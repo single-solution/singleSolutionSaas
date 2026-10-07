@@ -22,7 +22,7 @@ describe('defineModule', () => {
 });
 
 describe('composeModules', () => {
-	it('builds lazy services across modules, collects jobs and ports', () => {
+	it('builds lazy services across modules, collects routes and ports', () => {
 		/** @type {string[]} */
 		const built = [];
 		const a = defineModule({
@@ -32,8 +32,7 @@ describe('composeModules', () => {
 				return { hello: () => `alpha+${ctx.service('beta').name()}` };
 			},
 			routes: (ctx) => [{ method: 'GET', path: '/v1/alpha', auth: 'public', handler: () => ctx.service('alpha').hello() }],
-			jobs: () => ({ 'alpha.work': async () => {} }),
-			ports: () => ({ appKeys: () => null }),
+			ports: () => ({ productKeys: () => null }),
 		});
 		const b = defineModule({ name: 'beta', service: (ctx) => (built.push('beta'), { name: () => ctx.module }) });
 		const composed = composeModules([a, b], { shared: shared(), collection: (m, n) => `${m}:${n}` });
@@ -43,8 +42,7 @@ describe('composeModules', () => {
 		expect(built).toEqual(['alpha', 'beta']);
 		expect(composed.service('alpha')).toBe(composed.service('alpha'));
 		expect(composed.routes).toHaveLength(1);
-		expect(Object.keys(composed.jobs)).toEqual(['alpha.work']);
-		expect(typeof composed.ports.appKeys).toBe('function');
+		expect(typeof composed.ports.productKeys).toBe('function');
 		const ctx = composed.context('beta');
 		expect(ctx.collection('beta_x')).toBe('beta:beta_x');
 		expect(ctx.moduleNames()).toEqual(['alpha', 'beta']);
@@ -55,18 +53,15 @@ describe('composeModules', () => {
 	it('refuses collisions and bad wiring', () => {
 		const opts = { shared: shared(), collection: () => null };
 		expect(() => composeModules([defineModule({ name: 'a' }), defineModule({ name: 'a' })], opts)).toThrow(/twice/);
-		expect(() => composeModules([defineModule({ name: 'a', jobs: () => ({ 'b.x': async () => {} }) })], opts)).toThrow(
-			/must be named/,
-		);
 		expect(() =>
 			composeModules(
 				[
-					defineModule({ name: 'a', ports: () => ({ appKeys: () => null }) }),
-					defineModule({ name: 'b', ports: () => ({ appKeys: () => null }) }),
+					defineModule({ name: 'a', ports: () => ({ productKeys: () => null }) }),
+					defineModule({ name: 'b', ports: () => ({ productKeys: () => null }) }),
 				],
 				opts,
 			),
-		).toThrow(/port appKeys/);
+		).toThrow(/port productKeys/);
 		const cyclic = composeModules(
 			[
 				defineModule({ name: 'a', service: (ctx) => ctx.service('b') }),

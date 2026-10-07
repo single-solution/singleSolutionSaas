@@ -20,13 +20,13 @@ const config = {
 	// One route handler (app/api/[...path]) serves every server path; the public paths stay as they are. Checked before
 	// the console's catch-all page, which owns every other path.
 	rewrites: async () => ({
-		beforeFiles: ['/v1/:path*', '/w/:path*', '/branding/logo', '/.well-known/jwks.json'].map((source) => ({
+		beforeFiles: ['/v1/:path*', '/branding/logo', '/.well-known/jwks.json'].map((source) => ({
 			source,
 			destination: `/api${source}`,
 		})),
 	}),
 	// the console lives under /websites (signed-out visitors are sent on to /login by the console shell)
-	redirects: async () => [{ source: '/', destination: '/websites', permanent: false }],
+	redirects: async () => [{ source: '/', destination: '/overview', permanent: false }],
 	headers: async () => [
 		{ source: '/:path*', headers: staticSecurityHeaders() },
 		{ source: '/api/:path*', headers: [{ key: 'Content-Security-Policy', value: API_CSP }] },

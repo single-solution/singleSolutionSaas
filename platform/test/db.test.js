@@ -97,7 +97,12 @@ describe('ensureIndexes', () => {
 		const { logger, entries } = createTestLogger();
 		const first = await ensureIndexes(db, registry, { logger });
 		expect(first.created).toEqual(
-			expect.arrayContaining(['demo_things.slug_1', 'demo_websites.tenant', 'demo_cache.ttl', `${COLLECTIONS.jobs}.key_1`]),
+			expect.arrayContaining([
+				'demo_things.slug_1',
+				'demo_websites.tenant',
+				'demo_cache.ttl',
+				`${COLLECTIONS.audit}.at_-1__id_-1`,
+			]),
 		);
 		expect(entries.some((e) => e.msg === 'indexes ensured')).toBe(true);
 		const ttl = (await db.collection('demo_cache').listIndexes().toArray()).find((index) => index.name === 'ttl');

@@ -330,12 +330,34 @@ export const createSystemService = (ctx) => {
 			});
 		},
 
-		/** Admin Overview (step 2 part): counts and the e-mail warning (PLAN 0.5.10). */
-		overview: async () => ({
-			mailConfigured: Boolean(ctx.config.mail.smtp),
-			...(await ctx.service('identity').counts()),
-			recentActivity: (await activity.list({ viewer: { type: 'admin' }, limit: 10, before: null })).items,
-		}),
+		/**
+		 * Admin Overview: counts, the e-mail warning (PLAN 0.5.10), recent activity and the per-product numbers (PLAN
+		 * 0.8.2: for each connected product, the websites using it and the credits it earned this month, with the last
+		 * 30 UTC days).
+		 */
+		overview: async () => {
+			const names = ctx.moduleNames();
+			const connected = names.includes('catalog') ? await ctx.service('catalog').listProducts() : [];
+			/** @type {Map<string, Record<string, any>>} */
+			const numbers = new Map(
+				(names.includes('commerce') ? await ctx.service('commerce').allProductNumbers() : []).map(
+					(/** @type {Record<string, any>} */ n) => [String(n.productId), n],
+				),
+			);
+			return {
+				mailConfigured: Boolean(ctx.config.mail.smtp),
+				...(await ctx.service('identity').counts()),
+				products: connected.map((/** @type {Record<string, any>} */ p) => ({
+					productId: p.productId,
+					name: p.name,
+					status: p.status,
+					websites: numbers.get(p.productId)?.websites ?? 0,
+					earnedThisMonth: numbers.get(p.productId)?.earnedThisMonth ?? 0,
+					days: numbers.get(p.productId)?.days ?? [],
+				})),
+				recentActivity: (await activity.list({ viewer: { type: 'admin' }, limit: 10, before: null })).items,
+			};
+		},
 
 		activity,
 	};

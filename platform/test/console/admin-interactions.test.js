@@ -8,7 +8,6 @@
  * and locks, platform policies and rollback, credit operations and ledger verification.
  */
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { createHash } from 'node:crypto';
 import { Blob as NodeBlob } from 'node:buffer';
 import { totpCode } from '../../src/infra/auth.js';
 import { closeMongoClients } from '../../src/infra/db.js';
@@ -18,7 +17,7 @@ import { modules as defaultModules } from '../../src/modules/index.js';
 import { createIdentityModule } from '../../src/modules/identity/index.js';
 import { createConsoleApi } from '../../src/console/api.js';
 import * as admin from '../../src/console/admin/loaders.js';
-import { adminApi, adminRoutes } from '../../src/console/admin/paths.js';
+import { adminApi } from '../../src/console/admin/paths.js';
 import { adminFetch, adminSignInAgain, useAdminResource } from '../../src/console/admin/client.js';
 import { AdminShell } from '../../src/console/admin/views/shell.js';
 import { MyAccountView } from '../../src/console/admin/views/account.js';
@@ -26,12 +25,8 @@ import { ActivityView } from '../../src/console/admin/views/activity.js';
 import { AdminsView } from '../../src/console/admin/views/admins.js';
 import { OverviewView } from '../../src/console/admin/views/overview.js';
 import { MerchantView, MerchantsView } from '../../src/console/admin/views/merchants.js';
-import { AppView, AppsView } from '../../src/console/admin/views/apps.js';
-import { PoliciesView, SubscriptionAdminView } from '../../src/console/admin/views/config.js';
 import { AddCreditsDialog, FinanceView } from '../../src/console/admin/views/finance.js';
-import { ConnectorsAdminView } from '../../src/console/admin/views/operations.js';
 import { SettingsView } from '../../src/console/admin/views/settings.js';
-import { IdChip } from '../../src/console/admin/views/common.js';
 import { ToastProvider } from '@ss/ui';
 import { act, byLabel, cleanup, render, type } from '@ss/ui/testing';
 import { ENCRYPTION_KEY, PORTAL_URL, createTestLogger, startMongo, testConfig } from '../helpers.js';
@@ -110,18 +105,6 @@ const fillDialog = (label, value) =>
 /** @param {string} snippet */
 const shows = (snippet) => document.body.textContent?.replace(/\s+/g, ' ').includes(snippet) ?? false;
 
-/**
- * Pick a folder in the open pack dialog's folder input.
- * @param {unknown[]} files
- */
-const pickFolder = async (files) => {
-	const input = /** @type {HTMLInputElement} */ (document.querySelector('[role="dialog"] input[type="file"]'));
-	Object.defineProperty(input, 'files', { value: files, configurable: true });
-	await act(async () => {
-		input.dispatchEvent(new Event('change', { bubbles: true }));
-	});
-};
-
 /** Typed confirmation input of the open dialog. */
 const confirmInput = () => {
 	const label = [...document.querySelectorAll('label')].find((l) => /^Type .* to confirm/.test(l.textContent ?? ''));
@@ -182,81 +165,6 @@ const browserOf = (portal) => {
 	return { jar, calls, fetch: fetchImpl, api, use: () => vi.stubGlobal('fetch', fetchImpl) };
 };
 
-const manifest = (/** @type {{ version?: string, hourly?: number }} */ { version = '0.1.0', hourly = 1250 } = {}) => ({
-	ssps: '1',
-	product: { slug: 'notice-bar', name: 'Notice bar', kind: 'pack', version, category: 'storefront', description: 'Bar.' },
-	elements: [
-		{
-			key: 'bar',
-			name: 'Notice bar',
-			modes: ['A', 'B'],
-			price: { hourly },
-			placement: true,
-			headless: 'headless/bar.js#createBar',
-			renderer: 'ui/bar.js#render',
-			features: {
-				type: 'object',
-				additionalProperties: false,
-				properties: {
-					message: { type: 'string', title: 'Message', default: 'Hello', maxLength: 140, 'x-kind': 'config' },
-					maxPerDay: {
-						type: 'integer',
-						title: 'Max per day',
-						default: 3,
-						minimum: 1,
-						maximum: 100,
-						'x-kind': 'limit',
-						'x-lock': true,
-					},
-				},
-			},
-		},
-		{
-			key: 'badge',
-			name: 'Trust badge',
-			modes: ['A', 'B'],
-			price: { hourly: 500 },
-			placement: true,
-			headless: 'headless/badge.js#createBadge',
-			renderer: 'ui/badge.js#render',
-		},
-	],
-	plans: [{ code: 'basic', name: 'Basic', elements: ['bar'], addons: ['badge'] }],
-	priceBook: { version: '1', effectiveFrom: '2026-01-01T00:00:00.000Z' },
-});
-
-/** @param {string} version asset files of a build (their content changes with the version) */
-const assetsOf = (version) => ({
-	'headless/bar.js': `export const createBar = () => ({ v: '${version}' });`,
-	'ui/bar.js': `export const render = () => '${version}';`,
-	'headless/badge.js': `export const createBadge = () => ({ v: '${version}' });`,
-	'ui/badge.js': `export const render = () => 'badge ${version}';`,
-});
-
-/** @param {any} m */
-const descriptorOf = (m) => ({
-	format: 'ss-pack-bundle@1',
-	manifest: m,
-	assets: Object.entries(assetsOf(m.product.version)).map(([path, body]) => ({
-		path,
-		sha256: createHash('sha256').update(body).digest('hex'),
-		size: Buffer.byteLength(body),
-		contentType: 'text/javascript',
-	})),
-});
-
-/**
- * The folder `ss pack build` writes, as picked files (Node Blobs carrying `webkitRelativePath`).
- * @param {any} m
- */
-const folderOf = (m) =>
-	Object.entries({ 'descriptor.json': JSON.stringify(descriptorOf(m)), ...assetsOf(m.product.version) }).map(([path, body]) =>
-		Object.assign(new NodeBlob([body], { type: path.endsWith('.json') ? 'application/json' : 'text/javascript' }), {
-			name: path.split('/').at(-1),
-			webkitRelativePath: `pack/${path}`,
-		}),
-	);
-
 describe('admin console interactions (jsdom)', () => {
 	it('drives every admin page against a live Portal', async () => {
 		/** @type {Array<{ to: string, template: string, data: Record<string, any> }>} */
@@ -264,7 +172,7 @@ describe('admin console interactions (jsdom)', () => {
 		const mailer = { available: true, send: async (/** @type {any} */ m) => void mail.push(m) };
 		const modules = defaultModules.map((m) => (m.name === 'identity' ? createIdentityModule({ mailer }) : m));
 		const portal = createPortal({
-			config: await testConfig({ STORAGE_DIR: ':memory:' }),
+			config: await testConfig(),
 			db: mongo.db('admin_ui'),
 			system: createSystemStore(mongo.db('admin_ui'), { encryptionKey: ENCRYPTION_KEY }),
 			modules,
@@ -282,33 +190,33 @@ describe('admin console interactions (jsdom)', () => {
 		const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
 		// ---------------------------------------------------------------- the first admin (an Owner)
-		const staff = browserOf(portal);
-		staff.use();
-		const created = await staff.api.post('/v1/auth/first-admin', {
+		const ownerBrowser = browserOf(portal);
+		ownerBrowser.use();
+		const created = await ownerBrowser.api.post('/v1/auth/first-admin', {
 			name: 'Rita Root',
 			email: 'root@ss.test',
 			password: 'root password 123!',
 		});
 		expect(created.ok).toBe(true);
-		const session = await admin.loadAdminSession(staff.api);
+		const session = await admin.loadAdminSession(ownerBrowser.api);
 		if (!session.ok) throw new Error('admin session');
 		const me = session.admin;
 
 		// My account: the name
 		render(
 			<ToastProvider>
-				<MyAccountView {...await admin.loadMyAccount(staff.api)} />
+				<MyAccountView {...await admin.loadMyAccount(ownerBrowser.api)} />
 			</ToastProvider>,
 		);
 		await until(() => shows('Your activity'));
 		fill('Name', 'Rita R.');
 		await press('Save');
-		await until(() => staff.calls.some((c) => c.method === 'PATCH' && c.path === adminApi.me() && c.status === 200));
+		await until(() => ownerBrowser.calls.some((c) => c.method === 'PATCH' && c.path === adminApi.me() && c.status === 200));
 		cleanup();
 
-		// ---------------------------------------------------------------- seed: merchants, a pack, a product on a website
+		// ---------------------------------------------------------------- seed: merchants, a website, credits
 		const signup = async (/** @type {string} */ email, /** @type {string} */ name) => {
-			const made = await staff.api.post(adminApi.createMerchant(), { name, ownerName: 'Owner', email });
+			const made = await ownerBrowser.api.post(adminApi.createMerchant(), { name, ownerName: 'Owner', email });
 			const b = browserOf(portal);
 			await b.api.post('/v1/auth/set-password', {
 				token: tokenOf(email, 'merchant_setup'),
@@ -319,41 +227,13 @@ describe('admin console interactions (jsdom)', () => {
 		const owner = await signup('owner@shop.test', 'Shop & Co');
 		const other = await signup('other@else.test', 'Else Ltd');
 		const merchantId = owner.merchantId;
-		const site = await staff.api.post(`/v1/merchants/${merchantId}/websites`, { domain: 'shop.example.com' });
-		const websiteId = site.ok ? site.data.website.websiteId : '';
-		// the pack: its folder uploaded through the Apps page ("Add pack"), then activated with the switch
-		render(<AppsView {...await admin.loadApps(staff.api, {})} admin={me} />);
-		await press('Add pack');
-		await pickFolder(folderOf(manifest()));
-		await press('Upload');
-		await until(() => shows('Uploaded'));
-		const posted = staff.calls.find((c) => c.path === adminApi.packs() && c.status < 300)?.body;
-		const appId = String(posted?.appId);
-		expect(staff.calls.filter((c) => c.method === 'PUT' && c.path.startsWith(posted.uploadPath))).toHaveLength(4);
-		cleanup();
-		render(
-			<ToastProvider>
-				<AppView {...await admin.loadApp(staff.api, appId)} admin={me} />
-			</ToastProvider>,
-		);
-		await until(() => shows('Upload pack version'));
-		await act(async () => {
-			/** @type {HTMLElement} */ (document.querySelector('[role="switch"]')).click();
-		});
-		await until(() => staff.calls.some((c) => c.path === adminApi.status(appId) && c.status === 200));
-		cleanup();
-		await staff.api.post(adminApi.addReceipt(merchantId), {
+		expect((await ownerBrowser.api.post(`/v1/merchants/${merchantId}/websites`, { domain: 'shop.example.com' })).ok).toBe(true);
+		await ownerBrowser.api.post(adminApi.addReceipt(merchantId), {
 			credits: 100,
 			amountPaid: 'PKR 10,000',
 			method: 'Cash',
 			reference: 'seed-1',
 		});
-		const sub = await staff.api.post(`/v1/merchants/${merchantId}/websites/${websiteId}/subscriptions`, {
-			appId,
-			planCode: 'basic',
-		});
-		const subscriptionId = sub.ok ? sub.data.subscription.subscriptionId : '';
-		expect(subscriptionId).toMatch(/^sub_/);
 
 		// ---------------------------------------------------------------- shell and Overview
 		render(
@@ -363,14 +243,14 @@ describe('admin console interactions (jsdom)', () => {
 		);
 		expect(shows('child')).toBe(true);
 		cleanup();
-		render(<OverviewView {...await admin.loadOverview(staff.api)} admin={me} />);
+		render(<OverviewView {...await admin.loadOverview(ownerBrowser.api)} admin={me} />);
 		expect(shows('E-mail sending is not set up') && shows('Set up e-mail sending')).toBe(true);
 		cleanup();
 
 		// ---------------------------------------------------------------- merchants: search, bulk, Add merchant
 		render(
 			<ToastProvider>
-				<MerchantsView {...await admin.loadMerchants(staff.api, {})} admin={me} />
+				<MerchantsView {...await admin.loadMerchants(ownerBrowser.api, {})} admin={me} />
 			</ToastProvider>,
 		);
 		expect(shows('Else Ltd') && shows('Shop & Co')).toBe(true);
@@ -379,7 +259,7 @@ describe('admin console interactions (jsdom)', () => {
 		cleanup();
 		render(
 			<ToastProvider>
-				<MerchantsView {...await admin.loadMerchants(staff.api, {})} admin={me} />
+				<MerchantsView {...await admin.loadMerchants(ownerBrowser.api, {})} admin={me} />
 			</ToastProvider>,
 		);
 		await act(async () => {
@@ -392,7 +272,7 @@ describe('admin console interactions (jsdom)', () => {
 				[...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent === 'Suspend')
 			).click();
 		});
-		await until(() => staff.calls.some((c) => c.path === adminApi.bulk() && c.status === 200));
+		await until(() => ownerBrowser.calls.some((c) => c.path === adminApi.bulk() && c.status === 200));
 		await until(() => shows('1 done.'));
 		await act(async () => {
 			/** @type {HTMLInputElement} */ (document.querySelector('input[aria-label="Select Else Ltd"]')).click();
@@ -403,7 +283,7 @@ describe('admin console interactions (jsdom)', () => {
 				[...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent === 'Resume')
 			).click();
 		});
-		await until(() => staff.calls.filter((c) => c.path === adminApi.bulk() && c.status === 200).length >= 2);
+		await until(() => ownerBrowser.calls.filter((c) => c.path === adminApi.bulk() && c.status === 200).length >= 2);
 		await press('Add merchant');
 		fillDialog('Business name', 'Ops Made Ltd');
 		fillDialog('Owner name', 'Olga');
@@ -419,7 +299,9 @@ describe('admin console interactions (jsdom)', () => {
 		});
 		const made = /** @type {any} */ (
 			await until(
-				() => staff.calls.find((c) => c.method === 'POST' && c.path === adminApi.createMerchant() && c.status === 201)?.body,
+				() =>
+					ownerBrowser.calls.find((c) => c.method === 'POST' && c.path === adminApi.createMerchant() && c.status === 201)
+						?.body,
 			)
 		);
 		const madeId = String(made.merchant.merchantId);
@@ -428,10 +310,10 @@ describe('admin console interactions (jsdom)', () => {
 		// ---------------------------------------------------------------- the merchant page
 		const writeText = vi.fn(async () => undefined);
 		vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
-		staff.use();
+		ownerBrowser.use();
 		render(
 			<ToastProvider>
-				<MerchantView {...await admin.loadMerchant(staff.api, madeId)} admin={me} />
+				<MerchantView {...await admin.loadMerchant(ownerBrowser.api, madeId)} admin={me} />
 			</ToastProvider>,
 		);
 		await until(() => shows('Setup pending'));
@@ -441,7 +323,7 @@ describe('admin console interactions (jsdom)', () => {
 			/** @type {HTMLButtonElement} */ (document.querySelector('[role="dialog"] button[aria-label="Close"]'))?.click();
 		});
 		await press('Resend setup link');
-		await until(() => staff.calls.filter((c) => c.path === adminApi.setupLink(madeId) && c.status === 200).length >= 2);
+		await until(() => ownerBrowser.calls.filter((c) => c.path === adminApi.setupLink(madeId) && c.status === 200).length >= 2);
 		await press('Suspend');
 		fillDialog('Reason', 'unpaid');
 		await act(async () => {
@@ -456,9 +338,15 @@ describe('admin console interactions (jsdom)', () => {
 				[...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent === 'Resume')
 			).click();
 		});
-		await until(() => staff.calls.some((c) => c.path === adminApi.resume(madeId) && c.status === 200));
-		// websites: add one, add a product, remove the product first, then the website
+		await until(() => ownerBrowser.calls.some((c) => c.path === adminApi.resume(madeId) && c.status === 200));
+		// websites: add one (the exact domain), then open its page from the row
 		await press('Add website');
+		await act(async () => {
+			/** @type {HTMLButtonElement} */ (
+				[...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent?.includes('Add website'))
+			).click();
+		});
+		await until(() => shows('Enter the domain, for example shop.com.'));
 		fillDialog('Domain', 'made.example.com');
 		await act(async () => {
 			/** @type {HTMLButtonElement} */ (
@@ -468,42 +356,35 @@ describe('admin console interactions (jsdom)', () => {
 		const madeSite = String(
 			await until(
 				() =>
-					staff.calls.find((c) => c.method === 'POST' && c.path === `/v1/merchants/${madeId}/websites` && c.status === 201)
-						?.body.website.websiteId,
+					ownerBrowser.calls.find(
+						(c) => c.method === 'POST' && c.path === `/v1/merchants/${madeId}/websites` && c.status === 201,
+					)?.body.website.websiteId,
 			),
 		);
 		await until(() => shows('made.example.com'));
-		await press('Add product');
-		await until(() => shows('Subscribe to Notice bar') || shows('Not enough credits'));
-		await act(async () => {
-			/** @type {HTMLButtonElement} */ (
-				[...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent === 'Cancel')
-			).click();
-		});
 		// Details: the fields, the login e-mail until the password is set
 		await press('Details');
 		fill('Address', 'Industrial area');
 		fill('Owner e-mail (login)', 'olga@made.test');
 		await press('Save');
 		await until(() =>
-			staff.calls.some((c) => c.method === 'PATCH' && c.path === adminApi.merchant(madeId) && c.status === 200),
+			ownerBrowser.calls.some((c) => c.method === 'PATCH' && c.path === adminApi.merchant(madeId) && c.status === 200),
 		);
 		await press('Activity');
 		await until(() => shows('Merchant created'));
 		await press('Websites');
-		await press('Remove website');
-		type(confirmInput(), 'made.example.com');
-		await act(async () => {
-			/** @type {HTMLButtonElement} */ (
-				[...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent === 'Remove website')
-			).click();
-		});
-		await until(() =>
-			staff.calls.some(
-				(c) => c.method === 'DELETE' && c.path === `/v1/merchants/${madeId}/websites/${madeSite}` && c.status === 200,
-			),
+		expect(document.querySelector(`a[href="/admin/merchants/${madeId}/websites/${madeSite}"]`)?.textContent).toBe(
+			'made.example.com',
 		);
-		await until(() => !shows('made.example.com'));
+		// a merchant with a website cannot be deleted
+		expect(button('Delete').disabled).toBe(true);
+		await ownerBrowser.api.request('DELETE', `/v1/merchants/${madeId}/websites/${madeSite}`, { confirm: 'made.example.com' });
+		cleanup();
+		render(
+			<ToastProvider>
+				<MerchantView {...await admin.loadMerchant(ownerBrowser.api, madeId)} admin={me} />
+			</ToastProvider>,
+		);
 		// delete the merchant (no websites left): typed business name
 		await press('Delete');
 		type(confirmInput(), 'Ops Made Ltd');
@@ -513,7 +394,7 @@ describe('admin console interactions (jsdom)', () => {
 			).click();
 		});
 		await until(() =>
-			staff.calls.some((c) => c.method === 'DELETE' && c.path === adminApi.merchant(madeId) && c.status === 204),
+			ownerBrowser.calls.some((c) => c.method === 'DELETE' && c.path === adminApi.merchant(madeId) && c.status === 204),
 		);
 		cleanup();
 		// two-step off for a merchant with two-step on
@@ -523,7 +404,7 @@ describe('admin console interactions (jsdom)', () => {
 		await other.b.api.post('/v1/me/two-step/confirm', { code: totpCode(started.ok ? started.data.secret : '', Date.now()) });
 		render(
 			<ToastProvider>
-				<MerchantView {...await admin.loadMerchant(staff.api, other.merchantId)} admin={me} />
+				<MerchantView {...await admin.loadMerchant(ownerBrowser.api, other.merchantId)} admin={me} />
 			</ToastProvider>,
 		);
 		await press('Turn off two-step');
@@ -532,139 +413,17 @@ describe('admin console interactions (jsdom)', () => {
 				[...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent === 'Turn off two-step')
 			).click();
 		});
-		await until(() => staff.calls.some((c) => c.path === adminApi.merchantTwoStepOff(other.merchantId) && c.status === 200));
+		await until(() =>
+			ownerBrowser.calls.some((c) => c.path === adminApi.merchantTwoStepOff(other.merchantId) && c.status === 200),
+		);
 		cleanup();
 		vi.unstubAllGlobals();
-		staff.use();
-
-		// ---------------------------------------------------------------- apps: add (URL + connect secret), a new pack version, launch
-		render(<AppsView {...await admin.loadApps(staff.api, { status: 'active' })} admin={me} />);
-		expect(shows('notice-bar')).toBe(true);
-		await press('Add product');
-		fill('Product URL', 'https://product.example.com');
-		fill('Connect secret', 'too-short');
-		await press('Connect');
-		await until(() => staff.calls.some((c) => c.path === adminApi.connect() && c.status === 422));
-		await press('Cancel');
-		cleanup();
-
-		render(
-			<ToastProvider>
-				<AppView {...await admin.loadApp(staff.api, appId)} admin={me} />
-			</ToastProvider>,
-		);
-		await press('Upload pack version');
-		await pickFolder(folderOf(manifest({ version: '0.2.0', hourly: 1500 })));
-		await press('Upload');
-		await until(() => shows('Version v2 of notice-bar is uploaded'));
-		await until(() => shows('v2 (0.2.0)'));
-		cleanup();
-
-		// a service app (presentation of the pack as a service): the admin launch (production)
-		const loaded = await admin.loadApp(staff.api, appId);
-		if (!loaded.ok) throw new Error('app');
-		const serviceApp = { ...loaded.app, kind: 'service', baseUrl: 'https://svc.example.com' };
-		render(<AppView {...loaded} app={serviceApp} manifest={manifest()} admin={me} />);
-		expect(shows('Upload widgets')).toBe(true);
-		fill('Merchant id', merchantId);
-		await press(`Open ${serviceApp.name}`);
-		await until(() => staff.calls.some((c) => c.path === adminApi.launch(appId) && c.method === 'POST'));
-		cleanup();
-
-		// ---------------------------------------------------------------- admin overrides, locks, history, rollback
-		const subPage = await admin.loadSubscription(staff.api, subscriptionId);
-		render(<SubscriptionAdminView {...subPage} admin={me} />);
-		type(byLabel(document, 'Message'), 'Admin says hi');
-		await press('Save version');
-		expect(shows('Give a reason')).toBe(true);
-		fill('Reason', 'support ticket');
-		await press('Save version');
-		await until(() =>
-			staff.calls.some((c) => c.path === adminApi.adminConfig(subscriptionId) && c.method === 'PATCH' && c.status === 200),
-		);
-		// the page refreshes (layers, histories, effective preview) and remounts the editor at the new version
-		const patched = staff.calls.findIndex((c) => c.path === adminApi.adminConfig(subscriptionId) && c.method === 'PATCH');
-		await until(() => staff.calls.slice(patched).some((c) => c.path.endsWith('/config/preview')));
-		await settle(3);
-		await act(async () => {
-			/** @type {HTMLButtonElement} */ (
-				[...document.querySelectorAll('[role="switch"]')].find((s) => s.textContent?.includes('Lock Max per day')) ??
-					document.querySelector('[role="switch"]')
-			).click();
-		});
-		type(byLabel(document, 'Element switch'), 'on');
-		fill('Reason', 'lock it');
-		await press('Save version');
-
-		await until(
-			() => staff.calls.filter((c) => c.path === adminApi.adminConfig(subscriptionId) && c.method === 'PATCH').length >= 2,
-		);
-		await settle(2);
-		await press('Discard');
-		type(byLabel(document, 'Element'), 'badge');
-		await settle(1);
-		type(byLabel(document, 'Element'), 'bar');
-		await settle(1);
-		const resetLink = [...document.querySelectorAll('button')].find((b) => b.textContent === 'Reset');
-		if (resetLink)
-			await act(async () => {
-				resetLink.click();
-			});
-		await settle(1);
-		const rollbacks = [...document.querySelectorAll('button')].filter((b) => b.textContent === 'Roll back');
-		expect(rollbacks.length).toBeGreaterThan(0);
-		await act(async () => {
-			/** @type {HTMLButtonElement} */ (rollbacks[0]).click();
-		});
-		await act(async () => {
-			/** @type {HTMLButtonElement} */ (
-				[...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent === 'Roll back')
-			).click();
-		});
-		await settle(1);
-		expect(shows('Say why you roll back')).toBe(true);
-		fillDialog('Reason', 'undo');
-		await act(async () => {
-			/** @type {HTMLButtonElement} */ (
-				[...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent === 'Roll back')
-			).click();
-		});
-		await until(() => staff.calls.some((c) => c.path === adminApi.adminRollback(subscriptionId) && c.status === 200));
-		cleanup();
-
-		render(<PoliciesView {...await admin.loadPolicies(staff.api, appId)} admin={me} />);
-		type(byLabel(document, 'Message'), 'Platform says hi');
-		fill('Reason', 'brand copy');
-		await press('Save version');
-		await until(() =>
-			staff.calls.some((c) => c.path === adminApi.platformPolicy(appId) && c.method === 'PATCH' && c.status === 200),
-		);
-		const policyPatched = staff.calls.findIndex((c) => c.path === adminApi.platformPolicy(appId) && c.method === 'PATCH');
-		await until(() => staff.calls.slice(policyPatched).some((c) => c.path === adminApi.platformHistory(appId)));
-		await settle(3);
-		type(byLabel(document, 'Message'), 'Second copy');
-		fill('Reason', 'brand copy 2');
-		await press('Save version');
-		await until(() => staff.calls.filter((c) => c.path === adminApi.platformPolicy(appId) && c.method === 'PATCH').length >= 2);
-		await until(() => [...document.querySelectorAll('button')].some((b) => b.textContent === 'Roll back'));
-		await act(async () => {
-			/** @type {HTMLButtonElement} */ (
-				[...document.querySelectorAll('button')].find((b) => b.textContent === 'Roll back')
-			).click();
-		});
-		fillDialog('Reason', 'revert');
-		await act(async () => {
-			/** @type {HTMLButtonElement} */ (
-				[...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent === 'Roll back')
-			).click();
-		});
-		await until(() => staff.calls.some((c) => c.path === adminApi.platformRollback(appId) && c.status === 200));
-		cleanup();
+		ownerBrowser.use();
 
 		// ---------------------------------------------------------------- credits and billing
 		render(
 			<ToastProvider>
-				<FinanceView {...await admin.loadBilling(staff.api, { merchantId })} admin={me} />
+				<FinanceView {...await admin.loadBilling(ownerBrowser.api, { merchantId })} admin={me} />
 			</ToastProvider>,
 		);
 		expect(shows('No merchant is low, in grace or stopped.')).toBe(true);
@@ -694,37 +453,11 @@ describe('admin console interactions (jsdom)', () => {
 		await press('Review');
 		await press('Add credits');
 		await until(() => added === 1);
-		expect(staff.calls.filter((c) => c.path === adminApi.addReceipt(merchantId) && c.status === 201)).toHaveLength(1);
-		cleanup();
-
-		// ---------------------------------------------------------------- connectors (fabricated rows)
-		const connectors = await admin.loadConnectors(staff.api, {});
-		render(
-			<ConnectorsAdminView
-				{...connectors}
-				page={{
-					items: [
-						{
-							connectorId: 'con_1',
-							merchantId,
-							kind: 'database',
-							provider: 'mongodb',
-							label: null,
-							websiteIds: [websiteId],
-							status: 'failing',
-							lastCheckAt: new Date().toISOString(),
-							lastCheckReport: { checks: [{ name: 'auth', ok: false, code: 'auth_failed' }], warnings: [] },
-						},
-					],
-					nextCursor: null,
-				}}
-			/>,
-		);
-		expect(shows('0/1 checks passed · auth (auth_failed)')).toBe(true);
+		expect(ownerBrowser.calls.filter((c) => c.path === adminApi.addReceipt(merchantId) && c.status === 201)).toHaveLength(1);
 		cleanup();
 
 		// ---------------------------------------------------------------- Activity: filters
-		render(<ActivityView {...await admin.loadActivity(staff.api, { merchantId })} />);
+		render(<ActivityView {...await admin.loadActivity(ownerBrowser.api, { merchantId })} />);
 		await until(() => shows('Merchant created'));
 		fill('Admin id', me.adminId);
 		fill('From (UTC day)', '2026-01-01');
@@ -734,7 +467,7 @@ describe('admin console interactions (jsdom)', () => {
 		// ---------------------------------------------------------------- Settings: e-mail sending, branding, support, security
 		render(
 			<ToastProvider>
-				<SettingsView {...await admin.loadSettings(staff.api)} />
+				<SettingsView {...await admin.loadSettings(ownerBrowser.api)} />
 			</ToastProvider>,
 		);
 		fill('SMTP host', 'smtp.example.com');
@@ -747,16 +480,16 @@ describe('admin console interactions (jsdom)', () => {
 			/** @type {HTMLInputElement} */ (byLabel(document, 'Implicit TLS (port 465)')).click();
 		});
 		await press('Save');
-		await until(() => staff.calls.some((c) => c.path === adminApi.settingsMail() && c.status === 200));
+		await until(() => ownerBrowser.calls.some((c) => c.path === adminApi.settingsMail() && c.status === 200));
 		await until(() => shows('Send test e-mail'));
 		await press('Send test e-mail');
-		await until(() => staff.calls.some((c) => c.path === adminApi.settingsMailTest()));
+		await until(() => ownerBrowser.calls.some((c) => c.path === adminApi.settingsMailTest()));
 		await press('Turn e-mail sending off');
-		await until(() => staff.calls.filter((c) => c.path === adminApi.settingsMail() && c.status === 200).length >= 2);
+		await until(() => ownerBrowser.calls.filter((c) => c.path === adminApi.settingsMail() && c.status === 200).length >= 2);
 		await press('Branding');
 		fill('Name', 'Acme Portal');
 		await press('Save');
-		await until(() => staff.calls.some((c) => c.path === adminApi.settingsBranding() && c.status === 200));
+		await until(() => ownerBrowser.calls.some((c) => c.path === adminApi.settingsBranding() && c.status === 200));
 		const logo = /** @type {HTMLInputElement} */ (document.querySelector('input[type="file"]'));
 		const svg = Object.assign(new NodeBlob(['<svg/>'], { type: 'image/svg+xml' }), { name: 'logo.svg' });
 		Object.defineProperty(logo, 'files', { value: [svg], configurable: true });
@@ -772,36 +505,36 @@ describe('admin console interactions (jsdom)', () => {
 		await act(async () => {
 			logo.dispatchEvent(new Event('change', { bubbles: true }));
 		});
-		await until(() => staff.calls.some((c) => c.path === adminApi.settingsLogo() && c.status === 200));
+		await until(() => ownerBrowser.calls.some((c) => c.path === adminApi.settingsLogo() && c.status === 200));
 		await until(() => shows('Remove logo'));
 		await press('Remove logo');
-		await until(() => staff.calls.some((c) => c.method === 'DELETE' && c.path === adminApi.settingsLogo()));
+		await until(() => ownerBrowser.calls.some((c) => c.method === 'DELETE' && c.path === adminApi.settingsLogo()));
 		await press('Support contact');
 		fill('E-mail', 'help@acme.test');
 		fill('Phone', '+92 300 1234567');
 		await press('Save');
-		await until(() => staff.calls.some((c) => c.path === adminApi.settingsSupport() && c.status === 200));
+		await until(() => ownerBrowser.calls.some((c) => c.path === adminApi.settingsSupport() && c.status === 200));
 		await press('Security');
 		fill('Session length (hours)', '0');
 		await press('Save');
-		await until(() => staff.calls.some((c) => c.path === adminApi.settingsSecurity() && c.status === 422));
+		await until(() => ownerBrowser.calls.some((c) => c.path === adminApi.settingsSecurity() && c.status === 422));
 		fill('Session length (hours)', '24');
 		await act(async () => {
 			/** @type {HTMLElement} */ (document.querySelector('[role="switch"]')).click();
 		});
 		await press('Save');
-		await until(() => staff.calls.some((c) => c.path === adminApi.settingsSecurity() && c.status === 200));
+		await until(() => ownerBrowser.calls.some((c) => c.path === adminApi.settingsSecurity() && c.status === 200));
 		cleanup();
 		render(<SettingsView ok={false} problem={{ status: 403, title: 'Forbidden' }} />);
 		expect(shows('Not permitted')).toBe(true);
 		cleanup();
 		// back to no two-step requirement for the rest of the flow
-		await staff.api.request('PUT', adminApi.settingsSecurity(), { sessionHours: 24, requireTwoStepForAdmins: false });
+		await ownerBrowser.api.request('PUT', adminApi.settingsSecurity(), { sessionHours: 24, requireTwoStepForAdmins: false });
 
 		// ---------------------------------------------------------------- Admins
 		render(
 			<ToastProvider>
-				<AdminsView {...await admin.loadAdmins(staff.api, me)} />
+				<AdminsView {...await admin.loadAdmins(ownerBrowser.api, me)} />
 			</ToastProvider>,
 		);
 		await press('Invite');
@@ -814,7 +547,9 @@ describe('admin console interactions (jsdom)', () => {
 				[...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent === 'Invite')
 			).click();
 		});
-		await until(() => shows('help@ss.test') && staff.calls.some((c) => c.path === adminApi.admins() && c.status === 201));
+		await until(
+			() => shows('help@ss.test') && ownerBrowser.calls.some((c) => c.path === adminApi.admins() && c.status === 201),
+		);
 		await press('Copy invite link');
 		await until(() => shows('Copy this link now.'));
 		await act(async () => {
@@ -839,7 +574,7 @@ describe('admin console interactions (jsdom)', () => {
 			).click();
 		});
 		await until(() =>
-			staff.calls.some((c) => c.method === 'PATCH' && c.path.startsWith('/v1/admin/admins/') && c.status === 200),
+			ownerBrowser.calls.some((c) => c.method === 'PATCH' && c.path.startsWith('/v1/admin/admins/') && c.status === 200),
 		);
 		await settle(2);
 		await press('Remove');
@@ -849,7 +584,7 @@ describe('admin console interactions (jsdom)', () => {
 			).click();
 		});
 		await until(() =>
-			staff.calls.some((c) => c.method === 'DELETE' && c.path.startsWith('/v1/admin/admins/') && c.status === 204),
+			ownerBrowser.calls.some((c) => c.method === 'DELETE' && c.path.startsWith('/v1/admin/admins/') && c.status === 204),
 		);
 		cleanup();
 
@@ -862,23 +597,18 @@ describe('admin console interactions (jsdom)', () => {
 						reload
 					</button>
 					<span>{r.problem ? 'problem' : 'none'}</span>
-					<IdChip id="mer_x" />
-					<IdChip id={null} />
 				</div>
 			);
 		}
 		render(<Probe />);
 		await press('reload');
 		await until(() => shows('problem'));
-		await act(async () => {
-			/** @type {HTMLButtonElement} */ (document.querySelector('[aria-label="Copy id"]')).click();
-		});
 		cleanup();
 		const anonymous = browserOf(portal);
 		vi.stubGlobal('fetch', anonymous.fetch);
 		expect((await adminFetch(adminApi.merchants())).status).toBe(401);
 		adminSignInAgain('/admin/x');
-		staff.use();
+		ownerBrowser.use();
 		render(
 			<AdminShell admin={me}>
 				<p>x</p>
@@ -889,9 +619,8 @@ describe('admin console interactions (jsdom)', () => {
 				[...document.querySelectorAll('button')].find((b) => b.textContent?.includes('Sign out'))
 			).click();
 		});
-		await until(() => staff.calls.some((c) => c.path === adminApi.signOut() && c.status === 204));
-		expect((await admin.loadAdminSession(staff.api)).ok).toBe(false);
-		expect(adminRoutes.policies(appId)).toBe(`/admin/apps/${appId}/policies`);
+		await until(() => ownerBrowser.calls.some((c) => c.path === adminApi.signOut() && c.status === 204));
+		expect((await admin.loadAdminSession(ownerBrowser.api)).ok).toBe(false);
 		errors.mockRestore();
 		vi.unstubAllGlobals();
 	});

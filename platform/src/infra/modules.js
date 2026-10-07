@@ -1,13 +1,13 @@
 /**
  * Module definitions and their isolation boundary. A module is a plain object (see `modules/README.md`):
  *
- *   defineModule({ name, collections, migrations, problems, service, routes, jobs, ports })
+ *   defineModule({ name, collections, migrations, problems, service, routes, ports })
  *
  * Every factory receives a {@link ModuleContext}. A module reaches **only its own collections** through
  * `ctx.collection(name)`; another module's data is reached through that module's public `service` via
- * `ctx.service(name)` (a module's own routes use `ctx.service(<own name>)` too) (built lazily, so module order does not matter; cycles are a boot error). Job names are
- * namespaced `<module>.<job>`; routes, problem codes and ports are global and collisions are boot errors. Nothing runs
- * on a schedule (PLAN F.19): jobs run after the request that enqueued them.
+ * `ctx.service(name)` (a module's own routes use `ctx.service(<own name>)` too; built lazily, so module order does not
+ * matter; cycles are a boot error). Routes, problem codes and ports are global and collisions are boot errors. Nothing
+ * runs on a schedule (PLAN F.19): work runs inside, or right after, the request that caused it.
  * @module
  */
 import { platformError } from './errors.js';
@@ -15,7 +15,6 @@ import { platformError } from './errors.js';
 /** @typedef {import('./db.js').CollectionDefinition} CollectionDefinition */
 /** @typedef {import('./db.js').Migration} Migration */
 /** @typedef {import('./http.js').RouteDefinition} RouteDefinition */
-/** @typedef {import('./jobs.js').JobHandler} JobHandler */
 /** @typedef {import('./authenticators.js').AuthPorts} AuthPorts */
 /** @typedef {import('./logger.js').Logger} Logger */
 
@@ -28,17 +27,12 @@ import { platformError } from './errors.js';
  * @property {(n: number) => Uint8Array} randomBytes
  * @property {import('@ss/contracts').ProblemFactory} problems
  * @property {import('./crypto.js').PortalKeys} keys Portal signer(s), JWKS, resolver over our own keys
- * @property {import('./crypto.js').Envelope} envelope seal/open client credentials
  * @property {import('./crypto.js').Envelope} secretBox seal/open the Portal's stored secrets with `ENCRYPTION_KEY`
- *   (SMTP password, two-step secrets; PLAN 0.4.8)
- * @property {ReturnType<typeof import('./crypto.js').createSecretHasher>} secretHasher website secret keys at rest
+ *   (SMTP password, two-step secrets, server tokens; PLAN 0.4.8)
  * @property {import('./audit.js').Audit} audit
- * @property {import('./jobs.js').Jobs} jobs
  * @property {import('./db.js').Locks} locks
  * @property {import('./db.js').WithTransaction} withTransaction run `fn(session)` in a retried multi-document
  *   transaction; pass `{ session }` to every repository call inside it
- * @property {import('./authenticators.js').WebsiteKeyVerifier} verifyWebsiteKey the `websiteKey` authenticator's
- *   verification, for keys carried outside the `Authorization` header (throws infra problems)
  * @property {import('./mailer.js').Mailer} mailer platform mailer (setup links, invites, resets, e-mail changes, two-step notices)
  * @property {import('./auth.js').Sessions} sessions
  * @property {import('./auth.js').LoginThrottle} loginThrottle
@@ -60,13 +54,12 @@ import { platformError } from './errors.js';
 
 /**
  * @typedef {object} ModuleDefinition
- * @property {string} name lower-case identifier; collections are `<name>_*`, jobs `<name>.*`
+ * @property {string} name lower-case identifier; collections are `<name>_*`
  * @property {ReadonlyArray<Readonly<CollectionDefinition>>} [collections]
  * @property {ReadonlyArray<Migration>} [migrations]
  * @property {Readonly<Record<string, { status: number, title: string }>>} [problems] extra RFC 9457 codes
  * @property {(ctx: ModuleContext) => object} [service] public API for other modules
  * @property {(ctx: ModuleContext) => RouteDefinition[]} [routes]
- * @property {(ctx: ModuleContext) => Record<string, JobHandler>} [jobs]
  * @property {(ctx: ModuleContext) => AuthPorts} [ports] implementations of infra ports (one provider per port)
  */
 
@@ -89,7 +82,7 @@ export const defineModule = (definition) => {
 		if (!String(migration.id).includes(`-${name}-`))
 			throw new TypeError(`migration ${migration.id} must be named YYYYMMDDHHMM-${name}-<slug>`);
 	}
-	for (const key of ['service', 'routes', 'jobs', 'ports']) {
+	for (const key of ['service', 'routes', 'ports']) {
 		const value = /** @type {Record<string, unknown>} */ (definition)[key];
 		if (value !== undefined && typeof value !== 'function')
 			throw new TypeError(`module ${name}: ${key} must be a factory function`);
@@ -98,7 +91,7 @@ export const defineModule = (definition) => {
 };
 
 /**
- * Wire modules over the shared context: per-module contexts, lazy services, then routes, jobs and ports.
+ * Wire modules over the shared context: per-module contexts, lazy services, then routes and ports.
  * @param {ReadonlyArray<Readonly<ModuleDefinition>>} modules
  * @param {{ shared: SharedContext, collection: (module: string, name: string) => any }} options
  */
@@ -160,8 +153,6 @@ export const composeModules = (modules, { shared, collection }) => {
 
 	/** @type {RouteDefinition[]} */
 	const routes = [];
-	/** @type {Record<string, JobHandler>} */
-	const jobs = {};
 	/** @type {AuthPorts & Record<string, unknown>} */
 	const ports = {};
 	/** @type {Record<string, string>} */
@@ -170,11 +161,6 @@ export const composeModules = (modules, { shared, collection }) => {
 	for (const m of byName.values()) {
 		const ctx = contextOf(m.name);
 		if (m.routes) routes.push(...m.routes(ctx));
-		for (const [jobName, handler] of Object.entries(m.jobs?.(ctx) ?? {})) {
-			if (!jobName.startsWith(`${m.name}.`))
-				throw new TypeError(`job ${jobName} of module ${m.name} must be named ${m.name}.<job>`);
-			jobs[jobName] = handler;
-		}
 		for (const [port, impl] of Object.entries(m.ports?.(ctx) ?? {})) {
 			if (Object.hasOwn(ports, port)) throw new TypeError(`port ${port} is provided by ${portOwners[port]} and ${m.name}`);
 			ports[port] = impl;
@@ -185,7 +171,6 @@ export const composeModules = (modules, { shared, collection }) => {
 	return Object.freeze({
 		names: () => [...byName.keys()],
 		routes,
-		jobs,
 		/** @type {AuthPorts} */
 		ports,
 		service: serviceOf,

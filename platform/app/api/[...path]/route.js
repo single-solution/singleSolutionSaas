@@ -1,5 +1,5 @@
-// The Portal's only route handler. next.config.js rewrites /v1/*, /w/* (delivery) and /.well-known/jwks.json here
-// (public paths unchanged); the module router serves /v1 and /w.
+// The Portal's only route handler. next.config.js rewrites /v1/*, /branding/logo and /.well-known/jwks.json here
+// (public paths unchanged); the module router serves /v1 and /branding.
 import { after } from 'next/server.js';
 import { isPlatformError } from '../../../src/infra/errors.js';
 import { toNextRoute } from '../../../src/infra/http.js';

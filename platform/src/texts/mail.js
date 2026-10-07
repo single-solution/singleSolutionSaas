@@ -102,15 +102,6 @@ export const MAIL_TEXTS = Object.freeze({
 		action: null,
 		footer: 'No action is needed.',
 	},
-	issuer_request: {
-		subject: (d) => `${d.productName ?? 'A product'} wants to become the identity issuer of ${d.domain ?? 'your website'}`,
-		lines: (d) => [
-			`${d.productName ?? 'A product'} asked to become the customer identity issuer of ${d.domain ?? 'your website'} on ${d.brand}.`,
-			'Once you approve, every product on the website accepts the sign-ins it issues. Nothing changes until you decide.',
-		],
-		action: 'Review the request',
-		footer: 'If you did not install this product or do not expect the request, reject it in the console.',
-	},
 });
 
 /** Closing line with the support contact. */

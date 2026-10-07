@@ -5,22 +5,26 @@
  * - **Admins** have exactly one role: `owner`, `support` or `finance`. Their rights cover every merchant and website.
  * - **Merchants** have no roles: a merchant acts on its own records only (`merchantId` of the resource must be its
  *   own), with the merchant column of the table.
- * - `product` actors (client assertions) and `website` actors (website keys) have no rights here: their routes
- *   authorise by protocol, so `can` is false for them unless the actor carries explicit `permissions`.
+ * - `product` actors (client assertions) have no rights here: their routes authorise by protocol, so `can` is false
+ *   for them unless the actor carries explicit `permissions`.
+ * - Rows the products enforce on their own servers (switching features, settings, widget texts, theme, connections,
+ *   global defaults and prices: {@link PRODUCT_ENFORCED_ROWS}) have no Portal permission. The Portal's part of them is
+ *   what it signs and accepts: launches carry the role (Finance is never launched), and a feature report is accepted
+ *   only for a current Owner or Support admin.
  * - `system` actors (operations, migrations) may do everything.
  * @module
  */
 
 /**
- * @typedef {'admin' | 'merchant' | 'product' | 'website' | 'system'} ActorType
+ * @typedef {'admin' | 'merchant' | 'product' | 'system'} ActorType
  * @typedef {'owner' | 'support' | 'finance'} AdminRole
  *
  * @typedef {object} Actor
  * @property {ActorType} type
- * @property {string} id admin id, merchant id, app id, website key id or job name
+ * @property {string} id admin id, merchant id, product id or a module name (system)
  * @property {AdminRole | null} [role] admins: the live role
  * @property {string | null} [name] admins: the live name (Activity keeps it)
- * @property {string} [merchantId] merchant and website actors
+ * @property {string} [merchantId] merchant actors
  * @property {boolean} [twoStepRequired] admins: Require two-step for admins applies and two-step is not set up
  * @property {string[]} [permissions] explicit extra permissions (rarely needed)
  *
@@ -31,9 +35,8 @@
 export const ADMIN_ROLES = Object.freeze(/** @type {AdminRole[]} */ (['owner', 'support', 'finance']));
 
 /**
- * The permissions, one per row of the rights table (PLAN 0.2), plus the read halves the table marks "view".
- * Rows enforced by the products themselves (features, settings, defaults and prices inside a product dashboard) are
- * here too, for the Portal routes that still carry them until the switch (PLAN 0.12 step 5).
+ * The permissions, one per row of the rights table (PLAN 0.2) the Portal enforces, plus the read halves the table
+ * marks "view".
  */
 export const PERMISSIONS = Object.freeze({
 	/** See Overview and Activity */
@@ -60,13 +63,6 @@ export const PERMISSIONS = Object.freeze({
 	tokensManage: 'tokens.manage',
 	/** Open a product dashboard for a website */
 	dashboardsOpen: 'dashboards.open',
-	/** Switch features on and off */
-	featuresWrite: 'features.write',
-	/** Edit settings, widget texts, theme and connections */
-	settingsRead: 'settings.read',
-	settingsWrite: 'settings.write',
-	/** Edit global defaults and prices */
-	defaultsWrite: 'defaults.write',
 	/** Products: connect, reconnect, set active/inactive, Open as admin with no website */
 	productsManage: 'products.manage',
 	/** The connected products list (Add product on a website; Owner and Support) */
@@ -82,6 +78,13 @@ export const PERMISSIONS = Object.freeze({
 });
 
 const P = PERMISSIONS;
+
+/** Rows of the rights table (PLAN 0.2) that each product checks on its own server for every request. */
+export const PRODUCT_ENFORCED_ROWS = Object.freeze([
+	'Switch features on and off',
+	'Edit settings, widget texts, theme and connections',
+	'Edit global defaults and prices',
+]);
 
 /** Every permission. */
 export const ALL_PERMISSIONS = Object.freeze(Object.values(PERMISSIONS));
@@ -102,9 +105,6 @@ export const ROLE_PERMISSIONS = Object.freeze({
 		P.productsOnWebsitesWrite,
 		P.tokensManage,
 		P.dashboardsOpen,
-		P.featuresWrite,
-		P.settingsRead,
-		P.settingsWrite,
 		P.productsRead,
 		P.billingRead,
 	]),
@@ -128,8 +128,6 @@ export const MERCHANT_PERMISSIONS = Object.freeze([
 	P.productsOnWebsitesRead,
 	P.tokensManage,
 	P.dashboardsOpen,
-	P.settingsRead,
-	P.settingsWrite,
 	P.billingRead,
 ]);
 

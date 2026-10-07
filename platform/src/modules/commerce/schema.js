@@ -4,62 +4,25 @@
  */
 import { defineCollection } from '../../infra/db.js';
 
-export const SUBSCRIPTIONS = 'commerce_subscriptions';
-export const DOCUMENTS = 'commerce_documents';
-export const USAGE = 'commerce_usage';
-export const COUNTERS = 'commerce_usage_counters';
+export const PRODUCTS = 'commerce_products';
 export const LEDGER = 'commerce_ledger';
 export const ACCOUNTS = 'commerce_accounts';
 export const PRICE_LISTS = 'commerce_price_lists';
 export const HISTORY = 'commerce_history';
 export const BILLING = 'commerce_billing';
 
-const DAY_S = 86_400;
-
 export const collections = Object.freeze([
 	defineCollection({
 		module: 'commerce',
-		name: SUBSCRIPTIONS,
+		name: PRODUCTS,
 		tenant: 'merchant',
 		description:
-			'Subscriptions (website × app): plan, price-book pins, holds/status, element switches. `live` is set while not cancelled.',
+			'Products on websites (`_id` = `<websiteId>:<productId>`): status added | removed, the switched-on features and the version of the last accepted feature report, who reported it and when.',
 		indexes: [
-			{
-				keys: { websiteId: 1, appId: 1 },
-				name: 'one_live_per_website_app',
-				unique: true,
-				partialFilterExpression: { live: true },
-			},
-			{ keys: { websiteId: 1, createdAt: 1 }, name: 'by_website' },
-			{ keys: { appId: 1, live: 1 }, name: 'by_app' },
-			{ keys: { merchantId: 1, status: 1 }, name: 'by_merchant_status' },
+			{ keys: { merchantId: 1, websiteId: 1, productId: 1 }, name: 'by_merchant_website' },
+			{ keys: { websiteId: 1, status: 1 }, name: 'by_website' },
+			{ keys: { productId: 1, status: 1, _id: 1 }, name: 'by_product' },
 		],
-	}),
-	defineCollection({
-		module: 'commerce',
-		name: DOCUMENTS,
-		tenant: 'merchant',
-		description:
-			'Signed entitlement document cache per subscription (_id = subscriptionId): version, content hash, JWS, validity.',
-	}),
-	defineCollection({
-		module: 'commerce',
-		name: USAGE,
-		tenant: 'merchant',
-		appendOnly: true,
-		description: 'Accepted usage records (exactly once by subscription × idempotencyKey), bucketed by UTC hour of receipt.',
-		indexes: [
-			{ keys: { subscriptionId: 1, idempotencyKey: 1 }, name: 'dedupe', unique: true },
-			{ keys: { merchantId: 1, subscriptionId: 1, bucket: 1 }, name: 'by_bucket' },
-		],
-		ttl: { field: 'receivedAt', afterSeconds: 180 * DAY_S },
-	}),
-	defineCollection({
-		module: 'commerce',
-		name: COUNTERS,
-		tenant: 'merchant',
-		description: 'Hourly usage counters per subscription × unit (_id = sub:unit:hour), for quotas.',
-		indexes: [{ keys: { merchantId: 1, subscriptionId: 1, unit: 1, hour: 1 }, name: 'by_subscription_unit_hour' }],
 	}),
 	defineCollection({
 		module: 'commerce',
@@ -87,8 +50,12 @@ export const collections = Object.freeze([
 		module: 'commerce',
 		name: PRICE_LISTS,
 		appendOnly: true,
-		description: 'Price lists per product, stamped with Portal time: { appId, at, features: [{ key, name, price }] }.',
-		indexes: [{ keys: { appId: 1, at: 1 }, name: 'by_app_at' }],
+		description:
+			'Accepted price lists per product, stamped with Portal time: { productId, version, at, features: [{ key, name, description, dependsOn, price }] } (price in millicredits per hour).',
+		indexes: [
+			{ keys: { productId: 1, version: 1 }, name: 'one_per_version', unique: true },
+			{ keys: { productId: 1, at: 1 }, name: 'by_product_at' },
+		],
 	}),
 	defineCollection({
 		module: 'commerce',

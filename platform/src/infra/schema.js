@@ -12,7 +12,6 @@ export const COLLECTIONS = Object.freeze({
 	rateLimits: 'platform_rate_limits',
 	replay: 'platform_replay',
 	audit: 'platform_audit',
-	jobs: 'platform_jobs',
 	locks: 'platform_locks',
 	migrations: 'platform_migrations',
 	system: 'platform_system',
@@ -22,7 +21,7 @@ export const INFRA_COLLECTIONS = Object.freeze([
 	defineCollection({
 		module: 'platform',
 		name: COLLECTIONS.sessions,
-		description: 'Console sessions (staff and merchant users); `_id` = HMAC of the opaque token.',
+		description: 'Console sessions (admins and merchants); `_id` = HMAC of the opaque token.',
 		timestamps: false,
 		ttl: { field: 'expireAt', afterSeconds: 0 },
 		indexes: [{ keys: { kind: 1, subject: 1, lastSeenAt: -1 } }],
@@ -52,7 +51,7 @@ export const INFRA_COLLECTIONS = Object.freeze([
 	defineCollection({
 		module: 'platform',
 		name: COLLECTIONS.replay,
-		description: 'Replay store for client assertions, launches, nonces (`@ss/protocol` ReplayStore).',
+		description: 'Replay store for client assertions and launch consumption (`@ss/protocol` ReplayStore).',
 		timestamps: false,
 		ttl: { field: 'expireAt', afterSeconds: 0 },
 	}),
@@ -68,20 +67,6 @@ export const INFRA_COLLECTIONS = Object.freeze([
 			{ keys: { 'actor.id': 1, at: -1 } },
 			{ keys: { action: 1, at: -1 } },
 			{ keys: { at: -1, _id: -1 } },
-		],
-	}),
-	defineCollection({
-		module: 'platform',
-		name: COLLECTIONS.jobs,
-		description: 'Job queue with leases and retries.',
-		timestamps: false,
-		ttl: { field: 'expireAt', afterSeconds: 0 },
-		indexes: [
-			{ keys: { status: 1, runAt: 1 } },
-			{ keys: { status: 1, leaseUntil: 1 } },
-			{ keys: { name: 1, status: 1 } },
-			{ keys: { group: 1, status: 1, runAt: 1 }, partialFilterExpression: { group: { $type: 'string' } } },
-			{ keys: { key: 1 }, unique: true, partialFilterExpression: { key: { $type: 'string' } } },
 		],
 	}),
 	defineCollection({

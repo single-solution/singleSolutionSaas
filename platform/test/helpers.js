@@ -154,37 +154,24 @@ export const testEnv = async (overrides = {}) => ({
 	...overrides,
 });
 
-/** The environment of a production Portal (a bucket is required there). */
-export const PRODUCTION_ENV = Object.freeze({
-	NODE_ENV: 'production',
-	PORTAL_URL,
-	ENCRYPTION_KEY,
-	STORAGE_ENDPOINT: 'https://r2.example.net',
-	STORAGE_BUCKET: 'ss-assets',
-	STORAGE_ACCESS_KEY_ID: 'AK',
-	STORAGE_SECRET_ACCESS_KEY: 'SK',
-});
+/** The environment of a production Portal. */
+export const PRODUCTION_ENV = Object.freeze({ NODE_ENV: 'production', PORTAL_URL, ENCRYPTION_KEY });
 
 /**
  * A complete system state (generated secrets and settings, as `infra/system.js` keeps them in the database), with
- * fresh signing keys: Portal keys `portal-2026-10` (signs) and `portal-2026-04`, website-key signer `website-2026-10`.
+ * fresh signing keys: Portal keys `portal-2026-10` (signs) and `portal-2026-04`, token signer `token-2026-10`.
  * @param {Partial<import('../src/infra/config.js').SystemState>} [overrides]
  * @returns {Promise<import('../src/infra/config.js').SystemState>}
  */
 export const testSystem = async (overrides = {}) => {
 	const { privateJwk } = await generateSigningKey({ kid: 'portal-2026-10' });
 	const { privateJwk: previous } = await generateSigningKey({ kid: 'portal-2026-04' });
-	const { privateJwk: website } = await generateSigningKey({ kid: 'website-2026-10' });
+	const { privateJwk: token } = await generateSigningKey({ kid: 'token-2026-10' });
 	return {
 		mail: null,
 		signingKeys: [privateJwk, previous],
-		websiteKeySigningKeys: [website],
-		keks: [
-			{ id: 'kek-2', key: Buffer.alloc(32, 2) },
-			{ id: 'kek-1', key: Buffer.alloc(32, 1) },
-		],
+		tokenSigningKeys: [token],
 		sessionSecret: Buffer.alloc(32, 3),
-		websiteKeyPepper: Buffer.alloc(32, 4),
 		idempotencySecret: Buffer.alloc(32, 5),
 		...overrides,
 	};

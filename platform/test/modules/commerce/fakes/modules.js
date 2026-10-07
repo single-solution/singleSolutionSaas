@@ -1,130 +1,97 @@
 /**
- * Fake modules implementing the INTERFACES.md functions commerce depends on (identity, catalog, config, connectors,
- * integration). State lives in a mutable `world` the tests change directly.
+ * Fake modules implementing the INTERFACES.md functions commerce depends on (identity and catalog). State lives in a
+ * mutable `world` the tests change directly.
  */
-import { testSessionActor } from '../../../helpers.js';
 import { createKeyResolver } from '@ss/protocol';
+import { testSessionActor } from '../../../helpers.js';
 import { problem } from '../../../../src/infra/http.js';
 import { defineModule } from '../../../../src/infra/modules.js';
 
 /**
  * @typedef {object} World
- * @property {Map<string, { merchantId: string, name: string, status: 'active' | 'suspended', createdAt: string }>} merchants
- * @property {Map<string, { websiteId: string, merchantId: string, domain: string, env: 'live' | 'test', twinId: string | null, status: string, createdAt: string, timeZone?: string, allowSubdomains?: boolean }>} websites
- * @property {Map<string, { app: Record<string, any>, versions: Map<number, Record<string, any>> }>} apps
- * @property {Map<string, Record<string, any>>} layers by subscriptionId
- * @property {Map<string, { kind: string, ref?: string, status: string }[]>} resources by websiteId
- * @property {{ type: string, data: Record<string, any>, target: Record<string, any> }[]} events
- * @property {Map<string, unknown>} appJwks by appId
- * @property {{ layersFor: number, statusFor: number, lastHint?: unknown }} calls
- * @property {boolean} failEmit
- * @property {Map<string, Record<string, any>>} identities identity-issuer document sections by websiteId
+ * @property {Map<string, { merchantId: string, name: string, status: 'active' | 'suspended' | 'deleted' }>} merchants
+ * @property {Map<string, { websiteId: string, merchantId: string, domain: string, status: string }>} websites
+ * @property {Map<string, { productId: string, name: string, status: 'active' | 'inactive' }>} products
+ * @property {Map<string, { adminId: string, name: string, role: string, status: string }>} admins
+ * @property {Map<string, unknown>} productJwks by productId
+ * @property {Array<{ productId: string, body: Record<string, unknown> }>} notices
+ * @property {Array<{ merchantId: string, websiteId: string, productId: string }>} tokens tokens ensured
+ * @property {boolean} failNotices
  */
 
 /** @returns {World} */
 export const createWorld = () => ({
 	merchants: new Map(),
 	websites: new Map(),
-	apps: new Map(),
-	layers: new Map(),
-	resources: new Map(),
-	events: [],
-	appJwks: new Map(),
-	calls: { layersFor: 0, statusFor: 0 },
-	failEmit: false,
-	identities: new Map(),
+	products: new Map(),
+	admins: new Map(),
+	productJwks: new Map(),
+	notices: [],
+	tokens: [],
+	failNotices: false,
 });
 
 /**
  * @param {World} world
- * @param {{ withConfig?: boolean, withConnectors?: boolean, withIntegration?: boolean }} [options]
  */
-export const fakeModules = (world, { withConfig = true, withConnectors = true, withIntegration = true } = {}) => [
+export const fakeModules = (world) => [
 	defineModule({
 		name: 'identity',
 		ports: () => ({ sessionActor: testSessionActor }),
 		service: () => ({
 			getMerchant: async (/** @type {string} */ id) =>
 				world.merchants.get(id) ?? Promise.reject(problem('not_found', 'No such merchant.')),
+			getMerchantRecord: async (/** @type {string} */ id) =>
+				world.merchants.get(id) ?? Promise.reject(problem('not_found', 'No such merchant.')),
 			getWebsite: async (/** @type {string} */ id) =>
 				world.websites.get(id) ?? Promise.reject(problem('not_found', 'No such website.')),
-			listWebsites: async (/** @type {string} */ merchantId) =>
-				[...world.websites.values()].filter((w) => w.merchantId === merchantId),
-			identityFor: async (/** @type {string} */ websiteId) => structuredClone(world.identities.get(websiteId) ?? null),
+			websitesByIds: async (/** @type {readonly string[]} */ ids) =>
+				new Map(ids.filter((id) => world.websites.has(id)).map((id) => [id, world.websites.get(id)])),
 			merchantNames: async (/** @type {readonly string[]} */ ids) =>
 				new Map(
 					ids
 						.filter((id) => world.merchants.has(id))
-						.map((id) => [id, { name: /** @type {any} */ (world.merchants.get(id)).name, deleted: false }]),
+						.map((id) => {
+							const m = /** @type {any} */ (world.merchants.get(id));
+							return [id, { name: m.name, deleted: m.status === 'deleted' }];
+						}),
 				),
 			billingContacts: async (/** @type {string} */ merchantId) => ({
 				merchantName: world.merchants.get(merchantId)?.name ?? merchantId,
 				merchantEmail: `owner@${merchantId}.example`,
 				adminEmails: ['finance@portal.example'],
 			}),
+			dashboardAdmin: async (/** @type {unknown} */ adminId) => {
+				const admin = world.admins.get(String(adminId));
+				if (!admin || admin.status !== 'active') throw problem('validation_failed', 'adminId is not a current admin.');
+				if (admin.role !== 'owner' && admin.role !== 'support') throw problem('forbidden', 'Only Owner and Support.');
+				return { adminId: admin.adminId, name: admin.name, role: admin.role };
+			},
+			ensureTokens: async (/** @type {{ merchantId: string, websiteId: string, productId: string }} */ input) => {
+				world.tokens.push(input);
+				return { created: true };
+			},
 		}),
 	}),
 	defineModule({
 		name: 'catalog',
 		service: () => ({
-			getApp: async (/** @type {string} */ appId) => {
-				const entry = world.apps.get(appId);
-				if (!entry) throw problem('not_found', 'No such app.');
-				return { ...entry.app };
+			getProduct: async (/** @type {string} */ productId) => {
+				const product = world.products.get(productId);
+				if (!product) throw problem('not_found', 'No such product.');
+				return { ...product };
 			},
-			getManifest: async (/** @type {string} */ appId, /** @type {number | undefined} */ version) => {
-				const entry = world.apps.get(appId);
-				if (!entry) throw problem('not_found', 'No such app.');
-				const manifest = entry.versions.get(version ?? entry.app.currentVersion);
-				if (!manifest) throw problem('not_found', 'No such version.');
-				return structuredClone(manifest);
+			isActive: async (/** @type {string} */ productId) => world.products.get(productId)?.status === 'active',
+			notify: async (/** @type {string} */ productId, /** @type {Record<string, unknown>} */ body) => {
+				if (world.failNotices) throw new Error('catalog is down');
+				world.notices.push({ productId, body });
 			},
 		}),
 		ports: () => ({
-			appKeys: (/** @type {string} */ appId) => {
-				const jwks = world.appJwks.get(appId);
+			productKeys: (/** @type {string} */ productId) => {
+				const jwks = world.productJwks.get(productId);
 				return jwks ? createKeyResolver({ jwks: /** @type {any} */ (jwks) }) : null;
 			},
 		}),
 	}),
-	...(withConfig
-		? [
-				defineModule({
-					name: 'config',
-					service: () => ({
-						layersFor: async (/** @type {string} */ subscriptionId, /** @type {unknown} */ hint) => {
-							world.calls.layersFor += 1;
-							world.calls.lastHint = hint;
-							return structuredClone(world.layers.get(subscriptionId) ?? {});
-						},
-					}),
-				}),
-			]
-		: []),
-	...(withConnectors
-		? [
-				defineModule({
-					name: 'connectors',
-					service: () => ({
-						statusFor: async (/** @type {string} */ websiteId) => {
-							world.calls.statusFor += 1;
-							return structuredClone(world.resources.get(websiteId) ?? []);
-						},
-					}),
-				}),
-			]
-		: []),
-	...(withIntegration
-		? [
-				defineModule({
-					name: 'integration',
-					service: () => ({
-						emitControl: async (/** @type {string} */ type, /** @type {any} */ data, /** @type {any} */ target) => {
-							if (world.failEmit) throw new Error('delivery down');
-							world.events.push({ type, data, target });
-						},
-					}),
-				}),
-			]
-		: []),
 ];

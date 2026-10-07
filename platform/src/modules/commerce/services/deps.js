@@ -1,126 +1,71 @@
 /**
- * Other modules commerce depends on, reached only through `ctx.service(name)` (INTERFACES.md). `identity` and
- * `catalog` are required; `config`, `connectors` and `integration` are optional at runtime: without `config` no
- * overrides apply, without `connectors` every resource reads as missing (fail closed), without `integration` control
- * events are not delivered (products still pull documents). Manifests are cached per app version (immutable).
+ * Other modules commerce depends on, reached only through `ctx.service(name)` (INTERFACES.md): `identity` (merchants,
+ * websites, admins, tokens) and `catalog` (connected products, notices). Notices never fail a money operation: a
+ * failure to queue one is logged.
  * @module
  */
-import { productOf } from '../core/catalog.js';
 
 /** @typedef {import('../../../infra/modules.js').ModuleContext} ModuleContext */
-/** @typedef {import('../core/catalog.js').Manifest} Manifest */
-/** @typedef {import('../core/catalog.js').Product} Product */
-
-const MANIFEST_CACHE = 200;
-
-/**
- * The resolver layers of `config.layersFor` output (`{ platform, website, admin }`, absent ones dropped).
- * @param {Record<string, any> | null | undefined} value
- * @returns {Record<string, any>}
- */
-export const configLayers = (value) => {
-	/** @type {Record<string, any>} */
-	const out = {};
-	for (const name of ['platform', 'website', 'admin']) if (value?.[name]) out[name] = value[name];
-	return out;
-};
 
 /**
  * @param {ModuleContext} ctx
  */
 export const createDeps = (ctx) => {
-	/** @param {string} name */
-	const optional = (name) => (ctx.moduleNames().includes(name) ? ctx.service(name) : null);
-	/** @type {Map<string, Promise<{ manifest: Manifest, product: Product }>>} */
-	const manifests = new Map();
-
-	/**
-	 * Manifest (and normalised product) of an app version (current version when omitted; never cached then).
-	 * @param {string} appId
-	 * @param {string | number} [version] catalog version (the app's `currentVersion` numbering)
-	 * @returns {Promise<{ manifest: Manifest, product: Product }>}
-	 */
-	const manifestOf = (appId, version) => {
-		const load = async () => {
-			const manifest = /** @type {Manifest} */ (await ctx.service('catalog').getManifest(appId, version));
-			return { manifest, product: productOf(manifest) };
-		};
-		if (version === undefined) return load();
-		const key = `${appId}@${version}`;
-		const cached = manifests.get(key);
-		if (cached) return cached;
-		const pending = load();
-		manifests.set(key, pending);
-		pending.catch(() => manifests.delete(key));
-		if (manifests.size > MANIFEST_CACHE) manifests.delete(/** @type {string} */ (manifests.keys().next().value));
-		return pending;
-	};
+	const identity = () => ctx.service('identity');
+	const catalog = () => ctx.service('catalog');
 
 	return Object.freeze({
 		/** @param {string} merchantId */
-		getMerchant: (merchantId) => ctx.service('identity').getMerchant(merchantId),
+		getMerchant: (merchantId) => identity().getMerchant(merchantId),
+		/** @param {string} merchantId @returns {Promise<{ merchantId: string, name: string, status: string }>} */
+		getMerchantRecord: (merchantId) => identity().getMerchantRecord(merchantId),
 		/** @param {string} websiteId */
-		getWebsite: (websiteId) => ctx.service('identity').getWebsite(websiteId),
+		getWebsite: (websiteId) => identity().getWebsite(websiteId),
+		/** @param {readonly string[]} websiteIds @returns {Promise<Map<string, { domain: string, merchantId: string, status: string }>>} */
+		websitesByIds: (websiteIds) => identity().websitesByIds(websiteIds),
 		/**
 		 * Names of merchants (deleted ones included) by id.
 		 * @param {readonly string[]} ids
 		 * @returns {Promise<Map<string, { name: string, deleted: boolean }>>}
 		 */
-		merchantNames: async (ids) => {
-			const identity = ctx.service('identity');
-			return typeof identity.merchantNames === 'function' ? identity.merchantNames(ids) : new Map();
-		},
+		merchantNames: (ids) => identity().merchantNames(ids),
 		/**
 		 * Recipients of a merchant's billing e-mails.
 		 * @param {string} merchantId
 		 * @returns {Promise<{ merchantName: string, merchantEmail: string | null, adminEmails: string[] }>}
 		 */
-		billingContacts: (merchantId) => ctx.service('identity').billingContacts(merchantId),
-		/** @param {string} appId */
-		getApp: (appId) => ctx.service('catalog').getApp(appId),
-		manifestOf,
+		billingContacts: (merchantId) => identity().billingContacts(merchantId),
 		/**
-		 * Configuration layers of a subscription (`config.layersFor(subscriptionId, hint)` returns
-		 * `{ platform, website, admin }`).
-		 * @param {Record<string, any>} sub `{ _id, merchantId, appId }`
-		 * @returns {Promise<Record<string, any>>}
+		 * A current Owner or Support admin (feature reports).
+		 * @param {unknown} adminId
+		 * @returns {Promise<{ adminId: string, name: string, role: 'owner' | 'support' }>}
 		 */
-		layersFor: async (sub) =>
-			configLayers(await optional('config')?.layersFor(sub._id, { merchantId: sub.merchantId, appId: sub.appId })),
+		dashboardAdmin: (adminId) => identity().dashboardAdmin(adminId),
+		/** @param {{ merchantId: string, websiteId: string, productId: string }} input */
+		ensureTokens: (input) => identity().ensureTokens(input),
 		/**
-		 * Bring-your-own identity: the website's identity issuer as the document's `identity` section, or null.
-		 * @param {string} websiteId
-		 * @returns {Promise<import('@ss/contracts').IdentitySection | null>}
+		 * The product's name (its id when it cannot be read).
+		 * @param {string} productId
+		 * @returns {Promise<string>}
 		 */
-		identityFor: async (websiteId) => {
-			const identity = ctx.service('identity');
-			return typeof identity.identityFor === 'function' ? ((await identity.identityFor(websiteId)) ?? null) : null;
-		},
-		/** @param {string} websiteId @returns {Promise<{ kind: string, ref?: string, status: string }[]>} */
-		statusFor: async (websiteId) => (await optional('connectors')?.statusFor(websiteId)) ?? [],
-		/**
-		 * Ask `delivery` to recompile the website bundle (a document version changed or a subscription ended); a failure
-		 * is logged, never fails commerce.
-		 * @param {string} websiteId
-		 */
-		requestCompile: async (websiteId) => {
+		productName: async (productId) => {
 			try {
-				await optional('delivery')?.requestCompile(websiteId);
-			} catch (error) {
-				ctx.logger.warn('delivery recompile not requested', { websiteId, error });
+				return String((await catalog().getProduct(productId)).name);
+			} catch {
+				return productId;
 			}
 		},
+		/** @param {string} productId @returns {Promise<boolean>} */
+		productActive: (productId) => catalog().isActive(productId),
 		/**
-		 * Emit a control event; delivery problems are logged, never fail a money operation.
-		 * @param {string} type @param {Record<string, unknown>} data @param {{ appIds?: string[], websiteId?: string }} target
+		 * `status.changed` to a product for a website (queued and retried by catalog).
+		 * @param {string} productId @param {string} websiteId
 		 */
-		emit: async (type, data, target) => {
-			const integration = optional('integration');
-			if (!integration) return;
+		statusChanged: async (productId, websiteId) => {
 			try {
-				await integration.emitControl(type, data, target);
+				await catalog().notify(productId, { type: 'status.changed', websiteId });
 			} catch (error) {
-				ctx.logger.warn('control event not emitted', { type, error });
+				ctx.logger.warn('status.changed not queued', { productId, websiteId, error });
 			}
 		},
 	});

@@ -7,20 +7,20 @@
  * unknown id comes after the check). "Refused" is 403, except on admin-only routes, which a merchant session does not
  * authenticate at all (401).
  *
- * Rows are tested where their Portal route lives today: identity and system with the real modules; products on
- * websites, features and money with the commerce harness; launches and products with the catalog harness; global
- * defaults with the config harness (the last three move into product dashboards at the switch, PLAN 0.12 step 5).
+ * Rows are tested where their Portal route lives: identity and system with the real modules; products on websites and
+ * money with the commerce harness; dashboards and Products with the real modules and a fake product. The rows each
+ * product enforces on its own server (`PRODUCT_ENFORCED_ROWS`) are tested on the Portal's part of them: the feature
+ * report accepts only a current Owner or Support admin, and launches carry the role a product checks (Finance is never
+ * launched; Defaults and Prices open only for Owners, with no website).
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { manifest as notesManifest } from '@ss/contracts/testing';
 import { closeMongoClients } from '../src/infra/db.js';
-import { MERCHANT, PORTAL_URL, startMongo } from './helpers.js';
+import { PRODUCT_ENFORCED_ROWS } from '../src/infra/rbac.js';
+import { startMongo } from './helpers.js';
 import { boot as bootIdentity, setupMongo, teardownMongo } from './modules/identity/boot.js';
-import { APP, M1, M2, W1, bootCommerce } from './modules/commerce/fixtures.js';
+import { FINANCE_ADMIN, M1, M2, OWNER_ADMIN, PRODUCT, SUPPORT_ADMIN, W1, W2, bootCommerce } from './modules/commerce/fixtures.js';
 import { bootPortal } from './modules/catalog/boot.js';
-import { startFakeProduct } from './modules/catalog/fakes/product.js';
-import { serviceManifest } from './modules/catalog/fixtures.js';
-import { boot as bootConfig } from './modules/config/boot.js';
-import { APP as CONFIG_APP } from './modules/config/fixtures.js';
 
 vi.setConfig({ testTimeout: 60_000, hookTimeout: 180_000 });
 
@@ -83,7 +83,8 @@ describe('rights: people, merchants, websites, tokens, admins and Settings', () 
 		const pending = (await owner.post('/v1/admin/merchants', { name: 'P', ownerName: 'P', email: 'p@shop.test' })).json.merchant
 			.merchantId;
 		const anonymous = h.client();
-		return { h, owner, support, finance, merchant: m.client, other: other.client, m, otherM: other, pending, anonymous };
+		const site = `/v1/merchants/${m.merchantId}/websites/${m.websiteId}`;
+		return { h, owner, support, finance, merchant: m.client, other: other.client, m, otherM: other, pending, anonymous, site };
 	}, [
 		{
 			name: 'See Overview and Activity (merchant: own only)',
@@ -211,54 +212,22 @@ describe('rights: people, merchants, websites, tokens, admins and Settings', () 
 		{
 			name: 'Reveal, copy and regenerate server tokens (merchant: own)',
 			columns: {
-				owner: async (as) =>
-					expect((await as.owner.get(`/v1/merchants/${as.m.merchantId}/websites/${as.m.websiteId}/keys`)).status).toBe(200),
+				owner: async (as) => expect((await as.owner.get(`${as.site}/tokens`)).status).toBe(200),
 				support: async (as) =>
-					expect(
-						allowed(
-							await as.support.post(`/v1/merchants/${as.m.merchantId}/websites/${as.m.websiteId}/keys`, { kind: 'x' }),
-						),
-					).toBe(true),
-				finance: async (as) =>
-					expect((await as.finance.get(`/v1/merchants/${as.m.merchantId}/websites/${as.m.websiteId}/keys`)).status).toBe(
-						403,
-					),
+					expect(allowed(await as.support.post(`${as.site}/tokens/notes/regenerate`, { kind: 'server' }))).toBe(true),
+				finance: async (as) => {
+					expect((await as.finance.get(`${as.site}/tokens`)).status).toBe(403);
+					expect((await as.finance.post(`${as.site}/tokens/notes/reveal`, {})).status).toBe(403);
+				},
 				merchant: async (as) => {
-					expect((await as.merchant.get(`/v1/merchants/${as.m.merchantId}/websites/${as.m.websiteId}/keys`)).status).toBe(
-						200,
-					);
+					expect((await as.merchant.get(`${as.site}/tokens`)).status).toBe(200);
+					expect(allowed(await as.merchant.post(`${as.site}/tokens/notes/reveal`, {}))).toBe(true);
 					expect(
-						(await as.merchant.get(`/v1/merchants/${as.otherM.merchantId}/websites/${as.otherM.websiteId}/keys`)).status,
+						(await as.merchant.get(`/v1/merchants/${as.otherM.merchantId}/websites/${as.otherM.websiteId}/tokens`)).status,
 					).toBe(403);
 				},
 			},
-			anonymous: (as) => as.anonymous.get(`/v1/merchants/${as.m.merchantId}/websites/${as.m.websiteId}/keys`),
-		},
-		{
-			name: 'Edit settings, widget texts, theme and connections (merchant: own)',
-			columns: {
-				owner: async (as) =>
-					expect(allowed(await as.owner.patch(`/v1/merchants/${as.m.merchantId}/websites/${as.m.websiteId}`, {}))).toBe(
-						true,
-					),
-				support: async (as) =>
-					expect(allowed(await as.support.patch(`/v1/merchants/${as.m.merchantId}/websites/${as.m.websiteId}`, {}))).toBe(
-						true,
-					),
-				finance: async (as) =>
-					expect((await as.finance.patch(`/v1/merchants/${as.m.merchantId}/websites/${as.m.websiteId}`, {})).status).toBe(
-						403,
-					),
-				merchant: async (as) => {
-					expect(allowed(await as.merchant.patch(`/v1/merchants/${as.m.merchantId}/websites/${as.m.websiteId}`, {}))).toBe(
-						true,
-					);
-					expect(
-						(await as.merchant.patch(`/v1/merchants/${as.otherM.merchantId}/websites/${as.otherM.websiteId}`, {})).status,
-					).toBe(403);
-				},
-			},
-			anonymous: (as) => as.anonymous.patch(`/v1/merchants/${as.m.merchantId}/websites/${as.m.websiteId}`, {}),
+			anonymous: (as) => as.anonymous.get(`${as.site}/tokens`),
 		},
 		{
 			name: 'Admins: invite, resend (or copy) invite, correct invite e-mail, change role, remove',
@@ -284,96 +253,95 @@ describe('rights: people, merchants, websites, tokens, admins and Settings', () 
 });
 
 // ---------------------------------------------------------------------------------------------------------------
-// commerce (products on websites, features, money)
+// commerce (products on websites, money, and the Portal's part of switching features)
 
-describe('rights: products on websites, features, credits, receipts and charges', () => {
+describe('rights: products on websites, switching features, credits, receipts and charges', () => {
 	section(async () => {
 		const h = await bootCommerce({ mongo, dbName: 'rights_commerce' });
 		await h.credit(M1, 100_000);
+		await h.prices(PRODUCT, 1, { codes: 1000, box: 500 });
+		await h.service.addProduct({
+			merchantId: M1,
+			websiteId: W1,
+			productId: PRODUCT,
+			actor: /** @type {any} */ ({ type: 'admin', id: OWNER_ADMIN, role: 'owner', name: 'Olivia' }),
+		});
+		const product = await h.productAuth(PRODUCT);
 		const owner = await h.login({ kind: 'admin', subject: 'adm_owner' });
 		const support = await h.login({ kind: 'admin', subject: 'adm_support' });
 		const finance = await h.login({ kind: 'admin', subject: 'adm_finance' });
 		const merchant = await h.login({ kind: 'merchant', subject: M1 });
 		const other = await h.login({ kind: 'merchant', subject: M2 });
 		let n = 0;
+		let version = 0;
 		/** @param {Record<string, string>} who @param {string} method @param {string} path @param {unknown} [body] */
 		const as = (who, method, path, body) =>
 			h.call(method, path, {
 				headers: { ...who, ...(method === 'POST' ? { 'idempotency-key': `r-${(n += 1)}` } : {}) },
 				body,
 			});
-		const sub = await as(owner, 'POST', `/v1/merchants/${M1}/websites/${W1}/subscriptions`, {
-			appId: APP,
-			planCode: 'starter',
-		});
-		expect(sub.status).toBe(201);
-		return { h, owner, support, finance, merchant, other, as, sub: sub.json.subscription.subscriptionId };
+		/** A feature report naming an admin (or a merchant id). @param {string} adminId */
+		const report = async (adminId) =>
+			h.call('PUT', `/v1/product/websites/${W1}/features`, {
+				headers: await product(),
+				body: { version: (version += 1), on: ['codes'], adminId, adminName: 'x' },
+			});
+		return { h, owner, support, finance, merchant, other, as, report };
 	}, [
 		{
 			name: 'Add and remove products on websites (Finance: view; merchant: views own)',
 			columns: {
 				owner: async (x) =>
 					expect(
-						allowed(await x.as(x.owner, 'POST', `/v1/merchants/${M1}/websites/${W1}/subscriptions`, { appId: 'nope' })),
-					).toBe(true),
+						(await x.as(x.owner, 'POST', `/v1/merchants/${M1}/websites/${W2}/products`, { productId: PRODUCT })).status,
+					).toBe(201),
 				support: async (x) =>
-					expect(
-						allowed(
-							await x.as(x.support, 'POST', `/v1/merchants/${M1}/subscriptions/${x.sub}/pause`, { reason: 'bad Reason' }),
-						),
-					).toBe(true),
+					expect(allowed(await x.as(x.support, 'DELETE', `/v1/merchants/${M1}/websites/${W2}/products/${PRODUCT}`))).toBe(
+						true,
+					),
 				finance: async (x) => {
 					expect(
-						(await x.as(x.finance, 'POST', `/v1/merchants/${M1}/websites/${W1}/subscriptions`, { appId: APP })).status,
+						(await x.as(x.finance, 'POST', `/v1/merchants/${M1}/websites/${W1}/products`, { productId: PRODUCT })).status,
 					).toBe(403);
-					expect((await x.as(x.finance, 'GET', `/v1/merchants/${M1}/subscriptions`)).status).toBe(200);
+					expect((await x.as(x.finance, 'GET', `/v1/merchants/${M1}/websites/${W1}/products`)).status).toBe(200);
 				},
 				merchant: async (x) => {
 					expect(
-						(await x.as(x.merchant, 'POST', `/v1/merchants/${M1}/websites/${W1}/subscriptions`, { appId: APP })).status,
+						(await x.as(x.merchant, 'POST', `/v1/merchants/${M1}/websites/${W1}/products`, { productId: PRODUCT })).status,
 					).toBe(403);
-					expect((await x.as(x.merchant, 'POST', `/v1/merchants/${M1}/subscriptions/${x.sub}/cancel`, {})).status).toBe(403);
-					expect((await x.as(x.merchant, 'GET', `/v1/merchants/${M1}/subscriptions`)).status).toBe(200);
-					expect((await x.as(x.other, 'GET', `/v1/merchants/${M1}/subscriptions`)).status).toBe(403);
+					expect((await x.as(x.merchant, 'DELETE', `/v1/merchants/${M1}/websites/${W1}/products/${PRODUCT}`)).status).toBe(
+						403,
+					);
+					expect((await x.as(x.merchant, 'GET', `/v1/merchants/${M1}/websites/${W1}/products`)).status).toBe(200);
+					expect((await x.as(x.other, 'GET', `/v1/merchants/${M1}/websites/${W1}/products`)).status).toBe(403);
 				},
 			},
-			anonymous: (x) => x.h.call('GET', `/v1/merchants/${M1}/subscriptions`),
+			anonymous: (x) => x.h.call('GET', `/v1/merchants/${M1}/websites/${W1}/products`),
 		},
 		{
-			name: 'Switch features on and off (merchant: sees them read-only)',
+			name: 'Switch features on and off (product-enforced; the Portal accepts reports of Owner and Support only)',
 			columns: {
-				owner: async (x) =>
-					expect(
-						(await x.as(x.owner, 'PUT', `/v1/merchants/${M1}/subscriptions/${x.sub}/elements/reports`, { enabled: true }))
-							.status,
-					).toBe(200),
-				support: async (x) =>
-					expect(
-						(
-							await x.as(x.support, 'PUT', `/v1/merchants/${M1}/subscriptions/${x.sub}/elements/reports`, {
-								enabled: false,
-							})
-						).status,
-					).toBe(200),
-				finance: async (x) =>
-					expect(
-						(await x.as(x.finance, 'PUT', `/v1/merchants/${M1}/subscriptions/${x.sub}/elements/reports`, { enabled: true }))
-							.status,
-					).toBe(403),
+				owner: async (x) => expect((await x.report(OWNER_ADMIN)).status).toBe(200),
+				support: async (x) => expect((await x.report(SUPPORT_ADMIN)).status).toBe(200),
+				finance: async (x) => expect((await x.report(FINANCE_ADMIN)).status).toBe(403),
 				merchant: async (x) => {
+					expect((await x.report(M1)).status).toBe(422); // a merchant is never an admin
 					expect(
 						(
-							await x.as(x.merchant, 'PUT', `/v1/merchants/${M1}/subscriptions/${x.sub}/elements/reports`, {
-								enabled: true,
+							await x.as(x.merchant, 'PUT', `/v1/product/websites/${W1}/features`, {
+								version: 99,
+								on: [],
+								adminId: M1,
+								adminName: 'm',
 							})
 						).status,
-					).toBe(403);
-					expect((await x.as(x.merchant, 'GET', `/v1/merchants/${M1}/subscriptions/${x.sub}`)).status).toBe(200);
-					expect((await x.as(x.other, 'GET', `/v1/merchants/${M1}/subscriptions/${x.sub}`)).status).toBe(403);
+					).toBe(401); // a session never reaches product routes
 				},
 			},
 			anonymous: (x) =>
-				x.h.call('PUT', `/v1/merchants/${M1}/subscriptions/${x.sub}/elements/reports`, { body: { enabled: true } }),
+				x.h.call('PUT', `/v1/product/websites/${W1}/features`, {
+					body: { version: 100, on: [], adminId: OWNER_ADMIN, adminName: 'x' },
+				}),
 		},
 		{
 			name: 'Add credits',
@@ -408,158 +376,100 @@ describe('rights: products on websites, features, credits, receipts and charges'
 });
 
 // ---------------------------------------------------------------------------------------------------------------
-// catalog (launches and products)
+// catalog (dashboards and Products) with the real modules and a fake product
 
-describe('rights: product dashboards and Products', () => {
-	/** @type {Array<{ close: () => Promise<unknown> }>} */
-	const products = [];
+describe('rights: product dashboards, Products, settings, defaults and prices', () => {
+	/** @type {Awaited<ReturnType<typeof bootPortal>> | null} */
+	let portal = null;
 	afterAll(async () => {
-		await Promise.all(products.map((p) => p.close()));
+		await portal?.close();
 	});
 	section(async () => {
 		const t = await bootPortal({ db: mongo.db('rights_catalog') });
-		const p = await startFakeProduct({ manifest: serviceManifest(), portalUrl: PORTAL_URL, now: t.clock.now });
-		products.push(p);
-		const registered = await t.register(p);
-		expect(registered.status).toBe(201);
-		const appId = registered.json.appId;
-		await t.staff('POST', `/v1/admin/apps/${appId}/status`, { body: { status: 'active' } });
-		return {
-			t,
-			appId,
-			owner: await t.session({ role: 'owner' }),
-			support: await t.session({ role: 'support' }),
-			finance: await t.session({ role: 'finance' }),
-			merchant: await t.session({ kind: 'merchant', merchantId: MERCHANT }),
+		portal = t;
+		const owner = await t.owner();
+		const product = await t.connect(notesManifest());
+		const m = await t.merchant('m@shop.test', ['shop.example.com']);
+		const other = await t.merchant('o@shop.test', ['other.example.com']);
+		const websiteId = String(m.websiteIds[0]);
+		await owner.post(`/v1/merchants/${m.merchantId}/websites/${websiteId}/products`, { productId: 'notes' });
+		await owner.post(`/v1/merchants/${other.merchantId}/websites/${other.websiteIds[0]}/products`, { productId: 'notes' });
+		const support = (await t.admin('support')).client;
+		const finance = (await t.admin('finance')).client;
+		/** @param {any} client @param {unknown} body */
+		const open = (client, body) => client.post('/v1/admin/products/notes/launch', body);
+		const merchantOpen = (/** @type {any} */ client, /** @type {{ merchantId: string, websiteIds: string[] }} */ who) =>
+			client.post(`/v1/merchants/${who.merchantId}/websites/${who.websiteIds[0]}/products/notes/launch`, {});
+		/** The role a launch carries (what the product checks). @param {{ json: any }} res */
+		const roleOf = async (res) => {
+			const claims = await t.verify(res.json.url, 'notes');
+			return claims.kind === 'admin' ? claims.admin?.role : claims.kind;
 		};
+		return { t, product, m, other, websiteId, owner, support, finance, merchant: m.client, open, merchantOpen, roleOf };
 	}, [
 		{
 			name: 'Open a product dashboard for a website (Finance: refused; merchant: own websites)',
 			columns: {
-				owner: async (x) =>
-					expect(
-						(
-							await x.t.call('POST', `/v1/admin/apps/${x.appId}/launch`, {
-								cookie: x.owner,
-								body: { merchantId: MERCHANT },
-							})
-						).status,
-					).toBe(200),
-				support: async (x) =>
-					expect(
-						(
-							await x.t.call('POST', `/v1/admin/apps/${x.appId}/launch`, {
-								cookie: x.support,
-								body: { merchantId: MERCHANT },
-							})
-						).status,
-					).toBe(200),
-				finance: async (x) =>
-					expect(
-						(
-							await x.t.call('POST', `/v1/admin/apps/${x.appId}/launch`, {
-								cookie: x.finance,
-								body: { merchantId: MERCHANT },
-							})
-						).status,
-					).toBe(403),
+				owner: async (x) => expect((await x.open(x.owner, { websiteId: x.websiteId })).status).toBe(200),
+				support: async (x) => expect((await x.open(x.support, { websiteId: x.websiteId })).status).toBe(200),
+				finance: async (x) => expect((await x.open(x.finance, { websiteId: x.websiteId })).status).toBe(403),
 				merchant: async (x) => {
-					expect(
-						(await x.t.call('POST', `/v1/merchants/${MERCHANT}/apps/${x.appId}/launch`, { cookie: x.merchant, body: {} }))
-							.status,
-					).toBe(200);
-					expect(
-						(
-							await x.t.call('POST', `/v1/merchants/mer_1123456789abcdefghjkmnpq/apps/${x.appId}/launch`, {
-								cookie: x.merchant,
-								body: {},
-							})
-						).status,
-					).toBe(403);
+					expect((await x.merchantOpen(x.merchant, x.m)).status).toBe(200);
+					expect((await x.merchantOpen(x.merchant, x.other)).status).toBe(403);
 				},
 			},
-			anonymous: (x) => x.t.call('POST', `/v1/admin/apps/${x.appId}/launch`, { body: { merchantId: MERCHANT } }),
+			anonymous: (x) => x.t.api.call('POST', '/v1/admin/products/notes/launch', { body: { websiteId: x.websiteId } }),
 		},
 		{
 			name: 'Products: connect, reconnect, set active/inactive, Open as admin with no website',
 			columns: {
 				owner: async (x) => {
-					expect(
-						(await x.t.call('POST', `/v1/admin/apps/${x.appId}/status`, { cookie: x.owner, body: { status: 'active' } }))
-							.status,
-					).toBe(200);
-					expect(
-						(await x.t.call('POST', `/v1/admin/apps/${x.appId}/launch`, { cookie: x.owner, body: { all: true } })).status,
-					).toBe(200);
+					expect((await x.owner.post('/v1/admin/products/notes/status', { status: 'active' })).status).toBe(200);
+					expect((await x.open(x.owner, {})).status).toBe(200);
+					expect(allowed(await x.owner.post('/v1/admin/products/notes/reconnect', { secret: 'short' }))).toBe(true);
 				},
 				support: async (x) => {
-					expect(
-						(await x.t.call('POST', `/v1/admin/apps/${x.appId}/status`, { cookie: x.support, body: { status: 'active' } }))
-							.status,
-					).toBe(403);
-					expect(
-						(await x.t.call('POST', `/v1/admin/apps/${x.appId}/launch`, { cookie: x.support, body: { all: true } })).status,
-					).toBe(403);
+					expect((await x.support.post('/v1/admin/products/notes/status', { status: 'active' })).status).toBe(403);
+					expect((await x.open(x.support, {})).status).toBe(403);
+					expect((await x.support.post('/v1/admin/products', { url: 'https://x.test', secret: 'x' })).status).toBe(403);
 				},
-				finance: async (x) =>
-					expect(
-						(
-							await x.t.call('POST', '/v1/admin/apps/connect', {
-								cookie: x.finance,
-								body: { url: 'https://x.test', secret: 'x' },
-							})
-						).status,
-					).toBe(403),
+				finance: async (x) => {
+					expect((await x.finance.post('/v1/admin/products', { url: 'https://x.test', secret: 'x' })).status).toBe(403);
+					expect((await x.finance.get('/v1/admin/products')).status).toBe(403);
+				},
 				merchant: async (x) =>
-					expect(
-						(
-							await x.t.call('POST', `/v1/admin/apps/${x.appId}/status`, {
-								cookie: x.merchant,
-								body: { status: 'inactive' },
-							})
-						).status,
-					).toBe(401),
+					expect((await x.merchant.post('/v1/admin/products/notes/status', { status: 'inactive' })).status).toBe(401),
 			},
-			anonymous: (x) => x.t.call('POST', `/v1/admin/apps/${x.appId}/status`, { body: { status: 'active' } }),
+			anonymous: (x) => x.t.api.call('POST', '/v1/admin/products/notes/status', { body: { status: 'active' } }),
 		},
-	]);
-});
-
-// ---------------------------------------------------------------------------------------------------------------
-// config (global defaults until the switch)
-
-describe('rights: global defaults and prices', () => {
-	section(async () => {
-		const app = await bootConfig({ db: mongo.db('rights_config') });
-		return {
-			app,
-			owner: await app.login({ kind: 'admin', subject: 'adm_owner' }),
-			support: await app.login({ kind: 'admin', subject: 'adm_support' }),
-			finance: await app.login({ kind: 'admin', subject: 'adm_finance' }),
-			merchant: await app.login({ kind: 'merchant', subject: 'mer_aaaaaaaaaaaaaaaaaaaaaaaaaa' }),
-		};
-	}, [
 		{
-			name: 'Edit global defaults and prices',
+			name: 'Edit settings, widget texts, theme and connections (product-enforced; launches carry who it is)',
 			columns: {
-				owner: async (x) =>
-					expect(
-						allowed(await x.app.call('PATCH', `/v1/admin/config/platform/${CONFIG_APP}`, { cookie: x.owner, body: {} })),
-					).toBe(true),
-				support: async (x) =>
-					expect(
-						(await x.app.call('PATCH', `/v1/admin/config/platform/${CONFIG_APP}`, { cookie: x.support, body: {} })).status,
-					).toBe(403),
-				finance: async (x) =>
-					expect(
-						(await x.app.call('PATCH', `/v1/admin/config/platform/${CONFIG_APP}`, { cookie: x.finance, body: {} })).status,
-					).toBe(403),
-				merchant: async (x) =>
-					expect(
-						(await x.app.call('PATCH', `/v1/admin/config/platform/${CONFIG_APP}`, { cookie: x.merchant, body: {} })).status,
-					).toBe(401),
+				owner: async (x) => expect(await x.roleOf(await x.open(x.owner, { websiteId: x.websiteId }))).toBe('owner'),
+				support: async (x) => expect(await x.roleOf(await x.open(x.support, { websiteId: x.websiteId }))).toBe('support'),
+				finance: async (x) => expect((await x.open(x.finance, { websiteId: x.websiteId })).status).toBe(403),
+				merchant: async (x) => expect(await x.roleOf(await x.merchantOpen(x.merchant, x.m))).toBe('merchant'),
 			},
-			anonymous: (x) => x.app.call('PATCH', `/v1/admin/config/platform/${CONFIG_APP}`, { body: {} }),
+			anonymous: (x) =>
+				x.t.api.call('POST', `/v1/merchants/${x.m.merchantId}/websites/${x.websiteId}/products/notes/launch`, {}),
+		},
+		{
+			name: 'Edit global defaults and prices (product-enforced; Defaults open only for Owners, with no website)',
+			columns: {
+				owner: async (x) => expect(await x.roleOf(await x.open(x.owner, {}))).toBe('owner'),
+				support: async (x) => expect((await x.open(x.support, {})).status).toBe(403),
+				finance: async (x) => expect((await x.open(x.finance, {})).status).toBe(403),
+				merchant: async (x) => expect((await x.merchant.post('/v1/admin/products/notes/launch', {})).status).toBe(401),
+			},
+			anonymous: (x) => x.t.api.call('POST', '/v1/admin/products/notes/launch', { body: {} }),
 		},
 	]);
+
+	it('names the rows each product enforces on its own server', () => {
+		expect(PRODUCT_ENFORCED_ROWS).toEqual([
+			'Switch features on and off',
+			'Edit settings, widget texts, theme and connections',
+			'Edit global defaults and prices',
+		]);
+	});
 });

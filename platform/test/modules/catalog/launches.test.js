@@ -1,169 +1,159 @@
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { manifest as notesManifest } from '@ss/contracts/testing';
 import { closeMongoClients } from '../../../src/infra/db.js';
-import { MERCHANT, PORTAL_URL, WEBSITE, startMongo } from '../../helpers.js';
-import { bootPortal, problemOf } from './boot.js';
-import { fakeCommerce } from './fakes/modules.js';
-import { startFakeProduct } from './fakes/product.js';
-import { renamedService, serviceManifest } from './fixtures.js';
+import { startMongo } from '../../helpers.js';
+import { bootPortal, codeOf } from './boot.js';
+
+vi.setConfig({ testTimeout: 60_000, hookTimeout: 180_000 });
 
 /** @type {Awaited<ReturnType<typeof startMongo>>} */
 let mongo;
-/** @type {Array<{ close: () => Promise<unknown> }>} */
-const products = [];
-
-vi.setConfig({ testTimeout: 30_000, hookTimeout: 120_000 });
-
+/** @type {Array<() => Promise<unknown>>} */
+const cleanups = [];
 beforeAll(async () => {
 	mongo = await startMongo();
-}, 120_000);
+}, 180_000);
+afterEach(async () => {
+	for (const cleanup of cleanups.splice(0)) await cleanup();
+});
 afterAll(async () => {
-	await Promise.all(products.map((p) => p.close()));
 	await closeMongoClients();
 	await mongo?.stop();
 });
 
 /**
- * Portal + connected fake product.
- * @param {Partial<Parameters<typeof bootPortal>[0]>} [options]
- * @param {any} [manifest]
+ * A merchant with three websites; notes on the first two, then removed from the second.
+ * @param {string} name
  */
-const setup = async (options = {}, manifest = serviceManifest()) => {
-	const t = await bootPortal({ db: mongo.db('cat_launch'), ...options });
-	const p = await startFakeProduct({ manifest, portalUrl: PORTAL_URL, now: t.clock.now });
-	products.push(p);
-	const res = await t.register(p);
-	expect(res.status).toBe(201);
-	const appId = /** @type {string} */ (res.json.appId);
-	return { t, p, appId };
+const setUp = async (name) => {
+	const h = await bootPortal({
+		db: mongo.db(name),
+		settings: {
+			branding: { name: 'Acme Portal', accent: '#112233' },
+			support: { email: 'help@acme.test', phone: '+92 300 0000000', whatsapp: '+92 300 1111111' },
+		},
+	});
+	cleanups.push(h.close);
+	const owner = await h.owner();
+	const product = await h.connect(notesManifest());
+	const m = await h.merchant('m@shop.test', ['shop.example.com', 'blog.example.com', 'bare.example.com']);
+	const [w1, w2, w3] = m.websiteIds;
+	for (const websiteId of [w1, w2])
+		await owner.post(`/v1/merchants/${m.merchantId}/websites/${websiteId}/products`, { productId: 'notes' });
+	await owner.del(`/v1/merchants/${m.merchantId}/websites/${w2}/products/notes`);
+	return { h, owner, product, m, w1: String(w1), w2: String(w2), w3: String(w3) };
 };
 
-/** @param {any} t @param {string} appId */
-const activate = (t, appId) => t.staff('POST', `/v1/admin/apps/${appId}/status`, { body: { status: 'active' } });
-
-describe('launches', () => {
-	it('issues merchant and admin launches, verifiable with @ss/protocol verifyLaunch', async () => {
-		const { t, p, appId } = await setup({ modules: [fakeCommerce([])] });
-		await activate(t, appId);
-
-		/** @param {any} res */
-		const tokenOf = (res) => {
-			expect(res.status, JSON.stringify(res.json)).toBe(200);
-			const url = new URL(res.json.url);
-			expect(`${url.origin}${url.pathname}`).toBe(`${p.url}/sso`);
-			return /** @type {string} */ (url.searchParams.get('launch'));
-		};
-
-		// merchant (merchant console)
-		const merchantCookie = await t.session({ kind: 'merchant', merchantId: MERCHANT });
-		const merchant = await t.call('POST', `/v1/merchants/${MERCHANT}/apps/${appId}/launch`, {
-			cookie: merchantCookie,
-			body: { websiteId: WEBSITE },
-		});
-		const m = await t.verify(tokenOf(merchant), appId);
-		expect(m).toMatchObject({
+describe('launches (PLAN 0.4.3)', () => {
+	it('merchant launches name the merchant, its websites that have the product and the website to open', async () => {
+		const { h, product, m, w1, w2, w3 } = await setUp('launch_merchant');
+		const path = (/** @type {string} */ websiteId) =>
+			`/v1/merchants/${m.merchantId}/websites/${websiteId}/products/notes/launch`;
+		const opened = await m.client.post(path(w1));
+		expect(opened.status).toBe(200);
+		expect(opened.json.url.startsWith(`${product.url}/sso?launch=`)).toBe(true);
+		expect(opened.json.expiresAt).toBe('2026-10-01T10:01:00.000Z');
+		const claims = await h.verify(opened.json.url, 'notes');
+		expect(claims).toMatchObject({
+			iss: 'https://portal.test',
+			aud: 'notes',
+			sub: m.merchantId,
 			kind: 'merchant',
-			sub: MERCHANT,
-			iss: PORTAL_URL,
-			aud: appId,
-			scope: { merchantId: MERCHANT, websiteId: WEBSITE },
+			sessionExpiresAt: '2026-10-01T22:00:00.000Z',
+			branding: { name: 'Acme Portal', accent: '#112233', logoUrl: null },
+			support: { email: 'help@acme.test', phone: '+92 300 0000000', whatsapp: '+92 300 1111111' },
+			merchant: { id: m.merchantId, name: m.name, websites: [{ websiteId: w1, domain: 'shop.example.com' }], websiteId: w1 },
 		});
-		expect(m.exp - m.iat).toBe(60);
-		problemOf(
-			await t.call('POST', `/v1/merchants/mer_1123456789abcdefghjkmnpq/apps/${appId}/launch`, {
-				cookie: merchantCookie,
-				body: {},
-			}),
-			403,
-		);
-
-		// admin launches (Finance is refused, PLAN 0.2)
-		const staffLaunch = (/** @type {any} */ body, /** @type {string} */ role = 'owner') =>
-			t.staff('POST', `/v1/admin/apps/${appId}/launch`, { body, role });
-		const admin = await t.verify(tokenOf(await staffLaunch({ kind: 'admin', merchantId: MERCHANT })), appId);
-		expect(admin).toMatchObject({
-			kind: 'admin',
-			sub: 'adm_owner_alice',
-			user: { id: 'adm_owner_alice', roles: ['owner'] },
-			scope: { merchantId: MERCHANT },
+		expect(claims.admin).toBeUndefined();
+		// removed products and websites without the product cannot be opened; nor can another merchant's
+		expect(codeOf(await m.client.post(path(w2)))).toEqual([404, 'not_found']);
+		expect(codeOf(await m.client.post(path(w3)))).toEqual([404, 'not_found']);
+		const other = await h.merchant('o@shop.test', ['other.example.com']);
+		expect(codeOf(await other.client.post(path(w1)))).toEqual([403, 'forbidden']);
+		// admins open through the admin route, never the merchant one
+		expect((await (await h.owner()).post(path(w1))).status).toBe(401);
+		expect((await h.activity('product.dashboard_opened'))[0]).toMatchObject({
+			actor: { type: 'merchant', id: m.merchantId },
+			merchantId: m.merchantId,
+			target: { type: 'website', id: w1 },
+			after: { productId: 'notes', kind: 'merchant' },
 		});
-		// Open as admin with no website: Owner only
-		const wide = await t.verify(tokenOf(await staffLaunch({ all: true })), appId);
-		expect(wide).toMatchObject({ kind: 'admin', sub: 'adm_owner_alice', scope: { all: true } });
-		expect(wide.scope).not.toHaveProperty('merchantId');
-		problemOf(await staffLaunch({ all: true }, 'support'), 403, 'forbidden');
-		problemOf(await staffLaunch({ merchantId: MERCHANT }, 'finance'), 403, 'forbidden');
-		problemOf(await staffLaunch({ all: true, merchantId: MERCHANT }), 422, 'validation_failed');
-		expect((await staffLaunch({ merchantId: MERCHANT, websiteId: WEBSITE }, 'support')).status).toBe(200);
-		problemOf(await staffLaunch({ kind: 'impersonate', merchantId: MERCHANT }), 422, 'validation_failed');
-		problemOf(await staffLaunch({}), 422, 'catalog_launch_refused');
-
-		// admin launches are written to Activity
-		const launches = (await t.audit(appId)).filter((a) => a.action === 'catalog.launch_issued');
-		expect(launches.map((a) => a.after.kind)).toEqual(['admin', 'admin', 'admin']);
-		expect(launches[0]).toMatchObject({ actor: { id: 'adm_owner_alice' }, merchantId: MERCHANT });
-		expect(launches[1]).toMatchObject({ merchantId: null, after: { kind: 'admin', scope: 'all' } });
-	});
-
-	it('includes the website subscriptions from commerce in merchant launches', async () => {
-		const SUB = 'sub_0123456789abcdefghjkmnpq';
-		/** @type {any[]} */
-		const subs = [];
-		const { t, appId } = await setup({ modules: [fakeCommerce(subs)] });
-		subs.push(
-			{ subscriptionId: SUB, websiteId: WEBSITE, merchantId: MERCHANT, appId, status: 'active' },
-			{ subscriptionId: 'sub_other', websiteId: WEBSITE, merchantId: MERCHANT, appId: 'app_other', status: 'active' },
-		);
-		await activate(t, appId);
-		const cookie = await t.session({ kind: 'merchant', merchantId: MERCHANT });
-		const res = await t.call('POST', `/v1/merchants/${MERCHANT}/apps/${appId}/launch`, {
-			cookie,
-			body: { websiteId: WEBSITE },
-		});
-		const claims = await t.verify(/** @type {string} */ (new URL(res.json.url).searchParams.get('launch')), appId);
-		expect(claims.subscriptions).toEqual([{ subscriptionId: SUB, websiteId: WEBSITE, status: 'active' }]);
-	});
-
-	it('refuses merchant launches of inactive apps and launches of unknown apps', async () => {
-		const { t, appId } = await setup();
-		const cookie = await t.session({ kind: 'merchant', merchantId: MERCHANT });
-		problemOf(
-			await t.call('POST', `/v1/merchants/${MERCHANT}/apps/${appId}/launch`, { cookie, body: {} }),
-			422,
-			'catalog_launch_refused',
-		);
-		// staff can open an inactive product before listing it
-		expect((await t.staff('POST', `/v1/admin/apps/${appId}/launch`, { body: { merchantId: MERCHANT } })).status).toBe(200);
-		problemOf(await t.call('POST', `/v1/merchants/${MERCHANT}/apps/app_nope/launch`, { cookie, body: {} }), 404);
+		// a suspended merchant cannot open any product (the session ends; the service refuses too)
+		await (await h.owner()).post(`/v1/admin/merchants/${m.merchantId}/suspend`, { reason: 'unpaid' });
+		expect((await m.client.post(path(w1))).status).toBe(401);
+		const catalog = /** @type {any} */ (h.portal.modules.service('catalog'));
+		const session = { expiresAt: new Date(Date.UTC(2026, 9, 1, 22)) };
 		await expect(
-			t.service().issueLaunch({ kind: /** @type {any} */ ('demo'), appId, subject: 'usr_x', user: { id: 'usr_x' } }),
-		).rejects.toMatchObject({ code: 'catalog_launch_refused' });
+			catalog.merchantLaunch({
+				merchantId: m.merchantId,
+				websiteId: w1,
+				productId: 'notes',
+				session,
+				actor: { type: 'merchant', id: m.merchantId },
+			}),
+		).rejects.toMatchObject({ code: 'merchant_suspended' });
 	});
 
-	it('consumes launches once (shared replay store)', async () => {
-		const { t, p, appId } = await setup();
-		await activate(t, appId);
-		const issue = () =>
-			t
-				.service()
-				.issueLaunch({ kind: 'merchant', appId, subject: 'usr_x', user: { id: 'usr_x' }, scope: { merchantId: MERCHANT } });
-		const launch = await issue();
-		const consume = async (/** @type {string} */ jti, signer = p.signer, app = appId) =>
-			t.call('POST', '/v1/product/launch/consume', { bearer: await t.assertion(signer, app), body: { jti, exp: 1 } });
-		expect((await consume(launch.jti)).json).toEqual({ consumed: true });
-		expect((await consume(launch.jti)).json).toEqual({ consumed: false });
-		expect((await consume('unknown-jti-0123456789')).json).toEqual({ consumed: false });
-		problemOf(await consume('x'), 422);
+	it('admin launches: Owner and Support for a website that has the product, Owners only with no website; Finance refused', async () => {
+		const { h, owner, m, w1, w2 } = await setUp('launch_admin');
+		const support = await h.admin('support');
+		const finance = await h.admin('finance');
+		const open = (/** @type {any} */ client, /** @type {unknown} */ body) =>
+			client.post('/v1/admin/products/notes/launch', body);
+		const forSite = await open(support.client, { websiteId: w1 });
+		expect(forSite.status).toBe(200);
+		expect(await h.verify(forSite.json.url, 'notes')).toMatchObject({
+			kind: 'admin',
+			sub: support.adminId,
+			admin: { id: support.adminId, name: 'support admin', role: 'support', websiteId: w1 },
+		});
+		expect(codeOf(await open(support.client, {}))).toEqual([403, 'forbidden']); // no website: Owner only
+		const defaults = await open(owner, {});
+		expect((await h.verify(defaults.json.url, 'notes')).admin).toMatchObject({
+			role: 'owner',
+			websiteId: null,
+			name: 'Olivia Owner',
+		});
+		expect(codeOf(await open(finance.client, { websiteId: w1 }))).toEqual([403, 'forbidden']);
+		expect(codeOf(await open(owner, { websiteId: w2 }))).toEqual([404, 'not_found']); // removed
+		expect(codeOf(await open(owner, { websiteId: 'nope' }))).toEqual([422, 'validation_failed']);
+		expect(codeOf(await owner.post('/v1/admin/products/ghost/launch', {}))).toEqual([404, 'not_found']);
+		expect((await m.client.post('/v1/admin/products/notes/launch', { websiteId: w1 })).status).toBe(401);
+		// admins can still open a suspended merchant's products
+		await owner.post(`/v1/admin/merchants/${m.merchantId}/suspend`, { reason: 'unpaid' });
+		expect((await open(owner, { websiteId: w1 })).status).toBe(200);
+		// the service refuses a Finance actor whatever the route
+		const catalog = /** @type {any} */ (h.portal.modules.service('catalog'));
+		await expect(
+			catalog.adminLaunch({
+				productId: 'notes',
+				websiteId: w1,
+				session: { expiresAt: new Date() },
+				actor: { type: 'admin', id: finance.adminId, role: 'finance' },
+			}),
+		).rejects.toMatchObject({ code: 'forbidden' });
+	});
 
-		// another app cannot consume this app's launch
-		const other = await startFakeProduct({ manifest: renamedService('coupons-b'), portalUrl: PORTAL_URL, now: t.clock.now });
-		products.push(other);
-		const reg = await t.register(other);
-		expect(reg.status, JSON.stringify(reg.json)).toBe(201);
-		const second = await issue();
-		expect((await consume(second.jti, other.signer, reg.json.appId)).json).toEqual({ consumed: false });
-
-		// expired launches cannot be consumed
-		t.clock.advance(2 * 60_000);
-		expect((await consume(second.jti)).json).toEqual({ consumed: false });
+	it('the product consumes each launch once; the launch ends with the launching session', async () => {
+		const { h, product, m, w1, owner } = await setUp('launch_consume');
+		const opened = await m.client.post(`/v1/merchants/${m.merchantId}/websites/${w1}/products/notes/launch`);
+		const { jti } = await h.verify(opened.json.url, 'notes');
+		expect((await h.productCall(product, 'POST', '/v1/product/launch/consume', { jti })).json).toEqual({ consumed: true });
+		expect((await h.productCall(product, 'POST', '/v1/product/launch/consume', { jti })).json).toEqual({ consumed: false });
+		expect((await h.productCall(product, 'POST', '/v1/product/launch/consume', { jti: 'x'.repeat(22) })).json).toEqual({
+			consumed: false,
+		});
+		expect(codeOf(await h.productCall(product, 'POST', '/v1/product/launch/consume', { jti: 'bad' }))).toEqual([
+			422,
+			'validation_failed',
+		]);
+		// an expired launch is not consumed
+		const late = await owner.post('/v1/admin/products/notes/launch', { websiteId: w1 });
+		const lateClaims = await h.verify(late.json.url, 'notes');
+		h.clock.advance(120_000);
+		expect((await h.productCall(product, 'POST', '/v1/product/launch/consume', { jti: lateClaims.jti })).json).toEqual({
+			consumed: false,
+		});
+		expect((await h.api.call('POST', '/v1/product/launch/consume', { body: { jti } })).status).toBe(401);
 	});
 });

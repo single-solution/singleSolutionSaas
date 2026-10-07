@@ -1,387 +1,169 @@
 'use client';
 /**
- * Websites list (read only for merchants) and the website overview (with the install code). The add-website form is
- * used by the admin console.
+ * Merchant Overview, Websites and the website page (PLAN 0.8.2 Merchant): the balance and days left at the current
+ * spend, the 30-day spend chart and the websites with product chips and Open buttons; the websites list (inner sidebar
+ * on the website page); the website page without admin actions. With no websites yet, the welcome with the support
+ * contact (PLAN 0.8.2 Sign-in).
  * @module
  */
 import { useState } from 'react';
-import {
-	Badge,
-	Button,
-	ButtonLink,
-	Callout,
-	Card,
-	CodeBlock,
-	ConfirmDialog,
-	Dialog,
-	EmptyState,
-	Form,
-	FormError,
-	Icon,
-	Input,
-	PageHeader,
-	Stat,
-	StatusBadge,
-	Stepper,
-	Table,
-	fieldErrors,
-	formatDate,
-	humanize,
-	useToast,
-	formatCredits,
-} from '@ss/ui';
+import { BarChart, Button, Card, EmptyState, Icon, PageHeader, formatCredits, describeProblem, useToast } from '@ss/ui';
+import { AUTH, MERCHANT, WEBSITE } from '../../texts/console.js';
 import { apiFetch } from '../client.js';
 import { Link } from '../link.js';
 import { api, routes } from '../paths.js';
-import { AUTH, BILLING, MERCHANT } from '../../texts/console.js';
-import { ProductStatusBadge } from './billing.js';
-import { PageProblem, WebsiteHeader, productName } from './common.js';
+import { BillingStats, ProductStatusBadge } from './billing.js';
+import { PageProblem, openDashboard } from './common.js';
 import { contactLine } from './sign-in.js';
+import { WebsitePage, WebsitesTable, dailyCostOf } from './website.js';
 
-/** @typedef {import('@ss/ui').Problem} Problem */
-
-/** Resource kinds a website can connect (PLAN §1a), with what they are for. */
-export const RESOURCE_KINDS = Object.freeze([
-	{ kind: 'database', label: 'Database', help: 'Your own MongoDB for product data (required by products that store data).' },
-	{ kind: 'storage', label: 'Object storage', help: 'Your S3/R2/GCS bucket for files and media.' },
-	{ kind: 'ai', label: 'AI provider', help: 'Your own API key for AI features (you pay the provider directly).' },
-	{ kind: 'messaging', label: 'Messaging', help: 'Your e-mail/SMS/WhatsApp account for messages to customers.' },
-	{ kind: 'payments', label: 'Payments', help: 'Your payment gateway merchant account.' },
-]);
+/** @typedef {import('./website.js').ProductCard} ProductCard */
+/** @typedef {{ support?: { email: string | null, phone: string | null, whatsapp: string | null } | null }} BrandingSupport */
 
 /**
- * Add-website form (dialog body or onboarding step; the Admin Console passes `fetcher={adminFetch}`).
- * @param {{ merchantId: string, onAdded: (website: any) => void, autoFocus?: boolean, fetcher?: typeof apiFetch }} props
+ * The welcome of a merchant with no websites yet.
+ * @param {{ branding?: BrandingSupport }} props
  */
-export function AddWebsiteForm({ merchantId, onAdded, autoFocus = false, fetcher = apiFetch }) {
-	const [domain, setDomain] = useState('');
-	const [busy, setBusy] = useState(false);
-	const [error, setError] = useState(/** @type {string | null} */ (null));
-	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
-	const submit = async () => {
-		const value = domain.trim();
-		if (!value) {
-			setError('Enter the domain of your website, e.g. shop.example.com.');
-			return;
-		}
-		setError(null);
-		setBusy(true);
-		setProblem(null);
-		const result = await fetcher(api.websites(merchantId), { method: 'POST', body: { domain: value } });
-		setBusy(false);
-		if (result.ok) onAdded(result.data.website);
-		else setProblem(result.problem);
-	};
+function Welcome({ branding }) {
 	return (
-		<Form onSubmit={submit} busy={busy} aria-label="Add a website">
-			<Input
-				label="Domain"
-				name="domain"
-				placeholder="shop.example.com"
-				autoComplete="url"
-				inputMode="url"
-				value={domain}
-				onChange={(e) => setDomain(e.currentTarget.value)}
-				help="Just the domain — no https:// or path. A test twin is created with it."
-				error={error ?? fieldErrors(problem).domain}
-				autoFocus={autoFocus}
-				required
-			/>
-			<FormError problem={problem} fields={['domain']} />
-			<Button type="submit" loading={busy}>
-				Add website
-			</Button>
-		</Form>
+		<EmptyState
+			icon="globe"
+			title={AUTH.welcomeTitle}
+			description={
+				<>
+					{AUTH.welcome} {AUTH.contactUs} {contactLine(branding?.support)}.
+				</>
+			}
+		/>
 	);
 }
 
 /**
- * The merchant's websites (read only: Owner and Support admins add and remove them, PLAN 0.2). With none yet, the
- * welcome with the support contact (PLAN 0.8.2 Sign-in).
- * @param {{ ok: boolean, problem?: Problem, merchantId?: string, websites?: any[], subscriptions?: any[],
- *   branding?: { support: { email: string | null, phone: string | null, whatsapp: string | null } } }} props
+ * The merchant's Overview.
+ * @param {any} props loader result of `loadOverview` plus `branding`
+ */
+export function OverviewView(props) {
+	const toast = useToast();
+	const [opening, setOpening] = useState(/** @type {string | null} */ (null));
+	if (!props.ok) return <PageProblem problem={props.problem} />;
+	const rows = /** @type {Array<{ website: any, cards: ProductCard[] }>} */ (props.rows);
+	/** @param {any} website @param {ProductCard} card */
+	const open = async (website, card) => {
+		const key = `${website.websiteId}:${card.productId}`;
+		setOpening(key);
+		const result = await openDashboard(apiFetch, api.launch(props.merchantId, website.websiteId, card.productId));
+		setOpening(null);
+		if (!result.ok) toast.show({ tone: 'danger', title: describeProblem(result.problem) });
+	};
+	return (
+		<div className="space-y-6">
+			<PageHeader title={MERCHANT.overviewTitle} />
+			{props.billing ? <BillingStats summary={props.billing} /> : null}
+			<Card title={MERCHANT.spendChart} subtitle={props.usage ? formatCredits(props.usage.total ?? 0) : undefined}>
+				<BarChart
+					label={MERCHANT.spendChart}
+					data={(props.usage?.days ?? []).map((/** @type {{ day: string, amount: number }} */ d) => ({
+						label: d.day.slice(5),
+						value: d.amount / 1000,
+						hint: d.day,
+					}))}
+					format={(v) => formatCredits(Math.round(v * 1000))}
+				/>
+			</Card>
+			<section className="space-y-3" aria-labelledby="overview-websites">
+				<h2 id="overview-websites" className="text-base font-bold text-fg">
+					{MERCHANT.websitesTitle}
+				</h2>
+				{rows.length === 0 ? (
+					<Welcome branding={props.branding} />
+				) : (
+					<ul className="grid gap-4 lg:grid-cols-2">
+						{rows.map(({ website, cards }) => (
+							<li key={website.websiteId}>
+								<Card
+									title={
+										<Link href={routes.website(website.websiteId)} className="break-all text-primary hover:underline">
+											{website.domain}
+										</Link>
+									}
+									subtitle={WEBSITE.perDay(formatCredits(dailyCostOf(cards)))}>
+									{cards.length === 0 ? (
+										<p className="text-sm text-muted">{WEBSITE.noProductsMerchant}</p>
+									) : (
+										<ul className="divide-y divide-line">
+											{cards.map((card) => (
+												<li key={card.productId} className="flex flex-wrap items-center justify-between gap-2 py-2">
+													<span className="flex min-w-0 flex-wrap items-center gap-2">
+														<span className="truncate text-sm font-semibold text-fg">{card.name}</span>
+														<ProductStatusBadge status={card.status} featuresOn={card.featuresOn} />
+													</span>
+													<Button
+														size="sm"
+														variant="secondary"
+														loading={opening === `${website.websiteId}:${card.productId}`}
+														aria-label={`${WEBSITE.openLabel(card.name)} · ${website.domain}`}
+														onClick={() => void open(website, card)}
+														icon={<Icon name="external" size={14} />}>
+														{WEBSITE.open}
+													</Button>
+												</li>
+											))}
+										</ul>
+									)}
+								</Card>
+							</li>
+						))}
+					</ul>
+				)}
+			</section>
+		</div>
+	);
+}
+
+/**
+ * The merchant's websites (Owner and Support admins add and remove them, PLAN 0.2).
+ * @param {any} props loader result of `loadWebsites` plus `branding`
  */
 export function WebsitesView(props) {
-	if (!props.ok || !props.merchantId) return <PageProblem problem={props.problem} />;
-	const all = /** @type {any[]} */ (props.websites ?? []);
-	const live = all.filter((w) => w.env === 'live');
-	const subs = props.subscriptions ?? [];
-	/** @param {any} w */
-	const subCount = (w) =>
-		subs.filter((s) => (s.websiteId === w.websiteId || s.websiteId === w.twinId) && s.status !== 'cancelled').length;
-	return (
-		<div className="space-y-6">
-			<PageHeader title={MERCHANT.menu.websites} />
-			{live.length === 0 ? (
-				<EmptyState
-					icon="globe"
-					title={AUTH.welcomeTitle}
-					description={
-						<>
-							{AUTH.welcome} {AUTH.contactUs} {contactLine(props.branding?.support)}.
-						</>
-					}
-				/>
-			) : (
-				<Table
-					caption={MERCHANT.menu.websites}
-					rowKey={(w) => w.websiteId}
-					rows={live}
-					defaultSort={{ key: 'domain', direction: 'asc' }}
-					columns={[
-						{
-							key: 'domain',
-							header: 'Domain',
-							sortable: true,
-							rowHeader: true,
-							render: (w) => (
-								<Link href={routes.website(w.websiteId)} className="font-semibold text-primary hover:underline">
-									{w.domain}
-								</Link>
-							),
-						},
-						{
-							key: 'subs',
-							header: 'Products',
-							align: 'right',
-							sortable: true,
-							sortValue: subCount,
-							render: (w) => subCount(w),
-						},
-						{ key: 'createdAt', header: 'Added', sortable: true, render: (w) => formatDate(w.createdAt) },
-					]}
-				/>
-			)}
-		</div>
-	);
-}
-
-/**
- * The request body of the website settings form (empty fields clear a setting), or null when nothing changed.
- * @param {{ timeZone: string, language: string, currency: string }} form
- * @param {Record<string, any>} website
- * @returns {Record<string, string | null> | null}
- */
-export const settingsBody = (form, website) => {
-	/** @type {Record<string, string | null>} */
-	const body = {};
-	for (const name of /** @type {const} */ (['timeZone', 'language', 'currency'])) {
-		const value = form[name].trim() === '' ? null : form[name].trim();
-		if (value !== (website[name] ?? null)) body[name] = value;
-	}
-	return Object.keys(body).length > 0 ? body : null;
-};
-
-/**
- * Website settings (F.16): time zone, default language and store currency. Products receive them in every
- * entitlement document (`website` section) and use them as defaults. Shared by the merchant and admin consoles.
- * @param {{ merchantId: string, website: Record<string, any>, onSaved?: (website: Record<string, any>) => void,
- *   fetcher?: typeof apiFetch }} props `fetcher`: the Admin Console passes its staff client
- */
-export function WebsiteSettingsCard({ merchantId, website, onSaved, fetcher = apiFetch }) {
-	const toast = useToast();
-	const [current, setCurrent] = useState(website);
-	const [form, setForm] = useState({
-		timeZone: website.timeZone ?? '',
-		language: website.language ?? '',
-		currency: website.currency ?? '',
-	});
-	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
-	const [busy, setBusy] = useState(false);
-	const errors = problem ? fieldErrors(problem) : {};
-	/** @param {'timeZone' | 'language' | 'currency'} key */
-	const set = (key) => (/** @type {{ currentTarget: { value: string } }} */ e) =>
-		setForm({ ...form, [key]: e.currentTarget.value });
-	const save = async () => {
-		const body = settingsBody(form, current);
-		if (!body) return;
-		setBusy(true);
-		setProblem(null);
-		const result = await fetcher(api.website(merchantId, current.websiteId), { method: 'PATCH', body });
-		setBusy(false);
-		if (!result.ok) {
-			setProblem(result.problem);
-			return;
-		}
-		setCurrent(result.data);
-		setForm({
-			timeZone: result.data.timeZone ?? '',
-			language: result.data.language ?? '',
-			currency: result.data.currency ?? '',
-		});
-		onSaved?.(result.data);
-		toast.show({ title: 'Website settings saved', description: 'Products receive them within minutes.' });
-	};
-	return (
-		<Card
-			title="Website settings"
-			subtitle="Defaults every product on this website uses (they apply to the live site and its test twin).">
-			<div className="space-y-4">
-				<div className="grid gap-4 sm:grid-cols-3">
-					<Input
-						label="Time zone"
-						value={form.timeZone}
-						onChange={set('timeZone')}
-						error={errors.timeZone}
-						help="IANA name, e.g. Europe/Berlin (empty: UTC)"
-					/>
-					<Input
-						label="Language"
-						value={form.language}
-						onChange={set('language')}
-						error={errors.language}
-						help="BCP 47 tag, e.g. en or de-CH"
-					/>
-					<Input
-						label="Currency"
-						value={form.currency}
-						onChange={set('currency')}
-						error={errors.currency}
-						help="ISO 4217 code, e.g. EUR"
-					/>
-				</div>
-				<FormError problem={problem} fields={['timeZone', 'language', 'currency']} />
-				<Button size="sm" onClick={() => void save()} loading={busy} disabled={!settingsBody(form, current)}>
-					Save settings
-				</Button>
-			</div>
-		</Card>
-	);
-}
-
-/**
- * The website's install code: the loader script tag (always the current version) to paste into every page.
- * @param {{ snippet: any }} props `snippet`: `GET …/delivery/snippet` (null until the website has a compiled bundle)
- */
-export function InstallCodeCard({ snippet }) {
-	const tag = typeof snippet?.alias?.tag === 'string' ? snippet.alias.tag : null;
-	return (
-		<Card title="Copy install code">
-			{tag ? (
-				<div className="space-y-2">
-					<CodeBlock code={tag} label="Install code" />
-					<p className="text-sm text-muted">
-						Paste this before <code>{'</head>'}</code> on every page of your site.
-					</p>
-				</div>
-			) : (
-				<p className="text-sm text-muted">Your install code appears here once the website is loaded.</p>
-			)}
-		</Card>
-	);
-}
-
-/**
- * @param {any} props loader result of `loadWebsiteOverview`
- */
-export function WebsiteOverviewView(props) {
 	if (!props.ok) return <PageProblem problem={props.problem} />;
-	const { website, catalog, resources, billing, issuerRequest, snippet } = props;
-	const subs = /** @type {any[]} */ (props.subscriptions ?? []).filter((s) => s.status !== 'cancelled');
-	// products on this website with their status and daily cost (PLAN 0.5.4)
-	const lines = /** @type {any[]} */ (billing?.products ?? []).filter((l) => l.websiteId === website.websiteId);
-	const daily = lines.reduce((sum, l) => sum + (l.dailyCost ?? 0), 0);
-	const connected = /** @type {any[]} */ (resources).filter((r) => r.status === 'connected').length;
-	/** @param {string} appId */
-	const lineOf = (appId) => lines.find((l) => l.appId === appId) ?? null;
 	return (
 		<div className="space-y-6">
-			<WebsiteHeader website={website} active="overview" />
-			{issuerRequest ? (
-				<Callout
-					tone="info"
-					title={`${issuerRequest.product?.name ?? 'A product'} wants to become your identity issuer`}
-					actions={
-						<Link href={routes.identity(website.websiteId)} className="text-sm font-semibold underline">
-							Review
-						</Link>
-					}>
-					Approve or reject it on the Identity tab.
-				</Callout>
-			) : null}
-			<div className="grid gap-4 sm:grid-cols-3">
-				<Stat
-					label="Products"
-					value={subs.length}
-					hint={`${subs.filter((s) => s.status === 'active').length} active`}
-					icon="box"
-				/>
-				<Stat label={BILLING.dailyCost} value={formatCredits(daily)} hint="At today's prices" icon="activity" />
-				<Stat label="Resources" value={`${connected}/${resources.length}`} hint="Connected" icon="plug" />
-			</div>
-			<InstallCodeCard snippet={snippet} />
-			<Card
-				title="Subscriptions"
-				subtitle="Products on this website and what they cost per hour."
-				padded={false}
-				actions={
-					<ButtonLink as={Link} href={routes.products(website.websiteId)} size="sm" variant="secondary">
-						Browse products
-					</ButtonLink>
-				}>
-				{subs.length === 0 ? (
-					<div className="p-5">
-						<EmptyState
-							compact
-							title="No products yet"
-							description="Pick products from the catalog and switch their elements on."
-							action={
-								<ButtonLink as={Link} href={routes.products(website.websiteId)} variant="primary" size="sm">
-									Browse products
-								</ButtonLink>
-							}
-						/>
-					</div>
-				) : (
-					<ul className="divide-y divide-line">
-						{subs.map((s) => (
-							<li key={s.subscriptionId} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
-								<div className="min-w-0">
-									<Link
-										href={routes.subscription(website.websiteId, s.subscriptionId)}
-										className="font-semibold text-primary hover:underline">
-										{productName(catalog, s.appId, s.productSlug)}
-									</Link>
-									<p className="text-xs text-muted">
-										{s.planCode ? `Plan ${s.planCode}` : 'No plan'} · since {formatDate(s.startedAt)}
-									</p>
-								</div>
-								<div className="flex items-center gap-3">
-									<span className="text-sm tabular-nums text-muted">
-										{formatCredits(lineOf(s.appId)?.dailyCost ?? 0)} / day
-									</span>
-									{lineOf(s.appId) ? (
-										<ProductStatusBadge status={lineOf(s.appId).status} featuresOn={lineOf(s.appId).featuresOn} />
-									) : (
-										<StatusBadge status={s.status} />
-									)}
-								</div>
-							</li>
-						))}
-					</ul>
-				)}
-			</Card>
-			<Card
-				title="Resources"
-				subtitle="Your own database, storage and provider accounts used by products on this website."
-				actions={
-					<ButtonLink as={Link} href={routes.resources(website.websiteId)} size="sm" variant="secondary">
-						Manage
-					</ButtonLink>
-				}>
-				{resources.length === 0 ? (
-					<p className="text-sm text-muted">Nothing connected yet. Products that store data need a database first.</p>
-				) : (
-					<ul className="flex flex-wrap gap-2">
-						{resources.map((/** @type {any} */ r) => (
-							<li key={`${r.kind}-${r.ref}`}>
-								<StatusBadge status={r.status} label={`${humanize(r.kind)} · ${humanize(r.status)}`} />
-							</li>
-						))}
-					</ul>
-				)}
-			</Card>
-			<WebsiteSettingsCard merchantId={props.merchantId} website={website} />
+			<PageHeader title={MERCHANT.websitesTitle} />
+			{props.rows.length === 0 ? (
+				<Welcome branding={props.branding} />
+			) : (
+				<WebsitesTable rows={props.rows} hrefOf={(id) => routes.website(id)} empty={WEBSITE.none} />
+			)}
 		</div>
+	);
+}
+
+/**
+ * The merchant's website page: Products (Open), Install and tokens, Usage.
+ * @param {any} props loader result of `loadWebsite`
+ */
+export function WebsiteView(props) {
+	if (!props.ok) return <PageProblem problem={props.problem} />;
+	const merchantId = String(props.website.merchantId);
+	const websiteId = String(props.website.websiteId);
+	return (
+		<WebsitePage
+			website={props.website}
+			merchantName={props.merchantName}
+			siblings={props.websites}
+			cards={props.cards}
+			tokens={props.tokens}
+			tokensProblem={props.tokensProblem}
+			usage={props.usage}
+			usageProblem={props.usageProblem}
+			tab={props.tab}
+			can={{ manage: false, removeWebsite: false, tokens: true, open: true }}
+			fetcher={apiFetch}
+			links={{
+				website: (id) => routes.website(id),
+				back: { href: routes.websites(), label: MERCHANT.websitesTitle },
+			}}
+			launch={(productId) => ({ path: api.launch(merchantId, websiteId, productId) })}
+		/>
 	);
 }

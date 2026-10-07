@@ -35,13 +35,12 @@ import {
 	formatDateTime,
 	useToast,
 } from '@ss/ui';
-import { ADMIN, BILLING, MERCHANT_FIELDS } from '../../../texts/console.js';
+import { ADMIN, BILLING, MERCHANT_FIELDS, WEBSITE } from '../../../texts/console.js';
 import { Link } from '../../link.js';
-import { MerchantStatusBadge, ProductStatusBadge } from '../../views/billing.js';
+import { MerchantStatusBadge } from '../../views/billing.js';
 import { MerchantFieldsForm, countryOptions } from '../../views/account.js';
 import { ActivityTable } from '../../views/login-settings.js';
-import { SubscribeDialog } from '../../views/products.js';
-import { AddWebsiteForm } from '../../views/websites.js';
+import { AddWebsiteDialog, WebsitesTable } from '../../views/website.js';
 import { adminFetch, usePagedList } from '../client.js';
 import { adminApi, adminRoutes } from '../paths.js';
 import { AdminProblem, adminCan } from './common.js';
@@ -440,12 +439,9 @@ function InnerList({ currentId }) {
 export function MerchantView(props) {
 	const toast = useToast();
 	const [merchant, setMerchant] = useState(props.ok ? props.merchant : null);
-	const [websites, setWebsites] = useState(/** @type {any[]} */ (props.ok ? props.websites : []));
+	const [rows, setRows] = useState(/** @type {any[]} */ (props.ok ? props.rows : []));
 	const [tab, setTab] = useState(props.tab ?? 'websites');
 	const [dialog, setDialog] = useState(/** @type {null | 'suspend' | 'resume' | 'twoStep' | 'delete' | 'addWebsite'} */ (null));
-	const [removing, setRemoving] = useState(/** @type {any} */ (null));
-	const [addingTo, setAddingTo] = useState(/** @type {any} */ (null));
-	const [subs, setSubs] = useState(/** @type {any[]} */ (props.ok ? props.subscriptions : []));
 	const [reason, setReason] = useState('');
 	const [link, setLink] = useState(/** @type {string | null} */ (null));
 	const [busy, setBusy] = useState(false);
@@ -453,17 +449,9 @@ export function MerchantView(props) {
 	if (!props.ok || !merchant) return <AdminProblem problem={props.problem} />;
 	const admin = props.admin;
 	const merchantId = merchant.merchantId;
-	/** @param {any} w */
-	const productsOn = (w) =>
-		subs.filter((s) => (s.websiteId === w.websiteId || s.websiteId === w.twinId) && s.status !== 'cancelled');
 	const can = (/** @type {string} */ p) => adminCan(admin, p);
 	const billing = props.billing ?? null;
 	const balance = billing?.balance;
-	/** @param {string} appId @param {any} w */
-	const lineOf = (appId, w) =>
-		(billing?.products ?? []).find(
-			(/** @type {any} */ l) => l.appId === appId && (l.websiteId === w.websiteId || l.websiteId === w.twinId),
-		) ?? null;
 	const [crediting, setCrediting] = useState(false);
 
 	/**
@@ -509,13 +497,6 @@ export function MerchantView(props) {
 		const result = await act(adminApi.merchant(merchantId), { confirm: merchant.name }, 'DELETE');
 		if (result.ok) window.location.assign(adminRoutes.merchants());
 	};
-	const removeWebsite = async () => {
-		if (!removing) return;
-		const result = await act(adminApi.website(merchantId, removing.websiteId), { confirm: removing.domain }, 'DELETE');
-		if (!result.ok) return;
-		setWebsites((list) => list.filter((w) => w.websiteId !== removing.websiteId));
-		setRemoving(null);
-	};
 
 	const actions = (
 		<div className="flex flex-wrap gap-2">
@@ -550,8 +531,8 @@ export function MerchantView(props) {
 				<Button
 					variant="danger"
 					onClick={() => setDialog('delete')}
-					disabled={websites.length > 0}
-					title={websites.length > 0 ? ADMIN.deleteBlocked : undefined}>
+					disabled={rows.length > 0}
+					title={rows.length > 0 ? ADMIN.deleteBlocked : undefined}>
 					{ADMIN.deleteMerchant}
 				</Button>
 			) : null}
@@ -584,71 +565,13 @@ export function MerchantView(props) {
 								<div className="space-y-4">
 									{can('websites.write') ? (
 										<Button onClick={() => setDialog('addWebsite')} icon={<Icon name="plus" size={14} />}>
-											{ADMIN.addWebsite}
+											{WEBSITE.addWebsite}
 										</Button>
 									) : null}
-									<Table
-										caption={ADMIN.tabs.websites}
-										captionHidden
-										rows={websites}
-										rowKey={(w) => w.websiteId}
-										empty={<EmptyState icon="globe" title={ADMIN.tabs.websites} description="—" />}
-										columns={[
-											{ key: 'domain', header: ADMIN.domain, rowHeader: true, render: (w) => w.domain },
-											{
-												key: 'products',
-												header: 'Products',
-												render: (w) => (
-													<span className="flex flex-wrap gap-1">
-														{productsOn(w).map((s) => (
-															<span key={s.subscriptionId} className="inline-flex items-center gap-1 text-xs">
-																<span className="font-semibold">{s.productSlug ?? s.appId}</span>
-																{lineOf(s.appId, w) ? (
-																	<>
-																		<ProductStatusBadge
-																			status={lineOf(s.appId, w).status}
-																			featuresOn={lineOf(s.appId, w).featuresOn}
-																		/>
-																		<span className="text-muted">
-																			{formatCredits(lineOf(s.appId, w).dailyCost)} / day
-																		</span>
-																	</>
-																) : (
-																	<StatusBadge status={s.status} />
-																)}
-															</span>
-														))}
-													</span>
-												),
-											},
-											{ key: 'createdAt', header: ADMIN.columns.created, render: (w) => formatDate(w.createdAt) },
-											...(can('websites.write')
-												? [
-														{
-															key: 'actions',
-															header: <span className="sr-only">Actions</span>,
-															align: /** @type {const} */ ('right'),
-															render: (/** @type {any} */ w) => (
-																<span className="flex flex-wrap justify-end gap-1">
-																	{can('products_on_websites.write') ? (
-																		<Button size="sm" variant="ghost" onClick={() => setAddingTo(w)}>
-																			{ADMIN.addProduct}
-																		</Button>
-																	) : null}
-																	<Button
-																		size="sm"
-																		variant="ghost"
-																		disabled={productsOn(w).length > 0}
-																		title={productsOn(w).length > 0 ? ADMIN.removeProductsFirst : undefined}
-																		onClick={() => setRemoving(w)}>
-																		{ADMIN.removeWebsite}
-																	</Button>
-																</span>
-															),
-														},
-													]
-												: []),
-										]}
+									<WebsitesTable
+										rows={rows}
+										hrefOf={(id) => adminRoutes.website(merchantId, id)}
+										empty={<EmptyState icon="globe" title={WEBSITE.none} />}
 									/>
 								</div>
 							),
@@ -733,33 +656,16 @@ export function MerchantView(props) {
 				error={problem ? describeProblem(problem) : null}>
 				<p className="text-sm text-muted">{ADMIN.deleteHelp(typeof balance === 'number' ? formatCredits(balance) : '—')}</p>
 			</TypedConfirmDialog>
-			<TypedConfirmDialog
-				open={Boolean(removing)}
-				onClose={() => setRemoving(null)}
-				onConfirm={() => void removeWebsite()}
-				expected={removing?.domain ?? ''}
-				busy={busy}
-				danger
-				confirmLabel={ADMIN.removeWebsite}
-				title={`${ADMIN.removeWebsite} ${removing?.domain ?? ''}`}
-				error={problem ? describeProblem(problem) : null}>
-				<p className="text-sm text-muted">{ADMIN.removeWebsiteHelp}</p>
-			</TypedConfirmDialog>
-			<Dialog
+			<AddWebsiteDialog
 				open={dialog === 'addWebsite'}
+				merchantId={merchantId}
+				fetcher={adminFetch}
 				onClose={() => setDialog(null)}
-				title={ADMIN.addWebsite}
-				description={ADMIN.domainHelp}>
-				<AddWebsiteForm
-					merchantId={merchantId}
-					autoFocus
-					fetcher={adminFetch}
-					onAdded={(w) => {
-						setDialog(null);
-						setWebsites((list) => [...list, w]);
-					}}
-				/>
-			</Dialog>
+				onAdded={(website) => {
+					setDialog(null);
+					setRows((list) => [...list, { website, cards: [] }]);
+				}}
+			/>
 			<CopyLinkDialog link={link} onClose={() => setLink(null)} />
 			{crediting ? (
 				<AddCreditsDialog
@@ -767,21 +673,6 @@ export function MerchantView(props) {
 					balance={balance}
 					onClose={() => setCrediting(false)}
 					onAdded={() => window.location.reload()}
-				/>
-			) : null}
-			{addingTo ? (
-				<SubscribeDialog
-					merchantId={merchantId}
-					website={addingTo}
-					products={(props.catalog ?? []).filter(
-						(/** @type {any} */ p) => !productsOn(addingTo).some((s) => s.appId === p.appId),
-					)}
-					fetcher={adminFetch}
-					onClose={() => setAddingTo(null)}
-					onSubscribed={(sub) => {
-						setSubs((list) => [...list, sub]);
-						setAddingTo(null);
-					}}
 				/>
 			) : null}
 		</div>

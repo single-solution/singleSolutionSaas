@@ -24,7 +24,7 @@ export const PASSWORD_MIN = 12;
  * @param {string | null | undefined} next
  */
 export const homeOf = (console, next) => {
-	const home = console === 'admin' ? '/admin' : '/websites';
+	const home = console === 'admin' ? '/admin' : '/overview';
 	if (typeof next !== 'string' || !next.startsWith('/') || next.startsWith('//') || next.startsWith('/\\')) return home;
 	const isAdminPath = next === '/admin' || next.startsWith('/admin/');
 	return isAdminPath === (console === 'admin') ? next : home;

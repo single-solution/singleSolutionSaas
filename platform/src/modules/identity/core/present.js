@@ -44,15 +44,9 @@ export const presentWebsite = (w) => ({
 	websiteId: String(w._id),
 	merchantId: w.merchantId,
 	domain: w.domain,
-	env: w.env,
-	twinId: w.twinId,
 	status: w.status,
-	// website settings (F.16) until the switch (PLAN 0.12 step 5)
-	timeZone: w.settings?.timeZone ?? null,
-	language: w.settings?.language ?? null,
-	currency: w.settings?.currency ?? null,
 	createdAt: iso(w.createdAt),
-	deletedAt: iso(w.deletedAt),
+	removedAt: iso(w.removedAt),
 });
 
 /** @param {Record<string, any>} a */

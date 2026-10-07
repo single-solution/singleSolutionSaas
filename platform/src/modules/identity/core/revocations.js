@@ -1,11 +1,10 @@
 /**
- * Revocation-list cursors for `GET /v1/product/revocations?since=` (F.9: `{ keyIds, cursor }`).
+ * Revocation-list cursors for `GET /v1/product/revocations?since=` (PLAN 0.4.12 row 6: `{ tokenIds, cursor }`).
  *
- * A cursor is opaque base64url JSON `{ t, k }`: revocations effective after `(t, k)` in `(revokeAt, keyId)` order
- * are returned next. A full page continues from its last entry. A partial page ends the scan: the next cursor is
- * `now − LAG`, so a revocation whose write committed late (its `revokeAt` was stamped before it became visible) is
- * still returned on the next sync. Overlap only repeats keyIds, which consumers merge as a set; nothing is skipped.
- * Scheduled revocations (rotation grace) appear once they take effect.
+ * A cursor is opaque base64url JSON `{ t, k }`: revocations after `(t, k)` in `(revokedAt, jti)` order are returned
+ * next. A full page continues from its last entry. A partial page ends the scan: the next cursor is `now − LAG`, so a
+ * revocation whose write committed late (its `revokedAt` was stamped before it became visible) is still returned on
+ * the next fetch. Overlap only repeats token ids, which products merge as a set; nothing is skipped.
  * @module
  */
 
@@ -51,29 +50,29 @@ export const decodeRevocationCursor = (since) => {
 };
 
 /**
- * Mongo filter for revocations after the cursor, effective by `nowMs`.
+ * Mongo filter for one product's revocations after the cursor.
+ * @param {string} productId
  * @param {RevocationCursor} cursor
- * @param {number} nowMs
  */
-export const revocationFilter = ({ t, k }, nowMs) => ({
-	revokeAt: { $ne: null, $lte: new Date(nowMs) },
-	$or: [{ revokeAt: { $gt: new Date(t) } }, { revokeAt: new Date(t), _id: { $gt: k } }],
+export const revocationFilter = (productId, { t, k }) => ({
+	productId,
+	$or: [{ revokedAt: { $gt: new Date(t) } }, { revokedAt: new Date(t), _id: { $gt: k } }],
 });
 
 /**
- * The response for a page of `{ _id, revokeAt }` rows (sorted by revokeAt, _id; at most `limit + 1` rows).
- * @param {Array<{ _id: string, revokeAt: Date }>} rows
+ * The response for a page of `{ _id, revokedAt }` rows (sorted by revokedAt, _id; at most `limit + 1` rows).
+ * @param {Array<{ _id: string, revokedAt: Date }>} rows
  * @param {RevocationCursor} since
  * @param {number} nowMs
  * @param {{ limit?: number, lagMs?: number }} [options]
- * @returns {{ keyIds: string[], cursor: string }}
+ * @returns {{ tokenIds: string[], cursor: string }}
  */
 export const revocationPage = (rows, since, nowMs, { limit = REVOCATION_PAGE, lagMs = REVOCATION_LAG_MS } = {}) => {
 	const page = rows.slice(0, limit);
-	const keyIds = page.map((row) => row._id);
+	const tokenIds = page.map((row) => row._id);
 	const last = page[page.length - 1];
 	if (rows.length > limit && last)
-		return { keyIds, cursor: encodeRevocationCursor({ t: last.revokeAt.getTime(), k: last._id }) };
+		return { tokenIds, cursor: encodeRevocationCursor({ t: last.revokedAt.getTime(), k: last._id }) };
 	const t = Math.max(since.t, nowMs - lagMs);
-	return { keyIds, cursor: encodeRevocationCursor({ t, k: t === since.t ? since.k : '' }) };
+	return { tokenIds, cursor: encodeRevocationCursor({ t, k: t === since.t ? since.k : '' }) };
 };

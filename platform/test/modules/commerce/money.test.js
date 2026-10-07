@@ -24,21 +24,21 @@ const H = HOUR_MS;
 const M = 60_000;
 const W1 = 'web_1';
 const W2 = 'web_2';
-const A = 'app_a';
+const A = 'coupons';
 
 /** @param {number} at @param {Record<string, number>} prices */
 const prices = (at, prices) => ({
 	type: /** @type {const} */ ('prices'),
 	at,
-	appId: A,
+	productId: A,
 	features: Object.entries(prices).map(([key, price]) => ({ key, name: key.toUpperCase(), price })),
 });
 /** @param {number} at @param {string} [websiteId] */
-const added = (at, websiteId = W1) => ({ type: /** @type {const} */ ('added'), at, websiteId, appId: A });
+const added = (at, websiteId = W1) => ({ type: /** @type {const} */ ('added'), at, websiteId, productId: A });
 /** @param {number} at @param {string} [websiteId] */
-const removed = (at, websiteId = W1) => ({ type: /** @type {const} */ ('removed'), at, websiteId, appId: A });
+const removed = (at, websiteId = W1) => ({ type: /** @type {const} */ ('removed'), at, websiteId, productId: A });
 /** @param {number} at @param {string[]} on @param {string} [websiteId] */
-const switches = (at, on, websiteId = W1) => ({ type: /** @type {const} */ ('switches'), at, websiteId, appId: A, on });
+const switches = (at, on, websiteId = W1) => ({ type: /** @type {const} */ ('switches'), at, websiteId, productId: A, on });
 /** @param {number} at @param {number} amount */
 const receipt = (at, amount) => ({ type: /** @type {const} */ ('receipt'), at, amount });
 
@@ -72,7 +72,7 @@ describe('money function: charging (PLAN 0.5.3)', () => {
 		]);
 		expect(out.balance).toBe(100_000 - 4500); // the current hour is in the balance at once
 		expect(out.dailySpend).toBe(24 * 1500);
-		expect(out.products).toEqual([{ websiteId: W1, appId: A, added: true, on: ['box', 'codes'], hourlyCost: 1500 }]);
+		expect(out.products).toEqual([{ websiteId: W1, productId: A, added: true, on: ['box', 'codes'], hourlyCost: 1500 }]);
 	});
 
 	it('never gives back a started hour and never charges it twice; the same feature on two websites is charged twice', () => {
@@ -328,15 +328,15 @@ describe('usage rows, day charges and texts (PLAN 0.5.7, 0.5.11)', () => {
 			],
 		});
 		expect(usageRows(out.charges).filter((r) => r.day === '2026-10-01')).toEqual([
-			{ day: '2026-10-01', websiteId: W1, appId: A, feature: 'codes', hours: 2, amount: 2000 },
-			{ day: '2026-10-01', websiteId: W1, appId: A, feature: 'free', hours: 2, amount: 0 },
-			{ day: '2026-10-01', websiteId: W2, appId: A, feature: 'free', hours: 24, amount: 0 },
+			{ day: '2026-10-01', websiteId: W1, productId: A, feature: 'codes', hours: 2, amount: 2000 },
+			{ day: '2026-10-01', websiteId: W1, productId: A, feature: 'free', hours: 2, amount: 0 },
+			{ day: '2026-10-01', websiteId: W2, productId: A, feature: 'free', hours: 24, amount: 0 },
 		]);
 		expect(dayCharges(out.charges.filter((c) => c.hour < D0 + DAY_MS))).toEqual([
 			{
 				day: '2026-10-01',
 				websiteId: W1,
-				appId: A,
+				productId: A,
 				amount: 2000,
 				lines: [
 					{ feature: 'codes', hours: 2, amount: 2000 },

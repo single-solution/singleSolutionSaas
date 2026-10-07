@@ -1,25 +1,17 @@
 'use client';
 /**
- * Building blocks shared by Admin Console views: page errors, permission checks (the infra rights table, pure),
- * id chips and signed credit parsing.
+ * Building blocks shared by Admin Console views: the page error, the rights check (the infra rights table, pure) and
+ * the role badge.
  * @module
  */
-import { useState } from 'react';
-import { Badge, Breadcrumbs, ButtonLink, Callout, ErrorState, Icon, copyText, describeProblem, problemCode } from '@ss/ui';
-import { can } from '../../../infra/rbac.js';
-import { ADMIN } from '../../../texts/console.js';
+import { Badge, ButtonLink, ErrorState, describeProblem, problemCode } from '@ss/ui';
+import { ADMIN, CONSOLE } from '../../../texts/console.js';
 import { Link } from '../../link.js';
 import { adminRoutes } from '../paths.js';
 
 /** @typedef {import('@ss/ui').Problem} Problem */
 
-/**
- * Does the signed-in admin's role hold `permission` (PLAN 0.2 rights table; menus hide what a role cannot use)?
- * @param {any} admin `{ adminId, role }`
- * @param {string} permission
- */
-export const adminCan = (admin, permission) =>
-	Boolean(admin) && can({ type: 'admin', id: String(admin.adminId ?? 'admin'), role: admin.role ?? null }, permission);
+export { adminCan } from '../rights.js';
 
 /**
  * Page-level error of the Admin Console.
@@ -30,53 +22,21 @@ export function AdminProblem({ problem, title, back }) {
 	const action =
 		code === 'unauthorized' ? (
 			<ButtonLink as={Link} href={adminRoutes.login()} variant="primary">
-				Sign in
+				{CONSOLE.signIn}
 			</ButtonLink>
 		) : (
 			<ButtonLink as={Link} href={back?.href ?? adminRoutes.merchants()} variant="secondary">
-				{back?.label ?? 'Back to merchants'}
+				{back?.label ?? CONSOLE.backToMerchants}
 			</ButtonLink>
 		);
 	return (
 		<ErrorState
 			title={
-				title ??
-				(code === 'not_found' ? 'Not found' : code === 'forbidden' ? 'Not permitted' : 'This page could not be loaded')
+				title ?? (code === 'not_found' ? CONSOLE.notFound : code === 'forbidden' ? CONSOLE.notPermitted : CONSOLE.loadFailed)
 			}
-			message={
-				code === 'forbidden'
-					? `${describeProblem(problem)} Your role does not include this area; ask an Owner.`
-					: describeProblem(problem)
-			}
+			message={code === 'forbidden' ? CONSOLE.forbiddenHint(describeProblem(problem)) : describeProblem(problem)}
 			action={action}
 		/>
-	);
-}
-
-/**
- * Monospace id with a copy button.
- * @param {{ id: string | null | undefined, label?: string }} props
- */
-export function IdChip({ id, label }) {
-	const [copied, setCopied] = useState(false);
-	if (!id) return <span className="text-muted">—</span>;
-	return (
-		<span className="inline-flex max-w-full items-center gap-1">
-			<span className="truncate font-mono text-xs" title={id}>
-				{id}
-			</span>
-			<button
-				type="button"
-				aria-label={`Copy ${label ?? 'id'}`}
-				title={copied ? 'Copied' : `Copy ${label ?? 'id'}`}
-				onClick={async () => {
-					setCopied(await copyText(id));
-					setTimeout(() => setCopied(false), 1500);
-				}}
-				className="rounded p-0.5 text-muted hover:text-fg focus-visible:outline-2 focus-visible:outline-focus">
-				<Icon name={copied ? 'check' : 'copy'} size={12} />
-			</button>
-		</span>
 	);
 }
 
@@ -88,42 +48,3 @@ export function RoleBadge({ role }) {
 	if (!role) return null;
 	return <Badge tone={role === 'owner' ? 'primary' : 'neutral'}>{ADMIN.roles[/** @type {'owner'} */ (role)] ?? role}</Badge>;
 }
-
-/**
- * Who did something (audit / history actor).
- * @param {{ actor: any }} props
- */
-export function ActorLabel({ actor }) {
-	if (!actor) return <span className="text-muted">—</span>;
-	return (
-		<span className="inline-flex flex-wrap items-center gap-1">
-			<Badge>{String(actor.type ?? 'unknown')}</Badge>
-			<span className="text-xs">{actor.name ?? actor.id}</span>
-		</span>
-	);
-}
-
-/**
- * Inline API problem (actions on a page).
- * @param {{ problem: Problem | null | undefined }} props
- */
-export function ActionProblem({ problem }) {
-	if (!problem) return null;
-	return <Callout tone="danger">{describeProblem(problem)}</Callout>;
-}
-
-/**
- * Breadcrumbs with router links.
- * @param {{ items: Array<{ label: import('react').ReactNode, href?: string }> }} props
- */
-export function Crumbs({ items }) {
-	return <Breadcrumbs linkAs={Link} items={items} />;
-}
-
-/**
- * A problem raised in the browser (input checks, endpoints not served yet): its `detail` is shown as is.
- * @param {string} title
- * @param {string} detail
- * @returns {Problem}
- */
-export const localProblem = (title, detail) => ({ code: 'console_check', title, detail });

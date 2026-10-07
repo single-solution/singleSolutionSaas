@@ -22,7 +22,7 @@ import { RoleBadge, adminCan } from './common.js';
 export const ADMIN_NAV = Object.freeze([
 	{ href: adminRoutes.overview(), label: ADMIN.menu.overview, icon: 'grid', permission: 'overview.read', exact: true },
 	{ href: adminRoutes.merchants(), label: ADMIN.menu.merchants, icon: 'users', permission: 'merchants.read' },
-	{ href: adminRoutes.apps(), label: ADMIN.menu.products, icon: 'box', permission: 'products.manage' },
+	{ href: adminRoutes.products(), label: ADMIN.menu.products, icon: 'box', permission: 'products.manage' },
 	{ href: adminRoutes.finance(), label: ADMIN.menu.billing, icon: 'wallet', permission: 'billing.read' },
 	{ href: adminRoutes.admins(), label: ADMIN.menu.admins, icon: 'key', permission: 'admins.manage' },
 	{ href: adminRoutes.settings(), label: ADMIN.menu.settings, icon: 'sliders', permission: 'portal_settings.write' },

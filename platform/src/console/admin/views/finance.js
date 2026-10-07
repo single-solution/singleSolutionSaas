@@ -159,7 +159,7 @@ export function MerchantCredits({ billing, receipts, dayCharges }) {
 				<Table
 					caption={BILLING.dayChargesTitle}
 					rows={dayCharges}
-					rowKey={(d) => `${d.day}:${d.websiteId}:${d.appId}`}
+					rowKey={(d) => `${d.day}:${d.websiteId}:${d.productId}`}
 					empty={<EmptyState compact title={BILLING.noUsage} />}
 					columns={[
 						{ key: 'day', header: BILLING.usageColumns.day, rowHeader: true, sortable: true },

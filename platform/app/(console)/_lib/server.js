@@ -49,7 +49,7 @@ export const merchantContext = async (next) => {
 /** Signed-in visitors of the public pages go straight to their console. */
 export const redirectIfSignedIn = async () => {
 	const me = await (await consoleApi()).get('/v1/me');
-	if (me.ok) redirect(me.data?.kind === 'admin' ? '/admin' : '/websites');
+	if (me.ok) redirect(me.data?.kind === 'admin' ? '/admin' : '/overview');
 };
 
 /** True while no admin exists (the sign-in page offers Create admin). */

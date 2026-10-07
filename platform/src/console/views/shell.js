@@ -1,102 +1,54 @@
 'use client';
 /**
- * The signed-in merchant console frame (PLAN 0.6): navigation, the website switcher, balance pill, sign out and the
- * banners, with the Branding.
+ * The signed-in merchant console frame (PLAN 0.6): the menu Overview · Websites · Usage and credits · Account, the
+ * website switcher, the balance, sign out and the billing banner, with the Branding.
  * @module
  */
 import { usePathname } from 'next/navigation.js';
-import { AppShell, Button, Callout, Icon, ToastProvider, formatCredits } from '@ss/ui';
+import { AppShell, Button, Icon, ToastProvider, formatCredits } from '@ss/ui';
 import { MERCHANT } from '../../texts/console.js';
 import { apiFetch } from '../client.js';
 import { Link } from '../link.js';
-import { WEBSITE_TABS, routes } from '../paths.js';
+import { api, routes } from '../paths.js';
 import { BillingBanner } from './billing.js';
 import { accentStyle } from './brand.js';
 import { contactLine } from './sign-in.js';
 
 /**
- * @param {{ me: any, merchantId: string | null, websites: any[], billing: any, children: import('react').ReactNode,
- *   notifications?: any[], branding?: { name: string, accent: string, support?: any } }} props
+ * The merchant menu with the current entry marked.
+ * @param {string} pathname
+ * @returns {import('@ss/ui').NavSection[]}
  */
-export function ConsoleShell({ me, merchantId, websites, billing, children, notifications = [], branding }) {
-	const pathname = usePathname() ?? '';
-	const match = /^\/websites\/(web_[0-9a-z]+)(?:\/([a-z-]+))?/.exec(pathname);
-	const currentWebsiteId = match?.[1] ?? null;
-	const currentTab = match ? (match[2] ?? 'overview') : null;
-	const current = websites.find((w) => w.websiteId === currentWebsiteId) ?? null;
-	const live = websites.filter((w) => w.env === 'live');
-	const merchant = me?.merchant ?? null;
+export const merchantSections = (pathname) => {
 	/** @param {string} href */
 	const is = (href) => pathname === href || pathname.startsWith(`${href}/`);
-
-	/** @type {import('@ss/ui').NavSection[]} */
-	const sections = [
+	return [
 		{
-			label: 'Workspace',
+			label: '',
 			items: [
-				{ href: routes.websites(), label: MERCHANT.menu.websites, icon: 'globe', current: is('/websites') && !current },
-				{ href: routes.credits(), label: MERCHANT.menu.usage, icon: 'wallet', current: is('/credits') },
-				{ href: routes.account(), label: MERCHANT.menu.account, icon: 'user', current: is('/account') },
+				{ href: routes.overview(), label: MERCHANT.menu.overview, icon: 'grid', current: is(routes.overview()) },
+				{ href: routes.websites(), label: MERCHANT.menu.websites, icon: 'globe', current: is(routes.websites()) },
+				{ href: routes.credits(), label: MERCHANT.menu.usage, icon: 'wallet', current: is(routes.credits()) },
+				{ href: routes.account(), label: MERCHANT.menu.account, icon: 'user', current: is(routes.account()) },
 			],
 		},
 	];
-	if (current) {
-		/** @type {Record<string, import('@ss/ui').IconName>} */
-		const icons = { overview: 'grid', products: 'box', usage: 'activity', keys: 'key', resources: 'plug' };
-		sections.unshift({
-			label: current.env === 'test' ? `${current.domain} · test` : current.domain,
-			items: WEBSITE_TABS.map((t) => ({
-				href: t.href(current.websiteId),
-				label: t.label,
-				icon: icons[t.key] ?? 'grid',
-				current: currentTab === t.key || (t.key === 'products' && currentTab === 'subscriptions'),
-			})),
-		});
-	}
+};
 
-	/** @param {string} id */
-	const switchWebsite = (id) => {
-		if (!id) return;
-		const tab = WEBSITE_TABS.find((t) => t.key === currentTab) ?? WEBSITE_TABS[0];
-		window.location.assign((tab?.href ?? routes.website)(id));
-	};
+/**
+ * @param {{ me: any, merchantId: string | null, websites: any[], billing: any, children: import('react').ReactNode,
+ *   branding?: { name: string, accent: string, support?: any } }} props
+ */
+export function ConsoleShell({ me, merchantId, websites, billing, children, branding }) {
+	const pathname = usePathname() ?? '';
+	const currentWebsiteId = /^\/websites\/([^/?#]+)/.exec(pathname)?.[1] ?? '';
+	const merchant = me?.merchant ?? null;
 	const signOut = async () => {
-		await apiFetch('/v1/auth/sign-out', { method: 'POST', redirectOn401: false });
+		await apiFetch(api.signOut(), { method: 'POST', redirectOn401: false });
 		window.location.assign(routes.login());
 	};
-
-	// the billing banner (low balance, grace, stopped) cannot be dismissed and shows the support contact
-	const balanceBanner = <BillingBanner summary={billing} contact={contactLine(branding?.support)} />;
-	const hasBalanceBanner = ['low_balance', 'grace', 'stopped'].includes(billing?.status);
-	// F.16: a product asks to become a website's identity issuer (approve or reject on Website → Identity)
-	const requests = (Array.isArray(notifications) ? notifications : []).filter((n) => n?.kind === 'identity_issuer_request');
-	const requestBanner =
-		requests.length > 0 ? (
-			<Callout
-				tone="info"
-				title={`${requests[0].request?.product?.name ?? 'A product'} wants to become your identity issuer${
-					requests[0].domain ? ` on ${requests[0].domain}` : ''
-				}`}
-				actions={
-					<Link href={routes.identity(requests[0].websiteId)} className="text-sm font-semibold underline">
-						Review
-					</Link>
-				}>
-				{requests.length > 1
-					? `${requests.length} identity issuer requests are waiting for your decision.`
-					: 'Nothing changes until you approve the request.'}
-			</Callout>
-		) : null;
-	const banner =
-		hasBalanceBanner || requestBanner ? (
-			<div className="space-y-3">
-				{hasBalanceBanner ? balanceBanner : null}
-				{requestBanner}
-			</div>
-		) : null;
-
 	const selectClass =
-		'min-h-9 max-w-[14rem] truncate rounded-xl border border-line bg-surface px-3 py-1.5 text-sm font-semibold text-fg hover:border-line-strong focus-visible:outline-2 focus-visible:outline-focus';
+		'min-h-9 max-w-[11rem] truncate rounded-xl border border-line bg-surface px-3 py-1.5 text-sm font-semibold text-fg hover:border-line-strong focus-visible:outline-2 focus-visible:outline-focus sm:max-w-[14rem]';
 
 	return (
 		<ToastProvider>
@@ -104,29 +56,32 @@ export function ConsoleShell({ me, merchantId, websites, billing, children, noti
 				<AppShell
 					brand={{ name: branding?.name ?? 'Single Solution' }}
 					linkAs={Link}
-					sections={sections}
-					banner={banner}
+					sections={merchantSections(pathname)}
+					banner={<BillingBanner summary={billing} contact={contactLine(branding?.support)} />}
 					topbar={
 						<>
-							<span className="truncate px-1 text-sm font-bold text-fg">{merchant?.name ?? merchantId}</span>
-							{live.length > 0 ? (
-								<>
-									<Icon name="chevronRight" size={14} className="text-muted" />
-									<label className="flex items-center gap-2">
-										<span className="sr-only">Website</span>
-										<select
-											className={selectClass}
-											value={current ? (current.env === 'live' ? current.websiteId : current.twinId) : ''}
-											onChange={(e) => switchWebsite(e.currentTarget.value)}>
-											<option value="">All websites</option>
-											{live.map((w) => (
-												<option key={w.websiteId} value={w.websiteId}>
-													{w.domain}
-												</option>
-											))}
-										</select>
-									</label>
-								</>
+							<span className="hidden truncate px-1 text-sm font-bold text-fg sm:inline">
+								{merchant?.name ?? merchantId}
+							</span>
+							{websites.length > 0 ? (
+								<label className="flex min-w-0 items-center gap-2">
+									<span className="sr-only">{MERCHANT.website}</span>
+									<select
+										className={selectClass}
+										value={currentWebsiteId}
+										onChange={(e) =>
+											window.location.assign(
+												e.currentTarget.value ? routes.website(e.currentTarget.value) : routes.websites(),
+											)
+										}>
+										<option value="">{MERCHANT.allWebsites}</option>
+										{websites.map((w) => (
+											<option key={w.websiteId} value={w.websiteId}>
+												{w.domain}
+											</option>
+										))}
+									</select>
+								</label>
 							) : null}
 						</>
 					}
@@ -136,7 +91,7 @@ export function ConsoleShell({ me, merchantId, websites, billing, children, noti
 								<Link
 									href={routes.credits()}
 									className="hidden items-center gap-1.5 rounded-xl border border-line px-3 py-1.5 text-sm font-semibold text-fg hover:border-line-strong sm:inline-flex"
-									title="Credit balance">
+									title={MERCHANT.balanceLink}>
 									<Icon name="wallet" size={14} />
 									<span className="tabular-nums">{formatCredits(billing.balance)}</span>
 								</Link>

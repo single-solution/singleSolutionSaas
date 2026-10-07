@@ -4,8 +4,8 @@
  *
  * Pipeline per request:
  *
- *   request id → route match (404 / 405, CORS preflight) → body read with a byte cap (413) → authentication
- *   (`admin` | `merchant` session cookie, `websiteKey`, `product` client assertion, `public`) → CSRF for
+ *   request id → route match (404 / 405, OPTIONS) → body read with a byte cap (413) → authentication
+ *   (`admin` | `merchant` session cookie, `product` client assertion, `public`) → CSRF for
  *   cookie-authenticated mutations (403) → RBAC permission (403) → rate limit (429 + `RateLimit-*`) → JSON body
  *   (415 / 400) → `Idempotency-Key` on POST (428 / 409 / replay) → handler → RFC 9457 problems for every error.
  *
@@ -30,15 +30,14 @@ import { hmacHex, isObject, sha256Hex } from './util.js';
 /** @typedef {import('./stores.js').RateLimitStore} RateLimitStore */
 /** @typedef {import('@ss/contracts').ProblemFactory} ProblemFactory */
 
-/** @typedef {'admin' | 'merchant' | 'websiteKey' | 'product' | 'public'} AuthMode */
+/** @typedef {'admin' | 'merchant' | 'product' | 'public'} AuthMode */
 /** @typedef {'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'} Method */
 
-export const AUTH_MODES = Object.freeze(/** @type {AuthMode[]} */ (['admin', 'merchant', 'websiteKey', 'product', 'public']));
+export const AUTH_MODES = Object.freeze(/** @type {AuthMode[]} */ (['admin', 'merchant', 'product', 'public']));
 const METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
 const BODY_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const REQUEST_ID = /^[A-Za-z0-9._:-]{1,128}$/;
 const IDEMPOTENCY_KEY = /^[\x21-\x7e]{1,255}$/;
-const CORS_HEADERS = 'authorization, content-type, idempotency-key, x-request-id';
 const IDEMPOTENCY_TTL_MS = 24 * 60 * 60_000;
 
 /**
@@ -221,15 +220,12 @@ export const paginate = ({ cursor, limit, url } = {}, { defaultLimit = 20, maxLi
  * @property {(ctx: RequestContext) => Resource} [resource] default `{ merchantId: params.merchantId ?? actor.merchantId, websiteId: params.websiteId }`
  * @property {boolean} [mfa] admin sessions must have no pending two-step setup (default true; false for the routes
  *   that set two-step up, show the signed-in person and sign out)
- * @property {'pk' | 'sk'} [keyKind] websiteKey: restrict to one key kind
- * @property {string[]} [scopes] websiteKey: scopes the key must grant
  * @property {boolean | 'optional' | 'no-store'} [idempotent] POST: true = Idempotency-Key required (routes that create
  *   things or move money), 'optional', false (default), or 'no-store' — the key is optional and only the status and fingerprint are kept, so a replay
  *   answers 409 `idempotency_replay_no_body` instead of re-sending the response (use for responses with secrets)
  * @property {{ limit: number, windowMs: number, key?: (ctx: RequestContext) => string }} [rateLimit]
  * @property {number} [maxBodyBytes]
  * @property {boolean} [rawBody] do not parse JSON (handler reads `ctx.rawBody`)
- * @property {boolean} [cors] allow cross-origin browser calls (pk_ origins are reflected)
  * @property {(ctx: RequestContext) => unknown} handler
  */
 
@@ -343,9 +339,8 @@ export const matchRoute = (routes, method, pathname) => {
  * @property {AuthMode} mode
  * @property {boolean} [cookie] authenticated by a cookie (CSRF applies)
  * @property {import('./auth.js').Session} [session]
- * @property {import('@ss/protocol').WebsiteKeyClaims & { kid: string }} [website]
- * @property {{ appId: string }} [app]
- * @property {Record<string, string>} [headers] extra response headers (e.g. CORS for pk_)
+ * @property {{ productId: string }} [product]
+ * @property {Record<string, string>} [headers] extra response headers
  */
 
 /**
@@ -370,8 +365,7 @@ export const matchRoute = (routes, method, pathname) => {
  * @property {AuthMode | null} authMode
  * @property {Actor | null} actor
  * @property {import('./auth.js').Session | null} session
- * @property {(import('@ss/protocol').WebsiteKeyClaims & { kid: string }) | null} website
- * @property {{ appId: string } | null} app
+ * @property {{ productId: string } | null} product the calling product (`product` auth)
  * @property {string | undefined} idempotencyKey
  * @property {(permission: string, resource?: Resource) => void} authorize throws a 403 problem unless allowed
  * @property {(task: () => Promise<unknown>) => void} defer run `task` after the response (Next.js `after()` when the
@@ -386,7 +380,7 @@ export const matchRoute = (routes, method, pathname) => {
  * live list: tasks deferred while they run are appended), the framework's scheduler for this request (null outside
  * Next.js) and the product that called (`product` auth), so its own pending work can follow the request.
  * @typedef {{ deferred: Array<() => Promise<unknown>>, schedule: AfterScheduler | null, log: Logger,
- *   app: { appId: string } | null }} AfterResponse
+ *   product: { productId: string } | null }} AfterResponse
  */
 
 /** Per-request `after()` schedulers registered by `toNextRoute(handler, { after })`. */
@@ -522,19 +516,18 @@ export const createApiHandler = ({
 			pathname = pathname.slice(basePath.length) || '/';
 		// the client IP as the first hop (the proxy in front of us) saw it: the last X-Forwarded-For entry
 		const ip = request.headers.get('x-forwarded-for')?.split(',').at(-1)?.trim() || null;
-		const origin = request.headers.get('origin');
 		/** @type {Record<string, string>} */
 		const extra = { 'x-request-id': requestId };
 		/** @type {Actor | null} */
 		let actor = null;
-		/** @type {{ appId: string } | null} */
-		let app = null;
+		/** @type {{ productId: string } | null} */
+		let product = null;
 
 		/** @param {StoredResponse & { cookies?: string[] }} rendered */
 		const finish = (rendered) => {
 			if (afterResponse) {
 				try {
-					afterResponse({ deferred, schedule: SCHEDULERS.get(request) ?? null, log, app });
+					afterResponse({ deferred, schedule: SCHEDULERS.get(request) ?? null, log, product });
 				} catch (error) {
 					log.warn('after-response scheduling failed', { error });
 				}
@@ -563,13 +556,6 @@ export const createApiHandler = ({
 				const matching = compiled.filter((r) => matchPath(r, parts) !== null);
 				const methods = [...new Set(matching.map((r) => r.method))];
 				if (methods.length === 0) return fail(problem('not_found', 'No such resource.'));
-				if (origin && matching.some((r) => r.cors === true)) {
-					extra['access-control-allow-origin'] = origin;
-					extra['access-control-allow-methods'] = methods.join(', ');
-					extra['access-control-allow-headers'] = CORS_HEADERS;
-					extra['access-control-max-age'] = '600';
-					extra.vary = 'Origin';
-				}
 				extra.allow = [...methods, 'OPTIONS'].join(', ');
 				return finish({ status: 204, headers: [], body: '' });
 			}
@@ -613,7 +599,7 @@ export const createApiHandler = ({
 				if (!auth) return fail(problem('unauthorized', 'Authentication is required.'));
 			}
 			actor = auth.actor;
-			app = auth.app ?? null;
+			product = auth.product ?? null;
 			Object.assign(extra, auth.headers ?? {});
 
 			// CSRF (cookie sessions only)
@@ -641,8 +627,7 @@ export const createApiHandler = ({
 				authMode: auth.mode,
 				actor,
 				session: auth.session ?? null,
-				website: auth.website ?? null,
-				app: auth.app ?? null,
+				product,
 				idempotencyKey: undefined,
 				authorize: (permission, resource) => {
 					if (!can(actor, permission, resource)) throw problem('forbidden', `Missing permission ${permission}.`);
@@ -781,7 +766,7 @@ export const createApiHandler = ({
  * Next.js App Router adapter: `export const { GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS } = toNextRoute(handler)`.
  * The handler strips its own `basePath` (`/api`), so routes are declared as `/v1/...` whether they are reached at
  * `/api/v1/...` or through the `/v1/:path*` rewrite. Pass Next's `after` (`import { after } from 'next/server.js'`)
- * so deferred work (the request's own jobs, deliveries, e-mails) runs after the response on serverless hosts.
+ * so deferred work (the request's notices and e-mails) runs after the response on serverless hosts.
  * @param {(request: Request) => Promise<Response>} handler
  * @param {{ after?: AfterScheduler }} [options]
  * @returns {Readonly<Record<'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS', (request: Request) => Promise<Response>>>}

@@ -5,7 +5,7 @@
  * @module
  */
 import { isDuplicateKey } from '../../infra/util.js';
-import { ACCOUNTS, BILLING, COUNTERS, DOCUMENTS, HISTORY, LEDGER, PRICE_LISTS, SUBSCRIPTIONS, USAGE } from './schema.js';
+import { ACCOUNTS, BILLING, HISTORY, LEDGER, PRICE_LISTS, PRODUCTS } from './schema.js';
 
 /** @typedef {import('../../infra/modules.js').ModuleContext} ModuleContext */
 /** @typedef {import('../../infra/db.js').MutableOps} MutableOps */
@@ -18,118 +18,20 @@ import { ACCOUNTS, BILLING, COUNTERS, DOCUMENTS, HISTORY, LEDGER, PRICE_LISTS, S
 export const createCommerceRepo = (ctx) => {
 	/** @param {string} name */
 	const tenant = (name) => /** @type {import('../../infra/db.js').TenantRepository} */ (ctx.collection(name));
-	const subscriptions = tenant(SUBSCRIPTIONS);
-	const documents = tenant(DOCUMENTS);
-	const usage = tenant(USAGE);
-	const counters = tenant(COUNTERS);
+	const products = tenant(PRODUCTS);
 	const ledger = tenant(LEDGER);
 	const accounts = tenant(ACCOUNTS);
 	const history = tenant(HISTORY);
 	const billing = tenant(BILLING);
 	const priceLists = /** @type {ReadOps} */ (ctx.collection(PRICE_LISTS));
-	/** @param {string} m */
-	const subsOf = (m) => /** @type {MutableOps} */ (subscriptions.forMerchant(m));
 
 	return Object.freeze({
 		isDuplicateKey,
-		// ---- subscriptions
-		/** @param {string} id @returns {Promise<Doc | null>} */
-		subscriptionById: (id) => subscriptions.acrossMerchants().findOne({ _id: id }),
-		/** @param {string} merchantId @param {string} id @returns {Promise<Doc | null>} */
-		subscriptionOf: (merchantId, id) => subsOf(merchantId).findOne({ merchantId, _id: id }),
-		/** @param {string} websiteId @param {string} appId @returns {Promise<Doc | null>} */
-		liveSubscription: (websiteId, appId) => subscriptions.acrossMerchants().findOne({ websiteId, appId, live: true }),
-		/** @param {string} appId @returns {Promise<Doc[]>} */
-		liveSubscriptionsOfApp: (appId) => subscriptions.acrossMerchants().find({ appId, live: true }).sort({ _id: 1 }).toArray(),
-		/** @param {string} websiteId @returns {Promise<Doc[]>} */
-		subscriptionsForWebsite: (websiteId) =>
-			subscriptions.acrossMerchants().find({ websiteId }).sort({ createdAt: 1, _id: 1 }).toArray(),
-		/**
-		 * @param {string} merchantId
-		 * @param {{ websiteId?: string | null, live?: boolean }} [filter]
-		 * @returns {Promise<Doc[]>}
-		 */
-		subscriptionsOfMerchant: (merchantId, { websiteId = null, live } = {}) =>
-			subsOf(merchantId)
-				.find({ merchantId, ...(websiteId ? { websiteId } : {}), ...(live === true ? { live: true } : {}) })
-				.sort({ createdAt: 1, _id: 1 })
-				.toArray(),
-		/** @param {Doc} doc */
-		insertSubscription: (doc) => subsOf(doc.merchantId).insertOne(doc),
-		/**
-		 * Optimistic update guarded by `rev`; returns the updated document or null when `rev` moved.
-		 * @param {Doc} sub
-		 * @param {Doc} update update operators (rev is incremented here)
-		 * @returns {Promise<Doc | null>}
-		 */
-		updateSubscription: (sub, update) =>
-			subsOf(sub.merchantId).findOneAndUpdate(
-				{ merchantId: sub.merchantId, _id: sub._id, rev: sub.rev },
-				{ ...update, $inc: { ...(update.$inc ?? {}), rev: 1 } },
-				{ returnDocument: 'after' },
-			),
-
-		// ---- documents
-		/** @param {string} merchantId @param {string} subscriptionId @returns {Promise<Doc | null>} */
-		documentOf: (merchantId, subscriptionId) => documents.forMerchant(merchantId).findOne({ merchantId, _id: subscriptionId }),
-		/**
-		 * Write a document state; `expectedVersion` null = first write. Returns false on a lost race.
-		 * @param {string} merchantId @param {string} subscriptionId @param {number | null} expectedVersion @param {Doc} fields
-		 */
-		writeDocument: async (merchantId, subscriptionId, expectedVersion, fields) => {
-			const ops = /** @type {MutableOps} */ (documents.forMerchant(merchantId));
-			if (expectedVersion === null) {
-				try {
-					await ops.insertOne({ _id: subscriptionId, ...fields });
-					return true;
-				} catch (error) {
-					if (isDuplicateKey(error)) return false;
-					throw error;
-				}
-			}
-			const res = await ops.updateOne({ merchantId, _id: subscriptionId, version: expectedVersion }, { $set: fields });
-			return res.matchedCount === 1;
-		},
-		/** @param {string} merchantId @param {string} subscriptionId */
-		deleteDocument: (merchantId, subscriptionId) =>
-			/** @type {MutableOps} */ (documents.forMerchant(merchantId)).deleteOne({ merchantId, _id: subscriptionId }),
-
-		// ---- usage
-		/** @param {string} merchantId @param {Doc} record */
-		insertUsage: (merchantId, record) => usage.forMerchant(merchantId).insertOne(record),
-		/** @param {string} merchantId @param {string} subscriptionId @param {string} unit @param {Date} hour @param {number} quantity */
-		incCounter: async (merchantId, subscriptionId, unit, hour, quantity) => {
-			const ops = /** @type {MutableOps} */ (counters.forMerchant(merchantId));
-			const _id = `${subscriptionId}:${unit}:${hour.toISOString()}`;
-			const run = () =>
-				ops.updateOne(
-					{ merchantId, _id },
-					{ $inc: { quantity }, $setOnInsert: { subscriptionId, unit, hour } },
-					{ upsert: true },
-				);
-			try {
-				await run();
-			} catch (error) {
-				if (!isDuplicateKey(error)) throw error;
-				await run(); // concurrent upsert of the same counter
-			}
-		},
-		/**
-		 * Σ counters per unit for hours in `[from, to)`.
-		 * @param {string} merchantId @param {string} subscriptionId @param {readonly string[]} units @param {Date} from @param {Date} to
-		 * @returns {Promise<Record<string, number>>}
-		 */
-		countersBetween: async (merchantId, subscriptionId, units, from, to) => {
-			if (units.length === 0) return {};
-			const rows = await counters
-				.forMerchant(merchantId)
-				.aggregate([
-					{ $match: { merchantId, subscriptionId, unit: { $in: [...units] }, hour: { $gte: from, $lt: to } } },
-					{ $group: { _id: '$unit', quantity: { $sum: '$quantity' } } },
-				])
-				.toArray();
-			return Object.fromEntries(rows.map((r) => [String(r._id), Number(r.quantity)]));
-		},
+		// ---- products on websites
+		/** @param {string} merchantId */
+		productsOf: (merchantId) => /** @type {MutableOps} */ (products.forMerchant(merchantId)),
+		/** Every merchant's products on websites, for lookups by a global id (exact filters only). */
+		allProducts: () => /** @type {MutableOps} */ (products.acrossMerchants()),
 
 		// ---- ledger and accounts
 		/** @param {string} merchantId */
@@ -142,12 +44,21 @@ export const createCommerceRepo = (ctx) => {
 		// ---- money histories (PLAN 0.5.7 a)
 		/** @param {Doc} doc */
 		insertPriceList: (doc) => priceLists.insertOne(doc),
-		/** @param {readonly string[]} appIds @param {Date} to @returns {Promise<Doc[]>} */
-		priceListsOf: (appIds, to) =>
-			appIds.length === 0
+		/** @param {string} productId @returns {Promise<Doc | null>} the last accepted price list */
+		lastPriceList: (productId) => priceLists.findOne({ productId }, { sort: { version: -1 } }),
+		/** @param {string} productId @returns {Promise<string[]>} every feature key the product ever priced */
+		knownFeatures: async (productId) =>
+			(
+				await priceLists
+					.aggregate([{ $match: { productId } }, { $unwind: '$features' }, { $group: { _id: '$features.key' } }])
+					.toArray()
+			).map((row) => String(row._id)),
+		/** @param {readonly string[]} productIds @param {Date} to @returns {Promise<Doc[]>} */
+		priceListsOf: (productIds, to) =>
+			productIds.length === 0
 				? Promise.resolve([])
 				: priceLists
-						.find({ appId: { $in: [...appIds] }, at: { $lte: to } })
+						.find({ productId: { $in: [...productIds] }, at: { $lte: to } })
 						.sort({ at: 1, _id: 1 })
 						.toArray(),
 		/**

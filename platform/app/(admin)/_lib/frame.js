@@ -10,7 +10,7 @@ export async function AdminFrame({ children }) {
 	const session = await adminSession();
 	if (!session.ok) {
 		if (session.status === 401) redirect('/login');
-		if (/** @type {{ merchant?: boolean }} */ (session).merchant) redirect('/websites');
+		if (/** @type {{ merchant?: boolean }} */ (session).merchant) redirect('/overview');
 		throw new Error(session.problem?.detail ?? 'The admin console is unavailable.');
 	}
 	return (

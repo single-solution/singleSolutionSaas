@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 /**
- * Merchant Console in the browser (jsdom), part 1 — the public account pages, Account, websites and the frame: the
+ * Merchant Console in the browser (jsdom) — the public account pages, Account, Overview, Websites and the frame: the
  * views are rendered client-side against a live in-process Portal (`fetch` routed to `portal.handle` with a cookie jar)
  * and driven through their forms and dialogs: the one sign-in page (with two-step, Create admin and the suspended
  * message), Forgot password, reset and setup links, the e-mail confirmation, Account (details, sign-in e-mail,
- * password, two-step with a QR code and recovery codes), the welcome, the website's install code, the frame and the
- * client helpers.
+ * password, two-step with a QR code and recovery codes), the welcome, Overview with Open (the merchant launch route),
+ * the websites list, the frame and the client helpers.
  */
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import * as hooks from 'next/dist/shared/lib/hooks-client-context.shared-runtime.js';
@@ -24,7 +24,7 @@ import {
 	SignInView,
 } from '../../src/console/views/sign-in.js';
 import { ConsoleShell } from '../../src/console/views/shell.js';
-import { InstallCodeCard, WebsiteOverviewView, WebsitesView } from '../../src/console/views/websites.js';
+import { OverviewView, WebsitesView } from '../../src/console/views/websites.js';
 import { act, byLabel, cleanup, render, type } from '@ss/ui/testing';
 import { startMongo } from '../helpers.js';
 import { browserOf, button, clickEl, createWorld, fill, press, quiet, settle, shows, until } from './merchant-harness.js';
@@ -68,7 +68,7 @@ const BRANDING = {
 /** Two-step code of a secret now. @param {string} secret */
 const code = (secret) => totpCode(secret, Date.now());
 
-describe('merchant console interactions (jsdom): sign-in, Account, websites, frame', () => {
+describe('merchant console interactions (jsdom): sign-in, Account, Overview, websites, frame', () => {
 	it('drives the public pages, Account, websites and the frame against a live Portal', async () => {
 		const restore = quiet();
 		const db = mongo.db('merchant_ui_1');
@@ -221,7 +221,7 @@ describe('merchant console interactions (jsdom): sign-in, Account, websites, fra
 		cleanup();
 
 		// ---------------------------------------------------------------- a suspended merchant sees the support contact
-		const suspended = await world.staff.api.post(`/v1/admin/merchants/${merchantId}/suspend`, { reason: 'check' });
+		const suspended = await world.ownerBrowser.api.post(`/v1/admin/merchants/${merchantId}/suspend`, { reason: 'check' });
 		expect(suspended.ok).toBe(true);
 		const d = browserOf(portal);
 		d.use();
@@ -231,7 +231,7 @@ describe('merchant console interactions (jsdom): sign-in, Account, websites, fra
 		await press('Sign in');
 		await until(() => shows('Your account is suspended. Contact help@ss.test, +92 300 1234567.'));
 		cleanup();
-		await world.staff.api.post(`/v1/admin/merchants/${merchantId}/resume`, {});
+		await world.ownerBrowser.api.post(`/v1/admin/merchants/${merchantId}/resume`, {});
 
 		// ---------------------------------------------------------------- Forgot password, reset and setup links, e-mail confirmation
 		const f = browserOf(portal);
@@ -259,7 +259,7 @@ describe('merchant console interactions (jsdom): sign-in, Account, websites, fra
 		await f.waitCall('POST', '/v1/auth/reset-password', (st) => st === 204);
 		cleanup();
 		// setup link of a new merchant, and of an invited admin (who also enters a name)
-		await world.staff.api.post('/v1/admin/merchants', { name: 'Beta', ownerName: 'Bea', email: 'bea@beta.test' });
+		await world.ownerBrowser.api.post('/v1/admin/merchants', { name: 'Beta', ownerName: 'Bea', email: 'bea@beta.test' });
 		setToken(world.tokenOf('bea@beta.test', 'merchant_setup'));
 		render(<SetPasswordView branding={BRANDING} />);
 		await until(() => shows('Choose the password you will sign in with.'));
@@ -267,7 +267,7 @@ describe('merchant console interactions (jsdom): sign-in, Account, websites, fra
 		await press('Save and sign in');
 		await f.waitCall('POST', '/v1/auth/set-password', (st) => st === 200);
 		cleanup();
-		await world.staff.api.post('/v1/admin/admins', { email: 'sue@portal.test', role: 'support' });
+		await world.ownerBrowser.api.post('/v1/admin/admins', { email: 'sue@portal.test', role: 'support' });
 		setToken(world.tokenOf('sue@portal.test', 'admin_invite'));
 		render(<SetPasswordView branding={BRANDING} />);
 		await until(() => shows('Enter your name and choose the password'));
@@ -299,7 +299,7 @@ describe('merchant console interactions (jsdom): sign-in, Account, websites, fra
 		await until(() => shows('This link is incomplete.'));
 		cleanup();
 
-		// ---------------------------------------------------------------- websites: the welcome, then the list and the install code
+		// ---------------------------------------------------------------- the welcome, then Overview with Open and the websites list
 		const e = browserOf(portal);
 		e.use();
 		await e.api.post('/v1/auth/sign-in', { email: 'bea@beta.test', password: PASSWORD });
@@ -308,49 +308,56 @@ describe('merchant console interactions (jsdom): sign-in, Account, websites, fra
 		expect(shows('Your admin will add your websites and products.') && shows('help@ss.test')).toBe(true);
 		cleanup();
 		const site = await world.addWebsite(beta.merchantId, 'beta.example.com');
+		await world.connect();
+		await world.addProduct(beta.merchantId, site.websiteId, 'notes');
 		render(<WebsitesView {...await loaders.loadWebsites(e.api, beta.merchantId)} branding={BRANDING} />);
-		expect(shows('beta.example.com')).toBe(true);
+		expect(shows('beta.example.com') && shows('Notes')).toBe(true);
 		cleanup();
-		const twinOverview = await loaders.loadWebsiteOverview(e.api, beta.merchantId, site.twin.websiteId);
-		render(<WebsiteOverviewView {...twinOverview} />);
-		expect(shows('test twin')).toBe(true);
+		const open = vi.fn();
+		vi.stubGlobal('open', open);
+		withToasts(<OverviewView {...await loaders.loadOverview(e.api, beta.merchantId)} branding={BRANDING} />);
+		expect(shows('Spend per UTC day (last 30 days)') && shows('No features on')).toBe(true);
+		await press('Open Notes · beta.example.com');
+		const launched = await e.waitCall(
+			'POST',
+			`/v1/merchants/${beta.merchantId}/websites/${site.websiteId}/products/notes/launch`,
+			(st) => st === 200,
+		);
+		expect(open).toHaveBeenCalledWith(launched.body.url, '_blank', 'noopener,noreferrer');
+		expect(launched.body.url).toMatch(/\/sso\?launch=/);
+		// a refused launch shows its problem (the merchant is suspended meanwhile: every session ends)
+		await world.ownerBrowser.api.post(`/v1/admin/merchants/${beta.merchantId}/suspend`, { reason: 'check' });
+		await press('Open Notes · beta.example.com');
+		await e.waitCall(
+			'POST',
+			`/v1/merchants/${beta.merchantId}/websites/${site.websiteId}/products/notes/launch`,
+			(st) => st === 401,
+		);
+		expect(open).toHaveBeenCalledTimes(1);
 		cleanup();
-		render(<InstallCodeCard snippet={null} />);
-		expect(shows('Your install code appears here once the website is loaded.')).toBe(true);
-		cleanup();
-		const tag = `<script src="https://portal.test/w/${site.twin.websiteId}/loader.js" crossorigin="anonymous" defer></script>`;
-		const writeText = vi.fn(async () => undefined);
-		vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
-		render(<InstallCodeCard snippet={{ alias: { tag } }} />);
-		await press('Copy');
-		expect(writeText).toHaveBeenCalledWith(tag);
-		vi.unstubAllGlobals();
-		e.use();
-		cleanup();
+		await world.ownerBrowser.api.post(`/v1/admin/merchants/${beta.merchantId}/resume`, {});
+		await e.api.post('/v1/auth/sign-in', { email: 'bea@beta.test', password: PASSWORD });
 
 		// ---------------------------------------------------------------- the frame: website switcher, banners, sign out
 		const frame = await loaders.loadFrame(e.api, beta.merchantId);
 		const low = { status: 'low_balance', balance: 5000, dailySpend: 24_000, daysLeft: 0 };
 		render(
-			<PathnameContext.Provider value={`/websites/${site.twin.websiteId}/keys`}>
+			<PathnameContext.Provider value={`/websites/${site.websiteId}`}>
 				<ConsoleShell
 					me={beta.me}
 					merchantId={beta.merchantId}
 					websites={frame.websites}
 					billing={low}
-					branding={{ name: 'Acme', accent: '#112233', support: { email: 'help@ss.test' } }}
-					notifications={[
-						{ kind: 'identity_issuer_request', websiteId: site.website.websiteId, domain: 'beta.example.com', request: {} },
-					]}>
+					branding={{ name: 'Acme', accent: '#112233', support: { email: 'help@ss.test' } }}>
 					<p>child</p>
 				</ConsoleShell>
 			</PathnameContext.Provider>,
 		);
 		expect(shows('child') && shows('Credits are running low') && shows('help@ss.test') && shows('Acme')).toBe(true);
-		expect(shows('beta.example.com · test')).toBe(true);
 		const [siteSelect] = /** @type {HTMLSelectElement[]} */ ([...document.querySelectorAll('select')]);
+		expect(siteSelect?.value).toBe(site.websiteId);
 		type(/** @type {HTMLSelectElement} */ (siteSelect), '');
-		type(/** @type {HTMLSelectElement} */ (siteSelect), site.website.websiteId);
+		type(/** @type {HTMLSelectElement} */ (siteSelect), site.websiteId);
 		await clickEl(
 			/** @type {HTMLButtonElement} */ (
 				[...document.querySelectorAll('button')].find((x) => x.textContent?.includes('Sign out'))
@@ -359,11 +366,11 @@ describe('merchant console interactions (jsdom): sign-in, Account, websites, fra
 		await e.waitCall('POST', '/v1/auth/sign-out');
 		cleanup();
 		render(
-			<PathnameContext.Provider value="/websites">
+			<PathnameContext.Provider value="/overview">
 				<ConsoleShell
 					me={beta.me}
 					merchantId={beta.merchantId}
-					websites={frame.websites}
+					websites={[]}
 					billing={{ status: 'stopped', balance: -1000, dailySpend: 24_000, stoppedAt: '2026-10-04T11:00:00.000Z' }}>
 					<p>x</p>
 				</ConsoleShell>
@@ -433,6 +440,7 @@ describe('merchant console interactions (jsdom): sign-in, Account, websites, fra
 			probe.unmount();
 		});
 		await settle(2);
+		await world.close();
 		restore();
 	});
 });

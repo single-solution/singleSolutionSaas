@@ -2,7 +2,7 @@
  * Process-wide Portal instance for the Next.js adapters and the scripts. Built lazily on first use (never at import or
  * build time) and cached on `globalThis`, so warm serverless invocations reuse it:
  *
- * 1. the environment (`MONGODB_URI`, `PORTAL_URL`, `ENCRYPTION_KEY`, `STORAGE_*`) is validated — a misconfigured
+ * 1. the environment (`MONGODB_URI`, `PORTAL_URL`, `ENCRYPTION_KEY`) is validated — a misconfigured
  *    deployment fails fast, naming the variable (never its value);
  * 2. the system state is loaded from the control database: secrets generated on first start, settings recorded by
  *    admins (`infra/system.js`);

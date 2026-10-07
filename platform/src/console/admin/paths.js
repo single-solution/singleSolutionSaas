@@ -4,17 +4,13 @@
  * @module
  */
 
+import { api, query } from '../paths.js';
+
+/** @typedef {import('../paths.js').WebsiteTab} WebsiteTab */
+
 const e = encodeURIComponent;
 
-/**
- * @param {Record<string, string | number | boolean | null | undefined>} params
- */
-export const query = (params) => {
-	const q = new URLSearchParams();
-	for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== null && v !== '') q.set(k, String(v));
-	const s = q.toString();
-	return s ? `?${s}` : '';
-};
+export { query };
 
 /** Admin Console page URLs. */
 export const adminRoutes = Object.freeze({
@@ -22,16 +18,14 @@ export const adminRoutes = Object.freeze({
 	overview: () => '/admin',
 	merchants: (/** @type {{ status?: string | null, q?: string | null }} */ q = {}) => `/admin/merchants${query(q)}`,
 	merchant: (/** @type {string} */ id, /** @type {string | null} */ tab = null) => `/admin/merchants/${e(id)}${query({ tab })}`,
-	apps: (/** @type {{ status?: string | null, kind?: string | null }} */ q = {}) => `/admin/apps${query(q)}`,
-	app: (/** @type {string} */ id) => `/admin/apps/${e(id)}`,
-	policies: (/** @type {string} */ id) => `/admin/apps/${e(id)}/policies`,
-	subscriptions: (/** @type {{ id?: string | null }} */ q = {}) => `/admin/subscriptions${query(q)}`,
-	subscription: (/** @type {string} */ id) => `/admin/subscriptions/${e(id)}`,
+	website: (/** @type {string} */ m, /** @type {string} */ w, /** @type {WebsiteTab | null} */ tab = null) =>
+		`/admin/merchants/${e(m)}/websites/${e(w)}${query({ tab: tab === 'products' ? null : tab })}`,
+	products: (/** @type {{ status?: string | null }} */ q = {}) => `/admin/products${query(q)}`,
+	product: (/** @type {string} */ id, /** @type {string | null} */ tab = null) =>
+		`/admin/products/${e(id)}${query({ tab: tab === 'overview' ? null : tab })}`,
 	finance: (
 		/** @type {{ tab?: string | null, merchantId?: string | null, from?: string | null, to?: string | null, method?: string | null, by?: string | null }} */ q = {},
 	) => `/admin/finance${query(q)}`,
-	connectors: (/** @type {{ merchantId?: string | null, kind?: string | null, status?: string | null }} */ q = {}) =>
-		`/admin/connectors${query(q)}`,
 	activity: (
 		/** @type {{ merchantId?: string | null, adminId?: string | null, from?: string | null, to?: string | null }} */ q = {},
 	) => `/admin/activity${query(q)}`,
@@ -59,8 +53,6 @@ export const adminApi = Object.freeze({
 	/** `POST { copy? }` → `{ link (copy only), expiresAt, mailed }` */
 	setupLink: (/** @type {string} */ m) => `/v1/admin/merchants/${e(m)}/setup-link`,
 	merchantTwoStepOff: (/** @type {string} */ m) => `/v1/admin/merchants/${e(m)}/two-step/off`,
-	websites: (/** @type {string} */ m) => `/v1/merchants/${e(m)}/websites`,
-	website: (/** @type {string} */ m, /** @type {string} */ w) => `/v1/merchants/${e(m)}/websites/${e(w)}`,
 	merchantActivity: (/** @type {string} */ m) => `/v1/merchants/${e(m)}/activity`,
 	admins: () => '/v1/admin/admins',
 	admin: (/** @type {string} */ a) => `/v1/admin/admins/${e(a)}`,
@@ -76,30 +68,22 @@ export const adminApi = Object.freeze({
 	settingsSecurity: () => '/v1/admin/settings/security',
 	settingsBilling: () => '/v1/admin/settings/billing',
 
-	// catalog
-	apps: (/** @type {{ status?: string | null, kind?: string | null, cursor?: string | null, limit?: number }} */ q = {}) =>
-		`/v1/admin/apps${query(q)}`,
-	app: (/** @type {string} */ a) => `/v1/admin/apps/${e(a)}`,
-	/** `POST { url, secret }` → `{ appId, slug, baseUrl, kid, reconnected, priceChanges? }` (connect a service product) */
-	connect: () => '/v1/admin/apps/connect',
-	/** `POST { descriptor }` → `{ appId, slug, kind, version, status, missing, uploadPath, changed }`; then `PUT ${uploadPath}<path>` */
-	packs: () => '/v1/admin/packs',
-	/** one stored manifest version `{ version, manifest, … }` (subscriptions pin one) */
-	version: (/** @type {string} */ a, /** @type {number | string} */ v) => `/v1/admin/apps/${e(a)}/versions/${e(String(v))}`,
-	/** Staff "Retry now" for a product's queued event deliveries */
-	retryDeliveries: (/** @type {string} */ a) => `/v1/admin/apps/${e(a)}/deliveries/retry`,
-	/** `POST { status: 'active' | 'inactive' }` */
-	status: (/** @type {string} */ a) => `/v1/admin/apps/${e(a)}/status`,
-	launch: (/** @type {string} */ a) => `/v1/admin/apps/${e(a)}/launch`,
+	// catalog: connected products (PLAN 0.8.2 Products)
+	products: (/** @type {{ status?: string | null }} */ q = {}) => api.products(q),
+	product: (/** @type {string} */ p) => `/v1/admin/products/${e(p)}`,
+	/** `GET ?cursor=` → `{ items, cursor }` (merchant, domain, features on, daily cost) */
+	productWebsites: (/** @type {string} */ p, /** @type {string | null} */ cursor = null) =>
+		`/v1/admin/products/${e(p)}/websites${query({ cursor })}`,
+	/** `POST { url, secret }` → 201 `{ product }` (Add product; new products are inactive) */
+	connect: () => '/v1/admin/products',
+	/** `POST { url?, secret }` → `{ product }` */
+	reconnect: (/** @type {string} */ p) => `/v1/admin/products/${e(p)}/reconnect`,
+	/** `POST { status: 'active' | 'inactive' }` → `{ product }` */
+	productStatus: (/** @type {string} */ p) => `/v1/admin/products/${e(p)}/status`,
+	launch: (/** @type {string} */ p) => api.adminLaunch(p),
 
 	// commerce
-	/** active products with plans, elements and prices (public) */
-	catalog: () => '/v1/catalog/products',
-	subscriptions: (/** @type {string} */ m) => `/v1/merchants/${e(m)}/subscriptions`,
-	subscription: (/** @type {string} */ m, /** @type {string} */ s) => `/v1/merchants/${e(m)}/subscriptions/${e(s)}`,
 	billing: (/** @type {string} */ m) => `/v1/merchants/${e(m)}/billing`,
-	usage: (/** @type {string} */ m, /** @type {{ from?: string | null, to?: string | null }} */ q = {}) =>
-		`/v1/merchants/${e(m)}/usage${query(q)}`,
 	receipts: (/** @type {string} */ m) => `/v1/merchants/${e(m)}/receipts`,
 	addReceipt: (/** @type {string} */ m) => `/v1/admin/merchants/${e(m)}/receipts`,
 	dayCharges: (/** @type {string} */ m) => `/v1/admin/merchants/${e(m)}/day-charges`,
@@ -110,24 +94,6 @@ export const adminApi = Object.freeze({
 	) => `/v1/admin/billing/receipts${query(q)}`,
 	charges: (/** @type {{ by?: string | null, from?: string | null, to?: string | null }} */ q = {}) =>
 		`/v1/admin/billing/charges${query(q)}`,
-
-	// config
-	adminConfig: (/** @type {string} */ s) => `/v1/admin/subscriptions/${e(s)}/config`,
-	adminLocks: (/** @type {string} */ s) => `/v1/admin/subscriptions/${e(s)}/config/locks`,
-	adminHistory: (/** @type {string} */ s, /** @type {{ level?: string | null, cursor?: string | null }} */ q = {}) =>
-		`/v1/admin/subscriptions/${e(s)}/config/history${query(q)}`,
-	adminRollback: (/** @type {string} */ s) => `/v1/admin/subscriptions/${e(s)}/config/rollback`,
-	preview: (/** @type {string} */ m, /** @type {string} */ w, /** @type {string} */ s) =>
-		`/v1/merchants/${e(m)}/websites/${e(w)}/subscriptions/${e(s)}/config/preview`,
-	platformPolicy: (/** @type {string} */ a) => `/v1/admin/config/platform/${e(a)}`,
-	platformHistory: (/** @type {string} */ a, /** @type {{ cursor?: string | null }} */ q = {}) =>
-		`/v1/admin/config/platform/${e(a)}/history${query(q)}`,
-	platformRollback: (/** @type {string} */ a) => `/v1/admin/config/platform/${e(a)}/rollback`,
-
-	// connectors
-	connectors: (
-		/** @type {{ merchantId?: string | null, kind?: string | null, status?: string | null, cursor?: string | null }} */ q = {},
-	) => `/v1/admin/connectors${query(q)}`,
 
 	// system
 	/** newest-first Activity entries `{ items, nextCursor }` */
@@ -140,7 +106,4 @@ export const adminApi = Object.freeze({
 export const ID = Object.freeze({
 	merchant: /^mer_[0-9a-z]{10,64}$/,
 	admin: /^adm_[0-9a-z]{10,64}$/,
-	website: /^web_[0-9a-z]{10,64}$/,
-	app: /^app_[0-9a-z]{10,64}$/,
-	subscription: /^sub_[0-9a-z]{10,64}$/,
 });

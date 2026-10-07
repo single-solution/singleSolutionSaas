@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createJwks, createKeyResolver, generateSigningKey, issueWebsiteKey, signAssertion } from '@ss/protocol';
+import { createJwks, createKeyResolver, generateSigningKey, signAssertion } from '@ss/protocol';
 import { defineCollection } from '../src/infra/db.js';
 import { created, defineRoute, ok, problem } from '../src/infra/http.js';
 import { defineModule } from '../src/infra/modules.js';
@@ -17,7 +17,6 @@ import {
 	MERCHANT,
 	MERCHANT_2,
 	PORTAL_URL,
-	WEBSITE,
 	createClock,
 	createTestLogger,
 	startMongo,
@@ -41,7 +40,7 @@ const ORIGIN = PORTAL_URL;
 const SAME_ORIGIN = { origin: ORIGIN, 'sec-fetch-site': 'same-origin' };
 
 /** A module exercising the extension points the real modules will use. */
-const probeModule = ({ revoked = new Set(), appJwks = /** @type {any} */ (null), withWebsitePort = true } = {}) =>
+const probeModule = ({ productJwks = /** @type {any} */ (null) } = {}) =>
 	defineModule({
 		name: 'probe',
 		collections: [defineCollection({ module: 'probe', name: 'probe_items', tenant: 'merchant' })],
@@ -60,24 +59,15 @@ const probeModule = ({ revoked = new Set(), appJwks = /** @type {any} */ (null),
 		},
 		ports: () => ({
 			sessionActor: testSessionActor,
-			appKeys: (/** @type {string} */ appId) =>
-				appJwks && appId === 'app_probe' ? createKeyResolver({ jwks: appJwks }) : null,
-			...(withWebsitePort
-				? {
-						websiteKeyRevoked: (/** @type {any} */ claims, /** @type {string} */ rawKey) =>
-							revoked.has(claims.keyId) || !rawKey.startsWith(`${claims.kind}_`),
-					}
-				: {}),
-		}),
-		jobs: (ctx) => ({
-			'probe.add': async (payload) => void (await ctx.service('probe').add(payload.merchantId, payload.name)),
+			productKeys: (/** @type {string} */ productId) =>
+				productJwks && productId === 'probe' ? createKeyResolver({ jwks: productJwks }) : null,
 		}),
 		routes: (ctx) => [
 			defineRoute({
 				method: 'POST',
 				path: '/v1/probe/merchants/:merchantId/items',
 				auth: ['admin', 'merchant'],
-				permission: 'settings.write',
+				permission: 'tokens.manage',
 				idempotent: true,
 				rateLimit: { limit: 5, windowMs: 60_000 },
 				handler: async (c) => {
@@ -97,22 +87,13 @@ const probeModule = ({ revoked = new Set(), appJwks = /** @type {any} */ (null),
 			defineRoute({
 				method: 'GET',
 				path: '/v1/probe/whoami',
-				auth: ['admin', 'merchant', 'product', 'websiteKey'],
+				auth: ['admin', 'merchant', 'product'],
 				handler: (c) =>
 					ok({
 						authMode: c.authMode,
 						actor: c.actor,
 						...(c.session ? { session: { kind: c.session.kind, mfa: c.session.mfa } } : {}),
-						...(c.website
-							? {
-									website: {
-										websiteId: c.website.websiteId,
-										kind: c.website.kind,
-										env: c.website.env,
-										scopes: c.website.scopes,
-									},
-								}
-							: {}),
+						...(c.product ? { product: c.product } : {}),
 					}),
 			}),
 			defineRoute({
@@ -208,8 +189,8 @@ describe('Portal end to end', () => {
 		expect((await call('GET', '/v1/probe/info')).status).toBe(200);
 
 		const jwks = await portal.jwks().json();
-		// Portal keys and the dedicated website-key signing key, distinct kids
-		expect(jwks.keys.map((/** @type {any} */ k) => k.kid)).toEqual(['portal-2026-10', 'portal-2026-04', 'website-2026-10']);
+		// Portal keys and the dedicated token signing key, distinct kids
+		expect(jwks.keys.map((/** @type {any} */ k) => k.kid)).toEqual(['portal-2026-10', 'portal-2026-04', 'token-2026-10']);
 		expect(JSON.stringify(jwks)).not.toContain('"d"');
 		expect((await call('GET', '/v1/probe/fail')).status).toBe(200);
 		expect((await call('GET', '/v1/probe/foreign')).status).toBe(500); // modules cannot reach other modules' collections
@@ -300,7 +281,7 @@ describe('Portal end to end', () => {
 				})
 			).status,
 		).toBe(403);
-		// Finance never edits settings (PLAN 0.2)
+		// Finance never sees tokens (PLAN 0.2)
 		expect(
 			(
 				await call('POST', path, {
@@ -314,102 +295,34 @@ describe('Portal end to end', () => {
 		expect(who.json.actor).toEqual({ type: 'merchant', id: MERCHANT, merchantId: MERCHANT });
 	});
 
-	it('product client assertions: app keys port, audience and replay protection', async () => {
+	it('product client assertions: product keys port, audience and replay protection', async () => {
 		const { privateJwk, publicJwk } = await generateSigningKey({ kid: 'probe-1' });
 		const { call, clock } = await boot({
 			dbName: 'it_product',
-			modules: [systemModule, probeModule({ appJwks: createJwks([publicJwk]) })],
+			modules: [systemModule, probeModule({ productJwks: createJwks([publicJwk]) })],
 		});
 		const { createSigner } = await import('@ss/protocol');
 		const signer = createSigner(privateJwk);
-		const assertion = await signAssertion({ signer, appId: 'app_probe', audience: PORTAL_URL, now: clock.now });
+		const assertion = await signAssertion({ signer, productId: 'probe', audience: PORTAL_URL, now: clock.now });
 		const who = await call('GET', '/v1/probe/whoami', { headers: { authorization: `Bearer ${assertion}` } });
-		expect(who.json).toEqual({ authMode: 'product', actor: { type: 'product', id: 'app_probe' } });
+		expect(who.json).toEqual({
+			authMode: 'product',
+			actor: { type: 'product', id: 'probe' },
+			product: { productId: 'probe' },
+		});
 		expect((await call('GET', '/v1/probe/whoami', { headers: { authorization: `Bearer ${assertion}` } })).status).toBe(401); // replay
-		const wrongAudience = await signAssertion({ signer, appId: 'app_probe', audience: 'https://other.test', now: clock.now });
+		const wrongAudience = await signAssertion({ signer, productId: 'probe', audience: 'https://other.test', now: clock.now });
 		expect((await call('GET', '/v1/probe/whoami', { headers: { authorization: `Bearer ${wrongAudience}` } })).status).toBe(401);
-		const unknownApp = await signAssertion({ signer, appId: 'app_other', audience: PORTAL_URL, now: clock.now });
-		expect((await call('GET', '/v1/probe/whoami', { headers: { authorization: `Bearer ${unknownApp}` } })).status).toBe(401);
+		const unknown = await signAssertion({ signer, productId: 'other', audience: PORTAL_URL, now: clock.now });
+		expect((await call('GET', '/v1/probe/whoami', { headers: { authorization: `Bearer ${unknown}` } })).status).toBe(401);
 		expect((await call('GET', '/v1/probe/whoami', { headers: { authorization: 'Bearer not-a-jwt' } })).status).toBe(401);
 
 		const noPort = await boot({ dbName: 'it_product_noport', modules: [systemModule, probeModule()] });
-		const fresh = await signAssertion({ signer, appId: 'app_probe', audience: PORTAL_URL, now: noPort.clock.now });
+		const fresh = await signAssertion({ signer, productId: 'probe', audience: PORTAL_URL, now: noPort.clock.now });
 		expect((await noPort.call('GET', '/v1/probe/whoami', { headers: { authorization: `Bearer ${fresh}` } })).status).toBe(401);
 	});
 
-	it('website keys: offline verification, revocation port, origin and scopes', async () => {
-		const revoked = new Set();
-		const { portal, call, clock } = await boot({ dbName: 'it_keys', modules: [systemModule, probeModule({ revoked })] });
-		const issue = async (
-			/** @type {'pk' | 'sk'} */ kind,
-			keyId = `key_${kind}`,
-			signer = portal.shared.keys.websiteKeySigner,
-		) =>
-			(
-				await issueWebsiteKey({
-					signer,
-					kind,
-					websiteId: WEBSITE,
-					merchantId: MERCHANT,
-					domain: 'shop.example.com',
-					env: 'live',
-					scopes: ['config.*'],
-					keyId,
-					now: clock.now,
-				})
-			).key;
-		const sk = await issue('sk');
-		const who = await call('GET', '/v1/probe/whoami', { headers: { authorization: `Bearer ${sk}` } });
-		expect(who.json).toEqual({
-			authMode: 'websiteKey',
-			actor: { type: 'website', id: 'key_sk', merchantId: MERCHANT },
-			website: { websiteId: WEBSITE, kind: 'sk', env: 'live', scopes: ['config.*'] },
-		});
-		const pk = await issue('pk');
-		expect((await call('GET', '/v1/probe/whoami', { headers: { authorization: `Bearer ${pk}` } })).status).toBe(403); // no origin
-		expect(
-			(
-				await call('GET', '/v1/probe/whoami', {
-					headers: { authorization: `Bearer ${pk}`, origin: 'https://evil.example.com' },
-				})
-			).status,
-		).toBe(403);
-		expect(
-			(
-				await call('GET', '/v1/probe/whoami', {
-					headers: { authorization: `Bearer ${pk}`, origin: 'https://shop.example.com' },
-				})
-			).status,
-		).toBe(200);
-		revoked.add('key_sk');
-		expect((await call('GET', '/v1/probe/whoami', { headers: { authorization: `Bearer ${sk}` } })).status).toBe(401);
-		expect((await call('GET', '/v1/probe/whoami', { headers: { authorization: `Bearer sk_live_garbage` } })).status).toBe(401);
-		// a token signed with the Portal (launch/document) key is not a website key
-		const portalSigned = await issue('sk', 'key_portal', portal.shared.keys.signer);
-		expect((await call('GET', '/v1/probe/whoami', { headers: { authorization: `Bearer ${portalSigned}` } })).status).toBe(401);
-
-		// a key signed by someone else's key never verifies
-		const { privateJwk } = await generateSigningKey({ kid: 'portal-2026-10' });
-		const { createSigner } = await import('@ss/protocol');
-		const forged = await issueWebsiteKey({
-			signer: createSigner(privateJwk),
-			kind: 'sk',
-			websiteId: WEBSITE,
-			merchantId: MERCHANT,
-			domain: 'shop.example.com',
-			env: 'live',
-			scopes: [],
-			keyId: 'key_f',
-		});
-		expect((await call('GET', '/v1/probe/whoami', { headers: { authorization: `Bearer ${forged.key}` } })).status).toBe(401);
-
-		// without a revocation port, website keys fail closed
-		const closed = await boot({ dbName: 'it_keys_closed', modules: [systemModule, probeModule({ withWebsitePort: false })] });
-		const res = await closed.call('GET', '/v1/probe/whoami', { headers: { authorization: `Bearer ${sk}` } });
-		expect([res.status, res.headers.get('retry-after')]).toEqual([503, '30']);
-	});
-
-	it('no admin operations: jobs run after the request that enqueued them, the operations routes are gone', async () => {
+	it('no admin operations: the operations routes are gone', async () => {
 		const { portal, call } = await boot({ dbName: 'it_operations' });
 		await portal.ensureIndexes();
 		const owner = await login(portal, { kind: 'admin', subject: 'adm_owner', mfa: true });
@@ -418,23 +331,20 @@ describe('Portal end to end', () => {
 		expect((await call('GET', '/v1/admin/operations', { headers })).status).toBe(404);
 	});
 
-	it('work after responses: a job enqueued by a request runs right after it, and only that job (F.19)', async () => {
+	it('work after responses: deferred tasks run right after the request, and only its own (F.19)', async () => {
 		/** @type {Array<() => Promise<unknown>>} */
 		const scheduled = [];
 		/** @type {string[]} */
 		const called = [];
+		const { privateJwk, publicJwk } = await generateSigningKey({ kid: 'probe2-1' });
 		const probe = defineModule({
 			name: 'probe2',
-			jobs: (ctx) => ({
-				'probe2.mark': async (payload) => {
-					await ctx.locks.acquire(`mark:${payload.name}`, { ttlMs: 60_000 });
-				},
-			}),
 			ports: () => ({
-				appKeys: () => null,
-				productCalled: async (/** @type {string} */ appId) => void called.push(appId),
+				productKeys: (/** @type {string} */ productId) =>
+					productId === 'probe' ? createKeyResolver({ jwks: createJwks([publicJwk]) }) : null,
+				productCalled: async (/** @type {string} */ productId) => void called.push(productId),
 			}),
-			routes: (ctx) => [
+			routes: () => [
 				defineRoute({
 					method: 'GET',
 					path: '/v1/probe2/defer',
@@ -444,40 +354,32 @@ describe('Portal end to end', () => {
 						return ok({ deferred: true });
 					},
 				}),
-				defineRoute({
-					method: 'POST',
-					path: '/v1/probe2/mark',
-					auth: 'public',
-					idempotent: false,
-					handler: async () => {
-						await ctx.jobs.enqueue({ name: 'probe2.mark', payload: { name: 'now' } });
-						await ctx.jobs.enqueue({ name: 'probe2.mark', payload: { name: 'later' }, runAt: Date.now() + 3_600_000 });
-						return ok({});
-					},
-				}),
+				defineRoute({ method: 'GET', path: '/v1/probe2/product', auth: 'product', handler: () => ok({}) }),
 			],
 		});
 		const background = { mode: 'on', fallback: (/** @type {any} */ task) => void scheduled.push(task) };
 		const one = await boot({ dbName: 'it_after', modules: [systemModule, probe], background });
 		await one.portal.ensureIndexes();
-		const jobs = one.portal.shared.jobs;
-		// an unrelated job waiting in the queue is never swept by a request
-		await jobs.enqueue({ name: 'probe2.mark', payload: { name: 'unrelated' } });
 		expect((await one.call('GET', '/v1/probe2/defer')).status).toBe(200);
 		expect(scheduled).toHaveLength(1);
 		for (const task of scheduled.splice(0)) await task();
 		expect(one.entries.some((e) => e.msg === 'deferred task failed')).toBe(true);
-		const raw = mongo.db('it_after').collection(COLLECTIONS.jobs);
-		const count = async (/** @type {string} */ status) => raw.countDocuments({ status });
-		expect([await count('done'), await count('queued')]).toEqual([0, 1]);
-		expect((await one.call('POST', '/v1/probe2/mark')).status).toBe(200);
-		for (const task of scheduled.splice(0)) await task();
-		// the job due now ran; the future one and the unrelated one still wait
-		expect([await count('done'), await count('queued')]).toEqual([1, 2]);
 		// a product's request is followed by the productCalled port
 		await one.call('GET', '/v1/probe2/defer', { headers: { authorization: 'Bearer nope' } });
 		for (const task of scheduled.splice(0)) await task();
 		expect(called).toEqual([]); // unauthenticated (public route): no product
+		const { createSigner } = await import('@ss/protocol');
+		const assertion = await signAssertion({
+			signer: createSigner(privateJwk),
+			productId: 'probe',
+			audience: PORTAL_URL,
+			now: one.clock.now,
+		});
+		expect((await one.call('GET', '/v1/probe2/product', { headers: { authorization: `Bearer ${assertion}` } })).status).toBe(
+			200,
+		);
+		for (const task of scheduled.splice(0)) await task();
+		expect(called).toEqual(['probe']);
 		// Next.js adapter: the request's after() takes precedence over the fallback
 		/** @type {Array<() => Promise<unknown>>} */
 		const viaAfter = [];
@@ -502,7 +404,7 @@ describe('background (unit)', () => {
 		const bg = createBackground({
 			logger,
 			fallback: (task) => void fallback.push(task),
-			onProductCall: async (appId) => void calls.push(appId),
+			onProductCall: async (productId) => void calls.push(productId),
 		});
 		/** @type {Array<() => Promise<unknown>>} */
 		const deferred = [
@@ -517,19 +419,19 @@ describe('background (unit)', () => {
 				throw new Error('outside a request');
 			},
 			log: logger,
-			app: { appId: 'app_1' },
+			product: { productId: 'notes' },
 		});
 		expect(fallback).toHaveLength(1);
 		await fallback[0]?.();
-		expect(calls).toEqual(['app_1', 'nested']);
+		expect(calls).toEqual(['notes', 'nested']);
 		expect(entries.some((e) => e.msg === 'deferred task failed')).toBe(true);
-		bg.afterResponse({ deferred: [], schedule: null, log: logger, app: null }); // nothing to do
+		bg.afterResponse({ deferred: [], schedule: null, log: logger, product: null }); // nothing to do
 		expect(fallback).toHaveLength(1);
 		// a task that keeps deferring is cut off
 		const loop = createBackground({ logger, fallback: (task) => void fallback.push(task) });
 		/** @type {() => Promise<void>} */
 		const again = async () => void afterResponse(again);
-		loop.afterResponse({ deferred: [again], schedule: null, log: logger, app: null });
+		loop.afterResponse({ deferred: [again], schedule: null, log: logger, product: null });
 		await fallback[1]?.();
 		expect(entries.some((e) => e.msg === 'deferred tasks dropped')).toBe(true);
 		// the default fallback runs the work in the background of the request
@@ -543,7 +445,7 @@ describe('background (unit)', () => {
 			],
 			schedule: null,
 			log: logger,
-			app: null,
+			product: null,
 		});
 		await new Promise((resolve) => setTimeout(resolve, 10));
 		expect(ran).toBe(true);
@@ -879,13 +781,13 @@ describe('runtime', () => {
 		expect(forged.status).toBe(403);
 		expect((await import('node:fs')).existsSync(new URL('../app/setup/route.js', import.meta.url))).toBe(false);
 
-		const res = await portal.handle(new Request('https://portal.example.test/v1/catalog/products'));
+		const res = await portal.handle(new Request('https://portal.example.test/v1/branding'));
 		expect(res.status).toBe(200);
 		expect(lines.some((line) => JSON.parse(line).msg === 'request')).toBe(true);
 
 		// the Next.js adapters delegate to the cached instance
 		const api = await import('../app/api/[...path]/route.js');
-		expect((await api.GET(new Request('https://portal.example.test/api/v1/catalog/products'))).status).toBe(200);
+		expect((await api.GET(new Request('https://portal.example.test/api/v1/branding'))).status).toBe(200);
 		// /.well-known/jwks.json is rewritten to the same catch-all (GET/HEAD only)
 		const system = (/** @type {string} */ path, method = 'GET') =>
 			api[/** @type {'GET'} */ (method)](new Request(`https://portal.example.test/api${path}`, { method }));
@@ -902,64 +804,6 @@ describe('runtime', () => {
 });
 
 describe('infra hardening (Mongo)', () => {
-	it('ctx.verifyWebsiteKey: the authenticator logic for keys outside the header (kind, env, scopes, origin, raw key)', async () => {
-		const seenKeys = /** @type {string[]} */ ([]);
-		const watcher = defineModule({
-			name: 'watcher',
-			ports: () => ({
-				websiteKeyRevoked: (/** @type {any} */ claims, /** @type {string} */ rawKey) => {
-					seenKeys.push(rawKey);
-					return claims.keyId === 'key_revoked';
-				},
-			}),
-		});
-		const { portal, clock } = await boot({ dbName: 'it_verify', modules: [systemModule, watcher] });
-		const verify = portal.modules.context('watcher').verifyWebsiteKey;
-		const issue = async (/** @type {'pk' | 'sk'} */ kind, /** @type {Record<string, any>} */ over = {}) =>
-			(
-				await issueWebsiteKey({
-					signer: portal.shared.keys.websiteKeySigner,
-					kind,
-					websiteId: WEBSITE,
-					merchantId: MERCHANT,
-					domain: 'shop.example.com',
-					env: 'live',
-					scopes: ['events.write'],
-					keyId: `key_${kind}`,
-					now: clock.now,
-					...over,
-				})
-			).key;
-		const sk = await issue('sk');
-		const pk = await issue('pk');
-		const codeOf = async (/** @type {any} */ check) =>
-			verify(check).then(
-				() => 'ok',
-				(/** @type {any} */ e) => e.code,
-			);
-		expect((await verify({ key: sk, scopes: ['events.write'], keyKind: 'sk', env: 'live' })).keyId).toBe('key_sk');
-		expect(seenKeys).toEqual([sk]);
-		expect(await codeOf({ key: sk, keyKind: 'pk' })).toBe('forbidden');
-		expect(await codeOf({ key: sk, env: 'test' })).toBe('forbidden');
-		expect(await codeOf({ key: sk, scopes: ['config.write'] })).toBe('scope_missing');
-		expect(await codeOf({ key: pk })).toBe('origin_not_allowed');
-		expect(await codeOf({ key: pk, origin: 'https://shop.example.com' })).toBe('ok');
-		expect(await codeOf({ key: pk, referer: 'https://shop.example.com/cart' })).toBe('ok');
-		expect(await codeOf({ key: await issue('sk', { keyId: 'key_revoked' }) })).toBe('invalid_credentials');
-		expect(await codeOf({ key: 'not-a-key' })).toBe('invalid_credentials');
-		expect(await codeOf({ key: await issue('sk', { signer: portal.shared.keys.signer }) })).toBe('invalid_credentials');
-		const unavailable = await boot({
-			dbName: 'it_verify_none',
-			modules: [systemModule, probeModule({ withWebsitePort: false })],
-		});
-		expect(
-			await unavailable.portal.modules
-				.context('probe')
-				.verifyWebsiteKey({ key: sk })
-				.catch((/** @type {any} */ e) => e.code),
-		).toBe('unavailable');
-	});
-
 	it("idempotent 'no-store' routes keep only the status in the shared store", async () => {
 		let runs = 0;
 		const secrets = defineModule({
@@ -986,7 +830,7 @@ describe('infra hardening (Mongo)', () => {
 		expect(stored).not.toContain('hunter2');
 	});
 
-	it('offers transactions, the platform mailer and platform.config.write; reserves infra names', async () => {
+	it('offers transactions, the platform mailer and the rights table; reserves infra names', async () => {
 		const { portal } = await boot({ dbName: 'it_shared' });
 		await portal.ensureIndexes();
 		const ctx = portal.modules.context('probe');
@@ -1003,9 +847,9 @@ describe('infra hardening (Mongo)', () => {
 		expect(await items.countDocuments({ merchantId: MERCHANT })).toBe(1);
 
 		const { can } = portal.shared.rbac;
-		expect(can({ type: 'admin', id: 's', role: 'owner' }, 'defaults.write')).toBe(true);
-		expect(can({ type: 'admin', id: 's', role: 'support' }, 'defaults.write')).toBe(false);
-		expect(can({ type: 'merchant', id: MERCHANT, merchantId: MERCHANT }, 'defaults.write')).toBe(false);
+		expect(can({ type: 'admin', id: 's', role: 'owner' }, 'products.manage')).toBe(true);
+		expect(can({ type: 'admin', id: 's', role: 'support' }, 'products.manage')).toBe(false);
+		expect(can({ type: 'merchant', id: MERCHANT, merchantId: MERCHANT }, 'products.manage')).toBe(false);
 
 		const config = await testConfig();
 		const { logger } = createTestLogger();

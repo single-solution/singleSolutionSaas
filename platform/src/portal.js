@@ -4,7 +4,7 @@
  *
  * The returned object is what the Next.js adapters in `app/` call:
  * - `handle(request)` — the Portal API (`/v1/*`)
- * - `jwks()` — the published JWKS (Portal keys and website-key signing keys, distinct kids)
+ * - `jwks()` — the published JWKS (Portal keys and token signing keys, distinct kids)
  * - `ensureIndexes()`, `migrate()` — operational entry points (scripts, deploy pipeline)
  * @module
  */
@@ -12,8 +12,8 @@ import { createProblemFactory } from '@ss/contracts';
 import { createAudit } from './infra/audit.js';
 import { createBackground } from './infra/background.js';
 import { clearCookie, createLoginThrottle, createSessions, serializeCookie, sessionCookieName } from './infra/auth.js';
-import { createAuthenticators, createWebsiteKeyVerifier } from './infra/authenticators.js';
-import { createEnvelope, createPortalKeys, createSecretBox, createSecretHasher } from './infra/crypto.js';
+import { createAuthenticators } from './infra/authenticators.js';
+import { createPortalKeys, createSecretBox } from './infra/crypto.js';
 import {
 	createLocks,
 	createRegistry,
@@ -25,25 +25,21 @@ import {
 import { platformError } from './infra/errors.js';
 import { INFRA_PROBLEMS, createApiHandler } from './infra/http.js';
 import { createPlatformMailer } from './infra/mailer.js';
-import { createJobs } from './infra/jobs.js';
 import { composeModules, moduleProblems } from './infra/modules.js';
 import { can, websitesVisible } from './infra/rbac.js';
-import { afterResponse } from './infra/request-scope.js';
 import { COLLECTIONS, INFRA_COLLECTIONS } from './infra/schema.js';
 import { createIdempotencyStore, createRateLimitStore, createReplayStore } from './infra/stores.js';
 import { defaultRandomBytes } from './infra/util.js';
 
 /** @typedef {import('./infra/config.js').PortalConfig} PortalConfig */
 
-/** A job enqueued during a request runs right after its response, within this budget (F.19: no queue drains). */
-export const REQUEST_JOB_BUDGET_MS = 8_000;
 /** @typedef {import('./infra/modules.js').ModuleDefinition} ModuleDefinition */
 /** @typedef {import('./infra/modules.js').SharedContext} SharedContext */
 /** @typedef {import('./infra/logger.js').Logger} Logger */
 
 /**
  * @param {{ config: Readonly<PortalConfig>, db: import('mongodb').Db, modules: ReadonlyArray<Readonly<ModuleDefinition>>,
- *   logger: Logger, now?: () => number, randomBytes?: (n: number) => Uint8Array, random?: () => number,
+ *   logger: Logger, now?: () => number, randomBytes?: (n: number) => Uint8Array,
  *   mailer?: import('./infra/mailer.js').Mailer, system?: import('./infra/system.js').SystemStore | null,
  *   background?: { mode?: 'on' | 'off', fallback?: import('./infra/http.js').AfterScheduler } }} options
  *   `background`: work after responses (default `off` when `config.env` is `test`); `fallback` runs it when the
@@ -56,7 +52,6 @@ export const createPortal = ({
 	logger,
 	now = Date.now,
 	randomBytes = defaultRandomBytes,
-	random = Math.random,
 	mailer,
 	system = null,
 	background: backgroundOptions = {},
@@ -67,7 +62,7 @@ export const createPortal = ({
 	for (const code of Object.keys(moduleCodes))
 		if (Object.hasOwn(INFRA_PROBLEMS, code)) throw new TypeError(`problem code ${code} is reserved by the infra layer`);
 	const problems = createProblemFactory({ baseUri: config.problemBaseUri, codes: { ...INFRA_PROBLEMS, ...moduleCodes } });
-	const keys = createPortalKeys(config.signingKeys, config.websiteKeySigningKeys);
+	const keys = createPortalKeys(config.signingKeys, config.tokenSigningKeys);
 	const locks = createLocks(repos.mutable(COLLECTIONS.locks), { now, randomBytes });
 	const sessions = createSessions({
 		repo: repos.mutable(COLLECTIONS.sessions),
@@ -77,35 +72,6 @@ export const createPortal = ({
 		randomBytes,
 	});
 	const replayStore = createReplayStore(repos.mutable(COLLECTIONS.replay), { now });
-	const jobs = createJobs({
-		repo: repos.mutable(COLLECTIONS.jobs),
-		now,
-		randomBytes,
-		random,
-		logger: logger.child({ component: 'jobs' }),
-		// event-driven (F.19): a job a request enqueued runs right after that request's response, and only that job
-		onEnqueued: ({ id }) => {
-			afterResponse(() =>
-				jobs.runBatch({
-					handlers: jobHandlers,
-					ids: [id],
-					maxJobs: 1,
-					deadlineMs: REQUEST_JOB_BUDGET_MS,
-					owner: 'request',
-					safetyMs: 1_000,
-				}),
-			);
-		},
-	});
-
-	// ports are known once the modules are composed; the verifier reads them lazily
-	/** @type {import('./infra/authenticators.js').AuthPorts} */
-	let ports = {};
-	const verifyWebsiteKey = createWebsiteKeyVerifier({
-		keyResolver: keys.websiteKeyResolver,
-		revoked: () => ports.websiteKeyRevoked,
-		now,
-	});
 	const audit = createAudit({ repo: repos.appendOnly(COLLECTIONS.audit), now, randomBytes });
 
 	/** @type {SharedContext} */
@@ -116,13 +82,9 @@ export const createPortal = ({
 		randomBytes,
 		problems,
 		keys,
-		envelope: createEnvelope({ keks: config.keks, randomBytes }),
 		secretBox: createSecretBox({ encryptionKey: config.encryptionKey, randomBytes }),
-		secretHasher: createSecretHasher(config.websiteKeyPepper),
 		audit,
-		jobs,
 		withTransaction: createTransactionRunner(db.client),
-		verifyWebsiteKey,
 		mailer: mailer ?? createPlatformMailer({ config, logger: logger.child({ component: 'mailer' }) }),
 		locks,
 		sessions,
@@ -148,17 +110,13 @@ export const createPortal = ({
 			return repos.repo(name);
 		},
 	});
-	ports = composed.ports;
-
-	/** @type {Record<string, import('./infra/jobs.js').JobHandler>} */
-	const jobHandlers = { ...composed.jobs };
 
 	const background = createBackground({
 		logger: logger.child({ component: 'background' }),
 		mode: backgroundOptions.mode ?? (config.env === 'test' ? 'off' : 'on'),
 		...(backgroundOptions.fallback ? { fallback: backgroundOptions.fallback } : {}),
-		// a product calling the Portal is a natural moment to retry its own pending work (due event deliveries)
-		onProductCall: async (appId) => composed.ports.productCalled?.(appId),
+		// a product calling the Portal is the moment to retry its failed notices (PLAN 0.4.12)
+		onProductCall: async (productId) => composed.ports.productCalled?.(productId),
 	});
 
 	const api = createApiHandler({
@@ -167,7 +125,6 @@ export const createPortal = ({
 		logger,
 		authenticators: createAuthenticators({
 			sessions,
-			verifyWebsiteKey,
 			replayStore,
 			ports: composed.ports,
 			portalUrl: config.portalUrl,
@@ -195,7 +152,7 @@ export const createPortal = ({
 		/** Work right after responses (`on`, or `off` in tests). */
 		background: Object.freeze({ mode: background.mode }),
 		handle,
-		/** Published JWKS: Portal keys (current + previous) and website-key signing keys. */
+		/** Published JWKS: Portal keys (current + previous) and token signing keys. */
 		jwks: () =>
 			new Response(JSON.stringify(keys.publishedJwks()), {
 				status: 200,

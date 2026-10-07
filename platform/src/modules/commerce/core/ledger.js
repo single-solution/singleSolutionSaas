@@ -25,10 +25,10 @@ export const LEDGER_TYPES = Object.freeze(/** @type {const} */ (['receipt', 'day
  * @typedef {object} EntryDraft
  * @property {LedgerType} type
  * @property {number} amount signed integer millicredits
- * @property {string} entryKey unique per merchant (`day:<websiteId>:<appId>:<day>` for day charges)
+ * @property {string} entryKey unique per merchant (`day:<websiteId>:<productId>:<day>` for day charges)
  * @property {string | null} [day] UTC day `YYYY-MM-DD` (day charges)
  * @property {string | null} [websiteId]
- * @property {string | null} [appId]
+ * @property {string | null} [productId]
  * @property {string | null} [reference] receipt reference
  * @property {LedgerActor | null} [actor]
  * @property {unknown} [details] receipt `{ amountPaid, method }` or day-charge `{ lines }` (JSON)
@@ -78,7 +78,7 @@ export const canonicalEntry = (entry) =>
 		entryKey: entry.entryKey,
 		day: entry.day ?? null,
 		websiteId: entry.websiteId ?? null,
-		appId: entry.appId ?? null,
+		productId: entry.productId ?? null,
 		reference: entry.reference ?? null,
 		actor: ledgerActor(entry.actor),
 		at: iso(entry.at),
@@ -130,7 +130,7 @@ export const chainEntries = ({ merchantId, head, drafts, at, ids }) => {
 			entryKey: draft.entryKey,
 			day: draft.day ?? null,
 			websiteId: draft.websiteId ?? null,
-			appId: draft.appId ?? null,
+			productId: draft.productId ?? null,
 			reference: draft.reference ?? null,
 			actor: ledgerActor(draft.actor),
 			at,

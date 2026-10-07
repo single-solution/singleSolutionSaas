@@ -1,45 +1,35 @@
 /**
- * Collections of the `catalog` module. Control-plane facts only (PLAN §1a): app identity and status, the connected base
- * URL, manifests (public product descriptions), public keys and launch ids — never client data.
+ * Collections of the `catalog` module (PLAN 0.4.12, 0.8.2 Products): connected products, the launches the Portal
+ * issued, and notices a product has not taken yet. Control-plane facts only: product addresses, public manifests,
+ * public keys and launch ids.
  * @module
  */
 import { defineCollection } from '../../infra/db.js';
 
-export const APPS = 'catalog_apps';
-export const VERSIONS = 'catalog_versions';
-export const KEYS = 'catalog_app_keys';
+export const PRODUCTS = 'catalog_products';
 export const LAUNCHES = 'catalog_launches';
+export const NOTICES = 'catalog_notices';
 
 export const collections = Object.freeze([
 	defineCollection({
 		module: 'catalog',
-		name: APPS,
+		name: PRODUCTS,
 		description:
-			'Registered apps (`_id` = appId): slug, kind (service|pack), status (active|inactive), the connected production ' +
-			'base URL (service products), current and latest manifest version numbers.',
-		indexes: [{ keys: { slug: 1 }, unique: true }, { keys: { status: 1, _id: 1 } }, { keys: { kind: 1, status: 1, _id: 1 } }],
-	}),
-	defineCollection({
-		module: 'catalog',
-		name: VERSIONS,
-		description:
-			'Manifest versions per app (`_id` = `<appId>:<n>`; subscriptions pin one): canonical manifest JSON, its SHA-256, ' +
-			'status (uploading|accepted|superseded), source (connection|upload), pack asset metadata.',
-		indexes: [{ keys: { appId: 1, version: -1 }, unique: true }],
-	}),
-	defineCollection({
-		module: 'catalog',
-		name: KEYS,
-		description:
-			'Client-assertion public keys of service products (`_id` = `<appId>:<kid>`): Ed25519 public JWK and thumbprint; ' +
-			'replaced when the product is connected again.',
-		indexes: [{ keys: { appId: 1, createdAt: 1 } }],
+			'Connected products (`_id` = product id, the manifest `id`): status active | inactive, the base URL it was connected with, its manifest (canonical JSON), the public key of its client assertions, connected and reconnected times. Never deleted.',
+		indexes: [{ keys: { status: 1, _id: 1 } }],
 	}),
 	defineCollection({
 		module: 'catalog',
 		name: LAUNCHES,
-		description: 'Issued launch ids (`_id` = jti) for online single-use consumption by the product; expire with the launch.',
-		indexes: [{ keys: { appId: 1, _id: 1 } }],
+		description: 'Issued launch ids (`_id` = jti) for single-use consumption by the product; expire with the launch.',
+		indexes: [{ keys: { productId: 1, _id: 1 } }],
 		ttl: { field: 'expireAt', afterSeconds: 0 },
+	}),
+	defineCollection({
+		module: 'catalog',
+		name: NOTICES,
+		description:
+			'Notices a product has not answered 2xx yet (`{ productId, body, queuedAt, attempts }`), retried oldest first right after its next call to the Portal and dropped once delivered.',
+		indexes: [{ keys: { productId: 1, queuedAt: 1, _id: 1 } }],
 	}),
 ]);

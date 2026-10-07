@@ -14,18 +14,9 @@ import Login, { metadata as LoginMeta } from '../_views/login.js';
 import ResetPassword, { metadata as ResetPasswordMeta } from '../_views/reset-password.js';
 import SetPassword, { metadata as SetPasswordMeta } from '../_views/set-password.js';
 import ConfirmEmail, { metadata as ConfirmEmailMeta } from '../_views/confirm-email.js';
+import Overview, { metadata as OverviewMeta } from '../_views/overview.js';
 import Websites, { metadata as WebsitesMeta } from '../_views/websites.js';
 import WebsitesWebsiteId, { metadata as WebsitesWebsiteIdMeta } from '../_views/websites-websiteId.js';
-import WebsitesWebsiteIdIdentity, { metadata as WebsitesWebsiteIdIdentityMeta } from '../_views/websites-websiteId-identity.js';
-import WebsitesWebsiteIdKeys, { metadata as WebsitesWebsiteIdKeysMeta } from '../_views/websites-websiteId-keys.js';
-import WebsitesWebsiteIdProducts, { metadata as WebsitesWebsiteIdProductsMeta } from '../_views/websites-websiteId-products.js';
-import WebsitesWebsiteIdResources, {
-	metadata as WebsitesWebsiteIdResourcesMeta,
-} from '../_views/websites-websiteId-resources.js';
-import WebsitesWebsiteIdUsage, { metadata as WebsitesWebsiteIdUsageMeta } from '../_views/websites-websiteId-usage.js';
-import WebsitesWebsiteIdSubscriptionsSubscriptionId, {
-	metadata as WebsitesWebsiteIdSubscriptionsSubscriptionIdMeta,
-} from '../_views/websites-websiteId-subscriptions-subscriptionId.js';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,19 +29,9 @@ const VIEWS = /** @type {Array<[string[], (props: any) => any, import('next').Me
 	[['reset-password'], ResetPassword, ResetPasswordMeta, false],
 	[['set-password'], SetPassword, SetPasswordMeta, false],
 	[['confirm-email'], ConfirmEmail, ConfirmEmailMeta, false],
+	[['overview'], Overview, OverviewMeta, true],
 	[['websites'], Websites, WebsitesMeta, true],
 	[['websites', ':websiteId'], WebsitesWebsiteId, WebsitesWebsiteIdMeta, true],
-	[['websites', ':websiteId', 'identity'], WebsitesWebsiteIdIdentity, WebsitesWebsiteIdIdentityMeta, true],
-	[['websites', ':websiteId', 'keys'], WebsitesWebsiteIdKeys, WebsitesWebsiteIdKeysMeta, true],
-	[['websites', ':websiteId', 'products'], WebsitesWebsiteIdProducts, WebsitesWebsiteIdProductsMeta, true],
-	[['websites', ':websiteId', 'resources'], WebsitesWebsiteIdResources, WebsitesWebsiteIdResourcesMeta, true],
-	[['websites', ':websiteId', 'usage'], WebsitesWebsiteIdUsage, WebsitesWebsiteIdUsageMeta, true],
-	[
-		['websites', ':websiteId', 'subscriptions', ':subscriptionId'],
-		WebsitesWebsiteIdSubscriptionsSubscriptionId,
-		WebsitesWebsiteIdSubscriptionsSubscriptionIdMeta,
-		true,
-	],
 ]);
 
 /**

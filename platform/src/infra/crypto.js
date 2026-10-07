@@ -1,23 +1,21 @@
 /**
- * Portal cryptography. Signatures, JWKS and secret-key hashing come from `@ss/protocol` (never re-implemented);
- * this module only adds envelope encryption for stored client credentials (PLAN §1a "credentials custody").
+ * Portal cryptography. Signatures and JWKS come from `@ss/protocol` (never re-implemented); this module adds the
+ * sealing of the Portal's stored secrets with `ENCRYPTION_KEY` (PLAN 0.4.8).
  *
- * Signing keys (generated on first start, `infra/system.js`): the first key signs; every configured key is published in the JWKS so
- * tokens signed by the previous key keep verifying during the overlap. Rotation: prepend the new key (optionally
- * with `nbf`), keep the old one (with `exp` = end of overlap), then remove it. Website keys are signed by the
- * dedicated website-key signer (generated on first start), so rotating the Portal key never touches them; retiring
- * a website-key signing key requires re-issuing the website keys it signed (F.5).
+ * Signing keys (generated on first start, `infra/system.js`): the first key signs; every configured key is published
+ * in the JWKS so tokens signed by the previous key keep verifying during the overlap. Browser and server tokens are
+ * signed by a **dedicated token signer** (PLAN 0.4.4), so rotating the Portal key (launches, notices) never touches
+ * them.
  *
- * Envelope encryption: each record gets a fresh 256-bit data key; the plaintext is sealed with AES-256-GCM under
- * that data key with the caller's AAD (e.g. `{ merchantId, connectorId }`), and the data key is wrapped with
- * AES-256-GCM under the active KEK (generated on first start, first entry). The sealed string names the KEK id, so old records
- * open with older KEKs and `rewrap` moves a record to the active KEK without touching its ciphertext.
+ * Sealing: each value gets a fresh 256-bit data key; the plaintext is sealed with AES-256-GCM under that data key with
+ * the caller's AAD (e.g. `{ websiteId, productId }`), and the data key is wrapped with AES-256-GCM under a key derived
+ * from `ENCRYPTION_KEY`. A value sealed under another `ENCRYPTION_KEY` does not open (`decrypt_failed`).
  *
- * Format: `ssenc1.<kekId>.<b64url(wrapIv ‖ wrappedKey ‖ wrapTag)>.<b64url(iv ‖ ciphertext ‖ tag)>`.
+ * Format: `ssenc1.<keyId>.<b64url(wrapIv ‖ wrappedKey ‖ wrapTag)>.<b64url(iv ‖ ciphertext ‖ tag)>`.
  * @module
  */
 import { createCipheriv, createDecipheriv, hkdfSync } from 'node:crypto';
-import { compareSecretKey, createJwks, createKeyResolver, createSigner, hashSecretKey, toPublicJwk } from '@ss/protocol';
+import { createJwks, createKeyResolver, createSigner, toPublicJwk } from '@ss/protocol';
 import { platformError } from './errors.js';
 import { defaultRandomBytes, isObject, stableJson } from './util.js';
 
@@ -31,29 +29,29 @@ const TAG = 16;
 const KEY = 32;
 
 /**
- * Portal signing keys: active signer, all signers (for dual-signing events during rotation), the Portal JWKS and a
- * resolver over our own public keys (to verify tokens the Portal issued, such as launches). Website keys have a
- * **dedicated** signer (generated on first start, F.5) with its own resolver: a token signed by the Portal key is
- * never accepted as a website key, and the other way round. Both key sets are published together
- * (`publishedJwks()`, served at `/.well-known/jwks.json`) with distinct kids, so products verify website keys offline.
+ * Portal signing keys: active signer, all signers (for dual-signing notices during rotation), the Portal JWKS and a
+ * resolver over our own public keys (to verify what the Portal issued, such as launches). Browser and server tokens
+ * have a **dedicated** signer with its own resolver: a launch is never accepted as a token, and the other way round.
+ * Both key sets are published together (`publishedJwks()`, served at `/.well-known/jwks.json` and pinned by products
+ * at connect) with distinct kids.
  * @param {ReadonlyArray<PrivateJwk>} signingKeys
- * @param {ReadonlyArray<PrivateJwk>} websiteKeySigningKeys
+ * @param {ReadonlyArray<PrivateJwk>} tokenSigningKeys
  */
-export const createPortalKeys = (signingKeys, websiteKeySigningKeys) => {
+export const createPortalKeys = (signingKeys, tokenSigningKeys) => {
 	if (!Array.isArray(signingKeys) || signingKeys.length === 0)
 		throw platformError('config_invalid', 'at least one signing key is required');
-	if (!Array.isArray(websiteKeySigningKeys) || websiteKeySigningKeys.length === 0)
-		throw platformError('config_invalid', 'at least one website-key signing key is required');
+	if (!Array.isArray(tokenSigningKeys) || tokenSigningKeys.length === 0)
+		throw platformError('config_invalid', 'at least one token signing key is required');
 	const portalPublic = signingKeys.map((jwk) => toPublicJwk(jwk));
-	const websitePublic = websiteKeySigningKeys.map((jwk) => toPublicJwk(jwk));
+	const tokenPublic = tokenSigningKeys.map((jwk) => toPublicJwk(jwk));
 	const portalKids = new Set(portalPublic.map((jwk) => jwk.kid));
-	if (websitePublic.some((jwk) => portalKids.has(jwk.kid)))
-		throw platformError('config_invalid', 'website-key signing kids must differ from the Portal signing kids');
+	if (tokenPublic.some((jwk) => portalKids.has(jwk.kid)))
+		throw platformError('config_invalid', 'token signing kids must differ from the Portal signing kids');
 	const signers = signingKeys.map((jwk) => createSigner(jwk));
-	const websiteKeySigners = websiteKeySigningKeys.map((jwk) => createSigner(jwk));
+	const tokenSigners = tokenSigningKeys.map((jwk) => createSigner(jwk));
 	const jwks = createJwks(portalPublic);
-	const websiteKeyJwks = createJwks(websitePublic);
-	const published = createJwks([...portalPublic, ...websitePublic]);
+	const tokenJwks = createJwks(tokenPublic);
+	const published = createJwks([...portalPublic, ...tokenPublic]);
 	return Object.freeze({
 		/** @type {Signer} */
 		signer: /** @type {Signer} */ (signers[0]),
@@ -63,15 +61,13 @@ export const createPortalKeys = (signingKeys, websiteKeySigningKeys) => {
 		/** Portal keys only. @returns {Jwks} */
 		jwks: () => jwks,
 		keyResolver: createKeyResolver({ jwks }),
-		/** Signs website keys (`pk_` / `sk_`) — nothing else. @type {Signer} */
-		websiteKeySigner: /** @type {Signer} */ (websiteKeySigners[0]),
-		/** @type {ReadonlyArray<Signer>} */
-		websiteKeySigners: Object.freeze(websiteKeySigners),
-		/** Resolver over the website-key signing keys only. */
-		websiteKeyResolver: createKeyResolver({ jwks: websiteKeyJwks }),
-		/** Website-key public keys only. @returns {Jwks} */
-		websiteKeyJwks: () => websiteKeyJwks,
-		/** Everything the Portal publishes: Portal keys followed by website-key keys. @returns {Jwks} */
+		/** Signs browser and server tokens — nothing else. @type {Signer} */
+		tokenSigner: /** @type {Signer} */ (tokenSigners[0]),
+		/** Resolver over the token signing keys only. */
+		tokenKeyResolver: createKeyResolver({ jwks: tokenJwks }),
+		/** Token public keys only. @returns {Jwks} */
+		tokenJwks: () => tokenJwks,
+		/** Everything the Portal publishes: Portal keys followed by token keys. @returns {Jwks} */
 		publishedJwks: () => published,
 	});
 };
@@ -230,10 +226,10 @@ export const createEnvelope = ({ keks, randomBytes = defaultRandomBytes }) => {
 /** @typedef {ReturnType<typeof createEnvelope>} Envelope */
 
 /**
- * Encryption of the Portal's stored secrets that must be read back (PLAN 0.4.8: the SMTP password and two-step
- * secrets; server tokens from step 5) with `ENCRYPTION_KEY`, which is used for nothing else and never stored. The
- * same AES-256-GCM sealing as the envelope, under one key derived from `ENCRYPTION_KEY` (HKDF-SHA-256). A value
- * sealed under another `ENCRYPTION_KEY` fails to open (`decrypt_failed`): callers treat it as not set.
+ * Encryption of the Portal's stored secrets that must be read back (PLAN 0.4.8: the SMTP password, two-step secrets
+ * and server tokens) with `ENCRYPTION_KEY`, which is used for nothing else and never stored. The envelope sealing
+ * above, under one key derived from `ENCRYPTION_KEY` (HKDF-SHA-256). A value sealed under another `ENCRYPTION_KEY`
+ * fails to open (`decrypt_failed`): callers treat it as not set (a server token then cannot be shown).
  * @param {{ encryptionKey: string, randomBytes?: (n: number) => Uint8Array }} options
  * @returns {Envelope}
  */
@@ -242,21 +238,4 @@ export const createSecretBox = ({ encryptionKey, randomBytes = defaultRandomByte
 		throw platformError('config_invalid', 'ENCRYPTION_KEY must be at least 32 characters');
 	const key = Buffer.from(hkdfSync('sha256', Buffer.from(encryptionKey, 'utf8'), Buffer.alloc(0), 'ss-portal-secrets.v1', KEY));
 	return createEnvelope({ keks: [{ id: 'ek1', key }], randomBytes });
-};
-
-/**
- * Website secret keys at rest: HMAC-SHA-256 with the generated key pepper, compared in constant time.
- * @param {Uint8Array} pepper
- */
-export const createSecretHasher = (pepper) => {
-	if (!pepper || pepper.length < 32) throw platformError('config_invalid', 'the pepper must be at least 32 bytes');
-	return Object.freeze({
-		/** @param {string} key */
-		hash: (key) => hashSecretKey({ key, pepper }),
-		/**
-		 * @param {unknown} key
-		 * @param {unknown} hash
-		 */
-		verify: (key, hash) => compareSecretKey({ key, hash, pepper }),
-	});
 };

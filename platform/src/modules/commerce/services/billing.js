@@ -1,15 +1,16 @@
 /**
  * Credits and billing (PLAN 0.5): the money histories, the check, receipts and the money views.
  *
- * - **Histories** (0.5.7 a), stamped with Portal time: price lists per product, feature reports and status changes per
- *   merchant. Step 5 of the build order fills them from product reports; until then they are written through
- *   `recordPriceList`, `recordProductAdded` / `recordProductRemoved` and `recordSwitches` (tests) and by merchant
- *   suspension and resumption.
+ * - **Histories** (0.5.7 a), stamped with Portal time: accepted price lists per product (price reports and connect
+ *   answers), feature reports and status changes per merchant (product added or removed, merchant suspended or
+ *   resumed, grace started, stopped).
  * - **Check** (0.5.7): replays the time since the merchant was last settled with the pure money function, writes the
- *   day charges of complete UTC days, records grace starts and stops once, caches the balance and billing state, and
- *   sends a billing e-mail when the merchant enters a state (an atomic compare-and-set on the stored state, so two checks
- *   send one e-mail). It runs when a Portal page shows a merchant; nothing is scheduled.
- * - **Receipts** (0.5.8): the only way credits are added; never edited, voided or reversed.
+ *   day charges of complete UTC days, records grace starts and stops once (and tells the merchant's products,
+ *   `status.changed`), caches the balance and billing state, and sends a billing e-mail when the merchant enters a
+ *   state (an atomic compare-and-set on the stored state, so two checks send one e-mail). It runs when a product fetches
+ *   a status and when a Portal page shows a merchant; nothing is scheduled.
+ * - **Receipts** (0.5.8): the only way credits are added; never edited, voided or reversed. A receipt that ends grace
+ *   or a stop restarts the merchant's products (`status.changed`).
  * @module
  */
 import { createId } from '@ss/contracts';
@@ -80,9 +81,11 @@ const daysBetween = (from, to) => {
 };
 
 /**
- * @param {{ ctx: ModuleContext, repo: CommerceRepo, deps: Deps, ledger: Ledger }} input
+ * @param {{ ctx: ModuleContext, repo: CommerceRepo, deps: Deps, ledger: Ledger,
+ *   statusChanged: (merchantId: string) => Promise<unknown> }} input `statusChanged`: tell the products on the
+ *   merchant's websites that their status changed
  */
-export const createBilling = ({ ctx, repo, deps, ledger }) => {
+export const createBilling = ({ ctx, repo, deps, ledger, statusChanged }) => {
 	const rules = () => ctx.config.settings.billing;
 
 	/**
@@ -104,54 +107,67 @@ export const createBilling = ({ ctx, repo, deps, ledger }) => {
 	// ------------------------------------------------------------------------------------------------ histories
 
 	/**
-	 * Store a product's price list (one hourly price per feature, never negative); it applies from now on.
-	 * @param {{ appId: string, features: readonly { key: string, name: string, price: number }[] }} input
+	 * Store an accepted price list of a product (one hourly price per feature in millicredits, never negative); it
+	 * applies from now on. The version must be higher than the last accepted one (409 `conflict`).
+	 * @param {{ productId: string, prices: import('@ss/contracts').PriceList }} input
+	 * @returns {Promise<{ productId: string, version: number, at: string, features: Doc[], previous: Doc | null }>}
 	 */
-	const recordPriceList = async ({ appId, features }) => {
+	const recordPriceList = async ({ productId, prices }) => {
 		const valid =
-			Array.isArray(features) &&
-			features.every(
-				(f) =>
-					KEY.test(f?.key) &&
-					typeof f.name === 'string' &&
-					f.name.length > 0 &&
-					f.name.length <= 120 &&
-					Number.isSafeInteger(f.price) &&
-					f.price >= 0,
+			Number.isSafeInteger(prices?.version) &&
+			prices.version >= 1 &&
+			Array.isArray(prices.features) &&
+			prices.features.every(
+				(f) => KEY.test(f?.key) && Number.isSafeInteger(f.millicreditsPerHour) && f.millicreditsPerHour >= 0,
 			) &&
-			new Set(features.map((f) => f.key)).size === features.length;
+			new Set(prices.features.map((f) => f.key)).size === prices.features.length;
 		if (!valid) throw problem('validation_failed', 'The price list is invalid.');
+		const previous = await repo.lastPriceList(productId);
+		if (previous && prices.version <= previous.version)
+			throw problem('conflict', `Price list ${prices.version} is not higher than ${previous.version}.`);
 		const doc = {
-			appId,
+			productId,
+			version: prices.version,
 			at: new Date(ctx.now()),
-			features: features.map((f) => ({ key: f.key, name: f.name, price: f.price })),
+			features: prices.features.map((f) => ({
+				key: f.key,
+				name: f.name,
+				description: f.description,
+				dependsOn: [...f.dependsOn],
+				price: f.millicreditsPerHour,
+			})),
 		};
-		await repo.insertPriceList(doc);
-		return { appId, at: doc.at.toISOString(), features: doc.features };
+		try {
+			await repo.insertPriceList(doc);
+		} catch (error) {
+			if (repo.isDuplicateKey(error)) throw problem('conflict', `Price list ${prices.version} was already accepted.`);
+			throw error;
+		}
+		return { productId, version: doc.version, at: doc.at.toISOString(), features: doc.features, previous };
 	};
 
 	/**
 	 * @param {'added' | 'removed'} kind
-	 * @returns {(input: { merchantId: string, websiteId: string, appId: string }) => Promise<void>}
+	 * @returns {(input: { merchantId: string, websiteId: string, productId: string }) => Promise<void>}
 	 */
 	const productChange =
 		(kind) =>
-		async ({ merchantId, websiteId, appId }) => {
-			await repo.appendHistory(merchantId, { kind, at: new Date(ctx.now()), websiteId, appId });
+		async ({ merchantId, websiteId, productId }) => {
+			await repo.appendHistory(merchantId, { kind, at: new Date(ctx.now()), websiteId, productId });
 		};
 
 	/**
 	 * Store the last accepted feature report of a product on a website: the keys of its switched-on features.
-	 * @param {{ merchantId: string, websiteId: string, appId: string, on: readonly string[] }} input
+	 * @param {{ merchantId: string, websiteId: string, productId: string, on: readonly string[] }} input
 	 */
-	const recordSwitches = async ({ merchantId, websiteId, appId, on }) => {
+	const recordSwitches = async ({ merchantId, websiteId, productId, on }) => {
 		if (!Array.isArray(on) || !on.every((key) => KEY.test(key)))
 			throw problem('validation_failed', 'The feature report is invalid.');
 		await repo.appendHistory(merchantId, {
 			kind: 'switches',
 			at: new Date(ctx.now()),
 			websiteId,
-			appId,
+			productId,
 			on: [...new Set(on)].sort(),
 		});
 	};
@@ -171,17 +187,18 @@ export const createBilling = ({ ctx, repo, deps, ledger }) => {
 	 */
 	const inputsOf = async (merchantId, now) => {
 		const history = await repo.historyOf(merchantId, new Date(now));
-		const appIds = [...new Set(history.filter((h) => typeof h.appId === 'string').map((h) => String(h.appId)))];
-		const lists = await repo.priceListsOf(appIds, new Date(now));
+		const productIds = [...new Set(history.filter((h) => typeof h.productId === 'string').map((h) => String(h.productId)))];
+		const lists = await repo.priceListsOf(productIds, new Date(now));
 		/** @type {MoneyEvent[]} */
-		const events = lists.map((l) => ({ type: 'prices', at: l.at.getTime(), appId: l.appId, features: l.features }));
+		const events = lists.map((l) => ({ type: 'prices', at: l.at.getTime(), productId: l.productId, features: l.features }));
 		/** @type {Record<string, number>} */
 		const graceEnds = {};
 		for (const h of history) {
 			const at = h.at.getTime();
 			if (h.kind === 'added' || h.kind === 'removed')
-				events.push({ type: h.kind, at, websiteId: h.websiteId, appId: h.appId });
-			else if (h.kind === 'switches') events.push({ type: 'switches', at, websiteId: h.websiteId, appId: h.appId, on: h.on });
+				events.push({ type: h.kind, at, websiteId: h.websiteId, productId: h.productId });
+			else if (h.kind === 'switches')
+				events.push({ type: 'switches', at, websiteId: h.websiteId, productId: h.productId, on: h.on });
 			else if (h.kind === 'suspended' || h.kind === 'resumed') events.push({ type: h.kind, at });
 			else if (h.kind === 'grace_started') graceEnds[String(at)] = h.graceEnd.getTime();
 		}
@@ -225,25 +242,34 @@ export const createBilling = ({ ctx, repo, deps, ledger }) => {
 		const drafts = dayCharges(run.charges.filter((c) => c.hour < cut)).map((d) => ({
 			type: /** @type {const} */ ('day_charge'),
 			amount: -d.amount,
-			entryKey: `day:${d.websiteId}:${d.appId}:${d.day}`,
+			entryKey: `day:${d.websiteId}:${d.productId}:${d.day}`,
 			day: d.day,
 			websiteId: d.websiteId,
-			appId: d.appId,
+			productId: d.productId,
 			actor: SYSTEM_ACTOR,
 			details: { lines: d.lines },
 		}));
 		if (drafts.length > 0) await ledger.append(merchantId, drafts);
+		let changed = false;
 		for (const t of run.transitions) {
 			if (t.type === 'grace_started')
-				await repo.appendHistory(merchantId, {
-					kind: 'grace_started',
-					at: new Date(t.at),
-					graceEnd: new Date(t.graceEnd),
-					key: `${merchantId}:grace_started:${t.at}`,
-				});
+				changed =
+					(await repo.appendHistory(merchantId, {
+						kind: 'grace_started',
+						at: new Date(t.at),
+						graceEnd: new Date(t.graceEnd),
+						key: `${merchantId}:grace_started:${t.at}`,
+					})) || changed;
 			else if (t.type === 'stopped')
-				await repo.appendHistory(merchantId, { kind: 'stopped', at: new Date(t.at), key: `${merchantId}:stopped:${t.at}` });
+				changed =
+					(await repo.appendHistory(merchantId, {
+						kind: 'stopped',
+						at: new Date(t.at),
+						key: `${merchantId}:stopped:${t.at}`,
+					})) || changed;
 		}
+		// grace started or products stopped: the check that finds it tells the products (PLAN 0.4.12)
+		if (changed) await statusChanged(merchantId);
 
 		const lowBalanceDays = rules().lowBalanceDays;
 		const state = billingStateOf({ phase: run.phase, balance: run.balance, dailySpend: run.dailySpend, lowBalanceDays });
@@ -299,16 +325,31 @@ export const createBilling = ({ ctx, repo, deps, ledger }) => {
 	/**
 	 * Credits charged in the current UTC month, today included.
 	 * @param {Awaited<ReturnType<typeof check>>} checked
-	 * @param {{ appId?: string | null }} [filter]
+	 * @param {{ productId?: string | null }} [filter]
 	 */
-	const spentThisMonth = async ({ merchantId, now, cut, run }, { appId = null } = {}) => {
+	const spentThisMonth = async ({ merchantId, now, cut, run }, { productId = null } = {}) => {
 		const written = await ledger.sum(merchantId, {
 			type: 'day_charge',
 			day: { $gte: dayOf(floorMonth(now)) },
-			...(appId ? { appId } : {}),
+			...(productId ? { productId } : {}),
 		});
-		const today = run.charges.filter((c) => c.hour >= cut && (!appId || c.appId === appId)).reduce((s, c) => s + c.amount, 0);
+		const today = run.charges
+			.filter((c) => c.hour >= cut && (!productId || c.productId === productId))
+			.reduce((s, c) => s + c.amount, 0);
 		return -written + today;
+	};
+
+	/**
+	 * Check a merchant and work out its status (0.5.5).
+	 * @param {string} merchantId
+	 */
+	const statusOf = async (merchantId) => {
+		const checked = await check(merchantId);
+		const status = merchantStatusOf({
+			suspended: checked.run.suspended || (await suspendedNow(merchantId)),
+			billingState: checked.state,
+		});
+		return { checked, status };
 	};
 
 	/**
@@ -317,9 +358,8 @@ export const createBilling = ({ ctx, repo, deps, ledger }) => {
 	 * @param {string} merchantId
 	 */
 	const summary = async (merchantId) => {
-		const checked = await check(merchantId);
-		const { run, state } = checked;
-		const status = merchantStatusOf({ suspended: run.suspended || (await suspendedNow(merchantId)), billingState: state });
+		const { checked, status } = await statusOf(merchantId);
+		const { run } = checked;
 		return {
 			merchantId,
 			status,
@@ -334,7 +374,7 @@ export const createBilling = ({ ctx, repo, deps, ledger }) => {
 				.filter((p) => p.added)
 				.map((p) => ({
 					websiteId: p.websiteId,
-					appId: p.appId,
+					productId: p.productId,
 					status: productStatusOf({ added: true, merchantStatus: status }),
 					featuresOn: p.on,
 					hourlyCost: p.hourlyCost,
@@ -351,26 +391,23 @@ export const createBilling = ({ ctx, repo, deps, ledger }) => {
 		/** @type {Map<string, Map<string, string>>} */
 		const names = new Map();
 		for (const list of lists) {
-			const own = names.get(list.appId) ?? new Map();
+			const own = names.get(list.productId) ?? new Map();
 			for (const f of list.features) own.set(f.key, f.name);
-			names.set(list.appId, own);
+			names.set(list.productId, own);
 		}
 		return names;
 	};
 
 	/**
 	 * Labels of the products and websites in rows (removed websites keep their id when they cannot be read).
-	 * @param {readonly { websiteId: string, appId: string }[]} rows
+	 * @param {readonly { websiteId: string, productId: string }[]} rows
 	 */
 	const labels = async (rows) => {
 		/** @type {Map<string, string>} */
 		const products = new Map();
 		/** @type {Map<string, string>} */
 		const domains = new Map();
-		for (const appId of new Set(rows.map((r) => r.appId))) {
-			const app = await Promise.resolve(deps.getApp(appId)).catch(() => null);
-			products.set(appId, String(app?.name ?? app?.slug ?? appId));
-		}
+		for (const productId of new Set(rows.map((r) => r.productId))) products.set(productId, await deps.productName(productId));
 		for (const websiteId of new Set(rows.map((r) => r.websiteId))) {
 			const website = await Promise.resolve(deps.getWebsite(websiteId)).catch(() => null);
 			domains.set(websiteId, String(website?.domain ?? websiteId));
@@ -395,7 +432,7 @@ export const createBilling = ({ ctx, repo, deps, ledger }) => {
 			(e.details?.lines ?? []).map((/** @type {{ feature: string, hours: number, amount: number }} */ line) => ({
 				day: e.day,
 				websiteId: e.websiteId,
-				appId: e.appId,
+				productId: e.productId,
 				feature: line.feature,
 				hours: line.hours,
 				amount: line.amount,
@@ -418,9 +455,9 @@ export const createBilling = ({ ctx, repo, deps, ledger }) => {
 			days: daysBetween(from, to).map((day) => ({ day, amount: perDay.get(day) ?? 0 })),
 			rows: rows.map((r) => ({
 				...r,
-				product: products.get(r.appId) ?? r.appId,
+				product: products.get(r.productId) ?? r.productId,
 				domain: domains.get(r.websiteId) ?? r.websiteId,
-				featureName: names.get(r.appId)?.get(r.feature) ?? r.feature,
+				featureName: names.get(r.productId)?.get(r.feature) ?? r.feature,
 			})),
 		};
 	};
@@ -465,8 +502,8 @@ export const createBilling = ({ ctx, repo, deps, ledger }) => {
 			day: e.day,
 			websiteId: e.websiteId,
 			domain: domains.get(e.websiteId) ?? e.websiteId,
-			appId: e.appId,
-			product: products.get(e.appId) ?? e.appId,
+			productId: e.productId,
+			product: products.get(e.productId) ?? e.productId,
 			credits: -e.amount,
 			lines: e.details?.lines ?? [],
 		}));
@@ -479,7 +516,7 @@ export const createBilling = ({ ctx, repo, deps, ledger }) => {
 	 */
 	const addReceipt = async ({ merchantId, amount, amountPaid, method, reference, actor, requestId = null, ip = null }) => {
 		const merchant = await deps.getMerchant(merchantId);
-		await check(merchantId);
+		const before = await check(merchantId);
 		const { appended } = await ledger.append(merchantId, [
 			{
 				type: 'receipt',
@@ -492,6 +529,9 @@ export const createBilling = ({ ctx, repo, deps, ledger }) => {
 		]);
 		const entry = /** @type {Doc} */ (appended[0]);
 		const after = await summary(merchantId);
+		// credits that end grace or a stop restart the products at once (PLAN 0.5.6)
+		if ((before.state === 'grace' || before.state === 'stopped') && after.status !== 'grace' && after.status !== 'stopped')
+			await statusChanged(merchantId);
 		await ctx.audit.record({
 			actor: /** @type {any} */ (actor),
 			action: 'credits.added',
@@ -573,7 +613,7 @@ export const createBilling = ({ ctx, repo, deps, ledger }) => {
 	 * @param {{ from: string, to: string, by: 'day' | 'merchant' | 'product' }} query
 	 */
 	const charges = async ({ from, to, by }) => {
-		const field = by === 'day' ? '$day' : by === 'merchant' ? '$merchantId' : '$appId';
+		const field = by === 'day' ? '$day' : by === 'merchant' ? '$merchantId' : '$productId';
 		const rows = await repo
 			.allLedgers()
 			.aggregate([
@@ -588,11 +628,7 @@ export const createBilling = ({ ctx, repo, deps, ledger }) => {
 		if (by === 'merchant')
 			for (const [id, name] of await deps.merchantNames(keys))
 				label.set(id, `${name.name}${name.deleted ? ' (deleted)' : ''}`);
-		if (by === 'product')
-			for (const appId of keys) {
-				const app = await Promise.resolve(deps.getApp(appId)).catch(() => null);
-				label.set(appId, String(app?.name ?? app?.slug ?? appId));
-			}
+		if (by === 'product') for (const productId of keys) label.set(productId, await deps.productName(productId));
 		return {
 			from,
 			to,
@@ -612,6 +648,7 @@ export const createBilling = ({ ctx, repo, deps, ledger }) => {
 		recordSwitches,
 		recordMerchantStatus,
 		check,
+		statusOf,
 		summary,
 		usage,
 		receiptsOf,

@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { closeMongoClients } from '../../../src/infra/db.js';
 import { T0, createClock, startMongo } from '../../helpers.js';
-import { APP, APP2, HOUR, M1, M2, STAFF, W1, W2, bootCommerce } from './fixtures.js';
+import { HOUR, M1, M2, PRODUCT, PRODUCT2, STAFF, W1, W2, bootCommerce } from './fixtures.js';
 
 // Mongo-backed tests share the machine with other suites: allow for slow replica-set start-up and I/O.
 vi.setConfig({ testTimeout: 120_000, hookTimeout: 180_000 });
@@ -20,19 +20,13 @@ const MIN = 60_000;
 const DAY = 24 * HOUR;
 
 /**
- * Codes 1 credit/h and Box 0.5 credit/h on APP; W1 added with Codes on.
+ * Codes 1 credit/h and Box 0.5 credit/h on PRODUCT; W1 added with Codes on.
  * @param {Awaited<ReturnType<typeof bootCommerce>>} h
  */
 const setUp = async (h) => {
-	await h.service.recordPriceList({
-		appId: APP,
-		features: [
-			{ key: 'codes', name: 'Codes', price: 1000 },
-			{ key: 'box', name: 'Apply box', price: 500 },
-		],
-	});
-	await h.service.recordProductAdded({ merchantId: M1, websiteId: W1, appId: APP });
-	await h.service.recordSwitches({ merchantId: M1, websiteId: W1, appId: APP, on: ['codes'] });
+	await h.prices(PRODUCT, 1, { codes: 1000, box: 500 });
+	await h.service.recordProductAdded({ merchantId: M1, websiteId: W1, productId: PRODUCT });
+	await h.service.recordSwitches({ merchantId: M1, websiteId: W1, productId: PRODUCT, on: ['codes'] });
 };
 
 describe('credits and billing (PLAN 0.5)', () => {
@@ -42,10 +36,16 @@ describe('credits and billing (PLAN 0.5)', () => {
 		await h.credit(M1, 90_000);
 		await setUp(h);
 		clock.set(T0 + 30 * MIN);
-		await h.service.recordSwitches({ merchantId: M1, websiteId: W1, appId: APP, on: ['codes', 'box'] });
+		await h.service.recordSwitches({ merchantId: M1, websiteId: W1, productId: PRODUCT, on: ['codes', 'box'] });
 		// a renamed feature keeps its last name; a removed one keeps the name from the last list that had it
 		clock.set(T0 + 14 * HOUR); // next day 00:00
-		await h.service.recordPriceList({ appId: APP, features: [{ key: 'codes', name: 'Coupon codes', price: 1000 }] });
+		await h.service.recordPriceList({
+			productId: PRODUCT,
+			prices: {
+				version: 2,
+				features: [{ key: 'codes', name: 'Coupon codes', description: 'Codes.', dependsOn: [], millicreditsPerHour: 1000 }],
+			},
+		});
 		clock.set(T0 + 14 * HOUR + 30 * MIN);
 		const summary = await h.service.billingSummary(M1);
 		// day 1: codes 14 h, box 14 h (from 10:30) = 21 credits; today: codes 1 credit (box is no longer priced)
@@ -59,7 +59,14 @@ describe('credits and billing (PLAN 0.5)', () => {
 			stoppedAt: null,
 			spentThisMonth: 22_000,
 			products: [
-				{ websiteId: W1, appId: APP, status: 'active', featuresOn: ['box', 'codes'], hourlyCost: 1000, dailyCost: 24_000 },
+				{
+					websiteId: W1,
+					productId: PRODUCT,
+					status: 'active',
+					featuresOn: ['box', 'codes'],
+					hourlyCost: 1000,
+					dailyCost: 24_000,
+				},
 			],
 		});
 		expect(h.mails.filter((m) => m.template === 'low_balance').map((m) => m.to)).toEqual([
@@ -77,7 +84,7 @@ describe('credits and billing (PLAN 0.5)', () => {
 			{
 				day: '2026-10-01',
 				amount: -21_000,
-				entryKey: `day:${W1}:${APP}:2026-10-01`,
+				entryKey: `day:${W1}:${PRODUCT}:2026-10-01`,
 				details: {
 					lines: [
 						{ feature: 'box', hours: 14, amount: 7000 },
@@ -95,10 +102,10 @@ describe('credits and billing (PLAN 0.5)', () => {
 			{ day: '2026-10-02', amount: 1000 },
 		]);
 		expect(usage.rows.map((r) => `${r.day} ${r.domain} ${r.product} ${r.featureName} ${r.hours} ${r.amount}`)).toEqual([
-			'2026-10-01 shop.example.com coupon-box Apply box 14 7000',
-			'2026-10-01 shop.example.com coupon-box Coupon codes 14 14000',
-			'2026-10-02 shop.example.com coupon-box Apply box 1 0',
-			'2026-10-02 shop.example.com coupon-box Coupon codes 1 1000',
+			'2026-10-01 shop.example.com Coupons Apply box 14 7000',
+			'2026-10-01 shop.example.com Coupons Coupon codes 14 14000',
+			'2026-10-02 shop.example.com Coupons Apply box 1 0',
+			'2026-10-02 shop.example.com Coupons Coupon codes 1 1000',
 		]);
 		expect((await h.service.usage(M1, { from: '2026-09-01', to: '2026-09-02', websiteId: W2 })).rows).toEqual([]);
 		expect(await h.service.dayChargesOf(M1)).toMatchObject([
@@ -113,7 +120,7 @@ describe('credits and billing (PLAN 0.5)', () => {
 			{ key: M1, label: 'One', credits: 21_000 },
 		]);
 		expect((await h.service.charges({ from: '2026-10-01', to: '2026-10-31', by: 'product' })).rows).toEqual([
-			{ key: APP, label: 'coupon-box', credits: 21_000 },
+			{ key: PRODUCT, label: 'Coupons', credits: 21_000 },
 		]);
 		expect(await h.service.attention()).toMatchObject([{ merchantId: M1, merchantName: 'One', status: 'low_balance' }]);
 		expect(await h.service.allReceipts({ from: '2026-10-01', to: '2026-10-02', merchantId: M1 })).toMatchObject([
@@ -171,7 +178,7 @@ describe('credits and billing (PLAN 0.5)', () => {
 		const h = await bootCommerce({ mongo, dbName: 'cm_bill_status', clock });
 		await h.credit(M1, 100_000);
 		await setUp(h);
-		await h.service.recordSwitches({ merchantId: M1, websiteId: W2, appId: APP2, on: ['bar'] });
+		await h.service.recordSwitches({ merchantId: M1, websiteId: W2, productId: PRODUCT2, on: ['bar'] });
 		clock.set(T0 + 10 * MIN);
 		await h.service.onMerchantStatus({ merchantId: M1, status: 'suspended' });
 		h.world.merchants.set(M1, { .../** @type {any} */ (h.world.merchants.get(M1)), status: 'suspended' });
@@ -182,17 +189,17 @@ describe('credits and billing (PLAN 0.5)', () => {
 		await h.service.onMerchantStatus({ merchantId: M1, status: 'active' }); // 15:30: hour 15 charged
 		h.world.merchants.set(M1, { .../** @type {any} */ (h.world.merchants.get(M1)), status: 'active' });
 		clock.set(T0 + 5 * HOUR + 40 * MIN);
-		await h.service.recordProductRemoved({ merchantId: M1, websiteId: W1, appId: APP });
+		await h.service.recordProductRemoved({ merchantId: M1, websiteId: W1, productId: PRODUCT });
 		clock.set(T0 + 9 * HOUR);
 		const removed = await h.service.billingSummary(M1);
 		expect(removed).toMatchObject({ status: 'active', balance: 98_000, dailySpend: 0, daysLeft: null, products: [] });
 		await expect(
-			h.service.recordPriceList({ appId: APP, features: [{ key: 'Bad', name: 'x', price: -1 }] }),
+			h.service.recordPriceList({ productId: PRODUCT, prices: { version: 3, features: [{ key: 'Bad', name: 'x' }] } }),
 		).rejects.toMatchObject({
 			code: 'validation_failed',
 		});
 		await expect(
-			h.service.recordSwitches({ merchantId: M1, websiteId: W1, appId: APP, on: ['Bad key'] }),
+			h.service.recordSwitches({ merchantId: M1, websiteId: W1, productId: PRODUCT, on: ['Bad key'] }),
 		).rejects.toMatchObject({
 			code: 'validation_failed',
 		});

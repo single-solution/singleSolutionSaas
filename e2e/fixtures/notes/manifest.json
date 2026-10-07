@@ -1,0 +1,22 @@
+{
+	"id": "notes",
+	"name": "Notes",
+	"version": "0.1.0",
+	"endpoints": { "base": "https://notes.test", "dashboard": "/dashboard" },
+	"widgetScriptUrl": "/widget.js",
+	"docsUrl": "/docs",
+	"features": [
+		{
+			"key": "notes",
+			"name": "Notes",
+			"description": "Visitors leave short notes; the merchant's staff read them in their own admin.",
+			"dependsOn": [],
+			"settings": { "$ref": "schemas/notes.settings.json" }
+		}
+	],
+	"permissions": [{ "key": "notes.read", "name": "Read notes", "feature": "notes" }],
+	"widgets": [
+		{ "key": "note_form", "feature": "notes", "kind": "visitor" },
+		{ "key": "inbox", "feature": "notes", "kind": "admin" }
+	]
+}

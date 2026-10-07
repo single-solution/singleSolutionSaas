@@ -22,7 +22,6 @@ export async function ConsoleFrame({ children }) {
 			merchantId={session.merchantId}
 			websites={frame.websites}
 			billing={frame.billing}
-			notifications={frame.notifications}
 			branding={branding}>
 			{children}
 		</ConsoleShell>

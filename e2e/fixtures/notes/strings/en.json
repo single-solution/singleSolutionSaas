@@ -1,0 +1,18 @@
+{
+	"form.title": "Leave us a note",
+	"form.text": "Your note",
+	"form.email": "Your e-mail (optional)",
+	"form.submit": "Send",
+	"form.sending": "Sending…",
+	"form.sent": "Thank you, your note was sent.",
+	"form.empty": "Write a note first.",
+	"form.tooLong": "A note can have at most {max} characters.",
+	"form.badEmail": "Check the e-mail address.",
+	"form.failed": "The note could not be sent. Try again.",
+	"inbox.title": "Notes",
+	"inbox.count": "{count} notes",
+	"inbox.empty": "No notes yet.",
+	"inbox.anonymous": "Anonymous",
+	"inbox.signedOut": "Signed out",
+	"inbox.failed": "The notes could not be loaded."
+}

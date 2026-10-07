@@ -63,7 +63,7 @@ const memoryStores = () => {
 /** Header-driven fake authenticators: `x-test-<mode>: <json actor>` (or `bad`). */
 const fakeAuthenticators = () => {
 	/**
-	 * @param {'admin' | 'merchant' | 'websiteKey' | 'product'} mode
+	 * @param {'admin' | 'merchant' | 'product'} mode
 	 * @param {boolean} [cookie]
 	 */
 	const make = (mode, cookie = false) =>
@@ -72,13 +72,12 @@ const fakeAuthenticators = () => {
 				const value = request.headers.get(`x-test-${mode}`);
 				if (value === null) return null;
 				if (value === 'bad') return problem('invalid_credentials', 'bad', { headers: { 'x-auth': 'failed' } });
-				return { ok: true, mode, actor: JSON.parse(value), cookie, headers: mode === 'websiteKey' ? { vary: 'Origin' } : {} };
+				return { ok: true, mode, actor: JSON.parse(value), cookie, headers: mode === 'product' ? { vary: 'Origin' } : {} };
 			}
 		);
 	return {
 		admin: make('admin', true),
 		merchant: make('merchant', true),
-		websiteKey: make('websiteKey'),
 		product: make('product'),
 	};
 };
@@ -223,17 +222,12 @@ describe('request pipeline', () => {
 		expect((await call('GET', '/api')).status).toBe(404);
 	});
 
-	it('answers preflights, with CORS only for cors routes', async () => {
-		const { call } = build([
-			{ method: 'GET', path: '/v1/open', auth: 'public', cors: true, handler: () => ({}) },
-			{ method: 'GET', path: '/v1/closed', auth: 'public', handler: () => ({}) },
-		]);
-		const pre = await call('OPTIONS', '/v1/open', { headers: { origin: 'https://shop.example.com' } });
+	it('answers OPTIONS with the allowed methods and never with CORS headers', async () => {
+		const { call } = build([{ method: 'GET', path: '/v1/closed', auth: 'public', handler: () => ({}) }]);
+		const pre = await call('OPTIONS', '/v1/closed', { headers: { origin: 'https://shop.example.com' } });
 		expect(pre.status).toBe(204);
-		expect(pre.headers.get('access-control-allow-origin')).toBe('https://shop.example.com');
 		expect(pre.headers.get('allow')).toBe('GET, OPTIONS');
-		const closed = await call('OPTIONS', '/v1/closed', { headers: { origin: 'https://shop.example.com' } });
-		expect(closed.headers.get('access-control-allow-origin')).toBeNull();
+		expect(pre.headers.get('access-control-allow-origin')).toBeNull();
 		expect((await call('OPTIONS', '/v1/none')).status).toBe(404);
 	});
 
@@ -354,7 +348,7 @@ describe('request pipeline', () => {
 				method: 'GET',
 				path: '/v1/custom',
 				auth: 'merchant',
-				permission: 'settings.write',
+				permission: 'tokens.manage',
 				resource: (ctx) => ({ merchantId: ctx.query.m ?? null, websiteId: ctx.query.w ?? null }),
 				handler: (ctx) => {
 					if (ctx.query.deny) ctx.authorize('merchants.delete');

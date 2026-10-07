@@ -11,14 +11,6 @@ import { isId } from '@ss/contracts';
  * @typedef {{ ok: true, value: T } | { ok: false, errors: FieldError[] }} Checked
  */
 
-const CODE = /^[a-z][a-z0-9_.:-]{0,199}$/;
-const PLAN = /^[a-z][a-z0-9_-]{0,39}$/;
-const ELEMENT = /^[a-z][a-z0-9_]{0,63}$/;
-const UNIT = /^[a-z][a-z0-9_]{0,39}$/;
-const KEY = /^[\x21-\x7e]{1,255}$/;
-export const MAX_USAGE_RECORDS = 1000;
-export const MAX_QUANTITY = 1_000_000_000;
-
 /**
  * @param {unknown} value
  * @returns {value is Record<string, unknown>}
@@ -44,75 +36,21 @@ const noExtra = (body, allowed, errors, base = '') => {
  */
 const result = (errors, value) => (errors.length > 0 ? { ok: false, errors } : { ok: true, value: value() });
 
+const PRODUCT_ID = /^[a-z][a-z0-9-]{1,30}$/;
+
 /**
+ * Add product to a website: `{ productId }`.
  * @param {unknown} input
- * @returns {Checked<{ appId: string, planCode: string | null }>}
+ * @returns {Checked<{ productId: string }>}
  */
-export const checkSubscribe = (input) => {
+export const checkAddProduct = (input) => {
 	if (!isObject(input)) return { ok: false, errors: [{ path: '', message: 'body must be an object' }] };
 	/** @type {FieldError[]} */
 	const errors = [];
-	noExtra(input, ['appId', 'planCode'], errors);
-	if (!isId(input.appId)) errors.push({ path: '/appId', message: 'appId must be an id' });
-	if (
-		input.planCode !== undefined &&
-		input.planCode !== null &&
-		(typeof input.planCode !== 'string' || !PLAN.test(input.planCode))
-	)
-		errors.push({ path: '/planCode', message: 'planCode is invalid' });
-	return result(errors, () => ({
-		appId: /** @type {string} */ (input.appId),
-		planCode: typeof input.planCode === 'string' ? input.planCode : null,
-	}));
-};
-
-/**
- * @param {unknown} input
- * @returns {Checked<{ planCode: string | null }>}
- */
-export const checkPlanChange = (input) => {
-	if (!isObject(input)) return { ok: false, errors: [{ path: '', message: 'body must be an object' }] };
-	/** @type {FieldError[]} */
-	const errors = [];
-	noExtra(input, ['planCode'], errors);
-	if (!('planCode' in input)) errors.push({ path: '/planCode', message: 'planCode is required (null for no plan)' });
-	else if (input.planCode !== null && (typeof input.planCode !== 'string' || !PLAN.test(input.planCode)))
-		errors.push({ path: '/planCode', message: 'planCode is invalid' });
-	return result(errors, () => ({ planCode: typeof input.planCode === 'string' ? input.planCode : null }));
-};
-
-/**
- * @param {string} key
- * @param {unknown} input
- * @returns {Checked<{ elementKey: string, enabled: boolean }>}
- */
-export const checkElementSwitch = (key, input) => {
-	/** @type {FieldError[]} */
-	const errors = [];
-	if (!ELEMENT.test(key)) errors.push({ path: '/elementKey', message: 'elementKey is invalid' });
-	if (!isObject(input)) errors.push({ path: '', message: 'body must be an object { enabled }' });
-	else {
-		noExtra(input, ['enabled'], errors);
-		if (typeof input.enabled !== 'boolean') errors.push({ path: '/enabled', message: 'enabled must be a boolean' });
-	}
-	return result(errors, () => ({ elementKey: key, enabled: /** @type {any} */ (input).enabled }));
-};
-
-/**
- * Optional `{ reason }` (a lower-case code, default `fallback`).
- * @param {unknown} input
- * @param {string} fallback
- * @returns {Checked<{ reason: string }>}
- */
-export const checkReason = (input, fallback) => {
-	if (input === undefined || input === null) return { ok: true, value: { reason: fallback } };
-	if (!isObject(input)) return { ok: false, errors: [{ path: '', message: 'body must be an object' }] };
-	/** @type {FieldError[]} */
-	const errors = [];
-	noExtra(input, ['reason'], errors);
-	if (input.reason !== undefined && (typeof input.reason !== 'string' || !CODE.test(input.reason)))
-		errors.push({ path: '/reason', message: 'reason must be a lower-case code' });
-	return result(errors, () => ({ reason: typeof input.reason === 'string' ? input.reason : fallback }));
+	noExtra(input, ['productId'], errors);
+	if (typeof input.productId !== 'string' || !PRODUCT_ID.test(input.productId))
+		errors.push({ path: '/productId', message: 'must be a product id' });
+	return result(errors, () => ({ productId: String(input.productId) }));
 };
 
 /** Largest receipt, in credits (keeps every amount an exact integer of millicredits). */
@@ -203,68 +141,4 @@ export const checkDayRange = (query, now) => {
 		merchantId: query.merchantId ?? null,
 		method,
 	}));
-};
-
-/**
- * @typedef {object} UsageRecord
- * @property {string} websiteId
- * @property {string} subscriptionId
- * @property {string} unit
- * @property {number} quantity
- * @property {string} idempotencyKey
- * @property {Date} occurredAt
- */
-
-/**
- * The usage batch envelope (F.9). Individual records are checked by {@link checkUsageRecord}.
- * @param {unknown} input
- * @returns {Checked<unknown[]>}
- */
-export const checkUsageBatch = (input) => {
-	if (!isObject(input) || !Array.isArray(input.records))
-		return { ok: false, errors: [{ path: '/records', message: 'body must be { records: [...] }' }] };
-	/** @type {FieldError[]} */
-	const errors = [];
-	noExtra(input, ['records'], errors);
-	if (input.records.length === 0 || input.records.length > MAX_USAGE_RECORDS)
-		errors.push({ path: '/records', message: `1..${MAX_USAGE_RECORDS} records` });
-	return result(errors, () => /** @type {unknown[]} */ (input.records));
-};
-
-/**
- * One usage record: `{ ok: true, value }` or `{ ok: false, reason, idempotencyKey }`.
- * @param {unknown} record
- * @returns {{ ok: true, value: UsageRecord } | { ok: false, reason: string, idempotencyKey: string | null }}
- */
-export const checkUsageRecord = (record) => {
-	if (!isObject(record)) return { ok: false, reason: 'invalid_record', idempotencyKey: null };
-	const key = typeof record.idempotencyKey === 'string' && KEY.test(record.idempotencyKey) ? record.idempotencyKey : null;
-	if (key === null) return { ok: false, reason: 'invalid_idempotency_key', idempotencyKey: null };
-	const fail = (/** @type {string} */ reason) => ({ ok: /** @type {const} */ (false), reason, idempotencyKey: key });
-	const allowed = ['websiteId', 'subscriptionId', 'unit', 'quantity', 'idempotencyKey', 'occurredAt'];
-	if (Object.keys(record).some((k) => !allowed.includes(k))) return fail('invalid_record');
-	if (!isId(record.websiteId, 'web') || !isId(record.subscriptionId, 'sub')) return fail('invalid_record');
-	if (typeof record.unit !== 'string' || !UNIT.test(record.unit)) return fail('unknown_unit');
-	if (
-		!Number.isSafeInteger(record.quantity) ||
-		/** @type {number} */ (record.quantity) < 0 ||
-		/** @type {number} */ (record.quantity) > MAX_QUANTITY
-	)
-		return fail('invalid_quantity');
-	const occurredAt =
-		typeof record.occurredAt === 'string' && /^\d{4}-\d{2}-\d{2}T[\d:.]+Z$/.test(record.occurredAt)
-			? Date.parse(record.occurredAt)
-			: Number.NaN;
-	if (Number.isNaN(occurredAt)) return fail('invalid_occurred_at');
-	return {
-		ok: true,
-		value: {
-			websiteId: /** @type {string} */ (record.websiteId),
-			subscriptionId: /** @type {string} */ (record.subscriptionId),
-			unit: record.unit,
-			quantity: /** @type {number} */ (record.quantity),
-			idempotencyKey: key,
-			occurredAt: new Date(occurredAt),
-		},
-	};
 };

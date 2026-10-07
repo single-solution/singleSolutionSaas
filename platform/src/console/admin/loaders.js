@@ -6,7 +6,9 @@
  * throw for API failures. Query-string inputs are validated here; anything malformed is ignored.
  * @module
  */
+import { firstFailure as anyFailure, loadWebsitePage, loadWebsiteRows } from '../loaders.js';
 import { ID, adminApi as paths } from './paths.js';
+import { adminCan } from './rights.js';
 
 /** @typedef {import('../api.js').ConsoleApi} ConsoleApi */
 /** @typedef {import('@ss/ui/problems').Problem} Problem */
@@ -105,34 +107,54 @@ export const loadMerchants = async (api, filter = {}) => {
 };
 
 /**
- * Merchant page: the merchant, its websites with their products, the billing summary (checked), receipts, day charges
- * and activity.
+ * Merchant page: the merchant, its websites with their products (chips, daily cost), the billing summary (checked),
+ * receipts, day charges and activity.
  * @param {ConsoleApi} api
  * @param {string} merchantId
  */
 export const loadMerchant = async (api, merchantId) => {
-	const [merchant, websites, subscriptions, billing, receipts, dayCharges, activity, catalog] = await Promise.all([
+	const [merchant, websites, billing, receipts, dayCharges, activity] = await Promise.all([
 		api.get(paths.merchant(merchantId)),
-		api.get(paths.websites(merchantId)),
-		api.get(paths.subscriptions(merchantId)),
+		loadWebsiteRows(api, merchantId),
 		api.get(paths.billing(merchantId)),
 		api.get(paths.receipts(merchantId)),
 		api.get(paths.dayCharges(merchantId)),
 		api.get(paths.merchantActivity(merchantId)),
-		api.get(paths.catalog()),
 	]);
 	const failed = firstFailure(merchant);
 	if (failed) return failed;
 	return {
 		ok: /** @type {const} */ (true),
 		merchant: /** @type {any} */ (merchant.ok ? merchant.data : {}),
-		websites: itemsOf(websites).filter((w) => w.env === 'live'),
-		subscriptions: itemsOf(subscriptions),
+		rows: websites.rows,
 		billing: /** @type {any} */ (orElse(billing, null)),
 		receipts: itemsOf(receipts),
 		dayCharges: itemsOf(dayCharges),
 		activity: pageOf(activity),
-		catalog: itemsOf(catalog),
+	};
+};
+
+/**
+ * The website page seen by an admin (PLAN 0.8.2): the merchant's name, the products on the website, the install blocks
+ * (Owner and Support only; never Finance), the usage, and the active connected products for Add product (Owner and
+ * Support).
+ * @param {ConsoleApi} api
+ * @param {{ merchantId: string, websiteId: string, tab?: string, admin: any }} input
+ */
+export const loadWebsite = async (api, { merchantId, websiteId, tab, admin }) => {
+	const manage = adminCan(admin, 'products_on_websites.write');
+	const [page, merchant, active] = await Promise.all([
+		loadWebsitePage(api, { merchantId, websiteId, tab, tokens: adminCan(admin, 'tokens.manage') }),
+		api.get(paths.merchant(merchantId)),
+		manage ? api.get(paths.products({ status: 'active' })) : null,
+	]);
+	if (!page.ok) return page;
+	const failed = anyFailure(merchant);
+	if (failed) return failed;
+	return {
+		...page,
+		merchantName: String(/** @type {any} */ (merchant.ok ? merchant.data : null)?.name ?? ''),
+		addable: active ? itemsOf(active).map((p) => ({ productId: String(p.productId), name: String(p.name) })) : null,
 	};
 };
 
@@ -148,97 +170,41 @@ export const loadOverview = async (api) => {
 };
 
 /**
+ * Products (PLAN 0.8.2): the connected products with the websites using each and the credits it earned this month.
  * @param {ConsoleApi} api
- * @param {{ status?: string, kind?: string, cursor?: string }} [filter]
+ * @param {{ status?: string }} [filter]
  */
-export const loadApps = async (api, filter = {}) => {
+export const loadProducts = async (api, filter = {}) => {
 	const status = oneOf(filter.status, ['active', 'inactive']);
-	const kind = oneOf(filter.kind, ['service', 'pack']);
-	const list = await api.get(paths.apps({ status, kind, cursor: pick(filter.cursor, CURSOR), limit: 50 }));
+	const list = await api.get(paths.products({ status }));
 	const failed = firstFailure(list);
 	if (failed) return failed;
-	return { ok: /** @type {const} */ (true), filter: { status, kind }, page: pageOf(list) };
+	return { ok: /** @type {const} */ (true), filter: { status }, items: itemsOf(list) };
 };
 
 /**
- * The current manifest of an app (null when it has none yet).
+ * A product page: the product (address, connected date, features with prices, numbers), the first page of its
+ * websites, and every connected product (inner sidebar).
  * @param {ConsoleApi} api
- * @param {any} app
+ * @param {string} productId
+ * @param {{ tab?: string }} [options]
  */
-const currentManifest = async (api, app) => {
-	if (!app?.currentVersion) return null;
-	const version = await api.get(paths.version(app.appId, app.currentVersion));
-	return version.ok ? /** @type {any} */ (version.data.manifest ?? null) : null;
-};
-
-/**
- * App detail: the app and its current manifest (which elements take widgets).
- * @param {ConsoleApi} api
- * @param {string} appId
- */
-export const loadApp = async (api, appId) => {
-	const app = await api.get(paths.app(appId));
-	const failed = firstFailure(app);
-	if (failed) return failed;
-	const data = /** @type {any} */ (app.ok ? app.data : null);
-	return { ok: /** @type {const} */ (true), app: data, manifest: await currentManifest(api, data) };
-};
-
-/**
- * Platform policy of an app (applies to every subscription): the layer, its history, and the manifest schemas.
- * @param {ConsoleApi} api
- * @param {string} appId
- */
-export const loadPolicies = async (api, appId) => {
-	const [app, layer, history] = await Promise.all([
-		api.get(paths.app(appId)),
-		api.get(paths.platformPolicy(appId)),
-		api.get(paths.platformHistory(appId)),
+export const loadProduct = async (api, productId, { tab } = {}) => {
+	const [product, websites, all] = await Promise.all([
+		api.get(paths.product(productId)),
+		api.get(paths.productWebsites(productId)),
+		api.get(paths.products()),
 	]);
-	const failed = firstFailure(app, layer);
+	const failed = firstFailure(product);
 	if (failed) return failed;
-	const appData = /** @type {any} */ (app.ok ? app.data : null);
+	const page = /** @type {any} */ (orElse(websites, null));
 	return {
 		ok: /** @type {const} */ (true),
-		app: appData,
-		layer: /** @type {any} */ (layer.ok ? layer.data : null),
-		history: orElse(history, { items: [], nextCursor: null }),
-		manifest: await currentManifest(api, appData),
-	};
-};
-
-/**
- * A subscription seen by staff: the configuration overview (merchant, website, layers), the subscription, its
- * manifest (pinned version, feature schemas), the effective document (preview of an empty change) and the admin
- * and website histories.
- * @param {ConsoleApi} api
- * @param {string} subscriptionId
- */
-export const loadSubscription = async (api, subscriptionId) => {
-	const overview = await api.get(paths.adminConfig(subscriptionId));
-	const failed = firstFailure(overview);
-	if (failed) return failed;
-	const o = /** @type {any} */ (overview.ok ? overview.data : {});
-	const [subscription, app, adminHistory, websiteHistory, preview] = await Promise.all([
-		api.get(paths.subscription(o.merchantId, subscriptionId)),
-		api.get(paths.app(o.appId)),
-		api.get(paths.adminHistory(subscriptionId, { level: 'admin' })),
-		api.get(paths.adminHistory(subscriptionId, { level: 'website' })),
-		api.post(paths.preview(o.merchantId, o.websiteId, subscriptionId), { change: {} }),
-	]);
-	const failedSub = firstFailure(subscription);
-	if (failedSub) return failedSub;
-	const sub = /** @type {any} */ (subscription.ok ? subscription.data.subscription : null);
-	const pinned = await api.get(paths.version(o.appId, sub.manifestVersion));
-	return {
-		ok: /** @type {const} */ (true),
-		overview: o,
-		subscription: sub,
-		app: orElse(app, null),
-		manifest: /** @type {any} */ (pinned.ok ? (pinned.data.manifest ?? null) : null),
-		effective: /** @type {any} */ (orElse(preview, { preview: null })?.preview ?? null),
-		adminHistory: orElse(adminHistory, { items: [], nextCursor: null }),
-		websiteHistory: orElse(websiteHistory, { items: [], nextCursor: null }),
+		product: /** @type {any} */ (product.ok ? product.data : null),
+		websites: { items: /** @type {any[]} */ (page?.items ?? []), cursor: /** @type {string | null} */ (page?.cursor ?? null) },
+		websitesProblem: websites.ok ? null : websites.problem,
+		products: itemsOf(all).map((p) => ({ productId: String(p.productId), name: String(p.name), status: String(p.status) })),
+		tab: tab === 'websites' ? /** @type {const} */ ('websites') : /** @type {const} */ ('overview'),
 	};
 };
 
@@ -270,24 +236,6 @@ export const loadBilling = async (api, filter = {}) => {
 		charges: /** @type {any} */ (orElse(charges, null)),
 		attention: itemsOf(attention),
 	};
-};
-
-export const CONNECTOR_KINDS = Object.freeze(['database', 'storage', 'ai', 'messaging', 'payments']);
-export const CONNECTOR_STATUSES = Object.freeze(['connected', 'missing', 'failing']);
-
-/**
- * Connector status list (never secrets: the staff view carries status and check reports only).
- * @param {ConsoleApi} api
- * @param {{ merchantId?: string, kind?: string, status?: string }} [filter]
- */
-export const loadConnectors = async (api, filter = {}) => {
-	const merchantId = pick(filter.merchantId, ID.merchant);
-	const kind = oneOf(filter.kind, CONNECTOR_KINDS);
-	const status = oneOf(filter.status, CONNECTOR_STATUSES);
-	const list = await api.get(paths.connectors({ merchantId, kind, status }));
-	const failed = firstFailure(list);
-	if (failed) return failed;
-	return { ok: /** @type {const} */ (true), filter: { merchantId, kind, status }, page: pageOf(list) };
 };
 
 /**
@@ -341,17 +289,4 @@ export const loadMyAccount = async (api) => {
 	const failed = firstFailure(me);
 	if (failed) return failed;
 	return { ok: /** @type {const} */ (true), me: /** @type {any} */ (me.ok ? me.data : null), activity: pageOf(activity) };
-};
-
-/**
- * Subscription lookup by id (the configuration overview resolves its merchant and website).
- * @param {ConsoleApi} api
- * @param {{ id?: string }} [filter]
- */
-export const loadSubscriptionLookup = async (api, filter = {}) => {
-	const id = pick(filter.id?.trim(), ID.subscription);
-	if (!id) return { ok: /** @type {const} */ (true), id: null, invalid: Boolean(filter.id), found: null };
-	const overview = await api.get(paths.adminConfig(id));
-	if (!overview.ok && overview.status !== 404) return /** @type {LoadFailure} */ (firstFailure(overview));
-	return { ok: /** @type {const} */ (true), id, invalid: false, found: overview.ok ? overview.data : null };
 };

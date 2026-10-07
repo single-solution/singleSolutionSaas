@@ -1,15 +1,15 @@
 /**
- * Public service of the `commerce` module (INTERFACES.md): subscriptions, element switches, entitlement documents,
- * usage records, and credits and billing (PLAN 0.5: histories, the check, receipts, usage and billing views). Other
- * modules call it via `ctx.service('commerce')`; failures are thrown as RFC 9457 problems (`infra/http.js` `problem`).
+ * Public service of the `commerce` module (INTERFACES.md): products on websites, the price and feature reports and the
+ * status response of the Product ↔ Portal contract, and credits and billing (PLAN 0.5: histories, the check, receipts,
+ * usage and billing views). Other modules call it via `ctx.service('commerce')`; failures are thrown as RFC 9457
+ * problems (`infra/http.js` `problem`).
  * @module
  */
 import { createCommerceRepo } from './repo.js';
 import { createBilling } from './services/billing.js';
 import { createDeps } from './services/deps.js';
 import { createLedger } from './services/ledger.js';
-import { createSubscriptions } from './services/subscriptions.js';
-import { createUsage } from './services/usage.js';
+import { createProducts } from './services/products.js';
 
 /** @typedef {import('../../infra/modules.js').ModuleContext} ModuleContext */
 
@@ -26,66 +26,42 @@ export const createCommerceService = (ctx) => {
 			ctx.logger.error('ledger chain broken', { merchantId, message });
 		},
 	});
-	const subscriptions = createSubscriptions({ ctx, repo, deps });
-	const billing = createBilling({ ctx, repo, deps, ledger });
-	const usage = createUsage({ ctx, repo, deps, subscriptions });
+	// billing tells the products when a check finds grace or a stop; `products` exists by the time it is called
+	const billing = createBilling({ ctx, repo, deps, ledger, statusChanged: (merchantId) => products.statusChanged(merchantId) });
+	const products = createProducts({ ctx, repo, deps, billing });
 
 	return {
-		// subscriptions (until the switch to products on websites, PLAN 0.12 step 5)
-		subscribe: subscriptions.subscribe,
-		getSubscription: subscriptions.getSubscription,
-		subscriptionsForWebsite: subscriptions.subscriptionsForWebsite,
-		subscriptionsOfMerchant: subscriptions.subscriptionsOfMerchant,
-		setElement: subscriptions.setElement,
-		changePlan: subscriptions.changePlan,
-		pause: subscriptions.pause,
-		resume: subscriptions.resume,
-		cancel: subscriptions.cancel,
-		invalidate: subscriptions.invalidate,
-		/** @param {string} websiteId */
-		invalidateWebsite: async (websiteId) => {
-			let count = 0;
-			for (const sub of await repo.subscriptionsForWebsite(websiteId)) {
-				if (!sub.live) continue;
-				await subscriptions.refreshQuietly(sub);
-				count += 1;
-			}
-			return { invalidated: count };
-		},
-		/** @param {string} appId */
-		invalidateApp: async (appId) => {
-			let count = 0;
-			for (const sub of await repo.liveSubscriptionsOfApp(appId)) {
-				await subscriptions.refreshQuietly(sub);
-				count += 1;
-			}
-			return { invalidated: count };
-		},
+		// products on websites (PLAN 0.5.9)
+		addProduct: products.add,
+		removeProduct: products.remove,
+		productsForWebsite: products.listForWebsite,
+		productOnWebsite: products.productOnWebsite,
+		productsOnWebsite: products.productsOnWebsite,
+		/** @param {string} websiteId products on the website now (not removed) */
+		productsOnWebsiteCount: async (websiteId) => (await products.productsOnWebsite(websiteId)).length,
+		merchantWebsitesWithProduct: products.merchantWebsitesWithProduct,
 		/**
-		 * Websites with a live subscription of an app (delivery recompiles them when the app's UI bundle changes).
-		 * @param {string} appId
-		 * @returns {Promise<string[]>}
-		 */
-		websitesOfApp: async (appId) => [
-			...new Set((await repo.liveSubscriptionsOfApp(appId)).map((sub) => String(sub.websiteId))),
-		],
-		previewDocument: subscriptions.previewDocument,
-		/** Resource needs of a website's live subscriptions (connectors resolve and the console Resources page). */
-		resourceNeeds: subscriptions.resourceNeedsOf,
-		/**
-		 * Identity hook: a suspended merchant suspends every subscription, and suspended hours are never charged.
+		 * Identity hook: a suspended merchant's products are suspended (never charged) and the products are told;
+		 * resuming tells them too.
 		 * @param {{ merchantId: string, status: 'active' | 'suspended' }} input
 		 */
 		onMerchantStatus: async (input) => {
 			await billing.recordMerchantStatus(input.merchantId, input.status);
-			return subscriptions.onMerchantStatus(input);
+			await products.statusChanged(input.merchantId);
 		},
-		// documents and usage records
-		documentFor: subscriptions.documentFor,
-		/** @param {Parameters<typeof usage.recordUsage>[0]} input */
-		recordUsage: usage.recordUsage,
+		// the Product ↔ Portal contract (PLAN 0.4.12)
+		recordPriceList: products.acceptPrices,
+		/** @param {string} productId the last accepted price-list version (0 when none) */
+		priceListVersion: async (productId) => Number((await repo.lastPriceList(productId))?.version ?? 0),
+		/** @param {string} productId the last accepted price list, or null */
+		currentPriceList: (productId) => repo.lastPriceList(productId),
+		acceptFeatures: products.acceptFeatures,
+		statusFor: products.statusFor,
+		websitesOfProduct: products.websitesOfProduct,
+		productWebsitesView: products.productWebsitesView,
+		productNumbers: products.productNumbers,
+		allProductNumbers: products.allProductNumbers,
 		// credits and billing (PLAN 0.5)
-		recordPriceList: billing.recordPriceList,
 		recordProductAdded: billing.recordProductAdded,
 		recordProductRemoved: billing.recordProductRemoved,
 		recordSwitches: billing.recordSwitches,

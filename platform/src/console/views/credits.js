@@ -5,11 +5,37 @@
  * an admin; the page shows the support contact instead of a payment form.
  * @module
  */
-import { Callout, Card, PageHeader, describeProblem } from '@ss/ui';
+import { Callout, Card, Input, PageHeader, Select, describeProblem } from '@ss/ui';
 import { BILLING } from '../../texts/console.js';
 import { BillingStats, ReceiptsTable, UsageView } from './billing.js';
 import { PageProblem } from './common.js';
-import { RangeForm } from './usage.js';
+
+/**
+ * A GET form for a range of UTC days and a website.
+ * @param {{ range: { from: string | null, to: string | null }, websites: any[], websiteId: string | null }} props
+ */
+function RangeForm({ range, websites, websiteId }) {
+	return (
+		<form method="get" className="flex flex-wrap items-end gap-3">
+			<Input label={BILLING.filters.from} name="from" type="date" defaultValue={range.from ?? ''} />
+			<Input label={BILLING.filters.to} name="to" type="date" defaultValue={range.to ?? ''} />
+			<Select
+				label={BILLING.filters.website}
+				name="websiteId"
+				defaultValue={websiteId ?? ''}
+				options={[
+					{ value: '', label: BILLING.filters.all },
+					...websites.map((w) => ({ value: String(w.websiteId), label: String(w.domain) })),
+				]}
+			/>
+			<button
+				type="submit"
+				className="min-h-10 rounded-xl border border-line bg-surface px-4 text-sm font-semibold text-fg hover:border-line-strong">
+				{BILLING.filters.apply}
+			</button>
+		</form>
+	);
+}
 
 /**
  * @param {any} props loader result of `loadCredits`

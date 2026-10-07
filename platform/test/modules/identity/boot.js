@@ -11,7 +11,7 @@ import { systemModule } from '../../../src/modules/system/index.js';
 import { createSystemStore } from '../../../src/infra/system.js';
 import { createPortal } from '../../../src/portal.js';
 import { ENCRYPTION_KEY, PORTAL_URL, createClock, createTestLogger, startMongo, testConfig } from '../../helpers.js';
-import { fakeCatalog, fakeCommerce, fakeIntegration, memoryMailer, whoamiModule } from './fakes/modules.js';
+import { fakeCatalog, fakeCommerce, memoryMailer, whoamiModule } from './fakes/modules.js';
 
 export { PORTAL_URL };
 
@@ -30,8 +30,8 @@ export const teardownMongo = async () => {
 };
 
 /**
- * @param {{ commerce?: { fail?: boolean }, integration?: { fail?: boolean } | false, identity?: Record<string, unknown>,
- *   env?: Record<string, string>, settings?: Record<string, any>, withCommerce?: boolean, mail?: boolean }} [options]
+ * @param {{ commerce?: { fail?: boolean }, identity?: Record<string, unknown>, env?: Record<string, string>,
+ *   settings?: Record<string, any>, withCommerce?: boolean, withCatalog?: boolean, mail?: boolean }} [options]
  *   `mail: false` builds the Portal
  *   without e-mail sending (e-mails are skipped)
  */
@@ -41,7 +41,6 @@ export const boot = async (options = {}) => {
 	const mailer = memoryMailer();
 	if (options.mail === false) mailer.setAvailable(false);
 	const commerce = fakeCommerce(options.commerce);
-	const integration = fakeIntegration(options.integration || {});
 	const catalog = await fakeCatalog();
 	const config = await testConfig(options.env ?? {}, options.settings ? { settings: options.settings } : {});
 	const { logger, entries } = createTestLogger();
@@ -50,9 +49,8 @@ export const boot = async (options = {}) => {
 		systemModule,
 		whoamiModule,
 		identity,
-		catalog.module,
+		...(options.withCatalog === false ? [] : [catalog.module]),
 		...(options.withCommerce === false ? [] : [commerce.module]),
-		...(options.integration === false ? [] : [integration.module]),
 	];
 	dbCounter += 1;
 	const db = mongo.db(`identity_${process.pid}_${dbCounter}`);
@@ -238,11 +236,8 @@ export const boot = async (options = {}) => {
 		const m = await merchant(email);
 		const created = await m.admin.post(`/v1/merchants/${m.merchantId}/websites`, { domain });
 		if (created.status !== 201) throw new Error(`website ${created.status} ${JSON.stringify(created.json)}`);
-		return { ...m, websiteId: created.json.website.websiteId, twinId: created.json.twin.websiteId, domain };
+		return { ...m, websiteId: created.json.website.websiteId, domain };
 	};
-
-	/** @deprecated name kept for the key and issuer tests: a merchant with an Owner able to add its websites */
-	const signupOwner = merchant;
 
 	/**
 	 * Turn two-step on for a signed-in client; returns the secret and recovery codes.
@@ -272,7 +267,6 @@ export const boot = async (options = {}) => {
 		clock,
 		mailer,
 		commerce,
-		integration,
 		catalog,
 		entries,
 		code,
@@ -281,7 +275,6 @@ export const boot = async (options = {}) => {
 		admin,
 		merchant,
 		merchantWithWebsite,
-		signupOwner,
 		enableTwoStep,
 		activity,
 		config,

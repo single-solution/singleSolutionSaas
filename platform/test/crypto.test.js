@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { generateSigningKey, issueWebsiteKey, verifyWebsiteKey } from '@ss/protocol';
-import { createEnvelope, createPortalKeys, createSecretHasher } from '../src/infra/crypto.js';
+import { generateSigningKey, issueToken, verifyToken } from '@ss/protocol';
+import { createEnvelope, createPortalKeys, createSecretBox } from '../src/infra/crypto.js';
 import { isPlatformError } from '../src/infra/errors.js';
 import { API_CSP, createNonce, pageCsp, staticSecurityHeaders } from '../src/infra/security-headers.js';
 import { MERCHANT, WEBSITE } from './helpers.js';
 
 const kek = (/** @type {string} */ id, /** @type {number} */ fill) => ({ id, key: Buffer.alloc(32, fill) });
-const aad = { merchantId: MERCHANT, connectorId: 'con_1' };
+const aad = { merchantId: MERCHANT, productId: 'notes' };
 
 /** @param {() => unknown} fn */
 const codeOf = (fn) => {
@@ -19,50 +19,45 @@ const codeOf = (fn) => {
 };
 
 describe('portal keys', () => {
-	it('signs with the first key and publishes all of them, website keys with their dedicated signer', async () => {
+	it('signs with the first key and publishes all of them, browser and server tokens with their dedicated signer', async () => {
 		const { privateJwk: current } = await generateSigningKey({ kid: 'portal-new' });
 		const { privateJwk: previous } = await generateSigningKey({ kid: 'portal-old' });
-		const { privateJwk: website } = await generateSigningKey({ kid: 'website-new' });
-		const { privateJwk: websiteOld } = await generateSigningKey({ kid: 'website-old' });
-		const keys = createPortalKeys([current, previous], [website, websiteOld]);
+		const { privateJwk: token } = await generateSigningKey({ kid: 'token-new' });
+		const { privateJwk: tokenOld } = await generateSigningKey({ kid: 'token-old' });
+		const keys = createPortalKeys([current, previous], [token, tokenOld]);
 		expect(keys.activeKid).toBe('portal-new');
 		expect(keys.signers.map((s) => s.kid)).toEqual(['portal-new', 'portal-old']);
 		const jwks = keys.jwks();
 		expect(jwks.keys.map((k) => k.kid)).toEqual(['portal-new', 'portal-old']);
 		expect(JSON.stringify(jwks)).not.toContain('"d"');
-		expect(keys.websiteKeySigner.kid).toBe('website-new');
-		expect(keys.websiteKeySigners.map((s) => s.kid)).toEqual(['website-new', 'website-old']);
-		expect(keys.websiteKeyJwks().keys.map((k) => k.kid)).toEqual(['website-new', 'website-old']);
+		expect(keys.tokenSigner.kid).toBe('token-new');
+		expect(keys.tokenJwks().keys.map((k) => k.kid)).toEqual(['token-new', 'token-old']);
 		const published = keys.publishedJwks();
-		expect(published.keys.map((k) => k.kid)).toEqual(['portal-new', 'portal-old', 'website-new', 'website-old']);
+		expect(published.keys.map((k) => k.kid)).toEqual(['portal-new', 'portal-old', 'token-new', 'token-old']);
 		expect(JSON.stringify(published)).not.toContain('"d"');
 
 		/** @param {import('@ss/protocol').Signer} signer */
 		const issue = async (signer) =>
 			(
-				await issueWebsiteKey({
+				await issueToken({
 					signer,
-					kind: 'sk',
+					issuer: 'https://portal.test',
 					websiteId: WEBSITE,
-					merchantId: MERCHANT,
 					domain: 'shop.example.com',
-					env: 'live',
-					scopes: [],
-					keyId: 'key_1',
+					productId: 'notes',
+					kind: 'server',
 				})
-			).key;
-		// website keys signed by either website-key signer verify with the website-key resolver only
-		for (const signer of keys.websiteKeySigners) {
-			const key = await issue(signer);
-			const claims = await verifyWebsiteKey({ key, keyResolver: keys.websiteKeyResolver, revocations: [] });
-			expect(claims.kid).toBe(signer.kid);
-			await expect(verifyWebsiteKey({ key, keyResolver: keys.keyResolver, revocations: [] })).rejects.toThrow();
-		}
-		// a token signed with the Portal key is never a website key
-		const forged = await issue(keys.signer);
-		await expect(verifyWebsiteKey({ key: forged, keyResolver: keys.websiteKeyResolver, revocations: [] })).rejects.toThrow();
+			).token;
+		const verify = (/** @type {string} */ value, /** @type {import('@ss/protocol').KeyResolver} */ keyResolver) =>
+			verifyToken({ token: value, keyResolver, issuer: 'https://portal.test', productId: 'notes' });
+		// tokens signed by the token signer verify with the token resolver only
+		const good = await issue(keys.tokenSigner);
+		expect((await verify(good, keys.tokenKeyResolver)).websiteId).toBe(WEBSITE);
+		await expect(verify(good, keys.keyResolver)).rejects.toThrow();
+		// a token signed with the Portal key is never accepted as a token
+		await expect(verify(await issue(keys.signer), keys.tokenKeyResolver)).rejects.toThrow();
 
-		expect(codeOf(() => createPortalKeys([], [website]))).toBe('config_invalid');
+		expect(codeOf(() => createPortalKeys([], [token]))).toBe('config_invalid');
 		expect(codeOf(() => createPortalKeys([current], []))).toBe('config_invalid');
 		const { privateJwk: clash } = await generateSigningKey({ kid: 'portal-new' });
 		expect(codeOf(() => createPortalKeys([current], [clash]))).toBe('config_invalid');
@@ -76,7 +71,7 @@ describe('envelope encryption', () => {
 		expect(sealed.startsWith('ssenc1.k2.')).toBe(true);
 		expect(sealed).not.toContain('cluster');
 		expect(envelope.openText(sealed, { aad })).toBe('mongodb+srv://u:p@cluster/db');
-		expect(envelope.open(sealed, { aad: { connectorId: 'con_1', merchantId: MERCHANT } }).toString()).toBe(
+		expect(envelope.open(sealed, { aad: { productId: 'notes', merchantId: MERCHANT } }).toString()).toBe(
 			'mongodb+srv://u:p@cluster/db',
 		); // key order irrelevant
 		expect(codeOf(() => envelope.open(sealed, { aad: { ...aad, merchantId: 'mer_other' } }))).toBe('decrypt_failed');
@@ -126,15 +121,13 @@ describe('envelope encryption', () => {
 	});
 });
 
-describe('secret hasher', () => {
-	it('hashes with the pepper and compares in constant time', () => {
-		const hasher = createSecretHasher(Buffer.alloc(32, 9));
-		const hash = hasher.hash('sk_live_abc');
-		expect(hash).toMatch(/^[0-9a-f]{64}$/);
-		expect(hasher.verify('sk_live_abc', hash)).toBe(true);
-		expect(hasher.verify('sk_live_abd', hash)).toBe(false);
-		expect(createSecretHasher(Buffer.alloc(32, 8)).verify('sk_live_abc', hash)).toBe(false);
-		expect(() => createSecretHasher(Buffer.alloc(8))).toThrow();
+describe('secret box (ENCRYPTION_KEY)', () => {
+	it('seals with a key derived from ENCRYPTION_KEY; another key cannot open', () => {
+		const box = createSecretBox({ encryptionKey: 'a'.repeat(40) });
+		const sealed = box.seal('server-token', { aad });
+		expect(box.openText(sealed, { aad })).toBe('server-token');
+		expect(codeOf(() => createSecretBox({ encryptionKey: 'b'.repeat(40) }).open(sealed, { aad }))).toBe('decrypt_failed');
+		expect(codeOf(() => createSecretBox({ encryptionKey: 'short' }))).toBe('config_invalid');
 	});
 });
 

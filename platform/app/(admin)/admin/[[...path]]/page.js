@@ -11,19 +11,16 @@ import Home, { metadata as HomeMeta } from '../_views/home.js';
 import Account, { metadata as AccountMeta } from '../_views/account.js';
 import Activity, { metadata as ActivityMeta } from '../_views/activity.js';
 import Admins, { metadata as AdminsMeta } from '../_views/admins.js';
-import Apps, { metadata as AppsMeta } from '../_views/apps.js';
-import Connectors, { metadata as ConnectorsMeta } from '../_views/connectors.js';
 import Finance, { metadata as FinanceMeta } from '../_views/finance.js';
 import Login, { metadata as LoginMeta } from '../_views/login.js';
 import Merchants, { metadata as MerchantsMeta } from '../_views/merchants.js';
+import Products, { metadata as ProductsMeta } from '../_views/products.js';
 import Settings, { metadata as SettingsMeta } from '../_views/settings.js';
-import Subscriptions, { metadata as SubscriptionsMeta } from '../_views/subscriptions.js';
-import AppsAppId, { metadata as AppsAppIdMeta } from '../_views/apps-appId.js';
 import MerchantsMerchantId, { metadata as MerchantsMerchantIdMeta } from '../_views/merchants-merchantId.js';
-import SubscriptionsSubscriptionId, {
-	metadata as SubscriptionsSubscriptionIdMeta,
-} from '../_views/subscriptions-subscriptionId.js';
-import AppsAppIdPolicies, { metadata as AppsAppIdPoliciesMeta } from '../_views/apps-appId-policies.js';
+import MerchantsMerchantIdWebsitesWebsiteId, {
+	metadata as MerchantsMerchantIdWebsitesWebsiteIdMeta,
+} from '../_views/merchants-merchantId-websites-websiteId.js';
+import ProductsProductId, { metadata as ProductsProductIdMeta } from '../_views/products-productId.js';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,17 +30,19 @@ const VIEWS = /** @type {Array<[string[], (props: any) => any, import('next').Me
 	[['account'], Account, AccountMeta, true],
 	[['activity'], Activity, ActivityMeta, true],
 	[['admins'], Admins, AdminsMeta, true],
-	[['apps'], Apps, AppsMeta, true],
-	[['connectors'], Connectors, ConnectorsMeta, true],
 	[['finance'], Finance, FinanceMeta, true],
 	[['login'], Login, LoginMeta, false],
 	[['merchants'], Merchants, MerchantsMeta, true],
+	[['products'], Products, ProductsMeta, true],
 	[['settings'], Settings, SettingsMeta, true],
-	[['subscriptions'], Subscriptions, SubscriptionsMeta, true],
-	[['apps', ':appId'], AppsAppId, AppsAppIdMeta, true],
 	[['merchants', ':merchantId'], MerchantsMerchantId, MerchantsMerchantIdMeta, true],
-	[['subscriptions', ':subscriptionId'], SubscriptionsSubscriptionId, SubscriptionsSubscriptionIdMeta, true],
-	[['apps', ':appId', 'policies'], AppsAppIdPolicies, AppsAppIdPoliciesMeta, true],
+	[
+		['merchants', ':merchantId', 'websites', ':websiteId'],
+		MerchantsMerchantIdWebsitesWebsiteId,
+		MerchantsMerchantIdWebsitesWebsiteIdMeta,
+		true,
+	],
+	[['products', ':productId'], ProductsProductId, ProductsProductIdMeta, true],
 ]);
 
 /**

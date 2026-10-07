@@ -86,8 +86,11 @@ export const createMerchants = (deps, hooks) => {
 				{ $set: { status, suspension } },
 			);
 			if (changed.modifiedCount !== 1) return presentMerchant(await load(merchantId));
-			// suspended: no sign-in, every Portal session ends (product dashboard sessions end with the notices of step 5)
-			if (status === 'suspended') await ctx.sessions.revokeAll('merchant', merchantId);
+			// suspended: no sign-in, every Portal and product dashboard session ends
+			if (status === 'suspended') {
+				await ctx.sessions.revokeAll('merchant', merchantId);
+				await deps.sessionsEnded(merchantId);
+			}
 			await audit(
 				actor,
 				status === 'suspended' ? 'merchant.suspended' : 'merchant.resumed',
@@ -278,6 +281,7 @@ export const createMerchants = (deps, hooks) => {
 			for (const purpose of /** @type {const} */ (['setup', 'password_reset', 'email_change', 'two_step']))
 				await repo.dropTokens(purpose, `merchant:${merchantId}`);
 			await ctx.sessions.revokeAll('merchant', merchantId);
+			await deps.sessionsEnded(merchantId);
 			await audit(
 				actor,
 				'merchant.deleted',

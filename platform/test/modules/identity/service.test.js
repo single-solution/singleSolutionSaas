@@ -1,7 +1,4 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { generateSigningKey } from '@ss/protocol';
-import { createPortalKeys } from '../../../src/infra/crypto.js';
-import { websiteKeySigning } from '../../../src/modules/identity/service.js';
 import { C } from '../../../src/modules/identity/schema.js';
 import { PRODUCTION_ENV } from '../../helpers.js';
 import { boot, setupMongo, teardownMongo } from './boot.js';
@@ -11,27 +8,6 @@ beforeAll(setupMongo, 120_000);
 afterAll(teardownMongo, 60_000);
 
 describe('identity service wiring', () => {
-	it('selects the website-key signer: option › the infra dedicated signer', async () => {
-		const { privateJwk: portal } = await generateSigningKey({ kid: 'portal' });
-		const { privateJwk: dedicated } = await generateSigningKey({ kid: 'website-keys' });
-		const { privateJwk: option } = await generateSigningKey({ kid: 'website-option' });
-		const keys = createPortalKeys([portal], [dedicated]);
-		const ctx = /** @type {any} */ ({ keys });
-		const selected = websiteKeySigning(ctx, {});
-		expect([selected.source, selected.signer.kid, selected.jwks().keys.map((k) => k.kid)]).toEqual([
-			'infra',
-			'website-keys',
-			['website-keys'],
-		]);
-		expect(selected.keyResolver).toBe(keys.websiteKeyResolver);
-		const chosen = websiteKeySigning(ctx, { websiteKeySigningKeys: [option] });
-		expect([chosen.source, chosen.signer.kid, chosen.jwks().keys[0]?.kid]).toEqual([
-			'option',
-			'website-option',
-			'website-option',
-		]);
-	});
-
 	it('defaults: the platform mailer (logging outside production; in production without SMTP e-mails are skipped)', async () => {
 		const dev = await boot({ identity: { mailer: undefined } });
 		const o = await dev.owner();
@@ -47,7 +23,12 @@ describe('identity service wiring', () => {
 		const skipped = await p.client.post('/v1/admin/merchants', { name: 'P', ownerName: 'P', email: 'p@example.com' });
 		expect([skipped.status, skipped.json.setup.mailed]).toEqual([201, false]);
 		// the Overview warns while e-mail sending is not set up
-		expect((await p.client.get('/v1/admin/overview')).json).toMatchObject({ mailConfigured: false, merchants: 1, websites: 0 });
+		expect((await p.client.get('/v1/admin/overview')).json).toMatchObject({
+			mailConfigured: false,
+			merchants: 1,
+			websites: 0,
+			products: [],
+		});
 	});
 
 	it('sessionActor: the live role and name; removed admins and suspended or deleted merchants are signed out', async () => {
@@ -73,7 +54,7 @@ describe('identity service wiring', () => {
 		expect(await h.service.sessionActor(session)).toBeNull();
 	});
 
-	it('re-hashes weaker password hashes on sign-in; website keys are signed by the dedicated signer', async () => {
+	it('re-hashes weaker password hashes on sign-in', async () => {
 		const h = await boot();
 		const m = await h.merchantWithWebsite('o@example.com', 'x.example.com');
 		const { hashPassword } = await import('../../../src/infra/auth.js');
@@ -86,14 +67,5 @@ describe('identity service wiring', () => {
 			200,
 		);
 		expect((await merchants.findOne({ _id: m.merchantId }))?.passwordHash).toMatch(/^scrypt\$32768\$/);
-		const base = `/v1/merchants/${m.merchantId}/websites/${m.websiteId}/keys`;
-		const issued = await m.client.post(base, { kind: 'pk', scopes: ['events.write'] });
-		const header =
-			String(issued.json.key)
-				.replace(/^pk_(live|test)_/, '')
-				.split('.')[0] ?? '';
-		const { kid } = JSON.parse(Buffer.from(header, 'base64url').toString('utf8'));
-		expect(kid).toBe(h.portal.shared.keys.websiteKeySigner.kid);
-		expect(h.portal.shared.keys.signers.some((s) => s.kid === kid)).toBe(false);
 	});
 });

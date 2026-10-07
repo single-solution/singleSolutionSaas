@@ -1,11 +1,11 @@
 /**
- * The Portal's own state in its control database (`platform_system`), so that only the database, the Portal address,
- * the encryption key and (until step 5) the asset storage are configured through the environment:
+ * The Portal's own state in its control database (`platform_system`), so that only the database, the Portal address
+ * and the encryption key are configured through the environment (PLAN 0.11):
  *
  * - `secrets` — generated on first start and inserted only if absent (`_id` unique), so concurrent cold starts agree on
- *   one set: the Ed25519 Portal signing key(s), the website-key signing key(s), the encryption keys (KEKs), the session
- *   secret, the key pepper and the idempotency secret. Lists stay lists (first signs or seals; all are published or
- *   able to open), so older data keeps working.
+ *   one set: the Ed25519 Portal signing key(s) (launches, notices), the token signing key(s) (browser and server
+ *   tokens, PLAN 0.4.4), the session secret and the idempotency secret. Lists stay lists (first signs; all are
+ *   published), so older tokens keep verifying.
  * - `settings` — recorded by Owners (PLAN 0.8.2 Settings): e-mail sending (its password sealed with `ENCRYPTION_KEY`),
  *   branding, support contact, security and billing rules. `version` increases with every change so other instances
  *   notice and rebuild.
@@ -30,10 +30,8 @@ export const SYSTEM_COLLECTION = COLLECTIONS.system;
  * @typedef {object} SecretsDoc
  * @property {'secrets'} _id
  * @property {StoredKey[]} signingKeys
- * @property {StoredKey[]} websiteSigningKeys
- * @property {Array<{ id: string, key: string, createdAt: string }>} encryptionKeys
+ * @property {StoredKey[]} tokenSigningKeys
  * @property {string} sessionSecret
- * @property {string} keyPepper
  * @property {string} idempotencySecret
  */
 /**
@@ -86,10 +84,8 @@ export const generateSecrets = ({ now = Date.now, randomBytes = (n) => new Uint8
 	const createdAt = new Date(now()).toISOString();
 	return {
 		signingKeys: [{ kid: kidOf('portal', now, randomBytes), seed: b64url(randomBytes), createdAt }],
-		websiteSigningKeys: [{ kid: kidOf('website', now, randomBytes), seed: b64url(randomBytes), createdAt }],
-		encryptionKeys: [{ id: kidOf('k', now, randomBytes), key: b64url(randomBytes), createdAt }],
+		tokenSigningKeys: [{ kid: kidOf('token', now, randomBytes), seed: b64url(randomBytes), createdAt }],
 		sessionSecret: b64url(randomBytes),
-		keyPepper: b64url(randomBytes),
 		idempotencySecret: b64url(randomBytes),
 	};
 };
@@ -101,10 +97,8 @@ export const generateSecrets = ({ now = Date.now, randomBytes = (n) => new Uint8
  */
 export const secretsOf = (doc) => ({
 	signingKeys: doc.signingKeys.map((key) => signingKeyFromSeed(key.kid, key.seed)),
-	websiteKeySigningKeys: doc.websiteSigningKeys.map((key) => signingKeyFromSeed(key.kid, key.seed)),
-	keks: doc.encryptionKeys.map((key) => ({ id: key.id, key: Buffer.from(key.key, 'base64url') })),
+	tokenSigningKeys: doc.tokenSigningKeys.map((key) => signingKeyFromSeed(key.kid, key.seed)),
 	sessionSecret: Buffer.from(doc.sessionSecret, 'base64url'),
-	websiteKeyPepper: Buffer.from(doc.keyPepper, 'base64url'),
 	idempotencySecret: Buffer.from(doc.idempotencySecret, 'base64url'),
 });
 

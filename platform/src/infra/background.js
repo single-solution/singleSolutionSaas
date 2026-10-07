@@ -3,14 +3,14 @@
  * throttled passes, no polling).
  *
  * - **Deferred tasks**: whatever the request deferred (`ctx.defer(task)`, or `afterResponse(task)` from
- *   `request-scope.js` deep in a module: the job a request enqueued, the deliveries of an event it ingested, the
- *   e-mails it sent). Tasks deferred while these run are run too.
- * - **Product calls**: when a product called the Portal (`product` auth), `onProductCall(appId)` follows the request
- *   (the Event Hub retries that product's due deliveries).
+ *   `request-scope.js` deep in a module: the notices and e-mails it caused). Tasks deferred while these run are run
+ *   too.
+ * - **Product calls**: when a product called the Portal (`product` auth), `onProductCall(productId)` follows the
+ *   request (the product's failed notices are retried, oldest first).
  *
  * Everything runs through the framework's `after()` when the adapter provided one (`toNextRoute(handler, { after })`),
  * otherwise through `fallback` (default: in the background of the request). Failures are logged, never thrown. Mode
- * `off` (the default in tests) runs nothing: the work waits for the next request that touches it or an admin operation.
+ * `off` (the default in tests) runs nothing: the work waits for the next request that touches it.
  * @module
  */
 import { runInRequestScope } from './request-scope.js';
@@ -24,7 +24,7 @@ export const MAX_TASKS_PER_REQUEST = 200;
 
 /**
  * @param {{ logger: Logger, mode?: 'on' | 'off', fallback?: AfterScheduler,
- *   onProductCall?: (appId: string) => Promise<unknown> }} options
+ *   onProductCall?: (productId: string) => Promise<unknown> }} options
  */
 export const createBackground = ({ logger, mode = 'on', fallback, onProductCall }) => {
 	/** @type {AfterScheduler} */
@@ -34,9 +34,9 @@ export const createBackground = ({ logger, mode = 'on', fallback, onProductCall 
 	 * Schedule the request's deferred tasks (the handler's `afterResponse` hook).
 	 * @param {AfterResponse} input
 	 */
-	const afterResponse = ({ deferred, schedule, log, app }) => {
+	const afterResponse = ({ deferred, schedule, log, product }) => {
 		if (mode === 'off') return;
-		if (app && onProductCall) deferred.push(() => onProductCall(app.appId));
+		if (product && onProductCall) deferred.push(() => onProductCall(product.productId));
 		if (deferred.length === 0) return;
 		const work = () =>
 			runInRequestScope({ defer: (task) => void deferred.push(task) }, async () => {

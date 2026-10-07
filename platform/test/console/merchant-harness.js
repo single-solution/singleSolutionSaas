@@ -1,19 +1,20 @@
 /**
- * Shared harness of the Merchant Console browser tests (jsdom): a live in-process Portal, a cookie-jar `fetch` that
- * routes to `portal.handle` (same origin), DOM helpers, and a seeded world (staff, a listed pack, a merchant with a
- * website and credits).
+ * Shared harness of the console tests (jsdom and server render): a live in-process Portal, a cookie-jar `fetch` that
+ * routes to `portal.handle` (same origin), DOM helpers, and a seeded world (the first Owner, admins of every role,
+ * merchants, websites, connected fake products, products on websites, credits).
  */
 import { vi } from 'vitest';
-import { createHash, randomUUID } from 'node:crypto';
+import { manifest } from '@ss/contracts/testing';
 import { createPortal } from '../../src/portal.js';
-import { modules as defaultModules } from '../../src/modules/index.js';
+import { systemModule } from '../../src/modules/system/index.js';
+import { createCatalogModule } from '../../src/modules/catalog/index.js';
 import { createIdentityModule } from '../../src/modules/identity/index.js';
-import { createConnectorsModule } from '../../src/modules/connectors/index.js';
-import { createDeliveryModule } from '../../src/modules/delivery/index.js';
-import { createMemoryStorage } from '../../src/modules/delivery/storage.js';
+import { commerceModule } from '../../src/modules/commerce/index.js';
 import { createConsoleApi } from '../../src/console/api.js';
 import { act, byLabel, type } from '@ss/ui/testing';
-import { PORTAL_URL, createTestLogger, testConfig } from '../helpers.js';
+import { createSystemStore } from '../../src/infra/system.js';
+import { ENCRYPTION_KEY, PORTAL_URL, createTestLogger, testConfig } from '../helpers.js';
+import { startFakeProduct } from '../modules/catalog/fakes/product.js';
 
 export const sleep = (/** @type {number} */ ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -176,173 +177,39 @@ export const browserOf = (portal) => {
 	return { jar, calls, fetch: fetchImpl, api, waitCall, use: () => vi.stubGlobal('fetch', fetchImpl) };
 };
 
-/** A pack with configurable features (plan bounds, lockable), two plans and an add-on. */
-export const packManifest = () => ({
-	ssps: '1',
-	product: {
-		slug: 'notice-bar',
-		name: 'Notice bar',
-		kind: 'pack',
-		version: '0.1.0',
-		category: 'storefront',
-		description: 'A bar on top.',
-	},
-	elements: [
-		{
-			key: 'bar',
-			name: 'Notice bar',
-			modes: ['A', 'B'],
-			price: { hourly: 1250 },
-			placement: true,
-			headless: 'headless/bar.js#createBar',
-			renderer: 'ui/bar.js#render',
-			features: {
-				type: 'object',
-				additionalProperties: false,
-				properties: {
-					message: {
-						type: 'string',
-						title: 'Message',
-						default: 'Hello',
-						maxLength: 140,
-						'x-kind': 'config',
-						'x-ui': { widget: 'textarea', group: 'Content', order: 1, help: 'Shown in the bar' },
-					},
-					tone: {
-						type: 'string',
-						title: 'Tone',
-						default: 'info',
-						enum: ['info', 'warning'],
-						'x-ui': { group: 'Content', order: 2 },
-					},
-					maxPerDay: {
-						type: 'integer',
-						title: 'Max per day',
-						default: 3,
-						minimum: 1,
-						maximum: 100,
-						'x-kind': 'limit',
-						'x-plan': { basic: { default: 2, max: 5 } },
-						'x-lock': true,
-					},
-					dismissible: { type: 'boolean', title: 'Dismissible', default: true, 'x-ui': { advanced: true } },
-				},
-			},
-		},
-		{
-			key: 'badge',
-			name: 'Trust badge',
-			modes: ['A', 'B'],
-			price: { hourly: 500 },
-			placement: true,
-			headless: 'headless/badge.js#createBadge',
-			renderer: 'ui/badge.js#render',
-			features: {
-				type: 'object',
-				additionalProperties: false,
-				properties: { label: { type: 'string', title: 'Badge label', default: 'Secure', maxLength: 40 } },
-			},
-		},
-	],
-	plans: [
-		{ code: 'basic', name: 'Basic', elements: ['bar'], addons: ['badge'] },
-		{ code: 'plus', name: 'Plus', elements: ['bar', 'badge'] },
-	],
-	priceBook: { version: '1', effectiveFrom: '2026-01-01T00:00:00.000Z' },
-});
+/** The Portal modules with outbound calls allowed to loopback hosts (fake products run on 127.0.0.1). */
+export const testModules = (/** @type {{ mailer: any }} */ { mailer }) => [
+	systemModule,
+	createCatalogModule({ allowHosts: ['127.0.0.1'] }),
+	createIdentityModule({ mailer }),
+	commerceModule,
+];
 
 /**
- * The Portal modules with in-memory platform asset storage (pack uploads).
- * @template {{ name: string }} M
- * @param {M[]} modules
+ * A product manifest for a fake product (the shared test manifest under another id and name).
+ * @param {{ id?: string, name?: string, widgets?: boolean }} [options] `widgets: false` drops the widget script
  */
-export const withMemoryStorage = (modules) =>
-	modules.map((m) => (m.name === 'delivery' ? /** @type {M} */ (createDeliveryModule({ storage: createMemoryStorage() })) : m));
-
-/** The pack's module files (their sha256 and size go into the descriptor). */
-const PACK_FILES = Object.freeze({
-	'headless/bar.js': 'export const createBar = () => ({});\n',
-	'ui/bar.js': 'export const render = () => undefined;\n',
-	'headless/badge.js': 'export const createBadge = () => ({});\n',
-	'ui/badge.js': 'export const render = () => undefined;\n',
-});
-
-/**
- * Upload the pack as staff (`ss pack build` descriptor, then every missing asset's bytes) and activate it.
- * @param {typeof fetch} staffFetch a signed-in staff browser's fetch
- * @returns {Promise<string>} the appId
- */
-export const uploadPack = async (staffFetch) => {
-	const files = Object.entries(PACK_FILES).map(([path, text]) => ({ path, bytes: new TextEncoder().encode(text) }));
-	const descriptor = {
-		format: 'ss-pack-bundle@1',
-		manifest: packManifest(),
-		assets: files.map(({ path, bytes }) => ({
-			path,
-			sha256: createHash('sha256').update(bytes).digest('hex'),
-			size: bytes.byteLength,
-			contentType: 'text/javascript',
-		})),
-	};
-	/** @param {string} path @param {RequestInit} init */
-	const call = async (path, init) => {
-		const response = await staffFetch(path, init);
-		const text = await response.text();
-		if (!response.ok) throw new Error(`${init.method} ${path}: ${response.status} ${text}`);
-		return text ? JSON.parse(text) : null;
-	};
-	const json = { 'content-type': 'application/json', 'idempotency-key': randomUUID() };
-	const uploaded = await call('/v1/admin/packs', { method: 'POST', headers: json, body: JSON.stringify({ descriptor }) });
-	for (const path of /** @type {string[]} */ (uploaded.missing ?? []))
-		await call(`${uploaded.uploadPath}${path}`, {
-			method: 'PUT',
-			headers: { 'content-type': 'text/javascript' },
-			body: /** @type {any} */ (files.find((f) => f.path === path)?.bytes),
-		});
-	await call(`/v1/admin/apps/${uploaded.appId}/status`, {
-		method: 'POST',
-		headers: { 'content-type': 'application/json' },
-		body: JSON.stringify({ status: 'active' }),
-	});
-	return /** @type {string} */ (uploaded.appId);
+export const productManifest = ({ id = 'notes', name = 'Notes', widgets = true } = {}) => {
+	const base = /** @type {Record<string, any>} */ (manifest());
+	const { widgetScriptUrl, widgets: list, ...rest } = base;
+	return { ...rest, id, name, widgetScriptUrl: widgets ? widgetScriptUrl : null, widgets: widgets ? list : [] };
 };
 
 /**
- * A Portal with a recording mailer and controllable connector probes.
+ * A Portal with a recording mailer, its first admin (an Owner, the `ownerBrowser` browser) and helpers that seed merchants,
+ * websites, connected products (fake products on local HTTP servers), products on websites and credits.
  * @param {{ db: import('mongodb').Db }} options
  */
 export const createWorld = async ({ db }) => {
 	/** @type {Array<{ to: string, template: string, data: Record<string, any> }>} */
 	const mail = [];
 	const mailer = { available: true, send: async (/** @type {any} */ m) => void mail.push(m) };
-	/** Next connector check outcome (true = passes). */
-	const probe = { ok: true };
-	const probes = /** @type {any} */ ({
-		run: async () => ({
-			ok: probe.ok,
-			checkedAt: new Date().toISOString(),
-			durationMs: 3,
-			checks: [
-				{ name: 'reachability', ok: true },
-				{ name: 'auth', ok: probe.ok, ...(probe.ok ? {} : { code: 'auth_failed' }) },
-			],
-			warnings: probe.ok ? [] : ['tls_unverified'],
-		}),
-	});
-	const modules = withMemoryStorage(
-		defaultModules.map((m) =>
-			m.name === 'identity'
-				? createIdentityModule({ mailer })
-				: m.name === 'connectors'
-					? createConnectorsModule({ probes })
-					: m,
-		),
-	);
-	// work right after responses runs at once (e-mails are sent after the response of the request that caused them)
+	// work right after responses runs at once (e-mails and notices follow the request that caused them)
 	const portal = createPortal({
 		config: await testConfig(),
 		db,
-		modules,
+		modules: testModules({ mailer }),
+		system: createSystemStore(db, { encryptionKey: ENCRYPTION_KEY }),
 		logger: createTestLogger().logger,
 		background: { mode: 'on', fallback: (task) => void task() },
 	});
@@ -352,26 +219,25 @@ export const createWorld = async ({ db }) => {
 		const message = [...mail].reverse().find((m) => m.to === to && m.template === template);
 		return decodeURIComponent(String(message?.data.link).split('#token=')[1] ?? '');
 	};
+	/** @type {Array<Awaited<ReturnType<typeof startFakeProduct>>>} */
+	const products = [];
 
 	// the first admin (an Owner, created from the sign-in page) seeds the world
-	const staff = browserOf(portal);
-	const staffPassword = 'staff password 123!';
-	const first = await staff.api.post('/v1/auth/first-admin', {
+	const ownerBrowser = browserOf(portal);
+	const first = await ownerBrowser.api.post('/v1/auth/first-admin', {
 		name: 'Olivia Owner',
-		email: 'staff@ss.test',
-		password: staffPassword,
+		email: 'olivia@ss.test',
+		password: 'owner password 123!',
 	});
 	if (!first.ok) throw new Error(`first admin: ${JSON.stringify(first.problem)}`);
-
-	/** Upload and activate the pack. */
-	const seedPack = () => uploadPack(staff.fetch);
+	const owner = /** @type {any} */ (await ownerBrowser.api.get('/v1/me')).data.admin;
 
 	/**
 	 * A merchant created by the Owner whose login set its password from the setup link (a signed-in browser).
 	 * @param {string} email @param {string} merchantName
 	 */
 	const signup = async (email, merchantName, password = 'correct horse battery') => {
-		const created = await staff.api.post('/v1/admin/merchants', { name: merchantName, ownerName: 'Sam Seller', email });
+		const created = await ownerBrowser.api.post('/v1/admin/merchants', { name: merchantName, ownerName: 'Sam Seller', email });
 		if (!created.ok) throw new Error(`merchant: ${JSON.stringify(created.problem)}`);
 		const b = browserOf(portal);
 		const set = await b.api.post('/v1/auth/set-password', { token: tokenOf(email, 'merchant_setup'), password });
@@ -381,29 +247,80 @@ export const createWorld = async ({ db }) => {
 		return { b, me: me.data, merchantId: /** @type {string} */ (me.data.merchant.merchantId) };
 	};
 
+	let invited = 0;
+	/**
+	 * An admin of a role, invited by the Owner, who accepted the invite (a signed-in browser).
+	 * @param {'owner' | 'support' | 'finance'} role
+	 */
+	const adminOf = async (role) => {
+		invited += 1;
+		const email = `${role}-${invited}@ss.test`;
+		const r = await ownerBrowser.api.post('/v1/admin/admins', { email, role });
+		if (!r.ok) throw new Error(`invite: ${JSON.stringify(r.problem)}`);
+		const b = browserOf(portal);
+		const set = await b.api.post('/v1/auth/set-password', {
+			token: tokenOf(email, 'admin_invite'),
+			password: 'admin password 123!',
+			name: `${role} admin`,
+		});
+		if (!set.ok) throw new Error(`accept: ${JSON.stringify(set.problem)}`);
+		return { b, admin: /** @type {any} */ (await b.api.get('/v1/me')).data.admin };
+	};
+
 	/**
 	 * Add a website to a merchant (Owner and Support only).
 	 * @param {string} merchantId @param {string} domain
 	 */
 	const addWebsite = async (merchantId, domain) => {
-		const r = await staff.api.post(`/v1/merchants/${merchantId}/websites`, { domain });
+		const r = await ownerBrowser.api.post(`/v1/merchants/${merchantId}/websites`, { domain });
 		if (!r.ok) throw new Error(`website: ${JSON.stringify(r.problem)}`);
-		return { website: r.data.website, twin: r.data.twin };
+		return /** @type {any} */ (r.data.website);
+	};
+
+	/**
+	 * Start a fake product and connect it as the Owner (Add product); active unless told otherwise.
+	 * @param {Parameters<typeof productManifest>[0]} [options]
+	 * @param {{ active?: boolean }} [state]
+	 */
+	const connect = async (options = {}, { active = true } = {}) => {
+		const product = await startFakeProduct({ manifest: productManifest(options), portalUrl: PORTAL_URL });
+		products.push(product);
+		const r = await ownerBrowser.api.post('/v1/admin/products', { url: product.url, secret: product.secret });
+		if (!r.ok) throw new Error(`connect: ${JSON.stringify(r.problem)}`);
+		if (active) await ownerBrowser.api.post(`/v1/admin/products/${product.productId}/status`, { status: 'active' });
+		return product;
 	};
 
 	/**
 	 * Add a product to a website (Owner and Support only).
-	 * @param {string} merchantId @param {string} websiteId @param {Record<string, unknown>} body
+	 * @param {string} merchantId @param {string} websiteId @param {string} productId
 	 */
-	const subscribe = async (merchantId, websiteId, body) => {
-		const r = await staff.api.post(`/v1/merchants/${merchantId}/websites/${websiteId}/subscriptions`, body);
-		if (!r.ok) throw new Error(`subscribe: ${JSON.stringify(r.problem)}`);
-		return r.data.subscription;
+	const addProduct = async (merchantId, websiteId, productId) => {
+		const r = await ownerBrowser.api.post(`/v1/merchants/${merchantId}/websites/${websiteId}/products`, { productId });
+		if (!r.ok) throw new Error(`add product: ${JSON.stringify(r.problem)}`);
+		return /** @type {any} */ (r.data.product);
+	};
+
+	let reports = 0;
+	/**
+	 * The product reports the features switched on for a website (by the Owner, inside its dashboard).
+	 * @param {Awaited<ReturnType<typeof startFakeProduct>>} product @param {string} websiteId @param {string[]} on
+	 */
+	const switchFeatures = async (product, websiteId, on) => {
+		reports += 1;
+		const response = await portal.handle(
+			new Request(`${PORTAL_URL}/v1/product/websites/${websiteId}/features`, {
+				method: 'PUT',
+				headers: { 'content-type': 'application/json', authorization: `Bearer ${await product.assertion()}` },
+				body: JSON.stringify({ version: reports, on, adminId: owner.adminId, adminName: owner.name }),
+			}),
+		);
+		if (!response.ok) throw new Error(`features: ${response.status} ${await response.text()}`);
 	};
 
 	/** @param {string} merchantId @param {number} millicredits @param {string} reference */
 	const credit = async (merchantId, millicredits, reference) => {
-		const r = await staff.api.post(`/v1/admin/merchants/${merchantId}/receipts`, {
+		const r = await ownerBrowser.api.post(`/v1/admin/merchants/${merchantId}/receipts`, {
 			credits: Math.round(millicredits / 1000),
 			amountPaid: 'PKR 1,000',
 			method: 'Bank transfer',
@@ -412,7 +329,23 @@ export const createWorld = async ({ db }) => {
 		if (!r.ok) throw new Error(`credit: ${JSON.stringify(r.problem)}`);
 	};
 
-	return { portal, mail, tokenOf, staff, probe, seedPack, signup, credit, addWebsite, subscribe };
+	return {
+		portal,
+		mail,
+		tokenOf,
+		ownerBrowser,
+		owner,
+		signup,
+		adminOf,
+		addWebsite,
+		connect,
+		addProduct,
+		switchFeatures,
+		credit,
+		close: async () => {
+			for (const product of products.splice(0)) await product.close();
+		},
+	};
 };
 
 /** Silence React/jsdom noise (navigation is not implemented in jsdom) for the duration of a test. */

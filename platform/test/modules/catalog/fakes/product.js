@@ -1,102 +1,118 @@
 /**
- * A fake service product on a local node:http server, built with `@ss/protocol` exactly as `@ss/app-kit` does:
- * `GET /.well-known/ss-app.json` serves the manifest; `POST /.well-known/ss-connect` is the product side of the
- * connect-secret handshake (HMAC-verified request, single-use nonce, HMAC-signed answer). Behaviour can be tampered with
- * per test (redirects, oversized bodies, the connect answer).
+ * A fake product on a local node:http server, built with `@ss/protocol` the way `@ss/app-kit` does:
+ *
+ * - `POST /.well-known/ss-connect`: the product side of the connect handshake (HMAC-verified request, single-use
+ *   nonce, HMAC-signed answer with its id, public key, manifest and current price list). It pins the Portal's keys
+ *   and continues its price list from the Portal's `priceListVersion` when that is higher.
+ * - `POST /.well-known/ss-events`: notices, verified with `verifyNotice` against the pinned Portal keys and recorded.
+ *
+ * Behaviour can be tampered with per test (the connect answer, the notice status).
  * @module
  */
 import { createServer } from 'node:http';
-import { createConnectResponse, createSigner, generateSigningKey, verifyConnectRequest } from '@ss/protocol';
+import { manifestPriceList } from '@ss/contracts';
+import {
+	createConnectResponse,
+	createJwks,
+	createKeyResolver,
+	createMemoryReplayStore,
+	createSigner,
+	generateSigningKey,
+	signAssertion,
+	verifyConnectRequest,
+	verifyNotice,
+} from '@ss/protocol';
 
 /** The connect secret fake products are deployed with (unless a test passes another). */
 export const PRODUCT_SECRET = 'fake-product-connect-secret-0123456789abcdef';
 
 /**
  * @typedef {object} Tamper
- * @property {(manifest: any) => any} [advertised] rewrite the advertised manifest
- * @property {{ status: number, location: string }} [redirectManifest]
- * @property {number} [manifestBytes] pad ss-app.json to this many bytes
- * @property {'bad_signature' | 'other_nonce' | 'other_manifest' | 'no_secret'} [connect] how the connect answer is
- *   tampered with (`no_secret`: 503 like an app-kit product without a usable `CONNECT_SECRET`)
- * @property {string[]} [misconfigured] answer every request 503 `{ status: 'misconfigured', problems }` (app-kit)
+ * @property {'bad_signature' | 'other_nonce' | 'no_secret' | 'status_500' | 'other_id' | 'bad_prices'} [connect]
+ * @property {number} [noticeStatus] answer notices with this status (and record nothing)
+ * @property {number} [pricesVersion] answer this price-list version
  */
 
 /**
  * @param {{ manifest: any, portalUrl: string, now?: () => number, kid?: string, secret?: string }} options
  */
 export const startFakeProduct = async ({ manifest, portalUrl, now = Date.now, kid = 'product-k1', secret = PRODUCT_SECRET }) => {
-	const { privateJwk, publicJwk } = await generateSigningKey({ kid });
-	const signer = createSigner(privateJwk);
-	/** @type {Array<Record<string, unknown>>} */
-	const registrations = [];
+	let key = await generateSigningKey({ kid });
 	/** @type {Tamper} */
 	const tamper = {};
 	let current = manifest;
+	/** @type {{ version: number, features: any[] }} */
+	let prices = manifestPriceList(manifest);
 	/** @type {Set<string>} */
 	const nonces = new Set();
+	/** @type {Array<{ portalUrl: string, baseUrl: string, priceListVersion: number }>} */
+	const connects = [];
+	/** @type {Array<{ type: string, websiteId?: string, subject?: string }>} */
+	const notices = [];
+	/** @type {import('@ss/protocol').KeyResolver | null} */
+	let portalKeys = null;
+	const replayStore = createMemoryReplayStore({ now });
 
 	const server = createServer((req, res) => {
 		/** @type {Buffer[]} */
 		const chunks = [];
 		req.on('data', (c) => chunks.push(c));
 		req.on('end', async () => {
-			if (tamper.misconfigured) {
-				res.writeHead(503, { 'content-type': 'application/json' });
-				return void res.end(JSON.stringify({ status: 'misconfigured', problems: tamper.misconfigured }));
-			}
-			if (req.method === 'GET' && req.url === '/.well-known/ss-app.json') {
-				if (tamper.redirectManifest) {
-					res.writeHead(tamper.redirectManifest.status, { location: tamper.redirectManifest.location });
-					return void res.end();
-				}
-				const served = tamper.advertised ? tamper.advertised(structuredClone(current)) : current;
-				let text = JSON.stringify(served);
-				if (tamper.manifestBytes) text = text.padEnd(tamper.manifestBytes, ' ');
-				res.writeHead(200, { 'content-type': 'application/json' });
-				return void res.end(text);
-			}
-			if (req.method === 'POST' && req.url === '/.well-known/ss-connect' && tamper.connect === 'no_secret') {
-				const detail = 'This product refuses connections: CONNECT_SECRET is shorter than 32 characters.';
-				res.writeHead(503, { 'content-type': 'application/problem+json' });
-				return void res.end(JSON.stringify({ status: 503, code: 'misconfigured', detail, problems: [detail] }));
-			}
+			const body = Buffer.concat(chunks).toString('utf8');
+			/** @param {number} status @param {unknown} [json] */
+			const answer = (status, json) => {
+				res.writeHead(status, { 'content-type': 'application/json' });
+				res.end(json === undefined ? '' : JSON.stringify(json));
+			};
 			if (req.method === 'POST' && req.url === '/.well-known/ss-connect') {
+				if (tamper.connect === 'no_secret')
+					return answer(503, { status: 503, detail: 'CONNECT_SECRET is shorter than 32 characters.', problems: [] });
+				if (tamper.connect === 'status_500') return answer(500, {});
 				/** @type {ReturnType<typeof verifyConnectRequest>} */
 				let request;
 				try {
-					request = verifyConnectRequest({
-						secret,
-						headers: /** @type {any} */ (req.headers),
-						body: Buffer.concat(chunks).toString('utf8'),
-						now,
-					});
+					request = verifyConnectRequest({ secret, headers: /** @type {any} */ (req.headers), body, now });
 				} catch {
-					res.writeHead(401, { 'content-type': 'application/json' });
-					return void res.end('{"code":"unauthorized"}');
+					return answer(401, { code: 'unauthorized' });
 				}
-				if (nonces.has(request.nonce)) {
-					res.writeHead(401, { 'content-type': 'application/json' });
-					return void res.end('{"code":"unauthorized"}');
-				}
+				if (nonces.has(request.nonce)) return answer(401, { code: 'unauthorized' });
 				nonces.add(request.nonce);
-				if (request.portalUrl !== portalUrl) throw new Error(`fake product: unexpected Portal ${request.portalUrl}`);
-				registrations.push({ appId: request.appId, portalKid: request.jwks.keys[0]?.kid, baseUrl: request.baseUrl });
-				const answer = createConnectResponse({
+				connects.push({ portalUrl: request.portalUrl, baseUrl: request.baseUrl, priceListVersion: request.priceListVersion });
+				portalKeys = createKeyResolver({ jwks: request.jwks });
+				if (request.priceListVersion > prices.version) prices = { ...prices, version: request.priceListVersion };
+				const signed = createConnectResponse({
 					secret: tamper.connect === 'bad_signature' ? `${secret}-other` : secret,
-					appId: request.appId,
+					productId: tamper.connect === 'other_id' ? 'someone-else' : current.id,
 					nonce: tamper.connect === 'other_nonce' ? 'n'.repeat(22) : request.nonce,
-					publicJwk,
-					manifest:
-						tamper.connect === 'other_manifest'
-							? { ...current, product: { ...current.product, slug: 'someone-else' } }
-							: current,
+					publicJwk: key.publicJwk,
+					manifest: current,
+					prices:
+						tamper.connect === 'bad_prices'
+							? { version: 1, features: [{ key: 'x', millicreditsPerHour: -1 }] }
+							: { ...prices, ...(tamper.pricesVersion ? { version: tamper.pricesVersion } : {}) },
 					now,
 				});
-				res.writeHead(200, answer.headers);
-				return void res.end(answer.body);
+				res.writeHead(200, signed.headers);
+				return void res.end(signed.body);
 			}
-			res.writeHead(404);
-			res.end();
+			if (req.method === 'POST' && req.url === '/.well-known/ss-events') {
+				if (tamper.noticeStatus) return answer(tamper.noticeStatus, {});
+				try {
+					if (!portalKeys) throw new Error('not connected');
+					const notice = await verifyNotice({
+						headers: /** @type {any} */ (req.headers),
+						rawBody: body,
+						keyResolver: portalKeys,
+						replayStore,
+						now,
+					});
+					notices.push(notice);
+					return answer(204);
+				} catch {
+					return answer(401, { code: 'invalid_notice' });
+				}
+			}
+			answer(404);
 		});
 	});
 	await new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve(undefined)));
@@ -104,16 +120,31 @@ export const startFakeProduct = async ({ manifest, portalUrl, now = Date.now, ki
 	const url = `http://127.0.0.1:${address.port}`;
 	return {
 		url,
-		signer,
-		privateJwk,
-		publicJwk,
-		registrations,
+		productId: /** @type {string} */ (manifest.id),
+		secret,
 		tamper,
+		connects,
+		notices,
+		get publicJwk() {
+			return key.publicJwk;
+		},
+		/** A fresh client assertion of this product (`Authorization: Bearer …`). */
+		assertion: () => signAssertion({ signer: createSigner(key.privateJwk), productId: current.id, audience: portalUrl, now }),
 		/** Replace the served manifest. @param {any} m */
 		setManifest: (m) => {
 			current = m;
 		},
-		secret,
+		/** Replace the current price list. @param {{ version: number, features: any[] }} list */
+		setPrices: (list) => {
+			prices = list;
+		},
+		/** A new product key (the next connect answers it). @param {string} next */
+		rotateKey: async (next) => {
+			key = await generateSigningKey({ kid: next });
+		},
+		/** The Portal keys the product pinned at its last connect. */
+		pinnedJwks: () => portalKeys,
+		jwks: () => createJwks([key.publicJwk]),
 		close: () =>
 			new Promise((resolve) => {
 				server.close(() => resolve(undefined));
@@ -121,3 +152,4 @@ export const startFakeProduct = async ({ manifest, portalUrl, now = Date.now, ki
 			}),
 	};
 };
+/** @typedef {Awaited<ReturnType<typeof startFakeProduct>>} FakeProduct */

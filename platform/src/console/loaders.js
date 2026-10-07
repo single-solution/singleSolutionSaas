@@ -1,10 +1,11 @@
 /**
  * Page loaders: the data each console page needs, read through the in-process {@link ConsoleApi} (public API
  * only). A loader resolves to `{ ok: true, ... }` or `{ ok: false, status, problem }` (the first required call that
- * failed); optional reads degrade to empty values. Loaders never throw for API failures.
+ * failed); optional reads degrade to empty values. Loaders never throw for API failures. The website loaders are
+ * shared with the admin console (the same `/v1/merchants/…` routes).
  * @module
  */
-import { api as paths } from './paths.js';
+import { api as paths, websiteTab } from './paths.js';
 
 /** @typedef {import('./api.js').ConsoleApi} ConsoleApi */
 /** @typedef {import('@ss/ui/problems').Problem} Problem */
@@ -23,10 +24,13 @@ const orElse = (result, fallback) => (result.ok ? result.data : fallback);
  * @param {...import('./api.js').ApiResult} results
  * @returns {LoadFailure | null}
  */
-const firstFailure = (...results) => {
+export const firstFailure = (...results) => {
 	for (const r of results) if (!r.ok) return { ok: false, status: r.status, problem: r.problem };
 	return null;
 };
+
+/** @param {import('./api.js').ApiResult} r */
+const itemsOf = (r) => /** @type {any[]} */ (orElse(r, { items: [] })?.items ?? []);
 
 /**
  * @param {string | undefined} value
@@ -56,249 +60,112 @@ export const loadSession = async (api) => {
 };
 
 /**
- * Frame data: websites (switcher) and the billing summary (banners; the check runs for the merchant, PLAN 0.6).
+ * Frame data: the websites (switcher) and the billing summary (banners; the check runs for the merchant, PLAN 0.6).
  * @param {ConsoleApi} api
  * @param {string} merchantId
  */
 export const loadFrame = async (api, merchantId) => {
-	const [websites, billing, notifications] = await Promise.all([
-		api.get(paths.websites(merchantId)),
-		api.get(paths.billing(merchantId)),
-		api.get(paths.notifications(merchantId)),
-	]);
+	const [websites, billing] = await Promise.all([api.get(paths.websites(merchantId)), api.get(paths.billing(merchantId))]);
+	return { websites: itemsOf(websites), billing: /** @type {any} */ (orElse(billing, null)) };
+};
+
+/**
+ * Every website of a merchant with its products (cards: status, features on, daily cost). Removed websites and
+ * products are not listed.
+ * @param {ConsoleApi} api
+ * @param {string} merchantId
+ */
+export const loadWebsiteRows = async (api, merchantId) => {
+	const websites = await api.get(paths.websites(merchantId));
+	if (!websites.ok) return { failed: firstFailure(websites), rows: [] };
+	const list = itemsOf(websites);
+	const cards = await Promise.all(list.map((w) => api.get(paths.websiteProducts(merchantId, String(w.websiteId)))));
 	return {
-		websites: /** @type {any[]} */ (orElse(websites, { items: [] }).items ?? []),
-		billing: /** @type {any} */ (orElse(billing, null)),
-		// F.16: pending actions such as a product asking to become a website's identity issuer
-		notifications: /** @type {any[]} */ (orElse(notifications, { items: [] }).items ?? []),
+		failed: null,
+		rows: list.map((website, index) => ({
+			website,
+			cards: /** @type {any[]} */ (itemsOf(/** @type {import('./api.js').ApiResult} */ (cards[index]))),
+		})),
 	};
 };
 
 /**
+ * Overview (PLAN 0.8.2 Merchant): balance and days left, the 30-day spend chart, the websites with product chips and
+ * Open buttons.
+ * @param {ConsoleApi} api
+ * @param {string} merchantId
+ */
+export const loadOverview = async (api, merchantId) => {
+	const [billing, usage, websites] = await Promise.all([
+		api.get(paths.billing(merchantId)),
+		api.get(paths.usage(merchantId)),
+		loadWebsiteRows(api, merchantId),
+	]);
+	const failed = firstFailure(billing) ?? websites.failed;
+	if (failed) return failed;
+	return {
+		ok: /** @type {const} */ (true),
+		merchantId,
+		billing: /** @type {any} */ (orElse(billing, null)),
+		usage: /** @type {any} */ (orElse(usage, null)),
+		rows: websites.rows,
+	};
+};
+
+/**
+ * Websites (PLAN 0.8.2 Merchant): the list with product chips and daily cost.
  * @param {ConsoleApi} api
  * @param {string} merchantId
  */
 export const loadWebsites = async (api, merchantId) => {
-	const [websites, subscriptions] = await Promise.all([
+	const websites = await loadWebsiteRows(api, merchantId);
+	if (websites.failed) return websites.failed;
+	return { ok: /** @type {const} */ (true), merchantId, rows: websites.rows };
+};
+
+/**
+ * The website page (both consoles): the website, the merchant's websites (inner sidebar), the products on it, the
+ * install blocks with the tokens (only when `tokens`; Finance never sees them) and its usage of the last 30 UTC days.
+ * @param {ConsoleApi} api
+ * @param {{ merchantId: string, websiteId: string, tab?: string, tokens: boolean }} input
+ */
+export const loadWebsitePage = async (api, { merchantId, websiteId, tab, tokens }) => {
+	const [website, websites, cards, install, usage] = await Promise.all([
+		api.get(paths.website(merchantId, websiteId)),
 		api.get(paths.websites(merchantId)),
-		api.get(paths.subscriptions(merchantId)),
+		api.get(paths.websiteProducts(merchantId, websiteId)),
+		tokens ? api.get(paths.tokens(merchantId, websiteId)) : null,
+		api.get(paths.usage(merchantId, { websiteId })),
 	]);
-	const failed = firstFailure(websites);
+	const failed = firstFailure(website, cards);
 	if (failed) return failed;
 	return {
 		ok: /** @type {const} */ (true),
-		merchantId,
-		websites: /** @type {any[]} */ (websites.ok ? websites.data.items : []),
-		subscriptions: /** @type {any[]} */ (orElse(subscriptions, { items: [] }).items ?? []),
-	};
-};
-
-/**
- * Website plus the catalog (product names) — shared by every website page.
- * @param {ConsoleApi} api
- * @param {string} merchantId
- * @param {string} websiteId
- */
-const websiteBase = async (api, merchantId, websiteId) => {
-	const [website, catalog] = await Promise.all([api.get(paths.website(merchantId, websiteId)), api.get(paths.catalog())]);
-	return { website, catalog: /** @type {any[]} */ (orElse(catalog, { items: [] }).items ?? []) };
-};
-
-/**
- * @param {ConsoleApi} api
- * @param {string} merchantId
- * @param {string} websiteId
- */
-export const loadWebsiteOverview = async (api, merchantId, websiteId) => {
-	const [{ website, catalog }, subscriptions, resources, billing, identity, snippet] = await Promise.all([
-		websiteBase(api, merchantId, websiteId),
-		api.get(paths.subscriptions(merchantId, websiteId)),
-		api.get(paths.resources(merchantId, websiteId)),
-		api.get(paths.billing(merchantId)),
-		api.get(paths.identity(merchantId, websiteId)),
-		api.get(paths.snippet(merchantId, websiteId)),
-	]);
-	const failed = firstFailure(website);
-	if (failed) return failed;
-	return {
-		ok: /** @type {const} */ (true),
-		merchantId,
-		website: website.ok ? website.data : null,
-		catalog,
-		subscriptions: /** @type {any[]} */ (orElse(subscriptions, { items: [] }).items ?? []),
-		resources: /** @type {any[]} */ (orElse(resources, { resources: [] }).resources ?? []),
-		billing: /** @type {any} */ (orElse(billing, null)),
-		// F.16: a product's pending request to become the identity issuer (shown as a notice)
-		issuerRequest: /** @type {any} */ (identity.ok ? (identity.data?.request ?? null) : null),
-		// the install code (404 until the website has a compiled bundle)
-		snippet: /** @type {any} */ (orElse(snippet, null)),
-	};
-};
-
-/**
- * @param {ConsoleApi} api
- * @param {string} merchantId
- * @param {string} websiteId
- */
-export const loadProducts = async (api, merchantId, websiteId) => {
-	const [{ website, catalog }, subscriptions, resources, catalogResult] = await Promise.all([
-		websiteBase(api, merchantId, websiteId),
-		api.get(paths.subscriptions(merchantId, websiteId)),
-		api.get(paths.resources(merchantId, websiteId)),
-		api.get(paths.catalog()),
-	]);
-	const failed = firstFailure(website, catalogResult);
-	if (failed) return failed;
-	return {
-		ok: /** @type {const} */ (true),
-		merchantId,
-		website: website.ok ? website.data : null,
-		catalog,
-		subscriptions: /** @type {any[]} */ (orElse(subscriptions, { items: [] }).items ?? []),
-		resources: /** @type {any[]} */ (orElse(resources, { resources: [] }).resources ?? []),
-	};
-};
-
-/**
- * Everything the subscription detail needs. The effective configuration (values, sources, locks, clamping) is the
- * entitlement-document preview of an empty change.
- * @param {ConsoleApi} api
- * @param {string} merchantId
- * @param {string} websiteId
- * @param {string} subscriptionId
- */
-export const loadSubscription = async (api, merchantId, websiteId, subscriptionId) => {
-	const config = paths.config(merchantId, websiteId, subscriptionId);
-	const [website, subscription, overview, preview, history, resources] = await Promise.all([
-		api.get(paths.website(merchantId, websiteId)),
-		api.get(paths.subscription(merchantId, subscriptionId)),
-		api.get(config),
-		api.post(`${config}/preview`, { change: {} }),
-		api.get(`${config}/history`),
-		api.get(paths.resources(merchantId, websiteId)),
-	]);
-	const failed = firstFailure(website, subscription);
-	if (failed) return failed;
-	const sub = /** @type {any} */ (subscription.ok ? subscription.data.subscription : null);
-	if (sub && sub.websiteId !== websiteId)
-		return /** @type {LoadFailure} */ ({
-			ok: false,
-			status: 404,
-			problem: { status: 404, title: 'Not found', detail: 'This subscription belongs to another website.' },
-		});
-	const product = await api.get(paths.product(sub.productSlug));
-	return {
-		ok: /** @type {const} */ (true),
-		merchantId,
-		website: website.ok ? website.data : null,
-		subscription: sub,
-		product: orElse(product, null),
-		overview: orElse(overview, null),
-		effective: /** @type {any} */ (orElse(preview, { preview: null }).preview ?? null),
-		history: orElse(history, { items: [], nextCursor: null }),
-		resources: /** @type {any[]} */ (orElse(resources, { resources: [] }).resources ?? []),
-		configProblem: overview.ok ? null : overview.problem,
-	};
-};
-
-/**
- * Website → Usage (PLAN 0.5.11): the website's usage per UTC day × product × feature.
- * @param {ConsoleApi} api
- * @param {string} merchantId
- * @param {string} websiteId
- * @param {{ from?: string, to?: string }} [range] `YYYY-MM-DD` (UTC days, inclusive; default the last 30 days)
- */
-export const loadUsage = async (api, merchantId, websiteId, range = {}) => {
-	const from = isoDay(range.from);
-	const to = isoDay(range.to);
-	const [website, usage] = await Promise.all([
-		api.get(paths.website(merchantId, websiteId)),
-		api.get(paths.usage(merchantId, { websiteId, from, to })),
-	]);
-	const failed = firstFailure(website);
-	if (failed) return failed;
-	return {
-		ok: /** @type {const} */ (true),
-		merchantId,
-		website: website.ok ? website.data : null,
+		website: /** @type {any} */ (website.ok ? website.data : null),
+		websites: itemsOf(websites).map((w) => ({ websiteId: String(w.websiteId), domain: String(w.domain) })),
+		cards: itemsOf(cards),
+		tokens: install ? itemsOf(install) : null,
+		tokensProblem: install && !install.ok ? install.problem : null,
 		usage: /** @type {any} */ (orElse(usage, null)),
 		usageProblem: usage.ok ? null : usage.problem,
-		range: { from, to },
+		tab: websiteTab(tab),
 	};
 };
 
 /**
+ * The merchant's website page.
  * @param {ConsoleApi} api
  * @param {string} merchantId
  * @param {string} websiteId
+ * @param {string} [tab]
  */
-export const loadKeys = async (api, merchantId, websiteId) => {
-	const [website, keys, scopes] = await Promise.all([
-		api.get(paths.website(merchantId, websiteId)),
-		api.get(paths.keys(merchantId, websiteId)),
-		api.get(paths.keyScopes(merchantId, websiteId)),
+export const loadWebsite = async (api, merchantId, websiteId, tab) => {
+	const [page, merchant] = await Promise.all([
+		loadWebsitePage(api, { merchantId, websiteId, tab, tokens: true }),
+		api.get(paths.merchant(merchantId)),
 	]);
-	const failed = firstFailure(website, keys);
-	if (failed) return failed;
-	return {
-		ok: /** @type {const} */ (true),
-		merchantId,
-		website: website.ok ? website.data : null,
-		keys: /** @type {any[]} */ (keys.ok ? keys.data.items : []),
-		// F.16: the scope vocabulary (platform scopes + per listed service product)
-		scopes: /** @type {any[]} */ (orElse(scopes, { items: [] }).items ?? []),
-	};
-};
-
-/**
- * Website settings → Identity: the website's own customer identity issuer (bring-your-own identity).
- * @param {ConsoleApi} api
- * @param {string} merchantId
- * @param {string} websiteId
- */
-export const loadIdentity = async (api, merchantId, websiteId) => {
-	const [website, identity] = await Promise.all([
-		api.get(paths.website(merchantId, websiteId)),
-		api.get(paths.identity(merchantId, websiteId)),
-	]);
-	const failed = firstFailure(website, identity);
-	if (failed) return failed;
-	return {
-		ok: /** @type {const} */ (true),
-		merchantId,
-		website: website.ok ? website.data : null,
-		issuer: /** @type {any} */ (identity.ok ? (identity.data?.issuer ?? null) : null),
-		request: /** @type {any} */ (identity.ok ? (identity.data?.request ?? null) : null),
-	};
-};
-
-/**
- * @param {ConsoleApi} api
- * @param {string} merchantId
- * @param {string} websiteId
- */
-export const loadResources = async (api, merchantId, websiteId) => {
-	const [{ website, catalog }, resources, connectors, websites, subscriptions] = await Promise.all([
-		websiteBase(api, merchantId, websiteId),
-		api.get(paths.resources(merchantId, websiteId)),
-		api.get(paths.connectors(merchantId)),
-		api.get(paths.websites(merchantId)),
-		api.get(paths.subscriptions(merchantId, websiteId)),
-	]);
-	const failed = firstFailure(website, connectors);
-	if (failed) return failed;
-	return {
-		ok: /** @type {const} */ (true),
-		merchantId,
-		website: website.ok ? website.data : null,
-		catalog,
-		resources: /** @type {any[]} */ (orElse(resources, { resources: [] }).resources ?? []),
-		needs: /** @type {any[] | null} */ (orElse(resources, { needs: null }).needs ?? null),
-		connectors: /** @type {any[]} */ (connectors.ok ? connectors.data.items : []),
-		connectorsCursor: /** @type {string | null} */ (connectors.ok ? (connectors.data.nextCursor ?? null) : null),
-		websites: /** @type {any[]} */ (orElse(websites, { items: [] }).items ?? []),
-		subscriptions: /** @type {any[]} */ (orElse(subscriptions, { items: [] }).items ?? []),
-	};
+	if (!page.ok) return page;
+	return { ...page, merchantName: String(orElse(merchant, null)?.name ?? '') };
 };
 
 /**
@@ -327,8 +194,8 @@ export const loadCredits = async (api, merchantId, filter = {}) => {
 		billing: /** @type {any} */ (billing.ok ? billing.data : null),
 		usage: /** @type {any} */ (orElse(usage, null)),
 		usageProblem: usage.ok ? null : usage.problem,
-		receipts: /** @type {any[]} */ (orElse(receipts, { items: [] }).items ?? []),
-		websites: /** @type {any[]} */ (orElse(websites, { items: [] }).items ?? []),
+		receipts: itemsOf(receipts),
+		websites: itemsOf(websites),
 		filter: { from, to, websiteId },
 	};
 };

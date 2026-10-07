@@ -4,6 +4,7 @@ import {
 	ADMIN_ROLES,
 	ALL_PERMISSIONS,
 	MERCHANT_PERMISSIONS,
+	PRODUCT_ENFORCED_ROWS,
 	PERMISSIONS,
 	ROLE_PERMISSIONS,
 	can,
@@ -39,7 +40,8 @@ describe('logger', () => {
 	});
 
 	it('redacts secret-looking values and credentials in URLs', () => {
-		expect(redact('sk_live_abc')).toBe('[redacted]');
+		expect(redact('eyJhbGciOiJFZERTQSJ9.eyJzdWIiOiJ4In0.c2ln')).toBe('[redacted]');
+		expect(redact('sk_live_abc')).toBe('sk_live_abc');
 		expect(redact('mongodb+srv://user:pass@cluster/db')).toBe('mongodb+srv://[redacted]@cluster/db');
 		expect(redact('https://example.com/path')).toBe('https://example.com/path');
 		expect(redact([{ token: 'x' }, new Date(0)])).toEqual([{ token: '[redacted]' }, '1970-01-01T00:00:00.000Z']);
@@ -112,10 +114,6 @@ const TABLE = {
 	'products_on_websites.write': { owner: true, support: true, finance: false, merchant: false },
 	'tokens.manage': { owner: true, support: true, finance: false, merchant: true },
 	'dashboards.open': { owner: true, support: true, finance: false, merchant: true },
-	'features.write': { owner: true, support: true, finance: false, merchant: false },
-	'settings.read': { owner: true, support: true, finance: false, merchant: true },
-	'settings.write': { owner: true, support: true, finance: false, merchant: true },
-	'defaults.write': { owner: true, support: false, finance: false, merchant: false },
 	'products.manage': { owner: true, support: false, finance: false, merchant: false },
 	'products.read': { owner: true, support: true, finance: false, merchant: false },
 	'credits.add': { owner: true, support: false, finance: true, merchant: false },
@@ -130,6 +128,7 @@ describe('rbac (PLAN 0.2 rights table)', () => {
 		expect([...ALL_PERMISSIONS].sort()).toEqual(Object.keys(TABLE).sort());
 		expect(Object.keys(PERMISSIONS)).toHaveLength(ALL_PERMISSIONS.length);
 		expect(ADMIN_ROLES).toEqual(['owner', 'support', 'finance']);
+		expect(PRODUCT_ENFORCED_ROWS).toHaveLength(3);
 		for (const role of ADMIN_ROLES) for (const p of ROLE_PERMISSIONS[role]) expect(ALL_PERMISSIONS).toContain(p);
 		for (const p of MERCHANT_PERMISSIONS) expect(ALL_PERMISSIONS).toContain(p);
 	});
@@ -159,12 +158,11 @@ describe('rbac (PLAN 0.2 rights table)', () => {
 		expect(can({ type: 'merchant', id: MERCHANT }, 'websites.read')).toBe(false);
 	});
 
-	it('an admin without a known role, products, website keys and nobody get nothing; the system gets everything', () => {
+	it('an admin without a known role, products and nobody get nothing; the system gets everything', () => {
 		expect(can({ type: 'admin', id: 'adm_x' }, 'websites.read')).toBe(false);
 		expect(can({ type: 'admin', id: 'adm_x', role: /** @type {any} */ ('superadmin') }, 'websites.read')).toBe(false);
-		expect(can({ type: 'product', id: 'app_1' }, 'websites.read')).toBe(false);
-		expect(can({ type: 'product', id: 'app_1', permissions: ['websites.read'] }, 'websites.read')).toBe(true);
-		expect(can({ type: 'website', id: 'key_1', merchantId: MERCHANT }, 'websites.read')).toBe(false);
+		expect(can({ type: 'product', id: 'notes' }, 'websites.read')).toBe(false);
+		expect(can({ type: 'product', id: 'notes', permissions: ['websites.read'] }, 'websites.read')).toBe(true);
 		expect(can(null, 'websites.read')).toBe(false);
 		expect(can({ type: 'system', id: 'job' }, 'admins.manage')).toBe(true);
 		expect(can({ type: 'admin', id: 'adm_o', role: 'owner' }, '')).toBe(false);

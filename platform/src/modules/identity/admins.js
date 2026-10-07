@@ -138,6 +138,7 @@ export const createAdmins = (deps, hooks) => {
 			}
 			if (set.role) {
 				await ctx.sessions.revokeAll('admin', adminId);
+				await deps.sessionsEnded(adminId);
 				await audit(
 					actor,
 					'admin.role_changed',
@@ -164,6 +165,7 @@ export const createAdmins = (deps, hooks) => {
 			await repo.releaseLogin(admin.email, adminId);
 			await repo.dropTokens('setup', `admin:${adminId}`);
 			await ctx.sessions.revokeAll('admin', adminId);
+			await deps.sessionsEnded(adminId);
 			await audit(
 				actor,
 				'admin.removed',

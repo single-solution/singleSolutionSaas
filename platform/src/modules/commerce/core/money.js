@@ -23,16 +23,16 @@ export const HOUR_MS = 3_600_000;
 export const DAY_MS = 86_400_000;
 
 /**
- * @typedef {{ type: 'prices', at: number, appId: string, features: { key: string, name: string, price: number }[] }} PricesEvent
- * @typedef {{ type: 'switches', at: number, websiteId: string, appId: string, on: string[] }} SwitchesEvent
- * @typedef {{ type: 'added' | 'removed', at: number, websiteId: string, appId: string }} ProductEvent
+ * @typedef {{ type: 'prices', at: number, productId: string, features: { key: string, name: string, price: number }[] }} PricesEvent
+ * @typedef {{ type: 'switches', at: number, websiteId: string, productId: string, on: string[] }} SwitchesEvent
+ * @typedef {{ type: 'added' | 'removed', at: number, websiteId: string, productId: string }} ProductEvent
  * @typedef {{ type: 'suspended' | 'resumed', at: number }} MerchantEvent
  * @typedef {{ type: 'receipt', at: number, amount: number }} ReceiptEvent
  * @typedef {PricesEvent | SwitchesEvent | ProductEvent | MerchantEvent | ReceiptEvent} MoneyEvent
  * @typedef {{ graceStart: number | null, graceEnd: number | null, stoppedAt: number | null }} Phase
- * @typedef {{ at: number, hour: number, websiteId: string, appId: string, feature: string, amount: number }} Charge
+ * @typedef {{ at: number, hour: number, websiteId: string, productId: string, feature: string, amount: number }} Charge
  * @typedef {{ type: 'grace_started', at: number, graceEnd: number } | { type: 'stopped' | 'restored', at: number }} Transition
- * @typedef {{ websiteId: string, appId: string, added: boolean, on: string[], hourlyCost: number }} ProductState
+ * @typedef {{ websiteId: string, productId: string, added: boolean, on: string[], hourlyCost: number }} ProductState
  * @typedef {'active' | 'low_balance' | 'grace' | 'stopped'} BillingState
  * @typedef {BillingState | 'suspended'} MerchantStatus
  * @typedef {'active' | 'grace' | 'stopped' | 'suspended' | 'removed'} ProductStatus
@@ -71,8 +71,8 @@ export const creditsText = (millicredits) =>
  */
 export const instantText = (ms) => `${new Date(ms).toISOString().slice(0, 16).replace('T', ' ')} UTC`;
 
-/** @param {string} websiteId @param {string} appId */
-const pairKey = (websiteId, appId) => `${websiteId}\u0000${appId}`;
+/** @param {string} websiteId @param {string} productId */
+const pairKey = (websiteId, productId) => `${websiteId}\u0000${productId}`;
 
 /**
  * Replay a merchant's money from `from` to `to`.
@@ -88,7 +88,7 @@ export const replay = ({ from, to, cut = null, balance, phase = OPEN_PHASE, even
 		.map((x) => x.event);
 	/** @type {Map<string, Map<string, number>>} */
 	const prices = new Map();
-	/** @type {Map<string, { websiteId: string, appId: string, added: boolean, on: Set<string> }>} */
+	/** @type {Map<string, { websiteId: string, productId: string, added: boolean, on: Set<string> }>} */
 	const products = new Map();
 	let suspended = false;
 	let money = balance;
@@ -103,10 +103,10 @@ export const replay = ({ from, to, cut = null, balance, phase = OPEN_PHASE, even
 	/** @type {{ balance: number, phase: Phase } | null} */
 	let snapshot = null;
 
-	/** @param {string} appId @param {string} key */
-	const priceOf = (appId, key) => prices.get(appId)?.get(key) ?? 0;
-	/** @param {{ appId: string, added: boolean, on: Set<string> }} p */
-	const hourlyOf = (p) => (p.added ? [...p.on].reduce((sum, key) => sum + priceOf(p.appId, key), 0) : 0);
+	/** @param {string} productId @param {string} key */
+	const priceOf = (productId, key) => prices.get(productId)?.get(key) ?? 0;
+	/** @param {{ productId: string, added: boolean, on: Set<string> }} p */
+	const hourlyOf = (p) => (p.added ? [...p.on].reduce((sum, key) => sum + priceOf(p.productId, key), 0) : 0);
 	const dailySpend = () => 24 * [...products.values()].reduce((sum, p) => sum + hourlyOf(p), 0);
 	const phaseNow = () => ({ graceStart, graceEnd, stoppedAt });
 
@@ -114,20 +114,20 @@ export const replay = ({ from, to, cut = null, balance, phase = OPEN_PHASE, even
 	const apply = (event, live) => {
 		switch (event.type) {
 			case 'prices':
-				prices.set(event.appId, new Map(event.features.map((f) => [f.key, f.price])));
+				prices.set(event.productId, new Map(event.features.map((f) => [f.key, f.price])));
 				return;
 			case 'added':
 			case 'removed': {
-				const key = pairKey(event.websiteId, event.appId);
+				const key = pairKey(event.websiteId, event.productId);
 				const was = products.get(key);
 				// re-adding a removed product resets its switches to all off (0.5.9)
 				if (event.type === 'added')
-					products.set(key, { websiteId: event.websiteId, appId: event.appId, added: true, on: new Set() });
+					products.set(key, { websiteId: event.websiteId, productId: event.productId, added: true, on: new Set() });
 				else if (was) was.added = false;
 				return;
 			}
 			case 'switches': {
-				const product = products.get(pairKey(event.websiteId, event.appId));
+				const product = products.get(pairKey(event.websiteId, event.productId));
 				if (product) product.on = new Set(event.on);
 				return;
 			}
@@ -180,12 +180,12 @@ export const replay = ({ from, to, cut = null, balance, phase = OPEN_PHASE, even
 			for (const p of products.values()) {
 				if (!p.added) continue;
 				for (const feature of [...p.on].sort()) {
-					const key = `${pairKey(p.websiteId, p.appId)}\u0000${feature}`;
+					const key = `${pairKey(p.websiteId, p.productId)}\u0000${feature}`;
 					if (charged.has(key)) continue;
 					charged.add(key);
-					const amount = priceOf(p.appId, feature);
+					const amount = priceOf(p.productId, feature);
 					money -= amount;
-					charges.push({ at: t, hour, websiteId: p.websiteId, appId: p.appId, feature, amount });
+					charges.push({ at: t, hour, websiteId: p.websiteId, productId: p.productId, feature, amount });
 				}
 			}
 		if (graceEnd === null && stoppedAt === null && !suspended && money <= 0 && dailySpend() > 0) {
@@ -213,7 +213,7 @@ export const replay = ({ from, to, cut = null, balance, phase = OPEN_PHASE, even
 		/** @type {ProductState[]} */
 		products: [...products.values()].map((p) => ({
 			websiteId: p.websiteId,
-			appId: p.appId,
+			productId: p.productId,
 			added: p.added,
 			on: [...p.on].sort(),
 			hourlyCost: hourlyOf(p),
@@ -266,15 +266,22 @@ export const daysLeftOf = ({ balance, dailySpend }) => (dailySpend > 0 ? Math.ma
 /**
  * Group charges per website × product × UTC day × feature: hours charged and credits.
  * @param {readonly Charge[]} charges
- * @returns {{ day: string, websiteId: string, appId: string, feature: string, hours: number, amount: number }[]}
+ * @returns {{ day: string, websiteId: string, productId: string, feature: string, hours: number, amount: number }[]}
  */
 export const usageRows = (charges) => {
-	/** @type {Map<string, { day: string, websiteId: string, appId: string, feature: string, hours: number, amount: number }>} */
+	/** @type {Map<string, { day: string, websiteId: string, productId: string, feature: string, hours: number, amount: number }>} */
 	const rows = new Map();
 	for (const c of charges) {
 		const day = dayOf(c.hour);
-		const key = `${day}\u0000${pairKey(c.websiteId, c.appId)}\u0000${c.feature}`;
-		const row = rows.get(key) ?? { day, websiteId: c.websiteId, appId: c.appId, feature: c.feature, hours: 0, amount: 0 };
+		const key = `${day}\u0000${pairKey(c.websiteId, c.productId)}\u0000${c.feature}`;
+		const row = rows.get(key) ?? {
+			day,
+			websiteId: c.websiteId,
+			productId: c.productId,
+			feature: c.feature,
+			hours: 0,
+			amount: 0,
+		};
 		row.hours += 1;
 		row.amount += c.amount;
 		rows.set(key, row);
@@ -283,7 +290,7 @@ export const usageRows = (charges) => {
 		(a, b) =>
 			a.day.localeCompare(b.day) ||
 			a.websiteId.localeCompare(b.websiteId) ||
-			a.appId.localeCompare(b.appId) ||
+			a.productId.localeCompare(b.productId) ||
 			a.feature.localeCompare(b.feature),
 	);
 };
@@ -291,15 +298,15 @@ export const usageRows = (charges) => {
 /**
  * Day charges (0.5.7 b): one per website × product × UTC day with per-feature lines; days with 0 credits are left out.
  * @param {readonly Charge[]} charges
- * @returns {{ day: string, websiteId: string, appId: string, amount: number,
+ * @returns {{ day: string, websiteId: string, productId: string, amount: number,
  *   lines: { feature: string, hours: number, amount: number }[] }[]}
  */
 export const dayCharges = (charges) => {
-	/** @type {Map<string, { day: string, websiteId: string, appId: string, amount: number, lines: { feature: string, hours: number, amount: number }[] }>} */
+	/** @type {Map<string, { day: string, websiteId: string, productId: string, amount: number, lines: { feature: string, hours: number, amount: number }[] }>} */
 	const days = new Map();
 	for (const row of usageRows(charges)) {
-		const key = `${row.day}\u0000${pairKey(row.websiteId, row.appId)}`;
-		const day = days.get(key) ?? { day: row.day, websiteId: row.websiteId, appId: row.appId, amount: 0, lines: [] };
+		const key = `${row.day}\u0000${pairKey(row.websiteId, row.productId)}`;
+		const day = days.get(key) ?? { day: row.day, websiteId: row.websiteId, productId: row.productId, amount: 0, lines: [] };
 		day.amount += row.amount;
 		day.lines.push({ feature: row.feature, hours: row.hours, amount: row.amount });
 		days.set(key, day);

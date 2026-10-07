@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { closeMongoClients } from '../../../src/infra/db.js';
 import { createCommerceService } from '../../../src/modules/commerce/service.js';
 import { T0, createClock, startMongo } from '../../helpers.js';
-import { APP, HOUR, M1, M2, STAFF, W1, bootCommerce } from './fixtures.js';
+import { HOUR, M1, M2, PRODUCT, STAFF, W1, bootCommerce } from './fixtures.js';
 
 // Mongo-backed tests share the machine with other suites: allow for slow replica-set start-up and I/O.
 vi.setConfig({ testTimeout: 120_000, hookTimeout: 180_000 });
@@ -18,7 +18,7 @@ afterAll(async () => {
 });
 
 const MIN = 60_000;
-const OWNER = { type: 'merchant', id: M1, merchantId: M1 };
+const ADMIN = /** @type {const} */ ({ type: 'admin', id: 'adm_owner', role: 'owner', name: 'Olivia' });
 
 /**
  * A commerce service whose collections fail on demand (simulated crashes).
@@ -81,9 +81,10 @@ const accountOf = (h, merchantId) => h.db.collection('commerce_accounts').findOn
  * @param {any} h
  */
 const chargeHourly = async (h) => {
-	await h.service.recordPriceList({ appId: APP, features: [{ key: 'codes', name: 'Codes', price: 1000 }] });
-	await h.service.recordProductAdded({ merchantId: M1, websiteId: W1, appId: APP });
-	await h.service.recordSwitches({ merchantId: M1, websiteId: W1, appId: APP, on: ['codes'] });
+	await h.prices(PRODUCT, 1, { codes: 1000 });
+	await h.service.addProduct({ merchantId: M1, websiteId: W1, productId: PRODUCT, actor: ADMIN });
+	h.world.notices.splice(0);
+	await h.service.recordSwitches({ merchantId: M1, websiteId: W1, productId: PRODUCT, on: ['codes'] });
 };
 
 describe('ledger integrity', () => {
@@ -95,11 +96,15 @@ describe('ledger integrity', () => {
 		expect(verify).toMatchObject({ ok: true, entries: 25, seq: 25, balance: amounts.reduce((s, a) => s + a, 0) });
 		expect(await accountOf(h, M1)).toMatchObject({ seq: 25, balance: verify.balance });
 		await expect(h.credit('mer_zzzzzzzzzzzzzzzzzzzzzzzzzz', 1000)).rejects.toMatchObject({ code: 'not_found' });
-		// concurrent subscribe to the same website × app → exactly one subscription
-		const subs = await Promise.allSettled(
-			[1, 2, 3].map(() => h.service.subscribe({ websiteId: W1, appId: APP, planCode: 'starter', actor: OWNER })),
+		// concurrent adds of the same product to a website → exactly one product on the website
+		const adds = await Promise.allSettled(
+			[1, 2, 3].map(() => h.service.addProduct({ merchantId: M1, websiteId: W1, productId: PRODUCT, actor: ADMIN })),
 		);
-		expect(subs.filter((s) => s.status === 'fulfilled')).toHaveLength(1);
+		expect(adds.filter((s) => s.status === 'fulfilled')).toHaveLength(1);
+		expect(adds.filter((s) => s.status === 'rejected').map((s) => /** @type {any} */ (s).reason.code)).toEqual([
+			'conflict',
+			'conflict',
+		]);
 	});
 
 	it('concurrent checks write each day charge once and send one e-mail per state', async () => {
@@ -121,6 +126,8 @@ describe('ledger integrity', () => {
 		]);
 		expect(await h.service.verifyChain(M1)).toMatchObject({ ok: true });
 		expect(await h.db.collection('commerce_history').countDocuments({ merchantId: M1, kind: 'grace_started' })).toBe(1);
+		// the check that found grace told the product once (concurrent checks record it once)
+		expect(h.world.notices).toEqual([{ productId: PRODUCT, body: { type: 'status.changed', websiteId: W1 } }]);
 		expect(h.mails.filter((m) => m.template === 'grace_started').map((m) => m.to)).toEqual([
 			`owner@${M1}.example`,
 			'finance@portal.example',

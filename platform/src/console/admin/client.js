@@ -1,12 +1,10 @@
 'use client';
 /**
  * Browser API client of the Admin Console: the console's `apiFetch` (same-origin `/v1/*`, JSON only, CSRF-safe
- * cookie session, fresh `Idempotency-Key` per POST) with the sign-in page as the 401 destination, and raw
- * uploads of pack assets.
+ * cookie session, fresh `Idempotency-Key` per POST) with the sign-in page as the 401 destination.
  * @module
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { networkProblem } from '@ss/ui/problems';
 import { apiFetch } from '../client.js';
 import { adminRoutes } from './paths.js';
 
@@ -39,43 +37,7 @@ export const adminFetch = async (path, { redirectOn401 = true, ...init } = {}) =
 };
 
 /**
- * `PUT` raw bytes (a pack asset) with the staff cookie session: same-origin, so the browser's `Origin` /
- * `Sec-Fetch-Site` headers satisfy the Portal's CSRF check exactly as {@link adminFetch} does.
- * @param {string} path
- * @param {Blob} bytes
- * @param {string} [contentType] defaults to the blob's type
- * @returns {Promise<ApiResult>}
- */
-export const adminUpload = async (path, bytes, contentType) => {
-	/** @type {Response} */
-	let response;
-	try {
-		response = await fetch(path, {
-			method: 'PUT',
-			headers: { accept: 'application/json', 'content-type': contentType || bytes.type || 'application/octet-stream' },
-			credentials: 'same-origin',
-			cache: 'no-store',
-			body: bytes,
-		});
-	} catch (error) {
-		return { ok: false, status: 0, problem: networkProblem(error) };
-	}
-	/** @type {any} */
-	const data = await response.json().catch(() => null);
-	if (response.ok) return { ok: true, status: response.status, data };
-	if (response.status === 401) adminSignInAgain();
-	return {
-		ok: false,
-		status: response.status,
-		problem: {
-			status: response.status,
-			...(data && typeof data === 'object' ? data : { title: response.statusText || 'Error' }),
-		},
-	};
-};
-
-/**
- * A resource loaded on the server (`initial`) and re-fetched after mutations (staff 401 → staff sign-in).
+ * A resource loaded on the server (`initial`) and re-fetched after mutations (a 401 goes to the sign-in page).
  * @template T
  * @param {string | null} path
  * @param {T} initial

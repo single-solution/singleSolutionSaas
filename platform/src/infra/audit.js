@@ -27,7 +27,7 @@ export const AUDIT_ACTOR_TYPES = Object.freeze(['admin', 'merchant', 'product', 
  * @property {unknown} [after]
  * @property {string | null} [requestId]
  * @property {string | null} [ip]
- * @property {string | null} [reason] free-text justification (required by some staff actions)
+ * @property {string | null} [reason] free-text justification (required by some admin actions)
  */
 
 const ACTION = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/;
@@ -39,7 +39,7 @@ const ACTION = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/;
 const normaliseActor = (actor) => {
 	if (!isObject(actor) || typeof actor.id !== 'string' || actor.id.length === 0)
 		throw platformError('invalid_argument', 'audit actor needs an id');
-	// website-key actors are recorded as the product/system boundary they crossed: callers map them first
+	// only admins, merchants, products and the system act
 	if (!AUDIT_ACTOR_TYPES.includes(String(actor.type)))
 		throw platformError('invalid_argument', `audit actor type must be one of ${AUDIT_ACTOR_TYPES.join(', ')}`);
 	const name = actor.type === 'admin' && typeof actor.name === 'string' && actor.name.length > 0 ? actor.name : null;

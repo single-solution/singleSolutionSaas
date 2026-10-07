@@ -29,6 +29,8 @@ import { C } from './schema.js';
  * @property {Mailer} mailer
  * @property {ReturnType<typeof createRepo>} repo
  * @property {(actor: Actor | AuditActor, action: string, target: { type: string, id: string, merchantId?: string | null, websiteId?: string | null }, extra?: { before?: unknown, after?: unknown, reason?: string | null, meta?: Meta }) => Promise<string>} audit
+ * @property {(subject: string) => Promise<unknown>} sessionsEnded every product dashboard session of this person ends
+ *   (`sessions.revoked` to every connected product, PLAN 0.4.3)
  */
 
 /** @typedef {{ type: 'admin' | 'merchant' | 'product' | 'system', id: string, name?: string | null }} AuditActor */
@@ -43,7 +45,6 @@ export const createRepo = (ctx) => {
 	/** @type {MutableOps} */ const tokens = ctx.collection(C.tokens);
 	/** @type {MutableOps} */ const domains = ctx.collection(C.domains);
 	/** @type {TenantRepository} */ const websites = ctx.collection(C.websites);
-	/** @type {TenantRepository} */ const keys = ctx.collection(C.keys);
 	const secret = ctx.config.sessionSecret;
 
 	/** @param {TenantRepository} repo */
@@ -60,7 +61,6 @@ export const createRepo = (ctx) => {
 		tokens,
 		domains,
 		websites: scoped(websites),
-		keys: scoped(keys),
 		/**
 		 * Claim a login e-mail for an admin or a merchant (PLAN 0.2: unique across the whole Portal). Throws 409
 		 * `email_taken` when another login holds it.

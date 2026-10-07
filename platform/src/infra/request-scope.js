@@ -1,9 +1,8 @@
 /**
  * The request a piece of work belongs to (PLAN F.19: event-driven only). The HTTP handler runs every request inside a
  * scope; code deep in a module can then hand work to the end of *that* request with {@link afterResponse} — e.g. the
- * job queue runs the job a request just enqueued, the Event Hub delivers the event a request just ingested — without
- * threading `ctx.defer` through every call. Outside a request (scripts, tests calling services directly) nothing is
- * deferred and the work simply waits for the next request that touches it or an admin operation.
+ * notices a change causes, the e-mails a request sends — without threading `ctx.defer` through every call. Outside a
+ * request (scripts, tests calling services directly) nothing is deferred and callers do the work at once.
  * @module
  */
 import { AsyncLocalStorage } from 'node:async_hooks';

@@ -40,19 +40,32 @@ export function MerchantStatusBadge({ status }) {
 }
 
 /**
- * Product-on-website status; an active product with no features on shows grey `No features on`.
+ * Colour of a product-on-website status (PLAN 0.6): Active green, In grace amber, Stopped and Suspended red, and grey
+ * `No features on` for an active product with no features on.
+ * @param {{ status: string, featuresOn?: readonly string[] }} card
+ * @returns {Tone}
+ */
+export const productTone = ({ status, featuresOn = [] }) =>
+	status === 'active' && featuresOn.length === 0 ? 'neutral' : (MERCHANT_TONES[status] ?? 'neutral');
+
+/**
+ * Label of a product-on-website status.
+ * @param {{ status: string, featuresOn?: readonly string[] }} card
+ * @returns {string}
+ */
+export const productStatusLabel = ({ status, featuresOn = [] }) =>
+	status === 'active' && featuresOn.length === 0
+		? BILLING.productStatus.noFeatures
+		: (BILLING.productStatus[/** @type {'active' | 'grace' | 'stopped' | 'suspended'} */ (status)] ?? status);
+
+/**
+ * Product-on-website status badge.
  * @param {{ status: string, featuresOn?: readonly string[] }} props
  */
 export function ProductStatusBadge({ status, featuresOn = [] }) {
-	if (status === 'active' && featuresOn.length === 0)
-		return (
-			<Badge tone="neutral" dot>
-				{BILLING.productStatus.noFeatures}
-			</Badge>
-		);
 	return (
-		<Badge tone={MERCHANT_TONES[status] ?? 'neutral'} dot>
-			{BILLING.productStatus[/** @type {'active' | 'grace' | 'stopped' | 'suspended'} */ (status)] ?? status}
+		<Badge tone={productTone({ status, featuresOn })} dot>
+			{productStatusLabel({ status, featuresOn })}
 		</Badge>
 	);
 }
@@ -133,17 +146,15 @@ export function BillingBanner({ summary, contact }) {
 
 /**
  * Usage (0.5.11): spend per UTC day and one row per product × website × day × feature.
- * @param {{ usage: any, showWebsite?: boolean }} props
+ * @param {{ usage: any, showWebsite?: boolean, chartTitle?: string }} props
  */
-export function UsageView({ usage, showWebsite = true }) {
+export function UsageView({ usage, showWebsite = true, chartTitle = BILLING.usageChart }) {
 	const rows = /** @type {any[]} */ (usage?.rows ?? []);
 	return (
 		<div className="space-y-6">
-			<Card
-				title={BILLING.usageChart}
-				subtitle={`${usage?.from ?? ''} – ${usage?.to ?? ''} · ${formatCredits(usage?.total ?? 0)}`}>
+			<Card title={chartTitle} subtitle={`${usage?.from ?? ''} – ${usage?.to ?? ''} · ${formatCredits(usage?.total ?? 0)}`}>
 				<BarChart
-					label={BILLING.usageChart}
+					label={chartTitle}
 					data={(usage?.days ?? []).map((/** @type {{ day: string, amount: number }} */ d) => ({
 						label: d.day.slice(5),
 						value: d.amount / 1000,
@@ -155,7 +166,7 @@ export function UsageView({ usage, showWebsite = true }) {
 			<Table
 				caption={BILLING.usageTitle}
 				rows={rows}
-				rowKey={(r) => `${r.day}:${r.websiteId}:${r.appId}:${r.feature}`}
+				rowKey={(r) => `${r.day}:${r.websiteId}:${r.productId}:${r.feature}`}
 				empty={<EmptyState compact title={BILLING.noUsage} />}
 				defaultSort={{ key: 'day', direction: 'desc' }}
 				columns={[

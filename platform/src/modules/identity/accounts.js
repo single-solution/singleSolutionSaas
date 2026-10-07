@@ -277,12 +277,14 @@ export const createAccounts = (deps) => {
 		},
 
 		/**
-		 * Sign out: this session ends.
+		 * Sign out: this session ends, and so does every product dashboard session of the person (PLAN 0.4.3).
 		 * @param {Kind} kind
 		 * @param {string} token
+		 * @param {string} subject the admin or merchant id
 		 */
-		signOut: async (kind, token) => {
+		signOut: async (kind, token, subject) => {
 			await ctx.sessions.revoke(token);
+			await deps.sessionsEnded(subject);
 			return { cookie: ctx.cookies.clear(kind) };
 		},
 
@@ -321,6 +323,7 @@ export const createAccounts = (deps) => {
 			if (doc.status !== 'active' || !doc.passwordHash) throw problem('token_invalid', LINK_INVALID);
 			await logins(kind).updateOne({ _id: doc._id }, { $set: { passwordHash: await hash(password) } });
 			await ctx.sessions.revokeAll(kind, String(doc._id));
+			await deps.sessionsEnded(String(doc._id));
 			await ctx.loginThrottle.recordSuccess({ account: throttleKey(kind, doc.email) });
 			await audit(actorOf(kind, doc), 'login.password_reset', targetOf(kind, doc), { meta });
 		},
@@ -457,6 +460,7 @@ export const createAccounts = (deps) => {
 			);
 			await logins(kind).updateOne({ _id: doc._id }, { $set: { passwordHash: await hash(next) } });
 			await ctx.sessions.revokeAll(kind, id, { exceptToken: token });
+			await deps.sessionsEnded(id);
 			await audit(actorOf(kind, doc), 'login.password_changed', targetOf(kind, doc), { meta });
 		},
 

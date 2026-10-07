@@ -6,8 +6,8 @@
  * - keys whose normalised name (lower case, `_`/`-` removed) contains `secret`, `token`, `password`, `passwd`,
  *   `passphrase`, `authorization`, `cookie`, `apikey`, `privatekey`, `privatejwk`, `signingkey`, `credential`,
  *   `connectionstring`, `kek`, `pepper`, `sealed`, or that end in `uri`, or equal `d` (JWK private member);
- * - string values that look like website secret keys (`sk_live_…`, `sk_test_…`), or URLs with userinfo
- *   (`mongodb+srv://user:pass@host` → `mongodb+srv://[redacted]@host`);
+ * - string values that look like signed tokens (compact JWS: `eyJ….….…` — browser and server tokens, launches), or URLs
+ *   with userinfo (`mongodb+srv://user:pass@host` → `mongodb+srv://[redacted]@host`);
  * - errors become `{ name, message, code? }` (no stacks with request data).
  * @module
  */
@@ -27,7 +27,7 @@ const LEVELS = Object.freeze({ debug: 10, info: 20, warn: 30, error: 40, silent:
 
 const SENSITIVE_KEY =
 	/secret|token|password|passwd|passphrase|authorization|cookie|apikey|privatekey|privatejwk|signingkey|credential|connectionstring|kek|pepper|sealed/;
-const SECRET_VALUE = /^sk_(live|test)_/;
+const SECRET_VALUE = /^eyJ[\w-]*\.[\w-]+\.[\w-]+$/;
 const USERINFO = /^([a-z][a-z0-9+.-]*:\/\/)[^/@\s]+@/i;
 
 /**

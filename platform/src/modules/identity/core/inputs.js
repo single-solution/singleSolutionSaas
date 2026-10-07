@@ -3,7 +3,7 @@
  * of field errors (`{ path, message }`, JSON-pointer paths). Objects are closed: unknown members are errors.
  * @module
  */
-import { isTimeZone, normaliseDomain } from '@ss/contracts';
+import { normaliseDomain } from '@ss/contracts';
 import { isCountryCode } from './countries.js';
 
 /** @typedef {{ path: string, message: string }} FieldError */
@@ -19,16 +19,12 @@ import { isCountryCode } from './countries.js';
 
 export const PASSWORD_MIN = 12;
 export const PASSWORD_MAX = 1024;
-export const MAX_SCOPES = 32;
 export const ADMIN_ROLE_NAMES = Object.freeze(/** @type {const} */ (['owner', 'support', 'finance']));
 /** Merchant field lengths (PLAN 0.8.4: chosen by the builder, awaiting owner review). */
 export const MERCHANT_FIELD_MAX = Object.freeze({ name: 120, ownerName: 120, phone: 40, address: 300 });
-export const MAX_GRACE_SECONDS = 7 * 24 * 3600;
-export const DEFAULT_GRACE_SECONDS = 24 * 3600;
 
 const EMAIL = /^[^\s@<>()[\]\\,;:"]+@[^\s@<>()[\]\\,;:"]+\.[^\s@<>()[\]\\,;:"]+$/;
 const ID = /^[a-z]{2,8}_[0-9a-z]{10,64}$/;
-const SCOPE = /^[a-z*][a-z0-9_.:*@-]{0,127}$/;
 const TOKEN = /^[A-Za-z0-9_-]{20,128}$/;
 const OTP = /^\d{6}$/;
 const RECOVERY = /^[a-z2-7]{5}-?[a-z2-7]{5}$/i;
@@ -113,56 +109,6 @@ export const recoveryCode = (value) =>
 export const bool = (value) => (typeof value === 'boolean' ? okv(value) : bad('must be a boolean'));
 
 /**
- * Website-key scopes: 0..32 unique scope names (empty = the default scopes; the vocabulary is checked on issue,
- * `core/scopes.js`).
- * @type {Field<string[]>}
- */
-export const scopes = (value) => {
-	if (!Array.isArray(value) || value.length > MAX_SCOPES) return bad(`must be an array of at most ${MAX_SCOPES} scopes`);
-	if (value.some((scope) => typeof scope !== 'string' || !SCOPE.test(scope))) return bad('contains an invalid scope');
-	if (new Set(value).size !== value.length) return bad('must not repeat scopes');
-	return okv(/** @type {string[]} */ ([...value]));
-};
-
-/**
- * An IANA time zone name the runtime knows (`Intl`), in its canonical spelling (`europe/berlin` → `Europe/Berlin`).
- * @type {Field<string>}
- */
-export const timeZone = (value) => {
-	if (typeof value !== 'string' || !/^[A-Za-z][A-Za-z0-9_+/-]{0,63}$/.test(value) || !isTimeZone(value))
-		return bad('must be an IANA time zone such as Europe/Berlin');
-	return okv(new Intl.DateTimeFormat('en', { timeZone: value }).resolvedOptions().timeZone);
-};
-
-/**
- * A BCP 47 language tag, canonicalised with `Intl.getCanonicalLocales` (`en-us` → `en-US`).
- * @type {Field<string>}
- */
-export const language = (value) => {
-	if (typeof value !== 'string' || value.length === 0 || value.length > 35 || !/^[A-Za-z0-9-]+$/.test(value))
-		return bad('must be a BCP 47 language tag such as en or de-CH');
-	try {
-		const [tag] = Intl.getCanonicalLocales(value);
-		return tag ? okv(tag) : bad('must be a BCP 47 language tag such as en or de-CH');
-	} catch {
-		return bad('must be a BCP 47 language tag such as en or de-CH');
-	}
-};
-
-/** ISO 4217 codes the runtime knows (empty when `Intl.supportedValuesOf` is unavailable: then the shape alone counts). */
-const CURRENCIES = new Set(typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('currency') : []);
-
-/**
- * An ISO 4217 currency code, upper-cased (`eur` → `EUR`).
- * @type {Field<string>}
- */
-export const currency = (value) => {
-	if (typeof value !== 'string' || !/^[A-Za-z]{3}$/.test(value)) return bad('must be an ISO 4217 currency code such as EUR');
-	const code = value.toUpperCase();
-	return CURRENCIES.size === 0 || CURRENCIES.has(code) ? okv(code) : bad('must be an ISO 4217 currency code such as EUR');
-};
-
-/**
  * An ISO 3166-1 alpha-2 country code, upper-cased (`pk` → `PK`).
  * @type {Field<string>}
  */
@@ -180,7 +126,7 @@ export const optionalText = (max) => (value) =>
 	value === null || (typeof value === 'string' && value.trim() === '') ? okv(null) : text(max)(value);
 
 /**
- * `null` (clear the setting) or a value of `field`.
+ * `null` (clear the field) or a value of `field`.
  * @template T
  * @param {Field<T>} field
  * @returns {Field<T | null>}
@@ -198,28 +144,6 @@ export const domain =
 		const result = normaliseDomain(value, options.isPublicSuffix ? { isPublicSuffix: options.isPublicSuffix } : {});
 		return result.ok ? okv(result.value) : bad(result.message);
 	};
-
-/**
- * An ISO-8601 timestamp, returned as epoch milliseconds.
- * @type {Field<number>}
- */
-export const timestamp = (value) => {
-	if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?(Z|[+-]\d{2}:\d{2})$/.test(value))
-		return bad('must be an ISO-8601 timestamp with a zone');
-	const ms = Date.parse(value);
-	return Number.isFinite(ms) ? okv(ms) : bad('must be an ISO-8601 timestamp with a zone');
-};
-
-/**
- * Integer within bounds.
- * @param {number} min
- * @param {number} max
- * @returns {Field<number>}
- */
-export const int = (min, max) => (value) =>
-	Number.isInteger(value) && /** @type {number} */ (value) >= min && /** @type {number} */ (value) <= max
-		? okv(/** @type {number} */ (value))
-		: bad(`must be an integer ${min}..${max}`);
 
 /**
  * One of fixed values.
@@ -405,34 +329,8 @@ export const inputs = Object.freeze({
 			(b, options) => object(b, { domain: domain(options) })
 		),
 	websiteRemove: /** @type {(b: unknown) => Parsed<{ confirm: string }>} */ ((b) => object(b, { confirm: text(253) })),
-	websiteSettings:
-		/** @type {(b: unknown) => Parsed<{ timeZone?: string | null, language?: string | null, currency?: string | null }>} */ (
-			(b) => {
-				const parsed = object(b, {
-					timeZone: { optional: nullable(timeZone) },
-					language: { optional: nullable(language) },
-					currency: { optional: nullable(currency) },
-				});
-				if (parsed.ok && Object.keys(parsed.value).length === 0)
-					return { ok: false, errors: [{ path: '', message: 'send at least one of timeZone, language, currency' }] };
-				return /** @type {any} */ (parsed);
-			}
-		),
-	keyIssue:
-		/** @type {(b: unknown) => Parsed<{ kind: 'pk' | 'sk', scopes?: string[], expiresAt?: number, allowSubdomains?: boolean }>} */ (
-			(b) =>
-				object(b, {
-					kind: oneOf(/** @type {const} */ (['pk', 'sk'])),
-					scopes: { optional: scopes },
-					expiresAt: { optional: timestamp },
-					allowSubdomains: { optional: bool },
-				})
-		),
-	keyRotate: /** @type {(b: unknown) => Parsed<{ graceSeconds?: number }>} */ (
-		(b) => object(b ?? {}, { graceSeconds: { optional: int(0, MAX_GRACE_SECONDS) } })
-	),
-	keyRevoke: /** @type {(b: unknown) => Parsed<{ reason?: string }>} */ (
-		(b) => object(b ?? {}, { reason: { optional: text(500) } })
+	tokenRegenerate: /** @type {(b: unknown) => Parsed<{ kind: 'browser' | 'server' }>} */ (
+		(b) => object(b, { kind: oneOf(/** @type {const} */ (['browser', 'server'])) })
 	),
 	reason: /** @type {(b: unknown) => Parsed<{ reason: string }>} */ ((b) => object(b, { reason: text(500) })),
 	adminInvite: /** @type {(b: unknown) => Parsed<{ email: string, role: 'owner' | 'support' | 'finance', copy?: boolean }>} */ (

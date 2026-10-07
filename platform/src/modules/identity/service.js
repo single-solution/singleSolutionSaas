@@ -1,66 +1,30 @@
 /**
  * Public service of the `identity` module (other modules use `ctx.service('identity')`; see INTERFACES.md).
- * Composes logins, admins, merchants, websites and (until the switch, PLAN 0.12 step 5) website keys and identity
- * issuers over one repository, and implements the infra ports `sessionActor` (the live role, status and two-step
- * requirement; removed admins and suspended or deleted merchants → null) and `websiteKeyRevoked`.
+ * Composes logins, admins, merchants, websites and the tokens of products on websites over one repository, and
+ * implements the infra port `sessionActor` (the live role, status and two-step requirement; removed admins and
+ * suspended or deleted merchants → null).
  *
- * Website keys are signed with the **dedicated website-key signer** `ctx.keys.websiteKeySigner`
- * (generated on first start), whose public keys the infra publishes and the `websiteKey` authenticator verifies
- * with. The module option `websiteKeySigningKeys` overrides it (tests and embedded setups).
+ * Neighbours are reached lazily through `ctx.service`: `commerce` (products on a website, merchant status changes) and
+ * `catalog` (notices to products).
  * @module
  */
-import { createJwks, createKeyResolver, createSigner, toPublicJwk } from '@ss/protocol';
 import { problem } from '../../infra/http.js';
 import { createAccounts } from './accounts.js';
 import { createAdmins } from './admins.js';
-import { createIssuers } from './issuers.js';
-import { createIssuerRequests } from './issuer-requests.js';
 import { createMerchants } from './merchants.js';
-import { C } from './schema.js';
+import { createProductTokens } from './product-tokens.js';
 import { createAuditor, createRepo } from './repo.js';
-import { createWebsiteKeys } from './website-keys.js';
 import { createWebsites } from './websites.js';
 
 /** @typedef {import('../../infra/modules.js').ModuleContext} ModuleContext */
 /** @typedef {import('../../infra/auth.js').Session} Session */
 /** @typedef {import('../../infra/rbac.js').Actor} Actor */
-/** @typedef {import('@ss/protocol').PrivateJwk} PrivateJwk */
-/** @typedef {import('@ss/protocol').Signer} Signer */
-/** @typedef {import('@ss/protocol').KeyResolver} KeyResolver */
-/** @typedef {import('@ss/protocol').Jwks} Jwks */
 
 /**
  * @typedef {object} IdentityOptions
  * @property {import('../../infra/mailer.js').Mailer} [mailer] e-mail port (default: the platform mailer `ctx.mailer`)
- * @property {ReadonlyArray<PrivateJwk>} [websiteKeySigningKeys] dedicated website-key signing keys (first signs)
  * @property {(domain: string) => boolean} [isPublicSuffix] refuse public suffixes as website domains
- * @property {import('./issuers.js').IssuerOptions} [issuers] outbound options of identity-issuer JWKS fetches (tests)
  */
-
-/**
- * Select the website-key signer: module option › the infra's dedicated website-key signer.
- * @param {ModuleContext} ctx
- * @param {IdentityOptions} options
- * @returns {{ signer: Signer, keyResolver: KeyResolver, jwks: () => Jwks, source: 'option' | 'infra' }}
- */
-export const websiteKeySigning = (ctx, options) => {
-	const configured = options.websiteKeySigningKeys ?? [];
-	if (configured.length > 0) {
-		const jwks = createJwks(configured.map((jwk) => toPublicJwk(jwk)));
-		return {
-			signer: createSigner(/** @type {PrivateJwk} */ (configured[0])),
-			keyResolver: createKeyResolver({ jwks }),
-			jwks: () => jwks,
-			source: 'option',
-		};
-	}
-	return {
-		signer: ctx.keys.websiteKeySigner,
-		keyResolver: ctx.keys.websiteKeyResolver,
-		jwks: () => ctx.keys.websiteKeyJwks(),
-		source: 'infra',
-	};
-};
 
 /**
  * @param {ModuleContext} ctx
@@ -69,10 +33,30 @@ export const websiteKeySigning = (ctx, options) => {
 export const createIdentityService = (ctx, options = {}) => {
 	const repo = createRepo(ctx);
 	const mailer = options.mailer ?? ctx.mailer;
-	const deps = { ctx, repo, mailer, audit: createAuditor(ctx) };
-	const signing = websiteKeySigning(ctx, options);
-	const signer = () => signing.signer;
-	const commerce = () => (ctx.moduleNames().includes('commerce') ? ctx.service('commerce') : null);
+	/** @param {string} name */
+	const optional = (name) => (ctx.moduleNames().includes(name) ? ctx.service(name) : null);
+	/**
+	 * Send a notice to products; a failure is logged, never fails the change that caused it (it is kept and retried
+	 * by catalog).
+	 * @param {(catalog: any) => Promise<unknown>} send
+	 */
+	const notice = async (send) => {
+		const catalog = optional('catalog');
+		if (!catalog) return;
+		try {
+			await send(catalog);
+		} catch (error) {
+			ctx.logger.warn('notice not queued', { error });
+		}
+	};
+	const deps = {
+		ctx,
+		repo,
+		mailer,
+		audit: createAuditor(ctx),
+		/** @param {string} subject */
+		sessionsEnded: (subject) => notice((catalog) => catalog.notifyAll({ type: 'sessions.revoked', subject })),
+	};
 
 	const accounts = createAccounts(deps);
 	const admins = createAdmins(deps, { setupLink: accounts.setupLink });
@@ -81,66 +65,27 @@ export const createIdentityService = (ctx, options = {}) => {
 		websitesOf: (merchantId) => websites.activeWebsitesOf(merchantId),
 		onStatus: async (merchantId, status) => {
 			try {
-				const service = commerce();
-				if (service && typeof service.onMerchantStatus === 'function') await service.onMerchantStatus({ merchantId, status });
+				await optional('commerce')?.onMerchantStatus({ merchantId, status });
 			} catch (error) {
 				ctx.logger.error('commerce.onMerchantStatus failed', { error, merchantId, status });
 			}
 		},
 	});
-	/**
-	 * A merchant that may still act (not suspended, not deleted).
-	 * @param {string} merchantId
-	 */
-	const activeMerchant = async (merchantId) => {
-		const merchant = await merchants.load(merchantId);
-		if (merchant.status !== 'active') throw problem('merchant_suspended', 'The merchant is suspended.');
-		return merchant;
-	};
-	const keys = createWebsiteKeys(deps, {
-		signer,
+	const tokens = createProductTokens(deps, {
 		loadWebsite: (websiteId, merchantId) => websites.loadWebsite(websiteId, merchantId),
-		activeMerchant,
-		products: async () =>
-			ctx.moduleNames().includes('catalog')
-				? /** @type {Array<{ slug: string, name?: string }>} */ (
-						await ctx.service('catalog').activeProducts({ kind: 'service' })
-					)
-				: [],
-	});
-	const issuers = createIssuers(deps, {
-		loadWebsite: (websiteId, merchantId) => websites.loadWebsite(websiteId, merchantId),
-		collection: ctx.collection(C.issuers),
-		...(options.issuers ? { options: options.issuers } : {}),
-	});
-	const issuerRequests = createIssuerRequests(deps, {
-		loadWebsite: (websiteId, merchantId) => websites.loadWebsite(websiteId, merchantId),
-		loadMerchant: (merchantId) => merchants.load(merchantId),
-		issuers,
-		collection: ctx.collection(C.issuerRequests),
+		notify: (productId, body) => notice((catalog) => catalog.notify(productId, body)),
 	});
 	const websites = createWebsites(deps, {
 		// websites are added to any merchant that is not deleted, suspended ones included
 		activeMerchant: (merchantId) => merchants.load(merchantId),
 		productsOn: async (websiteId) => {
-			const service = commerce();
-			if (!service) return 0;
-			const subs = /** @type {Array<{ status?: string }>} */ (await service.subscriptionsForWebsite(websiteId));
-			return subs.filter((sub) => sub.status !== 'cancelled').length;
+			const commerce = optional('commerce');
+			return commerce ? /** @type {number} */ (await commerce.productsOnWebsiteCount(websiteId)) : 0;
 		},
-		revokeWebsiteKeys: keys.revokeWebsiteKeys,
-		forgetIssuers: async (input) => {
-			await issuers.forget(input);
-			await issuerRequests.forget(input);
-		},
-		resign: async (websiteId) => {
-			const service = commerce();
-			if (!service) return;
-			try {
-				await service.invalidateWebsite(websiteId);
-			} catch (error) {
-				ctx.logger.warn('entitlement documents not re-signed after a settings change', { websiteId, error });
-			}
+		onRemoved: async ({ merchantId, websiteId }) => {
+			const productIds = await tokens.revokeWebsite({ merchantId, websiteId });
+			for (const productId of productIds)
+				await notice((catalog) => catalog.notify(productId, { type: 'website.deleted', websiteId }));
 		},
 		...(options.isPublicSuffix ? { isPublicSuffix: options.isPublicSuffix } : {}),
 	});
@@ -198,46 +143,86 @@ export const createIdentityService = (ctx, options = {}) => {
 		/** Totals of admin Overview: merchants (not deleted) and websites (not removed). */
 		counts: async () => ({
 			merchants: await repo.merchants.countDocuments({ status: { $ne: 'deleted' } }),
-			websites: await repo.websites.all().countDocuments({ status: 'active', env: 'live' }),
+			websites: await repo.websites.all().countDocuments({ status: 'active' }),
 		}),
 		getWebsite: (/** @type {string} */ websiteId) => websites.getWebsite(websiteId),
 		listWebsites: (/** @type {string} */ merchantId) => websites.listWebsites(merchantId),
-		websiteByDomain: websites.websiteByDomain,
+		websitesByIds: websites.websitesByIds,
 		suspendMerchant: merchants.suspend,
 		resumeMerchant: merchants.resume,
-		issueKey: keys.issueKey,
-		revokeKey: keys.revokeKey,
-		revocationsSince: keys.revocationsSince,
-		rotateKey: keys.rotateKey,
-		listKeys: keys.listKeys,
 		createWebsite: websites.createWebsite,
-		updateWebsiteSettings: websites.updateSettings,
 		removeWebsite: websites.removeWebsite,
 		/** @param {string} adminId */
 		getAdmin: admins.get,
-		/** Public keys that verify website keys (published by the infra in the Portal JWKS). */
-		websiteKeyJwks: () => signing.jwks(),
-		websiteKeyResolver: () => signing.keyResolver,
-		websiteKeySigningSource: () => signing.source,
-		/** Bring-your-own identity: the `identity` section of the website's entitlement documents (commerce), or null. */
-		identityFor: issuers.identityFor,
-		getIdentityIssuer: issuers.getIssuer,
-		setIdentityIssuer: issuers.setIssuer,
-		removeIdentityIssuer: issuers.removeIssuer,
-		refreshIdentityIssuer: issuers.refreshKeys,
+		/**
+		 * A current Owner or Support admin (feature reports, PLAN 0.4.12 row 3): `{ adminId, name, role }`; 422 when the
+		 * id is no current admin, 403 for Finance.
+		 * @param {unknown} adminId
+		 */
+		dashboardAdmin: async (adminId) => {
+			const admin = typeof adminId === 'string' ? await repo.admins.findOne({ _id: adminId }) : null;
+			if (!admin || admin.status !== 'active')
+				throw problem('validation_failed', 'adminId is not a current admin.', {
+					errors: [{ path: '/adminId', message: 'is not a current admin' }],
+				});
+			if (admin.role !== 'owner' && admin.role !== 'support')
+				throw problem('forbidden', 'Only Owner and Support admins switch features.');
+			return {
+				adminId: String(admin._id),
+				name: String(admin.name ?? ''),
+				role: /** @type {'owner' | 'support'} */ (admin.role),
+			};
+		},
+		/**
+		 * The two tokens of a product on a website: created when it is first added, restored on a re-add (commerce).
+		 * @param {{ merchantId: string, websiteId: string, productId: string }} input
+		 */
+		ensureTokens: tokens.ensure,
+		/** @param {{ productId: string, since: unknown }} input */
+		revocationsSince: tokens.revocationsSince,
+		/**
+		 * 404 unless the product is on the website now (not removed).
+		 * @param {string} websiteId @param {string} productId
+		 */
+		requireProductOn: async (websiteId, productId) => {
+			const on = /** @type {Array<{ productId: string }>} */ (
+				(await optional('commerce')?.productsOnWebsite(websiteId)) ?? []
+			);
+			if (!on.some((p) => p.productId === productId)) throw problem('not_found', 'This product is not on the website.');
+		},
+		/**
+		 * Install and tokens (PLAN 0.8.2): one block per product on the website (not removed) with its widget script,
+		 * docs link, browser token and whether the server token can be shown.
+		 * @param {{ merchantId: string, websiteId: string }} input
+		 */
+		installOf: async ({ merchantId, websiteId }) => {
+			const on = /** @type {Array<{ productId: string }>} */ (
+				(await optional('commerce')?.productsOnWebsite(websiteId)) ?? []
+			);
+			const listed = await tokens.list({ merchantId, websiteId, productIds: on.map((p) => p.productId) });
+			const catalog = optional('catalog');
+			const out = [];
+			for (const entry of listed) {
+				const product = catalog ? await catalog.getProduct(entry.productId).catch(() => null) : null;
+				out.push({
+					productId: entry.productId,
+					name: product?.name ?? entry.productId,
+					widgetScriptUrl: product?.widgetScriptUrl ?? null,
+					docsUrl: product?.docsUrl ?? null,
+					browserToken: entry.browserToken,
+					serverToken: { canShow: entry.serverTokenCanShow },
+				});
+			}
+			return out;
+		},
 		// ports
 		sessionActor,
-		isKeyRevoked: keys.isRevoked,
-		/** Same check for modules that verify website keys themselves (e.g. body-authenticated event ingest). */
-		websiteKeyRevoked: keys.isRevoked,
 		// building blocks for this module's routes
 		accounts,
 		admins,
 		merchants,
 		websites,
-		keys,
-		issuers,
-		issuerRequests,
+		tokens,
 		mailer,
 	};
 };

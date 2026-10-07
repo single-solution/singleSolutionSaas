@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { closeMongoClients } from '../../../src/infra/db.js';
 import { T0, createClock, startMongo } from '../../helpers.js';
-import { APP, APP2, HOUR, M1, M2, STAFF, W1, W2, W3, bootCommerce } from './fixtures.js';
+import { HOUR, M1, M2, PRODUCT, PRODUCT2, STAFF, W1, W2, W3, bootCommerce } from './fixtures.js';
 
 // Mongo-backed tests share the machine with other suites: allow for slow replica-set start-up and I/O.
 vi.setConfig({ testTimeout: 120_000, hookTimeout: 180_000 });
@@ -30,111 +30,66 @@ describe('commerce routes and tenant isolation', () => {
 		const support = await h.login({ kind: 'admin', subject: 'adm_support' });
 
 		// products on websites: Owner and Support add them; merchants only view (PLAN 0.2)
-		expect(
-			(
-				await h.call('POST', `/v1/merchants/${M1}/websites/${W1}/subscriptions`, {
-					headers: { ...owner1, ...idem() },
-					body: { appId: APP, planCode: 'starter' },
-				})
-			).status,
-		).toBe(403);
-		const created = await h.call('POST', `/v1/merchants/${M1}/websites/${W1}/subscriptions`, {
-			headers: { ...admin, ...idem() },
-			body: { appId: APP, planCode: 'starter' },
-		});
+		const add = (
+			/** @type {Record<string, string>} */ who,
+			/** @type {string} */ merchant,
+			/** @type {string} */ website,
+			/** @type {unknown} */ body,
+		) => h.call('POST', `/v1/merchants/${merchant}/websites/${website}/products`, { headers: { ...who, ...idem() }, body });
+		expect((await add(owner1, M1, W1, { productId: PRODUCT })).status).toBe(403);
+		const created = await add(admin, M1, W1, { productId: PRODUCT });
 		expect(created.status).toBe(201);
-		const sub1 = created.json.subscription.subscriptionId;
-		const other = await h.call('POST', `/v1/merchants/${M2}/websites/${W3}/subscriptions`, {
-			headers: { ...support, ...idem() },
-			body: { appId: APP },
-		});
-		expect(other.status).toBe(201);
-		const sub3 = other.json.subscription.subscriptionId;
-		expect(
-			(
-				await h.call('POST', `/v1/merchants/${M1}/websites/${W3}/subscriptions`, {
-					headers: { ...admin, ...idem() },
-					body: { appId: APP2 },
-				})
-			).status,
-		).toBe(404);
-		expect(
-			(
-				await h.call('POST', `/v1/merchants/${M1}/websites/${W2}/subscriptions`, {
-					headers: { ...admin, ...idem() },
-					body: { appId: 'nope' },
-				})
-			).status,
-		).toBe(422);
-		expect(
-			(
-				await h.call('POST', `/v1/merchants/${M1}/websites/${W2}/subscriptions`, {
-					headers: { ...admin, ...idem() },
-					body: { appId: APP2 },
-				})
-			).status,
-		).toBe(201);
+		expect(created.json.product).toMatchObject({ productId: PRODUCT, name: 'Coupons', status: 'active', featuresOn: [] });
+		expect((await add(support, M2, W3, { productId: PRODUCT })).status).toBe(201);
+		expect((await add(admin, M1, W3, { productId: PRODUCT2 })).status).toBe(404); // W3 is M2's
+		expect((await add(admin, M1, W2, { productId: 'Not an id' })).status).toBe(422);
+		expect((await add(admin, M1, W2, { productId: 'unknown' })).status).toBe(409); // not connected
+		h.world.products.set(PRODUCT2, { productId: PRODUCT2, name: 'Notice', status: 'inactive' });
+		expect((await add(admin, M1, W2, { productId: PRODUCT2 })).status).toBe(409); // inactive: not offered
+		h.world.products.set(PRODUCT2, { productId: PRODUCT2, name: 'Notice', status: 'active' });
+		expect((await add(admin, M1, W2, { productId: PRODUCT2 })).status).toBe(201);
+		expect((await add(admin, M1, W2, { productId: PRODUCT2 })).status).toBe(409); // already on the website
+		expect(h.world.tokens.map((t) => `${t.websiteId}:${t.productId}`)).toEqual([
+			`${W1}:${PRODUCT}`,
+			`${W3}:${PRODUCT}`,
+			`${W2}:${PRODUCT2}`,
+		]);
 
-		// cross-merchant access is refused before any lookup; foreign ids under one's own merchant are not found
-		const base1 = `/v1/merchants/${M1}/subscriptions/${sub1}`;
-		for (const [method, path, body] of /** @type {const} */ ([
-			['GET', `/v1/merchants/${M1}/subscriptions`, undefined],
-			['GET', base1, undefined],
-			['PUT', `${base1}/elements/reports`, { enabled: true }],
-			['PUT', `${base1}/plan`, { planCode: 'pro' }],
-			['POST', `${base1}/pause`, {}],
-			['POST', `${base1}/resume`, {}],
-			['POST', `${base1}/cancel`, {}],
-			['GET', `/v1/merchants/${M1}/billing`, undefined],
-			['GET', `/v1/merchants/${M1}/usage`, undefined],
-			['GET', `/v1/merchants/${M1}/receipts`, undefined],
+		// cross-merchant access is refused before any lookup
+		for (const [method, path] of /** @type {const} */ ([
+			['GET', `/v1/merchants/${M1}/websites/${W1}/products`],
+			['POST', `/v1/merchants/${M1}/websites/${W1}/products`],
+			['DELETE', `/v1/merchants/${M1}/websites/${W1}/products/${PRODUCT}`],
+			['GET', `/v1/merchants/${M1}/billing`],
+			['GET', `/v1/merchants/${M1}/usage`],
+			['GET', `/v1/merchants/${M1}/receipts`],
 		])) {
 			const res = await h.call(method, path, {
 				headers: { ...owner2, ...(method === 'POST' ? idem() : {}) },
-				...(body ? { body } : {}),
+				...(method === 'POST' ? { body: { productId: PRODUCT } } : {}),
 			});
 			expect([method, path, res.status]).toEqual([method, path, 403]);
 		}
-		expect((await h.call('GET', `/v1/merchants/${M2}/subscriptions/${sub1}`, { headers: owner2 })).status).toBe(404);
-		expect(
-			(
-				await h.call('PUT', `/v1/merchants/${M2}/subscriptions/${sub1}/elements/reports`, {
-					headers: owner2,
-					body: { enabled: true },
-				})
-			).status,
-		).toBe(404);
-
-		// own merchant
-		const list = await h.call('GET', `/v1/merchants/${M1}/subscriptions`, { headers: owner1 });
-		expect(list.json.items.map((/** @type {any} */ s) => s.websiteId).sort()).toEqual([W1, W2]);
-		expect(list.json.items.some((/** @type {any} */ s) => s.subscriptionId === sub3)).toBe(false);
-		expect((await h.call('GET', base1, { headers: owner1 })).json.subscription.subscriptionId).toBe(sub1);
-		// switching features is Owner and Support only (merchants see them read-only)
-		expect((await h.call('PUT', `${base1}/elements/reports`, { headers: owner1, body: { enabled: true } })).status).toBe(403);
-		expect((await h.call('PUT', `${base1}/elements/reports`, { headers: support, body: { enabled: true } })).status).toBe(200);
-		expect((await h.call('PUT', `${base1}/elements/reports`, { headers: admin, body: { enabled: 'yes' } })).status).toBe(422);
-		expect((await h.call('PUT', `${base1}/elements/ai_copy`, { headers: admin, body: { enabled: true } })).status).toBe(200);
-		expect((await h.call('PUT', `${base1}/plan`, { headers: owner1, body: { planCode: 'pro' } })).status).toBe(403);
-		expect((await h.call('PUT', `${base1}/plan`, { headers: admin, body: {} })).status).toBe(422);
-		expect(
-			(await h.call('PUT', `${base1}/plan`, { headers: admin, body: { planCode: 'pro' } })).json.subscription.planCode,
-		).toBe('pro');
-		expect(
-			(await h.call('POST', `${base1}/pause`, { headers: { ...admin, ...idem() }, body: { reason: 'Bad Reason' } })).status,
-		).toBe(422);
-		expect(
-			(await h.call('POST', `${base1}/pause`, { headers: { ...admin, ...idem() }, body: { reason: 'holiday' } })).json
-				.subscription.status,
-		).toBe('paused');
-		expect((await h.call('POST', `${base1}/resume`, { headers: { ...admin, ...idem() } })).json.subscription.status).toBe(
-			'active',
+		// own merchant: the cards of a website
+		const cards = await h.call('GET', `/v1/merchants/${M1}/websites/${W1}/products`, { headers: owner1 });
+		expect(cards.json.items).toMatchObject([{ productId: PRODUCT, status: 'active', hourlyCost: 0, dailyCost: 0 }]);
+		expect((await h.call('GET', `/v1/merchants/${M2}/websites/${W3}/products`, { headers: owner2 })).json.items).toHaveLength(
+			1,
+		);
+		// removing: Owner and Support; merchants cannot
+		const remove = (/** @type {Record<string, string>} */ who, /** @type {string} */ productId) =>
+			h.call('DELETE', `/v1/merchants/${M1}/websites/${W2}/products/${productId}`, { headers: who });
+		expect((await remove(owner1, PRODUCT2)).status).toBe(403);
+		expect((await remove(support, PRODUCT2)).json).toEqual({ websiteId: W2, productId: PRODUCT2, status: 'removed' });
+		expect((await remove(support, PRODUCT2)).status).toBe(404);
+		expect((await h.call('GET', `/v1/merchants/${M1}/websites/${W2}/products`, { headers: owner1 })).json.items).toEqual([]);
+		expect((await h.portal.shared.audit.list({ merchantId: M1 })).map((a) => a.action)).toEqual(
+			expect.arrayContaining(['product.added', 'product.removed']),
 		);
 
 		// money views (each runs the check first)
-		await h.service.recordPriceList({ appId: APP, features: [{ key: 'codes', name: 'Codes', price: 1000 }] });
-		await h.service.recordProductAdded({ merchantId: M1, websiteId: W1, appId: APP });
-		await h.service.recordSwitches({ merchantId: M1, websiteId: W1, appId: APP, on: ['codes'] });
+		await h.prices(PRODUCT, 1, { codes: 1000 });
+		await h.service.recordSwitches({ merchantId: M1, websiteId: W1, productId: PRODUCT, on: ['codes'] });
 		clock.set(T0 + 2 * HOUR + 5 * 60_000);
 		const billing = await h.call('GET', `/v1/merchants/${M1}/billing`, { headers: owner1 });
 		expect(billing.json).toMatchObject({ merchantId: M1, status: 'active', balance: 97_000, dailySpend: 24_000, daysLeft: 4 });
@@ -193,41 +148,26 @@ describe('commerce routes and tenant isolation', () => {
 		for (const path of [`/v1/merchants/${M1}/balance`, `/v1/merchants/${M1}/spend-cap`, '/v1/admin/commerce/alerts'])
 			expect((await h.call('GET', path, { headers: admin })).status).toBe(404);
 
-		// product routes: only the app's own subscription
-		const app1 = await h.productAuth(APP);
-		const app2 = await h.productAuth(APP2);
-		expect((await h.call('GET', `/v1/product/entitlements?websiteId=${W1}`)).status).toBe(401);
-		expect((await h.call('GET', `/v1/product/entitlements?websiteId=${W1}`, { headers: owner1 })).status).toBe(401);
-		const doc = await h.call('GET', `/v1/product/entitlements?websiteId=${W1}`, { headers: await app1() });
-		expect(doc.status).toBe(200);
-		expect(doc.json.document.split('.')).toHaveLength(3);
-		expect((await h.call('GET', `/v1/product/entitlements?websiteId=${W1}`, { headers: await app2() })).status).toBe(404);
-		expect((await h.call('GET', `/v1/product/entitlements?websiteId=${W3}`, { headers: await app2() })).status).toBe(404);
-		expect((await h.call('GET', '/v1/product/entitlements', { headers: await app1() })).status).toBe(422);
-		const usageBatch = await h.call('POST', '/v1/product/usage', {
-			headers: { ...(await app2()), ...idem() },
-			body: {
-				records: [
-					{
-						websiteId: W1,
-						subscriptionId: sub1,
-						unit: 'redemption',
-						quantity: 1,
-						idempotencyKey: 'x1',
-						occurredAt: '2026-10-01T10:00:00Z',
-					},
-				],
-			},
+		// product routes need the product's client assertion; a session never reaches them
+		const coupons = await h.productAuth(PRODUCT);
+		expect((await h.call('GET', `/v1/product/websites/${W1}/status`)).status).toBe(401);
+		expect((await h.call('GET', `/v1/product/websites/${W1}/status`, { headers: owner1 })).status).toBe(401);
+		expect((await h.call('GET', `/v1/product/websites/${W1}/status`, { headers: await coupons() })).json).toMatchObject({
+			websiteId: W1,
+			status: 'active',
 		});
-		expect(usageBatch.json.results).toEqual([{ idempotencyKey: 'x1', status: 'rejected', reason: 'subscription_mismatch' }]);
-		expect((await h.call('POST', '/v1/product/usage', { headers: await app1(), body: { records: [] } })).status).toBe(428);
-
-		// cancel last
-		expect(
-			(await h.call('POST', `${base1}/cancel`, { headers: { ...admin, ...idem() }, body: { reason: 'done' } })).json
-				.subscription.status,
-		).toBe('cancelled');
-		expect((await h.call('GET', `/v1/product/entitlements?websiteId=${W1}`, { headers: await app1() })).status).toBe(410);
+		// the removed product routes are gone
+		for (const [method, path] of /** @type {const} */ ([
+			['GET', `/v1/product/entitlements?websiteId=${W1}`],
+			['POST', '/v1/product/usage'],
+			['POST', '/v1/product/events'],
+			['POST', '/v1/product/resources/resolve'],
+			['PUT', `/v1/product/websites/${W1}/identity`],
+		]))
+			expect([
+				path,
+				(await h.call(method, path, { headers: await coupons(), ...(method === 'GET' ? {} : { body: {} }) })).status,
+			]).toEqual([path, 404]);
 		expect(STAFF.type).toBe('admin');
 	});
 });

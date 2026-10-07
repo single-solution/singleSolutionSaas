@@ -1,11 +1,11 @@
 /**
- * The `identity` module (PLAN 0.2): admins (Owner, Support, Finance), merchants (one record = business details + one
- * login), the one sign-in page with optional two-step and recovery codes, setup links, password resets and login
- * changes, websites (exact, unique domains) and — until the switch (PLAN 0.12 step 5) — website keys and identity
- * issuers. Implements the `sessionActor` and `websiteKeyRevoked` ports.
+ * The `identity` module (PLAN 0.2, 0.4.4): admins (Owner, Support, Finance), merchants (one record = business details
+ * + one login), the one sign-in page with optional two-step and recovery codes, setup links, password resets and
+ * login changes, websites (exact, unique domains) and the browser and server tokens of each product on a website with
+ * their revocation list. Implements the `sessionActor` port.
  *
- * `createIdentityModule(options)` accepts the `mailer` port, dedicated website-key signing keys and a public-suffix
- * predicate; `identityModule` is the default instance registered in `modules/index.js`.
+ * `createIdentityModule(options)` accepts the `mailer` port and a public-suffix predicate; `identityModule` is the
+ * default instance registered in `modules/index.js`.
  * @module
  */
 import { defineModule } from '../../infra/modules.js';
@@ -34,7 +34,6 @@ export const createIdentityModule = (options = {}) =>
 		routes: (ctx) => identityRoutes(ctx, ctx.service('identity')),
 		ports: (ctx) => ({
 			sessionActor: (session) => ctx.service('identity').sessionActor(session),
-			websiteKeyRevoked: (claims, rawKey) => ctx.service('identity').isKeyRevoked(claims, rawKey),
 		}),
 	});
 

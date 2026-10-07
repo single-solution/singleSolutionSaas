@@ -1,7 +1,7 @@
 /**
- * Fake neighbour modules implementing only the INTERFACES.md functions identity depends on:
- * `commerce.onMerchantStatus`, `integration.emitControl`, and the `appKeys` port (catalog) for product routes, plus a
- * `whoami` route that reports how a request authenticated.
+ * Fake neighbour modules implementing only the INTERFACES.md functions identity depends on: `commerce`
+ * (`onMerchantStatus`, the products on a website) and `catalog` (notices, product names and the `productKeys` port for
+ * product routes), plus a `whoami` route that reports how a request authenticated.
  */
 import { createJwks, createKeyResolver, createSigner, generateSigningKey, signAssertion } from '@ss/protocol';
 import { ok } from '../../../../src/infra/http.js';
@@ -11,21 +11,16 @@ import { defineModule } from '../../../../src/infra/modules.js';
 export const fakeCommerce = (options = {}) => {
 	/** @type {Array<{ merchantId: string, status: string }>} */
 	const calls = [];
-	/** @type {string[]} websites whose documents were re-signed */
-	const invalidated = [];
-	/** @type {Array<{ appId: string, websiteId: string, status: string }>} subscriptions the identity module sees (F.16) */
-	const subscriptions = [];
+	/** @type {Array<{ productId: string, websiteId: string, merchantId: string }>} products on websites (not removed) */
+	const products = [];
 	const module = defineModule({
 		name: 'commerce',
 		service: () => ({
 			/** @param {string} websiteId */
-			invalidateWebsite: async (websiteId) => {
-				invalidated.push(websiteId);
-				if (options.fail) throw new Error('commerce is down');
-				return { invalidated: 1 };
-			},
+			productsOnWebsite: async (websiteId) => products.filter((p) => p.websiteId === websiteId),
+			allProductNumbers: async () => [],
 			/** @param {string} websiteId */
-			subscriptionsForWebsite: async (websiteId) => subscriptions.filter((s) => s.websiteId === websiteId),
+			productsOnWebsiteCount: async (websiteId) => products.filter((p) => p.websiteId === websiteId).length,
 			/** @param {{ merchantId: string, status: string }} input */
 			onMerchantStatus: async (input) => {
 				calls.push(input);
@@ -33,48 +28,54 @@ export const fakeCommerce = (options = {}) => {
 			},
 		}),
 	});
-	return { module, calls, invalidated, subscriptions };
+	return { module, calls, products };
 };
 
-/** @param {{ fail?: boolean }} [options] */
-export const fakeIntegration = (options = {}) => {
-	/** @type {Array<{ type: string, data: any, options: any }>} */
-	const events = [];
-	const module = defineModule({
-		name: 'integration',
-		service: () => ({
-			/** @param {string} type @param {any} data @param {any} opts */
-			emitControl: async (type, data, opts) => {
-				if (options.fail) throw new Error('integration is down');
-				events.push({ type, data, options: opts });
-			},
-		}),
-	});
-	return { module, events };
-};
-
-/** Catalog stand-in: registers one app key so product routes can be called with client assertions. */
-export const fakeCatalog = async (appId = 'app_test') => {
-	const { privateJwk, publicJwk } = await generateSigningKey({ kid: `${appId}-1` });
+/** Catalog stand-in: records notices and registers one product key so product routes can be called. */
+export const fakeCatalog = async (productId = 'notes') => {
+	const { privateJwk, publicJwk } = await generateSigningKey({ kid: `${productId}-1` });
 	const resolver = createKeyResolver({ jwks: createJwks([publicJwk]) });
 	const signer = createSigner(privateJwk);
-	/** The app's manifest capabilities (F.16 `identityIssuer`), mutable by tests. */
-	const capabilities = /** @type {Record<string, unknown>} */ ({});
+	/** @type {Array<{ productId: string, body: Record<string, unknown> }>} */
+	const notices = [];
+	let failing = false;
 	const module = defineModule({
 		name: 'catalog',
 		service: () => ({
-			getApp: async (/** @type {string} */ id) => ({ appId: id, slug: 'signups', kind: 'service', status: 'active' }),
-			getManifest: async () => ({ product: { slug: 'signups', name: 'Signups' }, capabilities: { ...capabilities } }),
-			activeProducts: async () => [{ appId, slug: 'signups', name: 'Signups', kind: 'service' }],
+			/** @param {string} id @param {Record<string, unknown>} body */
+			notify: async (id, body) => {
+				if (failing) throw new Error('catalog is down');
+				notices.push({ productId: id, body });
+			},
+			/** @param {Record<string, unknown>} body */
+			notifyAll: async (body) => {
+				if (failing) throw new Error('catalog is down');
+				notices.push({ productId: '*', body });
+			},
+			listProducts: async () => [],
+			/** @param {string} id */
+			getProduct: async (id) => {
+				if (id !== productId) throw new Error('not connected');
+				return {
+					productId,
+					name: 'Notes',
+					widgetScriptUrl: 'https://notes.example.dev/widget.js',
+					docsUrl: 'https://notes.example.dev/docs',
+				};
+			},
 		}),
-		ports: () => ({ appKeys: (/** @type {string} */ id) => (id === appId ? resolver : null) }),
+		ports: () => ({ productKeys: (/** @type {string} */ id) => (id === productId ? resolver : null) }),
 	});
 	return {
 		module,
-		appId,
-		capabilities,
+		productId,
+		notices,
+		/** @param {boolean} value */
+		setFailing: (value) => {
+			failing = value;
+		},
 		/** @param {string} audience @param {() => number} now */
-		assertion: (audience, now) => signAssertion({ signer, appId, audience, now }),
+		assertion: (audience, now) => signAssertion({ signer, productId, audience, now }),
 	};
 };
 
@@ -115,20 +116,19 @@ export const memoryMailer = () => {
 	};
 };
 
-/** `GET /v1/test/whoami`: the authentication mode, actor, session and website key of the request. */
+/** `GET /v1/test/whoami`: the authentication mode, actor and session of the request. */
 export const whoamiModule = defineModule({
 	name: 'whoami',
 	routes: () => [
 		{
 			method: 'GET',
 			path: '/v1/test/whoami',
-			auth: ['admin', 'merchant', 'product', 'websiteKey'],
+			auth: ['admin', 'merchant', 'product'],
 			handler: (c) =>
 				ok({
 					authMode: c.authMode,
 					actor: c.actor,
 					...(c.session ? { session: { kind: c.session.kind, mfa: c.session.mfa } } : {}),
-					...(c.website ? { website: { websiteId: c.website.websiteId, kind: c.website.kind, env: c.website.env } } : {}),
 				}),
 		},
 	],

@@ -5,12 +5,13 @@
  * - `/v1/auth/*` (public, rate-limited): the one sign-in page (+ two-step step), Create admin, Forgot password,
  *   setup links, reset links, e-mail confirmation; sign-out.
  * - `/v1/me/*` (admin or merchant session): the signed-in person, their details, e-mail, password and two-step.
- * - `/v1/merchants/:merchantId/*` (merchant session for its own records, or admin): websites, keys, issuers.
+ * - `/v1/merchants/:merchantId/*` (merchant session for its own records, or admin): websites and the tokens of the
+ *   products on them (Install and tokens).
  * - `/v1/admin/*` (admin): merchants (create, search, edit, suspend, resume, setup links, two-step off, delete,
  *   bulk actions) and admins (invite, resend or copy, correct e-mail, change role, two-step off, remove).
- * - `GET /v1/product/revocations?since=` (client assertion, F.9).
+ * - `GET /v1/product/revocations?since=` (client assertion, PLAN 0.4.12 row 6).
  *
- * Responses that carry secrets (setup links, two-step secrets and recovery codes, website keys) opt out of
+ * Responses that carry secrets (setup links, two-step secrets and recovery codes, server tokens) opt out of
  * idempotent replay (`idempotent: 'no-store'`): the idempotency store persists response bodies.
  * @module
  */
@@ -19,7 +20,6 @@ import { created, defineRoute, noContent, ok, paginate, problem } from '../../in
 import { PERMISSIONS as P } from '../../infra/rbac.js';
 import { inputs } from './core/inputs.js';
 import { presentMerchant } from './core/present.js';
-import { parseIssuer } from './core/issuer.js';
 
 /** @typedef {import('../../infra/http.js').RequestContext} RequestContext */
 /** @typedef {import('../../infra/http.js').RouteDefinition} RouteDefinition */
@@ -75,7 +75,7 @@ const ownMerchant = (c) => {
  * @returns {RouteDefinition[]}
  */
 export const identityRoutes = (ctx, service) => {
-	const { accounts, admins, merchants, websites, keys, issuers, issuerRequests } = service;
+	const { accounts, admins, merchants, websites, tokens } = service;
 
 	/**
 	 * @param {RequestContext} c
@@ -93,7 +93,7 @@ export const identityRoutes = (ctx, service) => {
 	const authorizedWebsite = async (c, permission) => {
 		const merchantId = ownMerchant(c);
 		const website = await websites.loadWebsite(/** @type {string} */ (c.params.websiteId), merchantId);
-		c.authorize(permission, { merchantId, websiteId: websites.liveIdOf(website) });
+		c.authorize(permission, { merchantId, websiteId: String(website._id) });
 		return { merchantId, website };
 	};
 
@@ -183,7 +183,7 @@ export const identityRoutes = (ctx, service) => {
 			mfa: false,
 			handler: async (c) => {
 				const kind = kindOf(c);
-				return noContent({ cookies: [(await accounts.signOut(kind, tokenOf(c, kind))).cookie] });
+				return noContent({ cookies: [(await accounts.signOut(kind, tokenOf(c, kind), actorOf(c).id)).cookie] });
 			},
 		},
 
@@ -347,25 +347,6 @@ export const identityRoutes = (ctx, service) => {
 			},
 		},
 		{
-			// website settings (F.16) until the switch (PLAN 0.12 step 5)
-			method: 'PATCH',
-			path: '/v1/merchants/:merchantId/websites/:websiteId',
-			auth: ['merchant', 'admin'],
-			handler: async (c) => {
-				const { merchantId, website } = await authorizedWebsite(c, P.settingsWrite);
-				const settings = valid(inputs.websiteSettings(c.body));
-				return ok(
-					await websites.updateSettings({
-						merchantId,
-						websiteId: String(website._id),
-						settings,
-						actor: actorOf(c),
-						meta: metaOf(c),
-					}),
-				);
-			},
-		},
-		{
 			method: 'DELETE',
 			path: '/v1/merchants/:merchantId/websites/:websiteId',
 			auth: ['admin', 'merchant'],
@@ -382,189 +363,54 @@ export const identityRoutes = (ctx, service) => {
 				);
 			},
 		},
-		{
-			method: 'GET',
-			path: '/v1/merchants/:merchantId/websites/:websiteId/keys',
-			auth: ['merchant', 'admin'],
-			handler: async (c) => {
-				const { merchantId, website } = await authorizedWebsite(c, P.tokensManage);
-				return ok({ items: await keys.listKeys({ merchantId, websiteId: String(website._id) }) });
-			},
-		},
-		{
-			// the scope vocabulary keys are checked against (F.16): platform scopes + per listed service product
-			method: 'GET',
-			path: '/v1/merchants/:merchantId/websites/:websiteId/keys/scopes',
-			auth: ['merchant', 'admin'],
-			handler: async (c) => {
-				await authorizedWebsite(c, P.tokensManage);
-				return ok({ defaults: ['elements.read', 'events.write'], items: await keys.scopeCatalogue() });
-			},
-		},
-		{
-			method: 'POST',
-			path: '/v1/merchants/:merchantId/websites/:websiteId/keys',
-			auth: ['merchant', 'admin'],
-			idempotent: 'no-store',
-			handler: async (c) => {
-				const body = valid(inputs.keyIssue(c.body));
-				const { merchantId, website } = await authorizedWebsite(c, P.tokensManage);
-				return created(
-					await keys.issueKey({
-						merchantId,
-						websiteId: String(website._id),
-						kind: body.kind,
-						scopes: body.scopes ?? [],
-						...(body.expiresAt === undefined ? {} : { expiresAt: body.expiresAt }),
-						...(body.allowSubdomains === undefined ? {} : { allowSubdomains: body.allowSubdomains }),
-						actor: actorOf(c),
-						meta: metaOf(c),
-					}),
-				);
-			},
-		},
-		{
-			method: 'POST',
-			path: '/v1/merchants/:merchantId/websites/:websiteId/keys/:keyId/rotate',
-			auth: ['merchant', 'admin'],
-			idempotent: 'no-store',
-			handler: async (c) => {
-				const body = valid(inputs.keyRotate(c.body));
-				const { merchantId, website } = await authorizedWebsite(c, P.tokensManage);
-				return created(
-					await keys.rotateKey({
-						merchantId,
-						websiteId: String(website._id),
-						keyId: /** @type {string} */ (c.params.keyId),
-						...(body.graceSeconds === undefined ? {} : { graceSeconds: body.graceSeconds }),
-						actor: actorOf(c),
-						meta: metaOf(c),
-					}),
-				);
-			},
-		},
-		{
-			method: 'POST',
-			path: '/v1/merchants/:merchantId/websites/:websiteId/keys/:keyId/revoke',
-			auth: ['merchant', 'admin'],
-			handler: async (c) => {
-				const body = valid(inputs.keyRevoke(c.body));
-				const { merchantId, website } = await authorizedWebsite(c, P.tokensManage);
-				return ok(
-					await keys.revokeKey({
-						merchantId,
-						websiteId: String(website._id),
-						keyId: /** @type {string} */ (c.params.keyId),
-						...(body.reason === undefined ? {} : { reason: body.reason }),
-						actor: actorOf(c),
-						meta: metaOf(c),
-					}),
-				);
-			},
-		},
 
 		// ---------------------------------------------------------------------------------------------------------
-		// Bring-your-own customer identity (one issuer per website) until the switch (PLAN 0.12 step 5)
+		// Install and tokens (merchant: own; Owner and Support; never Finance)
 		{
 			method: 'GET',
-			path: '/v1/merchants/:merchantId/websites/:websiteId/identity',
+			path: '/v1/merchants/:merchantId/websites/:websiteId/tokens',
 			auth: ['merchant', 'admin'],
 			handler: async (c) => {
-				const { merchantId, website } = await authorizedWebsite(c, P.settingsRead);
-				const websiteId = String(website._id);
-				return ok({
-					issuer: await issuers.getIssuer({ merchantId, websiteId }),
-					request: await issuerRequests.pending({ merchantId, websiteId }),
-				});
+				const { merchantId, website } = await authorizedWebsite(c, P.tokensManage);
+				return ok({ items: await service.installOf({ merchantId, websiteId: String(website._id) }) });
 			},
 		},
-		.../** @type {const} */ (['approve', 'reject']).map((decision) => ({
-			method: /** @type {const} */ ('POST'),
-			path: `/v1/merchants/:merchantId/websites/:websiteId/identity/request/${decision}`,
-			auth: /** @type {import('../../infra/http.js').AuthMode[]} */ (['merchant', 'admin']),
-			idempotent: /** @type {const} */ ('optional'),
-			/** @param {RequestContext} c */
+		{
+			method: 'POST',
+			path: '/v1/merchants/:merchantId/websites/:websiteId/tokens/:productId/reveal',
+			auth: ['merchant', 'admin'],
+			idempotent: 'no-store',
+			rateLimit: { limit: 60, windowMs: 60_000 },
 			handler: async (c) => {
-				const body = valid(inputs.keyRevoke(c.body));
-				const { merchantId, website } = await authorizedWebsite(c, P.settingsWrite);
+				const { merchantId, website } = await authorizedWebsite(c, P.tokensManage);
+				const productId = /** @type {string} */ (c.params.productId);
+				await service.requireProductOn(String(website._id), productId);
 				return ok(
-					await issuerRequests.decide({
-						merchantId,
-						websiteId: String(website._id),
-						decision,
-						reason: body.reason ?? null,
-						actor: actorOf(c),
-						meta: metaOf(c),
-					}),
-				);
-			},
-		})),
-		{
-			// console notifications: pending product requests across the merchant's websites (F.16)
-			method: 'GET',
-			path: '/v1/merchants/:merchantId/notifications',
-			auth: ['merchant', 'admin'],
-			permission: P.settingsRead,
-			handler: async (c) => {
-				const merchantId = ownMerchant(c);
-				const all = await issuerRequests.pendingForMerchant({ merchantId });
-				const live = new Map((await websites.listWebsites(merchantId)).map((w) => [w.websiteId, w]));
-				const items = all
-					.filter((r) => live.has(r.websiteId))
-					.map((r) => ({
-						kind: 'identity_issuer_request',
-						websiteId: r.websiteId,
-						domain: live.get(r.websiteId)?.domain ?? null,
-						request: r,
-					}));
-				return ok({ items });
-			},
-		},
-		{
-			method: 'PUT',
-			path: '/v1/merchants/:merchantId/websites/:websiteId/identity',
-			auth: ['merchant', 'admin'],
-			handler: async (c) => {
-				const { merchantId, website } = await authorizedWebsite(c, P.settingsWrite);
-				const input = valid(parseIssuer(c.body));
-				return ok({
-					issuer: await issuers.setIssuer({
-						merchantId,
-						websiteId: String(website._id),
-						input,
-						actor: actorOf(c),
-						meta: metaOf(c),
-					}),
-				});
-			},
-		},
-		{
-			method: 'DELETE',
-			path: '/v1/merchants/:merchantId/websites/:websiteId/identity',
-			auth: ['merchant', 'admin'],
-			handler: async (c) => {
-				const { merchantId, website } = await authorizedWebsite(c, P.settingsWrite);
-				return ok(
-					await issuers.removeIssuer({ merchantId, websiteId: String(website._id), actor: actorOf(c), meta: metaOf(c) }),
+					await tokens.reveal({ merchantId, websiteId: String(website._id), productId, actor: actorOf(c), meta: metaOf(c) }),
 				);
 			},
 		},
 		{
 			method: 'POST',
-			path: '/v1/merchants/:merchantId/websites/:websiteId/identity/refresh',
+			path: '/v1/merchants/:merchantId/websites/:websiteId/tokens/:productId/regenerate',
 			auth: ['merchant', 'admin'],
-			idempotent: 'optional',
-			rateLimit: { limit: 10, windowMs: 60_000 },
+			idempotent: 'no-store',
+			rateLimit: { limit: 30, windowMs: 60_000 },
 			handler: async (c) => {
-				const { merchantId, website } = await authorizedWebsite(c, P.settingsWrite);
-				return ok({
-					issuer: await issuers.refreshKeys({
+				const { kind } = valid(inputs.tokenRegenerate(c.body));
+				const { merchantId, website } = await authorizedWebsite(c, P.tokensManage);
+				const productId = /** @type {string} */ (c.params.productId);
+				await service.requireProductOn(String(website._id), productId);
+				return ok(
+					await tokens.regenerate({
 						merchantId,
 						websiteId: String(website._id),
+						productId,
+						kind,
 						actor: actorOf(c),
 						meta: metaOf(c),
 					}),
-				});
+				);
 			},
 		},
 
@@ -774,30 +620,19 @@ export const identityRoutes = (ctx, service) => {
 		},
 
 		// ---------------------------------------------------------------------------------------------------------
-		// Product API (F.9, F.16)
-		{
-			// a product asks to become the website's identity issuer: stored pending until the merchant approves
-			method: 'PUT',
-			path: '/v1/product/websites/:websiteId/identity',
-			auth: 'product',
-			rateLimit: { limit: 30, windowMs: 60 * 60_000 },
-			handler: async (c) => {
-				const input = valid(parseIssuer(c.body));
-				const result = await issuerRequests.request({
-					appId: /** @type {{ appId: string }} */ (c.app).appId,
-					websiteId: /** @type {string} */ (c.params.websiteId),
-					input,
-					meta: metaOf(c),
-				});
-				return ok(result, { status: result.status === 'pending' ? 202 : 200 });
-			},
-		},
+		// Product API (PLAN 0.4.12)
 		{
 			method: 'GET',
 			path: '/v1/product/revocations',
 			auth: 'product',
-			rateLimit: { limit: 120, windowMs: 60_000 },
-			handler: async (c) => ok(await keys.revocationsSince(c.query.since)),
+			rateLimit: { limit: 600, windowMs: 60_000 },
+			handler: async (c) =>
+				ok(
+					await tokens.revocationsSince({
+						productId: /** @type {{ productId: string }} */ (c.product).productId,
+						since: c.query.since,
+					}),
+				),
 		},
 	];
 	return routes.map((route) => defineRoute(route));

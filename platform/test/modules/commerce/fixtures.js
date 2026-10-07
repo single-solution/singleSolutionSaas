@@ -1,6 +1,5 @@
 /**
- * Commerce test fixtures: ids, a Coupons-like manifest with plans, metered units and quotas, and a portal harness on
- * MongoMemoryReplSet with fake neighbour modules.
+ * Commerce test fixtures: ids, price lists, and a Portal harness on MongoMemoryReplSet with fake neighbour modules.
  */
 import { createSigner, createJwks, generateSigningKey, signAssertion } from '@ss/protocol';
 import { createPortal } from '../../../src/portal.js';
@@ -13,130 +12,52 @@ export const M2 = 'mer_1123456789abcdefghjkmnpq';
 export const W1 = 'web_0123456789abcdefghjkmnpq';
 export const W2 = 'web_1123456789abcdefghjkmnpq';
 export const W3 = 'web_2123456789abcdefghjkmnpq';
-export const APP = 'app_0123456789abcdefghjkmnpq';
-export const APP2 = 'app_1123456789abcdefghjkmnpq';
+export const PRODUCT = 'coupons';
+export const PRODUCT2 = 'notice';
+export const OWNER_ADMIN = 'adm_0wner0000000000000000000';
+export const SUPPORT_ADMIN = 'adm_support000000000000000000';
+export const FINANCE_ADMIN = 'adm_finance000000000000000000';
 export const HOUR = 3_600_000;
 export const STAFF = Object.freeze({ type: 'admin', id: 'adm_finance', role: 'finance' });
 export const ORIGIN_HEADERS = Object.freeze({ origin: PORTAL_URL, 'sec-fetch-site': 'same-origin' });
 
 /**
- * A Coupons-like manifest. Prices (millicredits/hour): codes 1000, apply_box 500, reports 250, ai_copy 2000;
- * redemptions cost 10 each above the plan's included amount (starter 5, pro 100 per month).
- * @param {{ version?: string, priceBook?: string, effectiveFrom?: string, codesHourly?: number, redemptionPrice?: number }} [options]
+ * A price list (PLAN 0.4.12 row 2) from `{ key: millicreditsPerHour }`; `box` depends on `codes`.
+ * @param {number} version
+ * @param {Record<string, number>} prices
  */
-export const couponsManifest = ({
-	version = '1.0.0',
-	priceBook = '2026-01',
-	effectiveFrom = '2026-01-01T00:00:00Z',
-	codesHourly = 1000,
-	redemptionPrice = 10,
-} = {}) => ({
-	ssps: 1,
-	product: { slug: 'coupon-box', name: 'Coupons', kind: 'service', version, category: 'commerce' },
-	elements: [
-		{
-			key: 'codes',
-			name: 'Codes',
-			modes: ['C'],
-			price: {
-				hourly: codesHourly,
-				metered: [{ unit: 'redemption', perUnit: redemptionPrice, included: { starter: 5, pro: 100 } }],
-			},
-			features: {
-				type: 'object',
-				properties: {
-					redemptions: {
-						type: 'integer',
-						title: 'Redemptions per month',
-						default: 1000,
-						'x-kind': 'quota',
-						'x-period': 'month',
-						'x-unit': 'redemption',
-						'x-plan': { starter: { default: 20 } },
-					},
-				},
-			},
-		},
-		{ key: 'apply_box', name: 'Apply box', modes: ['C'], price: { hourly: 500 }, dependsOn: ['codes'] },
-		{
-			key: 'reports',
-			name: 'Reports',
-			modes: ['C'],
-			price: { hourly: 250 },
-			dependsOn: ['apply_box'],
-			requires: { resources: ['database'] },
-		},
-		{ key: 'ai_copy', name: 'AI copy', modes: ['C'], price: { hourly: 2000 }, requires: { resources: ['ai'] } },
-	],
-	plans: [
-		{ code: 'starter', name: 'Starter', elements: ['codes', 'apply_box'], addons: ['reports'] },
-		{ code: 'pro', name: 'Pro', elements: ['codes', 'apply_box', 'reports', 'ai_copy'] },
-	],
-	priceBook: { version: priceBook, effectiveFrom },
-});
-
-/** A second, free product (0 per hour) with a single element. */
-export const freeManifest = () => ({
-	ssps: 1,
-	product: { slug: 'notice', name: 'Notice', kind: 'pack', version: '1.0.0', category: 'content' },
-	elements: [{ key: 'bar', name: 'Bar', modes: ['A'], price: { hourly: 0 } }],
-	priceBook: { version: 'v1', effectiveFrom: '2026-01-01T00:00:00Z' },
+export const priceList = (version, prices) => ({
+	version,
+	features: Object.entries(prices).map(([key, millicreditsPerHour]) => ({
+		key,
+		name: key === 'codes' ? 'Codes' : key === 'box' ? 'Apply box' : key,
+		description: `The ${key} feature.`,
+		dependsOn: key === 'box' ? ['codes'] : [],
+		millicreditsPerHour,
+	})),
 });
 
 /**
  * @param {import('./fakes/modules.js').World} world
  */
 export const seedWorld = (world) => {
-	const created = new Date(T0 - 30 * 86_400_000).toISOString();
-	world.merchants.set(M1, { merchantId: M1, name: 'One', status: 'active', createdAt: created });
-	world.merchants.set(M2, { merchantId: M2, name: 'Two', status: 'active', createdAt: created });
-	world.websites.set(W1, {
-		websiteId: W1,
-		merchantId: M1,
-		domain: 'shop.example.com',
-		env: 'live',
-		twinId: null,
-		status: 'active',
-		createdAt: created,
-	});
-	world.websites.set(W2, {
-		websiteId: W2,
-		merchantId: M1,
-		domain: 'blog.example.com',
-		env: 'live',
-		twinId: null,
-		status: 'active',
-		createdAt: created,
-	});
-	world.websites.set(W3, {
-		websiteId: W3,
-		merchantId: M2,
-		domain: 'two.example.org',
-		env: 'test',
-		twinId: null,
-		status: 'active',
-		createdAt: created,
-	});
-	world.apps.set(APP, {
-		app: { appId: APP, slug: 'coupon-box', kind: 'service', status: 'active', endpoints: null, currentVersion: 1 },
-		versions: new Map([[1, couponsManifest()]]),
-	});
-	world.apps.set(APP2, {
-		app: { appId: APP2, slug: 'notice', kind: 'pack', status: 'active', endpoints: null, currentVersion: 1 },
-		versions: new Map([[1, freeManifest()]]),
-	});
-	world.resources.set(W1, [
-		{ kind: 'database', ref: 'con_db1', status: 'connected' },
-		{ kind: 'ai', status: 'missing' },
-	]);
+	world.merchants.set(M1, { merchantId: M1, name: 'One', status: 'active' });
+	world.merchants.set(M2, { merchantId: M2, name: 'Two', status: 'active' });
+	world.websites.set(W1, { websiteId: W1, merchantId: M1, domain: 'shop.example.com', status: 'active' });
+	world.websites.set(W2, { websiteId: W2, merchantId: M1, domain: 'blog.example.com', status: 'active' });
+	world.websites.set(W3, { websiteId: W3, merchantId: M2, domain: 'two.example.org', status: 'active' });
+	world.products.set(PRODUCT, { productId: PRODUCT, name: 'Coupons', status: 'active' });
+	world.products.set(PRODUCT2, { productId: PRODUCT2, name: 'Notice', status: 'active' });
+	world.admins.set(OWNER_ADMIN, { adminId: OWNER_ADMIN, name: 'Olivia', role: 'owner', status: 'active' });
+	world.admins.set(SUPPORT_ADMIN, { adminId: SUPPORT_ADMIN, name: 'Sam', role: 'support', status: 'active' });
+	world.admins.set(FINANCE_ADMIN, { adminId: FINANCE_ADMIN, name: 'Fay', role: 'finance', status: 'active' });
 };
 
 /**
  * Boot a Portal with commerce and the fakes.
- * @param {{ mongo: { db: (name: string) => import('mongodb').Db }, dbName: string, clock?: ReturnType<typeof createClock>,
- *   options?: Parameters<typeof fakeModules>[1] }} input
+ * @param {{ mongo: { db: (name: string) => import('mongodb').Db }, dbName: string, clock?: ReturnType<typeof createClock> }} input
  */
-export const bootCommerce = async ({ mongo, dbName, clock = createClock(T0), options }) => {
+export const bootCommerce = async ({ mongo, dbName, clock = createClock(T0) }) => {
 	const world = createWorld();
 	seedWorld(world);
 	const config = await testConfig();
@@ -148,7 +69,7 @@ export const bootCommerce = async ({ mongo, dbName, clock = createClock(T0), opt
 	const portal = createPortal({
 		config,
 		db,
-		modules: [commerceModule, ...fakeModules(world, options)],
+		modules: [commerceModule, ...fakeModules(world)],
 		logger,
 		now: clock.now,
 		mailer: /** @type {any} */ (mailer),
@@ -179,17 +100,23 @@ export const bootCommerce = async ({ mongo, dbName, clock = createClock(T0), opt
 	};
 
 	/**
-	 * Register product keys for an app; returns a function producing fresh assertion headers.
-	 * @param {string} appId
+	 * Register a product's key; returns a function producing fresh assertion headers.
+	 * @param {string} productId
 	 */
-	const productAuth = async (appId) => {
-		const { privateJwk, publicJwk } = await generateSigningKey({ kid: `${appId}-k1` });
-		world.appJwks.set(appId, createJwks([publicJwk]));
+	const productAuth = async (productId) => {
+		const { privateJwk, publicJwk } = await generateSigningKey({ kid: `${productId}-k1` });
+		world.productJwks.set(productId, createJwks([publicJwk]));
 		const signer = createSigner(privateJwk);
 		return async () => ({
-			authorization: `Bearer ${await signAssertion({ signer, appId, audience: PORTAL_URL, now: clock.now })}`,
+			authorization: `Bearer ${await signAssertion({ signer, productId, audience: PORTAL_URL, now: clock.now })}`,
 		});
 	};
+
+	/**
+	 * Accept a price list for a product.
+	 * @param {string} productId @param {number} version @param {Record<string, number>} prices
+	 */
+	const prices = (productId, version, prices) => service.recordPriceList({ productId, prices: priceList(version, prices) });
 
 	/** @param {string} merchantId @param {number} amount millicredits (whole credits) @param {string | null} [reference] */
 	const credit = (merchantId, amount, reference = null) =>
@@ -202,6 +129,7 @@ export const bootCommerce = async ({ mongo, dbName, clock = createClock(T0), opt
 		call,
 		login,
 		productAuth,
+		prices,
 		credit,
 		clock,
 		db,

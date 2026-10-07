@@ -39,7 +39,7 @@ export const adminContext = async (next) => {
 	const session = await adminSession();
 	if (!session.ok) {
 		if (session.status === 401) redirect(`/login?next=${encodeURIComponent(next)}`);
-		if (/** @type {{ merchant?: boolean }} */ (session).merchant) redirect('/websites');
+		if (/** @type {{ merchant?: boolean }} */ (session).merchant) redirect('/overview');
 		throw new Error(session.problem?.detail ?? 'The admin console is unavailable.');
 	}
 	return { api: await adminApiClient(), admin: session.admin };

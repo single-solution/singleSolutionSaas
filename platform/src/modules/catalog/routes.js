@@ -1,19 +1,21 @@
 /**
  * HTTP routes of the `catalog` module: thin adapters from requests to the service.
  *
- * Public:   GET  /v1/catalog/products · GET /v1/catalog/products/:slug
- * Merchant: POST /v1/merchants/:merchantId/apps/:appId/launch
- * Staff:    POST /v1/admin/apps/connect (URL + connect secret) · POST /v1/admin/packs · GET /v1/admin/apps ·
- *           GET /v1/admin/apps/:appId · GET /v1/admin/apps/:appId/versions/:version · POST /v1/admin/apps/:appId/status · POST /v1/admin/apps/:appId/launch
- * Product:  POST /v1/product/launch/consume (F.9)
+ * Admin:    GET  /v1/admin/products · GET /v1/admin/products/:productId · GET /v1/admin/products/:productId/websites ·
+ *           POST /v1/admin/products (Add product) · POST /v1/admin/products/:productId/reconnect ·
+ *           POST /v1/admin/products/:productId/status · POST /v1/admin/products/:productId/launch (Open as admin)
+ * Merchant: POST /v1/merchants/:merchantId/websites/:websiteId/products/:productId/launch
+ * Product:  POST /v1/product/launch/consume · GET /v1/product/directory/:productId · GET /v1/product/websites
  * @module
  */
-import { created, defineRoute, ok, paginate, problem } from '../../infra/http.js';
-import { parseConsume, parseMerchantLaunch, parseStaffLaunch, parseStatus } from './core/input.js';
+import { defineRoute, ok, created, problem } from '../../infra/http.js';
+import { PERMISSIONS as P } from '../../infra/rbac.js';
+import { parseAdminLaunch, parseConnect, parseConsume, parseStatus } from './core/input.js';
 
 /** @typedef {import('./service.js').CatalogService} CatalogService */
 /** @typedef {import('../../infra/http.js').RequestContext} RequestContext */
 /** @typedef {import('../../infra/rbac.js').Actor} Actor */
+/** @typedef {import('../../infra/auth.js').Session} Session */
 
 /**
  * @template T
@@ -25,206 +27,165 @@ const valid = (parsed) => {
 	return parsed.value;
 };
 
-/** @param {RequestContext} ctx */
-const audited = (ctx) => ({ actor: /** @type {Actor} */ (ctx.actor), requestId: ctx.requestId, ip: ctx.ip });
+/** @param {RequestContext} c */
+const audited = (c) => ({ actor: /** @type {Actor} */ (c.actor), requestId: c.requestId, ip: c.ip });
 
-const STATUSES = new Set(['active', 'inactive']);
+/** @param {RequestContext} c */
+const productOf = (c) => /** @type {{ productId: string }} */ (c.product).productId;
 
 /**
  * @param {CatalogService} service
- * @param {{ commerce: () => any }} deps lazily resolved optional services
+ * @param {() => any} commerce
  */
-export const catalogRoutes = (service, deps) => [
-	// ---------------------------------------------------------------- public catalog
+export const catalogRoutes = (service, commerce) => [
+	// ---------------------------------------------------------------- admin: Products
 	defineRoute({
 		method: 'GET',
-		path: '/v1/catalog/products',
-		auth: 'public',
-		rateLimit: { limit: 120, windowMs: 60_000 },
-		handler: async (ctx) => {
-			const kind = ctx.query.kind;
-			if (kind !== undefined && kind !== 'service' && kind !== 'pack')
-				return problem('bad_request', 'kind must be service or pack');
+		path: '/v1/admin/products',
+		auth: 'admin',
+		permission: P.productsRead,
+		handler: async (c) => {
+			const status = c.query.status;
+			if (status !== undefined && status !== 'active' && status !== 'inactive')
+				return problem('bad_request', 'status must be active or inactive');
+			const items = await service.listProducts(status ? { status } : {});
+			const numbers = /** @type {Map<string, Record<string, unknown>>} */ (
+				new Map(
+					(await commerce().allProductNumbers()).map((/** @type {Record<string, any>} */ n) => [String(n.productId), n]),
+				)
+			);
+			return ok({
+				items: items.map((p) => ({
+					...p,
+					websites: numbers.get(p.productId)?.websites ?? 0,
+					earnedThisMonth: numbers.get(p.productId)?.earnedThisMonth ?? 0,
+				})),
+			});
+		},
+	}),
+	defineRoute({
+		method: 'GET',
+		path: '/v1/admin/products/:productId',
+		auth: 'admin',
+		permission: P.productsRead,
+		handler: async (c) => ok(await service.productDetail(/** @type {string} */ (c.params.productId))),
+	}),
+	defineRoute({
+		method: 'GET',
+		path: '/v1/admin/products/:productId/websites',
+		auth: 'admin',
+		permission: P.productsRead,
+		handler: async (c) => {
+			const productId = /** @type {string} */ (c.params.productId);
+			await service.getProduct(productId);
+			return ok(await commerce().productWebsitesView({ productId, cursor: c.query.cursor ?? null }));
+		},
+	}),
+	defineRoute({
+		method: 'POST',
+		path: '/v1/admin/products',
+		auth: 'admin',
+		permission: P.productsManage,
+		idempotent: true, // the stored response never carries the connect secret
+		rateLimit: { limit: 20, windowMs: 60_000 },
+		handler: async (c) => {
+			const { url, secret } = valid(parseConnect(c.body, { urlRequired: true }));
+			return created({ product: await service.connect({ url: /** @type {string} */ (url), secret, ...audited(c) }) });
+		},
+	}),
+	defineRoute({
+		method: 'POST',
+		path: '/v1/admin/products/:productId/reconnect',
+		auth: 'admin',
+		permission: P.productsManage,
+		rateLimit: { limit: 20, windowMs: 60_000 },
+		handler: async (c) => {
+			const { url, secret } = valid(parseConnect(c.body, { urlRequired: false }));
+			return ok({
+				product: await service.reconnect({
+					productId: /** @type {string} */ (c.params.productId),
+					url,
+					secret,
+					...audited(c),
+				}),
+			});
+		},
+	}),
+	defineRoute({
+		method: 'POST',
+		path: '/v1/admin/products/:productId/status',
+		auth: 'admin',
+		permission: P.productsManage,
+		handler: async (c) =>
+			ok({
+				product: await service.setStatus({
+					productId: /** @type {string} */ (c.params.productId),
+					...valid(parseStatus(c.body)),
+					...audited(c),
+				}),
+			}),
+	}),
+	defineRoute({
+		method: 'POST',
+		path: '/v1/admin/products/:productId/launch',
+		auth: 'admin',
+		permission: P.dashboardsOpen,
+		rateLimit: { limit: 60, windowMs: 60_000 },
+		handler: async (c) => {
+			const { websiteId } = valid(parseAdminLaunch(c.body));
+			// Open as admin with no website is Owner only (PLAN 0.2 rights table: Products row)
+			if (websiteId === null) c.authorize(P.productsManage, {});
 			return ok(
-				{ items: await service.activeProducts(kind ? { kind } : {}) },
-				{ headers: { 'cache-control': 'public, max-age=60' } },
+				await service.adminLaunch({
+					productId: /** @type {string} */ (c.params.productId),
+					websiteId,
+					session: /** @type {Session} */ (c.session),
+					...audited(c),
+				}),
 			);
 		},
 	}),
-	defineRoute({
-		method: 'GET',
-		path: '/v1/catalog/products/:slug',
-		auth: 'public',
-		rateLimit: { limit: 240, windowMs: 60_000 },
-		handler: async (ctx) =>
-			ok(await service.productDetail(ctx.params.slug ?? ''), { headers: { 'cache-control': 'public, max-age=60' } }),
-	}),
 
-	// ---------------------------------------------------------------- merchant launch
+	// ---------------------------------------------------------------- merchant: Open
 	defineRoute({
 		method: 'POST',
-		path: '/v1/merchants/:merchantId/apps/:appId/launch',
+		path: '/v1/merchants/:merchantId/websites/:websiteId/products/:productId/launch',
 		auth: 'merchant',
-		permission: 'dashboards.open',
-		resource: (ctx) => {
-			const body = /** @type {any} */ (ctx.body);
-			return {
-				merchantId: ctx.params.merchantId ?? null,
-				websiteId: typeof body?.websiteId === 'string' ? body.websiteId : null,
-			};
-		},
+		permission: P.dashboardsOpen,
 		rateLimit: { limit: 60, windowMs: 60_000 },
-		handler: async (ctx) => {
-			const { websiteId } = valid(parseMerchantLaunch(ctx.body));
-			const actor = /** @type {Actor} */ (ctx.actor);
-			const merchantId = /** @type {string} */ (ctx.params.merchantId);
-			const appId = /** @type {string} */ (ctx.params.appId);
-			const commerce = deps.commerce();
-			/** @type {unknown[] | undefined} */
-			let subscriptions;
-			if (websiteId && commerce && typeof commerce.subscriptionsForWebsite === 'function') {
-				const all = await commerce.subscriptionsForWebsite(websiteId);
-				subscriptions = (Array.isArray(all) ? all : (all?.items ?? []))
-					.filter((/** @type {any} */ s) => s?.appId === appId && s?.merchantId === merchantId)
-					.map((/** @type {any} */ s) => ({ subscriptionId: s.subscriptionId, websiteId: s.websiteId, status: s.status }));
-			}
-			const launch = await service.issueLaunch({
-				kind: 'merchant',
-				appId,
-				subject: actor.id,
-				user: { id: actor.id, roles: [] },
-				scope: { merchantId, ...(websiteId ? { websiteId } : {}) },
-				...(subscriptions ? { subscriptions } : {}),
-				requestId: ctx.requestId,
-				ip: ctx.ip,
-			});
-			return ok({ url: launch.url, expiresAt: launch.expiresAt });
-		},
-	}),
-
-	// ---------------------------------------------------------------- staff
-	defineRoute({
-		method: 'POST',
-		path: '/v1/admin/apps/connect',
-		auth: 'admin',
-		permission: 'products.manage',
-		idempotent: true, // the stored response never carries the connect secret
-		rateLimit: { limit: 20, windowMs: 60_000 },
-		handler: async (ctx) => {
-			const body = /** @type {Record<string, unknown>} */ (ctx.body ?? {});
-			return created(await service.connectProduct({ url: body.url, secret: body.secret, ...audited(ctx) }));
-		},
-	}),
-	defineRoute({
-		method: 'POST',
-		path: '/v1/admin/packs',
-		auth: 'admin',
-		permission: 'products.manage',
-		idempotent: true,
-		maxBodyBytes: 1024 * 1024,
-		rateLimit: { limit: 30, windowMs: 60_000 },
-		handler: async (ctx) => {
-			const result = await service.uploadPack({ body: ctx.body, ...audited(ctx) });
-			return result.changed ? created(result) : ok(result);
-		},
-	}),
-	defineRoute({
-		method: 'GET',
-		path: '/v1/admin/apps',
-		auth: 'admin',
-		permission: 'products.read',
-		handler: async (ctx) => {
-			const page = paginate({ cursor: ctx.query.cursor, limit: ctx.query.limit, url: ctx.request.url });
-			const status = ctx.query.status ? ctx.query.status.split(',') : undefined;
-			if (status?.some((s) => !STATUSES.has(s))) return problem('bad_request', 'status must be active or inactive');
-			const kind = ctx.query.kind;
-			if (kind !== undefined && kind !== 'service' && kind !== 'pack')
-				return problem('bad_request', 'kind must be service or pack');
-			const items = await service.listApps({
-				...(status ? { status } : {}),
-				...(kind ? { kind } : {}),
-				after: typeof page.after === 'string' ? page.after : null,
-				limit: page.fetchLimit,
-			});
-			return page.respond(items, (item) => item.appId);
-		},
-	}),
-	defineRoute({
-		method: 'GET',
-		path: '/v1/admin/apps/:appId',
-		auth: 'admin',
-		permission: 'products.read',
-		handler: async (ctx) => ok(await service.appDetail(/** @type {string} */ (ctx.params.appId))),
-	}),
-	defineRoute({
-		method: 'GET',
-		path: '/v1/admin/apps/:appId/versions/:version',
-		auth: 'admin',
-		permission: 'products.read',
-		handler: async (ctx) => {
-			const version = Number(ctx.params.version);
-			if (!Number.isSafeInteger(version) || version < 1)
-				throw problem('not_found', `No version ${String(ctx.params.version)}.`);
-			return ok(await service.versionDetail(/** @type {string} */ (ctx.params.appId), version));
-		},
-	}),
-	defineRoute({
-		method: 'POST',
-		path: '/v1/admin/apps/:appId/status',
-		auth: 'admin',
-		permission: 'products.manage',
-		handler: async (ctx) =>
+		handler: async (c) =>
 			ok(
-				await service.setStatus({
-					appId: /** @type {string} */ (ctx.params.appId),
-					...valid(parseStatus(ctx.body)),
-					...audited(ctx),
+				await service.merchantLaunch({
+					merchantId: /** @type {string} */ (c.params.merchantId),
+					websiteId: /** @type {string} */ (c.params.websiteId),
+					productId: /** @type {string} */ (c.params.productId),
+					session: /** @type {Session} */ (c.session),
+					...audited(c),
 				}),
 			),
 	}),
-	defineRoute({
-		method: 'POST',
-		path: '/v1/admin/apps/:appId/launch',
-		auth: 'admin',
-		permission: 'dashboards.open',
-		rateLimit: { limit: 60, windowMs: 60_000 },
-		handler: async (ctx) => {
-			const input = valid(parseStaffLaunch(ctx.body));
-			const actor = /** @type {Actor} */ (ctx.actor);
-			// Open as admin with no website (scope.all) is Owner only (PLAN 0.2 rights table: Products row)
-			if (input.all) ctx.authorize('products.manage', {});
-			const launch = await service.issueLaunch({
-				kind: 'admin',
-				appId: /** @type {string} */ (ctx.params.appId),
-				subject: actor.id,
-				user: { id: actor.id, roles: actor.role ? [actor.role] : [] },
-				scope: {
-					...(input.all ? { all: /** @type {const} */ (true) } : {}),
-					...(input.merchantId ? { merchantId: input.merchantId } : {}),
-					...(input.websiteId ? { websiteId: input.websiteId } : {}),
-				},
-				actor: actor.id,
-				requestId: ctx.requestId,
-				ip: ctx.ip,
-			});
-			return ok({ url: launch.url, expiresAt: launch.expiresAt });
-		},
-	}),
 
-	// ---------------------------------------------------------------- product API (F.9)
+	// ---------------------------------------------------------------- product API (PLAN 0.4.12)
 	defineRoute({
 		method: 'POST',
 		path: '/v1/product/launch/consume',
 		auth: 'product',
-		idempotent: false,
 		maxBodyBytes: 4 * 1024,
 		rateLimit: { limit: 600, windowMs: 60_000 },
-		handler: async (ctx) =>
-			ok(
-				await service.consumeLaunch({
-					appId: /** @type {{ appId: string }} */ (ctx.app).appId,
-					...valid(parseConsume(ctx.body)),
-				}),
-			),
+		handler: async (c) => ok(await service.consumeLaunch({ productId: productOf(c), ...valid(parseConsume(c.body)) })),
+	}),
+	defineRoute({
+		method: 'GET',
+		path: '/v1/product/directory/:productId',
+		auth: 'product',
+		rateLimit: { limit: 600, windowMs: 60_000 },
+		handler: async (c) => ok(await service.directory(/** @type {string} */ (c.params.productId))),
+	}),
+	defineRoute({
+		method: 'GET',
+		path: '/v1/product/websites',
+		auth: 'product',
+		rateLimit: { limit: 600, windowMs: 60_000 },
+		handler: async (c) => ok(await commerce().websitesOfProduct({ productId: productOf(c), cursor: c.query.cursor ?? null })),
 	}),
 ];

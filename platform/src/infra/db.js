@@ -11,7 +11,7 @@
  *     and nothing that updates or deletes;
  *   - merchant-scoped collections are reached through `forMerchant(merchantId)` (every filter and the first
  *     `$match` must pin `merchantId` by equality, inserts are stamped, `merchantId` can never be changed,
- *     cross-collection stages are refused) or the explicit `acrossMerchants()` view for staff/system code;
+ *     cross-collection stages are refused) or the explicit `acrossMerchants()` view for admin/system code;
  *   - every repository refuses `$where` and the `$out` / `$merge` write stages (which could bypass append-only).
  * - `createLocks` — lease locks (unique `_id`, expiry takeover) used by migrations, operation runs and ledger appends.
  * - `createTransactionRunner` — `withTransaction(async (session) => …)` over a driver session: snapshot reads,
