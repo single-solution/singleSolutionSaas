@@ -181,17 +181,32 @@ flowchart LR
   A5[Portal: merchant → website → Open] --> A4
 ```
 
-## 0.8 Open items (to be decided before building)
+## 0.8 Further decisions (2026-10-07)
 
-- Portal screens page by page (admin and merchant), and each product dashboard's screens.
-- Exact feature list and default hourly prices per product.
-- How the merchant's server mints short-lived tokens for our admin widgets on their own admin pages.
-- What triggers the grace period ending, products stopping and credit e-mails without scheduled jobs (check on read, or
-  one daily job).
-- How merchants test locally now that there is no test mode.
-- Keep or drop: website transfer, admin notes on merchants, Chat extras (flows, knowledge base, lead capture, surveys,
-  transcripts, moderation), Accounts extras.
-- Live data: reset `ss_portal`/`ss_chatbot` (if test data only) or migrate.
+- **Grace and stops without scheduled jobs**: checked on use. Every call into a product counts as activity; balance,
+  grace ending, stopping and credit e-mails are evaluated at that moment (and whenever the Portal is opened).
+- **Local testing**: a website's browser token also works on `localhost` for that website (charged as part of it). No
+  test mode.
+- **Live data**: Atlas holds only test data, so `ss_portal` and `ss_chatbot` are **reset** at the switch (recreate the
+  first admin, re-add products).
+- **Kept**: Chat extras (flows, knowledge base, lead capture, satisfaction surveys, transcripts, moderation) and Accounts
+  extras (shopper orders tab, risk checks, terms acceptance), as switchable features. **Dropped**: website transfer,
+  admin notes on merchants.
+- **Prices**: every feature starts at **0**; our admin sets prices in each product's admin price screen.
+- **Widget styling**: theme settings (colours, fonts, corner radius, light/dark) plus a custom CSS box, set in the
+  product dashboard.
+- **Admin widgets on the merchant's own admin** use **short-lived tickets**: the merchant's server checks the user's role,
+  then asks the product for a ticket with its secret server token; the ticket is valid ~15 minutes for that website and
+  only the permissions granted, and renews automatically while the user stays signed in to the merchant's admin. The
+  secret never reaches a browser. Each product's Developers docs ship a ready server snippet.
+- **ibrahimMobiles** is connected only after the SaaS is built.
+- **Product depth**: each product is grilled in depth **right before it is built** (Chat first), and finished fully
+  before moving to the next.
+
+### Still open
+
+- Portal screens page by page (admin and merchant) beyond 0.6, and each product dashboard's screens.
+- Exact feature list per product (prices start at 0).
 
 ## 0.9 Conflicts with the current build and deployment
 
