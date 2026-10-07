@@ -8,11 +8,14 @@
  *   sends order.completed@1 to the Portal Event Hub → signed delivery to the product → review request in the merchant's
  *   own database → the verified customer (the website's own login token, verified offline from the signed entitlement)
  *   submits a review with the pk_ key → auto-approved by the default rules@1 rule → rating summary and Product JSON-LD
- *   reflect it → usage (`review`) reported → hourly settlement charges credits. Plus the merchant console's "Try demo".
+ *   reflect it → usage (`review`) reported → hourly settlement charges credits. Plus the widgets: staff upload the
+ *   `ss pack build` output ("Upload widgets") and the compiled website script mounts the real reviews widget, bound to
+ *   the product's base URL.
  *
  * The Portal is served over http on 127.0.0.1 (allowed outside production); the product over https on localhost with a
  * throw-away certificate trusted for this process only (the manifest's `endpoints.base` must be https).
- * System test (the `e2e/` workspace): it runs the Portal (`@ss/platform/testing`) and the product (`@ss/product-reviews/serve`).
+ * System test (the `e2e/` workspace): it runs the Portal (`@ss/platform/testing`) and the product (`@ss/product-reviews`
+ * `./platform` + `./routes`, served through app-kit).
  */
 import { execFileSync } from 'node:child_process';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
@@ -33,6 +36,7 @@ import {
 	configModule,
 	createCatalogModule,
 	createConnectorsModule,
+	createDeliveryModule,
 	createIdentityModule,
 	createIntegrationModule,
 	createPortal,
@@ -42,8 +46,12 @@ import {
 	totpCode,
 	SESSIONS,
 } from '@ss/platform/testing';
-import { ROOT, loadManifest, startServer } from '@ss/product-reviews/serve';
-import { CONNECT_SECRET, connectProduct, createClock, mongoUri } from './helpers.js';
+import { buildPack, descriptorOf } from '@ss/cli/pack';
+import { createPlatform, loadManifest } from '@ss/product-reviews/platform';
+import { buildRoutes, createReviews, wireEvents } from '@ss/product-reviews/routes';
+import { CONNECT_SECRET, connectProduct, createClock, mongoUri, productRoot, startProduct } from './helpers.js';
+
+const ROOT = productRoot('@ss/product-reviews');
 
 const HOUR = 3_600_000;
 const STAFF = { email: 'root@portal.test', password: 'staff password 123!' };
@@ -140,13 +148,17 @@ beforeAll(async () => {
 			NODE_ENV: 'test',
 			MONGODB_URI: mongoUri('unused'),
 			OUTBOUND_DEV_ALLOW_HOSTS: LOCAL_HOSTS.join(','),
+			STORAGE_DIR: ':memory:',
 		},
 		// keys and secrets as the Portal generates them on first start; the Portal URL is each request's origin
 		testSystemState(),
 		// long staff sessions for the scripted clock
 		{
 			baseUrl: PORTAL_URL,
-			overrides: { sessions: { ...SESSIONS, staff: { idleMs: 720 * 60_000, absoluteMs: SESSIONS.staff.absoluteMs } } },
+			overrides: {
+				sessions: { ...SESSIONS, staff: { idleMs: 720 * 60_000, absoluteMs: SESSIONS.staff.absoluteMs } },
+				delivery: { storage: { kind: 'memory' } },
+			},
 		},
 	);
 	const mongo = await new MongoClient(/** @type {string} */ (process.env.TEST_MONGODB_URI)).connect();
@@ -171,6 +183,7 @@ beforeAll(async () => {
 			configModule,
 			createConnectorsModule({ allowHosts: LOCAL_HOSTS, resolve: resolveLocal }),
 			commerceModule,
+			createDeliveryModule(),
 		],
 	});
 	await portal.ensureIndexes();
@@ -201,29 +214,34 @@ beforeAll(async () => {
 	const productPort = await freePort();
 	const PRODUCT_URL = `https://localhost:${productPort}`;
 	const manifest = await loadManifest(ROOT);
-	const product = await startServer({
-		port: productPort,
-		host: '127.0.0.1',
-		root: ROOT,
+	const reviews = wireEvents(
+		createReviews(
+			await createPlatform({
+				root: ROOT,
+				env: { LOG_LEVEL: 'error', CONNECT_SECRET },
+				overrides: {
+					now: clock.now,
+					logger: noopLogger,
+					manifest: { ...manifest, endpoints: { ...manifest.endpoints, base: PRODUCT_URL } },
+				},
+			}),
+		),
+	);
+	const product = await startProduct({
+		product: reviews.product,
+		routes: buildRoutes(reviews),
+		close: () => reviews.app.close(),
 		tls: { key, cert },
-		env: {
-			LOG_LEVEL: 'error',
-			CONNECT_SECRET,
-		},
-		overrides: {
-			now: clock.now,
-			logger: noopLogger,
-			manifest: { ...manifest, endpoints: { ...manifest.endpoints, base: PRODUCT_URL } },
-		},
+		port: productPort,
 	});
 
 	/**
 	 * In-process Portal call (cookie sessions send the Portal origin for CSRF).
 	 * @param {string} method
 	 * @param {string} pathname
-	 * @param {{ body?: unknown, cookie?: string, bearer?: string, headers?: Record<string, string> }} [init]
+	 * @param {{ body?: unknown, raw?: Uint8Array, cookie?: string, bearer?: string, headers?: Record<string, string> }} [init]
 	 */
-	const call = async (method, pathname, { body, cookie, bearer, headers = {} } = {}) => {
+	const call = async (method, pathname, { body, raw, cookie, bearer, headers = {} } = {}) => {
 		const response = await portal.handle(
 			new Request(`${PORTAL_URL}${pathname}`, {
 				method,
@@ -234,7 +252,7 @@ beforeAll(async () => {
 					...(method === 'POST' ? { 'idempotency-key': randomUUID() } : {}),
 					...headers,
 				},
-				...(body === undefined ? {} : { body: JSON.stringify(body) }),
+				...(raw ? { body: new Uint8Array(raw) } : body === undefined ? {} : { body: JSON.stringify(body) }),
 			}),
 		);
 		const text = await response.text();
@@ -242,19 +260,26 @@ beforeAll(async () => {
 			.getSetCookie()
 			.map((value) => value.split(';')[0])
 			.find((pair) => /=.+/.test(pair ?? ''));
-		return { status: response.status, json: text ? JSON.parse(text) : null, cookie: setCookie ?? null };
+		const json = (() => {
+			try {
+				return text ? JSON.parse(text) : null;
+			} catch {
+				return null;
+			}
+		})();
+		return { status: response.status, json, text, cookie: setCookie ?? null };
 	};
 	/** Run what the Portal deferred after its responses (deliveries, retries); returns the job outcome counts. */
 	const drain = async () => {
 		const jobs = portalDb.collection('platform_jobs');
 		const count = async () => ({
 			done: await jobs.countDocuments({ status: 'done' }),
-			dead: await jobs.countDocuments({ status: 'dead' }),
+			failed: await jobs.countDocuments({ status: 'failed' }),
 		});
 		const before = await count();
 		while (afterResponseTasks.length > 0) await afterResponseTasks.shift()?.();
 		const after = await count();
-		return { status: 'ok', stats: { succeeded: after.done - before.done, dead: after.dead - before.dead } };
+		return { status: 'ok', stats: { succeeded: after.done - before.done, failed: after.failed - before.failed } };
 	};
 	ctx = {
 		clock,
@@ -317,16 +342,14 @@ describe.skipIf(!hasOpenssl)('Reviews & Ratings on the real Portal', () => {
 		// Admin → Apps → Add product: the product URL and its connect secret
 		const registered = await connectProduct(call, state.staff, PRODUCT_URL);
 		expect(registered.status, JSON.stringify(registered.json)).toBe(201);
-		expect(registered.json).toMatchObject({ slug: 'reviews', kind: 'service', status: 'pending', currentVersion: 1 });
+		expect(registered.json).toMatchObject({ slug: 'reviews', kind: 'service', status: 'inactive', currentVersion: 1 });
 		state.appId = registered.json.appId;
 		// a wrong secret is refused
 		expect((await connectProduct(call, state.staff, PRODUCT_URL, 'w'.repeat(40))).status).toBe(401);
-		const versions = await call('GET', `/v1/admin/apps/${state.appId}/versions`, { cookie: state.staff });
-		expect(versions.json.items[0]).toMatchObject({ version: 1, status: 'accepted' });
-		// approval of the registered version = activation (pending → active, manifest.accepted@1)
-		const activated = await call('POST', `/v1/admin/apps/${state.appId}/lifecycle`, {
+		// Active/Inactive switch: merchants see and subscribe to active apps only
+		const activated = await call('POST', `/v1/admin/apps/${state.appId}/status`, {
 			cookie: state.staff,
-			body: { action: 'activate' },
+			body: { status: 'active' },
 		});
 		expect(activated.json.status).toBe('active');
 		const catalog = await call('GET', '/v1/catalog/products');
@@ -417,11 +440,7 @@ describe.skipIf(!hasOpenssl)('Reviews & Ratings on the real Portal', () => {
 		expect(keys.status, JSON.stringify(keys.json)).toBe(201);
 		state.sk = keys.json.key;
 		const drained = await drain();
-		expect(drained.stats.dead).toBe(0);
-		const log = await call('GET', `/v1/merchants/${state.merchantId}/websites/${state.websiteId}/deliveries`, {
-			cookie: state.merchant,
-		});
-		expect(log.status).toBe(200);
+		expect(drained.stats.failed).toBe(0);
 	});
 
 	it('routes order.completed@1 through the Event Hub to a review request in the merchant DB', async () => {
@@ -454,7 +473,7 @@ describe.skipIf(!hasOpenssl)('Reviews & Ratings on the real Portal', () => {
 		expect(completed.json.results[0].status, JSON.stringify(completed.json)).toBe('accepted');
 		const drained = await drain();
 		expect(drained.stats.succeeded).toBeGreaterThanOrEqual(1);
-		expect(drained.stats.dead).toBe(0);
+		expect(drained.stats.failed).toBe(0);
 		const clientDb = mongo.db(clientDbName);
 		const request = await clientDb
 			.collection('ss_reviews_requests')
@@ -462,10 +481,9 @@ describe.skipIf(!hasOpenssl)('Reviews & Ratings on the real Portal', () => {
 		expect(request).toMatchObject({ status: 'open', customerId: 'cus_e2e', merchantId: state.merchantId, env: 'live' });
 		expect(request?.items.map((/** @type {any} */ item) => item.itemId)).toEqual(['itm_e2e']);
 		// the Portal stored routing metadata only — no payloads
-		const deliveries = await call('GET', `/v1/merchants/${state.merchantId}/websites/${state.websiteId}/deliveries`, {
-			cookie: state.merchant,
-		});
-		expect(JSON.stringify(deliveries.json)).not.toContain('SKU-E2E');
+		const deliveries = await ctx.portalDb.collection('integration_deliveries').find({ websiteId: state.websiteId }).toArray();
+		expect(deliveries.length).toBeGreaterThan(0);
+		expect(JSON.stringify(deliveries)).not.toContain('SKU-E2E');
 	});
 
 	it('lets the verified customer review with the pk_ key and their own login token; auto-approved; summary and JSON-LD follow', async () => {
@@ -571,17 +589,37 @@ describe.skipIf(!hasOpenssl)('Reviews & Ratings on the real Portal', () => {
 		expect(balance.json.balanceMillicredits).toBe(100_000 + trial + charged);
 	});
 
-	it('opens the product demo from the merchant console ("Try demo")', async () => {
-		const { call, state } = ctx;
-		const demo = await call('POST', `/v1/merchants/${state.merchantId}/apps/${state.appId}/demo`, {
-			cookie: state.merchant,
-			body: {},
-		});
-		expect(demo.status, JSON.stringify(demo.json)).toBe(200);
-		const sso = await fetch(demo.json.url, { redirect: 'manual' });
-		expect(sso.status).toBe(303);
-		const session = /ss_session=(ses_[^;]+)/.exec(sso.headers.get('set-cookie') ?? '')?.[1];
-		const view = await fetch(`${ctx.PRODUCT_URL}/v1/session`, { headers: { authorization: `Bearer ${session}` } });
-		expect(await view.json()).toMatchObject({ kind: 'demo', role: 'demo' });
+	it('delivers the real reviews widget in the compiled website script after staff upload it ("Upload widgets")', async () => {
+		const { call, state, PRODUCT_URL } = ctx;
+		// `ss pack build` of the product's mode-A modules (headless/ + ui/), uploaded as built
+		const pack = await buildPack(ROOT);
+		const uploaded = await call('POST', '/v1/admin/packs', { cookie: state.staff, body: { descriptor: descriptorOf(pack) } });
+		expect(uploaded.status, JSON.stringify(uploaded.json)).toBe(201);
+		expect(uploaded.json).toMatchObject({ appId: state.appId, kind: 'service', status: 'uploading' });
+		for (const path of uploaded.json.missing) {
+			const asset = /** @type {any} */ (pack.assets.find((a) => a.path === path));
+			const put = await call('PUT', `${uploaded.json.uploadPath}${path}`, {
+				cookie: state.staff,
+				raw: asset.bytes,
+				headers: { 'content-type': asset.contentType },
+			});
+			expect(put.status, `${path}: ${put.text}`).toBe(200);
+		}
+		await ctx.drain();
+		const site = `/v1/merchants/${state.merchantId}/websites/${state.websiteId}`;
+		const compiled = await call('POST', `${site}/delivery/compile`, { cookie: state.merchant });
+		expect(compiled.status, JSON.stringify(compiled.json)).toBe(200);
+		const snippet = await call('GET', `${site}/delivery/snippet`, { cookie: state.merchant });
+		expect(snippet.status, JSON.stringify(snippet.json)).toBe(200);
+		expect(JSON.stringify(snippet.json)).toContain(`/w/${state.websiteId}/`);
+		const loader = await call('GET', `/w/${state.websiteId}/loader.js`);
+		expect(loader.status).toBe(200);
+		expect(loader.text).toContain(`packs/${state.appId}/${uploaded.json.version}/headless/reviews.js`);
+		expect(loader.text).toContain(`packs/${state.appId}/${uploaded.json.version}/ui/reviews.js`);
+		expect(loader.text).toContain(PRODUCT_URL);
+		expect(loader.text).not.toContain('ss-element-stub');
+		const served = await call('GET', `/w/packs/${state.appId}/${uploaded.json.version}/ui/reviews.js`);
+		expect(served.status).toBe(200);
+		expect(Buffer.from(served.text)).toEqual(/** @type {any} */ (pack.assets.find((a) => a.path === 'ui/reviews.js')).bytes);
 	});
 });

@@ -1,23 +1,20 @@
 /**
  * Pack delivery against the REAL Portal (`@ss/platform/testing`: `createPortal` with the production modules,
  * delivery included), in process, on the test run's MongoMemoryReplSet. An element pack has no server, so instead
- * of a product handshake this test publishes the Product Detail Page pack the way a developer does:
+ * of a product handshake staff upload the Product Detail Page pack (Admin → Apps → Upload pack version):
  *
- *   first admin from the sign-in page (password, then TOTP) → build the pack (`@ss/product-pdp/pack`: `ss pack build`, minified entries +
- *   shared chunks) → a staff API token (`POST /v1/admin/api-tokens`) → `ss pack publish` (`@ss/cli/pack`
- *   `publishPack`): sign the `ss-pack-bundle@1` descriptor with a developer key, upload it and every asset (bytes
- *   checked against the signed hashes) and activate → merchant signs up, adds a website, receives credits and subscribes
- *   (standard plan: gallery, price block, structured data on) → the website bundle compiles with exactly those
- *   elements, inside the website budget, serving the pack modules immutably → an add-on (reviews block) joins the
- *   bundle → switching every element on is refused for the budget and the live alias stays → hourly settlement
- *   charges the elements' prices.
+ *   first admin from the sign-in page (password, then TOTP) → build the pack (`@ss/product-pdp/pack`: `ss pack build`,
+ *   minified entries + shared chunks) → `POST /v1/admin/packs` with the `ss-pack-bundle@1` descriptor → `PUT` every
+ *   missing asset (bytes checked against the descriptor's hashes; the version becomes current with the last one) →
+ *   Active → merchant signs up, adds a website, receives credits and subscribes (standard plan: gallery, price block,
+ *   structured data on) → the website bundle compiles with exactly those elements, serving the pack modules
+ *   immutably → an add-on (reviews block) joins the bundle, then every element → hourly settlement charges the
+ *   elements' prices.
  */
 import { randomBytes, randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { MongoClient } from 'mongodb';
 import { noopLogger } from '@ss/app-kit';
-import { generateSigningKey } from '@ss/protocol';
-import { publishPack } from '@ss/cli/pack';
 import {
 	closeMongoClients,
 	commerceModule,
@@ -34,7 +31,7 @@ import {
 	totpCode,
 	SESSIONS,
 } from '@ss/platform/testing';
-import { buildPack } from '@ss/product-pdp/pack';
+import { buildPack, descriptorOf } from '@ss/product-pdp/pack';
 import { createClock, mongoUri } from './helpers.js';
 
 const HOUR = 3_600_000;
@@ -74,12 +71,12 @@ beforeAll(async () => {
 		},
 		// keys and secrets as the Portal generates them on first start; the Portal URL is each request's origin
 		testSystemState(),
-		// long staff sessions for the scripted clock; a 45 KB website budget
+		// long staff sessions for the scripted clock
 		{
 			baseUrl: PORTAL_URL,
 			overrides: {
 				sessions: { ...SESSIONS, staff: { idleMs: 720 * 60_000, absoluteMs: SESSIONS.staff.absoluteMs } },
-				delivery: { storage: { kind: 'memory' }, budgetKb: 45 },
+				delivery: { storage: { kind: 'memory' } },
 			},
 		},
 	);
@@ -173,39 +170,55 @@ describe('Product Detail Page pack delivered by the real Portal', () => {
 		state.staff = confirm.cookie ?? login.cookie;
 	});
 
-	it('publishes the signed pack with `ss pack publish` and a staff API token, and activates it', async () => {
-		const { call, state, pack, portal } = ctx;
-		const developer = await generateSigningKey({ kid: 'pdp-dev-1' });
-		const minted = await call('POST', '/v1/admin/api-tokens', { cookie: state.staff, body: { minutes: 30, label: 'e2e' } });
-		expect(minted.status, minted.text).toBe(201);
-		const token = minted.json.token;
-		expect(token).toMatch(/^sst_/);
-		// an API token cannot mint another one, and is refused as a cookie
-		expect((await call('POST', '/v1/admin/api-tokens', { bearer: token, body: { minutes: 5 } })).status).toBe(403);
-		/** @type {typeof globalThis.fetch} */
-		const fetch = async (/** @type {any} */ url, /** @type {any} */ init) => portal.handle(new Request(url, init));
-		const published = await publishPack({
-			pack,
-			portalUrl: PORTAL_URL,
-			token,
-			signingKey: developer.privateJwk,
-			fetch,
-			activate: true,
-		});
-		expect(published).toMatchObject({ version: 1, uploaded: pack.assets.length, status: 'active' });
-		state.appId = published.appId;
+	it('uploads the pack built by `ss pack build` (descriptor, then every asset) and activates it', async () => {
+		const { call, state, pack } = ctx;
+		const descriptor = descriptorOf(pack);
+		const uploaded = await call('POST', '/v1/admin/packs', { cookie: state.staff, body: { descriptor } });
+		expect(uploaded.status, uploaded.text).toBe(201);
+		expect(uploaded.json).toMatchObject({ slug: 'pdp', kind: 'pack', version: 1, status: 'uploading', changed: true });
+		expect([...uploaded.json.missing].sort()).toEqual(pack.assets.map((/** @type {any} */ a) => a.path).sort());
+		state.appId = uploaded.json.appId;
+		// staff only
+		expect((await call('POST', '/v1/admin/packs', { body: { descriptor } })).status).toBe(401);
 
-		// a tampered asset is refused against the signed hash
-		const first = pack.assets[0];
-		const tampered = await call('PUT', `/v1/admin/packs/${state.appId}/versions/1/assets/${first.path}`, {
-			bearer: token,
+		const [first] = pack.assets;
+		// a tampered asset is refused against the descriptor's hash; no session, no upload
+		const tampered = await call('PUT', `${uploaded.json.uploadPath}${first.path}`, {
+			cookie: state.staff,
 			raw: Buffer.concat([first.bytes, Buffer.from(' ')]),
 			headers: { 'content-type': first.contentType },
 		});
 		expect(tampered.status).toBe(422);
 		expect(
-			(await call('PUT', `/v1/admin/packs/${state.appId}/versions/1/assets/${first.path}`, { bearer: 'sst_nope' })).status,
+			(
+				await call('PUT', `${uploaded.json.uploadPath}${first.path}`, {
+					raw: first.bytes,
+					headers: { 'content-type': first.contentType },
+				})
+			).status,
 		).toBe(401);
+		for (const path of uploaded.json.missing) {
+			const asset = /** @type {any} */ (pack.assets.find((/** @type {any} */ a) => a.path === path));
+			const put = await call('PUT', `${uploaded.json.uploadPath}${path}`, {
+				cookie: state.staff,
+				raw: asset.bytes,
+				headers: { 'content-type': asset.contentType },
+			});
+			expect(put.status, `${path}: ${put.text}`).toBe(200);
+		}
+		// the last asset made version 1 current; the same build again is no change
+		const app = await call('GET', `/v1/admin/apps/${state.appId}`, { cookie: state.staff });
+		expect(app.json).toMatchObject({ slug: 'pdp', kind: 'pack', status: 'inactive', currentVersion: 1 });
+		const again = await call('POST', '/v1/admin/packs', { cookie: state.staff, body: { descriptor } });
+		expect(again.json).toMatchObject({ appId: state.appId, version: 1, status: 'ready', missing: [], changed: false });
+
+		// Active/Inactive switch: merchants see and subscribe to active apps only
+		expect((await call('GET', '/v1/catalog/products')).json.items.some((/** @type {any} */ i) => i.slug === 'pdp')).toBe(false);
+		const activated = await call('POST', `/v1/admin/apps/${state.appId}/status`, {
+			cookie: state.staff,
+			body: { status: 'active' },
+		});
+		expect(activated.json.status, activated.text).toBe('active');
 		const catalog = await call('GET', '/v1/catalog/products');
 		const listed = catalog.json.items.find((/** @type {any} */ item) => item.slug === 'pdp');
 		expect(listed).toMatchObject({ appId: state.appId });
@@ -246,7 +259,7 @@ describe('Product Detail Page pack delivered by the real Portal', () => {
 		state.subscribedAt = ctx.clock.now();
 	});
 
-	it('compiles the website bundle with the plan’s elements inside the website budget', async () => {
+	it('compiles the website bundle with the plan’s elements', async () => {
 		const { call, state, pack } = ctx;
 		const site = `/v1/merchants/${state.merchantId}/websites/${state.websiteId}`;
 		const compiled = await call('POST', `${site}/delivery/compile`, { cookie: state.merchant });
@@ -256,17 +269,8 @@ describe('Product Detail Page pack delivered by the real Portal', () => {
 
 		const manifest = await call('GET', `/w/${state.websiteId}/${state.version}/manifest.json`);
 		expect(manifest.status).toBe(200);
-		expect(manifest.json.budget.totalKb).toBeLessThanOrEqual(manifest.json.budget.limitKb);
-		const declared = pack.manifest.elements
-			.filter((/** @type {any} */ e) => DEFAULT_ELEMENTS.includes(e.key))
-			.reduce((/** @type {number} */ sum, /** @type {any} */ e) => sum + e.budget.js, 0);
-		expect(manifest.json.budget.elementsKb).toBe(declared);
-		// the shared chunks count once, against the pack's budget.shared
-		expect(manifest.json.budget.sharedKb).toBe(pack.manifest.budget.shared);
-		expect(manifest.json.budget.shared[0]).toMatchObject({ slug: 'pdp', declaredKb: pack.manifest.budget.shared });
-		expect(manifest.json.budget.shared[0].measuredKb).toBeLessThanOrEqual(pack.manifest.budget.shared);
 		for (const element of manifest.json.elements) {
-			expect(element).toMatchObject({ slug: 'pdp', kind: 'pack', delivery: 'pack' });
+			expect(element).toMatchObject({ slug: 'pdp', kind: 'pack' });
 			expect(element.modules).toHaveLength(2);
 		}
 
@@ -289,7 +293,7 @@ describe('Product Detail Page pack delivered by the real Portal', () => {
 		}
 	});
 
-	it('adds an embed add-on and refuses a bundle over the website budget, keeping the live alias', async () => {
+	it('adds an embed add-on, then every element, each in a new live bundle', async () => {
 		const { call, state, pack } = ctx;
 		const site = `/v1/merchants/${state.merchantId}/websites/${state.websiteId}`;
 		/** @param {string} key */
@@ -308,16 +312,17 @@ describe('Product Detail Page pack delivered by the real Portal', () => {
 		const withEmbed = await call('POST', `${site}/delivery/compile`, { cookie: state.merchant });
 		expect(withEmbed.status, withEmbed.text).toBe(200);
 		expect(withEmbed.json.artefact.elements.map((/** @type {any} */ e) => e.key)).toContain('reviews_block');
-		const live = withEmbed.json.version;
 
 		for (const element of pack.manifest.elements)
 			if (![...DEFAULT_ELEMENTS, 'reviews_block'].includes(element.key)) await enable(element.key);
 		const everything = await call('POST', `${site}/delivery/compile`, { cookie: state.merchant });
-		expect(everything.status).toBe(422);
-		expect(everything.json.type).toMatch(/delivery_budget_exceeded$/);
-		expect(everything.json.errors.every((/** @type {any} */ e) => e.code === 'budget')).toBe(true);
+		expect(everything.status, everything.text).toBe(200);
+		expect(everything.json.artefact.elements.map((/** @type {any} */ e) => e.key).sort()).toEqual(
+			pack.manifest.elements.map((/** @type {any} */ e) => e.key).sort(),
+		);
+		expect(everything.json.version).not.toBe(withEmbed.json.version);
 		const alias = await call('GET', `/w/${state.websiteId}/loader.js`);
-		expect(alias.headers.get('etag')).toBe(`"${live}"`);
+		expect(alias.headers.get('etag')).toBe(`"${everything.json.version}"`);
 	});
 
 	it('settles complete hours at the switched-on elements’ hourly prices', async () => {

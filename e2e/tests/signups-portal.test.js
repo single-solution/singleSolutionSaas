@@ -10,11 +10,13 @@
  *   fetches the per-website JWKS from Signups) → the re-signed entitlement document reaches Loyalty → Loyalty accepts
  *   the Signups token as the customer (`GET /v1/wallet` with SS-Identity) → customer.created@1 from Signups is routed
  *   by the Event Hub to Loyalty → usage (otp_send) reported exactly once → hourly settlement charges the Signups
- *   subscription.
+ *   subscription. Plus the widgets: staff upload the `ss pack build` output ("Upload widgets") and the compiled website
+ *   script mounts the real sign-in widget, bound to Signups' base URL.
  *
  * The Portal and the gateway are served over http on 127.0.0.1 (allowed outside production); the products over https
  * on localhost with a throw-away certificate trusted for this process only (`endpoints.base` must be https).
- * System test (the `e2e/` workspace): it runs the Portal (`@ss/platform/testing`) and the product (`@ss/product-signups/serve`) plus Loyalty (`@ss/product-loyalty/serve`).
+ * System test (the `e2e/` workspace): it runs the Portal (`@ss/platform/testing`) and the product (`@ss/product-signups`
+ * `./platform` + `./routes`, served through app-kit) plus Loyalty (`@ss/product-loyalty`, the same way).
  */
 import { execFileSync } from 'node:child_process';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
@@ -33,6 +35,7 @@ import {
 	configModule,
 	createCatalogModule,
 	createConnectorsModule,
+	createDeliveryModule,
 	createIdentityModule,
 	createIntegrationModule,
 	createPortal,
@@ -42,13 +45,15 @@ import {
 	totpCode,
 	SESSIONS,
 } from '@ss/platform/testing';
-import {
-	ROOT as LOYALTY_ROOT,
-	loadManifest as loadLoyaltyManifest,
-	startServer as startLoyalty,
-} from '@ss/product-loyalty/serve';
-import { ROOT, loadManifest, startServer } from '@ss/product-signups/serve';
-import { CONNECT_SECRET, connectProduct, createClock, mongoUri } from './helpers.js';
+import { createPlatform as createLoyaltyPlatform, loadManifest as loadLoyaltyManifest } from '@ss/product-loyalty/platform';
+import { buildRoutes as buildLoyaltyRoutes, createLoyalty, wireEvents as wireLoyaltyEvents } from '@ss/product-loyalty/routes';
+import { buildPack, descriptorOf } from '@ss/cli/pack';
+import { createPlatform, loadManifest } from '@ss/product-signups/platform';
+import { buildRoutes, createSignups, wireEvents } from '@ss/product-signups/routes';
+import { CONNECT_SECRET, connectProduct, createClock, mongoUri, productRoot, startProduct } from './helpers.js';
+
+const ROOT = productRoot('@ss/product-signups');
+const LOYALTY_ROOT = productRoot('@ss/product-loyalty');
 
 const HOUR = 3_600_000;
 const STAFF = { email: 'root@portal.test', password: 'staff password 123!' };
@@ -169,13 +174,17 @@ beforeAll(async () => {
 			NODE_ENV: 'test',
 			MONGODB_URI: mongoUri('unused'),
 			OUTBOUND_DEV_ALLOW_HOSTS: LOCAL_HOSTS.join(','),
+			STORAGE_DIR: ':memory:',
 		},
 		// keys and secrets as the Portal generates them on first start; the Portal URL is each request's origin
 		testSystemState(),
 		// long staff sessions for the scripted clock
 		{
 			baseUrl: PORTAL_URL,
-			overrides: { sessions: { ...SESSIONS, staff: { idleMs: 720 * 60_000, absoluteMs: SESSIONS.staff.absoluteMs } } },
+			overrides: {
+				sessions: { ...SESSIONS, staff: { idleMs: 720 * 60_000, absoluteMs: SESSIONS.staff.absoluteMs } },
+				delivery: { storage: { kind: 'memory' } },
+			},
 		},
 	);
 	const mongo = await new MongoClient(/** @type {string} */ (process.env.TEST_MONGODB_URI)).connect();
@@ -200,6 +209,7 @@ beforeAll(async () => {
 			configModule,
 			createConnectorsModule({ allowHosts: LOCAL_HOSTS, resolve: resolveLocal }),
 			commerceModule,
+			createDeliveryModule(),
 		],
 	});
 	await portal.ensureIndexes();
@@ -231,46 +241,58 @@ beforeAll(async () => {
 
 	// ── the products: https on localhost, pinned to this Portal ──────────────────────────────────────────────
 	/**
-	 * @param {{ start: typeof startServer, root: string, manifest: any }} input
+	 * The platform overrides of a product served at `url`.
+	 * @param {string} root
+	 * @param {any} manifest
+	 * @param {string} url
 	 */
-	const launchProduct = async ({ start, root, manifest }) => {
-		const port = await freePort();
-		const url = `https://localhost:${port}`;
-		const running = await start({
-			port,
-			host: '127.0.0.1',
-			root,
+	const platformInput = (root, manifest, url) => ({
+		root,
+		env: { LOG_LEVEL: 'error', CONNECT_SECRET },
+		overrides: {
+			now: clock.now,
+			logger: noopLogger,
+			manifest: { ...manifest, endpoints: { ...manifest.endpoints, base: url } },
+		},
+	});
+	const signupsPort = await freePort();
+	const signupsUrl = `https://localhost:${signupsPort}`;
+	const signupsApp = wireEvents(createSignups(await createPlatform(platformInput(ROOT, await loadManifest(ROOT), signupsUrl))));
+	const signups = {
+		url: signupsUrl,
+		running: await startProduct({
+			product: signupsApp.product,
+			routes: buildRoutes(signupsApp),
+			close: () => signupsApp.app.close(),
 			tls: { key, cert },
-			env: {
-				LOG_LEVEL: 'error',
-				CONNECT_SECRET,
-			},
-			overrides: {
-				now: clock.now,
-				logger: noopLogger,
-				manifest: { ...manifest, endpoints: { ...manifest.endpoints, base: url } },
-			},
-		});
-		return { url, running };
+			port: signupsPort,
+		}),
 	};
-	const signups = await launchProduct({
-		start: startServer,
-		root: ROOT,
-		manifest: await loadManifest(ROOT),
-	});
-	const loyalty = await launchProduct({
-		start: /** @type {any} */ (startLoyalty),
-		root: LOYALTY_ROOT,
-		manifest: await loadLoyaltyManifest(LOYALTY_ROOT),
-	});
+	const loyaltyPort = await freePort();
+	const loyaltyUrl = `https://localhost:${loyaltyPort}`;
+	const loyaltyApp = wireLoyaltyEvents(
+		createLoyalty(
+			await createLoyaltyPlatform(platformInput(LOYALTY_ROOT, await loadLoyaltyManifest(LOYALTY_ROOT), loyaltyUrl)),
+		),
+	);
+	const loyalty = {
+		url: loyaltyUrl,
+		running: await startProduct({
+			product: loyaltyApp.product,
+			routes: buildLoyaltyRoutes(loyaltyApp),
+			close: () => loyaltyApp.app.close(),
+			tls: { key, cert },
+			port: loyaltyPort,
+		}),
+	};
 
 	/**
 	 * In-process Portal call (cookie sessions send the Portal origin for CSRF).
 	 * @param {string} method
 	 * @param {string} pathname
-	 * @param {{ body?: unknown, cookie?: string, bearer?: string, headers?: Record<string, string> }} [init]
+	 * @param {{ body?: unknown, raw?: Uint8Array, cookie?: string, bearer?: string, headers?: Record<string, string> }} [init]
 	 */
-	const call = async (method, pathname, { body, cookie, bearer, headers = {} } = {}) => {
+	const call = async (method, pathname, { body, raw, cookie, bearer, headers = {} } = {}) => {
 		const response = await portal.handle(
 			new Request(`${PORTAL_URL}${pathname}`, {
 				method,
@@ -281,7 +303,7 @@ beforeAll(async () => {
 					...(method === 'POST' ? { 'idempotency-key': randomUUID() } : {}),
 					...headers,
 				},
-				...(body === undefined ? {} : { body: JSON.stringify(body) }),
+				...(raw ? { body: new Uint8Array(raw) } : body === undefined ? {} : { body: JSON.stringify(body) }),
 			}),
 		);
 		const text = await response.text();
@@ -289,7 +311,14 @@ beforeAll(async () => {
 			.getSetCookie()
 			.map((value) => value.split(';')[0])
 			.find((pair) => /=.+/.test(pair ?? ''));
-		return { status: response.status, json: text ? JSON.parse(text) : null, cookie: setCookie ?? null };
+		const json = (() => {
+			try {
+				return text ? JSON.parse(text) : null;
+			} catch {
+				return null;
+			}
+		})();
+		return { status: response.status, json, text, cookie: setCookie ?? null };
 	};
 	/**
 	 * A browser call to a product (pk_ key from the website's origin).
@@ -319,12 +348,12 @@ beforeAll(async () => {
 		const jobs = portalDb.collection('platform_jobs');
 		const count = async () => ({
 			done: await jobs.countDocuments({ status: 'done' }),
-			dead: await jobs.countDocuments({ status: 'dead' }),
+			failed: await jobs.countDocuments({ status: 'failed' }),
 		});
 		const before = await count();
 		while (afterResponseTasks.length > 0) await afterResponseTasks.shift()?.();
 		const after = await count();
-		return { status: 'ok', stats: { succeeded: after.done - before.done, dead: after.dead - before.dead } };
+		return { status: 'ok', stats: { succeeded: after.done - before.done, failed: after.failed - before.failed } };
 	};
 	ctx = {
 		clock,
@@ -393,10 +422,10 @@ describe.skipIf(!hasOpenssl)('Signups & Identity on the real Portal (bring-your-
 		])) {
 			const registered = await connectProduct(call, state.staff, product.url);
 			expect(registered.status, JSON.stringify(registered.json)).toBe(201);
-			expect(registered.json).toMatchObject({ slug: name, kind: 'service', status: 'pending' });
-			const activated = await call('POST', `/v1/admin/apps/${registered.json.appId}/lifecycle`, {
+			expect(registered.json).toMatchObject({ slug: name, kind: 'service', status: 'inactive' });
+			const activated = await call('POST', `/v1/admin/apps/${registered.json.appId}/status`, {
 				cookie: state.staff,
-				body: { action: 'activate' },
+				body: { status: 'active' },
 			});
 			expect(activated.json.status).toBe('active');
 			state[`${name}AppId`] = registered.json.appId;
@@ -493,7 +522,7 @@ describe.skipIf(!hasOpenssl)('Signups & Identity on the real Portal (bring-your-
 			state[kind] = issued.json.key;
 		}
 		const drained = await drain();
-		expect(drained.stats.dead).toBe(0);
+		expect(drained.stats.failed).toBe(0);
 	});
 
 	it('signs a customer in passwordlessly: the code goes to the merchant’s gateway, the verification issues a JWT', async () => {
@@ -588,13 +617,10 @@ describe.skipIf(!hasOpenssl)('Signups & Identity on the real Portal (bring-your-
 	it('routes Signups’ customer.created@1 through the Event Hub, reports usage once and settles the hours', async () => {
 		const { call, state, drain, signups, clock } = ctx;
 		const drained = await drain();
-		expect(drained.stats.dead).toBe(0);
-		const log = await call('GET', `/v1/merchants/${state.merchantId}/websites/${state.websiteId}/deliveries`, {
-			cookie: state.merchant,
-		});
-		expect(log.status).toBe(200);
-		expect(JSON.stringify(log.json)).toContain('customer.created@1');
-		expect(JSON.stringify(log.json)).not.toContain('ada@example.com'); // routing metadata only
+		expect(drained.stats.failed).toBe(0);
+		const deliveries = await ctx.portalDb.collection('integration_deliveries').find({ websiteId: state.websiteId }).toArray();
+		expect(deliveries.map((/** @type {any} */ d) => d.type)).toContain('customer.created@1');
+		expect(JSON.stringify(deliveries)).not.toContain('ada@example.com'); // routing metadata only
 		const flushed = await signups.running.product.usage.flush();
 		expect(flushed.sent + flushed.duplicates).toBeGreaterThanOrEqual(1);
 		expect(flushed.rejected).toBe(0);
@@ -618,17 +644,34 @@ describe.skipIf(!hasOpenssl)('Signups & Identity on the real Portal (bring-your-
 		).toBe(-900);
 	});
 
-	it('opens the Signups demo from the merchant console ("Try demo")', async () => {
-		const { call, state, signups } = ctx;
-		const demo = await call('POST', `/v1/merchants/${state.merchantId}/apps/${state.signupsAppId}/demo`, {
-			cookie: state.merchant,
-			body: {},
-		});
-		expect(demo.status, JSON.stringify(demo.json)).toBe(200);
-		const sso = await fetch(demo.json.url, { redirect: 'manual' });
-		expect(sso.status).toBe(303);
-		const session = /ss_session=(ses_[^;]+)/.exec(sso.headers.get('set-cookie') ?? '')?.[1];
-		const view = await fetch(`${signups.url}/v1/session`, { headers: { authorization: `Bearer ${session}` } });
-		expect(await view.json()).toMatchObject({ kind: 'demo', role: 'demo' });
+	it('delivers the real sign-in widget in the compiled website script after staff upload it ("Upload widgets")', async () => {
+		const { call, state } = ctx;
+		// `ss pack build` of the product's mode-A modules (headless/ + ui/), uploaded as built
+		const pack = await buildPack(ROOT);
+		const uploaded = await call('POST', '/v1/admin/packs', { cookie: state.staff, body: { descriptor: descriptorOf(pack) } });
+		expect(uploaded.status, JSON.stringify(uploaded.json)).toBe(201);
+		expect(uploaded.json).toMatchObject({ appId: state.signupsAppId, kind: 'service', status: 'uploading' });
+		for (const path of uploaded.json.missing) {
+			const asset = /** @type {any} */ (pack.assets.find((a) => a.path === path));
+			const put = await call('PUT', `${uploaded.json.uploadPath}${path}`, {
+				cookie: state.staff,
+				raw: asset.bytes,
+				headers: { 'content-type': asset.contentType },
+			});
+			expect(put.status, `${path}: ${put.text}`).toBe(200);
+		}
+		await ctx.drain();
+		const site = `/v1/merchants/${state.merchantId}/websites/${state.websiteId}`;
+		const compiled = await call('POST', `${site}/delivery/compile`, { cookie: state.merchant });
+		expect(compiled.status, JSON.stringify(compiled.json)).toBe(200);
+		const loader = await call('GET', `/w/${state.websiteId}/loader.js`);
+		expect(loader.status).toBe(200);
+		const base = `packs/${state.signupsAppId}/${uploaded.json.version}`;
+		expect(loader.text).toContain(`${base}/headless/signIn.js`);
+		expect(loader.text).toContain(`${base}/ui/signIn.js`);
+		expect(loader.text).toContain(ctx.signups.url);
+		const served = await call('GET', `/w/${base}/ui/signIn.js`);
+		expect(served.status).toBe(200);
+		expect(Buffer.from(served.text)).toEqual(/** @type {any} */ (pack.assets.find((a) => a.path === 'ui/signIn.js')).bytes);
 	});
 });

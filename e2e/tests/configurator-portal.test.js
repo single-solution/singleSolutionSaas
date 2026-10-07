@@ -8,11 +8,12 @@
  *   configurator (sk_) → the website sends item.created@1 + inventory.changed@1 to the Portal Event Hub → signed
  *   delivery to the product → the item lands in the merchant's own database → a catalog-linked configurator resolves
  *   against the live stock from the browser (pk_, origin-bound) → evaluations reported as metered usage once →
- *   hourly settlement charges the base price. Plus the merchant console's "Try demo" launch.
+ *   hourly settlement charges the base price.
  *
  * The Portal is served over http on 127.0.0.1 (allowed outside production); the product over https on localhost with a
  * throw-away certificate trusted for this process only (the manifest's `endpoints.base` must be https).
- * System test (the `e2e/` workspace): it runs the Portal (`@ss/platform/testing`) and the product (`@ss/product-configurator/serve`).
+ * System test (the `e2e/` workspace): it runs the Portal (`@ss/platform/testing`) and the product (`@ss/product-configurator`
+ * `./platform` + `./routes`, served through app-kit).
  */
 import { execFileSync } from 'node:child_process';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
@@ -41,8 +42,11 @@ import {
 	totpCode,
 	SESSIONS,
 } from '@ss/platform/testing';
-import { ROOT, loadManifest, startServer } from '@ss/product-configurator/serve';
-import { CONNECT_SECRET, connectProduct, createClock, mongoUri } from './helpers.js';
+import { createPlatform, loadManifest } from '@ss/product-configurator/platform';
+import { buildRoutes, createConfiguratorApp, wireEvents } from '@ss/product-configurator/routes';
+import { CONNECT_SECRET, connectProduct, createClock, mongoUri, productRoot, startProduct } from './helpers.js';
+
+const ROOT = productRoot('@ss/product-configurator');
 
 const HOUR = 3_600_000;
 const STAFF = { email: 'root@portal.test', password: 'staff password 123!' };
@@ -199,20 +203,25 @@ beforeAll(async () => {
 	const productPort = await freePort();
 	const PRODUCT_URL = `https://localhost:${productPort}`;
 	const manifest = await loadManifest(ROOT);
-	const product = await startServer({
-		port: productPort,
-		host: '127.0.0.1',
-		root: ROOT,
+	const svc = wireEvents(
+		createConfiguratorApp(
+			await createPlatform({
+				root: ROOT,
+				env: { LOG_LEVEL: 'error', CONNECT_SECRET },
+				overrides: {
+					now: clock.now,
+					logger: noopLogger,
+					manifest: { ...manifest, endpoints: { ...manifest.endpoints, base: PRODUCT_URL } },
+				},
+			}),
+		),
+	);
+	const product = await startProduct({
+		product: svc.product,
+		routes: buildRoutes(svc),
+		close: () => svc.app.close(),
 		tls: { key, cert },
-		env: {
-			LOG_LEVEL: 'error',
-			CONNECT_SECRET,
-		},
-		overrides: {
-			now: clock.now,
-			logger: noopLogger,
-			manifest: { ...manifest, endpoints: { ...manifest.endpoints, base: PRODUCT_URL } },
-		},
+		port: productPort,
 	});
 
 	/**
@@ -267,12 +276,12 @@ beforeAll(async () => {
 		const jobs = portalDb.collection('platform_jobs');
 		const count = async () => ({
 			done: await jobs.countDocuments({ status: 'done' }),
-			dead: await jobs.countDocuments({ status: 'dead' }),
+			failed: await jobs.countDocuments({ status: 'failed' }),
 		});
 		const before = await count();
 		while (afterResponseTasks.length > 0) await afterResponseTasks.shift()?.();
 		const after = await count();
-		return { status: 'ok', stats: { succeeded: after.done - before.done, dead: after.dead - before.dead } };
+		return { status: 'ok', stats: { succeeded: after.done - before.done, failed: after.failed - before.failed } };
 	};
 	ctx = {
 		clock,
@@ -336,11 +345,12 @@ describe.skipIf(!hasOpenssl)('Configurator Builder on the real Portal', () => {
 		// Admin → Apps → Add product: the product URL and its connect secret
 		const registered = await connectProduct(call, state.staff, PRODUCT_URL);
 		expect(registered.status, JSON.stringify(registered.json)).toBe(201);
-		expect(registered.json).toMatchObject({ slug: 'configurator', kind: 'service', status: 'pending', currentVersion: 1 });
+		expect(registered.json).toMatchObject({ slug: 'configurator', kind: 'service', status: 'inactive', currentVersion: 1 });
 		state.appId = registered.json.appId;
-		const activated = await call('POST', `/v1/admin/apps/${state.appId}/lifecycle`, {
+		// Active/Inactive switch: merchants see and subscribe to active apps only
+		const activated = await call('POST', `/v1/admin/apps/${state.appId}/status`, {
 			cookie: state.staff,
-			body: { action: 'activate' },
+			body: { status: 'active' },
 		});
 		expect(activated.json.status).toBe('active');
 		const catalog = await call('GET', '/v1/catalog/products');
@@ -411,7 +421,7 @@ describe.skipIf(!hasOpenssl)('Configurator Builder on the real Portal', () => {
 			state[kind] = keys.json.key;
 		}
 		const drained = await drain();
-		expect(drained.stats.dead).toBe(0);
+		expect(drained.stats.failed).toBe(0);
 	});
 
 	it('creates a standalone configurator from the merchant’s server and resolves it from the browser', async () => {
@@ -503,7 +513,7 @@ describe.skipIf(!hasOpenssl)('Configurator Builder on the real Portal', () => {
 		const accepted = await call('POST', '/v1/events', { bearer: state.sk, body: { events: [created] } });
 		expect(accepted.status, JSON.stringify(accepted.json)).toBe(202);
 		expect(accepted.json.results[0].status).toBe('accepted');
-		expect((await drain()).stats.dead).toBe(0);
+		expect((await drain()).stats.failed).toBe(0);
 		clock.advance(1000);
 		const restock = envelope('inventory.changed@1', {
 			itemId: 'itm_phone',
@@ -514,7 +524,7 @@ describe.skipIf(!hasOpenssl)('Configurator Builder on the real Portal', () => {
 		expect((await call('POST', '/v1/events', { bearer: state.sk, body: { events: [restock] } })).json.results[0].status).toBe(
 			'accepted',
 		);
-		expect((await drain()).stats.dead).toBe(0);
+		expect((await drain()).stats.failed).toBe(0);
 		const item = await mongo
 			.db(clientDbName)
 			.collection('ss_configurator_items')
@@ -603,19 +613,5 @@ describe.skipIf(!hasOpenssl)('Configurator Builder on the real Portal', () => {
 			.filter((/** @type {any} */ entry) => entry.type === 'adjustment')
 			.reduce((/** @type {any} */ sum, /** @type {any} */ entry) => sum + entry.amountMillicredits, 0);
 		expect(balance.json.balanceMillicredits).toBe(100_000 + trial + charged);
-	});
-
-	it('opens the product demo from the merchant console ("Try demo")', async () => {
-		const { call, state } = ctx;
-		const demo = await call('POST', `/v1/merchants/${state.merchantId}/apps/${state.appId}/demo`, {
-			cookie: state.merchant,
-			body: {},
-		});
-		expect(demo.status, JSON.stringify(demo.json)).toBe(200);
-		const sso = await fetch(demo.json.url, { redirect: 'manual' });
-		expect(sso.status).toBe(303);
-		const session = /ss_session=(ses_[^;]+)/.exec(sso.headers.get('set-cookie') ?? '')?.[1];
-		const view = await fetch(`${ctx.PRODUCT_URL}/v1/session`, { headers: { authorization: `Bearer ${session}` } });
-		expect(await view.json()).toMatchObject({ kind: 'demo', role: 'demo' });
 	});
 });

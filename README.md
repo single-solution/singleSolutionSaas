@@ -47,12 +47,12 @@ Shared packages:
 | ------------------ | ---------------------------------------------------------------------------------------------- |
 | `@ss/app-kit`      | **Every product is built on this.** Portal connection, keys, billing, client resources, events |
 | `@ss/contracts`    | The shared formats: manifest, entitlement document, events, error problems                     |
-| `@ss/cli` (`ss`)   | Create, run locally, validate and certify a product                                            |
+| `@ss/cli` (`ss`)   | Create, validate and build a product (`ss app init`, `ss app validate`, `ss pack build`)       |
 | `@ss/web`          | The script a client website adds to load products on its pages                                 |
 | `@ss/ui`           | Shared React components and theme                                                              |
 | `@ss/entitlements` | Works out what a website may use (plans, elements, features, limits)                           |
 | `@ss/rules`        | The small condition language (`rules@1`) used in settings                                      |
-| `@ss/protocol`     | Signing and verifying keys, requests, launches and events                                      |
+| `@ss/protocol`     | Signing and verifying keys, launches, entitlement documents and events                         |
 | `@ss/net`          | Safe outbound HTTP (blocks private networks, pins DNS)                                         |
 | `@ss/config`       | The shared tooling: ESLint, TypeScript, Prettier and Vitest presets, the test MongoDB setup    |
 
@@ -106,20 +106,11 @@ pnpm exec ss app init products/my-app --kind service --slug my_app --name "My Ap
 ```
 
 Add `--minimal` to start without the sample feature. A product's settings are its own database (`MONGODB_URI`;
-empty in development = in memory) and `CONNECT_SECRET` (`ss dev env` generates one). Run these two in separate terminals:
-
-```bash
-pnpm portal
-```
-
-```bash
-pnpm dev
-```
-
-`pnpm portal` runs a fake Portal (`ss dev`) on port 4400 with the merchants, websites and plans from `ss.dev.json`.
-`pnpm dev` runs the product on port 3000. Connect them with
-`pnpm exec ss dev connect --url http://localhost:3000 --secret <CONNECT_SECRET>`. Use `ss dev launch`, `ss dev keys` and `ss dev emit`
-to sign in, get website keys and send events.
+empty in development = in memory) and `CONNECT_SECRET` (any random string of at least 32 characters). Run the Portal
+(above) and the product (`pnpm dev`, port 3000), then connect them like in production: Admin → Apps → **Add product**
+with `http://localhost:3000` and the secret (plain http to localhost is allowed outside production with
+`OUTBOUND_DEV_ALLOW_HOSTS=localhost,127.0.0.1`), switch it to **Active**, and subscribe a test website from the merchant
+console.
 
 Before a product ships:
 
@@ -127,26 +118,19 @@ Before a product ships:
 pnpm exec ss app validate products/my-app
 ```
 
-```bash
-pnpm exec ss certify products/my-app --url http://localhost:3000
-```
+Validate checks the files: manifest, layout, imports, strings, API docs and package wiring.
 
-An element pack (or a service product's UI bundle) is built and published with:
-
-```bash
-pnpm exec ss pack build products/my-pack
-```
+The browser part of an element pack, and the widgets (mode-A `headless/` + `ui/` modules) of a service product, are
+built with:
 
 ```bash
-pnpm exec ss pack publish products/my-pack --portal https://portal.example --token sst_… --key @dev-key.json --activate
+pnpm exec ss pack build products/my-app
 ```
 
-`build` bundles the manifest's modules (minified ES modules, shared chunks), the string catalogs and the signed-bundle
-descriptor into `dist/pack`; `publish` signs it and uploads it with a staff API token (`POST /v1/admin/api-tokens`).
-
-Validate checks the files: manifest, layout, imports, strings and API docs. Certify checks the running product:
-keys, website binding, switching elements off, idempotency, events and offline grace. A product that fails certify is
-not registered.
+`build` bundles the manifest's modules (minified ES modules, shared chunks) and the string catalogs into `dist/pack`
+with a `descriptor.json` (every asset's path, SHA-256 and size). Upload that folder in Admin → Apps: **Add pack** for a
+new pack, **Upload pack version** on a pack, **Upload widgets** on a connected service product. The Portal checks every
+asset against the descriptor, serves them from `/w/packs/…` and recompiles the script of every subscribed website.
 
 ### Product layout
 
@@ -162,7 +146,7 @@ headless/        UI logic without the DOM, for merchants who build their own UI
 ui/              drop-in UI that renders headless/ with the website's theme
 app/             thin Next.js wiring only (routes call app-kit)
 jobs/            trigger-run handlers (on an event, on read, or from a dashboard button); nothing is scheduled
-tests/           Vitest tests, including certify (the Portal end-to-end test lives in e2e/)
+tests/           Vitest tests (the Portal end-to-end test lives in e2e/)
 eslint.config.js, tsconfig.json, vitest.config.js   tooling, built from @ss/config
 docs/guide.md    short guide for developers using the product
 ```
@@ -205,7 +189,7 @@ compile. Use `.js` files with JSDoc types; do not add `.ts` files.
 2. **Every request is verified.**
    - Website keys (`pk_` for browsers, `sk_` for servers) are verified offline by app-kit and only work on their own
      domain.
-   - Portal calls are signed requests.
+   - Event deliveries from the Portal are signed.
    - Never accept a key, website id or customer id from the request body without app-kit checking it.
 3. **Elements and features are enforced on the server.** app-kit reads the signed entitlement document. An element
    that is switched off answers 403 in every mode, whatever the UI does.
@@ -218,9 +202,7 @@ compile. Use `.js` files with JSDoc types; do not add `.ts` files.
 
 ## Fast and light
 
-- Keep the browser UI small. The Loader has size budgets per element (`budget.js`) and per product's shared chunks
-  (`budget.shared`); `ss app validate` measures them exactly as the Portal does (minified, bundled, gzip) and warns
-  when one is exceeded or padded.
+- Keep the browser UI small: minified ES modules loaded lazily by the Loader, shared code in chunks loaded once.
 - Prefer static and cacheable responses. API responses that hold private data are `no-store`.
 - **Nothing runs on its own** (PLAN F.19): no crons, no timers, no polling, no periodic or throttled background loops.
   Work happens inside, or right after (`after()`), the request or event that caused it, and only for what that request
@@ -236,8 +218,8 @@ compile. Use `.js` files with JSDoc types; do not add `.ts` files.
   (`defineUnitConfig` in `@ss/config/vitest`).
 - Test `core/` with plain inputs and outputs. Test `api/` through the real HTTP handler with app-kit's fake Portal
   (`@ss/app-kit/testing`) and the in-memory MongoDB (`mongo: true` in the unit's `vitest.config.js`).
-- Every product keeps its `tests/certify.test.js` (through `@ss/cli`) passing, and has a system test against the real
-  Portal in `e2e/tests/<product>-portal.test.js` (it imports `@ss/platform/testing` and the product's `./serve`).
+- Every product has a system test against the real Portal in `e2e/tests/<product>-portal.test.js` (it imports
+  `@ss/platform/testing` and the product's `./platform` and `./routes` exports, served through app-kit).
 
 ```bash
 pnpm --filter @ss/product-my-app test
@@ -258,7 +240,7 @@ address is simply the one it is opened at. One MongoDB Atlas cluster (M0 works) 
 | ----------------------- | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | Portal                  | `platform`                            | Merchant console, admin console, API, website script delivery                                                                             |
 | One per service product | `products/<name>`                     | aftersales, alerts, catalog, chatbot, checkout, configurator, coupons, deals, grades, loyalty, orders, reviews, search, signups, wishlist |
-| —                       | `products/pdp`, `products/storefront` | **Not deployed.** These are element packs, published into the Portal with `ss pack publish` (step 5)                                      |
+| —                       | `products/pdp`, `products/storefront` | **Not deployed.** These are element packs, uploaded into the Portal from Admin → Apps (step 5)                                            |
 
 On Vercel, for example, create one project per deployable from the same repository with its folder as **Root
 Directory**.
@@ -269,11 +251,11 @@ Directory**.
   `next.config.js` rewrites `/v1/*`, `/.well-known/*`, `/sso` and product paths to, URLs
   unchanged) and one dashboard page (`app/dashboard/[[...section]]`); `/` is static and there is no proxy (the route
   handler answers 503 `misconfigured` itself, the dashboard shows the reasons). The **Portal** deploys **5**: the API
-  catch-all (also `/w/*`, `/p/*`, `/.well-known/jwks.json`), one console page, one admin page,
+  catch-all (also `/w/*`, `/.well-known/jwks.json`), one console page, one admin page,
   `_not-found` and the CSP-nonce proxy. `ss app validate` fails a product with more than 2 server entry points or with
   `outputFileTracingIncludes`; runtime files are bundled through the generated `app/_lib/assets.js` (`prebuild`).
 - **Function size (limit 250 MB).** Traced server files per function: products 4.1–4.4 MB, Portal 4.5 MB (API) and
-  5.1 MB (each console page); the proxy 1.6 MB. No test, emulator or CLI code is traced.
+  5.1 MB (each console page); the proxy 1.6 MB. No test or CLI code is traced.
 - **Request body (limit 4.5 MB).** Every body cap is at most 3.9 MB (JSON default 1 MB; CSV/JSON imports 3.9 MB; Portal
   pack uploads 2 MB); photos and files go straight to storage with presigned URLs.
 - **Duration.** No `maxDuration` is needed: work after a response is bounded (Portal jobs 8 s, lazy settlement 2 s,
@@ -290,7 +272,7 @@ Directory**.
   statement is read, a product fetches an entitlement document or reports usage for one of its websites, or a
   subscription changes — so low-balance and spend-limit holds reach the products' entitlement documents. Products
   treat expiries on read, clean up when rows are touched (or by TTL indexes) and put merchant-started work behind
-  dashboard buttons. Connectors are checked when saved or resolved; audit chains are verified per scope from the audit log.
+  dashboard buttons. Connectors are checked when saved or resolved.
 - **Offline documents.** A product holding a still-valid entitlement document (10 minutes, plus its cache) may keep
   serving until it next refreshes it; a hold therefore takes effect within minutes, without any timer.
 - **Small connection pools.** About 15 deployments share M0's ~500 connections, so pools are a fixed 5 per instance (Portal
@@ -332,19 +314,20 @@ Mail is set later in Admin → Settings. Indexes and migrations run by themselve
 
 Set `MONGODB_URI` (its Atlas database from step 1) and `CONNECT_SECRET` (a random string of at least 32 characters,
 e.g. `openssl rand -hex 32`) and deploy. Then Portal → **Admin → Apps → Add product** → the product URL and that
-secret → **Connect**. The product generates its key and pins the Portal; review and activate it in the Portal, and
-merchants can subscribe. The **Portal** deployment is unchanged.
+secret → **Connect**. The product generates its key and pins the Portal; switch it to **Active** in the Portal, and
+merchants can subscribe. If it has widgets, build them (`ss pack build products/<name>`) and **Upload widgets** on its
+app page. The **Portal** deployment is unchanged.
 
 ### 5. Element packs (pdp, storefront)
 
-Packs have no server; their files are uploaded into the Portal and served from it. Create a staff API token
-(`POST /v1/admin/api-tokens` while signed in as an admin), then:
+Packs have no server; their files are uploaded into the Portal and served from it:
 
 ```bash
-pnpm exec ss pack publish products/pdp --portal https://portal.<your-domain> --token sst_… --activate
+pnpm exec ss pack build products/pdp
 ```
 
-Repeat for `products/storefront`.
+Then Admin → Apps → **Add pack** → pick `products/pdp/dist/pack` → switch it to **Active**. Repeat for
+`products/storefront`. A new version is the same upload (**Upload pack version** on the app page).
 
 ### After launch
 

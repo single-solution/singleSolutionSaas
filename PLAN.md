@@ -4,7 +4,7 @@
 | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Status**       | Direction approved · pre-implementation · greenfield (existing `singleSolutionSaas` code retired; UI look and ideas carry over)                                                                                         |
 | **Date**         | 2026-10-01 · Owner: Bilal (single-solution)                                                                                                                                                                             |
-| **Deliverables** | **A. Control plane** (Portal) · **B. Delivery plane** (Loader, Edge Injection, hosted pages, preview) · **C. Products** (independent) · **D. Contracts & kit**                                                          |
+| **Deliverables** | **A. Control plane** (Portal) · **B. Delivery plane** (Loader, Edge Injection, hosted pages) · **C. Products** (independent) · **D. Contracts & kit**                                                                   |
 | **Hosting**      | Vercel Hobby + MongoDB Atlas M0 ($0, F.19), one project/database per deployable; no vendor-specific code                                                                                                                |
 | **Language**     | JavaScript (ESM), functional, JSDoc-typed, `tsc --checkJs --strict` in CI                                                                                                                                               |
 | **This file**    | The only planning document. Sections 1–16 + Appendices A–C = platform plan · **Part D** = product specifications (every element and what can be modified) · **Part E** = the Product Standard every product must follow |
@@ -21,12 +21,12 @@ The previous plans described a marketplace of apps behind a billing portal. That
 | --- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1   | **One Loader per website**                  | A single tiny `<script>` (or nothing at all, see #2). The platform **compiles a per-website bundle** of exactly the enabled elements + their signed config and serves it from the edge. One request, cached globally, no per-product scripts, no config round-trips.                                                                                    |
 | 2   | **Edge Injection (zero-code integration)**  | Point the domain through the platform edge (optional). Elements, SEO fixes, structured data, redirects, hosted pages and widgets are injected into the site's HTML at the edge. Works for sites the merchant cannot modify or whose developer is gone.                                                                                                  |
-| 3   | **"Try it on your site" preview**           | Before subscribing, the merchant sees _their own live site_ rendered through the preview proxy with the element injected. Demo on a sample store is the fallback, not the pitch.                                                                                                                                                                        |
+| 3   | **Copy-paste install**                      | The website page in the merchant console shows the install code ("Copy install code"); it is pasted once before `</head>` and every later change ships without touching the site again.                                                                                                                                                                 |
 | 4   | **Website Graph**                           | One per-website data model (customers, items, orders, events, files) owned by the merchant. Products read/write the same graph through scoped contracts, so loyalty, chat, reviews and analytics agree on who the customer is and what happened — without integrating with each other. Bring-your-own identity: the site's existing login federates in. |
 | 5   | **Elements, not apps**                      | The unit merchants see, switch, configure and pay for is the element (a gallery, a coupon engine, an AI reply, a sitemap). Products are just how elements are built and shipped. Two product kinds: **service products** (own backend) and **element packs** (pure front-end, no server — served by the Loader).                                        |
-| 6   | **Performance and design as constraints**   | Every element declares a weight budget and uses the website's design tokens. The platform refuses combinations that break the site's budget and shows Core Web Vitals impact before enabling. Elements look native, not bolted on.                                                                                                                      |
+| 6   | **Performance and design as constraints**   | Elements lazy-mount only where their placement matches and use the website's design tokens; the Loader reports Core Web Vitals per element. Elements look native, not bolted on.                                                                                                                                                                        |
 | 7   | **AI operator in the console**              | "Give 2 % points on completed orders, expire after 12 months, message customers in their language." The assistant edits configuration through the same schemas, explains the effect on cost, audits SEO, drafts campaigns — with a diff and an undo, never silently.                                                                                    |
-| 8   | **Transparent, safe money, sovereign data** | Live meter (credits/hour now, projected month), budgets and caps per website, hourly idempotent settlement, statements that reconcile to the credit. **All client data lives in the client's own database and storage; all providers run on the client's own keys** (§1a).                                                                              |
+| 8   | **Transparent, safe money, sovereign data** | Live meter (credits/hour now, projected month), one optional monthly spend cap per merchant, hourly idempotent settlement, statements that reconcile to the credit. **All client data lives in the client's own database and storage; all providers run on the client's own keys** (§1a).                                                               |
 
 Everything below exists to make those eight true while staying **fast, secure, reliable, standalone and consumable**.
 
@@ -48,7 +48,7 @@ Consequences (binding):
 
 - **Two data domains.** _Control plane_ data (accounts, websites, subscriptions, entitlements, credits, ledger, audit, keys, delivery metadata) lives in our database. _Data plane_ content (Graph, events payloads, product data, files, messages, AI logs) lives **only** in the client's resources. If a client leaves, their data is already theirs; we hold nothing but control-plane records.
 - **Shared services become connectors.** Messaging, AI, Storage and Payments are adapter layers that execute with the client's credentials; metering counts our method usage for credits, never resells capacity.
-- **Credentials custody.** Client credentials are stored envelope-encrypted per merchant in the Secrets module, used only at runtime by products the client enabled, never shown back, rotatable, and revocable in one click (which immediately stops every product for that resource). Customer-managed keys are a later option.
+- **Credentials custody.** Client credentials are stored envelope-encrypted per merchant in the Secrets module, used only at runtime by products the client enabled, never shown back, replaceable (edit with new credentials) and removable in one click (which immediately stops every product for that resource). Customer-managed keys are a later option.
 - **Onboarding gate.** A product that stores data cannot be enabled for a website until the merchant's database connection passes the **connection check** (reachability, least-privilege role, index creation rights, size/plan sanity). Same for storage/provider connectors the product requires. The Portal shows exactly what is missing.
 - **Per-client schema management.** Products own their collections _inside the client's database_ under a product prefix, with `schemaVersion` on every document and lazy, idempotent migrations on connect; the app-kit provides connection caching per merchant with pool limits suited to serverless.
 - **Element packs** with state (e.g. wishlist) store through the Graph API, which writes to the client's database.
@@ -58,13 +58,13 @@ Consequences (binding):
 
 ## 2. Experience walkthroughs
 
-**Merchant with a site built by someone else.** Sign up → type `shop.example.com` → the platform fetches the homepage and shows it with a chat launcher and a review block injected (preview proxy) → "Enable" → choose Edge Injection (DNS record shown) or Loader (one script tag to send to the developer) → elements are live; every option is editable in place with a live preview; the meter shows 3.4 credits/hour.
+**Merchant with a site built by someone else.** Sign up → type `shop.example.com` → subscribe to a product and switch on its elements → copy the install code from the website page (one script tag before `</head>`, sent to the developer once) → elements are live; every option is editable with a dry-run preview of the resolved values; the meter shows 3.4 credits/hour.
 
-**Developer integrating deeply.** Website keys (test + live) → `npm i @ss/web` → `ss.track('order.placed', …)`; products react (points, messages, alerts) with no product-specific integration → server SDK for headless use (checkout API, entitlements) → delivery logs and replay in the console.
+**Developer integrating deeply.** Website keys (test + live) → `npm i @ss/web` → `ss.track('order.placed', …)`; products react (points, messages, alerts) with no product-specific integration → server SDK for headless use (checkout API, entitlements).
 
-**Product developer (us or third party).** `ss app init` → manifest with elements, prices, schemas → local Portal emulator with fake merchants and websites → contract tests → register with a one-time token → review → listed. Element packs need no backend at all: build UI elements, publish the pack, the Loader serves them.
+**Product developer (us).** `ss app init` → manifest with elements, prices, schemas → `ss app validate` and the product's own tests (app-kit `createFakePortal`) → deploy, staff connect it with its `CONNECT_SECRET` → staff switch it active → listed. Element packs need no backend at all: `ss pack build`, staff upload the folder, the Loader serves them; service products upload their widgets the same way.
 
-**Platform staff.** Review manifest diffs, certify products (automated checks + manual), add credits, book on behalf, override/lock any field, open any product as admin scoped to a merchant/website, impersonate time-boxed, watch fleet health, replay dead letters, run reconciliation.
+**Platform staff.** Connect and activate products, upload packs and widgets, add credits, book on behalf, override/lock any field, open any product as admin scoped to a merchant/website, retry failed event deliveries, run reconciliation.
 
 ---
 
@@ -72,7 +72,7 @@ Consequences (binding):
 
 ```
  ┌──────────────── Control plane (Portal) ─────────────────┐   identity · catalog · entitlements · credits · config · audit
- ├──────────────── Delivery plane ──────────────────────────┤   Loader compiler · edge injection · hosted pages · preview proxy · CDN
+ ├──────────────── Delivery plane ──────────────────────────┤   Loader compiler · edge injection · hosted pages · CDN
  ├──────────────── Data plane (Website Graph + Event Hub) ──┤   per-website graph · events · files · consent · identity federation
  ├──────────────── Runtime plane (Products) ────────────────┤   service products (own repo/deploy/DB) · element packs (static)
  └──────────────── Intelligence plane ──────────────────────┘   AI Gateway · console operator · audits · content
@@ -88,10 +88,10 @@ ADRs (kept as a numbered list here; each becomes a section when implementation s
 
 ### 4.1 Loader (compiled per website)
 
-- On any change (element enabled, config saved, product version accepted) the compiler produces a **website bundle**: element code from element packs + service-product client stubs + signed config document → immutable versioned artefact on the CDN (`/w/<websiteId>/<version>/loader.js`), with an alias `/w/<websiteId>/loader.js` that flips atomically.
-- Budget check at compile time (§6.3). Only enabled elements are included; nothing loads for disabled ones.
+- On any change (element enabled, config saved, product version accepted) the compiler produces a **website bundle**: element code from element packs + service-product widget bundles + signed config document → immutable versioned artefact on the CDN (`/w/<websiteId>/<version>/loader.js`), with an alias `/w/<websiteId>/loader.js` that flips atomically.
+- Only enabled elements are included; nothing loads for disabled ones.
 - Runtime: one script, `defer`, < 15 KB core; elements lazy-mount by page conditions declared in config (path, selector, event); consent-aware; CSP-friendly (nonce or hash published per version).
-- Rollback = flip alias to previous version. Preview = alias per environment (`test`).
+- The live and test twin of a website each have their own alias.
 
 ### 4.2 Edge Injection (optional, zero-code)
 
@@ -105,11 +105,11 @@ Products may publish server-rendered pages (checkout, account, policies, PDP) th
 
 ### 4.4 Preview proxy
 
-Renders the merchant's public page through a sandboxed proxy with the candidate bundle injected, watermarked, non-indexable, never cached, rate-limited, only for domains the merchant has added. Used by the catalog ("Try on your site"), the config editor (live preview) and the AI operator (before/after).
+Removed (F.20). The configuration editor previews the resolved values (dry-run), not the live site.
 
 ### 4.5 Performance
 
-CDN caching with immutable versions, Brotli, edge compute for injection, per-website bundles ≤ declared budget, RUM (Core Web Vitals) collected by the Loader and shown per element.
+CDN caching with immutable versions, Brotli, edge compute for injection, minified bundles from `ss pack build`, RUM (Core Web Vitals) collected by the Loader and shown per element.
 
 ---
 
@@ -121,7 +121,7 @@ Per website, merchant-owned, schema-versioned entities: **Customer** (identities
 
 ### 5.2 Event Hub
 
-Standard events v1 (`customer.*`, `page.viewed`, `item.viewed`, `cart.updated`, `order.*`, `inventory.changed`, `price.changed`, `file.uploaded`, `custom.*`) plus product events. Immutable, deduplicated by `(websiteId, idempotencyKey)`, fanned out to subscribed products with signed, retried deliveries, DLQ, replay and per-website delivery logs. Schemas in `@ss/contracts` (`type@v`).
+Standard events v1 (`customer.*`, `page.viewed`, `item.viewed`, `cart.updated`, `order.*`, `inventory.changed`, `price.changed`, `file.uploaded`, `custom.*`) plus product events. Immutable, deduplicated by `(websiteId, idempotencyKey)`, fanned out to subscribed products with signed deliveries retried with backoff for about 24 h, then marked failed (staff can "Retry deliveries now"). Schemas in `@ss/contracts` (`type@v`).
 
 ### 5.3 Bring-your-own identity
 
@@ -137,20 +137,20 @@ Files are graph nodes backed by Storage; consent categories are graph attributes
 
 ### 6.1 Two product kinds
 
-| Kind                | Has                                                  | Deployed as                                                                     | Examples                                               |
-| ------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| **Service product** | backend, own DB, dashboard, REST, jobs, hosted pages | own repo → own Vercel project + Atlas DB                                        | Chatbot, Checkout, Order Manager, SEO Suite            |
-| **Element pack**    | front-end elements only, config schemas, no server   | published static bundle, served by the Loader; state lives in the Graph via SDK | PDP blocks, Storefront blocks, Notice bar, Wishlist UI |
+| Kind                | Has                                                  | Deployed as                                                                             | Examples                                               |
+| ------------------- | ---------------------------------------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| **Service product** | backend, own DB, dashboard, REST, jobs, hosted pages | own repo → own Vercel project + Atlas DB                                                | Chatbot, Checkout, Order Manager, SEO Suite            |
+| **Element pack**    | front-end elements only, config schemas, no server   | static bundle uploaded by staff, served by the Loader; state lives in the Graph via SDK | PDP blocks, Storefront blocks, Notice bar, Wishlist UI |
 
-Both are independent, both are registered, reviewed and priced the same way. A service product may also ship an element pack for its UI.
+Both are independent; service products are connected and pack bundles uploaded by staff, both start inactive until staff activate them, and both are priced the same way. A service product may also ship widgets (its mode-A UI) built with `ss pack build` and uploaded by staff.
 
 ### 6.2 Elements
 
-Switchable, individually priced (per hour and/or per use), field-level configurable (typed features: flag/quota/limit/rate/config with JSON Schema), optional dependencies within the product, declared surfaces (Loader element, REST, hosted page, dashboard screen, console extension), declared weight budget and Graph scopes.
+Switchable, individually priced (per hour and/or per use), field-level configurable (typed features: flag/quota/limit/rate/config with JSON Schema), optional dependencies within the product, declared surfaces (Loader element, REST, hosted page, dashboard screen, console extension) and Graph scopes.
 
-### 6.3 Certification pipeline (automated + review)
+### 6.3 Quality checks
 
-Contract tests · isolation tests · performance budget (JS weight, no layout shift, lazy mount) · accessibility checks · security scan (deps, secrets, CSP compliance) · sandbox demo present · admin-launch support · graceful degradation test (Portal offline). Levels: **Listed** (passes automation) → **Certified** (manual review) → **Featured**.
+`ss app validate` (manifest, OpenAPI, imports, strings, package wiring), each product's own tests (unit, isolation, app-kit `createFakePortal`) and the e2e suite against the real Portal. There is no certification pipeline, Portal emulator or listing level (removed in F.20); staff activation decides what merchants see.
 
 ### 6.4 Independence rules
 
@@ -164,7 +164,7 @@ No product imports another; no product reads another's database; cooperation onl
 - **Price**: from the product's versioned price book only — element hourly price (0 allowed), metered units with included quotas and overage, optional product base; plans are optional presets with feature bounds. Subscriptions pin the accepted price-book version.
 - **Settlement**: per started hour, one ledger entry per subscription per hour bucket with a unique `periodKey`; batch-resumable; computed when read (F.19, no cron); reconciliation (admin operation) compares expected vs settled hours and alerts on drift.
 - **Credits**: merchant-level, append-only ledger in integer credits, cached balance verified nightly; staff add credits (offline payment); gateways later add deposits only; credits shown only.
-- **Safety**: live meter, projected month, budgets/caps per website and merchant, low-balance alerts in hours-remaining, balance ≤ 0 pauses everything, paused time never billed, auto-resume on top-up, trials as adjustments.
+- **Safety**: live meter, projected month, one optional monthly spend cap per merchant (UTC month), low-balance alerts in hours-remaining, balance ≤ 0 pauses everything, paused time never billed, auto-resume on top-up, trials as adjustments.
 - **Bundles & promotions**: Portal-defined discounts as adjustments; products stay independent.
 
 ---
@@ -173,21 +173,21 @@ No product imports another; no product reads another's database; cooperation onl
 
 > Binding rules for every product are in Part E (Product Standard, below). Product depth is in Part D (Product Specifications, below).
 
-- **App Protocol**: shared-secret connect (`POST <product>/.well-known/ss-connect`, HMAC with the product's `CONNECT_SECRET`, pinned Portal URL and product base URL) → per-app Ed25519 keys; SSO launches (EdDSA JWT, 60 s, single-use; kinds `merchant | demo | admin(scope) | impersonate | partner | developer`); product→Portal calls via client-assertion JWT with replay store; Portal→product signed events; pull-with-cache authoritative.
+- **App Protocol**: shared-secret connect (`POST <product>/.well-known/ss-connect`, HMAC with the product's `CONNECT_SECRET`, pinned Portal URL and product base URL) → per-app Ed25519 keys; SSO launches (EdDSA JWT, 60 s, single-use; kinds `merchant | admin(scope)`); product→Portal calls via client-assertion JWT with replay store; Portal→product signed events; pull-with-cache authoritative.
 - **Entitlement document**: signed, versioned; elements on/off, features, config, domain binding, `validUntil`; verified offline.
 - **Website keys**: `pk_` (domain-locked, browser) and `sk_` (server), scoped, signed, offline-verifiable, revocable; test-mode twins.
-- **Manifest**: product kind, elements (price, budget, scopes, surfaces, dependencies), features/schemas, plans, price book, events, capabilities, `trialHours`.
+- **Manifest**: product kind, elements (price, scopes, surfaces, dependencies), features/schemas, plans, price book, events, capabilities, `trialHours`.
 - **Event & Graph schemas**: versioned in `@ss/contracts`.
-- **API standards**: OpenAPI 3.1, `/v1`, idempotency keys, cursor pagination, uniform error envelope, rate-limit and deprecation headers.
-- **Kit**: `@ss/app-kit` (Node, functional): registration, launch/key verification, origin checks, signed client, entitlement cache, usage reporter, event verification, Graph client, shared-service clients, scheduler, audit, health. `@ss/web` (browser): events, identity federation, element runtime API. `@ss/cli`: `init | validate | dev (emulator) | register | certify`.
+- **API standards**: OpenAPI 3.1, `/v1`, idempotency keys on routes that move money or create things, cursor pagination, uniform error envelope, rate-limit headers.
+- **Kit**: `@ss/app-kit` (Node, functional): registration, launch/key verification, origin checks, signed client, entitlement cache, usage reporter, event verification, Graph client, shared-service clients, audit, `createFakePortal` for tests. `@ss/web` (browser): events, identity federation, element runtime API. `@ss/cli`: `app init | app validate | app assets | pack build`.
 
 ---
 
 ## 9. Control plane modules (Portal)
 
-Identity & Access (staff 2FA, merchants, website-scoped RBAC, partners, developers, sessions, keys) · Catalog & Lifecycle (apps, manifest versions/diffs/approval, environments, certification, rollouts, deprecation) · Commerce (subscriptions, elements, precedence & locks, entitlement docs, usage/quotas, ledger, settlement, caps, statements) · Configuration (schemas, templates, environments, versions, rollback, scheduled changes, dry-run) · Delivery (compiler, aliases, injection rules, preview) · Data (Graph, Event Hub, consent, federation) · Shared services (Messaging, AI Gateway, Storage, Secrets, Scheduler, Notifications) · Observability & Audit · Consoles (Merchant, Admin, Partner, Developer, Marketplace/Docs). Each module owns its collections, exposes an API, and has stated invariants .
+Identity & Access (staff 2FA, merchants, website-scoped RBAC, sessions, keys) · Catalog (apps, connect, manifest versions, active/inactive, packs and widgets) · Commerce (subscriptions, elements, precedence & locks, entitlement docs, usage/quotas, ledger, settlement, caps, statements) · Configuration (schemas, versions, rollback, locks, dry-run) · Delivery (compiler, aliases, injection rules, install snippet) · Data (Graph, Event Hub, consent, federation) · Shared services (Messaging, AI Gateway, Storage, Secrets, Scheduler, Notifications) · Observability & Audit · Consoles (Merchant, Admin, Marketplace/Docs). Each module owns its collections, exposes an API, and has stated invariants .
 
-**Precedence** (entitlements and configuration alike): product default → plan default → platform policy → merchant default → website override (≤ plan max) → admin override (may exceed, may lock) → runtime state.
+**Precedence** (entitlements and configuration alike): product default → plan default → platform policy → website override (≤ plan max) → admin override (may exceed, may lock) → runtime state.
 
 ---
 
@@ -201,7 +201,7 @@ Identity & Access (staff 2FA, merchants, website-scoped RBAC, partners, develope
 
 ## 11. Security architecture
 
-Threat model (to be expanded in this file before M1) (assets, adversaries incl. compromised product and injected edge). Controls: Ed25519 signatures and JWKS with `kid`; single-use launches; replay stores; identity only from crypto; data-access guards requiring tenant keys; isolation suites in CI; keys hashed at rest and shown once; envelope-encrypted secrets with rotation; scrypt/argon2id passwords; mandatory staff 2FA; progressive lockouts; shared-store rate limits; CSP with per-version nonces/hashes for the Loader; strict CORS; CSRF on console writes; product scopes and per-product DB users; edge injection guardrails (allow-listed rules, bypass, dry-run, instant off); dependency/secret scanning; audit immutability; data export/anonymisation; encrypted backups.
+Threat model (to be expanded in this file before M1) (assets, adversaries incl. compromised product and injected edge). Controls: Ed25519 signatures and JWKS with `kid`; single-use launches; replay stores; identity only from crypto; data-access guards requiring tenant keys; isolation suites in CI; keys hashed at rest and shown once; envelope-encrypted secrets; scrypt/argon2id passwords; mandatory staff 2FA; progressive lockouts; shared-store rate limits; CSP with per-version nonces/hashes for the Loader; strict CORS; CSRF on console writes; product scopes and per-product DB users; edge injection guardrails (allow-listed rules, bypass, dry-run, instant off); dependency/secret scanning; append-only audit log; encrypted backups.
 
 ---
 
@@ -209,11 +209,11 @@ Threat model (to be expanded in this file before M1) (assets, adversaries incl. 
 
 **SLOs**: Portal API 99.9 % availability, p95 < 200 ms; Loader availability 99.99 % (CDN); entitlement freshness ≤ 5 min; event fan-out p95 < 30 s; settlement within 10 min of the hour; product runtime unaffected by Portal outage.
 
-**Failure behaviour**: Portal down → Loader keeps serving last compiled bundle, products use cached entitlements, usage queues locally; Atlas degraded → writes 503 with retry-after, jobs resume from cursors; product down → flagged, merchants notified, injection rule for that element auto-disabled; provider down → queued/retried, product degrades; queue backlog → drain, DLQ, replay.
+**Failure behaviour**: Portal down → Loader keeps serving last compiled bundle, products use cached entitlements, usage queues locally; Atlas degraded → writes 503 with retry-after, jobs resume from cursors; product down → flagged, merchants notified, injection rule for that element auto-disabled; provider down → queued/retried, product degrades; failed event deliveries → retried with backoff, then marked failed (staff retry).
 
 **Capacity**: 100k websites, 1M events/day, 10k subscriptions settled hourly, bundles compiled within 10 s of a change.
 
-**Data**: per-module collections with tenant keys, `schemaVersion`; append-only ledger/audit/events; indexes declared and synced by script; versioned migrations with dry-run; retention per data type; rollups for analytics; export/anonymise propagated to products. DR: encrypted daily backups, 30-day retention, quarterly restore drill, RPO 24 h (1 h on Atlas continuous backup), RTO 4 h.
+**Data**: per-module collections with tenant keys, `schemaVersion`; append-only ledger/audit/events; indexes declared and synced by script; versioned migrations with dry-run; retention per data type; rollups for analytics. DR: encrypted daily backups, 30-day retention, quarterly restore drill, RPO 24 h (1 h on Atlas continuous backup), RTO 4 h.
 
 ---
 
@@ -223,7 +223,7 @@ Threat model (to be expanded in this file before M1) (assets, adversaries incl. 
 - **Standards**: JS ESM functional core with JSDoc + `checkJs --strict`; adapters injected; ESLint/Prettier; conventional commits; ADRs.
 - **Testing**: unit + property (idempotency, precedence, settlement) → adapter (`mongodb-memory-server`) → contract → isolation → Playwright (consoles, product dashboards, Loader on a sample site, injection on a sample origin) → load (settlement, fan-out, compile).
 - **CI/CD**: per PR all suites + preview deploy + scans; main → production with migration gate; products deploy independently; Portal keeps N-1 contract compatibility.
-- **Hosting**: one Vercel project per deployable; one Atlas DB/user per deployable (one shared M0 cluster, F.19); no crons or background processing (F.19): work runs on the request or event that causes it, time-based state on read, maintenance as admin/merchant buttons; Atlas-backed queues with leases; edge functions for injection/preview; CDN for bundles; Dockerfiles + compose as the portability proof.
+- **Hosting**: one Vercel project per deployable; one Atlas DB/user per deployable (one shared M0 cluster, F.19); no crons or background processing (F.19): work runs on the request or event that causes it, time-based state on read, maintenance as admin/merchant buttons; Atlas-backed queues with leases; edge functions for injection; CDN for bundles; Dockerfiles + compose as the portability proof.
 - **Porting from ibrahimMobiles**: logic and tests only; constants → element features with schemas and bounds; store data → Graph/Event contracts; providers → shared-service adapters; per-website keys everywhere.
 
 ---
@@ -233,13 +233,13 @@ Threat model (to be expanded in this file before M1) (assets, adversaries incl. 
 | Milestone                                         | Scope                                                                                                                                                                                                                                       | Exit                                               |
 | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
 | **M0 Specs** (1 wk)                               | ADRs 001–010, protocol, entitlement/element model, Graph & event schemas, manifest schema, data model, OpenAPI skeleton, threat model, delivery-plane design, hosting topology                                                              | sign-off                                           |
-| **M1 Contracts, kit, emulator** (2 wks)           | `@ss/contracts`, `@ss/app-kit`, `@ss/web`, CLI with Portal emulator, product + element-pack templates                                                                                                                                       | template products pass contract tests locally      |
+| **M1 Contracts, kit, CLI** (2 wks)                | `@ss/contracts`, `@ss/app-kit` (with `createFakePortal`), `@ss/web`, CLI, product + element-pack templates                                                                                                                                  | template products pass contract tests locally      |
 | **M2 Control plane** (5 wks)                      | Identity, Catalog/Lifecycle, Commerce, Configuration, Observability, Admin + Merchant consoles, isolation suite, CI, Docker                                                                                                                 | security/isolation green; OpenAPI published        |
-| **M3 Delivery + data planes** (4 wks)             | Loader compiler + CDN, preview proxy ("try on your site"), Website Graph v1, Event Hub v1, identity federation, Notifications; Loyalty reference product + one element pack                                                                 | first merchant live via Loader in < 10 min         |
-| **M4 Launch set** (4 wks)                         | In priority order: **Chatbot, Coupons, Loyalty, Signups & Identity, Deals, Reviews, Alerts** (+ Consent & Tags pack, Notice/Storefront basics pack). Chosen for merchant value, small data footprint, and independence from a store backend | listed & certified                                 |
+| **M3 Delivery + data planes** (4 wks)             | Loader compiler + CDN, Website Graph v1, Event Hub v1, identity federation, Notifications; Loyalty reference product + one element pack                                                                                                     | first merchant live via Loader in < 10 min         |
+| **M4 Launch set** (4 wks)                         | In priority order: **Chatbot, Coupons, Loyalty, Signups & Identity, Deals, Reviews, Alerts** (+ Consent & Tags pack, Notice/Storefront basics pack). Chosen for merchant value, small data footprint, and independence from a store backend | listed                                             |
 | **M5 Edge Injection + commerce products** (6 wks) | Edge injection with guardrails, hosted pages; Catalog, Configurator, Grades, PDP pack, Storefront pack, Checkout, Order Manager, After-sales, Search                                                                                        | zero-code site live; sample store on products only |
 | **M6 Intelligence + visibility** (4 wks)          | AI Gateway, console operator, SEO Suite, Analytics, Consent, Content, Files, Automation, Reports, Ops Monitor                                                                                                                               | operator applies audited diffs                     |
-| **M7 Partners, developers, marketplace** (3 wks)  | Partner & Developer consoles, certification UI, marketplace, docs site, WordPress plugin, deposit-request flow                                                                                                                              | third-party product certified end-to-end           |
+| **M7 Marketplace** (3 wks)                        | marketplace, docs site, WordPress plugin, deposit-request flow                                                                                                                                                                              | third-party product listed end-to-end              |
 | **M8 Scale**                                      | sovereign mode (BYO DB), white-label, gateways, revenue share, locales, status page, load tests                                                                                                                                             | —                                                  |
 
 ---
@@ -249,19 +249,19 @@ Threat model (to be expanded in this file before M1) (assets, adversaries incl. 
 | Risk                          | Mitigation                                                                                                              |
 | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | Edge injection breaking sites | opt-in, dry-run diffs, per-rule switches, bypass header, auto-disable on origin errors, never cache authenticated pages |
-| Loader weight creep           | hard budgets per element and per website; compile-time refusal; RUM feedback                                            |
+| Loader weight creep           | lazy mount by placement; minified bundles from `ss pack build`; RUM feedback per element                                |
 | Contract churn                | semver, N-1 compatibility, contract tests in every product CI                                                           |
 | Settlement errors             | pure core, property tests, reconciliation, merchant-visible statements                                                  |
 | Scope                         | elements ship incrementally; each product defines a launch element set                                                  |
-| Third-party quality           | certification pipeline, scopes, revocation, health SLOs                                                                 |
+| Third-party quality           | `ss app validate`, staff activation, scopes, key revocation                                                             |
 
 ---
 
 ## 16. Decisions log
 
-**Launch set (decided 2026-10-01):** Chatbot → Coupons → Loyalty → Signups & Identity → Deals → Reviews → Alerts, plus the Consent & Tags and basic Storefront packs. Reasoning: highest demand for any website type, no dependency on a store backend, smallest data footprint, fastest to certify; the commerce set follows once the Loader, Graph and Event Hub are proven.
+**Launch set (decided 2026-10-01):** Chatbot → Coupons → Loyalty → Signups & Identity → Deals → Reviews → Alerts, plus the Consent & Tags and basic Storefront packs. Reasoning: highest demand for any website type, no dependency on a store backend, smallest data footprint, fastest to ship; the commerce set follows once the Loader, Graph and Event Hub are proven.
 
-Greenfield · **clients bring their own database, storage, AI/messaging/payment keys; we provide methods only (§1a)** · four deliverables (control, delivery, products, contracts) · elements as unit of switching/pricing · hourly idempotent settlement from product price books only · merchant credits added by staff, shown only · website = domain, globally unique, no verification, hard-bound · self-service signup, subscribe with ≥ 1 h credits · demo after signup, plus "try on your site" preview · shared-secret connect + pinned URLs → key trust · admin has full powers incl. scoped SSO and impersonation · international, English default, nothing regional in code · initial products ported from ibrahimMobiles and generalised, store repos untouched · JS ESM functional · Vercel Hobby + Atlas M0 (F.19), one project/DB per deployable, portable.
+Greenfield · **clients bring their own database, storage, AI/messaging/payment keys; we provide methods only (§1a)** · four deliverables (control, delivery, products, contracts) · elements as unit of switching/pricing · hourly idempotent settlement from product price books only · merchant credits added by staff, shown only · website = domain, globally unique, no verification, hard-bound · self-service signup, subscribe with ≥ 1 h credits · shared-secret connect + pinned URLs → key trust · admin has full powers incl. scoped SSO (admin launch; demo, preview and impersonation removed in F.20) · international, English default, nothing regional in code · initial products ported from ibrahimMobiles and generalised, store repos untouched · JS ESM functional · Vercel Hobby + Atlas M0 (F.19), one project/DB per deployable, portable.
 
 ---
 
@@ -569,21 +569,19 @@ Every element can be used as **drop-in UI** (our renderer, themed by the website
 
 ### 0. The flexibility model (every product supports all nine levels)
 
-| Level | Name                | What a merchant (or staff, or the AI operator) can change                                                                                                                                                                                              | How it's declared by the product                  |
-| ----- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------- |
-| L0    | **Switch**          | Element on/off per website and environment; scheduled on/off; audience (all / segment / % rollout)                                                                                                                                                     | element `key`, `schedule`, `audience`             |
-| L1    | **Configure**       | Every setting is a typed feature (flag/quota/limit/rate/config) with defaults and plan-bounded ranges                                                                                                                                                  | JSON Schema per element                           |
-| L2    | **Appearance**      | Website design tokens inherited automatically; per-element overrides; layout variants; density; scoped custom CSS; icon set                                                                                                                            | `theme` schema + `variants[]`                     |
-| L3    | **Copy & language** | Every user-facing string editable, per language, with placeholders; tone presets                                                                                                                                                                       | `strings` catalog with `{{placeholders}}`         |
-| L4    | **Rules & logic**   | Conditions, segments, formulas and eligibility written in a safe expression language (`when`, `unless`, `score = …`), evaluated in the pure core; visual builder + code view                                                                           | `rules` schema referencing the expression grammar |
-| L5    | **Data**            | Custom fields on the product's entities and on Graph entities; custom events; tags; import/export                                                                                                                                                      | `customFields` allowed per entity                 |
-| L6    | **Extend**          | Webhooks in/out, custom tools/actions pointing at merchant URLs, sandboxed JS hooks in the Loader (`before/after` element events), slots for merchant HTML                                                                                             | `hooks[]`, `slots[]`, `webhooks[]`                |
-| L7    | **Placement**       | Where and when elements render: path patterns, CSS selectors, page types, device, referrer, time, consent state, scroll/idle/exit triggers                                                                                                             | `placement` schema (shared)                       |
-| L8    | **Governance**      | Who may change what (website-scoped roles), locks by staff, approval workflow for sensitive changes (pricing rules, payment settings), versions + rollback, **experiments** (A/B variants of any element config with traffic split and success metric) | `governance` metadata, `experiments`              |
+| Level | Name                | What a merchant (or staff, or the AI operator) can change                                                                                                                    | How it's declared by the product                  |
+| ----- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| L0    | **Switch**          | Element on/off per website (live/test twin); scheduled on/off; audience (all / segment / rules)                                                                              | element `key`, `schedule`, `audience`             |
+| L1    | **Configure**       | Every setting is a typed feature (flag/quota/limit/rate/config) with defaults and plan-bounded ranges                                                                        | JSON Schema per element                           |
+| L2    | **Appearance**      | Website design tokens inherited automatically; per-element overrides; layout variants; density; scoped custom CSS; icon set                                                  | `theme` schema + `variants[]`                     |
+| L3    | **Copy & language** | Every user-facing string editable, per language, with placeholders; tone presets                                                                                             | `strings` catalog with `{{placeholders}}`         |
+| L4    | **Rules & logic**   | Conditions, segments, formulas and eligibility written in a safe expression language (`when`, `unless`, `score = …`), evaluated in the pure core; visual builder + code view | `rules` schema referencing the expression grammar |
+| L5    | **Data**            | Custom fields on the product's entities and on Graph entities; custom events; tags; import/export                                                                            | `customFields` allowed per entity                 |
+| L6    | **Extend**          | Webhooks in/out, custom tools/actions pointing at merchant URLs, sandboxed JS hooks in the Loader (`before/after` element events), slots for merchant HTML                   | `hooks[]`, `slots[]`, `webhooks[]`                |
+| L7    | **Placement**       | Where and when elements render: path patterns, CSS selectors, page types, device, referrer, time, consent state, scroll/idle/exit triggers                                   | `placement` schema (shared)                       |
+| L8    | **Governance**      | Who may change what (website-scoped roles), locks by staff, approval workflow for sensitive changes (pricing rules, payment settings), versions + rollback                   | `governance` metadata                             |
 
 **Expression language (shared, tiny, safe).** Boolean and arithmetic over event/entity fields, sets, dates, string ops, and a fixed function library (`inSegment()`, `daysSince()`, `total()`, `has()`, `matches()`), no side effects, time-boxed evaluation, versioned grammar. Used by rules everywhere so merchants learn it once.
-
-**Experiments (shared).** Any element can hold up to N config variants; the Loader/product assigns visitors deterministically; the metric comes from the Event Hub (`order.placed`, `chat.lead_captured`, custom); results shown with confidence; winner can be applied in one click.
 
 ---
 
@@ -752,7 +750,6 @@ Every element can be used as **drop-in UI** (our renderer, themed by the website
 | `trust`              | badges, policies links, contact strip                                                                                                     |
 | `structured_data`    | on/off, mapping                                                                                                                           |
 | `layouts`            | desktop/mobile variants, slots for merchant HTML, section order via drag-and-drop                                                         |
-| `experiments`        | variants of any section                                                                                                                   |
 
 ---
 
@@ -891,21 +888,21 @@ Roles, website scoping, invites, 2FA, audit, activity feed, approvals.
 
 ### 28. Out-of-the-box product ideas (backlog, same model)
 
-Booking & Appointments (slots, resources, deposits) · Forms & Surveys (builder, logic, submissions to Graph) · Pop-ups & Banners (targeting, experiments) · Referral & Affiliate (links, commissions) · Gift cards & Store credit · Subscriptions & Recurring orders · Multi-vendor marketplace tools (vendors, payouts) · Live shopping / video commerce · Product Q&A · Size/fit assistant · Image search · Price intelligence (competitor tracking) · Translations (site localisation) · Accessibility widget · Legal generator (policies from answers) · Digital downloads / licensing · Events & tickets · Donations · Feedback & NPS · Help center / knowledge base · Status page for merchants' own services.
+Booking & Appointments (slots, resources, deposits) · Forms & Surveys (builder, logic, submissions to Graph) · Pop-ups & Banners (targeting) · Referral & Affiliate (links, commissions) · Gift cards & Store credit · Subscriptions & Recurring orders · Multi-vendor marketplace tools (vendors, payouts) · Live shopping / video commerce · Product Q&A · Size/fit assistant · Image search · Price intelligence (competitor tracking) · Translations (site localisation) · Accessibility widget · Legal generator (policies from answers) · Digital downloads / licensing · Events & tickets · Donations · Feedback & NPS · Help center / knowledge base · Status page for merchants' own services.
 
 ---
 
 ### 29. How this stays simple for the Portal
 
-Every capability above is expressed to the Portal as: an element (switch + price), typed features (schemas), rules (shared expression grammar), placement (shared schema), strings (catalog), hooks/webhooks (declared), experiments (shared). The Portal renders forms from schemas and enforces precedence, locks, budgets and pricing. It never learns product-specific logic.
+Every capability above is expressed to the Portal as: an element (switch + price), typed features (schemas), rules (shared expression grammar), placement (shared schema), strings (catalog), hooks/webhooks (declared). The Portal renders forms from schemas and enforces precedence, locks and pricing. It never learns product-specific logic.
 
 ---
 
 # PART E — PRODUCT STANDARD (SSPS v1)
 
-**Purpose.** Ten developers, ten repos, one behaviour. Every product — ours or third-party — is built to this standard so the Portal, the Loader, the SDKs, the docs, the consoles and the certification pipeline work with it without special cases, and so a merchant can consume any product in **three interchangeable ways**: drop-in UI, their own UI on our headless core, or API only.
+**Purpose.** Ten developers, ten repos, one behaviour. Every product — ours or third-party — is built to this standard so the Portal, the Loader, the SDKs, the docs, the consoles and the CLI work with it without special cases, and so a merchant can consume any product in **three interchangeable ways**: drop-in UI, their own UI on our headless core, or API only.
 
-The standard is enforced, not suggested: the product template generates it, `@ss/app-kit` implements it, `eslint-plugin-ss` lints it, and the certification suite tests it.
+The standard is enforced, not suggested: the product template generates it, `@ss/app-kit` implements it, `eslint-plugin-ss` lints it, and `ss app validate` plus the product's own tests check it.
 
 ---
 
@@ -936,7 +933,6 @@ product-<slug>/
   ui/                      # default renderers for elements (Mode A), built only on headless/
   api/                     # REST v1 handlers: thin, call core/, use adapters
   adapters/                # db (per-website keyed repos), platform (app-kit clients), providers (via platform services)
-  jobs/                    # signed scheduled handlers
   strings/                 # string catalog (en + others), placeholders declared
   schemas/                 # JSON Schemas for element features and custom fields
   tests/                   # unit (core), contract (SSPS suite), e2e
@@ -955,8 +951,8 @@ Only `core/` and `headless/` may contain business logic. `ui/` and `api/` are ad
 {
   "ssps": "1",
   "product": { "slug": "coupons", "name": "Coupons", "kind": "service" | "pack", "version": "1.4.0", "category": "commerce" },
-  "endpoints": { "base": "https://…", "dashboard": "/dashboard", "demo": "/demo", "events": "/.well-known/ss-events" },
-  "capabilities": { "adminLaunch": true, "sandbox": true, "localEnforcement": ["quota:redeem"], "offlineGrace": "PT24H" },
+  "endpoints": { "base": "https://…", "dashboard": "/dashboard", "events": "/.well-known/ss-events" },
+  "capabilities": { "adminLaunch": true, "identityIssuer": false },
   "scopes": ["graph.customer.read", "graph.order.read", "events.subscribe:order.*", "messaging.send"],
   "events": { "consumes": ["order.placed@1", "cart.updated@1"], "publishes": ["coupon.redeemed@1"] },
   "elements": [
@@ -965,7 +961,6 @@ Only `core/` and `headless/` may contain business logic. `ui/` and `api/` are ad
       "name": "Coupon codes",
       "modes": ["C"],                                   // A/B/C supported
       "price": { "hourly": 1, "metered": [{ "unit": "redemption", "perUnit": 0.01, "included": { "starter": 500 } }] },
-      "budget": { "js": 0 },                            // KB for Mode A bundle; 0 = no UI
       "dependsOn": [],
       "features": { "$ref": "schemas/codes.features.json" },
       "strings": "strings/codes.json",
@@ -973,7 +968,6 @@ Only `core/` and `headless/` may contain business logic. `ui/` and `api/` are ad
       "rules": ["eligibility"],                         // named rule slots using the shared grammar
       "hooks": ["beforeRedeem", "afterRedeem"],
       "customFields": ["coupon"],
-      "experiments": true,
       "api": { "resources": ["coupons", "redemptions"] },
       "headless": null,
       "renderer": null
@@ -983,7 +977,6 @@ Only `core/` and `headless/` may contain business logic. `ui/` and `api/` are ad
       "name": "Coupon apply box",
       "modes": ["A", "B", "C"],
       "price": { "hourly": 0 },
-      "budget": { "js": 6 },
       "dependsOn": ["codes"],
       "placement": true,
       "headless": "headless/applyBox.js#createApplyBox",
@@ -1021,10 +1014,10 @@ export const createApplyBox = ({ config, strings, client, identity, emit }) => (
 
 - Framework-agnostic; adapters in `@ss/web/react|vue|svelte` wrap it as hooks/composables (`useApplyBox()`).
 - `client` is the element's Mode-C API client (so B is built on C), already scoped with the website key and entitlement.
-- `emit` publishes element events (`apply_box.applied`) which flow to analytics/experiments and to merchant hooks.
+- `emit` publishes element events (`apply_box.applied`) which flow to analytics and to merchant hooks.
 - No DOM access in `headless/`. Lint enforces it.
 
-**Default renderer (Mode A)** is a pure function of `(state, actions, strings, theme, slots)` returning DOM, mounted by the Loader according to `placement`. It must use design tokens only (no hard-coded colours/fonts), expose `variants`, honour `slots`, meet the a11y rules (§8), and stay under the declared `budget.js`.
+**Default renderer (Mode A)** is a pure function of `(state, actions, strings, theme, slots)` returning DOM, mounted by the Loader according to `placement`. It must use design tokens only (no hard-coded colours/fonts), expose `variants`, honour `slots`, and meet the a11y rules (§8).
 
 ---
 
@@ -1036,7 +1029,7 @@ export const createApplyBox = ({ config, strings, client, identity, emit }) => (
 | Auth          | `Authorization: Bearer <website key>` (`pk_` for browser-safe reads, `sk_` for server); `X-SS-Website` optional override never trusted over the key's binding; SSO sessions for dashboard routes; app-to-Portal via client-assertion |
 | Resources     | plural nouns, kebab-case paths, `id` opaque strings, `websiteId` never in the path (derived from the key)                                                                                                                            |
 | Reads         | `GET /v1/<resource>?cursor=&limit=&filter[field]=&sort=` ; cursor pagination; `fields=` sparse selection; `include=` for relations                                                                                                   |
-| Writes        | `POST` create, `PATCH` partial update (JSON Merge Patch), `DELETE` soft by default; **`Idempotency-Key` required** on POST that creates or moves state; replay returns the original result                                           |
+| Writes        | `POST` create, `PATCH` partial update (JSON Merge Patch), `DELETE` soft by default; **`Idempotency-Key`** on POST routes that create things or move money; a repeated key within 24 h is refused (409 `duplicate_request`)           |
 | Errors        | RFC 9457 problem details: `{ type, title, status, detail, instance, requestId, errors[] }`; stable machine `type` URIs per product                                                                                                   |
 | Rate limits   | `RateLimit-Limit/Remaining/Reset` headers; 429 with `Retry-After`                                                                                                                                                                    |
 | Versioning    | additive changes only within `/v1`; breaking → `/v2` with `Sunset` and `Deprecation` headers on the old one; N-1 supported for 12 months                                                                                             |
@@ -1052,11 +1045,11 @@ Every product exposes the **same standard resources** in addition to its own: `G
 
 ### 6. Configuration standard
 
-- Every configurable value is a **feature** in an element's feature schema (JSON Schema 2020-12 subset) with `title`, `description`, `default`, bounds, `x-ui` (widget, group, order, help), `x-plan` (per-plan default/max), `x-lock` (lockable), `x-experiment` (variant-able).
+- Every configurable value is a **feature** in an element's feature schema (JSON Schema 2020-12 subset) with `title`, `description`, `default`, bounds, `x-ui` (widget, group, order, help), `x-plan` (per-plan default/max), `x-lock` (lockable).
 - **Strings** live in the string catalog, not in schemas; placeholders declared with types.
 - **Rules** use the shared expression grammar (`@ss/contracts/rules`), evaluated in `core/` with the provided evaluator; products never ship their own DSL.
 - **Placement** uses the shared placement schema; products never invent their own targeting model.
-- **Precedence, locks, versions, experiments** are Portal features; products read only the resolved, signed entitlement document and must not persist merchant config themselves except caches.
+- **Precedence, locks, versions** are Portal features; products read only the resolved, signed entitlement document and must not persist merchant config themselves except caches.
 
 ---
 
@@ -1064,66 +1057,65 @@ Every product exposes the **same standard resources** in addition to its own: `G
 
 **Ownership.** Products store data **only in the merchant's own database** (connection provided via the Portal, resolved by `app-kit` as `db = await dataFor(websiteId)`) and files **only in the merchant's own bucket**. Products never persist merchant/customer data in platform-owned storage; the only exceptions are short-lived caches (entitlements, revocations) and queues, which hold no payloads beyond ids. Collections are prefixed `ss_<product>_…` inside the merchant database; a product must create its own indexes idempotently on first connect and run lazy, versioned migrations keyed by `schemaVersion`. Connection pools are cached per merchant with serverless-safe limits (kit-provided). Providers (AI, messaging, storage, payments) are used **only through connectors that execute with the merchant's credentials**; products never hold platform provider keys.
 
-Every stored document: `_id`, `websiteId` (required, indexed first in every compound index), `merchantId`, `env` (`live`|`test`), `createdAt`, `updatedAt`, `schemaVersion`, optional `custom`. Repositories are generated by the template and **reject any query without `websiteId`**. Append-only collections declared as such (no update/delete functions generated). Retention per collection declared in the manifest (`retention: { conversations: "P365D" }`) and enforced by TTL. Export and anonymise handlers are mandatory (`POST /v1/data:export`, `POST /v1/data:anonymize` — Portal-signed).
+Every stored document: `_id`, `websiteId` (required, indexed first in every compound index), `merchantId`, `env` (`live`|`test`), `createdAt`, `updatedAt`, `schemaVersion`, optional `custom`. Repositories are generated by the template and **reject any query without `websiteId`**. Append-only collections declared as such (no update/delete functions generated). Retention per collection declared in the manifest (`retention: { conversations: "P365D" }`) and enforced by TTL.
 
 ---
 
 ### 8. UI standard (Mode A renderers and dashboards)
 
-Design tokens from the website (colours, type, radius, spacing, motion) via CSS variables; no hard-coded styles. Variants declared in manifest. Slots for merchant HTML. Accessibility: keyboard operable, focus visible, ARIA roles/labels, contrast ≥ 4.5:1 with default tokens, reduced-motion respected, no layout shift on mount (reserve space). i18n: strings from catalog, RTL-safe layouts. Performance: budget enforced at compile; lazy mount by placement; no third-party scripts unless declared. Dashboards (SSO) use `@ss/ui` components for consistency and support `merchant`, `demo`, `admin(scope)` and `impersonate` launch kinds with the standard top bar (context switcher, audit banner).
+Design tokens from the website (colours, type, radius, spacing, motion) via CSS variables; no hard-coded styles. Variants declared in manifest. Slots for merchant HTML. Accessibility: keyboard operable, focus visible, ARIA roles/labels, contrast ≥ 4.5:1 with default tokens, reduced-motion respected, no layout shift on mount (reserve space). i18n: strings from catalog, RTL-safe layouts. Performance: minified bundles; lazy mount by placement; no third-party scripts unless declared. Dashboards (SSO) use `@ss/ui` components for consistency and support the `merchant` and `admin(scope)` launch kinds with the standard top bar (context switcher, audit banner).
 
 ---
 
 ### 9. Events standard
 
-Publish and consume only envelope-conformant events (`@ss/contracts`): `id`, `type@v`, `websiteId`, `env`, `occurredAt`, `idempotencyKey`, `actor`, `data`, `context`. Consumers are idempotent (dedupe on `id`). Element UI events (`<element>.<verb>`) are emitted through the headless `emit` and forwarded by the Loader to analytics/experiments. Product domain events are declared in the manifest with versioned schemas.
+Publish and consume only envelope-conformant events (`@ss/contracts`): `id`, `type@v`, `websiteId`, `env`, `occurredAt`, `idempotencyKey`, `actor`, `data`, `context`. Consumers are idempotent (dedupe on `id`). Element UI events (`<element>.<verb>`) are emitted through the headless `emit` and forwarded by the Loader to analytics. Product domain events are declared in the manifest with versioned schemas.
 
 ---
 
 ### 10. Security standard
 
-Offline verification of website keys and entitlement documents (app-kit); origin/domain enforcement on `pk_` traffic; scopes enforced on Graph and shared-service calls; per-product DB user; secrets only via Secrets service; input validation on every boundary with the schemas; output encoding; CSP-compatible renderers (no inline scripts); no PII in logs; audit entries for dashboard actions with actor (including platform admins); rate limits via shared store; graceful degradation when the Portal is unreachable (`offlineGrace`).
+Offline verification of website keys and entitlement documents (app-kit); origin/domain enforcement on `pk_` traffic; scopes enforced on Graph and shared-service calls; per-product DB user; secrets only via Secrets service; input validation on every boundary with the schemas; output encoding; CSP-compatible renderers (no inline scripts); no PII in logs; audit entries for dashboard actions with actor (including platform admins); rate limits via shared store; graceful degradation when the Portal is unreachable (fixed 24 h offline grace).
 
 ---
 
 ### 11. Observability standard
 
-Structured JSON logs with `requestId`, `websiteId`, `element`; metrics: request latency, error rate, queue depth, usage reported, cache hit rate; heartbeat with version; error reporting hook; per-website delivery logs for webhooks.
+Structured JSON logs with `requestId`, `websiteId`, `element`; metrics: request latency, error rate, queue depth, usage reported, cache hit rate; error reporting hook; per-website delivery logs for webhooks.
 
 ---
 
-### 12. Testing & certification standard
+### 12. Testing standard
 
-Products ship: unit tests for `core/` and `headless/` (state machines), contract tests from `@ss/certify` (registration, launches of all kinds, key verification, entitlement handling incl. offline, origin enforcement, idempotency, error format, pagination, standard resources, events envelope, data export/anonymise), isolation tests (generated), renderer tests (a11y, tokens only, budget, no CLS), API conformance (OpenAPI lint + example validation), e2e for the demo. Certification runs the same suite in CI and again in the Portal before listing. Levels: Listed → Certified → Featured.
+Products ship: unit tests for `core/` and `headless/` (state machines), API tests against app-kit's `createFakePortal` (launches, key verification, entitlement handling incl. offline, origin enforcement, idempotency, error format, pagination, standard resources, events envelope), isolation tests, renderer tests (a11y, tokens only, no CLS) and `ss app validate` in CI; the e2e suite runs each product against the real Portal. No certification suite or listing levels (removed in F.20).
 
 ---
 
 ### 13. Versioning & lifecycle standard
 
-Semver for the product; manifest `version`; price-book `version` with `effectiveFrom`; breaking manifest changes flagged; `/v1` additive-only; deprecation headers and 12-month N-1; changelog file; migration scripts with dry-run; `Sunset` announcements propagate to merchants through the Portal.
+Semver for the product; manifest `version`; price-book `version` with `effectiveFrom`; breaking manifest changes flagged; `/v1` additive-only; deprecation headers and 12-month N-1; changelog file; migration scripts with dry-run. A changed manifest becomes current on reconnect (F.20).
 
 ---
 
 ### 14. Tooling that makes the standard automatic
 
-- `ss app init --kind service|pack` — generates the anatomy, manifest skeleton, repositories with `websiteId` guards, standard resources, health endpoints, string catalog, tests.
-- `ss app validate` — manifest ↔ OpenAPI ↔ code consistency, schema lint, budget estimate.
-- `ss dev` — local Portal emulator (fake merchants/websites/entitlements/keys, event injector, launch generator).
-- `ss certify` — runs the full certification suite locally.
+- `ss app init --kind service|pack` — generates the anatomy, manifest skeleton, repositories with `websiteId` guards, standard resources, string catalog, tests.
+- `ss app validate` — manifest ↔ OpenAPI ↔ code consistency, schema lint, imports and package wiring.
+- `ss pack build` — bundles mode-A elements (packs and service-product widgets) into `dist/pack/` for staff upload.
 - `eslint-plugin-ss` — import direction, no DOM in headless, no hard-coded styles, `websiteId` in queries, no literals for configurable values, idempotency on writes.
-- `@ss/app-kit`, `@ss/web` (+ framework adapters), `@ss/contracts`, `@ss/ui`, `@ss/certify`.
+- `@ss/app-kit` (incl. `createFakePortal`), `@ss/web` (+ framework adapters), `@ss/contracts`, `@ss/ui`.
 
 ---
 
 ### 15. Definition of Done for any element
 
-1. Manifest entry with modes, price, budget, features schema, strings, placement/rules/hooks as applicable.
+1. Manifest entry with modes, price, features schema, strings, placement/rules/hooks as applicable.
 2. Mode C resources documented in OpenAPI with examples; idempotent writes; standard errors.
 3. Headless core with state/actions/subscribe/validate; framework adapters compile.
-4. Default renderer (if A) using tokens, variants, slots, a11y and budget.
-5. Feature schema drives a working form in the Portal emulator; precedence and locks respected.
+4. Default renderer (if A) using tokens, variants, slots and a11y.
+5. Feature schema drives a working form in the Portal; precedence and locks respected.
 6. Events declared and emitted; consumers idempotent.
-7. Tests: unit, contract, isolation, renderer, e2e; certification green.
+7. Tests: unit, API, isolation, renderer, e2e; `ss app validate` green.
 8. Docs generated; changelog entry.
 
 ---
@@ -1141,11 +1133,10 @@ Recorded as the core packages were built on branch `platform-v1`. Each package's
 
 ## F.2 Entitlement resolution
 
-- **Lock authority** (not list order): website 1 < merchant 2 < product = plan 3 < platform policy 4 < admin 5. The highest-authority lock wins; lower-authority values are excluded and reported. Admin may exceed plan max. Absolute schema bounds bind everyone, admin included. Plan max applies to merchant, website and experiment values; platform policy is not plan-bounded.
+- **Lock authority** (not list order): website 1 < product = plan 3 < platform policy 4 < admin 5 (the merchant layer was removed in F.20). The highest-authority lock wins; lower-authority values are excluded and reported. Admin may exceed plan max. Absolute schema bounds bind everyone, admin included. Plan max applies to website values; platform policy is not plan-bounded.
 - **Plans** are `{ code, name?, description?, elements[], addons?[] }`: `elements` included and on by default, `addons` allowed and off by default, anything else unavailable (`not_in_plan`). Included elements' dependencies must be included; add-ons' dependencies must be in `elements ∪ addons`. No plan ⇒ every element available with product defaults.
 - **Per-plan defaults and maxima live only in feature schemas** (`x-plan`). Max semantics: number = value, array = item count, string = length, flag = boolean (`false` = cannot be enabled).
-- **Runtime order per element:** state (cancelled › suspended › paused › spend_cap) → `resource_missing` (element `requires` a connector not `connected`) → `rollout` → `dependency` (topological cascade; never auto-enables). A hard-stop quota blocks only that feature, not the element.
-- Rollouts here are subscription-level; visitor-level audience/placement belongs to the Loader.
+- **Runtime order per element:** state (cancelled › suspended › paused › spend_cap) → `resource_missing` (element `requires` a connector not `connected`) → `dependency` (topological cascade; never auto-enables). A hard-stop quota blocks only that feature, not the element.
 - **Document mapping:** the `@ss/contracts` entitlement document is canonical. `toDocument()` converts resolver output; the Portal assigns an integer `version` and bumps it when `contentHash()` changes; diagnostics stay in the resolver report; cancelled subscriptions get no document (revoked instead).
 - `@ss/entitlements` is Node-only (`node:crypto`); browsers receive signed documents, never run the resolver.
 
@@ -1153,10 +1144,10 @@ Recorded as the core packages were built on branch `platform-v1`. Each package's
 
 - Schema `$id`s are URNs `urn:ss:contracts:v1:<name>` (no hosts). Objects are closed (`additionalProperties: false`); v1 changes are additive and validators ship before producers.
 - Money in events/graph: integer minor units; one `currency` per cart/order context, `{ amount, currency }` when standalone.
-- **Feature-schema subset:** object root, one `type` per node, no `$ref`/combinators; top-level features need `title` and `default`. Extension keywords: `x-kind` (flag|quota|limit|rate|config), `x-plan`, `x-lock`, `x-experiment` (element must allow experiments), `x-period` (required on quota: hour|day|week|month), `x-hardStop`, `x-unit` (snake_case), `x-per` (required on rate: second|minute|hour), `x-ui` (form hints only).
+- **Feature-schema subset:** object root, one `type` per node, no `$ref`/combinators; top-level features need `title` and `default`. Extension keywords: `x-kind` (flag|quota|limit|rate|config), `x-plan`, `x-lock`, `x-period` (required on quota: hour|day|week|month), `x-hardStop`, `x-unit` (snake_case), `x-per` (required on rate: second|minute|hour), `x-ui` (form hints only).
 - Manifest `features` are delivered **inline** to the Portal; `ss app validate` bundles any local refs.
-- **Mode rules:** pack ⇒ every element mode A; A ⇒ renderer + `budget.js > 0`; B ⇒ headless core; renderer ⇒ headless + A; UI (renderer/placement/budget) ⇒ B; stateful ⇒ C, satisfied by the element's or a dependency's `api.resources`.
-- **Element packs:** no `endpoints`, no admin launch, modes ⊆ {A, B}, no `api.resources`, scopes limited to `graph.*` and `events.publish:*`; stateful pack elements need a `graph.<entity>.write` scope. Packs are published as signed bundles, not via the registration handshake. **Service products** must declare `endpoints.base`, `register`, `events`.
+- **Mode rules:** pack ⇒ every element mode A; A ⇒ renderer (the `budget.js` rule was removed in F.20); B ⇒ headless core; renderer ⇒ headless + A; UI (renderer/placement) ⇒ B; stateful ⇒ C, satisfied by the element's or a dependency's `api.resources`.
+- **Element packs:** no `endpoints`, no admin launch, modes ⊆ {A, B}, no `api.resources`, scopes limited to `graph.*` and `events.publish:*`; stateful pack elements need a `graph.<entity>.write` scope. Packs are `ss pack build` bundles uploaded by staff (unsigned since F.20), not connected via the handshake. **Service products** must declare `endpoints.base`, `register`, `events`.
 - **Event scopes are mandatory:** every consumed event (an exact `type@v` or a glob such as `custom.*` / `order.*@1`, F.14) is covered by an `events.subscribe:<glob>` scope; published events are in the product namespace (slug with `-` → `_`, e.g. `notice_bar.*`) or a standard event covered by `events.publish:<glob>`. Glob `*` spans dots; a pattern without `@` matches all versions.
 - Entitlement document time fields: `issuedAt`, `validFrom`, `validUntil` (ISO-8601 UTC); `resources[].ref` accepts opaque ids only (never connection strings); `dataScope.prefix` ends with `_`; feature keys are `<element>.<featurePath>`.
 - Domains: `normaliseDomain` lowercases, punycodes, strips scheme/path/port/trailing dot, rejects IPs (incl. odd forms), `localhost`, single labels and wildcards unless `allowLocal`; public-suffix rejection is an injected predicate.
@@ -1177,14 +1168,14 @@ Recorded as the core packages were built on branch `platform-v1`. Each package's
 
 - One JWS path: EdDSA only, `kid` required, a distinct `typ` per token type; `jwk/jku/x5u/x5c/crit/b64/zip` headers refused; token length capped; exact `aud`/`iss`.
 - **Key rotation:** JWKS entries may carry `nbf`/`exp`; unknown kids trigger at most one refetch per 30 s; last-known keys survive Portal outages up to `maxStaleMs` (24 h); revocation beats everything; duplicate kids are dropped. **Rotating the Portal key that signs website keys requires re-issuing all website keys.**
-- **Launch kinds:** admin must carry a scope (merchant or `all`); demo must not carry `merchantId`; partner needs `partnerId`; developer needs `developerId`; impersonate needs `act.sub ≠ sub`, `merchantId`, and `impExp ≤ 1 h`; only impersonate may carry `act`/`impExp`. Launch claims list `subscriptions`. TTL default 60 s, max 300 s.
+- **Launch kinds:** `merchant` and `admin` only (demo, impersonate, partner and developer removed in F.20); admin must carry a scope (merchant or `all`) and always targets the production base URL. Launch claims list `subscriptions`. TTL default 60 s, max 300 s.
 - **Website keys:** `pk_`/`sk_` are signed tokens verified offline plus server-side revocation by `keyId`; the prefix must agree with the signed kind and env (no relabelling). Revocation lists refresh ≤ 5 min. The Portal stores only HMAC-SHA-256(key, pepper) and compares in constant time.
 - **Origin check:** Origin is authoritative, Referer only when Origin is absent; https only (localhost only in test env); userinfo/whitespace/control chars/backslashes refused; exact host or `.domain` suffix when `allowSubdomains`.
 - **Events:** `SS-Signature: v1;kid=<kid>;sig=<b64url>` (up to 4 entries for dual-signing during rotation) over `ss-event.v1.${timestamp}.${sha256hex(body)}`; `SS-Key-Id` is only a hint; replay key `ts|sha256(body)` within tolerance (300 s).
 - **Connection (superseding earlier onboarding schemes):** the product holds `CONNECT_SECRET` (≥ 32 chars, set by the deployer; without it connection attempts get 503); the Portal never stores it. Staff enter the product URL and the secret; the Portal sends `POST <url>/.well-known/ss-connect` with `{ portalUrl, jwks, appId, baseUrl, nonce }`, `SS-Connect-Timestamp` and `SS-Connect-Signature` = hex HMAC-SHA256(secret, `ss-connect.v1|<timestamp>|<body>`). The product verifies in constant time (± 5 min, nonce single-use via a TTL record), generates its Ed25519 key if absent, pins the Portal URL and keys and answers `{ appId, nonce, publicJwk, manifest }` signed the same way under `ss-connected.v1`; the Portal verifies it and stores the app with the base URL and key pinned. Connecting again with the right secret replaces the binding (same app for the same URL); to lock a Portal out, change `CONNECT_SECRET` and connect from the right Portal.
 - **Replay/nonce stores in production** are one shared atomic TTL store (MongoDB unique `_id` + TTL index) in the control plane.
-- **Pack bundle signatures** (`signBundle` / `verifyBundle`) are detached Ed25519 signatures over `ss-pack-bundle.v1.<sha256(canonicalJson(descriptor))>`.
-- **Signed manifests:** `/.well-known/ss-app.json` carries `SS-Manifest-Signature`, a JWS with `typ ss-manifest+jws` and payload `{ appId, manifestHash, iat }`, signed with the registered product key. It is cached for 5 minutes and is unsigned before registration. The Portal checks it with `verifyManifest` (default max age 24 h) before importing a refreshed manifest.
+- **Pack bundle signatures** (`signBundle` / `verifyBundle`): removed in F.20; staff upload is the trust boundary.
+- **Signed manifests** (`SS-Manifest-Signature`): removed in F.20; the manifest is accepted on connect/reconnect over the HMAC-signed handshake.
 
 ## F.7 Browser SDK (`@ss/web`)
 
@@ -1193,7 +1184,7 @@ Recorded as the core packages were built on branch `platform-v1`. Each package's
 - **Consent:** opt-in by default (`defaultConsent: {}`); `necessary` is always granted and covers `customer.* cart.* order.* inventory.* price.* file.*`; everything else is `analytics` unless mapped. Non-consented events are dropped (not buffered); revocation purges queued events; anonymous/session ids persist only with `analytics`.
 - **Headless runtime:** instance = `{ key, state, actions, subscribe, validate, strings, destroy, isDestroyed }`; actions never throw (`internal_error`, `destroyed`); `validate` returns field problems `{ path, code, message }`; element API client adds `Idempotency-Key` on POST and returns RFC 9457 problems with a stable `code` (body `code` › last `type` segment › status).
 - **Loader:** placement per contracts v1; path `*` = one segment, `**` = any; overnight schedule windows belong to their start day; `maxPerDay` is a rolling 24 h; `dismissMemory` starts when the element emits `<key>.dismissed`; audience evaluation errors or a missing evaluator mean "no match". Elements a bundled entitlement document marks disabled or non-active never mount. Each element is isolated (`onError`, `ss:error`, `loader.element_failed@1`). `boot` is idempotent per website; `window.SS` replays a pre-boot `SS.q` stub. Loader-emitted events: `<key>.shown@1`, `loader.vitals@1` (sampled LCP/CLS/INP + per-element `mountMs`), `loader.element_failed@1` (`{ element, phase, code: <phase>_failed, message }` — never the error text) — all catalogued in `@ss/contracts` (F.14).
-- **Budget:** Loader + events client ≈ 12.8 kB gzip (< 15 kB). The rules evaluator (≈ 9.5 kB gzip for precompiled programs, ≈ 12.6 kB with the parser) is bundled only for websites with audience rules and counts against their budget; the compiler should precompile audience source to programs.
+- **Size:** Loader + events client ≈ 12.8 kB gzip (< 15 kB). The rules evaluator (≈ 9.5 kB gzip for precompiled programs, ≈ 12.6 kB with the parser) is bundled only for websites with audience rules; the compiler should precompile audience source to programs.
 
 ## F.6 Repository and tooling
 
@@ -1204,15 +1195,15 @@ Recorded as the core packages were built on branch `platform-v1`. Each package's
 
 - **Templates** live in `packages/cli/templates/`: `shared/` (core, headless, ui, strings, schemas, unit tests) overlaid by `service/` or `pack/`; placeholders `{{slug}}`, `{{name}}`, `{{namespace}}`, `{{sdkVersion}}`. The sample element is `notes`. Generated projects pass `ss app validate` and their own Vitest suites with the coverage thresholds (F.17).
 - **Conventions enforced by `ss app validate`:** strings are flat keys used through `t('key')` with `{placeholder}`s; `strings/<lang>.json` must match `strings/en.json` placeholders; Mode A renderers receive the DOM as `render({ state, actions, strings, theme, slots, dom })` (no DOM globals anywhere in `core/` or `headless/`); `ui/tokens.*` is the only place colour literals may appear; product event data schemas live at `schemas/events/<type@v>.json`; import policy `core → core`, `headless → core` (+ `@ss/web/element`), `ui → headless`, `api → core|adapters`, `adapters → core`, `jobs → core|adapters`.
-- **Portal emulator (`ss dev`)** implements the F.9 wire formats exactly, defaults to `http://localhost:4400`, reads `ss.dev.json`, keeps state in memory (`--state` persists it), and exposes a loopback-only admin API (`/_dev/*`, token in `.ss/dev-session.json`). Products connect with `ss dev connect --url <product> --secret <CONNECT_SECRET>` (the emulator calls the product's `POST /.well-known/ss-connect`). Launch URLs point at the product's standard `GET /sso?launch=`. Portal → product calls (`/v1/data:export|anonymize`) are signed with `signRequest` (audience = appId). Admin changes are pushed as control events (`entitlement.changed@1` with the document, `key.revoked@1`, `resource.changed@1`, `subscription.activated|paused|resumed|cancelled@1`). Entitlement documents live 10 min; the client database comes from `--mongo-uri`/`DEV_MONGODB_URI` or a lazily started MongoMemoryServer (one database per merchant).
-- **Certification (`ss certify`)** runs its own emulator on the product's pinned Portal URL (so `ss dev` must be stopped) and needs a fresh, unconnected product process, which it connects itself with the product's `CONNECT_SECRET` (`--secret`, env or `.env.local`; checks `connection.rejects-wrong-secret`, `connection.connect`, `connection.reconnect`). Launches are exchanged at `/sso` and read back from the product's `GET /v1/session` when present. The data-guard and event-effects checks use app-kit's dev probes (`createProduct({ devProbes: true })`, never mounted in production). Control events must take effect immediately (revoked key → 401; element off → 403, on → 200). The service template ships `serve.js` (plain node:http over `createRequestHandler`), and the CLI test suite certifies a freshly generated product with the real kit: 47/47 checks. Key checks (F.14): every documented resource `GET` answers a `pk_` key from the bound domain with 200 or a 401/403 problem, the same on a repeat; a `GET` marked `x-ss-key-kind: "sk"` in `openapi.json` must refuse `pk_`; the event checks use the first deliverable consumed type (a glob maps to a catalogued or `custom.ss_probe@1` type).
+- **Portal emulator (`ss dev`)** and its loopback dev API: removed in F.20; products test against app-kit `createFakePortal` and the e2e suite.
+- **Certification (`ss certify`)**, app-kit dev probes and the products' `serve.js` / `certify.test.js`: removed in F.20.
 
 ## F.9 Product kit (`@ss/app-kit`) and product ↔ Portal wire formats
 
-- **Sessions:** a launch is single-use, so products exchange it at `GET /sso?launch=` for an opaque HttpOnly `ss_session` cookie in the product's own control store; `auth: 'launch'` routes use that session. Impersonation sessions end at `impExp`.
-- **Portal → product requests** are signed over `ss-request.v1.${ts}.${METHOD}.${audience=appId}.${canonicalPath}.${sha256(body)}` (`@ss/protocol` `signRequest`/`verifyRequest`), distinct from event signatures (`ss-event.v1.`), so a signed call cannot be replayed to another endpoint, method or product. Canonical path: WHATWG dot-segment resolution, upper-case percent escapes, unreserved escapes decoded, query params sorted by name then value; trailing slash significant. Body-only event signatures are used only for the declared events endpoint.
+- **Sessions:** a launch is single-use, so products exchange it at `GET /sso?launch=` for an opaque HttpOnly `ss_session` cookie in the product's own control store; `auth: 'launch'` routes use that session.
+- **Portal → product requests** (`signRequest` / `verifyRequest`, `auth: 'portal'`): removed in F.20 together with the privacy export/anonymize routes; body-only event signatures remain for the declared events endpoint.
 - **Portal JWKS is persisted** in the product's control store (last good copy) so cold serverless instances can verify during Portal outages; serving remains bounded by `validUntil` + grace and revocation staleness.
-- **Revocations fail closed:** if not synced for longer than the offline grace (or never synced while the Portal is down), website keys are refused with 503. Every sync merges revocations stored by other instances.
+- **Revocations fail closed:** if not synced for longer than the offline grace (a fixed 24 h, `OFFLINE_GRACE_MS`, F.20) (or never synced while the Portal is down), website keys are refused with 503. Every sync merges revocations stored by other instances.
 - **Tenant guard** on client-owned data: `websiteId` equality required (no `$in`), `$where` and cross-collection stages (`$lookup`, `$unionWith`, `$out`, `$merge`, incl. inside `$facet`) blocked; inserts are stamped with `websiteId`, `merchantId`, `env`.
 - **Collection prefix** is derived from the manifest slug (`ss_<slug with - → _>_`) and must equal the signed document's `dataScope.prefix`; a mismatch refuses service.
 - Audit entries go to the merchant's database (`ss_<slug>_audit`) unless an audit sink is configured. Connection pools are process-wide per descriptor.
@@ -1222,7 +1213,7 @@ Recorded as the core packages were built on branch `platform-v1`. Each package's
    - `POST /v1/product/usage` with `Idempotency-Key` header, body `{ records: [{ websiteId, subscriptionId, unit, quantity, idempotencyKey, occurredAt }] }` → `{ results: [{ idempotencyKey, status: accepted|duplicate|rejected, reason? }] }`.
    - `POST /v1/product/launch/consume` `{ jti }` → `{ consumed: boolean }`.
    - `POST /v1/product/resources/resolve` `{ websiteId, kind }` → `{ kind, descriptor, expiresAt }` where descriptor is: database `{ uri, dbName? }`; storage `{ bucket, region, accessKeyId, secretAccessKey, sessionToken?, endpoint?, forcePathStyle?, prefix? }`; ai / messaging `{ baseUrl, apiKey, provider?, model?, authScheme?, authHeader?, headers?, paths? }`; payments (interface only in v1).
-   - `POST /v1/product/heartbeat` `{ version, status, queues? }`; `POST /v1/product/keys/rotate` `{ publicJwk }`; `POST /v1/product/events` (envelope batch).
+   - `POST /v1/product/events` (envelope batch). (Heartbeat and key rotation were removed in F.20; the key is replaced on reconnect.)
    - Client-assertion audience and launch issuer = canonical pinned Portal URL.
 
 ## F.10 Outbound networking (`@ss/net`)
@@ -1235,52 +1226,52 @@ Recorded as the core packages were built on branch `platform-v1`. Each package's
 ## F.11 Portal modules (`platform/src/modules/*`; contracts in `INTERFACES.md`)
 
 - **One composition root, isolated modules:** each module owns its collections (`defineCollection`), reaches others only through `ctx.service(name)`, and plugs into infra through routes, jobs, on-demand operations and single-provider ports (`sessionActor`, `appKeys`, `websiteKeyRevoked`, `productCalled`). Merchant-owned records are `tenant: 'merchant'` (every filter pins `merchantId`); ledgers, audit, notes and events are append-only. No client data in Portal collections.
-- **identity:** accounts (scrypt, mandatory staff TOTP, login throttle), merchants, teams (merchant roles + website-scoped grants), websites (global domain claims, test twin, 30-day cooldown, staff transfer), website keys (dedicated signer, `sk_` stored as HMAC, revocation list), staff impersonation (one-time token bound to the staff member → merchant session with `via`, ≤ 60 min, audited on both chains), merchant search (`q`: name prefix or member e-mail prefix), append-only staff notes, and **identity issuers** (F.14).
-- **catalog:** shared-secret connect (HMAC both ways, pinned URLs and keys), signed manifest refresh (unsigned/invalid → `rejected` version, alerted), manifest diff + staff review, lifecycle, environments (production/staging bases — the delivery target), app keys, launches (admin app-wide needs a superadmin/admin role), merchant "Try demo" (`demo` launch, no scope, listed apps only).
-- **commerce:** subscriptions (≥ 1 h of credits, pinned price book, one-time trial credit), element switches, signed documents (version bumps only on a content-hash change; the hash covers the identity section), usage, hash-chained ledger in transactions, settlement on read (F.19), on-demand reconciliation, spend caps; asks delivery to recompile on every version bump or cancellation.
-- **config:** immutable override versions per target with compare-and-set materialisation, locks, rollback, templates, scheduled changes, experiments, dry-run previews; values validated against the pinned manifest's feature schemas; commerce resolves precedence.
-- **integration:** Event Hub with header and beacon body auth, dedupe on `(websiteId, idempotencyKey)`, fan-out at ingest (payload only inside sealed jobs, DLQ ≤ 7 days, replay), product and control events, delivery to the app's registered environment (F.14), delivery logs and metrics.
-- **connectors:** merchant credentials sealed with per-connector AAD, never returned (masked previews), checks with least-privilege rules, rotation with 24 h rollback, `resolve` only for subscribed products whose manifest requires the kind (audited, ≤ 15 min).
+- **identity:** accounts (scrypt, mandatory staff TOTP, login throttle), merchants, teams (merchant roles + website-scoped grants), websites (global domain claims, test twin, 30-day cooldown, staff transfer), website keys (dedicated signer, `sk_` stored as HMAC, revocation list), merchant search (`q`: name prefix or member e-mail prefix), append-only staff notes, and **identity issuers** (F.14).
+- **catalog:** shared-secret connect (HMAC both ways, pinned URLs and keys; the manifest is accepted on connect/reconnect), apps `active`/`inactive` (new apps start inactive), one production base URL per service app, manifest versions as storage for pinned subscriptions, app keys, launches (admin app-wide needs a superadmin/admin role), one staff upload path for packs and service-product widgets (F.20).
+- **commerce:** subscriptions (≥ 1 h of credits, pinned price book, one-time trial credit), element switches, signed documents (version bumps only on a content-hash change; the hash covers the identity section), usage, hash-chained ledger in transactions, settlement on read (F.19), on-demand reconciliation, one optional monthly spend cap per merchant (UTC month); asks delivery to recompile on every version bump or cancellation.
+- **config:** immutable override versions per target with compare-and-set materialisation, locks, rollback, dry-run previews (website, admin and platform layers); values validated against the pinned manifest's feature schemas; commerce resolves precedence.
+- **integration:** Event Hub with header and beacon body auth, dedupe on `(websiteId, idempotencyKey)`, fan-out at ingest, product and control events, delivery to the app's production base URL with retry and backoff for about 24 h, then marked `failed`; staff "Retry deliveries now".
+- **connectors:** merchant credentials sealed with per-connector AAD, never returned (masked previews), checks with least-privilege rules, edit (incl. new credentials) and delete, `resolve` only for subscribed products whose manifest requires the kind (audited, ≤ 15 min).
 - **delivery:** see F.13.
 
 ## F.12 Consoles
 
 - **Merchant Console** (`/` — `app/(console)` over `src/console`) and **Admin Console** (`/admin` — `app/(admin)` over `src/console/admin`): Next.js App Router pages are thin adapters; every read and action is a public `/v1/*` call (server components call `portal.handle` in-process with the request's cookies, browsers `fetch` the same routes). Pages have loading, empty and error states; destructive actions use typed confirmation; navigation is filtered by RBAC.
-- Website pages share one header with the live/test twin switch and tabs: Overview, Products, Usage & spend, Keys, Resources, Deliveries, **Identity** (the website's identity issuer, F.14). Staff impersonation shows a banner on every page.
+- Website pages share one header with the live/test twin switch and tabs: Overview (with the "Copy install code" box, F.20), Products, Usage & spend, Keys, Resources, **Identity** (the website's identity issuer, F.14).
 - UI comes only from `@ss/ui` (tokens, forms generated from feature schemas, tables, dialogs); no inline business rules in views beyond form mapping.
 
 ## F.13 Delivery plane (`delivery` module)
 
-- **Artefacts** (our software, platform asset storage, never client data): pack assets `packs/<appId>/<version>/<path>` (bytes must equal the signed descriptor's sha256 and size; js/mjs/css/json/svg/png/woff2 with per-type caps); website bundles `w/<websiteId>/<env>/<version>/loader.js` + `manifest.json` (`ss-website-bundle@1`: sri sha384, sha256, sizes, budget report, CSP sources, elements, warnings). `version` = first 16 hex of SHA-256 of the bundle (deterministic); the alias flips by compare-and-set on the compile request counter, so bursts coalesce and an older compile never wins.
+- **Artefacts** (our software, platform asset storage, never client data): pack assets `packs/<appId>/<version>/<path>` (bytes must equal the descriptor's sha256 and size; js/mjs/css/json/svg/png/woff2 with per-type caps); website bundles `w/<websiteId>/<env>/<version>/loader.js` + `manifest.json` (`ss-website-bundle@1`: sri sha384, sha256, sizes, CSP sources, elements, warnings). `version` = first 16 hex of SHA-256 of the bundle (deterministic); the alias flips by compare-and-set on the compile request counter, so bursts coalesce and an older compile never wins.
 - **Serving:** `/w/<websiteId>/loader.js` (alias, 60 s + stale-while-revalidate), `/w/<websiteId>/<version>/…` and `/w/packs/…` immutable; one `pk_` key per website (`events.write elements.read`) issued by the system actor.
-- **Budgets:** Loader gzip + Σ element `budget.js` + Σ product `budget.shared` (F.18) ≤ the website budget (a fixed 60 KB) and no element may ship more gzip bytes than it declares (measured as F.18 describes); a refusal (`delivery_budget_exceeded`, offenders listed) keeps the current alias.
-- **Service-product elements** run through the product's signed UI bundle when it has one (F.16), else the element stub `ss-element-stub@1` (now `@2`, F.16; no product code in the bundle): the stub calls `GET <base>/v1/elements/<key>/view` and `POST …/actions/<action>` with the website's `pk_` (+ `SS-Identity` when federated); view models are text only (`title ≤ 200, body ≤ 2000, items ≤ 50, actions ≤ 10`), rendered with the Loader's safe `h()` and design tokens; it emits `<key>.action@1` and exposes `refresh()` / `invoke()`.
-- **Preview proxy** (`/p/<token>/<path>`, signed 10-minute sessions): fetches the merchant's public page via `@ss/net` (website origin only, GET, no cookies, HTML ≤ 2 MB), injects the candidate bundle and a ribbon, stores nothing. **Trade-off:** it is served from the Portal origin, so it must be `CSP: sandbox` (opaque origin, no Portal cookies) and the merchant's own scripts do not run — previews are faithful for layout and our elements, not for site behaviour. (A dedicated preview origin was implemented in F.16 and later dropped for simplicity.)
+- **Budgets:** removed in F.20 (no compile-time size refusal).
+- **Service-product elements** run through the widget bundle staff uploaded for the app (F.20): the real headless + renderer, served from `/w/packs/<appId>/<version>/…`, with an API client bound to the app's base URL and the website `pk_` (+ `SS-Identity` when federated). Without a ready bundle they are not delivered (`widgets_missing` warning). The element stub is gone.
+- **Preview proxy** (`/p/*`): removed in F.20.
 
 ## F.14 First-product learnings (Loyalty)
 
 - **Bring-your-own customer identity (PLAN §5.3):** per website the merchant registers its login's issuer (`{ issuer, jwksUrl | publicJwks[], audience?, claimMap: { subject, email?, phone? } }`; console Website → Identity). The Portal validates it (public signature keys only, Ed25519 / P-256 / RSA ≥ 2048, ≤ 5), fetches a JWKS URL through `@ss/net` (cached, refreshed ≤ hourly, last good keys kept on failure) and puts an optional `identity` section `{ issuer, jwks (inline), audience?, claimMap }` in every signed entitlement document of the website. app-kit `identity.verify(request, { doc, body })` reads `SS-Identity` (or the beacon body `identity`), verifies the JWT offline (EdDSA/ES256/RS256 matched to the key type; no `none`/HMAC/header keys/`crit`; `iss`, `aud` when configured, `exp` required, `nbf`, `iat` required and ≤ 24 h old, 60 s skew) and returns `{ subject, email?, phone?, issuer }`. Route option `identity: 'required' | 'optional'` fills `ctx.identity` (`required` → 401 `identity_required` / `identity_invalid`; `optional` leaves it null with `ctx.identityProblem`). CORS allows `SS-Identity`. Loyalty uses the kit identity and keeps its wallet tokens as the fallback.
 - **Richer order events (additive v1):** `order.completed@1`, `order.cancelled@1`, `order.refunded@1` (and `order.placed@1`) accept an optional `customer` identity reference `{ customerId?, subject?, email?, phone? }`; completed/cancelled accept `number`, `customerId`, `currency`, `lines`, `amounts` like `order.placed@1` (`lines`/`amounts` require `currency`); refunded lines gain optional `sku`, `title`, `unitAmount`, `totalAmount` and an optional `amounts` (in `amount.currency`). Loyalty settles a completion that carries its own context.
-- **Glob consumes:** `events.consumes` may list globs (`custom.*`, `order.*@1`; a version-less glob matches every version), each covered by an `events.subscribe:` glob; fan-out, the CLI emulator and certification honour them. Loyalty consumes `custom.*` (same earn rules and idempotency as `POST /v1/activities`).
-- **Delivery target:** events go to the app's registered environment base (production; staging for `test` websites when registered) + `endpoints.events`, never the manifest's own `endpoints.base`; http only for `OUTBOUND_DEV_ALLOW_HOSTS` outside production.
-- **CLI template:** the product singleton is cached on `globalThis` (route handlers and pages are bundled separately in Next.js); `headless/` may import `@ss/web/element` (no other `@ss/web` entry); certification no longer requires the first resource `GET` to be 200 for `pk_` (see F.8).
+- **Glob consumes:** `events.consumes` may list globs (`custom.*`, `order.*@1`; a version-less glob matches every version), each covered by an `events.subscribe:` glob; fan-out honours them. Loyalty consumes `custom.*` (same earn rules and idempotency as `POST /v1/activities`).
+- **Delivery target:** events go to the app's connected production base URL + `endpoints.events` (staging environments removed in F.20), never the manifest's own `endpoints.base`; http only for `OUTBOUND_DEV_ALLOW_HOSTS` outside production.
+- **CLI template:** the product singleton is cached on `globalThis` (route handlers and pages are bundled separately in Next.js); `headless/` may import `@ss/web/element` (no other `@ss/web` entry).
 - **app-kit:** `entitlements.invalidate(websiteId)` forces a Portal fetch on the next read (the cached copy stays as the offline fallback).
 - **ESLint** parses ES2025 everywhere (JSON import attributes); no products-only override.
 - **Event catalogue:** `<element>.shown@1` (`{ variant? }`), `<element>.action@1` (`{ action, ok? }`) and `loader.element_failed@1` (`{ element, phase?, code, message }`) are catalogued (`ELEMENT_EVENT_DATA`, `LOADER_EVENT_DATA`); other `<element>.<verb>@1` UI events stay size-capped objects. Problem codes `identity_required` and `identity_invalid` are standard.
 
 ## F.15 Post-launch kit changes (after the six products)
 
-- **Idempotency privacy (app-kit):** the control store keeps only `{ HMAC key, HMAC fingerprint, status, allowlisted headers, replay: empty|website|none }` (HMAC key derived from the product signing key). Replay bodies live in the merchant's database (`ss_<slug>_idempotency`, unique `(websiteId, key)`, TTL 24 h) via `data.forWebsite`; routes without a website store no body and a replay answers 409 `idempotency_replay_no_body` (never a second run).
+- **Idempotency (app-kit):** replaced in F.20 by a simple duplicate refusal for routes that declare `idempotent: true` (a seen `Idempotency-Key` per website + route within 24 h → 409 `duplicate_request`, no stored bodies).
 - **Cold start:** `keys.verify` awaits the single in-flight revocation sync; concurrent first requests no longer answer 503.
 - **Queue delivery:** usage queue and event outbox are sent after requests (superseded by F.19: no timers, no every-Nth-request flush; only the request's own website and what the instance queued). Product crons are not needed for delivery.
-- **Durable event outbox:** `portal.publishEvent` writes the envelope to `ss_kit_event_outbox` (id derived from `(websiteId, type, idempotencyKey)`, idempotent), sends at once, retries with backoff, dead-letters Portal `rejected` results / permanent 4xx (7 days); the envelope is dropped once sent. Heartbeat queues gain `eventsPending`/`eventsDead`. Portal `POST /v1/product/events` per-event results (`{ id, status }`) are honoured.
+- **Durable event outbox:** `portal.publishEvent` writes the envelope to `ss_kit_event_outbox` (id derived from `(websiteId, type, idempotencyKey)`, idempotent), sends at once, retries with backoff within a bounded window, then drops it with an error log (dead-lettering and heartbeat removed in F.20); the envelope is dropped once sent. Portal `POST /v1/product/events` per-event results (`{ id, status }`) are honoured.
 - **Routes:** `rateLimit.limit` may be a (sync/async) function of `ctx`, evaluated after auth, entitlement, JSON body and identity (`Infinity` = no limit, `0` = refuse); `bucket` shares one window between routes. `problem(code, detail, { extensions })` adds RFC 9457 extension members (validated names; standard members and `requestId`/`errors` cannot be redefined). `paginate` accepts compound keyset keys (`keyOf` returns an array, encoded opaquely; `after` is the array). Next routes export `OPTIONS`.
 - **`product.outbound.fetch(url, init)`:** the SSRF-guarded `@ss/net` fetch under the product policy, for merchant-chosen URLs (chatbot knowledge pages and webhook tools).
 - **Connectors:** built-ins keyed as the Portal resolves them — messaging `generic-http` (alias `http`) and `smtp` (nodemailer, TLS ≥ 1.2 required outside allowlisted dev hosts, host vetted, every send dials an IP from `resolveVetted` with SNI, connect/greeting/socket timeouts). Storage keys are always relative in and out (`fullKey()` for the object key); `presignPut({ key, contentType, contentLength })` signs `content-length` so the bucket enforces the size.
 - **Identity:** `identity.verify` returns `{ subject, email?, phone?, issuer, claims }`, `claims` = the full verified payload (deep-frozen).
 - **Contracts:** entitlement document `website { timeZone?, language?, currency? }` (Portal fills it; `toDocument` meta `website`); product-level `requires.resources` = always required, element-level kinds gate only their element (`undeclaredResource` retired); standard `item.created|updated|deleted@1` and richer optional `inventory.changed@1` / `price.changed@1`; envelope `context.keyKind?: pk|sk` set only by the Event Hub on delivery (stripped on ingest); website-event actor rule `pk_` → customer|anonymous, `sk_` → anything but product|system (`actorAllowedForKeyKind`). Web SDK: `item.created|updated|deleted` are `necessary`.
-- **CLI:** emulator samples for every catalogued event (`sampleFromSchema` + hand-tuned); `ss certify` uses the OpenAPI path marked `x-ss-certify: true` (check `certify.target`), else the first Mode C resource; `ss app init --minimal` generates a service without the notes sample (placeholder element `status`); template routes export `OPTIONS` and pass `after`.
-- **Products adopted:** chatbot (dynamic message rate, `outbound.fetch`), deals (shared dynamic quote bucket), signups (`attemptsRemaining` / `retryAfterSeconds` extensions; kit messaging), alerts (kit messaging, `identity.claims` tier, `x-ss-certify`), reviews (signed `content-length`, relative keys); manifests keep only `database` at product level; job crons no longer flush usage.
+- **CLI:** `ss app init --minimal` generates a service without the notes sample (placeholder element `status`); template routes export `OPTIONS` and pass `after`. (Emulator samples and `ss certify` targets were removed in F.20.)
+- **Products adopted:** chatbot (dynamic message rate, `outbound.fetch`), deals (shared dynamic quote bucket), signups (`attemptsRemaining` / `retryAfterSeconds` extensions; kit messaging), alerts (kit messaging, `identity.claims` tier), reviews (signed `content-length`, relative keys); manifests keep only `database` at product level; job crons no longer flush usage.
 
 ## F.16 Post-launch Portal changes (from the six new products' platform gaps)
 
@@ -1289,18 +1280,18 @@ Recorded as the core packages were built on branch `platform-v1`. Each package's
 - **Event provenance:** the Event Hub strips producer-supplied `context.keyKind`, stamps the verified `pk`/`sk` on ingest (`KEY_KINDS`) and checks actors with `actorAllowedForKeyKind`; product-published events carry no key kind and are marked `context.source: 'product'` + `context.product`.
 - **Product-requested identity issuer:** `PUT /v1/product/websites/:websiteId/identity` (product auth, active subscription, manifest `capabilities.identityIssuer: true`) stores a **pending** request; the merchant is notified (mail + console banner + Website → Identity) and approves or rejects; approval makes it the active issuer with `managedBy` the product. Identical requests are idempotent (`active`), so Signups can call it on every start.
 - **Key scope vocabulary:** `elements.read`, `events.write`, `<product>.read|write` per listed service product, `<group>.*`; empty = `['elements.read','events.write']`; validated on every issue; the console key form shows checkboxes per product (`GET …/keys/scopes`).
-- **Service UI bundles + stub v2:** service products upload their own signed `ss-pack-bundle@1` UI bundle (`POST /v1/product/ui-bundles`, `PUT /v1/product/ui-bundles/:version/assets/*`, signed with a registered product key); once complete it replaces the element stub (Mode A with the product's real headless + renderer, served from `/w/ui/…`). The stub is `ss-element-stub@2`: page context `?ctx=` (`path`, `itemId`, `pageType` from `data-ss-*`) and input `fields` posted with actions; v1 data still runs.
-- **Dedicated preview origin:** dropped (F.19 simplification): previews are served from the Portal's own origin under `CSP: sandbox` (opaque origin, scripts by nonce only).
-- **Tests:** the test `mongod` runs with the TTL monitor off — documents expire by the injected clock, never by wall time (a TTL pass deleted impersonation tokens whose injected expiry lay in the real past).
+- **Service UI bundles + stub v2:** replaced in F.20 — service-product widgets are built with `ss pack build` and uploaded by staff ("Upload widgets") through the same path as packs; `/v1/product/ui-bundles*`, bundle signatures and the element stub are gone.
+- **Dedicated preview origin:** dropped (F.19); the preview proxy itself was removed in F.20.
+- **Tests:** the test `mongod` runs with the TTL monitor off — documents expire by the injected clock, never by wall time (a TTL pass deleted tokens whose injected expiry lay in the real past).
 - **SMTP descriptors:** implicit TLS only on port 465; other ports STARTTLS.
 
 ## F.17 Repository layout: splittable units
 
 - **Units.** `platform/` (the Portal), each `products/*` and each `packages/*` is a unit: built and checked as if it were a repository of its own. The owner keeps one repository for now; splitting a unit later needs no code change beyond replacing `workspace:^` ranges with published versions (`pnpm publish` rewrites them for packages). Acceptance test per unit: copy the folder alone into a fresh repository, depend on the other `@ss/*` packages as published packages, and `pnpm install && pnpm check` (plus `pnpm build` for deployables) pass.
-- **No path imports between units.** A unit depends on another only as a package listed in its own `package.json` (`workspace:^`). Cross-unit test helpers are public entries: `@ss/contracts/testing` (fixtures), `@ss/ui/testing` (DOM helpers), the `@ss/cli` API (`runCertification`, `validateProject`, `createDatabaseResolver`), `@ss/web` subpaths for the delivery runtime, `@ss/platform/testing` (the Portal for system tests: `createPortal`, the module list and factories, `loadConfig`, `totpCode`, `closeMongoClients`) and each product's `./serve` (`startServer`, `loadManifest`, `ROOT`). Deep imports of another unit's internals are not allowed; a missing need is added to one of these entries.
+- **No path imports between units.** A unit depends on another only as a package listed in its own `package.json` (`workspace:^`). Cross-unit test helpers are public entries: `@ss/contracts/testing` (fixtures), `@ss/ui/testing` (DOM helpers), the `@ss/cli` API (`validateProject`), `@ss/web` subpaths for the delivery runtime, `@ss/platform/testing` (the Portal for system tests: `createPortal`, the module list and factories, `loadConfig`, `totpCode`, `closeMongoClients`) and each service product's `./platform` and `./routes` (the e2e suite composes them with app-kit `createRequestHandler`). Deep imports of another unit's internals are not allowed; a missing need is added to one of these entries.
 - **Shared tooling: `@ss/config`.** `@ss/config/eslint` (functional rules + JSX variant), `tsconfig.base.json`, `prettier.json`, `@ss/config/vitest` (`defineUnitConfig({ dir, include, coverageInclude, coverageExclude, jsx, mongo })`, thresholds 90 / 90 / 85) and `@ss/config/mongo-setup` (one MongoMemoryReplSet per run, TTL monitor off, reference-counted across Vitest projects). Each unit has thin `eslint.config.js`, `tsconfig.json`, `vitest.config.js` and a `prettier` key built from it, with its own coverage scope; the thresholds hold for each unit on its own.
-- **Every unit is self-sufficient.** Scripts `check` (format:check → lint → typecheck → test with coverage), `test`, `lint`, `typecheck`, `format`, `format:check`; deployables add `dev`/`build`/`start` (products also `portal`, `validate`, `certify`; the Portal adds `runtime:check` to its `check`). Own README, `.gitignore`, `.prettierignore`; deployables keep `.env.example` and `vercel.json`, are `"private": true` and `"license": "UNLICENSED"`. Packages carry `version`, `exports` (with `./package.json`), `files`, `engines` and `publishConfig` (`access: restricted`, not `private`, so they can be published to the team registry). They publish their JavaScript as written plus `.d.ts` declarations generated from the JSDoc at pack time (`prepack` → `build:types`, `tsconfig.types.json`, output `types/`, git-ignored); `publishConfig.exports` adds the `types` condition to every entry, so a split consumer type-checks against the published packages exactly as the monorepo does against the sources. Package indexes re-export type-bearing modules with `export *` (contracts `types.js`, protocol `keys`/`launch`/`events`/`requests`, net `policy`) so declarations name types through the package entry, never a deep path.
-- **System tests: `e2e/` (`@ss/e2e`, private).** Tests needing two or more deployables (each product against the real Portal; Signups + Loyalty identity) live there, not in a unit. They depend on `@ss/platform` and the product packages; products keep their own `certify.test.js` through `@ss/cli`.
+- **Every unit is self-sufficient.** Scripts `check` (format:check → lint → typecheck → test with coverage), `test`, `lint`, `typecheck`, `format`, `format:check`; deployables add `dev`/`build`/`start` (products also `validate`; the Portal adds `runtime:check` to its `check`). Own README, `.gitignore`, `.prettierignore`; deployables keep `.env.example` and `vercel.json`, are `"private": true` and `"license": "UNLICENSED"`. Packages carry `version`, `exports` (with `./package.json`), `files`, `engines` and `publishConfig` (`access: restricted`, not `private`, so they can be published to the team registry). They publish their JavaScript as written plus `.d.ts` declarations generated from the JSDoc at pack time (`prepack` → `build:types`, `tsconfig.types.json`, output `types/`, git-ignored); `publishConfig.exports` adds the `types` condition to every entry, so a split consumer type-checks against the published packages exactly as the monorepo does against the sources. Package indexes re-export type-bearing modules with `export *` (contracts `types.js`, protocol `keys`/`launch`/`events`/`requests`, net `policy`) so declarations name types through the package entry, never a deep path.
+- **System tests: `e2e/` (`@ss/e2e`, private).** Tests needing two or more deployables (each product against the real Portal; Signups + Loyalty identity) live there, not in a unit. They depend on `@ss/platform` and the product packages.
 - **The root only orchestrates.** `pnpm check` (root files' format, then every unit's `check` in turn), `pnpm test|lint|typecheck|format|format:check` (`pnpm -r`), `pnpm --filter <unit> <script>`, and `pnpm test:all` (Vitest projects: every unit's own config in one run, one shared MongoDB). No root ESLint, TypeScript or Prettier config. CI installs once, then checks each unit in a matrix (`check`, plus `build` for deployables and `ss app validate` for products), runs the e2e workspace and `pnpm audit --prod --audit-level high`.
 - **Enforced.** `ss app validate` reports `imports.outside` for any import (every code file, `tests/` and `app/` included) or stylesheet `@import` / `@source` that leaves the product folder, and checks the package wiring (`package.dependency`, `package.devDependency` for `@ss/cli` and `@ss/config`, `package.script` for the scripts above). `ss app init` generates the same shape (config from `@ss/config`, Vitest tests with the thresholds, `@ss/*` at `workspace:^` by default); outside a pnpm workspace it adds `pnpm-workspace.yaml` (allowed build scripts) and `.nvmrc`.
 
@@ -1310,27 +1301,9 @@ Every change is additive: existing manifests, bundles, documents and products ke
 Still later (unchanged, not started): server-rendered hosted pages (§4.3), Edge Injection (§4.2) and usage metering
 for packs.
 
-- **Honest bundle budgets.** One measurement for the CLI and the Portal: `@ss/contracts/budget` (Node only)
-  `measureBundle({ elements, read, gzip? })` over the **minified, bundled** browser modules (gzip level 9; KB rounded up
-  to 0.1). An element's own size is the gzip of its entry modules (headless + renderer); a module that several elements
-  name and every chunk reachable through relative imports is **shared** and counted once. `ss app validate` builds the
-  elements exactly like `ss pack build` and warns `budget.estimate` (an element ships more than `budget.js`),
-  `budget.padded` (a declaration above the measurement rounded up plus a quarter, ≥ 1 KB), `budget.shared` (shared
-  chunks undeclared or above `budget.shared`) and `budget.build` (cannot bundle). Every product re-declared its budgets
-  from the measurement (≈ ceil(measured × 1.1)); the CLI templates too. Service-product elements delivered through the
-  element stub ship no product code, so they take **0 KB** of the website budget (their `budget.js` applies to their UI
-  bundle).
-- **Website budget (fixed 60 KB, unchanged).** Before, declarations were unminified source
-  closures — 2–5× the real gzip — so the 60 KB ceiling held perhaps 20 KB of real element code next to the ≈ 13–15 KB
-  Loader. Measured honestly, the same 60 KB now admits ≈ 45 KB of real gzip element code (≈ 35 KB with the audience
-  evaluator), which is what a third-party embed should cost at most: about a third of a ~170 KB mobile JS budget, as a
-  worst case, since modules load lazily only on pages whose placement matches. A full Storefront (≈ 44 KB declared with its
-  shared chunks) plus a full PDP (≈ 37 KB) together exceed it on purpose; a deployment may raise the limit.
-- **Shared chunks.** Product-level manifest `budget: { shared }` (KB gzip). The compiler measures, per product, the
-  shared modules the delivered elements load and checks: loader + Σ `budget.js` + Σ `budget.shared` (the measured
-  size where none is declared, with a `shared_undeclared` warning — so older packs still compile) ≤ the website budget,
-  and measured shared ≤ declared (`shared_over_declared`, refused). `manifest.json` reports `budget.sharedKb` and
-  `budget.shared[]` (slug, declared, measured, modules) and each element's measured `gzipBytes`.
+- **Bundle budgets, website budget, shared-chunk budgets** (`@ss/contracts/budget`, `budget.*` validate warnings,
+  manifest `budget`): removed in F.20; bundles are still minified and code-split by `ss pack build`.
+
 - **`placement` feature kind.** `x-kind: 'placement'` on a top-level `type: 'object'` feature without `properties`:
   values are validated against the full placement v1 schema (every member: paths, selectors, page types, devices,
   referrers, schedule, consent, triggers, frequency incl. cooldown and dismissMemory, audience) plus its semantic
@@ -1362,13 +1335,11 @@ for packs.
   language): `GET|PUT /v1/merchants/:m/websites/:w/delivery/strings[/:appId/:element/:language]` (collection
   `delivery_strings`, audited `delivery.strings_updated`, recompiles), console Subscription → Texts. Storefront's and
   PDP's generated `strings/<element>.en.json` are gone.
-- **`ss pack build | publish`.** `build` bundles every manifest module ref with esbuild (minified ESM, browser,
-  code-split `chunks/`), adds the catalogs, hashes everything and writes `dist/pack/descriptor.json` + assets;
-  `publish` signs with `signBundle` and uploads to `POST /v1/admin/packs` + `PUT …/assets/*` (optional `--activate`)
-  with a **staff API token**: `POST /v1/admin/api-tokens` (`platform.apps.manage`, ≤ 12 h) mints `sst_<token>`, a
-  staff session flagged `api` accepted only as `Authorization: Bearer sst_…` (never as a cookie, no CSRF), listed and
-  revocable under `/v1/me/sessions`, unable to mint tokens. Programmatic API `@ss/cli/pack`. PDP and Storefront
-  `pack.js` are thin wrappers over it.
+- **`ss pack build`.** Bundles every manifest module ref with esbuild (minified ESM, browser, code-split `chunks/`),
+  adds the catalogs, hashes everything and writes `dist/pack/descriptor.json` + assets, for packs and service-product
+  widgets alike. Programmatic API `@ss/cli/pack`. (`ss pack publish`, bundle signing and staff API tokens `sst_` were
+  removed in F.20; staff upload the folder in the Admin Console.)
+
 - **Optional element resources.** Element `requires.optionalResources`: never `resource_missing`; commerce lists them in
   `resourceNeeds` (`optional: true`, needed while a using element is on), connectors resolve them, consoles show "can
   use". The kit reports the connection: `entitlements.resource(doc, kind) → { status, connected }`. Catalog folded
@@ -1377,8 +1348,7 @@ for packs.
 - **Kit:** `sweepStaleUploads` (delete objects of expired presigned uploads per website, bounded, idempotent), used by
   the Grades and Reviews products on the next upload and from a dashboard button (F.19).
 - **Products:** Storefront maps Catalog's real `GET /v1/items` (brand object, `collectionIds`, variant `options`,
-  `availability` / `purchasable`, `nextCursor`, no badges or rank); Grades serves the stub's
-  `POST /v1/elements/<key>/actions/*`; Catalog's SKU uniqueness is race-free (unique partial index on normalised
+  `availability` / `purchasable`, `nextCursor`, no badges or rank); Catalog's SKU uniqueness is race-free (unique partial index on normalised
   `skuKeys` while the setting is on, lazy backfill) and its CSV export uses short-lived signed download links.
 
 ## F.19 Event-driven only: no scheduled or background processing
@@ -1395,23 +1365,22 @@ that request created or touched. Running nothing costs nothing.
   end of that request. A job a request enqueued runs right after its response, and only that job.
    - **Event Hub:** the ingested event is delivered right after the request. A failed delivery stays queued with its
      next-attempt time and is retried when there is a natural reason: the next delivery to the same product and the
-     next time that product calls the Portal (entitlements, usage, heartbeat, any product API; port `productCalled`),
-     only that product's due deliveries, a few at a time. Dead-letter rules are kept (attempts spanning ~24 h of
-     backoff, or an event older than that window) and staff have "Retry deliveries now" per product.
+     next time that product calls the Portal (entitlements, usage, any product API; port `productCalled`),
+     only that product's due deliveries, a few at a time. After about 24 h of backoff (or for an event older than that window) a
+     delivery is marked failed; staff have "Retry deliveries now" per product.
    - **Mail** is sent inside the request that needs it (no queue).
    - **Billing is computed when read:** charges per started hour settle (idempotent by `periodKey`) before a merchant's
      balance, meter or statement is read (merchant console, admin views), when a product fetches an entitlement
-     document or reports usage for one of its websites, and before a subscription change. Spend limits and low-balance
+     document or reports usage for one of its websites, and before a subscription change. The spend cap and low-balance
      holds are evaluated at the same moments, so the document a product fetches reflects a hold. A product holding a
      still-valid offline document (10 minutes, plus its cache) may keep serving until it next refreshes it.
-   - **Time-based state on read:** scheduled configuration changes apply on the first read of the merchant's
-     configuration at or after their time; a rotated key's revocation takes effect by time in the revocation list; a
-     deprecated app retires the first time it is read after its sunset; a failed website compile retries when its
-     loader is next served.
+   - **Time-based state on read:** a rotated website key's revocation takes effect by time in the revocation list; a
+     failed website compile retries when its loader is next served. (Scheduled configuration changes and app sunsets
+     were removed in F.20.)
    - **Connectors** are checked when saved or resolved (if the last check is older than 50 minutes), plus "Test" for
      merchants.
-   - **No admin operations or Run buttons:** settlement only on read, connectors on save/resolve, manifests refreshed
-     per app by staff, audit chains verified per scope from the audit log. Never on a timer.
+   - **No admin operations or Run buttons:** settlement only on read, connectors on save/resolve, manifests updated
+     on reconnect. Never on a timer.
 - **Products.** app-kit sends the usage and events a request produced right after it; a failed send retries on the
   next request of that product for that website. `product.background.every` and the leases store no longer exist.
   Expiry is judged on read (holds, COD orders, coupon reservations, price locks, loyalty points, alert subscriptions,
@@ -1424,8 +1393,8 @@ that request created or touched. Running nothing costs nothing.
   created once per instance and cached on `globalThis`; pools are small and fixed (Portal 5, products'
   control DB 5, merchant databases 3) and idle merchant pools are closed when the next
   website is served.
-- **Templates.** `ss app init` generates `vercel.json` without crons and a `jobs/` folder with only a README; the notes
-  sample's soft-deleted notes are removed by a TTL index.
+- **Templates.** `ss app init` generates `vercel.json` without crons; the notes sample's soft-deleted notes are removed
+  by a TTL index.
 - **Environment and onboarding.** Every deployable runs on any Node 22 host and any domain; nothing reads
   host-specific variables, and the environment holds only database and storage connections (plain strings, neutral
   names). The Portal: `MONGODB_URI`, plus optional `STORAGE_ENDPOINT` / `STORAGE_REGION` (default `auto`) / `STORAGE_BUCKET` /
@@ -1437,11 +1406,28 @@ that request created or touched. Running nothing costs nothing.
   pin it at connect time. While no staff user exists the staff login offers "Choose a password" / "Create admin": the
   visitor becomes the superadmin `admin` (no e-mail; the deployer accepts that the first visitor wins). E-mail, name,
   password and two-factor sign-in (Account → Security) are optional; two-factor is required at sign-in once
-  enrolled. Mail is the only admin setting; there is no preview URL setting and no tuning variable (pools, body cap,
-  budget and session lifetimes are constants; `X-Forwarded-*` are read as the first hop set them); indexes and migrations apply once per schema version
+  enrolled. Mail is the only admin setting; there is no preview URL setting and no tuning variable (pools, body cap
+  and session lifetimes are constants; `X-Forwarded-*` are read as the first hop set them); indexes and migrations apply once per schema version
   under a lock. A product: `MONGODB_URI` and `CONNECT_SECRET` (random, ≥ 32 chars). Staff add it in Admin → Apps → Add product
   (product URL + that secret): the Portal calls the product's `/.well-known/ss-connect` HMAC-signed with the secret
   (never sent, never stored by the Portal); the product generates its key, pins the Portal URL and keys in its control
   database and answers signed the same way; the Portal pins the base URL and key. Product secrets are generated there
   too (`product.secret`). Connecting again with the secret replaces the binding; changing `CONNECT_SECRET` locks the old
   Portal out.
+
+## F.20 Simplification
+
+Everything not needed for real merchant functionality was removed to keep the platform lightweight: the dev/certify
+tooling (Portal emulator `ss dev`, `ss certify`, app-kit dev probes), config A/B experiments and rollouts, scheduled
+config changes, config templates and merchant-wide app defaults (the merchant layer), the app lifecycle machinery
+(deprecate/sunset/retire, staging environments, version review/diff, manifest refresh and signatures — apps are now
+simply active/inactive, have one production base URL, and a manifest is accepted on connect/reconnect), platform health
+(heartbeat, health tiles), bundle budgets, partners/developers, the preview proxy and delivery rollback, the event
+dead-letter queue/replay/metrics, privacy export/anonymize and signed Portal→product requests, the audit-log hash chain
+(the ledger chain stays), system notice/info/whoami, impersonation, "Try demo", staff API tokens and pack signatures
+(one admin upload path for packs and service-product widgets), connector rotate/rollback/revoke, and outbox
+dead-lettering. Idempotency is required only on routes that move money or create things, offline grace is a fixed 24 h,
+and each merchant has one optional monthly spend cap (UTC calendar month). Two fixes came with it: service-product
+widgets are built with `ss pack build` and uploaded by staff ("Upload widgets"), then mounted by the Loader with an API
+client bound to the product base URL and the website `pk_` key (the element stub is gone); and the merchant console
+website page shows a "Copy install code" box.

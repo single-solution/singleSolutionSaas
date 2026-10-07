@@ -9,11 +9,12 @@
  *   product's durable outbox → the browser key (pk_) reads the public view (no cost) → the website sends
  *   order.placed@1 to the Event Hub → signed delivery to the product → stock is taken in the merchant's own database and
  *   inventory.changed@1 is published back → the tokened public feed serves the item → usage (`request`) reaches the
- *   Portal → hourly settlement charges the elements and books the metered hour. Plus the merchant console's "Try demo".
+ *   Portal → hourly settlement charges the elements and books the metered hour.
  *
  * The Portal is served over http on 127.0.0.1 (allowed outside production); the product over https on localhost with a
  * throw-away certificate trusted for this process only (the manifest's `endpoints.base` must be https).
- * System test (the `e2e/` workspace): it runs the Portal (`@ss/platform/testing`) and the product (`@ss/product-catalog/serve`).
+ * System test (the `e2e/` workspace): it runs the Portal (`@ss/platform/testing`) and the product (`@ss/product-catalog`
+ * `./platform` + `./routes`, served through app-kit).
  */
 import { execFileSync } from 'node:child_process';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
@@ -42,8 +43,11 @@ import {
 	totpCode,
 	SESSIONS,
 } from '@ss/platform/testing';
-import { ROOT, loadManifest, startServer } from '@ss/product-catalog/serve';
-import { CONNECT_SECRET, connectProduct, createClock, mongoUri } from './helpers.js';
+import { createPlatform, loadManifest } from '@ss/product-catalog/platform';
+import { buildRoutes, createCatalog, HANDLER_OPTIONS, wireEvents } from '@ss/product-catalog/routes';
+import { CONNECT_SECRET, connectProduct, createClock, mongoUri, productRoot, startProduct } from './helpers.js';
+
+const ROOT = productRoot('@ss/product-catalog');
 
 const HOUR = 3_600_000;
 const STAFF = { email: 'root@portal.test', password: 'staff password 123!' };
@@ -199,20 +203,26 @@ beforeAll(async () => {
 	const productPort = await freePort();
 	const PRODUCT_URL = `https://localhost:${productPort}`;
 	const manifest = await loadManifest(ROOT);
-	const product = await startServer({
-		port: productPort,
-		host: '127.0.0.1',
-		root: ROOT,
+	const catalogApp = wireEvents(
+		createCatalog(
+			await createPlatform({
+				root: ROOT,
+				env: { LOG_LEVEL: 'error', CONNECT_SECRET },
+				overrides: {
+					now: clock.now,
+					logger: noopLogger,
+					manifest: { ...manifest, endpoints: { ...manifest.endpoints, base: PRODUCT_URL } },
+				},
+			}),
+		),
+	);
+	const product = await startProduct({
+		product: catalogApp.product,
+		routes: buildRoutes(catalogApp),
+		close: () => catalogApp.app.close(),
 		tls: { key, cert },
-		env: {
-			LOG_LEVEL: 'error',
-			CONNECT_SECRET,
-		},
-		overrides: {
-			now: clock.now,
-			logger: noopLogger,
-			manifest: { ...manifest, endpoints: { ...manifest.endpoints, base: PRODUCT_URL } },
-		},
+		port: productPort,
+		handlerOptions: HANDLER_OPTIONS,
 	});
 
 	/**
@@ -247,12 +257,12 @@ beforeAll(async () => {
 		const jobs = portalDb.collection('platform_jobs');
 		const count = async () => ({
 			done: await jobs.countDocuments({ status: 'done' }),
-			dead: await jobs.countDocuments({ status: 'dead' }),
+			failed: await jobs.countDocuments({ status: 'failed' }),
 		});
 		const before = await count();
 		while (afterResponseTasks.length > 0) await afterResponseTasks.shift()?.();
 		const after = await count();
-		return { status: 'ok', stats: { succeeded: after.done - before.done, dead: after.dead - before.dead } };
+		return { status: 'ok', stats: { succeeded: after.done - before.done, failed: after.failed - before.failed } };
 	};
 	ctx = {
 		clock,
@@ -315,16 +325,14 @@ describe.skipIf(!hasOpenssl)('Catalog & PIM on the real Portal', () => {
 		// Admin → Apps → Add product: the product URL and its connect secret
 		const registered = await connectProduct(call, state.staff, PRODUCT_URL);
 		expect(registered.status, JSON.stringify(registered.json)).toBe(201);
-		expect(registered.json).toMatchObject({ slug: 'catalog', kind: 'service', status: 'pending', currentVersion: 1 });
+		expect(registered.json).toMatchObject({ slug: 'catalog', kind: 'service', status: 'inactive', currentVersion: 1 });
 		state.appId = registered.json.appId;
 		// a wrong secret is refused
 		expect((await connectProduct(call, state.staff, PRODUCT_URL, 'w'.repeat(40))).status).toBe(401);
-		const versions = await call('GET', `/v1/admin/apps/${state.appId}/versions`, { cookie: state.staff });
-		expect(versions.json.items[0]).toMatchObject({ version: 1, status: 'accepted' });
-		// approval of the registered version = activation (pending → active, manifest.accepted@1)
-		const activated = await call('POST', `/v1/admin/apps/${state.appId}/lifecycle`, {
+		// Active/Inactive switch: merchants see and subscribe to active apps only
+		const activated = await call('POST', `/v1/admin/apps/${state.appId}/status`, {
 			cookie: state.staff,
-			body: { action: 'activate' },
+			body: { status: 'active' },
 		});
 		expect(activated.json.status).toBe('active');
 		const catalog = await call('GET', '/v1/catalog/products');
@@ -403,11 +411,7 @@ describe.skipIf(!hasOpenssl)('Catalog & PIM on the real Portal', () => {
 		expect(keys.status, JSON.stringify(keys.json)).toBe(201);
 		state.sk = keys.json.key;
 		const drained = await drain();
-		expect(drained.stats.dead).toBe(0);
-		const log = await call('GET', `/v1/merchants/${state.merchantId}/websites/${state.websiteId}/deliveries`, {
-			cookie: state.merchant,
-		});
-		expect(log.status).toBe(200);
+		expect(drained.stats.failed).toBe(0);
 	});
 
 	it('switches the feeds add-on on (the Portal pushes the new entitlement to the product)', async () => {
@@ -427,7 +431,7 @@ describe.skipIf(!hasOpenssl)('Catalog & PIM on the real Portal', () => {
 		});
 		expect(pk.status, JSON.stringify(pk.json)).toBe(201);
 		state.pk = pk.json.key;
-		expect((await drain()).stats.dead).toBe(0);
+		expect((await drain()).stats.failed).toBe(0);
 	});
 
 	it('creates an item with the sk_ key; item.created@1 reaches the Event Hub; the pk_ view hides the cost', async () => {
@@ -505,7 +509,7 @@ describe.skipIf(!hasOpenssl)('Catalog & PIM on the real Portal', () => {
 		expect(placed.status, JSON.stringify(placed.json)).toBe(202);
 		const drained = await drain();
 		expect(drained.stats.succeeded).toBeGreaterThanOrEqual(1);
-		expect(drained.stats.dead).toBe(0);
+		expect(drained.stats.failed).toBe(0);
 		const clientDb = mongo.db(clientDbName);
 		const item = await clientDb.collection('ss_catalog_items').findOne({ websiteId: state.websiteId, id: state.item.id });
 		expect(item?.variants[0].quantity).toBe(3);
@@ -520,10 +524,9 @@ describe.skipIf(!hasOpenssl)('Catalog & PIM on the real Portal', () => {
 			.collection('integration_events')
 			.findOne({ websiteId: state.websiteId, idempotencyKey: { $regex: `^inventory:${variantId}:` } });
 		expect(inventory, 'inventory.changed@1 in the Portal Event Hub').toBeTruthy();
-		const deliveries = await call('GET', `/v1/merchants/${state.merchantId}/websites/${state.websiteId}/deliveries`, {
-			cookie: state.merchant,
-		});
-		expect(JSON.stringify(deliveries.json)).not.toContain('LAMP-1');
+		const deliveries = await ctx.portalDb.collection('integration_deliveries').find({ websiteId: state.websiteId }).toArray();
+		expect(deliveries.length).toBeGreaterThan(0);
+		expect(JSON.stringify(deliveries)).not.toContain('LAMP-1');
 	});
 
 	it('serves the tokened public feed (cacheable) with the item', async () => {
@@ -588,19 +591,5 @@ describe.skipIf(!hasOpenssl)('Catalog & PIM on the real Portal', () => {
 			.reduce((/** @type {any} */ sum, /** @type {any} */ entry) => sum + entry.amountMillicredits, 0);
 		expect(charged).toBeLessThan(0);
 		expect(balance.json.balanceMillicredits).toBe(100_000 + trial + charged);
-	});
-
-	it('opens the product demo from the merchant console ("Try demo")', async () => {
-		const { call, state } = ctx;
-		const demo = await call('POST', `/v1/merchants/${state.merchantId}/apps/${state.appId}/demo`, {
-			cookie: state.merchant,
-			body: {},
-		});
-		expect(demo.status, JSON.stringify(demo.json)).toBe(200);
-		const sso = await fetch(demo.json.url, { redirect: 'manual' });
-		expect(sso.status).toBe(303);
-		const session = /ss_session=(ses_[^;]+)/.exec(sso.headers.get('set-cookie') ?? '')?.[1];
-		const view = await fetch(`${ctx.PRODUCT_URL}/v1/session`, { headers: { authorization: `Bearer ${session}` } });
-		expect(await view.json()).toMatchObject({ kind: 'demo', role: 'demo' });
 	});
 });

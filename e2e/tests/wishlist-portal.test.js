@@ -8,12 +8,13 @@
  *   with the website's pk_ key and a guest token → the shopper signs in (SS-Identity) and the guest list merges into
  *   the account → they opt in to signals on the list and share it (read-only link, no personal data) → the merchant's
  *   server sends price.changed@1 to the Portal Event Hub with an sk_ key, twice → exactly one wishlist.price_dropped@1
- *   reaches the Portal Event Hub → hourly settlement charges the five elements. Plus the merchant console's "Try demo"
- *   launch.
+ *   reaches the Portal Event Hub → hourly settlement charges the five elements. Plus the widgets: staff upload the
+ *   `ss pack build` output ("Upload widgets") and the compiled website script mounts the real wishlist widget.
  *
  * The Portal is served over http on 127.0.0.1 (allowed outside production); the product over https on localhost with a
  * throw-away certificate trusted for this process only (the manifest's `endpoints.base` must be https).
- * System test (the `e2e/` workspace): it runs the Portal (`@ss/platform/testing`) and the product (`@ss/product-wishlist/serve`).
+ * System test (the `e2e/` workspace): it runs the Portal (`@ss/platform/testing`) and the product (`@ss/product-wishlist`
+ * `./platform` + `./routes`, served through app-kit).
  */
 import { execFileSync } from 'node:child_process';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
@@ -34,6 +35,7 @@ import {
 	configModule,
 	createCatalogModule,
 	createConnectorsModule,
+	createDeliveryModule,
 	createIdentityModule,
 	createIntegrationModule,
 	createPortal,
@@ -43,8 +45,12 @@ import {
 	totpCode,
 	SESSIONS,
 } from '@ss/platform/testing';
-import { ROOT, loadManifest, startServer } from '@ss/product-wishlist/serve';
-import { CONNECT_SECRET, connectProduct, createClock, mongoUri } from './helpers.js';
+import { buildPack, descriptorOf } from '@ss/cli/pack';
+import { createPlatform, loadManifest } from '@ss/product-wishlist/platform';
+import { buildRoutes, createWishlist, wireEvents } from '@ss/product-wishlist/routes';
+import { CONNECT_SECRET, connectProduct, createClock, mongoUri, productRoot, startProduct } from './helpers.js';
+
+const ROOT = productRoot('@ss/product-wishlist');
 
 const HOUR = 3_600_000;
 const STAFF = { email: 'root@portal.test', password: 'staff password 123!' };
@@ -141,13 +147,17 @@ beforeAll(async () => {
 			NODE_ENV: 'test',
 			MONGODB_URI: mongoUri('unused'),
 			OUTBOUND_DEV_ALLOW_HOSTS: LOCAL_HOSTS.join(','),
+			STORAGE_DIR: ':memory:',
 		},
 		// keys and secrets as the Portal generates them on first start; the Portal URL is each request's origin
 		testSystemState(),
 		// long staff sessions for the scripted clock
 		{
 			baseUrl: PORTAL_URL,
-			overrides: { sessions: { ...SESSIONS, staff: { idleMs: 720 * 60_000, absoluteMs: SESSIONS.staff.absoluteMs } } },
+			overrides: {
+				sessions: { ...SESSIONS, staff: { idleMs: 720 * 60_000, absoluteMs: SESSIONS.staff.absoluteMs } },
+				delivery: { storage: { kind: 'memory' } },
+			},
 		},
 	);
 	const mongo = await new MongoClient(/** @type {string} */ (process.env.TEST_MONGODB_URI)).connect();
@@ -172,6 +182,7 @@ beforeAll(async () => {
 			configModule,
 			createConnectorsModule({ allowHosts: LOCAL_HOSTS, resolve: resolveLocal }),
 			commerceModule,
+			createDeliveryModule(),
 		],
 	});
 	await portal.ensureIndexes();
@@ -202,29 +213,34 @@ beforeAll(async () => {
 	const productPort = await freePort();
 	const PRODUCT_URL = `https://localhost:${productPort}`;
 	const manifest = await loadManifest(ROOT);
-	const product = await startServer({
-		port: productPort,
-		host: '127.0.0.1',
-		root: ROOT,
+	const wishlist = wireEvents(
+		createWishlist(
+			await createPlatform({
+				root: ROOT,
+				env: { LOG_LEVEL: 'error', CONNECT_SECRET },
+				overrides: {
+					now: clock.now,
+					logger: noopLogger,
+					manifest: { ...manifest, endpoints: { ...manifest.endpoints, base: PRODUCT_URL } },
+				},
+			}),
+		),
+	);
+	const product = await startProduct({
+		product: wishlist.product,
+		routes: buildRoutes(wishlist),
+		close: () => wishlist.app.close(),
 		tls: { key, cert },
-		env: {
-			LOG_LEVEL: 'error',
-			CONNECT_SECRET,
-		},
-		overrides: {
-			now: clock.now,
-			logger: noopLogger,
-			manifest: { ...manifest, endpoints: { ...manifest.endpoints, base: PRODUCT_URL } },
-		},
+		port: productPort,
 	});
 
 	/**
 	 * In-process Portal call (cookie sessions send the Portal origin for CSRF).
 	 * @param {string} method
 	 * @param {string} pathname
-	 * @param {{ body?: unknown, cookie?: string, bearer?: string, headers?: Record<string, string> }} [init]
+	 * @param {{ body?: unknown, raw?: Uint8Array, cookie?: string, bearer?: string, headers?: Record<string, string> }} [init]
 	 */
-	const call = async (method, pathname, { body, cookie, bearer, headers = {} } = {}) => {
+	const call = async (method, pathname, { body, raw, cookie, bearer, headers = {} } = {}) => {
 		const response = await portal.handle(
 			new Request(`${PORTAL_URL}${pathname}`, {
 				method,
@@ -235,7 +251,7 @@ beforeAll(async () => {
 					...(method === 'POST' ? { 'idempotency-key': randomUUID() } : {}),
 					...headers,
 				},
-				...(body === undefined ? {} : { body: JSON.stringify(body) }),
+				...(raw ? { body: new Uint8Array(raw) } : body === undefined ? {} : { body: JSON.stringify(body) }),
 			}),
 		);
 		const text = await response.text();
@@ -243,19 +259,26 @@ beforeAll(async () => {
 			.getSetCookie()
 			.map((value) => value.split(';')[0])
 			.find((pair) => /=.+/.test(pair ?? ''));
-		return { status: response.status, json: text ? JSON.parse(text) : null, cookie: setCookie ?? null };
+		const json = (() => {
+			try {
+				return text ? JSON.parse(text) : null;
+			} catch {
+				return null;
+			}
+		})();
+		return { status: response.status, json, text, cookie: setCookie ?? null };
 	};
 	/** Run what the Portal deferred after its responses (deliveries, retries); returns the job outcome counts. */
 	const drain = async () => {
 		const jobs = portalDb.collection('platform_jobs');
 		const count = async () => ({
 			done: await jobs.countDocuments({ status: 'done' }),
-			dead: await jobs.countDocuments({ status: 'dead' }),
+			failed: await jobs.countDocuments({ status: 'failed' }),
 		});
 		const before = await count();
 		while (afterResponseTasks.length > 0) await afterResponseTasks.shift()?.();
 		const after = await count();
-		return { status: 'ok', stats: { succeeded: after.done - before.done, dead: after.dead - before.dead } };
+		return { status: 'ok', stats: { succeeded: after.done - before.done, failed: after.failed - before.failed } };
 	};
 	/**
 	 * A browser call to the product with the website's pk_ key.
@@ -340,11 +363,11 @@ describe.skipIf(!hasOpenssl)('Wishlist on the real Portal', () => {
 		// Admin → Apps → Add product: the product URL and its connect secret
 		const registered = await connectProduct(call, state.staff, PRODUCT_URL);
 		expect(registered.status, JSON.stringify(registered.json)).toBe(201);
-		expect(registered.json).toMatchObject({ slug: 'wishlist', kind: 'service', status: 'pending', currentVersion: 1 });
+		expect(registered.json).toMatchObject({ slug: 'wishlist', kind: 'service', status: 'inactive', currentVersion: 1 });
 		state.appId = registered.json.appId;
-		const activated = await call('POST', `/v1/admin/apps/${state.appId}/lifecycle`, {
+		const activated = await call('POST', `/v1/admin/apps/${state.appId}/status`, {
 			cookie: state.staff,
-			body: { action: 'activate' },
+			body: { status: 'active' },
 		});
 		expect(activated.json.status).toBe('active');
 		const catalog = await call('GET', '/v1/catalog/products');
@@ -424,7 +447,7 @@ describe.skipIf(!hasOpenssl)('Wishlist on the real Portal', () => {
 			state[kind] = keys.json.key;
 		}
 		const drained = await drain();
-		expect(drained.stats.dead).toBe(0);
+		expect(drained.stats.failed).toBe(0);
 	});
 
 	it('keeps a guest list, merges it on sign-in, opts in and shares it read-only', async () => {
@@ -478,7 +501,7 @@ describe.skipIf(!hasOpenssl)('Wishlist on the real Portal', () => {
 		expect((await call('POST', '/v1/events', { bearer: state.sk, body: { events: [first] } })).json.results[0].status).toBe(
 			'duplicate',
 		);
-		expect((await drain()).stats.dead).toBe(0);
+		expect((await drain()).stats.failed).toBe(0);
 		await product.product.events.dispatch(first, { source: 'portal' });
 		const outbox = await product.product.outbox.flush();
 		expect(outbox.rejected).toBe(0);
@@ -513,17 +536,34 @@ describe.skipIf(!hasOpenssl)('Wishlist on the real Portal', () => {
 		expect(entry?.amountMillicredits, JSON.stringify(statement.json.entries)).toBe(-400);
 	});
 
-	it('opens the product demo from the merchant console ("Try demo")', async () => {
+	it('delivers the real wishlist widget in the compiled website script after staff upload it ("Upload widgets")', async () => {
 		const { call, state } = ctx;
-		const demo = await call('POST', `/v1/merchants/${state.merchantId}/apps/${state.appId}/demo`, {
-			cookie: state.merchant,
-			body: {},
-		});
-		expect(demo.status, JSON.stringify(demo.json)).toBe(200);
-		const sso = await fetch(demo.json.url, { redirect: 'manual' });
-		expect(sso.status).toBe(303);
-		const session = /ss_session=(ses_[^;]+)/.exec(sso.headers.get('set-cookie') ?? '')?.[1];
-		const view = await fetch(`${ctx.PRODUCT_URL}/v1/session`, { headers: { authorization: `Bearer ${session}` } });
-		expect(await view.json()).toMatchObject({ kind: 'demo', role: 'demo' });
+		// `ss pack build` of the product's mode-A modules (headless/ + ui/), uploaded as built
+		const pack = await buildPack(ROOT);
+		const uploaded = await call('POST', '/v1/admin/packs', { cookie: state.staff, body: { descriptor: descriptorOf(pack) } });
+		expect(uploaded.status, JSON.stringify(uploaded.json)).toBe(201);
+		expect(uploaded.json).toMatchObject({ appId: state.appId, kind: 'service', status: 'uploading' });
+		for (const path of uploaded.json.missing) {
+			const asset = /** @type {any} */ (pack.assets.find((a) => a.path === path));
+			const put = await call('PUT', `${uploaded.json.uploadPath}${path}`, {
+				cookie: state.staff,
+				raw: asset.bytes,
+				headers: { 'content-type': asset.contentType },
+			});
+			expect(put.status, `${path}: ${put.text}`).toBe(200);
+		}
+		await ctx.drain();
+		const site = `/v1/merchants/${state.merchantId}/websites/${state.websiteId}`;
+		const compiled = await call('POST', `${site}/delivery/compile`, { cookie: state.merchant });
+		expect(compiled.status, JSON.stringify(compiled.json)).toBe(200);
+		const loader = await call('GET', `/w/${state.websiteId}/loader.js`);
+		expect(loader.status).toBe(200);
+		const base = `packs/${state.appId}/${uploaded.json.version}`;
+		expect(loader.text).toContain(`${base}/headless/wishlist.js`);
+		expect(loader.text).toContain(`${base}/ui/wishlist.js`);
+		expect(loader.text).toContain(ctx.PRODUCT_URL);
+		const served = await call('GET', `/w/${base}/ui/wishlist.js`);
+		expect(served.status).toBe(200);
+		expect(Buffer.from(served.text)).toEqual(/** @type {any} */ (pack.assets.find((a) => a.path === 'ui/wishlist.js')).bytes);
 	});
 });

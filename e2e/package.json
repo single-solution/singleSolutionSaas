@@ -1,7 +1,7 @@
 {
 	"name": "@ss/e2e",
 	"version": "0.1.0",
-	"description": "System tests: every product against the REAL Portal, in process (the Portal from @ss/platform/testing, each product from its ./serve entry), on one MongoMemoryReplSet.",
+	"description": "System tests: every product against the REAL Portal, in process (the Portal from @ss/platform/testing, each product composed from its ./platform and ./routes exports and served through app-kit), on one MongoMemoryReplSet.",
 	"type": "module",
 	"private": true,
 	"license": "UNLICENSED",

@@ -8,11 +8,12 @@
  *   allowlist; the Portal's connection check calls its /models) → issues a pk_ key → a guest opens a conversation
  *   through the product REST from the website's origin → the product resolves the merchant's AI credentials through
  *   the Portal and the fake provider answers → conversation and messages in the merchant's own database → ai_token
- *   usage reported → hourly settlement charges the elements and the metered tokens. Plus the "Try demo" launch.
+ *   usage reported → hourly settlement charges the elements and the metered tokens.
  *
  * The Portal is served over http on 127.0.0.1 (allowed outside production); the product and the AI provider over
  * https on localhost with a throw-away certificate trusted for this process only.
- * System test (the `e2e/` workspace): it runs the Portal (`@ss/platform/testing`) and the product (`@ss/product-chatbot/serve`).
+ * System test (the `e2e/` workspace): it runs the Portal (`@ss/platform/testing`) and the product (`@ss/product-chatbot`
+ * `./platform` + `./routes`, served through app-kit).
  */
 import { execFileSync } from 'node:child_process';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
@@ -41,8 +42,11 @@ import {
 	totpCode,
 	SESSIONS,
 } from '@ss/platform/testing';
-import { ROOT, loadManifest, startServer } from '@ss/product-chatbot/serve';
-import { CONNECT_SECRET, connectProduct, createClock, mongoUri } from './helpers.js';
+import { createPlatform, loadManifest } from '@ss/product-chatbot/platform';
+import { buildRoutes, createChatbot, wireEvents } from '@ss/product-chatbot/routes';
+import { CONNECT_SECRET, connectProduct, createClock, mongoUri, productRoot, startProduct } from './helpers.js';
+
+const ROOT = productRoot('@ss/product-chatbot');
 
 const HOUR = 3_600_000;
 const STAFF = { email: 'root@portal.test', password: 'staff password 123!' };
@@ -232,20 +236,25 @@ beforeAll(async () => {
 	const productPort = await freePort();
 	const PRODUCT_URL = `https://localhost:${productPort}`;
 	const manifest = await loadManifest(ROOT);
-	const product = await startServer({
-		port: productPort,
-		host: '127.0.0.1',
-		root: ROOT,
+	const chatbot = wireEvents(
+		createChatbot(
+			await createPlatform({
+				root: ROOT,
+				env: { LOG_LEVEL: 'error', CONNECT_SECRET },
+				overrides: {
+					now: clock.now,
+					logger: noopLogger,
+					manifest: { ...manifest, endpoints: { ...manifest.endpoints, base: PRODUCT_URL } },
+				},
+			}),
+		),
+	);
+	const product = await startProduct({
+		product: chatbot.product,
+		routes: buildRoutes(chatbot),
+		close: () => chatbot.app.close(),
 		tls: { key, cert },
-		env: {
-			LOG_LEVEL: 'error',
-			CONNECT_SECRET,
-		},
-		overrides: {
-			now: clock.now,
-			logger: noopLogger,
-			manifest: { ...manifest, endpoints: { ...manifest.endpoints, base: PRODUCT_URL } },
-		},
+		port: productPort,
 	});
 
 	/**
@@ -280,12 +289,12 @@ beforeAll(async () => {
 		const jobs = portalDb.collection('platform_jobs');
 		const count = async () => ({
 			done: await jobs.countDocuments({ status: 'done' }),
-			dead: await jobs.countDocuments({ status: 'dead' }),
+			failed: await jobs.countDocuments({ status: 'failed' }),
 		});
 		const before = await count();
 		while (afterResponseTasks.length > 0) await afterResponseTasks.shift()?.();
 		const after = await count();
-		return { status: 'ok', stats: { succeeded: after.done - before.done, dead: after.dead - before.dead } };
+		return { status: 'ok', stats: { succeeded: after.done - before.done, failed: after.failed - before.failed } };
 	};
 	ctx = {
 		clock,
@@ -351,11 +360,12 @@ describe.skipIf(!hasOpenssl)('Chatbot & Support on the real Portal', () => {
 		// Admin → Apps → Add product: the product URL and its connect secret
 		const registered = await connectProduct(call, state.staff, PRODUCT_URL);
 		expect(registered.status, JSON.stringify(registered.json)).toBe(201);
-		expect(registered.json).toMatchObject({ slug: 'chatbot', kind: 'service', status: 'pending', currentVersion: 1 });
+		expect(registered.json).toMatchObject({ slug: 'chatbot', kind: 'service', status: 'inactive', currentVersion: 1 });
 		state.appId = registered.json.appId;
-		const activated = await call('POST', `/v1/admin/apps/${state.appId}/lifecycle`, {
+		// Active/Inactive switch: merchants see and subscribe to active apps only
+		const activated = await call('POST', `/v1/admin/apps/${state.appId}/status`, {
 			cookie: state.staff,
-			body: { action: 'activate' },
+			body: { status: 'active' },
 		});
 		expect(activated.json.status).toBe('active');
 		const listed = (await call('GET', '/v1/catalog/products')).json.items.find(
@@ -454,7 +464,7 @@ describe.skipIf(!hasOpenssl)('Chatbot & Support on the real Portal', () => {
 		expect(keys.status, JSON.stringify(keys.json)).toBe(201);
 		state.pk = keys.json.key;
 		expect(state.pk).toMatch(/^pk_/);
-		expect((await drain()).stats.dead).toBe(0);
+		expect((await drain()).stats.failed).toBe(0);
 	});
 
 	it('lets a guest open a conversation from the website and answers with the merchant’s AI through the Portal', async () => {
@@ -540,19 +550,5 @@ describe.skipIf(!hasOpenssl)('Chatbot & Support on the real Portal', () => {
 			.reduce((/** @type {number} */ sum, /** @type {any} */ e) => sum + e.amountMillicredits, 0);
 		expect(charged).toBeLessThan(0);
 		expect(balance.json.balanceMillicredits).toBe(100_000 + trial + charged);
-	});
-
-	it('opens the product demo from the merchant console ("Try demo")', async () => {
-		const { call, state } = ctx;
-		const demo = await call('POST', `/v1/merchants/${state.merchantId}/apps/${state.appId}/demo`, {
-			cookie: state.merchant,
-			body: {},
-		});
-		expect(demo.status, JSON.stringify(demo.json)).toBe(200);
-		const sso = await fetch(demo.json.url, { redirect: 'manual' });
-		expect(sso.status).toBe(303);
-		const session = /ss_session=(ses_[^;]+)/.exec(sso.headers.get('set-cookie') ?? '')?.[1];
-		const view = await fetch(`${ctx.PRODUCT_URL}/v1/session`, { headers: { authorization: `Bearer ${session}` } });
-		expect(await view.json()).toMatchObject({ kind: 'demo', role: 'demo' });
 	});
 });

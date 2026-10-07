@@ -3,12 +3,12 @@
  * delivery), in process, on the test run's MongoMemoryReplSet. Storefront Blocks is an element pack (no backend), so
  * instead of a product server this test drives the delivery plane end to end:
  *
- *   first admin from the sign-in page (password, then TOTP) → upload the pack as a signed `ss-pack-bundle@1` (developer key) and every
- *   asset (bytes = the signed sha256/size) → activate → listed in the catalog with its 13 elements → merchant signs up,
- *   adds a website, gets credits, subscribes (pro) → compile the website bundle → the immutable loader holds the
- *   plan's default elements within the 60 KB budget, the pack modules are served byte for byte → the compiled loader
- *   runs in a page (JSDOM) and mounts the real grid, filters and theme from the served modules → switching on every
- *   add-on is refused with `delivery_budget_exceeded` and the live bundle stays → hourly settlement charges the
+ *   first admin from the sign-in page (password, then TOTP) → upload the `ss pack build` output (Admin → Apps → Upload
+ *   pack version: the `ss-pack-bundle@1` descriptor, then every missing asset, bytes = the descriptor's sha256/size) →
+ *   Active → listed in the catalog with its 13 elements → merchant signs up, adds a website, gets credits, subscribes
+ *   (pro) → compile the website bundle → the immutable loader holds the plan's default elements, the pack modules are
+ *   served byte for byte → the compiled loader runs in a page (JSDOM) and mounts the real grid, filters and theme from
+ *   the served modules → switching on every add-on compiles a new live bundle → hourly settlement charges the
  *   subscription's priced elements.
  * System test (the `e2e/` workspace): it runs the Portal (`@ss/platform/testing`) and the pack (`@ss/product-storefront/pack`).
  */
@@ -17,7 +17,6 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createRequire } from 'node:module';
 import { MongoClient } from 'mongodb';
 import { noopLogger } from '@ss/app-kit';
-import { createSigner, generateSigningKey, signBundle } from '@ss/protocol';
 import {
 	closeMongoClients,
 	commerceModule,
@@ -39,7 +38,6 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { relativeImports } from '@ss/contracts/budget';
 import { createClock, mongoUri } from './helpers.js';
 
 /** jsdom ships no type declarations (the same typed require as the Portal's delivery tests). */
@@ -51,6 +49,17 @@ const PORTAL_URL = 'http://127.0.0.1:4999';
 const STAFF = { email: 'root@portal.test', password: 'staff password 123!' };
 const MERCHANT_USER = { email: 'owner@shop.example.com', password: 'merchant password 123!' };
 const SHOP = 'https://shop.example.com';
+
+/** Relative module specifiers of static imports, re-exports and literal dynamic imports (esbuild output). */
+const IMPORT =
+	/(?:\bimport|\bexport)\s*(?:[\w$*{}\s,]*?\bfrom\s*)?["'](\.{1,2}\/[^"'\s]+)["']|\bimport\s*\(\s*["'](\.{1,2}\/[^"'\s]+)["']\s*\)/g;
+
+/**
+ * Relative import specifiers of a served module (`import{a}from"./chunks/x.js"`, `import"./y.js"`, `import("./z.js")`).
+ * @param {string} text
+ * @returns {string[]}
+ */
+const relativeImports = (text) => [...text.matchAll(IMPORT)].map((match) => String(match[1] ?? match[2]));
 
 /** In-memory mailer (identity e-mails). */
 const createMailer = () => {
@@ -83,12 +92,12 @@ beforeAll(async () => {
 		},
 		// keys and secrets as the Portal generates them on first start; the Portal URL is each request's origin
 		testSystemState(),
-		// long staff sessions for the scripted clock; a 55 KB website budget
+		// long staff sessions for the scripted clock
 		{
 			baseUrl: PORTAL_URL,
 			overrides: {
 				sessions: { ...SESSIONS, staff: { idleMs: 720 * 60_000, absoluteMs: SESSIONS.staff.absoluteMs } },
-				delivery: { storage: { kind: 'memory' }, budgetKb: 55 },
+				delivery: { storage: { kind: 'memory' } },
 			},
 		},
 	);
@@ -174,44 +183,40 @@ describe('Storefront Blocks delivered by the real Portal', () => {
 		state.staff = confirm.cookie ?? login.cookie;
 	});
 
-	it('registers the signed pack, uploads every asset and lists it after activation', async () => {
+	it('uploads the pack (descriptor, then every asset) and lists it after activation', async () => {
 		const { call, state } = ctx;
 		// `ss pack build`: minified entries + shared chunks + strings/en.json, hashed into the descriptor (F.18)
 		const pack = await buildPack();
 		const { manifest, assets } = pack;
-		const developer = await generateSigningKey({ kid: 'storefront-dev-1' });
-		const descriptor = descriptorOf(pack);
-		const signature = await signBundle({ signer: createSigner(developer.privateJwk), descriptor });
-		const uploaded = await call('POST', '/v1/admin/packs', {
-			cookie: state.staff,
-			body: { descriptor, signature, publicJwk: developer.publicJwk },
-		});
+		const uploaded = await call('POST', '/v1/admin/packs', { cookie: state.staff, body: { descriptor: descriptorOf(pack) } });
 		expect(uploaded.status, JSON.stringify(uploaded.json)).toBe(201);
-		expect(uploaded.json).toMatchObject({
-			app: { slug: 'storefront', kind: 'pack' },
-			version: { version: 1, status: 'accepted' },
-		});
-		state.appId = uploaded.json.app.appId;
+		expect(uploaded.json).toMatchObject({ slug: 'storefront', kind: 'pack', version: 1, status: 'uploading' });
+		expect(uploaded.json.missing).toHaveLength(assets.length);
+		state.appId = uploaded.json.appId;
 		state.assets = assets;
-		// a tampered asset is refused: the bytes must equal the signed descriptor
+		// a tampered asset is refused: the bytes must equal the descriptor
 		const grid = /** @type {any} */ (assets.find((a) => a.path === 'ui/grid.js'));
-		const tampered = await call('PUT', `/v1/admin/packs/${state.appId}/versions/1/assets/${grid.path}`, {
+		const tampered = await call('PUT', `${uploaded.json.uploadPath}${grid.path}`, {
 			cookie: state.staff,
 			raw: Buffer.concat([grid.bytes, Buffer.from('\n')]),
 			headers: { 'content-type': 'text/javascript' },
 		});
 		expect(tampered.status).toBe(422);
-		for (const asset of assets) {
-			const put = await call('PUT', `/v1/admin/packs/${state.appId}/versions/1/assets/${asset.path}`, {
+		for (const path of uploaded.json.missing) {
+			const asset = /** @type {any} */ (assets.find((a) => a.path === path));
+			const put = await call('PUT', `${uploaded.json.uploadPath}${path}`, {
 				cookie: state.staff,
 				raw: asset.bytes,
 				headers: { 'content-type': asset.contentType },
 			});
-			expect(put.status, `${asset.path}: ${put.text}`).toBe(200);
+			expect(put.status, `${path}: ${put.text}`).toBe(200);
 		}
-		const activated = await call('POST', `/v1/admin/apps/${state.appId}/lifecycle`, {
+		// the last asset made version 1 current; Active/Inactive switch: merchants see active apps only
+		const app = await call('GET', `/v1/admin/apps/${state.appId}`, { cookie: state.staff });
+		expect(app.json).toMatchObject({ kind: 'pack', status: 'inactive', currentVersion: 1 });
+		const activated = await call('POST', `/v1/admin/apps/${state.appId}/status`, {
 			cookie: state.staff,
-			body: { action: 'activate' },
+			body: { status: 'active' },
 		});
 		expect(activated.json.status).toBe('active');
 		const catalog = await call('GET', '/v1/catalog/products?kind=pack');
@@ -253,7 +258,7 @@ describe('Storefront Blocks delivered by the real Portal', () => {
 		state.subscribedAt = ctx.clock.now();
 	});
 
-	it('compiles the website bundle with the plan’s elements, within the budget, and serves the modules', async () => {
+	it('compiles the website bundle with the plan’s elements and serves the modules', async () => {
 		const { call, state } = ctx;
 		const site = `/v1/merchants/${state.merchantId}/websites/${state.websiteId}`;
 		const compiled = await call('POST', `${site}/delivery/compile`, { cookie: state.merchant });
@@ -273,10 +278,7 @@ describe('Storefront Blocks delivered by the real Portal', () => {
 		expect(artefact.status).toBe(200);
 		const bundle = JSON.parse(artefact.text);
 		expect(bundle.format).toBe('ss-website-bundle@1');
-		expect(bundle.budget.limitKb).toBe(55);
-		expect(bundle.budget.totalKb).toBeLessThanOrEqual(55);
-		expect(bundle.budget.shared).toEqual([expect.objectContaining({ slug: 'storefront', declaredKb: 21 })]);
-		expect(bundle.elements.every((/** @type {any} */ e) => e.delivery === 'pack' && e.slug === 'storefront')).toBe(true);
+		expect(bundle.elements.every((/** @type {any} */ e) => e.kind === 'pack' && e.slug === 'storefront')).toBe(true);
 		// the pack reads Catalog, Search and Deals (manifest.reads); none is subscribed here, so no client is passed
 		expect(bundle.warnings.map((/** @type {any} */ w) => w.code)).toEqual(['reads_inactive']);
 		for (const path of ['headless/grid.js', 'ui/grid.js', 'strings/en.json']) {
@@ -356,7 +358,7 @@ describe('Storefront Blocks delivered by the real Portal', () => {
 		await rm(modules, { recursive: true, force: true });
 	});
 
-	it('refuses to switch on every add-on beyond the website budget, keeping the live bundle', async () => {
+	it('switches on every add-on into a new live bundle, and off again', async () => {
 		const { call, state } = ctx;
 		for (const key of [
 			'cards',
@@ -378,12 +380,13 @@ describe('Storefront Blocks delivered by the real Portal', () => {
 			expect(switched.status, `${key}: ${switched.text}`).toBe(200);
 		}
 		const site = `/v1/merchants/${state.merchantId}/websites/${state.websiteId}`;
-		const refused = await call('POST', `${site}/delivery/compile`, { cookie: state.merchant });
-		expect(refused.status, refused.text).toBe(422);
-		expect(String(refused.json.type)).toMatch(/delivery_budget_exceeded$/);
-		expect(refused.json.errors.length).toBeGreaterThan(0);
+		const everything = await call('POST', `${site}/delivery/compile`, { cookie: state.merchant });
+		expect(everything.status, everything.text).toBe(200);
+		expect(everything.json.artefact.elements.map((/** @type {any} */ e) => e.key)).toEqual(
+			expect.arrayContaining(['grid', 'cards', 'trending_band', 'search_overlay', 'deals_page', 'mobile_tab_bar']),
+		);
 		const live = await call('GET', `/w/${state.websiteId}/loader.js`);
-		expect(live.headers.get('etag')).toBe(`"${state.version}"`);
+		expect(live.headers.get('etag')).toBe(`"${everything.json.version}"`);
 		// switching the extras off again compiles
 		for (const key of [
 			'trending_band',
