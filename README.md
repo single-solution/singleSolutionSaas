@@ -1,3 +1,5 @@
+Describes the build before PLAN.md Part 0 (2026-10-07); where they differ, Part 0 wins.
+
 # Single Solution — developer guide
 
 Single Solution is a **Portal** plus independent **products** (micro-apps). Client websites use the products through
@@ -244,6 +246,12 @@ address is simply the one it is opened at. One MongoDB Atlas cluster (M0 works) 
 
 On Vercel, for example, create one project per deployable from the same repository with its folder as **Root
 Directory**.
+
+**Production and preview never share a database** (PLAN 0.12 step 1). Set each project's `MONGODB_URI` (and every
+other variable) for the **Production** environment only. **Preview** deployments either get their own variables
+pointing at a separate database and database user (for example `ss_portal_preview`), or none at all, so a preview
+build fails at start instead of touching production data. Never tick Preview on a production variable. No `.env` file
+with real values is kept in the repository folder: `.gitignore` ignores every `.env*` file except `.env.example`.
 
 **Vercel Hobby limits and how each is met** (measured on `next build`; kept as low as possible, not just under):
 

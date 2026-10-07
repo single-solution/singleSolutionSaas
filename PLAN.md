@@ -1627,6 +1627,17 @@ retry counts) are constants in code, not settings.
      connected (`use Reconnect`)? This interacts with the step-5 test product question.
    - **Money alerts** (0.9 Portal): is the commerce money-alerts collection (ledger chain breaks, unpriced hours) kept,
      or removed in step 3?
+- **Builder choices awaiting owner review.** Where Part 0 and 0.10 were silent or unclear and the owner could not be
+  asked, the building agent chose the smallest safe option that contradicts nothing and recorded it here. The owner
+  confirms or changes each one; a confirmed choice moves into the section it belongs to.
+   - **Step 1, owner items** (0.12 step 1): the building agent did not delete or change the untracked root `.env` (it
+     holds the owner's credentials) and cannot set Vercel variables. The owner deletes the file, changes that Atlas
+     password, and sets every production variable for Production only (previews get their own database or none). Step
+     1's Done line stays empty until then; steps 2 and 3 were built meanwhile, as the owner's instruction to the agent
+     asked.
+   - **Unit `.gitignore` files** (0.12 step 1): besides the root file, the deployables still in use (`platform`,
+     `products/chatbot`) and the `ss app init` template also ignore `.env*` except `.env.example`, so each stays safe
+     when split into its own repository.
 
 Everything else in Part 0 is decided. A point that is not decided in Part 0 or 0.10 is asked, not guessed (0.13).
 
