@@ -40,6 +40,16 @@ describe('ss (main)', () => {
 		expect(created.code).toBe(0);
 		expect(created.out).toContain("Created service product 'cli-notes'");
 		expect(await ss(['app', 'validate', 'svc'])).toMatchObject({ code: 0, out: expect.stringContaining('✔ valid') });
+		expect(await ss(['app', 'assets', 'svc', '--check'])).toMatchObject({
+			code: 0,
+			out: expect.stringContaining('up to date'),
+		});
+		await writeFile(path.join(root, 'svc/app/_lib/assets.js'), '// stale\n');
+		expect(await ss(['app', 'assets', 'svc', '--check'])).toMatchObject({
+			code: 1,
+			err: expect.stringContaining('out of date'),
+		});
+		expect(await ss(['app', 'assets', 'svc'])).toMatchObject({ code: 0, out: expect.stringContaining('written') });
 		const json = await ss(['app', 'validate', 'svc', '--json']);
 		expect(JSON.parse(json.out).ok).toBe(true);
 		expect((await ss(['app', 'init', 'svc', '--kind', 'pack', '--slug', 'x1', '--name', 'X'])).code).toBe(1);

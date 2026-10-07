@@ -6,6 +6,7 @@
 import { after } from 'next/server.js';
 import { createRequestHandler, toNextRoute, startupFailedResponse } from '@ss/app-kit';
 import { createPlatform } from '../../adapters/platform.js';
+import { assets } from './assets.js';
 import { buildRoutes, createApplication, wireEvents } from '../../api/routes.js';
 
 const KEY = Symbol.for('ss.products.checkout');
@@ -19,7 +20,8 @@ const shared = () => {
 	return (store[KEY] ??= {});
 };
 
-export const getApplication = () => (shared().application ??= createPlatform().then((app) => wireEvents(createApplication(app))));
+export const getApplication = () =>
+	(shared().application ??= createPlatform({ assets }).then((app) => wireEvents(createApplication(app))));
 
 /**
  * A Next.js route export that forwards to the app-kit router (which strips the `/api` prefix of rewritten paths).

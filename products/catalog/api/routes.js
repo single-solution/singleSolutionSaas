@@ -21,7 +21,7 @@ import { createMediaService } from './media.js';
 import { sessionView } from './session.js';
 import { settingsForDoc } from './settings.js';
 import { createTaxonomyService } from './taxonomy.js';
-import { createTransferService, MAX_CSV_CHARS } from './transfer.js';
+import { createTransferService } from './transfer.js';
 import { createVariantsService } from './variants.js';
 import { attributeView } from '../core/views.js';
 import { createDueWork } from './due.js';
@@ -698,7 +698,7 @@ export const buildRoutes = (catalog) => {
 			path: '/v1/imports',
 			element: 'import_export',
 			write: true,
-			maxBodyBytes: MAX_CSV_CHARS * 2,
+			maxBodyBytes: 3_900_000, // under the 4.5 MB request body limit of serverless hosts
 			handler: async (ctx, s) =>
 				reply(
 					await transfer.run(s, ctx.body, { key: ctx.idempotencyKey, actor: apiActor(ctx), exposeCost: exposeCost(ctx, s) }),

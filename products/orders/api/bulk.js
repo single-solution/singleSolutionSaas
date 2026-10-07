@@ -12,7 +12,7 @@ import { idList } from '../core/text.js';
 import { fail, invalid } from './context.js';
 
 /** Longest CSV accepted (characters). */
-export const MAX_CSV_CHARS = 5_000_000;
+export const MAX_CSV_CHARS = 3_500_000;
 
 /**
  * @param {import('./lifecycle.js').Lifecycle} lifecycle

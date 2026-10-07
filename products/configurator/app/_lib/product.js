@@ -6,6 +6,7 @@
 import { after } from 'next/server.js';
 import { createRequestHandler, toNextRoute, startupFailedResponse } from '@ss/app-kit';
 import { createPlatform } from '../../adapters/platform.js';
+import { assets } from './assets.js';
 import { buildRoutes, createConfiguratorApp, wireEvents } from '../../api/routes.js';
 
 const KEY = Symbol.for('ss.products.configurator');
@@ -20,7 +21,7 @@ const shared = () => {
 };
 
 export const getConfigurator = () =>
-	(shared().configurator ??= createPlatform().then((app) => wireEvents(createConfiguratorApp(app))));
+	(shared().configurator ??= createPlatform({ assets }).then((app) => wireEvents(createConfiguratorApp(app))));
 
 /**
  * A Next.js route export that forwards to the app-kit router (which strips the `/api` prefix of rewritten paths).

@@ -30,7 +30,7 @@ export const startServer = async ({
 } = {}) => {
 	const orders = wireEvents(createOrders(await createPlatform({ env, root, overrides })));
 	const { product } = orders;
-	const handle = createRequestHandler(product, buildRoutes(orders), { maxBodyBytes: 16_000_000 });
+	const handle = createRequestHandler(product, buildRoutes(orders), { maxBodyBytes: 3_900_000 });
 	/** @type {import('node:http').RequestListener} */
 	const listener = async (incoming, outgoing) => {
 		const scheme = tls ? 'https' : 'http';

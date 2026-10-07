@@ -384,8 +384,9 @@ is JSON, and no URL, key or other secret is read from the environment.
 problem naming the variable, never its value (today: `MONGODB_URI` missing in production). Pass them to
 `createProduct({ problems })`: the product still starts, and every route — `/healthz` and `/.well-known/ss-app.json`
 included — answers `503 { status: 'misconfigured', problems }` (`misconfiguredResponse`), so the deployer and the
-Portal's Add product dialog see the reason. A product's `proxy.js` re-exports `@ss/app-kit/proxy` so Next.js pages answer
-the same. A missing or too-short `CONNECT_SECRET` is not a misconfiguration: the product serves, and only
+Portal's Add product dialog see the reason. Products have no proxy function (it would be one more deployed function):
+their dashboard page checks `configProblems` and shows the reasons. `@ss/app-kit/proxy` remains for apps that want
+pages to answer 503 too. A missing or too-short `CONNECT_SECRET` is not a misconfiguration: the product serves, and only
 `POST /.well-known/ss-connect` answers 503 `misconfigured` with the reason.
 
 The merchant database is vetted with `@ss/net` `isSafeMongoUri` under the `outbound` policy before connecting (refused →

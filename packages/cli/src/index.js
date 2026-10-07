@@ -4,6 +4,7 @@
  * @module
  */
 export { main, USAGE, VERSION, SESSION_FILE } from './cli.js';
+export { renderAssets, writeAssets, ASSETS_FILE } from './assets.js';
 export { initApp, checkInitOptions, fill, insideWorkspace, TEMPLATES_DIR, INIT_KINDS } from './init.js';
 export {
 	validateProject,
@@ -17,6 +18,9 @@ export {
 	checkStringKeys,
 	checkModules,
 	checkServiceContract,
+	checkServerShape,
+	serverEntries,
+	MAX_SERVER_ENTRIES,
 	checkPackageWiring,
 	PACKAGE_WIRING,
 	checkEventSchemas,

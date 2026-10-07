@@ -14,7 +14,7 @@ import { attributesOf, fail, invalid } from './catalog.js';
 /** @typedef {import('./catalog.js').Deps} Deps */
 
 /** Largest CSV body (characters). */
-export const MAX_CSV_CHARS = 8_000_000;
+export const MAX_CSV_CHARS = 3_500_000;
 const POLICIES = ['skip', 'overwrite', 'fail'];
 
 /**

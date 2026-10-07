@@ -263,6 +263,23 @@ address is simply the one it is opened at. One MongoDB Atlas cluster (M0 works) 
 On Vercel, for example, create one project per deployable from the same repository with its folder as **Root
 Directory**.
 
+**Vercel Hobby limits and how each is met** (measured on `next build`; kept as low as possible, not just under):
+
+- **Functions per deployment (limit 12).** Each product deploys **2**: one route handler (`app/api/[...path]`, which
+  `next.config.js` rewrites `/v1/*`, `/healthz`, `/readyz`, `/.well-known/*`, `/sso` and product paths to, URLs
+  unchanged) and one dashboard page (`app/dashboard/[[...section]]`); `/` is static and there is no proxy (the route
+  handler answers 503 `misconfigured` itself, the dashboard shows the reasons). The **Portal** deploys **5**: the API
+  catch-all (also `/w/*`, `/p/*`, `/healthz`, `/readyz`, `/.well-known/jwks.json`), one console page, one admin page,
+  `_not-found` and the CSP-nonce proxy. `ss app validate` fails a product with more than 2 server entry points or with
+  `outputFileTracingIncludes`; runtime files are bundled through the generated `app/_lib/assets.js` (`prebuild`).
+- **Function size (limit 250 MB).** Traced server files per function: products 4.1–4.4 MB, Portal 4.5 MB (API) and
+  5.1 MB (each console page); the proxy 1.6 MB. No test, emulator or CLI code is traced.
+- **Request body (limit 4.5 MB).** Every body cap is at most 3.9 MB (JSON default 1 MB; CSV/JSON imports 3.9 MB; Portal
+  pack uploads 2 MB); photos and files go straight to storage with presigned URLs.
+- **Duration.** No `maxDuration` is needed: work after a response is bounded (Portal jobs 8 s, lazy settlement 2 s,
+  staff "Retry now" 8 s and 100 deliveries, products one batch per queue and website), outbound calls time out in
+  5–15 s, and there are no crons.
+
 **How it works** (PLAN F.19: event-driven only):
 
 - **Nothing to schedule.** No deployable has a cron (`ss app validate` refuses one), no

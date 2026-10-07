@@ -17,6 +17,7 @@
 	"prettier": "@ss/config/prettier.json",
 	"scripts": {
 		"dev": "next dev --port 3000",
+		"prebuild": "ss app assets .",
 		"build": "next build",
 		"start": "next start --port 3000",
 		"serve": "node serve.js 3000",

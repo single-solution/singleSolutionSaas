@@ -30,7 +30,7 @@ export const startServer = async ({
 } = {}) => {
 	const catalog = wireEvents(createCatalog(await createPlatform({ env, root, overrides })));
 	const { product } = catalog;
-	const handle = createRequestHandler(product, buildRoutes(catalog), { maxBodyBytes: 16_000_000 });
+	const handle = createRequestHandler(product, buildRoutes(catalog), { maxBodyBytes: 3_900_000 });
 	/** @type {import('node:http').RequestListener} */
 	const listener = async (incoming, outgoing) => {
 		const scheme = tls ? 'https' : 'http';

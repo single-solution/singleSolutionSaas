@@ -92,13 +92,17 @@ export const PROBLEM_CODES = Object.freeze({
 
 /**
  * Build the product.
- * @param {{ env?: Record<string, string | undefined>, root?: string, overrides?: Record<string, any> }} [options]
+ * @param {{ env?: Record<string, string | undefined>, root?: string, assets?: { manifest: any, strings: Record<string, Record<string, string>> },
+ *   overrides?: Record<string, any> }} [options]
+ *   `assets` (the Next.js build: app/_lib/assets.js) replaces reading manifest.json, schemas/ and strings/ from `root`
  *   `overrides` are passed to app-kit `createProduct` (tests: `now`, `fetch`, `logger`, `manifest`, `outboundSend`, …)
  * @returns {Promise<AftersalesApp>}
  */
-export const createPlatform = async ({ env = process.env, root = process.cwd(), overrides = {} } = {}) => {
+export const createPlatform = async ({ env = process.env, root = process.cwd(), assets, overrides = {} } = {}) => {
 	const config = configFromEnv(env);
-	const [manifest, strings] = await Promise.all([loadManifest(root), loadStrings(root)]);
+	const [manifest, strings] = assets
+		? [assets.manifest, assets.strings]
+		: await Promise.all([loadManifest(root), loadStrings(root)]);
 	/** @type {unknown} */
 	let stores;
 	/** @type {{ close: () => Promise<void> } | null} */

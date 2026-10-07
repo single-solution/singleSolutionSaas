@@ -17,7 +17,7 @@ import { customerSummary, customerView, trackingOf } from '../core/views.js';
 import { cleanText, idList, isId } from '../core/text.js';
 import { repositoriesFor } from '../adapters/db.js';
 import { createMessenger } from '../adapters/messaging.js';
-import { createBulk, filterOf, MAX_CSV_CHARS } from './bulk.js';
+import { createBulk, filterOf } from './bulk.js';
 import { labelsFor } from './context.js';
 import { createDashboardApi, HTML_VIEW_HEADERS } from './dashboard.js';
 import { createDocuments } from './documents.js';
@@ -596,7 +596,7 @@ export const buildRoutes = (orders) => {
 			method: 'POST',
 			path: '/v1/order-imports',
 			element: 'bulk',
-			maxBodyBytes: MAX_CSV_CHARS * 2,
+			maxBodyBytes: 3_900_000, // under the 4.5 MB request body limit of serverless hosts
 			handler: async (ctx, site) => {
 				const result = await bulk.importCsv(site, ctx.body, apiActor(ctx));
 				return result.ok ? ok(result.report) : failure(result);

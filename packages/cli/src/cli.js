@@ -9,6 +9,7 @@ import { parseArgs } from 'node:util';
 import { generateConnectSecret, parseSigningKeys } from '@ss/protocol';
 import { initApp, INIT_KINDS } from './init.js';
 import { formatValidation, validateProject } from './validate/index.js';
+import { writeAssets } from './assets.js';
 import { loadManifest } from './manifest.js';
 import { exists, isObject, readJson, walk } from './fsutil.js';
 import { normaliseFixture } from './emulator/fixture.js';
@@ -53,6 +54,8 @@ export const USAGE = `ss — Single Solution developer CLI (SSPS v1)
 Usage:
   ss app init <dir> --kind service|pack --slug <slug> --name <name> [--sdk-version <range>] [--minimal]
   ss app validate [dir] [--json]
+  ss app assets [dir] [--check]                generate app/_lib/assets.js (manifest, feature schemas, strings bundled
+                                               into the Next.js server build); --check fails when it is out of date
   ss pack build [dir] [--out <dir>] [--json]   bundle (minified ESM, shared chunks), hash, write descriptor.json (default dist/pack)
   ss pack publish [dir] --portal <url> [--token <sst_…>] [--key <kid:seed|@file>] [--activate]
                                                sign the descriptor (signBundle) and upload it to the Portal admin pack API
@@ -665,6 +668,17 @@ export const main = async (argv, deps) => {
 				io.out(
 					`Created ${kind} product '${values.slug}' in ${path.relative(full.cwd, result.dir) || '.'} (${result.files.length} files)\nNext: cd ${dir} && ss app validate${kind === 'service' ? ' && ss dev env > .env.local' : ''}\n`,
 				);
+				return 0;
+			}
+			if (sub === 'assets') {
+				const { values, positionals } = parse(args, { check: { type: 'boolean' } });
+				const result = await writeAssets(path.resolve(full.cwd, positionals[0] ?? '.'), { check: values.check === true });
+				const where = path.relative(full.cwd, result.file) || result.file;
+				if (values.check === true && !result.upToDate) {
+					io.err(`${where} is out of date: run ss app assets\n`);
+					return 1;
+				}
+				io.out(`${where} ${result.upToDate ? 'is up to date' : 'written'}\n`);
 				return 0;
 			}
 			if (sub === 'validate') {

@@ -101,7 +101,7 @@ export const createHarness = async ({ config = {}, elements = {}, website = { ti
 	});
 	const search = wireEvents(createSearchApp(app, atlas));
 	const handle = createRequestHandler(search.product, buildRoutes(search), {
-		maxBodyBytes: 8_000_000,
+		maxBodyBytes: 3_900_000,
 	});
 
 	let version = 0;

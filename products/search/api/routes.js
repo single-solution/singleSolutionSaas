@@ -205,7 +205,7 @@ export const buildRoutes = (searchApp) => {
 			path: '/v1/documents:batch',
 			element: 'index',
 			skOnly: true,
-			maxBodyBytes: 8_000_000,
+			maxBodyBytes: 3_900_000, // under the 4.5 MB request body limit of serverless hosts
 			handler: async (ctx, s) => {
 				const refused = writesRefused(s);
 				if (refused) return refused;

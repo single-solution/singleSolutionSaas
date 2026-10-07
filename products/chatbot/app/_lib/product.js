@@ -6,6 +6,7 @@
 import { after } from 'next/server.js';
 import { createRequestHandler, toNextRoute, startupFailedResponse } from '@ss/app-kit';
 import { createPlatform } from '../../adapters/platform.js';
+import { assets } from './assets.js';
 import { buildRoutes, createChatbot, wireEvents } from '../../api/routes.js';
 
 const KEY = Symbol.for('ss.products.chatbot');
@@ -19,7 +20,7 @@ const shared = () => {
 	return (store[KEY] ??= {});
 };
 
-export const getChatbot = () => (shared().chatbot ??= createPlatform().then((app) => wireEvents(createChatbot(app))));
+export const getChatbot = () => (shared().chatbot ??= createPlatform({ assets }).then((app) => wireEvents(createChatbot(app))));
 
 /**
  * A Next.js route export that forwards to the app-kit router (which strips the `/api` prefix of rewritten paths).

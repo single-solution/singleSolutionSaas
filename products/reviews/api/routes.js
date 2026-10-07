@@ -43,7 +43,7 @@ import { settingsForDoc } from './settings.js';
 /** @typedef {import('./service.js').Site} Site */
 
 /** Largest CSV import body (bytes); rows are bounded by `import.max_rows`. */
-const IMPORT_MAX_BYTES = 8 * 1024 * 1024;
+const IMPORT_MAX_BYTES = 3_900_000; // under the 4.5 MB request body limit of serverless hosts
 /** Items per `GET /v1/ratings?itemIds=` batch. */
 const MAX_BATCH_ITEMS = 100;
 /** Reviews shown by the Loader element stub view. */

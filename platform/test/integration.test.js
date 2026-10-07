@@ -751,15 +751,17 @@ describe('runtime', () => {
 		// the Next.js adapters delegate to the cached instance
 		const api = await import('../app/api/[...path]/route.js');
 		expect((await api.GET(new Request('https://portal.example.test/api/v1/system/info'))).status).toBe(200);
-		const jwks = await import('../app/.well-known/jwks.json/route.js');
-		expect((await (await jwks.GET()).json()).keys).toHaveLength(2);
-		const ready = await import('../app/readyz/route.js');
-		expect((await ready.GET()).status).toBe(200);
-		const health = await import('../app/healthz/route.js');
-		expect((await health.GET()).status).toBe(200);
+		// /healthz, /readyz and /.well-known/jwks.json are rewritten to the same catch-all (GET/HEAD only)
+		const system = (/** @type {string} */ path, method = 'GET') =>
+			api[/** @type {'GET'} */ (method)](new Request(`https://portal.example.test/api${path}`, { method }));
+		expect((await (await system('/.well-known/jwks.json')).json()).keys).toHaveLength(2);
+		expect((await system('/readyz')).status).toBe(200);
+		expect((await system('/healthz')).status).toBe(200);
+		expect((await system('/healthz', 'HEAD')).status).toBe(200);
+		expect((await system('/healthz', 'POST')).status).toBe(404);
 		resetPortal();
 		await expect(getPortal({ env: {} })).rejects.toThrow(/MONGODB_URI/);
-		expect((await ready.GET()).status).toBe(503); // config invalid
+		expect((await system('/readyz')).status).toBe(503); // config invalid
 		resetPortal();
 	}, 60_000);
 });

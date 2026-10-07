@@ -195,7 +195,7 @@ export const buildRoutes = (alerts) => {
 			method: 'POST',
 			path: '/v1/triggers:import',
 			...website('triggers'),
-			maxBodyBytes: 4 * 1024 * 1024,
+			maxBodyBytes: 3_900_000, // under the 4.5 MB request body limit of serverless hosts
 			handler: async (ctx) => {
 				const s = await site(ctx);
 				if (typeof ctx.body?.csv !== 'string') return invalid([{ path: '/csv', code: 'required' }]);

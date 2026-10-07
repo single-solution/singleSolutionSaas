@@ -13,6 +13,7 @@ import path from 'node:path';
 import { validateManifest } from '@ss/contracts';
 import { isObject, parseJson, walk } from '../fsutil.js';
 import { loadManifest, problemOf } from '../manifest.js';
+import { ASSETS_FILE, renderAssets } from '../assets.js';
 import { buildPack, measurePack } from '../pack/index.js';
 import {
 	colourLiterals,
@@ -48,11 +49,10 @@ export const ANATOMY = Object.freeze({
 		'jobs/',
 		'.env.example',
 		'vercel.json',
-		'app/.well-known/ss-connect/route.js',
-		'app/.well-known/ss-events/route.js',
-		'app/.well-known/ss-app.json/route.js',
-		'app/api/v1/[...route]/route.js',
-		'app/dashboard/page.js',
+		'next.config.js',
+		'app/api/[...path]/route.js',
+		'app/dashboard/[[...section]]/page.js',
+		'app/_lib/assets.js',
 	]),
 	pack: Object.freeze([]),
 });
@@ -801,6 +801,78 @@ export const checkCrons = async (files) => {
 	];
 };
 
+/** Server entry points a service product may have (Vercel Hobby deploys at most 12 functions per project). */
+export const MAX_SERVER_ENTRIES = 2;
+
+const ROUTE_FILE = /^(?:src\/)?app\/(?:.*\/)?route\.(?:m?js|jsx|ts|tsx)$/;
+const PAGE_FILE = /^(?:src\/)?app\/(?:.*\/)?page\.(?:m?js|jsx|ts|tsx)$/;
+const PROXY_FILE = /^(?:src\/)?(?:proxy|middleware)\.(?:m?js|ts)$/;
+const DYNAMIC_PAGE = /force-dynamic|searchParams|\bparams\b|\bcookies\(|\bheaders\(|\bconnection\(|\bdraftMode\(/;
+const NEXT_CONFIG = /^next\.config\.(?:m?js|cjs|ts)$/;
+
+/**
+ * Server entry points of a Next.js app: every route handler, every dynamic page (a dynamic segment or request data)
+ * and the proxy (middleware). Static pages are prerendered and need no function.
+ * @param {ProjectFiles} files
+ * @returns {Promise<string[]>}
+ */
+export const serverEntries = async (files) => {
+	/** @type {string[]} */
+	const entries = [];
+	for (const file of files.list) {
+		if (ROUTE_FILE.test(file) || PROXY_FILE.test(file)) entries.push(file);
+		else if (PAGE_FILE.test(file) && (file.includes('[') || DYNAMIC_PAGE.test(await files.read(file)))) entries.push(file);
+	}
+	return entries;
+};
+
+/**
+ * Deployment shape of a service product (Vercel Hobby): at most {@link MAX_SERVER_ENTRIES} server entry points (one
+ * route handler behind next.config.js rewrites and one dashboard page; the misconfiguration check runs in both, so no
+ * proxy function), no `outputFileTracingIncludes` (it
+ * defeats function grouping; runtime files are bundled through `app/_lib/assets.js`), and that module up to date.
+ * @param {ProjectFiles} files
+ * @returns {Promise<Problem[]>}
+ */
+export const checkServerShape = async (files) => {
+	/** @type {Problem[]} */
+	const problems = [];
+	const entries = await serverEntries(files);
+	if (entries.length > MAX_SERVER_ENTRIES) {
+		problems.push(
+			problemOf({
+				rule: 'server.entries',
+				file: 'app/',
+				message: `${entries.length} server entry points (at most ${MAX_SERVER_ENTRIES}: one route handler behind next.config.js rewrites and one dashboard page; no proxy): ${entries.join(', ')}`,
+			}),
+		);
+	}
+	for (const file of files.list.filter((name) => NEXT_CONFIG.test(name))) {
+		if ((await files.read(file)).includes('outputFileTracingIncludes')) {
+			problems.push(
+				problemOf({
+					rule: 'server.tracing',
+					file,
+					message: 'outputFileTracingIncludes is not allowed: import runtime files as modules (app/_lib/assets.js)',
+				}),
+			);
+		}
+	}
+	if (files.list.some((file) => file.startsWith('app/'))) {
+		const current = files.set.has(ASSETS_FILE) ? await files.read(ASSETS_FILE) : null;
+		if (current !== null && current !== (await renderAssets(files.dir))) {
+			problems.push(
+				problemOf({
+					rule: 'server.assets',
+					file: ASSETS_FILE,
+					message: 'out of date with manifest.json, schemas/ or strings/: run ss app assets',
+				}),
+			);
+		}
+	}
+	return problems;
+};
+
 /**
  * Validate a project directory.
  * @param {string} dir
@@ -857,7 +929,7 @@ export const validateProject = async (dir) => {
 			...(await checkStringSlices(files, manifest)),
 			...(await checkBudgets(files, manifest)),
 		);
-		if (kind === 'service') problems.push(...(await checkServiceContract(files, manifest)));
+		if (kind === 'service') problems.push(...(await checkServiceContract(files, manifest)), ...(await checkServerShape(files)));
 		if (kind !== null) problems.push(...(await checkPackageWiring(files, kind)));
 	}
 	problems.sort((a, b) => a.file.localeCompare(b.file) || (a.line ?? 0) - (b.line ?? 0) || a.rule.localeCompare(b.rule));

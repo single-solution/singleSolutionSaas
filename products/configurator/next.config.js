@@ -1,4 +1,4 @@
-/** Next.js config: /v1/* is served by the app-kit router; project files read at runtime are traced into the build. */
+/** Next.js config: every public server path is rewritten to the one route handler (app/api/[...path]), served by the app-kit router. */
 import { existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -17,10 +17,13 @@ const config = {
 	serverExternalPackages: ['mongodb'],
 	// the UI library ships untranspiled JSX in .js files
 	transpilePackages: ['@ss/ui'],
+	// public paths stay as they are (the Portal, websites and tests call them); one function serves them all
 	async rewrites() {
-		return [{ source: '/v1/:path*', destination: '/api/v1/:path*' }];
+		return ['/v1/:path*', '/healthz', '/readyz', '/.well-known/:path*', '/sso'].map((source) => ({
+			source,
+			destination: `/api${source}`,
+		}));
 	},
-	outputFileTracingIncludes: { '/**': ['./manifest.json', './schemas/**/*', './strings/**/*'] },
 };
 
 export default config;

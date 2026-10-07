@@ -6,6 +6,7 @@
 import { after } from 'next/server.js';
 import { createRequestHandler, toNextRoute, startupFailedResponse } from '@ss/app-kit';
 import { createPlatform } from '../../adapters/platform.js';
+import { assets } from './assets.js';
 import { buildRoutes, createLoyalty, wireEvents } from '../../api/routes.js';
 
 const KEY = Symbol.for('ss.products.loyalty');
@@ -19,7 +20,7 @@ const shared = () => {
 	return (store[KEY] ??= {});
 };
 
-export const getLoyalty = () => (shared().loyalty ??= createPlatform().then((app) => wireEvents(createLoyalty(app))));
+export const getLoyalty = () => (shared().loyalty ??= createPlatform({ assets }).then((app) => wireEvents(createLoyalty(app))));
 
 /**
  * A Next.js route export that forwards to the app-kit router (which strips the `/api` prefix of rewritten paths).

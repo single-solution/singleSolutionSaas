@@ -143,7 +143,8 @@ payload is a sealed event. Every request runs in a request scope (`infra/request
 - **connectors** are checked when saved (create, rotate, update, assign, test) and when a product resolves one whose
   last check is older than 50 minutes (after the response).
 
-Deferred work runs through Next `after()` (`toNextRoute(handler, { after })` in `app/api` and `app/w`).
+Deferred work runs through Next `after()` (`toNextRoute(handler, { after })` in the one route handler, `app/api`, which
+also serves `/w/*`, `/p/*`, `/healthz`, `/readyz` and `/.well-known/jwks.json` through `next.config.js` rewrites).
 `createPortal({ background: { mode: 'off' } })` (the default when `NODE_ENV=test`) runs none of it.
 
 There are no on-demand maintenance operations: settlement runs on read, connectors are checked on save and

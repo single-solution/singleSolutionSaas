@@ -2,7 +2,9 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { initApp } from '../src/init.js';
-import { formatValidation, layerOf, packageOf, resolveImport, validateProject } from '../src/validate/index.js';
+import { formatValidation, layerOf, packageOf, resolveImport, serverEntries, validateProject } from '../src/validate/index.js';
+import { writeAssets } from '../src/assets.js';
+import { walk } from '../src/fsutil.js';
 import { loadManifest, resolvePointer } from '../src/manifest.js';
 import { removeDir, tempDir } from './helpers/util.js';
 
@@ -27,6 +29,12 @@ const project = async (kind = 'service') => {
 
 /** @param {string} dir @param {string} file @param {(text: string) => string} change */
 const edit = async (dir, file, change) => writeFile(path.join(dir, file), change(await readFile(path.join(dir, file), 'utf8')));
+
+/** @param {string} dir */
+const filesOf = async (dir) => {
+	const list = await walk(dir);
+	return { dir, list, set: new Set(list), read: (/** @type {string} */ file) => readFile(path.join(dir, file), 'utf8') };
+};
 
 /** @param {import('../src/validate/index.js').ValidationReport} report */
 const rules = (report) => report.problems.map((problem) => problem.rule);
@@ -201,7 +209,7 @@ describe('ss app validate', () => {
 	it('checks anatomy, OpenAPI coverage, package wiring and event schemas', async () => {
 		const dir = await project();
 		await rm(path.join(dir, 'jobs'), { recursive: true });
-		await rm(path.join(dir, 'app/dashboard/page.js'));
+		await rm(path.join(dir, 'app/dashboard/[[...section]]/page.js'));
 		await rm(path.join(dir, 'schemas/events'), { recursive: true });
 		await edit(dir, 'openapi.json', (text) => text.replaceAll('"/v1/notes', '"/v1/other'));
 		await edit(dir, 'package.json', (text) =>
@@ -209,7 +217,7 @@ describe('ss app validate', () => {
 		);
 		let report = await validateProject(dir);
 		expect(report.problems.filter((problem) => problem.rule === 'anatomy.missing').map((problem) => problem.file)).toEqual([
-			'app/dashboard/page.js',
+			'app/dashboard/[[...section]]/page.js',
 			'jobs/',
 		]);
 		expect(rules(report)).toEqual(
@@ -219,6 +227,51 @@ describe('ss app validate', () => {
 		await writeFile(path.join(dir, 'openapi.json'), JSON.stringify({ openapi: '3.0.0', paths: {} }));
 		report = await validateProject(dir);
 		expect(rules(report)).toContain('openapi.invalid');
+	});
+
+	it('keeps a service product within 2 server entry points, without outputFileTracingIncludes, with fresh assets', async () => {
+		const dir = await project();
+		expect(await serverEntries(await filesOf(dir))).toEqual([
+			'app/api/[...path]/route.js',
+			'app/dashboard/[[...section]]/page.js',
+		]);
+		// a static page needs no function; a dynamic page or another route handler does
+		await mkdir(path.join(dir, 'app/about'), { recursive: true });
+		await writeFile(path.join(dir, 'app/about/page.js'), 'export default function About() {\n\treturn null;\n}\n');
+		expect(rules(await validateProject(dir))).not.toContain('server.entries');
+		await mkdir(path.join(dir, 'app/healthz'), { recursive: true });
+		await writeFile(path.join(dir, 'app/healthz/route.js'), "export const GET = () => new Response('ok');\n");
+		let report = await validateProject(dir);
+		expect(report.ok).toBe(false);
+		expect(report.problems.find((problem) => problem.rule === 'server.entries')?.message).toContain('3 server entry points');
+		await rm(path.join(dir, 'app/healthz'), { recursive: true });
+		await mkdir(path.join(dir, 'app/inbox/[id]'), { recursive: true });
+		await writeFile(path.join(dir, 'app/inbox/[id]/page.js'), 'export default function Inbox() {\n\treturn null;\n}\n');
+		expect(rules(await validateProject(dir))).toContain('server.entries');
+		await rm(path.join(dir, 'app/inbox'), { recursive: true });
+		await writeFile(path.join(dir, 'proxy.js'), "export { proxy } from '@ss/app-kit/proxy';\n");
+		expect(rules(await validateProject(dir))).toContain('server.entries');
+		await rm(path.join(dir, 'proxy.js'));
+
+		await edit(dir, 'next.config.js', (text) =>
+			text.replace('const config = {', "const config = {\n\toutputFileTracingIncludes: { '/**': ['./manifest.json'] },"),
+		);
+		report = await validateProject(dir);
+		expect(report.problems.filter((problem) => problem.rule === 'server.tracing').map((problem) => problem.file)).toEqual([
+			'next.config.js',
+		]);
+		await edit(dir, 'next.config.js', (text) => text.replace(/\n\toutputFileTracingIncludes: [^\n]*/, ''));
+
+		await edit(dir, 'strings/en.json', (text) => text);
+		expect(rules(await validateProject(dir))).not.toContain('server.assets');
+		await writeFile(path.join(dir, 'strings/fr.json'), await readFile(path.join(dir, 'strings/en.json'), 'utf8'));
+		report = await validateProject(dir);
+		expect(rules(report)).toContain('server.assets');
+		expect((await writeAssets(dir, { check: true })).upToDate).toBe(false);
+		expect((await writeAssets(dir)).upToDate).toBe(false);
+		expect((await writeAssets(dir)).upToDate).toBe(true);
+		expect(await readFile(path.join(dir, 'app/_lib/assets.js'), 'utf8')).toContain('strings: { en: strings0, fr: strings1 }');
+		expect(rules(await validateProject(dir))).not.toContain('server.assets');
 	});
 
 	it('refuses any vercel.json cron (event-driven only)', async () => {

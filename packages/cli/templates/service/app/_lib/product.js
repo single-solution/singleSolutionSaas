@@ -5,13 +5,14 @@
  */
 import { after } from 'next/server.js';
 import { createRequestHandler, toNextRoute, startupFailedResponse } from '@ss/app-kit';
-import { createPlatform, loadStrings } from '../../adapters/platform.js';
+import { createPlatform } from '../../adapters/platform.js';
+import { assets } from './assets.js';
 import { buildRoutes, wireEvents } from '../../api/routes.js';
 
 const KEY = Symbol.for('ss.products.{{slug}}');
 
 /**
- * @returns {{ product?: Promise<any>, strings?: Promise<Record<string, Record<string, string>>>,
+ * @returns {{ product?: Promise<any>,
  *   next?: Promise<Record<string, (request: Request, context?: unknown) => Promise<Response>>> }}
  */
 const shared = () => {
@@ -19,8 +20,8 @@ const shared = () => {
 	return (store[KEY] ??= {});
 };
 
-export const getProduct = () => (shared().product ??= createPlatform().then((product) => wireEvents(product)));
-export const getStrings = () => (shared().strings ??= loadStrings(process.cwd()));
+export const getProduct = () => (shared().product ??= createPlatform({ assets }).then((product) => wireEvents(product)));
+export const getStrings = async () => assets.strings;
 
 /**
  * A Next.js route export that forwards to the app-kit router (which strips the `/api` prefix of rewritten paths).

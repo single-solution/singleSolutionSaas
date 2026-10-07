@@ -46,11 +46,15 @@ export const loadStrings = async (root) => {
 
 /**
  * Build the product.
- * @param {{ env?: Record<string, string | undefined>, root?: string, overrides?: Record<string, unknown> }} [options]
+ * @param {{ env?: Record<string, string | undefined>, root?: string, assets?: { manifest: any, strings: Record<string, Record<string, string>> },
+ *   overrides?: Record<string, unknown> }} [options]
+ *   `assets` (the Next.js build: app/_lib/assets.js) replaces reading manifest.json, schemas/ and strings/ from `root`
  */
-export const createPlatform = async ({ env = process.env, root = process.cwd(), overrides = {} } = {}) => {
+export const createPlatform = async ({ env = process.env, root = process.cwd(), assets, overrides = {} } = {}) => {
 	const config = configFromEnv(env);
-	const [manifest, strings] = await Promise.all([loadManifest(root), loadStrings(root)]);
+	const [manifest, strings] = assets
+		? [assets.manifest, assets.strings]
+		: await Promise.all([loadManifest(root), loadStrings(root)]);
 	/** @type {ReturnType<typeof createMongoStores> | undefined} */
 	let stores;
 	if (config.productDbUri) {

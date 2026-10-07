@@ -123,7 +123,7 @@ export const createHarness = async ({
 	});
 	const orders = wireEvents(createOrders(app));
 	const handle = createRequestHandler(orders.product, buildRoutes(orders), {
-		maxBodyBytes: 16_000_000,
+		maxBodyBytes: 3_900_000,
 	});
 
 	let version = 0;

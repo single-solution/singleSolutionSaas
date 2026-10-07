@@ -265,7 +265,7 @@ export const createDashboardApi = (catalog) => {
 			auth: 'launch',
 			element: 'import_export',
 			roles: [...DASHBOARD_WRITE_ROLES],
-			maxBodyBytes: 16_000_000,
+			maxBodyBytes: 3_900_000,
 			handler: async (ctx) => {
 				const s = await dashboardSite(ctx);
 				if (!s) return noWebsite();

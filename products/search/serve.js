@@ -31,7 +31,7 @@ export const startServer = async ({
 } = {}) => {
 	const search = wireEvents(createSearchApp(await createPlatform({ env, root, overrides }), atlas));
 	const { product } = search;
-	const handle = createRequestHandler(product, buildRoutes(search), { maxBodyBytes: 8_000_000 });
+	const handle = createRequestHandler(product, buildRoutes(search), { maxBodyBytes: 3_900_000 });
 	/** @type {import('node:http').RequestListener} */
 	const listener = async (incoming, outgoing) => {
 		const scheme = tls ? 'https' : 'http';

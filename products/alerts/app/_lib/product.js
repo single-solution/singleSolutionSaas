@@ -6,6 +6,7 @@
 import { after } from 'next/server.js';
 import { createRequestHandler, toNextRoute, startupFailedResponse } from '@ss/app-kit';
 import { createPlatform } from '../../adapters/platform.js';
+import { assets } from './assets.js';
 import { buildRoutes, createAlerts, wireEvents } from '../../api/routes.js';
 
 const KEY = Symbol.for('ss.products.alerts');
@@ -19,7 +20,7 @@ const shared = () => {
 	return (store[KEY] ??= {});
 };
 
-export const getAlerts = () => (shared().alerts ??= createPlatform().then((app) => wireEvents(createAlerts(app))));
+export const getAlerts = () => (shared().alerts ??= createPlatform({ assets }).then((app) => wireEvents(createAlerts(app))));
 
 /**
  * A Next.js route export that forwards to the app-kit router (which strips the `/api` prefix of rewritten paths).

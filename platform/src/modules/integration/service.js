@@ -77,7 +77,7 @@ export const DUE_RETRIES_PER_TRIGGER = 5;
 /** Due deliveries retried when staff press "Retry now" for a product, at most. */
 export const DUE_RETRIES_PER_REQUEST = 100;
 /** Time budget of a staff "Retry now" (bounded; what is left stays due). */
-const RETRY_NOW_BUDGET_MS = 50_000;
+const RETRY_NOW_BUDGET_MS = 8_000;
 
 /**
  * Job group of a product's deliveries (its due deliveries are retried together).

@@ -120,7 +120,7 @@ export const createHarness = async ({ config = {}, elements = {}, website = { cu
 	});
 	const catalog = wireEvents(createCatalog(app));
 	const handle = createRequestHandler(catalog.product, buildRoutes(catalog), {
-		maxBodyBytes: 16_000_000,
+		maxBodyBytes: 3_900_000,
 	});
 
 	let version = 0;

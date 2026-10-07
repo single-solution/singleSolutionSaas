@@ -6,6 +6,7 @@
 import { after } from 'next/server.js';
 import { createRequestHandler, toNextRoute, startupFailedResponse } from '@ss/app-kit';
 import { createPlatform } from '../../adapters/platform.js';
+import { assets } from './assets.js';
 import { buildRoutes, createOrders, wireEvents } from '../../api/routes.js';
 
 const KEY = Symbol.for('ss.products.orders');
@@ -19,7 +20,7 @@ const shared = () => {
 	return (store[KEY] ??= {});
 };
 
-export const getOrders = () => (shared().orders ??= createPlatform().then((app) => wireEvents(createOrders(app))));
+export const getOrders = () => (shared().orders ??= createPlatform({ assets }).then((app) => wireEvents(createOrders(app))));
 
 /**
  * A Next.js route export that forwards to the app-kit router (which strips the `/api` prefix of rewritten paths).
@@ -32,7 +33,7 @@ export const forward = (method) => async (/** @type {Request} */ request, /** @t
 	state.next ??= getOrders().then((instance) =>
 		toNextRoute(
 			createRequestHandler(instance.product, buildRoutes(instance), {
-				maxBodyBytes: 16_000_000,
+				maxBodyBytes: 3_900_000,
 			}),
 			{ after },
 		),

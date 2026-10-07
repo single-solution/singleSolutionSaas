@@ -63,11 +63,9 @@ describe('ss app init → validate (integration)', () => {
 			'schemas/notes.features.json',
 			'schemas/events/order_notes.note_created@1.json',
 			'tests/api.test.js',
-			'app/.well-known/ss-connect/route.js',
-			'app/.well-known/ss-events/route.js',
-			'app/.well-known/ss-app.json/route.js',
-			'app/api/v1/[...route]/route.js',
-			'app/dashboard/page.js',
+			'app/api/[...path]/route.js',
+			'app/dashboard/[[...section]]/page.js',
+			'app/_lib/assets.js',
 			'vercel.json',
 			'.env.example',
 			'.gitignore',
@@ -105,7 +103,8 @@ describe('ss app init → validate (integration)', () => {
 		expect(await readFile(path.join(dir, '.env.local'), 'utf8')).toMatch(/^MONGODB_URI=\nCONNECT_SECRET=[A-Za-z0-9_-]{43}\n$/);
 		expect(env).not.toMatch(/\bSS_|LOG_LEVEL/);
 		expect(await readFile(path.join(dir, 'app/_lib/product.js'), 'utf8')).toContain('toNextRoute');
-		expect(await readFile(path.join(dir, 'app/api/v1/[...route]/route.js'), 'utf8')).toContain("forward('POST')");
+		expect(await readFile(path.join(dir, 'app/api/[...path]/route.js'), 'utf8')).toContain("forward('POST')");
+		expect(await readFile(path.join(dir, 'app/_lib/assets.js'), 'utf8')).toContain("'schemas/notes.features.json': feature0");
 		expect(files).toContain('serve.js');
 		expect(files).not.toContain('api/probes.js');
 		expect(await readFile(path.join(dir, 'api/routes.js'), 'utf8')).not.toContain('{{');
