@@ -220,7 +220,9 @@ is filtered by the staff member's permissions (`infra/rbac.js`).
   recovery codes), `/admin/forgot-password`, and `/staff/reset-password` (target of the staff setup and reset e-mails).
   The staff session is the `__Host-ss_staff` cookie, separate from merchant sessions; a session awaiting its second
   factor only reaches the MFA routes.
-- **Pages** (`/admin` opens merchants): merchants (search, detail, suspend/resume, notes) · websites (lookup,
+- **Pages** (`/admin` opens merchants): merchants (search, **Create merchant** → owner's one-time set-password link
+  (72 h, also mailed), detail with websites (add, open: subscriptions and install code, remove), subscribe / change
+  plan / cancel, credits, suspend/resume, notes; the Merchant Console's components with the staff client) · websites (lookup,
   transfer) · apps (list active/inactive; add product with its URL and connect secret, with a note when element prices
   changed; Add pack (folder → descriptor POST → asset PUTs); app page with the Active/Inactive switch, Upload widgets
   (service) or Upload pack version, keys, Retry deliveries, admin launch per merchant or app-wide) · subscriptions
@@ -228,15 +230,16 @@ is filtered by the staff member's permissions (`infra/rbac.js`).
   ledger and chain verification, alerts) · connectors (status only) · audit log (search) · staff (invite, roles, MFA
   reset, deactivate) · settings (mail) · Account settings (e-mail, name, password, Security: two-factor sign-in).
 
-| Route (staff)                                     | Permission                | Notes                                                                                                                                           |
-| ------------------------------------------------- | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /v1/admin/merchants?q=`                      | `platform.merchants.read` | `q`: name prefix (case/accent-insensitive `nameKey`) or member e-mail prefix                                                                    |
-| `GET\|POST /v1/admin/merchants/:merchantId/notes` | `.read` / `.write`        | append-only staff notes, audited (`merchant.note_added`, body not copied)                                                                       |
-| `GET /v1/admin/audit?actorId&targetId&action`     | `platform.audit.read`     | newest first, cursor pagination; `action` may end in `.*`; no IP addresses                                                                      |
-| `POST /v1/admin/apps/connect`                     | `platform.apps.manage`    | add a product `{ url, secret }`: HMAC-signed call to its `/.well-known/ss-connect`; pins base URL and key; again = rebind (secret never stored) |
-| `POST /v1/admin/packs`                            | `platform.apps.manage`    | `ss pack build` descriptor: a pack version, or the widgets of a service product; assets then `PUT …/packs/:appId/versions/:v/assets/<path>`     |
-| `POST /v1/admin/apps/:appId/status`               | `platform.apps.manage`    | `{ status: 'active' \| 'inactive' }`; activating needs a ready version                                                                          |
-| `GET /v1/admin/system/settings` (`PUT …/mail`)    | `platform.settings.write` | Portal settings (never key material or the mail password)                                                                                       |
+| Route (staff)                                     | Permission                 | Notes                                                                                                                                           |
+| ------------------------------------------------- | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /v1/admin/merchants?q=`                      | `platform.merchants.read`  | `q`: name prefix (case/accent-insensitive `nameKey`) or member e-mail prefix                                                                    |
+| `POST /v1/admin/merchants`                        | `platform.merchants.write` | `{ name, ownerEmail, ownerName? }`: merchant + owner without a password (an existing user becomes owner), set-password link, audited            |
+| `GET\|POST /v1/admin/merchants/:merchantId/notes` | `.read` / `.write`         | append-only staff notes, audited (`merchant.note_added`, body not copied)                                                                       |
+| `GET /v1/admin/audit?actorId&targetId&action`     | `platform.audit.read`      | newest first, cursor pagination; `action` may end in `.*`; no IP addresses                                                                      |
+| `POST /v1/admin/apps/connect`                     | `platform.apps.manage`     | add a product `{ url, secret }`: HMAC-signed call to its `/.well-known/ss-connect`; pins base URL and key; again = rebind (secret never stored) |
+| `POST /v1/admin/packs`                            | `platform.apps.manage`     | `ss pack build` descriptor: a pack version, or the widgets of a service product; assets then `PUT …/packs/:appId/versions/:v/assets/<path>`     |
+| `POST /v1/admin/apps/:appId/status`               | `platform.apps.manage`     | `{ status: 'active' \| 'inactive' }`; activating needs a ready version                                                                          |
+| `GET /v1/admin/system/settings` (`PUT …/mail`)    | `platform.settings.write`  | Portal settings (never key material or the mail password)                                                                                       |
 
 ## Local development
 

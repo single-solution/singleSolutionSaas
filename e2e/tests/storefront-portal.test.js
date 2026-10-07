@@ -407,7 +407,8 @@ describe('Storefront Blocks delivered by the real Portal', () => {
 	it('settles complete hours: the priced elements are charged in credits', async () => {
 		const { call, state, clock } = ctx;
 		const hour0 = Math.floor(state.subscribedAt / HOUR) * HOUR;
-		clock.advance(2 * HOUR);
+		// two complete hours after the subscription's hour, past the settlement lag (2 min): independent of the minute
+		clock.advance(hour0 + 2 * HOUR + 5 * 60_000 - clock.now());
 		// no cron: reading the statement settles the merchant's complete hours first
 		const from = encodeURIComponent(new Date(hour0 - HOUR).toISOString());
 		const to = encodeURIComponent(new Date(clock.now() + HOUR).toISOString());

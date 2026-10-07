@@ -147,7 +147,6 @@ export function AlertsCard({ alerts }) {
  * @param {any} props loader result of `loadLedger` plus `staff`
  */
 export function LedgerView(props) {
-	const toast = useToast();
 	const ok = props.ok === true;
 	const merchantId = ok ? props.merchant.merchantId : null;
 	const balance = useAdminResource(merchantId ? adminApi.balance(merchantId) : null, ok ? props.balance : null);
@@ -155,14 +154,6 @@ export function LedgerView(props) {
 		(cursor) => (merchantId ? adminApi.ledger(merchantId, { cursor, limit: 100 }) : null),
 		ok ? props.ledger : null,
 	);
-	const [kind, setKind] = useState(/** @type {'credits' | 'adjustments' | 'refunds'} */ ('credits'));
-	const [amount, setAmount] = useState('');
-	const [reference, setReference] = useState('');
-	const [note, setNote] = useState('');
-	const [errors, setErrors] = useState(/** @type {Record<string, string>} */ ({}));
-	const [pending, setPending] = useState(/** @type {null | { amountMillicredits: number }} */ (null));
-	const [busy, setBusy] = useState(false);
-	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
 	const [verification, setVerification] = useState(/** @type {any} */ (null));
 	const [verifying, setVerifying] = useState(false);
 	const [verifyProblem, setVerifyProblem] = useState(/** @type {Problem | null} */ (null));
@@ -170,45 +161,6 @@ export function LedgerView(props) {
 	const { merchant, staff } = props;
 	const canAdjust = staffCan(staff, 'platform.credits.adjust');
 
-	const review = () => {
-		/** @type {Record<string, string>} */
-		const local = {};
-		const parsed = parseSignedCredits(amount, { allowNegative: kind === 'adjustments' });
-		if (!parsed.ok) local.amountMillicredits = parsed.message;
-		if (!/^[\x21-\x7e]{1,120}$/.test(reference.trim()))
-			local.reference = 'A reference of 1–120 visible characters, no spaces (e.g. bank-2026-10-01).';
-		if (!note.trim()) local.note = 'Explain the operation (shown in the merchant statement).';
-		setErrors(local);
-		if (Object.keys(local).length > 0 || !parsed.ok) return;
-		setProblem(null);
-		setPending({ amountMillicredits: parsed.value });
-	};
-	const submit = async () => {
-		if (!pending) return;
-		setBusy(true);
-		setProblem(null);
-		const result = await adminFetch(adminApi.credit(merchant.merchantId, kind), {
-			method: 'POST',
-			body: { amountMillicredits: pending.amountMillicredits, reference: reference.trim(), note: note.trim() },
-		});
-		setBusy(false);
-		if (!result.ok) {
-			setProblem(result.problem);
-			setErrors(fieldErrors(result.problem));
-			return;
-		}
-		toast.show({
-			title: result.data?.duplicate ? 'Already booked' : `${CREDIT_KINDS[kind].label} booked`,
-			description: result.data?.duplicate
-				? `Reference ${reference.trim()} was booked before; nothing changed.`
-				: `New balance ${formatCredits(result.data?.balanceMillicredits)}.`,
-		});
-		setPending(null);
-		setAmount('');
-		setReference('');
-		setNote('');
-		await Promise.all([balance.reload(), ledger.reload()]);
-	};
 	const verify = async () => {
 		setVerifying(true);
 		setVerifyProblem(null);
@@ -271,52 +223,13 @@ export function LedgerView(props) {
 				/>
 			</div>
 			{canAdjust ? (
-				<Card title="Credit operation" subtitle="Booked once per reference: repeating a reference never books twice.">
-					<Form onSubmit={review} aria-label="Credit operation">
-						<RadioGroup
-							legend="Operation"
-							inline
-							value={kind}
-							onChange={(v) => setKind(/** @type {any} */ (v))}
-							options={Object.entries(CREDIT_KINDS).map(([value, k]) => ({ value, label: k.label }))}
-							help={CREDIT_KINDS[kind].help}
-						/>
-						<div className="grid gap-4 sm:grid-cols-2">
-							<Input
-								label="Amount (credits)"
-								inputMode="decimal"
-								value={amount}
-								onChange={(e) => setAmount(e.currentTarget.value)}
-								error={errors.amountMillicredits}
-								placeholder={kind === 'adjustments' ? '-12.5 or 12.5' : '100'}
-								suffix="credits"
-								required
-							/>
-							<Input
-								label="Reference"
-								value={reference}
-								onChange={(e) => setReference(e.currentTarget.value)}
-								error={errors.reference}
-								placeholder="bank-2026-10-01-0042"
-								className="font-mono"
-								maxLength={120}
-								required
-							/>
-						</div>
-						<TextArea
-							label="Note"
-							rows={2}
-							maxLength={500}
-							value={note}
-							onChange={(e) => setNote(e.currentTarget.value)}
-							error={errors.note}
-							required
-						/>
-						<FormActions>
-							<Button type="submit">Review</Button>
-						</FormActions>
-					</Form>
-				</Card>
+				<CreditOperationCard
+					merchant={merchant}
+					balanceMillicredits={balance.data?.balanceMillicredits}
+					onBooked={async () => {
+						await Promise.all([balance.reload(), ledger.reload()]);
+					}}
+				/>
 			) : null}
 			<Card title="Ledger entries" subtitle="Append-only and hash-chained, oldest first.">
 				<Table
@@ -372,6 +285,114 @@ export function LedgerView(props) {
 				/>
 				<ActionProblem problem={ledger.problem} />
 			</Card>
+		</div>
+	);
+}
+
+/**
+ * Credits, adjustments and refunds of a merchant (`POST /v1/admin/merchants/:merchantId/{credits|adjustments|refunds}`,
+ * reference + note, confirmation dialog). Shared by the ledger and the merchant page.
+ * @param {{ merchant: { merchantId: string, name: string }, balanceMillicredits: number | null | undefined,
+ *   onBooked: () => Promise<void> }} props
+ */
+export function CreditOperationCard({ merchant, balanceMillicredits, onBooked }) {
+	const toast = useToast();
+	const [kind, setKind] = useState(/** @type {'credits' | 'adjustments' | 'refunds'} */ ('credits'));
+	const [amount, setAmount] = useState('');
+	const [reference, setReference] = useState('');
+	const [note, setNote] = useState('');
+	const [errors, setErrors] = useState(/** @type {Record<string, string>} */ ({}));
+	const [pending, setPending] = useState(/** @type {null | { amountMillicredits: number }} */ (null));
+	const [busy, setBusy] = useState(false);
+	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
+
+	const review = () => {
+		/** @type {Record<string, string>} */
+		const local = {};
+		const parsed = parseSignedCredits(amount, { allowNegative: kind === 'adjustments' });
+		if (!parsed.ok) local.amountMillicredits = parsed.message;
+		if (!/^[\x21-\x7e]{1,120}$/.test(reference.trim()))
+			local.reference = 'A reference of 1–120 visible characters, no spaces (e.g. bank-2026-10-01).';
+		if (!note.trim()) local.note = 'Explain the operation (shown in the merchant statement).';
+		setErrors(local);
+		if (Object.keys(local).length > 0 || !parsed.ok) return;
+		setProblem(null);
+		setPending({ amountMillicredits: parsed.value });
+	};
+	const submit = async () => {
+		if (!pending) return;
+		setBusy(true);
+		setProblem(null);
+		const result = await adminFetch(adminApi.credit(merchant.merchantId, kind), {
+			method: 'POST',
+			body: { amountMillicredits: pending.amountMillicredits, reference: reference.trim(), note: note.trim() },
+		});
+		setBusy(false);
+		if (!result.ok) {
+			setProblem(result.problem);
+			setErrors(fieldErrors(result.problem));
+			return;
+		}
+		toast.show({
+			title: result.data?.duplicate ? 'Already booked' : `${CREDIT_KINDS[kind].label} booked`,
+			description: result.data?.duplicate
+				? `Reference ${reference.trim()} was booked before; nothing changed.`
+				: `New balance ${formatCredits(result.data?.balanceMillicredits)}.`,
+		});
+		setPending(null);
+		setAmount('');
+		setReference('');
+		setNote('');
+		await onBooked();
+	};
+	return (
+		<>
+			<Card title="Credit operation" subtitle="Booked once per reference: repeating a reference never books twice.">
+				<Form onSubmit={review} aria-label="Credit operation">
+					<RadioGroup
+						legend="Operation"
+						inline
+						value={kind}
+						onChange={(v) => setKind(/** @type {any} */ (v))}
+						options={Object.entries(CREDIT_KINDS).map(([value, k]) => ({ value, label: k.label }))}
+						help={CREDIT_KINDS[kind].help}
+					/>
+					<div className="grid gap-4 sm:grid-cols-2">
+						<Input
+							label="Amount (credits)"
+							inputMode="decimal"
+							value={amount}
+							onChange={(e) => setAmount(e.currentTarget.value)}
+							error={errors.amountMillicredits}
+							placeholder={kind === 'adjustments' ? '-12.5 or 12.5' : '100'}
+							suffix="credits"
+							required
+						/>
+						<Input
+							label="Reference"
+							value={reference}
+							onChange={(e) => setReference(e.currentTarget.value)}
+							error={errors.reference}
+							placeholder="bank-2026-10-01-0042"
+							className="font-mono"
+							maxLength={120}
+							required
+						/>
+					</div>
+					<TextArea
+						label="Note"
+						rows={2}
+						maxLength={500}
+						value={note}
+						onChange={(e) => setNote(e.currentTarget.value)}
+						error={errors.note}
+						required
+					/>
+					<FormActions>
+						<Button type="submit">Review</Button>
+					</FormActions>
+				</Form>
+			</Card>
 			<ConfirmDialog
 				open={pending !== null}
 				onClose={() => setPending(null)}
@@ -392,11 +413,11 @@ export function LedgerView(props) {
 					</div>
 					<div className="flex justify-between gap-4">
 						<dt className="text-muted">Balance now</dt>
-						<dd>{formatCredits(balance.data?.balanceMillicredits)}</dd>
+						<dd>{formatCredits(balanceMillicredits)}</dd>
 					</div>
 				</dl>
 				<p className="text-sm text-muted">“{note.trim()}” — ledger entries cannot be edited or deleted.</p>
 			</ConfirmDialog>
-		</div>
+		</>
 	);
 }

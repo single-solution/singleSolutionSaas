@@ -1,5 +1,5 @@
 /**
- * Admin operations APIs: merchant notes (append-only, audited), merchant search (`?q=` name / e-mail prefix,
+ * Admin operations APIs: merchant creation (owner, one-time set-password link, audit), merchant notes (append-only, audited), merchant search (`?q=` name / e-mail prefix,
  * migration backfill) and the audit log search (filters, cursor).
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -13,6 +13,105 @@ import { boot, setupMongo, teardownMongo } from './boot.js';
 vi.setConfig({ testTimeout: 60_000 });
 beforeAll(setupMongo, 120_000);
 afterAll(teardownMongo, 60_000);
+
+describe('merchant creation by staff', () => {
+	it('creates a merchant and its owner with a one-time set-password link', async () => {
+		const h = await boot();
+		const root = await h.staffUser('root@example.com');
+		const support = await h.staffUser('support@example.com', ['support'], { creator: root.client });
+		const existing = await h.signupOwner('anna@shop.test', { merchantName: 'Anna Ltd' });
+		const create = (/** @type {any} */ client, /** @type {unknown} */ body) => client.post('/v1/admin/merchants', body);
+
+		// staff only, with platform.merchants.write
+		expect((await create(support.client, { name: 'X', ownerEmail: 'x@new.test' })).status).toBe(403);
+		expect((await create(existing.client, { name: 'X', ownerEmail: 'x@new.test' })).status).toBe(401);
+		expect((await h.call('POST', '/v1/admin/merchants', { body: { name: 'X', ownerEmail: 'x@new.test' } })).status).toBe(401);
+		expect((await create(root.client, { name: '', ownerEmail: 'nope' })).status).toBe(422);
+		expect((await create(root.client, { name: 'X', ownerEmail: 'x@new.test', extra: 1 })).status).toBe(422);
+
+		// a new owner: active user without a password, link returned and mailed
+		const made = await create(root.client, { name: 'Bistro Nord', ownerEmail: 'Owner@New.test', ownerName: 'Olga' });
+		expect(made.status).toBe(201);
+		expect(made.json).toMatchObject({
+			merchant: { name: 'Bistro Nord', status: 'active' },
+			owner: { email: 'owner@new.test', existing: false },
+			mailed: true,
+		});
+		const merchantId = made.json.merchant.merchantId;
+		expect(made.json.setupLink).toMatch(/\/reset-password#token=/);
+		expect(Date.parse(made.json.setupLinkExpiresAt) - h.clock.now()).toBe(72 * 60 * 60_000);
+		const welcome = h.mailer.sent.find((m) => m.to === 'owner@new.test');
+		expect(welcome).toMatchObject({
+			template: 'merchant_welcome',
+			data: { link: made.json.setupLink, merchantName: 'Bistro Nord' },
+		});
+		const user = await h.db.collection(C.users).findOne({ email: 'owner@new.test' });
+		expect(user).toMatchObject({ name: 'Olga', status: 'active', passwordHash: null });
+		const detail = await root.client.get(`/v1/admin/merchants/${merchantId}`);
+		expect(detail.json).toMatchObject({ ownerUserId: String(user?._id), websites: [] });
+		const team = await root.client.get(`/v1/merchants/${merchantId}/team`);
+		expect(team.json.members).toMatchObject([{ email: 'owner@new.test', roles: ['owner'] }]);
+		const entry = await h.db.collection(COLLECTIONS.audit).findOne({ action: 'merchant.created', merchantId });
+		expect(entry).toMatchObject({
+			actor: { type: 'staff', id: root.staffId },
+			after: { name: 'Bistro Nord', ownerUserId: String(user?._id), existingUser: false },
+		});
+		expect(JSON.stringify(entry)).not.toContain('#token=');
+		// no password yet: sign-in fails
+		expect((await h.call('POST', '/v1/auth/merchant/login', { body: { email: 'owner@new.test', password: 'x' } })).status).toBe(
+			401,
+		);
+
+		// the link sets the password once
+		const token = decodeURIComponent(String(made.json.setupLink).split('#token=')[1] ?? '');
+		const confirm = (/** @type {string} */ password) =>
+			h.call('POST', '/v1/auth/merchant/password-reset/confirm', { body: { token, password } });
+		expect((await confirm('owner password 123!')).status).toBe(204);
+		expect((await confirm('another password 123!')).status).toBe(400);
+		const owner = await h.login('owner@new.test', 'owner password 123!');
+		expect((await owner.get('/v1/me')).json.merchantId).toBe(merchantId);
+
+		// an existing user becomes the owner of the new merchant (no link: they keep their password)
+		const second = await create(root.client, { name: 'Anna Two', ownerEmail: 'anna@shop.test' });
+		expect(second.status).toBe(201);
+		expect(second.json).toMatchObject({
+			owner: { userId: existing.userId, existing: true },
+			setupLink: null,
+			setupLinkExpiresAt: null,
+		});
+		expect(h.mailer.sent.at(-1)).toMatchObject({ to: 'anna@shop.test', template: 'merchant_added' });
+		const anna = await h.login('anna@shop.test');
+		const me = (await anna.get('/v1/me')).json;
+		expect(me.memberships.map((/** @type {any} */ m) => m.merchantId).sort()).toEqual(
+			[existing.merchantId, second.json.merchant.merchantId].sort(),
+		);
+		expect(await h.db.collection(C.users).countDocuments({ email: 'anna@shop.test' })).toBe(1);
+		const audited = await h.db
+			.collection(COLLECTIONS.audit)
+			.findOne({ action: 'merchant.created', merchantId: second.json.merchant.merchantId });
+		expect(audited).toMatchObject({ after: { existingUser: true } });
+
+		// without mail the link is still returned (staff pass it on)
+		h.mailer.setAvailable(false);
+		const quiet = await create(root.client, { name: 'Quiet Shop', ownerEmail: 'quiet@new.test' });
+		expect(quiet.status).toBe(201);
+		expect(quiet.json).toMatchObject({ mailed: false });
+		expect(quiet.json.setupLink).toMatch(/#token=/);
+		expect(h.mailer.sent.some((m) => m.to === 'quiet@new.test')).toBe(false);
+
+		// the link expires after 72 h
+		const late = await create(root.client, { name: 'Late Shop', ownerEmail: 'late@new.test' });
+		h.clock.advance(72 * 60 * 60_000 + 1000);
+		const lateToken = decodeURIComponent(String(late.json.setupLink).split('#token=')[1] ?? '');
+		expect(
+			(
+				await h.call('POST', '/v1/auth/merchant/password-reset/confirm', {
+					body: { token: lateToken, password: 'late password 123!' },
+				})
+			).status,
+		).toBe(400);
+	});
+});
 
 describe('merchant notes and search', () => {
 	it('appends audited notes and searches merchants by name or e-mail prefix', async () => {

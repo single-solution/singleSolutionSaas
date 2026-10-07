@@ -117,6 +117,7 @@ export const createIdentityService = (ctx, options = {}) => {
 		loadMerchant: teams.loadMerchant,
 		staffSetupLink: accounts.staffSetupLink,
 		staffWelcomeTtlMs: accounts.STAFF_WELCOME_TTL_MS,
+		merchantSetupLink: accounts.merchantSetupLink,
 	});
 
 	/**

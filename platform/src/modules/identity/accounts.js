@@ -36,6 +36,7 @@ const BAD_LOGIN = 'The e-mail or password is incorrect.';
 const BAD_CODE = 'The verification code is incorrect.';
 const ISSUER = 'Single Solution';
 const STAFF_WELCOME_TTL_MS = 24 * 60 * 60_000;
+const MERCHANT_WELCOME_TTL_MS = 72 * 60 * 60_000;
 
 /** @param {Kind} kind @param {string | null | undefined} email (the first admin may have none) */
 const accountKey = (kind, email) => `${kind}:${email ?? 'admin'}`;
@@ -537,6 +538,20 @@ export const createAccounts = (deps) => {
 			return linkFor(ctx.config.portalUrl, 'staff_password_reset', token);
 		},
 		STAFF_WELCOME_TTL_MS,
+
+		/**
+		 * Mint a merchant user's password-setup link without mailing it (merchant created by staff): a single-use
+		 * password-reset token, valid 72 h, consumed on the console's reset-password page.
+		 * @param {string} userId
+		 */
+		merchantSetupLink: async (userId) => {
+			await repo.dropTokens('password_reset', `merchant:${userId}`);
+			const token = await repo.issueToken('password_reset', { subject: `merchant:${userId}`, ttlMs: MERCHANT_WELCOME_TTL_MS });
+			return {
+				link: linkFor(ctx.config.portalUrl, 'password_reset', token),
+				expiresAt: new Date(ctx.now() + MERCHANT_WELCOME_TTL_MS).toISOString(),
+			};
+		},
 
 		/**
 		 * Set a new password with a reset token (single use, 30 min). Every session of the account is revoked and

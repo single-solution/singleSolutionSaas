@@ -1,7 +1,7 @@
 'use client';
 /**
  * Product catalog of a website: products with their elements and prices in credits/hour, plan comparison,
- * and subscribing with an hourly estimate and a balance check.
+ * and subscribing (product, plan, elements) with an hourly estimate and a balance check.
  * @module
  */
 import { useState } from 'react';
@@ -11,10 +11,12 @@ import {
 	ButtonLink,
 	Callout,
 	Card,
+	CheckboxGroup,
 	Dialog,
 	EmptyState,
 	FormError,
 	RadioGroup,
+	Select,
 	formatCredits,
 	formatCreditsPerHour,
 	formatHours,
@@ -113,14 +115,186 @@ export function PlanComparison({ product }) {
 }
 
 /**
+ * Elements a plan makes available (included and add-ons; every element without a plan) and those on by default.
+ * @param {any} product
+ * @param {string} planCode
+ */
+export const planElements = (product, planCode) => {
+	const plan = product.plans.find((/** @type {any} */ p) => p.code === planCode);
+	const keys = /** @type {any[]} */ (product.elements).map((el) => el.key);
+	return plan
+		? { available: keys.filter((k) => plan.elements.includes(k) || plan.addons.includes(k)), on: [...plan.elements] }
+		: { available: keys, on: keys };
+};
+
+/**
+ * Subscribe a website to a product: product (when several are offered), plan and elements, with the hourly estimate
+ * and the balance check. Elements chosen differently from the plan's defaults are switched right after subscribing.
+ * Shared by the Merchant Console (products page) and the Admin Console (merchant page, `fetcher={adminFetch}`).
+ * @param {{ merchantId: string, website: any, products: any[], balanceMillicredits: number | null, onClose: () => void,
+ *   onSubscribed: (subscription: any) => void, fetcher?: typeof apiFetch, creditsHref?: string | null }} props
+ */
+export function SubscribeDialog({
+	merchantId,
+	website,
+	products,
+	balanceMillicredits,
+	onClose,
+	onSubscribed,
+	fetcher = apiFetch,
+	creditsHref = routes.credits(),
+}) {
+	const [appId, setAppId] = useState(/** @type {string} */ (products[0]?.appId ?? ''));
+	const subscribing = products.find((p) => p.appId === appId) ?? null;
+	const [plan, setPlan] = useState(/** @type {string} */ (products[0]?.plans[0]?.code ?? ''));
+	const [elements, setElements] = useState(/** @type {string[]} */ (products[0] ? planElements(products[0], plan).on : []));
+	const [busy, setBusy] = useState(false);
+	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
+	/** @param {any} product @param {string} code */
+	const choose = (product, code) => {
+		setAppId(product?.appId ?? '');
+		setPlan(code);
+		setElements(product ? planElements(product, code).on : []);
+	};
+	const estimate = subscribing ? hourlyEstimate(subscribing, plan || null) : 0;
+	const enough = typeof balanceMillicredits !== 'number' || balanceMillicredits >= Math.max(estimate, 1);
+	const subscribe = async () => {
+		if (!subscribing) return;
+		setBusy(true);
+		setProblem(null);
+		const result = await fetcher(api.subscribe(merchantId, website.websiteId), {
+			method: 'POST',
+			body: { appId: subscribing.appId, ...(plan ? { planCode: plan } : {}) },
+		});
+		if (!result.ok) {
+			setBusy(false);
+			setProblem(result.problem);
+			return;
+		}
+		const subscription = result.data.subscription;
+		const { available, on } = planElements(subscribing, plan);
+		for (const key of available) {
+			const enabled = elements.includes(key);
+			if (enabled === on.includes(key)) continue;
+			await fetcher(`${api.subscription(merchantId, subscription.subscriptionId)}/elements/${encodeURIComponent(key)}`, {
+				method: 'PUT',
+				body: { enabled },
+			});
+		}
+		setBusy(false);
+		onSubscribed(subscription);
+	};
+	const available = subscribing ? planElements(subscribing, plan).available : [];
+	return (
+		<Dialog
+			open
+			onClose={onClose}
+			title={subscribing && products.length === 1 ? `Subscribe to ${subscribing.name}` : 'Subscribe'}
+			description={`On ${website.domain}${website.env === 'test' ? ' (test)' : ''}. Billed per started hour; pause or cancel any time.`}
+			footer={
+				<>
+					<Button variant="secondary" onClick={onClose}>
+						Cancel
+					</Button>
+					<Button onClick={() => void subscribe()} loading={busy} disabled={!subscribing || !enough}>
+						Subscribe
+					</Button>
+				</>
+			}>
+			{products.length === 0 ? (
+				<EmptyState compact title="No products yet" description="Products appear here once they are listed and active." />
+			) : null}
+			{products.length > 1 ? (
+				<Select
+					label="Product"
+					value={appId}
+					onChange={(e) => {
+						const next = products.find((p) => p.appId === e.currentTarget.value);
+						choose(next, next?.plans[0]?.code ?? '');
+					}}
+					options={products.map((p) => ({ value: p.appId, label: p.name }))}
+				/>
+			) : null}
+			{subscribing ? (
+				<>
+					{subscribing.plans.length > 0 ? (
+						<RadioGroup
+							legend="Plan"
+							value={plan}
+							onChange={(code) => choose(subscribing, code)}
+							options={subscribing.plans.map((/** @type {any} */ p) => ({
+								value: p.code,
+								label: `${p.name ?? p.code} — ${formatCreditsPerHour(p.includedHourlyMillicredits)}`,
+							}))}
+						/>
+					) : (
+						<p className="text-sm text-muted">This product has no plans: every element is available at its own price.</p>
+					)}
+					{available.length > 0 ? (
+						<CheckboxGroup
+							legend="Elements"
+							value={elements}
+							onChange={setElements}
+							options={available.map((key) => ({
+								value: key,
+								label: subscribing.elements.find((/** @type {any} */ el) => el.key === key)?.name ?? key,
+							}))}
+						/>
+					) : null}
+					<div className="grid gap-3 rounded-xl border border-line bg-surface-2 p-4 sm:grid-cols-3">
+						<div>
+							<p className="text-xs font-semibold uppercase tracking-wider text-muted">Estimate</p>
+							<p className="text-base font-bold tabular-nums text-fg">{formatCreditsPerHour(estimate)}</p>
+						</div>
+						<div>
+							<p className="text-xs font-semibold uppercase tracking-wider text-muted">Per 30 days</p>
+							<p className="text-base font-bold tabular-nums text-fg">{formatCredits(estimate * 24 * 30)}</p>
+						</div>
+						<div>
+							<p className="text-xs font-semibold uppercase tracking-wider text-muted">Balance</p>
+							<p className="text-base font-bold tabular-nums text-fg">{formatCredits(balanceMillicredits)}</p>
+							{typeof balanceMillicredits === 'number' && estimate > 0 ? (
+								<p className="text-xs text-muted">
+									Covers about {formatHours(balanceMillicredits / estimate)} of this product
+								</p>
+							) : null}
+						</div>
+					</div>
+					{subscribing.price.metered ? (
+						<p className="text-xs text-muted">
+							Metered usage (per unit, above the plan's included quantities) is billed on top.
+						</p>
+					) : null}
+					{subscribing.price.trialHours > 0 ? (
+						<p className="text-xs text-muted">Includes a trial of {subscribing.price.trialHours} hours.</p>
+					) : null}
+					{!enough ? (
+						<Callout
+							tone="danger"
+							title="Not enough credits"
+							actions={
+								creditsHref ? (
+									<Link href={creditsHref} className="text-sm font-semibold underline">
+										View credits
+									</Link>
+								) : undefined
+							}>
+							Subscribing needs at least one hour of credits ({formatCredits(Math.max(estimate, 1))}).
+						</Callout>
+					) : null}
+					<FormError problem={problem} />
+				</>
+			) : null}
+		</Dialog>
+	);
+}
+
+/**
  * @param {any} props loader result of `loadProducts`
  */
 export function ProductsView(props) {
 	const [comparing, setComparing] = useState(/** @type {any} */ (null));
 	const [subscribing, setSubscribing] = useState(/** @type {any} */ (null));
-	const [plan, setPlan] = useState(/** @type {string} */ (''));
-	const [busy, setBusy] = useState(false);
-	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
 	if (!props.ok) return <PageProblem problem={props.problem} />;
 	const { merchantId, website, catalog, subscriptions, balanceMillicredits, resources } = props;
 	const connected = new Set(/** @type {any[]} */ (resources).filter((r) => r.status === 'connected').map((r) => r.kind));
@@ -128,25 +302,6 @@ export function ProductsView(props) {
 	const subscriptionOf = (appId) =>
 		/** @type {any[]} */ (subscriptions).find((s) => s.appId === appId && s.status !== 'cancelled');
 
-	/** @param {any} product */
-	const openSubscribe = (product) => {
-		setProblem(null);
-		setPlan(product.plans[0]?.code ?? '');
-		setSubscribing(product);
-	};
-	const estimate = subscribing ? hourlyEstimate(subscribing, plan || null) : 0;
-	const enough = typeof balanceMillicredits !== 'number' || balanceMillicredits >= Math.max(estimate, 1);
-	const subscribe = async () => {
-		setBusy(true);
-		setProblem(null);
-		const result = await apiFetch(api.subscribe(merchantId, website.websiteId), {
-			method: 'POST',
-			body: { appId: subscribing.appId, ...(plan ? { planCode: plan } : {}) },
-		});
-		setBusy(false);
-		if (result.ok) window.location.assign(routes.subscription(website.websiteId, result.data.subscription.subscriptionId));
-		else setProblem(result.problem);
-	};
 	return (
 		<div className="space-y-6">
 			<WebsiteHeader website={website} active="products" />
@@ -218,7 +373,7 @@ export function ProductsView(props) {
 											Manage
 										</ButtonLink>
 									) : (
-										<Button onClick={() => openSubscribe(product)}>Subscribe</Button>
+										<Button onClick={() => setSubscribing(product)}>Subscribe</Button>
 									)}
 									{product.plans.length > 0 ? (
 										<Button variant="secondary" onClick={() => setComparing(product)}>
@@ -239,79 +394,17 @@ export function ProductsView(props) {
 				description="Included elements are on by default; add-ons can be switched on at their hourly price.">
 				{comparing ? <PlanComparison product={comparing} /> : null}
 			</Dialog>
-			<Dialog
-				open={Boolean(subscribing)}
-				onClose={() => setSubscribing(null)}
-				title={subscribing ? `Subscribe to ${subscribing.name}` : 'Subscribe'}
-				description={`On ${website.domain}${website.env === 'test' ? ' (test)' : ''}. Billed per started hour; pause or cancel any time.`}
-				footer={
-					<>
-						<Button variant="secondary" onClick={() => setSubscribing(null)}>
-							Cancel
-						</Button>
-						<Button onClick={() => void subscribe()} loading={busy} disabled={!enough}>
-							Subscribe
-						</Button>
-					</>
-				}>
-				{subscribing ? (
-					<>
-						{subscribing.plans.length > 0 ? (
-							<RadioGroup
-								legend="Plan"
-								value={plan}
-								onChange={setPlan}
-								options={subscribing.plans.map((/** @type {any} */ p) => ({
-									value: p.code,
-									label: `${p.name ?? p.code} — ${formatCreditsPerHour(p.includedHourlyMillicredits)}`,
-								}))}
-							/>
-						) : (
-							<p className="text-sm text-muted">This product has no plans: every element is available at its own price.</p>
-						)}
-						<div className="grid gap-3 rounded-xl border border-line bg-surface-2 p-4 sm:grid-cols-3">
-							<div>
-								<p className="text-xs font-semibold uppercase tracking-wider text-muted">Estimate</p>
-								<p className="text-base font-bold tabular-nums text-fg">{formatCreditsPerHour(estimate)}</p>
-							</div>
-							<div>
-								<p className="text-xs font-semibold uppercase tracking-wider text-muted">Per 30 days</p>
-								<p className="text-base font-bold tabular-nums text-fg">{formatCredits(estimate * 24 * 30)}</p>
-							</div>
-							<div>
-								<p className="text-xs font-semibold uppercase tracking-wider text-muted">Balance</p>
-								<p className="text-base font-bold tabular-nums text-fg">{formatCredits(balanceMillicredits)}</p>
-								{typeof balanceMillicredits === 'number' && estimate > 0 ? (
-									<p className="text-xs text-muted">
-										Covers about {formatHours(balanceMillicredits / estimate)} of this product
-									</p>
-								) : null}
-							</div>
-						</div>
-						{subscribing.price.metered ? (
-							<p className="text-xs text-muted">
-								Metered usage (per unit, above the plan's included quantities) is billed on top.
-							</p>
-						) : null}
-						{subscribing.price.trialHours > 0 ? (
-							<p className="text-xs text-muted">Includes a trial of {subscribing.price.trialHours} hours.</p>
-						) : null}
-						{!enough ? (
-							<Callout
-								tone="danger"
-								title="Not enough credits"
-								actions={
-									<Link href={routes.credits()} className="text-sm font-semibold underline">
-										View credits
-									</Link>
-								}>
-								Subscribing needs at least one hour of credits ({formatCredits(Math.max(estimate, 1))}).
-							</Callout>
-						) : null}
-						<FormError problem={problem} />
-					</>
-				) : null}
-			</Dialog>
+			{subscribing ? (
+				<SubscribeDialog
+					key={subscribing.appId}
+					merchantId={merchantId}
+					website={website}
+					products={[subscribing]}
+					balanceMillicredits={balanceMillicredits}
+					onClose={() => setSubscribing(null)}
+					onSubscribed={(sub) => window.location.assign(routes.subscription(website.websiteId, sub.subscriptionId))}
+				/>
+			) : null}
 		</div>
 	);
 }

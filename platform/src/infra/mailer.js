@@ -20,7 +20,7 @@ import { problem } from './http.js';
 /** @typedef {import('./config.js').SmtpConfig} SmtpConfig */
 
 /**
- * @typedef {'verify_email' | 'account_exists' | 'password_reset' | 'invite' | 'staff_welcome' | 'issuer_request'} MailTemplate
+ * @typedef {'verify_email' | 'account_exists' | 'password_reset' | 'invite' | 'staff_welcome' | 'merchant_welcome' | 'merchant_added' | 'issuer_request'} MailTemplate
  *
  * @typedef {object} MailMessage
  * @property {string} to recipient address
@@ -101,6 +101,28 @@ const TEMPLATES = Object.freeze({
 		],
 		action: 'Set up account',
 		footer: 'The link expires and works once. If you did not expect this, contact your administrator.',
+	},
+	merchant_welcome: {
+		subject: (d) => (d.merchantName ? `Your ${d.merchantName} account on ${BRAND}` : `Your ${BRAND} account`),
+		lines: (d) => [
+			d.merchantName
+				? `A ${BRAND} account for ${d.merchantName} was created for you.`
+				: `A ${BRAND} account was created for you.`,
+			'Choose a password to sign in.',
+		],
+		action: 'Set your password',
+		footer: 'The link expires in 72 hours and works once. If you did not expect this, ignore this message.',
+	},
+	merchant_added: {
+		subject: (d) => (d.merchantName ? `You now own ${d.merchantName} on ${BRAND}` : `A new merchant on ${BRAND}`),
+		lines: (d) => [
+			d.merchantName
+				? `${d.merchantName} was created on ${BRAND} with you as its owner.`
+				: `A merchant was created on ${BRAND} with you as its owner.`,
+			'Sign in with your existing password to manage it.',
+		],
+		action: 'Sign in',
+		footer: 'If you did not expect this, contact support.',
 	},
 	issuer_request: {
 		subject: (d) => `${d.productName ?? 'A product'} wants to become the identity issuer of ${d.domain ?? 'your website'}`,

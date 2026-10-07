@@ -1,5 +1,5 @@
 /**
- * Staff operations: merchant suspension (with reason; commerce reacts through `onMerchantStatus`), merchant listing,
+ * Staff operations: merchant creation (owner without a password plus a one-time set-password link), merchant suspension (with reason; commerce reacts through `onMerchantStatus`), merchant listing,
  * staff users (created without a password — they set one through a mailed setup link; two-factor sign-in once they
  * enrol). Every mutation is audited.
  * @module
@@ -7,7 +7,7 @@
 import { problem } from '../../infra/http.js';
 import { presentMerchant, presentStaff } from './core/present.js';
 import { insertUnique, requireMailer, sendQuietly } from './repo.js';
-import { parseMerchantQuery, prefixPattern } from './core/search.js';
+import { nameKey, parseMerchantQuery, prefixPattern } from './core/search.js';
 
 /** @typedef {import('./repo.js').Deps} Deps */
 /** @typedef {import('./repo.js').Meta} Meta */
@@ -20,6 +20,7 @@ import { parseMerchantQuery, prefixPattern } from './core/search.js';
  *   loadMerchant: (merchantId: string) => Promise<Record<string, any>>,
  *   staffSetupLink: (staffId: string, options?: { ttlMs?: number }) => Promise<string>,
  *   staffWelcomeTtlMs: number,
+ *   merchantSetupLink: (userId: string) => Promise<{ link: string, expiresAt: string }>,
  * }} hooks
  */
 export const createAdmin = (deps, hooks) => {
@@ -92,6 +93,62 @@ export const createAdmin = (deps, hooks) => {
 	};
 
 	return Object.freeze({
+		/**
+		 * Create a merchant and its owner. A new owner is an active user without a password; the result carries a
+		 * one-time set-password link (72 h) for staff to pass on, also mailed when mail is configured. An existing user
+		 * becomes the owner of the new merchant (no link: they sign in with their own password; mailed a notice).
+		 * @param {{ name: string, ownerEmail: string, ownerName?: string, actor: Actor, meta?: Meta }} input
+		 */
+		createMerchant: async ({ name, ownerEmail, ownerName, actor, meta = {} }) => {
+			const existing = await repo.users.findOne({ email: ownerEmail });
+			if (existing && existing.status !== 'active') throw problem('conflict', 'The user with this e-mail is disabled.');
+			const user = existing ?? {
+				_id: repo.id('usr'),
+				email: ownerEmail,
+				name: ownerName ?? null,
+				status: 'active',
+				passwordHash: null,
+				emailVerifiedAt: null,
+				totp: null,
+				pendingTotp: null,
+				recoveryHashes: [],
+			};
+			if (!existing)
+				await insertUnique(() => repo.users.insertOne(user), 'conflict', 'A user with this e-mail was just created; retry.');
+			const merchantId = repo.id('mer');
+			const merchant = {
+				_id: merchantId,
+				name,
+				nameKey: nameKey(name),
+				status: 'active',
+				ownerUserId: user._id,
+				suspension: null,
+			};
+			await repo.merchants.insertOne(merchant);
+			await repo.memberships.of(merchantId).insertOne({ _id: repo.id('mbr'), userId: user._id, roles: ['owner'], grants: [] });
+			const setup = existing?.passwordHash ? null : await hooks.merchantSetupLink(String(user._id));
+			const mailed = mailer.available !== false;
+			if (mailed)
+				await sendQuietly(deps, {
+					to: ownerEmail,
+					template: setup ? 'merchant_welcome' : 'merchant_added',
+					data: { link: setup?.link ?? `${ctx.config.portalUrl.replace(/\/+$/, '')}/login`, merchantName: name },
+				});
+			await audit(
+				actor,
+				'merchant.created',
+				{ type: 'merchant', id: merchantId, merchantId },
+				{ after: { name, ownerUserId: user._id, existingUser: Boolean(existing) }, meta },
+			);
+			return {
+				merchant: presentMerchant({ ...merchant, createdAt: new Date(ctx.now()) }),
+				owner: { userId: String(user._id), email: ownerEmail, existing: Boolean(existing) },
+				setupLink: setup?.link ?? null,
+				setupLinkExpiresAt: setup?.expiresAt ?? null,
+				mailed,
+			};
+		},
+
 		suspendMerchant: setStatus('suspended'),
 		resumeMerchant: setStatus('active'),
 

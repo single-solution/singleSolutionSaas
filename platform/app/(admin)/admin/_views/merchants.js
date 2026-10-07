@@ -7,6 +7,8 @@ export const metadata = { title: 'Merchants' };
 /** @param {{ searchParams: Promise<Record<string, string | string[] | undefined>> }} props */
 export default async function MerchantsPage({ searchParams }) {
 	const q = await searchParams;
-	const { api } = await staffContext('/admin/merchants');
-	return <MerchantsView {...await loadMerchants(api, { status: one(q.status), q: one(q.q), cursor: one(q.cursor) })} />;
+	const { api, staff } = await staffContext('/admin/merchants');
+	return (
+		<MerchantsView {...await loadMerchants(api, { status: one(q.status), q: one(q.q), cursor: one(q.cursor) })} staff={staff} />
+	);
 }

@@ -139,7 +139,7 @@ export const loadMerchants = async (api, filter = {}) => {
  * @param {string} merchantId
  */
 export const loadMerchant = async (api, merchantId) => {
-	const [merchant, team, subscriptions, balance, meter, notes, alerts] = await Promise.all([
+	const [merchant, team, subscriptions, balance, meter, notes, alerts, catalog] = await Promise.all([
 		api.get(paths.merchant(merchantId)),
 		api.get(paths.team(merchantId)),
 		api.get(paths.subscriptions(merchantId)),
@@ -147,6 +147,7 @@ export const loadMerchant = async (api, merchantId) => {
 		api.get(paths.meter(merchantId)),
 		api.get(paths.notes(merchantId)),
 		api.get(paths.alerts({ merchantId })),
+		api.get(paths.catalog()),
 	]);
 	const failed = firstFailure(merchant);
 	if (failed) return failed;
@@ -162,6 +163,7 @@ export const loadMerchant = async (api, merchantId) => {
 		meter: orElse(meter, null),
 		notes: section(notes, { items: [] }),
 		alerts: itemsOf(alerts),
+		catalog: itemsOf(catalog),
 	};
 };
 

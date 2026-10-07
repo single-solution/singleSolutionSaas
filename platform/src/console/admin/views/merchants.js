@@ -1,16 +1,21 @@
 'use client';
 /**
- * Merchants: search (id, domain, name or member e-mail prefix) and status filter; merchant detail with websites,
- * subscriptions, balance, team, notes and alerts; suspend / resume with a reason (typed confirmation).
+ * Merchants: search (id, domain, name or member e-mail prefix) and status filter; create a merchant (owner gets a
+ * one-time set-password link); merchant detail with websites (add, open: subscriptions and install code, remove),
+ * subscriptions (subscribe, change plan, cancel), balance and credit operations, team, notes and alerts; suspend /
+ * resume with a reason (typed confirmation). Website, subscribe and credit components are the Merchant Console's and
+ * the ledger's, called with the staff client.
  * @module
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
 	Badge,
 	Button,
 	ButtonLink,
 	Callout,
 	Card,
+	CodeBlock,
+	ConfirmDialog,
 	Dialog,
 	EmptyState,
 	Form,
@@ -27,6 +32,7 @@ import {
 	TextArea,
 	TypedConfirmDialog,
 	describeProblem,
+	fieldErrors,
 	formatCredits,
 	formatCreditsPerHour,
 	formatDate,
@@ -36,16 +42,22 @@ import {
 	useToast,
 } from '@ss/ui';
 import { Link } from '../../link.js';
+import { api } from '../../paths.js';
+import { AddWebsiteForm, InstallCodeCard } from '../../views/websites.js';
+import { PlanComparison, SubscribeDialog, hourlyEstimate } from '../../views/products.js';
+import { subscriptionCalls } from '../../views/subscription.js';
 import { adminFetch, useAdminResource, usePagedList } from '../client.js';
 import { adminApi, adminRoutes } from '../paths.js';
 import { AdminProblem, Crumbs, IdChip, staffCan } from './common.js';
+import { CreditOperationCard } from './finance.js';
 
 /** @typedef {import('@ss/ui').Problem} Problem */
 
 /**
- * @param {any} props loader result of `loadMerchants`
+ * @param {any} props loader result of `loadMerchants` plus `staff`
  */
 export function MerchantsView(props) {
+	const [creating, setCreating] = useState(false);
 	const ok = props.ok === true;
 	const filter = ok ? props.filter : { status: null, q: null };
 	const list = usePagedList(
@@ -59,7 +71,18 @@ export function MerchantsView(props) {
 	const rows = list.items;
 	return (
 		<div className="space-y-6">
-			<PageHeader title="Merchants" subtitle="Find an organisation by id, website domain or name." />
+			<PageHeader
+				title="Merchants"
+				subtitle="Find an organisation by id, website domain or name."
+				actions={
+					staffCan(props.staff, 'platform.merchants.write') ? (
+						<Button icon={<Icon name="plus" size={14} />} onClick={() => setCreating(true)}>
+							Create merchant
+						</Button>
+					) : null
+				}
+			/>
+			{creating ? <CreateMerchantDialog onClose={() => setCreating(false)} /> : null}
 			<form method="get" action="/admin/merchants" className="flex flex-wrap items-end gap-3" role="search">
 				<Input
 					label="Search"
@@ -106,6 +129,104 @@ export function MerchantsView(props) {
 			)}
 			{list.problem ? <Callout tone="danger">{describeProblem(list.problem)}</Callout> : null}
 		</div>
+	);
+}
+
+/**
+ * Create a merchant and its owner (`POST /v1/admin/merchants`); then show the one-time set-password link to copy.
+ * @param {{ onClose: () => void }} props
+ */
+function CreateMerchantDialog({ onClose }) {
+	const [name, setName] = useState('');
+	const [ownerEmail, setOwnerEmail] = useState('');
+	const [ownerName, setOwnerName] = useState('');
+	const [busy, setBusy] = useState(false);
+	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
+	const [created, setCreated] = useState(/** @type {any} */ (null));
+	const submit = async () => {
+		setBusy(true);
+		setProblem(null);
+		const result = await adminFetch(adminApi.createMerchant(), {
+			method: 'POST',
+			body: { name: name.trim(), ownerEmail: ownerEmail.trim(), ...(ownerName.trim() ? { ownerName: ownerName.trim() } : {}) },
+		});
+		setBusy(false);
+		if (result.ok) setCreated(result.data);
+		else setProblem(result.problem);
+	};
+	const errors = fieldErrors(problem);
+	return (
+		<Dialog
+			open
+			onClose={onClose}
+			title={created ? `${created.merchant.name} created` : 'Create merchant'}
+			description={created ? undefined : 'The owner gets a link to choose a password.'}
+			footer={
+				created ? (
+					<>
+						<Button variant="secondary" onClick={onClose}>
+							Done
+						</Button>
+						<ButtonLink as={Link} href={adminRoutes.merchant(created.merchant.merchantId)} variant="primary">
+							Open merchant
+						</ButtonLink>
+					</>
+				) : (
+					<>
+						<Button variant="secondary" onClick={onClose}>
+							Cancel
+						</Button>
+						<Button onClick={() => void submit()} loading={busy} disabled={!name.trim() || !ownerEmail.trim()}>
+							Create merchant
+						</Button>
+					</>
+				)
+			}>
+			{created ? (
+				<div className="space-y-3">
+					{created.setupLink ? (
+						<>
+							<CodeBlock code={created.setupLink} label="Set-password link" secret />
+							<p className="text-sm text-muted">
+								Send it to {created.owner.email}. It works once and expires {formatDateTime(created.setupLinkExpiresAt)}
+								{created.mailed ? '; it was also e-mailed.' : '; mail is not configured, so it was not e-mailed.'}
+							</p>
+						</>
+					) : (
+						<Callout tone="info">
+							{created.owner.email} already has an account and is now the owner; they sign in with their own password.
+						</Callout>
+					)}
+				</div>
+			) : (
+				<Form onSubmit={submit} busy={busy} aria-label="Create merchant">
+					<Input
+						label="Merchant name"
+						value={name}
+						maxLength={120}
+						onChange={(e) => setName(e.currentTarget.value)}
+						error={errors.name}
+						required
+					/>
+					<Input
+						label="Owner e-mail"
+						type="email"
+						value={ownerEmail}
+						onChange={(e) => setOwnerEmail(e.currentTarget.value)}
+						error={errors.ownerEmail}
+						required
+					/>
+					<Input
+						label="Owner name (optional)"
+						value={ownerName}
+						maxLength={120}
+						onChange={(e) => setOwnerName(e.currentTarget.value)}
+						error={errors.ownerName}
+					/>
+					<FormError problem={problem} fields={['name', 'ownerEmail', 'ownerName']} />
+				</Form>
+			)}
+		</Dialog>
 	);
 }
 
@@ -160,12 +281,21 @@ export function MerchantView(props) {
 		merchantId ? adminApi.merchant(merchantId) : null,
 		ok ? props.merchant : null,
 	);
+	const subs = useAdminResource(merchantId ? adminApi.subscriptions(merchantId) : null, {
+		items: ok ? props.subscriptions : [],
+	});
+	const balanceRes = useAdminResource(merchantId ? adminApi.balance(merchantId) : null, ok ? props.balance : null);
 	const [statusChange, setStatusChange] = useState(/** @type {null | 'suspend' | 'resume'} */ (null));
 	const [busy, setBusy] = useState(false);
 	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
+	const [adding, setAdding] = useState(false);
+	const [openId, setOpenId] = useState(/** @type {string | null} */ (null));
 	if (!ok) return <AdminProblem problem={props.problem} back={{ href: adminRoutes.merchants(), label: 'Back to merchants' }} />;
-	const { staff, members, invites, subscriptions, balance, meter, alerts, notes } = props;
+	const { staff, members, invites, meter, alerts, notes } = props;
+	const subscriptions = /** @type {any[]} */ (subs.data?.items ?? []);
+	const balance = balanceRes.data;
 	const websites = /** @type {any[]} */ (merchant?.websites ?? props.websites);
+	const opened = websites.find((w) => w.websiteId === openId && !w.deletedAt) ?? null;
 	const canWrite = staffCan(staff, 'platform.merchants.write');
 	const domainOf = (/** @type {string} */ id) => websites.find((w) => w.websiteId === id)?.domain ?? id;
 
@@ -247,7 +377,16 @@ export function MerchantView(props) {
 				/>
 			</Card>
 
-			<Card title="Websites" subtitle="Live websites and their test twins.">
+			<Card
+				title="Websites"
+				subtitle="Live websites and their test twins."
+				actions={
+					staffCan(staff, 'websites.create') ? (
+						<Button size="sm" icon={<Icon name="plus" size={14} />} onClick={() => setAdding(true)}>
+							Add website
+						</Button>
+					) : null
+				}>
 				<Table
 					caption="Websites"
 					dense
@@ -278,15 +417,48 @@ export function MerchantView(props) {
 							header: <span className="sr-only">Actions</span>,
 							align: 'right',
 							render: (w) =>
-								w.env === 'live' ? (
-									<ButtonLink as={Link} size="sm" variant="ghost" href={adminRoutes.websites({ domain: w.domain })}>
-										Transfer
-									</ButtonLink>
+								w.env === 'live' && !w.deletedAt ? (
+									<span className="flex justify-end gap-1">
+										<Button size="sm" variant="secondary" onClick={() => setOpenId(w.websiteId)}>
+											Open
+										</Button>
+										<ButtonLink as={Link} size="sm" variant="ghost" href={adminRoutes.websites({ domain: w.domain })}>
+											Transfer
+										</ButtonLink>
+									</span>
 								) : null,
 						},
 					]}
 				/>
 			</Card>
+			{opened ? (
+				<WebsitePanel
+					key={opened.websiteId}
+					merchantId={merchant.merchantId}
+					website={opened}
+					catalog={props.catalog ?? []}
+					subscriptions={subscriptions.filter((s) => s.websiteId === opened.websiteId || s.websiteId === opened.twinId)}
+					balanceMillicredits={balance?.balanceMillicredits ?? null}
+					staff={staff}
+					onClose={() => setOpenId(null)}
+					onChanged={async () => {
+						await Promise.all([reload(), subs.reload(), balanceRes.reload()]);
+					}}
+				/>
+			) : null}
+			<Dialog open={adding} onClose={() => setAdding(false)} title="Add website" description={`For ${merchant.name}.`}>
+				<AddWebsiteForm
+					merchantId={merchant.merchantId}
+					fetcher={adminFetch}
+					autoFocus
+					onAdded={(w) => {
+						setAdding(false);
+						toast.show({ title: `${w.domain} added`, description: 'A test twin was created with it.' });
+						setOpenId(w.websiteId);
+						void reload();
+					}}
+				/>
+			</Dialog>
 
 			<Card title="Subscriptions">
 				<Table
@@ -362,6 +534,16 @@ export function MerchantView(props) {
 				) : null}
 			</Card>
 
+			{staffCan(staff, 'platform.credits.adjust') ? (
+				<CreditOperationCard
+					merchant={merchant}
+					balanceMillicredits={balance?.balanceMillicredits}
+					onBooked={async () => {
+						await balanceRes.reload();
+					}}
+				/>
+			) : null}
+
 			<NotesCard merchantId={merchant.merchantId} notes={notes} canWrite={canWrite} />
 
 			{alerts.length > 0 ? (
@@ -402,6 +584,229 @@ export function MerchantView(props) {
 				</p>
 			</TypedConfirmDialog>
 		</div>
+	);
+}
+
+/**
+ * One website of the merchant: its subscriptions (subscribe, change plan, cancel), install code and removal — the
+ * merchant APIs (staff may call them), through the Merchant Console's components.
+ * @param {{ merchantId: string, website: any, catalog: any[], subscriptions: any[], balanceMillicredits: number | null,
+ *   staff: any, onClose: () => void, onChanged: () => Promise<void> }} props
+ */
+function WebsitePanel({ merchantId, website, catalog, subscriptions, balanceMillicredits, staff, onClose, onChanged }) {
+	const toast = useToast();
+	const snippet = useAdminResource(api.snippet(merchantId, website.websiteId), null);
+	const [subscribing, setSubscribing] = useState(false);
+	const [planOf, setPlanOf] = useState(/** @type {any} */ (null));
+	const [planChoice, setPlanChoice] = useState('');
+	const [cancelling, setCancelling] = useState(/** @type {any} */ (null));
+	const [removing, setRemoving] = useState(false);
+	const [busy, setBusy] = useState(false);
+	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
+	const { reload: loadSnippet } = snippet;
+	useEffect(() => {
+		void loadSnippet();
+	}, [loadSnippet]);
+	const canManage = staffCan(staff, 'subscriptions.manage');
+	const live = subscriptions.filter((s) => s.status !== 'cancelled');
+	const productOf = (/** @type {string} */ appId) => catalog.find((p) => p.appId === appId) ?? null;
+	const planProduct = planOf ? productOf(planOf.appId) : null;
+
+	/** @param {() => Promise<{ ok: boolean, problem?: any }>} call @param {string} title */
+	const run = async (call, title) => {
+		setBusy(true);
+		setProblem(null);
+		const result = await call();
+		setBusy(false);
+		if (!result.ok) {
+			setProblem(result.problem ?? null);
+			return false;
+		}
+		toast.show({ title });
+		await onChanged();
+		return true;
+	};
+	const changePlan = async () => {
+		if (!planOf) return;
+		const done = await run(
+			() => subscriptionCalls(adminFetch, merchantId, planOf.subscriptionId).changePlan(planChoice),
+			'Plan changed',
+		);
+		if (done) setPlanOf(null);
+	};
+	const cancel = async () => {
+		if (!cancelling) return;
+		const done = await run(
+			() => subscriptionCalls(adminFetch, merchantId, cancelling.subscriptionId).lifecycle('cancel'),
+			'Subscription cancelled',
+		);
+		if (done) setCancelling(null);
+	};
+	const remove = async () => {
+		const done = await run(
+			() => adminFetch(api.website(merchantId, website.websiteId), { method: 'DELETE' }),
+			`${website.domain} removed`,
+		);
+		if (done) {
+			setRemoving(false);
+			onClose();
+		}
+	};
+
+	return (
+		<Card
+			title={website.domain}
+			subtitle="Subscriptions and install code of this website."
+			actions={
+				<span className="flex flex-wrap gap-2">
+					{canManage ? (
+						<Button size="sm" onClick={() => setSubscribing(true)}>
+							Subscribe
+						</Button>
+					) : null}
+					{staffCan(staff, 'websites.delete') ? (
+						<Button size="sm" variant="danger" onClick={() => setRemoving(true)}>
+							Remove website
+						</Button>
+					) : null}
+					<Button size="sm" variant="ghost" onClick={onClose}>
+						Close
+					</Button>
+				</span>
+			}>
+			<div className="space-y-4">
+				{problem && !planOf && !cancelling && !removing ? <Callout tone="danger">{describeProblem(problem)}</Callout> : null}
+				<Table
+					caption={`Subscriptions of ${website.domain}`}
+					dense
+					rows={live}
+					rowKey={(s) => s.subscriptionId}
+					empty="No products yet."
+					columns={[
+						{
+							key: 'product',
+							header: 'Product',
+							rowHeader: true,
+							render: (s) => (
+								<Link
+									href={adminRoutes.subscription(s.subscriptionId)}
+									className="font-semibold text-primary hover:underline">
+									{productOf(s.appId)?.name ?? s.productSlug}
+								</Link>
+							),
+						},
+						{ key: 'planCode', header: 'Plan', render: (s) => s.planCode ?? '—' },
+						{ key: 'status', header: 'Status', render: (s) => <StatusBadge status={s.status} /> },
+						{
+							key: 'actions',
+							header: <span className="sr-only">Actions</span>,
+							align: 'right',
+							render: (s) =>
+								canManage ? (
+									<span className="flex justify-end gap-1">
+										{(productOf(s.appId)?.plans ?? []).length > 0 ? (
+											<Button
+												size="sm"
+												variant="secondary"
+												onClick={() => {
+													setProblem(null);
+													setPlanChoice(s.planCode ?? '');
+													setPlanOf(s);
+												}}>
+												Change plan
+											</Button>
+										) : null}
+										<Button
+											size="sm"
+											variant="ghost"
+											onClick={() => {
+												setProblem(null);
+												setCancelling(s);
+											}}>
+											Cancel
+										</Button>
+									</span>
+								) : null,
+						},
+					]}
+				/>
+				<InstallCodeCard snippet={snippet.data} />
+			</div>
+			{subscribing ? (
+				<SubscribeDialog
+					merchantId={merchantId}
+					website={website}
+					products={catalog}
+					balanceMillicredits={balanceMillicredits}
+					fetcher={adminFetch}
+					creditsHref={null}
+					onClose={() => setSubscribing(false)}
+					onSubscribed={(sub) => {
+						setSubscribing(false);
+						toast.show({ title: `Subscribed to ${productOf(sub.appId)?.name ?? sub.productSlug}` });
+						void onChanged();
+					}}
+				/>
+			) : null}
+			<Dialog
+				open={Boolean(planOf)}
+				onClose={() => setPlanOf(null)}
+				size="lg"
+				title={planProduct ? `Change the plan of ${planProduct.name}` : 'Change plan'}
+				description="Applies from the next hour."
+				footer={
+					<>
+						<Button variant="secondary" onClick={() => setPlanOf(null)}>
+							Cancel
+						</Button>
+						<Button
+							onClick={() => void changePlan()}
+							loading={busy}
+							disabled={!planOf || planChoice === (planOf.planCode ?? '')}>
+							Change plan
+						</Button>
+					</>
+				}>
+				{planProduct ? (
+					<div className="space-y-4">
+						<PlanComparison product={planProduct} />
+						<RadioGroup
+							legend="Plan"
+							value={planChoice}
+							onChange={setPlanChoice}
+							options={planProduct.plans.map((/** @type {any} */ p) => ({
+								value: p.code,
+								label: `${p.name ?? p.code} — ${formatCreditsPerHour(hourlyEstimate(planProduct, p.code))}`,
+							}))}
+						/>
+					</div>
+				) : null}
+				<FormError problem={problem} />
+			</Dialog>
+			<ConfirmDialog
+				open={Boolean(cancelling)}
+				onClose={() => setCancelling(null)}
+				onConfirm={() => void cancel()}
+				busy={busy}
+				danger
+				title={`Cancel ${cancelling ? (productOf(cancelling.appId)?.name ?? cancelling.productSlug) : ''} on ${website.domain}?`}
+				confirmLabel="Cancel subscription"
+				error={problem ? describeProblem(problem) : null}>
+				<p className="text-sm text-muted">All elements stop at once and billing ends with the current hour.</p>
+			</ConfirmDialog>
+			<TypedConfirmDialog
+				open={removing}
+				onClose={() => setRemoving(false)}
+				onConfirm={() => void remove()}
+				busy={busy}
+				danger
+				title={`Remove ${website.domain}?`}
+				expected={website.domain}
+				confirmLabel="Remove website"
+				error={problem ? describeProblem(problem) : null}>
+				<p className="text-sm text-muted">Its test twin, keys and subscriptions go with it.</p>
+			</TypedConfirmDialog>
+		</Card>
 	);
 }
 

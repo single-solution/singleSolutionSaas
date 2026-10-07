@@ -403,6 +403,9 @@ export const inputs = Object.freeze({
 	websiteTransfer: /** @type {(b: unknown) => Parsed<{ toMerchantId: string, reason: string }>} */ (
 		(b) => object(b, { toMerchantId: idOf('mer'), reason: text(500) })
 	),
+	merchantCreate: /** @type {(b: unknown) => Parsed<{ name: string, ownerEmail: string, ownerName?: string }>} */ (
+		(b) => object(b, { name: text(120), ownerEmail: email, ownerName: { optional: text(120) } })
+	),
 	staffCreate: /** @type {(b: unknown) => Parsed<{ email: string, roles: string[], name?: string }>} */ (
 		(b) => object(b, { email, roles: roles(STAFF_ROLE_NAMES), name: { optional: text(120) } })
 	),

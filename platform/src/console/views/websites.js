@@ -49,10 +49,10 @@ export const RESOURCE_KINDS = Object.freeze([
 ]);
 
 /**
- * Add-website form (dialog body or onboarding step).
- * @param {{ merchantId: string, onAdded: (website: any) => void, autoFocus?: boolean }} props
+ * Add-website form (dialog body or onboarding step; the Admin Console passes `fetcher={adminFetch}`).
+ * @param {{ merchantId: string, onAdded: (website: any) => void, autoFocus?: boolean, fetcher?: typeof apiFetch }} props
  */
-export function AddWebsiteForm({ merchantId, onAdded, autoFocus = false }) {
+export function AddWebsiteForm({ merchantId, onAdded, autoFocus = false, fetcher = apiFetch }) {
 	const [domain, setDomain] = useState('');
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState(/** @type {string | null} */ (null));
@@ -66,7 +66,7 @@ export function AddWebsiteForm({ merchantId, onAdded, autoFocus = false }) {
 		setError(null);
 		setBusy(true);
 		setProblem(null);
-		const result = await apiFetch(api.websites(merchantId), { method: 'POST', body: { domain: value } });
+		const result = await fetcher(api.websites(merchantId), { method: 'POST', body: { domain: value } });
 		setBusy(false);
 		if (result.ok) onAdded(result.data.website);
 		else setProblem(result.problem);

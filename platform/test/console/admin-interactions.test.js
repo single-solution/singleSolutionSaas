@@ -470,6 +470,100 @@ describe('admin console interactions (jsdom)', () => {
 		await until(() => shows('Prefers e-mail over phone.') && shows('root@ss.test ·'));
 		cleanup();
 
+		// ---------------------------------------------------------------- create a merchant, then manage it
+		render(
+			<ToastProvider>
+				<MerchantsView {...await admin.loadMerchants(staff.api, {})} staff={me} />
+			</ToastProvider>,
+		);
+		await press('Create merchant');
+		fillDialog('Merchant name', 'Ops Made Ltd');
+		fillDialog('Owner e-mail', 'ops-owner@made.test');
+		fillDialog('Owner name (optional)', 'Olga');
+		await press('Create merchant');
+		const made = /** @type {any} */ (
+			await until(
+				() => staff.calls.find((c) => c.method === 'POST' && c.path === adminApi.createMerchant() && c.status === 201)?.body,
+			)
+		);
+		await until(() => shows('It works once'));
+		expect(made.setupLink).toMatch(/\/reset-password#token=/);
+		expect(tokenOf('ops-owner@made.test', 'merchant_welcome')).toBe(decodeURIComponent(made.setupLink.split('#token=')[1]));
+		const madeId = String(made.merchant.merchantId);
+		cleanup();
+		render(
+			<ToastProvider>
+				<MerchantView {...await admin.loadMerchant(staff.api, madeId)} staff={me} />
+			</ToastProvider>,
+		);
+		await press('Add website');
+		fillDialog('Domain', 'made.example.com');
+		await press('Add website');
+		await until(() => shows('Subscriptions and install code of this website.') && shows('Copy install code'));
+		const madeSite = String(
+			staff.calls.find((c) => c.method === 'POST' && c.path === `/v1/merchants/${madeId}/websites` && c.status === 201)?.body
+				.website.websiteId,
+		);
+		// credits on the merchant page
+		fill('Amount (credits)', '50');
+		fill('Reference', 'ops-made-1');
+		fill('Note', 'Opening balance');
+		await press('Review');
+		await press('Add credits');
+		await until(() => staff.calls.some((c) => c.path === adminApi.credit(madeId, 'credits') && c.status === 201));
+		await until(() => shows('50 credits') || shows('50.00'));
+		// subscribe: product, plan and elements (the add-on switched on too)
+		await press('Subscribe');
+		await until(() => shows('Subscribe to Notice bar'));
+		await act(async () => {
+			byLabel(/** @type {HTMLElement} */ (document.querySelector('[role="dialog"]')), 'Trust badge').click();
+		});
+		await press('Subscribe');
+		const madeSub = /** @type {any} */ (
+			await until(
+				() =>
+					staff.calls.find(
+						(c) =>
+							c.method === 'POST' &&
+							c.path === `/v1/merchants/${madeId}/websites/${madeSite}/subscriptions` &&
+							c.status === 201,
+					)?.body.subscription,
+			)
+		);
+		await until(() =>
+			staff.calls.some(
+				(c) =>
+					c.method === 'PUT' &&
+					c.path.endsWith(`/subscriptions/${madeSub.subscriptionId}/elements/badge`) &&
+					c.status === 200,
+			),
+		);
+		await until(() => shows('Subscribed to Notice bar'));
+		// change plan (one plan: nothing to change) and cancel
+		await until(() => button('Change plan'));
+		await press('Change plan');
+		expect(button('Change plan').disabled).toBe(true);
+		await press('Cancel');
+		await until(() => !document.querySelector('[role="dialog"]'));
+		await press('Cancel');
+		await press('Cancel subscription');
+		await until(() =>
+			staff.calls.some(
+				(c) => c.path === `/v1/merchants/${madeId}/subscriptions/${madeSub.subscriptionId}/cancel` && c.status === 200,
+			),
+		);
+		await until(() => shows('Subscription cancelled'));
+		// remove the website
+		await press('Remove website');
+		type(confirmInput(), 'made.example.com');
+		await press('Remove website');
+		await until(() =>
+			staff.calls.some(
+				(c) => c.method === 'DELETE' && c.path === `/v1/merchants/${madeId}/websites/${madeSite}` && c.status === 200,
+			),
+		);
+		cleanup();
+
 		// ---------------------------------------------------------------- websites: transfer
 		render(<WebsitesView {...await admin.loadWebsites(staff.api, { domain: 'shop.example.com' })} staff={me} />);
 		await press('Transfer');

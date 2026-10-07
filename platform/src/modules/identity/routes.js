@@ -5,7 +5,7 @@
  *   staff login and the MFA routes a half-signed-in staff session may reach (`mfa: false`).
  * - `/v1/me/*` (staff or merchant session): profile, password, MFA, sessions, merchant switch.
  * - `/v1/merchants/:merchantId/*` (merchant session or staff): merchant, team, websites, keys.
- * - `/v1/admin/*` (staff): merchants (search, notes), websites, staff users.
+ * - `/v1/admin/*` (staff): merchants (create, search, notes), websites, staff users.
  * - `GET /v1/product/revocations?since=` (client assertion, F.9).
  *
  * Creates require an `Idempotency-Key` (`idempotent: true`). Responses that carry secrets (website keys, MFA secrets
@@ -742,6 +742,16 @@ export const identityRoutes = (ctx, service) => {
 				});
 				return page.respond(rows, (m) => String(m._id), admin.presentMerchant);
 			},
+		},
+		{
+			// the response carries a one-time set-password link: never replayed from the idempotency store
+			method: 'POST',
+			path: '/v1/admin/merchants',
+			auth: 'staff',
+			permission: 'platform.merchants.write',
+			idempotent: 'no-store',
+			handler: async (c) =>
+				created(await admin.createMerchant({ ...valid(inputs.merchantCreate(c.body)), actor: actorOf(c), meta: metaOf(c) })),
 		},
 		{
 			method: 'GET',

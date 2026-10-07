@@ -84,6 +84,21 @@ export const availability = (sub, product, key) => {
 };
 
 /**
+ * Plan change and lifecycle calls of a subscription, shared by the Merchant Console and the Admin Console
+ * (`fetcher = adminFetch`).
+ * @param {typeof apiFetch} fetcher
+ * @param {string} merchantId
+ * @param {string} subscriptionId
+ */
+export const subscriptionCalls = (fetcher, merchantId, subscriptionId) => ({
+	/** @param {string} planCode '' = no plan */
+	changePlan: (planCode) =>
+		fetcher(`${api.subscription(merchantId, subscriptionId)}/plan`, { method: 'PUT', body: { planCode: planCode || null } }),
+	/** @param {'pause' | 'resume' | 'cancel'} action */
+	lifecycle: (action) => fetcher(`${api.subscription(merchantId, subscriptionId)}/${action}`, { method: 'POST', body: {} }),
+});
+
+/**
  * @param {any} props loader result of `loadSubscription`
  */
 export function SubscriptionView(props) {
@@ -138,10 +153,7 @@ export function SubscriptionView(props) {
 	const lifecycle = async (action) => {
 		setPending(action);
 		setProblem(null);
-		const result = await apiFetch(`${api.subscription(merchantId, sub.subscriptionId)}/${action}`, {
-			method: 'POST',
-			body: {},
-		});
+		const result = await subscriptionCalls(apiFetch, merchantId, sub.subscriptionId).lifecycle(action);
 		setPending(null);
 		setConfirm(null);
 		if (!result.ok) {
@@ -158,10 +170,7 @@ export function SubscriptionView(props) {
 	const changePlan = async () => {
 		setPending('plan');
 		setProblem(null);
-		const result = await apiFetch(`${api.subscription(merchantId, sub.subscriptionId)}/plan`, {
-			method: 'PUT',
-			body: { planCode: planChoice || null },
-		});
+		const result = await subscriptionCalls(apiFetch, merchantId, sub.subscriptionId).changePlan(planChoice);
 		setPending(null);
 		setConfirm(null);
 		if (!result.ok) {

@@ -56,6 +56,8 @@ export const adminApi = Object.freeze({
 	merchants: (/** @type {{ status?: string | null, q?: string | null, cursor?: string | null, limit?: number }} */ q = {}) =>
 		`/v1/admin/merchants${query(q)}`,
 	merchant: (/** @type {string} */ m) => `/v1/admin/merchants/${e(m)}`,
+	/** `POST { name, ownerEmail, ownerName? }` → `{ merchant, owner, setupLink, setupLinkExpiresAt, mailed }` */
+	createMerchant: () => '/v1/admin/merchants',
 	suspend: (/** @type {string} */ m) => `/v1/admin/merchants/${e(m)}/suspend`,
 	resume: (/** @type {string} */ m) => `/v1/admin/merchants/${e(m)}/resume`,
 	/** `GET` staff notes (newest first) / `POST { body }` (append-only) */
@@ -87,6 +89,8 @@ export const adminApi = Object.freeze({
 	launch: (/** @type {string} */ a) => `/v1/admin/apps/${e(a)}/launch`,
 
 	// commerce
+	/** active products with plans, elements and prices (public) */
+	catalog: () => '/v1/catalog/products',
 	subscriptions: (/** @type {string} */ m) => `/v1/merchants/${e(m)}/subscriptions`,
 	subscription: (/** @type {string} */ m, /** @type {string} */ s) => `/v1/merchants/${e(m)}/subscriptions/${e(s)}`,
 	balance: (/** @type {string} */ m) => `/v1/merchants/${e(m)}/balance`,
