@@ -1,0 +1,55 @@
+{
+	"type": "object",
+	"additionalProperties": false,
+	"properties": {
+		"numberPrefix": {
+			"type": "string",
+			"title": "Order number prefix",
+			"description": "Put before every order number (for example SHOP-). Order numbers are <prefix><year>-<number>.",
+			"default": "",
+			"maxLength": 12
+		},
+		"messageChannels": {
+			"type": "array",
+			"title": "Order messages by",
+			"description": "How shoppers get order messages, through Notifications.",
+			"default": ["email"],
+			"items": { "type": "string", "enum": ["email", "sms", "whatsapp"] }
+		},
+		"notifyStatuses": {
+			"type": "array",
+			"title": "Statuses that send a message",
+			"description": "Status keys of your order flow; moving an order into one of them sends the shopper a message.",
+			"default": ["confirmed", "dispatched", "delivered", "cancelled", "refunded"],
+			"items": { "type": "string", "maxLength": 40 }
+		},
+		"policyShipping": {
+			"type": "string",
+			"title": "Delivery policy",
+			"default": "",
+			"maxLength": 20000,
+			"x-ui": { "widget": "textarea" }
+		},
+		"policyReturns": {
+			"type": "string",
+			"title": "Returns policy",
+			"default": "",
+			"maxLength": 20000,
+			"x-ui": { "widget": "textarea" }
+		},
+		"policyPrivacy": {
+			"type": "string",
+			"title": "Privacy policy",
+			"default": "",
+			"maxLength": 20000,
+			"x-ui": { "widget": "textarea" }
+		},
+		"policyTerms": {
+			"type": "string",
+			"title": "Terms of sale",
+			"default": "",
+			"maxLength": 20000,
+			"x-ui": { "widget": "textarea" }
+		}
+	}
+}

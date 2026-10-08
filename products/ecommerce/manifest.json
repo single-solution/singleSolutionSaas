@@ -1,0 +1,389 @@
+{
+	"id": "ecommerce",
+	"name": "Ecommerce",
+	"version": "0.1.0",
+	"endpoints": {
+		"base": "http://localhost:3000",
+		"dashboard": "/dashboard"
+	},
+	"widgetScriptUrl": "/widget.js",
+	"docsUrl": "/docs",
+	"features": [
+		{
+			"key": "catalog",
+			"name": "Catalog",
+			"description": "Products, categories with SEO text, brands, attributes, media in the merchant's own storage, search, listings and filters, the product page and the catalog admin widget.",
+			"dependsOn": [],
+			"settings": {
+				"$ref": "schemas/catalog.settings.json"
+			}
+		},
+		{
+			"key": "variants",
+			"name": "Variants",
+			"description": "Options such as size or colour, each variant with its own price, stock and SKU.",
+			"dependsOn": ["catalog"],
+			"settings": {
+				"$ref": "schemas/variants.settings.json"
+			}
+		},
+		{
+			"key": "multi_location",
+			"name": "Multi-location stock",
+			"description": "Stock kept per location (warehouses, shops); orders take stock from the first location that has it.",
+			"dependsOn": ["catalog"],
+			"settings": {
+				"$ref": "schemas/multi_location.settings.json"
+			}
+		},
+		{
+			"key": "grades_serials",
+			"name": "Grades and serials",
+			"description": "Condition grades for used or refurbished items and serial numbers (such as IMEI) captured per unit when an order is packed.",
+			"dependsOn": ["catalog"],
+			"settings": {
+				"$ref": "schemas/grades_serials.settings.json"
+			}
+		},
+		{
+			"key": "digital_goods",
+			"name": "Digital goods",
+			"description": "Downloads and licence keys, given to the shopper once the order is paid.",
+			"dependsOn": ["checkout"],
+			"settings": {
+				"$ref": "schemas/digital_goods.settings.json"
+			}
+		},
+		{
+			"key": "bookings",
+			"name": "Bookings",
+			"description": "Services booked in simple slots: a duration, weekly hours and no double booking.",
+			"dependsOn": ["checkout"],
+			"settings": {
+				"$ref": "schemas/bookings.settings.json"
+			}
+		},
+		{
+			"key": "checkout",
+			"name": "Cart and checkout",
+			"description": "The cart, checkout, orders with merchant-defined statuses, couriers with tracking links, customer records and the success page.",
+			"dependsOn": ["catalog"],
+			"settings": {
+				"$ref": "schemas/checkout.settings.json"
+			}
+		},
+		{
+			"key": "cod",
+			"name": "Cash on delivery",
+			"description": "Cash on delivery with a confirmation step, a largest order value, an optional advance, a blocklist and return-to-origin flags.",
+			"dependsOn": ["checkout"],
+			"settings": {
+				"$ref": "schemas/cod.settings.json"
+			}
+		},
+		{
+			"key": "delivery_zones",
+			"name": "Delivery zones",
+			"description": "Delivery fees by city or area, free delivery over an amount, and store pickup.",
+			"dependsOn": ["checkout"],
+			"settings": {
+				"$ref": "schemas/delivery_zones.settings.json"
+			}
+		},
+		{
+			"key": "courier_apis",
+			"name": "Courier APIs",
+			"description": "Book shipments with a courier's API using the merchant's own keys and read the latest tracking status.",
+			"dependsOn": ["checkout"],
+			"settings": {
+				"$ref": "schemas/courier_apis.settings.json"
+			}
+		},
+		{
+			"key": "taxes",
+			"name": "Taxes",
+			"description": "Simple tax rules: a percentage per category or region, prices shown with or without tax.",
+			"dependsOn": ["checkout"],
+			"settings": {
+				"$ref": "schemas/taxes.settings.json"
+			}
+		},
+		{
+			"key": "coupons",
+			"name": "Coupons",
+			"description": "Codes for a percentage or fixed amount off, with limits, dates and conditions.",
+			"dependsOn": ["checkout"],
+			"settings": {
+				"$ref": "schemas/coupons.settings.json"
+			}
+		},
+		{
+			"key": "deals",
+			"name": "Deals",
+			"description": "Automatic offers on products, categories or brands, with dates and use limits.",
+			"dependsOn": ["catalog"],
+			"settings": {
+				"$ref": "schemas/deals.settings.json"
+			}
+		},
+		{
+			"key": "loyalty",
+			"name": "Loyalty",
+			"description": "Points earned on delivered orders and redeemed at checkout, with expiry and a history.",
+			"dependsOn": ["checkout"],
+			"settings": {
+				"$ref": "schemas/loyalty.settings.json"
+			}
+		},
+		{
+			"key": "bundles",
+			"name": "Bundles",
+			"description": "Bundles and buy X get Y offers applied in the cart.",
+			"dependsOn": ["checkout"],
+			"settings": {
+				"$ref": "schemas/bundles.settings.json"
+			}
+		},
+		{
+			"key": "reviews",
+			"name": "Reviews",
+			"description": "Ratings and reviews from shoppers whose order was delivered, with moderation.",
+			"dependsOn": ["checkout"],
+			"settings": {
+				"$ref": "schemas/reviews.settings.json"
+			}
+		},
+		{
+			"key": "wishlist",
+			"name": "Wishlist",
+			"description": "Shoppers save products to their wishlist.",
+			"dependsOn": ["catalog"],
+			"settings": {
+				"$ref": "schemas/wishlist.settings.json"
+			}
+		},
+		{
+			"key": "alerts",
+			"name": "Alerts",
+			"description": "Back-in-stock and price-drop alerts sent through Notifications.",
+			"dependsOn": ["catalog"],
+			"settings": {
+				"$ref": "schemas/alerts.settings.json"
+			}
+		},
+		{
+			"key": "compare",
+			"name": "Compare",
+			"description": "Shoppers compare products side by side.",
+			"dependsOn": ["catalog"],
+			"settings": {
+				"$ref": "schemas/compare.settings.json"
+			}
+		},
+		{
+			"key": "returns",
+			"name": "Returns",
+			"description": "Return and warranty claims with time windows per item and grade, photos, approval, refunds and restocking exactly once.",
+			"dependsOn": ["checkout"],
+			"settings": {
+				"$ref": "schemas/returns.settings.json"
+			}
+		},
+		{
+			"key": "invoices",
+			"name": "Invoices",
+			"description": "Invoices and packing slips, with the serial numbers on each line.",
+			"dependsOn": ["checkout"],
+			"settings": {
+				"$ref": "schemas/invoices.settings.json"
+			}
+		},
+		{
+			"key": "csv",
+			"name": "CSV",
+			"description": "Import and export products and stock, export orders, as CSV.",
+			"dependsOn": ["catalog"],
+			"settings": {
+				"$ref": "schemas/csv.settings.json"
+			}
+		},
+		{
+			"key": "bulk_actions",
+			"name": "Bulk actions",
+			"description": "Change prices, stock, status or category for many products at once, and move many orders at once.",
+			"dependsOn": ["catalog"],
+			"settings": {
+				"$ref": "schemas/bulk_actions.settings.json"
+			}
+		},
+		{
+			"key": "reports",
+			"name": "Reports",
+			"description": "Sales by product, category, brand and city, stock age, return rate and margin.",
+			"dependsOn": ["checkout"],
+			"settings": {
+				"$ref": "schemas/reports.settings.json"
+			}
+		},
+		{
+			"key": "seo",
+			"name": "SEO",
+			"description": "Meta tags and structured data for products and categories, and sitemaps.",
+			"dependsOn": ["catalog"],
+			"settings": {
+				"$ref": "schemas/seo.settings.json"
+			}
+		},
+		{
+			"key": "feeds",
+			"name": "Feeds",
+			"description": "Product feeds for shopping and social catalogues.",
+			"dependsOn": ["catalog"],
+			"settings": {
+				"$ref": "schemas/feeds.settings.json"
+			}
+		},
+		{
+			"key": "ai_copy",
+			"name": "AI copy",
+			"description": "Product descriptions and meta text written with the merchant's own AI key.",
+			"dependsOn": ["catalog"],
+			"settings": {
+				"$ref": "schemas/ai_copy.settings.json"
+			}
+		},
+		{
+			"key": "llms_txt",
+			"name": "llms.txt",
+			"description": "An llms.txt of the catalog for AI assistants.",
+			"dependsOn": ["catalog"],
+			"settings": {
+				"$ref": "schemas/llms_txt.settings.json"
+			}
+		}
+	],
+	"permissions": [
+		{
+			"key": "catalog.edit",
+			"name": "Edit the catalog",
+			"feature": "catalog"
+		},
+		{
+			"key": "orders.read",
+			"name": "See orders",
+			"feature": "checkout"
+		},
+		{
+			"key": "orders.manage",
+			"name": "Move and edit orders",
+			"feature": "checkout"
+		},
+		{
+			"key": "orders.refund",
+			"name": "Refund orders",
+			"feature": "checkout"
+		},
+		{
+			"key": "customers.manage",
+			"name": "Manage customers and the blocklist",
+			"feature": "checkout"
+		},
+		{
+			"key": "returns.manage",
+			"name": "Handle returns and warranty claims",
+			"feature": "returns"
+		},
+		{
+			"key": "coupons.edit",
+			"name": "Edit coupons",
+			"feature": "coupons"
+		},
+		{
+			"key": "deals.edit",
+			"name": "Edit deals",
+			"feature": "deals"
+		},
+		{
+			"key": "bundles.edit",
+			"name": "Edit bundles",
+			"feature": "bundles"
+		},
+		{
+			"key": "loyalty.manage",
+			"name": "Adjust loyalty points",
+			"feature": "loyalty"
+		},
+		{
+			"key": "reviews.moderate",
+			"name": "Moderate reviews",
+			"feature": "reviews"
+		},
+		{
+			"key": "reports.read",
+			"name": "See reports",
+			"feature": "reports"
+		},
+		{
+			"key": "csv.run",
+			"name": "Import and export CSV",
+			"feature": "csv"
+		},
+		{
+			"key": "bulk.run",
+			"name": "Run bulk actions",
+			"feature": "bulk_actions"
+		}
+	],
+	"widgets": [
+		{
+			"key": "product_grid",
+			"feature": "catalog",
+			"kind": "visitor"
+		},
+		{
+			"key": "product_page",
+			"feature": "catalog",
+			"kind": "visitor"
+		},
+		{
+			"key": "cart",
+			"feature": "checkout",
+			"kind": "visitor"
+		},
+		{
+			"key": "my_orders",
+			"feature": "checkout",
+			"kind": "visitor"
+		},
+		{
+			"key": "wishlist",
+			"feature": "wishlist",
+			"kind": "visitor"
+		},
+		{
+			"key": "compare",
+			"feature": "compare",
+			"kind": "visitor"
+		},
+		{
+			"key": "catalog_admin",
+			"feature": "catalog",
+			"kind": "admin"
+		},
+		{
+			"key": "orders_admin",
+			"feature": "checkout",
+			"kind": "admin"
+		},
+		{
+			"key": "promotions_admin",
+			"feature": ["coupons", "deals", "bundles", "loyalty"],
+			"kind": "admin"
+		},
+		{
+			"key": "customers_admin",
+			"feature": ["checkout", "reviews", "reports", "csv"],
+			"kind": "admin"
+		}
+	]
+}
