@@ -1,13 +1,7 @@
 node_modules/
 **/node_modules/
-dist/
-**/dist/
-build/
-**/build/
 .next/
 **/.next/
-.turbo/
-**/.turbo/
 coverage/
 **/coverage/
 *.log
@@ -17,15 +11,12 @@ coverage/
 !**/.env.example
 .DS_Store
 .idea/
-.vscode/*
-!.vscode/extensions.json
+.vscode/
 
-# Caches, build artifacts, tooling
-.npm-cache/
+# Build artifacts
 *.tsbuildinfo
 next-env.d.ts
 .vercel
-.data/
 
 # Agent worktrees (local only)
 .claude/worktrees/

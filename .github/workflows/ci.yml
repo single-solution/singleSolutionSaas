@@ -3,7 +3,6 @@ name: CI
 on:
    push:
       branches: [main]
-   pull_request:
 
 permissions:
    contents: read
@@ -30,7 +29,7 @@ jobs:
          - run: pnpm exec prettier --check .
          - run: pnpm audit --prod --audit-level high
 
-   # every unit on its own (PLAN F.17): its own check (format, lint, typecheck, tests with coverage thresholds),
+   # every unit on its own (PLAN 0.10): its own check (format, lint, typecheck, tests with coverage thresholds),
    # plus `next build` for deployables and `ss app validate` for products.
    units:
       runs-on: ubuntu-latest
