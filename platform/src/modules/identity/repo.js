@@ -150,13 +150,10 @@ export const createRepo = (ctx) => {
  * @param {Actor | AuditActor} actor
  * @returns {AuditActor}
  */
-export const auditActor = (actor) => {
+const auditActor = (actor) => {
 	const type = actor.type === 'admin' || actor.type === 'merchant' || actor.type === 'product' ? actor.type : 'system';
 	return { type, id: actor.id, ...(type === 'admin' && actor.name ? { name: actor.name } : {}) };
 };
-
-/** System actor for calls from other modules or jobs that pass none. */
-export const SYSTEM_ACTOR = Object.freeze({ type: /** @type {'system'} */ ('system'), id: 'identity' });
 
 /**
  * @param {ModuleContext} ctx

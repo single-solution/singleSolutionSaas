@@ -16,21 +16,21 @@ import { sha1Upper } from './crypto.js';
 /** @typedef {'google' | 'apple' | 'facebook'} Provider */
 /** @typedef {{ subject: string, email: string | null, name: string }} ProviderIdentity */
 
-export const GOOGLE = Object.freeze({
+const GOOGLE = Object.freeze({
 	authorize: 'https://accounts.google.com/o/oauth2/v2/auth',
 	token: 'https://oauth2.googleapis.com/token',
 	issuers: ['https://accounts.google.com', 'accounts.google.com'],
 });
-export const APPLE = Object.freeze({
+const APPLE = Object.freeze({
 	authorize: 'https://appleid.apple.com/auth/authorize',
 	token: 'https://appleid.apple.com/auth/token',
 	issuer: 'https://appleid.apple.com',
 });
-export const FACEBOOK = Object.freeze({
+const FACEBOOK = Object.freeze({
 	authorize: 'https://www.facebook.com/v21.0/dialog/oauth',
 	graph: 'https://graph.facebook.com/v21.0',
 });
-export const PWNED_RANGE = 'https://api.pwnedpasswords.com/range/';
+const PWNED_RANGE = 'https://api.pwnedpasswords.com/range/';
 
 /** @param {unknown} value @returns {Record<string, any>} */
 const objectOf = (value) => (typeof value === 'object' && value !== null ? /** @type {Record<string, any>} */ (value) : {});

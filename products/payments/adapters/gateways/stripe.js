@@ -13,9 +13,9 @@ import { call, failure, ok2xx } from './types.js';
 /** @typedef {import('./types.js').GatewayAdapter} GatewayAdapter */
 /** @typedef {import('./types.js').PaymentNews} PaymentNews */
 
-export const STRIPE_API = 'https://api.stripe.com';
+const STRIPE_API = 'https://api.stripe.com';
 /** The Stripe API version every call names (the smallest safe choice, PLAN 0.8.4). */
-export const STRIPE_VERSION = '2024-06-20';
+const STRIPE_VERSION = '2024-06-20';
 
 /** @param {Record<string, any>} keys @param {string} [idempotencyKey] */
 const headers = (keys, idempotencyKey) => ({

@@ -19,13 +19,13 @@ import { exists, walk } from './fsutil.js';
 import { writeAssets } from './assets.js';
 
 /** Root of the bundled templates. */
-export const TEMPLATES_DIR = fileURLToPath(new URL('../templates/', import.meta.url));
+const TEMPLATES_DIR = fileURLToPath(new URL('../templates/', import.meta.url));
 
 /** Product ids (manifest `id`, PLAN 0.4.13). */
-export const PRODUCT_ID = /^[a-z][a-z0-9-]{1,30}$/;
+const PRODUCT_ID = /^[a-z][a-z0-9-]{1,30}$/;
 
 /** Where a new product's manifest says it lives until its deployment address is set. */
-export const DEFAULT_BASE_URL = 'http://localhost:3000';
+const DEFAULT_BASE_URL = 'http://localhost:3000';
 
 /**
  * @typedef {object} InitOptions

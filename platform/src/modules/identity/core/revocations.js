@@ -9,7 +9,7 @@
  */
 
 export const REVOCATION_PAGE = 1000;
-export const REVOCATION_LAG_MS = 30_000;
+const REVOCATION_LAG_MS = 30_000;
 
 /** @typedef {{ t: number, k: string }} RevocationCursor */
 

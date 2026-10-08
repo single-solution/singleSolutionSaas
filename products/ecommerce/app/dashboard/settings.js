@@ -85,7 +85,7 @@ const ORDER_SETTINGS = new Set(['numberPrefix', 'messageChannels', 'notifyStatus
  * @param {string} name
  * @returns {SectionId}
  */
-export const sectionOf = (feature, name) => {
+const sectionOf = (feature, name) => {
 	if (feature === 'checkout') return name.startsWith('policy') ? 'policies' : ORDER_SETTINGS.has(name) ? 'orders' : 'checkout';
 	return FEATURE_SECTION[feature] ?? 'other';
 };
@@ -96,7 +96,7 @@ export const sectionOf = (feature, name) => {
  * @param {SectionId} section
  * @returns {FeatureSettings[]}
  */
-export const settingsIn = (features, section) =>
+const settingsIn = (features, section) =>
 	features.filter(hasSettings).flatMap((feature) => {
 		/** @type {Record<string, any>} */
 		const properties = feature.schema.properties;

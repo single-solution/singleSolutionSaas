@@ -8,9 +8,9 @@
 import { DAY_MS } from './returns.js';
 
 /** The longest range, in days. */
-export const MAX_RANGE_DAYS = 366;
+const MAX_RANGE_DAYS = 366;
 /** The range when none is given, in days (up to now). */
-export const DEFAULT_RANGE_DAYS = 30;
+const DEFAULT_RANGE_DAYS = 30;
 /** Rows of a report, at most. */
 export const MAX_ROWS = 500;
 export const SALES_BY = Object.freeze(/** @type {const} */ (['product', 'category', 'brand', 'city']));
@@ -58,7 +58,7 @@ export const parseRange = (query, now) => {
  * @param {Range} range
  * @param {string} currency
  */
-export const ordersMatch = (websiteId, range, currency) => ({
+const ordersMatch = (websiteId, range, currency) => ({
 	$match: {
 		websiteId,
 		placedAt: { $gte: range.from, $lt: range.to },

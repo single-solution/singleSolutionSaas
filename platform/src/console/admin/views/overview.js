@@ -38,7 +38,7 @@ const creditsOf = (v) => formatCredits(Math.round(v * 1000));
  * Credits of all products per UTC day (the sum of each product's 30 days).
  * @param {ReadonlyArray<{ days?: ReadonlyArray<{ day: string, amount: number }> }>} products
  */
-export const totalDays = (products) => {
+const totalDays = (products) => {
 	/** @type {Map<string, number>} */
 	const sums = new Map();
 	for (const p of products) for (const d of p.days ?? []) sums.set(d.day, (sums.get(d.day) ?? 0) + d.amount);

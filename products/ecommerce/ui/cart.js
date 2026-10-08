@@ -32,7 +32,7 @@ import {
 import { addressForm, renderSuccess, returnUrlOf } from './shop-checkout.js';
 
 /** The pause after a change before the cart is priced again (ms). */
-export const QUOTE_DELAY = 300;
+const QUOTE_DELAY = 300;
 const ORDER_ID = /^ord_[A-Za-z0-9_-]{1,64}$/;
 /** Problems that mean the cart changed on the server: it is priced again at once. */
 const REQUOTE = ['out_of_stock', 'offer_unavailable', 'points_changed', 'slot_taken', 'cod_not_allowed', 'validation_failed'];

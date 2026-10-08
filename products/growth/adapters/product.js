@@ -56,7 +56,7 @@ export const manifest = /** @type {import('@ss/contracts').Manifest} */ (
 export { strings };
 
 /** Growth's own problem codes. */
-export const PROBLEM_CODES = Object.freeze({
+const PROBLEM_CODES = Object.freeze({
 	indexnow_refused: Object.freeze({ status: 502, title: 'IndexNow refused the submission' }),
 });
 

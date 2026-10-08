@@ -9,7 +9,7 @@ import { loadAdminSession } from '../../../src/console/admin/loaders.js';
 import { getPortal } from '../../../src/runtime.js';
 
 /** The request's API client (one per request). */
-export const adminApiClient = cache(async () => {
+const adminApiClient = cache(async () => {
 	const h = await headers(); // first: makes the page dynamic before the Portal (environment) is touched
 	const portal = await getPortal();
 	return createConsoleApi({

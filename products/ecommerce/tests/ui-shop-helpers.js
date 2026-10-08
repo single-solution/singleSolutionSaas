@@ -38,7 +38,7 @@ export const fail = (status, code, extra = {}) => ({
 /** @typedef {(call: Call) => Answer | Promise<Answer>} Route */
 
 /** A Storage kept in memory. */
-export const memoryStorage = () => {
+const memoryStorage = () => {
 	/** @type {Map<string, string>} */
 	const map = new Map();
 	return /** @type {Storage} */ (

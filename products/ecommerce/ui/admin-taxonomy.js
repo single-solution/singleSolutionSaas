@@ -16,7 +16,7 @@ import { entriesOf, query } from './admin-kit.js';
  * @param {Named[]} categories
  * @returns {Array<Named & { depth: number }>}
  */
-export const treeOrder = (categories) => {
+const treeOrder = (categories) => {
 	/** @type {Array<Named & { depth: number }>} */
 	const out = [];
 	/** @param {string | null} parentId @param {number} depth */
@@ -134,7 +134,7 @@ export const createSearches = (kit) => {
  *   body: (values: Record<string, string | boolean>) => Record<string, unknown>,
  *   image?: { for: 'category' | 'brand', field: 'image' | 'logo' }, changed: () => Promise<void> }} spec
  */
-export const recordList = (kit, panel, spec) => {
+const recordList = (kit, panel, spec) => {
 	const { t, h } = kit;
 	const line = kit.status();
 	const list = h('ul', { class: 'rows' });

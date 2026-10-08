@@ -15,7 +15,7 @@ import { defaultRandomBytes, isObject } from './util.js';
 /** @typedef {import('./db.js').ReadOps} ReadOps */
 /** @typedef {import('./rbac.js').Actor} Actor */
 
-export const AUDIT_ACTOR_TYPES = Object.freeze(['admin', 'merchant', 'product', 'system']);
+const AUDIT_ACTOR_TYPES = Object.freeze(['admin', 'merchant', 'product', 'system']);
 
 /**
  * @typedef {object} AuditInput

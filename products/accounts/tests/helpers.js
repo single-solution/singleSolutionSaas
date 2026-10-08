@@ -10,8 +10,8 @@ import { createFakePortal, createMemoryStore, createNetwork } from '@ss/app-kit/
 import { createProductInstance, manifest } from '../adapters/product.js';
 import { createRoutes } from '../api/routes.js';
 
-export const BASE = 'https://accounts.example.dev';
-export const DOMAIN = 'shop.example.com';
+const BASE = 'https://accounts.example.dev';
+const DOMAIN = 'shop.example.com';
 export const ORIGIN = `https://${DOMAIN}`;
 export const ADMIN_ORIGIN = 'https://admin.shop.example.com';
 export const NOTIFY = 'https://notifications.example.dev';
@@ -20,7 +20,7 @@ export const CHAT = 'https://chat.example.dev';
 const SECRET = 'connect-secret-0123456789-abcdefghij';
 const ENCRYPTION_KEY = 'encryption-key-0123456789-abcdefghij';
 export const ALL = manifest.features.map((feature) => feature.key);
-export const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/605.1.15 Version/17.0 Safari/605.1.15';
+const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/605.1.15 Version/17.0 Safari/605.1.15';
 
 let databases = 0;
 /** A fresh merchant database URI on the shared MongoDB. */

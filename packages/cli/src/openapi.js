@@ -11,7 +11,7 @@ import { isObject } from './fsutil.js';
 /** @typedef {{ method: string, path: string, auth: string, idempotent?: boolean, summary: string }} KitRoute */
 
 /** API routes the kit serves for every product (server token, no feature). */
-export const KIT_API_ROUTES = Object.freeze(
+const KIT_API_ROUTES = Object.freeze(
 	/** @type {KitRoute[]} */ ([
 		{ method: 'POST', path: '/v1/tickets', auth: 'server', summary: 'Ticket for an admin widget (15 minutes)' },
 		{ method: 'POST', path: '/v1/data-rights/export', auth: 'server', summary: "Export one user's records" },

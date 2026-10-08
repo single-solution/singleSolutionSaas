@@ -13,16 +13,16 @@ import { createProductInstance, manifest } from '../adapters/product.js';
 import { createRoutes } from '../api/routes.js';
 import { COLLECTIONS } from '../core/model.js';
 
-export const BASE = 'https://ecommerce.example.dev';
-export const ACCOUNTS = 'https://accounts.example.dev';
-export const NOTIFY = 'https://notifications.example.dev';
+const BASE = 'https://ecommerce.example.dev';
+const ACCOUNTS = 'https://accounts.example.dev';
+const NOTIFY = 'https://notifications.example.dev';
 export const PAYMENTS = 'https://payments.example.dev';
 export const STORAGE = 'https://bucket.example.org';
 export const COURIER = 'https://courier.example.org';
 export const AI = 'https://ai.example.org';
 export const DOMAIN = 'shop.example.com';
 export const ORIGIN = `https://${DOMAIN}`;
-export const ADMIN_ORIGIN = 'https://admin.shop.example.com';
+const ADMIN_ORIGIN = 'https://admin.shop.example.com';
 const SECRET = 'connect-secret-0123456789-abcdefghij';
 const ENCRYPTION_KEY = 'encryption-key-0123456789-abcdefghij';
 
@@ -37,7 +37,7 @@ export const ALL_PERMISSIONS = (manifest.permissions ?? []).map((permission) => 
 let databases = 0;
 
 /** A fresh merchant database URI on the shared MongoDB. */
-export const merchantDatabase = () => {
+const merchantDatabase = () => {
 	databases += 1;
 	const url = new URL(/** @type {string} */ (process.env.TEST_MONGODB_URI));
 	url.pathname = `/shop_${process.pid}_${Date.now()}_${databases}`;

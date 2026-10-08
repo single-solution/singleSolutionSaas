@@ -15,13 +15,13 @@ import { canonicalOrigin, isProductId, ticketOriginAllowed } from './tokens.js';
 /** @import { KeyResolver, Signer } from './keys.js' */
 
 /** JOSE `typ` of tickets. */
-export const TICKET_TYP = 'ss-ticket+jws';
+const TICKET_TYP = 'ss-ticket+jws';
 
 /** Lifetime of every ticket, seconds (exactly 15 minutes). */
 export const TICKET_TTL_SECONDS = 900;
 
 /** Format of a permission key (the manifest `permissions[].key`). */
-export const PERMISSION_KEY_PATTERN = /^[a-z][a-z0-9_.]{0,63}$/;
+const PERMISSION_KEY_PATTERN = /^[a-z][a-z0-9_.]{0,63}$/;
 
 const INVALID_TOKEN_MESSAGE = 'token is not valid';
 const SKEW_SECONDS = 5;

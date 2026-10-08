@@ -39,7 +39,7 @@ import { createOrderMessages } from './order-messages.js';
 /** @typedef {import('../core/model.js').StatusRole} StatusRole */
 
 /** A waiting payment is asked of Payments at most this often per order. */
-export const RECHECK_MS = 30_000;
+const RECHECK_MS = 30_000;
 
 const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/;
 const E164 = /^\+[1-9]\d{6,14}$/;

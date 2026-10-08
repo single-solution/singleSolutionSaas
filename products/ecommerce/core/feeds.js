@@ -131,7 +131,7 @@ export const googleItem = (row) => {
 };
 
 /** The columns of a Meta catalog CSV. */
-export const META_COLUMNS = Object.freeze([
+const META_COLUMNS = Object.freeze([
 	'id',
 	'title',
 	'description',

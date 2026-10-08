@@ -11,7 +11,7 @@
 /** @typedef {import('./model.js').LoyaltyRecord} LoyaltyRecord */
 
 /** Days before expiry when points count as expiring soon (the shopper's loyalty view). */
-export const EXPIRING_SOON_DAYS = 30;
+const EXPIRING_SOON_DAYS = 30;
 /** Most history entries shown to the shopper (newest first). */
 export const SHOPPER_HISTORY = 50;
 

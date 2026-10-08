@@ -5,22 +5,10 @@
  * @module
  */
 export { cx } from './cx.js';
-export { Icon, ICON_NAMES } from './icons.js';
-export { Button, IconButton, ButtonLink, buttonClass } from './Button.js';
+export { Icon } from './icons.js';
+export { Button, IconButton, ButtonLink } from './Button.js';
 export { Spinner } from './Spinner.js';
-export {
-	Field,
-	FieldMessages,
-	Input,
-	TextArea,
-	Select,
-	Checkbox,
-	Switch,
-	RadioGroup,
-	CheckboxGroup,
-	LABEL_CLASS,
-	useFieldIds,
-} from './fields.js';
+export { Input, TextArea, Select, Checkbox, Switch, RadioGroup, CheckboxGroup } from './fields.js';
 export { Form, FormError, FormActions, useFormState } from './Form.js';
 export {
 	Card,
@@ -34,22 +22,20 @@ export {
 	Stat,
 	Section,
 	IconBadge,
-	ACCENTS,
 	Meter,
 	Stepper,
 	Breadcrumbs,
 	KeyValueList,
-	Bar,
 } from './display.js';
 export { Table } from './Table.js';
 export { Tabs, TabNav } from './Tabs.js';
-export { Dialog, ConfirmDialog, useFocusTrap, focusableIn } from './overlay.js';
+export { Dialog, ConfirmDialog } from './overlay.js';
 export { TypedConfirmDialog } from './TypedConfirm.js';
 export { ToastProvider, useToast } from './Toast.js';
 export { CodeBlock, copyText } from './CodeBlock.js';
 export { AppShell } from './AppShell.js';
 export { THEME_SCRIPT, THEME_STORAGE_KEY, ThemeScript } from './theme-script.js';
-export { ThemeToggle, applyThemeChoice, readThemeChoice } from './theme.js';
+export { ThemeToggle } from './theme.js';
 export { BarChart, ShareBars, HeroCard } from './charts.js';
 export { SchemaForm } from './SchemaForm.js';
 export * from './schema.js';

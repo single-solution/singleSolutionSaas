@@ -441,7 +441,7 @@ export function PasswordPanel({ twoStepOn }) {
 }
 
 /** @param {string} action e.g. `merchant.suspended` → `Merchant suspended` */
-export const actionLabel = (action) => {
+const actionLabel = (action) => {
 	const text = String(action ?? '').replace(/[._]/g, ' ');
 	return text.charAt(0).toUpperCase() + text.slice(1);
 };

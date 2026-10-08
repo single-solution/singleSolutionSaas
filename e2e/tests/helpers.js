@@ -31,11 +31,11 @@ import { createSigner, signAssertion } from '@ss/protocol';
 import { createProductInstance, manifest, strings } from '../fixtures/notes/adapters/product.js';
 import { createRoutes } from '../fixtures/notes/api/routes.js';
 
-export const PORTAL_URL = 'https://portal.test';
+const PORTAL_URL = 'https://portal.test';
 export const PRODUCT_URL = 'https://notes.test';
 export const CONNECT_SECRET = 'e2e-notes-connect-secret-0123456789abcdef';
 export const PASSWORD = 'correct horse battery staple';
-export const T0 = Date.parse('2026-10-01T10:00:00Z');
+const T0 = Date.parse('2026-10-01T10:00:00Z');
 export const HOUR = 3_600_000;
 export const DAY = 24 * HOUR;
 const PORTAL_KEY = 'e2e-portal-encryption-key-0123456789abcdef';
@@ -100,7 +100,7 @@ const memoryMailer = () => {
  */
 
 /** @type {ProductUnit} */
-export const NOTES = { createProductInstance, createRoutes, manifest, strings, url: PRODUCT_URL };
+const NOTES = { createProductInstance, createRoutes, manifest, strings, url: PRODUCT_URL };
 
 /**
  * Start the Portal and a product (Notes unless told otherwise), connected to each other through one in-process network.

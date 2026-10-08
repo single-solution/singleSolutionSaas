@@ -81,7 +81,7 @@ export const keydown = (el, key, init = {}) =>
  * @param {string} [selector]
  * @returns {HTMLElement[]}
  */
-export const allByText = (root, text, selector = '*') =>
+const allByText = (root, text, selector = '*') =>
 	/** @type {HTMLElement[]} */ ([...root.querySelectorAll(selector)]).filter(
 		(el) => el.textContent?.includes(text) && ![...el.children].some((c) => c.textContent?.includes(text)),
 	);

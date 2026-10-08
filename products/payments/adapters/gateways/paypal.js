@@ -16,8 +16,8 @@ import { call, failure, ok2xx } from './types.js';
 /** @typedef {import('./types.js').GatewayContext} GatewayContext */
 /** @typedef {import('./types.js').PaymentNews} PaymentNews */
 
-export const PAYPAL_LIVE = 'https://api-m.paypal.com';
-export const PAYPAL_SANDBOX = 'https://api-m.sandbox.paypal.com';
+const PAYPAL_LIVE = 'https://api-m.paypal.com';
+const PAYPAL_SANDBOX = 'https://api-m.sandbox.paypal.com';
 
 /** @param {Record<string, any>} keys */
 const apiOf = (keys) => (keys.sandbox === true ? PAYPAL_SANDBOX : PAYPAL_LIVE);

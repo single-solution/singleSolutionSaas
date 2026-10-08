@@ -9,13 +9,13 @@ import { FUNNEL_STEPS } from './widgets.js';
 import { VITALS } from './events.js';
 
 /** Rows of each top list. */
-export const TOP = 10;
+const TOP = 10;
 
 /** Most days one report covers. */
-export const MAX_DAYS = 366;
+const MAX_DAYS = 366;
 
 /** Days a report covers when none are asked for. */
-export const DEFAULT_DAYS = 30;
+const DEFAULT_DAYS = 30;
 
 const DAY_MS = 86_400_000;
 const DAY = /^\d{4}-\d{2}-\d{2}$/;

@@ -37,7 +37,7 @@ import { bodyOf, refuse, STAFF_LIMITS } from './catalog-common.js';
 /** Serial numbers: printable, 1 to 64 characters. */
 const SERIAL = /^[\p{L}\p{N}][\p{L}\p{N} ._/:#-]{0,63}$/u;
 /** Most serials added at once. */
-export const MAX_SERIALS = 500;
+const MAX_SERIALS = 500;
 
 /**
  * @param {Product} product

@@ -18,7 +18,7 @@ import { isObject } from './util.js';
 const LEVELS = Object.freeze({ debug: 10, info: 20, warn: 30, error: 40, silent: 100 });
 
 /** Field names that are always redacted (case-insensitive). */
-export const REDACTED_FIELDS = Object.freeze([
+const REDACTED_FIELDS = Object.freeze([
 	'authorization',
 	'cookie',
 	'password',

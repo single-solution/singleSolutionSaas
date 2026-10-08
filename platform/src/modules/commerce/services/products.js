@@ -28,13 +28,13 @@ import { dayOf, floorDay, floorMonth, productStatusOf } from '../core/money.js';
 /** @typedef {{ actor: Actor, requestId?: string | null, ip?: string | null }} Caller */
 
 /** A status response may be cached this long at most (PLAN 0.4.7). */
-export const STATUS_TTL_MS = 5 * 60_000;
+const STATUS_TTL_MS = 5 * 60_000;
 /** Websites per page of the websites list (row 5). */
-export const WEBSITES_PAGE = 100;
+const WEBSITES_PAGE = 100;
 const DAYS_IN_SERIES = 30;
 
 /** @param {string} websiteId @param {string} productId */
-export const productKey = (websiteId, productId) => `${websiteId}:${productId}`;
+const productKey = (websiteId, productId) => `${websiteId}:${productId}`;
 
 /**
  * @param {string | null | undefined} cursor

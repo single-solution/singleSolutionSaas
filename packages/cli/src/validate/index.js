@@ -35,7 +35,7 @@ import { findCssReferences, findDomGlobals, findImports, findStringKeys, lex } f
 /** @typedef {import('@ss/contracts').Manifest} Manifest */
 
 /** Folders (ending with `/`) and files every product has (PLAN 0.4.13, F.17). */
-export const ANATOMY = Object.freeze([
+const ANATOMY = Object.freeze([
 	'core/',
 	'api/',
 	'adapters/',
@@ -59,7 +59,7 @@ export const ANATOMY = Object.freeze([
 ]);
 
 /** The variables a product reads, and the only names its `.env.example` lists (PLAN 0.11). */
-export const ENV_NAMES = Object.freeze(['MONGODB_URI', 'CONNECT_SECRET', 'ENCRYPTION_KEY']);
+const ENV_NAMES = Object.freeze(['MONGODB_URI', 'CONNECT_SECRET', 'ENCRYPTION_KEY']);
 
 /** Marker for project-root files (e.g. `manifest.json`) as import targets. */
 const ROOT = '.';
@@ -74,7 +74,7 @@ const DATA_LAYERS = Object.freeze(['strings', 'schemas', 'docs', ROOT]);
  * `ui/` is bundled into the browser script.
  * @type {Readonly<Record<string, { layers: readonly string[], data: boolean, packages: readonly string[] | null }>>}
  */
-export const IMPORT_POLICY = Object.freeze({
+const IMPORT_POLICY = Object.freeze({
 	core: { layers: ['core'], data: false, packages: ['@ss/contracts'] },
 	api: { layers: ['api', 'core', 'adapters'], data: true, packages: null },
 	adapters: { layers: ['adapters', 'core'], data: true, packages: null },
@@ -142,7 +142,7 @@ const present = (files, entry) =>
  * @param {ProjectFiles} files
  * @returns {Problem[]}
  */
-export const checkAnatomy = (files) =>
+const checkAnatomy = (files) =>
 	ANATOMY.filter((entry) => !present(files, entry)).map((entry) =>
 		problemOf({
 			rule: 'anatomy.missing',
@@ -175,7 +175,7 @@ const layerName = (layer) => (layer === ROOT ? 'the project root' : `${layer}/`)
  * @param {ProjectFiles} files
  * @returns {Promise<Problem[]>}
  */
-export const checkImports = async (files) => {
+const checkImports = async (files) => {
 	/** @type {Problem[]} */
 	const problems = [];
 	for (const file of files.list) {
@@ -240,7 +240,7 @@ export const checkImports = async (files) => {
  * @param {ProjectFiles} files
  * @returns {Promise<Problem[]>}
  */
-export const checkCorePure = async (files) => {
+const checkCorePure = async (files) => {
 	/** @type {Problem[]} */
 	const problems = [];
 	for (const file of files.list) {
@@ -264,7 +264,7 @@ const placeholdersWellFormed = (text) => text.replace(PLACEHOLDER, '').match(BRA
  * @param {ProjectFiles} files
  * @returns {Promise<Problem[]>}
  */
-export const checkStrings = async (files) => {
+const checkStrings = async (files) => {
 	/** @type {Problem[]} */
 	const problems = [];
 	for (const file of files.list.filter((name) => name.startsWith('strings/') && name !== 'strings/en.json')) {
@@ -327,7 +327,7 @@ export const checkStrings = async (files) => {
  * @param {ProjectFiles} files
  * @returns {Promise<Problem[]>}
  */
-export const checkEnvExample = async (files) => {
+const checkEnvExample = async (files) => {
 	if (!files.set.has('.env.example')) return [];
 	const names = (await files.read('.env.example'))
 		.split('\n')
@@ -351,7 +351,7 @@ export const checkEnvExample = async (files) => {
  * @param {ProjectFiles} files
  * @returns {Promise<Problem[]>}
  */
-export const checkCrons = async (files) => {
+const checkCrons = async (files) => {
 	if (!files.set.has('vercel.json')) return [];
 	const parsed = parseJson(await files.read('vercel.json'));
 	const config = parsed.ok ? parsed.value : null;
@@ -375,7 +375,7 @@ export const checkCrons = async (files) => {
  * @param {Manifest} manifest
  * @returns {Problem[]}
  */
-export const checkRoutes = (routes, manifest) => {
+const checkRoutes = (routes, manifest) => {
 	/** @type {Problem[]} */
 	const problems = [];
 	const features = new Set(manifest.features.map((feature) => feature.key));
@@ -440,7 +440,7 @@ export const checkRoutes = (routes, manifest) => {
  * package.json wiring every product needs to work on its own (in the monorepo and once split into its own repository):
  * the kit it is built on, its tooling (`@ss/cli`, `@ss/config`) and its scripts (F.17).
  */
-export const PACKAGE_WIRING = Object.freeze({
+const PACKAGE_WIRING = Object.freeze({
 	dependencies: Object.freeze(['@ss/app-kit']),
 	devDependencies: Object.freeze(['@ss/cli', '@ss/config']),
 	scripts: Object.freeze(['check', 'test', 'lint', 'typecheck', 'format', 'format:check', 'dev', 'build', 'start', 'validate']),
@@ -452,7 +452,7 @@ export const PACKAGE_WIRING = Object.freeze({
  * @param {ProjectFiles} files
  * @returns {Promise<Problem[]>}
  */
-export const checkPackageWiring = async (files) => {
+const checkPackageWiring = async (files) => {
 	if (!files.set.has('package.json')) return [];
 	const parsed = parseJson(await files.read('package.json'));
 	const pkg = parsed.ok && isObject(parsed.value) ? parsed.value : {};
@@ -516,7 +516,7 @@ export const checkPackageWiring = async (files) => {
 };
 
 /** Server functions a product has: the API route handler and the dashboard page (PLAN 0.9, Vercel Hobby). */
-export const MAX_SERVER_ENTRIES = 2;
+const MAX_SERVER_ENTRIES = 2;
 
 const ROUTE_FILE = /^(?:src\/)?app\/(?:.*\/)?route\.(?:m?js|jsx|ts|tsx)$/;
 const PAGE_FILE = /^(?:src\/)?app\/(?:.*\/)?page\.(?:m?js|jsx|ts|tsx)$/;
@@ -547,7 +547,7 @@ export const serverEntries = async (files) => {
  * @param {ProjectFiles} files
  * @returns {Promise<Problem[]>}
  */
-export const checkServerShape = async (files) => {
+const checkServerShape = async (files) => {
 	/** @type {Problem[]} */
 	const problems = [];
 	const entries = await serverEntries(files);
@@ -580,7 +580,7 @@ export const checkServerShape = async (files) => {
  * @param {Manifest | null} manifest
  * @returns {Promise<Problem[]>}
  */
-export const checkAssets = async (files, manifest) => {
+const checkAssets = async (files, manifest) => {
 	if (manifest !== null && manifest.widgets.length > 0 && !files.set.has(WIDGET_ENTRY))
 		return [
 			problemOf({

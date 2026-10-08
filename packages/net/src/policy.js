@@ -48,14 +48,14 @@ import { classifyAddress } from './address.js';
  *   | { ok: false, code: 'bad_url' | 'ssrf_blocked', reason: string }} UrlCheck
  */
 
-export const DEFAULT_PORTS = Object.freeze([443, 8443]);
-export const DEFAULT_TIMEOUT_MS = 10_000;
+const DEFAULT_PORTS = Object.freeze([443, 8443]);
+const DEFAULT_TIMEOUT_MS = 10_000;
 export const DEFAULT_MAX_BYTES = 1024 * 1024;
-export const DEFAULT_MAX_REDIRECTS = 3;
-export const MAX_URL_LENGTH = 4096;
+const DEFAULT_MAX_REDIRECTS = 3;
+const MAX_URL_LENGTH = 4096;
 
 /** Name suffixes that only resolve inside a network. */
-export const INTERNAL_SUFFIXES = Object.freeze([
+const INTERNAL_SUFFIXES = Object.freeze([
 	'localhost',
 	'local',
 	'internal',

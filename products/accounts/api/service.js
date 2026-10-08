@@ -45,7 +45,7 @@ import { createStore } from '../adapters/store.js';
 /** Time a two-step step or a social hand-over stays open. */
 const STEP_MS = 10 * 60_000;
 /** Data exports are single-use links valid for 15 minutes (PLAN 0.4.11). */
-export const EXPORT_MS = 15 * 60_000;
+const EXPORT_MS = 15 * 60_000;
 /** Erasures handled right after one request (code constant). */
 const ERASURES_PER_REQUEST = 3;
 

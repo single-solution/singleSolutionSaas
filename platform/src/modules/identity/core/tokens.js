@@ -7,7 +7,7 @@
  */
 import { createHmac } from 'node:crypto';
 
-export const TOKEN_PURPOSES = Object.freeze(['setup', 'password_reset', 'email_change', 'two_step']);
+const TOKEN_PURPOSES = Object.freeze(['setup', 'password_reset', 'email_change', 'two_step']);
 
 /** @typedef {'setup' | 'password_reset' | 'email_change' | 'two_step'} TokenPurpose */
 

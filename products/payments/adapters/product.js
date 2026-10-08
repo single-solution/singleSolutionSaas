@@ -52,7 +52,7 @@ export const manifest = /** @type {import('@ss/contracts').Manifest} */ (
 export { strings };
 
 /** Payments' own problem codes. */
-export const PROBLEM_CODES = Object.freeze({
+const PROBLEM_CODES = Object.freeze({
 	gateway_not_ready: Object.freeze({ status: 422, title: 'Gateway not ready' }),
 	currency_not_supported: Object.freeze({ status: 422, title: 'Currency not supported' }),
 	not_refundable: Object.freeze({ status: 409, title: 'Not refundable' }),

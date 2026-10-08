@@ -76,7 +76,7 @@ export const isDuplicate = (error) => typeof error === 'object' && error !== nul
  * @param {string} collection
  * @returns {Promise<T[]>}
  */
-export const allOf = async (data, collection) =>
+const allOf = async (data, collection) =>
 	/** @type {T[]} */ (
 		await data
 			.collection(collection)
@@ -133,7 +133,7 @@ export const loadRules = async (data, switches) => {
  * @param {Session} [session]
  * @returns {Promise<T | null>}
  */
-export const findByRef = async (data, collection, ref, prefix, session) =>
+const findByRef = async (data, collection, ref, prefix, session) =>
 	/** @type {T | null} */ (
 		await data
 			.collection(collection)

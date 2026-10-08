@@ -54,7 +54,7 @@ export const checkAddProduct = (input) => {
 };
 
 /** Largest receipt, in credits (keeps every amount an exact integer of millicredits). */
-export const MAX_RECEIPT_CREDITS = 1_000_000_000;
+const MAX_RECEIPT_CREDITS = 1_000_000_000;
 
 /**
  * @param {unknown} value

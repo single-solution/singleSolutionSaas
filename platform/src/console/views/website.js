@@ -449,7 +449,7 @@ export function WebsitePage(props) {
  * @param {{ merchantId: string, websiteId: string, fetcher: Fetcher, products: Array<{ productId: string, name: string }>,
  *   onClose: () => void, onAdded: (card: ProductCard) => void }} props
  */
-export function AddProductDialog({ merchantId, websiteId, fetcher, products, onClose, onAdded }) {
+function AddProductDialog({ merchantId, websiteId, fetcher, products, onClose, onAdded }) {
 	const [busy, setBusy] = useState(/** @type {string | null} */ (null));
 	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
 	/** @param {string} productId */

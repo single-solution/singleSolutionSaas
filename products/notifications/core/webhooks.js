@@ -9,7 +9,7 @@ export const WEBHOOK_EVENTS = Object.freeze(['message.sent', 'message.failed', '
 /** Name of the signature header. */
 export const SIGNATURE_HEADER = 'ss-signature';
 /** URLs a website may send events to, at most. */
-export const MAX_WEBHOOK_URLS = 5;
+const MAX_WEBHOOK_URLS = 5;
 /** A receiver should refuse signatures older than this (the docs say so). */
 export const SIGNATURE_TOLERANCE_SECONDS = 300;
 

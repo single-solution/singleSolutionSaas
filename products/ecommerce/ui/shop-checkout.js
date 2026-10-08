@@ -12,7 +12,7 @@ import { button, codeOf, currencyOf, dateText, field, h, money, problemText } fr
 /** @typedef {import('./widget.js').WidgetConfig} WidgetConfig */
 
 /** The address fields in order, with their longest text and the browser's autofill name. */
-export const ADDRESS_FIELDS = Object.freeze(
+const ADDRESS_FIELDS = Object.freeze(
 	/** @type {Array<[string, number, string]>} */ ([
 		['name', 120, 'name'],
 		['phone', 30, 'tel'],

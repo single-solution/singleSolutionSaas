@@ -14,10 +14,7 @@
  */
 import { normalise } from './text.js';
 
-/** PII kinds this module can redact. */
-export const PII_KINDS = Object.freeze(/** @type {const} */ (['card', 'iban', 'email', 'phone', 'ip']));
-
-/** @typedef {(typeof PII_KINDS)[number]} PiiKind */
+/** @typedef {'card' | 'iban' | 'email' | 'phone' | 'ip'} PiiKind */
 
 const EMAIL = /[\p{L}\p{N}._%+-]+@[\p{L}\p{N}.-]+\.[\p{L}]{2,}/gu;
 const CARD_CANDIDATE = /\b(?:\d[ -]?){12,18}\d\b/g;
@@ -29,7 +26,7 @@ const IPV4 = /\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d
  * Luhn checksum.
  * @param {string} digits
  */
-export const luhn = (digits) => {
+const luhn = (digits) => {
 	let sum = 0;
 	let double = false;
 	for (let i = digits.length - 1; i >= 0; i -= 1) {
@@ -139,7 +136,7 @@ const hostIn = (host, hosts) => hosts.some((h) => host === h || host.endsWith(`.
  * @param {string} target
  * @param {LinkPolicy} policy
  */
-export const linkAllowed = (target, policy) => {
+const linkAllowed = (target, policy) => {
 	const value = target.trim();
 	if (policy.mode === 'none') return false;
 	if (value.startsWith('/') && !value.startsWith('//')) return true;
@@ -186,7 +183,7 @@ export const applyLinkPolicy = (text, policy) => {
  * @param {string} text
  * @param {number} max
  */
-export const tidy = (text, max) =>
+const tidy = (text, max) =>
 	[
 		...String(text ?? '')
 			.replace(/[ \t]{2,}/g, ' ')
@@ -204,7 +201,7 @@ export const tidy = (text, max) =>
  * @param {'mask' | 'reject'} action
  * @returns {{ ok: boolean, text: string, hits: number }}
  */
-export const applyBlockedTerms = (text, terms, action) => {
+const applyBlockedTerms = (text, terms, action) => {
 	let hits = 0;
 	let out = String(text ?? '');
 	for (const term of terms) {

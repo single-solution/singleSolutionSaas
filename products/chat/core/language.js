@@ -8,7 +8,7 @@
 import { tokenize } from './text.js';
 
 /** Unicode script of the languages written in a non-Latin script (Unicode data, not a market assumption). */
-export const LANGUAGE_SCRIPTS = Object.freeze({
+const LANGUAGE_SCRIPTS = Object.freeze({
 	ar: 'Arabic',
 	fa: 'Arabic',
 	ur: 'Arabic',
@@ -95,7 +95,7 @@ const SCRIPT_PATTERNS = Object.freeze([
  * Primary subtag (`pt-BR` → `pt`).
  * @param {string} tag
  */
-export const primary = (tag) => String(tag).toLowerCase().split('-')[0] ?? '';
+const primary = (tag) => String(tag).toLowerCase().split('-')[0] ?? '';
 
 /** ISO 15924 script subtags (`ur-Latn`, `sr-Cyrl`) → the script names used here. */
 const SCRIPT_SUBTAGS = Object.freeze({
@@ -134,7 +134,7 @@ const SCRIPT_SUBTAGS = Object.freeze({
  * Latin.
  * @param {string} tag
  */
-export const scriptOf = (tag) => {
+const scriptOf = (tag) => {
 	const subtag = String(tag)
 		.split('-')
 		.slice(1)
@@ -148,7 +148,7 @@ export const scriptOf = (tag) => {
  * @param {string} text
  * @returns {{ latin: number, scripts: Record<string, number>, letters: number }}
  */
-export const scriptCounts = (text) => {
+const scriptCounts = (text) => {
 	/** @type {Record<string, number>} */
 	const scripts = {};
 	for (const [name, pattern] of SCRIPT_PATTERNS) {
@@ -165,7 +165,7 @@ export const scriptCounts = (text) => {
  * @param {string} text
  * @returns {string | null}
  */
-export const dominantScript = (text) => {
+const dominantScript = (text) => {
 	const { scripts, letters } = scriptCounts(text);
 	if (letters === 0) return null;
 	/** @type {Record<string, number>} */
@@ -192,7 +192,7 @@ export const dominantScript = (text) => {
  * @param {readonly MarkerSet[]} markers
  * @returns {Array<{ language: string, hits: number }>} sorted by hits (desc)
  */
-export const markerScores = (text, markers) => {
+const markerScores = (text, markers) => {
 	const words = tokenize(text, { minLength: 1 });
 	const counts = new Map();
 	for (const word of words) counts.set(word, (counts.get(word) ?? 0) + 1);
@@ -212,7 +212,7 @@ export const markerScores = (text, markers) => {
  * @param {string} tag
  * @param {readonly string[] | undefined} allowed
  */
-export const isAllowed = (tag, allowed) =>
+const isAllowed = (tag, allowed) =>
 	!allowed || allowed.length === 0 || allowed.some((a) => a === tag || primary(a) === primary(tag));
 
 /**

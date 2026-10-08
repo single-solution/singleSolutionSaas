@@ -12,7 +12,7 @@ import { MAX_SEARCH, checkCustomerEdit, customerView, orderSummary } from '../co
 /** @typedef {import('./service.js').Site} Site */
 
 /** A customer shows this many of their latest orders. */
-export const RECENT_ORDERS = 10;
+const RECENT_ORDERS = 10;
 
 const USER_ID = /^[A-Za-z0-9_-]{1,100}$/;
 

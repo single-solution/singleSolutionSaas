@@ -94,9 +94,9 @@ import { platformError } from './errors.js';
  */
 
 /** Control-plane connection pool per instance. */
-export const MONGO_POOL_SIZE = 5;
+const MONGO_POOL_SIZE = 5;
 /** Default request body cap (1 MiB). */
-export const MAX_BODY_BYTES = 1024 * 1024;
+const MAX_BODY_BYTES = 1024 * 1024;
 /** Settings bounds and defaults (PLAN 0.5.4, 0.8.2). */
 export const SETTINGS_BOUNDS = Object.freeze({
 	sessionHours: Object.freeze({ min: 1, max: 336, default: 12 }),
@@ -127,9 +127,6 @@ export const sessionPolicies = (hours) => {
 	return Object.freeze({ admin: policy, merchant: policy });
 };
 
-/** Session lifetimes with the default Session length. */
-export const SESSIONS = sessionPolicies(SETTINGS_BOUNDS.sessionHours.default);
-
 /** Documented environment variables: `[name, required, description]`. Nothing else is read. */
 export const ENV_VARS = Object.freeze([
 	['MONGODB_URI', true, 'Control-plane MongoDB connection string (never a client database).'],
@@ -143,7 +140,7 @@ export const ENV_VARS = Object.freeze([
 
 const LEVELS = new Set(['debug', 'info', 'warn', 'error', 'silent']);
 /** Hosts outbound calls may reach over loopback and plain http outside production (products run locally). */
-export const LOCAL_OUTBOUND_HOSTS = Object.freeze(['localhost', '127.0.0.1', '::1']);
+const LOCAL_OUTBOUND_HOSTS = Object.freeze(['localhost', '127.0.0.1', '::1']);
 /** `Name <address>` or `address`. */
 export const MAIL_FROM = /^(?:[^<>\r\n]{1,100} <[^\s@<>]{1,64}@[^\s@<>]{1,255}>|[^\s@<>]{1,64}@[^\s@<>]{1,255})$/;
 
@@ -260,7 +257,7 @@ export const loadEnv = (env = process.env) => {
  * @param {{ [K in keyof PortalSettings]?: Partial<PortalSettings[K]> } | null | undefined} settings
  * @returns {PortalSettings}
  */
-export const settingsWithDefaults = (settings) => ({
+const settingsWithDefaults = (settings) => ({
 	security: { ...DEFAULT_SETTINGS.security, ...(settings?.security ?? {}) },
 	branding: { ...DEFAULT_SETTINGS.branding, ...(settings?.branding ?? {}) },
 	support: { ...DEFAULT_SETTINGS.support, ...(settings?.support ?? {}) },

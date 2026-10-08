@@ -8,14 +8,10 @@ export { consumeWith, createMemoryReplayStore } from './replay.js';
 export * from './tokens.js';
 export * from './tickets.js';
 export * from './launch.js';
-export { ASSERTION_TYP, MAX_ASSERTION_LIFETIME_SECONDS, signAssertion, verifyAssertion } from './assertion.js';
-export { NOTICE_HEADERS, NOTICE_PATH, NOTICE_TOLERANCE_SECONDS, NOTICE_TYPES, signNotice, verifyNotice } from './notices.js';
+export { signAssertion, verifyAssertion } from './assertion.js';
+export { NOTICE_PATH, NOTICE_TYPES, signNotice, verifyNotice } from './notices.js';
 export {
 	CONNECT_PATH,
-	CONNECT_SIGNATURE_HEADER,
-	CONNECT_TIMESTAMP_HEADER,
-	CONNECT_TOLERANCE_SECONDS,
-	MIN_CONNECT_SECRET_LENGTH,
 	canonicalUrl,
 	createConnectRequest,
 	createConnectResponse,

@@ -19,7 +19,7 @@ import { STATUS_ROLES } from './model.js';
 /** @typedef {import('./model.js').StatusRole} StatusRole */
 
 /** At most this many statuses in a flow. */
-export const MAX_STATUSES = 30;
+const MAX_STATUSES = 30;
 /** A status key. */
 const KEY = /^[a-z][a-z0-9_]{1,39}$/;
 
@@ -70,8 +70,6 @@ Object.freeze(ALLOWED_FROM);
 
 /** Roles whose orders still wait (counted by the open-order cap; cancelled when their window ends). */
 export const WAITING_ROLES = Object.freeze(/** @type {StatusRole[]} */ (['awaiting_payment', 'awaiting_confirmation']));
-/** Roles in which an order is finished and never moves again. */
-export const FINAL_ROLES = Object.freeze(/** @type {StatusRole[]} */ (['cancelled', 'refunded']));
 
 /**
  * Check a flow the merchant saves.

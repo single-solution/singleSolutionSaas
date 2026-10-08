@@ -8,33 +8,17 @@
  */
 
 /** Pages one checklist run reads, besides robots.txt and the sitemap. */
-export const MAX_PAGES = 20;
+const MAX_PAGES = 20;
 
 /** URLs one IndexNow submission takes (the IndexNow limit). */
-export const MAX_INDEXNOW_URLS = 10_000;
+const MAX_INDEXNOW_URLS = 10_000;
 
 /** The IndexNow endpoint every participating search engine shares. */
 export const INDEXNOW_ENDPOINT = 'https://api.indexnow.org/indexnow';
 
 /** Title and description lengths search results show without cutting. */
-export const TITLE_LENGTH = Object.freeze({ min: 10, max: 60 });
-export const DESCRIPTION_LENGTH = Object.freeze({ min: 50, max: 160 });
-
-/** Every check, in the order the widget shows them: site checks, then page checks. */
-export const SITE_CHECKS = Object.freeze(['robots_txt', 'robots_blocks', 'sitemap', 'verification']);
-export const PAGE_CHECKS = Object.freeze([
-	'reachable',
-	'noindex',
-	'title',
-	'description',
-	'h1',
-	'canonical',
-	'lang',
-	'viewport',
-	'social',
-	'image_alt',
-	'structured_data',
-]);
+const TITLE_LENGTH = Object.freeze({ min: 10, max: 60 });
+const DESCRIPTION_LENGTH = Object.freeze({ min: 50, max: 160 });
 
 /** @typedef {'pass' | 'warn' | 'fail'} CheckStatus */
 /** @typedef {{ id: string, status: CheckStatus, page: string | null, detail: Record<string, string | number> }} Check */
@@ -43,7 +27,7 @@ export const PAGE_CHECKS = Object.freeze([
 // ------------------------------------------------------------------------------------------------- robots and tags
 
 /** The verification meta tags: setting → tag name. */
-export const VERIFICATION_TAGS = Object.freeze({
+const VERIFICATION_TAGS = Object.freeze({
 	googleVerification: 'google-site-verification',
 	bingVerification: 'msvalidate.01',
 	metaVerification: 'facebook-domain-verification',
@@ -111,7 +95,7 @@ export const robotsTxtOf = (values, domain) => {
 };
 
 /** @param {unknown} value */
-export const isIndexNowKey = (value) => typeof value === 'string' && /^[A-Za-z0-9-]{8,128}$/.test(value);
+const isIndexNowKey = (value) => typeof value === 'string' && /^[A-Za-z0-9-]{8,128}$/.test(value);
 
 /**
  * An IndexNow submission: the URLs checked (https, the website's exact domain, no duplicates) and the body the

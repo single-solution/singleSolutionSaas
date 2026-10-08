@@ -32,10 +32,10 @@ export const COLLECT_FEATURES = Object.freeze(['visitor_analytics', 'conversion_
 export const MAX_BATCH = 25;
 
 /** Most items kept of one funnel event. */
-export const MAX_ITEMS = 50;
+const MAX_ITEMS = 50;
 
 /** Device classes the page script reports (from the screen width). */
-export const DEVICES = Object.freeze(['mobile', 'tablet', 'desktop']);
+const DEVICES = Object.freeze(['mobile', 'tablet', 'desktop']);
 
 /** The Web Vitals the page script measures, with the good and poor thresholds of web.dev (ms; CLS × 1000). */
 export const VITALS = Object.freeze({

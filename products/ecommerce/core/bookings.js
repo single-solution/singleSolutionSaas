@@ -10,7 +10,7 @@
 /** @typedef {{ day: number, from: string, to: string }} OpeningHours */
 
 /** At most this many opening periods. */
-export const MAX_PERIODS = 70;
+const MAX_PERIODS = 70;
 /** A slot list covers at most this many days. */
 export const MAX_SLOT_DAYS = 14;
 const TIME = /^([01]\d|2[0-3]):([0-5]\d)$/;

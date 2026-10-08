@@ -29,8 +29,8 @@ export const INDEXES = [
 const NO_ID = Object.freeze({ projection: { _id: 0 } });
 
 /** Waiting orders handled per sweep, and waiting payments rechecked per use. */
-export const SWEEP_BATCH = 20;
-export const RECHECK_BATCH = 10;
+const SWEEP_BATCH = 20;
+const RECHECK_BATCH = 10;
 
 /**
  * @param {WebsiteData} data

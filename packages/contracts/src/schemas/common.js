@@ -24,7 +24,7 @@ export const PATTERNS = Object.freeze({
 });
 
 /** Largest integer representable exactly in JavaScript; bound for money and counters. */
-export const MAX_SAFE = Number.MAX_SAFE_INTEGER;
+const MAX_SAFE = Number.MAX_SAFE_INTEGER;
 
 /**
  * `$ref` into the common schema.

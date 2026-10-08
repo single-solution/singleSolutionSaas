@@ -236,7 +236,7 @@ export const totpUri = ({ secret, issuer, account, digits = 6, step = 30 }) => {
  * @param {string} code
  * @param {Uint8Array} secret
  */
-export const hashRecoveryCode = (code, secret) => hmacHex(secret, `ss-recovery.v1|${code.toLowerCase().replace(/[\s-]/g, '')}`);
+const hashRecoveryCode = (code, secret) => hmacHex(secret, `ss-recovery.v1|${code.toLowerCase().replace(/[\s-]/g, '')}`);
 
 /**
  * Recovery codes: `count` codes of 10 base32 characters (50 bits) formatted `xxxxx-xxxxx`; return the plaintext
@@ -527,7 +527,7 @@ export const actorFromSession = (session) =>
  * @property {number} ipWindowMs
  */
 
-export const DEFAULT_THROTTLE = Object.freeze({
+const DEFAULT_THROTTLE = Object.freeze({
 	accountMaxFailures: 5,
 	accountWindowMs: 15 * 60_000,
 	lockMs: 15 * 60_000,

@@ -52,7 +52,7 @@ export const PAY_SCRIPT = `(() => {
 `;
 
 /** @param {unknown} value */
-export const escape = (value) => String(value).replace(/[&<>"']/g, (ch) => `&#${/** @type {string} */ (ch).charCodeAt(0)};`);
+const escape = (value) => String(value).replace(/[&<>"']/g, (ch) => `&#${/** @type {string} */ (ch).charCodeAt(0)};`);
 
 const PAGE_CSS = `
 :root { color-scheme: light dark; }

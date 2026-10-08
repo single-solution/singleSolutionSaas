@@ -20,7 +20,7 @@ export const exists = async (target) => {
 };
 
 /** Directories never walked. */
-export const IGNORED_DIRS = Object.freeze(new Set(['node_modules', '.git', '.next', 'coverage', 'dist', '.vercel']));
+const IGNORED_DIRS = Object.freeze(new Set(['node_modules', '.git', '.next', 'coverage', 'dist', '.vercel']));
 
 /**
  * Recursively list files under `root` (relative POSIX paths, sorted).

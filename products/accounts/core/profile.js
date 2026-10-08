@@ -5,9 +5,9 @@
  * @module
  */
 
-export const MAX_ADDRESSES = 10;
+const MAX_ADDRESSES = 10;
 export const MAX_CUSTOM_FIELDS = 50;
-export const FIELD_TYPES = Object.freeze(/** @type {const} */ (['text', 'number', 'date', 'choice']));
+const FIELD_TYPES = Object.freeze(/** @type {const} */ (['text', 'number', 'date', 'choice']));
 const FIELD_KEY = /^[a-z][a-z0-9_]{0,39}$/;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const COUNTRY = /^[A-Z]{2}$/;

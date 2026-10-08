@@ -29,13 +29,13 @@ import { isProductId } from './tokens.js';
 /** Path of the product's connect endpoint. */
 export const CONNECT_PATH = '/.well-known/ss-connect';
 /** Header carrying the HMAC timestamp (unix seconds). */
-export const CONNECT_TIMESTAMP_HEADER = 'SS-Connect-Timestamp';
+const CONNECT_TIMESTAMP_HEADER = 'SS-Connect-Timestamp';
 /** Header carrying the hex HMAC-SHA256. */
-export const CONNECT_SIGNATURE_HEADER = 'SS-Connect-Signature';
+const CONNECT_SIGNATURE_HEADER = 'SS-Connect-Signature';
 /** Shortest accepted connect secret. */
-export const MIN_CONNECT_SECRET_LENGTH = 32;
+const MIN_CONNECT_SECRET_LENGTH = 32;
 /** Accepted clock difference, seconds. */
-export const CONNECT_TOLERANCE_SECONDS = 300;
+const CONNECT_TOLERANCE_SECONDS = 300;
 const REQUEST_LABEL = 'ss-connect.v1';
 const RESPONSE_LABEL = 'ss-connected.v1';
 const SIGNATURE = /^[0-9a-f]{64}$/;

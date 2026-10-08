@@ -19,13 +19,13 @@ import { nowSeconds, requireString, signCompact, verifyCompact } from './jws.js'
 /** @import { KeyResolver, Signer } from './keys.js' */
 
 /** JOSE `typ` of browser and server tokens. */
-export const TOKEN_TYP = 'ss-token+jws';
+const TOKEN_TYP = 'ss-token+jws';
 
 /** Token kinds. */
 export const TOKEN_KINDS = Object.freeze(/** @type {const} */ (['browser', 'server']));
 
 /** Format of a product id (the manifest `id`). */
-export const PRODUCT_ID_PATTERN = /^[a-z][a-z0-9-]{1,30}$/;
+const PRODUCT_ID_PATTERN = /^[a-z][a-z0-9-]{1,30}$/;
 
 /** Accepted difference between the Portal clock and the product clock when checking `iat`, seconds. */
 const IAT_SKEW_SECONDS = 300;

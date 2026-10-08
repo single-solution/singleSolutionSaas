@@ -13,7 +13,7 @@ import { formatMoney } from '../core/money.js';
 /** @typedef {import('../core/model.js').OrderRecord} OrderRecord */
 
 /** Template keys. */
-export const ORDER_TEMPLATES = Object.freeze({ placed: 'ecommerce.order_placed', status: 'ecommerce.order_status' });
+const ORDER_TEMPLATES = Object.freeze({ placed: 'ecommerce.order_placed', status: 'ecommerce.order_status' });
 
 /**
  * @param {Service} service

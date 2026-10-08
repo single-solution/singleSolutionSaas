@@ -20,17 +20,17 @@ import { checkTimeClaims, isObject, nowSeconds, requireString, signCompact, veri
 /** @import { KeyResolver, Signer } from './keys.js' */
 
 /** Launch kinds. */
-export const LAUNCH_KINDS = Object.freeze(/** @type {const} */ (['merchant', 'admin']));
+const LAUNCH_KINDS = Object.freeze(/** @type {const} */ (['merchant', 'admin']));
 
 /** Admin roles that may open a product dashboard. */
-export const LAUNCH_ADMIN_ROLES = Object.freeze(/** @type {const} */ (['owner', 'support']));
+const LAUNCH_ADMIN_ROLES = Object.freeze(/** @type {const} */ (['owner', 'support']));
 
 /** JOSE `typ` of launches. */
-export const LAUNCH_TYP = 'ss-launch+jwt';
+const LAUNCH_TYP = 'ss-launch+jwt';
 
 /** Default and maximum launch lifetime (seconds). */
-export const DEFAULT_LAUNCH_TTL_SECONDS = 60;
-export const MAX_LAUNCH_TTL_SECONDS = 300;
+const DEFAULT_LAUNCH_TTL_SECONDS = 60;
+const MAX_LAUNCH_TTL_SECONDS = 300;
 
 const MAX_WEBSITES = 1000;
 const ISO_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z$/;

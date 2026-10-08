@@ -23,7 +23,7 @@ import { call, failure, ok2xx } from './types.js';
 /** @typedef {import('./types.js').GatewayAdapter} GatewayAdapter */
 
 /** The header of the generic adapter's signed notices and refund requests. */
-export const SIGNATURE_HEADER = 'ss-signature';
+const SIGNATURE_HEADER = 'ss-signature';
 
 /**
  * The checkout fields' signature.

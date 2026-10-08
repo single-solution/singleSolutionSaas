@@ -211,7 +211,7 @@ export const createIdentity = ({ connections, send, now }) => {
 /** @typedef {ReturnType<typeof createIdentity>} Identity */
 
 /** Path of a website's Accounts sign-in keys at Accounts (PLAN 0.8.6): `{ issuer, keys }`. */
-export const accountsKeysPath = (/** @type {string} */ websiteId) => `/v1/websites/${websiteId}/keys`;
+const accountsKeysPath = (/** @type {string} */ websiteId) => `/v1/websites/${websiteId}/keys`;
 const ACCOUNTS_KEYS_TTL_MS = 10 * 60_000;
 const ACCOUNTS_REFETCH_MS = 60_000;
 

@@ -5,7 +5,6 @@ import { modules } from '../src/modules/index.js';
 describe('@ss/platform/testing', () => {
 	it('exposes the composition root, the module list, the module factories and the API driver for system tests', () => {
 		expect(Object.keys(testing).sort()).toEqual([
-			'SESSIONS',
 			'closeMongoClients',
 			'commerceModule',
 			'createCatalogModule',
@@ -14,11 +13,9 @@ describe('@ss/platform/testing', () => {
 			'createPortalClient',
 			'createSystemStore',
 			'loadConfig',
-			'loadEnv',
 			'modules',
 			'systemModule',
 			'testSystemState',
-			'totpCode',
 		]);
 		expect(testing.modules).toBe(modules);
 		expect(modules.map((m) => m.name)).toEqual(['system', 'catalog', 'identity', 'commerce']);

@@ -22,7 +22,7 @@ import { isObject } from './util.js';
 /** @typedef {{ ok: true } | { ok: false, problem: ProblemResult }} Change */
 
 /** The theme before anyone changes it: product CSS supplies the colours. */
-export const DEFAULT_THEME = Object.freeze({
+const DEFAULT_THEME = Object.freeze({
 	colors: Object.freeze({}),
 	fontFamily: 'inherit',
 	radius: 8,
@@ -30,9 +30,9 @@ export const DEFAULT_THEME = Object.freeze({
 	customCss: '',
 });
 /** Longest custom CSS, in bytes. */
-export const MAX_CUSTOM_CSS_BYTES = 20 * 1024;
+const MAX_CUSTOM_CSS_BYTES = 20 * 1024;
 /** Longest widget text. */
-export const MAX_TEXT_LENGTH = 2000;
+const MAX_TEXT_LENGTH = 2000;
 const THEME_FIELDS = /** @type {const} */ (['colors', 'fontFamily', 'radius', 'mode', 'customCss']);
 const COLOR_NAME = /^[a-z][a-zA-Z0-9]{0,31}$/;
 const COLOR = /^#[0-9a-fA-F]{6}$/;
@@ -44,7 +44,7 @@ const FONT = /^[A-Za-z0-9][A-Za-z0-9 _-]{0,63}$/;
  * @param {unknown} value
  * @returns {string | null}
  */
-export const themeViolation = (field, value) => {
+const themeViolation = (field, value) => {
 	switch (field) {
 		case 'colors':
 			return isObject(value) &&

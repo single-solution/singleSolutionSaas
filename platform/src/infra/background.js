@@ -20,7 +20,7 @@ import { runInRequestScope } from './request-scope.js';
 /** @typedef {import('./http.js').AfterScheduler} AfterScheduler */
 
 /** At most this many tasks run after one request (a task deferring tasks cannot loop forever). */
-export const MAX_TASKS_PER_REQUEST = 200;
+const MAX_TASKS_PER_REQUEST = 200;
 
 /**
  * @param {{ logger: Logger, mode?: 'on' | 'off', fallback?: AfterScheduler,

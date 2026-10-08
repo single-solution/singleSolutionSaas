@@ -4,14 +4,14 @@
  */
 
 /** Prefix shared by every v1 schema id. */
-export const SCHEMA_ID_PREFIX = 'urn:ss:contracts:v1:';
+const SCHEMA_ID_PREFIX = 'urn:ss:contracts:v1:';
 
 /**
  * Build a v1 schema id from a short name.
  * @param {string} name
  * @returns {string}
  */
-export const schemaId = (name) => `${SCHEMA_ID_PREFIX}${name}`;
+const schemaId = (name) => `${SCHEMA_ID_PREFIX}${name}`;
 
 /** Every schema id, keyed by short name. */
 export const SCHEMA_IDS = Object.freeze({

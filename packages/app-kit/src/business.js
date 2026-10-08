@@ -12,16 +12,16 @@ import { validateBusinessJson } from '@ss/contracts';
 /** @typedef {import('./connections.js').OutboundSend} OutboundSend */
 
 /** A copy older than this is fetched again right after the next request. */
-export const BUSINESS_MAX_AGE_MS = 24 * 60 * 60_000;
+const BUSINESS_MAX_AGE_MS = 24 * 60 * 60_000;
 /** Largest business.json read. */
-export const BUSINESS_MAX_BYTES = 64 * 1024;
+const BUSINESS_MAX_BYTES = 64 * 1024;
 
 /**
  * The defaults when the file or a field is missing: name = the domain, time zone UTC, other fields empty.
  * @param {string} domain
  * @returns {BusinessInfo}
  */
-export const businessDefaults = (domain) => ({
+const businessDefaults = (domain) => ({
 	name: domain,
 	logo: null,
 	email: null,

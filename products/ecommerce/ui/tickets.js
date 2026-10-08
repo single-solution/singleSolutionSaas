@@ -5,7 +5,7 @@
  */
 
 /** A new ticket is asked for this long before the current one expires. */
-export const REFRESH_BEFORE_MS = 60_000;
+const REFRESH_BEFORE_MS = 60_000;
 
 /** @typedef {{ ticket: string, expiresAt: string }} Ticket */
 /** @typedef {() => Promise<Ticket>} GetTicket */

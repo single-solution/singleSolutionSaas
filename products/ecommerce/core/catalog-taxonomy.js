@@ -13,10 +13,10 @@ import { LIMITS, cleanText, isObject, isSlug } from './catalog.js';
 /** @typedef {import('./catalog.js').FieldError} FieldError */
 
 /** Attribute types. */
-export const ATTRIBUTE_TYPES = Object.freeze(/** @type {const} */ (['text', 'number', 'boolean', 'choice']));
+const ATTRIBUTE_TYPES = Object.freeze(/** @type {const} */ (['text', 'number', 'boolean', 'choice']));
 
 /** Limits of the catalog's records. */
-export const TAXONOMY_LIMITS = Object.freeze({
+const TAXONOMY_LIMITS = Object.freeze({
 	name: 120,
 	description: 5000,
 	choices: 100,

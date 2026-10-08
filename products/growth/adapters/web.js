@@ -10,10 +10,10 @@ import { INDEXNOW_ENDPOINT } from '../core/seo.js';
 /** @typedef {import('../core/seo.js').Fetched} Fetched */
 
 /** Time and size limits of one page read. */
-export const PAGE_TIMEOUT_MS = 8_000;
-export const PAGE_MAX_BYTES = 1_048_576;
+const PAGE_TIMEOUT_MS = 8_000;
+const PAGE_MAX_BYTES = 1_048_576;
 /** Time limit of an IndexNow submission. */
-export const INDEXNOW_TIMEOUT_MS = 10_000;
+const INDEXNOW_TIMEOUT_MS = 10_000;
 
 const USER_AGENT = 'SingleSolution-Growth-SEO/1 (SEO checklist on request of the site owner)';
 

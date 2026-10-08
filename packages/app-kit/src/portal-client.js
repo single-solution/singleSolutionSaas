@@ -17,7 +17,7 @@ import { isObject, kitError } from './util.js';
 /** @typedef {import('@ss/contracts').Revocations} Revocations */
 
 /** Deadline of one Portal call. */
-export const PORTAL_TIMEOUT_MS = 10_000;
+const PORTAL_TIMEOUT_MS = 10_000;
 
 /**
  * @param {{ portalUrl: string, productId: string, signer: Signer, fetch?: typeof globalThis.fetch, now?: () => number,

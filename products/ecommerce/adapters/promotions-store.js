@@ -14,7 +14,7 @@ import { normaliseCode } from '../core/coupons.js';
 /** @typedef {'coupons' | 'deals' | 'bundles'} OfferCollection */
 
 /** Most deals or bundles loaded for one cart. */
-export const MAX_LIVE_OFFERS = 500;
+const MAX_LIVE_OFFERS = 500;
 
 /** Merchant database indexes of this part. @type {import('@ss/app-kit').IndexDefinition[]} */
 export const INDEXES = [

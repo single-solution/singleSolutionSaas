@@ -34,9 +34,9 @@ import { toDecimal } from '../core/money.js';
 /** @typedef {import('../core/model.js').OrderRecord} OrderRecord */
 
 /** One courier call's deadline. */
-export const COURIER_TIMEOUT_MS = 8000;
+const COURIER_TIMEOUT_MS = 8000;
 /** The largest courier answer read. */
-export const COURIER_MAX_BYTES = 64 * 1024;
+const COURIER_MAX_BYTES = 64 * 1024;
 /** The longest status text kept. */
 const MAX_STATUS = 200;
 

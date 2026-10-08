@@ -11,7 +11,7 @@
  */
 
 /** RFC 5321 limits. */
-export const EMAIL_MAX = 254;
+const EMAIL_MAX = 254;
 const LOCAL_MAX = 64;
 const LABEL = /^(?!-)[a-z0-9-]{1,63}(?<!-)$/;
 const LOCAL = /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+$/;
@@ -40,7 +40,7 @@ export const normaliseEmail = (input) => {
 export const emailDomain = (email) => email.slice(email.lastIndexOf('@') + 1);
 
 /** Canonical E.164 shape. */
-export const E164 = /^\+[1-9]\d{6,14}$/;
+const E164 = /^\+[1-9]\d{6,14}$/;
 const CALLING_CODE = /^\+[1-9]\d{0,2}$/;
 const PHONE_CHARACTERS = /^[\d\s()+./-]+$/;
 

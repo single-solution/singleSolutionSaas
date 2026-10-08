@@ -112,7 +112,7 @@ export const manifest = /** @type {import('@ss/contracts').Manifest} */ (
 export { strings };
 
 /** Chat's own problem codes. */
-export const PROBLEM_CODES = Object.freeze({
+const PROBLEM_CODES = Object.freeze({
 	sign_in_required: Object.freeze({ status: 403, title: 'Sign in to chat' }),
 	guest_limit_reached: Object.freeze({ status: 403, title: 'Guest message limit reached' }),
 	message_rejected: Object.freeze({ status: 422, title: 'Message rejected' }),

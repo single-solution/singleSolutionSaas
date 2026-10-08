@@ -24,7 +24,7 @@ const DAY_MS = 86_400_000;
  * @param {string} text
  * @param {Record<string, string | number>} values
  */
-export const fill = (text, values) =>
+const fill = (text, values) =>
 	text.replace(/\{(\w+)\}/g, (match, key) => (Object.hasOwn(values, key) ? String(values[key]) : match));
 
 /**
@@ -112,7 +112,7 @@ export const wholeOf = (text) => {
  * The helpers of one mounted admin widget.
  * @param {AdminInput} input
  */
-export const createKit = ({ root, config, api, win, save, open }) => {
+const createKit = ({ root, config, api, win, save, open }) => {
 	const doc = /** @type {Document} */ (root.ownerDocument);
 	const currency = String(config.settings?.currency ?? '');
 	/** @type {string[]} */

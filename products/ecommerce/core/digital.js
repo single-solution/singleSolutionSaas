@@ -11,8 +11,8 @@ export const DOWNLOAD_SECONDS = 300;
 /** The largest digital file (one signed upload). */
 export const MAX_FILE_BYTES = 5 * 1024 * 1024 * 1024;
 /** At most this many licence keys per call, and this long each. */
-export const MAX_KEYS_PER_CALL = 1000;
-export const MAX_KEY_LENGTH = 500;
+const MAX_KEYS_PER_CALL = 1000;
+const MAX_KEY_LENGTH = 500;
 
 /**
  * A file name safe for a storage key and a download (letters, digits, dot, dash, underscore; at most 120 characters),

@@ -20,8 +20,6 @@ import { renderOpenapi } from './openapi.js';
 import { projectFiles } from './project.js';
 import { WIDGET_MODULE, scanRoutes } from './routes.js';
 
-export { WIDGET_MODULE };
-
 /** Project-relative path of the generated OpenAPI file. */
 export const OPENAPI_FILE = 'openapi.json';
 /** Entry of the widget bundle: it starts the widgets when the script loads. */
@@ -54,7 +52,7 @@ const kitFallback = {
  * @param {string} dir project root
  * @returns {Promise<string>}
  */
-export const renderWidgetModule = async (dir) => {
+const renderWidgetModule = async (dir) => {
 	const { build } = await import('esbuild');
 	const result = await build({
 		absWorkingDir: dir,
@@ -88,7 +86,7 @@ export const renderWidgetModule = async (dir) => {
  * @param {string} dir
  * @returns {Promise<Record<string, unknown>>}
  */
-export const renderProjectOpenapi = async (dir) => {
+const renderProjectOpenapi = async (dir) => {
 	const loaded = await loadManifest(dir);
 	const { routes } = await scanRoutes(await projectFiles(dir));
 	return renderOpenapi({ manifest: loaded.manifest, routes });

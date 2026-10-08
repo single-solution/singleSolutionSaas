@@ -10,7 +10,7 @@ import { button, h } from './shop-common.js';
 /** @typedef {import('./widget.js').Shop} Shop */
 
 /** Days read at once. */
-export const SLOT_DAYS = 7;
+const SLOT_DAYS = 7;
 const DAY_MS = 86_400_000;
 
 /**

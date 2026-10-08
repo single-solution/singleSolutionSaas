@@ -54,10 +54,10 @@ import { createId } from '@ss/contracts';
  *   attempts: number, dueAt: Date, createdAt: Date }} EventRecord
  */
 
-export const PAYMENTS = 'payments';
-export const LINKS = 'links';
-export const SUBSCRIPTIONS = 'subscriptions';
-export const EVENTS = 'events';
+const PAYMENTS = 'payments';
+const LINKS = 'links';
+const SUBSCRIPTIONS = 'subscriptions';
+const EVENTS = 'events';
 
 /** Merchant database indexes (created on a website's first use). @type {import('@ss/app-kit').IndexDefinition[]} */
 export const INDEXES = [

@@ -13,7 +13,7 @@ import { kitError } from './util.js';
 /** @typedef {{ websiteId: string, merchantId: string | null, after: (task: () => Promise<unknown>) => void }} ActivityContext */
 
 /** Path of the provisional Accounts route that receives copies. */
-export const ACTIVITY_COPY_PATH = '/v1/activity-copies';
+const ACTIVITY_COPY_PATH = '/v1/activity-copies';
 const RETRY_BATCH = 20;
 
 /**

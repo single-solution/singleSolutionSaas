@@ -94,7 +94,7 @@ export const manifest = /** @type {import('@ss/contracts').Manifest} */ (
 export { strings };
 
 /** Ecommerce's own problem codes. */
-export const PROBLEM_CODES = Object.freeze({
+const PROBLEM_CODES = Object.freeze({
 	sign_in_required: Object.freeze({ status: 403, title: 'Sign in required' }),
 	customer_blocked: Object.freeze({ status: 403, title: 'Ordering is not possible for this account' }),
 	out_of_stock: Object.freeze({ status: 409, title: 'Out of stock' }),

@@ -11,9 +11,9 @@ import { containsPhrase, pathMatches } from './text.js';
 import { checkFieldValue } from './fields.js';
 
 /** Most flows a website has. */
-export const MAX_FLOWS = 20;
+const MAX_FLOWS = 20;
 /** Most steps of one flow. */
-export const MAX_STEPS = 20;
+const MAX_STEPS = 20;
 const FLOW_ID = /^[a-z0-9_-]{1,40}$/;
 const STANDARD_FIELDS = Object.freeze(['name', 'email', 'phone', 'text']);
 

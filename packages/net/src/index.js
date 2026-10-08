@@ -18,8 +18,8 @@ export {
 export * from './policy.js';
 export { guardedLookup, resolveVetted } from './lookup.js';
 export { jsonOf, safeFetch, textOf } from './fetch.js';
-export { SAFE_MONGO_OPTIONS, isSafeMongoUri, parseMongoUri } from './mongo.js';
-export { ALGORITHM, MAX_PRESIGN_SECONDS, UNSIGNED_PAYLOAD, amzDates, objectUrl, presignV4, signV4, uriEncode } from './sigv4.js';
+export { isSafeMongoUri, parseMongoUri } from './mongo.js';
+export { amzDates, objectUrl, presignV4, signV4, uriEncode } from './sigv4.js';
 
 /** @typedef {import('./errors.js').NetError} NetError */
 /** @typedef {import('./errors.js').NetErrorCode} NetErrorCode */

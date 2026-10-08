@@ -16,9 +16,9 @@ import { isProductId } from './tokens.js';
 /** @typedef {{ iss: string, sub: string, aud: string, jti: string, iat: number, exp: number }} AssertionClaims */
 
 /** JOSE `typ` of client assertions. */
-export const ASSERTION_TYP = 'ss-assertion+jwt';
+const ASSERTION_TYP = 'ss-assertion+jwt';
 /** Maximum assertion lifetime (seconds). */
-export const MAX_ASSERTION_LIFETIME_SECONDS = 300;
+const MAX_ASSERTION_LIFETIME_SECONDS = 300;
 
 /**
  * Sign a client assertion.

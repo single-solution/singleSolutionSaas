@@ -12,7 +12,7 @@ import { button, codeOf, dateText, field, h, money, problemText, select } from '
 /** @typedef {import('./widget.js').WidgetConfig} WidgetConfig */
 
 /** Photo types the claims take. */
-export const PHOTO_TYPES = Object.freeze(['image/jpeg', 'image/png', 'image/webp']);
+const PHOTO_TYPES = Object.freeze(['image/jpeg', 'image/png', 'image/webp']);
 const CLAIMS_PAGE = 10;
 
 /**

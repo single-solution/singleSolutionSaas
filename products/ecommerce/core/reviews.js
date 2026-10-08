@@ -8,9 +8,9 @@ import { plainText } from './returns.js';
 /** @typedef {import('./model.js').ReviewRecord} ReviewRecord */
 /** @typedef {import('./extras-pages.js').SortField} SortField */
 
-export const MAX_TITLE = 120;
-export const MAX_BODY = 2000;
-export const MAX_REPLY = 2000;
+const MAX_TITLE = 120;
+const MAX_BODY = 2000;
+const MAX_REPLY = 2000;
 export const REVIEW_STATUSES = Object.freeze(/** @type {ReviewRecord['status'][]} */ (['pending', 'approved', 'rejected']));
 
 /** The public list's sorts (newest first by default). @type {Readonly<Record<'newest' | 'highest' | 'lowest', SortField[]>>} */

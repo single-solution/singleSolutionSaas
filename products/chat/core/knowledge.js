@@ -110,7 +110,7 @@ export const chunkText = (text, { size, overlap, max }) => {
  * @param {{ boost?: string }} [options] extra text whose terms count twice (FAQ questions, titles)
  * @returns {{ terms: string[], tf: Record<string, number>, length: number }}
  */
-export const termsOf = (text, { boost = '' } = {}) => {
+const termsOf = (text, { boost = '' } = {}) => {
 	/** @type {Record<string, number>} */
 	const tf = {};
 	const all = [...tokenize(text), ...tokenize(boost), ...tokenize(boost)];

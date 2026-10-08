@@ -31,7 +31,7 @@ export const CHANNEL_CONNECTIONS = Object.freeze({
 export const FALLBACK_CHANNELS = Object.freeze(/** @type {Array<'email' | 'sms' | 'whatsapp'>} */ (['email', 'sms', 'whatsapp']));
 
 /** The member of `to` each channel needs. */
-export const ADDRESS_FIELDS = Object.freeze({
+const ADDRESS_FIELDS = Object.freeze({
 	email: 'email',
 	sms: 'phone',
 	whatsapp: 'phone',

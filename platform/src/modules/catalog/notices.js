@@ -21,7 +21,7 @@ import { NOTICES, PRODUCTS } from './schema.js';
  */
 
 /** At most this many notices go to one product after one request. */
-export const NOTICE_BATCH = 50;
+const NOTICE_BATCH = 50;
 const NOTICE_TIMEOUT_MS = 5_000;
 
 /**

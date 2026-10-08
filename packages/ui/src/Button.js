@@ -29,7 +29,7 @@ const SIZES = {
  * Class names of a button look (for links styled as buttons).
  * @param {{ variant?: ButtonVariant, size?: ButtonSize, block?: boolean, className?: string }} [options]
  */
-export const buttonClass = ({ variant = 'primary', size = 'md', block = false, className } = {}) =>
+const buttonClass = ({ variant = 'primary', size = 'md', block = false, className } = {}) =>
 	cx(BASE, VARIANTS[variant], SIZES[size], block && 'w-full', className);
 
 /**

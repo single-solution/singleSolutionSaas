@@ -8,7 +8,7 @@
 /** @typedef {import('./model.js').ProductRecord} ProductRecord */
 /** @typedef {import('./model.js').VariantRecord} VariantRecord */
 
-export const ALERT_KINDS = Object.freeze(/** @type {AlertRecord['kind'][]} */ (['back_in_stock', 'price_drop']));
+const ALERT_KINDS = Object.freeze(/** @type {AlertRecord['kind'][]} */ (['back_in_stock', 'price_drop']));
 /** Waiting alerts per shopper, at most. */
 export const MAX_ALERTS = 100;
 /** Alerts sent per catalog change or per use, at most (the rest are sent on later uses). */
@@ -39,7 +39,7 @@ export const checkAlertInput = (body) => {
  * @param {Pick<ProductRecord, 'trackStock'>} product
  * @param {Pick<VariantRecord, 'active' | 'stock'>} variant
  */
-export const sellable = (product, variant) => variant.active && (!product.trackStock || variant.stock > 0);
+const sellable = (product, variant) => variant.active && (!product.trackStock || variant.stock > 0);
 
 /**
  * The price an alert watches: its variant's, else the product's lowest.

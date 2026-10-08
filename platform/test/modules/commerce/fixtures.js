@@ -19,7 +19,7 @@ export const SUPPORT_ADMIN = 'adm_support000000000000000000';
 export const FINANCE_ADMIN = 'adm_finance000000000000000000';
 export const HOUR = 3_600_000;
 export const STAFF = Object.freeze({ type: 'admin', id: 'adm_finance', role: 'finance' });
-export const ORIGIN_HEADERS = Object.freeze({ origin: PORTAL_URL, 'sec-fetch-site': 'same-origin' });
+const ORIGIN_HEADERS = Object.freeze({ origin: PORTAL_URL, 'sec-fetch-site': 'same-origin' });
 
 /**
  * A price list (PLAN 0.4.12 row 2) from `{ key: millicreditsPerHour }`; `box` depends on `codes`.
@@ -40,7 +40,7 @@ export const priceList = (version, prices) => ({
 /**
  * @param {import('./fakes/modules.js').World} world
  */
-export const seedWorld = (world) => {
+const seedWorld = (world) => {
 	world.merchants.set(M1, { merchantId: M1, name: 'One', status: 'active' });
 	world.merchants.set(M2, { merchantId: M2, name: 'Two', status: 'active' });
 	world.websites.set(W1, { websiteId: W1, merchantId: M1, domain: 'shop.example.com', status: 'active' });

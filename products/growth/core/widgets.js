@@ -37,9 +37,6 @@ export const BROWSER_EVENTS = Object.freeze({
 /** The funnel steps, in order. */
 export const FUNNEL_STEPS = Object.freeze(['view_item', 'add_to_cart', 'begin_checkout', 'purchase']);
 
-/** The consent categories; `necessary` is always on. */
-export const CONSENT_CATEGORIES = Object.freeze(['necessary', 'analytics', 'marketing']);
-
 /** Where the visitor's consent choice is kept (their own browser's localStorage). */
 export const CONSENT_STORAGE_KEY = 'ss-growth-consent';
 

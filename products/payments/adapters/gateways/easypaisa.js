@@ -17,8 +17,8 @@ import { call, ok2xx } from './types.js';
 
 /** @typedef {import('./types.js').GatewayAdapter} GatewayAdapter */
 
-export const EASYPAY_LIVE = 'https://easypay.easypaisa.com.pk';
-export const EASYPAY_SANDBOX = 'https://easypaystg.easypaisa.com.pk';
+const EASYPAY_LIVE = 'https://easypay.easypaisa.com.pk';
+const EASYPAY_SANDBOX = 'https://easypaystg.easypaisa.com.pk';
 
 /** @param {Record<string, any>} keys */
 const hostOf = (keys) => (keys.sandbox === true ? EASYPAY_SANDBOX : EASYPAY_LIVE);

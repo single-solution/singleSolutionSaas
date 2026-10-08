@@ -28,12 +28,12 @@ export const EDITABLE_ROLES = Object.freeze(
 	/** @type {ReadonlyArray<StatusRole>} */ (['awaiting_payment', 'awaiting_confirmation', 'open', 'packed']),
 );
 /** Bulk moves take at most this many orders. */
-export const MAX_BULK = 200;
+const MAX_BULK = 200;
 /** Longest note, staff note, search text and serial number. */
-export const MAX_NOTE = 1000;
-export const MAX_STAFF_NOTE = 5000;
+const MAX_NOTE = 1000;
+const MAX_STAFF_NOTE = 5000;
 export const MAX_SEARCH = 120;
-export const MAX_SERIAL = 80;
+const MAX_SERIAL = 80;
 /** A booked shipment's status is asked again at most this often (on read). */
 export const TRACK_EVERY_MS = 30 * 60_000;
 
@@ -74,7 +74,7 @@ export const wire = (value) => {
  * The part of what was paid that went through Payments (online, bank transfer, a COD advance).
  * @param {OrderRecord} order
  */
-export const paidThroughPayments = (order) => {
+const paidThroughPayments = (order) => {
 	if (!order.payment.paymentId) return 0;
 	return CASH_METHODS.includes(order.payment.method) ? Math.min(order.payment.advance, order.payment.paid) : order.payment.paid;
 };
@@ -435,7 +435,7 @@ export const orderSummary = (order, flow) => ({
  * @param {Partial<CustomerRecord> | null} customer
  * @returns {CustomerFlags}
  */
-export const customerFlags = (customer) => ({
+const customerFlags = (customer) => ({
 	blocked: customer?.blocked === true,
 	blockedReason: customer?.blockedReason ?? '',
 	rtoCount: customer?.rtoCount ?? 0,

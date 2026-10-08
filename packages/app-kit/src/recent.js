@@ -11,7 +11,7 @@ import { randomToken } from './util.js';
 /** @typedef {{ websiteId: string | null, who: Who, what: string, detail: string, at: string }} RecentChange */
 
 /** Entries a list returns. */
-export const RECENT_CHANGES_LIMIT = 50;
+const RECENT_CHANGES_LIMIT = 50;
 
 /**
  * @param {{ store: Store, now: () => number, randomBytes: (length: number) => Uint8Array }} options

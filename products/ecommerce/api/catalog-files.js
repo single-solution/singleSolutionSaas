@@ -21,7 +21,7 @@ import { IMAGE_TYPES, bodyOf, refuse, STAFF_LIMITS } from './catalog-common.js';
 /** @typedef {import('@ss/app-kit').WebsiteData} WebsiteData */
 
 /** An upload link lasts this long (seconds). */
-export const UPLOAD_SECONDS = 900;
+const UPLOAD_SECONDS = 900;
 
 /** What an image can belong to: the collection, the storage folder and the activity name. */
 const OWNERS = Object.freeze({

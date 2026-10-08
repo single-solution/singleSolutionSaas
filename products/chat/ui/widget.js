@@ -20,7 +20,7 @@ import { createChecks } from './transport.js';
 import { createVisitor } from './visitor.js';
 
 /** The kit's widget config routes (browser token; ticket). */
-export const CONFIG_PATH = '/v1/widget/config';
+const CONFIG_PATH = '/v1/widget/config';
 export const ADMIN_CONFIG_PATH = '/v1/widget/admin/config';
 
 /**

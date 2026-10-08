@@ -22,7 +22,7 @@ const ENCRYPTION_KEY = 'encryption-key-0123456789-abcdefghij';
 export const ALL = manifest.features.map((feature) => feature.key);
 
 /** Gateway hosts the fakes answer. */
-export const GATEWAY_ORIGINS = Object.freeze([
+const GATEWAY_ORIGINS = Object.freeze([
 	'https://api.stripe.com',
 	'https://api-m.paypal.com',
 	'https://api-m.sandbox.paypal.com',

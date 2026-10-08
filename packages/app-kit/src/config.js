@@ -6,7 +6,7 @@
  */
 
 /** Shortest accepted `CONNECT_SECRET` and `ENCRYPTION_KEY`. */
-export const MIN_SECRET_LENGTH = 32;
+const MIN_SECRET_LENGTH = 32;
 
 /** @typedef {{ mongodbUri: string, connectSecret: string, encryptionKey: string }} ProductConfig */
 

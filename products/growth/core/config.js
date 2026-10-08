@@ -8,7 +8,7 @@
  */
 
 /** The shape of each tag id. */
-export const TAG_IDS = Object.freeze({
+const TAG_IDS = Object.freeze({
 	meta: /^\d{6,20}$/,
 	ga4: /^G-[A-Z0-9]{4,20}$/,
 	ads: /^AW-\d{5,15}$/,
@@ -18,7 +18,7 @@ export const TAG_IDS = Object.freeze({
 });
 
 /** Search parameters read when the merchant names none. */
-export const DEFAULT_SEARCH_PARAMS = Object.freeze(['q', 's', 'search', 'query']);
+const DEFAULT_SEARCH_PARAMS = Object.freeze(['q', 's', 'search', 'query']);
 
 /** @typedef {Record<string, Record<string, unknown>>} FeatureValues settings of each switched-on feature */
 

@@ -48,7 +48,7 @@ const int = (value) => (Number.isFinite(value) && Number(value) > 0 ? Math.floor
  * @param {ChatRequest} request
  * @returns {{ path: string, body: Record<string, unknown> }}
  */
-export const toOpenAi = ({ model, messages, tools, temperature, maxTokens }) => ({
+const toOpenAi = ({ model, messages, tools, temperature, maxTokens }) => ({
 	path: '/chat/completions',
 	body: {
 		model,
@@ -84,7 +84,7 @@ export const toOpenAi = ({ model, messages, tools, temperature, maxTokens }) => 
  * @param {any} payload
  * @returns {ChatResult}
  */
-export const fromOpenAi = (payload) => {
+const fromOpenAi = (payload) => {
 	const choice = payload?.choices?.[0];
 	const message = choice?.message ?? {};
 	const toolCalls = (Array.isArray(message.tool_calls) ? message.tool_calls : [])
@@ -136,7 +136,7 @@ const toAnthropicMessages = (messages) => {
  * @param {ChatRequest} request
  * @returns {{ path: string, body: Record<string, unknown> }}
  */
-export const toAnthropic = ({ model, messages, tools, temperature, maxTokens }) => {
+const toAnthropic = ({ model, messages, tools, temperature, maxTokens }) => {
 	const system = messages
 		.filter((m) => m.role === 'system')
 		.map((m) => m.content)
@@ -160,7 +160,7 @@ export const toAnthropic = ({ model, messages, tools, temperature, maxTokens }) 
  * @param {any} payload
  * @returns {ChatResult}
  */
-export const fromAnthropic = (payload) => {
+const fromAnthropic = (payload) => {
 	/** @type {string[]} */
 	const texts = [];
 	/** @type {ToolCall[]} */
@@ -215,7 +215,7 @@ const toGeminiContents = (messages) => {
  * @param {ChatRequest} request
  * @returns {{ path: string, body: Record<string, unknown> }}
  */
-export const toGoogle = ({ model, messages, tools, temperature, maxTokens }) => {
+const toGoogle = ({ model, messages, tools, temperature, maxTokens }) => {
 	const system = messages
 		.filter((m) => m.role === 'system')
 		.map((m) => m.content)
@@ -251,7 +251,7 @@ export const toGoogle = ({ model, messages, tools, temperature, maxTokens }) => 
  * @param {any} payload
  * @returns {ChatResult}
  */
-export const fromGoogle = (payload) => {
+const fromGoogle = (payload) => {
 	const candidate = payload?.candidates?.[0];
 	const parts = Array.isArray(candidate?.content?.parts) ? candidate.content.parts : [];
 	/** @type {string[]} */

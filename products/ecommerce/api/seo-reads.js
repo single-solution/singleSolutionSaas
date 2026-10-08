@@ -14,7 +14,7 @@ import { COLLECTIONS } from '../core/model.js';
 /** @typedef {import('./catalog-media.js').Media} Media */
 
 /** At most this many categories are read at once (trees, product types). */
-export const MAX_CATEGORIES = 5000;
+const MAX_CATEGORIES = 5000;
 
 /**
  * An id or slug from the path, or '' when it cannot be one.

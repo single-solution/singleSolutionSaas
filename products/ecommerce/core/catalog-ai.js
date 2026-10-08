@@ -7,7 +7,7 @@
 import { LIMITS, cleanText, isObject } from './catalog.js';
 
 /** The texts AI copy can suggest, with their longest length. */
-export const AI_FIELDS = Object.freeze({
+const AI_FIELDS = Object.freeze({
 	description: LIMITS.description,
 	summary: LIMITS.summary,
 	seoTitle: 70,

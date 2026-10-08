@@ -24,7 +24,7 @@ const controlClass = (invalid) => cx(CONTROL, invalid ? 'border-danger' : 'borde
  * Ids for a field's parts.
  * @param {string | undefined} id
  */
-export const useFieldIds = (id) => {
+const useFieldIds = (id) => {
 	const auto = useId();
 	const base = id ?? `f${auto.replace(/[^a-zA-Z0-9_-]/g, '')}`;
 	return { id: base, help: `${base}-help`, error: `${base}-error` };
@@ -41,7 +41,7 @@ const describedBy = ({ help, error }, ids) =>
  * Help and error lines under a control.
  * @param {{ ids: { help: string, error: string }, help?: ReactNode, error?: ReactNode }} props
  */
-export function FieldMessages({ ids, help, error }) {
+function FieldMessages({ ids, help, error }) {
 	return (
 		<>
 			{help ? (
@@ -65,7 +65,7 @@ export function FieldMessages({ ids, help, error }) {
  *   error?: ReactNode, aside?: ReactNode, className?: string,
  *   children: (ids: { id: string, help: string, error: string, describedBy: string | undefined }) => ReactNode }} props
  */
-export function Field({ id, label, hideLabel = false, required = false, help, error, aside, className, children }) {
+function Field({ id, label, hideLabel = false, required = false, help, error, aside, className, children }) {
 	const ids = useFieldIds(id);
 	return (
 		<div className={cx('space-y-1.5', className)}>

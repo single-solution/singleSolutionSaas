@@ -33,7 +33,7 @@ import { hmacHex, isObject, sha256Hex } from './util.js';
 /** @typedef {'admin' | 'merchant' | 'product' | 'public'} AuthMode */
 /** @typedef {'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'} Method */
 
-export const AUTH_MODES = Object.freeze(/** @type {AuthMode[]} */ (['admin', 'merchant', 'product', 'public']));
+const AUTH_MODES = Object.freeze(/** @type {AuthMode[]} */ (['admin', 'merchant', 'product', 'public']));
 const METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
 const BODY_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const REQUEST_ID = /^[A-Za-z0-9._:-]{1,128}$/;

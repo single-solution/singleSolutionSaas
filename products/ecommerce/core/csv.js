@@ -8,7 +8,7 @@
  */
 
 /** Byte order mark spreadsheets need to open UTF-8. */
-export const CSV_BOM = '\uFEFF';
+const CSV_BOM = '\uFEFF';
 const FORMULA = /^[=+\-@\t\r]/;
 
 /** @typedef {string | number | boolean | null | undefined} Cell */

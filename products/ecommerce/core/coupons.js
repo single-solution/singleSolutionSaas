@@ -25,13 +25,13 @@ import {
 /** @typedef {import('./promotions-rules.js').Checked} Checked */
 
 /** Coupon types. */
-export const COUPON_TYPES = Object.freeze(/** @type {const} */ (['percent', 'fixed', 'free_delivery']));
+const COUPON_TYPES = Object.freeze(/** @type {const} */ (['percent', 'fixed', 'free_delivery']));
 
 /** A stored code: 3–40 characters A–Z, 0–9, `-` and `_`. */
-export const CODE_PATTERN = /^[A-Z0-9_-]{3,40}$/;
+const CODE_PATTERN = /^[A-Z0-9_-]{3,40}$/;
 
 /** Why a code does not apply, with the shopper's message. */
-export const COUPON_PROBLEMS = Object.freeze({
+const COUPON_PROBLEMS = Object.freeze({
 	coupon_unknown: 'This code is not valid.',
 	coupon_inactive: 'This code is not active.',
 	coupon_not_started: 'This code is not valid yet.',
@@ -170,11 +170,11 @@ export const couponView = (coupon) => ({
 // ------------------------------------------------------------------------------------------------- batch codes
 
 /** Most codes in one batch. */
-export const MAX_BATCH = 500;
+const MAX_BATCH = 500;
 /** Random characters after the prefix (no 0/O or 1/I, so codes read back without mistakes). */
 export const BATCH_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 /** Random characters of a batch code. */
-export const BATCH_RANDOM_LENGTH = 8;
+const BATCH_RANDOM_LENGTH = 8;
 
 /**
  * A batch request: `{ prefix, count, coupon }` (the coupon without `code`).

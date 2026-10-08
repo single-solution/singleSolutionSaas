@@ -16,7 +16,7 @@ import { BrandMark } from './brand.js';
 /** @typedef {import('@ss/ui').Problem} Problem */
 /** @typedef {{ name: string, accent: string, logoUrl: string | null, support: { email: string | null, phone: string | null, whatsapp: string | null } }} Branding */
 
-export const PASSWORD_MIN = 12;
+const PASSWORD_MIN = 12;
 
 /**
  * Where to go after signing in: a same-site relative `next` of that console (no open redirects), else its home.
@@ -54,7 +54,7 @@ const emailProblem = (email) => (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
  * @param {{ branding: Branding, title: string, subtitle?: import('react').ReactNode, children: import('react').ReactNode,
  *   footer?: import('react').ReactNode }} props
  */
-export function AuthFrame({ branding, title, subtitle, children, footer }) {
+function AuthFrame({ branding, title, subtitle, children, footer }) {
 	return (
 		<main className="flex min-h-screen items-center justify-center bg-canvas px-4 py-10">
 			<div className="w-full max-w-md space-y-6">
@@ -79,7 +79,7 @@ export function AuthFrame({ branding, title, subtitle, children, footer }) {
  * @param {{ challenge: string, onDone: (console: 'admin' | 'merchant') => void, onRestart: () => void,
  *   onProblem: (problem: Problem) => void }} props
  */
-export function TwoStepStep({ challenge, onDone, onRestart, onProblem }) {
+function TwoStepStep({ challenge, onDone, onRestart, onProblem }) {
 	const [useRecovery, setUseRecovery] = useState(false);
 	const [code, setCode] = useState('');
 	const [busy, setBusy] = useState(false);

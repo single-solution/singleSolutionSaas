@@ -65,7 +65,7 @@ export { strings };
 export const OTHER_PRODUCTS = Object.freeze(/** @type {const} */ (['notifications', 'chat', 'ecommerce', 'payments', 'growth']));
 
 /** Accounts' own problem codes. */
-export const PROBLEM_CODES = Object.freeze({
+const PROBLEM_CODES = Object.freeze({
 	sign_in_failed: Object.freeze({ status: 401, title: 'Sign-in failed' }),
 	signed_out: Object.freeze({ status: 401, title: 'Signed out' }),
 	locked: Object.freeze({ status: 423, title: 'Locked' }),

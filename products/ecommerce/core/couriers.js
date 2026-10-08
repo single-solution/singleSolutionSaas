@@ -8,7 +8,7 @@
  */
 
 /** At most this many couriers. */
-export const MAX_COURIERS = 30;
+const MAX_COURIERS = 30;
 /** Where the tracking number goes in a template. */
 export const TRACKING_TOKEN = '{tracking}';
 /** Longest tracking number. */
@@ -122,7 +122,7 @@ export const DEFAULT_BODY_TEMPLATE = JSON.stringify({
 });
 
 /** The fields a booking template may name. */
-export const TEMPLATE_FIELDS = Object.freeze([
+const TEMPLATE_FIELDS = Object.freeze([
 	'number',
 	'name',
 	'phone',

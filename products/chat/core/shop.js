@@ -10,7 +10,7 @@
  * @module
  */
 /** The shop tool names. */
-export const SHOP_TOOLS = Object.freeze({
+const SHOP_TOOLS = Object.freeze({
 	search: 'search_catalog',
 	details: 'get_product_details',
 	quote: 'quote_product_savings',
@@ -25,10 +25,10 @@ export const SHOP_TOOLS = Object.freeze({
 export const SHOP_LIMIT = 5;
 
 /** Most deals one list asks for. */
-export const DEALS_LIMIT = 10;
+const DEALS_LIMIT = 10;
 
 /** Orders shown in the context panel. */
-export const CONTEXT_ORDERS = 5;
+const CONTEXT_ORDERS = 5;
 
 /** The tool answer when Ecommerce cannot be asked (not connected, token refused, stopped, unreachable). */
 export const SHOP_UNAVAILABLE =
@@ -169,7 +169,7 @@ export const formatPrice = (amount, currency, { locale, display = 'code' } = {})
  * @param {unknown} raw
  * @returns {ShopProduct | null}
  */
-export const productOf = (raw) => {
+const productOf = (raw) => {
 	if (!isObject(raw)) return null;
 	const id = textOf(raw.id, 100);
 	const name = textOf(raw.name, 200);

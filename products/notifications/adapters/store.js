@@ -62,12 +62,12 @@ import { LEASE_MS } from '../core/timing.js';
  *   lastError: string | null, dueAt: Date, leaseUntil: Date | null }} WebhookEventRecord
  */
 
-export const TEMPLATES = 'templates';
-export const MESSAGES = 'messages';
-export const OPTOUTS = 'optouts';
-export const RECIPIENTS = 'recipients';
-export const SUBSCRIPTIONS = 'subscriptions';
-export const WEBHOOK_EVENTS = 'webhook_events';
+const TEMPLATES = 'templates';
+const MESSAGES = 'messages';
+const OPTOUTS = 'optouts';
+const RECIPIENTS = 'recipients';
+const SUBSCRIPTIONS = 'subscriptions';
+const WEBHOOK_EVENTS = 'webhook_events';
 
 /** Merchant database indexes (created on a website's first use). @type {import('@ss/app-kit').IndexDefinition[]} */
 export const INDEXES = [

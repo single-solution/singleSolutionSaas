@@ -7,23 +7,23 @@
 import { CHANNELS } from './channels.js';
 
 /** Template keys: lower case, digits, `_`, `.` and `-`, starting with a letter. */
-export const TEMPLATE_KEY = /^[a-z][a-z0-9_.-]{0,63}$/;
+const TEMPLATE_KEY = /^[a-z][a-z0-9_.-]{0,63}$/;
 
 /**
  * Template keys of the other products' own events start with that product's id and a dot. They work without the
  * Merchant send API feature; every other key is the merchant's own and needs it (PLAN 0.8.4 builder choice).
  */
-export const PRODUCT_KEY_PREFIXES = Object.freeze(['accounts.', 'ecommerce.', 'chat.', 'payments.', 'growth.']);
+const PRODUCT_KEY_PREFIXES = Object.freeze(['accounts.', 'ecommerce.', 'chat.', 'payments.', 'growth.']);
 
 /** The language of a template every recipient falls back to (written as `default` in paths). */
 export const DEFAULT_LANGUAGE = '';
 
 /** Longest texts per channel (characters). */
-export const TEXT_LIMITS = Object.freeze({ email: 100_000, sms: 1600, whatsapp: 4096, push: 500, staff_push: 500 });
+const TEXT_LIMITS = Object.freeze({ email: 100_000, sms: 1600, whatsapp: 4096, push: 500, staff_push: 500 });
 /** Longest subject (e-mail) or title (push). */
-export const SUBJECT_LIMIT = 200;
+const SUBJECT_LIMIT = 200;
 /** Placeholders Notifications fills itself. */
-export const BUILT_IN_VALUES = Object.freeze(['unsubscribeUrl']);
+const BUILT_IN_VALUES = Object.freeze(['unsubscribeUrl']);
 
 const PLACEHOLDER = /\{([A-Za-z][A-Za-z0-9_]{0,63})\}/g;
 const LANGUAGE = /^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8}){0,3}$/;

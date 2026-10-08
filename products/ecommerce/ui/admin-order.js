@@ -19,7 +19,7 @@ const ADDRESS_FIELDS = Object.freeze(['name', 'phone', 'line1', 'line2', 'city',
  * @param {Kit} kit
  * @returns {Array<{ key: string, name: string }>}
  */
-export const couriersOf = (kit) => {
+const couriersOf = (kit) => {
 	const list = kit.settings.orders?.couriers;
 	return Array.isArray(list) ? list : [];
 };

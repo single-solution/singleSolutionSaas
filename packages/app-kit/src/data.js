@@ -17,7 +17,7 @@ import { MongoClient } from 'mongodb';
 import { collectionPrefix, isObject, kitError, sha256Hex } from './util.js';
 
 /** Connections per merchant database per instance (serverless instances multiply it; clusters may be free tiers). */
-export const CLIENT_DB_POOL_SIZE = 3;
+const CLIENT_DB_POOL_SIZE = 3;
 
 /** @typedef {import('./logger.js').Logger} Logger */
 /** @typedef {import('mongodb').Document} Document */
@@ -179,7 +179,7 @@ export const guardUpdate = (update, websiteId, at, op) => {
  * @param {string} op
  * @returns {Document}
  */
-export const stampInsert = (doc, { websiteId, at, stamp }, op) => {
+const stampInsert = (doc, { websiteId, at, stamp }, op) => {
 	if (!isObject(doc)) throw tenantError(op, 'a document object is required');
 	if (doc.websiteId !== undefined && doc.websiteId !== websiteId)
 		throw tenantError(op, 'the document belongs to another website');
@@ -195,7 +195,7 @@ export const stampInsert = (doc, { websiteId, at, stamp }, op) => {
  * @param {import('mongodb').Collection<any>} collection
  * @param {{ websiteId: string, now: () => number, stamp: Record<string, unknown> }} context
  */
-export const guardCollection = (collection, { websiteId, now, stamp }) => {
+const guardCollection = (collection, { websiteId, now, stamp }) => {
 	const at = () => new Date(now());
 	/** @param {unknown} doc @param {string} op */
 	const insertDoc = (doc, op) => stampInsert(doc, { websiteId, at: at(), stamp }, op);

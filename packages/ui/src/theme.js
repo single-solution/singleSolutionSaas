@@ -20,7 +20,7 @@ const CHOICES = Object.freeze([
 ]);
 
 /** @returns {ThemeChoice} */
-export const readThemeChoice = () => {
+const readThemeChoice = () => {
 	try {
 		const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
 		return stored === 'light' || stored === 'dark' ? stored : 'system';
@@ -33,7 +33,7 @@ export const readThemeChoice = () => {
  * Store and apply a choice (`system` clears both the stored value and `data-theme`).
  * @param {ThemeChoice} choice
  */
-export const applyThemeChoice = (choice) => {
+const applyThemeChoice = (choice) => {
 	const root = document.documentElement;
 	if (choice === 'system') root.removeAttribute('data-theme');
 	else root.setAttribute('data-theme', choice);

@@ -12,7 +12,7 @@ import { b64url, fromB64url, getHeader } from './encoding.js';
 /** @typedef {Record<string, string | string[] | undefined> | Headers} HeaderBag */
 
 /** Header names. */
-export const SIGNATURE_HEADERS = Object.freeze({ timestamp: 'SS-Timestamp', signature: 'SS-Signature', keyId: 'SS-Key-Id' });
+const SIGNATURE_HEADERS = Object.freeze({ timestamp: 'SS-Timestamp', signature: 'SS-Signature', keyId: 'SS-Key-Id' });
 const MAX_SIGNATURES = 4;
 
 /**

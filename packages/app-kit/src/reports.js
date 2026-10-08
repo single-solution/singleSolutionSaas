@@ -25,7 +25,7 @@ const RETRY_MS = 60_000;
  * @param {unknown} error
  * @returns {ProblemResult}
  */
-export const portalProblem = (error) => {
+const portalProblem = (error) => {
 	if (!isKitError(error, 'portal_refused'))
 		return problem('portal_unreachable', 'The Portal cannot be reached. Nothing was changed.');
 	const status = /** @type {number} */ (error.details?.status);
@@ -42,7 +42,7 @@ export const portalProblem = (error) => {
  * @param {string[]} on
  * @returns {Array<[string, string]>}
  */
-export const missingDependencies = (manifest, on) =>
+const missingDependencies = (manifest, on) =>
 	manifest.features.flatMap((feature) =>
 		on.includes(feature.key)
 			? feature.dependsOn.filter((dep) => !on.includes(dep)).map((dep) => /** @type {[string, string]} */ ([feature.key, dep]))

@@ -8,7 +8,7 @@ export const BASE = 'https://notes.example.dev';
 export const DOMAIN = 'shop.example.com';
 export const SECRET = 'connect-secret-0123456789-abcdefghij';
 export const ENCRYPTION_KEY = 'encryption-key-0123456789-abcdefghij';
-export const STRINGS = Object.freeze({
+const STRINGS = Object.freeze({
 	'form.title': 'Leave a note',
 	'form.count': 'You left {count} notes, {name}',
 	'inbox.empty': 'No notes',

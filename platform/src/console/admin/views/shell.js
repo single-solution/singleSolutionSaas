@@ -19,7 +19,7 @@ import { RoleBadge, adminCan } from './common.js';
  * The admin menu and the permission each entry needs (PLAN 0.6 Admin menu, 0.2 rights table).
  * @type {ReadonlyArray<{ href: string, label: string, icon: import('@ss/ui').IconName, tone: import('@ss/ui').Accent, permission: string, exact?: boolean }>}
  */
-export const ADMIN_NAV = Object.freeze([
+const ADMIN_NAV = Object.freeze([
 	{
 		href: adminRoutes.overview(),
 		label: ADMIN.menu.overview,

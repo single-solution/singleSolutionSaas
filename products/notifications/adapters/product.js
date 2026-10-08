@@ -55,7 +55,7 @@ export const manifest = /** @type {import('@ss/contracts').Manifest} */ (
 export { strings };
 
 /** Notifications' own problem codes. */
-export const PROBLEM_CODES = Object.freeze({
+const PROBLEM_CODES = Object.freeze({
 	template_not_found: Object.freeze({ status: 422, title: 'Template not found' }),
 });
 

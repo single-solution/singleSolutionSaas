@@ -7,7 +7,7 @@
 import { isAmount, isCurrency, toMajor } from './money.js';
 
 /** Each funnel step's name per pixel. */
-export const PIXEL_EVENTS = Object.freeze({
+const PIXEL_EVENTS = Object.freeze({
 	view_item: Object.freeze({ meta: 'ViewContent', google: 'view_item', tiktok: 'ViewContent' }),
 	add_to_cart: Object.freeze({ meta: 'AddToCart', google: 'add_to_cart', tiktok: 'AddToCart' }),
 	begin_checkout: Object.freeze({ meta: 'InitiateCheckout', google: 'begin_checkout', tiktok: 'InitiateCheckout' }),

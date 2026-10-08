@@ -16,7 +16,7 @@
  */
 import { createProtocolError } from './errors.js';
 import { fromUtf8, sha256Hex, utf8 } from './encoding.js';
-import { SIGNATURE_HEADERS, assertBody, checkSigningInputs, readTimestamp, signDetached, verifyDetached } from './detached.js';
+import { assertBody, checkSigningInputs, readTimestamp, signDetached, verifyDetached } from './detached.js';
 import { isObject } from './jws.js';
 
 /** @import { KeyResolver, Signer } from './keys.js' */
@@ -31,11 +31,8 @@ export const NOTICE_TYPES = Object.freeze(
 	/** @type {const} */ (['status.changed', 'token.revoked', 'sessions.revoked', 'website.deleted']),
 );
 
-/** Header names. */
-export const NOTICE_HEADERS = SIGNATURE_HEADERS;
-
 /** Default accepted clock difference, seconds. */
-export const NOTICE_TOLERANCE_SECONDS = 300;
+const NOTICE_TOLERANCE_SECONDS = 300;
 
 const MAX_ID_LENGTH = 256;
 

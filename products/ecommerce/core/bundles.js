@@ -30,11 +30,11 @@ import {
 /** @typedef {import('./promotions-rules.js').Checked} Checked */
 
 /** Bundle types. */
-export const BUNDLE_TYPES = Object.freeze(/** @type {const} */ (['bundle', 'buy_x_get_y']));
+const BUNDLE_TYPES = Object.freeze(/** @type {const} */ (['bundle', 'buy_x_get_y']));
 /** Most sets formed for one cart (all bundles together). */
 export const MAX_SETS = 1000;
 /** Most products in one bundle. */
-export const MAX_BUNDLE_ITEMS = 20;
+const MAX_BUNDLE_ITEMS = 20;
 
 /**
  * One cart line as bundles see it.

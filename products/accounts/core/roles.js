@@ -15,16 +15,16 @@
  */
 
 export const ROLE_KEY = /^[a-z][a-z0-9_]{1,39}$/;
-export const PERMISSION = /^(?:[a-z][a-z0-9-]{1,30}:[a-z][a-z0-9_.]{0,63}|\*)$/;
-export const OWN_PERMISSION_KEY = /^[a-z][a-z0-9_.]{0,63}$/;
+const PERMISSION = /^(?:[a-z][a-z0-9-]{1,30}:[a-z][a-z0-9_.]{0,63}|\*)$/;
+const OWN_PERMISSION_KEY = /^[a-z][a-z0-9_.]{0,63}$/;
 /** The source of the merchant's own permission names. */
-export const OWN_SOURCE = 'site';
+const OWN_SOURCE = 'site';
 /** Hard maximums (code constants). */
 export const MAX_ROLES = 100;
-export const MAX_ROLE_PERMISSIONS = 500;
-export const MAX_OWN_PERMISSIONS = 200;
-export const MAX_SESSION_HOURS = 720;
-export const MAX_REMEMBER_DAYS = 365;
+const MAX_ROLE_PERMISSIONS = 500;
+const MAX_OWN_PERMISSIONS = 200;
+const MAX_SESSION_HOURS = 720;
+const MAX_REMEMBER_DAYS = 365;
 /** The role of every new sign-up and of users whose role was deleted. */
 export const DEFAULT_ROLE = 'customer';
 

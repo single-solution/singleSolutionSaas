@@ -42,7 +42,7 @@ export const normaliseCode = (input, length) => {
 // ----------------------------------------------------------------------------------------------------- passwords
 
 /** Longest password accepted (code constant). */
-export const PASSWORD_MAX = 256;
+const PASSWORD_MAX = 256;
 
 /**
  * Why a new password is refused (`too_short`, `too_long`), or null. The breached-password check runs in adapters.
@@ -58,7 +58,7 @@ export const passwordProblem = (password, { minLength }) => {
 // -------------------------------------------------------------------------------------------------- risk checks
 
 /** Common disposable e-mail domains (the merchant adds their own in Settings). */
-export const DISPOSABLE_DOMAINS = Object.freeze([
+const DISPOSABLE_DOMAINS = Object.freeze([
 	'10minutemail.com',
 	'discard.email',
 	'dispostable.com',

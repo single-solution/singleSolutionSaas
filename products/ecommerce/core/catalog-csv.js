@@ -18,12 +18,12 @@ import { fromDecimal, toDecimal } from './money.js';
 /** Most data rows of an import. */
 export const MAX_IMPORT_ROWS = 5000;
 /** Option columns: option1_name, option1_value … */
-export const OPTION_COLUMNS = 3;
+const OPTION_COLUMNS = 3;
 /** A location's stock column: `stock@<location id>`. */
-export const LOCATION_COLUMN = 'stock@';
+const LOCATION_COLUMN = 'stock@';
 
 /** Columns of the products file (location stock columns follow). */
-export const PRODUCT_COLUMNS = Object.freeze([
+const PRODUCT_COLUMNS = Object.freeze([
 	'product_id',
 	'slug',
 	'name',

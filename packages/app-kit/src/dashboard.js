@@ -34,9 +34,9 @@ import { isObject, randomToken, sha256Hex } from './util.js';
  */
 
 /** Name of the dashboard session cookie. */
-export const SESSION_COOKIE = 'ss_session';
+const SESSION_COOKIE = 'ss_session';
 /** A widget counts as installed when it was seen within this time. */
-export const WIDGET_SEEN_MS = 7 * 24 * 60 * 60_000;
+const WIDGET_SEEN_MS = 7 * 24 * 60 * 60_000;
 const SWITCHER_PAGES = 50;
 
 /**
@@ -52,7 +52,7 @@ const sessionIdOf = (header) => {
 };
 
 /** @param {Session} session @returns {Who} */
-export const whoOf = (session) => ({
+const whoOf = (session) => ({
 	kind: session.kind,
 	id: session.subject,
 	name: session.name,

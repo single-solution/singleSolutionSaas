@@ -10,7 +10,7 @@
 /** @typedef {import('./service.js').Site} Site */
 
 /** A signed image link lasts this long. */
-export const SIGNED_MEDIA_SECONDS = 3600;
+const SIGNED_MEDIA_SECONDS = 3600;
 
 /**
  * @param {Product} product

@@ -11,7 +11,7 @@ import { MAX_BATCH } from '../core/events.js';
 import { PAGE_MARKER, VISIT_IDLE_MS, VISIT_STORAGE_KEY } from '../core/widgets.js';
 
 /** Events wait this long for others before a batch is sent. */
-export const FLUSH_DELAY_MS = 1000;
+const FLUSH_DELAY_MS = 1000;
 /** Most events kept while waiting for consent. */
 const MAX_WAITING = 50;
 

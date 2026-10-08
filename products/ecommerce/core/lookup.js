@@ -13,9 +13,9 @@ import { activeVariants, variantInStock } from './seo.js';
 /** @typedef {import('./model.js').OrderFlow} OrderFlow */
 
 /** A product description in a details answer is cut to this many characters. */
-export const DETAILS_DESCRIPTION_LENGTH = 1500;
+const DETAILS_DESCRIPTION_LENGTH = 1500;
 /** A details answer lists at most this many variants. */
-export const DETAILS_VARIANTS = 20;
+const DETAILS_VARIANTS = 20;
 /** A search uses at most this many words, each at most 40 characters. */
 const MAX_TERMS = 6;
 /** The longest search text. */

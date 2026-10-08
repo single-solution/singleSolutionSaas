@@ -66,8 +66,3 @@ export const createEslintConfig = ({ jsx = [], browserJsx = [], ignores = [] } =
 		rules: { 'no-param-reassign': 'off' },
 	},
 ];
-
-/** @type {ReturnType<typeof createEslintConfig>} */
-const defaultConfig = createEslintConfig();
-
-export default defaultConfig;

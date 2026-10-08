@@ -43,7 +43,7 @@ export const FORMS = Object.freeze({
  * @param {string} text
  * @returns {string | null}
  */
-export const headersProblem = (text) => {
+const headersProblem = (text) => {
 	if (text.trim() === '') return null;
 	try {
 		const parsed = JSON.parse(text);

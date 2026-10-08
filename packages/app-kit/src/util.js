@@ -22,7 +22,7 @@ export const sha256Hex = (data) => createHash('sha256').update(data).digest('hex
  * @param {Uint8Array | string} data
  * @returns {string}
  */
-export const toBase64Url = (data) => Buffer.from(data).toString('base64url');
+const toBase64Url = (data) => Buffer.from(data).toString('base64url');
 
 /**
  * Default randomness (WebCrypto).

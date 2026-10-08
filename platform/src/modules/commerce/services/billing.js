@@ -44,12 +44,12 @@ import {
 /** @typedef {{ type: string, id: string, name?: string | null }} Actor */
 /** @typedef {{ actor: Actor, requestId?: string | null, ip?: string | null }} Caller */
 
-export const SYSTEM_ACTOR = Object.freeze({ type: 'system', id: 'commerce' });
+const SYSTEM_ACTOR = Object.freeze({ type: 'system', id: 'commerce' });
 
 /** Billing states that send an e-mail when entered, and their template. */
 const STATE_MAILS = Object.freeze({ low_balance: 'low_balance', grace: 'grace_started', stopped: 'products_stopped' });
 /** Merchants shown per admin list (lists are paged at 50, PLAN 0.6). */
-export const PAGE = 50;
+const PAGE = 50;
 const KEY = /^[a-z][a-z0-9_]{0,63}$/;
 
 /** @param {unknown} value */

@@ -136,9 +136,6 @@ export const createTestLogger = () => {
 	return { logger: make({}), entries };
 };
 
-/** @param {number} n */
-export const b64 = (n, fill = 7) => Buffer.alloc(n, fill).toString('base64');
-
 /** The `ENCRYPTION_KEY` of test Portals. */
 export const ENCRYPTION_KEY = 'test-encryption-key-0123456789abcdef-portal';
 
@@ -203,12 +200,3 @@ export const testSessionActor = (session) => {
 		...(session.subject.includes('pending') ? { twoStepRequired: true } : {}),
 	};
 };
-
-/**
- * Login of a test session from an admin role or a merchant id: `{ kind: 'admin', role }` → subject `adm_<role>_<name>`
- * (see {@link testSessionActor}); `{ kind: 'merchant', merchantId }` → the merchant id.
- * @param {{ kind?: 'admin' | 'merchant', role?: string | null, name?: string, merchantId?: string }} who
- * @returns {{ kind: 'admin' | 'merchant', subject: string }}
- */
-export const testLogin = ({ kind = 'admin', role = 'owner', name = 'alice', merchantId = MERCHANT }) =>
-	kind === 'merchant' ? { kind, subject: merchantId } : { kind, subject: `adm_${role ?? 'none'}_${name}` };

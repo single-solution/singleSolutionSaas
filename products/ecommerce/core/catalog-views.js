@@ -33,7 +33,7 @@ export const compareAtOf = (product) => {
  * @param {ProductRecord} product
  * @param {ReadonlyMap<string, Grade>} grades
  */
-export const gradeLabels = (product, grades) => {
+const gradeLabels = (product, grades) => {
 	const keys = new Set(product.variants.filter((v) => v.active && v.grade).map((v) => v.grade));
 	return [...grades.values()].filter((grade) => keys.has(grade.key)).map((grade) => grade.label);
 };

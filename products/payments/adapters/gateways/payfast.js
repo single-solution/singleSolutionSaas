@@ -15,9 +15,9 @@ import { call, failure, ok2xx } from './types.js';
 
 /** @typedef {import('./types.js').GatewayAdapter} GatewayAdapter */
 
-export const PAYFAST_LIVE = 'https://www.payfast.co.za';
-export const PAYFAST_SANDBOX = 'https://sandbox.payfast.co.za';
-export const PAYFAST_API = 'https://api.payfast.co.za';
+const PAYFAST_LIVE = 'https://www.payfast.co.za';
+const PAYFAST_SANDBOX = 'https://sandbox.payfast.co.za';
+const PAYFAST_API = 'https://api.payfast.co.za';
 
 /** @param {Record<string, any>} keys */
 const siteOf = (keys) => (keys.sandbox === true ? PAYFAST_SANDBOX : PAYFAST_LIVE);

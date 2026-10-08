@@ -14,7 +14,7 @@ import { problem } from '@ss/app-kit';
 /** @typedef {import('../core/model.js').OrderRecord} OrderRecord */
 
 /** The header a signed-in shopper's Accounts sign-in comes in (the kit's CORS allows it). */
-export const SIGN_IN_HEADER = 'ss-sign-in';
+const SIGN_IN_HEADER = 'ss-sign-in';
 
 /** Rate limits of the merchant's server and admin routes (code constants protecting our hosting). */
 export const SERVER_LIMITS = Object.freeze([{ limit: 600, windowSeconds: 60, per: /** @type {const} */ ('website') }]);
@@ -30,7 +30,7 @@ export const VISITOR_WRITE_LIMITS = Object.freeze([
 ]);
 
 /** The server token as an actor. */
-export const SERVER_ACTOR = Object.freeze({ kind: 'server', id: 'server', name: 'Server' });
+const SERVER_ACTOR = Object.freeze({ kind: 'server', id: 'server', name: 'Server' });
 
 /**
  * A shopper: the Accounts user of a verified sign-in (PLAN 0.4.6).
@@ -61,7 +61,7 @@ export const SERVER_ACTOR = Object.freeze({ kind: 'server', id: 'server', name: 
  */
 
 /** Work that runs on use (PLAN 0.8.1: no scheduled jobs) runs at most this often per website and instance. */
-export const ON_USE_EVERY_MS = 60_000;
+const ON_USE_EVERY_MS = 60_000;
 
 /**
  * @param {Product} product

@@ -8,7 +8,7 @@ import { vi } from 'vitest';
 import strings from '../strings/en.json' with { type: 'json' };
 
 export const BASE = 'https://shop-product.example.dev';
-export const TEXTS = /** @type {Record<string, string>} */ (strings);
+const TEXTS = /** @type {Record<string, string>} */ (strings);
 
 /** Let pending promises settle. */
 export const flush = async () => {
@@ -27,7 +27,7 @@ export const problem = (status, detail, extra = {}) => answer(status, { type: `$
  * `window.fetch` answering by `METHOD /path`; every call is recorded.
  * @param {Record<string, Route>} routes
  */
-export const serve = (routes) => {
+const serve = (routes) => {
 	/** @type {Call[]} */
 	const calls = [];
 	vi.spyOn(window, 'fetch').mockImplementation(async (input, init) => {
@@ -59,7 +59,7 @@ export const serve = (routes) => {
 };
 
 /** A ticket source with a fixed ticket (or none). @param {string | null} [ticket] */
-export const tickets = (ticket = 't1') => {
+const tickets = (ticket = 't1') => {
 	/** @type {Set<(signedIn: boolean) => void>} */
 	const listeners = new Set();
 	const self = {

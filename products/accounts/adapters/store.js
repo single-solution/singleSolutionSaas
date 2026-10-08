@@ -43,17 +43,17 @@ import { DEFAULT_ROLE, READY_ROLES } from '../core/roles.js';
  *   data: Record<string, any>, createdAt: Date }} CodeRecord
  */
 
-export const USERS = 'users';
-export const SESSIONS = 'sessions';
-export const CODES = 'codes';
-export const OAUTH = 'oauth';
-export const ROLES = 'roles';
-export const FIELDS = 'fields';
-export const PERMISSIONS = 'permissions';
-export const KEYS = 'keys';
-export const SIGNUPS = 'signups';
-export const DELETIONS = 'deletions';
-export const COPIES = 'copies';
+const USERS = 'users';
+const SESSIONS = 'sessions';
+const CODES = 'codes';
+const OAUTH = 'oauth';
+const ROLES = 'roles';
+const FIELDS = 'fields';
+const PERMISSIONS = 'permissions';
+const KEYS = 'keys';
+const SIGNUPS = 'signups';
+const DELETIONS = 'deletions';
+const COPIES = 'copies';
 
 const present = { $type: 'string' };
 

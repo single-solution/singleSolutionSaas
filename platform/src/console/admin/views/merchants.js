@@ -53,7 +53,7 @@ import { AddCreditsDialog, MerchantCredits } from './finance.js';
  * separate grey badge, PLAN 0.6).
  * @param {{ merchant: any, billing?: any }} props
  */
-export function MerchantStatus({ merchant, billing = null }) {
+function MerchantStatus({ merchant, billing = null }) {
 	const status = merchant.status === 'suspended' ? 'suspended' : (billing?.status ?? merchant.status);
 	return (
 		<span className="inline-flex flex-wrap items-center gap-1">

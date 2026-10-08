@@ -29,7 +29,7 @@ const ZERO_DECIMALS = new Set([
 const THREE_DECIMALS = new Set(['BHD', 'IQD', 'JOD', 'KWD', 'LYD', 'OMR', 'TND']);
 
 /** The largest amount an event may carry (minor units). */
-export const MAX_AMOUNT = 1e12;
+const MAX_AMOUNT = 1e12;
 
 /** @param {unknown} value @returns {value is string} */
 export const isCurrency = (value) => typeof value === 'string' && /^[A-Z]{3}$/.test(value);

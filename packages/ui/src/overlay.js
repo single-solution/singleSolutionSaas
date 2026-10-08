@@ -21,7 +21,7 @@ const FOCUSABLE =
  * @param {HTMLElement} root
  * @returns {HTMLElement[]}
  */
-export const focusableIn = (root) =>
+const focusableIn = (root) =>
 	/** @type {HTMLElement[]} */ ([...root.querySelectorAll(FOCUSABLE)]).filter(
 		(el) => !el.hasAttribute('disabled') && el.getAttribute('aria-hidden') !== 'true',
 	);

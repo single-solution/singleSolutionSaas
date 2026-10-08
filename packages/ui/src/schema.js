@@ -62,7 +62,7 @@
  * @property {Bounds} bounds
  */
 
-export const DEFAULT_GROUP = 'General';
+const DEFAULT_GROUP = 'General';
 
 /**
  * Widget for a node: `x-ui.widget` when it fits the type, else a sensible default.

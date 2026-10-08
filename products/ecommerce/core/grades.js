@@ -6,7 +6,7 @@
  */
 
 /** At most this many grades. */
-export const MAX_GRADES = 20;
+const MAX_GRADES = 20;
 
 /** Grade keys. */
 const KEY = /^[a-z][a-z0-9_]{0,39}$/;

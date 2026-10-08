@@ -25,7 +25,7 @@ import {
 /** @typedef {import('./promotions-rules.js').Checked} Checked */
 
 /** Deal types. */
-export const DEAL_TYPES = Object.freeze(/** @type {const} */ (['percent', 'fixed']));
+const DEAL_TYPES = Object.freeze(/** @type {const} */ (['percent', 'fixed']));
 
 /**
  * What a deal takes off one unit (never more than the unit's price).

@@ -42,7 +42,7 @@ export const DAY_MS = 86_400_000;
 export const OPEN_PHASE = Object.freeze({ graceStart: null, graceEnd: null, stoppedAt: null });
 
 /** @param {number} ms */
-export const floorHour = (ms) => Math.floor(ms / HOUR_MS) * HOUR_MS;
+const floorHour = (ms) => Math.floor(ms / HOUR_MS) * HOUR_MS;
 /** @param {number} ms */
 export const floorDay = (ms) => Math.floor(ms / DAY_MS) * DAY_MS;
 /** @param {number} ms */

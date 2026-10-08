@@ -37,12 +37,12 @@ import { isObject } from './util.js';
  */
 
 /** Graph API version for WhatsApp Cloud API calls. */
-export const META_API_VERSION = 'v21.0';
+const META_API_VERSION = 'v21.0';
 /** Timeout of one provider call. */
-export const PROVIDER_TIMEOUT_MS = 15_000;
+const PROVIDER_TIMEOUT_MS = 15_000;
 
 /** Providers each connection may use. */
-export const PROVIDERS = Object.freeze({
+const PROVIDERS = Object.freeze({
 	email: Object.freeze(['smtp', 'resend', 'sendgrid', 'mailgun', 'ses']),
 	sms: Object.freeze(['twilio', 'http']),
 	whatsapp: Object.freeze(['meta', 'twilio', 'http']),

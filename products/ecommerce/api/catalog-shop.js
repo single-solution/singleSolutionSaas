@@ -30,13 +30,13 @@ import { SHOP_LIMITS, refuse } from './catalog-common.js';
 /** @typedef {import('@ss/app-kit').WebsiteData} WebsiteData */
 
 /** Most products on one page of a listing. */
-export const MAX_PAGE = 48;
+const MAX_PAGE = 48;
 
 /**
  * Product cards for any part that shows products (wishlist, compare, alerts, Chat lookups, feeds).
  * @param {CatalogCommon} common
  */
-export const createCards = (common) => {
+const createCards = (common) => {
 	/**
 	 * @param {Site} s
 	 * @param {WebsiteData} data

@@ -8,9 +8,6 @@ importers:
 
   .:
     devDependencies:
-      '@ss/cli':
-        specifier: workspace:^
-        version: link:packages/cli
       '@ss/config':
         specifier: workspace:^
         version: link:packages/config
@@ -29,9 +26,6 @@ importers:
       '@ss/app-kit':
         specifier: workspace:^
         version: link:../packages/app-kit
-      '@ss/cli':
-        specifier: workspace:^
-        version: link:../packages/cli
       '@ss/config':
         specifier: workspace:^
         version: link:../packages/config
@@ -632,9 +626,6 @@ importers:
       '@ss/net':
         specifier: workspace:^
         version: link:../../packages/net
-      '@ss/protocol':
-        specifier: workspace:^
-        version: link:../../packages/protocol
       '@ss/ui':
         specifier: workspace:^
         version: link:../../packages/ui

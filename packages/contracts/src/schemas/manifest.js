@@ -9,7 +9,7 @@ import { SCHEMA_IDS } from './schema-ids.js';
 import { commonRef as ref } from './common.js';
 
 /** Widget kinds. */
-export const WIDGET_KINDS = Object.freeze(/** @type {const} */ (['visitor', 'admin']));
+const WIDGET_KINDS = Object.freeze(/** @type {const} */ (['visitor', 'admin']));
 
 /** The manifest schema (shape only; `validateManifest` adds the semantic rules). */
 export const manifestSchema = deepFreeze({

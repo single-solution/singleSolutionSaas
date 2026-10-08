@@ -15,8 +15,8 @@ import { isPrice } from './money.js';
  */
 
 /** At most this many zones, and this many cities or areas in one zone. */
-export const MAX_ZONES = 100;
-export const MAX_PLACES = 500;
+const MAX_ZONES = 100;
+const MAX_PLACES = 500;
 /** A zone key. */
 const KEY = /^[a-z][a-z0-9_]{1,39}$/;
 

@@ -368,7 +368,7 @@ export const createSystemService = (ctx) => {
  * @param {string} type
  * @param {Buffer} data
  */
-export const magicMatches = (type, data) => {
+const magicMatches = (type, data) => {
 	if (type === 'image/png') return data.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
 	if (type === 'image/jpeg') return data[0] === 0xff && data[1] === 0xd8 && data[2] === 0xff;
 	if (type === 'image/webp')

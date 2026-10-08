@@ -25,7 +25,7 @@ import { compareIds, onCompareChange, toggleCompare } from './shop-compare-store
 import { savedOf } from './shop-saved.js';
 
 /** The sorts of the listing (`GET /v1/shop/products?sort=`). */
-export const GRID_SORTS = Object.freeze(['newest', 'price_asc', 'price_desc', 'top', 'rating', 'name']);
+const GRID_SORTS = Object.freeze(['newest', 'price_asc', 'price_desc', 'top', 'rating', 'name']);
 /** Most products asked for at once (the listing's own limit). */
 const MAX_LIMIT = 48;
 

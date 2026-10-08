@@ -27,9 +27,9 @@ const VISITOR_RATE = [...VISITOR_LIMITS];
 /** @typedef {import('../core/model.js').LoyaltyRecord} LoyaltyRecord */
 
 /** Most deals the shopper's deals list shows. */
-export const MAX_SHOP_DEALS = 50;
+const MAX_SHOP_DEALS = 50;
 /** The largest single adjustment of points. */
-export const MAX_ADJUST = 1_000_000_000;
+const MAX_ADJUST = 1_000_000_000;
 /** Tries of a loyalty write when the account changed meanwhile. */
 const WRITE_TRIES = 3;
 

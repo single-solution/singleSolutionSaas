@@ -14,7 +14,7 @@ import { Icon } from './icons.js';
  * Tile colours per accent (soft tint, icon badge, badge icon). Spelled out so Tailwind finds every class.
  * @type {Record<Accent, { tint: string, badge: string }>}
  */
-export const ACCENTS = Object.freeze({
+const ACCENTS = Object.freeze({
 	indigo: { tint: 'bg-tint-indigo', badge: 'bg-accent-indigo text-on-accent-indigo' },
 	violet: { tint: 'bg-tint-violet', badge: 'bg-accent-violet text-on-accent-violet' },
 	teal: { tint: 'bg-tint-teal', badge: 'bg-accent-teal text-on-accent-teal' },

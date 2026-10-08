@@ -47,7 +47,7 @@ import { dayBars } from './overview.js';
  * Active / Inactive badge of a connected product.
  * @param {{ status: string }} props
  */
-export function ProductActiveBadge({ status }) {
+function ProductActiveBadge({ status }) {
 	return (
 		<Badge tone={status === 'active' ? 'success' : 'neutral'} dot>
 			{status === 'active' ? PRODUCTS.status.active : PRODUCTS.status.inactive}
@@ -63,7 +63,7 @@ const creditsOf = (v) => formatCredits(Math.round(v * 1000));
  * @param {{ open: boolean, title: string, description: string, submitLabel: string, urlRequired: boolean,
  *   path: string, onClose: () => void, onDone: (product: any) => void, conflict?: string }} props
  */
-export function ConnectDialog({ open, title, description, submitLabel, urlRequired, path, onClose, onDone, conflict }) {
+function ConnectDialog({ open, title, description, submitLabel, urlRequired, path, onClose, onDone, conflict }) {
 	const [url, setUrl] = useState('');
 	const [secret, setSecret] = useState('');
 	const [errors, setErrors] = useState(/** @type {Record<string, string>} */ ({}));

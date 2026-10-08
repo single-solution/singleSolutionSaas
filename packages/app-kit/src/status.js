@@ -20,9 +20,9 @@ import { problem } from './http/results.js';
 /** @typedef {import('./http/results.js').ProblemResult} ProblemResult */
 
 /** Longest time a status copy is used without asking the Portal again. */
-export const STATUS_MAX_AGE_MS = 5 * 60_000;
+const STATUS_MAX_AGE_MS = 5 * 60_000;
 /** Offline grace: how long the last status copy is used while the Portal cannot be reached. */
-export const OFFLINE_GRACE_MS = 24 * 60 * 60_000;
+const OFFLINE_GRACE_MS = 24 * 60 * 60_000;
 const REVOCATION_PAGES = 10;
 const REFUSED = Object.freeze(['removed', 'suspended', 'stopped']);
 

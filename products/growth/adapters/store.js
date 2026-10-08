@@ -16,8 +16,8 @@ import { createId } from '@ss/contracts';
  * @typedef {{ id: string, type: string, path: string, at: Date, expiresAt: Date, data: Record<string, unknown> }} EventRecord
  */
 
-export const EVENTS = 'events';
-export const DAILY = 'daily';
+const EVENTS = 'events';
+const DAILY = 'daily';
 
 /** Merchant database indexes (created on a website's first use). @type {import('@ss/app-kit').IndexDefinition[]} */
 export const INDEXES = [

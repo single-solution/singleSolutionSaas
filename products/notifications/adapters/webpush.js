@@ -26,7 +26,7 @@ import { isObject } from './util.js';
  */
 
 /** How long a push service keeps an undelivered push (seconds). */
-export const PUSH_TTL_SECONDS = 24 * 60 * 60;
+const PUSH_TTL_SECONDS = 24 * 60 * 60;
 /** VAPID tokens last this long (the RFC allows up to 24 hours). */
 const VAPID_SECONDS = 12 * 60 * 60;
 
@@ -126,7 +126,7 @@ export const encryptPayload = ({ payload, keys, salt = randomBytes(16), serverKe
  * The VAPID `Authorization` header for a push service.
  * @param {{ endpoint: string, keys: { publicKey: string, privateKey: import('node:crypto').KeyObject, subject: string }, now: number }} input
  */
-export const vapidHeader = ({ endpoint, keys, now }) => {
+const vapidHeader = ({ endpoint, keys, now }) => {
 	const head = b64url(Buffer.from(JSON.stringify({ typ: 'JWT', alg: 'ES256' })));
 	const claims = b64url(
 		Buffer.from(

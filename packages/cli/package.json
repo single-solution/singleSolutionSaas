@@ -5,13 +5,11 @@
 	"type": "module",
 	"license": "UNLICENSED",
 	"exports": {
-		".": "./src/index.js",
 		"./package.json": "./package.json"
 	},
 	"files": [
 		"src",
-		"templates",
-		"types"
+		"templates"
 	],
 	"bin": {
 		"ss": "./src/bin.js"
@@ -20,14 +18,7 @@
 		"node": ">=22"
 	},
 	"publishConfig": {
-		"access": "restricted",
-		"exports": {
-			".": {
-				"types": "./types/src/index.d.ts",
-				"default": "./src/index.js"
-			},
-			"./package.json": "./package.json"
-		}
+		"access": "restricted"
 	},
 	"prettier": "@ss/config/prettier.json",
 	"scripts": {
@@ -37,9 +28,7 @@
 		"lint": "eslint .",
 		"typecheck": "tsc -p tsconfig.json",
 		"format": "prettier --write .",
-		"format:check": "prettier --check .",
-		"build:types": "tsc -p tsconfig.types.json",
-		"prepack": "pnpm build:types"
+		"format:check": "prettier --check ."
 	},
 	"dependencies": {
 		"@ss/app-kit": "workspace:^",

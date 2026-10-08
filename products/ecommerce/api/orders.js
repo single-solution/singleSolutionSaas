@@ -34,7 +34,7 @@ import { SERVER_LIMITS, VISITOR_LIMITS } from './service.js';
 /** @typedef {import('../core/model.js').OrderRecord} OrderRecord */
 
 /** Headers of the printable documents: never cached, no scripts, nothing loaded but images. */
-export const DOCUMENT_HEADERS = Object.freeze({
+const DOCUMENT_HEADERS = Object.freeze({
 	'content-type': 'text/html; charset=utf-8',
 	'cache-control': 'no-store',
 	'x-content-type-options': 'nosniff',

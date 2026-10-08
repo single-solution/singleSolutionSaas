@@ -23,7 +23,7 @@ import { bodyOf, invalid } from './service.js';
  * @param {{ page: import('../core/conversation.js').PageContext | null, device: string, now: number }} input
  * @returns {Omit<ConversationRecord, 'id'>}
  */
-export const newConversation = (visitor, { page, device, now }) => ({
+const newConversation = (visitor, { page, device, now }) => ({
 	visitor: { kind: visitor.kind, id: visitor.id },
 	guestIds: [],
 	name: visitor.name,

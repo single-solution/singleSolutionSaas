@@ -262,7 +262,7 @@ const pins = (value, merchantId) =>
  * @param {string} name
  * @returns {Document}
  */
-export const guardAnyFilter = (filter, name) => {
+const guardAnyFilter = (filter, name) => {
 	if (!isObject(filter)) throw guardError(name, 'a filter object is required');
 	if ('$where' in filter) throw guardError(name, '$where is not allowed');
 	return filter;
@@ -275,7 +275,7 @@ export const guardAnyFilter = (filter, name) => {
  * @param {string} name
  * @returns {Document}
  */
-export const guardMerchantFilter = (filter, merchantId, name) => {
+const guardMerchantFilter = (filter, merchantId, name) => {
 	const f = guardAnyFilter(filter, name);
 	if (!pins(f.merchantId, merchantId)) throw guardError(name, 'the filter must pin merchantId to the scoped merchant');
 	return f;

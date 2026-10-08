@@ -15,12 +15,12 @@ import { toDecimal } from './money.js';
 const SCHEMA = 'https://schema.org';
 
 /** At most this many addresses in one sitemap file (the sitemaps.org limit). */
-export const SITEMAP_LIMIT = 50_000;
+const SITEMAP_LIMIT = 50_000;
 /** A meta description is cut to this many characters. */
-export const DESCRIPTION_LENGTH = 160;
+const DESCRIPTION_LENGTH = 160;
 
 /** Condition → schema.org `OfferItemCondition`. */
-export const CONDITION_URL = Object.freeze({
+const CONDITION_URL = Object.freeze({
 	new: `${SCHEMA}/NewCondition`,
 	used: `${SCHEMA}/UsedCondition`,
 	refurbished: `${SCHEMA}/RefurbishedCondition`,
@@ -144,7 +144,7 @@ const compact = (node) =>
  * `BreadcrumbList` of a page: its trail from the home page.
  * @param {Array<{ name: string, url: string }>} trail
  */
-export const breadcrumbJsonLd = (trail) => ({
+const breadcrumbJsonLd = (trail) => ({
 	'@type': 'BreadcrumbList',
 	itemListElement: trail.map((step, index) => ({ '@type': 'ListItem', position: index + 1, name: step.name, item: step.url })),
 });

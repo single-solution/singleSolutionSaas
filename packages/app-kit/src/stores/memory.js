@@ -13,7 +13,7 @@
  * @param {Filter} filter
  * @returns {boolean}
  */
-export const matches = (doc, filter) =>
+const matches = (doc, filter) =>
 	Object.entries(filter).every(([field, value]) => {
 		const actual = doc[field];
 		return Array.isArray(actual) ? actual.includes(value) : (actual ?? null) === value;

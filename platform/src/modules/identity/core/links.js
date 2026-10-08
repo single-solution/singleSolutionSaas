@@ -5,7 +5,7 @@
  */
 
 /** Console paths of each link kind. */
-export const LINK_PATHS = Object.freeze({
+const LINK_PATHS = Object.freeze({
 	setup: '/set-password',
 	password_reset: '/reset-password',
 	email_change: '/confirm-email',

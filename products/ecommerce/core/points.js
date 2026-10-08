@@ -80,7 +80,7 @@ export const takeFromLots = (lots, points, orderId) => {
 };
 
 /** Lots that are spent and older than this many kept lots are dropped from the record. */
-export const KEEP_EMPTY_LOTS = 50;
+const KEEP_EMPTY_LOTS = 50;
 
 /**
  * Drop empty lots beyond the newest {@link KEEP_EMPTY_LOTS}, so the record stays small.

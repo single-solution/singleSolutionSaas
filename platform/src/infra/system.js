@@ -22,7 +22,7 @@ import { platformError } from './errors.js';
 import { COLLECTIONS } from './schema.js';
 
 /** The collection (registered in `INFRA_COLLECTIONS`). */
-export const SYSTEM_COLLECTION = COLLECTIONS.system;
+const SYSTEM_COLLECTION = COLLECTIONS.system;
 
 /** @typedef {import('./config.js').SystemState} SystemState */
 /** @typedef {{ kid: string, seed: string, createdAt: string }} StoredKey */

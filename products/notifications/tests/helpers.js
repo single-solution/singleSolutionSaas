@@ -9,8 +9,8 @@ import { createFakePortal, createMemoryStore, createNetwork } from '@ss/app-kit/
 import { createProductInstance, manifest } from '../adapters/product.js';
 import { createRoutes } from '../api/routes.js';
 
-export const BASE = 'https://notifications.example.dev';
-export const DOMAIN = 'shop.example.com';
+const BASE = 'https://notifications.example.dev';
+const DOMAIN = 'shop.example.com';
 export const ORIGIN = `https://${DOMAIN}`;
 export const ADMIN_ORIGIN = 'https://admin.shop.example.com';
 export const PUSH_ORIGIN = 'https://push.example.net';
@@ -33,7 +33,7 @@ const merchantDatabase = () => {
 /** @typedef {(call: ProviderCall) => { status: number, body?: string, headers?: Record<string, string> }} Responder */
 
 /** Provider origins the fakes answer. */
-export const PROVIDER_ORIGINS = Object.freeze([
+const PROVIDER_ORIGINS = Object.freeze([
 	'https://api.resend.com',
 	'https://api.sendgrid.com',
 	'https://api.mailgun.net',
@@ -49,7 +49,7 @@ export const PROVIDER_ORIGINS = Object.freeze([
 /**
  * Fake providers: each origin records its calls and answers 200 `{ id }` unless told otherwise.
  */
-export const createFakeProviders = () => {
+const createFakeProviders = () => {
 	/** @type {ProviderCall[]} */
 	const calls = [];
 	/** @type {Map<string, Responder>} */

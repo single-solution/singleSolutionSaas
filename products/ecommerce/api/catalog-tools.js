@@ -44,10 +44,10 @@ import { bodyOf, refuse, STAFF_LIMITS } from './catalog-common.js';
 /** @typedef {import('@ss/app-kit').WebsiteData} WebsiteData */
 
 /** Most products of an export, and of orders. */
-export const MAX_EXPORT_PRODUCTS = 20_000;
-export const MAX_EXPORT_ORDERS = 10_000;
+const MAX_EXPORT_PRODUCTS = 20_000;
+const MAX_EXPORT_ORDERS = 10_000;
 /** Most products of one bulk action. */
-export const MAX_BULK = 500;
+const MAX_BULK = 500;
 /** Largest import body. */
 const IMPORT_BYTES = 8 * 1024 * 1024;
 

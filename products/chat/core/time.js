@@ -5,9 +5,9 @@
  * @module
  */
 
-export const MINUTE_MS = 60_000;
-export const HOUR_MS = 60 * MINUTE_MS;
-export const DAY_MS = 24 * HOUR_MS;
+const MINUTE_MS = 60_000;
+const HOUR_MS = 60 * MINUTE_MS;
+const DAY_MS = 24 * HOUR_MS;
 
 /** Week days in `Intl` short English order, as working-hour windows name them. */
 export const WEEK_DAYS = Object.freeze(/** @type {const} */ (['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']));
@@ -43,7 +43,7 @@ const formatFor = (timeZone) => {
  * @param {unknown} timeZone
  * @returns {timeZone is string}
  */
-export const isTimeZone = (timeZone) => {
+const isTimeZone = (timeZone) => {
 	if (typeof timeZone !== 'string' || timeZone.length === 0 || timeZone.length > 64) return false;
 	try {
 		formatFor(timeZone);
@@ -70,7 +70,7 @@ export const zoneOr = (timeZone, fallback = 'UTC') => {
  * @param {string} timeZone
  * @returns {LocalParts}
  */
-export const localParts = (ms, timeZone) => {
+const localParts = (ms, timeZone) => {
 	/** @type {Record<string, string>} */
 	const parts = {};
 	for (const part of formatFor(zoneOr(timeZone)).formatToParts(new Date(ms))) parts[part.type] = part.value;
@@ -89,7 +89,7 @@ export const localParts = (ms, timeZone) => {
  * @param {unknown} text
  * @returns {number | null}
  */
-export const minutesOf = (text) => {
+const minutesOf = (text) => {
 	const match = typeof text === 'string' ? /^(\d{2}):(\d{2})$/.exec(text) : null;
 	if (!match) return null;
 	const hours = Number(match[1]);

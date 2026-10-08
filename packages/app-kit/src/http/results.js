@@ -3,7 +3,6 @@
  * rendered as RFC 9457 documents with the product's type base URI and the request id.
  * @module
  */
-import { PROBLEM_CODES } from '@ss/contracts';
 import { isObject } from '../util.js';
 
 const BRAND = Symbol.for('ss.app-kit.result');
@@ -35,7 +34,7 @@ export const created = (body, { location, headers = {} } = {}) =>
 export const noContent = () => ok(undefined, { status: 204 });
 
 /** Members the kit renders itself; extensions cannot use these names. */
-export const RESERVED_PROBLEM_MEMBERS = Object.freeze(['type', 'title', 'status', 'detail', 'instance', 'requestId', 'errors']);
+const RESERVED_PROBLEM_MEMBERS = Object.freeze(['type', 'title', 'status', 'detail', 'instance', 'requestId', 'errors']);
 /** RFC 9457 §3.2: extension member names start with a letter and use letters, digits and `_` (≥ 3 characters). */
 const EXTENSION_NAME = /^[A-Za-z][A-Za-z0-9_]{2,63}$/;
 
@@ -95,10 +94,6 @@ export const isResult = (value) => brandOf(value) === 'response' || brandOf(valu
  * @returns {value is ProblemResult}
  */
 export const isProblem = (value) => brandOf(value) === 'problem';
-
-/** Status of a built-in code (500 for unknown codes). @param {string} code */
-export const statusOf = (code) =>
-	Object.hasOwn(PROBLEM_CODES, code) ? PROBLEM_CODES[/** @type {keyof typeof PROBLEM_CODES} */ (code)].status : 500;
 
 /** @typedef {string | number | boolean | null} CursorScalar */
 /** @typedef {CursorScalar | CursorScalar[]} CursorKey a key, or a compound key (array of scalars, e.g. `[createdAt, id]`) */

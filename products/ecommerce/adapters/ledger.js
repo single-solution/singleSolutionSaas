@@ -18,7 +18,7 @@ import { balanceOf, compactLots, expireLots, spendFromLots, takeFromLots } from 
 /** @typedef {import('../core/model.js').LoyaltyRecord} LoyaltyRecord */
 
 /** Loyalty history entries kept per account (the newest). */
-export const HISTORY_KEPT = 200;
+const HISTORY_KEPT = 200;
 
 /**
  * Indexes the ledger relies on (merged into the product's index list): the unique ones are what make the guards hold.
@@ -161,7 +161,7 @@ export const holdStock = async (data, lines, { locationOrder = [], session } = {
  * @param {StockLine[]} lines
  * @param {Session} [session]
  */
-export const releaseStock = async (data, lines, session) => {
+const releaseStock = async (data, lines, session) => {
 	const products = data.collection(COLLECTIONS.products);
 	for (const line of lines) {
 		if (line.quantity <= 0) continue;
@@ -190,7 +190,7 @@ export const releaseStock = async (data, lines, session) => {
  * @param {Session} [session]
  * @returns {Promise<{ ok: true } | { ok: false, offerId: string }>}
  */
-export const useOffers = async (data, { couponId, dealIds, bundleIds, userId, orderId, perCustomer = null }, session) => {
+const useOffers = async (data, { couponId, dealIds, bundleIds, userId, orderId, perCustomer = null }, session) => {
 	const websiteId = data.websiteId;
 	const underLimit = { $or: [{ limit: null }, { $expr: { $lt: ['$used', '$limit'] } }] };
 	/** @type {Array<[string, string]>} */
@@ -221,7 +221,7 @@ export const useOffers = async (data, { couponId, dealIds, bundleIds, userId, or
  * @param {{ couponId: string | null, dealIds: string[], bundleIds: string[], orderId: string }} uses
  * @param {Session} [session]
  */
-export const releaseOffers = async (data, { couponId, dealIds, bundleIds, orderId }, session) => {
+const releaseOffers = async (data, { couponId, dealIds, bundleIds, orderId }, session) => {
 	const websiteId = data.websiteId;
 	/** @type {Array<[string, string]>} */
 	const targets = [
@@ -352,7 +352,7 @@ export const takePoints = async (data, { userId, points, orderId, kind, note = '
  * @param {Array<{ productId: string, start: Date, end: Date, orderId: string, lineId: string }>} slots
  * @param {Session} [session]
  */
-export const holdSlots = async (data, slots, session) => {
+const holdSlots = async (data, slots, session) => {
 	if (slots.length === 0) return;
 	await data.collection(COLLECTIONS.slots).insertMany(
 		slots.map((slot) => ({ ...slot, id: createId(ID_PREFIX.slot) })),
@@ -366,7 +366,7 @@ export const holdSlots = async (data, slots, session) => {
  * @param {string} orderId
  * @param {Session} [session]
  */
-export const releaseSlots = (data, orderId, session) =>
+const releaseSlots = (data, orderId, session) =>
 	data.collection(COLLECTIONS.slots).deleteMany({ websiteId: data.websiteId, orderId }, { session });
 
 /**
@@ -374,7 +374,7 @@ export const releaseSlots = (data, orderId, session) =>
  * @param {WebsiteData} data
  * @param {{ prefix: string, year: number, session?: Session }} options
  */
-export const nextOrderNumber = async (data, { prefix, year, session }) => {
+const nextOrderNumber = async (data, { prefix, year, session }) => {
 	const counter = /** @type {any} */ (
 		await data
 			.collection(COLLECTIONS.counters)

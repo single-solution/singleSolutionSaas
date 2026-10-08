@@ -21,7 +21,7 @@ import { mountUsersAdmin } from './users-admin.js';
 export const CONFIG_PATH = '/v1/widget/config';
 export const ADMIN_CONFIG_PATH = '/v1/widget/admin/config';
 /** The fragment parameter of a social sign-in that did not work (its value is a problem code). */
-export const ERROR_PARAM = LINK_PARAMS.error;
+const ERROR_PARAM = LINK_PARAMS.error;
 
 /**
  * The website's widget config, from the kit.
@@ -61,7 +61,7 @@ const loadConfig = async (request, url, credential) => {
  * @param {Window} win
  * @returns {import('./sign-in.js').Link | null}
  */
-export const takeLink = (win) => {
+const takeLink = (win) => {
 	const params = new URLSearchParams(win.location.hash.slice(1));
 	/** @type {Array<[import('./sign-in.js').Link['kind'], string]>} */
 	const kinds = [

@@ -35,7 +35,7 @@ const merchantDatabase = () => {
  * The merchant's site and IndexNow, faked: `pages[path]` answers, everything else 404; IndexNow answers 200 unless
  * told otherwise.
  */
-export const createFakeWeb = () => {
+const createFakeWeb = () => {
 	/** @type {Record<string, Page>} */
 	const pages = {};
 	/** @type {Array<{ url: string, method: string, body: string }>} */

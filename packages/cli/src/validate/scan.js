@@ -179,7 +179,7 @@ export const lex = (source) => {
  * @param {number} offset
  * @returns {number}
  */
-export const lineOf = (text, offset) => {
+const lineOf = (text, offset) => {
 	let line = 1;
 	for (let k = 0; k < offset && k < text.length; k += 1) if (text[k] === '\n') line += 1;
 	return line;
@@ -232,7 +232,7 @@ export const findCssReferences = (css) => {
 };
 
 /** Browser globals that must never appear in `core/` (pure logic). */
-export const DOM_GLOBALS = Object.freeze([
+const DOM_GLOBALS = Object.freeze([
 	'window',
 	'document',
 	'navigator',

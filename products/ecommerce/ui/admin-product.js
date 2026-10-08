@@ -54,7 +54,7 @@ const blank = () => ({
  * @param {Array<{ name: string, values: string[] }>} axes
  * @returns {Array<Record<string, string>>}
  */
-export const combinations = (axes) =>
+const combinations = (axes) =>
 	axes.reduce(
 		/** @param {Array<Record<string, string>>} out */
 		(out, axis) => out.flatMap((combo) => axis.values.map((value) => ({ ...combo, [axis.name]: value }))),

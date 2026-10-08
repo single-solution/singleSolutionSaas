@@ -13,7 +13,7 @@ import { identityRoutes } from './routes.js';
 import { collections } from './schema.js';
 import { createIdentityService } from './service.js';
 
-export const IDENTITY_PROBLEMS = Object.freeze({
+const IDENTITY_PROBLEMS = Object.freeze({
 	domain_taken: Object.freeze({ status: 409, title: 'Domain already belongs to a website' }),
 	email_taken: Object.freeze({ status: 409, title: 'E-mail already used by another login' }),
 	last_owner: Object.freeze({ status: 409, title: 'There must always be at least one Owner' }),

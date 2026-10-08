@@ -8,9 +8,9 @@
 import { dayKey } from './time.js';
 
 /** Longest report range (days). */
-export const MAX_REPORT_DAYS = 366;
+const MAX_REPORT_DAYS = 366;
 /** The default range (days, today included). */
-export const DEFAULT_REPORT_DAYS = 30;
+const DEFAULT_REPORT_DAYS = 30;
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 

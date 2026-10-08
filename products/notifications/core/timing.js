@@ -5,9 +5,9 @@
  */
 
 /** Attempts on one channel before the message fails there (then the fallback channel, if any). */
-export const MAX_ATTEMPTS = 3;
+const MAX_ATTEMPTS = 3;
 /** Wait before attempt 2 and 3 (judged on the next use after it). */
-export const RETRY_DELAYS_MS = Object.freeze([60_000, 5 * 60_000]);
+const RETRY_DELAYS_MS = Object.freeze([60_000, 5 * 60_000]);
 /** Attempts to deliver one outgoing webhook event. */
 export const MAX_WEBHOOK_ATTEMPTS = 5;
 /** Wait before webhook attempts 2–5. */

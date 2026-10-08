@@ -14,15 +14,15 @@
 
 export const DAY_MS = 86_400_000;
 /** Lines in one claim, at most. */
-export const MAX_CLAIM_LINES = 50;
+const MAX_CLAIM_LINES = 50;
 /** Longest reason. */
-export const MAX_REASON = 1000;
+const MAX_REASON = 1000;
 /** Longest staff note. */
-export const MAX_NOTE = 1000;
+const MAX_NOTE = 1000;
 /** Photo uploads and photo links last this long. */
 export const PHOTO_SECONDS = 300;
 /** Photo types a shopper may upload, with their file extension. */
-export const PHOTO_TYPES = Object.freeze({ 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' });
+const PHOTO_TYPES = Object.freeze({ 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' });
 export const CLAIM_KINDS = Object.freeze(/** @type {ClaimKind[]} */ (['return', 'warranty']));
 export const CLAIM_STATUSES = Object.freeze(
 	/** @type {ClaimStatus[]} */ (['requested', 'approved', 'rejected', 'received', 'refunded', 'closed']),

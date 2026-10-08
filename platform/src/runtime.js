@@ -21,7 +21,7 @@ import { createPortal } from './portal.js';
 
 const KEY = Symbol.for('ss.platform.portal');
 /** Settings changes on other instances are noticed within this delay. */
-export const SETTINGS_RECHECK_MS = 5_000;
+const SETTINGS_RECHECK_MS = 5_000;
 
 /**
  * @typedef {object} Entry
@@ -41,7 +41,7 @@ const shared = () => {
  * Fingerprint of every collection definition and migration id: indexes and migrations are applied when it changes.
  * @param {import('./portal.js').Portal} portal
  */
-export const schemaFingerprint = (portal) =>
+const schemaFingerprint = (portal) =>
 	createHash('sha256')
 		.update(
 			JSON.stringify({
@@ -57,7 +57,7 @@ export const schemaFingerprint = (portal) =>
  * @param {import('./infra/system.js').SystemStore} system
  * @param {import('./infra/logger.js').Logger} logger
  */
-export const prepareSchema = async (portal, system, logger) => {
+const prepareSchema = async (portal, system, logger) => {
 	const fingerprint = schemaFingerprint(portal);
 	if ((await system.appliedSchema()) === fingerprint) return { applied: false };
 	await portal.ensureIndexes();

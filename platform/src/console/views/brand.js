@@ -7,7 +7,7 @@
 import { Icon } from '@ss/ui';
 
 /** The default accent (the theme's own primary colour). */
-export const DEFAULT_ACCENT = '#4f46e5';
+const DEFAULT_ACCENT = '#4f46e5';
 
 /**
  * Inline style that applies a changed accent to a subtree (the theme reads `--ss-primary`).

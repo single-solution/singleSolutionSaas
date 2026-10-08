@@ -17,11 +17,11 @@ import { isCountryCode } from './countries.js';
  * @typedef {(value: unknown) => { ok: true, value: T } | { ok: false, message: string }} Field
  */
 
-export const PASSWORD_MIN = 12;
-export const PASSWORD_MAX = 1024;
-export const ADMIN_ROLE_NAMES = Object.freeze(/** @type {const} */ (['owner', 'support', 'finance']));
+const PASSWORD_MIN = 12;
+const PASSWORD_MAX = 1024;
+const ADMIN_ROLE_NAMES = Object.freeze(/** @type {const} */ (['owner', 'support', 'finance']));
 /** Merchant field lengths (PLAN 0.8.4: chosen by the builder, awaiting owner review). */
-export const MERCHANT_FIELD_MAX = Object.freeze({ name: 120, ownerName: 120, phone: 40, address: 300 });
+const MERCHANT_FIELD_MAX = Object.freeze({ name: 120, ownerName: 120, phone: 40, address: 300 });
 
 const EMAIL = /^[^\s@<>()[\]\\,;:"]+@[^\s@<>()[\]\\,;:"]+\.[^\s@<>()[\]\\,;:"]+$/;
 const ID = /^[a-z]{2,8}_[0-9a-z]{10,64}$/;

@@ -52,7 +52,7 @@ const pageOf = (r) => {
  * @param {RegExp} pattern
  * @returns {string | null}
  */
-export const pick = (value, pattern) => (typeof value === 'string' && pattern.test(value) ? value : null);
+const pick = (value, pattern) => (typeof value === 'string' && pattern.test(value) ? value : null);
 
 /** @param {unknown} value @param {readonly string[]} allowed */
 const oneOf = (value, allowed) => (typeof value === 'string' && allowed.includes(value) ? value : null);

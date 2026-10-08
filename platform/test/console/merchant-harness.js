@@ -16,7 +16,7 @@ import { createSystemStore } from '../../src/infra/system.js';
 import { ENCRYPTION_KEY, PORTAL_URL, createTestLogger, testConfig } from '../helpers.js';
 import { startFakeProduct } from '../modules/catalog/fakes/product.js';
 
-export const sleep = (/** @type {number} */ ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const sleep = (/** @type {number} */ ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** Let pending fetches and state updates settle (inside act). */
 export const settle = async (rounds = 3) => {
@@ -99,9 +99,6 @@ export const fill = (label, value) => type(byLabel(document, label), value);
 /** @param {string} label @param {string} value */
 export const fillDialog = (label, value) => type(byLabel(dialog(), label), value);
 
-/** Click the control labelled `label` (checkbox, radio). @param {string} label @param {ParentNode} [root] */
-export const check = (label, root = document) => clickEl(byLabel(root, label));
-
 /** @param {string} snippet */
 export const shows = (snippet) => document.body.textContent?.replace(/\s+/g, ' ').includes(snippet) ?? false;
 
@@ -178,7 +175,7 @@ export const browserOf = (portal) => {
 };
 
 /** The Portal modules with outbound calls allowed to loopback hosts (fake products run on 127.0.0.1). */
-export const testModules = (/** @type {{ mailer: any }} */ { mailer }) => [
+const testModules = (/** @type {{ mailer: any }} */ { mailer }) => [
 	systemModule,
 	createCatalogModule({ allowHosts: ['127.0.0.1'] }),
 	createIdentityModule({ mailer }),

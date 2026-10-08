@@ -41,13 +41,13 @@ export const LIMITS = Object.freeze({
 });
 
 /** Product kinds and statuses. */
-export const KINDS = Object.freeze(/** @type {const} */ (['physical', 'digital', 'booking']));
-export const STATUSES = Object.freeze(/** @type {const} */ (['draft', 'active', 'archived']));
+const KINDS = Object.freeze(/** @type {const} */ (['physical', 'digital', 'booking']));
+const STATUSES = Object.freeze(/** @type {const} */ (['draft', 'active', 'archived']));
 
 /** Slugs: lowercase letters of any script, digits, single dashes. */
-export const SLUG_PATTERN = /^[\p{Ll}\p{Lo}\p{N}]+(?:-[\p{Ll}\p{Lo}\p{N}]+)*$/u;
+const SLUG_PATTERN = /^[\p{Ll}\p{Lo}\p{N}]+(?:-[\p{Ll}\p{Lo}\p{N}]+)*$/u;
 /** Longest slug. */
-export const MAX_SLUG = 120;
+const MAX_SLUG = 120;
 
 // eslint-disable-next-line no-control-regex
 const CONTROL = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g;

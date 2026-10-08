@@ -27,7 +27,7 @@ import { ID_PREFIX } from '../core/model.js';
 /** @typedef {import('../core/model.js').ProductRecord} ProductRecord */
 
 /** At most this many files per product. */
-export const MAX_FILES = 20;
+const MAX_FILES = 20;
 /** A signed upload lasts this long. */
 const UPLOAD_SECONDS = 900;
 const MEDIA_TYPE = /^[a-z]+\/[a-z0-9.+-]{1,100}$/;

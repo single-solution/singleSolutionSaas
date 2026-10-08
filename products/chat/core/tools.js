@@ -22,16 +22,16 @@ export const TOOL_SIGNATURE_HEADER = 'ss-chat-signature';
 export const TOOL_TIMEOUT_MS = 8000;
 
 /** Largest tool answer kept for the AI (characters). */
-export const TOOL_OUTPUT_MAX = 4000;
+const TOOL_OUTPUT_MAX = 4000;
 
 /** Largest tool answer read from the merchant's endpoint (bytes). */
 export const TOOL_RESPONSE_MAX_BYTES = 64 * 1024;
 
 /** Most tools a website defines. */
-export const MAX_TOOLS = 20;
+const MAX_TOOLS = 20;
 
 /** Most parameters of one tool. */
-export const MAX_TOOL_PARAMETERS = 10;
+const MAX_TOOL_PARAMETERS = 10;
 
 const TOOL_NAME = /^[a-z][a-z0-9_]{1,40}$/;
 const PARAMETER_NAME = /^[a-zA-Z][a-zA-Z0-9_]{0,40}$/;

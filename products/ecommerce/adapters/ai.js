@@ -7,7 +7,7 @@
 import { jsonOf } from '@ss/net';
 
 /** Deadline of one writing call (ms). */
-export const AI_TIMEOUT_MS = 30_000;
+const AI_TIMEOUT_MS = 30_000;
 
 /** @typedef {{ baseUrl: string, apiKey: string, model: string }} AiConnection */
 /** @typedef {(url: string, init?: import('@ss/net').SafeFetchInit) => Promise<import('@ss/net').SafeResponse>} Send */

@@ -31,7 +31,6 @@ export { PROBLEM_CODES, problem, createProblemFactory } from './errors.js';
 export {
 	ID_PREFIXES,
 	ID_ALPHABET,
-	ID_RANDOM_BYTES,
 	idPattern,
 	encodeBase32,
 	createId,
@@ -40,7 +39,6 @@ export {
 	normaliseDomain,
 	hostMatchesDomain,
 } from './ids.js';
-export { deepFreeze, isUtcTimestamp, isServiceUrl, isPathOrServiceUrl } from './util.js';
 
 /** @typedef {import('./errors.js').Problem} Problem */
 /** @typedef {import('./errors.js').ProblemFactory} ProblemFactory */

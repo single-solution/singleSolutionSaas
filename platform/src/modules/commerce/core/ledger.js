@@ -37,7 +37,7 @@ const stableStringify = (value) => {
  */
 const sha256Hex = (text) => createHash('sha256').update(text, 'utf8').digest('hex');
 
-export const LEDGER_TYPES = Object.freeze(/** @type {const} */ (['receipt', 'day_charge']));
+const LEDGER_TYPES = Object.freeze(/** @type {const} */ (['receipt', 'day_charge']));
 /** @typedef {typeof LEDGER_TYPES[number]} LedgerType */
 
 /**

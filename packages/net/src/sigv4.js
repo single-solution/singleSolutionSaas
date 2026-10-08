@@ -40,9 +40,9 @@ import { createHash, createHmac } from 'node:crypto';
  * @property {Record<string, string>} [query] extra query parameters (e.g. `response-content-disposition`)
  */
 
-export const ALGORITHM = 'AWS4-HMAC-SHA256';
-export const UNSIGNED_PAYLOAD = 'UNSIGNED-PAYLOAD';
-export const MAX_PRESIGN_SECONDS = 604_800;
+const ALGORITHM = 'AWS4-HMAC-SHA256';
+const UNSIGNED_PAYLOAD = 'UNSIGNED-PAYLOAD';
+const MAX_PRESIGN_SECONDS = 604_800;
 
 /**
  * RFC 3986 encoding as SigV4 expects it (`/` kept when `keepSlash`).

@@ -14,8 +14,8 @@ import { formFields, isObject, same } from '../util.js';
 
 /** @typedef {import('./types.js').GatewayAdapter} GatewayAdapter */
 
-export const JAZZCASH_LIVE = 'https://payments.jazzcash.com.pk';
-export const JAZZCASH_SANDBOX = 'https://sandbox.jazzcash.com.pk';
+const JAZZCASH_LIVE = 'https://payments.jazzcash.com.pk';
+const JAZZCASH_SANDBOX = 'https://sandbox.jazzcash.com.pk';
 const FORM_PATH = '/CustomerPortal/transactionmanagement/merchantform/';
 /** JazzCash takes times in Pakistan time (UTC+5, no daylight saving). */
 const PKT_OFFSET_MS = 5 * 3_600_000;

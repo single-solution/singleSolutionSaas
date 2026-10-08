@@ -20,7 +20,7 @@ export const ID_PREFIXES = Object.freeze({
 export const ID_ALPHABET = '0123456789abcdefghjkmnpqrstvwxyz';
 
 /** Number of random bytes in a generated id. */
-export const ID_RANDOM_BYTES = 16;
+const ID_RANDOM_BYTES = 16;
 
 /**
  * Regular-expression source accepted for ids with the given prefix.

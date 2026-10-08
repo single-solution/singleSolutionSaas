@@ -5,10 +5,10 @@
  * @module
  */
 /** Most custom fields a website has. */
-export const MAX_CUSTOM_FIELDS = 30;
+const MAX_CUSTOM_FIELDS = 30;
 /** Most proactive page rules a website has. */
-export const MAX_PAGE_RULES = 20;
-export const FIELD_TYPES = Object.freeze(/** @type {const} */ (['text', 'number', 'yes_no', 'choice']));
+const MAX_PAGE_RULES = 20;
+const FIELD_TYPES = Object.freeze(/** @type {const} */ (['text', 'number', 'yes_no', 'choice']));
 const KEY = /^[a-z][a-z0-9_]{0,39}$/;
 const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,}$/u;
 const PHONE = /^\+?[0-9 ()./-]{6,24}$/;

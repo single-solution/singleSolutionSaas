@@ -24,7 +24,7 @@ import {
 } from '@ss/protocol';
 
 /** The connect secret fake products are deployed with (unless a test passes another). */
-export const PRODUCT_SECRET = 'fake-product-connect-secret-0123456789abcdef';
+const PRODUCT_SECRET = 'fake-product-connect-secret-0123456789abcdef';
 
 /**
  * @typedef {object} Tamper

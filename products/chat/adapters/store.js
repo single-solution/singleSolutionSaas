@@ -20,16 +20,16 @@ import { createId } from '@ss/contracts';
 /** @typedef {{ id: string, kind: 'faq' | 'article', title: string, text: string, updatedAt: Date }} EntryRecord */
 /** @typedef {{ id: string, url: string, title: string, text: string, status: 'ok' | 'failed', error: string | null, fetchedAt: Date | null }} PageRecord */
 
-export const CONVERSATIONS = 'conversations';
-export const MESSAGES = 'messages';
-export const GUESTS = 'guests';
-export const STAFF = 'staff';
-export const LEADS = 'leads';
-export const SAVED_REPLIES = 'saved_replies';
-export const ENTRIES = 'entries';
-export const PAGES = 'pages';
-export const CHUNKS = 'chunks';
-export const USAGE = 'usage';
+const CONVERSATIONS = 'conversations';
+const MESSAGES = 'messages';
+const GUESTS = 'guests';
+const STAFF = 'staff';
+const LEADS = 'leads';
+const SAVED_REPLIES = 'saved_replies';
+const ENTRIES = 'entries';
+const PAGES = 'pages';
+const CHUNKS = 'chunks';
+const USAGE = 'usage';
 
 /** Merchant database indexes (created on a website's first use). @type {import('@ss/app-kit').IndexDefinition[]} */
 export const INDEXES = [

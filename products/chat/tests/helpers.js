@@ -11,19 +11,18 @@ import { createProductInstance, manifest } from '../adapters/product.js';
 import { createRoutes } from '../api/routes.js';
 
 export const BASE = 'https://chat.example.dev';
-export const DOMAIN = 'shop.example.com';
+const DOMAIN = 'shop.example.com';
 export const ORIGIN = `https://${DOMAIN}`;
 export const ADMIN_ORIGIN = 'https://admin.shop.example.com';
-export const NOTIFY = 'https://notifications.example.dev';
-export const ACCOUNTS = 'https://accounts.example.dev';
+const NOTIFY = 'https://notifications.example.dev';
+const ACCOUNTS = 'https://accounts.example.dev';
 export const AI = 'https://api.openai.com';
-export const STORAGE = 'https://s3.example.dev';
+const STORAGE = 'https://s3.example.dev';
 export const TOOLS = 'https://tools.example.dev';
 export const ECOMMERCE = 'https://ecommerce.example.dev';
 const SECRET = 'connect-secret-0123456789-abcdefghij';
 const ENCRYPTION_KEY = 'encryption-key-0123456789-abcdefghij';
-export const ALL = manifest.features.map((feature) => feature.key);
-export const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/605.1.15 Version/17.0 Safari/605.1.15';
+const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/605.1.15 Version/17.0 Safari/605.1.15';
 export const AI_KEY = { provider: 'openai', apiKey: 'sk-test-0123456789', model: 'gpt-4.1-mini' };
 export const STORAGE_KEY = {
 	endpoint: STORAGE,

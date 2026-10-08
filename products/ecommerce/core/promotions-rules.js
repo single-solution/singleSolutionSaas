@@ -9,7 +9,7 @@ import { MAX_AMOUNT } from './money.js';
 /** @typedef {import('./model.js').OfferScope} OfferScope */
 
 /** Most ids in one scope list. */
-export const MAX_SCOPE_IDS = 200;
+const MAX_SCOPE_IDS = 200;
 /** The largest use limit. */
 export const MAX_LIMIT = 1_000_000_000;
 
@@ -116,7 +116,7 @@ export const checkDate = (value, field) => {
  * @param {Record<string, unknown>} input
  * @returns {Checked}
  */
-export const checkDates = (input) => {
+const checkDates = (input) => {
 	const starts = checkDate(input.startsAt, 'startsAt');
 	if (!starts.ok) return starts;
 	const ends = checkDate(input.endsAt, 'endsAt');

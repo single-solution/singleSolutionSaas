@@ -13,13 +13,13 @@ import { SCHEMA_IDS } from './schema-ids.js';
 import { PATTERNS } from './common.js';
 
 /** Types a setting may have. */
-export const SETTING_TYPES = Object.freeze(/** @type {const} */ (['string', 'integer', 'number', 'boolean', 'array']));
+const SETTING_TYPES = Object.freeze(/** @type {const} */ (['string', 'integer', 'number', 'boolean', 'array']));
 
 /** Types a list item may have. */
-export const SETTING_ITEM_TYPES = Object.freeze(/** @type {const} */ (['string', 'integer', 'number', 'boolean']));
+const SETTING_ITEM_TYPES = Object.freeze(/** @type {const} */ (['string', 'integer', 'number', 'boolean']));
 
 /** `format` values a string setting may use. */
-export const SETTING_FORMATS = Object.freeze(
+const SETTING_FORMATS = Object.freeze(
 	/** @type {const} */ (['email', 'uri', 'uri-reference', 'date-time', 'date', 'time', 'duration', 'hostname', 'uuid', 'regex']),
 );
 

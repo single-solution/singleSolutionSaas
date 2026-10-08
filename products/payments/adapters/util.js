@@ -14,13 +14,6 @@ export const GATEWAY_TIMEOUT_MS = 15_000;
 export const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /**
- * A non-empty trimmed text field of an object, or ''.
- * @param {Record<string, unknown>} value
- * @param {string} name
- */
-export const field = (value, name) => (typeof value[name] === 'string' ? value[name].trim() : '');
-
-/**
  * Timing-safe equality of two texts.
  * @param {string} a
  * @param {string} b

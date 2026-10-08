@@ -29,7 +29,7 @@ import { checkHost } from './policy.js';
  */
 
 /** URI options (lower-cased) a connection string may carry. */
-export const SAFE_MONGO_OPTIONS = Object.freeze(
+const SAFE_MONGO_OPTIONS = Object.freeze(
 	[
 		'replicaSet',
 		'authSource',

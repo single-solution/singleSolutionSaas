@@ -9,7 +9,7 @@ import { PROVIDER_BASE, checkAiConnection } from '../core/models.js';
 import { WIRE } from '../core/providers.js';
 
 /** Deadline of one AI call (ms). */
-export const AI_TIMEOUT_MS = 25_000;
+const AI_TIMEOUT_MS = 25_000;
 
 /** @typedef {import('../core/models.js').AiConnection} AiConnection */
 /** @typedef {import('../core/providers.js').ChatMessage} ChatMessage */

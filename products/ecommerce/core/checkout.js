@@ -25,10 +25,10 @@ import { taxOf, taxPercent } from './taxes.js';
 /** @typedef {import('./cod.js').CodSettings} CodSettings */
 
 /** At most this many lines in a cart, and this many of one line (the cart widget keeps the same limits). */
-export const MAX_LINES = 50;
-export const MAX_QUANTITY = 99;
+const MAX_LINES = 50;
+const MAX_QUANTITY = 99;
 /** Payment methods, in the order they are offered. @type {ReadonlyArray<PaymentMethod>} */
-export const PAYMENT_METHODS = Object.freeze(/** @type {PaymentMethod[]} */ (['cod', 'online', 'bank_transfer', 'pickup']));
+const PAYMENT_METHODS = Object.freeze(/** @type {PaymentMethod[]} */ (['cod', 'online', 'bank_transfer', 'pickup']));
 /** Address fields a merchant may make required (name, phone, line 1 and city always are). */
 export const OPTIONAL_ADDRESS_FIELDS = Object.freeze(['line2', 'area', 'postalCode', 'country']);
 

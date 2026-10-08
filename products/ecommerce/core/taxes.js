@@ -12,7 +12,7 @@ import { placeKey } from './delivery.js';
 /** @typedef {{ name: string, percent: number, categoryIds: string[], regions: Array<{ country: string, city: string }> }} TaxRule */
 
 /** At most this many rules. */
-export const MAX_RULES = 50;
+const MAX_RULES = 50;
 
 /** @param {unknown} value */
 const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);

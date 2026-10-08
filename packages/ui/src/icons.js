@@ -75,5 +75,3 @@ export function Icon({ name, size = 16, className, title }) {
 		</svg>
 	);
 }
-
-export const ICON_NAMES = /** @type {IconName[]} */ (Object.keys(PATHS));
