@@ -13,7 +13,6 @@ export const COLLECTIONS = Object.freeze({
 	replay: 'platform_replay',
 	audit: 'platform_audit',
 	locks: 'platform_locks',
-	migrations: 'platform_migrations',
 	system: 'platform_system',
 });
 
@@ -72,16 +71,9 @@ export const INFRA_COLLECTIONS = Object.freeze([
 	defineCollection({
 		module: 'platform',
 		name: COLLECTIONS.locks,
-		description: 'Lease locks (migrations, ledger appends).',
+		description: 'Lease locks (ledger appends).',
 		timestamps: false,
 		ttl: { field: 'expireAt', afterSeconds: 3600 },
-	}),
-	defineCollection({
-		module: 'platform',
-		name: COLLECTIONS.migrations,
-		description: 'Applied migrations (append-only).',
-		appendOnly: true,
-		timestamps: false,
 	}),
 	defineCollection({
 		module: 'platform',

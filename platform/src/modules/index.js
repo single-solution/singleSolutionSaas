@@ -1,6 +1,6 @@
 /**
  * The module registry: every control-plane module is listed here once. The API catch-all route mounts the routes
- * of every module; collections, jobs, operations, migrations, problem codes and ports are collected from this list.
+ * of every module; collections, problem codes and ports are collected from this list.
  * Add a module by appending it — modules never import each other (they use `ctx.service(name)`).
  * @module
  */

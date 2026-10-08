@@ -1,7 +1,7 @@
 /**
  * Module definitions and their isolation boundary. A module is a plain object (see `modules/README.md`):
  *
- *   defineModule({ name, collections, migrations, problems, service, routes, ports })
+ *   defineModule({ name, collections, problems, service, routes, ports })
  *
  * Every factory receives a {@link ModuleContext}. A module reaches **only its own collections** through
  * `ctx.collection(name)`; another module's data is reached through that module's public `service` via
@@ -13,7 +13,6 @@
 import { platformError } from './errors.js';
 
 /** @typedef {import('./db.js').CollectionDefinition} CollectionDefinition */
-/** @typedef {import('./db.js').Migration} Migration */
 /** @typedef {import('./http.js').RouteDefinition} RouteDefinition */
 /** @typedef {import('./authenticators.js').AuthPorts} AuthPorts */
 /** @typedef {import('./logger.js').Logger} Logger */
@@ -56,7 +55,6 @@ import { platformError } from './errors.js';
  * @typedef {object} ModuleDefinition
  * @property {string} name lower-case identifier; collections are `<name>_*`
  * @property {ReadonlyArray<Readonly<CollectionDefinition>>} [collections]
- * @property {ReadonlyArray<Migration>} [migrations]
  * @property {Readonly<Record<string, { status: number, title: string }>>} [problems] extra RFC 9457 codes
  * @property {(ctx: ModuleContext) => object} [service] public API for other modules
  * @property {(ctx: ModuleContext) => RouteDefinition[]} [routes]
@@ -77,10 +75,6 @@ export const defineModule = (definition) => {
 	for (const collection of definition.collections ?? []) {
 		if (collection.module !== name)
 			throw new TypeError(`module ${name} declares collection ${collection.name} of module ${collection.module}`);
-	}
-	for (const migration of definition.migrations ?? []) {
-		if (!String(migration.id).includes(`-${name}-`))
-			throw new TypeError(`migration ${migration.id} must be named YYYYMMDDHHMM-${name}-<slug>`);
 	}
 	for (const key of ['service', 'routes', 'ports']) {
 		const value = /** @type {Record<string, unknown>} */ (definition)[key];
@@ -175,7 +169,6 @@ export const composeModules = (modules, { shared, collection }) => {
 		ports,
 		service: serviceOf,
 		context: contextOf,
-		migrations: () => [...byName.values()].flatMap((m) => m.migrations ?? []),
 	});
 };
 

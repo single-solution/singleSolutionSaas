@@ -4,7 +4,6 @@
  */
 export const TEXTS = Object.freeze({
 	title: 'Notifications',
-	tagline: 'Product dashboard',
 	loading: 'Loading…',
 	signedOut: 'Open this dashboard from the Portal.',
 	failed: 'This could not be loaded.',
@@ -174,7 +173,6 @@ export const TEXTS = Object.freeze({
 		repliesHelp: "Point your provider's incoming-message webhook here for unsubscribe keywords.",
 		intro: 'The docs show every feature, widget and route. Features that are off are marked.',
 		openDocs: 'Open the docs',
-		snippet: 'Widget script (your browser token is in the Portal)',
 		server: 'Your server calls the API with the server token, kept as SS_SERVER_TOKEN on your server.',
 		manageTokens: 'Manage tokens in the Portal',
 		off: 'off',

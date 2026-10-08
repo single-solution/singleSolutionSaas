@@ -11,7 +11,7 @@
  *   global defaults and prices: {@link PRODUCT_ENFORCED_ROWS}) have no Portal permission. The Portal's part of them is
  *   what it signs and accepts: launches carry the role (Finance is never launched), and a feature report is accepted
  *   only for a current Owner or Support admin.
- * - `system` actors (operations, migrations) may do everything.
+ * - `system` actors may do everything.
  * @module
  */
 

@@ -5,7 +5,7 @@
  * The returned object is what the Next.js adapters in `app/` call:
  * - `handle(request)` — the Portal API (`/v1/*`)
  * - `jwks()` — the published JWKS (Portal keys and token signing keys, distinct kids)
- * - `ensureIndexes()`, `migrate()` — operational entry points (scripts, deploy pipeline)
+ * - `ensureIndexes()` — applies the declared indexes (on the first request after a deploy)
  * @module
  */
 import { createProblemFactory } from '@ss/contracts';
@@ -14,14 +14,7 @@ import { createBackground } from './infra/background.js';
 import { clearCookie, createLoginThrottle, createSessions, serializeCookie, sessionCookieName } from './infra/auth.js';
 import { createAuthenticators } from './infra/authenticators.js';
 import { createPortalKeys, createSecretBox } from './infra/crypto.js';
-import {
-	createLocks,
-	createRegistry,
-	createRepositories,
-	createTransactionRunner,
-	ensureIndexes,
-	runMigrations,
-} from './infra/db.js';
+import { createLocks, createRegistry, createRepositories, createTransactionRunner, ensureIndexes } from './infra/db.js';
 import { platformError } from './infra/errors.js';
 import { INFRA_PROBLEMS, createApiHandler } from './infra/http.js';
 import { createPlatformMailer } from './infra/mailer.js';
@@ -160,17 +153,6 @@ export const createPortal = ({
 			}),
 		/** @param {{ dryRun?: boolean }} [options] */
 		ensureIndexes: ({ dryRun = false } = {}) => ensureIndexes(db, registry, { dryRun, logger }),
-		/** @param {{ dryRun?: boolean }} [options] */
-		migrate: ({ dryRun = false } = {}) =>
-			runMigrations({
-				db,
-				applied: repos.appendOnly(COLLECTIONS.migrations),
-				locks,
-				migrations: composed.migrations(),
-				logger,
-				now,
-				dryRun,
-			}),
 	});
 };
 /** @typedef {ReturnType<typeof createPortal>} Portal */

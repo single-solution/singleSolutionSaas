@@ -11,8 +11,6 @@ import {
 	guardPipeline,
 	guardUpdate,
 	indexSpecs,
-	orderMigrations,
-	runMigrations,
 } from '../src/infra/db.js';
 import { isPlatformError } from '../src/infra/errors.js';
 import { COLLECTIONS, INFRA_COLLECTIONS } from '../src/infra/schema.js';
@@ -284,89 +282,6 @@ describe('locks', () => {
 		await held?.release();
 		await expect(locks.withLock('job', { ttlMs: 1000 }, async () => Promise.reject(new Error('x')))).rejects.toThrow('x');
 		expect(await locks.acquire('job', { ttlMs: 1000 })).not.toBeNull(); // released after the failure
-	});
-});
-
-describe('migrations', () => {
-	const setup = (/** @type {string} */ name) => {
-		const clock = createClock();
-		const db = mongo.db(name);
-		const r = createRepositories(db, createRegistry(INFRA_COLLECTIONS), { now: clock.now });
-		const locks = createLocks(r.mutable(COLLECTIONS.locks), { now: clock.now });
-		const { logger } = createTestLogger();
-		return { db, applied: r.appendOnly(COLLECTIONS.migrations), locks, logger, now: clock.now };
-	};
-
-	it('validates and orders migrations', () => {
-		const up = async () => {};
-		expect(() => orderMigrations([{ id: 'bad', up }])).toThrow(/id/);
-		expect(() =>
-			orderMigrations([
-				{ id: '202610010000-a-x', up },
-				{ id: '202610010000-a-x', up },
-			]),
-		).toThrow(/twice/);
-		expect(() => orderMigrations([/** @type {any} */ ({ id: '202610010000-a-x' })])).toThrow(/up/);
-		expect(
-			orderMigrations([
-				{ id: '202610020000-b-y', up },
-				{ id: '202610010000-a-x', up },
-			]).map((m) => m.id),
-		).toEqual(['202610010000-a-x', '202610020000-b-y']);
-	});
-
-	it('dry-runs, applies in order once, and stops at the first failure', async () => {
-		const ctx = setup('db_migrations');
-		/** @type {string[]} */
-		const ran = [];
-		/** @type {import('../src/infra/db.js').Migration[]} */
-		const migrations = [
-			{ id: '202610020000-demo-second', up: async () => void ran.push('second') },
-			{
-				id: '202610010000-demo-first',
-				description: 'first',
-				plan: async () => ['create x'],
-				up: async ({ db }) => void (await db.collection('demo_x').insertOne({ a: 1 }), ran.push('first')),
-			},
-		];
-		const dry = await runMigrations({ ...ctx, migrations, dryRun: true });
-		expect(dry).toEqual({
-			dryRun: true,
-			applied: [],
-			pending: [
-				{ id: '202610010000-demo-first', description: 'first', plan: ['create x'] },
-				{ id: '202610020000-demo-second' },
-			],
-		});
-		expect(ran).toEqual([]);
-		expect(await runMigrations({ ...ctx, migrations })).toEqual({
-			dryRun: false,
-			applied: ['202610010000-demo-first', '202610020000-demo-second'],
-			pending: [],
-		});
-		expect(ran).toEqual(['first', 'second']);
-		expect((await runMigrations({ ...ctx, migrations })).applied).toEqual([]);
-		expect((await ctx.applied.findOne({ _id: '202610010000-demo-first' }))?.description).toBe('first');
-
-		const failing = [
-			...migrations,
-			{ id: '202610030000-demo-boom', up: async () => Promise.reject(new Error('boom')) },
-			{ id: '202610040000-demo-after', up: async () => void ran.push('after') },
-		];
-		await expect(runMigrations({ ...ctx, migrations: failing })).rejects.toThrow('boom');
-		expect(ran).not.toContain('after');
-		expect((await runMigrations({ ...ctx, migrations: failing, dryRun: true })).pending.map((p) => p.id)).toEqual([
-			'202610030000-demo-boom',
-			'202610040000-demo-after',
-		]);
-	});
-
-	it('refuses to run while another run holds the lock', async () => {
-		const ctx = setup('db_migrations_lock');
-		const held = await ctx.locks.acquire('migrations', { ttlMs: 60_000 });
-		expect(await guardCode(() => runMigrations({ ...ctx, migrations: [] }))).toBe('locked');
-		await held?.release();
-		expect((await runMigrations({ ...ctx, migrations: [] })).applied).toEqual([]);
 	});
 });
 

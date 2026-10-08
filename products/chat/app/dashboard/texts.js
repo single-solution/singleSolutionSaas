@@ -4,7 +4,6 @@
  */
 export const TEXTS = Object.freeze({
 	title: 'Chat',
-	tagline: 'Product dashboard',
 	loading: 'Loading…',
 	signedOut: 'Open this dashboard from the Portal.',
 	failed: 'This could not be loaded.',
@@ -136,7 +135,6 @@ export const TEXTS = Object.freeze({
 		max: 'Up to {max}.',
 		saveList: 'Save list',
 		errors: 'Not saved: fix these first.',
-		onePerLine: 'One per line',
 		tools: Object.freeze({
 			title: 'Webhook tools',
 			help: 'Each tool is a POST to your https address with the arguments the AI chose, signed with the tool signing secret.',

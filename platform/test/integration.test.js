@@ -44,9 +44,6 @@ const probeModule = ({ productJwks = /** @type {any} */ (null) } = {}) =>
 	defineModule({
 		name: 'probe',
 		collections: [defineCollection({ module: 'probe', name: 'probe_items', tenant: 'merchant' })],
-		migrations: [
-			{ id: '202610010000-probe-seed', description: 'No-op seed.', plan: async () => ['nothing'], up: async () => {} },
-		],
 		problems: { probe_failed: { status: 422, title: 'Probe failed' } },
 		service: (ctx) => {
 			const items = ctx.collection('probe_items');
@@ -171,15 +168,12 @@ const login = async (portal, input) => {
 };
 
 describe('Portal end to end', () => {
-	it('boots, ensures indexes, migrates and serves public routes and the JWKS', async () => {
+	it('boots, ensures indexes and serves public routes and the JWKS', async () => {
 		const { portal, call } = await boot({ dbName: 'it_boot', db: mongo.db('it_boot', { fresh: true }) });
 		const indexes = await portal.ensureIndexes();
 		expect(indexes.created).toEqual(
 			expect.arrayContaining(['probe_items.tenant', `${COLLECTIONS.audit}.merchantId_1_at_-1__id_-1`]),
 		);
-		expect((await portal.migrate({ dryRun: true })).pending.map((p) => p.id)).toEqual(['202610010000-probe-seed']);
-		expect((await portal.migrate()).applied).toEqual(['202610010000-probe-seed']);
-		expect((await portal.migrate()).applied).toEqual([]);
 
 		const info = await call('GET', '/api/v1/probe/info');
 		expect(info.status).toBe(200);

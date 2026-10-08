@@ -365,7 +365,6 @@ export const ADMIN = Object.freeze({
 	roleChangeHelp: 'The change takes effect at once and ends all their sessions.',
 	you: 'you',
 	twoStepColumn: 'Two-step',
-	lastOwner: 'There must always be at least one Owner.',
 	settingsTitle: 'Settings',
 	settingsTabs: Object.freeze({
 		mail: 'E-mail sending',
@@ -429,11 +428,9 @@ export const ADMIN = Object.freeze({
 		to: 'To (UTC day)',
 		apply: 'Filter',
 	}),
-	activityColumns: Object.freeze({ when: 'When', who: 'Who', what: 'What', target: 'Target' }),
 	noActivity: 'No activity yet.',
 	myAccountTitle: 'My account',
 	nameTitle: 'Name',
-	deletedMerchant: 'Deleted merchant',
 });
 
 /** Credits and billing (PLAN 0.5, 0.6 status labels). */
@@ -475,7 +472,6 @@ export const BILLING = Object.freeze({
 	billingIntro: 'Receipts, charges and the merchants that need attention.',
 	usageChartIntro: (/** @type {string} */ range, /** @type {string} */ total) => `${range} · ${total} in total`,
 	receiptsIntro: 'Every credit receipt on this account.',
-	dayChargesIntro: 'Charges per UTC day.',
 	usageChart: 'Spend per UTC day',
 	usageColumns: Object.freeze({
 		day: 'Day (UTC)',

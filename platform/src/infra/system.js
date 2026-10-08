@@ -10,7 +10,7 @@
  *   branding, support contact, security and billing rules. `version` increases with every change so other instances
  *   notice and rebuild.
  * - `logo` — the Branding logo (PNG, JPEG or WebP, at most 200 kB), served at `/branding/logo`.
- * - `schema` — the fingerprint of the indexes and migrations last applied (applied once per deploy, under a lock).
+ * - `schema` — the fingerprint of the indexes last applied (applied once per deploy).
  *
  * Loaded once per instance and cached by the runtime.
  * @module

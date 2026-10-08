@@ -13,12 +13,11 @@
  *     `$match` must pin `merchantId` by equality, inserts are stamped, `merchantId` can never be changed,
  *     cross-collection stages are refused) or the explicit `acrossMerchants()` view for admin/system code;
  *   - every repository refuses `$where` and the `$out` / `$merge` write stages (which could bypass append-only).
- * - `createLocks` — lease locks (unique `_id`, expiry takeover) used by migrations, operation runs and ledger appends.
+ * - `createLocks` — lease locks (unique `_id`, expiry takeover) used by ledger appends.
  * - `createTransactionRunner` — `withTransaction(async (session) => …)` over a driver session: snapshot reads,
  *   majority commit, whole-transaction retry on `TransientTransactionError` and commit retry on
  *   `UnknownTransactionCommitResult`. Repository operations take the driver options, so `{ session }` is passed to
  *   them like any other option (the guards are unchanged).
- * - `runMigrations` — versioned, ordered, recorded migrations under a lock, with a read-only dry run.
  * @module
  */
 import { MongoClient } from 'mongodb';
@@ -658,99 +657,4 @@ export const createTransactionRunner = (
 			await session.endSession();
 		}
 	};
-};
-
-// ---------------------------------------------------------------------------------------------------------------
-// Migrations
-
-/**
- * @typedef {object} MigrationContext
- * @property {Db} db raw database — migrations are reviewed code and the only raw access; they never update
- *   append-only collections
- * @property {Logger} logger
- */
-
-/**
- * @typedef {object} Migration
- * @property {string} id `YYYYMMDDHHMM-<module>-<slug>`; migrations run in id order across modules
- * @property {string} [description]
- * @property {(ctx: MigrationContext) => Promise<void>} up must be safe to re-run if a crash interrupted it
- * @property {(ctx: MigrationContext) => Promise<string[]>} [plan] read-only description of the changes (dry run)
- */
-
-const MIGRATION_ID = /^\d{12}-[a-z0-9]+(?:-[a-z0-9]+)*$/;
-
-/**
- * Validate and order migrations.
- * @param {ReadonlyArray<Migration>} migrations
- * @returns {Migration[]}
- */
-export const orderMigrations = (migrations) => {
-	const seen = new Set();
-	for (const m of migrations) {
-		if (typeof m.id !== 'string' || !MIGRATION_ID.test(m.id))
-			throw new TypeError(`migration id must be YYYYMMDDHHMM-<module>-<slug>: ${m.id}`);
-		if (seen.has(m.id)) throw new TypeError(`migration ${m.id} is declared twice`);
-		if (typeof m.up !== 'function') throw new TypeError(`migration ${m.id} needs up()`);
-		seen.add(m.id);
-	}
-	return [...migrations].sort((a, b) => (a.id < b.id ? -1 : 1));
-};
-
-/**
- * Apply pending migrations in order under the `migrations` lock, recording each in the append-only `applied`
- * collection. A failure stops the run (later migrations are not attempted; the failed one is not recorded).
- * `dryRun` takes no lock and writes nothing: it lists pending migrations with their `plan()`.
- * @param {{ db: Db, applied: ReadOps, locks: Locks, migrations: ReadonlyArray<Migration>, logger: Logger,
- *   now?: () => number, dryRun?: boolean, lockTtlMs?: number }} options
- * @returns {Promise<{ dryRun: boolean, applied: string[], pending: Array<{ id: string, description?: string, plan?: string[] }> }>}
- */
-export const runMigrations = async ({
-	db,
-	applied,
-	locks,
-	migrations,
-	logger,
-	now = Date.now,
-	dryRun = false,
-	lockTtlMs = 15 * 60_000,
-}) => {
-	const ordered = orderMigrations(migrations);
-	const ctx = { db, logger };
-	/** @returns {Promise<Migration[]>} */
-	const pendingNow = async () => {
-		const done = new Set((await applied.find({}, { projection: { _id: 1 } }).toArray()).map((doc) => String(doc._id)));
-		return ordered.filter((m) => !done.has(m.id));
-	};
-	if (dryRun) {
-		const pending = [];
-		for (const m of await pendingNow()) {
-			pending.push({
-				id: m.id,
-				...(m.description ? { description: m.description } : {}),
-				...(m.plan ? { plan: await m.plan(ctx) } : {}),
-			});
-		}
-		return { dryRun: true, applied: [], pending };
-	}
-	const result = await locks.withLock('migrations', { ttlMs: lockTtlMs, owner: 'migrations' }, async () => {
-		/** @type {string[]} */
-		const ran = [];
-		for (const m of await pendingNow()) {
-			const started = now();
-			logger.info('migration starting', { id: m.id });
-			await m.up(ctx);
-			await applied.insertOne({
-				_id: m.id,
-				description: m.description ?? null,
-				appliedAt: new Date(now()),
-				durationMs: now() - started,
-			});
-			logger.info('migration applied', { id: m.id, ms: now() - started });
-			ran.push(m.id);
-		}
-		return ran;
-	});
-	if (result.locked) throw platformError('locked', 'another migration run holds the lock');
-	return { dryRun: false, applied: result.value, pending: [] };
 };

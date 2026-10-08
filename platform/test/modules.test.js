@@ -7,14 +7,11 @@ import { createTestLogger } from './helpers.js';
 const shared = () => /** @type {any} */ ({ logger: createTestLogger().logger, now: () => 0 });
 
 describe('defineModule', () => {
-	it('validates names, collections, migrations and factories', () => {
+	it('validates names, collections and factories', () => {
 		expect(() => defineModule({ name: 'Bad' })).toThrow(/name/);
 		expect(() => defineModule({ name: 'platform' })).toThrow(/name/);
 		expect(() => defineModule({ name: 'a', collections: [defineCollection({ module: 'b', name: 'b_x' })] })).toThrow(
 			/collection/,
-		);
-		expect(() => defineModule({ name: 'a', migrations: [{ id: '202610010000-b-x', up: async () => {} }] })).toThrow(
-			/migration/,
 		);
 		expect(() => defineModule(/** @type {any} */ ({ name: 'a', routes: [] }))).toThrow(/factory/);
 		expect(Object.isFrozen(defineModule({ name: 'a' }))).toBe(true);
@@ -47,7 +44,6 @@ describe('composeModules', () => {
 		expect(ctx.collection('beta_x')).toBe('beta:beta_x');
 		expect(ctx.moduleNames()).toEqual(['alpha', 'beta']);
 		expect(composed.context('beta')).toBe(ctx);
-		expect(composed.migrations()).toEqual([]);
 	});
 
 	it('refuses collisions and bad wiring', () => {

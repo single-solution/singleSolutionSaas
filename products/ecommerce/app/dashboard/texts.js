@@ -4,7 +4,6 @@
  */
 export const TEXTS = Object.freeze({
 	title: 'Ecommerce',
-	tagline: 'Product dashboard',
 	loading: 'Loading…',
 	signedOut: 'Open this dashboard from the Portal.',
 	failed: 'This could not be loaded.',
@@ -135,7 +134,6 @@ export const TEXTS = Object.freeze({
 		max: 'Up to {max}.',
 		saveList: 'Save list',
 		errors: 'Not saved: fix these first.',
-		onePerLine: 'One per line',
 		orderFlow: Object.freeze({
 			title: 'Order statuses and moves',
 			help: 'Name your statuses, add your own and choose where an order may move next. Each status has a role; the roles keep stock, offers, points and money right.',

@@ -4,7 +4,6 @@
  */
 export const TEXTS = Object.freeze({
 	title: 'Growth',
-	tagline: 'Product dashboard',
 	loading: 'Loading…',
 	signedOut: 'Open this dashboard from the Portal.',
 	failed: 'This could not be loaded.',

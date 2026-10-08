@@ -40,7 +40,6 @@
 	"analytics.emptySearches": "Searches with no results",
 	"analytics.notFound": "Pages not found (404)",
 	"analytics.vitals": "Web Vitals",
-	"analytics.average": "Average {value}",
 	"analytics.share": "{good} % good · {needsImprovement} % needs improvement · {poor} % poor",
 	"device.mobile": "Phones",
 	"device.tablet": "Tablets",

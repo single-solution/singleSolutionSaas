@@ -6,7 +6,7 @@
  *    deployment fails fast, naming the variable (never its value);
  * 2. the system state is loaded from the control database: secrets generated on first start, settings recorded by
  *    admins (`infra/system.js`);
- * 3. indexes and migrations are applied once per schema version, under a lock (no manual step for the owner);
+ * 3. indexes are applied once per schema version (no manual step for the owner);
  * 4. every few seconds a cheap read of the settings version decides whether another instance changed the settings
  *    (or rotated a key), and the Portal is rebuilt.
  * @module
@@ -38,7 +38,7 @@ const shared = () => {
 };
 
 /**
- * Fingerprint of every collection definition and migration id: indexes and migrations are applied when it changes.
+ * Fingerprint of every collection definition: indexes are applied when it changes.
  * @param {import('./portal.js').Portal} portal
  */
 const schemaFingerprint = (portal) =>
@@ -46,13 +46,12 @@ const schemaFingerprint = (portal) =>
 		.update(
 			JSON.stringify({
 				collections: portal.registry.all().map((def) => [def.name, def.indexes, def.ttl ?? null]),
-				migrations: portal.modules.migrations().map((m) => m.id),
 			}),
 		)
 		.digest('hex');
 
 /**
- * Apply indexes and migrations once per schema version (idempotent; migrations hold their own lock).
+ * Apply indexes once per schema version (idempotent).
  * @param {import('./portal.js').Portal} portal
  * @param {import('./infra/system.js').SystemStore} system
  * @param {import('./infra/logger.js').Logger} logger
@@ -61,8 +60,6 @@ const prepareSchema = async (portal, system, logger) => {
 	const fingerprint = schemaFingerprint(portal);
 	if ((await system.appliedSchema()) === fingerprint) return { applied: false };
 	await portal.ensureIndexes();
-	const migrated = await portal.migrate();
-	if (migrated && /** @type {any} */ (migrated).locked) return { applied: false };
 	await system.recordSchema(fingerprint);
 	logger.info('schema prepared', { fingerprint: fingerprint.slice(0, 12) });
 	return { applied: true };
