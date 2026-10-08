@@ -26,6 +26,7 @@
 		"@ss/platform": "workspace:^",
 		"@ss/product-accounts": "workspace:^",
 		"@ss/product-chat": "workspace:^",
+		"@ss/product-ecommerce": "workspace:^",
 		"@ss/product-notifications": "workspace:^",
 		"@ss/product-payments": "workspace:^",
 		"@ss/protocol": "workspace:^",

@@ -47,6 +47,9 @@ importers:
       '@ss/product-chat':
         specifier: workspace:^
         version: link:../products/chat
+      '@ss/product-ecommerce':
+        specifier: workspace:^
+        version: link:../products/ecommerce
       '@ss/product-notifications':
         specifier: workspace:^
         version: link:../products/notifications

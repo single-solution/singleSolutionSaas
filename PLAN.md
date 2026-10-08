@@ -2111,6 +2111,98 @@ validate` / `openapi.json` (`x-ss-feature` a list) accept a list meaning "any of
         Easypaisa and the generic adapter get theirs with each payment); final domains come before charging (step 14).
         Step 9's Done line stays empty until then.
 
+   - **Step 10, Ecommerce** (0.8.8; each item open for owner review):
+      - **Feature keys**: `catalog`, `variants`, `multi_location`, `grades_serials`, `digital_goods`, `bookings`,
+        `checkout`, `cod`, `delivery_zones`, `courier_apis`, `taxes`, `coupons`, `deals`, `loyalty`, `bundles`,
+        `reviews`, `wishlist`, `alerts`, `compare`, `returns`, `invoices`, `csv`, `bulk_actions`, `reports`, `seo`,
+        `feeds`, `ai_copy`, `llms_txt`. `catalog` needs nothing; `variants`, `multi_location`, `grades_serials`,
+        `checkout`, `deals`, `wishlist`, `alerts`, `compare`, `csv`, `bulk_actions`, `seo`, `feeds`, `ai_copy` and
+        `llms_txt` need `catalog`; every other feature needs `checkout`. Orders, customers and the blocklist belong to
+        `checkout`. Permissions: `catalog.edit`, `orders.read`, `orders.manage`, `orders.refund`, `customers.manage`,
+        `returns.manage`, `coupons.edit`, `deals.edit`, `bundles.edit`, `loyalty.manage`, `reviews.moderate`,
+        `reports.read`, `csv.run`, `bulk.run`. Widgets: `product_grid`, `product_page`, `cart` (cart, checkout and
+        success page), `my_orders`, `wishlist`, `compare`; admin `catalog_admin`, `orders_admin`, `promotions_admin`
+        (any of coupons, deals, bundles, loyalty) and `customers_admin` (customers, reviews, reports, CSV).
+      - **One transaction**: placing an order numbers it, holds its stock (and booked slots), counts its coupon, deal
+        and bundle uses and spends its points, then inserts it, in one MongoDB transaction (`adapters/ledger.js`; Atlas
+        M0 and every replica set support it). Giving them back (cancel, an ended waiting window, return to origin, a
+        claim's restock) is guarded so it happens exactly once. Merchant databases must be replica sets (Atlas is).
+      - **Shoppers**: placing orders, reviews, the wishlist, alerts and return claims need an Accounts sign-in
+        (`SS-Sign-In`, the pasted Accounts token); browsing, the cart and quotes work for guests. The cart lives in the
+        shopper's browser (localStorage) and is priced by the server on every quote and again at placement. Ecommerce
+        keeps only shop records per Accounts user id (orders, customer record with blocklist and RTO count, loyalty).
+        A missing sign-in answers 403 `sign_in_required` (a 401 would make a calling product's kit treat its pasted
+        token as refused).
+      - **Payments**: online payments and bank transfers both go through Payments (bank transfer = Payments'
+        `bank_transfer` gateway with its proof upload and the merchant's confirmation); a COD advance is a Payments
+        payment for the advance. Online, bank transfer and COD with an advance start in the flow's `awaiting_payment`
+        status; plain COD and pay at pickup in `awaiting_confirmation`. **Rechecks without timers** (the 0.3 open
+        point): an order is marked paid only after `POST /v1/payments/:id/verify` answers verified for its exact amount
+        (or advance) and currency; a waiting payment is asked again when the order is read (at most every 30 s) and by
+        the work on use (at most 10 per request) before a waiting order whose window ended (payment window, default 60
+        minutes; confirmation window, default 24 hours) is cancelled; if Payments cannot be reached the order waits for
+        a later request. Refunds of online-paid money go through Payments; cash refunds are recorded.
+      - **Work on use**: expired waiting orders, payment rechecks and unsent alerts run right after requests for that
+        website, at most once a minute per website and instance (`service.whenUsed`). Loyalty lots expire when the
+        account is read or changed. Courier tracking is refreshed when a shipped order is read (at most every 30 min).
+      - **Order flow**: the merchant's statuses and moves are a list setting (`order_flow`) with roles
+        (`awaiting_payment`, `awaiting_confirmation`, `open`, `packed`, `shipped`, `delivered`, `cancelled`,
+        `returned_to_origin`, `refunded`) whose rules hold whatever the flow (exactly one waiting status of each kind,
+        cancel only before shipping, RTO only from shipped, refunded only after delivered or RTO). The default is the
+        ibrahimMobiles flow. Packing captures serials of serialized lines; shipping takes a courier of the `couriers`
+        list and a tracking number, or books through the courier API; delivered marks COD and pickup orders paid,
+        counts sales and earns points; cancelled gives everything back and refunds online money.
+      - **List settings** (product database, like Chat's): `order_flow`, `couriers` (name, tracking link with
+        `{tracking}`), `delivery_zones`, `tax_rules`, `grades` (with return and warranty days) and `booking_hours`,
+        edited in the dashboard with Recent changes, no global defaults.
+      - **Couriers**: no named couriers in code: the tracking-link list, plus one generic courier API adapter (booking
+        and tracking addresses, headers, a body template, answer paths) for `courier_apis`. **AI copy**: the merchant's
+        OpenAI-compatible key (base URL, key, model); suggestions are returned, never saved by themselves.
+      - **Media**: images, digital files and return photos go to the merchant's storage with short presigned PUTs;
+        images are shown from the `catalog` setting `mediaBaseUrl` (the bucket's or CDN's public address) or, when it
+        is empty, through signed links of one hour.
+      - **Bookings**: weekly hours in the business.json time zone, slots of the product's duration, no double booking
+        (unique index per product and start). **Digital goods**: licence keys and files are given once the order is
+        paid; downloads are 5-minute signed links, limited per line.
+      - **Promotions**: each line takes its best deal; bundles and buy-X-get-Y compete with deals per unit; a coupon
+        applies last on what is left. Loyalty earns a percentage of the goods paid as points (ibrahimMobiles), redeemed
+        up to a share of the order, expiring after the set days (0 = never).
+      - **Returns**: claims within the item's, else the grade's, else the setting's window from delivery; approve,
+        receive, refund (through Payments when paid online, else recorded), restock exactly once, close; points earned
+        on the returned part are taken back.
+      - **Things on the merchant's domain** are served by the merchant's site from server-token routes, with snippets
+        in `/docs`: `GET /v1/seo/products/:ref`, `/v1/seo/categories/:ref`, `/v1/seo/sitemap.xml`,
+        `/v1/feeds/products.xml` (Google Merchant), `/v1/feeds/products.csv` (Meta), `/v1/llms.txt`, `/v1/policies`.
+        Policies are four `checkout` texts.
+      - **Chat's shop tools** (the 0.8.4 open point): Ecommerce implements exactly the routes in
+        `products/chat/core/shop.js` (`/v1/chat/…`, server token; the `me` routes take the visitor's forwarded
+        sign-in and return no addresses or phone numbers). **Add to cart from a chat card**: the card dispatches the
+        cancelable window event `ss-ecommerce:add-to-cart` with `{ productId, variantId, quantity }`; Ecommerce's
+        widget adds it to the browser cart and calls `preventDefault()`; without Ecommerce's widget on the page the card
+        opens the product page. Chat's context panel and Accounts' Orders tab call
+        `GET /v1/customers/:userId/orders?limit=` → `{ items: [{ id, number, status, statusLabel, total, totalText,
+currency, createdAt }], loyaltyPoints }`. `context_panel` is not marked Not working without the Ecommerce
+        token (its shop info just stays empty). Accounts' ready-made roles got Ecommerce permissions (Business manager
+        all; Product manager catalog, CSV, bulk, reviews; Marketing manager promotions and reports; Support staff
+        orders, returns, customers); roles already created keep theirs.
+      - **Notifications templates**: `ecommerce.order_placed`, `ecommerce.order_status` (statuses listed in the
+        `checkout` setting `notifyStatuses`), `ecommerce.return_status`, `ecommerce.back_in_stock`,
+        `ecommerce.price_drop` (values in the docs); alerts are non-essential (unsubscribes apply).
+      - **Data rights** match the Accounts user id, e-mail or phone: the export lists orders (without staff notes),
+        the customer record, loyalty, claims, reviews, wishlist and alerts; delete anonymises orders and claims (amounts
+        kept: the merchant's money records), deletes the customer record, loyalty, wishlist, alerts and reviews.
+      - **Limits** (code constants): 50 cart lines and 99 of one item, 250 variants and 20 images per product, 500 ids
+        per bulk product action and 200 per bulk order move, 5,000 rows per CSV import, 4 products compared.
+      - **Parked folders**: the 15 shop folders and `parked/e2e` (tests of the deleted parked products only) are
+        deleted, so `parked/` is gone.
+      - **Owner items, step 10**: create the Vercel project with root `products/ecommerce`, set `MONGODB_URI` (its own
+        database, for example `ss_ecommerce`), `CONNECT_SECRET` and `ENCRYPTION_KEY` for Production, deploy, then
+        Portal → Products → Add product and set it Active; redeploy Chat and Accounts (shop tools, Orders tab, role
+        defaults). Merchants paste the Accounts, Payments and Notifications tokens into Ecommerce and the Ecommerce
+        token into Chat and Accounts; their sites serve the sitemap, feeds, llms.txt and policies from the routes above;
+        storage CORS allows `PUT` from the website and admin origins. No courier or gateway address needs registering
+        for Ecommerce. Step 10's Done line stays empty until then.
+
 Everything else in Part 0 is decided. A point that is not decided in Part 0 or 0.10 is asked, not guessed (0.13).
 
 ## 0.9 Conflicts with the current build and deployment
