@@ -9,13 +9,12 @@ This file covers how to build. `PLAN.md` Part 0 is the binding plan: what is bui
 
 ## Repository
 
-| Folder      | What it is                                                                                        | Deployed?                     |
-| ----------- | ------------------------------------------------------------------------------------------------- | ----------------------------- |
-| `platform/` | The **Portal**: merchant console, admin console (`/admin`), API                                   | Yes, one deployment           |
-| `products/` | The **products**: `notifications`, `accounts`, `chat` and `payments` so far (PLAN 0.12 steps 6–9) | Yes, one deployment each      |
-| `packages/` | The **shared kit** used by the Portal and the products (published packages)                       | No, built into the apps above |
-| `e2e/`      | **System tests**: products against the real Portal (`@ss/e2e`)                                    | No                            |
-| `parked/`   | The old product folders, kept for reference until their replacement ships (PLAN 0.12 step 4)      | No, outside the workspace     |
+| Folder      | What it is                                                                                                      | Deployed?                     |
+| ----------- | --------------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| `platform/` | The **Portal**: merchant console, admin console (`/admin`), API                                                 | Yes, one deployment           |
+| `products/` | The **products**: `notifications`, `accounts`, `chat`, `payments` and `ecommerce` so far (PLAN 0.12 steps 6–10) | Yes, one deployment each      |
+| `packages/` | The **shared kit** used by the Portal and the products (published packages)                                     | No, built into the apps above |
+| `e2e/`      | **System tests**: products against the real Portal (`@ss/e2e`)                                                  | No                            |
 
 ### Each folder is its own repository
 
@@ -32,8 +31,7 @@ Everything lives in one repository for now, but every **unit** — `platform/`, 
   functions, 85 % branches) are met by its own tests.
 - Tests that need two or more deployables live in `e2e/`.
 - Packages are published as written (JavaScript with JSDoc); `prepack` writes `.d.ts` files from the JSDoc.
-- The root only orchestrates: workspace scripts, CI and the docs. `parked/` is outside the workspace, CI and the
-  root scripts.
+- The root only orchestrates: workspace scripts, CI and the docs.
 
 ## Shared kit
 

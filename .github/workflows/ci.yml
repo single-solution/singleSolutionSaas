@@ -39,7 +39,7 @@ jobs:
       steps:
          - uses: actions/checkout@v4
          - id: find
-           # every folder with a package.json is a unit; new products join CI automatically; parked/ is never a unit.
+           # every folder with a package.json is a unit; new products join CI automatically.
            run: echo "list=$(ls -d packages/*/ platform/ products/*/ e2e/ | sed 's:/$::' | jq -R . | jq -cs .)" >> "$GITHUB_OUTPUT"
 
    unit:

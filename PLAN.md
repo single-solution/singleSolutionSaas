@@ -2193,6 +2193,15 @@ currency, createdAt }], loyaltyPoints }`. `context_panel` is not marked Not work
         kept: the merchant's money records), deletes the customer record, loyalty, wishlist, alerts and reviews.
       - **Limits** (code constants): 50 cart lines and 99 of one item, 250 variants and 20 images per product, 500 ids
         per bulk product action and 200 per bulk order move, 5,000 rows per CSV import, 4 products compared.
+      - **Widgets**: the cart prices itself on every change (one quote per pause), keeps the checkout's
+        Idempotency-Key only for a retry after a lost answer, empties itself once the order exists, and shows the
+        success page for `ss_order`; the invoice opens as a document in a new window. Admin widgets learn the order
+        statuses, couriers and grades (names only) from the widget settings; ticket permissions are not in the config,
+        so an action answered 403 is disabled.
+      - **Open items for the owner**: digital files can be added but not removed (no route yet); the orders admin does
+        not know which lines are serialized, so packing asks a serial per physical unit and the server names a missing
+        one; deleting a product does not notify alerts (it is refused once the product is in an order); the orders CSV
+        stops at 10,000 orders per export.
       - **Parked folders**: the 15 shop folders and `parked/e2e` (tests of the deleted parked products only) are
         deleted, so `parked/` is gone.
       - **Owner items, step 10**: create the Vercel project with root `products/ecommerce`, set `MONGODB_URI` (its own
