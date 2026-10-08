@@ -981,6 +981,13 @@ Merchants see **credits only**, never money. Only the Portal's clock counts for 
   are plain tables.
 - **Forms**: centred dialogs; a full page only when a form would still scroll a lot after a smarter layout.
 - **Home cards**: numbers with small 30-day charts.
+- **Visual style (owner pick 2026-10-08, "A + B")**: pages are built from **grid sections**; each section has a clear
+  heading with a lighter one-line description under it. **Summary tiles** are colourful: each kind of number has its
+  own soft colour tint and a rounded icon badge (e.g. balance indigo, websites teal, products coral, spend pink). The
+  most important number on an overview (merchant: credit balance; admin: credits this month) is a **large hero card**
+  in solid indigo with a 30-day bar chart inside. Soft rounded surfaces (16–18px radius), **no sharp borders and no
+  shadows**, generous spacing, wide layout. Plain "simple" white-on-white is not acceptable. Same style in light and
+  dark, and in product dashboards.
 - **Product dashboards** look the same as the Portal.
 - **Light and dark**, following the device, with a switch. The Portal and product dashboards are English, with texts
   kept in files. Widget texts are editable by merchants (0.4.10).
