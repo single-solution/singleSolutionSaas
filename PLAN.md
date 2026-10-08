@@ -1635,6 +1635,30 @@ behaviour below is managed inside Accounts (per website; our admin sets defaults
   Google/Apple/Facebook app keys, other products' tokens) · Developers (token verification, public keys, widget and
   ticket snippets, API).
 
+### 0.8.7 Payments — owner interview (2026-10-08)
+
+Payments takes online payments for the merchant's customers with the **merchant's own gateway keys**. All behaviour is
+managed inside Payments (per website; our admin sets defaults and prices). Features start at 0.
+
+- **Feature switches** (same pattern as Notifications/Accounts: per gateway + extras): Stripe · PayPal · PayFast ·
+  JazzCash · Easypaisa · Bank transfer (manual) · Generic gateway adapter · Payment links · Merchant payment API ·
+  Subscriptions · Refunds.
+- **Uses**: shop checkout (Ecommerce sends the total via a pasted Payments token), payment links for any amount
+  (invoices, bookings, donations), the merchant's own server via API, and subscriptions.
+- **Paying**: on the **gateway's own page or embedded form**; card details never touch our servers.
+- **Bank transfer (manual)**: shows the merchant's bank details; optional proof upload to the merchant's own storage;
+  the merchant confirms receipt.
+- **Currency**: per payment; each gateway lists what it supports.
+- **Refunds**: full and partial, by admin widget or API, recorded in the payment's history.
+- **Confirmations**: Payments verifies the gateway's signed confirmation, marks the payment paid, and tells the
+  merchant's server / Ecommerce via a signed webhook (through Notifications) and the API.
+- **Subscriptions**: gateway-managed (Stripe, PayPal); Payments mirrors their status. No scheduled jobs.
+- **Widgets**: pay button / checkout, hosted payment-link page (every word editable), admin widgets via tickets:
+  Payments admin (list, search, refund, export) and Subscriptions admin (see, cancel).
+- **Payment records** live in the merchant's own database. Our admins see setup only.
+- **Dashboard**: Overview · Features (read-only for merchants) · Settings · Connections (database, storage, gateway keys,
+  Notifications token) · Developers (API, webhook verification, widget and ticket snippets).
+
 ### 0.8.4 Still open
 
 - **The grilling of each later product** (Notifications, Accounts, Payments, Ecommerce, Growth), held right before it is
