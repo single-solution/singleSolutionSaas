@@ -159,8 +159,10 @@ describe('buildConfig: environment + system state', () => {
 		});
 		for (const local of ['http://127.0.0.1:3000', 'http://[::1]', 'http://app.localhost', 'http://localhost'])
 			expect(parsePortalUrl(local, false).ok).toBe(true);
+		// one trailing slash and surrounding spaces are tolerated
+		expect(parsePortalUrl(' https://portal.example.com/ ', true)).toEqual({ ok: true, value: 'https://portal.example.com' });
 		for (const bad of [
-			'https://portal.example.com/',
+			'https://portal.example.com//',
 			'https://portal.example.com/admin',
 			'https://portal.example.com?x=1',
 			'https://portal.example.com#a',

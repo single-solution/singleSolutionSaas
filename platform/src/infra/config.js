@@ -162,11 +162,13 @@ const LOCAL_HOST = /^(?:localhost|[a-z0-9-]+(?:\.[a-z0-9-]+)*\.localhost|127\.0\
 /**
  * Validate `PORTAL_URL` (PLAN 0.11): an http(s) origin with nothing after it; https unless a local host outside
  * production. Returns the origin or a message naming the variable.
- * @param {string | undefined} text
+ * @param {string | undefined} raw
  * @param {boolean} production
  * @returns {{ ok: true, value: string } | { ok: false, message: string }}
  */
-export const parsePortalUrl = (text, production) => {
+export const parsePortalUrl = (raw, production) => {
+	// tolerate surrounding spaces and one trailing slash, the common copy-paste slips
+	const text = raw?.trim().replace(/\/$/, '');
 	if (!text) return { ok: false, message: 'PORTAL_URL is required' };
 	/** @type {URL | null} */
 	let url = null;
