@@ -1,7 +1,7 @@
 import { createServer } from 'node:net';
 import { createOutboundPolicy } from '@ss/net';
 import { describe, expect, it } from 'vitest';
-import { SMTP_PORTS, createSmtpMessaging, smtpSettingsOf } from '../src/adapters/smtp.js';
+import { SMTP_PORTS, createSmtpMessaging, smtpSettingsOf } from '../adapters/smtp.js';
 
 const publicResolve = async () => [{ address: '93.184.215.14', family: 4 }];
 const policy = createOutboundPolicy({ resolve: publicResolve });
@@ -21,7 +21,7 @@ const PORTAL = {
 const fakeTransport = (answer = (mail) => ({ messageId: '<m1@example.com>', accepted: mail.to, rejected: [] })) => {
 	/** @type {{ options: any[], mails: any[], closed: number }} */
 	const seen = { options: [], mails: [], closed: 0 };
-	/** @type {import('../src/adapters/smtp.js').CreateSmtpTransport} */
+	/** @type {import('../adapters/smtp.js').CreateSmtpTransport} */
 	const createTransport = (options) => {
 		seen.options.push(options);
 		return {

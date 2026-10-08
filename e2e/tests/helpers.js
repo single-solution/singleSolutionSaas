@@ -89,10 +89,25 @@ const memoryMailer = () => {
 };
 
 /**
- * Start the Portal and the Notes product, connected to each other through one in-process network.
- * @param {{ graceDays?: number }} [options] Settings → Billing grace days (default 1)
+ * A product the system can run: its kit wiring, routes and address. The default is the test product Notes.
+ * @typedef {object} ProductUnit
+ * @property {(options: any) => ReturnType<typeof createProductInstance>} createProductInstance
+ * @property {(product: any) => ReadonlyArray<any>} createRoutes
+ * @property {typeof manifest} manifest
+ * @property {Record<string, string>} strings
+ * @property {string} url
+ * @property {Record<string, Handler>} [handlers] more in-process hosts on the network (for example fake providers)
  */
-export const startSystem = async ({ graceDays = 1 } = {}) => {
+
+/** @type {ProductUnit} */
+export const NOTES = { createProductInstance, createRoutes, manifest, strings, url: PRODUCT_URL };
+
+/**
+ * Start the Portal and a product (Notes unless told otherwise), connected to each other through one in-process network.
+ * @param {{ graceDays?: number, unit?: ProductUnit }} [options] Settings → Billing grace days (default 1)
+ */
+export const startSystem = async ({ graceDays = 1, unit = NOTES } = {}) => {
+	const { manifest: productManifest, url: productUrl } = unit;
 	const uri = process.env.TEST_MONGODB_URI;
 	if (!uri) throw new Error('TEST_MONGODB_URI is not set (run through vitest with the @ss/config Mongo setup)');
 	const client = await new MongoClient(uri).connect();
@@ -115,7 +130,7 @@ export const startSystem = async ({ graceDays = 1 } = {}) => {
 	};
 
 	/** @type {Record<string, Handler>} */
-	const handlers = {};
+	const handlers = { ...unit.handlers };
 	const network = createNetwork(handlers);
 	/** @type {Array<() => Promise<unknown>>} */
 	const queued = [];
@@ -147,9 +162,9 @@ export const startSystem = async ({ graceDays = 1 } = {}) => {
 	const api = createPortalClient({ handle: portal.handle, portalUrl: PORTAL_URL, settle });
 
 	// ---------------------------------------------------------------------------------------------- the product
-	const productDb = database('notes');
+	const productDb = database(productManifest.id);
 	const productStore = createMongoStore({ db: productDb, now: clock.now });
-	const product = createProductInstance({
+	const product = unit.createProductInstance({
 		config: { mongodbUri: '', connectSecret: CONNECT_SECRET, encryptionKey: PRODUCT_KEY },
 		store: productStore,
 		fetch: network.fetch,
@@ -158,9 +173,9 @@ export const startSystem = async ({ graceDays = 1 } = {}) => {
 		outbound: { allowHosts: ['127.0.0.1', 'localhost'] },
 		outboundSend: network.send,
 	});
-	const productHandler = product.handler(createRoutes(product), { after: (task) => void queued.push(task) });
+	const productHandler = product.handler(unit.createRoutes(product), { after: (task) => void queued.push(task) });
 	let reachable = true;
-	handlers[PRODUCT_URL] = async (request) => (reachable ? productHandler(request) : new Response(null, { status: 503 }));
+	handlers[productUrl] = async (request) => (reachable ? productHandler(request) : new Response(null, { status: 503 }));
 
 	/**
 	 * A second product on the kit with no routes of its own (another id), for wrong-product tokens.
@@ -169,8 +184,8 @@ export const startSystem = async ({ graceDays = 1 } = {}) => {
 	const startOtherProduct = (id) => {
 		const base = `https://${id}.test`;
 		const other = createProduct({
-			manifest: { ...manifest, id, name: id, endpoints: { ...manifest.endpoints, base } },
-			strings,
+			manifest: { ...productManifest, id, name: id, endpoints: { ...productManifest.endpoints, base } },
+			strings: unit.strings,
 			config: { mongodbUri: '', connectSecret: CONNECT_SECRET, encryptionKey: PRODUCT_KEY },
 			store: createMongoStore({ db: database(id), now: clock.now }),
 			fetch: network.fetch,
@@ -188,7 +203,7 @@ export const startSystem = async ({ graceDays = 1 } = {}) => {
 	 * @param {{ token?: string, origin?: string, body?: unknown, cookie?: string, base?: string }} [init]
 	 * @returns {Promise<Answer>}
 	 */
-	const call = async (method, path, { token, origin, body, cookie, base = PRODUCT_URL } = {}) => {
+	const call = async (method, path, { token, origin, body, cookie, base = productUrl } = {}) => {
 		const handler = /** @type {Handler} */ (handlers[base]);
 		const response = await handler(
 			new Request(`${base}${path}`, {
@@ -230,7 +245,7 @@ export const startSystem = async ({ graceDays = 1 } = {}) => {
 	 * @param {string} cookie @param {string} method @param {string} path @param {unknown} [body]
 	 */
 	const dashboard = (cookie, method, path, body) =>
-		call(method, path, { cookie, body, ...(method === 'GET' ? {} : { origin: PRODUCT_URL }) });
+		call(method, path, { cookie, body, ...(method === 'GET' ? {} : { origin: productUrl }) });
 
 	/**
 	 * A call to a `/v1/product/*` route signed with the product's own key (the one it pinned at connect).
@@ -240,7 +255,7 @@ export const startSystem = async ({ graceDays = 1 } = {}) => {
 		const key = /** @type {{ privateJwk: any }} */ (await productStore.get('state', 'productKey'));
 		const bearer = await signAssertion({
 			signer: createSigner(key.privateJwk),
-			productId: manifest.id,
+			productId: productManifest.id,
 			audience: PORTAL_URL,
 			now: clock.now,
 		});
@@ -305,7 +320,7 @@ export const startSystem = async ({ graceDays = 1 } = {}) => {
 
 	// ---------------------------------------------------------------------------------------------- steps
 	/** Add product (Owner): the product's URL and connect secret; then Set active unless told otherwise. */
-	const connect = async ({ active = true, base = PRODUCT_URL } = {}) => {
+	const connect = async ({ active = true, base = productUrl } = {}) => {
 		const res = await (await owner()).post('/v1/admin/products', { url: base, secret: CONNECT_SECRET });
 		if (res.status !== 201) throw new Error(`connect ${res.status} ${JSON.stringify(res.json)}`);
 		if (active) await (await owner()).post(`/v1/admin/products/${res.json.product.productId}/status`, { status: 'active' });
@@ -316,7 +331,7 @@ export const startSystem = async ({ graceDays = 1 } = {}) => {
 	 * Add the product to a website (Owner).
 	 * @param {string} merchantId @param {string} websiteId @param {string} [productId]
 	 */
-	const addProduct = async (merchantId, websiteId, productId = manifest.id) => {
+	const addProduct = async (merchantId, websiteId, productId = productManifest.id) => {
 		const res = await (await owner()).post(`/v1/merchants/${merchantId}/websites/${websiteId}/products`, { productId });
 		if (res.status !== 201) throw new Error(`add product ${res.status} ${JSON.stringify(res.json)}`);
 		return res.json.product;
@@ -326,7 +341,7 @@ export const startSystem = async ({ graceDays = 1 } = {}) => {
 	 * The website's two tokens of a product: browser from the Install and tokens list, server revealed (Owner).
 	 * @param {string} merchantId @param {string} websiteId @param {string} [productId]
 	 */
-	const tokens = async (merchantId, websiteId, productId = manifest.id) => {
+	const tokens = async (merchantId, websiteId, productId = productManifest.id) => {
 		const by = await owner();
 		const base = `/v1/merchants/${merchantId}/websites/${websiteId}/tokens`;
 		const list = await by.get(base);
@@ -341,7 +356,7 @@ export const startSystem = async ({ graceDays = 1 } = {}) => {
 	 * @param {string | null} websiteId
 	 */
 	const adminSession = async (by, websiteId) => {
-		const launch = await by.post(`/v1/admin/products/${manifest.id}/launch`, { websiteId });
+		const launch = await by.post(`/v1/admin/products/${productManifest.id}/launch`, { websiteId });
 		if (launch.status !== 200) throw new Error(`launch ${launch.status} ${JSON.stringify(launch.json)}`);
 		return (await open(launch.json.url)).cookie;
 	};
@@ -353,7 +368,7 @@ export const startSystem = async ({ graceDays = 1 } = {}) => {
 	 */
 	const merchantSession = async (who, websiteId) => {
 		const launch = await who.client.post(
-			`/v1/merchants/${who.merchantId}/websites/${websiteId}/products/${manifest.id}/launch`,
+			`/v1/merchants/${who.merchantId}/websites/${websiteId}/products/${productManifest.id}/launch`,
 		);
 		if (launch.status !== 200) throw new Error(`launch ${launch.status} ${JSON.stringify(launch.json)}`);
 		return (await open(launch.json.url)).cookie;
@@ -411,7 +426,7 @@ export const startSystem = async ({ graceDays = 1 } = {}) => {
 	};
 
 	/** Notices the Portal keeps for the product (not delivered yet). */
-	const waitingNotices = () => portalDb.collection('catalog_notices').find({ productId: manifest.id }).toArray();
+	const waitingNotices = () => portalDb.collection('catalog_notices').find({ productId: productManifest.id }).toArray();
 
 	/** Activity entries of an action, newest first. @param {string} action */
 	const activity = (action) => portalDb.collection('platform_audit').find({ action }).sort({ at: -1, _id: -1 }).toArray();

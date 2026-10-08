@@ -1,0 +1,770 @@
+'use client';
+/**
+ * The dashboard's tabs (PLAN 0.4.3), each on the kit's dashboard API. Rights are the kit's: merchants see features
+ * read-only and only the settings of switched-on features; Owners and Support switch features; Owners alone edit
+ * Defaults and Prices.
+ * @module
+ */
+import { useState } from 'react';
+import {
+	Badge,
+	Button,
+	Callout,
+	Card,
+	Checkbox,
+	CodeBlock,
+	ConfirmDialog,
+	ErrorState,
+	Input,
+	SchemaForm,
+	Section,
+	Select,
+	Skeleton,
+	Stat,
+	TextArea,
+	describeProblem,
+	formatCredits,
+	formatCreditsPerHour,
+	formatDateTime,
+	parseCredits,
+} from '@ss/ui';
+import manifest from '../../manifest.json' with { type: 'json' };
+import { createSnippets } from '../../core/snippets.js';
+import { call, fill, useLoad } from './api.js';
+import { PROVIDER_FORMS, ProviderForm } from './providers.js';
+import { TemplatesSection } from './templates.js';
+import { TEXTS } from './texts.js';
+
+/** @typedef {{ kind: 'merchant' | 'admin', id: string, name: string, role?: 'owner' | 'support' }} Who */
+/** @typedef {{ websiteId: string | null, who: Who, support: { email: string, phone: string }, portal: string }} TabProps */
+/** @typedef {{ key: string, name: string, description: string, dependsOn: string[], millicreditsPerHour: number, on?: boolean }} Feature */
+
+/**
+ * Skeleton while loading, the problem when it failed, else the content.
+ * @param {{ answer: import('./api.js').Answer | null, children: (data: any) => import('react').ReactNode }} props
+ */
+function Loaded({ answer, children }) {
+	if (!answer) return <Skeleton lines={3} label={TEXTS.loading} />;
+	if (!answer.ok) return <ErrorState title={TEXTS.failed} message={describeProblem(answer.problem)} />;
+	return <>{children(answer.data)}</>;
+}
+
+/**
+ * The outcome of the last write: saved, or the problem.
+ * @param {{ result: import('./api.js').Answer | null }} props
+ */
+function Outcome({ result }) {
+	if (!result) return null;
+	return result.ok ? (
+		<Callout tone="success">{TEXTS.saved}</Callout>
+	) : (
+		<Callout tone="danger">{describeProblem(result.problem)}</Callout>
+	);
+}
+
+/** @param {{ items: Array<{ who: { name: string }, what: string, detail: string, at: string }> }} props */
+function RecentChanges({ items }) {
+	return (
+		<Card title={TEXTS.overview.recent}>
+			{items.length === 0 ? (
+				<p className="text-sm text-muted">{TEXTS.overview.noChanges}</p>
+			) : (
+				<ul className="space-y-2 text-sm">
+					{items.map((item) => (
+						<li key={`${item.at}-${item.detail}`}>
+							<span className="font-semibold">{item.who.name}</span> · {item.detail}{' '}
+							<span className="text-muted">{formatDateTime(item.at)}</span>
+						</li>
+					))}
+				</ul>
+			)}
+		</Card>
+	);
+}
+
+/** @param {{ status: { status: string, graceEndsAt: string | null } }} props */
+function StatusBanner({ status }) {
+	const text = fill(TEXTS.status[/** @type {keyof typeof TEXTS.status} */ (status.status)] ?? status.status, {
+		time: formatDateTime(status.graceEndsAt),
+	});
+	const tone = status.status === 'active' ? 'success' : status.status === 'grace' ? 'warning' : 'danger';
+	return <Callout tone={tone}>{text}</Callout>;
+}
+
+/** @param {TabProps} props */
+function OverviewTab({ websiteId }) {
+	const base = `/v1/dashboard/websites/${websiteId}`;
+	const { answer, reload } = useLoad(`${base}/overview`);
+	const templates = useLoad(`${base}/templates`);
+	const [busy, setBusy] = useState(false);
+	return (
+		<Loaded answer={answer}>
+			{(data) => {
+				/** @type {Array<{ name: string, label: string, status: string, message?: string }>} */
+				const needed = data.checklist.connections;
+				const ready = needed.filter((item) => item.status === 'connected').length;
+				return (
+					<div className="space-y-8">
+						<StatusBanner status={data.status} />
+						<Section title={TEXTS.overview.numbers} description={TEXTS.overview.numbersHelp}>
+							<div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+								<Stat
+									label={TEXTS.overview.today}
+									value={formatCredits(data.todayMillicredits)}
+									icon="coins"
+									accent="indigo"
+								/>
+								<Stat
+									label={TEXTS.overview.features}
+									value={data.featuresOn.length}
+									hint={data.featuresOn.length > 0 ? data.featuresOn.join(', ') : TEXTS.overview.noFeatures}
+									icon="zap"
+									accent="violet"
+								/>
+								<Stat
+									label={TEXTS.overview.connectionsReady}
+									value={fill(TEXTS.overview.ofTotal, { count: ready, total: needed.length })}
+									tone={ready < needed.length ? 'warning' : 'success'}
+									icon="plug"
+									accent="teal"
+								/>
+								<Stat
+									label={TEXTS.overview.templates}
+									value={templates.answer?.ok ? templates.answer.data.items.length : '—'}
+									hint={templates.answer && !templates.answer.ok ? TEXTS.overview.templatesNone : undefined}
+									icon="mail"
+									accent="coral"
+								/>
+							</div>
+						</Section>
+						<Section title={TEXTS.overview.setup} description={TEXTS.overview.setupHelp}>
+							<Card>
+								<ul className="space-y-3 text-sm">
+									{needed.map((item) => (
+										<li key={item.name} className="flex flex-wrap items-center gap-2">
+											<Badge
+												tone={
+													item.status === 'connected'
+														? 'success'
+														: item.status === 'test_failed'
+															? 'danger'
+															: 'warning'
+												}
+												dot>
+												{TEXTS.connections[/** @type {'connected'} */ (item.status)]}
+											</Badge>
+											<span className="font-semibold">{item.label}</span>
+											{item.message ? <span className="text-muted">{item.message}</span> : null}
+										</li>
+									))}
+									<li className="flex flex-wrap items-center gap-2">
+										<Badge tone={data.checklist.business.found ? 'success' : 'warning'} dot>
+											{data.checklist.business.found ? TEXTS.overview.businessFound : TEXTS.overview.businessMissing}
+										</Badge>
+										<span className="font-semibold">{TEXTS.overview.business}</span>
+										<Button
+											size="sm"
+											variant="secondary"
+											loading={busy}
+											onClick={async () => {
+												setBusy(true);
+												await call('POST', `${base}/business/refresh`);
+												setBusy(false);
+												reload();
+											}}>
+											{TEXTS.overview.refresh}
+										</Button>
+									</li>
+									{data.checklist.widget ? (
+										<li className="flex flex-wrap items-center gap-2">
+											<Badge tone={data.checklist.widget.installed ? 'success' : 'warning'} dot>
+												{data.checklist.widget.installed
+													? fill(TEXTS.overview.widgetSeen, {
+															time: formatDateTime(data.checklist.widget.lastSeenAt),
+														})
+													: TEXTS.overview.widgetMissing}
+											</Badge>
+											<span className="font-semibold">{TEXTS.overview.widget}</span>
+										</li>
+									) : null}
+								</ul>
+							</Card>
+						</Section>
+						<Section title={TEXTS.overview.changes} description={TEXTS.overview.changesHelp}>
+							<RecentChanges items={data.recentChanges} />
+						</Section>
+					</div>
+				);
+			}}
+		</Loaded>
+	);
+}
+
+/**
+ * Keys switched off together with `key`: the features that need it, directly or through others.
+ * @param {Feature[]} features
+ * @param {string[]} on
+ * @param {string} key
+ */
+const withDependents = (features, on, key) => {
+	const off = new Set([key]);
+	let grew = true;
+	while (grew) {
+		grew = false;
+		for (const feature of features)
+			if (on.includes(feature.key) && !off.has(feature.key) && feature.dependsOn.some((dep) => off.has(dep))) {
+				off.add(feature.key);
+				grew = true;
+			}
+	}
+	return off;
+};
+
+/** @param {TabProps} props */
+function FeaturesTab({ websiteId, who, support }) {
+	const base = `/v1/dashboard/websites/${websiteId}`;
+	const { answer, reload } = useLoad(`${base}/features`);
+	const connections = useLoad(`${base}/connections`);
+	const [picked, setPicked] = useState(/** @type {string[] | null} */ (null));
+	const [confirming, setConfirming] = useState(false);
+	const [busy, setBusy] = useState(false);
+	const [result, setResult] = useState(/** @type {import('./api.js').Answer | null} */ (null));
+	const admin = who.kind === 'admin';
+	return (
+		<Loaded answer={answer}>
+			{(data) => {
+				/** @type {Feature[]} */
+				const features = data.features;
+				const saved = features.filter((feature) => feature.on).map((feature) => feature.key);
+				const on = picked ?? saved;
+				const turnedOff = saved.filter((key) => !on.includes(key));
+				const cost = features.reduce((sum, feature) => sum + (on.includes(feature.key) ? feature.millicreditsPerHour : 0), 0);
+				/** @type {Array<{ label: string, status: string, neededBy: string[] }>} */
+				const links = connections.answer?.ok ? connections.answer.data.connections : [];
+				/** @param {Feature} feature @param {boolean} checked */
+				const toggle = (feature, checked) => {
+					const off = withDependents(features, on, feature.key);
+					setPicked(checked ? [...on, feature.key] : on.filter((key) => !off.has(key)));
+				};
+				return (
+					<div className="space-y-4">
+						{admin ? null : <Callout tone="info">{fill(TEXTS.features.contact, { contact: support.email })}</Callout>}
+						{features.map((feature) => {
+							const missing = feature.dependsOn.filter((dep) => !on.includes(dep));
+							const broken = links.filter((link) => link.neededBy.includes(feature.key) && link.status !== 'connected');
+							return (
+								<Card
+									key={feature.key}
+									title={feature.name}
+									subtitle={fill(TEXTS.features.price, { price: formatCreditsPerHour(feature.millicreditsPerHour) })}
+									actions={
+										<a className="text-sm font-semibold text-primary" href={`/docs#feature-${feature.key}`}>
+											{TEXTS.features.docs}
+										</a>
+									}>
+									<p className="text-sm">{feature.description}</p>
+									{feature.dependsOn.length > 0 ? (
+										<p className="text-sm text-muted">
+											{fill(TEXTS.features.needs, { features: feature.dependsOn.join(', ') })}
+										</p>
+									) : null}
+									{feature.on
+										? broken.map((link) => (
+												<p key={link.label} className="text-sm text-danger">
+													{fill(TEXTS.features.notWorking, { connection: link.label })}
+												</p>
+											))
+										: null}
+									<Checkbox
+										label={TEXTS.features.on}
+										checked={on.includes(feature.key)}
+										disabled={!admin || (missing.length > 0 && !on.includes(feature.key))}
+										onChange={(event) => toggle(feature, event.target.checked)}
+									/>
+								</Card>
+							);
+						})}
+						{admin ? (
+							<Button disabled={picked === null} onClick={() => setConfirming(true)}>
+								{TEXTS.save}
+							</Button>
+						) : null}
+						<Outcome result={result} />
+						<ConfirmDialog
+							open={confirming}
+							busy={busy}
+							title={TEXTS.features.confirmTitle}
+							confirmLabel={TEXTS.save}
+							cancelLabel={TEXTS.cancel}
+							onClose={() => setConfirming(false)}
+							onConfirm={async () => {
+								setBusy(true);
+								const next = await call('PUT', `${base}/features`, { on });
+								setBusy(false);
+								setConfirming(false);
+								setResult(next);
+								if (next.ok) {
+									setPicked(null);
+									reload();
+								}
+							}}>
+							<p>{fill(TEXTS.features.confirmCost, { cost: formatCreditsPerHour(cost) })}</p>
+							{turnedOff.length > 0 ? <p>{fill(TEXTS.features.alsoOff, { features: turnedOff.join(', ') })}</p> : null}
+						</ConfirmDialog>
+					</div>
+				);
+			}}
+		</Loaded>
+	);
+}
+
+/**
+ * Settings forms, one per feature: a website's settings or the global defaults.
+ * @param {{ features: Array<{ key: string, name: string, on?: boolean, schema: any, values: Record<string, { value: unknown, source: string }> }>,
+ *   saveUrl: (key: string) => string, resetBody: boolean, savedSource: string, reload: () => void }} props
+ *   `resetBody`: reset with `PUT { value: null }` (defaults) instead of `DELETE`
+ */
+function SettingsForms({ features, saveUrl, resetBody, savedSource, reload }) {
+	const [edits, setEdits] = useState(/** @type {Record<string, Record<string, unknown>>} */ ({}));
+	const [result, setResult] = useState(/** @type {import('./api.js').Answer | null} */ (null));
+	/** @param {string} feature @param {string} name */
+	const reset = async (feature, name) => {
+		setResult(
+			resetBody
+				? await call('PUT', saveUrl(`${feature}.${name}`), { value: null })
+				: await call('DELETE', saveUrl(`${feature}.${name}`)),
+		);
+		reload();
+	};
+	return (
+		<>
+			{features.map((feature) => {
+				const changed = edits[feature.key] ?? {};
+				const values = Object.fromEntries(
+					Object.entries(feature.values).map(([name, entry]) => [name, name in changed ? changed[name] : entry.value]),
+				);
+				const overridden = Object.fromEntries(
+					Object.entries(feature.values).map(([name, entry]) => [name, entry.source === savedSource]),
+				);
+				return (
+					<Card key={feature.key} title={feature.name} subtitle={feature.on === false ? TEXTS.settings.off : undefined}>
+						<SchemaForm
+							schema={feature.schema}
+							values={values}
+							overridden={overridden}
+							onReset={(name) => void reset(feature.key, name)}
+							onChange={(name, value) => setEdits({ ...edits, [feature.key]: { ...changed, [name]: value } })}
+						/>
+						<Button
+							className="mt-4"
+							disabled={Object.keys(changed).length === 0}
+							onClick={async () => {
+								/** @type {import('./api.js').Answer} */
+								let last = { ok: true, data: null };
+								for (const [name, value] of Object.entries(changed)) {
+									last = await call('PUT', saveUrl(`${feature.key}.${name}`), { value });
+									if (!last.ok) break;
+								}
+								setResult(last);
+								if (last.ok) setEdits({ ...edits, [feature.key]: {} });
+								reload();
+							}}>
+							{TEXTS.save}
+						</Button>
+					</Card>
+				);
+			})}
+			<Outcome result={result} />
+		</>
+	);
+}
+
+/**
+ * Widget texts: every word the widgets show, with its English default.
+ * @param {{ texts: Array<{ key: string, english: string, value: string, source: string }>, saveUrl: (key: string) => string,
+ *   resetBody: boolean, savedSource: string, reload: () => void }} props
+ */
+function TextsForm({ texts, saveUrl, resetBody, savedSource, reload }) {
+	const [edits, setEdits] = useState(/** @type {Record<string, string>} */ ({}));
+	const [result, setResult] = useState(/** @type {import('./api.js').Answer | null} */ (null));
+	return (
+		<Card title={TEXTS.settings.texts} subtitle={TEXTS.settings.textsHelp}>
+			<div className="space-y-3">
+				{texts.map((text) => (
+					<div key={text.key} className="flex flex-wrap items-end gap-2">
+						<Input
+							fieldClassName="min-w-64 flex-1"
+							label={text.key}
+							help={text.english}
+							value={edits[text.key] ?? text.value}
+							onChange={(event) => setEdits({ ...edits, [text.key]: event.target.value })}
+						/>
+						<Button
+							size="sm"
+							disabled={edits[text.key] === undefined}
+							onClick={async () => {
+								const next = await call('PUT', saveUrl(text.key), { value: edits[text.key] });
+								setResult(next);
+								if (next.ok) setEdits(Object.fromEntries(Object.entries(edits).filter(([key]) => key !== text.key)));
+								reload();
+							}}>
+							{TEXTS.save}
+						</Button>
+						{text.source === savedSource ? (
+							<Button
+								size="sm"
+								variant="ghost"
+								onClick={async () => {
+									setResult(
+										resetBody
+											? await call('PUT', saveUrl(text.key), { value: null })
+											: await call('DELETE', saveUrl(text.key)),
+									);
+									reload();
+								}}>
+								{TEXTS.reset}
+							</Button>
+						) : null}
+					</div>
+				))}
+			</div>
+			<Outcome result={result} />
+		</Card>
+	);
+}
+
+/**
+ * The widgets' theme (one per website): light or dark, font, corner radius, accent colour and custom CSS.
+ * @param {{ theme: { colors: Record<string, string>, fontFamily: string, radius: number, mode: string, customCss: string },
+ *   save: (theme: Record<string, unknown>) => Promise<import('./api.js').Answer>, reload: () => void }} props
+ */
+function ThemeForm({ theme, save, reload }) {
+	const [draft, setDraft] = useState(theme);
+	const [result, setResult] = useState(/** @type {import('./api.js').Answer | null} */ (null));
+	return (
+		<Card title={TEXTS.settings.theme}>
+			<div className="grid gap-3 md:grid-cols-2">
+				<Select
+					label={TEXTS.settings.mode}
+					value={draft.mode}
+					options={Object.entries(TEXTS.settings.modes).map(([value, label]) => ({ value, label }))}
+					onChange={(event) => setDraft({ ...draft, mode: event.target.value })}
+				/>
+				<Input
+					label={TEXTS.settings.fontFamily}
+					value={draft.fontFamily}
+					onChange={(event) => setDraft({ ...draft, fontFamily: event.target.value })}
+				/>
+				<Input
+					label={TEXTS.settings.radius}
+					type="number"
+					min={0}
+					max={24}
+					value={String(draft.radius)}
+					onChange={(event) => setDraft({ ...draft, radius: Number(event.target.value) })}
+				/>
+				<Input
+					label={TEXTS.settings.accent}
+					type="color"
+					value={draft.colors.accent ?? '#4f46e5'}
+					onChange={(event) => setDraft({ ...draft, colors: { ...draft.colors, accent: event.target.value } })}
+				/>
+			</div>
+			<TextArea
+				label={TEXTS.settings.customCss}
+				rows={6}
+				value={draft.customCss}
+				onChange={(event) => setDraft({ ...draft, customCss: event.target.value })}
+			/>
+			<Button
+				className="mt-4"
+				onClick={async () => {
+					setResult(await save(draft));
+					reload();
+				}}>
+				{TEXTS.save}
+			</Button>
+			<Outcome result={result} />
+		</Card>
+	);
+}
+
+/** @param {TabProps} props */
+function SettingsTab({ websiteId }) {
+	const base = `/v1/dashboard/websites/${websiteId}`;
+	const settings = useLoad(`${base}/settings`);
+	const texts = useLoad(`${base}/texts`);
+	const theme = useLoad(`${base}/theme`);
+	return (
+		<div className="space-y-8">
+			<TemplatesSection websiteId={/** @type {string} */ (websiteId)} />
+			<Section title={TEXTS.settings.featuresTitle} description={TEXTS.settings.featuresHelp}>
+				<div className="grid gap-4 xl:grid-cols-2">
+					<Loaded answer={settings.answer}>
+						{(data) => (
+							<SettingsForms
+								features={data.features}
+								saveUrl={(key) => `${base}/settings/${encodeURIComponent(key)}`}
+								resetBody={false}
+								savedSource="website"
+								reload={settings.reload}
+							/>
+						)}
+					</Loaded>
+				</div>
+			</Section>
+			<Section title={TEXTS.settings.looksTitle} description={TEXTS.settings.looksHelp}>
+				<Loaded answer={texts.answer}>
+					{(data) => (
+						<TextsForm
+							texts={data.texts}
+							saveUrl={(key) => `${base}/texts/${encodeURIComponent(key)}`}
+							resetBody={false}
+							savedSource="website"
+							reload={texts.reload}
+						/>
+					)}
+				</Loaded>
+				<Loaded answer={theme.answer}>
+					{(data) => (
+						<ThemeForm theme={data.theme} save={(next) => call('PUT', `${base}/theme`, next)} reload={theme.reload} />
+					)}
+				</Loaded>
+			</Section>
+		</div>
+	);
+}
+
+/** @param {TabProps} props */
+function ConnectionsTab({ websiteId }) {
+	const base = `/v1/dashboard/websites/${websiteId}/connections`;
+	const { answer, reload } = useLoad(base);
+	const [values, setValues] = useState(/** @type {Record<string, string>} */ ({}));
+	const [result, setResult] = useState(/** @type {import('./api.js').Answer | null} */ (null));
+	/** @param {Promise<import('./api.js').Answer>} pending */
+	const act = async (pending) => {
+		setResult(await pending);
+		reload();
+	};
+	return (
+		<Loaded answer={answer}>
+			{(data) => (
+				<div className="space-y-4">
+					{data.connections.length === 0 ? <p className="text-sm text-muted">{TEXTS.connections.none}</p> : null}
+					{data.connections.map((/** @type {any} */ item) => (
+						<Card
+							key={item.name}
+							title={item.label}
+							subtitle={fill(TEXTS.connections.neededBy, { features: item.neededBy.join(', ') })}>
+							<p className="text-sm">
+								{TEXTS.connections[/** @type {'connected'} */ (item.status)]}
+								{item.last4 ? ` · ••••${item.last4}` : ''}
+								{item.message ? ` (${item.message})` : ''}
+							</p>
+							<div className="mt-3 flex flex-wrap items-end gap-2">
+								<Input
+									fieldClassName="min-w-64 flex-1"
+									label={TEXTS.connections.value}
+									type="password"
+									autoComplete="off"
+									value={values[item.name] ?? ''}
+									onChange={(event) => setValues({ ...values, [item.name]: event.target.value })}
+								/>
+								<Button
+									size="sm"
+									disabled={!values[item.name]}
+									onClick={() => {
+										void act(call('PUT', `${base}/${item.name}`, { value: values[item.name] }));
+										setValues({ ...values, [item.name]: '' });
+									}}>
+									{TEXTS.connections.replace}
+								</Button>
+								<Button size="sm" variant="secondary" onClick={() => void act(call('POST', `${base}/${item.name}/test`))}>
+									{TEXTS.connections.test}
+								</Button>
+								<Button size="sm" variant="ghost" onClick={() => void act(call('DELETE', `${base}/${item.name}`))}>
+									{TEXTS.connections.remove}
+								</Button>
+							</div>
+						</Card>
+					))}
+					<Outcome result={result} />
+				</div>
+			)}
+		</Loaded>
+	);
+}
+
+/** @param {TabProps} props */
+function DevelopersTab({ websiteId, portal }) {
+	const base = `/v1/dashboard/websites/${websiteId}`;
+	const { answer } = useLoad(`${base}/features`);
+	const templates = useLoad(`${base}/templates`);
+	const origin = typeof window === 'undefined' ? '' : window.location.origin;
+	const snippets = createSnippets({
+		base: origin,
+		widgets: manifest.widgets,
+		permissions: manifest.permissions.map((permission) => permission.key),
+	});
+	/** @type {Map<string, string[]>} */
+	const keys = new Map();
+	for (const item of templates.answer?.ok ? templates.answer.data.items : [])
+		keys.set(item.key, [...new Set([...(keys.get(item.key) ?? []), item.channel])]);
+	return (
+		<Loaded answer={answer}>
+			{(data) => (
+				<div className="space-y-8">
+					<Card title={TEXTS.tabs.developers}>
+						<p className="text-sm">{TEXTS.developers.intro}</p>
+						<ul className="mt-3 flex flex-wrap gap-2 text-sm">
+							{data.features.map((/** @type {Feature} */ feature) => (
+								<li key={feature.key}>
+									<a className="font-semibold text-primary" href={`/docs#feature-${feature.key}`}>
+										{feature.name}
+									</a>
+									{feature.on ? '' : ` (${TEXTS.developers.off})`}
+								</li>
+							))}
+						</ul>
+						<p className="mt-3 flex flex-wrap gap-4">
+							<a className="text-sm font-semibold text-primary" href="/docs">
+								{TEXTS.developers.openDocs}
+							</a>
+							<a className="text-sm font-semibold text-primary" href={portal}>
+								{TEXTS.developers.manageTokens}
+							</a>
+						</p>
+					</Card>
+					<Section title={TEXTS.developers.send} description={TEXTS.developers.sendHelp}>
+						<CodeBlock code={snippets.send} />
+						<CodeBlock code={snippets.sendCurl} />
+					</Section>
+					<Section title={TEXTS.developers.keys} description={TEXTS.developers.keysHelp}>
+						<Card>
+							{keys.size === 0 ? <p className="text-sm text-muted">{TEXTS.developers.noKeys}</p> : null}
+							<ul className="space-y-2 text-sm">
+								{[...keys].map(([key, channels]) => (
+									<li key={key} className="flex flex-wrap items-center gap-2">
+										<code className="font-semibold">{key}</code>
+										{channels.map((channel) => (
+											<Badge key={channel} tone="info">
+												{TEXTS.settings.channels[/** @type {keyof typeof TEXTS.settings.channels} */ (channel)]}
+											</Badge>
+										))}
+									</li>
+								))}
+							</ul>
+						</Card>
+					</Section>
+					<Section title={TEXTS.developers.widgets} description={TEXTS.developers.widgetsHelp}>
+						<CodeBlock code={snippets.visitor} />
+						<CodeBlock code={snippets.admin} />
+					</Section>
+					<Section title={TEXTS.developers.ticket} description={TEXTS.developers.ticketHelp}>
+						<CodeBlock code={snippets.ticketNode} />
+					</Section>
+					<Section title={TEXTS.developers.webhook} description={TEXTS.developers.webhookHelp}>
+						<CodeBlock code={snippets.webhook} />
+					</Section>
+					<Section title={TEXTS.developers.replies} description={TEXTS.developers.repliesHelp}>
+						<CodeBlock code={snippets.inbound.replaceAll('<websiteId>', String(websiteId))} />
+					</Section>
+				</div>
+			)}
+		</Loaded>
+	);
+}
+
+function DefaultsTab() {
+	const { answer, reload } = useLoad('/v1/dashboard/defaults');
+	/** @param {string} key */
+	const saveUrl = (key) => `/v1/dashboard/defaults/${encodeURIComponent(key)}`;
+	return (
+		<Loaded answer={answer}>
+			{(data) => (
+				<div className="space-y-4">
+					<Callout tone="info">{TEXTS.defaults.intro}</Callout>
+					<SettingsForms features={data.features} saveUrl={saveUrl} resetBody savedSource="default" reload={reload} />
+					<TextsForm
+						texts={data.texts}
+						saveUrl={(key) => saveUrl(`text.${key}`)}
+						resetBody
+						savedSource="default"
+						reload={reload}
+					/>
+					<ThemeForm
+						theme={data.theme.theme}
+						save={(next) => call('PUT', saveUrl('theme'), { value: next })}
+						reload={reload}
+					/>
+					<RecentChanges items={data.recentChanges} />
+				</div>
+			)}
+		</Loaded>
+	);
+}
+
+function PricesTab() {
+	const { answer, reload } = useLoad('/v1/dashboard/prices');
+	const [draft, setDraft] = useState(/** @type {Record<string, string>} */ ({}));
+	const [result, setResult] = useState(/** @type {import('./api.js').Answer | null} */ (null));
+	return (
+		<Loaded answer={answer}>
+			{(data) => {
+				/** @type {Feature[]} */
+				const features = data.features;
+				const parsed = features.map((feature) => {
+					const text = draft[feature.key] ?? String(feature.millicreditsPerHour / 1000);
+					return { feature, text, credits: parseCredits(text) };
+				});
+				return (
+					<div className="space-y-4">
+						<Callout tone="info">{TEXTS.prices.intro}</Callout>
+						<Card>
+							<div className="space-y-3">
+								{parsed.map(({ feature, text, credits }) => (
+									<Input
+										key={feature.key}
+										label={feature.name}
+										help={TEXTS.prices.perHour}
+										inputMode="decimal"
+										value={text}
+										error={credits.ok ? undefined : credits.message}
+										onChange={(event) => setDraft({ ...draft, [feature.key]: event.target.value })}
+									/>
+								))}
+							</div>
+							<Button
+								className="mt-4"
+								disabled={parsed.some((entry) => !entry.credits.ok)}
+								onClick={async () => {
+									const prices = Object.fromEntries(
+										parsed.map(({ feature, credits }) => [feature.key, credits.ok ? credits.value : 0]),
+									);
+									const next = await call('PUT', '/v1/dashboard/prices', { prices });
+									setResult(next);
+									if (next.ok) setDraft({});
+									reload();
+								}}>
+								{TEXTS.save}
+							</Button>
+						</Card>
+						<Outcome result={result} />
+						<RecentChanges items={data.recentChanges} />
+					</div>
+				);
+			}}
+		</Loaded>
+	);
+}
+
+/** Sidebar order: the five tabs of every dashboard, then the Owner tabs. */
+export const TABS = Object.freeze({
+	overview: OverviewTab,
+	features: FeaturesTab,
+	settings: SettingsTab,
+	connections: ConnectionsTab,
+	developers: DevelopersTab,
+	defaults: DefaultsTab,
+	prices: PricesTab,
+});

@@ -9,8 +9,6 @@ export { toNextRoute } from './http/next.js';
 export { createLogger, noopLogger } from './logger.js';
 export { createMongoStore } from './stores/mongo.js';
 export { createMemoryStore } from './stores/memory.js';
-export { createHttpMessaging } from './adapters/http.js';
-export { createSmtpMessaging } from './adapters/smtp.js';
 export { formatText } from './text.js';
 
 /** @typedef {import('./product.js').ProductOptions} ProductOptions */

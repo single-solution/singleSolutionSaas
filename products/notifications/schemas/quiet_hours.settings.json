@@ -1,0 +1,22 @@
+{
+	"type": "object",
+	"additionalProperties": false,
+	"properties": {
+		"startHour": {
+			"type": "integer",
+			"title": "Quiet from (hour, 0–23)",
+			"description": "In the recipient's time zone, else the time zone in business.json.",
+			"default": 21,
+			"minimum": 0,
+			"maximum": 23
+		},
+		"endHour": {
+			"type": "integer",
+			"title": "Quiet until (hour, 0–23)",
+			"description": "Waiting messages are sent on the first use after this hour.",
+			"default": 8,
+			"minimum": 0,
+			"maximum": 23
+		}
+	}
+}

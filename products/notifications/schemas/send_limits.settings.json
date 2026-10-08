@@ -1,0 +1,20 @@
+{
+	"type": "object",
+	"additionalProperties": false,
+	"properties": {
+		"perHour": {
+			"type": "integer",
+			"title": "Messages per recipient per hour",
+			"default": 5,
+			"minimum": 1,
+			"maximum": 100
+		},
+		"perDay": {
+			"type": "integer",
+			"title": "Messages per recipient per day",
+			"default": 20,
+			"minimum": 1,
+			"maximum": 1000
+		}
+	}
+}

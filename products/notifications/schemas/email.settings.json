@@ -1,0 +1,13 @@
+{
+	"type": "object",
+	"additionalProperties": false,
+	"properties": {
+		"replyTo": {
+			"type": "string",
+			"title": "Reply-to address",
+			"description": "Replies to e-mails go here. Empty: to the sender address.",
+			"default": "",
+			"maxLength": 254
+		}
+	}
+}

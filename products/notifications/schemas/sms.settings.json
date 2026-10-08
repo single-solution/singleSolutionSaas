@@ -1,0 +1,16 @@
+{
+	"type": "object",
+	"additionalProperties": false,
+	"properties": {
+		"optOutKeywords": {
+			"type": "array",
+			"title": "Unsubscribe keywords",
+			"description": "A reply that is one of these words (any case) unsubscribes the sender from optional messages. Works with Twilio and the WhatsApp Cloud API.",
+			"default": ["STOP", "UNSUBSCRIBE"],
+			"items": {
+				"type": "string",
+				"maxLength": 32
+			}
+		}
+	}
+}

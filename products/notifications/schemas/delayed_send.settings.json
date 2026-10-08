@@ -1,0 +1,14 @@
+{
+	"type": "object",
+	"additionalProperties": false,
+	"properties": {
+		"maxDelayDays": {
+			"type": "integer",
+			"title": "Latest send time (days ahead)",
+			"description": "A send may name a time at most this many days ahead.",
+			"default": 30,
+			"minimum": 1,
+			"maximum": 90
+		}
+	}
+}

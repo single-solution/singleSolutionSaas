@@ -1,0 +1,24 @@
+{
+	"type": "object",
+	"additionalProperties": false,
+	"properties": {
+		"whatsapp": {
+			"type": "string",
+			"title": "When WhatsApp fails",
+			"default": "none",
+			"enum": ["none", "sms", "email"]
+		},
+		"sms": {
+			"type": "string",
+			"title": "When SMS fails",
+			"default": "none",
+			"enum": ["none", "whatsapp", "email"]
+		},
+		"email": {
+			"type": "string",
+			"title": "When e-mail fails",
+			"default": "none",
+			"enum": ["none", "sms", "whatsapp"]
+		}
+	}
+}

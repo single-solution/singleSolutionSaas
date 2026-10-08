@@ -1785,6 +1785,52 @@ actor, action, target, at }` sent to Accounts at `POST /v1/activity-copies`.
    - **Shared kit trims**: `@ss/web` keeps the renderer and widget helpers (`defineWidget`, `createApiClient` with a
      browser token or ticket); `@ss/ui` lost the placement field and plan/lock bits, and its status badge colours
      follow 0.5.5.
+   - **Step 6, Notifications** (0.8.5; each item open for owner review):
+      - **Feature keys**: `whatsapp`, `email`, `sms`, `browser_push`, `staff_push`, `webhooks`, `fallback`,
+        `quiet_hours`, `send_limits`, `delayed_send`, `multi_language`, `send_api`; none depends on another.
+      - **Send API and features**: one route per channel, `POST /v1/messages/{email,sms,whatsapp,push,staff-push}`,
+        each in its channel's feature (0.4.2). Products and the merchant's server both use the server token, so they
+        are told apart by template key: keys starting `accounts.`, `ecommerce.`, `chat.`, `payments.` or `growth.`
+        are those products' events and need only the channel; every other key is the merchant's own and needs
+        `send_api`. The admin widgets (delivery log, template editor, send a message), their permissions
+        (`log.read`, `templates.edit`, `messages.send`) and the server log routes belong to `send_api`; staff push
+        (`push.subscribe`, widget `staff_push_permission`) to `staff_push`.
+      - **Templates** live in the merchant database (`ss_notifications_templates`, at most 1000 per website), edited
+        in the dashboard (Settings → Templates; Recent changes) and in the template editor widget (activity log).
+        Each key × channel has a default version plus language versions; "fallback English" is the default version,
+        written in whatever language the merchant chooses (code assumes none). Two flags per template: required
+        (ignores unsubscribes) and urgent (ignores quiet hours). Send limits apply to every message, required ones
+        too, and skip it as `limited`. A one-off message from the send-message widget (e-mail, SMS or WhatsApp) is
+        required and urgent.
+      - **Retries**: 3 attempts per channel (1 and 5 minutes apart); a final provider error skips the rest. Then, once,
+        the fallback channel of the settings (between e-mail, SMS and WhatsApp), when its feature is on, the
+        recipient has that address and a template exists for it. Webhook events: 5 attempts (1 min, 5 min, 30 min,
+        2 h). Waiting work is sent right after every Notifications route for that website (website routes, the
+        unsubscribe page, replies), at most 5 messages and 5 events per request.
+      - **Unsubscribe**: per address (an e-mail address, or a phone number for both SMS and WhatsApp). The link is
+        `/unsubscribe/<websiteId>/<code>` with a random code per address kept in the merchant database (no personal
+        data in the URL); opening it asks, its button (and e-mail one-click `List-Unsubscribe-Post`) unsubscribes.
+        Keywords: replies forwarded by Twilio (checked with the auth token) and the WhatsApp Cloud API (app secret and
+        verify token in the WhatsApp connection) to `/v1/inbound/<websiteId>/<sms|whatsapp>`; the keywords are a
+        setting of `sms` and `whatsapp` (default STOP, UNSUBSCRIBE). Generic gateways unsubscribe by link only.
+      - **Providers**: the generic HTTP adapter (address, json or form, headers as a JSON object, a body template
+        with `{to}`, `{toDigits}`, `{text}`, `{secret}`) covers Connectivity.pk and local gateways. Connection tests
+        are read-only account calls (SMTP signs in); a generic gateway is only checked for its address. The SMTP
+        adapter moved from the kit into `products/notifications` (with its tests); the kit's HTTP messaging client is
+        removed (the gateway adapter replaces it) and `nodemailer` left the kit.
+      - **Push**: the merchant's VAPID keys in Connections; the merchant hosts the service worker at
+        `/ss-notifications-sw.js` (the docs give it). A visitor is addressed by the opaque `subscriberId` the widget
+        announces (`ss-notifications:subscribed` event and localStorage), which the merchant links to its user; staff
+        by the ticket's user id. Push services answering 404/410 remove the subscription.
+      - **Webhooks**: the merchant enters the signing secret in Connections (at least 24 characters, write-only); the
+        product does not generate one. Header `SS-Signature: t=<unix>,v1=<hex HMAC-SHA256 of "<t>.<body>">`.
+      - **Data rights**: matched by e-mail and phone; delete removes the person's messages, unsubscribes and
+        unsubscribe codes (push subscriptions name no person).
+      - **Overview**: today's cost is a colour tile, not a hero card (a product has no 30-day numbers to chart).
+      - **Owner items, step 6**: create the Vercel project with root `products/notifications`, set `MONGODB_URI`
+        (its own database, for example `ss_notifications`), `CONNECT_SECRET` and `ENCRYPTION_KEY` for Production,
+        deploy, then Portal → Products → Add product (its address and `CONNECT_SECRET`) and set it Active. Step 6's
+        Done line stays empty until then.
 
 Everything else in Part 0 is decided. A point that is not decided in Part 0 or 0.10 is asked, not guessed (0.13).
 

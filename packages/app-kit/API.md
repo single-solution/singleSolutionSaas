@@ -4,23 +4,21 @@ Three entries: `@ss/app-kit` (server), `@ss/app-kit/widget` (browser, no Node.js
 
 ## `@ss/app-kit`
 
-| Export                                                                     | What it is                                                                                                 |
-| -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `configFromEnv(env?) → { config, problems }`                               | reads `MONGODB_URI`, `CONNECT_SECRET`, `ENCRYPTION_KEY`; problems name the variable, never its value       |
-| `createProduct(options) → product`                                         | wires the kit (below)                                                                                      |
-| `defineRoute(definition) → route`                                          | checks and freezes a route definition (below)                                                              |
-| `ok(body, { status?, headers? })`                                          | JSON answer (default 200); handlers may also return a plain value (200), `undefined` (204) or a `Response` |
-| `created(body, { location?, headers? })`                                   | 201                                                                                                        |
-| `noContent()`                                                              | 204                                                                                                        |
-| `problem(code, detail?, { errors?, headers?, extensions? })`               | RFC 9457 problem with a stable code from `@ss/contracts` or `problemCodes`; return or throw it             |
-| `paginate({ cursor?, limit?, url? }, { defaultLimit?, maxLimit? })`        | cursor pagination: `{ limit, after, fetchLimit, page(items, keyOf?), link(next), respond(items, keyOf?) }` |
-| `toNextRoute(handler, { after?, stripPrefix? })`                           | `{ GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS }` for a Next.js catch-all route; strips `/api`            |
-| `createLogger({ level?, write?, now?, fields? })`, `noopLogger`            | JSON-lines logger; credential-like fields are redacted                                                     |
-| `createMongoStore({ db, prefix?, now? })`                                  | the product database store on MongoDB (collections `kit_*`)                                                |
-| `createMemoryStore({ now? })`                                              | the same store in memory (development and tests)                                                           |
-| `createSmtpMessaging({ descriptor, policy, createTransport?, timeouts? })` | SMTP adapter for a connection value (kept until Notifications ships)                                       |
-| `createHttpMessaging({ descriptor, send, policy? })`                       | HTTP messaging adapter for a connection value (kept until Notifications ships)                             |
-| `formatText(text, values?)`                                                | fills `{placeholders}` of a widget text (plain text)                                                       |
+| Export                                                              | What it is                                                                                                 |
+| ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `configFromEnv(env?) → { config, problems }`                        | reads `MONGODB_URI`, `CONNECT_SECRET`, `ENCRYPTION_KEY`; problems name the variable, never its value       |
+| `createProduct(options) → product`                                  | wires the kit (below)                                                                                      |
+| `defineRoute(definition) → route`                                   | checks and freezes a route definition (below)                                                              |
+| `ok(body, { status?, headers? })`                                   | JSON answer (default 200); handlers may also return a plain value (200), `undefined` (204) or a `Response` |
+| `created(body, { location?, headers? })`                            | 201                                                                                                        |
+| `noContent()`                                                       | 204                                                                                                        |
+| `problem(code, detail?, { errors?, headers?, extensions? })`        | RFC 9457 problem with a stable code from `@ss/contracts` or `problemCodes`; return or throw it             |
+| `paginate({ cursor?, limit?, url? }, { defaultLimit?, maxLimit? })` | cursor pagination: `{ limit, after, fetchLimit, page(items, keyOf?), link(next), respond(items, keyOf?) }` |
+| `toNextRoute(handler, { after?, stripPrefix? })`                    | `{ GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS }` for a Next.js catch-all route; strips `/api`            |
+| `createLogger({ level?, write?, now?, fields? })`, `noopLogger`     | JSON-lines logger; credential-like fields are redacted                                                     |
+| `createMongoStore({ db, prefix?, now? })`                           | the product database store on MongoDB (collections `kit_*`)                                                |
+| `createMemoryStore({ now? })`                                       | the same store in memory (development and tests)                                                           |
+| `formatText(text, values?)`                                         | fills `{placeholders}` of a widget text (plain text)                                                       |
 
 ### `createProduct(options)`
 

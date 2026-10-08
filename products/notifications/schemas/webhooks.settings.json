@@ -1,0 +1,26 @@
+{
+	"type": "object",
+	"additionalProperties": false,
+	"properties": {
+		"urls": {
+			"type": "array",
+			"title": "Webhook URLs",
+			"description": "Up to 5 https addresses that receive the events.",
+			"default": [],
+			"items": {
+				"type": "string",
+				"maxLength": 2048
+			}
+		},
+		"events": {
+			"type": "array",
+			"title": "Events",
+			"description": "The events sent to the URLs.",
+			"default": ["message.sent", "message.failed", "recipient.unsubscribed"],
+			"items": {
+				"type": "string",
+				"enum": ["message.sent", "message.failed", "recipient.unsubscribed"]
+			}
+		}
+	}
+}

@@ -1,0 +1,170 @@
+{
+	"id": "notifications",
+	"name": "Notifications",
+	"version": "0.1.0",
+	"endpoints": {
+		"base": "http://localhost:3000",
+		"dashboard": "/dashboard"
+	},
+	"widgetScriptUrl": "/widget.js",
+	"docsUrl": "/docs",
+	"features": [
+		{
+			"key": "whatsapp",
+			"name": "WhatsApp",
+			"description": "Sends WhatsApp messages through the merchant's own provider: Meta WhatsApp Cloud API, Twilio, Connectivity.pk or any gateway over HTTP.",
+			"dependsOn": [],
+			"settings": {
+				"$ref": "schemas/whatsapp.settings.json"
+			}
+		},
+		{
+			"key": "email",
+			"name": "Email",
+			"description": "Sends e-mail through the merchant's own provider: SMTP, Resend, SendGrid, Mailgun or Amazon SES.",
+			"dependsOn": [],
+			"settings": {
+				"$ref": "schemas/email.settings.json"
+			}
+		},
+		{
+			"key": "sms",
+			"name": "SMS",
+			"description": "Sends SMS through the merchant's own provider: Twilio, or a local gateway or any API over HTTP.",
+			"dependsOn": [],
+			"settings": {
+				"$ref": "schemas/sms.settings.json"
+			}
+		},
+		{
+			"key": "browser_push",
+			"name": "Browser push",
+			"description": "Visitors who allow it get push notifications in their browser, with the merchant's own push keys.",
+			"dependsOn": [],
+			"settings": {
+				"$ref": "schemas/browser_push.settings.json"
+			}
+		},
+		{
+			"key": "staff_push",
+			"name": "Staff push",
+			"description": "The merchant's staff get push notifications in their browsers, with the merchant's own push keys.",
+			"dependsOn": [],
+			"settings": {
+				"$ref": "schemas/staff_push.settings.json"
+			}
+		},
+		{
+			"key": "webhooks",
+			"name": "Outgoing webhooks",
+			"description": "Sends signed events (message sent, message failed, recipient unsubscribed) to the merchant's own URLs, retried on failure.",
+			"dependsOn": [],
+			"settings": {
+				"$ref": "schemas/webhooks.settings.json"
+			}
+		},
+		{
+			"key": "fallback",
+			"name": "Fallback channel",
+			"description": "When a message fails on its channel after its retries, it is sent once on the fallback channel (for example WhatsApp, then SMS).",
+			"dependsOn": [],
+			"settings": {
+				"$ref": "schemas/fallback.settings.json"
+			}
+		},
+		{
+			"key": "quiet_hours",
+			"name": "Quiet hours",
+			"description": "Messages that are not urgent wait for the end of the quiet hours in the recipient's time zone.",
+			"dependsOn": [],
+			"settings": {
+				"$ref": "schemas/quiet_hours.settings.json"
+			}
+		},
+		{
+			"key": "send_limits",
+			"name": "Send limits",
+			"description": "Caps the messages one recipient gets per hour and per day.",
+			"dependsOn": [],
+			"settings": {
+				"$ref": "schemas/send_limits.settings.json"
+			}
+		},
+		{
+			"key": "delayed_send",
+			"name": "Delayed send",
+			"description": "A send can name a later time; the message goes out on the first use of the website after it, so it can be late on a quiet site.",
+			"dependsOn": [],
+			"settings": {
+				"$ref": "schemas/delayed_send.settings.json"
+			}
+		},
+		{
+			"key": "multi_language",
+			"name": "Multi-language templates",
+			"description": "Each template can have a version per language; recipients get their language, else the default version.",
+			"dependsOn": [],
+			"settings": {
+				"$ref": "schemas/multi_language.settings.json"
+			}
+		},
+		{
+			"key": "send_api",
+			"name": "Merchant send API",
+			"description": "The merchant's own server sends with its own template keys, and the admin widgets: delivery log, template editor and send a message.",
+			"dependsOn": [],
+			"settings": {
+				"$ref": "schemas/send_api.settings.json"
+			}
+		}
+	],
+	"permissions": [
+		{
+			"key": "log.read",
+			"name": "Read the delivery log",
+			"feature": "send_api"
+		},
+		{
+			"key": "templates.edit",
+			"name": "Edit templates",
+			"feature": "send_api"
+		},
+		{
+			"key": "messages.send",
+			"name": "Send a one-off message",
+			"feature": "send_api"
+		},
+		{
+			"key": "push.subscribe",
+			"name": "Get staff push notifications",
+			"feature": "staff_push"
+		}
+	],
+	"widgets": [
+		{
+			"key": "push_permission",
+			"feature": "browser_push",
+			"kind": "visitor"
+		},
+		{
+			"key": "staff_push_permission",
+			"feature": "staff_push",
+			"kind": "admin"
+		},
+		{
+			"key": "delivery_log",
+			"feature": "send_api",
+			"kind": "admin"
+		},
+		{
+			"key": "template_editor",
+			"feature": "send_api",
+			"kind": "admin"
+		},
+		{
+			"key": "send_message",
+			"feature": "send_api",
+			"kind": "admin"
+		}
+	]
+}

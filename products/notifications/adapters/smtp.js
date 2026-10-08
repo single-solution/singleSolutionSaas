@@ -1,6 +1,6 @@
 /**
- * SMTP messaging adapter (kept in the kit until Notifications ships, PLAN 0.3): sends e-mail through the merchant's own
- * SMTP server with nodemailer, using a connection value the product stores in its Connections.
+ * SMTP e-mail adapter (moved here from the kit, PLAN 0.12 step 6): sends e-mail through the merchant's own SMTP server
+ * with nodemailer, using the merchant's `email` connection.
  *
  * - **Value**: `{ baseUrl: 'smtps://host:465' | 'smtp://host:587', username, apiKey (the password), from? }`. The
  *   explicit form `{ host, port?, secure?, username, password }` is accepted too. `smtps://` (or port 465) means implicit TLS. `smtp://` means STARTTLS, which is required.
@@ -18,7 +18,7 @@
  * @module
  */
 import { checkHost, isNetError, resolveVetted } from '@ss/net';
-import { isObject, kitError } from '../util.js';
+import { isObject, providerError as kitError } from './util.js';
 
 /** Ports SMTP may use for hosts that are not allowlisted. */
 export const SMTP_PORTS = Object.freeze([25, 465, 587, 2525]);
@@ -66,7 +66,7 @@ const RESERVED_HEADERS = new Set([
 /**
  * A nodemailer-compatible transport (the subset this adapter uses).
  * @typedef {{ sendMail: (mail: Record<string, unknown>) => Promise<{ messageId?: string, accepted?: unknown[], rejected?: unknown[] }>,
- *   close?: () => void }} SmtpTransport
+ *   verify?: () => Promise<unknown>, close?: () => void }} SmtpTransport
  */
 /** @typedef {(options: SmtpTransportOptions) => SmtpTransport | Promise<SmtpTransport>} CreateSmtpTransport */
 
@@ -255,6 +255,45 @@ export const createSmtpMessaging = ({ descriptor, policy, createTransport = node
 		});
 	};
 
+	/**
+	 * Open a transport to the vetted address and run `use` with it; the transport is always closed.
+	 * @template T
+	 * @param {(transport: SmtpTransport) => Promise<T>} use
+	 * @returns {Promise<T>}
+	 */
+	const withTransport = async (use) => {
+		/** @type {string} */
+		let address;
+		try {
+			address = s.ip ? s.host : /** @type {{ address: string }} */ ((await resolveVetted(policy, s.host))[0]).address;
+		} catch (error) {
+			return fail(error);
+		}
+		const servername = s.ip ? undefined : s.host;
+		/** @type {SmtpTransport | undefined} */
+		let transport;
+		try {
+			transport = await createTransport({
+				host: address,
+				port: s.port,
+				secure: s.secure,
+				requireTLS,
+				...(servername ? { servername } : {}),
+				auth: { user: s.username, pass: s.password },
+				tls: { ...(servername ? { servername } : {}), minVersion: 'TLSv1.2', rejectUnauthorized: true },
+				connectionTimeout: t.connectionMs,
+				greetingTimeout: t.greetingMs,
+				socketTimeout: t.socketMs,
+				pool: false,
+			});
+			return await use(transport);
+		} catch (error) {
+			return fail(error);
+		} finally {
+			transport?.close?.();
+		}
+	};
+
 	return Object.freeze({
 		kind: 'messaging',
 		provider: 'smtp',
@@ -265,41 +304,23 @@ export const createSmtpMessaging = ({ descriptor, policy, createTransport = node
 		 */
 		send: async (message) => {
 			const mail = mailOf(message, defaultFrom);
-			/** @type {string} */
-			let address;
-			try {
-				address = s.ip ? s.host : /** @type {{ address: string }} */ ((await resolveVetted(policy, s.host))[0]).address;
-			} catch (error) {
-				return fail(error);
-			}
-			const servername = s.ip ? undefined : s.host;
-			/** @type {SmtpTransport | undefined} */
-			let transport;
-			try {
-				transport = await createTransport({
-					host: address,
-					port: s.port,
-					secure: s.secure,
-					requireTLS,
-					...(servername ? { servername } : {}),
-					auth: { user: s.username, pass: s.password },
-					tls: { ...(servername ? { servername } : {}), minVersion: 'TLSv1.2', rejectUnauthorized: true },
-					connectionTimeout: t.connectionMs,
-					greetingTimeout: t.greetingMs,
-					socketTimeout: t.socketMs,
-					pool: false,
-				});
+			return withTransport(async (transport) => {
 				const info = await transport.sendMail(mail);
 				return {
 					id: typeof info?.messageId === 'string' ? info.messageId : null,
 					accepted: addressesOf(info?.accepted),
 					rejected: addressesOf(info?.rejected),
 				};
-			} catch (error) {
-				return fail(error);
-			} finally {
-				transport?.close?.();
-			}
+			});
 		},
+		/**
+		 * Sign in to the server without sending (the connection test): nodemailer's `verify`, when the transport has it.
+		 * @returns {Promise<true>}
+		 */
+		verify: () =>
+			withTransport(async (transport) => {
+				if (transport.verify) await transport.verify();
+				return /** @type {const} */ (true);
+			}),
 	});
 };
