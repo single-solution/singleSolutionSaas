@@ -141,6 +141,12 @@ export const MERCHANT = Object.freeze({
 	website: 'Website',
 	allWebsites: 'All websites',
 	balanceLink: 'Credit balance',
+	overviewIntro: 'Your credits, spend and websites at a glance.',
+	websitesIntro: 'Each website with its products. Open a product to manage it.',
+	websitesPageIntro: 'Select a website to see its products, install code and usage.',
+	accountIntro: 'Your business details, sign-in and security.',
+	detailsIntro: 'Business name, owner, phone, address and country.',
+	tiles: Object.freeze({ websites: 'Websites', products: 'Products on websites' }),
 });
 
 /** The websites list and the website page (PLAN 0.6 Website page, 0.8.2, 0.4.4, 0.5.9), in both consoles. */
@@ -206,6 +212,7 @@ export const WEBSITE = Object.freeze({
 /** Connected products (PLAN 0.8.2 Products). */
 export const PRODUCTS = Object.freeze({
 	title: 'Products',
+	intro: 'Connected products, their status and the websites using them.',
 	add: 'Add product',
 	addHelp: 'The address the product is deployed at and its connect secret. New products start inactive.',
 	url: 'Product URL',
@@ -283,6 +290,13 @@ export const ADMIN = Object.freeze({
 	productEarned: (/** @type {string} */ credits) => `${credits} earned this month (UTC)`,
 	noProducts: 'No products connected yet.',
 	recentActivity: 'Recent activity',
+	recentActivityIntro: 'The latest entries in the activity log.',
+	overviewIntro: 'Merchants, websites, products and credits at a glance.',
+	creditsThisMonth: 'Credits spent this month (UTC)',
+	creditsChart: 'Credits spent per UTC day, last 30 days',
+	productsIntro: 'For each connected product: the websites using it and the credits it earned this month.',
+	totalProducts: 'Connected products',
+	merchantsIntro: 'Find a merchant by name, owner e-mail or website domain.',
 	merchantsTitle: 'Merchants',
 	addMerchant: 'Add merchant',
 	searchMerchants: 'Search name, owner e-mail or domain',
@@ -404,6 +418,10 @@ export const ADMIN = Object.freeze({
 		lowBalanceHelp: '1 to 30 whole days. Below this many days of spend the merchant sees a warning and gets one e-mail.',
 	}),
 	activityTitle: 'Activity',
+	activityIntro: 'Every entry in the activity log, filterable by merchant, admin and date.',
+	adminsIntro: 'Who can sign in to the admin console, with their role and two-step sign-in.',
+	settingsIntro: 'E-mail sending, billing rules, branding, support contact and security.',
+	myAccountIntro: 'Your name, sign-in, password, two-step sign-in and activity.',
 	filters: Object.freeze({
 		merchant: 'Merchant id',
 		admin: 'Admin id',
@@ -453,6 +471,11 @@ export const BILLING = Object.freeze({
 		stoppedBody: 'They restart as soon as new credits bring the balance above 0. Contact support to add credits:',
 	}),
 	usageTitle: 'Usage and credits',
+	usageIntro: 'Your balance, spend per product and website, and the credits added.',
+	billingIntro: 'Receipts, charges and the merchants that need attention.',
+	usageChartIntro: (/** @type {string} */ range, /** @type {string} */ total) => `${range} · ${total} in total`,
+	receiptsIntro: 'Every credit receipt on this account.',
+	dayChargesIntro: 'Charges per UTC day.',
 	usageChart: 'Spend per UTC day',
 	usageColumns: Object.freeze({
 		day: 'Day (UTC)',

@@ -70,7 +70,7 @@ export function AdminShell({ admin, twoStepRequired = false, branding, children 
 						</Button>
 					}
 					sidebarFooter={
-						<div className="space-y-1.5 rounded-xl border border-line bg-surface-2 p-3 text-xs">
+						<div className="space-y-1.5 rounded-2xl bg-surface-2 p-3 text-xs">
 							<p className="truncate font-semibold text-fg">{admin?.name ?? admin?.email}</p>
 							<RoleBadge role={admin?.role} />
 							{twoStepRequired ? null : (

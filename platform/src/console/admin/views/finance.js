@@ -150,9 +150,9 @@ export function AddCreditsDialog({ merchant, balance, onClose, onAdded }) {
  */
 export function MerchantCredits({ billing, receipts, dayCharges }) {
 	return (
-		<div className="space-y-6">
+		<div className="space-y-8">
 			{billing ? <BillingStats summary={billing} /> : null}
-			<Card title={BILLING.receiptsTitle} padded={false}>
+			<Card title={BILLING.receiptsTitle} subtitle={BILLING.receiptsIntro} padded={false}>
 				<ReceiptsTable receipts={receipts} />
 			</Card>
 			<Card title={BILLING.dayChargesTitle} subtitle={BILLING.chargesNote} padded={false}>
@@ -195,8 +195,8 @@ export function FinanceView(props) {
 	const { filter, receipts, charges, attention } = props;
 	const reload = () => window.location.reload();
 	return (
-		<div className="space-y-6">
-			<PageHeader title={BILLING.billingTitle} />
+		<div className="space-y-8">
+			<PageHeader title={BILLING.billingTitle} subtitle={BILLING.billingIntro} />
 			<Tabs
 				label={BILLING.billingTitle}
 				tabs={[
@@ -280,7 +280,7 @@ export function FinanceView(props) {
 												key={by}
 												href={adminRoutes.finance({ by, from: filter.from, to: filter.to })}
 												aria-current={filter.by === by ? 'page' : undefined}
-												className={`rounded-xl border px-3 py-1.5 text-sm font-semibold ${filter.by === by ? 'border-primary text-primary' : 'border-line text-fg'}`}>
+												className={`rounded-xl px-3 py-1.5 text-sm font-semibold ${filter.by === by ? 'bg-primary-soft text-on-primary-soft' : 'bg-surface-2 text-fg hover:bg-surface-3'}`}>
 												{BILLING.chargesBy[by]}
 											</Link>
 										))

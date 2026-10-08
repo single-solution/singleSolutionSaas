@@ -227,7 +227,7 @@ function BrandingTab({ settings, onSaved }) {
 						<img
 							src={`/branding/logo?v=${settings.branding.logoVersion}`}
 							alt=""
-							className="size-16 rounded-xl border border-line object-contain"
+							className="size-16 rounded-xl bg-surface-2 object-contain"
 						/>
 					) : null}
 					<input
@@ -393,8 +393,8 @@ export function SettingsView(props) {
 	const [settings, setSettings] = useState(props.ok ? props.settings : null);
 	if (!props.ok || !settings) return <AdminProblem problem={props.problem} />;
 	return (
-		<div className="space-y-6">
-			<PageHeader title={ADMIN.settingsTitle} />
+		<div className="space-y-8">
+			<PageHeader title={ADMIN.settingsTitle} subtitle={ADMIN.settingsIntro} />
 			<Tabs
 				label={ADMIN.settingsTitle}
 				tabs={[

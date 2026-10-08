@@ -37,8 +37,8 @@ export function ActivityView(props) {
 			}),
 		);
 	return (
-		<div className="space-y-6">
-			<PageHeader title={ADMIN.activityTitle} />
+		<div className="space-y-8">
+			<PageHeader title={ADMIN.activityTitle} subtitle={ADMIN.activityIntro} />
 			<Card>
 				<Form onSubmit={apply} aria-label={ADMIN.filters.apply}>
 					<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_10rem_10rem_auto] lg:items-end">

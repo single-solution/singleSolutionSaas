@@ -28,7 +28,7 @@ export function BrandMark({ branding, tagline }) {
 			{branding.logoUrl ? (
 				<img src={branding.logoUrl} alt="" className="size-10 rounded-xl object-contain" />
 			) : (
-				<span className="flex size-10 items-center justify-center rounded-xl bg-primary text-on-primary shadow-card">
+				<span className="flex size-10 items-center justify-center rounded-xl bg-primary text-on-primary">
 					<Icon name="zap" size={18} />
 				</span>
 			)}

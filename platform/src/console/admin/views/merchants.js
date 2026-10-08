@@ -229,9 +229,10 @@ export function MerchantsView(props) {
 		await list.reload();
 	};
 	return (
-		<div className="space-y-6">
+		<div className="space-y-8">
 			<PageHeader
 				title={ADMIN.merchantsTitle}
+				subtitle={ADMIN.merchantsIntro}
 				actions={
 					canWrite ? (
 						<Button onClick={() => setAdding(true)} icon={<Icon name="plus" size={14} />}>
@@ -268,7 +269,7 @@ export function MerchantsView(props) {
 				</Form>
 			</Card>
 			{canBulk && selected.size > 0 ? (
-				<div className="flex flex-wrap items-center gap-2 rounded-xl border border-line bg-surface-2 p-3 text-sm">
+				<div className="flex flex-wrap items-center gap-2 rounded-2xl bg-primary-soft p-3 text-sm text-on-primary-soft">
 					<span className="font-semibold">{ADMIN.bulk.selected(selected.size)}</span>
 					{canSuspend ? (
 						<>
@@ -540,9 +541,9 @@ export function MerchantView(props) {
 	);
 
 	return (
-		<div className="flex gap-6">
+		<div className="flex gap-6 lg:gap-8">
 			<InnerList currentId={merchantId} />
-			<div className="min-w-0 flex-1 space-y-6">
+			<div className="min-w-0 flex-1 space-y-8">
 				<Link href={adminRoutes.merchants()} className="text-sm font-semibold text-primary hover:underline lg:hidden">
 					← {ADMIN.merchantsTitle}
 				</Link>

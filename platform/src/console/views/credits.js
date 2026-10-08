@@ -28,9 +28,7 @@ function RangeForm({ range, websites, websiteId }) {
 					...websites.map((w) => ({ value: String(w.websiteId), label: String(w.domain) })),
 				]}
 			/>
-			<button
-				type="submit"
-				className="min-h-10 rounded-xl border border-line bg-surface px-4 text-sm font-semibold text-fg hover:border-line-strong">
+			<button type="submit" className="min-h-10 rounded-xl bg-surface-2 px-4 text-sm font-semibold text-fg hover:bg-surface-3">
 				{BILLING.filters.apply}
 			</button>
 		</form>
@@ -43,8 +41,8 @@ function RangeForm({ range, websites, websiteId }) {
 export function CreditsView(props) {
 	if (!props.ok) return <PageProblem problem={props.problem} />;
 	return (
-		<div className="space-y-6">
-			<PageHeader title={BILLING.usageTitle} />
+		<div className="space-y-8">
+			<PageHeader title={BILLING.usageTitle} subtitle={BILLING.usageIntro} />
 			<BillingStats summary={props.billing} />
 			<Card>
 				<RangeForm range={props.filter} websites={props.websites} websiteId={props.filter.websiteId} />
@@ -54,7 +52,7 @@ export function CreditsView(props) {
 			) : (
 				<UsageView usage={props.usage} />
 			)}
-			<Card title={BILLING.receiptsTitle} padded={false}>
+			<Card title={BILLING.receiptsTitle} subtitle={BILLING.receiptsIntro} padded={false}>
 				<ReceiptsTable receipts={props.receipts} />
 			</Card>
 		</div>

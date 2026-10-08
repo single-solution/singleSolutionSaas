@@ -41,6 +41,14 @@ const PATHS = Object.freeze({
 	sun: 'M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41',
 	moon: 'M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z',
 	monitor: 'M3 4h18v12H3zM8 20h8M12 16v4',
+	home: 'M3 11l9-8 9 8M5 10v10h5v-6h4v6h5V10',
+	coins: 'M9 14a6 6 0 1 0 0-12 6 6 0 0 0 0 12zM15.9 10.1A6 6 0 1 1 10 18M7 6h2v4',
+	trendingUp: 'M22 7l-8.5 8.5-5-5L2 17M16 7h6v6',
+	calendar: 'M3 5h18v16H3zM16 3v4M8 3v4M3 10h18',
+	layers: 'M12 2l10 5-10 5L2 7zM2 17l10 5 10-5M2 12l10 5 10-5',
+	receipt: 'M5 2h14v20l-3-2-2 2-2-2-2 2-2-2-3 2zM9 7h6M9 11h6M9 15h4',
+	mail: 'M3 5h18v14H3zM3 5l9 8 9-8',
+	store: 'M3 9l2-5h14l2 5M3 9h18v2a3 3 0 0 1-6 0 3 3 0 0 1-6 0 3 3 0 0 1-6 0zM5 13v8h14v-8M10 21v-5h4v5',
 });
 
 /** @typedef {keyof typeof PATHS} IconName */

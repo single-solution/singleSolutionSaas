@@ -12,7 +12,7 @@ import { cx } from './cx.js';
 const TAB =
 	'inline-flex items-center gap-2 whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors ' +
 	'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus';
-const ACTIVE = 'bg-surface text-fg shadow-card';
+const ACTIVE = 'bg-primary-soft text-on-primary-soft';
 const IDLE = 'text-muted hover:text-fg';
 
 /**
@@ -51,7 +51,7 @@ export function Tabs({ tabs, value, defaultValue, onChange, label, className }) 
 				role="tablist"
 				aria-label={label}
 				onKeyDown={onKeyDown}
-				className="flex max-w-full gap-1 overflow-x-auto rounded-xl border border-line bg-surface-2 p-1">
+				className="flex max-w-full gap-1 overflow-x-auto rounded-2xl bg-surface p-1.5">
 				{tabs.map((tab) => {
 					const selected = tab.id === active?.id;
 					return (
@@ -92,7 +92,7 @@ export function TabNav({ items, current, label, linkAs, className }) {
 	const LinkTag = linkAs ?? 'a';
 	return (
 		<nav aria-label={label} className={className}>
-			<ul className="flex max-w-full gap-1 overflow-x-auto rounded-xl border border-line bg-surface-2 p-1">
+			<ul className="flex max-w-full gap-1 overflow-x-auto rounded-2xl bg-surface p-1.5">
 				{items.map((item) => {
 					const selected = item.href === current;
 					return (

@@ -1,6 +1,6 @@
 'use client';
 /**
- * Console frame: a floating sidebar island (brand, sections of links) and a top bar island (switchers on the left,
+ * Console frame: a soft sidebar island (brand, sections of links) and a top bar island (switchers on the left,
  * account actions and the System / Light / Dark theme switch on the right). The frame uses the available width (16 px
  * side padding on phones, 24–32 px from `md`, at most 1600 px wide); pages decide their own reading widths. Below `md`
  * the sidebar becomes an off-canvas panel opened by the menu button.
@@ -62,7 +62,7 @@ function Nav({ sections, linkAs, onNavigate }) {
 function Brand({ name, tagline }) {
 	return (
 		<div className="flex items-center gap-3 px-2">
-			<span className="flex size-9 items-center justify-center rounded-xl bg-primary text-on-primary shadow-card">
+			<span className="flex size-9 items-center justify-center rounded-xl bg-primary text-on-primary">
 				<Icon name="zap" size={18} />
 			</span>
 			<span className="min-w-0">
@@ -110,8 +110,8 @@ export function AppShell({
 				className="sr-only z-[70] rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-on-primary focus:not-sr-only focus:fixed focus:left-4 focus:top-4">
 				Skip to content
 			</a>
-			<div className="mx-auto flex w-full max-w-[1600px] gap-4 px-4 py-3 sm:py-4 md:px-6 lg:px-8">
-				<aside className="sticky top-4 hidden h-[calc(100vh-2rem)] w-64 shrink-0 flex-col justify-between overflow-y-auto rounded-card border border-line bg-surface p-4 shadow-card md:flex">
+			<div className="mx-auto flex w-full max-w-[1680px] gap-5 px-4 py-3 sm:py-4 md:px-6 lg:gap-6 lg:px-8">
+				<aside className="sticky top-4 hidden h-[calc(100vh-2rem)] w-64 shrink-0 flex-col justify-between overflow-y-auto rounded-card bg-surface p-4 md:flex">
 					<div className="space-y-6">
 						<Brand {...brand} />
 						<Nav sections={sections} {...(linkAs ? { linkAs } : {})} />
@@ -129,7 +129,7 @@ export function AppShell({
 							role="dialog"
 							aria-modal="true"
 							aria-label="Navigation"
-							className="flex h-full w-72 max-w-[85vw] flex-col justify-between overflow-y-auto border-r border-line bg-surface p-4 shadow-overlay">
+							className="flex h-full w-72 max-w-[85vw] flex-col justify-between overflow-y-auto bg-surface p-4">
 							<div className="space-y-6">
 								<div className="flex items-center justify-between">
 									<Brand {...brand} />
@@ -147,8 +147,8 @@ export function AppShell({
 						</div>
 					</div>
 				) : null}
-				<div className="flex min-w-0 flex-1 flex-col gap-4">
-					<header className="sticky top-3 z-30 flex flex-wrap items-center justify-between gap-3 rounded-card border border-line bg-surface/95 px-3 py-2.5 shadow-card backdrop-blur sm:top-4 sm:px-4">
+				<div className="flex min-w-0 flex-1 flex-col gap-6">
+					<header className="sticky top-3 z-30 flex flex-wrap items-center justify-between gap-3 rounded-card bg-surface/95 px-3 py-2.5 backdrop-blur sm:top-4 sm:px-4">
 						<div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
 							<button
 								type="button"
@@ -168,7 +168,7 @@ export function AppShell({
 						) : null}
 					</header>
 					{banner}
-					<main id={mainId} tabIndex={-1} className="min-w-0 space-y-6 pb-12 focus:outline-none">
+					<main id={mainId} tabIndex={-1} className="min-w-0 space-y-8 pb-16 focus:outline-none">
 						{children}
 					</main>
 				</div>

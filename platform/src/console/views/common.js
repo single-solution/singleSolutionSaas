@@ -92,7 +92,7 @@ export function ActionMenu({ label, items }) {
 					id={id}
 					role="menu"
 					aria-label={label}
-					className="absolute right-0 z-30 mt-1 w-64 max-w-[calc(100vw-2rem)] space-y-0.5 rounded-xl border border-line bg-surface p-1 shadow-overlay">
+					className="absolute right-0 z-30 mt-1 w-64 max-w-[calc(100vw-2rem)] space-y-0.5 rounded-2xl bg-surface p-1.5 shadow-overlay">
 					{items.map((item, index) => (
 						<div key={item.label}>
 							<button
@@ -143,16 +143,16 @@ export function InnerList({ label, search, entries, currentId }) {
 	const needle = q.trim().toLowerCase();
 	const shown = needle ? entries.filter((entry) => entry.label.toLowerCase().includes(needle)) : entries;
 	return (
-		<aside className="hidden w-60 shrink-0 space-y-3 lg:block" aria-label={label}>
+		<aside className="hidden w-64 shrink-0 space-y-3 self-start rounded-card bg-surface p-3 lg:block" aria-label={label}>
 			<Input label={search} hideLabel placeholder={search} value={q} onChange={(e) => setQ(e.currentTarget.value)} />
-			<ul className="max-h-[70vh] space-y-0.5 overflow-y-auto">
+			<ul className="max-h-[70vh] space-y-1 overflow-y-auto">
 				{shown.map((entry) => (
 					<li key={entry.id}>
 						<Link
 							href={entry.href}
 							aria-current={entry.id === currentId ? 'page' : undefined}
 							className={cx(
-								'flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm',
+								'flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm',
 								entry.id === currentId
 									? 'bg-primary-soft font-semibold text-on-primary-soft'
 									: 'text-fg hover:bg-surface-2',

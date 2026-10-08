@@ -166,9 +166,9 @@ export function AccountView(props) {
 	if (!props.ok || !data) return <PageProblem problem={props.problem} />;
 	const merchant = data.merchant;
 	return (
-		<div className="space-y-6">
-			<PageHeader title={MERCHANT.accountTitle} />
-			<Card title={MERCHANT.detailsTitle}>
+		<div className="space-y-8">
+			<PageHeader title={MERCHANT.accountTitle} subtitle={MERCHANT.accountIntro} />
+			<Card title={MERCHANT.detailsTitle} subtitle={MERCHANT.detailsIntro}>
 				<MerchantFieldsForm merchant={merchant} path="/v1/me" onSaved={() => void reload()} />
 			</Card>
 			<EmailPanel email={merchant.email} twoStepOn={merchant.twoStep.enabled} />

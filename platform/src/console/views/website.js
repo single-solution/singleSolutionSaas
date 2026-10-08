@@ -356,14 +356,14 @@ export function WebsitePage(props) {
 	}));
 
 	return (
-		<div className="flex gap-6">
+		<div className="flex gap-6 lg:gap-8">
 			<InnerList
 				label={props.links.back.label}
 				search={WEBSITE.search}
 				currentId={websiteId}
 				entries={props.siblings.map((w) => ({ id: w.websiteId, label: w.domain, href: props.links.website(w.websiteId) }))}
 			/>
-			<div className="min-w-0 flex-1 space-y-6">
+			<div className="min-w-0 flex-1 space-y-8">
 				<BackLink href={props.links.back.href} label={WEBSITE.back(props.links.back.label)} />
 				<PageHeader
 					breadcrumbs={props.breadcrumbs}
@@ -469,7 +469,7 @@ export function AddProductDialog({ merchantId, websiteId, fetcher, products, onC
 			{products.length === 0 ? (
 				<p className="text-sm text-muted">{WEBSITE.noneToAdd}</p>
 			) : (
-				<ul className="divide-y divide-line rounded-xl border border-line">
+				<ul className="divide-y divide-line-soft rounded-2xl bg-surface-2/60">
 					{products.map((p) => (
 						<li key={p.productId} className="flex items-center justify-between gap-3 px-4 py-3">
 							<span className="min-w-0 truncate text-sm font-semibold text-fg">{p.name}</span>
@@ -584,7 +584,7 @@ export function InstallBlock({ entry, domain, merchantId, websiteId, fetcher }) 
 					) : shown && value ? (
 						<CodeBlock code={value} label={WEBSITE.serverToken} />
 					) : (
-						<p className="rounded-xl border border-line bg-surface-2 p-3 font-mono text-xs text-muted">
+						<p className="rounded-2xl bg-surface-2 p-3.5 font-mono text-xs text-muted">
 							<span aria-hidden="true">••••••••••••••••••••</span>
 							<span className="sr-only">{WEBSITE.hidden}</span>
 						</p>

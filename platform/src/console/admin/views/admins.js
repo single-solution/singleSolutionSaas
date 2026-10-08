@@ -113,9 +113,10 @@ export function AdminsView(props) {
 	};
 
 	return (
-		<div className="space-y-6">
+		<div className="space-y-8">
 			<PageHeader
 				title={ADMIN.adminsTitle}
+				subtitle={ADMIN.adminsIntro}
 				actions={
 					<Button onClick={() => open('invite')} icon={<Icon name="plus" size={14} />}>
 						{ADMIN.invite}

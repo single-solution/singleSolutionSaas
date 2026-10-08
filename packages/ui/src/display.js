@@ -8,29 +8,73 @@ import { Icon } from './icons.js';
 
 /** @typedef {import('react').ReactNode} ReactNode */
 /** @typedef {'neutral' | 'primary' | 'success' | 'warning' | 'danger' | 'info'} Tone */
+/** @typedef {'indigo' | 'violet' | 'teal' | 'coral' | 'pink' | 'amber' | 'sky' | 'green'} Accent */
 
 /**
- * Surface card (rounded island with a hairline border).
+ * Tile colours per accent (soft tint, icon badge, badge icon). Spelled out so Tailwind finds every class.
+ * @type {Record<Accent, { tint: string, badge: string }>}
+ */
+export const ACCENTS = Object.freeze({
+	indigo: { tint: 'bg-tint-indigo', badge: 'bg-accent-indigo text-on-accent-indigo' },
+	violet: { tint: 'bg-tint-violet', badge: 'bg-accent-violet text-on-accent-violet' },
+	teal: { tint: 'bg-tint-teal', badge: 'bg-accent-teal text-on-accent-teal' },
+	coral: { tint: 'bg-tint-coral', badge: 'bg-accent-coral text-on-accent-coral' },
+	pink: { tint: 'bg-tint-pink', badge: 'bg-accent-pink text-on-accent-pink' },
+	amber: { tint: 'bg-tint-amber', badge: 'bg-accent-amber text-on-accent-amber' },
+	sky: { tint: 'bg-tint-sky', badge: 'bg-accent-sky text-on-accent-sky' },
+	green: { tint: 'bg-tint-green', badge: 'bg-accent-green text-on-accent-green' },
+});
+
+/**
+ * Rounded icon badge in an accent colour.
+ * @param {{ icon: import('./icons.js').IconName, accent?: Accent, size?: 'sm' | 'md', className?: string }} props
+ */
+export function IconBadge({ icon, accent = 'indigo', size = 'md', className }) {
+	return (
+		<span
+			aria-hidden="true"
+			className={cx(
+				'inline-flex shrink-0 items-center justify-center',
+				size === 'sm' ? 'size-8 rounded-lg' : 'size-10 rounded-xl',
+				ACCENTS[accent].badge,
+				className,
+			)}>
+			<Icon name={icon} size={size === 'sm' ? 15 : 18} />
+		</span>
+	);
+}
+
+/**
+ * Surface card: a soft rounded section (no border, no shadow) with a heading and a lighter one-line description.
  * @param {{ title?: ReactNode, subtitle?: ReactNode, actions?: ReactNode, children?: ReactNode, className?: string,
  *   bodyClassName?: string, as?: 'section' | 'div' | 'article', id?: string, padded?: boolean }} props
  */
 export function Card({ title, subtitle, actions, children, className, bodyClassName, as = 'section', id, padded = true }) {
 	const Tag = as;
+	const hasHeader = Boolean(title || actions);
 	return (
 		<Tag
 			id={id}
-			className={cx('min-w-0 rounded-card border border-line bg-surface shadow-card', className)}
+			className={cx('min-w-0 rounded-card bg-surface', className)}
 			{...(title && typeof title === 'string' && as === 'section' ? { 'aria-label': title } : {})}>
 			{title || actions ? (
-				<header className="flex flex-wrap items-start justify-between gap-3 border-b border-line px-5 py-4">
+				<header className="flex flex-wrap items-start justify-between gap-3 px-6 pt-5 sm:px-7 sm:pt-6">
 					<div className="min-w-0">
-						{title ? <h2 className="text-sm font-bold text-fg">{title}</h2> : null}
-						{subtitle ? <p className="mt-0.5 text-xs text-muted">{subtitle}</p> : null}
+						{title ? <h2 className="text-base font-bold tracking-tight text-fg">{title}</h2> : null}
+						{subtitle ? <p className="mt-1 text-sm text-muted">{subtitle}</p> : null}
 					</div>
 					{actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
 				</header>
 			) : null}
-			<div className={cx(padded && 'p-5', bodyClassName)}>{children}</div>
+			<div
+				className={cx(
+					padded && 'p-6 sm:p-7',
+					padded && hasHeader && 'pt-4 sm:pt-5',
+					!padded && hasHeader && 'pt-3',
+					bodyClassName,
+				)}>
+				{children}
+			</div>
 		</Tag>
 	);
 }
@@ -41,15 +85,15 @@ export function Card({ title, subtitle, actions, children, className, bodyClassN
  */
 export function PageHeader({ title, subtitle, actions, breadcrumbs, badge }) {
 	return (
-		<div className="space-y-2 pb-2">
+		<div className="space-y-3 pb-1">
 			{breadcrumbs}
 			<div className="flex flex-wrap items-end justify-between gap-4">
 				<div className="min-w-0">
-					<h1 className="flex flex-wrap items-center gap-2 text-xl font-bold tracking-tight text-fg">
+					<h1 className="flex flex-wrap items-center gap-2 text-2xl font-extrabold tracking-tight text-fg">
 						<span className="break-words">{title}</span>
 						{badge}
 					</h1>
-					{subtitle ? <p className="mt-1 text-sm text-muted">{subtitle}</p> : null}
+					{subtitle ? <p className="mt-1.5 text-sm text-muted">{subtitle}</p> : null}
 				</div>
 				{actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
 			</div>
@@ -59,7 +103,7 @@ export function PageHeader({ title, subtitle, actions, breadcrumbs, badge }) {
 
 /** @type {Record<Tone, string>} */
 const TONES = {
-	neutral: 'border-line bg-surface-2 text-fg',
+	neutral: 'border-transparent bg-surface-2 text-fg',
 	primary: 'border-transparent bg-primary-soft text-on-primary-soft',
 	success: 'border-transparent bg-success-soft text-on-success-soft',
 	warning: 'border-transparent bg-warning-soft text-on-warning-soft',
@@ -128,7 +172,7 @@ export function StatusBadge({ status, label, className }) {
 
 /** @type {Record<Tone, { box: string, icon: import('./icons.js').IconName }>} */
 const CALLOUTS = {
-	neutral: { box: 'border-line bg-surface-2 text-fg', icon: 'info' },
+	neutral: { box: 'border-transparent bg-surface-2 text-fg', icon: 'info' },
 	primary: { box: 'border-transparent bg-primary-soft text-on-primary-soft', icon: 'info' },
 	info: { box: 'border-transparent bg-info-soft text-on-info-soft', icon: 'info' },
 	success: { box: 'border-transparent bg-success-soft text-on-success-soft', icon: 'check' },
@@ -145,7 +189,7 @@ export function Callout({ tone = 'info', title, children, actions, className, li
 	const { box, icon } = CALLOUTS[tone];
 	const role = !live ? undefined : tone === 'danger' || tone === 'warning' ? 'alert' : 'status';
 	return (
-		<div role={role} className={cx('flex gap-3 rounded-xl border px-4 py-3 text-sm', box, className)}>
+		<div role={role} className={cx('flex gap-3 rounded-2xl border px-5 py-4 text-sm', box, className)}>
 			<span className="mt-0.5 shrink-0">
 				<Icon name={icon} size={16} />
 			</span>
@@ -167,7 +211,7 @@ export function EmptyState({ title, description, action, icon = 'box', className
 	return (
 		<div
 			className={cx(
-				'flex flex-col items-center justify-center rounded-card border border-dashed border-line text-center',
+				'flex flex-col items-center justify-center rounded-card bg-surface-2/60 text-center',
 				compact ? 'gap-2 px-4 py-6' : 'gap-3 px-6 py-12',
 				className,
 			)}>
@@ -191,10 +235,7 @@ export function ErrorState({ title = 'This could not be loaded', message, action
 	return (
 		<div
 			role="alert"
-			className={cx(
-				'flex flex-col items-center gap-3 rounded-card border border-line bg-surface px-6 py-10 text-center',
-				className,
-			)}>
+			className={cx('flex flex-col items-center gap-3 rounded-card bg-surface px-6 py-10 text-center', className)}>
 			<span className="flex size-10 items-center justify-center rounded-xl bg-danger-soft text-on-danger-soft">
 				<Icon name="alert" size={18} />
 			</span>
@@ -225,11 +266,12 @@ export function Skeleton({ className, lines = 1, label = 'Loading' }) {
 }
 
 /**
- * Key figure.
+ * Key figure: a summary tile. With an `accent` the tile takes that soft tint and shows the icon in a rounded badge
+ * of the accent colour (PLAN 0.6: each kind of number has its own colour).
  * @param {{ label: ReactNode, value: ReactNode, hint?: ReactNode, tone?: Tone, icon?: import('./icons.js').IconName,
- *   className?: string }} props
+ *   accent?: Accent, className?: string }} props
  */
-export function Stat({ label, value, hint, tone = 'neutral', icon, className }) {
+export function Stat({ label, value, hint, tone = 'neutral', icon, accent, className }) {
 	const hintTone =
 		tone === 'danger'
 			? 'text-danger'
@@ -239,18 +281,36 @@ export function Stat({ label, value, hint, tone = 'neutral', icon, className }) 
 					? 'text-success'
 					: 'text-muted';
 	return (
-		<div className={cx('min-w-0 space-y-1.5 rounded-card border border-line bg-surface p-5 shadow-card', className)}>
-			<div className="flex items-center justify-between gap-2">
-				<span className="text-xs font-semibold uppercase tracking-wider text-muted">{label}</span>
-				{icon ? (
-					<span className="text-muted">
-						<Icon name={icon} size={16} />
-					</span>
-				) : null}
+		<div className={cx('min-w-0 space-y-3 rounded-card p-5 sm:p-6', accent ? ACCENTS[accent].tint : 'bg-surface', className)}>
+			<div className="flex items-center gap-3">
+				{icon ? <IconBadge icon={icon} accent={accent ?? 'indigo'} /> : null}
+				<span className="min-w-0 text-sm font-semibold text-muted">{label}</span>
 			</div>
-			<div className="truncate text-2xl font-extrabold tracking-tight text-fg tabular-nums">{value}</div>
+			<div className="truncate text-3xl font-extrabold tracking-tight text-fg tabular-nums">{value}</div>
 			{hint ? <div className={cx('text-xs font-medium', hintTone)}>{hint}</div> : null}
 		</div>
+	);
+}
+
+/**
+ * Grid section of a page: a heading with a lighter one-line description, optional actions, then the content.
+ * @param {{ title: ReactNode, description?: ReactNode, actions?: ReactNode, children?: ReactNode, id?: string,
+ *   className?: string }} props `id` names the heading (`aria-labelledby`)
+ */
+export function Section({ title, description, actions, children, id, className }) {
+	return (
+		<section className={cx('min-w-0 space-y-4', className)} {...(id ? { 'aria-labelledby': id } : {})}>
+			<div className="flex flex-wrap items-end justify-between gap-3">
+				<div className="min-w-0">
+					<h2 id={id} className="text-lg font-bold tracking-tight text-fg">
+						{title}
+					</h2>
+					{description ? <p className="mt-1 text-sm text-muted">{description}</p> : null}
+				</div>
+				{actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
+			</div>
+			{children}
+		</section>
 	);
 }
 
@@ -325,7 +385,7 @@ export function Stepper({ steps, current, className }) {
 								'flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-bold',
 								state === 'done' && 'bg-success-soft text-on-success-soft',
 								state === 'current' && 'bg-primary text-on-primary',
-								state === 'todo' && 'border border-line bg-surface text-muted',
+								state === 'todo' && 'bg-surface-2 text-muted',
 							)}>
 							{state === 'done' ? <Icon name="check" size={14} title="Done" /> : i + 1}
 						</span>

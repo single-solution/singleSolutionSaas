@@ -4,6 +4,9 @@
  * `data-theme="dark"` on <html>, set before paint by `ThemeScript` from the `ThemeToggle` choice); utilities read them
  * through `@theme inline`, so components never need `dark:`. Text/background pairs keep a contrast ratio of at least
  * 4.5:1 (WCAG AA) in both themes; `line-strong` (form controls) keeps 3:1 against surfaces, `line` stays visible.
+ * Visual style (PLAN 0.6 "A + B"): soft rounded surfaces with no borders or shadows (`line-soft` only separates rows),
+ * one tint + accent pair per kind of number (`tint-*` tile background, `accent-*` icon badge, `on-accent-*` its icon)
+ * and the solid `hero` card with its bar colours.
  */
 @theme inline {
 	--color-canvas: var(--ss-canvas);
@@ -32,20 +35,51 @@
 	--color-info-soft: var(--ss-info-soft);
 	--color-on-info-soft: var(--ss-on-info-soft);
 	--color-focus: var(--ss-focus);
+	--color-tint-indigo: var(--ss-tint-indigo);
+	--color-accent-indigo: var(--ss-accent-indigo);
+	--color-on-accent-indigo: var(--ss-on-accent-indigo);
+	--color-tint-violet: var(--ss-tint-violet);
+	--color-accent-violet: var(--ss-accent-violet);
+	--color-on-accent-violet: var(--ss-on-accent-violet);
+	--color-tint-teal: var(--ss-tint-teal);
+	--color-accent-teal: var(--ss-accent-teal);
+	--color-on-accent-teal: var(--ss-on-accent-teal);
+	--color-tint-coral: var(--ss-tint-coral);
+	--color-accent-coral: var(--ss-accent-coral);
+	--color-on-accent-coral: var(--ss-on-accent-coral);
+	--color-tint-pink: var(--ss-tint-pink);
+	--color-accent-pink: var(--ss-accent-pink);
+	--color-on-accent-pink: var(--ss-on-accent-pink);
+	--color-tint-amber: var(--ss-tint-amber);
+	--color-accent-amber: var(--ss-accent-amber);
+	--color-on-accent-amber: var(--ss-on-accent-amber);
+	--color-tint-sky: var(--ss-tint-sky);
+	--color-accent-sky: var(--ss-accent-sky);
+	--color-on-accent-sky: var(--ss-on-accent-sky);
+	--color-tint-green: var(--ss-tint-green);
+	--color-accent-green: var(--ss-accent-green);
+	--color-on-accent-green: var(--ss-on-accent-green);
+	--color-line-soft: var(--ss-line-soft);
+	--color-surface-3: var(--ss-surface-3);
+	--color-hero: var(--ss-hero);
+	--color-on-hero: var(--ss-on-hero);
+	--color-on-hero-muted: var(--ss-on-hero-muted);
+	--color-hero-bar: var(--ss-hero-bar);
+	--color-hero-track: var(--ss-hero-track);
 	--color-overlay: var(--ss-overlay);
 	--font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
 	--font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
-	--radius-card: 1rem;
+	--radius-card: 1.125rem;
 	--radius-control: 0.75rem;
-	--shadow-card: 0 1px 2px 0 rgb(15 23 42 / 0.05);
+	--shadow-card: none;
 	--shadow-overlay: 0 24px 48px -12px rgb(15 23 42 / 0.35);
 }
 
 :root {
 	color-scheme: light;
-	--ss-canvas: #f8fafc;
+	--ss-canvas: #f3f4f9;
 	--ss-surface: #ffffff;
-	--ss-surface-2: #f1f5f9;
+	--ss-surface-2: #eef1f7;
 	--ss-line: #cbd5e1;
 	--ss-line-strong: #7c8ba1;
 	--ss-fg: #0f172a;
@@ -70,14 +104,45 @@
 	--ss-on-info-soft: #075985;
 	--ss-focus: #4f46e5;
 	--ss-overlay: rgb(15 23 42 / 0.45);
+	--ss-tint-indigo: #eef0ff;
+	--ss-accent-indigo: #4f46e5;
+	--ss-on-accent-indigo: #ffffff;
+	--ss-tint-violet: #f4efff;
+	--ss-accent-violet: #7c3aed;
+	--ss-on-accent-violet: #ffffff;
+	--ss-tint-teal: #e6f7f5;
+	--ss-accent-teal: #0d9488;
+	--ss-on-accent-teal: #ffffff;
+	--ss-tint-coral: #fff0ec;
+	--ss-accent-coral: #e0533d;
+	--ss-on-accent-coral: #ffffff;
+	--ss-tint-pink: #fdeef6;
+	--ss-accent-pink: #db2777;
+	--ss-on-accent-pink: #ffffff;
+	--ss-tint-amber: #fff6e5;
+	--ss-accent-amber: #c2410c;
+	--ss-on-accent-amber: #ffffff;
+	--ss-tint-sky: #e9f5fd;
+	--ss-accent-sky: #0369a1;
+	--ss-on-accent-sky: #ffffff;
+	--ss-tint-green: #e9f8f0;
+	--ss-accent-green: #047857;
+	--ss-on-accent-green: #ffffff;
+	--ss-line-soft: #eceef4;
+	--ss-surface-3: #e4e8f1;
+	--ss-hero: #4f46e5;
+	--ss-on-hero: #ffffff;
+	--ss-on-hero-muted: #e0e7ff;
+	--ss-hero-bar: rgb(255 255 255 / 0.9);
+	--ss-hero-track: rgb(255 255 255 / 0.16);
 }
 
 @media (prefers-color-scheme: dark) {
 	:root:not([data-theme='light']) {
 		color-scheme: dark;
-		--ss-canvas: #0b1120;
-		--ss-surface: #111827;
-		--ss-surface-2: #1e293b;
+		--ss-canvas: #0a0f1c;
+		--ss-surface: #121a2b;
+		--ss-surface-2: #1b2438;
 		--ss-line: #334155;
 		--ss-line-strong: #64748b;
 		--ss-fg: #f1f5f9;
@@ -102,14 +167,45 @@
 		--ss-on-info-soft: #7dd3fc;
 		--ss-focus: #a5b4fc;
 		--ss-overlay: rgb(2 6 23 / 0.7);
+		--ss-tint-indigo: #1d1f47;
+		--ss-accent-indigo: #818cf8;
+		--ss-on-accent-indigo: #0a0f1c;
+		--ss-tint-violet: #261b45;
+		--ss-accent-violet: #a78bfa;
+		--ss-on-accent-violet: #0a0f1c;
+		--ss-tint-teal: #0d2e2c;
+		--ss-accent-teal: #2dd4bf;
+		--ss-on-accent-teal: #0a0f1c;
+		--ss-tint-coral: #3a1d17;
+		--ss-accent-coral: #fb8a73;
+		--ss-on-accent-coral: #0a0f1c;
+		--ss-tint-pink: #3a1428;
+		--ss-accent-pink: #f472b6;
+		--ss-on-accent-pink: #0a0f1c;
+		--ss-tint-amber: #36250b;
+		--ss-accent-amber: #fbbf24;
+		--ss-on-accent-amber: #0a0f1c;
+		--ss-tint-sky: #0c2a3f;
+		--ss-accent-sky: #38bdf8;
+		--ss-on-accent-sky: #0a0f1c;
+		--ss-tint-green: #0c2e21;
+		--ss-accent-green: #34d399;
+		--ss-on-accent-green: #0a0f1c;
+		--ss-line-soft: #1e2638;
+		--ss-surface-3: #27324a;
+		--ss-hero: #4338ca;
+		--ss-on-hero: #ffffff;
+		--ss-on-hero-muted: #e0e7ff;
+		--ss-hero-bar: rgb(255 255 255 / 0.88);
+		--ss-hero-track: rgb(255 255 255 / 0.14);
 	}
 }
 
 :root[data-theme='dark'] {
 	color-scheme: dark;
-	--ss-canvas: #0b1120;
-	--ss-surface: #111827;
-	--ss-surface-2: #1e293b;
+	--ss-canvas: #0a0f1c;
+	--ss-surface: #121a2b;
+	--ss-surface-2: #1b2438;
 	--ss-line: #334155;
 	--ss-line-strong: #64748b;
 	--ss-fg: #f1f5f9;
@@ -134,6 +230,37 @@
 	--ss-on-info-soft: #7dd3fc;
 	--ss-focus: #a5b4fc;
 	--ss-overlay: rgb(2 6 23 / 0.7);
+	--ss-tint-indigo: #1d1f47;
+	--ss-accent-indigo: #818cf8;
+	--ss-on-accent-indigo: #0a0f1c;
+	--ss-tint-violet: #261b45;
+	--ss-accent-violet: #a78bfa;
+	--ss-on-accent-violet: #0a0f1c;
+	--ss-tint-teal: #0d2e2c;
+	--ss-accent-teal: #2dd4bf;
+	--ss-on-accent-teal: #0a0f1c;
+	--ss-tint-coral: #3a1d17;
+	--ss-accent-coral: #fb8a73;
+	--ss-on-accent-coral: #0a0f1c;
+	--ss-tint-pink: #3a1428;
+	--ss-accent-pink: #f472b6;
+	--ss-on-accent-pink: #0a0f1c;
+	--ss-tint-amber: #36250b;
+	--ss-accent-amber: #fbbf24;
+	--ss-on-accent-amber: #0a0f1c;
+	--ss-tint-sky: #0c2a3f;
+	--ss-accent-sky: #38bdf8;
+	--ss-on-accent-sky: #0a0f1c;
+	--ss-tint-green: #0c2e21;
+	--ss-accent-green: #34d399;
+	--ss-on-accent-green: #0a0f1c;
+	--ss-line-soft: #1e2638;
+	--ss-surface-3: #27324a;
+	--ss-hero: #4338ca;
+	--ss-on-hero: #ffffff;
+	--ss-on-hero-muted: #e0e7ff;
+	--ss-hero-bar: rgb(255 255 255 / 0.88);
+	--ss-hero-track: rgb(255 255 255 / 0.14);
 }
 
 @layer base {

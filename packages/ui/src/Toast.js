@@ -91,7 +91,7 @@ function ToastCard({ toast, onDismiss }) {
 	return (
 		<div
 			className={cx(
-				'pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-xl border border-line px-4 py-3 text-sm shadow-overlay',
+				'pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-2xl px-4 py-3 text-sm shadow-overlay',
 				tone,
 			)}>
 			<Icon name={toast.tone === 'danger' ? 'alert' : toast.tone === 'info' ? 'info' : 'check'} size={16} className="mt-0.5" />

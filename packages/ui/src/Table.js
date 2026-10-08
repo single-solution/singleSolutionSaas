@@ -69,17 +69,20 @@ export function Table({
 	/** @param {string} key */
 	const toggle = (key) =>
 		setSort((s) => (s?.key === key ? { key, direction: s.direction === 'asc' ? 'desc' : 'asc' } : { key, direction: 'asc' }));
-	const pad = dense ? 'px-3 py-2' : 'px-4 py-3';
+	const pad = dense ? 'px-3 py-2' : 'px-5 py-3.5';
 	/** @param {'left' | 'right' | 'center' | undefined} align */
 	const alignClass = (align) => (align === 'right' ? 'text-right' : align === 'center' ? 'text-center' : 'text-left');
 	return (
 		<div className={cx('space-y-3', className)}>
-			<div className="overflow-x-auto rounded-card border border-line bg-surface">
+			<div className="overflow-x-auto rounded-card bg-surface">
 				<table className="w-full min-w-[32rem] border-collapse text-sm">
-					<caption className={cx(captionHidden ? 'sr-only' : 'px-4 pt-3 text-left text-sm font-semibold text-fg')}>
+					<caption
+						className={cx(
+							captionHidden ? 'sr-only' : 'px-5 pb-1 pt-4 text-left text-sm font-semibold text-fg',
+						)}>
 						{caption}
 					</caption>
-					<thead className="bg-surface-2">
+					<thead>
 						<tr>
 							{columns.map((column) => {
 								const active = sort?.key === column.key;
@@ -129,7 +132,7 @@ export function Table({
 							</tr>
 						) : (
 							sorted.map((row) => (
-								<tr key={rowKey(row)} className="border-t border-line hover:bg-surface-2/60">
+								<tr key={rowKey(row)} className="border-t border-line-soft hover:bg-surface-2/60">
 									{columns.map((column) => {
 										const content = column.render
 											? column.render(row)

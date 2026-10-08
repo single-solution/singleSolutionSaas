@@ -11,10 +11,10 @@ const BASE =
 
 /** @type {Record<ButtonVariant, string>} */
 const VARIANTS = {
-	primary: 'bg-primary text-on-primary shadow-card hover:bg-primary-hover',
-	secondary: 'border border-line bg-surface text-fg shadow-card hover:border-line-strong hover:bg-surface-2',
+	primary: 'bg-primary text-on-primary hover:bg-primary-hover',
+	secondary: 'bg-surface-2 text-fg hover:bg-surface-3',
 	ghost: 'text-fg hover:bg-surface-2',
-	danger: 'bg-danger text-on-danger shadow-card hover:bg-danger-hover',
+	danger: 'bg-danger text-on-danger hover:bg-danger-hover',
 	soft: 'bg-primary-soft text-on-primary-soft hover:bg-surface-2',
 };
 

@@ -48,7 +48,7 @@ export function ConsoleShell({ me, merchantId, websites, billing, children, bran
 		window.location.assign(routes.login());
 	};
 	const selectClass =
-		'min-h-9 max-w-[11rem] truncate rounded-xl border border-line bg-surface px-3 py-1.5 text-sm font-semibold text-fg hover:border-line-strong focus-visible:outline-2 focus-visible:outline-focus sm:max-w-[14rem]';
+		'min-h-9 max-w-[11rem] truncate rounded-xl bg-surface-2 px-3 py-1.5 text-sm font-semibold text-fg hover:bg-surface-3 focus-visible:outline-2 focus-visible:outline-focus sm:max-w-[14rem]';
 
 	return (
 		<ToastProvider>
@@ -90,7 +90,7 @@ export function ConsoleShell({ me, merchantId, websites, billing, children, bran
 							{billing && typeof billing.balance === 'number' ? (
 								<Link
 									href={routes.credits()}
-									className="hidden items-center gap-1.5 rounded-xl border border-line px-3 py-1.5 text-sm font-semibold text-fg hover:border-line-strong sm:inline-flex"
+									className="hidden items-center gap-1.5 rounded-xl bg-tint-indigo px-3 py-1.5 text-sm font-semibold text-fg hover:bg-primary-soft sm:inline-flex"
 									title={MERCHANT.balanceLink}>
 									<Icon name="wallet" size={14} />
 									<span className="tabular-nums">{formatCredits(billing.balance)}</span>
@@ -103,7 +103,7 @@ export function ConsoleShell({ me, merchantId, websites, billing, children, bran
 						</>
 					}
 					sidebarFooter={
-						<div className="rounded-xl border border-line bg-surface-2 p-3 text-xs">
+						<div className="rounded-2xl bg-surface-2 p-3 text-xs">
 							<p className="truncate font-semibold text-fg">{merchant?.email}</p>
 						</div>
 					}>

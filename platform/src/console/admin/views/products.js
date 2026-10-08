@@ -144,9 +144,10 @@ export function ProductsView(props) {
 		(p) => !needle || String(p.name).toLowerCase().includes(needle) || String(p.productId).includes(needle),
 	);
 	return (
-		<div className="space-y-6">
+		<div className="space-y-8">
 			<PageHeader
 				title={PRODUCTS.title}
+				subtitle={PRODUCTS.intro}
 				actions={
 					owner ? (
 						<Button onClick={() => setAdding(true)} icon={<Icon name="plus" size={14} />}>
@@ -282,7 +283,7 @@ export function ProductView(props) {
 	};
 
 	const overview = (
-		<div className="space-y-6">
+		<div className="space-y-8">
 			<div className="grid gap-4 sm:grid-cols-2">
 				<Stat label={PRODUCTS.earnedThisMonth} value={formatCredits(numbers.earnedThisMonth ?? 0)} icon="wallet" />
 				<Stat label={PRODUCTS.websitesUsing} value={numbers.websites ?? 0} icon="globe" />
@@ -348,7 +349,7 @@ export function ProductView(props) {
 	);
 
 	return (
-		<div className="flex gap-6">
+		<div className="flex gap-6 lg:gap-8">
 			<InnerList
 				label={PRODUCTS.title}
 				search={PRODUCTS.search}
@@ -360,7 +361,7 @@ export function ProductView(props) {
 					dot: p.status === 'active' ? 'success' : 'neutral',
 				}))}
 			/>
-			<div className="min-w-0 flex-1 space-y-6">
+			<div className="min-w-0 flex-1 space-y-8">
 				<BackLink href={adminRoutes.products()} label={PRODUCTS.title} />
 				<PageHeader
 					title={product.name}

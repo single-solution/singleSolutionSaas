@@ -190,7 +190,7 @@ function NodeControl({
 		const record =
 			value && typeof value === 'object' && !Array.isArray(value) ? /** @type {Record<string, unknown>} */ (value) : {};
 		return (
-			<fieldset className="space-y-3 rounded-xl border border-line p-4" disabled={disabled}>
+			<fieldset className="space-y-3 rounded-2xl bg-surface-2/60 p-4" disabled={disabled}>
 				<legend className={cx(LABEL_CLASS, 'px-1')}>
 					{label}
 					{aside ? <span className="ml-2 normal-case tracking-normal">{aside}</span> : null}
@@ -324,7 +324,7 @@ export function SchemaForm({
 				),
 			)}
 			{advanced.length > 0 ? (
-				<div className="space-y-4 border-t border-line pt-4">
+				<div className="space-y-4 border-t border-line-soft pt-4">
 					<Button
 						variant="ghost"
 						size="sm"

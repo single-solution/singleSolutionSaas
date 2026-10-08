@@ -23,6 +23,7 @@ import {
 	ErrorState,
 	Form,
 	FormError,
+	HeroCard,
 	Icon,
 	IconButton,
 	Input,
@@ -30,6 +31,7 @@ import {
 	Meter,
 	PageHeader,
 	RadioGroup,
+	Section,
 	Select,
 	ShareBars,
 	Skeleton,
@@ -191,6 +193,35 @@ describe('display', () => {
 		expect(container.querySelector('[aria-busy="true"]')).not.toBeNull();
 		expect(container.querySelector('nav[aria-label="Breadcrumb"] [aria-current="page"]')?.textContent).toBe('Here');
 		expect(container.querySelector('dl dt')?.textContent).toBe('Domain');
+	});
+
+	it('Stat tiles take an accent; Section and HeroCard label their content', () => {
+		const { container } = render(
+			<div>
+				<Stat label="Websites" value={3} icon="globe" accent="teal" />
+				<Section id="s1" title="Websites" description="Your websites">
+					<p>body</p>
+				</Section>
+				<HeroCard
+					label="Credit balance"
+					value="1,000 credits"
+					details={[{ label: 'Days left', value: '12 days' }]}
+					chart={{
+						label: 'Spend',
+						data: [
+							{ label: '10-01', value: 2 },
+							{ label: '10-02', value: 0 },
+						],
+					}}
+				/>
+				<HeroCard label="Empty" value="0" chart={{ label: 'None', data: [] }} />
+			</div>,
+		);
+		expect(container.querySelector('.bg-tint-teal')).not.toBeNull();
+		expect(container.querySelector('section[aria-labelledby="s1"] h2')?.textContent).toBe('Websites');
+		expect(container.querySelector('section[aria-label="Credit balance"] svg[role="img"]')).not.toBeNull();
+		expect(container.querySelector('section[aria-label="Credit balance"] dd')?.textContent).toBe('12 days');
+		expect(container.textContent).toContain('No data for this period.');
 	});
 
 	it('Meter exposes its value; Stepper marks the current step', () => {

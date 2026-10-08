@@ -6,7 +6,7 @@
  * @module
  */
 import { useEffect, useState } from 'react';
-import { Badge, BarChart, Callout, Card, EmptyState, Stat, Table, formatCredits, formatDateTime } from '@ss/ui';
+import { Badge, BarChart, Callout, Card, EmptyState, HeroCard, Stat, Table, formatCredits, formatDateTime } from '@ss/ui';
 import { BILLING } from '../../texts/console.js';
 
 /** @typedef {'active' | 'low_balance' | 'grace' | 'stopped' | 'suspended'} MerchantStatus */
@@ -97,17 +97,51 @@ export function DaysLeft({ summary }) {
  */
 export function BillingStats({ summary }) {
 	return (
-		<div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+		<div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
 			<Stat
 				label={BILLING.balance}
 				value={formatCredits(summary.balance)}
 				tone={summary.balance <= 0 ? 'danger' : summary.lowBalance ? 'warning' : 'neutral'}
 				hint={<MerchantStatusBadge status={summary.status} />}
+				icon="wallet"
+				accent="indigo"
 			/>
-			<Stat label={BILLING.daysLeft} value={<DaysLeft summary={summary} />} />
-			<Stat label={BILLING.dailySpend} value={formatCredits(summary.dailySpend)} />
-			<Stat label={BILLING.spentThisMonth} value={formatCredits(summary.spentThisMonth)} />
+			<Stat label={BILLING.daysLeft} value={<DaysLeft summary={summary} />} icon="clock" accent="violet" />
+			<Stat label={BILLING.dailySpend} value={formatCredits(summary.dailySpend)} icon="trendingUp" accent="pink" />
+			<Stat label={BILLING.spentThisMonth} value={formatCredits(summary.spentThisMonth)} icon="calendar" accent="amber" />
 		</div>
+	);
+}
+
+/**
+ * Credits per UTC day as chart bars (credits in thousandths, shown as credits).
+ * @param {ReadonlyArray<{ day: string, amount: number }> | undefined} days
+ */
+export const creditDayBars = (days) => (days ?? []).map((d) => ({ label: d.day.slice(5), value: d.amount / 1000, hint: d.day }));
+
+/** @param {number} v credits */
+export const formatChartCredits = (v) => formatCredits(Math.round(v * 1000));
+
+/**
+ * The merchant's hero card (PLAN 0.6): the credit balance and days left, with the 30-day spend chart inside.
+ * @param {{ summary: any, days: ReadonlyArray<{ day: string, amount: number }> | undefined, label: string,
+ *   chartLabel: string }} props
+ */
+export function BalanceHero({ summary, days, label, chartLabel }) {
+	return (
+		<HeroCard
+			label={label}
+			value={formatCredits(summary.balance)}
+			icon="wallet"
+			details={[
+				{ label: BILLING.daysLeft, value: <DaysLeft summary={summary} /> },
+				{ label: BILLING.dailySpend, value: formatCredits(summary.dailySpend) },
+			]}
+			chart={{ label: chartLabel, data: creditDayBars(days), format: formatChartCredits }}>
+			<div>
+				<MerchantStatusBadge status={summary.status} />
+			</div>
+		</HeroCard>
 	);
 }
 
@@ -151,17 +185,11 @@ export function BillingBanner({ summary, contact }) {
 export function UsageView({ usage, showWebsite = true, chartTitle = BILLING.usageChart }) {
 	const rows = /** @type {any[]} */ (usage?.rows ?? []);
 	return (
-		<div className="space-y-6">
-			<Card title={chartTitle} subtitle={`${usage?.from ?? ''} – ${usage?.to ?? ''} · ${formatCredits(usage?.total ?? 0)}`}>
-				<BarChart
-					label={chartTitle}
-					data={(usage?.days ?? []).map((/** @type {{ day: string, amount: number }} */ d) => ({
-						label: d.day.slice(5),
-						value: d.amount / 1000,
-						hint: d.day,
-					}))}
-					format={(v) => formatCredits(Math.round(v * 1000))}
-				/>
+		<div className="space-y-8">
+			<Card
+				title={chartTitle}
+				subtitle={BILLING.usageChartIntro(`${usage?.from ?? ''} – ${usage?.to ?? ''}`, formatCredits(usage?.total ?? 0))}>
+				<BarChart label={chartTitle} data={creditDayBars(usage?.days)} format={formatChartCredits} />
 			</Card>
 			<Table
 				caption={BILLING.usageTitle}

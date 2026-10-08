@@ -54,7 +54,7 @@ export function CodeBlock({ code, label, secret = false, wrap = true, className,
 	return (
 		<div className={cx('space-y-2', className)}>
 			{label ? <p className="text-xs font-semibold uppercase tracking-wider text-muted">{label}</p> : null}
-			<div className="flex items-start gap-2 rounded-xl border border-line bg-surface-2 p-3">
+			<div className="flex items-start gap-2 rounded-2xl bg-surface-2 p-3.5">
 				<pre
 					className={cx(
 						'min-w-0 flex-1 font-mono text-xs leading-relaxed text-fg',
@@ -67,7 +67,7 @@ export function CodeBlock({ code, label, secret = false, wrap = true, className,
 				<button
 					type="button"
 					onClick={copy}
-					className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-line bg-surface px-2 py-1 text-xs font-semibold text-fg hover:border-line-strong focus-visible:outline-2 focus-visible:outline-focus">
+					className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-surface px-2 py-1 text-xs font-semibold text-fg hover:bg-surface-3 focus-visible:outline-2 focus-visible:outline-focus">
 					<Icon name={copied ? 'check' : 'copy'} size={13} />
 					{copied ? 'Copied' : 'Copy'}
 				</button>

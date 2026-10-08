@@ -7,12 +7,25 @@
  * @module
  */
 import { useState } from 'react';
-import { BarChart, Button, Card, EmptyState, Icon, PageHeader, formatCredits, describeProblem, useToast } from '@ss/ui';
-import { AUTH, MERCHANT, WEBSITE } from '../../texts/console.js';
+import {
+	BarChart,
+	Button,
+	Card,
+	EmptyState,
+	Icon,
+	IconBadge,
+	PageHeader,
+	Section,
+	Stat,
+	formatCredits,
+	describeProblem,
+	useToast,
+} from '@ss/ui';
+import { AUTH, BILLING, MERCHANT, WEBSITE } from '../../texts/console.js';
 import { apiFetch } from '../client.js';
 import { Link } from '../link.js';
 import { api, routes } from '../paths.js';
-import { BillingStats, ProductStatusBadge } from './billing.js';
+import { BalanceHero, ProductStatusBadge, creditDayBars, formatChartCredits } from './billing.js';
 import { PageProblem, openDashboard } from './common.js';
 import { contactLine } from './sign-in.js';
 import { WebsitePage, WebsitesTable, dailyCostOf } from './website.js';
@@ -55,42 +68,62 @@ export function OverviewView(props) {
 		setOpening(null);
 		if (!result.ok) toast.show({ tone: 'danger', title: describeProblem(result.problem) });
 	};
+	const billing = props.billing;
+	const productCount = rows.reduce((n, r) => n + r.cards.length, 0);
 	return (
-		<div className="space-y-6">
-			<PageHeader title={MERCHANT.overviewTitle} />
-			{props.billing ? <BillingStats summary={props.billing} /> : null}
-			<Card title={MERCHANT.spendChart} subtitle={props.usage ? formatCredits(props.usage.total ?? 0) : undefined}>
-				<BarChart
-					label={MERCHANT.spendChart}
-					data={(props.usage?.days ?? []).map((/** @type {{ day: string, amount: number }} */ d) => ({
-						label: d.day.slice(5),
-						value: d.amount / 1000,
-						hint: d.day,
-					}))}
-					format={(v) => formatCredits(Math.round(v * 1000))}
+		<div className="space-y-8">
+			<PageHeader title={MERCHANT.overviewTitle} subtitle={MERCHANT.overviewIntro} />
+			{billing ? (
+				<BalanceHero
+					summary={billing}
+					days={props.usage?.days}
+					label={MERCHANT.balanceLink}
+					chartLabel={MERCHANT.spendChart}
 				/>
-			</Card>
-			<section className="space-y-3" aria-labelledby="overview-websites">
-				<h2 id="overview-websites" className="text-base font-bold text-fg">
-					{MERCHANT.websitesTitle}
-				</h2>
+			) : (
+				<Card title={MERCHANT.spendChart} subtitle={props.usage ? formatCredits(props.usage.total ?? 0) : undefined}>
+					<BarChart label={MERCHANT.spendChart} data={creditDayBars(props.usage?.days)} format={formatChartCredits} />
+				</Card>
+			)}
+			<div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
+				{billing ? (
+					<>
+						<Stat label={BILLING.dailySpend} value={formatCredits(billing.dailySpend)} icon="trendingUp" accent="pink" />
+						<Stat
+							label={BILLING.spentThisMonth}
+							value={formatCredits(billing.spentThisMonth)}
+							icon="calendar"
+							accent="amber"
+						/>
+					</>
+				) : null}
+				<Stat label={MERCHANT.tiles.websites} value={rows.length} icon="globe" accent="teal" />
+				<Stat label={MERCHANT.tiles.products} value={productCount} icon="box" accent="coral" />
+			</div>
+			<Section id="overview-websites" title={MERCHANT.websitesTitle} description={MERCHANT.websitesIntro}>
 				{rows.length === 0 ? (
 					<Welcome branding={props.branding} />
 				) : (
-					<ul className="grid gap-4 lg:grid-cols-2">
+					<ul className="grid gap-5 lg:grid-cols-2 2xl:grid-cols-3">
 						{rows.map(({ website, cards }) => (
 							<li key={website.websiteId}>
 								<Card
+									className="h-full"
 									title={
-										<Link href={routes.website(website.websiteId)} className="break-all text-primary hover:underline">
-											{website.domain}
-										</Link>
+										<span className="flex items-center gap-3">
+											<IconBadge icon="globe" accent="teal" size="sm" />
+											<Link
+												href={routes.website(website.websiteId)}
+												className="break-all text-fg hover:text-primary hover:underline">
+												{website.domain}
+											</Link>
+										</span>
 									}
 									subtitle={WEBSITE.perDay(formatCredits(dailyCostOf(cards)))}>
 									{cards.length === 0 ? (
 										<p className="text-sm text-muted">{WEBSITE.noProductsMerchant}</p>
 									) : (
-										<ul className="divide-y divide-line">
+										<ul className="divide-y divide-line-soft">
 											{cards.map((card) => (
 												<li key={card.productId} className="flex flex-wrap items-center justify-between gap-2 py-2">
 													<span className="flex min-w-0 flex-wrap items-center gap-2">
@@ -115,7 +148,7 @@ export function OverviewView(props) {
 						))}
 					</ul>
 				)}
-			</section>
+			</Section>
 		</div>
 	);
 }
@@ -127,8 +160,8 @@ export function OverviewView(props) {
 export function WebsitesView(props) {
 	if (!props.ok) return <PageProblem problem={props.problem} />;
 	return (
-		<div className="space-y-6">
-			<PageHeader title={MERCHANT.websitesTitle} />
+		<div className="space-y-8">
+			<PageHeader title={MERCHANT.websitesTitle} subtitle={MERCHANT.websitesPageIntro} />
 			{props.rows.length === 0 ? (
 				<Welcome branding={props.branding} />
 			) : (

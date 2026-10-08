@@ -61,8 +61,8 @@ export function MyAccountView(props) {
 	if (!props.ok || !data) return <AdminProblem problem={props.problem} />;
 	const admin = data.admin;
 	return (
-		<div className="space-y-6">
-			<PageHeader title={ADMIN.myAccountTitle} />
+		<div className="space-y-8">
+			<PageHeader title={ADMIN.myAccountTitle} subtitle={ADMIN.myAccountIntro} />
 			<NameCard admin={admin} onSaved={() => void reload()} />
 			<EmailPanel email={admin.email} twoStepOn={admin.twoStep.enabled} />
 			<PasswordPanel twoStepOn={admin.twoStep.enabled} />

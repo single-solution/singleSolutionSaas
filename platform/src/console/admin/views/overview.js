@@ -5,7 +5,20 @@
  * month, with a 30-day chart, UTC) and recent activity.
  * @module
  */
-import { Badge, BarChart, ButtonLink, Callout, Card, EmptyState, PageHeader, Stat, formatCredits } from '@ss/ui';
+import {
+	Badge,
+	BarChart,
+	ButtonLink,
+	Callout,
+	Card,
+	EmptyState,
+	HeroCard,
+	IconBadge,
+	PageHeader,
+	Section,
+	Stat,
+	formatCredits,
+} from '@ss/ui';
 import { ADMIN, PRODUCTS } from '../../../texts/console.js';
 import { Link } from '../../link.js';
 import { ActivityTable } from '../../views/login-settings.js';
@@ -22,6 +35,17 @@ export const dayBars = (days) => (days ?? []).map((d) => ({ label: d.day.slice(5
 const creditsOf = (v) => formatCredits(Math.round(v * 1000));
 
 /**
+ * Credits of all products per UTC day (the sum of each product's 30 days).
+ * @param {ReadonlyArray<{ days?: ReadonlyArray<{ day: string, amount: number }> }>} products
+ */
+export const totalDays = (products) => {
+	/** @type {Map<string, number>} */
+	const sums = new Map();
+	for (const p of products) for (const d of p.days ?? []) sums.set(d.day, (sums.get(d.day) ?? 0) + d.amount);
+	return [...sums.keys()].sort().map((day) => ({ day, amount: sums.get(day) ?? 0 }));
+};
+
+/**
  * @param {any} props loader result of `loadOverview` plus `admin`
  */
 export function OverviewView(props) {
@@ -29,9 +53,10 @@ export function OverviewView(props) {
 	const o = props.overview ?? {};
 	const products = /** @type {any[]} */ (o.products ?? []);
 	const linked = adminCan(props.admin, 'products.manage');
+	const earned = products.reduce((n, p) => n + (p.earnedThisMonth ?? 0), 0);
 	return (
-		<div className="space-y-6">
-			<PageHeader title={ADMIN.overviewTitle} />
+		<div className="space-y-8">
+			<PageHeader title={ADMIN.overviewTitle} subtitle={ADMIN.overviewIntro} />
 			{o.mailConfigured === false ? (
 				<Callout
 					tone="warning"
@@ -45,29 +70,39 @@ export function OverviewView(props) {
 					{ADMIN.smtpWarning}
 				</Callout>
 			) : null}
-			<div className="grid gap-4 sm:grid-cols-2">
-				<Stat label={ADMIN.totals.merchants} value={o.merchants ?? 0} icon="users" />
-				<Stat label={ADMIN.totals.websites} value={o.websites ?? 0} icon="globe" />
+			<HeroCard
+				label={ADMIN.creditsThisMonth}
+				value={formatCredits(earned)}
+				icon="coins"
+				chart={{ label: ADMIN.creditsChart, data: dayBars(totalDays(products)), format: creditsOf }}
+			/>
+			<div className="grid gap-5 sm:grid-cols-3">
+				<Stat label={ADMIN.totals.merchants} value={o.merchants ?? 0} icon="users" accent="violet" />
+				<Stat label={ADMIN.totals.websites} value={o.websites ?? 0} icon="globe" accent="teal" />
+				<Stat label={ADMIN.totalProducts} value={products.length} icon="box" accent="coral" />
 			</div>
-			<section className="space-y-3" aria-labelledby="overview-products">
-				<h2 id="overview-products" className="text-base font-bold text-fg">
-					{ADMIN.productsTitle}
-				</h2>
+			<Section id="overview-products" title={ADMIN.productsTitle} description={ADMIN.productsIntro}>
 				{products.length === 0 ? (
 					<EmptyState compact icon="box" title={ADMIN.noProducts} />
 				) : (
-					<ul className="grid gap-4 lg:grid-cols-2">
+					<ul className="grid gap-5 lg:grid-cols-2 2xl:grid-cols-3">
 						{products.map((p) => (
 							<li key={p.productId}>
 								<Card
+									className="h-full"
 									title={
-										linked ? (
-											<Link href={adminRoutes.product(p.productId)} className="text-primary hover:underline">
-												{p.name}
-											</Link>
-										) : (
-											p.name
-										)
+										<span className="flex items-center gap-3">
+											<IconBadge icon="box" accent="coral" size="sm" />
+											{linked ? (
+												<Link
+													href={adminRoutes.product(p.productId)}
+													className="text-fg hover:text-primary hover:underline">
+													{p.name}
+												</Link>
+											) : (
+												p.name
+											)}
+										</span>
 									}
 									subtitle={`${ADMIN.productWebsites(p.websites ?? 0)} · ${ADMIN.productEarned(formatCredits(p.earnedThisMonth ?? 0))}`}
 									actions={
@@ -81,8 +116,8 @@ export function OverviewView(props) {
 						))}
 					</ul>
 				)}
-			</section>
-			<Card title={ADMIN.recentActivity}>
+			</Section>
+			<Card title={ADMIN.recentActivity} subtitle={ADMIN.recentActivityIntro}>
 				<ActivityTable items={o.recentActivity ?? []} empty={ADMIN.noActivity} showMerchant />
 			</Card>
 		</div>
