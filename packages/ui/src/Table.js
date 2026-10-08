@@ -76,10 +76,7 @@ export function Table({
 		<div className={cx('space-y-3', className)}>
 			<div className="overflow-x-auto rounded-card bg-surface">
 				<table className="w-full min-w-[32rem] border-collapse text-sm">
-					<caption
-						className={cx(
-							captionHidden ? 'sr-only' : 'px-5 pb-1 pt-4 text-left text-sm font-semibold text-fg',
-						)}>
+					<caption className={cx(captionHidden ? 'sr-only' : 'px-5 pb-1 pt-4 text-left text-sm font-semibold text-fg')}>
 						{caption}
 					</caption>
 					<thead>

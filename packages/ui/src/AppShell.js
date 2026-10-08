@@ -1,6 +1,6 @@
 'use client';
 /**
- * Console frame: a soft sidebar island (brand, sections of links) and a top bar island (switchers on the left,
+ * Console frame: a soft sidebar island (brand, sections of links, each link with a colour icon badge in its `tone`) and a top bar island (switchers on the left,
  * account actions and the System / Light / Dark theme switch on the right). The frame uses the available width (16 px
  * side padding on phones, 24–32 px from `md`, at most 1600 px wide); pages decide their own reading widths. Below `md`
  * the sidebar becomes an off-canvas panel opened by the menu button.
@@ -14,7 +14,20 @@ import { useFocusTrap } from './overlay.js';
 import { ThemeToggle } from './theme.js';
 
 /** @typedef {import('react').ReactNode} ReactNode */
-/** @typedef {{ href: string, label: ReactNode, icon?: import('./icons.js').IconName, current?: boolean, badge?: ReactNode }} NavItem */
+/** @typedef {import('./display.js').Accent} Accent */
+/** @typedef {{ href: string, label: ReactNode, icon?: import('./icons.js').IconName, tone?: Accent, current?: boolean, badge?: ReactNode }} NavItem */
+
+/** Icon badge colours per tone: a soft tint with the matching icon colour (static class names for Tailwind). */
+const BADGE_TONES = /** @type {Record<Accent, string>} */ ({
+	indigo: 'bg-tint-indigo text-accent-indigo',
+	violet: 'bg-tint-violet text-accent-violet',
+	teal: 'bg-tint-teal text-accent-teal',
+	coral: 'bg-tint-coral text-accent-coral',
+	pink: 'bg-tint-pink text-accent-pink',
+	amber: 'bg-tint-amber text-accent-amber',
+	sky: 'bg-tint-sky text-accent-sky',
+	green: 'bg-tint-green text-accent-green',
+});
 /** @typedef {{ label?: string, items: NavItem[] }} NavSection */
 
 /**
@@ -37,13 +50,20 @@ function Nav({ sections, linkAs, onNavigate }) {
 									onClick={onNavigate}
 									aria-current={item.current ? 'page' : undefined}
 									className={cx(
-										'flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-semibold transition-colors',
+										'flex items-center gap-3 rounded-[12px] px-2.5 py-2 text-sm font-semibold transition-colors',
 										'focus-visible:outline-2 focus-visible:outline-focus',
-										item.current
-											? 'bg-primary-soft text-on-primary-soft'
-											: 'text-muted hover:bg-surface-2 hover:text-fg',
+										item.current ? 'bg-primary-soft text-on-primary-soft' : 'text-fg hover:bg-surface-2',
 									)}>
-									{item.icon ? <Icon name={item.icon} size={16} /> : null}
+									{item.icon ? (
+										<span
+											aria-hidden="true"
+											className={cx(
+												'flex size-[26px] shrink-0 items-center justify-center rounded-[9px]',
+												item.current ? 'bg-primary text-on-primary' : BADGE_TONES[item.tone ?? 'indigo'],
+											)}>
+											<Icon name={item.icon} size={15} />
+										</span>
+									) : null}
 									<span className="min-w-0 flex-1 truncate">{item.label}</span>
 									{item.badge}
 								</LinkTag>

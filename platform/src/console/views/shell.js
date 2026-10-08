@@ -26,10 +26,22 @@ export const merchantSections = (pathname) => {
 		{
 			label: '',
 			items: [
-				{ href: routes.overview(), label: MERCHANT.menu.overview, icon: 'grid', current: is(routes.overview()) },
-				{ href: routes.websites(), label: MERCHANT.menu.websites, icon: 'globe', current: is(routes.websites()) },
-				{ href: routes.credits(), label: MERCHANT.menu.usage, icon: 'wallet', current: is(routes.credits()) },
-				{ href: routes.account(), label: MERCHANT.menu.account, icon: 'user', current: is(routes.account()) },
+				{
+					href: routes.overview(),
+					label: MERCHANT.menu.overview,
+					tone: 'indigo',
+					icon: 'grid',
+					current: is(routes.overview()),
+				},
+				{
+					href: routes.websites(),
+					label: MERCHANT.menu.websites,
+					tone: 'teal',
+					icon: 'globe',
+					current: is(routes.websites()),
+				},
+				{ href: routes.credits(), label: MERCHANT.menu.usage, tone: 'pink', icon: 'wallet', current: is(routes.credits()) },
+				{ href: routes.account(), label: MERCHANT.menu.account, tone: 'amber', icon: 'user', current: is(routes.account()) },
 			],
 		},
 	];

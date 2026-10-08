@@ -551,6 +551,8 @@ describe('AppShell', () => {
 						items: [
 							{ href: '/websites', label: 'Websites', icon: 'globe', current: true },
 							{ href: '/team', label: 'Team' },
+							{ href: '/usage', label: 'Usage', icon: 'wallet', tone: 'pink' },
+							{ href: '/home', label: 'Home', icon: 'grid' },
 						],
 					},
 				]}
@@ -564,6 +566,12 @@ describe('AppShell', () => {
 		expect(container.querySelector('a[href="#main"]')?.textContent).toBe('Skip to content');
 		expect(container.querySelector('main#main')?.textContent).toBe('Page body');
 		expect(container.querySelector('nav[aria-label="Main"] [aria-current="page"]')?.textContent).toBe('Websites');
+		// colour icon badges: solid for the current page, the item's tint otherwise (indigo by default)
+		const badge = (/** @type {string} */ href) => container.querySelector(`nav a[href="${href}"] > span[aria-hidden="true"]`);
+		expect(badge('/websites')?.className).toContain('bg-primary');
+		expect(badge('/usage')?.className).toContain('bg-tint-pink');
+		expect(badge('/home')?.className).toContain('bg-tint-indigo');
+		expect(badge('/team')).toBeNull();
 		const menu = /** @type {HTMLElement} */ (container.querySelector('button[aria-label="Open navigation"]'));
 		expect(menu.getAttribute('aria-expanded')).toBe('false');
 		click(menu);
