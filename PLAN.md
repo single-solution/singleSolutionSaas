@@ -1599,6 +1599,42 @@ defaults and prices). Features start at price 0.
   Connections (database, providers per channel, push keys) · Developers (send API, template keys, widget snippets,
   ticket snippet, webhook signature check).
 
+### 0.8.6 Accounts — owner interview (2026-10-08)
+
+Accounts is the merchant's sign-in and user system for **their own website and admin** (never our Portal). All
+behaviour below is managed inside Accounts (per website; our admin sets defaults and prices). Features start at 0.
+
+- **Feature switches**: Phone code · Email + password · Email code / magic link · Google · Apple · Facebook · Roles and
+  permissions · Custom fields · Two-step sign-in · Approval / invite sign-up · Risk checks · Terms acceptance · Data
+  rights · Activity log copy (plus the Orders tab, which needs the merchant's pasted Ecommerce token).
+- **One user list with roles**: shoppers and the merchant's staff are all users of that website; roles decide what each
+  can do on the merchant's site.
+- **Roles**: ready-made like ibrahimMobiles — Customer, Owner, Business manager, Product manager, Marketing manager,
+  Support staff — which the merchant can copy and adjust, plus their own roles.
+- **Permissions**: each connected product supplies its permission list when the merchant pastes that product's token
+  into Accounts (e.g. Chat: reply to chats; Ecommerce: refund orders); the merchant ticks them per role and may add
+  their own permission names for their own site.
+- **Sign-up rules (merchant sets)**: open sign-up, invite only, approval required, and which profile fields are
+  required.
+- **Profile**: standard fields (name, e-mail, phone, addresses, merchant-only notes, blocked flag + reason) plus custom
+  fields (text, number, date, choice).
+- **Security**: two-step sign-in (optional or required per role), password rules (minimum length, breached-password
+  check), login limits (block after repeated wrong attempts), device/session list with sign-out.
+- **Sessions**: merchant sets session length and "remember me" per role (defaults 1 day, remember 30 days).
+- **Session check**: Accounts issues short signed sign-in tokens; products and the merchant's server verify them with
+  Accounts' public keys (no call per check).
+- **Extras kept**: terms acceptance (version recorded), risk checks (disposable e-mails, many accounts from one
+  device/phone), Orders tab (via the pasted Ecommerce token).
+- **Data rights**: "download my data" runs at once; "delete my account" waits for merchant approval (or N days), then
+  Accounts asks every connected product (via pasted tokens) to erase that user.
+- **Messages** (codes, invites, resets) are sent through Notifications via its pasted token.
+- **Widgets**: sign-in / sign-up (all methods), My account (profile, addresses, devices, two-step, data rights), and
+  admin widgets via tickets: Users admin (list, search, block, roles, invite, notes) and Roles admin. Every word
+  editable.
+- **Dashboard**: Overview · Features (read-only for merchants) · Settings · Connections (database, Notifications token,
+  Google/Apple/Facebook app keys, other products' tokens) · Developers (token verification, public keys, widget and
+  ticket snippets, API).
+
 ### 0.8.4 Still open
 
 - **The grilling of each later product** (Notifications, Accounts, Payments, Ecommerce, Growth), held right before it is
