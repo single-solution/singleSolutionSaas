@@ -1,6 +1,6 @@
 # @ss/config — shared tooling
 
-The one place the code standard lives (PLAN F.6, F.17): every unit of the repository (`platform/`, each `products/*`,
+The one place the code standard lives (PLAN 0.10): every unit of the repository (`platform/`, each `products/*`,
 each `packages/*`, `e2e/`) builds its own lint, typecheck, format and test config from this package, so each folder
 works on its own and can move to a repository of its own unchanged.
 

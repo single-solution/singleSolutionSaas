@@ -1,5 +1,5 @@
 /**
- * Append-only audit log (`platform_audit`, PLAN §11 "audit immutability"). The repository is append-only, so no
+ * Append-only audit log (`platform_audit`). The repository is append-only, so no
  * code path in the Portal can update or delete an entry; retention is governed by backups, not by TTL.
  *
  * Every entry records who (`actor`), what (`action`, `target`), the change (`before`/`after`, redacted with the

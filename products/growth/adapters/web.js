@@ -1,5 +1,5 @@
 /**
- * Growth's calls to the web, all through `@ss/net` (PLAN F.10): reading the merchant's own pages for the SEO checklist
+ * Growth's calls to the web, all through `@ss/net` (PLAN 0.10): reading the merchant's own pages for the SEO checklist
  * and sending an IndexNow submission. Both run only when the merchant asks (widget or API); nothing is fetched on a
  * timer.
  * @module

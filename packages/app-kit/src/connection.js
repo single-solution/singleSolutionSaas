@@ -1,5 +1,5 @@
 /**
- * The product's connection to the Portal (PLAN 0.4.12 row 1, F.5), kept in the product database:
+ * The product's connection to the Portal (PLAN 0.4.12 row 1, 0.10), kept in the product database:
  *
  * - `state/productKey`: the product's Ed25519 key, generated on the first connect and kept (insert-if-absent, so
  *   concurrent instances agree);

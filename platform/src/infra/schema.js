@@ -1,6 +1,6 @@
 /**
  * Collections owned by the infra layer (module `platform`). Modules declare theirs in `modules/<name>/schema.js`.
- * None of these hold client data: ids, hashes, counters, sealed values and control-plane facts only (PLAN §1a).
+ * None of these hold client data: ids, hashes, counters, sealed values and control-plane facts only (PLAN 0.4.8).
  * @module
  */
 import { defineCollection } from './db.js';

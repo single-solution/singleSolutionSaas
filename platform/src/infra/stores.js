@@ -1,7 +1,7 @@
 /**
  * Shared atomic stores on the control-plane database, used by the HTTP layer and the protocol verifiers. Each is
  * one collection with a unique `_id` and a TTL index on `expireAt` (declared in `infra/schema.js`), so every
- * serverless instance sees the same state (F.5: "replay/nonce stores in production are one shared atomic TTL store").
+ * serverless instance sees the same state (one shared atomic TTL store in production).
  * @module
  */
 import { isDuplicateKey } from './util.js';

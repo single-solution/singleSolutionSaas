@@ -1,5 +1,5 @@
 /**
- * Work right after a response, for that request only (PLAN F.19: event-driven only — no crons, no timers, no
+ * Work right after a response, for that request only (PLAN 0.10: event-driven only — no crons, no timers, no
  * throttled passes, no polling).
  *
  * - **Deferred tasks**: whatever the request deferred (`ctx.defer(task)`, or `afterResponse(task)` from

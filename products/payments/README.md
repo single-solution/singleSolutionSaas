@@ -1,48 +1,25 @@
 # Payments
 
-The Single Solution product that takes online payments for the merchant's customers with the merchant's own gateway
-keys (PLAN.md 0.8.7, step 9): Stripe, PayPal, PayFast, JazzCash, Easypaisa, manual bank transfer and a generic adapter;
-payment links, the merchant payment API, gateway-managed subscriptions and full and partial refunds. Payers always pay on
-the gateway's own page or form: card details never reach Payments. Built on `@ss/app-kit`.
+Online payments with the merchant's own gateway keys (PLAN.md 0.8.7): Stripe, PayPal, PayFast, JazzCash, Easypaisa,
+bank transfer and a generic adapter; payment links, the payment API, subscriptions and refunds. Payers always pay on
+the gateway's own page, so card details never reach Payments. Feature keys are in `manifest.json`, the public docs at
+`/docs`.
 
-## Features
+## Environment
 
-| Key               | What it does                                                                                               |
-| ----------------- | ---------------------------------------------------------------------------------------------------------- |
-| `stripe`          | Stripe Checkout (redirect), refunds through the Refunds API, Stripe subscriptions; signed webhooks         |
-| `paypal`          | PayPal Orders v2 (approve, then captured server to server), refunds, PayPal subscriptions; verified hooks  |
-| `payfast`         | PayFast's page (signed form), ITN checked by signature, amount and PayFast's validate call; API refunds    |
-| `jazzcash`        | JazzCash hosted checkout (page redirection 1.1), `pp_SecureHash` both ways; refunds recorded               |
-| `easypaisa`       | Easypay hosted checkout (two steps), confirmed with the inquire-transaction API; refunds recorded          |
-| `bank_transfer`   | The merchant's bank details, an optional proof upload to the merchant's storage, confirmed by the merchant |
-| `generic_gateway` | Any other gateway: signed checkout fields, signed notice, optional refund address                          |
-| `payment_links`   | Reusable links for any amount (fixed or entered by the payer), the hosted link page, the pay button        |
-| `payment_api`     | Create, list, read and verify payments; the event list; the Payments admin widget                          |
-| `subscriptions`   | Gateway-managed subscriptions (Stripe, PayPal), mirrored; the Subscriptions admin widget                   |
-| `refunds`         | Full and partial refunds by API or the Payments admin widget, recorded in the payment's history            |
+Exactly three variables (`.env.example`; nothing else is read):
 
-A payment becomes paid only after its gateway confirmed it (a signed notice, or Payments asking the gateway server to
-server) for its exact amount and currency. `POST /v1/payments/:id/verify` tells the merchant's server (or Ecommerce)
-whether a payment of this website was paid for exactly the amount it expects. There is no background work: a pending
-payment is asked of its gateway again when it is read (at most every 30 seconds), and payment events are sent to the
-merchant through Notifications (`POST /v1/events` with the pasted Notifications token, signed there with the merchant's
-webhook secret) right after requests for that website, retried on later ones (5 attempts).
+| Variable         | What it is                                                                      |
+| ---------------- | ------------------------------------------------------------------------------- |
+| `MONGODB_URI`    | this product's own database (never a merchant database)                         |
+| `CONNECT_SECRET` | random, at least 32 characters; typed once into Portal → Products → Add product |
+| `ENCRYPTION_KEY` | random, at least 32 characters, different for each deployable                   |
 
-## Layout (PLAN 0.4.13)
+## Deploy
 
-| Folder      | What it holds                                                                                                        |
-| ----------- | -------------------------------------------------------------------------------------------------------------------- |
-| `core/`     | pure logic: money (minor units, currencies), gateways and their currencies, payment rules and views, snippets        |
-| `api/`      | routes, the payments service, the hosted pages (link page, pay page, bank details, results), the docs                |
-| `adapters/` | the kit wiring (`product.js`), the gateway adapters behind one interface (`gateways/`), the merchant database        |
-| `ui/`       | widgets: `pay_button` (visitor), `payments_admin` and `subscriptions_admin` (admin, tickets)                         |
-| `app/`      | Next.js: the API function and the dashboard (Overview · Features · Settings · Connections · Developers)              |
-| `strings/`  | every word of the widgets and the hosted pages (Settings → Texts)                                                    |
-| `schemas/`  | each feature's settings schema (bank details and proof upload for `bank_transfer`)                                   |
-| `tests/`    | Vitest on the kit's fake Portal with fake gateways, storage and Notifications (no real network call), MongoDB, jsdom |
-| `docs/`     | the public docs' texts, served at `/docs`                                                                            |
-
-## Addresses merchants register with gateways
+1. Create a Vercel project with the root directory `products/payments` and set the three variables for Production only.
+2. Deploy, then in the Portal: Products → **Add product** with its address and `CONNECT_SECRET`, then **Set active**.
+3. Merchants register these addresses with their gateways (`<base>` is this product's address):
 
 | Gateway       | Address                                                                                               |
 | ------------- | ----------------------------------------------------------------------------------------------------- |
@@ -54,14 +31,7 @@ webhook secret) right after requests for that website, retried on later ones (5 
 | Generic       | notice `<base>/v1/gateways/generic/<websiteId>` (sent per payment as `notify_url`)                    |
 | Bank transfer | none; storage CORS allows `PUT` from `<base>` for proof uploads                                       |
 
-## Environment and deploying
-
-Exactly three variables (`.env.example`): `MONGODB_URI` (this product's own database), `CONNECT_SECRET` and
-`ENCRYPTION_KEY` (each random, at least 32 characters). Deploy with the Vercel project root `products/payments`, set the
-three variables for Production, then connect it in the Portal: Products → Add product, with its address and
-`CONNECT_SECRET`, then set it Active.
-
 ## Scripts
 
-`pnpm dev` / `pnpm build` (both regenerate `openapi.json` and `api/widget-script.js` first) / `pnpm start`,
-`pnpm check` (format, lint, typecheck, tests with coverage) and `pnpm validate` (`ss app validate`).
+`pnpm dev` and `pnpm build` regenerate `openapi.json` and `api/widget-script.js` first; `pnpm check` runs format, lint,
+typecheck and tests with coverage; `pnpm validate` runs `ss app validate`.

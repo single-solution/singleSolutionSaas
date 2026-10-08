@@ -1,5 +1,5 @@
 /**
- * Control-plane database access (PLAN §1a: this database holds control-plane records only — never client data).
+ * Control-plane database access (PLAN 0.4.8: this database holds control-plane records only — never client data).
  *
  * - `getMongoClient` — one pooled `MongoClient` per URI, cached on `globalThis` so warm serverless invocations
  *   reuse it. The driver connects lazily on the first operation, so importing or building never needs a database.

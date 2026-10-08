@@ -1,5 +1,5 @@
 /**
- * `ss app validate` — checks a product against the product standard (PLAN 0.4.13, 0.11, F.17, F.19):
+ * `ss app validate` — checks a product against the product standard (PLAN 0.4.13, 0.11, 0.10):
  *
  * - the layout: the folders `core/ api/ adapters/ ui/ app/ strings/ schemas/ tests/ docs/` and the files every product
  *   needs (`anatomy.missing`);
@@ -34,7 +34,7 @@ import { findCssReferences, findDomGlobals, findImports, findStringKeys, lex } f
 /** @typedef {import('../routes.js').ScannedRoute} ScannedRoute */
 /** @typedef {import('@ss/contracts').Manifest} Manifest */
 
-/** Folders (ending with `/`) and files every product has (PLAN 0.4.13, F.17). */
+/** Folders (ending with `/`) and files every product has (PLAN 0.4.13, 0.10). */
 const ANATOMY = Object.freeze([
 	'core/',
 	'api/',
@@ -346,7 +346,7 @@ const checkEnvExample = async (files) => {
 };
 
 /**
- * `vercel.json` declares no crons (PLAN F.19: no scheduled or background work). Work happens on the request that
+ * `vercel.json` declares no crons (PLAN 0.10: no scheduled or background work). Work happens on the request that
  * causes it, on read, or from a dashboard button.
  * @param {ProjectFiles} files
  * @returns {Promise<Problem[]>}
@@ -438,7 +438,7 @@ const checkRoutes = (routes, manifest) => {
 
 /**
  * package.json wiring every product needs to work on its own (in the monorepo and once split into its own repository):
- * the kit it is built on, its tooling (`@ss/cli`, `@ss/config`) and its scripts (F.17).
+ * the kit it is built on, its tooling (`@ss/cli`, `@ss/config`) and its scripts (PLAN 0.10).
  */
 const PACKAGE_WIRING = Object.freeze({
 	dependencies: Object.freeze(['@ss/app-kit']),

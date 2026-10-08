@@ -1,6 +1,6 @@
 # @ss/cli (`ss`)
 
-Developer tooling for Single Solution products (PLAN.md Part 0: 0.4.13 product standard, 0.11 environment, F.17
+Developer tooling for Single Solution products (PLAN.md Part 0: 0.4.13 product standard, 0.11 environment, 0.10
 splittable units). JavaScript ESM, functional; it depends on `@ss/contracts` (manifest checks), `@ss/app-kit` (the
 widget entry, bundled when a product has not installed it yet) and esbuild (the widget bundle).
 
@@ -55,8 +55,7 @@ it, the same for every website. With `data-token` the script fetches the website
 | `server.entries`, `server.tracing`                                                          | at most two server functions (the API route and the dashboard page), no `outputFileTracingIncludes`                                                                                                                                           |
 | `assets.openapi`, `assets.widget`                                                           | `openapi.json` (compared as JSON) and `api/widget-script.js` match the sources                                                                                                                                                                |
 
-Programmatic: `validateProject(dir)` → `{ ok, dir, manifest, problems: [{ severity, rule, file, line?, pointer?, message }], summary }`;
-also `initApp`, `writeAssets`, `renderOpenapi`, `scanRoutes` and the scanners.
+`--json` prints `{ ok, dir, manifest, problems: [{ severity, rule, file, line?, pointer?, message }], summary }`.
 
 ## Testing
 

@@ -26,7 +26,6 @@ import { defineModule } from '../../infra/modules.js';
 export const exampleModule = defineModule({
 	name: 'example', // lower-case; collections are example_*
 	collections, // from schema.js
-	migrations: [{ id: '202610150900-example-backfill', description, plan, up }],
 	problems: { example_conflict: { status: 409, title: 'Example conflict' } }, // extra RFC 9457 codes
 	service: (ctx) => createExampleService(ctx), // built lazily, once
 	routes: (ctx) => exampleRoutes(ctx.service('example')),
@@ -73,7 +72,7 @@ appendOnly, tenant })`. `ensureIndexes` creates everything declared. Merchant-ow
   and `'no-store'` when the request or response carries a secret. Duplicate routes across modules are a boot error.
 - **Wire formats** of the Product ↔ Portal contract (PLAN 0.4.12, `/v1/product/*`) are binding; product routes use
   `auth: 'product'` (client assertion; `ctx.product.productId`).
-- **Nothing is scheduled** (PLAN F.19): no crons, timers, polling or periodic passes. Work runs inside, or right after
+- **Nothing is scheduled** (PLAN 0.10): no crons, timers, polling or periodic passes. Work runs inside, or right after
   (`ctx.defer` / `afterResponse()` from `infra/request-scope.js`), the request that caused it, for what it touched.
   Time-based state is judged when read.
 - **Failed work waits for a natural trigger**: a notice a product did not take stays in `catalog_notices` and is sent
@@ -82,9 +81,6 @@ appendOnly, tenant })`. `ensureIndexes` creates everything declared. Merchant-ow
   and `twoStepRequired`; removed admins and suspended merchants → null), `productKeys(productId)` (catalog: the key the
   product answered at connect, as a `KeyResolver`), `productCalled(productId)` (catalog: the product's waiting notices,
   after any request it made). Without `productKeys`, product assertions are refused.
-- **Migrations** are `YYYYMMDDHHMM-<module>-<slug>`, run in id order across modules under a lock, recorded once, and
-  must be safe to re-run after a crash. Provide `plan()` for the dry run. They receive the raw `Db` and must never
-  update append-only collections.
 - **Audit** every admin and merchant mutation (Activity; never personal details) with the actor from `ctx.actor`.
 - **Tests** live in `platform/test/**`: pure `core/` tests, and repository/route tests on `MongoMemoryReplSet`
   through `createPortal` (see `test/integration.test.js` for a probe module that uses every extension point, and

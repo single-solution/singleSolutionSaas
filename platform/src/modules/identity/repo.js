@@ -271,7 +271,7 @@ export const checkSecondFactor = async (ctx, collection, account, input) => {
 };
 
 /**
- * Send an e-mail right after the response of the current request (F.19 `after()`), or at once outside a request.
+ * Send an e-mail right after the response of the current request (`after()`, PLAN 0.10), or at once outside a request.
  * Without SMTP settings the e-mail is skipped (PLAN 0.5.10). Failures are logged, never thrown. Returns whether the
  * e-mail was handed to the mailer.
  * @param {Deps} deps

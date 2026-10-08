@@ -29,7 +29,7 @@ import { problem } from './http.js';
  * @property {(session: Session) => Actor | null | Promise<Actor | null>} [sessionActor]
  * @property {(productId: string) => KeyResolver | null | undefined | Promise<KeyResolver | null | undefined>} [productKeys]
  * @property {(productId: string) => Promise<unknown>} [productCalled] runs right after a request a product made (its
- *   own pending notices; F.19)
+ *   own pending notices; PLAN 0.10)
  */
 
 /**

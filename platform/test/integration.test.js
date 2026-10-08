@@ -325,7 +325,7 @@ describe('Portal end to end', () => {
 		expect((await call('GET', '/v1/admin/operations', { headers })).status).toBe(404);
 	});
 
-	it('work after responses: deferred tasks run right after the request, and only its own (F.19)', async () => {
+	it('work after responses: deferred tasks run right after the request, and only its own (PLAN 0.10)', async () => {
 		/** @type {Array<() => Promise<unknown>>} */
 		const scheduled = [];
 		/** @type {string[]} */
@@ -849,7 +849,7 @@ describe('infra hardening (Mongo)', () => {
 		const { logger } = createTestLogger();
 		const build = (/** @type {any} */ definition) =>
 			createPortal({ config, db: mongo.db('it_reserved'), modules: [defineModule({ name: 'clash', ...definition })], logger });
-		// periodic module work no longer exists (F.19)
+		// periodic module work does not exist (PLAN 0.10)
 		expect(() => build({ background: () => ({}) })).not.toThrow();
 		expect(() => build({ problems: { idempotency_replay_no_body: { status: 409, title: 'x' } } })).toThrow(/reserved/);
 	});

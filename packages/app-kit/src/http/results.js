@@ -154,7 +154,7 @@ const decodeCursor = (cursor) => {
 };
 
 /**
- * Cursor pagination (Part E §5): opaque cursors, `limit` bounded. Fetch `fetchLimit` (= limit + 1) items sorted by the
+ * Cursor pagination: opaque cursors, `limit` bounded. Fetch `fetchLimit` (= limit + 1) items sorted by the
  * key and pass them to `page()`, which slices and returns the next cursor, or to `respond()`, which also emits
  * `Link: <url>; rel="next"` when a next page exists (`url` = the request URL, e.g. `ctx.request.url`).
  *

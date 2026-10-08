@@ -10,7 +10,7 @@
  *   (415 / 400) → `Idempotency-Key` on POST (428 / 409 / replay) → handler → RFC 9457 problems for every error.
  *
  * Every request runs in a request scope (`request-scope.js`): work deferred with `ctx.defer` or `afterResponse()`
- * runs right after the response, and only then (no timers, PLAN F.19).
+ * runs right after the response, and only then (no timers, PLAN 0.10).
  *
  * The result helpers (`ok`, `created`, `problem`, `paginate`, …) mirror `@ss/app-kit`'s so products and the Portal
  * share one wire behaviour (problem documents, cursor pages `{ items, nextCursor, hasMore }` + `Link`, idempotent
@@ -158,7 +158,7 @@ const decodeCursor = (cursor) => {
 };
 
 /**
- * Cursor pagination (Part E §5). Fetch `fetchLimit` (= limit + 1) items in key order after `after`, then `respond`.
+ * Cursor pagination. Fetch `fetchLimit` (= limit + 1) items in key order after `after`, then `respond`.
  * @param {{ cursor?: string | null, limit?: string | number | null, url?: string | URL }} [input]
  * @param {{ defaultLimit?: number, maxLimit?: number }} [options]
  * @throws {ProblemResult} `bad_request` for an invalid cursor or limit

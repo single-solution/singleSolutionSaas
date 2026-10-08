@@ -7,7 +7,7 @@
  * `ctx.collection(name)`; another module's data is reached through that module's public `service` via
  * `ctx.service(name)` (a module's own routes use `ctx.service(<own name>)` too; built lazily, so module order does not
  * matter; cycles are a boot error). Routes, problem codes and ports are global and collisions are boot errors. Nothing
- * runs on a schedule (PLAN F.19): work runs inside, or right after, the request that caused it.
+ * runs on a schedule (PLAN 0.10): work runs inside, or right after, the request that caused it.
  * @module
  */
 import { platformError } from './errors.js';
