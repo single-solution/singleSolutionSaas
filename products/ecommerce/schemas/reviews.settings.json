@@ -1,5 +1,13 @@
 {
 	"type": "object",
 	"additionalProperties": false,
-	"properties": {}
+	"properties": {
+		"moderation": {
+			"type": "string",
+			"title": "New reviews",
+			"description": "Show new reviews at once, or only after your staff approve them.",
+			"default": "manual",
+			"enum": ["auto", "manual"]
+		}
+	}
 }

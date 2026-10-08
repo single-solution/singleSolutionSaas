@@ -1,0 +1,145 @@
+{
+	"title": "Ecommerce docs",
+	"intro": "Ecommerce is the whole shop of your own website: catalog, variants and stock, cart and checkout, orders with your own statuses, delivery, couriers, taxes, promotions, loyalty, returns, reviews, wishlist, alerts, reports, catalog SEO and feeds. Every product, order and customer record is kept in your own database, and media in your own storage (Connections). Shoppers sign in with Accounts, payments go through Payments and messages through Notifications, each with its server token pasted into Connections. Your website's tokens are in the Portal: open the website, then Install and tokens. The browser token is public and goes into your pages; the server token is secret and stays on your server.",
+	"localhost": "Testing on your own computer: the browser token also works on pages served from localhost, *.localhost, 127.0.0.1 or [::1], on any port, over http or https. These pages use your website's real database, storage, Payments, Notifications and courier keys, so orders placed there are real orders, payments are real payments and messages reach real people. There is no test mode: use your payment gateway's own test keys in Payments if it has them, and delete test orders afterwards.",
+	"install": "Add the script to every page of your shop, then place each widget where it belongs. A widget renders nothing while its feature is off, the product is stopped or your database is not connected. Every word the widgets show can be changed in Settings → Texts, and their look in Settings → Theme.",
+	"attributes": "Data attributes of the visitor widgets:",
+	"widgets": {
+		"product_grid": "Product listing with filters, sorting and search.",
+		"product_page": "The product page blocks: gallery, variant picker, price, buy box and reviews.",
+		"cart": "The cart, checkout and the success page after payment.",
+		"my_orders": "The shopper's orders with tracking, invoices and returns.",
+		"wishlist": "The shopper's wishlist.",
+		"compare": "Products compared side by side.",
+		"catalog_admin": "Products, categories, brands, attributes, stock and media.",
+		"orders_admin": "Orders, status moves, shipments, refunds and returns.",
+		"promotions_admin": "Coupons, deals, bundles and loyalty points.",
+		"customers_admin": "Customers and the blocklist, review moderation, reports and CSV."
+	},
+	"jsApi": "window.SSEcommerce is ready once the script has loaded. identify(signIn) passes the shopper's Accounts sign-in to the widgets (identify(null) on sign-out). addToCart({ productId, variantId?, quantity? }) adds to the cart; cart.count() and cart.onChange(listener) feed your own header's cart badge. The cart lives in the shopper's browser and is priced by the server on every quote and again when the order is placed.",
+	"addToCart": "Other scripts on the page add to the cart with a cancelable window event. Chat's product cards use it: when an Ecommerce widget handled the event it calls preventDefault() and opens the cart; otherwise the product's page opens instead.",
+	"signIn": "Shoppers browse, fill their cart and see prices as guests. Placing an order, writing a review, keeping a wishlist, setting alerts and claiming a return need an Accounts sign-in: paste your website's Accounts server token into Connections, put the Accounts widgets on your site and pass the sign-in to SSEcommerce.identify(signIn). Ecommerce verifies each sign-in with your Accounts keys and keeps only shop records (orders, loyalty, blocklist) linked to the Accounts user id.",
+	"payments": "Payment methods are set in Settings → Checkout and payment. Cash on delivery and pay at pickup orders start awaiting confirmation. Online payments and bank transfers go through Payments: paste your website's Payments server token into Connections. The order starts awaiting payment, the shopper pays on Payments' page (bank transfer: your bank details and the proof upload live in Payments, where you confirm receipt), and Ecommerce marks the order paid only after Payments says it was paid for the order's exact amount and currency. A cash on delivery advance is a Payments payment for the advance. A waiting payment is checked again when the order is read (at most every 30 seconds) and before a waiting order is cancelled at the end of its payment window. Refunds of orders paid online are made through Payments.",
+	"success": "After paying, Payments sends the shopper back to the page with the cart widget, with ss_order=<order id> in the address; the cart widget then shows the order's result (paid, waiting or failed). Never treat the return itself as a payment: only the order's status counts.",
+	"orderFlow": "Orders move through your own statuses (Settings → Orders and messages). You name the statuses, add your own and choose the allowed moves; each status has a role, and the rules of the roles hold whatever the flow, so stock, offer uses, loyalty points and money stay right. Orders start in the one awaiting payment or awaiting confirmation status and nothing moves into those; cancelled and refunded are final. The default flow:",
+	"roles": {
+		"awaiting_payment": "Paid online, by bank transfer or with a cash on delivery advance: waits for Payments to confirm; cancelled when the payment window ends.",
+		"awaiting_confirmation": "Cash on delivery and pay at pickup: waits for your staff to confirm.",
+		"open": "Confirmed and being prepared.",
+		"packed": "Packed; serial numbers are captured here with Grades and serials.",
+		"shipped": "Handed to the courier, with the tracking number and link.",
+		"delivered": "Delivered: loyalty points are earned, reviews open and return windows start.",
+		"cancelled": "Final, only before shipping: stock, booked slots, offer uses and redeemed points go back exactly once.",
+		"returned_to_origin": "The parcel came back: stock goes back and the customer is flagged for cash on delivery.",
+		"refunded": "Final: the money was returned (through Payments when paid online)."
+	},
+	"messages": "Messages to shoppers and alerts go through Notifications: paste your website's Notifications server token into Connections and edit each template in Notifications (e-mail, SMS or WhatsApp, as you set them up there). Order messages are optional: choose the channels and the statuses that send a message in Settings → Orders and messages. A failed or unconnected send never stops an order. In the order and return templates name is the shopper's name; in the alert templates it is the product's name, with its price and page address. Template keys and their values:",
+	"templates": {
+		"ecommerce.order_placed": ["number", "name", "status", "total", "courier", "trackingNumber", "trackingUrl"],
+		"ecommerce.order_status": ["number", "name", "status", "total", "courier", "trackingNumber", "trackingUrl"],
+		"ecommerce.return_status": ["number", "claim", "kind", "status", "amount", "name"],
+		"ecommerce.back_in_stock": ["name", "price", "url"],
+		"ecommerce.price_drop": ["name", "price", "url"]
+	},
+	"couriers": "Couriers are a list in Settings → Couriers: a name and a tracking link template in which {tracking} is replaced by the tracking number (for example https://track.courier.example/?id={tracking}). Staff pick the courier and enter the tracking number when an order ships, and the shopper gets the link.",
+	"courierApi": "With Courier APIs on, Ecommerce books the shipment with your courier's own API and reads its latest status, using your keys (Connections → Courier API keys). The connection is one generic adapter for any courier: the booking address (Ecommerce posts the JSON body built from your template), the tracking address with {tracking}, your API key, optional extra headers as a JSON object of text values (they may hold {apiKey}; without them the key goes as Authorization: Bearer <key>), the booking body template, and where the tracking number (default trackingNumber) and the status (default status) are in the courier's JSON answers, as dotted paths. In the body template, {number}, {name}, {phone}, {email}, {line1}, {line2}, {city}, {area}, {postalCode}, {country}, {items}, {amount} (decimal), {total} (minor units), {cod} (the decimal to collect, 0 when prepaid), {currency} and {note} are filled in, JSON-escaped. There is nothing to register at the courier: Ecommerce calls the courier, never the other way round.",
+	"storage": "Product images, downloads and return photos are kept in your own S3-compatible bucket (Connections → Storage). Uploads go from the browser straight to the bucket with a short presigned PUT, so the bucket's CORS must allow PUT (and GET) from your website's origin and from your admin page's origin:",
+	"site": "Some things must be served from your own domain: the sitemap, product meta tags and structured data, product feeds, llms.txt and your policy pages. Your site fetches them from the API with the server token (never from the browser) and serves them; the snippets below are Next.js route handlers and pages, and any server can do the same with a plain HTTPS request.",
+	"siteRoutes": {
+		"sitemap": "The sitemap of your products and categories (SEO). A large catalog is split into pages: the first answer is then a sitemap index pointing at ?page=2 and so on, which the route below passes on. Add Sitemap: https://<your domain>/sitemap.xml to your robots.txt.",
+		"feedXml": "The product feed for shopping and social catalogues (Feeds), as XML.",
+		"feedCsv": "The same feed as CSV.",
+		"llms": "llms.txt of your catalog for AI assistants (llms.txt)."
+	},
+	"productMeta": "GET /v1/seo/products/<id or slug> (and GET /v1/seo/categories/<id or slug>) answers { title, description, canonical, image, jsonLd }: the meta tags and the JSON-LD structured data (a string safe to put in a script tag) for your product and category pages.",
+	"policies": "GET /v1/policies answers your shipping, returns, privacy and terms texts (Settings → Policies), for your own policy pages:",
+	"chat": "Chat's shop tools read your shop through these lookups with your website's Ecommerce server token (paste it into Chat's Connections). They only read. The me/* lookups take the visitor's Accounts sign-in forwarded in the SS-Sign-In header; Ecommerce verifies it with Accounts.",
+	"chatRoutes": [
+		"GET /v1/chat/products?q=<text>&limit=5: search the catalog",
+		"GET /v1/chat/products/<productId>: one product's details",
+		"GET /v1/chat/products/<productId>/quote: the price with today's deals",
+		"GET /v1/chat/deals?limit=10: active deals",
+		"GET /v1/chat/products/top?kind=top|new&limit=5: best sellers or new products",
+		"GET /v1/chat/me/orders?limit=5 (SS-Sign-In): the visitor's orders",
+		"GET /v1/chat/me/account (SS-Sign-In): the visitor's loyalty points and saved details",
+		"GET /v1/chat/me/shipments (SS-Sign-In): the visitor's shipments with tracking links"
+	],
+	"customers": "Accounts shows a shopper's orders in its Orders tab, and Chat in its context panel, with GET /v1/customers/<Accounts user id>/orders?limit= (server token):",
+	"dataRights": "Data rights run through Accounts: when a user asks for their data or to be deleted, Accounts calls each product. Ecommerce finds the person's records by Accounts user id, e-mail or phone; an export lists their orders, returns, reviews, wishlist, alerts and loyalty history, and a deletion erases them or, where you must keep an order for your accounts, removes the personal details from it. Staff actions in the admin widgets are copied to the Accounts activity log.",
+	"admin": "Admin widgets run in your own admin with a ticket. Include the script without data-token, place the widgets and register your ticket function. The widget calls it at start and 1 minute before the ticket expires; your server checks the user's sign-in and role every time and asks only for the permissions that user has.",
+	"tickets": "Your server asks for a ticket with the server token (never send the server token to a browser). The origin is the address of your admin page: any https origin, or a local one while testing. Tickets last 15 minutes and carry only the permissions of switched-on features. Permissions:",
+	"business": "Every product reads your business basics (name, contact, address) from https://<your domain>/.well-known/business.json. Only name is required; without the file the name is your domain. Shop-only details (payment methods, delivery, policies) are Ecommerce settings.",
+	"api": "Every route answers JSON (feeds, sitemap and llms.txt answer their own formats); errors are RFC 9457 problems with a stable code. Amounts are integer minor units of your shop currency. Times are ISO 8601 in UTC. Lists are paged with cursor and limit. Routes that create things or move money take an Idempotency-Key header. Routes of a feature that is off answer 403 feature_off.",
+	"features": {
+		"catalog": [
+			"Set the shop currency, your product and category page addresses (with {slug}) and, if your bucket has a public address or CDN, the media address in Settings → Catalog. Connect your database and storage. Manage products with the catalog admin widget and show them with the product grid and product page widgets."
+		],
+		"variants": [
+			"Give a product options (for example size and colour); each variant has its own price, stock and SKU, and the product page shows a variant picker."
+		],
+		"multi_location": [
+			"Keep stock per location (warehouses, shops). Orders take stock from the first location that has it, in the order you set."
+		],
+		"grades_serials": [
+			"Define condition grades in Settings → Grades and serials, each with its own return and warranty days. Staff capture serial numbers (such as IMEI) per unit when an order is packed; they appear on invoices and packing slips."
+		],
+		"digital_goods": [
+			"Attach files or licence keys to a product. The shopper gets the download link or key once the order is paid. Files are kept in your storage."
+		],
+		"bookings": [
+			"Sell services in simple slots: each product has a duration, your weekly booking hours are set in Settings → Catalog, and a slot is never booked twice."
+		],
+		"checkout": [
+			"The cart, checkout and success page (cart widget), My orders (my_orders widget) and the orders admin widget. Shoppers must be signed in with Accounts to order; paste the Accounts token. Order statuses and moves, the order number prefix and order messages are in Settings → Orders and messages; couriers and their tracking links in Settings → Couriers."
+		],
+		"cod": [
+			"Cash on delivery orders start awaiting confirmation. Set the largest order value, an optional advance paid through Payments, the open-order cap per customer, and use the blocklist and the returned-parcel flag in the customers admin widget."
+		],
+		"delivery_zones": [
+			"Delivery fees by city or area, free delivery over an amount, delivery days and store pickup, in Settings → Delivery. A shopper's address is matched to the first zone that lists its city or area."
+		],
+		"courier_apis": [
+			"Book shipments and read their status with your courier's API (see Couriers above). Connect the courier keys in Connections."
+		],
+		"taxes": ["Tax rules in Settings → Taxes: a percentage per category or region, and whether your prices include tax."],
+		"coupons": [
+			"Codes for a percentage or fixed amount off, with use limits, dates and conditions, made in the promotions admin widget."
+		],
+		"deals": [
+			"Automatic offers on products, categories or brands, with dates and use limits; shown on product pages and in the cart."
+		],
+		"loyalty": [
+			"Shoppers earn points on delivered orders and redeem them at checkout. Set the earn and redeem rates and the expiry in Settings → Loyalty; staff adjust points in the promotions admin widget."
+		],
+		"bundles": ["Bundles and buy X get Y offers, applied in the cart."],
+		"reviews": ["Ratings and reviews from shoppers whose order was delivered, moderated in the customers admin widget."],
+		"wishlist": ["Signed-in shoppers save products to their wishlist (wishlist widget, and the heart on product pages)."],
+		"alerts": [
+			"Back-in-stock and price-drop alerts by e-mail or SMS through Notifications (templates ecommerce.back_in_stock and ecommerce.price_drop). Paste the Notifications token."
+		],
+		"compare": [
+			"Shoppers add products to compare and see them side by side (compare widget). The list lives in the shopper's browser."
+		],
+		"returns": [
+			"Return and warranty claims from My orders, within the windows of each item and grade, with photos (kept in your storage). Staff approve, refund (through Payments when the order was paid online) and restock exactly once."
+		],
+		"invoices": [
+			"Invoices and packing slips with the serial numbers on each line, from the orders admin widget and My orders."
+		],
+		"csv": ["Import and export products and stock, and export orders, as CSV in the customers admin widget."],
+		"bulk_actions": [
+			"Change prices, stock, status or category for many products at once, and move many orders at once, in the admin widgets."
+		],
+		"reports": [
+			"Sales by product, category, brand and city, stock age, return rate and margin, in the customers admin widget."
+		],
+		"seo": [
+			"Meta tags and structured data for products and categories, and the sitemap, served by your own site from the API (see Your site serves)."
+		],
+		"feeds": ["Product feeds (XML and CSV) for shopping and social catalogues, served by your own site from the API."],
+		"ai_copy": [
+			"Product descriptions and meta text suggested with your own OpenAI-compatible AI key (Connections → AI provider key: base URL, key and model). Suggestions are shown to staff in the catalog admin widget and never saved automatically."
+		],
+		"llms_txt": ["An llms.txt of your catalog for AI assistants, served by your own site from the API."]
+	}
+}

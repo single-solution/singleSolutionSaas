@@ -1,5 +1,28 @@
 {
 	"type": "object",
 	"additionalProperties": false,
-	"properties": {}
+	"properties": {
+		"tone": {
+			"type": "string",
+			"title": "Tone",
+			"description": "How suggested texts should sound, for example: clear, friendly and factual.",
+			"default": "clear, friendly and factual",
+			"maxLength": 100
+		},
+		"language": {
+			"type": "string",
+			"title": "Language",
+			"description": "The language suggestions are written in. Empty: the language of the product's own texts.",
+			"default": "",
+			"maxLength": 40
+		},
+		"words": {
+			"type": "integer",
+			"title": "Description length (words)",
+			"description": "About how many words a suggested description has.",
+			"default": 150,
+			"minimum": 30,
+			"maximum": 600
+		}
+	}
 }

@@ -1,5 +1,44 @@
 {
 	"type": "object",
 	"additionalProperties": false,
-	"properties": {}
+	"properties": {
+		"maxOrderValue": {
+			"type": "integer",
+			"title": "Largest cash-on-delivery order",
+			"description": "In minor units of your currency (for example cents). Larger orders must be paid another way. 0 = no limit.",
+			"default": 0,
+			"minimum": 0,
+			"maximum": 1000000000000
+		},
+		"advanceAmount": {
+			"type": "integer",
+			"title": "Advance (fixed amount)",
+			"description": "Paid through Payments before a cash-on-delivery order is confirmed, in minor units. Wins over the percent. 0 = none.",
+			"default": 0,
+			"minimum": 0,
+			"maximum": 1000000000000
+		},
+		"advancePercent": {
+			"type": "integer",
+			"title": "Advance (percent of the total)",
+			"description": "Used when there is no fixed advance, rounded up. 0 = none.",
+			"default": 0,
+			"minimum": 0,
+			"maximum": 100
+		},
+		"rtoThreshold": {
+			"type": "integer",
+			"title": "Returned parcels before a customer is flagged",
+			"description": "A customer with at least this many parcels returned to you is flagged. 0 = never.",
+			"default": 2,
+			"minimum": 0,
+			"maximum": 100
+		},
+		"rtoRequireAdvance": {
+			"type": "boolean",
+			"title": "Flagged customers pay an advance",
+			"description": "Flagged customers may use cash on delivery only with the advance; without an advance set they must pay another way.",
+			"default": true
+		}
+	}
 }

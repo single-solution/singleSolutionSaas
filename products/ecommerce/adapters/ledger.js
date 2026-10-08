@@ -408,14 +408,11 @@ export const nextOrderNumber = async (data, { prefix, year, session }) => {
  *   `duplicate`: the same customer already placed an order with this checkout key (that order is returned)
  */
 
-/** A business-rule refusal inside the transaction: it aborts everything. */
-class Refused extends Error {
-	/** @param {Exclude<PlacementResult, { ok: true }>} result */
-	constructor(result) {
-		super(result.code);
-		this.result = result;
-	}
-}
+/**
+ * A business-rule refusal inside the transaction: thrown, it aborts everything.
+ * @param {Exclude<PlacementResult, { ok: true }>} result
+ */
+const refused = (result) => Object.assign(new Error(result.code), { refused: result });
 
 /**
  * Place an order in one transaction: number it, hold its stock, count its offer uses, spend its points, hold its
@@ -452,7 +449,7 @@ export const placeOrder = async (data, placement, { now }) => {
 				{ locationOrder: placement.locationOrder ?? [], session },
 			);
 			if (!stock.ok)
-				throw new Refused({ ok: false, code: 'out_of_stock', productId: stock.productId, variantId: stock.variantId });
+				throw refused({ ok: false, code: 'out_of_stock', productId: stock.productId, variantId: stock.variantId });
 			const where = new Map(stock.taken.map((line) => [`${line.productId}|${line.variantId}`, line.locationId]));
 			const { promotions } = order;
 			const offers = await useOffers(
@@ -467,14 +464,14 @@ export const placeOrder = async (data, placement, { now }) => {
 				},
 				session,
 			);
-			if (!offers.ok) throw new Refused({ ok: false, code: 'offer_unavailable', offerId: offers.offerId });
+			if (!offers.ok) throw refused({ ok: false, code: 'offer_unavailable', offerId: offers.offerId });
 			if (promotions.pointsRedeemed > 0) {
 				const spent = await spendPoints(
 					data,
 					{ userId: order.customer.userId, points: promotions.pointsRedeemed, orderId: order.id, note: number },
 					{ now, session },
 				);
-				if (!spent) throw new Refused({ ok: false, code: 'points_changed' });
+				if (!spent) throw refused({ ok: false, code: 'points_changed' });
 			}
 			await holdSlots(
 				data,
@@ -494,7 +491,7 @@ export const placeOrder = async (data, placement, { now }) => {
 		});
 		return { ok: true, order: /** @type {OrderRecord} */ (/** @type {unknown} */ (placed)), duplicate: false };
 	} catch (error) {
-		if (error instanceof Refused) return error.result;
+		if (error instanceof Error && 'refused' in error) return /** @type {any} */ (error).refused;
 		if (duplicateIn(error, COLLECTIONS.slots)) return { ok: false, code: 'slot_taken' };
 		if (duplicateIn(error, COLLECTIONS.couponUses))
 			return { ok: false, code: 'offer_unavailable', offerId: order.promotions.couponId ?? '' };

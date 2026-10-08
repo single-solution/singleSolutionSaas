@@ -1,5 +1,33 @@
 {
 	"type": "object",
 	"additionalProperties": false,
-	"properties": {}
+	"properties": {
+		"items": {
+			"type": "string",
+			"title": "Items in the feeds",
+			"description": "All active items, or only those with an image (shopping catalogues refuse items without one).",
+			"default": "with_images",
+			"enum": ["with_images", "all"]
+		},
+		"includeOutOfStock": {
+			"type": "boolean",
+			"title": "Include items out of stock",
+			"description": "Listed as out of stock; off leaves them out of the feeds.",
+			"default": true
+		},
+		"skuAs": {
+			"type": "string",
+			"title": "Send the SKU as",
+			"description": "Shopping catalogues match items by GTIN (barcode) or MPN (manufacturer part number). Choose what your SKUs are.",
+			"default": "none",
+			"enum": ["none", "mpn", "gtin"]
+		},
+		"gradedCondition": {
+			"type": "string",
+			"title": "Condition of graded items",
+			"description": "The condition sent for items that have a condition grade. Items without a grade are new.",
+			"default": "used",
+			"enum": ["used", "refurbished", "new"]
+		}
+	}
 }

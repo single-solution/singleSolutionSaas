@@ -1,5 +1,13 @@
 {
 	"type": "object",
 	"additionalProperties": false,
-	"properties": {}
+	"properties": {
+		"courier": {
+			"type": "string",
+			"title": "Courier of booked shipments",
+			"description": "The key of the courier (from your couriers list) whose name and tracking link booked shipments get. Staff may pick another when booking.",
+			"default": "",
+			"maxLength": 40
+		}
+	}
 }

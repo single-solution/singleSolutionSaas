@@ -1,5 +1,37 @@
 {
 	"type": "object",
 	"additionalProperties": false,
-	"properties": {}
+	"properties": {
+		"returnDays": {
+			"type": "integer",
+			"title": "Return window (days)",
+			"description": "Days after delivery during which a shopper may return an item, unless the item or its condition grade has its own window. 0 = no returns.",
+			"default": 7,
+			"minimum": 0,
+			"maximum": 365
+		},
+		"warrantyDays": {
+			"type": "integer",
+			"title": "Warranty (days)",
+			"description": "Days after delivery during which a shopper may make a warranty claim, unless the item or its condition grade has its own. 0 = no warranty.",
+			"default": 0,
+			"minimum": 0,
+			"maximum": 3650
+		},
+		"maxPhotos": {
+			"type": "integer",
+			"title": "Photos per claim",
+			"description": "How many photos a shopper may add to a claim (0 = none).",
+			"default": 5,
+			"minimum": 0,
+			"maximum": 10
+		},
+		"photoMaxMb": {
+			"type": "integer",
+			"title": "Largest photo (MB)",
+			"default": 5,
+			"minimum": 1,
+			"maximum": 20
+		}
+	}
 }

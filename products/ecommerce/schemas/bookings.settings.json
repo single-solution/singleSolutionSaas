@@ -1,5 +1,21 @@
 {
 	"type": "object",
 	"additionalProperties": false,
-	"properties": {}
+	"properties": {
+		"leadMinutes": {
+			"type": "integer",
+			"title": "Book at least (minutes ahead)",
+			"description": "How long before a slot it can still be booked.",
+			"default": 60,
+			"minimum": 0,
+			"maximum": 10080
+		},
+		"daysAhead": {
+			"type": "integer",
+			"title": "Book at most (days ahead)",
+			"default": 30,
+			"minimum": 1,
+			"maximum": 365
+		}
+	}
 }

@@ -1,5 +1,14 @@
 {
 	"type": "object",
 	"additionalProperties": false,
-	"properties": {}
+	"properties": {
+		"downloadLimit": {
+			"type": "integer",
+			"title": "Downloads per purchase",
+			"description": "How many times a bought file can be downloaded, unless the product sets its own limit. 0 = no limit.",
+			"default": 5,
+			"minimum": 0,
+			"maximum": 1000
+		}
+	}
 }

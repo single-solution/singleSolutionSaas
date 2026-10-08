@@ -1,5 +1,13 @@
 {
 	"type": "object",
 	"additionalProperties": false,
-	"properties": {}
+	"properties": {
+		"maxProducts": {
+			"type": "integer",
+			"title": "Products compared at once",
+			"default": 4,
+			"minimum": 2,
+			"maximum": 4
+		}
+	}
 }

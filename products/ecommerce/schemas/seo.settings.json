@@ -1,5 +1,27 @@
 {
 	"type": "object",
 	"additionalProperties": false,
-	"properties": {}
+	"properties": {
+		"titleTemplate": {
+			"type": "string",
+			"title": "Page title pattern",
+			"description": "How product and category page titles are written: {name} is the product or category, {business} your business name.",
+			"default": "{name} | {business}",
+			"maxLength": 120
+		},
+		"gradedCondition": {
+			"type": "string",
+			"title": "Condition of graded items",
+			"description": "The condition search engines are told for items that have a condition grade. Items without a grade are new.",
+			"default": "used",
+			"enum": ["used", "refurbished", "new"]
+		},
+		"sitemapUrl": {
+			"type": "string",
+			"title": "Sitemap address",
+			"description": "Where your website serves the sitemap. With more than 50,000 pages it is split into pages at this address with ?page=1, ?page=2 …",
+			"default": "/sitemap.xml",
+			"maxLength": 200
+		}
+	}
 }

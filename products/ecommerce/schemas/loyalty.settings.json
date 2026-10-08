@@ -1,5 +1,46 @@
 {
 	"type": "object",
 	"additionalProperties": false,
-	"properties": {}
+	"properties": {
+		"earnPercent": {
+			"type": "number",
+			"title": "Points earned (% back)",
+			"description": "The share of what a shopper paid for the goods (without delivery and tax) given back as points when the order is delivered. 1 = 1% back.",
+			"default": 1,
+			"minimum": 0,
+			"maximum": 100
+		},
+		"pointValue": {
+			"type": "integer",
+			"title": "Value of one point",
+			"description": "What one point is worth at checkout, in the smallest unit of your currency (100 = 1.00 in a currency with cents).",
+			"default": 100,
+			"minimum": 1,
+			"maximum": 1000000000
+		},
+		"minRedeem": {
+			"type": "integer",
+			"title": "Fewest points redeemed at once",
+			"description": "A shopper redeems at least this many points on an order.",
+			"default": 100,
+			"minimum": 1,
+			"maximum": 1000000000
+		},
+		"maxPercent": {
+			"type": "number",
+			"title": "Most of an order paid with points (%)",
+			"description": "Points pay at most this share of an order's total.",
+			"default": 20,
+			"minimum": 0,
+			"maximum": 100
+		},
+		"expiryDays": {
+			"type": "integer",
+			"title": "Points expire after (days)",
+			"description": "Earned points expire this many days after they are earned. 0 = they never expire.",
+			"default": 0,
+			"minimum": 0,
+			"maximum": 36500
+		}
+	}
 }

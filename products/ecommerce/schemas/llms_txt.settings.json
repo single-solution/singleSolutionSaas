@@ -1,5 +1,28 @@
 {
 	"type": "object",
 	"additionalProperties": false,
-	"properties": {}
+	"properties": {
+		"description": {
+			"type": "string",
+			"title": "About your shop",
+			"description": "A short description of your shop for AI assistants, shown under your business name.",
+			"default": "",
+			"maxLength": 2000,
+			"x-ui": { "widget": "textarea" }
+		},
+		"products": {
+			"type": "integer",
+			"title": "Products listed",
+			"description": "How many of your best-selling products are listed, with links and prices.",
+			"default": 50,
+			"minimum": 0,
+			"maximum": 200
+		},
+		"policies": {
+			"type": "boolean",
+			"title": "Include policy summaries",
+			"description": "A short summary of your delivery, returns, privacy and terms texts (Cart and checkout settings).",
+			"default": true
+		}
+	}
 }

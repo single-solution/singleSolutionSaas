@@ -1,5 +1,13 @@
 {
 	"type": "object",
 	"additionalProperties": false,
-	"properties": {}
+	"properties": {
+		"delimiter": {
+			"type": "string",
+			"title": "Separator",
+			"description": "The character between cells in CSV files: a comma, or a semicolon for spreadsheets that use commas in numbers.",
+			"default": ",",
+			"enum": [",", ";"]
+		}
+	}
 }

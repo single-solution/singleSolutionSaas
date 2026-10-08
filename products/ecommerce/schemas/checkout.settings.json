@@ -14,42 +14,100 @@
 			"title": "Order messages by",
 			"description": "How shoppers get order messages, through Notifications.",
 			"default": ["email"],
-			"items": { "type": "string", "enum": ["email", "sms", "whatsapp"] }
+			"items": {
+				"type": "string",
+				"enum": ["email", "sms", "whatsapp"]
+			}
 		},
 		"notifyStatuses": {
 			"type": "array",
 			"title": "Statuses that send a message",
 			"description": "Status keys of your order flow; moving an order into one of them sends the shopper a message.",
 			"default": ["confirmed", "dispatched", "delivered", "cancelled", "refunded"],
-			"items": { "type": "string", "maxLength": 40 }
+			"items": {
+				"type": "string",
+				"maxLength": 40
+			}
 		},
 		"policyShipping": {
 			"type": "string",
 			"title": "Delivery policy",
 			"default": "",
 			"maxLength": 20000,
-			"x-ui": { "widget": "textarea" }
+			"x-ui": {
+				"widget": "textarea"
+			}
 		},
 		"policyReturns": {
 			"type": "string",
 			"title": "Returns policy",
 			"default": "",
 			"maxLength": 20000,
-			"x-ui": { "widget": "textarea" }
+			"x-ui": {
+				"widget": "textarea"
+			}
 		},
 		"policyPrivacy": {
 			"type": "string",
 			"title": "Privacy policy",
 			"default": "",
 			"maxLength": 20000,
-			"x-ui": { "widget": "textarea" }
+			"x-ui": {
+				"widget": "textarea"
+			}
 		},
 		"policyTerms": {
 			"type": "string",
 			"title": "Terms of sale",
 			"default": "",
 			"maxLength": 20000,
-			"x-ui": { "widget": "textarea" }
+			"x-ui": {
+				"widget": "textarea"
+			}
+		},
+		"paymentMethods": {
+			"type": "array",
+			"title": "Payment methods offered",
+			"description": "Online payment and bank transfer go through Payments (paste its token in Connections); pay at pickup needs a pickup location. Cash on delivery is its own feature.",
+			"default": ["online", "bank_transfer", "pickup"],
+			"items": {
+				"type": "string",
+				"enum": ["online", "bank_transfer", "pickup"]
+			}
+		},
+		"paymentWindowMinutes": {
+			"type": "integer",
+			"title": "Time to pay (minutes)",
+			"description": "An order paid online or by bank transfer (or a cash-on-delivery advance) that is not paid within this time is cancelled and its stock given back.",
+			"default": 60,
+			"minimum": 5,
+			"maximum": 10080
+		},
+		"confirmationHours": {
+			"type": "integer",
+			"title": "Time to confirm (hours)",
+			"description": "A cash-on-delivery or pay-at-pickup order your staff do not confirm within this time is cancelled and its stock given back.",
+			"default": 24,
+			"minimum": 1,
+			"maximum": 336
+		},
+		"openOrderCap": {
+			"type": "integer",
+			"title": "Waiting orders per customer",
+			"description": "A customer may have at most this many orders waiting for payment or confirmation (0 = no limit).",
+			"default": 3,
+			"minimum": 0,
+			"maximum": 100
+		},
+		"addressRequired": {
+			"type": "array",
+			"title": "Also required in the address",
+			"description": "Name, phone, address line 1 and city are always required.",
+			"default": [],
+			"items": {
+				"type": "string",
+				"enum": ["line2", "area", "postalCode", "country"]
+			}
 		}
 	}
 }

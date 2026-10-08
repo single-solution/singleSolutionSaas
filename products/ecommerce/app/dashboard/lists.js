@@ -1,25 +1,25 @@
 'use client';
 /**
- * Settings list editors (Chat's own dashboard routes, PLAN 0.8.3): webhook tools, page rules, flows and custom fields,
- * each saved whole with `PUT /v1/dashboard/websites/:websiteId/lists/:list { items }` (a 422 lists its `errors`), and
- * the tool signing secret (reveal, copy, regenerate).
+ * Settings list editors (Ecommerce's list settings, `adapters/lists.js`): the order flow (statuses with roles and the
+ * allowed moves), couriers, delivery zones, tax rules, condition grades and booking hours. Each list is read with
+ * `GET /v1/dashboard/websites/:websiteId/lists/:list` and saved whole with `PUT … { value }`; a 422 lists the server's
+ * check errors, which are shown under the editor.
  * @module
  */
 import { useState } from 'react';
-import { Button, Callout, Card, Checkbox, CodeBlock, ConfirmDialog, Input, Select, TextArea, describeProblem } from '@ss/ui';
+import { Button, Callout, Card, CheckboxGroup, Input, Select, TextArea, describeProblem } from '@ss/ui';
+import { DEFAULT_FLOW, canMove } from '../../core/flow.js';
+import { STATUS_ROLES } from '../../core/model.js';
+import { exponentOf, fromDecimal, toDecimal } from '../../core/money.js';
 import { call, fill, useLoad } from './api.js';
 import { Loaded } from './parts.js';
 import { TEXTS } from './texts.js';
 
 /** @typedef {Record<string, any>} Item */
+/** @typedef {import('../../core/model.js').OrderFlow} OrderFlow */
+/** @typedef {{ websiteId: string, off?: boolean }} EditorProps */
 
 const L = TEXTS.lists;
-
-/**
- * Lines typed in a text area (kept as typed while editing).
- * @param {string} text
- */
-const toLines = (text) => text.split('\n');
 
 /**
  * Lines as saved: trimmed, empty ones dropped.
@@ -27,6 +27,22 @@ const toLines = (text) => text.split('\n');
  */
 const cleanLines = (lines) =>
 	(Array.isArray(lines) ? lines : []).map((line) => String(line).trim()).filter((line) => line !== '');
+
+/**
+ * A key made from a name when none was typed (`Express Delivery` → `express_delivery`).
+ * @param {unknown} key
+ * @param {unknown} name
+ */
+const keyOf = (key, name) => {
+	const typed = String(key ?? '').trim();
+	if (typed !== '') return typed;
+	const made = String(name ?? '')
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, '_')
+		.replace(/^[^a-z]+|_+$/g, '')
+		.slice(0, 40);
+	return made;
+};
 
 /**
  * A copy of `items` with the entry at `index` moved by `step` (-1 up, 1 down).
@@ -45,6 +61,7 @@ const moved = (items, index, step) => {
 
 /**
  * The `errors` of a 422 answer as lines, whatever their shape (strings, `{ path, message }` or a key → message map).
+ * The list routes put every error on `/value`, so that path is left out.
  * @param {any} problem
  * @returns {string[]}
  */
@@ -54,7 +71,7 @@ const errorLines = (problem) => {
 		return errors.map((entry) =>
 			typeof entry === 'string'
 				? entry
-				: [entry?.path ?? entry?.field ?? entry?.index, entry?.message ?? entry?.detail]
+				: [entry?.path === '/value' ? undefined : (entry?.path ?? entry?.field), entry?.message ?? entry?.detail]
 						.filter((part) => part !== undefined && part !== null && part !== '')
 						.map(String)
 						.join(': '),
@@ -62,6 +79,28 @@ const errorLines = (problem) => {
 	if (errors && typeof errors === 'object') return Object.entries(errors).map(([key, message]) => `${key}: ${String(message)}`);
 	return [];
 };
+
+/**
+ * Minor units from a decimal typed in the shop currency: empty → `empty`, zero → 0, else the amount or undefined.
+ * @param {unknown} text
+ * @param {string} currency
+ * @param {number | null} empty
+ * @returns {number | null | undefined}
+ */
+const amountOf = (text, currency, empty) => {
+	const value = String(text ?? '').trim();
+	if (value === '') return empty;
+	if (/^0*(\.0*)?$/.test(value)) return 0;
+	return fromDecimal(value, currency) ?? undefined;
+};
+
+/**
+ * A saved amount as the decimal shown while editing.
+ * @param {unknown} amount minor units
+ * @param {string} currency
+ */
+const decimalOf = (amount, currency) =>
+	typeof amount === 'number' && Number.isSafeInteger(amount) && amount >= 0 ? toDecimal(amount, currency) : '';
 
 /**
  * Up, down and remove buttons of one entry.
@@ -85,80 +124,134 @@ function EntryHead({ label, index, count, onMove, onRemove }) {
 }
 
 /**
- * One list, edited as a whole and saved with one PUT.
- * @param {{ websiteId: string, list: string, title: string, help: string, itemLabel: string, max: number,
- *   blank: () => Item, clean: (item: Item) => Item, off?: boolean,
- *   render: (item: Item, set: (patch: Item) => void) => import('react').ReactNode }} props
+ * The outcome of a save: local errors, the server's check errors, another problem, or saved.
+ * @param {{ result: import('./api.js').Answer | null, local: string[] }} props
  */
-function ListEditor({ websiteId, list, title, help, itemLabel, max, blank, clean, off, render }) {
+function ListOutcome({ result, local }) {
+	const problems = local.length > 0 ? local : result && !result.ok ? errorLines(result.problem) : [];
+	if (problems.length > 0)
+		return (
+			<Callout tone="danger" title={L.errors}>
+				<ul className="list-disc pl-5">
+					{problems.map((line) => (
+						<li key={line}>{line}</li>
+					))}
+				</ul>
+			</Callout>
+		);
+	if (result && !result.ok) return <Callout tone="danger">{describeProblem(result.problem)}</Callout>;
+	return result ? <Callout tone="success">{TEXTS.saved}</Callout> : null;
+}
+
+/**
+ * Save and Cancel under an editor.
+ * @param {{ dirty: boolean, onSave: () => Promise<void>, onCancel: () => void, children?: import('react').ReactNode }} props
+ */
+function SaveRow({ dirty, onSave, onCancel, children }) {
+	const [busy, setBusy] = useState(false);
+	return (
+		<div className="flex flex-wrap gap-2">
+			{children}
+			<Button
+				size="sm"
+				disabled={!dirty}
+				loading={busy}
+				onClick={async () => {
+					setBusy(true);
+					await onSave();
+					setBusy(false);
+				}}>
+				{L.saveList}
+			</Button>
+			{dirty ? (
+				<Button size="sm" variant="ghost" onClick={onCancel}>
+					{TEXTS.cancel}
+				</Button>
+			) : null}
+		</div>
+	);
+}
+
+/**
+ * Load and save one list: the saved value, the draft, the last outcome.
+ * @param {string} websiteId
+ * @param {string} list
+ */
+const useList = (websiteId, list) => {
 	const path = `/v1/dashboard/websites/${websiteId}/lists/${list}`;
 	const { answer, reload } = useLoad(path);
-	const [draft, setDraft] = useState(/** @type {Item[] | null} */ (null));
+	const [draft, setDraft] = useState(/** @type {any} */ (null));
 	const [result, setResult] = useState(/** @type {import('./api.js').Answer | null} */ (null));
+	const [local, setLocal] = useState(/** @type {string[]} */ ([]));
+	/** @param {unknown} value */
+	const save = async (value) => {
+		setLocal([]);
+		const next = await call('PUT', path, { value });
+		setResult(next);
+		if (next.ok) {
+			setDraft(null);
+			reload();
+		}
+	};
+	/** @param {string[]} problems */
+	const refuse = (problems) => {
+		setResult(null);
+		setLocal(problems);
+	};
+	return { answer, draft, setDraft, result, local, save, refuse };
+};
+
+/**
+ * A list of records, edited as a whole and saved with one PUT. `load` turns a saved record into its draft (amounts as
+ * decimals), `clean` a draft back into the record to save, `check` finds draft problems before anything is sent.
+ * @param {{ websiteId: string, list: string, title: string, help: string, itemLabel: string, max: number,
+ *   blank: () => Item, load?: (item: Item) => Item, clean: (item: Item) => Item, check?: (items: Item[]) => string[],
+ *   off?: boolean, render: (item: Item, set: (patch: Item) => void) => import('react').ReactNode }} props
+ */
+function ListEditor({ websiteId, list, title, help, itemLabel, max, blank, load = (item) => item, clean, check, off, render }) {
+	const state = useList(websiteId, list);
 	return (
 		<Card title={title} subtitle={off ? TEXTS.settings.off : `${help} ${fill(L.max, { max })}`}>
-			<Loaded answer={answer}>
+			<Loaded answer={state.answer}>
 				{(data) => {
 					/** @type {Item[]} */
-					const items = draft ?? data.items;
+					const items = state.draft ?? (Array.isArray(data.value) ? data.value : []).map(load);
+					/** @param {Item[]} next */
+					const setItems = (next) => state.setDraft(next);
 					/** @param {number} index @param {Item} patch */
-					const set = (index, patch) => setDraft(items.map((item, at) => (at === index ? { ...item, ...patch } : item)));
-					const problems = result && !result.ok ? errorLines(result.problem) : [];
+					const set = (index, patch) => setItems(items.map((item, at) => (at === index ? { ...item, ...patch } : item)));
 					return (
 						<div className="space-y-4">
 							{items.length === 0 ? <p className="text-sm text-muted">{L.none}</p> : null}
 							{items.map((item, index) => (
-								<div key={index} className="space-y-3 rounded-2xl border border-line p-3 sm:p-4">
+								<div key={index} className="space-y-3 rounded-2xl bg-surface-2 p-3 sm:p-4">
 									<EntryHead
 										label={itemLabel}
 										index={index}
 										count={items.length}
-										onMove={(step) => setDraft(moved(items, index, step))}
-										onRemove={() => setDraft(items.filter((_, at) => at !== index))}
+										onMove={(step) => setItems(moved(items, index, step))}
+										onRemove={() => setItems(items.filter((_, at) => at !== index))}
 									/>
 									{render(item, (patch) => set(index, patch))}
 								</div>
 							))}
-							<div className="flex flex-wrap gap-2">
+							<SaveRow
+								dirty={state.draft !== null}
+								onCancel={() => state.setDraft(null)}
+								onSave={async () => {
+									const problems = check ? check(items) : [];
+									if (problems.length > 0) return state.refuse(problems);
+									await state.save(items.map(clean));
+								}}>
 								<Button
 									size="sm"
 									variant="secondary"
 									disabled={items.length >= max}
-									onClick={() => setDraft([...items, blank()])}>
+									onClick={() => setItems([...items, blank()])}>
 									{L.add}
 								</Button>
-								<Button
-									size="sm"
-									disabled={draft === null}
-									onClick={async () => {
-										const next = await call('PUT', path, { items: items.map(clean) });
-										setResult(next);
-										if (next.ok) {
-											setDraft(null);
-											reload();
-										}
-									}}>
-									{L.saveList}
-								</Button>
-								{draft !== null ? (
-									<Button size="sm" variant="ghost" onClick={() => setDraft(null)}>
-										{TEXTS.cancel}
-									</Button>
-								) : null}
-							</div>
-							{result && !result.ok && problems.length > 0 ? (
-								<Callout tone="danger" title={L.errors}>
-									<ul className="list-disc pl-5">
-										{problems.map((line) => (
-											<li key={line}>{line}</li>
-										))}
-									</ul>
-								</Callout>
-							) : result && !result.ok ? (
-								<Callout tone="danger">{describeProblem(result.problem)}</Callout>
-							) : result ? (
-								<Callout tone="success">{TEXTS.saved}</Callout>
-							) : null}
+							</SaveRow>
+							<ListOutcome result={state.result} local={state.local} />
 						</div>
 					);
 				}}
@@ -167,148 +260,227 @@ function ListEditor({ websiteId, list, title, help, itemLabel, max, blank, clean
 	);
 }
 
-/** @typedef {{ websiteId: string, off?: boolean }} EditorProps */
+const C = L.couriers;
 
-const T = L.tools;
-const PARAMETER_TYPES = /** @type {const} */ (['string', 'number', 'boolean']);
-
-/** @param {EditorProps} props */
-export function ToolsEditor({ websiteId, off }) {
+/** Couriers: a name and a tracking link template with `{tracking}` (`couriers`, feature checkout). @param {EditorProps} props */
+export function CouriersEditor({ websiteId, off }) {
 	return (
 		<ListEditor
 			websiteId={websiteId}
-			list="tools"
-			title={T.title}
-			help={T.help}
-			itemLabel={T.item}
-			max={20}
+			list="couriers"
+			title={C.title}
+			help={C.help}
+			itemLabel={C.item}
+			max={30}
 			off={off}
-			blank={() => ({ name: '', description: '', url: 'https://', parameters: [], includeVisitor: false })}
-			clean={(tool) => ({
-				name: String(tool.name).trim(),
-				description: String(tool.description).trim(),
-				url: String(tool.url).trim(),
-				parameters: (tool.parameters ?? []).map((/** @type {Item} */ p) => ({ ...p, name: String(p.name).trim() })),
-				includeVisitor: tool.includeVisitor === true,
+			blank={() => ({ key: '', name: '', trackingUrl: 'https://' })}
+			clean={(courier) => ({
+				key: keyOf(courier.key, courier.name),
+				name: String(courier.name ?? '').trim(),
+				trackingUrl: String(courier.trackingUrl ?? '').trim(),
 			})}
-			render={(tool, set) => {
-				/** @type {Item[]} */
-				const parameters = tool.parameters ?? [];
-				/** @param {number} index @param {Item} patch */
-				const setParameter = (index, patch) =>
-					set({ parameters: parameters.map((p, at) => (at === index ? { ...p, ...patch } : p)) });
-				return (
-					<>
-						<div className="grid gap-3 md:grid-cols-2">
-							<Input
-								label={T.name}
-								value={tool.name}
-								maxLength={41}
-								autoComplete="off"
-								onChange={(event) => set({ name: event.target.value })}
-							/>
-							<Input label={T.url} type="url" value={tool.url} onChange={(event) => set({ url: event.target.value })} />
-						</div>
-						<TextArea
-							label={T.description}
-							rows={2}
-							value={tool.description}
-							onChange={(event) => set({ description: event.target.value })}
-						/>
-						<Checkbox
-							label={T.includeVisitor}
-							checked={tool.includeVisitor === true}
-							onChange={(event) => set({ includeVisitor: event.target.checked })}
-						/>
-						<p className="text-sm font-semibold">{T.parameters}</p>
-						{parameters.map((parameter, index) => (
-							<div key={index} className="space-y-2 rounded-xl bg-surface-2 p-3">
-								<EntryHead
-									label={T.parameter}
-									index={index}
-									count={parameters.length}
-									onMove={(step) => set({ parameters: moved(parameters, index, step) })}
-									onRemove={() => set({ parameters: parameters.filter((_, at) => at !== index) })}
-								/>
-								<div className="grid gap-3 md:grid-cols-3">
-									<Input
-										label={T.parameter}
-										value={parameter.name}
-										autoComplete="off"
-										onChange={(event) => setParameter(index, { name: event.target.value })}
-									/>
-									<Select
-										label={T.type}
-										value={parameter.type}
-										options={PARAMETER_TYPES.map((value) => ({ value, label: T.types[value] }))}
-										onChange={(event) => setParameter(index, { type: event.target.value })}
-									/>
-									<Input
-										label={T.description}
-										value={parameter.description}
-										onChange={(event) => setParameter(index, { description: event.target.value })}
-									/>
-								</div>
-								<Checkbox
-									label={T.required}
-									checked={parameter.required === true}
-									onChange={(event) => setParameter(index, { required: event.target.checked })}
-								/>
-							</div>
-						))}
-						<Button
-							size="sm"
-							variant="ghost"
-							disabled={parameters.length >= 10}
-							onClick={() =>
-								set({ parameters: [...parameters, { name: '', type: 'string', description: '', required: false }] })
-							}>
-							{T.addParameter}
-						</Button>
-					</>
-				);
-			}}
+			render={(courier, set) => (
+				<div className="grid gap-3 md:grid-cols-3">
+					<Input label={C.name} value={courier.name ?? ''} onChange={(event) => set({ name: event.target.value })} />
+					<Input
+						label={C.key}
+						value={courier.key ?? ''}
+						maxLength={40}
+						autoComplete="off"
+						onChange={(event) => set({ key: event.target.value })}
+					/>
+					<Input
+						label={C.trackingUrl}
+						type="url"
+						value={courier.trackingUrl ?? ''}
+						onChange={(event) => set({ trackingUrl: event.target.value })}
+					/>
+				</div>
+			)}
 		/>
 	);
 }
 
-const P = L.pageRules;
+const Z = L.zones;
 
-/** @param {EditorProps} props */
-export function PageRulesEditor({ websiteId, off }) {
+/**
+ * Delivery zones: cities and areas, the fee and free-over amount (typed as decimals in the shop currency, saved as minor
+ * units) and the delivery days (`delivery_zones`).
+ * @param {EditorProps & { currency: string }} props
+ */
+export function ZonesEditor({ websiteId, off, currency }) {
+	const step = exponentOf(currency) === 0 ? '1' : String(10 ** -exponentOf(currency));
 	return (
 		<ListEditor
 			websiteId={websiteId}
-			list="page_rules"
-			title={P.title}
-			help={P.help}
-			itemLabel={P.item}
-			max={20}
+			list="delivery_zones"
+			title={Z.title}
+			help={Z.help}
+			itemLabel={Z.item}
+			max={100}
 			off={off}
-			blank={() => ({ path: '/', delay: 10, message: '' })}
-			clean={(rule) => ({
-				path: String(rule.path).trim(),
-				delay: Number(rule.delay) || 0,
-				message: String(rule.message).trim(),
+			blank={() => ({ key: '', name: '', cities: [], areas: [], fee: '', freeOver: '', minDays: '1', maxDays: '3' })}
+			load={(zone) => ({
+				...zone,
+				cities: Array.isArray(zone.cities) ? zone.cities : [],
+				areas: Array.isArray(zone.areas) ? zone.areas : [],
+				fee: decimalOf(zone.fee, currency),
+				freeOver: zone.freeOver ? decimalOf(zone.freeOver, currency) : '',
+				minDays: String(zone.minDays ?? ''),
+				maxDays: String(zone.maxDays ?? ''),
 			})}
-			render={(rule, set) => (
+			check={(zones) =>
+				zones.flatMap((zone, index) =>
+					[
+						{ text: zone.fee, empty: 0 },
+						{ text: zone.freeOver, empty: 0 },
+					]
+						.filter((entry) => amountOf(entry.text, currency, entry.empty) === undefined)
+						.map((entry) =>
+							fill(Z.badAmount, { zone: zone.name || `${Z.item} ${index + 1}`, value: String(entry.text), currency }),
+						),
+				)
+			}
+			clean={(zone) => ({
+				key: keyOf(zone.key, zone.name),
+				name: String(zone.name ?? '').trim(),
+				cities: cleanLines(zone.cities),
+				areas: cleanLines(zone.areas),
+				fee: amountOf(zone.fee, currency, 0),
+				freeOver: amountOf(zone.freeOver, currency, 0),
+				minDays: Number(String(zone.minDays).trim() || 0),
+				maxDays: Number(String(zone.maxDays).trim() || zone.minDays || 0),
+			})}
+			render={(zone, set) => (
 				<>
 					<div className="grid gap-3 md:grid-cols-2">
-						<Input label={P.path} value={rule.path} onChange={(event) => set({ path: event.target.value })} />
+						<Input label={Z.name} value={zone.name ?? ''} onChange={(event) => set({ name: event.target.value })} />
 						<Input
-							label={P.delay}
+							label={Z.key}
+							value={zone.key ?? ''}
+							maxLength={40}
+							autoComplete="off"
+							onChange={(event) => set({ key: event.target.value })}
+						/>
+						<TextArea
+							label={Z.cities}
+							rows={3}
+							value={zone.cities.join('\n')}
+							onChange={(event) => set({ cities: event.target.value.split('\n') })}
+						/>
+						<TextArea
+							label={Z.areas}
+							rows={3}
+							value={zone.areas.join('\n')}
+							onChange={(event) => set({ areas: event.target.value.split('\n') })}
+						/>
+					</div>
+					<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+						<Input
+							label={fill(Z.fee, { currency })}
 							type="number"
 							min={0}
-							max={3600}
-							value={String(rule.delay)}
-							onChange={(event) => set({ delay: Number(event.target.value) })}
+							step={step}
+							inputMode="decimal"
+							value={zone.fee}
+							onChange={(event) => set({ fee: event.target.value })}
+						/>
+						<Input
+							label={fill(Z.freeOver, { currency })}
+							type="number"
+							min={0}
+							step={step}
+							inputMode="decimal"
+							value={zone.freeOver}
+							onChange={(event) => set({ freeOver: event.target.value })}
+						/>
+						<Input
+							label={Z.minDays}
+							type="number"
+							min={0}
+							value={zone.minDays}
+							onChange={(event) => set({ minDays: event.target.value })}
+						/>
+						<Input
+							label={Z.maxDays}
+							type="number"
+							min={0}
+							value={zone.maxDays}
+							onChange={(event) => set({ maxDays: event.target.value })}
+						/>
+					</div>
+				</>
+			)}
+		/>
+	);
+}
+
+const G = L.grades;
+
+/**
+ * Whole days typed, or null when left empty (the feature's own default applies).
+ * @param {unknown} text
+ */
+const daysOf = (text) => {
+	const value = String(text ?? '').trim();
+	return value === '' ? null : Number(value);
+};
+
+/** Condition grades with their return and warranty days (`grades`, feature grades_serials). @param {EditorProps} props */
+export function GradesEditor({ websiteId, off }) {
+	return (
+		<ListEditor
+			websiteId={websiteId}
+			list="grades"
+			title={G.title}
+			help={G.help}
+			itemLabel={G.item}
+			max={20}
+			off={off}
+			blank={() => ({ key: '', label: '', description: '', returnDays: '', warrantyDays: '' })}
+			load={(grade) => ({
+				...grade,
+				returnDays: grade.returnDays === null || grade.returnDays === undefined ? '' : String(grade.returnDays),
+				warrantyDays: grade.warrantyDays === null || grade.warrantyDays === undefined ? '' : String(grade.warrantyDays),
+			})}
+			clean={(grade) => ({
+				key: keyOf(grade.key, grade.label),
+				label: String(grade.label ?? '').trim(),
+				description: String(grade.description ?? '').trim(),
+				returnDays: daysOf(grade.returnDays),
+				warrantyDays: daysOf(grade.warrantyDays),
+			})}
+			render={(grade, set) => (
+				<>
+					<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+						<Input label={G.label} value={grade.label ?? ''} onChange={(event) => set({ label: event.target.value })} />
+						<Input
+							label={G.key}
+							value={grade.key ?? ''}
+							maxLength={40}
+							autoComplete="off"
+							onChange={(event) => set({ key: event.target.value })}
+						/>
+						<Input
+							label={G.returnDays}
+							type="number"
+							min={0}
+							value={grade.returnDays}
+							onChange={(event) => set({ returnDays: event.target.value })}
+						/>
+						<Input
+							label={G.warrantyDays}
+							type="number"
+							min={0}
+							value={grade.warrantyDays}
+							onChange={(event) => set({ warrantyDays: event.target.value })}
 						/>
 					</div>
 					<TextArea
-						label={P.message}
+						label={G.description}
 						rows={2}
-						value={rule.message}
-						onChange={(event) => set({ message: event.target.value })}
+						value={grade.description ?? ''}
+						onChange={(event) => set({ description: event.target.value })}
 					/>
 				</>
 			)}
@@ -316,284 +488,307 @@ export function PageRulesEditor({ websiteId, off }) {
 	);
 }
 
-const C = L.customFields;
-const FIELD_TYPES = /** @type {const} */ (['text', 'number', 'yes_no', 'choice']);
+const B = L.bookingHours;
 
-/** @param {EditorProps} props */
-export function CustomFieldsEditor({ websiteId, off }) {
+/** Weekly booking hours: a day (0 Sunday – 6 Saturday) and a time range (`booking_hours`). @param {EditorProps} props */
+export function BookingHoursEditor({ websiteId, off }) {
 	return (
 		<ListEditor
 			websiteId={websiteId}
-			list="custom_fields"
-			title={C.title}
-			help={C.help}
-			itemLabel={C.item}
-			max={30}
+			list="booking_hours"
+			title={B.title}
+			help={B.help}
+			itemLabel={B.item}
+			max={70}
 			off={off}
-			blank={() => ({ key: '', label: '', type: 'text', options: [] })}
-			clean={(field) => ({
-				key: String(field.key).trim(),
-				label: String(field.label).trim(),
-				type: field.type,
-				options: field.type === 'choice' ? cleanLines(field.options) : [],
+			blank={() => ({ day: 1, from: '09:00', to: '17:00' })}
+			clean={(hours) => ({ day: Number(hours.day), from: String(hours.from ?? ''), to: String(hours.to ?? '') })}
+			render={(hours, set) => (
+				<div className="grid gap-3 sm:grid-cols-3">
+					<Select
+						label={B.day}
+						value={String(hours.day ?? 1)}
+						options={B.days.map((label, day) => ({ value: String(day), label }))}
+						onChange={(event) => set({ day: Number(event.target.value) })}
+					/>
+					<Input
+						label={B.from}
+						type="time"
+						value={hours.from ?? ''}
+						onChange={(event) => set({ from: event.target.value })}
+					/>
+					<Input label={B.to} type="time" value={hours.to ?? ''} onChange={(event) => set({ to: event.target.value })} />
+				</div>
+			)}
+		/>
+	);
+}
+
+const X = L.taxRules;
+
+/**
+ * Tax rules: a name, a percent, the category ids it applies to and the regions (`Country` or `Country, City` per
+ * line); empty lists apply everywhere (`tax_rules`, `core/taxes.js`).
+ * @param {EditorProps} props
+ */
+export function TaxRulesEditor({ websiteId, off }) {
+	return (
+		<ListEditor
+			websiteId={websiteId}
+			list="tax_rules"
+			title={X.title}
+			help={X.help}
+			itemLabel={X.item}
+			max={50}
+			off={off}
+			blank={() => ({ name: '', percent: '', categoryIds: [], regions: [] })}
+			load={(rule) => ({
+				name: rule.name ?? '',
+				percent: String(rule.percent ?? ''),
+				categoryIds: Array.isArray(rule.categoryIds) ? rule.categoryIds : [],
+				regions: (Array.isArray(rule.regions) ? rule.regions : []).map((/** @type {Item} */ region) =>
+					region.city ? `${region.country}, ${region.city}` : String(region.country ?? ''),
+				),
 			})}
-			render={(field, set) => (
+			clean={(rule) => {
+				const percent = String(rule.percent).trim();
+				return {
+					name: String(rule.name ?? '').trim(),
+					percent: percent === '' ? Number.NaN : Number(percent),
+					categoryIds: cleanLines(rule.categoryIds),
+					regions: cleanLines(rule.regions).map((line) => {
+						const comma = line.indexOf(',');
+						return comma < 0
+							? { country: line, city: '' }
+							: { country: line.slice(0, comma).trim(), city: line.slice(comma + 1).trim() };
+					}),
+				};
+			}}
+			check={(rules) =>
+				rules
+					.filter((rule) => !Number.isFinite(Number(String(rule.percent).trim() || Number.NaN)))
+					.map((rule) => fill(X.badPercent, { rule: rule.name || X.item }))
+			}
+			render={(rule, set) => (
 				<>
-					<div className="grid gap-3 md:grid-cols-3">
+					<div className="grid gap-3 sm:grid-cols-2">
 						<Input
-							label={C.key}
-							value={field.key}
-							maxLength={40}
-							autoComplete="off"
-							onChange={(event) => set({ key: event.target.value })}
+							label={X.name}
+							value={rule.name}
+							maxLength={60}
+							onChange={(event) => set({ name: event.target.value })}
 						/>
-						<Input label={C.label} value={field.label} onChange={(event) => set({ label: event.target.value })} />
-						<Select
-							label={C.type}
-							value={field.type}
-							options={FIELD_TYPES.map((value) => ({ value, label: C.types[value] }))}
-							onChange={(event) => set({ type: event.target.value })}
+						<Input
+							label={X.percent}
+							type="number"
+							min={0}
+							max={100}
+							step="0.001"
+							inputMode="decimal"
+							value={rule.percent}
+							onChange={(event) => set({ percent: event.target.value })}
 						/>
 					</div>
-					{field.type === 'choice' ? (
+					<div className="grid gap-3 sm:grid-cols-2">
 						<TextArea
-							label={C.options}
-							rows={4}
-							value={(field.options ?? []).join('\n')}
-							onChange={(event) => set({ options: toLines(event.target.value) })}
+							label={X.categoryIds}
+							rows={3}
+							value={rule.categoryIds.join('\n')}
+							onChange={(event) => set({ categoryIds: event.target.value.split('\n') })}
 						/>
-					) : null}
+						<TextArea
+							label={X.regions}
+							rows={3}
+							value={rule.regions.join('\n')}
+							onChange={(event) => set({ regions: event.target.value.split('\n') })}
+						/>
+					</div>
 				</>
 			)}
 		/>
 	);
 }
 
-const F = L.flows;
-const STEP_KINDS = /** @type {const} */ (['message', 'question', 'collect', 'handoff', 'end']);
-const BASE_FIELDS = /** @type {const} */ (['name', 'email', 'phone', 'text']);
+const F = L.orderFlow;
 
 /**
- * A fresh step of `kind`, keeping the text of the step it replaces.
- * @param {string} kind
- * @param {Item} [from]
- * @returns {Item}
+ * The moves of a flow the role rules allow, among statuses that exist.
+ * @param {OrderFlow} flow
  */
-const stepOf = (kind, from = {}) => {
-	const text = typeof from.text === 'string' ? from.text : '';
-	if (kind === 'message') return { kind, text };
-	if (kind === 'question') return { kind, text, buttons: Array.isArray(from.buttons) ? from.buttons : [] };
-	if (kind === 'collect') return { kind, field: typeof from.field === 'string' ? from.field : 'email', text };
-	return { kind };
-};
+const allowedMoves = (flow) => flow.moves.filter((move) => canMove(flow, move.from, move.to));
 
 /**
- * A step as saved.
- * @param {Item} step
+ * The statuses an order in `from` could move to under the role rules (whether or not the move is ticked).
+ * @param {OrderFlow} flow
+ * @param {string} from
  */
-const cleanStep = (step) => {
-	const base = stepOf(step.kind, step);
-	if ('text' in base) base.text = String(base.text).trim();
-	if (step.kind === 'question') base.buttons = cleanLines(step.buttons);
-	return base;
-};
+const possibleTargets = (flow, from) =>
+	flow.statuses.filter((status) => canMove({ statuses: flow.statuses, moves: [{ from, to: status.key }] }, from, status.key));
 
-/** @param {EditorProps & { customFields: boolean }} props `customFields`: offer the custom fields to collect */
-export function FlowsEditor({ websiteId, off, customFields }) {
-	const custom = useLoad(customFields ? `/v1/dashboard/websites/${websiteId}/lists/custom_fields` : null);
-	/** @type {Array<{ key: string, label: string }>} */
-	const extra = custom.answer?.ok ? custom.answer.data.items : [];
-	const fieldOptions = [
-		...BASE_FIELDS.map((value) => ({ value, label: F.fields[value] })),
-		...extra.map((field) => ({ value: `custom:${field.key}`, label: fill(F.custom, { label: field.label }) })),
-	];
+/** @param {OrderFlow} flow @returns {OrderFlow} a copy safe to edit */
+const copyFlow = (flow) => ({
+	statuses: flow.statuses.map((status) => ({ ...status })),
+	moves: flow.moves.map((move) => ({ ...move })),
+});
+
+/**
+ * The order flow: statuses (key, name, role) in order, and for each status the statuses it may move to. Moves the
+ * role rules do not allow are not offered; the server checks the whole flow again (`core/flow.js` `checkOrderFlow`).
+ * @param {EditorProps} props
+ */
+export function OrderFlowEditor({ websiteId, off }) {
+	const state = useList(websiteId, 'order_flow');
+	const [resetShown, setResetShown] = useState(false);
 	return (
-		<ListEditor
-			websiteId={websiteId}
-			list="flows"
-			title={F.title}
-			help={F.help}
-			itemLabel={F.item}
-			max={20}
-			off={off}
-			blank={() => ({ id: '', name: '', start: { kind: 'page', path: '/', delay: 5 }, steps: [stepOf('message')] })}
-			clean={(flow) => ({
-				id: String(flow.id).trim(),
-				name: String(flow.name).trim(),
-				start:
-					flow.start?.kind === 'keyword'
-						? { kind: 'keyword', keywords: cleanLines(flow.start.keywords) }
-						: { kind: 'page', path: String(flow.start?.path ?? '').trim(), delay: Number(flow.start?.delay) || 0 },
-				steps: (flow.steps ?? []).map(cleanStep),
-			})}
-			render={(flow, set) => {
-				/** @type {Item} */
-				const start = flow.start ?? { kind: 'page', path: '/', delay: 0 };
-				/** @type {Item[]} */
-				const steps = flow.steps ?? [];
-				/** @param {number} index @param {Item} next */
-				const setStep = (index, next) => set({ steps: steps.map((step, at) => (at === index ? next : step)) });
-				return (
-					<>
-						<div className="grid gap-3 md:grid-cols-3">
-							<Input
-								label={F.id}
-								value={flow.id}
-								maxLength={40}
-								autoComplete="off"
-								onChange={(event) => set({ id: event.target.value })}
-							/>
-							<Input label={F.name} value={flow.name} onChange={(event) => set({ name: event.target.value })} />
-							<Select
-								label={F.start}
-								value={start.kind}
-								options={[
-									{ value: 'page', label: F.starts.page },
-									{ value: 'keyword', label: F.starts.keyword },
-								]}
-								onChange={(event) =>
-									set({
-										start:
-											event.target.value === 'keyword'
-												? { kind: 'keyword', keywords: [] }
-												: { kind: 'page', path: '/', delay: 5 },
-									})
-								}
-							/>
-						</div>
-						{start.kind === 'keyword' ? (
-							<TextArea
-								label={F.keywords}
-								rows={3}
-								value={(start.keywords ?? []).join('\n')}
-								onChange={(event) => set({ start: { ...start, keywords: toLines(event.target.value) } })}
-							/>
-						) : (
-							<div className="grid gap-3 md:grid-cols-2">
-								<Input
-									label={F.path}
-									value={start.path}
-									onChange={(event) => set({ start: { ...start, path: event.target.value } })}
-								/>
-								<Input
-									label={F.delay}
-									type="number"
-									min={0}
-									max={3600}
-									value={String(start.delay)}
-									onChange={(event) => set({ start: { ...start, delay: Number(event.target.value) } })}
-								/>
-							</div>
-						)}
-						<p className="text-sm font-semibold">{F.steps}</p>
-						{steps.map((step, index) => (
-							<div key={index} className="space-y-2 rounded-xl bg-surface-2 p-3">
-								<EntryHead
-									label={F.step}
-									index={index}
-									count={steps.length}
-									onMove={(move) => set({ steps: moved(steps, index, move) })}
-									onRemove={() => set({ steps: steps.filter((_, at) => at !== index) })}
-								/>
-								<div className="grid gap-3 md:grid-cols-2">
-									<Select
-										label={F.step}
-										value={step.kind}
-										options={STEP_KINDS.map((value) => ({ value, label: F.kinds[value] }))}
-										onChange={(event) => setStep(index, stepOf(event.target.value, step))}
-									/>
-									{step.kind === 'collect' ? (
-										<Select
-											label={F.field}
-											value={step.field}
-											options={
-												fieldOptions.some((option) => option.value === step.field)
-													? fieldOptions
-													: [...fieldOptions, { value: step.field, label: step.field }]
-											}
-											onChange={(event) => setStep(index, { ...step, field: event.target.value })}
+		<Card title={F.title} subtitle={off ? TEXTS.settings.off : F.help}>
+			<Loaded answer={state.answer}>
+				{(data) => {
+					/** @type {OrderFlow} */
+					const saved =
+						data.value && Array.isArray(data.value.statuses) && Array.isArray(data.value.moves) ? data.value : DEFAULT_FLOW;
+					/** @type {OrderFlow} */
+					const flow = state.draft ?? saved;
+					/** @param {OrderFlow} next */
+					const setFlow = (next) => state.setDraft(next);
+					/** @param {number} index @param {Partial<OrderFlow['statuses'][number]>} patch */
+					const setStatus = (index, patch) => {
+						const old = flow.statuses[index]?.key ?? '';
+						const key = patch.key;
+						setFlow({
+							statuses: flow.statuses.map((status, at) => (at === index ? { ...status, ...patch } : status)),
+							// a renamed key keeps its moves
+							moves:
+								key === undefined
+									? flow.moves
+									: flow.moves.map((move) => ({
+											from: move.from === old ? key : move.from,
+											to: move.to === old ? key : move.to,
+										})),
+						});
+					};
+					/** @param {number} index */
+					const removeStatus = (index) => {
+						const key = flow.statuses[index]?.key;
+						setFlow({
+							statuses: flow.statuses.filter((_, at) => at !== index),
+							moves: flow.moves.filter((move) => move.from !== key && move.to !== key),
+						});
+					};
+					return (
+						<div className="space-y-4">
+							{flow.statuses.map((status, index) => {
+								const targets = possibleTargets(flow, status.key);
+								const ticked = flow.moves.filter((move) => move.from === status.key).map((move) => move.to);
+								return (
+									<div key={index} className="space-y-3 rounded-2xl bg-surface-2 p-3 sm:p-4">
+										<EntryHead
+											label={F.status}
+											index={index}
+											count={flow.statuses.length}
+											onMove={(step) => setFlow({ ...flow, statuses: moved(flow.statuses, index, step) })}
+											onRemove={() => removeStatus(index)}
 										/>
-									) : null}
-								</div>
-								{'text' in step ? (
-									<TextArea
-										label={F.text}
-										rows={2}
-										value={step.text}
-										onChange={(event) => setStep(index, { ...step, text: event.target.value })}
-									/>
-								) : null}
-								{step.kind === 'question' ? (
-									<TextArea
-										label={F.buttons}
-										rows={3}
-										value={(step.buttons ?? []).join('\n')}
-										onChange={(event) => setStep(index, { ...step, buttons: toLines(event.target.value) })}
-									/>
-								) : null}
-							</div>
-						))}
-						<Button
-							size="sm"
-							variant="ghost"
-							disabled={steps.length >= 20}
-							onClick={() => set({ steps: [...steps, stepOf('message')] })}>
-							{F.addStep}
-						</Button>
-					</>
-				);
-			}}
-		/>
-	);
-}
-
-const S = TEXTS.secret;
-
-/** @param {{ websiteId: string }} props */
-export function ToolSecret({ websiteId }) {
-	const path = `/v1/dashboard/websites/${websiteId}/tool-secret`;
-	const [secret, setSecret] = useState(/** @type {string | null} */ (null));
-	const [confirming, setConfirming] = useState(false);
-	const [busy, setBusy] = useState(false);
-	const [result, setResult] = useState(/** @type {import('./api.js').Answer | null} */ (null));
-	/** @param {'GET' | 'POST'} method */
-	const load = async (method) => {
-		setBusy(true);
-		const next = await call(method, path);
-		setBusy(false);
-		setResult(next.ok ? null : next);
-		if (next.ok) setSecret(next.data.secret);
-	};
-	return (
-		<Card title={S.title} subtitle={S.help}>
-			{secret ? <CodeBlock code={secret} secret /> : null}
-			<div className="mt-3 flex flex-wrap gap-2">
-				<Button
-					size="sm"
-					variant="secondary"
-					loading={busy && !confirming}
-					onClick={() => (secret ? setSecret(null) : void load('GET'))}>
-					{secret ? S.hide : S.reveal}
-				</Button>
-				<Button size="sm" variant="ghost" onClick={() => setConfirming(true)}>
-					{S.regenerate}
-				</Button>
-			</div>
-			{result && !result.ok ? <Callout tone="danger">{describeProblem(result.problem)}</Callout> : null}
-			<ConfirmDialog
-				open={confirming}
-				busy={busy}
-				danger
-				title={S.confirmTitle}
-				confirmLabel={S.regenerate}
-				cancelLabel={TEXTS.cancel}
-				onClose={() => setConfirming(false)}
-				onConfirm={async () => {
-					await load('POST');
-					setConfirming(false);
-				}}>
-				<p>{S.confirmText}</p>
-			</ConfirmDialog>
+										<div className="grid gap-3 md:grid-cols-3">
+											<Input
+												label={F.label}
+												value={status.label}
+												maxLength={60}
+												onChange={(event) => setStatus(index, { label: event.target.value })}
+											/>
+											<Input
+												label={F.key}
+												value={status.key}
+												maxLength={40}
+												autoComplete="off"
+												onChange={(event) => setStatus(index, { key: event.target.value })}
+											/>
+											<Select
+												label={F.role}
+												value={status.role}
+												options={STATUS_ROLES.map((role) => ({
+													value: role,
+													label: F.roles[/** @type {keyof typeof F.roles} */ (role)],
+												}))}
+												onChange={(event) =>
+													setStatus(index, {
+														role: /** @type {import('../../core/model.js').StatusRole} */ (event.target.value),
+													})
+												}
+											/>
+										</div>
+										{targets.length > 0 ? (
+											<CheckboxGroup
+												legend={F.moves}
+												options={targets.map((target) => ({ value: target.key, label: target.label || target.key }))}
+												value={ticked.filter((key) => targets.some((target) => target.key === key))}
+												onChange={(next) =>
+													setFlow({
+														...flow,
+														moves: [
+															...flow.moves.filter((move) => move.from !== status.key),
+															...next.map((to) => ({ from: status.key, to })),
+														],
+													})
+												}
+											/>
+										) : (
+											<p className="text-sm text-muted">{F.noMoves}</p>
+										)}
+									</div>
+								);
+							})}
+							{resetShown && state.draft !== null ? <Callout tone="info">{F.resetNote}</Callout> : null}
+							<SaveRow
+								dirty={state.draft !== null}
+								onCancel={() => {
+									state.setDraft(null);
+									setResetShown(false);
+								}}
+								onSave={async () => {
+									// statuses saved without a key get one from their name; their moves follow
+									const keys = new Map(flow.statuses.map((status) => [status.key, keyOf(status.key, status.label)]));
+									/** @type {OrderFlow} */
+									const next = {
+										statuses: flow.statuses.map((status) => ({
+											key: keyOf(status.key, status.label),
+											label: status.label.trim(),
+											role: status.role,
+										})),
+										moves: flow.moves.map((move) => ({
+											from: keys.get(move.from) ?? move.from,
+											to: keys.get(move.to) ?? move.to,
+										})),
+									};
+									await state.save({ statuses: next.statuses, moves: allowedMoves(next) });
+									setResetShown(false);
+								}}>
+								<Button
+									size="sm"
+									variant="secondary"
+									disabled={flow.statuses.length >= 30}
+									onClick={() =>
+										setFlow({
+											...flow,
+											statuses: [...flow.statuses, { key: '', label: '', role: /** @type {const} */ ('open') }],
+										})
+									}>
+									{L.add}
+								</Button>
+								<Button
+									size="sm"
+									variant="ghost"
+									onClick={() => {
+										setFlow(copyFlow(DEFAULT_FLOW));
+										setResetShown(true);
+									}}>
+									{F.resetFlow}
+								</Button>
+							</SaveRow>
+							<ListOutcome result={state.result} local={state.local} />
+						</div>
+					);
+				}}
+			</Loaded>
 		</Card>
 	);
 }

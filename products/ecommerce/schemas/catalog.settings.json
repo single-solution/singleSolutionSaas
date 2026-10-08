@@ -29,6 +29,30 @@
 			"description": "The public https address your storage or CDN serves files from (for example https://cdn.shop.com). Empty: images are shown through short-lived signed links.",
 			"default": "",
 			"maxLength": 300
+		},
+		"pageSize": {
+			"type": "integer",
+			"title": "Products per page",
+			"description": "How many products the product grid shows at a time (1 to 48).",
+			"default": 24,
+			"minimum": 1,
+			"maximum": 48
+		},
+		"lowStock": {
+			"type": "integer",
+			"title": "Low stock at",
+			"description": "A variant with this many units or fewer counts as low on stock in the products list.",
+			"default": 3,
+			"minimum": 0,
+			"maximum": 1000000
+		},
+		"imageMaxBytes": {
+			"type": "integer",
+			"title": "Largest image (bytes)",
+			"description": "The largest product, category or brand image that can be uploaded, in bytes.",
+			"default": 5242880,
+			"minimum": 100000,
+			"maximum": 20971520
 		}
 	}
 }

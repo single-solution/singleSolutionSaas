@@ -1,5 +1,12 @@
 {
 	"type": "object",
 	"additionalProperties": false,
-	"properties": {}
+	"properties": {
+		"pricesIncludeTax": {
+			"type": "boolean",
+			"title": "Prices include tax",
+			"description": "On: tax is part of your prices. Off: tax is added at checkout.",
+			"default": true
+		}
+	}
 }

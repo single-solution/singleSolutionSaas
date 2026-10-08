@@ -1,5 +1,22 @@
 {
 	"type": "object",
 	"additionalProperties": false,
-	"properties": {}
+	"properties": {
+		"defaultFee": {
+			"type": "integer",
+			"title": "Delivery fee where no zone matches",
+			"description": "In minor units of your currency.",
+			"default": 0,
+			"minimum": 0,
+			"maximum": 1000000000000
+		},
+		"defaultFreeOver": {
+			"type": "integer",
+			"title": "Free delivery over (where no zone matches)",
+			"description": "Orders worth at least this much (after discounts, in minor units) are delivered free. 0 = never free.",
+			"default": 0,
+			"minimum": 0,
+			"maximum": 1000000000000
+		}
+	}
 }

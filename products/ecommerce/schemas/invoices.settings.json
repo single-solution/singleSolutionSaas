@@ -1,5 +1,232 @@
 {
 	"type": "object",
 	"additionalProperties": false,
-	"properties": {}
+	"properties": {
+		"title": {
+			"type": "string",
+			"title": "Invoice title",
+			"default": "Invoice",
+			"maxLength": 80
+		},
+		"packingSlipTitle": {
+			"type": "string",
+			"title": "Packing slip title",
+			"default": "Packing slip",
+			"maxLength": 80
+		},
+		"footer": {
+			"type": "string",
+			"title": "Footer",
+			"description": "Printed at the bottom of invoices and packing slips (terms, tax number, thanks).",
+			"default": "",
+			"maxLength": 2000,
+			"x-ui": {
+				"widget": "textarea"
+			}
+		},
+		"labelNumber": {
+			"type": "string",
+			"title": "Label: Invoice no.",
+			"default": "Invoice no.",
+			"maxLength": 80
+		},
+		"labelDate": {
+			"type": "string",
+			"title": "Label: Date",
+			"default": "Date",
+			"maxLength": 80
+		},
+		"labelBilledTo": {
+			"type": "string",
+			"title": "Label: Billed to",
+			"default": "Billed to",
+			"maxLength": 80
+		},
+		"labelShipTo": {
+			"type": "string",
+			"title": "Label: Ship to",
+			"default": "Ship to",
+			"maxLength": 80
+		},
+		"labelItem": {
+			"type": "string",
+			"title": "Label: Item",
+			"default": "Item",
+			"maxLength": 80
+		},
+		"labelSku": {
+			"type": "string",
+			"title": "Label: SKU",
+			"default": "SKU",
+			"maxLength": 80
+		},
+		"labelGrade": {
+			"type": "string",
+			"title": "Label: Grade",
+			"default": "Grade",
+			"maxLength": 80
+		},
+		"labelSerials": {
+			"type": "string",
+			"title": "Label: Serial numbers",
+			"default": "Serial numbers",
+			"maxLength": 80
+		},
+		"labelQuantity": {
+			"type": "string",
+			"title": "Label: Qty",
+			"default": "Qty",
+			"maxLength": 80
+		},
+		"labelUnitPrice": {
+			"type": "string",
+			"title": "Label: Unit price",
+			"default": "Unit price",
+			"maxLength": 80
+		},
+		"labelAmount": {
+			"type": "string",
+			"title": "Label: Amount",
+			"default": "Amount",
+			"maxLength": 80
+		},
+		"labelSubtotal": {
+			"type": "string",
+			"title": "Label: Subtotal",
+			"default": "Subtotal",
+			"maxLength": 80
+		},
+		"labelDiscount": {
+			"type": "string",
+			"title": "Label: Discount",
+			"default": "Discount",
+			"maxLength": 80
+		},
+		"labelDelivery": {
+			"type": "string",
+			"title": "Label: Delivery",
+			"default": "Delivery",
+			"maxLength": 80
+		},
+		"labelTax": {
+			"type": "string",
+			"title": "Label: Tax",
+			"default": "Tax",
+			"maxLength": 80
+		},
+		"labelTaxIncluded": {
+			"type": "string",
+			"title": "Label: Tax included",
+			"default": "Tax included",
+			"maxLength": 80
+		},
+		"labelTotal": {
+			"type": "string",
+			"title": "Label: Total",
+			"default": "Total",
+			"maxLength": 80
+		},
+		"labelPayment": {
+			"type": "string",
+			"title": "Label: Payment",
+			"default": "Payment",
+			"maxLength": 80
+		},
+		"labelPaid": {
+			"type": "string",
+			"title": "Label: Paid",
+			"default": "Paid",
+			"maxLength": 80
+		},
+		"labelRefunded": {
+			"type": "string",
+			"title": "Label: Refunded",
+			"default": "Refunded",
+			"maxLength": 80
+		},
+		"labelBalance": {
+			"type": "string",
+			"title": "Label: Balance due",
+			"default": "Balance due",
+			"maxLength": 80
+		},
+		"labelPickup": {
+			"type": "string",
+			"title": "Label: Store pickup",
+			"default": "Store pickup",
+			"maxLength": 80
+		},
+		"labelCourier": {
+			"type": "string",
+			"title": "Label: Courier",
+			"default": "Courier",
+			"maxLength": 80
+		},
+		"labelTracking": {
+			"type": "string",
+			"title": "Label: Tracking number",
+			"default": "Tracking number",
+			"maxLength": 80
+		},
+		"labelNote": {
+			"type": "string",
+			"title": "Label: Note",
+			"default": "Note",
+			"maxLength": 80
+		},
+		"methodCod": {
+			"type": "string",
+			"title": "Payment method: Cash on delivery",
+			"default": "Cash on delivery",
+			"maxLength": 80
+		},
+		"methodOnline": {
+			"type": "string",
+			"title": "Payment method: Paid online",
+			"default": "Paid online",
+			"maxLength": 80
+		},
+		"methodBankTransfer": {
+			"type": "string",
+			"title": "Payment method: Bank transfer",
+			"default": "Bank transfer",
+			"maxLength": 80
+		},
+		"methodPickup": {
+			"type": "string",
+			"title": "Payment method: Pay at pickup",
+			"default": "Pay at pickup",
+			"maxLength": 80
+		},
+		"stateUnpaid": {
+			"type": "string",
+			"title": "Payment state: Unpaid",
+			"default": "Unpaid",
+			"maxLength": 80
+		},
+		"statePending": {
+			"type": "string",
+			"title": "Payment state: Pending",
+			"default": "Pending",
+			"maxLength": 80
+		},
+		"statePaid": {
+			"type": "string",
+			"title": "Payment state: Paid",
+			"default": "Paid",
+			"maxLength": 80
+		},
+		"statePartiallyRefunded": {
+			"type": "string",
+			"title": "Payment state: Partially refunded",
+			"default": "Partially refunded",
+			"maxLength": 80
+		},
+		"stateRefunded": {
+			"type": "string",
+			"title": "Payment state: Refunded",
+			"default": "Refunded",
+			"maxLength": 80
+		}
+	}
 }

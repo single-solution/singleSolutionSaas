@@ -3,7 +3,7 @@
  * The product dashboard (PLAN 0.4.3): one page, opened from the Portal (`/sso` → `/dashboard?websiteId=…`), with the
  * left sidebar Overview · Features · Settings · Connections · Developers, plus Defaults and Prices for Owners. Admins
  * get the website switcher and the `Admin view` banner; everyone gets Back to Portal. Setup only: it calls the kit's
- * dashboard API and shows no business data (no conversations, no leads).
+ * dashboard API and shows no business data (no products, orders or customers).
  * @module
  */
 import { useEffect, useState } from 'react';

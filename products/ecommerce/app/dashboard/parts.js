@@ -154,10 +154,22 @@ export function SettingsForms({ features, saveUrl, resetBody, savedSource, reloa
 export function TextsForm({ texts, saveUrl, resetBody, savedSource, reload }) {
 	const [edits, setEdits] = useState(/** @type {Record<string, string>} */ ({}));
 	const [result, setResult] = useState(/** @type {import('./api.js').Answer | null} */ (null));
+	const [filter, setFilter] = useState('');
+	const needle = filter.trim().toLowerCase();
+	const shown = needle
+		? texts.filter((text) => `${text.key} ${text.english} ${text.value}`.toLowerCase().includes(needle))
+		: texts;
 	return (
 		<Card title={TEXTS.settings.texts} subtitle={TEXTS.settings.textsHelp}>
+			<Input
+				fieldClassName="mb-4"
+				label={TEXTS.settings.textsFilter}
+				type="search"
+				value={filter}
+				onChange={(event) => setFilter(event.target.value)}
+			/>
 			<div className="space-y-3">
-				{texts.map((text) => (
+				{shown.map((text) => (
 					<div key={text.key} className="flex flex-wrap items-end gap-2">
 						<Input
 							fieldClassName="min-w-0 flex-1 basis-64"

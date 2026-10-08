@@ -196,6 +196,7 @@ export const STATUS_ROLES = Object.freeze([
  * @property {string[]} serials serial numbers captured when packed
  * @property {{ start: Date, end: Date } | null} booking the booked slot
  * @property {string[]} licences licence ids given after payment (digital)
+ * @property {number} [downloads] downloads made so far (digital)
  * @property {number} returnedQuantity units returned through approved return claims
  */
 
@@ -215,7 +216,8 @@ export const STATUS_ROLES = Object.freeze([
  *   pointsValue: number, pointsEarned: number, released: boolean }} promotions `released`: offer uses and points were given
  *   back (cancel), exactly once
  * @property {{ method: PaymentMethod, state: PaymentState, paymentId: string | null, advance: number, paid: number,
- *   refunded: number, checkedAt: Date | null }} payment `paymentId`: the Payments payment; `advance`: the COD advance
+ *   refunded: number, checkedAt: Date | null, checkoutUrl?: string }} payment `paymentId`: the Payments payment; `advance`: the
+ *   COD advance; `checkoutUrl`: Payments' page for paying it
  * @property {string} status a status key of the website's order flow
  * @property {StatusRole} role the role of `status`
  * @property {Array<{ at: Date, from: string | null, to: string, by: string, note: string }>} history
