@@ -1659,6 +1659,50 @@ managed inside Payments (per website; our admin sets defaults and prices). Featu
 - **Dashboard**: Overview · Features (read-only for merchants) · Settings · Connections (database, storage, gateway keys,
   Notifications token) · Developers (API, webhook verification, widget and ticket snippets).
 
+### 0.8.8 Ecommerce — owner interview (2026-10-08)
+
+Ecommerce is the whole shop (merging the 15 parked shop products, following ibrahimMobiles, generic for any shop).
+Stock, offer use and points change in **one database step** at order placement. All behaviour is managed inside
+Ecommerce (per website; our admin sets defaults and prices). Features start at 0.
+
+- **Feature switches (per area + extras)**: Catalog · Variants · Multi-location stock · Grades and serials · Digital
+  goods · Bookings · Cart and checkout · Cash on delivery · Delivery zones · Courier APIs · Taxes · Coupons · Deals ·
+  Loyalty · Bundles · Reviews · Wishlist · Alerts · Compare · Returns · Invoices · CSV · Bulk actions · Reports · SEO ·
+  Feeds · AI copy · llms.txt.
+- **Items**: physical goods (including used/graded items with condition grades and serial numbers such as IMEI —
+  part of physical goods, not a separate type), digital goods (download/licence after payment), services/bookings
+  (**simple slots**: duration, weekly hours, no double booking).
+- **Catalog**: nested categories (with SEO text), brands, variants + attributes (own price, stock, SKU), multiple stock
+  locations, media in the merchant's own storage.
+- **Delivery**: zones and fees (by city/area, free over an amount), store pickup, couriers with tracking-link templates,
+  courier booking via courier APIs with the merchant's keys.
+- **Taxes**: simple rules (percentage per category/region; prices shown with or without tax).
+- **Checkout payment**: cash on delivery, online via the merchant's pasted **Payments** token, bank transfer + proof,
+  pay at pickup.
+- **COD safety (ibrahimMobiles lessons)**: confirmation step, max COD value and optional advance, blocklist and
+  returned-parcel (RTO) flag, open-order cap per customer.
+- **Promotions**: coupons, automatic deals, loyalty points (earn, redeem, expiry, history), bundles / buy X get Y.
+- **Orders**: **merchant-defined statuses and allowed moves**, defaulting to the ibrahimMobiles flow (placed →
+  confirmed → packed with serials → dispatched → delivered; cancel and return-to-origin rules).
+- **Returns and warranty**: claims with time windows per item/grade, photos, approval, refund (through Payments when
+  paid online) and restock exactly once.
+- **Shopper extras**: reviews (only after delivery), wishlist, back-in-stock / price alerts (via Notifications),
+  compare.
+- **Admin tools**: CSV import/export, invoices and packing slips (serials per line), bulk actions, reports (sales by
+  product/category/brand/city, stock age, return rate, margin).
+- **Catalog SEO**: meta and structured data, sitemaps and product feeds, AI copy with the merchant's AI key, llms.txt.
+- **Shoppers** are Accounts users (pasted Accounts token); Ecommerce keeps only shop records (orders, loyalty,
+  blocklist) linked to the Accounts user id. Messages go through Notifications; payments through Payments.
+- **Shopper widgets**: product grid + filters + search, product page blocks (gallery, variant picker, price, buy box,
+  reviews), cart + checkout + success page, my orders + tracking + invoices + returns. Every word editable.
+- **Admin widgets** (via tickets): products and catalog; orders and returns; promotions; customers, reviews moderation,
+  reports and CSV.
+- **Business details** come from the merchant's business.json; shop-only details (payment methods, delivery info,
+  policies) live in Ecommerce settings.
+- **Dashboard**: Overview · Features (read-only for merchants) · Settings · Connections (database, storage, Accounts,
+  Payments, Notifications tokens, courier keys, AI key) · Developers.
+- **Chat's shop tools** (step 8 stubs) use Ecommerce's public lookup API built here.
+
 ### 0.8.4 Still open
 
 - **The grilling of each later product** (Notifications, Accounts, Payments, Ecommerce, Growth), held right before it is
