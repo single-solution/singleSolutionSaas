@@ -64,7 +64,7 @@
 		"mongodb": "^6.21.0",
 		"mongodb-memory-server": "^10.4.3",
 		"prettier": "^3.9.9",
-		"typescript": "~5.9.3",
+		"typescript": "~7.0.2",
 		"vitest": "^3.2.7"
 	},
 	"peerDependenciesMeta": {
@@ -97,7 +97,7 @@
 		"mongodb": "^6.21.0",
 		"mongodb-memory-server": "^10.4.3",
 		"prettier": "^3.9.9",
-		"typescript": "~5.9.3",
+		"typescript": "~7.0.2",
 		"vitest": "^3.2.7"
 	}
 }
