@@ -175,7 +175,7 @@ describe('the product grid', () => {
 		expect(answer.json.items[0].image).toBe(`https://cdn.shop.example.com/ecommerce/products/${ids.case.id}/a%20b.png`);
 		expect((await get('/v1/shop/products')).json.items).toHaveLength(2);
 		const config = await shop.visitor('GET', '/v1/widget/config');
-		expect(config.json.settings.catalog).toEqual({
+		expect(config.json.settings.catalog).toMatchObject({
 			productUrl: '/products/{slug}',
 			categoryUrl: '/categories/{slug}',
 			pageSize: 2,

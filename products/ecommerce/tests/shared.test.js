@@ -132,6 +132,12 @@ describe('shared routes', () => {
 		const deleted = await shop.api('POST', '/v1/data-rights/delete', { user: { id: 'usr_nobody000000' } });
 		expect(deleted.json).toMatchObject({ deleted: expect.any(Number), anonymised: expect.any(Number) });
 		const config = await shop.visitor('GET', '/v1/widget/config');
-		expect(config.json.settings).toMatchObject({ currency: 'USD', catalog: expect.any(Object), checkout: expect.any(Object) });
+		expect(config.json.settings).toMatchObject({
+			currency: 'USD',
+			catalog: { grades: [] },
+			checkout: expect.any(Object),
+			orders: { couriers: [{ key: 'fast', name: 'Fast' }] },
+		});
+		expect(config.json.settings.orders.statuses[0]).toEqual({ key: 'pending_payment', label: 'Awaiting payment' });
 	});
 });

@@ -55,6 +55,8 @@ export const ADMIN_CONFIG_PATH = '/v1/widget/admin/config';
  * @property {(url: string) => void} go send the browser to an address (the payment page, a product page)
  * @property {() => URL} location the page's address (the success page reads `ss_order`)
  * @property {() => string} newKey a fresh Idempotency-Key
+ * @property {(path: string) => Promise<{ ok: boolean, status: number, text: string }>} document a visitor route that
+ *   answers a document (the invoice's HTML), with the same headers as `call`; status 0 when unreachable
  */
 
 /**
@@ -160,6 +162,18 @@ export const startWidget = ({ window: win, script }) => {
 		}
 	};
 
+	/** @type {Shop['document']} */
+	const fetchDocument = async (path) => {
+		try {
+			const response = await request(`${base}${path}`, {
+				headers: { authorization: `Bearer ${token}`, ...(signIn ? { 'ss-sign-in': signIn } : {}) },
+			});
+			return { ok: response.ok, status: response.status, text: await response.text() };
+		} catch {
+			return { ok: false, status: 0, text: '' };
+		}
+	};
+
 	/** @param {{ productId?: unknown, variantId?: unknown, quantity?: unknown }} item @returns {boolean} added */
 	const addToCart = (item) => {
 		if (!visitorConfig?.features.includes('checkout') || typeof item?.productId !== 'string') return false;
@@ -179,6 +193,7 @@ export const startWidget = ({ window: win, script }) => {
 		/** @type {Shop} */
 		const shop = {
 			call,
+			document: fetchDocument,
 			signIn: () => signIn,
 			onIdentity: (listener) => {
 				identityListeners.add(listener);

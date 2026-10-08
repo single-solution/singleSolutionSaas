@@ -112,6 +112,9 @@ describe('visitor widgets', () => {
 			'content-type': 'application/json',
 		});
 		expect(await shop.call('/v1/shop/empty')).toEqual({ ok: true, status: 204, data: null });
+		expect(await shop.document('/v1/shop/thing')).toEqual({ ok: true, status: 200, text: '{"ok":1}' });
+		fetch.mockRejectedValueOnce(new Error('offline'));
+		expect(await shop.document('/v1/shop/thing')).toEqual({ ok: false, status: 0, text: '' });
 		/** @type {any} */ (api).identify(null);
 		expect(shop.signIn()).toBeNull();
 		expect(typeof shop.newKey()).toBe('string');

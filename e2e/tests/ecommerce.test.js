@@ -370,7 +370,7 @@ describe('Ecommerce on the real Portal', () => {
 
 	it('the merchant’s staff move orders with a ticket, only along the flow', async () => {
 		const staff = await ticket(['orders.read', 'orders.manage', 'returns.manage']);
-		const admin = (/** @type {string} */ method, /** @type {string} */ path, /** @type {unknown} */ body) =>
+		const admin = (/** @type {string} */ method, /** @type {string} */ path, /** @type {unknown} */ body = undefined) =>
 			sys.call(method, path, { token: staff, origin: ADMIN_ORIGIN, ...(body === undefined ? {} : { body }) });
 		const list = await admin('GET', '/v1/admin/orders');
 		expect(list.json.items.map((/** @type {any} */ o) => o.id).sort()).toEqual([codOrderId, paidOrderId].sort());

@@ -71,6 +71,21 @@ export const createRoutes = (product) => {
 			/** @type {Record<string, unknown>} */
 			const settings = { currency: s.currency };
 			for (const area of areas) if (area.widgetSettings) Object.assign(settings, await area.widgetSettings(s));
+			// the merchant's order statuses, couriers and grades (names only), for the admin widgets' pickers
+			if (s.has('checkout')) {
+				const flow = /** @type {import('../core/model.js').OrderFlow} */ (
+					/** @type {unknown} */ (await s.list('order_flow'))
+				);
+				const couriers = await s.list('couriers');
+				settings.orders = {
+					statuses: flow.statuses.map((/** @type {any} */ status) => ({ key: status.key, label: status.label })),
+					couriers: couriers.map((/** @type {any} */ courier) => ({ key: courier.key, name: courier.name })),
+				};
+			}
+			if (s.has('grades_serials')) {
+				const grades = (await s.list('grades')).map((/** @type {any} */ grade) => ({ key: grade.key, label: grade.label }));
+				settings.catalog = { .../** @type {object} */ (settings.catalog ?? {}), grades };
+			}
 			return settings;
 		},
 	});
