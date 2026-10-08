@@ -1998,6 +1998,75 @@ validate` / `openapi.json` (`x-ss-feature` a list) accept a list meaning "any of
         then Portal → Products → Add product (its address and `CONNECT_SECRET`) and set it Active. Step 8's Done line
         stays empty until then.
 
+   - **Step 9, Payments** (0.8.7; each item open for owner review):
+      - **Feature keys**: `stripe`, `paypal`, `payfast`, `jazzcash`, `easypaisa`, `bank_transfer`, `generic_gateway`,
+        `payment_links`, `payment_api`, `subscriptions`, `refunds`; none depends on another (a subscription also needs
+        Stripe or PayPal on; the route checks it, because `dependsOn` cannot say "one of").
+      - **Routes and widgets per feature**: creating, listing, reading and verifying payments and the event list
+        (`/v1/payments…`, `/v1/events`), the pay button with `data-payment` and the Payments admin widget
+        (`payments.read`) belong to `payment_api`, which the merchant's server and Ecommerce (through the pasted Payments
+        token) use alike; links (`/v1/links…`, created by API only, as 0.8.7 lists no links widget), the hosted link page
+        and the pay button with `data-link` to `payment_links`; refunds (`payments.refund`) to `refunds`; confirming a
+        transfer and its proof (`payments.confirm`) to `bank_transfer`; `subscriptions.read` and `subscriptions.cancel`
+        to `subscriptions`. The pay button widget belongs to `payment_links` or `payment_api` (either on).
+      - **Money**: integer minor units plus an ISO 4217 code per payment, at most 10^12 minor units; the zero- and
+        three-decimal currencies are a code list. Currencies per gateway: Stripe any (Stripe refuses the few it does not
+        take when the payment starts), PayPal its REST list, PayFast ZAR, JazzCash and Easypaisa PKR, bank transfer any,
+        the generic adapter its connection's list (else any). Payers are offered only switched-on, connected gateways
+        that take the currency (bank transfer: account number or IBAN set).
+      - **Gateway APIs** (the smallest documented choice each): Stripe Checkout Sessions (`Stripe-Version: 2024-06-20`),
+        the Refunds API and subscriptions as Checkout Sessions in `subscription` mode on the merchant's own price id;
+        webhooks checked with `Stripe-Signature` (5 minutes). PayPal Orders v2 (`CAPTURE`, captured server to server when
+        the payer returns), captures refunded, Subscriptions v1 on the merchant's plan id; webhooks verified by PayPal's
+        `verify-webhook-signature` with the webhook id in the connection. PayFast custom integration (MD5 signature over
+        the fields in order plus the passphrase); the ITN is trusted after the signature, the merchant id, the amount
+        and PayFast's `/eng/query/validate`; refunds and the connection test use `api.payfast.co.za` (MD5 over the sorted
+        headers, fields and passphrase; form body; amount in cents), so the passphrase is required. JazzCash page
+        redirection 1.1 (`pp_SecureHash` HMAC-SHA256 with the integrity salt, times in Pakistan time, a 20-character
+        reference); its signed answer posted back to the return address is the confirmation (no IPN), `000` paid,
+        `124`/`157` pending. Easypaisa Easypay hosted checkout in two steps (`merchantHashedReq` AES-128-ECB with the
+        hash key), confirmed only by its REST `inquire-transaction` v4 call with the store's API credentials. The
+        generic adapter: signed form fields, a signed JSON notice (`SS-Signature`) and an optional refund address.
+      - **Sandbox**: the PayPal, PayFast, JazzCash and Easypaisa connections have a Sandbox box that sends calls to the
+        gateway's own test environment (Stripe uses test keys). It is the gateway's environment, not a Payments test
+        mode (0.8.1); the owner confirms or removes it.
+      - **Refunds**: Stripe, PayPal, PayFast and a generic gateway with a refund address refund at the gateway; JazzCash,
+        Easypaisa, bank transfer and a generic gateway without one are recorded (`manual`) and the merchant returns the
+        money in the gateway's portal (no documented refund API was taken for them). Refund ids `rfd_<payment>_<n>`
+        are the idempotency keys sent to the gateways.
+      - **Confirmations and rechecks** (the open point "how unconfirmed payments are rechecked without timers"): a payment
+        becomes paid only from a gateway's signed notice or a server-to-server answer, for exactly its amount and
+        currency (a mismatch is recorded in its history and changes nothing); a pending payment is asked of its gateway
+        again when it is read (API, verify, pay page), at most every 30 seconds (Stripe, PayPal, Easypaisa).
+        `POST /v1/payments/:id/verify` with `{ amount, currency }` answers `verified` for Ecommerce and the merchant's
+        server. A payer who cancels on the gateway marks the payment cancelled; a later confirmation still pays it, and
+        the payer can try again (failed or cancelled → pick a gateway again).
+      - **Events and Notifications**: `payment.paid`, `payment.failed`, `payment.refunded` and `subscription.updated` are
+        kept in the merchant database, listed by `GET /v1/events` and sent as `payments.<event>` through a new
+        Notifications route, `POST /v1/events` (Notifications server token, feature `webhooks`, `{ type, data }` with a
+        type `<product id>.<event>` and at most 16 kB of data), which signs them with the merchant's webhook secret and
+        sends them to every webhook URL (its Events setting picks among Notifications' own events only). 5 attempts
+        (1 min, 5 min, 30 min, 2 h) right after later requests; without the token an event stays `not_connected`.
+      - **Hosted pages**: `/l/<websiteId>/<linkId>`, `/pay/<websiteId>/<paymentId>` and `/return/<gateway>/<websiteId>/<id>`
+        carry only random ids (no personal data); the payer goes back with `?ss_payment=<id>` (`ss_subscription`) to
+        return and cancel addresses on the website's exact https domain or a local address. The pages run only
+        `/pay.js` (posting a gateway form, uploading a proof) and allow form posts to https gateways.
+      - **Bank transfer**: the bank details are `bank_transfer` settings (account title, bank, account number, IBAN,
+        instructions, proof upload on/off, largest proof 1–10 MB, default 5). Proofs (JPEG, PNG, WebP, PDF) go to
+        `payments/proofs/<paymentId>.<ext>` in the merchant's storage with a 5-minute presigned PUT; proof links last 5
+        minutes.
+      - **Data rights**: matched on the Accounts user id, e-mail or phone; export lists payments (without metadata and
+        history) and subscriptions; delete removes the person's details and keeps the amounts (the merchant's money
+        records): `{ deleted: 0, anonymised }`.
+      - **Payments admin export**: a CSV built in the browser from the filtered list (at most 2,000 rows).
+      - **Overview**: today's cost, features on, connections ready and gateways ready as colour tiles (no hero card).
+      - **Owner items, step 9**: create the Vercel project with root `products/payments`, set `MONGODB_URI` (its own
+        database, for example `ss_payments`), `CONNECT_SECRET` and `ENCRYPTION_KEY` for Production, deploy, then
+        Portal → Products → Add product and set it Active; redeploy Notifications (its new `POST /v1/events`). Merchants
+        register the gateway addresses in `products/payments/README.md` (Stripe and PayPal webhooks; PayFast, JazzCash,
+        Easypaisa and the generic adapter get theirs with each payment); final domains come before charging (step 14).
+        Step 9's Done line stays empty until then.
+
 Everything else in Part 0 is decided. A point that is not decided in Part 0 or 0.10 is asked, not guessed (0.13).
 
 ## 0.9 Conflicts with the current build and deployment

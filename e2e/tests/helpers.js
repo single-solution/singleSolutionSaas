@@ -216,10 +216,11 @@ export const startSystem = async ({ graceDays = 1, unit = NOTES, extras = [] } =
 	 * A request to the product, as a browser, a merchant's server or the dashboard sends it.
 	 * @param {string} method
 	 * @param {string} path
-	 * @param {{ token?: string, origin?: string, body?: unknown, cookie?: string, base?: string, headers?: Record<string, string> }} [init]
+	 * @param {{ token?: string, origin?: string, body?: unknown, form?: Record<string, string>, cookie?: string, base?: string,
+	 *   headers?: Record<string, string> }} [init] `form`: an HTML form post (`application/x-www-form-urlencoded`)
 	 * @returns {Promise<Answer>}
 	 */
-	const call = async (method, path, { token, origin, body, cookie, base = productUrl, headers = {} } = {}) => {
+	const call = async (method, path, { token, origin, body, form, cookie, base = productUrl, headers = {} } = {}) => {
 		const handler = /** @type {Handler} */ (handlers[base]);
 		const response = await handler(
 			new Request(`${base}${path}`, {
@@ -229,9 +230,11 @@ export const startSystem = async ({ graceDays = 1, unit = NOTES, extras = [] } =
 					...(origin ? { origin } : {}),
 					...(cookie ? { cookie } : {}),
 					...(body === undefined ? {} : { 'content-type': 'application/json' }),
+					...(form === undefined ? {} : { 'content-type': 'application/x-www-form-urlencoded' }),
 					...headers,
 				},
-				...(body === undefined ? {} : { body: JSON.stringify(body) }),
+				...(body === undefined ? {} : { body: typeof body === 'string' ? body : JSON.stringify(body) }),
+				...(form === undefined ? {} : { body: new URLSearchParams(form).toString() }),
 			}),
 		);
 		const text = await response.text();

@@ -27,6 +27,7 @@
 		"@ss/product-accounts": "workspace:^",
 		"@ss/product-chat": "workspace:^",
 		"@ss/product-notifications": "workspace:^",
+		"@ss/product-payments": "workspace:^",
 		"@ss/protocol": "workspace:^",
 		"@types/node": "^22.20.4",
 		"eslint": "^9.39.5",

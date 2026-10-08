@@ -1,0 +1,55 @@
+{
+	"type": "object",
+	"additionalProperties": false,
+	"properties": {
+		"accountTitle": {
+			"type": "string",
+			"title": "Account title",
+			"description": "The name on the bank account.",
+			"default": "",
+			"maxLength": 120
+		},
+		"bankName": {
+			"type": "string",
+			"title": "Bank",
+			"default": "",
+			"maxLength": 120
+		},
+		"accountNumber": {
+			"type": "string",
+			"title": "Account number",
+			"default": "",
+			"maxLength": 60
+		},
+		"iban": {
+			"type": "string",
+			"title": "IBAN",
+			"description": "Empty when your bank has none.",
+			"default": "",
+			"maxLength": 60
+		},
+		"instructions": {
+			"type": "string",
+			"title": "Instructions",
+			"description": "Shown under the bank details (plain text).",
+			"default": "",
+			"maxLength": 1000,
+			"x-ui": {
+				"widget": "textarea"
+			}
+		},
+		"proofUpload": {
+			"type": "boolean",
+			"title": "Proof upload",
+			"description": "Payers may upload a photo or PDF of their transfer to your storage.",
+			"default": true
+		},
+		"proofMaxMb": {
+			"type": "integer",
+			"title": "Largest proof (MB)",
+			"default": 5,
+			"minimum": 1,
+			"maximum": 10
+		}
+	}
+}

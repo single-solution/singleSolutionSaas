@@ -1,0 +1,156 @@
+{
+	"id": "payments",
+	"name": "Payments",
+	"version": "0.1.0",
+	"endpoints": {
+		"base": "http://localhost:3000",
+		"dashboard": "/dashboard"
+	},
+	"widgetScriptUrl": "/widget.js",
+	"docsUrl": "/docs",
+	"features": [
+		{
+			"key": "stripe",
+			"name": "Stripe",
+			"description": "Card and wallet payments on Stripe Checkout with the merchant's own Stripe keys; also Stripe subscriptions.",
+			"dependsOn": [],
+			"settings": {
+				"$ref": "schemas/stripe.settings.json"
+			}
+		},
+		{
+			"key": "paypal",
+			"name": "PayPal",
+			"description": "PayPal checkout with the merchant's own PayPal app; also PayPal subscriptions.",
+			"dependsOn": [],
+			"settings": {
+				"$ref": "schemas/paypal.settings.json"
+			}
+		},
+		{
+			"key": "payfast",
+			"name": "PayFast",
+			"description": "Payments on PayFast's own page with the merchant's own PayFast account.",
+			"dependsOn": [],
+			"settings": {
+				"$ref": "schemas/payfast.settings.json"
+			}
+		},
+		{
+			"key": "jazzcash",
+			"name": "JazzCash",
+			"description": "Payments on JazzCash's hosted checkout with the merchant's own JazzCash account.",
+			"dependsOn": [],
+			"settings": {
+				"$ref": "schemas/jazzcash.settings.json"
+			}
+		},
+		{
+			"key": "easypaisa",
+			"name": "Easypaisa",
+			"description": "Payments on Easypaisa's hosted checkout (Easypay) with the merchant's own store.",
+			"dependsOn": [],
+			"settings": {
+				"$ref": "schemas/easypaisa.settings.json"
+			}
+		},
+		{
+			"key": "bank_transfer",
+			"name": "Bank transfer (manual)",
+			"description": "Shows the merchant's bank details; the payer may upload a proof to the merchant's own storage and the merchant confirms receipt.",
+			"dependsOn": [],
+			"settings": {
+				"$ref": "schemas/bank_transfer.settings.json"
+			}
+		},
+		{
+			"key": "generic_gateway",
+			"name": "Generic gateway adapter",
+			"description": "Any other gateway: the payer is sent to its checkout address with signed fields and it confirms with a signed notice.",
+			"dependsOn": [],
+			"settings": {
+				"$ref": "schemas/generic_gateway.settings.json"
+			}
+		},
+		{
+			"key": "payment_links",
+			"name": "Payment links",
+			"description": "Reusable links for any amount (invoices, bookings, donations), with a hosted page and the pay button.",
+			"dependsOn": [],
+			"settings": {
+				"$ref": "schemas/payment_links.settings.json"
+			}
+		},
+		{
+			"key": "payment_api",
+			"name": "Merchant payment API",
+			"description": "The merchant's server (and Ecommerce through a pasted token) creates, reads and verifies payments; the Payments admin widget.",
+			"dependsOn": [],
+			"settings": {
+				"$ref": "schemas/payment_api.settings.json"
+			}
+		},
+		{
+			"key": "subscriptions",
+			"name": "Subscriptions",
+			"description": "Gateway-managed subscriptions on Stripe and PayPal; Payments mirrors their status; the Subscriptions admin widget.",
+			"dependsOn": [],
+			"settings": {
+				"$ref": "schemas/subscriptions.settings.json"
+			}
+		},
+		{
+			"key": "refunds",
+			"name": "Refunds",
+			"description": "Full and partial refunds by API or the Payments admin widget, recorded in the payment's history.",
+			"dependsOn": [],
+			"settings": {
+				"$ref": "schemas/refunds.settings.json"
+			}
+		}
+	],
+	"permissions": [
+		{
+			"key": "payments.read",
+			"name": "See and search payments",
+			"feature": "payment_api"
+		},
+		{
+			"key": "payments.refund",
+			"name": "Refund payments",
+			"feature": "refunds"
+		},
+		{
+			"key": "payments.confirm",
+			"name": "Confirm bank transfers",
+			"feature": "bank_transfer"
+		},
+		{
+			"key": "subscriptions.read",
+			"name": "See subscriptions",
+			"feature": "subscriptions"
+		},
+		{
+			"key": "subscriptions.cancel",
+			"name": "Cancel subscriptions",
+			"feature": "subscriptions"
+		}
+	],
+	"widgets": [
+		{
+			"key": "pay_button",
+			"feature": ["payment_links", "payment_api"],
+			"kind": "visitor"
+		},
+		{
+			"key": "payments_admin",
+			"feature": "payment_api",
+			"kind": "admin"
+		},
+		{
+			"key": "subscriptions_admin",
+			"feature": "subscriptions",
+			"kind": "admin"
+		}
+	]
+}
