@@ -1867,6 +1867,67 @@ actor, action, target, at }` sent to Accounts at `POST /v1/activity-copies`.
         (its own database, for example `ss_notifications`), `CONNECT_SECRET` and `ENCRYPTION_KEY` for Production,
         deploy, then Portal → Products → Add product (its address and `CONNECT_SECRET`) and set it Active. Step 6's
         Done line stays empty until then.
+   - **Step 7, Accounts** (0.8.6; each item open for owner review):
+      - **Feature keys**: `phone_code`, `email_password`, `email_code`, `google`, `apple`, `facebook`, `roles`,
+        `custom_fields`, `two_step`, `approval`, `risk_checks`, `terms`, `data_rights`, `activity_copies`,
+        `orders_tab`; none depends on another.
+      - **Routes and widgets of several features**: the routes of a signed-in user (session renew and sign-out, My
+        account, devices) and the `sign_in` and `my_account` widgets work while **any** sign-in method is on. The kit
+        (`defineRoute` `feature: [..]`), `@ss/contracts` (a manifest widget's `feature` may be a list) and `ss app
+validate` / `openapi.json` (`x-ss-feature` a list) accept a list meaning "any of"; every other route keeps one
+        feature. The user list, block, notes, roles, the Users and Roles widgets and their routes belong to `roles`;
+        invites and approvals to `approval`; deletion approvals to `data_rights`.
+      - **Cross-product shapes, final**: sign-ins are EdDSA JWTs of 15 minutes with `iss` = Accounts' address, `aud` =
+        the website id, `sub` = the user id, `sid`, `name`, `email`/`email_verified`, `phone`/`phone_verified` and,
+        with `roles` on, `role` and `permissions` (`<product>:<key>`, `site:<key>` for the merchant's own, `*` for
+        Owner). Public keys: `GET /v1/websites/:websiteId/keys` → `{ issuer, keys }` (no token). The kit verifies them
+        for any product as `product.accounts.verify({ websiteId, token })` with the pasted Accounts token (keys cached
+        10 minutes). A signed-in visitor request sends the sign-in in the `SS-Sign-In` header (added to the kit's CORS
+        headers). Each product serves its permissions at the kit route `GET /v1/permissions` (server token), which
+        Accounts reads live (cached 5 minutes) for the Roles widget. Data rights and activity copies keep the step-4
+        shapes; Accounts matches a user on id, e-mail or phone.
+      - **One role per user**; new sign-ups get Customer. Ready-made roles get default permissions only for the
+        published Accounts, Chat and Notifications keys (Owner `*`; Product manager none until Ecommerce publishes its
+        list); they can be edited but not deleted. Deleting an own role moves its users to Customer. Session length
+        (1–720 h, default 24) and remember me (0–365 days, default 30) and two-step optional/required live on the role.
+      - **Sign-up rules** (mode open / invite / approval, required standard fields, invite page and days) are settings
+        of `approval`; without it sign-up is open. Required fields apply to form sign-ups (password, phone code, e-mail
+        code); a social sign-up is created with what the provider gives and the user completes the rest in My account.
+        Custom field definitions (at most 50) are kept in the merchant database and edited in the dashboard (Settings
+        → Custom fields, Recent changes), not in a settings schema (schemas allow no object lists).
+      - **Sessions**: an absolute end (role length, or remember-me days), a refresh token rotated on every renew whose
+        reuse ends the session; the widget keeps it in localStorage with remember me, else sessionStorage. Blocking a
+        user, a password reset and Sign out everywhere end their sessions at once; issued sign-ins end within 15
+        minutes.
+      - **Codes and limits** (code constants): 5 wrong tries per code, 30 s between codes to one address, 6 codes per
+        address per hour; per-visitor rate limits on sign-in routes. Login limits (wrong passwords before a lock, lock
+        minutes) are `email_password` settings. The breached-password check uses the Have I Been Pwned range API
+        (k-anonymity) and lets the password through when the list cannot be reached.
+      - **Secrets**: the website's Ed25519 signing key and two-step secrets are kept in the merchant database,
+        encrypted with `ENCRYPTION_KEY` (0.4.8); a lost key makes a new signing key (everyone signs in again).
+        Passwords use scrypt; codes, links and refresh tokens are kept as SHA-256 hashes. One-time records, social
+        sign-ins in progress and risk counters use MongoDB TTL indexes (no background jobs).
+      - **Social sign-in**: authorization code (Google with PKCE, Apple `form_post` with an ES256 client secret,
+        Facebook with `appsecret_proof`); the provider returns to `<Accounts>/oauth/<provider>/callback`, which sends
+        the browser back to the page with a 5-minute single-use code in the fragment for the widget to exchange. An
+        existing user with the same verified e-mail is linked. Connection tests: Facebook asks for an app token; Google
+        and Apple are checked for their shape (Apple's key must sign).
+      - **Messages** go through Notifications with template keys `accounts.phone_code`, `accounts.email_code`,
+        `accounts.password_reset` and `accounts.invite` (values in the docs); links point to the page the widget gives
+        (`returnTo`, the website's domain or local only) or to the invite page setting.
+      - **Data rights**: the export (Accounts' profile and devices, never notes, passwords or secrets, plus each
+        connected product's records) is one single-use link for 15 minutes. Deletion requests wait for approval in
+        the Users widget or the server API, or run on the first request after `deleteAfterDays` (default 30; 0 =
+        approval only); a declined request is dropped. Products that do not confirm an erasure are asked again right
+        after later requests. There is no "cancel my request" for the user.
+      - **Risk checks**: disposable domains (a built-in short list plus the merchant's), accounts per browser device id
+        (kept by the widget) and sign-ups per network (IP) per day, counted on hashes.
+      - **Orders tab** calls Ecommerce `GET /v1/customers/<userId>/orders?limit=20` and shows `items` as given
+        (provisional until Ecommerce is grilled). E-mail and phone are not edited in My account (they are sign-in
+        addresses).
+      - **Owner items, step 7**: create the Vercel project with root `products/accounts`, set `MONGODB_URI` (its own
+        database, for example `ss_accounts`), `CONNECT_SECRET` and `ENCRYPTION_KEY` for Production, deploy, then
+        Portal → Products → Add product and set it Active. Step 7's Done line stays empty until then.
 
 Everything else in Part 0 is decided. A point that is not decided in Part 0 or 0.10 is asked, not guessed (0.13).
 

@@ -1,0 +1,14 @@
+{
+	"type": "object",
+	"additionalProperties": false,
+	"properties": {
+		"deleteAfterDays": {
+			"type": "integer",
+			"title": "Delete without approval after (days)",
+			"description": "0: only when a member of staff approves.",
+			"default": 30,
+			"minimum": 0,
+			"maximum": 365
+		}
+	}
+}

@@ -1,0 +1,41 @@
+{
+	"type": "object",
+	"additionalProperties": false,
+	"properties": {
+		"channel": {
+			"type": "string",
+			"title": "Send codes by",
+			"description": "The channel Notifications sends the code on (its template accounts.phone_code).",
+			"default": "sms",
+			"enum": ["sms", "whatsapp"]
+		},
+		"defaultCallingCode": {
+			"type": "string",
+			"title": "Default calling code",
+			"description": "For numbers typed without a country code, for example +92 or +1. Empty: numbers must start with + or 00.",
+			"default": "",
+			"maxLength": 4
+		},
+		"trunkPrefix": {
+			"type": "string",
+			"title": "National trunk prefix",
+			"description": "Dropped from national numbers before the calling code is added, for example 0.",
+			"default": "",
+			"maxLength": 2
+		},
+		"codeLength": {
+			"type": "integer",
+			"title": "Code length",
+			"default": 6,
+			"minimum": 4,
+			"maximum": 8
+		},
+		"codeMinutes": {
+			"type": "integer",
+			"title": "Code valid for (minutes)",
+			"default": 10,
+			"minimum": 1,
+			"maximum": 30
+		}
+	}
+}

@@ -1,0 +1,187 @@
+{
+	"id": "accounts",
+	"name": "Accounts",
+	"version": "0.1.0",
+	"endpoints": {
+		"base": "http://localhost:3000",
+		"dashboard": "/dashboard"
+	},
+	"widgetScriptUrl": "/widget.js",
+	"docsUrl": "/docs",
+	"features": [
+		{
+			"key": "phone_code",
+			"name": "Phone code",
+			"description": "Sign-up and sign-in with a one-time code sent by SMS or WhatsApp through the merchant's Notifications (pasted Notifications token).",
+			"dependsOn": [],
+			"settings": {
+				"$ref": "schemas/phone_code.settings.json"
+			}
+		},
+		{
+			"key": "email_password",
+			"name": "Email + password",
+			"description": "Sign-up and sign-in with an e-mail address and a password, with password rules, login limits and Forgot password (reset links through Notifications).",
+			"dependsOn": [],
+			"settings": {
+				"$ref": "schemas/email_password.settings.json"
+			}
+		},
+		{
+			"key": "email_code",
+			"name": "Email code / magic link",
+			"description": "Sign-in with a one-time code or a single-use link sent by e-mail through the merchant's Notifications.",
+			"dependsOn": [],
+			"settings": {
+				"$ref": "schemas/email_code.settings.json"
+			}
+		},
+		{
+			"key": "google",
+			"name": "Google",
+			"description": "Sign-in with Google, using the merchant's own Google OAuth client.",
+			"dependsOn": [],
+			"settings": {
+				"$ref": "schemas/google.settings.json"
+			}
+		},
+		{
+			"key": "apple",
+			"name": "Apple",
+			"description": "Sign in with Apple, using the merchant's own Apple Services ID and key.",
+			"dependsOn": [],
+			"settings": {
+				"$ref": "schemas/apple.settings.json"
+			}
+		},
+		{
+			"key": "facebook",
+			"name": "Facebook",
+			"description": "Sign-in with Facebook, using the merchant's own Facebook app.",
+			"dependsOn": [],
+			"settings": {
+				"$ref": "schemas/facebook.settings.json"
+			}
+		},
+		{
+			"key": "roles",
+			"name": "Roles and permissions",
+			"description": "One user list with roles: the ready-made roles and the merchant's own, the permissions products supply plus the merchant's own names, session lengths per role, and the Users and Roles admin widgets.",
+			"dependsOn": [],
+			"settings": {
+				"$ref": "schemas/roles.settings.json"
+			}
+		},
+		{
+			"key": "custom_fields",
+			"name": "Custom fields",
+			"description": "The merchant's own profile fields (text, number, date, choice), shown at sign-up and in My account.",
+			"dependsOn": [],
+			"settings": {
+				"$ref": "schemas/custom_fields.settings.json"
+			}
+		},
+		{
+			"key": "two_step",
+			"name": "Two-step sign-in",
+			"description": "A 6-digit authenticator-app code after the first step, with 10 recovery codes; optional, or required per role.",
+			"dependsOn": [],
+			"settings": {
+				"$ref": "schemas/two_step.settings.json"
+			}
+		},
+		{
+			"key": "approval",
+			"name": "Approval / invite sign-up",
+			"description": "Sign-up rules: open sign-up, invite only or approval required, the required profile fields, and invites from the Users admin widget.",
+			"dependsOn": [],
+			"settings": {
+				"$ref": "schemas/approval.settings.json"
+			}
+		},
+		{
+			"key": "risk_checks",
+			"name": "Risk checks",
+			"description": "Refuses disposable e-mail addresses and too many accounts from one device or one network.",
+			"dependsOn": [],
+			"settings": {
+				"$ref": "schemas/risk_checks.settings.json"
+			}
+		},
+		{
+			"key": "terms",
+			"name": "Terms acceptance",
+			"description": "Sign-up and sign-in ask the user to accept the current terms version, which is recorded on the user.",
+			"dependsOn": [],
+			"settings": {
+				"$ref": "schemas/terms.settings.json"
+			}
+		},
+		{
+			"key": "data_rights",
+			"name": "Data rights",
+			"description": "Download my data at once; Delete my account after the merchant approves (or after N days), erased in every connected product through pasted tokens.",
+			"dependsOn": [],
+			"settings": {
+				"$ref": "schemas/data_rights.settings.json"
+			}
+		},
+		{
+			"key": "activity_copies",
+			"name": "Activity log copy",
+			"description": "Keeps a copy of the activity log of every product the merchant pasted the Accounts token into.",
+			"dependsOn": [],
+			"settings": {
+				"$ref": "schemas/activity_copies.settings.json"
+			}
+		},
+		{
+			"key": "orders_tab",
+			"name": "Orders tab",
+			"description": "My account shows the user's orders from Ecommerce (pasted Ecommerce token).",
+			"dependsOn": [],
+			"settings": {
+				"$ref": "schemas/orders_tab.settings.json"
+			}
+		}
+	],
+	"permissions": [
+		{
+			"key": "users.read",
+			"name": "See users",
+			"feature": "roles"
+		},
+		{
+			"key": "users.manage",
+			"name": "Block, invite, approve and edit users (roles, notes)",
+			"feature": "roles"
+		},
+		{
+			"key": "roles.manage",
+			"name": "Edit roles and permissions",
+			"feature": "roles"
+		}
+	],
+	"widgets": [
+		{
+			"key": "sign_in",
+			"feature": ["phone_code", "email_password", "email_code", "google", "apple", "facebook"],
+			"kind": "visitor"
+		},
+		{
+			"key": "my_account",
+			"feature": ["phone_code", "email_password", "email_code", "google", "apple", "facebook"],
+			"kind": "visitor"
+		},
+		{
+			"key": "users_admin",
+			"feature": "roles",
+			"kind": "admin"
+		},
+		{
+			"key": "roles_admin",
+			"feature": "roles",
+			"kind": "admin"
+		}
+	]
+}

@@ -104,9 +104,10 @@ export const NOTES = { createProductInstance, createRoutes, manifest, strings, u
 
 /**
  * Start the Portal and a product (Notes unless told otherwise), connected to each other through one in-process network.
- * @param {{ graceDays?: number, unit?: ProductUnit }} [options] Settings → Billing grace days (default 1)
+ * @param {{ graceDays?: number, unit?: ProductUnit, extras?: ProductUnit[] }} [options] Settings → Billing grace days
+ *   (default 1); `extras`: more products on the same network (each with its own product database)
  */
-export const startSystem = async ({ graceDays = 1, unit = NOTES } = {}) => {
+export const startSystem = async ({ graceDays = 1, unit = NOTES, extras = [] } = {}) => {
 	const { manifest: productManifest, url: productUrl } = unit;
 	const uri = process.env.TEST_MONGODB_URI;
 	if (!uri) throw new Error('TEST_MONGODB_URI is not set (run through vitest with the @ss/config Mongo setup)');
@@ -176,6 +177,21 @@ export const startSystem = async ({ graceDays = 1, unit = NOTES } = {}) => {
 	const productHandler = product.handler(unit.createRoutes(product), { after: (task) => void queued.push(task) });
 	let reachable = true;
 	handlers[productUrl] = async (request) => (reachable ? productHandler(request) : new Response(null, { status: 503 }));
+	/** The other products of this system, by product id. @type {Record<string, any>} */
+	const others = {};
+	for (const extra of extras) {
+		const other = extra.createProductInstance({
+			config: { mongodbUri: '', connectSecret: CONNECT_SECRET, encryptionKey: PRODUCT_KEY },
+			store: createMongoStore({ db: database(extra.manifest.id), now: clock.now }),
+			fetch: network.fetch,
+			now: clock.now,
+			nodeEnv: 'test',
+			outbound: { allowHosts: ['127.0.0.1', 'localhost'] },
+			outboundSend: network.send,
+		});
+		others[extra.manifest.id] = other;
+		handlers[extra.url] = other.handler(extra.createRoutes(other), { after: (task) => void queued.push(task) });
+	}
 
 	/**
 	 * A second product on the kit with no routes of its own (another id), for wrong-product tokens.
@@ -200,10 +216,10 @@ export const startSystem = async ({ graceDays = 1, unit = NOTES } = {}) => {
 	 * A request to the product, as a browser, a merchant's server or the dashboard sends it.
 	 * @param {string} method
 	 * @param {string} path
-	 * @param {{ token?: string, origin?: string, body?: unknown, cookie?: string, base?: string }} [init]
+	 * @param {{ token?: string, origin?: string, body?: unknown, cookie?: string, base?: string, headers?: Record<string, string> }} [init]
 	 * @returns {Promise<Answer>}
 	 */
-	const call = async (method, path, { token, origin, body, cookie, base = productUrl } = {}) => {
+	const call = async (method, path, { token, origin, body, cookie, base = productUrl, headers = {} } = {}) => {
 		const handler = /** @type {Handler} */ (handlers[base]);
 		const response = await handler(
 			new Request(`${base}${path}`, {
@@ -213,6 +229,7 @@ export const startSystem = async ({ graceDays = 1, unit = NOTES } = {}) => {
 					...(origin ? { origin } : {}),
 					...(cookie ? { cookie } : {}),
 					...(body === undefined ? {} : { 'content-type': 'application/json' }),
+					...headers,
 				},
 				...(body === undefined ? {} : { body: JSON.stringify(body) }),
 			}),
@@ -242,10 +259,10 @@ export const startSystem = async ({ graceDays = 1, unit = NOTES } = {}) => {
 
 	/**
 	 * A dashboard API call with a session cookie (writes carry the product's own Origin).
-	 * @param {string} cookie @param {string} method @param {string} path @param {unknown} [body]
+	 * @param {string} cookie @param {string} method @param {string} path @param {unknown} [body] @param {string} [base]
 	 */
-	const dashboard = (cookie, method, path, body) =>
-		call(method, path, { cookie, body, ...(method === 'GET' ? {} : { origin: productUrl }) });
+	const dashboard = (cookie, method, path, body, base = productUrl) =>
+		call(method, path, { cookie, body, base, ...(method === 'GET' ? {} : { origin: base }) });
 
 	/**
 	 * A call to a `/v1/product/*` route signed with the product's own key (the one it pinned at connect).
@@ -354,9 +371,10 @@ export const startSystem = async ({ graceDays = 1, unit = NOTES } = {}) => {
 	 * A dashboard session of an admin (Open as admin); '' when refused.
 	 * @param {ReturnType<typeof api.session>} by
 	 * @param {string | null} websiteId
+	 * @param {string} [productId]
 	 */
-	const adminSession = async (by, websiteId) => {
-		const launch = await by.post(`/v1/admin/products/${productManifest.id}/launch`, { websiteId });
+	const adminSession = async (by, websiteId, productId = productManifest.id) => {
+		const launch = await by.post(`/v1/admin/products/${productId}/launch`, { websiteId });
 		if (launch.status !== 200) throw new Error(`launch ${launch.status} ${JSON.stringify(launch.json)}`);
 		return (await open(launch.json.url)).cookie;
 	};
@@ -396,16 +414,20 @@ export const startSystem = async ({ graceDays = 1, unit = NOTES } = {}) => {
 
 	/**
 	 * Connect a fresh merchant database (Connections screen; tested live when saved).
-	 * @param {string} cookie @param {string} websiteId
+	 * @param {string} cookie @param {string} websiteId @param {string} [base] the product's address
 	 */
-	const connectDatabase = async (cookie, websiteId) => {
+	const connectDatabase = async (cookie, websiteId, base = productUrl) => {
 		const name = `${prefix}_merchant_${databases.length}`;
 		databases.push(name);
 		const target = new URL(/** @type {string} */ (uri));
 		target.pathname = `/${name}`;
-		const res = await dashboard(cookie, 'PUT', `/v1/dashboard/websites/${websiteId}/connections/database`, {
-			value: target.toString(),
-		});
+		const res = await dashboard(
+			cookie,
+			'PUT',
+			`/v1/dashboard/websites/${websiteId}/connections/database`,
+			{ value: target.toString() },
+			base,
+		);
 		if (res.status !== 200) throw new Error(`database ${res.status} ${JSON.stringify(res.json)}`);
 		return client.db(name);
 	};
@@ -440,6 +462,7 @@ export const startSystem = async ({ graceDays = 1, unit = NOTES } = {}) => {
 		mailer,
 		entries,
 		product,
+		others,
 		call,
 		open,
 		dashboard,
@@ -467,6 +490,7 @@ export const startSystem = async ({ graceDays = 1, unit = NOTES } = {}) => {
 		},
 		stop: async () => {
 			await product.close();
+			for (const other of Object.values(others)) await other.close();
 			for (const name of databases) await client.db(name).dropDatabase();
 			await client.close();
 			await closeMongoClients();

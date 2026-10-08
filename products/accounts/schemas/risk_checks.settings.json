@@ -1,0 +1,36 @@
+{
+	"type": "object",
+	"additionalProperties": false,
+	"properties": {
+		"blockDisposable": {
+			"type": "boolean",
+			"title": "Refuse disposable e-mail addresses",
+			"default": true
+		},
+		"blockedDomains": {
+			"type": "array",
+			"title": "More refused e-mail domains",
+			"default": [],
+			"items": {
+				"type": "string",
+				"maxLength": 253
+			}
+		},
+		"maxAccountsPerDevice": {
+			"type": "integer",
+			"title": "Accounts per device",
+			"description": "New accounts one browser may create.",
+			"default": 3,
+			"minimum": 1,
+			"maximum": 50
+		},
+		"maxSignUpsPerNetworkPerDay": {
+			"type": "integer",
+			"title": "Sign-ups per network per day",
+			"description": "New accounts from one IP address in 24 hours.",
+			"default": 20,
+			"minimum": 1,
+			"maximum": 1000
+		}
+	}
+}

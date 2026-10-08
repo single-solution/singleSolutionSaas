@@ -1,0 +1,19 @@
+{
+	"type": "object",
+	"additionalProperties": false,
+	"properties": {
+		"version": {
+			"type": "string",
+			"title": "Current terms version",
+			"description": "Change it when the terms change: everyone accepts the new version at their next sign-in.",
+			"default": "1",
+			"maxLength": 40
+		},
+		"url": {
+			"type": "string",
+			"title": "Terms page",
+			"default": "",
+			"maxLength": 2048
+		}
+	}
+}

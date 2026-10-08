@@ -1,0 +1,37 @@
+{
+	"type": "object",
+	"additionalProperties": false,
+	"properties": {
+		"mode": {
+			"type": "string",
+			"title": "Who can sign up",
+			"description": "open: anyone; invite: only invited people; approval: anyone, but a member of staff approves each new user.",
+			"default": "approval",
+			"enum": ["open", "invite", "approval"]
+		},
+		"requiredFields": {
+			"type": "array",
+			"title": "Required at sign-up",
+			"description": "Standard profile fields the user must give at sign-up (custom fields set their own).",
+			"default": [],
+			"items": {
+				"type": "string",
+				"enum": ["name", "email", "phone"]
+			}
+		},
+		"invitePageUrl": {
+			"type": "string",
+			"title": "Invite page",
+			"description": "A page of your website with the sign-in widget; invites link to it.",
+			"default": "",
+			"maxLength": 2048
+		},
+		"inviteDays": {
+			"type": "integer",
+			"title": "Invites valid for (days)",
+			"default": 7,
+			"minimum": 1,
+			"maximum": 30
+		}
+	}
+}
