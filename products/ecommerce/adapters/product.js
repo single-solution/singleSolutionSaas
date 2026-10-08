@@ -45,6 +45,7 @@ import { createAi } from './ai.js';
 import { INDEXES as CATALOG_INDEXES } from './catalog-store.js';
 import { createCouriers } from './couriers.js';
 import { INDEXES as EXTRAS_INDEXES } from './extras-store.js';
+import { INDEXES as FULFILMENT_INDEXES } from './fulfilment-store.js';
 import { LEDGER_INDEXES } from './ledger.js';
 import { createLists } from './lists.js';
 import { INDEXES as ORDERS_INDEXES } from './orders-store.js';
@@ -113,7 +114,14 @@ export const PROBLEM_CODES = Object.freeze({
 });
 
 /** Every merchant database index of the shop. */
-export const INDEXES = [...LEDGER_INDEXES, ...CATALOG_INDEXES, ...ORDERS_INDEXES, ...PROMOTIONS_INDEXES, ...EXTRAS_INDEXES];
+export const INDEXES = [
+	...LEDGER_INDEXES,
+	...CATALOG_INDEXES,
+	...ORDERS_INDEXES,
+	...FULFILMENT_INDEXES,
+	...PROMOTIONS_INDEXES,
+	...EXTRAS_INDEXES,
+];
 
 /**
  * @typedef {Omit<import('@ss/app-kit').ProductOptions, 'manifest' | 'strings' | 'hooks' | 'connections' | 'data' | 'problemCodes'>} InstanceOptions
