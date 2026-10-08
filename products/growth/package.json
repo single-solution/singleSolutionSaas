@@ -8,6 +8,7 @@
 	"exports": {
 		"./product": "./adapters/product.js",
 		"./routes": "./api/routes.js",
+		"./page-script": "./ui/widget.js",
 		"./package.json": "./package.json"
 	},
 	"engines": {

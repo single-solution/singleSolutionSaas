@@ -2243,6 +2243,78 @@ currency, createdAt }], loyaltyPoints }`. `context_panel` is not marked Not work
         storage CORS allows `PUT` from the website and admin origins. No courier or gateway address needs registering
         for Ecommerce. Step 10's Done line stays empty until then.
 
+   - **Step 11, Growth** (0.8.9; each item open for owner review):
+      - **Feature keys**: `meta_pixel`, `google_tags`, `tiktok_pixel`, `custom_scripts`, `consent_banner`,
+        `visitor_analytics`, `conversion_funnel`, `searches_404s`, `web_vitals`, `robots_verification`, `indexnow`,
+        `seo_checklist`, `notice_bar`. `conversion_funnel`, `searches_404s` and `web_vitals` need `visitor_analytics`
+        (they record into the same analytics and show in its dashboard); the others need nothing. Permissions:
+        `analytics.read` (`visitor_analytics`), `seo.check` (`seo_checklist`), `indexnow.submit` (`indexnow`). Widgets:
+        `consent_banner` and `notice_bar` (visitor), `analytics_dashboard` (admin, `visitor_analytics`) and `seo_checklist`
+        (admin, while `seo_checklist` or `indexnow` is on: the IndexNow box lives in it, since 0.8.9 names four widgets).
+      - **Page script**: the product's `widget.js` with `data-token`, placed in the page head without `async` before the
+        other products' scripts (shop events dispatched before it runs are lost). `window.SSGrowth` offers
+        `consent.open()`, `consent.set({ analytics, marketing })`, `consent.get()`, `search(term, { results })`,
+        `notFound()` and `admin({ getTicket })`. Without `data-token` it only mounts the admin widgets.
+      - **Consent**: the choice is kept in localStorage (`ss-growth-consent`) and asked again after 365 days (code
+        constant). Tags always wait for consent, also with the banner off (the merchant's own consent tool passes the
+        choice with `consent.set()`). GA4 and analytics scripts need analytics; the Meta and TikTok pixels, Google Ads
+        and marketing scripts need marketing; the Tag Manager container loads after either, with Consent Mode v2
+        (default all denied, `wait_for_update` 500 ms, updated on every choice) telling its tags what was granted. No
+        Google tag loads before consent (basic mode). A later refusal updates Consent Mode; tags already loaded stay
+        until the next page.
+      - **Analytics privacy**: Count only after analytics consent (`requireConsent`, default on); before consent events
+        wait in memory for that page only. A visit is a page view with no other in the last 30 minutes in that tab
+        (sessionStorage keeps a time, never an id), so there are no unique-visitor counts. Paths are kept without query
+        strings. Source: `utm_source`, else an external referrer host, else `(direct)`. Device: phone, tablet or
+        computer from the window width. Country: the first two-letter value of `x-vercel-ip-country`, `cf-ipcountry`,
+        `cloudfront-viewer-country` or `x-country-code`, behind the `recordCountry` setting (default on).
+      - **Storage**: raw events in `ss_growth_events` with a TTL index on `expiresAt` (recorded time + the retention
+        setting, 1–25 months, default 13; a change applies to events recorded afterwards); daily totals in
+        `ss_growth_daily` as `{ day, metric, key, count, sum }` `$inc` upserts, UTC days, kept forever, keys not capped
+        (paths cut at 300 characters, search terms at 100). Events are written inside the `POST /v1/collect` request
+        (browser token, at most 25 events and 64 kB, 3,000 per minute per website and 120 per visitor; invalid events
+        are dropped silently).
+      - **Shop events**: `detail` is `{ items: [{ id, variantId?, name?, price?, quantity? }], value, currency,
+orderId? }` with money in minor units (as everywhere); pixels get major units. Names per pixel: Meta
+        ViewContent / AddToCart / InitiateCheckout / Purchase, GA4 `view_item` / `add_to_cart` / `begin_checkout` /
+        `purchase`, TikTok ViewContent / AddToCart / InitiateCheckout / CompletePayment; a purchase is also sent as the
+        Google Ads conversion of the `adsPurchaseLabel` setting. Ecommerce dispatches `ss:view_item` when a product page
+        first shows a product, `ss:add_to_cart` from the product page, the wishlist and `SSEcommerce.addToCart` (Chat's
+        cards), `ss:begin_checkout` on the first press of Place order, `ss:purchase` once the order exists.
+      - **Searches and 404s**: searches come from the search query parameters setting (default `q, s, search, query`)
+        or `SSGrowth.search()`; a 404 from the page marker `<meta name="ss-growth-page" content="not_found">` or
+        `SSGrowth.notFound()` ("calls the API" read as the page script's API; there is no server route for 404s).
+      - **Web Vitals**: LCP, INP (the longest interaction), CLS (× 1000), FCP and TTFB, sent when the page is first
+        hidden; the report shows the average and the good / needs-improvement / poor shares (web.dev thresholds), not
+        the 75th percentile (totals keep sums only).
+      - **SEO routes**: `GET /v1/robots.txt` and `GET /v1/verification` (server token) for the merchant's site to proxy
+        or include. The IndexNow key is a setting (it is public by design, so not a write-only connection), served by
+        `GET /v1/indexnow/key.txt`; `POST /v1/indexnow` (server) and `POST /v1/admin/indexnow` (ticket) send up to
+        10,000 https URLs of the exact domain to `api.indexnow.org`. The SEO checklist (`POST /v1/seo/checks`, ticket
+        `POST /v1/admin/seo/checks`) reads robots.txt, the sitemap (the first one robots.txt names on the domain, else
+        `/sitemap.xml`) and the home page plus the `paths` setting (20 pages at most; 8 s and 1 MB each, through
+        `@ss/net`) and checks robots.txt reachable and not blocking all, sitemap, verification tag, and per page: opens,
+        not noindex, title 10–60, description 50–160, one h1, canonical on the domain, lang, viewport, og:title and
+        og:image, image alt, JSON-LD. Results are not stored. ibrahimMobiles' catalog, feed and local-business checks
+        stay with Ecommerce or are left out. IndexNow and the checklist are limited to 10 runs per hour per website.
+      - **Notice bar**: its text, link, link text, dates and "visitors can close it" are `notice_bar` settings (the close
+        label is a widget text). Dates are plain ISO 8601 strings checked on use (settings schemas allow no optional
+        date-time); an invalid date hides the bar. A closed bar stays closed for the visit (sessionStorage).
+      - **Tag ids** are checked on use (settings schemas allow no pattern): a malformed id is not loaded, and Overview's
+        Tags ready tile counts the tag features with a well-formed id or a script. Overview: today's cost, features on,
+        connections ready and tags ready as colour tiles (no hero card).
+      - **Connections**: the database and the Accounts token (activity-log copies of the staff actions IndexNow
+        submitted and SEO checked). **Data rights**: nothing names a person, so export answers no records and delete
+        removes nothing.
+      - **System test**: the page script is exported as `@ss/product-growth/page-script` and run in a jsdom window in
+        `e2e/tests/growth.test.js`; `e2e` gained `@types/jsdom`.
+      - **Owner items, step 11**: create the Vercel project with root `products/growth`, set `MONGODB_URI` (its own
+        database, for example `ss_growth`), `CONNECT_SECRET` and `ENCRYPTION_KEY` for Production, deploy, then Portal →
+        Products → Add product and set it Active; redeploy Ecommerce (its widgets dispatch the shop events). Merchants
+        add the page script before Ecommerce's, serve `/robots.txt`, the verification tags and `/<key>.txt` from the
+        routes above, and give their database user the right to create indexes (the TTL index). Step 11's Done line
+        stays empty until then.
+
 Everything else in Part 0 is decided. A point that is not decided in Part 0 or 0.10 is asked, not guessed (0.13).
 
 ## 0.9 Conflicts with the current build and deployment
