@@ -132,6 +132,31 @@ export const createSending = (product) => {
 		await s.store.events.add(webhookUrls(urls).map((url) => ({ type, url, body })));
 	};
 
+	/**
+	 * Queue another product's event (for example `payments.payment.paid`, PLAN 0.8.7) for the merchant's webhook URLs,
+	 * signed and retried like Notifications' own. Other products' events go to every URL; the Events setting picks
+	 * among Notifications' own events only.
+	 * @param {Site} s
+	 * @param {string} type
+	 * @param {Record<string, unknown>} data
+	 * @returns {Promise<number>} deliveries queued (0 without the signing secret or URLs)
+	 */
+	const relay = async (s, type, data) => {
+		if (typeof (await product.connections.value(s.websiteId, 'webhook_secret')) !== 'string') return 0;
+		const { urls } = await product.settings.values(s.websiteId, 'webhooks');
+		const targets = webhookUrls(urls);
+		if (targets.length === 0) return 0;
+		const body = JSON.stringify({
+			id: createId('evt'),
+			type,
+			createdAt: new Date(now()).toISOString(),
+			websiteId: s.websiteId,
+			data,
+		});
+		await s.store.events.add(targets.map((url) => ({ type, url, body })));
+		return targets.length;
+	};
+
 	/** @param {MessageRecord} message */
 	const eventData = (message) => ({
 		messageId: message.id,
@@ -466,7 +491,7 @@ export const createSending = (product) => {
 		if (await s.store.optouts.add(address, via)) await emit(s, 'recipient.unsubscribed', { address, via });
 	};
 
-	return Object.freeze({ site, accept, drain, unsubscribe });
+	return Object.freeze({ site, accept, drain, unsubscribe, relay });
 };
 
 /** @typedef {ReturnType<typeof createSending>} Sending */

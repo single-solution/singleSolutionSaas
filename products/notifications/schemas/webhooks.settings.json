@@ -15,7 +15,7 @@
 		"events": {
 			"type": "array",
 			"title": "Events",
-			"description": "The events sent to the URLs.",
+			"description": "Notifications' own events sent to the URLs. Other products' events (for example payments.payment.paid) are always sent.",
 			"default": ["message.sent", "message.failed", "recipient.unsubscribed"],
 			"items": {
 				"type": "string",

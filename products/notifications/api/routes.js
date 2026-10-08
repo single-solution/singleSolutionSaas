@@ -7,7 +7,7 @@
  * @module
  */
 import { isId } from '@ss/contracts';
-import { created, defineRoute, noContent, paginate, problem } from '@ss/app-kit';
+import { created, defineRoute, noContent, ok, paginate, problem } from '@ss/app-kit';
 import { CHANNELS, checkRecipient, normaliseEmail, normalisePhone } from '../core/channels.js';
 import { isOptOut, repliesOf } from '../core/inbound.js';
 import { verifyMeta, verifyTwilio } from '../adapters/signatures.js';
@@ -31,6 +31,9 @@ const VISITOR_LIMITS = [
 	{ limit: 300, windowSeconds: 60, per: /** @type {const} */ ('website') },
 	{ limit: 20, windowSeconds: 60, per: /** @type {const} */ ('visitor') },
 ];
+
+/** Event types other products send through `POST /v1/events`: `<product id>.<event>`. */
+const PRODUCT_EVENT = /^(?:accounts|ecommerce|chat|payments|growth)\.[a-z][a-z0-9_.]{0,62}$/;
 
 /** @param {string} field @param {string} message @param {string} [code] */
 const invalid = (field, message, code = 'invalid') =>
@@ -277,6 +280,29 @@ export const createRoutes = (product) => {
 			idempotent: true,
 			rateLimit: SEND_LIMITS,
 			handler: sendHandler('staff_push'),
+		}),
+		// other products' events (for example payments.payment.paid) to the merchant's webhook URLs, signed here
+		defineRoute({
+			method: 'POST',
+			path: '/v1/events',
+			auth: 'server',
+			feature: 'webhooks',
+			idempotent: true,
+			rateLimit: SEND_LIMITS,
+			handler: async (ctx) => {
+				const body = typeof ctx.body === 'object' && ctx.body !== null ? ctx.body : {};
+				if (typeof body.type !== 'string' || !PRODUCT_EVENT.test(body.type))
+					return invalid('type', 'Name the event as <product id>.<event>, for example payments.payment.paid.');
+				if (
+					typeof body.data !== 'object' ||
+					body.data === null ||
+					Array.isArray(body.data) ||
+					JSON.stringify(body.data).length > 16_384
+				)
+					return invalid('data', 'data is an object of at most 16 kB of JSON.');
+				const s = await siteOf(ctx);
+				return ok({ queued: await sending.relay(s, body.type, body.data) }, { status: 202 });
+			},
 		}),
 		// the delivery log for the merchant's server
 		defineRoute({ method: 'GET', path: '/v1/messages', auth: 'server', feature: 'send_api', handler: listMessages }),

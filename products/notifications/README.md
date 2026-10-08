@@ -6,20 +6,20 @@ product and for the merchant's own server, through the merchant's own provider k
 
 ## Features
 
-| Key              | What it does                                                                                                      |
-| ---------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `whatsapp`       | WhatsApp through Meta WhatsApp Cloud API, Twilio, or any gateway over HTTP (Connectivity.pk, local gateways)      |
-| `email`          | E-mail through SMTP, Resend, SendGrid, Mailgun or Amazon SES                                                      |
-| `sms`            | SMS through Twilio or any gateway over HTTP                                                                       |
-| `browser_push`   | Web push to visitors (the push-permission widget), with the merchant's VAPID keys                                 |
-| `staff_push`     | Web push to the merchant's staff (admin widget with a ticket)                                                     |
-| `webhooks`       | Signed events (`message.sent`, `message.failed`, `recipient.unsubscribed`) to up to 5 URLs, retried on later uses |
-| `fallback`       | After the retries, one more try on the fallback channel set per channel (e.g. WhatsApp → SMS)                     |
-| `quiet_hours`    | Non-urgent messages wait for the end of the quiet window in the recipient's time zone                             |
-| `send_limits`    | Messages per recipient per hour and per day                                                                       |
-| `delayed_send`   | `sendAt`: sent on the first use of the website after that time                                                    |
-| `multi_language` | Template versions per language (exact code, then base language, else the default version)                         |
-| `send_api`       | The merchant's own template keys, the delivery log routes and the admin widgets                                   |
+| Key              | What it does                                                                                                                                                            |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `whatsapp`       | WhatsApp through Meta WhatsApp Cloud API, Twilio, or any gateway over HTTP (Connectivity.pk, local gateways)                                                            |
+| `email`          | E-mail through SMTP, Resend, SendGrid, Mailgun or Amazon SES                                                                                                            |
+| `sms`            | SMS through Twilio or any gateway over HTTP                                                                                                                             |
+| `browser_push`   | Web push to visitors (the push-permission widget), with the merchant's VAPID keys                                                                                       |
+| `staff_push`     | Web push to the merchant's staff (admin widget with a ticket)                                                                                                           |
+| `webhooks`       | Signed events (`message.sent`, `message.failed`, `recipient.unsubscribed`, and other products' events sent to `POST /v1/events`) to up to 5 URLs, retried on later uses |
+| `fallback`       | After the retries, one more try on the fallback channel set per channel (e.g. WhatsApp → SMS)                                                                           |
+| `quiet_hours`    | Non-urgent messages wait for the end of the quiet window in the recipient's time zone                                                                                   |
+| `send_limits`    | Messages per recipient per hour and per day                                                                                                                             |
+| `delayed_send`   | `sendAt`: sent on the first use of the website after that time                                                                                                          |
+| `multi_language` | Template versions per language (exact code, then base language, else the default version)                                                                               |
+| `send_api`       | The merchant's own template keys, the delivery log routes and the admin widgets                                                                                         |
 
 There is no background work: a message due now is attempted inside the request that sends it; retries (3 per channel,
 after 1 and 5 minutes), quiet-hour and delayed messages and webhook retries are sent right after the next requests for

@@ -482,6 +482,36 @@ describe('the send API', () => {
 		});
 		expect(JSON.parse(last.body).data.text).toBeUndefined();
 	});
+
+	it("relays other products' events to every webhook URL, signed", async () => {
+		/** @param {unknown} body */
+		const relay = (body) => env.call('POST', '/v1/events', { token: env.server, body });
+		expect((await relay({ type: 'message.sent', data: {} })).status).toBe(422);
+		expect((await relay({ type: 'payments.payment.paid', data: [] })).status).toBe(422);
+		expect((await relay({ type: 'payments.payment.paid', data: { x: 'y'.repeat(17_000) } })).status).toBe(422);
+		const before = env.providers.callsTo('https://hooks.example.org').length;
+		const res = await relay({ type: 'payments.payment.paid', data: { payment: { id: 'pay_1', status: 'paid' } } });
+		expect(res.status).toBe(202);
+		expect(await res.json()).toEqual({ queued: 1 });
+		const calls = env.providers.callsTo('https://hooks.example.org');
+		expect(calls).toHaveLength(before + 1);
+		const last = /** @type {import('./helpers.js').ProviderCall} */ (calls.at(-1));
+		expect(
+			verifyWebhook({ body: last.body, header: last.headers['ss-signature'] ?? null, secret: WEBHOOK_SECRET, now: env.now() }),
+		).toBe(true);
+		expect(JSON.parse(last.body)).toMatchObject({
+			type: 'payments.payment.paid',
+			websiteId: env.websiteId,
+			data: { payment: { id: 'pay_1' } },
+		});
+		const cookie = await env.adminSession();
+		await env.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${env.websiteId}/settings/webhooks.urls`, { value: [] });
+		expect(await (await relay({ type: 'payments.payment.paid', data: {} })).json()).toEqual({ queued: 0 });
+		await env.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${env.websiteId}/settings/webhooks.urls`, { value: [HOOK_URL] });
+		await env.dashboard(cookie, 'DELETE', `/v1/dashboard/websites/${env.websiteId}/connections/webhook_secret`);
+		expect(await (await relay({ type: 'payments.payment.paid', data: {} })).json()).toEqual({ queued: 0 });
+		await env.connect('webhook_secret', WEBHOOK_SECRET);
+	});
 });
 
 describe('the delivery log and the admin widgets (tickets)', () => {
