@@ -1568,6 +1568,37 @@ retry counts) are constants in code, not settings.
 - The current chatbot dashboard's Inbox and Knowledge pages (`products/chatbot/app/dashboard/_views/inbox.js`,
   `inbox-id.js`, `knowledge.js`) are removed; their functions are the inbox and knowledge editor widgets.
 
+### 0.8.5 Notifications — owner interview (2026-10-08)
+
+Notifications sends messages for any product **and** for the merchant's own server (send API), through the merchant's
+own provider keys. All behaviour below is managed inside the Notifications product (per website; our admin sets
+defaults and prices). Features start at price 0.
+
+- **Feature switches**: WhatsApp · Email · SMS · Browser push · Staff push · Outgoing webhooks · Fallback channel ·
+  Quiet hours · Send limits · Delayed send · Multi-language templates · Merchant send API.
+- **Providers (merchant's own keys)**: WhatsApp — Meta WhatsApp Cloud API, Twilio WhatsApp, Connectivity.pk / local
+  gateways, generic HTTP (URL, headers, body template). Email — SMTP, Resend, SendGrid, Mailgun, Amazon SES. SMS —
+  Twilio, local gateways and any API via generic HTTP. Browser and staff push use the merchant's own push keys.
+- **Templates live in Notifications**: products and the send API say "send `<template key>` to `<recipient>` with
+  these values"; the merchant edits every template per event, per channel and **per language** (recipient's language,
+  fallback English) in the Notifications dashboard (and the template editor widget).
+- **Failures**: retry on the same channel a bounded number of times (on the next uses, no background jobs), then an
+  optional **fallback channel** (e.g. WhatsApp → SMS); every attempt is recorded in the delivery log.
+- **Opt-out**: required messages (sign-in codes, order and account updates) always send; non-essential messages
+  (promotions, alerts) honour a per-recipient unsubscribe (link or keyword).
+- **Timing**: quiet hours (non-urgent messages wait for the recipient's morning), send limits per recipient per
+  hour/day, delayed send (sent on the first use after its due time; no scheduled jobs, so it can be late on a quiet
+  site).
+- **Webhooks**: outgoing events to the merchant's own URLs, signed so they can be verified, retried on failure.
+- **Push**: browser push to visitors who allow it, and staff push to the merchant's staff browsers.
+- **Delivery log**: kept **forever** in the merchant's own database; our admins never see it (setup only).
+- **Hosted pages**: Notifications serves the unsubscribe page and the push-permission widget; the merchant can restyle
+  them and edit every word.
+- **Admin widgets** (via tickets, on the merchant's own admin): delivery log, template editor, send a one-off message.
+- **Dashboard**: Overview (what's on, today's cost, setup checklist) · Features (read-only for merchants) · Settings ·
+  Connections (database, providers per channel, push keys) · Developers (send API, template keys, widget snippets,
+  ticket snippet, webhook signature check).
+
 ### 0.8.4 Still open
 
 - **The grilling of each later product** (Notifications, Accounts, Payments, Ecommerce, Growth), held right before it is
