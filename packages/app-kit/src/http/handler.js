@@ -69,7 +69,8 @@ const REQUEST_ID = /^[A-Za-z0-9._:-]{1,128}$/;
 const IDEMPOTENCY_KEY = /^[\x21-\x7e]{1,255}$/;
 const BODY_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const DUPLICATE_WINDOW_MS = 24 * 60 * 60_000;
-const CORS_HEADERS = 'authorization, content-type, idempotency-key, x-request-id';
+// `ss-sign-in`: a visitor's Accounts sign-in next to the browser token (Accounts' signed-in visitor routes)
+const CORS_HEADERS = 'authorization, content-type, idempotency-key, ss-sign-in, x-request-id';
 const LAST_SEEN_EVERY_MS = 60 * 60_000;
 const STAFF_EVERY_MS = 10 * 60_000;
 const NO_FRAMES = Object.freeze({ 'x-frame-options': 'DENY', 'content-security-policy': "frame-ancestors 'none'" });
@@ -129,8 +130,8 @@ export const createRequestHandler = (kit, routes, options = {}) => {
 		manifest.permissions.map((/** @type {{ key: string, feature: string }} */ p) => [p.key, p.feature]),
 	);
 	for (const route of compiled) {
-		if (route.feature !== undefined && !featureKeys.includes(route.feature))
-			throw new TypeError(`route ${route.id}: unknown feature ${route.feature}`);
+		for (const key of route.feature === undefined ? [] : [route.feature].flat())
+			if (!featureKeys.includes(key)) throw new TypeError(`route ${route.id}: unknown feature ${key}`);
 		if (route.permission !== undefined && !featureOfPermission.has(route.permission))
 			throw new TypeError(`route ${route.id}: unknown permission ${route.permission}`);
 	}
@@ -423,8 +424,10 @@ export const createRequestHandler = (kit, routes, options = {}) => {
 				ctx.status = serving.status;
 				ctx.merchantId = serving.status.merchantId;
 				const feature = r.feature ?? (r.permission === undefined ? undefined : featureOfPermission.get(r.permission));
-				if (feature !== undefined && !(await kit.reports.isOn(id, feature)))
-					return fail(problem('feature_off', `The feature ${feature} is off.`));
+				// a list: the route works while any of its features is on
+				const keys = feature === undefined ? [] : [feature].flat();
+				if (keys.length > 0 && !(await kit.reports.switches(id)).on.some((key) => keys.includes(key)))
+					return fail(problem('feature_off', `The feature ${keys.join(' or ')} is off.`));
 				if (r.database !== false && (await kit.connections.value(id, 'database')) === null)
 					return fail(problem('database_not_connected', 'Connect the merchant database in the product dashboard first.'));
 				afterTasks.push(() => afterWebsiteRequest(ctx, r));

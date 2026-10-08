@@ -255,7 +255,9 @@ export const createDashboard = (kit) => {
 				const status = await statusOf(ctx);
 				const { on } = await kit.reports.switches(id);
 				const needed = (await kit.connections.list(id)).filter((c) => c.neededBy.some((key) => on.includes(key)));
-				const visitorWidgets = manifest.widgets.some((w) => w.kind === 'visitor' && on.includes(w.feature));
+				const visitorWidgets = manifest.widgets.some(
+					(w) => w.kind === 'visitor' && [w.feature].flat().some((key) => on.includes(key)),
+				);
 				const seen = await store.get('widget', id);
 				const business = await kit.business.get(id, status.domain);
 				return {

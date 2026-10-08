@@ -16,7 +16,7 @@ import { findRoutes, lex } from './validate/scan.js';
  * @property {string} method
  * @property {string} path
  * @property {string} auth
- * @property {string} [feature]
+ * @property {string | string[]} [feature] one feature, or several (the route works while any of them is on)
  * @property {string} [permission]
  * @property {boolean} idempotent
  */
@@ -42,7 +42,9 @@ export const scanRoutes = async (files) => {
 		if (!file.startsWith('api/') || !file.endsWith('.js') || file === WIDGET_MODULE) continue;
 		for (const { line, members, spread } of findRoutes(lex(await files.read(file)))) {
 			const unreadable = LITERAL_MEMBERS.filter(
-				(name) => (members[name] !== undefined || ['method', 'path', 'auth'].includes(name)) && !members[name]?.literal,
+				(name) =>
+					(members[name] !== undefined || ['method', 'path', 'auth'].includes(name)) &&
+					(!members[name]?.literal || (name !== 'feature' && Array.isArray(members[name]?.value))),
 			);
 			if (spread || unreadable.length > 0) {
 				problems.push(
@@ -57,13 +59,14 @@ export const scanRoutes = async (files) => {
 			}
 			/** @param {string} name */
 			const text = (name) => /** @type {string | undefined} */ (members[name]?.value);
+			const feature = /** @type {string | string[] | undefined} */ (members.feature?.value);
 			routes.push({
 				file,
 				line,
 				method: /** @type {string} */ (text('method')),
 				path: /** @type {string} */ (text('path')),
 				auth: /** @type {string} */ (text('auth')),
-				...(text('feature') === undefined ? {} : { feature: text('feature') }),
+				...(feature === undefined ? {} : { feature }),
 				...(text('permission') === undefined ? {} : { permission: text('permission') }),
 				idempotent: members.idempotent?.value === true,
 			});

@@ -117,6 +117,7 @@ describe('ss app init → validate → own tests (integration)', () => {
 			'/v1/data-rights/delete',
 			'/v1/data-rights/export',
 			'/v1/notes',
+			'/v1/permissions',
 			'/v1/tickets',
 		]);
 		expect(openapi.paths['/v1/admin/notes'].get).toMatchObject({ 'x-ss-auth': 'ticket', 'x-ss-feature': 'notes' });

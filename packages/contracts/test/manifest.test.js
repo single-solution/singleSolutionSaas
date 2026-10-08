@@ -19,6 +19,9 @@ describe('validateManifest', () => {
 		value.widgets = [{ key: 'w', feature: 'notes', kind: 'visitor' }];
 		value.widgetScriptUrl = '/widget.js';
 		expect(validateManifest(value).ok).toBe(true);
+		// a widget that works while any of several features is on
+		value.widgets = [{ key: 'w', feature: ['notes', 'inbox'], kind: 'visitor' }];
+		expect(validateManifest(value).ok).toBe(true);
 	});
 
 	/** @type {Array<[string, (m: any) => unknown, string, string]>} */
@@ -38,6 +41,7 @@ describe('validateManifest', () => {
 		['a duplicated dependency', (m) => (m.features[1].dependsOn = ['notes', 'notes']), '/features/1/dependsOn', 'uniqueItems'],
 		['a bad permission key', (m) => (m.permissions[0].key = 'Read'), '/permissions/0/key', 'pattern'],
 		['a bad widget kind', (m) => (m.widgets[0].kind = 'inline'), '/widgets/0/kind', 'enum'],
+		['an empty widget feature list', (m) => (m.widgets[0].feature = []), '/widgets/0/feature', 'anyOf'],
 		['a placement member', (m) => (m.widgets[0].placement = {}), '/widgets/0/placement', 'additionalProperties'],
 		[
 			'settings with plans',
@@ -72,6 +76,12 @@ describe('validateManifest', () => {
 		],
 		['duplicate widgets', (m) => (m.widgets[1].key = 'note_form'), '/widgets/1/key', RULES.duplicateKey],
 		['a widget of an unknown feature', (m) => (m.widgets[0].feature = 'chat'), '/widgets/0/feature', RULES.unknownFeature],
+		[
+			'a widget listing an unknown feature',
+			(m) => (m.widgets[0].feature = ['notes', 'chat']),
+			'/widgets/0/feature',
+			RULES.unknownFeature,
+		],
 		['a script URL without widgets', (m) => (m.widgets = []), '/widgetScriptUrl', RULES.widgetScriptUrl],
 		['widgets without a script URL', (m) => (m.widgetScriptUrl = null), '/widgetScriptUrl', RULES.widgetScriptUrl],
 		['an http script URL', (m) => (m.widgetScriptUrl = 'http://notes.example.dev/widget.js'), '/widgetScriptUrl', RULES.url],

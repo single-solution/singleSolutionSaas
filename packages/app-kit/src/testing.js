@@ -10,6 +10,7 @@
  * - `createMemoryStore()`.
  * @module
  */
+import { createPrivateKey, sign as cryptoSign } from 'node:crypto';
 import { validateActivityCopy, validateFeatureReport, validatePriceReport } from '@ss/contracts';
 import { netError } from '@ss/net';
 import {
@@ -22,6 +23,7 @@ import {
 	issueLaunch,
 	issueToken,
 	signNotice,
+	toPublicJwk,
 	verifyAssertion,
 	verifyConnectResponse,
 } from '@ss/protocol';
@@ -436,20 +438,35 @@ export const createFakePortal = async ({ url = 'https://portal.test', now = Date
 };
 
 /**
- * Accounts as products see it before it ships (PLAN 0.12 step 6): receives activity copies at
- * `POST /v1/activity-copies` and calls a product's data-rights routes with a pasted server token.
- * @param {{ url?: string }} [options]
+ * Accounts as products see it (PLAN 0.12 steps 6–7): receives activity copies at `POST /v1/activity-copies`, serves a
+ * website's sign-in keys at `GET /v1/websites/:websiteId/keys` (`{ issuer, keys }`), signs sign-ins
+ * (`signIn({ websiteId, sub, … })`, 15 minutes) and calls a product's data-rights routes with a pasted server token.
+ * @param {{ url?: string, now?: () => number }} [options]
  */
-export const createAccountsDouble = ({ url = 'https://accounts.test' } = {}) => {
+export const createAccountsDouble = ({ url = 'https://accounts.test', now = Date.now } = {}) => {
 	/** @type {Array<{ token: string, copy: import('@ss/contracts').ActivityCopy }>} */
 	const copies = [];
 	let failing = false;
+	/** @type {Promise<{ privateJwk: Record<string, any>, signer: import('@ss/protocol').Signer }> | null} */
+	let key = null;
+	const keyOf = () => {
+		key ??= generateSigningKey({ kid: 'accounts-double' }).then(({ privateJwk }) => ({
+			privateJwk,
+			signer: createSigner(privateJwk),
+		}));
+		return key;
+	};
 
 	/** @type {Handler} */
 	const handle = async (request) => {
 		const token = /^Bearer\s+(\S+)$/.exec(request.headers.get('authorization') ?? '')?.[1];
-		if (request.method !== 'POST' || new URL(request.url).pathname !== '/v1/activity-copies')
-			return fail(url, 'not_found', 404);
+		const path = new URL(request.url).pathname;
+		if (request.method === 'GET' && /^\/v1\/websites\/[^/]+\/keys$/.test(path)) {
+			if (failing) return fail(url, 'unavailable', 503);
+			const { privateJwk } = await keyOf();
+			return json(200, { issuer: url, keys: [{ ...toPublicJwk(privateJwk), alg: 'EdDSA', use: 'sig' }] });
+		}
+		if (request.method !== 'POST' || path !== '/v1/activity-copies') return fail(url, 'not_found', 404);
 		if (!token) return fail(url, 'invalid_token', 401);
 		if (failing) return fail(url, 'unavailable', 503);
 		const checked = validateActivityCopy(await request.json().catch(() => null));
@@ -475,10 +492,29 @@ export const createAccountsDouble = ({ url = 'https://accounts.test' } = {}) => 
 			return { status: response.status, body: await response.json() };
 		};
 
+	/**
+	 * A sign-in as Accounts issues it (EdDSA, `aud` = the website, 15 minutes unless `ttlSeconds`).
+	 * @param {{ websiteId: string, sub: string, ttlSeconds?: number } & Record<string, unknown>} input
+	 */
+	const signIn = async ({ websiteId, sub, ttlSeconds = 900, ...extra }) => {
+		const { privateJwk } = await keyOf();
+		const iat = Math.floor(now() / 1000);
+		/** @param {unknown} value */
+		const b64 = (value) => Buffer.from(JSON.stringify(value)).toString('base64url');
+		const input = `${b64({ alg: 'EdDSA', typ: 'JWT', kid: privateJwk.kid })}.${b64({ iss: url, aud: websiteId, sub, iat, exp: iat + ttlSeconds, ...extra })}`;
+		const signature = cryptoSign(
+			null,
+			Buffer.from(input),
+			createPrivateKey({ key: /** @type {import('node:crypto').JsonWebKey} */ ({ ...privateJwk }), format: 'jwk' }),
+		);
+		return `${input}.${signature.toString('base64url')}`;
+	};
+
 	return Object.freeze({
 		url,
 		handle,
 		copies,
+		signIn,
 		/** @param {boolean} value answer 503 to copies while true */
 		setFailing: (value) => {
 			failing = value;

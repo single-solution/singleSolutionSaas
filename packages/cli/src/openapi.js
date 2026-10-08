@@ -1,7 +1,7 @@
 /**
  * `openapi.json` generated from the routes (PLAN 0.4.13): every browser-token, server-token and ticket route of the
- * product, plus the API routes the kit serves for every product (tickets and data rights). Each operation names its
- * auth (`x-ss-auth`), its feature (`x-ss-feature`) and, for ticket routes, its permission (`x-ss-permission`).
+ * product, plus the API routes the kit serves for every product (tickets, data rights and the permission list). Each operation names its
+ * auth (`x-ss-auth`), its feature (`x-ss-feature`: one key, or a list when any of them is enough) and, for ticket routes, its permission (`x-ss-permission`).
  * Errors are RFC 9457 problems with a stable `code`.
  * @module
  */
@@ -16,6 +16,7 @@ export const KIT_API_ROUTES = Object.freeze(
 		{ method: 'POST', path: '/v1/tickets', auth: 'server', summary: 'Ticket for an admin widget (15 minutes)' },
 		{ method: 'POST', path: '/v1/data-rights/export', auth: 'server', summary: "Export one user's records" },
 		{ method: 'POST', path: '/v1/data-rights/delete', auth: 'server', summary: "Delete one user's records" },
+		{ method: 'GET', path: '/v1/permissions', auth: 'server', summary: "This product's permissions (for Accounts roles)" },
 	]),
 );
 

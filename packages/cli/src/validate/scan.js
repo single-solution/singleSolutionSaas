@@ -270,8 +270,8 @@ export const findStringKeys = ({ code }) =>
 
 /**
  * @typedef {object} RouteMember
- * @property {boolean} literal the value is a plain string literal, `true` or `false`
- * @property {string | boolean} value the literal value, or the source text when not literal
+ * @property {boolean} literal the value is a plain string literal, a list of them, `true` or `false`
+ * @property {string | string[] | boolean} value the literal value, or the source text when not literal
  */
 
 /**
@@ -284,6 +284,7 @@ export const findStringKeys = ({ code }) =>
 const ROUTE_CALL = /(?<![\w$.])defineRoute\s*\(\s*\{/g;
 const MEMBER = /^([A-Za-z_$][\w$]*)\s*:\s*([\s\S]*)$/;
 const STRING_VALUE = /^(['"])((?:(?!\1)[^\\\n])*)\1$/;
+const STRING_LIST = /^\[\s*(?:'[^'\\\n,]*'|"[^"\\\n,]*")(?:\s*,\s*(?:'[^'\\\n,]*'|"[^"\\\n,]*"))*\s*,?\s*\]$/;
 
 /**
  * @param {string} text
@@ -292,6 +293,15 @@ const STRING_VALUE = /^(['"])((?:(?!\1)[^\\\n])*)\1$/;
 const memberValue = (text) => {
 	const string = STRING_VALUE.exec(text);
 	if (string) return { literal: true, value: string[2] ?? '' };
+	// a list of string literals (a route that works while any of several features is on)
+	if (STRING_LIST.test(text)) {
+		const items = text
+			.slice(1, -1)
+			.split(',')
+			.map((item) => item.trim())
+			.filter((item) => item !== '');
+		return { literal: true, value: items.map((item) => item.slice(1, -1)) };
+	}
 	if (text === 'true' || text === 'false') return { literal: true, value: text === 'true' };
 	return { literal: false, value: text };
 };

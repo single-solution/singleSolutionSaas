@@ -139,3 +139,31 @@ describe('identity.verify (issuer from Connections)', () => {
 		});
 	});
 });
+
+describe('accounts.verify (Accounts sign-ins through the pasted Accounts token)', () => {
+	const CONNECTIONS = { accounts: { label: 'Accounts token', kind: 'token', productId: 'accounts', neededBy: [] } };
+
+	it('refuses until the token is pasted, then verifies sign-ins offline with the keys fetched once', async () => {
+		const { product, websiteId, portal, accounts, session, dash, clock } = await setup({ connections: CONNECTIONS });
+		const token = await accounts.signIn({ websiteId, sub: 'usr_1', email: 'a@example.com', role: 'customer' });
+		expect(await product.accounts.verify({ websiteId, token })).toEqual({ ok: false, code: 'accounts_not_connected' });
+		expect(await product.accounts.verify({ websiteId, token: '' })).toEqual({ ok: false, code: 'identity_missing' });
+		const server = (await portal.issueToken({ websiteId, productId: 'accounts', kind: 'server' })).token;
+		const cookie = await session();
+		await dash(cookie, 'PUT', `/v1/dashboard/websites/${websiteId}/connections/accounts`, { value: server });
+		expect(await product.accounts.verify({ websiteId, token })).toEqual({
+			ok: true,
+			user: { id: 'usr_1', email: 'a@example.com', role: 'customer' },
+		});
+		// another website's sign-in is refused (audience), and so is an expired one
+		const other = await accounts.signIn({ websiteId: 'web_other', sub: 'usr_1' });
+		expect(await product.accounts.verify({ websiteId, token: other })).toEqual({ ok: false, code: 'audience' });
+		clock.advance(16 * 60_000);
+		expect(await product.accounts.verify({ websiteId, token })).toEqual({ ok: false, code: 'expired' });
+		// keys unavailable once the cached copy is older than 10 minutes
+		accounts.setFailing(true);
+		clock.advance(11 * 60_000);
+		const fresh = await accounts.signIn({ websiteId, sub: 'usr_2' });
+		expect(await product.accounts.verify({ websiteId, token: fresh })).toEqual({ ok: false, code: 'accounts_unavailable' });
+	});
+});

@@ -65,7 +65,17 @@ export const manifestSchema = deepFreeze({
 				type: 'object',
 				required: ['key', 'feature', 'kind'],
 				additionalProperties: false,
-				properties: { key: ref('widgetKey'), feature: ref('featureKey'), kind: { type: 'string', enum: [...WIDGET_KINDS] } },
+				properties: {
+					key: ref('widgetKey'),
+					// one feature, or several when the widget works while any of them is on (Accounts' sign-in)
+					feature: {
+						anyOf: [
+							ref('featureKey'),
+							{ type: 'array', minItems: 1, maxItems: 20, uniqueItems: true, items: ref('featureKey') },
+						],
+					},
+					kind: { type: 'string', enum: [...WIDGET_KINDS] },
+				},
 			},
 		},
 	},

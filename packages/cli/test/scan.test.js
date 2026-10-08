@@ -78,10 +78,12 @@ describe('finders', () => {
 			'\t}),',
 			'\tdefineRoute({ ...base, method: METHOD, path: `/v1/${name}`, handler }),',
 			'\tdefineRoute({ async handler() {} }),',
+			"\tdefineRoute({ method: 'GET', path: '/v1/b', auth: 'browser', feature: ['a', \"b\"], handler }),",
 			'];',
 		].join('\n');
 		const found = findRoutes(lex(code));
-		expect(found).toHaveLength(4);
+		expect(found).toHaveLength(5);
+		expect(found[4]?.members.feature).toEqual({ literal: true, value: ['a', 'b'] });
 		expect(found[0]).toEqual({
 			line: 4,
 			spread: false,

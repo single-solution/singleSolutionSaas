@@ -7,6 +7,8 @@
  * - `POST /v1/tickets` (server token): tickets for admin widgets (0.4.5);
  * - `POST /v1/data-rights/export` and `POST /v1/data-rights/delete` (server token, merchant database required, no
  *   feature): data rights for one end user (0.4.11);
+ * - `GET /v1/permissions` (server token, no feature, no merchant database): the product's permissions, which Accounts
+ *   reads with the pasted server token to offer them on roles (0.8.6);
  * - `GET /v1/widget/config` (browser token, Origin required) and `GET /v1/widget/admin/config` (ticket): what the
  *   product's `widget.js` needs for a website (0.4.10): widget texts, theme, custom CSS, the switched-on features and
  *   the product's own widget settings (`hooks.widgetConfig`). No feature gate; the status and the merchant database
@@ -182,6 +184,20 @@ export const createKitRoutes = (kit, hooks) => {
 		}),
 		defineRoute({ method: 'POST', path: NOTICE_PATH, auth: 'none', rawBody: true, maxBodyBytes: 16 * 1024, handler: notice }),
 		defineRoute({ method: 'POST', path: '/v1/tickets', auth: 'server', database: false, handler: tickets }),
+		// the product's permissions, for the roles of the merchant's users in Accounts (PLAN 0.8.6)
+		defineRoute({
+			method: 'GET',
+			path: '/v1/permissions',
+			auth: 'server',
+			database: false,
+			handler: () => ({
+				permissions: manifest.permissions.map((/** @type {{ key: string, name: string, feature: string }} */ p) => ({
+					key: p.key,
+					name: p.name,
+					feature: p.feature,
+				})),
+			}),
+		}),
 		defineRoute({ method: 'POST', path: '/v1/data-rights/export', auth: 'server', handler: dataRights('export') }),
 		defineRoute({ method: 'POST', path: '/v1/data-rights/delete', auth: 'server', handler: dataRights('delete') }),
 	];

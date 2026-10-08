@@ -389,14 +389,13 @@ export const checkRoutes = (routes, manifest) => {
 			);
 			continue;
 		}
-		if (route.feature !== undefined && !features.has(route.feature))
-			problems.push(
-				problemOf({
-					rule: 'routes.feature',
-					...where,
-					message: `${name}: feature '${route.feature}' is not in manifest.json`,
-				}),
-			);
+		for (const key of route.feature === undefined ? [] : [route.feature].flat())
+			if (!features.has(key))
+				problems.push(
+					problemOf({ rule: 'routes.feature', ...where, message: `${name}: feature '${key}' is not in manifest.json` }),
+				);
+		if (Array.isArray(route.feature) && route.feature.length === 0)
+			problems.push(problemOf({ rule: 'routes.feature', ...where, message: `${name}: the feature list is empty` }));
 		if (route.permission !== undefined && !permissions.has(route.permission))
 			problems.push(
 				problemOf({

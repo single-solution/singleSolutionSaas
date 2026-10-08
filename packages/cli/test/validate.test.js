@@ -96,6 +96,9 @@ describe('ss app validate', () => {
 				"\tdefineRoute({ method: 'GET', path: '/v1/b', auth: 'ticket', permission: 'nope.read', handler: () => 1 }),",
 				"\tdefineRoute({ method: 'GET', path: '/v1/c', auth: 'weird', handler: () => 1 }),",
 				"\tdefineRoute({ method: 'GET', path: '/v1/d', auth: 'browser', handler: () => 1 }),",
+				"\tdefineRoute({ method: 'GET', path: '/v1/g', auth: 'browser', feature: ['notes', 'nope'], handler: () => 1 }),",
+				"\tdefineRoute({ method: 'GET', path: '/v1/h', auth: 'browser', feature: ['notes'], handler: () => 1 }),",
+				"\tdefineRoute({ method: ['GET'], path: '/v1/i', auth: 'none', handler: () => 1 }),",
 				"\tdefineRoute({ method: 'GET', path: `/v1/${'e'}`, auth: 'server', feature: 'notes', handler: () => 1 }),",
 				"\tdefineRoute({ ...{ method: 'GET' }, path: '/v1/f', auth: 'none', handler: () => 1 }),",
 				'\tdefineRoute({ handler: () => 1 }),',
@@ -107,10 +110,12 @@ describe('ss app validate', () => {
 		expect(messages(report, 'routes.feature')).toEqual([
 			"GET /v1/a: feature 'nope' is not in manifest.json",
 			'GET /v1/d: every browser route belongs to one feature (set feature)',
+			"GET /v1/g: feature 'nope' is not in manifest.json",
 		]);
 		expect(messages(report, 'routes.permission')).toEqual(["GET /v1/b: permission 'nope.read' is not in manifest.json"]);
 		expect(messages(report, 'routes.auth')).toHaveLength(1);
 		expect(messages(report, 'routes.dynamic')).toEqual([
+			'write method as string literals so the route can be checked and documented',
 			'write path as string literals so the route can be checked and documented',
 			'write the route without spreads and method as string literals so the route can be checked and documented',
 			'write method, path, auth as string literals so the route can be checked and documented',

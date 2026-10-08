@@ -3,7 +3,7 @@ import { createLogger, created, defineRoute, noContent, noopLogger, ok, paginate
 import { redact } from '../src/logger.js';
 import { collectionPrefix, isKitError, kitError, omit } from '../src/util.js';
 import { createMemoryStore } from '../src/testing.js';
-import { BASE, setup } from './helpers.js';
+import { BASE, productRoutes, setup } from './helpers.js';
 
 const handler = () => ok({});
 
@@ -249,5 +249,40 @@ describe('logger and helpers', () => {
 		expect(omit({ a: 1, b: 2 }, ['a'])).toEqual({ b: 2 });
 		const error = kitError('x', 'm', { a: 1 });
 		expect(isKitError(error, 'x') && isKitError(error) && !isKitError(error, 'y') && !isKitError(new Error('m'))).toBe(true);
+	});
+});
+
+describe('routes of several features and the permission list', () => {
+	it('a route listing features works while any of them is on; /v1/permissions lists the manifest permissions', async () => {
+		const routes = [
+			...productRoutes(),
+			defineRoute({
+				method: 'GET',
+				path: '/v1/either',
+				auth: 'server',
+				feature: ['notes', 'inbox'],
+				database: false,
+				handler: () => ({ either: true }),
+			}),
+		];
+		const env = await setup({ routes });
+		const off = await env.call('GET', '/v1/either', { token: env.server.token });
+		expect(off.status).toBe(403);
+		expect((await off.json()).detail).toBe('The feature notes or inbox is off.');
+		await env.switchOn(['notes']);
+		expect(await (await env.call('GET', '/v1/either', { token: env.server.token })).json()).toEqual({ either: true });
+		const permissions = await env.call('GET', '/v1/permissions', { token: env.server.token });
+		expect(await permissions.json()).toEqual({
+			permissions: env.product.manifest.permissions.map((/** @type {any} */ p) => ({
+				key: p.key,
+				name: p.name,
+				feature: p.feature,
+			})),
+		});
+		const preflight = await env.call('OPTIONS', '/v1/notes', { origin: 'https://shop.example.com' });
+		expect(preflight.headers.get('access-control-allow-headers')).toContain('ss-sign-in');
+		expect(() => defineRoute({ method: 'GET', path: '/x', auth: 'server', feature: [], handler: () => 1 })).toThrow(
+			/non-empty list/,
+		);
 	});
 });

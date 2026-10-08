@@ -15,7 +15,7 @@ import { checkConnectionDefinitions, createConnections } from './connections.js'
 import { createDashboard } from './dashboard.js';
 import { createData } from './data.js';
 import { createRequestHandler } from './http/handler.js';
-import { createIdentity } from './identity.js';
+import { createAccountsSignIns, createIdentity } from './identity.js';
 import { createKitRoutes } from './kit-routes.js';
 import { noopLogger } from './logger.js';
 import { createRecentChanges } from './recent.js';
@@ -192,6 +192,7 @@ export const createProduct = (options) => {
 	const activity = createActivity({ productId: manifest.id, data, connections, now, logger });
 	const tickets = createTickets({ store, productId: manifest.id, now, randomBytes });
 	const identity = createIdentity({ connections, send, now });
+	const accounts = createAccountsSignIns({ connections, now });
 
 	const parts = {
 		manifest,
@@ -254,6 +255,10 @@ export const createProduct = (options) => {
 		activity: Object.freeze({ record: activity.record }),
 		recentChanges: Object.freeze({ record: recent.record, list: recent.list }),
 		identity,
+		/** Accounts sign-ins of a website, verified offline with its pasted Accounts token (PLAN 0.4.6). */
+		accounts,
+		/** This product's own address (the base URL it was connected with), or null before the first connect. */
+		address: () => (kit.connection.connected() ? kit.connection.active().baseUrl : null),
 		/** Close pooled merchant database connections (tests, shutdown). */
 		close: () => data.closeAll(),
 	});

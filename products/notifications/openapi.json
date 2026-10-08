@@ -511,6 +511,33 @@
 				}
 			}
 		},
+		"/v1/permissions": {
+			"get": {
+				"summary": "This product's permissions (for Accounts roles)",
+				"x-ss-auth": "server",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [],
+				"responses": {
+					"2XX": {
+						"description": "Success (JSON)"
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/v1/push/subscriptions": {
 			"post": {
 				"x-ss-auth": "browser",

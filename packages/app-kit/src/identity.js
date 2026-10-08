@@ -209,3 +209,91 @@ export const createIdentity = ({ connections, send, now }) => {
 };
 
 /** @typedef {ReturnType<typeof createIdentity>} Identity */
+
+/** Path of a website's Accounts sign-in keys at Accounts (PLAN 0.8.6): `{ issuer, keys }`. */
+export const accountsKeysPath = (/** @type {string} */ websiteId) => `/v1/websites/${websiteId}/keys`;
+const ACCOUNTS_KEYS_TTL_MS = 10 * 60_000;
+const ACCOUNTS_REFETCH_MS = 60_000;
+
+/**
+ * @typedef {{ id: string, email?: string, phone?: string, name?: string, role?: string, permissions?: string[] }} AccountsUser
+ * @typedef {{ ok: true, user: AccountsUser } | { ok: false, code: IdentityFailure | 'accounts_not_connected' | 'accounts_unavailable' }} AccountsSignInResult
+ */
+
+/**
+ * Accounts sign-ins (PLAN 0.4.6): a product trusts them for a website only after the merchant pasted that website's
+ * Accounts server token into the product's Connections. The website's public keys are fetched from Accounts with that
+ * token (through `@ss/net`, cached 10 minutes; an unknown key id refetches them at most once a minute) and each sign-in
+ * is verified offline: signed by Accounts, issued for this website (`aud`) and not expired (they last 15 minutes). A
+ * sign-in only says who the person is; it never authorises admin actions.
+ * @param {{ connections: import('./connections.js').Connections, now: () => number }} options
+ */
+export const createAccountsSignIns = ({ connections, now }) => {
+	/** @type {Map<string, { issuer: string, jwks: Array<Record<string, any>>, fetchedAt: number }>} */
+	const cache = new Map();
+
+	/**
+	 * @param {string} websiteId
+	 * @returns {Promise<{ issuer: string, jwks: Array<Record<string, any>>, fetchedAt: number } | 'not_connected' | null>}
+	 */
+	const fetchKeys = async (websiteId) => {
+		const answer = await connections.callProduct(websiteId, 'accounts', accountsKeysPath(websiteId));
+		if (!answer.ok) return answer.reason === 'not_connected' ? 'not_connected' : null;
+		const body = answer.body;
+		if (!isObject(body) || typeof body.issuer !== 'string' || !Array.isArray(body.keys)) return null;
+		const entry = { issuer: body.issuer, jwks: body.keys.filter(isObject).slice(0, 10), fetchedAt: now() };
+		cache.set(websiteId, entry);
+		return entry;
+	};
+
+	return Object.freeze({
+		/**
+		 * Verify a visitor's Accounts sign-in for a website.
+		 * @param {{ websiteId: string, token: unknown }} input
+		 * @returns {Promise<AccountsSignInResult>}
+		 */
+		verify: async ({ websiteId, token }) => {
+			if (typeof token !== 'string' || token.length === 0) return { ok: false, code: 'identity_missing' };
+			let entry = cache.get(websiteId);
+			if (!entry || now() - entry.fetchedAt >= ACCOUNTS_KEYS_TTL_MS) {
+				const fetched = await fetchKeys(websiteId);
+				if (fetched === 'not_connected') return { ok: false, code: 'accounts_not_connected' };
+				if (fetched === null) return { ok: false, code: 'accounts_unavailable' };
+				entry = fetched;
+			}
+			const check = (/** @type {{ issuer: string, jwks: Array<Record<string, any>> }} */ keys) =>
+				verifyIdentityToken(
+					token,
+					{
+						issuer: keys.issuer,
+						jwks: keys.jwks,
+						audience: websiteId,
+						claimMap: { subject: 'sub', email: 'email', phone: 'phone' },
+					},
+					{ now },
+				);
+			let result = check(entry);
+			if (!result.ok && result.code === 'unknown_key' && now() - entry.fetchedAt >= ACCOUNTS_REFETCH_MS) {
+				const fetched = await fetchKeys(websiteId);
+				if (fetched !== null && fetched !== 'not_connected') result = check(fetched);
+			}
+			if (!result.ok) return result;
+			const { claims } = result.identity;
+			return {
+				ok: true,
+				user: {
+					id: result.identity.subject,
+					...(result.identity.email === undefined ? {} : { email: result.identity.email }),
+					...(result.identity.phone === undefined ? {} : { phone: result.identity.phone }),
+					...(typeof claims.name === 'string' ? { name: claims.name } : {}),
+					...(typeof claims.role === 'string' ? { role: claims.role } : {}),
+					...(Array.isArray(claims.permissions)
+						? { permissions: claims.permissions.filter((p) => typeof p === 'string') }
+						: {}),
+				},
+			};
+		},
+	});
+};
+
+/** @typedef {ReturnType<typeof createAccountsSignIns>} AccountsSignIns */

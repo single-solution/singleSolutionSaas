@@ -134,7 +134,7 @@ export const setup = async (options = {}) => {
 	const clock = createClock();
 	const { logger, entries } = createTestLogger();
 	const portal = await createFakePortal({ now: clock.now });
-	const accounts = createAccountsDouble();
+	const accounts = createAccountsDouble({ now: clock.now });
 	/** @type {Record<string, (request: Request) => Promise<Response>>} */
 	const handlers = { [portal.url]: portal.handle, [accounts.url]: accounts.handle };
 	const network = createNetwork(handlers);

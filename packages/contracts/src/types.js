@@ -62,7 +62,7 @@
  */
 
 /** @typedef {{ key: string, name: string, feature: string }} ManifestPermission */
-/** @typedef {{ key: string, feature: string, kind: 'visitor' | 'admin' }} ManifestWidget */
+/** @typedef {{ key: string, feature: string | string[], kind: 'visitor' | 'admin' }} ManifestWidget */
 
 /**
  * @typedef {object} Manifest

@@ -20,8 +20,8 @@
  * @property {AuthMode} auth `browser`: browser token + allowed Origin (visitor routes, CORS for that origin);
  *   `server`: server token, refused with an Origin header; `ticket`: ticket + its Origin (CORS for it); `dashboard`:
  *   product dashboard session; `none`: public
- * @property {string} [feature] browser, server and ticket routes: answers 403 `feature_off` while the feature is off
- *   (ticket routes default to the feature of their `permission`)
+ * @property {string | string[]} [feature] browser, server and ticket routes: answers 403 `feature_off` while the feature
+ *   is off (a list: while all of them are off); ticket routes default to the feature of their `permission`
  * @property {string} [permission] ticket routes: the ticket must carry this permission
  * @property {boolean} [database] browser, server and ticket routes: false skips the 403 `database_not_connected` check
  * @property {boolean} [idempotent] a repeated `Idempotency-Key` (same website, same route, within 24 h) answers 409
@@ -55,6 +55,11 @@ export const defineRoute = (definition) => {
 	if (typeof handler !== 'function') throw new TypeError(`route needs a handler ${where}`);
 	if ((definition.feature !== undefined || definition.database !== undefined) && !WEBSITE_AUTH.has(auth))
 		throw new TypeError(`feature and database need browser, server or ticket auth ${where}`);
+	if (
+		definition.feature !== undefined &&
+		!(typeof definition.feature === 'string' || (Array.isArray(definition.feature) && definition.feature.length > 0))
+	)
+		throw new TypeError(`feature is a feature key or a non-empty list of them ${where}`);
 	if (definition.permission !== undefined && auth !== 'ticket') throw new TypeError(`permission needs ticket auth ${where}`);
 	if (
 		definition.roles !== undefined &&

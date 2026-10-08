@@ -109,7 +109,7 @@ const checkDependencies = (features, out) => {
 
 /**
  * Semantic rules of a manifest (PLAN 0.4.13): unique feature, permission and widget keys; `dependsOn` keys exist with
- * no self-dependency or cycle; every permission and widget names an existing feature; `widgetScriptUrl` is null
+ * no self-dependency or cycle; every permission and widget names an existing feature (a widget may name several: it works while any is on); `widgetScriptUrl` is null
  * exactly when there are no widgets; `endpoints.base` is an https address (http only on local hosts);
  * `endpoints.dashboard`, `docsUrl` and `widgetScriptUrl` are paths or such addresses. Settings schemas are checked
  * separately.
@@ -126,8 +126,8 @@ export const checkManifest = (manifest) => {
 	uniqueKeys(manifest.widgets, 'widgets', 'widget', out);
 	for (const member of /** @type {const} */ (['permissions', 'widgets'])) {
 		for (const [index, entry] of manifest[member].entries()) {
-			if (!features.has(entry.feature))
-				out.push(at([member, index, 'feature'], RULES.unknownFeature, `unknown feature '${entry.feature}'`));
+			for (const key of [entry.feature].flat())
+				if (!features.has(key)) out.push(at([member, index, 'feature'], RULES.unknownFeature, `unknown feature '${key}'`));
 		}
 	}
 	if (!isServiceUrl(manifest.endpoints.base))
