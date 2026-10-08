@@ -1,0 +1,473 @@
+{
+	"openapi": "3.1.0",
+	"info": {
+		"title": "Growth API",
+		"version": "0.1.0"
+	},
+	"servers": [
+		{
+			"url": "http://localhost:3000"
+		}
+	],
+	"paths": {
+		"/v1/admin/analytics": {
+			"get": {
+				"x-ss-auth": "ticket",
+				"x-ss-feature": "visitor_analytics",
+				"x-ss-permission": "analytics.read",
+				"security": [
+					{
+						"ticket": []
+					}
+				],
+				"parameters": [],
+				"responses": {
+					"2XX": {
+						"description": "Success (JSON)"
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/admin/indexnow": {
+			"post": {
+				"x-ss-auth": "ticket",
+				"x-ss-feature": "indexnow",
+				"x-ss-permission": "indexnow.submit",
+				"security": [
+					{
+						"ticket": []
+					}
+				],
+				"parameters": [],
+				"responses": {
+					"2XX": {
+						"description": "Success (JSON)"
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/admin/seo/checks": {
+			"post": {
+				"x-ss-auth": "ticket",
+				"x-ss-feature": "seo_checklist",
+				"x-ss-permission": "seo.check",
+				"security": [
+					{
+						"ticket": []
+					}
+				],
+				"parameters": [],
+				"responses": {
+					"2XX": {
+						"description": "Success (JSON)"
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/analytics": {
+			"get": {
+				"x-ss-auth": "server",
+				"x-ss-feature": "visitor_analytics",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [],
+				"responses": {
+					"2XX": {
+						"description": "Success (JSON)"
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/collect": {
+			"post": {
+				"x-ss-auth": "browser",
+				"x-ss-feature": [
+					"visitor_analytics",
+					"conversion_funnel",
+					"searches_404s",
+					"web_vitals"
+				],
+				"security": [
+					{
+						"browserToken": []
+					}
+				],
+				"parameters": [],
+				"responses": {
+					"2XX": {
+						"description": "Success (JSON)"
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/data-rights/delete": {
+			"post": {
+				"summary": "Delete one user's records",
+				"x-ss-auth": "server",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [],
+				"responses": {
+					"2XX": {
+						"description": "Success (JSON)"
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/data-rights/export": {
+			"post": {
+				"summary": "Export one user's records",
+				"x-ss-auth": "server",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [],
+				"responses": {
+					"2XX": {
+						"description": "Success (JSON)"
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/events": {
+			"get": {
+				"x-ss-auth": "server",
+				"x-ss-feature": "visitor_analytics",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [],
+				"responses": {
+					"2XX": {
+						"description": "Success (JSON)"
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/indexnow": {
+			"post": {
+				"x-ss-auth": "server",
+				"x-ss-feature": "indexnow",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [],
+				"responses": {
+					"2XX": {
+						"description": "Success (JSON)"
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/indexnow/key.txt": {
+			"get": {
+				"x-ss-auth": "server",
+				"x-ss-feature": "indexnow",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [],
+				"responses": {
+					"2XX": {
+						"description": "Success (JSON)"
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/permissions": {
+			"get": {
+				"summary": "This product's permissions (for Accounts roles)",
+				"x-ss-auth": "server",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [],
+				"responses": {
+					"2XX": {
+						"description": "Success (JSON)"
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/robots.txt": {
+			"get": {
+				"x-ss-auth": "server",
+				"x-ss-feature": "robots_verification",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [],
+				"responses": {
+					"2XX": {
+						"description": "Success (JSON)"
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/seo/checks": {
+			"post": {
+				"x-ss-auth": "server",
+				"x-ss-feature": "seo_checklist",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [],
+				"responses": {
+					"2XX": {
+						"description": "Success (JSON)"
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/tickets": {
+			"post": {
+				"summary": "Ticket for an admin widget (15 minutes)",
+				"x-ss-auth": "server",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [],
+				"responses": {
+					"2XX": {
+						"description": "Success (JSON)"
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/verification": {
+			"get": {
+				"x-ss-auth": "server",
+				"x-ss-feature": "robots_verification",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [],
+				"responses": {
+					"2XX": {
+						"description": "Success (JSON)"
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	},
+	"components": {
+		"securitySchemes": {
+			"browserToken": {
+				"type": "http",
+				"scheme": "bearer",
+				"description": "The website's browser token: visitor routes, from https://<exact domain> or a local origin."
+			},
+			"serverToken": {
+				"type": "http",
+				"scheme": "bearer",
+				"description": "The website's server token: the merchant's server only, never with an Origin header."
+			},
+			"ticket": {
+				"type": "http",
+				"scheme": "bearer",
+				"description": "A ticket from POST /v1/tickets: admin widgets, only from the origin it names."
+			}
+		},
+		"schemas": {
+			"Problem": {
+				"type": "object",
+				"required": [
+					"type",
+					"title",
+					"status"
+				],
+				"properties": {
+					"type": {
+						"type": "string"
+					},
+					"title": {
+						"type": "string"
+					},
+					"status": {
+						"type": "integer"
+					},
+					"code": {
+						"type": "string"
+					},
+					"detail": {
+						"type": "string"
+					}
+				}
+			}
+		}
+	}
+}

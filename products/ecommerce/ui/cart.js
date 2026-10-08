@@ -6,11 +6,15 @@
  * and the totals. Placing the order needs the shopper's sign-in; the Idempotency-Key is kept while the same attempt
  * is retried after a lost answer. Then the shopper pays on Payments' page (`next.kind === 'pay'`), sees the success
  * page (`done`), or can start the payment again (`retry`). Coming back from Payments, the page's `ss_order` shows that
- * order's success page (reading it rechecks its payment).
+ * order's success page (reading it rechecks its payment). Growth's events (PLAN 0.8.9): `ss:begin_checkout` the first
+ * time the shopper presses Place order (once per cart widget, with the quoted lines), and `ss:purchase` as soon as
+ * `POST /v1/shop/orders` answers that the order is placed (before the payment page or the success page).
  * @module
  */
+import { GROWTH_EVENTS, growthItem, itemsDetail, purchaseDetail } from '../core/growth-events.js';
 import { MAX_QUANTITY } from './cart-store.js';
 import {
+	announce,
 	button,
 	codeOf,
 	currencyOf,
@@ -63,6 +67,7 @@ export const mountCart = async ({ host, config, shop, win }) => {
 			/** @type {string | null} */
 			let attemptKey = null;
 			let placing = false;
+			let checkoutBegun = false;
 			let waitingForSignIn = false;
 			let seq = 0;
 			/** @type {number | null} */
@@ -562,6 +567,10 @@ export const mountCart = async ({ host, config, shop, win }) => {
 
 			const placeOrder = async () => {
 				if (placing || !shop.signIn()) return;
+				if (!checkoutBegun) {
+					checkoutBegun = true;
+					announce(win, GROWTH_EVENTS.beginCheckout, itemsDetail(currency(), quote.lines.map(growthItem)));
+				}
 				const isDelivery = physical() && quote.delivery.method === 'delivery';
 				const missing = isDelivery ? address.missing() : null;
 				if (missing) {
@@ -588,6 +597,7 @@ export const mountCart = async ({ host, config, shop, win }) => {
 				// a lost answer or a server failure: the same attempt is retried with the same key
 				if (answer.status !== 0 && answer.status < 500) attemptKey = null;
 				if (answer.ok) {
+					announce(win, GROWTH_EVENTS.purchase, purchaseDetail(answer.data.order));
 					sayPlace('');
 					cart.clear();
 					if (answer.data.next?.kind === 'pay') return shop.go(answer.data.next.url);

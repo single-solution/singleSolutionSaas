@@ -1,0 +1,22 @@
+{
+	"type": "object",
+	"additionalProperties": false,
+	"properties": {
+		"analyticsScripts": {
+			"type": "string",
+			"title": "Analytics scripts",
+			"description": "Your own <script> tags (or plain JavaScript), added to the page once the visitor consents to analytics.",
+			"default": "",
+			"maxLength": 20000,
+			"x-ui": { "widget": "textarea" }
+		},
+		"marketingScripts": {
+			"type": "string",
+			"title": "Marketing scripts",
+			"description": "Your own <script> tags (or plain JavaScript), added to the page once the visitor consents to marketing.",
+			"default": "",
+			"maxLength": 20000,
+			"x-ui": { "widget": "textarea" }
+		}
+	}
+}

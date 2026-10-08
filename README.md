@@ -9,12 +9,12 @@ This file covers how to build. `PLAN.md` Part 0 is the binding plan: what is bui
 
 ## Repository
 
-| Folder      | What it is                                                                                                      | Deployed?                     |
-| ----------- | --------------------------------------------------------------------------------------------------------------- | ----------------------------- |
-| `platform/` | The **Portal**: merchant console, admin console (`/admin`), API                                                 | Yes, one deployment           |
-| `products/` | The **products**: `notifications`, `accounts`, `chat`, `payments` and `ecommerce` so far (PLAN 0.12 steps 6–10) | Yes, one deployment each      |
-| `packages/` | The **shared kit** used by the Portal and the products (published packages)                                     | No, built into the apps above |
-| `e2e/`      | **System tests**: products against the real Portal (`@ss/e2e`)                                                  | No                            |
+| Folder      | What it is                                                                                                         | Deployed?                     |
+| ----------- | ------------------------------------------------------------------------------------------------------------------ | ----------------------------- |
+| `platform/` | The **Portal**: merchant console, admin console (`/admin`), API                                                    | Yes, one deployment           |
+| `products/` | The **products**: `notifications`, `accounts`, `chat`, `payments`, `ecommerce` and `growth` (PLAN 0.12 steps 6–11) | Yes, one deployment each      |
+| `packages/` | The **shared kit** used by the Portal and the products (published packages)                                        | No, built into the apps above |
+| `e2e/`      | **System tests**: products against the real Portal (`@ss/e2e`)                                                     | No                            |
 
 ### Each folder is its own repository
 

@@ -5,10 +5,14 @@
  * combinations that do not exist are disabled), the condition grade, the stock state, the quantity and Add to cart,
  * the time picker of a booking product, the note of a digital item, back-in-stock and price-drop alerts (`alerts`,
  * signed in), the wishlist and compare toggles, the specs, the description and the reviews block (`reviews`).
+ * Growth's events (PLAN 0.8.9): `ss:view_item` once when the product is shown (its first in-stock variant; a variant
+ * change does not fire it again) and `ss:add_to_cart` on each Add to cart, at the price shown.
  * @module
  */
+import { GROWTH_EVENTS, growthItem, itemsDetail } from '../core/growth-events.js';
 import { MAX_QUANTITY } from './cart-store.js';
 import {
+	announce,
 	button,
 	codeOf,
 	currencyOf,
@@ -90,6 +94,26 @@ export const mountProductPage = async ({ host, config, shop, win }) => {
 				let added = false;
 				/** @type {Map<string, any>} */
 				const quotes = new Map();
+				/** @param {PageVariant} of the price shown for a variant (after automatic deals, once quoted) */
+				const shownPrice = (of) => {
+					const quote = quotes.get(of.id);
+					return quote?.savings > 0 ? quote.priceAfterDeals : of.price;
+				};
+				/** @param {string} name @param {PageVariant | null} of @param {number} count */
+				const tell = (name, of, count) =>
+					announce(
+						win,
+						name,
+						itemsDetail(currency, [
+							growthItem({
+								productId: item.id,
+								variantId: of?.id ?? null,
+								name: item.name,
+								price: of ? shownPrice(of) : item.price,
+								quantity: count,
+							}),
+						]),
+					);
 
 				// ------------------------------------------------------------------------------------------ gallery
 				const media = item.media.filter((/** @type {{ url: string | null }} */ m) => m.url);
@@ -315,6 +339,7 @@ export const mountProductPage = async ({ host, config, shop, win }) => {
 								quantity: booking ? 1 : quantity,
 								...(booking && slot ? { slot } : {}),
 							});
+							tell(GROWTH_EVENTS.addToCart, now, booking ? 1 : quantity);
 							added = true;
 							said.textContent = t('page.addedStatus', { name: item.name });
 							keepFocus(root, renderAdd);
@@ -492,6 +517,7 @@ export const mountProductPage = async ({ host, config, shop, win }) => {
 
 				root.replaceChildren(h(doc, 'div', { class: 'page' }, gallery, buy, ...blocks));
 				refresh();
+				tell(GROWTH_EVENTS.viewItem, first, 1);
 				stops.push(
 					shop.onIdentity(() => {
 						void renderExtras();

@@ -1,7 +1,8 @@
 /**
  * Helpers the shopper widgets share (PLAN 0.8.8 Shopper widgets): widget texts with `{placeholders}` (every word is a
  * text the merchant can edit), the settings with defaults, money, dates, elements (text is always set as text, never
- * as HTML), problem codes of answers, the sign-in hint, product cards and the mount with the shop's CSS.
+ * as HTML), problem codes of answers, the sign-in hint, product cards, the mount with the shop's CSS and the
+ * dispatch of Growth's browser events (`../core/growth-events.js`).
  * @module
  */
 import { formatText, mountWidget } from '@ss/app-kit/widget';
@@ -69,6 +70,14 @@ export const currencyOf = (settings, ...candidates) => {
 	const found = candidates.find((value) => isCurrency(value));
 	return typeof found === 'string' ? found : settings.currency;
 };
+
+/**
+ * Dispatch a Growth browser event on the page's window (PLAN 0.8.9), not cancelable.
+ * @param {Window & typeof globalThis} win
+ * @param {string} name one of `GROWTH_EVENTS`
+ * @param {object} detail
+ */
+export const announce = (win, name, detail) => void win.dispatchEvent(new win.CustomEvent(name, { detail }));
 
 /** @param {number} amount @param {string} currency */
 export const money = (amount, currency) => formatMoney(Math.round(Number(amount) || 0), currency);

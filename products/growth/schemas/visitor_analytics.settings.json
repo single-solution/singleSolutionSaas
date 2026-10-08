@@ -1,0 +1,26 @@
+{
+	"type": "object",
+	"additionalProperties": false,
+	"properties": {
+		"retentionMonths": {
+			"type": "integer",
+			"title": "Keep raw events (months)",
+			"description": "Raw events are removed by your database's expiry index after this many months (applies to events recorded from now on). Daily totals are kept forever.",
+			"default": 13,
+			"minimum": 1,
+			"maximum": 25
+		},
+		"requireConsent": {
+			"type": "boolean",
+			"title": "Count only after analytics consent",
+			"description": "Visits, events, searches and Web Vitals are recorded only once the visitor consents to analytics.",
+			"default": true
+		},
+		"recordCountry": {
+			"type": "boolean",
+			"title": "Record the visitor's country",
+			"description": "From your host's country header; no IP address is ever kept.",
+			"default": true
+		}
+	}
+}

@@ -1,0 +1,46 @@
+{
+	"type": "object",
+	"additionalProperties": false,
+	"properties": {
+		"text": {
+			"type": "string",
+			"title": "Notice text",
+			"description": "Shown in the bar while the dates say so; empty shows nothing.",
+			"default": "",
+			"maxLength": 300
+		},
+		"linkText": {
+			"type": "string",
+			"title": "Link text",
+			"default": "",
+			"maxLength": 60
+		},
+		"linkUrl": {
+			"type": "string",
+			"title": "Link address",
+			"description": "An https address or a path on your website.",
+			"default": "",
+			"maxLength": 2048
+		},
+		"startsAt": {
+			"type": "string",
+			"title": "Show from",
+			"description": "An ISO 8601 time such as 2026-11-20T00:00:00Z; empty shows it at once.",
+			"default": "",
+			"maxLength": 40
+		},
+		"endsAt": {
+			"type": "string",
+			"title": "Show until",
+			"description": "An ISO 8601 time; empty keeps it until you change it.",
+			"default": "",
+			"maxLength": 40
+		},
+		"dismissible": {
+			"type": "boolean",
+			"title": "Visitors can close it",
+			"description": "A closed bar stays closed for the rest of the visit.",
+			"default": true
+		}
+	}
+}

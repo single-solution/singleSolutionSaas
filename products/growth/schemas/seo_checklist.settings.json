@@ -1,0 +1,13 @@
+{
+	"type": "object",
+	"additionalProperties": false,
+	"properties": {
+		"paths": {
+			"type": "array",
+			"title": "Pages to check",
+			"description": "Paths on your website (for example /, /shop, /about); the home page is always checked, at most 20 pages.",
+			"default": ["/"],
+			"items": { "type": "string", "maxLength": 300 }
+		}
+	}
+}

@@ -1,0 +1,13 @@
+{
+	"type": "object",
+	"additionalProperties": false,
+	"properties": {
+		"key": {
+			"type": "string",
+			"title": "IndexNow key",
+			"description": "Your key: 8 to 128 letters, digits or dashes. Your site must serve it as plain text at /<key>.txt.",
+			"default": "",
+			"maxLength": 128
+		}
+	}
+}

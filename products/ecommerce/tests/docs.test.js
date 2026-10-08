@@ -3,6 +3,7 @@ import manifest from '../manifest.json' with { type: 'json' };
 import guide from '../docs/guide.json' with { type: 'json' };
 import { escape, featuresOf, operations, renderDocs } from '../api/docs.js';
 import { DEFAULT_FLOW } from '../core/flow.js';
+import { GROWTH_EVENTS } from '../core/growth-events.js';
 import { SITE_ROUTES, WIDGET_ATTRIBUTES, createSnippets, proxyRoute } from '../core/snippets.js';
 import { ADD_TO_CART_EVENT, WIDGET_GLOBAL } from '../core/widgets.js';
 
@@ -96,6 +97,8 @@ describe('renderDocs', () => {
 		expect(html).toContain(escape(`'${BASE}/v1/tickets'`));
 		expect(html).toContain('SS_SERVER_TOKEN');
 		expect(html).toContain(escape(guide.localhost));
+		expect(html).toContain(escape(guide.growthEvents));
+		for (const name of Object.values(GROWTH_EVENTS)) expect(html).toContain(name);
 		expect(html).toContain('<h2 id="business">business.json</h2>');
 	});
 

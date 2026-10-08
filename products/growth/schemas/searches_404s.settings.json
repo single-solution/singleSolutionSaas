@@ -1,0 +1,13 @@
+{
+	"type": "object",
+	"additionalProperties": false,
+	"properties": {
+		"searchParams": {
+			"type": "string",
+			"title": "Search query parameters",
+			"description": "The query parameters of your search results page, comma-separated (for example q, s). Your code can also call SSGrowth.search().",
+			"default": "q, s, search, query",
+			"maxLength": 200
+		}
+	}
+}

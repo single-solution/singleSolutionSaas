@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ADD_TO_CART_EVENT, STORAGE_KEYS, WIDGET_ATTRIBUTE, WIDGET_GLOBAL } from '../core/widgets.js';
 import { MAX_LINES, MAX_QUANTITY, createCartStore } from '../ui/cart-store.js';
 import { adminCall, createTicketSource } from '../ui/tickets.js';
+import { flush, growthEvents } from './ui-shop-helpers.js';
 
 const mounts = vi.hoisted(() => ({ visitor: /** @type {any[]} */ ([]), admin: /** @type {any[]} */ ([]) }));
 vi.mock('../ui/product-grid.js', () => ({
@@ -142,6 +143,63 @@ describe('visitor widgets', () => {
 			{ productId: 'prd_1', variantId: 'var_1', quantity: 2 },
 			{ productId: 'prd_2', variantId: null, quantity: 1 },
 		]);
+	});
+
+	it('tell Growth about lines added from the page API and Chat’s card event, priced from the catalog', async () => {
+		const product = {
+			id: 'prd_1',
+			name: 'Phone One',
+			price: 100000,
+			currency: 'PKR',
+			variants: [
+				{ id: 'var_1', price: 100000 },
+				{ id: 'var_2', price: 120000 },
+			],
+		};
+		vi.spyOn(window, 'fetch').mockImplementation(async (input) => {
+			const url = new URL(String(input));
+			if (url.pathname === CONFIG_PATH) return answer(200, configOf(['catalog', 'checkout']));
+			if (url.pathname === '/v1/shop/products/prd_1') return answer(200, product);
+			return answer(404, { type: 'not_found' });
+		});
+		const { ready, api } = startWidget({ window, script: script('t') });
+		await ready;
+		const events = growthEvents();
+		const shop = /** @type {any} */ (api);
+		shop.addToCart({ productId: 'prd_1', variantId: 'var_2', quantity: 2 });
+		shop.addToCart({ productId: 'prd_1', quantity: 500 });
+		shop.addToCart({ productId: 'prd_9', variantId: 'var_9' });
+		await flush();
+		expect(events.of('ss:add_to_cart')).toEqual([
+			{
+				currency: 'PKR',
+				value: 240000,
+				items: [{ id: 'prd_1', variantId: 'var_2', name: 'Phone One', price: 120000, quantity: 2 }],
+			},
+			{
+				currency: 'PKR',
+				value: 9900000,
+				items: [{ id: 'prd_1', variantId: null, name: 'Phone One', price: 100000, quantity: 99 }],
+			},
+			{ currency: 'USD', value: 0, items: [{ id: 'prd_9', variantId: 'var_9', name: '', price: 0, quantity: 1 }] },
+		]);
+		events.seen.length = 0;
+		window.dispatchEvent(
+			new window.CustomEvent(ADD_TO_CART_EVENT, { detail: { productId: 'prd_1', variantId: 'var_1' }, cancelable: true }),
+		);
+		await flush();
+		// widgets started by earlier tests listen too: every one tells the same
+		expect(events.seen.length).toBeGreaterThan(0);
+		for (const entry of events.seen)
+			expect(entry).toEqual({
+				name: 'ss:add_to_cart',
+				detail: {
+					currency: 'PKR',
+					value: 100000,
+					items: [{ id: 'prd_1', variantId: 'var_1', name: 'Phone One', price: 100000, quantity: 1 }],
+				},
+			});
+		events.stop();
 	});
 
 	it('render nothing without a token or when the product says no', async () => {

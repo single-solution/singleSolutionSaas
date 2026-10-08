@@ -2,17 +2,20 @@
  * The wishlist (visitor widget `wishlist`, feature wishlist; PLAN 0.8.8 Shopper extras): the signed-in shopper's saved
  * products as cards, each with Remove and, while the cart is on, Add to cart (a product with several variants is
  * then chosen in the cart). Signed out, the sign-in hint shows. It follows saves made by the grid and the product page.
+ * Add to cart dispatches Growth's `ss:add_to_cart` (PLAN 0.8.9) at the card's price.
  * @module
  */
-import { button, h, mountShop, productCard, textsOf } from './shop-common.js';
+import { GROWTH_EVENTS, growthItem, itemsDetail } from '../core/growth-events.js';
+import { announce, button, currencyOf, h, mountShop, productCard, settingsOf, textsOf } from './shop-common.js';
 import { savedOf } from './shop-saved.js';
 
 /**
  * @param {import('./widget.js').VisitorMount} input
  * @returns {Promise<void>}
  */
-export const mountWishlist = async ({ host, config, shop }) => {
+export const mountWishlist = async ({ host, config, shop, win }) => {
 	const t = textsOf(config);
+	const settings = settingsOf(config);
 	const saved = savedOf(shop);
 
 	mountShop({
@@ -37,6 +40,13 @@ export const mountWishlist = async ({ host, config, shop }) => {
 										t('wishlist.addToCart'),
 										() => {
 											shop.cart.add({ productId: item.id, variantId: null, quantity: 1 });
+											announce(
+												win,
+												GROWTH_EVENTS.addToCart,
+												itemsDetail(currencyOf(settings, item.currency), [
+													growthItem({ productId: item.id, name: item.name, price: item.price, quantity: 1 }),
+												]),
+											);
 											status.textContent = t('page.addedStatus', { name: item.name });
 										},
 										{ 'aria-label': t('wishlist.addToCartLabel', { name: item.name }) },

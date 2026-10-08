@@ -1,0 +1,13 @@
+{
+	"type": "object",
+	"additionalProperties": false,
+	"properties": {
+		"pixelId": {
+			"type": "string",
+			"title": "TikTok pixel id",
+			"description": "Your pixel id (TikTok Ads Manager → Events), capital letters and digits. Loads only after the visitor consents to marketing.",
+			"default": "",
+			"maxLength": 40
+		}
+	}
+}

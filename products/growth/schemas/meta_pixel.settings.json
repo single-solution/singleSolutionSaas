@@ -1,0 +1,13 @@
+{
+	"type": "object",
+	"additionalProperties": false,
+	"properties": {
+		"pixelId": {
+			"type": "string",
+			"title": "Meta pixel id",
+			"description": "The digits of your pixel id (Events Manager → Data sources). Loads only after the visitor consents to marketing.",
+			"default": "",
+			"maxLength": 30
+		}
+	}
+}

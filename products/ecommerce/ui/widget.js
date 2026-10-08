@@ -9,13 +9,17 @@
  * - `cart.count()`, `cart.onChange(listener)`: the cart for the merchant's own header;
  * - `admin({ getTicket })`: on the merchant's admin pages (no `data-token`), mounts the admin widgets with tickets.
  *
- * It also handles the `ss-ecommerce:add-to-cart` window event (Chat's product cards, PLAN 0.8.4). Widgets render
- * nothing while the product is stopped, their feature is off or the merchant database is not connected.
+ * It also handles the `ss-ecommerce:add-to-cart` window event (Chat's product cards, PLAN 0.8.4). Both ways of adding
+ * dispatch Growth's `ss:add_to_cart` (PLAN 0.8.9) once the product's name and price are read from the catalog (an
+ * unreadable product still dispatches it, with an empty name and price 0). Widgets render nothing while the product
+ * is stopped, their feature is off or the merchant database is not connected.
  * @module
  */
+import { GROWTH_EVENTS, growthItem, itemsDetail } from '../core/growth-events.js';
+import { isCurrency } from '../core/money.js';
 import { ADD_TO_CART_EVENT, WIDGET_ATTRIBUTE, WIDGET_FEATURES, WIDGET_GLOBAL } from '../core/widgets.js';
 import { mountCart } from './cart.js';
-import { createCartStore } from './cart-store.js';
+import { MAX_QUANTITY, createCartStore } from './cart-store.js';
 import { mountCatalogAdmin } from './catalog-admin.js';
 import { mountCompare } from './compare.js';
 import { mountCustomersAdmin } from './customers-admin.js';
@@ -24,6 +28,7 @@ import { mountOrdersAdmin } from './orders-admin.js';
 import { mountProductGrid } from './product-grid.js';
 import { mountProductPage } from './product-page.js';
 import { mountPromotionsAdmin } from './promotions-admin.js';
+import { announce } from './shop-common.js';
 import { createTicketSource } from './tickets.js';
 import { mountWishlist } from './wishlist.js';
 
@@ -174,14 +179,35 @@ export const startWidget = ({ window: win, script }) => {
 		}
 	};
 
+	/**
+	 * Growth's `ss:add_to_cart` for a line added here, with the product's name and price from the catalog.
+	 * @param {import('./cart-store.js').CartLine} line
+	 * @param {string} fallback the shop's currency
+	 */
+	const tellAdded = async (line, fallback) => {
+		const found = await call(`/v1/shop/products/${encodeURIComponent(line.productId)}`);
+		const product = found.ok ? found.data : null;
+		const variants = Array.isArray(product?.variants) ? product.variants : [];
+		const variant = variants.find((/** @type {{ id: unknown }} */ entry) => entry.id === line.variantId);
+		announce(
+			win,
+			GROWTH_EVENTS.addToCart,
+			itemsDetail(isCurrency(product?.currency) ? product.currency : fallback, [
+				growthItem({ ...line, name: product?.name, price: variant?.price ?? product?.price }),
+			]),
+		);
+	};
+
 	/** @param {{ productId?: unknown, variantId?: unknown, quantity?: unknown }} item @returns {boolean} added */
 	const addToCart = (item) => {
 		if (!visitorConfig?.features.includes('checkout') || typeof item?.productId !== 'string') return false;
-		cart.add({
+		const line = {
 			productId: item.productId,
 			variantId: typeof item.variantId === 'string' ? item.variantId : null,
-			quantity: Number.isSafeInteger(item.quantity) ? Number(item.quantity) : 1,
-		});
+			quantity: Number.isSafeInteger(item.quantity) ? Math.max(1, Math.min(MAX_QUANTITY, Number(item.quantity))) : 1,
+		};
+		cart.add(line);
+		void tellAdded(line, String(visitorConfig.settings?.currency ?? ''));
 		return true;
 	};
 

@@ -1,0 +1,19 @@
+{
+	"type": "object",
+	"additionalProperties": false,
+	"properties": {
+		"position": {
+			"type": "string",
+			"title": "Banner position",
+			"default": "bottom",
+			"enum": ["bottom", "top"]
+		},
+		"privacyUrl": {
+			"type": "string",
+			"title": "Privacy policy link",
+			"description": "An https address or a path on your website (for example /privacy). Every word of the banner is in Texts.",
+			"default": "",
+			"maxLength": 2048
+		}
+	}
+}

@@ -47,6 +47,13 @@ wishlists, alerts and returns need an Accounts sign-in. An order paid online or 
 after Payments confirms it for the order's exact amount and currency. There is no background work: delayed work (a
 waiting payment rechecked, an unconfirmed order cancelled, alerts sent) runs when the website is used or the order read.
 
+For Growth (PLAN 0.8.9) the shopper widgets dispatch window events, not cancelable, that Growth's page script listens
+for (`core/growth-events.js`; no Growth token): `ss:view_item` (the product page shows a product), `ss:add_to_cart`
+(each line added: product page, wishlist, `addToCart()` and the `ss-ecommerce:add-to-cart` event), `ss:begin_checkout`
+(the first Place order press in the cart widget) and `ss:purchase` (the order placed). The detail is
+`{ currency, value, items }`, plus `orderId` and `orderNumber` on `ss:purchase`, whose value is the order total; items
+are `{ id, variantId, name, price, quantity }`, money in minor units.
+
 ## Layout (PLAN 0.4.13)
 
 | Folder      | What it holds                                                                                                                                                                              |

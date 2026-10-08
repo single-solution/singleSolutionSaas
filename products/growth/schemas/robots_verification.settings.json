@@ -1,0 +1,42 @@
+{
+	"type": "object",
+	"additionalProperties": false,
+	"properties": {
+		"robotsRules": {
+			"type": "string",
+			"title": "robots.txt rules",
+			"description": "Your rules; the Sitemap lines are added from the sitemaps below.",
+			"default": "User-agent: *\nAllow: /",
+			"maxLength": 10000,
+			"x-ui": { "widget": "textarea" }
+		},
+		"sitemaps": {
+			"type": "array",
+			"title": "Sitemaps",
+			"description": "https addresses of your sitemaps on this website (Ecommerce serves one).",
+			"default": [],
+			"items": { "type": "string", "maxLength": 2048 }
+		},
+		"googleVerification": {
+			"type": "string",
+			"title": "Google Search Console verification",
+			"description": "The content of the google-site-verification meta tag (or the whole tag).",
+			"default": "",
+			"maxLength": 300
+		},
+		"bingVerification": {
+			"type": "string",
+			"title": "Bing Webmaster Tools verification",
+			"description": "The content of the msvalidate.01 meta tag (or the whole tag).",
+			"default": "",
+			"maxLength": 300
+		},
+		"metaVerification": {
+			"type": "string",
+			"title": "Meta domain verification",
+			"description": "The content of the facebook-domain-verification meta tag (or the whole tag).",
+			"default": "",
+			"maxLength": 300
+		}
+	}
+}

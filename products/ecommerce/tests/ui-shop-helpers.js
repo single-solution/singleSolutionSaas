@@ -4,6 +4,7 @@
  * widget config with the English texts, timers the tests run by hand, and finders inside shadow roots.
  * @module
  */
+import { GROWTH_EVENTS } from '../core/growth-events.js';
 import strings from '../strings/en.json' with { type: 'json' };
 import { createCartStore } from '../ui/cart-store.js';
 
@@ -133,7 +134,7 @@ export const flush = async () => {
 	for (let i = 0; i < 20; i += 1) await new Promise((resolve) => setTimeout(resolve, 0));
 };
 
-/** Timers run by hand (`win.setTimeout` of the cart's pause). */
+/** Timers run by hand (`win.setTimeout` of the cart's pause); events still go to the page's window. */
 export const handTimers = () => {
 	let id = 0;
 	/** @type {Map<number, () => void>} */
@@ -147,6 +148,9 @@ export const handTimers = () => {
 		},
 		/** @param {number} timer */
 		clearTimeout: (timer) => void tasks.delete(timer),
+		CustomEvent: window.CustomEvent,
+		/** @param {Event} event */
+		dispatchEvent: (event) => window.dispatchEvent(event),
 		pending: () => tasks.size,
 		/** Run every pending task, then let promises settle. */
 		run: async () => {
@@ -212,6 +216,26 @@ export const submit = async (form) => {
 /** @param {string} key @param {Record<string, string | number>} [values] */
 export const text = (key, values = {}) =>
 	String(TEXTS[key] ?? key).replace(/\{(\w+)\}/g, (whole, name) => (name in values ? String(values[name]) : whole));
+
+/**
+ * Record the Growth events dispatched on the page's window (PLAN 0.8.9).
+ * @returns {{ seen: Array<{ name: string, detail: any }>, of: (name: string) => any[], stop: () => void }}
+ */
+export const growthEvents = () => {
+	const names = Object.values(GROWTH_EVENTS);
+	/** @type {Array<{ name: string, detail: any }>} */
+	const seen = [];
+	/** @param {Event} event */
+	const hear = (event) => void seen.push({ name: event.type, detail: /** @type {CustomEvent} */ (event).detail });
+	for (const name of names) window.addEventListener(name, hear);
+	return {
+		seen,
+		of: (name) => seen.filter((entry) => entry.name === name).map((entry) => entry.detail),
+		stop: () => {
+			for (const name of names) window.removeEventListener(name, hear);
+		},
+	};
+};
 
 /** Clear the page and the browser's storage. */
 export const resetPage = () => {

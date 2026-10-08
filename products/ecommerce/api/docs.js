@@ -1,11 +1,11 @@
 /**
- * The public docs at `/docs` (PLAN 0.4.10, 0.8.8): the widgets with their data attributes, the JS API and the
- * add-to-cart event, the Accounts sign-in checkout needs, paying through Payments and the success page, the order flow
- * and its roles, the Notifications templates, couriers (tracking links and the courier API adapter), the storage CORS
- * rule, what the merchant's site serves from the API (sitemap, product meta, feeds, llms.txt, policies), the Chat
- * lookups, the Accounts Orders lookup, data rights, per-feature guides with their routes and widgets, the admin widgets
- * and the ticket snippet (Node.js and cURL), the business.json template, the localhost note and the API reference
- * from `openapi.json`. Plain HTML; every value is escaped.
+ * The public docs at `/docs` (PLAN 0.4.10, 0.8.8): the widgets with their data attributes, the JS API, the
+ * add-to-cart event and the browser events for Growth (PLAN 0.8.9), the Accounts sign-in checkout needs, paying
+ * through Payments and the success page, the order flow and its roles, the Notifications templates, couriers (tracking
+ * links and the courier API adapter), the storage CORS rule, what the merchant's site serves from the API (sitemap,
+ * product meta, feeds, llms.txt, policies), the Chat lookups, the Accounts Orders lookup, data rights, per-feature
+ * guides with their routes and widgets, the admin widgets and the ticket snippet (Node.js and cURL), the business.json
+ * template, the localhost note and the API reference from `openapi.json`. Plain HTML; every value is escaped.
  * @module
  */
 import { BUSINESS_JSON_TEMPLATE } from '@ss/contracts';
@@ -161,6 +161,8 @@ ${block(snippets.api)}
 <h3>The <code>${escape(ADD_TO_CART_EVENT)}</code> event</h3>
 ${para(guide.addToCart)}
 ${block(snippets.addToCartEvent)}
+<h3>Events for Growth</h3>
+${para(guide.growthEvents)}
 <h2 id="sign-in">Shoppers sign in with Accounts</h2>
 ${para(guide.signIn)}
 <h2 id="payments">Checkout and payments</h2>

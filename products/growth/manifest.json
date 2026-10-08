@@ -1,0 +1,169 @@
+{
+	"id": "growth",
+	"name": "Growth",
+	"version": "0.1.0",
+	"endpoints": {
+		"base": "http://localhost:3000",
+		"dashboard": "/dashboard"
+	},
+	"widgetScriptUrl": "/widget.js",
+	"docsUrl": "/docs",
+	"features": [
+		{
+			"key": "meta_pixel",
+			"name": "Meta pixel",
+			"description": "Loads the merchant's Meta pixel once the visitor consents to marketing, and sends it the shop events.",
+			"dependsOn": [],
+			"settings": {
+				"$ref": "schemas/meta_pixel.settings.json"
+			}
+		},
+		{
+			"key": "google_tags",
+			"name": "Google tags",
+			"description": "Google Analytics 4, Google Ads and Tag Manager with the merchant's ids, after consent, with Google Consent Mode v2 and the shop events.",
+			"dependsOn": [],
+			"settings": {
+				"$ref": "schemas/google_tags.settings.json"
+			}
+		},
+		{
+			"key": "tiktok_pixel",
+			"name": "TikTok pixel",
+			"description": "Loads the merchant's TikTok pixel once the visitor consents to marketing, and sends it the shop events.",
+			"dependsOn": [],
+			"settings": {
+				"$ref": "schemas/tiktok_pixel.settings.json"
+			}
+		},
+		{
+			"key": "custom_scripts",
+			"name": "Custom scripts",
+			"description": "Scripts the merchant pastes, added to the page once the visitor consents to their category (analytics or marketing).",
+			"dependsOn": [],
+			"settings": {
+				"$ref": "schemas/custom_scripts.settings.json"
+			}
+		},
+		{
+			"key": "consent_banner",
+			"name": "Consent banner",
+			"description": "A cookie banner with the categories necessary, analytics and marketing; the choice stays in the visitor's browser and feeds Google Consent Mode v2.",
+			"dependsOn": [],
+			"settings": {
+				"$ref": "schemas/consent_banner.settings.json"
+			}
+		},
+		{
+			"key": "visitor_analytics",
+			"name": "Visitor analytics",
+			"description": "Anonymous first-party analytics in the merchant's database: visits, page views, sources, devices and countries; the analytics dashboard widget.",
+			"dependsOn": [],
+			"settings": {
+				"$ref": "schemas/visitor_analytics.settings.json"
+			}
+		},
+		{
+			"key": "conversion_funnel",
+			"name": "Conversion funnel",
+			"description": "Records the shop events (view, add to cart, checkout, purchase) and revenue from the page's browser events.",
+			"dependsOn": ["visitor_analytics"],
+			"settings": {
+				"$ref": "schemas/conversion_funnel.settings.json"
+			}
+		},
+		{
+			"key": "searches_404s",
+			"name": "Searches and 404s",
+			"description": "Records what visitors search for on the site and the pages they reach that do not exist.",
+			"dependsOn": ["visitor_analytics"],
+			"settings": {
+				"$ref": "schemas/searches_404s.settings.json"
+			}
+		},
+		{
+			"key": "web_vitals",
+			"name": "Web Vitals",
+			"description": "Measures how fast and stable pages are for real visitors (LCP, INP, CLS, FCP, TTFB).",
+			"dependsOn": ["visitor_analytics"],
+			"settings": {
+				"$ref": "schemas/web_vitals.settings.json"
+			}
+		},
+		{
+			"key": "robots_verification",
+			"name": "robots and verification",
+			"description": "The robots.txt rules and the Google, Bing and Meta verification tags, served for the merchant's site to include.",
+			"dependsOn": [],
+			"settings": {
+				"$ref": "schemas/robots_verification.settings.json"
+			}
+		},
+		{
+			"key": "indexnow",
+			"name": "IndexNow",
+			"description": "Tells search engines about new or changed pages at once, with the merchant's IndexNow key, when the merchant asks (widget or API).",
+			"dependsOn": [],
+			"settings": {
+				"$ref": "schemas/indexnow.settings.json"
+			}
+		},
+		{
+			"key": "seo_checklist",
+			"name": "SEO checklist",
+			"description": "Checks the merchant's pages on request and shows what to fix, with steps.",
+			"dependsOn": [],
+			"settings": {
+				"$ref": "schemas/seo_checklist.settings.json"
+			}
+		},
+		{
+			"key": "notice_bar",
+			"name": "Notice bar",
+			"description": "An announcement bar on the website with the merchant's text, a link and the dates it shows.",
+			"dependsOn": [],
+			"settings": {
+				"$ref": "schemas/notice_bar.settings.json"
+			}
+		}
+	],
+	"permissions": [
+		{
+			"key": "analytics.read",
+			"name": "See the analytics dashboard",
+			"feature": "visitor_analytics"
+		},
+		{
+			"key": "seo.check",
+			"name": "Run the SEO checklist",
+			"feature": "seo_checklist"
+		},
+		{
+			"key": "indexnow.submit",
+			"name": "Submit pages to IndexNow",
+			"feature": "indexnow"
+		}
+	],
+	"widgets": [
+		{
+			"key": "consent_banner",
+			"feature": "consent_banner",
+			"kind": "visitor"
+		},
+		{
+			"key": "notice_bar",
+			"feature": "notice_bar",
+			"kind": "visitor"
+		},
+		{
+			"key": "analytics_dashboard",
+			"feature": "visitor_analytics",
+			"kind": "admin"
+		},
+		{
+			"key": "seo_checklist",
+			"feature": ["seo_checklist", "indexnow"],
+			"kind": "admin"
+		}
+	]
+}
