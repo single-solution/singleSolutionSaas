@@ -8,14 +8,15 @@ attachments, ratings, transcripts, staff alerts, moderation and reports. Built o
 
 ## Features
 
-34 switches (keys in `manifest.json`, settings in `schemas/`), all starting off at price 0: `visitor_chat`,
+40 switches (keys in `manifest.json`, settings in `schemas/`), all starting off at price 0: `visitor_chat`,
 `guest_chat`, `signed_in_chat`, `ai_replies`, `ai_backup`, `ai_instructions`, `ai_caps`, `ai_cost_alerts`,
-`language_lock`, `knowledge_base`, `knowledge_pages`, `knowledge_editor`, `webhook_tools`, `book_slot`,
-`proactive_idle`, `proactive_pages`, `proactive_exit`, `leads_flows`, `custom_fields`, `attachments`,
-`typing_receipts`, `ratings`, `transcripts`, `inbox`, `handoff`, `assignment`, `presence_queue`, `internal_notes`,
-`saved_replies`, `context_panel`, `ai_summary`, `staff_alerts`, `moderation`, `reports`. The shop tools, track
-shipment and product cards join with Ecommerce (step 10); the Ecommerce routes they will call are in `core/shop.js` and
-the docs.
+`language_lock`, `knowledge_base`, `knowledge_pages`, `knowledge_editor`, `webhook_tools`, `book_slot`, `shop_search`,
+`shop_deals`, `shop_top`, `shop_my_orders`, `track_shipment`, `product_cards`, `proactive_idle`, `proactive_pages`,
+`proactive_exit`, `leads_flows`, `custom_fields`, `attachments`, `typing_receipts`, `ratings`, `transcripts`, `inbox`,
+`handoff`, `assignment`, `presence_queue`, `internal_notes`, `saved_replies`, `context_panel`, `ai_summary`,
+`staff_alerts`, `moderation`, `reports`. The shop tools, track shipment, product cards and the context panel's shop
+info read Ecommerce with the pasted Ecommerce token; the Ecommerce routes they call are listed once, in
+`core/shop.js`, and in the docs.
 
 All business data (conversations, messages, guests, staff, leads, saved replies, knowledge, pages, AI token counts,
 the activity log) lives in the merchant's database (`ss_chat_*`). The product database holds the kit's records plus
@@ -25,17 +26,17 @@ checks with back-off. There are no background jobs, timers or websockets.
 
 ## Layout (PLAN 0.4.13)
 
-| Folder      | What it holds                                                                                                                 |
-| ----------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `core/`     | pure logic: conversations, flows, fields and leads, handoff and office hours, caps, prompt, AI wire formats, knowledge, tools |
-| `api/`      | routes, the service (sites, visitors, views, Notifications), the reply pipeline, visitor API, inbox, knowledge, admin, docs   |
-| `adapters/` | the kit wiring (`product.js`), AI providers, cryptography, list settings, the merchant database                               |
-| `ui/`       | widgets: `chat` (visitor), `inbox`, `knowledge_editor`, `reports` (admin, tickets)                                            |
-| `app/`      | Next.js: the API function and the dashboard (Overview · Features · Settings with lists · Connections · Developers)            |
-| `strings/`  | every word of the widgets (Settings → Texts)                                                                                  |
-| `schemas/`  | each feature's settings schema                                                                                                |
-| `tests/`    | Vitest on the kit's fake Portal with fakes for the AI provider, Notifications, Accounts and storage; MongoDB; jsdom           |
-| `docs/`     | the public docs' texts, served at `/docs`                                                                                     |
+| Folder      | What it holds                                                                                                                  |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `core/`     | pure logic: conversations, flows, fields and leads, handoff and office hours, caps, prompt, AI wire formats, knowledge, tools  |
+| `api/`      | routes, the service (sites, visitors, views, Notifications), the reply pipeline, visitor API, inbox, knowledge, admin, docs    |
+| `adapters/` | the kit wiring (`product.js`), AI providers, cryptography, list settings, the merchant database                                |
+| `ui/`       | widgets: `chat` (visitor), `inbox`, `knowledge_editor`, `reports` (admin, tickets)                                             |
+| `app/`      | Next.js: the API function and the dashboard (Overview · Features · Settings with lists · Connections · Developers)             |
+| `strings/`  | every word of the widgets (Settings → Texts)                                                                                   |
+| `schemas/`  | each feature's settings schema                                                                                                 |
+| `tests/`    | Vitest on the kit's fake Portal with fakes for the AI provider, Notifications, Accounts, Ecommerce and storage; MongoDB; jsdom |
+| `docs/`     | the public docs' texts, served at `/docs`                                                                                      |
 
 ## Environment and deploying
 

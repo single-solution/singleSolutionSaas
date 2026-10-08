@@ -1,8 +1,8 @@
 /**
  * Names the widgets, the API and the docs share (PLAN 0.4.10, 0.8.3): the browser global of `widget.js`
  * (`window.SSChat`), the attribute of the elements the merchant places for admin widgets, the headers a visitor request
- * carries, where the browser keeps the guest key, and the back-off checking constants (fixed code constants, never
- * settings).
+ * carries, where the browser keeps the guest key, the event a product card's Add to cart dispatches, and the back-off
+ * checking constants (fixed code constants, never settings).
  * @module
  */
 
@@ -31,6 +31,13 @@ export const GUEST_STORAGE_KEY = 'ss-chat-guest';
 
 /** Where the widget keeps proactive memory (shown this session, dismissed until). */
 export const PROACTIVE_STORAGE_KEY = 'ss-chat-proactive';
+
+/**
+ * The window event a product card's Add to cart dispatches (cancelable), with `detail: { productId, variantId,
+ * quantity }`. Ecommerce's widget on the page listens and calls `preventDefault()` once it added the item to the cart;
+ * when nobody does, the card opens the product page instead.
+ */
+export const ADD_TO_CART_EVENT = 'ss-ecommerce:add-to-cart';
 
 /** Page kinds `SSChat.setPage({ kind })` accepts. */
 export const PAGE_KINDS = Object.freeze(/** @type {const} */ (['product', 'category', 'deals', 'cart', 'other']));

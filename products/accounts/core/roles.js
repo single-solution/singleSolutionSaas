@@ -52,11 +52,14 @@ const ready = (key, name, description, permissions) => ({
 	ready: true,
 });
 
+/** Ecommerce's published permission keys (its manifest), as `ecommerce:<key>`. */
+const shop = (/** @type {string[]} */ ...keys) => keys.map((key) => `ecommerce:${key}`);
+
 /** The ready-made roles, created for a website on first use. */
 export const READY_ROLES = Object.freeze([
 	ready('customer', 'Customer', 'Shoppers and visitors with an account. No staff permissions.', []),
 	ready('owner', 'Owner', 'Runs the business: every permission.', ['*']),
-	ready('business_manager', 'Business manager', 'Day-to-day operations lead: users, chats and messages.', [
+	ready('business_manager', 'Business manager', 'Day-to-day operations lead: users, the shop, chats and messages.', [
 		'accounts:users.read',
 		'accounts:users.manage',
 		'chat:inbox.read',
@@ -67,17 +70,40 @@ export const READY_ROLES = Object.freeze([
 		'notifications:log.read',
 		'notifications:messages.send',
 		'notifications:templates.edit',
+		...shop(
+			'catalog.edit',
+			'orders.read',
+			'orders.manage',
+			'orders.refund',
+			'customers.manage',
+			'returns.manage',
+			'coupons.edit',
+			'deals.edit',
+			'bundles.edit',
+			'loyalty.manage',
+			'reviews.moderate',
+			'reports.read',
+			'csv.run',
+			'bulk.run',
+		),
 	]),
-	ready('product_manager', 'Product manager', 'Catalog focus. Tick the catalog permissions once the shop is connected.', []),
+	ready(
+		'product_manager',
+		'Product manager',
+		'Catalog focus: products, CSV and bulk changes, and review moderation.',
+		shop('catalog.edit', 'csv.run', 'bulk.run', 'reviews.moderate'),
+	),
 	ready('marketing_manager', 'Marketing manager', 'Offers, content and messages.', [
 		'notifications:templates.edit',
 		'chat:reports.read',
+		...shop('coupons.edit', 'deals.edit', 'bundles.edit', 'loyalty.manage', 'reports.read'),
 	]),
-	ready('support_staff', 'Support staff', 'Customer-facing: reads users and answers chats.', [
+	ready('support_staff', 'Support staff', 'Customer-facing: reads users, answers chats and handles orders and returns.', [
 		'accounts:users.read',
 		'chat:inbox.read',
 		'chat:inbox.reply',
 		'notifications:log.read',
+		...shop('orders.read', 'orders.manage', 'returns.manage', 'customers.manage'),
 	]),
 ]);
 

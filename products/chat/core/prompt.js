@@ -37,6 +37,7 @@ export const CORE_RULES = Object.freeze([
  * @property {{ signedIn: boolean, name: string | null }} visitor
  * @property {{ url: string, title: string, kind: string, productName: string | null } | null} page
  * @property {boolean} handoff the escalate tool is offered
+ * @property {{ tools: boolean, cards: boolean }} [shop] shop tools are offered; their products show as cards
  */
 
 /**
@@ -46,6 +47,14 @@ export const CORE_RULES = Object.freeze([
 export const buildSystemPrompt = (input) => {
 	const lines = [`Your name is ${input.botName}.`, ...CORE_RULES, `When you do not know the answer: ${input.dontKnow}`];
 	if (input.handoff) lines.push('To hand the chat to a person, use the escalate_to_human tool.');
+	if (input.shop?.tools)
+		lines.push(
+			'For products, prices, stock, deals, orders and deliveries, use the shop tools and answer only from what they return.',
+		);
+	if (input.shop?.cards)
+		lines.push(
+			'The products the shop tools return are shown under your answer as cards with a link and an Add to cart button.',
+		);
 	if (input.language)
 		lines.push(`Answer only in ${languageName(input.language)} (${input.language}), whatever language the knowledge is in.`);
 	const contact = [

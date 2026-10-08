@@ -194,17 +194,20 @@ export const staffPart = ({ doc, t, make, api, failure, queue, onStaff }) => {
 };
 
 /**
- * The context panel: the visitor, the page the chat started on, the device, their conversations, the AI summary
- * (with Summarise when ai_summary is on) and the rating.
+ * The context panel: the visitor, the page the chat started on, the device, their conversations, then the shop info of
+ * a signed-in visitor (last orders with status and total, and loyalty points; with the Ecommerce token), the AI
+ * summary (with Summarise when ai_summary is on) and the rating.
  * @param {PartKit & { summary: boolean }} input
  */
 export const contextPart = ({ doc, t, api, failure, summary }) => {
 	const part = element(doc, 'section', { class: 'part' });
 	const facts = element(doc, 'ul', { class: 'facts' });
+	const shopTitle = element(doc, 'h3', {}, t('inbox.orders'));
+	const shop = element(doc, 'ul', { class: 'facts shop' });
 	const text = element(doc, 'p', { class: 'summary' });
 	const summarise = buttonOf(doc, t('inbox.summarise'), { class: 'secondary small' });
 	const note = element(doc, 'p', { class: 'status', role: 'status' });
-	part.append(element(doc, 'h3', {}, t('inbox.context')), facts, text, ...(summary ? [summarise] : []), note);
+	part.append(element(doc, 'h3', {}, t('inbox.context')), facts, shopTitle, shop, text, ...(summary ? [summarise] : []), note);
 	/** @type {string} */
 	let id = '';
 	summarise.addEventListener('click', async () => {
@@ -246,6 +249,23 @@ export const contextPart = ({ doc, t, api, failure, summary }) => {
 				return item;
 			}),
 		);
+		const info = context.shop;
+		setHidden(shopTitle, !info);
+		setHidden(shop, !info);
+		/** @type {string[]} */
+		const orders = info
+			? [
+					...(info.orders.length > 0
+						? info.orders.map((/** @type {any} */ order) =>
+								formatText(t('inbox.order'), { number: order.number, status: order.status, total: order.total }),
+							)
+						: [t('inbox.noOrders')]),
+					...(typeof info.loyaltyPoints === 'number'
+						? [formatText(t('inbox.loyaltyPoints'), { points: info.loyaltyPoints })]
+						: []),
+				]
+			: [];
+		shop.replaceChildren(...orders.map((line) => element(doc, 'li', {}, line)));
 		text.textContent = conversation.summary ?? '';
 	};
 	return { part, show };

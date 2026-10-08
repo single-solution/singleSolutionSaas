@@ -1069,6 +1069,14 @@ describe('My account', () => {
 				answer(200, {
 					items: [
 						{ id: 'ord_1', number: 'A-100', status: 'paid', total: '$10.00', createdAt: at(0) },
+						{
+							id: 'ord_3',
+							number: 'A-101',
+							status: 'packed',
+							statusLabel: 'Being packed',
+							totalText: 'PKR 1,250.00',
+							total: 125000,
+						},
 						{ id: 'ord_2', status: 7, total: { amount: 5 } },
 						'junk',
 					],
@@ -1090,9 +1098,10 @@ describe('My account', () => {
 		);
 		const orders = part(host, strings['account.orders']);
 		const rows = [...orders.querySelectorAll('li')];
-		expect(rows.map((li) => li.firstChild?.textContent)).toEqual(['Order A-100', 'Order ord_2', 'Order ']);
+		expect(rows.map((li) => li.firstChild?.textContent)).toEqual(['Order A-100', 'Order A-101', 'Order ord_2', 'Order ']);
 		expect(rows[0]?.querySelector('.meta')?.textContent).toBe(`paid · $10.00 · ${when(at(0))}`);
-		expect(rows[1]?.querySelector('.meta')?.textContent).toBe('');
+		expect(rows[1]?.querySelector('.meta')?.textContent).toBe('Being packed · PKR 1,250.00');
+		expect(rows[2]?.querySelector('.meta')?.textContent).toBe('');
 	});
 
 	it('shows a pending deletion, failures and the parts of switched-on features only', async () => {

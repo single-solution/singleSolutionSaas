@@ -769,3 +769,104 @@ describe('proactive', () => {
 		expect($('.nudge').hidden).toBe(true);
 	});
 });
+
+describe('product cards', () => {
+	const CARDS = [
+		{
+			productId: 'prd_1',
+			variantId: 'var_1',
+			name: 'Phone X',
+			price: 125000,
+			currency: 'PKR',
+			image: 'https://cdn.example.com/x.jpg',
+			url: 'https://shop.example.com/products/phone-x',
+			inStock: true,
+		},
+		{
+			productId: 'prd_2',
+			variantId: null,
+			name: 'Case',
+			price: 1500,
+			currency: 'PKR',
+			image: null,
+			url: null,
+			inStock: true,
+		},
+		{ productId: 'prd_3', variantId: null, name: 'Old', price: 100, currency: 'PKR', image: null, url: null, inStock: false },
+	];
+	const ROUTES = {
+		'GET /v1/chat': () =>
+			answer(200, { ...view(), messages: [msg(1, 'visitor', 'Phones?'), msg(2, 'ai', 'Here you go.', { cards: CARDS })] }),
+		'POST /v1/chat/read': () => answer(204),
+	};
+
+	it('shows image, name, price and Add to cart; a cart on the page takes the item', async () => {
+		keepGuest();
+		document.documentElement.lang = 'en-US';
+		const { root, api } = await start({
+			features: ['visitor_chat', 'guest_chat', 'ai_replies', 'product_cards'],
+			routes: ROUTES,
+		});
+		await api.open();
+		const cards = [...root.querySelectorAll('.card')];
+		expect(cards).toHaveLength(3);
+		expect(root.querySelector('.cards')?.getAttribute('aria-label')).toBe(TEXTS['chat.products']);
+		expect(cards[0]?.querySelector('img')?.getAttribute('src')).toBe(CARDS[0]?.image);
+		expect(cards[0]?.querySelector('a.name')?.getAttribute('href')).toBe(CARDS[0]?.url);
+		expect(textsIn(root, '.card .price')).toEqual(['PKR 1,250.00', 'PKR 15.00', 'PKR 1.00']);
+		expect(textsIn(root, '.card .name')).toEqual(['Phone X', 'Case', 'Old']);
+		expect(cards[2]?.textContent).toContain(TEXTS['chat.outOfStock']);
+		expect(cards[2]?.querySelector('.add')).toBeNull();
+		/** @type {any[]} */
+		const asked = [];
+		const cart = (/** @type {Event} */ event) => {
+			asked.push(/** @type {CustomEvent} */ (event).detail);
+			event.preventDefault();
+		};
+		window.addEventListener('ss-ecommerce:add-to-cart', cart);
+		const add = /** @type {HTMLAnchorElement} */ (cards[0]?.querySelector('a.add'));
+		expect(add.textContent).toBe(TEXTS['chat.addToCart']);
+		const click = new window.MouseEvent('click', { bubbles: true, cancelable: true, composed: true });
+		expect(add.dispatchEvent(click)).toBe(false);
+		expect(asked).toEqual([{ productId: 'prd_1', variantId: 'var_1', quantity: 1 }]);
+		expect(cards[0]?.querySelector('.status')?.textContent).toBe(TEXTS['chat.addedToCart']);
+		// a card without a product page has a plain button
+		buttonIn(/** @type {HTMLElement} */ (cards[1]), TEXTS['chat.addToCart']).click();
+		expect(asked.at(-1)).toEqual({ productId: 'prd_2', variantId: null, quantity: 1 });
+		window.removeEventListener('ss-ecommerce:add-to-cart', cart);
+		document.documentElement.lang = '';
+	});
+
+	it('follows the link to the product page when no cart on the page takes the item', async () => {
+		keepGuest();
+		const { root, api } = await start({
+			features: ['visitor_chat', 'guest_chat', 'ai_replies', 'product_cards'],
+			routes: ROUTES,
+		});
+		await api.open();
+		const add = /** @type {HTMLAnchorElement} */ (root.querySelector('.card a.add'));
+		/** @type {boolean[]} */
+		const followed = [];
+		const watch = (/** @type {Event} */ event) => {
+			followed.push(!event.defaultPrevented);
+			event.preventDefault(); // jsdom cannot navigate
+		};
+		document.addEventListener('click', watch);
+		add.dispatchEvent(new window.MouseEvent('click', { bubbles: true, cancelable: true, composed: true }));
+		document.removeEventListener('click', watch);
+		expect(followed).toEqual([true]);
+		expect(add.getAttribute('href')).toBe(CARDS[0]?.url);
+		expect(root.querySelector('.card .status')?.textContent).toBe('');
+		const plain = buttonIn(/** @type {HTMLElement} */ (root.querySelectorAll('.card')[1]), TEXTS['chat.addToCart']);
+		plain.click();
+		expect(root.querySelectorAll('.card .status')[1]?.textContent).toBe('');
+	});
+
+	it('shows no cards while product cards is off', async () => {
+		keepGuest();
+		const { root, api } = await start({ features: ['visitor_chat', 'guest_chat', 'ai_replies'], routes: ROUTES });
+		await api.open();
+		expect(textsIn(root, '.msg.ai p')).toEqual(['Here you go.']);
+		expect(root.querySelector('.card')).toBeNull();
+	});
+});

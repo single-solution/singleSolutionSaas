@@ -1,8 +1,11 @@
 /**
  * The parts the visitor chat shows above its composer: the guest-limit answer (sign-in link, lead form or text), the
- * contact form, flow steps, the rating prompt and the transcript form. Each `send` answers the text to show.
+ * contact form, flow steps, the rating prompt and the transcript form. Each `send` answers the text to show. Also the
+ * product cards under an AI answer.
  * @module
  */
+import { formatPrice } from '../core/shop.js';
+import { ADD_TO_CART_EVENT } from '../core/widgets.js';
 import { buttonOf, customInput, formPart, webAddress } from './common.js';
 import { element } from './dom.js';
 
@@ -160,6 +163,53 @@ export const ratingPart = ({ doc, t, make, scale, comment, send }) => {
 	}
 	part.append(note);
 	return part;
+};
+
+/**
+ * The product cards under an AI answer (product cards): image, name linking to the product page, price and Add to
+ * cart. Add to cart dispatches the cancelable `ss-ecommerce:add-to-cart` window event; when no widget on the page
+ * (Ecommerce's) calls `preventDefault()`, the button follows its link to the product page.
+ * @param {{ doc: Document, win: Window, t: import('./common.js').Texts,
+ *   cards: Array<{ productId: string, variantId: string | null, name: string, price: number, currency: string,
+ *   image: string | null, url: string | null, inStock: boolean }> }} input
+ */
+export const cardsPart = ({ doc, win, t, cards }) => {
+	const list = element(doc, 'ul', { class: 'cards', 'aria-label': t('chat.products') });
+	const locale = doc.documentElement.lang || undefined;
+	for (const card of cards) {
+		const item = element(doc, 'li', { class: 'card' });
+		const url = card.url ? webAddress(card.url) : null;
+		const image = card.image ? webAddress(card.image) : null;
+		if (image) item.append(element(doc, 'img', { src: image, alt: '', loading: 'lazy' }));
+		item.append(
+			url ? element(doc, 'a', { href: url, class: 'name' }, card.name) : element(doc, 'span', { class: 'name' }, card.name),
+			element(doc, 'span', { class: 'price' }, formatPrice(card.price, card.currency, { locale, display: 'symbol' })),
+		);
+		if (!card.inStock) {
+			item.append(element(doc, 'span', { class: 'meta' }, t('chat.outOfStock')));
+			list.append(item);
+			continue;
+		}
+		const note = element(doc, 'p', { class: 'status', role: 'status' });
+		const add = url
+			? element(doc, 'a', { href: url, class: 'add', role: 'button' }, t('chat.addToCart'))
+			: buttonOf(doc, t('chat.addToCart'), { class: 'small' });
+		add.addEventListener('click', (event) => {
+			const Custom = /** @type {typeof CustomEvent} */ (/** @type {any} */ (win).CustomEvent);
+			const asked = new Custom(ADD_TO_CART_EVENT, {
+				detail: { productId: card.productId, variantId: card.variantId, quantity: 1 },
+				cancelable: true,
+			});
+			// handled by a cart on the page: stay in the chat; otherwise the link opens the product page
+			if (!win.dispatchEvent(asked)) {
+				event.preventDefault();
+				note.textContent = t('chat.addedToCart');
+			}
+		});
+		item.append(add, note);
+		list.append(item);
+	}
+	return list;
 };
 
 /**

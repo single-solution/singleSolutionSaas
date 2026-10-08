@@ -1,8 +1,9 @@
 /**
  * The public docs at `/docs` (PLAN 0.4.10, 0.8.3): the visitor API with guests and signed-in visitors, AI, knowledge,
  * webhook tools and their signature check, the booking endpoint's two requests, handoff, flows, the Notifications
- * templates, attachments and the bucket's CORS rule, data rights and the activity log, the Ecommerce routes the shop
- * tools will call (step 10), per-feature routes and widgets, the widget snippets, the ticket server snippet (Node.js
+ * templates, attachments and the bucket's CORS rule, data rights and the activity log, the shop tools with the
+ * Ecommerce routes they call, product cards and their add-to-cart event, the context panel's shop info, per-feature
+ * routes and widgets, the widget snippets, the ticket server snippet (Node.js
  * fetch and cURL), the business.json template, the localhost note and the API reference from `openapi.json`. Plain
  * HTML; every value is escaped.
  * @module
@@ -10,7 +11,7 @@
 import { BUSINESS_JSON_TEMPLATE } from '@ss/contracts';
 import guide from '../docs/guide.json' with { type: 'json' };
 import openapi from '../openapi.json' with { type: 'json' };
-import { SHOP_ANSWERS, SHOP_ENDPOINTS } from '../core/shop.js';
+import { CONTEXT_ENDPOINT, SHOP_ANSWERS, SHOP_ENDPOINTS } from '../core/shop.js';
 import { createSnippets } from '../core/snippets.js';
 import { MESSAGE_TEMPLATES, WIDGET_ATTRIBUTE } from '../core/widgets.js';
 import { manifest } from '../adapters/product.js';
@@ -77,9 +78,12 @@ export const renderDocs = ({ base }) => {
 				`<li><code>${escape(key)}</code>: ${values.map((value) => `<code>{${escape(value)}}</code>`).join(', ')}</li>`,
 		)
 		.join('');
-	const shop = SHOP_ENDPOINTS.map(
-		(row) => `<li><code>${escape(row.tool)}</code> (${escape(row.feature)}): <code>${escape(row.request)}</code></li>`,
-	).join('');
+	const shop = [
+		...SHOP_ENDPOINTS.map(
+			(row) => `<li><code>${escape(row.tool)}</code> (${escape(row.feature)}): <code>${escape(row.request)}</code></li>`,
+		),
+		`<li>context panel (${escape(CONTEXT_ENDPOINT.feature)}): <code>${escape(CONTEXT_ENDPOINT.request)}</code></li>`,
+	].join('');
 	const answers = Object.entries(SHOP_ANSWERS)
 		.map(([name, fields]) => `<li>${escape(name)}: ${escape(fields)}</li>`)
 		.join('');
@@ -129,6 +133,8 @@ ${para(guide.activity)}
 ${para(guide.shop)}
 <ul>${shop}</ul>
 <ul>${answers}</ul>
+${para(guide.cards)}
+${para(guide.contextPanel)}
 <h2>Features</h2>
 ${featureSections.join('\n')}
 <h2>Admin widgets and tickets</h2>

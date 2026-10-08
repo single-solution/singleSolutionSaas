@@ -1,14 +1,15 @@
 /**
  * The visitor chat (PLAN 0.8.3): the launcher with its unread badge, the chat window (floating or side panel, full
  * screen on phones when set) with the welcome text, messages (AI label, staff names, human-like typing pace, typing
- * and Seen with typing receipts), the composer with attachments, flows, contact and lead forms, the guest limit,
+ * and Seen with typing receipts, product cards with Add to cart), the composer with attachments, flows, contact and
+ * lead forms, the guest limit,
  * handoff, queue position, office hours, ratings, transcripts and End chat, plus the proactive messages. Live updates
  * come from the back-off checks of `transport.js`.
  * @module
  */
 import { formatText, mountWidget } from '@ss/app-kit/widget';
 import { ATTACHMENT_TYPES, MAX_ATTACHMENT_BYTES, MAX_MESSAGE_LENGTH, PACE } from '../core/widgets.js';
-import { contactPart, flowPart, leadPart, ratingPart, signInPart, transcriptPart } from './chat-parts.js';
+import { cardsPart, contactPart, flowPart, leadPart, ratingPart, signInPart, transcriptPart } from './chat-parts.js';
 import {
 	attachmentNode,
 	buttonOf,
@@ -37,6 +38,7 @@ import { createChecks, createUnreadChecks } from './transport.js';
  * @property {string | null} name
  * @property {string} text
  * @property {{ name: string, type: string, size: number, url: string }} [attachment]
+ * @property {import('../core/shop.js').ProductCard[]} [cards] product cards under an AI answer
  */
 
 /** What the guest limit leads to. */
@@ -200,6 +202,8 @@ export const mountChat = ({ win, host, config, visitor, clock, page, onUnread })
 		}
 		if (message.text) item.append(element(doc, 'p', {}, message.text));
 		if (message.attachment) item.append(attachmentNode(doc, message.attachment));
+		if (message.cards && message.cards.length > 0 && on('product_cards'))
+			item.append(cardsPart({ doc, win, t, cards: message.cards }));
 		return item;
 	};
 	/** @param {Message} message */

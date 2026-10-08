@@ -136,6 +136,60 @@
 			}
 		},
 		{
+			"key": "shop_search",
+			"name": "Shop tools: product search and details",
+			"description": "The AI searches your Ecommerce catalog and reads a product's details, with the pasted Ecommerce token.",
+			"dependsOn": ["ai_replies"],
+			"settings": {
+				"$ref": "schemas/shop_search.settings.json"
+			}
+		},
+		{
+			"key": "shop_deals",
+			"name": "Shop tools: deals and savings quotes",
+			"description": "The AI lists your active deals and quotes a product's price after them, with the pasted Ecommerce token.",
+			"dependsOn": ["ai_replies"],
+			"settings": {
+				"$ref": "schemas/shop_deals.settings.json"
+			}
+		},
+		{
+			"key": "shop_top",
+			"name": "Shop tools: top and new products",
+			"description": "The AI shows your best-selling and newest products, with the pasted Ecommerce token.",
+			"dependsOn": ["ai_replies"],
+			"settings": {
+				"$ref": "schemas/shop_top.settings.json"
+			}
+		},
+		{
+			"key": "shop_my_orders",
+			"name": "Shop tools: my orders and account",
+			"description": "The AI tells a signed-in visitor about their own last orders, loyalty points and name, with the pasted Ecommerce token.",
+			"dependsOn": ["ai_replies", "signed_in_chat"],
+			"settings": {
+				"$ref": "schemas/shop_my_orders.settings.json"
+			}
+		},
+		{
+			"key": "track_shipment",
+			"name": "Track-shipment tool",
+			"description": "The AI gives a signed-in visitor the courier, tracking number, tracking link and latest status of their own orders.",
+			"dependsOn": ["ai_replies", "signed_in_chat"],
+			"settings": {
+				"$ref": "schemas/track_shipment.settings.json"
+			}
+		},
+		{
+			"key": "product_cards",
+			"name": "Product cards with add-to-cart",
+			"description": "Products the shop tools find show under the AI answer as cards (image, name, price, link) with an Add to cart button.",
+			"dependsOn": ["shop_search"],
+			"settings": {
+				"$ref": "schemas/product_cards.settings.json"
+			}
+		},
+		{
 			"key": "proactive_idle",
 			"name": "Proactive idle nudge",
 			"description": "A nudge beside the launcher after the visitor has been idle for a while.",

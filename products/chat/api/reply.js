@@ -3,7 +3,8 @@
  * flow; a handoff phrase or keyword hands the chat to a person; otherwise the AI answers right after the response
  * (`after()`, the widget checks every 3 s meanwhile) unless the chat waits for a person, staff paused the AI, or a
  * limit or cap is reached. The AI uses the website's own provider (backup on failure, when on), knowledge from
- * switched-on features, the merchant's webhook tools and the booking endpoint, the language lock and moderation. On
+ * switched-on features, the merchant's webhook tools, the booking endpoint and the shop tools (Ecommerce, pasted token;
+ * the products they return become product cards on the answer), the language lock and moderation. On
  * failure the on-failure setting applies; N failures in a row hand off. Staff alerts go out as the features say.
  * @module
  */
@@ -35,7 +36,9 @@ import {
 	toolOutput,
 	webhookSchema,
 } from '../core/tools.js';
+import { SHOP_LIMIT, SHOP_UNAVAILABLE, cardOf, shopAnswer, shopRequest, shopSchemas } from '../core/shop.js';
 import { dayKey } from '../core/time.js';
+import { SIGN_IN_HEADER } from '../core/widgets.js';
 import { jsonOf } from '@ss/net';
 import { signTool } from '../adapters/crypto.js';
 
@@ -267,20 +270,48 @@ export const createReply = (product, service) => {
 	};
 
 	/**
-	 * The tools of a turn and how to run them.
+	 * The tools of a turn and how to run them, and the product cards the shop tools found.
 	 * @param {Site} s
 	 * @param {ConversationRecord} c
 	 * @param {Visitor | null} visitor
+	 * @param {string | null} signIn the visitor's Accounts sign-in, verified on this request for this conversation's user
 	 */
-	const toolsOf = async (s, c, visitor) => {
+	const toolsOf = async (s, c, visitor, signIn) => {
 		const booking = s.on.includes('book_slot') ? await s.values('book_slot') : null;
 		const bookingUrl = booking && isHttpsUrl(booking.bookingUrl) ? String(booking.bookingUrl) : null;
 		const webhooks = s.on.includes('webhook_tools') ? await s.list('tools') : [];
+		const shop = shopSchemas(s.on, { signedIn: signIn !== null });
 		const schemas = [
 			...builtinSchemas({ handoff: s.on.includes('handoff'), booking: bookingUrl !== null }),
+			...shop,
 			...webhooks.map(webhookSchema),
 		];
 		const signedIn = visitor?.kind === 'user' ? { id: visitor.id, email: visitor.email } : null;
+		const withCards = s.on.includes('product_cards');
+		/** @type {import('../core/shop.js').ProductCard[]} */
+		const cards = [];
+		/**
+		 * A shop tool: one read from Ecommerce with the pasted token (the sign-in tools forward the verified sign-in;
+		 * the model's arguments never name the user). A failed call answers that it cannot be looked up now.
+		 * @param {import('../core/providers.js').ToolCall} call
+		 */
+		const shopCall = async (call) => {
+			const request = shopRequest(call.name, call.arguments);
+			if (!request.ok) return { ok: false, content: request.content };
+			const answer = await product.callProduct(
+				s.websiteId,
+				'ecommerce',
+				request.path,
+				// offered only with a verified sign-in (shopSchemas)
+				request.signIn ? { headers: { [SIGN_IN_HEADER]: String(signIn) } } : {},
+			);
+			if (!answer.ok) return { ok: false, content: SHOP_UNAVAILABLE };
+			const found = shopAnswer(call.name, answer.body);
+			if (withCards)
+				for (const item of found.products)
+					if (cards.length < SHOP_LIMIT && !cards.some((card) => card.productId === item.id)) cards.push(cardOf(item));
+			return { ok: true, content: toolOutput(found.content) };
+		};
 		/** @param {import('../core/providers.js').ToolCall} call */
 		const execute = async (call) => {
 			if (call.name === BUILTIN.escalate)
@@ -307,6 +338,7 @@ export const createReply = (product, service) => {
 					conversationId: c.id,
 				});
 			}
+			if (shop.some((t) => t.name === call.name)) return shopCall(call);
 			const tool = webhooks.find((t) => t.name === call.name);
 			if (!tool) return { ok: false, content: 'No such tool.' };
 			const args = checkArguments(tool, call.arguments);
@@ -318,7 +350,7 @@ export const createReply = (product, service) => {
 				...(tool.includeVisitor && signedIn ? { visitor: signedIn } : {}),
 			});
 		};
-		return { schemas, execute };
+		return { schemas, execute, cards: () => [...cards], shop: shop.length > 0 };
 	};
 
 	/**
@@ -363,6 +395,8 @@ export const createReply = (product, service) => {
 		const allowed = connections.length > 0 && (await withinReplyLimits(s, c)) && !(await service.capped(s));
 		/** @type {{ text: string, failure: string | null, escalation: { reason: string } | null }} */
 		let result = { text: '', failure: 'unavailable', escalation: null };
+		/** @type {import('../core/shop.js').ProductCard[]} */
+		let cards = [];
 		if (allowed && last) {
 			const lock = s.on.includes('language_lock') ? await s.values('language_lock') : null;
 			const markers = lock ? markerSets(lock.markerWords) : [];
@@ -372,7 +406,10 @@ export const createReply = (product, service) => {
 				: null;
 			const settings = await s.values('ai_replies');
 			const { botName } = await s.values('visitor_chat');
-			const tools = await toolsOf(s, c, visitor);
+			// the shop's sign-in tools only for the user whose sign-in Chat verified on this request
+			const signIn = await s.signIn();
+			const verified = signIn && visitor && signIn.user.id === visitor.id ? signIn.token : null;
+			const tools = await toolsOf(s, c, visitor, verified);
 			const system = buildSystemPrompt({
 				botName: String(botName),
 				business: await s.business(),
@@ -385,6 +422,7 @@ export const createReply = (product, service) => {
 				visitor: { signedIn: visitor !== null, name: c.name },
 				page: c.page,
 				handoff: s.on.includes('handoff'),
+				shop: { tools: tools.shop, cards: tools.shop && s.on.includes('product_cards') },
 			});
 			/** @type {ChatMessage[]} */
 			const messages = [
@@ -410,6 +448,7 @@ export const createReply = (product, service) => {
 					expired: () => now() > deadline,
 				},
 			);
+			cards = tools.cards();
 		}
 		c = /** @type {ConversationRecord} */ (await s.store.conversations.get(conversationId));
 		if (c.waiting || c.aiPaused) return void (await done());
@@ -423,7 +462,7 @@ export const createReply = (product, service) => {
 				const appended = await service.append(
 					s,
 					c,
-					{ author: 'ai', text: checked.text, name: String(botName) },
+					{ author: 'ai', text: checked.text, name: String(botName), cards },
 					{
 						set: { aiPending: false, aiFailures: 0 },
 						inc: { aiReplies: 1 },

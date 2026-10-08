@@ -59,6 +59,14 @@ p { overflow-wrap: anywhere; }
 .msg.system p { background: transparent; font-size: 0.85em; opacity: 0.8; }
 .msg.note p { border: 1px dashed var(--line); background: transparent; }
 .msg img { max-width: 220px; border-radius: var(--r); margin-top: 4px; }
+.cards { display: flex; gap: 8px; overflow-x: auto; max-width: 100%; margin-top: 4px; padding-bottom: 4px; }
+.card { flex: 0 0 148px; display: flex; flex-direction: column; gap: 4px; padding: 8px; border: 1px solid var(--line);
+  border-radius: var(--r); background: var(--bg); }
+.msg .card img { width: 100%; max-width: none; aspect-ratio: 1; object-fit: cover; margin: 0; }
+.card .name { font-weight: 600; } .card .price { font-size: 0.9em; }
+.card .add { display: block; text-align: center; padding: 6px 10px; border-radius: var(--r); background: var(--accent);
+  color: var(--on-accent); text-decoration: none; font-size: 0.9em; }
+.card .status { margin: 0; }
 .who { font-size: 0.8em; opacity: 0.8; margin-bottom: 2px; }
 .typing { margin: 0 12px; font-size: 0.85em; opacity: 0.7; }
 .notices, .slot, .tools { padding: 0 12px; } .notice { margin: 8px 0; font-size: 0.9em; }

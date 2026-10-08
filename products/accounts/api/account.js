@@ -232,7 +232,12 @@ export const createAccount = (product, service, flows) => {
 		});
 	};
 
-	/** The Orders tab: the user's orders from Ecommerce, through the pasted Ecommerce token. @param {any} ctx */
+	/**
+	 * The Orders tab: the user's last 20 orders from Ecommerce, through the pasted Ecommerce token
+	 * (`GET /v1/customers/<userId>/orders` → `{ items: [{ id, number, status, statusLabel, total, totalText, currency,
+	 * createdAt }] }`), shown as given.
+	 * @param {any} ctx
+	 */
 	const orders = async (ctx) => {
 		const { s, user } = await service.signedIn(ctx);
 		const answer = await product.callProduct(

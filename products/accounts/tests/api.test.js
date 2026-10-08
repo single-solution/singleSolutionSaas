@@ -530,6 +530,18 @@ describe('roles, two-step, terms, approval and risk checks', () => {
 		});
 		const catalog = await env.serverCall('GET', '/v1/roles/permissions');
 		expect(catalog.json.unavailable).toEqual(expect.arrayContaining(['ecommerce']));
+		const ready = Object.fromEntries(roles.json.items.map((/** @type {any} */ r) => [r.key, r.permissions]));
+		expect(ready.owner).toEqual(['*']);
+		expect(ready.customer).toEqual([]);
+		expect(ready.product_manager).toEqual([
+			'ecommerce:catalog.edit',
+			'ecommerce:csv.run',
+			'ecommerce:bulk.run',
+			'ecommerce:reviews.moderate',
+		]);
+		expect(ready.business_manager.filter((/** @type {string} */ p) => p.startsWith('ecommerce:'))).toHaveLength(14);
+		expect(ready.marketing_manager).toEqual(expect.arrayContaining(['ecommerce:coupons.edit', 'ecommerce:reports.read']));
+		expect(ready.support_staff).toEqual(expect.arrayContaining(['ecommerce:orders.manage', 'ecommerce:returns.manage']));
 		expect(catalog.json.groups).toEqual(
 			expect.arrayContaining([
 				expect.objectContaining({ source: 'accounts' }),

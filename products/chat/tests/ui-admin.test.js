@@ -692,3 +692,47 @@ describe('reports', () => {
 		expect(root.querySelector('[role="status"]')?.textContent).toBe(TEXTS['reports.signedOut']);
 	});
 });
+
+describe('context panel shop info', () => {
+	/** @param {unknown} shop */
+	const open = async (shop) => {
+		const { hosts } = await startAdmin({
+			features: ['inbox', 'context_panel'],
+			routes: {
+				'GET /v1/admin/conversations': () => answer(200, { items: [item()], hasMore: false, unread: 0 }),
+				'GET /v1/admin/conversations/c1': () =>
+					answer(200, { conversation: full({ context: { ...full().context, shop } }), messages: [] }),
+				'POST /v1/admin/conversations/c1/read': () => answer(204),
+			},
+		});
+		const root = shadow(hosts.inbox);
+		await click(buttonIn(root, 'Ana'));
+		return root;
+	};
+
+	it('shows the signed-in visitor’s last orders with status and total, and loyalty points', async () => {
+		const root = await open({
+			orders: [
+				{ number: 'A-1001', status: 'On its way', total: 'PKR 1,250.00', createdAt: null },
+				{ number: 'A-1000', status: 'Delivered', total: 'PKR 99.00', createdAt: AT },
+			],
+			loyaltyPoints: 120,
+		});
+		expect(root.querySelector('.shop')?.hasAttribute('hidden')).toBe(false);
+		expect(textsIn(root, '.shop li')).toEqual([
+			'A-1001 · On its way · PKR 1,250.00',
+			'A-1000 · Delivered · PKR 99.00',
+			'Loyalty points: 120',
+		]);
+		expect(root.textContent).toContain(TEXTS['inbox.orders']);
+	});
+
+	it('says there are no orders yet, and shows nothing without shop info', async () => {
+		const empty = await open({ orders: [], loyaltyPoints: null });
+		expect(textsIn(empty, '.shop li')).toEqual([TEXTS['inbox.noOrders']]);
+		resetPage();
+		const none = await open(null);
+		expect(none.querySelector('.shop')?.hasAttribute('hidden')).toBe(true);
+		expect(textsIn(none, '.shop li')).toEqual([]);
+	});
+});

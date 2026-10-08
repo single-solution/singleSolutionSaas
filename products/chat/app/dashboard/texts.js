@@ -234,7 +234,8 @@ export const TEXTS = Object.freeze({
 			accounts: "Paste the website's Accounts server token from the Portal. Signed-in chat checks sign-ins with it.",
 			notifications:
 				"Paste the website's Notifications server token from the Portal. Staff alerts, transcripts and cost alerts are sent with it.",
-			ecommerce: "Paste the website's Ecommerce server token from the Portal. Used by the shop tools when Ecommerce ships.",
+			ecommerce:
+				"Paste the website's Ecommerce server token from the Portal. The shop tools, track shipment, product cards and the context panel's shop info read your shop with it.",
 		}),
 		save: 'Save and test',
 		neededBy: 'Needed by: {features}',

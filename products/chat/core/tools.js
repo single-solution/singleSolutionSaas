@@ -3,9 +3,10 @@
  * fills public inputs (a webhook tool's declared parameters, a date range, a slot id); who the visitor is comes from the
  * verified conversation, never from the model. `escalate_to_human` belongs to handoff. Webhook tools and the book-a-slot
  * tool are signed POSTs to the merchant's own https endpoints (adapters/tools.js); the timeout and the answer size cap
- * are code constants, the same for every tool.
+ * are code constants, the same for every tool. The shop tools are in shop.js.
  * @module
  */
+import { SHOP_TOOL_NAMES } from './shop.js';
 
 /** Built-in tool names. */
 export const BUILTIN = Object.freeze({
@@ -79,7 +80,7 @@ export const checkTools = (items) => {
 		const at = `Tool ${index + 1}`;
 		if (!isObject(item)) return void errors.push(`${at}: not a tool.`);
 		const name = typeof item.name === 'string' && TOOL_NAME.test(item.name) ? item.name : null;
-		if (!name || Object.values(BUILTIN).includes(name) || names.has(name))
+		if (!name || Object.values(BUILTIN).includes(name) || SHOP_TOOL_NAMES.includes(name) || names.has(name))
 			return void errors.push(`${at}: the name is 2–41 lower-case letters, digits or _, unique and not a built-in tool.`);
 		names.add(name);
 		const description = text(item.description, 500);

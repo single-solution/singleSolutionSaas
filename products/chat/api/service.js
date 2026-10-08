@@ -3,9 +3,10 @@
  *
  * - `site(ctx)`: the website of a request (merchant database store, switched-on features, settings and texts read
  *   once per request).
- * - `visitorOf(site)`: who is chatting — the Accounts user of a verified sign-in (signed-in chat on), else the guest of
- *   the device's guest key; a device showing both moves the guest's chats to the account.
- * - Views of a conversation for the visitor and for staff, attachment links, the queue position and office hours.
+ * - `visitorOf(site)`: who is chatting — the Accounts user of a sign-in verified on this request (signed-in chat on),
+ *   else the guest of the device's guest key; a device showing both moves the guest's chats to the account.
+ * - Views of a conversation for the visitor and for staff, attachment links, the queue position and office hours; the
+ *   context panel's shop info from Ecommerce (pasted token) for a signed-in visitor.
  * - Messages through Notifications (pasted token): staff alerts, AI cost alerts and transcripts.
  * - AI token counts per day and month window, the caps and the monthly cost alert.
  * @module
@@ -13,6 +14,7 @@
 import { problem } from '@ss/app-kit';
 import { createId } from '@ss/contracts';
 import { capReached, windowKeys, alertCrossed } from '../core/caps.js';
+import { customerOrdersPath, shopInfoOf } from '../core/shop.js';
 import { iso, previewOf, staffMessageView, visitorMessageView } from '../core/conversation.js';
 import { waitingView } from '../core/flows.js';
 import { backAtText, officeState, parseOfficeHours } from '../core/handoff.js';
@@ -37,6 +39,10 @@ import { createStore } from '../adapters/store.js';
  * @property {() => Promise<Record<string, string>>} texts the widget texts
  * @property {() => Promise<{ name: string, email?: string, phone?: string, address?: string, timeZone: string }>} business
  * @property {(name: import('../adapters/lists.js').ListName) => Promise<any[]>} list
+ * @property {() => Promise<SignIn | null>} signIn the visitor's Accounts sign-in, verified on this request (signed-in chat on)
+ */
+/**
+ * @typedef {{ token: string, user: { id: string, name?: string, email?: string, phone?: string } }} SignIn
  */
 /**
  * @typedef {{ kind: 'user', id: string, name: string | null, email: string | null, phone: string | null }
@@ -98,6 +104,13 @@ export const createService = (product) => {
 					return { ...found, name: String(found.name), timeZone: zoneOr(found.timeZone) };
 				}),
 			list: (name) => once(`l:${name}`, () => product.lists.get(websiteId, name)),
+			signIn: () =>
+				once('signIn', async () => {
+					const token = ctx.headers.get(SIGN_IN_HEADER);
+					if (!token || !on.includes('signed_in_chat')) return null;
+					const verified = await product.accounts.verify({ websiteId, token });
+					return verified.ok ? { token, user: verified.user } : null;
+				}),
 		};
 	};
 
@@ -109,22 +122,18 @@ export const createService = (product) => {
 	 * @returns {Promise<Visitor | null>}
 	 */
 	const visitorOf = async (s) => {
-		const headers = s.ctx.headers;
-		const signIn = headers.get(SIGN_IN_HEADER);
+		const signIn = await s.signIn();
 		/** @type {Visitor | null} */
-		let user = null;
-		if (signIn && s.on.includes('signed_in_chat')) {
-			const verified = await product.accounts.verify({ websiteId: s.websiteId, token: signIn });
-			if (verified.ok)
-				user = {
+		const user = signIn
+			? {
 					kind: 'user',
-					id: verified.user.id,
-					name: verified.user.name ?? null,
-					email: verified.user.email ?? null,
-					phone: verified.user.phone ?? null,
-				};
-		}
-		const key = headers.get(GUEST_HEADER);
+					id: signIn.user.id,
+					name: signIn.user.name ?? null,
+					email: signIn.user.email ?? null,
+					phone: signIn.user.phone ?? null,
+				}
+			: null;
+		const key = s.ctx.headers.get(GUEST_HEADER);
 		const guest = key && key.length >= 20 && key.length <= 100 ? await s.store.guests.byKey(sha256(key)) : null;
 		if (user && guest) await s.store.conversations.moveGuest(guest.id, user.id);
 		if (user) return user;
@@ -149,7 +158,8 @@ export const createService = (product) => {
 	 * @param {Site} s
 	 * @param {ConversationRecord} c
 	 * @param {{ author: Author, text: string, name?: string | null, staffId?: string | null, internal?: boolean,
-	 *   buttons?: string[], attachment?: import('../core/conversation.js').Attachment | null }} input
+	 *   buttons?: string[], attachment?: import('../core/conversation.js').Attachment | null,
+	 *   cards?: import('../core/shop.js').ProductCard[] }} input
 	 * @param {{ set?: Record<string, unknown>, inc?: Record<string, number> }} [change] more changes with it
 	 * @returns {Promise<{ message: MessageRecord, conversation: ConversationRecord }>}
 	 */
@@ -183,6 +193,7 @@ export const createService = (product) => {
 			text: input.text,
 			internal,
 			...(input.buttons ? { buttons: input.buttons } : {}),
+			...(input.cards && input.cards.length > 0 ? { cards: input.cards } : {}),
 			attachment: input.attachment ?? null,
 			createdAt: new Date(now()),
 		};
@@ -306,7 +317,8 @@ export const createService = (product) => {
 	 */
 	const visitorMessages = async (s, messages) => {
 		const urlOf = await linker(s);
-		return messages.map((m) => visitorMessageView(m, urlOf));
+		const cards = s.on.includes('product_cards');
+		return messages.map((m) => visitorMessageView(m, urlOf, { cards }));
 	};
 
 	/**
@@ -345,6 +357,7 @@ export const createService = (product) => {
 										page: c.page,
 										device: c.device,
 										conversations: await s.store.conversations.countOf(c.visitor),
+										shop: await shopInfo(s, c),
 									},
 								}
 							: {}),
@@ -354,13 +367,27 @@ export const createService = (product) => {
 	};
 
 	/**
+	 * The context panel's shop info: the signed-in visitor's last orders and loyalty points from Ecommerce (pasted
+	 * token); null for a guest, without the token, or when Ecommerce cannot answer.
+	 * @param {Site} s
+	 * @param {ConversationRecord} c
+	 * @returns {Promise<import('../core/shop.js').ShopInfo | null>}
+	 */
+	const shopInfo = async (s, c) => {
+		if (c.visitor.kind !== 'user') return null;
+		const answer = await product.callProduct(s.websiteId, 'ecommerce', customerOrdersPath(c.visitor.id));
+		return answer.ok ? shopInfoOf(answer.body) : null;
+	};
+
+	/**
 	 * Messages for staff (internal notes only with that feature on).
 	 * @param {Site} s
 	 * @param {MessageRecord[]} messages
 	 */
 	const staffMessages = async (s, messages) => {
 		const urlOf = await linker(s);
-		return messages.map((m) => staffMessageView(m, urlOf));
+		const cards = s.on.includes('product_cards');
+		return messages.map((m) => staffMessageView(m, urlOf, { cards }));
 	};
 
 	// ------------------------------------------------------------------------------------------ notifications

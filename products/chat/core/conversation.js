@@ -5,6 +5,7 @@
  * the AI pause; staff see everything their features allow).
  * @module
  */
+import { cardsOf } from './shop.js';
 import { MAX_MESSAGE_LENGTH, PAGE_KINDS } from './widgets.js';
 
 export const STATUSES = Object.freeze(/** @type {const} */ (['open', 'awaiting_visitor', 'resolved']));
@@ -25,6 +26,7 @@ export const STATUSES = Object.freeze(/** @type {const} */ (['open', 'awaiting_v
  * @property {boolean} internal an internal note
  * @property {string[]} [buttons] a flow question's buttons
  * @property {Attachment | null} attachment
+ * @property {import('./shop.js').ProductCard[]} [cards] product cards under an AI answer (product cards)
  * @property {Date} createdAt
  */
 /**
@@ -156,11 +158,13 @@ export const deviceOf = (userAgent) => {
 const iso = (date) => (date ? new Date(date).toISOString() : null);
 
 /**
- * A message as the visitor sees it (never internal notes: callers filter them out).
+ * A message as the visitor sees it (never internal notes: callers filter them out). Product cards only while that
+ * feature is on.
  * @param {MessageRecord} m
  * @param {(attachment: Attachment) => string | null} urlOf
+ * @param {{ cards?: boolean }} [options]
  */
-export const visitorMessageView = (m, urlOf) => ({
+export const visitorMessageView = (m, urlOf, { cards = false } = {}) => ({
 	id: m.id,
 	seq: m.seq,
 	author: m.author,
@@ -170,6 +174,7 @@ export const visitorMessageView = (m, urlOf) => ({
 	...(m.attachment
 		? { attachment: { name: m.attachment.name, type: m.attachment.type, size: m.attachment.size, url: urlOf(m.attachment) } }
 		: {}),
+	...(cards && m.cards && m.cards.length > 0 ? { cards: cardsOf(m.cards) } : {}),
 	createdAt: iso(m.createdAt),
 });
 
@@ -177,9 +182,10 @@ export const visitorMessageView = (m, urlOf) => ({
  * A message as staff see it.
  * @param {MessageRecord} m
  * @param {(attachment: Attachment) => string | null} urlOf
+ * @param {{ cards?: boolean }} [options]
  */
-export const staffMessageView = (m, urlOf) => ({
-	...visitorMessageView(m, urlOf),
+export const staffMessageView = (m, urlOf, options = {}) => ({
+	...visitorMessageView(m, urlOf, options),
 	name: m.author === 'visitor' ? null : m.name,
 	internal: m.internal,
 });

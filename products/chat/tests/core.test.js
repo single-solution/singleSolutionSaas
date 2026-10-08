@@ -16,6 +16,7 @@ import { applyLinkPolicy, ibanValid, leakCheck, moderateInbound, moderateOutboun
 import { buildSystemPrompt } from '../core/prompt.js';
 import { WIRE, estimateTokens, parseArguments } from '../core/providers.js';
 import { reportRange, summarise } from '../core/reports.js';
+import { cardsOf, exponentOf, formatPrice, shopAnswer, shopInfoOf, shopRequest } from '../core/shop.js';
 import { pathMatches, truncate } from '../core/text.js';
 import { dayStart, isOpenAt, nextOpenAt, zoneOr } from '../core/time.js';
 import { checkArguments, checkTools, slotRange, toolOutput } from '../core/tools.js';
@@ -417,5 +418,64 @@ describe('moderation, language, knowledge and the prompt', () => {
 		expect(truncate('abc', 2)).toBe('a…');
 		expect(pathMatches('/a/*/c', '/a/b/c')).toBe(true);
 		expect(pathMatches('/a/**', '/b')).toBe(false);
+	});
+});
+
+describe('shop', () => {
+	it('formats minor units with the currency’s ISO decimals', () => {
+		expect([exponentOf('PKR'), exponentOf('JPY'), exponentOf('KWD')]).toEqual([2, 0, 3]);
+		expect(formatPrice(125000, 'PKR')).toBe('PKR 1,250.00');
+		expect(formatPrice(1250, 'JPY')).toBe('JPY 1,250');
+		expect(formatPrice(1250, 'KWD')).toBe('KWD 1.250');
+		expect(formatPrice(5, 'PKR', { locale: 'no-such-@@locale' })).toBe('PKR 0.05');
+	});
+
+	it('keeps only checked card fields and refuses unknown tools', () => {
+		expect(cardsOf('x')).toEqual([]);
+		expect(
+			cardsOf([
+				null,
+				{ productId: 'p', name: 'N', price: -1, currency: 'PKR' },
+				{ productId: 'p', name: 'N', price: 1, currency: 'PKR', url: 'javascript:x' },
+			]),
+		).toEqual([
+			{ productId: 'p', variantId: null, name: 'N', price: 1, currency: 'PKR', image: null, url: null, inStock: false },
+		]);
+		expect(shopRequest('nope', {})).toEqual({ ok: false, content: 'No such tool.' });
+		expect(
+			checkTools([{ name: 'search_catalog', description: 'x', url: 'https://x.example.com', parameters: [] }]),
+		).toMatchObject({
+			ok: false,
+		});
+	});
+
+	it('reads odd answers safely', () => {
+		expect(
+			shopAnswer('get_product_details', {
+				...{ id: 'p', name: 'N', price: 1, currency: 'PKR' },
+				specs: [{ label: 'A', value: 2 }],
+				options: 'x',
+			}).content,
+		).toMatchObject({
+			specs: ['A: 2'],
+			options: [],
+		});
+		expect(
+			shopAnswer('get_product_details', { id: 'p', name: 'N', price: 1, currency: 'PKR', specs: 'x' }).content,
+		).toMatchObject({ specs: [] });
+		expect(shopAnswer('get_my_orders', { items: [{ number: 7, total: 'x' }] }).content).toMatchObject({
+			orders: [{ number: '7', status: null, total: null, placedAt: null }],
+		});
+		expect(shopAnswer('list_active_deals', null).content).toBe('No deals are running right now.');
+		expect(
+			shopAnswer('quote_product_savings', { price: 1, priceAfterDeals: 1, currency: 'PKR', deals: 'x' }).content,
+		).toMatchObject({
+			savings: 'PKR 0.00',
+			deals: [],
+		});
+		expect(shopInfoOf('x')).toEqual({ orders: [], loyaltyPoints: null });
+		expect(shopInfoOf({ items: [{ status: 'packed' }] }).orders).toEqual([
+			{ number: '', status: 'packed', total: '', createdAt: null },
+		]);
 	});
 });

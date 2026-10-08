@@ -474,8 +474,13 @@ export const mountMyAccount = ({ host, config, session }) => {
 							const total = [order.totalText, order.total].find(
 								(value) => typeof value === 'string' || typeof value === 'number',
 							);
+							// Ecommerce's statuses are merchant-defined: its label first, else the status key
 							const status =
-								typeof order.status === 'string' ? (config.texts[`order.${order.status}`] ?? order.status) : '';
+								typeof order.statusLabel === 'string' && order.statusLabel !== ''
+									? order.statusLabel
+									: typeof order.status === 'string'
+										? (config.texts[`order.${order.status}`] ?? order.status)
+										: '';
 							item.append(
 								element(
 									doc,

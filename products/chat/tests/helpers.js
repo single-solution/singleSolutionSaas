@@ -2,7 +2,7 @@
  * Test harness: Chat on the kit, connected to the kit's fake Portal (`@ss/app-kit/testing`), with one website, its two
  * tokens, dashboard sessions, a merchant database on the run's MongoDB (`TEST_MONGODB_URI`) and fakes for every outside
  * service: the AI provider (OpenAI-compatible answers queued by the test), Notifications (records what Chat sends), the
- * Accounts double (sign-ins and public keys), S3 storage, the merchant's tool and booking endpoints, and the website
+ * Accounts double (sign-ins and public keys), Ecommerce (answers set per test with `responders`), S3 storage, the merchant's tool and booking endpoints, and the website
  * (business.json and pages). No real network call is ever made.
  * @module
  */
@@ -19,6 +19,7 @@ export const ACCOUNTS = 'https://accounts.example.dev';
 export const AI = 'https://api.openai.com';
 export const STORAGE = 'https://s3.example.dev';
 export const TOOLS = 'https://tools.example.dev';
+export const ECOMMERCE = 'https://ecommerce.example.dev';
 const SECRET = 'connect-secret-0123456789-abcdefghij';
 const ENCRYPTION_KEY = 'encryption-key-0123456789-abcdefghij';
 export const ALL = manifest.features.map((feature) => feature.key);
@@ -84,7 +85,7 @@ export const setup = async ({ start = Date.parse('2026-10-05T10:00:00Z') } = {})
 	const handlers = {
 		[portal.url]: portal.handle,
 		[ACCOUNTS]: accounts.handle,
-		...Object.fromEntries([NOTIFY, AI, STORAGE, TOOLS, ORIGIN].map((origin) => [origin, fake(origin)])),
+		...Object.fromEntries([NOTIFY, AI, STORAGE, TOOLS, ECOMMERCE, ORIGIN].map((origin) => [origin, fake(origin)])),
 	};
 	responders.set(NOTIFY, (call) =>
 		new URL(call.url).pathname.startsWith('/v1/messages/')
@@ -138,7 +139,7 @@ export const setup = async ({ start = Date.parse('2026-10-05T10:00:00Z') } = {})
 	const websiteId = portal.addWebsite({ domain: DOMAIN });
 	portal.addProduct({ productId: 'notifications', baseUrl: NOTIFY });
 	portal.addProduct({ productId: 'accounts', baseUrl: ACCOUNTS });
-	portal.addProduct({ productId: 'ecommerce', baseUrl: 'https://ecommerce.example.dev' });
+	portal.addProduct({ productId: 'ecommerce', baseUrl: ECOMMERCE });
 	const browser = (await portal.issueToken({ websiteId, productId: manifest.id, kind: 'browser' })).token;
 	const server = (await portal.issueToken({ websiteId, productId: manifest.id, kind: 'server' })).token;
 
@@ -286,6 +287,9 @@ export const setup = async ({ start = Date.parse('2026-10-05T10:00:00Z') } = {})
 			.filter((c) => c.url.startsWith(`${NOTIFY}/v1/messages/`))
 			.map((c) => ({ channel: c.url.split('/').pop(), authorization: c.headers.authorization, ...JSON.parse(c.body) }));
 
+	/** Requests Chat made to Ecommerce. */
+	const shopCalls = () => calls.filter((c) => c.url.startsWith(ECOMMERCE));
+
 	/** Requests to the AI provider (POST completions only). */
 	const aiCalls = () => calls.filter((c) => c.url.startsWith(AI) && c.method === 'POST').map((c) => JSON.parse(c.body));
 
@@ -312,6 +316,7 @@ export const setup = async ({ start = Date.parse('2026-10-05T10:00:00Z') } = {})
 		ticket,
 		admin,
 		messages,
+		shopCalls,
 		aiCalls,
 		flush,
 		/** Queue answers of the fake AI. @param {...AiAnswer} answers */

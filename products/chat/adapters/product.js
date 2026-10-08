@@ -34,14 +34,20 @@ import languageLock from '../schemas/language_lock.settings.json' with { type: '
 import leadsFlows from '../schemas/leads_flows.settings.json' with { type: 'json' };
 import moderation from '../schemas/moderation.settings.json' with { type: 'json' };
 import presenceQueue from '../schemas/presence_queue.settings.json' with { type: 'json' };
+import productCards from '../schemas/product_cards.settings.json' with { type: 'json' };
 import proactiveExit from '../schemas/proactive_exit.settings.json' with { type: 'json' };
 import proactiveIdle from '../schemas/proactive_idle.settings.json' with { type: 'json' };
 import proactivePages from '../schemas/proactive_pages.settings.json' with { type: 'json' };
 import ratings from '../schemas/ratings.settings.json' with { type: 'json' };
 import reports from '../schemas/reports.settings.json' with { type: 'json' };
 import savedReplies from '../schemas/saved_replies.settings.json' with { type: 'json' };
+import shopDeals from '../schemas/shop_deals.settings.json' with { type: 'json' };
+import shopMyOrders from '../schemas/shop_my_orders.settings.json' with { type: 'json' };
+import shopSearch from '../schemas/shop_search.settings.json' with { type: 'json' };
+import shopTop from '../schemas/shop_top.settings.json' with { type: 'json' };
 import signedInChat from '../schemas/signed_in_chat.settings.json' with { type: 'json' };
 import staffAlerts from '../schemas/staff_alerts.settings.json' with { type: 'json' };
+import trackShipment from '../schemas/track_shipment.settings.json' with { type: 'json' };
 import transcripts from '../schemas/transcripts.settings.json' with { type: 'json' };
 import typingReceipts from '../schemas/typing_receipts.settings.json' with { type: 'json' };
 import visitorChat from '../schemas/visitor_chat.settings.json' with { type: 'json' };
@@ -67,6 +73,12 @@ const SETTINGS = {
 	knowledge_editor: knowledgeEditor,
 	webhook_tools: webhookTools,
 	book_slot: bookSlot,
+	shop_search: shopSearch,
+	shop_deals: shopDeals,
+	shop_top: shopTop,
+	shop_my_orders: shopMyOrders,
+	track_shipment: trackShipment,
+	product_cards: productCards,
 	proactive_idle: proactiveIdle,
 	proactive_pages: proactivePages,
 	proactive_exit: proactiveExit,
@@ -175,10 +187,10 @@ export const createProductInstance = (options) => {
 				neededBy: ['ai_cost_alerts', 'transcripts', 'staff_alerts'],
 			},
 			ecommerce: {
-				label: 'Ecommerce token (shop tools, when Ecommerce ships)',
+				label: 'Ecommerce token (shop tools, track shipment, product cards, shop info in the context panel)',
 				kind: 'token',
 				productId: 'ecommerce',
-				neededBy: [],
+				neededBy: ['shop_search', 'shop_deals', 'shop_top', 'shop_my_orders', 'track_shipment', 'product_cards'],
 			},
 		},
 		// the routes fill these in (they need the merchant database store and the services)
