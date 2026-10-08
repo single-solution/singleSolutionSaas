@@ -37,8 +37,8 @@
 		"@ss/protocol": "workspace:^",
 		"@ss/ui": "workspace:^",
 		"mongodb": "^6.21.0",
-		"next": "^16.3.7",
-		"nodemailer": "^10.0.13",
+		"next": "^16.3.8",
+		"nodemailer": "^10.0.15",
 		"qrcode-generator": "2.0.4",
 		"react": "^19.3.0",
 		"react-dom": "^19.3.0"
