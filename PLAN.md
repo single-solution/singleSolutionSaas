@@ -1703,6 +1703,37 @@ Ecommerce (per website; our admin sets defaults and prices). Features start at 0
   Payments, Notifications tokens, courier keys, AI key) · Developers.
 - **Chat's shop tools** (step 8 stubs) use Ecommerce's public lookup API built here.
 
+### 0.8.9 Growth — owner interview (2026-10-08, round 1; round 2 left to builder defaults)
+
+Growth handles a merchant site's tracking, consent, own analytics and site-wide SEO. Catalog SEO stays in Ecommerce. All
+behaviour is managed inside Growth (per website; our admin sets defaults and prices). Features start at 0.
+
+- **Feature switches (per tool)**: Meta pixel · Google tags (GA4, Ads, Tag Manager) · TikTok pixel · Custom scripts ·
+  Consent banner · Visitor analytics · Conversion funnel · Searches and 404s · Web Vitals · robots and verification ·
+  IndexNow · SEO checklist · Notice bar.
+- **Tags**: the merchant enters their own IDs; custom scripts are pasted by the merchant. Tags load only after the
+  visitor consents to their category.
+- **Consent**: a banner with categories (necessary, analytics, marketing), Google Consent Mode v2, and every word
+  editable. The visitor's choice is stored in their own browser.
+- **Own analytics** (in the merchant's database): visits, page views, sources, devices and countries; the funnel
+  (view → cart → checkout → purchase); site searches and 404s; Web Vitals.
+- **Privacy** (builder default): anonymous; no IPs stored and no cross-site IDs; counts only after consent where the
+  merchant requires it.
+- **Retention** (builder default): the merchant sets it. Raw events default to 13 months and are removed by a database
+  expiry index, not a timer. Daily totals are kept forever.
+- **How Growth learns about carts and orders** (closes the 0.3 open point): there is no server path between products.
+  Growth's page script listens for browser events that Ecommerce's shopper widgets dispatch on the merchant's page:
+  `ss:view_item`, `ss:add_to_cart`, `ss:begin_checkout`, `ss:purchase`. The merchant's own code may dispatch them too.
+  Growth records them and forwards them to the merchant's pixels.
+- **Site-wide SEO**: robots.txt rules and verification tags (Google, Bing, Meta), served for the merchant's site to
+  include; IndexNow submits on the merchant's request (widget or API, no timers); an SEO checklist checks the merchant's
+  pages on request and shows what to fix, with steps.
+- **Notice bar**: an announcement bar with editable text, a link and dates (checked on use).
+- **Widgets** (builder default: all four): consent banner and notice bar (visitor-facing, browser token); analytics
+  dashboard and SEO checklist (admin, via tickets).
+- **Dashboard**: Overview · Features (read-only for merchants) · Settings · Connections (database) · Developers (page
+  script, event names, API, widget and ticket snippets).
+
 ### 0.8.4 Still open
 
 - **The grilling of each later product** (Notifications, Accounts, Payments, Ecommerce, Growth), held right before it is
@@ -1713,7 +1744,7 @@ Ecommerce (per website; our admin sets defaults and prices). Features start at 0
    - Payments and Ecommerce: how unconfirmed payments are rechecked without timers (0.3);
    - Ecommerce: the endpoints for Chat's shop tools, track shipment and product cards (written in Chat's docs first),
      and how Add to cart works from a chat card;
-   - Growth: how it learns about orders, carts and item changes (0.3).
+   - Growth: how it learns about orders, carts and item changes (0.3) — answered in 0.8.9 (browser events).
 - **Before charging real merchants** (0.12 step 14): which commercial host, the mail setup and the final domains, chosen
   by the owner.
 - **Open owner questions** (from the Part 0 review of 2026-10-07). Each is answered by the owner and written into the
