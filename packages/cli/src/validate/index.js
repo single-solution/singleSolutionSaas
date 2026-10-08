@@ -75,10 +75,10 @@ const DATA_LAYERS = Object.freeze(['strings', 'schemas', 'docs', ROOT]);
  * @type {Readonly<Record<string, { layers: readonly string[], data: boolean, packages: readonly string[] | null }>>}
  */
 export const IMPORT_POLICY = Object.freeze({
-	core: { layers: ['core'], data: false, packages: ['@ss/contracts', '@ss/rules'] },
+	core: { layers: ['core'], data: false, packages: ['@ss/contracts'] },
 	api: { layers: ['api', 'core', 'adapters'], data: true, packages: null },
 	adapters: { layers: ['adapters', 'core'], data: true, packages: null },
-	ui: { layers: ['ui', 'core'], data: false, packages: ['@ss/app-kit/widget', '@ss/web'] },
+	ui: { layers: ['ui', 'core'], data: false, packages: ['@ss/app-kit/widget'] },
 	app: { layers: ['app', 'api', 'adapters', 'core', 'strings'], data: true, packages: null },
 });
 

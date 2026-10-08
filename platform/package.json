@@ -32,7 +32,6 @@
 	},
 	"dependencies": {
 		"@ss/contracts": "workspace:^",
-		"@ss/entitlements": "workspace:^",
 		"@ss/net": "workspace:^",
 		"@ss/protocol": "workspace:^",
 		"@ss/ui": "workspace:^",

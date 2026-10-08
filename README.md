@@ -35,18 +35,15 @@ Everything lives in one repository for now, but every **unit** — `platform/`, 
 
 ## Shared kit
 
-| Package            | What it holds                                                                                                                            |
-| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `@ss/protocol`     | Signing: browser and server tokens, tickets, launches, notices, client assertions and the connect handshake                              |
-| `@ss/contracts`    | The product manifest, settings schemas, the Portal ↔ product shapes, business.json, problem codes and ids                                |
-| `@ss/app-kit`      | Everything a product needs: connect, status cache, notices, reports, tokens, tickets, settings, connections, dashboard API, widget mount |
-| `@ss/entitlements` | Money units (millicredits), UTC hours and hashing used by the Portal's ledger                                                            |
-| `@ss/net`          | Safe outbound calls to addresses a merchant or admin entered                                                                             |
-| `@ss/ui`           | Console and dashboard components (light and dark)                                                                                        |
-| `@ss/web`          | Small browser helpers a product may bundle into its own `widget.js`                                                                      |
-| `@ss/rules`        | The `rules@1` expression language, optional inside a product                                                                             |
-| `@ss/cli`          | `ss app init`, `ss app validate`, `ss app assets`                                                                                        |
-| `@ss/config`       | Shared ESLint, TypeScript, Prettier and Vitest config                                                                                    |
+| Package         | What it holds                                                                                                                            |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `@ss/protocol`  | Signing: browser and server tokens, tickets, launches, notices, client assertions and the connect handshake                              |
+| `@ss/contracts` | The product manifest, settings schemas, the Portal ↔ product shapes, business.json, problem codes and ids                                |
+| `@ss/app-kit`   | Everything a product needs: connect, status cache, notices, reports, tokens, tickets, settings, connections, dashboard API, widget mount |
+| `@ss/net`       | Safe outbound calls to addresses a merchant or admin entered                                                                             |
+| `@ss/ui`        | Console and dashboard components (light and dark)                                                                                        |
+| `@ss/cli`       | `ss app init`, `ss app validate`, `ss app assets`                                                                                        |
+| `@ss/config`    | Shared ESLint, TypeScript, Prettier and Vitest config                                                                                    |
 
 ## Setup
 

@@ -241,30 +241,6 @@ importers:
         specifier: ^3.2.7
         version: 3.2.7(@types/node@22.20.4)(jiti@2.7.0)(jsdom@26.1.0)(lightningcss@1.32.0)
 
-  packages/entitlements:
-    devDependencies:
-      '@ss/config':
-        specifier: workspace:^
-        version: link:../config
-      '@types/node':
-        specifier: ^22.20.4
-        version: 22.20.4
-      '@vitest/coverage-v8':
-        specifier: ^3.2.7
-        version: 3.2.7(vitest@3.2.7(@types/node@22.20.4)(jiti@2.7.0)(jsdom@26.1.0)(lightningcss@1.32.0))
-      eslint:
-        specifier: ^9.39.5
-        version: 9.39.5(jiti@2.7.0)
-      prettier:
-        specifier: ^3.9.9
-        version: 3.9.9
-      typescript:
-        specifier: ~5.9.3
-        version: 5.9.3
-      vitest:
-        specifier: ^3.2.7
-        version: 3.2.7(@types/node@22.20.4)(jiti@2.7.0)(jsdom@26.1.0)(lightningcss@1.32.0)
-
   packages/net:
     devDependencies:
       '@ss/config':
@@ -317,33 +293,6 @@ importers:
         specifier: ^3.2.7
         version: 3.2.7(@types/node@22.20.4)(jiti@2.7.0)(jsdom@26.1.0)(lightningcss@1.32.0)
 
-  packages/rules:
-    devDependencies:
-      '@ss/config':
-        specifier: workspace:^
-        version: link:../config
-      '@types/node':
-        specifier: ^22.20.4
-        version: 22.20.4
-      '@vitest/coverage-v8':
-        specifier: ^3.2.7
-        version: 3.2.7(vitest@3.2.7(@types/node@22.20.4)(jiti@2.7.0)(jsdom@26.1.0)(lightningcss@1.32.0))
-      eslint:
-        specifier: ^9.39.5
-        version: 9.39.5(jiti@2.7.0)
-      fast-check:
-        specifier: ^4.10.2
-        version: 4.10.2
-      prettier:
-        specifier: ^3.9.9
-        version: 3.9.9
-      typescript:
-        specifier: ~5.9.3
-        version: 5.9.3
-      vitest:
-        specifier: ^3.2.7
-        version: 3.2.7(@types/node@22.20.4)(jiti@2.7.0)(jsdom@26.1.0)(lightningcss@1.32.0)
-
   packages/ui:
     devDependencies:
       '@ss/config':
@@ -383,41 +332,11 @@ importers:
         specifier: ^3.2.7
         version: 3.2.7(@types/node@22.20.4)(jiti@2.7.0)(jsdom@26.1.0)(lightningcss@1.32.0)
 
-  packages/web:
-    devDependencies:
-      '@ss/config':
-        specifier: workspace:^
-        version: link:../config
-      '@types/node':
-        specifier: ^22.20.4
-        version: 22.20.4
-      '@vitest/coverage-v8':
-        specifier: ^3.2.7
-        version: 3.2.7(vitest@3.2.7(@types/node@22.20.4)(jiti@2.7.0)(jsdom@26.1.0)(lightningcss@1.32.0))
-      eslint:
-        specifier: ^9.39.5
-        version: 9.39.5(jiti@2.7.0)
-      jsdom:
-        specifier: ^26.1.0
-        version: 26.1.0
-      prettier:
-        specifier: ^3.9.9
-        version: 3.9.9
-      typescript:
-        specifier: ~5.9.3
-        version: 5.9.3
-      vitest:
-        specifier: ^3.2.7
-        version: 3.2.7(@types/node@22.20.4)(jiti@2.7.0)(jsdom@26.1.0)(lightningcss@1.32.0)
-
   platform:
     dependencies:
       '@ss/contracts':
         specifier: workspace:^
         version: link:../packages/contracts
-      '@ss/entitlements':
-        specifier: workspace:^
-        version: link:../packages/entitlements
       '@ss/net':
         specifier: workspace:^
         version: link:../packages/net
