@@ -1,0 +1,55 @@
+{
+	"type": "object",
+	"additionalProperties": false,
+	"properties": {
+		"temperature": {
+			"type": "number",
+			"title": "Creativity (temperature)",
+			"default": 0.4,
+			"minimum": 0,
+			"maximum": 1
+		},
+		"maxOutputTokens": {
+			"type": "integer",
+			"title": "Longest answer (AI tokens)",
+			"default": 500,
+			"minimum": 50,
+			"maximum": 4000
+		},
+		"showAiLabel": {
+			"type": "boolean",
+			"title": "Label AI replies",
+			"default": true,
+			"description": "Shows the AI assistant label on AI replies. Laws in some places (for example the EU AI Act and California’s bot disclosure law) require telling visitors they are talking to a bot; if you hide the label, you are responsible for following the law where you operate."
+		},
+		"onFailure": {
+			"type": "string",
+			"title": "When the AI cannot answer",
+			"default": "message_and_handoff",
+			"enum": ["message", "handoff", "message_and_handoff"],
+			"description": "After the backup provider (when on): send the unavailable message, hand the chat to a person, or both."
+		},
+		"dontKnow": {
+			"type": "string",
+			"title": "When the AI does not know",
+			"default": "Say that you are not sure and offer to connect the visitor with a person.",
+			"maxLength": 500
+		},
+		"repliesPerVisitorPerDay": {
+			"type": "integer",
+			"title": "AI replies per visitor per day",
+			"default": 40,
+			"minimum": 0,
+			"maximum": 10000,
+			"description": "0 = no limit."
+		},
+		"repliesPerNetworkPerDay": {
+			"type": "integer",
+			"title": "AI replies per network (IP) per day",
+			"default": 60,
+			"minimum": 0,
+			"maximum": 100000,
+			"description": "0 = no limit."
+		}
+	}
+}

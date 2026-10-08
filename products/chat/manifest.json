@@ -1,0 +1,368 @@
+{
+	"id": "chat",
+	"name": "Chat",
+	"version": "0.1.0",
+	"endpoints": {
+		"base": "http://localhost:3000",
+		"dashboard": "/dashboard"
+	},
+	"widgetScriptUrl": "/widget.js",
+	"docsUrl": "/docs",
+	"features": [
+		{
+			"key": "visitor_chat",
+			"name": "Visitor chat",
+			"description": "The ready chat widget and the visitor API for your own chat screens, with window.SSChat.",
+			"dependsOn": [],
+			"settings": {
+				"$ref": "schemas/visitor_chat.settings.json"
+			}
+		},
+		{
+			"key": "guest_chat",
+			"name": "Guest chat",
+			"description": "Visitors chat without signing in, up to the guest message limit, remembered on their device.",
+			"dependsOn": ["visitor_chat"],
+			"settings": {
+				"$ref": "schemas/guest_chat.settings.json"
+			}
+		},
+		{
+			"key": "signed_in_chat",
+			"name": "Signed-in chat",
+			"description": "Visitors signed in with Accounts chat as themselves; a guest chat moves to the account on sign-in.",
+			"dependsOn": ["visitor_chat"],
+			"settings": {
+				"$ref": "schemas/signed_in_chat.settings.json"
+			}
+		},
+		{
+			"key": "ai_replies",
+			"name": "AI replies",
+			"description": "The AI answers visitors with your own AI provider key (OpenAI, Anthropic, Google Gemini or any OpenAI-compatible service).",
+			"dependsOn": ["visitor_chat"],
+			"settings": {
+				"$ref": "schemas/ai_replies.settings.json"
+			}
+		},
+		{
+			"key": "ai_backup",
+			"name": "Backup AI provider",
+			"description": "When the main AI provider fails, the backup provider answers.",
+			"dependsOn": ["ai_replies"],
+			"settings": {
+				"$ref": "schemas/ai_backup.settings.json"
+			}
+		},
+		{
+			"key": "ai_instructions",
+			"name": "AI instructions",
+			"description": "Your own instructions for the AI (up to 12,000 characters), on top of the built-in neutral ones.",
+			"dependsOn": ["ai_replies"],
+			"settings": {
+				"$ref": "schemas/ai_instructions.settings.json"
+			}
+		},
+		{
+			"key": "ai_caps",
+			"name": "AI token caps",
+			"description": "Daily and monthly caps on the AI tokens a website uses; at a cap the AI stops until the window resets.",
+			"dependsOn": ["ai_replies"],
+			"settings": {
+				"$ref": "schemas/ai_caps.settings.json"
+			}
+		},
+		{
+			"key": "ai_cost_alerts",
+			"name": "AI cost alerts",
+			"description": "One alert a month to your staff when the AI tokens cross a share of the monthly cap.",
+			"dependsOn": ["ai_caps"],
+			"settings": {
+				"$ref": "schemas/ai_cost_alerts.settings.json"
+			}
+		},
+		{
+			"key": "language_lock",
+			"name": "Language lock",
+			"description": "The AI answers in the visitor’s language, from the languages you allow.",
+			"dependsOn": ["ai_replies"],
+			"settings": {
+				"$ref": "schemas/language_lock.settings.json"
+			}
+		},
+		{
+			"key": "knowledge_base",
+			"name": "Knowledge base",
+			"description": "FAQ entries and articles the AI answers from.",
+			"dependsOn": ["ai_replies"],
+			"settings": {
+				"$ref": "schemas/knowledge_base.settings.json"
+			}
+		},
+		{
+			"key": "knowledge_pages",
+			"name": "Website pages as knowledge",
+			"description": "Pages of your website the AI answers from, fetched when added and with Fetch again.",
+			"dependsOn": ["ai_replies"],
+			"settings": {
+				"$ref": "schemas/knowledge_pages.settings.json"
+			}
+		},
+		{
+			"key": "knowledge_editor",
+			"name": "Knowledge editor",
+			"description": "The knowledge editor widget for your admin.",
+			"dependsOn": ["knowledge_base"],
+			"settings": {
+				"$ref": "schemas/knowledge_editor.settings.json"
+			}
+		},
+		{
+			"key": "webhook_tools",
+			"name": "Custom webhook tools",
+			"description": "Tools the AI can call on your own server, signed with your tool signing secret.",
+			"dependsOn": ["ai_replies"],
+			"settings": {
+				"$ref": "schemas/webhook_tools.settings.json"
+			}
+		},
+		{
+			"key": "book_slot",
+			"name": "Book-a-slot tool",
+			"description": "The AI offers free time slots and books one through your own booking endpoint.",
+			"dependsOn": ["ai_replies"],
+			"settings": {
+				"$ref": "schemas/book_slot.settings.json"
+			}
+		},
+		{
+			"key": "proactive_idle",
+			"name": "Proactive idle nudge",
+			"description": "A nudge beside the launcher after the visitor has been idle for a while.",
+			"dependsOn": ["visitor_chat"],
+			"settings": {
+				"$ref": "schemas/proactive_idle.settings.json"
+			}
+		},
+		{
+			"key": "proactive_pages",
+			"name": "Proactive page rules",
+			"description": "A message on matching pages after a delay.",
+			"dependsOn": ["visitor_chat"],
+			"settings": {
+				"$ref": "schemas/proactive_pages.settings.json"
+			}
+		},
+		{
+			"key": "proactive_exit",
+			"name": "Proactive exit intent",
+			"description": "A message when the pointer leaves the top of the window (desktop only).",
+			"dependsOn": ["visitor_chat"],
+			"settings": {
+				"$ref": "schemas/proactive_exit.settings.json"
+			}
+		},
+		{
+			"key": "leads_flows",
+			"name": "Lead capture and flows",
+			"description": "Collects contact details as leads, and runs short scripted flows started by a page or a keyword.",
+			"dependsOn": ["visitor_chat"],
+			"settings": {
+				"$ref": "schemas/leads_flows.settings.json"
+			}
+		},
+		{
+			"key": "custom_fields",
+			"name": "Custom fields",
+			"description": "Your own fields on conversations and leads.",
+			"dependsOn": ["visitor_chat"],
+			"settings": {
+				"$ref": "schemas/custom_fields.settings.json"
+			}
+		},
+		{
+			"key": "attachments",
+			"name": "Attachments",
+			"description": "Images and PDFs in the chat, stored in your own storage.",
+			"dependsOn": ["visitor_chat"],
+			"settings": {
+				"$ref": "schemas/attachments.settings.json"
+			}
+		},
+		{
+			"key": "typing_receipts",
+			"name": "Typing indicator and read receipts",
+			"description": "Visitors see typing while the AI prepares a reply; both sides see Seen.",
+			"dependsOn": ["visitor_chat"],
+			"settings": {
+				"$ref": "schemas/typing_receipts.settings.json"
+			}
+		},
+		{
+			"key": "ratings",
+			"name": "Ratings",
+			"description": "Visitors rate the chat, with an optional comment.",
+			"dependsOn": ["visitor_chat"],
+			"settings": {
+				"$ref": "schemas/ratings.settings.json"
+			}
+		},
+		{
+			"key": "transcripts",
+			"name": "Transcripts by e-mail",
+			"description": "Visitors and staff e-mail a copy of a chat, through Notifications.",
+			"dependsOn": ["visitor_chat"],
+			"settings": {
+				"$ref": "schemas/transcripts.settings.json"
+			}
+		},
+		{
+			"key": "inbox",
+			"name": "Inbox",
+			"description": "The inbox widget where your staff read and answer conversations.",
+			"dependsOn": ["visitor_chat"],
+			"settings": {
+				"$ref": "schemas/inbox.settings.json"
+			}
+		},
+		{
+			"key": "handoff",
+			"name": "Human handoff",
+			"description": "Hands a conversation to a person: the AI stops and your staff take over, with office hours.",
+			"dependsOn": ["inbox"],
+			"settings": {
+				"$ref": "schemas/handoff.settings.json"
+			}
+		},
+		{
+			"key": "assignment",
+			"name": "Assignment",
+			"description": "Assign conversations to members of your staff.",
+			"dependsOn": ["inbox"],
+			"settings": {
+				"$ref": "schemas/assignment.settings.json"
+			}
+		},
+		{
+			"key": "presence_queue",
+			"name": "Staff presence, max concurrent chats and queue position",
+			"description": "Online, Away or Offline, a limit of open chats per person, and the visitor’s place in the queue.",
+			"dependsOn": ["handoff", "assignment"],
+			"settings": {
+				"$ref": "schemas/presence_queue.settings.json"
+			}
+		},
+		{
+			"key": "internal_notes",
+			"name": "Internal notes",
+			"description": "Notes on a conversation that only your staff see.",
+			"dependsOn": ["inbox"],
+			"settings": {
+				"$ref": "schemas/internal_notes.settings.json"
+			}
+		},
+		{
+			"key": "saved_replies",
+			"name": "Saved replies",
+			"description": "Replies your staff save and reuse.",
+			"dependsOn": ["inbox"],
+			"settings": {
+				"$ref": "schemas/saved_replies.settings.json"
+			}
+		},
+		{
+			"key": "context_panel",
+			"name": "Conversation context panel",
+			"description": "Who the visitor is, where the chat started and their earlier conversations, beside the conversation.",
+			"dependsOn": ["inbox"],
+			"settings": {
+				"$ref": "schemas/context_panel.settings.json"
+			}
+		},
+		{
+			"key": "ai_summary",
+			"name": "AI conversation summary",
+			"description": "A short AI summary when a conversation is handed to a person, and on demand.",
+			"dependsOn": ["inbox", "ai_replies"],
+			"settings": {
+				"$ref": "schemas/ai_summary.settings.json"
+			}
+		},
+		{
+			"key": "staff_alerts",
+			"name": "Staff alerts",
+			"description": "E-mails your staff about new messages and handoffs, through Notifications.",
+			"dependsOn": ["inbox"],
+			"settings": {
+				"$ref": "schemas/staff_alerts.settings.json"
+			}
+		},
+		{
+			"key": "moderation",
+			"name": "Moderation",
+			"description": "Hides personal data, filters leaks from AI answers, applies a link policy and your blocked terms.",
+			"dependsOn": [],
+			"settings": {
+				"$ref": "schemas/moderation.settings.json"
+			}
+		},
+		{
+			"key": "reports",
+			"name": "Reports",
+			"description": "The reports widget: conversations, AI and staff answers, reply times, ratings, leads and AI tokens.",
+			"dependsOn": [],
+			"settings": {
+				"$ref": "schemas/reports.settings.json"
+			}
+		}
+	],
+	"permissions": [
+		{
+			"key": "inbox.read",
+			"name": "See conversations and set your own presence",
+			"feature": "inbox"
+		},
+		{
+			"key": "inbox.reply",
+			"name": "Reply and attach",
+			"feature": "inbox"
+		},
+		{
+			"key": "inbox.manage",
+			"name": "Status, assignment, notes, saved replies, custom field values and max chats",
+			"feature": "inbox"
+		},
+		{
+			"key": "knowledge.edit",
+			"name": "Edit the knowledge base",
+			"feature": "knowledge_editor"
+		},
+		{
+			"key": "reports.read",
+			"name": "Read reports",
+			"feature": "reports"
+		}
+	],
+	"widgets": [
+		{
+			"key": "chat",
+			"feature": "visitor_chat",
+			"kind": "visitor"
+		},
+		{
+			"key": "inbox",
+			"feature": "inbox",
+			"kind": "admin"
+		},
+		{
+			"key": "knowledge_editor",
+			"feature": "knowledge_editor",
+			"kind": "admin"
+		},
+		{
+			"key": "reports",
+			"feature": "reports",
+			"kind": "admin"
+		}
+	]
+}

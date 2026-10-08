@@ -1,0 +1,22 @@
+{
+	"type": "object",
+	"additionalProperties": false,
+	"properties": {
+		"dailyTokens": {
+			"type": "integer",
+			"title": "Daily cap (AI tokens)",
+			"default": 0,
+			"minimum": 0,
+			"maximum": 1000000000,
+			"description": "0 = no daily cap. Counted in the time zone of business.json."
+		},
+		"monthlyTokens": {
+			"type": "integer",
+			"title": "Monthly cap (AI tokens)",
+			"default": 0,
+			"minimum": 0,
+			"maximum": 10000000000,
+			"description": "0 = no monthly cap."
+		}
+	}
+}

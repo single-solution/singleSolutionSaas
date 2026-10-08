@@ -7,14 +7,14 @@
 	},
 	"prettier": "@ss/config/prettier.json",
 	"scripts": {
-		"check": "prettier --check . && pnpm -r --workspace-concurrency=1 --filter '!./products/chatbot' check",
-		"test": "pnpm -r --workspace-concurrency=1 --filter '!./products/chatbot' test",
+		"check": "prettier --check . && pnpm -r --workspace-concurrency=1 check",
+		"test": "pnpm -r --workspace-concurrency=1 test",
 		"test:all": "vitest run",
-		"lint": "pnpm -r --filter '!./products/chatbot' lint",
-		"typecheck": "pnpm -r --filter '!./products/chatbot' typecheck",
-		"format": "prettier --write . && pnpm -r --filter '!./products/chatbot' format",
-		"format:check": "prettier --check . && pnpm -r --filter '!./products/chatbot' format:check",
-		"validate": "pnpm --filter './products/*' --filter '!./products/chatbot' validate"
+		"lint": "pnpm -r lint",
+		"typecheck": "pnpm -r typecheck",
+		"format": "prettier --write . && pnpm -r format",
+		"format:check": "prettier --check . && pnpm -r format:check",
+		"validate": "pnpm --filter './products/*' validate"
 	},
 	"devDependencies": {
 		"@ss/cli": "workspace:^",

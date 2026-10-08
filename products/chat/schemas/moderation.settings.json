@@ -1,0 +1,57 @@
+{
+	"type": "object",
+	"additionalProperties": false,
+	"properties": {
+		"redact": {
+			"type": "array",
+			"title": "Hide personal data",
+			"default": ["card", "iban", "email", "phone", "ip"],
+			"items": {
+				"type": "string",
+				"enum": ["card", "iban", "email", "phone", "ip"]
+			},
+			"description": "In visitor messages and AI answers."
+		},
+		"blockedTerms": {
+			"type": "array",
+			"title": "Blocked terms",
+			"default": [],
+			"items": {
+				"type": "string",
+				"maxLength": 100
+			}
+		},
+		"blockedAction": {
+			"type": "string",
+			"title": "Blocked terms in visitor messages",
+			"default": "mask",
+			"enum": ["mask", "reject"]
+		},
+		"linkPolicy": {
+			"type": "string",
+			"title": "Links in AI answers",
+			"default": "website",
+			"enum": ["website", "allow_list", "none", "any"]
+		},
+		"allowedLinkHosts": {
+			"type": "array",
+			"title": "Allowed link hosts",
+			"default": [],
+			"items": {
+				"type": "string",
+				"maxLength": 253,
+				"format": "hostname"
+			},
+			"description": "With the allow-list link policy."
+		},
+		"leakPhrases": {
+			"type": "array",
+			"title": "Phrases the AI must never reveal",
+			"default": [],
+			"items": {
+				"type": "string",
+				"maxLength": 200
+			}
+		}
+	}
+}

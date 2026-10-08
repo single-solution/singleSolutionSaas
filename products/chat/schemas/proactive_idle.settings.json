@@ -1,0 +1,13 @@
+{
+	"type": "object",
+	"additionalProperties": false,
+	"properties": {
+		"idleMinutes": {
+			"type": "integer",
+			"title": "Idle minutes before the nudge",
+			"default": 7,
+			"minimum": 1,
+			"maximum": 120
+		}
+	}
+}

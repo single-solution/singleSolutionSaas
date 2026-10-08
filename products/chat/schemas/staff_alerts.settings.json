@@ -1,0 +1,24 @@
+{
+	"type": "object",
+	"additionalProperties": false,
+	"properties": {
+		"inboxUrl": {
+			"type": "string",
+			"title": "Inbox address",
+			"default": "",
+			"maxLength": 500,
+			"description": "The page of your admin with the inbox widget, for example https://admin.shop.com/inbox. Alerts link to it with the conversation id."
+		},
+		"recipients": {
+			"type": "array",
+			"title": "Alert recipients",
+			"default": [],
+			"items": {
+				"type": "string",
+				"maxLength": 254,
+				"format": "email"
+			},
+			"description": "E-mail addresses; the assigned person is added."
+		}
+	}
+}

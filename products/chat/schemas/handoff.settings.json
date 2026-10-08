@@ -1,0 +1,44 @@
+{
+	"type": "object",
+	"additionalProperties": false,
+	"properties": {
+		"askPhrases": {
+			"type": "array",
+			"title": "Phrases that ask for a person",
+			"default": ["human", "person", "agent", "talk to someone"],
+			"items": {
+				"type": "string",
+				"maxLength": 100
+			},
+			"description": "Any language. The visitor can also use the Talk to a person button."
+		},
+		"keywords": {
+			"type": "array",
+			"title": "Keywords that hand off",
+			"default": [],
+			"items": {
+				"type": "string",
+				"maxLength": 100
+			},
+			"description": "A visitor message containing one of these goes to a person."
+		},
+		"failuresBeforeHandoff": {
+			"type": "integer",
+			"title": "AI failures in a row before a handoff",
+			"default": 2,
+			"minimum": 0,
+			"maximum": 10,
+			"description": "0 = never."
+		},
+		"officeHours": {
+			"type": "array",
+			"title": "Office hours",
+			"default": [],
+			"items": {
+				"type": "string",
+				"maxLength": 40
+			},
+			"description": "One line per window in the time zone of business.json, for example `mon-fri 09:00-17:00`. Empty = always open."
+		}
+	}
+}

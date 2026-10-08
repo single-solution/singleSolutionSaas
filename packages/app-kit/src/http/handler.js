@@ -69,8 +69,9 @@ const REQUEST_ID = /^[A-Za-z0-9._:-]{1,128}$/;
 const IDEMPOTENCY_KEY = /^[\x21-\x7e]{1,255}$/;
 const BODY_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const DUPLICATE_WINDOW_MS = 24 * 60 * 60_000;
-// `ss-sign-in`: a visitor's Accounts sign-in next to the browser token (Accounts' signed-in visitor routes)
-const CORS_HEADERS = 'authorization, content-type, idempotency-key, ss-sign-in, x-request-id';
+// `ss-sign-in`: a visitor's Accounts sign-in next to the browser token (signed-in visitor routes);
+// `ss-guest`: a Chat guest's device key (Chat's guest visitor routes)
+const CORS_HEADERS = 'authorization, content-type, idempotency-key, ss-guest, ss-sign-in, x-request-id';
 const LAST_SEEN_EVERY_MS = 60 * 60_000;
 const STAFF_EVERY_MS = 10 * 60_000;
 const NO_FRAMES = Object.freeze({ 'x-frame-options': 'DENY', 'content-security-policy': "frame-ancestors 'none'" });

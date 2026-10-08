@@ -1,0 +1,85 @@
+{
+	"type": "object",
+	"additionalProperties": false,
+	"properties": {
+		"botName": {
+			"type": "string",
+			"title": "Bot name",
+			"default": "Assistant",
+			"maxLength": 60,
+			"x-ui": {
+				"group": "Branding"
+			}
+		},
+		"avatarUrl": {
+			"type": "string",
+			"title": "Avatar (https image URL)",
+			"default": "",
+			"maxLength": 500,
+			"description": "Leave empty for the initial of the bot name.",
+			"x-ui": {
+				"group": "Branding"
+			}
+		},
+		"launcherPosition": {
+			"type": "string",
+			"title": "Launcher position",
+			"default": "bottom-right",
+			"enum": ["bottom-right", "bottom-left"],
+			"x-ui": {
+				"group": "Launcher"
+			}
+		},
+		"launcherStyle": {
+			"type": "string",
+			"title": "Launcher style",
+			"default": "round",
+			"enum": ["round", "label"],
+			"description": "A round button, or a button with the launcher text.",
+			"x-ui": {
+				"group": "Launcher"
+			}
+		},
+		"hideOnPages": {
+			"type": "array",
+			"title": "Hide on pages",
+			"default": [],
+			"items": {
+				"type": "string",
+				"maxLength": 200
+			},
+			"description": "Path patterns: an exact path, * = one segment, ** = any (for example /checkout/**).",
+			"x-ui": {
+				"group": "Launcher"
+			}
+		},
+		"windowStyle": {
+			"type": "string",
+			"title": "Window style",
+			"default": "floating",
+			"enum": ["floating", "side_panel"],
+			"x-ui": {
+				"group": "Window"
+			}
+		},
+		"fullScreenOnMobile": {
+			"type": "boolean",
+			"title": "Full screen on phones",
+			"default": true,
+			"x-ui": {
+				"group": "Window"
+			}
+		},
+		"proactiveDismissDays": {
+			"type": "integer",
+			"title": "Proactive messages: quiet days after a dismissal",
+			"default": 7,
+			"minimum": 0,
+			"maximum": 365,
+			"description": "After a visitor dismisses a proactive message, none shows again for this many days.",
+			"x-ui": {
+				"group": "Proactive"
+			}
+		}
+	}
+}

@@ -39,9 +39,8 @@ jobs:
       steps:
          - uses: actions/checkout@v4
          - id: find
-           # every folder with a package.json is a unit; new products join CI automatically. products/chatbot is left
-           # out until it is rebuilt as Chat (PLAN 0.12 steps 4–8); parked/ is never a unit.
-           run: echo "list=$(ls -d packages/*/ platform/ products/*/ e2e/ | sed 's:/$::' | grep -v '^products/chatbot$' | jq -R . | jq -cs .)" >> "$GITHUB_OUTPUT"
+           # every folder with a package.json is a unit; new products join CI automatically; parked/ is never a unit.
+           run: echo "list=$(ls -d packages/*/ platform/ products/*/ e2e/ | sed 's:/$::' | jq -R . | jq -cs .)" >> "$GITHUB_OUTPUT"
 
    unit:
       name: ${{ matrix.unit }}

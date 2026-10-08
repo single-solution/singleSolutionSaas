@@ -1,0 +1,28 @@
+{
+	"type": "object",
+	"additionalProperties": false,
+	"properties": {
+		"messageLimit": {
+			"type": "integer",
+			"title": "Guest message limit per conversation",
+			"default": 5,
+			"minimum": 0,
+			"maximum": 1000,
+			"description": "0 = no limit. Uploads count too."
+		},
+		"rememberDays": {
+			"type": "integer",
+			"title": "Remember guests on their device (days)",
+			"default": 90,
+			"minimum": 1,
+			"maximum": 365
+		},
+		"contactCapture": {
+			"type": "string",
+			"title": "Ask guests for contact details",
+			"default": "never",
+			"enum": ["never", "before_first", "on_handoff"],
+			"description": "Never, before the first message, or when the chat is handed to a person."
+		}
+	}
+}

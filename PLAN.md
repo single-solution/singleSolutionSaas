@@ -1929,6 +1929,51 @@ validate` / `openapi.json` (`x-ss-feature` a list) accept a list meaning "any of
         database, for example `ss_accounts`), `CONNECT_SECRET` and `ENCRYPTION_KEY` for Production, deploy, then
         Portal → Products → Add product and set it Active. Step 7's Done line stays empty until then.
 
+   - **Step 8, Chat** (0.8.3; each item open for owner review):
+      - **Features**: the 34 step-8 keys of 0.8.3. The step-10 keys are not in the manifest yet; the `ecommerce` token
+        connection is listed (needed by no feature until step 10), and the Ecommerce routes the shop tools will call
+        are written in Chat's docs and `products/chat/core/shop.js` (`GET /v1/chat/products?q=`, `/v1/chat/products/:id`,
+        `/v1/chat/products/:id/quote`, `/v1/chat/deals`, `/v1/chat/products/top?kind=top|new`, and with the forwarded
+        sign-in `/v1/chat/me/orders`, `/v1/chat/me/account`, `/v1/chat/me/shipments`), provisional until Ecommerce's
+        grilling.
+      - **List settings** (webhook tools, flows, custom field definitions, proactive page rules) are kept per website in
+        the product database, edited in Settings (`/v1/dashboard/websites/:id/lists/:list`) with Recent changes, and
+        have no global defaults (settings schemas allow no object lists). The tool signing secret is sealed with
+        `ENCRYPTION_KEY` and made on first use.
+      - **Guests**: a random guest key per device, answered by the first message, kept by the widget in localStorage
+        and sent in an `SS-Guest` header (added to the kit's CORS headers); stored only as a hash, removed after the
+        remember days. One ongoing conversation per visitor: a message reopens a resolved one; the visitor can End chat
+        (Resolved). Contact capture also saves a lead when lead capture is on.
+      - **Routes**: server-token routes `/v1/conversations…`, `/v1/inbox/unread`, `/v1/leads`, `/v1/knowledge/…` and
+        `/v1/reports`; ticket routes under `/v1/admin/…` (the unread count at `/v1/admin/inbox/unread`). A server-token
+        reply is signed `Team` in the conversation and the activity log.
+      - **AI**: the reply runs right after the response (`after()`), the widget checks every 3 s meanwhile. AI replies
+        per visitor and per network (IP) per day are `ai_replies` settings with ibrahimMobiles' defaults (40 and 60;
+        0 = no limit), counted in the product database; temperature and longest answer are settings; deadlines, tool
+        rounds, history length and retrieval constants are code. AI tokens are always counted per day and month (for
+        Reports); the caps apply only with AI token caps on. On failure: `message`, `handoff` or both (default both);
+        AI failures before a handoff default 2. Ask-for-a-person phrases default to a few English words (editable). The
+        credential leak check of AI answers always runs; the old "present as human" check is dropped.
+      - **Settings placement**: bot name, avatar, launcher, window and the proactive quiet days are `visitor_chat`
+        settings; the sign-in page URL is `signed_in_chat`'s; the Inbox address and alert recipients are
+        `staff_alerts`'; the default max chats and queue position are `presence_queue`'s. Rating scales are 2, 3 or 5
+        (asked on resolve, only after staff took part, or only when staff ask).
+      - **Notifications templates** (e-mail): `chat.new_message`, `chat.needs_you`, `chat.transcript`,
+        `chat.cost_alert` (values in the docs). A transcript carries the most recent 1,000 characters of the chat,
+        because Notifications caps a value at 1,000 characters; a longer transcript needs a Notifications change
+        (owner decision).
+      - **Booking endpoint**: two signed POSTs, `{ action: "list_slots", from, to, timeZone }` → `{ slots }` and
+        `{ action: "book", slotId, name, email, phone, conversationId }` → `{ booked }`; tools and booking share the
+        `ss-chat-signature` header (`t=…,v1=` HMAC-SHA256 of `<t>.<body>`), an 8 s timeout and a 64 kB answer cap.
+      - **Data rights** match the Accounts user id (guest chats merged into the account included) and the e-mail or
+        phone captured on conversations and leads; delete also removes the attachments from storage and the guest
+        records. The language lock's marker words apply to languages written in Latin letters.
+      - **Owner items, step 8**: in the existing Chatbot Vercel project change the Root Directory to `products/chat`,
+        keep `MONGODB_URI` and `CONNECT_SECRET`, add `ENCRYPTION_KEY` (random, at least 32 characters, Production
+        only), and reset or rename its database (it was `ss_chatbot`; Chat starts empty, for example `ss_chat`); deploy,
+        then Portal → Products → Add product (its address and `CONNECT_SECRET`) and set it Active. Step 8's Done line
+        stays empty until then.
+
 Everything else in Part 0 is decided. A point that is not decided in Part 0 or 0.10 is asked, not guessed (0.13).
 
 ## 0.9 Conflicts with the current build and deployment

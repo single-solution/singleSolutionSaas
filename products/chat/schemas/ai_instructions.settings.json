@@ -1,0 +1,15 @@
+{
+	"type": "object",
+	"additionalProperties": false,
+	"properties": {
+		"instructions": {
+			"type": "string",
+			"title": "AI instructions",
+			"default": "",
+			"maxLength": 12000,
+			"x-ui": {
+				"widget": "textarea"
+			}
+		}
+	}
+}

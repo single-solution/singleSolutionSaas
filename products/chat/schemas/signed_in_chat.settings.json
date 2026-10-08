@@ -1,0 +1,13 @@
+{
+	"type": "object",
+	"additionalProperties": false,
+	"properties": {
+		"signInUrl": {
+			"type": "string",
+			"title": "Sign-in page URL",
+			"default": "",
+			"maxLength": 500,
+			"description": "Where Sign in to continue links to (an https address on your website); the visitor comes back to the same page."
+		}
+	}
+}

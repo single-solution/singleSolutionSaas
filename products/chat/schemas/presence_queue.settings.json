@@ -1,0 +1,19 @@
+{
+	"type": "object",
+	"additionalProperties": false,
+	"properties": {
+		"maxChats": {
+			"type": "integer",
+			"title": "Default max concurrent chats per person",
+			"default": 0,
+			"minimum": 0,
+			"maximum": 200,
+			"description": "0 = no limit."
+		},
+		"queuePosition": {
+			"type": "boolean",
+			"title": "Show visitors their place in the queue",
+			"default": true
+		}
+	}
+}

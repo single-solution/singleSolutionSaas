@@ -1,0 +1,32 @@
+{
+	"type": "object",
+	"additionalProperties": false,
+	"properties": {
+		"leadFields": {
+			"type": "array",
+			"title": "Lead fields",
+			"default": ["name", "email"],
+			"items": {
+				"type": "string",
+				"enum": ["name", "email", "phone", "message"]
+			}
+		},
+		"customLeadFields": {
+			"type": "array",
+			"title": "Custom fields on leads",
+			"default": [],
+			"items": {
+				"type": "string",
+				"maxLength": 40
+			},
+			"description": "Keys of your custom fields (when Custom fields is on)."
+		},
+		"consentText": {
+			"type": "string",
+			"title": "Consent text",
+			"default": "",
+			"maxLength": 500,
+			"description": "Shown with a tick box the visitor must tick. Empty = no consent box."
+		}
+	}
+}

@@ -44,6 +44,9 @@ importers:
       '@ss/product-accounts':
         specifier: workspace:^
         version: link:../products/accounts
+      '@ss/product-chat':
+        specifier: workspace:^
+        version: link:../products/chat
       '@ss/product-notifications':
         specifier: workspace:^
         version: link:../products/notifications
@@ -544,7 +547,7 @@ importers:
         specifier: ^3.2.7
         version: 3.2.7(@types/node@22.20.4)(jiti@2.7.0)(jsdom@26.1.0)(lightningcss@1.32.0)
 
-  products/chatbot:
+  products/chat:
     dependencies:
       '@ss/app-kit':
         specifier: workspace:^
@@ -552,9 +555,9 @@ importers:
       '@ss/contracts':
         specifier: workspace:^
         version: link:../../packages/contracts
-      '@ss/rules':
+      '@ss/net':
         specifier: workspace:^
-        version: link:../../packages/rules
+        version: link:../../packages/net
       '@ss/ui':
         specifier: workspace:^
         version: link:../../packages/ui
@@ -577,9 +580,6 @@ importers:
       '@ss/config':
         specifier: workspace:^
         version: link:../../packages/config
-      '@ss/protocol':
-        specifier: workspace:^
-        version: link:../../packages/protocol
       '@tailwindcss/postcss':
         specifier: ^4.3.3
         version: 4.3.3
@@ -598,6 +598,9 @@ importers:
       eslint:
         specifier: ^9.39.5
         version: 9.39.5(jiti@2.7.0)
+      jsdom:
+        specifier: ^26.1.0
+        version: 26.1.0
       mongodb-memory-server:
         specifier: ^10.4.3
         version: 10.4.3

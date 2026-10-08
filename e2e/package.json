@@ -25,6 +25,7 @@
 		"@ss/contracts": "workspace:^",
 		"@ss/platform": "workspace:^",
 		"@ss/product-accounts": "workspace:^",
+		"@ss/product-chat": "workspace:^",
 		"@ss/product-notifications": "workspace:^",
 		"@ss/protocol": "workspace:^",
 		"@types/node": "^22.20.4",

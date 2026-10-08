@@ -281,6 +281,7 @@ describe('routes of several features and the permission list', () => {
 		});
 		const preflight = await env.call('OPTIONS', '/v1/notes', { origin: 'https://shop.example.com' });
 		expect(preflight.headers.get('access-control-allow-headers')).toContain('ss-sign-in');
+		expect(preflight.headers.get('access-control-allow-headers')).toContain('ss-guest');
 		expect(() => defineRoute({ method: 'GET', path: '/x', auth: 'server', feature: [], handler: () => 1 })).toThrow(
 			/non-empty list/,
 		);

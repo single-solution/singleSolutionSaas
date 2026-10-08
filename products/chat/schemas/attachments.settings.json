@@ -1,0 +1,29 @@
+{
+	"type": "object",
+	"additionalProperties": false,
+	"properties": {
+		"visitorUploads": {
+			"type": "string",
+			"title": "Visitors may attach",
+			"default": "off",
+			"enum": ["off", "signed_in", "everyone"],
+			"description": "Staff can always attach."
+		},
+		"allowedTypes": {
+			"type": "array",
+			"title": "Allowed types",
+			"default": ["image/jpeg", "image/png", "image/webp", "image/gif", "application/pdf"],
+			"items": {
+				"type": "string",
+				"enum": ["image/jpeg", "image/png", "image/webp", "image/gif", "application/pdf"]
+			}
+		},
+		"maxSizeMb": {
+			"type": "integer",
+			"title": "Largest file (MB)",
+			"default": 5,
+			"minimum": 1,
+			"maximum": 10
+		}
+	}
+}

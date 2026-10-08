@@ -1,0 +1,26 @@
+{
+	"type": "object",
+	"additionalProperties": false,
+	"properties": {
+		"allowedLanguages": {
+			"type": "array",
+			"title": "Allowed languages",
+			"default": [],
+			"items": {
+				"type": "string",
+				"maxLength": 20
+			},
+			"description": "Language codes such as en, ur, ar or pt-BR. Empty = any language."
+		},
+		"markerWords": {
+			"type": "array",
+			"title": "Marker words",
+			"default": [],
+			"items": {
+				"type": "string",
+				"maxLength": 500
+			},
+			"description": "For languages written in Latin letters: one line per language, for example `tl: po salamat ako`."
+		}
+	}
+}

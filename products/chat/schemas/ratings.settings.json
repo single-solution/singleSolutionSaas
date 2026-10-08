@@ -1,0 +1,25 @@
+{
+	"type": "object",
+	"additionalProperties": false,
+	"properties": {
+		"scale": {
+			"type": "string",
+			"title": "Rating scale",
+			"default": "5",
+			"enum": ["2", "3", "5"],
+			"description": "2 = thumbs up or down."
+		},
+		"askWhen": {
+			"type": "string",
+			"title": "Ask for a rating",
+			"default": "on_resolve",
+			"enum": ["on_resolve", "after_staff", "manual"],
+			"description": "When the chat is resolved, only when a person took part, or only when staff ask."
+		},
+		"askComment": {
+			"type": "boolean",
+			"title": "Ask for a comment",
+			"default": true
+		}
+	}
+}

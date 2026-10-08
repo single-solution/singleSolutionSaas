@@ -1,0 +1,13 @@
+{
+	"type": "object",
+	"additionalProperties": false,
+	"properties": {
+		"alertPercent": {
+			"type": "integer",
+			"title": "Alert at this share of the monthly cap (%)",
+			"default": 80,
+			"minimum": 1,
+			"maximum": 100
+		}
+	}
+}

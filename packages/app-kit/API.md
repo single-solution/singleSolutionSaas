@@ -67,7 +67,7 @@ The returned `product`:
 roles?, handler })`
 
 - `auth`: `browser` (browser token in `Authorization: Bearer`; Origin required and allowed; CORS for it, which also allows the
-  `SS-Sign-In` header Accounts reads), `server`
+  `SS-Sign-In` header Accounts reads and the `SS-Guest` header Chat reads), `server`
   (server token; refused with an Origin header; no CORS), `ticket` (ticket bound to the request's Origin; CORS for it),
   `dashboard` (session cookie), `none`.
 - `feature` (browser, server, ticket): 403 `feature_off` while off; a list works while any of them is on; ticket routes
