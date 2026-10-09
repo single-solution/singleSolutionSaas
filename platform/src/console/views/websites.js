@@ -28,6 +28,7 @@ import { apiFetch } from '../client.js';
 import { Link } from '../link.js';
 import { api, routes } from '../paths.js';
 import { BalanceHero, ProductStatusBadge, creditDayBars, formatChartCredits } from './billing.js';
+import { FrameBilling } from './frame-billing.js';
 import { ListDetail, ListPane, ListRow, ListSearch, PageProblem, openDashboard } from './common.js';
 import { contactLine } from './sign-in.js';
 import { WebsiteCard, dailyCostOf, websiteDot } from './website.js';
@@ -75,6 +76,7 @@ export function OverviewView(props) {
 	const productCount = rows.reduce((n, r) => n + r.cards.length, 0);
 	return (
 		<div className="space-y-8">
+			<FrameBilling billing={billing} />
 			<PageHeader title={MERCHANT.overviewTitle} subtitle={MERCHANT.overviewIntro} />
 			{billing ? (
 				<BalanceHero
@@ -171,50 +173,54 @@ export function WebsitesView(props) {
 	const needle = q.trim().toLowerCase();
 	const shown = needle ? rows.filter((r) => String(r.website.domain).toLowerCase().includes(needle)) : rows;
 	return (
-		<ListDetail
-			label={MERCHANT.websitesTitle}
-			auto={auto}
-			back={{ href: routes.websites(), label: MERCHANT.websitesTitle }}
-			list={
-				<ListPane title={MERCHANT.websitesTitle} tools={<ListSearch label={WEBSITE.search} value={q} onChange={setQ} />}>
-					{shown.length === 0 ? (
-						<li>
-							<EmptyState compact icon="globe" kind="website" title={WEBSITE.none} />
-						</li>
-					) : (
-						shown.map(({ website, cards }) => (
-							<ListRow
-								key={website.websiteId}
-								href={routes.website(website.websiteId)}
-								current={String(website.websiteId) === shownId ? (auto ? 'wide' : true) : false}
-								label={website.domain}
-								sublabel={WEBSITE.productsCount(cards.length)}
-								dot={websiteDot(cards)}
-								meta={WEBSITE.perDay(formatCredits(dailyCostOf(cards)))}
-							/>
-						))
-					)}
-				</ListPane>
-			}
-			empty={<Welcome branding={props.branding} />}
-			detail={
-				selected && shownId ? (
-					<WebsiteCard
-						key={shownId}
-						headline
-						website={selected.website}
-						cards={selected.cards}
-						can={{ manage: false, removeWebsite: false, tokens: true, open: true }}
-						fetcher={apiFetch}
-						launch={(productId) => ({ path: api.launch(props.merchantId, shownId, productId) })}
-					/>
-				) : auto ? null : (
-					<PageProblem
-						problem={{ status: 404, title: 'Not Found', detail: WEBSITE.gone }}
-						back={{ href: routes.websites(), label: MERCHANT.websitesTitle }}
-					/>
-				)
-			}
-		/>
+		<>
+			<FrameBilling billing={props.billing} />
+			<ListDetail
+				section="websites"
+				label={MERCHANT.websitesTitle}
+				auto={auto}
+				back={{ href: routes.websites(), label: MERCHANT.websitesTitle }}
+				list={
+					<ListPane title={MERCHANT.websitesTitle} tools={<ListSearch label={WEBSITE.search} value={q} onChange={setQ} />}>
+						{shown.length === 0 ? (
+							<li>
+								<EmptyState compact icon="globe" kind="website" title={WEBSITE.none} />
+							</li>
+						) : (
+							shown.map(({ website, cards }) => (
+								<ListRow
+									key={website.websiteId}
+									href={routes.website(website.websiteId)}
+									current={String(website.websiteId) === shownId ? (auto ? 'wide' : true) : false}
+									label={website.domain}
+									sublabel={WEBSITE.productsCount(cards.length)}
+									dot={websiteDot(cards)}
+									meta={WEBSITE.perDay(formatCredits(dailyCostOf(cards)))}
+								/>
+							))
+						)}
+					</ListPane>
+				}
+				empty={<Welcome branding={props.branding} />}
+				detail={
+					selected && shownId ? (
+						<WebsiteCard
+							key={shownId}
+							headline
+							website={selected.website}
+							cards={selected.cards}
+							can={{ manage: false, removeWebsite: false, tokens: true, open: true }}
+							fetcher={apiFetch}
+							launch={(productId) => ({ path: api.launch(props.merchantId, shownId, productId) })}
+						/>
+					) : auto ? null : (
+						<PageProblem
+							problem={{ status: 404, title: 'Not Found', detail: WEBSITE.gone }}
+							back={{ href: routes.websites(), label: MERCHANT.websitesTitle }}
+						/>
+					)
+				}
+			/>
+		</>
 	);
 }

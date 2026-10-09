@@ -53,6 +53,301 @@
 	--shadow-card: none;
 	--shadow-overlay: 0 24px 48px -12px rgb(15 23 42 / 0.35);
 	--shadow-pop: 0 12px 32px -12px rgb(15 23 42 / 0.28), 0 0 0 1px var(--ss-line-soft);
+	/* motion (see "Motion" below): `ease-ss`, `ease-ss-move`, `duration-(--ss-motion)` and the `animate-ss-*` utilities */
+	--ease-ss: var(--ss-ease);
+	--ease-ss-move: var(--ss-ease-move);
+	--animate-ss-fade: ss-fade var(--ss-motion) var(--ss-ease) both;
+	--animate-ss-fade-out: ss-fade-out var(--ss-motion-fast) var(--ss-ease-exit) both;
+	--animate-ss-enter: ss-enter var(--ss-motion-slow) var(--ss-ease) both;
+	--animate-ss-pop: ss-pop var(--ss-motion) var(--ss-ease) both;
+	--animate-ss-pop-out: ss-pop-out var(--ss-motion-fast) var(--ss-ease-exit) both;
+	--animate-ss-sheet: ss-sheet var(--ss-motion-slow) var(--ss-ease) both;
+	--animate-ss-sheet-out: ss-sheet-out var(--ss-motion) var(--ss-ease-exit) both;
+	--animate-ss-drawer: ss-drawer var(--ss-motion-slow) var(--ss-ease) both;
+	--animate-ss-drawer-out: ss-drawer-out var(--ss-motion) var(--ss-ease-exit) both;
+	--animate-ss-toast: ss-toast var(--ss-motion-slow) var(--ss-ease) both;
+	--animate-ss-toast-out: ss-toast-out var(--ss-motion) var(--ss-ease-exit) both;
+	--animate-ss-shake: ss-shake var(--ss-motion-slow) var(--ss-ease-move) both;
+}
+
+/*
+ * Motion (one system for the Portal and every product dashboard): three durations and three curves, used by every
+ * transition and animation. Only `transform` (`translate` / `scale`) and `opacity` move; colours change with the same
+ * timing. With `prefers-reduced-motion` the durations are zero and the base layer below turns every animation off.
+ */
+:root {
+	--ss-motion-fast: 120ms;
+	--ss-motion: 180ms;
+	--ss-motion-slow: 240ms;
+	/* entering and hover: quick start, soft landing */
+	--ss-ease: cubic-bezier(0.2, 0, 0, 1);
+	/* moving between two places (the menu indicator) */
+	--ss-ease-move: cubic-bezier(0.4, 0, 0.2, 1);
+	/* leaving: gentle start, quick end */
+	--ss-ease-exit: cubic-bezier(0.4, 0, 1, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	:root {
+		--ss-motion-fast: 0ms;
+		--ss-motion: 0ms;
+		--ss-motion-slow: 0ms;
+	}
+}
+
+@keyframes ss-fade {
+	from {
+		opacity: 0;
+	}
+}
+
+@keyframes ss-enter {
+	from {
+		opacity: 0;
+		translate: 0 6px;
+	}
+}
+
+@keyframes ss-pop {
+	from {
+		opacity: 0;
+		scale: 0.96;
+	}
+}
+
+@keyframes ss-sheet {
+	from {
+		opacity: 0;
+		translate: 0 24px;
+	}
+}
+
+@keyframes ss-drawer {
+	from {
+		opacity: 0;
+		translate: -24px 0;
+	}
+}
+
+@keyframes ss-toast {
+	from {
+		opacity: 0;
+		translate: 0 12px;
+		scale: 0.98;
+	}
+}
+
+/* exits have their own names: an element that animated in keeps its finished enter animation, and only a new
+   animation name starts a new animation */
+@keyframes ss-fade-out {
+	to {
+		opacity: 0;
+	}
+}
+
+@keyframes ss-pop-out {
+	to {
+		opacity: 0;
+		scale: 0.96;
+	}
+}
+
+@keyframes ss-sheet-out {
+	to {
+		opacity: 0;
+		translate: 0 24px;
+	}
+}
+
+@keyframes ss-drawer-out {
+	to {
+		opacity: 0;
+		translate: -24px 0;
+	}
+}
+
+@keyframes ss-toast-out {
+	to {
+		opacity: 0;
+		translate: 0 12px;
+		scale: 0.98;
+	}
+}
+
+@keyframes ss-shake {
+	0% {
+		opacity: 0;
+		translate: -4px 0;
+	}
+	30% {
+		opacity: 1;
+		translate: 4px 0;
+	}
+	55% {
+		translate: -3px 0;
+	}
+	80% {
+		translate: 2px 0;
+	}
+	100% {
+		translate: 0 0;
+	}
+}
+
+@keyframes ss-shimmer {
+	from {
+		translate: -100% 0;
+	}
+	to {
+		translate: 100% 0;
+	}
+}
+
+@keyframes ss-progress {
+	from {
+		translate: -100% 0;
+	}
+	to {
+		translate: 250% 0;
+	}
+}
+
+/* interactive elements: colours, opacity and transforms change together, quickly */
+@utility ss-motion {
+	transition-property: color, background-color, border-color, opacity, transform, translate, scale;
+	transition-duration: var(--ss-motion-fast);
+	transition-timing-function: var(--ss-ease);
+}
+
+/* press feedback (buttons, rows, menu items) */
+@utility ss-press {
+	&:active:not(:disabled, [aria-disabled='true']) {
+		scale: 0.98;
+	}
+}
+
+/* a clickable card lifts a little on hover */
+@utility ss-lift {
+	transition-property: color, background-color, opacity, transform, translate, scale;
+	transition-duration: var(--ss-motion);
+	transition-timing-function: var(--ss-ease);
+	@media (hover: hover) {
+		&:hover {
+			translate: 0 -2px;
+		}
+	}
+	&:active {
+		translate: 0 0;
+		scale: 0.99;
+	}
+}
+
+/* loading blocks: a soft light sweeps across the placeholder (`--ss-skeleton` sets its colour, e.g. on the canvas) */
+@utility ss-shimmer {
+	position: relative;
+	overflow: hidden;
+	background-color: var(--ss-skeleton, var(--ss-surface-2));
+	&::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		translate: -100% 0;
+		background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--ss-surface) 55%, transparent), transparent);
+		animation: ss-shimmer 1.4s var(--ss-ease-move) infinite;
+	}
+}
+
+/* the thin bar on top of the page while a route or a section loads (`NavigationProgress`) */
+@utility ss-progress {
+	position: fixed;
+	inset: 0 0 auto 0;
+	z-index: 80;
+	height: 2px;
+	overflow: hidden;
+	pointer-events: none;
+	opacity: 0;
+	transition: opacity var(--ss-motion) var(--ss-ease);
+	& > span {
+		display: block;
+		width: 40%;
+		height: 100%;
+		border-radius: 9999px;
+		background-color: var(--ss-primary);
+		animation: ss-progress 1.1s var(--ss-ease-move) infinite paused;
+	}
+	&[data-active] {
+		opacity: 1;
+		/* fast changes never flash the bar */
+		transition-delay: 80ms;
+	}
+	&[data-active] > span {
+		animation-play-state: running;
+	}
+}
+
+/* the small spinner beside a clicked link while its page is on the way (`PendingHint`) */
+@utility ss-pending-hint {
+	opacity: 0;
+	transition: opacity var(--ss-motion) var(--ss-ease);
+	& svg {
+		animation-play-state: paused;
+	}
+	&[data-pending] {
+		opacity: 1;
+		/* a quick navigation shows no spinner */
+		transition-delay: 100ms;
+	}
+	&[data-pending] svg {
+		animation-play-state: running;
+	}
+}
+
+/*
+ * Page and section changes (React `ViewTransition`, `PageTransition` / `SwapTransition`): the old content fades out
+ * quickly, the new one fades and slides in. The page around it (menu, top bar) stays put and clickable.
+ */
+::view-transition {
+	pointer-events: none;
+}
+::view-transition-old(root),
+::view-transition-new(root) {
+	animation: none;
+}
+::view-transition-old(.ss-vt-exit) {
+	animation: ss-fade-out var(--ss-motion-fast) var(--ss-ease-exit) both;
+}
+::view-transition-new(.ss-vt-enter) {
+	animation: ss-enter var(--ss-motion-slow) var(--ss-ease) both;
+}
+::view-transition-group(.ss-vt-morph) {
+	animation-duration: var(--ss-motion-slow);
+	animation-timing-function: var(--ss-ease-move);
+}
+::view-transition-group(ss-topbar),
+::view-transition-group(ss-sidebar) {
+	z-index: 50;
+	animation: none;
+}
+::view-transition-old(ss-topbar),
+::view-transition-old(ss-sidebar) {
+	display: none;
+}
+::view-transition-new(ss-topbar),
+::view-transition-new(ss-sidebar) {
+	animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+	::view-transition-group(*),
+	::view-transition-old(*),
+	::view-transition-new(*) {
+		animation: none !important;
+	}
+}
+/* browsers without view transitions: the new content still fades and slides in */
+@supports not (view-transition-name: none) {
+	[data-ss-transition] {
+		animation: ss-enter var(--ss-motion-slow) var(--ss-ease) both;
+	}
 }
 
 :root {
@@ -184,12 +479,22 @@
 		outline: 2px solid var(--ss-focus);
 		outline-offset: 2px;
 	}
+	/* a clicked router link whose page is still on the way looks pressed (`data-link-pending` inside it) */
+	a:has(> [data-link-pending]) {
+		cursor: progress;
+		opacity: 0.7;
+		transition: opacity var(--ss-motion) var(--ss-ease);
+	}
+	/* reduced motion: nothing moves (one instant iteration, so loops such as spinners and shimmers stand still) */
 	@media (prefers-reduced-motion: reduce) {
 		*,
 		*::before,
 		*::after {
 			animation-duration: 0.01ms !important;
+			animation-delay: 0ms !important;
+			animation-iteration-count: 1 !important;
 			transition-duration: 0.01ms !important;
+			transition-delay: 0ms !important;
 		}
 	}
 }

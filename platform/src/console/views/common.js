@@ -3,12 +3,17 @@
  * Building blocks shared by console views: the page error, the actions of a detail header (one or two buttons and a
  * More menu), the list-and-detail layout with its list pane, rows and search (PLAN 0.6), and opening a product
  * dashboard in a new tab.
+ *
+ * Motion (PLAN 0.6): picking another item keeps the list in place (screen-memory.js) and marks the picked row at once —
+ * its highlight slides there — while the detail fades out and the next one fades and slides in.
  * @module
  */
-import { ActionMenu, ButtonLink, ErrorState, Icon, Input, cx, describeProblem, problemCode } from '@ss/ui';
+import { ViewTransition, useEffect, useLayoutEffect, useRef } from 'react';
+import { ActionMenu, ButtonLink, ErrorState, Icon, Input, PageTransition, cx, describeProblem, problemCode } from '@ss/ui';
 import { CONSOLE } from '../../texts/console.js';
 import { Link } from '../link.js';
 import { routes } from '../paths.js';
+import { ScreenContext, listScroll, listWasPlaceholder, rememberList, useScreen } from './screen-memory.js';
 
 /** @typedef {import('@ss/ui/problems').Problem} Problem */
 /**
@@ -67,35 +72,49 @@ const DOTS = Object.freeze({ success: 'bg-success', warning: 'bg-warning', dange
  * the item the URL selects or, with `auto`, the first item of the list, opened by default so a wide screen is never
  * half empty; with no item at all the detail side shows `empty` (under the list on phones). Below 1024 px the two
  * stack: the list alone (an `auto` detail stays hidden there) until an item is chosen, then the detail alone with a
- * Back link (`back`) to the list.
- * @param {{ label: string, list: import('react').ReactNode, detail: import('react').ReactNode | null,
- *   empty: import('react').ReactNode, back: { href: string, label: string }, auto?: boolean }} props
+ * Back link (`back`) to the list. `section` names the screen: its list is kept for the loading skeleton of the next
+ * page of the same screen, which renders it again with `going` (the path being opened) and `remember` off.
+ * @param {{ label: string, section: string, list: import('react').ReactNode, detail: import('react').ReactNode | null,
+ *   empty: import('react').ReactNode, back: { href: string, label: string }, auto?: boolean, going?: string | null,
+ *   remember?: boolean }} props
  */
-export function ListDetail({ label, list, detail, empty, back, auto = false }) {
+export function ListDetail({ label, section, list, detail, empty, back, auto = false, going = null, remember = true }) {
 	const shown = detail !== null && detail !== undefined;
 	const chosen = shown && !auto;
+	useEffect(() => {
+		if (remember) rememberList(section, list);
+	}, [remember, section, list]);
 	return (
-		<div className="grid items-start gap-6 lg:grid-cols-[20rem_minmax(0,1fr)] xl:grid-cols-[22rem_minmax(0,1fr)] xl:gap-8">
-			<aside aria-label={label} className={cx('min-w-0 lg:sticky lg:top-24', chosen ? 'hidden lg:block' : 'block')}>
-				{list}
-			</aside>
-			<div className={cx('min-w-0 space-y-8', chosen || !shown ? 'block' : 'hidden lg:block')}>
-				{chosen ? <BackLink href={back.href} label={back.label} /> : null}
-				{shown ? detail : empty}
+		<ScreenContext.Provider value={{ section, going }}>
+			<div className="grid items-start gap-6 lg:grid-cols-[20rem_minmax(0,1fr)] xl:grid-cols-[22rem_minmax(0,1fr)] xl:gap-8">
+				<aside aria-label={label} className={cx('min-w-0 lg:sticky lg:top-24', chosen ? 'hidden lg:block' : 'block')}>
+					{list}
+				</aside>
+				<div className={cx('min-w-0 space-y-8', chosen || !shown ? 'block' : 'hidden lg:block')}>
+					{chosen ? <BackLink href={back.href} label={back.label} /> : null}
+					<PageTransition className="space-y-8">{shown ? detail : empty}</PageTransition>
+				</div>
 			</div>
-		</div>
+		</ScreenContext.Provider>
 	);
 }
 
 /**
  * The list pane of a list-and-detail screen: the section's title (the page heading) with its main action, an optional
- * search / filter row, the rows, and an optional footer (load more, bulk actions).
+ * search / filter row, the rows, and an optional footer (load more, bulk actions). Its scroll position is kept per
+ * screen; it fades in when it replaces a placeholder list.
  * @param {{ title: string, count?: import('react').ReactNode, action?: import('react').ReactNode,
  *   tools?: import('react').ReactNode, children: import('react').ReactNode, footer?: import('react').ReactNode }} props
  */
 export function ListPane({ title, count, action, tools, children, footer }) {
+	const { section, going } = useScreen();
+	const rows = useRef(/** @type {HTMLUListElement | null} */ (null));
+	useLayoutEffect(() => {
+		if (rows.current && section) rows.current.scrollTop = listScroll(section);
+	}, [section]);
+	const fades = section !== null && going === null && listWasPlaceholder(section);
 	return (
-		<div className="space-y-3 rounded-card bg-surface p-3 sm:p-4">
+		<div className={cx('space-y-3 rounded-card bg-surface p-3 sm:p-4', fades && 'animate-ss-fade')}>
 			<div className="flex flex-wrap items-center justify-between gap-2 px-1 pt-1">
 				<h1 className="text-xl font-extrabold tracking-tight text-fg">
 					{title}
@@ -104,37 +123,59 @@ export function ListPane({ title, count, action, tools, children, footer }) {
 				{action}
 			</div>
 			{tools}
-			<ul className="max-h-none space-y-0.5 overflow-y-auto lg:max-h-[calc(100vh-17rem)]">{children}</ul>
+			<ul
+				ref={rows}
+				onScroll={(event) => {
+					if (section) listScroll(section, event.currentTarget.scrollTop);
+				}}
+				className="max-h-none space-y-0.5 overflow-y-auto lg:max-h-[calc(100vh-17rem)]">
+				{children}
+			</ul>
 			{footer}
 		</div>
 	);
 }
 
+/** @param {string} href */
+const pathOf = (href) => href.split(/[?#]/)[0] ?? href;
+
 /**
  * One row of a list pane: a link with the name, an optional second line, a status dot and a right-hand figure; the
  * selected row is marked. `current="wide"` marks the row opened by default, only where its detail shows beside the list
- * (1024 px and up). `leading` sits before the link (a bulk-selection checkbox).
+ * (1024 px and up). `leading` sits before the link (a bulk-selection checkbox). Rows tint on hover and press in when
+ * clicked; the selected row's highlight slides from the row picked before.
  * @param {{ href: string, label: import('react').ReactNode, sublabel?: import('react').ReactNode, dot?: Dot,
  *   dotLabel?: string, meta?: import('react').ReactNode, current?: boolean | 'wide', leading?: import('react').ReactNode }} props
  */
 export function ListRow({ href, label, sublabel, dot, dotLabel, meta, current = false, leading }) {
+	const { going } = useScreen();
+	const marked = going === null ? current : pathOf(href) === going;
 	return (
 		<li className="flex items-center gap-1">
 			{leading ? <span className="flex shrink-0 items-center pl-2">{leading}</span> : null}
 			<Link
 				href={href}
-				aria-current={current === true ? 'page' : undefined}
+				hint
+				aria-current={marked === true ? 'page' : undefined}
 				className={cx(
-					'flex min-w-0 flex-1 items-center gap-3 rounded-xl px-3 py-2.5 text-sm',
-					current === true
-						? 'bg-primary-soft text-on-primary-soft'
-						: current === 'wide'
-							? 'text-fg hover:bg-surface-2 lg:bg-primary-soft lg:text-on-primary-soft lg:hover:bg-primary-soft'
+					'ss-motion ss-press relative isolate flex min-w-0 flex-1 items-center gap-3 rounded-xl px-3 py-2.5 text-sm',
+					marked === true
+						? 'text-on-primary-soft'
+						: marked === 'wide'
+							? 'text-fg hover:bg-surface-2 lg:text-on-primary-soft lg:hover:bg-transparent'
 							: 'text-fg hover:bg-surface-2',
 				)}>
+				{marked ? (
+					<ViewTransition name="ss-list-selection" share="ss-vt-morph" default="none">
+						<span
+							aria-hidden="true"
+							className={cx('absolute inset-0 -z-10 rounded-xl bg-primary-soft', marked === 'wide' && 'hidden lg:block')}
+						/>
+					</ViewTransition>
+				) : null}
 				{dot ? <span aria-hidden="true" title={dotLabel} className={cx('size-2 shrink-0 rounded-full', DOTS[dot])} /> : null}
 				<span className="min-w-0 flex-1">
-					<span className={cx('block truncate', current === true ? 'font-bold' : 'font-semibold')}>{label}</span>
+					<span className={cx('block truncate', marked === true ? 'font-bold' : 'font-semibold')}>{label}</span>
 					{sublabel ? <span className="block truncate text-xs text-muted">{sublabel}</span> : null}
 				</span>
 				{dot && dotLabel ? <span className="sr-only">{dotLabel}</span> : null}

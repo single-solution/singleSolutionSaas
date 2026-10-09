@@ -92,12 +92,13 @@ export function ConnectionForm({ name, onSave }) {
 				size="sm"
 				disabled={!ready}
 				onClick={() => {
-					onSave(
+					const done = onSave(
 						Object.fromEntries(
 							fields.filter((field) => valueOf(field.name) !== '').map((field) => [field.name, valueOf(field.name)]),
 						),
 					);
 					setValues({});
+					return done;
 				}}>
 				{TEXTS.connections.save}
 			</Button>

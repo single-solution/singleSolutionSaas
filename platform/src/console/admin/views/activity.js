@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { Button, Callout, Card, Form, Input, PageHeader, describeProblem } from '@ss/ui';
 import { ADMIN } from '../../../texts/console.js';
 import { ActivityTable } from '../../views/login-settings.js';
+import { useNavigation } from '../../navigation.js';
 import { usePagedList } from '../client.js';
 import { adminApi, adminRoutes } from '../paths.js';
 import { AdminProblem } from './common.js';
@@ -24,11 +25,12 @@ export function ActivityView(props) {
 		to: f.to ?? '',
 	});
 	const list = usePagedList((cursor) => (ok ? adminApi.activity({ ...f, cursor }) : null), ok ? props.page : null);
+	const nav = useNavigation();
 	if (!ok) return <AdminProblem problem={props.problem} />;
 	/** @param {keyof typeof form} key @param {string} value */
 	const set = (key, value) => setForm((x) => ({ ...x, [key]: value }));
 	const apply = () =>
-		window.location.assign(
+		nav.go(
 			adminRoutes.activity({
 				merchantId: form.merchantId.trim() || null,
 				adminId: form.adminId.trim() || null,
@@ -40,7 +42,7 @@ export function ActivityView(props) {
 		<div className="space-y-8">
 			<PageHeader title={ADMIN.activityTitle} subtitle={ADMIN.activityIntro} />
 			<Card>
-				<Form onSubmit={apply} aria-label={ADMIN.filters.apply}>
+				<Form onSubmit={apply} busy={nav.pending} aria-label={ADMIN.filters.apply}>
 					<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_10rem_10rem_auto] lg:items-end">
 						<Input
 							label={ADMIN.filters.merchant}
@@ -64,7 +66,7 @@ export function ActivityView(props) {
 							value={form.to}
 							onChange={(e) => set('to', e.currentTarget.value)}
 						/>
-						<Button type="submit" variant="secondary">
+						<Button type="submit" variant="secondary" loading={nav.pending}>
 							{ADMIN.filters.apply}
 						</Button>
 					</div>

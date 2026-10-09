@@ -36,6 +36,7 @@ import {
 } from '@ss/ui';
 import { PRODUCTS } from '../../../texts/console.js';
 import { Link } from '../../link.js';
+import { useNavigation } from '../../navigation.js';
 import { LocalTime, ProductStatusBadge } from '../../views/billing.js';
 import { ListDetail, ListPane, ListRow, ListSearch, openDashboard } from '../../views/common.js';
 import { adminFetch } from '../client.js';
@@ -139,8 +140,11 @@ function ProductList({ props, owner, selectedId, autoId = null }) {
 	const toast = useToast();
 	const [adding, setAdding] = useState(false);
 	const [q, setQ] = useState('');
+	const nav = useNavigation();
+	// the picked filter shows at once, while its list loads
+	const [picked, setPicked] = useState(/** @type {string | null} */ (null));
 	const needle = q.trim().toLowerCase();
-	const status = props.filter.status ?? '';
+	const status = nav.pending && picked !== null ? picked : (props.filter.status ?? '');
 	const rows = /** @type {any[]} */ (props.items).filter(
 		(p) => !needle || String(p.name).toLowerCase().includes(needle) || String(p.productId).includes(needle),
 	);
@@ -168,9 +172,11 @@ function ProductList({ props, owner, selectedId, autoId = null }) {
 								{ value: 'active', label: PRODUCTS.status.active },
 								{ value: 'inactive', label: PRODUCTS.status.inactive },
 							]}
+							disabled={nav.pending}
 							onChange={(e) => {
+								setPicked(e.currentTarget.value);
 								const next = { status: e.currentTarget.value || null };
-								window.location.assign(selectedId ? adminRoutes.product(selectedId, next) : adminRoutes.products(next));
+								nav.go(selectedId ? adminRoutes.product(selectedId, next) : adminRoutes.products(next));
 							}}
 						/>
 					</ListSearch>
@@ -207,7 +213,7 @@ function ProductList({ props, owner, selectedId, autoId = null }) {
 					onDone={(product) => {
 						setAdding(false);
 						toast.show({ title: PRODUCTS.connected(product.name) });
-						window.location.assign(adminRoutes.product(product.productId, keep));
+						nav.go(adminRoutes.product(product.productId, keep));
 					}}
 				/>
 			) : null}
@@ -420,6 +426,7 @@ export function ProductsView(props) {
 	const back = adminRoutes.products({ status: props.filter.status });
 	return (
 		<ListDetail
+			section="admin/products"
 			label={PRODUCTS.title}
 			auto={auto}
 			back={{ href: back, label: PRODUCTS.title }}

@@ -9,5 +9,8 @@ export const metadata = { title: 'Websites' };
 export default async function WebsitePage({ params }) {
 	const { websiteId } = await params;
 	const { api, merchantId } = await merchantContext(`/websites/${websiteId}`);
-	return <WebsitesView {...await loadWebsites(api, merchantId, websiteId)} branding={await consoleBranding()} />;
+	const websites = await loadWebsites(api, merchantId, websiteId);
+	// the support contact shows only in the welcome of a merchant with no websites yet
+	const welcome = websites.ok && websites.rows.length === 0;
+	return <WebsitesView {...websites} branding={welcome ? await consoleBranding() : undefined} />;
 }

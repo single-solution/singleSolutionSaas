@@ -29,6 +29,11 @@ import { act, byLabel, cleanup, render, type } from '@ss/ui/testing';
 import { startMongo } from '../helpers.js';
 import { browserOf, button, clickEl, createWorld, fill, press, quiet, settle, shows, until } from './merchant-harness.js';
 
+vi.mock('next/navigation.js', async (importOriginal) => {
+	const { testRouter } = await import('./router.js');
+	return { .../** @type {object} */ (await importOriginal()), useRouter: () => testRouter };
+});
+
 vi.setConfig({ testTimeout: 180_000, hookTimeout: 120_000 });
 
 const PathnameContext = /** @type {import('react').Context<string | null>} */ (

@@ -41,6 +41,25 @@ a `Form`, a `FieldGrid` or a `SchemaForm` group, short controls pack into 1 / 2 
 (container queries); `TextArea`, `CheckboxGroup` and any control with `wide` span the row, as do children that are not
 controls (buttons, callouts) and a lone control (a card with one short setting does not leave it in a corner).
 
+## Motion and feedback
+
+One motion system for the Portal and every product dashboard (PLAN.md 0.6): three durations (`--ss-motion-fast` 120 ms,
+`--ss-motion` 180 ms, `--ss-motion-slow` 240 ms) and three curves (`--ss-ease` for entering and hover, `--ss-ease-move`
+between two places, `--ss-ease-exit` for leaving) in `theme.css`; only `transform` (`translate`, `scale`) and `opacity`
+move. With `prefers-reduced-motion` nothing moves.
+
+- Buttons tint on hover and press in (`ss-motion ss-press`). A button whose `onClick` returns a promise, and the submit
+  button of a `Form` whose `onSubmit` returns one, show the spinner and stay disabled until it settles (`loading` and
+  `busy` still work). `FormBusyContext` gives the same to a submit button inside another form.
+- `Dialog`, `ActionMenu`, toasts and the phone menu animate in and out (`usePresence` keeps them mounted while they leave);
+  callouts and field errors fade in (an error with a short shake); new table rows and changed `Stat` / `HeroCard`
+  figures fade in; skeletons shimmer (`Skeleton`, `SkeletonBlock`).
+- `AppShell`: the current item's tint slides to the clicked item at once, and the frame holds `NavigationProgress`, the
+  thin bar on top of the page while anything reports progress (`useNavigationProgress(active)`, `RouteProgress` in a
+  loading skeleton). `PendingHint` is the fixed-size spinner beside a clicked link.
+- `PageTransition` and `SwapTransition` animate page and section changes with React's `ViewTransition` (navigations and
+  other transitions only); browsers without view transitions get a CSS enter animation.
+
 ## SchemaForm
 
 `<SchemaForm schema values onChange errors? overridden? onReset? disabled? />` renders each top-level property of a

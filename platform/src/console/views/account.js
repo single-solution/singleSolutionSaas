@@ -13,6 +13,7 @@ import { apiFetch, useResource } from '../client.js';
 import { api } from '../paths.js';
 import { PageProblem } from './common.js';
 import { EmailPanel, OwnActivity, PasswordPanel, TwoStepPanel } from './login-settings.js';
+import { FrameBilling } from './frame-billing.js';
 
 /** @typedef {import('@ss/ui').Problem} Problem */
 
@@ -165,6 +166,7 @@ export function AccountView(props) {
 	const merchant = data.merchant;
 	return (
 		<div className="space-y-8">
+			<FrameBilling billing={props.billing} />
 			<PageHeader title={MERCHANT.accountTitle} subtitle={MERCHANT.accountIntro} />
 			<Masonry columns={2}>
 				<Card title={MERCHANT.detailsTitle} subtitle={MERCHANT.detailsIntro}>

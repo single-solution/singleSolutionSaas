@@ -29,6 +29,7 @@ import {
 	useToast,
 } from '@ss/ui';
 import { ADMIN, TWO_STEP } from '../../../texts/console.js';
+import { useNavigation } from '../../navigation.js';
 import { adminFetch, useAdminResource } from '../client.js';
 import { LocalTime } from '../../views/billing.js';
 import { HeaderActions, ListDetail, ListPane, ListRow, ListSearch } from '../../views/common.js';
@@ -58,6 +59,7 @@ export function AdminsView(props) {
 	const [link, setLink] = useState(/** @type {string | null} */ (null));
 	const [busy, setBusy] = useState(false);
 	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
+	const nav = useNavigation();
 	const [q, setQ] = useState('');
 	if (!ok) return <AdminProblem problem={props.problem} />;
 	const selectedId = typeof props.selectedId === 'string' ? props.selectedId : null;
@@ -110,8 +112,8 @@ export function AdminsView(props) {
 						: await call(adminApi.admin(id), 'DELETE');
 		if (!result.ok) return;
 		setDialog(null);
-		if (dialog.kind === 'remove') window.location.assign(adminRoutes.admins());
-		else await reload();
+		await reload();
+		if (dialog.kind === 'remove') nav.go(adminRoutes.admins());
 	};
 	/** @param {'invite' | 'email' | 'role' | 'twoStep' | 'remove'} kind @param {any} [admin] */
 	const open = (kind, admin) => {
@@ -163,6 +165,7 @@ export function AdminsView(props) {
 	return (
 		<>
 			<ListDetail
+				section="admin/admins"
 				label={ADMIN.adminsTitle}
 				back={{ href: adminRoutes.admins(), label: ADMIN.adminsTitle }}
 				list={

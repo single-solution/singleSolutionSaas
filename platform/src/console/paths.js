@@ -16,6 +16,9 @@ export const query = (params) => {
 	return s ? `?${s}` : '';
 };
 
+/** The public account pages (no console frame): sign-in and the pages of e-mailed links. */
+export const PUBLIC_PATHS = Object.freeze(['/login', '/forgot-password', '/reset-password', '/set-password', '/confirm-email']);
+
 /** Merchant console page URLs. */
 export const routes = Object.freeze({
 	login: (next = '') => (next ? `/login?next=${e(next)}` : '/login'),

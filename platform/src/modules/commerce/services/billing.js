@@ -15,7 +15,7 @@
  */
 import { createId } from '@ss/contracts';
 import { problem } from '../../../infra/http.js';
-import { afterResponse } from '../../../infra/request-scope.js';
+import { afterResponse, memoize } from '../../../infra/request-scope.js';
 import {
 	OPEN_PHASE,
 	billingStateOf,
@@ -207,22 +207,30 @@ export const createBilling = ({ ctx, repo, deps, ledger, statusChanged }) => {
 	};
 
 	/**
-	 * Run the check for one merchant (PLAN 0.5.7) and return the live money state.
+	 * Run the check for one merchant (PLAN 0.5.7) and return the live money state. Independent reads run together; a
+	 * console page render checks each merchant once however many of its reads need it (`memoize`).
 	 * @param {string} merchantId
 	 */
-	const check = async (merchantId) => {
+	const check = (merchantId) => memoize(`check|${merchantId}`, () => runCheck(merchantId));
+
+	/** @param {string} merchantId */
+	const runCheck = async (merchantId) => {
 		const now = ctx.now();
-		const stored = await repo.billingOf(merchantId);
-		const { events, graceEnds, earliest, lists } = await inputsOf(merchantId, now);
+		const [stored, { events, graceEnds, earliest, lists }] = await Promise.all([
+			repo.billingOf(merchantId),
+			inputsOf(merchantId, now),
+		]);
 		const from = stored?.settledThrough ? stored.settledThrough.getTime() : floorDay(earliest ?? now);
-		const receipts = await repo
-			.ledgerOf(merchantId)
-			.find({ merchantId, type: 'receipt', at: { $gte: new Date(from) } })
-			.sort({ seq: 1 })
-			.toArray();
-		const opening = await ledger.sum(merchantId, {
-			$or: [{ type: 'day_charge' }, { type: 'receipt', at: { $lt: new Date(from) } }],
-		});
+		const [receipts, opening] = await Promise.all([
+			repo
+				.ledgerOf(merchantId)
+				.find({ merchantId, type: 'receipt', at: { $gte: new Date(from) } })
+				.sort({ seq: 1 })
+				.toArray(),
+			ledger.sum(merchantId, {
+				$or: [{ type: 'day_charge' }, { type: 'receipt', at: { $lt: new Date(from) } }],
+			}),
+		]);
 		const cut = floorDay(now);
 		const run = replay({
 			from,

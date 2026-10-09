@@ -64,7 +64,7 @@ export function ThemeToggle({ className }) {
 						setChoice(item.value);
 					}}
 					className={cx(
-						'rounded-lg p-1.5 transition-colors focus-visible:outline-2 focus-visible:outline-focus',
+						'ss-motion ss-press rounded-lg p-1.5 focus-visible:outline-2 focus-visible:outline-focus',
 						choice === item.value ? 'bg-surface-2 text-fg' : 'text-muted hover:text-fg',
 					)}>
 					<Icon name={item.icon} size={14} />

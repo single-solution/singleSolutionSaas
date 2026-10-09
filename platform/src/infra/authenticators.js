@@ -15,6 +15,7 @@
 import { verifyAssertion } from '@ss/protocol';
 import { actorFromSession, readCookie, sessionCookieName } from './auth.js';
 import { problem } from './http.js';
+import { memoize } from './request-scope.js';
 
 /** @typedef {import('./http.js').Authenticator} Authenticator */
 /** @typedef {import('./http.js').AuthMode} AuthMode */
@@ -64,9 +65,10 @@ export const createAuthenticators = ({ sessions, replayStore, ports = {}, portal
 	const sessionAuth = (kind) => async (request, route) => {
 		const token = readCookie(request.headers.get('cookie'), sessionCookieName(kind, cookieSecure));
 		if (token === undefined || token === '') return null;
-		const session = await sessions.get(token);
+		// once per console page render (its in-process reads share the memo); every other request looks it up
+		const session = await memoize(`session|${kind}|${token}`, () => sessions.get(token));
 		if (!session || session.kind !== kind) return problem('unauthorized', 'The session has expired. Sign in again.');
-		const actor = await sessionActor(session);
+		const actor = await memoize(`actor|${kind}|${session.subject}`, () => sessionActor(session));
 		if (!actor) return problem('unauthorized', 'The session has ended. Sign in again.');
 		// Require two-step for admins (PLAN 0.2): until it is set up, only the setup routes open
 		if (actor.twoStepRequired && route.mfa !== false)

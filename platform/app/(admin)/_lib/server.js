@@ -18,6 +18,7 @@ const adminApiClient = cache(async () => {
 		cookie: h.get('cookie'),
 		forwardedFor: h.get('x-forwarded-for'),
 		userAgent: h.get('user-agent'),
+		perRender: true,
 	});
 });
 

@@ -124,21 +124,39 @@ export const createSettings = ({ store, manifest, strings, recent, now }) => {
 	const featureOf = (key) => manifest.features.find((feature) => feature.key === key);
 
 	/**
-	 * Every setting of a feature with its value and source.
-	 * @param {string | null} websiteId null = the global defaults
+	 * The settings of a feature with their values and sources, from a snapshot.
 	 * @param {string} featureKey
-	 * @returns {Promise<Record<string, { value: any, source: Source }>>}
+	 * @param {Awaited<ReturnType<typeof snapshot>>} resolve
+	 * @returns {Record<string, { value: any, source: Source }>}
 	 */
-	const settingsOf = async (websiteId, featureKey) => {
+	const valuesOf = (featureKey, resolve) => {
 		const feature = featureOf(featureKey);
 		if (!feature) return {};
-		const resolve = await snapshot(websiteId);
 		return Object.fromEntries(
 			Object.entries(feature.settings.properties).map(([key, node]) => [
 				key,
 				resolve('setting', `${featureKey}.${key}`, node.default),
 			]),
 		);
+	};
+
+	/**
+	 * Every setting of a feature with its value and source.
+	 * @param {string | null} websiteId null = the global defaults
+	 * @param {string} featureKey
+	 * @returns {Promise<Record<string, { value: any, source: Source }>>}
+	 */
+	const settingsOf = async (websiteId, featureKey) => valuesOf(featureKey, await snapshot(websiteId));
+
+	/**
+	 * The settings of several features, read once (the dashboard's Settings and Defaults).
+	 * @param {string | null} websiteId null = the global defaults
+	 * @param {string[]} featureKeys
+	 * @returns {Promise<Record<string, Record<string, { value: any, source: Source }>>>}
+	 */
+	const settingsOfFeatures = async (websiteId, featureKeys) => {
+		const resolve = await snapshot(websiteId);
+		return Object.fromEntries(featureKeys.map((key) => [key, valuesOf(key, resolve)]));
 	};
 
 	/**
@@ -238,6 +256,7 @@ export const createSettings = ({ store, manifest, strings, recent, now }) => {
 	return Object.freeze({
 		featureOf,
 		settingsOf,
+		settingsOfFeatures,
 		/**
 		 * The values of a feature's settings for a website (for product code).
 		 * @param {string} websiteId

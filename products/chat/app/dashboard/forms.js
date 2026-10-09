@@ -70,8 +70,9 @@ export function AiForm({ onSave }) {
 					);
 					if (!checked.ok) return setError(checked.message);
 					setError(null);
-					onSave(checked.value);
+					const done = onSave(checked.value);
 					setValues({ provider });
+					return done;
 				}}>
 				{TEXTS.connections.save}
 			</Button>
@@ -113,12 +114,13 @@ export function StorageForm({ onSave }) {
 				size="sm"
 				disabled={!ready}
 				onClick={() => {
-					onSave(
+					const done = onSave(
 						Object.fromEntries(
 							STORAGE.filter((field) => valueOf(field.name) !== '').map((field) => [field.name, valueOf(field.name)]),
 						),
 					);
 					setValues({});
+					return done;
 				}}>
 				{TEXTS.connections.save}
 			</Button>

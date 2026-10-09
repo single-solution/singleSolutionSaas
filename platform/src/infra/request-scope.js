@@ -7,7 +7,11 @@
  */
 import { AsyncLocalStorage } from 'node:async_hooks';
 
-/** @typedef {{ defer: (task: () => Promise<unknown>) => void }} RequestScope */
+/**
+ * `memo`: values shared by the requests of one page render (the console's in-process reads, `memoize`); absent for
+ * every other request.
+ * @typedef {{ defer: (task: () => Promise<unknown>) => void, memo?: Map<string, unknown> | null }} RequestScope
+ */
 
 /** @type {AsyncLocalStorage<RequestScope>} */
 const storage = new AsyncLocalStorage();
@@ -31,4 +35,19 @@ export const afterResponse = (task) => {
 	if (!scope) return false;
 	scope.defer(task);
 	return true;
+};
+
+/**
+ * The value of `compute()` once per page render: the in-process reads of one console page share it (the session of
+ * the signed-in person, the check of a merchant). Any other request computes it every time.
+ * @template T
+ * @param {string} key
+ * @param {() => T} compute
+ * @returns {T}
+ */
+export const memoize = (key, compute) => {
+	const memo = storage.getStore()?.memo;
+	if (!memo) return compute();
+	if (!memo.has(key)) memo.set(key, compute());
+	return /** @type {T} */ (memo.get(key));
 };

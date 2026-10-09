@@ -1,7 +1,8 @@
 'use client';
 /**
  * Modal dialog: `role="dialog"` + `aria-modal`, labelled by its title, traps focus (Tab / Shift+Tab cycle inside), close on Escape and on backdrop click, lock page scroll,
- * and restore focus to the element that opened them.
+ * and restore focus to the element that opened them. The backdrop fades and the dialog scales in (slides up as a sheet
+ * on phones), and both animate out when it closes (PLAN 0.6 motion).
  * @module
  */
 import { useEffect, useId, useRef } from 'react';
@@ -9,6 +10,7 @@ import { createPortal } from 'react-dom';
 import { Button } from './Button.js';
 import { cx } from './cx.js';
 import { Icon } from './icons.js';
+import { usePresence } from './motion.js';
 
 /** @typedef {import('react').ReactNode} ReactNode */
 
@@ -105,12 +107,18 @@ export function Dialog({
 	const close = () => {
 		if (dismissible) onClose();
 	};
+	const presence = usePresence(open);
 	useFocusTrap(ref, open, close);
-	if (!open) return null;
+	if (!presence.mounted) return null;
 	const width = size === 'sm' ? 'max-w-md' : size === 'lg' ? 'max-w-3xl' : 'max-w-xl';
 	const panel = (
 		<div
-			className="fixed inset-0 z-50 flex items-end justify-center bg-overlay p-0 sm:items-center sm:p-4"
+			ref={presence.ref}
+			data-state={presence.closing ? 'closed' : 'open'}
+			className={cx(
+				'group fixed inset-0 z-50 flex items-end justify-center bg-overlay p-0 sm:items-center sm:p-4',
+				'animate-ss-fade data-[state=closed]:pointer-events-none data-[state=closed]:animate-ss-fade-out',
+			)}
 			onMouseDown={(event) => {
 				if (event.target === event.currentTarget) close();
 			}}>
@@ -123,6 +131,7 @@ export function Dialog({
 				tabIndex={-1}
 				className={cx(
 					'flex max-h-[92vh] w-full flex-col rounded-t-card bg-surface text-fg focus:outline-none sm:rounded-card',
+					'animate-ss-sheet group-data-[state=closed]:animate-ss-sheet-out sm:animate-ss-pop sm:group-data-[state=closed]:animate-ss-pop-out',
 					width,
 				)}>
 				<div className="flex items-start justify-between gap-4 px-6 pb-2 pt-5">
@@ -141,7 +150,7 @@ export function Dialog({
 							type="button"
 							onClick={onClose}
 							aria-label={closeLabel}
-							className="rounded-lg p-1.5 text-muted hover:bg-surface-2 hover:text-fg focus-visible:outline-2 focus-visible:outline-focus">
+							className="ss-motion ss-press rounded-lg p-1.5 text-muted hover:bg-surface-2 hover:text-fg focus-visible:outline-2 focus-visible:outline-focus">
 							<Icon name="close" size={16} />
 						</button>
 					) : null}
@@ -189,7 +198,7 @@ export function ConfirmDialog({
 			}>
 			{children}
 			{error ? (
-				<p role="alert" className="text-sm font-medium text-danger">
+				<p role="alert" className="animate-ss-shake text-sm font-medium text-danger">
 					{error}
 				</p>
 			) : null}

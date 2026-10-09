@@ -134,7 +134,11 @@ export function HeroCard({ label, value, icon = 'wallet', details = [], chart, c
 					</span>
 					<span className="text-sm font-semibold text-on-hero-muted">{label}</span>
 				</div>
-				<div className="break-words text-4xl font-extrabold tracking-tight tabular-nums sm:text-5xl">{value}</div>
+				<div
+					key={typeof value === 'string' || typeof value === 'number' ? String(value) : undefined}
+					className="animate-ss-fade break-words text-4xl font-extrabold tracking-tight tabular-nums sm:text-5xl">
+					{value}
+				</div>
 				{details.length > 0 ? (
 					<dl className="grid grid-cols-2 gap-4">
 						{details.map((d, i) => (

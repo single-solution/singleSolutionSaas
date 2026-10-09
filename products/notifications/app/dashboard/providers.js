@@ -145,8 +145,9 @@ export function ProviderForm({ name, onSave }) {
 						} else if (typeof raw === 'string' && raw.trim() !== '')
 							value[field.name] = field.type === 'number' ? Number(raw) : raw.trim();
 					}
-					onSave(value);
+					const done = onSave(value);
 					setValues({});
+					return done;
 				}}>
 				{TEXTS.connections.save}
 			</Button>

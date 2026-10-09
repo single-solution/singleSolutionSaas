@@ -133,7 +133,9 @@ export function Table({
 							</tr>
 						) : (
 							sorted.map((row) => (
-								<tr key={rowKey(row)} className="border-t border-line-soft hover:bg-surface-2/60">
+								<tr
+									key={rowKey(row)}
+									className="ss-motion animate-ss-fade border-t border-line-soft hover:bg-surface-2/60">
 									{columns.map((column) => {
 										const content = column.render
 											? column.render(row)

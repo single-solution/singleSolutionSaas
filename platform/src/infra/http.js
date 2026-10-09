@@ -432,7 +432,8 @@ const readBody = async (request, max) => {
  *   allowedOrigin: string,
  * }} options `afterResponse` schedules the deferred tasks and any background work after each response;
  *   `allowedOrigin` is the only origin cookie-authenticated writes may come from (`PORTAL_URL`, PLAN 0.8.1)
- * @returns {(request: Request) => Promise<Response>}
+ * @returns {(request: Request, options?: { memo?: Map<string, unknown> }) => Promise<Response>} `options.memo`: the
+ *   memo of a page render the request belongs to (`memoize`, console in-process reads only)
  */
 export const createApiHandler = ({
 	routes,
@@ -755,10 +756,12 @@ export const createApiHandler = ({
 		}
 	};
 
-	return (/** @type {Request} */ request) => {
+	return (/** @type {Request} */ request, /** @type {{ memo?: Map<string, unknown> }} */ options = {}) => {
 		/** @type {Array<() => Promise<unknown>>} */
 		const deferred = [];
-		return runInRequestScope({ defer: (task) => void deferred.push(task) }, () => serve(request, deferred));
+		return runInRequestScope({ defer: (task) => void deferred.push(task), memo: options.memo ?? null }, () =>
+			serve(request, deferred),
+		);
 	};
 };
 

@@ -23,6 +23,11 @@ import { adminCan } from '../../src/console/admin/views/common.js';
 import { startMongo } from '../helpers.js';
 import { createWorld } from './merchant-harness.js';
 
+vi.mock('next/navigation.js', async (importOriginal) => {
+	const { testRouter } = await import('./router.js');
+	return { .../** @type {object} */ (await importOriginal()), useRouter: () => testRouter };
+});
+
 vi.setConfig({ testTimeout: 180_000, hookTimeout: 120_000 });
 
 /** @type {Awaited<ReturnType<typeof startMongo>>} */
@@ -141,7 +146,7 @@ describe('admin console smoke', () => {
 			expect(listHtml).toContain('Shop & Co');
 			expect(listHtml).toContain('250 credits'); // the balance on the row
 			expect(listHtml).toContain('Add website'); // the merchant's page beside the list
-			expect(listRaw).toContain('lg:bg-primary-soft');
+			expect(listRaw).toContain('lg:text-on-primary-soft');
 			expect(listRaw).not.toContain('aria-current="page"');
 			expect(listRaw).not.toContain('rotate-180'); // no Back link: phones show the list until a merchant is chosen
 			const none = await admin.loadMerchantsScreen(ownerBrowser.api, { q: 'nobody-here' }, owner);

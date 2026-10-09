@@ -3,7 +3,8 @@
  * Browser calls to the kit's dashboard API (`/v1/dashboard/*`, session cookie; writes carry this page's Origin).
  * @module
  */
-import { useCallback, useEffect, useState } from 'react';
+import { startTransition, useCallback, useEffect, useState } from 'react';
+import { useNavigationProgress } from '@ss/ui';
 
 /** @typedef {{ ok: true, data: any } | { ok: false, problem: any }} Answer */
 
@@ -28,25 +29,45 @@ export const call = async (method, path, body) => {
 };
 
 /**
- * Load a dashboard resource; `reload()` fetches it again (the last answer stays shown meanwhile).
+ * The last answer of each resource this page loaded (in this browser tab only): a section opened again shows it at
+ * once while it is fetched again.
+ * @type {Map<string, Answer>}
+ */
+const answers = new Map();
+
+/**
+ * Load a dashboard resource: its last answer shows at once (or a skeleton, with the progress bar, the first time) and
+ * is refreshed in the background every time the section opens; `reload()` fetches it again (the last answer stays
+ * shown meanwhile).
  * @param {string | null} path null loads nothing
  * @returns {{ answer: Answer | null, reload: () => void }}
  */
 export const useLoad = (path) => {
-	const [answer, setAnswer] = useState(/** @type {Answer | null} */ (null));
+	const [shown, setShown] = useState(
+		/** @type {{ path: string | null, answer: Answer | null }} */ ({
+			path,
+			answer: path === null ? null : (answers.get(path) ?? null),
+		}),
+	);
 	const [round, setRound] = useState(0);
+	// another resource: its last answer (or nothing) until its fetch ends
+	const current = shown.path === path ? shown : { path, answer: path === null ? null : (answers.get(path) ?? null) };
+	if (current !== shown) setShown(current);
+	useNavigationProgress(path !== null && current.answer === null);
 	useEffect(() => {
 		let live = true;
 		if (path !== null)
 			void call('GET', path).then((next) => {
-				if (live) setAnswer(next);
+				answers.set(path, next);
+				// a transition, so content that replaces a skeleton animates in (React ViewTransition)
+				if (live) startTransition(() => setShown({ path, answer: next }));
 			});
 		return () => {
 			live = false;
 		};
 	}, [path, round]);
 	const reload = useCallback(() => setRound((n) => n + 1), []);
-	return { answer, reload };
+	return { answer: current.answer, reload };
 };
 
 /**

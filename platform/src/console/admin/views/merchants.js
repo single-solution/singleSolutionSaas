@@ -41,6 +41,7 @@ import { MerchantFieldsForm, countryOptions } from '../../views/account.js';
 import { HeaderActions, ListDetail, ListPane, ListRow, ListSearch } from '../../views/common.js';
 import { ActivityTable } from '../../views/login-settings.js';
 import { AddWebsiteDialog, WebsiteCard } from '../../views/website.js';
+import { useNavigation } from '../../navigation.js';
 import { adminFetch, usePagedList } from '../client.js';
 import { adminApi, adminRoutes } from '../paths.js';
 import { AdminProblem, adminCan } from './common.js';
@@ -215,9 +216,10 @@ function MerchantList({ props, admin, selectedId, autoId = null }) {
 	const canLink = adminCan(admin, 'merchants.setup_link');
 	const canBulk = canSuspend || canLink;
 	const keep = { q: filter.q, status: filter.status };
+	const nav = useNavigation();
 	const search = () => {
 		const next = { q: q.trim() || null, status: status || null };
-		window.location.assign(selectedId ? adminRoutes.merchant(selectedId, next) : adminRoutes.merchants(next));
+		nav.go(selectedId ? adminRoutes.merchant(selectedId, next) : adminRoutes.merchants(next));
 	};
 	/** @param {string} id */
 	const toggle = (id) =>
@@ -277,7 +279,7 @@ function MerchantList({ props, admin, selectedId, autoId = null }) {
 								{ value: 'suspended', label: ADMIN.status.suspended },
 							]}
 						/>
-						<Button type="submit" variant="secondary">
+						<Button type="submit" variant="secondary" loading={nav.pending}>
 							{ADMIN.filters.apply}
 						</Button>
 					</ListSearch>
@@ -350,7 +352,7 @@ function MerchantList({ props, admin, selectedId, autoId = null }) {
 				onClose={() => setAdding(false)}
 				onCreated={(merchant) => {
 					setAdding(false);
-					if (merchant?.merchantId) window.location.assign(adminRoutes.merchant(merchant.merchantId, keep));
+					if (merchant?.merchantId) nav.go(adminRoutes.merchant(merchant.merchantId, keep));
 				}}
 			/>
 			<ConfirmDialog
@@ -400,6 +402,7 @@ function MerchantDetail({ detail, admin, back }) {
 	const can = (/** @type {string} */ p) => adminCan(admin, p);
 	const billing = detail.billing ?? null;
 	const balance = billing?.balance;
+	const nav = useNavigation();
 
 	/**
 	 * @param {string} path
@@ -447,7 +450,7 @@ function MerchantDetail({ detail, admin, back }) {
 	};
 	const remove = async () => {
 		const result = await act(adminApi.merchant(merchantId), { confirm: merchant.name }, 'DELETE');
-		if (result.ok) window.location.assign(back);
+		if (result.ok) nav.go(back);
 	};
 
 	const websiteRights = {
@@ -624,7 +627,7 @@ function MerchantDetail({ detail, admin, back }) {
 				onClose={() => setDialog(null)}
 				onConfirm={() => void remove()}
 				expected={merchant.name}
-				busy={busy}
+				busy={busy || nav.pending}
 				danger
 				confirmLabel={ADMIN.deleteMerchant}
 				title={`${ADMIN.deleteMerchant} ${merchant.name}`}
@@ -669,10 +672,19 @@ export function MerchantsView(props) {
 	const back = adminRoutes.merchants({ q: props.filter.q, status: props.filter.status });
 	return (
 		<ListDetail
+			section="admin/merchants"
 			label={ADMIN.merchantsTitle}
 			auto={auto}
 			back={{ href: back, label: ADMIN.merchantsTitle }}
-			list={<MerchantList props={props} admin={admin} selectedId={auto ? null : shownId} autoId={auto ? shownId : null} />}
+			list={
+				<MerchantList
+					key={`${props.filter.q ?? ''}|${props.filter.status ?? ''}`}
+					props={props}
+					admin={admin}
+					selectedId={auto ? null : shownId}
+					autoId={auto ? shownId : null}
+				/>
+			}
 			empty={
 				<EmptyState
 					icon="users"

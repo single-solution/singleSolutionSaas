@@ -18,6 +18,7 @@ export const consoleApi = cache(async () => {
 		cookie: h.get('cookie'),
 		forwardedFor: h.get('x-forwarded-for'),
 		userAgent: h.get('user-agent'),
+		perRender: true,
 	});
 });
 
@@ -46,10 +47,11 @@ export const merchantContext = async (next) => {
 	return { api: await consoleApi(), me: session.me, merchantId: session.merchantId };
 };
 
-/** Signed-in visitors of the public pages go straight to their console. */
+/** Signed-in visitors of the public pages go straight to their console (the session of the layout, no second call). */
 export const redirectIfSignedIn = async () => {
-	const me = await (await consoleApi()).get('/v1/me');
-	if (me.ok) redirect(me.data?.kind === 'admin' ? '/admin' : '/overview');
+	const session = await consoleSession();
+	if (session.ok) redirect('/overview');
+	if (/** @type {{ admin?: boolean }} */ (session).admin) redirect('/admin');
 };
 
 /** True while no admin exists (the sign-in page offers Create admin). */

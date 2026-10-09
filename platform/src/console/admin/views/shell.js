@@ -8,7 +8,7 @@
 import { usePathname } from 'next/navigation.js';
 import { AppShell, Button, Callout, Card, Icon, PageHeader, ToastProvider } from '@ss/ui';
 import { ADMIN, TWO_STEP } from '../../../texts/console.js';
-import { Link } from '../../link.js';
+import { Link, NavLink } from '../../link.js';
 import { accentStyle } from '../../views/brand.js';
 import { TwoStepSetup } from '../../views/login-settings.js';
 import { adminFetch } from '../client.js';
@@ -75,7 +75,7 @@ export function AdminShell({ admin, twoStepRequired = false, branding, children 
 			<div style={accentStyle(branding?.accent)}>
 				<AppShell
 					brand={{ name: branding?.name ?? 'Single Solution', tagline: ADMIN.consoleTagline }}
-					linkAs={Link}
+					linkAs={NavLink}
 					sections={twoStepRequired ? [] : adminSections(admin, pathname)}
 					actions={
 						<Button variant="ghost" size="sm" onClick={signOut} icon={<Icon name="logout" size={14} />}>

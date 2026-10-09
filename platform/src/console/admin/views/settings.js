@@ -166,7 +166,7 @@ function MailCard({ settings, onSaved }) {
 						</Button>
 					) : null}
 					{mail ? (
-						<Button variant="ghost" onClick={() => void save(adminApi.settingsMail(), 'PUT', { mail: null })}>
+						<Button variant="ghost" onClick={() => save(adminApi.settingsMail(), 'PUT', { mail: null })}>
 							{ADMIN.mail.remove}
 						</Button>
 					) : null}
@@ -238,7 +238,7 @@ function BrandingCard({ settings, onSaved }) {
 					/>
 					{logoError ? <Callout tone="danger">{logoError}</Callout> : null}
 					{settings.branding?.hasLogo ? (
-						<Button variant="ghost" size="sm" onClick={() => void save(adminApi.settingsLogo(), 'DELETE')}>
+						<Button variant="ghost" size="sm" onClick={() => save(adminApi.settingsLogo(), 'DELETE')}>
 							{ADMIN.branding.logoRemove}
 						</Button>
 					) : null}

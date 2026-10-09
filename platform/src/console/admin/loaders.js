@@ -89,21 +89,33 @@ export const loadAdminSession = async (api) => {
  * @param {{ status?: string, q?: string, cursor?: string }} [filter]
  */
 export const loadMerchants = async (api, filter = {}) => {
+	const list = await merchantPage(api, filter);
+	return list.ok ? withBilling(api, list) : list;
+};
+
+/**
+ * One page of the Merchants list (search and status filter).
+ * @param {ConsoleApi} api
+ * @param {{ status?: string, q?: string, cursor?: string }} filter
+ */
+const merchantPage = async (api, filter) => {
 	const status = oneOf(filter.status, ['active', 'suspended']);
 	const q = pick(filter.q?.trim(), FREE_TEXT);
 	const list = await api.get(paths.merchants({ status, q, cursor: pick(filter.cursor, CURSOR), limit: 50 }));
 	const failed = firstFailure(list);
 	if (failed) return failed;
-	const page = pageOf(list);
-	// status, balance and daily spend of the merchants on screen (each one checked, PLAN 0.6)
-	const ids = page.items.map((m) => String(m.merchantId));
+	return { ok: /** @type {const} */ (true), filter: { status, q }, page: pageOf(list) };
+};
+
+/**
+ * The status, balance and daily spend of the merchants on screen (each one checked, PLAN 0.6).
+ * @param {ConsoleApi} api
+ * @param {{ ok: true, filter: { status: string | null, q: string | null }, page: { items: any[], nextCursor: string | null } }} list
+ */
+const withBilling = async (api, list) => {
+	const ids = list.page.items.map((m) => String(m.merchantId));
 	const billing = ids.length > 0 ? itemsOf(await api.get(paths.billingMerchants(ids))) : [];
-	return {
-		ok: /** @type {const} */ (true),
-		filter: { status, q },
-		page,
-		billing: Object.fromEntries(billing.map((b) => [b.merchantId, b])),
-	};
+	return { ...list, billing: Object.fromEntries(billing.map((b) => [b.merchantId, b])) };
 };
 
 /**
@@ -147,10 +159,15 @@ export const loadMerchant = async (api, merchantId, admin) => {
  * @param {any} admin the signed-in admin
  */
 export const loadMerchantsScreen = async (api, filter, admin) => {
-	const list = await loadMerchants(api, filter);
-	const first = list.ok ? list.page.items[0] : undefined;
-	if (!list.ok || !first) return list;
-	return { ...list, detail: await loadMerchant(api, String(first.merchantId), admin), auto: true };
+	const list = await merchantPage(api, filter);
+	if (!list.ok) return list;
+	const first = list.page.items[0];
+	// the balances of the list and the first merchant load together
+	const [merchants, detail] = await Promise.all([
+		withBilling(api, list),
+		first ? loadMerchant(api, String(first.merchantId), admin) : null,
+	]);
+	return detail ? { ...merchants, detail, auto: true } : merchants;
 };
 
 /**

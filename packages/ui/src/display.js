@@ -178,7 +178,8 @@ const CALLOUTS = {
 };
 
 /**
- * Inline message box. Danger/warning callouts are announced (`role="alert"`), others are `status`.
+ * Inline message box. Danger/warning callouts are announced (`role="alert"`), others are `status`. It fades in when it
+ * appears (a Saved confirmation, an error).
  * @param {{ tone?: Tone, title?: ReactNode, children?: ReactNode, actions?: ReactNode, className?: string,
  *   live?: boolean }} props
  */
@@ -186,7 +187,7 @@ export function Callout({ tone = 'info', title, children, actions, className, li
 	const { box, icon } = CALLOUTS[tone];
 	const role = !live ? undefined : tone === 'danger' || tone === 'warning' ? 'alert' : 'status';
 	return (
-		<div role={role} className={cx('flex gap-3 rounded-2xl border px-5 py-4 text-sm', box, className)}>
+		<div role={role} className={cx('flex animate-ss-enter gap-3 rounded-2xl border px-5 py-4 text-sm', box, className)}>
 			<span className="mt-0.5 shrink-0">
 				<Icon name={icon} size={16} />
 			</span>
@@ -247,25 +248,30 @@ export function ErrorState({ title = 'This could not be loaded', message, action
 }
 
 /**
- * Loading placeholder blocks.
+ * Loading placeholder blocks with a soft shimmer.
  * @param {{ className?: string, lines?: number, label?: string }} props
  */
 export function Skeleton({ className, lines = 1, label = 'Loading' }) {
 	return (
-		<div role="status" aria-label={label} aria-busy="true" className="space-y-2">
+		<div role="status" aria-label={label} aria-busy="true" className="animate-ss-fade space-y-2">
 			{Array.from({ length: lines }, (_, i) => (
-				<div
-					key={i}
-					className={cx('h-4 animate-pulse rounded-lg bg-surface-2', i === lines - 1 && lines > 1 && 'w-2/3', className)}
-				/>
+				<div key={i} className={cx('ss-shimmer h-4 rounded-lg', i === lines - 1 && lines > 1 && 'w-2/3', className)} />
 			))}
 		</div>
 	);
 }
 
 /**
+ * One loading block (a title, a tile, a row) with the same shimmer, for skeletons shaped like the page to come.
+ * @param {{ className?: string }} props
+ */
+export function SkeletonBlock({ className }) {
+	return <div aria-hidden="true" className={cx('ss-shimmer rounded-lg', className)} />;
+}
+
+/**
  * Key figure: a summary tile on a neutral surface. With a `kind` its icon sits in the accent-tinted badge, without one
- * in a neutral badge (PLAN 0.6 colour rule); `tone` colours the hint by status.
+ * in a neutral badge (PLAN 0.6 colour rule); `tone` colours the hint by status. A new value fades in.
  * @param {{ label: ReactNode, value: ReactNode, hint?: ReactNode, tone?: Tone, icon?: import('./icons.js').IconName,
  *   kind?: Kind, className?: string }} props
  */
@@ -294,7 +300,11 @@ export function Stat({ label, value, hint, tone = 'neutral', icon, kind, classNa
 				) : null}
 				<span className="min-w-0 text-sm font-semibold text-muted">{label}</span>
 			</div>
-			<div className="truncate text-3xl font-extrabold tracking-tight text-fg tabular-nums">{value}</div>
+			<div
+				key={typeof value === 'string' || typeof value === 'number' ? String(value) : undefined}
+				className="animate-ss-fade truncate text-3xl font-extrabold tracking-tight text-fg tabular-nums">
+				{value}
+			</div>
 			{hint ? <div className={cx('text-xs font-medium', hintTone)}>{hint}</div> : null}
 		</div>
 	);

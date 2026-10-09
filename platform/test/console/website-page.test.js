@@ -32,6 +32,11 @@ import {
 	until,
 } from './merchant-harness.js';
 
+vi.mock('next/navigation.js', async (importOriginal) => {
+	const { testRouter } = await import('./router.js');
+	return { .../** @type {object} */ (await importOriginal()), useRouter: () => testRouter };
+});
+
 vi.setConfig({ testTimeout: 180_000, hookTimeout: 120_000 });
 
 /** @type {Awaited<ReturnType<typeof startMongo>>} */

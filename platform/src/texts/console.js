@@ -14,6 +14,7 @@ export const CONSOLE = Object.freeze({
 	forbiddenHint: (/** @type {string} */ detail) => `${detail} Your role does not include this area; ask an Owner.`,
 	backToWebsites: 'Back to websites',
 	backToMerchants: 'Back to merchants',
+	loading: 'Loading the page',
 });
 
 /** The sign-in page and the other public account pages (PLAN 0.8.2 Sign-in). */

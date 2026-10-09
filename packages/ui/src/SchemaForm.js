@@ -331,11 +331,20 @@ export function SchemaForm({
 						aria-expanded={showAdvanced || advancedErrors}
 						aria-controls={`${prefix}-advanced`}
 						onClick={() => setShowAdvanced((v) => !v)}
-						icon={<Icon name={showAdvanced || advancedErrors ? 'chevronDown' : 'chevronRight'} size={14} />}>
+						icon={
+							<Icon
+								name="chevronRight"
+								size={14}
+								className={cx(
+									'transition-transform duration-(--ss-motion) ease-ss',
+									(showAdvanced || advancedErrors) && 'rotate-90',
+								)}
+							/>
+						}>
 						{`Advanced settings (${advanced.length})`}
 					</Button>
 					{showAdvanced || advancedErrors ? (
-						<div id={`${prefix}-advanced`}>
+						<div id={`${prefix}-advanced`} className="animate-ss-enter">
 							<FieldGrid>{advanced.map(renderField)}</FieldGrid>
 						</div>
 					) : null}

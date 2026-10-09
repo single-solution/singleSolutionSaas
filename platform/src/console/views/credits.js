@@ -7,8 +7,10 @@
  */
 import { Button, Callout, Card, Input, PageHeader, Select, describeProblem } from '@ss/ui';
 import { BILLING } from '../../texts/console.js';
+import { FilterForm } from '../navigation.js';
 import { BillingStats, ReceiptsTable, UsageView } from './billing.js';
 import { PageProblem } from './common.js';
+import { FrameBilling } from './frame-billing.js';
 
 /**
  * A GET form for a range of UTC days and a website.
@@ -16,7 +18,7 @@ import { PageProblem } from './common.js';
  */
 function RangeForm({ range, websites, websiteId }) {
 	return (
-		<form method="get" className="flex flex-wrap items-end gap-3">
+		<FilterForm label={BILLING.filters.apply} className="flex flex-wrap items-end gap-3">
 			<Input label={BILLING.filters.from} name="from" type="date" defaultValue={range.from ?? ''} />
 			<Input label={BILLING.filters.to} name="to" type="date" defaultValue={range.to ?? ''} />
 			<Select
@@ -31,7 +33,7 @@ function RangeForm({ range, websites, websiteId }) {
 			<Button type="submit" variant="secondary">
 				{BILLING.filters.apply}
 			</Button>
-		</form>
+		</FilterForm>
 	);
 }
 
@@ -42,6 +44,7 @@ export function CreditsView(props) {
 	if (!props.ok) return <PageProblem problem={props.problem} />;
 	return (
 		<div className="space-y-8">
+			<FrameBilling billing={props.billing} />
 			<PageHeader title={BILLING.usageTitle} subtitle={BILLING.usageIntro} />
 			<BillingStats summary={props.billing} />
 			<Card>

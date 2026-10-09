@@ -3,13 +3,15 @@
  * A compact actions menu (PLAN 0.6 "fewer levels"): an icon button — ⋯ by default — that opens a short list of actions
  * (`role="menu"`). Headers keep their one or two main actions as buttons and put the rest here, a destructive one last
  * in danger text. Opening focuses the first action; Arrow keys, Home and End move between the actions; Escape, Tab and
- * a click outside close the menu, and Escape returns focus to the button.
+ * a click outside close the menu, and Escape returns focus to the button. The menu scales in from its button and fades
+ * out when it closes (PLAN 0.6 motion).
  * @module
  */
 import { useEffect, useId, useRef, useState } from 'react';
 import { Button } from './Button.js';
 import { cx } from './cx.js';
 import { Icon } from './icons.js';
+import { usePresence } from './motion.js';
 
 /**
  * @typedef {object} MenuItem
@@ -29,6 +31,7 @@ export function ActionMenu({ label, items, icon = 'more', size = 'sm', className
 	const root = useRef(/** @type {HTMLDivElement | null} */ (null));
 	const button = useRef(/** @type {HTMLButtonElement | null} */ (null));
 	const id = useId();
+	const presence = usePresence(open);
 
 	/** The enabled menu items, in order. */
 	const enabled = () =>
@@ -92,12 +95,17 @@ export function ActionMenu({ label, items, icon = 'more', size = 'sm', className
 				onClick={() => setOpen((o) => !o)}>
 				<Icon name={icon} size={16} />
 			</Button>
-			{open ? (
+			{presence.mounted ? (
 				<div
+					ref={presence.ref}
 					id={id}
 					role="menu"
 					aria-label={label}
-					className="absolute right-0 z-40 mt-1.5 w-64 max-w-[calc(100vw-2rem)] space-y-0.5 rounded-2xl bg-surface p-1.5 shadow-pop">
+					data-state={presence.closing ? 'closed' : 'open'}
+					className={cx(
+						'absolute right-0 z-40 mt-1.5 w-64 max-w-[calc(100vw-2rem)] origin-top-right space-y-0.5 rounded-2xl bg-surface p-1.5 shadow-pop',
+						'animate-ss-pop data-[state=closed]:pointer-events-none data-[state=closed]:animate-ss-pop-out',
+					)}>
 					{items.map((item, index) => (
 						<div key={item.label}>
 							<button
@@ -110,7 +118,7 @@ export function ActionMenu({ label, items, icon = 'more', size = 'sm', className
 									item.onSelect();
 								}}
 								className={cx(
-									'block w-full rounded-xl px-3 py-2 text-left text-sm font-semibold hover:bg-surface-2 focus:bg-surface-2',
+									'ss-motion ss-press block w-full rounded-xl px-3 py-2 text-left text-sm font-semibold hover:bg-surface-2 focus:bg-surface-2',
 									'focus-visible:outline-2 focus-visible:outline-focus disabled:cursor-not-allowed disabled:opacity-50',
 									'disabled:hover:bg-transparent',
 									item.danger ? 'text-danger' : 'text-fg',

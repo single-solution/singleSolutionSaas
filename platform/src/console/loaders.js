@@ -114,19 +114,20 @@ export const loadOverview = async (api, merchantId) => {
 
 /**
  * Websites (PLAN 0.8.2 Merchant): the list-and-detail screen — every website with its products (cards), and the
- * selected one (`websiteId`, when given and the merchant's).
+ * selected one (`websiteId`, when given and the merchant's); the billing summary (checked) for the frame.
  * @param {ConsoleApi} api
  * @param {string} merchantId
  * @param {string | null} [websiteId]
  */
 export const loadWebsites = async (api, merchantId, websiteId = null) => {
-	const websites = await loadWebsiteRows(api, merchantId);
+	const [websites, billing] = await Promise.all([loadWebsiteRows(api, merchantId), api.get(paths.billing(merchantId))]);
 	if (websites.failed) return websites.failed;
 	return {
 		ok: /** @type {const} */ (true),
 		merchantId,
 		rows: websites.rows,
 		selectedId: websiteId,
+		billing: /** @type {any} */ (orElse(billing, null)),
 	};
 };
 
@@ -163,12 +164,16 @@ export const loadCredits = async (api, merchantId, filter = {}) => {
 };
 
 /**
- * Account: business details, sign-in e-mail, two-step and own activity.
+ * Account: business details, sign-in e-mail, two-step and own activity; the billing summary (checked) for the frame.
  * @param {ConsoleApi} api
  * @param {string} merchantId
  */
 export const loadAccount = async (api, merchantId) => {
-	const [me, activity] = await Promise.all([api.get(paths.me()), api.get(paths.activity(merchantId))]);
+	const [me, activity, billing] = await Promise.all([
+		api.get(paths.me()),
+		api.get(paths.activity(merchantId)),
+		api.get(paths.billing(merchantId)),
+	]);
 	const failed = firstFailure(me);
 	if (failed) return failed;
 	return {
@@ -176,5 +181,6 @@ export const loadAccount = async (api, merchantId) => {
 		merchantId,
 		me: me.ok ? me.data : null,
 		activity: orElse(activity, { items: [], nextCursor: null }),
+		billing: /** @type {any} */ (orElse(billing, null)),
 	};
 };

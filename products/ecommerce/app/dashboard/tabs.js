@@ -348,7 +348,7 @@ function ConnectionsTab({ websiteId }) {
 						{data.connections.map((/** @type {Connection} */ item) => {
 							const hint = connectionHint(item.name);
 							/** @param {unknown} value */
-							const save = (value) => void act(call('PUT', `${base}/${item.name}`, { value }));
+							const save = (value) => act(call('PUT', `${base}/${item.name}`, { value }));
 							return (
 								<Card
 									key={item.name}
@@ -382,8 +382,9 @@ function ConnectionsTab({ websiteId }) {
 												size="sm"
 												disabled={!values[item.name]?.trim()}
 												onClick={() => {
-													save(values[item.name]?.trim());
+													const done = save(values[item.name]?.trim());
 													setValues({ ...values, [item.name]: '' });
+													return done;
 												}}>
 												{TEXTS.connections.save}
 											</Button>
@@ -393,10 +394,10 @@ function ConnectionsTab({ websiteId }) {
 										<Button
 											size="sm"
 											variant="secondary"
-											onClick={() => void act(call('POST', `${base}/${item.name}/test`))}>
+											onClick={() => act(call('POST', `${base}/${item.name}/test`))}>
 											{TEXTS.connections.test}
 										</Button>
-										<Button size="sm" variant="ghost" onClick={() => void act(call('DELETE', `${base}/${item.name}`))}>
+										<Button size="sm" variant="ghost" onClick={() => act(call('DELETE', `${base}/${item.name}`))}>
 											{TEXTS.connections.remove}
 										</Button>
 									</div>

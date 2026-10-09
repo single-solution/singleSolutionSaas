@@ -1,12 +1,11 @@
 /**
- * The admin console: one page (one server function) renders the view of every path — signed-in views inside
- * `AdminFrame` (the shell; it sends signed-out visitors to the one sign-in page); any other path is a 404.
- * Views keep the `params` / `searchParams` / `metadata` they had as pages.
+ * The admin console: one page (one server function) renders the view of every path; any other path is a 404. The
+ * console frame is the layout above (it stays on screen across navigations) and `loading.js` the skeleton shown at
+ * once while a page is on the way. Pages fade and slide in (`PageTransition`); list-and-detail screens keep their
+ * list in place and animate the detail only. Views keep the `params` / `searchParams` / `metadata` they had as pages.
  */
-import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
-import { AdminFrame } from '../../_lib/frame.js';
-import Loading from './loading-view.js';
+import { PageTransition } from '@ss/ui';
 import Home, { metadata as HomeMeta } from '../_views/home.js';
 import Account, { metadata as AccountMeta } from '../_views/account.js';
 import Activity, { metadata as ActivityMeta } from '../_views/activity.js';
@@ -22,28 +21,32 @@ import ProductsProductId, { metadata as ProductsProductIdMeta } from '../_views/
 
 export const dynamic = 'force-dynamic';
 
-/** Path patterns under /admin (`:name` captures a segment into `params`), views, metadata and whether they need a session. */
-const VIEWS = /** @type {Array<[string[], (props: any) => any, import('next').Metadata, boolean]>} */ ([
-	[[], Home, HomeMeta, true],
-	[['account'], Account, AccountMeta, true],
-	[['activity'], Activity, ActivityMeta, true],
-	[['admins'], Admins, AdminsMeta, true],
-	[['finance'], Finance, FinanceMeta, true],
-	[['login'], Login, LoginMeta, false],
-	[['merchants'], Merchants, MerchantsMeta, true],
-	[['products'], Products, ProductsMeta, true],
-	[['settings'], Settings, SettingsMeta, true],
-	[['merchants', ':merchantId'], MerchantsMerchantId, MerchantsMerchantIdMeta, true],
-	[['admins', ':adminId'], AdminsAdminId, AdminsAdminIdMeta, true],
-	[['products', ':productId'], ProductsProductId, ProductsProductIdMeta, true],
+/**
+ * Path patterns under /admin (`:name` captures a segment into `params`), views, metadata and the kind of view: a
+ * `page`, a list-and-detail `screen` (it animates its detail itself) or `public` (no session, no title suffix).
+ * @typedef {'page' | 'screen' | 'public'} ViewKind
+ */
+const VIEWS = /** @type {Array<[string[], (props: any) => any, import('next').Metadata, ViewKind]>} */ ([
+	[[], Home, HomeMeta, 'page'],
+	[['account'], Account, AccountMeta, 'page'],
+	[['activity'], Activity, ActivityMeta, 'page'],
+	[['admins'], Admins, AdminsMeta, 'screen'],
+	[['finance'], Finance, FinanceMeta, 'page'],
+	[['login'], Login, LoginMeta, 'public'],
+	[['merchants'], Merchants, MerchantsMeta, 'screen'],
+	[['products'], Products, ProductsMeta, 'screen'],
+	[['settings'], Settings, SettingsMeta, 'page'],
+	[['merchants', ':merchantId'], MerchantsMerchantId, MerchantsMerchantIdMeta, 'screen'],
+	[['admins', ':adminId'], AdminsAdminId, AdminsAdminIdMeta, 'screen'],
+	[['products', ':productId'], ProductsProductId, ProductsProductIdMeta, 'screen'],
 ]);
 
 /**
  * @param {string[]} path
- * @returns {{ view: (props: any) => any, metadata: import('next').Metadata, framed: boolean, params: Record<string, string> } | null}
+ * @returns {{ view: (props: any) => any, metadata: import('next').Metadata, kind: ViewKind, params: Record<string, string> } | null}
  */
 const resolve = (path) => {
-	for (const [pattern, view, metadata, framed] of VIEWS) {
+	for (const [pattern, view, metadata, kind] of VIEWS) {
 		if (pattern.length !== path.length) continue;
 		/** @type {Record<string, string>} */
 		const params = {};
@@ -52,7 +55,7 @@ const resolve = (path) => {
 				part.startsWith(':') ? ((params[part.slice(1)] = path[index] ?? ''), true) : part === path[index],
 			)
 		)
-			return { view, metadata, framed, params };
+			return { view, metadata, kind, params };
 	}
 	return null;
 };
@@ -61,7 +64,7 @@ const resolve = (path) => {
 export async function generateMetadata({ params }) {
 	const found = resolve((await params).path ?? []);
 	return found
-		? found.framed && typeof found.metadata.title === 'string'
+		? found.kind !== 'public' && typeof found.metadata.title === 'string'
 			? { ...found.metadata, title: { absolute: `${found.metadata.title} · Admin · Single Solution` } }
 			: found.metadata
 		: {};
@@ -73,10 +76,5 @@ export default async function Page({ params, searchParams }) {
 	if (!found) notFound();
 	const View = found.view;
 	const view = <View params={Promise.resolve(found.params)} searchParams={searchParams} />;
-	if (!found.framed) return view;
-	return (
-		<AdminFrame>
-			<Suspense fallback={<Loading />}>{view}</Suspense>
-		</AdminFrame>
-	);
+	return found.kind === 'page' ? <PageTransition>{view}</PageTransition> : view;
 }

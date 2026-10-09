@@ -89,8 +89,9 @@ export function ConnectionForm({ name, onSave }) {
 					for (const field of fields)
 						if (field.check) value[field.name] = values[field.name] === true;
 						else if (text(field.name) !== '') value[field.name] = text(field.name);
-					onSave(value);
+					const done = onSave(value);
 					setValues({});
+					return done;
 				}}>
 				{TEXTS.connections.save}
 			</Button>

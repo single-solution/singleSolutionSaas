@@ -6,7 +6,8 @@
  * mapped from problems.
  * @module
  */
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { FormBusyContext } from './Button.js';
 import { cx } from './cx.js';
 import { Callout } from './display.js';
 import { FIELD_GRID } from './fields.js';
@@ -15,11 +16,22 @@ import { describeProblem, fieldErrors } from './problems.js';
 /** @typedef {import('./problems.js').Problem} Problem */
 
 /**
+ * A form that never submits natively. While `busy`, or while the promise its `onSubmit` returned runs, a second submit
+ * is ignored and its submit buttons show their spinner.
  * @param {Omit<import('react').FormHTMLAttributes<HTMLFormElement>, 'onSubmit'> & {
  *   onSubmit: (event: import('react').FormEvent<HTMLFormElement>) => unknown | Promise<unknown>,
  *   busy?: boolean }} props
  */
-export function Form({ onSubmit, busy = false, className, children, ...rest }) {
+export function Form({ onSubmit, busy: busyProp = false, className, children, ...rest }) {
+	const [running, setRunning] = useState(false);
+	const live = useRef(true);
+	useEffect(() => {
+		live.current = true;
+		return () => {
+			live.current = false;
+		};
+	}, []);
+	const busy = busyProp || running;
 	return (
 		<form
 			noValidate
@@ -27,10 +39,19 @@ export function Form({ onSubmit, busy = false, className, children, ...rest }) {
 			className={cx('@container min-w-0', className)}
 			onSubmit={(event) => {
 				event.preventDefault();
-				if (!busy) void onSubmit(event);
+				if (busy) return;
+				const out = /** @type {unknown} */ (onSubmit(event));
+				if (!out || typeof (/** @type {{ then?: unknown }} */ (out).then) !== 'function') return;
+				setRunning(true);
+				const done = () => {
+					if (live.current) setRunning(false);
+				};
+				/** @type {Promise<unknown>} */ (out).then(done, done);
 			}}
 			{...rest}>
-			<div className={FIELD_GRID}>{children}</div>
+			<FormBusyContext.Provider value={busy}>
+				<div className={FIELD_GRID}>{children}</div>
+			</FormBusyContext.Provider>
 		</form>
 	);
 }

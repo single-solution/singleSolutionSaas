@@ -252,14 +252,19 @@ export const createDashboard = (kit) => {
 			auth: 'dashboard',
 			handler: async (ctx) => {
 				const id = website(ctx);
+				// the status first (a removed website turns its switches off), then every other read at once
 				const status = await statusOf(ctx);
-				const { on } = await kit.reports.switches(id);
-				const needed = (await kit.connections.list(id)).filter((c) => c.neededBy.some((key) => on.includes(key)));
+				const [{ on }, connections, seen, business, recentChanges] = await Promise.all([
+					kit.reports.switches(id),
+					kit.connections.list(id),
+					store.get('widget', id),
+					kit.business.get(id, status.domain),
+					kit.recent.list(id),
+				]);
+				const needed = connections.filter((c) => c.neededBy.some((key) => on.includes(key)));
 				const visitorWidgets = manifest.widgets.some(
 					(w) => w.kind === 'visitor' && [w.feature].flat().some((key) => on.includes(key)),
 				);
-				const seen = await store.get('widget', id);
-				const business = await kit.business.get(id, status.domain);
 				return {
 					website: {
 						websiteId: id,
@@ -280,7 +285,7 @@ export const createDashboard = (kit) => {
 							: null,
 						business: { found: business.found, fetchedAt: business.fetchedAt },
 					},
-					recentChanges: await kit.recent.list(id),
+					recentChanges,
 				};
 			},
 		}),
@@ -289,8 +294,10 @@ export const createDashboard = (kit) => {
 			path: `${W}/features`,
 			auth: 'dashboard',
 			handler: async (ctx) => {
-				const { on, featuresVersion } = await kit.reports.switches(website(ctx));
-				const prices = await kit.connection.acceptedPrices();
+				const [{ on, featuresVersion }, prices] = await Promise.all([
+					kit.reports.switches(website(ctx)),
+					kit.connection.acceptedPrices(),
+				]);
 				return {
 					featuresVersion,
 					features: currentFeatures(manifest, prices).map((f) => ({ ...f, on: on.includes(f.key) })),
@@ -317,18 +324,23 @@ export const createDashboard = (kit) => {
 			path: `${W}/settings`,
 			auth: 'dashboard',
 			handler: async (ctx) => {
-				const { on } = await kit.reports.switches(website(ctx));
+				// the switches and every saved value at once (one read of the values for all features)
+				const [{ on }, values] = await Promise.all([
+					kit.reports.switches(website(ctx)),
+					kit.settings.settingsOfFeatures(
+						website(ctx),
+						manifest.features.map((f) => f.key),
+					),
+				]);
 				const visible = manifest.features.filter((f) => !isMerchant(ctx) || on.includes(f.key));
 				return {
-					features: await Promise.all(
-						visible.map(async (f) => ({
-							key: f.key,
-							name: f.name,
-							on: on.includes(f.key),
-							schema: f.settings,
-							values: await kit.settings.settingsOf(website(ctx), f.key),
-						})),
-					),
+					features: visible.map((f) => ({
+						key: f.key,
+						name: f.name,
+						on: on.includes(f.key),
+						schema: f.settings,
+						values: values[f.key] ?? {},
+					})),
 				};
 			},
 		}),
@@ -432,19 +444,24 @@ export const createDashboard = (kit) => {
 			path: '/v1/dashboard/defaults',
 			auth: 'dashboard',
 			roles: OWNER,
-			handler: async () => ({
-				features: await Promise.all(
-					manifest.features.map(async (f) => ({
-						key: f.key,
-						name: f.name,
-						schema: f.settings,
-						values: await kit.settings.settingsOf(null, f.key),
-					})),
-				),
-				texts: await kit.settings.textsOf(null),
-				theme: await kit.settings.themeOf(null),
-				recentChanges: await kit.recent.list(null),
-			}),
+			handler: async () => {
+				const [values, texts, theme, recentChanges] = await Promise.all([
+					kit.settings.settingsOfFeatures(
+						null,
+						manifest.features.map((f) => f.key),
+					),
+					kit.settings.textsOf(null),
+					kit.settings.themeOf(null),
+					kit.recent.list(null),
+				]);
+				const features = manifest.features.map((f) => ({
+					key: f.key,
+					name: f.name,
+					schema: f.settings,
+					values: values[f.key] ?? {},
+				}));
+				return { features, texts, theme, recentChanges };
+			},
 		}),
 		defineRoute({
 			method: 'PUT',
@@ -469,12 +486,8 @@ export const createDashboard = (kit) => {
 			auth: 'dashboard',
 			roles: OWNER,
 			handler: async () => {
-				const prices = await kit.connection.acceptedPrices();
-				return {
-					version: prices?.version ?? 0,
-					features: currentFeatures(manifest, prices),
-					recentChanges: await kit.recent.list(null),
-				};
+				const [prices, recentChanges] = await Promise.all([kit.connection.acceptedPrices(), kit.recent.list(null)]);
+				return { version: prices?.version ?? 0, features: currentFeatures(manifest, prices), recentChanges };
 			},
 		}),
 		defineRoute({

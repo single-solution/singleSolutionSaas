@@ -1,14 +1,16 @@
 'use client';
 /**
  * Toasts: transient confirmations in a polite live region (errors use an assertive one). Wrap the app in
- * `ToastProvider` and call `useToast().show({ title, description, tone })`.
+ * `ToastProvider` and call `useToast().show({ title, description, tone })`. A toast slides in and fades out when it
+ * is dismissed or times out (PLAN 0.6 motion).
  * @module
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { cx } from './cx.js';
 import { Icon } from './icons.js';
+import { usePresence } from './motion.js';
 
-/** @typedef {{ id: number, title: string, description?: string, tone: 'success' | 'danger' | 'info' }} ToastItem */
+/** @typedef {{ id: number, title: string, description?: string, tone: 'success' | 'danger' | 'info', leaving?: boolean }} ToastItem */
 /** @typedef {{ show: (toast: { title: string, description?: string, tone?: 'success' | 'danger' | 'info', durationMs?: number }) => void, dismiss: (id: number) => void }} ToastApi */
 
 const NOOP = /** @type {ToastApi} */ ({ show: () => undefined, dismiss: () => undefined });
@@ -24,12 +26,14 @@ export function ToastProvider({ children, durationMs = 5000 }) {
 	const [items, setItems] = useState(/** @type {ToastItem[]} */ ([]));
 	const counter = useRef(0);
 	const timers = useRef(/** @type {Map<number, ReturnType<typeof setTimeout>>} */ (new Map()));
+	/** Start a toast's exit; it leaves the list once its animation ends (`remove`). */
 	const dismiss = useCallback((/** @type {number} */ id) => {
-		setItems((list) => list.filter((t) => t.id !== id));
+		setItems((list) => list.map((t) => (t.id === id ? { ...t, leaving: true } : t)));
 		const timer = timers.current.get(id);
 		if (timer) clearTimeout(timer);
 		timers.current.delete(id);
 	}, []);
+	const remove = useCallback((/** @type {number} */ id) => setItems((list) => list.filter((t) => t.id !== id)), []);
 	const show = useCallback(
 		(/** @type {Parameters<ToastApi['show']>[0]} */ toast) => {
 			counter.current += 1;
@@ -65,12 +69,12 @@ export function ToastProvider({ children, durationMs = 5000 }) {
 			<div className="pointer-events-none fixed inset-x-0 bottom-0 z-[60] flex flex-col items-center gap-2 p-4 sm:items-end">
 				<div aria-live="polite" role="status" className="flex w-full flex-col items-center gap-2 sm:items-end">
 					{polite.map((t) => (
-						<ToastCard key={t.id} toast={t} onDismiss={dismiss} />
+						<ToastCard key={t.id} toast={t} onDismiss={dismiss} onGone={remove} />
 					))}
 				</div>
 				<div aria-live="assertive" role="alert" className="flex w-full flex-col items-center gap-2 sm:items-end">
 					{urgent.map((t) => (
-						<ToastCard key={t.id} toast={t} onDismiss={dismiss} />
+						<ToastCard key={t.id} toast={t} onDismiss={dismiss} onGone={remove} />
 					))}
 				</div>
 			</div>
@@ -79,9 +83,14 @@ export function ToastProvider({ children, durationMs = 5000 }) {
 }
 
 /**
- * @param {{ toast: ToastItem, onDismiss: (id: number) => void }} props
+ * @param {{ toast: ToastItem, onDismiss: (id: number) => void, onGone: (id: number) => void }} props
  */
-function ToastCard({ toast, onDismiss }) {
+function ToastCard({ toast, onDismiss, onGone }) {
+	const presence = usePresence(toast.leaving !== true);
+	useEffect(() => {
+		if (!presence.mounted) onGone(toast.id);
+	}, [presence.mounted, onGone, toast.id]);
+	if (!presence.mounted) return null;
 	const tone =
 		toast.tone === 'danger'
 			? 'bg-danger-soft text-on-danger-soft'
@@ -90,8 +99,11 @@ function ToastCard({ toast, onDismiss }) {
 				: 'bg-success-soft text-on-success-soft';
 	return (
 		<div
+			ref={presence.ref}
+			data-state={presence.closing ? 'closed' : 'open'}
 			className={cx(
 				'pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-2xl px-4 py-3 text-sm shadow-overlay',
+				'animate-ss-toast data-[state=closed]:pointer-events-none data-[state=closed]:animate-ss-toast-out',
 				tone,
 			)}>
 			<Icon name={toast.tone === 'danger' ? 'alert' : toast.tone === 'info' ? 'info' : 'check'} size={16} className="mt-0.5" />
@@ -103,7 +115,7 @@ function ToastCard({ toast, onDismiss }) {
 				type="button"
 				onClick={() => onDismiss(toast.id)}
 				aria-label="Dismiss notification"
-				className="rounded p-0.5 opacity-80 hover:opacity-100 focus-visible:outline-2 focus-visible:outline-focus">
+				className="ss-motion ss-press rounded p-0.5 opacity-80 hover:opacity-100 focus-visible:outline-2 focus-visible:outline-focus">
 				<Icon name="close" size={14} />
 			</button>
 		</div>

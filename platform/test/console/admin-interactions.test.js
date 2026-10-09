@@ -30,6 +30,11 @@ import { ToastProvider } from '@ss/ui';
 import { act, byLabel, cleanup, render, type } from '@ss/ui/testing';
 import { ENCRYPTION_KEY, PORTAL_URL, createTestLogger, startMongo, testConfig } from '../helpers.js';
 
+vi.mock('next/navigation.js', async (importOriginal) => {
+	const { testRouter } = await import('./router.js');
+	return { .../** @type {object} */ (await importOriginal()), useRouter: () => testRouter };
+});
+
 vi.setConfig({ testTimeout: 120_000, hookTimeout: 120_000 });
 
 /** @type {Awaited<ReturnType<typeof startMongo>>} */

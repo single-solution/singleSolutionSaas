@@ -6,8 +6,17 @@
  */
 export { cx } from './cx.js';
 export { Icon } from './icons.js';
-export { Button, IconButton, ButtonLink } from './Button.js';
+export { Button, IconButton, ButtonLink, FormBusyContext } from './Button.js';
 export { Spinner } from './Spinner.js';
+export {
+	usePresence,
+	NavigationProgress,
+	useNavigationProgress,
+	RouteProgress,
+	PendingHint,
+	PageTransition,
+	SwapTransition,
+} from './motion.js';
 export { Input, TextArea, Select, Checkbox, Switch, RadioGroup, CheckboxGroup, FieldGrid, FIELD_GRID } from './fields.js';
 export { Form, FormError, FormActions, useFormState } from './Form.js';
 export {
@@ -19,6 +28,7 @@ export {
 	EmptyState,
 	ErrorState,
 	Skeleton,
+	SkeletonBlock,
 	Stat,
 	Section,
 	IconBadge,

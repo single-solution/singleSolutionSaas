@@ -25,11 +25,10 @@
  */
 
 /**
- * @param {Response} response
- * @returns {Promise<unknown>}
+ * @param {string} text
+ * @returns {unknown}
  */
-const readJson = async (response) => {
-	const text = await response.text();
+const parse = (text) => {
 	if (!text) return null;
 	try {
 		return JSON.parse(text);
@@ -39,10 +38,14 @@ const readJson = async (response) => {
 };
 
 /**
- * @param {{ handle: (request: Request) => Promise<Response>, baseUrl: string, cookie?: string | null | (() => string | null),
- *   onSetCookie?: (setCookies: string[]) => void, forwardedFor?: string | null, userAgent?: string | null,
- *   randomUUID?: () => string }} options `cookie` is the request's Cookie header (or a getter, for a client that
- *   follows `Set-Cookie` through `onSetCookie`, e.g. tests and scripts).
+ * @param {{ handle: (request: Request, options?: { memo?: Map<string, unknown> }) => Promise<Response>, baseUrl: string,
+ *   cookie?: string | null | (() => string | null), onSetCookie?: (setCookies: string[]) => void,
+ *   forwardedFor?: string | null, userAgent?: string | null, randomUUID?: () => string, perRender?: boolean }} options
+ *   `cookie` is the request's Cookie header (or a getter, for a client that follows `Set-Cookie` through
+ *   `onSetCookie`, e.g. tests and scripts). `perRender`: the client serves one page render (one browser request), so
+ *   its reads are made once each (the same GET twice answers from the first call) and share one in-request memo with
+ *   the Portal (the session is looked up and each merchant checked once per render, PLAN 0.5.7); a write starts
+ *   afresh.
  * @returns {ConsoleApi}
  */
 export const createConsoleApi = ({
@@ -53,16 +56,20 @@ export const createConsoleApi = ({
 	forwardedFor = null,
 	userAgent = null,
 	randomUUID = () => globalThis.crypto.randomUUID(),
+	perRender = false,
 }) => {
 	const origin = new URL(baseUrl).origin;
+	/** @type {Map<string, Promise<{ status: number, statusText: string, text: string } | { error: unknown }>>} */
+	let reads = new Map();
+	/** @type {Map<string, unknown>} */
+	let memo = new Map();
+
 	/**
 	 * @param {string} method
 	 * @param {string} path
 	 * @param {unknown} [body]
-	 * @returns {Promise<ApiResult>}
 	 */
-	const request = async (method, path, body) => {
-		if (!path.startsWith('/v1/')) throw new TypeError(`console API paths start with /v1/ (got ${path})`);
+	const send = async (method, path, body) => {
 		/** @type {Record<string, string>} */
 		const headers = { accept: 'application/json' };
 		const cookieHeader = typeof cookie === 'function' ? cookie() : cookie;
@@ -75,17 +82,48 @@ export const createConsoleApi = ({
 		}
 		if (body !== undefined) headers['content-type'] = 'application/json';
 		if (method === 'POST') headers['idempotency-key'] = randomUUID();
-		/** @type {Response} */
-		let response;
 		try {
-			response = await handle(
+			const response = await handle(
 				new Request(new URL(path, origin), {
 					method,
 					headers,
 					...(body === undefined ? {} : { body: JSON.stringify(body) }),
 				}),
+				perRender && method === 'GET' ? { memo } : undefined,
 			);
+			if (onSetCookie) {
+				const set = response.headers.getSetCookie();
+				if (set.length > 0) onSetCookie(set);
+			}
+			return { status: response.status, statusText: response.statusText, text: await response.text() };
 		} catch (error) {
+			return { error };
+		}
+	};
+
+	/**
+	 * @param {string} method
+	 * @param {string} path
+	 * @param {unknown} [body]
+	 * @returns {Promise<ApiResult>}
+	 */
+	const request = async (method, path, body) => {
+		if (!path.startsWith('/v1/')) throw new TypeError(`console API paths start with /v1/ (got ${path})`);
+		/** @type {Awaited<ReturnType<typeof send>>} */
+		let answer;
+		if (perRender && method === 'GET') {
+			const known = reads.get(path) ?? send(method, path);
+			reads.set(path, known);
+			answer = await known;
+		} else {
+			if (perRender) {
+				reads = new Map();
+				memo = new Map();
+			}
+			answer = await send(method, path, body);
+		}
+		if ('error' in answer) {
+			const { error } = answer;
 			return {
 				ok: false,
 				status: 500,
@@ -97,17 +135,14 @@ export const createConsoleApi = ({
 				},
 			};
 		}
-		if (onSetCookie) {
-			const set = response.headers.getSetCookie();
-			if (set.length > 0) onSetCookie(set);
-		}
-		const data = await readJson(response);
-		if (response.ok) return { ok: true, status: response.status, data };
+		// every caller gets its own copy of the data
+		const data = parse(answer.text);
+		if (answer.status >= 200 && answer.status < 300) return { ok: true, status: answer.status, data };
 		const problem =
 			data && typeof data === 'object'
 				? /** @type {Problem} */ (data)
-				: { title: response.statusText || 'Error', status: response.status };
-		return { ok: false, status: response.status, problem: { status: response.status, ...problem } };
+				: { title: answer.statusText || 'Error', status: answer.status };
+		return { ok: false, status: answer.status, problem: { status: answer.status, ...problem } };
 	};
 	return {
 		request,

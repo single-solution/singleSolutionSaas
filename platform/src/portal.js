@@ -3,7 +3,7 @@
  * wiring — no I/O happens here (the Mongo driver connects on first use), so building is cheap and testable.
  *
  * The returned object is what the Next.js adapters in `app/` call:
- * - `handle(request)` — the Portal API (`/v1/*`)
+ * - `handle(request, options?)` — the Portal API (`/v1/*`); a console page render passes its memo
  * - `jwks()` — the published JWKS (Portal keys and token signing keys, distinct kids)
  * - `ensureIndexes()` — applies the declared indexes (on the first request after a deploy)
  * @module
@@ -134,8 +134,11 @@ export const createPortal = ({
 		maxBodyBytes: config.maxBodyBytes,
 		afterResponse: background.afterResponse,
 	});
-	/** @param {Request} request */
-	const handle = (request) => api(request);
+	/**
+	 * @param {Request} request
+	 * @param {{ memo?: Map<string, unknown> }} [options] the memo of the console page render the request belongs to
+	 */
+	const handle = (request, options) => api(request, options);
 
 	return Object.freeze({
 		config,

@@ -5,7 +5,7 @@
  * Defaults and Prices.
  * @module
  */
-import { useState } from 'react';
+import { ViewTransition, useState } from 'react';
 import {
 	Badge,
 	Button,
@@ -42,13 +42,18 @@ import { TEXTS } from './texts.js';
 /** @typedef {{ key: string, name: string, description: string, dependsOn: string[], millicreditsPerHour: number, on?: boolean }} Feature */
 
 /**
- * Skeleton while loading, the problem when it failed, else the content.
+ * Skeleton while loading, the problem when it failed, else the content (it fades in).
  * @param {{ answer: import('./api.js').Answer | null, children: (data: any) => import('react').ReactNode }} props
  */
 function Loaded({ answer, children }) {
 	if (!answer) return <Skeleton lines={3} label={TEXTS.loading} />;
 	if (!answer.ok) return <ErrorState title={TEXTS.failed} message={describeProblem(answer.problem)} />;
-	return <>{children(answer.data)}</>;
+	// fades and slides in when it replaces the skeleton; a refresh of shown content changes it in place
+	return (
+		<ViewTransition enter="ss-vt-enter" default="none">
+			{children(answer.data)}
+		</ViewTransition>
+	);
 }
 
 /**
@@ -590,18 +595,16 @@ function ConnectionsTab({ websiteId }) {
 										size="sm"
 										disabled={!values[item.name]}
 										onClick={() => {
-											void act(call('PUT', `${base}/${item.name}`, { value: values[item.name] }));
+											const done = act(call('PUT', `${base}/${item.name}`, { value: values[item.name] }));
 											setValues({ ...values, [item.name]: '' });
+											return done;
 										}}>
 										{TEXTS.connections.replace}
 									</Button>
-									<Button
-										size="sm"
-										variant="secondary"
-										onClick={() => void act(call('POST', `${base}/${item.name}/test`))}>
+									<Button size="sm" variant="secondary" onClick={() => act(call('POST', `${base}/${item.name}/test`))}>
 										{TEXTS.connections.test}
 									</Button>
-									<Button size="sm" variant="ghost" onClick={() => void act(call('DELETE', `${base}/${item.name}`))}>
+									<Button size="sm" variant="ghost" onClick={() => act(call('DELETE', `${base}/${item.name}`))}>
 										{TEXTS.connections.remove}
 									</Button>
 								</div>

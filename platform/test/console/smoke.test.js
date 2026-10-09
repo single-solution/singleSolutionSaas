@@ -19,6 +19,11 @@ import { dailyCostOf, scriptTag, websiteDot } from '../../src/console/views/webs
 import { startMongo } from '../helpers.js';
 import { createWorld } from './merchant-harness.js';
 
+vi.mock('next/navigation.js', async (importOriginal) => {
+	const { testRouter } = await import('./router.js');
+	return { .../** @type {object} */ (await importOriginal()), useRouter: () => testRouter };
+});
+
 vi.setConfig({ testTimeout: 180_000, hookTimeout: 120_000 });
 
 /** @type {Awaited<ReturnType<typeof startMongo>>} */
@@ -107,7 +112,7 @@ describe('merchant console smoke', () => {
 			expect(websitesText).toContain('2 products');
 			expect(websitesText).toContain('Install and tokens');
 			expect(websitesRaw).not.toContain('aria-current="page"');
-			expect(websitesRaw).toContain('lg:bg-primary-soft');
+			expect(websitesRaw).toContain('lg:text-on-primary-soft');
 
 			// a website selected: its card (products with Open; tokens and usage as dialogs; no admin actions)
 			const selected = await loaders.loadWebsites(merchant.api, merchantId, String(site.websiteId));

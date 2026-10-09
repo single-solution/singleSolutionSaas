@@ -23,6 +23,7 @@ import {
 	useToast,
 } from '@ss/ui';
 import { BILLING } from '../../../texts/console.js';
+import { FilterForm } from '../../navigation.js';
 import { Link } from '../../link.js';
 import { BillingStats, DaysLeft, MerchantStatusBadge, ReceiptsTable } from '../../views/billing.js';
 import { adminFetch } from '../client.js';
@@ -240,7 +241,7 @@ export function FinanceView(props) {
 			</Section>
 			<Section id="billing-receipts" title={S.receipts.title} description={S.receipts.help}>
 				<Card>
-					<form method="get" aria-label={BILLING.filters.apply} className="flex flex-wrap items-end gap-3">
+					<FilterForm label={BILLING.filters.apply} className="flex flex-wrap items-end gap-3">
 						<input type="hidden" name="by" value={filter.by} />
 						<Input
 							label={BILLING.receiptColumns.merchant}
@@ -272,7 +273,7 @@ export function FinanceView(props) {
 						<Button type="submit" variant="secondary">
 							{BILLING.filters.apply}
 						</Button>
-					</form>
+					</FilterForm>
 				</Card>
 				<ReceiptsTable receipts={receipts} showMerchant />
 			</Section>

@@ -1,20 +1,18 @@
 import { ButtonLink, EmptyState } from '@ss/ui';
-import { AdminFrame } from '../../_lib/frame.js';
+import { Link } from '../../../../src/console/link.js';
 
-// inside the shell, like the views (an unknown path or a view's notFound())
+// inside the console frame (the layout), like the views: an unknown path or a view's notFound()
 export default function AdminNotFound() {
 	return (
-		<AdminFrame>
-			<EmptyState
-				icon="shield"
-				title="Page not found"
-				description="The admin page does not exist."
-				action={
-					<ButtonLink href="/admin/merchants" variant="primary">
-						Back to merchants
-					</ButtonLink>
-				}
-			/>
-		</AdminFrame>
+		<EmptyState
+			icon="shield"
+			title="Page not found"
+			description="The admin page does not exist."
+			action={
+				<ButtonLink as={Link} href="/admin/merchants" variant="primary">
+					Back to merchants
+				</ButtonLink>
+			}
+		/>
 	);
 }

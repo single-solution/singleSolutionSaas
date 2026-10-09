@@ -4,7 +4,7 @@
  * settings, texts and theme forms (a website's values or the global defaults).
  * @module
  */
-import { useState } from 'react';
+import { ViewTransition, useState } from 'react';
 import {
 	Button,
 	Callout,
@@ -31,13 +31,18 @@ import { TEXTS } from './texts.js';
 export const hasSettings = (feature) => Object.keys(feature.schema?.properties ?? {}).length > 0;
 
 /**
- * Skeleton while loading, the problem when it failed, else the content.
+ * Skeleton while loading, the problem when it failed, else the content (it fades in).
  * @param {{ answer: import('./api.js').Answer | null, children: (data: any) => import('react').ReactNode }} props
  */
 export function Loaded({ answer, children }) {
 	if (!answer) return <Skeleton lines={3} label={TEXTS.loading} />;
 	if (!answer.ok) return <ErrorState title={TEXTS.failed} message={describeProblem(answer.problem)} />;
-	return <>{children(answer.data)}</>;
+	// fades and slides in when it replaces the skeleton; a refresh of shown content changes it in place
+	return (
+		<ViewTransition enter="ss-vt-enter" default="none">
+			{children(answer.data)}
+		</ViewTransition>
+	);
 }
 
 /**

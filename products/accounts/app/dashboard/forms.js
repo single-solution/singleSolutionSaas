@@ -61,8 +61,9 @@ export function KeyForm({ name, onSave }) {
 				size="sm"
 				disabled={!ready}
 				onClick={() => {
-					onSave(Object.fromEntries(fields.map((field) => [field.name, (values[field.name] ?? '').trim()])));
+					const done = onSave(Object.fromEntries(fields.map((field) => [field.name, (values[field.name] ?? '').trim()])));
 					setValues({});
+					return done;
 				}}>
 				{TEXTS.connections.save}
 			</Button>

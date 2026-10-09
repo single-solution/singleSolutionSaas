@@ -44,7 +44,7 @@ export function FieldGrid({ children, className }) {
 	);
 }
 const CONTROL =
-	'w-full rounded-xl border bg-surface px-3.5 py-2 text-sm text-fg placeholder:text-muted/80 transition-colors ' +
+	'w-full rounded-xl border bg-surface px-3.5 py-2 text-sm text-fg placeholder:text-muted/80 ss-motion ' +
 	'focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-focus ' +
 	'disabled:cursor-not-allowed disabled:bg-surface-2 [&:read-only:not(select)]:bg-surface-2';
 
@@ -76,7 +76,7 @@ const describedBy = ({ help, error }, ids) =>
 	[help ? ids.help : null, error ? ids.error : null].filter(Boolean).join(' ') || undefined;
 
 /**
- * Help and error lines under a control.
+ * Help and error lines under a control; an error fades in with a short shake (again when its message changes).
  * @param {{ ids: { help: string, error: string }, help?: ReactNode, error?: ReactNode }} props
  */
 function FieldMessages({ ids, help, error }) {
@@ -88,7 +88,11 @@ function FieldMessages({ ids, help, error }) {
 				</p>
 			) : null}
 			{error ? (
-				<p id={ids.error} className="flex items-center gap-1 text-xs font-medium text-danger" role="alert">
+				<p
+					key={typeof error === 'string' ? error : undefined}
+					id={ids.error}
+					className="flex animate-ss-shake items-center gap-1 text-xs font-medium text-danger"
+					role="alert">
 					<Icon name="alert" size={12} />
 					{error}
 				</p>
@@ -351,7 +355,7 @@ export function Switch({
 					disabled={inactive}
 					onClick={() => onChange?.(!checked)}
 					className={cx(
-						'relative inline-flex shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors',
+						'ss-motion ss-press relative inline-flex shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent',
 						'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus disabled:cursor-not-allowed disabled:opacity-60',
 						track,
 						checked ? 'bg-primary' : 'bg-line-strong',
@@ -359,7 +363,7 @@ export function Switch({
 					<span
 						aria-hidden="true"
 						className={cx(
-							'inline-block rounded-full bg-surface shadow transition-transform',
+							'inline-block rounded-full bg-surface shadow transition-transform duration-(--ss-motion) ease-ss',
 							knob,
 							checked ? shift : 'translate-x-0',
 						)}
