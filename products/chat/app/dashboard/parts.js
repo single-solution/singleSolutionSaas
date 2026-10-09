@@ -91,14 +91,15 @@ export function StatusBanner({ status }) {
  */
 export function SettingsForms({ features, saveUrl, resetBody, savedSource, reload, notice }) {
 	const [edits, setEdits] = useState(/** @type {Record<string, Record<string, unknown>>} */ ({}));
-	const [result, setResult] = useState(/** @type {import('./api.js').Answer | null} */ (null));
+	const [result, setResult] = useState(/** @type {{ feature: string, answer: import('./api.js').Answer } | null} */ (null));
 	/** @param {string} feature @param {string} name */
 	const reset = async (feature, name) => {
-		setResult(
-			resetBody
+		setResult({
+			feature,
+			answer: resetBody
 				? await call('PUT', saveUrl(`${feature}.${name}`), { value: null })
 				: await call('DELETE', saveUrl(`${feature}.${name}`)),
-		);
+		});
 		reload();
 	};
 	const shown = features.filter(hasSettings);
@@ -133,16 +134,20 @@ export function SettingsForms({ features, saveUrl, resetBody, savedSource, reloa
 									last = await call('PUT', saveUrl(`${feature.key}.${name}`), { value });
 									if (!last.ok) break;
 								}
-								setResult(last);
+								setResult({ feature: feature.key, answer: last });
 								if (last.ok) setEdits({ ...edits, [feature.key]: {} });
 								reload();
 							}}>
 							{TEXTS.save}
 						</Button>
+						{result?.feature === feature.key ? (
+							<div className="mt-4">
+								<Outcome result={result.answer} />
+							</div>
+						) : null}
 					</Card>
 				);
 			})}
-			<Outcome result={result} />
 		</>
 	);
 }

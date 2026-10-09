@@ -127,16 +127,32 @@ describe('admin console smoke', () => {
 			expect(overviewHtml).toContain('Chatty');
 			expect(overviewHtml).toContain('0 websites');
 			expect(overviewHtml).toContain('Inactive');
-			expect(overviewHtml).toContain('Credits earned per UTC day (last 30 days)');
+			expect(overviewHtml).toContain('No data for this period.'); // no charges yet: one line, not an empty chart
 			expect(overviewHtml).toContain('Recent activity');
 			expect(text(ssr(<OverviewView ok overview={{ products: [] }} admin={owner} />))).toContain('No products connected yet.');
 
 			// ------------------------------------------------------------------ Merchants: the list, then a merchant selected
 			const list = await admin.loadMerchants(ownerBrowser.api, {});
-			const listHtml = text(ssr(<MerchantsView {...list} admin={owner} />));
+			// nothing in the URL: the first merchant opens by default (wide screens only; its row marked there, not current)
+			const screen = await admin.loadMerchantsScreen(ownerBrowser.api, {}, owner);
+			expect(screen).toMatchObject({ ok: true, auto: true, detail: { ok: true, merchant: { merchantId } } });
+			const listRaw = ssr(<MerchantsView {...screen} admin={owner} />);
+			const listHtml = text(listRaw);
 			expect(listHtml).toContain('Shop & Co');
 			expect(listHtml).toContain('250 credits'); // the balance on the row
-			expect(listHtml).toContain('Select a merchant');
+			expect(listHtml).toContain('Add website'); // the merchant's page beside the list
+			expect(listRaw).toContain('lg:bg-primary-soft');
+			expect(listRaw).not.toContain('aria-current="page"');
+			expect(listRaw).not.toContain('rotate-180'); // no Back link: phones show the list until a merchant is chosen
+			const none = await admin.loadMerchantsScreen(ownerBrowser.api, { q: 'nobody-here' }, owner);
+			expect(none).toMatchObject({ ok: true, page: { items: [] } });
+			expect(none).not.toHaveProperty('detail');
+			expect(text(ssr(<MerchantsView {...none} admin={owner} />))).toContain('No merchants found.');
+			expect(
+				text(
+					ssr(<MerchantsView ok filter={{ q: null, status: null }} page={{ items: [], nextCursor: null }} admin={owner} />),
+				),
+			).toContain('Add a merchant to give them websites, products and credits.');
 			const byDomain = await admin.loadMerchants(ownerBrowser.api, { q: 'shop.example.com' });
 			expect(byDomain.ok && byDomain.page.items.map((m) => m.merchantId)).toEqual([merchantId]);
 			const detail = await admin.loadMerchant(ownerBrowser.api, merchantId, owner);
@@ -155,13 +171,15 @@ describe('admin console smoke', () => {
 				'Add website',
 				'Add credits',
 				'Edit merchant',
-				'Suspend',
 				'Credit receipts',
 				'Activity',
 				'Install and tokens',
 				'Usage',
 			])
 				expect(detailHtml).toContain(word);
+			// the other actions (Suspend, setup link, two-step off, Delete) sit in the header's More menu
+			expect(raw).toContain('aria-label="More actions for Shop &amp; Co"');
+			expect(raw).not.toMatch(/>Suspend<\/button>/);
 			expect(raw).toContain('aria-label="Add product to shop.example.com"');
 			expect(raw).toContain('aria-label="Actions for shop.example.com"');
 			expect(raw).toContain('aria-label="Actions for Notes"');
@@ -183,7 +201,16 @@ describe('admin console smoke', () => {
 			expect(productsHtml).toContain('Notes');
 			expect(productsHtml).toContain('Chatty');
 			expect(productsHtml).toContain('1 website');
-			expect(productsHtml).toContain('Select a product');
+			expect(productsHtml).toContain('No products connected yet.'); // no product in the props: the empty side
+			const productsScreen = await admin.loadProductsScreen(ownerBrowser.api, {});
+			// by name: Chatty opens by default
+			expect(productsScreen).toMatchObject({ ok: true, auto: true, detail: { ok: true, product: { productId: 'chatty' } } });
+			expect(products.ok && products.items.map((p) => p.name)).toEqual(['Chatty', 'Notes']);
+			const screenRaw = ssr(<ProductsView {...productsScreen} admin={owner} />);
+			expect(text(screenRaw)).toContain('Set active');
+			expect(screenRaw).not.toContain('aria-current="page"');
+			const noProducts = await admin.loadProductsScreen(ownerBrowser.api, { status: 'bogus' });
+			expect(noProducts).toHaveProperty('ok', true);
 			const active = await admin.loadProducts(ownerBrowser.api, { status: 'active' });
 			expect(active.ok && active.items.map((p) => p.productId)).toEqual(['notes']);
 			const product = await admin.loadProduct(ownerBrowser.api, 'notes');
@@ -195,6 +222,11 @@ describe('admin console smoke', () => {
 			const productHtml = text(productRaw);
 			for (const word of ['Open as admin', 'Set inactive', 'Reconnect', 'Connected', 'Websites using it', 'Shop & Co'])
 				expect(productHtml).toContain(word);
+			// the address once (the subtitle), and one line instead of an empty 30-day chart
+			expect(productHtml.split(String(product.product.baseUrl)).length - 1).toBe(1);
+			expect(productHtml).toContain('No credits earned in the last 30 UTC days.');
+			expect(productHtml).not.toContain('Credits earned per UTC day (last 30 days)');
+			expect(productRaw).toContain('title="shop.example.com"');
 			expect(productRaw).not.toContain('role="tab"');
 			expect(productRaw).toContain(`href="/admin/merchants/${merchantId}#website-${websiteId}"`);
 			const chatty = await admin.loadProduct(ownerBrowser.api, 'chatty');
@@ -214,24 +246,43 @@ describe('admin console smoke', () => {
 			const admins = await admin.loadAdmins(ownerBrowser.api, owner);
 			const adminsHtml = text(ssr(<AdminsView {...admins} />));
 			expect(adminsHtml).toContain('help@ss.test');
-			expect(adminsHtml).toContain('Select an admin');
+			// the first admin opens by default on wide screens
+			expect(adminsHtml).toContain('Two-step');
 			const invited = admins.ok ? admins.items.find((a) => a.email === 'help@ss.test') : null;
-			const invitedHtml = text(ssr(<AdminsView {...admins} selectedId={invited?.adminId} />));
-			for (const word of ['Invited', 'Resend invite', 'Copy invite link', 'Correct invite e-mail', 'Change role', 'Remove'])
-				expect(invitedHtml).toContain(word);
+			const invitedRaw = ssr(<AdminsView {...admins} selectedId={invited?.adminId} />);
+			const invitedHtml = text(invitedRaw);
+			for (const word of ['Invited', 'Resend invite', 'Copy invite link']) expect(invitedHtml).toContain(word);
+			// Correct invite e-mail, Change role and Remove sit in the More menu
+			expect(invitedRaw).toContain('aria-label="More actions for help@ss.test"');
+			expect(invitedHtml).not.toContain('Change role');
 			const meHtml = text(ssr(<AdminsView {...admins} selectedId={owner.adminId} />));
 			expect(meHtml).toContain('you');
 			expect(meHtml).not.toContain('Change role');
 			expect(text(ssr(<AdminsView {...admins} selectedId="adm_00000000000000000000z" />))).toContain(
 				'This admin does not exist or was removed.',
 			);
-			expect(text(ssr(<SettingsView {...await admin.loadSettings(ownerBrowser.api)} />))).toContain('SMTP host');
+			// Settings: one page, every section a card with its own Save (no tabs)
+			const settingsRaw = ssr(<SettingsView {...await admin.loadSettings(ownerBrowser.api)} />);
+			for (const title of ['E-mail sending', 'Branding', 'Support contact', 'Security', 'Billing rules'])
+				expect(settingsRaw).toContain(`aria-label="${title}"`);
+			expect(text(settingsRaw)).toContain('SMTP host');
+			expect(text(settingsRaw)).toContain('Grace period (days)');
+			expect(settingsRaw).not.toContain('role="tab"');
+			expect(text(settingsRaw).match(/ Save /g)).toHaveLength(5);
 			expect(text(ssr(<MyAccountView {...await admin.loadMyAccount(ownerBrowser.api)} />))).toContain(
 				'10 recovery codes left',
 			);
 			const finance = await admin.loadBilling(ownerBrowser.api, { merchantId, by: 'merchant', method: 'Bank transfer' });
 			expect(finance).toMatchObject({ ok: true, filter: { merchantId, by: 'merchant' } });
-			expect(text(ssr(<FinanceView {...finance} admin={owner} />))).toContain('Credits and billing');
+			const financeRaw = ssr(<FinanceView {...finance} admin={owner} />);
+			// one page: needs attention, receipts and charges (no tabs); the charges switch keeps the receipt filter
+			for (const word of ['Credits and billing', 'Needs attention', 'Receipts', 'Charges', 'By merchant'])
+				expect(text(financeRaw)).toContain(word);
+			expect(financeRaw).not.toContain('role="tab"');
+			expect(financeRaw).toContain('name="by" value="merchant"');
+			expect(financeRaw).toContain(
+				`/admin/finance?merchantId=${merchantId}&amp;method=Bank+transfer&amp;by=day#billing-charges`,
+			);
 			const creditsHtml = text(
 				ssr(
 					<MerchantCredits

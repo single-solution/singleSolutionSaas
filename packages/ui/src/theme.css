@@ -4,20 +4,12 @@
  * `data-theme="dark"` on <html>, set before paint by `ThemeScript` from the `ThemeToggle` choice); utilities read them
  * through `@theme inline`, so components never need `dark:`. Text/background pairs keep a contrast ratio of at least
  * 4.5:1 (WCAG AA) in both themes; `line-strong` (form controls) keeps 3:1 against surfaces, `line` stays visible.
- * Visual style (PLAN 0.6 "A + B"): soft rounded surfaces with no borders or shadows (`line-soft` only separates rows)
- * and the solid `hero` card with its bar colours.
+ * Visual style (PLAN 0.6): soft rounded surfaces with no borders or shadows (`line-soft` only separates rows) and the
+ * solid indigo `hero` card with its bar colours.
  *
- * Colour rule (PLAN 0.6): every kind of thing has a semantic tone, `--tone-<kind>` (its colour), `--tone-<kind>-tint`
- * (a soft background) and `--tone-<kind>-on` (text on the solid colour). Kinds: overview, merchant, website, product,
- * feature, credit, price, admin, settings, default, activity, connection, developer. Two palettes, picked on <html>:
- *   - A, "one colour per thing" (default): merchants violet, websites teal, products and features orange, credits and
- *     prices pink, admins blue, settings and defaults slate, activity green-grey, overview cyan, connections fuchsia,
- *     developers stone. Indigo is kept for primary buttons, links and the active item; green, amber and red for status.
- *   - B, "one accent only" (`data-palette="mono"`): every tone is the indigo tint; tiles are neutral, colour is status.
- * Every tone keeps 4.5:1 for its colour on its tint and for its `-on` text on the colour, in light and dark.
- * Components mark an element with `data-tone="<kind>"`; the rules at the end give it the role colours `tone-ink`,
- * `tone-tint`, `tone-tile` (summary tile background), `tone-solid` and `tone-on-solid` (icon badge), which Tailwind
- * reads as `bg-tone-tile`, `text-tone-ink`, … No component names a colour for meaning.
+ * Colour rule (PLAN 0.6, owner decision 2026-10-09: one accent): indigo is the only accent — primary buttons, links,
+ * the active item, icon tiles and badges (`primary-soft` tint); surfaces are neutral; green, amber and red mean status
+ * only. `info` is the indigo tint too, so no second hue appears.
  */
 @theme inline {
 	--color-canvas: var(--ss-canvas);
@@ -46,11 +38,6 @@
 	--color-info-soft: var(--ss-info-soft);
 	--color-on-info-soft: var(--ss-on-info-soft);
 	--color-focus: var(--ss-focus);
-	--color-tone-ink: var(--t-ink);
-	--color-tone-tint: var(--t-tint);
-	--color-tone-tile: var(--t-tile);
-	--color-tone-solid: var(--t-solid);
-	--color-tone-on-solid: var(--t-on-solid);
 	--color-line-soft: var(--ss-line-soft);
 	--color-surface-3: var(--ss-surface-3);
 	--color-hero: var(--ss-hero);
@@ -65,6 +52,7 @@
 	--radius-control: 0.75rem;
 	--shadow-card: none;
 	--shadow-overlay: 0 24px 48px -12px rgb(15 23 42 / 0.35);
+	--shadow-pop: 0 12px 32px -12px rgb(15 23 42 / 0.28), 0 0 0 1px var(--ss-line-soft);
 }
 
 :root {
@@ -92,45 +80,15 @@
 	--ss-on-danger: #ffffff;
 	--ss-danger-soft: #fef2f2;
 	--ss-on-danger-soft: #991b1b;
-	--ss-info-soft: #f0f9ff;
-	--ss-on-info-soft: #075985;
+	--ss-info-soft: #eef2ff;
+	--ss-on-info-soft: #3730a3;
 	--ss-focus: #4f46e5;
 	--ss-overlay: rgb(15 23 42 / 0.45);
-	--ss-hue-violet: #7c3aed;
-	--ss-hue-violet-tint: #f4efff;
-	--ss-hue-violet-on: #ffffff;
-	--ss-hue-teal: #0f766e;
-	--ss-hue-teal-tint: #e6f7f5;
-	--ss-hue-teal-on: #ffffff;
-	--ss-hue-orange: #c2410c;
-	--ss-hue-orange-tint: #fff1e6;
-	--ss-hue-orange-on: #ffffff;
-	--ss-hue-pink: #be185d;
-	--ss-hue-pink-tint: #fdeef6;
-	--ss-hue-pink-on: #ffffff;
-	--ss-hue-blue: #1d4ed8;
-	--ss-hue-blue-tint: #eaf2ff;
-	--ss-hue-blue-on: #ffffff;
-	--ss-hue-slate: #475569;
-	--ss-hue-slate-tint: #eef1f5;
-	--ss-hue-slate-on: #ffffff;
-	--ss-hue-sage: #48695a;
-	--ss-hue-sage-tint: #ecf3ef;
-	--ss-hue-sage-on: #ffffff;
-	--ss-hue-cyan: #0e7490;
-	--ss-hue-cyan-tint: #e6f6fb;
-	--ss-hue-cyan-on: #ffffff;
-	--ss-hue-fuchsia: #a21caf;
-	--ss-hue-fuchsia-tint: #fcedfd;
-	--ss-hue-fuchsia-on: #ffffff;
-	--ss-hue-stone: #6b6560;
-	--ss-hue-stone-tint: #f3f1ee;
-	--ss-hue-stone-on: #ffffff;
 	--ss-line-soft: #eceef4;
 	--ss-surface-3: #e4e8f1;
-	--ss-hero: #be185d;
+	--ss-hero: #4f46e5;
 	--ss-on-hero: #ffffff;
-	--ss-on-hero-muted: #fce7f3;
+	--ss-on-hero-muted: #e0e7ff;
 	--ss-hero-bar: rgb(255 255 255 / 0.9);
 	--ss-hero-track: rgb(255 255 255 / 0.16);
 }
@@ -161,45 +119,15 @@
 		--ss-on-danger: #1a0505;
 		--ss-danger-soft: #3b0d0d;
 		--ss-on-danger-soft: #fca5a5;
-		--ss-info-soft: #082f49;
-		--ss-on-info-soft: #7dd3fc;
+		--ss-info-soft: #1e1b4b;
+		--ss-on-info-soft: #c7d2fe;
 		--ss-focus: #a5b4fc;
 		--ss-overlay: rgb(2 6 23 / 0.7);
-		--ss-hue-violet: #a78bfa;
-		--ss-hue-violet-tint: #231a3d;
-		--ss-hue-violet-on: #0a0f1c;
-		--ss-hue-teal: #2dd4bf;
-		--ss-hue-teal-tint: #0f2928;
-		--ss-hue-teal-on: #0a0f1c;
-		--ss-hue-orange: #fb923c;
-		--ss-hue-orange-tint: #2d1d13;
-		--ss-hue-orange-on: #0a0f1c;
-		--ss-hue-pink: #f472b6;
-		--ss-hue-pink-tint: #2c1623;
-		--ss-hue-pink-on: #0a0f1c;
-		--ss-hue-blue: #60a5fa;
-		--ss-hue-blue-tint: #15213d;
-		--ss-hue-blue-on: #0a0f1c;
-		--ss-hue-slate: #94a3b8;
-		--ss-hue-slate-tint: #1c2433;
-		--ss-hue-slate-on: #0a0f1c;
-		--ss-hue-sage: #8fb8a2;
-		--ss-hue-sage-tint: #17251e;
-		--ss-hue-sage-on: #0a0f1c;
-		--ss-hue-cyan: #22d3ee;
-		--ss-hue-cyan-tint: #0e2630;
-		--ss-hue-cyan-on: #0a0f1c;
-		--ss-hue-fuchsia: #e879f9;
-		--ss-hue-fuchsia-tint: #2c1532;
-		--ss-hue-fuchsia-on: #0a0f1c;
-		--ss-hue-stone: #a8a29e;
-		--ss-hue-stone-tint: #24211e;
-		--ss-hue-stone-on: #0a0f1c;
 		--ss-line-soft: #1e2638;
 		--ss-surface-3: #27324a;
-		--ss-hero: #9d174d;
+		--ss-hero: #4338ca;
 		--ss-on-hero: #ffffff;
-		--ss-on-hero-muted: #fce7f3;
+		--ss-on-hero-muted: #e0e7ff;
 		--ss-hero-bar: rgb(255 255 255 / 0.88);
 		--ss-hero-track: rgb(255 255 255 / 0.14);
 	}
@@ -230,225 +158,17 @@
 	--ss-on-danger: #1a0505;
 	--ss-danger-soft: #3b0d0d;
 	--ss-on-danger-soft: #fca5a5;
-	--ss-info-soft: #082f49;
-	--ss-on-info-soft: #7dd3fc;
+	--ss-info-soft: #1e1b4b;
+	--ss-on-info-soft: #c7d2fe;
 	--ss-focus: #a5b4fc;
 	--ss-overlay: rgb(2 6 23 / 0.7);
-	--ss-hue-violet: #a78bfa;
-	--ss-hue-violet-tint: #231a3d;
-	--ss-hue-violet-on: #0a0f1c;
-	--ss-hue-teal: #2dd4bf;
-	--ss-hue-teal-tint: #0f2928;
-	--ss-hue-teal-on: #0a0f1c;
-	--ss-hue-orange: #fb923c;
-	--ss-hue-orange-tint: #2d1d13;
-	--ss-hue-orange-on: #0a0f1c;
-	--ss-hue-pink: #f472b6;
-	--ss-hue-pink-tint: #2c1623;
-	--ss-hue-pink-on: #0a0f1c;
-	--ss-hue-blue: #60a5fa;
-	--ss-hue-blue-tint: #15213d;
-	--ss-hue-blue-on: #0a0f1c;
-	--ss-hue-slate: #94a3b8;
-	--ss-hue-slate-tint: #1c2433;
-	--ss-hue-slate-on: #0a0f1c;
-	--ss-hue-sage: #8fb8a2;
-	--ss-hue-sage-tint: #17251e;
-	--ss-hue-sage-on: #0a0f1c;
-	--ss-hue-cyan: #22d3ee;
-	--ss-hue-cyan-tint: #0e2630;
-	--ss-hue-cyan-on: #0a0f1c;
-	--ss-hue-fuchsia: #e879f9;
-	--ss-hue-fuchsia-tint: #2c1532;
-	--ss-hue-fuchsia-on: #0a0f1c;
-	--ss-hue-stone: #a8a29e;
-	--ss-hue-stone-tint: #24211e;
-	--ss-hue-stone-on: #0a0f1c;
 	--ss-line-soft: #1e2638;
 	--ss-surface-3: #27324a;
-	--ss-hero: #9d174d;
+	--ss-hero: #4338ca;
 	--ss-on-hero: #ffffff;
-	--ss-on-hero-muted: #fce7f3;
+	--ss-on-hero-muted: #e0e7ff;
 	--ss-hero-bar: rgb(255 255 255 / 0.88);
 	--ss-hero-track: rgb(255 255 255 / 0.14);
-}
-
-/* Palette A (default): one colour per thing. */
-:root {
-	--tone-overview: var(--ss-hue-cyan);
-	--tone-overview-tint: var(--ss-hue-cyan-tint);
-	--tone-overview-on: var(--ss-hue-cyan-on);
-	--tone-merchant: var(--ss-hue-violet);
-	--tone-merchant-tint: var(--ss-hue-violet-tint);
-	--tone-merchant-on: var(--ss-hue-violet-on);
-	--tone-website: var(--ss-hue-teal);
-	--tone-website-tint: var(--ss-hue-teal-tint);
-	--tone-website-on: var(--ss-hue-teal-on);
-	--tone-product: var(--ss-hue-orange);
-	--tone-product-tint: var(--ss-hue-orange-tint);
-	--tone-product-on: var(--ss-hue-orange-on);
-	--tone-credit: var(--ss-hue-pink);
-	--tone-credit-tint: var(--ss-hue-pink-tint);
-	--tone-credit-on: var(--ss-hue-pink-on);
-	--tone-admin: var(--ss-hue-blue);
-	--tone-admin-tint: var(--ss-hue-blue-tint);
-	--tone-admin-on: var(--ss-hue-blue-on);
-	--tone-settings: var(--ss-hue-slate);
-	--tone-settings-tint: var(--ss-hue-slate-tint);
-	--tone-settings-on: var(--ss-hue-slate-on);
-	--tone-activity: var(--ss-hue-sage);
-	--tone-activity-tint: var(--ss-hue-sage-tint);
-	--tone-activity-on: var(--ss-hue-sage-on);
-	--tone-connection: var(--ss-hue-fuchsia);
-	--tone-connection-tint: var(--ss-hue-fuchsia-tint);
-	--tone-connection-on: var(--ss-hue-fuchsia-on);
-	--tone-developer: var(--ss-hue-stone);
-	--tone-developer-tint: var(--ss-hue-stone-tint);
-	--tone-developer-on: var(--ss-hue-stone-on);
-	--tone-feature: var(--tone-product);
-	--tone-feature-tint: var(--tone-product-tint);
-	--tone-feature-on: var(--tone-product-on);
-	--tone-price: var(--tone-credit);
-	--tone-price-tint: var(--tone-credit-tint);
-	--tone-price-on: var(--tone-credit-on);
-	--tone-default: var(--tone-settings);
-	--tone-default-tint: var(--tone-settings-tint);
-	--tone-default-on: var(--tone-settings-on);
-}
-
-/* Palette B (`data-palette="mono"`): one accent only — every tone is the indigo tint, the hero card indigo. */
-:root[data-palette='mono'] {
-	--tone-overview: var(--ss-primary);
-	--tone-overview-tint: var(--ss-primary-soft);
-	--tone-overview-on: var(--ss-on-primary);
-	--tone-merchant: var(--ss-primary);
-	--tone-merchant-tint: var(--ss-primary-soft);
-	--tone-merchant-on: var(--ss-on-primary);
-	--tone-website: var(--ss-primary);
-	--tone-website-tint: var(--ss-primary-soft);
-	--tone-website-on: var(--ss-on-primary);
-	--tone-product: var(--ss-primary);
-	--tone-product-tint: var(--ss-primary-soft);
-	--tone-product-on: var(--ss-on-primary);
-	--tone-credit: var(--ss-primary);
-	--tone-credit-tint: var(--ss-primary-soft);
-	--tone-credit-on: var(--ss-on-primary);
-	--tone-admin: var(--ss-primary);
-	--tone-admin-tint: var(--ss-primary-soft);
-	--tone-admin-on: var(--ss-on-primary);
-	--tone-settings: var(--ss-primary);
-	--tone-settings-tint: var(--ss-primary-soft);
-	--tone-settings-on: var(--ss-on-primary);
-	--tone-activity: var(--ss-primary);
-	--tone-activity-tint: var(--ss-primary-soft);
-	--tone-activity-on: var(--ss-on-primary);
-	--tone-connection: var(--ss-primary);
-	--tone-connection-tint: var(--ss-primary-soft);
-	--tone-connection-on: var(--ss-on-primary);
-	--tone-developer: var(--ss-primary);
-	--tone-developer-tint: var(--ss-primary-soft);
-	--tone-developer-on: var(--ss-on-primary);
-	--tone-feature: var(--ss-primary);
-	--tone-feature-tint: var(--ss-primary-soft);
-	--tone-feature-on: var(--ss-on-primary);
-	--tone-price: var(--ss-primary);
-	--tone-price-tint: var(--ss-primary-soft);
-	--tone-price-on: var(--ss-on-primary);
-	--tone-default: var(--ss-primary);
-	--tone-default-tint: var(--ss-primary-soft);
-	--tone-default-on: var(--ss-on-primary);
-	--ss-hero: #4f46e5;
-	--ss-on-hero-muted: #e0e7ff;
-}
-
-@media (prefers-color-scheme: dark) {
-	:root[data-palette='mono']:not([data-theme='light']) {
-		--ss-hero: #4338ca;
-	}
-}
-
-:root[data-palette='mono'][data-theme='dark'] {
-	--ss-hero: #4338ca;
-}
-
-/* Role colours of an element marked `data-tone="<kind>"`. */
-[data-tone='overview'] {
-	--t-ink: var(--tone-overview);
-	--t-tint: var(--tone-overview-tint);
-	--t-on: var(--tone-overview-on);
-}
-[data-tone='merchant'] {
-	--t-ink: var(--tone-merchant);
-	--t-tint: var(--tone-merchant-tint);
-	--t-on: var(--tone-merchant-on);
-}
-[data-tone='website'] {
-	--t-ink: var(--tone-website);
-	--t-tint: var(--tone-website-tint);
-	--t-on: var(--tone-website-on);
-}
-[data-tone='product'] {
-	--t-ink: var(--tone-product);
-	--t-tint: var(--tone-product-tint);
-	--t-on: var(--tone-product-on);
-}
-[data-tone='credit'] {
-	--t-ink: var(--tone-credit);
-	--t-tint: var(--tone-credit-tint);
-	--t-on: var(--tone-credit-on);
-}
-[data-tone='admin'] {
-	--t-ink: var(--tone-admin);
-	--t-tint: var(--tone-admin-tint);
-	--t-on: var(--tone-admin-on);
-}
-[data-tone='settings'] {
-	--t-ink: var(--tone-settings);
-	--t-tint: var(--tone-settings-tint);
-	--t-on: var(--tone-settings-on);
-}
-[data-tone='activity'] {
-	--t-ink: var(--tone-activity);
-	--t-tint: var(--tone-activity-tint);
-	--t-on: var(--tone-activity-on);
-}
-[data-tone='connection'] {
-	--t-ink: var(--tone-connection);
-	--t-tint: var(--tone-connection-tint);
-	--t-on: var(--tone-connection-on);
-}
-[data-tone='developer'] {
-	--t-ink: var(--tone-developer);
-	--t-tint: var(--tone-developer-tint);
-	--t-on: var(--tone-developer-on);
-}
-[data-tone='feature'] {
-	--t-ink: var(--tone-feature);
-	--t-tint: var(--tone-feature-tint);
-	--t-on: var(--tone-feature-on);
-}
-[data-tone='price'] {
-	--t-ink: var(--tone-price);
-	--t-tint: var(--tone-price-tint);
-	--t-on: var(--tone-price-on);
-}
-[data-tone='default'] {
-	--t-ink: var(--tone-default);
-	--t-tint: var(--tone-default-tint);
-	--t-on: var(--tone-default-on);
-}
-
-/* A: tinted summary tiles with a solid icon badge. B: neutral tiles with an indigo-tinted badge. */
-[data-tone] {
-	--t-tile: var(--t-tint);
-	--t-solid: var(--t-ink);
-	--t-on-solid: var(--t-on);
-}
-
-:root[data-palette='mono'] [data-tone] {
-	--t-tile: var(--ss-surface);
-	--t-solid: var(--t-tint);
-	--t-on-solid: var(--t-ink);
 }
 
 @layer base {

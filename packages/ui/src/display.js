@@ -9,23 +9,27 @@ import { Icon } from './icons.js';
 /** @typedef {import('react').ReactNode} ReactNode */
 /** @typedef {'neutral' | 'primary' | 'success' | 'warning' | 'danger' | 'info'} Tone */
 /**
- * Kind of thing a tile, badge or menu item stands for (PLAN 0.6 colour rule). Its colour comes from the semantic tokens
- * `--tone-<kind>` of theme.css (palette A: one colour per kind; palette B: the indigo tint for all).
+ * Kind of thing a tile, badge or menu item stands for. It names the thing in the code; every kind takes the one indigo
+ * accent (PLAN 0.6 colour rule: one accent, neutral surfaces, colour for status only), so a `kind` marks an item as
+ * accented and its absence leaves it neutral.
  * @typedef {'overview' | 'merchant' | 'website' | 'product' | 'feature' | 'credit' | 'price' | 'admin' | 'settings'
  *   | 'default' | 'activity' | 'connection' | 'developer'} Kind
  */
 
+/** The accent tint of icon tiles, chips and empty-state icons. */
+const ACCENT = 'bg-primary-soft text-primary';
+
 /**
- * Rounded icon badge in the colour of a kind.
- * @param {{ icon: import('./icons.js').IconName, kind: Kind, size?: 'sm' | 'md', className?: string }} props
+ * Rounded icon badge in the accent tint.
+ * @param {{ icon: import('./icons.js').IconName, kind?: Kind, size?: 'sm' | 'md', className?: string }} props
  */
-export function IconBadge({ icon, kind, size = 'md', className }) {
+export function IconBadge({ icon, size = 'md', className }) {
 	return (
 		<span
 			aria-hidden="true"
-			data-tone={kind}
 			className={cx(
-				'inline-flex shrink-0 items-center justify-center bg-tone-solid text-tone-on-solid',
+				'inline-flex shrink-0 items-center justify-center',
+				ACCENT,
 				size === 'sm' ? 'size-8 rounded-lg' : 'size-10 rounded-xl',
 				className,
 			)}>
@@ -114,20 +118,20 @@ const DOTS = {
 };
 
 /**
- * Small pill: a status `tone`, or the colour of a `kind` of thing (a chip; it wins over `tone`).
+ * Small pill: a status `tone`, or a chip of a `kind` of thing (the accent tint; it wins over `tone`).
  * @param {{ tone?: Tone, kind?: Kind, children: ReactNode, dot?: boolean, className?: string, title?: string }} props
  */
 export function Badge({ tone = 'neutral', kind, children, dot = false, className, title }) {
+	const look = kind ? 'primary' : tone;
 	return (
 		<span
 			title={title}
-			{...(kind ? { 'data-tone': kind } : {})}
 			className={cx(
 				'inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border px-2 py-0.5 text-xs font-semibold',
-				kind ? 'border-transparent bg-tone-tint text-tone-ink' : TONES[tone],
+				TONES[look],
 				className,
 			)}>
-			{dot ? <span aria-hidden="true" className={cx('size-1.5 rounded-full', kind ? 'bg-tone-ink' : DOTS[tone])} /> : null}
+			{dot ? <span aria-hidden="true" className={cx('size-1.5 rounded-full', DOTS[look])} /> : null}
 			{children}
 		</span>
 	);
@@ -196,7 +200,8 @@ export function Callout({ tone = 'info', title, children, actions, className, li
 }
 
 /**
- * Empty state (nothing here yet) with an optional call to action. The icon is neutral, or tinted with a `kind`.
+ * Empty state (nothing here yet) with an optional call to action. The icon is neutral, or in the accent tint with a
+ * `kind`.
  * @param {{ title: ReactNode, description?: ReactNode, action?: ReactNode, icon?: import('./icons.js').IconName,
  *   kind?: Kind, className?: string, compact?: boolean }} props
  */
@@ -208,12 +213,7 @@ export function EmptyState({ title, description, action, icon = 'box', kind, cla
 				compact ? 'gap-2 px-4 py-6' : 'gap-3 px-6 py-12',
 				className,
 			)}>
-			<span
-				{...(kind ? { 'data-tone': kind } : {})}
-				className={cx(
-					'flex size-10 items-center justify-center rounded-xl',
-					kind ? 'bg-tone-tint text-tone-ink' : 'bg-surface-3 text-muted',
-				)}>
+			<span className={cx('flex size-10 items-center justify-center rounded-xl', kind ? ACCENT : 'bg-surface-3 text-muted')}>
 				<Icon name={icon} size={18} />
 			</span>
 			<div className="max-w-md space-y-1">
@@ -264,8 +264,8 @@ export function Skeleton({ className, lines = 1, label = 'Loading' }) {
 }
 
 /**
- * Key figure: a summary tile. With a `kind` the tile takes that kind's soft tint and shows the icon in a rounded badge
- * of its colour (PLAN 0.6 colour rule); `tone` colours the hint by status.
+ * Key figure: a summary tile on a neutral surface. With a `kind` its icon sits in the accent-tinted badge, without one
+ * in a neutral badge (PLAN 0.6 colour rule); `tone` colours the hint by status.
  * @param {{ label: ReactNode, value: ReactNode, hint?: ReactNode, tone?: Tone, icon?: import('./icons.js').IconName,
  *   kind?: Kind, className?: string }} props
  */
@@ -279,9 +279,7 @@ export function Stat({ label, value, hint, tone = 'neutral', icon, kind, classNa
 					? 'text-success'
 					: 'text-muted';
 	return (
-		<div
-			{...(kind ? { 'data-tone': kind } : {})}
-			className={cx('min-w-0 space-y-3 rounded-card p-5 sm:p-6', kind ? 'bg-tone-tile' : 'bg-surface', className)}>
+		<div className={cx('min-w-0 space-y-3 rounded-card bg-surface p-5 sm:p-6', className)}>
 			<div className="flex items-center gap-3">
 				{icon ? (
 					kind ? (
@@ -321,6 +319,32 @@ export function Section({ title, description, actions, children, id, className }
 			</div>
 			{children}
 		</section>
+	);
+}
+
+/**
+ * Masonry of cards of different heights (PLAN 0.6 "use the space"): CSS columns by the width of the container — one
+ * column below 42rem, two from 42rem, three from 72rem (`columns={2}` stops at two) — and every child is kept whole
+ * (`break-inside: avoid`), so no card stretches to a taller neighbour. Children flow down the first column, then the
+ * next, which is also the reading and tab order. Fragments are transparent: cards a component returns in a fragment are
+ * items too. Rows of a list (`as="ul"`) are `li` items.
+ * @param {{ children?: ReactNode, columns?: 2 | 3, as?: 'div' | 'ul', className?: string, label?: string }} props
+ *   `label`: an accessible name for a list
+ */
+export function Masonry({ children, columns = 3, as = 'div', className, label }) {
+	const Tag = as;
+	return (
+		<div className="@container min-w-0">
+			<Tag
+				aria-label={label}
+				className={cx(
+					'gap-5 [&>*]:mt-5 [&>*]:break-inside-avoid [&>*:first-child]:mt-0',
+					columns === 3 ? 'columns-1 @2xl:columns-2 @6xl:columns-3' : 'columns-1 @2xl:columns-2',
+					className,
+				)}>
+				{children}
+			</Tag>
+		</div>
 	);
 }
 

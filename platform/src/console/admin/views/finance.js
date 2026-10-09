@@ -12,12 +12,12 @@ import {
 	Dialog,
 	EmptyState,
 	Form,
-	FormActions,
 	FormError,
 	Input,
 	PageHeader,
+	Section,
 	Table,
-	Tabs,
+	cx,
 	fieldErrors,
 	formatCredits,
 	useToast,
@@ -160,7 +160,7 @@ export function MerchantCredits({ billing, receipts, dayCharges }) {
 					caption={BILLING.dayChargesTitle}
 					rows={dayCharges}
 					rowKey={(d) => `${d.day}:${d.websiteId}:${d.productId}`}
-					empty={<EmptyState compact title={BILLING.noUsage} />}
+					empty={<EmptyState compact icon="coins" kind="credit" title={BILLING.noUsage} />}
 					columns={[
 						{ key: 'day', header: BILLING.usageColumns.day, rowHeader: true, sortable: true },
 						{ key: 'domain', header: BILLING.usageColumns.website, sortable: true },
@@ -185,7 +185,8 @@ export function MerchantCredits({ billing, receipts, dayCharges }) {
 }
 
 /**
- * Credits and billing page (Owner and Finance; Support read-only).
+ * Credits and billing page (Owner and Finance; Support read-only): one page, no tabs — the merchants that need
+ * attention, the receipts with their filter, and the charges by day, merchant or product.
  * @param {any} props loader result of `loadBilling` plus `admin`
  */
 export function FinanceView(props) {
@@ -193,125 +194,132 @@ export function FinanceView(props) {
 	if (props.ok !== true) return <AdminProblem problem={props.problem} />;
 	const canAdd = adminCan(props.admin, 'credits.add');
 	const { filter, receipts, charges, attention } = props;
+	const S = BILLING.billingSections;
 	const reload = () => window.location.reload();
 	return (
 		<div className="space-y-8">
 			<PageHeader title={BILLING.billingTitle} subtitle={BILLING.billingIntro} />
-			<Tabs
-				label={BILLING.billingTitle}
-				tabs={[
-					{
-						id: 'attention',
-						label: BILLING.billingTabs.attention,
-						content: (
-							<Table
-								caption={BILLING.billingTabs.attention}
-								rows={attention}
-								rowKey={(m) => m.merchantId}
-								empty={<EmptyState compact title={BILLING.noAttention} />}
-								columns={[
+			<Section id="billing-attention" title={S.attention.title} description={S.attention.help}>
+				<Table
+					caption={S.attention.title}
+					rows={attention}
+					rowKey={(m) => m.merchantId}
+					empty={<EmptyState compact icon="check" kind="merchant" title={BILLING.noAttention} />}
+					columns={[
+						{
+							key: 'merchantName',
+							header: BILLING.receiptColumns.merchant,
+							rowHeader: true,
+							render: (m) => (
+								<Link
+									href={`${adminRoutes.merchant(m.merchantId)}#merchant-credits`}
+									className="font-semibold text-primary hover:underline">
+									{m.merchantName ?? m.merchantId}
+								</Link>
+							),
+						},
+						{ key: 'status', header: 'Status', render: (m) => <MerchantStatusBadge status={m.status} /> },
+						{ key: 'balance', header: BILLING.balance, align: 'right', render: (m) => formatCredits(m.balance) },
+						{ key: 'daysLeft', header: BILLING.daysLeft, render: (m) => <DaysLeft summary={m} /> },
+						...(canAdd
+							? [
 									{
-										key: 'merchantName',
-										header: BILLING.receiptColumns.merchant,
-										rowHeader: true,
-										render: (m) => (
-											<Link
-												href={`${adminRoutes.merchant(m.merchantId)}#merchant-credits`}
-												className="font-semibold text-primary hover:underline">
-												{m.merchantName ?? m.merchantId}
-											</Link>
+										key: 'add',
+										header: '',
+										align: /** @type {const} */ ('right'),
+										render: (/** @type {any} */ m) => (
+											<Button size="sm" variant="secondary" onClick={() => setAdding(m)}>
+												{BILLING.addCredits}
+											</Button>
 										),
 									},
-									{ key: 'status', header: 'Status', render: (m) => <MerchantStatusBadge status={m.status} /> },
-									{ key: 'balance', header: BILLING.balance, align: 'right', render: (m) => formatCredits(m.balance) },
-									{ key: 'daysLeft', header: BILLING.daysLeft, render: (m) => <DaysLeft summary={m} /> },
-									...(canAdd
-										? [
-												{
-													key: 'add',
-													header: '',
-													render: (/** @type {any} */ m) => (
-														<Button size="sm" variant="secondary" onClick={() => setAdding(m)}>
-															{BILLING.addCredits}
-														</Button>
-													),
-												},
-											]
-										: []),
-								]}
-							/>
-						),
-					},
-					{
-						id: 'receipts',
-						label: BILLING.billingTabs.receipts,
-						content: (
-							<div className="space-y-4">
-								<form method="get" className="flex flex-wrap items-end gap-3">
-									<Input
-										label={BILLING.receiptColumns.merchant}
-										name="merchantId"
-										defaultValue={filter.merchantId ?? ''}
-										placeholder="mer_…"
-									/>
-									<Input label={BILLING.filters.from} name="from" type="date" defaultValue={filter.from ?? ''} />
-									<Input label={BILLING.filters.to} name="to" type="date" defaultValue={filter.to ?? ''} />
-									<Input label={BILLING.receiptColumns.method} name="method" defaultValue={filter.method ?? ''} />
-									<FormActions>
-										<Button type="submit" variant="secondary">
-											{BILLING.filters.apply}
-										</Button>
-									</FormActions>
-								</form>
-								<ReceiptsTable receipts={receipts} showMerchant />
-							</div>
-						),
-					},
-					{
-						id: 'charges',
-						label: BILLING.billingTabs.charges,
-						content: (
-							<div className="space-y-4">
-								<p className="text-sm text-muted">{BILLING.chargesNote}</p>
-								<nav className="flex flex-wrap gap-2" aria-label={BILLING.billingTabs.charges}>
-									{
-										/** @type {const} */ (['day', 'merchant', 'product']).map((by) => (
-											<Link
-												key={by}
-												href={adminRoutes.finance({ by, from: filter.from, to: filter.to })}
-												aria-current={filter.by === by ? 'page' : undefined}
-												className={`rounded-xl px-3 py-1.5 text-sm font-semibold ${filter.by === by ? 'bg-primary-soft text-on-primary-soft' : 'bg-surface-2 text-fg hover:bg-surface-3'}`}>
-												{BILLING.chargesBy[by]}
-											</Link>
-										))
-									}
-								</nav>
-								<Table
-									caption={BILLING.billingTabs.charges}
-									rows={/** @type {any[]} */ (charges?.rows ?? [])}
-									rowKey={(r) => r.key}
-									empty={<EmptyState compact title={BILLING.noUsage} />}
-									columns={[
-										{
-											key: 'label',
-											header: BILLING.chargesBy[/** @type {'day'} */ (filter.by)],
-											rowHeader: true,
-											sortable: true,
-										},
-										{
-											key: 'credits',
-											header: BILLING.usageColumns.credits,
-											align: 'right',
-											sortable: true,
-											render: (r) => formatCredits(r.credits),
-										},
-									]}
-								/>
-							</div>
-						),
-					},
-				]}
-			/>
+								]
+							: []),
+					]}
+				/>
+			</Section>
+			<Section id="billing-receipts" title={S.receipts.title} description={S.receipts.help}>
+				<Card>
+					<form method="get" aria-label={BILLING.filters.apply} className="flex flex-wrap items-end gap-3">
+						<input type="hidden" name="by" value={filter.by} />
+						<Input
+							label={BILLING.receiptColumns.merchant}
+							name="merchantId"
+							defaultValue={filter.merchantId ?? ''}
+							placeholder="mer_…"
+							fieldClassName="min-w-48 flex-1"
+						/>
+						<Input
+							label={BILLING.filters.from}
+							name="from"
+							type="date"
+							defaultValue={filter.from ?? ''}
+							fieldClassName="min-w-40"
+						/>
+						<Input
+							label={BILLING.filters.to}
+							name="to"
+							type="date"
+							defaultValue={filter.to ?? ''}
+							fieldClassName="min-w-40"
+						/>
+						<Input
+							label={BILLING.receiptColumns.method}
+							name="method"
+							defaultValue={filter.method ?? ''}
+							fieldClassName="min-w-40 flex-1"
+						/>
+						<Button type="submit" variant="secondary">
+							{BILLING.filters.apply}
+						</Button>
+					</form>
+				</Card>
+				<ReceiptsTable receipts={receipts} showMerchant />
+			</Section>
+			<Section
+				id="billing-charges"
+				title={S.charges.title}
+				description={S.charges.help}
+				actions={
+					<nav className="flex flex-wrap gap-1 rounded-2xl bg-surface p-1" aria-label={S.charges.title}>
+						{
+							/** @type {const} */ (['day', 'merchant', 'product']).map((by) => (
+								<Link
+									key={by}
+									href={`${adminRoutes.finance({ ...filter, by })}#billing-charges`}
+									aria-current={filter.by === by ? 'page' : undefined}
+									className={cx(
+										'rounded-xl px-3 py-1.5 text-sm font-semibold',
+										filter.by === by ? 'bg-primary-soft text-on-primary-soft' : 'text-muted hover:text-fg',
+									)}>
+									{BILLING.chargesBy[by]}
+								</Link>
+							))
+						}
+					</nav>
+				}>
+				<Table
+					caption={S.charges.title}
+					rows={/** @type {any[]} */ (charges?.rows ?? [])}
+					rowKey={(r) => r.key}
+					empty={<EmptyState compact icon="coins" kind="credit" title={BILLING.noUsage} />}
+					columns={[
+						{
+							key: 'label',
+							header: BILLING.chargesBy[/** @type {'day'} */ (filter.by)],
+							rowHeader: true,
+							sortable: true,
+						},
+						{
+							key: 'credits',
+							header: BILLING.usageColumns.credits,
+							align: 'right',
+							sortable: true,
+							render: (r) => formatCredits(r.credits),
+						},
+					]}
+				/>
+			</Section>
 			{adding ? (
 				<AddCreditsDialog
 					merchant={{ merchantId: adding.merchantId, name: adding.merchantName ?? adding.merchantId }}

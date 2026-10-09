@@ -1,11 +1,11 @@
 'use client';
 /**
- * Building blocks shared by console views: the page error, a small actions menu, the list-and-detail layout with its
- * list pane, rows and search (PLAN 0.6), and opening a product dashboard in a new tab.
+ * Building blocks shared by console views: the page error, the actions of a detail header (one or two buttons and a
+ * More menu), the list-and-detail layout with its list pane, rows and search (PLAN 0.6), and opening a product
+ * dashboard in a new tab.
  * @module
  */
-import { useEffect, useId, useRef, useState } from 'react';
-import { ButtonLink, ErrorState, Icon, IconButton, Input, cx, describeProblem, problemCode } from '@ss/ui';
+import { ActionMenu, ButtonLink, ErrorState, Icon, Input, cx, describeProblem, problemCode } from '@ss/ui';
 import { CONSOLE } from '../../texts/console.js';
 import { Link } from '../link.js';
 import { routes } from '../paths.js';
@@ -43,82 +43,16 @@ export function PageProblem({ problem, title, back }) {
 }
 
 /**
- * @typedef {object} MenuItem
- * @property {string} label
- * @property {() => void} onSelect
- * @property {boolean} [disabled]
- * @property {string} [hint] shown under the item (why it is disabled)
- * @property {boolean} [danger]
+ * The actions of a detail header (PLAN 0.6 "fewer levels"): the one or two main actions as buttons (`children`), the
+ * rest in a compact More menu (⋯) — a destructive action last, in danger text.
+ * @param {{ label: string, children?: import('react').ReactNode, more?: import('@ss/ui').MenuItem[] }} props
+ *   `label`: the More button's accessible name
  */
-
-/**
- * A small actions menu (a button that opens a list of actions). Escape and a click outside close it.
- * @param {{ label: string, items: MenuItem[] }} props
- */
-export function ActionMenu({ label, items }) {
-	const [open, setOpen] = useState(false);
-	const root = useRef(/** @type {HTMLDivElement | null} */ (null));
-	const id = useId();
-	useEffect(() => {
-		if (!open) return undefined;
-		/** @param {MouseEvent} event */
-		const outside = (event) => {
-			if (root.current && !root.current.contains(/** @type {Node} */ (event.target))) setOpen(false);
-		};
-		/** @param {KeyboardEvent} event */
-		const escape = (event) => {
-			if (event.key === 'Escape') setOpen(false);
-		};
-		document.addEventListener('mousedown', outside);
-		document.addEventListener('keydown', escape);
-		return () => {
-			document.removeEventListener('mousedown', outside);
-			document.removeEventListener('keydown', escape);
-		};
-	}, [open]);
+export function HeaderActions({ label, children, more = [] }) {
 	return (
-		<div ref={root} className="relative">
-			<IconButton
-				label={label}
-				variant="secondary"
-				aria-haspopup="menu"
-				aria-expanded={open}
-				aria-controls={open ? id : undefined}
-				onClick={() => setOpen((o) => !o)}>
-				<Icon name="menu" size={16} />
-			</IconButton>
-			{open ? (
-				<div
-					id={id}
-					role="menu"
-					aria-label={label}
-					className="absolute right-0 z-30 mt-1 w-64 max-w-[calc(100vw-2rem)] space-y-0.5 rounded-2xl bg-surface p-1.5 shadow-overlay">
-					{items.map((item, index) => (
-						<div key={item.label}>
-							<button
-								type="button"
-								role="menuitem"
-								disabled={item.disabled}
-								aria-describedby={item.hint ? `${id}-${index}` : undefined}
-								onClick={() => {
-									setOpen(false);
-									item.onSelect();
-								}}
-								className={cx(
-									'block w-full rounded-lg px-3 py-2 text-left text-sm font-semibold hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-focus disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent',
-									item.danger ? 'text-danger' : 'text-fg',
-								)}>
-								{item.label}
-							</button>
-							{item.hint ? (
-								<p id={`${id}-${index}`} className="px-3 pb-1.5 text-xs text-muted">
-									{item.hint}
-								</p>
-							) : null}
-						</div>
-					))}
-				</div>
-			) : null}
+		<div className="flex flex-wrap items-center gap-2">
+			{children}
+			{more.length > 0 ? <ActionMenu label={label} items={more} size="md" /> : null}
 		</div>
 	);
 }
@@ -129,28 +63,25 @@ const DOTS = Object.freeze({ success: 'bg-success', warning: 'bg-warning', dange
 /** @typedef {'success' | 'warning' | 'danger' | 'neutral'} Dot */
 
 /**
- * A list-and-detail screen (PLAN 0.6): the list on the left and the selected item's detail beside it, on one screen.
- * With nothing selected the detail shows `empty`. Below 1024 px the two stack: the list alone until an item is
- * selected, then the detail alone with a Back link (`back`) to the list.
+ * A list-and-detail screen (PLAN 0.6): the list on the left and an item's detail beside it, on one screen. `detail` is
+ * the item the URL selects or, with `auto`, the first item of the list, opened by default so a wide screen is never
+ * half empty; with no item at all the detail side shows `empty` (under the list on phones). Below 1024 px the two
+ * stack: the list alone (an `auto` detail stays hidden there) until an item is chosen, then the detail alone with a
+ * Back link (`back`) to the list.
  * @param {{ label: string, list: import('react').ReactNode, detail: import('react').ReactNode | null,
- *   empty: import('react').ReactNode, back: { href: string, label: string } }} props
+ *   empty: import('react').ReactNode, back: { href: string, label: string }, auto?: boolean }} props
  */
-export function ListDetail({ label, list, detail, empty, back }) {
-	const selected = detail !== null && detail !== undefined;
+export function ListDetail({ label, list, detail, empty, back, auto = false }) {
+	const shown = detail !== null && detail !== undefined;
+	const chosen = shown && !auto;
 	return (
 		<div className="grid items-start gap-6 lg:grid-cols-[20rem_minmax(0,1fr)] xl:grid-cols-[22rem_minmax(0,1fr)] xl:gap-8">
-			<aside aria-label={label} className={cx('min-w-0 lg:sticky lg:top-24', selected ? 'hidden lg:block' : 'block')}>
+			<aside aria-label={label} className={cx('min-w-0 lg:sticky lg:top-24', chosen ? 'hidden lg:block' : 'block')}>
 				{list}
 			</aside>
-			<div className={cx('min-w-0 space-y-8', selected ? 'block' : 'hidden lg:block')}>
-				{selected ? (
-					<>
-						<BackLink href={back.href} label={back.label} />
-						{detail}
-					</>
-				) : (
-					empty
-				)}
+			<div className={cx('min-w-0 space-y-8', chosen || !shown ? 'block' : 'hidden lg:block')}>
+				{chosen ? <BackLink href={back.href} label={back.label} /> : null}
+				{shown ? detail : empty}
 			</div>
 		</div>
 	);
@@ -181,9 +112,10 @@ export function ListPane({ title, count, action, tools, children, footer }) {
 
 /**
  * One row of a list pane: a link with the name, an optional second line, a status dot and a right-hand figure; the
- * selected row is marked. `leading` sits before the link (a bulk-selection checkbox).
+ * selected row is marked. `current="wide"` marks the row opened by default, only where its detail shows beside the list
+ * (1024 px and up). `leading` sits before the link (a bulk-selection checkbox).
  * @param {{ href: string, label: import('react').ReactNode, sublabel?: import('react').ReactNode, dot?: Dot,
- *   dotLabel?: string, meta?: import('react').ReactNode, current?: boolean, leading?: import('react').ReactNode }} props
+ *   dotLabel?: string, meta?: import('react').ReactNode, current?: boolean | 'wide', leading?: import('react').ReactNode }} props
  */
 export function ListRow({ href, label, sublabel, dot, dotLabel, meta, current = false, leading }) {
 	return (
@@ -191,14 +123,18 @@ export function ListRow({ href, label, sublabel, dot, dotLabel, meta, current = 
 			{leading ? <span className="flex shrink-0 items-center pl-2">{leading}</span> : null}
 			<Link
 				href={href}
-				aria-current={current ? 'page' : undefined}
+				aria-current={current === true ? 'page' : undefined}
 				className={cx(
 					'flex min-w-0 flex-1 items-center gap-3 rounded-xl px-3 py-2.5 text-sm',
-					current ? 'bg-primary-soft text-on-primary-soft' : 'text-fg hover:bg-surface-2',
+					current === true
+						? 'bg-primary-soft text-on-primary-soft'
+						: current === 'wide'
+							? 'text-fg hover:bg-surface-2 lg:bg-primary-soft lg:text-on-primary-soft lg:hover:bg-primary-soft'
+							: 'text-fg hover:bg-surface-2',
 				)}>
 				{dot ? <span aria-hidden="true" title={dotLabel} className={cx('size-2 shrink-0 rounded-full', DOTS[dot])} /> : null}
 				<span className="min-w-0 flex-1">
-					<span className={cx('block truncate', current ? 'font-bold' : 'font-semibold')}>{label}</span>
+					<span className={cx('block truncate', current === true ? 'font-bold' : 'font-semibold')}>{label}</span>
 					{sublabel ? <span className="block truncate text-xs text-muted">{sublabel}</span> : null}
 				</span>
 				{dot && dotLabel ? <span className="sr-only">{dotLabel}</span> : null}

@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useState } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
+	ActionMenu,
 	AppShell,
 	Badge,
 	FieldGrid,
@@ -31,6 +32,7 @@ import {
 	IconButton,
 	Input,
 	KeyValueList,
+	Masonry,
 	Meter,
 	PageHeader,
 	RadioGroup,
@@ -43,9 +45,7 @@ import {
 	StatusBadge,
 	Stepper,
 	Switch,
-	TabNav,
 	Table,
-	Tabs,
 	TextArea,
 	ToastProvider,
 	copyText,
@@ -198,7 +198,7 @@ describe('display', () => {
 		expect(container.querySelector('dl dt')?.textContent).toBe('Domain');
 	});
 
-	it('Stat tiles, badges, chips and empty states take the colour of a kind; Section and HeroCard label their content', () => {
+	it('Stat tiles stay neutral and a kind takes the one accent; Section and HeroCard label their content', () => {
 		const { container } = render(
 			<div>
 				<PageHeader title="Detail" level={2} />
@@ -226,12 +226,14 @@ describe('display', () => {
 				<HeroCard label="Empty" value="0" chart={{ label: 'None', data: [] }} />
 			</div>,
 		);
-		// the tile and its badge carry the kind; the colours come from the semantic tokens (palette A or B)
-		const tile = /** @type {HTMLElement} */ (container.querySelector('[data-tone="website"].bg-tone-tile'));
-		expect(tile.querySelector('[data-tone="website"].bg-tone-solid')).not.toBeNull();
-		expect(container.querySelector('[data-tone="merchant"].bg-tone-solid.size-8')).not.toBeNull();
-		expect(container.querySelector('[data-tone="admin"].bg-tone-tint')?.textContent).toBe('Owner');
-		expect(container.querySelectorAll('[data-tone="website"].bg-tone-tint')).toHaveLength(1);
+		// one accent: tiles stay neutral, a kind puts the icon badge, chip and empty-state icon in the indigo tint
+		expect(container.querySelector('[data-tone]')).toBeNull();
+		const tile = /** @type {HTMLElement} */ (byText(container, 'Websites').closest('.rounded-card'));
+		expect(tile.className).toContain('bg-surface');
+		expect(tile.querySelector('.bg-primary-soft.size-10')).not.toBeNull();
+		expect(container.querySelector('.bg-primary-soft.size-8')).not.toBeNull();
+		expect(byText(container, 'Owner').className).toContain('bg-primary-soft');
+		expect(byText(container, 'No websites').closest('.rounded-card')?.querySelector('.bg-primary-soft')).not.toBeNull();
 		expect(container.querySelector('section[aria-labelledby="s1"] h2')?.textContent).toBe('Websites');
 		expect(container.querySelector('h2 > span')?.textContent).toBe('Detail');
 		expect(container.querySelector('section[aria-label="Credit balance"] svg[role="img"]')).not.toBeNull();
@@ -275,6 +277,7 @@ describe('display', () => {
 					format={(v) => `${v} c`}
 				/>
 				<BarChart label="Empty" data={[]} />
+				<BarChart label="Zero" data={[{ label: '01', value: 0 }]} emptyText="Nothing earned yet." />
 				<ShareBars
 					label="Share"
 					data={[
@@ -288,6 +291,10 @@ describe('display', () => {
 		expect(container.querySelector('svg[role="img"]')?.getAttribute('aria-label')).toBe('Spend: 2 values, highest 2 c');
 		expect(container.querySelector('table.sr-only td')?.textContent).toBe('2 c');
 		expect(container.textContent).toContain('No data for this period.');
+		expect(container.textContent).toContain('Nothing earned yet.');
+		expect(container.querySelectorAll('svg[role="img"]')).toHaveLength(1);
+		expect(container.textContent).toContain('Nothing earned yet.');
+		expect(container.querySelectorAll('svg[role="img"]')).toHaveLength(1);
 		expect(container.querySelector('ul[aria-label="Share"]')?.children).toHaveLength(2);
 	});
 });
@@ -341,55 +348,120 @@ describe('Table', () => {
 			/>,
 		);
 		expect(container.textContent).toContain('Nothing here');
+		const other = render(
+			<Table caption="Node" rows={[]} rowKey={() => 'x'} columns={[{ key: 'a', header: 'A' }]} empty={<b>No rows</b>} />,
+		);
+		expect(other.container.querySelector('td > b')?.textContent).toBe('No rows');
+		const fallback = render(<Table caption="Plain" rows={[]} rowKey={() => 'x'} columns={[{ key: 'a', header: 'A' }]} />);
+		expect(fallback.container.textContent).toContain('Nothing to show yet.');
 	});
 });
 
-describe('Tabs', () => {
-	it('moves selection and focus with arrow keys, Home and End', () => {
-		const onChange = vi.fn();
+describe('ActionMenu', () => {
+	it('opens a menu of actions, moves with the arrow keys and closes on Escape, Tab and outside clicks', () => {
+		const remove = vi.fn();
+		const edit = vi.fn();
 		const { container } = render(
-			<Tabs
-				label="Sections"
-				onChange={onChange}
-				tabs={[
-					{ id: 'a', label: 'A', content: 'Panel A' },
-					{ id: 'b', label: 'B', content: 'Panel B' },
-					{ id: 'c', label: 'C', content: 'Panel C' },
-				]}
-			/>,
+			<div>
+				<ActionMenu
+					label="More actions"
+					size="md"
+					items={[
+						{ label: 'Edit', onSelect: edit },
+						{ label: 'Blocked', onSelect: () => undefined, disabled: true, hint: 'Remove the websites first' },
+						{ label: 'Delete', onSelect: remove, danger: true },
+					]}
+				/>
+				<p>outside</p>
+			</div>,
 		);
-		const list = /** @type {HTMLElement} */ (container.querySelector('[role="tablist"]'));
-		const tabs = allByRole(container, 'tab');
-		expect(tabs.map((t) => t.getAttribute('tabindex'))).toEqual(['0', '-1', '-1']);
-		expect(container.querySelector('[role="tabpanel"]')?.textContent).toBe('Panel A');
-		keydown(list, 'ArrowRight');
-		expect(onChange).toHaveBeenLastCalledWith('b');
-		expect(document.activeElement).toBe(tabs[1]);
-		expect(container.querySelector('[role="tabpanel"]')?.getAttribute('aria-labelledby')).toBe(tabs[1]?.id);
-		keydown(list, 'End');
-		expect(onChange).toHaveBeenLastCalledWith('c');
-		keydown(list, 'ArrowRight');
-		expect(onChange).toHaveBeenLastCalledWith('a');
-		keydown(list, 'ArrowLeft');
-		expect(onChange).toHaveBeenLastCalledWith('c');
-		keydown(list, 'Home');
-		expect(onChange).toHaveBeenLastCalledWith('a');
-		keydown(list, 'x');
-		click(/** @type {HTMLElement} */ (tabs[2]));
-		expect(tabs[2]?.getAttribute('aria-selected')).toBe('true');
+		const button = /** @type {HTMLElement} */ (container.querySelector('button[aria-haspopup="menu"]'));
+		expect(button.getAttribute('aria-label')).toBe('More actions');
+		expect(button.className).toContain('w-10');
+		expect(button.getAttribute('aria-expanded')).toBe('false');
+		click(button);
+		const menu = /** @type {HTMLElement} */ (container.querySelector('[role="menu"]'));
+		expect(menu.getAttribute('aria-label')).toBe('More actions');
+		const items = allByRole(container, 'menuitem');
+		expect(items.map((i) => i.textContent)).toEqual(['Edit', 'Blocked', 'Delete']);
+		expect(document.activeElement).toBe(items[0]);
+		expect(items[2]?.className).toContain('text-danger');
+		expect(items[1]?.getAttribute('aria-describedby')).toBeTruthy();
+		expect(container.textContent).toContain('Remove the websites first');
+		keydown(menu, 'ArrowDown');
+		expect(document.activeElement).toBe(items[2]);
+		keydown(menu, 'ArrowDown');
+		expect(document.activeElement).toBe(items[0]);
+		keydown(menu, 'ArrowUp');
+		expect(document.activeElement).toBe(items[2]);
+		keydown(menu, 'Home');
+		expect(document.activeElement).toBe(items[0]);
+		keydown(menu, 'End');
+		expect(document.activeElement).toBe(items[2]);
+		keydown(menu, 'x');
+		keydown(menu, 'Escape');
+		expect(container.querySelector('[role="menu"]')).toBeNull();
+		expect(document.activeElement).toBe(button);
+		click(button);
+		keydown(/** @type {HTMLElement} */ (container.querySelector('[role="menu"]')), 'Tab');
+		expect(container.querySelector('[role="menu"]')).toBeNull();
+		click(button);
+		act(() => {
+			byText(container, 'outside').dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+		});
+		expect(container.querySelector('[role="menu"]')).toBeNull();
+		click(button);
+		click(byText(container, 'Delete', 'button'));
+		expect(remove).toHaveBeenCalledTimes(1);
+		expect(container.querySelector('[role="menu"]')).toBeNull();
+		click(button);
+		click(byText(container, 'Edit', 'button'));
+		expect(edit).toHaveBeenCalledTimes(1);
 	});
-	it('TabNav marks the current link', () => {
+	it('a menu whose actions are all disabled ignores the arrow keys; the small button is the default', () => {
 		const { container } = render(
-			<TabNav
-				label="Nav"
-				current="/b"
-				items={[
-					{ href: '/a', label: 'A' },
-					{ href: '/b', label: 'B' },
-				]}
+			<ActionMenu
+				label="Website actions"
+				icon="menu"
+				items={[{ label: 'Remove', onSelect: () => undefined, disabled: true }]}
 			/>,
 		);
-		expect(container.querySelector('[aria-current="page"]')?.getAttribute('href')).toBe('/b');
+		const button = /** @type {HTMLElement} */ (container.querySelector('button'));
+		expect(button.className).toContain('w-8');
+		click(button);
+		const menu = /** @type {HTMLElement} */ (container.querySelector('[role="menu"]'));
+		keydown(menu, 'ArrowDown');
+		expect(document.activeElement).not.toBe(container.querySelector('[role="menuitem"]'));
+		click(button);
+		expect(container.querySelector('[role="menu"]')).toBeNull();
+	});
+});
+
+describe('Masonry', () => {
+	it('lays cards out in columns that keep each card whole; a list keeps its items', () => {
+		const { container } = render(
+			<div>
+				<Masonry>
+					<Card title="A">a</Card>
+					<>
+						<Card title="B">b</Card>
+						<Card title="C">c</Card>
+					</>
+				</Masonry>
+				<Masonry as="ul" columns={2} label="Websites" className="extra">
+					<li>one</li>
+					<li>two</li>
+				</Masonry>
+			</div>,
+		);
+		const [first, second] = /** @type {HTMLElement[]} */ ([...container.querySelectorAll('.\\@container > *')]);
+		expect(first?.className).toContain('@6xl:columns-3');
+		expect(first?.className).toContain('[&>*]:break-inside-avoid');
+		expect(first?.children).toHaveLength(3);
+		expect(second?.tagName).toBe('UL');
+		expect(second?.getAttribute('aria-label')).toBe('Websites');
+		expect(second?.className).not.toContain('columns-3');
+		expect(second?.className).toContain('extra');
 	});
 });
 
@@ -531,6 +603,7 @@ describe('toasts, code blocks and forms', () => {
 				<FieldGrid className="mt-4">
 					<Input label="Alone" />
 				</FieldGrid>
+				<Input label="Accent" type="color" defaultValue="#4f46e5" />
 			</div>,
 		);
 		const grid = /** @type {HTMLElement} */ (container.querySelector('form > div'));
@@ -551,6 +624,9 @@ describe('toasts, code blocks and forms', () => {
 		expect(grid.querySelector(':scope > fieldset:not([data-wide])')?.textContent).toContain('Size');
 		expect(grid.querySelector(':scope > button')?.hasAttribute('data-cell')).toBe(false);
 		expect(byLabel(container, 'Alone').closest('.\\@container')?.className).toContain('mt-4');
+		expect(byLabel(container, 'Accent').className).toContain('cursor-pointer');
+		// a lone field cell spans the row
+		expect(grid.className).toContain('[&:not(:has(>[data-cell]~[data-cell]))>[data-cell]]:col-span-full');
 	});
 
 	it('Form prevents native submission and FormError explains problems', () => {
@@ -621,11 +697,10 @@ describe('AppShell', () => {
 		expect(container.querySelector('a[href="#main"]')?.textContent).toBe('Skip to content');
 		expect(container.querySelector('main#main')?.textContent).toBe('Page body');
 		expect(container.querySelector('nav[aria-label="Main"] [aria-current="page"]')?.textContent).toBe('Websites');
-		// icon tiles: solid primary for the current page, the tint of the item's kind otherwise (neutral without one)
+		// icon tiles: solid primary for the current page, the accent tint for an item with a kind, neutral without one
 		const badge = (/** @type {string} */ href) => container.querySelector(`nav a[href="${href}"] > span[aria-hidden="true"]`);
 		expect(badge('/websites')?.className).toContain('bg-primary');
-		expect(badge('/usage')?.getAttribute('data-tone')).toBe('credit');
-		expect(badge('/usage')?.className).toContain('bg-tone-tint');
+		expect(badge('/usage')?.className).toContain('bg-primary-soft');
 		expect(badge('/home')?.className).toContain('bg-surface-2');
 		expect(badge('/team')).toBeNull();
 		const menu = /** @type {HTMLElement} */ (container.querySelector('button[aria-label="Open navigation"]'));

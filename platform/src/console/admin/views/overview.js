@@ -83,7 +83,7 @@ export function OverviewView(props) {
 			</div>
 			<Section id="overview-products" title={ADMIN.productsTitle} description={ADMIN.productsIntro}>
 				{products.length === 0 ? (
-					<EmptyState compact icon="box" title={ADMIN.noProducts} />
+					<EmptyState compact icon="box" kind="product" title={ADMIN.noProducts} />
 				) : (
 					<ul className="grid gap-5 lg:grid-cols-2 2xl:grid-cols-3">
 						{products.map((p) => (

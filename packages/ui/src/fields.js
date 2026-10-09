@@ -18,11 +18,13 @@ export const LABEL_CLASS = 'block text-xs font-semibold uppercase tracking-wider
 
 /**
  * Classes of a responsive field grid: 1 / 2 / 3 columns by the width of the nearest `@container`, packed densely
- * (masonry-like); children that are not field cells, and wide cells, span the row.
+ * (masonry-like); children that are not field cells, and wide cells, span the row. A lone field cell spans the row
+ * too, so a card with one short setting does not leave it orphaned in a corner.
  */
 export const FIELD_GRID =
 	'grid grid-flow-row-dense grid-cols-1 items-start gap-x-5 gap-y-4 @md:grid-cols-2 @3xl:grid-cols-3 ' +
-	'[&>:not([data-cell])]:col-span-full [&>[data-wide]]:col-span-full [&>a]:justify-self-start [&>button]:justify-self-start';
+	'[&>:not([data-cell])]:col-span-full [&>[data-wide]]:col-span-full ' +
+	'[&:not(:has(>[data-cell]~[data-cell]))>[data-cell]]:col-span-full [&>a]:justify-self-start [&>button]:justify-self-start';
 
 /**
  * Grid cell attributes of a control's root (`wide` spans the whole row).
@@ -44,7 +46,12 @@ export function FieldGrid({ children, className }) {
 const CONTROL =
 	'w-full rounded-xl border bg-surface px-3.5 py-2 text-sm text-fg placeholder:text-muted/80 transition-colors ' +
 	'focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-focus ' +
-	'disabled:cursor-not-allowed disabled:bg-surface-2 read-only:bg-surface-2';
+	'disabled:cursor-not-allowed disabled:bg-surface-2 [&:read-only:not(select)]:bg-surface-2';
+
+/** A colour input: the whole control is the swatch. */
+const COLOR =
+	'h-10 cursor-pointer p-1 [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:rounded-lg ' +
+	'[&::-webkit-color-swatch]:border-0 [&::-moz-color-swatch]:rounded-lg [&::-moz-color-swatch]:border-0';
 
 /**
  * @param {boolean} invalid
@@ -147,7 +154,7 @@ export function Input({ label, hideLabel, help, error, aside, suffix, fieldClass
 						required={required}
 						aria-invalid={error ? true : undefined}
 						aria-describedby={ids.describedBy}
-						className={cx(controlClass(Boolean(error)), suffix ? 'pr-16' : null, className)}
+						className={cx(controlClass(Boolean(error)), suffix ? 'pr-16' : null, rest.type === 'color' && COLOR, className)}
 						{...rest}
 					/>
 					{suffix ? (

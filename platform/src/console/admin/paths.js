@@ -24,7 +24,7 @@ export const adminRoutes = Object.freeze({
 	products: (/** @type {{ status?: string | null }} */ q = {}) => `/admin/products${query(q)}`,
 	product: (/** @type {string} */ id, /** @type {{ status?: string | null }} */ q = {}) => `/admin/products/${e(id)}${query(q)}`,
 	finance: (
-		/** @type {{ tab?: string | null, merchantId?: string | null, from?: string | null, to?: string | null, method?: string | null, by?: string | null }} */ q = {},
+		/** @type {{ merchantId?: string | null, from?: string | null, to?: string | null, method?: string | null, by?: string | null }} */ q = {},
 	) => `/admin/finance${query(q)}`,
 	activity: (
 		/** @type {{ merchantId?: string | null, adminId?: string | null, from?: string | null, to?: string | null }} */ q = {},

@@ -1,9 +1,10 @@
 'use client';
 /**
- * Console frame: a soft sidebar island (brand, sections of links, each link with an icon tile in the colour of its `kind`) and a top bar island (switchers on the left,
- * account actions and the System / Light / Dark theme switch on the right). The frame uses the available width (16 px
- * side padding on phones, 24–32 px from `md`, at most 1600 px wide); pages decide their own reading widths. Below `md`
- * the sidebar becomes an off-canvas panel opened by the menu button.
+ * Console frame: a soft sidebar island (brand, sections of links, each link with an icon tile — the accent tint with a
+ * `kind`, solid for the current page) and a top bar island (switchers on the left, account actions and the System /
+ * Light / Dark theme switch on the right) that stays on top of the page as it scrolls. The frame uses the available
+ * width (16 px side padding on phones, 24–32 px from `md`, at most 1680 px wide); pages decide their own reading
+ * widths. Below `md` the sidebar becomes an off-canvas panel opened by the menu button.
  * Includes a skip link to the main content. Router links are rendered with `linkAs` (e.g. Next's `Link`).
  * @module
  */
@@ -16,7 +17,7 @@ import { ThemeToggle } from './theme.js';
 /** @typedef {import('react').ReactNode} ReactNode */
 /** @typedef {import('./display.js').Kind} Kind */
 /**
- * A menu link; its icon sits in a small tile tinted with the colour of its `kind` (PLAN 0.6 colour rule).
+ * A menu link; its icon sits in a small tile, in the accent tint when the link has a `kind` (PLAN 0.6 colour rule).
  * @typedef {{ href: string, label: ReactNode, icon?: import('./icons.js').IconName, kind?: Kind, current?: boolean, badge?: ReactNode }} NavItem
  */
 /** @typedef {{ label?: string, items: NavItem[] }} NavSection */
@@ -48,13 +49,12 @@ function Nav({ sections, linkAs, onNavigate }) {
 									{item.icon ? (
 										<span
 											aria-hidden="true"
-											{...(item.current || !item.kind ? {} : { 'data-tone': item.kind })}
 											className={cx(
 												'flex size-[26px] shrink-0 items-center justify-center rounded-[9px]',
 												item.current
 													? 'bg-primary text-on-primary'
 													: item.kind
-														? 'bg-tone-tint text-tone-ink'
+														? 'bg-primary-soft text-primary'
 														: 'bg-surface-2 text-muted',
 											)}>
 											<Icon name={item.icon} size={15} />
@@ -164,25 +164,27 @@ export function AppShell({
 					</div>
 				) : null}
 				<div className="flex min-w-0 flex-1 flex-col gap-6">
-					<header className="sticky top-3 z-30 flex flex-wrap items-center justify-between gap-3 rounded-card bg-surface/95 px-3 py-2.5 backdrop-blur sm:top-4 sm:px-4">
-						<div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-							<button
-								type="button"
-								onClick={() => setOpen(true)}
-								aria-label="Open navigation"
-								aria-expanded={open}
-								className="rounded-lg p-2 text-fg hover:bg-surface-2 md:hidden">
-								<Icon name="menu" size={18} />
-							</button>
-							{topbar}
-						</div>
-						{actions || themeToggle ? (
-							<div className="flex items-center gap-2">
-								{themeToggle ? <ThemeToggle /> : null}
-								{actions}
+					<div className="sticky top-0 z-30 -mt-3 bg-canvas pt-3 sm:-mt-4 sm:pt-4">
+						<header className="flex flex-wrap items-center justify-between gap-3 rounded-card bg-surface px-3 py-2.5 sm:px-4">
+							<div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+								<button
+									type="button"
+									onClick={() => setOpen(true)}
+									aria-label="Open navigation"
+									aria-expanded={open}
+									className="rounded-lg p-2 text-fg hover:bg-surface-2 md:hidden">
+									<Icon name="menu" size={18} />
+								</button>
+								{topbar}
 							</div>
-						) : null}
-					</header>
+							{actions || themeToggle ? (
+								<div className="flex items-center gap-2">
+									{themeToggle ? <ThemeToggle /> : null}
+									{actions}
+								</div>
+							) : null}
+						</header>
+					</div>
 					{banner}
 					<main id={mainId} tabIndex={-1} className="min-w-0 space-y-8 pb-16 focus:outline-none">
 						{children}

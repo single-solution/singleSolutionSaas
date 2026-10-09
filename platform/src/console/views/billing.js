@@ -20,7 +20,7 @@ const MERCHANT_TONES = { active: 'success', low_balance: 'warning', grace: 'warn
  * @param {{ value: string | null | undefined }} props
  */
 export function LocalTime({ value }) {
-	const [text, setText] = useState(value ? `${formatDateTime(value)} UTC` : '—');
+	const [text, setText] = useState(value ? formatDateTime(value) : '—');
 	useEffect(() => {
 		if (value) setText(new Date(value).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }));
 	}, [value]);
@@ -197,7 +197,7 @@ export function UsageView({ usage, showWebsite = true, chartTitle = BILLING.usag
 				caption={BILLING.usageTitle}
 				rows={rows}
 				rowKey={(r) => `${r.day}:${r.websiteId}:${r.productId}:${r.feature}`}
-				empty={<EmptyState compact title={BILLING.noUsage} />}
+				empty={<EmptyState compact icon="trendingUp" kind="credit" title={BILLING.noUsage} />}
 				defaultSort={{ key: 'day', direction: 'desc' }}
 				columns={[
 					{ key: 'day', header: BILLING.usageColumns.day, sortable: true, rowHeader: true },
@@ -229,7 +229,7 @@ export function ReceiptsTable({ receipts, showMerchant = false }) {
 			caption={BILLING.receiptsTitle}
 			rows={receipts}
 			rowKey={(r) => r.receiptId}
-			empty={<EmptyState compact title={BILLING.noReceipts} />}
+			empty={<EmptyState compact icon="receipt" kind="credit" title={BILLING.noReceipts} />}
 			columns={[
 				{ key: 'at', header: BILLING.receiptColumns.date, rowHeader: true, render: (r) => <LocalTime value={r.at} /> },
 				...(showMerchant ? [{ key: 'merchantName', header: BILLING.receiptColumns.merchant, sortable: true }] : []),

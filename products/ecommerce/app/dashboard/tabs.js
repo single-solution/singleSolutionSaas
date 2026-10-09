@@ -16,6 +16,7 @@ import {
 	ConfirmDialog,
 	FieldGrid,
 	Input,
+	Masonry,
 	Section,
 	Stat,
 	formatCredits,
@@ -112,7 +113,7 @@ function OverviewTab({ websiteId }) {
 					<div className="space-y-8">
 						<StatusBanner status={data.status} />
 						<Section title={TEXTS.overview.numbers} description={TEXTS.overview.numbersHelp}>
-							<div className="grid gap-4 sm:grid-cols-3">
+							<div className="grid gap-5 sm:grid-cols-3">
 								<Stat
 									label={TEXTS.overview.today}
 									value={formatCredits(data.todayMillicredits)}
@@ -249,13 +250,14 @@ function FeaturesTab({ websiteId, who, support }) {
 				return (
 					<div className="space-y-4">
 						{admin ? null : <Callout tone="info">{fill(TEXTS.features.contact, { contact: support.email })}</Callout>}
-						<div className="grid gap-4 xl:grid-cols-2">
+						<Masonry>
 							{features.map((feature) => {
 								const missing = feature.dependsOn.filter((dep) => !on.includes(dep));
 								const broken = links.filter((link) => link.neededBy.includes(feature.key) && link.status !== 'connected');
 								return (
 									<Card
 										key={feature.key}
+										bodyClassName="space-y-3"
 										title={feature.name}
 										subtitle={fill(TEXTS.features.price, { price: formatCreditsPerHour(feature.millicreditsPerHour) })}
 										actions={
@@ -285,7 +287,7 @@ function FeaturesTab({ websiteId, who, support }) {
 									</Card>
 								);
 							})}
-						</div>
+						</Masonry>
 						{admin ? (
 							<Button disabled={picked === null} onClick={() => setConfirming(true)}>
 								{TEXTS.save}
@@ -342,64 +344,66 @@ function ConnectionsTab({ websiteId }) {
 			{(data) => (
 				<div className="space-y-4">
 					{data.connections.length === 0 ? <p className="text-sm text-muted">{TEXTS.connections.none}</p> : null}
-					{data.connections.map((/** @type {Connection} */ item) => {
-						const hint = connectionHint(item.name);
-						/** @param {unknown} value */
-						const save = (value) => void act(call('PUT', `${base}/${item.name}`, { value }));
-						return (
-							<Card
-								key={item.name}
-								title={item.label}
-								subtitle={
-									item.neededBy.length > 0
-										? fill(TEXTS.connections.neededBy, { features: namesOf(item.neededBy) })
-										: TEXTS.connections.neededByNone
-								}>
-								<p className="flex flex-wrap items-center gap-2 text-sm">
-									<Badge tone={toneOf(item.status)} dot>
-										{TEXTS.connections[/** @type {'connected'} */ (item.status)]}
-									</Badge>
-									{item.last4 ? <code>••••{item.last4}</code> : null}
-									{item.message ? <span className="text-muted">{item.message}</span> : null}
-								</p>
-								{hint ? <p className="mt-2 text-sm text-muted">{hint}</p> : null}
-								{Object.hasOwn(FORMS, item.name) ? (
-									<ConnectionForm name={item.name} onSave={save} />
-								) : (
-									<div className="mt-3 flex flex-wrap items-end gap-2">
-										<Input
-											fieldClassName="min-w-0 flex-1 basis-64"
-											label={TEXTS.connections.value}
-											type="password"
-											autoComplete="off"
-											value={values[item.name] ?? ''}
-											onChange={(event) => setValues({ ...values, [item.name]: event.target.value })}
-										/>
+					<Masonry>
+						{data.connections.map((/** @type {Connection} */ item) => {
+							const hint = connectionHint(item.name);
+							/** @param {unknown} value */
+							const save = (value) => void act(call('PUT', `${base}/${item.name}`, { value }));
+							return (
+								<Card
+									key={item.name}
+									title={item.label}
+									subtitle={
+										item.neededBy.length > 0
+											? fill(TEXTS.connections.neededBy, { features: namesOf(item.neededBy) })
+											: TEXTS.connections.neededByNone
+									}>
+									<p className="flex flex-wrap items-center gap-2 text-sm">
+										<Badge tone={toneOf(item.status)} dot>
+											{TEXTS.connections[/** @type {'connected'} */ (item.status)]}
+										</Badge>
+										{item.last4 ? <code>••••{item.last4}</code> : null}
+										{item.message ? <span className="text-muted">{item.message}</span> : null}
+									</p>
+									{hint ? <p className="mt-2 text-sm text-muted">{hint}</p> : null}
+									{Object.hasOwn(FORMS, item.name) ? (
+										<ConnectionForm name={item.name} onSave={save} />
+									) : (
+										<div className="mt-3 flex flex-wrap items-end gap-2">
+											<Input
+												fieldClassName="min-w-0 flex-1 basis-64"
+												label={TEXTS.connections.value}
+												type="password"
+												autoComplete="off"
+												value={values[item.name] ?? ''}
+												onChange={(event) => setValues({ ...values, [item.name]: event.target.value })}
+											/>
+											<Button
+												size="sm"
+												disabled={!values[item.name]?.trim()}
+												onClick={() => {
+													save(values[item.name]?.trim());
+													setValues({ ...values, [item.name]: '' });
+												}}>
+												{TEXTS.connections.save}
+											</Button>
+										</div>
+									)}
+									<div className="mt-3 flex flex-wrap gap-2">
 										<Button
 											size="sm"
-											disabled={!values[item.name]?.trim()}
-											onClick={() => {
-												save(values[item.name]?.trim());
-												setValues({ ...values, [item.name]: '' });
-											}}>
-											{TEXTS.connections.save}
+											variant="secondary"
+											onClick={() => void act(call('POST', `${base}/${item.name}/test`))}>
+											{TEXTS.connections.test}
+										</Button>
+										<Button size="sm" variant="ghost" onClick={() => void act(call('DELETE', `${base}/${item.name}`))}>
+											{TEXTS.connections.remove}
 										</Button>
 									</div>
-								)}
-								<div className="mt-3 flex flex-wrap gap-2">
-									<Button
-										size="sm"
-										variant="secondary"
-										onClick={() => void act(call('POST', `${base}/${item.name}/test`))}>
-										{TEXTS.connections.test}
-									</Button>
-									<Button size="sm" variant="ghost" onClick={() => void act(call('DELETE', `${base}/${item.name}`))}>
-										{TEXTS.connections.remove}
-									</Button>
-								</div>
-							</Card>
-						);
-					})}
+								</Card>
+							);
+						})}
+					</Masonry>
 					<Outcome result={result} />
 				</div>
 			)}

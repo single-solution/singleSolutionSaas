@@ -139,7 +139,12 @@ describe('security headers', () => {
 		expect(csp).toContain("frame-ancestors 'none'");
 		expect(csp).toContain('upgrade-insecure-requests');
 		expect(csp).not.toContain('unsafe-eval');
-		expect(pageCsp({ nonce, dev: true, upgradeInsecure: false })).toContain("'unsafe-eval'");
+		expect(csp).toContain(`style-src 'self' 'nonce-${nonce}'`);
+		expect(csp).not.toContain('unsafe-inline');
+		// development only: React debugging and the inline styles of the Next.js dev tools
+		const dev = pageCsp({ nonce, dev: true, upgradeInsecure: false });
+		expect(dev).toContain("'unsafe-eval'");
+		expect(dev).toContain("style-src 'self' 'unsafe-inline'");
 		expect(() => pageCsp({ nonce: "x' 'unsafe-inline" })).toThrow();
 		expect(API_CSP).toContain("default-src 'none'");
 		const keys = staticSecurityHeaders().map((h) => h.key);

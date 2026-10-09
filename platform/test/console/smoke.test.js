@@ -99,13 +99,15 @@ describe('merchant console smoke', () => {
 			expect(overviewText).toContain('Open');
 			expect(overviewText).toContain('Your admin adds products to this website.'); // the second website
 
-			// Websites with nothing selected: the list (domain, status dot, daily cost) and a short empty state
-			const websitesText = text(
-				ssr(<WebsitesView {...await loaders.loadWebsites(merchant.api, merchantId)} branding={BRANDING} />),
-			);
+			// Websites with nothing in the URL: the list (domain, status dot, daily cost) and the first website's card,
+			// which wide screens open by default (its row marked there only; phones show the list)
+			const websitesRaw = ssr(<WebsitesView {...await loaders.loadWebsites(merchant.api, merchantId)} branding={BRANDING} />);
+			const websitesText = text(websitesRaw);
 			expect(websitesText).toContain('www.shop.example.com');
 			expect(websitesText).toContain('2 products');
-			expect(websitesText).toContain('Select a website');
+			expect(websitesText).toContain('Install and tokens');
+			expect(websitesRaw).not.toContain('aria-current="page"');
+			expect(websitesRaw).toContain('lg:bg-primary-soft');
 
 			// a website selected: its card (products with Open; tokens and usage as dialogs; no admin actions)
 			const selected = await loaders.loadWebsites(merchant.api, merchantId, String(site.websiteId));

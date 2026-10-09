@@ -2,9 +2,9 @@
 /**
  * Merchant Overview and Websites (PLAN 0.8.2 Merchant): the balance and days left at the current spend, the 30-day
  * spend chart and the websites with product chips and Open buttons; the Websites screen — the list of websites (per
- * row the domain, a status dot and the daily cost) beside the selected website's card (its products with Open, and
- * Install and tokens and Usage as dialogs; no admin actions). With no websites yet, the welcome with the support
- * contact (PLAN 0.8.2 Sign-in).
+ * row the domain, a status dot and the daily cost) beside the selected website's card (on wide screens the first one
+ * until another is picked; its products with Open, and Install and tokens and Usage as dialogs; no admin actions).
+ * With no websites yet, the welcome with the support contact (PLAN 0.8.2 Sign-in).
  * @module
  */
 import { useState } from 'react';
@@ -15,6 +15,7 @@ import {
 	EmptyState,
 	Icon,
 	IconBadge,
+	Masonry,
 	PageHeader,
 	Section,
 	Stat,
@@ -42,6 +43,7 @@ function Welcome({ branding }) {
 	return (
 		<EmptyState
 			icon="globe"
+			kind="website"
 			title={AUTH.welcomeTitle}
 			description={
 				<>
@@ -105,17 +107,17 @@ export function OverviewView(props) {
 				{rows.length === 0 ? (
 					<Welcome branding={props.branding} />
 				) : (
-					<ul className="grid gap-5 lg:grid-cols-2 2xl:grid-cols-3">
+					<Masonry as="ul" label={MERCHANT.websitesTitle}>
 						{rows.map(({ website, cards }) => (
 							<li key={website.websiteId}>
 								<Card
-									className="h-full"
 									title={
-										<span className="flex items-center gap-3">
+										<span className="flex min-w-0 items-center gap-3">
 											<IconBadge icon="globe" kind="website" size="sm" />
 											<Link
 												href={routes.website(website.websiteId)}
-												className="break-all text-fg hover:text-primary hover:underline">
+												title={website.domain}
+												className="min-w-0 truncate text-fg hover:text-primary hover:underline">
 												{website.domain}
 											</Link>
 										</span>
@@ -147,7 +149,7 @@ export function OverviewView(props) {
 								</Card>
 							</li>
 						))}
-					</ul>
+					</Masonry>
 				)}
 			</Section>
 		</div>
@@ -163,12 +165,15 @@ export function WebsitesView(props) {
 	if (!props.ok) return <PageProblem problem={props.problem} />;
 	const rows = /** @type {Array<{ website: any, cards: ProductCard[] }>} */ (props.rows);
 	const selectedId = typeof props.selectedId === 'string' ? props.selectedId : null;
-	const selected = selectedId ? (rows.find((r) => String(r.website.websiteId) === selectedId) ?? null) : null;
+	const auto = selectedId === null;
+	const selected = auto ? (rows[0] ?? null) : (rows.find((r) => String(r.website.websiteId) === selectedId) ?? null);
+	const shownId = selected ? String(selected.website.websiteId) : null;
 	const needle = q.trim().toLowerCase();
 	const shown = needle ? rows.filter((r) => String(r.website.domain).toLowerCase().includes(needle)) : rows;
 	return (
 		<ListDetail
 			label={MERCHANT.websitesTitle}
+			auto={auto}
 			back={{ href: routes.websites(), label: MERCHANT.websitesTitle }}
 			list={
 				<ListPane title={MERCHANT.websitesTitle} tools={<ListSearch label={WEBSITE.search} value={q} onChange={setQ} />}>
@@ -181,7 +186,7 @@ export function WebsitesView(props) {
 							<ListRow
 								key={website.websiteId}
 								href={routes.website(website.websiteId)}
-								current={String(website.websiteId) === selectedId}
+								current={String(website.websiteId) === shownId ? (auto ? 'wide' : true) : false}
 								label={website.domain}
 								sublabel={WEBSITE.productsCount(cards.length)}
 								dot={websiteDot(cards)}
@@ -191,25 +196,19 @@ export function WebsitesView(props) {
 					)}
 				</ListPane>
 			}
-			empty={
-				rows.length === 0 ? (
-					<Welcome branding={props.branding} />
-				) : (
-					<EmptyState icon="globe" kind="website" title={WEBSITE.selectTitle} description={MERCHANT.websitesPageIntro} />
-				)
-			}
+			empty={<Welcome branding={props.branding} />}
 			detail={
-				selectedId === null ? null : selected ? (
+				selected && shownId ? (
 					<WebsiteCard
-						key={selectedId}
+						key={shownId}
 						headline
 						website={selected.website}
 						cards={selected.cards}
 						can={{ manage: false, removeWebsite: false, tokens: true, open: true }}
 						fetcher={apiFetch}
-						launch={(productId) => ({ path: api.launch(props.merchantId, selectedId, productId) })}
+						launch={(productId) => ({ path: api.launch(props.merchantId, shownId, productId) })}
 					/>
-				) : (
+				) : auto ? null : (
 					<PageProblem
 						problem={{ status: 404, title: 'Not Found', detail: WEBSITE.gone }}
 						back={{ href: routes.websites(), label: MERCHANT.websitesTitle }}

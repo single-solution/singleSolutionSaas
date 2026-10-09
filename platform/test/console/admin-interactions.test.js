@@ -94,6 +94,32 @@ const press = async (label) => {
 	await settle(1);
 };
 
+/**
+ * Press the Save button of one settings card.
+ * @param {string} title the card's title
+ */
+const saveIn = async (title) => {
+	await act(async () => {
+		/** @type {HTMLButtonElement} */ (
+			[...document.querySelectorAll(`section[aria-label="${title}"] button`)].find((b) => b.textContent === 'Save')
+		).click();
+	});
+	await settle(1);
+};
+
+/**
+ * Open a header's More menu (⋯), then choose one of its actions.
+ * @param {string} label
+ */
+const choose = async (label) => {
+	await act(async () => {
+		/** @type {HTMLButtonElement} */ (
+			document.querySelector('button[aria-haspopup="menu"][aria-label^="More actions for"]')
+		).click();
+	});
+	await press(label);
+};
+
 /** @param {string} label @param {string} value */
 const fill = (label, value) => type(byLabel(document, label), value);
 
@@ -321,14 +347,14 @@ describe('admin console interactions (jsdom)', () => {
 			</ToastProvider>,
 		);
 		await until(() => shows('Setup pending'));
-		await press('Copy setup link');
+		await choose('Copy setup link');
 		await until(() => shows('Copy this link now.'));
 		await act(async () => {
 			/** @type {HTMLButtonElement} */ (document.querySelector('[role="dialog"] button[aria-label="Close"]'))?.click();
 		});
-		await press('Resend setup link');
+		await choose('Resend setup link');
 		await until(() => ownerBrowser.calls.filter((c) => c.path === adminApi.setupLink(madeId) && c.status === 200).length >= 2);
-		await press('Suspend');
+		await choose('Suspend');
 		fillDialog('Reason', 'unpaid');
 		await act(async () => {
 			/** @type {HTMLButtonElement} */ (
@@ -336,7 +362,7 @@ describe('admin console interactions (jsdom)', () => {
 			).click();
 		});
 		await until(() => shows('Suspended: unpaid'));
-		await press('Resume');
+		await choose('Resume');
 		await act(async () => {
 			/** @type {HTMLButtonElement} */ (
 				[...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent === 'Resume')
@@ -382,8 +408,14 @@ describe('admin console interactions (jsdom)', () => {
 		await until(() => !document.querySelector('[role="dialog"]') && shows('olga@made.test'));
 		// credits and activity are sections of the same page
 		expect(shows('Credit receipts') && shows('Merchant created')).toBe(true);
-		// a merchant with a website cannot be deleted
-		expect(button('Delete').disabled).toBe(true);
+		// a merchant with a website cannot be deleted: Delete is last in the More menu, disabled, with the reason
+		await act(async () => {
+			/** @type {HTMLButtonElement} */ (document.querySelector('button[aria-label^="More actions for"]')).click();
+		});
+		const items = [...document.querySelectorAll('[role="menuitem"]')];
+		expect(items.at(-1)?.textContent).toBe('Delete');
+		expect(/** @type {HTMLButtonElement} */ (items.at(-1)).disabled).toBe(true);
+		expect(shows('Remove the websites of this merchant first.')).toBe(true);
 		await ownerBrowser.api.request('DELETE', `/v1/merchants/${madeId}/websites/${madeSite}`, { confirm: 'made.example.com' });
 		cleanup();
 		render(
@@ -397,7 +429,7 @@ describe('admin console interactions (jsdom)', () => {
 			</ToastProvider>,
 		);
 		// delete the merchant (no websites left): typed business name
-		await press('Delete');
+		await choose('Delete');
 		type(confirmInput(), 'Ops Made Ltd');
 		await act(async () => {
 			/** @type {HTMLButtonElement} */ (
@@ -423,7 +455,7 @@ describe('admin console interactions (jsdom)', () => {
 				/>
 			</ToastProvider>,
 		);
-		await press('Turn off two-step');
+		await choose('Turn off two-step');
 		await act(async () => {
 			/** @type {HTMLButtonElement} */ (
 				[...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent === 'Turn off two-step')
@@ -495,16 +527,17 @@ describe('admin console interactions (jsdom)', () => {
 		await act(async () => {
 			/** @type {HTMLInputElement} */ (byLabel(document, 'Implicit TLS (port 465)')).click();
 		});
-		await press('Save');
+		// one page: every section is a card with its own Save
+		expect(document.querySelector('[role="tablist"]')).toBeNull();
+		await saveIn('E-mail sending');
 		await until(() => ownerBrowser.calls.some((c) => c.path === adminApi.settingsMail() && c.status === 200));
 		await until(() => shows('Send test e-mail'));
 		await press('Send test e-mail');
 		await until(() => ownerBrowser.calls.some((c) => c.path === adminApi.settingsMailTest()));
 		await press('Turn e-mail sending off');
 		await until(() => ownerBrowser.calls.filter((c) => c.path === adminApi.settingsMail() && c.status === 200).length >= 2);
-		await press('Branding');
 		fill('Name', 'Acme Portal');
-		await press('Save');
+		await saveIn('Branding');
 		await until(() => ownerBrowser.calls.some((c) => c.path === adminApi.settingsBranding() && c.status === 200));
 		const logo = /** @type {HTMLInputElement} */ (document.querySelector('input[type="file"]'));
 		const svg = Object.assign(new NodeBlob(['<svg/>'], { type: 'image/svg+xml' }), { name: 'logo.svg' });
@@ -525,20 +558,18 @@ describe('admin console interactions (jsdom)', () => {
 		await until(() => shows('Remove logo'));
 		await press('Remove logo');
 		await until(() => ownerBrowser.calls.some((c) => c.method === 'DELETE' && c.path === adminApi.settingsLogo()));
-		await press('Support contact');
 		fill('E-mail', 'help@acme.test');
 		fill('Phone', '+92 300 1234567');
-		await press('Save');
+		await saveIn('Support contact');
 		await until(() => ownerBrowser.calls.some((c) => c.path === adminApi.settingsSupport() && c.status === 200));
-		await press('Security');
 		fill('Session length (hours)', '0');
-		await press('Save');
+		await saveIn('Security');
 		await until(() => ownerBrowser.calls.some((c) => c.path === adminApi.settingsSecurity() && c.status === 422));
 		fill('Session length (hours)', '24');
 		await act(async () => {
 			/** @type {HTMLElement} */ (document.querySelector('[role="switch"]')).click();
 		});
-		await press('Save');
+		await saveIn('Security');
 		await until(() => ownerBrowser.calls.some((c) => c.path === adminApi.settingsSecurity() && c.status === 200));
 		cleanup();
 		render(<SettingsView ok={false} problem={{ status: 403, title: 'Forbidden' }} />);
@@ -583,7 +614,7 @@ describe('admin console interactions (jsdom)', () => {
 			/** @type {HTMLButtonElement} */ (document.querySelector('[role="dialog"] button[aria-label="Close"]'))?.click();
 		});
 		await press('Resend invite');
-		await press('Correct invite e-mail');
+		await choose('Correct invite e-mail');
 		fillDialog('E-mail', 'helpdesk@ss.test');
 		await act(async () => {
 			/** @type {HTMLButtonElement} */ (
@@ -591,7 +622,7 @@ describe('admin console interactions (jsdom)', () => {
 			).click();
 		});
 		await until(() => shows('helpdesk@ss.test'));
-		await press('Change role');
+		await choose('Change role');
 		await act(async () => {
 			type(byLabel(/** @type {HTMLElement} */ (document.querySelector('[role="dialog"]')), 'Role'), 'finance');
 		});
@@ -604,7 +635,7 @@ describe('admin console interactions (jsdom)', () => {
 			ownerBrowser.calls.some((c) => c.method === 'PATCH' && c.path.startsWith('/v1/admin/admins/') && c.status === 200),
 		);
 		await settle(2);
-		await press('Remove');
+		await choose('Remove');
 		await act(async () => {
 			/** @type {HTMLButtonElement} */ (
 				[...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent === 'Remove')

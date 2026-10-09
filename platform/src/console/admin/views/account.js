@@ -5,7 +5,7 @@
  * @module
  */
 import { useState } from 'react';
-import { Button, Card, Form, FormError, Input, PageHeader, fieldErrors, useToast } from '@ss/ui';
+import { Button, Card, Form, FormError, Input, Masonry, PageHeader, fieldErrors, useToast } from '@ss/ui';
 import { ADMIN, LOGIN } from '../../../texts/console.js';
 import { useResource } from '../../client.js';
 import { EmailPanel, OwnActivity, PasswordPanel, TwoStepPanel } from '../../views/login-settings.js';
@@ -63,10 +63,12 @@ export function MyAccountView(props) {
 	return (
 		<div className="space-y-8">
 			<PageHeader title={ADMIN.myAccountTitle} subtitle={ADMIN.myAccountIntro} />
-			<NameCard admin={admin} onSaved={() => void reload()} />
-			<EmailPanel email={admin.email} twoStepOn={admin.twoStep.enabled} />
-			<PasswordPanel twoStepOn={admin.twoStep.enabled} />
-			<TwoStepPanel twoStep={admin.twoStep} onChange={() => void reload()} />
+			<Masonry columns={2}>
+				<NameCard admin={admin} onSaved={() => void reload()} />
+				<EmailPanel email={admin.email} twoStepOn={admin.twoStep.enabled} />
+				<PasswordPanel twoStepOn={admin.twoStep.enabled} />
+				<TwoStepPanel twoStep={admin.twoStep} onChange={() => void reload()} />
+			</Masonry>
 			<OwnActivity path={adminApi.myActivity()} initial={props.activity} />
 		</div>
 	);

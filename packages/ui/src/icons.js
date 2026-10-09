@@ -11,6 +11,7 @@ const PATHS = Object.freeze({
 	copy: 'M9 9h11v11H9zM5 15H4V4h11v1',
 	close: 'M6 6l12 12M18 6L6 18',
 	menu: 'M4 6h16M4 12h16M4 18h16',
+	more: 'M6 12a1 1 0 1 0-2 0 1 1 0 0 0 2 0zM13 12a1 1 0 1 0-2 0 1 1 0 0 0 2 0zM20 12a1 1 0 1 0-2 0 1 1 0 0 0 2 0z',
 	chevronRight: 'M9 6l6 6-6 6',
 	chevronDown: 'M6 9l6 6 6-6',
 	arrowUp: 'M12 19V5M5 12l7-7 7 7',
@@ -48,6 +49,7 @@ const PATHS = Object.freeze({
 	layers: 'M12 2l10 5-10 5L2 7zM2 17l10 5 10-5M2 12l10 5 10-5',
 	receipt: 'M5 2h14v20l-3-2-2 2-2-2-2 2-2-2-3 2zM9 7h6M9 11h6M9 15h4',
 	mail: 'M3 5h18v14H3zM3 5l9 8 9-8',
+	code: 'M16 18l6-6-6-6M8 6l-6 6 6 6',
 	store: 'M3 9l2-5h14l2 5M3 9h18v2a3 3 0 0 1-6 0 3 3 0 0 1-6 0 3 3 0 0 1-6 0zM5 13v8h14v-8M10 21v-5h4v5',
 });
 

@@ -6,7 +6,7 @@
  * @module
  */
 import { useState } from 'react';
-import { Button, Card, Form, FormError, Input, PageHeader, Select, fieldErrors, useToast } from '@ss/ui';
+import { Button, Card, Form, FormError, Input, Masonry, PageHeader, Select, fieldErrors, useToast } from '@ss/ui';
 import { COUNTRY_CODES } from '../../modules/identity/core/countries.js';
 import { LOGIN, MERCHANT, MERCHANT_FIELDS } from '../../texts/console.js';
 import { apiFetch, useResource } from '../client.js';
@@ -166,12 +166,14 @@ export function AccountView(props) {
 	return (
 		<div className="space-y-8">
 			<PageHeader title={MERCHANT.accountTitle} subtitle={MERCHANT.accountIntro} />
-			<Card title={MERCHANT.detailsTitle} subtitle={MERCHANT.detailsIntro}>
-				<MerchantFieldsForm merchant={merchant} path="/v1/me" onSaved={() => void reload()} />
-			</Card>
-			<EmailPanel email={merchant.email} twoStepOn={merchant.twoStep.enabled} />
-			<PasswordPanel twoStepOn={merchant.twoStep.enabled} />
-			<TwoStepPanel twoStep={merchant.twoStep} onChange={() => void reload()} />
+			<Masonry columns={2}>
+				<Card title={MERCHANT.detailsTitle} subtitle={MERCHANT.detailsIntro}>
+					<MerchantFieldsForm merchant={merchant} path="/v1/me" onSaved={() => void reload()} />
+				</Card>
+				<EmailPanel email={merchant.email} twoStepOn={merchant.twoStep.enabled} />
+				<PasswordPanel twoStepOn={merchant.twoStep.enabled} />
+				<TwoStepPanel twoStep={merchant.twoStep} onChange={() => void reload()} />
+			</Masonry>
 			<OwnActivity path={api.activity(props.merchantId)} initial={props.activity} />
 		</div>
 	);

@@ -5,7 +5,7 @@
  * when one of its features is visible (merchants: switched-on features; admins: all, off ones marked).
  * @module
  */
-import { Callout, Section } from '@ss/ui';
+import { Callout, Masonry, Section } from '@ss/ui';
 import { call, useLoad } from './api.js';
 import { CustomFieldsEditor, FlowsEditor, PageRulesEditor, ToolSecret, ToolsEditor } from './lists.js';
 import { Loaded, SettingsForms, TextsForm, ThemeForm, hasSettings } from './parts.js';
@@ -143,10 +143,10 @@ export function SettingsTab({ websiteId: id }) {
 								key={section.id}
 								title={TEXTS.settings.sections[section.id].title}
 								description={TEXTS.settings.sections[section.id].help}>
-								<div className="space-y-4">
+								<Masonry>
 									{forms(section.features)}
 									{extras[section.id]}
-								</div>
+								</Masonry>
 							</Section>
 						))}
 					</div>

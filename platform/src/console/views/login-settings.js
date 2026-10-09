@@ -14,6 +14,7 @@ import {
 	Card,
 	Checkbox,
 	CodeBlock,
+	EmptyState,
 	Form,
 	FormError,
 	Input,
@@ -453,7 +454,7 @@ export function ActivityTable({ items, title = 'Activity', empty, hasMore = fals
 			captionHidden
 			rows={items}
 			rowKey={(e) => e.activityId}
-			empty={empty}
+			empty={<EmptyState compact icon="activity" kind="activity" title={empty} />}
 			hasMore={hasMore}
 			{...(onLoadMore ? { onLoadMore } : {})}
 			columns={[

@@ -16,19 +16,30 @@ Tailwind scans `node_modules/@ss/ui/src` (`@source` in the app's CSS).
 
 ## Colour rule
 
-Colour carries meaning only through semantic tokens (PLAN.md 0.6). `IconBadge`, `Stat`, `Badge`, `EmptyState` and
-`AppShell` menu items take a `kind` (`overview`, `merchant`, `website`, `product`, `feature`, `credit`, `price`, `admin`,
-`settings`, `default`, `activity`, `connection`, `developer`); its colour comes from `--tone-<kind>`, `--tone-<kind>-tint`
-and `--tone-<kind>-on` in `theme.css`. Palette A (default) gives each kind its own colour; palette B
-(`data-palette="mono"` on `<html>`) maps every kind to the indigo tint. Status colours stay on `tone`
-(`success`, `warning`, `danger`).
+One accent (PLAN.md 0.6): indigo (`primary`) is used for primary buttons, links, the active item, icon tiles and
+badges; surfaces are neutral; green, amber and red mean status only (`tone` `success`, `warning`, `danger`). `IconBadge`,
+`Stat`, `Badge`, `EmptyState` and `AppShell` menu items take a `kind` (`overview`, `merchant`, `website`, `product`,
+`feature`, `credit`, `price`, `admin`, `settings`, `default`, `activity`, `connection`, `developer`) that names the thing;
+every kind takes the same indigo tint (`primary-soft`), and leaving `kind` out keeps the item neutral. No screen names a
+colour for meaning. The `hero` card is solid indigo.
+
+## Masonry and the More menu
+
+`<Masonry columns? as? label?>` lays cards of different heights out in CSS columns (1, 2 from a 42rem container, 3 from
+72rem; `columns={2}` stops at two) with every card kept whole, so no card stretches to a taller neighbour. Settings
+pages, website cards and the product dashboards' card lists use it.
+
+`<ActionMenu label items icon? size? />` is the compact ⋯ menu of a detail header or a card: the main one or two actions
+stay buttons, the rest go in the menu, a destructive one last with `danger: true`. Arrow keys, Home and End move between
+the items; Escape, Tab and a click outside close it. There are no tabs: pages show their sections one under another
+(PLAN 0.6).
 
 ## Field grid
 
 Every control (`Input`, `Select`, `TextArea`, `Checkbox`, `Switch`, `RadioGroup`, `CheckboxGroup`) is a grid cell. Inside
 a `Form`, a `FieldGrid` or a `SchemaForm` group, short controls pack into 1 / 2 / 3 columns by the width of the form
 (container queries); `TextArea`, `CheckboxGroup` and any control with `wide` span the row, as do children that are not
-controls (buttons, callouts).
+controls (buttons, callouts) and a lone control (a card with one short setting does not leave it in a corner).
 
 ## SchemaForm
 

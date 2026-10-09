@@ -10,12 +10,24 @@ import { Icon } from './icons.js';
 /** @typedef {{ label: string, value: number, hint?: string }} Datum */
 
 /**
- * Vertical bar chart.
+ * Whether a series has nothing to draw: no points, or every value zero.
+ * @param {readonly Datum[]} data
+ */
+export const isEmptySeries = (data) => data.every((d) => !(d.value > 0));
+
+/**
+ * Vertical bar chart. A series with nothing to draw (no points, or all zero) is a compact line of text instead.
  * @param {{ data: Datum[], label: string, format?: (value: number) => string, height?: number, className?: string,
  *   emptyText?: string }} props
  */
 export function BarChart({ data, label, format = String, height = 160, className, emptyText = 'No data for this period.' }) {
-	if (data.length === 0) return <p className="py-6 text-center text-sm text-muted">{emptyText}</p>;
+	if (isEmptySeries(data))
+		return (
+			<p className={cx('flex items-center gap-2 text-sm text-muted', className)}>
+				<Icon name="trendingUp" size={14} />
+				{emptyText}
+			</p>
+		);
 	const max = Math.max(...data.map((d) => d.value), 0);
 	const width = Math.max(data.length * 28, 280);
 	const barWidth = Math.max(6, Math.min(32, width / data.length - 6));

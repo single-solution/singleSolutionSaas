@@ -3,10 +3,11 @@
  * Products (PLAN 0.8.2, 0.6): one list-and-detail screen. The list of connected products (search, filter Active /
  * Inactive; per row the name, a status dot and the websites using it) with **Add product** (the product URL and
  * connect secret; new products start inactive; an id already connected is refused with "use Reconnect") sits beside
- * the selected product — a header (name, Active / Inactive, address, connected date; actions Open as admin, Set active
- * / inactive, Reconnect), its numbers (credits earned this month with the 30-day chart, websites using it) and its
- * websites (merchant, domain, features on, daily cost; paged). Owners manage products; Support sees them read-only.
- * The Portal checks every right again.
+ * the selected product — on wide screens the first one until another is picked: a header (name, Active / Inactive,
+ * address and connected date; actions Open as admin, Set active / inactive, Reconnect), its numbers (credits earned
+ * this month with the 30-day chart — one line while there is nothing to draw — and websites using it) and its websites
+ * (domain with its merchant, status, features on, daily cost; paged). Owners manage products; Support sees them
+ * read-only. The Portal checks every right again.
  * @module
  */
 import { useState } from 'react';
@@ -21,7 +22,6 @@ import {
 	FormError,
 	Icon,
 	Input,
-	KeyValueList,
 	PageHeader,
 	Section,
 	Select,
@@ -30,6 +30,7 @@ import {
 	describeProblem,
 	fieldErrors,
 	formatCredits,
+	isEmptySeries,
 	problemCode,
 	useToast,
 } from '@ss/ui';
@@ -131,10 +132,10 @@ function ConnectDialog({ open, title, description, submitLabel, urlRequired, pat
 }
 
 /**
- * The Products list pane.
- * @param {{ props: any, owner: boolean, selectedId: string | null }} input
+ * The Products list pane (by name). `selectedId` is the product the URL picks; `autoId` the one opened by default.
+ * @param {{ props: any, owner: boolean, selectedId: string | null, autoId?: string | null }} input
  */
-function ProductList({ props, owner, selectedId }) {
+function ProductList({ props, owner, selectedId, autoId = null }) {
 	const toast = useToast();
 	const [adding, setAdding] = useState(false);
 	const [q, setQ] = useState('');
@@ -179,20 +180,18 @@ function ProductList({ props, owner, selectedId }) {
 						<EmptyState compact icon="box" kind="product" title={PRODUCTS.none} />
 					</li>
 				) : (
-					rows
-						.sort((a, b) => String(a.name).localeCompare(String(b.name)))
-						.map((p) => (
-							<ListRow
-								key={p.productId}
-								href={adminRoutes.product(p.productId, keep)}
-								current={p.productId === selectedId}
-								label={p.name}
-								sublabel={formatCredits(p.earnedThisMonth ?? 0)}
-								dot={p.status === 'active' ? 'success' : 'neutral'}
-								dotLabel={p.status === 'active' ? PRODUCTS.status.active : PRODUCTS.status.inactive}
-								meta={PRODUCTS.websitesCount(p.websites ?? 0)}
-							/>
-						))
+					rows.map((p) => (
+						<ListRow
+							key={p.productId}
+							href={adminRoutes.product(p.productId, keep)}
+							current={p.productId === selectedId ? true : p.productId === autoId ? 'wide' : false}
+							label={p.name}
+							sublabel={formatCredits(p.earnedThisMonth ?? 0)}
+							dot={p.status === 'active' ? 'success' : 'neutral'}
+							dotLabel={p.status === 'active' ? PRODUCTS.status.active : PRODUCTS.status.inactive}
+							meta={PRODUCTS.websitesCount(p.websites ?? 0)}
+						/>
+					))
 				)}
 			</ListPane>
 			{owner ? (
@@ -230,6 +229,7 @@ function ProductDetail({ detail, owner }) {
 	const [loadingMore, setLoadingMore] = useState(false);
 	const [problem, setProblem] = useState(/** @type {Problem | null} */ (detail.websitesProblem));
 	const numbers = product.numbers ?? {};
+	const earned = dayBars(numbers.days);
 
 	const openAsAdmin = async () => {
 		setBusy('open');
@@ -267,7 +267,22 @@ function ProductDetail({ detail, owner }) {
 				level={2}
 				title={product.name}
 				badge={<ProductActiveBadge status={product.status} />}
-				subtitle={<span className="break-all">{product.baseUrl}</span>}
+				subtitle={
+					<span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+						<span className="max-w-full truncate font-mono text-xs" title={product.baseUrl}>
+							{product.baseUrl}
+						</span>
+						<span>
+							{PRODUCTS.connectedOn} <LocalTime value={product.connectedAt} />
+							{product.reconnectedAt ? (
+								<>
+									{' · '}
+									{PRODUCTS.reconnectedOn} <LocalTime value={product.reconnectedAt} />
+								</>
+							) : null}
+						</span>
+					</span>
+				}
 				actions={
 					owner ? (
 						<div className="flex flex-wrap gap-2">
@@ -293,28 +308,21 @@ function ProductDetail({ detail, owner }) {
 					) : null
 				}
 			/>
-			<KeyValueList
-				columns={3}
-				items={[
-					{ label: PRODUCTS.address, value: <span className="break-all">{product.baseUrl}</span> },
-					{ label: PRODUCTS.connectedAt, value: <LocalTime value={product.connectedAt} /> },
-					...(product.reconnectedAt
-						? [{ label: PRODUCTS.reconnectedAt, value: <LocalTime value={product.reconnectedAt} /> }]
-						: []),
-				]}
-			/>
 			<div className="grid gap-5 sm:grid-cols-2">
 				<Stat
 					label={PRODUCTS.earnedThisMonth}
 					value={formatCredits(numbers.earnedThisMonth ?? 0)}
 					icon="coins"
 					kind="credit"
+					{...(isEmptySeries(earned) ? { hint: PRODUCTS.noEarnings } : {})}
 				/>
 				<Stat label={PRODUCTS.websitesUsing} value={numbers.websites ?? 0} icon="globe" kind="website" />
 			</div>
-			<Card title={PRODUCTS.earnedChart}>
-				<BarChart label={PRODUCTS.earnedChart} data={dayBars(numbers.days)} format={creditsOf} />
-			</Card>
+			{isEmptySeries(earned) ? null : (
+				<Card title={PRODUCTS.earnedChart}>
+					<BarChart label={PRODUCTS.earnedChart} data={earned} format={creditsOf} />
+				</Card>
+			)}
 			<Section id="product-websites" title={PRODUCTS.websitesTitle} description={PRODUCTS.websitesIntro}>
 				{problem ? <p className="text-sm text-danger">{describeProblem(problem)}</p> : null}
 				<Table
@@ -329,14 +337,24 @@ function ProductDetail({ detail, owner }) {
 					columns={[
 						{
 							key: 'domain',
-							header: PRODUCTS.websiteColumns.domain,
+							header: PRODUCTS.websiteColumns.website,
 							rowHeader: true,
+							className: 'max-w-[20rem]',
 							render: (w) => (
-								<Link
-									href={adminRoutes.website(w.merchantId, w.websiteId)}
-									className="break-all font-semibold text-primary hover:underline">
-									{w.domain}
-								</Link>
+								<span className="block min-w-0">
+									<Link
+										href={adminRoutes.website(w.merchantId, w.websiteId)}
+										title={w.domain}
+										className="block truncate font-semibold text-primary hover:underline">
+										{w.domain}
+									</Link>
+									<Link
+										href={adminRoutes.merchant(w.merchantId)}
+										title={w.merchantName}
+										className="block truncate text-xs font-normal text-muted hover:text-fg hover:underline">
+										{w.merchantName}
+									</Link>
+								</span>
 							),
 						},
 						{
@@ -345,24 +363,24 @@ function ProductDetail({ detail, owner }) {
 							render: (w) => <ProductStatusBadge status={w.status} featuresOn={w.featuresOn} />,
 						},
 						{
+							key: 'featuresOn',
+							header: PRODUCTS.websiteColumns.featuresOn,
+							className: 'max-w-[16rem]',
+							render: (w) => {
+								const names = featureNames(product.features, w.featuresOn);
+								return (
+									<span className="block truncate" title={names}>
+										{names}
+									</span>
+								);
+							},
+						},
+						{
 							key: 'dailyCost',
 							header: PRODUCTS.websiteColumns.dailyCost,
 							align: 'right',
+							className: 'whitespace-nowrap',
 							render: (w) => formatCredits(w.dailyCost ?? 0),
-						},
-						{
-							key: 'merchant',
-							header: PRODUCTS.websiteColumns.merchant,
-							render: (w) => (
-								<Link href={adminRoutes.merchant(w.merchantId)} className="hover:underline">
-									{w.merchantName}
-								</Link>
-							),
-						},
-						{
-							key: 'featuresOn',
-							header: PRODUCTS.websiteColumns.featuresOn,
-							render: (w) => featureNames(product.features, w.featuresOn),
 						},
 					]}
 				/>
@@ -388,25 +406,35 @@ function ProductDetail({ detail, owner }) {
 }
 
 /**
- * The Products screen: the list beside the selected product (or a short empty state).
- * @param {any} props loader result of `loadProducts` plus `admin` and, with a product selected, `detail` (the result
- *   of `loadProduct`) and `selectedId`
+ * The Products screen: the list beside the selected product — the one the URL picks or, with `auto`, the first of the
+ * list (shown on wide screens only) — or a short empty state when there are no products.
+ * @param {any} props loader result of `loadProducts` plus `admin` and, with a product shown, `detail` (the result of
+ *   `loadProduct`), `selectedId` and `auto`
  */
 export function ProductsView(props) {
 	if (!props.ok) return <AdminProblem problem={props.problem} />;
 	const owner = adminCan(props.admin, 'products.manage');
 	const detail = props.detail ?? null;
-	const selectedId = detail ? String(props.selectedId) : null;
+	const auto = props.auto === true;
+	const shownId = detail ? (detail.ok ? String(detail.product.productId) : String(props.selectedId)) : null;
 	const back = adminRoutes.products({ status: props.filter.status });
 	return (
 		<ListDetail
 			label={PRODUCTS.title}
+			auto={auto}
 			back={{ href: back, label: PRODUCTS.title }}
-			list={<ProductList props={props} owner={owner} selectedId={selectedId} />}
-			empty={<EmptyState icon="box" kind="product" title={PRODUCTS.selectTitle} description={PRODUCTS.selectHelp} />}
+			list={<ProductList props={props} owner={owner} selectedId={auto ? null : shownId} autoId={auto ? shownId : null} />}
+			empty={
+				<EmptyState
+					icon="box"
+					kind="product"
+					title={PRODUCTS.none}
+					description={owner && !props.filter.status ? PRODUCTS.noneHelp : undefined}
+				/>
+			}
 			detail={
 				detail === null ? null : detail.ok ? (
-					<ProductDetail key={selectedId} detail={detail} owner={owner} />
+					<ProductDetail key={shownId} detail={detail} owner={owner} />
 				) : (
 					<AdminProblem problem={detail.problem} back={{ href: back, label: PRODUCTS.title }} />
 				)

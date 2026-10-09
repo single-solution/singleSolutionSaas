@@ -919,54 +919,56 @@ Merchants see **credits only**, never money. Only the Portal's clock counts for 
 
 ## 0.6 Look and feel
 
-- **Brand**: Single Solution, indigo/violet accent, friendly business style (like Stripe / Shopify admin). Name, accent
+- **Brand**: Single Solution, indigo accent, friendly business style (like Stripe / Shopify admin). Name, accent
   and logo can be changed in Settings → Branding.
-- **Layout** (owner decision 2026-10-09): main left sidebar; list sections are **list-and-detail screens**: a rich list on
-  the left (search, filters, the main Add action, per row the name, a status dot and one figure) beside the selected
-  item's detail, on one screen. There is no separate plain list page: with nothing selected, the detail side shows a
-  short empty state. Full width, spacious; fewer levels: actions sit one level up (in the header or on the card), there
-  are no deep child pages and no tabs on item pages, and secondary forms open in dialogs.
+- **Layout** (owner decisions 2026-10-09): main left sidebar; list sections are **list-and-detail screens**: a rich list
+  on the left (search, filters, the main Add action, per row the name, a status dot and one figure) beside an item's
+  detail, on one screen. There is no separate plain list page: with nothing in the URL, wide screens open the **first
+  item of the list** by default, so the page is never half empty (phones show the list until an item is chosen); the
+  detail side shows a short empty state only when the list is empty. Full width, spacious; fewer levels: actions sit one
+  level up (in the header or on the card), there are no deep child pages and **no tabs** (a page shows its sections one
+  under another; the product dashboards keep their sidebar sections, and a section list too long for one page picks one
+  section at a time), and secondary forms open in dialogs.
+- **Header actions**: a detail header keeps its one or two main actions as buttons; any others go in a compact **More**
+  menu (⋯), a destructive action last in danger text and still behind its typed confirmation.
+- **Masonry**: cards of different heights that sit side by side (settings cards, website cards, feature and connection
+  cards) are laid out as a masonry of 1, 2 or 3 columns by the available width; no card stretches to a taller
+  neighbour.
 - **Merchant menu**: Overview · Websites · Usage and credits · Account.
 - **Admin menu**: Overview · Merchants · Products · Credits and billing · Admins · Settings · Activity, plus My account
   in the user menu. Each role sees only the items it can use (0.2).
 - **List-and-detail screens**: admin Merchants, Products and Admins, and merchant Websites. Credits and billing and
-  Activity stay plain tables. The URL holds the selection (`/admin/merchants/<id>`) and the list's filter, so a link
+  Activity stay plain pages. The URL holds the selection (`/admin/merchants/<id>`) and the list's filter, so a link
   opens the same screen.
-- **Merchant page (admin)**: one page, no sub-pages and no tabs: a header (name, status, balance, owner; actions as
-  dialogs: Add credits, Edit merchant, Suspend / Resume, setup link, Turn off two-step, Delete), then a grid of
-  **website cards**, then the Credits and Activity sections. A website card shows the domain and daily cost, its
-  products (status, features on, daily cost, Open, a menu with Remove), an obvious **Add product** button, **Install and
-  tokens** and **Usage**, all as dialogs, and a menu with Remove website. There is no separate website page.
+- **Merchant page (admin)**: one page, no sub-pages and no tabs: a header (name, status, balance, owner; **Add credits**
+  and **Edit merchant** as buttons, and Suspend / Resume, the setup link, Turn off two-step and Delete in its More menu;
+  all as dialogs), then a masonry of **website cards**, then the Credits and Activity sections. A website card shows the
+  domain and daily cost, its products (status, features on, daily cost, Open, a menu with Remove), an obvious **Add
+  product** button, **Install and tokens** and **Usage**, all as dialogs, and a menu with Remove website. There is no
+  separate website page.
 - **Websites (merchant)**: the list of websites beside the selected website's card (products with Open; Install and
   tokens and Usage as dialogs; no admin actions).
 - **Lists**: search and filters inside each list (no global search). Bulk actions exist only on Merchants: Suspend /
   Resume (one reason for all) and Resend setup link (for merchants without a password), with a checkbox on each row. No
   other list has bulk actions, and there is no CSV export. The Merchants search also matches owner e-mail and website
-  domains; this is how an admin finds a website. Merchants is paged at 50.
+  domains; this is how an admin finds a website. Merchants is paged at 50. Long names and domains are cut with an
+  ellipsis (the full text on hover), never broken mid-word.
 - **Forms**: centred dialogs; a full page only when a form would still scroll a lot after a smarter layout. **Fields sit
   in a grid**, not full width: short inputs (names, e-mails, numbers, selects, switches, dates, short text) pack into 1
   column on phones, 2 on tablets and 3 on wide screens (by the width of the form, so dialogs get fewer); long text, code,
-  JSON and lists span the whole row. The shared form components do this for every Portal form and every product
-  dashboard's settings form; a settings schema field with a long-text `format` or `x-ui.wide` spans the row.
-- **Home cards**: numbers with small 30-day charts.
+  JSON and lists span the whole row, and so does a lone short field. The shared form components do this for every
+  Portal form and every product dashboard's settings form; a settings schema field with a long-text `format` or
+  `x-ui.wide` spans the row.
+- **Home cards**: numbers with small 30-day charts; a chart with nothing to draw is one line of text instead.
 - **Visual style (owner pick 2026-10-08, "A + B")**: pages are built from **grid sections**; each section has a clear
-  heading with a lighter one-line description under it. **Summary tiles** carry the colour of their kind (see the colour
-  rule) and a rounded icon badge. The most important number on an overview (merchant: credit balance; admin: credits
-  this month) is a **large hero card** with a 30-day bar chart inside (in the credits colour under palette A, indigo
-  under palette B). Soft rounded surfaces (16–18px radius), **no sharp borders and no
-  shadows**, generous spacing, wide layout. Plain "simple" white-on-white is not acceptable. Same style in light and
-  dark, and in product dashboards.
-- **Colour rule (owner decision 2026-10-09; the choice between A and B is pending with the owner)**: every kind of
-  thing has a semantic colour token (`--tone-merchant`, `--tone-website`, …, in `packages/ui` theme.css); no screen
-  names a colour for meaning. Both palettes are built; A is the default, B is selected with `data-palette="mono"` on
-  `<html>`; there is no user-facing switch, and the palette not chosen is deleted once the owner picks.
-   - **Palette A, "one colour per thing"**: merchants violet, websites teal, products (and features) orange, credits
-     and billing (and prices) pink, admins blue, settings (and defaults) slate, activity green-grey, overview cyan,
-     connections fuchsia, developers stone — the same in sidebar icons, icon tiles, summary tiles and chips, and the
-     same for each dashboard tab in every product. Indigo is used only for primary buttons, links and the active item;
-     green, amber and red only for status.
-   - **Palette B, "one accent only"**: every icon tile and badge is indigo-tinted or neutral; summary tiles are
-     neutral; colour is used only for status.
+  heading with a lighter one-line description under it. **Summary tiles** are neutral with a rounded indigo-tinted icon
+  badge. The most important number on an overview (merchant: credit balance; admin: credits this month) is a **large
+  hero card**, solid indigo, with a 30-day bar chart inside. Soft rounded surfaces (16–18px radius), **no sharp borders
+  and no heavy shadows**, generous spacing, wide layout. Plain "simple" white-on-white is not acceptable. Same style in
+  light and dark, and in product dashboards.
+- **Colour rule (owner decision 2026-10-09: one accent, final)**: **indigo is the only accent** — primary buttons,
+  links, the active item, icon tiles and badges; surfaces are neutral; **green, amber and red only for status**. No
+  screen names a colour for meaning, and the product dashboards follow the same rule.
 - **Product dashboards** look the same as the Portal.
 - **Light and dark**, following the device, with a switch. The Portal and product dashboards are English, with texts
   kept in files. Widget texts are editable by merchants (0.4.10).
@@ -984,8 +986,7 @@ Merchants see **credits only**, never money. Only the Portal's clock counts for 
 
 - No horizontal page scroll from 360 px wide. Below 1024 px, the main sidebar becomes a menu button, and list-and-detail
   screens stack: the list first, the selected item's detail alone with a Back link to the list. Tables keep the name, status and amount
-  columns and scroll the rest inside the table. Below 640 px, dialogs become full-screen sheets and tabs scroll
-  sideways.
+  columns and scroll the rest inside the table. Below 640 px, dialogs become full-screen sheets.
 - The same applies to product dashboards and admin widgets (the inbox shows the list, then the conversation with Back).
 
 ## 0.7 Flows
@@ -1153,14 +1154,16 @@ in, before any other page opens. A merchant with no websites sees a short welcom
   websites using it and the credits it earned this month); numbers with 30-day charts. Active products = products on
   websites with status active or grace and at least one feature on. A warning shows while SMTP is not set.
 - **Merchants** (list-and-detail, 0.6): the list (search by name, owner e-mail or domain; status filter; per row name +
-  owner e-mail, status dot and balance; bulk actions, 0.6) beside the selected merchant's page. **Add merchant** (Owner, Support) opens a dialog with the
-  merchant fields (0.2); saving creates the merchant and e-mails the setup link (or offers to copy it).
-   - Merchant page (one page, no tabs): header with name, status, balance; actions **Add credits** (Owner, Finance),
-     **Edit merchant** (a dialog with the merchant fields; Owner and Support), **Suspend / Resume** (Owner, Support; a
-     reason is required to suspend), **Resend setup link** / **Copy setup link** (Owner, Support; only until the
-     password is set), **Turn off two-step** (Owner; only while it is on), **Delete** (Owner; only with no websites;
-     removed websites do not count; 0.5.9).
-   - Then **Websites**: a grid of website cards and **Add website** (a dialog with the exact domain; Owner and Support).
+  owner e-mail, status dot and balance; bulk actions, 0.6) beside the selected merchant's page (on wide screens the
+  first merchant of the list until another is picked). **Add merchant** (Owner, Support) opens a dialog with the merchant
+  fields (0.2); saving creates the merchant and e-mails the setup link (or offers to copy it).
+   - Merchant page (one page, no tabs): header with name, status, balance; the buttons **Add credits** (Owner, Finance;
+     the main action) and **Edit merchant** (a dialog with the merchant fields; Owner and Support), and in the header's
+     More menu **Suspend / Resume** (Owner, Support; a reason is required to suspend), **Resend setup link** / **Copy
+     setup link** (Owner, Support; only until the password is set), **Turn off two-step** (Owner; only while it is on)
+     and, last, **Delete** (Owner; only with no websites; removed websites do not count; typed confirmation; 0.5.9).
+   - Then **Websites**: a masonry of website cards and **Add website** (a dialog with the exact domain; Owner and
+     Support).
      Each card: domain and daily cost; its products (status, features on, daily cost, **Open**; **Remove** in the
      product's menu, 0.5.9); an **Add product** button (0.5.9); **Install and tokens** and **Usage** buttons; **Remove
      website** in the card's menu (0.5.9). Admin actions are for Owner and Support. Only our admins switch features,
@@ -1174,29 +1177,31 @@ in, before any other page opens. A merchant with no websites sees a short welcom
    - **Usage**: 30-day chart + table by product and feature (0.5.11).
 - **Products** (Owner only; list-and-detail, 0.6): the list (search, Active / Inactive filter; per row name, status dot
   and websites using it) with **Add product**, which opens a dialog for the product URL and connect secret; new products
-  start inactive. The selected product shows a header with name, Active or Inactive, address and connected date, and the
-  actions **Open as admin**, **Set active / inactive** and **Reconnect**; then its numbers (credits earned this month +
-  30-day chart, number of websites) and its websites (merchant, domain, features on, daily cost; a domain opens the
-  website's card on its merchant's page), on one page without tabs.
+  start inactive. The selected product (on wide screens the first of the list until another is picked) shows a header
+  with name, Active or Inactive, address and connected date, and the actions **Open as admin**, **Set active /
+  inactive** and **Reconnect**; then its numbers (credits earned this month + 30-day chart, one line while there is
+  nothing to draw; number of websites) and its websites (domain with its merchant, status, features on, daily cost; a
+  domain opens the website's card on its merchant's page), on one page without tabs.
    - Inactive means the product is not offered in Add product. Nothing else changes: websites that have it keep working
      and paying, and merchants can still open it.
    - Reconnect runs on the existing product with a new URL and/or secret. The product must answer with the same product
      id, and all websites, tokens, switches and charges stay. The returned price list is handled as a price report.
    - Connected products are never deleted, only set inactive.
-- **Credits and billing** (Owner and Finance; Support read-only): all receipts (filter by merchant, date, method),
-  charges by day / merchant / product, needs attention. Add credits opens the receipt form (0.5.8).
+- **Credits and billing** (Owner and Finance; Support read-only), one page without tabs: needs attention, all receipts
+  (filter by merchant, date, method), charges by day / merchant / product. Add credits opens the receipt form (0.5.8).
 - **Admins** (Owner only; list-and-detail, 0.6): the list (search; per row name, e-mail, status dot — invited grey —
   and role) with **Invite** (e-mail + role; sends a setup link; the invitee sets their name and password); the selected
-  admin shows e-mail, role, two-step on/off and last sign-in, with the actions **Resend invite** or **Copy invite
-  link** and **Correct invite e-mail** (only until the invite is accepted, as 0.2 Logins), **Change role**, **Turn off
-  two-step**, **Remove**, as dialogs. Activity entries keep the removed admin's name. There is always at least one Owner: the last
-  Owner cannot be removed or demoted, and no one can remove themselves. A role change or removal takes effect at once
+  admin (on wide screens the first of the list until another is picked) shows e-mail, role, two-step on/off and last
+  sign-in, with the actions **Resend invite** or **Copy invite link** and **Correct invite e-mail** (only until the
+  invite is accepted, as 0.2 Logins), **Change role**, **Turn off two-step**, **Remove**, as dialogs — the first two as
+  buttons, the rest in the header's More menu with Remove last. Activity entries keep the removed admin's name. There is
+  always at least one Owner: the last Owner cannot be removed or demoted, and no one can remove themselves. A role change or removal takes effect at once
   and ends all that admin's sessions, in the Portal and in product dashboards.
-- **Settings** (Owner only):
+- **Settings** (Owner only): one page without tabs; each part below is a card with its own Save, laid out in a masonry.
    - **E-mail sending**: SMTP (host, port, user, password, sender name and address), which works with any provider. Send
      test e-mail sends to the signed-in admin.
    - **Billing rules**: grace days (0–30) and the low-balance threshold in days of spend (1–30), default 3 each (0.5.4).
-   - **Branding**: name, accent and logo, default Single Solution, indigo/violet. The logo is PNG, JPEG or WebP, at most
+   - **Branding**: name, accent and logo, default Single Solution, indigo. The logo is PNG, JPEG or WebP, at most
      200 kB, never SVG; it is stored in the Portal database and served by the Portal at `/branding/logo`, because the
      Portal has no file storage. Branding is used by the Portal, its e-mails and product dashboards (passed in the
      launch).
@@ -1213,7 +1218,8 @@ in, before any other page opens. A merchant with no websites sees a short welcom
 - **Overview**: balance + days left at current spend, 30-day spend chart, websites with product chips and Open buttons,
   warnings (low, grace, stopped).
 - **Websites** (list-and-detail, 0.6): the list (search; per row domain, status dot and daily cost) beside the selected
-  website's card (products with Open; Install and tokens and Usage as dialogs; no admin actions).
+  website's card — on wide screens the first website until another is picked (products with Open; Install and tokens
+  and Usage as dialogs; no admin actions).
 - **Usage and credits**: spend per product × website × day × feature; credit receipts (date, credits, method, reference;
   the amount paid is shown to admins only).
 - **Account**: business details (business name, owner name, phone, address, country), login e-mail (confirmed by e-mail)

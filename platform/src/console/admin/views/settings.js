@@ -1,10 +1,10 @@
 'use client';
 /**
- * Settings (PLAN 0.8.2; Owner only): E-mail sending (SMTP host, port, user, password, sender name and address; Send
- * test e-mail to the signed-in admin), Branding (name, accent, logo), Support contact (e-mail, phone, optional WhatsApp)
- * Security (Session length, Require two-step for admins) and Billing rules (grace days, low-balance threshold). Every
- * change is written to
- * Activity and reaches every Portal instance within seconds.
+ * Settings (PLAN 0.8.2; Owner only): one page, no tabs — a masonry of cards, each saved on its own: E-mail sending
+ * (SMTP host, port, user, password, sender name and address; Send test e-mail to the signed-in admin), Branding (name,
+ * accent, logo), Support contact (e-mail, phone, optional WhatsApp), Security (Session length, Require two-step for
+ * admins) and Billing rules (grace days, low-balance threshold). Every change is written to Activity and reaches every
+ * Portal instance within seconds.
  * @module
  */
 import { useState } from 'react';
@@ -16,9 +16,9 @@ import {
 	Form,
 	FormError,
 	Input,
+	Masonry,
 	PageHeader,
 	Switch,
-	Tabs,
 	describeProblem,
 	fieldErrors,
 	useToast,
@@ -63,7 +63,7 @@ const useSave = (onSaved) => {
 };
 
 /** @param {{ settings: any, onSaved: (s: any) => void }} props */
-function MailTab({ settings, onSaved }) {
+function MailCard({ settings, onSaved }) {
 	const toast = useToast();
 	const mail = settings.mail;
 	const [form, setForm] = useState({
@@ -102,8 +102,8 @@ function MailTab({ settings, onSaved }) {
 	};
 	const errors = fieldErrors(problem);
 	return (
-		<Card>
-			<Form onSubmit={submit} busy={busy} aria-label={ADMIN.settingsTabs.mail}>
+		<Card title={ADMIN.settingsSections.mail.title} subtitle={ADMIN.settingsSections.mail.help}>
+			<Form onSubmit={submit} busy={busy} aria-label={ADMIN.settingsSections.mail.title}>
 				<Input
 					label={ADMIN.mail.host}
 					value={form.host}
@@ -178,7 +178,7 @@ function MailTab({ settings, onSaved }) {
 }
 
 /** @param {{ settings: any, onSaved: (s: any) => void }} props */
-function BrandingTab({ settings, onSaved }) {
+function BrandingCard({ settings, onSaved }) {
 	const [name, setName] = useState(settings.branding?.name ?? '');
 	const [accent, setAccent] = useState(settings.branding?.accent ?? '#4f46e5');
 	const [logoError, setLogoError] = useState(/** @type {string | null} */ (null));
@@ -196,11 +196,11 @@ function BrandingTab({ settings, onSaved }) {
 	};
 	const errors = fieldErrors(problem);
 	return (
-		<Card>
+		<Card title={ADMIN.settingsSections.branding.title} subtitle={ADMIN.settingsSections.branding.help}>
 			<Form
 				onSubmit={() => save(adminApi.settingsBranding(), 'PUT', { name: name.trim(), accent })}
 				busy={busy}
-				aria-label={ADMIN.settingsTabs.branding}>
+				aria-label={ADMIN.settingsSections.branding.title}>
 				<Input
 					label={ADMIN.branding.name}
 					value={name}
@@ -234,7 +234,7 @@ function BrandingTab({ settings, onSaved }) {
 							const file = e.currentTarget.files?.[0];
 							if (file) void upload(file);
 						}}
-						className="block text-sm"
+						className="block w-full text-sm text-muted file:mr-3 file:cursor-pointer file:rounded-xl file:border-0 file:bg-surface-2 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-fg hover:file:bg-surface-3"
 					/>
 					{logoError ? <Callout tone="danger">{logoError}</Callout> : null}
 					{settings.branding?.hasLogo ? (
@@ -253,7 +253,7 @@ function BrandingTab({ settings, onSaved }) {
 }
 
 /** @param {{ settings: any, onSaved: (s: any) => void }} props */
-function SupportTab({ settings, onSaved }) {
+function SupportCard({ settings, onSaved }) {
 	const [form, setForm] = useState({
 		email: settings.support?.email ?? '',
 		phone: settings.support?.phone ?? '',
@@ -264,9 +264,11 @@ function SupportTab({ settings, onSaved }) {
 	const set = (key, value) => setForm((f) => ({ ...f, [key]: value }));
 	const errors = fieldErrors(problem);
 	return (
-		<Card>
-			<Form onSubmit={() => save(adminApi.settingsSupport(), 'PUT', form)} busy={busy} aria-label={ADMIN.settingsTabs.support}>
-				<p className="text-sm text-muted">{ADMIN.support.help}</p>
+		<Card title={ADMIN.settingsSections.support.title} subtitle={ADMIN.settingsSections.support.help}>
+			<Form
+				onSubmit={() => save(adminApi.settingsSupport(), 'PUT', form)}
+				busy={busy}
+				aria-label={ADMIN.settingsSections.support.title}>
 				<Input
 					label={ADMIN.support.email}
 					type="email"
@@ -296,19 +298,19 @@ function SupportTab({ settings, onSaved }) {
 }
 
 /** @param {{ settings: any, onSaved: (s: any) => void }} props */
-function SecurityTab({ settings, onSaved }) {
+function SecurityCard({ settings, onSaved }) {
 	const bounds = settings.bounds?.sessionHours ?? { min: 1, max: 336 };
 	const [hours, setHours] = useState(String(settings.security?.sessionHours ?? 12));
 	const [required, setRequired] = useState(Boolean(settings.security?.requireTwoStepForAdmins));
 	const { busy, problem, save } = useSave(onSaved);
 	return (
-		<Card>
+		<Card title={ADMIN.settingsSections.security.title} subtitle={ADMIN.settingsSections.security.help}>
 			<Form
 				onSubmit={() =>
 					save(adminApi.settingsSecurity(), 'PUT', { sessionHours: Number(hours), requireTwoStepForAdmins: required })
 				}
 				busy={busy}
-				aria-label={ADMIN.settingsTabs.security}>
+				aria-label={ADMIN.settingsSections.security.title}>
 				<Input
 					label={ADMIN.security.sessionHours}
 					inputMode="numeric"
@@ -334,7 +336,7 @@ function SecurityTab({ settings, onSaved }) {
 }
 
 /** @param {{ settings: any, onSaved: (s: any) => void }} props */
-function BillingRulesTab({ settings, onSaved }) {
+function BillingRulesCard({ settings, onSaved }) {
 	const grace = settings.bounds?.graceDays ?? { min: 0, max: 30 };
 	const low = settings.bounds?.lowBalanceDays ?? { min: 1, max: 30 };
 	const [graceDays, setGraceDays] = useState(String(settings.billing?.graceDays ?? 3));
@@ -342,13 +344,13 @@ function BillingRulesTab({ settings, onSaved }) {
 	const { busy, problem, save } = useSave(onSaved);
 	const errors = fieldErrors(problem);
 	return (
-		<Card>
+		<Card title={ADMIN.settingsSections.billing.title} subtitle={ADMIN.settingsSections.billing.help}>
 			<Form
 				onSubmit={() =>
 					save(adminApi.settingsBilling(), 'PUT', { graceDays: Number(graceDays), lowBalanceDays: Number(lowBalanceDays) })
 				}
 				busy={busy}
-				aria-label={ADMIN.settingsTabs.billing}>
+				aria-label={ADMIN.settingsSections.billing.title}>
 				<Input
 					label={ADMIN.billingRules.graceDays}
 					inputMode="numeric"
@@ -389,32 +391,13 @@ export function SettingsView(props) {
 	return (
 		<div className="space-y-8">
 			<PageHeader title={ADMIN.settingsTitle} subtitle={ADMIN.settingsIntro} />
-			<Tabs
-				label={ADMIN.settingsTitle}
-				tabs={[
-					{ id: 'mail', label: ADMIN.settingsTabs.mail, content: <MailTab settings={settings} onSaved={setSettings} /> },
-					{
-						id: 'branding',
-						label: ADMIN.settingsTabs.branding,
-						content: <BrandingTab settings={settings} onSaved={setSettings} />,
-					},
-					{
-						id: 'support',
-						label: ADMIN.settingsTabs.support,
-						content: <SupportTab settings={settings} onSaved={setSettings} />,
-					},
-					{
-						id: 'security',
-						label: ADMIN.settingsTabs.security,
-						content: <SecurityTab settings={settings} onSaved={setSettings} />,
-					},
-					{
-						id: 'billing',
-						label: ADMIN.settingsTabs.billing,
-						content: <BillingRulesTab settings={settings} onSaved={setSettings} />,
-					},
-				]}
-			/>
+			<Masonry columns={2}>
+				<MailCard settings={settings} onSaved={setSettings} />
+				<BrandingCard settings={settings} onSaved={setSettings} />
+				<SupportCard settings={settings} onSaved={setSettings} />
+				<SecurityCard settings={settings} onSaved={setSettings} />
+				<BillingRulesCard settings={settings} onSaved={setSettings} />
+			</Masonry>
 		</div>
 	);
 }

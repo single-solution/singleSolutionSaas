@@ -3,8 +3,10 @@
  * per-request nonce-based CSP to HTML pages (Next.js applies the nonce to its own scripts and styles).
  *
  * - Pages: `script-src 'self' 'nonce-…' 'strict-dynamic'` (+ `'unsafe-eval'` in development only, for React
- *   debugging), `style-src 'self' 'nonce-…'`, `object-src 'none'`, `base-uri 'none'`, `form-action 'self'`,
- *   `frame-ancestors 'none'`, `upgrade-insecure-requests` (not on plain-http localhost).
+ *   debugging), `style-src 'self' 'nonce-…'` (in development `'self' 'unsafe-inline'`: the Next.js dev tools style
+ *   their shadow root with inline styles; blocked, their unstyled button showed as a square in the page's corner),
+ *   `object-src 'none'`, `base-uri 'none'`, `form-action 'self'`, `frame-ancestors 'none'`,
+ *   `upgrade-insecure-requests` (not on plain-http localhost).
  * - API / JSON / anything without a proxy-issued policy: `default-src 'none'; frame-ancestors 'none'`.
  * @module
  */
@@ -18,7 +20,7 @@ export const pageCsp = ({ nonce, dev = false, upgradeInsecure = true }) => {
 	return [
 		"default-src 'self'",
 		`script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${dev ? " 'unsafe-eval'" : ''}`,
-		`style-src 'self' 'nonce-${nonce}'`,
+		dev ? "style-src 'self' 'unsafe-inline'" : `style-src 'self' 'nonce-${nonce}'`,
 		"img-src 'self' blob: data:",
 		"font-src 'self'",
 		`connect-src 'self'${dev ? ' ws: wss:' : ''}`,

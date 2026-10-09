@@ -9,7 +9,7 @@
  * @module
  */
 import { useState } from 'react';
-import { Section, Select, cx } from '@ss/ui';
+import { Masonry, Section, Select, cx } from '@ss/ui';
 import { call, useLoad } from './api.js';
 import { BookingHoursEditor, CouriersEditor, GradesEditor, OrderFlowEditor, TaxRulesEditor, ZonesEditor } from './lists.js';
 import { Loaded, SettingsForms, TextsForm, ThemeForm, hasSettings } from './parts.js';
@@ -157,10 +157,10 @@ export function SettingsSections({ features, forms, extras }) {
 				</ul>
 			</nav>
 			<Section title={S[active.id].title} description={S[active.id].help}>
-				<div className="space-y-4">
+				<Masonry columns={2}>
 					{forms(active.features)}
 					{extras[active.id] ?? null}
-				</div>
+				</Masonry>
 			</Section>
 		</div>
 	);

@@ -14,7 +14,9 @@ import {
 	Checkbox,
 	CodeBlock,
 	ConfirmDialog,
+	FieldGrid,
 	Input,
+	Masonry,
 	Section,
 	Stat,
 	formatCredits,
@@ -59,7 +61,7 @@ function OverviewTab({ websiteId }) {
 					<div className="space-y-8">
 						<StatusBanner status={data.status} />
 						<Section title={TEXTS.overview.numbers} description={TEXTS.overview.numbersHelp}>
-							<div className="grid gap-4 sm:grid-cols-3">
+							<div className="grid gap-5 sm:grid-cols-3">
 								<Stat
 									label={TEXTS.overview.today}
 									value={formatCredits(data.todayMillicredits)}
@@ -212,41 +214,44 @@ function FeaturesTab({ websiteId, who, support }) {
 								{warning}
 							</Callout>
 						))}
-						{features.map((feature) => {
-							const missing = feature.dependsOn.filter((dep) => !on.includes(dep));
-							const broken = links.filter((link) => link.neededBy.includes(feature.key) && link.status !== 'connected');
-							return (
-								<Card
-									key={feature.key}
-									title={feature.name}
-									subtitle={fill(TEXTS.features.price, { price: formatCreditsPerHour(feature.millicreditsPerHour) })}
-									actions={
-										<a className="text-sm font-semibold text-primary" href={`/docs#feature-${feature.key}`}>
-											{TEXTS.features.docs}
-										</a>
-									}>
-									<p className="text-sm">{feature.description}</p>
-									{feature.dependsOn.length > 0 ? (
-										<p className="text-sm text-muted">
-											{fill(TEXTS.features.needs, { features: feature.dependsOn.join(', ') })}
-										</p>
-									) : null}
-									{feature.on
-										? broken.map((link) => (
-												<p key={link.name} className="text-sm text-danger">
-													{fill(TEXTS.features.notWorking, { connection: link.label })}
-												</p>
-											))
-										: null}
-									<Checkbox
-										label={TEXTS.features.on}
-										checked={on.includes(feature.key)}
-										disabled={!admin || (missing.length > 0 && !on.includes(feature.key))}
-										onChange={(event) => toggle(feature, event.target.checked)}
-									/>
-								</Card>
-							);
-						})}
+						<Masonry>
+							{features.map((feature) => {
+								const missing = feature.dependsOn.filter((dep) => !on.includes(dep));
+								const broken = links.filter((link) => link.neededBy.includes(feature.key) && link.status !== 'connected');
+								return (
+									<Card
+										key={feature.key}
+										bodyClassName="space-y-3"
+										title={feature.name}
+										subtitle={fill(TEXTS.features.price, { price: formatCreditsPerHour(feature.millicreditsPerHour) })}
+										actions={
+											<a className="text-sm font-semibold text-primary" href={`/docs#feature-${feature.key}`}>
+												{TEXTS.features.docs}
+											</a>
+										}>
+										<p className="text-sm">{feature.description}</p>
+										{feature.dependsOn.length > 0 ? (
+											<p className="text-sm text-muted">
+												{fill(TEXTS.features.needs, { features: feature.dependsOn.join(', ') })}
+											</p>
+										) : null}
+										{feature.on
+											? broken.map((link) => (
+													<p key={link.name} className="text-sm text-danger">
+														{fill(TEXTS.features.notWorking, { connection: link.label })}
+													</p>
+												))
+											: null}
+										<Checkbox
+											label={TEXTS.features.on}
+											checked={on.includes(feature.key)}
+											disabled={!admin || (missing.length > 0 && !on.includes(feature.key))}
+											onChange={(event) => toggle(feature, event.target.checked)}
+										/>
+									</Card>
+								);
+							})}
+						</Masonry>
 						{admin ? (
 							<Button disabled={picked === null} onClick={() => setConfirming(true)}>
 								{TEXTS.save}
@@ -306,66 +311,68 @@ function ConnectionsTab({ websiteId }) {
 			{(data) => (
 				<div className="space-y-4">
 					{data.connections.length === 0 ? <p className="text-sm text-muted">{TEXTS.connections.none}</p> : null}
-					{data.connections.map((/** @type {Connection} */ item) => {
-						const hint = connectionHint(item.name);
-						/** @param {object} value */
-						const save = (value) => void act(call('PUT', `${base}/${item.name}`, { value }));
-						return (
-							<Card
-								key={item.name}
-								title={item.label}
-								subtitle={
-									item.neededBy.length > 0
-										? fill(TEXTS.connections.neededBy, { features: item.neededBy.join(', ') })
-										: TEXTS.connections.neededByNone
-								}>
-								<p className="flex flex-wrap items-center gap-2 text-sm">
-									<Badge tone={toneOf(item.status)} dot>
-										{TEXTS.connections[/** @type {'connected'} */ (item.status)]}
-									</Badge>
-									{item.last4 ? <code>••••{item.last4}</code> : null}
-									{item.message ? <span className="text-muted">{item.message}</span> : null}
-								</p>
-								{hint ? <p className="mt-2 text-sm text-muted">{hint}</p> : null}
-								{item.name === 'storage' ? (
-									<StorageForm onSave={save} />
-								) : FORMS.includes(item.name) ? (
-									<AiForm onSave={save} />
-								) : (
-									<div className="mt-3 flex flex-wrap items-end gap-2">
-										<Input
-											fieldClassName="min-w-0 flex-1 basis-64"
-											label={TEXTS.connections.value}
-											type="password"
-											autoComplete="off"
-											value={values[item.name] ?? ''}
-											onChange={(event) => setValues({ ...values, [item.name]: event.target.value })}
-										/>
+					<Masonry>
+						{data.connections.map((/** @type {Connection} */ item) => {
+							const hint = connectionHint(item.name);
+							/** @param {object} value */
+							const save = (value) => void act(call('PUT', `${base}/${item.name}`, { value }));
+							return (
+								<Card
+									key={item.name}
+									title={item.label}
+									subtitle={
+										item.neededBy.length > 0
+											? fill(TEXTS.connections.neededBy, { features: item.neededBy.join(', ') })
+											: TEXTS.connections.neededByNone
+									}>
+									<p className="flex flex-wrap items-center gap-2 text-sm">
+										<Badge tone={toneOf(item.status)} dot>
+											{TEXTS.connections[/** @type {'connected'} */ (item.status)]}
+										</Badge>
+										{item.last4 ? <code>••••{item.last4}</code> : null}
+										{item.message ? <span className="text-muted">{item.message}</span> : null}
+									</p>
+									{hint ? <p className="mt-2 text-sm text-muted">{hint}</p> : null}
+									{item.name === 'storage' ? (
+										<StorageForm onSave={save} />
+									) : FORMS.includes(item.name) ? (
+										<AiForm onSave={save} />
+									) : (
+										<div className="mt-3 flex flex-wrap items-end gap-2">
+											<Input
+												fieldClassName="min-w-0 flex-1 basis-64"
+												label={TEXTS.connections.value}
+												type="password"
+												autoComplete="off"
+												value={values[item.name] ?? ''}
+												onChange={(event) => setValues({ ...values, [item.name]: event.target.value })}
+											/>
+											<Button
+												size="sm"
+												disabled={!values[item.name]?.trim()}
+												onClick={() => {
+													void act(call('PUT', `${base}/${item.name}`, { value: values[item.name]?.trim() }));
+													setValues({ ...values, [item.name]: '' });
+												}}>
+												{TEXTS.connections.save}
+											</Button>
+										</div>
+									)}
+									<div className="mt-3 flex flex-wrap gap-2">
 										<Button
 											size="sm"
-											disabled={!values[item.name]?.trim()}
-											onClick={() => {
-												void act(call('PUT', `${base}/${item.name}`, { value: values[item.name]?.trim() }));
-												setValues({ ...values, [item.name]: '' });
-											}}>
-											{TEXTS.connections.save}
+											variant="secondary"
+											onClick={() => void act(call('POST', `${base}/${item.name}/test`))}>
+											{TEXTS.connections.test}
+										</Button>
+										<Button size="sm" variant="ghost" onClick={() => void act(call('DELETE', `${base}/${item.name}`))}>
+											{TEXTS.connections.remove}
 										</Button>
 									</div>
-								)}
-								<div className="mt-3 flex flex-wrap gap-2">
-									<Button
-										size="sm"
-										variant="secondary"
-										onClick={() => void act(call('POST', `${base}/${item.name}/test`))}>
-										{TEXTS.connections.test}
-									</Button>
-									<Button size="sm" variant="ghost" onClick={() => void act(call('DELETE', `${base}/${item.name}`))}>
-										{TEXTS.connections.remove}
-									</Button>
-								</div>
-							</Card>
-						);
-					})}
+								</Card>
+							);
+						})}
+					</Masonry>
 					<Outcome result={result} />
 				</div>
 			)}
@@ -436,7 +443,7 @@ function DefaultsTab() {
 			{(data) => (
 				<div className="space-y-4">
 					<Callout tone="info">{TEXTS.defaults.intro}</Callout>
-					<div className="grid gap-4 xl:grid-cols-2">
+					<Masonry>
 						<SettingsForms
 							features={data.features}
 							saveUrl={saveUrl}
@@ -445,19 +452,19 @@ function DefaultsTab() {
 							reload={reload}
 							notice={aiLabelNotice}
 						/>
-					</div>
-					<TextsForm
-						texts={data.texts}
-						saveUrl={(key) => saveUrl(`text.${key}`)}
-						resetBody
-						savedSource="default"
-						reload={reload}
-					/>
-					<ThemeForm
-						theme={data.theme.theme}
-						save={(next) => call('PUT', saveUrl('theme'), { value: next })}
-						reload={reload}
-					/>
+						<TextsForm
+							texts={data.texts}
+							saveUrl={(key) => saveUrl(`text.${key}`)}
+							resetBody
+							savedSource="default"
+							reload={reload}
+						/>
+						<ThemeForm
+							theme={data.theme.theme}
+							save={(next) => call('PUT', saveUrl('theme'), { value: next })}
+							reload={reload}
+						/>
+					</Masonry>
 					<RecentChanges items={data.recentChanges} />
 				</div>
 			)}
@@ -482,7 +489,7 @@ function PricesTab() {
 					<div className="space-y-4">
 						<Callout tone="info">{TEXTS.prices.intro}</Callout>
 						<Card>
-							<div className="space-y-3">
+							<FieldGrid>
 								{parsed.map(({ feature, text, credits }) => (
 									<Input
 										key={feature.key}
@@ -494,7 +501,7 @@ function PricesTab() {
 										onChange={(event) => setDraft({ ...draft, [feature.key]: event.target.value })}
 									/>
 								))}
-							</div>
+							</FieldGrid>
 							<Button
 								className="mt-4"
 								disabled={parsed.some((entry) => !entry.credits.ok)}

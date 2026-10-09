@@ -5,7 +5,7 @@
  * an admin; the page shows the support contact instead of a payment form.
  * @module
  */
-import { Callout, Card, Input, PageHeader, Select, describeProblem } from '@ss/ui';
+import { Button, Callout, Card, Input, PageHeader, Select, describeProblem } from '@ss/ui';
 import { BILLING } from '../../texts/console.js';
 import { BillingStats, ReceiptsTable, UsageView } from './billing.js';
 import { PageProblem } from './common.js';
@@ -28,9 +28,9 @@ function RangeForm({ range, websites, websiteId }) {
 					...websites.map((w) => ({ value: String(w.websiteId), label: String(w.domain) })),
 				]}
 			/>
-			<button type="submit" className="min-h-10 rounded-xl bg-surface-2 px-4 text-sm font-semibold text-fg hover:bg-surface-3">
+			<Button type="submit" variant="secondary">
 				{BILLING.filters.apply}
-			</button>
+			</Button>
 		</form>
 	);
 }

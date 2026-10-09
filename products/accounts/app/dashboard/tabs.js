@@ -17,6 +17,7 @@ import {
 	ErrorState,
 	FieldGrid,
 	Input,
+	Masonry,
 	SchemaForm,
 	Section,
 	Select,
@@ -109,7 +110,7 @@ function OverviewTab({ websiteId }) {
 					<div className="space-y-8">
 						<StatusBanner status={data.status} />
 						<Section title={TEXTS.overview.numbers} description={TEXTS.overview.numbersHelp}>
-							<div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+							<div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
 								<Stat
 									label={TEXTS.overview.today}
 									value={formatCredits(data.todayMillicredits)}
@@ -251,41 +252,44 @@ function FeaturesTab({ websiteId, who, support }) {
 				return (
 					<div className="space-y-4">
 						{admin ? null : <Callout tone="info">{fill(TEXTS.features.contact, { contact: support.email })}</Callout>}
-						{features.map((feature) => {
-							const missing = feature.dependsOn.filter((dep) => !on.includes(dep));
-							const broken = links.filter((link) => link.neededBy.includes(feature.key) && link.status !== 'connected');
-							return (
-								<Card
-									key={feature.key}
-									title={feature.name}
-									subtitle={fill(TEXTS.features.price, { price: formatCreditsPerHour(feature.millicreditsPerHour) })}
-									actions={
-										<a className="text-sm font-semibold text-primary" href={`/docs#feature-${feature.key}`}>
-											{TEXTS.features.docs}
-										</a>
-									}>
-									<p className="text-sm">{feature.description}</p>
-									{feature.dependsOn.length > 0 ? (
-										<p className="text-sm text-muted">
-											{fill(TEXTS.features.needs, { features: feature.dependsOn.join(', ') })}
-										</p>
-									) : null}
-									{feature.on
-										? broken.map((link) => (
-												<p key={link.label} className="text-sm text-danger">
-													{fill(TEXTS.features.notWorking, { connection: link.label })}
-												</p>
-											))
-										: null}
-									<Checkbox
-										label={TEXTS.features.on}
-										checked={on.includes(feature.key)}
-										disabled={!admin || (missing.length > 0 && !on.includes(feature.key))}
-										onChange={(event) => toggle(feature, event.target.checked)}
-									/>
-								</Card>
-							);
-						})}
+						<Masonry>
+							{features.map((feature) => {
+								const missing = feature.dependsOn.filter((dep) => !on.includes(dep));
+								const broken = links.filter((link) => link.neededBy.includes(feature.key) && link.status !== 'connected');
+								return (
+									<Card
+										key={feature.key}
+										bodyClassName="space-y-3"
+										title={feature.name}
+										subtitle={fill(TEXTS.features.price, { price: formatCreditsPerHour(feature.millicreditsPerHour) })}
+										actions={
+											<a className="text-sm font-semibold text-primary" href={`/docs#feature-${feature.key}`}>
+												{TEXTS.features.docs}
+											</a>
+										}>
+										<p className="text-sm">{feature.description}</p>
+										{feature.dependsOn.length > 0 ? (
+											<p className="text-sm text-muted">
+												{fill(TEXTS.features.needs, { features: feature.dependsOn.join(', ') })}
+											</p>
+										) : null}
+										{feature.on
+											? broken.map((link) => (
+													<p key={link.label} className="text-sm text-danger">
+														{fill(TEXTS.features.notWorking, { connection: link.label })}
+													</p>
+												))
+											: null}
+										<Checkbox
+											label={TEXTS.features.on}
+											checked={on.includes(feature.key)}
+											disabled={!admin || (missing.length > 0 && !on.includes(feature.key))}
+											onChange={(event) => toggle(feature, event.target.checked)}
+										/>
+									</Card>
+								);
+							})}
+						</Masonry>
 						{admin ? (
 							<Button disabled={picked === null} onClick={() => setConfirming(true)}>
 								{TEXTS.save}
@@ -321,62 +325,70 @@ function FeaturesTab({ websiteId, who, support }) {
 }
 
 /**
- * Settings forms, one per feature: a website's settings or the global defaults.
+ * Settings forms, one card per feature that has settings, each with its own Save and outcome: a website's settings or
+ * the global defaults.
  * @param {{ features: Array<{ key: string, name: string, on?: boolean, schema: any, values: Record<string, { value: unknown, source: string }> }>,
  *   saveUrl: (key: string) => string, resetBody: boolean, savedSource: string, reload: () => void }} props
  *   `resetBody`: reset with `PUT { value: null }` (defaults) instead of `DELETE`
  */
 function SettingsForms({ features, saveUrl, resetBody, savedSource, reload }) {
 	const [edits, setEdits] = useState(/** @type {Record<string, Record<string, unknown>>} */ ({}));
-	const [result, setResult] = useState(/** @type {import('./api.js').Answer | null} */ (null));
+	const [result, setResult] = useState(/** @type {{ feature: string, answer: import('./api.js').Answer } | null} */ (null));
 	/** @param {string} feature @param {string} name */
 	const reset = async (feature, name) => {
-		setResult(
-			resetBody
+		setResult({
+			feature,
+			answer: resetBody
 				? await call('PUT', saveUrl(`${feature}.${name}`), { value: null })
 				: await call('DELETE', saveUrl(`${feature}.${name}`)),
-		);
+		});
 		reload();
 	};
 	return (
 		<>
-			{features.map((feature) => {
-				const changed = edits[feature.key] ?? {};
-				const values = Object.fromEntries(
-					Object.entries(feature.values).map(([name, entry]) => [name, name in changed ? changed[name] : entry.value]),
-				);
-				const overridden = Object.fromEntries(
-					Object.entries(feature.values).map(([name, entry]) => [name, entry.source === savedSource]),
-				);
-				return (
-					<Card key={feature.key} title={feature.name} subtitle={feature.on === false ? TEXTS.settings.off : undefined}>
-						<SchemaForm
-							schema={feature.schema}
-							values={values}
-							overridden={overridden}
-							onReset={(name) => void reset(feature.key, name)}
-							onChange={(name, value) => setEdits({ ...edits, [feature.key]: { ...changed, [name]: value } })}
-						/>
-						<Button
-							className="mt-4"
-							disabled={Object.keys(changed).length === 0}
-							onClick={async () => {
-								/** @type {import('./api.js').Answer} */
-								let last = { ok: true, data: null };
-								for (const [name, value] of Object.entries(changed)) {
-									last = await call('PUT', saveUrl(`${feature.key}.${name}`), { value });
-									if (!last.ok) break;
-								}
-								setResult(last);
-								if (last.ok) setEdits({ ...edits, [feature.key]: {} });
-								reload();
-							}}>
-							{TEXTS.save}
-						</Button>
-					</Card>
-				);
-			})}
-			<Outcome result={result} />
+			{features
+				.filter((feature) => Object.keys(feature.schema?.properties ?? {}).length > 0)
+				.map((feature) => {
+					const changed = edits[feature.key] ?? {};
+					const values = Object.fromEntries(
+						Object.entries(feature.values).map(([name, entry]) => [name, name in changed ? changed[name] : entry.value]),
+					);
+					const overridden = Object.fromEntries(
+						Object.entries(feature.values).map(([name, entry]) => [name, entry.source === savedSource]),
+					);
+					return (
+						<Card key={feature.key} title={feature.name} subtitle={feature.on === false ? TEXTS.settings.off : undefined}>
+							<SchemaForm
+								schema={feature.schema}
+								values={values}
+								overridden={overridden}
+								onReset={(name) => void reset(feature.key, name)}
+								onChange={(name, value) => setEdits({ ...edits, [feature.key]: { ...changed, [name]: value } })}
+							/>
+							<Button
+								className="mt-4"
+								disabled={Object.keys(changed).length === 0}
+								onClick={async () => {
+									/** @type {import('./api.js').Answer} */
+									let last = { ok: true, data: null };
+									for (const [name, value] of Object.entries(changed)) {
+										last = await call('PUT', saveUrl(`${feature.key}.${name}`), { value });
+										if (!last.ok) break;
+									}
+									setResult({ feature: feature.key, answer: last });
+									if (last.ok) setEdits({ ...edits, [feature.key]: {} });
+									reload();
+								}}>
+								{TEXTS.save}
+							</Button>
+							{result?.feature === feature.key ? (
+								<div className="mt-4">
+									<Outcome result={result.answer} />
+								</div>
+							) : null}
+						</Card>
+					);
+				})}
 		</>
 	);
 }
@@ -501,7 +513,7 @@ function SettingsTab({ websiteId }) {
 		<div className="space-y-8">
 			<FieldsSection websiteId={/** @type {string} */ (websiteId)} />
 			<Section title={TEXTS.settings.featuresTitle} description={TEXTS.settings.featuresHelp}>
-				<div className="grid gap-4 xl:grid-cols-2">
+				<Masonry>
 					<Loaded answer={settings.answer}>
 						{(data) => (
 							<SettingsForms
@@ -513,25 +525,27 @@ function SettingsTab({ websiteId }) {
 							/>
 						)}
 					</Loaded>
-				</div>
+				</Masonry>
 			</Section>
 			<Section title={TEXTS.settings.looksTitle} description={TEXTS.settings.looksHelp}>
-				<Loaded answer={texts.answer}>
-					{(data) => (
-						<TextsForm
-							texts={data.texts}
-							saveUrl={(key) => `${base}/texts/${encodeURIComponent(key)}`}
-							resetBody={false}
-							savedSource="website"
-							reload={texts.reload}
-						/>
-					)}
-				</Loaded>
-				<Loaded answer={theme.answer}>
-					{(data) => (
-						<ThemeForm theme={data.theme} save={(next) => call('PUT', `${base}/theme`, next)} reload={theme.reload} />
-					)}
-				</Loaded>
+				<Masonry>
+					<Loaded answer={texts.answer}>
+						{(data) => (
+							<TextsForm
+								texts={data.texts}
+								saveUrl={(key) => `${base}/texts/${encodeURIComponent(key)}`}
+								resetBody={false}
+								savedSource="website"
+								reload={texts.reload}
+							/>
+						)}
+					</Loaded>
+					<Loaded answer={theme.answer}>
+						{(data) => (
+							<ThemeForm theme={data.theme} save={(next) => call('PUT', `${base}/theme`, next)} reload={theme.reload} />
+						)}
+					</Loaded>
+				</Masonry>
 			</Section>
 		</div>
 	);
@@ -566,73 +580,82 @@ function ConnectionsTab({ websiteId }) {
 			{(data) => (
 				<div className="space-y-4">
 					{data.connections.length === 0 ? <p className="text-sm text-muted">{TEXTS.connections.none}</p> : null}
-					{data.connections.map(
-						(
-							/** @type {{ name: string, label: string, neededBy: string[], status: string, message?: string, last4?: string | null }} */ item,
-						) => {
-							const hint = connectionHint(item.name);
-							return (
-								<Card
-									key={item.name}
-									title={item.label}
-									subtitle={
-										item.neededBy.length > 0
-											? fill(TEXTS.connections.neededBy, { features: item.neededBy.join(', ') })
-											: TEXTS.connections.neededByNone
-									}>
-									<p className="flex flex-wrap items-center gap-2 text-sm">
-										<Badge
-											tone={
-												item.status === 'connected' ? 'success' : item.status === 'test_failed' ? 'danger' : 'warning'
-											}
-											dot>
-											{TEXTS.connections[/** @type {'connected'} */ (item.status)]}
-										</Badge>
-										{item.last4 ? <code>••••{item.last4}</code> : null}
-										{item.message ? <span className="text-muted">{item.message}</span> : null}
-									</p>
-									{hint ? <p className="mt-2 text-sm text-muted">{hint}</p> : null}
-									{item.name in KEY_FORMS ? (
-										<KeyForm
-											name={item.name}
-											onSave={(value) => void act(call('PUT', `${base}/${item.name}`, { value }))}
-										/>
-									) : (
-										<div className="mt-3 flex flex-wrap items-end gap-2">
-											<Input
-												fieldClassName="min-w-0 flex-1 basis-64"
-												label={TEXTS.connections.value}
-												type="password"
-												autoComplete="off"
-												value={values[item.name] ?? ''}
-												onChange={(event) => setValues({ ...values, [item.name]: event.target.value })}
+					<Masonry>
+						{data.connections.map(
+							(
+								/** @type {{ name: string, label: string, neededBy: string[], status: string, message?: string, last4?: string | null }} */ item,
+							) => {
+								const hint = connectionHint(item.name);
+								return (
+									<Card
+										key={item.name}
+										title={item.label}
+										subtitle={
+											item.neededBy.length > 0
+												? fill(TEXTS.connections.neededBy, { features: item.neededBy.join(', ') })
+												: TEXTS.connections.neededByNone
+										}>
+										<p className="flex flex-wrap items-center gap-2 text-sm">
+											<Badge
+												tone={
+													item.status === 'connected'
+														? 'success'
+														: item.status === 'test_failed'
+															? 'danger'
+															: 'warning'
+												}
+												dot>
+												{TEXTS.connections[/** @type {'connected'} */ (item.status)]}
+											</Badge>
+											{item.last4 ? <code>••••{item.last4}</code> : null}
+											{item.message ? <span className="text-muted">{item.message}</span> : null}
+										</p>
+										{hint ? <p className="mt-2 text-sm text-muted">{hint}</p> : null}
+										{item.name in KEY_FORMS ? (
+											<KeyForm
+												name={item.name}
+												onSave={(value) => void act(call('PUT', `${base}/${item.name}`, { value }))}
 											/>
+										) : (
+											<div className="mt-3 flex flex-wrap items-end gap-2">
+												<Input
+													fieldClassName="min-w-0 flex-1 basis-64"
+													label={TEXTS.connections.value}
+													type="password"
+													autoComplete="off"
+													value={values[item.name] ?? ''}
+													onChange={(event) => setValues({ ...values, [item.name]: event.target.value })}
+												/>
+												<Button
+													size="sm"
+													disabled={!values[item.name]?.trim()}
+													onClick={() => {
+														void act(call('PUT', `${base}/${item.name}`, { value: values[item.name]?.trim() }));
+														setValues({ ...values, [item.name]: '' });
+													}}>
+													{TEXTS.connections.save}
+												</Button>
+											</div>
+										)}
+										<div className="mt-3 flex flex-wrap gap-2">
 											<Button
 												size="sm"
-												disabled={!values[item.name]?.trim()}
-												onClick={() => {
-													void act(call('PUT', `${base}/${item.name}`, { value: values[item.name]?.trim() }));
-													setValues({ ...values, [item.name]: '' });
-												}}>
-												{TEXTS.connections.save}
+												variant="secondary"
+												onClick={() => void act(call('POST', `${base}/${item.name}/test`))}>
+												{TEXTS.connections.test}
+											</Button>
+											<Button
+												size="sm"
+												variant="ghost"
+												onClick={() => void act(call('DELETE', `${base}/${item.name}`))}>
+												{TEXTS.connections.remove}
 											</Button>
 										</div>
-									)}
-									<div className="mt-3 flex flex-wrap gap-2">
-										<Button
-											size="sm"
-											variant="secondary"
-											onClick={() => void act(call('POST', `${base}/${item.name}/test`))}>
-											{TEXTS.connections.test}
-										</Button>
-										<Button size="sm" variant="ghost" onClick={() => void act(call('DELETE', `${base}/${item.name}`))}>
-											{TEXTS.connections.remove}
-										</Button>
-									</div>
-								</Card>
-							);
-						},
-					)}
+									</Card>
+								);
+							},
+						)}
+					</Masonry>
 					<Outcome result={result} />
 				</div>
 			)}
@@ -721,19 +744,21 @@ function DefaultsTab() {
 			{(data) => (
 				<div className="space-y-4">
 					<Callout tone="info">{TEXTS.defaults.intro}</Callout>
-					<SettingsForms features={data.features} saveUrl={saveUrl} resetBody savedSource="default" reload={reload} />
-					<TextsForm
-						texts={data.texts}
-						saveUrl={(key) => saveUrl(`text.${key}`)}
-						resetBody
-						savedSource="default"
-						reload={reload}
-					/>
-					<ThemeForm
-						theme={data.theme.theme}
-						save={(next) => call('PUT', saveUrl('theme'), { value: next })}
-						reload={reload}
-					/>
+					<Masonry>
+						<SettingsForms features={data.features} saveUrl={saveUrl} resetBody savedSource="default" reload={reload} />
+						<TextsForm
+							texts={data.texts}
+							saveUrl={(key) => saveUrl(`text.${key}`)}
+							resetBody
+							savedSource="default"
+							reload={reload}
+						/>
+						<ThemeForm
+							theme={data.theme.theme}
+							save={(next) => call('PUT', saveUrl('theme'), { value: next })}
+							reload={reload}
+						/>
+					</Masonry>
 					<RecentChanges items={data.recentChanges} />
 				</div>
 			)}
@@ -758,7 +783,7 @@ function PricesTab() {
 					<div className="space-y-4">
 						<Callout tone="info">{TEXTS.prices.intro}</Callout>
 						<Card>
-							<div className="space-y-3">
+							<FieldGrid>
 								{parsed.map(({ feature, text, credits }) => (
 									<Input
 										key={feature.key}
@@ -770,7 +795,7 @@ function PricesTab() {
 										onChange={(event) => setDraft({ ...draft, [feature.key]: event.target.value })}
 									/>
 								))}
-							</div>
+							</FieldGrid>
 							<Button
 								className="mt-4"
 								disabled={parsed.some((entry) => !entry.credits.ok)}

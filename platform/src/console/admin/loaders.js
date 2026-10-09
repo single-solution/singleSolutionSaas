@@ -140,6 +140,20 @@ export const loadMerchant = async (api, merchantId, admin) => {
 };
 
 /**
+ * The Merchants screen with no merchant in the URL: the list and, when it has merchants, the first one, which wide
+ * screens open by default (PLAN 0.6 list-and-detail screens).
+ * @param {ConsoleApi} api
+ * @param {{ status?: string, q?: string, cursor?: string }} filter
+ * @param {any} admin the signed-in admin
+ */
+export const loadMerchantsScreen = async (api, filter, admin) => {
+	const list = await loadMerchants(api, filter);
+	const first = list.ok ? list.page.items[0] : undefined;
+	if (!list.ok || !first) return list;
+	return { ...list, detail: await loadMerchant(api, String(first.merchantId), admin), auto: true };
+};
+
+/**
  * Admin Overview.
  * @param {ConsoleApi} api
  */
@@ -151,8 +165,8 @@ export const loadOverview = async (api) => {
 };
 
 /**
- * Products (PLAN 0.8.2): the connected products with the websites using each and the credits it earned this month (the
- * list of the Products screen).
+ * Products (PLAN 0.8.2): the connected products, by name, with the websites using each and the credits it earned this
+ * month (the list of the Products screen).
  * @param {ConsoleApi} api
  * @param {{ status?: string }} [filter]
  */
@@ -161,7 +175,21 @@ export const loadProducts = async (api, filter = {}) => {
 	const list = await api.get(paths.products({ status }));
 	const failed = firstFailure(list);
 	if (failed) return failed;
-	return { ok: /** @type {const} */ (true), filter: { status }, items: itemsOf(list) };
+	const items = itemsOf(list).sort((a, b) => String(a.name).localeCompare(String(b.name)));
+	return { ok: /** @type {const} */ (true), filter: { status }, items };
+};
+
+/**
+ * The Products screen with no product in the URL: the list (by name) and, when it has products, the first one, which
+ * wide screens open by default.
+ * @param {ConsoleApi} api
+ * @param {{ status?: string }} filter
+ */
+export const loadProductsScreen = async (api, filter) => {
+	const list = await loadProducts(api, filter);
+	const first = list.ok ? list.items[0] : undefined;
+	if (!list.ok || !first) return list;
+	return { ...list, detail: await loadProduct(api, String(first.productId)), auto: true };
 };
 
 /**

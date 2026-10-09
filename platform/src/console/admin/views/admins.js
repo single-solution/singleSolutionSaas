@@ -1,10 +1,11 @@
 'use client';
 /**
  * Admins (PLAN 0.8.2; Owner only): one list-and-detail screen. The list (search; per row the name, e-mail, a status dot
- * — invited grey — and the role) with **Invite** (e-mail + role) sits beside the selected admin: e-mail, role, two-step
- * on/off and last sign-in, with the actions Resend invite or Copy invite link and Correct invite e-mail (until
- * accepted), Change role, Turn off two-step and Remove, as dialogs. The last Owner cannot be removed or demoted and no
- * one removes themselves (the API refuses; the screen explains).
+ * — invited grey — and the role) with **Invite** (e-mail + role) sits beside the selected admin — on wide screens the
+ * first one until another is picked: e-mail, role, two-step on/off and last sign-in, with the actions Resend invite or
+ * Copy invite link and Correct invite e-mail (until accepted), Change role, Turn off two-step and Remove, as dialogs —
+ * the first two as buttons, the rest in the header's More menu with Remove last. The last Owner cannot be removed or
+ * demoted and no one removes themselves (the API refuses; the screen explains).
  * @module
  */
 import { useState } from 'react';
@@ -25,12 +26,12 @@ import {
 	Select,
 	describeProblem,
 	fieldErrors,
-	formatDateTime,
 	useToast,
 } from '@ss/ui';
 import { ADMIN, TWO_STEP } from '../../../texts/console.js';
 import { adminFetch, useAdminResource } from '../client.js';
-import { ListDetail, ListPane, ListRow, ListSearch } from '../../views/common.js';
+import { LocalTime } from '../../views/billing.js';
+import { HeaderActions, ListDetail, ListPane, ListRow, ListSearch } from '../../views/common.js';
 import { adminApi, adminRoutes } from '../paths.js';
 import { AdminProblem, RoleBadge } from './common.js';
 
@@ -122,38 +123,41 @@ export function AdminsView(props) {
 
 	const needle = q.trim().toLowerCase();
 	const shown = items.filter((a) => !needle || `${a.name ?? ''} ${a.email}`.toLowerCase().includes(needle));
-	const current = selectedId ? (items.find((a) => a.adminId === selectedId) ?? null) : null;
+	const auto = selectedId === null;
+	const current = auto ? (items[0] ?? null) : (items.find((a) => a.adminId === selectedId) ?? null);
+	/** @type {Array<{ label: string, onSelect: () => void, danger?: boolean }>} */
+	const actionList = current
+		? [
+				...(current.status === 'invited'
+					? [
+							{ label: ADMIN.resendInvite, onSelect: () => void resend(current, false) },
+							{ label: ADMIN.copyInvite, onSelect: () => void resend(current, true) },
+							{ label: ADMIN.correctEmail, onSelect: () => open('email', current) },
+						]
+					: []),
+				...(current.adminId !== me?.adminId
+					? [
+							{ label: ADMIN.changeRole, onSelect: () => open('role', current) },
+							...(current.twoStep?.enabled
+								? [{ label: ADMIN.turnOffTwoStep, onSelect: () => open('twoStep', current) }]
+								: []),
+							{ label: ADMIN.remove, onSelect: () => open('remove', current), danger: true },
+						]
+					: []),
+			]
+		: [];
+	// the first two actions are buttons; the rest (Remove always) sit in the More menu
+	const shownActions = actionList.filter((a) => !a.danger).slice(0, 2);
 	const actions = current ? (
-		<div className="flex flex-wrap gap-2">
-			{current.status === 'invited' ? (
-				<>
-					<Button variant="secondary" onClick={() => void resend(current, false)}>
-						{ADMIN.resendInvite}
-					</Button>
-					<Button variant="secondary" onClick={() => void resend(current, true)}>
-						{ADMIN.copyInvite}
-					</Button>
-					<Button variant="secondary" onClick={() => open('email', current)}>
-						{ADMIN.correctEmail}
-					</Button>
-				</>
-			) : null}
-			{current.adminId !== me?.adminId ? (
-				<>
-					<Button variant="secondary" onClick={() => open('role', current)}>
-						{ADMIN.changeRole}
-					</Button>
-					{current.twoStep?.enabled ? (
-						<Button variant="secondary" onClick={() => open('twoStep', current)}>
-							{ADMIN.turnOffTwoStep}
-						</Button>
-					) : null}
-					<Button variant="danger" onClick={() => open('remove', current)}>
-						{ADMIN.remove}
-					</Button>
-				</>
-			) : null}
-		</div>
+		<HeaderActions
+			label={ADMIN.moreActions(current.name ?? current.email)}
+			more={actionList.filter((a) => !shownActions.includes(a))}>
+			{shownActions.map((a) => (
+				<Button key={a.label} variant="secondary" onClick={a.onSelect}>
+					{a.label}
+				</Button>
+			))}
+		</HeaderActions>
 	) : null;
 
 	return (
@@ -174,7 +178,7 @@ export function AdminsView(props) {
 							<ListRow
 								key={a.adminId}
 								href={adminRoutes.admin(a.adminId)}
-								current={a.adminId === selectedId}
+								current={a.adminId === current?.adminId ? (auto ? 'wide' : true) : false}
 								label={a.adminId === me?.adminId ? `${a.name ?? a.email} (${ADMIN.you})` : (a.name ?? a.email)}
 								sublabel={a.email}
 								dot={a.status === 'invited' ? 'neutral' : 'success'}
@@ -184,9 +188,10 @@ export function AdminsView(props) {
 						))}
 					</ListPane>
 				}
-				empty={<EmptyState icon="key" kind="admin" title={ADMIN.selectAdminTitle} description={ADMIN.adminsIntro} />}
+				auto={auto}
+				empty={<EmptyState icon="shield" kind="admin" title={ADMIN.noAdmins} />}
 				detail={
-					selectedId === null ? null : current ? (
+					current ? (
 						<>
 							<PageHeader
 								level={2}
@@ -194,7 +199,7 @@ export function AdminsView(props) {
 								badge={
 									<span className="inline-flex flex-wrap gap-1">
 										<RoleBadge role={current.role} />
-										{current.status === 'invited' ? <Badge tone="info">{ADMIN.invited}</Badge> : null}
+										{current.status === 'invited' ? <Badge tone="neutral">{ADMIN.invited}</Badge> : null}
 									</span>
 								}
 								subtitle={current.adminId === me?.adminId ? `${current.email} · ${ADMIN.you}` : current.email}
@@ -202,18 +207,15 @@ export function AdminsView(props) {
 							/>
 							<Card>
 								<KeyValueList
-									columns={3}
 									items={[
-										{ label: 'E-mail', value: current.email },
-										{ label: ADMIN.role, value: ADMIN.roles[/** @type {'owner'} */ (current.role)] ?? current.role },
 										{ label: ADMIN.twoStepColumn, value: current.twoStep?.enabled ? TWO_STEP.on : TWO_STEP.off },
-										{ label: ADMIN.columns.lastSignIn, value: formatDateTime(current.lastSignInAt) },
+										{ label: ADMIN.columns.lastSignIn, value: <LocalTime value={current.lastSignInAt} /> },
 									]}
 								/>
 							</Card>
 						</>
-					) : (
-						<EmptyState icon="key" title={ADMIN.adminGone} />
+					) : auto ? null : (
+						<EmptyState icon="shield" kind="admin" title={ADMIN.adminGone} />
 					)
 				}
 			/>

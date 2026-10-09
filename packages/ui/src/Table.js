@@ -98,7 +98,7 @@ export function Table({
 										className={cx(
 											pad,
 											alignClass(column.align),
-											'text-xs font-semibold uppercase tracking-wider text-muted',
+											'whitespace-nowrap text-xs font-semibold uppercase tracking-wider text-muted',
 											column.className,
 										)}>
 										{column.sortable ? (
@@ -123,8 +123,12 @@ export function Table({
 					<tbody>
 						{sorted.length === 0 ? (
 							<tr>
-								<td colSpan={columns.length} className="px-4 py-8 text-center text-sm text-muted">
-									{empty ?? 'Nothing to show yet.'}
+								<td colSpan={columns.length} className="p-3">
+									{typeof empty === 'string' || empty === undefined ? (
+										<p className="px-2 py-5 text-center text-sm text-muted">{empty ?? 'Nothing to show yet.'}</p>
+									) : (
+										empty
+									)}
 								</td>
 							</tr>
 						) : (

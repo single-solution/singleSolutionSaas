@@ -30,7 +30,7 @@ export const merchantSections = (pathname) => {
 					href: routes.overview(),
 					label: MERCHANT.menu.overview,
 					kind: 'overview',
-					icon: 'grid',
+					icon: 'home',
 					current: is(routes.overview()),
 				},
 				{
@@ -108,8 +108,7 @@ export function ConsoleShell({ me, merchantId, websites, billing, children, bran
 							{billing && typeof billing.balance === 'number' ? (
 								<Link
 									href={routes.credits()}
-									data-tone="credit"
-									className="hidden items-center gap-1.5 rounded-xl bg-tone-tint px-3 py-1.5 text-sm font-semibold text-fg hover:bg-surface-2 sm:inline-flex"
+									className="hidden items-center gap-1.5 rounded-xl bg-primary-soft px-3 py-1.5 text-sm font-semibold text-on-primary-soft hover:bg-surface-2 sm:inline-flex"
 									title={MERCHANT.balanceLink}>
 									<Icon name="wallet" size={14} />
 									<span className="tabular-nums">{formatCredits(billing.balance)}</span>

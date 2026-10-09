@@ -2,10 +2,11 @@
 /**
  * Admin Merchants (PLAN 0.8.2, 0.6): one list-and-detail screen. The list (search by business name, owner e-mail or
  * domain; status filter; paged at 50; per row the name, a status dot and the balance; bulk Suspend / Resume with one
- * reason and Resend setup link) sits beside the selected merchant — a header (name, status, balance; actions Add
- * credits, Edit merchant, Suspend / Resume, Resend or Copy setup link, Turn off two-step, Delete, all as dialogs), a
- * grid of website cards (products with Add product, tokens and usage in dialogs; Add website) and the Credits and
- * Activity sections. Rights follow the role (PLAN 0.2); the API checks them again.
+ * reason and Resend setup link) sits beside the selected merchant — on wide screens the first one until another is
+ * picked. The merchant: a header (name, status, balance; Add credits and Edit merchant as buttons, and Suspend /
+ * Resume, Resend or Copy setup link, Turn off two-step and Delete in its More menu, all as dialogs), a masonry of
+ * website cards (products with Add product, tokens and usage in dialogs; Add website) and the Credits and Activity
+ * sections. Rights follow the role (PLAN 0.2); the API checks them again.
  * @module
  */
 import { useState } from 'react';
@@ -21,6 +22,7 @@ import {
 	FormError,
 	Icon,
 	Input,
+	Masonry,
 	PageHeader,
 	Section,
 	Select,
@@ -36,7 +38,7 @@ import { ADMIN, BILLING, MERCHANT_FIELDS, WEBSITE } from '../../../texts/console
 import { api } from '../../paths.js';
 import { MerchantStatusBadge } from '../../views/billing.js';
 import { MerchantFieldsForm, countryOptions } from '../../views/account.js';
-import { ListDetail, ListPane, ListRow, ListSearch } from '../../views/common.js';
+import { HeaderActions, ListDetail, ListPane, ListRow, ListSearch } from '../../views/common.js';
 import { ActivityTable } from '../../views/login-settings.js';
 import { AddWebsiteDialog, WebsiteCard } from '../../views/website.js';
 import { adminFetch, usePagedList } from '../client.js';
@@ -188,10 +190,10 @@ function AddMerchantDialog({ open, onClose, onCreated }) {
 }
 
 /**
- * The Merchants list pane.
- * @param {{ props: any, admin: any, selectedId: string | null }} input
+ * The Merchants list pane. `selectedId` is the merchant the URL picks; `autoId` the one opened by default.
+ * @param {{ props: any, admin: any, selectedId: string | null, autoId?: string | null }} input
  */
-function MerchantList({ props, admin, selectedId }) {
+function MerchantList({ props, admin, selectedId, autoId = null }) {
 	const toast = useToast();
 	const filter = props.filter;
 	/** @param {string} id @returns {any} */
@@ -321,7 +323,7 @@ function MerchantList({ props, admin, selectedId }) {
 							<ListRow
 								key={m.merchantId}
 								href={adminRoutes.merchant(m.merchantId, keep)}
-								current={m.merchantId === selectedId}
+								current={m.merchantId === selectedId ? true : m.merchantId === autoId ? 'wide' : false}
 								label={m.name}
 								sublabel={m.email}
 								dot={STATUS_DOTS[status] ?? 'neutral'}
@@ -455,8 +457,38 @@ function MerchantDetail({ detail, admin, back }) {
 		open: can('dashboards.open'),
 	};
 
+	/** @type {import('@ss/ui').MenuItem[]} */
+	const more = [
+		...(can('merchants.suspend')
+			? [
+					merchant.status === 'suspended'
+						? { label: ADMIN.resume, onSelect: () => openDialog('resume') }
+						: { label: ADMIN.suspend, onSelect: () => openDialog('suspend') },
+				]
+			: []),
+		...(can('merchants.setup_link') && merchant.setupPending
+			? [
+					{ label: ADMIN.resendSetupLink, onSelect: () => void setupLink(false), disabled: busy },
+					{ label: ADMIN.copySetupLink, onSelect: () => void setupLink(true), disabled: busy },
+				]
+			: []),
+		...(can('two_step.turn_off') && merchant.twoStep?.enabled
+			? [{ label: ADMIN.turnOffTwoStep, onSelect: () => openDialog('twoStep') }]
+			: []),
+		...(can('merchants.delete')
+			? [
+					{
+						label: ADMIN.deleteMerchant,
+						danger: true,
+						disabled: rows.length > 0,
+						...(rows.length > 0 ? { hint: ADMIN.deleteBlocked } : {}),
+						onSelect: () => openDialog('delete'),
+					},
+				]
+			: []),
+	];
 	const actions = (
-		<div className="flex flex-wrap gap-2">
+		<HeaderActions label={ADMIN.moreActions(merchant.name)} more={more}>
 			{can('credits.add') ? (
 				<Button onClick={() => openDialog('credits')} icon={<Icon name="plus" size={14} />}>
 					{BILLING.addCredits}
@@ -467,42 +499,7 @@ function MerchantDetail({ detail, admin, back }) {
 					{ADMIN.editMerchant}
 				</Button>
 			) : null}
-			{can('merchants.suspend') ? (
-				merchant.status === 'suspended' ? (
-					<Button variant="secondary" onClick={() => openDialog('resume')}>
-						{ADMIN.resume}
-					</Button>
-				) : (
-					<Button variant="secondary" onClick={() => openDialog('suspend')}>
-						{ADMIN.suspend}
-					</Button>
-				)
-			) : null}
-			{can('merchants.setup_link') && merchant.setupPending ? (
-				<>
-					<Button variant="secondary" onClick={() => void setupLink(false)} loading={busy}>
-						{ADMIN.resendSetupLink}
-					</Button>
-					<Button variant="secondary" onClick={() => void setupLink(true)} loading={busy}>
-						{ADMIN.copySetupLink}
-					</Button>
-				</>
-			) : null}
-			{can('two_step.turn_off') && merchant.twoStep?.enabled ? (
-				<Button variant="secondary" onClick={() => openDialog('twoStep')}>
-					{ADMIN.turnOffTwoStep}
-				</Button>
-			) : null}
-			{can('merchants.delete') ? (
-				<Button
-					variant="danger"
-					onClick={() => openDialog('delete')}
-					disabled={rows.length > 0}
-					title={rows.length > 0 ? ADMIN.deleteBlocked : undefined}>
-					{ADMIN.deleteMerchant}
-				</Button>
-			) : null}
-		</div>
+		</HeaderActions>
 	);
 
 	return (
@@ -542,7 +539,7 @@ function MerchantDetail({ detail, admin, back }) {
 				{rows.length === 0 ? (
 					<EmptyState compact icon="globe" kind="website" title={WEBSITE.none} />
 				) : (
-					<ul className="grid gap-5 xl:grid-cols-2">
+					<Masonry as="ul" columns={2} label={ADMIN.websitesTitle}>
 						{rows.map((row) => (
 							<li key={row.website.websiteId} className="min-w-0">
 								<WebsiteCard
@@ -564,7 +561,7 @@ function MerchantDetail({ detail, admin, back }) {
 								/>
 							</li>
 						))}
-					</ul>
+					</Masonry>
 				)}
 			</Section>
 			<Section id="merchant-credits" title={ADMIN.creditsTitle} description={ADMIN.creditsIntro}>
@@ -658,27 +655,35 @@ function MerchantDetail({ detail, admin, back }) {
 }
 
 /**
- * The Merchants screen: the list beside the selected merchant (or a short empty state).
- * @param {any} props loader result of `loadMerchants` plus `admin` and, with a merchant selected, `detail` (the
- *   result of `loadMerchant`)
+ * The Merchants screen: the list beside the selected merchant — the one the URL picks or, with `auto`, the first of
+ * the list (shown on wide screens only) — or a short empty state when the list is empty.
+ * @param {any} props loader result of `loadMerchants` plus `admin` and, with a merchant shown, `detail` (the result of
+ *   `loadMerchant`), `selectedId` and `auto`
  */
 export function MerchantsView(props) {
 	if (!props.ok) return <AdminProblem problem={props.problem} />;
 	const admin = props.admin;
 	const detail = props.detail ?? null;
-	const selectedId = detail ? (detail.ok ? String(detail.merchant.merchantId) : (props.selectedId ?? null)) : null;
+	const auto = props.auto === true;
+	const shownId = detail ? (detail.ok ? String(detail.merchant.merchantId) : (props.selectedId ?? null)) : null;
 	const back = adminRoutes.merchants({ q: props.filter.q, status: props.filter.status });
 	return (
 		<ListDetail
 			label={ADMIN.merchantsTitle}
+			auto={auto}
 			back={{ href: back, label: ADMIN.merchantsTitle }}
-			list={<MerchantList props={props} admin={admin} selectedId={selectedId} />}
+			list={<MerchantList props={props} admin={admin} selectedId={auto ? null : shownId} autoId={auto ? shownId : null} />}
 			empty={
-				<EmptyState icon="users" kind="merchant" title={ADMIN.selectMerchantTitle} description={ADMIN.selectMerchantHelp} />
+				<EmptyState
+					icon="users"
+					kind="merchant"
+					title={props.filter.q || props.filter.status ? ADMIN.noMerchants : ADMIN.noMerchantsYet}
+					description={props.filter.q || props.filter.status ? undefined : ADMIN.noMerchantsYetHelp}
+				/>
 			}
 			detail={
 				detail === null ? null : detail.ok ? (
-					<MerchantDetail key={selectedId} detail={detail} admin={admin} back={back} />
+					<MerchantDetail key={shownId} detail={detail} admin={admin} back={back} />
 				) : (
 					<AdminProblem problem={detail.problem} back={{ href: back, label: ADMIN.merchantsTitle }} />
 				)

@@ -24,14 +24,14 @@ const ADMIN_NAV = Object.freeze([
 		href: adminRoutes.overview(),
 		label: ADMIN.menu.overview,
 		kind: 'overview',
-		icon: 'grid',
+		icon: 'home',
 		permission: 'overview.read',
 		exact: true,
 	},
 	{ href: adminRoutes.merchants(), label: ADMIN.menu.merchants, kind: 'merchant', icon: 'users', permission: 'merchants.read' },
 	{ href: adminRoutes.products(), label: ADMIN.menu.products, kind: 'product', icon: 'box', permission: 'products.manage' },
 	{ href: adminRoutes.finance(), label: ADMIN.menu.billing, kind: 'credit', icon: 'wallet', permission: 'billing.read' },
-	{ href: adminRoutes.admins(), label: ADMIN.menu.admins, kind: 'admin', icon: 'key', permission: 'admins.manage' },
+	{ href: adminRoutes.admins(), label: ADMIN.menu.admins, kind: 'admin', icon: 'shield', permission: 'admins.manage' },
 	{
 		href: adminRoutes.settings(),
 		label: ADMIN.menu.settings,
@@ -39,7 +39,7 @@ const ADMIN_NAV = Object.freeze([
 		icon: 'sliders',
 		permission: 'portal_settings.write',
 	},
-	{ href: adminRoutes.activity(), label: ADMIN.menu.activity, kind: 'activity', icon: 'shield', permission: 'activity.read' },
+	{ href: adminRoutes.activity(), label: ADMIN.menu.activity, kind: 'activity', icon: 'activity', permission: 'activity.read' },
 ]);
 
 /**

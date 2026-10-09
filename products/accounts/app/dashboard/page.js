@@ -21,7 +21,7 @@ const TAB_ICONS = {
 	features: { icon: 'zap', kind: 'feature' },
 	settings: { icon: 'sliders', kind: 'settings' },
 	connections: { icon: 'plug', kind: 'connection' },
-	developers: { icon: 'key', kind: 'developer' },
+	developers: { icon: 'code', kind: 'developer' },
 	defaults: { icon: 'layers', kind: 'default' },
 	prices: { icon: 'coins', kind: 'price' },
 };

@@ -11,6 +11,7 @@
  */
 import { useEffect, useState } from 'react';
 import {
+	ActionMenu,
 	Button,
 	Callout,
 	Card,
@@ -35,7 +36,7 @@ import {
 import { BILLING, WEBSITE } from '../../texts/console.js';
 import { api } from '../paths.js';
 import { productTone, ProductStatusBadge, UsageView } from './billing.js';
-import { ActionMenu, openDashboard } from './common.js';
+import { openDashboard } from './common.js';
 
 /** @typedef {import('@ss/ui/problems').Problem} Problem */
 /** @typedef {import('./common.js').Fetcher} Fetcher */
@@ -218,14 +219,15 @@ export function WebsiteCard({ website, cards: initial, can, fetcher, launch, add
 
 	const DomainHeading = headline ? 'h2' : 'h3';
 	return (
-		<Card as="article" id={`website-${websiteId}`} className="h-full scroll-mt-24">
+		<Card as="article" id={`website-${websiteId}`} className="scroll-mt-24">
 			<header className="mb-4 flex items-start justify-between gap-3">
 				<span className="flex min-w-0 items-center gap-3">
 					<IconBadge icon="globe" kind="website" size={headline ? 'md' : 'sm'} />
 					<span className="min-w-0">
 						<DomainHeading
+							title={website.domain}
 							className={cx(
-								'break-all font-bold tracking-tight text-fg',
+								'truncate font-bold tracking-tight text-fg',
 								headline ? 'text-2xl font-extrabold' : 'text-base',
 							)}>
 							{website.domain}
@@ -459,7 +461,7 @@ function TokensDialog({ merchantId, website, fetcher, onClose }) {
 			) : !result.ok ? (
 				<Callout tone="danger">{describeProblem(result.problem)}</Callout>
 			) : tokens.length === 0 ? (
-				<EmptyState compact icon="key" title={WEBSITE.noTokens} />
+				<EmptyState compact icon="key" kind="developer" title={WEBSITE.noTokens} />
 			) : (
 				<div className="space-y-4">
 					{tokens.map((entry) => (
