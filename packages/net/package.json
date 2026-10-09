@@ -13,7 +13,7 @@
 		"types"
 	],
 	"engines": {
-		"node": ">=22"
+		"node": "22.x"
 	},
 	"publishConfig": {
 		"access": "restricted",

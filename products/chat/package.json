@@ -11,7 +11,7 @@
 		"./package.json": "./package.json"
 	},
 	"engines": {
-		"node": ">=22"
+		"node": "22.x"
 	},
 	"prettier": "@ss/config/prettier.json",
 	"scripts": {
