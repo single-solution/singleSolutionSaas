@@ -6,3 +6,5 @@ packages:
 allowBuilds:
    esbuild: true
    mongodb-memory-server: false
+overrides:
+   source-map-js: '^1.2.2'
