@@ -24,7 +24,7 @@ import {
 	returnAddress,
 } from '../core/rules.js';
 import { createSnippets } from '../core/snippets.js';
-import { parseSecret } from '../api/service.js';
+import { parseSecret } from '../server/service.js';
 import { appleKey, idToken } from './helpers.js';
 
 describe('identifiers', () => {

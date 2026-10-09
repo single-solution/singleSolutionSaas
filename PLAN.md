@@ -714,9 +714,9 @@ answers 2xx. Grace-started and stopped notices are sent by the check that finds 
 
 ### 0.4.13 Product standard
 
-- Every product is one deployable unit (0.10) with these folders: `core/` (pure logic), `api/` (routes), `adapters/`
+- Every product is one deployable unit (0.10) with these folders: `core/` (pure logic), `server/` (routes; not `api/`, which Vercel would deploy as one function per file), `adapters/`
   (merchant database, storage, providers, Portal), `ui/` (widgets), `app/` (dashboard pages), `strings/` (English
-  texts), `schemas/` (settings schemas), `tests/`, `docs/`. Imports go from api to core or adapters, from adapters to
+  texts), `schemas/` (settings schemas), `tests/`, `docs/`. Imports go from server to core or adapters, from adapters to
   core, and from ui to core, never the reverse.
 - **API rules**: `/v1` paths; RFC 9457 problems with a stable code; cursor pagination; `Idempotency-Key` on routes that
   create things or move money; ISO-8601 UTC times; money as integer minor units plus a currency; an OpenAPI file

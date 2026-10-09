@@ -43,9 +43,9 @@ describe('ss app init → validate → own tests (integration)', () => {
 			'.nvmrc',
 			'core/notes.js',
 			'core/widgets.js',
-			'api/routes.js',
-			'api/docs.js',
-			'api/widget-script.js',
+			'server/routes.js',
+			'server/docs.js',
+			'server/widget-script.js',
 			'adapters/product.js',
 			'adapters/notes-store.js',
 			'ui/entry.js',
@@ -86,7 +86,7 @@ describe('ss app init → validate → own tests (integration)', () => {
 		expect(pkg).toMatchObject({ name: '@ss/product-order-notes', private: true, license: 'UNLICENSED' });
 		expect(pkg.exports).toEqual({
 			'./product': './adapters/product.js',
-			'./routes': './api/routes.js',
+			'./routes': './server/routes.js',
 			'./package.json': './package.json',
 		});
 		expect(Object.keys(pkg.scripts).sort()).toEqual(
@@ -110,7 +110,7 @@ describe('ss app init → validate → own tests (integration)', () => {
 		expect(await read(dir, 'next.config.js')).toContain("'/widget.js', '/docs', '/v1/:path*'");
 		expect(await read(dir, 'core/widgets.js')).toContain("WIDGET_GLOBAL = 'SSOrderNotes'");
 		expect(await read(dir, 'core/widgets.js')).toContain("WIDGET_ATTRIBUTE = 'data-ss-order-notes'");
-		expect(await read(dir, 'api/widget-script.js')).toContain('export const WIDGET_SCRIPT = ');
+		expect(await read(dir, 'server/widget-script.js')).toContain('export const WIDGET_SCRIPT = ');
 		const openapi = await json(dir, 'openapi.json');
 		expect(Object.keys(openapi.paths)).toEqual([
 			'/v1/admin/notes',

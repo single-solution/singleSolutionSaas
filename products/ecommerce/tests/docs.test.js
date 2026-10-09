@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import manifest from '../manifest.json' with { type: 'json' };
 import guide from '../docs/guide.json' with { type: 'json' };
-import { escape, featuresOf, operations, renderDocs } from '../api/docs.js';
+import { escape, featuresOf, operations, renderDocs } from '../server/docs.js';
 import { DEFAULT_FLOW } from '../core/flow.js';
 import { GROWTH_EVENTS } from '../core/growth-events.js';
 import { SITE_ROUTES, WIDGET_ATTRIBUTES, createSnippets, proxyRoute } from '../core/snippets.js';

@@ -1,22 +1,22 @@
 /**
  * `ss app validate` — checks a product against the product standard (PLAN 0.4.13, 0.11, 0.10):
  *
- * - the layout: the folders `core/ api/ adapters/ ui/ app/ strings/ schemas/ tests/ docs/` and the files every product
+ * - the layout: the folders `core/ server/ adapters/ ui/ app/ strings/ schemas/ tests/ docs/` and the files every product
  *   needs (`anatomy.missing`);
  * - `manifest.json` (local `$ref`s bundled) against `@ss/contracts` `validateManifest` (`manifest.*`);
- * - the routes in `api/`: every route has a valid auth, every browser-token, server-token and ticket route belongs to
+ * - the routes in `server/`: every route has a valid auth, every browser-token, server-token and ticket route belongs to
  *   a feature of the manifest, permissions exist, and the widget script and the docs are public routes
  *   (`routes.*`);
  * - `strings/en.json`, the only widget-text file: flat keys, text values, well-formed `{placeholders}`, and every
  *   `t('key')` used in the code exists (`strings.*`);
  * - `.env.example` lists exactly `MONGODB_URI`, `CONNECT_SECRET`, `ENCRYPTION_KEY` (`env.example`), and `vercel.json`
  *   declares no crons (`vercel.crons`);
- * - import direction: api → core | adapters, adapters → core, ui → core, app → api | adapters | core | strings, never
+ * - import direction: server → core | adapters, adapters → core, ui → core, app → server | adapters | core | strings, never
  *   the reverse; core stays pure and DOM-free; no import leaves the product folder (`imports.*`, `core.dom`);
  * - package wiring: the kit and the tooling are dependencies, the standard scripts exist, and every imported package
  *   is listed in package.json (`package.*`);
  * - the deployment shape (at most two server functions: the API route and the dashboard page) and the generated files
- *   (`openapi.json`, `api/widget-script.js`) being up to date (`server.*`, `assets.*`).
+ *   (`openapi.json`, `server/widget-script.js`) being up to date (`server.*`, `assets.*`).
  * @module
  */
 import { builtinModules } from 'node:module';
@@ -37,7 +37,7 @@ import { findCssReferences, findDomGlobals, findImports, findStringKeys, lex } f
 /** Folders (ending with `/`) and files every product has (PLAN 0.4.13, 0.10). */
 const ANATOMY = Object.freeze([
 	'core/',
-	'api/',
+	'server/',
 	'adapters/',
 	'ui/',
 	'app/',
@@ -76,10 +76,10 @@ const DATA_LAYERS = Object.freeze(['strings', 'schemas', 'docs', ROOT]);
  */
 const IMPORT_POLICY = Object.freeze({
 	core: { layers: ['core'], data: false, packages: ['@ss/contracts'] },
-	api: { layers: ['api', 'core', 'adapters'], data: true, packages: null },
+	server: { layers: ['server', 'core', 'adapters'], data: true, packages: null },
 	adapters: { layers: ['adapters', 'core'], data: true, packages: null },
 	ui: { layers: ['ui', 'core'], data: false, packages: ['@ss/app-kit/widget'] },
-	app: { layers: ['app', 'api', 'adapters', 'core', 'strings'], data: true, packages: null },
+	app: { layers: ['app', 'server', 'adapters', 'core', 'strings'], data: true, packages: null },
 });
 
 /** Auth modes of `defineRoute`. */
@@ -311,7 +311,7 @@ const checkStrings = async (files) => {
 		}
 	}
 	for (const source of files.list) {
-		if (!['core', 'api', 'adapters', 'ui', 'app'].includes(layerOf(source)) || !CODE_FILE.test(source)) continue;
+		if (!['core', 'server', 'adapters', 'ui', 'app'].includes(layerOf(source)) || !CODE_FILE.test(source)) continue;
 		for (const { key, line } of findStringKeys(lex(await files.read(source)))) {
 			if (!known.has(key))
 				problems.push(
@@ -420,7 +420,7 @@ const checkRoutes = (routes, manifest) => {
 		problems.push(
 			problemOf({
 				rule: 'routes.widget-script',
-				file: 'api/',
+				file: 'server/',
 				message: `widgetScriptUrl is ${script}: serve the widgets' script publicly with a GET ${script} route (auth none, the same for every website)`,
 			}),
 		);
@@ -429,7 +429,7 @@ const checkRoutes = (routes, manifest) => {
 		problems.push(
 			problemOf({
 				rule: 'routes.docs',
-				file: 'api/',
+				file: 'server/',
 				message: `docsUrl is ${docs}: serve the docs publicly with a GET ${docs} route (auth none)`,
 			}),
 		);
@@ -575,7 +575,7 @@ const checkServerShape = async (files) => {
 };
 
 /**
- * The generated files (`openapi.json`, `api/widget-script.js`) match the sources.
+ * The generated files (`openapi.json`, `server/widget-script.js`) match the sources.
  * @param {ProjectFiles} files
  * @param {Manifest | null} manifest
  * @returns {Promise<Problem[]>}

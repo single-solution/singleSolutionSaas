@@ -1,6 +1,6 @@
 /**
  * Ecommerce's routes (the kit adds its own: connect, notices, tickets, permissions, data rights, widget config, `/sso`
- * and the dashboard API). The shop's parts each bring their routes (`api/<part>.js`): catalog, checkout, orders,
+ * and the dashboard API). The shop's parts each bring their routes (`server/<part>.js`): catalog, checkout, orders,
  * promotions, extras (returns, reviews, wishlist, alerts, compare, reports) and SEO (with feeds, llms.txt and the Chat
  * lookups). Every browser-token, server-token and ticket route belongs to one feature; `openapi.json` is generated from
  * the definitions (`ss app assets`), so `method`, `path`, `auth`, `feature` and `permission` stay string literals.

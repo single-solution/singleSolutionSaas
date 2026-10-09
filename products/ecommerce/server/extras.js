@@ -1,6 +1,6 @@
 /**
  * Returns and warranty claims, reviews, wishlist, alerts, compare and reports (PLAN 0.8.8: "Returns and warranty",
- * "Shopper extras", reports of "Admin tools"). Joins the extras' routes (`api/extras-*.js`), their data-rights answers
+ * "Shopper extras", reports of "Admin tools"). Joins the extras' routes (`server/extras-*.js`), their data-rights answers
  * (a person's claims, reviews, wishlist and alerts: the export returns them; the delete removes the wishlist, alerts
  * and reviews, recomputing ratings, and anonymises claims, which keep their amounts) and the settings the visitor
  * widgets need.

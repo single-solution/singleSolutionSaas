@@ -24,5 +24,5 @@ Exactly three variables (`.env.example`; nothing else is read):
 
 ## Scripts
 
-`pnpm dev` and `pnpm build` regenerate `openapi.json` and `api/widget-script.js` first; `pnpm check` runs format, lint,
+`pnpm dev` and `pnpm build` regenerate `openapi.json` and `server/widget-script.js` first; `pnpm check` runs format, lint,
 typecheck and tests with coverage; `pnpm validate` runs `ss app validate`.

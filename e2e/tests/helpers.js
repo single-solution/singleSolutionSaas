@@ -29,7 +29,7 @@ import {
 } from '@ss/platform/testing';
 import { createSigner, signAssertion } from '@ss/protocol';
 import { createProductInstance, manifest, strings } from '../fixtures/notes/adapters/product.js';
-import { createRoutes } from '../fixtures/notes/api/routes.js';
+import { createRoutes } from '../fixtures/notes/server/routes.js';
 
 const PORTAL_URL = 'https://portal.test';
 export const PRODUCT_URL = 'https://notes.test';

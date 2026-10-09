@@ -88,7 +88,7 @@ describe('ss app validate', () => {
 		const dir = await project();
 		await put(
 			dir,
-			'api/extra.js',
+			'server/extra.js',
 			[
 				"import { defineRoute } from '@ss/app-kit';",
 				'export const extra = [',
@@ -124,7 +124,7 @@ describe('ss app validate', () => {
 		expect(rules(report)).toContain('assets.openapi');
 
 		const bare = await project();
-		await edit(bare, 'api/routes.js', (text) =>
+		await edit(bare, 'server/routes.js', (text) =>
 			text
 				.replace("path: '/widget.js'", "path: '/script.js'")
 				.replace("path: '/docs',\n\t\tauth: 'none'", "path: '/docs',\n\t\tauth: 'server'"),
@@ -187,10 +187,10 @@ describe('ss app validate', () => {
 			'ui/dom.js',
 			(text) => `import { createNotesStore } from '../adapters/notes-store.js';\nimport React from 'react';\n${text}`,
 		);
-		await edit(dir, 'adapters/notes-store.js', (text) => `import { createRoutes } from '../api/routes.js';\n${text}`);
+		await edit(dir, 'adapters/notes-store.js', (text) => `import { createRoutes } from '../server/routes.js';\n${text}`);
 		await edit(
 			dir,
-			'api/docs.js',
+			'server/docs.js',
 			(text) => `import Page from '../app/dashboard/page.js';\nimport lodash from 'lodash';\nimport fs from 'fs';\n${text}`,
 		);
 		await put(dir, 'app/globals.css', "@import 'tailwindcss';\n@import '../../outside.css';\n@import './local.css';\n");
@@ -200,17 +200,17 @@ describe('ss app validate', () => {
 			report.problems.filter((p) => p.rule === rule).map((p) => `${p.file}:${p.line}`);
 		expect(byRule('imports.direction')).toEqual([
 			'adapters/notes-store.js:1',
-			'api/docs.js:1',
 			'core/notes.js:1',
 			'core/notes.js:5',
+			'server/docs.js:1',
 			'ui/dom.js:1',
 		]);
 		expect(byRule('imports.package')).toEqual(['core/notes.js:2', 'ui/dom.js:2']);
 		expect(byRule('imports.unresolved')).toEqual(['core/notes.js:3']);
 		expect(byRule('imports.outside')).toEqual(['app/globals.css:2', 'core/notes.js:4', 'tests/extra.test.js:1']);
 		expect(byRule('core.dom')).toEqual(['core/notes.js:6']);
-		expect(byRule('package.missing')).toEqual(['api/docs.js:2']);
-		expect(messages(report, 'imports.direction')[0]).toMatch(/adapters\/ must not import from api\/.*JSON data/);
+		expect(byRule('package.missing')).toEqual(['server/docs.js:2']);
+		expect(messages(report, 'imports.direction')[0]).toMatch(/adapters\/ must not import from server\/.*JSON data/);
 	});
 
 	it('checks the package wiring', async () => {
@@ -258,15 +258,15 @@ describe('ss app validate', () => {
 	it('checks that the generated files are up to date', async () => {
 		const dir = await project();
 		await edit(dir, 'openapi.json', (text) => text.replace('"3.1.0"', '"3.0.0"'));
-		await edit(dir, 'api/widget-script.js', (text) => `${text}// edited\n`);
+		await edit(dir, 'server/widget-script.js', (text) => `${text}// edited\n`);
 		const report = await validateProject(dir);
 		expect(report.problems.filter((p) => p.rule.startsWith('assets.')).map((p) => `${p.rule} ${p.file}`)).toEqual([
-			'assets.widget api/widget-script.js',
 			'assets.openapi openapi.json',
+			'assets.widget server/widget-script.js',
 		]);
 		expect(await writeAssets(dir, { check: true })).toEqual([
 			{ file: 'openapi.json', upToDate: false },
-			{ file: 'api/widget-script.js', upToDate: false },
+			{ file: 'server/widget-script.js', upToDate: false },
 		]);
 		await writeAssets(dir);
 		expect((await validateProject(dir)).problems).toEqual([]);
@@ -289,8 +289,8 @@ describe('ss app validate', () => {
 			return JSON.stringify({ ...manifest, widgetScriptUrl: null, widgets: [] }, null, '\t');
 		});
 		await rm(path.join(dir, 'ui/entry.js'));
-		await rm(path.join(dir, 'api/widget-script.js'));
-		await edit(dir, 'api/routes.js', (text) =>
+		await rm(path.join(dir, 'server/widget-script.js'));
+		await edit(dir, 'server/routes.js', (text) =>
 			text.replace("import { WIDGET_SCRIPT } from './widget-script.js';", "const WIDGET_SCRIPT = '';"),
 		);
 		expect(await writeAssets(dir, { check: true })).toEqual([{ file: 'openapi.json', upToDate: true }]);
@@ -306,9 +306,9 @@ describe('helpers', () => {
 		expect(packageOf('next/server.js')).toBe('next');
 		expect(packageOf('node:fs')).toBe('node:fs');
 		const files = new Set(['core/a.js', 'core/b/index.js']);
-		expect(resolveImport('api/x.js', '../core/a', files)).toEqual({ inside: true, target: 'core/a.js' });
-		expect(resolveImport('api/x.js', '../core/b', files)).toEqual({ inside: true, target: 'core/b/index.js' });
-		expect(resolveImport('api/x.js', '../../x.js', files)).toEqual({ inside: false, target: null });
+		expect(resolveImport('server/x.js', '../core/a', files)).toEqual({ inside: true, target: 'core/a.js' });
+		expect(resolveImport('server/x.js', '../core/b', files)).toEqual({ inside: true, target: 'core/b/index.js' });
+		expect(resolveImport('server/x.js', '../../x.js', files)).toEqual({ inside: false, target: null });
 	});
 
 	it('loads manifests with $refs and resolves pointers', async () => {
@@ -345,7 +345,7 @@ describe('helpers', () => {
 				manifest: null,
 				routes: [
 					{
-						file: 'api/a.js',
+						file: 'server/a.js',
 						line: 1,
 						method: 'DELETE',
 						path: '/v1/items/:itemId',
@@ -355,7 +355,7 @@ describe('helpers', () => {
 						idempotent: true,
 					},
 					{
-						file: 'api/a.js',
+						file: 'server/a.js',
 						line: 2,
 						method: 'GET',
 						path: '/v1/x',
@@ -364,7 +364,7 @@ describe('helpers', () => {
 
 						idempotent: false,
 					},
-					{ file: 'api/a.js', line: 3, method: 'GET', path: '/docs', auth: 'none', idempotent: false },
+					{ file: 'server/a.js', line: 3, method: 'GET', path: '/docs', auth: 'none', idempotent: false },
 				],
 			})
 		);

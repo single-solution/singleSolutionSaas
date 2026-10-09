@@ -1,10 +1,10 @@
 /**
  * Orders for the merchant (PLAN 0.8.8): what the merchant's staff (orders admin widget, ticket) and server (server
  * token) do with orders after placement — the order list and search, one order with its history and the statuses it
- * may move to, moves through the merchant's flow (`api/orders-moves.js`), refunds, the staff note and address edits,
+ * may move to, moves through the merchant's flow (`server/orders-moves.js`), refunds, the staff note and address edits,
  * the courier's tracking status (read again on view, at most every 30 minutes), invoices and packing slips (also the
- * shopper's own invoice), customers and the blocklist (`api/orders-customers.js`), bulk moves, and the data-rights
- * answers for orders and customer records. Checkout (`api/checkout.js`) places orders and handles waiting ones.
+ * shopper's own invoice), customers and the blocklist (`server/orders-customers.js`), bulk moves, and the data-rights
+ * answers for orders and customer records. Checkout (`server/checkout.js`) places orders and handles waiting ones.
  * @module
  */
 import { created, defineRoute, paginate, problem } from '@ss/app-kit';

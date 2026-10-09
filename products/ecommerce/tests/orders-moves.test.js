@@ -4,8 +4,8 @@
  */
 import { createId } from '@ss/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createMoves } from '../api/orders-moves.js';
-import { createService } from '../api/service.js';
+import { createMoves } from '../server/orders-moves.js';
+import { createService } from '../server/service.js';
 import { DEFAULT_FLOW } from '../core/flow.js';
 import { COLLECTIONS } from '../core/model.js';
 import { ALL, DOMAIN, readyShop } from './helpers.js';

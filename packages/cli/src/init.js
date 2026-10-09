@@ -1,13 +1,13 @@
 /**
  * `ss app init <dir> --id <id> --name <name>` — generates a product in the PLAN 0.4.13 layout from
- * `templates/product`: `core/ api/ adapters/ ui/ app/ strings/ schemas/ tests/ docs/`, the manifest, the Next.js
+ * `templates/product`: `core/ server/ adapters/ ui/ app/ strings/ schemas/ tests/ docs/`, the manifest, the Next.js
  * wiring (one API route and the dashboard page), the tooling config from `@ss/config` and a sample feature `notes`
  * (a visitor widget, an admin widget with a ticket permission, one setting, widget texts and public docs).
  *
  * Template files and paths may contain `{{id}}`, `{{name}}`, `{{global}}` (the widget's browser global,
  * `SS<Product>`), `{{baseUrl}}` and `{{sdkVersion}}`. `_gitignore` is written as `.gitignore`. Outside a pnpm workspace
  * `templates/standalone` (the pnpm settings and `.nvmrc` a repository of its own needs) is added; inside one (e.g.
- * `products/` of the monorepo) the workspace's apply. `openapi.json` and `api/widget-script.js` are then generated
+ * `products/` of the monorepo) the workspace's apply. `openapi.json` and `server/widget-script.js` are then generated
  * (`ss app assets`), and `.env.local` (git-ignored) gets fresh development secrets.
  * @module
  */

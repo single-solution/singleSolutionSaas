@@ -1,5 +1,5 @@
 /**
- * The product's routes as written in `api/` (every `defineRoute({ … })` call, read statically): the source of
+ * The product's routes as written in `server/` (every `defineRoute({ … })` call, read statically): the source of
  * `openapi.json` and of the route checks of `ss app validate`.
  * @module
  */
@@ -22,13 +22,13 @@ import { findRoutes, lex } from './validate/scan.js';
  */
 
 /** The generated widget module (`ss app assets`): it holds no route definitions. */
-export const WIDGET_MODULE = 'api/widget-script.js';
+export const WIDGET_MODULE = 'server/widget-script.js';
 
 /** Members that must be plain string literals so the route can be checked and documented. */
 const LITERAL_MEMBERS = /** @type {const} */ (['method', 'path', 'auth', 'feature', 'permission']);
 
 /**
- * Every route definition under `api/`. Definitions whose members cannot be read statically are reported
+ * Every route definition under `server/`. Definitions whose members cannot be read statically are reported
  * (`routes.dynamic`) and left out.
  * @param {ProjectFiles} files
  * @returns {Promise<{ routes: ScannedRoute[], problems: Problem[] }>}
@@ -39,7 +39,7 @@ export const scanRoutes = async (files) => {
 	/** @type {Problem[]} */
 	const problems = [];
 	for (const file of files.list) {
-		if (!file.startsWith('api/') || !file.endsWith('.js') || file === WIDGET_MODULE) continue;
+		if (!file.startsWith('server/') || !file.endsWith('.js') || file === WIDGET_MODULE) continue;
 		for (const { line, members, spread } of findRoutes(lex(await files.read(file)))) {
 			const unreadable = LITERAL_MEMBERS.filter(
 				(name) =>

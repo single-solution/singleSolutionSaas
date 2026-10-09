@@ -7,7 +7,7 @@
 import { after } from 'next/server.js';
 import { configFromEnv, toNextRoute } from '@ss/app-kit';
 import { createProductInstance } from '../../../adapters/product.js';
-import { createRoutes } from '../../../api/routes.js';
+import { createRoutes } from '../../../server/routes.js';
 
 // a missing or invalid variable is named (never its value) and every route answers 503 until it is fixed
 const { config, problems } = configFromEnv();

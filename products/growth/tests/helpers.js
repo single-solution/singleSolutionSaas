@@ -8,7 +8,7 @@
 import { MongoClient } from 'mongodb';
 import { createFakePortal, createMemoryStore, createNetwork } from '@ss/app-kit/testing';
 import { createProductInstance, manifest } from '../adapters/product.js';
-import { createRoutes } from '../api/routes.js';
+import { createRoutes } from '../server/routes.js';
 
 export const BASE = 'https://growth.example.dev';
 export const DOMAIN = 'shop.example.com';

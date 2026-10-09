@@ -1,8 +1,8 @@
 /**
  * `ss app assets` — the two files a product generates from its sources:
  *
- * - `openapi.json` from the route definitions in `api/` (PLAN 0.4.13: the OpenAPI file is generated from the routes);
- * - `api/widget-script.js`, the product's widgets (`ui/entry.js` and what it imports, `@ss/app-kit/widget` included)
+ * - `openapi.json` from the route definitions in `server/` (PLAN 0.4.13: the OpenAPI file is generated from the routes);
+ * - `server/widget-script.js`, the product's widgets (`ui/entry.js` and what it imports, `@ss/app-kit/widget` included)
  *   bundled for browsers into one script, exported as the string `WIDGET_SCRIPT`: the public `/widget.js` route serves
  *   it, the same bytes for every website (the script fetches each website's widget config itself). Being a string,
  *   it needs no file at runtime in the Next.js server build.
@@ -48,7 +48,7 @@ const kitFallback = {
 };
 
 /**
- * Source of `api/widget-script.js` (formatted the way Prettier prints it, so `format:check` keeps passing).
+ * Source of `server/widget-script.js` (formatted the way Prettier prints it, so `format:check` keeps passing).
  * @param {string} dir project root
  * @returns {Promise<string>}
  */

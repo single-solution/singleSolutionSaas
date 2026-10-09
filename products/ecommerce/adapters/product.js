@@ -2,7 +2,7 @@
  * The product on the kit: `createProductInstance(options)` wires `@ss/app-kit` `createProduct` with Ecommerce's
  * manifest (each feature's settings schema from `schemas/` inline), its widget texts, its Connections (storage, the
  * Accounts, Payments and Notifications tokens, courier keys and the AI key), the merchant database indexes of every
- * part, the data-rights and widget-config hooks (filled in by `api/routes.js`), and adds the list settings (product
+ * part, the data-rights and widget-config hooks (filled in by `server/routes.js`), and adds the list settings (product
  * database), the courier APIs and the AI provider on the same outbound policy. The Next.js route and the tests pass the
  * rest (config, store, clock, network). Public entry `./product` of this package, so a system test can compose the
  * product with `./routes`.

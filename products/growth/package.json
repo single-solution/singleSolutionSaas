@@ -7,7 +7,7 @@
 	"license": "UNLICENSED",
 	"exports": {
 		"./product": "./adapters/product.js",
-		"./routes": "./api/routes.js",
+		"./routes": "./server/routes.js",
 		"./page-script": "./ui/widget.js",
 		"./package.json": "./package.json"
 	},

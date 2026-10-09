@@ -2,7 +2,7 @@
  * The orders part's (fulfilment) queries in the merchant database: the staff order list and search, customers with
  * what they spent, and the data-rights look-ups. Every query pins `websiteId` (the kit's tenant guard). Writes that
  * move stock, offer uses, points or slots go through `adapters/ledger.js`; the order moves themselves are in
- * `api/orders-moves.js`.
+ * `server/orders-moves.js`.
  * @module
  */
 import { COLLECTIONS } from '../core/model.js';

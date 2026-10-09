@@ -7,8 +7,8 @@ import { createId } from '@ss/contracts';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { givePoints, loyaltyAccount, placeOrder } from '../adapters/ledger.js';
 import { INDEXES } from '../adapters/product.js';
-import { createExtras } from '../api/extras.js';
-import { createService } from '../api/service.js';
+import { createExtras } from '../server/extras.js';
+import { createService } from '../server/service.js';
 import { COLLECTIONS } from '../core/model.js';
 import { DOMAIN, PAYMENTS, STORAGE, readyShop } from './helpers.js';
 

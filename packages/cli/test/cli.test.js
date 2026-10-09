@@ -50,16 +50,16 @@ describe('ss (main)', () => {
 		expect(JSON.parse((await ss(['app', 'validate', 'demo', '--json'])).out).ok).toBe(true);
 		expect(await ss(['app', 'assets', 'demo', '--check'])).toMatchObject({
 			code: 0,
-			out: 'openapi.json is up to date\napi/widget-script.js is up to date\n',
+			out: 'openapi.json is up to date\nserver/widget-script.js is up to date\n',
 		});
-		await writeFile(path.join(root, 'demo/api/widget-script.js'), '// stale\n');
+		await writeFile(path.join(root, 'demo/server/widget-script.js'), '// stale\n');
 		expect(await ss(['app', 'assets', 'demo', '--check'])).toMatchObject({
 			code: 1,
-			err: 'api/widget-script.js out of date: run ss app assets\n',
+			err: 'server/widget-script.js out of date: run ss app assets\n',
 		});
 		expect(await ss(['app', 'assets', 'demo'])).toMatchObject({
 			code: 0,
-			out: expect.stringContaining('api/widget-script.js written'),
+			out: expect.stringContaining('server/widget-script.js written'),
 		});
 		expect((await ss(['app', 'init', 'demo', '--id', 'demo', '--name', 'Demo'])).code).toBe(1);
 		expect((await ss(['app', 'init', 'other', '--id', 'Bad', '--name', 'Demo'])).err).toContain('--id must be');

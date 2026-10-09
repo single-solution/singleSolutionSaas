@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { checkAiConnection, createAi } from '../adapters/ai.js';
-import { createCatalogCommon } from '../api/catalog-common.js';
+import { createCatalogCommon } from '../server/catalog-common.js';
 import {
 	changedPrice,
 	changedStock,

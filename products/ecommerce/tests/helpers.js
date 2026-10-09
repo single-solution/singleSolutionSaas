@@ -10,7 +10,7 @@
 import { createId } from '@ss/contracts';
 import { createAccountsDouble, createFakePortal, createMemoryStore, createNetwork } from '@ss/app-kit/testing';
 import { createProductInstance, manifest } from '../adapters/product.js';
-import { createRoutes } from '../api/routes.js';
+import { createRoutes } from '../server/routes.js';
 import { COLLECTIONS } from '../core/model.js';
 
 const BASE = 'https://ecommerce.example.dev';
