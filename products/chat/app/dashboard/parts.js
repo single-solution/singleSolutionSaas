@@ -15,6 +15,7 @@ import {
 	SchemaForm,
 	Select,
 	Skeleton,
+	SoftBreaks,
 	TextArea,
 	describeProblem,
 	formatDateTime,
@@ -58,10 +59,13 @@ export function Outcome({ result }) {
 	);
 }
 
-/** @param {{ items: Array<{ who: { name: string }, what: string, detail: string, at: string }> }} props */
-export function RecentChanges({ items }) {
+/**
+ * Recent changes; `titled` gives the card its own title (Defaults, Prices) where no section heading names it.
+ * @param {{ items: Array<{ who: { name: string }, what: string, detail: string, at: string }>, titled?: boolean }} props
+ */
+export function RecentChanges({ items, titled = true }) {
 	return (
-		<Card title={TEXTS.overview.recent}>
+		<Card {...(titled ? { title: TEXTS.overview.recent } : {})}>
 			{items.length === 0 ? (
 				<p className="text-sm text-muted">{TEXTS.overview.noChanges}</p>
 			) : (
@@ -164,49 +168,59 @@ export function SettingsForms({ features, saveUrl, resetBody, savedSource, reloa
  */
 export function TextsForm({ texts, saveUrl, resetBody, savedSource, reload }) {
 	const [edits, setEdits] = useState(/** @type {Record<string, string>} */ ({}));
-	const [result, setResult] = useState(/** @type {import('./api.js').Answer | null} */ (null));
+	const [result, setResult] = useState(/** @type {{ key: string, answer: import('./api.js').Answer } | null} */ (null));
 	return (
 		<Card title={TEXTS.settings.texts} subtitle={TEXTS.settings.textsHelp}>
-			<div className="space-y-3">
-				{texts.map((text) => (
-					<div key={text.key} className="flex flex-wrap items-end gap-2">
-						<Input
-							fieldClassName="min-w-0 flex-1 basis-64"
-							label={text.key}
-							help={text.english}
-							value={edits[text.key] ?? text.value}
-							onChange={(event) => setEdits({ ...edits, [text.key]: event.target.value })}
-						/>
-						<Button
-							size="sm"
-							disabled={edits[text.key] === undefined}
-							onClick={async () => {
-								const next = await call('PUT', saveUrl(text.key), { value: edits[text.key] });
-								setResult(next);
-								if (next.ok) setEdits(Object.fromEntries(Object.entries(edits).filter(([key]) => key !== text.key)));
-								reload();
-							}}>
-							{TEXTS.save}
-						</Button>
-						{text.source === savedSource ? (
-							<Button
-								size="sm"
-								variant="ghost"
-								onClick={async () => {
-									setResult(
-										resetBody
-											? await call('PUT', saveUrl(text.key), { value: null })
-											: await call('DELETE', saveUrl(text.key)),
-									);
-									reload();
-								}}>
-								{TEXTS.reset}
-							</Button>
-						) : null}
-					</div>
-				))}
+			<div className="space-y-4">
+				{texts.map((text) => {
+					const englishId = `text-${text.key.replace(/[^\w-]/g, '-')}-english`;
+					return (
+						<div key={text.key} className="space-y-1.5">
+							<div className="flex flex-wrap items-end gap-2">
+								<Input
+									fieldClassName="min-w-0 flex-1 basis-64"
+									label={<SoftBreaks text={text.key} />}
+									aria-describedby={englishId}
+									value={edits[text.key] ?? text.value}
+									onChange={(event) => setEdits({ ...edits, [text.key]: event.target.value })}
+								/>
+								<Button
+									size="sm"
+									disabled={edits[text.key] === undefined}
+									onClick={async () => {
+										const next = await call('PUT', saveUrl(text.key), { value: edits[text.key] });
+										setResult({ key: text.key, answer: next });
+										if (next.ok)
+											setEdits(Object.fromEntries(Object.entries(edits).filter(([key]) => key !== text.key)));
+										reload();
+									}}>
+									{TEXTS.save}
+								</Button>
+								{text.source === savedSource ? (
+									<Button
+										size="sm"
+										variant="ghost"
+										onClick={async () => {
+											setResult({
+												key: text.key,
+												answer: resetBody
+													? await call('PUT', saveUrl(text.key), { value: null })
+													: await call('DELETE', saveUrl(text.key)),
+											});
+											reload();
+										}}>
+										{TEXTS.reset}
+									</Button>
+								) : null}
+							</div>
+							<p id={englishId} className="text-xs text-muted">
+								{text.english}
+							</p>
+							{result?.key === text.key ? <Outcome result={result.answer} /> : null}
+						</div>
+					);
+				})}
 			</div>
-			<Outcome result={result} />
 		</Card>
 	);
 }

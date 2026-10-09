@@ -73,21 +73,21 @@ export function ProviderForm({ name, onSave }) {
 	);
 	return (
 		<div className="mt-3 space-y-3">
-			{provider === '' ? null : (
-				<Select
-					label={TEXTS.connections.provider}
-					value={provider}
-					options={choices.map((value) => ({
-						value,
-						label: TEXTS.connections.providers[/** @type {keyof typeof TEXTS.connections.providers} */ (value)],
-					}))}
-					onChange={(event) => {
-						setProvider(event.target.value);
-						setValues({});
-					}}
-				/>
-			)}
 			<FieldGrid>
+				{provider === '' ? null : (
+					<Select
+						label={TEXTS.connections.provider}
+						value={provider}
+						options={choices.map((value) => ({
+							value,
+							label: TEXTS.connections.providers[/** @type {keyof typeof TEXTS.connections.providers} */ (value)],
+						}))}
+						onChange={(event) => {
+							setProvider(event.target.value);
+							setValues({});
+						}}
+					/>
+				)}
 				{fields.map((field) => {
 					const label = labels[field.name] ?? field.name;
 					const value = values[field.name];

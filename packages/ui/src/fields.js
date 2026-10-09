@@ -112,7 +112,7 @@ function Field({ id, label, hideLabel = false, required = false, help, error, as
 	return (
 		<div {...cell(wide)} className={cx('min-w-0 space-y-1.5', className)}>
 			<div className={cx('flex items-center justify-between gap-2', hideLabel && 'sr-only')}>
-				<label htmlFor={ids.id} className={LABEL_CLASS}>
+				<label htmlFor={ids.id} className={cx(LABEL_CLASS, 'min-w-0 break-words')}>
 					{label}
 					{required ? (
 						<span className="text-danger" aria-hidden="true">

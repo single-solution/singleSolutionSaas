@@ -2,7 +2,7 @@
  * Orders and returns (admin widget `orders_admin`, tickets with `orders.read`, `orders.manage`, `orders.refund`,
  * `bulk.run` and `returns.manage`; PLAN 0.8.8 Orders): the orders list with filters (status, payment state and method,
  * dates, search) and Load more, bulk moves of the selected orders (Bulk actions), one order (`./admin-order.js`), and
- * the returns tab (Returns, `./admin-returns.js`). What the ticket does not allow answers 403 and is shown as not
+ * the returns section (Returns, `./admin-returns.js`). What the ticket does not allow answers 403 and is shown as not
  * allowed.
  * @module
  */
@@ -22,7 +22,7 @@ export const mountOrdersAdmin = async (input) => {
 	mountAdmin(input, 'orders-admin', 'ordersAdmin.title', (kit, box) => {
 		const { t, has } = kit;
 		box.append(
-			kit.tabs([
+			kit.sections([
 				{ key: 'orders', label: t('ordersAdmin.orders'), render: (panel) => ordersTab(kit, panel) },
 				...(has('returns')
 					? [
@@ -49,7 +49,7 @@ const statusesOf = (kit) => {
 };
 
 /**
- * The orders tab: filters, the list, bulk moves and the order detail.
+ * The orders section: filters, the list, bulk moves and the order detail.
  * @param {Kit} kit @param {HTMLElement} panel
  */
 const ordersTab = (kit, panel) => {

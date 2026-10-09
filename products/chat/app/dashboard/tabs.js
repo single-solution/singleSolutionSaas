@@ -38,8 +38,45 @@ import { TEXTS } from './texts.js';
 /** @typedef {{ key: string, name: string, description: string, dependsOn: string[], millicreditsPerHour: number, on?: boolean }} Feature */
 /** @typedef {{ name: string, label: string, neededBy: string[], status: string, message?: string, last4?: string | null }} Connection */
 
+/** Feature names by key (manifest.json). */
+const NAMES = new Map(manifest.features.map((feature) => [feature.key, feature.name]));
+
+/**
+ * The names of features, at most `max` of them and how many more (a long list would make its tile or card tall).
+ * @param {string[]} keys
+ * @param {number} [max]
+ */
+const namesOf = (keys, max = Infinity) => {
+	const names = keys.map((key) => NAMES.get(key) ?? key);
+	return names.length > max
+		? fill(TEXTS.andMore, { names: names.slice(0, max).join(', '), count: names.length - max })
+		: names.join(', ');
+};
+
 /** @param {string} status */
 const toneOf = (status) => (status === 'connected' ? 'success' : status === 'test_failed' ? 'danger' : 'warning');
+
+/**
+ * One line of the setup checklist: what is needed (and why it is not ready), then its status and any action.
+ * @param {{ tone: 'success' | 'warning' | 'danger' | 'neutral', badge: string, label: string, detail?: string | null,
+ *   children?: import('react').ReactNode }} props
+ */
+function CheckRow({ tone, badge, label, detail, children }) {
+	return (
+		<li className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 py-3 first:pt-0 last:pb-0">
+			<span className="min-w-0 flex-[1_1_16rem]">
+				<span className="block font-semibold text-fg">{label}</span>
+				{detail ? <span className="block text-muted">{detail}</span> : null}
+			</span>
+			<span className="flex flex-wrap items-center gap-2">
+				<Badge tone={tone} dot>
+					{badge}
+				</Badge>
+				{children}
+			</span>
+		</li>
+	);
+}
 
 /** @param {TabProps} props */
 function OverviewTab({ websiteId }) {
@@ -72,7 +109,7 @@ function OverviewTab({ websiteId }) {
 								<Stat
 									label={TEXTS.overview.features}
 									value={on.length}
-									hint={on.length > 0 ? on.join(', ') : TEXTS.overview.noFeatures}
+									hint={on.length > 0 ? namesOf(on, 3) : TEXTS.overview.noFeatures}
 									icon="zap"
 									kind="feature"
 								/>
@@ -87,41 +124,42 @@ function OverviewTab({ websiteId }) {
 						</Section>
 						<Section title={TEXTS.overview.setup} description={TEXTS.overview.setupHelp}>
 							<Card>
-								<ul className="space-y-3 text-sm">
+								<ul className="divide-y divide-line-soft text-sm">
 									{needed.map((item) => (
-										<li key={item.name} className="flex flex-wrap items-center gap-2">
-											<Badge tone={toneOf(item.status)} dot>
-												{TEXTS.connections[/** @type {'connected'} */ (item.status)]}
-											</Badge>
-											<span className="font-semibold">{item.label}</span>
-											{item.message ? <span className="text-muted">{item.message}</span> : null}
-										</li>
+										<CheckRow
+											key={item.name}
+											tone={toneOf(item.status)}
+											badge={TEXTS.connections[/** @type {'connected'} */ (item.status)]}
+											label={item.label}
+											detail={item.message}
+										/>
 									))}
 									{on.includes('book_slot') && settings.answer?.ok ? (
-										<li className="flex flex-wrap items-center gap-2">
-											<Badge tone={bookingUrl ? 'success' : 'warning'} dot>
-												{bookingUrl ? TEXTS.overview.bookingSet : TEXTS.overview.bookingMissing}
-											</Badge>
-											<span className="font-semibold">{TEXTS.overview.booking}</span>
-										</li>
+										<CheckRow
+											tone={bookingUrl ? 'success' : 'warning'}
+											badge={bookingUrl ? TEXTS.overview.bookingSet : TEXTS.overview.bookingMissing}
+											label={TEXTS.overview.booking}
+										/>
 									) : null}
 									{data.checklist.widget ? (
-										<li className="flex flex-wrap items-center gap-2">
-											<Badge tone={data.checklist.widget.installed ? 'success' : 'warning'} dot>
-												{data.checklist.widget.installed
+										<CheckRow
+											tone={data.checklist.widget.installed ? 'success' : 'warning'}
+											badge={
+												data.checklist.widget.installed
 													? fill(TEXTS.overview.widgetSeen, {
 															time: formatDateTime(data.checklist.widget.lastSeenAt),
 														})
-													: TEXTS.overview.widgetMissing}
-											</Badge>
-											<span className="font-semibold">{TEXTS.overview.widget}</span>
-										</li>
+													: TEXTS.overview.widgetMissing
+											}
+											label={TEXTS.overview.widget}
+										/>
 									) : null}
-									<li className="flex flex-wrap items-center gap-2">
-										<Badge tone={data.checklist.business.found ? 'success' : 'warning'} dot>
-											{data.checklist.business.found ? TEXTS.overview.businessFound : TEXTS.overview.businessMissing}
-										</Badge>
-										<span className="font-semibold">{TEXTS.overview.business}</span>
+									<CheckRow
+										tone={data.checklist.business.found ? 'success' : 'warning'}
+										badge={
+											data.checklist.business.found ? TEXTS.overview.businessFound : TEXTS.overview.businessMissing
+										}
+										label={TEXTS.overview.business}>
 										<Button
 											size="sm"
 											variant="secondary"
@@ -134,12 +172,12 @@ function OverviewTab({ websiteId }) {
 											}}>
 											{TEXTS.overview.refresh}
 										</Button>
-									</li>
+									</CheckRow>
 								</ul>
 							</Card>
 						</Section>
 						<Section title={TEXTS.overview.changes} description={TEXTS.overview.changesHelp}>
-							<RecentChanges items={data.recentChanges} />
+							<RecentChanges items={data.recentChanges} titled={false} />
 						</Section>
 					</div>
 				);
@@ -215,7 +253,7 @@ function FeaturesTab({ websiteId, who, support }) {
 								{warning}
 							</Callout>
 						))}
-						<Masonry>
+						<Masonry wideAlone>
 							{features.map((feature) => {
 								const missing = feature.dependsOn.filter((dep) => !on.includes(dep));
 								const broken = links.filter((link) => link.neededBy.includes(feature.key) && link.status !== 'connected');
@@ -233,7 +271,7 @@ function FeaturesTab({ websiteId, who, support }) {
 										<p className="text-sm">{feature.description}</p>
 										{feature.dependsOn.length > 0 ? (
 											<p className="text-sm text-muted">
-												{fill(TEXTS.features.needs, { features: feature.dependsOn.join(', ') })}
+												{fill(TEXTS.features.needs, { features: namesOf(feature.dependsOn) })}
 											</p>
 										) : null}
 										{feature.on
@@ -278,7 +316,7 @@ function FeaturesTab({ websiteId, who, support }) {
 								}
 							}}>
 							<p>{fill(TEXTS.features.confirmCost, { cost: formatCreditsPerHour(cost) })}</p>
-							{turnedOff.length > 0 ? <p>{fill(TEXTS.features.alsoOff, { features: turnedOff.join(', ') })}</p> : null}
+							{turnedOff.length > 0 ? <p>{fill(TEXTS.features.alsoOff, { features: namesOf(turnedOff) })}</p> : null}
 							{warnings.map((warning) => (
 								<p key={warning}>{warning}</p>
 							))}
@@ -312,7 +350,7 @@ function ConnectionsTab({ websiteId }) {
 			{(data) => (
 				<div className="space-y-4">
 					{data.connections.length === 0 ? <p className="text-sm text-muted">{TEXTS.connections.none}</p> : null}
-					<Masonry>
+					<Masonry wideAlone>
 						{data.connections.map((/** @type {Connection} */ item) => {
 							const hint = connectionHint(item.name);
 							/** @param {object} value */
@@ -323,7 +361,7 @@ function ConnectionsTab({ websiteId }) {
 									title={item.label}
 									subtitle={
 										item.neededBy.length > 0
-											? fill(TEXTS.connections.neededBy, { features: item.neededBy.join(', ') })
+											? fill(TEXTS.connections.neededBy, { features: namesOf(item.neededBy, 4) })
 											: TEXTS.connections.neededByNone
 									}>
 									<p className="flex flex-wrap items-center gap-2 text-sm">
@@ -447,7 +485,7 @@ function DefaultsTab() {
 			{(data) => (
 				<div className="space-y-4">
 					<Callout tone="info">{TEXTS.defaults.intro}</Callout>
-					<Masonry>
+					<Masonry wideAlone>
 						<SettingsForms
 							features={data.features}
 							saveUrl={saveUrl}

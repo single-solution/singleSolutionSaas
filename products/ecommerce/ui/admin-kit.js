@@ -2,7 +2,7 @@
  * What the admin widgets share (PLAN 0.4.5, 0.4.10): the widget shell with its `Signed out` line, widget texts with
  * `{placeholders}`, money in the shop currency (decimals in inputs, minor units on the wire), calls with the ticket
  * (JSON, and plain text for CSV files and printable documents), problem texts (a 403 means the ticket's permissions do
- * not allow it), and small builders: labelled fields, tables, tabs, paged lists, id pickers, two-step buttons and
+ * not allow it), and small builders: labelled fields, tables, sections, paged lists, id pickers, two-step buttons and
  * uploads to presigned addresses. Text is always set as text, never as HTML.
  * @module
  */
@@ -370,39 +370,45 @@ const createKit = ({ root, config, api, win, save, open }) => {
 		]);
 
 	/**
-	 * Tabs; each panel is built the first time it is shown. With one tab the bar is hidden.
+	 * The widget's sections, one shown at a time (PLAN 0.6: no tabs; a section list too long for one page picks one
+	 * section at a time): a list of the sections beside the shown one where the widget is wide, a select above it where
+	 * it is narrow (a container query on the widget's own width). Each section is built the first time it is shown;
+	 * with one section there is no list.
 	 * @param {Array<{ key: string, label: string, render: (panel: HTMLElement) => void }>} entries
 	 */
-	const tabs = (entries) => {
-		const bar = h('div', { role: 'tablist', class: 'tabs' });
-		const panels = h('div');
+	const sections = (entries) => {
+		const list = h('ul');
+		const choose = select(entries.map((entry) => ({ value: entry.key, label: entry.label })));
+		const nav = h('nav', { class: 'sections', 'aria-label': t('admin.sections') }, [field(t('admin.section'), choose), list]);
+		const panels = h('div', { class: 'panels' });
 		/** @type {Set<string>} */
 		const built = new Set();
 		/** @param {string} key */
 		const show = (key) => {
 			for (const entry of entries) {
-				const tab = /** @type {HTMLElement} */ (bar.querySelector(`[data-tab="${entry.key}"]`));
+				const item = /** @type {HTMLElement} */ (list.querySelector(`[data-section="${entry.key}"]`));
 				const panel = /** @type {HTMLElement} */ (panels.querySelector(`[data-panel="${entry.key}"]`));
 				const on = entry.key === key;
-				tab.setAttribute('aria-selected', String(on));
-				tab.setAttribute('tabindex', on ? '0' : '-1');
+				if (on) item.setAttribute('aria-current', 'true');
+				else item.removeAttribute('aria-current');
 				panel.hidden = !on;
 				if (on && !built.has(key)) {
 					built.add(key);
 					entry.render(panel);
 				}
 			}
+			choose.value = key;
 		};
 		for (const entry of entries) {
-			ids += 1;
-			const tab = text('button', { type: 'button', role: 'tab', 'data-tab': entry.key, id: `ss-tab-${ids}` }, entry.label);
-			tab.addEventListener('click', () => show(entry.key));
-			bar.append(tab);
-			panels.append(h('div', { role: 'tabpanel', 'data-panel': entry.key, 'aria-labelledby': `ss-tab-${ids}` }));
+			const item = text('button', { type: 'button', 'data-section': entry.key }, entry.label);
+			item.addEventListener('click', () => show(entry.key));
+			list.append(h('li', {}, [item]));
+			panels.append(h('div', { 'data-panel': entry.key, role: 'region', 'aria-label': entry.label }));
 		}
-		bar.hidden = entries.length < 2;
+		choose.addEventListener('change', () => show(choose.value));
+		nav.hidden = entries.length < 2;
 		if (entries[0]) show(entries[0].key);
-		return h('div', {}, [bar, panels]);
+		return h('div', { class: 'picker' }, [h('div', { class: entries.length < 2 ? 'layout single' : 'layout' }, [nav, panels])]);
 	};
 
 	/**
@@ -536,7 +542,7 @@ const createKit = ({ root, config, api, win, save, open }) => {
 		group,
 		row,
 		table,
-		tabs,
+		sections,
 		pager,
 		picker,
 		when,

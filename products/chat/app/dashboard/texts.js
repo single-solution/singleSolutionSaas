@@ -15,6 +15,7 @@ export const TEXTS = Object.freeze({
 	save: 'Save',
 	reset: 'Reset to default',
 	cancel: 'Cancel',
+	andMore: '{names} and {count} more',
 	tabs: Object.freeze({
 		overview: 'Overview',
 		features: 'Features',

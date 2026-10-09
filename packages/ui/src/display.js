@@ -409,11 +409,12 @@ export function Section({ title, description, actions, children, id, className }
  * column below 42rem, two from 42rem, three from 72rem (`columns={2}` stops at two) — and every child is kept whole
  * (`break-inside: avoid`), so no card stretches to a taller neighbour. Children flow down the first column, then the
  * next, which is also the reading and tab order. Fragments are transparent: cards a component returns in a fragment are
- * items too. Rows of a list (`as="ul"`) are `li` items.
- * @param {{ children?: ReactNode, columns?: 2 | 3, as?: 'div' | 'ul', className?: string, label?: string }} props
- *   `label`: an accessible name for a list
+ * items too. Rows of a list (`as="ul"`) are `li` items. With `wideAlone`, a lone card takes the whole width instead of
+ * the first column (a settings section with one form).
+ * @param {{ children?: ReactNode, columns?: 2 | 3, as?: 'div' | 'ul', className?: string, label?: string,
+ *   wideAlone?: boolean }} props `label`: an accessible name for a list
  */
-export function Masonry({ children, columns = 3, as = 'div', className, label }) {
+export function Masonry({ children, columns = 3, as = 'div', className, label, wideAlone = false }) {
 	const Tag = as;
 	return (
 		<div className="@container min-w-0">
@@ -422,6 +423,7 @@ export function Masonry({ children, columns = 3, as = 'div', className, label })
 				className={cx(
 					'gap-5 [&>*]:mt-5 [&>*]:break-inside-avoid [&>*:first-child]:mt-0',
 					columns === 3 ? 'columns-1 @2xl:columns-2 @6xl:columns-3' : 'columns-1 @2xl:columns-2',
+					wideAlone && '[&:has(>:only-child)]:columns-1',
 					className,
 				)}>
 				{children}

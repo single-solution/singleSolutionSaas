@@ -378,8 +378,11 @@ describe('inbox', () => {
 		box.value = 'x';
 		await submit(box);
 		expect(root.querySelector('form.part textarea')?.closest('form')?.hidden).toBe(true);
+		// an open conversation sits beside the list (or replaces it in a narrow widget) until it is closed
+		expect(root.querySelector('.split')?.classList.contains('open')).toBe(true);
 		await click(buttonIn(root, TEXTS['inbox.close']));
 		expect(root.querySelector('.log')).toBeNull();
+		expect(root.querySelector('.split')?.classList.contains('open')).toBe(false);
 	});
 
 	it('attaches files to replies', async () => {
@@ -462,7 +465,7 @@ describe('inbox', () => {
 			},
 		});
 		const root = shadow(hosts.inbox);
-		expect(root.querySelector('.inbox > .status')?.textContent).toBe(TEXTS['inbox.noAccess']);
+		expect(root.querySelector('.inbox .list-part > .status')?.textContent).toBe(TEXTS['inbox.noAccess']);
 		list = () =>
 			answer(200, {
 				items: [
@@ -486,9 +489,9 @@ describe('inbox', () => {
 		expect(shows(root, TEXTS['inbox.askRating'])).toBe(false);
 		expect(server.all('GET /v1/admin/conversations/c1')).toHaveLength(1);
 		await time.advance(14 * 60_000);
-		expect(root.querySelector('.inbox > .status')?.textContent).toBe(TEXTS['inbox.signedOut']);
+		expect(root.querySelector('.inbox .list-part > .status')?.textContent).toBe(TEXTS['inbox.signedOut']);
 		await submit(fieldIn(root, TEXTS['inbox.search']));
-		expect(root.querySelector('.inbox > .status')?.textContent).toBe(TEXTS['inbox.signedOut']);
+		expect(root.querySelector('.inbox .list-part > .status')?.textContent).toBe(TEXTS['inbox.signedOut']);
 	});
 });
 

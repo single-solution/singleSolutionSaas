@@ -4,7 +4,9 @@
  * its messages and internal notes, reply (with attachments and saved replies), notes, status, AI paused, assignment
  * (with presence and Full), custom field values, the context panel with the AI summary, transcripts and rating
  * requests; your own presence and the staff's max chats. Only parts of switched-on features show, and a part whose
- * route answers 403 hides itself. It checks for news with the same back-off as the visitor chat.
+ * route answers 403 hides itself. It checks for news with the same back-off as the visitor chat. Where the widget is
+ * wide the open conversation sits beside the list; in a narrow one it replaces the list until it is closed (PLAN 0.6:
+ * by the widget's own width, a container query).
  * @module
  */
 import { formatText, mountWidget } from '@ss/app-kit/widget';
@@ -111,7 +113,7 @@ export const mountInbox = ({ host, win, api, config, clock, onUnread }) => {
 			const note = element(doc, 'p', { class: 'status', role: 'status' });
 			const list = element(doc, 'ul', { class: 'conversations' });
 			const more = buttonOf(doc, t('inbox.more'), { class: 'secondary', hidden: '' });
-			const detail = element(doc, 'div');
+			const detail = element(doc, 'div', { class: 'detail-part' });
 			const saved = savedReplies(kit);
 			const people = staffPart({
 				...kit,
@@ -121,7 +123,12 @@ export const mountInbox = ({ host, win, api, config, clock, onUnread }) => {
 					fillAssign();
 				},
 			});
-			box.append(element(doc, 'h2', {}, t('inbox.title')), total, people.part, filters, note, list, more, detail);
+			const listPart = element(doc, 'div', { class: 'list-part' });
+			listPart.append(filters, note, list, more);
+			// the list and the open conversation: side by side, or one at a time in a narrow widget
+			const split = element(doc, 'div', { class: 'split' });
+			split.append(listPart, detail);
+			box.append(element(doc, 'h2', {}, t('inbox.title')), total, people.part, split);
 			if (on('saved_replies')) box.append(saved.part);
 			root.append(box);
 
@@ -362,6 +369,7 @@ export const mountInbox = ({ host, win, api, config, clock, onUnread }) => {
 				addMessages(answer.data.messages ?? []);
 				sync();
 				detail.replaceChildren(conversationPart);
+				split.classList.add('open');
 				await markRead();
 			};
 			const refresh = async () => {
@@ -441,6 +449,7 @@ export const mountInbox = ({ host, win, api, config, clock, onUnread }) => {
 			closeDetail.addEventListener('click', () => {
 				current = null;
 				detail.replaceChildren();
+				split.classList.remove('open');
 			});
 			filters.addEventListener('submit', (event) => {
 				event.preventDefault();
@@ -460,6 +469,7 @@ export const mountInbox = ({ host, win, api, config, clock, onUnread }) => {
 				if (signedIn) return;
 				list.replaceChildren();
 				detail.replaceChildren();
+				split.classList.remove('open');
 				current = null;
 				setHidden(more, true);
 				note.textContent = t('inbox.signedOut');

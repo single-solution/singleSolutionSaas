@@ -515,7 +515,10 @@ export const mountProductPage = async ({ host, config, shop, win }) => {
 					reviews = renderReviews({ box, t, shop, config, productId: item.id });
 				}
 
-				root.replaceChildren(h(doc, 'div', { class: 'page' }, gallery, buy, ...blocks));
+				// the frame is the size container: two columns where the widget itself is wide, not the screen
+				root.replaceChildren(
+					h(doc, 'div', { class: 'page-frame' }, h(doc, 'div', { class: 'page' }, gallery, buy, ...blocks)),
+				);
 				refresh();
 				tell(GROWTH_EVENTS.viewItem, first, 1);
 				stops.push(

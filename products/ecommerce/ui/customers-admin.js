@@ -1,5 +1,5 @@
 /**
- * Customers, reviews, reports and CSV (admin widget `customers_admin`; PLAN 0.8.8 Admin widgets): a tab for each
+ * Customers, reviews, reports and CSV (admin widget `customers_admin`; PLAN 0.8.8 Admin widgets): a section for each
  * switched-on feature — customers (Cart and checkout, `customers.manage`: search, blocked filter, one customer with
  * their latest orders, block or unblock with a reason, the staff note, reset the returned-parcel count), reviews
  * moderation (Reviews, `reviews.moderate`: pending, approved or rejected; approve, reject, reply, delete), reports
@@ -51,12 +51,12 @@ export const mountCustomersAdmin = async (input) => {
 				? [{ key: 'csv', label: t('customersAdmin.csv'), render: (/** @type {HTMLElement} */ panel) => csvTab(kit, panel) }]
 				: []),
 		];
-		box.append(kit.tabs(entries));
+		box.append(kit.sections(entries));
 	});
 };
 
 /**
- * The customers tab: search, the blocked filter, the list and one customer.
+ * The customers section: search, the blocked filter, the list and one customer.
  * @param {Kit} kit @param {HTMLElement} panel
  */
 const customersTab = (kit, panel) => {
@@ -224,7 +224,7 @@ const customerDetail = (kit, { userId, done }) => {
 const REVIEW_STATUSES = Object.freeze(['pending', 'approved', 'rejected']);
 
 /**
- * The reviews tab: reviews by status, newest first, with approve, reject, reply and delete.
+ * The reviews section: reviews by status, newest first, with approve, reject, reply and delete.
  * @param {Kit} kit @param {HTMLElement} panel
  */
 const reviewsTab = (kit, panel) => {

@@ -22,6 +22,7 @@ import {
 	Section,
 	Select,
 	Skeleton,
+	SoftBreaks,
 	Stat,
 	StatGrid,
 	TextArea,
@@ -70,10 +71,53 @@ function Outcome({ result }) {
 	);
 }
 
-/** @param {{ items: Array<{ who: { name: string }, what: string, detail: string, at: string }> }} props */
-function RecentChanges({ items }) {
+/** Feature names by key (manifest.json). */
+const NAMES = new Map(manifest.features.map((feature) => [feature.key, feature.name]));
+
+/**
+ * The names of features, at most `max` of them and how many more (a long list would make its tile or card tall).
+ * @param {string[]} keys
+ * @param {number} [max]
+ */
+const namesOf = (keys, max = Infinity) => {
+	const names = keys.map((key) => NAMES.get(key) ?? key);
+	return names.length > max
+		? fill(TEXTS.andMore, { names: names.slice(0, max).join(', '), count: names.length - max })
+		: names.join(', ');
+};
+
+/** @param {string} status */
+const toneOf = (status) => (status === 'connected' ? 'success' : status === 'test_failed' ? 'danger' : 'warning');
+
+/**
+ * One line of the setup checklist: what is needed (and why it is not ready), then its status and any action.
+ * @param {{ tone: 'success' | 'warning' | 'danger' | 'neutral', badge: string, label: string, detail?: string | null,
+ *   children?: import('react').ReactNode }} props
+ */
+function CheckRow({ tone, badge, label, detail, children }) {
 	return (
-		<Card title={TEXTS.overview.recent}>
+		<li className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 py-3 first:pt-0 last:pb-0">
+			<span className="min-w-0 flex-[1_1_16rem]">
+				<span className="block font-semibold text-fg">{label}</span>
+				{detail ? <span className="block text-muted">{detail}</span> : null}
+			</span>
+			<span className="flex flex-wrap items-center gap-2">
+				<Badge tone={tone} dot>
+					{badge}
+				</Badge>
+				{children}
+			</span>
+		</li>
+	);
+}
+
+/**
+ * Recent changes; `titled` gives the card its own title (Defaults, Prices) where no section heading names it.
+ * @param {{ items: Array<{ who: { name: string }, what: string, detail: string, at: string }>, titled?: boolean }} props
+ */
+function RecentChanges({ items, titled = true }) {
+	return (
+		<Card {...(titled ? { title: TEXTS.overview.recent } : {})}>
 			{items.length === 0 ? (
 				<p className="text-sm text-muted">{TEXTS.overview.noChanges}</p>
 			) : (
@@ -138,7 +182,7 @@ function OverviewTab({ websiteId }) {
 								<Stat
 									label={TEXTS.overview.features}
 									value={data.featuresOn.length}
-									hint={data.featuresOn.length > 0 ? data.featuresOn.join(', ') : TEXTS.overview.noFeatures}
+									hint={data.featuresOn.length > 0 ? namesOf(data.featuresOn, 3) : TEXTS.overview.noFeatures}
 									icon="zap"
 									kind="feature"
 								/>
@@ -161,29 +205,35 @@ function OverviewTab({ websiteId }) {
 						</Section>
 						<Section title={TEXTS.overview.setup} description={TEXTS.overview.setupHelp}>
 							<Card>
-								<ul className="space-y-3 text-sm">
+								<ul className="divide-y divide-line-soft text-sm">
 									{needed.map((item) => (
-										<li key={item.name} className="flex flex-wrap items-center gap-2">
-											<Badge
-												tone={
-													item.status === 'connected'
-														? 'success'
-														: item.status === 'test_failed'
-															? 'danger'
-															: 'warning'
-												}
-												dot>
-												{TEXTS.connections[/** @type {'connected'} */ (item.status)]}
-											</Badge>
-											<span className="font-semibold">{item.label}</span>
-											{item.message ? <span className="text-muted">{item.message}</span> : null}
-										</li>
+										<CheckRow
+											key={item.name}
+											tone={toneOf(item.status)}
+											badge={TEXTS.connections[/** @type {'connected'} */ (item.status)]}
+											label={item.label}
+											detail={item.message}
+										/>
 									))}
-									<li className="flex flex-wrap items-center gap-2">
-										<Badge tone={data.checklist.business.found ? 'success' : 'warning'} dot>
-											{data.checklist.business.found ? TEXTS.overview.businessFound : TEXTS.overview.businessMissing}
-										</Badge>
-										<span className="font-semibold">{TEXTS.overview.business}</span>
+									{data.checklist.widget ? (
+										<CheckRow
+											tone={data.checklist.widget.installed ? 'success' : 'warning'}
+											badge={
+												data.checklist.widget.installed
+													? fill(TEXTS.overview.widgetSeen, {
+															time: formatDateTime(data.checklist.widget.lastSeenAt),
+														})
+													: TEXTS.overview.widgetMissing
+											}
+											label={TEXTS.overview.widget}
+										/>
+									) : null}
+									<CheckRow
+										tone={data.checklist.business.found ? 'success' : 'warning'}
+										badge={
+											data.checklist.business.found ? TEXTS.overview.businessFound : TEXTS.overview.businessMissing
+										}
+										label={TEXTS.overview.business}>
 										<Button
 											size="sm"
 											variant="secondary"
@@ -196,24 +246,12 @@ function OverviewTab({ websiteId }) {
 											}}>
 											{TEXTS.overview.refresh}
 										</Button>
-									</li>
-									{data.checklist.widget ? (
-										<li className="flex flex-wrap items-center gap-2">
-											<Badge tone={data.checklist.widget.installed ? 'success' : 'warning'} dot>
-												{data.checklist.widget.installed
-													? fill(TEXTS.overview.widgetSeen, {
-															time: formatDateTime(data.checklist.widget.lastSeenAt),
-														})
-													: TEXTS.overview.widgetMissing}
-											</Badge>
-											<span className="font-semibold">{TEXTS.overview.widget}</span>
-										</li>
-									) : null}
+									</CheckRow>
 								</ul>
 							</Card>
 						</Section>
 						<Section title={TEXTS.overview.changes} description={TEXTS.overview.changesHelp}>
-							<RecentChanges items={data.recentChanges} />
+							<RecentChanges items={data.recentChanges} titled={false} />
 						</Section>
 					</div>
 				);
@@ -271,7 +309,7 @@ function FeaturesTab({ websiteId, who, support }) {
 				return (
 					<div className="space-y-4">
 						{admin ? null : <Callout tone="info">{fill(TEXTS.features.contact, { contact: support.email })}</Callout>}
-						<Masonry>
+						<Masonry wideAlone>
 							{features.map((feature) => {
 								const missing = feature.dependsOn.filter((dep) => !on.includes(dep));
 								const broken = links.filter((link) => link.neededBy.includes(feature.key) && link.status !== 'connected');
@@ -289,7 +327,7 @@ function FeaturesTab({ websiteId, who, support }) {
 										<p className="text-sm">{feature.description}</p>
 										{feature.dependsOn.length > 0 ? (
 											<p className="text-sm text-muted">
-												{fill(TEXTS.features.needs, { features: feature.dependsOn.join(', ') })}
+												{fill(TEXTS.features.needs, { features: namesOf(feature.dependsOn) })}
 											</p>
 										) : null}
 										{feature.on
@@ -334,7 +372,7 @@ function FeaturesTab({ websiteId, who, support }) {
 								}
 							}}>
 							<p>{fill(TEXTS.features.confirmCost, { cost: formatCreditsPerHour(cost) })}</p>
-							{turnedOff.length > 0 ? <p>{fill(TEXTS.features.alsoOff, { features: turnedOff.join(', ') })}</p> : null}
+							{turnedOff.length > 0 ? <p>{fill(TEXTS.features.alsoOff, { features: namesOf(turnedOff) })}</p> : null}
 						</ConfirmDialog>
 					</div>
 				);
@@ -419,49 +457,59 @@ function SettingsForms({ features, saveUrl, resetBody, savedSource, reload }) {
  */
 function TextsForm({ texts, saveUrl, resetBody, savedSource, reload }) {
 	const [edits, setEdits] = useState(/** @type {Record<string, string>} */ ({}));
-	const [result, setResult] = useState(/** @type {import('./api.js').Answer | null} */ (null));
+	const [result, setResult] = useState(/** @type {{ key: string, answer: import('./api.js').Answer } | null} */ (null));
 	return (
 		<Card title={TEXTS.settings.texts} subtitle={TEXTS.settings.textsHelp}>
-			<div className="space-y-3">
-				{texts.map((text) => (
-					<div key={text.key} className="flex flex-wrap items-end gap-2">
-						<Input
-							fieldClassName="min-w-64 flex-1"
-							label={text.key}
-							help={text.english}
-							value={edits[text.key] ?? text.value}
-							onChange={(event) => setEdits({ ...edits, [text.key]: event.target.value })}
-						/>
-						<Button
-							size="sm"
-							disabled={edits[text.key] === undefined}
-							onClick={async () => {
-								const next = await call('PUT', saveUrl(text.key), { value: edits[text.key] });
-								setResult(next);
-								if (next.ok) setEdits(Object.fromEntries(Object.entries(edits).filter(([key]) => key !== text.key)));
-								reload();
-							}}>
-							{TEXTS.save}
-						</Button>
-						{text.source === savedSource ? (
-							<Button
-								size="sm"
-								variant="ghost"
-								onClick={async () => {
-									setResult(
-										resetBody
-											? await call('PUT', saveUrl(text.key), { value: null })
-											: await call('DELETE', saveUrl(text.key)),
-									);
-									reload();
-								}}>
-								{TEXTS.reset}
-							</Button>
-						) : null}
-					</div>
-				))}
+			<div className="space-y-4">
+				{texts.map((text) => {
+					const englishId = `text-${text.key.replace(/[^\w-]/g, '-')}-english`;
+					return (
+						<div key={text.key} className="space-y-1.5">
+							<div className="flex flex-wrap items-end gap-2">
+								<Input
+									fieldClassName="min-w-0 flex-1 basis-64"
+									label={<SoftBreaks text={text.key} />}
+									aria-describedby={englishId}
+									value={edits[text.key] ?? text.value}
+									onChange={(event) => setEdits({ ...edits, [text.key]: event.target.value })}
+								/>
+								<Button
+									size="sm"
+									disabled={edits[text.key] === undefined}
+									onClick={async () => {
+										const next = await call('PUT', saveUrl(text.key), { value: edits[text.key] });
+										setResult({ key: text.key, answer: next });
+										if (next.ok)
+											setEdits(Object.fromEntries(Object.entries(edits).filter(([key]) => key !== text.key)));
+										reload();
+									}}>
+									{TEXTS.save}
+								</Button>
+								{text.source === savedSource ? (
+									<Button
+										size="sm"
+										variant="ghost"
+										onClick={async () => {
+											setResult({
+												key: text.key,
+												answer: resetBody
+													? await call('PUT', saveUrl(text.key), { value: null })
+													: await call('DELETE', saveUrl(text.key)),
+											});
+											reload();
+										}}>
+										{TEXTS.reset}
+									</Button>
+								) : null}
+							</div>
+							<p id={englishId} className="text-xs text-muted">
+								{text.english}
+							</p>
+							{result?.key === text.key ? <Outcome result={result.answer} /> : null}
+						</div>
+					);
+				})}
 			</div>
-			<Outcome result={result} />
 		</Card>
 	);
 }
@@ -531,7 +579,7 @@ function SettingsTab({ websiteId }) {
 	return (
 		<div className="space-y-8">
 			<Section title={TEXTS.settings.featuresTitle} description={TEXTS.settings.featuresHelp}>
-				<Masonry>
+				<Masonry wideAlone>
 					<Loaded answer={settings.answer}>
 						{(data) => (
 							<SettingsForms
@@ -546,7 +594,7 @@ function SettingsTab({ websiteId }) {
 				</Masonry>
 			</Section>
 			<Section title={TEXTS.settings.looksTitle} description={TEXTS.settings.looksHelp}>
-				<Masonry>
+				<Masonry wideAlone>
 					<Loaded answer={texts.answer}>
 						{(data) => (
 							<TextsForm
@@ -584,7 +632,7 @@ function ConnectionsTab({ websiteId }) {
 		<Loaded answer={answer}>
 			{(data) => (
 				<div className="space-y-4">
-					<Masonry>
+					<Masonry wideAlone>
 						{data.connections.map((/** @type {any} */ item) => {
 							/** @param {unknown} value */
 							const save = (value) => act(call('PUT', `${base}/${item.name}`, { value }));
@@ -594,15 +642,11 @@ function ConnectionsTab({ websiteId }) {
 									title={item.label}
 									subtitle={
 										item.neededBy.length > 0
-											? fill(TEXTS.connections.neededBy, { features: item.neededBy.join(', ') })
+											? fill(TEXTS.connections.neededBy, { features: namesOf(item.neededBy, 4) })
 											: TEXTS.connections.neededByNone
 									}>
 									<p className="flex flex-wrap items-center gap-2 text-sm">
-										<Badge
-											tone={
-												item.status === 'connected' ? 'success' : item.status === 'test_failed' ? 'danger' : 'warning'
-											}
-											dot>
+										<Badge tone={toneOf(item.status)} dot>
 											{TEXTS.connections[/** @type {'connected'} */ (item.status)]}
 										</Badge>
 										{item.last4 ? <code>••••{item.last4}</code> : null}
@@ -722,7 +766,7 @@ function DefaultsTab() {
 			{(data) => (
 				<div className="space-y-4">
 					<Callout tone="info">{TEXTS.defaults.intro}</Callout>
-					<Masonry>
+					<Masonry wideAlone>
 						<SettingsForms features={data.features} saveUrl={saveUrl} resetBody savedSource="default" reload={reload} />
 						<TextsForm
 							texts={data.texts}

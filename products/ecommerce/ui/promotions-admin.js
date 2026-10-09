@@ -1,6 +1,6 @@
 /**
  * Promotions (admin widget `promotions_admin`, tickets with `coupons.edit`, `deals.edit`, `bundles.edit` and
- * `loyalty.manage`; PLAN 0.8.8 Promotions): a tab for each switched-on feature — coupons (with batches of random
+ * `loyalty.manage`; PLAN 0.8.8 Promotions): a section for each switched-on feature — coupons (with batches of random
  * codes), deals, bundles (bundle items or buy X get Y) and loyalty accounts (look up by Accounts user id, history,
  * adjust points with a note) — from `./admin-offers.js`.
  * @module
@@ -20,7 +20,7 @@ export const mountPromotionsAdmin = async (input) => {
 		/** @type {Array<'coupons' | 'deals' | 'bundles'>} */
 		const kinds = ['coupons', 'deals', 'bundles'];
 		box.append(
-			kit.tabs([
+			kit.sections([
 				...kinds
 					.filter((kind) => has(kind))
 					.map((kind) => ({

@@ -15,6 +15,7 @@ export const TEXTS = Object.freeze({
 	save: 'Save',
 	reset: 'Reset to default',
 	cancel: 'Cancel',
+	andMore: '{names} and {count} more',
 	tabs: Object.freeze({
 		overview: 'Overview',
 		features: 'Features',
@@ -83,6 +84,7 @@ export const TEXTS = Object.freeze({
 			options: 'Options (comma-separated or one per line)',
 			required: 'Required at sign-up',
 			add: 'New field',
+			editTitle: 'Edit field',
 			edit: 'Edit',
 			delete: 'Delete',
 			none: 'No custom fields yet.',

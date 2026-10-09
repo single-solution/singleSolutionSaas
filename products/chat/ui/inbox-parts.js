@@ -136,7 +136,7 @@ export const staffPart = ({ doc, t, make, api, failure, queue, onStaff }) => {
 		...Object.entries(presence).map(([value, label]) => element(doc, 'option', { value }, label)),
 	);
 	const note = element(doc, 'p', { class: 'status', role: 'status' });
-	const list = element(doc, 'ul');
+	const list = element(doc, 'ul', { class: 'staff' });
 	part.append(mine.wrap, element(doc, 'h3', {}, t('inbox.staff')), list, note);
 	mine.input.addEventListener('change', async () => {
 		if (!mine.input.value) return;

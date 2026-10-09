@@ -118,12 +118,12 @@ export const mountWith = async (mount, { features, settings = {}, routes = {}, t
 /** The visible text of a node. @param {ParentNode} scope */
 export const textOf = (scope) => /** @type {any} */ (scope).textContent ?? '';
 
-/** A tab's panel. @param {ParentNode} root @param {string} key */
+/** A section's panel. @param {ParentNode} root @param {string} key */
 export const panelOf = (root, key) => /** @type {HTMLElement} */ (root.querySelector(`[data-panel="${key}"]`));
 
-/** Show a tab. @param {ParentNode} root @param {string} key */
+/** Show a section. @param {ParentNode} root @param {string} key */
 export const openTab = async (root, key) => {
-	/** @type {HTMLElement} */ (root.querySelector(`[data-tab="${key}"]`)).click();
+	/** @type {HTMLElement} */ (root.querySelector(`[data-section="${key}"]`)).click();
 	await flush();
 	return panelOf(root, key);
 };

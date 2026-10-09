@@ -41,26 +41,39 @@ import { TEXTS } from './texts.js';
 /** Feature names by key (manifest.json). */
 const NAMES = new Map(manifest.features.map((feature) => [feature.key, feature.name]));
 
-/** @param {string[]} keys */
-const namesOf = (keys) => keys.map((key) => NAMES.get(key) ?? key).join(', ');
+/**
+ * The names of features, at most `max` of them and how many more (a long list would make its tile or card tall).
+ * @param {string[]} keys
+ * @param {number} [max]
+ */
+const namesOf = (keys, max = Infinity) => {
+	const names = keys.map((key) => NAMES.get(key) ?? key);
+	return names.length > max
+		? fill(TEXTS.andMore, { names: names.slice(0, max).join(', '), count: names.length - max })
+		: names.join(', ');
+};
 
 /** @param {string} status */
 const toneOf = (status) => (status === 'connected' ? 'success' : status === 'test_failed' ? 'danger' : 'warning');
 
 /**
- * One line of the setup checklist.
+ * One line of the setup checklist: what is needed (and why it is not ready), then its status and any action.
  * @param {{ tone: 'success' | 'warning' | 'danger' | 'neutral', badge: string, label: string, detail?: string | null,
  *   children?: import('react').ReactNode }} props
  */
 function CheckRow({ tone, badge, label, detail, children }) {
 	return (
-		<li className="flex flex-wrap items-center gap-2">
-			<Badge tone={tone} dot>
-				{badge}
-			</Badge>
-			<span className="font-semibold">{label}</span>
-			{detail ? <span className="text-muted">{detail}</span> : null}
-			{children}
+		<li className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 py-3 first:pt-0 last:pb-0">
+			<span className="min-w-0 flex-[1_1_16rem]">
+				<span className="block font-semibold text-fg">{label}</span>
+				{detail ? <span className="block text-muted">{detail}</span> : null}
+			</span>
+			<span className="flex flex-wrap items-center gap-2">
+				<Badge tone={tone} dot>
+					{badge}
+				</Badge>
+				{children}
+			</span>
 		</li>
 	);
 }
@@ -124,7 +137,7 @@ function OverviewTab({ websiteId }) {
 								<Stat
 									label={TEXTS.overview.features}
 									value={on.length}
-									hint={on.length > 0 ? namesOf(on) : TEXTS.overview.noFeatures}
+									hint={on.length > 0 ? namesOf(on, 3) : TEXTS.overview.noFeatures}
 									icon="zap"
 									kind="feature"
 								/>
@@ -139,12 +152,19 @@ function OverviewTab({ websiteId }) {
 						</Section>
 						<Section title={TEXTS.overview.setup} description={TEXTS.overview.setupHelp}>
 							<Card>
-								<ul className="space-y-3 text-sm">
+								<ul className="divide-y divide-line-soft text-sm">
 									{needed.map((item) => (
 										<ConnectionRow
 											key={item.name}
 											item={item}
-											why={item.name === 'database' ? '' : namesOf(item.neededBy.filter((key) => on.includes(key)))}
+											why={
+												item.name === 'database'
+													? ''
+													: namesOf(
+															item.neededBy.filter((key) => on.includes(key)),
+															3,
+														)
+											}
 										/>
 									))}
 									{payments ? (
@@ -193,7 +213,7 @@ function OverviewTab({ websiteId }) {
 							</Card>
 						</Section>
 						<Section title={TEXTS.overview.changes} description={TEXTS.overview.changesHelp}>
-							<RecentChanges items={data.recentChanges} />
+							<RecentChanges items={data.recentChanges} titled={false} />
 						</Section>
 					</div>
 				);
@@ -251,7 +271,7 @@ function FeaturesTab({ websiteId, who, support }) {
 				return (
 					<div className="space-y-4">
 						{admin ? null : <Callout tone="info">{fill(TEXTS.features.contact, { contact: support.email })}</Callout>}
-						<Masonry>
+						<Masonry wideAlone>
 							{features.map((feature) => {
 								const missing = feature.dependsOn.filter((dep) => !on.includes(dep));
 								const broken = links.filter((link) => link.neededBy.includes(feature.key) && link.status !== 'connected');
@@ -345,7 +365,7 @@ function ConnectionsTab({ websiteId }) {
 			{(data) => (
 				<div className="space-y-4">
 					{data.connections.length === 0 ? <p className="text-sm text-muted">{TEXTS.connections.none}</p> : null}
-					<Masonry>
+					<Masonry wideAlone>
 						{data.connections.map((/** @type {Connection} */ item) => {
 							const hint = connectionHint(item.name);
 							/** @param {unknown} value */
@@ -356,7 +376,7 @@ function ConnectionsTab({ websiteId }) {
 									title={item.label}
 									subtitle={
 										item.neededBy.length > 0
-											? fill(TEXTS.connections.neededBy, { features: namesOf(item.neededBy) })
+											? fill(TEXTS.connections.neededBy, { features: namesOf(item.neededBy, 4) })
 											: TEXTS.connections.neededByNone
 									}>
 									<p className="flex flex-wrap items-center gap-2 text-sm">
@@ -491,7 +511,7 @@ function DefaultsTab() {
 	return (
 		<Loaded answer={answer}>
 			{(data) => (
-				<div className="space-y-6">
+				<div className="space-y-4">
 					<Callout tone="info">{TEXTS.defaults.intro}</Callout>
 					<SettingsSections
 						features={data.features}

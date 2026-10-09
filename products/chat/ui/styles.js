@@ -78,7 +78,15 @@ p { overflow-wrap: anywhere; }
 @media (max-width: 480px) {
   .chat[data-full] .window { position: fixed; inset: 0; width: 100%; height: 100%; border-radius: 0; }
 }
+.inbox { container-type: inline-size; }
+ul.staff { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); gap: 0 20px; }
+.split.open > .list-part { display: none; }
+@container (min-width: 720px) {
+  .split.open { display: grid; grid-template-columns: minmax(220px, 320px) minmax(0, 1fr); gap: 0 20px; align-items: start; }
+  .split.open > .list-part { display: block; }
+}
 .conversations li.unread > button { font-weight: 700; }
+.conversations .badge { margin-left: 6px; background: var(--accent); color: var(--on-accent); }
 .facts li { padding: 4px 0; border: 0; }
 .numbers { display: grid; grid-template-columns: 1fr auto; gap: 4px 16px; } .numbers dd { margin: 0; font-weight: 600; }
 .bars li { display: grid; grid-template-columns: 96px 1fr 48px; gap: 8px; align-items: center; padding: 2px 0; border: 0; }

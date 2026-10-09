@@ -226,7 +226,7 @@ describe('promotions admin: coupons', () => {
 	it('generates a batch of codes and downloads them', async () => {
 		let reply = () => problem(422, 'prefix is up to 30 characters.');
 		const { root, server, saved } = await start({ 'POST /v1/admin/coupons/batch': () => reply() }, ['coupons']);
-		expect(root.querySelector('[role="tablist"]')?.hasAttribute('hidden')).toBe(true);
+		expect(root.querySelector('nav.sections')?.hasAttribute('hidden')).toBe(true);
 		const panel = panelOf(root, 'coupons');
 		await click(buttonIn(panel, 'Generate codes'));
 		expect(() => fieldIn(panel, 'Code')).toThrow();

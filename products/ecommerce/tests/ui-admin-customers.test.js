@@ -125,8 +125,8 @@ describe('customers admin: customers', () => {
 
 	it('shows only switched-on tabs', async () => {
 		const { root } = await start({}, ['reviews']);
-		expect(root.querySelector('[data-tab="customers"]')).toBeNull();
-		expect(root.querySelector('[data-tab="reviews"]')).not.toBeNull();
+		expect(root.querySelector('[data-section="customers"]')).toBeNull();
+		expect(root.querySelector('[data-section="reviews"]')).not.toBeNull();
 	});
 });
 

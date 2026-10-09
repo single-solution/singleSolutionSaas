@@ -7,7 +7,19 @@
  * @module
  */
 import { useState } from 'react';
-import { Button, Callout, Card, CheckboxGroup, FieldGrid, Input, Select, TextArea, describeProblem } from '@ss/ui';
+import {
+	Button,
+	Callout,
+	Card,
+	CheckboxGroup,
+	FieldGrid,
+	Icon,
+	IconButton,
+	Input,
+	Select,
+	TextArea,
+	describeProblem,
+} from '@ss/ui';
 import { DEFAULT_FLOW, canMove } from '../../core/flow.js';
 import { STATUS_ROLES } from '../../core/model.js';
 import { exponentOf, fromDecimal, toDecimal } from '../../core/money.js';
@@ -110,12 +122,12 @@ function EntryHead({ label, index, count, onMove, onRemove }) {
 	return (
 		<div className="flex flex-wrap items-center gap-1">
 			<span className="mr-auto text-sm font-bold">{`${label} ${index + 1}`}</span>
-			<Button size="sm" variant="ghost" disabled={index === 0} onClick={() => onMove(-1)} aria-label={L.up}>
-				↑
-			</Button>
-			<Button size="sm" variant="ghost" disabled={index === count - 1} onClick={() => onMove(1)} aria-label={L.down}>
-				↓
-			</Button>
+			<IconButton label={L.up} disabled={index === 0} onClick={() => onMove(-1)}>
+				<Icon name="arrowUp" size={14} />
+			</IconButton>
+			<IconButton label={L.down} disabled={index === count - 1} onClick={() => onMove(1)}>
+				<Icon name="arrowDown" size={14} />
+			</IconButton>
 			<Button size="sm" variant="ghost" onClick={onRemove}>
 				{L.remove}
 			</Button>
@@ -224,7 +236,7 @@ function ListEditor({ websiteId, list, title, help, itemLabel, max, blank, load 
 						<div className="space-y-4">
 							{items.length === 0 ? <p className="text-sm text-muted">{L.none}</p> : null}
 							{items.map((item, index) => (
-								<div key={index} className="space-y-3 rounded-2xl bg-surface-2 p-3 sm:p-4">
+								<div key={index} className="space-y-3 rounded-2xl bg-surface-2 p-4">
 									<EntryHead
 										label={itemLabel}
 										index={index}
@@ -280,7 +292,7 @@ export function CouriersEditor({ websiteId, off }) {
 				trackingUrl: String(courier.trackingUrl ?? '').trim(),
 			})}
 			render={(courier, set) => (
-				<div className="grid gap-3 md:grid-cols-3">
+				<FieldGrid>
 					<Input label={C.name} value={courier.name ?? ''} onChange={(event) => set({ name: event.target.value })} />
 					<Input
 						label={C.key}
@@ -295,7 +307,7 @@ export function CouriersEditor({ websiteId, off }) {
 						value={courier.trackingUrl ?? ''}
 						onChange={(event) => set({ trackingUrl: event.target.value })}
 					/>
-				</div>
+				</FieldGrid>
 			)}
 		/>
 	);
@@ -352,64 +364,60 @@ export function ZonesEditor({ websiteId, off, currency }) {
 				maxDays: Number(String(zone.maxDays).trim() || zone.minDays || 0),
 			})}
 			render={(zone, set) => (
-				<>
-					<FieldGrid>
-						<Input label={Z.name} value={zone.name ?? ''} onChange={(event) => set({ name: event.target.value })} />
-						<Input
-							label={Z.key}
-							value={zone.key ?? ''}
-							maxLength={40}
-							autoComplete="off"
-							onChange={(event) => set({ key: event.target.value })}
-						/>
-						<TextArea
-							label={Z.cities}
-							rows={3}
-							value={zone.cities.join('\n')}
-							onChange={(event) => set({ cities: event.target.value.split('\n') })}
-						/>
-						<TextArea
-							label={Z.areas}
-							rows={3}
-							value={zone.areas.join('\n')}
-							onChange={(event) => set({ areas: event.target.value.split('\n') })}
-						/>
-					</FieldGrid>
-					<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-						<Input
-							label={fill(Z.fee, { currency })}
-							type="number"
-							min={0}
-							step={step}
-							inputMode="decimal"
-							value={zone.fee}
-							onChange={(event) => set({ fee: event.target.value })}
-						/>
-						<Input
-							label={fill(Z.freeOver, { currency })}
-							type="number"
-							min={0}
-							step={step}
-							inputMode="decimal"
-							value={zone.freeOver}
-							onChange={(event) => set({ freeOver: event.target.value })}
-						/>
-						<Input
-							label={Z.minDays}
-							type="number"
-							min={0}
-							value={zone.minDays}
-							onChange={(event) => set({ minDays: event.target.value })}
-						/>
-						<Input
-							label={Z.maxDays}
-							type="number"
-							min={0}
-							value={zone.maxDays}
-							onChange={(event) => set({ maxDays: event.target.value })}
-						/>
-					</div>
-				</>
+				<FieldGrid>
+					<Input label={Z.name} value={zone.name ?? ''} onChange={(event) => set({ name: event.target.value })} />
+					<Input
+						label={Z.key}
+						value={zone.key ?? ''}
+						maxLength={40}
+						autoComplete="off"
+						onChange={(event) => set({ key: event.target.value })}
+					/>
+					<Input
+						label={fill(Z.fee, { currency })}
+						type="number"
+						min={0}
+						step={step}
+						inputMode="decimal"
+						value={zone.fee}
+						onChange={(event) => set({ fee: event.target.value })}
+					/>
+					<Input
+						label={fill(Z.freeOver, { currency })}
+						type="number"
+						min={0}
+						step={step}
+						inputMode="decimal"
+						value={zone.freeOver}
+						onChange={(event) => set({ freeOver: event.target.value })}
+					/>
+					<Input
+						label={Z.minDays}
+						type="number"
+						min={0}
+						value={zone.minDays}
+						onChange={(event) => set({ minDays: event.target.value })}
+					/>
+					<Input
+						label={Z.maxDays}
+						type="number"
+						min={0}
+						value={zone.maxDays}
+						onChange={(event) => set({ maxDays: event.target.value })}
+					/>
+					<TextArea
+						label={Z.cities}
+						rows={3}
+						value={zone.cities.join('\n')}
+						onChange={(event) => set({ cities: event.target.value.split('\n') })}
+					/>
+					<TextArea
+						label={Z.areas}
+						rows={3}
+						value={zone.areas.join('\n')}
+						onChange={(event) => set({ areas: event.target.value.split('\n') })}
+					/>
+				</FieldGrid>
 			)}
 		/>
 	);
@@ -451,38 +459,36 @@ export function GradesEditor({ websiteId, off }) {
 				warrantyDays: daysOf(grade.warrantyDays),
 			})}
 			render={(grade, set) => (
-				<>
-					<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-						<Input label={G.label} value={grade.label ?? ''} onChange={(event) => set({ label: event.target.value })} />
-						<Input
-							label={G.key}
-							value={grade.key ?? ''}
-							maxLength={40}
-							autoComplete="off"
-							onChange={(event) => set({ key: event.target.value })}
-						/>
-						<Input
-							label={G.returnDays}
-							type="number"
-							min={0}
-							value={grade.returnDays}
-							onChange={(event) => set({ returnDays: event.target.value })}
-						/>
-						<Input
-							label={G.warrantyDays}
-							type="number"
-							min={0}
-							value={grade.warrantyDays}
-							onChange={(event) => set({ warrantyDays: event.target.value })}
-						/>
-					</div>
+				<FieldGrid>
+					<Input label={G.label} value={grade.label ?? ''} onChange={(event) => set({ label: event.target.value })} />
+					<Input
+						label={G.key}
+						value={grade.key ?? ''}
+						maxLength={40}
+						autoComplete="off"
+						onChange={(event) => set({ key: event.target.value })}
+					/>
+					<Input
+						label={G.returnDays}
+						type="number"
+						min={0}
+						value={grade.returnDays}
+						onChange={(event) => set({ returnDays: event.target.value })}
+					/>
+					<Input
+						label={G.warrantyDays}
+						type="number"
+						min={0}
+						value={grade.warrantyDays}
+						onChange={(event) => set({ warrantyDays: event.target.value })}
+					/>
 					<TextArea
 						label={G.description}
 						rows={2}
 						value={grade.description ?? ''}
 						onChange={(event) => set({ description: event.target.value })}
 					/>
-				</>
+				</FieldGrid>
 			)}
 		/>
 	);
@@ -504,7 +510,7 @@ export function BookingHoursEditor({ websiteId, off }) {
 			blank={() => ({ day: 1, from: '09:00', to: '17:00' })}
 			clean={(hours) => ({ day: Number(hours.day), from: String(hours.from ?? ''), to: String(hours.to ?? '') })}
 			render={(hours, set) => (
-				<div className="grid gap-3 sm:grid-cols-3">
+				<FieldGrid>
 					<Select
 						label={B.day}
 						value={String(hours.day ?? 1)}
@@ -518,7 +524,7 @@ export function BookingHoursEditor({ websiteId, off }) {
 						onChange={(event) => set({ from: event.target.value })}
 					/>
 					<Input label={B.to} type="time" value={hours.to ?? ''} onChange={(event) => set({ to: event.target.value })} />
-				</div>
+				</FieldGrid>
 			)}
 		/>
 	);
@@ -570,40 +576,31 @@ export function TaxRulesEditor({ websiteId, off }) {
 					.map((rule) => fill(X.badPercent, { rule: rule.name || X.item }))
 			}
 			render={(rule, set) => (
-				<>
-					<div className="grid gap-3 sm:grid-cols-2">
-						<Input
-							label={X.name}
-							value={rule.name}
-							maxLength={60}
-							onChange={(event) => set({ name: event.target.value })}
-						/>
-						<Input
-							label={X.percent}
-							type="number"
-							min={0}
-							max={100}
-							step="0.001"
-							inputMode="decimal"
-							value={rule.percent}
-							onChange={(event) => set({ percent: event.target.value })}
-						/>
-					</div>
-					<div className="grid gap-3 sm:grid-cols-2">
-						<TextArea
-							label={X.categoryIds}
-							rows={3}
-							value={rule.categoryIds.join('\n')}
-							onChange={(event) => set({ categoryIds: event.target.value.split('\n') })}
-						/>
-						<TextArea
-							label={X.regions}
-							rows={3}
-							value={rule.regions.join('\n')}
-							onChange={(event) => set({ regions: event.target.value.split('\n') })}
-						/>
-					</div>
-				</>
+				<FieldGrid>
+					<Input label={X.name} value={rule.name} maxLength={60} onChange={(event) => set({ name: event.target.value })} />
+					<Input
+						label={X.percent}
+						type="number"
+						min={0}
+						max={100}
+						step="0.001"
+						inputMode="decimal"
+						value={rule.percent}
+						onChange={(event) => set({ percent: event.target.value })}
+					/>
+					<TextArea
+						label={X.categoryIds}
+						rows={3}
+						value={rule.categoryIds.join('\n')}
+						onChange={(event) => set({ categoryIds: event.target.value.split('\n') })}
+					/>
+					<TextArea
+						label={X.regions}
+						rows={3}
+						value={rule.regions.join('\n')}
+						onChange={(event) => set({ regions: event.target.value.split('\n') })}
+					/>
+				</FieldGrid>
 			)}
 		/>
 	);
@@ -680,7 +677,7 @@ export function OrderFlowEditor({ websiteId, off }) {
 								const targets = possibleTargets(flow, status.key);
 								const ticked = flow.moves.filter((move) => move.from === status.key).map((move) => move.to);
 								return (
-									<div key={index} className="space-y-3 rounded-2xl bg-surface-2 p-3 sm:p-4">
+									<div key={index} className="space-y-3 rounded-2xl bg-surface-2 p-4">
 										<EntryHead
 											label={F.status}
 											index={index}
@@ -688,7 +685,7 @@ export function OrderFlowEditor({ websiteId, off }) {
 											onMove={(step) => setFlow({ ...flow, statuses: moved(flow.statuses, index, step) })}
 											onRemove={() => removeStatus(index)}
 										/>
-										<div className="grid gap-3 md:grid-cols-3">
+										<FieldGrid>
 											<Input
 												label={F.label}
 												value={status.label}
@@ -715,7 +712,7 @@ export function OrderFlowEditor({ websiteId, off }) {
 													})
 												}
 											/>
-										</div>
+										</FieldGrid>
 										{targets.length > 0 ? (
 											<CheckboxGroup
 												legend={F.moves}

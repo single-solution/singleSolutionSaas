@@ -1,7 +1,7 @@
 /**
  * Products and catalog (admin widget `catalog_admin`, ticket with `catalog.edit`; PLAN 0.8.8): the product list with
  * search, status, category, brand and low-stock filters and Load more; bulk changes of the selected products (Bulk
- * actions); the product editor (`./admin-product.js`); and tabs for categories, brands, attributes, locations
+ * actions); the product editor (`./admin-product.js`); and sections for categories, brands, attributes, locations
  * (Multi-location stock) and serial numbers (Grades and serials) (`./admin-taxonomy.js`).
  * @module
  */
@@ -33,7 +33,7 @@ export const mountCatalogAdmin = async (input) => {
 		const lookups = createLookups(kit);
 		const ready = lookups.reload();
 		box.append(
-			kit.tabs([
+			kit.sections([
 				{
 					key: 'products',
 					label: t('catalogAdmin.products'),
@@ -66,7 +66,7 @@ export const mountCatalogAdmin = async (input) => {
 };
 
 /**
- * The products tab: filters, the list with Load more, bulk changes and the editor.
+ * The products section: filters, the list with Load more, bulk changes and the editor.
  * @param {Kit} kit @param {HTMLElement} panel @param {Lookups} lookups
  */
 const productsTab = (kit, panel, lookups) => {

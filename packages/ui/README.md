@@ -42,8 +42,9 @@ it is the menu button.
 ## Masonry and the More menu
 
 `<Masonry columns? as? label?>` lays cards of different heights out in CSS columns (1, 2 from a 42rem container, 3 from
-72rem; `columns={2}` stops at two) with every card kept whole, so no card stretches to a taller neighbour. Settings
-pages, website cards and the product dashboards' card lists use it.
+72rem; `columns={2}` stops at two) with every card kept whole, so no card stretches to a taller neighbour; with
+`wideAlone` a lone card takes the whole width (a settings section with one form). Settings pages, website cards and the
+product dashboards' card lists use it.
 
 `<ActionMenu label items icon? size? />` is the compact ⋯ menu of a detail header or a card: the main one or two actions
 stay buttons, the rest go in the menu, a destructive one last with `danger: true`. Arrow keys, Home and End move between

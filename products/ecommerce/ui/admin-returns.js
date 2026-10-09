@@ -15,7 +15,7 @@ import { query } from './admin-kit.js';
 const MOVES = Object.freeze(['approve', 'reject', 'receive', 'close']);
 
 /**
- * The returns tab.
+ * The returns section.
  * @param {Kit} kit @param {HTMLElement} panel
  */
 export const returnsTab = (kit, panel) => {

@@ -6,7 +6,22 @@
  * @module
  */
 import { useState } from 'react';
-import { Badge, Button, Callout, Card, Checkbox, Input, Section, Select, Skeleton, TextArea, describeProblem } from '@ss/ui';
+import {
+	Badge,
+	Button,
+	Callout,
+	Card,
+	Checkbox,
+	Dialog,
+	EmptyState,
+	Form,
+	Input,
+	Section,
+	Select,
+	Skeleton,
+	TextArea,
+	describeProblem,
+} from '@ss/ui';
 import { call, useLoad } from './api.js';
 import { TEXTS } from './texts.js';
 
@@ -35,14 +50,33 @@ export function FieldsSection({ websiteId }) {
 	const { answer, reload } = useLoad(base);
 	const [draft, setDraft] = useState(/** @type {Draft | null} */ (null));
 	const [result, setResult] = useState(/** @type {import('./api.js').Answer | null} */ (null));
+	const [problem, setProblem] = useState(/** @type {any} */ (null));
 	/** @param {Partial<Draft>} patch */
 	const edit = (patch) => setDraft({ .../** @type {Draft} */ (draft), ...patch });
+	/** @param {Draft} next */
+	const open = (next) => {
+		setProblem(null);
+		setDraft(next);
+	};
+	const save = async () => {
+		if (!draft) return;
+		const next = await call('PUT', `${base}/${encodeURIComponent(draft.key)}`, {
+			label: draft.label.trim(),
+			type: draft.type,
+			options: draft.type === 'choice' ? splitOptions(draft.options) : [],
+			required: draft.required,
+		});
+		if (!next.ok) return setProblem(next.problem);
+		setResult(next);
+		setDraft(null);
+		reload();
+	};
 	return (
 		<Section
 			title={TEXTS.settings.fieldsTitle}
 			description={TEXTS.settings.fieldsHelp}
 			actions={
-				<Button size="sm" onClick={() => setDraft({ ...EMPTY })}>
+				<Button size="sm" onClick={() => open({ ...EMPTY })}>
 					{T.add}
 				</Button>
 			}>
@@ -52,41 +86,53 @@ export function FieldsSection({ websiteId }) {
 				<Callout tone="info">
 					{answer.problem?.type?.endsWith('database_not_connected') ? T.needsDatabase : describeProblem(answer.problem)}
 				</Callout>
+			) : answer.data.items.length === 0 ? (
+				<EmptyState compact icon="user" kind="settings" title={T.none} />
 			) : (
 				<Card>
-					{answer.data.items.length === 0 ? <p className="text-sm text-muted">{T.none}</p> : null}
-					<ul className="divide-y divide-line">
+					<ul className="divide-y divide-line-soft">
 						{answer.data.items.map((/** @type {CustomField} */ item) => (
-							<li key={item.key} className="flex flex-wrap items-center gap-2 py-3">
-								<span className="min-w-0 flex-1">
-									<span className="font-semibold">{item.label}</span>{' '}
-									<code className="text-xs text-muted">{item.key}</code>
+							<li key={item.key} className="flex flex-wrap items-center gap-x-3 gap-y-2 py-3 first:pt-0 last:pb-0">
+								<span className="min-w-0 flex-[1_1_12rem]">
+									<span className="block break-words text-sm font-semibold text-fg">{item.label}</span>
+									<code className="block break-all text-xs text-muted">{item.key}</code>
 								</span>
-								<Badge tone="info">{TEXTS.settings.fieldTypes[item.type]}</Badge>
-								{item.required ? <Badge tone="warning">{T.required_badge}</Badge> : null}
-								<Button
-									size="sm"
-									variant="secondary"
-									onClick={() => setDraft({ ...item, options: item.options.join('\n'), isNew: false })}>
-									{T.edit}
-								</Button>
-								<Button
-									size="sm"
-									variant="ghost"
-									onClick={async () => {
-										setResult(await call('DELETE', `${base}/${encodeURIComponent(item.key)}`));
-										reload();
-									}}>
-									{T.delete}
-								</Button>
+								<span className="flex flex-wrap gap-1.5">
+									<Badge kind="settings">{TEXTS.settings.fieldTypes[item.type]}</Badge>
+									{item.required ? <Badge>{T.required_badge}</Badge> : null}
+								</span>
+								<span className="flex flex-wrap gap-2">
+									<Button
+										size="sm"
+										variant="secondary"
+										onClick={() => open({ ...item, options: item.options.join('\n'), isNew: false })}>
+										{T.edit}
+									</Button>
+									<Button
+										size="sm"
+										variant="ghost"
+										onClick={async () => {
+											setResult(await call('DELETE', `${base}/${encodeURIComponent(item.key)}`));
+											reload();
+										}}>
+										{T.delete}
+									</Button>
+								</span>
 							</li>
 						))}
 					</ul>
 				</Card>
 			)}
-			{draft ? (
-				<Card>
-					<div className="grid gap-3 md:grid-cols-3">
+			{result ? (
+				result.ok ? (
+					<Callout tone="success">{TEXTS.saved}</Callout>
+				) : (
+					<Callout tone="danger">{describeProblem(result.problem)}</Callout>
+				)
+			) : null}
+			<Dialog open={draft !== null} onClose={() => setDraft(null)} title={draft?.isNew === false ? T.editTitle : T.add}>
+				{draft ? (
+					<Form onSubmit={save} aria-label={draft.isNew ? T.add : T.editTitle}>
 						<Input
 							label={T.key}
 							value={draft.key}
@@ -107,53 +153,31 @@ export function FieldsSection({ websiteId }) {
 							options={TYPES.map((value) => ({ value, label: TEXTS.settings.fieldTypes[value] }))}
 							onChange={(event) => edit({ type: /** @type {FieldType} */ (event.target.value) })}
 						/>
-					</div>
-					{draft.type === 'choice' ? (
-						<TextArea
-							label={T.options}
-							rows={4}
-							value={draft.options}
-							onChange={(event) => edit({ options: event.target.value })}
-						/>
-					) : null}
-					<div className="mt-3">
 						<Checkbox
 							label={T.required}
 							checked={draft.required}
 							onChange={(event) => edit({ required: event.target.checked })}
 						/>
-					</div>
-					<div className="mt-4 flex gap-2">
-						<Button
-							disabled={draft.key === '' || draft.label.trim() === ''}
-							onClick={async () => {
-								const next = await call('PUT', `${base}/${encodeURIComponent(draft.key)}`, {
-									label: draft.label.trim(),
-									type: draft.type,
-									options: draft.type === 'choice' ? splitOptions(draft.options) : [],
-									required: draft.required,
-								});
-								setResult(next);
-								if (next.ok) {
-									setDraft(null);
-									reload();
-								}
-							}}>
-							{TEXTS.save}
-						</Button>
-						<Button variant="ghost" onClick={() => setDraft(null)}>
-							{TEXTS.cancel}
-						</Button>
-					</div>
-				</Card>
-			) : null}
-			{result ? (
-				result.ok ? (
-					<Callout tone="success">{TEXTS.saved}</Callout>
-				) : (
-					<Callout tone="danger">{describeProblem(result.problem)}</Callout>
-				)
-			) : null}
+						{draft.type === 'choice' ? (
+							<TextArea
+								label={T.options}
+								rows={4}
+								value={draft.options}
+								onChange={(event) => edit({ options: event.target.value })}
+							/>
+						) : null}
+						{problem ? <Callout tone="danger">{describeProblem(problem)}</Callout> : null}
+						<div className="flex flex-wrap gap-2">
+							<Button type="submit" disabled={draft.key === '' || draft.label.trim() === ''}>
+								{TEXTS.save}
+							</Button>
+							<Button variant="ghost" onClick={() => setDraft(null)}>
+								{TEXTS.cancel}
+							</Button>
+						</div>
+					</Form>
+				) : null}
+			</Dialog>
 		</Section>
 	);
 }

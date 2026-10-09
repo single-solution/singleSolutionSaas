@@ -486,6 +486,18 @@ describe('Masonry', () => {
 		expect(second?.getAttribute('aria-label')).toBe('Websites');
 		expect(second?.className).not.toContain('columns-3');
 		expect(second?.className).toContain('extra');
+		expect(first?.className).not.toContain('only-child');
+	});
+
+	it('with wideAlone gives a lone card the whole width', () => {
+		const { container } = render(
+			<Masonry wideAlone>
+				<Card title="Only">a</Card>
+			</Masonry>,
+		);
+		const columns = /** @type {HTMLElement} */ (container.querySelector('.\\@container > *'));
+		expect(columns.className).toContain('[&:has(>:only-child)]:columns-1');
+		expect(columns.className).toContain('@2xl:columns-2');
 	});
 });
 

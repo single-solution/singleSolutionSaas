@@ -1,7 +1,8 @@
 /**
  * The shopper widgets' own CSS (added after `WIDGET_CSS`, inside their shadow roots only): the grid's filters and
  * cards, the product page's gallery and buy box, the cart's lines and totals, the order pages. Colours, font and
- * corner radius come from the website's theme, with fallbacks for light and dark; everything fits from 360 px.
+ * corner radius come from the website's theme, with fallbacks for light and dark; everything fits from 360 px, and the
+ * product page puts its gallery beside the buy box by its own width (a container query), not the screen's.
  * @module
  */
 export const SHOP_CSS = `
@@ -26,8 +27,9 @@ a { color: var(--ss-color-accent, #4f46e5); }
 .icon[aria-pressed='true'] { background: var(--ss-color-accent, #4f46e5); color: var(--ss-color-onAccent, #ffffff); }
 .icon[aria-pressed='false'] { background: transparent; color: inherit; border: 1px solid var(--ss-color-border, #d1d5db); }
 .more { display: block; margin: 16px auto 0; }
+.page-frame { container-type: inline-size; }
 .page { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
-@media (min-width: 720px) { .page { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .page > .wide { grid-column: 1 / -1; } }
+@container (min-width: 720px) { .page { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .page > .wide { grid-column: 1 / -1; } }
 .gallery .main { position: relative; }
 .gallery .main img, .gallery .main video { width: 100%; aspect-ratio: 1 / 1; object-fit: contain; border-radius: var(--ss-radius, 8px); background: rgba(127, 127, 127, 0.06); }
 .gallery .nav { display: flex; justify-content: space-between; gap: 8px; }

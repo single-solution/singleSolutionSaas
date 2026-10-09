@@ -14,6 +14,8 @@ import {
 	CodeBlock,
 	ConfirmDialog,
 	FieldGrid,
+	Icon,
+	IconButton,
 	Input,
 	Select,
 	TextArea,
@@ -83,12 +85,12 @@ function EntryHead({ label, index, count, onMove, onRemove }) {
 	return (
 		<div className="flex flex-wrap items-center gap-1">
 			<span className="mr-auto text-sm font-bold">{`${label} ${index + 1}`}</span>
-			<Button size="sm" variant="ghost" disabled={index === 0} onClick={() => onMove(-1)} aria-label={L.up}>
-				↑
-			</Button>
-			<Button size="sm" variant="ghost" disabled={index === count - 1} onClick={() => onMove(1)} aria-label={L.down}>
-				↓
-			</Button>
+			<IconButton label={L.up} disabled={index === 0} onClick={() => onMove(-1)}>
+				<Icon name="arrowUp" size={14} />
+			</IconButton>
+			<IconButton label={L.down} disabled={index === count - 1} onClick={() => onMove(1)}>
+				<Icon name="arrowDown" size={14} />
+			</IconButton>
 			<Button size="sm" variant="ghost" onClick={onRemove}>
 				{L.remove}
 			</Button>
@@ -120,7 +122,7 @@ function ListEditor({ websiteId, list, title, help, itemLabel, max, blank, clean
 						<div className="space-y-4">
 							{items.length === 0 ? <p className="text-sm text-muted">{L.none}</p> : null}
 							{items.map((item, index) => (
-								<div key={index} className="space-y-3 rounded-2xl border border-line p-3 sm:p-4">
+								<div key={index} className="space-y-3 rounded-2xl bg-surface-2 p-4">
 									<EntryHead
 										label={itemLabel}
 										index={index}
@@ -234,7 +236,7 @@ export function ToolsEditor({ websiteId, off }) {
 						/>
 						<p className="text-sm font-semibold">{T.parameters}</p>
 						{parameters.map((parameter, index) => (
-							<div key={index} className="space-y-2 rounded-xl bg-surface-2 p-3">
+							<div key={index} className="space-y-3 rounded-xl bg-surface p-3">
 								<EntryHead
 									label={T.parameter}
 									index={index}
@@ -242,7 +244,7 @@ export function ToolsEditor({ websiteId, off }) {
 									onMove={(step) => set({ parameters: moved(parameters, index, step) })}
 									onRemove={() => set({ parameters: parameters.filter((_, at) => at !== index) })}
 								/>
-								<div className="grid gap-3 md:grid-cols-3">
+								<FieldGrid>
 									<Input
 										label={T.parameter}
 										value={parameter.name}
@@ -260,7 +262,7 @@ export function ToolsEditor({ websiteId, off }) {
 										value={parameter.description}
 										onChange={(event) => setParameter(index, { description: event.target.value })}
 									/>
-								</div>
+								</FieldGrid>
 								<Checkbox
 									label={T.required}
 									checked={parameter.required === true}
@@ -351,7 +353,7 @@ export function CustomFieldsEditor({ websiteId, off }) {
 			})}
 			render={(field, set) => (
 				<>
-					<div className="grid gap-3 md:grid-cols-3">
+					<FieldGrid>
 						<Input
 							label={C.key}
 							value={field.key}
@@ -366,7 +368,7 @@ export function CustomFieldsEditor({ websiteId, off }) {
 							options={FIELD_TYPES.map((value) => ({ value, label: C.types[value] }))}
 							onChange={(event) => set({ type: event.target.value })}
 						/>
-					</div>
+					</FieldGrid>
 					{field.type === 'choice' ? (
 						<TextArea
 							label={C.options}
@@ -447,7 +449,7 @@ export function FlowsEditor({ websiteId, off, customFields }) {
 				const setStep = (index, next) => set({ steps: steps.map((step, at) => (at === index ? next : step)) });
 				return (
 					<>
-						<div className="grid gap-3 md:grid-cols-3">
+						<FieldGrid>
 							<Input
 								label={F.id}
 								value={flow.id}
@@ -472,7 +474,7 @@ export function FlowsEditor({ websiteId, off, customFields }) {
 									})
 								}
 							/>
-						</div>
+						</FieldGrid>
 						{start.kind === 'keyword' ? (
 							<TextArea
 								label={F.keywords}
@@ -499,7 +501,7 @@ export function FlowsEditor({ websiteId, off, customFields }) {
 						)}
 						<p className="text-sm font-semibold">{F.steps}</p>
 						{steps.map((step, index) => (
-							<div key={index} className="space-y-2 rounded-xl bg-surface-2 p-3">
+							<div key={index} className="space-y-3 rounded-xl bg-surface p-3">
 								<EntryHead
 									label={F.step}
 									index={index}

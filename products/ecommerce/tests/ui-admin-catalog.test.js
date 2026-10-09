@@ -232,7 +232,15 @@ describe('catalog admin: products', () => {
 	it('shows not allowed, unreachable and signed-out answers', async () => {
 		const denied = await start(['catalog'], { 'GET /v1/admin/products': () => problem(403, 'no') });
 		expect(statuses(denied.root)).toContain('You are not allowed to do this.');
-		expect(denied.root.querySelector('[role="tablist"]')?.hasAttribute('hidden')).toBe(false);
+		const sections = /** @type {HTMLElement} */ (denied.root.querySelector('nav.sections'));
+		expect(sections.hasAttribute('hidden')).toBe(false);
+		// a narrow widget picks its section from the select; the list marks the same one
+		const pick = /** @type {HTMLSelectElement} */ (sections.querySelector('select'));
+		pick.value = 'brands';
+		pick.dispatchEvent(new Event('change'));
+		expect(denied.root.querySelector('[data-panel="brands"]')?.hasAttribute('hidden')).toBe(false);
+		expect(denied.root.querySelector('[data-panel="products"]')?.hasAttribute('hidden')).toBe(true);
+		expect(sections.querySelector('[aria-current="true"]')?.getAttribute('data-section')).toBe('brands');
 		resetPage();
 		const down = await start(['catalog'], {
 			'GET /v1/admin/products': () => {

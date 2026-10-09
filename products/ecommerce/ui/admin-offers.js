@@ -397,7 +397,7 @@ const KINDS = {
 };
 
 /**
- * A tab of offers: list, filters, editor (and batches for coupons).
+ * A section of offers: list, filters, editor (and batches for coupons).
  * @param {Kit} kit @param {HTMLElement} panel @param {Searches} searches @param {'coupons' | 'deals' | 'bundles'} kind
  */
 export const offersTab = (kit, panel, searches, kind) => {
@@ -567,7 +567,7 @@ export const offersTab = (kit, panel, searches, kind) => {
 };
 
 /**
- * The loyalty tab: look up a shopper's account by Accounts user id, see the balance, lots and history, and add or
+ * The loyalty section: look up a shopper's account by Accounts user id, see the balance, lots and history, and add or
  * take points with a note.
  * @param {Kit} kit @param {HTMLElement} panel
  */

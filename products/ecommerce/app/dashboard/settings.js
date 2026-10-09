@@ -8,8 +8,8 @@
  * features; admins: all, off ones marked). Defaults uses the same sections for the global defaults.
  * @module
  */
-import { useState } from 'react';
-import { Masonry, Section, Select, cx } from '@ss/ui';
+import { startTransition, useState } from 'react';
+import { Masonry, Section, Select, SwapTransition, cx } from '@ss/ui';
 import { call, useLoad } from './api.js';
 import { BookingHoursEditor, CouriersEditor, GradesEditor, OrderFlowEditor, TaxRulesEditor, ZonesEditor } from './lists.js';
 import { Loaded, SettingsForms, TextsForm, ThemeForm, hasSettings } from './parts.js';
@@ -117,12 +117,17 @@ const settingsIn = (features, section) =>
 	});
 
 /**
- * The sections picked from an inner list (a select below 1024 px), and the picked one's forms and extras.
+ * The sections picked from an inner list, and the picked one's forms (a masonry) and extras (list editors, texts and
+ * theme, each the full width of the section under the forms). The list sits beside the section where
+ * the content area is at least 64rem wide and is a select above it in a narrower one (its container, not the screen:
+ * PLAN 0.6 medium widths).
  * @param {{ features: FeatureSettings[], forms: (features: FeatureSettings[]) => import('react').ReactNode,
  *   extras: Partial<Record<SectionId, import('react').ReactNode>> }} props
  */
 export function SettingsSections({ features, forms, extras }) {
 	const [picked, setPicked] = useState(/** @type {SectionId | null} */ (null));
+	/** The picked section cross-fades in (PLAN 0.6 motion). @param {SectionId} id */
+	const pick = (id) => startTransition(() => setPicked(id));
 	const shown = SECTION_ORDER.map((id) => ({ id, features: settingsIn(features, id) })).filter(
 		(section) => section.features.length > 0 || (extras[section.id] ?? null) !== null,
 	);
@@ -130,38 +135,46 @@ export function SettingsSections({ features, forms, extras }) {
 	if (!active) return <p className="text-sm text-muted">{TEXTS.settings.nothing}</p>;
 	const S = TEXTS.settings.sections;
 	return (
-		<div className="grid gap-6 lg:grid-cols-[15rem_minmax(0,1fr)]">
-			<nav aria-label={TEXTS.settings.sectionsLabel} className="min-w-0">
-				<Select
-					fieldClassName="lg:hidden"
-					label={TEXTS.settings.section}
-					value={active.id}
-					options={shown.map((section) => ({ value: section.id, label: S[section.id].title }))}
-					onChange={(event) => setPicked(/** @type {SectionId} */ (event.target.value))}
-				/>
-				<ul className="hidden space-y-1 rounded-2xl bg-surface p-2 lg:block">
-					{shown.map((section) => (
-						<li key={section.id}>
-							<button
-								type="button"
-								aria-current={section.id === active.id ? 'true' : undefined}
-								onClick={() => setPicked(section.id)}
-								className={cx(
-									'w-full rounded-xl px-3 py-2 text-left text-sm font-semibold',
-									section.id === active.id ? 'bg-primary-soft text-on-primary-soft' : 'text-muted hover:text-fg',
-								)}>
-								{S[section.id].title}
-							</button>
-						</li>
-					))}
-				</ul>
-			</nav>
-			<Section title={S[active.id].title} description={S[active.id].help}>
-				<Masonry columns={2}>
-					{forms(active.features)}
-					{extras[active.id] ?? null}
-				</Masonry>
-			</Section>
+		<div className="@container min-w-0">
+			<div className="grid gap-6 @5xl:grid-cols-[15rem_minmax(0,1fr)] @5xl:items-start">
+				<nav aria-label={TEXTS.settings.sectionsLabel} className="min-w-0 @5xl:sticky @5xl:top-24">
+					<div className="max-w-md @5xl:hidden">
+						<Select
+							label={TEXTS.settings.section}
+							value={active.id}
+							options={shown.map((section) => ({ value: section.id, label: S[section.id].title }))}
+							onChange={(event) => pick(/** @type {SectionId} */ (event.target.value))}
+						/>
+					</div>
+					<ul className="hidden space-y-0.5 rounded-card bg-surface p-2 @5xl:block">
+						{shown.map((section) => (
+							<li key={section.id}>
+								<button
+									type="button"
+									aria-current={section.id === active.id ? 'true' : undefined}
+									onClick={() => pick(section.id)}
+									className={cx(
+										'ss-motion ss-press w-full rounded-[12px] px-3 py-2 text-left text-sm font-semibold',
+										'focus-visible:outline-2 focus-visible:outline-focus',
+										section.id === active.id ? 'bg-primary-soft text-on-primary-soft' : 'text-fg hover:bg-surface-2',
+									)}>
+									{S[section.id].title}
+								</button>
+							</li>
+						))}
+					</ul>
+				</nav>
+				<SwapTransition id={active.id}>
+					<Section title={S[active.id].title} description={S[active.id].help}>
+						{active.features.length > 0 ? (
+							<Masonry columns={2} wideAlone>
+								{forms(active.features)}
+							</Masonry>
+						) : null}
+						{extras[active.id] ?? null}
+					</Section>
+				</SwapTransition>
+			</div>
 		</div>
 	);
 }

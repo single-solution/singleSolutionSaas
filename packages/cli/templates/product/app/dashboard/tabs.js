@@ -5,8 +5,9 @@
  * Defaults and Prices.
  * @module
  */
-import { useState } from 'react';
+import { ViewTransition, useState } from 'react';
 import {
+	Badge,
 	Button,
 	Callout,
 	Card,
@@ -18,8 +19,12 @@ import {
 	Input,
 	Masonry,
 	SchemaForm,
+	Section,
 	Select,
 	Skeleton,
+	SoftBreaks,
+	Stat,
+	StatGrid,
 	TextArea,
 	describeProblem,
 	formatCredits,
@@ -27,6 +32,7 @@ import {
 	formatDateTime,
 	parseCredits,
 } from '@ss/ui';
+import manifest from '../../manifest.json' with { type: 'json' };
 import { call, fill, useLoad } from './api.js';
 import { TEXTS } from './texts.js';
 
@@ -35,13 +41,18 @@ import { TEXTS } from './texts.js';
 /** @typedef {{ key: string, name: string, description: string, dependsOn: string[], millicreditsPerHour: number, on?: boolean }} Feature */
 
 /**
- * Skeleton while loading, the problem when it failed, else the content.
+ * Skeleton while loading, the problem when it failed, else the content (it fades in).
  * @param {{ answer: import('./api.js').Answer | null, children: (data: any) => import('react').ReactNode }} props
  */
 function Loaded({ answer, children }) {
 	if (!answer) return <Skeleton lines={3} label={TEXTS.loading} />;
 	if (!answer.ok) return <ErrorState title={TEXTS.failed} message={describeProblem(answer.problem)} />;
-	return <>{children(answer.data)}</>;
+	// fades and slides in when it replaces the skeleton; a refresh of shown content changes it in place
+	return (
+		<ViewTransition enter="ss-vt-enter" default="none">
+			{children(answer.data)}
+		</ViewTransition>
+	);
 }
 
 /**
@@ -57,10 +68,53 @@ function Outcome({ result }) {
 	);
 }
 
-/** @param {{ items: Array<{ who: { name: string }, what: string, detail: string, at: string }> }} props */
-function RecentChanges({ items }) {
+/** Feature names by key (manifest.json). */
+const NAMES = new Map(manifest.features.map((feature) => [feature.key, feature.name]));
+
+/**
+ * The names of features, at most `max` of them and how many more (a long list would make its tile or card tall).
+ * @param {string[]} keys
+ * @param {number} [max]
+ */
+const namesOf = (keys, max = Infinity) => {
+	const names = keys.map((key) => NAMES.get(key) ?? key);
+	return names.length > max
+		? fill(TEXTS.andMore, { names: names.slice(0, max).join(', '), count: names.length - max })
+		: names.join(', ');
+};
+
+/** @param {string} status */
+const toneOf = (status) => (status === 'connected' ? 'success' : status === 'test_failed' ? 'danger' : 'warning');
+
+/**
+ * One line of the setup checklist: what is needed (and why it is not ready), then its status and any action.
+ * @param {{ tone: 'success' | 'warning' | 'danger' | 'neutral', badge: string, label: string, detail?: string | null,
+ *   children?: import('react').ReactNode }} props
+ */
+function CheckRow({ tone, badge, label, detail, children }) {
 	return (
-		<Card title={TEXTS.overview.recent}>
+		<li className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 py-3 first:pt-0 last:pb-0">
+			<span className="min-w-0 flex-[1_1_16rem]">
+				<span className="block font-semibold text-fg">{label}</span>
+				{detail ? <span className="block text-muted">{detail}</span> : null}
+			</span>
+			<span className="flex flex-wrap items-center gap-2">
+				<Badge tone={tone} dot>
+					{badge}
+				</Badge>
+				{children}
+			</span>
+		</li>
+	);
+}
+
+/**
+ * Recent changes; `titled` gives the card its own title (Defaults, Prices) where no section heading names it.
+ * @param {{ items: Array<{ who: { name: string }, what: string, detail: string, at: string }>, titled?: boolean }} props
+ */
+function RecentChanges({ items, titled = true }) {
+	return (
+		<Card {...(titled ? { title: TEXTS.overview.recent } : {})}>
 			{items.length === 0 ? (
 				<p className="text-sm text-muted">{TEXTS.overview.noChanges}</p>
 			) : (
@@ -93,56 +147,90 @@ function OverviewTab({ websiteId }) {
 	const [busy, setBusy] = useState(false);
 	return (
 		<Loaded answer={answer}>
-			{(data) => (
-				<div className="space-y-4">
-					<StatusBanner status={data.status} />
-					<div className="grid gap-5 md:grid-cols-2">
-						<Card title={TEXTS.overview.featuresOn}>
-							<p className="text-sm">
-								{data.featuresOn.length > 0 ? data.featuresOn.join(', ') : TEXTS.overview.noFeatures}
-							</p>
-						</Card>
-						<Card title={TEXTS.overview.today}>
-							<p className="text-2xl font-bold">{formatCredits(data.todayMillicredits)}</p>
-						</Card>
+			{(data) => {
+				/** @type {Array<{ name: string, label: string, status: string, message?: string }>} */
+				const needed = data.checklist.connections;
+				const ready = needed.filter((item) => item.status === 'connected').length;
+				return (
+					<div className="space-y-8">
+						<StatusBanner status={data.status} />
+						<Section title={TEXTS.overview.numbers} description={TEXTS.overview.numbersHelp}>
+							<StatGrid>
+								<Stat
+									label={TEXTS.overview.today}
+									value={formatCredits(data.todayMillicredits)}
+									icon="coins"
+									kind="credit"
+								/>
+								<Stat
+									label={TEXTS.overview.features}
+									value={data.featuresOn.length}
+									hint={data.featuresOn.length > 0 ? namesOf(data.featuresOn, 3) : TEXTS.overview.noFeatures}
+									icon="zap"
+									kind="feature"
+								/>
+								<Stat
+									label={TEXTS.overview.connectionsReady}
+									value={fill(TEXTS.overview.ofTotal, { count: ready, total: needed.length })}
+									tone={ready < needed.length ? 'warning' : 'success'}
+									icon="plug"
+									kind="connection"
+								/>
+							</StatGrid>
+						</Section>
+						<Section title={TEXTS.overview.setup} description={TEXTS.overview.setupHelp}>
+							<Card>
+								<ul className="divide-y divide-line-soft text-sm">
+									{needed.map((item) => (
+										<CheckRow
+											key={item.name}
+											tone={toneOf(item.status)}
+											badge={TEXTS.connections[/** @type {'connected'} */ (item.status)]}
+											label={item.label}
+											detail={item.message}
+										/>
+									))}
+									{data.checklist.widget ? (
+										<CheckRow
+											tone={data.checklist.widget.installed ? 'success' : 'warning'}
+											badge={
+												data.checklist.widget.installed
+													? fill(TEXTS.overview.widgetSeen, {
+															time: formatDateTime(data.checklist.widget.lastSeenAt),
+														})
+													: TEXTS.overview.widgetMissing
+											}
+											label={TEXTS.overview.widget}
+										/>
+									) : null}
+									<CheckRow
+										tone={data.checklist.business.found ? 'success' : 'warning'}
+										badge={
+											data.checklist.business.found ? TEXTS.overview.businessFound : TEXTS.overview.businessMissing
+										}
+										label={TEXTS.overview.business}>
+										<Button
+											size="sm"
+											variant="secondary"
+											loading={busy}
+											onClick={async () => {
+												setBusy(true);
+												await call('POST', `${base}/business/refresh`);
+												setBusy(false);
+												reload();
+											}}>
+											{TEXTS.overview.refresh}
+										</Button>
+									</CheckRow>
+								</ul>
+							</Card>
+						</Section>
+						<Section title={TEXTS.overview.changes} description={TEXTS.overview.changesHelp}>
+							<RecentChanges items={data.recentChanges} titled={false} />
+						</Section>
 					</div>
-					<Card title={TEXTS.overview.checklist}>
-						<ul className="space-y-2 text-sm">
-							{data.checklist.connections.map((/** @type {any} */ item) => (
-								<li key={item.name}>
-									{item.label}: {TEXTS.connections[/** @type {'connected'} */ (item.status)]}
-									{item.message ? ` (${item.message})` : ''}
-								</li>
-							))}
-							{data.checklist.widget ? (
-								<li>
-									{TEXTS.overview.widget}:{' '}
-									{data.checklist.widget.installed
-										? fill(TEXTS.overview.widgetSeen, { time: formatDateTime(data.checklist.widget.lastSeenAt) })
-										: TEXTS.overview.widgetMissing}
-								</li>
-							) : null}
-							<li className="flex flex-wrap items-center gap-3">
-								{TEXTS.overview.business}:{' '}
-								{data.checklist.business.found ? TEXTS.overview.businessFound : TEXTS.overview.businessMissing}
-								<Button
-									size="sm"
-									variant="secondary"
-									loading={busy}
-									onClick={async () => {
-										setBusy(true);
-										await call('POST', `${base}/business/refresh`);
-										setBusy(false);
-										reload();
-									}}>
-									{TEXTS.overview.refresh}
-								</Button>
-							</li>
-						</ul>
-					</Card>
-					<RecentChanges items={data.recentChanges} />
-				</div>
-			)}
+				);
+			}}
 		</Loaded>
 	);
 }
@@ -196,7 +284,7 @@ function FeaturesTab({ websiteId, who, support }) {
 				return (
 					<div className="space-y-4">
 						{admin ? null : <Callout tone="info">{fill(TEXTS.features.contact, { contact: support.email })}</Callout>}
-						<Masonry>
+						<Masonry wideAlone>
 							{features.map((feature) => {
 								const missing = feature.dependsOn.filter((dep) => !on.includes(dep));
 								const broken = links.filter((link) => link.neededBy.includes(feature.key) && link.status !== 'connected');
@@ -214,7 +302,7 @@ function FeaturesTab({ websiteId, who, support }) {
 										<p className="text-sm">{feature.description}</p>
 										{feature.dependsOn.length > 0 ? (
 											<p className="text-sm text-muted">
-												{fill(TEXTS.features.needs, { features: feature.dependsOn.join(', ') })}
+												{fill(TEXTS.features.needs, { features: namesOf(feature.dependsOn) })}
 											</p>
 										) : null}
 										{feature.on
@@ -259,7 +347,7 @@ function FeaturesTab({ websiteId, who, support }) {
 								}
 							}}>
 							<p>{fill(TEXTS.features.confirmCost, { cost: formatCreditsPerHour(cost) })}</p>
-							{turnedOff.length > 0 ? <p>{fill(TEXTS.features.alsoOff, { features: turnedOff.join(', ') })}</p> : null}
+							{turnedOff.length > 0 ? <p>{fill(TEXTS.features.alsoOff, { features: namesOf(turnedOff) })}</p> : null}
 						</ConfirmDialog>
 					</div>
 				);
@@ -344,49 +432,59 @@ function SettingsForms({ features, saveUrl, resetBody, savedSource, reload }) {
  */
 function TextsForm({ texts, saveUrl, resetBody, savedSource, reload }) {
 	const [edits, setEdits] = useState(/** @type {Record<string, string>} */ ({}));
-	const [result, setResult] = useState(/** @type {import('./api.js').Answer | null} */ (null));
+	const [result, setResult] = useState(/** @type {{ key: string, answer: import('./api.js').Answer } | null} */ (null));
 	return (
 		<Card title={TEXTS.settings.texts} subtitle={TEXTS.settings.textsHelp}>
-			<div className="space-y-3">
-				{texts.map((text) => (
-					<div key={text.key} className="flex flex-wrap items-end gap-2">
-						<Input
-							fieldClassName="min-w-64 flex-1"
-							label={text.key}
-							help={text.english}
-							value={edits[text.key] ?? text.value}
-							onChange={(event) => setEdits({ ...edits, [text.key]: event.target.value })}
-						/>
-						<Button
-							size="sm"
-							disabled={edits[text.key] === undefined}
-							onClick={async () => {
-								const next = await call('PUT', saveUrl(text.key), { value: edits[text.key] });
-								setResult(next);
-								if (next.ok) setEdits(Object.fromEntries(Object.entries(edits).filter(([key]) => key !== text.key)));
-								reload();
-							}}>
-							{TEXTS.save}
-						</Button>
-						{text.source === savedSource ? (
-							<Button
-								size="sm"
-								variant="ghost"
-								onClick={async () => {
-									setResult(
-										resetBody
-											? await call('PUT', saveUrl(text.key), { value: null })
-											: await call('DELETE', saveUrl(text.key)),
-									);
-									reload();
-								}}>
-								{TEXTS.reset}
-							</Button>
-						) : null}
-					</div>
-				))}
+			<div className="space-y-4">
+				{texts.map((text) => {
+					const englishId = `text-${text.key.replace(/[^\w-]/g, '-')}-english`;
+					return (
+						<div key={text.key} className="space-y-1.5">
+							<div className="flex flex-wrap items-end gap-2">
+								<Input
+									fieldClassName="min-w-0 flex-1 basis-64"
+									label={<SoftBreaks text={text.key} />}
+									aria-describedby={englishId}
+									value={edits[text.key] ?? text.value}
+									onChange={(event) => setEdits({ ...edits, [text.key]: event.target.value })}
+								/>
+								<Button
+									size="sm"
+									disabled={edits[text.key] === undefined}
+									onClick={async () => {
+										const next = await call('PUT', saveUrl(text.key), { value: edits[text.key] });
+										setResult({ key: text.key, answer: next });
+										if (next.ok)
+											setEdits(Object.fromEntries(Object.entries(edits).filter(([key]) => key !== text.key)));
+										reload();
+									}}>
+									{TEXTS.save}
+								</Button>
+								{text.source === savedSource ? (
+									<Button
+										size="sm"
+										variant="ghost"
+										onClick={async () => {
+											setResult({
+												key: text.key,
+												answer: resetBody
+													? await call('PUT', saveUrl(text.key), { value: null })
+													: await call('DELETE', saveUrl(text.key)),
+											});
+											reload();
+										}}>
+										{TEXTS.reset}
+									</Button>
+								) : null}
+							</div>
+							<p id={englishId} className="text-xs text-muted">
+								{text.english}
+							</p>
+							{result?.key === text.key ? <Outcome result={result.answer} /> : null}
+						</div>
+					);
+				})}
 			</div>
-			<Outcome result={result} />
 		</Card>
 	);
 }
@@ -454,33 +552,43 @@ function SettingsTab({ websiteId }) {
 	const texts = useLoad(`${base}/texts`);
 	const theme = useLoad(`${base}/theme`);
 	return (
-		<Masonry>
-			<Loaded answer={settings.answer}>
-				{(data) => (
-					<SettingsForms
-						features={data.features}
-						saveUrl={(key) => `${base}/settings/${encodeURIComponent(key)}`}
-						resetBody={false}
-						savedSource="website"
-						reload={settings.reload}
-					/>
-				)}
-			</Loaded>
-			<Loaded answer={texts.answer}>
-				{(data) => (
-					<TextsForm
-						texts={data.texts}
-						saveUrl={(key) => `${base}/texts/${encodeURIComponent(key)}`}
-						resetBody={false}
-						savedSource="website"
-						reload={texts.reload}
-					/>
-				)}
-			</Loaded>
-			<Loaded answer={theme.answer}>
-				{(data) => <ThemeForm theme={data.theme} save={(next) => call('PUT', `${base}/theme`, next)} reload={theme.reload} />}
-			</Loaded>
-		</Masonry>
+		<div className="space-y-8">
+			<Section title={TEXTS.settings.featuresTitle} description={TEXTS.settings.featuresHelp}>
+				<Masonry wideAlone>
+					<Loaded answer={settings.answer}>
+						{(data) => (
+							<SettingsForms
+								features={data.features}
+								saveUrl={(key) => `${base}/settings/${encodeURIComponent(key)}`}
+								resetBody={false}
+								savedSource="website"
+								reload={settings.reload}
+							/>
+						)}
+					</Loaded>
+				</Masonry>
+			</Section>
+			<Section title={TEXTS.settings.looksTitle} description={TEXTS.settings.looksHelp}>
+				<Masonry wideAlone>
+					<Loaded answer={texts.answer}>
+						{(data) => (
+							<TextsForm
+								texts={data.texts}
+								saveUrl={(key) => `${base}/texts/${encodeURIComponent(key)}`}
+								resetBody={false}
+								savedSource="website"
+								reload={texts.reload}
+							/>
+						)}
+					</Loaded>
+					<Loaded answer={theme.answer}>
+						{(data) => (
+							<ThemeForm theme={data.theme} save={(next) => call('PUT', `${base}/theme`, next)} reload={theme.reload} />
+						)}
+					</Loaded>
+				</Masonry>
+			</Section>
+		</div>
 	);
 }
 
@@ -500,47 +608,60 @@ function ConnectionsTab({ websiteId }) {
 			{(data) => (
 				<div className="space-y-4">
 					{data.connections.length === 0 ? <p className="text-sm text-muted">{TEXTS.connections.none}</p> : null}
-					<Masonry>
-						{data.connections.map((/** @type {any} */ item) => (
-							<Card
-								key={item.name}
-								title={item.label}
-								subtitle={fill(TEXTS.connections.neededBy, { features: item.neededBy.join(', ') })}>
-								<p className="text-sm">
-									{TEXTS.connections[/** @type {'connected'} */ (item.status)]}
-									{item.last4 ? ` · ••••${item.last4}` : ''}
-									{item.message ? ` (${item.message})` : ''}
-								</p>
-								<div className="mt-3 flex flex-wrap items-end gap-2">
-									<Input
-										fieldClassName="min-w-64 flex-1"
-										label={TEXTS.connections.value}
-										type="password"
-										autoComplete="off"
-										value={values[item.name] ?? ''}
-										onChange={(event) => setValues({ ...values, [item.name]: event.target.value })}
-									/>
-									<Button
-										size="sm"
-										disabled={!values[item.name]}
-										onClick={() => {
-											void act(call('PUT', `${base}/${item.name}`, { value: values[item.name] }));
-											setValues({ ...values, [item.name]: '' });
-										}}>
-										{TEXTS.connections.replace}
-									</Button>
-									<Button
-										size="sm"
-										variant="secondary"
-										onClick={() => void act(call('POST', `${base}/${item.name}/test`))}>
-										{TEXTS.connections.test}
-									</Button>
-									<Button size="sm" variant="ghost" onClick={() => void act(call('DELETE', `${base}/${item.name}`))}>
-										{TEXTS.connections.remove}
-									</Button>
-								</div>
-							</Card>
-						))}
+					<Masonry wideAlone>
+						{data.connections.map((/** @type {any} */ item) => {
+							/** @param {unknown} value */
+							const save = (value) => act(call('PUT', `${base}/${item.name}`, { value }));
+							return (
+								<Card
+									key={item.name}
+									title={item.label}
+									subtitle={
+										item.neededBy.length > 0
+											? fill(TEXTS.connections.neededBy, { features: namesOf(item.neededBy, 4) })
+											: TEXTS.connections.neededByNone
+									}>
+									<p className="flex flex-wrap items-center gap-2 text-sm">
+										<Badge tone={toneOf(item.status)} dot>
+											{TEXTS.connections[/** @type {'connected'} */ (item.status)]}
+										</Badge>
+										{item.last4 ? <code>••••{item.last4}</code> : null}
+										{item.message ? <span className="text-muted">{item.message}</span> : null}
+									</p>
+									<div className="mt-3 flex flex-wrap items-end gap-2">
+										<Input
+											fieldClassName="min-w-0 flex-1 basis-64"
+											label={item.kind === 'token' ? TEXTS.connections.token : TEXTS.connections.value}
+											type="password"
+											autoComplete="off"
+											value={values[item.name] ?? ''}
+											onChange={(event) => setValues({ ...values, [item.name]: event.target.value })}
+										/>
+										<Button
+											size="sm"
+											disabled={!values[item.name]?.trim()}
+											onClick={() => {
+												const done = save(values[item.name]?.trim());
+												setValues({ ...values, [item.name]: '' });
+												return done;
+											}}>
+											{TEXTS.connections.save}
+										</Button>
+									</div>
+									<div className="mt-3 flex flex-wrap gap-2">
+										<Button
+											size="sm"
+											variant="secondary"
+											onClick={() => act(call('POST', `${base}/${item.name}/test`))}>
+											{TEXTS.connections.test}
+										</Button>
+										<Button size="sm" variant="ghost" onClick={() => act(call('DELETE', `${base}/${item.name}`))}>
+											{TEXTS.connections.remove}
+										</Button>
+									</div>
+								</Card>
+							);
+						})}
 					</Masonry>
 					<Outcome result={result} />
 				</div>
@@ -556,10 +677,12 @@ function DevelopersTab({ websiteId, portal }) {
 	return (
 		<Loaded answer={answer}>
 			{(data) => (
-				<div className="space-y-4">
+				<div className="space-y-8">
 					<Card title={TEXTS.tabs.developers}>
 						<p className="text-sm">{TEXTS.developers.intro}</p>
-						<ul className="mt-3 space-y-1 text-sm">
+						<p className="mt-2 text-sm">{fill(TEXTS.developers.websiteId, { id: String(websiteId) })}</p>
+						<p className="mt-2 text-sm">{TEXTS.developers.server}</p>
+						<ul className="mt-3 flex flex-wrap gap-2 text-sm">
 							{data.features.map((/** @type {Feature} */ feature) => (
 								<li key={feature.key}>
 									<a className="font-semibold text-primary" href={`/docs#feature-${feature.key}`}>
@@ -569,21 +692,18 @@ function DevelopersTab({ websiteId, portal }) {
 								</li>
 							))}
 						</ul>
-						<p className="mt-3">
+						<p className="mt-3 flex flex-wrap gap-4">
 							<a className="text-sm font-semibold text-primary" href="/docs">
 								{TEXTS.developers.openDocs}
 							</a>
-						</p>
-					</Card>
-					<Card title={TEXTS.developers.snippet}>
-						<CodeBlock code={`<script src="${origin}/widget.js" data-token="YOUR_BROWSER_TOKEN" async></script>`} />
-						<p className="mt-3 text-sm">{TEXTS.developers.server}</p>
-						<p className="mt-3">
 							<a className="text-sm font-semibold text-primary" href={portal}>
 								{TEXTS.developers.manageTokens}
 							</a>
 						</p>
 					</Card>
+					<Section title={TEXTS.developers.script} description={TEXTS.developers.scriptHelp}>
+						<CodeBlock code={`<script src="${origin}/widget.js" data-token="YOUR_BROWSER_TOKEN" async></script>`} />
+					</Section>
 				</div>
 			)}
 		</Loaded>
@@ -599,7 +719,7 @@ function DefaultsTab() {
 			{(data) => (
 				<div className="space-y-4">
 					<Callout tone="info">{TEXTS.defaults.intro}</Callout>
-					<Masonry>
+					<Masonry wideAlone>
 						<SettingsForms features={data.features} saveUrl={saveUrl} resetBody savedSource="default" reload={reload} />
 						<TextsForm
 							texts={data.texts}

@@ -36,6 +36,9 @@ button[disabled] { opacity: 0.6; cursor: default; }
 .actions { display: flex; flex-wrap: wrap; }
 fieldset { border: 1px solid var(--ss-color-border, #e5e7eb); border-radius: var(--ss-radius, 8px); margin: 8px 0; padding: 4px 12px 8px; }
 legend { font-size: 0.9em; padding: 0 4px; }
+/* a role's permissions sit in columns where the widget is wide (by its own width, not the screen's) */
+.permissions fieldset { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); column-gap: 16px; }
+.permissions label.check { flex-wrap: nowrap; align-items: flex-start; } .permissions label.check input { flex: none; margin-top: 3px; }
 .status { margin: 8px 0 0; font-size: 0.9em; }
 .code { font-family: ui-monospace, monospace; overflow-wrap: anywhere; }
 .tag { display: inline-block; font-size: 0.8em; padding: 2px 8px; margin-top: 4px; border-radius: 999px;

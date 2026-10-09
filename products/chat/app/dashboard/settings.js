@@ -143,7 +143,7 @@ export function SettingsTab({ websiteId: id }) {
 								key={section.id}
 								title={TEXTS.settings.sections[section.id].title}
 								description={TEXTS.settings.sections[section.id].help}>
-								<Masonry>
+								<Masonry wideAlone>
 									{forms(section.features)}
 									{extras[section.id]}
 								</Masonry>

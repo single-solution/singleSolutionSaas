@@ -18,6 +18,6 @@ button { margin-top: 12px; font: inherit; padding: 8px 16px; border: 0; border-r
 button[disabled] { opacity: 0.6; cursor: default; }
 .status { margin: 8px 0 0; font-size: 0.9em; }
 ul { list-style: none; margin: 0; padding: 0; }
-li { padding: 8px 0; border-top: 1px solid var(--ss-color-border, #e5e7eb); white-space: pre-wrap; }
+li { padding: 8px 0; border-top: 1px solid var(--ss-color-border, #e5e7eb); white-space: pre-wrap; overflow-wrap: anywhere; }
 .meta { display: block; font-size: 0.8em; opacity: 0.7; }
 `;

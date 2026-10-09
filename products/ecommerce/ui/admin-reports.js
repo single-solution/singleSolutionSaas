@@ -67,7 +67,7 @@ const columnsOf = (kit, key) => {
 };
 
 /**
- * The reports tab.
+ * The reports section.
  * @param {Kit} kit @param {HTMLElement} panel
  */
 export const reportsTab = (kit, panel) => {
@@ -167,7 +167,7 @@ export const reportsTab = (kit, panel) => {
 };
 
 /**
- * The CSV tab: export products, import products (dry run first), export orders by date range.
+ * The CSV section: export products, import products (dry run first), export orders by date range.
  * @param {Kit} kit @param {HTMLElement} panel
  */
 export const csvTab = (kit, panel) => {

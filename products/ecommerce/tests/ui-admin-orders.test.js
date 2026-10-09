@@ -210,7 +210,7 @@ describe('orders admin: orders', () => {
 
 	it('filters by role and offers seen statuses without flow settings', async () => {
 		const { root, server } = await start({}, ['checkout', 'bulk_actions'], {});
-		expect(root.querySelector('[data-tab="returns"]')).toBeNull();
+		expect(root.querySelector('[data-section="returns"]')).toBeNull();
 		const panel = panelOf(root, 'orders');
 		await change(fieldIn(panel, 'Status'), 'shipped');
 		expect(server.last('GET /v1/admin/orders')?.url.searchParams.get('role')).toBe('shipped');

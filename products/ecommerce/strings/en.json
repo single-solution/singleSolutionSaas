@@ -339,6 +339,8 @@
 	"admin.notAllowed": "You are not allowed to do this.",
 	"admin.failed": "Something went wrong. Please try again.",
 	"admin.all": "All",
+	"admin.sections": "Sections",
+	"admin.section": "Section",
 	"admin.back": "Back",
 	"admin.close": "Close",
 	"admin.open": "Open",

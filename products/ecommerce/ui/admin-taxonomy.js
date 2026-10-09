@@ -289,7 +289,7 @@ const imageOf = (kit, spec, item, note) => {
 };
 
 /**
- * The categories tab: the tree, each with parent, description, SEO text, sort and image.
+ * The categories section: the tree, each with parent, description, SEO text, sort and image.
  * @param {Kit} kit @param {HTMLElement} panel @param {Lookups} lookups
  */
 export const categoriesTab = (kit, panel, lookups) => {
@@ -428,7 +428,7 @@ export const variantLabel = (kit, variant) =>
 	Object.values(variant.options ?? {}).join(' / ') || variant.sku || kit.t('catalogAdmin.defaultVariant');
 
 /**
- * The serials tab: search and filter serial numbers, mark a unit faulty or back in stock, delete one, and add many for
+ * The serials section: search and filter serial numbers, mark a unit faulty or back in stock, delete one, and add many for
  * a product variant (one per line).
  * @param {Kit} kit @param {HTMLElement} panel @param {Lookups} lookups
  */

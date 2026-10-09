@@ -20,7 +20,8 @@ export const KEY_FORMS = {
 };
 
 /**
- * @param {{ name: string, onSave: (value: Record<string, string>) => void }} props
+ * @param {{ name: string, onSave: (value: Record<string, string>) => unknown }} props `onSave` may return a promise (the
+ *   button shows its spinner until it settles)
  */
 export function KeyForm({ name, onSave }) {
 	const fields = KEY_FORMS[name] ?? [];
@@ -37,7 +38,6 @@ export function KeyForm({ name, onSave }) {
 					field.type === 'textarea' ? (
 						<TextArea
 							key={field.name}
-							fieldClassName="md:col-span-2"
 							label={TEXTS.connections.fields[field.name]}
 							rows={5}
 							spellCheck={false}
