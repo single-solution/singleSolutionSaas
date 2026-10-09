@@ -43,7 +43,7 @@ export function ActivityView(props) {
 			<PageHeader title={ADMIN.activityTitle} subtitle={ADMIN.activityIntro} />
 			<Card>
 				<Form onSubmit={apply} busy={nav.pending} aria-label={ADMIN.filters.apply}>
-					<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_10rem_10rem_auto] lg:items-end">
+					<div className="grid gap-3 @md:grid-cols-2 @4xl:grid-cols-[1fr_1fr_10rem_10rem_auto] @4xl:items-end">
 						<Input
 							label={ADMIN.filters.merchant}
 							value={form.merchantId}
@@ -66,7 +66,7 @@ export function ActivityView(props) {
 							value={form.to}
 							onChange={(e) => set('to', e.currentTarget.value)}
 						/>
-						<Button type="submit" variant="secondary" loading={nav.pending}>
+						<Button type="submit" variant="secondary" loading={nav.pending} className="justify-self-start">
 							{ADMIN.filters.apply}
 						</Button>
 					</div>

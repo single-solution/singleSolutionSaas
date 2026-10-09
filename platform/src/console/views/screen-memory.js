@@ -19,6 +19,8 @@ const screens = new Map();
 const scrolls = new Map();
 /** @type {Map<string, boolean>} */
 const skeletons = new Map();
+/** @type {Map<string, boolean>} */
+const strips = new Map();
 /** @type {Set<() => void>} */
 const listeners = new Set();
 
@@ -76,13 +78,29 @@ export const listWasPlaceholder = (section, placeholder) => {
 };
 
 /**
- * The screen a list pane belongs to and, in a loading skeleton, the path the click is going to (its row shows as
- * selected).
- * @type {import('react').Context<{ section: string | null, going: string | null }>}
+ * Whether the list of a screen is open where it is a strip above the detail (1024–1279 px): the person's last choice
+ * on that screen (browser only), closed by default.
+ * @param {string} section
+ * @param {boolean} [open] the new choice
+ * @returns {boolean}
  */
-export const ScreenContext = createContext(
-	/** @type {{ section: string | null, going: string | null }} */ ({ section: null, going: null }),
-);
+export const stripOpen = (section, open) => {
+	if (open !== undefined) strips.set(section, open);
+	return strips.get(section) ?? false;
+};
+
+/**
+ * The list strip of a screen whose detail is shown: open or closed, and how to change it.
+ * @typedef {{ open: boolean, toggle: () => void, picked: () => void }} Strip
+ */
+
+/**
+ * The screen a list pane belongs to, in a loading skeleton the path the click is going to (its row shows as
+ * selected), and its list strip (null while no detail is shown, where the list is always open).
+ * @typedef {{ section: string | null, going: string | null, strip: Strip | null }} Screen
+ * @type {import('react').Context<Screen>}
+ */
+export const ScreenContext = createContext(/** @type {Screen} */ ({ section: null, going: null, strip: null }));
 
 /** The screen a list pane belongs to. */
 export const useScreen = () => useContext(ScreenContext);
@@ -92,4 +110,5 @@ export const forgetScreens = () => {
 	screens.clear();
 	scrolls.clear();
 	skeletons.clear();
+	strips.clear();
 };

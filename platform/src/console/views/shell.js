@@ -76,7 +76,7 @@ export function ConsoleShell({ me, merchantId, websites, billing: frameBilling, 
 		window.location.assign(routes.login());
 	};
 	const selectClass =
-		'min-h-9 max-w-[11rem] truncate rounded-xl bg-surface-2 px-3 py-1.5 text-sm font-semibold text-fg hover:bg-surface-3 focus-visible:outline-2 focus-visible:outline-focus sm:max-w-[14rem]';
+		'min-h-9 w-full min-w-0 max-w-[11rem] truncate rounded-xl bg-surface-2 px-3 py-1.5 text-sm font-semibold text-fg hover:bg-surface-3 focus-visible:outline-2 focus-visible:outline-focus sm:max-w-[14rem]';
 
 	return (
 		<BillingContext.Provider value={setBilling}>
@@ -89,11 +89,13 @@ export function ConsoleShell({ me, merchantId, websites, billing: frameBilling, 
 						banner={<BillingBanner summary={billing} contact={contactLine(branding?.support)} />}
 						topbar={
 							<>
-								<span className="hidden truncate px-1 text-sm font-bold text-fg sm:inline">
+								<span
+									title={merchant?.name ?? merchantId}
+									className="hidden min-w-0 truncate px-1 text-sm font-bold text-fg sm:block">
 									{merchant?.name ?? merchantId}
 								</span>
 								{websites.length > 0 ? (
-									<label className="flex min-w-0 items-center gap-2">
+									<label className="flex min-w-32 items-center gap-2">
 										<span className="sr-only">{MERCHANT.website}</span>
 										<select
 											className={selectClass}

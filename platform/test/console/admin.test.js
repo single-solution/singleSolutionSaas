@@ -58,6 +58,7 @@ const ssr = (element) => {
 /** @param {string} html */
 const text = (html) =>
 	html
+		.replace(/<wbr\/?>/g, '') // soft line breaks inside a domain or e-mail
 		.replace(/<[^>]+>/g, ' ')
 		.replace(/&#x27;/g, "'")
 		.replace(/&amp;/g, '&')
@@ -225,8 +226,10 @@ describe('admin console smoke', () => {
 			]);
 			const productRaw = ssr(<ProductsView {...products} detail={product} selectedId="notes" admin={owner} />);
 			const productHtml = text(productRaw);
-			for (const word of ['Open as admin', 'Set inactive', 'Reconnect', 'Connected', 'Websites using it', 'Shop & Co'])
+			for (const word of ['Open as admin', 'Set inactive', 'Connected', 'Websites using it', 'Shop & Co'])
 				expect(productHtml).toContain(word);
+			// two actions as buttons; Reconnect in the header's More menu (PLAN 0.6 header actions)
+			expect(productRaw).toContain('aria-label="More actions for Notes"');
 			// the address once (the subtitle), and one line instead of an empty 30-day chart
 			expect(productHtml.split(String(product.product.baseUrl)).length - 1).toBe(1);
 			expect(productHtml).toContain('No credits earned in the last 30 UTC days.');
@@ -377,18 +380,18 @@ describe('admin console smoke', () => {
 			const supportProductsHtml = text(ssr(<ProductsView {...supportProducts} admin={support} />));
 			expect(supportProductsHtml).toContain('Notes');
 			expect(supportProductsHtml).not.toContain('Add product');
-			const supportProduct = text(
-				ssr(
-					<ProductsView
-						{...supportProducts}
-						detail={await admin.loadProduct(supportBrowser.api, 'notes')}
-						selectedId="notes"
-						admin={support}
-					/>,
-				),
+			const supportProductRaw = ssr(
+				<ProductsView
+					{...supportProducts}
+					detail={await admin.loadProduct(supportBrowser.api, 'notes')}
+					selectedId="notes"
+					admin={support}
+				/>,
 			);
+			const supportProduct = text(supportProductRaw);
 			expect(supportProduct).toContain('Websites using it');
-			for (const word of ['Open as admin', 'Set inactive', 'Reconnect']) expect(supportProduct).not.toContain(word);
+			for (const word of ['Open as admin', 'Set inactive']) expect(supportProduct).not.toContain(word);
+			expect(supportProductRaw).not.toContain('More actions for'); // no Reconnect
 
 			// Finance: products and usage only; no Install and tokens, no Open, no admin actions
 			const financeDetail = await admin.loadMerchant(financeBrowser.api, merchantId, finance);

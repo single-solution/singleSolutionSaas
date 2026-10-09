@@ -25,7 +25,9 @@ import {
 	PageHeader,
 	Section,
 	Select,
+	SoftBreaks,
 	Stat,
+	StatGrid,
 	Table,
 	describeProblem,
 	fieldErrors,
@@ -34,11 +36,11 @@ import {
 	problemCode,
 	useToast,
 } from '@ss/ui';
-import { PRODUCTS } from '../../../texts/console.js';
+import { ADMIN, PRODUCTS } from '../../../texts/console.js';
 import { Link } from '../../link.js';
 import { useNavigation } from '../../navigation.js';
 import { LocalTime, ProductStatusBadge } from '../../views/billing.js';
-import { ListDetail, ListPane, ListRow, ListSearch, openDashboard } from '../../views/common.js';
+import { HeaderActions, ListDetail, ListPane, ListRow, ListSearch, openDashboard } from '../../views/common.js';
 import { adminFetch } from '../client.js';
 import { adminApi, adminRoutes } from '../paths.js';
 import { AdminProblem, adminCan } from './common.js';
@@ -291,7 +293,9 @@ function ProductDetail({ detail, owner }) {
 				}
 				actions={
 					owner ? (
-						<div className="flex flex-wrap gap-2">
+						<HeaderActions
+							label={ADMIN.moreActions(product.name)}
+							more={[{ label: PRODUCTS.reconnect, onSelect: () => setReconnecting(true) }]}>
 							<Button
 								variant="secondary"
 								loading={busy === 'open'}
@@ -307,14 +311,11 @@ function ProductDetail({ detail, owner }) {
 								onClick={() => void toggle()}>
 								{product.status === 'active' ? PRODUCTS.setInactive : PRODUCTS.setActive}
 							</Button>
-							<Button variant="secondary" onClick={() => setReconnecting(true)}>
-								{PRODUCTS.reconnect}
-							</Button>
-						</div>
+						</HeaderActions>
 					) : null
 				}
 			/>
-			<div className="grid gap-5 sm:grid-cols-2">
+			<StatGrid>
 				<Stat
 					label={PRODUCTS.earnedThisMonth}
 					value={formatCredits(numbers.earnedThisMonth ?? 0)}
@@ -323,7 +324,7 @@ function ProductDetail({ detail, owner }) {
 					{...(isEmptySeries(earned) ? { hint: PRODUCTS.noEarnings } : {})}
 				/>
 				<Stat label={PRODUCTS.websitesUsing} value={numbers.websites ?? 0} icon="globe" kind="website" />
-			</div>
+			</StatGrid>
 			{isEmptySeries(earned) ? null : (
 				<Card title={PRODUCTS.earnedChart}>
 					<BarChart label={PRODUCTS.earnedChart} data={earned} format={creditsOf} />
@@ -345,19 +346,21 @@ function ProductDetail({ detail, owner }) {
 							key: 'domain',
 							header: PRODUCTS.websiteColumns.website,
 							rowHeader: true,
-							className: 'max-w-[20rem]',
+							// a long domain wraps between its parts and a long merchant name on words, so the table fits
+							// a narrow detail pane before it has to scroll
+							wrap: true,
 							render: (w) => (
 								<span className="block min-w-0">
 									<Link
 										href={adminRoutes.website(w.merchantId, w.websiteId)}
 										title={w.domain}
-										className="block truncate font-semibold text-primary hover:underline">
-										{w.domain}
+										className="line-clamp-2 break-words font-semibold text-primary hover:underline">
+										<SoftBreaks text={w.domain} />
 									</Link>
 									<Link
 										href={adminRoutes.merchant(w.merchantId)}
 										title={w.merchantName}
-										className="block truncate text-xs font-normal text-muted hover:text-fg hover:underline">
+										className="line-clamp-2 text-xs font-normal text-muted hover:text-fg hover:underline">
 										{w.merchantName}
 									</Link>
 								</span>
@@ -371,11 +374,10 @@ function ProductDetail({ detail, owner }) {
 						{
 							key: 'featuresOn',
 							header: PRODUCTS.websiteColumns.featuresOn,
-							className: 'max-w-[16rem]',
 							render: (w) => {
 								const names = featureNames(product.features, w.featuresOn);
 								return (
-									<span className="block truncate" title={names}>
+									<span className="block max-w-56 truncate" title={names}>
 										{names}
 									</span>
 								);

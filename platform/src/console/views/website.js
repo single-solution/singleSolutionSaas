@@ -24,6 +24,7 @@ import {
 	IconBadge,
 	Input,
 	Skeleton,
+	SoftBreaks,
 	TypedConfirmDialog,
 	copyText,
 	cx,
@@ -219,7 +220,7 @@ export function WebsiteCard({ website, cards: initial, can, fetcher, launch, add
 
 	const DomainHeading = headline ? 'h2' : 'h3';
 	return (
-		<Card as="article" id={`website-${websiteId}`} className="scroll-mt-24">
+		<Card as="article" id={`website-${websiteId}`} className="@container scroll-mt-24">
 			<header className="mb-4 flex items-start justify-between gap-3">
 				<span className="flex min-w-0 items-center gap-3">
 					<IconBadge icon="globe" kind="website" size={headline ? 'md' : 'sm'} />
@@ -227,10 +228,11 @@ export function WebsiteCard({ website, cards: initial, can, fetcher, launch, add
 						<DomainHeading
 							title={website.domain}
 							className={cx(
-								'truncate font-bold tracking-tight text-fg',
-								headline ? 'text-2xl font-extrabold' : 'text-base',
+								'font-bold tracking-tight text-fg',
+								'break-words',
+								headline ? 'line-clamp-3 text-xl font-extrabold @md:text-2xl' : 'line-clamp-2 text-base',
 							)}>
-							{website.domain}
+							<SoftBreaks text={website.domain} />
 						</DomainHeading>
 						<span className="block text-sm text-muted">{WEBSITE.perDay(formatCredits(dailyCostOf(cards)))}</span>
 					</span>
@@ -244,7 +246,7 @@ export function WebsiteCard({ website, cards: initial, can, fetcher, launch, add
 					</p>
 				) : (
 					<ul
-						className={headline ? 'grid gap-3 sm:grid-cols-2 2xl:grid-cols-3' : 'space-y-2'}
+						className={headline ? 'grid gap-3 @2xl:grid-cols-2 @5xl:grid-cols-3' : 'space-y-2'}
 						aria-label={WEBSITE.productsOf(website.domain)}>
 						{cards.map((card) => (
 							<li

@@ -2,7 +2,10 @@
 /**
  * Data table: semantic `<table>` with a caption, client-side sorting of the loaded rows (`aria-sort` on headers,
  * sort buttons are keyboard operable) and cursor pagination (`hasMore` + `onLoadMore`, the Portal's
- * `nextCursor`). Wide tables scroll horizontally inside their container on small screens.
+ * `nextCursor`). Cells keep their text on one line, so a column is never squeezed into a word per line; a table wider
+ * than its card (a narrow pane, a phone) scrolls horizontally inside the card. A column of longer text (`wrap`) wraps
+ * on whole words within a readable minimum width instead. With no rows the table is just its empty message, as wide
+ * as the card (no header row to scroll past).
  * @module
  */
 import { useMemo, useState } from 'react';
@@ -21,6 +24,7 @@ import { Icon } from './icons.js';
  * @property {'left' | 'right' | 'center'} [align]
  * @property {string} [className]
  * @property {boolean} [rowHeader] render this cell as the row's `<th scope="row">`
+ * @property {boolean} [wrap] let the text wrap on whole words (at least 10rem wide); other cells keep one line
  */
 
 /**
@@ -69,17 +73,18 @@ export function Table({
 	/** @param {string} key */
 	const toggle = (key) =>
 		setSort((s) => (s?.key === key ? { key, direction: s.direction === 'asc' ? 'desc' : 'asc' } : { key, direction: 'asc' }));
-	const pad = dense ? 'px-3 py-2' : 'px-5 py-3.5';
+	// cells are a little tighter in a narrow card (the table's own width, not the screen's)
+	const pad = dense ? 'px-3 py-2' : 'px-4 py-3.5 @4xl:px-5';
 	/** @param {'left' | 'right' | 'center' | undefined} align */
 	const alignClass = (align) => (align === 'right' ? 'text-right' : align === 'center' ? 'text-center' : 'text-left');
 	return (
-		<div className={cx('space-y-3', className)}>
+		<div className={cx('@container space-y-3', className)}>
 			<div className="overflow-x-auto rounded-card bg-surface">
-				<table className="w-full min-w-[32rem] border-collapse text-sm">
+				<table className={cx('w-full border-collapse text-sm', sorted.length > 0 && 'min-w-[32rem]')}>
 					<caption className={cx(captionHidden ? 'sr-only' : 'px-5 pb-1 pt-4 text-left text-sm font-semibold text-fg')}>
 						{caption}
 					</caption>
-					<thead>
+					<thead className={cx(sorted.length === 0 && 'hidden')}>
 						<tr>
 							{columns.map((column) => {
 								const active = sort?.key === column.key;
@@ -137,10 +142,18 @@ export function Table({
 									key={rowKey(row)}
 									className="ss-motion animate-ss-fade border-t border-line-soft hover:bg-surface-2/60">
 									{columns.map((column) => {
-										const content = column.render
+										const value = column.render
 											? column.render(row)
 											: /** @type {import('react').ReactNode} */ (cell(row, column.key));
-										const classes = cx(pad, alignClass(column.align), 'align-middle text-fg', column.className);
+										// cells take no min-width: the block inside keeps a wrapping column readable
+										const content = column.wrap ? <span className="block min-w-40">{value}</span> : value;
+										const classes = cx(
+											pad,
+											alignClass(column.align),
+											'align-middle text-fg',
+											column.wrap ? 'text-pretty' : 'whitespace-nowrap',
+											column.className,
+										);
 										return column.rowHeader ? (
 											<th key={column.key} scope="row" className={cx(classes, 'font-semibold')}>
 												{content}

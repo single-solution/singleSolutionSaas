@@ -930,7 +930,8 @@ Merchants see **credits only**, never money. Only the Portal's clock counts for 
   under another; the product dashboards keep their sidebar sections, and a section list too long for one page picks one
   section at a time), and secondary forms open in dialogs.
 - **Header actions**: a detail header keeps its one or two main actions as buttons; any others go in a compact **More**
-  menu (⋯), a destructive action last in danger text and still behind its typed confirmation.
+  menu (⋯), a destructive action last in danger text and still behind its typed confirmation. The actions sit beside
+  the title while both fit on one line; otherwise they move together onto their own row under the title.
 - **Masonry**: cards of different heights that sit side by side (settings cards, website cards, feature and connection
   cards) are laid out as a masonry of 1, 2 or 3 columns by the available width; no card stretches to a taller
   neighbour.
@@ -951,8 +952,8 @@ Merchants see **credits only**, never money. Only the Portal's clock counts for 
 - **Lists**: search and filters inside each list (no global search). Bulk actions exist only on Merchants: Suspend /
   Resume (one reason for all) and Resend setup link (for merchants without a password), with a checkbox on each row. No
   other list has bulk actions, and there is no CSV export. The Merchants search also matches owner e-mail and website
-  domains; this is how an admin finds a website. Merchants is paged at 50. Long names and domains are cut with an
-  ellipsis (the full text on hover), never broken mid-word.
+  domains; this is how an admin finds a website. Merchants is paged at 50. Long names and domains wrap to two lines on
+  whole words (a domain or e-mail between its parts) before they are cut with an ellipsis (the full text on hover).
 - **Forms**: centred dialogs; a full page only when a form would still scroll a lot after a smarter layout. **Fields sit
   in a grid**, not full width: short inputs (names, e-mails, numbers, selects, switches, dates, short text) pack into 1
   column on phones, 2 on tablets and 3 on wide screens (by the width of the form, so dialogs get fewer); long text, code,
@@ -987,6 +988,13 @@ Merchants see **credits only**, never money. Only the Portal's clock counts for 
 - No horizontal page scroll from 360 px wide. Below 1024 px, the main sidebar becomes a menu button, and list-and-detail
   screens stack: the list first, the selected item's detail alone with a Back link to the list. Tables keep the name, status and amount
   columns and scroll the rest inside the table. Below 640 px, dialogs become full-screen sheets.
+- **Medium widths** (owner decision 2026-10-09): a list-and-detail screen puts the list beside the detail only where
+  both have room, from 1280 px. From 1024 to 1279 px the list is a strip above the detail that opens and closes (open
+  while nothing is picked, closed once an item is). Summary tiles and their grids, masonry, field grids and website
+  cards follow the width of their own container, not the screen: in a narrow one a tile puts its icon above the label,
+  labels wrap on whole words, tile grids drop to one or two columns, and a value stays on one line (a smaller step if
+  needed), never cut. Table cells keep one line, so a table wider than its card scrolls inside it rather than squeezing
+  words.
 - The same applies to product dashboards and admin widgets (the inbox shows the list, then the conversation with Back).
 
 ## 0.7 Flows

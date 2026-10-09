@@ -18,7 +18,9 @@ import {
 	Masonry,
 	PageHeader,
 	Section,
+	SoftBreaks,
 	Stat,
+	StatGrid,
 	formatCredits,
 	describeProblem,
 	useToast,
@@ -90,7 +92,7 @@ export function OverviewView(props) {
 					<BarChart label={MERCHANT.spendChart} data={creditDayBars(props.usage?.days)} format={formatChartCredits} />
 				</Card>
 			)}
-			<div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
+			<StatGrid>
 				{billing ? (
 					<>
 						<Stat label={BILLING.dailySpend} value={formatCredits(billing.dailySpend)} icon="trendingUp" kind="credit" />
@@ -104,7 +106,7 @@ export function OverviewView(props) {
 				) : null}
 				<Stat label={MERCHANT.tiles.websites} value={rows.length} icon="globe" kind="website" />
 				<Stat label={MERCHANT.tiles.products} value={productCount} icon="box" kind="product" />
-			</div>
+			</StatGrid>
 			<Section id="overview-websites" title={MERCHANT.websitesTitle} description={MERCHANT.websitesIntro}>
 				{rows.length === 0 ? (
 					<Welcome branding={props.branding} />
@@ -119,8 +121,8 @@ export function OverviewView(props) {
 											<Link
 												href={routes.website(website.websiteId)}
 												title={website.domain}
-												className="min-w-0 truncate text-fg hover:text-primary hover:underline">
-												{website.domain}
+												className="line-clamp-2 min-w-0 break-words text-fg hover:text-primary hover:underline">
+												<SoftBreaks text={website.domain} />
 											</Link>
 										</span>
 									}

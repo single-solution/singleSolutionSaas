@@ -111,7 +111,9 @@ export function ShareBars({ data, label, format = String, className, emptyText =
 
 /**
  * The solid hero card of an overview (PLAN 0.6): the most important number large, a few details under it, and a
- * bar chart of the last days inside the card.
+ * bar chart of the last days inside the card. It follows its own width (a size container): the number and the chart
+ * sit side by side from 44rem, one above the other below; the number steps down a size below 36rem and again below
+ * 28rem, and wraps on whole words rather than being cut.
  * @param {{ label: string, value: import('react').ReactNode, icon?: import('./icons.js').IconName,
  *   details?: Array<{ label: import('react').ReactNode, value: import('react').ReactNode }>,
  *   chart: { label: string, data: Datum[], format?: (value: number) => string, emptyText?: string },
@@ -119,39 +121,36 @@ export function ShareBars({ data, label, format = String, className, emptyText =
  */
 export function HeroCard({ label, value, icon = 'wallet', details = [], chart, children, className }) {
 	return (
-		<section
-			aria-label={label}
-			className={cx(
-				'grid min-w-0 gap-6 rounded-card bg-hero p-6 text-on-hero sm:p-8 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] lg:gap-10',
-				className,
-			)}>
-			<div className="flex min-w-0 flex-col gap-5">
-				<div className="flex items-center gap-3">
-					<span
-						aria-hidden="true"
-						className="inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-hero-track">
-						<Icon name={icon} size={18} />
-					</span>
-					<span className="text-sm font-semibold text-on-hero-muted">{label}</span>
+		<section aria-label={label} className={cx('@container min-w-0 rounded-card bg-hero p-6 text-on-hero sm:p-8', className)}>
+			<div className="grid min-w-0 gap-6 @[44rem]:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] @[44rem]:gap-10">
+				<div className="flex min-w-0 flex-col gap-5">
+					<div className="flex items-center gap-3">
+						<span
+							aria-hidden="true"
+							className="inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-hero-track">
+							<Icon name={icon} size={18} />
+						</span>
+						<span className="text-sm font-semibold text-on-hero-muted">{label}</span>
+					</div>
+					<div
+						key={typeof value === 'string' || typeof value === 'number' ? String(value) : undefined}
+						className="animate-ss-fade text-3xl font-extrabold tracking-tight text-balance tabular-nums @md:text-4xl @xl:text-5xl">
+						{value}
+					</div>
+					{details.length > 0 ? (
+						<dl className="grid grid-cols-1 gap-4 @xs:grid-cols-2">
+							{details.map((d, i) => (
+								<div key={i} className="min-w-0 rounded-2xl bg-hero-track px-4 py-3">
+									<dt className="text-xs font-semibold text-pretty text-on-hero">{d.label}</dt>
+									<dd className="mt-1 text-base font-bold break-words tabular-nums">{d.value}</dd>
+								</div>
+							))}
+						</dl>
+					) : null}
+					{children}
 				</div>
-				<div
-					key={typeof value === 'string' || typeof value === 'number' ? String(value) : undefined}
-					className="animate-ss-fade break-words text-4xl font-extrabold tracking-tight tabular-nums sm:text-5xl">
-					{value}
-				</div>
-				{details.length > 0 ? (
-					<dl className="grid grid-cols-2 gap-4">
-						{details.map((d, i) => (
-							<div key={i} className="min-w-0 rounded-2xl bg-hero-track px-4 py-3">
-								<dt className="text-xs font-semibold text-on-hero">{d.label}</dt>
-								<dd className="mt-1 truncate text-base font-bold tabular-nums">{d.value}</dd>
-							</div>
-						))}
-					</dl>
-				) : null}
-				{children}
+				<HeroBars {...chart} />
 			</div>
-			<HeroBars {...chart} />
 		</section>
 	);
 }

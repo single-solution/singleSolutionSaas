@@ -2,6 +2,7 @@
  * Layout and data-display components (no client state; usable from server components).
  * @module
  */
+import { Fragment } from 'react';
 import { cx } from './cx.js';
 import { humanize } from './format.js';
 import { Icon } from './icons.js';
@@ -15,6 +16,30 @@ import { Icon } from './icons.js';
  * @typedef {'overview' | 'merchant' | 'website' | 'product' | 'feature' | 'credit' | 'price' | 'admin' | 'settings'
  *   | 'default' | 'activity' | 'connection' | 'developer'} Kind
  */
+
+/**
+ * Text that may wrap between the parts of a domain, e-mail address or path: a soft break (`<wbr>`) after every dot,
+ * `@` and slash, so `shop.example.com` wraps as `shop.example.` / `com` rather than mid-name, where it has to wrap at
+ * all. Copying the text copies it unchanged.
+ * @param {{ text: string }} props
+ */
+export function SoftBreaks({ text }) {
+	// the text after each dot, `@` and slash starts a new part (no lookbehind: older Safari cannot parse it)
+	const parts =
+		String(text)
+			.match(/[^.@/]*(?:[.@/]+|$)/g)
+			?.filter(Boolean) ?? [];
+	return (
+		<>
+			{parts.map((part, i) => (
+				<Fragment key={i}>
+					{i > 0 ? <wbr /> : null}
+					{part}
+				</Fragment>
+			))}
+		</>
+	);
+}
 
 /** The accent tint of icon tiles, chips and empty-state icons. */
 const ACCENT = 'bg-primary-soft text-primary';
@@ -74,7 +99,10 @@ export function Card({ title, subtitle, actions, children, className, bodyClassN
 }
 
 /**
- * Page title row. `level` 2 makes the title an `h2` (the detail beside a list whose heading is the page's `h1`).
+ * Page title row. `level` 2 makes the title an `h2` (the detail beside a list whose heading is the page's `h1`). The
+ * actions sit beside the title while both fit on one line at their natural width; otherwise they move, as one group,
+ * onto their own row under the title, so a long title is not squeezed beside them (they wrap inside the group only
+ * when even that row is too narrow).
  * @param {{ title: ReactNode, subtitle?: ReactNode, actions?: ReactNode, breadcrumbs?: ReactNode, badge?: ReactNode,
  *   level?: 1 | 2 }} props
  */
@@ -83,15 +111,15 @@ export function PageHeader({ title, subtitle, actions, breadcrumbs, badge, level
 	return (
 		<div className="space-y-3 pb-1">
 			{breadcrumbs}
-			<div className="flex flex-wrap items-end justify-between gap-4">
-				<div className="min-w-0">
+			<div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
+				<div className="min-w-0 flex-auto">
 					<Heading className="flex flex-wrap items-center gap-2 text-2xl font-extrabold tracking-tight text-fg">
-						<span className="break-words">{title}</span>
+						<span className="min-w-0 break-words">{title}</span>
 						{badge}
 					</Heading>
 					{subtitle ? <p className="mt-1.5 text-sm text-muted">{subtitle}</p> : null}
 				</div>
-				{actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
+				{actions ? <div className="flex max-w-full flex-wrap items-center gap-2">{actions}</div> : null}
 			</div>
 		</div>
 	);
@@ -270,8 +298,27 @@ export function SkeletonBlock({ className }) {
 }
 
 /**
+ * Type size of a tile's value by the tile's width (container queries), so a figure fits on one line: up to 13
+ * characters (`1,250 credits`) it is full size from a 12rem tile and one step smaller below; a longer one
+ * (`12,345.678 credits`) steps down from full size below 17.5rem to the smallest step below 11.5rem. A value that is
+ * not plain text (a phrase with a date, say) wraps on whole words instead.
+ * @param {ReactNode} value
+ */
+const valueSize = (value) =>
+	typeof value === 'string' || typeof value === 'number'
+		? String(value).length > 13
+			? 'whitespace-nowrap text-lg @[11.5rem]:text-xl @[14rem]:text-2xl @[17.5rem]:text-3xl'
+			: 'whitespace-nowrap text-2xl @[12rem]:text-3xl'
+		: 'text-balance text-2xl @[16rem]:text-3xl';
+
+/**
  * Key figure: a summary tile on a neutral surface. With a `kind` its icon sits in the accent-tinted badge, without one
  * in a neutral badge (PLAN 0.6 colour rule); `tone` colours the hint by status. A new value fades in.
+ *
+ * The tile follows its own width (a size container), not the screen's: from 16rem the icon sits beside the label,
+ * below that above it; the label wraps on whole words; a figure stays on one line and is never cut, its type a step
+ * or two smaller where the tile is too narrow for it at full size (see `valueSize`). Put tiles in a
+ * {@link StatGrid}, which keeps each one wide enough for its value.
  * @param {{ label: ReactNode, value: ReactNode, hint?: ReactNode, tone?: Tone, icon?: import('./icons.js').IconName,
  *   kind?: Kind, className?: string }} props
  */
@@ -285,27 +332,52 @@ export function Stat({ label, value, hint, tone = 'neutral', icon, kind, classNa
 					? 'text-success'
 					: 'text-muted';
 	return (
-		<div className={cx('min-w-0 space-y-3 rounded-card bg-surface p-5 sm:p-6', className)}>
-			<div className="flex items-center gap-3">
-				{icon ? (
-					kind ? (
-						<IconBadge icon={icon} kind={kind} />
-					) : (
-						<span
-							aria-hidden="true"
-							className="inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-surface-3 text-muted">
-							<Icon name={icon} size={18} />
-						</span>
-					)
-				) : null}
-				<span className="min-w-0 text-sm font-semibold text-muted">{label}</span>
+		<div className={cx('@container min-w-0 rounded-card bg-surface p-5 sm:p-6', className)}>
+			<div className="space-y-3">
+				<div className="flex flex-col items-start gap-3 @3xs:flex-row @3xs:items-center">
+					{icon ? (
+						kind ? (
+							<IconBadge icon={icon} kind={kind} />
+						) : (
+							<span
+								aria-hidden="true"
+								className="inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-surface-3 text-muted">
+								<Icon name={icon} size={18} />
+							</span>
+						)
+					) : null}
+					<span className="min-w-0 text-sm font-semibold text-pretty text-muted">{label}</span>
+				</div>
+				<div
+					key={typeof value === 'string' || typeof value === 'number' ? String(value) : undefined}
+					className={cx('animate-ss-fade font-extrabold tracking-tight text-fg tabular-nums', valueSize(value))}>
+					{value}
+				</div>
+				{hint ? <div className={cx('text-xs font-medium text-pretty', hintTone)}>{hint}</div> : null}
 			</div>
-			<div
-				key={typeof value === 'string' || typeof value === 'number' ? String(value) : undefined}
-				className="animate-ss-fade truncate text-3xl font-extrabold tracking-tight text-fg tabular-nums">
-				{value}
-			</div>
-			{hint ? <div className={cx('text-xs font-medium', hintTone)}>{hint}</div> : null}
+		</div>
+	);
+}
+
+/**
+ * Classes of a grid of summary tiles, by the width of its `@container` (not the screen's): one column, two from 28rem
+ * (an odd last tile then spans the row), and every tile in one row once each gets about 13rem — three tiles from 42rem,
+ * four from 56rem. More tiles stay in two columns.
+ */
+export const STAT_GRID =
+	'grid grid-cols-1 gap-5 @md:grid-cols-2 @md:[&>:last-child:nth-child(odd)]:col-span-full ' +
+	'@2xl:[&:has(>:nth-child(3):last-child)]:grid-cols-3 @2xl:[&:has(>:nth-child(3):last-child)>*]:col-span-1! ' +
+	'@4xl:[&:has(>:nth-child(4):last-child)]:grid-cols-4';
+
+/**
+ * A row of summary tiles ({@link Stat}) sized by its own container (see {@link STAT_GRID}), so tiles in a narrow
+ * detail pane or card drop to one or two columns while a wide page shows them side by side.
+ * @param {{ children?: ReactNode, className?: string, label?: string }} props `label`: an accessible name for the group
+ */
+export function StatGrid({ children, className, label }) {
+	return (
+		<div className={cx('@container min-w-0', className)} {...(label ? { role: 'group', 'aria-label': label } : {})}>
+			<div className={STAT_GRID}>{children}</div>
 		</div>
 	);
 }
@@ -478,23 +550,27 @@ export function Breadcrumbs({ items, linkAs, className }) {
 }
 
 /**
- * Description list of label/value pairs.
+ * Description list of label/value pairs, in up to `columns` columns by the width of its own container: two from 28rem,
+ * three from 42rem.
  * @param {{ items: Array<{ label: ReactNode, value: ReactNode }>, className?: string, columns?: 1 | 2 | 3 }} props
  */
 export function KeyValueList({ items, className, columns = 2 }) {
 	return (
-		<dl
-			className={cx(
-				'grid gap-x-6 gap-y-4',
-				columns === 1 ? 'grid-cols-1' : columns === 2 ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1 sm:grid-cols-3',
-				className,
-			)}>
-			{items.map((item, i) => (
-				<div key={i} className="min-w-0 space-y-0.5">
-					<dt className="text-xs font-semibold uppercase tracking-wider text-muted">{item.label}</dt>
-					<dd className="break-words text-sm text-fg">{item.value}</dd>
-				</div>
-			))}
-		</dl>
+		<div className="@container min-w-0">
+			<dl
+				className={cx(
+					'grid grid-cols-1 gap-x-6 gap-y-4',
+					columns === 2 && '@md:grid-cols-2',
+					columns === 3 && '@md:grid-cols-2 @2xl:grid-cols-3',
+					className,
+				)}>
+				{items.map((item, i) => (
+					<div key={i} className="min-w-0 space-y-0.5">
+						<dt className="text-xs font-semibold uppercase tracking-wider text-muted">{item.label}</dt>
+						<dd className="break-words text-sm text-fg">{item.value}</dd>
+					</div>
+				))}
+			</dl>
+		</div>
 	);
 }

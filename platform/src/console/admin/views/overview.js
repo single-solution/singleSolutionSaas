@@ -17,6 +17,7 @@ import {
 	PageHeader,
 	Section,
 	Stat,
+	StatGrid,
 	formatCredits,
 } from '@ss/ui';
 import { ADMIN, PRODUCTS } from '../../../texts/console.js';
@@ -76,45 +77,47 @@ export function OverviewView(props) {
 				icon="coins"
 				chart={{ label: ADMIN.creditsChart, data: dayBars(totalDays(products)), format: creditsOf }}
 			/>
-			<div className="grid gap-5 sm:grid-cols-3">
+			<StatGrid>
 				<Stat label={ADMIN.totals.merchants} value={o.merchants ?? 0} icon="users" kind="merchant" />
 				<Stat label={ADMIN.totals.websites} value={o.websites ?? 0} icon="globe" kind="website" />
 				<Stat label={ADMIN.totalProducts} value={products.length} icon="box" kind="product" />
-			</div>
+			</StatGrid>
 			<Section id="overview-products" title={ADMIN.productsTitle} description={ADMIN.productsIntro}>
 				{products.length === 0 ? (
 					<EmptyState compact icon="box" kind="product" title={ADMIN.noProducts} />
 				) : (
-					<ul className="grid gap-5 lg:grid-cols-2 2xl:grid-cols-3">
-						{products.map((p) => (
-							<li key={p.productId}>
-								<Card
-									className="h-full"
-									title={
-										<span className="flex items-center gap-3">
-											<IconBadge icon="box" kind="product" size="sm" />
-											{linked ? (
-												<Link
-													href={adminRoutes.product(p.productId)}
-													className="text-fg hover:text-primary hover:underline">
-													{p.name}
-												</Link>
-											) : (
-												p.name
-											)}
-										</span>
-									}
-									subtitle={`${ADMIN.productWebsites(p.websites ?? 0)} · ${ADMIN.productEarned(formatCredits(p.earnedThisMonth ?? 0))}`}
-									actions={
-										<Badge tone={p.status === 'active' ? 'success' : 'neutral'} dot>
-											{PRODUCTS.status[/** @type {'active'} */ (p.status)] ?? p.status}
-										</Badge>
-									}>
-									<BarChart label={PRODUCTS.earnedChart} data={dayBars(p.days)} format={creditsOf} height={96} />
-								</Card>
-							</li>
-						))}
-					</ul>
+					<div className="@container">
+						<ul className="grid gap-5 @2xl:grid-cols-2 @6xl:grid-cols-3">
+							{products.map((p) => (
+								<li key={p.productId}>
+									<Card
+										className="h-full"
+										title={
+											<span className="flex items-center gap-3">
+												<IconBadge icon="box" kind="product" size="sm" />
+												{linked ? (
+													<Link
+														href={adminRoutes.product(p.productId)}
+														className="text-fg hover:text-primary hover:underline">
+														{p.name}
+													</Link>
+												) : (
+													p.name
+												)}
+											</span>
+										}
+										subtitle={`${ADMIN.productWebsites(p.websites ?? 0)} · ${ADMIN.productEarned(formatCredits(p.earnedThisMonth ?? 0))}`}
+										actions={
+											<Badge tone={p.status === 'active' ? 'success' : 'neutral'} dot>
+												{PRODUCTS.status[/** @type {'active'} */ (p.status)] ?? p.status}
+											</Badge>
+										}>
+										<BarChart label={PRODUCTS.earnedChart} data={dayBars(p.days)} format={creditsOf} height={96} />
+									</Card>
+								</li>
+							))}
+						</ul>
+					</div>
 				)}
 			</Section>
 			<Card title={ADMIN.recentActivity} subtitle={ADMIN.recentActivityIntro}>

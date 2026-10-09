@@ -166,7 +166,8 @@ describe('admin Products (jsdom)', () => {
 			);
 			await until(() => shows('The product is active'));
 
-			// Reconnect: the secret is required; a wrong one is refused; the same id reconnects
+			// Reconnect (in the header's More menu): the secret is required; a wrong one is refused; the same id reconnects
+			await press('More actions for Notes');
 			await press('Reconnect');
 			expect(shows('New product URL (optional)')).toBe(true);
 			await pressDialog('Reconnect');

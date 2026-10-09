@@ -6,7 +6,19 @@
  * @module
  */
 import { useEffect, useState } from 'react';
-import { Badge, BarChart, Callout, Card, EmptyState, HeroCard, Stat, Table, formatCredits, formatDateTime } from '@ss/ui';
+import {
+	Badge,
+	BarChart,
+	Callout,
+	Card,
+	EmptyState,
+	HeroCard,
+	Stat,
+	StatGrid,
+	Table,
+	formatCredits,
+	formatDateTime,
+} from '@ss/ui';
 import { BILLING } from '../../texts/console.js';
 
 /** @typedef {'active' | 'low_balance' | 'grace' | 'stopped' | 'suspended'} MerchantStatus */
@@ -97,21 +109,19 @@ export function DaysLeft({ summary }) {
  */
 export function BillingStats({ summary }) {
 	return (
-		<div className="@container">
-			<div className="grid gap-5 @lg:grid-cols-2 @5xl:grid-cols-4">
-				<Stat
-					label={BILLING.balance}
-					value={formatCredits(summary.balance)}
-					tone={summary.balance <= 0 ? 'danger' : summary.lowBalance ? 'warning' : 'neutral'}
-					hint={<MerchantStatusBadge status={summary.status} />}
-					icon="wallet"
-					kind="credit"
-				/>
-				<Stat label={BILLING.daysLeft} value={<DaysLeft summary={summary} />} icon="clock" kind="credit" />
-				<Stat label={BILLING.dailySpend} value={formatCredits(summary.dailySpend)} icon="trendingUp" kind="credit" />
-				<Stat label={BILLING.spentThisMonth} value={formatCredits(summary.spentThisMonth)} icon="calendar" kind="credit" />
-			</div>
-		</div>
+		<StatGrid>
+			<Stat
+				label={BILLING.balance}
+				value={formatCredits(summary.balance)}
+				tone={summary.balance <= 0 ? 'danger' : summary.lowBalance ? 'warning' : 'neutral'}
+				hint={<MerchantStatusBadge status={summary.status} />}
+				icon="wallet"
+				kind="credit"
+			/>
+			<Stat label={BILLING.daysLeft} value={<DaysLeft summary={summary} />} icon="clock" kind="credit" />
+			<Stat label={BILLING.dailySpend} value={formatCredits(summary.dailySpend)} icon="trendingUp" kind="credit" />
+			<Stat label={BILLING.spentThisMonth} value={formatCredits(summary.spentThisMonth)} icon="calendar" kind="credit" />
+		</StatGrid>
 	);
 }
 

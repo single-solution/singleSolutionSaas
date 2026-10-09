@@ -463,6 +463,7 @@ export function ActivityTable({ items, title = 'Activity', empty, hasMore = fals
 				{
 					key: 'what',
 					header: 'What',
+					wrap: true,
 					render: (e) => (
 						<span className="space-y-0.5">
 							<span className="block">{actionLabel(e.action)}</span>

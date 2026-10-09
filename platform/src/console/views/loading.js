@@ -8,7 +8,7 @@
  */
 import { usePathname } from 'next/navigation.js';
 import { useEffect } from 'react';
-import { RouteProgress, SkeletonBlock, cx } from '@ss/ui';
+import { RouteProgress, STAT_GRID, SkeletonBlock, cx } from '@ss/ui';
 import { ADMIN, CONSOLE, MERCHANT } from '../../texts/console.js';
 import { PUBLIC_PATHS } from '../paths.js';
 import { ListDetail } from './common.js';
@@ -71,16 +71,18 @@ function ListSkeleton() {
 function DetailSkeleton() {
 	return (
 		<>
-			<div className="flex flex-wrap items-end justify-between gap-4">
-				<SkeletonBlock className={cx('h-8 w-56', ON_CANVAS)} />
+			<div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
+				<SkeletonBlock className={cx('h-8 w-56 max-w-full', ON_CANVAS)} />
 				<div className="flex gap-2">
 					<SkeletonBlock className={cx('h-10 w-28 rounded-xl', ON_CANVAS)} />
 					<SkeletonBlock className={cx('h-10 w-10 rounded-xl', ON_CANVAS)} />
 				</div>
 			</div>
-			<div className="grid gap-5 sm:grid-cols-2">
-				<CardSkeleton lines={2} />
-				<CardSkeleton lines={2} />
+			<div className="@container">
+				<div className="grid gap-5 @md:grid-cols-2">
+					<CardSkeleton lines={2} />
+					<CardSkeleton lines={2} />
+				</div>
 			</div>
 			<CardSkeleton lines={4} />
 		</>
@@ -92,10 +94,12 @@ function PageSkeleton() {
 	return (
 		<div className="space-y-8">
 			<SkeletonBlock className={cx('h-8 w-48', ON_CANVAS)} />
-			<div className="grid gap-5 sm:grid-cols-3">
-				{[0, 1, 2].map((i) => (
-					<CardSkeleton key={i} lines={1} />
-				))}
+			<div className="@container">
+				<div className={STAT_GRID}>
+					{[0, 1, 2].map((i) => (
+						<CardSkeleton key={i} lines={1} />
+					))}
+				</div>
 			</div>
 			<CardSkeleton lines={5} />
 		</div>

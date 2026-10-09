@@ -284,7 +284,7 @@ describe('admin console interactions (jsdom)', () => {
 			</ToastProvider>,
 		);
 		expect(shows('Else Ltd') && shows('Shop & Co')).toBe(true);
-		fill('Search name, owner e-mail or domain', 'else');
+		fill('Search name, e-mail or domain', 'else');
 		await press('Filter');
 		cleanup();
 		render(

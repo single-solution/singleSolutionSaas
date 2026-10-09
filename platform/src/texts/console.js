@@ -15,6 +15,8 @@ export const CONSOLE = Object.freeze({
 	backToWebsites: 'Back to websites',
 	backToMerchants: 'Back to merchants',
 	loading: 'Loading the page',
+	showList: 'Show list',
+	hideList: 'Hide list',
 });
 
 /** The sign-in page and the other public account pages (PLAN 0.8.2 Sign-in). */
@@ -297,7 +299,7 @@ export const ADMIN = Object.freeze({
 	totalProducts: 'Connected products',
 	merchantsTitle: 'Merchants',
 	addMerchant: 'Add merchant',
-	searchMerchants: 'Search name, owner e-mail or domain',
+	searchMerchants: 'Search name, e-mail or domain',
 	allStatuses: 'All statuses',
 	status: Object.freeze({
 		active: 'Active',

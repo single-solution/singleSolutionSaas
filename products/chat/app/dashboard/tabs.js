@@ -19,6 +19,7 @@ import {
 	Masonry,
 	Section,
 	Stat,
+	StatGrid,
 	formatCredits,
 	formatCreditsPerHour,
 	formatDateTime,
@@ -61,7 +62,7 @@ function OverviewTab({ websiteId }) {
 					<div className="space-y-8">
 						<StatusBanner status={data.status} />
 						<Section title={TEXTS.overview.numbers} description={TEXTS.overview.numbersHelp}>
-							<div className="grid gap-5 sm:grid-cols-3">
+							<StatGrid>
 								<Stat
 									label={TEXTS.overview.today}
 									value={formatCredits(data.todayMillicredits)}
@@ -82,7 +83,7 @@ function OverviewTab({ websiteId }) {
 									icon="plug"
 									kind="connection"
 								/>
-							</div>
+							</StatGrid>
 						</Section>
 						<Section title={TEXTS.overview.setup} description={TEXTS.overview.setupHelp}>
 							<Card>

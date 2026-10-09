@@ -38,10 +38,13 @@ import {
 	RadioGroup,
 	Section,
 	Select,
+	STAT_GRID,
 	ShareBars,
 	Skeleton,
+	SoftBreaks,
 	Spinner,
 	Stat,
+	StatGrid,
 	StatusBadge,
 	Stepper,
 	Switch,
@@ -354,6 +357,27 @@ describe('Table', () => {
 		expect(other.container.querySelector('td > b')?.textContent).toBe('No rows');
 		const fallback = render(<Table caption="Plain" rows={[]} rowKey={() => 'x'} columns={[{ key: 'a', header: 'A' }]} />);
 		expect(fallback.container.textContent).toContain('Nothing to show yet.');
+		// no header row to scroll past, and as wide as its card
+		expect(fallback.container.querySelector('thead')?.className).toContain('hidden');
+		expect(fallback.container.querySelector('table')?.className).not.toContain('min-w-');
+	});
+	it('keeps cells on one line; a wrap column wraps on whole words within a readable width', () => {
+		const { container } = render(
+			<Table
+				caption="Log"
+				rows={[{ id: 'a', when: '1 Oct', what: 'A longer description of what happened' }]}
+				rowKey={(r) => r.id}
+				columns={[
+					{ key: 'when', header: 'When', rowHeader: true },
+					{ key: 'what', header: 'What', wrap: true },
+				]}
+			/>,
+		);
+		const [when, what] = /** @type {HTMLElement[]} */ ([...container.querySelectorAll('tbody th, tbody td')]);
+		expect(when?.className).toContain('whitespace-nowrap');
+		expect(what?.className).not.toContain('whitespace-nowrap');
+		expect(what?.querySelector('span.min-w-40')?.textContent).toBe('A longer description of what happened');
+		expect(container.querySelector('table')?.className).toContain('min-w-[32rem]');
 	});
 });
 
@@ -462,6 +486,62 @@ describe('Masonry', () => {
 		expect(second?.getAttribute('aria-label')).toBe('Websites');
 		expect(second?.className).not.toContain('columns-3');
 		expect(second?.className).toContain('extra');
+	});
+});
+
+describe('widths follow the container', () => {
+	it('StatGrid sizes its tiles by its own width; a Stat never cuts its value', () => {
+		const { container } = render(
+			<StatGrid label="Numbers">
+				<Stat label="Short" value="250 credits" icon="coins" />
+				<Stat label="Long" value="12,345.678 credits" />
+				<Stat label="Phrase" value={<>Grace ends 12 Oct</>} />
+			</StatGrid>,
+		);
+		const group = /** @type {HTMLElement} */ (container.querySelector('[role="group"]'));
+		expect(group.getAttribute('aria-label')).toBe('Numbers');
+		expect(group.className).toContain('@container');
+		const grid = /** @type {HTMLElement} */ (group.firstElementChild);
+		expect(grid.className).toBe(STAT_GRID);
+		expect(STAT_GRID).toContain('@md:grid-cols-2');
+		expect(STAT_GRID).toContain('@2xl:[&:has(>:nth-child(3):last-child)]:grid-cols-3');
+		const values = [...grid.querySelectorAll('.font-extrabold')].map((el) => el.className);
+		expect(values[0]).toContain('whitespace-nowrap');
+		expect(values[0]).toContain('@[12rem]:text-3xl');
+		expect(values[1]).toContain('whitespace-nowrap');
+		expect(values[1]).toContain('text-lg');
+		expect(values[2]).toContain('text-balance');
+		for (const value of values) expect(value).not.toContain('truncate');
+		// the icon sits above the label in a narrow tile and beside it from 16rem
+		expect(grid.firstElementChild?.className).toContain('@container');
+		expect(grid.querySelector('.\\@3xs\\:flex-row')).not.toBeNull();
+		expect(render(<StatGrid />).container.querySelector('[role="group"]')).toBeNull();
+	});
+
+	it('SoftBreaks lets a domain or e-mail wrap between its parts without changing the text', () => {
+		const { container } = render(
+			<p>
+				<SoftBreaks text="shop.example.com" />|<SoftBreaks text="a@b.c/d" />|<SoftBreaks text="plain" />
+			</p>,
+		);
+		expect(container.textContent).toBe('shop.example.com|a@b.c/d|plain');
+		expect(container.querySelectorAll('wbr')).toHaveLength(5);
+		expect(renderToStaticMarkup(<SoftBreaks text="a.b" />)).toBe('a.<wbr/>b');
+	});
+
+	it('KeyValueList and PageHeader follow their own width', () => {
+		const { container } = render(
+			<div>
+				<KeyValueList columns={3} items={[{ label: 'A', value: '1' }]} />
+				<KeyValueList columns={1} items={[{ label: 'B', value: '2' }]} />
+				<PageHeader title="Title" actions={<button type="button">Act</button>} />
+			</div>,
+		);
+		const [three, one] = [...container.querySelectorAll('dl')];
+		expect(three?.parentElement?.className).toContain('@container');
+		expect(three?.className).toContain('@2xl:grid-cols-3');
+		expect(one?.className).not.toContain('grid-cols-2');
+		expect(container.querySelector('h1')?.closest('.flex-auto')).not.toBeNull();
 	});
 });
 
@@ -705,6 +785,9 @@ describe('AppShell', () => {
 		expect(badge('/team')).toBeNull();
 		const menu = /** @type {HTMLElement} */ (container.querySelector('button[aria-label="Open navigation"]'));
 		expect(menu.getAttribute('aria-expanded')).toBe('false');
+		// the menu button (below 1024 px) and the switchers share one line; the switchers keep at least 10rem
+		expect(menu.className).toContain('lg:hidden');
+		expect(menu.parentElement?.className).toContain('flex-[1_1_10rem]');
 		click(menu);
 		const panel = /** @type {HTMLElement} */ (container.querySelector('[role="dialog"][aria-label="Navigation"]'));
 		expect(panel).not.toBeNull();

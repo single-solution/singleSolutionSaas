@@ -23,6 +23,7 @@ import {
 	Select,
 	Skeleton,
 	Stat,
+	StatGrid,
 	TextArea,
 	describeProblem,
 	formatCredits,
@@ -114,7 +115,7 @@ function OverviewTab({ websiteId }) {
 					<div className="space-y-8">
 						<StatusBanner status={data.status} />
 						<Section title={TEXTS.overview.numbers} description={TEXTS.overview.numbersHelp}>
-							<div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
+							<StatGrid>
 								<Stat
 									label={TEXTS.overview.today}
 									value={formatCredits(data.todayMillicredits)}
@@ -142,7 +143,7 @@ function OverviewTab({ websiteId }) {
 									icon="mail"
 									kind="settings"
 								/>
-							</div>
+							</StatGrid>
 						</Section>
 						<Section title={TEXTS.overview.setup} description={TEXTS.overview.setupHelp}>
 							<Card>

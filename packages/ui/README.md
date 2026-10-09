@@ -23,6 +23,22 @@ badges; surfaces are neutral; green, amber and red mean status only (`tone` `suc
 every kind takes the same indigo tint (`primary-soft`), and leaving `kind` out keeps the item neutral. No screen names a
 colour for meaning. The `hero` card is solid indigo.
 
+## Widths: containers, not the screen
+
+Components follow the width they are given (Tailwind container queries), so a narrow detail pane or card gets the
+narrow layout even on a wide screen (PLAN.md 0.6 Medium widths). `AppShell` shows the sidebar from 1024 px; below that
+it is the menu button.
+
+- `<Stat>` puts its icon above the label below a 16rem tile; the label wraps on whole words; a figure stays on one line
+  and is never cut — its type steps down where the tile is too narrow for it (phrases that are not plain text wrap).
+- `<StatGrid label?>` (classes in `STAT_GRID`) holds the tiles: one column, two from 28rem (an odd last tile spans the
+  row), three tiles in a row from 42rem and four from 56rem.
+- `KeyValueList`, `HeroCard`, `Masonry` and the field grid also follow their own width.
+- `PageHeader` keeps its actions beside the title while both fit on one line, else moves them together under it.
+- `Table` cells keep one line (a column with `wrap` wraps on whole words within 10rem); a table wider than its card
+  scrolls inside it. With no rows it shows only its empty message.
+- `<SoftBreaks text>` lets a domain, e-mail or path wrap between its parts (`<wbr>` after dots, `@` and slashes).
+
 ## Masonry and the More menu
 
 `<Masonry columns? as? label?>` lays cards of different heights out in CSS columns (1, 2 from a 42rem container, 3 from

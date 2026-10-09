@@ -14,7 +14,7 @@ import { Link, NavLink } from '../../src/console/link.js';
 import { FilterForm, useNavigation } from '../../src/console/navigation.js';
 import { ListDetail, ListPane, ListRow } from '../../src/console/views/common.js';
 import { ConsoleLoading, screenOf } from '../../src/console/views/loading.js';
-import { forgetScreens, listScroll, listWasPlaceholder } from '../../src/console/views/screen-memory.js';
+import { forgetScreens, listScroll, listWasPlaceholder, stripOpen } from '../../src/console/views/screen-memory.js';
 import { memoize, runInRequestScope } from '../../src/infra/request-scope.js';
 import { testRouter } from './router.js';
 
@@ -120,6 +120,92 @@ describe('loading skeletons', () => {
 		const auto = render(at('/admin/merchants', <ConsoleLoading area="admin" />));
 		expect(auto.container.querySelector('a[aria-current="page"]')).toBeNull();
 		expect(auto.container.textContent).not.toContain('Back');
+	});
+});
+
+describe('list-and-detail widths', () => {
+	/** @param {{ auto?: boolean, rows?: import('react').ReactNode }} props */
+	const screen = ({ auto = false, rows = merchantList(auto ? null : 'mer_a') }) => (
+		<ListDetail
+			section="admin/merchants"
+			label="Merchants"
+			auto={auto}
+			back={{ href: '/admin/merchants', label: 'Merchants' }}
+			list={rows}
+			detail={<p>Alpha detail</p>}
+			empty={null}
+		/>
+	);
+	/** The Show / Hide list button and the part of the pane it opens and closes. */
+	const strip = (/** @type {HTMLElement} */ container) => {
+		const button = /** @type {HTMLButtonElement} */ (container.querySelector('button[aria-controls]'));
+		return {
+			button,
+			body: /** @type {HTMLElement} */ (container.querySelector(`[id="${button.getAttribute('aria-controls')}"]`)),
+		};
+	};
+
+	it('puts the list beside the detail from 1280 px and makes it a strip above the detail from 1024 px', () => {
+		const { container } = render(screen({ auto: true }));
+		const grid = /** @type {HTMLElement} */ (container.querySelector('aside')?.parentElement);
+		expect(grid.className).toContain('xl:grid-cols-[20rem_minmax(0,1fr)]');
+		expect(grid.className).not.toContain('lg:grid-cols');
+		expect(container.querySelector('aside')?.className).toContain('xl:sticky');
+		// nothing picked: the strip is open (the list is what the person came for)
+		const { button, body } = strip(container);
+		expect(button.parentElement?.className).toContain('lg:inline-flex xl:hidden');
+		expect(button.getAttribute('aria-expanded')).toBe('true');
+		expect(button.textContent).toBe('Hide list');
+		expect(body.className).not.toContain('lg:max-xl:hidden');
+		act(() => button.click());
+		expect(button.getAttribute('aria-expanded')).toBe('false');
+		expect(button.textContent).toBe('Show list');
+		expect(body.className).toContain('lg:max-xl:hidden');
+		expect(stripOpen('admin/merchants')).toBe(false);
+	});
+
+	it('closes the strip once an item is picked and keeps the person’s choice while they stay on the screen', () => {
+		const picked = render(screen({}));
+		expect(strip(picked.container).button.getAttribute('aria-expanded')).toBe('false');
+		act(() => strip(picked.container).button.click());
+		expect(stripOpen('admin/merchants')).toBe(true);
+		picked.unmount();
+		// a filter or search opens the same item again: the strip stays open
+		const again = render(screen({}));
+		const { button } = strip(again.container);
+		expect(button.getAttribute('aria-expanded')).toBe('true');
+		// picking a row: this page stays as it is, the next one opens with the strip closed
+		const row = /** @type {HTMLAnchorElement} */ (again.container.querySelector('a[href="/admin/merchants/mer_b"]'));
+		row.addEventListener('click', (event) => event.preventDefault());
+		act(() => row.click());
+		expect(button.getAttribute('aria-expanded')).toBe('true');
+		expect(stripOpen('admin/merchants')).toBe(false);
+	});
+
+	it('shows names in full where it can: two lines, a domain wrapping between its parts, the figure under it in a narrow pane', () => {
+		const { container } = render(
+			<ListPane title="Websites">
+				<ListRow
+					href="/websites/web_a"
+					label="shop.example.com"
+					sublabel="owner@shop.test"
+					meta="2 credits / day"
+					dot="success"
+				/>
+				<ListRow href="/websites/web_b" label={<b>Node</b>} />
+			</ListPane>,
+		);
+		expect(container.firstElementChild?.className).toContain('@container');
+		const name = /** @type {HTMLElement} */ (container.querySelector('[title="shop.example.com"]'));
+		expect(name.className).toContain('line-clamp-2');
+		expect(name.querySelectorAll('wbr')).toHaveLength(2);
+		expect(container.querySelector('[title="owner@shop.test"]')?.className).toContain('truncate');
+		const figure = [...container.querySelectorAll('span')].find((el) => el.textContent === '2 credits / day');
+		expect(figure?.className).toContain('@sm:row-span-2');
+		expect(figure?.parentElement?.className).toContain('@sm:contents');
+		// no strip outside a screen with a detail
+		expect(container.querySelector('button[aria-controls]')).toBeNull();
+		expect(container.querySelector('a[href="/websites/web_b"] [title]')).toBeNull();
 	});
 });
 

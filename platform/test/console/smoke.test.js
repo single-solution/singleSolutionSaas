@@ -54,6 +54,7 @@ const ssr = (element) => {
 /** @param {string} html */
 const text = (html) =>
 	html
+		.replace(/<wbr\/?>/g, '') // soft line breaks inside a domain or e-mail
 		.replace(/<[^>]+>/g, ' ')
 		.replace(/&#x27;/g, "'")
 		.replace(/&amp;/g, '&')

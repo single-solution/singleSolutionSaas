@@ -2,9 +2,12 @@
 /**
  * Console frame: a soft sidebar island (brand, sections of links, each link with an icon tile — the accent tint with a
  * `kind`, solid for the current page) and a top bar island (switchers on the left, account actions and the System /
- * Light / Dark theme switch on the right) that stays on top of the page as it scrolls. The frame uses the available
- * width (16 px side padding on phones, 24–32 px from `md`, at most 1680 px wide); pages decide their own reading
- * widths. Below `md` the sidebar becomes an off-canvas panel opened by the menu button.
+ * Light / Dark theme switch on the right) that stays on top of the page as it scrolls. The switchers keep at least
+ * 10rem on one line with the menu button; where that and the actions do not fit, the actions move to a second row.
+ * The frame uses the available width (16 px side padding on phones, 24–32 px from `md`, at most 1680 px wide); pages
+ * decide their own reading widths, and the components inside them follow the width they get (container queries), not
+ * the screen's. Below 1024 px (`lg`, PLAN 0.6 Phones and tablets) the sidebar becomes an off-canvas panel opened by
+ * the menu button.
  * Includes a skip link to the main content. Router links are rendered with `linkAs` (e.g. Next's `Link`).
  *
  * Motion (PLAN 0.6): the current item's tint is one marker that slides to the clicked item at once (before its page
@@ -165,7 +168,7 @@ export function AppShell({
 	useFocusTrap(panel, open, () => setOpen(false));
 	useEffect(() => {
 		if (!open) return undefined;
-		const media = typeof window !== 'undefined' && window.matchMedia ? window.matchMedia('(min-width: 768px)') : null;
+		const media = typeof window !== 'undefined' && window.matchMedia ? window.matchMedia('(min-width: 1024px)') : null;
 		const onChange = () => {
 			if (media?.matches) setOpen(false);
 		};
@@ -181,7 +184,7 @@ export function AppShell({
 					Skip to content
 				</a>
 				<div className="mx-auto flex w-full max-w-[1680px] gap-5 px-4 py-3 sm:py-4 md:px-6 lg:gap-6 lg:px-8">
-					<aside className="sticky top-4 hidden h-[calc(100vh-2rem)] w-64 shrink-0 flex-col justify-between overflow-y-auto rounded-card bg-surface p-4 [view-transition-name:ss-sidebar] md:flex">
+					<aside className="sticky top-4 hidden h-[calc(100vh-2rem)] w-64 shrink-0 flex-col justify-between overflow-y-auto rounded-card bg-surface p-4 [view-transition-name:ss-sidebar] lg:flex">
 						<div className="space-y-6">
 							<Brand {...brand} />
 							<Nav sections={sections} {...(linkAs ? { linkAs } : {})} />
@@ -192,7 +195,7 @@ export function AppShell({
 						<div
 							ref={drawer.ref}
 							data-state={drawer.closing ? 'closed' : 'open'}
-							className="group fixed inset-0 z-50 animate-ss-fade bg-overlay data-[state=closed]:pointer-events-none data-[state=closed]:animate-ss-fade-out md:hidden"
+							className="group fixed inset-0 z-50 animate-ss-fade bg-overlay data-[state=closed]:pointer-events-none data-[state=closed]:animate-ss-fade-out lg:hidden"
 							onMouseDown={(event) => {
 								if (event.target === event.currentTarget) setOpen(false);
 							}}>
@@ -222,16 +225,16 @@ export function AppShell({
 					<div className="flex min-w-0 flex-1 flex-col gap-6">
 						<div className="sticky top-0 z-30 -mt-3 bg-canvas pt-3 [view-transition-name:ss-topbar] sm:-mt-4 sm:pt-4">
 							<header className="flex flex-wrap items-center justify-between gap-3 rounded-card bg-surface px-3 py-2.5 sm:px-4">
-								<div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+								<div className={cx('flex min-w-0 items-center gap-2', topbar ? 'flex-[1_1_10rem]' : 'flex-1')}>
 									<button
 										type="button"
 										onClick={() => setOpen(true)}
 										aria-label="Open navigation"
 										aria-expanded={open}
-										className="ss-motion ss-press rounded-lg p-2 text-fg hover:bg-surface-2 md:hidden">
+										className="ss-motion ss-press shrink-0 rounded-lg p-2 text-fg hover:bg-surface-2 lg:hidden">
 										<Icon name="menu" size={18} />
 									</button>
-									{topbar}
+									{topbar ? <div className="flex min-w-0 flex-1 items-center gap-2">{topbar}</div> : null}
 								</div>
 								{actions || themeToggle ? (
 									<div className="flex items-center gap-2">
