@@ -59,9 +59,9 @@ export const mountAnalyticsDashboard = ({ host, api, config, now }) => {
 			box.append(head, status, body);
 			root.append(box);
 
-			/** @param {string} label @param {string | number} value @param {string} tone @param {string} badge */
-			const tile = (label, value, tone, badge) => {
-				const node = h('div', { class: `tile ${tone}` });
+			/** @param {string} label @param {string | number} value @param {string} badge @param {'good' | 'poor' | null} [status] */
+			const tile = (label, value, badge, status = null) => {
+				const node = h('div', { class: status ? `tile ${status}` : 'tile' });
 				node.append(
 					h('span', { class: 'badge', 'aria-hidden': 'true' }, badge),
 					h('span', { class: 'value' }, String(value)),
@@ -69,9 +69,9 @@ export const mountAnalyticsDashboard = ({ host, api, config, now }) => {
 				node.append(h('span', { class: 'label' }, label));
 				return node;
 			};
-			/** @param {string} title @param {Array<{ key: string, count: number }>} rows @param {(key: string) => string} [name] @param {string} [tone] */
-			const list = (title, rows, name = (key) => key, tone = 'sky') => {
-				const node = h('div', { class: `tile ${tone}` });
+			/** @param {string} title @param {Array<{ key: string, count: number }>} rows @param {(key: string) => string} [name] */
+			const list = (title, rows, name = (key) => key) => {
+				const node = h('div', { class: 'tile' });
 				node.append(h('h3', {}, title));
 				const items = h('ul', { class: 'list' });
 				if (rows.length === 0) items.append(h('li', {}, t('analytics.none')));
@@ -112,13 +112,12 @@ export const mountAnalyticsDashboard = ({ host, api, config, now }) => {
 				const overview = h('div', { class: 'grid' });
 				overview.append(
 					hero,
-					tile(t('analytics.pageViews'), report.totals.pageViews, 'teal', 'P'),
+					tile(t('analytics.pageViews'), report.totals.pageViews, 'P'),
 					...(report.funnel
 						? report.funnel.revenue.map((entry) =>
 								tile(
 									`${t('analytics.revenue')} · ${t('analytics.orders', { count: entry.orders })}`,
 									`${entry.currency} ${toMajor(entry.value, entry.currency).toLocaleString()}`,
-									'pink',
 									'$',
 								),
 							)
@@ -129,37 +128,25 @@ export const mountAnalyticsDashboard = ({ host, api, config, now }) => {
 					parts.push(h('p', { class: 'lead' }, t('analytics.empty')));
 				parts.push(
 					section(t('analytics.visits'), [
-						list(t('analytics.pages'), report.pages, undefined, 'sky'),
-						list(t('analytics.sources'), report.sources, (key) => (key === DIRECT ? t('analytics.direct') : key), 'violet'),
-						list(t('analytics.devices'), report.devices, (key) => t(`device.${key}`), 'teal'),
-						list(
-							t('analytics.countries'),
-							report.countries,
-							(key) => (key === UNKNOWN ? t('analytics.unknown') : key),
-							'amber',
-						),
+						list(t('analytics.pages'), report.pages),
+						list(t('analytics.sources'), report.sources, (key) => (key === DIRECT ? t('analytics.direct') : key)),
+						list(t('analytics.devices'), report.devices, (key) => t(`device.${key}`)),
+						list(t('analytics.countries'), report.countries, (key) => (key === UNKNOWN ? t('analytics.unknown') : key)),
 					]),
 				);
 				if (report.funnel)
 					parts.push(
 						section(
 							t('analytics.funnel'),
-							report.funnel.steps.map((step, index) =>
-								tile(
-									t(`funnel.${step.step}`),
-									step.count,
-									['sky', 'violet', 'amber', 'pink'][index] ?? 'sky',
-									String(index + 1),
-								),
-							),
+							report.funnel.steps.map((step, index) => tile(t(`funnel.${step.step}`), step.count, String(index + 1))),
 						),
 					);
 				if (report.searches && report.notFound && report.emptySearches)
 					parts.push(
 						section(t('analytics.searches'), [
-							list(t('analytics.searches'), report.searches, undefined, 'violet'),
-							list(t('analytics.emptySearches'), report.emptySearches, undefined, 'amber'),
-							list(t('analytics.notFound'), report.notFound, undefined, 'coral'),
+							list(t('analytics.searches'), report.searches),
+							list(t('analytics.emptySearches'), report.emptySearches),
+							list(t('analytics.notFound'), report.notFound),
 						]),
 					);
 				if (report.vitals)
@@ -179,8 +166,8 @@ export const mountAnalyticsDashboard = ({ host, api, config, now }) => {
 								const node = tile(
 									t(`vital.${vital.name}`),
 									value,
-									vital.poor > vital.good ? 'coral' : 'teal',
 									vital.name.slice(0, 1),
+									vital.average === null ? null : vital.poor > vital.good ? 'poor' : 'good',
 								);
 								node.append(
 									h(

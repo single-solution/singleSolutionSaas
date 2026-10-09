@@ -52,17 +52,16 @@ ul { list-style: none; margin: 0; padding: 0; }
 .head .row label { margin-top: 0; }
 .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); }
 .section { margin-top: 24px; }
-.tile { border-radius: calc(var(--ss-radius, 8px) * 2); padding: 16px; background: var(--tint, rgba(99, 102, 241, 0.1)); }
+/* one accent (PLAN 0.6): every tile takes the website's accent tint; green and red only for status (Web Vitals) */
+.tile { border-radius: calc(var(--ss-radius, 8px) * 2); padding: 16px;
+  --badge: var(--ss-color-accent, #4f46e5); background: color-mix(in srgb, var(--badge) 10%, transparent); }
 .tile .badge { display: inline-flex; width: 32px; height: 32px; border-radius: 999px; align-items: center; justify-content: center;
-  background: var(--badge, #6366f1); color: #ffffff; font-weight: 700; font-size: 0.9em; }
+  background: var(--badge); color: var(--ss-color-onAccent, #ffffff); font-weight: 700; font-size: 0.9em; }
 .tile .value { display: block; font-size: 1.6em; font-weight: 700; margin-top: 8px; }
 .tile .label { display: block; font-size: 0.9em; opacity: 0.75; }
-.tile.teal { --tint: rgba(20, 184, 166, 0.12); --badge: #0d9488; }
-.tile.coral { --tint: rgba(251, 113, 133, 0.12); --badge: #e11d48; }
-.tile.pink { --tint: rgba(236, 72, 153, 0.12); --badge: #db2777; }
-.tile.amber { --tint: rgba(245, 158, 11, 0.14); --badge: #d97706; }
-.tile.sky { --tint: rgba(14, 165, 233, 0.12); --badge: #0284c7; }
-.tile.violet { --tint: rgba(139, 92, 246, 0.12); --badge: #7c3aed; }
+.tile.good { --badge: #16a34a; }
+.tile.poor { --badge: #dc2626; }
+.tile.good .badge, .tile.poor .badge { color: #ffffff; }
 .hero { border-radius: calc(var(--ss-radius, 8px) * 2); padding: 20px; background: var(--ss-color-accent, #4f46e5);
   color: var(--ss-color-onAccent, #ffffff); grid-column: 1 / -1; }
 .hero .value { display: block; font-size: 2.2em; font-weight: 700; }
