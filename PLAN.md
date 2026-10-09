@@ -2279,8 +2279,10 @@ Everything else in Part 0 is decided. A point that is not decided in Part 0 or 0
   signatures, 0.4.3–0.4.5); `@ss/net` (the outbound guard, 0.10); `@ss/ui` (Portal and dashboard components);
   `@ss/cli` (`ss app init`, `ss app validate`, `ss app assets`); `@ss/config` (shared tooling, 0.10).
 - **Hosting**: the environment variables are those of 0.11. Server functions: the Portal 5, each product 2. Preview
-  deploys never share the production database. Vercel Hobby is for non-commercial use: move hosting before charging
-  merchants (0.12 step 14).
+  deploys never share the production database. Every deployable's `vercel.json` pins its functions to `bom1`
+  (Mumbai), the region of the Atlas cluster (AWS `ap-south-1`): every page makes several database calls, and each one
+  across regions costs ~200 ms. If the database moves, the region moves with it. Vercel Hobby is for non-commercial
+  use: move hosting before charging merchants (0.12 step 14).
 
 ## 0.10 Standing technical rules
 
