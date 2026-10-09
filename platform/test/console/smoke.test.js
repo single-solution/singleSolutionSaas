@@ -1,21 +1,21 @@
 /**
  * Server render of every merchant console page against a live in-process Portal: the Owner seeds a merchant with two
  * websites, connects two fake products, adds them to a website and switches features on; the merchant's pages
- * (Overview, Websites, the website page with each tab, Usage and credits, Account) render without errors or React
- * warnings and use the words of PLAN 0.0.
+ * (Overview, the Websites screen with and without a website selected, Usage and credits, Account) render without
+ * errors or React warnings and use the words of PLAN 0.0.
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { renderToString } from 'react-dom/server';
 import { closeMongoClients } from '../../src/infra/db.js';
 import * as loaders from '../../src/console/loaders.js';
-import { routes, websiteTab } from '../../src/console/paths.js';
+import { routes } from '../../src/console/paths.js';
 import { AccountView } from '../../src/console/views/account.js';
 import { CreditsView } from '../../src/console/views/credits.js';
 import { BillingBanner, DaysLeft, ProductStatusBadge, productStatusLabel, productTone } from '../../src/console/views/billing.js';
 import { ConsoleShell, merchantSections } from '../../src/console/views/shell.js';
 import { contactLine, homeOf } from '../../src/console/views/sign-in.js';
-import { OverviewView, WebsiteView, WebsitesView } from '../../src/console/views/websites.js';
-import { ProductChips, dailyCostOf, scriptTag } from '../../src/console/views/website.js';
+import { OverviewView, WebsitesView } from '../../src/console/views/websites.js';
+import { dailyCostOf, scriptTag, websiteDot } from '../../src/console/views/website.js';
 import { startMongo } from '../helpers.js';
 import { createWorld } from './merchant-harness.js';
 
@@ -99,43 +99,31 @@ describe('merchant console smoke', () => {
 			expect(overviewText).toContain('Open');
 			expect(overviewText).toContain('Your admin adds products to this website.'); // the second website
 
-			// Websites: domain, product chips, daily cost
+			// Websites with nothing selected: the list (domain, status dot, daily cost) and a short empty state
 			const websitesText = text(
 				ssr(<WebsitesView {...await loaders.loadWebsites(merchant.api, merchantId)} branding={BRANDING} />),
 			);
 			expect(websitesText).toContain('www.shop.example.com');
-			expect(websitesText).toContain('Notes ( Active )');
-			expect(websitesText).toContain('Chatty ( No features on )');
+			expect(websitesText).toContain('2 products');
+			expect(websitesText).toContain('Select a website');
 
-			// the website page: Products (cards, Open; no admin actions), Install and tokens, Usage
-			for (const tab of ['products', 'install', 'usage']) {
-				const page = await loaders.loadWebsite(merchant.api, merchantId, site.websiteId, tab);
-				const html = text(ssr(<WebsiteView {...page} />));
-				expect(html).toContain('shop.example.com');
-				expect(html).toContain('Shop & Co');
-				expect(html).toContain('Install and tokens');
-				expect(html).not.toContain('Add product');
-				expect(html).not.toContain('Website actions');
-			}
-			const install = await loaders.loadWebsite(merchant.api, merchantId, site.websiteId, 'install');
-			if (!install.ok) throw new Error('install');
-			expect(install.tokens?.map((t) => t.productId)).toEqual(['chatty', 'notes']);
-			const installText = text(ssr(<WebsiteView {...install} />));
-			const notesToken = /** @type {any} */ (install.tokens?.find((t) => t.productId === 'notes'));
-			expect(installText).toContain(scriptTag(notesToken.widgetScriptUrl, notesToken.browserToken));
-			expect(installText).toContain('Browser token');
-			expect(installText).toContain('Server token');
-			expect(installText).toContain('Docs');
-			// a product without widgets has no script tag
-			expect(installText.match(/data-token=/g)).toHaveLength(1);
-			const usage = await loaders.loadWebsite(merchant.api, merchantId, site.websiteId, 'usage');
-			expect(text(ssr(<WebsiteView {...usage} />))).toContain('Spend per UTC day');
+			// a website selected: its card (products with Open; tokens and usage as dialogs; no admin actions)
+			const selected = await loaders.loadWebsites(merchant.api, merchantId, String(site.websiteId));
+			const selectedText = text(ssr(<WebsitesView {...selected} branding={BRANDING} />));
+			expect(selectedText).toContain('Notes');
+			expect(selectedText).toContain('Chatty');
+			expect(selectedText).toContain('No features on');
+			expect(selectedText).toContain('Install and tokens');
+			expect(selectedText).toContain('Usage');
+			expect(selectedText).not.toContain('Add product');
+			expect(selectedText).not.toContain('Remove website');
 
 			// another merchant's website is not found
 			const other = await world.signup('else@else.test', 'Else Ltd');
-			const foreign = await loaders.loadWebsite(other.b.api, other.merchantId, site.websiteId);
-			expect(foreign.ok).toBe(false);
-			expect(text(ssr(<WebsiteView {...foreign} />))).toContain('Back to websites');
+			const foreign = await loaders.loadWebsites(other.b.api, other.merchantId, String(site.websiteId));
+			expect(text(ssr(<WebsitesView {...foreign} branding={BRANDING} />))).toContain(
+				'This website does not exist or was removed.',
+			);
 
 			// Usage and credits, Account
 			const credits = await loaders.loadCredits(merchant.api, merchantId, { from: '2026-01-01', websiteId: site.websiteId });
@@ -193,10 +181,7 @@ describe('merchant console smoke', () => {
 		expect(homeOf('admin', '/credits')).toBe('/admin');
 		expect(contactLine({ email: 'a@b.co', phone: '+1', whatsapp: '+2' })).toBe('a@b.co, +1, WhatsApp +2');
 		expect(contactLine(null)).toBe('support');
-		expect(routes.website('web_1', 'install')).toBe('/websites/web_1?tab=install');
-		expect(routes.website('web_1', 'products')).toBe('/websites/web_1');
-		expect(websiteTab('usage')).toBe('usage');
-		expect(websiteTab('keys')).toBe('products');
+		expect(routes.website('web_1')).toBe('/websites/web_1');
 		expect(merchantSections('/websites/web_1')[0]?.items.map((i) => [i.label, i.current])).toEqual([
 			['Overview', false],
 			['Websites', true],
@@ -214,7 +199,14 @@ describe('merchant console smoke', () => {
 		expect(productStatusLabel({ status: 'other', featuresOn: ['a'] })).toBe('other');
 		expect(text(ssr(<ProductStatusBadge status="active" />))).toContain('No features on');
 		expect(text(ssr(<ProductStatusBadge status="stopped" featuresOn={['a']} />))).toContain('Stopped');
-		expect(text(ssr(<ProductChips cards={[]} />))).toContain('—');
+		// the status dot of a website in the list: the worst status of its products
+		/** @param {string} status @param {string[]} [featuresOn] */
+		const card = (status, featuresOn = ['a']) => ({ productId: status, name: status, status, featuresOn, dailyCost: 0 });
+		expect(websiteDot([])).toBe('neutral');
+		expect(websiteDot([card('active', [])])).toBe('neutral');
+		expect(websiteDot([card('active')])).toBe('success');
+		expect(websiteDot([card('active'), card('grace')])).toBe('warning');
+		expect(websiteDot([card('grace'), card('stopped')])).toBe('danger');
 		expect(dailyCostOf([{ productId: 'a', name: 'A', status: 'active', featuresOn: [], dailyCost: 24_000 }])).toBe(24_000);
 		expect(scriptTag('https://p.example/widget.js', 'tok')).toBe(
 			'<script src="https://p.example/widget.js" data-token="tok" async></script>',

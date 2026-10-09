@@ -1,11 +1,12 @@
 'use client';
 /**
- * Products (PLAN 0.8.2, 0.6): the connected products as a table (filter Active / Inactive, search) with **Add product**
- * (the product URL and connect secret; new products start inactive; an id already connected is refused with "use
- * Reconnect"), and the product page — an inner sidebar with the list, a header (name, Active / Inactive, address,
- * connected date; actions Open as admin, Set active / inactive, Reconnect) and the tabs Overview (credits earned this
- * month with the 30-day chart, websites using it) and Websites (merchant, domain, features on, daily cost; paged).
- * Owners manage products; Support sees them read-only. The Portal checks every right again.
+ * Products (PLAN 0.8.2, 0.6): one list-and-detail screen. The list of connected products (search, filter Active /
+ * Inactive; per row the name, a status dot and the websites using it) with **Add product** (the product URL and
+ * connect secret; new products start inactive; an id already connected is refused with "use Reconnect") sits beside
+ * the selected product — a header (name, Active / Inactive, address, connected date; actions Open as admin, Set active
+ * / inactive, Reconnect), its numbers (credits earned this month with the 30-day chart, websites using it) and its
+ * websites (merchant, domain, features on, daily cost; paged). Owners manage products; Support sees them read-only.
+ * The Portal checks every right again.
  * @module
  */
 import { useState } from 'react';
@@ -22,10 +23,10 @@ import {
 	Input,
 	KeyValueList,
 	PageHeader,
+	Section,
 	Select,
 	Stat,
 	Table,
-	Tabs,
 	describeProblem,
 	fieldErrors,
 	formatCredits,
@@ -35,7 +36,7 @@ import {
 import { PRODUCTS } from '../../../texts/console.js';
 import { Link } from '../../link.js';
 import { LocalTime, ProductStatusBadge } from '../../views/billing.js';
-import { BackLink, InnerList, openDashboard } from '../../views/common.js';
+import { ListDetail, ListPane, ListRow, ListSearch, openDashboard } from '../../views/common.js';
 import { adminFetch } from '../client.js';
 import { adminApi, adminRoutes } from '../paths.js';
 import { AdminProblem, adminCan } from './common.js';
@@ -130,88 +131,70 @@ function ConnectDialog({ open, title, description, submitLabel, urlRequired, pat
 }
 
 /**
- * The Products list.
- * @param {any} props loader result of `loadProducts` plus `admin`
+ * The Products list pane.
+ * @param {{ props: any, owner: boolean, selectedId: string | null }} input
  */
-export function ProductsView(props) {
+function ProductList({ props, owner, selectedId }) {
 	const toast = useToast();
 	const [adding, setAdding] = useState(false);
 	const [q, setQ] = useState('');
-	if (!props.ok) return <AdminProblem problem={props.problem} />;
-	const owner = adminCan(props.admin, 'products.manage');
 	const needle = q.trim().toLowerCase();
+	const status = props.filter.status ?? '';
 	const rows = /** @type {any[]} */ (props.items).filter(
 		(p) => !needle || String(p.name).toLowerCase().includes(needle) || String(p.productId).includes(needle),
 	);
+	const keep = { status: props.filter.status };
 	return (
-		<div className="space-y-8">
-			<PageHeader
+		<>
+			<ListPane
 				title={PRODUCTS.title}
-				subtitle={PRODUCTS.intro}
-				actions={
+				action={
 					owner ? (
-						<Button onClick={() => setAdding(true)} icon={<Icon name="plus" size={14} />}>
+						<Button size="sm" onClick={() => setAdding(true)} icon={<Icon name="plus" size={14} />}>
 							{PRODUCTS.add}
 						</Button>
 					) : null
 				}
-			/>
-			<div className="flex flex-wrap items-end gap-3">
-				<form method="get" className="flex items-end gap-3">
-					<Select
-						label={PRODUCTS.columns.status}
-						name="status"
-						defaultValue={props.filter.status ?? ''}
-						options={[
-							{ value: '', label: PRODUCTS.allStatuses },
-							{ value: 'active', label: PRODUCTS.status.active },
-							{ value: 'inactive', label: PRODUCTS.status.inactive },
-						]}
-						onChange={(e) => e.currentTarget.form?.requestSubmit()}
-					/>
-				</form>
-				<Input label={PRODUCTS.search} value={q} onChange={(e) => setQ(e.currentTarget.value)} />
-			</div>
-			<Table
-				caption={PRODUCTS.title}
-				captionHidden
-				rows={rows}
-				rowKey={(p) => p.productId}
-				empty={<EmptyState icon="box" title={PRODUCTS.none} />}
-				defaultSort={{ key: 'name', direction: 'asc' }}
-				columns={[
-					{
-						key: 'name',
-						header: PRODUCTS.columns.name,
-						rowHeader: true,
-						sortable: true,
-						render: (p) => (
-							<Link href={adminRoutes.product(p.productId)} className="font-semibold text-primary hover:underline">
-								{p.name}
-							</Link>
-						),
-					},
-					{
-						key: 'status',
-						header: PRODUCTS.columns.status,
-						sortable: true,
-						render: (p) => <ProductActiveBadge status={p.status} />,
-					},
-					{
-						key: 'earnedThisMonth',
-						header: PRODUCTS.columns.earned,
-						align: 'right',
-						sortable: true,
-						render: (p) => formatCredits(p.earnedThisMonth ?? 0),
-					},
-					{ key: 'websites', header: PRODUCTS.columns.websites, align: 'right', sortable: true },
-					{
-						key: 'baseUrl',
-						header: PRODUCTS.columns.address,
-						render: (p) => <span className="break-all text-xs text-muted">{p.baseUrl}</span>,
-					},
-				]}
-			/>
+				tools={
+					<ListSearch label={PRODUCTS.search} value={q} onChange={setQ}>
+						<Select
+							label={PRODUCTS.columns.status}
+							hideLabel
+							fieldClassName="min-w-0 flex-1"
+							value={status}
+							options={[
+								{ value: '', label: PRODUCTS.allStatuses },
+								{ value: 'active', label: PRODUCTS.status.active },
+								{ value: 'inactive', label: PRODUCTS.status.inactive },
+							]}
+							onChange={(e) => {
+								const next = { status: e.currentTarget.value || null };
+								window.location.assign(selectedId ? adminRoutes.product(selectedId, next) : adminRoutes.products(next));
+							}}
+						/>
+					</ListSearch>
+				}>
+				{rows.length === 0 ? (
+					<li>
+						<EmptyState compact icon="box" kind="product" title={PRODUCTS.none} />
+					</li>
+				) : (
+					rows
+						.sort((a, b) => String(a.name).localeCompare(String(b.name)))
+						.map((p) => (
+							<ListRow
+								key={p.productId}
+								href={adminRoutes.product(p.productId, keep)}
+								current={p.productId === selectedId}
+								label={p.name}
+								sublabel={formatCredits(p.earnedThisMonth ?? 0)}
+								dot={p.status === 'active' ? 'success' : 'neutral'}
+								dotLabel={p.status === 'active' ? PRODUCTS.status.active : PRODUCTS.status.inactive}
+								meta={PRODUCTS.websitesCount(p.websites ?? 0)}
+							/>
+						))
+				)}
+			</ListPane>
 			{owner ? (
 				<ConnectDialog
 					open={adding}
@@ -225,31 +208,27 @@ export function ProductsView(props) {
 					onDone={(product) => {
 						setAdding(false);
 						toast.show({ title: PRODUCTS.connected(product.name) });
-						window.location.assign(adminRoutes.product(product.productId));
+						window.location.assign(adminRoutes.product(product.productId, keep));
 					}}
 				/>
 			) : null}
-		</div>
+		</>
 	);
 }
 
 /**
- * A product page.
- * @param {any} props loader result of `loadProduct` plus `admin`
+ * The selected product: header with its actions, numbers and websites.
+ * @param {{ detail: any, owner: boolean }} props
  */
-export function ProductView(props) {
+function ProductDetail({ detail, owner }) {
 	const toast = useToast();
-	const [product, setProduct] = useState(props.ok ? props.product : null);
-	const [tab, setTab] = useState(props.ok ? props.tab : 'overview');
+	const [product, setProduct] = useState(detail.product);
 	const [reconnecting, setReconnecting] = useState(false);
 	const [busy, setBusy] = useState(/** @type {null | 'open' | 'status'} */ (null));
-	const [rows, setRows] = useState(/** @type {any[]} */ (props.ok ? props.websites.items : []));
-	const [cursor, setCursor] = useState(/** @type {string | null} */ (props.ok ? props.websites.cursor : null));
+	const [rows, setRows] = useState(/** @type {any[]} */ (detail.websites.items));
+	const [cursor, setCursor] = useState(/** @type {string | null} */ (detail.websites.cursor));
 	const [loadingMore, setLoadingMore] = useState(false);
-	const [problem, setProblem] = useState(/** @type {Problem | null} */ (props.ok ? props.websitesProblem : null));
-	if (!props.ok || !product)
-		return <AdminProblem problem={props.problem} back={{ href: adminRoutes.products(), label: PRODUCTS.title }} />;
-	const owner = adminCan(props.admin, 'products.manage');
+	const [problem, setProblem] = useState(/** @type {Problem | null} */ (detail.websitesProblem));
 	const numbers = product.numbers ?? {};
 
 	const openAsAdmin = async () => {
@@ -282,136 +261,112 @@ export function ProductView(props) {
 		setCursor(result.data?.cursor ?? null);
 	};
 
-	const overview = (
-		<div className="space-y-8">
-			<div className="grid gap-4 sm:grid-cols-2">
-				<Stat label={PRODUCTS.earnedThisMonth} value={formatCredits(numbers.earnedThisMonth ?? 0)} icon="wallet" />
-				<Stat label={PRODUCTS.websitesUsing} value={numbers.websites ?? 0} icon="globe" />
+	return (
+		<>
+			<PageHeader
+				level={2}
+				title={product.name}
+				badge={<ProductActiveBadge status={product.status} />}
+				subtitle={<span className="break-all">{product.baseUrl}</span>}
+				actions={
+					owner ? (
+						<div className="flex flex-wrap gap-2">
+							<Button
+								variant="secondary"
+								loading={busy === 'open'}
+								title={PRODUCTS.openAsAdminHelp}
+								onClick={() => void openAsAdmin()}
+								icon={<Icon name="external" size={14} />}>
+								{PRODUCTS.openAsAdmin}
+							</Button>
+							<Button
+								variant="secondary"
+								loading={busy === 'status'}
+								title={PRODUCTS.inactiveHelp}
+								onClick={() => void toggle()}>
+								{product.status === 'active' ? PRODUCTS.setInactive : PRODUCTS.setActive}
+							</Button>
+							<Button variant="secondary" onClick={() => setReconnecting(true)}>
+								{PRODUCTS.reconnect}
+							</Button>
+						</div>
+					) : null
+				}
+			/>
+			<KeyValueList
+				columns={3}
+				items={[
+					{ label: PRODUCTS.address, value: <span className="break-all">{product.baseUrl}</span> },
+					{ label: PRODUCTS.connectedAt, value: <LocalTime value={product.connectedAt} /> },
+					...(product.reconnectedAt
+						? [{ label: PRODUCTS.reconnectedAt, value: <LocalTime value={product.reconnectedAt} /> }]
+						: []),
+				]}
+			/>
+			<div className="grid gap-5 sm:grid-cols-2">
+				<Stat
+					label={PRODUCTS.earnedThisMonth}
+					value={formatCredits(numbers.earnedThisMonth ?? 0)}
+					icon="coins"
+					kind="credit"
+				/>
+				<Stat label={PRODUCTS.websitesUsing} value={numbers.websites ?? 0} icon="globe" kind="website" />
 			</div>
 			<Card title={PRODUCTS.earnedChart}>
 				<BarChart label={PRODUCTS.earnedChart} data={dayBars(numbers.days)} format={creditsOf} />
 			</Card>
-		</div>
-	);
-	const websites = (
-		<div className="space-y-3">
-			{problem ? <p className="text-sm text-danger">{describeProblem(problem)}</p> : null}
-			<Table
-				caption={PRODUCTS.tabs.websites}
-				captionHidden
-				rows={rows}
-				rowKey={(w) => w.websiteId}
-				empty={<EmptyState compact icon="globe" title={PRODUCTS.noWebsites} />}
-				hasMore={cursor !== null}
-				loadingMore={loadingMore}
-				onLoadMore={() => void more()}
-				columns={[
-					{
-						key: 'domain',
-						header: PRODUCTS.websiteColumns.domain,
-						rowHeader: true,
-						render: (w) => (
-							<Link
-								href={adminRoutes.website(w.merchantId, w.websiteId)}
-								className="break-all font-semibold text-primary hover:underline">
-								{w.domain}
-							</Link>
-						),
-					},
-					{
-						key: 'status',
-						header: PRODUCTS.websiteColumns.status,
-						render: (w) => <ProductStatusBadge status={w.status} featuresOn={w.featuresOn} />,
-					},
-					{
-						key: 'dailyCost',
-						header: PRODUCTS.websiteColumns.dailyCost,
-						align: 'right',
-						render: (w) => formatCredits(w.dailyCost ?? 0),
-					},
-					{
-						key: 'merchant',
-						header: PRODUCTS.websiteColumns.merchant,
-						render: (w) => (
-							<Link href={adminRoutes.merchant(w.merchantId)} className="hover:underline">
-								{w.merchantName}
-							</Link>
-						),
-					},
-					{
-						key: 'featuresOn',
-						header: PRODUCTS.websiteColumns.featuresOn,
-						render: (w) => featureNames(product.features, w.featuresOn),
-					},
-				]}
-			/>
-		</div>
-	);
-
-	return (
-		<div className="flex gap-6 lg:gap-8">
-			<InnerList
-				label={PRODUCTS.title}
-				search={PRODUCTS.search}
-				currentId={product.productId}
-				entries={props.products.map((/** @type {any} */ p) => ({
-					id: p.productId,
-					label: p.name,
-					href: adminRoutes.product(p.productId),
-					dot: p.status === 'active' ? 'success' : 'neutral',
-				}))}
-			/>
-			<div className="min-w-0 flex-1 space-y-8">
-				<BackLink href={adminRoutes.products()} label={PRODUCTS.title} />
-				<PageHeader
-					title={product.name}
-					badge={<ProductActiveBadge status={product.status} />}
-					subtitle={<span className="break-all">{product.baseUrl}</span>}
-					actions={
-						owner ? (
-							<div className="flex flex-wrap gap-2">
-								<Button
-									variant="secondary"
-									loading={busy === 'open'}
-									title={PRODUCTS.openAsAdminHelp}
-									onClick={() => void openAsAdmin()}
-									icon={<Icon name="external" size={14} />}>
-									{PRODUCTS.openAsAdmin}
-								</Button>
-								<Button
-									variant="secondary"
-									loading={busy === 'status'}
-									title={PRODUCTS.inactiveHelp}
-									onClick={() => void toggle()}>
-									{product.status === 'active' ? PRODUCTS.setInactive : PRODUCTS.setActive}
-								</Button>
-								<Button variant="secondary" onClick={() => setReconnecting(true)}>
-									{PRODUCTS.reconnect}
-								</Button>
-							</div>
-						) : null
-					}
-				/>
-				<KeyValueList
-					columns={3}
-					items={[
-						{ label: PRODUCTS.address, value: <span className="break-all">{product.baseUrl}</span> },
-						{ label: PRODUCTS.connectedAt, value: <LocalTime value={product.connectedAt} /> },
-						...(product.reconnectedAt
-							? [{ label: PRODUCTS.reconnectedAt, value: <LocalTime value={product.reconnectedAt} /> }]
-							: []),
+			<Section id="product-websites" title={PRODUCTS.websitesTitle} description={PRODUCTS.websitesIntro}>
+				{problem ? <p className="text-sm text-danger">{describeProblem(problem)}</p> : null}
+				<Table
+					caption={PRODUCTS.websitesTitle}
+					captionHidden
+					rows={rows}
+					rowKey={(w) => w.websiteId}
+					empty={<EmptyState compact icon="globe" kind="website" title={PRODUCTS.noWebsites} />}
+					hasMore={cursor !== null}
+					loadingMore={loadingMore}
+					onLoadMore={() => void more()}
+					columns={[
+						{
+							key: 'domain',
+							header: PRODUCTS.websiteColumns.domain,
+							rowHeader: true,
+							render: (w) => (
+								<Link
+									href={adminRoutes.website(w.merchantId, w.websiteId)}
+									className="break-all font-semibold text-primary hover:underline">
+									{w.domain}
+								</Link>
+							),
+						},
+						{
+							key: 'status',
+							header: PRODUCTS.websiteColumns.status,
+							render: (w) => <ProductStatusBadge status={w.status} featuresOn={w.featuresOn} />,
+						},
+						{
+							key: 'dailyCost',
+							header: PRODUCTS.websiteColumns.dailyCost,
+							align: 'right',
+							render: (w) => formatCredits(w.dailyCost ?? 0),
+						},
+						{
+							key: 'merchant',
+							header: PRODUCTS.websiteColumns.merchant,
+							render: (w) => (
+								<Link href={adminRoutes.merchant(w.merchantId)} className="hover:underline">
+									{w.merchantName}
+								</Link>
+							),
+						},
+						{
+							key: 'featuresOn',
+							header: PRODUCTS.websiteColumns.featuresOn,
+							render: (w) => featureNames(product.features, w.featuresOn),
+						},
 					]}
 				/>
-				<Tabs
-					label={product.name}
-					value={tab}
-					onChange={setTab}
-					tabs={[
-						{ id: 'overview', label: PRODUCTS.tabs.overview, content: overview },
-						{ id: 'websites', label: PRODUCTS.tabs.websites, content: websites },
-					]}
-				/>
-			</div>
+			</Section>
 			{owner ? (
 				<ConnectDialog
 					open={reconnecting}
@@ -428,7 +383,35 @@ export function ProductView(props) {
 					}}
 				/>
 			) : null}
-		</div>
+		</>
+	);
+}
+
+/**
+ * The Products screen: the list beside the selected product (or a short empty state).
+ * @param {any} props loader result of `loadProducts` plus `admin` and, with a product selected, `detail` (the result
+ *   of `loadProduct`) and `selectedId`
+ */
+export function ProductsView(props) {
+	if (!props.ok) return <AdminProblem problem={props.problem} />;
+	const owner = adminCan(props.admin, 'products.manage');
+	const detail = props.detail ?? null;
+	const selectedId = detail ? String(props.selectedId) : null;
+	const back = adminRoutes.products({ status: props.filter.status });
+	return (
+		<ListDetail
+			label={PRODUCTS.title}
+			back={{ href: back, label: PRODUCTS.title }}
+			list={<ProductList props={props} owner={owner} selectedId={selectedId} />}
+			empty={<EmptyState icon="box" kind="product" title={PRODUCTS.selectTitle} description={PRODUCTS.selectHelp} />}
+			detail={
+				detail === null ? null : detail.ok ? (
+					<ProductDetail key={selectedId} detail={detail} owner={owner} />
+				) : (
+					<AdminProblem problem={detail.problem} back={{ href: back, label: PRODUCTS.title }} />
+				)
+			}
+		/>
 	);
 }
 

@@ -1,6 +1,11 @@
 /**
  * Form controls. Every control has a visible label (or `hideLabel` for a visually hidden one), optional help text
  * and an error message, wired with `aria-describedby` / `aria-invalid` so assistive technology announces them.
+ *
+ * Layout (PLAN 0.6 "fields in a grid"): every control's root is a grid cell (`data-cell`). Inside a {@link FieldGrid}
+ * (and so inside every `Form`) short controls pack into 1 column on narrow containers, 2 from 28rem and 3 from 48rem
+ * (container widths, so dialogs and side panels get fewer columns); long ones (`TextArea`, `CheckboxGroup`, or any
+ * control with `wide`) span the whole row, and anything that is not a control (buttons, callouts, groups) does too.
  * @module
  */
 import { useId } from 'react';
@@ -10,6 +15,32 @@ import { Icon } from './icons.js';
 /** @typedef {import('react').ReactNode} ReactNode */
 
 export const LABEL_CLASS = 'block text-xs font-semibold uppercase tracking-wider text-muted';
+
+/**
+ * Classes of a responsive field grid: 1 / 2 / 3 columns by the width of the nearest `@container`, packed densely
+ * (masonry-like); children that are not field cells, and wide cells, span the row.
+ */
+export const FIELD_GRID =
+	'grid grid-flow-row-dense grid-cols-1 items-start gap-x-5 gap-y-4 @md:grid-cols-2 @3xl:grid-cols-3 ' +
+	'[&>:not([data-cell])]:col-span-full [&>[data-wide]]:col-span-full [&>a]:justify-self-start [&>button]:justify-self-start';
+
+/**
+ * Grid cell attributes of a control's root (`wide` spans the whole row).
+ * @param {boolean | undefined} wide
+ */
+const cell = (wide) => (wide ? { 'data-cell': '', 'data-wide': '' } : { 'data-cell': '' });
+
+/**
+ * A responsive grid of fields (its own size container): short controls side by side, long ones full width.
+ * @param {{ children: ReactNode, className?: string }} props
+ */
+export function FieldGrid({ children, className }) {
+	return (
+		<div className={cx('@container min-w-0', className)}>
+			<div className={FIELD_GRID}>{children}</div>
+		</div>
+	);
+}
 const CONTROL =
 	'w-full rounded-xl border bg-surface px-3.5 py-2 text-sm text-fg placeholder:text-muted/80 transition-colors ' +
 	'focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-focus ' +
@@ -62,13 +93,13 @@ function FieldMessages({ ids, help, error }) {
 /**
  * Label + control + messages layout (for custom controls).
  * @param {{ id?: string, label: ReactNode, hideLabel?: boolean, required?: boolean, help?: ReactNode,
- *   error?: ReactNode, aside?: ReactNode, className?: string,
+ *   error?: ReactNode, aside?: ReactNode, className?: string, wide?: boolean,
  *   children: (ids: { id: string, help: string, error: string, describedBy: string | undefined }) => ReactNode }} props
  */
-function Field({ id, label, hideLabel = false, required = false, help, error, aside, className, children }) {
+function Field({ id, label, hideLabel = false, required = false, help, error, aside, className, wide, children }) {
 	const ids = useFieldIds(id);
 	return (
-		<div className={cx('space-y-1.5', className)}>
+		<div {...cell(wide)} className={cx('min-w-0 space-y-1.5', className)}>
 			<div className={cx('flex items-center justify-between gap-2', hideLabel && 'sr-only')}>
 				<label htmlFor={ids.id} className={LABEL_CLASS}>
 					{label}
@@ -88,18 +119,20 @@ function Field({ id, label, hideLabel = false, required = false, help, error, as
 }
 
 /**
+ * `wide`: span the whole row of a field grid.
  * @typedef {{ label: ReactNode, hideLabel?: boolean, help?: ReactNode, error?: ReactNode, aside?: ReactNode,
- *   suffix?: ReactNode, fieldClassName?: string }} FieldProps
+ *   suffix?: ReactNode, fieldClassName?: string, wide?: boolean }} FieldProps
  */
 
 /**
  * Text-like input (`type` text, email, password, number, url, date, color …).
  * @param {import('react').InputHTMLAttributes<HTMLInputElement> & FieldProps & { ref?: import('react').Ref<HTMLInputElement> }} props
  */
-export function Input({ label, hideLabel, help, error, aside, suffix, fieldClassName, id, required, className, ...rest }) {
+export function Input({ label, hideLabel, help, error, aside, suffix, fieldClassName, wide, id, required, className, ...rest }) {
 	return (
 		<Field
 			label={label}
+			wide={wide}
 			{...(id ? { id } : {})}
 			{...(hideLabel ? { hideLabel } : {})}
 			required={Boolean(required)}
@@ -127,13 +160,27 @@ export function Input({ label, hideLabel, help, error, aside, suffix, fieldClass
 }
 
 /**
- * Multi-line text.
+ * Multi-line text (long text: spans the whole row of a field grid unless `wide={false}`).
  * @param {import('react').TextareaHTMLAttributes<HTMLTextAreaElement> & FieldProps} props
  */
-export function TextArea({ label, hideLabel, help, error, aside, fieldClassName, id, required, className, rows = 4, ...rest }) {
+export function TextArea({
+	label,
+	hideLabel,
+	help,
+	error,
+	aside,
+	fieldClassName,
+	wide = true,
+	id,
+	required,
+	className,
+	rows = 4,
+	...rest
+}) {
 	return (
 		<Field
 			label={label}
+			wide={wide}
 			{...(id ? { id } : {})}
 			{...(hideLabel ? { hideLabel } : {})}
 			required={Boolean(required)}
@@ -171,6 +218,7 @@ export function Select({
 	error,
 	aside,
 	fieldClassName,
+	wide,
 	id,
 	required,
 	className,
@@ -181,6 +229,7 @@ export function Select({
 	return (
 		<Field
 			label={label}
+			wide={wide}
 			{...(id ? { id } : {})}
 			{...(hideLabel ? { hideLabel } : {})}
 			required={Boolean(required)}
@@ -220,12 +269,12 @@ export function Select({
 /**
  * Checkbox with a label on the right.
  * @param {Omit<import('react').InputHTMLAttributes<HTMLInputElement>, 'type'> & { label: ReactNode, help?: ReactNode,
- *   error?: ReactNode }} props
+ *   error?: ReactNode, wide?: boolean }} props
  */
-export function Checkbox({ label, help, error, id, className, ...rest }) {
+export function Checkbox({ label, help, error, id, className, wide, ...rest }) {
 	const ids = useFieldIds(id);
 	return (
-		<div className={cx('space-y-1', className)}>
+		<div {...cell(wide)} className={cx('min-w-0 space-y-1', className)}>
 			<div className="flex items-start gap-2.5">
 				<input
 					id={ids.id}
@@ -251,7 +300,7 @@ export function Checkbox({ label, help, error, id, className, ...rest }) {
  * lock icon.
  * @param {{ checked: boolean, onChange?: (next: boolean) => void, label: ReactNode, description?: ReactNode,
  *   error?: ReactNode, disabled?: boolean, locked?: boolean, lockedLabel?: string, id?: string, hideLabel?: boolean,
- *   size?: 'sm' | 'md', className?: string, aside?: ReactNode }} props
+ *   size?: 'sm' | 'md', className?: string, aside?: ReactNode, wide?: boolean }} props
  */
 export function Switch({
 	checked,
@@ -267,6 +316,7 @@ export function Switch({
 	size = 'md',
 	className,
 	aside,
+	wide,
 }) {
 	const ids = useFieldIds(id);
 	const inactive = disabled || locked;
@@ -274,7 +324,7 @@ export function Switch({
 	const knob = size === 'sm' ? 'size-4' : 'size-5';
 	const shift = size === 'sm' ? 'translate-x-4' : 'translate-x-5';
 	return (
-		<div className={cx('flex items-start justify-between gap-4', className)}>
+		<div {...cell(wide)} className={cx('flex min-w-0 items-start justify-between gap-4', className)}>
 			<div className={cx('min-w-0 space-y-0.5', hideLabel && 'sr-only')}>
 				<label htmlFor={ids.id} className="flex items-center gap-1.5 text-sm font-semibold text-fg">
 					{label}
@@ -317,13 +367,29 @@ export function Switch({
  * Radio group in a fieldset.
  * @param {{ legend: ReactNode, name?: string, options: Option[], value: string | null | undefined,
  *   onChange: (value: string) => void, help?: ReactNode, error?: ReactNode, disabled?: boolean, inline?: boolean,
- *   className?: string }} props
+ *   className?: string, wide?: boolean }} props
  */
-export function RadioGroup({ legend, name, options, value, onChange, help, error, disabled = false, inline = false, className }) {
+export function RadioGroup({
+	legend,
+	name,
+	options,
+	value,
+	onChange,
+	help,
+	error,
+	disabled = false,
+	inline = false,
+	className,
+	wide,
+}) {
 	const ids = useFieldIds(undefined);
 	const groupName = name ?? ids.id;
 	return (
-		<fieldset className={cx('space-y-2', className)} aria-describedby={describedBy({ help, error }, ids)} disabled={disabled}>
+		<fieldset
+			{...cell(wide)}
+			className={cx('min-w-0 space-y-2', className)}
+			aria-describedby={describedBy({ help, error }, ids)}
+			disabled={disabled}>
 			<legend className={cx(LABEL_CLASS, 'mb-1.5')}>{legend}</legend>
 			<div className={cx(inline ? 'flex flex-wrap gap-x-5 gap-y-2' : 'space-y-2')}>
 				{options.map((o) => {
@@ -355,13 +421,18 @@ export function RadioGroup({ legend, name, options, value, onChange, help, error
 /**
  * Several checkboxes for a list value.
  * @param {{ legend: ReactNode, options: Option[], value: readonly string[], onChange: (value: string[]) => void,
- *   help?: ReactNode, error?: ReactNode, disabled?: boolean, max?: number, className?: string }} props
+ *   help?: ReactNode, error?: ReactNode, disabled?: boolean, max?: number, className?: string, wide?: boolean }} props
+ *   `wide` defaults to true (a list of options spans the row)
  */
-export function CheckboxGroup({ legend, options, value, onChange, help, error, disabled = false, max, className }) {
+export function CheckboxGroup({ legend, options, value, onChange, help, error, disabled = false, max, className, wide = true }) {
 	const ids = useFieldIds(undefined);
 	const selected = new Set(value);
 	return (
-		<fieldset className={cx('space-y-2', className)} aria-describedby={describedBy({ help, error }, ids)} disabled={disabled}>
+		<fieldset
+			{...cell(wide)}
+			className={cx('min-w-0 space-y-2', className)}
+			aria-describedby={describedBy({ help, error }, ids)}
+			disabled={disabled}>
 			<legend className={cx(LABEL_CLASS, 'mb-1.5')}>{legend}</legend>
 			<div className="flex flex-wrap gap-x-5 gap-y-2">
 				{options.map((o) => {

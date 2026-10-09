@@ -1,7 +1,7 @@
 'use client';
 /**
  * Credits and billing (PLAN 0.5.8, 0.8.2): the receipt form with its confirm step (Owner and Finance), all receipts,
- * charges by day, merchant or product, the merchants that need attention, and a merchant's Credits tab. Credits are
+ * charges by day, merchant or product, the merchants that need attention, and a merchant's Credits section. Credits are
  * whole numbers on screen and integer millicredits on the wire; receipts are never edited or reversed.
  * @module
  */
@@ -145,7 +145,7 @@ export function AddCreditsDialog({ merchant, balance, onClose, onAdded }) {
 }
 
 /**
- * A merchant's Credits tab: the money numbers, receipts and day charges.
+ * A merchant's Credits section: the money numbers, receipts and day charges.
  * @param {{ billing: any, receipts: any[], dayCharges: any[] }} props
  */
 export function MerchantCredits({ billing, receipts, dayCharges }) {
@@ -216,7 +216,7 @@ export function FinanceView(props) {
 										rowHeader: true,
 										render: (m) => (
 											<Link
-												href={adminRoutes.merchant(m.merchantId, 'credits')}
+												href={`${adminRoutes.merchant(m.merchantId)}#merchant-credits`}
 												className="font-semibold text-primary hover:underline">
 												{m.merchantName ?? m.merchantId}
 											</Link>

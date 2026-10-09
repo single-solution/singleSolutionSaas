@@ -97,18 +97,20 @@ export function DaysLeft({ summary }) {
  */
 export function BillingStats({ summary }) {
 	return (
-		<div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
-			<Stat
-				label={BILLING.balance}
-				value={formatCredits(summary.balance)}
-				tone={summary.balance <= 0 ? 'danger' : summary.lowBalance ? 'warning' : 'neutral'}
-				hint={<MerchantStatusBadge status={summary.status} />}
-				icon="wallet"
-				accent="indigo"
-			/>
-			<Stat label={BILLING.daysLeft} value={<DaysLeft summary={summary} />} icon="clock" accent="violet" />
-			<Stat label={BILLING.dailySpend} value={formatCredits(summary.dailySpend)} icon="trendingUp" accent="pink" />
-			<Stat label={BILLING.spentThisMonth} value={formatCredits(summary.spentThisMonth)} icon="calendar" accent="amber" />
+		<div className="@container">
+			<div className="grid gap-5 @lg:grid-cols-2 @5xl:grid-cols-4">
+				<Stat
+					label={BILLING.balance}
+					value={formatCredits(summary.balance)}
+					tone={summary.balance <= 0 ? 'danger' : summary.lowBalance ? 'warning' : 'neutral'}
+					hint={<MerchantStatusBadge status={summary.status} />}
+					icon="wallet"
+					kind="credit"
+				/>
+				<Stat label={BILLING.daysLeft} value={<DaysLeft summary={summary} />} icon="clock" kind="credit" />
+				<Stat label={BILLING.dailySpend} value={formatCredits(summary.dailySpend)} icon="trendingUp" kind="credit" />
+				<Stat label={BILLING.spentThisMonth} value={formatCredits(summary.spentThisMonth)} icon="calendar" kind="credit" />
+			</div>
 		</div>
 	);
 }

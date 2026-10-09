@@ -6,7 +6,7 @@
  * throw for API failures. Query-string inputs are validated here; anything malformed is ignored.
  * @module
  */
-import { firstFailure as anyFailure, loadWebsitePage, loadWebsiteRows } from '../loaders.js';
+import { loadWebsiteRows } from '../loaders.js';
 import { ID, adminApi as paths } from './paths.js';
 import { adminCan } from './rights.js';
 
@@ -107,19 +107,23 @@ export const loadMerchants = async (api, filter = {}) => {
 };
 
 /**
- * Merchant page: the merchant, its websites with their products (chips, daily cost), the billing summary (checked),
- * receipts, day charges and activity.
+ * The selected merchant of the Merchants screen: the merchant, its websites with their products (cards: status,
+ * features on, daily cost), the billing summary (checked), receipts, day charges, activity, and the active connected
+ * products that Add product offers (only for admins who add products: Owner and Support).
  * @param {ConsoleApi} api
  * @param {string} merchantId
+ * @param {any} admin the signed-in admin
  */
-export const loadMerchant = async (api, merchantId) => {
-	const [merchant, websites, billing, receipts, dayCharges, activity] = await Promise.all([
+export const loadMerchant = async (api, merchantId, admin) => {
+	const manage = adminCan(admin, 'products_on_websites.write');
+	const [merchant, websites, billing, receipts, dayCharges, activity, active] = await Promise.all([
 		api.get(paths.merchant(merchantId)),
 		loadWebsiteRows(api, merchantId),
 		api.get(paths.billing(merchantId)),
 		api.get(paths.receipts(merchantId)),
 		api.get(paths.dayCharges(merchantId)),
 		api.get(paths.merchantActivity(merchantId)),
+		manage ? api.get(paths.products({ status: 'active' })) : null,
 	]);
 	const failed = firstFailure(merchant);
 	if (failed) return failed;
@@ -131,29 +135,6 @@ export const loadMerchant = async (api, merchantId) => {
 		receipts: itemsOf(receipts),
 		dayCharges: itemsOf(dayCharges),
 		activity: pageOf(activity),
-	};
-};
-
-/**
- * The website page seen by an admin (PLAN 0.8.2): the merchant's name, the products on the website, the install blocks
- * (Owner and Support only; never Finance), the usage, and the active connected products for Add product (Owner and
- * Support).
- * @param {ConsoleApi} api
- * @param {{ merchantId: string, websiteId: string, tab?: string, admin: any }} input
- */
-export const loadWebsite = async (api, { merchantId, websiteId, tab, admin }) => {
-	const manage = adminCan(admin, 'products_on_websites.write');
-	const [page, merchant, active] = await Promise.all([
-		loadWebsitePage(api, { merchantId, websiteId, tab, tokens: adminCan(admin, 'tokens.manage') }),
-		api.get(paths.merchant(merchantId)),
-		manage ? api.get(paths.products({ status: 'active' })) : null,
-	]);
-	if (!page.ok) return page;
-	const failed = anyFailure(merchant);
-	if (failed) return failed;
-	return {
-		...page,
-		merchantName: String(/** @type {any} */ (merchant.ok ? merchant.data : null)?.name ?? ''),
 		addable: active ? itemsOf(active).map((p) => ({ productId: String(p.productId), name: String(p.name) })) : null,
 	};
 };
@@ -170,7 +151,8 @@ export const loadOverview = async (api) => {
 };
 
 /**
- * Products (PLAN 0.8.2): the connected products with the websites using each and the credits it earned this month.
+ * Products (PLAN 0.8.2): the connected products with the websites using each and the credits it earned this month (the
+ * list of the Products screen).
  * @param {ConsoleApi} api
  * @param {{ status?: string }} [filter]
  */
@@ -183,18 +165,13 @@ export const loadProducts = async (api, filter = {}) => {
 };
 
 /**
- * A product page: the product (address, connected date, features with prices, numbers), the first page of its
- * websites, and every connected product (inner sidebar).
+ * The selected product of the Products screen: the product (address, connected date, features with prices, numbers)
+ * and the first page of its websites.
  * @param {ConsoleApi} api
  * @param {string} productId
- * @param {{ tab?: string }} [options]
  */
-export const loadProduct = async (api, productId, { tab } = {}) => {
-	const [product, websites, all] = await Promise.all([
-		api.get(paths.product(productId)),
-		api.get(paths.productWebsites(productId)),
-		api.get(paths.products()),
-	]);
+export const loadProduct = async (api, productId) => {
+	const [product, websites] = await Promise.all([api.get(paths.product(productId)), api.get(paths.productWebsites(productId))]);
 	const failed = firstFailure(product);
 	if (failed) return failed;
 	const page = /** @type {any} */ (orElse(websites, null));
@@ -203,8 +180,6 @@ export const loadProduct = async (api, productId, { tab } = {}) => {
 		product: /** @type {any} */ (product.ok ? product.data : null),
 		websites: { items: /** @type {any[]} */ (page?.items ?? []), cursor: /** @type {string | null} */ (page?.cursor ?? null) },
 		websitesProblem: websites.ok ? null : websites.problem,
-		products: itemsOf(all).map((p) => ({ productId: String(p.productId), name: String(p.name), status: String(p.status) })),
-		tab: tab === 'websites' ? /** @type {const} */ ('websites') : /** @type {const} */ ('overview'),
 	};
 };
 

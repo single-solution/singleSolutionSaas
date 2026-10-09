@@ -16,27 +16,15 @@ export const query = (params) => {
 	return s ? `?${s}` : '';
 };
 
-/** The tabs of the website page (PLAN 0.6, 0.8.2), in order. */
-export const WEBSITE_TABS = Object.freeze(/** @type {const} */ (['products', 'install', 'usage']));
-
-/** @typedef {(typeof WEBSITE_TABS)[number]} WebsiteTab */
-
-/**
- * A website tab from a query string value (anything else is the first tab).
- * @param {unknown} value
- * @returns {WebsiteTab}
- */
-export const websiteTab = (value) =>
-	WEBSITE_TABS.includes(/** @type {WebsiteTab} */ (value)) ? /** @type {WebsiteTab} */ (value) : 'products';
-
 /** Merchant console page URLs. */
 export const routes = Object.freeze({
 	login: (next = '') => (next ? `/login?next=${e(next)}` : '/login'),
 	forgotPassword: () => '/forgot-password',
 	overview: () => '/overview',
+	/** the Websites screen with nothing selected */
 	websites: () => '/websites',
-	website: (/** @type {string} */ id, /** @type {WebsiteTab | null} */ tab = null) =>
-		`/websites/${e(id)}${query({ tab: tab === 'products' ? null : tab })}`,
+	/** the Websites screen with a website selected */
+	website: (/** @type {string} */ id) => `/websites/${e(id)}`,
 	credits: () => '/credits',
 	account: () => '/account',
 });

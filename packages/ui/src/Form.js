@@ -1,12 +1,15 @@
 'use client';
 /**
- * Form helpers: `Form` (no native submission, async `onSubmit` with a busy flag), `FormError` (a problem document
- * as a friendly callout), `FormActions`, and `useFormState` for values + field errors mapped from problems.
+ * Form helpers: `Form` (no native submission, async `onSubmit` with a busy flag; its children are laid out in the
+ * responsive field grid of fields.js, so short controls sit side by side and everything else spans the row),
+ * `FormError` (a problem document as a friendly callout), `FormActions`, and `useFormState` for values + field errors
+ * mapped from problems.
  * @module
  */
 import { useCallback, useState } from 'react';
 import { cx } from './cx.js';
 import { Callout } from './display.js';
+import { FIELD_GRID } from './fields.js';
 import { describeProblem, fieldErrors } from './problems.js';
 
 /** @typedef {import('./problems.js').Problem} Problem */
@@ -21,13 +24,13 @@ export function Form({ onSubmit, busy = false, className, children, ...rest }) {
 		<form
 			noValidate
 			aria-busy={busy || undefined}
-			className={cx('space-y-4', className)}
+			className={cx('@container min-w-0', className)}
 			onSubmit={(event) => {
 				event.preventDefault();
 				if (!busy) void onSubmit(event);
 			}}
 			{...rest}>
-			{children}
+			<div className={FIELD_GRID}>{children}</div>
 		</form>
 	);
 }

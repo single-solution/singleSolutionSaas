@@ -17,9 +17,7 @@ import Merchants, { metadata as MerchantsMeta } from '../_views/merchants.js';
 import Products, { metadata as ProductsMeta } from '../_views/products.js';
 import Settings, { metadata as SettingsMeta } from '../_views/settings.js';
 import MerchantsMerchantId, { metadata as MerchantsMerchantIdMeta } from '../_views/merchants-merchantId.js';
-import MerchantsMerchantIdWebsitesWebsiteId, {
-	metadata as MerchantsMerchantIdWebsitesWebsiteIdMeta,
-} from '../_views/merchants-merchantId-websites-websiteId.js';
+import AdminsAdminId, { metadata as AdminsAdminIdMeta } from '../_views/admins-adminId.js';
 import ProductsProductId, { metadata as ProductsProductIdMeta } from '../_views/products-productId.js';
 
 export const dynamic = 'force-dynamic';
@@ -36,12 +34,7 @@ const VIEWS = /** @type {Array<[string[], (props: any) => any, import('next').Me
 	[['products'], Products, ProductsMeta, true],
 	[['settings'], Settings, SettingsMeta, true],
 	[['merchants', ':merchantId'], MerchantsMerchantId, MerchantsMerchantIdMeta, true],
-	[
-		['merchants', ':merchantId', 'websites', ':websiteId'],
-		MerchantsMerchantIdWebsitesWebsiteId,
-		MerchantsMerchantIdWebsitesWebsiteIdMeta,
-		true,
-	],
+	[['admins', ':adminId'], AdminsAdminId, AdminsAdminIdMeta, true],
 	[['products', ':productId'], ProductsProductId, ProductsProductIdMeta, true],
 ]);
 

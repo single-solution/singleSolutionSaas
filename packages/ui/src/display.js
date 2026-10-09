@@ -8,35 +8,25 @@ import { Icon } from './icons.js';
 
 /** @typedef {import('react').ReactNode} ReactNode */
 /** @typedef {'neutral' | 'primary' | 'success' | 'warning' | 'danger' | 'info'} Tone */
-/** @typedef {'indigo' | 'violet' | 'teal' | 'coral' | 'pink' | 'amber' | 'sky' | 'green'} Accent */
+/**
+ * Kind of thing a tile, badge or menu item stands for (PLAN 0.6 colour rule). Its colour comes from the semantic tokens
+ * `--tone-<kind>` of theme.css (palette A: one colour per kind; palette B: the indigo tint for all).
+ * @typedef {'overview' | 'merchant' | 'website' | 'product' | 'feature' | 'credit' | 'price' | 'admin' | 'settings'
+ *   | 'default' | 'activity' | 'connection' | 'developer'} Kind
+ */
 
 /**
- * Tile colours per accent (soft tint, icon badge, badge icon). Spelled out so Tailwind finds every class.
- * @type {Record<Accent, { tint: string, badge: string }>}
+ * Rounded icon badge in the colour of a kind.
+ * @param {{ icon: import('./icons.js').IconName, kind: Kind, size?: 'sm' | 'md', className?: string }} props
  */
-const ACCENTS = Object.freeze({
-	indigo: { tint: 'bg-tint-indigo', badge: 'bg-accent-indigo text-on-accent-indigo' },
-	violet: { tint: 'bg-tint-violet', badge: 'bg-accent-violet text-on-accent-violet' },
-	teal: { tint: 'bg-tint-teal', badge: 'bg-accent-teal text-on-accent-teal' },
-	coral: { tint: 'bg-tint-coral', badge: 'bg-accent-coral text-on-accent-coral' },
-	pink: { tint: 'bg-tint-pink', badge: 'bg-accent-pink text-on-accent-pink' },
-	amber: { tint: 'bg-tint-amber', badge: 'bg-accent-amber text-on-accent-amber' },
-	sky: { tint: 'bg-tint-sky', badge: 'bg-accent-sky text-on-accent-sky' },
-	green: { tint: 'bg-tint-green', badge: 'bg-accent-green text-on-accent-green' },
-});
-
-/**
- * Rounded icon badge in an accent colour.
- * @param {{ icon: import('./icons.js').IconName, accent?: Accent, size?: 'sm' | 'md', className?: string }} props
- */
-export function IconBadge({ icon, accent = 'indigo', size = 'md', className }) {
+export function IconBadge({ icon, kind, size = 'md', className }) {
 	return (
 		<span
 			aria-hidden="true"
+			data-tone={kind}
 			className={cx(
-				'inline-flex shrink-0 items-center justify-center',
+				'inline-flex shrink-0 items-center justify-center bg-tone-solid text-tone-on-solid',
 				size === 'sm' ? 'size-8 rounded-lg' : 'size-10 rounded-xl',
-				ACCENTS[accent].badge,
 				className,
 			)}>
 			<Icon name={icon} size={size === 'sm' ? 15 : 18} />
@@ -80,19 +70,21 @@ export function Card({ title, subtitle, actions, children, className, bodyClassN
 }
 
 /**
- * Page title row.
- * @param {{ title: ReactNode, subtitle?: ReactNode, actions?: ReactNode, breadcrumbs?: ReactNode, badge?: ReactNode }} props
+ * Page title row. `level` 2 makes the title an `h2` (the detail beside a list whose heading is the page's `h1`).
+ * @param {{ title: ReactNode, subtitle?: ReactNode, actions?: ReactNode, breadcrumbs?: ReactNode, badge?: ReactNode,
+ *   level?: 1 | 2 }} props
  */
-export function PageHeader({ title, subtitle, actions, breadcrumbs, badge }) {
+export function PageHeader({ title, subtitle, actions, breadcrumbs, badge, level = 1 }) {
+	const Heading = level === 2 ? 'h2' : 'h1';
 	return (
 		<div className="space-y-3 pb-1">
 			{breadcrumbs}
 			<div className="flex flex-wrap items-end justify-between gap-4">
 				<div className="min-w-0">
-					<h1 className="flex flex-wrap items-center gap-2 text-2xl font-extrabold tracking-tight text-fg">
+					<Heading className="flex flex-wrap items-center gap-2 text-2xl font-extrabold tracking-tight text-fg">
 						<span className="break-words">{title}</span>
 						{badge}
-					</h1>
+					</Heading>
 					{subtitle ? <p className="mt-1.5 text-sm text-muted">{subtitle}</p> : null}
 				</div>
 				{actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
@@ -122,19 +114,20 @@ const DOTS = {
 };
 
 /**
- * Small pill.
- * @param {{ tone?: Tone, children: ReactNode, dot?: boolean, className?: string, title?: string }} props
+ * Small pill: a status `tone`, or the colour of a `kind` of thing (a chip; it wins over `tone`).
+ * @param {{ tone?: Tone, kind?: Kind, children: ReactNode, dot?: boolean, className?: string, title?: string }} props
  */
-export function Badge({ tone = 'neutral', children, dot = false, className, title }) {
+export function Badge({ tone = 'neutral', kind, children, dot = false, className, title }) {
 	return (
 		<span
 			title={title}
+			{...(kind ? { 'data-tone': kind } : {})}
 			className={cx(
 				'inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border px-2 py-0.5 text-xs font-semibold',
-				TONES[tone],
+				kind ? 'border-transparent bg-tone-tint text-tone-ink' : TONES[tone],
 				className,
 			)}>
-			{dot ? <span aria-hidden="true" className={cx('size-1.5 rounded-full', DOTS[tone])} /> : null}
+			{dot ? <span aria-hidden="true" className={cx('size-1.5 rounded-full', kind ? 'bg-tone-ink' : DOTS[tone])} /> : null}
 			{children}
 		</span>
 	);
@@ -203,11 +196,11 @@ export function Callout({ tone = 'info', title, children, actions, className, li
 }
 
 /**
- * Empty state (nothing here yet) with an optional call to action.
+ * Empty state (nothing here yet) with an optional call to action. The icon is neutral, or tinted with a `kind`.
  * @param {{ title: ReactNode, description?: ReactNode, action?: ReactNode, icon?: import('./icons.js').IconName,
- *   className?: string, compact?: boolean }} props
+ *   kind?: Kind, className?: string, compact?: boolean }} props
  */
-export function EmptyState({ title, description, action, icon = 'box', className, compact = false }) {
+export function EmptyState({ title, description, action, icon = 'box', kind, className, compact = false }) {
 	return (
 		<div
 			className={cx(
@@ -215,7 +208,12 @@ export function EmptyState({ title, description, action, icon = 'box', className
 				compact ? 'gap-2 px-4 py-6' : 'gap-3 px-6 py-12',
 				className,
 			)}>
-			<span className="flex size-10 items-center justify-center rounded-xl bg-primary-soft text-on-primary-soft">
+			<span
+				{...(kind ? { 'data-tone': kind } : {})}
+				className={cx(
+					'flex size-10 items-center justify-center rounded-xl',
+					kind ? 'bg-tone-tint text-tone-ink' : 'bg-surface-3 text-muted',
+				)}>
 				<Icon name={icon} size={18} />
 			</span>
 			<div className="max-w-md space-y-1">
@@ -266,12 +264,12 @@ export function Skeleton({ className, lines = 1, label = 'Loading' }) {
 }
 
 /**
- * Key figure: a summary tile. With an `accent` the tile takes that soft tint and shows the icon in a rounded badge
- * of the accent colour (PLAN 0.6: each kind of number has its own colour).
+ * Key figure: a summary tile. With a `kind` the tile takes that kind's soft tint and shows the icon in a rounded badge
+ * of its colour (PLAN 0.6 colour rule); `tone` colours the hint by status.
  * @param {{ label: ReactNode, value: ReactNode, hint?: ReactNode, tone?: Tone, icon?: import('./icons.js').IconName,
- *   accent?: Accent, className?: string }} props
+ *   kind?: Kind, className?: string }} props
  */
-export function Stat({ label, value, hint, tone = 'neutral', icon, accent, className }) {
+export function Stat({ label, value, hint, tone = 'neutral', icon, kind, className }) {
 	const hintTone =
 		tone === 'danger'
 			? 'text-danger'
@@ -281,9 +279,21 @@ export function Stat({ label, value, hint, tone = 'neutral', icon, accent, class
 					? 'text-success'
 					: 'text-muted';
 	return (
-		<div className={cx('min-w-0 space-y-3 rounded-card p-5 sm:p-6', accent ? ACCENTS[accent].tint : 'bg-surface', className)}>
+		<div
+			{...(kind ? { 'data-tone': kind } : {})}
+			className={cx('min-w-0 space-y-3 rounded-card p-5 sm:p-6', kind ? 'bg-tone-tile' : 'bg-surface', className)}>
 			<div className="flex items-center gap-3">
-				{icon ? <IconBadge icon={icon} accent={accent ?? 'indigo'} /> : null}
+				{icon ? (
+					kind ? (
+						<IconBadge icon={icon} kind={kind} />
+					) : (
+						<span
+							aria-hidden="true"
+							className="inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-surface-3 text-muted">
+							<Icon name={icon} size={18} />
+						</span>
+					)
+				) : null}
 				<span className="min-w-0 text-sm font-semibold text-muted">{label}</span>
 			</div>
 			<div className="truncate text-3xl font-extrabold tracking-tight text-fg tabular-nums">{value}</div>

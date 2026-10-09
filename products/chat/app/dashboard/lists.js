@@ -6,7 +6,19 @@
  * @module
  */
 import { useState } from 'react';
-import { Button, Callout, Card, Checkbox, CodeBlock, ConfirmDialog, Input, Select, TextArea, describeProblem } from '@ss/ui';
+import {
+	Button,
+	Callout,
+	Card,
+	Checkbox,
+	CodeBlock,
+	ConfirmDialog,
+	FieldGrid,
+	Input,
+	Select,
+	TextArea,
+	describeProblem,
+} from '@ss/ui';
 import { call, fill, useLoad } from './api.js';
 import { Loaded } from './parts.js';
 import { TEXTS } from './texts.js';
@@ -199,7 +211,7 @@ export function ToolsEditor({ websiteId, off }) {
 					set({ parameters: parameters.map((p, at) => (at === index ? { ...p, ...patch } : p)) });
 				return (
 					<>
-						<div className="grid gap-3 md:grid-cols-2">
+						<FieldGrid>
 							<Input
 								label={T.name}
 								value={tool.name}
@@ -208,7 +220,7 @@ export function ToolsEditor({ websiteId, off }) {
 								onChange={(event) => set({ name: event.target.value })}
 							/>
 							<Input label={T.url} type="url" value={tool.url} onChange={(event) => set({ url: event.target.value })} />
-						</div>
+						</FieldGrid>
 						<TextArea
 							label={T.description}
 							rows={2}
@@ -293,7 +305,7 @@ export function PageRulesEditor({ websiteId, off }) {
 			})}
 			render={(rule, set) => (
 				<>
-					<div className="grid gap-3 md:grid-cols-2">
+					<FieldGrid>
 						<Input label={P.path} value={rule.path} onChange={(event) => set({ path: event.target.value })} />
 						<Input
 							label={P.delay}
@@ -303,7 +315,7 @@ export function PageRulesEditor({ websiteId, off }) {
 							value={String(rule.delay)}
 							onChange={(event) => set({ delay: Number(event.target.value) })}
 						/>
-					</div>
+					</FieldGrid>
 					<TextArea
 						label={P.message}
 						rows={2}
@@ -469,7 +481,7 @@ export function FlowsEditor({ websiteId, off, customFields }) {
 								onChange={(event) => set({ start: { ...start, keywords: toLines(event.target.value) } })}
 							/>
 						) : (
-							<div className="grid gap-3 md:grid-cols-2">
+							<FieldGrid>
 								<Input
 									label={F.path}
 									value={start.path}
@@ -483,7 +495,7 @@ export function FlowsEditor({ websiteId, off, customFields }) {
 									value={String(start.delay)}
 									onChange={(event) => set({ start: { ...start, delay: Number(event.target.value) } })}
 								/>
-							</div>
+							</FieldGrid>
 						)}
 						<p className="text-sm font-semibold">{F.steps}</p>
 						{steps.map((step, index) => (
@@ -495,7 +507,7 @@ export function FlowsEditor({ websiteId, off, customFields }) {
 									onMove={(move) => set({ steps: moved(steps, index, move) })}
 									onRemove={() => set({ steps: steps.filter((_, at) => at !== index) })}
 								/>
-								<div className="grid gap-3 md:grid-cols-2">
+								<FieldGrid>
 									<Select
 										label={F.step}
 										value={step.kind}
@@ -514,7 +526,7 @@ export function FlowsEditor({ websiteId, off, customFields }) {
 											onChange={(event) => setStep(index, { ...step, field: event.target.value })}
 										/>
 									) : null}
-								</div>
+								</FieldGrid>
 								{'text' in step ? (
 									<TextArea
 										label={F.text}

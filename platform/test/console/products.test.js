@@ -3,21 +3,20 @@
  * Admin Products in the browser (jsdom) against a live in-process Portal with fake products (PLAN 0.8.2 Products): the
  * list with its search and Add product (missing fields, a refused secret, an unreachable address, an id already
  * connected → "use Reconnect", a new product connected inactive), and the product page (Open as admin on Defaults with
- * no website, Set active / inactive, Reconnect, the Overview numbers and the paged Websites tab).
+ * no website, Set active / inactive, Reconnect, the numbers and the paged websites of a selected product).
  */
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { ToastProvider } from '@ss/ui';
 import { cleanup, render } from '@ss/ui/testing';
 import { closeMongoClients } from '../../src/infra/db.js';
 import * as admin from '../../src/console/admin/loaders.js';
-import { ProductView, ProductsView } from '../../src/console/admin/views/products.js';
+import { ProductsView } from '../../src/console/admin/views/products.js';
 import { startMongo } from '../helpers.js';
 import { PORTAL_URL } from '../helpers.js';
 import { startFakeProduct } from '../modules/catalog/fakes/product.js';
 import {
 	button,
 	buttons,
-	clickEl,
 	createWorld,
 	dialog,
 	fill,
@@ -48,10 +47,6 @@ afterEach(() => {
 
 /** @param {import('react').ReactNode} node */
 const withToasts = (node) => render(<ToastProvider durationMs={600_000}>{node}</ToastProvider>);
-
-/** @param {string} label */
-const tab = (label) =>
-	clickEl(/** @type {Element} */ ([...document.querySelectorAll('[role="tab"]')].find((t) => t.textContent === label)));
 
 /**
  * The claims of a launch URL's token (decoded, not verified).
@@ -125,7 +120,7 @@ describe('admin Products (jsdom)', () => {
 		}
 	});
 
-	it('drives the product page: Open as admin, Set active / inactive, Reconnect, Overview and Websites', async () => {
+	it('drives a selected product: Open as admin, Set active / inactive, Reconnect, its numbers and websites', async () => {
 		const restore = quiet();
 		const world = await createWorld({ db: mongo.db('products_page') });
 		try {
@@ -138,8 +133,14 @@ describe('admin Products (jsdom)', () => {
 			const open = vi.fn();
 			vi.stubGlobal('open', open);
 			ownerBrowser.use();
+			const list = await admin.loadProducts(ownerBrowser.api, {});
 			const loaded = await admin.loadProduct(ownerBrowser.api, 'notes');
-			withToasts(<ProductView {...loaded} admin={owner} />);
+			/** @param {Record<string, unknown>} [over] the selected product's loader result, changed */
+			const screen = (over = {}) => (
+				<ProductsView {...list} detail={{ ...loaded, ...over }} selectedId="notes" admin={owner} />
+			);
+			withToasts(screen());
+			expect(document.querySelector('a[aria-current="page"]')?.textContent).toContain('Notes');
 			expect(shows('Credits earned this month (UTC)') && shows('Websites using it')).toBe(true);
 			expect(shows(notes.url)).toBe(true);
 
@@ -174,10 +175,10 @@ describe('admin Products (jsdom)', () => {
 			await until(() => shows('Reconnected.'));
 			expect(shows('Reconnected')).toBe(true);
 
-			// Websites: merchant, domain, status, features on, daily cost
-			await tab('Websites');
+			// Websites using it (on the same page): merchant, domain, status, features on, daily cost; the domain opens its
+			// website card on the merchant's page
 			expect(shows('shop.example.com') && shows('Shop & Co') && shows('Notes')).toBe(true);
-			expect(document.querySelector(`a[href="/admin/merchants/${merchantId}/websites/${site.websiteId}"]`)).not.toBeNull();
+			expect(document.querySelector(`a[href="/admin/merchants/${merchantId}#website-${site.websiteId}"]`)).not.toBeNull();
 			cleanup();
 
 			// the next page of websites, and failures (a stubbed Portal)
@@ -199,21 +200,14 @@ describe('admin Products (jsdom)', () => {
 				return new Response(JSON.stringify({ items: [more], cursor: null }), { status: 200 });
 			});
 			if (!loaded.ok) throw new Error('product');
-			withToasts(
-				<ProductView
-					{...loaded}
-					websites={{ items: loaded.websites.items, cursor: 'next-page' }}
-					tab="websites"
-					admin={owner}
-				/>,
-			);
+			withToasts(screen({ websites: { items: loaded.websites.items, cursor: 'next-page' } }));
 			await press('Load more');
 			await until(() => shows('more.example.com'));
 			expect(asked.at(-1)).toEqual({ url: '/v1/admin/products/notes/websites?cursor=next-page', method: 'GET' });
 			expect(buttons('Load more')).toHaveLength(0);
 			cleanup();
 			failing = true;
-			withToasts(<ProductView {...loaded} websites={{ items: [], cursor: 'next-page' }} tab="websites" admin={owner} />);
+			withToasts(screen({ websites: { items: [], cursor: 'next-page' } }));
 			expect(shows('No website has this product yet.')).toBe(true);
 			await press('Load more');
 			await until(() => shows('Something went wrong on our side.'));

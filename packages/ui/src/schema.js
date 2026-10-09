@@ -5,7 +5,9 @@
  * maximums of limits, lengths, enums, formats). The product remains the authority: its field errors are shown on top.
  *
  * `x-ui`: `widget` (switch|checkbox|number|text|textarea|select|radio|checkboxes|tags|color|url|email|password|json),
- * `group`, `order`, `help`, `placeholder`, `hidden`, `advanced`.
+ * `group`, `order`, `help`, `placeholder`, `hidden`, `advanced`, `wide` (span the whole row of the field grid; long
+ * text — a `textarea` widget or a long-text `format` (textarea, multiline, markdown, html) —, JSON, lists and
+ * fieldsets are wide anyway).
  * @module
  */
 
@@ -32,7 +34,7 @@
  * @property {boolean} [uniqueItems]
  * @property {Record<string, SettingNode>} [properties]
  * @property {string[]} [required]
- * @property {{ widget?: string, group?: string, order?: number, help?: string, placeholder?: string, hidden?: boolean, advanced?: boolean }} [x-ui]
+ * @property {{ widget?: string, group?: string, order?: number, help?: string, placeholder?: string, hidden?: boolean, advanced?: boolean, wide?: boolean }} [x-ui]
  */
 
 /**
@@ -58,11 +60,18 @@
  * @property {string | null} help
  * @property {string | null} placeholder
  * @property {boolean} advanced
+ * @property {boolean} wide spans the whole row of the field grid
  * @property {unknown} defaultValue
  * @property {Bounds} bounds
  */
 
 const DEFAULT_GROUP = 'General';
+
+/** String formats that hold long text (shown as a text area, full width). */
+export const LONG_TEXT_FORMATS = Object.freeze(['textarea', 'multiline', 'markdown', 'html']);
+
+/** Widgets that take the whole row of the field grid. */
+const WIDE_WIDGETS = Object.freeze(['textarea', 'json', 'tags', 'checkboxes', 'fieldset']);
 
 /**
  * Widget for a node: `x-ui.widget` when it fits the type, else a sensible default.
@@ -89,7 +98,21 @@ export const widgetOf = (node) => {
 	if (node.enum) return node.enum.length <= 4 ? 'radio' : 'select';
 	if (node.format === 'email') return 'email';
 	if (node.format === 'uri') return 'url';
+	if (node.format && LONG_TEXT_FORMATS.includes(node.format)) return 'textarea';
 	return 'text';
+};
+
+/**
+ * Whether a field spans the whole row of the field grid: `x-ui.wide` when given, else long text, JSON, lists and
+ * fieldsets.
+ * @param {SettingNode} node
+ * @param {string} widget
+ * @returns {boolean}
+ */
+export const isWide = (node, widget) => {
+	const asked = node['x-ui']?.wide;
+	if (typeof asked === 'boolean') return asked;
+	return WIDE_WIDGETS.includes(widget);
 };
 
 /**
@@ -122,6 +145,7 @@ export const fieldsOf = (schema) => {
 			node,
 			title: node.title ?? humanName(name),
 			widget: widgetOf(node),
+			wide: isWide(node, widgetOf(node)),
 			group: node['x-ui']?.group ?? DEFAULT_GROUP,
 			order: node['x-ui']?.order ?? 1000 + index,
 			help: node['x-ui']?.help ?? node.description ?? null,

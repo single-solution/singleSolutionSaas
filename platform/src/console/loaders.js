@@ -1,11 +1,11 @@
 /**
  * Page loaders: the data each console page needs, read through the in-process {@link ConsoleApi} (public API
  * only). A loader resolves to `{ ok: true, ... }` or `{ ok: false, status, problem }` (the first required call that
- * failed); optional reads degrade to empty values. Loaders never throw for API failures. The website loaders are
- * shared with the admin console (the same `/v1/merchants/…` routes).
+ * failed); optional reads degrade to empty values. Loaders never throw for API failures. `loadWebsiteRows` is shared
+ * with the admin console (the same `/v1/merchants/…` routes).
  * @module
  */
-import { api as paths, websiteTab } from './paths.js';
+import { api as paths } from './paths.js';
 
 /** @typedef {import('./api.js').ConsoleApi} ConsoleApi */
 /** @typedef {import('@ss/ui/problems').Problem} Problem */
@@ -113,59 +113,21 @@ export const loadOverview = async (api, merchantId) => {
 };
 
 /**
- * Websites (PLAN 0.8.2 Merchant): the list with product chips and daily cost.
+ * Websites (PLAN 0.8.2 Merchant): the list-and-detail screen — every website with its products (cards), and the
+ * selected one (`websiteId`, when given and the merchant's).
  * @param {ConsoleApi} api
  * @param {string} merchantId
+ * @param {string | null} [websiteId]
  */
-export const loadWebsites = async (api, merchantId) => {
+export const loadWebsites = async (api, merchantId, websiteId = null) => {
 	const websites = await loadWebsiteRows(api, merchantId);
 	if (websites.failed) return websites.failed;
-	return { ok: /** @type {const} */ (true), merchantId, rows: websites.rows };
-};
-
-/**
- * The website page (both consoles): the website, the merchant's websites (inner sidebar), the products on it, the
- * install blocks with the tokens (only when `tokens`; Finance never sees them) and its usage of the last 30 UTC days.
- * @param {ConsoleApi} api
- * @param {{ merchantId: string, websiteId: string, tab?: string, tokens: boolean }} input
- */
-export const loadWebsitePage = async (api, { merchantId, websiteId, tab, tokens }) => {
-	const [website, websites, cards, install, usage] = await Promise.all([
-		api.get(paths.website(merchantId, websiteId)),
-		api.get(paths.websites(merchantId)),
-		api.get(paths.websiteProducts(merchantId, websiteId)),
-		tokens ? api.get(paths.tokens(merchantId, websiteId)) : null,
-		api.get(paths.usage(merchantId, { websiteId })),
-	]);
-	const failed = firstFailure(website, cards);
-	if (failed) return failed;
 	return {
 		ok: /** @type {const} */ (true),
-		website: /** @type {any} */ (website.ok ? website.data : null),
-		websites: itemsOf(websites).map((w) => ({ websiteId: String(w.websiteId), domain: String(w.domain) })),
-		cards: itemsOf(cards),
-		tokens: install ? itemsOf(install) : null,
-		tokensProblem: install && !install.ok ? install.problem : null,
-		usage: /** @type {any} */ (orElse(usage, null)),
-		usageProblem: usage.ok ? null : usage.problem,
-		tab: websiteTab(tab),
+		merchantId,
+		rows: websites.rows,
+		selectedId: websiteId,
 	};
-};
-
-/**
- * The merchant's website page.
- * @param {ConsoleApi} api
- * @param {string} merchantId
- * @param {string} websiteId
- * @param {string} [tab]
- */
-export const loadWebsite = async (api, merchantId, websiteId, tab) => {
-	const [page, merchant] = await Promise.all([
-		loadWebsitePage(api, { merchantId, websiteId, tab, tokens: true }),
-		api.get(paths.merchant(merchantId)),
-	]);
-	if (!page.ok) return page;
-	return { ...page, merchantName: String(orElse(merchant, null)?.name ?? '') };
 };
 
 /**

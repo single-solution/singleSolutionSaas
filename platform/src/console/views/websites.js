@@ -1,8 +1,9 @@
 'use client';
 /**
- * Merchant Overview, Websites and the website page (PLAN 0.8.2 Merchant): the balance and days left at the current
- * spend, the 30-day spend chart and the websites with product chips and Open buttons; the websites list (inner sidebar
- * on the website page); the website page without admin actions. With no websites yet, the welcome with the support
+ * Merchant Overview and Websites (PLAN 0.8.2 Merchant): the balance and days left at the current spend, the 30-day
+ * spend chart and the websites with product chips and Open buttons; the Websites screen — the list of websites (per
+ * row the domain, a status dot and the daily cost) beside the selected website's card (its products with Open, and
+ * Install and tokens and Usage as dialogs; no admin actions). With no websites yet, the welcome with the support
  * contact (PLAN 0.8.2 Sign-in).
  * @module
  */
@@ -26,9 +27,9 @@ import { apiFetch } from '../client.js';
 import { Link } from '../link.js';
 import { api, routes } from '../paths.js';
 import { BalanceHero, ProductStatusBadge, creditDayBars, formatChartCredits } from './billing.js';
-import { PageProblem, openDashboard } from './common.js';
+import { ListDetail, ListPane, ListRow, ListSearch, PageProblem, openDashboard } from './common.js';
 import { contactLine } from './sign-in.js';
-import { WebsitePage, WebsitesTable, dailyCostOf } from './website.js';
+import { WebsiteCard, dailyCostOf, websiteDot } from './website.js';
 
 /** @typedef {import('./website.js').ProductCard} ProductCard */
 /** @typedef {{ support?: { email: string | null, phone: string | null, whatsapp: string | null } | null }} BrandingSupport */
@@ -88,17 +89,17 @@ export function OverviewView(props) {
 			<div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
 				{billing ? (
 					<>
-						<Stat label={BILLING.dailySpend} value={formatCredits(billing.dailySpend)} icon="trendingUp" accent="pink" />
+						<Stat label={BILLING.dailySpend} value={formatCredits(billing.dailySpend)} icon="trendingUp" kind="credit" />
 						<Stat
 							label={BILLING.spentThisMonth}
 							value={formatCredits(billing.spentThisMonth)}
 							icon="calendar"
-							accent="amber"
+							kind="credit"
 						/>
 					</>
 				) : null}
-				<Stat label={MERCHANT.tiles.websites} value={rows.length} icon="globe" accent="teal" />
-				<Stat label={MERCHANT.tiles.products} value={productCount} icon="box" accent="coral" />
+				<Stat label={MERCHANT.tiles.websites} value={rows.length} icon="globe" kind="website" />
+				<Stat label={MERCHANT.tiles.products} value={productCount} icon="box" kind="product" />
 			</div>
 			<Section id="overview-websites" title={MERCHANT.websitesTitle} description={MERCHANT.websitesIntro}>
 				{rows.length === 0 ? (
@@ -111,7 +112,7 @@ export function OverviewView(props) {
 									className="h-full"
 									title={
 										<span className="flex items-center gap-3">
-											<IconBadge icon="globe" accent="teal" size="sm" />
+											<IconBadge icon="globe" kind="website" size="sm" />
 											<Link
 												href={routes.website(website.websiteId)}
 												className="break-all text-fg hover:text-primary hover:underline">
@@ -154,49 +155,67 @@ export function OverviewView(props) {
 }
 
 /**
- * The merchant's websites (Owner and Support admins add and remove them, PLAN 0.2).
+ * The merchant's Websites screen (Owner and Support admins add and remove websites and products, PLAN 0.2).
  * @param {any} props loader result of `loadWebsites` plus `branding`
  */
 export function WebsitesView(props) {
+	const [q, setQ] = useState('');
 	if (!props.ok) return <PageProblem problem={props.problem} />;
+	const rows = /** @type {Array<{ website: any, cards: ProductCard[] }>} */ (props.rows);
+	const selectedId = typeof props.selectedId === 'string' ? props.selectedId : null;
+	const selected = selectedId ? (rows.find((r) => String(r.website.websiteId) === selectedId) ?? null) : null;
+	const needle = q.trim().toLowerCase();
+	const shown = needle ? rows.filter((r) => String(r.website.domain).toLowerCase().includes(needle)) : rows;
 	return (
-		<div className="space-y-8">
-			<PageHeader title={MERCHANT.websitesTitle} subtitle={MERCHANT.websitesPageIntro} />
-			{props.rows.length === 0 ? (
-				<Welcome branding={props.branding} />
-			) : (
-				<WebsitesTable rows={props.rows} hrefOf={(id) => routes.website(id)} empty={WEBSITE.none} />
-			)}
-		</div>
-	);
-}
-
-/**
- * The merchant's website page: Products (Open), Install and tokens, Usage.
- * @param {any} props loader result of `loadWebsite`
- */
-export function WebsiteView(props) {
-	if (!props.ok) return <PageProblem problem={props.problem} />;
-	const merchantId = String(props.website.merchantId);
-	const websiteId = String(props.website.websiteId);
-	return (
-		<WebsitePage
-			website={props.website}
-			merchantName={props.merchantName}
-			siblings={props.websites}
-			cards={props.cards}
-			tokens={props.tokens}
-			tokensProblem={props.tokensProblem}
-			usage={props.usage}
-			usageProblem={props.usageProblem}
-			tab={props.tab}
-			can={{ manage: false, removeWebsite: false, tokens: true, open: true }}
-			fetcher={apiFetch}
-			links={{
-				website: (id) => routes.website(id),
-				back: { href: routes.websites(), label: MERCHANT.websitesTitle },
-			}}
-			launch={(productId) => ({ path: api.launch(merchantId, websiteId, productId) })}
+		<ListDetail
+			label={MERCHANT.websitesTitle}
+			back={{ href: routes.websites(), label: MERCHANT.websitesTitle }}
+			list={
+				<ListPane title={MERCHANT.websitesTitle} tools={<ListSearch label={WEBSITE.search} value={q} onChange={setQ} />}>
+					{shown.length === 0 ? (
+						<li>
+							<EmptyState compact icon="globe" kind="website" title={WEBSITE.none} />
+						</li>
+					) : (
+						shown.map(({ website, cards }) => (
+							<ListRow
+								key={website.websiteId}
+								href={routes.website(website.websiteId)}
+								current={String(website.websiteId) === selectedId}
+								label={website.domain}
+								sublabel={WEBSITE.productsCount(cards.length)}
+								dot={websiteDot(cards)}
+								meta={WEBSITE.perDay(formatCredits(dailyCostOf(cards)))}
+							/>
+						))
+					)}
+				</ListPane>
+			}
+			empty={
+				rows.length === 0 ? (
+					<Welcome branding={props.branding} />
+				) : (
+					<EmptyState icon="globe" kind="website" title={WEBSITE.selectTitle} description={MERCHANT.websitesPageIntro} />
+				)
+			}
+			detail={
+				selectedId === null ? null : selected ? (
+					<WebsiteCard
+						key={selectedId}
+						headline
+						website={selected.website}
+						cards={selected.cards}
+						can={{ manage: false, removeWebsite: false, tokens: true, open: true }}
+						fetcher={apiFetch}
+						launch={(productId) => ({ path: api.launch(props.merchantId, selectedId, productId) })}
+					/>
+				) : (
+					<PageProblem
+						problem={{ status: 404, title: 'Not Found', detail: WEBSITE.gone }}
+						back={{ href: routes.websites(), label: MERCHANT.websitesTitle }}
+					/>
+				)
+			}
 		/>
 	);
 }

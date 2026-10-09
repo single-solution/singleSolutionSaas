@@ -77,9 +77,9 @@ export function OverviewView(props) {
 				chart={{ label: ADMIN.creditsChart, data: dayBars(totalDays(products)), format: creditsOf }}
 			/>
 			<div className="grid gap-5 sm:grid-cols-3">
-				<Stat label={ADMIN.totals.merchants} value={o.merchants ?? 0} icon="users" accent="violet" />
-				<Stat label={ADMIN.totals.websites} value={o.websites ?? 0} icon="globe" accent="teal" />
-				<Stat label={ADMIN.totalProducts} value={products.length} icon="box" accent="coral" />
+				<Stat label={ADMIN.totals.merchants} value={o.merchants ?? 0} icon="users" kind="merchant" />
+				<Stat label={ADMIN.totals.websites} value={o.websites ?? 0} icon="globe" kind="website" />
+				<Stat label={ADMIN.totalProducts} value={products.length} icon="box" kind="product" />
 			</div>
 			<Section id="overview-products" title={ADMIN.productsTitle} description={ADMIN.productsIntro}>
 				{products.length === 0 ? (
@@ -92,7 +92,7 @@ export function OverviewView(props) {
 									className="h-full"
 									title={
 										<span className="flex items-center gap-3">
-											<IconBadge icon="box" accent="coral" size="sm" />
+											<IconBadge icon="box" kind="product" size="sm" />
 											{linked ? (
 												<Link
 													href={adminRoutes.product(p.productId)}

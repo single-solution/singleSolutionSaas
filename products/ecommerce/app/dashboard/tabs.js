@@ -14,6 +14,7 @@ import {
 	Checkbox,
 	CodeBlock,
 	ConfirmDialog,
+	FieldGrid,
 	Input,
 	Section,
 	Stat,
@@ -116,21 +117,21 @@ function OverviewTab({ websiteId }) {
 									label={TEXTS.overview.today}
 									value={formatCredits(data.todayMillicredits)}
 									icon="coins"
-									accent="indigo"
+									kind="credit"
 								/>
 								<Stat
 									label={TEXTS.overview.features}
 									value={on.length}
 									hint={on.length > 0 ? namesOf(on) : TEXTS.overview.noFeatures}
 									icon="zap"
-									accent="violet"
+									kind="feature"
 								/>
 								<Stat
 									label={TEXTS.overview.connectionsReady}
 									value={fill(TEXTS.overview.ofTotal, { count: ready, total: needed.length })}
 									tone={ready < needed.length ? 'warning' : 'success'}
 									icon="plug"
-									accent="teal"
+									kind="connection"
 								/>
 							</div>
 						</Section>
@@ -534,7 +535,7 @@ function PricesTab() {
 					<div className="space-y-4">
 						<Callout tone="info">{TEXTS.prices.intro}</Callout>
 						<Card>
-							<div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+							<FieldGrid>
 								{parsed.map(({ feature, text, credits }) => (
 									<Input
 										key={feature.key}
@@ -546,7 +547,7 @@ function PricesTab() {
 										onChange={(event) => setDraft({ ...draft, [feature.key]: event.target.value })}
 									/>
 								))}
-							</div>
+							</FieldGrid>
 							<Button
 								className="mt-4"
 								disabled={parsed.some((entry) => !entry.credits.ok)}

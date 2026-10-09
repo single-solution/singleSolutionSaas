@@ -1,6 +1,6 @@
 'use client';
 /**
- * Console frame: a soft sidebar island (brand, sections of links, each link with a colour icon badge in its `tone`) and a top bar island (switchers on the left,
+ * Console frame: a soft sidebar island (brand, sections of links, each link with an icon tile in the colour of its `kind`) and a top bar island (switchers on the left,
  * account actions and the System / Light / Dark theme switch on the right). The frame uses the available width (16 px
  * side padding on phones, 24–32 px from `md`, at most 1600 px wide); pages decide their own reading widths. Below `md`
  * the sidebar becomes an off-canvas panel opened by the menu button.
@@ -14,20 +14,11 @@ import { useFocusTrap } from './overlay.js';
 import { ThemeToggle } from './theme.js';
 
 /** @typedef {import('react').ReactNode} ReactNode */
-/** @typedef {import('./display.js').Accent} Accent */
-/** @typedef {{ href: string, label: ReactNode, icon?: import('./icons.js').IconName, tone?: Accent, current?: boolean, badge?: ReactNode }} NavItem */
-
-/** Icon badge colours per tone: a soft tint with the matching icon colour (static class names for Tailwind). */
-const BADGE_TONES = /** @type {Record<Accent, string>} */ ({
-	indigo: 'bg-tint-indigo text-accent-indigo',
-	violet: 'bg-tint-violet text-accent-violet',
-	teal: 'bg-tint-teal text-accent-teal',
-	coral: 'bg-tint-coral text-accent-coral',
-	pink: 'bg-tint-pink text-accent-pink',
-	amber: 'bg-tint-amber text-accent-amber',
-	sky: 'bg-tint-sky text-accent-sky',
-	green: 'bg-tint-green text-accent-green',
-});
+/** @typedef {import('./display.js').Kind} Kind */
+/**
+ * A menu link; its icon sits in a small tile tinted with the colour of its `kind` (PLAN 0.6 colour rule).
+ * @typedef {{ href: string, label: ReactNode, icon?: import('./icons.js').IconName, kind?: Kind, current?: boolean, badge?: ReactNode }} NavItem
+ */
 /** @typedef {{ label?: string, items: NavItem[] }} NavSection */
 
 /**
@@ -57,9 +48,14 @@ function Nav({ sections, linkAs, onNavigate }) {
 									{item.icon ? (
 										<span
 											aria-hidden="true"
+											{...(item.current || !item.kind ? {} : { 'data-tone': item.kind })}
 											className={cx(
 												'flex size-[26px] shrink-0 items-center justify-center rounded-[9px]',
-												item.current ? 'bg-primary text-on-primary' : BADGE_TONES[item.tone ?? 'indigo'],
+												item.current
+													? 'bg-primary text-on-primary'
+													: item.kind
+														? 'bg-tone-tint text-tone-ink'
+														: 'bg-surface-2 text-muted',
 											)}>
 											<Icon name={item.icon} size={15} />
 										</span>

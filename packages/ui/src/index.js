@@ -8,7 +8,7 @@ export { cx } from './cx.js';
 export { Icon } from './icons.js';
 export { Button, IconButton, ButtonLink } from './Button.js';
 export { Spinner } from './Spinner.js';
-export { Input, TextArea, Select, Checkbox, Switch, RadioGroup, CheckboxGroup } from './fields.js';
+export { Input, TextArea, Select, Checkbox, Switch, RadioGroup, CheckboxGroup, FieldGrid, FIELD_GRID } from './fields.js';
 export { Form, FormError, FormActions, useFormState } from './Form.js';
 export {
 	Card,
@@ -45,7 +45,7 @@ export * from './problems.js';
 /** @typedef {import('./AppShell.js').NavSection} NavSection */
 /** @typedef {import('./AppShell.js').NavItem} NavItem */
 /** @typedef {import('./icons.js').IconName} IconName */
-/** @typedef {import('./display.js').Accent} Accent */
+/** @typedef {import('./display.js').Kind} Kind */
 /** @typedef {import('./theme.js').ThemeChoice} ThemeChoice */
 /** @typedef {import('./problems.js').Problem} Problem */
 /** @typedef {import('./schema.js').SettingsSchema} SettingsSchema */

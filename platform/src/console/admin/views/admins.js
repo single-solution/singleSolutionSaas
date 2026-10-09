@@ -1,24 +1,28 @@
 'use client';
 /**
- * Admins (PLAN 0.8.2; Owner only): name, e-mail, role, two-step on/off and last sign-in; Invite (e-mail + role),
- * Resend invite or Copy invite link and Correct invite e-mail (until accepted), Change role, Turn off two-step, Remove.
- * The last Owner cannot be removed or demoted and no one removes themselves (the API refuses; the screen explains).
+ * Admins (PLAN 0.8.2; Owner only): one list-and-detail screen. The list (search; per row the name, e-mail, a status dot
+ * — invited grey — and the role) with **Invite** (e-mail + role) sits beside the selected admin: e-mail, role, two-step
+ * on/off and last sign-in, with the actions Resend invite or Copy invite link and Correct invite e-mail (until
+ * accepted), Change role, Turn off two-step and Remove, as dialogs. The last Owner cannot be removed or demoted and no
+ * one removes themselves (the API refuses; the screen explains).
  * @module
  */
 import { useState } from 'react';
 import {
 	Badge,
 	Button,
+	Card,
 	CodeBlock,
 	ConfirmDialog,
 	Dialog,
+	EmptyState,
 	Form,
 	FormError,
 	Icon,
 	Input,
+	KeyValueList,
 	PageHeader,
 	Select,
-	Table,
 	describeProblem,
 	fieldErrors,
 	formatDateTime,
@@ -26,7 +30,8 @@ import {
 } from '@ss/ui';
 import { ADMIN, TWO_STEP } from '../../../texts/console.js';
 import { adminFetch, useAdminResource } from '../client.js';
-import { adminApi } from '../paths.js';
+import { ListDetail, ListPane, ListRow, ListSearch } from '../../views/common.js';
+import { adminApi, adminRoutes } from '../paths.js';
 import { AdminProblem, RoleBadge } from './common.js';
 
 /** @typedef {import('@ss/ui').Problem} Problem */
@@ -38,7 +43,7 @@ const ROLE_OPTIONS = Object.freeze([
 ]);
 
 /**
- * @param {any} props loader result of `loadAdmins`
+ * @param {any} props loader result of `loadAdmins` plus `selectedId` (an admin selected)
  */
 export function AdminsView(props) {
 	const toast = useToast();
@@ -52,7 +57,9 @@ export function AdminsView(props) {
 	const [link, setLink] = useState(/** @type {string | null} */ (null));
 	const [busy, setBusy] = useState(false);
 	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
+	const [q, setQ] = useState('');
 	if (!ok) return <AdminProblem problem={props.problem} />;
+	const selectedId = typeof props.selectedId === 'string' ? props.selectedId : null;
 	const me = props.me;
 	const items = /** @type {any[]} */ (data.items ?? []);
 
@@ -102,7 +109,8 @@ export function AdminsView(props) {
 						: await call(adminApi.admin(id), 'DELETE');
 		if (!result.ok) return;
 		setDialog(null);
-		await reload();
+		if (dialog.kind === 'remove') window.location.assign(adminRoutes.admins());
+		else await reload();
 	};
 	/** @param {'invite' | 'email' | 'role' | 'twoStep' | 'remove'} kind @param {any} [admin] */
 	const open = (kind, admin) => {
@@ -112,85 +120,102 @@ export function AdminsView(props) {
 		setDialog({ kind, ...(admin ? { admin } : {}) });
 	};
 
-	return (
-		<div className="space-y-8">
-			<PageHeader
-				title={ADMIN.adminsTitle}
-				subtitle={ADMIN.adminsIntro}
-				actions={
-					<Button onClick={() => open('invite')} icon={<Icon name="plus" size={14} />}>
-						{ADMIN.invite}
+	const needle = q.trim().toLowerCase();
+	const shown = items.filter((a) => !needle || `${a.name ?? ''} ${a.email}`.toLowerCase().includes(needle));
+	const current = selectedId ? (items.find((a) => a.adminId === selectedId) ?? null) : null;
+	const actions = current ? (
+		<div className="flex flex-wrap gap-2">
+			{current.status === 'invited' ? (
+				<>
+					<Button variant="secondary" onClick={() => void resend(current, false)}>
+						{ADMIN.resendInvite}
 					</Button>
+					<Button variant="secondary" onClick={() => void resend(current, true)}>
+						{ADMIN.copyInvite}
+					</Button>
+					<Button variant="secondary" onClick={() => open('email', current)}>
+						{ADMIN.correctEmail}
+					</Button>
+				</>
+			) : null}
+			{current.adminId !== me?.adminId ? (
+				<>
+					<Button variant="secondary" onClick={() => open('role', current)}>
+						{ADMIN.changeRole}
+					</Button>
+					{current.twoStep?.enabled ? (
+						<Button variant="secondary" onClick={() => open('twoStep', current)}>
+							{ADMIN.turnOffTwoStep}
+						</Button>
+					) : null}
+					<Button variant="danger" onClick={() => open('remove', current)}>
+						{ADMIN.remove}
+					</Button>
+				</>
+			) : null}
+		</div>
+	) : null;
+
+	return (
+		<>
+			<ListDetail
+				label={ADMIN.adminsTitle}
+				back={{ href: adminRoutes.admins(), label: ADMIN.adminsTitle }}
+				list={
+					<ListPane
+						title={ADMIN.adminsTitle}
+						action={
+							<Button size="sm" onClick={() => open('invite')} icon={<Icon name="plus" size={14} />}>
+								{ADMIN.invite}
+							</Button>
+						}
+						tools={<ListSearch label={ADMIN.searchAdmins} value={q} onChange={setQ} />}>
+						{shown.map((a) => (
+							<ListRow
+								key={a.adminId}
+								href={adminRoutes.admin(a.adminId)}
+								current={a.adminId === selectedId}
+								label={a.adminId === me?.adminId ? `${a.name ?? a.email} (${ADMIN.you})` : (a.name ?? a.email)}
+								sublabel={a.email}
+								dot={a.status === 'invited' ? 'neutral' : 'success'}
+								dotLabel={a.status === 'invited' ? ADMIN.invited : ADMIN.status.active}
+								meta={ADMIN.roles[/** @type {'owner'} */ (a.role)] ?? a.role}
+							/>
+						))}
+					</ListPane>
 				}
-			/>
-			<Table
-				caption={ADMIN.adminsTitle}
-				captionHidden
-				rows={items}
-				rowKey={(a) => a.adminId}
-				columns={[
-					{
-						key: 'name',
-						header: ADMIN.columns.name,
-						rowHeader: true,
-						render: (a) => (
-							<span className="block min-w-0">
-								<span className="font-semibold">{a.name ?? '—'}</span>
-								{a.adminId === me?.adminId ? <span className="ml-1 text-xs text-muted">({ADMIN.you})</span> : null}
-								<span className="block truncate text-xs text-muted">{a.email}</span>
-							</span>
-						),
-					},
-					{
-						key: 'role',
-						header: ADMIN.role,
-						render: (a) => (
-							<span className="inline-flex flex-wrap gap-1">
-								<RoleBadge role={a.role} />
-								{a.status === 'invited' ? <Badge tone="info">{ADMIN.invited}</Badge> : null}
-							</span>
-						),
-					},
-					{ key: 'twoStep', header: ADMIN.twoStepColumn, render: (a) => (a.twoStep?.enabled ? TWO_STEP.on : TWO_STEP.off) },
-					{ key: 'lastSignInAt', header: ADMIN.columns.lastSignIn, render: (a) => formatDateTime(a.lastSignInAt) },
-					{
-						key: 'actions',
-						header: <span className="sr-only">Actions</span>,
-						align: 'right',
-						render: (a) => (
-							<span className="flex flex-wrap justify-end gap-1">
-								{a.status === 'invited' ? (
-									<>
-										<Button size="sm" variant="ghost" onClick={() => void resend(a, false)}>
-											{ADMIN.resendInvite}
-										</Button>
-										<Button size="sm" variant="ghost" onClick={() => void resend(a, true)}>
-											{ADMIN.copyInvite}
-										</Button>
-										<Button size="sm" variant="ghost" onClick={() => open('email', a)}>
-											{ADMIN.correctEmail}
-										</Button>
-									</>
-								) : null}
-								{a.adminId !== me?.adminId ? (
-									<>
-										<Button size="sm" variant="ghost" onClick={() => open('role', a)}>
-											{ADMIN.changeRole}
-										</Button>
-										{a.twoStep?.enabled ? (
-											<Button size="sm" variant="ghost" onClick={() => open('twoStep', a)}>
-												{ADMIN.turnOffTwoStep}
-											</Button>
-										) : null}
-										<Button size="sm" variant="ghost" onClick={() => open('remove', a)}>
-											{ADMIN.remove}
-										</Button>
-									</>
-								) : null}
-							</span>
-						),
-					},
-				]}
+				empty={<EmptyState icon="key" kind="admin" title={ADMIN.selectAdminTitle} description={ADMIN.adminsIntro} />}
+				detail={
+					selectedId === null ? null : current ? (
+						<>
+							<PageHeader
+								level={2}
+								title={current.name ?? current.email}
+								badge={
+									<span className="inline-flex flex-wrap gap-1">
+										<RoleBadge role={current.role} />
+										{current.status === 'invited' ? <Badge tone="info">{ADMIN.invited}</Badge> : null}
+									</span>
+								}
+								subtitle={current.adminId === me?.adminId ? `${current.email} · ${ADMIN.you}` : current.email}
+								actions={actions}
+							/>
+							<Card>
+								<KeyValueList
+									columns={3}
+									items={[
+										{ label: 'E-mail', value: current.email },
+										{ label: ADMIN.role, value: ADMIN.roles[/** @type {'owner'} */ (current.role)] ?? current.role },
+										{ label: ADMIN.twoStepColumn, value: current.twoStep?.enabled ? TWO_STEP.on : TWO_STEP.off },
+										{ label: ADMIN.columns.lastSignIn, value: formatDateTime(current.lastSignInAt) },
+									]}
+								/>
+							</Card>
+						</>
+					) : (
+						<EmptyState icon="key" title={ADMIN.adminGone} />
+					)
+				}
 			/>
 			<Dialog open={dialog?.kind === 'invite'} onClose={() => setDialog(null)} title={ADMIN.inviteTitle}>
 				<Form onSubmit={() => invite(false)} busy={busy} aria-label={ADMIN.inviteTitle}>
@@ -257,6 +282,6 @@ export function AdminsView(props) {
 			<Dialog open={Boolean(link)} onClose={() => setLink(null)} title={ADMIN.copyInvite} description={ADMIN.setupLinkCopy}>
 				{link ? <CodeBlock code={link} label={ADMIN.copyInvite} secret wrap /> : null}
 			</Dialog>
-		</div>
+		</>
 	);
 }

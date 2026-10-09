@@ -2,9 +2,9 @@
 /**
  * Admin Console in the browser (jsdom): the views are rendered client-side against a live in-process Portal —
  * `fetch` is routed to `portal.handle` with a cookie jar, as a same-origin browser would — and driven through
- * their forms and dialogs: the first admin, My account, Overview, Merchants (search, bulk actions, Add merchant), the
- * merchant page (suspend and resume, setup links, two-step off, Details, websites, delete), Credits and billing,
- * Activity, Settings and Admins.
+ * their forms and dialogs: the first admin, My account, Overview, the Merchants screen (search, bulk actions, Add
+ * merchant; a selected merchant: suspend and resume, setup links, two-step off, Edit merchant, websites, delete), Credits
+ * and billing, Activity, Settings and the Admins screen.
  */
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { Blob as NodeBlob } from 'node:buffer';
@@ -23,7 +23,7 @@ import { MyAccountView } from '../../src/console/admin/views/account.js';
 import { ActivityView } from '../../src/console/admin/views/activity.js';
 import { AdminsView } from '../../src/console/admin/views/admins.js';
 import { OverviewView } from '../../src/console/admin/views/overview.js';
-import { MerchantView, MerchantsView } from '../../src/console/admin/views/merchants.js';
+import { MerchantsView } from '../../src/console/admin/views/merchants.js';
 import { AddCreditsDialog, FinanceView } from '../../src/console/admin/views/finance.js';
 import { SettingsView } from '../../src/console/admin/views/settings.js';
 import { ToastProvider } from '@ss/ui';
@@ -306,13 +306,18 @@ describe('admin console interactions (jsdom)', () => {
 		const madeId = String(made.merchant.merchantId);
 		cleanup();
 
-		// ---------------------------------------------------------------- the merchant page
+		// ---------------------------------------------------------------- a merchant selected: one page, actions as dialogs
 		const writeText = vi.fn(async () => undefined);
 		vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
 		ownerBrowser.use();
 		render(
 			<ToastProvider>
-				<MerchantView {...await admin.loadMerchant(ownerBrowser.api, madeId)} admin={me} />
+				<MerchantsView
+					{...await admin.loadMerchants(ownerBrowser.api, {})}
+					detail={await admin.loadMerchant(ownerBrowser.api, madeId, me)}
+					selectedId={madeId}
+					admin={me}
+				/>
 			</ToastProvider>,
 		);
 		await until(() => shows('Setup pending'));
@@ -338,7 +343,7 @@ describe('admin console interactions (jsdom)', () => {
 			).click();
 		});
 		await until(() => ownerBrowser.calls.some((c) => c.path === adminApi.resume(madeId) && c.status === 200));
-		// websites: add one (the exact domain), then open its page from the row
+		// websites: add one (the exact domain); it shows as a card
 		await press('Add website');
 		await act(async () => {
 			/** @type {HTMLButtonElement} */ (
@@ -360,28 +365,35 @@ describe('admin console interactions (jsdom)', () => {
 					)?.body.website.websiteId,
 			),
 		);
-		await until(() => shows('made.example.com'));
-		// Details: the fields, the login e-mail until the password is set
-		await press('Details');
-		fill('Address', 'Industrial area');
-		fill('Owner e-mail (login)', 'olga@made.test');
-		await press('Save');
+		await until(() => document.getElementById(`website-${madeSite}`)?.textContent?.includes('made.example.com'));
+		expect(document.querySelector(`button[aria-label="Add product to made.example.com"]`)).not.toBeNull();
+		// Edit merchant: the fields in a dialog, the login e-mail until the password is set
+		await press('Edit merchant');
+		fillDialog('Address', 'Industrial area');
+		fillDialog('Owner e-mail (login)', 'olga@made.test');
+		await act(async () => {
+			/** @type {HTMLButtonElement} */ (
+				[...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent === 'Save')
+			).click();
+		});
 		await until(() =>
 			ownerBrowser.calls.some((c) => c.method === 'PATCH' && c.path === adminApi.merchant(madeId) && c.status === 200),
 		);
-		await press('Activity');
-		await until(() => shows('Merchant created'));
-		await press('Websites');
-		expect(document.querySelector(`a[href="/admin/merchants/${madeId}/websites/${madeSite}"]`)?.textContent).toBe(
-			'made.example.com',
-		);
+		await until(() => !document.querySelector('[role="dialog"]') && shows('olga@made.test'));
+		// credits and activity are sections of the same page
+		expect(shows('Credit receipts') && shows('Merchant created')).toBe(true);
 		// a merchant with a website cannot be deleted
 		expect(button('Delete').disabled).toBe(true);
 		await ownerBrowser.api.request('DELETE', `/v1/merchants/${madeId}/websites/${madeSite}`, { confirm: 'made.example.com' });
 		cleanup();
 		render(
 			<ToastProvider>
-				<MerchantView {...await admin.loadMerchant(ownerBrowser.api, madeId)} admin={me} />
+				<MerchantsView
+					{...await admin.loadMerchants(ownerBrowser.api, {})}
+					detail={await admin.loadMerchant(ownerBrowser.api, madeId, me)}
+					selectedId={madeId}
+					admin={me}
+				/>
 			</ToastProvider>,
 		);
 		// delete the merchant (no websites left): typed business name
@@ -403,7 +415,12 @@ describe('admin console interactions (jsdom)', () => {
 		await other.b.api.post('/v1/me/two-step/confirm', { code: totpCode(started.ok ? started.data.secret : '', Date.now()) });
 		render(
 			<ToastProvider>
-				<MerchantView {...await admin.loadMerchant(ownerBrowser.api, other.merchantId)} admin={me} />
+				<MerchantsView
+					{...await admin.loadMerchants(ownerBrowser.api, {})}
+					detail={await admin.loadMerchant(ownerBrowser.api, other.merchantId, me)}
+					selectedId={other.merchantId}
+					admin={me}
+				/>
 			</ToastProvider>,
 		);
 		await press('Turn off two-step');
@@ -546,8 +563,19 @@ describe('admin console interactions (jsdom)', () => {
 				[...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent === 'Invite')
 			).click();
 		});
-		await until(
-			() => shows('help@ss.test') && ownerBrowser.calls.some((c) => c.path === adminApi.admins() && c.status === 201),
+		const invited = /** @type {any} */ (
+			await until(
+				() =>
+					shows('help@ss.test') &&
+					ownerBrowser.calls.find((c) => c.method === 'POST' && c.path === adminApi.admins() && c.status === 201)?.body,
+			)
+		);
+		cleanup();
+		// the invited admin selected: the actions sit on its detail
+		render(
+			<ToastProvider>
+				<AdminsView {...await admin.loadAdmins(ownerBrowser.api, me)} selectedId={invited.admin.adminId} />
+			</ToastProvider>,
 		);
 		await press('Copy invite link');
 		await until(() => shows('Copy this link now.'));

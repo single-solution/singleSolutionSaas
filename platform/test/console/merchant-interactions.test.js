@@ -311,7 +311,7 @@ describe('merchant console interactions (jsdom): sign-in, Account, Overview, web
 		await world.connect();
 		await world.addProduct(beta.merchantId, site.websiteId, 'notes');
 		render(<WebsitesView {...await loaders.loadWebsites(e.api, beta.merchantId)} branding={BRANDING} />);
-		expect(shows('beta.example.com') && shows('Notes')).toBe(true);
+		expect(shows('beta.example.com') && shows('1 product') && shows('Select a website')).toBe(true);
 		cleanup();
 		const open = vi.fn();
 		vi.stubGlobal('open', open);

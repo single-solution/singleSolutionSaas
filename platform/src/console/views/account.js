@@ -91,63 +91,61 @@ export function MerchantFieldsForm({
 	const errors = fieldErrors(problem);
 	return (
 		<Form onSubmit={submit} busy={busy} aria-label={MERCHANT.detailsTitle}>
-			<div className="grid gap-4 md:grid-cols-2">
+			<Input
+				label={MERCHANT_FIELDS.name}
+				value={form.name}
+				onChange={(e) => set('name', e.currentTarget.value)}
+				error={errors.name}
+				required
+				readOnly={readOnly}
+				maxLength={120}
+			/>
+			<Input
+				label={MERCHANT_FIELDS.ownerName}
+				value={form.ownerName}
+				onChange={(e) => set('ownerName', e.currentTarget.value)}
+				error={errors.ownerName}
+				required
+				readOnly={readOnly}
+				maxLength={120}
+			/>
+			{withEmail ? (
 				<Input
-					label={MERCHANT_FIELDS.name}
-					value={form.name}
-					onChange={(e) => set('name', e.currentTarget.value)}
-					error={errors.name}
-					required
-					readOnly={readOnly}
-					maxLength={120}
+					label={MERCHANT_FIELDS.email}
+					type="email"
+					value={form.email}
+					onChange={(e) => set('email', e.currentTarget.value)}
+					error={errors.email}
+					readOnly={readOnly || emailLocked}
+					{...(emailLocked && emailLockedHelp ? { help: emailLockedHelp } : {})}
 				/>
-				<Input
-					label={MERCHANT_FIELDS.ownerName}
-					value={form.ownerName}
-					onChange={(e) => set('ownerName', e.currentTarget.value)}
-					error={errors.ownerName}
-					required
-					readOnly={readOnly}
-					maxLength={120}
-				/>
-				{withEmail ? (
-					<Input
-						label={MERCHANT_FIELDS.email}
-						type="email"
-						value={form.email}
-						onChange={(e) => set('email', e.currentTarget.value)}
-						error={errors.email}
-						readOnly={readOnly || emailLocked}
-						{...(emailLocked && emailLockedHelp ? { help: emailLockedHelp } : {})}
-					/>
-				) : null}
-				<Input
-					label={MERCHANT_FIELDS.phone}
-					help={MERCHANT_FIELDS.phoneHelp}
-					value={form.phone}
-					onChange={(e) => set('phone', e.currentTarget.value)}
-					error={errors.phone}
-					readOnly={readOnly}
-					maxLength={40}
-				/>
-				<Select
-					label={MERCHANT_FIELDS.country}
-					value={form.country}
-					onChange={(e) => set('country', e.currentTarget.value)}
-					error={errors.country}
-					disabled={readOnly}
-					options={countryOptions(MERCHANT_FIELDS.countryNone)}
-				/>
-				<Input
-					label={MERCHANT_FIELDS.address}
-					value={form.address}
-					onChange={(e) => set('address', e.currentTarget.value)}
-					error={errors.address}
-					readOnly={readOnly}
-					maxLength={300}
-					fieldClassName="md:col-span-2"
-				/>
-			</div>
+			) : null}
+			<Input
+				label={MERCHANT_FIELDS.phone}
+				help={MERCHANT_FIELDS.phoneHelp}
+				value={form.phone}
+				onChange={(e) => set('phone', e.currentTarget.value)}
+				error={errors.phone}
+				readOnly={readOnly}
+				maxLength={40}
+			/>
+			<Select
+				label={MERCHANT_FIELDS.country}
+				value={form.country}
+				onChange={(e) => set('country', e.currentTarget.value)}
+				error={errors.country}
+				disabled={readOnly}
+				options={countryOptions(MERCHANT_FIELDS.countryNone)}
+			/>
+			<Input
+				label={MERCHANT_FIELDS.address}
+				value={form.address}
+				onChange={(e) => set('address', e.currentTarget.value)}
+				error={errors.address}
+				readOnly={readOnly}
+				maxLength={300}
+				wide
+			/>
 			<FormError problem={problem} fields={['name', 'ownerName', 'email', 'phone', 'address', 'country']} />
 			{readOnly ? null : (
 				<Button type="submit" loading={busy}>

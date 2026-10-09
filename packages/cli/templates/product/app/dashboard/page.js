@@ -12,6 +12,20 @@ import { call, fill } from './api.js';
 import { TABS } from './tabs.js';
 import { TEXTS } from './texts.js';
 
+/**
+ * Sidebar icon and kind of each tab: the kind gives its colour, the same in every product (PLAN 0.6 colour rule).
+ * @type {{ [tab in keyof typeof TABS]: { icon: import('@ss/ui').IconName, kind: import('@ss/ui').Kind } }}
+ */
+const TAB_ICONS = {
+	overview: { icon: 'home', kind: 'overview' },
+	features: { icon: 'zap', kind: 'feature' },
+	settings: { icon: 'sliders', kind: 'settings' },
+	connections: { icon: 'plug', kind: 'connection' },
+	developers: { icon: 'key', kind: 'developer' },
+	defaults: { icon: 'layers', kind: 'default' },
+	prices: { icon: 'coins', kind: 'price' },
+};
+
 /** Tabs that need no picked website (Owner only). */
 const GLOBAL_TABS = ['defaults', 'prices'];
 
@@ -56,6 +70,8 @@ export default function Dashboard() {
 					items: tabs.map((tab) => ({
 						href: href(tab),
 						label: TEXTS.tabs[/** @type {keyof typeof TEXTS.tabs} */ (tab)],
+						icon: TAB_ICONS[/** @type {keyof typeof TAB_ICONS} */ (tab)].icon,
+						kind: TAB_ICONS[/** @type {keyof typeof TAB_ICONS} */ (tab)].kind,
 						current: tab === view,
 					})),
 				},

@@ -6,8 +6,6 @@
 
 import { api, query } from '../paths.js';
 
-/** @typedef {import('../paths.js').WebsiteTab} WebsiteTab */
-
 const e = encodeURIComponent;
 
 export { query };
@@ -16,13 +14,15 @@ export { query };
 export const adminRoutes = Object.freeze({
 	login: (next = '') => (next ? `/login?next=${e(next)}` : '/login'),
 	overview: () => '/admin',
+	/** the Merchants screen with nothing selected; `q` and `status` filter its list */
 	merchants: (/** @type {{ status?: string | null, q?: string | null }} */ q = {}) => `/admin/merchants${query(q)}`,
-	merchant: (/** @type {string} */ id, /** @type {string | null} */ tab = null) => `/admin/merchants/${e(id)}${query({ tab })}`,
-	website: (/** @type {string} */ m, /** @type {string} */ w, /** @type {WebsiteTab | null} */ tab = null) =>
-		`/admin/merchants/${e(m)}/websites/${e(w)}${query({ tab: tab === 'products' ? null : tab })}`,
+	/** the Merchants screen with a merchant selected (the list keeps its filter) */
+	merchant: (/** @type {string} */ id, /** @type {{ status?: string | null, q?: string | null }} */ q = {}) =>
+		`/admin/merchants/${e(id)}${query(q)}`,
+	/** a website card on its merchant's page */
+	website: (/** @type {string} */ m, /** @type {string} */ w) => `/admin/merchants/${e(m)}#website-${e(w)}`,
 	products: (/** @type {{ status?: string | null }} */ q = {}) => `/admin/products${query(q)}`,
-	product: (/** @type {string} */ id, /** @type {string | null} */ tab = null) =>
-		`/admin/products/${e(id)}${query({ tab: tab === 'overview' ? null : tab })}`,
+	product: (/** @type {string} */ id, /** @type {{ status?: string | null }} */ q = {}) => `/admin/products/${e(id)}${query(q)}`,
 	finance: (
 		/** @type {{ tab?: string | null, merchantId?: string | null, from?: string | null, to?: string | null, method?: string | null, by?: string | null }} */ q = {},
 	) => `/admin/finance${query(q)}`,
@@ -30,6 +30,7 @@ export const adminRoutes = Object.freeze({
 		/** @type {{ merchantId?: string | null, adminId?: string | null, from?: string | null, to?: string | null }} */ q = {},
 	) => `/admin/activity${query(q)}`,
 	admins: () => '/admin/admins',
+	admin: (/** @type {string} */ id) => `/admin/admins/${e(id)}`,
 	settings: () => '/admin/settings',
 	account: () => '/admin/account',
 });

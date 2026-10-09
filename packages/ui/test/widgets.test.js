@@ -4,6 +4,9 @@ import { useState } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
 	AppShell,
+	Badge,
+	FieldGrid,
+	IconBadge,
 	THEME_SCRIPT,
 	THEME_STORAGE_KEY,
 	ThemeScript,
@@ -195,10 +198,16 @@ describe('display', () => {
 		expect(container.querySelector('dl dt')?.textContent).toBe('Domain');
 	});
 
-	it('Stat tiles take an accent; Section and HeroCard label their content', () => {
+	it('Stat tiles, badges, chips and empty states take the colour of a kind; Section and HeroCard label their content', () => {
 		const { container } = render(
 			<div>
-				<Stat label="Websites" value={3} icon="globe" accent="teal" />
+				<PageHeader title="Detail" level={2} />
+				<Stat label="Websites" value={3} icon="globe" kind="website" />
+				<IconBadge icon="users" kind="merchant" size="sm" />
+				<Badge kind="admin" dot>
+					Owner
+				</Badge>
+				<EmptyState title="No websites" icon="globe" kind="website" />
 				<Section id="s1" title="Websites" description="Your websites">
 					<p>body</p>
 				</Section>
@@ -217,8 +226,14 @@ describe('display', () => {
 				<HeroCard label="Empty" value="0" chart={{ label: 'None', data: [] }} />
 			</div>,
 		);
-		expect(container.querySelector('.bg-tint-teal')).not.toBeNull();
+		// the tile and its badge carry the kind; the colours come from the semantic tokens (palette A or B)
+		const tile = /** @type {HTMLElement} */ (container.querySelector('[data-tone="website"].bg-tone-tile'));
+		expect(tile.querySelector('[data-tone="website"].bg-tone-solid')).not.toBeNull();
+		expect(container.querySelector('[data-tone="merchant"].bg-tone-solid.size-8')).not.toBeNull();
+		expect(container.querySelector('[data-tone="admin"].bg-tone-tint')?.textContent).toBe('Owner');
+		expect(container.querySelectorAll('[data-tone="website"].bg-tone-tint')).toHaveLength(1);
 		expect(container.querySelector('section[aria-labelledby="s1"] h2')?.textContent).toBe('Websites');
+		expect(container.querySelector('h2 > span')?.textContent).toBe('Detail');
 		expect(container.querySelector('section[aria-label="Credit balance"] svg[role="img"]')).not.toBeNull();
 		expect(container.querySelector('section[aria-label="Credit balance"] dd')?.textContent).toBe('12 days');
 		expect(container.textContent).toContain('No data for this period.');
@@ -498,6 +513,46 @@ describe('toasts, code blocks and forms', () => {
 		expect(await copyText('x')).toBe(true);
 	});
 
+	it('lays fields out in a grid: short controls are cells, long text and wide ones span the row', () => {
+		const { container } = render(
+			<div>
+				<Form onSubmit={() => undefined} aria-label="Grid">
+					<Input label="Name" />
+					<Select label="Country" options={[{ value: 'a', label: 'A' }]} />
+					<Input label="Address" wide />
+					<TextArea label="Notes" />
+					<TextArea label="Short note" wide={false} />
+					<Checkbox label="Agree" />
+					<Switch label="On" checked={false} />
+					<RadioGroup legend="Size" options={[{ value: 's', label: 'S' }]} value="s" onChange={() => undefined} />
+					<CheckboxGroup legend="Days" options={[{ value: 'mon', label: 'Mon' }]} value={[]} onChange={() => undefined} />
+					<button type="submit">Save</button>
+				</Form>
+				<FieldGrid className="mt-4">
+					<Input label="Alone" />
+				</FieldGrid>
+			</div>,
+		);
+		const grid = /** @type {HTMLElement} */ (container.querySelector('form > div'));
+		expect(container.querySelector('form')?.className).toContain('@container');
+		expect(grid.className).toContain('@3xl:grid-cols-3');
+		const cellOf = (/** @type {string} */ label) => {
+			let el = /** @type {HTMLElement | null} */ (byLabel(container, label));
+			while (el && el.parentElement !== grid) el = el.parentElement;
+			return /** @type {HTMLElement} */ (el);
+		};
+		expect(cellOf('Name').hasAttribute('data-wide')).toBe(false);
+		expect(cellOf('Country').hasAttribute('data-cell')).toBe(true);
+		expect(cellOf('Address').hasAttribute('data-wide')).toBe(true);
+		expect(cellOf('Notes').hasAttribute('data-wide')).toBe(true);
+		expect(cellOf('Short note').hasAttribute('data-wide')).toBe(false);
+		expect(cellOf('Agree').hasAttribute('data-cell')).toBe(true);
+		expect(grid.querySelector(':scope > fieldset[data-wide]')?.textContent).toContain('Days');
+		expect(grid.querySelector(':scope > fieldset:not([data-wide])')?.textContent).toContain('Size');
+		expect(grid.querySelector(':scope > button')?.hasAttribute('data-cell')).toBe(false);
+		expect(byLabel(container, 'Alone').closest('.\\@container')?.className).toContain('mt-4');
+	});
+
 	it('Form prevents native submission and FormError explains problems', () => {
 		const onSubmit = vi.fn();
 		/** @type {ReturnType<typeof useFormState<{ email: string }>> | null} */
@@ -551,7 +606,7 @@ describe('AppShell', () => {
 						items: [
 							{ href: '/websites', label: 'Websites', icon: 'globe', current: true },
 							{ href: '/team', label: 'Team' },
-							{ href: '/usage', label: 'Usage', icon: 'wallet', tone: 'pink' },
+							{ href: '/usage', label: 'Usage', icon: 'wallet', kind: 'credit' },
 							{ href: '/home', label: 'Home', icon: 'grid' },
 						],
 					},
@@ -566,11 +621,12 @@ describe('AppShell', () => {
 		expect(container.querySelector('a[href="#main"]')?.textContent).toBe('Skip to content');
 		expect(container.querySelector('main#main')?.textContent).toBe('Page body');
 		expect(container.querySelector('nav[aria-label="Main"] [aria-current="page"]')?.textContent).toBe('Websites');
-		// colour icon badges: solid for the current page, the item's tint otherwise (indigo by default)
+		// icon tiles: solid primary for the current page, the tint of the item's kind otherwise (neutral without one)
 		const badge = (/** @type {string} */ href) => container.querySelector(`nav a[href="${href}"] > span[aria-hidden="true"]`);
 		expect(badge('/websites')?.className).toContain('bg-primary');
-		expect(badge('/usage')?.className).toContain('bg-tint-pink');
-		expect(badge('/home')?.className).toContain('bg-tint-indigo');
+		expect(badge('/usage')?.getAttribute('data-tone')).toBe('credit');
+		expect(badge('/usage')?.className).toContain('bg-tone-tint');
+		expect(badge('/home')?.className).toContain('bg-surface-2');
 		expect(badge('/team')).toBeNull();
 		const menu = /** @type {HTMLElement} */ (container.querySelector('button[aria-label="Open navigation"]'));
 		expect(menu.getAttribute('aria-expanded')).toBe('false');

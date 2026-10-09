@@ -6,7 +6,7 @@
  * @module
  */
 import { useState } from 'react';
-import { Button, Checkbox, Input, Select, TextArea } from '@ss/ui';
+import { Button, Checkbox, FieldGrid, Input, Select, TextArea } from '@ss/ui';
 import { TEXTS } from './texts.js';
 
 /** @typedef {{ name: string, type?: 'text' | 'password' | 'number' | 'checkbox' | 'textarea' | 'select', options?: string[], optional?: boolean }} Field */
@@ -87,7 +87,7 @@ export function ProviderForm({ name, onSave }) {
 					}}
 				/>
 			)}
-			<div className="grid gap-3 md:grid-cols-2">
+			<FieldGrid>
 				{fields.map((field) => {
 					const label = labels[field.name] ?? field.name;
 					const value = values[field.name];
@@ -131,7 +131,7 @@ export function ProviderForm({ name, onSave }) {
 						/>
 					);
 				})}
-			</div>
+			</FieldGrid>
 			<Button
 				size="sm"
 				disabled={!ready}

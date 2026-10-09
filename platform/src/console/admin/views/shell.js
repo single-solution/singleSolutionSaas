@@ -17,29 +17,29 @@ import { RoleBadge, adminCan } from './common.js';
 
 /**
  * The admin menu and the permission each entry needs (PLAN 0.6 Admin menu, 0.2 rights table).
- * @type {ReadonlyArray<{ href: string, label: string, icon: import('@ss/ui').IconName, tone: import('@ss/ui').Accent, permission: string, exact?: boolean }>}
+ * @type {ReadonlyArray<{ href: string, label: string, icon: import('@ss/ui').IconName, kind: import('@ss/ui').Kind, permission: string, exact?: boolean }>}
  */
 const ADMIN_NAV = Object.freeze([
 	{
 		href: adminRoutes.overview(),
 		label: ADMIN.menu.overview,
-		tone: 'indigo',
+		kind: 'overview',
 		icon: 'grid',
 		permission: 'overview.read',
 		exact: true,
 	},
-	{ href: adminRoutes.merchants(), label: ADMIN.menu.merchants, tone: 'violet', icon: 'users', permission: 'merchants.read' },
-	{ href: adminRoutes.products(), label: ADMIN.menu.products, tone: 'coral', icon: 'box', permission: 'products.manage' },
-	{ href: adminRoutes.finance(), label: ADMIN.menu.billing, tone: 'pink', icon: 'wallet', permission: 'billing.read' },
-	{ href: adminRoutes.admins(), label: ADMIN.menu.admins, tone: 'sky', icon: 'key', permission: 'admins.manage' },
+	{ href: adminRoutes.merchants(), label: ADMIN.menu.merchants, kind: 'merchant', icon: 'users', permission: 'merchants.read' },
+	{ href: adminRoutes.products(), label: ADMIN.menu.products, kind: 'product', icon: 'box', permission: 'products.manage' },
+	{ href: adminRoutes.finance(), label: ADMIN.menu.billing, kind: 'credit', icon: 'wallet', permission: 'billing.read' },
+	{ href: adminRoutes.admins(), label: ADMIN.menu.admins, kind: 'admin', icon: 'key', permission: 'admins.manage' },
 	{
 		href: adminRoutes.settings(),
 		label: ADMIN.menu.settings,
-		tone: 'amber',
+		kind: 'settings',
 		icon: 'sliders',
 		permission: 'portal_settings.write',
 	},
-	{ href: adminRoutes.activity(), label: ADMIN.menu.activity, tone: 'green', icon: 'shield', permission: 'activity.read' },
+	{ href: adminRoutes.activity(), label: ADMIN.menu.activity, kind: 'activity', icon: 'shield', permission: 'activity.read' },
 ]);
 
 /**
@@ -55,7 +55,7 @@ export const adminSections = (admin, pathname) => [
 			href: item.href,
 			label: item.label,
 			icon: item.icon,
-			tone: item.tone,
+			kind: item.kind,
 			current: item.exact ? pathname === item.href : pathname === item.href || pathname.startsWith(`${item.href}/`),
 		})),
 	},

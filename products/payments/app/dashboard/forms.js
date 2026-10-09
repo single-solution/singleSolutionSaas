@@ -5,7 +5,7 @@
  * @module
  */
 import { useState } from 'react';
-import { Button, Checkbox, Input } from '@ss/ui';
+import { Button, Checkbox, FieldGrid, Input } from '@ss/ui';
 import { TEXTS } from './texts.js';
 
 /** @typedef {{ name: string, secret?: boolean, optional?: boolean, check?: boolean }} Field */
@@ -59,7 +59,7 @@ export function ConnectionForm({ name, onSave }) {
 	const ready = fields.every((field) => field.optional || field.check || text(field.name) !== '');
 	return (
 		<div className="mt-3 space-y-3">
-			<div className="grid gap-3 md:grid-cols-2">
+			<FieldGrid>
 				{fields.map((field) =>
 					field.check ? (
 						<Checkbox
@@ -79,7 +79,7 @@ export function ConnectionForm({ name, onSave }) {
 						/>
 					),
 				)}
-			</div>
+			</FieldGrid>
 			<Button
 				size="sm"
 				disabled={!ready}

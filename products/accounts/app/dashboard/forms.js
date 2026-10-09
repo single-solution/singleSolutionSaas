@@ -7,7 +7,7 @@
  * @module
  */
 import { useState } from 'react';
-import { Button, CodeBlock, Input, TextArea } from '@ss/ui';
+import { Button, CodeBlock, FieldGrid, Input, TextArea } from '@ss/ui';
 import { TEXTS } from './texts.js';
 
 /** @typedef {{ name: keyof typeof TEXTS.connections.fields, type?: 'text' | 'password' | 'textarea' }} Field */
@@ -32,7 +32,7 @@ export function KeyForm({ name, onSave }) {
 	return (
 		<div className="mt-3 space-y-3">
 			<CodeBlock label={TEXTS.connections.returnAddress} code={`${origin}/oauth/${name}/callback`} />
-			<div className="grid gap-3 md:grid-cols-2">
+			<FieldGrid>
 				{fields.map((field) =>
 					field.type === 'textarea' ? (
 						<TextArea
@@ -56,7 +56,7 @@ export function KeyForm({ name, onSave }) {
 						/>
 					),
 				)}
-			</div>
+			</FieldGrid>
 			<Button
 				size="sm"
 				disabled={!ready}

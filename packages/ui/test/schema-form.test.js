@@ -7,6 +7,7 @@ import {
 	changedNames,
 	fieldsOf,
 	groupFields,
+	isWide,
 	sameValue,
 	validateValue,
 	validateValues,
@@ -96,6 +97,19 @@ describe('schema helpers', () => {
 		expect(widgetOf({ type: 'array', items: { type: 'string' } })).toBe('tags');
 		expect(widgetOf({ type: 'integer', 'x-ui': { widget: 'slider' } })).toBe('number');
 		expect(widgetOf({ type: 'boolean', 'x-ui': { widget: 'textarea' } })).toBe('switch');
+		expect(widgetOf({ type: 'string', format: 'markdown' })).toBe('textarea');
+		// grid layout: long text, JSON, lists and fieldsets span the row; `x-ui.wide` decides when given
+		expect(isWide({ type: 'string' }, 'text')).toBe(false);
+		expect(isWide({ type: 'string', format: 'multiline' }, widgetOf({ type: 'string', format: 'multiline' }))).toBe(true);
+		expect(isWide({ type: 'string', 'x-ui': { wide: true } }, 'text')).toBe(true);
+		expect(isWide({ type: 'array', items: { type: 'string' }, 'x-ui': { wide: false } }, 'tags')).toBe(false);
+		expect(fieldsOf(s).map((f) => [f.name, f.wide])).toEqual([
+			['allowStacking', false],
+			['maxActive', false],
+			['prefix', false],
+			['channels', true],
+			['window', true],
+		]);
 		expect(boundsOf(s.properties.maxActive)).toEqual({ min: 1, max: 100000, maxLength: undefined, maxItems: undefined });
 		expect(boundsOf({ type: 'integer', exclusiveMinimum: 0, exclusiveMaximum: 10 })).toMatchObject({ min: 1, max: 9 });
 		expect(boundsOf({ type: 'number', exclusiveMinimum: 0 }).min).toBe(Number.EPSILON);
@@ -194,6 +208,13 @@ describe('SchemaForm', () => {
 		expect(toggle.getAttribute('aria-expanded')).toBe('true');
 		expect(byLabel(container, 'Debug').getAttribute('type')).toBe('checkbox');
 		expect(byLabel(container, 'Raw').tagName).toBe('TEXTAREA');
+		// fields sit in a grid: short ones are cells, long ones span the row
+		const cellOf = (/** @type {string} */ name) => container.querySelector(`[data-field="${name}"]`);
+		expect(cellOf('tone')?.hasAttribute('data-cell')).toBe(true);
+		expect(cellOf('tone')?.hasAttribute('data-wide')).toBe(false);
+		expect(cellOf('message')?.hasAttribute('data-wide')).toBe(true);
+		expect(cellOf('tags')?.hasAttribute('data-wide')).toBe(true);
+		expect(cellOf('tone')?.parentElement?.className).toContain('@md:grid-cols-2');
 	});
 
 	it('reports typed values: numbers, switches, enums, lists, tags, nested objects and JSON', () => {

@@ -7,7 +7,7 @@
  * @module
  */
 import { useState } from 'react';
-import { Button, Input, TextArea } from '@ss/ui';
+import { Button, FieldGrid, Input, TextArea } from '@ss/ui';
 import { TEXTS } from './texts.js';
 
 const N = TEXTS.connections.fields;
@@ -86,7 +86,7 @@ export function ConnectionForm({ name, onSave }) {
 	};
 	return (
 		<div className="mt-3 space-y-3">
-			<div className="grid gap-3 md:grid-cols-2">{fields.filter((field) => !field.area).map(input)}</div>
+			<FieldGrid>{fields.filter((field) => !field.area).map(input)}</FieldGrid>
 			{fields.filter((field) => field.area).map(input)}
 			<Button
 				size="sm"

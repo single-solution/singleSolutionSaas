@@ -6,7 +6,7 @@
  * @module
  */
 import { useId, useState } from 'react';
-import { Button, Callout, Input, Select } from '@ss/ui';
+import { Button, Callout, FieldGrid, Input, Select } from '@ss/ui';
 import { AI_PROVIDERS, MODEL_SUGGESTIONS, checkAiConnection } from '../../core/models.js';
 import { TEXTS } from './texts.js';
 
@@ -25,7 +25,7 @@ export function AiForm({ onSave }) {
 	const provider = /** @type {import('../../core/models.js').AiProvider} */ (values.provider);
 	return (
 		<div className="mt-3 space-y-3">
-			<div className="grid gap-3 md:grid-cols-2">
+			<FieldGrid>
 				<Select
 					label={N.provider}
 					value={provider}
@@ -60,7 +60,7 @@ export function AiForm({ onSave }) {
 						onChange={(event) => set('baseUrl', event.target.value)}
 					/>
 				) : null}
-			</div>
+			</FieldGrid>
 			{error ? <Callout tone="danger">{error}</Callout> : null}
 			<Button
 				size="sm"
@@ -97,7 +97,7 @@ export function StorageForm({ onSave }) {
 	const ready = STORAGE.every((field) => 'optional' in field || valueOf(field.name) !== '');
 	return (
 		<div className="mt-3 space-y-3">
-			<div className="grid gap-3 md:grid-cols-2">
+			<FieldGrid>
 				{STORAGE.map((field) => (
 					<Input
 						key={field.name}
@@ -108,7 +108,7 @@ export function StorageForm({ onSave }) {
 						onChange={(event) => setValues({ ...values, [field.name]: event.target.value })}
 					/>
 				))}
-			</div>
+			</FieldGrid>
 			<Button
 				size="sm"
 				disabled={!ready}

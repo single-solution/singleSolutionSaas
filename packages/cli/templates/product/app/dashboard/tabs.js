@@ -14,6 +14,7 @@ import {
 	CodeBlock,
 	ConfirmDialog,
 	ErrorState,
+	FieldGrid,
 	Input,
 	SchemaForm,
 	Select,
@@ -388,7 +389,7 @@ function ThemeForm({ theme, save, reload }) {
 	const [result, setResult] = useState(/** @type {import('./api.js').Answer | null} */ (null));
 	return (
 		<Card title={TEXTS.settings.theme}>
-			<div className="grid gap-3 md:grid-cols-2">
+			<FieldGrid>
 				<Select
 					label={TEXTS.settings.mode}
 					value={draft.mode}
@@ -414,7 +415,7 @@ function ThemeForm({ theme, save, reload }) {
 					value={draft.colors.accent ?? '#4f46e5'}
 					onChange={(event) => setDraft({ ...draft, colors: { ...draft.colors, accent: event.target.value } })}
 				/>
-			</div>
+			</FieldGrid>
 			<TextArea
 				label={TEXTS.settings.customCss}
 				rows={6}

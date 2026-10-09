@@ -1,7 +1,9 @@
 'use client';
 /**
  * SchemaForm renders a feature's settings form from its settings schema with the `x-ui` hints: `widget`, `group`
- * (fieldsets), `order`, `help`, `placeholder`, `advanced` (behind a disclosure) and `hidden`.
+ * (fieldsets), `order`, `help`, `placeholder`, `advanced` (behind a disclosure), `hidden` and `wide`. Each group lays
+ * its fields out in the responsive field grid (PLAN 0.6): short controls side by side, long text, JSON, lists and
+ * `wide` fields across the whole row.
  *
  * It is controlled: `values` holds the value of every setting, `onChange(name, value)` reports edits.
  * Validation messages come from `errors` (client-side `validateValues` and/or server field errors).
@@ -9,7 +11,7 @@
  */
 import { useId, useState } from 'react';
 import { Button } from './Button.js';
-import { Checkbox, CheckboxGroup, Input, LABEL_CLASS, RadioGroup, Select, Switch, TextArea } from './fields.js';
+import { Checkbox, CheckboxGroup, FieldGrid, Input, LABEL_CLASS, RadioGroup, Select, Switch, TextArea } from './fields.js';
 import { cx } from './cx.js';
 import { Icon } from './icons.js';
 import { fieldsOf, groupFields, validateValue, widgetOf } from './schema.js';
@@ -288,7 +290,7 @@ export function SchemaForm({
 				</button>
 			) : undefined;
 		return (
-			<div key={field.name} data-field={field.name}>
+			<div key={field.name} data-field={field.name} data-cell="" {...(field.wide ? { 'data-wide': '' } : {})}>
 				<NodeControl
 					id={`${prefix}-${field.name}`}
 					label={field.title}
@@ -313,13 +315,11 @@ export function SchemaForm({
 		<div className={cx('space-y-6', className)}>
 			{groups.map((group) =>
 				groups.length === 1 && advanced.length === 0 ? (
-					<div key={group.name} className="space-y-5">
-						{group.fields.map(renderField)}
-					</div>
+					<FieldGrid key={group.name}>{group.fields.map(renderField)}</FieldGrid>
 				) : (
-					<fieldset key={group.name} className="space-y-5">
+					<fieldset key={group.name} className="min-w-0">
 						<legend className="mb-3 text-sm font-bold text-fg">{group.name}</legend>
-						{group.fields.map(renderField)}
+						<FieldGrid>{group.fields.map(renderField)}</FieldGrid>
 					</fieldset>
 				),
 			)}
@@ -335,8 +335,8 @@ export function SchemaForm({
 						{`Advanced settings (${advanced.length})`}
 					</Button>
 					{showAdvanced || advancedErrors ? (
-						<div id={`${prefix}-advanced`} className="space-y-5">
-							{advanced.map(renderField)}
+						<div id={`${prefix}-advanced`}>
+							<FieldGrid>{advanced.map(renderField)}</FieldGrid>
 						</div>
 					) : null}
 				</div>

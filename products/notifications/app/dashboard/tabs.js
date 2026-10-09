@@ -15,6 +15,7 @@ import {
 	CodeBlock,
 	ConfirmDialog,
 	ErrorState,
+	FieldGrid,
 	Input,
 	SchemaForm,
 	Section,
@@ -112,28 +113,28 @@ function OverviewTab({ websiteId }) {
 									label={TEXTS.overview.today}
 									value={formatCredits(data.todayMillicredits)}
 									icon="coins"
-									accent="indigo"
+									kind="credit"
 								/>
 								<Stat
 									label={TEXTS.overview.features}
 									value={data.featuresOn.length}
 									hint={data.featuresOn.length > 0 ? data.featuresOn.join(', ') : TEXTS.overview.noFeatures}
 									icon="zap"
-									accent="violet"
+									kind="feature"
 								/>
 								<Stat
 									label={TEXTS.overview.connectionsReady}
 									value={fill(TEXTS.overview.ofTotal, { count: ready, total: needed.length })}
 									tone={ready < needed.length ? 'warning' : 'success'}
 									icon="plug"
-									accent="teal"
+									kind="connection"
 								/>
 								<Stat
 									label={TEXTS.overview.templates}
 									value={templates.answer?.ok ? templates.answer.data.items.length : '—'}
 									hint={templates.answer && !templates.answer.ok ? TEXTS.overview.templatesNone : undefined}
 									icon="mail"
-									accent="coral"
+									kind="settings"
 								/>
 							</div>
 						</Section>
@@ -443,7 +444,7 @@ function ThemeForm({ theme, save, reload }) {
 	const [result, setResult] = useState(/** @type {import('./api.js').Answer | null} */ (null));
 	return (
 		<Card title={TEXTS.settings.theme}>
-			<div className="grid gap-3 md:grid-cols-2">
+			<FieldGrid>
 				<Select
 					label={TEXTS.settings.mode}
 					value={draft.mode}
@@ -469,7 +470,7 @@ function ThemeForm({ theme, save, reload }) {
 					value={draft.colors.accent ?? '#4f46e5'}
 					onChange={(event) => setDraft({ ...draft, colors: { ...draft.colors, accent: event.target.value } })}
 				/>
-			</div>
+			</FieldGrid>
 			<TextArea
 				label={TEXTS.settings.customCss}
 				rows={6}

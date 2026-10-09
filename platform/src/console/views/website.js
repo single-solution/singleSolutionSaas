@@ -1,15 +1,16 @@
 'use client';
 /**
- * Websites in both consoles (PLAN 0.6, 0.8.2): the websites table with product chips, Add website, and the website page
- * — header (domain, merchant) and the tabs Products (cards with status, daily cost and Open; Add product, Remove and
- * Remove website for Owner and Support), Install and tokens (one block per product: widget script tag, browser token,
- * server token reveal / copy / regenerate, docs; never for Finance) and Usage (30-day chart and the table by product
- * and feature). The consoles pass the rights, the API client and the links; the Portal checks every right again.
+ * Websites in both consoles (PLAN 0.6, 0.8.2): the website card — its domain and daily cost, its products (status,
+ * features on, daily cost, Open) and, launched from the card as dialogs, everything the old website page did: **Add
+ * product** and **Remove** a product (Owner, Support), **Install and tokens** (one block per product: widget script
+ * tag, browser token, server token reveal / copy / regenerate, docs; never for Finance), **Usage** (30-day chart and
+ * the table by product and feature) and **Remove website** (Owner, Support). The admin's merchant page shows one card
+ * per website; the merchant console shows the selected website's card as the detail of its Websites screen. The
+ * consoles pass the rights, the API client and the Open route; the Portal checks every right again.
  * @module
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
-	Badge,
 	Button,
 	Callout,
 	Card,
@@ -19,28 +20,25 @@ import {
 	Form,
 	FormError,
 	Icon,
+	IconBadge,
 	Input,
-	PageHeader,
-	Table,
-	Tabs,
+	Skeleton,
 	TypedConfirmDialog,
 	copyText,
+	cx,
 	describeProblem,
 	fieldErrors,
 	formatCredits,
-	formatDate,
 	problemCode,
 	useToast,
 } from '@ss/ui';
 import { BILLING, WEBSITE } from '../../texts/console.js';
-import { Link } from '../link.js';
-import { WEBSITE_TABS, api } from '../paths.js';
-import { productStatusLabel, productTone, ProductStatusBadge, UsageView } from './billing.js';
-import { ActionMenu, BackLink, InnerList, openDashboard } from './common.js';
+import { api } from '../paths.js';
+import { productTone, ProductStatusBadge, UsageView } from './billing.js';
+import { ActionMenu, openDashboard } from './common.js';
 
 /** @typedef {import('@ss/ui/problems').Problem} Problem */
 /** @typedef {import('./common.js').Fetcher} Fetcher */
-/** @typedef {import('../paths.js').WebsiteTab} WebsiteTab */
 /**
  * A product on a website (card).
  * @typedef {{ productId: string, name: string, status: string, featuresOn: string[], dailyCost: number }} ProductCard
@@ -49,6 +47,10 @@ import { ActionMenu, BackLink, InnerList, openDashboard } from './common.js';
  * One product's install block.
  * @typedef {{ productId: string, name: string, widgetScriptUrl: string | null, docsUrl: string | null,
  *   browserToken: string, serverToken: { canShow: boolean } }} TokenEntry
+ */
+/**
+ * What the viewer may do on a website card.
+ * @typedef {{ manage: boolean, removeWebsite: boolean, tokens: boolean, open: boolean }} WebsiteRights
  */
 
 /**
@@ -66,70 +68,18 @@ export const scriptTag = (widgetScriptUrl, browserToken) =>
 export const dailyCostOf = (cards) => cards.reduce((sum, card) => sum + (card.dailyCost ?? 0), 0);
 
 /**
- * Product chips with their status colour (removed products have none).
- * @param {{ cards: readonly ProductCard[] }} props
+ * Status dot of a website in a list: the worst status of its products (stopped or suspended red, in grace amber,
+ * active green), grey without products or with no features on.
+ * @param {readonly ProductCard[]} cards
+ * @returns {'success' | 'warning' | 'danger' | 'neutral'}
  */
-export function ProductChips({ cards }) {
-	if (cards.length === 0) return <span className="text-muted">—</span>;
-	return (
-		<span className="flex flex-wrap gap-1">
-			{cards.map((card) => (
-				<Badge key={card.productId} tone={productTone(card)} dot title={productStatusLabel(card)}>
-					{card.name}
-					<span className="sr-only"> ({productStatusLabel(card)})</span>
-				</Badge>
-			))}
-		</span>
-	);
-}
-
-/**
- * The websites of a merchant: domain, product chips and daily cost (PLAN 0.8.2).
- * @param {{ rows: Array<{ website: any, cards: ProductCard[] }>, hrefOf: (websiteId: string) => string,
- *   empty: import('react').ReactNode }} props
- */
-export function WebsitesTable({ rows, hrefOf, empty }) {
-	return (
-		<Table
-			caption={WEBSITE.columns.domain}
-			captionHidden
-			rows={rows}
-			rowKey={(r) => r.website.websiteId}
-			empty={empty}
-			defaultSort={{ key: 'domain', direction: 'asc' }}
-			columns={[
-				{
-					key: 'domain',
-					header: WEBSITE.columns.domain,
-					rowHeader: true,
-					sortable: true,
-					sortValue: (r) => r.website.domain,
-					render: (r) => (
-						<Link href={hrefOf(r.website.websiteId)} className="font-semibold text-primary hover:underline">
-							{r.website.domain}
-						</Link>
-					),
-				},
-				{ key: 'products', header: WEBSITE.columns.products, render: (r) => <ProductChips cards={r.cards} /> },
-				{
-					key: 'dailyCost',
-					header: WEBSITE.columns.dailyCost,
-					align: 'right',
-					sortable: true,
-					sortValue: (r) => dailyCostOf(r.cards),
-					render: (r) => formatCredits(dailyCostOf(r.cards)),
-				},
-				{
-					key: 'added',
-					header: WEBSITE.columns.added,
-					sortable: true,
-					sortValue: (r) => r.website.createdAt,
-					render: (r) => formatDate(r.website.createdAt),
-				},
-			]}
-		/>
-	);
-}
+export const websiteDot = (cards) => {
+	const tones = cards.map((card) => productTone(card));
+	if (tones.includes('danger')) return 'danger';
+	if (tones.includes('warning')) return 'warning';
+	if (tones.includes('success')) return 'success';
+	return 'neutral';
+};
 
 /**
  * Add website (Owner, Support): the exact domain.
@@ -167,6 +117,7 @@ export function AddWebsiteDialog({ open, merchantId, fetcher, onClose, onAdded }
 					onChange={(e) => setDomain(e.currentTarget.value)}
 					error={error ?? fieldErrors(problem).domain}
 					required
+					wide
 				/>
 				<FormError problem={problem} fields={['domain']} />
 				<Button type="submit" loading={busy}>
@@ -178,52 +129,43 @@ export function AddWebsiteDialog({ open, merchantId, fetcher, onClose, onAdded }
 }
 
 /**
- * @typedef {object} WebsitePageProps
+ * @typedef {object} WebsiteCardProps
  * @property {any} website
- * @property {string} merchantName
- * @property {Array<{ websiteId: string, domain: string }>} siblings the merchant's websites (inner sidebar)
  * @property {ProductCard[]} cards
- * @property {TokenEntry[] | null} tokens null when the viewer may not see them
- * @property {Problem | null} [tokensProblem]
- * @property {any} usage
- * @property {Problem | null} [usageProblem]
- * @property {WebsiteTab} tab
- * @property {{ manage: boolean, removeWebsite: boolean, tokens: boolean, open: boolean }} can
+ * @property {WebsiteRights} can
  * @property {Fetcher} fetcher
- * @property {{ website: (websiteId: string) => string, back: { href: string, label: string } }} links
  * @property {(productId: string) => { path: string, body?: unknown }} launch the Open route of a product
  * @property {Array<{ productId: string, name: string }> | null} [addable] active connected products (Add product)
- * @property {import('react').ReactNode} [breadcrumbs]
+ * @property {(cards: ProductCard[]) => void} [onCardsChange] after a product was added or removed
+ * @property {() => void} [onRemoved] after the website was removed
+ * @property {boolean} [headline] the card is the page's detail (larger heading, products as tiles)
  */
 
 /**
- * The website page.
- * @param {WebsitePageProps} props
+ * A website card: domain, daily cost, products, and the dialogs launched from it.
+ * @param {WebsiteCardProps} props
  */
-export function WebsitePage(props) {
+export function WebsiteCard({ website, cards: initial, can, fetcher, launch, addable, onCardsChange, onRemoved, headline }) {
 	const toast = useToast();
-	const { website, can, fetcher } = props;
 	const merchantId = String(website.merchantId);
 	const websiteId = String(website.websiteId);
-	const [cards, setCards] = useState(props.cards);
-	const [tokens, setTokens] = useState(props.tokens);
-	const [tab, setTab] = useState(/** @type {string} */ (props.tab));
-	const [adding, setAdding] = useState(false);
+	const [cards, setCardsState] = useState(initial);
+	const [dialog, setDialog] = useState(/** @type {null | 'add' | 'tokens' | 'usage' | 'removeWebsite'} */ (null));
 	const [removing, setRemoving] = useState(/** @type {ProductCard | null} */ (null));
-	const [removingWebsite, setRemovingWebsite] = useState(false);
 	const [busy, setBusy] = useState(false);
 	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
 	const [opening, setOpening] = useState(/** @type {string | null} */ (null));
+	useEffect(() => setCardsState(initial), [initial]);
 
-	const reloadTokens = async () => {
-		if (!can.tokens) return;
-		const result = await fetcher(api.tokens(merchantId, websiteId));
-		if (result.ok) setTokens(result.data?.items ?? []);
+	/** @param {ProductCard[]} next */
+	const setCards = (next) => {
+		setCardsState(next);
+		onCardsChange?.(next);
 	};
 	/** @param {ProductCard} card */
 	const open = async (card) => {
 		setOpening(card.productId);
-		const { path, body } = props.launch(card.productId);
+		const { path, body } = launch(card.productId);
 		const result = await openDashboard(fetcher, path, body);
 		setOpening(null);
 		if (!result.ok) toast.show({ tone: 'danger', title: describeProblem(result.problem) });
@@ -238,8 +180,7 @@ export function WebsitePage(props) {
 			setProblem(result.problem);
 			return;
 		}
-		setCards((list) => list.filter((c) => c.productId !== removing.productId));
-		setTokens((list) => (list ? list.filter((t) => t.productId !== removing.productId) : list));
+		setCards(cards.filter((c) => c.productId !== removing.productId));
 		toast.show({ title: WEBSITE.productRemoved(removing.name) });
 		setRemoving(null);
 	};
@@ -252,28 +193,89 @@ export function WebsitePage(props) {
 			setProblem(result.problem);
 			return;
 		}
-		window.location.assign(props.links.back.href);
+		setDialog(null);
+		toast.show({ title: WEBSITE.websiteRemoved(website.domain) });
+		onRemoved?.();
 	};
 
-	const productsTab = (
-		<div className="space-y-4">
-			{can.manage ? (
-				<div className="flex justify-end">
-					<Button onClick={() => setAdding(true)} icon={<Icon name="plus" size={14} />}>
-						{WEBSITE.addProduct}
-					</Button>
-				</div>
-			) : null}
-			{cards.length === 0 ? (
-				<EmptyState icon="box" title={WEBSITE.noProducts} description={can.manage ? undefined : WEBSITE.noProductsMerchant} />
-			) : (
-				<ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-					{cards.map((card) => (
-						<li key={card.productId}>
-							<Card
-								title={card.name}
-								actions={
-									can.manage ? (
+	const menu = can.removeWebsite ? (
+		<ActionMenu
+			label={WEBSITE.websiteActionsOf(website.domain)}
+			items={[
+				{
+					label: WEBSITE.removeWebsite,
+					danger: true,
+					disabled: cards.length > 0,
+					...(cards.length > 0 ? { hint: WEBSITE.removeProductsFirst } : {}),
+					onSelect: () => {
+						setProblem(null);
+						setDialog('removeWebsite');
+					},
+				},
+			]}
+		/>
+	) : null;
+
+	const DomainHeading = headline ? 'h2' : 'h3';
+	return (
+		<Card as="article" id={`website-${websiteId}`} className="h-full scroll-mt-24">
+			<header className="mb-4 flex items-start justify-between gap-3">
+				<span className="flex min-w-0 items-center gap-3">
+					<IconBadge icon="globe" kind="website" size={headline ? 'md' : 'sm'} />
+					<span className="min-w-0">
+						<DomainHeading
+							className={cx(
+								'break-all font-bold tracking-tight text-fg',
+								headline ? 'text-2xl font-extrabold' : 'text-base',
+							)}>
+							{website.domain}
+						</DomainHeading>
+						<span className="block text-sm text-muted">{WEBSITE.perDay(formatCredits(dailyCostOf(cards)))}</span>
+					</span>
+				</span>
+				{menu}
+			</header>
+			<div className="space-y-4">
+				{cards.length === 0 ? (
+					<p className="rounded-2xl bg-surface-2/60 px-4 py-3 text-sm text-muted">
+						{can.manage ? WEBSITE.noProducts : WEBSITE.noProductsMerchant}
+					</p>
+				) : (
+					<ul
+						className={headline ? 'grid gap-3 sm:grid-cols-2 2xl:grid-cols-3' : 'space-y-2'}
+						aria-label={WEBSITE.productsOf(website.domain)}>
+						{cards.map((card) => (
+							<li
+								key={card.productId}
+								className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-2xl bg-surface-2/60 px-4 py-3">
+								<span className="flex min-w-0 items-center gap-3">
+									<IconBadge icon="box" kind="product" size="sm" />
+									<span className="min-w-0 space-y-1">
+										<span className="flex flex-wrap items-center gap-2">
+											<span className="truncate text-sm font-semibold text-fg">{card.name}</span>
+											<ProductStatusBadge status={card.status} featuresOn={card.featuresOn} />
+										</span>
+										<span className="block text-xs text-muted">
+											{card.featuresOn.length > 0 ? `${WEBSITE.featuresOn(card.featuresOn.length)} · ` : ''}
+											{BILLING.dailyCost}:{' '}
+											<span className="font-semibold tabular-nums text-fg">{formatCredits(card.dailyCost)}</span>
+										</span>
+									</span>
+								</span>
+								<span className="flex items-center gap-1.5">
+									{can.open ? (
+										<Button
+											variant="secondary"
+											size="sm"
+											loading={opening === card.productId}
+											aria-label={WEBSITE.openLabel(card.name)}
+											title={WEBSITE.openHelp}
+											onClick={() => void open(card)}
+											icon={<Icon name="external" size={14} />}>
+											{WEBSITE.open}
+										</Button>
+									) : null}
+									{can.manage ? (
 										<ActionMenu
 											label={WEBSITE.productActions(card.name)}
 											items={[
@@ -287,134 +289,61 @@ export function WebsitePage(props) {
 												},
 											]}
 										/>
-									) : null
-								}>
-								<div className="space-y-3">
-									<div className="flex flex-wrap items-center gap-2">
-										<ProductStatusBadge status={card.status} featuresOn={card.featuresOn} />
-										{card.featuresOn.length > 0 ? (
-											<span className="text-xs text-muted">{WEBSITE.featuresOn(card.featuresOn.length)}</span>
-										) : null}
-									</div>
-									<p className="text-sm">
-										<span className="text-muted">{BILLING.dailyCost}: </span>
-										<span className="font-semibold tabular-nums text-fg">{formatCredits(card.dailyCost)}</span>
-									</p>
-									{can.open ? (
-										<Button
-											variant="secondary"
-											size="sm"
-											loading={opening === card.productId}
-											aria-label={WEBSITE.openLabel(card.name)}
-											title={WEBSITE.openHelp}
-											onClick={() => void open(card)}
-											icon={<Icon name="external" size={14} />}>
-											{WEBSITE.open}
-										</Button>
 									) : null}
-								</div>
-							</Card>
-						</li>
-					))}
-				</ul>
-			)}
-		</div>
-	);
-
-	const installTab = (
-		<div className="space-y-4">
-			{props.tokensProblem ? <Callout tone="danger">{describeProblem(props.tokensProblem)}</Callout> : null}
-			{(tokens ?? []).length === 0 ? (
-				<EmptyState icon="key" title={WEBSITE.noTokens} />
-			) : (
-				(tokens ?? []).map((entry) => (
-					<InstallBlock
-						key={entry.productId}
-						entry={entry}
-						domain={website.domain}
-						merchantId={merchantId}
-						websiteId={websiteId}
-						fetcher={fetcher}
-					/>
-				))
-			)}
-		</div>
-	);
-
-	const usageTab = props.usageProblem ? (
-		<Callout tone="danger">{describeProblem(props.usageProblem)}</Callout>
-	) : (
-		<UsageView usage={props.usage} showWebsite={false} chartTitle={BILLING.usageChart} />
-	);
-
-	/** @type {Record<WebsiteTab, import('react').ReactNode>} */
-	const contents = { products: productsTab, install: installTab, usage: usageTab };
-	const tabs = WEBSITE_TABS.filter((t) => t !== 'install' || can.tokens).map((t) => ({
-		id: t,
-		label: WEBSITE.tabs[t],
-		content: contents[t],
-	}));
-
-	return (
-		<div className="flex gap-6 lg:gap-8">
-			<InnerList
-				label={props.links.back.label}
-				search={WEBSITE.search}
-				currentId={websiteId}
-				entries={props.siblings.map((w) => ({ id: w.websiteId, label: w.domain, href: props.links.website(w.websiteId) }))}
-			/>
-			<div className="min-w-0 flex-1 space-y-8">
-				<BackLink href={props.links.back.href} label={WEBSITE.back(props.links.back.label)} />
-				<PageHeader
-					breadcrumbs={props.breadcrumbs}
-					title={<span className="break-all">{website.domain}</span>}
-					subtitle={
-						<>
-							<span className="sr-only">{WEBSITE.merchant}: </span>
-							{props.merchantName}
-						</>
-					}
-					actions={
-						can.removeWebsite ? (
-							<ActionMenu
-								label={WEBSITE.websiteActions}
-								items={[
-									{
-										label: WEBSITE.removeWebsite,
-										danger: true,
-										disabled: cards.length > 0,
-										...(cards.length > 0 ? { hint: WEBSITE.removeProductsFirst } : {}),
-										onSelect: () => {
-											setProblem(null);
-											setRemovingWebsite(true);
-										},
-									},
-								]}
-							/>
-						) : null
-					}
-				/>
-				<Tabs
-					label={website.domain}
-					value={tabs.some((t) => t.id === tab) ? tab : 'products'}
-					onChange={setTab}
-					tabs={tabs}
-				/>
+								</span>
+							</li>
+						))}
+					</ul>
+				)}
+				<div className="flex flex-wrap gap-2">
+					{can.manage ? (
+						<Button
+							size="sm"
+							onClick={() => setDialog('add')}
+							aria-label={WEBSITE.addProductTo(website.domain)}
+							icon={<Icon name="plus" size={14} />}>
+							{WEBSITE.addProduct}
+						</Button>
+					) : null}
+					{can.tokens ? (
+						<Button
+							size="sm"
+							variant="secondary"
+							onClick={() => setDialog('tokens')}
+							aria-label={WEBSITE.tokensOf(website.domain)}
+							icon={<Icon name="key" size={14} />}>
+							{WEBSITE.tokens}
+						</Button>
+					) : null}
+					<Button
+						size="sm"
+						variant="secondary"
+						onClick={() => setDialog('usage')}
+						aria-label={WEBSITE.usageOf(website.domain)}
+						icon={<Icon name="trendingUp" size={14} />}>
+						{WEBSITE.usage}
+					</Button>
+				</div>
 			</div>
-			{adding ? (
+			{dialog === 'add' ? (
 				<AddProductDialog
 					merchantId={merchantId}
-					websiteId={websiteId}
+					website={website}
 					fetcher={fetcher}
-					products={(props.addable ?? []).filter((p) => !cards.some((c) => c.productId === p.productId))}
-					onClose={() => setAdding(false)}
+					products={(addable ?? []).filter((p) => !cards.some((c) => c.productId === p.productId))}
+					onClose={() => setDialog(null)}
 					onAdded={(card) => {
-						setCards((list) => [...list, card].sort((a, b) => a.productId.localeCompare(b.productId)));
-						setAdding(false);
+						setCards([...cards, card].sort((a, b) => a.productId.localeCompare(b.productId)));
+						setDialog(null);
 						toast.show({ title: WEBSITE.productAdded(card.name) });
-						void reloadTokens();
 					}}
 				/>
+			) : null}
+			{dialog === 'tokens' ? (
+				<TokensDialog merchantId={merchantId} website={website} fetcher={fetcher} onClose={() => setDialog(null)} />
+			) : null}
+			{dialog === 'usage' ? (
+				<UsageDialog merchantId={merchantId} website={website} fetcher={fetcher} onClose={() => setDialog(null)} />
 			) : null}
 			<TypedConfirmDialog
 				open={Boolean(removing)}
@@ -429,8 +358,8 @@ export function WebsitePage(props) {
 				<p className="text-sm text-muted">{WEBSITE.removeHelp}</p>
 			</TypedConfirmDialog>
 			<TypedConfirmDialog
-				open={removingWebsite}
-				onClose={() => setRemovingWebsite(false)}
+				open={dialog === 'removeWebsite'}
+				onClose={() => setDialog(null)}
 				onConfirm={() => void removeWebsite()}
 				expected={website.domain}
 				busy={busy}
@@ -440,23 +369,26 @@ export function WebsitePage(props) {
 				error={problem ? describeProblem(problem) : null}>
 				<p className="text-sm text-muted">{WEBSITE.removeWebsiteHelp}</p>
 			</TypedConfirmDialog>
-		</div>
+		</Card>
 	);
 }
 
 /**
  * Add product (PLAN 0.5.9): the active connected products not yet on the website.
- * @param {{ merchantId: string, websiteId: string, fetcher: Fetcher, products: Array<{ productId: string, name: string }>,
+ * @param {{ merchantId: string, website: any, fetcher: Fetcher, products: Array<{ productId: string, name: string }>,
  *   onClose: () => void, onAdded: (card: ProductCard) => void }} props
  */
-function AddProductDialog({ merchantId, websiteId, fetcher, products, onClose, onAdded }) {
+function AddProductDialog({ merchantId, website, fetcher, products, onClose, onAdded }) {
 	const [busy, setBusy] = useState(/** @type {string | null} */ (null));
 	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
 	/** @param {string} productId */
 	const add = async (productId) => {
 		setBusy(productId);
 		setProblem(null);
-		const result = await fetcher(api.websiteProducts(merchantId, websiteId), { method: 'POST', body: { productId } });
+		const result = await fetcher(api.websiteProducts(merchantId, String(website.websiteId)), {
+			method: 'POST',
+			body: { productId },
+		});
 		setBusy(null);
 		if (!result.ok) {
 			setProblem(result.problem);
@@ -465,14 +397,17 @@ function AddProductDialog({ merchantId, websiteId, fetcher, products, onClose, o
 		onAdded(result.data.product);
 	};
 	return (
-		<Dialog open onClose={onClose} title={WEBSITE.addProduct} description={WEBSITE.addProductHelp}>
+		<Dialog open onClose={onClose} title={WEBSITE.addProductTo(website.domain)} description={WEBSITE.addProductHelp}>
 			{products.length === 0 ? (
 				<p className="text-sm text-muted">{WEBSITE.noneToAdd}</p>
 			) : (
 				<ul className="divide-y divide-line-soft rounded-2xl bg-surface-2/60">
 					{products.map((p) => (
 						<li key={p.productId} className="flex items-center justify-between gap-3 px-4 py-3">
-							<span className="min-w-0 truncate text-sm font-semibold text-fg">{p.name}</span>
+							<span className="flex min-w-0 items-center gap-3">
+								<IconBadge icon="box" kind="product" size="sm" />
+								<span className="truncate text-sm font-semibold text-fg">{p.name}</span>
+							</span>
 							<Button
 								size="sm"
 								loading={busy === p.productId}
@@ -486,6 +421,78 @@ function AddProductDialog({ merchantId, websiteId, fetcher, products, onClose, o
 				</ul>
 			)}
 			<FormError problem={problem} />
+		</Dialog>
+	);
+}
+
+/**
+ * Loads a website's resource once when its dialog opens.
+ * @param {Fetcher} fetcher
+ * @param {string} path
+ */
+const useOnce = (fetcher, path) => {
+	const [result, setResult] = useState(/** @type {import('./common.js').ApiResult | null} */ (null));
+	useEffect(() => {
+		let live = true;
+		void fetcher(path).then((r) => {
+			if (live) setResult(r);
+		});
+		return () => {
+			live = false;
+		};
+	}, [fetcher, path]);
+	return result;
+};
+
+/**
+ * Install and tokens of a website, as a dialog: one install block per product.
+ * @param {{ merchantId: string, website: any, fetcher: Fetcher, onClose: () => void }} props
+ */
+function TokensDialog({ merchantId, website, fetcher, onClose }) {
+	const websiteId = String(website.websiteId);
+	const result = useOnce(fetcher, api.tokens(merchantId, websiteId));
+	const tokens = /** @type {TokenEntry[]} */ (result?.ok ? (result.data?.items ?? []) : []);
+	return (
+		<Dialog open onClose={onClose} size="lg" title={WEBSITE.tokensOf(website.domain)}>
+			{!result ? (
+				<Skeleton lines={4} />
+			) : !result.ok ? (
+				<Callout tone="danger">{describeProblem(result.problem)}</Callout>
+			) : tokens.length === 0 ? (
+				<EmptyState compact icon="key" title={WEBSITE.noTokens} />
+			) : (
+				<div className="space-y-4">
+					{tokens.map((entry) => (
+						<InstallBlock
+							key={entry.productId}
+							entry={entry}
+							domain={website.domain}
+							merchantId={merchantId}
+							websiteId={websiteId}
+							fetcher={fetcher}
+						/>
+					))}
+				</div>
+			)}
+		</Dialog>
+	);
+}
+
+/**
+ * Usage of a website, as a dialog: the last 30 UTC days by product and feature.
+ * @param {{ merchantId: string, website: any, fetcher: Fetcher, onClose: () => void }} props
+ */
+function UsageDialog({ merchantId, website, fetcher, onClose }) {
+	const result = useOnce(fetcher, api.usage(merchantId, { websiteId: String(website.websiteId) }));
+	return (
+		<Dialog open onClose={onClose} size="lg" title={WEBSITE.usageOf(website.domain)}>
+			{!result ? (
+				<Skeleton lines={4} />
+			) : !result.ok ? (
+				<Callout tone="danger">{describeProblem(result.problem)}</Callout>
+			) : (
+				<UsageView usage={result.data} showWebsite={false} chartTitle={BILLING.usageChart} />
+			)}
 		</Dialog>
 	);
 }
@@ -552,10 +559,13 @@ export function InstallBlock({ entry, domain, merchantId, websiteId, fetcher }) 
 	};
 
 	return (
-		<Card
-			title={entry.name}
-			actions={
-				entry.docsUrl ? (
+		<section aria-label={entry.name} className="space-y-4 rounded-2xl bg-surface-2/60 p-4 sm:p-5">
+			<div className="flex flex-wrap items-center justify-between gap-2">
+				<h3 className="flex items-center gap-2 text-sm font-bold text-fg">
+					<IconBadge icon="box" kind="product" size="sm" />
+					{entry.name}
+				</h3>
+				{entry.docsUrl ? (
 					<a
 						href={entry.docsUrl}
 						target="_blank"
@@ -564,56 +574,54 @@ export function InstallBlock({ entry, domain, merchantId, websiteId, fetcher }) 
 						{WEBSITE.docs}
 						<Icon name="external" size={13} />
 					</a>
-				) : null
-			}>
-			<div className="space-y-5">
-				{entry.widgetScriptUrl ? (
-					<div className="space-y-1">
-						<CodeBlock label={WEBSITE.scriptTag} code={scriptTag(entry.widgetScriptUrl, entry.browserToken)} />
-						<p className="text-xs text-muted">{WEBSITE.scriptTagHelp}</p>
-					</div>
 				) : null}
+			</div>
+			{entry.widgetScriptUrl ? (
 				<div className="space-y-1">
-					<CodeBlock label={WEBSITE.browserToken} code={entry.browserToken} />
-					<p className="text-xs text-muted">{WEBSITE.browserTokenHelp(domain)}</p>
+					<CodeBlock label={WEBSITE.scriptTag} code={scriptTag(entry.widgetScriptUrl, entry.browserToken)} />
+					<p className="text-xs text-muted">{WEBSITE.scriptTagHelp}</p>
 				</div>
-				<div className="space-y-2">
-					<p className="text-xs font-semibold uppercase tracking-wider text-muted">{WEBSITE.serverToken}</p>
-					{cannot ? (
-						<Callout tone="warning">{WEBSITE.cannotShow}</Callout>
-					) : shown && value ? (
-						<CodeBlock code={value} label={WEBSITE.serverToken} />
-					) : (
-						<p className="rounded-2xl bg-surface-2 p-3.5 font-mono text-xs text-muted">
-							<span aria-hidden="true">••••••••••••••••••••</span>
-							<span className="sr-only">{WEBSITE.hidden}</span>
-						</p>
+			) : null}
+			<div className="space-y-1">
+				<CodeBlock label={WEBSITE.browserToken} code={entry.browserToken} />
+				<p className="text-xs text-muted">{WEBSITE.browserTokenHelp(domain)}</p>
+			</div>
+			<div className="space-y-2">
+				<p className="text-xs font-semibold uppercase tracking-wider text-muted">{WEBSITE.serverToken}</p>
+				{cannot ? (
+					<Callout tone="warning">{WEBSITE.cannotShow}</Callout>
+				) : shown && value ? (
+					<CodeBlock code={value} label={WEBSITE.serverToken} />
+				) : (
+					<p className="rounded-2xl bg-surface p-3.5 font-mono text-xs text-muted">
+						<span aria-hidden="true">••••••••••••••••••••</span>
+						<span className="sr-only">{WEBSITE.hidden}</span>
+					</p>
+				)}
+				<div className="flex flex-wrap gap-2">
+					{cannot ? null : (
+						<>
+							<Button variant="secondary" size="sm" onClick={() => void show()} loading={busy && !regenerating}>
+								{shown ? WEBSITE.hide : WEBSITE.reveal}
+							</Button>
+							<Button variant="secondary" size="sm" onClick={() => void copy()} disabled={busy}>
+								{WEBSITE.copy}
+							</Button>
+						</>
 					)}
-					<div className="flex flex-wrap gap-2">
-						{cannot ? null : (
-							<>
-								<Button variant="secondary" size="sm" onClick={() => void show()} loading={busy && !regenerating}>
-									{shown ? WEBSITE.hide : WEBSITE.reveal}
-								</Button>
-								<Button variant="secondary" size="sm" onClick={() => void copy()} disabled={busy}>
-									{WEBSITE.copy}
-								</Button>
-							</>
-						)}
-						<Button
-							variant="secondary"
-							size="sm"
-							disabled={busy}
-							onClick={() => {
-								setProblem(null);
-								setRegenerating(true);
-							}}>
-							{WEBSITE.regenerate}
-						</Button>
-					</div>
-					<p className="text-xs text-muted">{WEBSITE.serverTokenHelp}</p>
-					{problem && !regenerating ? <Callout tone="danger">{describeProblem(problem)}</Callout> : null}
+					<Button
+						variant="secondary"
+						size="sm"
+						disabled={busy}
+						onClick={() => {
+							setProblem(null);
+							setRegenerating(true);
+						}}>
+						{WEBSITE.regenerate}
+					</Button>
 				</div>
+				<p className="text-xs text-muted">{WEBSITE.serverTokenHelp}</p>
+				{problem && !regenerating ? <Callout tone="danger">{describeProblem(problem)}</Callout> : null}
 			</div>
 			<TypedConfirmDialog
 				open={regenerating}
@@ -627,6 +635,6 @@ export function InstallBlock({ entry, domain, merchantId, websiteId, fetcher }) 
 				error={problem ? describeProblem(problem) : null}>
 				<p className="text-sm text-muted">{WEBSITE.regenerateHelp}</p>
 			</TypedConfirmDialog>
-		</Card>
+		</section>
 	);
 }

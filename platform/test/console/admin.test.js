@@ -1,8 +1,8 @@
 /**
  * Server render of every admin page against a live in-process Portal: the first Owner turns two-step on, seeds a
  * merchant with a website, connects two fake products (one inactive), adds a product to the website and credits; then
- * every admin page renders without errors or React warnings, and each role (Owner, Support, Finance) sees only the menu
- * entries, tabs and actions it can use (PLAN 0.2, 0.6).
+ * every admin page renders without errors or React warnings (the list-and-detail screens with and without a selection),
+ * and each role (Owner, Support, Finance) sees only the menu entries and actions it can use (PLAN 0.2, 0.6).
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { renderToString } from 'react-dom/server';
@@ -11,15 +11,14 @@ import { closeMongoClients } from '../../src/infra/db.js';
 import * as admin from '../../src/console/admin/loaders.js';
 import { adminApi, adminRoutes, query } from '../../src/console/admin/paths.js';
 import { AdminShell, adminSections } from '../../src/console/admin/views/shell.js';
-import { MerchantView, MerchantsView } from '../../src/console/admin/views/merchants.js';
+import { MerchantsView } from '../../src/console/admin/views/merchants.js';
 import { OverviewView, dayBars } from '../../src/console/admin/views/overview.js';
 import { ActivityView } from '../../src/console/admin/views/activity.js';
 import { AdminsView } from '../../src/console/admin/views/admins.js';
 import { MyAccountView } from '../../src/console/admin/views/account.js';
 import { SettingsView } from '../../src/console/admin/views/settings.js';
 import { FinanceView, MerchantCredits } from '../../src/console/admin/views/finance.js';
-import { ProductView, ProductsView, featureNames } from '../../src/console/admin/views/products.js';
-import { AdminWebsiteView } from '../../src/console/admin/views/website.js';
+import { ProductsView, featureNames } from '../../src/console/admin/views/products.js';
 import { adminCan } from '../../src/console/admin/views/common.js';
 import { startMongo } from '../helpers.js';
 import { createWorld } from './merchant-harness.js';
@@ -132,87 +131,100 @@ describe('admin console smoke', () => {
 			expect(overviewHtml).toContain('Recent activity');
 			expect(text(ssr(<OverviewView ok overview={{ products: [] }} admin={owner} />))).toContain('No products connected yet.');
 
-			// ------------------------------------------------------------------ merchants and the merchant page
-			expect(text(ssr(<MerchantsView {...await admin.loadMerchants(ownerBrowser.api, {})} admin={owner} />))).toContain(
-				'Shop & Co',
-			);
+			// ------------------------------------------------------------------ Merchants: the list, then a merchant selected
+			const list = await admin.loadMerchants(ownerBrowser.api, {});
+			const listHtml = text(ssr(<MerchantsView {...list} admin={owner} />));
+			expect(listHtml).toContain('Shop & Co');
+			expect(listHtml).toContain('250 credits'); // the balance on the row
+			expect(listHtml).toContain('Select a merchant');
 			const byDomain = await admin.loadMerchants(ownerBrowser.api, { q: 'shop.example.com' });
 			expect(byDomain.ok && byDomain.page.items.map((m) => m.merchantId)).toEqual([merchantId]);
-			const detail = await admin.loadMerchant(ownerBrowser.api, merchantId);
-			const detailHtml = text(ssr(<MerchantView {...detail} admin={owner} />));
-			expect(detailHtml).toContain('shop.example.com');
-			expect(detailHtml).toContain('Notes ( Active )');
-			expect(detailHtml).toContain('250 credits');
-			expect(detailHtml).toContain('Add website');
-			for (const tab of ['details', 'activity', 'credits'])
-				expect(text(ssr(<MerchantView {...detail} admin={owner} tab={tab} />))).toMatch(
-					/Owner name|Merchant created|250 credits/,
-				);
-
-			// ------------------------------------------------------------------ the website page (every tab)
-			for (const tab of ['products', 'install', 'usage']) {
-				const page = await admin.loadWebsite(ownerBrowser.api, { merchantId, websiteId, tab, admin: owner });
-				const raw = ssr(<AdminWebsiteView {...page} admin={owner} />);
-				const html = text(raw);
-				expect(html).toContain('shop.example.com');
-				expect(html).toContain('Shop & Co');
-				expect(raw).toContain('aria-label="Website actions"');
-				if (tab === 'products') {
-					expect(html).toContain('Add product');
-					expect(raw).toContain('aria-label="Actions for Notes"');
-				}
-				expect(html).toContain('Install and tokens');
-			}
-			const page = await admin.loadWebsite(ownerBrowser.api, { merchantId, websiteId, admin: owner });
-			if (!page.ok) throw new Error('website page');
+			const detail = await admin.loadMerchant(ownerBrowser.api, merchantId, owner);
+			if (!detail.ok) throw new Error('merchant');
 			// Add product lists only active connected products
-			expect(page.addable).toEqual([{ productId: 'notes', name: 'Notes' }]);
-			expect(page.tokens?.map((t) => t.productId)).toEqual(['notes']);
-			const missingSite = await admin.loadWebsite(ownerBrowser.api, {
-				merchantId,
-				websiteId: 'web_0000000000000000000000000z',
-				admin: owner,
-			});
-			expect(missingSite.ok).toBe(false);
-			expect(text(ssr(<AdminWebsiteView {...missingSite} admin={owner} />))).toContain('Not found');
+			expect(detail.addable).toEqual([{ productId: 'notes', name: 'Notes' }]);
+			const raw = ssr(<MerchantsView {...list} detail={detail} selectedId={merchantId} admin={owner} />);
+			const detailHtml = text(raw);
+			// one page: header with the actions, website cards, credits and activity — no tabs
+			expect(raw).not.toContain('role="tab"');
+			for (const word of [
+				'shop.example.com',
+				'Notes',
+				'Active',
+				'250 credits',
+				'Add website',
+				'Add credits',
+				'Edit merchant',
+				'Suspend',
+				'Credit receipts',
+				'Activity',
+				'Install and tokens',
+				'Usage',
+			])
+				expect(detailHtml).toContain(word);
+			expect(raw).toContain('aria-label="Add product to shop.example.com"');
+			expect(raw).toContain('aria-label="Actions for shop.example.com"');
+			expect(raw).toContain('aria-label="Actions for Notes"');
+			expect(raw).toContain('aria-current="page"'); // the selected row
+			const missingMerchant = await admin.loadMerchant(ownerBrowser.api, 'mer_0000000000000000000000000z', owner);
+			expect(
+				text(
+					ssr(
+						<MerchantsView {...list} detail={missingMerchant} selectedId="mer_0000000000000000000000000z" admin={owner} />,
+					),
+				),
+			).toContain('Not found');
 
-			// ------------------------------------------------------------------ Products
+			// ------------------------------------------------------------------ Products: the list, then a product selected
 			const products = await admin.loadProducts(ownerBrowser.api, { status: 'bogus' });
 			expect(products.ok && products.filter).toEqual({ status: null });
 			const productsHtml = text(ssr(<ProductsView {...products} admin={owner} />));
 			expect(productsHtml).toContain('Add product');
 			expect(productsHtml).toContain('Notes');
 			expect(productsHtml).toContain('Chatty');
-			expect(productsHtml).toContain('Earned this month (UTC)');
+			expect(productsHtml).toContain('1 website');
+			expect(productsHtml).toContain('Select a product');
 			const active = await admin.loadProducts(ownerBrowser.api, { status: 'active' });
 			expect(active.ok && active.items.map((p) => p.productId)).toEqual(['notes']);
-			const product = await admin.loadProduct(ownerBrowser.api, 'notes', { tab: 'websites' });
+			const product = await admin.loadProduct(ownerBrowser.api, 'notes');
 			if (!product.ok) throw new Error('product');
-			expect(product.tab).toBe('websites');
 			expect(product.websites.items).toMatchObject([
 				{ domain: 'shop.example.com', merchantName: 'Shop & Co', featuresOn: ['notes'] },
 			]);
-			const productHtml = text(ssr(<ProductView {...product} admin={owner} />));
-			for (const word of ['Open as admin', 'Set inactive', 'Reconnect', 'Connected', 'Overview', 'Websites', 'Shop & Co'])
+			const productRaw = ssr(<ProductsView {...products} detail={product} selectedId="notes" admin={owner} />);
+			const productHtml = text(productRaw);
+			for (const word of ['Open as admin', 'Set inactive', 'Reconnect', 'Connected', 'Websites using it', 'Shop & Co'])
 				expect(productHtml).toContain(word);
-			const overviewTab = await admin.loadProduct(ownerBrowser.api, 'chatty');
-			if (!overviewTab.ok) throw new Error('product');
-			expect(overviewTab.tab).toBe('overview');
-			const chattyHtml = text(ssr(<ProductView {...overviewTab} admin={owner} />));
+			expect(productRaw).not.toContain('role="tab"');
+			expect(productRaw).toContain(`href="/admin/merchants/${merchantId}#website-${websiteId}"`);
+			const chatty = await admin.loadProduct(ownerBrowser.api, 'chatty');
+			const chattyHtml = text(ssr(<ProductsView {...products} detail={chatty} selectedId="chatty" admin={owner} />));
 			expect(chattyHtml).toContain('Set active');
 			expect(chattyHtml).toContain('Credits earned this month (UTC)');
-			expect(chattyHtml).toContain('Websites using it');
 			const unknown = await admin.loadProduct(ownerBrowser.api, 'nothing-here');
 			expect(unknown.ok).toBe(false);
-			expect(text(ssr(<ProductView {...unknown} admin={owner} />))).toContain('Products');
+			expect(text(ssr(<ProductsView {...products} detail={unknown} selectedId="nothing-here" admin={owner} />))).toContain(
+				'Not found',
+			);
 
 			// ------------------------------------------------------------------ the other pages
 			const activity = await admin.loadActivity(ownerBrowser.api, { merchantId, adminId: '<bad>', from: 'x' });
 			expect(activity.ok && activity.filter).toEqual({ merchantId, adminId: null, from: null, to: null });
 			expect(text(ssr(<ActivityView {...activity} />))).toContain('Product added');
-			const adminsHtml = text(ssr(<AdminsView {...await admin.loadAdmins(ownerBrowser.api, owner)} />));
+			const admins = await admin.loadAdmins(ownerBrowser.api, owner);
+			const adminsHtml = text(ssr(<AdminsView {...admins} />));
 			expect(adminsHtml).toContain('help@ss.test');
-			expect(adminsHtml).toContain('Invited');
+			expect(adminsHtml).toContain('Select an admin');
+			const invited = admins.ok ? admins.items.find((a) => a.email === 'help@ss.test') : null;
+			const invitedHtml = text(ssr(<AdminsView {...admins} selectedId={invited?.adminId} />));
+			for (const word of ['Invited', 'Resend invite', 'Copy invite link', 'Correct invite e-mail', 'Change role', 'Remove'])
+				expect(invitedHtml).toContain(word);
+			const meHtml = text(ssr(<AdminsView {...admins} selectedId={owner.adminId} />));
+			expect(meHtml).toContain('you');
+			expect(meHtml).not.toContain('Change role');
+			expect(text(ssr(<AdminsView {...admins} selectedId="adm_00000000000000000000z" />))).toContain(
+				'This admin does not exist or was removed.',
+			);
 			expect(text(ssr(<SettingsView {...await admin.loadSettings(ownerBrowser.api)} />))).toContain('SMTP host');
 			expect(text(ssr(<MyAccountView {...await admin.loadMyAccount(ownerBrowser.api)} />))).toContain(
 				'10 recovery codes left',
@@ -244,10 +256,9 @@ describe('admin console smoke', () => {
 			expect(creditsHtml).toContain('notes 3 h');
 
 			// ------------------------------------------------------------------ failures render friendly states
-			const missing = await admin.loadMerchant(ownerBrowser.api, 'mer_0000000000000000000000000z');
+			const missing = await admin.loadMerchant(ownerBrowser.api, 'mer_0000000000000000000000000z', owner);
 			expect(missing).toMatchObject({ ok: false, status: 404 });
 			for (const View of [
-				MerchantView,
 				MerchantsView,
 				ProductsView,
 				FinanceView,
@@ -265,7 +276,7 @@ describe('admin console smoke', () => {
 		}
 	});
 
-	it('limits menus, tabs and actions to the admin role', async () => {
+	it('limits menus and actions to the admin role', async () => {
 		const { world, merchantId, websiteId } = await seed('admin_roles');
 		try {
 			const { admin: support, b: supportBrowser } = await world.adminOf('support');
@@ -290,41 +301,63 @@ describe('admin console smoke', () => {
 					.find((i) => i.current)?.label,
 			).toBe('Products');
 
-			// Support: the website page with every admin action and Install and tokens; Products read-only
-			const supportPage = await admin.loadWebsite(supportBrowser.api, { merchantId, websiteId, admin: support });
-			expect(supportPage.ok && supportPage.tokens?.length).toBe(1);
-			const supportHtml = ssr(<AdminWebsiteView {...supportPage} admin={support} />);
-			for (const word of ['Add product', 'aria-label="Website actions"', 'Install and tokens', 'Open Notes'])
-				expect(supportHtml).toContain(word);
-			const supportProducts = text(ssr(<ProductsView {...await admin.loadProducts(supportBrowser.api)} admin={support} />));
-			expect(supportProducts).toContain('Notes');
-			expect(supportProducts).not.toContain('Add product');
-			const supportProduct = text(
-				ssr(<ProductView {...await admin.loadProduct(supportBrowser.api, 'notes')} admin={support} />),
+			// Support: the website cards with every admin action and Install and tokens; Products read-only
+			const supportList = await admin.loadMerchants(supportBrowser.api, {});
+			const supportDetail = await admin.loadMerchant(supportBrowser.api, merchantId, support);
+			expect(supportDetail.ok && supportDetail.addable).toEqual([{ productId: 'notes', name: 'Notes' }]);
+			const supportHtml = ssr(
+				<MerchantsView {...supportList} detail={supportDetail} selectedId={merchantId} admin={support} />,
 			);
-			expect(supportProduct).toContain('Notes');
+			for (const word of [
+				'Add product to shop.example.com',
+				'aria-label="Actions for shop.example.com"',
+				'Install and tokens',
+				'Open Notes',
+				'Add website',
+			])
+				expect(supportHtml).toContain(word);
+			expect(supportHtml).not.toContain('Add credits');
+			const supportProducts = await admin.loadProducts(supportBrowser.api);
+			const supportProductsHtml = text(ssr(<ProductsView {...supportProducts} admin={support} />));
+			expect(supportProductsHtml).toContain('Notes');
+			expect(supportProductsHtml).not.toContain('Add product');
+			const supportProduct = text(
+				ssr(
+					<ProductsView
+						{...supportProducts}
+						detail={await admin.loadProduct(supportBrowser.api, 'notes')}
+						selectedId="notes"
+						admin={support}
+					/>,
+				),
+			);
+			expect(supportProduct).toContain('Websites using it');
 			for (const word of ['Open as admin', 'Set inactive', 'Reconnect']) expect(supportProduct).not.toContain(word);
 
 			// Finance: products and usage only; no Install and tokens, no Open, no admin actions
-			const financePage = await admin.loadWebsite(financeBrowser.api, {
-				merchantId,
-				websiteId,
-				tab: 'install',
-				admin: finance,
-			});
-			if (!financePage.ok) throw new Error('finance website page');
-			expect(financePage.tokens).toBeNull();
-			expect(financePage.addable).toBeNull();
-			const financeHtml = ssr(<AdminWebsiteView {...financePage} admin={finance} />);
+			const financeDetail = await admin.loadMerchant(financeBrowser.api, merchantId, finance);
+			if (!financeDetail.ok) throw new Error('finance merchant');
+			expect(financeDetail.addable).toBeNull();
+			const financeHtml = ssr(
+				<MerchantsView
+					{...await admin.loadMerchants(financeBrowser.api, {})}
+					detail={financeDetail}
+					selectedId={merchantId}
+					admin={finance}
+				/>,
+			);
 			expect(financeHtml).toContain('Notes');
 			expect(financeHtml).toContain('Usage');
-			for (const word of ['Install and tokens', 'Add product', 'Website actions', 'Open', 'Server token', 'Browser token'])
+			expect(financeHtml).toContain('Add credits');
+			for (const word of [
+				'Install and tokens',
+				'Add product',
+				'Actions for shop.example.com',
+				'Open Notes',
+				'Add website',
+				'Edit merchant',
+			])
 				expect(financeHtml).not.toContain(word);
-			const financeMerchant = text(
-				ssr(<MerchantView {...await admin.loadMerchant(financeBrowser.api, merchantId)} admin={finance} />),
-			);
-			expect(financeMerchant).toContain('shop.example.com');
-			expect(financeMerchant).not.toContain('Add website');
 			// the API refuses what the screens hide
 			expect((await financeBrowser.api.get(`/v1/merchants/${merchantId}/websites/${websiteId}/tokens`)).status).toBe(403);
 			expect((await financeBrowser.api.post('/v1/admin/products/notes/launch', { websiteId })).status).toBe(403);
@@ -344,11 +377,12 @@ describe('admin console smoke', () => {
 		expect(query({})).toBe('');
 		expect(adminRoutes.activity({ merchantId: 'mer_1' })).toBe('/admin/activity?merchantId=mer_1');
 		expect(adminRoutes.login('/admin/x')).toBe('/login?next=%2Fadmin%2Fx');
-		expect(adminRoutes.merchant('mer_1', 'details')).toBe('/admin/merchants/mer_1?tab=details');
-		expect(adminRoutes.website('mer_1', 'web_1', 'usage')).toBe('/admin/merchants/mer_1/websites/web_1?tab=usage');
-		expect(adminRoutes.website('mer_1', 'web_1')).toBe('/admin/merchants/mer_1/websites/web_1');
-		expect(adminRoutes.product('notes', 'websites')).toBe('/admin/products/notes?tab=websites');
-		expect(adminRoutes.product('notes', 'overview')).toBe('/admin/products/notes');
+		expect(adminRoutes.merchant('mer_1', { q: 'shop', status: null })).toBe('/admin/merchants/mer_1?q=shop');
+		expect(adminRoutes.merchant('mer_1')).toBe('/admin/merchants/mer_1');
+		expect(adminRoutes.website('mer_1', 'web_1')).toBe('/admin/merchants/mer_1#website-web_1');
+		expect(adminRoutes.product('notes', { status: 'active' })).toBe('/admin/products/notes?status=active');
+		expect(adminRoutes.product('notes')).toBe('/admin/products/notes');
+		expect(adminRoutes.admin('adm_1')).toBe('/admin/admins/adm_1');
 		expect(adminRoutes.products({ status: 'active' })).toBe('/admin/products?status=active');
 		expect(adminApi.productWebsites('notes', 'abc')).toBe('/v1/admin/products/notes/websites?cursor=abc');
 		expect(adminApi.launch('notes')).toBe('/v1/admin/products/notes/launch');

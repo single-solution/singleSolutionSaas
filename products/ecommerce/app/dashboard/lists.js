@@ -7,7 +7,7 @@
  * @module
  */
 import { useState } from 'react';
-import { Button, Callout, Card, CheckboxGroup, Input, Select, TextArea, describeProblem } from '@ss/ui';
+import { Button, Callout, Card, CheckboxGroup, FieldGrid, Input, Select, TextArea, describeProblem } from '@ss/ui';
 import { DEFAULT_FLOW, canMove } from '../../core/flow.js';
 import { STATUS_ROLES } from '../../core/model.js';
 import { exponentOf, fromDecimal, toDecimal } from '../../core/money.js';
@@ -353,7 +353,7 @@ export function ZonesEditor({ websiteId, off, currency }) {
 			})}
 			render={(zone, set) => (
 				<>
-					<div className="grid gap-3 md:grid-cols-2">
+					<FieldGrid>
 						<Input label={Z.name} value={zone.name ?? ''} onChange={(event) => set({ name: event.target.value })} />
 						<Input
 							label={Z.key}
@@ -374,7 +374,7 @@ export function ZonesEditor({ websiteId, off, currency }) {
 							value={zone.areas.join('\n')}
 							onChange={(event) => set({ areas: event.target.value.split('\n') })}
 						/>
-					</div>
+					</FieldGrid>
 					<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
 						<Input
 							label={fill(Z.fee, { currency })}

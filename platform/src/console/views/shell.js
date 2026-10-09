@@ -29,19 +29,25 @@ export const merchantSections = (pathname) => {
 				{
 					href: routes.overview(),
 					label: MERCHANT.menu.overview,
-					tone: 'indigo',
+					kind: 'overview',
 					icon: 'grid',
 					current: is(routes.overview()),
 				},
 				{
 					href: routes.websites(),
 					label: MERCHANT.menu.websites,
-					tone: 'teal',
+					kind: 'website',
 					icon: 'globe',
 					current: is(routes.websites()),
 				},
-				{ href: routes.credits(), label: MERCHANT.menu.usage, tone: 'pink', icon: 'wallet', current: is(routes.credits()) },
-				{ href: routes.account(), label: MERCHANT.menu.account, tone: 'amber', icon: 'user', current: is(routes.account()) },
+				{ href: routes.credits(), label: MERCHANT.menu.usage, kind: 'credit', icon: 'wallet', current: is(routes.credits()) },
+				{
+					href: routes.account(),
+					label: MERCHANT.menu.account,
+					kind: 'merchant',
+					icon: 'user',
+					current: is(routes.account()),
+				},
 			],
 		},
 	];
@@ -102,7 +108,8 @@ export function ConsoleShell({ me, merchantId, websites, billing, children, bran
 							{billing && typeof billing.balance === 'number' ? (
 								<Link
 									href={routes.credits()}
-									className="hidden items-center gap-1.5 rounded-xl bg-tint-indigo px-3 py-1.5 text-sm font-semibold text-fg hover:bg-primary-soft sm:inline-flex"
+									data-tone="credit"
+									className="hidden items-center gap-1.5 rounded-xl bg-tone-tint px-3 py-1.5 text-sm font-semibold text-fg hover:bg-surface-2 sm:inline-flex"
 									title={MERCHANT.balanceLink}>
 									<Icon name="wallet" size={14} />
 									<span className="tabular-nums">{formatCredits(billing.balance)}</span>

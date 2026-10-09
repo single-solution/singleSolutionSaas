@@ -104,58 +104,56 @@ function MailTab({ settings, onSaved }) {
 	return (
 		<Card>
 			<Form onSubmit={submit} busy={busy} aria-label={ADMIN.settingsTabs.mail}>
-				<div className="grid gap-4 md:grid-cols-2">
-					<Input
-						label={ADMIN.mail.host}
-						value={form.host}
-						onChange={(e) => set('host', e.currentTarget.value)}
-						error={errors.host}
-						required
-					/>
-					<Input
-						label={ADMIN.mail.port}
-						inputMode="numeric"
-						value={form.port}
-						onChange={(e) => set('port', e.currentTarget.value)}
-						error={errors.port}
-						required
-					/>
-					<Input
-						label={ADMIN.mail.user}
-						value={form.user}
-						onChange={(e) => set('user', e.currentTarget.value)}
-						error={errors.user}
-					/>
-					<Input
-						label={ADMIN.mail.password}
-						type="password"
-						autoComplete="new-password"
-						value={form.password}
-						onChange={(e) => set('password', e.currentTarget.value)}
-						error={errors.password}
-						help={
-							mail?.passwordUnreadable
-								? ADMIN.mail.passwordUnreadable
-								: mail?.hasPassword
-									? ADMIN.mail.passwordKept
-									: undefined
-						}
-					/>
-					<Input
-						label={ADMIN.mail.senderName}
-						value={form.senderName}
-						onChange={(e) => set('senderName', e.currentTarget.value)}
-						error={errors.senderName}
-					/>
-					<Input
-						label={ADMIN.mail.senderAddress}
-						type="email"
-						value={form.senderAddress}
-						onChange={(e) => set('senderAddress', e.currentTarget.value)}
-						error={errors.senderAddress}
-						required
-					/>
-				</div>
+				<Input
+					label={ADMIN.mail.host}
+					value={form.host}
+					onChange={(e) => set('host', e.currentTarget.value)}
+					error={errors.host}
+					required
+				/>
+				<Input
+					label={ADMIN.mail.port}
+					inputMode="numeric"
+					value={form.port}
+					onChange={(e) => set('port', e.currentTarget.value)}
+					error={errors.port}
+					required
+				/>
+				<Input
+					label={ADMIN.mail.user}
+					value={form.user}
+					onChange={(e) => set('user', e.currentTarget.value)}
+					error={errors.user}
+				/>
+				<Input
+					label={ADMIN.mail.password}
+					type="password"
+					autoComplete="new-password"
+					value={form.password}
+					onChange={(e) => set('password', e.currentTarget.value)}
+					error={errors.password}
+					help={
+						mail?.passwordUnreadable
+							? ADMIN.mail.passwordUnreadable
+							: mail?.hasPassword
+								? ADMIN.mail.passwordKept
+								: undefined
+					}
+				/>
+				<Input
+					label={ADMIN.mail.senderName}
+					value={form.senderName}
+					onChange={(e) => set('senderName', e.currentTarget.value)}
+					error={errors.senderName}
+				/>
+				<Input
+					label={ADMIN.mail.senderAddress}
+					type="email"
+					value={form.senderAddress}
+					onChange={(e) => set('senderAddress', e.currentTarget.value)}
+					error={errors.senderAddress}
+					required
+				/>
 				<Checkbox label={ADMIN.mail.secure} checked={form.secure} onChange={(e) => set('secure', e.currentTarget.checked)} />
 				<FormError problem={problem} fields={['host', 'port', 'user', 'password', 'senderName', 'senderAddress']} />
 				<div className="flex flex-wrap gap-2">
@@ -203,23 +201,21 @@ function BrandingTab({ settings, onSaved }) {
 				onSubmit={() => save(adminApi.settingsBranding(), 'PUT', { name: name.trim(), accent })}
 				busy={busy}
 				aria-label={ADMIN.settingsTabs.branding}>
-				<div className="grid gap-4 md:grid-cols-2">
-					<Input
-						label={ADMIN.branding.name}
-						value={name}
-						onChange={(e) => setName(e.currentTarget.value)}
-						error={errors.name}
-						required
-						maxLength={60}
-					/>
-					<Input
-						label={ADMIN.branding.accent}
-						type="color"
-						value={accent}
-						onChange={(e) => setAccent(e.currentTarget.value)}
-						error={errors.accent}
-					/>
-				</div>
+				<Input
+					label={ADMIN.branding.name}
+					value={name}
+					onChange={(e) => setName(e.currentTarget.value)}
+					error={errors.name}
+					required
+					maxLength={60}
+				/>
+				<Input
+					label={ADMIN.branding.accent}
+					type="color"
+					value={accent}
+					onChange={(e) => setAccent(e.currentTarget.value)}
+					error={errors.accent}
+				/>
 				<div className="space-y-2">
 					<p className="text-sm font-semibold text-fg">{ADMIN.branding.logo}</p>
 					<p className="text-sm text-muted">{ADMIN.branding.logoHelp}</p>
@@ -271,27 +267,25 @@ function SupportTab({ settings, onSaved }) {
 		<Card>
 			<Form onSubmit={() => save(adminApi.settingsSupport(), 'PUT', form)} busy={busy} aria-label={ADMIN.settingsTabs.support}>
 				<p className="text-sm text-muted">{ADMIN.support.help}</p>
-				<div className="grid gap-4 md:grid-cols-3">
-					<Input
-						label={ADMIN.support.email}
-						type="email"
-						value={form.email}
-						onChange={(e) => set('email', e.currentTarget.value)}
-						error={errors.email}
-					/>
-					<Input
-						label={ADMIN.support.phone}
-						value={form.phone}
-						onChange={(e) => set('phone', e.currentTarget.value)}
-						error={errors.phone}
-					/>
-					<Input
-						label={ADMIN.support.whatsapp}
-						value={form.whatsapp}
-						onChange={(e) => set('whatsapp', e.currentTarget.value)}
-						error={errors.whatsapp}
-					/>
-				</div>
+				<Input
+					label={ADMIN.support.email}
+					type="email"
+					value={form.email}
+					onChange={(e) => set('email', e.currentTarget.value)}
+					error={errors.email}
+				/>
+				<Input
+					label={ADMIN.support.phone}
+					value={form.phone}
+					onChange={(e) => set('phone', e.currentTarget.value)}
+					error={errors.phone}
+				/>
+				<Input
+					label={ADMIN.support.whatsapp}
+					value={form.whatsapp}
+					onChange={(e) => set('whatsapp', e.currentTarget.value)}
+					error={errors.whatsapp}
+				/>
 				<FormError problem={problem} fields={['email', 'phone', 'whatsapp']} />
 				<Button type="submit" loading={busy}>
 					{LOGIN.save}

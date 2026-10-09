@@ -64,21 +64,21 @@ function OverviewTab({ websiteId }) {
 									label={TEXTS.overview.today}
 									value={formatCredits(data.todayMillicredits)}
 									icon="coins"
-									accent="indigo"
+									kind="credit"
 								/>
 								<Stat
 									label={TEXTS.overview.features}
 									value={on.length}
 									hint={on.length > 0 ? on.join(', ') : TEXTS.overview.noFeatures}
 									icon="zap"
-									accent="violet"
+									kind="feature"
 								/>
 								<Stat
 									label={TEXTS.overview.connectionsReady}
 									value={fill(TEXTS.overview.ofTotal, { count: ready, total: needed.length })}
 									tone={ready < needed.length ? 'warning' : 'success'}
 									icon="plug"
-									accent="teal"
+									kind="connection"
 								/>
 							</div>
 						</Section>

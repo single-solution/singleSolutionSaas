@@ -46,5 +46,5 @@ export function AdminProblem({ problem, title, back }) {
  */
 export function RoleBadge({ role }) {
 	if (!role) return null;
-	return <Badge tone={role === 'owner' ? 'primary' : 'neutral'}>{ADMIN.roles[/** @type {'owner'} */ (role)] ?? role}</Badge>;
+	return <Badge kind="admin">{ADMIN.roles[/** @type {'owner'} */ (role)] ?? role}</Badge>;
 }

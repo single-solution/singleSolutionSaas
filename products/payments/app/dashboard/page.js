@@ -13,17 +13,17 @@ import { TABS } from './tabs.js';
 import { TEXTS } from './texts.js';
 
 /**
- * Sidebar icon badge and colour of each tab (PLAN 0.6).
- * @type {{ [tab in keyof typeof TABS]: { icon: import('@ss/ui').IconName, tone: import('@ss/ui').Accent } }}
+ * Sidebar icon and kind of each tab: the kind gives its colour, the same in every product (PLAN 0.6 colour rule).
+ * @type {{ [tab in keyof typeof TABS]: { icon: import('@ss/ui').IconName, kind: import('@ss/ui').Kind } }}
  */
 const TAB_ICONS = {
-	overview: { icon: 'home', tone: 'indigo' },
-	features: { icon: 'zap', tone: 'violet' },
-	settings: { icon: 'sliders', tone: 'teal' },
-	connections: { icon: 'plug', tone: 'coral' },
-	developers: { icon: 'grid', tone: 'sky' },
-	defaults: { icon: 'layers', tone: 'amber' },
-	prices: { icon: 'coins', tone: 'pink' },
+	overview: { icon: 'home', kind: 'overview' },
+	features: { icon: 'zap', kind: 'feature' },
+	settings: { icon: 'sliders', kind: 'settings' },
+	connections: { icon: 'plug', kind: 'connection' },
+	developers: { icon: 'grid', kind: 'developer' },
+	defaults: { icon: 'layers', kind: 'default' },
+	prices: { icon: 'coins', kind: 'price' },
 };
 
 /** Tabs that need no picked website (Owner only). */
@@ -71,7 +71,7 @@ export default function Dashboard() {
 						href: href(tab),
 						label: TEXTS.tabs[/** @type {keyof typeof TEXTS.tabs} */ (tab)],
 						icon: TAB_ICONS[/** @type {keyof typeof TAB_ICONS} */ (tab)].icon,
-						tone: TAB_ICONS[/** @type {keyof typeof TAB_ICONS} */ (tab)].tone,
+						kind: TAB_ICONS[/** @type {keyof typeof TAB_ICONS} */ (tab)].kind,
 						current: tab === view,
 					})),
 				},

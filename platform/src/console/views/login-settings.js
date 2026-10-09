@@ -324,37 +324,35 @@ export function EmailPanel({ email, twoStepOn }) {
 			<Form onSubmit={submit} busy={busy} aria-label={LOGIN.changeEmail}>
 				<p className="text-sm text-muted">{LOGIN.loginHelp}</p>
 				{sentTo ? <Callout tone="success">{LOGIN.emailSent(sentTo)}</Callout> : null}
-				<div className="grid gap-4 md:grid-cols-2">
+				<Input
+					label={LOGIN.newEmail}
+					type="email"
+					autoComplete="email"
+					value={next}
+					onChange={(e) => setNext(e.currentTarget.value)}
+					error={fieldErrors(problem).email}
+					required
+				/>
+				<Input
+					label={LOGIN.currentPassword}
+					type="password"
+					autoComplete="current-password"
+					value={password}
+					onChange={(e) => setPassword(e.currentTarget.value)}
+					error={fieldErrors(problem).password}
+					required
+				/>
+				{twoStepOn ? (
 					<Input
-						label={LOGIN.newEmail}
-						type="email"
-						autoComplete="email"
-						value={next}
-						onChange={(e) => setNext(e.currentTarget.value)}
-						error={fieldErrors(problem).email}
+						label={LOGIN.twoStepCode}
+						help={LOGIN.twoStepCodeHelp}
+						value={code}
+						onChange={(e) => setCode(e.currentTarget.value)}
+						autoComplete="one-time-code"
+						error={fieldErrors(problem).code ?? fieldErrors(problem).recoveryCode}
 						required
 					/>
-					<Input
-						label={LOGIN.currentPassword}
-						type="password"
-						autoComplete="current-password"
-						value={password}
-						onChange={(e) => setPassword(e.currentTarget.value)}
-						error={fieldErrors(problem).password}
-						required
-					/>
-					{twoStepOn ? (
-						<Input
-							label={LOGIN.twoStepCode}
-							help={LOGIN.twoStepCodeHelp}
-							value={code}
-							onChange={(e) => setCode(e.currentTarget.value)}
-							autoComplete="one-time-code"
-							error={fieldErrors(problem).code ?? fieldErrors(problem).recoveryCode}
-							required
-						/>
-					) : null}
-				</div>
+				) : null}
 				<FormError problem={problem} fields={['email', 'password', 'code', 'recoveryCode']} />
 				<Button type="submit" loading={busy}>
 					{LOGIN.changeEmail}
@@ -400,37 +398,35 @@ export function PasswordPanel({ twoStepOn }) {
 		<Card title={LOGIN.passwordTitle}>
 			<Form onSubmit={submit} busy={busy} aria-label={LOGIN.changePassword}>
 				<p className="text-sm text-muted">{LOGIN.passwordHelp}</p>
-				<div className="grid gap-4 md:grid-cols-2">
+				<Input
+					label={LOGIN.currentPassword}
+					type="password"
+					autoComplete="current-password"
+					value={current}
+					onChange={(e) => setCurrent(e.currentTarget.value)}
+					error={fieldErrors(problem).currentPassword}
+					required
+				/>
+				<Input
+					label="New password"
+					type="password"
+					autoComplete="new-password"
+					value={next}
+					onChange={(e) => setNext(e.currentTarget.value)}
+					error={error ?? fieldErrors(problem).newPassword}
+					required
+				/>
+				{twoStepOn ? (
 					<Input
-						label={LOGIN.currentPassword}
-						type="password"
-						autoComplete="current-password"
-						value={current}
-						onChange={(e) => setCurrent(e.currentTarget.value)}
-						error={fieldErrors(problem).currentPassword}
+						label={LOGIN.twoStepCode}
+						help={LOGIN.twoStepCodeHelp}
+						value={code}
+						onChange={(e) => setCode(e.currentTarget.value)}
+						autoComplete="one-time-code"
+						error={fieldErrors(problem).code ?? fieldErrors(problem).recoveryCode}
 						required
 					/>
-					<Input
-						label="New password"
-						type="password"
-						autoComplete="new-password"
-						value={next}
-						onChange={(e) => setNext(e.currentTarget.value)}
-						error={error ?? fieldErrors(problem).newPassword}
-						required
-					/>
-					{twoStepOn ? (
-						<Input
-							label={LOGIN.twoStepCode}
-							help={LOGIN.twoStepCodeHelp}
-							value={code}
-							onChange={(e) => setCode(e.currentTarget.value)}
-							autoComplete="one-time-code"
-							error={fieldErrors(problem).code ?? fieldErrors(problem).recoveryCode}
-							required
-						/>
-					) : null}
-				</div>
+				) : null}
 				<FormError problem={problem} fields={['currentPassword', 'newPassword', 'code', 'recoveryCode']} />
 				<Button type="submit" loading={busy}>
 					{LOGIN.changePassword}
