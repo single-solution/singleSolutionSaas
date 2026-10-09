@@ -39,7 +39,7 @@ describe('commerce routes and tenant isolation', () => {
 		expect((await add(owner1, M1, W1, { productId: PRODUCT })).status).toBe(403);
 		const created = await add(admin, M1, W1, { productId: PRODUCT });
 		expect(created.status).toBe(201);
-		expect(created.json.product).toMatchObject({ productId: PRODUCT, name: 'Coupons', status: 'active', featuresOn: [] });
+		expect(created.json.product).toMatchObject({ productId: PRODUCT, name: 'Ecommerce', status: 'active', featuresOn: [] });
 		expect((await add(support, M2, W3, { productId: PRODUCT })).status).toBe(201);
 		expect((await add(admin, M1, W3, { productId: PRODUCT2 })).status).toBe(404); // W3 is M2's
 		expect((await add(admin, M1, W2, { productId: 'Not an id' })).status).toBe(422);
@@ -144,30 +144,15 @@ describe('commerce routes and tenant isolation', () => {
 		expect((await h.call('GET', '/v1/admin/billing/charges?by=week', { headers: finance })).status).toBe(422);
 		expect((await h.call('GET', '/v1/admin/billing/charges?from=x', { headers: finance })).status).toBe(422);
 		expect((await h.call('GET', '/v1/admin/billing/receipts?merchantId=x', { headers: finance })).status).toBe(422);
-		// the removed money routes are gone
-		for (const path of [`/v1/merchants/${M1}/balance`, `/v1/merchants/${M1}/spend-cap`, '/v1/admin/commerce/alerts'])
-			expect((await h.call('GET', path, { headers: admin })).status).toBe(404);
 
 		// product routes need the product's client assertion; a session never reaches them
-		const coupons = await h.productAuth(PRODUCT);
+		const asProduct = await h.productAuth(PRODUCT);
 		expect((await h.call('GET', `/v1/product/websites/${W1}/status`)).status).toBe(401);
 		expect((await h.call('GET', `/v1/product/websites/${W1}/status`, { headers: owner1 })).status).toBe(401);
-		expect((await h.call('GET', `/v1/product/websites/${W1}/status`, { headers: await coupons() })).json).toMatchObject({
+		expect((await h.call('GET', `/v1/product/websites/${W1}/status`, { headers: await asProduct() })).json).toMatchObject({
 			websiteId: W1,
 			status: 'active',
 		});
-		// the removed product routes are gone
-		for (const [method, path] of /** @type {const} */ ([
-			['GET', `/v1/product/entitlements?websiteId=${W1}`],
-			['POST', '/v1/product/usage'],
-			['POST', '/v1/product/events'],
-			['POST', '/v1/product/resources/resolve'],
-			['PUT', `/v1/product/websites/${W1}/identity`],
-		]))
-			expect([
-				path,
-				(await h.call(method, path, { headers: await coupons(), ...(method === 'GET' ? {} : { body: {} }) })).status,
-			]).toEqual([path, 404]);
 		expect(STAFF.type).toBe('admin');
 	});
 });

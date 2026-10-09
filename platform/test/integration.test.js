@@ -316,15 +316,6 @@ describe('Portal end to end', () => {
 		expect((await noPort.call('GET', '/v1/probe/whoami', { headers: { authorization: `Bearer ${fresh}` } })).status).toBe(401);
 	});
 
-	it('no admin operations: the operations routes are gone', async () => {
-		const { portal, call } = await boot({ dbName: 'it_operations' });
-		await portal.ensureIndexes();
-		const owner = await login(portal, { kind: 'admin', subject: 'adm_owner', mfa: true });
-		const headers = { cookie: owner.cookie, ...SAME_ORIGIN };
-		expect((await call('POST', '/v1/admin/operations/drain', { headers })).status).toBe(404);
-		expect((await call('GET', '/v1/admin/operations', { headers })).status).toBe(404);
-	});
-
 	it('work after responses: deferred tasks run right after the request, and only its own (PLAN 0.10)', async () => {
 		/** @type {Array<() => Promise<unknown>>} */
 		const scheduled = [];

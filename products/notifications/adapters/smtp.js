@@ -1,5 +1,5 @@
 /**
- * SMTP e-mail adapter (moved here from the kit, PLAN 0.12 step 6): sends e-mail through the merchant's own SMTP server
+ * SMTP e-mail adapter (PLAN 0.8.5): sends e-mail through the merchant's own SMTP server
  * with nodemailer, using the merchant's `email` connection.
  *
  * - **Value**: `{ baseUrl: 'smtps://host:465' | 'smtp://host:587', username, apiKey (the password), from? }`. The

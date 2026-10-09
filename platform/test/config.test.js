@@ -111,26 +111,6 @@ describe('loadEnv: the database, the Portal address and the encryption key (PLAN
 		const names = ENV_VARS.map(([name]) => name);
 		expect(names).toEqual(['MONGODB_URI', 'PORTAL_URL', 'ENCRYPTION_KEY']);
 		expect(ENV_VARS.every(([, required]) => required)).toBe(true);
-		for (const gone of [
-			'PUBLIC_URL',
-			'ADMIN_SECRET',
-			'SIGNING_KEYS',
-			'ENCRYPTION_KEYS',
-			'SESSION_SECRET',
-			'KEY_PEPPER',
-			'SMTP_URL',
-			'PREVIEW_URL',
-			'TRUST_PROXY_HEADERS',
-			'MAX_BODY_BYTES',
-			'DELIVERY_BUDGET_KB',
-			'OPERATION_DEADLINE_MS',
-			'MONGODB_MAX_POOL_SIZE',
-			'APP_VERSION',
-			'STAFF_SESSION_IDLE_MINUTES',
-			'STORAGE_BUCKET',
-			'OUTBOUND_DEV_ALLOW_HOSTS',
-		])
-			expect(names).not.toContain(gone);
 	});
 });
 

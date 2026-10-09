@@ -33,16 +33,16 @@ describe('createValidator', () => {
 		const v = createValidator({
 			schemas: [
 				{
-					$id: 'urn:product:coupons:v1:coupon',
+					$id: 'urn:product:ecommerce:v1:coupon',
 					type: 'object',
 					required: ['value'],
 					properties: { value: { $ref: `${SCHEMA_IDS.common}#/$defs/millicredits` } },
 				},
 			],
 		});
-		expect(v.validate('urn:product:coupons:v1:coupon', { value: 1500 }).ok).toBe(true);
-		expectProblem(v.validate('urn:product:coupons:v1:coupon', { value: -1 }), '/value', 'minimum');
-		expectProblem(v.validate('urn:product:coupons:v1:coupon', {}), '/value', 'required');
+		expect(v.validate('urn:product:ecommerce:v1:coupon', { value: 1500 }).ok).toBe(true);
+		expectProblem(v.validate('urn:product:ecommerce:v1:coupon', { value: -1 }), '/value', 'minimum');
+		expectProblem(v.validate('urn:product:ecommerce:v1:coupon', {}), '/value', 'required');
 		expect(() => createValidator({ schemas: [{ type: 'object' }] })).toThrow(TypeError);
 	});
 

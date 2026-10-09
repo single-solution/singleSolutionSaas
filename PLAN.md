@@ -18,9 +18,9 @@
 # PART 0 — The plan (owner decisions of 2026-10-07, binding)
 
 **Contents**: 0.0 Words · 0.1 Idea and scope · 0.2 People, roles and logins · 0.3 Products · 0.4 How products work · 0.5
-Credits and billing · 0.6 Look and feel · 0.7 Flows · 0.8 Further decisions, Portal screens and Chat · 0.9 Changes from
-the earlier build · 0.10 Standing technical rules · 0.11 Environment variables · 0.12 Build order · 0.13 Rules for
-building agents.
+Credits and billing · 0.6 Look and feel · 0.7 Flows · 0.8 Further decisions, Portal screens and Chat · 0.9 Portal
+modules, shared kit and hosting · 0.10 Standing technical rules · 0.11 Environment variables · 0.12 Build order · 0.13
+Rules for building agents.
 
 **Conventions**: "must" and "never" are requirements. Times are UTC unless a rule says otherwise. `<…>` is a
 placeholder. References such as "0.4.4" point inside Part 0.
@@ -212,26 +212,6 @@ One meaning per word. New code, screens, APIs and docs use only these words, wit
   the products.
 - **Grilling**: the in-depth owner interview held right before a product is built. It decides that product's exact
   feature list and dashboard contents.
-- **The switch**: the deploy in 0.12 step 5 that moves the Portal to the new model. The test databases `ss_portal` and
-  `ss_chatbot` are reset at it.
-- **Parked folder**: an old product folder moved to `parked/` at the repository root: kept for reference, outside the
-  pnpm workspace, CI and deployments (0.12 step 4).
-
-**Old words.** Do not use these in new code, screens, APIs or docs:
-
-| Old word                                                                  | Use instead                     |
-| ------------------------------------------------------------------------- | ------------------------------- |
-| element                                                                   | feature                         |
-| subscription                                                              | product on website              |
-| entitlement document                                                      | status (status response)        |
-| staff (our people), superadmin                                            | admin (Owner, Support, Finance) |
-| staff (the merchant's people)                                             | merchant's staff                |
-| apps                                                                      | products                        |
-| connectors, resources                                                     | connections                     |
-| website keys `pk_` / `sk_`                                                | browser token / server token    |
-| activity (meaning a call into a product)                                  | use                             |
-| headless chat, visitor chat widget                                        | visitor chat                    |
-| pack, loader, plan, trial, test mode, live/test, Website Graph, Event Hub | nothing: removed (0.10)         |
 
 ## 0.1 The idea and the scope
 
@@ -293,8 +273,7 @@ Each product checks the dashboard rights on its own server for every request.
   sign-in page and Forgot password always know which console to open.
 - **First admin**: while no admin exists, the sign-in page offers Create admin (name, e-mail, password). It creates an
   Owner. The check is atomic, so only one can ever be created this way. The first visitor wins, so the deployer creates
-  the Owner right after deploying, and right after the reset at the switch (0.8.1). Later admins join only by invite
-  (0.8.2 Admins).
+  the Owner right after deploying. Later admins join only by invite (0.8.2 Admins).
 - **Setup links** (merchants and admins) are single-use and work only while that login has no password. They last 72
   hours for merchants and 24 hours for admins; password-reset links last 30 minutes. Resend creates a new link and
   cancels the previous one. It is offered only until the password is set; after that the person uses Forgot password on
@@ -368,13 +347,11 @@ Each product checks the dashboard rights on its own server for every request.
 - Nothing outside 0.3 is built: no Automation, Ops Monitor, Files & Drive, Reports builder, Content product, Messaging
   campaigns, Configurator product, booking system, or any other idea. (Chat's book-a-slot tool calls the
   merchant's own booking system, 0.8.3.)
-- The existing 17 products are **merged and reshaped** into these six: the 15 shop products → Ecommerce, Signups →
-  Accounts, Chatbot → Chat; Notifications, Payments and Growth are new.
 - There is no "Admin panel" product: each product offers admin widgets and an API, and the merchant builds their own
   admin.
 - **Messaging goes through Notifications.** Only Notifications holds messaging provider keys and talks to messaging
-  providers. `packages/app-kit/src/connectors/smtp.js` and the HTTP messaging connector stay in `@ss/app-kit` until step
-  6, then move into `products/notifications` and are deleted from the kit. The Portal keeps its own mailer
+  providers; its SMTP and gateway adapters live in `products/notifications/adapters`, and the shared kit has no
+  messaging code. The Portal keeps its own mailer
   (`platform/src/infra/mailer.js`). Every other product sends through Notifications, using the pasted Notifications
   token. Without that token, its sending features show `Notifications not connected`. The Portal's own e-mails use the
   Portal's SMTP settings (0.8.2 Settings), not Notifications. Campaigns and segments are not built unless Notifications'
@@ -399,7 +376,7 @@ Each product checks the dashboard rights on its own server for every request.
 | OTP, sessions, profiles and addresses, account pages, roles and allowlists of the merchant's users, copies of activity logs                                                                                                                                                                                                                                                                                                                                                                        | Accounts                                                        |
 | Categories, attributes, brands, products, variants, grades, serials/IMEI, CSV, product page blocks and variant selector, storefront cards/grid/filters, search, cart, checkout (COD, bank transfer + proof), order placement and lifecycle, couriers, invoices, packing slips, risk caps, payments/refunds ledger, returns/warranty, coupons, deals, cart locks, loyalty, reviews, wishlist, stock/price alerts, catalog SEO (meta, structured data, sitemaps, feeds, llms.txt), policies, reports | Ecommerce                                                       |
 | Message sending, outbox, SMTP/WhatsApp/SMS providers                                                                                                                                                                                                                                                                                                                                                                                                                                               | Notifications                                                   |
-| Card and online gateways                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | Payments (new)                                                  |
+| Card and online gateways                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | Payments                                                        |
 | Consent banner, tags/pixels, conversion events, telemetry/vitals/first-party analytics, notice bar, robots, verification, IndexNow, SEO checklist                                                                                                                                                                                                                                                                                                                                                  | Growth                                                          |
 | Presigned uploads                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | Shared kit (each product uploads to the merchant's own storage) |
 | Admin roles, two-step and audit for our team                                                                                                                                                                                                                                                                                                                                                                                                                                                       | Portal (Owner, Support, Finance)                                |
@@ -583,8 +560,7 @@ Admin widgets on the merchant's own admin use **tickets**, never the browser tok
 - An Accounts sign-in only says who the visitor or user is. Whatever roles it carries, it never authorises admin actions
   in any product; those need the server token or a ticket.
 - Some products may also accept a merchant's own login for visitors (decided in their grilling; Chat never does). For
-  those, the issuer and its public-keys URL are set in that product's Connections, never in the Portal. The Portal's
-  identity issuers, the Website → Identity tab and issuer approval are removed.
+  those, the issuer and its public-keys URL are set in that product's Connections, never in the Portal.
 
 ### 0.4.7 Status of a product on a website: what every product must do
 
@@ -614,7 +590,7 @@ status response and notices (0.4.12) and checks it on use (0.8.1).
 
 - **Business data lives only in the merchant database**, connected in each product's Connections. Each product's
   collections there are prefixed `ss_<product id>_` (Chat: `ss_chat_`). Every query carries `websiteId` (tenant guard,
-  0.10). Changing the database never moves old data. There is no Website Graph and no shared customer model.
+  0.10). Changing the database never moves old data. There is no shared customer model.
 - **The product database** (its `MONGODB_URI`) holds only: its Portal connection (pinned `PORTAL_URL`, Portal keys,
   product key); per-website feature switches, settings, widget texts and theme (kept when the product is removed,
   deleted when the website is removed, 0.5.9); global defaults and prices; Connections; ticket signing keys; dashboard
@@ -681,11 +657,11 @@ status response and notices (0.4.12) and checks it on use (0.8.1).
   snippets, the ticket server snippet and an API reference generated from its OpenAPI file. The connect answer gives the
   script and docs URLs (0.4.12), and the Portal shows them in Install and tokens. A product without widgets (for example
   Notifications) shows only its tokens and the docs link.
-- There is no Loader, no Edge Injection and no hosted page on merchants' domains. Anything that must appear on the
+- Products host no page on merchants' domains and inject nothing into them. Anything that must appear on the
   merchant's domain (sitemaps, robots.txt, llms.txt, feeds, structured data, policy pages) is served by the merchant's
   site from the product's API, with a ready snippet in the docs.
-- There is one environment: `env` (live/test) is removed from tokens, status, stored documents, the tenant guard, routes
-  and paths.
+- There is one environment: tokens, status, stored documents, the tenant guard, routes and paths have no live/test
+  split.
 
 ### 0.4.11 Data rights and activity-log copies
 
@@ -704,7 +680,7 @@ status response and notices (0.4.12) and checks it on use (0.8.1).
 
 ### 0.4.12 Product ↔ Portal contract
 
-Product → Portal calls are signed with the product key pinned at connect (as today).
+Product → Portal calls are signed with the product key pinned at connect.
 The Portal answers them only for websites that have this product (removed ones included where a row says so). The Portal
 uses the last accepted price report for feature names, descriptions, dependencies and prices. The manifest's feature
 list is used only to build price-list version 1 at connect.
@@ -716,11 +692,11 @@ list is used only to build price-list version 1 at connect.
 | 3   | `PUT /v1/product/websites/:websiteId/features` with `{ version, on, adminId, adminName }`                                                                                     | Sent when an admin saves the Features screen; `on` lists the switched-on feature keys. The product saves the switches only after the Portal accepts. If the Portal refuses or cannot be reached, nothing changes and the admin sees an error; there is no background retry. Refused whole when a key is unknown, a switched-on feature has no price, a dependency is off, the website × product never existed, the version is not higher, or `adminId` is not a current Owner or Support admin. Accepted for a product that is stopped, suspended or removed (nothing is charged while that lasts). The Portal timestamps it with its own clock and writes it to Activity with the admin, using its own stored name for that admin. |
 | 4   | `GET /v1/product/websites/:websiteId/status` returning `{ websiteId, merchantId, merchantName, domain, status, graceEndsAt, todayMillicredits, featuresVersion, validUntil }` | `status` is `active`, `grace`, `stopped`, `suspended` or `removed`. Fetching it is a use (0.8.1): the Portal settles that merchant first. Products cache it until `validUntil`, at most 5 minutes. `todayMillicredits` is an integer. `graceEndsAt` and `validUntil` are ISO-8601 UTC strings; `graceEndsAt` is null outside grace. `featuresVersion` is the last accepted feature-report version for that website × product; the product sends `featuresVersion + 1`. Answers for removed products too (status `removed`). For a deleted website, or a website × product that never existed, it answers 404 with problem code `website_not_found`.                                                                                 |
 | 5   | `GET /v1/product/websites?cursor=`                                                                                                                                            | The websites that have this product, removed ones excluded, each as `{ websiteId, domain, merchantId, merchantName, status }`; used by the admin switcher.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| 6   | `GET /v1/product/revocations?since=` returning `{ tokenIds, cursor }`                                                                                                         | As today, but listing revoked token ids (`jti`, 0.4.4); fetched together with the status.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| 6   | `GET /v1/product/revocations?since=` returning `{ tokenIds, cursor }`                                                                                                         | The revoked token ids (`jti`, 0.4.4); fetched together with the status.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | 7   | `GET /v1/product/directory/:productId` returning `{ baseUrl }`                                                                                                                | Where to send a pasted token.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| 8   | `POST /v1/product/launch/consume` with `{ jti }` returning `{ consumed }`                                                                                                     | As today.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| 8   | `POST /v1/product/launch/consume` with `{ jti }` returning `{ consumed }`                                                                                                     | Marks a launch used, so each launch works once (0.4.3).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 
-**Notices** (Portal → product) go to `POST <product base>/.well-known/ss-events`, signed with `SS-Signature` as today,
+**Notices** (Portal → product) go to `POST <product base>/.well-known/ss-events`, signed with `SS-Signature`,
 with body `{ type, websiteId?, subject? }`. There are four types:
 
 - `status.changed`: a product on a website was added or removed, or its status changed (credits added, suspend, resume,
@@ -734,9 +710,7 @@ with body `{ type, websiteId?, subject? }`. There are four types:
 
 Notices are sent right after the request that caused them, to every product concerned. A failed notice is kept and
 retried right after (`after()`) that product's next call to the Portal, oldest first, and dropped once the product
-answers 2xx. Grace-started and stopped notices are sent by the check that finds them. Removed:
-`GET /v1/product/entitlements`, `POST /v1/product/usage`, `POST /v1/product/resources/resolve`,
-`POST /v1/product/events`, `resource.changed`, and every website, product and shopper event.
+answers 2xx. Grace-started and stopped notices are sent by the check that finds them.
 
 ### 0.4.13 Product standard
 
@@ -753,11 +727,7 @@ answers 2xx. Grace-started and stopped notices are sent by the check that finds 
   `docsUrl`, `features` (key, name, description, dependsOn, settings schema), `permissions` (key, name, feature) and
   `widgets` (key, feature, visitor or admin). It carries no prices; prices live in the product database, start at 0 and
   are set by an Owner.
-- Removed from manifests and code: kind/pack, plans, priceBook, trialHours, prices, metered units, scopes, events,
-  placement, hooks, slots, modes A/B/C, the standard routes `/v1/entitlement`, `/v1/config` and `/v1/events`, and TTL
-  retention by default.
-- `ss app init` and `ss app validate` change to this standard when the shared kit is rebuilt (0.12 step 4).
-  `eslint-plugin-ss` is not built.
+- `ss app init` generates this layout and `ss app validate` checks it (0.9).
 
 ## 0.5 Credits and billing
 
@@ -1130,15 +1100,9 @@ flowchart LR
   and costs nothing beyond the normal hourly feature prices. Localhost use never counts as widget installed, and
   business.json is always read from the real domain. Calls from localhost use the website's real database, keys and
   providers, so they make real orders, messages and payments; the docs and snippets say so plainly. No test mode.
-  `@ss/protocol` `originAllowed` accepts local origins for every browser token (today it accepts them only for test
-  keys).
-- **Replace in place**: the old model is replaced in place, with no period where old and new run side by side and no
-  compatibility layer (0.12). The 16 old product folders other than `products/chatbot` are parked (0.12 step 4) until
-  the product that replaces them ships.
-- **Live data**: Atlas holds only test data, so `ss_portal` and `ss_chatbot` are **reset at the switch** (0.12 step 5).
-  The deployer creates the first Owner (0.2); products are connected as each one ships (steps 6–11). Product ids are
-  `accounts`, `ecommerce`, `chat`, `notifications`, `payments` and `growth`. No old data is moved and no migration code
-  is written for old data.
+  `@ss/protocol` `originAllowed` accepts local origins for every browser token.
+- **Product ids** are `accounts`, `ecommerce`, `chat`, `notifications`, `payments` and `growth`. The deployer creates the
+  first Owner (0.2); each product is deployed and connected when it ships (0.12 steps 6–11).
 - **Portal address**: the Portal's address is the environment variable `PORTAL_URL` (0.11), its final public address. It
   is used for links in e-mails, as the issuer of the tokens and launches the Portal signs, and as the CSRF origin (the
   Portal refuses writes whose Origin differs). Products pin it at connect. It is never derived from request headers
@@ -1146,7 +1110,7 @@ flowchart LR
 - **Encryption key**: each deployable has its own `ENCRYPTION_KEY` (0.4.8, 0.11).
 - **Prices**: every feature starts at 0; an Owner sets prices in each product's Prices screen (0.5.2).
 - **Kept as switchable features**: the Chat extras listed in 0.8.3, and the Accounts extras (shopper orders tab, risk
-  checks, terms acceptance). **Dropped**: website transfer, admin notes on merchants, and the Chat items listed as not
+  checks, terms acceptance). **Not built**: website transfer, admin notes on merchants, and the Chat items listed as not
   built in 0.8.3.
 - **ibrahimMobiles** is connected only after the SaaS is built (0.12 step 14), and is never modified. Its own assistant
   text goes into Chat's AI instructions setting when it connects.
@@ -1232,11 +1196,10 @@ in, before any other page opens. A merchant with no websites sees a short welcom
 
 ### 0.8.3 Chat — full specification
 
-Chat is the rebuild of today's `products/chatbot` on the new shared kit (0.12 step 8). It does everything the
-ibrahimMobiles chat does, plus the kept extras below. Every option is managed inside the Chat product (settings per
-website; Owners set global defaults and prices). Each feature has its own switch and hourly price, starting at 0. No
-owner interview is needed before building it: this section is the specification. "As in ibrahimMobiles" or "as today"
-names code to port, not history to follow.
+Chat (`products/chat`, 0.12 step 8) does everything the ibrahimMobiles chat does, plus the kept extras below. Every
+option is managed inside the Chat product (settings per website; Owners set global defaults and prices). Each feature
+has its own switch and hourly price, starting at 0. No owner interview is needed before building it: this section is
+the specification. "As in ibrahimMobiles" names code to port, not history to follow.
 
 #### Features (final list)
 
@@ -1287,9 +1250,9 @@ Chat when Ecommerce is built (0.12 step 10) and are not in Chat's feature list b
 | Moderation                                              | `moderation`       | —                              | —                                            | 8    |
 | Reports (widget)                                        | `reports`          | —                              | —                                            | 8    |
 
-**Not built** (even where the earlier Chatbot had them): teams and automatic assignment (round-robin, least
+**Not built**: teams and automatic assignment (round-robin, least
 loaded, rules); SLA targets and breach alerts; priorities and tags; snooze, merge, transfer and auto-close; channels
-other than the website widget (WhatsApp, Messenger, Instagram, e-mail-to-inbox, SMS); today's JSON flow graph and any
+other than the website widget (WhatsApp, Messenger, Instagram, e-mail-to-inbox, SMS); a JSON flow graph or any
 visual flow builder; per-language text catalogs; transcript retention days; topic grouping in reports; guest order
 lookup by order number; a realtime service or websockets. Tuning knobs (BM25, chunk sizes, timeouts, poll intervals,
 retry counts) are constants in code, not settings.
@@ -1329,14 +1292,14 @@ retry counts) are constants in code, not settings.
   website, with daily and monthly windows in the business.json time zone (UTC if missing). At a cap, AI replies stop
   until the window resets, and the on-failure setting applies (message and/or handoff; never the backup provider).
 - **AI cost alerts**: when the month's AI tokens cross a set share of the monthly cap (setting, default 80%), one alert
-  goes through the Notifications token to the staff alert recipient list, once per monthly window (as today's chatbot
-  `cost_alert_percent`).
+  goes through the Notifications token to the staff alert recipient list, once per monthly window (setting
+  `alertPercent`).
 - AI reply limits per visitor and per IP, and the human-like typing pace, carry over from ibrahimMobiles.
-- **Language lock**: as today (`products/chatbot/core/language.js`, from ibrahimMobiles). The visitor's language is
+- **Language lock** (`products/chat/core/language.js`, from ibrahimMobiles). The visitor's language is
   detected from each message and the AI must answer in it. An answer in another language is retried once; if it still
   fails, the on-failure setting applies. Settings: allowed languages (empty = any) and marker words for Latin-script
   languages.
-- **Custom webhook tools**: as today (`products/chatbot/core/tools.js`). The merchant defines tools in Settings → Tools
+- **Custom webhook tools** (`products/chat/core/tools.js`). The merchant defines tools in Settings → Tools
   (name, description, typed parameters, HTTPS URL, whether to include the signed-in visitor's id and e-mail). The call
   timeout and the maximum response size are constants in code, the same for every tool and for the book-a-slot calls.
   The AI may call them. Chat sends each call as a POST through `@ss/net`, signed (HMAC over timestamp and body) with the
@@ -1426,7 +1389,7 @@ retry counts) are constants in code, not settings.
 - **Inbox** (admin widget, via tickets). Statuses as in ibrahimMobiles (`packages/shared/src/chat/inquiryStatus.ts`):
   Open, Awaiting visitor, Resolved. A staff reply moves Open to Awaiting visitor, and a visitor message reopens a
   Resolved conversation. Flags: Waiting for a person (after handoff), and AI paused (a per-conversation staff toggle, as
-  in ibrahimMobiles). The existing chatbot's Pending, Snoozed and Closed statuses are dropped.
+  in ibrahimMobiles). There are no other statuses.
 - Filters: status; assigned (me / unassigned / anyone, when assignment is on); waiting for a person; guest or signed in.
   Search covers visitor name, e-mail, phone and message text. Newest activity comes first, with unread counts per
   conversation and in total.
@@ -1437,8 +1400,7 @@ retry counts) are constants in code, not settings.
   login; Accounts is not needed.
 - **Assignment** is manual: a user with `inbox.manage` assigns or unassigns a conversation to anyone on the staff list.
   There are no teams and no automatic assignment.
-- **Staff presence, max concurrent chats and queue position** (as today's `products/chatbot/core/inbox.js`, without
-  teams or automatic assignment):
+- **Staff presence, max concurrent chats and queue position** (without teams or automatic assignment):
    - Each staff member sets Online, Away or Offline in the inbox. Someone whose inbox has not checked in for 5 minutes
      is shown as Offline (judged when read). Presence is shown in the staff list and the assignment picker.
    - Max concurrent chats: a default in Settings (empty = no limit, otherwise 1–200), which a user with `inbox.manage`
@@ -1479,10 +1441,10 @@ retry counts) are constants in code, not settings.
 
 #### Ratings, transcripts, moderation, summary and reports
 
-- **Ratings**: as today's chatbot CSAT settings (rating scale, when to ask, optional comment).
+- **Ratings**: settings for the rating scale, when to ask and an optional comment.
 - **Transcripts by e-mail**, via the Notifications token: a visitor can ask for a copy at the end of a chat (a signed-in
   visitor's Accounts e-mail is prefilled), and staff can send one from the inbox.
-- **Moderation** is the existing chatbot moderation (`products/chatbot/core/moderation.js`): PII redaction (cards, IBAN,
+- **Moderation** (`products/chat/core/moderation.js`): PII redaction (cards, IBAN,
   e-mail, phone, IP), a leak filter on AI answers, a link policy, and the merchant's blocked-terms list.
 - **AI conversation summary**: made when a conversation is handed to a person, and on demand (Summarise in the context
   panel). It is saved on the conversation and counted in the AI token caps.
@@ -1494,8 +1456,8 @@ retry counts) are constants in code, not settings.
 #### Live updates and retention
 
 - **Live updates**: back-off checking from the browser, with fixed constants in code (not settings), as in
-  ibrahimMobiles (`packages/shared/src/chat/chatTransport.ts`) and today's chatbot defaults. While the window is open
-  and the tab visible, it checks every 10 s; after 5 minutes without activity, every 20 s; after 15 minutes without
+  ibrahimMobiles (`packages/shared/src/chat/chatTransport.ts`; here `products/chat/ui/transport.js`). While the window
+  is open and the tab visible, it checks every 10 s; after 5 minutes without activity, every 20 s; after 15 minutes without
   activity it stops. There are no checks while the tab is hidden, and an immediate check when it becomes visible or on
   any visitor input. After a send, while an AI reply is pending, it checks every 3 s for 45 s. With the window closed,
   the launcher checks unread on page load, on tab focus (at most once a minute) and every 5 minutes while visible, as
@@ -1517,7 +1479,7 @@ retry counts) are constants in code, not settings.
   website page list and crawled page text, AI summaries, AI token counts, and Chat's activity log. The activity log
   records staff actions done through widgets and the API (reply, assign, note, status, knowledge edits) and is forwarded
   to Accounts when the Accounts token is pasted (0.4.11).
-- Chat neither consumes nor publishes platform events: events and event scopes are removed from its manifest. Shop data
+- Chat neither consumes nor publishes platform events: its manifest has no events or event scopes. Shop data
   comes only from Ecommerce lookups made with the pasted token.
 
 #### Widgets and ticket permissions
@@ -1554,8 +1516,7 @@ retry counts) are constants in code, not settings.
 - **Connections**: database, storage, AI provider primary and backup with model, and the Ecommerce / Notifications /
   Accounts tokens.
 - **Developers**: as 0.4.3.
-- The current chatbot dashboard's Inbox and Knowledge pages (`products/chatbot/app/dashboard/_views/inbox.js`,
-  `inbox-id.js`, `knowledge.js`) are removed; their functions are the inbox and knowledge editor widgets.
+- The dashboard has no Inbox or Knowledge pages: those are the inbox and knowledge editor widgets.
 
 ### 0.8.5 Notifications — owner interview (2026-10-08)
 
@@ -1650,7 +1611,7 @@ managed inside Payments (per website; our admin sets defaults and prices). Featu
 
 ### 0.8.8 Ecommerce — owner interview (2026-10-08)
 
-Ecommerce is the whole shop (merging the 15 parked shop products, following ibrahimMobiles, generic for any shop).
+Ecommerce is the whole shop (following ibrahimMobiles, generic for any shop).
 Stock, offer use and points change in **one database step** at order placement. All behaviour is managed inside
 Ecommerce (per website; our admin sets defaults and prices). Features start at 0.
 
@@ -1739,10 +1700,6 @@ behaviour is managed inside Growth (per website; our admin sets defaults and pri
 - **Open owner questions** (from the Part 0 review of 2026-10-07). Each is answered by the owner and written into the
   section named before the step that needs it is built:
    - **Start** (0.12): is building authorised now, and must step 1 be finished before step 2?
-   - **Deploys during steps 2–4** (0.12): are steps 2–4 deployed to production? If not, the owner turns off automatic
-     production deploys from `main` for the Portal and `products/chatbot` before the first step-2 commit, and they stay
-     off until the step-5 switch (Portal) and step 8 (Chat); this is then added to 0.12 and to the Deploying owner
-     tasks.
    - **Step 5 test product** (0.12 step 5): may step 5 be verified in e2e against a minimal test product generated by
      `ss app init` under `e2e/fixtures/` (test-only, never deployed)?
    - **Session length** (0.2, 0.8.2): is it an absolute lifetime from sign-in with no idle timeout, and what range is
@@ -1750,8 +1707,8 @@ behaviour is managed inside Growth (per website; our admin sets defaults and pri
    - **Signing out** (0.2, 0.4.12): does signing out of one Portal session end all of that person's dashboard sessions,
      or only the ones it launched? This decides what `subject` in `sessions.revoked` identifies (the admin or merchant
      id, or also a `launchingSessionId`).
-   - **Sign-in throttling** (0.2): do we keep today's throttling and lockouts (per account and per IP, progressive), and
-     do they also cover two-step codes, recovery codes, Forgot password and setup-link use?
+   - **Sign-in throttling** (0.2): how are sign-ins throttled and locked out (per account and per IP, progressive), and
+     does that also cover two-step codes, recovery codes, Forgot password and setup-link use?
    - **E-mail-change link** (0.2): how long is the confirmation link for a new login e-mail valid? (Proposed:
      single-use, refused if the new e-mail has become a login in the meantime.)
    - **Admin invite links** (0.2, 0.8.2): can an admin invite link be copied, and can its e-mail be corrected before it
@@ -1764,15 +1721,13 @@ behaviour is managed inside Growth (per website; our admin sets defaults and pri
    - **Suspended merchant links** (0.2): while suspended, may a merchant use a setup or reset link to set a password
      (without being signed in), or are the links refused?
    - **Removed admin's e-mail** (0.8.2): does removing an admin free their e-mail for a new login?
-   - **Old billing removal** (0.12 steps 3 and 5): does step 3 remove plan, per-use and price-book billing too, or does
-     that wait for step 5? Trials are then removed in only one of the two steps.
    - **Totals for all merchants** (0.5.7, 0.8.2): must admin Overview totals, needs attention and Merchants sort or
      filter by balance or status always be computed live for all merchants, or may they use the cached billing state
      (0.5.7 c) for merchants not on screen?
    - **Grace while suspended** (0.5.6): can a grace period start while the merchant is suspended, or only once they are
      resumed?
-   - **Launch delivery** (0.4.3, 0.13): does the launch stay `GET /sso?launch=` as today, or move to an auto-submitted
-     form POST?
+   - **Launch delivery** (0.4.3, 0.13): is the launch delivered as `GET /sso?launch=` or as an auto-submitted form
+     POST?
    - **Settings of several features** (0.4.2): confirm the rule: each widget text belongs to its widget's feature; theme
      and custom CSS are visible while any feature with a widget is on; a setting used by several features is visible
      while any of them is on. Settings schemas would then list each setting's feature or features.
@@ -1783,34 +1738,28 @@ behaviour is managed inside Growth (per website; our admin sets defaults and pri
      0.4.11 and 0.4.6 for approval, documented in `@ss/contracts`) or in Accounts' grilling (step 7)? Does an export or
      delete match a user on any of id, e-mail or phone, or only on the Accounts user id, with e-mail and phone for
      guests?
-   - **`ss pack build`** (0.9 Shared kit, 0.12 step 4): is it removed, or kept (renamed, for example `ss widget build`)
-     to bundle a product's `widget.js`?
    - **Add product ids** (0.8.2 Products): should Add product refuse ids other than the six in 0.3, and ids already
      connected (`use Reconnect`)? This interacts with the step-5 test product question.
-   - **Money alerts** (0.9 Portal): is the commerce money-alerts collection (ledger chain breaks, unpriced hours) kept,
-     or removed in step 3?
 - **Builder choices awaiting owner review.** Where Part 0 and 0.10 were silent or unclear and the owner could not be
   asked, the building agent chose the smallest safe option that contradicts nothing and recorded it here. The owner
   confirms or changes each one; a confirmed choice moves into the section it belongs to.
-   - **Step 1, owner items** (0.12 step 1): the building agent did not delete or change the untracked root `.env` (it
-     holds the owner's credentials) and cannot set Vercel variables. The owner deletes the file, changes that Atlas
-     password, and sets every production variable for Production only (previews get their own database or none). Step
-     1's Done line stays empty until then; steps 2 and 3 were built meanwhile, as the owner's instruction to the agent
-     asked.
+   - **Step 1, owner items** (0.12 step 1): building agents do not change the untracked root `.env` or `.env.deploy`
+     (they hold the owner's credentials) and cannot set Vercel variables. The owner changes the Atlas password if it was
+     ever exposed and sets every production variable for Production only (previews get their own database or none).
+     Step 1's Done line stays empty until then.
    - **Unit `.gitignore` files** (0.12 step 1): besides the root file, every deployable and the `ss app init` template
      also ignore `.env*` except `.env.example`, so each stays safe
      when split into its own repository.
-   - **Step 2, owner items** (0.12 step 2): the Portal now refuses to start without `PORTAL_URL` and `ENCRYPTION_KEY`.
-     The owner sets both on the Portal's Vercel project (Production only) before the next deploy: `PORTAL_URL`
-     exactly the address the live Chatbot pinned when it connected, `ENCRYPTION_KEY` random and at least 32
-     characters. The existing database's staff users, merchant users, memberships and invites are not migrated (no
-     migrations, 0.12 step 2): after deploying, the owner creates the first admin at `/login`.
+   - **Owner items, Portal** (0.12 steps 2–5): the Portal refuses to start without `PORTAL_URL` and `ENCRYPTION_KEY`.
+     The owner creates the Vercel project with root `platform`, sets `MONGODB_URI` (its own database, `ss_portal`),
+     `PORTAL_URL` (its final address) and `ENCRYPTION_KEY` (random, at least 32 characters) for Production only,
+     deploys, then creates the first Owner at `/login` at once.
    - **Merchant field lengths**: business name and owner name up to 120 characters, phone up to 40, address up to 300.
    - **Session length** is one absolute lifetime from sign-in (no idle timeout), 1 to 336 hours, default 12.
    - **Require two-step for admins** is checked on every request: until the admin sets it up, every route except the
      two-step setup and sign-out answers `two_step_required` (403) and the console shows only the setup.
-   - **Throttling** stays as today (5 failures in 15 minutes lock the e-mail, 50 per address) and also counts wrong
-     two-step and recovery codes.
+   - **Throttling**: 5 failures in 15 minutes lock the e-mail, 50 per address; wrong two-step and recovery codes count
+     too.
    - **E-mail change**: the confirmation link lasts 24 hours, works once, and is refused if the new address was taken
      meanwhile; the old address gets a notice.
    - **Admin invites** can be resent or copied and their e-mail corrected until accepted.
@@ -1819,9 +1768,8 @@ behaviour is managed inside Growth (per website; our admin sets defaults and pri
    - **Activity** stores no personal details (names of admins only, ids for everything else), so the append-only log
      never needs blanking when a merchant is deleted.
    - **Admin-only routes** answer 401 (not 403) to a merchant session, since the session is not an admin session.
-   - **Rights enforced inside products** (the 0.2 rights each product checks): since step 5 they are listed as
-     product-enforced in the Portal's rights data; the Portal tests its share (feature reports only from a current
-     Owner or Support admin, launches carry the role, Finance is never launched, Defaults without a website for Owners
+   - **Rights enforced inside products** (the 0.2 rights each product checks): they are listed as product-enforced
+     in the Portal's rights data; the Portal tests its share (feature reports only from a current Owner or Support admin, launches carry the role, Finance is never launched, Defaults without a website for Owners
      only) and the kit's dashboard API enforces the rest.
    - **Two-step QR code**: drawn in the browser with `qrcode-generator` (one small dependency, no network call).
    - **Grace while suspended**: a grace period does not start while the merchant is suspended; it starts on resume if
@@ -1838,22 +1786,17 @@ behaviour is managed inside Growth (per website; our admin sets defaults and pri
      key is the request's Idempotency-Key, created when the form opens.
    - **Charges by day / merchant / product** on Credits and billing list complete UTC days written by checks; today is
      live on each merchant's own pages.
-   - **Status changes reach products** (`status.changed`, restart after a receipt) with the notices of 0.4.12 since
-     step 5.
+   - **Status changes reach products** (`status.changed`, restart after a receipt) with the notices of 0.4.12.
    - **Money code** lives in the Portal: the pure money function (`commerce/core/money.js`) and the ledger's canonical
-     JSON hash (`commerce/core/ledger.js`); the old `@ss/entitlements` package is removed.
+     JSON hash (`commerce/core/ledger.js`).
    - **Admin Overview** money totals (credits added and spent this month) and the 30-day home charts are left for the
      Overview work; step 3 shows them on Credits and billing, the merchant page and Usage and credits.
-   - **Owner items, steps 4–5**: disconnect the Vercel projects of the 16 parked folders; deploy the Portal with
-     `ss_portal` and `ss_chatbot` reset and `PORTAL_URL` + `ENCRYPTION_KEY` set (Production only), then create the
-     first Owner at `/login` at once. The live Chatbot stops at this deploy (accepted, 0.12 step 5); its Vercel project
-     (root `products/chatbot`) will fail to build on the new kit until step 8, which leaves the last deployment as is.
    - **Step 5 test product**: step 5 is verified in e2e against a test-only product generated by `ss app init` in
      `e2e/fixtures/notes` (part of the e2e unit, never deployed). Add product accepts any id of the right format
      (`^[a-z][a-z0-9-]{1,30}$`), not only the six, and refuses an id already connected (`use Reconnect`).
-   - **Launch delivery** stays `GET <product>/sso?launch=`. **Signing out** of the Portal ends all of that person's
+   - **Launch delivery** is `GET <product>/sso?launch=`. **Signing out** of the Portal ends all of that person's
      dashboard sessions: `sessions.revoked` carries the admin or merchant id; it is also sent on a password reset.
-   - **`ss pack build`** is removed; `ss app assets` writes `openapi.json` from the routes and bundles `ui/` into the
+   - **`ss app assets`** writes `openapi.json` from the routes and bundles `ui/` into the
      product's `widget.js` (esbuild stays inside the CLI). `/widget.js` is public and the same for every website; with
      `data-token` it fetches the website's texts, theme and switched-on features from the kit route
      `GET /v1/widget/config` (browser token); admin widgets use `GET /v1/widget/admin/config` with a ticket.
@@ -1869,7 +1812,7 @@ actor, action, target, at }` sent to Accounts at `POST /v1/activity-copies`.
      the Portal to raise `featuresVersion` on re-add (a contract change; owner decision).
    - **Products menu**: Owner only (0.8.2); Support can still read the active product list, which Add product needs,
      and the product cards. The merchant console opens on `/overview`.
-   - **Tokens**: the Portal signs tokens with its own token key (generated on first start, as today); the revocation
+   - **Tokens**: the Portal signs tokens with its own token key (generated on first start); the revocation
      list a product reads holds only its own token ids, and its cursor may repeat ids within 30 s but never skips
      any; regenerate exists for the server token in the screens (the API also regenerates a browser token); removing
      a website revokes the tokens of every product it ever had and sends only `website.deleted`.
@@ -1896,9 +1839,8 @@ actor, action, target, at }` sent to Accounts at `POST /v1/activity-copies`.
    - **Protocol details**: launches are refused once `sessionExpiresAt` has passed; a token issued more than 5 minutes
      in the future is refused; ticket users need id, name and e-mail; business.json without a valid `name` counts as
      not found (defaults apply), other invalid fields are dropped.
-   - **Shared kit trims**: widgets use `@ss/app-kit/widget` (Shadow DOM mount, theme, widget texts); the unused
-     `@ss/web` and `@ss/rules` packages are removed; `@ss/ui` lost the placement field and plan/lock bits, and its status badge colours
-     follow 0.5.5.
+   - **Shared kit widgets**: widgets use `@ss/app-kit/widget` (Shadow DOM mount, theme, widget texts); `@ss/ui`'s status
+     badge colours follow 0.5.5.
    - **Step 6, Notifications** (0.8.5; each item open for owner review):
       - **Feature keys**: `whatsapp`, `email`, `sms`, `browser_push`, `staff_push`, `webhooks`, `fallback`,
         `quiet_hours`, `send_limits`, `delayed_send`, `multi_language`, `send_api`; none depends on another.
@@ -1930,8 +1872,7 @@ actor, action, target, at }` sent to Accounts at `POST /v1/activity-copies`.
       - **Providers**: the generic HTTP adapter (address, json or form, headers as a JSON object, a body template
         with `{to}`, `{toDigits}`, `{text}`, `{secret}`) covers Connectivity.pk and local gateways. Connection tests
         are read-only account calls (SMTP signs in); a generic gateway is only checked for its address. The SMTP
-        adapter moved from the kit into `products/notifications` (with its tests); the kit's HTTP messaging client is
-        removed (the gateway adapter replaces it) and `nodemailer` left the kit.
+        adapter and its tests live in `products/notifications`; the generic gateway adapter covers HTTP messaging.
       - **Push**: the merchant's VAPID keys in Connections; the merchant hosts the service worker at
         `/ss-notifications-sw.js` (the docs give it). A visitor is addressed by the opaque `subscriberId` the widget
         announces (`ss-notifications:subscribed` event and localStorage), which the merchant links to its user; staff
@@ -2031,7 +1972,7 @@ validate` / `openapi.json` (`x-ss-feature` a list) accept a list meaning "any of
         rounds, history length and retrieval constants are code. AI tokens are always counted per day and month (for
         Reports); the caps apply only with AI token caps on. On failure: `message`, `handoff` or both (default both);
         AI failures before a handoff default 2. Ask-for-a-person phrases default to a few English words (editable). The
-        credential leak check of AI answers always runs; the old "present as human" check is dropped.
+        credential leak check of AI answers always runs; there is no "present as human" check.
       - **Settings placement**: bot name, avatar, launcher, window and the proactive quiet days are `visitor_chat`
         settings; the sign-in page URL is `signed_in_chat`'s; the Inbox address and alert recipients are
         `staff_alerts`'; the default max chats and queue position are `presence_queue`'s. Rating scales are 2, 3 or 5
@@ -2046,11 +1987,10 @@ validate` / `openapi.json` (`x-ss-feature` a list) accept a list meaning "any of
       - **Data rights** match the Accounts user id (guest chats merged into the account included) and the e-mail or
         phone captured on conversations and leads; delete also removes the attachments from storage and the guest
         records. The language lock's marker words apply to languages written in Latin letters.
-      - **Owner items, step 8**: in the existing Chatbot Vercel project change the Root Directory to `products/chat`,
-        keep `MONGODB_URI` and `CONNECT_SECRET`, add `ENCRYPTION_KEY` (random, at least 32 characters, Production
-        only), and reset or rename its database (it was `ss_chatbot`; Chat starts empty, for example `ss_chat`); deploy,
-        then Portal → Products → Add product (its address and `CONNECT_SECRET`) and set it Active. Step 8's Done line
-        stays empty until then.
+      - **Owner items, step 8**: create the Vercel project with root `products/chat`, set `MONGODB_URI` (its own
+        database, for example `ss_chat`), `CONNECT_SECRET` and `ENCRYPTION_KEY` for Production, deploy, then Portal →
+        Products → Add product (its address and `CONNECT_SECRET`) and set it Active. Step 8's Done line stays empty until
+        then.
 
    - **Step 9, Payments** (0.8.7; each item open for owner review):
       - **Feature keys**: `stripe`, `paypal`, `payfast`, `jazzcash`, `easypaisa`, `bank_transfer`, `generic_gateway`,
@@ -2294,90 +2234,22 @@ orderId? }` with money in minor units (as everywhere); pixels get major units. N
 
 Everything else in Part 0 is decided. A point that is not decided in Part 0 or 0.10 is asked, not guessed (0.13).
 
-## 0.9 Changes from the earlier build
+## 0.9 Portal modules, shared kit and hosting
 
-What Part 0 changed in the earlier build. The Portal kept its sign-in, credit ledger, product connection and dashboard
-sign-on; plans, per-use billing, settings, merchants' keys, the event hub and the widget loader left the Portal (moved
-into products or dropped). The 17 earlier products became 6 (Notifications, Payments and Growth are new).
-
-### Portal
-
-| Area                                             | Before                                                                       | Change                                                                                                                                                                                                                                                      |
-| ------------------------------------------------ | ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Merchant sign-up                                 | Public sign-up page (live)                                                   | Remove; admins create every merchant (setup link exists)                                                                                                                                                                                                    |
-| Team members                                     | Invites, roles, per-website grants, ownership transfer                       | Remove; one login per merchant                                                                                                                                                                                                                              |
-| One login, many merchants                        | One e-mail can own several merchants (switcher)                              | One login = one merchant; e-mail unique across admins and merchants (0.2)                                                                                                                                                                                   |
-| First admin                                      | Superadmin `admin` without an e-mail, first visitor wins                     | Owner with name, e-mail and password, first visitor wins (0.2)                                                                                                                                                                                              |
-| Portal address                                   | Each request's origin (Host, X-Forwarded-Proto)                              | `PORTAL_URL` environment variable; never from request headers (0.8.1)                                                                                                                                                                                       |
-| Encryption keys                                  | Generated into the Portal database                                           | `ENCRYPTION_KEY` environment variable (0.4.8)                                                                                                                                                                                                               |
-| Suspend                                          | Only pauses billing/products; merchant can still sign in and open dashboards | Block sign-in and launches, revoke sessions (0.2)                                                                                                                                                                                                           |
-| Merchant details                                 | Business name only                                                           | Add owner name, e-mail, phone, address, country; merchant can edit                                                                                                                                                                                          |
-| Websites and products                            | Merchants add websites and subscribe themselves                              | Owner and Support only                                                                                                                                                                                                                                      |
-| Removing a website                               | Domain held for 30 days                                                      | Only after its products are removed; domain free at once; products delete its settings and keys (0.5.9)                                                                                                                                                     |
-| Test websites                                    | Every website has a test twin; test keys work on localhost                   | Remove; browser tokens also work on localhost (0.8.1)                                                                                                                                                                                                       |
-| Website settings (time zone, language, currency) | Stored in the Portal, sent to products                                       | Remove (business.json + Ecommerce), and remove the Overview/Keys/Resources/Identity website tabs; the website page has only Products, Install and tokens, Usage                                                                                             |
-| Tokens                                           | Per website, scoped by hand, subdomains allowed, secret shown once           | Per website × product; exact domain; revealable secret, encrypted with `ENCRYPTION_KEY` (0.4.4)                                                                                                                                                             |
-| Install code                                     | Portal stores widget files in a bucket and builds one script per website     | Each product serves its own script; remove the loader, bucket, `STORAGE_*`                                                                                                                                                                                  |
-| Feature switches and settings                    | In the Portal (layers, overrides, policy)                                    | Move into product dashboards                                                                                                                                                                                                                                |
-| Signed document to products                      | Big document (settings, prices, key status, limits)                          | Small status per website × product (active, grace, stopped, suspended, removed; 0.4.12)                                                                                                                                                                     |
-| Merchant's own keys                              | Portal vault; products fetch at runtime                                      | Move into each product's Connections (encrypted with that product's `ENCRYPTION_KEY`)                                                                                                                                                                       |
-| Sign-in provider approval                        | Products ask, merchant approves in Portal                                    | Remove; products trust Accounts through the pasted Accounts token (0.4.6)                                                                                                                                                                                   |
-| Plans, trials, per-use charges, spend cap        | All present                                                                  | Remove; per-feature hourly prices reported by products                                                                                                                                                                                                      |
-| Running out of credits                           | Stops at zero, no grace, no warnings                                         | Charged grace period (admin setting) + banner + e-mails; credits pay the debt first (0.5.6)                                                                                                                                                                 |
-| Adding credits                                   | Add / adjustment / refund with a note                                        | One receipt-style Add credits (credits, amount paid as free text, method, reference)                                                                                                                                                                        |
-| Removing a product                               | Final; settings lost                                                         | Keep settings and tokens so re-adding restores them                                                                                                                                                                                                         |
-| Usage view                                       | Per website, per-use units                                                   | Per product × website × day × feature                                                                                                                                                                                                                       |
-| Event hub, shopper events                        | Products send events through the Portal                                      | Remove; shopper events are decided when Growth is grilled; Portal → product notices are kept as 0.4.12 defines                                                                                                                                              |
-| Admin roles                                      | superadmin, admin, support, finance                                          | Owner, Support, Finance only; the superadmin and admin names are removed from code; the code knows only owner, support and finance; no mapping code is written, because development and test databases are recreated and `ss_portal` is reset at the switch |
-| Two-step sign-in                                 | Cannot be turned off once on                                                 | Optional for everyone, with a turn-off; recovery codes for everyone; an Owner can turn off someone else's (0.2)                                                                                                                                             |
-| Opening a product                                | Same tab, from a subscription page                                           | New tab, from the website page; admin Open as admin + switcher                                                                                                                                                                                              |
-| Website transfer, merchant notes                 | Exist                                                                        | Remove (dropped, 0.8.1)                                                                                                                                                                                                                                     |
-| Menus, wording, texts                            | Old menus, "staff", texts inline                                             | New menus, the words in 0.0, texts in files                                                                                                                                                                                                                 |
-
-### Products
-
-| Area                                         | Before                                                           | Change                                                                                                                                                                                                                                                               |
-| -------------------------------------------- | ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 15 shop products and Signups                 | 13 apps + 2 packs (~94k lines) plus Signups, separate databases  | Parked (0.12 step 4); the shop products are merged into one Ecommerce (one catalog, one order record, one API; step 10) and Signups becomes Accounts (step 7)                                                                                                        |
-| Placing an order                             | Checkout calls Coupons/Deals/Loyalty/Catalog over the internet   | One database transaction inside Ecommerce                                                                                                                                                                                                                            |
-| Duplicates                                   | Item data copied up to 10 times; rules built 2–3 times           | One of each                                                                                                                                                                                                                                                          |
-| Sending messages                             | Orders, after-sales, reviews, alerts, Signups send directly      | Through Notifications                                                                                                                                                                                                                                                |
-| Settings and keys                            | Read-only, from the Portal                                       | Editable in each product dashboard; keys encrypted with `ENCRYPTION_KEY`                                                                                                                                                                                             |
-| Plans, trials, test mode, per-use            | In all 17 product files                                          | Remove; add a Prices screen (Owner) and price and feature reports                                                                                                                                                                                                    |
-| Chat                                         | Chatbot: no shop tools, text only, polling only, no staff alerts | Rebuilt on the new kit (step 8): staff alerts, transcripts and cost alerts (Notifications token), signed-in chat (Accounts token), attachments, kept extras as switches (0.8.3); shop tools and product cards added with Ecommerce (step 10); back-off checking only |
-| Accounts                                     | Signups: codes and magic links, shoppers only                    | Add password and Google/Apple/Facebook, users' roles and rules, notes, addresses                                                                                                                                                                                     |
-| Notifications, Payments, Growth              | Do not exist (pieces scattered)                                  | Build new                                                                                                                                                                                                                                                            |
-| Product dashboards                           | Top tabs, no global defaults or prices, no admin switcher        | Left sidebar, Overview · Features · Settings · Connections · Developers, Owner Defaults and Prices, admin switcher                                                                                                                                                   |
-| Admin widgets for merchant admins            | None (all widgets are shopper-facing)                            | Add, using tickets (0.4.5)                                                                                                                                                                                                                                           |
-| Renames (Chatbot → Chat, Signups → Accounts) | Names built into IDs and data names                              | New ids (`accounts`, `ecommerce`, `chat`, `notifications`, `payments`, `growth`); data is reset, so no old names are kept; `products/chatbot` becomes `products/chat` in step 8                                                                                      |
-
-### Shared kit
-
-- **Portal modules after Part 0.** `identity`: admins, merchants, websites, tokens per website × product; no teams,
-  issuers, test twins, transfer, notes or multi-merchant logins. `catalog`: connect, active/inactive, launches, price
-  and feature reports, notices; no packs or widget uploads. `commerce`: receipts, hourly charges from feature reports,
-  grace and stop, usage views; no plans, trials, spend cap, metered usage or price books. `system`: Settings, activity
-  log, mail. Removed entirely: `config`, `connectors`, `delivery` and `integration`.
-- **Packages.** `@ss/entitlements`, `@ss/web` and `@ss/rules` are removed (the ledger hash moved into the Portal;
-  products bundle their own widget script with `@ss/app-kit/widget`). `@ss/contracts` and
-  `@ss/protocol` lose manifest plans, prices, scopes and events, entitlement documents, event catalogues, env and
-  allowSubdomains, and gain the 0.4.12 shapes and the 0.4.4 token claims. `@ss/cli` loses `--kind pack` and the upload
-  output of `ss pack build`. `@ss/app-kit` loses usage, events and the outbox, Portal-resolved connectors, Portal
-  identity issuers and env. It keeps `identity.verify`, fed from the product's own Connections. It gains the settings
-  store, the encrypted connection store, the pasted-token client, the business.json reader, the status cache and notice
-  handler, the price and feature reporters, tickets, the data-rights and log-forwarding routes, the Shadow DOM widget
-  mount, widget texts, the Recent changes record, and the admin switcher and roles.
-- Rename "element" → "feature" and "subscription" → "product on website" everywhere (0.0).
-
-### Live deployment and data
-
-- **Environment**: the Portal's is `MONGODB_URI` + `PORTAL_URL` + `ENCRYPTION_KEY` (`STORAGE_*` and the bucket are
-  gone); each product's is `MONGODB_URI` + `CONNECT_SECRET` + `ENCRYPTION_KEY` (0.11). Function counts are unchanged
-  (Portal 5, each product 2).
-- **Data**: the ledger stays hash-chained.
-- Preview deploys must not share the production database. An old untracked root `.env` holds a `MONGODB_URI`: change
-  that password if it is live, and delete the file (0.12 step 1).
-- Vercel Hobby is for non-commercial use: move hosting before charging merchants (0.12 step 14).
+- **Portal modules** (`platform/src/modules`): `identity` (admins, merchants, websites, tokens per website × product),
+  `catalog` (connect, active/inactive, launches, price and feature reports, notices), `commerce` (receipts, the pure
+  money function, hourly charges from feature reports, grace and stop, the hash-chained ledger, usage views) and
+  `system` (Settings, activity log, mail).
+- **Shared kit** (`packages/*`): `@ss/app-kit` (the product kit: settings store, encrypted connection store, pasted-token
+  client, business.json reader, status cache and notice handler, price and feature reporters, tickets, data-rights and
+  log-forwarding routes, Accounts sign-in checks, the Shadow DOM widget mount in `@ss/app-kit/widget`, widget texts,
+  Recent changes, the admin switcher and roles, the tenant guard); `@ss/contracts` (manifest, settings schemas, the
+  0.4.12 shapes, business.json, cross-product shapes, ids and problems); `@ss/protocol` (launches, tokens, tickets and
+  signatures, 0.4.3–0.4.5); `@ss/net` (the outbound guard, 0.10); `@ss/ui` (Portal and dashboard components);
+  `@ss/cli` (`ss app init`, `ss app validate`, `ss app assets`); `@ss/config` (shared tooling, 0.10).
+- **Hosting**: the environment variables are those of 0.11. Server functions: the Portal 5, each product 2. Preview
+  deploys never share the production database. Vercel Hobby is for non-commercial use: move hosting before charging
+  merchants (0.12 step 14).
 
 ## 0.10 Standing technical rules
 
@@ -2438,7 +2310,7 @@ These bind wherever the rest of Part 0 does not change them.
 | Each product | `CONNECT_SECRET` | Random, at least 32 characters. Typed once into Portal → Products → Add; the Portal never stores it. Changing it locks the old binding out until Reconnect.                                                                                                                                                                                                                  |
 | Each product | `ENCRYPTION_KEY` | Random, at least 32 characters, different for each deployable. Encrypts the product's stored secrets (0.4.8).                                                                                                                                                                                                                                                                |
 
-- Nothing else is read in production. `STORAGE_*` is removed with the loader. There are no host-specific variables, no
+- Nothing else is read in production. There are no host-specific variables, no
   tuning variables, no product URL variable and no cron secret.
 - A deployable fails at start with a clear error naming the missing or invalid variable (never its value).
 - The deployable's own source reads only the three variables listed, in every environment. Only test and e2e harness
@@ -2452,9 +2324,6 @@ These bind wherever the rest of Part 0 does not change them.
 - **Order**: the Portal first (steps 1–5), then **Notifications → Accounts → Chat → Payments → Ecommerce → Growth**
   (steps 6–11). Chat comes after Accounts and Notifications so the Chat features that need them work when Chat ships.
   Steps 12 and 13 run alongside; step 14 comes before charging real merchants.
-- **Replace in place**: there is no old-and-new period, no compatibility layer and no migration of old data. Steps 2, 3
-  and 5 all change the Portal; nothing from before the switch (step 5) is kept, so between steps the Portal only has to
-  keep passing CI.
 - **One step at a time.** A step is done only when every "done when" item is true and verified (0.13). `main` passes CI
   at the end of every step. Each step heading is followed by a line `Done: <date>, verified by <who>`, empty until then.
   A step starts only after the previous step's Done line is filled.
@@ -2465,7 +2334,8 @@ These bind wherever the rest of Part 0 does not change them.
   Part 0 as a new section of 0.8 (like 0.8.3 for Chat) and approved by the owner before any code is written. Chat is
   already specified (0.8.3).
 - **Deploying** (Vercel projects, environment variables, Atlas users and domains) is done by the owner; the building
-  agent prepares everything and lists exactly what to set.
+  agent prepares everything and lists exactly what to set (0.8.4 owner items). Every deployable is a fresh Vercel
+  project with its own root folder and its own database.
 
 **Done when, for every product (steps 6–11)**, besides the step's own items:
 
@@ -2484,16 +2354,15 @@ These bind wherever the rest of Part 0 does not change them.
   against the kit's test double. The e2e tests against the real Accounts are added in step 7, which is not done until
   they pass for every product already shipped.
 
-#### Step 1 — Protect the live system
+#### Step 1 — Protect production
 
 Done: <date>, verified by <who>
 
 - Production deployments have their own database variables; preview deployments use their own databases or none, never
   production's.
-- The untracked root `.env` is deleted.
 - `.gitignore` ignores `.env*` everywhere except `.env.example` (patterns: `.env*`, `**/.env*`, `!.env.example`,
-  `!**/.env.example`).
-- The owner confirms the Atlas password from that file is changed, or was never live.
+  `!**/.env.example`); no `.env` file with real values is committed.
+- The owner confirms that the Atlas password in the untracked root `.env` is changed, or was never exposed.
 
 #### Step 2 — Portal: people and access
 
@@ -2502,18 +2371,16 @@ Done: <date>, verified by <who>
 - No public sign-up; admins create merchants; setup links, password resets and login changes work as 0.2 says.
 - No teams, merchant invites, per-website grants, ownership transfer or multi-merchant logins; one login = one merchant;
   e-mails unique across admins and merchants.
-- Roles are Owner, Support and Finance; old role names are gone from code and data (0.9); the rights table (0.2) is
-  enforced by the API, with one API test per row and per role column (Owner, Support, Finance, Merchant) asserting
-  allowed or 403, plus 401 for a caller who is not signed in; merchant tests also assert that another merchant's records
-  are refused.
-- First admin: Create admin makes an Owner with name, e-mail and password; the superadmin without an e-mail is gone.
+- Roles are Owner, Support and Finance only; the rights table (0.2) is enforced by the API, with one API test per row
+  and per role column (Owner, Support, Finance, Merchant) asserting allowed or 403, plus 401 for a caller who is not
+  signed in; merchant tests also assert that another merchant's records are refused.
+- First admin: Create admin makes an Owner with name, e-mail and password.
 - Two-step is optional for everyone, with 10 recovery codes; an Owner can turn off someone else's two-step (e-mail sent,
   Activity logged); Require two-step for admins works.
 - Suspend blocks sign-in and launches and ends sessions; Resume restores.
 - Merchant fields, the Details tab and the merchant Account page match 0.2 and 0.8.2; My account exists for admins.
 - Websites follow 0.2 (exact, unique domains; added and removed only by Owner and Support). Remove website (0.5.9) frees
-  the domain (its `website.deleted` notice is added in step 5). Delete merchant works as 0.5.9.
-- Website transfer and merchant notes are removed.
+  the domain and sends `website.deleted`. Delete merchant works as 0.5.9.
 - `PORTAL_URL` and `ENCRYPTION_KEY` are read (0.11) and used as 0.8.1 and 0.4.8 say; nothing derives the Portal address
   from request headers; the SMTP password and two-step secrets are encrypted with `ENCRYPTION_KEY`.
 - Settings → E-mail sending, Branding, Support contact and Security work as 0.8.2. The Admins page works as 0.8.2
@@ -2526,44 +2393,27 @@ Done: <date>, verified by <who>
 
 Done: <date>, verified by <who>
 
-- The receipt form matches 0.5.8 (free-text amount paid); adjustments, refunds, trial credits, trials, the spend cap and
-  hours-remaining alerts are removed.
+- The receipt form matches 0.5.8 (free-text amount paid).
 - One pure money function implements 0.5.1–0.5.7: hourly charging with the mid-hour rules, charged grace and debt, stop,
   restart only above 0, both status orders, low balance and days left. Tests cover every rule.
-- The money function, receipts, ledger and screens are built and tested on price-list and switch histories written by
-  tests; step 5 fills those histories from real reports.
-- The ledger holds only receipts and day charges. In step 3, checks run when Portal pages show merchants; the status
-  route adds checks in step 5. Billing e-mails are sent once per state (0.5.10).
+- The money function, receipts, ledger and screens are tested on price-list and switch histories; product reports fill
+  those histories (step 5).
+- The ledger holds only receipts and day charges. Checks run when Portal pages show merchants and when a product fetches
+  a status (0.5.7). Billing e-mails are sent once per state (0.5.10).
 - Usage (0.5.11), banners, status labels (0.6), Credits and billing, and Settings → Billing rules match Part 0.
 
-#### Step 4 — New shared kit, in place
+#### Step 4 — Shared kit
 
 Done: <date>, verified by <who>
 
-- First, the 16 old product folders other than `products/chatbot` (`aftersales`, `alerts`, `catalog`, `checkout`,
-  `configurator`, `coupons`, `deals`, `grades`, `loyalty`, `orders`, `pdp`, `reviews`, `search`, `signups`,
-  `storefront`, `wishlist`) are moved from `products/` to `parked/`, unchanged. `parked/` is outside the pnpm workspace
-  globs, root scripts, CI and the e2e workspace; e2e tests that need a parked product are parked with it. The owner
-  disconnects their deployments. Each parked folder is deleted when the product that replaces it ships (`signups` in
-  step 7, the other 15 in step 10).
-- `products/chatbot` stays in the workspace as the starting point for Chat, but from this step until step 8 it is left
-  out of CI and root checks, and its live deployment is left alone:
-   - CI's unit list excludes `products/chatbot` (`ls … | grep -v '^products/chatbot$'`), and root scripts add
-     `--filter '!./products/chatbot'`.
-   - `e2e/tests/chatbot-portal.test.js` and e2e's dependency on `@ss/product-chatbot` are removed (Chat's e2e is
-     rewritten in step 8). Parked e2e tests go to `parked/e2e/<file>`. Until step 5 adds tests, the e2e config sets
-     `passWithNoTests`.
-   - Step 8 removes these exclusions.
-- `packages/*` match 0.9 Shared kit: the removals are done and the additions exist with tests (settings store, encrypted
-  connection store, pasted-token client, business.json reader, status cache and notice handler, price and feature
-  reporters, origin-bound tickets, data-rights and log-forwarding routes, Shadow DOM widget mount, widget texts, Recent
-  changes, admin switcher and roles, tenant guard without env).
+- `packages/*` match 0.9, with tests: settings store, encrypted connection store, pasted-token client, business.json
+  reader, status cache and notice handler, price and feature reporters, origin-bound tickets, data-rights and
+  log-forwarding routes, Shadow DOM widget mount, widget texts, Recent changes, admin switcher and roles, tenant guard.
 - `ss app init` generates the 0.4.13 layout and `ss app validate` checks it.
 - Every package passes its own `check` (coverage thresholds: 90 % lines, 90 % functions, 85 % branches) and the
   splittable-unit test.
-- The Portal still passes its `check`; if it cannot without step 5, steps 4 and 5 are done together.
 
-#### Step 5 — Portal on the new model (the switch)
+#### Step 5 — Portal: products, tokens and the contract
 
 Done: <date>, verified by <who>
 
@@ -2573,17 +2423,13 @@ Done: <date>, verified by <who>
   websites list, revocations, the directory, launch consume, and the four notices with retry.
 - Launches carry the 0.4.3 claims; Finance launches are refused; `sessions.revoked` is sent in every case 0.4.3 lists.
 - Billing runs from the reports through step 3's money function.
-- Removed from the Portal: the loader, packs, widget uploads, the `delivery` module, the bucket and `STORAGE_*`, the key
-  vault and the `connectors` module, the Event Hub and the `integration` module, the `config` module (settings, layers,
-  overrides, policy), website settings and the Overview/Keys/Resources/Identity tabs, identity issuers, test twins,
-  plans, trials, per-use billing, price books, and the entitlement document and its routes.
 - The Portal's modules are `identity`, `catalog`, `commerce` and `system` only (0.9).
 - Portal → Products (0.8.2: Add product, Active/Inactive, Reconnect with the same id, Open as admin, Overview and
   Websites tabs), the website page Products tab (0.5.9 add, remove and restore; cards with status and daily cost; Remove
   website disabled until products are removed), Install and tokens (0.8.2) and the per-product numbers on admin Overview
   work and are tested.
-- The owner deploys it with `ss_portal` and `ss_chatbot` reset and `PORTAL_URL` and `ENCRYPTION_KEY` set, and creates
-  the first Owner. The live Chatbot stops (accepted).
+- Deployed by the owner (root `platform`, database `ss_portal`, `PORTAL_URL` and `ENCRYPTION_KEY` set), who creates the
+  first Owner at once.
 
 #### Step 6 — Notifications
 
@@ -2591,9 +2437,9 @@ Done: <date>, verified by <who>
 
 - Grilled first; decisions written into Part 0 and approved.
 - Meets the every-product list above.
-- Holds all messaging provider keys; the kit's SMTP and HTTP messaging adapters have moved here; other products can send
-  through a pasted Notifications token.
-- Deployed by the owner and connected.
+- Holds all messaging provider keys and adapters (SMTP and the generic HTTP gateway); other products send through a
+  pasted Notifications token.
+- Deployed by the owner (root `products/notifications`, database `ss_notifications`) and connected.
 
 #### Step 7 — Accounts
 
@@ -2605,22 +2451,19 @@ Done: <date>, verified by <who>
   are renewed by Accounts' widget.
 - Data-rights coordination and activity-log copies work across connected products (0.4.11); the Accounts extras are
   switches.
-- `parked/signups` is deleted.
-- Deployed by the owner and connected.
+- Deployed by the owner (root `products/accounts`, database `ss_accounts`) and connected.
 
 #### Step 8 — Chat
 
 Done: <date>, verified by <who>
 
 - No grilling: 0.8.3 is the specification.
-- `products/chatbot` is rebuilt on the new kit, renamed `products/chat` with product id `chat`, and is back in CI and
-  root checks.
 - Meets the every-product list above.
 - Every 0.8.3 feature marked step 8 works end to end; signed-in chat is tested with the real Accounts, and staff alerts,
   transcripts and AI cost alerts with the real Notifications.
-- Nothing from the 0.8.3 "Not built" list remains in the code; the old dashboard Inbox and Knowledge pages and the
-  manifest events are removed.
-- Deployed by the owner (its product database starts empty) and connected.
+- Nothing from the 0.8.3 "Not built" list is in the code; the dashboard has no Inbox or Knowledge pages and the manifest
+  has no events.
+- Deployed by the owner (root `products/chat`, database `ss_chat`) and connected.
 
 #### Step 9 — Payments
 
@@ -2629,21 +2472,20 @@ Done: <date>, verified by <who>
 - Grilled first; decisions written into Part 0 and approved.
 - Meets the every-product list above.
 - Ecommerce (and non-shop sites) can confirm a payment server-to-server for the same website and the exact amount (0.3).
-- Deployed by the owner and connected.
+- Deployed by the owner (root `products/payments`, database `ss_payments`) and connected.
 
 #### Step 10 — Ecommerce
 
 Done: <date>, verified by <who>
 
 - Grilled first; decisions written into Part 0 and approved.
-- Meets the every-product list above. Built from the 15 parked shop folders and ibrahimMobiles as references.
+- Meets the every-product list above. Follows ibrahimMobiles as the reference.
 - Placing an order is one database transaction (stock, offer use, points) with no network calls between parts; orders
   are marked paid only after Payments confirms (0.3).
 - Implements the endpoints Chat's docs define for shop tools, track shipment and product cards. Chat gains the step-10
   features (`shop_search`, `shop_deals`, `shop_top`, `shop_my_orders`, `track_shipment`, `product_cards`) and the
   context panel's shop info, with e2e tests against the real Ecommerce.
-- The 15 parked shop folders are deleted, and `parked/` with them once it is empty.
-- Deployed by the owner and connected.
+- Deployed by the owner (root `products/ecommerce`, database `ss_ecommerce`) and connected.
 
 #### Step 11 — Growth
 
@@ -2652,7 +2494,7 @@ Done: <date>, verified by <who>
 - Grilled first (including how it learns about orders, carts and item changes); decisions written into Part 0 and
   approved.
 - Meets the every-product list above.
-- Deployed by the owner and connected.
+- Deployed by the owner (root `products/growth`, database `ss_growth`) and connected.
 
 #### Step 12 — Screens and wording (alongside every step)
 
@@ -2668,8 +2510,8 @@ Done: <date>, verified by <who>
 
 - Every unit passes its own `check` (coverage thresholds: 90 % lines, 90 % functions, 85 % branches).
 - The e2e suite covers every product against the real Portal.
-- The CI matrix lists exactly the units in the workspace (no parked folders); no `vercel.json` has crons.
-- Every code doc is rewritten for Part 0 (0.10); each deployable's `.env.example` matches 0.11.
+- The CI matrix lists exactly the units in the workspace; no `vercel.json` has crons.
+- Every code doc matches Part 0; each deployable's `.env.example` matches 0.11.
 
 #### Step 14 — Before charging real merchants (owner)
 
@@ -2684,8 +2526,8 @@ Done: <date>, verified by <who>
 ## 0.13 Rules for building agents
 
 - **Read Part 0 first**, all of it, before writing code. Use the words in 0.0.
-- **Ask, don't guess.** When Part 0 is silent or unclear on a point, ask the owner. Do not fill the gap from old code,
-  from code docs or from your own ideas. Old code and ibrahimMobiles are sources of behaviour only where Part 0 says "as today" or "as in ibrahimMobiles".
+- **Ask, don't guess.** When Part 0 is silent or unclear on a point, ask the owner. Do not fill the gap from code docs or
+  from your own ideas. ibrahimMobiles is a source of behaviour only where Part 0 says "as in ibrahimMobiles".
 - **No extras.** Build only what Part 0 names (0.1 scope rule): no health, ready or status endpoints, status pages,
   uptime checks, monitoring, telemetry or diagnostic screens; no crons, timers, timed queue drains or background loops;
   no extra admin tools, exports, presets or nice-to-haves.

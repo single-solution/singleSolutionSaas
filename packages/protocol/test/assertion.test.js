@@ -23,7 +23,7 @@ const verify = (clock, token, overrides = {}) =>
 	verifyAssertion({
 		token,
 		keyResolverForProduct: (productId) =>
-			productId === 'coupons'
+			productId === 'notes'
 				? staticResolver([product.publicJwk])
 				: productId === 'other'
 					? staticResolver([other.publicJwk])
@@ -41,7 +41,7 @@ const verify = (clock, token, overrides = {}) =>
 const sign = (clock, overrides = {}) =>
 	signAssertion({
 		signer: product.signer,
-		productId: 'coupons',
+		productId: 'notes',
 		audience: AUD,
 		now: clock.now,
 		randomBytes: seededRandom(),
@@ -53,8 +53,8 @@ describe('client assertions', () => {
 		const clock = createClock();
 		const token = await sign(clock);
 		const { productId, claims } = await verify(clock, token);
-		expect(productId).toBe('coupons');
-		expect(claims).toMatchObject({ iss: 'coupons', sub: 'coupons', aud: AUD });
+		expect(productId).toBe('notes');
+		expect(claims).toMatchObject({ iss: 'notes', sub: 'notes', aud: AUD });
 		expect(claims.exp - claims.iat).toBe(60);
 	});
 
@@ -77,7 +77,7 @@ describe('client assertions', () => {
 		const long = await signCompact({
 			signer: product.signer,
 			typ: 'ss-assertion+jwt',
-			payload: { iss: 'coupons', sub: 'coupons', aud: AUD, jti: 'j'.repeat(20), iat, exp: iat + 301 },
+			payload: { iss: 'notes', sub: 'notes', aud: AUD, jti: 'j'.repeat(20), iat, exp: iat + 301 },
 		});
 		await expectCode(verify(clock, long), 'lifetime_too_long');
 	});
@@ -85,7 +85,7 @@ describe('client assertions', () => {
 	it('rejects unknown product, impersonating another product, wrong aud, sub != iss, tampering and short jti', async () => {
 		const clock = createClock();
 		await expectCode(verify(clock, await sign(clock, { productId: 'unknown' })), 'issuer');
-		// signed by coupons but claims other → other's keys don't know this kid
+		// signed by notes but claims other → other's keys don't know this kid
 		await expectCode(verify(clock, await sign(clock, { productId: 'other' })), 'unknown_kid');
 		await expectCode(sign(clock, { productId: 'Bad_Id' }), 'invalid_argument');
 		await expectCode(verify(clock, await sign(clock), { audience: 'https://portal.test/other' }), 'audience');
@@ -106,7 +106,7 @@ describe('client assertions', () => {
 			'issuer',
 		);
 		const iat = Math.floor(clock.now() / 1000);
-		const base = { iss: 'coupons', sub: 'coupons', aud: AUD, jti: 'j'.repeat(20), iat, exp: iat + 60 };
+		const base = { iss: 'notes', sub: 'notes', aud: AUD, jti: 'j'.repeat(20), iat, exp: iat + 60 };
 		/** @param {Record<string, unknown>} payload */
 		const raw = (payload) => signCompact({ signer: product.signer, typ: 'ss-assertion+jwt', payload });
 		await expectCode(verify(clock, await raw({ ...base, sub: 'someone' })), 'subject');

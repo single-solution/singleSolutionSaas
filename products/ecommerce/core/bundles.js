@@ -1,5 +1,5 @@
 /**
- * Bundles and buy X get Y (PLAN 0.8.8 Promotions), ported from the parked deals product's bundle engine:
+ * Bundles and buy X get Y (PLAN 0.8.8 Promotions):
  * - `bundle`: every listed product in its quantity is in the cart → the set costs `price` (never more than its value),
  *   or `value` percent off the set; applied as many times as there are complete sets, taking each product's most
  *   expensive units first (the largest saving);

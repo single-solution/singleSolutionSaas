@@ -105,11 +105,11 @@ describe('ensureIndexes', () => {
 		expect(entries.some((e) => e.msg === 'indexes ensured')).toBe(true);
 		const ttl = (await db.collection('demo_cache').listIndexes().toArray()).find((index) => index.name === 'ttl');
 		expect(ttl?.expireAfterSeconds).toBe(0);
-		await db.collection('demo_things').createIndex({ legacy: 1 }, { name: 'legacy_1' });
+		await db.collection('demo_things').createIndex({ extra: 1 }, { name: 'extra_1' });
 		const second = await ensureIndexes(db, registry);
 		expect(second.created).toEqual([]);
 		expect(second.existing).toContain('demo_things.slug_1');
-		expect(second.undeclared).toEqual(['demo_things.legacy_1']);
+		expect(second.undeclared).toEqual(['demo_things.extra_1']);
 	});
 });
 

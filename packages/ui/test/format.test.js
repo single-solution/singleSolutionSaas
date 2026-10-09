@@ -83,9 +83,9 @@ describe('problem documents', () => {
 		expect(describeProblem({ type: '/problems/invalid_credentials', detail: 'The e-mail or password is incorrect.' })).toBe(
 			'The e-mail or password is incorrect.',
 		);
-		expect(
-			describeProblem({ type: '/problems/catalog_launch_refused', detail: 'element packs have no dashboard to launch' }),
-		).toBe('element packs have no dashboard to launch');
+		expect(describeProblem({ type: '/problems/catalog_launch_refused', detail: 'the launch has expired' })).toBe(
+			'the launch has expired',
+		);
 		expect(describeProblem({ type: '/problems/rate_limited' })).toMatch(/Too many attempts/);
 		expect(describeProblem({ type: '/problems/something_new', detail: 'Plain detail.' })).toBe('Plain detail.');
 		expect(describeProblem({ type: '/problems/something_new', title: 'Title only' })).toBe('Title only');

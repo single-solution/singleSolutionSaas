@@ -4,7 +4,7 @@ import './globals.css';
 
 export const metadata = {
 	title: { default: 'Single Solution', template: '%s · Single Solution' },
-	description: 'Control plane for websites, elements, subscriptions and credits.',
+	description: 'Merchants, websites, products on websites and credits.',
 	robots: { index: false, follow: false },
 };
 

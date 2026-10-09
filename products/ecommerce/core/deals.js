@@ -1,8 +1,7 @@
 /**
  * Deals (PLAN 0.8.8 Promotions: automatic deals): a percent or a fixed amount off each unit of the items in scope,
  * within dates and a use limit. A line takes the single best deal (the largest saving per unit, then the higher
- * priority) — deals never stack on one another (the parked deals product's rule with stacking off, and ibrahimMobiles'
- * one offer per line). Also the checks of a deal the merchant writes and the views of a deal. No I/O.
+ * priority) — deals never stack on one another (ibrahimMobiles' one offer per line). Also the checks of a deal the merchant writes and the views of a deal. No I/O.
  * @module
  */
 import { percentOf } from './money.js';

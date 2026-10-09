@@ -42,7 +42,7 @@ const codeOf = (res) => [
 ];
 
 /**
- * A harness with Coupons priced (codes 1 credit/h, box 0.5 credit/h, box needs codes) and on W1.
+ * A harness with Ecommerce priced (codes 1 credit/h, box 0.5 credit/h, box needs codes) and on W1.
  * @param {string} dbName
  */
 const setUp = async (dbName) => {
@@ -51,12 +51,12 @@ const setUp = async (dbName) => {
 	await h.prices(PRODUCT, 1, { codes: 1000, box: 500 });
 	await h.service.addProduct({ merchantId: M1, websiteId: W1, productId: PRODUCT, actor: ADMIN });
 	h.world.notices.splice(0);
-	const coupons = await h.productAuth(PRODUCT);
+	const asProduct = await h.productAuth(PRODUCT);
 	/**
 	 * @param {string} method @param {string} path @param {unknown} [body]
 	 */
 	const product = async (method, path, body) =>
-		h.call(method, path, { headers: await coupons(), ...(body === undefined ? {} : { body }) });
+		h.call(method, path, { headers: await asProduct(), ...(body === undefined ? {} : { body }) });
 	/** @param {string} websiteId @param {Record<string, unknown>} body */
 	const features = (websiteId, body) => product('PUT', `/v1/product/websites/${websiteId}/features`, body);
 	/** @param {string} websiteId */
@@ -148,7 +148,7 @@ describe('feature reports (PLAN 0.4.12 row 3)', () => {
 		// an unknown key
 		const unknown = await features(W1, body({ on: ['nope'] }));
 		expect(codeOf(unknown)).toEqual([422, 'validation_failed']);
-		expect(unknown.json.errors).toEqual([{ path: '/on/0', message: 'nope is not a feature of coupons' }]);
+		expect(unknown.json.errors).toEqual([{ path: '/on/0', message: 'nope is not a feature of ecommerce' }]);
 		// a feature that is no longer priced
 		await product('PUT', '/v1/product/prices', priceList(2, { codes: 1000 }));
 		const unpriced = await features(W1, body({ on: ['codes', 'box'] }));

@@ -145,12 +145,12 @@ describe('ledger integrity', () => {
 		await expect(receiptVia(faultyService(h.ctx, { accountUpdatesToFail: 1 }), M1, 500)).rejects.toThrow(/simulated crash/);
 		expect(await h.db.collection('commerce_ledger').countDocuments({ merchantId: M1 })).toBe(1);
 		expect(await accountOf(h, M1)).toMatchObject({ seq: 1, balance: 1000 });
-		// entries written without a transaction (an older writer) are still rolled into the account cache
-		const legacy = faultyService(
+		// entries written without a transaction (a writer outside this path) are still rolled into the account cache
+		const untransacted = faultyService(
 			{ ...h.ctx, withTransaction: (/** @type {any} */ fn) => fn(undefined) },
 			{ accountUpdatesToFail: 1 },
 		);
-		await expect(receiptVia(legacy, M1, 500)).rejects.toThrow(/simulated crash/);
+		await expect(receiptVia(untransacted, M1, 500)).rejects.toThrow(/simulated crash/);
 		expect(await accountOf(h, M1)).toMatchObject({ seq: 1, balance: 1000 });
 		await h.credit(M1, 250);
 		expect(await accountOf(h, M1)).toMatchObject({ seq: 3, balance: 1750 });

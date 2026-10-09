@@ -24,7 +24,7 @@ const H = HOUR_MS;
 const M = 60_000;
 const W1 = 'web_1';
 const W2 = 'web_2';
-const A = 'coupons';
+const A = 'ecommerce';
 
 /** @param {number} at @param {Record<string, number>} prices */
 const prices = (at, prices) => ({

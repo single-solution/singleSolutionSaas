@@ -24,7 +24,7 @@ describe('Admins (PLAN 0.8.2; Owner only)', () => {
 		expect(codeOf(await o.client.post('/v1/admin/admins', { email: 'sue@portal.test', role: 'finance' }))).toBe('email_taken');
 		await h.merchant('sam@shop.test');
 		expect(codeOf(await o.client.post('/v1/admin/admins', { email: 'sam@shop.test', role: 'finance' }))).toBe('email_taken');
-		expect((await o.client.post('/v1/admin/admins', { email: 'x@portal.test', role: 'superadmin' })).status).toBe(422);
+		expect((await o.client.post('/v1/admin/admins', { email: 'x@portal.test', role: 'auditor' })).status).toBe(422);
 
 		// copy: shown once, only to that admin, logged
 		const copied = await o.client.post(`/v1/admin/admins/${adminId}/invite`, { copy: true });

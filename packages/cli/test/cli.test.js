@@ -31,8 +31,6 @@ describe('ss (main)', () => {
 		expect((await ss(['app', 'validate', '--bogus'])).code).toBe(2);
 		expect((await ss(['app', 'init'])).code).toBe(2);
 		expect((await ss(['app', 'init', 'x', '--id', 'x1'])).err).toContain('needs --id and --name');
-		expect((await ss(['app', 'init', 'x', '--id', 'x1', '--name', 'X', '--kind', 'pack'])).code).toBe(2);
-		for (const removed of ['pack', 'dev', 'certify']) expect((await ss([removed, 'build'])).code).toBe(2);
 	});
 
 	it('inits, validates and regenerates assets with exit codes', async () => {

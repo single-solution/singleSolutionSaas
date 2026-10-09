@@ -107,28 +107,13 @@ describe('problem factory', () => {
 		expect(v.validate(SCHEMA_IDS.problem, factory.create('product_unavailable', { reason: 'removed' })).ok).toBe(true);
 	});
 
-	it('has the codes of the new model and none of the old billing ones', () => {
+	it('has the status codes of PLAN 0.4.7', () => {
 		expect(PROBLEM_CODES.invalid_token.status).toBe(401);
 		expect(PROBLEM_CODES.product_unavailable.status).toBe(403);
 		expect(PROBLEM_CODES.feature_off.status).toBe(403);
 		expect(PROBLEM_CODES.database_not_connected.status).toBe(403);
 		expect(PROBLEM_CODES.website_not_found.status).toBe(404);
 		expect(PROBLEM_CODES.portal_unreachable.status).toBe(503);
-		for (const old of [
-			'credits_exhausted',
-			'spend_cap_reached',
-			'scope_missing',
-			'element_disabled',
-			'subscription_inactive',
-			'invalid_event',
-			'unknown_event_type',
-			'resource_missing',
-			'quota_exhausted',
-			'identity_required',
-			'identity_invalid',
-			'origin_not_allowed',
-		])
-			expect(Object.hasOwn(PROBLEM_CODES, old)).toBe(false);
 	});
 
 	it('wraps validation problems', () => {
@@ -143,10 +128,10 @@ describe('problem factory', () => {
 
 	it('supports product codes but not overriding built-ins', () => {
 		const extended = createProblemFactory({
-			baseUri: 'https://errors.example.dev/coupons/',
+			baseUri: 'https://errors.example.dev/ecommerce/',
 			codes: { code_expired: { status: 410, title: 'Code expired' } },
 		});
-		expect(extended.create('code_expired').type).toBe('https://errors.example.dev/coupons/code_expired');
+		expect(extended.create('code_expired').type).toBe('https://errors.example.dev/ecommerce/code_expired');
 		expect(() => createProblemFactory({ baseUri: 'https://e.dev', codes: { not_found: { status: 404, title: 'x' } } })).toThrow(
 			TypeError,
 		);

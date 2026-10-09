@@ -12,7 +12,7 @@ export const M2 = 'mer_1123456789abcdefghjkmnpq';
 export const W1 = 'web_0123456789abcdefghjkmnpq';
 export const W2 = 'web_1123456789abcdefghjkmnpq';
 export const W3 = 'web_2123456789abcdefghjkmnpq';
-export const PRODUCT = 'coupons';
+export const PRODUCT = 'ecommerce';
 export const PRODUCT2 = 'notice';
 export const OWNER_ADMIN = 'adm_0wner0000000000000000000';
 export const SUPPORT_ADMIN = 'adm_support000000000000000000';
@@ -46,7 +46,7 @@ const seedWorld = (world) => {
 	world.websites.set(W1, { websiteId: W1, merchantId: M1, domain: 'shop.example.com', status: 'active' });
 	world.websites.set(W2, { websiteId: W2, merchantId: M1, domain: 'blog.example.com', status: 'active' });
 	world.websites.set(W3, { websiteId: W3, merchantId: M2, domain: 'two.example.org', status: 'active' });
-	world.products.set(PRODUCT, { productId: PRODUCT, name: 'Coupons', status: 'active' });
+	world.products.set(PRODUCT, { productId: PRODUCT, name: 'Ecommerce', status: 'active' });
 	world.products.set(PRODUCT2, { productId: PRODUCT2, name: 'Notice', status: 'active' });
 	world.admins.set(OWNER_ADMIN, { adminId: OWNER_ADMIN, name: 'Olivia', role: 'owner', status: 'active' });
 	world.admins.set(SUPPORT_ADMIN, { adminId: SUPPORT_ADMIN, name: 'Sam', role: 'support', status: 'active' });

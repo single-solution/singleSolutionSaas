@@ -2,7 +2,7 @@
  * Server render of every merchant console page against a live in-process Portal: the Owner seeds a merchant with two
  * websites, connects two fake products, adds them to a website and switches features on; the merchant's pages
  * (Overview, Websites, the website page with each tab, Usage and credits, Account) render without errors or React
- * warnings and show the new model's words.
+ * warnings and use the words of PLAN 0.0.
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { renderToString } from 'react-dom/server';
@@ -65,7 +65,7 @@ const BRANDING = {
 };
 
 describe('merchant console smoke', () => {
-	it('server-renders every merchant page on the new model', async () => {
+	it('server-renders every merchant page', async () => {
 		const world = await createWorld({ db: mongo.db('merchant_smoke') });
 		try {
 			const { b: merchant, me, merchantId } = await world.signup('owner@shop.test', 'Shop & Co');

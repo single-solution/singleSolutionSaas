@@ -2,10 +2,9 @@
 /**
  * Admin Console in the browser (jsdom): the views are rendered client-side against a live in-process Portal —
  * `fetch` is routed to `portal.handle` with a cookie jar, as a same-origin browser would — and driven through
- * their forms and dialogs: Overview, Merchants (search, bulk actions, Add merchant), the merchant page (suspend and
- * resume, setup links, two-step off, Details, websites and products, delete), Admins, Settings, Activity, My
- * account, product connect and pack folder upload, the Active / Inactive switch, the admin launch, admin overrides
- * and locks, platform policies and rollback, credit operations and ledger verification.
+ * their forms and dialogs: the first admin, My account, Overview, Merchants (search, bulk actions, Add merchant), the
+ * merchant page (suspend and resume, setup links, two-step off, Details, websites, delete), Credits and billing,
+ * Activity, Settings and Admins.
  */
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { Blob as NodeBlob } from 'node:buffer';

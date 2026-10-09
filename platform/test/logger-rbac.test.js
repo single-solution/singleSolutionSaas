@@ -160,7 +160,7 @@ describe('rbac (PLAN 0.2 rights table)', () => {
 
 	it('an admin without a known role, products and nobody get nothing; the system gets everything', () => {
 		expect(can({ type: 'admin', id: 'adm_x' }, 'websites.read')).toBe(false);
-		expect(can({ type: 'admin', id: 'adm_x', role: /** @type {any} */ ('superadmin') }, 'websites.read')).toBe(false);
+		expect(can({ type: 'admin', id: 'adm_x', role: /** @type {any} */ ('auditor') }, 'websites.read')).toBe(false);
 		expect(can({ type: 'product', id: 'notes' }, 'websites.read')).toBe(false);
 		expect(can({ type: 'product', id: 'notes', permissions: ['websites.read'] }, 'websites.read')).toBe(true);
 		expect(can(null, 'websites.read')).toBe(false);

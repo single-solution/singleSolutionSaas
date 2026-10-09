@@ -138,7 +138,7 @@ describe('inputs: objects', () => {
 		});
 		expect(I.inputs.merchantProfile({}).ok).toBe(false);
 		expect(I.inputs.adminUpdate({}).ok).toBe(false);
-		expect(I.inputs.adminInvite({ email: 'a@b.co', role: 'superadmin' }).ok).toBe(false);
+		expect(I.inputs.adminInvite({ email: 'a@b.co', role: 'auditor' }).ok).toBe(false);
 		expect(I.inputs.bulk({ action: 'suspend', merchantIds: [] }).ok).toBe(false);
 		expect(I.inputs.bulk({ action: 'suspend', merchantIds: ['nope'] }).ok).toBe(false);
 		expect(I.inputs.bulk({ action: 'resume', merchantIds: ['mer_0123456789', 'mer_0123456789'] })).toEqual({

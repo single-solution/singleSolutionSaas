@@ -102,10 +102,10 @@ describe('credits and billing (PLAN 0.5)', () => {
 			{ day: '2026-10-02', amount: 1000 },
 		]);
 		expect(usage.rows.map((r) => `${r.day} ${r.domain} ${r.product} ${r.featureName} ${r.hours} ${r.amount}`)).toEqual([
-			'2026-10-01 shop.example.com Coupons Apply box 14 7000',
-			'2026-10-01 shop.example.com Coupons Coupon codes 14 14000',
-			'2026-10-02 shop.example.com Coupons Apply box 1 0',
-			'2026-10-02 shop.example.com Coupons Coupon codes 1 1000',
+			'2026-10-01 shop.example.com Ecommerce Apply box 14 7000',
+			'2026-10-01 shop.example.com Ecommerce Coupon codes 14 14000',
+			'2026-10-02 shop.example.com Ecommerce Apply box 1 0',
+			'2026-10-02 shop.example.com Ecommerce Coupon codes 1 1000',
 		]);
 		expect((await h.service.usage(M1, { from: '2026-09-01', to: '2026-09-02', websiteId: W2 })).rows).toEqual([]);
 		expect(await h.service.dayChargesOf(M1)).toMatchObject([
@@ -120,7 +120,7 @@ describe('credits and billing (PLAN 0.5)', () => {
 			{ key: M1, label: 'One', credits: 21_000 },
 		]);
 		expect((await h.service.charges({ from: '2026-10-01', to: '2026-10-31', by: 'product' })).rows).toEqual([
-			{ key: PRODUCT, label: 'Coupons', credits: 21_000 },
+			{ key: PRODUCT, label: 'Ecommerce', credits: 21_000 },
 		]);
 		expect(await h.service.attention()).toMatchObject([{ merchantId: M1, merchantName: 'One', status: 'low_balance' }]);
 		expect(await h.service.allReceipts({ from: '2026-10-01', to: '2026-10-02', merchantId: M1 })).toMatchObject([

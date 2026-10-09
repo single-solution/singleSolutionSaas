@@ -20,7 +20,7 @@ export const copyText = async (text) => {
 			return true;
 		}
 	} catch {
-		// fall through to the legacy path
+		// fall through to the textarea copy
 	}
 	if (typeof document === 'undefined') return false;
 	const area = document.createElement('textarea');

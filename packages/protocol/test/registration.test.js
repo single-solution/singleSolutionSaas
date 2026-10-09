@@ -15,9 +15,9 @@ import {
 import { createClock, expectThrowCode, makeKey } from './helpers.js';
 
 const PORTAL = 'https://portal.test';
-const BASE = 'https://coupons.example.com';
+const BASE = 'https://notes.example.com';
 const SECRET = 'a'.repeat(40);
-const manifest = { id: 'coupons', name: 'Coupons', endpoints: { base: BASE } };
+const manifest = { id: 'notes', name: 'Notes', endpoints: { base: BASE } };
 const prices = {
 	version: 1,
 	features: [{ key: 'codes', name: 'Codes', description: 'd', dependsOn: [], millicreditsPerHour: 0 }],
@@ -82,7 +82,7 @@ describe('connect handshake', () => {
 
 		const answer = createConnectResponse({
 			secret: SECRET,
-			productId: 'coupons',
+			productId: 'notes',
 			nonce: verified.nonce,
 			publicJwk: product.privateJwk,
 			manifest,
@@ -97,7 +97,7 @@ describe('connect handshake', () => {
 			nonce: request.nonce,
 			now: clock.now,
 		});
-		expect(accepted).toEqual({ productId: 'coupons', publicJwk: product.publicJwk, manifest, prices });
+		expect(accepted).toEqual({ productId: 'notes', publicJwk: product.publicJwk, manifest, prices });
 		const check = (/** @type {Record<string, unknown>} */ change) => () =>
 			verifyConnectResponse({
 				secret: SECRET,
@@ -118,7 +118,7 @@ describe('connect handshake', () => {
 		const clock = createClock();
 		const nonce = 'n'.repeat(22);
 		const resign = (/** @type {Record<string, unknown>} */ members) => {
-			const body = JSON.stringify({ productId: 'coupons', nonce, publicJwk: product.publicJwk, manifest, prices, ...members });
+			const body = JSON.stringify({ productId: 'notes', nonce, publicJwk: product.publicJwk, manifest, prices, ...members });
 			const timestamp = String(Math.floor(clock.now() / 1000));
 			const signature = createHmac('sha256', SECRET).update(`ss-connected.v1|${timestamp}|${body}`).digest('hex');
 			return () =>
@@ -130,7 +130,7 @@ describe('connect handshake', () => {
 					now: clock.now,
 				});
 		};
-		expect(resign({})()).toMatchObject({ productId: 'coupons' });
+		expect(resign({})()).toMatchObject({ productId: 'notes' });
 		expectThrowCode(resign({ productId: 'App_1' }), 'malformed');
 		expectThrowCode(resign({ manifest: null }), 'malformed');
 		expectThrowCode(resign({ prices: [] }), 'malformed');
@@ -143,7 +143,7 @@ describe('connect handshake', () => {
 			() =>
 				createConnectResponse({
 					secret: SECRET,
-					productId: 'coupons',
+					productId: 'notes',
 					nonce,
 					publicJwk: product.publicJwk,
 					manifest,
@@ -155,7 +155,7 @@ describe('connect handshake', () => {
 			() =>
 				createConnectResponse({
 					secret: SECRET,
-					productId: 'coupons',
+					productId: 'notes',
 					nonce: 'x',
 					publicJwk: product.publicJwk,
 					manifest,

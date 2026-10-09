@@ -4,8 +4,7 @@
  * Appends run under a per-merchant lease lock (`commerce.ledger:<merchantId>`) and, inside it, in **one database
  * transaction** (`ctx.withTransaction`): the entries (unique `merchantId+seq` and `merchantId+entryKey`) and the account's conditional `$inc` commit together or not at all. The ledger stays the source of
  * truth and the account (balance, seq, head hash) a cache: an append still first **rolls forward** any entries
- * beyond the account's `seq` (records written before appends were transactional, or by a writer outside this
- * path), so the cache can always be repaired from the chain. A repeated check finds its day keys already present;
+ * beyond the account's `seq` (left by a crash or by a writer outside this path), so the cache can always be repaired from the chain. A repeated check finds its day keys already present;
  * the unique `seq` index keeps the chain linear even if a lease expired.
  * @module
  */

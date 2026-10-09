@@ -134,7 +134,7 @@ describe('ledger chain', () => {
 
 describe('validation', () => {
 	it('add product input', () => {
-		expect(checkAddProduct({ productId: 'coupons' })).toEqual({ ok: true, value: { productId: 'coupons' } });
+		expect(checkAddProduct({ productId: 'ecommerce' })).toEqual({ ok: true, value: { productId: 'ecommerce' } });
 		expect(checkAddProduct({ productId: 'Bad Id', x: 1 })).toMatchObject({
 			ok: false,
 			errors: [

@@ -1,5 +1,5 @@
 /**
- * Cross-product shapes (PLAN 0.4.11), provisional until Accounts is specified (0.12 step 7).
+ * Cross-product shapes (PLAN 0.4.11).
  *
  * - Data rights request (`POST /v1/data-rights/export` and `/delete`): `{ user: { id?, email?, phone? } }` with at
  *   least one member. Answers: export `{ records: object }`, delete `{ deleted: integer, anonymised: integer }`.

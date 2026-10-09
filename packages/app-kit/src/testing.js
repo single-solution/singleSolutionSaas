@@ -4,8 +4,8 @@
  * - `createFakePortal()`: the Portal side of the Product ↔ Portal contract (PLAN 0.4.12): connect, price and feature
  *   reports, status (settable), websites, revocations, directory and launch consume, plus helpers that sign tokens,
  *   launches and notices;
- * - `createAccountsDouble()`: Accounts as products see it before step 7: it receives activity copies and calls a
- *   product's data-rights routes with a pasted server token;
+ * - `createAccountsDouble()`: Accounts as products see it: it receives activity copies, serves sign-in keys and
+ *   calls a product's data-rights routes with a pasted server token;
  * - `createNetwork(handlers)`: routes `fetch` and outbound calls (`outboundSend`) to in-process handlers by origin;
  * - `createMemoryStore()`.
  * @module
@@ -438,7 +438,7 @@ export const createFakePortal = async ({ url = 'https://portal.test', now = Date
 };
 
 /**
- * Accounts as products see it (PLAN 0.12 steps 6–7): receives activity copies at `POST /v1/activity-copies`, serves a
+ * Accounts as products see it (PLAN 0.4.6, 0.4.11): receives activity copies at `POST /v1/activity-copies`, serves a
  * website's sign-in keys at `GET /v1/websites/:websiteId/keys` (`{ issuer, keys }`), signs sign-ins
  * (`signIn({ websiteId, sub, … })`, 15 minutes) and calls a product's data-rights routes with a pasted server token.
  * @param {{ url?: string, now?: () => number }} [options]

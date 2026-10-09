@@ -1,6 +1,6 @@
 /**
- * E-mail addresses and phone numbers (pure), ported from the old Signups product (which generalised the ibrahimMobiles
- * phone rules from one country to E.164 for any country):
+ * E-mail addresses and phone numbers (pure); the ibrahimMobiles phone rules, generalised from one country to E.164 for
+ * any country:
  *
  * - an e-mail address has one canonical form per mailbox: trimmed and lower-cased; provider tricks (dots, `+tags`) are
  *   not rewritten, because they are not universal;

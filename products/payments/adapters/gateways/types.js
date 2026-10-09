@@ -1,6 +1,6 @@
 /**
- * The common gateway adapter interface (PLAN 0.8.7; the shape of the old kit payments interface `createPayment`,
- * `refund`, `status`, `verifyWebhook`, reshaped for redirect gateways). Every adapter sends the payer to the gateway's
+ * The common gateway adapter interface (PLAN 0.8.7: `createPayment`, `refund`, `status`, `verifyWebhook`, shaped for
+ * redirect gateways). Every adapter sends the payer to the gateway's
  * own page or form, so card details never reach Payments, and reports what the gateway confirmed only after checking
  * its signature or asking the gateway server to server. Calls go through the outbound `send` (`@ss/net`).
  * @module
