@@ -3,6 +3,8 @@
  * PLAN 0.8.10 K7), main image, page address and whether it can be bought now, read from the products collection.
  * @module
  */
+import { summarize } from '../core/catalog.js';
+import { cardPhotos } from '../core/catalog-views.js';
 import { COLLECTIONS } from '../core/model.js';
 import { createMedia } from './catalog-media.js';
 import { hiddenFor, visibleMatch } from './catalog-visibility.js';
@@ -62,6 +64,15 @@ export const createCards = (product) => {
 			currency: s.currency,
 			inStock: item.inStock,
 			rating: item.rating,
+			// as the grid's cards (PLAN 0.8.10 E2, E6, E8)
+			priceMax: summarize(item.variants, item.trackStock).priceMax,
+			featured: item.featured === true,
+			cardImages: await Promise.all(
+				cardPhotos(item).map(async (file) => ({
+					url: await media.mediaUrl(s, file.sizes?.card ?? file.key),
+					alt: file.alt || item.name,
+				})),
+			),
 		};
 	};
 

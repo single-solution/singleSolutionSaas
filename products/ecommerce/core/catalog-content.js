@@ -85,7 +85,8 @@ export const siteAddress = (value) => {
 	const address = text(value, CONTENT_LIMITS.address);
 	if (address === null) return null;
 	if (address === '') return '';
-	if (address.startsWith('/') && !address.startsWith('//') && !/\s/.test(address)) return address;
+	// a path on the website: never `//host` or `/\host` (browsers read both as another host), nor a backslash anywhere
+	if (address.startsWith('/') && !address.startsWith('//') && !/[\s\\]/.test(address)) return address;
 	try {
 		const url = new URL(address);
 		return url.protocol === 'https:' && !url.username && !url.password ? url.toString() : null;

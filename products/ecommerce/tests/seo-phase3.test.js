@@ -24,7 +24,13 @@ const node = (jsonLd, type) => JSON.parse(jsonLd)['@graph'].find((/** @type {any
 beforeAll(async () => {
 	shop = await readyShop({ features: ALL.filter((feature) => feature !== 'multi_location') });
 	await shop.list('grades', [
-		{ key: 'mint', label: 'Mint', condition: 'refurbished', seo: { body: 'Like new.', title: 'Mint grade' } },
+		{
+			key: 'mint',
+			label: 'Mint',
+			condition: 'refurbished',
+			video: 'dQw4w9WgXcQ',
+			seo: { body: 'Like new.', title: 'Mint grade' },
+		},
 		{ key: 'fair', label: 'Fair', description: 'Marks', categoryIds: [] },
 		{ key: 'old', label: 'Old', active: false },
 	]);
@@ -109,7 +115,12 @@ describe('E10 grades and E16 structured data', () => {
 			'https://schema.org/MerchantReturnNotPermitted',
 		);
 		const page = (await shop.visitor('GET', `/v1/shop/products/${ids.phone.slug}`)).json;
-		expect(page.variants[0].grade).toMatchObject({ key: 'mint', condition: 'refurbished' });
+		expect(page.variants[0].grade).toMatchObject({
+			key: 'mint',
+			condition: 'refurbished',
+			videoUrl: 'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ',
+		});
+		expect(page.variants[1].grade.videoUrl).toBeNull();
 		await shop.setting('feeds', 'items', 'all');
 		const google = await shop.api('GET', '/v1/feeds/products.xml');
 		expect(google.text).toContain('<g:condition>refurbished</g:condition>');

@@ -80,6 +80,9 @@ describe('content fields', () => {
 		expect(errors.at(-1)?.path).toBe('/seo');
 		expect(siteAddress('')).toBe('');
 		expect(siteAddress('/a b')).toBeNull();
+		expect(siteAddress('/\\evil.example')).toBeNull();
+		expect(siteAddress('/care\\x')).toBeNull();
+		expect(cleanHtml('<a href="/\\evil.example">x</a>')).toBe('<a>x</a>');
 		expect(siteAddress('https://user:pw@x.example/')).toBeNull();
 		expect(siteAddress('not a url')).toBeNull();
 		expect(siteAddress(5)).toBeNull();

@@ -24,6 +24,7 @@ import {
 	SORTS,
 } from '../core/catalog-query.js';
 import { categoryTree, withDescendants } from '../core/catalog-taxonomy.js';
+import { youtubeId } from '../core/catalog-content.js';
 import { cardOf, cardPhotos, pageOf } from '../core/catalog-views.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import { chartView, resolveSizeChart } from '../core/size-charts.js';
@@ -257,6 +258,31 @@ export const createCatalogShop = (product, service, common) => {
 		return chart ? chartView(chart) : null;
 	};
 
+	/**
+	 * The website's grades with each inspection video's address (a YouTube id becomes its embed address, a file key its
+	 * storage address; E10).
+	 * @param {Site} s
+	 */
+	const gradesWithVideos = async (s) =>
+		new Map(
+			await Promise.all(
+				[...(await common.gradesOf(s)).entries()].map(
+					async ([key, grade]) =>
+						/** @type {[string, import('../core/grades.js').Grade]} */ ([
+							key,
+							{
+								...grade,
+								videoUrl: !grade.video
+									? null
+									: youtubeId(grade.video) === grade.video
+										? `https://www.youtube-nocookie.com/embed/${encodeURIComponent(grade.video)}`
+										: await common.media.mediaUrl(s, grade.video),
+							},
+						]),
+				),
+			),
+		);
+
 	/** GET /v1/shop/products/:ref (id, slug in any case, or an earlier slug). @param {any} ctx */
 	const page = async (ctx) => {
 		const { s, data } = await common.open(ctx);
@@ -274,11 +300,11 @@ export const createCatalogShop = (product, service, common) => {
 			// an archived product may lead to its category (E13)
 			const category = byId.get(item.categoryIds[0] ?? '');
 			if (item.status === 'archived' && settings.retiredUrl === 'category' && category && !hidden.unlisted.has(category.id))
-				return { moved: { slug: category.slug, url: await common.media.categoryUrl(s, category) } };
+				return { moved: { kind: 'category', slug: category.slug, url: await common.media.categoryUrl(s, category) } };
 			throw problem('not_found', 'There is no such product.');
 		}
 		if (!visible(item, hidden)) throw problem('not_found', 'There is no such product.');
-		if (found.moved) return { moved: { slug: item.slug, url: await common.media.productUrl(s, item) } };
+		if (found.moved) return { moved: { kind: 'product', slug: item.slug, url: await common.media.productUrl(s, item) } };
 		/** @type {BrandRecord | null} */
 		const brand = item.brandId
 			? /** @type {BrandRecord | null} */ (
@@ -299,7 +325,7 @@ export const createCatalogShop = (product, service, common) => {
 				trail.map(async (c) => ({ id: c.id, slug: c.slug, name: c.name, url: await common.media.categoryUrl(s, c) })),
 			),
 			attributes: byAttribute,
-			grades: await common.gradesOf(s),
+			grades: await gradesWithVideos(s),
 			variantMedia: new Map(
 				await Promise.all(
 					active.map(

@@ -40,6 +40,7 @@ const CONTROL = /[\u0000-\u001F\u007F]/;
  * @property {Condition | null} [condition] null = the SEO and feeds setting for graded items
  * @property {{ title: string, description: string, body: string, faqs: import('./catalog-content.js').Faq[] }} [seo]
  *   the glossary page (E15)
+ * @property {string | null} [videoUrl] the inspection video's address, filled in for shoppers (not stored)
  */
 
 /** @param {unknown} value */
@@ -168,6 +169,7 @@ export const gradeView = (grade) => ({
 	description: grade.description,
 	color: grade.color ?? '',
 	video: grade.video ?? '',
+	videoUrl: grade.videoUrl ?? null,
 	content: grade.content ?? { ...EMPTY_CONTENT },
 	condition: grade.condition ?? null,
 	warrantyDays: grade.warrantyDays,

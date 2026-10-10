@@ -382,7 +382,7 @@ describe('Ecommerce phase 3 on the real Portal', () => {
 		await write(SB, 'PATCH', `/v1/products/${ids.sbDress.id}`, { slug: 'hand-embroidered-dress' });
 		const moved = await serverCall(SB, 'GET', '/v1/shop/products/embroidered-dress');
 		expect(moved.json).toEqual({
-			moved: { slug: 'hand-embroidered-dress', url: 'https://sisters.example.com/dresses/hand-embroidered-dress' },
+			moved: { kind: 'product', slug: 'hand-embroidered-dress', url: 'https://sisters.example.com/dresses/hand-embroidered-dress' },
 		});
 	});
 

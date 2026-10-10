@@ -316,7 +316,7 @@ export const createLandings = (product, service, media) => {
 			const found = await findBySlugHistory(data, COLLECTIONS.categories, String(ctx.query.category), ID_PREFIX.category);
 			const record = /** @type {CategoryRecord | undefined} */ (found?.record);
 			if (!found || !record || hidden.unlisted.has(record.id)) throw problem('not_found', 'There is no such category.');
-			if (found.moved) return { moved: { slug: record.slug, url: await media.categoryUrl(s, record) } };
+			if (found.moved) return { moved: { kind: 'category', slug: record.slug, url: await media.categoryUrl(s, record) } };
 			category = record;
 		}
 		const brandRefs = listOf(ctx.query.brand);

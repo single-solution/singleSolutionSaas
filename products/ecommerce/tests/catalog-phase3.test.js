@@ -619,7 +619,7 @@ describe('E13 URL templates and slug history', () => {
 		expect(renamed.previousSlugs).toEqual([ids.featured.slug]);
 		const moved = await get(`/v1/shop/products/${ids.featured.slug.toUpperCase()}`);
 		expect(moved.json).toEqual({
-			moved: { slug: 'evening-gown', url: 'https://shop.example.com/clothes/dresses/maison/evening-gown' },
+			moved: { kind: 'product', slug: 'evening-gown', url: 'https://shop.example.com/clothes/dresses/maison/evening-gown' },
 		});
 		expect((await get('/v1/shop/products/EVENING-GOWN')).json.name).toBe('Featured gown');
 		const again = await api('PATCH', `/v1/products/${ids.featured.id}`, { slug: ids.featured.slug });
@@ -627,6 +627,7 @@ describe('E13 URL templates and slug history', () => {
 		const category = await api('PATCH', `/v1/categories/${ids.dresses.id}`, { slug: 'gowns' });
 		expect(category.previousSlugs).toEqual(['dresses']);
 		expect((await shop.api('GET', '/v1/seo/categories/dresses')).json.moved).toEqual({
+			kind: 'category',
 			slug: 'gowns',
 			url: 'https://shop.example.com/clothes/gowns',
 		});
@@ -635,7 +636,7 @@ describe('E13 URL templates and slug history', () => {
 		expect((await get(`/v1/shop/products/${ids.shown.slug}`)).status).toBe(404);
 		await shop.setting('catalog', 'retiredUrl', 'category');
 		expect((await get(`/v1/shop/products/${ids.shown.slug}`)).json).toEqual({
-			moved: { slug: 'gowns', url: 'https://shop.example.com/clothes/gowns' },
+			moved: { kind: 'category', slug: 'gowns', url: 'https://shop.example.com/clothes/gowns' },
 		});
 		expect((await shop.api('GET', `/v1/seo/products/${ids.shown.slug}`)).json.moved.slug).toBe('gowns');
 		await api('PATCH', `/v1/products/${ids.shown.id}`, { status: 'active' });

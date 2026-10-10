@@ -156,7 +156,7 @@ export const createSeo = (product, service) => {
 	/**
 	 * An active product shoppers may see by id, slug or an earlier slug; a `moved` answer, or 404 (E1, E13).
 	 * @param {Site} s @param {WebsiteData} data @param {unknown} ref
-	 * @returns {Promise<{ item: ProductRecord } | { moved: { slug: string, url: string } }>}
+	 * @returns {Promise<{ item: ProductRecord } | { moved: { kind: string, slug: string, url: string } }>}
 	 */
 	const productOf = async (s, data, ref) => {
 		const found = typeof ref === 'string' ? await findBySlugHistory(data, COLLECTIONS.products, ref, ID_PREFIX.product) : null;
@@ -172,11 +172,11 @@ export const createSeo = (product, service) => {
 					.toArray()
 			);
 			if (item.status === 'archived' && retiredUrl === 'category' && category && !hidden.unlisted.has(category.id))
-				return { moved: { slug: category.slug, url: await media.categoryUrl(s, category) } };
+				return { moved: { kind: 'category', slug: category.slug, url: await media.categoryUrl(s, category) } };
 			throw problem('not_found', 'There is no such product.');
 		}
 		if (!visible(item, hidden)) throw problem('not_found', 'There is no such product.');
-		if (found.moved) return { moved: { slug: item.slug, url: await media.productUrl(s, item) } };
+		if (found.moved) return { moved: { kind: 'product', slug: item.slug, url: await media.productUrl(s, item) } };
 		return { item };
 	};
 
@@ -272,7 +272,7 @@ export const createSeo = (product, service) => {
 		const category = /** @type {CategoryRecord | undefined} */ (found?.record);
 		const hidden = await hiddenFor(s);
 		if (!found || !category || hidden.unlisted.has(category.id)) throw problem('not_found', 'There is no such category.');
-		if (found.moved) return { moved: { slug: category.slug, url: await media.categoryUrl(s, category) } };
+		if (found.moved) return { moved: { kind: 'category', slug: category.slug, url: await media.categoryUrl(s, category) } };
 		const [settings, business, categories] = await Promise.all([s.values('seo'), s.business(), allCategories(data)]);
 		const url = await media.categoryUrl(s, category);
 		const image = category.image ? await media.mediaUrl(s, category.image.key) : null;

@@ -486,6 +486,9 @@ describe('wishlist, alerts and compare', () => {
 				priceText: 'USD 40.00',
 				inStock: true,
 				url: `https://${DOMAIN}/products/${a.slug}`,
+				priceMax: 4000,
+				featured: false,
+				cardImages: [],
 			}),
 		]);
 		await shop.visitor('POST', `/v1/shop/wishlist/items/${a.id}`, { signIn: sara });
