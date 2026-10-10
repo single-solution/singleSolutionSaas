@@ -298,6 +298,9 @@
 					"ZM",
 					"ZW"
 				]
+			},
+			"x-ui": {
+				"widget": "tags"
 			}
 		},
 		"newUserName": {

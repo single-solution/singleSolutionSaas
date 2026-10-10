@@ -187,6 +187,11 @@
 			"key": "roles.manage",
 			"name": "Edit roles and permissions",
 			"feature": "roles"
+		},
+		{
+			"key": "activity.read",
+			"name": "See the activity log copies",
+			"feature": "activity_copies"
 		}
 	],
 	"widgets": [
@@ -201,6 +206,11 @@
 			"kind": "visitor"
 		},
 		{
+			"key": "role_request",
+			"feature": "role_requests",
+			"kind": "visitor"
+		},
+		{
 			"key": "users_admin",
 			"feature": "roles",
 			"kind": "admin"
@@ -208,6 +218,11 @@
 		{
 			"key": "roles_admin",
 			"feature": "roles",
+			"kind": "admin"
+		},
+		{
+			"key": "activity_admin",
+			"feature": "activity_copies",
 			"kind": "admin"
 		}
 	]

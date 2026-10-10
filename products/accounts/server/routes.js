@@ -563,6 +563,27 @@ export const createRoutes = (product) => {
 		// --------------------------------------------------------------- admin widgets: Users and Roles (tickets)
 		defineRoute({
 			method: 'GET',
+			path: '/v1/admin/activity-copies',
+			auth: 'ticket',
+			permission: 'activity.read',
+			handler: manage.listCopies,
+		}),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/admin/activity-copies/count',
+			auth: 'ticket',
+			permission: 'activity.read',
+			handler: manage.countCopies,
+		}),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/admin/activity-copies/counts',
+			auth: 'ticket',
+			permission: 'activity.read',
+			handler: manage.countCopiesBy,
+		}),
+		defineRoute({
+			method: 'GET',
 			path: '/v1/admin/users',
 			auth: 'ticket',
 			permission: 'users.read',

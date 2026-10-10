@@ -3,14 +3,17 @@
  * its script tag (the website's browser token) it fetches the website's widget config and, while any sign-in method is
  * on, runs the visitor's session (kept from the last visit, renewed before it expires), handles the links Accounts
  * sends people to (`#ss_accounts_code=`, `#ss_accounts_link=`, `#ss_accounts_reset=`, `#ss_accounts_invite=`, removed
- * from the address bar at once) and mounts `sign_in` and `my_account`. `window.SSAccounts` offers `getSignIn()`,
- * `user()`, `signOut()`, `ready` and `admin({ getTicket })`, which fetches the config with a ticket and mounts the admin
- * widgets `users_admin` and `roles_admin` while Roles is on. Widgets mount only into the elements the merchant placed
+ * from the address bar at once, and a setup link's `?ss_setup=`) and mounts `sign_in` and `my_account`; `role_request`
+ * mounts while Role requests is on. `window.SSAccounts` offers `getSignIn()`, `user()`, `signOut()`, `ready` and
+ * `admin({ getTicket })`, which fetches the config with a ticket and mounts the admin widgets `users_admin` and
+ * `roles_admin` while Roles is on, and `activity_admin` while Activity log copy is on. Widgets mount only into the elements the merchant placed
  * (`data-ss-accounts="<widget key>"`), and render nothing while the product is stopped or their features are off.
  * @module
  */
-import { LINK_PARAMS, SIGN_IN_METHODS, WIDGET_ATTRIBUTE, WIDGET_FEATURES, WIDGET_GLOBAL } from '../core/widgets.js';
+import { LINK_PARAMS, SETUP_PARAM, SIGN_IN_METHODS, WIDGET_ATTRIBUTE, WIDGET_FEATURES, WIDGET_GLOBAL } from '../core/widgets.js';
+import { mountActivityAdmin } from './activity-admin.js';
 import { mountMyAccount } from './my-account.js';
+import { mountRoleRequest } from './role-request.js';
 import { mountRolesAdmin } from './roles-admin.js';
 import { createSession } from './session.js';
 import { mountSignIn } from './sign-in.js';
@@ -41,6 +44,11 @@ const ERROR_PARAM = LINK_PARAMS.error;
  * @property {import('./common.js').CustomField[]} customFields
  * @property {number} passwordMinLength
  * @property {{ version: string, url: string } | null} terms
+ * @property {{ minLength: number, letterAndDigit: boolean, selfReset: 'code' | 'off', forgotUrl: string } | null} [phonePassword]
+ * @property {'ask' | 'ask_ticked' | 'always'} [remember] "Remember me" of the role sign-ups get (A6)
+ * @property {boolean} [signInPaused] the role sign-ups get has its sign-in paused (A6)
+ * @property {{ maxAddresses: number, keepOneAddress: boolean, addressRequired: string[] }} [profile] (A11)
+ * @property {{ roles: Array<{ key: string, name: string }>, requireNote: boolean } | null} [roleRequests] (A5)
  */
 
 /**
@@ -74,9 +82,13 @@ const takeLink = (win) => {
 		['error', ERROR_PARAM],
 	];
 	const found = kinds.find(([, param]) => params.has(param));
-	if (!found) return null;
-	win.history.replaceState(win.history.state, '', `${win.location.pathname}${win.location.search}`);
-	return { kind: found[0], value: params.get(found[1]) ?? '' };
+	const query = new URLSearchParams(win.location.search);
+	const setup = query.get(SETUP_PARAM);
+	if (!found && setup === null) return null;
+	query.delete(SETUP_PARAM);
+	const search = query.toString();
+	win.history.replaceState(win.history.state, '', `${win.location.pathname}${search ? `?${search}` : ''}`);
+	return found ? { kind: found[0], value: params.get(found[1]) ?? '' } : { kind: 'setup', value: setup ?? '' };
 };
 
 /**
@@ -112,8 +124,11 @@ export const startWidget = ({
 		if (!token) return;
 		const link = takeLink(win);
 		const config = await loadConfig(request, `${base}${CONFIG_PATH}`, token);
-		if (!config || !SIGN_IN_METHODS.some((method) => config.features.includes(method))) return;
+		if (!config) return;
 		const current = createSession({ win, base, token, schedule, cancel, now });
+		if (config.features.includes('role_requests'))
+			for (const host of hosts('role_request')) mountRoleRequest({ host, win, config, call: current.call });
+		if (!SIGN_IN_METHODS.some((method) => config.features.includes(method))) return;
 		session = current;
 		await current.restore();
 		const signIns = hosts('sign_in');
@@ -156,10 +171,11 @@ export const startWidget = ({
 		if (!config) return;
 		const tickets = createTicketSource({ first, getTicket, schedule, cancel, now });
 		const api = { base, tickets, fetch: request };
-		/** @param {'users_admin' | 'roles_admin'} key */
+		/** @param {'users_admin' | 'roles_admin' | 'activity_admin'} key */
 		const on = (key) => WIDGET_FEATURES[key].some((feature) => config.features.includes(feature));
 		if (on('users_admin')) for (const host of hosts('users_admin')) mountUsersAdmin({ host, api, config });
 		if (on('roles_admin')) for (const host of hosts('roles_admin')) mountRolesAdmin({ host, api, config });
+		if (on('activity_admin')) for (const host of hosts('activity_admin')) mountActivityAdmin({ host, api, config });
 	};
 
 	Object.assign(win, { [WIDGET_GLOBAL]: Object.freeze({ getSignIn, user, signOut, admin, ready }) });

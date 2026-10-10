@@ -30,6 +30,11 @@ const at = (ms) => new Date(START + ms).toISOString();
  * @property {any[]} [customFields]
  * @property {number} [passwordMinLength]
  * @property {{ version: string, url: string } | null} [terms]
+ * @property {any} [phonePassword]
+ * @property {string} [remember]
+ * @property {boolean} [signInPaused]
+ * @property {any} [profile]
+ * @property {any} [roleRequests]
  */
 
 /** The Format and time zone of the widget config before anyone changes them (PLAN 0.8.10 K7, K8). */
@@ -228,10 +233,10 @@ const heading = (host) => shadow(host).querySelector('h2')?.textContent;
 /**
  * Start the widget on a page with the browser token.
  * @param {Record<string, Route>} routes
- * @param {{ features?: string[], settings?: Settings, hash?: string }} [options]
+ * @param {{ features?: string[], settings?: Settings, hash?: string, page?: string }} [options]
  */
-const start = async (routes, { features = ['email_password'], settings = {}, hash = '' } = {}) => {
-	window.history.replaceState(null, '', `${PAGE}${hash ? `#${hash}` : ''}`);
+const start = async (routes, { features = ['email_password'], settings = {}, hash = '', page = PAGE } = {}) => {
+	window.history.replaceState(null, '', `${page}${hash ? `#${hash}` : ''}`);
 	const server = serve({ [`GET ${CONFIG_PATH}`]: () => answer(200, configOf(features, settings)), ...routes });
 	const time = clock();
 	const widget = startWidget({
@@ -1249,6 +1254,7 @@ describe('admin widgets', () => {
 			twoStep: 'optional',
 			sessionHours: 24,
 			rememberDays: 30,
+			rank: 900,
 			ready: true,
 		},
 		{
@@ -1259,6 +1265,7 @@ describe('admin widgets', () => {
 			twoStep: 'required',
 			sessionHours: 12,
 			rememberDays: 0,
+			rank: 100,
 			ready: true,
 		},
 		{
@@ -1269,6 +1276,7 @@ describe('admin widgets', () => {
 			twoStep: 'optional',
 			sessionHours: 8,
 			rememberDays: 7,
+			rank: 600,
 			ready: false,
 		},
 	];
@@ -1317,16 +1325,24 @@ describe('admin widgets', () => {
 		expect(roles.shadowRoot).toBeNull();
 	});
 
-	it('Users admin lists, searches, pages, blocks, approves, invites and signs out', async () => {
+	it('Users admin: counts on the chips, filters, the first user’s detail and the More menu', async () => {
 		const host = place('users_admin');
 		const ana = {
 			...USER,
 			role: 'customer',
-			notes: '',
+			notes: 'Calls on Fridays',
 			blocked: null,
 			status: 'pending',
 			lastSignInAt: at(0),
-			deletion: { requestedAt: at(0), dueAt: null },
+			roleSince: at(0),
+			recoveryCodesLeft: 3,
+			twoStep: true,
+			lockedUntil: at(60_000),
+			providers: ['google'],
+			terms: { version: '2', acceptedAt: at(0) },
+			custom: { size: 'M' },
+			addresses: [{ id: 'adr_1', label: 'Home', line1: '1 Main St', area: 'Gulberg', city: 'Lahore', default: true }],
+			deletion: { requestedAt: at(0), dueAt: at(86_400_000) },
 		};
 		const bo = {
 			...USER,
@@ -1335,107 +1351,399 @@ describe('admin widgets', () => {
 			email: null,
 			phone: '+15550002222',
 			role: 'helper',
-			notes: 'VIP',
+			notes: '',
 			blocked: { at: at(0), reason: 'spam' },
 			status: 'active',
 			lastSignInAt: null,
 		};
 		/** @type {URL[]} */
 		const asked = [];
-		const { server } = await startAdmin({
-			'GET /v1/admin/roles': () => answer(200, { items: ROLES }),
-			'GET /v1/admin/users': ({ url }) => {
-				asked.push(url);
-				if (url.searchParams.get('q') === 'none') return answer(200, { items: [], nextCursor: null, hasMore: false });
-				if (url.searchParams.get('q') === 'boom') return problem(500, 'internal');
-				return url.searchParams.get('cursor')
-					? answer(200, { items: [bo], nextCursor: null, hasMore: false })
-					: answer(200, { items: [ana], nextCursor: 'c1', hasMore: true });
+		const { server } = await startAdmin(
+			{
+				'GET /v1/admin/roles': () => answer(200, { items: ROLES }),
+				'GET /v1/admin/users/counts': () => answer(200, { total: 7, groups: { active: 4, pending: 2, invited: 1 } }),
+				'GET /v1/admin/users/count': ({ url }) =>
+					answer(200, { count: url.searchParams.get('deletion') ? 1 : 2, capped: false }),
+				'GET /v1/admin/users': ({ url }) => {
+					asked.push(url);
+					if (url.searchParams.get('q') === 'none') return answer(200, { items: [], nextCursor: null, hasMore: false });
+					if (url.searchParams.get('q') === 'boom') return problem(500, 'internal');
+					return url.searchParams.get('cursor')
+						? answer(200, { items: [bo], nextCursor: null, hasMore: false })
+						: answer(200, { items: [ana], nextCursor: 'c1', hasMore: true });
+				},
+				'PATCH /v1/admin/users/usr_1': ({ body }) => answer(200, { ...ana, ...body }),
+				'PATCH /v1/admin/users/usr_2': () => answer(200, { ...bo, blocked: null }),
+				'POST /v1/admin/users/usr_1/approve': () => answer(200, { ...ana, status: 'active' }),
+				'POST /v1/admin/users/usr_1/decline': () => problem(409, 'conflict'),
+				'POST /v1/admin/users/usr_1/sign-out': () => answer(204),
+				'POST /v1/admin/users/usr_1/sign-in-code': () => answer(200, { code: '123456', expiresAt: at(900_000) }),
+				'POST /v1/admin/users/usr_1/setup-link': () => problem(403, 'forbidden'),
+				'POST /v1/admin/users/usr_2/setup-link': () =>
+					answer(200, { url: 'https://shop.example.com/?ss_setup=x', expiresAt: at(0) }),
+				'POST /v1/admin/users/usr_1/deletion/approve': () => answer(200, {}),
+				'POST /v1/admin/users/usr_1/deletion/reject': () => answer(200, ana),
+				'DELETE /v1/admin/users/usr_1': () => answer(200, { deleted: true, pending: [] }),
 			},
-			'PATCH /v1/admin/users/usr_1': ({ body }) => answer(200, { ...ana, ...body }),
-			'POST /v1/admin/users/usr_1/approve': () => answer(200, { ...ana, status: 'active' }),
-			'POST /v1/admin/users/usr_1/decline': () => problem(409, 'conflict'),
-			'POST /v1/admin/users/usr_1/sign-out': () => answer(204),
-			'POST /v1/admin/users/usr_1/deletion/approve': () => answer(200, {}),
-			'POST /v1/admin/users/invite': ({ body }) =>
-				body.email === 'taken@example.com' ? problem(409, 'already_exists') : answer(201, {}),
-		});
+			['roles', 'approval', 'data_rights', 'two_step', 'staff_links'],
+		);
 		const root = shadow(host);
 		expect(server.calls.find((c) => c.path === '/v1/admin/users')?.headers.authorization).toBe('Bearer ticket-1');
-		const first = /** @type {HTMLElement} */ (root.querySelector('li'));
-		expect(first.firstChild?.textContent).toBe('Ana');
-		expect(first.querySelector('.meta')?.textContent).toBe(
-			`ana@example.com · Customer · ${strings['status.pending']} · ${strings['users.deletionAsked']} · Last sign-in ${when(at(0))}`,
-		);
+		// the chips carry the counts
+		const chipText = [...root.querySelectorAll('.chip')].map((chip) => chip.textContent);
+		expect(chipText).toEqual(['All7', 'Active4', 'Waiting for approval2', 'Invited1', 'Blocked2', 'Asked to delete1']);
+		// the list and, beside it, the first user
+		const first = /** @type {HTMLElement} */ (root.querySelector('li.row-item'));
+		expect(first.textContent).toContain('Ana');
+		expect(first.querySelector('.meta')?.textContent).toBe(`ana@example.com · Customer · ${strings['users.deletionAsked']}`);
+		expect(first.getAttribute('aria-current')).toBe('true');
+		const detail = /** @type {HTMLElement} */ (root.querySelector('.detail-pane'));
+		expect(detail.querySelector('h3')?.textContent).toBe('Ana');
+		const cards = [...detail.querySelectorAll('.card h4')].map((h) => h.textContent);
+		expect(cards).toEqual([
+			strings['users.contact'],
+			strings['users.account'],
+			strings['users.addresses'],
+			strings['users.notesCard'],
+			strings['users.deletionCard'],
+		]);
+		expect(detail.textContent).toContain('ana@example.com (verified)');
+		expect(detail.textContent).toContain('On, 3 recovery codes left');
+		expect(detail.textContent).toContain('1 Main St, Gulberg, Lahore');
+		expect(detail.textContent).toContain(formatDeletion(at(0)));
 		await click(buttonIn(root, strings['users.more']));
 		expect(asked.at(-1)?.searchParams.get('cursor')).toBe('c1');
-		const second = root.querySelectorAll('ul > li')[1];
-		expect(second?.firstChild?.textContent).toBe('+15550002222');
-		expect(second?.querySelector('.meta')?.textContent).toBe(`Helper · ${strings['status.blocked']}`);
+		const second = /** @type {HTMLElement} */ (root.querySelectorAll('li.row-item')[1]);
+		expect(second.textContent).toContain('+15550002222');
+		expect(second.textContent).toContain(strings['users.never']);
 
-		// filters
+		// a chip and the filters
+		await click(/** @type {HTMLButtonElement} */ (root.querySelectorAll('.chip')[5]));
+		expect(asked.at(-1)?.searchParams.get('deletion')).toBe('1');
+		await click(/** @type {HTMLButtonElement} */ (root.querySelectorAll('.chip')[2]));
 		fieldIn(root, strings['users.search']).value = 'none';
-		fieldIn(root, strings['users.role']).value = 'helper';
-		fieldIn(root, strings['users.status']).value = 'pending';
-		checkIn(root, strings['users.deletionOnly']).checked = true;
+		fieldIn(root, strings['users.phoneDigits']).value = '0300 1234567';
+		const roleSelect = fieldIn(root, strings['users.roles']);
+		roleSelect.options[0].selected = true;
+		roleSelect.options[2].selected = true;
+		fieldIn(root, strings['users.permission']).value = 'accounts:users.read';
+		fieldIn(root, strings['users.joinedAfter']).value = '2026-09-01';
+		checkIn(root, strings['users.hideBlocked']).checked = true;
 		await submit(buttonIn(root, strings['users.searchButton']));
 		expect(Object.fromEntries(asked.at(-1)?.searchParams ?? [])).toEqual({
-			limit: '25',
 			q: 'none',
-			role: 'helper',
+			phoneDigits: '0300 1234567',
+			roles: 'customer,helper',
+			permission: 'accounts:users.read',
+			createdAfter: '2026-09-01T00:00:00Z',
+			blocked: 'false',
 			status: 'pending',
-			deletion: '1',
+			limit: '25',
 		});
 		expect(statusIn(root)).toBe(strings['users.empty']);
+		expect(detail.textContent).toBe(strings['users.emptyDetail']);
 		fieldIn(root, strings['users.search']).value = 'boom';
 		await submit(buttonIn(root, strings['users.searchButton']));
 		expect(statusIn(root)).toBe(strings['error.generic']);
-		fieldIn(root, strings['users.search']).value = '';
-		fieldIn(root, strings['users.role']).value = '';
-		fieldIn(root, strings['users.status']).value = '';
-		checkIn(root, strings['users.deletionOnly']).checked = false;
-		await submit(buttonIn(root, strings['users.searchButton']));
+		for (const label of [
+			strings['users.search'],
+			strings['users.phoneDigits'],
+			strings['users.permission'],
+			strings['users.joinedAfter'],
+		])
+			fieldIn(root, label).value = '';
+		roleSelect.options[0].selected = false;
+		roleSelect.options[2].selected = false;
+		checkIn(root, strings['users.hideBlocked']).checked = false;
+		await click(/** @type {HTMLButtonElement} */ (root.querySelectorAll('.chip')[0]));
 
-		// one user
-		await click(buttonIn(root, strings['users.open']));
-		const panel = /** @type {HTMLElement} */ (root.querySelector('section.part'));
-		expect(fieldIn(panel, strings['users.role']).value).toBe('customer');
-		expect(panel.textContent).toContain(formatDeletion(at(0)));
-		fieldIn(panel, strings['users.role']).value = 'helper';
-		fieldIn(panel, strings['users.notes']).value = 'Called';
-		checkIn(panel, strings['users.blocked']).checked = true;
-		fieldIn(panel, strings['users.blockedReason']).value = ' abuse ';
-		await submit(buttonIn(panel, strings['users.save']));
+		// the More menu: a sign-in code in a dialog, a refused setup link, approve, decline, keep the account
+		const menuOf = () => /** @type {HTMLElement} */ (detail.querySelector('.more'));
+		const pick = async (/** @type {string} */ label) => {
+			await click(/** @type {HTMLButtonElement} */ (menuOf().querySelector('button')));
+			expect(/** @type {HTMLElement} */ (menuOf().querySelector('.menu')).hidden).toBe(false);
+			await click(buttonIn(menuOf(), label));
+		};
+		const items = [...menuOf().querySelectorAll('.menu button')].map((b) => b.textContent);
+		expect(items).toEqual([
+			strings['users.signInCode'],
+			strings['users.setupLink'],
+			strings['users.signOut'],
+			strings['users.approve'],
+			strings['users.decline'],
+			strings['users.deletionReject'],
+			strings['users.block'],
+			strings['users.deletionApprove'],
+			strings['users.delete'],
+		]);
+		expect(menuOf().querySelector('.menu button:last-child')?.className).toContain('danger-text');
+		await pick(strings['users.signInCode']);
+		const dialog = () => /** @type {HTMLElement} */ (root.querySelector('.dialog'));
+		expect(dialog().querySelector('.code')?.textContent).toBe('123456');
+		expect(dialog().textContent).toContain('Read this code to Ana.');
+		await click(buttonIn(dialog(), strings['users.copy']));
+		await click(buttonIn(dialog(), '×'));
+		expect(root.querySelector('.overlay')).toBeNull();
+		await pick(strings['users.setupLink']);
+		expect(statusIn(detail)).toBe(strings['error.forbidden']);
+		await pick(strings['users.approve']);
+		expect(statusIn(detail)).toBe(strings['users.approved']);
+		await pick(strings['users.decline']);
+		expect(statusIn(detail)).toBe(strings['error.generic']);
+		await pick(strings['users.signOut']);
+		expect(statusIn(detail)).toBe(strings['users.signedOutUser']);
+		await pick(strings['users.deletionReject']);
+		expect(statusIn(detail)).toBe(strings['users.deletionRejected']);
+		await pick(strings['users.deletionApprove']);
+		expect(statusIn(detail)).toBe(strings['users.deletionApproved']);
+
+		// edit: contacts, role, notes, a new password, custom fields and addresses
+		await click(buttonIn(detail, strings['users.edit']));
+		expect(dialog().querySelector('h3')?.textContent).toBe('Edit Ana');
+		fieldIn(dialog(), strings['fields.phone']).value = '+15550009999';
+		fieldIn(dialog(), strings['users.role']).value = 'helper';
+		fieldIn(dialog(), strings['users.notes']).value = 'Called';
+		fieldIn(dialog(), strings['users.newPassword']).value = 'a new password';
+		await click(buttonIn(dialog(), strings['account.addressAdd']));
+		const fieldsets = dialog().querySelectorAll('fieldset');
+		fieldIn(/** @type {HTMLElement} */ (fieldsets[1]), strings['address.line1']).value = '2 Canal Rd';
+		fieldIn(/** @type {HTMLElement} */ (fieldsets[1]), strings['address.city']).value = 'Lahore';
+		await submit(buttonIn(dialog(), strings['users.save']));
 		expect(server.last('PATCH /v1/admin/users/usr_1')?.body).toEqual({
 			name: 'Ana',
 			role: 'helper',
 			notes: 'Called',
-			blocked: true,
-			blockedReason: 'abuse',
+			phone: '+15550009999',
+			password: 'a new password',
+			addresses: [
+				{
+					id: 'adr_1',
+					label: 'Home',
+					name: '',
+					line1: '1 Main St',
+					line2: '',
+					area: 'Gulberg',
+					city: 'Lahore',
+					region: '',
+					postalCode: '',
+					country: '',
+					phone: '',
+					default: true,
+				},
+				{
+					label: '',
+					name: '',
+					line1: '2 Canal Rd',
+					line2: '',
+					area: '',
+					city: 'Lahore',
+					region: '',
+					postalCode: '',
+					country: '',
+					phone: '',
+					default: false,
+				},
+			],
 		});
-		expect(statusIn(panel)).toBe(strings['users.saved']);
-		await click(buttonIn(panel, strings['users.approve']));
-		expect(statusIn(panel)).toBe(strings['users.approved']);
-		await click(buttonIn(panel, strings['users.decline']));
-		expect(statusIn(panel)).toBe(strings['error.generic']);
-		await click(buttonIn(panel, strings['users.signOut']));
-		expect(statusIn(panel)).toBe(strings['users.signedOutUser']);
-		await click(buttonIn(panel, strings['users.deletionApprove']));
-		expect(statusIn(panel)).toBe(strings['users.deletionApproved']);
-		await click(buttonIn(panel, strings['users.close']));
-		expect(root.querySelector('section.part:not(form)')).toBeNull();
+		expect(root.querySelector('.overlay')).toBeNull();
+		expect(statusIn(detail)).toBe(strings['users.saved']);
 
-		// invites
-		const invite = /** @type {HTMLElement} */ (root.querySelector('form.part'));
-		fieldIn(invite, strings['users.inviteContact']).value = 'taken@example.com';
-		await submit(buttonIn(invite, strings['users.inviteSend']));
-		expect(statusIn(invite)).toBe(strings['error.already_exists']);
-		fieldIn(invite, strings['users.inviteContact']).value = '+15550003333';
-		fieldIn(invite, strings['fields.name']).value = 'Cy';
-		fieldIn(invite, strings['users.role']).value = 'helper';
-		await submit(buttonIn(invite, strings['users.inviteSend']));
-		expect(server.last('POST /v1/admin/users/invite')?.body).toEqual({ phone: '+15550003333', name: 'Cy', role: 'helper' });
-		expect(statusIn(invite)).toBe('An invite was sent to +15550003333.');
+		// block with a reason; delete behind the typed name
+		await pick(strings['users.block']);
+		fieldIn(dialog(), strings['users.blockedReason']).value = ' abuse ';
+		await submit(buttonIn(dialog(), strings['users.blockSubmit']));
+		expect(server.last('PATCH /v1/admin/users/usr_1')?.body).toEqual({ blocked: true, blockedReason: 'abuse' });
+		await pick(strings['users.delete']);
+		fieldIn(dialog(), strings['users.deleteReason']).value = 'Asked by phone';
+		fieldIn(dialog(), strings['users.typeToConfirm']).value = 'Anna';
+		await submit(buttonIn(dialog(), strings['users.deleteSubmit']));
+		expect(server.last('DELETE /v1/admin/users/usr_1')).toBeUndefined();
+		fieldIn(dialog(), strings['users.typeToConfirm']).value = 'Ana';
+		await submit(buttonIn(dialog(), strings['users.deleteSubmit']));
+		expect(server.last('DELETE /v1/admin/users/usr_1')?.body).toEqual({ reason: 'Asked by phone' });
+
+		// another user: unblock and a setup link to hand over; Back on narrow widgets
+		await click(/** @type {HTMLButtonElement} */ (/** @type {unknown} */ (root.querySelectorAll('li.row-item')[0])));
+		expect(root.querySelector('.layout')?.classList.contains('picked')).toBe(true);
+		await click(buttonIn(detail, strings['users.back']));
+		expect(root.querySelector('.layout')?.classList.contains('picked')).toBe(false);
+	});
+
+	it('Users admin: Add user, Invite with the link handed to staff, and role requests', async () => {
+		const host = place('users_admin');
+		const bo = {
+			...USER,
+			id: 'usr_2',
+			name: 'Bo',
+			status: 'active',
+			blocked: { at: at(0), reason: '' },
+			notes: '',
+			lastSignInAt: null,
+		};
+		let created = false;
+		/** @type {Array<Record<string, any>>} */
+		let requests = [
+			{
+				id: 'rrq_1',
+				role: 'helper',
+				name: 'Nia',
+				phone: '+923001112222',
+				email: null,
+				note: 'Member please',
+				status: 'pending',
+				createdAt: at(0),
+			},
+			{
+				id: 'rrq_2',
+				role: 'helper',
+				name: 'Dee',
+				phone: null,
+				email: 'dee@example.com',
+				note: '',
+				status: 'expired',
+				createdAt: at(0),
+			},
+			{
+				id: 'rrq_3',
+				role: 'helper',
+				name: 'Cy',
+				phone: '+923001113333',
+				email: null,
+				note: '',
+				status: 'pending',
+				createdAt: at(0),
+			},
+		];
+		const { server } = await startAdmin(
+			{
+				'GET /v1/admin/roles': () => answer(200, { items: ROLES }),
+				'GET /v1/admin/users/counts': () => problem(500, 'internal'),
+				'GET /v1/admin/users': () =>
+					answer(200, {
+						items: created ? [{ ...bo, id: 'usr_9', name: 'Zed' }, bo] : [bo],
+						nextCursor: null,
+						hasMore: false,
+					}),
+				'PATCH /v1/admin/users/usr_2': () => answer(200, { ...bo, blocked: null }),
+				'POST /v1/admin/users/usr_2/setup-link': () =>
+					answer(200, { url: 'https://shop.example.com/?ss_setup=abc', expiresAt: at(0) }),
+				'POST /v1/admin/users': ({ body }) => {
+					if (body.email === 'taken@example.com') return problem(409, 'already_exists');
+					created = true;
+					return answer(201, { ...bo, id: 'usr_9', name: body.name });
+				},
+				'POST /v1/admin/users/invite': ({ body }) =>
+					answer(
+						201,
+						body.deliver === 'return' ? { invite: { url: 'https://shop.example.com/join#x', expiresAt: at(0) } } : {},
+					),
+				'GET /v1/admin/role-requests/counts': () => answer(200, { total: 3, groups: { pending: 2, invited: 1 } }),
+				'GET /v1/admin/role-requests/count': () => answer(200, { count: 1, capped: false }),
+				'GET /v1/admin/role-requests': ({ url }) => {
+					const status = url.searchParams.get('status');
+					return answer(200, {
+						items: requests.filter((r) => !status || r.status === status),
+						nextCursor: null,
+						hasMore: false,
+					});
+				},
+				'POST /v1/admin/role-requests/rrq_1/invite': () => {
+					requests = requests.map((r) => (r.id === 'rrq_1' ? { ...r, status: 'invited' } : r));
+					return answer(200, {
+						request: {},
+						user: {},
+						setupLink: { url: 'https://shop.example.com/?ss_setup=nia', expiresAt: at(0) },
+					});
+				},
+				'POST /v1/admin/role-requests/rrq_3/invite': () => answer(200, { request: {}, user: {}, setupLink: null }),
+				'POST /v1/admin/role-requests/rrq_3/decline': () => problem(409, 'conflict'),
+				'POST /v1/admin/role-requests/rrq_2/reopen': () => answer(200, {}),
+			},
+			['roles', 'approval', 'staff_links', 'role_requests'],
+		);
+		const root = shadow(host);
+		const dialog = () => /** @type {HTMLElement} */ (root.querySelector('.dialog'));
+		// chips stay without counts when the counts cannot be read
+		expect([...root.querySelectorAll('.box > .chips .badge')].every((badge) => badge.textContent === '')).toBe(true);
+
+		// Add user
+		await click(buttonIn(root, strings['users.add']));
+		fieldIn(dialog(), strings['fields.name']).value = 'Zed';
+		fieldIn(dialog(), strings['fields.email']).value = 'taken@example.com';
+		fieldIn(dialog(), strings['fields.password']).value = 'first password';
+		await submit(buttonIn(dialog(), strings['users.add']));
+		expect(statusIn(dialog())).toBe(strings['error.already_exists']);
+		fieldIn(dialog(), strings['fields.email']).value = 'zed@example.com';
+		await submit(buttonIn(dialog(), strings['users.add']));
+		expect(server.last('POST /v1/admin/users')?.body).toEqual({
+			name: 'Zed',
+			role: 'customer',
+			notes: '',
+			email: 'zed@example.com',
+			password: 'first password',
+		});
+		expect(root.querySelector('.detail-pane h3')?.textContent).toBe('Zed');
+
+		// Invite, sent or handed to staff
+		await click(buttonIn(root, strings['users.invite']));
+		fieldIn(dialog(), strings['users.inviteContact']).value = 'ivy@example.com';
+		await submit(buttonIn(dialog(), strings['users.inviteSend']));
+		expect(server.last('POST /v1/admin/users/invite')?.body).toEqual({ email: 'ivy@example.com', role: 'customer' });
+		await click(buttonIn(root, strings['users.invite']));
+		fieldIn(dialog(), strings['users.inviteContact']).value = '+15550003333';
+		fieldIn(dialog(), strings['fields.name']).value = 'Cy';
+		checkIn(dialog(), strings['users.inviteReturn']).checked = true;
+		await submit(buttonIn(dialog(), strings['users.inviteSend']));
+		expect(server.last('POST /v1/admin/users/invite')?.body).toEqual({
+			phone: '+15550003333',
+			name: 'Cy',
+			role: 'customer',
+			deliver: 'return',
+		});
+		expect(dialog().querySelector('.code')?.textContent).toBe('https://shop.example.com/join#x');
+		dialog()
+			.closest('.overlay')
+			?.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape' }));
+		expect(root.querySelector('.overlay')).toBeNull();
+
+		// a blocked user: unblock, and a setup link
+		await click(/** @type {HTMLButtonElement} */ (/** @type {unknown} */ (root.querySelectorAll('li.row-item')[1])));
+		const detail = /** @type {HTMLElement} */ (root.querySelector('.detail-pane'));
+		const menuButton = () => /** @type {HTMLButtonElement} */ (detail.querySelector('.more > button'));
+		await click(menuButton());
+		expect(hasButton(detail, strings['users.signInCode'])).toBe(false);
+		await click(buttonIn(detail, strings['users.unblock']));
+		expect(server.last('PATCH /v1/admin/users/usr_2')?.body).toEqual({ blocked: false });
+
+		// role requests: chips with counts, invite (the setup link), the role given at once, a refusal, open again
+		const part = /** @type {HTMLElement} */ (root.querySelector('section.part'));
+		expect([...part.querySelectorAll('.chip')].map((c) => c.textContent)).toEqual([
+			'All3',
+			'Waiting2',
+			'Invited0',
+			'Link expired1',
+			'Done0',
+			'Declined0',
+		]);
+		expect(part.querySelectorAll('li')).toHaveLength(2);
+		expect(part.textContent).toContain('Member please');
+		const rowMenu = async (/** @type {number} */ index, /** @type {string} */ label) => {
+			const row = /** @type {HTMLElement} */ (part.querySelectorAll('li')[index]);
+			await click(/** @type {HTMLButtonElement} */ (row.querySelector('.more > button')));
+			await click(buttonIn(row, label));
+		};
+		await rowMenu(0, strings['requests.invite']);
+		expect(dialog().querySelector('.code')?.textContent).toBe('https://shop.example.com/?ss_setup=nia');
+		await click(buttonIn(dialog(), '×'));
+		await rowMenu(0, strings['requests.decline']);
+		expect(statusIn(part)).toBe(strings['error.generic']);
+		await rowMenu(0, strings['requests.invite']);
+		expect(statusIn(part)).toBe('Cy already has a password: the role is given.');
+		await click(/** @type {HTMLButtonElement} */ (part.querySelectorAll('.chip')[3]));
+		await rowMenu(0, strings['requests.reopen']);
+		expect(statusIn(part)).toBe(strings['requests.reopened']);
+		await click(/** @type {HTMLButtonElement} */ (part.querySelectorAll('.chip')[5]));
+		expect(statusIn(part)).toBe(strings['requests.empty']);
 	});
 
 	it('Roles admin edits, copies, deletes roles and names the merchant’s own permissions', async () => {
@@ -1487,9 +1795,9 @@ describe('admin widgets', () => {
 		const root = shadow(host);
 		const rows = [...root.querySelectorAll('ul > li')];
 		expect(rows.map((li) => li.querySelector('.meta')?.textContent)).toEqual([
-			`customer · 0 permissions · ${strings['roles.readyMade']}`,
-			`owner · ${strings['roles.allPermissions']} · ${strings['roles.readyMade']}`,
-			'helper · 2 permissions',
+			`customer · 0 permissions · Rank 900 · ${strings['roles.readyMade']}`,
+			`owner · ${strings['roles.allPermissions']} · Rank 100 · ${strings['roles.readyMade']}`,
+			'helper · 2 permissions · Rank 600',
 		]);
 		expect(rows[0]?.textContent).not.toContain(strings['roles.delete']);
 		const form = /** @type {HTMLElement} */ (root.querySelector('form'));
@@ -1505,7 +1813,7 @@ describe('admin widgets', () => {
 		// edit a role: tick boxes per group; a permission of a product no longer listed stays visible
 		await click(buttonIn(/** @type {HTMLElement} */ (rows[2]), strings['roles.edit']));
 		expect(form.querySelector('h3')?.textContent).toBe('Editing Helper');
-		const legends = [...form.querySelectorAll('legend')].map((l) => l.textContent);
+		const legends = [...form.querySelectorAll('.permissions legend')].map((l) => l.textContent);
 		expect(legends).toEqual(['accounts', strings['roles.ownGroup'], strings['roles.otherGroup']]);
 		expect(form.textContent).toContain('Not available right now: chat');
 		expect(checkIn(form, 'See users').checked).toBe(true);
@@ -1525,6 +1833,11 @@ describe('admin widgets', () => {
 			twoStep: 'required',
 			sessionHours: 48,
 			rememberDays: 7,
+			rank: 600,
+			remember: 'ask',
+			signIn: 'on',
+			logSignIns: false,
+			methods: [],
 		});
 		expect(statusIn(form)).toBe(strings['roles.saved']);
 
@@ -1620,9 +1933,104 @@ describe('admin widgets', () => {
 			'GET /v1/admin/users': () => answer(200, { items: [ana], nextCursor: null, hasMore: false }),
 		});
 		const root = shadow(host);
-		expect(root.querySelector('li .meta')?.textContent).toContain('Last sign-in 2 Oct 2026, 03:30');
-		await click(buttonIn(root, strings['users.open']));
-		expect(root.querySelector('section.part')?.textContent).toContain('Asked to be deleted on 1 Oct 2026, 15:00.');
+		expect(root.querySelector('li .figure')?.textContent).toBe('2 Oct 2026');
+		expect(root.querySelector('.detail-pane')?.textContent).toContain('2 Oct 2026, 03:30');
+		expect(root.querySelector('.detail-pane')?.textContent).toContain('Asked to be deleted on 1 Oct 2026, 15:00.');
+	});
+
+	it('Roles admin sets the rank, remember me, the methods, a paused sign-in and the sign-in log', async () => {
+		const host = place('roles_admin');
+		/** @type {any[]} */
+		const saved = [];
+		await startAdmin(
+			{
+				'GET /v1/admin/roles': () =>
+					answer(200, { items: ROLES.map((role) => (role.key === 'customer' ? { ...role, signIn: 'paused' } : role)) }),
+				'GET /v1/admin/roles/permissions': () => answer(200, { groups: [], unavailable: [] }),
+				'PUT /v1/admin/roles/helper': ({ body }) => {
+					saved.push(body);
+					return answer(200, { key: 'helper', ...body });
+				},
+			},
+			['roles', 'email_password', 'phone_code'],
+		);
+		const root = shadow(host);
+		expect(root.querySelector('ul > li .meta')?.textContent).toContain(strings['roles.paused']);
+		await click(buttonIn(/** @type {HTMLElement} */ (root.querySelectorAll('ul > li')[0]), strings['roles.edit']));
+		const form = /** @type {HTMLElement} */ (root.querySelector('form'));
+		expect(fieldIn(form, strings['roles.rank']).disabled).toBe(true);
+		expect(fieldIn(form, strings['roles.signIn']).value).toBe('paused');
+		await click(buttonIn(/** @type {HTMLElement} */ (root.querySelectorAll('ul > li')[2]), strings['roles.edit']));
+		expect(fieldIn(form, strings['roles.rank']).disabled).toBe(false);
+		fieldIn(form, strings['roles.rank']).value = '450';
+		fieldIn(form, strings['roles.remember']).value = 'always';
+		checkIn(form, strings['method.email_password']).checked = true;
+		checkIn(form, strings['roles.logSignIns']).checked = true;
+		await submit(buttonIn(form, strings['roles.save']));
+		expect(saved[0]).toMatchObject({
+			rank: 450,
+			remember: 'always',
+			methods: ['email_password'],
+			logSignIns: true,
+			signIn: 'on',
+		});
+	});
+
+	it('Activity admin lists the copies with counts per product, filters and paging', async () => {
+		const host = place('activity_admin');
+		const entry = {
+			id: 'act_1',
+			productId: 'ecommerce',
+			actor: { kind: 'user', id: 'usr_1', name: 'Ana', role: 'Owner' },
+			action: 'order.status_changed',
+			target: 'ord_1',
+			label: 'IM-2026-0043',
+			detail: 'Confirmed → Shipped',
+			at: at(0),
+		};
+		/** @type {URL[]} */
+		const asked = [];
+		await startAdmin(
+			{
+				'GET /v1/admin/activity-copies/counts': () => answer(200, { total: 5, groups: { ecommerce: 4, chat: 1 } }),
+				'GET /v1/admin/activity-copies': ({ url }) => {
+					asked.push(url);
+					if (url.searchParams.get('q') === 'boom') return problem(422, 'validation_failed', { detail: 'from is a day.' });
+					if (url.searchParams.get('productId') === 'chat')
+						return answer(200, { items: [], nextCursor: null, hasMore: false });
+					return url.searchParams.get('cursor')
+						? answer(200, {
+								items: [{ ...entry, id: 'act_2', label: null, detail: null }],
+								nextCursor: null,
+								hasMore: false,
+							})
+						: answer(200, { items: [entry], nextCursor: 'c1', hasMore: true });
+				},
+			},
+			['activity_copies'],
+		);
+		const root = shadow(host);
+		expect([...root.querySelectorAll('.chip')].map((c) => c.textContent).slice(0, 4)).toEqual([
+			`${strings['activity.all']}5`,
+			'accounts',
+			'chat1',
+			'ecommerce4',
+		]);
+		const first = /** @type {HTMLElement} */ (root.querySelector('li'));
+		expect(first.textContent).toContain('IM-2026-0043 · order.status_changed');
+		expect(first.textContent).toContain('Confirmed → Shipped');
+		expect(first.textContent).toContain(`ecommerce · Ana, Owner · ${when(at(0))}`);
+		await click(buttonIn(root, strings['activity.more']));
+		expect(asked.at(-1)?.searchParams.get('cursor')).toBe('c1');
+		expect(root.querySelectorAll('li')[1]?.textContent).toContain('ord_1 · order.status_changed');
+		await click(/** @type {HTMLButtonElement} */ (root.querySelectorAll('.chip')[2]));
+		expect(asked.at(-1)?.searchParams.get('productId')).toBe('chat');
+		expect(statusIn(root)).toBe(strings['activity.empty']);
+		fieldIn(root, strings['activity.search']).value = 'boom';
+		fieldIn(root, strings['activity.from']).value = '2026-10-01';
+		await submit(buttonIn(root, strings['activity.searchButton']));
+		expect(Object.fromEntries(asked.at(-1)?.searchParams ?? [])).toMatchObject({ q: 'boom', from: '2026-10-01', limit: '50' });
+		expect(statusIn(root)).toBe('from is a day.');
 	});
 
 	it('Roles admin says when the roles cannot be loaded', async () => {
@@ -1631,7 +2039,241 @@ describe('admin widgets', () => {
 			'GET /v1/admin/roles': () => problem(403, 'forbidden'),
 			'GET /v1/admin/roles/permissions': () => answer(200, {}),
 		});
-		expect(statusIn(shadow(host))).toBe(strings['error.generic']);
+		expect(statusIn(shadow(host))).toBe(strings['error.forbidden']);
+	});
+});
+
+describe('Phase 2 options in the widgets (PLAN 0.8.10)', () => {
+	const PHONE_RULES = { minLength: 6, letterAndDigit: false, selfReset: 'code', forgotUrl: '' };
+
+	it('phone + password: signs in, signs up, and Forgot password sends a code', async () => {
+		const host = place('sign_in');
+		const { server } = await start(
+			{
+				'POST /v1/sign-in/phone-password': ({ body }) =>
+					body.password === 'wrong' ? problem(401, 'sign_in_failed') : answer(200, signedIn()),
+				'POST /v1/sign-up/phone-password': () => answer(200, { status: 'pending' }),
+				'POST /v1/password/phone/forgot': ({ body }) => (body.phone === 'x' ? problem(429, 'code_cooldown') : answer(202)),
+				'POST /v1/password/phone/reset': ({ body }) => (body.code === '1' ? problem(422, 'code_invalid') : answer(204)),
+			},
+			{ features: ['phone_password'], settings: { phonePassword: PHONE_RULES, remember: 'ask_ticked' } },
+		);
+		const root = shadow(host);
+		expect(checkIn(root, strings['signIn.remember']).checked).toBe(true);
+		fieldIn(root, strings['fields.phone']).value = ' 0300 1234567 ';
+		fieldIn(root, strings['fields.password']).value = 'wrong';
+		await submit(buttonIn(root, strings['signIn.submit']));
+		expect(statusIn(root)).toBe(strings['error.sign_in_failed']);
+		fieldIn(root, strings['fields.password']).value = '123456';
+		await submit(buttonIn(root, strings['signIn.submit']));
+		expect(server.last('POST /v1/sign-in/phone-password')?.body).toMatchObject({
+			phone: '0300 1234567',
+			password: '123456',
+			remember: true,
+		});
+		expect(heading(host)).toBe(strings['signedIn.title']);
+		await click(buttonIn(root, strings['signIn.signOut']));
+
+		// sign up
+		await click(buttonIn(root, strings['signIn.toSignUp']));
+		fieldIn(root, strings['fields.name']).value = 'Sana';
+		fieldIn(root, strings['fields.phone']).value = '+923001234567';
+		fieldIn(root, strings['fields.password']).value = 'abc123';
+		await submit(buttonIn(root, strings['signUp.submit']));
+		expect(server.last('POST /v1/sign-up/phone-password')?.body).toMatchObject({ name: 'Sana', phone: '+923001234567' });
+		expect(heading(host)).toBe(strings['pending.title']);
+		await click(buttonIn(root, strings['signIn.back']));
+		await click(buttonIn(root, strings['signUp.toSignIn']));
+
+		// forgot: a code, then the new password
+		fieldIn(root, strings['fields.phone']).value = 'x';
+		await click(buttonIn(root, strings['signIn.forgot']));
+		expect(fieldIn(root, strings['fields.phone']).value).toBe('x');
+		await click(buttonIn(root, strings['phoneForgot.send']));
+		expect(statusIn(root)).toBe(strings['error.code_cooldown']);
+		fieldIn(root, strings['fields.phone']).value = '+923001234567';
+		await click(buttonIn(root, strings['phoneForgot.send']));
+		expect(statusIn(root)).toBe(strings['phoneForgot.sent']);
+		fieldIn(root, strings['phoneForgot.code']).value = '1';
+		fieldIn(root, strings['phoneForgot.password']).value = 'new123';
+		await submit(buttonIn(root, strings['phoneForgot.submit']));
+		expect(statusIn(root)).toBe(strings['error.code_invalid']);
+		fieldIn(root, strings['phoneForgot.code']).value = '123456';
+		await submit(buttonIn(root, strings['phoneForgot.submit']));
+		expect(server.last('POST /v1/password/phone/reset')?.body).toEqual({
+			phone: '+923001234567',
+			code: '123456',
+			password: 'new123',
+		});
+		expect(statusIn(root)).toBe(strings['reset.done']);
+		await click(buttonIn(root, strings['signIn.forgot']));
+		await click(buttonIn(root, strings['signIn.back']));
+		expect(heading(host)).toBe(strings['signIn.title']);
+	});
+
+	it('Forgot password opens the shop’s page when self-reset is off; Remember me hidden when roles always remember', async () => {
+		const host = place('sign_in');
+		await start(
+			{},
+			{
+				features: ['phone_password'],
+				settings: {
+					phonePassword: { ...PHONE_RULES, selfReset: 'off', forgotUrl: 'https://wa.me/923001234567' },
+					remember: 'always',
+				},
+			},
+		);
+		const root = shadow(host);
+		expect(root.querySelector('a.link')?.getAttribute('href')).toBe('https://wa.me/923001234567');
+		expect(hasButton(root, strings['signIn.forgot'])).toBe(false);
+		expect(checkIn(root, strings['signIn.remember']).closest('label')?.hidden).toBe(true);
+	});
+
+	it('a paused sign-in shows its text instead of the forms', async () => {
+		const host = place('sign_in');
+		await start({}, { features: ['email_password', 'phone_code'], settings: { signInPaused: true } });
+		const root = shadow(host);
+		expect(root.textContent).toContain(strings['signIn.paused']);
+		expect(root.querySelector('form')).toBeNull();
+	});
+
+	it('a code from staff is typed without asking for a new one', async () => {
+		const host = place('sign_in');
+		const { server } = await start({ 'POST /v1/sign-in/phone': () => answer(200, signedIn()) }, { features: ['phone_code'] });
+		const root = shadow(host);
+		await click(buttonIn(root, strings['code.have']));
+		expect(root.querySelector('form')?.textContent).not.toContain(strings['code.code']);
+		fieldIn(root, strings['fields.phone']).value = '+923001234567';
+		await click(buttonIn(root, strings['code.have']));
+		fieldIn(root, strings['code.code']).value = '654321';
+		await submit(buttonIn(root, strings['code.submit']));
+		expect(server.calls.some((c) => c.path === '/v1/sign-in/phone/code')).toBe(false);
+		expect(server.last('POST /v1/sign-in/phone')?.body).toMatchObject({ phone: '+923001234567', code: '654321' });
+	});
+
+	it('a setup link (?ss_setup=) sets the password and signs in; the code leaves the address bar', async () => {
+		const host = place('sign_in');
+		const { server } = await start(
+			{
+				'POST /v1/setup-links/accept': ({ body }) =>
+					body.password === 'short'
+						? problem(422, 'weak_password', { detail: 'Use at least 8 characters.' })
+						: answer(200, signedIn()),
+			},
+			{ features: ['phone_password'], settings: { phonePassword: PHONE_RULES }, page: '/account?ss_setup=cod_1.secret&x=1' },
+		);
+		expect(window.location.search).toBe('?x=1');
+		const root = shadow(host);
+		expect(heading(host)).toBe(strings['setup.title']);
+		fieldIn(root, strings['fields.password']).value = 'short';
+		await submit(buttonIn(root, strings['setup.submit']));
+		expect(statusIn(root)).toBe('Use at least 8 characters.');
+		fieldIn(root, strings['fields.password']).value = 'long enough';
+		await submit(buttonIn(root, strings['setup.submit']));
+		expect(server.last('POST /v1/setup-links/accept')?.body).toMatchObject({ code: 'cod_1.secret', password: 'long enough' });
+		expect(heading(host)).toBe(strings['signedIn.title']);
+	});
+
+	it('the role request widget sends a visitor’s request, even with no sign-in method on', async () => {
+		const host = place('role_request');
+		const { server } = await start(
+			{
+				'POST /v1/role-requests': ({ body }) =>
+					body.name === ''
+						? problem(422, 'validation_failed', { detail: 'Write your name.' })
+						: answer(201, { id: 'rrq_1', status: 'pending' }),
+			},
+			{
+				features: ['role_requests'],
+				settings: {
+					roleRequests: {
+						roles: [
+							{ key: 'member', name: 'Member' },
+							{ key: 'wholesale', name: 'Wholesale' },
+						],
+						requireNote: true,
+					},
+				},
+			},
+		);
+		const root = shadow(host);
+		expect(heading(host)).toBe(strings['request.title']);
+		fieldIn(root, strings['request.role']).value = 'wholesale';
+		await submit(buttonIn(root, strings['request.submit']));
+		expect(statusIn(root)).toBe('Write your name.');
+		fieldIn(root, strings['fields.name']).value = 'Nia';
+		fieldIn(root, strings['fields.phone']).value = '0300 1112222';
+		fieldIn(root, strings['request.note']).value = 'Shop owner';
+		await submit(buttonIn(root, strings['request.submit']));
+		expect(server.last('POST /v1/role-requests')?.body).toEqual({
+			role: 'wholesale',
+			name: 'Nia',
+			phone: '0300 1112222',
+			note: 'Shop owner',
+		});
+		expect(root.textContent).toContain(strings['request.sent']);
+	});
+
+	it('My account: area, the default address, the Profile limits, Member since and a phone user’s password', async () => {
+		window.sessionStorage.setItem(REFRESH_STORAGE_KEY, 'ref-0');
+		const host = place('my_account');
+		const me = {
+			...USER,
+			email: null,
+			phone: '+923001234567',
+			hasPassword: false,
+			role: 'member',
+			roleName: 'Member',
+			roleSince: at(0),
+			addresses: [
+				{ id: 'adr_000001', label: 'Home', line1: '1 Main St', area: 'Gulberg', city: 'Lahore', default: true },
+				{ id: 'adr_000002', label: 'Work', line1: '9 Mall Rd', area: '', city: 'Lahore', default: false },
+			],
+		};
+		/** @type {any[]} */
+		const patches = [];
+		const { server } = await start(
+			{
+				'POST /v1/session/refresh': () => answer(200, signedIn({ user: me })),
+				'GET /v1/me': () => answer(200, me),
+				'GET /v1/me/sessions': () => answer(200, { items: [] }),
+				'PATCH /v1/me': ({ body }) => {
+					patches.push(body);
+					return answer(200, { ...me, ...body });
+				},
+				'PUT /v1/me/password': () => answer(204),
+			},
+			{
+				features: ['phone_password'],
+				settings: { profile: { maxAddresses: 2, keepOneAddress: true, addressRequired: ['line1', 'area'] } },
+			},
+		);
+		const profile = part(host, strings['account.profile']);
+		expect(profile.textContent).toContain(`Member since ${when(at(0), 'date')}`);
+		const addresses = part(host, strings['account.addresses']);
+		expect(addresses.querySelector('li')?.textContent).toContain('Gulberg');
+		expect(addresses.querySelector('li .tag')?.textContent).toBe(strings['account.defaultAddress']);
+		expect(hasButton(addresses, strings['account.addressAdd'])).toBe(true);
+		expect(
+			/** @type {HTMLElement} */ (
+				[...addresses.querySelectorAll('button')].find((b) => b.textContent === strings['account.addressAdd'])
+			).hidden,
+		).toBe(true);
+		await click(buttonIn(/** @type {HTMLElement} */ (addresses.querySelectorAll('li')[1]), strings['account.makeDefault']));
+		expect(patches.at(-1).addresses.map((/** @type {any} */ a) => a.default)).toEqual([false, true]);
+		await click(buttonIn(/** @type {HTMLElement} */ (addresses.querySelectorAll('li')[0]), strings['account.edit']));
+		expect(fieldIn(addresses, strings['address.area']).required).toBe(true);
+		expect(fieldIn(addresses, strings['address.city']).required).toBe(false);
+		checkIn(addresses, strings['address.default']).checked = true;
+		await submit(buttonIn(addresses, strings['account.addressSave']));
+		expect(patches.at(-1).addresses.map((/** @type {any} */ a) => a.default)).toEqual([true, false]);
+		// one address left: it stays
+		await click(buttonIn(/** @type {HTMLElement} */ (addresses.querySelectorAll('li')[1]), strings['account.remove']));
+		expect(hasButton(/** @type {HTMLElement} */ (addresses.querySelector('li')), strings['account.remove'])).toBe(false);
+		const password = part(host, strings['account.password']);
+		fieldIn(password, strings['account.newPassword']).value = 'phone pass 1';
+		await submit(buttonIn(password, strings['account.passwordSet']));
+		expect(server.last('PUT /v1/me/password')?.body).toEqual({ password: 'phone pass 1' });
 	});
 });
 

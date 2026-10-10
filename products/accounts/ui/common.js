@@ -47,6 +47,13 @@ const OWN_TEXT = new Set([
 	'rate_limited',
 	'cancelled',
 	'provider_failed',
+	'code_cooldown',
+	'code_limit',
+	'country_not_allowed',
+	'method_refused',
+	'self_reset_off',
+	'forbidden',
+	'feature_off',
 ]);
 
 /**
@@ -108,6 +115,7 @@ export const errorText = (t, answer, when) => {
 		const detail = code === 'validation_failed' ? (data.errors?.[0]?.message ?? data.detail) : data.detail;
 		return typeof detail === 'string' && detail !== '' ? detail : t('error.generic');
 	}
+	if (code === 'sign_in_paused') return t('signIn.paused');
 	if (code === 'locked')
 		return typeof data.lockedUntil === 'string' && when(data.lockedUntil) !== ''
 			? formatText(t('error.locked'), { time: when(data.lockedUntil) })

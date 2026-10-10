@@ -34,8 +34,20 @@ const bodyOf = (value) => (typeof value === 'object' && value !== null ? /** @ty
 export const createAccount = (product, service, flows) => {
 	const { now, sealer } = product;
 
+	/**
+	 * The user as they see themselves, with their role's name while Roles is on ("Member since", A5).
+	 * @param {import('./service.js').Site} s @param {import('../core/profile.js').UserRecord} user
+	 */
+	const meView = async (s, user) => ({
+		...selfView(user),
+		roleName: s.on.includes('roles') ? (await service.roleOf(s, user)).name : null,
+	});
+
 	/** @param {any} ctx */
-	const me = async (ctx) => selfView((await service.signedIn(ctx)).user);
+	const me = async (ctx) => {
+		const { s, user } = await service.signedIn(ctx);
+		return meView(s, user);
+	};
 
 	/** Name, custom fields and addresses (e-mail and phone are sign-in addresses and change only by signing in). @param {any} ctx */
 	const updateMe = async (ctx) => {
@@ -55,7 +67,7 @@ export const createAccount = (product, service, flows) => {
 			set.custom = checked.value;
 		}
 		if (body.addresses !== undefined) set.addresses = await service.addressesOf(s, body.addresses, user);
-		return selfView((await s.store.users.update(user.id, set)) ?? user);
+		return meView(s, (await s.store.users.update(user.id, set)) ?? user);
 	};
 
 	/** @param {any} ctx */

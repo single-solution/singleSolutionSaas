@@ -10,6 +10,9 @@
 			"items": {
 				"type": "string",
 				"maxLength": 40
+			},
+			"x-ui": {
+				"widget": "tags"
 			}
 		},
 		"requireNote": {

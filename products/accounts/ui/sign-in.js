@@ -1,8 +1,10 @@
 /**
  * The visitor widget `sign_in` (PLAN 0.8.6): the switched-on sign-in methods (e-mail + password with sign-up and
- * Forgot password, phone code, e-mail code, Google, Apple, Facebook), the two-step step (code, recovery code or the
- * first setup), the pages Accounts links to (password reset, invite, magic link, a social sign-in's hand-over) and,
- * once signed in, "Signed in as …" with Sign out.
+ * Forgot password, phone code, phone + password with sign-up and Forgot password by code or the merchant's page, e-mail
+ * code, Google, Apple, Facebook), the two-step step (code, recovery code or the first setup), the pages Accounts links
+ * to (password reset, invite, setup link, magic link, a social sign-in's hand-over) and, once signed in, "Signed in as
+ * …" with Sign out. "Remember me" follows the role sign-ups get, and a paused sign-in shows its text instead of the
+ * forms (PLAN 0.8.10 A2, A3, A6).
  * @module
  */
 import { formatText, mountWidget } from '@ss/app-kit/widget';
@@ -23,9 +25,9 @@ import { element } from './dom.js';
 import { WIDGET_CSS } from './styles.js';
 
 /** The methods with a form, in the order of their tabs. */
-const FORM_METHODS = /** @type {const} */ (['email_password', 'phone_code', 'email_code']);
+const FORM_METHODS = /** @type {const} */ (['email_password', 'phone_password', 'phone_code', 'email_code']);
 
-/** @typedef {{ kind: 'handoff' | 'magic' | 'reset' | 'invite' | 'error', value: string }} Link */
+/** @typedef {{ kind: 'handoff' | 'magic' | 'reset' | 'invite' | 'setup' | 'error', value: string }} Link */
 /** @typedef {import('./common.js').Answer} Answer */
 
 /**
@@ -64,8 +66,10 @@ export const mountSignIn = ({ host, win, config, session, link = null }) => {
 			const make = fieldMaker(doc, 'ss-sign-in');
 			const box = element(doc, 'section', { class: 'box' });
 			root.append(box);
-			/** One "Remember me" box: it keeps its choice from view to view. */
+			/** One "Remember me" box: it keeps its choice from view to view; the role sign-ups get may tick or hide it (A6). */
 			const remember = make.check(t('signIn.remember'));
+			remember.input.checked = settings.remember === 'ask_ticked' || settings.remember === 'always';
+			setHidden(remember.wrap, settings.remember === 'always');
 			/** @type {(typeof methods)[number] | undefined} */
 			let method = methods[0];
 			let signUp = false;
@@ -163,6 +167,10 @@ export const mountSignIn = ({ host, win, config, session, link = null }) => {
 
 			/** @param {string} [message] */
 			const start = (message = '') => {
+				if (settings.signInPaused) {
+					view('paused', t('signIn.title'), [para(t('signIn.paused'))], message);
+					return;
+				}
 				/** @type {Node[]} */
 				const nodes = [];
 				if (methods.length > 1) {
@@ -211,6 +219,7 @@ export const mountSignIn = ({ host, win, config, session, link = null }) => {
 					);
 				});
 				if (method === 'email_password') passwordForm(area, note);
+				else if (method === 'phone_password') phonePasswordForm(area, note);
 				else if (method) codeForm(area, note, method === 'phone_code' ? 'phone' : 'email');
 			};
 
@@ -304,6 +313,145 @@ export const mountSignIn = ({ host, win, config, session, link = null }) => {
 				area.replaceChildren(...nodes);
 			};
 
+			/** Phone + password (A2): sign in (a code from staff works as the password, A3) or sign up. @param {HTMLElement} area @param {HTMLElement} note */
+			const phonePasswordForm = (area, note) => {
+				const form = element(doc, 'form');
+				const creating = signUp && signUpOpen;
+				const rules = settings.phonePassword;
+				const phone = make.field('input', t('fields.phone'), {
+					type: 'tel',
+					autocomplete: 'tel',
+					maxlength: '40',
+					required: '',
+				});
+				const password = make.field('input', t('fields.password'), {
+					type: 'password',
+					autocomplete: creating ? 'new-password' : 'current-password',
+					required: '',
+					...(creating && rules ? { minlength: String(rules.minLength) } : {}),
+				});
+				const terms = termsBox(doc, t, settings.terms);
+				setHidden(terms.wrap, !(creating && settings.terms));
+				const submit = element(doc, 'button', { type: 'submit' }, t(creating ? 'signUp.submit' : 'signIn.submit'));
+				/** @type {() => Record<string, unknown>} */
+				let profile = () => ({});
+				if (creating) {
+					const name = make.field('input', t('fields.name'), {
+						autocomplete: 'name',
+						maxlength: '120',
+						...(required('name') ? { required: '' } : {}),
+					});
+					const email = required('email')
+						? make.field('input', t('fields.email'), { type: 'email', autocomplete: 'email', required: '' })
+						: null;
+					const custom = customInputs(doc, make, t, settings.customFields, { required: true });
+					if (settings.terms) terms.input.setAttribute('required', '');
+					form.append(
+						name.wrap,
+						phone.wrap,
+						...(email ? [email.wrap] : []),
+						...custom.nodes,
+						password.wrap,
+						terms.wrap,
+						submit,
+					);
+					profile = () => {
+						const values = custom.read();
+						return {
+							...(name.input.value.trim() ? { name: name.input.value.trim() } : {}),
+							...(email?.input.value.trim() ? { email: email.input.value.trim() } : {}),
+							...(Object.keys(values).length > 0 ? { custom: values } : {}),
+						};
+					};
+				} else {
+					form.append(phone.wrap, password.wrap, terms.wrap, submit);
+					// Forgot password: a code by SMS or WhatsApp, or the merchant's own page (for example a WhatsApp chat)
+					const page = rules?.selfReset === 'off' ? webAddress(rules.forgotUrl) : null;
+					if (rules?.selfReset === 'code') {
+						const forgot = button(t('signIn.forgot'), { class: 'link' });
+						forgot.addEventListener('click', () => phoneForgotView(phone.input.value));
+						form.append(forgot);
+					} else if (page)
+						form.append(
+							element(
+								doc,
+								'a',
+								{ href: page, target: '_blank', rel: 'noopener noreferrer', class: 'link' },
+								t('signIn.forgot'),
+							),
+						);
+				}
+				form.addEventListener('submit', (event) => {
+					event.preventDefault();
+					void run(submit, note, async () =>
+						handle(
+							await session.call('POST', creating ? '/v1/sign-up/phone-password' : '/v1/sign-in/phone-password', {
+								phone: phone.input.value.trim(),
+								password: password.input.value,
+								...profile(),
+								acceptTerms: terms.input.checked,
+								...extras(),
+							}),
+							note,
+							terms,
+						),
+					);
+				});
+				const nodes = [form];
+				if (signUpOpen) {
+					const toggle = button(t(creating ? 'signUp.toSignIn' : 'signIn.toSignUp'), { class: 'link' });
+					toggle.addEventListener('click', () => {
+						signUp = !creating;
+						start();
+					});
+					nodes.push(toggle);
+				}
+				area.replaceChildren(...nodes);
+			};
+
+			/** Forgot password with a phone (A2): a code, then the new password. @param {string} prefill */
+			const phoneForgotView = (prefill) => {
+				const form = element(doc, 'form');
+				const phone = make.field('input', t('fields.phone'), { type: 'tel', autocomplete: 'tel', required: '' });
+				phone.input.value = prefill;
+				const code = make.field('input', t('phoneForgot.code'), { inputmode: 'numeric', autocomplete: 'one-time-code' });
+				const password = make.field('input', t('phoneForgot.password'), {
+					type: 'password',
+					autocomplete: 'new-password',
+					...(settings.phonePassword ? { minlength: String(settings.phonePassword.minLength) } : {}),
+				});
+				const send = button(t('phoneForgot.send'), { class: 'secondary' });
+				const submit = element(doc, 'button', { type: 'submit' }, t('phoneForgot.submit'));
+				const back = button(t('signIn.back'), { class: 'link' });
+				back.addEventListener('click', () => start());
+				const step = element(doc, 'div', { hidden: '' });
+				step.append(code.wrap, password.wrap, submit);
+				form.append(para(t('phoneForgot.help')), phone.wrap, send, step, back);
+				const note = view('forgot', t('forgot.title'), [form]);
+				send.addEventListener('click', () =>
+					run(send, note, async () => {
+						const answer = await session.call('POST', '/v1/password/phone/forgot', { phone: phone.input.value.trim() });
+						if (answer.ok) setHidden(step, false);
+						say(note, answer.ok ? t('phoneForgot.sent') : errorText(t, answer, when));
+					}),
+				);
+				form.addEventListener('submit', (event) => {
+					event.preventDefault();
+					void run(submit, note, async () => {
+						const answer = await session.call('POST', '/v1/password/phone/reset', {
+							phone: phone.input.value.trim(),
+							code: code.input.value.trim(),
+							password: password.input.value,
+						});
+						if (answer.ok) {
+							method = 'phone_password';
+							signUp = false;
+							start(t('reset.done'));
+						} else say(note, errorText(t, answer, when));
+					});
+				});
+			};
+
 			/**
 			 * Ask for a code by SMS/WhatsApp or e-mail.
 			 * @param {'phone' | 'email'} kind @param {string} value
@@ -326,7 +474,14 @@ export const mountSignIn = ({ host, win, config, session, link = null }) => {
 								required: '',
 							});
 				const send = element(doc, 'button', { type: 'submit' }, t('code.send'));
-				form.append(target.wrap, send);
+				// a code from staff (A3), or one that came before, is typed without asking for a new one
+				const have = button(t('code.have'), { class: 'link' });
+				have.addEventListener('click', () => {
+					const value = target.input.value.trim();
+					if (value) codeStep(area, note, kind, value);
+					else target.input.reportValidity?.();
+				});
+				form.append(target.wrap, send, have);
 				form.addEventListener('submit', (event) => {
 					event.preventDefault();
 					const value = target.input.value.trim();
@@ -555,6 +710,36 @@ export const mountSignIn = ({ host, win, config, session, link = null }) => {
 				});
 			};
 
+			/** A setup link from staff (A3, A5): choose a password, then signed in. @param {string} code */
+			const setupView = (code) => {
+				const form = element(doc, 'form');
+				const password = make.field('input', t('fields.password'), {
+					type: 'password',
+					autocomplete: 'new-password',
+					required: '',
+				});
+				const terms = termsBox(doc, t, settings.terms);
+				setHidden(terms.wrap, !settings.terms);
+				const submit = element(doc, 'button', { type: 'submit' }, t('setup.submit'));
+				form.append(para(t('setup.help')), password.wrap, terms.wrap, remember.wrap, submit);
+				const note = view('setup', t('setup.title'), [form]);
+				form.addEventListener('submit', (event) => {
+					event.preventDefault();
+					void run(submit, note, async () =>
+						handle(
+							await session.call('POST', '/v1/setup-links/accept', {
+								code,
+								password: password.input.value,
+								acceptTerms: terms.input.checked,
+								...extras(),
+							}),
+							note,
+							terms,
+						),
+					);
+				});
+			};
+
 			/**
 			 * A sign-in from a link: a social sign-in's hand-over code or a magic link.
 			 * @param {'handoff' | 'magic'} kind @param {string} value @param {boolean} acceptTerms
@@ -590,6 +775,7 @@ export const mountSignIn = ({ host, win, config, session, link = null }) => {
 			});
 			if (link?.kind === 'reset') resetView(link.value);
 			else if (link?.kind === 'invite') inviteView(link.value);
+			else if (link?.kind === 'setup') setupView(link.value);
 			else if (link?.kind === 'handoff' || link?.kind === 'magic') void linkSignIn(link.kind, link.value, false);
 			else if (link?.kind === 'error')
 				home(errorText(t, { ok: false, status: 0, data: { type: `/problems/${link.value}` } }, when));

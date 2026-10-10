@@ -288,6 +288,90 @@
 				}
 			}
 		},
+		"/v1/admin/activity-copies": {
+			"get": {
+				"x-ss-auth": "ticket",
+				"x-ss-feature": "activity_copies",
+				"x-ss-permission": "activity.read",
+				"security": [
+					{
+						"ticket": []
+					}
+				],
+				"parameters": [],
+				"responses": {
+					"2XX": {
+						"description": "Success (JSON)"
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/admin/activity-copies/count": {
+			"get": {
+				"x-ss-auth": "ticket",
+				"x-ss-feature": "activity_copies",
+				"x-ss-permission": "activity.read",
+				"security": [
+					{
+						"ticket": []
+					}
+				],
+				"parameters": [],
+				"responses": {
+					"2XX": {
+						"description": "Success (JSON)"
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/admin/activity-copies/counts": {
+			"get": {
+				"x-ss-auth": "ticket",
+				"x-ss-feature": "activity_copies",
+				"x-ss-permission": "activity.read",
+				"security": [
+					{
+						"ticket": []
+					}
+				],
+				"parameters": [],
+				"responses": {
+					"2XX": {
+						"description": "Success (JSON)"
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/v1/admin/role-requests": {
 			"get": {
 				"x-ss-auth": "ticket",

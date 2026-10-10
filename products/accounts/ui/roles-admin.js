@@ -1,7 +1,8 @@
 /**
  * The admin widget `roles_admin` (Roles; permission `roles.manage`): the merchant's staff edit the roles (name,
- * description, the permissions ticked per product, two-step, session lengths), copy one into a new role, add and delete
- * their own roles, and name their own permissions (the `site` group).
+ * description, the permissions ticked per product, two-step, session lengths, and PLAN 0.8.10 A4, A6, A10: rank,
+ * remember me, the sign-in methods, paused sign-in and the sign-in log), copy one into a new role, add and delete their
+ * own roles, and name their own permissions (the `site` group).
  * @module
  */
 import { formatText, mountWidget } from '@ss/app-kit/widget';
@@ -24,8 +25,24 @@ const OWN_SOURCE = 'site';
  * @property {'optional' | 'required'} twoStep
  * @property {number} sessionHours
  * @property {number} rememberDays
+ * @property {number} [rank]
+ * @property {'ask' | 'ask_ticked' | 'always'} [remember]
+ * @property {string[]} [methods]
+ * @property {'on' | 'paused'} [signIn]
+ * @property {boolean} [logSignIns]
  * @property {boolean} ready a ready-made role (cannot be deleted)
  */
+
+/** The sign-in methods a role can be limited to (PLAN 0.8.10 A6). */
+const METHODS = /** @type {const} */ ([
+	'phone_code',
+	'phone_password',
+	'email_password',
+	'email_code',
+	'google',
+	'apple',
+	'facebook',
+]);
 /** @typedef {{ source: string, permissions: Array<{ key: string, name: string }> }} PermissionGroup */
 
 /**
@@ -91,6 +108,30 @@ export const mountRolesAdmin = ({ host, api, config }) => {
 				step: '1',
 				required: '',
 			});
+			const rank = make.field('input', t('roles.rank'), { type: 'number', min: '101', max: '899', step: '1' });
+			const remember = make.field('select', t('roles.remember'));
+			remember.input.append(
+				element(doc, 'option', { value: 'ask' }, t('roles.rememberAsk')),
+				element(doc, 'option', { value: 'ask_ticked' }, t('roles.rememberAskTicked')),
+				element(doc, 'option', { value: 'always' }, t('roles.rememberAlways')),
+			);
+			const signIn = make.field('select', t('roles.signIn'));
+			signIn.input.append(
+				element(doc, 'option', { value: 'on' }, t('roles.signInOn')),
+				element(doc, 'option', { value: 'paused' }, t('roles.signInPaused')),
+			);
+			const logSignIns = make.check(t('roles.logSignIns'));
+			const methodSet = element(doc, 'fieldset');
+			methodSet.append(element(doc, 'legend', {}, t('roles.methods')));
+			/** @type {Map<string, HTMLInputElement>} */
+			const methodBoxes = new Map();
+			for (const method of METHODS.filter((key) => config.features.includes(key))) {
+				const made = make.check(t(`method.${method}`));
+				methodBoxes.set(method, made.input);
+				methodSet.append(made.wrap);
+			}
+			const signInRow = element(doc, 'div', { class: 'row' });
+			signInRow.append(rank.wrap, remember.wrap, signIn.wrap);
 			const all = make.check(t('roles.allPermissions'));
 			const permissionArea = element(doc, 'div', { class: 'permissions' });
 			const save = element(doc, 'button', { type: 'submit' }, t('roles.save'));
@@ -105,6 +146,9 @@ export const mountRolesAdmin = ({ host, api, config }) => {
 				description.wrap,
 				...(twoStepOn ? [twoStepField.wrap] : []),
 				lengths,
+				signInRow,
+				methodSet,
+				logSignIns.wrap,
 				element(doc, 'h4', {}, t('roles.permissions')),
 				all.wrap,
 				permissionArea,
@@ -192,6 +236,14 @@ export const mountRolesAdmin = ({ host, api, config }) => {
 				twoStepField.input.value = twoStep;
 				sessionHours.input.value = String(role?.sessionHours ?? 24);
 				rememberDays.input.value = String(role?.rememberDays ?? 30);
+				// a ready-made role keeps its rank; a copy or a new role is placed among the merchant's own
+				rank.input.value = String(role && !copy && role.ready ? role.rank : Math.min(899, Math.max(101, role?.rank ?? 600)));
+				if (role?.ready && !copy) rank.input.setAttribute('disabled', '');
+				else rank.input.removeAttribute('disabled');
+				remember.input.value = role?.remember ?? 'ask';
+				signIn.input.value = role?.signIn ?? 'on';
+				logSignIns.input.checked = role?.logSignIns === true;
+				for (const [method, input] of methodBoxes) input.checked = (role?.methods ?? []).includes(method);
 				heading.textContent = editing ? formatText(t('roles.editing'), { name: role?.name ?? '' }) : t('roles.newRole');
 				paintPermissions(role?.permissions ?? []);
 			};
@@ -210,6 +262,8 @@ export const mountRolesAdmin = ({ host, api, config }) => {
 									role.permissions.includes(ALL)
 										? t('roles.allPermissions')
 										: formatText(t('roles.permissionCount'), { count: role.permissions.length }),
+									formatText(t('roles.rankShort'), { rank: role.rank ?? '' }),
+									role.signIn === 'paused' ? t('roles.paused') : '',
 									role.ready ? t('roles.readyMade') : '',
 								]
 									.filter((part) => part !== '')
@@ -297,6 +351,11 @@ export const mountRolesAdmin = ({ host, api, config }) => {
 					twoStep,
 					sessionHours: Number(sessionHours.input.value),
 					rememberDays: Number(rememberDays.input.value),
+					...(rank.input.hasAttribute('disabled') ? {} : { rank: Number(rank.input.value) }),
+					remember: remember.input.value,
+					signIn: signIn.input.value,
+					logSignIns: logSignIns.input.checked,
+					methods: [...methodBoxes].filter(([, input]) => input.checked).map(([method]) => method),
 				});
 				save.removeAttribute('disabled');
 				formNote.textContent = answer.ok ? t('roles.saved') : failure(answer);

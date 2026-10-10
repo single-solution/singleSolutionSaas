@@ -15,6 +15,7 @@ const ADDRESS_FIELDS = /** @type {const} */ ([
 	['name', 120],
 	['line1', 200],
 	['line2', 200],
+	['area', 100],
 	['city', 100],
 	['region', 100],
 	['postalCode', 20],
@@ -37,6 +38,7 @@ const addressLine = (address) =>
 		address.name,
 		address.line1,
 		address.line2,
+		address.area,
 		address.city,
 		[address.region, address.postalCode].filter(Boolean).join(' '),
 		address.country,
@@ -131,6 +133,17 @@ export const mountMyAccount = ({ host, win, config, session }) => {
 				const { section, note } = part(t('account.profile'));
 				if (user.email) section.append(para(formatText(t('account.email'), { email: user.email }), 'meta'));
 				if (user.phone) section.append(para(formatText(t('account.phone'), { phone: user.phone }), 'meta'));
+				// "Member since" (PLAN 0.8.10 A5): the role and when it was given
+				if (user.role && user.role !== 'customer' && user.roleSince)
+					section.append(
+						para(
+							formatText(t('account.memberSince'), {
+								role: user.roleName ?? user.role,
+								date: when(user.roleSince, 'date'),
+							}),
+							'meta',
+						),
+					);
 				const form = element(doc, 'form');
 				const name = make.field('input', t('fields.name'), { autocomplete: 'name', maxlength: '120' });
 				name.input.value = user.name ?? '';
@@ -161,6 +174,8 @@ export const mountMyAccount = ({ host, win, config, session }) => {
 				const area = element(doc, 'div');
 				const add = button(t('account.addressAdd'), { class: 'secondary' });
 				section.append(list, area, add, note);
+				// the website's Profile settings (PLAN 0.8.10 A11)
+				const rules = settings.profile ?? { maxAddresses: 10, keepOneAddress: false, addressRequired: ['line1', 'city'] };
 
 				/** @param {Array<Record<string, any>>} next @returns {Promise<boolean>} */
 				const save = async (next) => {
@@ -174,6 +189,7 @@ export const mountMyAccount = ({ host, win, config, session }) => {
 					note.textContent = t('account.saved');
 					area.replaceChildren();
 					paint();
+					setHidden(add, addresses.length >= rules.maxAddresses);
 					return true;
 				};
 
@@ -183,22 +199,30 @@ export const mountMyAccount = ({ host, win, config, session }) => {
 					const fields = ADDRESS_FIELDS.map(([key, max]) => {
 						const made = make.field('input', t(`address.${key}`), {
 							maxlength: String(max),
-							...(key === 'line1' || key === 'city' ? { required: '' } : {}),
+							...(rules.addressRequired.includes(key) ? { required: '' } : {}),
 						});
 						made.input.value = address?.[key] ?? '';
 						return /** @type {const} */ ([key, made]);
 					});
+					const isDefault = make.check(t('address.default'));
+					isDefault.input.checked = address?.default === true;
 					const submit = element(doc, 'button', { type: 'submit' }, t('account.addressSave'));
 					const cancel = button(t('account.cancel'), { class: 'secondary' });
 					cancel.addEventListener('click', () => area.replaceChildren());
-					form.append(...fields.map(([, made]) => made.wrap), submit, cancel);
+					form.append(...fields.map(([, made]) => made.wrap), isDefault.wrap, submit, cancel);
 					form.addEventListener('submit', (event) => {
 						event.preventDefault();
-						/** @type {Record<string, string>} */
-						const values = Object.fromEntries(fields.map(([key, made]) => [key, made.input.value.trim()]));
+						/** @type {Record<string, string | boolean>} */
+						const values = {
+							...Object.fromEntries(fields.map(([key, made]) => [key, made.input.value.trim()])),
+							default: isDefault.input.checked,
+						};
+						// one default address: choosing this one unsets the others
+						/** @type {Array<Record<string, any>>} */
+						const others = values.default ? addresses.map((each) => ({ ...each, default: false })) : addresses;
 						const next = address
-							? addresses.map((each) => (each.id === address.id ? { ...each, ...values } : each))
-							: [...addresses, values];
+							? others.map((each) => (each.id === address.id ? { ...each, ...values } : each))
+							: [...others, values];
 						void run(submit, async () => {
 							await save(next);
 						});
@@ -212,16 +236,25 @@ export const mountMyAccount = ({ host, win, config, session }) => {
 							? [element(doc, 'li', {}, t('account.noAddresses'))]
 							: addresses.map((address) => {
 									const item = element(doc, 'li', {}, addressLine(address));
+									if (address.default) item.append(element(doc, 'span', { class: 'tag' }, t('account.defaultAddress')));
 									const change = button(t('account.edit'), { class: 'secondary small' });
 									const remove = button(t('account.remove'), { class: 'secondary small' });
+									const makeDefault = button(t('account.makeDefault'), { class: 'secondary small' });
 									change.addEventListener('click', () => edit(address));
 									remove.addEventListener('click', () =>
 										run(remove, async () => {
 											await save(addresses.filter((each) => each !== address));
 										}),
 									);
+									makeDefault.addEventListener('click', () =>
+										run(makeDefault, async () => {
+											await save(addresses.map((each) => ({ ...each, default: each === address })));
+										}),
+									);
 									const actions = element(doc, 'div', { class: 'actions' });
-									actions.append(change, remove);
+									actions.append(change, ...(address.default ? [] : [makeDefault]));
+									// the last address stays when the website keeps one (A11)
+									if (!(rules.keepOneAddress && addresses.length === 1)) actions.append(remove);
 									item.append(actions);
 									return item;
 								})),
@@ -229,6 +262,7 @@ export const mountMyAccount = ({ host, win, config, session }) => {
 				};
 				add.addEventListener('click', () => edit(null));
 				paint();
+				setHidden(add, addresses.length >= rules.maxAddresses);
 				return section;
 			};
 
@@ -508,7 +542,8 @@ export const mountMyAccount = ({ host, win, config, session }) => {
 				const parts = [];
 				if (on('terms') && settings.terms && user.terms?.version !== settings.terms.version) parts.push(termsPart(user));
 				parts.push(profilePart(user), addressesPart(user));
-				if (on('email_password') && user.email) parts.push(passwordPart(user));
+				// passwords go with an e-mail address (Email + password) or a phone number (Phone + password, A2)
+				if ((on('email_password') && user.email) || (on('phone_password') && user.phone)) parts.push(passwordPart(user));
 				if (on('two_step')) parts.push(twoStepPart(user));
 				parts.push(devicesPart());
 				if (on('data_rights')) parts.push(privacyPart(user));

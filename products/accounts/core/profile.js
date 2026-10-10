@@ -228,6 +228,7 @@ export const selfView = (user) => ({
 	deletion: user.deletion
 		? { requestedAt: user.deletion.requestedAt.toISOString(), dueAt: user.deletion.dueAt?.toISOString() ?? null }
 		: null,
+	roleSince: (user.roleSince ?? user.createdAt).toISOString(),
 	createdAt: user.createdAt.toISOString(),
 });
 
@@ -241,7 +242,6 @@ export const staffView = (user) => ({
 	blocked: user.blocked ? { at: user.blocked.at.toISOString(), reason: user.blocked.reason } : null,
 	status: user.status,
 	lastSignInAt: user.lastSignInAt?.toISOString() ?? null,
-	roleSince: (user.roleSince ?? user.createdAt).toISOString(),
 	lockedUntil: user.lockedUntil?.toISOString() ?? null,
 	recoveryCodesLeft: user.twoStep?.enabledAt ? user.twoStep.recovery.length : null,
 });
