@@ -446,6 +446,47 @@ describe('store-conversion options with the real page script (PLAN 0.8.10 G1–G
 		await startWidget({ window, script: script('t') }).ready;
 		expect(hostOf('notice_bar')).toBeNull();
 	});
+
+	it('G7: Web Vitals also go to Google Analytics 4 when the merchant asks', async () => {
+		vi.useFakeTimers({ toFake: ['setTimeout'] });
+		serve({
+			[`GET ${CONFIG_PATH}`]: () =>
+				answer(
+					200,
+					configOf(['visitor_analytics', 'web_vitals', 'google_tags'], {
+						tags: { consentRequired: false },
+						visitor_analytics: { requireConsent: false },
+						web_vitals: { toGa4: true },
+						google_tags: { ga4Id: 'G-ABCD12' },
+					}),
+				),
+			'POST /v1/collect': () => answer(202),
+		});
+		/** @type {any} */
+		let take = null;
+		w.PerformanceObserver = function Observer(/** @type {any} */ fn) {
+			return {
+				observe: (/** @type {{ type: string }} */ options) => {
+					if (options.type === 'largest-contentful-paint') take = fn;
+				},
+			};
+		};
+		const page = startWidget({ window, script: script('t') });
+		await vi.advanceTimersByTimeAsync(0);
+		await page.ready;
+		take?.({ getEntries: () => [{ startTime: 4200.4 }] });
+		Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
+		document.dispatchEvent(new window.Event('visibilitychange'));
+		expect([...w.dataLayer].filter((entry) => entry[0] === 'event' && entry[1] === 'LCP').map((e) => e[2])).toContainEqual({
+			value: 4200,
+			metric_value: 4200,
+			metric_rating: 'poor',
+			non_interaction: true,
+		});
+		expect(collected()).toContainEqual({ type: 'vital', path: '/', name: 'LCP', value: 4200.4 });
+		Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
+		delete w.PerformanceObserver;
+	});
 });
 
 describe('page facts', () => {

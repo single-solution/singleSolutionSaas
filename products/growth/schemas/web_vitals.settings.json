@@ -1,5 +1,12 @@
 {
 	"type": "object",
 	"additionalProperties": false,
-	"properties": {}
+	"properties": {
+		"toGa4": {
+			"type": "boolean",
+			"title": "Also send them to Google Analytics 4",
+			"description": "Each Web Vital also goes to Google Analytics 4 as an event of its name (LCP, INP, CLS, FCP, TTFB) with its value and rating, while Google Analytics is loaded (Google tags, after consent).",
+			"default": false
+		}
+	}
 }

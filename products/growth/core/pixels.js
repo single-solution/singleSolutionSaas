@@ -230,6 +230,29 @@ export const contactCalls = (method, loaded) => {
 };
 
 /**
+ * A Web Vital as a Google Analytics 4 event (PLAN 0.8.10 G7): the event is named after the vital, with `value` (whole
+ * milliseconds; CLS × 1000), `metric_value` (CLS as measured), `metric_rating` (`good`, `needs-improvement`, `poor`)
+ * and `non_interaction`.
+ * @param {string} name LCP, INP, CLS, FCP or TTFB
+ * @param {number} value milliseconds (CLS × 1000)
+ * @param {'good' | 'needs_improvement' | 'poor'} rating
+ * @param {Loaded} loaded
+ * @returns {PixelCall[]}
+ */
+export const vitalCalls = (name, value, rating, loaded) =>
+	googleEvent(
+		name,
+		{
+			value: Math.round(value),
+			metric_value: name === 'CLS' ? Math.round(value) / 1000 : Math.round(value),
+			metric_rating: rating.replace('_', '-'),
+			non_interaction: true,
+		},
+		loaded,
+		false,
+	);
+
+/**
  * What `POST /v1/collect` takes for a funnel event (ids and quantities; money in minor units).
  * @param {Step} step
  * @param {Detail} detail

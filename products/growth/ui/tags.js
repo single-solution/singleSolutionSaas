@@ -8,11 +8,12 @@
  * Options (PLAN 0.8.10 G1): with `consentRequired` off, Consent Mode starts granted and every tag loads at once until
  * the visitor chooses (a choice they make is followed); with `ga4ViaGtm` on, Google Analytics 4 is left to the Tag
  * Manager container, which takes the events from the `dataLayer`. Site searches and contacts go to the loaded pixels
- * too (G2), items named by the `contentIds` setting.
+ * too (G2), items named by the `contentIds` setting, and with `toGa4` the Web Vitals go to Google Analytics (G7).
  * @module
  */
 import { consentMode, granted, tagChoice } from '../core/consent.js';
-import { contactCalls, pixelCalls, searchCalls } from '../core/pixels.js';
+import { ratingOf } from '../core/events.js';
+import { contactCalls, pixelCalls, searchCalls, vitalCalls } from '../core/pixels.js';
 
 /** @typedef {import('../core/config.js').Tags} Tags */
 /** @typedef {import('../core/consent.js').Choice} Choice */
@@ -181,5 +182,16 @@ export const createTags = ({ window: win, tags }) => {
 	/** Pass a contact to the loaded pixels (G2). @param {string | null} method */
 	const contact = (method) => send(contactCalls(method, loadedNow()));
 
-	return Object.freeze({ apply, forward, search, contact, loaded: () => [...loaded] });
+	/**
+	 * Pass a Web Vital to Google Analytics 4 (G7), loaded by Growth or inside the Tag Manager container.
+	 * @param {import('../core/events.js').VitalName} name @param {number} value milliseconds (CLS × 1000)
+	 */
+	const vital = (name, value) => {
+		const now = loadedNow();
+		// Google Ads alone takes no Web Vitals
+		const google = now.google && loaded.has('ga4');
+		if (google || now.gtm) send(vitalCalls(name, value, ratingOf(name, value), { ...now, google }));
+	};
+
+	return Object.freeze({ apply, forward, search, contact, vital, loaded: () => [...loaded] });
 };

@@ -216,6 +216,7 @@ export const widgetSettings = ({ on, values, now }) => {
 			funnel: on.includes('conversion_funnel'),
 			searches: on.includes('searches_404s'),
 			vitals: on.includes('web_vitals'),
+			vitalsToGa4: on.includes('web_vitals') && values.web_vitals?.toGa4 === true,
 			requireConsent: analytics.requireConsent !== false,
 			searchParams: searchParamsOf(text(values, 'searches_404s', 'searchParams')),
 		},

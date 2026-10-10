@@ -13,6 +13,7 @@
  */
 import { viewerOf } from '@ss/app-kit/widget';
 import { granted } from '../core/consent.js';
+import { VITALS } from '../core/events.js';
 import { pathMatches } from '../core/config.js';
 import { contactOf, detailOf, funnelEvent, searchOf } from '../core/pixels.js';
 import { BROWSER_EVENTS, SITE_EVENTS, WIDGET_ATTRIBUTE, WIDGET_FEATURES, WIDGET_GLOBAL } from '../core/widgets.js';
@@ -187,6 +188,8 @@ export const startWidget = ({ window: win, script }) => {
 				report: (name, value) => {
 					collector.record(() => ({ type: 'vital', path: path(), name, value }));
 					collector.flush();
+					if (record.vitalsToGa4 && Object.hasOwn(VITALS, name))
+						tags.vital(/** @type {import('../core/events.js').VitalName} */ (name), value);
 				},
 			});
 		const leave = () => {

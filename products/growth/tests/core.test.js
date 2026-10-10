@@ -14,7 +14,7 @@ import {
 import { consentMode, granted, makeChoice, readChoice, tagChoice } from '../core/consent.js';
 import { checkBatch, checkEvent, countryOf, dayOf, expiryOf, mergeTotals, pathOf, ratingOf, textOf } from '../core/events.js';
 import { decimalsOf, isAmount, toMajor } from '../core/money.js';
-import { contactCalls, contactOf, detailOf, funnelEvent, pixelCalls, searchCalls, searchOf } from '../core/pixels.js';
+import { contactCalls, contactOf, detailOf, funnelEvent, pixelCalls, searchCalls, searchOf, vitalCalls } from '../core/pixels.js';
 import {
 	attributesOf,
 	blocksAll,
@@ -391,6 +391,21 @@ describe('pixels and money', () => {
 			{ vendor: 'tiktok', args: ['Contact', {}] },
 		]);
 		expect(searchCalls('x', { meta: false, google: false, gtm: false, ads: null, tiktok: false })).toEqual([]);
+		// G7: a Web Vital as a GA4 event
+		expect(vitalCalls('CLS', 125.4, 'needs_improvement', { ...all, gtm: false })).toEqual([
+			{
+				vendor: 'google',
+				args: [
+					'event',
+					'CLS',
+					{ value: 125, metric_value: 0.125, metric_rating: 'needs-improvement', non_interaction: true },
+				],
+			},
+		]);
+		expect(vitalCalls('LCP', 900, 'good', { ...all, google: false })[0]).toEqual({
+			vendor: 'datalayer',
+			args: [{ event: 'LCP', value: 900, metric_value: 900, metric_rating: 'good', non_interaction: true }],
+		});
 		expect(funnelEvent('view_item', bare, '/c')).toEqual({ type: 'view_item', path: '/c', items: [] });
 	});
 });
