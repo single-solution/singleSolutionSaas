@@ -3169,6 +3169,91 @@ The owner confirms or changes each one.
   webhooks `/v1/inbound/*` (the Developers tab shows their addresses), connect and notices. The server has no resend,
   bulk action, sort or export: retries happen on use by the plan, the log is newest first, and 0.6 has no CSV export.
 
+#### Builder choices, Phase 2 (Accounts) (awaiting owner review)
+
+- **Shared settings (kit)**: `createProduct({ sharedSettings })` takes groups of settings several features use, stored
+  once as `<group>.<setting>`, listed after the features in Settings, Defaults and `GET /v1/settings` (K1) with `on`
+  while any of their features is on, and editable by merchants while any is on (0.8.4 "Settings of several features",
+  answered for these groups only). Accounts has two: `phone` (Phone numbers: `defaultCallingCode` and `trunkPrefix`,
+  moved from `phone_code`; Phone code and Phone + password) and `profile` (Profile, A11; every sign-in method).
+- **A1**: bcrypt of any cost through `bcryptjs`; `pbkdf2$<iterations>$<salt>$<hash>` with salt and hash in base64 and
+  the input `<pepper>:<password>` (the colon as the stores join them), 1 to 2,000,000 iterations, hashes of 16 to 64
+  bytes. A malformed hash, an unknown format or a missing pepper fails like a wrong password after the dummy check. The
+  current password in My account goes through the same check. `legacy_pepper` is a plain secret with no live test.
+- **A2**: Phone + password sign-up does not verify the number (`phoneVerified` false) and follows the sign-up rules
+  (invite only refuses, approval waits). Forgot password sends to users with a password who are not blocked, always
+  answers 202, and uses Phone code's channel, code length, minutes, cooldown and hourly caps (read while Phone code is
+  off; admins edit them then). The reset answers 204, marks the phone verified and signs every device out, as the
+  e-mail reset does. With `selfReset` off both routes answer 403 `self_reset_off`; the widget's Forgot password opens
+  `forgotUrl` in a new tab, or is not shown. `PUT /v1/me/password` uses Email + password's rules for users with an
+  e-mail address while it is on, else Phone + password's; an invite accepted with a password follows the same rule.
+- **A3**: staff codes work while `staff_links` is on, in the code step of Phone code and Email code (next to the code
+  that was sent) and in Phone + password's password box (the password is tried first); the sign-in widget has "I
+  already have a code" to reach the code step without sending one. Codes and links are refused for blocked users
+  (403 `blocked`). With `setupPageUrl` empty a link is `https://<domain>/?ss_setup=<code>`; a page without `{code}`
+  gets `?ss_setup=`; a page off the website is 422. `POST /v1/setup-links/accept` `{ code, password, acceptTerms? }`
+  works while Staff sign-in codes and setup links or Role requests is on; it uses the user's password rules, makes an
+  invited user active, completes their invited role request and signs in (method `setup_link`). `deliver: 'return'`
+  answers the user with `invite: { url, expiresAt }`.
+- **A4**: `POST /v1/users` needs a name and an e-mail address or a phone number (Customer when no role), marks both
+  verified, takes `Idempotency-Key`; on `PATCH` an empty or null contact removes it, a taken one is 409
+  `already_exists`, and a password set by staff clears the lock and signs the user out everywhere. `DELETE` answers
+  `{ deleted, pending }`. Filters: `roles` (comma list, with `role`), `permission` (the roles granting it; Owner's `*`
+  grants all), `phone` (in the website's phone format; 422 when it is not a number), `phoneDigits` (digits only, the
+  last 10, at least 7), `createdAfter` (ISO-8601; 422) and `blocked=true|false`. Answers also carry `roleSince`,
+  `lockedUntil` and `recoveryCodesLeft`. Ranks: a smaller number ranks higher; Owner 100, Business manager 200, Product
+  manager 300, Marketing manager 400, Support staff 500, Customer 900; ready roles keep theirs, own roles 101–899 (600
+  by default). The guards apply only with `SS-Actor-*` or a ticket (the server token alone stays all-powerful, the
+  last-Owner rule included); an acting user who is not an Accounts user is checked by id only. "Edits" cover `PATCH`,
+  blocking, `DELETE`, sign-in codes, setup links, declining a sign-up and approving a deletion; nobody gives a role
+  ranking above their own either (create, `PATCH`, invite, role-request invite). Refusals are 403 `forbidden`.
+- **A5**: a visitor's request needs a name and a phone number or e-mail address (a note of at most 1,000 characters);
+  one pending request per role and contact (409 `already_exists`). Invite only from `pending`: the user with that phone,
+  else that e-mail, gets the role; one with a password completes the request at once, with no link; otherwise a setup
+  link (A3's settings) and `invited` until `setupExpiresAt`, after which it reads `expired`. Decline only from
+  `pending`; reopen from `declined` or `expired`. Counts by status group the stored status (expired within invited;
+  `/count?status=expired` counts them); the list also filters by `role`. `/v1/me` answers `roleName` while Roles is on,
+  and My account shows "<role> since <date>" for roles other than Customer.
+- **A6**: role fields apply while Roles is on. `always` remembers whatever the box says. The widget follows the role
+  sign-ups get (Customer): it hides or ticks the box, and shows the editable paused text (`signIn.paused`) instead of
+  the forms; staff of other roles sign in on the merchant's own screens then. Paused and methods are checked before a
+  code is sent (the address's user, else Customer), at every sign-up, and after the first step of every method; paused
+  also covers invites and setup links, methods only the seven sign-in methods. Refusals: 403 `sign_in_paused` (detail:
+  the paused text) and 403 `method_refused`. Sessions already open continue.
+- **A7**: `code_cooldown` answers `retryAt`; the hourly caps count each code sent in fixed clock hours (TTL counters in
+  the merchant database), sign-in and reset codes alike; e-mail codes keep their code constants and `too_soon`.
+  `countries` takes ISO codes from a built-in calling-code table (NANP countries share +1; Russia and Kazakhstan +7),
+  checked when a sign-in code is asked for. `newUserName` names phone-code sign-ups without a name only.
+- **A8**: recovery codes are stored as `{ hash, format }`; the old format is SHA-256 hex of `recovery:` and the code
+  without spaces or dashes in capitals (the store's normalisation), checked after Accounts' own. Phase 2 has no import
+  route: `product.twoStepFromImport(websiteId, userId, { secret, recoveryHashes })` builds the record for Phase 5.
+- **A9**: `lockMode`, `networkLimit` and `personalCheck` stay Email + password settings that Phone + password reads too
+  (merchants see them while Email + password is on). Growing: each failure beyond `maxAttempts` locks for 2^(n−1)
+  minutes, at most 60; nothing counts while locked; a good sign-in starts again. `networkLimit` counts every try per IP
+  and address in fixed 15-minute windows (429 `rate_limited`). The personal check refuses words of 4 or more
+  characters from the name and the e-mail's local part, and 4 steps along the number row or a letter row, either way.
+- **A10**: logged while Roles is on for roles with `logSignIns`, as `{ kind: 'user', id, name, role }` with the detail
+  `IP: <address>; <what>`; failures are wrong passwords and wrong two-step codes of existing users (unknown addresses
+  are not logged); resets by e-mail link and by phone code.
+- **A11**: addresses gain `area` (100 characters) and `default`; two defaults are 422, none makes the first the default;
+  the Profile settings apply to My account and to staff edits; `keepOneAddress` refuses emptying the list.
+- **A12**: the kit's K3 already serves every sign-in route; Accounts also reads an optional `SS-Visitor-Agent` header on
+  visitor calls from the merchant's server to name the device.
+- **Everything reachable in the UI** (owner request during Phase 2): the Users admin widget is a list-and-detail screen
+  (status chips with counts; filters: text, phone, roles, permission, joined after, hide blocked; the first user's
+  detail as cards; Add user, Invite and Edit as dialogs; a More menu with sign-in code, setup link, sign out, approve,
+  decline, keep or delete on request, block or unblock, and Delete user behind the typed name; the role requests list
+  with its chips); a new admin widget `activity_admin` (permission `activity.read`, feature `activity_copies`) with
+  ticket twins `GET /v1/admin/activity-copies`, `/count` and `/counts`; a new visitor widget `role_request` (it mounts
+  even when no sign-in method is on); the Roles admin edits rank, remember me, methods, paused sign-in and the sign-in
+  log. The dashboard's Settings show the new features and the shared groups from their schemas (countries and
+  requestable roles as tags) and Connections has a hint for the pepper.
+- **Server-only on purpose**: `GET /v1/websites/:websiteId/keys` (offline verification), `POST /v1/activity-copies`
+  (products send copies), `GET /v1/users/:id` (the list answers every field), the export download and OAuth callbacks
+  (opened by the browser), and the kit's routes (tickets, permissions, data rights, connect, notices, the K1 mirrors of
+  the dashboard, and `GET /v1/activity`: Accounts' own log has no ticket route in the kit, so the Activity widget shows
+  the other products' copies).
+
 ### 0.8.4 Still open
 
 - **The grilling of each later product** (Notifications, Accounts, Payments, Ecommerce, Growth), held right before it is
