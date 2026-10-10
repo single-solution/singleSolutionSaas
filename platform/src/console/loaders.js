@@ -91,15 +91,17 @@ export const loadWebsiteRows = async (api, merchantId) => {
 
 /**
  * Overview (PLAN 0.8.2 Merchant): balance and days left, the 30-day spend chart, the websites with product chips and
- * Open buttons.
+ * Open buttons, the latest activity and the latest credit receipts.
  * @param {ConsoleApi} api
  * @param {string} merchantId
  */
 export const loadOverview = async (api, merchantId) => {
-	const [billing, usage, websites] = await Promise.all([
+	const [billing, usage, websites, activity, receipts] = await Promise.all([
 		api.get(paths.billing(merchantId)),
 		api.get(paths.usage(merchantId)),
 		loadWebsiteRows(api, merchantId),
+		api.get(`${paths.activity(merchantId)}?limit=8`),
+		api.get(paths.receipts(merchantId)),
 	]);
 	const failed = firstFailure(billing) ?? websites.failed;
 	if (failed) return failed;
@@ -109,6 +111,8 @@ export const loadOverview = async (api, merchantId) => {
 		billing: /** @type {any} */ (orElse(billing, null)),
 		usage: /** @type {any} */ (orElse(usage, null)),
 		rows: websites.rows,
+		activity: /** @type {any[]} */ (orElse(activity, { items: [] })?.items ?? []),
+		receipts: itemsOf(receipts).slice(0, 5),
 	};
 };
 

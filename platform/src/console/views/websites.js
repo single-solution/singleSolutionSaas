@@ -7,10 +7,12 @@
  * With no websites yet, the welcome with the support contact (PLAN 0.8.2 Sign-in).
  * @module
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
 	BarChart,
 	Button,
+	ButtonLink,
+	Callout,
 	Card,
 	EmptyState,
 	Icon,
@@ -22,16 +24,19 @@ import {
 	Stat,
 	StatGrid,
 	formatCredits,
+	formatDate,
 	describeProblem,
+	isEmptySeries,
 	useToast,
 } from '@ss/ui';
-import { AUTH, BILLING, MERCHANT, WEBSITE } from '../../texts/console.js';
+import { AUTH, BILLING, MERCHANT, MORE, WEBSITE } from '../../texts/console.js';
 import { apiFetch } from '../client.js';
 import { Link } from '../link.js';
 import { api, routes } from '../paths.js';
-import { BalanceHero, ProductStatusBadge, creditDayBars, formatChartCredits } from './billing.js';
+import { BalanceHero, LocalTime, ProductStatusBadge, ReceiptsTable, creditDayBars, formatChartCredits } from './billing.js';
 import { FrameBilling } from './frame-billing.js';
 import { ListDetail, ListPane, ListRow, ListSearch, PageProblem, openDashboard } from './common.js';
+import { ActivityTable } from './login-settings.js';
 import { contactLine } from './sign-in.js';
 import { WebsiteCard, dailyCostOf, websiteDot } from './website.js';
 
@@ -156,7 +161,84 @@ export function OverviewView(props) {
 					</Masonry>
 				)}
 			</Section>
+			<div className="@container">
+				<div className="grid items-start gap-5 @5xl:grid-cols-2">
+					<Card
+						title={MORE.recentActivity}
+						subtitle={MORE.recentActivityIntro}
+						actions={
+							<ButtonLink as={Link} href={routes.account()} variant="secondary" size="sm">
+								{MORE.viewAll}
+							</ButtonLink>
+						}>
+						<ActivityTable items={props.activity ?? []} empty="No activity yet." />
+					</Card>
+					<Card
+						title={MORE.latestReceipts}
+						subtitle={MORE.latestReceiptsIntro}
+						padded={false}
+						actions={
+							<ButtonLink as={Link} href={routes.credits()} variant="secondary" size="sm">
+								{MORE.viewAll}
+							</ButtonLink>
+						}>
+						<ReceiptsTable receipts={props.receipts ?? []} />
+					</Card>
+				</div>
+			</div>
 		</div>
+	);
+}
+
+/**
+ * The spend on one website over the last 30 UTC days (all its products), and when it was added.
+ * @param {{ merchantId: string, website: any, cards: ProductCard[] }} props
+ */
+function WebsiteSpend({ merchantId, website, cards }) {
+	const [result, setResult] = useState(/** @type {import('../client.js').ApiResult<any> | null} */ (null));
+	const websiteId = String(website.websiteId);
+	useEffect(() => {
+		let live = true;
+		void apiFetch(api.usage(merchantId, { websiteId })).then((r) => {
+			if (live) setResult(r);
+		});
+		return () => {
+			live = false;
+		};
+	}, [merchantId, websiteId]);
+	const usage = result?.ok ? result.data : null;
+	const bars = creditDayBars(usage?.days);
+	return (
+		<>
+			<StatGrid>
+				<Stat
+					label={MORE.websiteSpend}
+					value={usage ? formatCredits(usage.total ?? 0) : '—'}
+					hint={MORE.websiteSpendIntro}
+					icon="trendingUp"
+					kind="credit"
+				/>
+				<Stat
+					label={MORE.featuresOn}
+					value={cards.reduce((n, c) => n + c.featuresOn.length, 0)}
+					icon="sliders"
+					kind="product"
+				/>
+				<Stat
+					label={MORE.websiteAdded}
+					value={formatDate(website.createdAt)}
+					hint={<LocalTime value={website.createdAt} />}
+					icon="calendar"
+					kind="website"
+				/>
+			</StatGrid>
+			{result && !result.ok ? <Callout tone="danger">{describeProblem(result.problem)}</Callout> : null}
+			{usage && !isEmptySeries(bars) ? (
+				<Card title={MORE.websiteSpend} subtitle={MORE.websiteSpendIntro}>
+					<BarChart label={MORE.websiteSpend} data={bars} format={formatChartCredits} height={120} />
+				</Card>
+			) : null}
+		</>
 	);
 }
 
@@ -183,7 +265,10 @@ export function WebsitesView(props) {
 				auto={auto}
 				back={{ href: routes.websites(), label: MERCHANT.websitesTitle }}
 				list={
-					<ListPane title={MERCHANT.websitesTitle} tools={<ListSearch label={WEBSITE.search} value={q} onChange={setQ} />}>
+					<ListPane
+						title={MERCHANT.websitesTitle}
+						count={MORE.count(rows.length)}
+						tools={<ListSearch label={WEBSITE.search} value={q} onChange={setQ} />}>
 						{shown.length === 0 ? (
 							<li>
 								<EmptyState compact icon="globe" kind="website" title={WEBSITE.none} />
@@ -206,15 +291,23 @@ export function WebsitesView(props) {
 				empty={<Welcome branding={props.branding} />}
 				detail={
 					selected && shownId ? (
-						<WebsiteCard
-							key={shownId}
-							headline
-							website={selected.website}
-							cards={selected.cards}
-							can={{ manage: false, removeWebsite: false, tokens: true, open: true }}
-							fetcher={apiFetch}
-							launch={(productId) => ({ path: api.launch(props.merchantId, shownId, productId) })}
-						/>
+						<>
+							<WebsiteCard
+								key={shownId}
+								headline
+								website={selected.website}
+								cards={selected.cards}
+								can={{ manage: false, removeWebsite: false, tokens: true, open: true }}
+								fetcher={apiFetch}
+								launch={(productId) => ({ path: api.launch(props.merchantId, shownId, productId) })}
+							/>
+							<WebsiteSpend
+								key={`spend-${shownId}`}
+								merchantId={props.merchantId}
+								website={selected.website}
+								cards={selected.cards}
+							/>
+						</>
 					) : auto ? null : (
 						<PageProblem
 							problem={{ status: 404, title: 'Not Found', detail: WEBSITE.gone }}

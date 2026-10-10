@@ -674,4 +674,5 @@ export const MORE = Object.freeze({
 	websiteSpend: 'Spend on this website',
 	websiteSpendIntro: 'Last 30 UTC days, all products on this website.',
 	websiteAdded: 'Added',
+	featuresOn: 'Features on',
 });

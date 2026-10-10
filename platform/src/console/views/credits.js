@@ -6,19 +6,28 @@
  * @module
  */
 import { Button, Callout, Card, Input, PageHeader, Select, describeProblem } from '@ss/ui';
-import { BILLING } from '../../texts/console.js';
+import { BILLING, MORE } from '../../texts/console.js';
 import { FilterForm } from '../navigation.js';
+import { query, routes } from '../paths.js';
 import { BillingStats, ReceiptsTable, UsageView } from './billing.js';
 import { PageProblem } from './common.js';
 import { FrameBilling } from './frame-billing.js';
+import { RangeSelect } from './range.js';
 
 /**
- * A GET form for a range of UTC days and a website.
+ * A GET form for a range of UTC days (or a Period preset) and a website.
  * @param {{ range: { from: string | null, to: string | null }, websites: any[], websiteId: string | null }} props
  */
 function RangeForm({ range, websites, websiteId }) {
 	return (
 		<FilterForm label={BILLING.filters.apply} className="flex flex-wrap items-end gap-3">
+			<RangeSelect
+				from={range.from}
+				to={range.to}
+				emptyLabel={MORE.range.last30}
+				omit="last30"
+				hrefFor={(r) => `${routes.credits()}${query({ ...r, websiteId })}`}
+			/>
 			<Input label={BILLING.filters.from} name="from" type="date" defaultValue={range.from ?? ''} />
 			<Input label={BILLING.filters.to} name="to" type="date" defaultValue={range.to ?? ''} />
 			<Select
