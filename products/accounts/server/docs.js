@@ -118,6 +118,12 @@ ${para(guide.dataRights)}
 ${para(guide.activity)}
 <h2>Orders tab</h2>
 ${para(guide.orders)}
+<h2>Staff and customers from your server</h2>
+${para(guide.staff)}
+<h2>Sign-in from your server</h2>
+${para(guide.serverSignIn)}
+<h2>Passwords and two-step from another system</h2>
+${para(guide.legacy)}
 <h2>Features</h2>
 ${featureSections.join('\n')}
 <h2>Install the widgets</h2>

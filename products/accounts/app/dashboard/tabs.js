@@ -680,6 +680,7 @@ const PRODUCT_TOKENS = /** @type {const} */ (['notifications', 'ecommerce', 'cha
  */
 const connectionHint = (name) => {
 	if (name === 'database') return TEXTS.connections.hints.database;
+	if (name === 'legacy_pepper') return TEXTS.connections.hints.legacy_pepper;
 	const product = PRODUCT_TOKENS.find((entry) => entry === name);
 	return product ? fill(TEXTS.connections.hints.token, { product: TEXTS.connections.products[product] }) : null;
 };

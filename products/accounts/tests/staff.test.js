@@ -337,3 +337,34 @@ describe('A5: role requests', () => {
 		expect((await env.admin(ticket, 'POST', `/v1/admin/role-requests/${dee.json.id}/decline`)).status).toBe(401);
 	});
 });
+
+describe('the admin widgets’ reads', () => {
+	it('the Activity widget reads the copies with activity.read; My account names the role', async () => {
+		await env.paste('chat');
+		const chatToken = (await env.portal.issueToken({ websiteId: env.websiteId, productId: 'accounts', kind: 'server' })).token;
+		const copy = {
+			websiteId: env.websiteId,
+			productId: 'chat',
+			actor: { kind: 'user', id: people.manager.id, name: 'Mo', role: 'Business manager' },
+			action: 'conversation.assigned',
+			target: 'cnv_1',
+			label: 'Chat with Nia',
+			at: new Date(env.now()).toISOString(),
+		};
+		expect((await env.call('POST', '/v1/activity-copies', { token: chatToken, body: copy })).status).toBe(201);
+		const denied = await env.ticket(['users.read']);
+		expect(code(await env.admin(denied, 'GET', '/v1/admin/activity-copies'))).toBe('forbidden');
+		const ticket = await env.ticket(['activity.read']);
+		const listed = await env.admin(ticket, 'GET', '/v1/admin/activity-copies?productId=chat');
+		expect(listed.json.items).toMatchObject([{ action: 'conversation.assigned', label: 'Chat with Nia' }]);
+		expect((await env.admin(ticket, 'GET', '/v1/admin/activity-copies/count')).json.count).toBe(1);
+		expect((await env.admin(ticket, 'GET', '/v1/admin/activity-copies/counts?by=productId')).json.groups).toEqual({ chat: 1 });
+		const member = await env.visitor('POST', '/v1/sign-in/phone-password', {
+			phone: '+923005550100',
+			password: 'member pass 1',
+		});
+		const me = await env.visitor('GET', '/v1/me', undefined, member.json.signIn);
+		expect(me.json).toMatchObject({ role: 'member', roleName: 'Member' });
+		expect(me.json.roleSince).toBeTruthy();
+	});
+});
