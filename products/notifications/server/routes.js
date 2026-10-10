@@ -17,6 +17,7 @@ import { verifyMeta, verifyTwilio } from '../adapters/signatures.js';
 import { checkTemplate, checkValues, isProductKey, languageOfSegment, templateView } from '../core/templates.js';
 import { checkSendAt } from '../core/timing.js';
 import { checkForwardedEvent } from '../core/webhooks.js';
+import { LISTS } from '../adapters/lists.js';
 import { strings } from '../adapters/product.js';
 import { createStore } from '../adapters/store.js';
 import { checkSubscription } from '../adapters/webpush.js';
@@ -250,6 +251,38 @@ export const createRoutes = (product) => {
 	const dashboardTemplates = templateHandlers('dashboard');
 	const widgetTemplates = templateHandlers('widget');
 	const serverTemplates = templateHandlers('server');
+
+	/**
+	 * The list a dashboard request names (`webhook_urls`, PLAN 0.8.10 N5).
+	 * @param {any} ctx
+	 * @returns {keyof typeof LISTS}
+	 */
+	const listOf = (ctx) => {
+		if (!Object.hasOwn(LISTS, ctx.params.list)) throw problem('not_found', 'No such list.');
+		return ctx.params.list;
+	};
+	/**
+	 * Save a list whole in the dashboard: merchants only while its feature is on (our admins may prepare it), checked, a
+	 * Recent change by the session.
+	 * @param {any} ctx
+	 */
+	const saveList = async (ctx) => {
+		const name = listOf(ctx);
+		const { session } = ctx;
+		if (session.kind === 'merchant' && !(await product.featuresOn(ctx.websiteId)).includes(LISTS[name].feature))
+			return problem('feature_off', 'This feature is off.');
+		const body = typeof ctx.body === 'object' && ctx.body !== null ? ctx.body : {};
+		const saved = await product.lists.saveWebhookUrls(ctx.websiteId, body.value);
+		if (!saved.ok)
+			return problem('validation_failed', saved.errors[0]?.message ?? 'The list is not valid.', { errors: saved.errors });
+		await product.recentChanges.record({
+			websiteId: ctx.websiteId,
+			who: { kind: session.kind, id: session.subject, name: session.name, ...(session.role ? { role: session.role } : {}) },
+			what: 'settings',
+			detail: `${LISTS[name].title}: changed`,
+		});
+		return { value: saved.value };
+	};
 
 	/**
 	 * A website a public page or a provider names: it must exist, be served and have its merchant database.
@@ -571,6 +604,23 @@ export const createRoutes = (product) => {
 			path: '/v1/dashboard/websites/:websiteId/templates/:key/:channel/:language',
 			auth: 'dashboard',
 			handler: dashboardTemplates.remove,
+		}),
+
+		// ---------------------------------------------------------------- dashboard: lists (webhook URLs, PLAN 0.8.10 N5)
+		defineRoute({
+			method: 'GET',
+			path: '/v1/dashboard/websites/:websiteId/lists/:list',
+			auth: 'dashboard',
+			handler: async (ctx) => {
+				listOf(ctx);
+				return { value: await product.lists.webhookUrls(String(ctx.websiteId)) };
+			},
+		}),
+		defineRoute({
+			method: 'PUT',
+			path: '/v1/dashboard/websites/:websiteId/lists/:list',
+			auth: 'dashboard',
+			handler: saveList,
 		}),
 
 		// ------------------------------------------------------------------------------- hosted unsubscribe page

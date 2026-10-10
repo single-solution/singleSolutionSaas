@@ -33,7 +33,7 @@ import {
 	retryPlanOf,
 	withinLimits,
 } from '../core/timing.js';
-import { checkForwardedEvent, eventTime, webhookUrls } from '../core/webhooks.js';
+import { checkForwardedEvent, checkWebhookUrls, eventTime, fromOldUrls, urlsFor } from '../core/webhooks.js';
 import { keyBytes } from '../core/widgets.js';
 
 describe('channels', () => {
@@ -431,9 +431,70 @@ describe('provider answers, replies and webhook URLs', () => {
 		expect(isOptOut('', ['', 5])).toBe(false);
 	});
 
-	it('keeps only https webhook URLs, at most five', () => {
-		expect(webhookUrls(['https://a.example', 'http://b.example', 5, ...Array(6).fill('https://c.example')])).toHaveLength(5);
-		expect(webhookUrls('https://a.example')).toEqual([]);
+	it('moves the old setting’s https URLs into the list, each taking every event (PLAN 0.8.10 N5)', () => {
+		const many = Array.from({ length: 7 }, (_, i) => `https://h${i}.example/x`);
+		expect(fromOldUrls(['https://a.example', 'http://b.example', 5, 'https://a.example', ...many])).toHaveLength(5);
+		expect(fromOldUrls(['https://a.example', 'https://u:p@b.example', 'https://%zz'])).toEqual([
+			{ url: 'https://a.example', events: [] },
+		]);
+		expect(fromOldUrls('https://a.example')).toEqual([]);
+	});
+
+	it('checks the list of webhook URLs and picks the URLs of an event (PLAN 0.8.10 N5)', () => {
+		expect(checkWebhookUrls('x')).toMatchObject({ ok: false, errors: [{ path: '/value' }] });
+		const six = Array.from({ length: 6 }, (_, i) => ({ url: `https://h${i}.example` }));
+		expect(checkWebhookUrls(six)).toMatchObject({ ok: false, errors: [{ message: 'Add at most 5 URLs.' }] });
+		expect(
+			checkWebhookUrls([
+				{ url: 'http://a.example' },
+				{ url: `https://a.example/${'x'.repeat(2048)}` },
+				null,
+				{ url: 'https://b.example', events: ['nope'] },
+				{ url: 'https://b.example', events: 'message.sent' },
+			]),
+		).toEqual({
+			ok: false,
+			errors: [
+				{ path: '/value/0/url', message: 'Use an https address of at most 2048 characters.' },
+				{ path: '/value/1/url', message: 'Use an https address of at most 2048 characters.' },
+				{ path: '/value/2/url', message: 'Use an https address of at most 2048 characters.' },
+				expect.objectContaining({ path: '/value/3/events' }),
+				expect.objectContaining({ path: '/value/4/events' }),
+			],
+		});
+		expect(
+			checkWebhookUrls([{ url: 'https://c.example' }, { url: ' https://c.example ', events: Array(51).fill('message.sent') }]),
+		).toEqual({
+			ok: false,
+			errors: [
+				{ path: '/value/1/url', message: 'This URL is listed twice.' },
+				expect.objectContaining({ path: '/value/1/events' }),
+			],
+		});
+		const checked = checkWebhookUrls([
+			{
+				url: ' https://orders.example/hook ',
+				events: ['ecommerce.order.placed', 'payments.payment.paid', 'payments.payment.paid'],
+			},
+			{ url: 'https://all.example/hook' },
+			{ url: 'https://fails.example/hook', events: ['message.failed'] },
+		]);
+		expect(checked).toEqual({
+			ok: true,
+			value: [
+				{ url: 'https://orders.example/hook', events: ['ecommerce.order.placed', 'payments.payment.paid'] },
+				{ url: 'https://all.example/hook', events: [] },
+				{ url: 'https://fails.example/hook', events: ['message.failed'] },
+			],
+		});
+		if (!checked.ok) return;
+		expect(urlsFor(checked.value, 'payments.payment.paid')).toEqual([
+			'https://orders.example/hook',
+			'https://all.example/hook',
+		]);
+		expect(urlsFor(checked.value, 'message.failed')).toEqual(['https://all.example/hook', 'https://fails.example/hook']);
+		expect(urlsFor(checked.value, 'chat.conversation.opened')).toEqual(['https://all.example/hook']);
+		expect(checkWebhookUrls([])).toEqual({ ok: true, value: [] });
 	});
 
 	it('turns a base64url push key into bytes', () => {

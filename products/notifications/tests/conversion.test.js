@@ -190,3 +190,101 @@ describe('templates for the merchant’s server (N4)', () => {
 		await env.switchOn(['whatsapp', 'email', 'sms', 'webhooks', 'send_api']);
 	});
 });
+
+describe('webhook URLs per event (N5)', () => {
+	const HOOKS = 'https://hooks.example.org';
+	const SECRET = 'whsec-0123456789abcdefghijklmnop';
+	const list = () => `/v1/dashboard/websites/${env.websiteId}/lists/webhook_urls`;
+	/** Paths of the webhook calls since `from`. @param {number} from */
+	const delivered = (from) =>
+		env.providers
+			.callsTo(HOOKS)
+			.slice(from)
+			.map((call) => `${new URL(call.url).pathname} ${JSON.parse(call.body).type}`);
+
+	it('moves the old urls setting into the list on its first read, each URL taking every event', async () => {
+		await env.store.put('settings', `${env.websiteId}|setting|webhooks.urls`, {
+			websiteId: env.websiteId,
+			kind: 'setting',
+			key: 'webhooks.urls',
+			value: [`${HOOKS}/old`, 'http://insecure.example/x'],
+			at: env.now(),
+		});
+		const read = await env.call('GET', '/v1/lists/webhook_urls', { token: env.server });
+		expect(await read.json()).toEqual({ value: [{ url: `${HOOKS}/old`, events: [] }] });
+		expect(await env.store.get('settings', `${env.websiteId}|setting|webhooks.urls`)).toBeFalsy();
+		const settings = await (await env.call('GET', '/v1/settings', { token: env.server })).json();
+		const webhooks = settings.features.find((/** @type {any} */ f) => f.key === 'webhooks');
+		expect(Object.keys(webhooks.values)).toEqual(['events']);
+		// the dashboard reads the same list
+		const cookie = await env.adminSession();
+		expect(await (await env.dashboard(cookie, 'GET', list())).json()).toEqual({
+			value: [{ url: `${HOOKS}/old`, events: [] }],
+		});
+		expect((await env.dashboard(cookie, 'GET', `/v1/dashboard/websites/${env.websiteId}/lists/other`)).status).toBe(404);
+	});
+
+	it('sends each event only to the URLs that take it (none named: every event)', async () => {
+		await env.connect('webhook_secret', SECRET);
+		const saved = await env.call('PUT', '/v1/lists/webhook_urls', {
+			token: env.server,
+			headers: { 'ss-actor-id': 'usr_7', 'ss-actor-name': 'Ayesha' },
+			body: {
+				value: [
+					{ url: `${HOOKS}/orders`, events: ['ecommerce.order.placed', 'payments.payment.paid'] },
+					{ url: `${HOOKS}/failures`, events: ['message.failed'] },
+					{ url: `${HOOKS}/all`, events: [] },
+				],
+			},
+		});
+		expect(saved.status).toBe(200);
+		const overview = await (
+			await env.dashboard(await env.adminSession(), 'GET', `/v1/dashboard/websites/${env.websiteId}/overview`)
+		).json();
+		expect(overview.recentChanges).toContainEqual(
+			expect.objectContaining({ who: { kind: 'user', id: 'usr_7', name: 'Ayesha' }, detail: 'Webhook URLs: changed' }),
+		);
+		const from = env.providers.callsTo(HOOKS).length;
+		/** @param {string} type */
+		const relay = async (type) =>
+			(await (await env.call('POST', '/v1/events', { token: env.server, body: { type, data: {} } })).json()).queued;
+		expect(await relay('payments.payment.paid')).toBe(2);
+		expect(await relay('chat.conversation.opened')).toBe(1);
+		// Notifications' own events too: a failed message goes to /failures and /all, a sent one to /all
+		env.providers.respond('https://graph.facebook.com', () => ({ status: 400, body: '{"error":{"message":"bad"}}' }));
+		await env.send('whatsapp', { template: 'accounts.code', to: { phone: '+923009998888' }, values: { code: '1' } });
+		env.providers.reset('https://graph.facebook.com');
+		await env.send('whatsapp', { template: 'accounts.code', to: { phone: '+923009998888' }, values: { code: '2' } });
+		expect(delivered(from).sort()).toEqual(
+			[
+				'/orders payments.payment.paid',
+				'/all payments.payment.paid',
+				'/all chat.conversation.opened',
+				'/failures message.failed',
+				'/all message.failed',
+				'/all message.sent',
+			].sort(),
+		);
+	});
+
+	it('checks the list and keeps it to the webhooks feature', async () => {
+		const bad = await env.call('PUT', '/v1/lists/webhook_urls', {
+			token: env.server,
+			body: { value: [{ url: `${HOOKS}/a`, events: ['orders'] }] },
+		});
+		expect(bad.status).toBe(422);
+		expect((await bad.json()).errors[0].path).toBe('/value/0/events');
+		const cookie = await env.adminSession();
+		expect((await env.dashboard(cookie, 'PUT', list(), { value: 'x' })).status).toBe(422);
+		await env.switchOn(['whatsapp', 'email', 'sms', 'send_api']);
+		expect((await env.call('PUT', '/v1/lists/webhook_urls', { token: env.server, body: { value: [] } })).status).toBe(403);
+		// a merchant edits it only while the feature is on; our admins may prepare it
+		const launch = await env.portal.issueLaunch({ productId: 'notifications', kind: 'merchant', websiteId: env.websiteId });
+		const merchant = ((await env.call('GET', `/sso?launch=${launch}`)).headers.get('set-cookie') ?? '').split(';')[0] ?? '';
+		const refused = await env.dashboard(merchant, 'PUT', list(), { value: [] });
+		expect(refused.status).toBe(403);
+		expect((await env.dashboard(cookie, 'PUT', list(), { value: [] })).status).toBe(200);
+		await env.switchOn(['whatsapp', 'email', 'sms', 'webhooks', 'send_api']);
+		expect((await env.dashboard(merchant, 'PUT', list(), { value: [{ url: `${HOOKS}/all` }] })).status).toBe(200);
+	});
+});

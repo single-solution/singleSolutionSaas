@@ -138,9 +138,10 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 	const network = createNetwork(handlers);
 	/** @type {Array<{ options: any, mail: any }>} */
 	const mails = [];
+	const store = createMemoryStore({ now });
 	const product = createProductInstance({
 		config: { mongodbUri: '', connectSecret: SECRET, encryptionKey: ENCRYPTION_KEY },
-		store: createMemoryStore({ now }),
+		store,
 		fetch: portal.fetch,
 		now,
 		nodeEnv: 'test',
@@ -254,6 +255,8 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 	return {
 		portal,
 		product,
+		/** The product database store (the kit's collections). */
+		store,
 		providers,
 		mails,
 		websiteId,

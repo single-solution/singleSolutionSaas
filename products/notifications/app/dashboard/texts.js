@@ -106,6 +106,18 @@ export const TEXTS = Object.freeze({
 			urgent_badge: 'Urgent',
 			needsDatabase: 'Templates live in your database: connect it in Connections first.',
 		}),
+		webhooks: Object.freeze({
+			title: 'Webhook URLs',
+			help: 'Up to {max} https addresses that receive the signed events, each with the events it takes.',
+			none: 'No webhook URLs yet.',
+			url: 'URL {n}',
+			events: 'Events it takes',
+			eventsHelp:
+				'One type per line, for example message.failed or payments.payment.paid. Empty: every event (Notifications’ own events as the Events setting picks them).',
+			add: 'Add URL',
+			remove: 'Remove URL',
+			error: 'URL {n}: {message}',
+		}),
 		channels: Object.freeze({
 			email: 'E-mail',
 			sms: 'SMS',

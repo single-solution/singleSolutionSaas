@@ -140,11 +140,11 @@ describe('Payments on the real Portal', () => {
 		const urls = await sys.dashboard(
 			notifyCookie,
 			'PUT',
-			`/v1/dashboard/websites/${websiteId}/settings/webhooks.urls`,
-			{ value: [`${HOOKS}/payments`] },
+			`/v1/dashboard/websites/${websiteId}/lists/webhook_urls`,
+			{ value: [{ url: `${HOOKS}/payments`, events: [] }] },
 			NOTIFY,
 		);
-		expect(urls.status).toBe(204);
+		expect(urls.status).toBe(200);
 		const pasted = await sys.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${websiteId}/connections/notifications`, {
 			value: notifyTokens.server,
 		});

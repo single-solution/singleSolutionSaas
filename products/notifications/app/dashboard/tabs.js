@@ -38,6 +38,7 @@ import { call, fill, useLoad } from './api.js';
 import { PROVIDER_FORMS, ProviderForm } from './providers.js';
 import { TemplatesSection } from './templates.js';
 import { TEXTS } from './texts.js';
+import { WebhookUrlsCard } from './webhooks.js';
 
 /** @typedef {{ kind: 'merchant' | 'admin', id: string, name: string, role?: 'owner' | 'support' }} Who */
 /** @typedef {{ websiteId: string | null, who: Who, support: { email: string, phone: string }, portal: string }} TabProps */
@@ -625,15 +626,23 @@ function SettingsTab({ websiteId }) {
 			<Section title={TEXTS.settings.featuresTitle} description={TEXTS.settings.featuresHelp}>
 				<Masonry wideAlone>
 					<Loaded answer={settings.answer}>
-						{(data) => (
-							<SettingsForms
-								features={data.features}
-								saveUrl={(key) => `${base}/settings/${encodeURIComponent(key)}`}
-								resetBody={false}
-								savedSource="website"
-								reload={settings.reload}
-							/>
-						)}
+						{(data) => {
+							const webhooks = data.features.find((/** @type {{ key: string }} */ f) => f.key === 'webhooks');
+							return (
+								<>
+									<SettingsForms
+										features={data.features}
+										saveUrl={(key) => `${base}/settings/${encodeURIComponent(key)}`}
+										resetBody={false}
+										savedSource="website"
+										reload={settings.reload}
+									/>
+									{webhooks ? (
+										<WebhookUrlsCard websiteId={/** @type {string} */ (websiteId)} off={webhooks.on === false} />
+									) : null}
+								</>
+							);
+						}}
 					</Loaded>
 				</Masonry>
 			</Section>

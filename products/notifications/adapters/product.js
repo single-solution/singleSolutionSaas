@@ -2,12 +2,13 @@
  * The product on the kit: `createProductInstance(options)` wires `@ss/app-kit` `createProduct` with Notifications'
  * manifest (each feature's settings schema from `schemas/` inline), its widget texts, its Connections (providers per
  * channel, push keys, the webhook signing secret and the Accounts token for activity-log copies), the merchant
- * database indexes, the data-rights hooks and the widget settings, and adds the providers and web push on the same
- * outbound policy. The Next.js route and the tests pass the rest (config, store, clock, network).
+ * database indexes, the data-rights hooks, the widget settings and the list `webhook_urls` (in the product database,
+ * whose store it owns), and adds the providers and web push on the same outbound policy. The Next.js route and the tests pass the rest (config, store, clock, network).
  * Public entry `./product` of this package, so a system test can compose the product with `./routes`.
  * @module
  */
-import { createProduct } from '@ss/app-kit';
+import { MongoClient } from 'mongodb';
+import { createMemoryStore, createMongoStore, createProduct } from '@ss/app-kit';
 import { createOutboundPolicy, safeFetch } from '@ss/net';
 import manifestFile from '../manifest.json' with { type: 'json' };
 import strings from '../strings/en.json' with { type: 'json' };
@@ -24,6 +25,7 @@ import staffPush from '../schemas/staff_push.settings.json' with { type: 'json' 
 import webhooks from '../schemas/webhooks.settings.json' with { type: 'json' };
 import whatsapp from '../schemas/whatsapp.settings.json' with { type: 'json' };
 import { normaliseEmail, normalisePhone } from '../core/channels.js';
+import { LISTS, createLists } from './lists.js';
 import { createProviders } from './providers.js';
 import { INDEXES, createStore } from './store.js';
 import { createWebPush, pushKeysOf } from './webpush.js';
@@ -120,6 +122,14 @@ export const createProductInstance = (options) => {
 	const { createTransport, ...kitOptions } = options;
 	const now = options.now ?? Date.now;
 	const production = (options.nodeEnv ?? process.env.NODE_ENV) === 'production';
+	const uri = (options.problems ?? []).length === 0 ? options.config?.mongodbUri : undefined;
+	// Notifications keeps its list setting (webhook URLs) in the product database too, so it owns the store
+	const store =
+		options.store ??
+		(uri
+			? createMongoStore({ db: new MongoClient(uri, { maxPoolSize: 5, minPoolSize: 0, maxIdleTimeMS: 60_000 }).db(), now })
+			: createMemoryStore({ now }));
+	const lists = createLists({ store, now });
 	const { allowHosts = [], ...outboundRest } = options.outbound ?? {};
 	// the same policy the kit uses for addresses merchants enter
 	const policy = createOutboundPolicy({ ...outboundRest, allowHosts: production ? [] : allowHosts });
@@ -135,6 +145,7 @@ export const createProductInstance = (options) => {
 
 	const product = createProduct({
 		...kitOptions,
+		store,
 		manifest,
 		strings,
 		problemCodes: PROBLEM_CODES,
@@ -180,8 +191,17 @@ export const createProductInstance = (options) => {
 			},
 		},
 		data: { indexes: INDEXES },
+		// the settings API's `GET|PUT /v1/lists/webhook_urls` for the merchant's server (K1, N5), checked like the dashboard's
+		lists: {
+			webhook_urls: {
+				feature: LISTS.webhook_urls.feature,
+				title: LISTS.webhook_urls.title,
+				get: lists.webhookUrls,
+				save: lists.saveWebhookUrls,
+			},
+		},
 	});
-	return Object.freeze({ ...product, providers, webpush, now, send });
+	return Object.freeze({ ...product, providers, webpush, lists, now, send });
 };
 
 /** @typedef {ReturnType<typeof createProductInstance>} Product */

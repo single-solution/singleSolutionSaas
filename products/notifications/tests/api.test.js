@@ -476,9 +476,11 @@ describe('the send API', () => {
 
 	it('signs outgoing webhooks and retries them on later uses', async () => {
 		const cookie = await env.adminSession();
-		await env.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${env.websiteId}/settings/webhooks.urls`, {
-			value: [HOOK_URL, 'http://insecure.example'],
-		});
+		const lists = `/v1/dashboard/websites/${env.websiteId}/lists/webhook_urls`;
+		const insecure = await env.dashboard(cookie, 'PUT', lists, { value: [{ url: 'http://insecure.example', events: [] }] });
+		expect(insecure.status).toBe(422);
+		expect((await insecure.json()).errors[0].path).toBe('/value/0/url');
+		expect((await env.dashboard(cookie, 'PUT', lists, { value: [{ url: HOOK_URL, events: [] }] })).status).toBe(200);
 		env.providers.respond('https://hooks.example.org', () => ({ status: 500 }));
 		const sent = await env.send('sms', { template: 'accounts.code', to: { phone: '+15550009999' } });
 		const first = env.providers.callsTo('https://hooks.example.org');
@@ -522,9 +524,10 @@ describe('the send API', () => {
 			data: { payment: { id: 'pay_1' } },
 		});
 		const cookie = await env.adminSession();
-		await env.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${env.websiteId}/settings/webhooks.urls`, { value: [] });
+		const lists = `/v1/dashboard/websites/${env.websiteId}/lists/webhook_urls`;
+		await env.dashboard(cookie, 'PUT', lists, { value: [] });
 		expect(await (await relay({ type: 'payments.payment.paid', data: {} })).json()).toEqual({ queued: 0 });
-		await env.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${env.websiteId}/settings/webhooks.urls`, { value: [HOOK_URL] });
+		await env.dashboard(cookie, 'PUT', lists, { value: [{ url: HOOK_URL, events: [] }] });
 		await env.dashboard(cookie, 'DELETE', `/v1/dashboard/websites/${env.websiteId}/connections/webhook_secret`);
 		expect(await (await relay({ type: 'payments.payment.paid', data: {} })).json()).toEqual({ queued: 0 });
 		await env.connect('webhook_secret', WEBHOOK_SECRET);

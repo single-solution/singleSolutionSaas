@@ -20,7 +20,7 @@ import {
 	retryPlanOf,
 	withinLimits,
 } from '../core/timing.js';
-import { SIGNATURE_HEADER, webhookUrls } from '../core/webhooks.js';
+import { SIGNATURE_HEADER, urlsFor } from '../core/webhooks.js';
 import { signWebhook } from '../adapters/signatures.js';
 import { createStore } from '../adapters/store.js';
 
@@ -126,7 +126,8 @@ export const createSending = (product) => {
 			: 'short';
 
 	/**
-	 * Queue outgoing webhook events (sent right after the request, signed).
+	 * Queue outgoing webhook events (sent right after the request, signed): Notifications' own events that the Events
+	 * setting picks, to the URLs that take the type.
 	 * @param {Site} s
 	 * @param {string} type
 	 * @param {Record<string, unknown>} data
@@ -134,8 +135,10 @@ export const createSending = (product) => {
 	const emit = async (s, type, data) => {
 		if (!s.on.includes('webhooks')) return;
 		if (typeof (await product.connections.value(s.websiteId, 'webhook_secret')) !== 'string') return;
-		const { urls, events } = await product.settings.values(s.websiteId, 'webhooks');
+		const { events } = await product.settings.values(s.websiteId, 'webhooks');
 		if (!Array.isArray(events) || !events.includes(type)) return;
+		const targets = urlsFor(await product.lists.webhookUrls(s.websiteId), type);
+		if (targets.length === 0) return;
 		const body = JSON.stringify({
 			id: createId('evt'),
 			type,
@@ -143,23 +146,22 @@ export const createSending = (product) => {
 			websiteId: s.websiteId,
 			data,
 		});
-		await s.store.events.add(webhookUrls(urls).map((url) => ({ type, url, body })));
+		await s.store.events.add(targets.map((url) => ({ type, url, body })));
 	};
 
 	/**
 	 * Queue another product's event (for example `payments.payment.paid`, PLAN 0.8.7 and 0.8.10 K5) for the merchant's
 	 * webhook URLs, signed and retried like Notifications' own. The webhook keeps the product's own event id and time
 	 * when it sent them (so the merchant's server can match it with that product's `GET /v1/events`), else it gets a
-	 * new id and now. Other products' events go to every URL; the Events setting picks among Notifications' own events
-	 * only.
+	 * new id and now. Each event goes to the URLs that take its type (PLAN 0.8.10 N5); the Events setting picks among
+	 * Notifications' own events only.
 	 * @param {Site} s
 	 * @param {import('../core/webhooks.js').ForwardedEvent} event
 	 * @returns {Promise<number>} deliveries queued (0 without the signing secret or URLs)
 	 */
 	const relay = async (s, { id, type, at, data }) => {
 		if (typeof (await product.connections.value(s.websiteId, 'webhook_secret')) !== 'string') return 0;
-		const { urls } = await product.settings.values(s.websiteId, 'webhooks');
-		const targets = webhookUrls(urls);
+		const targets = urlsFor(await product.lists.webhookUrls(s.websiteId), type);
 		if (targets.length === 0) return 0;
 		const body = JSON.stringify({
 			id: id ?? createId('evt'),
