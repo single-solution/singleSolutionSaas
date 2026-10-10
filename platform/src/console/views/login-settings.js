@@ -25,8 +25,9 @@ import {
 	formatDateTime,
 	useToast,
 } from '@ss/ui';
-import { LOGIN, TWO_STEP } from '../../texts/console.js';
-import { apiFetch, useResource } from '../client.js';
+import { LOGIN, MORE, TWO_STEP } from '../../texts/console.js';
+import { apiFetch } from '../client.js';
+import { Link } from '../link.js';
 
 /** @typedef {import('@ss/ui').Problem} Problem */
 
@@ -443,11 +444,62 @@ const actionLabel = (action) => {
 	return text.charAt(0).toUpperCase() + text.slice(1);
 };
 
+/** @param {unknown} value one value of an entry’s before / after, shown short @returns {string} */
+const shortValue = (value) => {
+	if (value === null || value === undefined || value === '') return '—';
+	if (Array.isArray(value)) return value.length === 0 ? '—' : value.map((v) => shortValue(v)).join(', ');
+	const text = typeof value === 'object' ? JSON.stringify(value) : String(value);
+	return text.length > 80 ? `${text.slice(0, 79)}…` : text;
+};
+
 /**
- * Activity entries (newest first, paged).
- * @param {{ items: any[], title?: string, empty: string, hasMore?: boolean, onLoadMore?: () => void, showMerchant?: boolean }} props
+ * What an entry changed (admins only: `before` / `after`), one line per field.
+ * @param {{ entry: any }} props
  */
-export function ActivityTable({ items, title = 'Activity', empty, hasMore = false, onLoadMore, showMerchant = false }) {
+function Changes({ entry }) {
+	const before = entry.before && typeof entry.before === 'object' ? entry.before : {};
+	const after = entry.after && typeof entry.after === 'object' ? entry.after : {};
+	const keys = [...new Set([...Object.keys(before), ...Object.keys(after)])];
+	if (keys.length === 0) return null;
+	return (
+		<details className="text-xs text-muted">
+			<summary className="cursor-pointer font-semibold text-primary">{MORE.changes}</summary>
+			<ul className="mt-1 space-y-0.5">
+				{keys.map((key) => (
+					<li key={key} className="break-words">
+						<span className="font-semibold text-fg">{key}</span>: {key in before ? `${shortValue(before[key])} → ` : ''}
+						{shortValue(after[key])}
+					</li>
+				))}
+			</ul>
+		</details>
+	);
+}
+
+/**
+ * Activity entries (newest first, paged). `filterHref` turns the admin and merchant names into links that filter the
+ * Activity page by them; `details` shows what each entry changed (admin views).
+ * @param {{ items: any[], title?: string, empty: string, hasMore?: boolean, loadingMore?: boolean,
+ *   onLoadMore?: () => void, showMerchant?: boolean, details?: boolean,
+ *   filterHref?: (q: { merchantId?: string, adminId?: string }) => string }} props
+ */
+export function ActivityTable({
+	items,
+	title = 'Activity',
+	empty,
+	hasMore = false,
+	loadingMore = false,
+	onLoadMore,
+	showMerchant = false,
+	details = false,
+	filterHref,
+}) {
+	/** @param {string} name @param {string} href */
+	const filterLink = (name, href) => (
+		<Link href={href} title={MORE.onlyThis(name)} className="hover:text-primary hover:underline">
+			{name}
+		</Link>
+	);
 	return (
 		<Table
 			caption={title}
@@ -456,10 +508,24 @@ export function ActivityTable({ items, title = 'Activity', empty, hasMore = fals
 			rowKey={(e) => e.activityId}
 			empty={<EmptyState compact icon="activity" kind="activity" title={empty} />}
 			hasMore={hasMore}
+			loadingMore={loadingMore}
 			{...(onLoadMore ? { onLoadMore } : {})}
 			columns={[
 				{ key: 'at', header: 'When', render: (e) => formatDateTime(e.at) },
-				{ key: 'who', header: 'Who', render: (e) => e.actor?.name ?? e.actor?.type ?? '—', rowHeader: true },
+				{
+					key: 'who',
+					header: 'Who',
+					rowHeader: true,
+					render: (e) => {
+						const name = e.actor?.name ?? e.actor?.type ?? '—';
+						if (!filterHref || !e.actor?.id) return name;
+						return e.actor.type === 'admin'
+							? filterLink(name, filterHref({ adminId: e.actor.id }))
+							: e.actor.type === 'merchant'
+								? filterLink(name, filterHref({ merchantId: e.actor.id }))
+								: name;
+					},
+				},
 				{
 					key: 'what',
 					header: 'What',
@@ -468,6 +534,7 @@ export function ActivityTable({ items, title = 'Activity', empty, hasMore = fals
 						<span className="space-y-0.5">
 							<span className="block">{actionLabel(e.action)}</span>
 							{e.reason ? <span className="block text-xs text-muted">{e.reason}</span> : null}
+							{details ? <Changes entry={e} /> : null}
 						</span>
 					),
 				},
@@ -479,7 +546,9 @@ export function ActivityTable({ items, title = 'Activity', empty, hasMore = fals
 								render: (/** @type {any} */ e) =>
 									e.merchantName ? (
 										<span>
-											{e.merchantName}
+											{filterHref && e.merchantId
+												? filterLink(e.merchantName, filterHref({ merchantId: e.merchantId }))
+												: e.merchantName}
 											{e.merchantDeleted ? (
 												<Badge tone="neutral" className="ml-1">
 													Deleted
@@ -497,16 +566,51 @@ export function ActivityTable({ items, title = 'Activity', empty, hasMore = fals
 	);
 }
 
+/** @param {string} path @param {string} cursor */
+const withCursor = (path, cursor) => `${path}${path.includes('?') ? '&' : '?'}cursor=${encodeURIComponent(cursor)}`;
+
 /**
- * The person's own activity, loaded from `path` (`{ items, nextCursor }`).
+ * Activity pages after the first (`{ items, nextCursor }` from `path`): Load more appends the next page.
+ * @param {string} path
+ * @param {{ items?: any[], nextCursor?: string | null } | null | undefined} initial
+ * @param {(path: string) => Promise<import('../client.js').ApiResult<any>>} [fetcher]
+ */
+export const useActivityPages = (path, initial, fetcher = apiFetch) => {
+	const [items, setItems] = useState(/** @type {any[]} */ (initial?.items ?? []));
+	const [cursor, setCursor] = useState(/** @type {string | null} */ (initial?.nextCursor ?? null));
+	const [loading, setLoading] = useState(false);
+	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
+	const more = async () => {
+		if (!cursor) return;
+		setLoading(true);
+		const result = await fetcher(withCursor(path, cursor));
+		setLoading(false);
+		if (!result.ok) {
+			setProblem(result.problem);
+			return;
+		}
+		setItems((list) => [...list, ...(result.data?.items ?? [])]);
+		setCursor(result.data?.nextCursor ?? null);
+	};
+	return { items, cursor, loading, problem, more };
+};
+
+/**
+ * The person's own activity, loaded from `path` (`{ items, nextCursor }`), with Load more.
  * @param {{ path: string, initial?: { items: any[], nextCursor?: string | null } }} props
  */
 export function OwnActivity({ path, initial = { items: [], nextCursor: null } }) {
-	const { data, problem } = useResource(path, initial);
+	const pages = useActivityPages(path, initial);
 	return (
 		<Card title={LOGIN.activityTitle}>
-			{problem ? <Callout tone="danger">{describeProblem(problem)}</Callout> : null}
-			<ActivityTable items={data.items ?? []} empty="No activity yet." />
+			{pages.problem ? <Callout tone="danger">{describeProblem(pages.problem)}</Callout> : null}
+			<ActivityTable
+				items={pages.items}
+				empty="No activity yet."
+				hasMore={pages.cursor !== null}
+				loadingMore={pages.loading}
+				onLoadMore={() => void pages.more()}
+			/>
 		</Card>
 	);
 }

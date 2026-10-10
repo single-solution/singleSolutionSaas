@@ -58,6 +58,32 @@ const pick = (value, pattern) => (typeof value === 'string' && pattern.test(valu
 const oneOf = (value, allowed) => (typeof value === 'string' && allowed.includes(value) ? value : null);
 
 const CURSOR = /^[A-Za-z0-9_=-]{1,512}$/;
+
+/**
+ * The merchants as dropdown options (`{ value: merchantId, label: name }`, the first 100 by name), plus the selected
+ * one when it is not among them.
+ * @param {ConsoleApi} api
+ * @param {string | null} selected
+ */
+const merchantOptions = async (api, selected) => {
+	const list = itemsOf(await api.get(paths.merchants({ limit: 100 })));
+	const options = list.map((m) => ({ value: String(m.merchantId), label: String(m.name) }));
+	if (selected && !options.some((o) => o.value === selected)) options.push({ value: selected, label: selected });
+	return options;
+};
+
+/**
+ * The admins as dropdown options, for those who may list them (Owners); `null` for the others.
+ * @param {ConsoleApi} api
+ * @param {any} admin the signed-in admin
+ */
+const adminOptions = async (api, admin) =>
+	adminCan(admin, 'admins.manage')
+		? itemsOf(await api.get(paths.admins())).map((a) => ({
+				value: String(a.adminId),
+				label: String(a.name ?? a.email),
+			}))
+		: null;
 const FREE_TEXT = /^[^<>]{1,120}$/;
 
 /**
@@ -232,7 +258,7 @@ const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
  * Credits and billing (PLAN 0.8.2): all receipts (filter by merchant, UTC days, method), charges by day, merchant or
- * product, and the merchants that need attention (checked now).
+ * product, the merchants that need attention (checked now), and the merchants for the filter and Add credits.
  * @param {ConsoleApi} api
  * @param {{ merchantId?: string, from?: string, to?: string, method?: string, by?: string }} [filter]
  */
@@ -242,10 +268,11 @@ export const loadBilling = async (api, filter = {}) => {
 	const to = pick(filter.to, DAY);
 	const method = pick(filter.method?.trim(), /^[^<>]{1,60}$/);
 	const by = oneOf(filter.by, ['day', 'merchant', 'product']) ?? 'day';
-	const [receipts, charges, attention] = await Promise.all([
+	const [receipts, charges, attention, merchants] = await Promise.all([
 		api.get(paths.allReceipts({ merchantId, from, to, method })),
 		api.get(paths.charges({ by, from, to })),
 		api.get(paths.attention()),
+		merchantOptions(api, merchantId),
 	]);
 	const failed = firstFailure(receipts);
 	if (failed) return failed;
@@ -255,15 +282,18 @@ export const loadBilling = async (api, filter = {}) => {
 		receipts: itemsOf(receipts),
 		charges: /** @type {any} */ (orElse(charges, null)),
 		attention: itemsOf(attention),
+		merchants,
 	};
 };
 
 /**
- * Activity: newest-first entries filtered by merchant, admin and UTC days.
+ * Activity: newest-first entries filtered by merchant, admin and UTC days, with the merchants (and, for Owners, the
+ * admins) for the filter dropdowns.
  * @param {ConsoleApi} api
  * @param {{ merchantId?: string, adminId?: string, from?: string, to?: string }} [filter]
+ * @param {any} [admin] the signed-in admin
  */
-export const loadActivity = async (api, filter = {}) => {
+export const loadActivity = async (api, filter = {}, admin = null) => {
 	const day = /^\d{4}-\d{2}-\d{2}$/;
 	const f = {
 		merchantId: pick(filter.merchantId, ID.merchant),
@@ -271,10 +301,14 @@ export const loadActivity = async (api, filter = {}) => {
 		from: pick(filter.from, day),
 		to: pick(filter.to, day),
 	};
-	const list = await api.get(paths.activity(f));
+	const [list, merchants, admins] = await Promise.all([
+		api.get(paths.activity(f)),
+		merchantOptions(api, f.merchantId),
+		adminOptions(api, admin),
+	]);
 	const failed = firstFailure(list);
 	if (failed) return failed;
-	return { ok: /** @type {const} */ (true), filter: f, page: pageOf(list) };
+	return { ok: /** @type {const} */ (true), filter: f, page: pageOf(list), merchants, admins };
 };
 
 /**

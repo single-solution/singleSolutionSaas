@@ -1,12 +1,16 @@
 'use client';
 /**
- * Activity (PLAN 0.5.12, 0.8.2): every entry, newest first, filterable by merchant, admin and date (UTC days).
+ * Activity (PLAN 0.5.12, 0.8.2): every entry, newest first, filterable by merchant, admin and date (UTC days). The
+ * merchant and admin filters are dropdowns of their names (admins for Owners, who see the admin list); a period picks
+ * common date ranges; the names in the entries filter by them; each entry shows what it changed.
  * @module
  */
 import { useState } from 'react';
-import { Button, Callout, Card, Form, Input, PageHeader, describeProblem } from '@ss/ui';
-import { ADMIN } from '../../../texts/console.js';
+import { Button, ButtonLink, Callout, Card, Form, Input, PageHeader, Select, describeProblem } from '@ss/ui';
+import { ADMIN, MORE } from '../../../texts/console.js';
+import { Link } from '../../link.js';
 import { ActivityTable } from '../../views/login-settings.js';
+import { RangeSelect } from '../../views/range.js';
 import { useNavigation } from '../../navigation.js';
 import { usePagedList } from '../client.js';
 import { adminApi, adminRoutes } from '../paths.js';
@@ -27,6 +31,7 @@ export function ActivityView(props) {
 	const list = usePagedList((cursor) => (ok ? adminApi.activity({ ...f, cursor }) : null), ok ? props.page : null);
 	const nav = useNavigation();
 	if (!ok) return <AdminProblem problem={props.problem} />;
+	const filtered = Boolean(f.merchantId || f.adminId || f.from || f.to);
 	/** @param {keyof typeof form} key @param {string} value */
 	const set = (key, value) => setForm((x) => ({ ...x, [key]: value }));
 	const apply = () =>
@@ -43,16 +48,33 @@ export function ActivityView(props) {
 			<PageHeader title={ADMIN.activityTitle} subtitle={ADMIN.activityIntro} />
 			<Card>
 				<Form onSubmit={apply} busy={nav.pending} aria-label={ADMIN.filters.apply}>
-					<div className="grid gap-3 @md:grid-cols-2 @4xl:grid-cols-[1fr_1fr_10rem_10rem_auto] @4xl:items-end">
-						<Input
-							label={ADMIN.filters.merchant}
+					<div className="grid gap-3 @md:grid-cols-2 @4xl:grid-cols-3 @6xl:grid-cols-[1fr_1fr_1fr_10rem_10rem_auto] @6xl:items-end">
+						<Select
+							label={MORE.pickMerchant}
 							value={form.merchantId}
 							onChange={(e) => set('merchantId', e.currentTarget.value)}
+							options={[{ value: '', label: MORE.allMerchants }, ...(props.merchants ?? [])]}
 						/>
-						<Input
-							label={ADMIN.filters.admin}
-							value={form.adminId}
-							onChange={(e) => set('adminId', e.currentTarget.value)}
+						{props.admins ? (
+							<Select
+								label={MORE.adminFilter}
+								value={form.adminId}
+								onChange={(e) => set('adminId', e.currentTarget.value)}
+								options={[{ value: '', label: MORE.allAdmins }, ...props.admins]}
+							/>
+						) : (
+							<Input
+								label={ADMIN.filters.admin}
+								value={form.adminId}
+								onChange={(e) => set('adminId', e.currentTarget.value)}
+							/>
+						)}
+						<RangeSelect
+							from={f.from}
+							to={f.to}
+							emptyLabel={MORE.range.allTime}
+							hrefFor={(range) => adminRoutes.activity({ ...f, ...range })}
+							fieldClassName="min-w-0"
 						/>
 						<Input
 							label={ADMIN.filters.from}
@@ -66,9 +88,16 @@ export function ActivityView(props) {
 							value={form.to}
 							onChange={(e) => set('to', e.currentTarget.value)}
 						/>
-						<Button type="submit" variant="secondary" loading={nav.pending} className="justify-self-start">
-							{ADMIN.filters.apply}
-						</Button>
+						<div className="flex flex-wrap items-center gap-2">
+							<Button type="submit" variant="secondary" loading={nav.pending}>
+								{ADMIN.filters.apply}
+							</Button>
+							{filtered ? (
+								<ButtonLink as={Link} href={adminRoutes.activity()} variant="ghost">
+									{MORE.clearFilters}
+								</ButtonLink>
+							) : null}
+						</div>
 					</div>
 				</Form>
 			</Card>
@@ -77,7 +106,10 @@ export function ActivityView(props) {
 				items={list.items}
 				empty={ADMIN.noActivity}
 				showMerchant
+				details
+				filterHref={(q) => adminRoutes.activity({ ...f, ...q })}
 				hasMore={Boolean(list.cursor)}
+				loadingMore={list.loading}
 				onLoadMore={() => void list.more()}
 			/>
 		</div>
