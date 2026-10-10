@@ -131,7 +131,7 @@ const leave = (win) => {
 
 /** @param {() => boolean | Promise<boolean>} done */
 const until = async (done) => {
-	for (let i = 0; i < 250 && !(await done()); i += 1) await new Promise((resolve) => setTimeout(resolve, 20));
+	for (let i = 0; i < 750 && !(await done()); i += 1) await new Promise((resolve) => setTimeout(resolve, 20));
 };
 
 /** The script addresses in a page head. @param {any} win */

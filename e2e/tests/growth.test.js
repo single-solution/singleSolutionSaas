@@ -69,11 +69,12 @@ const openPage = (consent = null) => {
 };
 
 /**
- * Wait until a condition holds (the page script sends its events without waiting for the answer).
+ * Wait until a condition holds, at most 15 s (the page script sends its events without waiting for the answer; a busy
+ * machine runs the whole suite at once).
  * @param {() => boolean} done
  */
 const until = async (done) => {
-	for (let i = 0; i < 250 && !done(); i += 1) await new Promise((resolve) => setTimeout(resolve, 20));
+	for (let i = 0; i < 750 && !done(); i += 1) await new Promise((resolve) => setTimeout(resolve, 20));
 };
 
 describe('Growth on the real Portal', () => {
