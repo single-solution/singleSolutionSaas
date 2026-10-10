@@ -17,7 +17,15 @@ import { ADD_TO_CART_EVENT, WIDGET_ATTRIBUTE, WIDGET_GLOBAL } from './widgets.js
 export const WIDGET_ATTRIBUTES = Object.freeze({
 	product_grid: Object.freeze([
 		{ name: 'data-category', example: 'phones', help: 'only this category (its id or slug) and its subcategories' },
-		{ name: 'data-brand', example: 'acme', help: 'only this brand (its id or slug)' },
+		{ name: 'data-brand', example: 'acme', help: 'only these brands (ids or slugs, comma-separated)' },
+		{ name: 'data-grade', example: '', help: 'only these grades (keys, comma-separated)' },
+		{ name: 'data-featured', example: '', help: '1: only featured products' },
+		{ name: 'data-deal', example: '', help: "only this deal's products (its id or slug)" },
+		{
+			name: 'data-sort',
+			example: 'newest',
+			help: 'the first sort: newest, price_asc, price_desc, top, rating, name, updated or sold_asc',
+		},
 		{ name: 'data-query', example: '', help: 'start with this search text' },
 		{ name: 'data-limit', example: '24', help: 'products per page' },
 	]),
@@ -254,7 +262,7 @@ export const createSnippets = ({ base, widgets, permissions, browserToken = 'YOU
 		'      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: head.jsonLd }} />',
 		'      <h1>{head.h1}</h1>',
 		'      {head.intro ? <p>{head.intro}</p> : null}',
-		`      <div ${WIDGET_ATTRIBUTE}="product_grid" data-category={slug} data-brand={filters.brand ?? ''} />`,
+		`      <div ${WIDGET_ATTRIBUTE}="product_grid" data-category={slug} data-brand={filters.brand ?? ''} data-grade={filters.grade ?? ''} />`,
 		'      {head.faqs.map((faq) => (',
 		'        <details key={faq.question}>',
 		'          <summary>{faq.question}</summary>',

@@ -3332,6 +3332,100 @@ The owner confirms or changes each one.
 - **Not changed**: Ecommerce's widgets dispatch no `ss:search` or `ss:contact` (the store's code, or a later Ecommerce
   change, can).
 
+#### Builder choices, Phase 3 (Ecommerce catalog) (awaiting owner review)
+
+- **E1 hiding**: a product is hidden from every shopper read, feed, sitemap, llms.txt and Chat lookup when any of its
+  categories, or an ancestor of one, is `hidden` or `coming_soon`, or its brand is `hidden`. `GET /v1/shop/categories`
+  lists active categories; `include=coming_soon` adds coming-soon ones (with `status`); hidden ones and those below
+  them are never listed, and their SEO reads answer 404. A coming-soon category's SEO read answers `robots` noindex and
+  `status: coming_soon`. `brands?category=` keeps brands whose `categoryIds` is empty or holds the category, one of its
+  ancestors or one below it. Counts in the tree and on brands count visible products only. A category or brand a
+  landing page names cannot be deleted (409).
+- **E2**: `stockState` is `none` while stock is not tracked or nothing is active, `out` when no active variant can be
+  sold (sold out or empty), `full` when every one can, else `partial`. Products keep a derived `grades` list (the active
+  variants' grades) for the `grade` filter and `counts?by=grade`, where a product counts under each of its grades
+  (`none` without), and `total` counts each product once; `counts?by=featured` groups `true` and `none`.
+- **E3**: the plain `description` is derived from `descriptionHtml` with blank lines between blocks; `b` and `i` become
+  `strong` and `em`; `script`, `style`, frames and similar are dropped with their content; an `a` whose `href` is not
+  https or site-relative keeps its text without the link. Emptying `descriptionHtml` without sending `description`
+  empties the derived text. `GET /v1/policies` answers `{ format, <policy>… }` (the `format` key added beside the filled,
+  non-empty policies); `{warrantyMonths}` is the warranty days divided by 30, rounded; the checkout widget config carries
+  the same filled policies and `policyFormat`.
+- **E4**: a video file is an upload made for the product, checked in the bucket (MP4 or WebM, at most `videoMaxBytes`)
+  the first time it is named; YouTube takes an id or a YouTube address and shoppers get a `youtube-nocookie.com` embed
+  address; `url` must be https. Deleting a product deletes its video and every photo size and variant photo.
+- **E5**: only active charts are shown; a chart is set on products only while Size charts is on (also on categories and
+  brands); chart answers carry `uses` (products, brands, categories); at most 1,000 charts per website.
+- **E6**: `sizes` keys must be uploads under the record's folder and exist in the bucket; cards and sitemaps prefer the
+  `card` copy for the card image; `cardImages` are the first photos of active variants, one per distinct first photo
+  (variants sharing it look the same), at most 4. Variant photos are uploads for the product or the product's own photos
+  (which lend their alternative text); removing a product photo removes it from the variants; sitemap image entries
+  list the product's photos, then its variants' (at most 10).
+- **E7**: variant attributes are text, number or choice (no yes/no on variants); a choice may also take the product's
+  own values (`customValues`). An axis is the attribute's name and its value the labels joined with commas; once a
+  variant has attributes, the options are derived and any given options are ignored. Changing an attribute's type, its
+  place (product or variant) or taking away several values is refused while products use it. Slugs are unique per
+  website ('' = made from the name). `visibility` is `{ when, ids, attributeId, value }`; it is kept for the widgets and
+  the stores to show, the server's reads do not filter by it. The generator combines the set-up values and own values of
+  variant attributes; generated variants get stock only without multi-location stock. The bulk generator takes
+  `{ ids, price?, stock? }` (price default: each product's lowest price; stock 0) and answers per product
+  `{ id, added }` or `{ id, error }`.
+- **E8**: `attr.<slug>` also takes an attribute id; product attributes match on the product, variant attributes inside
+  the one-variant match together with price, grade and stock; the price range is now judged on variants. With `page`
+  the cursor is ignored (skip by page); facets come with the first page only; the price facet's maximum is the highest
+  variant price. Answers add `hasMore`. `deal=` takes an id or a slug (slugs arrive with E18), a missing deal matches
+  nothing, and a deal's scope is read as pricing reads it (any of its lists; categories with those below them).
+- **E9**: `stockLeft` is null while stock is not tracked or the setting is `none`; a sold-out or inactive variant shows 0
+  where stock is shown. Quotes answer `out_of_stock` for a sold-out variant and placement refuses it. `soldOut` may be
+  sent alone on the stock route; the activity detail says "sold out" or "for sale".
+- **E10**: a grade's `categoryIds` are not enforced on variants (they decide what llms-full.txt and widgets list per
+  category); `condition` null uses the `gradedCondition` setting; `color` is a CSS colour text (at most 40); `video` is a
+  file key or YouTube id (not checked in the bucket); inactive grades stay on old variants and leave the glossary and
+  llms-full.txt. The widget config's grades add `color`, `active` and `categoryIds`.
+- **E11**: a product with `serialized: null` follows its categories (a category's `requiresSerial`, else the nearest
+  ancestor's; serialized when any of its categories says so); new products stay `false` unless sent. Typed serials may be
+  sent when packing (optional) or with `PATCH /v1/orders/:id` while the order is packed, shipped or delivered; a list
+  sent for a line holds one per unit; every serialized line needs them before a shipped-role status. They are kept as
+  sold serial records marked `typed`, removed (not restocked) on cancel or return to origin; a registered unit in stock
+  typed by staff is taken from stock; a number recorded for another unit is refused. `imei` means exactly 15 digits
+  passing Luhn. Serial numbers are 1–64 characters (were 80).
+- **E12**: each physical line keeps the warranty resolved at placement (variant, product, grade, then the `returns`
+  setting); claims use it, older orders keep the old rule; invoices print it with the new `invoices` text
+  `labelWarranty` ("Warranty: {days} days"); shopper order answers carry `serials` and `warrantyDays` per line.
+- **E13**: `{category}` is the first category's slug and `{categoryPath}` its slugs from the root (an empty segment
+  collapses); `{path}` in `categoryUrl` the same for categories; `variantQuery` drops pairs with empty values and joins
+  several values with commas. Old slugs and slugs in any case answer 200 `{ moved: { slug, url } }` on the shop product
+  page, the product and category SEO reads and the listing head; `retiredUrl: category` moves archived products only
+  (drafts stay 404), to a category shoppers see. Cart quote lines carry `url` (the variant's page). Order messages hold
+  no product links today, so nothing changed there.
+- **E14**: the index definition is in the docs (name autocomplete and string, summary and tags as strings, websiteId,
+  status, brandId and categoryIds as tokens); brands and categories whose names hold every word boost their products
+  through a token match; an explicit `sort` keeps its order, otherwise results rank by score; any failure of the stage
+  answers with the basic search. The state is kept in the product database next to the website's settings, written
+  only when it changes, and read by the dashboard (`GET /v1/dashboard/websites/:websiteId/search-index`, Overview).
+  Chat's product search uses Atlas too. "Works on Atlas" cannot be tested here (no Atlas in the test database).
+- **E15**: `GET /v1/seo/listing` belongs to `seo` (category pages need it without landing pages); landing pages are
+  matched only while `landing_pages` is on and only for exact filters (a category, at most one brand, at most one grade;
+  any other parameter except `page`, `limit` and `cursor` is a filter and answers noindex). Pages after the first keep
+  `index` with `?page=N` in the canonical address. A landing page without a category fills `{categoryUrl}` with the home
+  page. Two settings were added to `landing_pages` for the glossary addresses, `attributeUrl` and `gradeUrl` ('' = no
+  glossary pages: canonical null, noindex, not in the sitemap); a glossary page is listed when the attribute or grade is
+  active and has a glossary text or description. Landing AI copy is a route of `ai_copy` that needs `landing_pages` on.
+  One landing page per category, brand and grade; at most 2,000.
+- **E16**: a product is a ProductGroup only with two or more active variants (one variant stays a Product); `variesBy`
+  maps Size, Colour, Color, Material and Pattern to schema.org properties and names other options as they are.
+  `shippingDetails` come from the Delivery zones setting `defaultFee` and the business.json country while that feature
+  is on; the return policy while Returns is on (0 days = not permitted); the five newest approved reviews are review
+  nodes. SEO answers add `robots` (`index|noindex, follow|nofollow`) and products `focusKeyword`. Files of a sitemap
+  index are at the sitemap address with `?file=<name>`; the categories file is not split (at most 5,000 categories);
+  pages marked noindex leave the sitemap. `llms-full.txt` answers 404 while `full` is off; products go under their first
+  category (others last under Products), every visible product in stock (at most 50,000, 5 MB). IndexNow sends active
+  products and categories after a create or change (not deletes); a failure is only logged. The Growth token is the
+  connection `growth`.
+- **E17**: legacy ids only when both ids are imported (a prefix and 24 hex digits), else the variant id; shipping is
+  sent only with a business.json country (Google needs one); whole units round half up; each row links to its variant's
+  page and uses its variant's first photo; the Meta CSV adds `google_product_category` and `custom_label_0`.
+
 ### 0.8.4 Still open
 
 - **The grilling of each later product** (Notifications, Accounts, Payments, Ecommerce, Growth), held right before it is

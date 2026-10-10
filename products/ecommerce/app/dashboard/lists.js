@@ -1,9 +1,9 @@
 'use client';
 /**
  * Settings list editors (Ecommerce's list settings, `adapters/lists.js`): the order flow (statuses with roles and the
- * allowed moves), couriers, delivery zones, tax rules, condition grades and booking hours. Each list is read with
- * `GET /v1/dashboard/websites/:websiteId/lists/:list` and saved whole with `PUT … { value }`; a 422 lists the server's
- * check errors, which are shown under the editor.
+ * allowed moves), couriers, delivery zones, tax rules and booking hours, and the pieces the condition grades editor
+ * (`./grades.js`) shares. Each list is read with `GET /v1/dashboard/websites/:websiteId/lists/:list` and saved whole
+ * with `PUT … { value }`; a 422 lists the server's check errors, which are shown under the editor.
  * @module
  */
 import { useState } from 'react';
@@ -24,6 +24,7 @@ import { DEFAULT_FLOW, canMove } from '../../core/flow.js';
 import { STATUS_ROLES } from '../../core/model.js';
 import { exponentOf, fromDecimal, toDecimal } from '../../core/money.js';
 import { call, fill, useLoad } from './api.js';
+import { cleanLines, keyOf } from './drafts.js';
 import { Loaded } from './parts.js';
 import { TEXTS } from './texts.js';
 
@@ -34,36 +35,13 @@ import { TEXTS } from './texts.js';
 const L = TEXTS.lists;
 
 /**
- * Lines as saved: trimmed, empty ones dropped.
- * @param {unknown} lines
- */
-const cleanLines = (lines) =>
-	(Array.isArray(lines) ? lines : []).map((line) => String(line).trim()).filter((line) => line !== '');
-
-/**
- * A key made from a name when none was typed (`Express Delivery` → `express_delivery`).
- * @param {unknown} key
- * @param {unknown} name
- */
-const keyOf = (key, name) => {
-	const typed = String(key ?? '').trim();
-	if (typed !== '') return typed;
-	const made = String(name ?? '')
-		.toLowerCase()
-		.replace(/[^a-z0-9]+/g, '_')
-		.replace(/^[^a-z]+|_+$/g, '')
-		.slice(0, 40);
-	return made;
-};
-
-/**
  * A copy of `items` with the entry at `index` moved by `step` (-1 up, 1 down).
  * @template T
  * @param {T[]} items
  * @param {number} index
  * @param {number} step
  */
-const moved = (items, index, step) => {
+export const moved = (items, index, step) => {
 	const to = index + step;
 	if (to < 0 || to >= items.length) return items;
 	const next = [...items];
@@ -118,7 +96,7 @@ const decimalOf = (amount, currency) =>
  * Up, down and remove buttons of one entry.
  * @param {{ label: string, index: number, count: number, onMove: (step: number) => void, onRemove: () => void }} props
  */
-function EntryHead({ label, index, count, onMove, onRemove }) {
+export function EntryHead({ label, index, count, onMove, onRemove }) {
 	return (
 		<div className="flex flex-wrap items-center gap-1">
 			<span className="mr-auto text-sm font-bold">{`${label} ${index + 1}`}</span>
@@ -139,7 +117,7 @@ function EntryHead({ label, index, count, onMove, onRemove }) {
  * The outcome of a save: local errors, the server's check errors, another problem, or saved.
  * @param {{ result: import('./api.js').Answer | null, local: string[] }} props
  */
-function ListOutcome({ result, local }) {
+export function ListOutcome({ result, local }) {
 	const problems = local.length > 0 ? local : result && !result.ok ? errorLines(result.problem) : [];
 	if (problems.length > 0)
 		return (
@@ -159,7 +137,7 @@ function ListOutcome({ result, local }) {
  * Save and Cancel under an editor.
  * @param {{ dirty: boolean, onSave: () => Promise<void>, onCancel: () => void, children?: import('react').ReactNode }} props
  */
-function SaveRow({ dirty, onSave, onCancel, children }) {
+export function SaveRow({ dirty, onSave, onCancel, children }) {
 	const [busy, setBusy] = useState(false);
 	return (
 		<div className="flex flex-wrap gap-2">
@@ -189,7 +167,7 @@ function SaveRow({ dirty, onSave, onCancel, children }) {
  * @param {string} websiteId
  * @param {string} list
  */
-const useList = (websiteId, list) => {
+export const useList = (websiteId, list) => {
 	const path = `/v1/dashboard/websites/${websiteId}/lists/${list}`;
 	const { answer, reload } = useLoad(path);
 	const [draft, setDraft] = useState(/** @type {any} */ (null));
@@ -416,77 +394,6 @@ export function ZonesEditor({ websiteId, off, currency }) {
 						rows={3}
 						value={zone.areas.join('\n')}
 						onChange={(event) => set({ areas: event.target.value.split('\n') })}
-					/>
-				</FieldGrid>
-			)}
-		/>
-	);
-}
-
-const G = L.grades;
-
-/**
- * Whole days typed, or null when left empty (the feature's own default applies).
- * @param {unknown} text
- */
-const daysOf = (text) => {
-	const value = String(text ?? '').trim();
-	return value === '' ? null : Number(value);
-};
-
-/** Condition grades with their return and warranty days (`grades`, feature grades_serials). @param {EditorProps} props */
-export function GradesEditor({ websiteId, off }) {
-	return (
-		<ListEditor
-			websiteId={websiteId}
-			list="grades"
-			title={G.title}
-			help={G.help}
-			itemLabel={G.item}
-			max={20}
-			off={off}
-			blank={() => ({ key: '', label: '', description: '', returnDays: '', warrantyDays: '' })}
-			load={(grade) => ({
-				...grade,
-				returnDays: grade.returnDays === null || grade.returnDays === undefined ? '' : String(grade.returnDays),
-				warrantyDays: grade.warrantyDays === null || grade.warrantyDays === undefined ? '' : String(grade.warrantyDays),
-			})}
-			clean={(grade) => ({
-				key: keyOf(grade.key, grade.label),
-				label: String(grade.label ?? '').trim(),
-				description: String(grade.description ?? '').trim(),
-				returnDays: daysOf(grade.returnDays),
-				warrantyDays: daysOf(grade.warrantyDays),
-			})}
-			render={(grade, set) => (
-				<FieldGrid>
-					<Input label={G.label} value={grade.label ?? ''} onChange={(event) => set({ label: event.target.value })} />
-					<Input
-						label={G.key}
-						value={grade.key ?? ''}
-						maxLength={40}
-						autoComplete="off"
-						onChange={(event) => set({ key: event.target.value })}
-					/>
-					<Input
-						label={G.returnDays}
-						type="number"
-						min={0}
-						value={grade.returnDays}
-						onChange={(event) => set({ returnDays: event.target.value })}
-					/>
-					<Input
-						label={G.warrantyDays}
-						type="number"
-						min={0}
-						value={grade.warrantyDays}
-						onChange={(event) => set({ warrantyDays: event.target.value })}
-					/>
-					<TextArea
-						label={G.description}
-						rows={2}
-						value={grade.description ?? ''}
-						onChange={(event) => set({ description: event.target.value })}
 					/>
 				</FieldGrid>
 			)}

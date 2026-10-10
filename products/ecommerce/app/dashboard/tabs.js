@@ -26,11 +26,12 @@ import {
 	parseCredits,
 } from '@ss/ui';
 import manifest from '../../manifest.json' with { type: 'json' };
+import { SEARCH_INDEX_DEFINITION } from '../../core/search.js';
 import { SITE_ROUTES, createSnippets } from '../../core/snippets.js';
 import { call, fill, useLoad } from './api.js';
 import { ConnectionForm, FORMS } from './forms.js';
 import { FormatForm, Loaded, Outcome, RecentChanges, SettingsForms, StatusBanner, TextsForm, ThemeForm } from './parts.js';
-import { SettingsSections, SettingsTab } from './settings.js';
+import { SettingsSections, SettingsTab, settingsNotice } from './settings.js';
 import { TEXTS } from './texts.js';
 
 /** @typedef {{ kind: 'merchant' | 'admin', id: string, name: string, role?: 'owner' | 'support' }} Who */
@@ -100,11 +101,48 @@ function ConnectionRow({ item, why, extra }) {
 	);
 }
 
+/**
+ * @typedef {{ search: 'basic' | 'atlas', index: string,
+ *   state: { missing: boolean, at: string, message: string } | null }} SearchIndex
+ */
+
+/**
+ * The Atlas Search index on the checklist (E14): ready when it answered the last search, missing (basic search answers
+ * meanwhile) or not checked before the first shop search; the docs say how to create it.
+ * @param {{ found: SearchIndex }} props
+ */
+function SearchIndexRow({ found }) {
+	const O = TEXTS.overview;
+	const { state, index } = found;
+	const time = state ? formatDateTime(state.at) : '';
+	const detail = !state
+		? fill(O.searchUncheckedDetail, { index })
+		: state.missing
+			? [fill(O.searchMissingDetail, { index, time }), state.message ? fill(O.searchMessage, { message: state.message }) : '']
+					.filter(Boolean)
+					.join(' ')
+			: fill(O.searchReadyDetail, { index, time });
+	return (
+		<CheckRow
+			tone={!state ? 'neutral' : state.missing ? 'warning' : 'success'}
+			badge={!state ? O.searchUnchecked : state.missing ? O.searchMissing : O.searchReady}
+			label={O.searchIndex}
+			detail={detail}>
+			{state && !state.missing ? null : (
+				<a className="text-sm font-semibold text-primary hover:underline" href="/docs#atlas-search">
+					{O.searchDocs}
+				</a>
+			)}
+		</CheckRow>
+	);
+}
+
 /** @param {TabProps} props */
 function OverviewTab({ websiteId }) {
 	const base = `/v1/dashboard/websites/${websiteId}`;
 	const { answer, reload } = useLoad(`${base}/overview`);
 	const connections = useLoad(`${base}/connections`);
+	const search = useLoad(`${base}/search-index`);
 	const [busy, setBusy] = useState(false);
 	return (
 		<Loaded answer={answer}>
@@ -123,6 +161,9 @@ function OverviewTab({ websiteId }) {
 						? (all.find((item) => item.name === 'notifications') ?? null)
 						: null;
 				const ready = needed.filter((item) => item.status === 'connected').length;
+				/** @type {SearchIndex | null} the index, while the catalog searches with Atlas */
+				const atlas =
+					on.includes('catalog') && search.answer?.ok && search.answer.data?.search === 'atlas' ? search.answer.data : null;
 				return (
 					<div className="space-y-8">
 						<StatusBanner status={data.status} />
@@ -177,6 +218,7 @@ function OverviewTab({ websiteId }) {
 									{messages ? (
 										<ConnectionRow item={messages} why={TEXTS.overview.messagesWhy} extra={TEXTS.overview.optional} />
 									) : null}
+									{atlas ? <SearchIndexRow found={atlas} /> : null}
 									{data.checklist.widget ? (
 										<CheckRow
 											tone={data.checklist.widget.installed ? 'success' : 'warning'}
@@ -463,6 +505,9 @@ function DevelopersTab({ websiteId, portal }) {
 							<a className="text-sm font-semibold text-primary" href="/docs">
 								{D.openDocs}
 							</a>
+							<a className="text-sm font-semibold text-primary" href="/docs#catalog-seo">
+								{D.catalogSeo}
+							</a>
 							<a className="text-sm font-semibold text-primary" href={portal}>
 								{D.manageTokens}
 							</a>
@@ -492,8 +537,19 @@ function DevelopersTab({ websiteId, portal }) {
 								<CodeBlock key={entry.name} code={snippets.site[entry.name] ?? ''} />
 							))}
 							<CodeBlock code={snippets.productMeta} />
+							<CodeBlock code={snippets.listingPage} />
 							<CodeBlock code={snippets.policies} />
 						</div>
+					</Section>
+					<Section
+						title={D.searchIndex}
+						description={fill(D.searchIndexHelp, { collection: 'ss_ecommerce_products' })}
+						actions={
+							<a className="text-sm font-semibold text-primary hover:underline" href="/docs#atlas-search">
+								{D.searchIndexDocs}
+							</a>
+						}>
+						<CodeBlock code={JSON.stringify(SEARCH_INDEX_DEFINITION, null, 2)} />
 					</Section>
 					<Section title={D.cors} description={D.corsHelp}>
 						<CodeBlock code={snippets.cors} />
@@ -516,7 +572,14 @@ function DefaultsTab() {
 					<SettingsSections
 						features={data.features}
 						forms={(shown) => (
-							<SettingsForms features={shown} saveUrl={saveUrl} resetBody savedSource="default" reload={reload} />
+							<SettingsForms
+								features={shown}
+								saveUrl={saveUrl}
+								resetBody
+								savedSource="default"
+								reload={reload}
+								notice={settingsNotice}
+							/>
 						)}
 						extras={{
 							texts: (

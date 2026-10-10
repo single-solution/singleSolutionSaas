@@ -19,7 +19,7 @@
 		"sitemapUrl": {
 			"type": "string",
 			"title": "Sitemap address",
-			"description": "Where your website serves the sitemap. With more than 50,000 pages it is split into pages at this address with ?page=1, ?page=2 …",
+			"description": "Where your website serves the sitemap. Above the addresses per sitemap file it becomes an index of files at this address with ?file=categories, ?file=landings, ?file=products-1 …",
 			"default": "/sitemap.xml",
 			"maxLength": 200
 		},

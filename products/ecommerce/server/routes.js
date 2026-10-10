@@ -12,6 +12,7 @@ import { defineRoute, problem } from '@ss/app-kit';
 import { LISTS, isListName } from '../adapters/lists.js';
 import { createCatalog } from './catalog.js';
 import { createCheckout } from './checkout.js';
+import { createDashboardSearch } from './dashboard-search.js';
 import { renderDocs } from './docs.js';
 import { createExtras } from './extras.js';
 import { createOrders } from './orders.js';
@@ -125,6 +126,9 @@ export const createRoutes = (product) => {
 					headers: { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'public, max-age=300' },
 				}),
 		}),
+
+		// the Atlas Search index state on Overview (E14)
+		...createDashboardSearch(product),
 
 		// the dashboard's list settings (order flow, couriers, delivery zones, tax rules, grades, booking hours)
 		defineRoute({

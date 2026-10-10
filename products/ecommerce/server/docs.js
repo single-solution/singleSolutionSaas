@@ -2,12 +2,13 @@
  * The public docs at `/docs` (PLAN 0.4.10, 0.8.8): the widgets with their data attributes, the JS API, the
  * add-to-cart event and the browser events for Growth (PLAN 0.8.9), the Accounts sign-in checkout needs, paying
  * through Payments and the success page, the order flow and its roles, the Notifications templates, couriers (tracking
- * links and the courier API adapter), the storage CORS rule, what the merchant's site serves from the API (sitemap,
- * product meta, feeds, llms.txt, policies), the Chat lookups, the Accounts Orders lookup, data rights, per-feature
- * guides with their routes and widgets, the admin widgets and the ticket snippet (Node.js and cURL), the kit's routes
- * for your server (settings and lists, the acting user, visitor calls, counts, activity, Format; PLAN 0.8.10), the
- * business.json template, the localhost note and the API reference from `openapi.json`. Plain HTML; every value is
- * escaped.
+ * links and the courier API adapter), the storage CORS rule, what the merchant's site serves from the API (the sitemap
+ * index and its files, feeds, llms.txt and llms-full.txt, the product page with its 308 for moved addresses, listing
+ * pages, policies), Catalog and SEO (PLAN 0.8.10 E1–E17: each addition with its routes and their features, and the
+ * Atlas Search index definition), the Chat lookups, the Accounts Orders lookup, data rights, per-feature guides with
+ * their routes and widgets, the admin widgets and the ticket snippet (Node.js and cURL), the kit's routes for your
+ * server (settings and lists, the acting user, visitor calls, counts, activity, Format; PLAN 0.8.10), the business.json
+ * template, the localhost note and the API reference from `openapi.json`. Plain HTML; every value is escaped.
  * @module
  */
 import { KIT_GUIDE } from '@ss/app-kit';
@@ -15,6 +16,7 @@ import { BUSINESS_JSON_TEMPLATE } from '@ss/contracts';
 import guide from '../docs/guide.json' with { type: 'json' };
 import openapi from '../openapi.json' with { type: 'json' };
 import { DEFAULT_FLOW } from '../core/flow.js';
+import { SEARCH_INDEX_DEFINITION } from '../core/search.js';
 import { SITE_ROUTES, WIDGET_ATTRIBUTES, createSnippets } from '../core/snippets.js';
 import { ADD_TO_CART_EVENT, WIDGET_ATTRIBUTE } from '../core/widgets.js';
 import { manifest } from '../adapters/product.js';
@@ -63,6 +65,12 @@ const routeTable = (rows) =>
 		.join('')}</tbody></table>`;
 
 /**
+ * A Catalog and SEO section of the guide (PLAN 0.8.10 E1–E17): paragraphs (or a named code block in their flow) and
+ * the routes it uses, each with the feature it needs.
+ * @typedef {{ id: string, title: string, paragraphs: Array<string | { code: string }>, routes: Array<[string, string]> }} GuideSection
+ */
+
+/**
  * The docs page.
  * @param {{ base: string, paths?: unknown }} input Ecommerce's address (snippets point at it); `paths` replaces the
  *   operations of `openapi.json` (tests)
@@ -77,6 +85,8 @@ export const renderDocs = ({ base, paths = openapi.paths }) => {
 	const snippets = createSnippets({ base, widgets: manifest.widgets, permissions });
 	const rows = operations(paths);
 	const nameOf = new Map(manifest.features.map((feature) => [feature.key, feature.name]));
+	/** Code blocks a guide section names. @type {Record<string, string>} */
+	const codes = { searchIndex: JSON.stringify(SEARCH_INDEX_DEFINITION, null, 2) };
 
 	const widgetRows = manifest.widgets.map((widget) => {
 		const attributes = (WIDGET_ATTRIBUTES[widget.key] ?? []).map(
@@ -129,6 +139,20 @@ export const renderDocs = ({ base, paths = openapi.paths }) => {
 				/** @type {string} */ (snippets.site[entry.name]),
 			)}`,
 	).join('\n');
+	const catalogSeo = /** @type {{ intro: string, sections: GuideSection[] }} */ (guide.catalogSeo);
+	const catalogSections = catalogSeo.sections.map((section) =>
+		[
+			`<section id="${escape(section.id)}"><h3>${escape(section.title)}</h3>`,
+			...section.paragraphs.map((part) => (typeof part === 'string' ? para(part) : block(codes[part.code] ?? ''))),
+			list(
+				section.routes.map(
+					([route, feature]) =>
+						`<code>${escape(route)}</code> (${escape(nameOf.get(feature) ?? feature)}, <code>${escape(feature)}</code>)`,
+				),
+			),
+			'</section>',
+		].join(''),
+	);
 	const permissionList = list(
 		manifest.permissions.map(
 			(permission) =>
@@ -191,9 +215,15 @@ ${site}
 <h3><code>GET /v1/seo/products/:ref</code></h3>
 ${para(guide.productMeta)}
 ${block(snippets.productMeta)}
+<h3><code>GET /v1/seo/listing</code></h3>
+${para(guide.listing)}
+${block(snippets.listingPage)}
 <h3><code>GET /v1/policies</code></h3>
 ${para(guide.policies)}
 ${block(snippets.policies)}
+<h2 id="catalog-seo">Catalog and SEO</h2>
+${para(catalogSeo.intro)}
+${catalogSections.join('\n')}
 <h2 id="chat">Chat lookups</h2>
 ${para(guide.chat)}
 ${list(guide.chatRoutes.map((route) => `<code>${escape(route)}</code>`))}

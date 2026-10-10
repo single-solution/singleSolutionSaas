@@ -5,8 +5,8 @@
 	"install": "Add the script to every page of your shop, then place each widget where it belongs. A widget renders nothing while its feature is off, the product is stopped or your database is not connected. Every word the widgets show can be changed in Settings → Texts, and their look in Settings → Theme.",
 	"attributes": "Data attributes of the visitor widgets:",
 	"widgets": {
-		"product_grid": "Product listing with filters, sorting and search.",
-		"product_page": "The product page blocks: gallery, variant picker, price, buy box and reviews.",
+		"product_grid": "Product listing with filters, sorting, search, page numbers and result totals.",
+		"product_page": "The product page blocks: gallery with variant photos, video, variant picker, price and stock, buy box, size guide, FAQs and reviews.",
 		"cart": "The cart, checkout and the success page after payment.",
 		"my_orders": "The shopper's orders with tracking, invoices and returns.",
 		"wishlist": "The shopper's wishlist.",
@@ -47,13 +47,15 @@
 	"storage": "Product images, downloads and return photos are kept in your own S3-compatible bucket (Connections → Storage). Uploads go from the browser straight to the bucket with a short presigned PUT, so the bucket's CORS must allow PUT (and GET) from your website's origin and from your admin page's origin:",
 	"site": "Some things must be served from your own domain: the sitemap, product meta tags and structured data, product feeds, llms.txt and your policy pages. Your site fetches them from the API with the server token (never from the browser) and serves them; the snippets below are Next.js route handlers and pages, and any server can do the same with a plain HTTPS request.",
 	"siteRoutes": {
-		"sitemap": "The sitemap of your products and categories (SEO). A large catalog is split into pages: the first answer is then a sitemap index pointing at ?page=2 and so on, which the route below passes on. Add Sitemap: https://<your domain>/sitemap.xml to your robots.txt.",
+		"sitemap": "The sitemap of your categories, indexable landing and glossary pages and products, with their images (SEO). Above the seo setting sitemapSize addresses (10,000 by default) the answer is a sitemap index whose files are your sitemap address with ?file=categories, ?file=landings, ?file=products-1 and so on; the route below fetches each file from GET /v1/seo/sitemaps/<file>. The index uses the seo setting sitemapUrl (/sitemap.xml by default) as your sitemap address. Add Sitemap: https://<your domain>/sitemap.xml to your robots.txt.",
 		"feedXml": "The product feed for shopping and social catalogues (Feeds), as XML.",
 		"feedCsv": "The same feed as CSV.",
-		"llms": "llms.txt of your catalog for AI assistants (llms.txt)."
+		"llms": "llms.txt of your catalog for AI assistants (llms.txt).",
+		"llmsFull": "llms-full.txt: every product in stock with its price range, by category, with the grades of each category (llms.txt, with the llms_txt setting full on; 404 otherwise)."
 	},
-	"productMeta": "GET /v1/seo/products/<id or slug> (and GET /v1/seo/categories/<id or slug>) answers { title, description, canonical, image, jsonLd }: the meta tags and the JSON-LD structured data (a string safe to put in a script tag) for your product and category pages.",
-	"policies": "GET /v1/policies answers your shipping, returns, privacy and terms texts (Settings → Policies), for your own policy pages:",
+	"productMeta": "GET /v1/seo/products/<id or slug> answers { title, description, canonical, image, robots, focusKeyword, jsonLd } for your product page: the meta tags, robots (from the product's noindex and nofollow) and the JSON-LD structured data (a ProductGroup with its variants, as a string safe to put in a script tag). An earlier slug, a slug in other letter case or an archived product sent to its category (retiredUrl) answers { moved: { slug, url } } instead: answer it with a 308 to url. GET /v1/seo/categories/<id or slug> answers the same for a category page (with status coming_soon and robots noindex while it is coming soon).",
+	"listing": "GET /v1/seo/listing?category=<id or slug>&brand=&grade=&page=&… answers what a listing page (a category, a landing page, or any filtered list) puts in its head and above the grid: { h1, title, description, intro, faqs, canonical, robots, landing, jsonLd } (CollectionPage, ItemList and BreadcrumbList). robots is index only for a category and its pages without other filters and for an indexable landing page; any other filter is noindex, follow, so filtered lists never compete with your category pages. Pass your page's query as it is; an earlier category slug answers { moved } like a product.",
+	"policies": "GET /v1/policies answers { format, shipping, returns, privacy, terms, warranty } from Settings → Policies, for your own policy pages: empty policies are left out, and {returnDays}, {warrantyDays}, {warrantyMonths} and {business} are filled in. With the checkout setting policyFormat html the texts are HTML cleaned by Ecommerce to p, br, strong, em, u, ul, ol, li, h3, h4, blockquote and links (https or on your site):",
 	"chat": "Chat's shop tools read your shop through these lookups with your website's Ecommerce server token (paste it into Chat's Connections). They only read. The me/* lookups take the visitor's Accounts sign-in forwarded in the SS-Sign-In header; Ecommerce verifies it with Accounts.",
 	"chatRoutes": [
 		"GET /v1/chat/products?q=<text>&limit=5: search the catalog",
@@ -69,21 +71,232 @@
 	"dataRights": "Data rights run through Accounts: when a user asks for their data or to be deleted, Accounts calls each product. Ecommerce finds the person's records by Accounts user id, e-mail or phone; an export lists their orders, returns, reviews, wishlist, alerts and loyalty history, and a deletion erases them or, where you must keep an order for your accounts, removes the personal details from it. Staff actions in the admin widgets are copied to the Accounts activity log.",
 	"admin": "Admin widgets run in your own admin with a ticket. Include the script without data-token, place the widgets and register your ticket function. The widget calls it at start and 1 minute before the ticket expires; your server checks the user's sign-in and role every time and asks only for the permissions that user has.",
 	"tickets": "Your server asks for a ticket with the server token (never send the server token to a browser). The origin is the address of your admin page: any https origin, or a local one while testing. Tickets last 15 minutes and carry only the permissions of switched-on features. Permissions:",
-	"kit": "In Ecommerce: the lists are order_flow, couriers, delivery_zones, tax_rules, grades and booking_hours (GET and PUT /v1/lists/<list> with { value }, checked like the dashboard's editors). Counts: orders (/v1/orders/count and /counts?by=status|role|paymentMethod|paymentState; role groups the status keys by their role in your order flow), products (by=status|brand), customers (by=blocked), reviews and returns (by=status), each with the same filters as its list and an /v1/admin/ twin for the admin widgets. An order move or refund and a return claim step made with SS-Actor headers show that staff member's name in the order's or the claim's history, every change shows it in the activity log (with the order number, product name or code as its label), and a refund through Payments names them there too. Every visitor route under /v1/shop/ takes the server token with SS-Sign-In and SS-Visitor-IP. Totals and prices in messages, invoices, packing slips, llms.txt and the Chat lookups (priceText, totalText) follow your Format; order numbers take the year in your business time zone, and report days are days in that time zone.",
+	"kit": "In Ecommerce: the lists are order_flow, couriers, delivery_zones, tax_rules, grades and booking_hours (GET and PUT /v1/lists/<list> with { value }, checked like the dashboard's editors). Counts: orders (/v1/orders/count and /counts?by=status|role|paymentMethod|paymentState; role groups the status keys by their role in your order flow), products (by=status|brand|stockState|featured|grade), customers (by=blocked), reviews and returns (by=status), each with the same filters as its list and an /v1/admin/ twin for the admin widgets. An order move or refund and a return claim step made with SS-Actor headers show that staff member's name in the order's or the claim's history, every change shows it in the activity log (with the order number, product name or code as its label), and a refund through Payments names them there too. Every visitor route under /v1/shop/ takes the server token with SS-Sign-In and SS-Visitor-IP. Totals and prices in messages, invoices, packing slips, llms.txt and the Chat lookups (priceText, totalText) follow your Format; order numbers take the year in your business time zone, and report days are days in that time zone.",
 	"business": "Every product reads your business basics (name, contact, address) from https://<your domain>/.well-known/business.json. Only name is required; without the file the name is your domain. Shop-only details (payment methods, delivery, policies) are Ecommerce settings.",
 	"api": "Every route answers JSON (feeds, sitemap and llms.txt answer their own formats); errors are RFC 9457 problems with a stable code. Amounts are integer minor units of your shop currency. Times are ISO 8601 in UTC. Lists are paged with cursor and limit. Routes that create things or move money take an Idempotency-Key header. Routes of a feature that is off answer 403 feature_off.",
+	"catalogSeo": {
+		"intro": "What the catalog and its SEO can do beyond the basics, each with the feature it needs. Routes are named with the server token; every staff route also has its /v1/admin/ twin for the admin widgets (ticket with catalog.edit), and the catalog admin widget edits every field below.",
+		"sections": [
+			{
+				"id": "category-brand-status",
+				"title": "Category and brand status and content",
+				"paragraphs": [
+					"Categories have a status: active, coming_soon (listed with their content, their products hidden) or hidden. Brands are active or hidden, and list the categories they belong to (categoryIds; none = every category). A hidden category or brand hides its products from every shopper read, feed, sitemap, llms.txt and Chat lookup, judged on every read, so switching it back shows them again at once.",
+					"Categories also carry an icon (a name of at most 40 characters your website maps to its own icon), content { summary, bullets: [{ text, icon }] } with at most 12 bullets, at most 20 FAQs, a size chart, requiresSerial (true, false or null) and the SEO fields; brands carry the SEO fields and a size chart. Earlier slugs are kept in previousSlugs (read-only)."
+				],
+				"routes": [
+					["GET /v1/shop/categories?include=coming_soon", "catalog"],
+					["GET /v1/shop/brands?category=<id or slug>", "catalog"],
+					["PATCH /v1/categories/:id", "catalog"],
+					["PATCH /v1/brands/:id", "catalog"]
+				]
+			},
+			{
+				"id": "featured-filters",
+				"title": "Featured products and staff filters",
+				"paragraphs": [
+					"Products have a featured flag; shop listings take featured=1. The staff product list filters by q, status, kind, category, brand (several, comma-separated), lowStock, featured (1 or 0), stockState (none, out, partial or full; several), hasMedia (1 or 0) and grade (several), and its rows add featured, stockState, grades and mediaCount. Counts take the same filters: /v1/products/count, and /v1/products/counts?by=status, brand, stockState, featured or grade."
+				],
+				"routes": [
+					["GET /v1/products", "catalog"],
+					["GET /v1/products/count", "catalog"],
+					["GET /v1/products/counts?by=stockState", "catalog"]
+				]
+			},
+			{
+				"id": "rich-text",
+				"title": "Rich descriptions and HTML policies",
+				"paragraphs": [
+					"A product's descriptionHtml is cleaned when saved to p, br, strong, em, u, ul, ol, li, h3, h4, blockquote and links with an https or site-relative href (at most 20,000 characters); the plain description is then made from it for search, feeds and AI copy. The product page widget builds the page from that cleaned copy.",
+					"Policies (Settings → Policies: delivery, returns, privacy, terms and warranty) are plain text or, with the checkout setting policyFormat html, the same cleaned HTML. {returnDays}, {warrantyDays}, {warrantyMonths} and {business} are filled in when they are read, and empty policies are left out."
+				],
+				"routes": [
+					["GET /v1/policies", "checkout"],
+					["GET /v1/shop/policies", "checkout"]
+				]
+			},
+			{
+				"id": "product-video",
+				"title": "Product video",
+				"paragraphs": [
+					"A product's video is { kind: 'file', key } (an MP4 or WebM uploaded to your storage like a photo, up to the catalog setting videoMaxBytes, 64 MB by default), { kind: 'youtube', id } (a YouTube id or address), { kind: 'url', url } (https) or null. The shop's product answer gives the file's address and type, or the YouTube embed address, and the product page widget plays it."
+				],
+				"routes": [
+					["POST /v1/catalog/uploads", "catalog"],
+					["PATCH /v1/products/:id", "catalog"]
+				]
+			},
+			{
+				"id": "size-charts",
+				"title": "Size charts",
+				"paragraphs": [
+					"With Size charts on, a chart has a name, a unit (in or cm), at most 12 columns { key, label }, at most 40 rows { size, label, values }, fit advice, notes and active. Products, brands and categories take a sizeChartId: a product page shows the product's chart, else its brand's, else its category's (hideSizeGuide on a product shows none), with an in/cm switch. A chart in use cannot be deleted (409); its answer says where it is used."
+				],
+				"routes": [
+					["GET /v1/size-charts", "size_charts"],
+					["POST /v1/size-charts", "size_charts"],
+					["PATCH /v1/size-charts/:id", "size_charts"],
+					["DELETE /v1/size-charts/:id", "size_charts"]
+				]
+			},
+			{
+				"id": "photos",
+				"title": "Photo sizes and variant galleries",
+				"paragraphs": [
+					"There is no image processing on the server. The catalog admin widget's uploader makes thumb, card and detail WebP copies of each photo in the browser, uploads each one to your storage and makes a blur image (a data URI of at most 2 kB); the photo is attached with { key, alt, sizes: { thumb, card, detail }, width, height, blur }. Your own uploader can do the same: every key comes from POST /v1/catalog/uploads for that product.",
+					"Variants have their own photos (media: at most 24 per variant and 200 per product, keys of the product's uploads); removing a photo from the product removes it from its variants too. Shop answers give each photo's sizes and each variant's photos, and product cards carry cardImages: the first photo of up to 4 variants that look different (a 2×2 grid)."
+				],
+				"routes": [
+					["POST /v1/catalog/uploads", "catalog"],
+					["POST /v1/products/:id/media", "catalog"],
+					["PUT /v1/products/:id/media", "catalog"]
+				]
+			},
+			{
+				"id": "attributes",
+				"title": "Attributes per category, on variants",
+				"paragraphs": [
+					"An attribute has a slug (made from its name when empty; shop filters are attr.<slug>), the categories it belongs to (none = all), whether it is set on the product or on each variant (on: product or variant; variant attributes are text, number or choice), multiple (several values on one variant), choices { value, label }, visibility (always, or only for some brands, some grades, or when another attribute has a value), how cards show it (none, image or chips), active, and glossary SEO { title, description, body, faqs }.",
+					"Variants hold attributes { <attributeId>: value or [values] }, and the product's options are made from them (up to 6 axes; two variants may share options when their grades differ). A product's attribute setup (at most 20 { attributeId, values, customValues, defaultValue }) lists the values it is sold in; Generate adds every missing combination as a variant (at most 250) with the price and stock you give, for one product or up to 100 at once (Variants)."
+				],
+				"routes": [
+					["POST /v1/attributes", "catalog"],
+					["PATCH /v1/attributes/:id", "catalog"],
+					["POST /v1/products/:id/variants/generate", "variants"],
+					["POST /v1/products/variants/generate", "variants"]
+				]
+			},
+			{
+				"id": "listing",
+				"title": "Listing filters, page numbers and totals",
+				"paragraphs": [
+					"GET /v1/shop/products filters by q, category, brand and grade (several values, comma-separated), attr.<slug>=a,b, minPrice, maxPrice, inStock, featured=1 and deal=<id or slug>; one active variant must match the price, attributes, grade and stock together. Sorts are newest, price_asc, price_desc, top, sold_asc, rating, name and updated (price ties go to the newest). page (1 to 500) works beside the cursor, and count=1 adds total (exact up to 10,000, else capped is true). Facets carry counts and labels, and cards carry priceMax for price ranges. The catalog setting pageSize goes up to 60."
+				],
+				"routes": [["GET /v1/shop/products?page=2&count=1", "catalog"]]
+			},
+			{
+				"id": "stock-display",
+				"title": "Stock display and sold out",
+				"paragraphs": [
+					"The catalog setting showStock (none, low or always) and lowStockShown (5) decide what shoppers are told: shop answers and Chat lookups carry stockLeft per variant (a number, or null when it is not shown), so the product page can say Only 3 left or 12 in stock. A variant marked soldOut is shown as sold out without changing its stock; POST /v1/products/:id/stock takes soldOut alone or with a stock change."
+				],
+				"routes": [["POST /v1/products/:id/stock", "catalog"]]
+			},
+			{
+				"id": "grades",
+				"title": "Grades per category",
+				"paragraphs": [
+					"Condition grades (Settings → Grades and serials, or PUT /v1/lists/grades) have a key (lower-case letters, digits, _ and -), a name, a description of up to 1,200 characters, return and warranty days, the categories they are for (none = all), a colour, an inspection video (a file key or a YouTube id), content (summary and bullets), whether they are offered, a condition (new, refurbished or used, used for structured data and feeds instead of the seo setting gradedCondition) and a glossary page's SEO; up to 100 grades. Shop answers give each variant's grade with these details."
+				],
+				"routes": [
+					["PUT /v1/lists/grades", "grades_serials"],
+					["GET /v1/seo/grades/:key", "landing_pages"]
+				]
+			},
+			{
+				"id": "serials",
+				"title": "Serial numbers and the IMEI check",
+				"paragraphs": [
+					"The grades_serials setting serialMode is registered (serial numbers are added to stock first and picked when an order is packed) or typed (typed when an order is packed or later with PATCH /v1/orders/<id> { serials: { <lineId>: ['…'] } }, one per unit, and required before the order moves to a shipped status). serialCheck imei requires 15 digits that pass the IMEI (Luhn) check digit. A category's requiresSerial says whether its products need serial numbers; a product with serialized null follows its categories. Order lines, invoices and the shopper's orders show the serial numbers."
+				],
+				"routes": [
+					["PATCH /v1/orders/:id", "checkout"],
+					["GET /v1/serials", "grades_serials"]
+				]
+			},
+			{
+				"id": "warranty",
+				"title": "Warranty per variant",
+				"paragraphs": [
+					"A variant's warrantyDays (null = the product's, then its grade's, then the returns setting) is kept on the order line when the order is placed; warranty claims use it, and shop answers and invoices show it."
+				],
+				"routes": [["PATCH /v1/products/:id", "catalog"]]
+			},
+			{
+				"id": "addresses",
+				"title": "Page addresses, slug history and moved pages",
+				"paragraphs": [
+					"The catalog setting productUrl takes {slug} (or {id}), {category} (its first category's slug), {categoryPath} (that category's slugs from the top) and {brand}, for example /{category}/{slug}; categoryUrl takes {slug} or {path}. variantQuery is added to a product's address to open one variant, with {grade} and {attributes} (its slug=value pairs), for example grade={grade}&{attributes}. Every link Ecommerce makes follows them: sitemaps, feeds, canonical addresses, structured data, llms.txt, Chat cards, messages and cart lines.",
+					"When a product's or category's slug changes, the old one is kept (at most 20 in previousSlugs). Lookups by slug ignore letter case and match old slugs, and then answer { moved: { slug, url } }: your site turns it into a 308 to url (see the product page below). With retiredUrl set to category, an archived product answers moved to its category's page instead of not found."
+				],
+				"routes": [
+					["GET /v1/seo/products/:ref", "seo"],
+					["GET /v1/seo/categories/:ref", "seo"],
+					["GET /v1/shop/products/:ref", "catalog"]
+				]
+			},
+			{
+				"id": "atlas-search",
+				"title": "Atlas Search",
+				"paragraphs": [
+					"Basic search matches every word. With the catalog setting search at atlas, shop and Chat searches use Atlas Search on your own database: fuzzy autocomplete on the product name (one typo allowed), text on the tags and summary, and the brands and categories whose names match, filtered on your website and active products and ranked by score (unless the shopper picks a sort); the listing's other filters follow.",
+					"Your database must be on MongoDB Atlas. In Atlas, open your cluster → Atlas Search → Create Search Index → JSON Editor, pick your shop's database and the ss_ecommerce_products collection, name the index as the catalog setting searchIndex (ss_ecommerce_products_search by default) and paste this definition:",
+					{
+						"code": "searchIndex"
+					},
+					"If the index is missing or the search fails, basic search answers instead, and the dashboard's Overview shows Search index missing until a search works again."
+				],
+				"routes": [["GET /v1/shop/products?q=<words>", "catalog"]]
+			},
+			{
+				"id": "landing-pages",
+				"title": "Landing pages, listing heads and glossary pages",
+				"paragraphs": [
+					"With Landing pages on (it needs SEO), a landing page is a category, brand and grade combination with its own h1, title, description, introduction and FAQs, one per combination (409 for a second). indexable is auto, yes or no; auto is indexed while at least landingMinProducts (3) of its products are in stock, judged on every read, and answers add url, inStock and indexed. Its address comes from the setting landingUrl ({categoryUrl}?brand={brand}&grade={grade} by default). With AI copy on, POST /v1/landings/<id>/ai-copy suggests its texts.",
+					"GET /v1/seo/listing gives the head of any listing your site shows (see Your site serves): robots is index only for a category (and its pages) and an indexable landing page, noindex for any other filter.",
+					"Glossary pages explain an attribute or a grade from its glossary SEO, at the addresses of the settings attributeUrl ({slug}) and gradeUrl ({key}); with an address and a text they are listed in the sitemaps, as are indexable landing pages."
+				],
+				"routes": [
+					["GET /v1/landings", "landing_pages"],
+					["POST /v1/landings", "landing_pages"],
+					["PATCH /v1/landings/:id", "landing_pages"],
+					["POST /v1/landings/:id/ai-copy", "ai_copy"],
+					["GET /v1/seo/listing", "seo"],
+					["GET /v1/seo/attributes/:slug", "landing_pages"],
+					["GET /v1/seo/grades/:key", "landing_pages"]
+				]
+			},
+			{
+				"id": "structured-data",
+				"title": "SEO fields, structured data, sitemaps, llms-full.txt and IndexNow",
+				"paragraphs": [
+					"Products, categories and brands have seo { title, description, canonicalUrl, ogImage, noindex, nofollow, focusKeyword }, and products at most 20 FAQs (AI copy can suggest them). The seo settings defaultDescription and defaultImage fill pages that have none.",
+					"A product's JSON-LD is a ProductGroup with its variants, the condition of each variant's grade, shipping details from your default delivery fee, the return policy, up to 5 reviews and a FAQPage; a category's adds an ItemList of its products.",
+					"Above sitemapSize addresses the sitemap is an index of files (categories, landings, products-1, products-2 …) with image entries, served from GET /v1/seo/sitemaps/<file>. With the llms_txt setting full on, GET /v1/llms-full.txt lists every product in stock with its price range and the grades of each category.",
+					"With the seo setting indexNowOnSave on and the Growth token pasted in Connections, the address of a product or category is sent to search engines through Growth's IndexNow right after it is saved."
+				],
+				"routes": [
+					["GET /v1/seo/sitemap.xml", "seo"],
+					["GET /v1/seo/sitemaps/:file", "seo"],
+					["GET /v1/llms-full.txt", "llms_txt"]
+				]
+			},
+			{
+				"id": "feed-options",
+				"title": "Feed options",
+				"paragraphs": [
+					"The feeds settings: itemId (variant ids, or legacy <product>_<variant> ids made from imported records, so Merchant Center keeps your items), googleCategory (sent with every item) and gradeLabel (each item's grade name as custom_label_0). Each item's condition follows its grade, shipping comes from the default delivery fee, and prices follow your Format with whole units."
+				],
+				"routes": [
+					["GET /v1/feeds/products.xml", "feeds"],
+					["GET /v1/feeds/products.csv", "feeds"]
+				]
+			}
+		]
+	},
 	"features": {
 		"catalog": [
-			"Set the shop currency, your product and category page addresses (with {slug}) and, if your bucket has a public address or CDN, the media address in Settings → Catalog. Connect your database and storage. Manage products with the catalog admin widget and show them with the product grid and product page widgets."
+			"Set the shop currency, your product, category and variant page addresses and, if your bucket has a public address or CDN, the media address in Settings → Catalog. Connect your database and storage. Manage products with the catalog admin widget and show them with the product grid and product page widgets.",
+			"Categories and brands have a status and content, products a featured flag, rich descriptions, a video, SEO fields and FAQs, and earlier slugs keep working; shop listings filter, count and page, show stock as you choose and can search with Atlas Search (see Catalog and SEO)."
 		],
 		"variants": [
-			"Give a product options (for example size and colour); each variant has its own price, stock and SKU, and the product page shows a variant picker."
+			"Give a product options (for example size and colour), up to 6; each variant has its own price, stock, SKU, photos, warranty and attributes (several values allowed), and the product page shows a variant picker. Generate adds every missing combination of a product's attribute setup (see Catalog and SEO)."
 		],
 		"multi_location": [
 			"Keep stock per location (warehouses, shops). Orders take stock from the first location that has it, in the order you set."
 		],
 		"grades_serials": [
-			"Define condition grades in Settings → Grades and serials, each with its own return and warranty days. Staff capture serial numbers (such as IMEI) per unit when an order is packed; they appear on invoices and packing slips."
+			"Define condition grades in Settings → Grades and serials: per grade its categories, return and warranty days, colour, inspection video, content, condition and glossary page. Serial numbers (such as IMEI) are registered in stock and picked when an order is packed, or typed at packing or later and checked as IMEI if you choose; they appear on invoices, packing slips and the shopper's orders (see Catalog and SEO)."
 		],
 		"digital_goods": [
 			"Attach files or licence keys to a product. The shopper gets the download link or key once the order is paid. Files are kept in your storage."
@@ -92,7 +305,7 @@
 			"Sell services in simple slots: each product has a duration, your weekly booking hours are set in Settings → Catalog, and a slot is never booked twice."
 		],
 		"checkout": [
-			"The cart, checkout and success page (cart widget), My orders (my_orders widget) and the orders admin widget. Shoppers must be signed in with Accounts to order; paste the Accounts token. Order statuses and moves, the order number prefix and order messages are in Settings → Orders and messages; couriers and their tracking links in Settings → Couriers."
+			"The cart, checkout and success page (cart widget), My orders (my_orders widget) and the orders admin widget. Shoppers must be signed in with Accounts to order; paste the Accounts token. Order statuses and moves, the order number prefix and order messages are in Settings → Orders and messages; couriers and their tracking links in Settings → Couriers; your delivery, returns, privacy, terms and warranty policies, as text or HTML, in Settings → Policies."
 		],
 		"cod": [
 			"Cash on delivery orders start awaiting confirmation. Set the largest order value, an optional advance paid through Payments, the open-order cap per customer, and use the blocklist and the returned-parcel flag in the customers admin widget."
@@ -136,12 +349,22 @@
 			"Sales by product, category, brand and city, stock age, return rate and margin, in the customers admin widget."
 		],
 		"seo": [
-			"Meta tags and structured data for products and categories, and the sitemap, served by your own site from the API (see Your site serves)."
+			"Meta tags, robots and structured data (ProductGroup, ItemList, FAQPage) for products, categories and every listing, the sitemap and its files, default description and image, and IndexNow through Growth, served by your own site from the API (see Your site serves and Catalog and SEO)."
 		],
-		"feeds": ["Product feeds (XML and CSV) for shopping and social catalogues, served by your own site from the API."],
+		"feeds": [
+			"Product feeds (XML and CSV) for shopping and social catalogues, served by your own site from the API, with your item ids, Google product category and grade labels (see Catalog and SEO)."
+		],
 		"ai_copy": [
 			"Product descriptions and meta text suggested with your own OpenAI-compatible AI key (Connections → AI provider key: base URL, key and model). Suggestions are shown to staff in the catalog admin widget and never saved automatically."
 		],
-		"llms_txt": ["An llms.txt of your catalog for AI assistants, served by your own site from the API."]
+		"llms_txt": [
+			"An llms.txt of your catalog for AI assistants and, with the full setting on, llms-full.txt with every product in stock, served by your own site from the API."
+		],
+		"size_charts": [
+			"Size charts in inches or centimetres with fit advice, linked to products, brands or categories; the product page shows a Size guide (see Catalog and SEO)."
+		],
+		"landing_pages": [
+			"Category, brand and grade landing pages with their own copy, indexed only while enough of their products are in stock, and attribute and grade glossary pages, all in the sitemaps (see Catalog and SEO)."
+		]
 	}
 }

@@ -390,6 +390,7 @@ export const createSeo = (product, service) => {
 								brandId: 1,
 								updatedAt: 1,
 								media: { $slice: MAX_IMAGES },
+								'variants.media.key': 1,
 							},
 						})
 						.sort({ id: 1 })
@@ -401,10 +402,19 @@ export const createSeo = (product, service) => {
 			const record = /** @type {any} */ (row);
 			if (part === 'categories') chunk += sitemapEntry({ loc: await media.categoryUrl(s, record), lastmod: record.updatedAt });
 			else {
+				// the product's photos, then its variants' (E6), each once
+				const keys = [
+					...new Set([
+						...(record.media ?? []).map((/** @type {any} */ file) => file.key),
+						...(record.variants ?? []).flatMap((/** @type {any} */ variant) =>
+							(variant.media ?? []).map((/** @type {any} */ file) => file.key),
+						),
+					]),
+				].slice(0, MAX_IMAGES);
 				/** @type {string[]} */
 				const images = [];
-				for (const file of record.media ?? []) {
-					const address = await media.mediaUrl(s, file.key);
+				for (const key of keys) {
+					const address = await media.mediaUrl(s, key);
 					if (address) images.push(address);
 				}
 				chunk += sitemapEntry({ loc: await media.productUrl(s, record), lastmod: record.updatedAt, images });

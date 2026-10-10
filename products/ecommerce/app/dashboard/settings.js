@@ -5,14 +5,16 @@
  * delivery zones, tax rules, grades, booking hours), the widget texts, the theme and the Format (PLAN 0.8.10 K7, side
  * by side in one masonry). Forms are rendered from the schemas the settings API returns; the `checkout` feature's
  * settings are spread over Checkout and payment, Orders and messages, and Policies. A section shows only when it has
- * something for the visible features (merchants: switched-on features; admins: all, off ones marked). Defaults uses
- * the same sections for the global defaults.
+ * something for the visible features (merchants: switched-on features; admins: all, off ones marked). Text settings
+ * with room for long values (addresses and templates) span the row; with Atlas Search picked, the catalog card says
+ * which index to create and links the docs. Defaults uses the same sections for the global defaults.
  * @module
  */
 import { startTransition, useState } from 'react';
-import { Masonry, Section, Select, SwapTransition, cx } from '@ss/ui';
-import { call, useLoad } from './api.js';
-import { BookingHoursEditor, CouriersEditor, GradesEditor, OrderFlowEditor, TaxRulesEditor, ZonesEditor } from './lists.js';
+import { Callout, Masonry, Section, Select, SwapTransition, cx } from '@ss/ui';
+import { call, fill, useLoad } from './api.js';
+import { GradesEditor } from './grades.js';
+import { BookingHoursEditor, CouriersEditor, OrderFlowEditor, TaxRulesEditor, ZonesEditor } from './lists.js';
 import { FormatForm, Loaded, SettingsForms, TextsForm, ThemeForm, hasSettings } from './parts.js';
 import { TEXTS } from './texts.js';
 
@@ -48,6 +50,7 @@ const SECTION_ORDER = /** @type {SectionId[]} */ ([
 /** The section of each feature's settings. @type {Readonly<Record<string, SectionId>>} */
 const FEATURE_SECTION = Object.freeze({
 	catalog: 'catalog',
+	size_charts: 'catalog',
 	digital_goods: 'catalog',
 	bookings: 'catalog',
 	csv: 'catalog',
@@ -72,6 +75,7 @@ const FEATURE_SECTION = Object.freeze({
 	returns: 'returns',
 	reports: 'reports',
 	seo: 'seo',
+	landing_pages: 'seo',
 	feeds: 'seo',
 	llms_txt: 'seo',
 	ai_copy: 'ai',
@@ -91,6 +95,20 @@ const sectionOf = (feature, name) => {
 	return FEATURE_SECTION[feature] ?? 'other';
 };
 
+/** Text settings this long or longer (addresses and templates with placeholders) span the row of their form. */
+const WIDE_TEXT = 200;
+
+/**
+ * A setting's schema with long text spanning the row (PLAN 0.6 fields in a grid): a text setting without choices and
+ * with room for at least `WIDE_TEXT` characters is wide unless its schema says otherwise.
+ * @param {Record<string, any>} node
+ * @returns {Record<string, any>}
+ */
+const widened = (node) =>
+	node.type === 'string' && !node.enum && Number(node.maxLength) >= WIDE_TEXT && typeof node['x-ui']?.wide !== 'boolean'
+		? { ...node, 'x-ui': { ...node['x-ui'], wide: true } }
+		: node;
+
 /**
  * The features' settings that belong to a section: each feature with only those settings (features with none left out).
  * @param {FeatureSettings[]} features
@@ -109,7 +127,7 @@ const settingsIn = (features, section) =>
 				...feature,
 				schema: {
 					...feature.schema,
-					properties: Object.fromEntries(names.map((name) => [name, properties[name]])),
+					properties: Object.fromEntries(names.map((name) => [name, widened(properties[name])])),
 					...(required ? { required: required.filter((/** @type {string} */ name) => names.includes(name)) } : {}),
 				},
 				values: Object.fromEntries(Object.entries(feature.values).filter(([name]) => names.includes(name))),
@@ -180,6 +198,27 @@ export function SettingsSections({ features, forms, extras }) {
 	);
 }
 
+/**
+ * The notice on a feature's settings card: with the `catalog` setting `search` at `atlas` (saved or being edited), the
+ * index Atlas Search needs and where the docs explain it (E14).
+ * @param {string} key the feature
+ * @param {Record<string, unknown>} values its settings shown in this section, edits included
+ * @returns {import('react').ReactNode}
+ */
+export const settingsNotice = (key, values) =>
+	key === 'catalog' && values.search === 'atlas' ? (
+		<Callout
+			tone="info"
+			className="mb-4"
+			actions={
+				<a className="text-sm font-semibold text-primary hover:underline" href="/docs#atlas-search">
+					{TEXTS.settings.atlasDocs}
+				</a>
+			}>
+			{fill(TEXTS.settings.atlasNotice, { index: String(values.searchIndex || 'ss_ecommerce_products_search') })}
+		</Callout>
+	) : null;
+
 /** @param {import('./tabs.js').TabProps} props */
 export function SettingsTab({ websiteId: id }) {
 	const websiteId = /** @type {string} */ (id);
@@ -208,6 +247,7 @@ export function SettingsTab({ websiteId: id }) {
 								resetBody={false}
 								savedSource="website"
 								reload={settings.reload}
+								notice={settingsNotice}
 							/>
 						)}
 						extras={{
