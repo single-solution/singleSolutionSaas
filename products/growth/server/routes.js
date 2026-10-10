@@ -9,9 +9,9 @@
  * @module
  */
 import { actorOf, countHandlers, defineRoute, formatText, ok, paginate, problem } from '@ss/app-kit';
-import { buildReport, rangeOf } from '../core/analytics.js';
+import { JOURNEYS, LIVE_MS, buildReport, rangeOf, topOf } from '../core/analytics.js';
 import { noticeAnswer } from '../core/config.js';
-import { COLLECT_FEATURES, EVENT_FEATURES, checkBatch, countryOf, dayOf, expiryOf, mergeTotals } from '../core/events.js';
+import { COLLECT_FEATURES, EVENT_FEATURES, checkBatch, cityOf, countryOf, dayOf, expiryOf, mergeTotals } from '../core/events.js';
 import {
 	checksActivity,
 	indexNowActivity,
@@ -25,6 +25,7 @@ import {
 	sitemapsIn,
 	verificationOf,
 } from '../core/seo.js';
+import { zonedDayStart } from '@ss/contracts/format';
 import { createStore } from '../adapters/store.js';
 import { renderDocs } from './docs.js';
 import { WIDGET_SCRIPT } from './widget-script.js';
@@ -47,6 +48,12 @@ const WEB_LIMITS = [{ limit: 10, windowSeconds: 3600, per: /** @type {const} */ 
 /** Who acts when no member of the merchant's staff is named (PLAN 0.8.10 K2). */
 const SERVER = Object.freeze({ kind: 'server', id: 'server', name: 'Server' });
 
+/**
+ * The day after a day (`YYYY-MM-DD`).
+ * @param {string} day
+ */
+const dayAfter = (day) => new Date(Date.parse(`${day}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
+
 /** @param {string} field @param {string} message */
 const invalid = (field, message) =>
 	problem('validation_failed', message, { errors: [{ path: `/${field}`, message, code: 'invalid' }] });
@@ -68,23 +75,69 @@ export const createRoutes = (product) => {
 
 	/**
 	 * The analytics report of a range of days (`?from=&to=`, days of the business time zone; the last 30 days by
-	 * default).
+	 * default; `top`: rows of each top list, 10 by default, at most 100). With the `sessions` detail (G3) it adds the
+	 * live visitors and the latest journeys, read from the raw events now.
 	 * @param {any} ctx
 	 */
 	const analytics = async (ctx) => {
 		const timeZone = await timeZoneOf(ctx);
 		const range = rangeOf(ctx.query, now(), timeZone);
 		if (!range.ok) return invalid('from', range.message);
-		const on = await product.featuresOn(ctx.websiteId);
-		const { totals, days } = await (await storeOf(ctx)).totals(range.from, range.to);
-		return buildReport({ from: range.from, to: range.to, timeZone, on, totals, days });
+		const [on, { detail }] = await Promise.all([
+			product.featuresOn(ctx.websiteId),
+			product.settings.values(ctx.websiteId, 'visitor_analytics'),
+		]);
+		const store = await storeOf(ctx);
+		const sessions = detail === 'sessions';
+		const [{ totals, days }, live, journeys] = await Promise.all([
+			store.totals(range.from, range.to),
+			sessions ? store.live(new Date(now() - LIVE_MS)) : null,
+			sessions
+				? store.journeys(
+						new Date(zonedDayStart(range.from, timeZone)),
+						// up to the start of the day after `to` in the business time zone
+						new Date(zonedDayStart(dayAfter(range.to), timeZone)),
+						JOURNEYS,
+					)
+				: null,
+		]);
+		return buildReport({
+			from: range.from,
+			to: range.to,
+			timeZone,
+			on,
+			totals,
+			days,
+			top: topOf(ctx.query.top),
+			detail: sessions ? 'sessions' : 'anonymous',
+			live,
+			journeys,
+		});
 	};
 
 	/**
-	 * The raw events' filter of `GET /v1/events` and its counts: `type`, one event type (any other value is ignored).
+	 * The raw events' filter of `GET /v1/events` and its counts: `type`, one event type, and `session`, one session
+	 * (G3); any other value is ignored.
 	 * @param {any} ctx
 	 */
-	const eventQuery = (ctx) => ({ type: Object.hasOwn(EVENT_FEATURES, ctx.query.type) ? String(ctx.query.type) : undefined });
+	const eventQuery = (ctx) => ({
+		type: Object.hasOwn(EVENT_FEATURES, ctx.query.type) ? String(ctx.query.type) : undefined,
+		session:
+			typeof ctx.query.session === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(ctx.query.session) ? ctx.query.session : undefined,
+	});
+
+	/**
+	 * A page of raw events, newest first (`?type=&session=&cursor=&limit=`).
+	 * @param {any} ctx
+	 */
+	const eventList = async (ctx) => {
+		const page = paginate({ cursor: ctx.query.cursor, limit: ctx.query.limit, url: ctx.request.url }, { defaultLimit: 50 });
+		const rows = await (await storeOf(ctx)).list({ after: page.after, limit: page.fetchLimit, ...eventQuery(ctx) });
+		return page.respond(
+			rows.map((row) => ({ ...row, at: row.at.toISOString(), expiresAt: row.expiresAt.toISOString() })),
+			(row) => [row.at, row.id],
+		);
+	};
 
 	/** `GET /v1/events/count` and `/counts?by=type`: the list's own filter (PLAN 0.8.10 K4). */
 	const eventCounts = countHandlers({
@@ -195,15 +248,20 @@ export const createRoutes = (product) => {
 			maxBodyBytes: 65_536,
 			rateLimit: COLLECT_LIMITS,
 			handler: async (ctx) => {
-				const [features, { recordCountry, retentionMonths }, timeZone] = await Promise.all([
+				const [features, { recordCountry, retentionMonths, detail }, timeZone] = await Promise.all([
 					product.featuresOn(ctx.websiteId),
 					product.settings.values(ctx.websiteId, 'visitor_analytics'),
 					timeZoneOf(ctx),
 				]);
 				const on = features.filter((key) => COLLECT_FEATURES.includes(key));
-				// the host's country header; on a visitor call from the merchant's server it is the server's own
-				const country = recordCountry === false ? null : countryOf((name) => ctx.headers.get(name));
-				const kept = checkBatch(ctx.body, { on, domain: String(ctx.status.domain), country });
+				/** @param {string} name */
+				const header = (name) => ctx.headers.get(name);
+				// the host's country (and, with sessions, city) header; on a visitor call from the merchant's server it is
+				// the server's own
+				const country = recordCountry === false ? null : countryOf(header);
+				const sessions = detail === 'sessions';
+				const city = sessions && recordCountry !== false ? cityOf(header) : null;
+				const kept = checkBatch(ctx.body, { on, domain: String(ctx.status.domain), country, sessions, city });
 				const at = now();
 				await (
 					await storeOf(ctx)
@@ -232,23 +290,7 @@ export const createRoutes = (product) => {
 
 		// --------------------------------------------------------------------------- analytics (server, ticket)
 		defineRoute({ method: 'GET', path: '/v1/analytics', auth: 'server', feature: 'visitor_analytics', handler: analytics }),
-		defineRoute({
-			method: 'GET',
-			path: '/v1/events',
-			auth: 'server',
-			feature: 'visitor_analytics',
-			handler: async (ctx) => {
-				const page = paginate(
-					{ cursor: ctx.query.cursor, limit: ctx.query.limit, url: ctx.request.url },
-					{ defaultLimit: 50 },
-				);
-				const rows = await (await storeOf(ctx)).list({ after: page.after, limit: page.fetchLimit, ...eventQuery(ctx) });
-				return page.respond(
-					rows.map((row) => ({ ...row, at: row.at.toISOString(), expiresAt: row.expiresAt.toISOString() })),
-					(row) => [row.at, row.id],
-				);
-			},
-		}),
+		defineRoute({ method: 'GET', path: '/v1/events', auth: 'server', feature: 'visitor_analytics', handler: eventList }),
 		defineRoute({
 			method: 'GET',
 			path: '/v1/events/count',
@@ -269,6 +311,22 @@ export const createRoutes = (product) => {
 			auth: 'ticket',
 			permission: 'analytics.read',
 			handler: analytics,
+		}),
+		// the event log of the analytics dashboard (ticket twins of the raw events, PLAN 0.8.10 K4)
+		defineRoute({ method: 'GET', path: '/v1/admin/events', auth: 'ticket', permission: 'analytics.read', handler: eventList }),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/admin/events/count',
+			auth: 'ticket',
+			permission: 'analytics.read',
+			handler: eventCounts.count,
+		}),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/admin/events/counts',
+			auth: 'ticket',
+			permission: 'analytics.read',
+			handler: eventCounts.counts,
 		}),
 
 		// ----------------------------------------------------------------- robots and verification (server)

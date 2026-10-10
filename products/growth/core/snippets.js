@@ -120,10 +120,10 @@ export const createSnippets = ({ base, widgets, permissions }) => {
 		`  -d '${JSON.stringify({ paths: ['/', '/shop'] })}'`,
 	].join('\n');
 	const analytics = [
-		`curl '${base}/v1/analytics?from=2026-10-01&to=2026-10-31' \\`,
+		`curl '${base}/v1/analytics?from=2026-10-01&to=2026-10-31&top=25' \\`,
 		'  -H "Authorization: Bearer $SS_SERVER_TOKEN"',
 		'',
-		'# raw events, newest first (kept for the retention you set)',
+		'# raw events, newest first (kept for the retention you set); one session with ?session=<id> (sessions detail)',
 		`curl '${base}/v1/events?type=purchase&limit=50' \\`,
 		'  -H "Authorization: Bearer $SS_SERVER_TOKEN"',
 		'',

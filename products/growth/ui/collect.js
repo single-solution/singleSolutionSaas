@@ -5,10 +5,15 @@
  * only; refusing drops them. What is sent is anonymous: the page view, whether it starts a visit (the start of the
  * visit is a time in sessionStorage, never an id), the referring host, the campaign, a device class, searches, 404s,
  * the shop events and Web Vitals.
+ *
+ * With the `detail` setting `sessions` (PLAN 0.8.10 G3) every event also carries the tab's session: a random id kept
+ * in that tab's sessionStorage (never a cross-site id, gone when the tab closes or after 30 minutes without a page
+ * view) with the browser and system family; a page view says which page of the session it is and how long after the
+ * last one it came.
  * @module
  */
-import { MAX_BATCH } from '../core/events.js';
-import { PAGE_MARKER, VISIT_IDLE_MS, VISIT_STORAGE_KEY } from '../core/widgets.js';
+import { MAX_BATCH, familiesOf } from '../core/events.js';
+import { PAGE_MARKER, SESSION_STORAGE_KEY, VISIT_IDLE_MS, VISIT_STORAGE_KEY } from '../core/widgets.js';
 
 /** Events wait this long for others before a batch is sent. */
 const FLUSH_DELAY_MS = 1000;
@@ -19,9 +24,11 @@ const MAX_WAITING = 50;
 /** @typedef {import('./consent.js').KeyValue} KeyValue */
 
 /**
- * @param {{ base: string, token: string, fetch: typeof fetch, schedule: (task: () => void, ms: number) => unknown }} input
+ * @param {{ base: string, token: string, fetch: typeof fetch, schedule: (task: () => void, ms: number) => unknown,
+ *   stamp?: () => Record<string, unknown> }} input `stamp`: what every event also carries (the session, G3), read when
+ *   the event is built
  */
-export const createCollector = ({ base, token, fetch, schedule }) => {
+export const createCollector = ({ base, token, fetch, schedule, stamp }) => {
 	/** @type {PageEvent[]} */
 	const queue = [];
 	/** @type {Array<() => PageEvent | null>} */
@@ -45,7 +52,7 @@ export const createCollector = ({ base, token, fetch, schedule }) => {
 	/** @param {PageEvent | null} event */
 	const enqueue = (event) => {
 		if (event === null) return;
-		queue.push(event);
+		queue.push(stamp ? { ...event, ...stamp() } : event);
 		if (!timer) {
 			timer = true;
 			schedule(flush, FLUSH_DELAY_MS);
@@ -81,14 +88,98 @@ export const createCollector = ({ base, token, fetch, schedule }) => {
 export const deviceOf = (width) => (width < 768 ? 'mobile' : width < 1024 ? 'tablet' : 'desktop');
 
 /**
+ * A random session id: 32 hex characters (G3).
+ * @param {Window} win
+ */
+export const randomId = (win) => {
+	const bytes = new Uint8Array(16);
+	try {
+		win.crypto.getRandomValues(bytes);
+	} catch {
+		for (let i = 0; i < bytes.length; i += 1) bytes[i] = Math.floor(Math.random() * 256);
+	}
+	return [...bytes].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+};
+
+/** @typedef {{ id: string, last: number, pages: number }} SessionState */
+
+/**
+ * The tab's session (G3): created by its first page view, or by any event before one; it ends after 30 minutes
+ * without a page view. Kept in sessionStorage (in memory when the browser refuses it).
+ * @param {{ visits: KeyValue, now: () => number, random: () => string, userAgent: string, touch?: boolean }} input
+ */
+export const createSession = ({ visits, now, random, userAgent, touch = false }) => {
+	const { browser, os } = familiesOf(userAgent, { touch });
+	/** @type {SessionState | null} */
+	let memory = null;
+	/** @returns {SessionState | null} the session while it lasts */
+	const current = () => {
+		/** @type {SessionState | null} */
+		let kept = memory;
+		try {
+			const stored = JSON.parse(visits.getItem(SESSION_STORAGE_KEY) ?? 'null');
+			if (typeof stored?.id === 'string' && Number.isFinite(stored.last) && Number.isSafeInteger(stored.pages)) kept = stored;
+		} catch {
+			// unreadable: the one in memory
+		}
+		return kept !== null && now() - kept.last < VISIT_IDLE_MS && kept.last <= now() ? kept : null;
+	};
+	/** @param {SessionState} state */
+	const save = (state) => {
+		memory = state;
+		try {
+			visits.setItem(SESSION_STORAGE_KEY, JSON.stringify(state));
+		} catch {
+			// kept in memory for this page
+		}
+		return state;
+	};
+	return Object.freeze({
+		/**
+		 * A page view: whether it starts the session, which page of it this is and how long after the last one.
+		 * @returns {{ visit: boolean, page: number, gap: number | null }}
+		 */
+		view: () => {
+			const kept = current();
+			const state = save({ id: kept?.id ?? random(), last: now(), pages: (kept?.pages ?? 0) + 1 });
+			return {
+				visit: kept === null || kept.pages === 0,
+				page: state.pages,
+				gap: kept && kept.pages > 0 ? now() - kept.last : null,
+			};
+		},
+		/** What every event carries: the session id, the browser and the system family. */
+		stamp: () => ({ session: (current() ?? save({ id: random(), last: now(), pages: 0 })).id, browser, os }),
+	});
+};
+
+/** @typedef {ReturnType<typeof createSession>} Session */
+
+/**
+ * Where the visitor came from to this page (G3, for 404s): a path on this site, another site's host, or null.
+ * @param {Window} win
+ * @returns {string | null}
+ */
+export const cameFrom = (win) => {
+	try {
+		const referrer = new URL(win.document.referrer);
+		return referrer.host === win.location.host ? referrer.pathname : referrer.hostname;
+	} catch {
+		return null;
+	}
+};
+
+/**
  * The page view of the current page: whether it starts a visit (none in the last 30 minutes in this tab's session),
- * the referring host and the campaign of a visit's first page.
- * @param {{ window: Window, visits: KeyValue, now: () => number }} input
+ * the referring host and the campaign of a visit's first page; with a session (G3), which page of it this is and how
+ * long after the last one it came.
+ * @param {{ window: Window, visits: KeyValue, now: () => number, session?: Session | null }} input
  * @returns {PageEvent}
  */
-export const pageView = ({ window: win, visits, now }) => {
+export const pageView = ({ window: win, visits, now, session = null }) => {
 	const last = Number(visits.getItem(VISIT_STORAGE_KEY));
-	const visit = !(last > 0 && now() - last < VISIT_IDLE_MS);
+	const viewed = session?.view() ?? null;
+	const visit = viewed ? viewed.visit : !(last > 0 && now() - last < VISIT_IDLE_MS);
 	try {
 		visits.setItem(VISIT_STORAGE_KEY, String(now()));
 	} catch {
@@ -107,6 +198,7 @@ export const pageView = ({ window: win, visits, now }) => {
 		path: url.pathname,
 		visit,
 		device: deviceOf(win.innerWidth),
+		...(viewed ? { page: viewed.page, ...(viewed.gap === null ? {} : { gap: viewed.gap }) } : {}),
 		...(visit
 			? {
 					referrer,

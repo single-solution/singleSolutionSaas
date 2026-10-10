@@ -54,6 +54,10 @@ export const CONSENT_STORAGE_KEY = 'ss-growth-consent';
 /** Where the page script keeps the start of the current visit (sessionStorage: a time, never an id). */
 export const VISIT_STORAGE_KEY = 'ss-growth-visit';
 
+/** Where the page script keeps the tab's session with the `sessions` detail (sessionStorage: a random id, never a
+ * cross-site id; PLAN 0.8.10 G3). */
+export const SESSION_STORAGE_KEY = 'ss-growth-session';
+
 /** A stored consent choice is asked again after this many days. */
 export const CONSENT_DAYS = 365;
 

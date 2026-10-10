@@ -4,14 +4,25 @@
  * searches and 404s, and Web Vitals (average and the share of good, needs-improvement and poor). Each part is there
  * only while its feature is on. Days are the days of the website's business time zone (business.json `timeZone`, UTC
  * when missing; PLAN 0.8.10 K8), and the report says which zone.
+ *
+ * With the `detail` setting `sessions` (PLAN 0.8.10 G3) it adds sessions, bounce (sessions that saw one page), their
+ * average duration (time between their first and last page) and pages, browsers, systems and cities, Web Vitals per
+ * page and 404 referrers from the daily totals, and live visitors (sessions seen in the last 5 minutes) and the latest
+ * journeys from the raw events, judged when it is read.
  * @module
  */
 import { zonedDay, zonedDayStart } from '@ss/contracts/format';
 import { FUNNEL_STEPS } from './widgets.js';
 import { VITALS } from './events.js';
 
-/** Rows of each top list. */
+/** Rows of each top list, unless the request asks for more (`top`, at most {@link MAX_TOP}). */
 const TOP = 10;
+/** Most rows of a top list. */
+const MAX_TOP = 100;
+/** Sessions seen this recently are live visitors (G3). */
+export const LIVE_MS = 5 * 60_000;
+/** Latest journeys in a report (G3). */
+export const JOURNEYS = 20;
 
 /** Most days one report covers. */
 const MAX_DAYS = 366;
@@ -21,6 +32,14 @@ const DEFAULT_DAYS = 30;
 
 const DAY_MS = 86_400_000;
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * One session's journey (G3): when it started and ended, its first steps and where it came from.
+ * @typedef {{ session: string, startedAt: string, endedAt: string, duration: number, events: number, pages: number,
+ *   device: string | null, browser: string | null, os: string | null, country: string | null, city: string | null,
+ *   source: string | null, steps: Array<{ type: string, path: string, at: string, term?: string, value?: number,
+ *   currency?: string | null }> }} Journey
+ */
 
 /**
  * @typedef {{ metric: string, key: string, count: number, sum: number }} TotalRow one metric × key over the range
@@ -89,16 +108,64 @@ export const daysOf = (from, to) => {
 };
 
 /**
+ * How many rows each top list has: the request's `top` (1–100), else 10.
+ * @param {unknown} value
+ */
+export const topOf = (value) => {
+	const n = typeof value === 'string' && /^\d{1,3}$/.test(value) ? Number(value) : NaN;
+	return n >= 1 && n <= MAX_TOP ? n : TOP;
+};
+
+/**
  * The top rows of one metric, by count (then key).
  * @param {TotalRow[]} rows
  * @param {string} metric
+ * @param {number} [size]
  */
-const top = (rows, metric) =>
+const top = (rows, metric, size = TOP) =>
 	rows
 		.filter((row) => row.metric === metric)
 		.sort((a, b) => b.count - a.count || a.key.localeCompare(b.key))
-		.slice(0, TOP)
+		.slice(0, size)
 		.map((row) => ({ key: row.key, count: row.count }));
+
+/**
+ * Web Vitals per page (G3): each page's average of each vital, the slowest largest paint first.
+ * @param {TotalRow[]} rows
+ * @param {number} size
+ */
+const vitalPagesOf = (rows, size) => {
+	/** @type {Map<string, { path: string, samples: number, averages: Record<string, number | null> }>} */
+	const pages = new Map();
+	for (const row of rows.filter((entry) => entry.metric === 'vital_page')) {
+		const cut = row.key.lastIndexOf('\n');
+		const path = row.key.slice(0, cut);
+		const name = row.key.slice(cut + 1);
+		const page = pages.get(path) ?? {
+			path,
+			samples: 0,
+			averages: Object.fromEntries(Object.keys(VITALS).map((key) => [key, null])),
+		};
+		page.samples += row.count;
+		if (Object.hasOwn(VITALS, name) && row.count > 0) page.averages[name] = Math.round(row.sum / row.count);
+		pages.set(path, page);
+	}
+	return [...pages.values()]
+		.sort((a, b) => (b.averages.LCP ?? -1) - (a.averages.LCP ?? -1) || b.samples - a.samples || a.path.localeCompare(b.path))
+		.slice(0, size);
+};
+
+/**
+ * 404 referrers (G3): the missing page and where its visitors came from (a path on the website, another site, or
+ * direct), most first.
+ * @param {TotalRow[]} rows
+ * @param {number} size
+ */
+const notFoundFromOf = (rows, size) =>
+	top(rows, 'not_found_from', size).map((row) => {
+		const cut = row.key.lastIndexOf('\n');
+		return { path: row.key.slice(0, cut), from: row.key.slice(cut + 1), count: row.count };
+	});
 
 /**
  * @param {TotalRow[]} rows
@@ -108,11 +175,45 @@ const top = (rows, metric) =>
 const countOf = (rows, metric, key) => rows.find((row) => row.metric === metric && row.key === key)?.count ?? 0;
 
 /**
- * The report.
- * @param {{ from: string, to: string, timeZone: string, on: ReadonlyArray<string>, totals: TotalRow[], days: DayRow[] }} input
- *   `timeZone`: the zone of the days (the business.json time zone, else UTC)
+ * The session figures of a range (G3): sessions, bounces and the bounce rate (percent, one decimal), the average
+ * duration (seconds) and pages per session (one decimal).
+ * @param {TotalRow[]} totals
  */
-export const buildReport = ({ from, to, timeZone, on, totals, days }) => {
+const sessionsOf = (totals) => {
+	const count = countOf(totals, 'sessions', '');
+	const bounces = Math.max(0, count - countOf(totals, 'engaged', ''));
+	const duration = totals.find((row) => row.metric === 'duration' && row.key === '')?.sum ?? 0;
+	return {
+		count,
+		bounces,
+		bounceRate: count > 0 ? Math.round((bounces / count) * 1000) / 10 : null,
+		averageDuration: count > 0 ? Math.round(duration / count / 1000) : null,
+		pagesPerSession: count > 0 ? Math.round((countOf(totals, 'session_pages', '') / count) * 10) / 10 : null,
+	};
+};
+
+/**
+ * The report.
+ * @param {{ from: string, to: string, timeZone: string, on: ReadonlyArray<string>, totals: TotalRow[], days: DayRow[],
+ *   top?: number, detail?: 'anonymous' | 'sessions',
+ *   live?: { visitors: number, pages: Array<{ key: string, count: number }> } | null,
+ *   journeys?: Journey[] | null }} input
+ *   `timeZone`: the zone of the days (the business.json time zone, else UTC); `top`: rows of each top list; `detail`:
+ *   the `visitor_analytics` setting; `live` and `journeys`: read from the raw events with `sessions`
+ */
+export const buildReport = ({
+	from,
+	to,
+	timeZone,
+	on,
+	totals,
+	days,
+	top: size = TOP,
+	detail = 'anonymous',
+	live = null,
+	journeys = null,
+}) => {
+	const sessions = detail === 'sessions';
 	const series = daysOf(from, to).map((day) => ({
 		day,
 		visits: days.find((row) => row.day === day && row.metric === 'visits')?.count ?? 0,
@@ -124,10 +225,17 @@ export const buildReport = ({ from, to, timeZone, on, totals, days }) => {
 		timeZone,
 		totals: { visits: countOf(totals, 'visits', ''), pageViews: countOf(totals, 'page_views', '') },
 		days: series,
-		pages: top(totals, 'page'),
-		sources: top(totals, 'source'),
-		devices: top(totals, 'device'),
-		countries: top(totals, 'country'),
+		detail,
+		pages: top(totals, 'page', size),
+		sources: top(totals, 'source', size),
+		devices: top(totals, 'device', size),
+		countries: top(totals, 'country', size),
+		sessions: sessions ? sessionsOf(totals) : null,
+		browsers: sessions ? top(totals, 'browser', size) : null,
+		systems: sessions ? top(totals, 'os', size) : null,
+		cities: sessions ? top(totals, 'city', size) : null,
+		live: sessions ? (live ?? { visitors: 0, pages: [] }) : null,
+		journeys: sessions ? (journeys ?? []) : null,
 		funnel: on.includes('conversion_funnel')
 			? {
 					steps: FUNNEL_STEPS.map((step) => ({ step, count: countOf(totals, 'funnel', step) })),
@@ -137,9 +245,11 @@ export const buildReport = ({ from, to, timeZone, on, totals, days }) => {
 						.map((row) => ({ currency: row.key, value: row.sum, orders: row.count })),
 				}
 			: null,
-		searches: on.includes('searches_404s') ? top(totals, 'search') : null,
-		emptySearches: on.includes('searches_404s') ? top(totals, 'search_empty') : null,
-		notFound: on.includes('searches_404s') ? top(totals, 'not_found') : null,
+		searches: on.includes('searches_404s') ? top(totals, 'search', size) : null,
+		emptySearches: on.includes('searches_404s') ? top(totals, 'search_empty', size) : null,
+		notFound: on.includes('searches_404s') ? top(totals, 'not_found', size) : null,
+		notFoundFrom: sessions && on.includes('searches_404s') ? notFoundFromOf(totals, size) : null,
+		vitalPages: sessions && on.includes('web_vitals') ? vitalPagesOf(totals, size) : null,
 		vitals: on.includes('web_vitals')
 			? Object.keys(VITALS).map((name) => {
 					const value = totals.find((row) => row.metric === 'vital_value' && row.key === name);

@@ -3,8 +3,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import strings from '../strings/en.json' with { type: 'json' };
 import { widgetSettings } from '../core/config.js';
-import { CONSENT_STORAGE_KEY, VISIT_STORAGE_KEY, WIDGET_ATTRIBUTE, WIDGET_GLOBAL } from '../core/widgets.js';
-import { createCollector, deviceOf, markedNotFound, pageView, searchOnPage, watchVitals } from '../ui/collect.js';
+import { CONSENT_STORAGE_KEY, SESSION_STORAGE_KEY, VISIT_STORAGE_KEY, WIDGET_ATTRIBUTE, WIDGET_GLOBAL } from '../core/widgets.js';
+import {
+	cameFrom,
+	createCollector,
+	createSession,
+	deviceOf,
+	markedNotFound,
+	pageView,
+	randomId,
+	searchOnPage,
+	watchVitals,
+} from '../ui/collect.js';
 import { storageOf } from '../ui/consent.js';
 import { NOTICE_STORAGE_KEY } from '../ui/notice-bar.js';
 import { injectScripts } from '../ui/tags.js';
@@ -487,6 +497,63 @@ describe('store-conversion options with the real page script (PLAN 0.8.10 G1–G
 		Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
 		delete w.PerformanceObserver;
 	});
+
+	it('G3: with the sessions detail every event carries the tab’s session, kept only once events may be sent', async () => {
+		vi.useFakeTimers({ toFake: ['setTimeout', 'Date'], now: NOW });
+		serve({
+			[`GET ${CONFIG_PATH}`]: () =>
+				answer(
+					200,
+					configOf(['consent_banner', 'visitor_analytics', 'searches_404s'], {
+						visitor_analytics: { detail: 'sessions' },
+					}),
+				),
+			'POST /v1/collect': () => answer(202),
+		});
+		const first = startWidget({ window, script: script('t') });
+		await vi.advanceTimersByTimeAsync(0);
+		await first.ready;
+		// nothing is kept before consent
+		expect(window.sessionStorage.getItem(SESSION_STORAGE_KEY)).toBeNull();
+		w[WIDGET_GLOBAL].consent.set({ analytics: true });
+		await vi.advanceTimersByTimeAsync(1000);
+		const [view] = collected();
+		expect(view).toMatchObject({ type: 'page_view', path: '/', visit: true, page: 1, browser: 'other', os: 'other' });
+		expect(view.session).toMatch(/^[0-9a-f]{32}$/);
+		expect(view).not.toHaveProperty('gap');
+
+		// the next page of the same tab: the same session, its second page, 40 seconds later
+		await vi.advanceTimersByTimeAsync(40_000);
+		document.body.replaceChildren();
+		window.history.replaceState(null, '', '/missing');
+		Object.defineProperty(document, 'referrer', { value: `${window.location.origin}/shop?x=1`, configurable: true });
+		const second = startWidget({ window, script: script('t') });
+		await vi.advanceTimersByTimeAsync(0);
+		await second.ready;
+		w[WIDGET_GLOBAL].notFound();
+		window.dispatchEvent(new window.CustomEvent('ss:search', { detail: { term: 'lost' } }));
+		await vi.advanceTimersByTimeAsync(1000);
+		const latest = collected().filter((event) => event.path === '/missing');
+		expect(latest).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({ type: 'page_view', visit: false, page: 2, gap: 41_000, session: view.session }),
+				expect.objectContaining({ type: 'not_found', referrer: '/shop', session: view.session }),
+				expect.objectContaining({ type: 'search', term: 'lost', session: view.session }),
+			]),
+		);
+		Object.defineProperty(document, 'referrer', { value: '', configurable: true });
+
+		// after 30 minutes without a page view a new session starts
+		await vi.advanceTimersByTimeAsync(31 * 60_000);
+		document.body.replaceChildren();
+		const third = startWidget({ window, script: script('t') });
+		await vi.advanceTimersByTimeAsync(0);
+		await third.ready;
+		await vi.advanceTimersByTimeAsync(1000);
+		const fresh = collected().at(-1);
+		expect(fresh).toMatchObject({ type: 'page_view', visit: true, page: 1 });
+		expect(fresh?.session).not.toBe(view.session);
+	});
 });
 
 describe('page facts', () => {
@@ -520,6 +587,33 @@ describe('page facts', () => {
 		expect(deviceOf(800)).toBe('tablet');
 		expect(searchOnPage(window, ['q'])).toBeNull();
 		expect(markedNotFound(document)).toBe(false);
+	});
+
+	it('keeps a session in memory when the browser refuses storage, and makes random ids without crypto (G3)', () => {
+		let t = NOW;
+		const refusing = {
+			getItem: () => '{broken',
+			setItem: () => {
+				throw new Error('full');
+			},
+		};
+		let n = 0;
+		const session = createSession({
+			visits: refusing,
+			now: () => t,
+			random: () => `id${(n += 1)}`.padEnd(8, '0'),
+			userAgent: '',
+		});
+		expect(session.stamp()).toEqual({ session: 'id100000', browser: 'other', os: 'other' });
+		expect(session.view()).toEqual({ visit: true, page: 1, gap: null });
+		t += 5000;
+		expect(session.view()).toEqual({ visit: false, page: 2, gap: 5000 });
+		expect(session.stamp().session).toBe('id100000');
+		expect(randomId(/** @type {any} */ ({}))).toMatch(/^[0-9a-f]{32}$/);
+		expect(cameFrom(/** @type {any} */ ({ document: { referrer: '' }, location: window.location }))).toBeNull();
+		expect(cameFrom(/** @type {any} */ ({ document: { referrer: 'https://www.bing.com/x' }, location: window.location }))).toBe(
+			'www.bing.com',
+		);
 	});
 
 	it('works without storage the browser refuses', () => {

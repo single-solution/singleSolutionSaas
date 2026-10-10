@@ -158,6 +158,90 @@
 				}
 			}
 		},
+		"/v1/admin/events": {
+			"get": {
+				"x-ss-auth": "ticket",
+				"x-ss-feature": "visitor_analytics",
+				"x-ss-permission": "analytics.read",
+				"security": [
+					{
+						"ticket": []
+					}
+				],
+				"parameters": [],
+				"responses": {
+					"2XX": {
+						"description": "Success (JSON)"
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/admin/events/count": {
+			"get": {
+				"x-ss-auth": "ticket",
+				"x-ss-feature": "visitor_analytics",
+				"x-ss-permission": "analytics.read",
+				"security": [
+					{
+						"ticket": []
+					}
+				],
+				"parameters": [],
+				"responses": {
+					"2XX": {
+						"description": "Success (JSON)"
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/admin/events/counts": {
+			"get": {
+				"x-ss-auth": "ticket",
+				"x-ss-feature": "visitor_analytics",
+				"x-ss-permission": "analytics.read",
+				"security": [
+					{
+						"ticket": []
+					}
+				],
+				"parameters": [],
+				"responses": {
+					"2XX": {
+						"description": "Success (JSON)"
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/v1/admin/indexnow": {
 			"post": {
 				"x-ss-auth": "ticket",

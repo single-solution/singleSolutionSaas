@@ -18,7 +18,16 @@ import { pathMatches } from '../core/config.js';
 import { contactOf, detailOf, funnelEvent, searchOf } from '../core/pixels.js';
 import { BROWSER_EVENTS, SITE_EVENTS, WIDGET_ATTRIBUTE, WIDGET_FEATURES, WIDGET_GLOBAL } from '../core/widgets.js';
 import { mountAnalyticsDashboard } from './analytics-dashboard.js';
-import { createCollector, markedNotFound, pageView, searchOnPage, watchVitals } from './collect.js';
+import {
+	cameFrom,
+	createCollector,
+	createSession,
+	markedNotFound,
+	pageView,
+	randomId,
+	searchOnPage,
+	watchVitals,
+} from './collect.js';
 import { createConsent, mountConsentBanner, storageOf } from './consent.js';
 import { NOTICE_STORAGE_KEY, mountNoticeBar } from './notice-bar.js';
 import { mountSeoChecklist } from './seo-checklist.js';
@@ -152,7 +161,23 @@ export const startWidget = ({ window: win, script }) => {
 		const config = await loadConfig(request, `${base}${CONFIG_PATH}`, token);
 		if (!config) return;
 		const { record } = config.settings;
-		const collector = createCollector({ base, token, fetch: request, schedule: (task, ms) => win.setTimeout(task, ms) });
+		// the tab's session with the `sessions` detail (G3), read and kept only once an event may be sent
+		const session = record.sessions
+			? createSession({
+					visits,
+					now,
+					random: () => randomId(win),
+					userAgent: win.navigator.userAgent,
+					touch: win.navigator.maxTouchPoints > 1,
+				})
+			: null;
+		const collector = createCollector({
+			base,
+			token,
+			fetch: request,
+			schedule: (task, ms) => win.setTimeout(task, ms),
+			...(session ? { stamp: session.stamp } : {}),
+		});
 		const tags = createTags({ window: win, tags: config.settings.tags });
 		/** @param {import('../core/consent.js').Choice | null} choice */
 		const follow = (choice) => {
@@ -174,14 +199,16 @@ export const startWidget = ({ window: win, script }) => {
 		)
 			mountNoticeBar({ host: hostFor('notice_bar', 'start'), config, visits });
 
-		if (record.visits) collector.record(() => pageView({ window: win, visits, now }));
+		if (record.visits) collector.record(() => pageView({ window: win, visits, now, session }));
 		// a search results page: recorded, and passed to the pixels loaded now (G2)
 		const found = searchOnPage(win, record.searchParams);
 		if (found) {
 			if (record.searches) collector.record(() => found);
 			tags.search(String(found.term));
 		}
-		if (record.searches && markedNotFound(doc)) collector.record(() => ({ type: 'not_found', path: path() }));
+		/** A 404: with sessions, where its visitor came from (G3). */
+		const notFound = () => ({ type: 'not_found', path: path(), ...(session ? { referrer: cameFrom(win) } : {}) });
+		if (record.searches && markedNotFound(doc)) collector.record(notFound);
 		if (record.vitals)
 			watchVitals({
 				window: win,
@@ -253,7 +280,12 @@ export const startWidget = ({ window: win, script }) => {
 		notFound: () => {
 			const at = path();
 			whenReady(({ config, collector }) => {
-				if (config.settings.record.searches) collector.record(() => ({ type: 'not_found', path: at }));
+				if (config.settings.record.searches)
+					collector.record(() => ({
+						type: 'not_found',
+						path: at,
+						...(config.settings.record.sessions ? { referrer: cameFrom(win) } : {}),
+					}));
 			});
 		},
 	});

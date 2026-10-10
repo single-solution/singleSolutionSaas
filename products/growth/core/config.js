@@ -218,6 +218,7 @@ export const widgetSettings = ({ on, values, now }) => {
 			vitals: on.includes('web_vitals'),
 			vitalsToGa4: on.includes('web_vitals') && values.web_vitals?.toGa4 === true,
 			requireConsent: analytics.requireConsent !== false,
+			sessions: on.includes('visitor_analytics') && analytics.detail === 'sessions',
 			searchParams: searchParamsOf(text(values, 'searches_404s', 'searchParams')),
 		},
 		tags: tagsOf(on, values),

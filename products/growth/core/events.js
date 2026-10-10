@@ -7,10 +7,16 @@
  * Every kept event becomes a raw event (removed by the database expiry index after the retention) and increments of
  * the daily totals (kept forever): `{ day, metric, key, count, sum }`, where `day` is the day in the website's business
  * time zone (business.json `timeZone`, UTC when missing; PLAN 0.8.10 K8).
+ *
+ * With the `detail` setting `sessions` (PLAN 0.8.10 G3), events also carry the tab's random session id (never a
+ * cross-site id), the browser and system family and the city of the host's header; a page view says which page of the
+ * session it is and how long after the session's last page it came, and a 404 where the visitor came from. The daily
+ * totals then also count sessions, engaged sessions (a second page), their pages and time, browsers, systems and
+ * cities, Web Vitals per page and 404 referrers.
  * @module
  */
 import { zonedDay } from '@ss/contracts/format';
-import { FUNNEL_STEPS } from './widgets.js';
+import { FUNNEL_STEPS, VISIT_IDLE_MS } from './widgets.js';
 import { isAmount, isCurrency } from './money.js';
 
 /** The feature each event type belongs to. */
@@ -50,6 +56,11 @@ export const VITALS = Object.freeze({
 
 /** @typedef {keyof typeof VITALS} VitalName */
 
+/** Browser families a session may name (G3). */
+export const BROWSERS = Object.freeze(['chrome', 'safari', 'edge', 'firefox', 'samsung', 'opera', 'other']);
+/** System families a session may name (G3). */
+export const SYSTEMS = Object.freeze(['android', 'ios', 'windows', 'macos', 'chromeos', 'linux', 'other']);
+
 /** A visit with no referrer and no campaign. */
 export const DIRECT = '(direct)';
 /** A country the host's header did not give. */
@@ -61,6 +72,8 @@ export const UNKNOWN = '(unknown)';
  * @property {string} path
  * @property {Record<string, unknown>} data what else is kept with the raw event
  * @property {Array<{ metric: string, key: string, count: number, sum: number }>} totals increments of the daily totals
+ * @property {{ session: string, browser: string | null, os: string | null, city: string | null }} [visitor] the session
+ *   facts kept with the raw event (G3)
  */
 
 /** @param {unknown} value @returns {value is Record<string, any>} */
@@ -116,6 +129,92 @@ export const countryOf = (header) => {
 };
 
 /**
+ * The city of a request from the host's header (Vercel's is URL-encoded), at most 80 characters, or null (G3).
+ * @param {(name: string) => string | null} header
+ */
+export const cityOf = (header) => {
+	for (const name of ['x-vercel-ip-city', 'cf-ipcity', 'cloudfront-viewer-city']) {
+		const raw = header(name);
+		if (!raw) continue;
+		let value = raw;
+		try {
+			value = decodeURIComponent(raw);
+		} catch {
+			// kept as sent
+		}
+		const city = textOf(value, 80);
+		if (city !== '' && !/^\d+$/.test(city)) return city;
+	}
+	return null;
+};
+
+/**
+ * The browser and system family of a user agent (G3): only the family is ever sent, never the user agent. `touch`:
+ * an iPad that names itself a Mac.
+ * @param {string} userAgent
+ * @param {{ touch?: boolean }} [options]
+ * @returns {{ browser: string, os: string }}
+ */
+export const familiesOf = (userAgent, { touch = false } = {}) => {
+	const ua = String(userAgent);
+	const browser = /\bEdg(?:e|A|iOS)?\//.test(ua)
+		? 'edge'
+		: /\bOPR\/|\bOpera\b/.test(ua)
+			? 'opera'
+			: /SamsungBrowser\//.test(ua)
+				? 'samsung'
+				: /Firefox\/|FxiOS\//.test(ua)
+					? 'firefox'
+					: /Chrome\/|CriOS\/|Chromium\//.test(ua)
+						? 'chrome'
+						: /Safari\//.test(ua) && /Version\//.test(ua)
+							? 'safari'
+							: 'other';
+	const os = /Android/.test(ua)
+		? 'android'
+		: /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && touch)
+			? 'ios'
+			: /Windows/.test(ua)
+				? 'windows'
+				: /CrOS/.test(ua)
+					? 'chromeos'
+					: /Mac OS X|Macintosh/.test(ua)
+						? 'macos'
+						: /Linux/.test(ua)
+							? 'linux'
+							: 'other';
+	return { browser, os };
+};
+
+/**
+ * A session id the page script (or the merchant's server) sent: 8 to 64 letters, digits, `_` or `-`, else null.
+ * @param {unknown} value
+ */
+const sessionIdOf = (value) => (typeof value === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(value) ? value : null);
+
+/**
+ * Where a 404's visitor came from (G3): a path on the website or another site's host; null when unknown.
+ * @param {unknown} value
+ */
+const cameFromOf = (value) => pathOf(value) ?? hostOf(value);
+
+/**
+ * The session facts of an event (G3), or null without a session id.
+ * @param {Record<string, any>} raw
+ * @param {string | null} city
+ */
+const visitorOf = (raw, city) => {
+	const session = sessionIdOf(raw.session);
+	if (session === null) return null;
+	return {
+		session,
+		browser: BROWSERS.includes(raw.browser) ? String(raw.browser) : null,
+		os: SYSTEMS.includes(raw.os) ? String(raw.os) : null,
+		city,
+	};
+};
+
+/**
  * The rating of a Web Vital value.
  * @param {VitalName} name
  * @param {number} value
@@ -144,10 +243,60 @@ const itemsOf = (value) =>
 /**
  * One event as the page script sent it, checked: what is kept, or null when it is invalid.
  * @param {unknown} raw
- * @param {{ domain: string, country: string | null }} context `domain`: the website's (a referrer on it is not a source)
+ * @param {{ domain: string, country: string | null, sessions?: boolean, city?: string | null }} context `domain`: the
+ *   website's (a referrer on it is not a source); `sessions`: the `detail` setting is `sessions` (G3); `city`: from the
+ *   host's header
  * @returns {KeptEvent | null}
  */
-export const checkEvent = (raw, { domain, country }) => {
+export const checkEvent = (raw, context) => {
+	const kept = checkBase(raw, context);
+	if (kept === null || !context.sessions || !isObject(raw)) return kept;
+	const visitor = visitorOf(raw, context.city ?? null);
+	/** @type {KeptEvent['totals']} */
+	const more = [];
+	if (kept.type === 'vital')
+		more.push({
+			metric: 'vital_page',
+			key: `${kept.path}\n${String(kept.data.name)}`,
+			count: 1,
+			sum: Number(kept.data.value),
+		});
+	if (kept.type === 'not_found') {
+		const from = cameFromOf(raw.referrer);
+		kept.data = { from };
+		more.push({ metric: 'not_found_from', key: `${kept.path}\n${from ?? DIRECT}`, count: 1, sum: 0 });
+	}
+	if (visitor !== null && kept.type === 'page_view') {
+		const page = Number.isSafeInteger(raw.page) && raw.page > 0 && raw.page <= 10_000 ? Number(raw.page) : null;
+		const gap =
+			typeof raw.gap === 'number' && Number.isFinite(raw.gap) && raw.gap >= 0 && raw.gap <= VISIT_IDLE_MS
+				? Math.round(raw.gap)
+				: null;
+		more.push({ metric: 'session_pages', key: '', count: 1, sum: 0 });
+		if (kept.data.visit === true) {
+			const where = String(kept.data.country ?? UNKNOWN);
+			more.push(
+				{ metric: 'sessions', key: '', count: 1, sum: 0 },
+				{ metric: 'browser', key: visitor.browser ?? 'other', count: 1, sum: 0 },
+				{ metric: 'os', key: visitor.os ?? 'other', count: 1, sum: 0 },
+				...(visitor.city === null
+					? []
+					: [{ metric: 'city', key: where === UNKNOWN ? visitor.city : `${visitor.city}, ${where}`, count: 1, sum: 0 }]),
+			);
+		} else if (gap !== null) more.push({ metric: 'duration', key: '', count: 1, sum: gap });
+		if (page === 2) more.push({ metric: 'engaged', key: '', count: 1, sum: 0 });
+		kept.data = { ...kept.data, ...(page === null ? {} : { page }) };
+	}
+	return { ...kept, totals: [...kept.totals, ...more], ...(visitor === null ? {} : { visitor }) };
+};
+
+/**
+ * One event checked as anonymous analytics keep it (without the session facts of G3).
+ * @param {unknown} raw
+ * @param {{ domain: string, country: string | null }} context
+ * @returns {KeptEvent | null}
+ */
+const checkBase = (raw, { domain, country }) => {
 	if (!isObject(raw) || typeof raw.type !== 'string' || !Object.hasOwn(EVENT_FEATURES, raw.type)) return null;
 	const type = /** @type {EventType} */ (raw.type);
 	const path = pathOf(raw.path);
@@ -233,15 +382,15 @@ export const checkEvent = (raw, { domain, country }) => {
  * A `POST /v1/collect` body, checked: the kept events of switched-on features (at most {@link MAX_BATCH}; the rest and
  * the invalid ones are dropped, as a beacon has nobody to tell).
  * @param {unknown} body
- * @param {{ on: ReadonlyArray<string>, domain: string, country: string | null }} context
+ * @param {{ on: ReadonlyArray<string>, domain: string, country: string | null, sessions?: boolean, city?: string | null }} context
  * @returns {KeptEvent[]}
  */
-export const checkBatch = (body, { on, domain, country }) => {
+export const checkBatch = (body, { on, ...context }) => {
 	const list = isObject(body) && Array.isArray(body.events) ? body.events.slice(0, MAX_BATCH) : [];
 	/** @type {KeptEvent[]} */
 	const kept = [];
 	for (const raw of list) {
-		const event = checkEvent(raw, { domain, country });
+		const event = checkEvent(raw, context);
 		if (event && on.includes(EVENT_FEATURES[event.type])) kept.push(event);
 	}
 	return kept;
