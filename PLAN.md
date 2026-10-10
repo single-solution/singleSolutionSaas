@@ -2960,6 +2960,94 @@ are built in parallel; a phase starts when the one before it is done.
    the AI label can be hidden), with the law warning shown in Settings while it is on; off by default.
 3. **Session hand-over**: not built; everyone signs in once after the cut-over (A13).
 
+#### Builder choices, Phase 1 (awaiting owner review)
+
+Where 0.8.10 was silent or open to two readings, Phase 1 took the simplest option that contradicts nothing in Part 0.
+The owner confirms or changes each one.
+
+- **K1 answers mirror the dashboard API.** `GET /v1/settings` lists every feature with `on` and its schema; `values`
+  (`{ <setting>: { value, source } }`, source `website`, `default` or `built-in`) only for switched-on features and
+  `null` for the others. `PUT /v1/settings/<feature>.<key>` and `DELETE` answer `{ key, value, source }`; a `PUT` with
+  `null` is refused (`DELETE` resets). Texts answer `{ texts }` / `{ key, english, value, source }`, theme and Format
+  `{ theme | format, sources }`, lists `{ value }`. Connections add `label` and `testedAt` to the listed fields, and
+  `message` is `null` when there is none.
+- **K1 lists** are handed to the kit by the product (`createProduct({ lists })`); `GET /v1/lists/:list` answers whatever
+  the feature's state (as the dashboard's list read does), `PUT` needs the list's feature on. The dashboards keep their
+  own list routes.
+- **K1 write limit**: one counter of 60 writes per minute per website shared by every settings-API write (settings,
+  texts, theme, Format, lists, connections and their tests).
+- **K2 headers**: `SS-Actor-Id` and `SS-Actor-Name` come together; `SS-Actor-Role` is percent-encoded like the name;
+  `SS-Actor-Email` is checked and lower-cased; any other combination is `invalid_actor`. They are read on every
+  server-token request, visitor calls included. A ticket's user stays `{ kind: 'staff', … }`; the acting user is
+  `{ kind: 'user', id, name, role }`. Its staff record (name, e-mail, role, last seen) is upserted only while the
+  merchant database is connected, at most every 10 minutes per instance. Activity entries never carry the e-mail.
+- **K3**: `SS-Visitor-IP` must be an IPv4 or IPv6 address. On reads it is optional: without it only the server window
+  applies, since the per-visitor limits need the address. A browser-token request never honours it. Products read the
+  visitor's address as `ctx.clientIp`. On a server call, edge headers (Growth's country) are the merchant server's.
+  `SS-Order-Key` is already among the CORS headers (E21 uses it).
+- **K4**: Phase 1 mounts counts on each product's main lists — Accounts users and its activity copies, Chat
+  conversations, Ecommerce orders, products, customers, reviews and returns, Notifications' delivery log, Payments
+  payments and its events, Growth's raw events — plus the kit's activity log and the `ss app init` template's list.
+  Other list routes get theirs when their phase touches them, and fields that do not exist yet (`stockState`,
+  `featured`, `segment`, role requests) come with their items. A missing value is the group `none`; `total` counts
+  every matching record, also beyond the 50 largest groups; `counts` without a named field is 422. Payments' `state`
+  groups the payment's `status`. Ecommerce counts orders by `status`, `role` (each status key through the website's
+  order flow; a key no longer in the flow is `none`), `paymentMethod` and `paymentState`, products by `status` and
+  `brand` (a grade lives on variants, so products are not grouped by grade), customers by `blocked` until E31's
+  segments, and reviews and returns by `status`. Accounts' `counts?by=status` groups the stored status (active, pending, invited);
+  blocked users are counted with `/count?status=blocked`, as the list filters them. Counts are not given for
+  personal fields (Notifications' recipient address).
+- **K5**: `GET /v1/events` keeps Payments' envelope (`{ items, nextCursor, hasMore }`, newest first, cursor) with items
+  `{ id, type, at, data, delivery }` (`at` replaces Payments' `createdAt`); `since` is an ISO-8601 time (events after
+  it) and `types` a comma list of full types; counts by `type` and `delivery`. The product forwards
+  `{ id, type, at, data }` with the event id as `Idempotency-Key`, and Notifications keeps that id and time in the
+  signed webhook (`id`, `createdAt`). A product opts in with `createProduct({ events: true })` (Payments now, Ecommerce
+  with E32). Public routes that name a website retry due events too (`product.events.drain`), so Payments' pages and
+  gateway notices behave as before. Payments' event data keeps its payment view (the payer's name, e-mail and phone
+  included) unchanged; data over 16 kB drops the payment's metadata and history.
+- **K2 in Chat**: an acting user counts as "me" for `assigned=me`, checks in (presence) when listing conversations,
+  and joins the staff list; internal notes stay ticket-only (no server notes route until C11). On a server visitor
+  call the device a sign-in or chat records is the merchant server's User-Agent (the kit has no header for the
+  visitor's browser; A12 may add one).
+- **K6**: the filled `adminUrl` template is sent as the value `link`; phones must be international (`+` or `00`),
+  because Notifications sends only to those, and a local number is left out; Accounts staff are read with `limit=100`
+  and, while Accounts cannot be reached, the last list read is used. The `permission` filter of Accounts' users (A4) is
+  Phase 2, so staff by permission work once Accounts serves it.
+- **K7**: every product offers the Format (all six show dates). Text the server makes has no viewer: an empty locale is
+  `en` and dates are in the business time zone whatever `times` says. Minor units follow ISO 4217 (the products' own
+  list), never the runtime's display default (it shows PKR without decimals). No-break spaces from the runtime become
+  plain spaces. Date styles: `date` (`12 Mar 2026` in en-GB), `datetime` and `time`. The widget configs answer `format`
+  and `timeZone`. Chat lookups of Ecommerce answer a `priceText` next to each price. With the default Format, Chat's
+  product cards show the currency code (they showed the page language's symbol) and its office-closed and transcript
+  times are full dates and times; merchants pick `symbol` or a locale to change that. Ecommerce's invoices and packing
+  slips show their dates in the Format (`Oct 4, 2026` by default, where they showed `2026-10-04`), and its admin
+  widgets format totals themselves. A refund Ecommerce asks of Payments forwards the acting user's headers.
+- **K8**: the calendar helpers live in `@ss/contracts` (`zonedParts`, `zonedDay`, `zonedDayStart`). Phase 1 applies
+  them to the calendar rules that exist today: Ecommerce's order-number year and report days, Growth's daily totals
+  and report ranges, Notifications' quiet hours; loyalty months and deal weekdays come with E18 and E20. Rolling spans
+  (send limits, lock times) are not calendar rules and do not change.
+- **K9**: entries get an id `act_…`; `label` is cut to 200 and `detail` to 2,000 characters. `GET /v1/activity` (and
+  Accounts' `GET /v1/activity-copies`) take `actor` (an actor id), `action` (one or a comma list), `target`, `q`
+  (label, detail, actor name, target), and `from`/`to` as an ISO-8601 time or a business-time-zone day (`to` includes
+  the day); counts by `action`, `actor` and `kind`.
+- **K10**: the body is `application/x-ndjson` (or `application/ndjson`); a dry run writes nothing, not even the activity
+  entry; a repeated id in one call fails that line; failed lines come back sorted with `{ line, id, errors }`; import
+  entries are never copied to Accounts. No product has its `import` feature in Phase 1 (Phase 5 adds them): the e2e
+  test product Notes mounts the helper to prove it.
+- **K11**: `$search` is allowed only as the first stage and only with an `equals` on `websiteId` in its
+  `compound.filter`; `$searchMeta` and `$vectorSearch` stay refused.
+- **Importer**: `ss-import send` posts with `?dryRun=1` for a dry run and calls `POST /v1/import/finish` once per
+  product after a real run; the store database's address comes from `SS_IMPORT_SOURCE_URI` and each server token from
+  `SS_IMPORT_TOKEN_<PRODUCT ID>` (never on the command line); `read` writes `NN-<product>.<collection>.ndjson`,
+  `idmap.json` and `manifest.json`; ids come from ObjectIds only (other source ids fail until a mapping needs them);
+  `mergeKey` keeps the oldest document's id. Until Phase 5 the only mapping is the e2e fixture.
+- **OpenAPI and docs**: visitor routes list both tokens and reference `SS-Visitor-IP`; server routes reference the
+  `SS-Actor-*` headers; every product's `/docs` renders the kit's guide (`KIT_GUIDE`): settings from the server, the
+  acting user, visitor calls from the server, counts, the activity log and the Format.
+- **Payments dev databases**: merchant databases used before this change hold Payments' own event indexes (same keys
+  as the kit's, other names), which the kit cannot create next to them; drop `ss_payments_events` in any such
+  development database (no merchant is live).
+
 ### 0.8.4 Still open
 
 - **The grilling of each later product** (Notifications, Accounts, Payments, Ecommerce, Growth), held right before it is
