@@ -6,6 +6,7 @@
  * merchant's own scripts are public in any page that loads them).
  * @module
  */
+import { keyPathOf } from './seo.js';
 
 /** The shape of each tag id. */
 const TAG_IDS = Object.freeze({
@@ -200,12 +201,41 @@ export const tagsReady = (on, values) => {
 };
 
 /**
- * The page script's settings.
- * @param {{ on: ReadonlyArray<string>, values: FeatureValues, now: number }} input
+ * What the admin widgets also show (never to visitors): the pages the SEO checklist checks by default (paths; the home
+ * page first), where the merchant's site serves the IndexNow key, the analytics detail and how long raw events are kept.
+ * @param {ReadonlyArray<string>} on
+ * @param {FeatureValues} values
+ * @param {string} domain
  */
-export const widgetSettings = ({ on, values, now }) => {
+export const adminSettings = (on, values, domain) => {
+	const paths = values.seo_checklist?.paths;
+	const listed = (Array.isArray(paths) ? paths : []).filter(
+		(path) => typeof path === 'string' && path.startsWith('/') && !path.startsWith('//') && !/\s/.test(path),
+	);
+	const indexnow = values.indexnow ?? {};
+	const key = text(values, 'indexnow', 'key');
+	const keyPath = keyPathOf(indexnow.keyPath);
+	return {
+		seoPages: [...new Set(['/', ...listed.map(String)])].slice(0, 20),
+		indexNow: on.includes('indexnow')
+			? {
+					keySet: /^[A-Za-z0-9-]{8,128}$/.test(key),
+					keyLocation: keyPath === null ? null : `https://${domain}${keyPath === '' ? `/${key || '<key>'}.txt` : keyPath}`,
+				}
+			: null,
+		detail: values.visitor_analytics?.detail === 'sessions' ? 'sessions' : 'anonymous',
+		retentionMonths: Number(values.visitor_analytics?.retentionMonths) || 13,
+	};
+};
+
+/**
+ * The page script's settings; with `admin` (the admin widgets' config, PLAN 0.4.5) also {@link adminSettings}.
+ * @param {{ on: ReadonlyArray<string>, values: FeatureValues, now: number, admin?: { domain: string } | null }} input
+ */
+export const widgetSettings = ({ on, values, now, admin = null }) => {
 	const analytics = values.visitor_analytics ?? {};
 	return {
+		admin: admin ? adminSettings(on, values, admin.domain) : null,
 		consent: {
 			banner: on.includes('consent_banner'),
 			position: values.consent_banner?.position === 'top' ? 'top' : 'bottom',

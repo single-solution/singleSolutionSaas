@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { buildReport, dayStart, daysOf, lastDays, rangeOf, topOf } from '../core/analytics.js';
+import { PRESETS, buildReport, dayStart, daysOf, lastDays, presetRange, rangeOf, topOf } from '../core/analytics.js';
 import {
+	adminSettings,
 	hiddenPagesOf,
 	linkOf,
 	noticeAnswer,
@@ -350,6 +351,18 @@ describe('analytics report', () => {
 		expect(empty.sessions).toEqual({ count: 0, bounces: 0, bounceRate: null, averageDuration: null, pagesPerSession: null });
 		expect(empty).toMatchObject({ live: { visitors: 0, pages: [] }, vitalPages: null, notFoundFrom: null });
 		expect([topOf('25'), topOf('0'), topOf('101'), topOf(undefined), topOf('x')]).toEqual([25, 10, 10, 10, 10]);
+		// the dashboard widget's range chips, in the business time zone
+		const late = Date.parse('2026-03-01T20:00:00Z');
+		expect(PRESETS.map((preset) => presetRange(preset, late, 'Asia/Karachi'))).toEqual([
+			{ from: '2026-03-02', to: '2026-03-02' },
+			{ from: '2026-02-24', to: '2026-03-02' },
+			{ from: '2026-02-01', to: '2026-03-02' },
+			{ from: '2025-12-03', to: '2026-03-02' },
+			{ from: '2026-03-01', to: '2026-03-02' },
+			{ from: '2026-02-01', to: '2026-02-28' },
+			{ from: '2025-03-03', to: '2026-03-02' },
+		]);
+		expect(presetRange('nonsense', late, 'UTC')).toEqual({ from: '2026-01-31', to: '2026-03-01' });
 	});
 });
 
@@ -447,6 +460,33 @@ describe('page script settings', () => {
 			record: { visits: true, funnel: false, requireConsent: false },
 			notice: { text: 'Sale' },
 		});
+		// the admin widgets' part: the checklist's pages, the IndexNow key file, the analytics detail and retention
+		const admin = widgetSettings({
+			on: ['seo_checklist', 'indexnow', 'visitor_analytics'],
+			values: {
+				seo_checklist: { paths: ['/shop', 'bad', '//x', '/shop', '/'] },
+				indexnow: { key: 'abcdefgh' },
+				visitor_analytics: { detail: 'sessions', retentionMonths: 6 },
+			},
+			now: NOW,
+			admin: { domain: DOMAIN },
+		}).admin;
+		expect(admin).toEqual({
+			seoPages: ['/', '/shop'],
+			indexNow: { keySet: true, keyLocation: `https://${DOMAIN}/abcdefgh.txt` },
+			detail: 'sessions',
+			retentionMonths: 6,
+		});
+		expect(adminSettings(['indexnow'], { indexnow: { keyPath: 'x' } }, DOMAIN)).toMatchObject({
+			indexNow: { keySet: false, keyLocation: null },
+			detail: 'anonymous',
+			retentionMonths: 13,
+		});
+		expect(adminSettings(['indexnow'], { indexnow: { keyPath: '/k.txt' } }, DOMAIN).indexNow?.keyLocation).toBe(
+			`https://${DOMAIN}/k.txt`,
+		);
+		expect(adminSettings([], {}, DOMAIN).indexNow).toBeNull();
+		expect(widgetSettings({ on: [], values: {}, now: NOW }).admin).toBeNull();
 		expect(widgetSettings({ on: [], values: {}, now: NOW })).toMatchObject({
 			consent: { banner: false, position: 'bottom', privacyUrl: null },
 			record: { requireConsent: true },

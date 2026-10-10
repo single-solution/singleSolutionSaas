@@ -77,6 +77,30 @@ export const lastDays = (now, timeZone) => {
 	return { from: shiftDay(to, -(DEFAULT_DAYS - 1)), to };
 };
 
+/** The range presets of the analytics dashboard. */
+export const PRESETS = Object.freeze(['today', '7d', '30d', '90d', 'month', 'lastMonth', '12m']);
+
+/**
+ * The days of a range preset, up to today in the business time zone: today, the last 7, 30 or 90 days, this month,
+ * last month, or the last 12 months (365 days).
+ * @param {string} preset one of {@link PRESETS}
+ * @param {number} now
+ * @param {string | null | undefined} timeZone
+ * @returns {{ from: string, to: string }}
+ */
+export const presetRange = (preset, now, timeZone) => {
+	const today = zonedDay(now, timeZone);
+	const monthStart = `${today.slice(0, 8)}01`;
+	if (preset === 'today') return { from: today, to: today };
+	if (preset === 'month') return { from: monthStart, to: today };
+	if (preset === 'lastMonth') {
+		const to = shiftDay(monthStart, -1);
+		return { from: `${to.slice(0, 8)}01`, to };
+	}
+	const days = { '7d': 7, '90d': 90, '12m': 365 }[preset] ?? DEFAULT_DAYS;
+	return { from: shiftDay(today, -(days - 1)), to: today };
+};
+
 /**
  * The days a report covers: `from` and `to` (`YYYY-MM-DD`, days of the business time zone, both included), else the
  * last 30 days up to today in that zone.

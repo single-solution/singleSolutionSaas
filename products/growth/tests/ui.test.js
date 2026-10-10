@@ -760,7 +760,7 @@ describe('admin widgets', () => {
 			{ day: '2026-10-01', visits: 1, pageViews: 2 },
 			{ day: '2026-10-02', visits: 2, pageViews: 5 },
 		],
-		pages: [{ key: '/', count: 5 }],
+		pages: Array.from({ length: 8 }, (_, i) => ({ key: i === 0 ? '/' : `/p${i}`, count: 9 - i })),
 		sources: [{ key: '(direct)', count: 2 }],
 		devices: [{ key: 'mobile', count: 3 }],
 		countries: [{ key: '(unknown)', count: 1 }],
@@ -780,6 +780,57 @@ describe('admin widgets', () => {
 			{ name: 'LCP', count: 2, average: 1800, good: 2, needsImprovement: 0, poor: 0 },
 			{ name: 'CLS', count: 1, average: 300, good: 0, needsImprovement: 0, poor: 1 },
 			{ name: 'INP', count: 0, average: null, good: 0, needsImprovement: 0, poor: 0 },
+		],
+		detail: 'anonymous',
+		sessions: null,
+		browsers: null,
+		systems: null,
+		cities: null,
+		live: null,
+		journeys: null,
+		notFoundFrom: null,
+		vitalPages: null,
+	};
+	const SESSIONS_EMPTY = {
+		detail: 'sessions',
+		sessions: { count: 0, bounces: 0, bounceRate: null, averageDuration: null, pagesPerSession: null },
+		browsers: [],
+		systems: [],
+		cities: [],
+		live: { visitors: 0, pages: [] },
+		journeys: [],
+	};
+	const SESSIONS_REPORT = {
+		...REPORT,
+		funnel: null,
+		detail: 'sessions',
+		sessions: { count: 2, bounces: 1, bounceRate: 50, averageDuration: 65, pagesPerSession: 1.5 },
+		browsers: [{ key: 'samsung', count: 2 }],
+		systems: [{ key: 'other', count: 2 }],
+		cities: [{ key: 'Lahore, PK', count: 2 }],
+		live: { visitors: 1, pages: [{ key: '/shop', count: 1 }] },
+		notFoundFrom: [{ path: '/old', from: '/shop', count: 1 }],
+		vitalPages: [{ path: '/shop', samples: 2, averages: { LCP: 4100, INP: null, CLS: 50, FCP: null, TTFB: null } }],
+		journeys: [
+			{
+				session: 'sess_1234567890',
+				startedAt: '2026-10-02T09:00:00.000Z',
+				endedAt: '2026-10-02T09:01:05.000Z',
+				duration: 65,
+				events: 3,
+				pages: 2,
+				device: 'mobile',
+				browser: 'chrome',
+				os: 'android',
+				country: 'PK',
+				city: 'Lahore',
+				source: '(direct)',
+				steps: [
+					{ type: 'page_view', path: '/', at: '2026-10-02T09:00:00.000Z' },
+					{ type: 'search', path: '/shop', at: '2026-10-02T09:00:30.000Z', term: 'cases' },
+					{ type: 'purchase', path: '/cart', at: '2026-10-02T09:01:05.000Z', value: 2500, currency: 'USD' },
+				],
+			},
 		],
 	};
 
@@ -815,26 +866,174 @@ describe('admin widgets', () => {
 		expect(host.shadowRoot).toBeNull();
 	});
 
-	it('the analytics dashboard shows the report in tiles, lists and the hero chart', async () => {
+	/** @param {HTMLElement} host @param {string} text the start of a button's words (chips add their count) */
+	const press = (host, text) => {
+		const found = [...(host.shadowRoot?.querySelectorAll('button') ?? [])].find((b) => b.textContent?.startsWith(text));
+		if (!found) throw new Error(`no button ${text}`);
+		found.click();
+	};
+	/** @param {HTMLElement} host */
+	const dialog = (host) => inside(host, '.dialog');
+	const EVENTS = {
+		'GET /v1/admin/events/counts': () => answer(200, { total: 3, groups: { page_view: 2, purchase: 1 } }),
+		'GET /v1/admin/events': (/** @type {any} */ _init, /** @type {URL} */ url) =>
+			answer(200, {
+				items: [
+					{
+						id: url.searchParams.get('cursor') ? 'evt_3' : 'evt_1',
+						type: url.searchParams.get('type') ?? 'purchase',
+						path: '/cart',
+						at: '2026-10-02T09:00:00.000Z',
+						expiresAt: '2027-11-02T09:00:00.000Z',
+						data: { value: 2500, currency: 'USD' },
+						session: url.searchParams.get('session') ?? undefined,
+						browser: 'chrome',
+						os: 'android',
+						city: 'Lahore',
+					},
+				],
+				hasMore: !url.searchParams.get('cursor'),
+				nextCursor: 'next',
+			}),
+	};
+
+	it('the analytics dashboard: hero, tiles, ranked cards with See all, range chips, a custom range and the event log', async () => {
+		vi.useFakeTimers({ toFake: ['Date'] });
+		vi.setSystemTime(NOW);
 		const host = place('analytics_dashboard');
+		/** @type {URL[]} */
+		const asked = [];
 		let fail = false;
-		await startAdmin(['visitor_analytics'], {
+		await startAdmin(['visitor_analytics', 'conversion_funnel', 'searches_404s', 'web_vitals'], {
 			'GET /v1/admin/analytics': (init, url) => {
 				expect(init.headers.authorization).toBe('Bearer ticket-1');
-				expect(url.searchParams.get('to')).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+				asked.push(url);
 				return fail ? answer(422, { detail: 'Bad days.' }) : answer(200, REPORT);
+			},
+			...EVENTS,
+		});
+		expect(asked[0]?.searchParams.get('from')).toBe('2026-09-09');
+		expect(asked[0]?.searchParams.get('to')).toBe('2026-10-08');
+		expect(asked[0]?.searchParams.get('top')).toBe('50');
+		const text = () => host.shadowRoot?.textContent ?? '';
+		expect(inside(host, '.hero .value').textContent).toBe('3');
+		expect(host.shadowRoot?.querySelectorAll('.bars span')).toHaveLength(2);
+		for (const words of [
+			'Direct',
+			'Phones',
+			'Unknown',
+			'Purchased',
+			'USD 25',
+			'1 orders',
+			'Pages not found (404)',
+			'1800 ms',
+			'0.30',
+			'—',
+			'50 % of the step before',
+		])
+			expect(text()).toContain(words);
+		expect(text()).toContain('Days are in the UTC time zone.');
+		expect(text()).not.toContain(strings['analytics.journeys']);
+		// a long list shows its first rows and the rest in a dialog
+		press(host, 'See all 8');
+		expect(dialog(host).querySelectorAll('ul.rank li')).toHaveLength(8);
+		press(host, strings['analytics.close']);
+		expect(dialog(host)).toBeNull();
+		// a range chip asks for its days
+		press(host, strings['analytics.range.7d']);
+		await flush();
+		expect(asked.at(-1)?.searchParams.get('from')).toBe('2026-10-02');
+		press(host, strings['analytics.range.lastMonth']);
+		await flush();
+		expect([asked.at(-1)?.searchParams.get('from'), asked.at(-1)?.searchParams.get('to')]).toEqual([
+			'2026-09-01',
+			'2026-09-30',
+		]);
+		// the More menu: a custom range whose error stays in the dialog, then Refresh
+		press(host, '⋯');
+		press(host, strings['analytics.custom']);
+		const [from, to] = dialog(host).querySelectorAll('input');
+		from.value = '2026-08-01';
+		to.value = '2026-08-03';
+		fail = true;
+		dialog(host).dispatchEvent(new window.Event('submit', { cancelable: true }));
+		await flush();
+		expect(dialog(host).querySelector('[role="status"]').textContent).toBe(`${strings['analytics.failed']} Bad days.`);
+		fail = false;
+		dialog(host).dispatchEvent(new window.Event('submit', { cancelable: true }));
+		await flush();
+		expect(dialog(host)).toBeNull();
+		expect(asked.at(-1)?.searchParams.get('from')).toBe('2026-08-01');
+		expect(host.shadowRoot?.querySelector('.head + .chips .chip[aria-pressed="true"]')).toBeNull();
+		fail = true;
+		press(host, '⋯');
+		press(host, strings['analytics.refresh']);
+		await flush();
+		expect(inside(host, '[role="status"]').textContent).toBe(`${strings['analytics.failed']} Bad days.`);
+		// the event log: chips with counts, Load more, and an event's fields in a dialog
+		const chips = [...(host.shadowRoot?.querySelectorAll('.section:last-child .chip') ?? [])].map((c) => c.textContent);
+		expect(chips).toEqual(['All3', 'Viewed a page2', 'Purchased1']);
+		expect(text()).toContain('Purchased · /cart');
+		press(host, strings['analytics.loadMore']);
+		await flush();
+		expect(host.shadowRoot?.querySelectorAll('.section:last-child ul.rows li')).toHaveLength(2);
+		press(host, 'Viewed a page');
+		await flush();
+		const row = /** @type {HTMLElement} */ (host.shadowRoot?.querySelector('.section:last-child ul.rows li'));
+		expect(row.textContent).toContain('Viewed a page · /cart');
+		row.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter' }));
+		expect(dialog(host).textContent).toContain('evt_1');
+		expect(dialog(host).textContent).toContain('Chrome · Android · Lahore');
+		dialog(host).dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+		expect(dialog(host)).toBeNull();
+	});
+
+	it('the analytics dashboard with sessions: live visitors, session tiles, journeys and every event of a visit', async () => {
+		const host = place('analytics_dashboard');
+		/** @type {string[]} */
+		const sessionsAsked = [];
+		await startAdmin(['visitor_analytics', 'searches_404s', 'web_vitals'], {
+			'GET /v1/admin/analytics': () => answer(200, SESSIONS_REPORT),
+			...EVENTS,
+			'GET /v1/admin/events': (init, url) => {
+				sessionsAsked.push(url.searchParams.get('session') ?? '');
+				return EVENTS['GET /v1/admin/events'](init, url);
 			},
 		});
 		const text = host.shadowRoot?.textContent ?? '';
-		expect(inside(host, '.hero .value').textContent).toBe('3');
-		expect(host.shadowRoot?.querySelectorAll('.bars span')).toHaveLength(2);
-		for (const words of ['Direct', 'Phones', 'Unknown', 'Purchased', 'USD 25', 'Pages not found (404)', '1800 ms', '0.30', '—'])
+		for (const words of [
+			'Visitors now',
+			'/shop',
+			'Bounce rate',
+			'50 %',
+			'1 min 5 s',
+			'1.5',
+			'Samsung Internet',
+			'Other systems',
+			'Lahore, PK',
+			'Slowest pages',
+			'4100 ms',
+			'CLS 0.05',
+			'from /shop',
+			'2 pages · Phones · Chrome · Lahore, PK · Direct',
+		])
 			expect(text).toContain(words);
-		expect(text).toContain('Days are in the UTC time zone.');
-		fail = true;
-		inside(host, 'form').dispatchEvent(new window.Event('submit', { cancelable: true }));
+		expect(inside(host, '.pulse').classList.contains('idle')).toBe(false);
+		const journey = /** @type {HTMLElement} */ (host.shadowRoot?.querySelector('.section ul.rows.card li'));
+		journey.click();
+		expect(dialog(host).textContent).toContain('sess_1234567890');
+		expect([...dialog(host).querySelectorAll('ol.timeline li')].map((li) => li.textContent)).toEqual([
+			expect.stringContaining('Viewed a page /'),
+			expect.stringContaining('Searched /shop'),
+			expect.stringContaining('USD 25'),
+		]);
+		press(host, strings['analytics.allEvents']);
 		await flush();
-		expect(inside(host, '[role="status"]').textContent).toBe(`${strings['analytics.failed']} Bad days.`);
+		expect(sessionsAsked.at(-1)).toBe('sess_1234567890');
+		expect(dialog(host).querySelectorAll('ul.rows li')).toHaveLength(1);
+		press(host, strings['analytics.close']);
+		journey.dispatchEvent(new window.KeyboardEvent('keydown', { key: ' ' }));
+		expect(dialog(host)).not.toBeNull();
 	});
 
 	it('the admin widgets follow the website’s Format and business time zone', async () => {
@@ -856,8 +1055,14 @@ describe('admin widgets', () => {
 					asked.push(url);
 					return answer(200, { ...REPORT, timeZone: 'Asia/Karachi' });
 				},
+				...EVENTS,
 				'POST /v1/admin/seo/checks': () =>
-					answer(200, { checkedAt: '2026-10-08T12:00:00.000Z', summary: { pass: 0, warn: 0, fail: 0 }, checks: [] }),
+					answer(200, {
+						checkedAt: '2026-10-08T12:00:00.000Z',
+						summary: { pass: 0, warn: 0, fail: 0 },
+						checks: [],
+						pages: [],
+					}),
 			},
 			look,
 		);
@@ -866,7 +1071,7 @@ describe('admin widgets', () => {
 		const text = dashboard.shadowRoot?.textContent ?? '';
 		expect(text).toContain('Rs 25');
 		expect(text).not.toContain('USD');
-		expect(text).toContain('Days are in the Asia/Karachi time zone.');
+		expect(text).toContain('1 Oct 2026 – 2 Oct 2026 · Days are in the Asia/Karachi time zone.');
 		const bars = [...(dashboard.shadowRoot?.querySelectorAll('.bars span') ?? [])].map((bar) => bar.getAttribute('title'));
 		expect(bars).toEqual(['1 Oct 2026: 1', '2 Oct 2026: 2']);
 		button(checklist, strings['seo.run']).click();
@@ -886,28 +1091,63 @@ describe('admin widgets', () => {
 					funnel: null,
 					searches: null,
 					vitals: null,
+					...SESSIONS_EMPTY,
 				}),
+			'GET /v1/admin/events/counts': () => answer(500),
+			'GET /v1/admin/events': () => answer(200, { items: [], hasMore: false }),
 		});
-		expect(host.shadowRoot?.textContent).toContain(strings['analytics.empty']);
-		expect(host.shadowRoot?.textContent).toContain(strings['analytics.none']);
+		const text = host.shadowRoot?.textContent ?? '';
+		for (const words of [
+			strings['analytics.empty'],
+			strings['analytics.none'],
+			strings['analytics.liveNone'],
+			strings['analytics.noJourneys'],
+			strings['analytics.noEvents'],
+		])
+			expect(text).toContain(words);
+		expect(inside(host, '.pulse').classList.contains('idle')).toBe(true);
 		vi.spyOn(window, 'fetch').mockImplementation(async () => answer(500));
-		inside(host, 'form').dispatchEvent(new window.Event('submit', { cancelable: true }));
+		press(host, strings['analytics.range.today']);
 		await flush();
 		expect(inside(host, '[role="status"]').textContent).toBe(strings['analytics.failed']);
 	});
 
-	it('the SEO checklist runs the checks and submits pages to IndexNow', async () => {
+	it('the SEO checklist: tiles, filter chips, page cards with their More menu, other pages, and IndexNow', async () => {
 		const host = place('seo_checklist');
 		/** @type {any[]} */
 		const submitted = [];
+		/** @type {any[]} */
+		const checked = [];
+		/** @type {string[]} */
+		const opened = [];
 		let refuse = false;
-		await startAdmin(['seo_checklist', 'indexnow'], {
-			'POST /v1/admin/seo/checks': () =>
+		const page = 'https://shop.example.com/';
+		const shop = 'https://shop.example.com/shop';
+		w.open = (/** @type {string} */ url) => opened.push(url);
+		serve({
+			[`GET ${ADMIN_CONFIG_PATH}`]: () =>
 				answer(200, {
+					...configOf(['seo_checklist', 'indexnow']),
+					settings: {
+						...configOf(['seo_checklist', 'indexnow']).settings,
+						admin: {
+							seoPages: ['/', '/shop'],
+							indexNow: { keySet: true, keyLocation: 'https://shop.example.com/indexnow-key.txt' },
+							detail: 'anonymous',
+							retentionMonths: 13,
+						},
+					},
+				}),
+			'POST /v1/admin/seo/checks': (init) => {
+				checked.push(JSON.parse(init.body));
+				return answer(200, {
 					checkedAt: '2026-10-08T12:00:00.000Z',
-					summary: { pass: 1, warn: 0, fail: 1 },
+					summary: { pass: 2, warn: 1, fail: 1 },
+					pages: [page, shop],
 					checks: [
-						{ id: 'title', status: 'pass', page: 'https://shop.example.com/', title: 'Page title', fix: '' },
+						{ id: 'title', status: 'pass', page, title: 'Page title', fix: '' },
+						{ id: 'verification', status: 'pass', page, title: 'Search engine verification', fix: '' },
+						{ id: 'description', status: 'warn', page: shop, title: 'Meta description', fix: 'Write one.' },
 						{
 							id: 'robots_blocks',
 							status: 'fail',
@@ -916,29 +1156,98 @@ describe('admin widgets', () => {
 							fix: 'Remove it.',
 						},
 					],
-				}),
+				});
+			},
 			'POST /v1/admin/indexnow': (init) => {
 				submitted.push(JSON.parse(init.body));
 				return refuse ? answer(502, { detail: 'IndexNow answered 500.' }) : answer(200, { submitted: 2 });
 			},
 		});
+		let tickets = 0;
+		await startWidget({ window, script: script(null) }).admin({
+			getTicket: async () => ({ ticket: `t${(tickets += 1)}`, expiresAt: new Date(Date.now() + 15 * 60_000).toISOString() }),
+		});
+		await flush();
+		const text = () => host.shadowRoot?.textContent ?? '';
+		expect(text()).toContain('Checks 2 pages: /, /shop');
+		expect(text()).toContain(strings['seo.notRun']);
+		expect(text()).toContain('Your site must serve your key at https://shop.example.com/indexnow-key.txt.');
 		button(host, strings['seo.run']).click();
 		await flush();
-		const items = [...(host.shadowRoot?.querySelectorAll('.checks li') ?? [])].map((li) => li.textContent);
-		expect(items[0]).toContain('Fix');
-		expect(items[0]).toContain('Remove it.');
-		expect(items[1]).toContain('https://shop.example.com/');
-		expect(inside(host, '.lead').textContent).toBe('1 passed · 0 to improve · 1 to fix');
-		const urls = inside(host, 'textarea');
-		urls.value = 'https://shop.example.com/a\nhttps://shop.example.com/b ';
-		inside(host, 'form').dispatchEvent(new window.Event('submit', { cancelable: true }));
+		expect(checked[0]).toEqual({});
+		expect([...(host.shadowRoot?.querySelectorAll('.tile .value') ?? [])].map((v) => v.textContent)).toEqual(['1', '1', '2']);
+		const cards = () => [...(host.shadowRoot?.querySelectorAll('.masonry .card h4') ?? [])].map((h) => h.textContent);
+		expect(cards()).toEqual(['Whole site', '/', '/shop']);
+		const site = /** @type {HTMLElement} */ (host.shadowRoot?.querySelector('.masonry .card'));
+		expect(site.textContent).toContain('Fix');
+		expect(site.textContent).toContain('Remove it.');
+		expect(site.textContent).toContain('Search engine verification');
+		press(host, 'Improve');
+		expect(cards()).toEqual(['/shop']);
+		press(host, 'All');
+		// a page's More menu: open it, check it again, submit it
+		const shopCard = /** @type {HTMLElement} */ ([...(host.shadowRoot?.querySelectorAll('.masonry .card') ?? [])][2]);
+		/** @param {string} words */
+		const menuItem = (words) =>
+			/** @type {HTMLButtonElement} */ (
+				[...shopCard.querySelectorAll('[role="menuitem"]')].find((b) => b.textContent === words)
+			);
+		/** @type {HTMLButtonElement} */ (shopCard.querySelector('.more > button')).click();
+		menuItem(strings['seo.openPage']).click();
+		expect(opened).toEqual([shop]);
+		menuItem(strings['seo.submitPage']).click();
+		expect(dialog(host).querySelector('textarea').value).toBe(shop);
+		dialog(host).dispatchEvent(new window.Event('submit', { cancelable: true }));
 		await flush();
-		expect(submitted).toEqual([{ urls: ['https://shop.example.com/a', 'https://shop.example.com/b'] }]);
-		expect(host.shadowRoot?.textContent).toContain('Submitted 2 addresses.');
+		expect(submitted).toEqual([{ urls: [shop] }]);
+		expect(text()).toContain('Submitted 2 addresses.');
+		menuItem(strings['seo.checkAgain']).click();
+		await flush();
+		expect(checked.at(-1)).toEqual({ paths: ['/shop'] });
+		// other pages from the header's More menu
+		press(host, '⋯');
+		press(host, strings['seo.otherPages']);
+		const paths = dialog(host).querySelector('textarea');
+		expect(paths.value).toBe('/\n/shop');
+		paths.value = '/a\n /b ';
+		dialog(host).dispatchEvent(new window.Event('submit', { cancelable: true }));
+		await flush();
+		expect(checked.at(-1)).toEqual({ paths: ['/a', '/b'] });
+		// the IndexNow card's dialog, refused
 		refuse = true;
-		inside(host, 'form').dispatchEvent(new window.Event('submit', { cancelable: true }));
+		press(host, strings['indexnow.open']);
+		const urls = dialog(host).querySelector('textarea');
+		urls.value = 'https://shop.example.com/a\nhttps://shop.example.com/b ';
+		dialog(host).dispatchEvent(new window.Event('submit', { cancelable: true }));
 		await flush();
-		expect(host.shadowRoot?.textContent).toContain('Not submitted: IndexNow answered 500.');
+		expect(submitted.at(-1)).toEqual({ urls: ['https://shop.example.com/a', 'https://shop.example.com/b'] });
+		expect(dialog(host).querySelector('[role="status"]').textContent).toBe('Not submitted: IndexNow answered 500.');
+		press(host, strings['seo.cancel']);
+		delete w.open;
+	});
+
+	it('IndexNow alone, before a key is set or with a broken key path', async () => {
+		const host = place('seo_checklist');
+		/** @param {any} indexNow */
+		const configWith = (indexNow) => ({
+			...configOf(['indexnow']),
+			settings: {
+				...configOf(['indexnow']).settings,
+				admin: { seoPages: ['/'], indexNow, detail: 'anonymous', retentionMonths: 13 },
+			},
+		});
+		serve({ [`GET ${ADMIN_CONFIG_PATH}`]: () => answer(200, configWith({ keySet: false, keyLocation: null })) });
+		const getTicket = async () => ({ ticket: 't', expiresAt: new Date(Date.now() + 15 * 60_000).toISOString() });
+		await startWidget({ window, script: script(null) }).admin({ getTicket });
+		await flush();
+		expect(host.shadowRoot?.textContent).toContain(strings['indexnow.noKey']);
+		expect(button(host, strings['seo.run'])).toBeUndefined();
+		document.body.replaceChildren();
+		const again = place('seo_checklist');
+		serve({ [`GET ${ADMIN_CONFIG_PATH}`]: () => answer(200, configWith({ keySet: true, keyLocation: null })) });
+		await startWidget({ window, script: script(null) }).admin({ getTicket });
+		await flush();
+		expect(again.shadowRoot?.textContent).toContain(strings['indexnow.badPath']);
 	});
 
 	it('the SEO checklist without IndexNow, and signed out', async () => {
@@ -958,7 +1267,7 @@ describe('admin widgets', () => {
 		});
 		await vi.advanceTimersByTimeAsync(0);
 		await done;
-		expect(inside(host, 'textarea')).toBeNull();
+		expect(host.shadowRoot?.textContent).not.toContain(strings['indexnow.title']);
 		button(host, strings['seo.run']).click();
 		await vi.advanceTimersByTimeAsync(0);
 		expect(inside(host, '[role="status"]').textContent).toBe(strings['seo.failed']);
@@ -988,7 +1297,7 @@ describe('admin widgets', () => {
 		await done;
 		await vi.advanceTimersByTimeAsync(10);
 		expect(inside(host, '[role="status"]').textContent).toBe(strings['analytics.signedOut']);
-		inside(host, 'form').dispatchEvent(new window.Event('submit', { cancelable: true }));
+		inside(host, '.chip').click();
 		await vi.advanceTimersByTimeAsync(0);
 		expect(inside(host, '[role="status"]').textContent).toBe(strings['analytics.signedOut']);
 	});

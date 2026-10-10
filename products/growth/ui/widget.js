@@ -254,7 +254,8 @@ export const startWidget = ({ window: win, script }) => {
 		if (on(config, 'analytics_dashboard'))
 			for (const host of hosts('analytics_dashboard')) mountAnalyticsDashboard({ host, api, config, viewer, now });
 		if (on(config, 'seo_checklist'))
-			for (const host of hosts('seo_checklist')) mountSeoChecklist({ host, api, config, viewer });
+			for (const host of hosts('seo_checklist'))
+				mountSeoChecklist({ host, api, config, viewer, open: (url) => void win.open(url, '_blank', 'noopener') });
 	};
 
 	const api = Object.freeze({

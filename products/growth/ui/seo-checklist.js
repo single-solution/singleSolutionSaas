@@ -1,33 +1,49 @@
 /**
- * The SEO checklist (admin widget `seo_checklist`; PLAN 0.8.9): with the SEO checklist on (ticket `seo.check`), a
- * button checks the website's pages on request and lists every check (passed, improve, fix) with its fix steps; with
- * IndexNow on (ticket `indexnow.submit`), a box submits page addresses. Every word is a widget text; the time of a
- * run follows the website's Format and time zone (PLAN 0.8.10 K7).
+ * The SEO checklist (admin widget `seo_checklist`; PLAN 0.8.9, 0.8.10 G5, 0.6). With the SEO checklist on (ticket
+ * `seo.check`): Check my pages runs the checks on the pages of its settings (they are named under the title), and the
+ * More menu checks other pages (a dialog). A run shows the passed, to-improve and to-fix counts as tiles, filter chips
+ * with counts, and a masonry of cards (the whole site, then each page) whose checks carry their fix steps; each page's
+ * More menu opens it, checks it again or submits it to IndexNow. With IndexNow on (ticket `indexnow.submit`) a card
+ * names the key file address (G5) and submits pages in a dialog. Every word is a widget text; the time of a run
+ * follows the website's Format and time zone (PLAN 0.8.10 K7).
  * @module
  */
 import { formatDate, mountWidget } from '@ss/app-kit/widget';
+import { chipGroup, fill, moreMenu, openDialog } from './admin-kit.js';
 import { adminCall } from './tickets.js';
 import { element } from './dom.js';
 import { WIDGET_CSS } from './styles.js';
 
-/**
- * Fill `{name}` placeholders.
- * @param {string} text @param {Record<string, string | number>} values
- */
-const fill = (text, values) =>
-	text.replace(/\{(\w+)\}/g, (match, key) => (Object.hasOwn(values, key) ? String(values[key]) : match));
+/** Checks of the whole site, whatever page they read. */
+const SITE_CHECKS = Object.freeze(['robots_txt', 'robots_blocks', 'sitemap', 'verification']);
 
-/** Order of the statuses in the list: what to fix first. */
+/** Order of the statuses in a card: what to fix first. */
 const ORDER = Object.freeze({ fail: 0, warn: 1, pass: 2 });
+
+/** @typedef {{ id: string, status: 'pass' | 'warn' | 'fail', page: string | null, title: string, fix: string }} Check */
+
+/**
+ * The path of a page address (`https://shop.example.com/a` → `/a`).
+ * @param {string} url
+ */
+const pathOf = (url) => {
+	try {
+		return new URL(url).pathname;
+	} catch {
+		return url;
+	}
+};
 
 /**
  * @param {{ host: HTMLElement, api: import('./tickets.js').AdminApi, config: import('./widget.js').WidgetConfig,
- *   viewer: import('./widget.js').Viewer }} input `viewer`: the browser's language and time zone
+ *   viewer: import('./widget.js').Viewer, open?: (url: string) => void }} input `viewer`: the browser's language and
+ *   time zone; `open`: open a page in a new tab
  */
-export const mountSeoChecklist = ({ host, api, config, viewer }) => {
+export const mountSeoChecklist = ({ host, api, config, viewer, open = () => {} }) => {
 	/** @param {string} key @param {Record<string, string | number>} [values] */
 	const t = (key, values) => fill(config.texts[key] ?? key, values ?? {});
 	const on = (/** @type {string} */ feature) => config.features.includes(feature);
+	const admin = config.settings.admin;
 	return mountWidget({
 		host,
 		theme: config.theme,
@@ -40,88 +56,220 @@ export const mountSeoChecklist = ({ host, api, config, viewer }) => {
 			/** @param {{ ok: boolean, status: number, data: any }} answer @param {string} fallback */
 			const failure = (answer, fallback) =>
 				answer.status === 0 && !api.tickets.current() ? t('seo.signedOut') : (answer.data?.detail ?? t(fallback));
+			/** @param {string} label @param {HTMLElement} control */
+			const field = (label, control) => {
+				const node = h('label', {}, label);
+				node.append(control);
+				return node;
+			};
 			const parts = [];
+
+			/** Where the outcome of an IndexNow submission is said: the IndexNow card's, else the checklist's. */
+			const indexNowNote = h('p', { class: 'status', role: 'status' });
+			/**
+			 * Submit page addresses to IndexNow: an error text, or null.
+			 * @param {string[]} urls
+			 */
+			const submit = async (urls) => {
+				const answer = await adminCall(api, 'POST', '/v1/admin/indexnow', { urls });
+				if (!answer.ok) return t('indexnow.failed', { reason: failure(answer, 'seo.failed') });
+				indexNowNote.textContent = t('indexnow.done', { count: answer.data.submitted });
+				return null;
+			};
+			/** @param {string[]} [urls] the addresses to offer */
+			const submitDialog = (urls = []) => {
+				const box = /** @type {HTMLTextAreaElement} */ (h('textarea', { rows: '6' }));
+				box.value = urls.join('\n');
+				openDialog(root, {
+					title: t('indexnow.title'),
+					body: [h('p', { class: 'sub' }, t('indexnow.help')), field(t('indexnow.urls'), box)],
+					submitLabel: t('indexnow.submit'),
+					closeLabel: t('seo.cancel'),
+					onSubmit: () =>
+						submit(
+							box.value
+								.split(/\s+/)
+								.map((url) => url.trim())
+								.filter(Boolean),
+						),
+				});
+			};
 
 			if (on('seo_checklist')) {
 				const run = h('button', { type: 'button' }, t('seo.run'));
 				const status = h('p', { class: 'status', role: 'status' });
-				const summary = h('p', { class: 'lead' });
-				const list = h('ul', { class: 'checks' });
+				const pages = admin?.seoPages ?? ['/'];
+				const lead = h('p', { class: 'sub' }, t('seo.pages', { count: pages.length, pages: pages.join(', ') }));
+				const results = h('div');
+				results.append(h('p', { class: 'lead' }, t('seo.notRun')));
+				const actions = h('div', { class: 'actions' });
+				actions.append(
+					run,
+					moreMenu(doc, t('seo.more'), [
+						{ label: t('seo.otherPages'), onSelect: () => otherPages() },
+						...(on('indexnow') ? [{ label: t('indexnow.open'), onSelect: () => submitDialog() }] : []),
+					]),
+				);
 				const head = h('div', { class: 'head' });
-				head.append(h('h2', {}, t('seo.title')), run);
+				head.append(h('h2', {}, t('seo.title')), actions);
 				const box = h('section', { class: 'box' });
-				box.append(head, status, summary, list);
-				run.addEventListener('click', async () => {
+				box.append(head, lead, status, results);
+
+				/**
+				 * Run the checks: the settings' pages, or the paths asked for.
+				 * @param {string[]} [paths]
+				 * @returns {Promise<string | null>} an error text, or null
+				 */
+				const check = async (paths) => {
 					run.setAttribute('disabled', '');
 					status.textContent = t('seo.running');
-					const answer = await adminCall(api, 'POST', '/v1/admin/seo/checks', {});
+					const answer = await adminCall(api, 'POST', '/v1/admin/seo/checks', paths ? { paths } : {});
 					run.removeAttribute('disabled');
 					if (!answer.ok) {
 						status.textContent = failure(answer, 'seo.failed');
-						return;
+						return status.textContent;
 					}
-					const report = answer.data;
 					status.textContent = t('seo.checkedAt', {
-						time: formatDate(report.checkedAt, config.format, { timeZone: config.timeZone, style: 'datetime', viewer }),
-					});
-					summary.textContent = t('seo.summary', report.summary);
-					const checks = [...report.checks].sort(
-						(a, b) =>
-							ORDER[/** @type {keyof typeof ORDER} */ (a.status)] - ORDER[/** @type {keyof typeof ORDER} */ (b.status)],
-					);
-					list.replaceChildren(
-						...checks.map((check) => {
-							const item = h('li');
-							const line = h('div');
-							line.append(h('span', { class: `pill ${check.status}` }, t(`seo.status.${check.status}`)));
-							line.append(h('strong', {}, check.title));
-							item.append(line);
-							if (check.page) item.append(h('span', { class: 'meta' }, check.page));
-							if (check.fix) {
-								const fix = h('p', { class: 'fix' });
-								fix.append(h('strong', {}, `${t('seo.fix')}: `), check.fix);
-								item.append(fix);
-							}
-							return item;
+						time: formatDate(answer.data.checkedAt, config.format, {
+							timeZone: config.timeZone,
+							style: 'datetime',
+							viewer,
 						}),
+					});
+					draw(answer.data);
+					return null;
+				};
+
+				/** @param {{ summary: { pass: number, warn: number, fail: number }, checks: Check[], pages: string[] }} report */
+				const draw = (report) => {
+					const tiles = h('div', { class: 'tiles' });
+					for (const [status, tone, badge] of /** @type {const} */ ([
+						['fail', 'poor', '!'],
+						['warn', null, '~'],
+						['pass', 'good', '✓'],
+					])) {
+						const tile = h('div', { class: tone ? `tile ${tone}` : 'tile' });
+						tile.append(
+							h('span', { class: 'badge', 'aria-hidden': 'true' }, badge),
+							h('span', { class: 'value' }, String(report.summary[status])),
+							h('span', { class: 'label' }, t(`seo.count.${status}`)),
+						);
+						tiles.append(tile);
+					}
+					/** @type {Map<string, Check[]>} each card's checks: the whole site (''), then each page */
+					const groups = new Map([['', []]]);
+					for (const url of report.pages ?? []) groups.set(url, []);
+					for (const item of report.checks) {
+						const key = !SITE_CHECKS.includes(item.id) && item.page && groups.has(item.page) ? item.page : '';
+						groups.get(key)?.push(item);
+					}
+					const cards = h('div', { class: 'masonry' });
+					/** @param {string} filter */
+					const fillCards = (filter) => {
+						cards.replaceChildren();
+						for (const [url, checks] of groups) {
+							const shown = checks
+								.filter((item) => filter === '' || item.status === filter)
+								.sort((a, b) => ORDER[a.status] - ORDER[b.status]);
+							if (shown.length === 0) continue;
+							const card = h('div', { class: 'card' });
+							const top = h('div', { class: 'card-head' });
+							top.append(h('h4', {}, url === '' ? t('seo.site') : pathOf(url)));
+							if (url !== '')
+								top.append(
+									moreMenu(doc, t('seo.pageMenu', { page: pathOf(url) }), [
+										{ label: t('seo.openPage'), onSelect: () => open(url) },
+										{ label: t('seo.checkAgain'), onSelect: () => void check([pathOf(url)]) },
+										...(on('indexnow') ? [{ label: t('seo.submitPage'), onSelect: () => submitDialog([url]) }] : []),
+									]),
+								);
+							const list = h('ul', { class: 'checks' });
+							for (const item of shown) {
+								const row = h('li');
+								const line = h('div');
+								line.append(
+									h('span', { class: `pill ${item.status}` }, t(`seo.status.${item.status}`)),
+									h('strong', {}, item.title),
+								);
+								row.append(line);
+								if (item.fix) {
+									const fix = h('p', { class: 'fix' });
+									fix.append(h('strong', {}, `${t('seo.fix')}: `), item.fix);
+									row.append(fix);
+								}
+								list.append(row);
+							}
+							card.append(top, list);
+							cards.append(card);
+						}
+					};
+					const chips = chipGroup(
+						doc,
+						t('seo.filter'),
+						[
+							{ value: '', label: t('seo.all'), count: report.checks.length },
+							{ value: 'fail', label: t('seo.status.fail'), count: report.summary.fail },
+							{ value: 'warn', label: t('seo.status.warn'), count: report.summary.warn },
+							{ value: 'pass', label: t('seo.status.pass'), count: report.summary.pass },
+						],
+						'',
+						fillCards,
 					);
-				});
+					fillCards('');
+					const swap = h('div', { class: 'swap' });
+					const spacer = h('div', { class: 'section' });
+					spacer.append(chips);
+					swap.append(tiles, spacer, h('div', { class: 'section' }), cards);
+					results.replaceChildren(swap);
+				};
+
+				const otherPages = () => {
+					const paths = /** @type {HTMLTextAreaElement} */ (h('textarea', { rows: '6' }));
+					paths.value = pages.join('\n');
+					openDialog(root, {
+						title: t('seo.pagesTitle'),
+						body: [h('p', { class: 'sub' }, t('seo.pagesHelp')), field(t('seo.paths'), paths)],
+						submitLabel: t('seo.check'),
+						closeLabel: t('seo.cancel'),
+						onSubmit: () =>
+							check(
+								paths.value
+									.split(/\s+/)
+									.map((path) => path.trim())
+									.filter(Boolean),
+							),
+					});
+				};
+
+				run.addEventListener('click', () => void check());
 				parts.push(box);
 			}
 
 			if (on('indexnow')) {
-				const urls = /** @type {HTMLTextAreaElement} */ (h('textarea', { id: 'ss-growth-urls', rows: '4' }));
-				const submit = h('button', { type: 'submit' }, t('indexnow.submit'));
-				const status = h('p', { class: 'status', role: 'status' });
-				const form = h('form', { class: 'box' });
-				form.append(
-					h('h2', {}, t('indexnow.title')),
-					h('p', { class: 'lead' }, t('indexnow.help')),
-					h('label', { for: 'ss-growth-urls' }, t('indexnow.urls')),
-					urls,
-					h('div', { class: 'actions' }),
-					status,
+				const key = admin?.indexNow;
+				const card = h('section', { class: 'box' });
+				const send = h('button', { type: 'button' }, t('indexnow.open'));
+				send.addEventListener('click', () => submitDialog());
+				const head = h('div', { class: 'head' });
+				head.append(h('h2', {}, t('indexnow.title')), send);
+				card.append(
+					head,
+					h('p', { class: 'sub' }, t('indexnow.help')),
+					h(
+						'p',
+						{},
+						key?.keySet
+							? key.keyLocation
+								? t('indexnow.keyAt', { url: key.keyLocation })
+								: t('indexnow.badPath')
+							: t('indexnow.noKey'),
+					),
+					indexNowNote,
 				);
-				form.querySelector('.actions')?.append(submit);
-				form.addEventListener('submit', async (event) => {
-					event.preventDefault();
-					const list = urls.value
-						.split(/\s+/)
-						.map((url) => url.trim())
-						.filter(Boolean);
-					submit.setAttribute('disabled', '');
-					const answer = await adminCall(api, 'POST', '/v1/admin/indexnow', { urls: list });
-					submit.removeAttribute('disabled');
-					if (!answer.ok) {
-						status.textContent = t('indexnow.failed', { reason: failure(answer, 'seo.failed') });
-						return;
-					}
-					status.textContent = t('indexnow.done', { count: answer.data.submitted });
-					urls.value = '';
-				});
-				parts.push(form);
+				parts.push(card);
 			}
-			const wrap = h('div', { class: 'grid' });
+
+			const wrap = h('div', { class: 'stack' });
 			wrap.append(...parts);
 			root.append(wrap);
 			const stop = api.tickets.onChange((signedIn) => {
