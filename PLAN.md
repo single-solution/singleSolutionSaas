@@ -3080,6 +3080,54 @@ The owner confirms or changes each one.
   permissions and data rights (Accounts' calls), and the K1 routes (mirrors of the dashboard). Payments and
   subscriptions never show in the dashboard: our admins see setup only (0.8.7).
 
+#### Builder choices, Phase 2 (Notifications) (awaiting owner review)
+
+- **N1 buttons**: only a WhatsApp template with a template name at Meta (`providerTemplate`) may list them (else 422 at
+  `/buttons`); at most 10, each `index` 0–9 once, `value` 1–2,000 characters with placeholders and optional sections,
+  kept sorted by `index`. Meta's authentication templates take their copy-code button as a `url` button whose text
+  parameter is the code, so `copy_code` is sent that way (as SB and CT send it today); Meta's coupon-code button of
+  marketing templates (`sub_type: copy_code`) is not built. Twilio and HTTP gateways ignore buttons. A message keeps
+  its filled buttons for its retries; a fallback uses the fallback channel's own template. The message views (API,
+  delivery log) do not list buttons. Templates saved before N1 answer `buttons: []`.
+- **N2 sections**: "empty" is a missing value, `''` or only spaces. Sections work in the text, the subject and button
+  values; they may hold sections of other names, never one of the same name; the template check refuses an unclosed,
+  crossing or stray tag. Tags are not placeholders: a provider template's body parameters stay every placeholder of
+  the text in order (Meta's parameters are positional, so a hidden section never shifts them).
+- **N3 retry plan**: the plan is read from the channel's setting when the message is accepted and kept on it
+  (`retryPlan`); a move to the fallback channel takes that channel's plan at that moment. Browser and staff push keep
+  the short plan; messages accepted before N3 are short. Webhook retries are unchanged.
+- **N4 template routes**: one route per method for the five channel features (works while any is on, else 403);
+  `GET /v1/templates` lists only templates of channels whose feature is on; `PUT` and `DELETE` need the template's own
+  channel on (403 `feature_off`). Answers as the dashboard's (`{ items }`, the template, 204). Writes share the
+  settings API's 60 writes per minute and are Recent changes (`templates`, "Template <key> (<channel>, <language>):
+  saved | deleted") by the acting user, else `Server`; no activity entry, as in the dashboard.
+- **N5 webhook URLs**: the list lives in the product database next to the settings (like Chat's lists), without global
+  defaults. Its first read (settings API, dashboard or a send) moves the website's own saved `urls` (https only, each
+  once, at most 5) in as `{ url, events: [] }` and deletes the old value; a global default of `urls` is dropped (no
+  merchant is live). `events` names full types (`message.failed`, `payments.payment.paid`), at most 50 per URL, no
+  wildcards. The `events` setting stays: Notifications' own events go out only when it picks them, then to the URLs
+  that take them. The dashboard has its own `GET|PUT /v1/dashboard/websites/:websiteId/lists/webhook_urls` with
+  `{ value }` (merchants only while `webhooks` is on), a Settings card, and a setup-checklist line while the feature is
+  on.
+- **K5 and K6 checked end to end** with the real Notifications (e2e: Payments' event as a signed webhook through the
+  list, and Chat's `Chat needs you` staff alert); nothing was broken. One gap for the owner: K6 says staff templates are "required,
+  not urgent", but Notifications takes both flags from the template the merchant writes (`<product>.staff_<event>`), so
+  a merchant can make a staff alert optional or urgent.
+- **Every server action in the UI** (owner request relayed 2026-10-10): the delivery-log widget searches by recipient,
+  shows the number of messages per status on its status filter and a total, and opens each message to its words, its
+  source, due and sent times, reason, id and every attempt. The template editor widget edits buttons, previews the
+  words live with a sample per value, and sends the saved template as a test: `POST /v1/admin/messages` also takes
+  `{ channel, to, template, language?, values? }` (permission `messages.send`), logged as a staff message with the
+  activity detail "Template <key> by <channel>: <status>". The dashboard's templates get a search, a channel filter
+  with counts, the live preview, and a More menu (Duplicate; Delete behind a confirmation, where it deleted at once).
+  The test send is in the widget only: the dashboard is setup and our admins never send for a merchant.
+- **Server-only on purpose**: the send API `POST /v1/messages/<channel>` (products and the merchant's server; staff
+  send one-off messages and template tests in the widgets), `GET /v1/messages/:id` (the widget's list carries every
+  field), `POST /v1/events` (other products' K5 forwarding), the N4 and K1 routes (mirrors of the dashboard and the
+  template editor), the activity read (copied to Accounts), tickets, permissions, data rights, the provider reply
+  webhooks `/v1/inbound/*` (the Developers tab shows their addresses), connect and notices. The server has no resend,
+  bulk action, sort or export: retries happen on use by the plan, the log is newest first, and 0.6 has no CSV export.
+
 ### 0.8.4 Still open
 
 - **The grilling of each later product** (Notifications, Accounts, Payments, Ecommerce, Growth), held right before it is
