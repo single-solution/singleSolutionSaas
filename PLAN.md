@@ -1725,6 +1725,1242 @@ behaviour is managed inside Growth (per website; our admin sets defaults and pri
 - **Dashboard**: Overview · Features (read-only for merchants) · Settings · Connections (database) · Developers (page
   script, event names, API, widget and ticket snippets).
 
+### 0.8.10 Converting existing stores
+
+Owner decisions of 2026-10-10. Three merchant websites move onto the products with **no visible change**: **SB**
+(Sisters Boutique, clothing), **CT** (Chandni Traders, fans) and **IM** (ibrahimMobiles, phones). They share one
+codebase lineage (IM, then SB, then CT). Their parity audits are condensed here into decisions; nothing below depends on
+the audit files. In this section a **store** is one of these three websites with its own storefront, admin and database,
+and tags SB, CT and IM name the stores that need a change. Where this section changes an earlier rule of Part 0, it says
+so and wins.
+
+#### Principles
+
+- **Options with safe defaults.** Every behaviour a store has that the products lack becomes a general option of the
+  product it belongs to, per website, open to every merchant. Its default keeps today's behaviour. A change that is
+  plainly better for every website has no switch and is marked **always**; no merchant is live yet, so these break
+  nothing.
+- **Billing.** Each change is either a **new feature** (new key, off, price 0, switched by our admins, 0.4.2) or a
+  **setting or list of an existing feature**; every item names which. Kit routes (like `/v1/tickets`) have no feature of
+  their own: whatever they read or write stays gated by its own feature.
+- **The store keeps its own UI.** Storefront and admin screens stay the store's code and call the products' APIs: the
+  store's server with the server token (also for visitor calls, K3), the store's pages with the browser token, and SaaS
+  admin widgets, where a store picks them, with tickets. Widgets gain each visitor- and staff-facing option too, so
+  other merchants get it, but no store depends on a widget.
+- **"No visible change"** covers URLs (products, categories, orders, landing pages, setup links), formats (money, dates,
+  order numbers), statuses (keys, labels, moves), messages (texts, channels, moments, recipients) and sign-in (methods,
+  codes, session length). The only accepted visible effects are the one-time effects of the cut-over (Migration). Store
+  bugs are **fixed, not copied**.
+- **Products stay independent** (0.4.1, 0.4.6): they talk only through pasted tokens, and every new cross-product call
+  below names the token it uses.
+- **No background work** (0.10): the stores' crons (SEO reconcile, order expiry, loyalty expiry, outbox retries) become
+  rules judged on read or work on use. IM's daily health digest is not built (0.1 scope rule).
+- **Migration by importers** that run on request (an admin-switched feature plus a CLI), re-runnable, with deterministic
+  ids (Migration). The store repositories change only later, with separate owner approval (Store-side rewiring).
+- 0.10 binds everything new: splittable units, `@ss/net` for every address a merchant enters, the tenant guard,
+  JSDoc-typed JavaScript, and no store names in product code (they appear only in the importer's source mapping).
+
+**Store-only** (stays in store code; no product change): layout, fonts, motion, hero media and marquee, About and
+concept pages, WhatsApp links and "Order via WhatsApp", the size finder and fit preview (data from E5), closest-match
+variant picking, cart line re-mapping, infinite scroll and URL-synced filters, prefetching and skeletons, OG image
+rendering (data from the APIs), CSP and legacy redirects, the store's own consent banner (it passes the choice with
+`SSGrowth.consent.set`), and store-only settings (hero, about, social links, opening hours) in the store's own database.
+
+#### Fixed, not copied
+
+- IM: the admin chat panel sends PATCH to a route that only takes PUT, so status, assignee and notes are never saved;
+  Pause/Resume bot sends `{action}` where `{enabled}` is expected; older messages are paged by time where the route
+  expects an id. Chat saves all three correctly (C11) and pages by sequence (C8).
+- IM: keyword escalation always mutes the bot (its "soft" branch is dead code); Chat's handoff settings decide exactly
+  (C4).
+- IM and CT: the guest-limit text always says 5; Chat answers the real remainder (`guestMessagesLeft`, C7).
+- IM: an unpaid order can be marked refunded, because "refunds ≥ paid" holds when both are 0; refunded before delivery
+  needs money paid and refunded (E27).
+- CT: the success page and the payment start act on any order number without a session; a guest order needs its order
+  key (E21).
+- CT: the admin chat panel calls a missing `/read` route, so unread never clears; the inbox clears it on open.
+- CT: guest phones are stored as typed, so one person has several customer records; phones are normalised (E21) and the
+  importer merges duplicates.
+- CT: a debug route (`/api/test-product`) ships; nothing like it is ported.
+- SB: after a guest orders, the success page sends them to a member sign-in they cannot use; a guest sees the order with
+  its order key (E21).
+
+#### Kit and platform changes (all products)
+
+They go into `@ss/app-kit`, `@ss/contracts` and `@ss/protocol` first (phase 1), and every product mounts them.
+
+**K1. Settings API for the merchant's server.** Kit routes, server token only, with the rights of a merchant dashboard
+session: settings only of switched-on features, never feature switches, prices or global defaults.
+
+- `GET /v1/features` → `{ features: [{ key, name, description, on, millicreditsPerHour }] }`, read-only.
+- `GET /v1/settings` → `{ features: [{ key, name, on, schema, values }] }` (values only of switched-on features);
+  `PUT /v1/settings/<feature>.<key>` with `{ value }` answers the saved value, 422 `validation_failed` with `errors`, or
+  403 `feature_off`; `DELETE` resets to the default.
+- `GET /v1/texts`, `PUT|DELETE /v1/texts/:key`; `GET|PUT /v1/theme`; `GET|PUT /v1/format` (K7).
+- `GET /v1/lists/:list` and `PUT /v1/lists/:list` with `{ value }`: the whole list, checked by the product's own list
+  check (422 with its errors). Ecommerce: `order_flow`, `couriers`, `delivery_zones`, `tax_rules`, `grades`,
+  `booking_hours` and the new lists below; Chat: tools, flows, custom fields, page rules and the new lists below.
+- `GET /v1/connections` → `{ connections: [{ name, kind, neededBy, state, last4, message }] }` with `state` `connected`,
+  `not_connected` or `test_failed`; `PUT /v1/connections/:name` with `{ value }` (checked and tested live, as in the
+  dashboard); `DELETE /v1/connections/:name`; `POST /v1/connections/:name/test`. Secrets never come back.
+- Every write is a Recent change by the acting user (K2), else `Server`; at most 60 writes per minute per website (code
+  constant). Records in the merchant database keep their own routes (Notifications templates: N4).
+- Why: the settings, integrations and chat settings tabs of SB, CT and IM.
+
+**K2. Acting user on server-token calls.** Any server-token request may name the member of the merchant's staff it acts
+for: `SS-Actor-Id` (1–64 characters of `A–Z a–z 0–9 _ . : @ -`; the Accounts user id when the store uses Accounts),
+`SS-Actor-Name` (percent-encoded UTF-8, at most 120 characters), and optional `SS-Actor-Role` (at most 40) and
+`SS-Actor-Email`.
+
+- The product records `{ kind: 'user', id, name, role }` wherever it records an actor today (activity log, order and
+  claim history `by`, payments and refunds, chat replies and notes, Recent changes) and upserts the staff record as a
+  ticket does (0.4.5), so staff lists include people who act only through the merchant's server.
+- A malformed header answers 400 `invalid_actor`; without the headers the actor stays `Server` (Chat: `Team`).
+- The headers grant nothing: the server token stays all-powerful, except for Accounts' self-protection guards, which use
+  the id (A4).
+- Why: every store shows staff names on order timelines and in its activity screen.
+
+**K3. Visitor calls from the merchant's server.** As 0.4.4 says, the server token reaches every route: every
+browser-token route also accepts it.
+
+- Such a request acts for one visitor, named by `SS-Sign-In` (verified as usual), `SS-Guest` (Chat), `SS-Order-Key`
+  (E21) and `SS-Visitor-IP` (that visitor's address, used for per-visitor limits and Accounts' risk checks; required on
+  writes, else 400 `visitor_ip_required`). The answer is exactly the visitor answer.
+- These calls count in their own window of 3,000 requests per minute per route per website (code constant), not the
+  browser one, plus the per-visitor limits; they never count as widget installed.
+- Accounts answers its sign-in and session routes with the refresh token in the body, for the server to keep (A12).
+- Uses: server-rendered and cached listings, product pages, search and landing pages; sign-in and checkout from the
+  store's server; the store's admin on its own host, which browser tokens never reach.
+- Why: SB, CT and IM render every shop page on the server (ISR) and run their admins on separate hosts.
+
+**K4. Counts.** Every list route `GET /v1/<list>` gains `GET /v1/<list>/count` with the same filters →
+`{ count, capped }` (exact up to 100,000), and `GET /v1/<list>/counts?by=<field>` →
+`{ total, groups: { <value>: <n> } }` for the fields the product names (at most 50 groups). Ticket twins sit under
+`/v1/admin/`. Same feature and permission as the list; at most 3 s per count, else 503 `count_timeout`.
+
+- Ecommerce orders (`status`, `role`, `paymentState`, `paymentMethod`), products (`status`, `stockState`, `featured`,
+  `grade`, `brand`), customers (`segment`), reviews and returns (`status`); Accounts users (`status`, `role`) and role
+  requests (`status`); Chat conversations (`status`, `waiting`, `guest`, `unread`); Payments payments (`state`,
+  `gateway`).
+- Why: the dashboards, tabs, bells and badges of SB, CT and IM.
+
+**K5. Events.** Payments' event mechanism (0.8.4 step 9), moved into the kit for every product that publishes events.
+
+- Each event `{ id, type: '<product>.<event>', at, data }` (`data` at most 16 kB: ids and small facts, never addresses
+  or message contents) is stored in `ss_<product>_events` (TTL 30 days) and listed by
+  `GET /v1/events?since=&types=&limit=` (server token, Payments' shape).
+- When the Notifications token is pasted, each event is forwarded right after the request to Notifications'
+  `POST /v1/events`, which signs it and sends it to the merchant's webhook URLs (retries on use; N5 filters them).
+- Ecommerce gains a feature for it (E32); Payments moves onto it unchanged.
+- Why: the stores' servers refresh cached pages and admin badges when catalog or orders change.
+
+**K6. Staff alerts.** A kit helper for products that alert the merchant's staff through Notifications.
+
+- Recipients: the feature's `recipients` setting (e-mail addresses and phone numbers, at most 20); plus, when its
+  `staffPermission` setting names a permission, every unblocked Accounts user whose role grants it (through the pasted
+  Accounts token, `GET /v1/users?permission=<product>:<key>&blocked=false`, A4, cached 5 minutes); plus the assignee
+  where the product has one.
+- An e-mail address gets e-mail; a phone gets WhatsApp, or SMS with the feature's `phoneChannel` setting.
+- Templates `<product>.staff_<event>` (required, not urgent); one message per address per event, sent right after the
+  request; links built from the feature's `adminUrl` template.
+- Used by Ecommerce (E32) and Chat (C5). Why: SB, CT and IM alert every active member of their staff.
+
+**K7. Format.** A per-website value stored like the theme (0.4.10): global defaults, Settings → Format in every product
+that shows money or dates, and `GET|PUT /v1/format` (K1).
+
+- Fields: `locale` (BCP 47; '' = the viewer's browser in widgets and `en` in text the server makes); `currencyDisplay`
+  (`code` default, "PKR 12,500.00" | `symbol`, the locale's symbol, "Rs 12,500.00" | `custom`); `currencySymbol` (at
+  most 8 characters, with `custom`); `wholeUnits` (false; true shows no minor units, "Rs 12,500"); `times` (`viewer`
+  default | `business`: dates and times in the business.json time zone).
+- One kit `formatMoney` and `formatDate` serve widgets, messages, invoices, hosted pages and chat answers (Ecommerce
+  sends `priceText`). Feeds keep the currency code. Ecommerce also rounds its amounts when `wholeUnits` is on (E25).
+- Why: SB, CT and IM show "Rs 12,500" and dates like "12 Mar 2026" everywhere, messages and chat answers included.
+
+**K8. Time zone.** Every calendar rule uses the business.json `timeZone` (UTC when missing), **always**: the
+order-number year, report and analytics days (Growth's daily totals were UTC), loyalty months, deal weekdays and hours,
+and Chat's caps and reports (already so). Portal billing stays UTC (0.5). Why: IM numbers orders by the Asia/Karachi
+year; every store reports in store time.
+
+**K9. Activity log reads and detail.**
+
+- Entries gain `label` (at most 200 characters, for example the order number or the product name), `detail` (at most
+  2,000 plain-text characters; never message contents, secrets or addresses) and `actor.role`.
+- Each product serves `GET /v1/activity?actor=&action=&target=&q=&from=&to=&cursor=` (server token, newest first).
+  Copies to Accounts carry the new fields, and Accounts' `GET /v1/activity-copies` takes the same filters;
+  `@ss/contracts` updates the activity-copy shape.
+- Why: the Activity screens of SB, CT and IM, with per-order and per-staff timelines.
+
+**K10. Import routes.** A kit helper for the `import` features (Migration): checked, idempotent bulk upserts with given
+ids and no side effects.
+
+**K11. Tenant guard and Atlas Search.** The guard accepts `$search` as the first stage of a pipeline only when its
+`compound.filter` holds an `equals` on `websiteId` with the request's website; everything else stays refused (0.10).
+Needed by E14.
+
+#### Accounts
+
+**A1. Legacy password hashes.** Password checks also accept bcrypt (`$2a$`, `$2b$`, `$2y$`, any cost) and
+`pbkdf2$<iterations>$<salt>$<hash>` (PBKDF2-HMAC-SHA256 of the password joined with a pepper, without Unicode
+normalisation on this path). After a successful check the password is re-hashed with scrypt and saved; failed checks
+keep the timing of the dummy check.
+
+- Why: SB (staff and members, bcrypt cost 12), CT (staff, bcrypt), IM (staff, PBKDF2 peppered with `AUTH_SECRET`).
+- Key: always, inside every password sign-in. New Connections item `legacy_pepper` (a write-only secret, needed by no
+  feature, used only for `pbkdf2$` hashes).
+- API and widgets: none.
+- Data: `users.passwordHash` holds `scrypt$…`, `$2…` or `pbkdf2$…`. New dependency `bcryptjs`.
+
+**A2. Phone + password sign-in and reset.**
+
+- Why: SB members sign in with phone and password.
+- Key: new feature `phone_password`. Settings: `minLength` (8; 6–128), `letterAndDigit` (false), `breachedCheck` (true),
+  `maxAttempts` (5), `lockMinutes` (15), `selfReset` (`code` default | `off`), `forgotUrl` ('' ; with `selfReset` off,
+  Forgot password links here, for example a WhatsApp chat). The phone format settings `defaultCallingCode` and
+  `trunkPrefix` become one setting shared by `phone_code` and `phone_password`, visible while either is on.
+- API: `POST /v1/sign-in/phone-password` `{ phone, password, remember }`; `POST /v1/sign-up/phone-password` (while
+  sign-up is open); `POST /v1/password/phone/forgot` `{ phone }` sends a code (template `accounts.phone_code`);
+  `POST /v1/password/phone/reset` `{ phone, code, password }`; `PUT /v1/me/password` also serves phone users. The
+  sign-in widget offers Phone and password while it is on.
+- Data: sessions record the method `phone_password`; no new fields.
+
+**A3. Staff-issued sign-in codes and setup links.**
+
+- Why: SB (staff send setup links by WhatsApp), CT and IM (staff read a code to customers whose WhatsApp code does not
+  arrive).
+- Key: new feature `staff_links`. Settings: `codeMinutes` (15; 5–60), `setupDays` (7; 1–30), `setupPageUrl` (the
+  merchant's page that takes the link's code, for example `https://shop.com/account/setup/{code}`; '' = the sign-in
+  widget's page with `?ss_setup=`).
+- API (server token; ticket twins under `/v1/admin/` with `users.manage`): `POST /v1/users/:id/sign-in-code` →
+  `{ code, expiresAt }` (6 digits, single use, shown to staff only, never sent; typed into the normal phone-code,
+  e-mail-code or phone + password screen; a new one cancels the old); `POST /v1/users/:id/setup-link` →
+  `{ url, expiresAt }` (sets a password, also for users with no e-mail; a new one cancels the old); visitor
+  `POST /v1/setup-links/accept` `{ code, password }` sets it and signs in; `POST /v1/users/invite` gains `deliver`
+  (`send` default | `return`: answers the link instead of sending it). Activity `user.sign_in_code_issued` and
+  `user.setup_link_issued` name the acting user. Users widget: both buttons.
+- Data: `codes` kinds `staff_code` and `setup` (hashes only, TTL).
+
+**A4. Staff and customer management.**
+
+- Why: SB, CT and IM create active customers by phone, edit staff contacts and passwords, delete people, and protect
+  roles.
+- Key: existing `roles` (its routes).
+- API: `POST /v1/users` creates an active user `{ name, email?, phone?, role, password?, addresses?, notes?, custom? }`
+  and sends nothing; `PATCH /v1/users/:id` also takes `email`, `phone` (normalised, unique, marked verified), `password`
+  (ends the user's sessions) and `addresses`; `DELETE /v1/users/:id` `{ reason }` erases at once, as an approved
+  deletion request does (every connected product deletes or anonymises, 0.4.11). `GET /v1/users` takes `phone` (exact),
+  `phoneDigits` (the last 10 digits), `permission` (`<product>:<key>` granted by the role, K6), several `roles` and
+  `createdAfter`, has counts (K4), and its answers carry `hasPassword`. Users widget: create, edit contacts and
+  password, delete.
+- Guards (always), with an acting user (K2) or a ticket: nobody changes their own role or blocks or deletes themselves;
+  nobody edits, blocks or deletes a user whose role ranks above theirs; the last unblocked Owner cannot be demoted,
+  blocked or deleted.
+- Data: roles gain `rank` (ready roles in the order Owner, Business manager, Product manager, Marketing manager, Support
+  staff, Customer; the merchant places their own roles); users gain `phoneDigits` (indexed).
+
+**A5. Role requests (membership).**
+
+- Why: SB "premium members": a visitor asks with name and WhatsApp number, staff approve and send a setup link, members
+  get a discount (E19) and loyalty (E20). Sign-up approval (`approval`) would hold back every buyer.
+- Key: new feature `role_requests` (needs `roles`). Settings: `requestableRoles` ([]), `requireNote` (false).
+- API: visitor `POST /v1/role-requests` `{ role, name, phone | email, note }` (no account; per-visitor limits); server
+  and ticket `GET /v1/role-requests?status=`, `POST /v1/role-requests/:id/invite` (creates the user, or gives the role
+  to the existing user with that phone or e-mail, and answers a setup link, A3, unless the user already has a password),
+  `POST /v1/role-requests/:id/decline`, `POST /v1/role-requests/:id/reopen`. Statuses: `pending`, `invited`, `completed`
+  (password set or role given), `declined`, `expired` (its setup link expired; judged on read). Users widget: a Requests
+  list.
+- Data: new collection `ss_accounts_requests` with `id` (`rrq_…`), `role`, `name`, `phone`, `email`, `note`, `status`,
+  `userId`, `invitedBy`, `invitedAt` and `completedAt`; users gain `roleSince` (when the role was last set: "Member
+  since").
+
+**A6. Per-role sign-in options.**
+
+- Why: IM (30 days across browser restarts with no Remember me box; staff sign in only with e-mail + password), SB
+  (30-day sessions), CT (customer sign-in paused while guest checkout is on).
+- Key: role fields of `roles`: `remember` (`ask` default | `ask_ticked` | `always`: no box, always remembered);
+  `methods` (allowed sign-in methods; [] = all); `signIn` (`on` default | `paused`: users of the role, and new sign-ups
+  while it is the default role, get 403 `sign_in_paused` before any code is sent).
+- API and widgets: the role routes take the fields; the sign-in widget follows `remember` and shows a paused text
+  (editable) instead of the form.
+- Data: role records gain `remember`, `methods` and `signIn`.
+
+**A7. Phone-code options.**
+
+- Why: CT and IM (resend after 60 s, per-phone and site-wide hourly caps, home-country numbers only, new customers named
+  "Customer 1234").
+- Key: settings of `phone_code`, today code constants: `cooldownSeconds` (30; 30–300), `perHour` (6; 1–20),
+  `websitePerHour` (0 = no cap; up to 10,000), `countries` ([] = any; ISO codes whose calling codes are accepted),
+  `newUserName` ('' ; may hold `{last4}`).
+- API: refusals `code_cooldown`, `code_limit` and `country_not_allowed`.
+- Data: a TTL counter per website and hour for `websitePerHour`.
+
+**A8. Two-step import and old recovery codes.**
+
+- Why: IM staff use TOTP with 8 recovery codes kept as `sha256("recovery:" + code)`.
+- Key: always, inside `two_step`.
+- API: import only (Migration): a plain TOTP secret is sealed at once; a recovery code that fails the Accounts format is
+  checked against the old-format hashes and works once.
+- Data: `twoStep.recovery[]` items gain `format` (`v1` | `sha256_prefixed`).
+
+**A9. Password and lock options.**
+
+- Why: IM staff: a growing lock after 4 free failures (1 to 60 minutes), 8 tries per network and e-mail per 15 minutes,
+  12–128 characters, no personal words or runs.
+- Key: settings of `email_password`, also read by `phone_password`: `minLength` up to 128; `lockMode` (`fixed` default |
+  `growing`: after `maxAttempts` failures each further failure doubles the lock, from 1 up to 60 minutes);
+  `networkLimit` (0 = off; tries per IP and identifier per 15 minutes); `personalCheck` (false: refuses passwords
+  holding the name, the e-mail's local part, or a run of 4 keyboard or number steps).
+- Data: the per-user lock state gains `lockLevel`.
+
+**A10. Sign-in events in the activity log.**
+
+- Why: IM shows staff sign-ins, failures with their IP, resets and recovery-code use in its Activity screen.
+- Key: role field `logSignIns` of `roles` (false).
+- API: activity entries `user.signed_in`, `user.sign_in_failed`, `user.password_reset` and `user.recovery_code_used`,
+  with the IP in `detail` (K9).
+- Data: none new.
+
+**A11. Profile options.**
+
+- Why: SB and IM (a default address and an area field), CT (at most 6 addresses and the last one cannot be deleted), SB
+  and CT (no city asked).
+- Key: new shared Profile settings, visible while any sign-in feature is on: `maxAddresses` (10; 1–10), `keepOneAddress`
+  (false), `addressRequired` (["line1", "city"]; may be emptied).
+- API and widgets: addresses gain `area` and `default` (one per user; the first when none is set); My account shows
+  both.
+- Data: address records gain `area` and `default`.
+
+**A12. Sign-in from the merchant's server.** K3 for Accounts: every sign-in, sign-up, code, renew and sign-out route
+takes the server token with `SS-Visitor-IP` and answers the refresh token in the body.
+
+- Why: the stores' admins run on their own hosts, and the storefronts sign in from their servers.
+- Key: kit (each route keeps its feature).
+- Data: none.
+
+**A13. Session hand-over at cut-over** (open question 3).
+
+- Why: nobody is signed out when a store switches (SB, CT, IM).
+- Key: feature `import` (Migration).
+- API: `POST /v1/users/:id/sessions` (server token only) `{ remember, device }` → `{ refreshToken, expiresAt }`. The
+  store's server calls it once for a visitor whose old store session is still valid and hands the token to its page,
+  which gives it to the sign-in widget (`SSAccounts.adopt(refreshToken)`) or keeps it server-side. Activity
+  `user.session_handed_over`.
+- Data: a normal session with the method `handover`.
+
+#### Notifications
+
+**N1. WhatsApp template buttons.** A WhatsApp template with a provider template name may list `buttons`
+(`[{ index, type: 'url' | 'copy_code', value }]`, values with placeholders such as `{code}`), which the Meta adapter
+sends as button components.
+
+- Why: SB and CT authentication templates carry a copy-code button.
+- Key: always (template fields under `whatsapp`).
+- API: the template routes and the template editor take `buttons`.
+- Data: template records gain `buttons`.
+
+**N2. Optional sections in templates.** `{?name}…{/name}` shows its text only when the value `name` is not empty.
+
+- Why: IM's per-status texts show tracking details or a cancel reason only when there is one.
+- Key: always. API: template checks accept it. Data: none.
+
+**N3. Long retry plan.**
+
+- Why: IM retries customer and staff messages 6 times over about 10.5 hours.
+- Key: setting `retryPlan` of `whatsapp`, `email` and `sms`: `short` (default: now, then 1 and 5 minutes later) |
+  `long` (now, then 5 and 15 minutes and 1, 3 and 6 hours later), still sent only on use (0.10).
+- Data: messages keep their plan.
+
+**N4. Templates for the merchant's server.**
+
+- Why: IM edits its 7 customer texts in its own admin; SB and CT set their WhatsApp template names there.
+- Key: kit-style routes gated by the channel's feature (not `send_api`).
+- API: `GET /v1/templates`, `PUT /v1/templates` (one template) and `DELETE /v1/templates/:key/:channel/:language`
+  (server token), with the dashboard's checks, Recent changes and the acting user (K2).
+- Data: none new.
+
+**N5. Webhook URLs per event.** The `webhooks` setting `urls` becomes the list `webhook_urls` of `{ url, events }`
+(empty `events` = every event, today's behaviour).
+
+- Why: the stores' servers take only the events they handle (K5).
+- Key: list of `webhooks`.
+- Data: the setting moves into the list on first read.
+
+#### Payments
+
+**Open:** whether `payfast_pk` also speaks the stores' exact PayFast Pakistan protocol (open question 1). If so, it is a
+`protocol` setting of `payfast_pk`, not a new feature.
+
+**P1. Bank details for the merchant's server.**
+
+- Why: SB, CT and IM show bank details at checkout, on the success page and on order pages.
+- Key: `bank_transfer`.
+- API: `GET /v1/bank-transfer` (server token) → `{ ready, accountTitle, bankName, accountNumber, iban, instructions }`;
+  Ecommerce reads it with its pasted token (E24).
+- Data: none.
+
+**P2. Bank transfer without details.**
+
+- Why: CT offers bank transfer by its switch alone and sends the details over WhatsApp.
+- Key: setting `requireDetails` of `bank_transfer` (true); false makes bank transfer ready with only its instructions.
+- Data: none.
+
+**P3. Proof reference and confirmation note.**
+
+- Why: IM keeps a reference with each proof and a note with each confirmation.
+- Key: `bank_transfer`.
+- API: the proof upload takes `reference` (at most 120 characters); `POST /v1/payments/:id/confirm` takes `reference`
+  and `note`; new event `payment.proof_uploaded` (K5).
+- Data: payment history entries carry them.
+
+#### Ecommerce
+
+Catalog:
+
+**E1. Category and brand status, content and scope.**
+
+- Why: SB and IM (an inactive category shows "Coming soon"; hiding a category or brand hides its products), CT and IM
+  (icons, content and brands per category).
+- Key: `catalog` fields.
+- API: categories gain `status` (`active` default | `coming_soon`: listed, products hidden | `hidden`), `icon` (at most
+  40 characters, a name the site maps), `content { summary, bullets: [{ text, icon }] }` (at most 12 bullets) and `faqs`
+  (at most 20); brands gain `status` (`active` | `hidden`), `categoryIds` ([] = all) and `seo`. A hidden category or
+  brand hides its products from every shopper read, feed, sitemap, llms.txt and chat lookup (judged on read).
+  `GET /v1/shop/categories?include=coming_soon`; `GET /v1/shop/brands?category=` follows `categoryIds`. Catalog widget:
+  these fields.
+- Data: those fields on `CategoryRecord` and `BrandRecord`.
+
+**E2. Featured flag and staff list filters.**
+
+- Why: SB, CT and IM (featured filter; filters by stock state and photos; several brands and grades at once).
+- Key: `catalog`.
+- API: products gain `featured` (false); shop and staff lists take `featured=1`; the staff list takes `stockState`
+  (`none` | `out` | `partial` | `full`), `hasMedia`, several `brand` and `grade`, and has counts (K4). Catalog widget: a
+  Featured switch and these filters.
+- Data: `ProductRecord.featured`; `ProductRecord.stockState` (derived on save).
+
+**E3. Rich descriptions and HTML policies.**
+
+- Why: SB (HTML descriptions; HTML return and privacy policies), IM (five HTML policies, warranty included, with
+  placeholders).
+- Key: `catalog` (descriptions); settings of `checkout`: `policyFormat` (`text` default | `html`), `policyWarranty`
+  ('').
+- API: products gain `descriptionHtml` (cleaned on save to `p`, `br`, `strong`, `em`, `u`, `ul`, `ol`, `li`, `h3`, `h4`,
+  `blockquote` and `a` with an https or site-relative `href`; at most 20,000 characters); when it is set, `description`
+  (plain) is derived from it and serves search, feeds and AI. Policies may hold the same HTML; `GET /v1/policies` fills
+  `{returnDays}`, `{warrantyDays}`, `{warrantyMonths}` and `{business}` and leaves out empty policies. The product page
+  widget renders the HTML.
+- Data: `ProductRecord.descriptionHtml`.
+
+**E4. Product video.**
+
+- Why: SB.
+- Key: `catalog`; setting `videoMaxBytes` (67,108,864; up to 209,715,200).
+- API: products gain `video`: `{ kind: 'file', key, type, size }` (MP4 or WebM through the presigned upload) |
+  `{ kind: 'youtube', id }` | `{ kind: 'url', url }` (https) | null. The product page widget plays it.
+- Data: `ProductRecord.video`.
+
+**E5. Size charts.**
+
+- Why: SB (a chart from the product, else the brand, else the category; inches or centimetres; fit advice).
+- Key: new feature `size_charts` (needs `catalog`).
+- API: `/v1/size-charts` create, read, update and delete (server token; ticket with `catalog.edit`; delete refused while
+  linked); products, brands and categories take `sizeChartId`, products `hideSizeGuide`; `GET /v1/shop/products/:ref`
+  answers the resolved `sizeChart` or null. Product page widget: a Size guide table with an in/cm switch; catalog
+  widget: a chart editor.
+- Data: new collection `ss_ecommerce_size_charts` with `id` (`szc_…`), `name`, `unit` (`in` | `cm`), `columns`
+  (at most 12 `{ key, label }`), `rows` (at most 40 `{ size, label, values }`), `fitAdvice`, `notes` and `active`.
+
+**E6. Media sizes and per-variant galleries.**
+
+- Why: SB and IM (four WebP sizes and a blur image per photo), CT (photos per variant; the card shows a 2×2 grid).
+- Key: `catalog` (sizes), `variants` (variant media).
+- API: a media record may carry `sizes { thumb?, card?, detail? }` (storage keys the uploader made; there is no server
+  image processing), `width`, `height` and `blur` (a data URI of at most 2 kB); variants gain `media` (at most 24 each,
+  200 per product); shop answers give each variant's media, and cards give `cardImages` (the first image of up to 4
+  variants with different option values).
+- Data: `MediaRecord` gains `sizes`, `width`, `height` and `blur`; `VariantRecord.media`.
+
+**E7. Attributes per category, on variants, with several values.**
+
+- Why: SB (five variant attributes, several colours on one variant, labels per category), CT (generate all variants), IM
+  (attributes shown only for some grades).
+- Key: `catalog` (attributes), `variants` (variant values and the generator).
+- API: attributes gain `slug`, `categoryIds` ([] = all), `on` (`product` | `variant`), `multiple`, choices as
+  `{ value, label }`, `visibility` (`always` | `brands` | `grades` | `attribute`, with ids or a value), `card` (`none` |
+  `image` | `chips`), `active` and glossary `seo { title, description, body, faqs }`. Variants gain
+  `attributes { <attributeId>: value | value[] }`, from which their `options` are derived. Option axes: 3 → 6. Two
+  variants may share options when their grades differ (always). Products gain `attributeSetup` (at most 20
+  `{ attributeId, values, customValues, defaultValue }`). `POST /v1/products/:id/variants/generate` `{ price, stock }`
+  adds every missing combination of the setup values (at most 250 variants); `POST /v1/products/variants/generate`
+  `{ ids }` does it for up to 100 products. Catalog widget: the attribute editor and Generate.
+- Data: `AttributeRecord` fields; `VariantRecord.attributes`; `ProductRecord.attributeSetup`; `LIMITS.axes` 6.
+
+**E8. Listing and filtering.**
+
+- Why: SB, CT and IM (several brands, grades and values at once; one variant must match every filter; recently updated;
+  result totals; page numbers; price ranges on cards).
+- Key: `catalog`; the `pageSize` maximum rises from 48 to 60.
+- API: in shop listings one active variant must match the price range, attributes, grade and stock together (always);
+  `brand`, `grade` and `attr.<slug>` take several comma-separated values; facets carry counts; sorts add `updated` and
+  `sold_asc`, and price ties break by newest; `page` (1–500) works beside the cursor; `count=1` adds `total` (exact up
+  to 10,000, else `capped`); filters `featured` and `deal` (id or slug); cards carry `priceMax` (always).
+- Data: indexes for the new filters.
+
+**E9. Stock display and sold out.**
+
+- Why: SB ("Only N left" at 5 or fewer), CT and IM ("N in stock"; sold out without changing stock).
+- Key: settings of `catalog`: `showStock` (`none` default | `low` | `always`), `lowStockShown` (5; 1–1,000).
+- API: shop answers and chat lookups carry `stockLeft` per variant as the setting allows; variants gain `soldOut` (shown
+  as sold out, not hidden); `POST /v1/products/:id/stock` takes `soldOut`.
+- Data: `VariantRecord.soldOut`.
+
+**E10. Grades per category.**
+
+- Why: IM (grades per category with a colour, an inspection video, content, SEO and an item condition; keys with
+  hyphens).
+- Key: the `grades` list of `grades_serials`.
+- API: grade items gain `categoryIds` ([] = all), `color`, `video` (a media key or a YouTube id), `content`, `active`,
+  `condition` (`new` | `refurbished` | `used`; JSON-LD and feeds use it instead of the single `gradedCondition`) and
+  `seo`; descriptions up to 1,200 characters; keys may contain `-`; up to 100 grades. Shop answers carry the grade
+  details.
+- Data: the list items.
+
+**E11. Serial (IMEI) capture.**
+
+- Why: IM types IMEIs at packing or later, checks them with Luhn, and requires them per category before dispatch.
+- Key: settings of `grades_serials`: `serialMode` (`registered` default: registered in stock and captured at packing |
+  `typed`: typed at packing or later, required before a `shipped` status, written as a `sold` serial), `serialCheck`
+  (`none` default | `imei`: a 15-digit value must pass Luhn); serials up to 64 characters, inner spaces kept.
+- API: categories gain `requiresSerial` (true, false or null), which products with `serialized` null follow;
+  `PATCH /v1/orders/:id` takes `serials` per line; shopper order answers show serials per line (always).
+- Data: `CategoryRecord.requiresSerial`; `ProductRecord.serialized` may be null.
+
+**E12. Warranty per variant.**
+
+- Why: SB and IM keep warranty per variant and on the order line.
+- Key: `catalog` fields; `returns` windows.
+- API: variants gain `warrantyDays` (null = the product's, then the grade's, then the setting); order lines keep
+  `warrantyDays` from placement and claims use it; shop answers and invoices show it.
+- Data: `VariantRecord.warrantyDays`, `OrderLineRecord.warrantyDays`.
+
+**E13. URL templates and slug history.**
+
+- Why: SB, CT and IM product URLs are `/{category}/{slug}` with variant parameters; IM redirects old slugs.
+- Key: settings of `catalog`: `productUrl` gains `{category}` (the first category's slug), `{categoryPath}` and
+  `{brand}`; `categoryUrl` gains `{path}`; new `variantQuery` ('' ; for example `grade={grade}&{attributes}`, where
+  `{attributes}` gives `slug=value` pairs); new `retiredUrl` (`none` default | `category`).
+- API: every link the product makes uses them: sitemaps, feeds, canonical URLs, JSON-LD, llms.txt, chat cards, messages
+  and cart lines. Products and categories keep `previousSlugs` (at most 20, added on every slug change); slug lookups
+  ignore case and match old slugs, answering `moved { slug, url }` so the site sends a 308; with `retiredUrl`
+  `category`, an archived product answers `moved` to its category.
+- Data: `previousSlugs` on products and categories.
+
+**E14. Atlas Search.**
+
+- Why: SB, CT and IM search with Atlas Search (fuzzy and ranked).
+- Key: settings of `catalog`: `search` (`basic` default | `atlas`), `searchIndex` (`ss_ecommerce_products_search`).
+- API: the docs give the index definition (autocomplete on the name; text on brand, category and tags; `websiteId` as a
+  token). With `atlas`, shop and chat searches run `$search` (filtered on the website and active status; fuzzy
+  autocomplete with at most 1 edit; K11), ranked by score, then the other filters; if the stage fails, basic search
+  answers and Overview shows `Search index missing`.
+- Data: none (the merchant creates the index).
+
+SEO and feeds:
+
+**E15. Landing pages and glossary.**
+
+- Why: SB (category × brand pages; attribute glossary), IM (brand, grade and brand + grade pages; grade glossary), CT
+  (brand filter pages in the sitemap); each with its own copy and indexed only when it has enough stock.
+- Key: new feature `landing_pages` (needs `seo`). Settings: `landingMinProducts` (3), `landingUrl`
+  (`{categoryUrl}?brand={brand}&grade={grade}`).
+- API: `/v1/landings` create, read, update and delete (server token; ticket with `catalog.edit`);
+  `GET /v1/seo/listing?category=&brand=&grade=&page=&…` answers the h1, title, description, intro, FAQs, canonical URL,
+  JSON-LD (CollectionPage, ItemList, BreadcrumbList) and `robots`: `index` only for a category, its pages and indexable
+  landings, `noindex` for any other filter. A landing with `indexable` `auto` is indexable while at least
+  `landingMinProducts` of its products are in stock (judged on read; no reconcile job). Glossary:
+  `GET /v1/seo/attributes/:slug` and `GET /v1/seo/grades/:key` (E7, E10). Sitemaps list indexable landings and glossary
+  pages. `POST /v1/landings/:id/ai-copy` suggests copy (with `ai_copy`).
+- Data: new collection `ss_ecommerce_landings` with `id` (`lnd_…`), `categoryId`, `brandId`, `grade`, `h1`, `title`,
+  `description`, `intro`, `faqs` and `indexable` (`auto` | `yes` | `no`).
+
+**E16. Structured data, SEO fields and sitemaps.**
+
+- Why: SB and IM (ProductGroup, FAQs, condition per grade, shipping and return policy, reviews, canonical and robots
+  overrides, default description and image, sitemap files with images, llms-full.txt, IndexNow on every save).
+- Key: `seo` (the JSON-LD always); settings `sitemapSize` (10,000; 1,000–50,000), `defaultDescription` (''),
+  `defaultImage` (''), `indexNowOnSave` (false); setting `full` of `llms_txt` (false).
+- API: products, categories and brands gain `seo { canonicalUrl, ogImage, noindex, nofollow, focusKeyword }`, and
+  products `faqs` (at most 20). Product JSON-LD becomes a ProductGroup with its variants, `itemCondition` per grade,
+  `shippingDetails`, `hasMerchantReturnPolicy`, review nodes and a FAQPage; category JSON-LD adds an ItemList.
+  `GET /v1/seo/sitemap.xml` becomes an index above `sitemapSize` URLs, with `GET /v1/seo/sitemaps/:file` (`categories`,
+  `landings`, `products-<n>`) and image entries. `GET /v1/llms-full.txt` lists every in-stock product with its price
+  range and the grades per category. `ai-copy` also suggests FAQs. With `indexNowOnSave`, changed product and category
+  URLs go to Growth's `POST /v1/indexnow` right after the save, through a new optional pasted Growth token in
+  Connections.
+- Data: the SEO fields and `faqs`.
+
+**E17. Feed options.**
+
+- Why: SB and IM keep their Merchant Center item ids and labels.
+- Key: settings of `feeds`: `itemId` (`variant` default | `legacy`: `<product hex>_<variant hex>` from imported ids),
+  `googleCategory` (''), `gradeLabel` (false: the grade label as `custom_label_0`); shipping comes from the default
+  delivery fee, and prices follow K7 with whole units.
+- Data: none.
+
+Promotions:
+
+**E18. Deal rules, display and cart locks.**
+
+- Why: SB and CT (attribute, price-range, minimum-quantity, cart-total and payment-method conditions; exclusions;
+  all/any groups; weekday and hour windows; automatic free delivery; badges and colours; deal pages; "no points with
+  this offer"; the offer kept on the cart line), CT (the shopper picks the deal), IM (a grade condition).
+- Key: `deals`. Settings: `lockMinutes` (0 = off; up to 10,080), `shopperChoice` (false).
+- API: deals gain `slug`; display fields `badgeLabel`, `discountLabel`, `color`, `banner` (media), `content`, `seo` and
+  `sort`; `conditions` with `match` (`all` | `any`; one level of groups): products, categories, brands, attributes and
+  grades `in` or `not_in`, `priceRange { min, max }` on the variant price, `minQuantity` per line, `cartTotal` (a
+  minimum), `paymentMethods`; actions `percent`, `fixed` or `free_delivery`, on the `items` (default) or the `cart`;
+  `days` (0–6) and `timeFrom`/`timeTo` (HH:MM in the business time zone; judged on read); `allowPoints` (true). Quotes
+  take `paymentMethod` and re-price; quote lines carry the deal's display fields and `minQuantity`. With `lockMinutes`,
+  each quote line carries a signed `lock` (deal, variant, unit price and expiry, HMAC with a website secret kept in the
+  product database), which placement honours after the deal ends or changes, unless the deal was deleted or its limit is
+  used up. With `shopperChoice`, a cart line may name one of its eligible deals (`dealId`). `GET /v1/shop/deals/:ref`
+  takes an id or a slug; cards carry `dealCount` and the first deal's badge. The promotions widget edits it all.
+- Data: those `DealRecord` fields.
+
+**E19. Role pricing.**
+
+- Why: SB members get 10 % off after offers and before delivery.
+- Key: new feature `role_pricing` (needs `checkout`; Accounts token); list `role_prices`
+  `[{ role, percent (0–90), label }]`.
+- API: a signed-in shopper whose Accounts role is listed gets that percent off the goods after deals; quotes, orders and
+  invoices show `roleDiscount` with its label.
+- Data: `totals.roleDiscount`; `promotions.role { key, percent }`.
+
+**E20. Loyalty options.**
+
+- Why: SB (members only; one switch redeems the most; earned on the order total), CT (guests earn on their phone), IM
+  (expiry in calendar months that applies to past points; points fixed at placement; earned on the total).
+- Key: settings of `loyalty`: `roles` ([] = every signed-in shopper), `guests` (`none` default | `earn`: guests earn,
+  and redeem once signed in), `earnBase` (`goods` default | `total`: with delivery and fees), `earnAt` (`delivery`
+  default | `placement`: fixed at placement, credited on delivery), `capBase` (`order` default | `goods`), `redeemMode`
+  (`amount` default | `maximum`), `expiryUnit` (`days` default | `months`, in the business time zone), `expiryRule`
+  (`at_earn` default | `current`: expiry = earned + the current setting, so a change applies to past points).
+- API: quotes answer `pointsToEarn` (always); `GET /v1/shop/loyalty` adds `lifetimeEarned`, `pending` and paged history
+  (always); guests earn through E21.
+- Data: loyalty records are keyed by `customerId` (E21), with `userId`.
+
+Checkout:
+
+**E21. Guest checkout and order keys.**
+
+- Why: SB (anyone orders with name and WhatsApp number, but a member's number must sign in), CT (guest checkout is the
+  default).
+- Key: settings of `checkout`: `guests` (`off` default | `on` | `unless_password`: a phone that belongs to an Accounts
+  user with a password must sign in, checked with the pasted Accounts token), `defaultCallingCode` and `trunkPrefix`
+  (phone normalising, as in Accounts).
+- API: `POST /v1/shop/orders` without a sign-in takes `customer { name, phone, email? }`; its answer carries `orderKey`
+  (32 random characters, shown once, kept as a hash), and guest reads, pay, cancel and proof upload send it as
+  `SS-Order-Key`. `GET /v1/shop/orders/by-number/:number` (the owner's sign-in or the key) serves order pages by number
+  (always). When a signed-in shopper's verified phone matches a guest, the guest's orders, loyalty and alerts move to
+  the user on that request. The open-order cap and the blocklist apply per guest phone.
+- Data: `CustomerRecord` gains `id` (`cus_…`), `userId` (null for guests), `guest`, `city` and `phoneDigits`; a guest is
+  unique by normalised phone; orders gain `customer.customerId` and `accessKeyHash`.
+
+**E22. Payment, delivery and address options.**
+
+- Why: SB, CT and IM (free pickup is the default, with the store's hours; one free-text address with no city; bank
+  transfer listed first and preselected; a note per payment method; delivery-time texts; 20 lines of at most 10; the
+  shopper returns to the store's own success and checkout pages).
+- Key: settings of `checkout`: `paymentOrder` (["cod", "online", "bank_transfer", "pickup"]; the first available is
+  preselected), `noteCod`, `noteOnline`, `noteBankTransfer` and `notePickup` (''), `addressRequired` now lists every
+  required address field besides name and phone (default ["line1", "city"]), `maxLines` (50; 1–50), `maxQuantity` (99;
+  1–99), `successUrl` and `cancelUrl` ('' = today's return with `ss_order`; templates with `{number}` and `{id}`).
+  Settings of `delivery_zones`: `defaultMethod` (`delivery` default | `pickup`), one pickup point without
+  `multi_location` (`pickupEnabled`, `pickupName`, `pickupAddress`, `pickupHours`), `deliveryNote`, `prepNote` and
+  `pickupReadyNote`.
+- API: quotes and order answers carry the notes, the pickup point and the method order. The cart widget follows them.
+- Data: none (settings).
+
+**E23. COD options.**
+
+- Why: SB (COD confirmed at placement; a "Cash handling" percent), CT (COD at pickup; the surcharge), IM (confirmation
+  may wait forever; the COD fee; cash recorded by staff; the advance paid by bank transfer).
+- Key: settings of `cod`: `startStatus` (`awaiting_confirmation` default | `open`), `atPickup` (false), `feePercent` (0;
+  0–20), `paidOnDelivery` (true; false waits for staff to record the cash, E26), `advanceVia` (`payments` default |
+  `manual`); `checkout.confirmationHours` takes 0 = never.
+- API: totals gain `fee`, shown in quotes, orders and invoices with the widget text `Cash handling`.
+- Data: `totals.fee`.
+
+**E24. Bank transfer options.**
+
+- Why: SB, CT and IM show bank details inline; SB and CT never cancel unpaid transfers; CT offers transfer with no
+  details; IM takes the proof on its order page.
+- Key: settings of `checkout`: `paymentWindowMinutes` takes 0 = never; `bankTransferVia` (`payments` default |
+  `manual`).
+- API: quotes and order answers carry `bankDetails`, read from Payments (P1; cached 5 minutes). With `manual`, the order
+  waits in its awaiting-payment status with no Payments payment, is offered even without bank details, takes the
+  shopper's proof (`POST /v1/shop/orders/:id/proof`: a presigned JPEG, PNG, WebP or PDF up to 10 MB, plus `reference`),
+  and staff record the payment (E26).
+- Data: `payment.proof { key, reference, at }`.
+
+**E25. Whole-unit amounts.** With `wholeUnits` on in Ecommerce's Format (K7), every amount Ecommerce computes is whole:
+deal discounts and the points value round down; percentage fees, role discounts and tax round half up.
+
+- Why: SB, CT and IM work in whole rupees.
+- Key: the Format value (K7).
+- Data: none.
+
+Orders:
+
+**E26. Payments log on orders.**
+
+- Why: IM records several payments per order (transfer, cash, other) and refunds, each with a reference, a proof and the
+  staff member; SB and CT confirm transfers by hand.
+- Key: `checkout`; setting `autoRefundedStatus` (false).
+- API: `POST /v1/orders/:id/payments` `{ method, amount, reference?, note?, confirm? }` with `method` `bank_transfer`,
+  `cash` or `other` (`orders.manage`; `confirm` moves a waiting order to its confirmed status in the same call); the
+  refunds route takes `method`, `reference` and `claimId` (`orders.refund`). `payment.paid`, `refunded` and `state`
+  come from the entries; Payments confirmations are `online` entries. With `autoRefundedStatus`, an order whose refunds
+  reach a paid amount above 0 moves to the refunded status. Shopper answers show paid, balance due and the entries,
+  without staff names. The orders widget records payments.
+- Data: `OrderRecord.payments: [{ id: 'opy_…', method, amount, reference, proofKey, note, by, at }]` and
+  `refunds: [{ id, method, amount, reference, claimId, note, by, at }]`.
+
+**E27. Order flow: more moves.**
+
+- Why: SB (back to an earlier status before dispatch; cancel after dispatch; returned after delivery with restock;
+  refunded), IM (back to pending payment; refunded once refunds cover the payments; returned from dispatched as RTO or
+  customer return, and from delivered as a customer return, never restocking).
+- Key: the `order_flow` list (a move works only when listed; the default flow does not change); settings of `checkout`:
+  `returnRestock` (`yes` default | `no`), `shopperCancel` (["awaiting_payment", "awaiting_confirmation"]; may add
+  `open`).
+- API: status keys may contain `-`. The role rules also allow: `open` or `packed` → `awaiting_payment` (the order waits
+  again and its window restarts); `packed` → `open` (captured serials are freed); `shipped` → `cancelled` (the parcel is
+  recalled; everything is given back); waiting, `open` or `packed` → `refunded`, only when something was paid and
+  refunds cover it, else 409 `nothing_paid` (it acts as a cancel); a new role `returned` (a customer return after
+  delivery) from `delivered`, then → `refunded`. Entering `returned_to_origin` takes `reason`: `rto` (counted) or
+  `customer_return` (not counted). `returned` takes back earned points and gives back redeemed ones (always); both
+  return roles restock as `returnRestock` says. Moves into `refunded` need `orders.refund` (always).
+- Data: `STATUS_ROLES` gains `returned`; history entries gain `reason`.
+
+**E28. Shipping and packing options.**
+
+- Why: SB and CT (one-click dispatch with a free-text tracking note and an expected date; a dispatch video to pack), IM
+  (courier and tracking optional and editable; the video required to pack; bulk dispatch; links built from today's
+  courier list).
+- Key: settings of `checkout`: `trackingRequired` (true), `packingVideo` (`off` default | `optional` | `required`).
+- API: `PATCH /v1/orders/:id` takes `shipment { courier, trackingNumber, trackingNote, estimatedDeliveryAt }` at any
+  time; the courier is kept by name and its link built on read from the current `couriers` list; entering `packed` takes
+  `video` (an upload key, a YouTube id or an https URL) as the setting says; shopper answers show the note, the date and
+  the video; `bulk-move` takes `items: [{ id, shipment?, serials?, video? }]`.
+- Data: `shipment.trackingNote`, `shipment.estimatedDeliveryAt`;
+  `OrderRecord.media: [{ kind: 'dispatch_video', key | url }]`.
+
+**E29. Order editing.**
+
+- Why: SB, CT and IM change items, prices, payment and delivery while an order waits.
+- Key: `checkout`.
+- API: while the order waits for payment or confirmation, `PATCH /v1/orders/:id` also takes `lines` (variant, quantity,
+  optional `unitPrice`), `paymentMethod` and `delivery`; the order is re-priced and its stock holds swapped in one
+  transaction; the address follows `addressRequired`.
+- Data: history entries `edited`.
+
+**E30. Order numbers.**
+
+- Why: SB, CT and IM number orders `IM-YYYY-NNNN` by the store's calendar year and continue from the highest number
+  used.
+- Key: setting `numberDigits` of `checkout` (6; 4–8); the year from K8.
+- API: a missing yearly counter starts after the highest number already used for that prefix and year (always);
+  `POST /v1/orders/counter` `{ year, next }` (server token) sets the next number, never below one already used.
+- Data: none new.
+
+**E31. Customers, seen markers and deletes.**
+
+- Why: SB and CT (segments and counts; orders and customers each admin has not opened; deleting orders; cleanup), IM
+  (phone search on the last digits; seen-up-to times).
+- Key: `checkout`; delete-all in `bulk_actions`; new permission `orders.delete` (`checkout`).
+- API: the customer list takes `segment` (`loyalty` | `active` | `guest`) and has counts; orders and customers match the
+  last 10 digits of a phone (always); the order list takes several statuses, payment and delivery methods, city, dates
+  and customer; `POST /v1/orders/:id/seen` and `POST /v1/customers/:id/seen` mark them for the acting user (K2), and
+  lists take `unseen=1` and `createdAfter`; `DELETE /v1/orders/:id` gives everything back as a cancel does, then deletes
+  (its activity entry keeps the number and total); `POST /v1/data/delete-all`
+  `{ scope: 'catalog' | 'orders' | 'customers', confirm: '<domain>' }` (server token only) deletes that scope after
+  giving held stock back.
+- Data: `seenBy` (at most 50 staff ids) on orders and customers; `phoneDigits` on orders.
+
+**E32. Messages, events and staff alerts.**
+
+- Why: SB and CT (customer WhatsApp on placed, paid and every status; staff e-mail and WhatsApp on new orders, status
+  changes, payments and cancels), IM (one editable text per status with first name, order and review links, tracking and
+  cancel reason; staff e-mail on proof upload, new claims and expiry).
+- Key: new feature `events` (needs `catalog`; K5). New feature `staff_alerts` (needs `checkout`; Notifications token;
+  K6) with settings `events` (from `placed`, `status`, `paid`, `proof_uploaded`, `cancelled`, `expired`,
+  `return_requested`), `recipients`, `staffPermission` ('' or an Ecommerce permission), `phoneChannel` and `adminUrl`.
+  Settings of `checkout`: `statusTemplates` (`one` default | `per_status`: sends `ecommerce.order_status.<status key>`),
+  `orderUrl` and `reviewUrl` (templates with `{number}`).
+- API: events `order.placed`, `order.status_changed { from, to, reason, by }`, `order.paid`, `order.payment_recorded`,
+  `order.proof_uploaded`, `order.cancelled { reason: 'staff' | 'shopper' | 'expired' }`, `order.refunded`,
+  `return.requested`, `return.status_changed`, `review.submitted`, `catalog.changed { kind, id, slug }` and
+  `stock.low { productId, variantId, stock }`. Message values add `firstName`, `paymentMethod`, `deliveryMethod`,
+  `orderUrl`, `trackingDetails`, `cancelReason`, `reviewUrl` and `business` (always); an order its window cancels is
+  messaged with the reason `expired`. Staff templates `ecommerce.staff_<event>`.
+- Data: `ss_ecommerce_events`.
+
+**E33. Returns and warranty claims.**
+
+- Why: IM (exchange claims; fixed reasons; replaced and repaired outcomes; restock per line; refund method and
+  reference; delivery inside the refund cap; points taken back only on a full refund; `RR-` references; staff notes).
+- Key: settings of `returns`: `kinds` (["return", "warranty"]; may add `exchange`), `reasons` ([] = free text),
+  `referencePrefix` ("R-"), `refundDelivery` (false), `pointsBack` (`proportional` default | `full_refund_only`).
+- API: claim statuses add `replaced` and `repaired` (final); `receive` takes `lines[].restock`; `refund` takes `method`
+  and `reference`; `POST /v1/returns/:id/notes`; a new claim raises `return_requested` (E32).
+- Data: `ReturnRecord.kind` adds `exchange`; lines gain `restock` and `restockedAt`; `notes: [{ at, by, text }]`.
+
+**E34. Reviews, alerts and wishlists.**
+
+- Why: IM (a review per order line written from the order page, a verified badge, names shown as "Ayesha K."; guest
+  alerts by phone per variant with a target price and an unsubscribe link; guest wishlists merged at sign-in).
+- Key: settings of `reviews`: `per` (`product` default | `order_line`), `nameFormat` (`full` default | `first_initial`),
+  `pageSize` (10; 5–20); setting `guests` of `alerts` (false).
+- API: `POST /v1/shop/reviews` takes `orderId` and `lineId`; answers carry `verified` and the variant name (always);
+  `POST /v1/reviews/:id/pending`; counts by status. Alerts are per variant with an optional `targetPrice`; guests give a
+  phone; every alert message carries `{unsubscribeUrl}` for `POST /v1/shop/alerts/unsubscribe/:token` (removes every
+  alert of that phone or e-mail); alerts also fire when stock comes back from a cancel, an expiry, a refund, a return or
+  an import (always). `POST /v1/shop/wishlist/merge` `{ productIds }` (always).
+- Data: `ReviewRecord.lineId`; `AlertRecord` gains `customerId`, `targetPrice` and `tokenHash`.
+
+**E35. Invoices, packing slips and pick lists.**
+
+- Why: IM (warranty, grade and IMEI per line; fee, points and payments on the invoice; the shopper's invoice only once
+  confirmed; batch slips; a pick list).
+- Key: `invoices`; setting `shopperFrom` (`placed` default | `confirmed`).
+- API: invoices show per-line warranty, grade and serials, the fee, role discount and points apart, payment and refund
+  entries, and "Cash due on delivery"; `GET /v1/orders/packing-slips?ids=` (at most 50, one document, COD to collect,
+  empty serial slots); `GET /v1/orders/pick-list?ids=` (at most 100; quantities per variant).
+- Data: none.
+
+**E36. Reports and CSV.**
+
+- Why: SB, CT and IM dashboards (orders, sales, average order value and daily series, each by its own revenue rule), IM
+  (sales by grade and payment method, sell-through, oldest stock, CSV of reports, orders per order and customers; price
+  and stock updates by CSV with a stale-row check and a sold-out column).
+- Key: `reports`; `csv`.
+- API: `GET /v1/reports/summary?from=&to=&statuses=&series=day` →
+  `{ orders, total, goods, delivery, fees, discount, refunded, units, days: [{ day, orders, total }] }` (business time
+  zone; `statuses` decides what counts as revenue);
+  `reports/sales` takes `by=grade | payment_method`; `GET /v1/reports/sell-through` and `GET /v1/reports/oldest-stock`;
+  every report takes `format=csv`; `GET /v1/csv/orders?per=order` with the list filters; `GET /v1/csv/customers`;
+  `POST /v1/csv/products?mode=update` changes only price, stock and `soldOut`, and refuses rows whose `updatedAt` is
+  older than the product's.
+- Data: none.
+
+**E37. Fuller chat lookups.**
+
+- Why: CT and IM shop tools (filters, 12 results, grades, stock, warranty, quotes per variant and payment method, order
+  details) and live store context (C1).
+- Key: the features of those routes (`catalog`, `deals`, `checkout`).
+- API: `/v1/chat/products` takes `category`, `grade`, `minPrice`, `maxPrice`, `inStock` and `limit` (up to 12); product
+  details answer variants with grade, price, `stockLeft` (E9) and warranty; `/v1/chat/products/:id/quote` takes
+  `variantId`, `quantity` (up to 5) and `paymentMethod`, and answers fees, delivery and the free-delivery threshold;
+  deals carry their display fields; `/v1/chat/me/orders` adds lines, the expected date, the tracking note and the
+  dispatch video; `/v1/chat/me/account` adds the city and the default address's area; new
+  `GET /v1/chat/context?productId=` (the policies, the 10 newest products with grade prices, the deals table, the named
+  product's details and, with a forwarded sign-in, first name, city and points; at most 6,000 characters); every price
+  carries `priceText` (K7).
+- Data: none.
+
+#### Chat
+
+**C1. Longer instructions and store context** (changes 0.8.3).
+
+- Why: CT (a 12.4k persona plus live context), IM (a 15.3k playbook plus live context, including the product the visitor
+  is viewing).
+- Key: `ai_instructions.instructions` up to 32,000 characters (was 12,000); new feature `shop_context` (needs
+  `ai_replies`; Ecommerce token).
+- API: with `shop_context`, each AI reply adds Ecommerce's `GET /v1/chat/context` (E37) for the product named by
+  `setPage`, cached 60 s per website and per verified sign-in.
+- Data: none.
+
+**C2. Rich answers.**
+
+- Why: CT and IM answer with tables, bold text, lists, links and several bubbles.
+- Key: always for the markdown subset; setting `bubbles` of `ai_replies` (1; 1–5).
+- API: AI and staff messages carry `format: 'markdown'` (bold, italic, lists, tables, and links on the website's domain
+  or site-relative; other links follow the moderation link policy); the widget renders them; an AI answer splits on
+  `---` lines into at most `bubbles` messages.
+- Data: `messages.format`.
+
+**C3. Fallback answers.**
+
+- Why: CT and IM answer from live data (deals, products by budget, own orders, greetings) when the AI fails or reaches a
+  cap.
+- Key: new feature `fallback_answers` (needs `ai_replies`); list `fallback_answers` of
+  `{ intent, language, keywords, text }` items: `intent` is `greeting`, `deals`, `products`, `budget`, `my_orders` or
+  `other`; `language` is '' (any) or a language-lock language; `text` may hold `{deals_table}`, `{top_products}`,
+  `{products_under}` and `{my_orders}`, filled by the shop tools that are on.
+- API: used before the `onFailure` message when the AI fails, a cap is reached or the answer is refused; the first
+  matching entry wins.
+- Data: none (a list).
+
+**C4. Handoff options.**
+
+- Why: CT and IM: the AI still answers the message that asked for a person, then goes quiet, then reassures after 3
+  minutes; no system text and no button.
+- Key: settings of `handoff`: `answerFirst` (false), `notice` (today's text; '' = none), `showButton` (true),
+  `reassureAfterMinutes` (0 = off: from that many minutes after handoff, the AI answers the visitor's next messages with
+  reassurance only, until staff reply).
+- Data: none.
+
+**C5. Staff alerts, extended.**
+
+- Why: CT and IM e-mail every active member of staff on every customer message, guests included, and WhatsApp the
+  assignee.
+- Key: settings of `staff_alerts`: `frequency` (`first_unanswered` default | `every_message`), `recipients` may hold
+  phones (K6), `staffPermission` ('' | `inbox.reply`), `phoneChannel`.
+- API: WhatsApp versions of `chat.new_message` and `chat.needs_you`.
+- Data: none.
+
+**C6. Reply alerts to visitors.**
+
+- Why: CT sends the customer a WhatsApp when staff reply.
+- Key: new feature `visitor_alerts` (needs `inbox`; Notifications token); setting `awaySeconds` (60; 0–3,600).
+- API: when staff reply to a visitor with a phone or e-mail (from the sign-in or captured) who has not checked the
+  conversation for `awaySeconds`, template `chat.staff_reply` goes out, once until the visitor checks again.
+- Data: conversations gain `visitorAlertedAt`.
+
+**C7. Guests and sign-ins.**
+
+- Why: CT and IM keep guest conversations in their own cookies, merge them into the customer's single conversation at
+  sign-in, and show "N preview messages left".
+- Key: always; setting `claimByPhone` of `signed_in_chat` (false).
+- API: guest lookups accept any key of 16–128 characters (`A–Z a–z 0–9 - _`), so a store's own guest cookie works as
+  `SS-Guest` once imported; when a signed-in visitor already has a conversation, a moving guest conversation is merged
+  into it by time; with `claimByPhone`, guest conversations whose captured phone equals the verified phone move too;
+  answers carry `guestMessagesLeft`.
+- Data: none new.
+
+**C8. Older messages and times.**
+
+- Why: CT and IM page back through older messages and show times and day dividers.
+- Key: always for paging; setting `showTimes` of `visitor_chat` (false).
+- API: `GET /v1/chat?before=<seq>&limit=` and `GET /v1/conversations/:id?before=<seq>&limit=` (1–50; ticket twin).
+- Data: none.
+
+**C9. Typing, Seen and the paused notice.**
+
+- Why: CT and IM show typing without Seen, and tell the visitor while the team reviews.
+- Key: settings of `typing_receipts`: `showTyping` (true), `showSeen` (true); setting `showPaused` of `visitor_chat`
+  (false; its text is editable).
+- Data: none.
+
+**C10. AI reply in the same request.**
+
+- Why: CT and IM get the AI reply in the send call of their own chat UI.
+- Key: always.
+- API: `POST /v1/chat/messages?wait=1` waits up to 20 s for the AI reply and answers it with the visitor's message;
+  without `wait`, as today.
+- Data: none.
+
+**C11. Inbox options.**
+
+- Why: CT and IM (guests hidden until escalated; pausing with reply rights, recording who and why; counts by
+  conversation; one notes field; the first replier assigned; delete and call; a customer filter).
+- Key: new settings of `inbox`: `guests` (`all` default | `escalated`), `pauseNeeds` (`manage` default | `reply`);
+  setting `mode` of `internal_notes` (`timeline` default | `single`: one editable note of up to 4,000 characters);
+  setting `autoAssign` of `assignment` (`off` default | `first_replier`).
+- API: pausing keeps `aiPausedBy`, `aiPausedAt` and `aiPausedReason` (always); `GET /v1/inbox/unread` adds
+  `conversations` and `open` (always); lists take `userId`; counts (K4); the inbox widget offers Delete (`inbox.manage`)
+  and a Call link when a phone is known (always).
+- Data: those conversation fields; `note` for single notes.
+
+**C12. Staff attachments** (changes 0.8.3).
+
+- Why: CT and IM staff send Office and text files of 64–100 MB.
+- Key: settings of `attachments`: `staffTypes` adds `.doc`, `.docx`, `.xls`, `.xlsx` and `.txt` (downloads only),
+  `staffMaxSizeMb` (10; up to 100). Visitors keep the 10 MB cap.
+- Data: none.
+
+**C13. Fuller shop tools.**
+
+- Why: CT and IM (E37).
+- Key: setting `maxResults` of `shop_search` (5; 1–12).
+- API: the tools pass E37's filters and answer grades, variants, stock, warranty, quotes per variant and payment method,
+  order details, `priceText`, and links from Ecommerce's URL templates.
+- Data: none.
+
+**C14. Language and proactive options.**
+
+- Why: IM (a strict language check), CT and IM (nudge texts per page kind; once per product; none on phones).
+- Key: setting `strict` of `language_lock` (false: when true, a reply must also match the visitor's language by its
+  share of marker words); settings of `proactive_idle`: `messageProduct`, `messageCategory`, `messageDeals` and
+  `messageCart` ('' = the general text; `{product}`), `oncePer` (`session` default | `product`), `hideOnMobile` (false).
+- API: `setPage` also updates the context of later messages (always).
+- Data: none.
+
+**C15. Moderation keeps the website's own contact.**
+
+- Why: IM's own phone number would be redacted as "[phone]".
+- Key: always: the business.json phone and e-mail are never redacted.
+- Data: none.
+
+#### Growth
+
+**G1. Tags without a consent step.**
+
+- Why: SB and CT load their pixels with no consent step; IM grants everything while its banner is off and loads GA4
+  inside GTM.
+- Key: setting `consentRequired` (true), shared by `meta_pixel`, `google_tags`, `tiktok_pixel` and `custom_scripts` and
+  visible while any of them is on: false loads tags without a choice, with Consent Mode defaulting to granted, under the
+  same law warning as Chat's AI label; setting `ga4ViaGtm` of `google_tags` (false).
+- Data: none.
+
+**G2. More pixel events.**
+
+- Why: IM sends search and contact (WhatsApp clicks) events, with variant ids.
+- Key: always for the events; setting `contentIds` (`product` default | `variant`), shared by the pixel features.
+- API: `ss:search` (and `SSGrowth.search`) and new `ss:contact` (and `SSGrowth.contact()`) → GA4 `search` and
+  `generate_lead`, Meta `Search` and `Contact`, TikTok `Search` and `Contact`.
+- Data: none.
+
+**G3. Detailed analytics.**
+
+- Why: IM's analytics screen (live visitors, sessions, bounce, browsers, systems, cities, journeys, slowest pages, 404
+  referrers, days in store time).
+- Key: setting `detail` of `visitor_analytics` (`anonymous` default | `sessions`).
+- API: with `sessions`, events carry a random per-tab session id (sessionStorage; no cross-site id), the browser and
+  system family and the city (from edge headers); the analytics widget and `GET /v1/analytics` add sessions, bounce,
+  duration, journeys, live visitors (sessions seen in the last 5 minutes, judged on read), vitals per page and 404
+  referrers; days follow K8.
+- Data: `ss_growth_events` gain `session`, `browser`, `os` and `city`; daily totals gain those keys.
+
+**G4. Robots and verification.**
+
+- Why: IM blocks AI-training crawlers and verifies with Yandex.
+- Key: settings of `robots_verification`: `blockAiCrawlers` (false; the crawler list is kept in code),
+  `yandexVerification` ('').
+- Data: none.
+
+**G5. IndexNow key path.**
+
+- Why: IM serves its key at `/indexnow-key.txt` and pings on every save (E16).
+- Key: setting `keyPath` of `indexnow` ('' = `/<key>.txt`).
+- Data: none.
+
+**G6. Notice bar for custom UIs.**
+
+- Why: SB hides its bar on the home page and closes it per page; CT and IM draw their own.
+- Key: settings of `notice_bar`: `dismissFor` (`visit` default | `page`), `hideOnPages` ([]).
+- API: `GET /v1/notice` (browser and server token) → `{ text, linkText, linkUrl, dismissible }` or null.
+- Data: none.
+
+**G7. Web Vitals to GA4.**
+
+- Why: SB sends its vitals as GA4 events.
+- Key: setting `toGa4` of `web_vitals` (false).
+- Data: none.
+
+#### Migration and importers
+
+**Where the code lives.**
+
+- **Write side, in each product**: a new feature `import` (price 0) in Accounts, Ecommerce, Chat and Growth, which our
+  admins switch on for a migration and off after it. Its kit routes (K10) take the server token only:
+   - `POST /v1/import/:collection?dryRun=1` takes NDJSON (at most 1,000 records or 4 MB per call) of the product's own
+     record shapes with given ids, upserts by id (re-runnable), checks each record with the product's own checks in
+     import mode (past times, history, legacy hash formats and given numbers allowed), stamps the tenant, and answers
+     `{ inserted, updated, failed: [{ line, id, errors }] }`. It sends no message, event, alert or activity copy and
+     holds no stock; each call writes one activity entry (`import.<collection>` with counts).
+   - `POST /v1/import/finish` recomputes derived values: product `price`, `inStock`, `stockState`, `sold` and `rating`;
+     customer `orderCount` and `rtoCount`; loyalty balances; serial statuses; order counters (to the highest number per
+     prefix and year).
+   - `GET /v1/import/status` → record counts per collection.
+- **Read side, one tool**: a new unit `packages/importer` (`@ss/importer`, command `ss-import`, never deployed) holding
+  the one source mapping for the ibrahimMobiles schema family (IM, SB and CT share it). `ss-import read` reads a store
+  database read-only and writes NDJSON files and an id map to a local folder; `ss-import send` posts them with the
+  server tokens; `ss-import verify` compares the source with `GET /v1/import/status`, counts (K4) and reports.
+- **Why this split**: each product keeps its own shapes, checks, derived fields and tenant guard, and nothing writes
+  `ss_*` collections from outside; store-specific names stay out of product code (0.13); the files make dry runs and
+  diffs possible and re-runs idempotent; nothing runs in the background (0.10).
+
+**Order.** Each step can be re-run.
+
+1. Accounts: `roles` (custom copies such as `member`), `fields`, `users` and `requests`; then `copies` (the old activity
+   entries, with label and detail, so the store's Activity screen keeps its history).
+2. Settings and lists through K1: Format, then the `checkout`, `cod`, `loyalty`, `returns` and `catalog` settings, and
+   the `order_flow`, `couriers` (`{{tracking}}` becomes `{tracking}`), `delivery_zones` and `grades` lists.
+3. Ecommerce taxonomy: `categories`, `brands`, `attributes`, `size_charts` and `landings`.
+4. Media: the importer copies files that are not in the merchant's bucket yet (Vercel Blob, Unsplash, Pexels) into it;
+   files already there keep their keys.
+5. Ecommerce `products` and `serials`, then `deals` and `bundles` with their `used` counts.
+6. Ecommerce `customers`, `orders`, `loyalty`, `reviews`, `returns`, `alerts` and `wishlists`, then `finish`.
+7. Chat: `staff`, `guests` (hashes of the store's guest cookie values) and `conversations` (with their messages).
+8. Growth (IM, optional): `daily` totals rebuilt from the store's analytics events.
+9. Notifications templates through N4 (IM's 7 customer texts per status; the SB and CT template names).
+
+**Ids.** `<prefix>_<the ObjectId's 24 hex digits>` (accepted by `@ss/contracts`' id pattern; new ids keep the 0.10
+form), so references and old links map without a lookup: `usr_`, `prd_`, `var_`, `cat_`, `brd_`, `att_`, `szc_`, `lnd_`,
+`deal_`, `bnd_`, `cus_`, `ord_`, `oln_`, `ret_`, `rev_`, `alr_`, `conv_`, `msg_`. Merges keep the oldest id and record
+the others in the id map: brands with one slug in several categories (one brand with those `categoryIds`); attributes
+with one slug (one attribute with those `categoryIds`); grades with the same slug and label (one grade; a different
+label gets the key `<slug>-<category slug>`); people (one Accounts user per phone or e-mail; the customer's id wins over
+the staff record's). Codes that must be exactly 26 characters use `createId`.
+
+**Per store.**
+
+- **People.**
+   - SB: staff and members become Accounts users with their bcrypt hashes (A1); members get the role `member` with
+     `roleSince`; other customers stay Ecommerce guests (`cus_`, no Accounts user); open membership requests and their
+     unexpired setup links (SHA-256 hashes) are imported (A5, A3).
+   - CT: phones are normalised and duplicate customers merged first (orders, loyalty and conversations re-pointed);
+     every customer becomes a phone-only Accounts user, linked to their Ecommerce customer; staff keep their bcrypt
+     hashes.
+   - IM: every customer becomes a phone-only Accounts user; staff are imported without phones (A6 `methods` keeps them
+     on e-mail + password), with their PBKDF2 hashes (A1; the pepper is entered into `legacy_pepper` by hand before IM
+     ever rotates `AUTH_SECRET`), their TOTP secrets (decrypted by the importer with IM's key and sent straight to
+     Accounts, never written to the files) and their recovery hashes (A8); `isBlocked` becomes Ecommerce's `blocked`,
+     not Accounts'.
+- **Catalog.** Money × 100 (rupees to paisa). CT's sale price: `price = (priceRupees − discountRupees) × 100`,
+  `compareAtPrice = priceRupees × 100`. Variant attributes keep their values and slugs (E7); IM's `gradeSlug` becomes
+  `grade`; `forceOutOfStock` becomes `soldOut`; featured flags, videos, rich descriptions, size charts, SEO fields,
+  FAQs, previous slugs and per-variant warranty and photos all have homes (E1–E16). `publishedAt` = `createdAt`. Image
+  keys are the existing object paths and `catalog.mediaBaseUrl` is the existing public base, so image URLs do not
+  change; size ladders and blur images move into `sizes` and `blur` (E6).
+- **Orders.** Numbers are kept. Statuses keep their keys (hyphens allowed, E27) and get roles: `pending-payment`
+  awaiting_payment; `awaiting-confirmation` awaiting_confirmation (SB and CT get one that no order enters, since their
+  COD starts confirmed, E23); `confirmed` open; `packed`; `dispatched` shipped; `delivered`; `cancelled`; `refunded`;
+  `returned`: in SB and CT the role `returned`; in IM two statuses labelled Returned, `returned` (returned_to_origin,
+  with its reason) and `returned-delivered` (role `returned`), chosen by the order's history. Payment state: in IM from
+  its payments log (E26); in SB and CT from the status (bank transfer and card paid from `confirmed`, COD paid at
+  `delivered`). `holdUntil`: IM's reservation end; null in SB and CT (window 0, E24). Lines keep `warrantyDays` and
+  serials (IM also writes a `sold` serial per IMEI). Dispatch videos, tracking notes and expected dates go into `media`
+  and `shipment` (E28).
+- **Loyalty.** Lots are rebuilt oldest first from the transactions (earn credits; redeem and expire debits), with expiry
+  by the website's rule (IM: calendar months).
+- **IM extras.** Reviews stay one per order line (E34); claims keep exchange, reasons, outcomes and `RR-` references
+  (E33); guest stock alerts keep their phones and token hashes, so unsubscribe links already sent keep working (E34);
+  wishlists move into `wishlists`.
+- **Chat (CT and IM).** Both message shapes are read (embedded and separate, after IM's `migrate-inquiry-messages`);
+  conversations keep `conv_<hex>` ids (old `?inquiry=` links map); statuses map (`awaiting-customer` →
+  `awaiting_visitor`); pauses keep who and when (C11) and escalations become `waiting`; internal notes become a single
+  note (C11); attachments keep their keys (the bucket must be Chat's storage); sequence numbers are derived; guest
+  conversations keep working through their cookie values (C7).
+
+**Write freeze and cut-over.**
+
+1. Prepare: the Portal website, products and features (with `import`); Connections; pasted tokens; business.json (with
+   `timeZone` and the store's contact); settings and lists through K1.
+2. Rehearse: connect a scratch merchant database, import a copy of the store database, run `ss-import verify`, and
+   compare the store's key screens side by side; then connect the real, empty merchant database (changing the database
+   never moves old data, 0.4.8).
+3. Pre-import users, taxonomy, media and products (re-runnable).
+4. Freeze: the store shows its maintenance notice and refuses writes; new online payments stop 30 minutes earlier so
+   open ones finish; IM drains its message outbox.
+5. Final pass: users again, then customers, orders, loyalty, deal uses, stock, reviews, claims, alerts, wishlists and
+   chat; `finish`.
+6. Verify: counts per collection, order totals per status, stock units, points balances, deal uses and the list of open
+   orders.
+7. Point the gateways' notification addresses at Payments (the Rapid Gateway webhook, PayFast returns) and the WhatsApp
+   webhook at Notifications.
+8. Deploy the rewired store and lift the freeze. Downtime: minutes to an hour, by row counts.
+9. After: the old collections stay untouched for rollback (redeploy the old store; orders taken meanwhile are copied
+   back by hand). `import` is switched off once the hand-over window ends (A13; the longest session, 30 days).
+
+**Entered by hand.** Every secret (merchant database, storage, gateway keys, SMTP, WhatsApp and Connectivity.pk keys, AI
+keys, social sign-in keys, `legacy_pepper`), pasted tokens, feature switches, business.json, Meta template approvals,
+and the gateway and webhook addresses.
+
+**One-time visible effects.** Everyone signs in once if A13 is not built (open question 3); open carts re-price once,
+because their old offer locks are not carried; images that lived outside the store's bucket get new URLs; IM's raw
+analytics history starts empty (its daily totals are kept).
+
+**Not imported.** Sign-in codes; rate-limit, lockout, cron and ops collections; the drained outbox; sessions; cached SEO
+surfaces (landings keep their copy, E15).
+
+#### Store-side rewiring (checklist for later; needs separate owner approval)
+
+All three stores:
+
+- Storefront catalog reads (`lib/core/cached.ts`, `queries.ts`, `pageData.ts`, `app/api/products`, `app/api/search/**`)
+  → Ecommerce shop reads with the server token (K3); search hints from `sort=top` and `sort=sold_asc`.
+- Cart (`lib/cart/**`) keeps its own store; ids become `prd_` and `var_` (old lines are translated by adding the
+  prefix); reconcile → `POST /v1/shop/cart/quote`.
+- Checkout (`app/api/orders/route.ts`, `app/checkout/**`) → `POST /v1/shop/orders` through K3; `lib/payments/*`,
+  `app/api/payments/**` and `app/api/webhooks/**` go (Ecommerce starts payments in Payments).
+- Success and order pages → `GET /v1/shop/orders/by-number/:number`, cancel and proof routes; account profile and
+  addresses → Accounts `/v1/me` through K3; loyalty → `/v1/shop/loyalty`.
+- SEO: `sitemap.ts` → `/v1/seo/sitemap.xml` plus the store's own pages; `robots.ts` → Growth `/v1/robots.txt`; metadata
+  and JSON-LD → `/v1/seo/products/:ref`, `/v1/seo/categories/:ref` and `/v1/seo/listing`; feeds → `/v1/feeds/*`; OG
+  images read the same APIs.
+- Pixels → the Growth page script; the notice banner → `GET /v1/notice`; vitals → `web_vitals`.
+- Order messages (`orderEventNotify.ts`, `orderEventNotifications.ts`) and staff alerts (`staffAlertDispatch.ts`,
+  `staffNotifyContacts.ts`) go: Ecommerce sends them (E32).
+- Admin: every `apps/admin/src/app/api/**` route calls the matching server route with `SS-Actor-*` (K2): catalog and
+  offers → Ecommerce; orders (moves, edits, payments, deletes, invoices) → Ecommerce; customers → Ecommerce customers
+  and Accounts users; team, roles and staff sign-in → Accounts (sign-in through K3); uploads → presigned uploads with
+  the sizes made in the browser.
+- Admin dashboard, bell and sidebar → counts (K4), `reports/summary` and seen markers (E31); Activity → Accounts
+  `GET /v1/activity-copies` (K9); Settings tabs → K1 in each product; Cleanup → `POST /v1/data/delete-all`.
+- Scripts (`create-admin`, seeds, `rebuild-offers`, `remove-grades`) are retired; the first owner is an Accounts user
+  given the role Owner.
+
+SB adds: phone + password sign-in (A2); the setup page → `POST /v1/setup-links/accept` (A3); membership requests (A5);
+the member discount (E19); size charts (E5); glossary and landing pages (E15); video and rich descriptions (E3, E4); the
+SEO reconcile cron goes.
+
+CT adds: guest mode → `checkout.guests` and the Customer role's `signIn` (E21, A6); WhatsApp code sign-in (`lib/otp/**`)
+→ Accounts `phone_code` with N1; `/deals` → `GET /v1/shop/deals` and the `deal` filter; variant galleries (E6); chat
+(`app/api/chat/**`, `lib/chat/**`, the chat components) → Chat's visitor API with `SS-Guest` set to the old cookie value
+and `SS-Sign-In`; the inquiries admin → Chat's server routes with `SS-Actor-*`; the chat settings tab → K1 for Chat.
+Hero and about settings stay in the store.
+
+IM adds: grades, serials and warranty (E10–E12); the payments log and proofs (E24, E26); claims, reviews, alerts and
+wishlists (E33, E34), with `/alerts/unsubscribe/[token]` calling E34; invoices, slips and pick lists (E35); reports and
+CSV (E36); `/_listing` and `/_search` on K3; the llms files (E16); IndexNow (G5, E16); analytics → Growth with `detail`
+`sessions` (G3), its own consent banner calling `SSGrowth.consent.set()`; customer texts → Notifications templates over
+the generic HTTP provider (Connectivity.pk); staff two-step and lockout → Accounts (A8, A9); chat as for CT; the crons
+in `apps/web/vercel.json` and `.github/workflows/scheduled-jobs.yml` (order expiry, outbox, health digest, loyalty
+expiry, SEO reconcile) go.
+
+#### Build phases
+
+Each phase ships on `main`, passes `pnpm check` and the e2e suite, and is verified (0.13). The products within a phase
+are built in parallel; a phase starts when the one before it is done.
+
+1. **Shared kit** (K1–K11; the `@ss/importer` skeleton). Done when: every product serves the settings API, takes the
+   actor headers and the server token on visitor routes, has counts on its main lists, formats with Format and the
+   business time zone, and serves activity reads; Notifications forwards kit events; e2e covers a settings round trip
+   per product, a staff name on an order move and on a chat reply, counts equal to list lengths, the separate server
+   window, and an import dry run on a fixture.
+2. **Accounts, Notifications and Payments** (A1–A13, N1–N5, P1–P3). Done when: imported bcrypt and PBKDF2 hashes sign in
+   and are re-hashed; phone + password, staff codes and setup links, role requests, the guards, paused roles and the
+   remember options work through the widget and through the server; an old recovery code works once; a WhatsApp template
+   with a copy-code button and a per-status template with optional sections are sent; bank details are readable and bank
+   transfer is ready without details.
+3. **Ecommerce catalog and SEO, and Growth** (E1–E17, G1–G7). Done when: SB-, CT- and IM-like fixture catalogs (variant
+   attributes with several values, grades per category, variant galleries, size charts, video, rich text, landing pages)
+   are written through the API and read back through server-token shop reads; product links come out as
+   `/{category}/{slug}`; robots, JSON-LD and sitemaps match the fixtures; Atlas Search works on Atlas and falls back
+   elsewhere; the Growth options pass the jsdom test.
+4. **Ecommerce checkout, orders and promotions, and Chat** (E18–E37, C1–C15; Chat builds on E37's shapes written here).
+   Done when: guest and member checkout, COD, bank transfer and whole-unit totals, deal rules and locks, role pricing,
+   the loyalty options, the extra moves (refunded before delivery only when paid; return after delivery with or without
+   restock), the payments log, `IM-2026-0043`, events, staff alerts and per-status messages, claims, invoices and
+   reports pass e2e; Chat's store context, rich and fallback answers, handoff options, alerts, imported guest keys and
+   paging pass e2e against the real Accounts, Notifications and Ecommerce.
+5. **Importers and rehearsal** (the `import` features; the `@ss/importer` source mapping and `verify`). Done when: a
+   read-only copy of each store's database imports into a scratch merchant database with no failed records; `verify`
+   matches counts and sums; a side-by-side check of each store's key screens (listing, product page, cart, checkout,
+   order page, account, admin orders, dashboard, chat) shows no visible change beyond the one-time effects; the cut-over
+   steps are written in the importer's README. Rewiring a store follows only with owner approval (0.12 step 14).
+
+#### Open questions for the owner
+
+1. **PayFast Pakistan**: keep the built `payfast_pk` only (GetAccessToken, then PostTransaction, checked with
+   `validation_hash`), or also speak the stores' exact protocol (their `ipg1.apps.net.pk` form post and notice checks)
+   as a `protocol` setting of `payfast_pk`, so their gateway accounts and callbacks stay exactly as they are?
+2. **Bot persona**: IM and CT never say the assistant is a bot and filter answers that do. Offer a "never disclose"
+   option in Chat (with the law warning), or keep only hiding the AI label?
+3. **Session hand-over** (A13): build it, so nobody is signed out at cut-over, or accept one sign-in for everyone?
+
 ### 0.8.4 Still open
 
 - **The grilling of each later product** (Notifications, Accounts, Payments, Ecommerce, Growth), held right before it is
@@ -1738,6 +2974,8 @@ behaviour is managed inside Growth (per website; our admin sets defaults and pri
    - Growth: how it learns about orders, carts and item changes (0.3) — answered in 0.8.9 (browser events).
 - **Before charging real merchants** (0.12 step 14): which commercial host, the mail setup and the final domains, chosen
   by the owner.
+- **Converting existing stores** (0.8.10): its three open questions (PayFast Pakistan protocol, bot persona, session
+  hand-over).
 - **Open owner questions** (from the Part 0 review of 2026-10-07). Each is answered by the owner and written into the
   section named before the step that needs it is built:
    - **Start** (0.12): is building authorised now, and must step 1 be finished before step 2?
@@ -2574,7 +3812,8 @@ Done: <date>, verified by <who>
 - Portal SMTP is set up and a test e-mail arrives.
 - Final domains are set for the Portal (`PORTAL_URL`; products reconnected if it changed) and every product, especially
   Payments and Accounts (payment callbacks and sign-in providers need final domains).
-- Then ibrahimMobiles is connected, as a separate piece of work (0.8.1).
+- Then ibrahimMobiles is connected, as a separate piece of work (0.8.1), following 0.8.10 for it and for the other
+  stores.
 
 ## 0.13 Rules for building agents
 
