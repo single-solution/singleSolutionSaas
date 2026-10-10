@@ -129,6 +129,7 @@ ${para(guide.generic)}
 ${block(urls.generic)}
 <h3>Bank transfer (manual)</h3>
 ${para(guide.bank)}
+${block(snippets.bank)}
 <h2>Currencies</h2>
 ${para(guide.currencies)}
 ${block(currencies)}

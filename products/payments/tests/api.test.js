@@ -651,6 +651,31 @@ describe('bank transfer', () => {
 		).toBe(503);
 		await env.setting('bank_transfer', 'proofUpload', true);
 	});
+
+	it('serves the bank details to the merchant’s server, kept through the settings API (P1, K1)', async () => {
+		const IBAN = 'PK36SCBL0000001123456702';
+		const read = () => env.api('GET', '/v1/bank-transfer');
+		expect((await read()).json).toEqual({
+			ready: true,
+			accountTitle: 'Shop Ltd',
+			bankName: '',
+			accountNumber: '0123-456789',
+			iban: '',
+			instructions: '',
+		});
+		expect((await env.call('GET', '/v1/bank-transfer', { token: env.browser, origin: ORIGIN })).status).toBe(401);
+		const saved = await env.api('PUT', '/v1/settings/bank_transfer.iban', { value: IBAN });
+		expect(saved.json).toMatchObject({ value: IBAN, source: 'website' });
+		expect((await env.api('PUT', '/v1/settings/bank_transfer.iban', { value: 'x'.repeat(61) })).status).toBe(422);
+		await env.api('DELETE', '/v1/settings/bank_transfer.accountNumber');
+		expect((await read()).json).toMatchObject({ ready: true, accountNumber: '', iban: IBAN });
+		await env.api('DELETE', '/v1/settings/bank_transfer.iban');
+		expect((await read()).json.ready).toBe(false);
+		const refused = await env.api('POST', '/v1/payments', { amount: 100, currency: 'PKR', gateway: 'bank_transfer' });
+		expect(refused.json.type).toMatch(/gateway_not_ready$/);
+		await env.api('PUT', '/v1/settings/bank_transfer.accountNumber', { value: '0123-456789' });
+		expect((await read()).json).toMatchObject({ ready: true, accountNumber: '0123-456789' });
+	});
 });
 
 describe('payment links and the pay button routes', () => {

@@ -8,7 +8,7 @@
  */
 import { problem } from '@ss/app-kit';
 import { originAllowed } from '@ss/protocol';
-import { GATEWAY_CONNECTIONS, GATEWAY_FEATURES, gatewaysFor, takesCurrency } from '../core/gateways.js';
+import { GATEWAY_CONNECTIONS, GATEWAY_FEATURES, bankTransfer, gatewaysFor, takesCurrency } from '../core/gateways.js';
 import {
 	mirrorStatus,
 	paymentEventData,
@@ -123,10 +123,8 @@ export const createService = (product) => {
 			if (keys) ready.add(gateway);
 			if (gateway === 'generic') own = genericCurrencies(keys);
 		}
-		if (s.on.includes('bank_transfer')) {
-			const bank = await product.settings.values(s.websiteId, 'bank_transfer');
-			if (String(bank.accountNumber ?? '') !== '' || String(bank.iban ?? '') !== '') ready.add('bank_transfer');
-		}
+		if (s.on.includes('bank_transfer') && bankTransfer(await product.settings.values(s.websiteId, 'bank_transfer')).ready)
+			ready.add('bank_transfer');
 		return gatewaysFor({ on: s.on, ready: (gateway) => ready.has(gateway), currency, own, only });
 	};
 

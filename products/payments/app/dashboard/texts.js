@@ -158,7 +158,8 @@ export const TEXTS = Object.freeze({
 		eventsHelp:
 			'Paste the Notifications token in Connections and turn on its Outgoing webhooks; check the SS-Signature header of every event.',
 		more: 'Links, refunds and subscriptions',
-		moreHelp: 'Payment links for any amount, full and partial refunds, gateway-managed subscriptions.',
+		moreHelp:
+			'Payment links for any amount, full and partial refunds, the bank details for your checkout, gateway-managed subscriptions.',
 		widgets: 'Widget snippets',
 		widgetsHelp: 'The pay button on your website, and the admin widgets in your own admin.',
 		ticket: 'Ticket snippet',

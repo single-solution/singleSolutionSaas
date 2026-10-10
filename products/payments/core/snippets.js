@@ -1,7 +1,7 @@
 /**
  * The code snippets the public docs and the dashboard's Developers tab show: the widget script and the pay button, the
  * admin widgets with their ticket function, the ticket request, the payment API (create, verify, refund), payment links,
- * subscriptions, the webhook signature check and the addresses merchants register with each gateway. Plain text; no
+ * the bank details, subscriptions, the webhook signature check and the addresses merchants register with each gateway. Plain text; no
  * I/O.
  * @module
  */
@@ -110,6 +110,13 @@ export const createSnippets = ({ base, widgets, permissions }) => {
 		"  -H 'Content-Type: application/json' \\",
 		`  -d '${JSON.stringify({ title: 'Donation', currency: 'USD', amount: null, minAmount: 500 })}'`,
 	].join('\n');
+	const bank = [
+		'// your server: the bank details to show at checkout and on order pages, and whether bank transfer is ready',
+		`const response = await fetch('${base}/v1/bank-transfer', {`,
+		'  headers: { authorization: `Bearer ${process.env.SS_SERVER_TOKEN}` },',
+		'});',
+		'const { ready, accountTitle, bankName, accountNumber, iban, instructions } = await response.json();',
+	].join('\n');
 	const subscription = [
 		`curl -X POST '${base}/v1/subscriptions' \\`,
 		'  -H "Authorization: Bearer $SS_SERVER_TOKEN" \\',
@@ -127,5 +134,5 @@ export const createSnippets = ({ base, widgets, permissions }) => {
 		'  return parts.v1?.length === expected.length && timingSafeEqual(Buffer.from(parts.v1), Buffer.from(expected));',
 		'};',
 	].join('\n');
-	return { visitor, admin, ticketNode, ticketCurl, create, verify, refund, link, subscription, webhook };
+	return { visitor, admin, ticketNode, ticketCurl, create, verify, refund, link, bank, subscription, webhook };
 };

@@ -10,7 +10,7 @@
  */
 import { isId } from '@ss/contracts';
 import { actorOf, countHandlers, created, defineRoute, formatMoney, formatText, paginate, problem } from '@ss/app-kit';
-import { GATEWAY_FEATURES, isGateway } from '../core/gateways.js';
+import { GATEWAY_FEATURES, bankTransfer, isGateway } from '../core/gateways.js';
 import { fromDecimal } from '../core/money.js';
 import {
 	PAYMENT_STATUSES,
@@ -382,13 +382,7 @@ export const createRoutes = (product) => {
 					amount: payment.amount,
 					currency: payment.currency,
 					reference: payment.reference || payment.id,
-					bank: {
-						accountTitle: String(bank.accountTitle ?? ''),
-						bankName: String(bank.bankName ?? ''),
-						accountNumber: String(bank.accountNumber ?? ''),
-						iban: String(bank.iban ?? ''),
-						instructions: String(bank.instructions ?? ''),
-					},
+					bank: bankTransfer(bank),
 					proof: storage
 						? { action: `/pay/${websiteId}/${payment.id}/proof`, maxBytes: Number(bank.proofMaxMb) * 1_048_576 }
 						: null,
@@ -687,6 +681,16 @@ export const createRoutes = (product) => {
 			auth: 'server',
 			feature: 'payment_api',
 			handler: (ctx) => product.events.counts(ctx),
+		}),
+		// the bank details for the merchant's server (PLAN 0.8.10 P1): what the bank page shows, and whether bank
+		// transfer is ready; Ecommerce reads it with its pasted Payments token (E24)
+		defineRoute({
+			method: 'GET',
+			path: '/v1/bank-transfer',
+			auth: 'server',
+			feature: 'bank_transfer',
+			database: false,
+			handler: async (ctx) => bankTransfer(await product.settings.values(ctx.websiteId, 'bank_transfer')),
 		}),
 		defineRoute({
 			method: 'POST',

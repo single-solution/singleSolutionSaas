@@ -816,6 +816,7 @@ function DevelopersTab({ websiteId, portal }) {
 					<Section title={TEXTS.developers.more} description={TEXTS.developers.moreHelp}>
 						<CodeBlock code={snippets.link} />
 						<CodeBlock code={snippets.refund} />
+						<CodeBlock code={snippets.bank} />
 						<CodeBlock code={snippets.subscription} />
 					</Section>
 					<Section title={TEXTS.developers.widgets} description={TEXTS.developers.widgetsHelp}>

@@ -129,3 +129,22 @@ export const gatewaysFor = ({ on, ready, currency, own = null, only = null }) =>
 			takesCurrency(gateway, currency, own) &&
 			ready(gateway),
 	);
+
+/**
+ * Bank transfer as the payer and the merchant's server see it (PLAN 0.8.10 P1): the bank details from the
+ * `bank_transfer` settings, and whether it is ready — its account number or IBAN is set.
+ * @param {Readonly<Record<string, unknown>>} values the resolved `bank_transfer` settings
+ * @returns {{ ready: boolean, accountTitle: string, bankName: string, accountNumber: string, iban: string, instructions: string }}
+ */
+export const bankTransfer = (values) => {
+	/** @param {string} name */
+	const text = (name) => (typeof values[name] === 'string' ? /** @type {string} */ (values[name]) : '');
+	const details = {
+		accountTitle: text('accountTitle'),
+		bankName: text('bankName'),
+		accountNumber: text('accountNumber'),
+		iban: text('iban'),
+		instructions: text('instructions'),
+	};
+	return { ready: details.accountNumber !== '' || details.iban !== '', ...details };
+};
