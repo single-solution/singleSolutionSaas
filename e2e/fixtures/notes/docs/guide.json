@@ -11,6 +11,9 @@
 		"notes": [
 			"Visitors leave a short note with an optional e-mail address. The longest note is a setting (Settings in the product dashboard).",
 			"Your staff read the notes in your admin with the inbox widget (permission notes.read), and your server can read them with GET /v1/notes and the server token."
+		],
+		"import": [
+			"Our admins switch Import on to move notes in from another system with ss-import (POST /v1/import/notes with NDJSON, ?dryRun=1 first; POST /v1/import/finish; GET /v1/import/status), and off after it."
 		]
 	}
 }

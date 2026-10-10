@@ -7,13 +7,14 @@
  */
 import { createProduct } from '@ss/app-kit';
 import manifestFile from '../manifest.json' with { type: 'json' };
+import importSettings from '../schemas/import.settings.json' with { type: 'json' };
 import notesSettings from '../schemas/notes.settings.json' with { type: 'json' };
 import strings from '../strings/en.json' with { type: 'json' };
-import { noteView } from '../core/notes.js';
+import { checkImportedNote, noteView } from '../core/notes.js';
 import { NOTE_INDEXES, createNotesStore } from './notes-store.js';
 
 /** Settings schema of each feature (manifest.json points at them with `$ref`). @type {Record<string, unknown>} */
-const SETTINGS = { notes: notesSettings };
+const SETTINGS = { notes: notesSettings, import: importSettings };
 
 /** The manifest as the kit and the Portal take it: settings schemas inline. */
 export const manifest = /** @type {import('@ss/contracts').Manifest} */ (
@@ -59,6 +60,8 @@ export const createProductInstance = (options) => {
 			}),
 		},
 		data: { indexes: NOTE_INDEXES },
+		// the import feature (test-only here, PLAN 0.8.10 K10): notes moved in with ss-import
+		imports: { collections: { notes: { check: checkImportedNote } } },
 	});
 	return product;
 };

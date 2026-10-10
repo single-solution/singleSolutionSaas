@@ -13,6 +13,12 @@ statuses, tickets, dashboard launches, notices, websites and data rights). The p
 `ecommerce`, `growth`, `notifications`, `payments`) run each shipped product against the Portal and the products it
 works with.
 
+The store-conversion kit (PLAN 0.8.10, Phase 1) has its own tests: `settings-api` (a settings round trip per product
+through the server token, with an acting user), `server-calls` (visitor calls from the merchant's server in their own
+rate window, counts equal to list lengths) and `import` (an `ss-import` dry run of the importer's fixture into Notes,
+whose test-only `import` feature mounts the kit's import routes); the product tests add a staff name on an order move
+and on a chat reply, counts of the main lists and kit events forwarded by Notifications.
+
 ```sh
 pnpm --filter @ss/e2e check   # from the root; or `pnpm check` in this folder
 ```

@@ -216,6 +216,42 @@ describe('Chat on the real Portal', () => {
 		expect((await sys.call('GET', '/v1/admin/conversations', { ...auth, origin: ORIGIN })).status).toBe(401);
 	});
 
+	it('the merchant’s server replies as a named member of staff (SS-Actor), and counts match the inbox', async () => {
+		const actor = {
+			'ss-actor-id': 'usr_staff_42',
+			'ss-actor-name': encodeURIComponent('Ayesha Khan'),
+			'ss-actor-role': 'Support staff',
+		};
+		const replied = await sys.call('POST', `/v1/conversations/${conversationId}/messages`, {
+			token: chatTokens.server,
+			headers: actor,
+			body: { text: 'Your order is packed.' },
+		});
+		expect(replied.status).toBe(201);
+		expect(replied.json.message).toMatchObject({ author: 'staff', name: 'Ayesha Khan' });
+		const seen = await visitor('GET', '/v1/chat', { headers: signedIn });
+		expect(seen.json.messages.at(-1)).toMatchObject({ author: 'staff', name: 'Ayesha Khan', text: 'Your order is packed.' });
+		// without the headers the server is the team
+		const team = await sys.call('POST', `/v1/conversations/${conversationId}/messages`, {
+			token: chatTokens.server,
+			body: { text: 'Anything else?' },
+		});
+		expect(team.json.message).toMatchObject({ author: 'staff', name: 'Team' });
+		const activity = await sys.call('GET', `/v1/activity?target=${conversationId}&actor=usr_staff_42`, {
+			token: chatTokens.server,
+		});
+		expect(activity.json.items[0]).toMatchObject({
+			action: 'conversation.replied',
+			actor: { kind: 'user', id: 'usr_staff_42', name: 'Ayesha Khan', role: 'Support staff' },
+		});
+		// counts equal the inbox list (PLAN 0.8.10 K4)
+		const list = await sys.call('GET', '/v1/conversations?limit=100', { token: chatTokens.server });
+		const count = await sys.call('GET', '/v1/conversations/count', { token: chatTokens.server });
+		expect(count.json).toEqual({ count: list.json.items.length, capped: false });
+		const byStatus = await sys.call('GET', '/v1/conversations/counts?by=status', { token: chatTokens.server });
+		expect(byStatus.json.total).toBe(list.json.items.length);
+	});
+
 	it('a handoff sends `Chat needs you` to the staff through the real Notifications', async () => {
 		const notifyCookie = await sys.adminSession(await sys.owner(), websiteId, 'notifications');
 		const on = await sys.dashboard(

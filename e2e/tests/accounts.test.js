@@ -187,8 +187,23 @@ describe('Accounts on the real Portal', () => {
 				productId: 'notifications',
 				action: 'template.saved',
 				actor: { kind: 'staff', id: 'u_9', name: 'Sam Staff' },
+				label: expect.stringContaining('welcome'),
 			}),
 		]);
+		// the copies carry the label and are read with the activity filters and counts (PLAN 0.8.10 K9, K4)
+		const found = await sys.call('GET', '/v1/activity-copies?q=welcome&productId=notifications&actor=u_9', {
+			token: accountsTokens.server,
+		});
+		expect(found.json.items).toHaveLength(1);
+		expect(
+			(await sys.call('GET', '/v1/activity-copies?q=nothing-like-it', { token: accountsTokens.server })).json.items,
+		).toEqual([]);
+		const copyCount = await sys.call('GET', '/v1/activity-copies/count', { token: accountsTokens.server });
+		expect(copyCount.json).toEqual({ count: copies.json.items.length, capped: false });
+		const users = await sys.call('GET', '/v1/users?limit=100', { token: accountsTokens.server });
+		const userCount = await sys.call('GET', '/v1/users/count', { token: accountsTokens.server });
+		expect(userCount.json).toEqual({ count: users.json.items.length, capped: false });
+		expect(users.json.items.length).toBeGreaterThan(0);
 
 		// Accounts calls Notifications' data-rights routes with the pasted Notifications token
 		const accountsCookie = await sys.adminSession(await sys.owner(), websiteId);

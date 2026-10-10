@@ -12,6 +12,13 @@
 			"description": "Visitors leave short notes; the merchant's staff read them in their own admin.",
 			"dependsOn": [],
 			"settings": { "$ref": "schemas/notes.settings.json" }
+		},
+		{
+			"key": "import",
+			"name": "Import",
+			"description": "Notes moved in from another system with ss-import; our admins switch it on for a migration and off after it.",
+			"dependsOn": [],
+			"settings": { "$ref": "schemas/import.settings.json" }
 		}
 	],
 	"permissions": [{ "key": "notes.read", "name": "Read notes", "feature": "notes" }],

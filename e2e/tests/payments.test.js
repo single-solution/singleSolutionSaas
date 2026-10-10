@@ -230,6 +230,9 @@ describe('Payments on the real Portal', () => {
 		expect(createHmac('sha256', WEBHOOK_SECRET).update(`${parts.t}.${paid?.body}`).digest('hex')).toBe(parts.v1);
 		const events = await sys.call('GET', '/v1/events', { token: payTokens.server });
 		expect(events.json.items).toEqual([expect.objectContaining({ type: 'payments.payment.paid', delivery: 'sent' })]);
+		// the kit's event (PLAN 0.8.10 K5), forwarded by Notifications with its own id and time
+		expect(body).toMatchObject({ id: events.json.items[0].id, createdAt: events.json.items[0].at });
+		expect((await sys.call('GET', '/v1/events/count', { token: payTokens.server })).json).toEqual({ count: 1, capped: false });
 	});
 
 	it('refunds part of it on Stripe and tells the merchant', async () => {
@@ -250,6 +253,32 @@ describe('Payments on the real Portal', () => {
 			body: { amount: 12_000, currency: 'USD' },
 		});
 		expect(verified.json.verified).toBe(true);
+	});
+
+	it('counts equal list lengths, and a refund names the member of staff the merchant’s server acts for', async () => {
+		const list = await sys.call('GET', '/v1/payments?limit=100', { token: payTokens.server });
+		const count = await sys.call('GET', '/v1/payments/count', { token: payTokens.server });
+		expect(count.json).toEqual({ count: list.json.items.length, capped: false });
+		const byState = await sys.call('GET', '/v1/payments/counts?by=state', { token: payTokens.server });
+		expect(byState.json).toEqual({ total: list.json.items.length, groups: { partially_refunded: 1 } });
+		const refund = await sys.call('POST', `/v1/payments/${paymentId}/refunds`, {
+			token: payTokens.server,
+			body: { amount: 1000, reason: 'Goodwill' },
+			headers: {
+				'idempotency-key': 'refund-inv-42-2',
+				'ss-actor-id': 'usr_finance_1',
+				'ss-actor-name': 'Hina%20Malik',
+				'ss-actor-role': 'Finance',
+			},
+		});
+		expect(refund.json.refunds.at(-1)).toMatchObject({ amount: 1000, by: 'Hina Malik' });
+		const activity = await sys.call('GET', `/v1/activity?target=${paymentId}&action=payment.refunded`, {
+			token: payTokens.server,
+		});
+		expect(activity.json.items[0]).toMatchObject({
+			actor: { kind: 'user', id: 'usr_finance_1', name: 'Hina Malik', role: 'Finance' },
+			label: 'inv-42',
+		});
 	});
 
 	it('data rights: the export with the server token finds the payer’s payment', async () => {

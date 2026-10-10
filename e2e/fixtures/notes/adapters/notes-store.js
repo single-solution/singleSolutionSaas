@@ -17,6 +17,12 @@ export const NOTE_INDEXES = [
 /** @typedef {import('../core/notes.js').NoteRecord} NoteRecord */
 
 /**
+ * The filter of the notes list and its count (PLAN 0.8.10 K4: a count takes exactly the list's filters).
+ * @param {string} websiteId
+ */
+export const notesFilter = (websiteId) => ({ websiteId });
+
+/**
  * @param {import('@ss/app-kit').WebsiteData} data the website's guarded merchant database (`ctx.data()`)
  */
 export const createNotesStore = (data) => {
@@ -42,8 +48,11 @@ export const createNotesStore = (data) => {
 			const [at, id] = Array.isArray(after) ? after : [];
 			const filter =
 				typeof at === 'string' && typeof id === 'string'
-					? { websiteId, $or: [{ createdAt: { $lt: new Date(at) } }, { createdAt: new Date(at), id: { $lt: id } }] }
-					: { websiteId };
+					? {
+							...notesFilter(websiteId),
+							$or: [{ createdAt: { $lt: new Date(at) } }, { createdAt: new Date(at), id: { $lt: id } }],
+						}
+					: notesFilter(websiteId);
 			const rows = await notes.find(filter, { projection, sort: { createdAt: -1, id: -1 }, limit }).toArray();
 			return /** @type {NoteRecord[]} */ (/** @type {unknown} */ (rows));
 		},

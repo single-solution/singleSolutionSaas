@@ -45,3 +45,20 @@ export const noteView = ({ id, text, email, createdAt }) => ({
 	email,
 	createdAt: new Date(createdAt).toISOString(),
 });
+
+/**
+ * Check a note an import sends (PLAN 0.8.10 K10, import mode): the given id, the text within the hard maximum, an
+ * optional e-mail and a past time.
+ * @param {Record<string, unknown>} record
+ * @returns {{ ok: true, value: { id: string, text: string, email: string | null, createdAt: Date } }
+ *   | { ok: false, errors: Array<{ path: string, message: string }> }}
+ */
+export const checkImportedNote = (record) => {
+	const checked = checkNote(record, { maxLength: NOTE_MAX_LENGTH });
+	if (!checked.ok)
+		return { ok: false, errors: [{ path: `/${checked.field}`, message: `${checked.field} is not valid (${checked.error})` }] };
+	const createdAt = typeof record.createdAt === 'string' ? new Date(record.createdAt) : null;
+	if (!createdAt || Number.isNaN(createdAt.getTime()))
+		return { ok: false, errors: [{ path: '/createdAt', message: 'createdAt is an ISO-8601 time' }] };
+	return { ok: true, value: { id: String(record.id), ...checked.value, createdAt } };
+};

@@ -30,12 +30,21 @@ describe('price and feature reports', () => {
 		expect(saved.status).toBe(200);
 		expect(saved.json).toMatchObject({ version: 2 });
 		const page = await owner.get('/v1/admin/products/notes');
-		expect(page.json).toMatchObject({ priceListVersion: 2, features: [{ key: 'notes', millicreditsPerHour: 1500 }] });
+		expect(page.json).toMatchObject({
+			priceListVersion: 2,
+			features: [
+				{ key: 'notes', millicreditsPerHour: 1500 },
+				{ key: 'import', millicreditsPerHour: 0 },
+			],
+		});
 		const [entry] = await sys.activity('product.prices_changed');
 		expect(entry?.after).toMatchObject({ version: 2, changes: [{ key: 'notes', before: 0, after: 1500 }] });
 		expect((await sys.dashboard(cookie, 'GET', '/v1/dashboard/prices')).json).toMatchObject({
 			version: 2,
-			features: [{ key: 'notes', millicreditsPerHour: 1500 }],
+			features: [
+				{ key: 'notes', millicreditsPerHour: 1500 },
+				{ key: 'import', millicreditsPerHour: 0 },
+			],
 		});
 		// Support never opens Prices; a negative price never leaves the product
 		const support = await sys.admin('support');
@@ -89,7 +98,10 @@ describe('price and feature reports', () => {
 		const owned = await sys.adminSession(owner, websiteId);
 		expect((await sys.dashboard(owned, 'GET', `/v1/dashboard/websites/${websiteId}/features`)).json).toMatchObject({
 			featuresVersion: 1,
-			features: [{ key: 'notes', on: true }],
+			features: [
+				{ key: 'notes', on: true },
+				{ key: 'import', on: false },
+			],
 		});
 		const cards = await owner.get(`/v1/merchants/${m.merchantId}/websites/${websiteId}/products`);
 		expect(cards.json.items[0]).toMatchObject({ featuresOn: ['notes'], featuresVersion: 1 });

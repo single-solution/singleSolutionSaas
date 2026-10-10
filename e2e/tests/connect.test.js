@@ -34,14 +34,23 @@ describe('connecting a product', () => {
 		const page = await owner.get('/v1/admin/products/notes');
 		expect(page.json).toMatchObject({
 			priceListVersion: 1,
-			features: [{ key: 'notes', name: 'Notes', dependsOn: [], millicreditsPerHour: 0 }],
+			features: [
+				{ key: 'notes', name: 'Notes', dependsOn: [], millicreditsPerHour: 0 },
+				{ key: 'import', name: 'Import', dependsOn: [], millicreditsPerHour: 0 },
+			],
 		});
 		expect((await sys.activity('product.connected')).length).toBe(1);
 
 		// the product pinned the Portal: its dashboard prices show the same list
 		const cookie = await sys.adminSession(owner, null);
 		const prices = await sys.dashboard(cookie, 'GET', '/v1/dashboard/prices');
-		expect(prices.json).toMatchObject({ version: 1, features: [{ key: 'notes', millicreditsPerHour: 0 }] });
+		expect(prices.json).toMatchObject({
+			version: 1,
+			features: [
+				{ key: 'notes', millicreditsPerHour: 0 },
+				{ key: 'import', millicreditsPerHour: 0 },
+			],
+		});
 	});
 
 	it('refuses an id that is already connected (use Reconnect)', async () => {

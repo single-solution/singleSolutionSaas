@@ -135,9 +135,10 @@ export const startSystem = async ({ graceDays = 1, unit = NOTES, extras = [] } =
 	const network = createNetwork(handlers);
 	/** @type {Array<() => Promise<unknown>>} */
 	const queued = [];
-	const settle = async () => {
+	/** Run the queued work; the clock moves one second unless `tick` is false (calls inside one rate window). */
+	const settle = async (tick = true) => {
 		while (queued.length > 0) await /** @type {() => Promise<unknown>} */ (queued.shift())();
-		clock.advance(1000);
+		if (tick) clock.advance(1000);
 	};
 
 	// ---------------------------------------------------------------------------------------------- the Portal
@@ -217,10 +218,15 @@ export const startSystem = async ({ graceDays = 1, unit = NOTES, extras = [] } =
 	 * @param {string} method
 	 * @param {string} path
 	 * @param {{ token?: string, origin?: string, body?: unknown, form?: Record<string, string>, cookie?: string, base?: string,
-	 *   headers?: Record<string, string> }} [init] `form`: an HTML form post (`application/x-www-form-urlencoded`)
+	 *   headers?: Record<string, string>, tick?: boolean }} [init] `form`: an HTML form post
+	 *   (`application/x-www-form-urlencoded`); `tick: false` keeps the clock still (many calls inside one rate window)
 	 * @returns {Promise<Answer>}
 	 */
-	const call = async (method, path, { token, origin, body, form, cookie, base = productUrl, headers = {} } = {}) => {
+	const call = async (
+		method,
+		path,
+		{ token, origin, body, form, cookie, base = productUrl, headers = {}, tick = true } = {},
+	) => {
 		const handler = /** @type {Handler} */ (handlers[base]);
 		const response = await handler(
 			new Request(`${base}${path}`, {
@@ -238,7 +244,7 @@ export const startSystem = async ({ graceDays = 1, unit = NOTES, extras = [] } =
 			}),
 		);
 		const text = await response.text();
-		await settle();
+		await settle(tick);
 		/** @type {any} */
 		let json = null;
 		try {

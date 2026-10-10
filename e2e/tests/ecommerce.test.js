@@ -384,6 +384,48 @@ describe('Ecommerce on the real Portal', () => {
 		expect((await sys.call('GET', '/v1/admin/orders', { token: staff, origin: ORIGIN })).status).toBe(401);
 	});
 
+	it('the merchant’s server moves an order as a named member of staff (SS-Actor), and counts match the lists', async () => {
+		const server = String(tokens.ecommerce?.server);
+		const actor = {
+			'ss-actor-id': 'usr_staff_7',
+			'ss-actor-name': encodeURIComponent('Ayesha Khan'),
+			'ss-actor-role': 'Packer',
+		};
+		const packed = await sys.call('POST', `/v1/orders/${codOrderId}/move`, {
+			token: server,
+			headers: actor,
+			body: { to: 'packed' },
+		});
+		expect(packed.status).toBe(200);
+		expect(packed.json.history.at(-1)).toMatchObject({ to: 'packed', by: 'Ayesha Khan' });
+		const activity = await sys.call('GET', `/v1/activity?target=${codOrderId}&actor=usr_staff_7`, { token: server });
+		expect(activity.json.items[0]).toMatchObject({
+			actor: { kind: 'user', id: 'usr_staff_7', name: 'Ayesha Khan', role: 'Packer' },
+		});
+		// without the headers the server is the actor
+		const unpacked = await sys.call('POST', `/v1/orders/${codOrderId}/move`, { token: server, body: { to: 'delivered' } });
+		expect(unpacked.json.history.at(-1)).toMatchObject({ to: 'delivered', by: 'Server' });
+		// counts equal the lists (PLAN 0.8.10 K4)
+		for (const list of ['orders', 'products', 'customers', 'returns']) {
+			const items = await sys.call('GET', `/v1/${list}?limit=100`, { token: server });
+			const count = await sys.call('GET', `/v1/${list}/count`, { token: server });
+			expect([list, count.json]).toEqual([list, { count: items.json.items.length, capped: false }]);
+		}
+		// a count has its list's feature: reviews are off here, so both refuse alike
+		const reviews = await sys.call('GET', '/v1/reviews', { token: server });
+		const reviewCount = await sys.call('GET', '/v1/reviews/count', { token: server });
+		expect([reviews.status, codeOf(reviews), reviewCount.status, codeOf(reviewCount)]).toEqual([
+			403,
+			'feature_off',
+			403,
+			'feature_off',
+		]);
+		const byStatus = await sys.call('GET', '/v1/orders/counts?by=status', { token: server });
+		expect(byStatus.json).toEqual({ total: 2, groups: { delivered: 2 } });
+		const byRole = await sys.call('GET', '/v1/orders/counts?by=role', { token: server });
+		expect(byRole.json).toEqual({ total: 2, groups: { delivered: 2 } });
+	});
+
 	it('a partial return is refunded through Payments and restocked exactly once', async () => {
 		const order = await shopper('GET', `/v1/shop/orders/${paidOrderId}`);
 		const lineId = order.json.lines[0].id;

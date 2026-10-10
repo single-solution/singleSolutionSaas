@@ -102,6 +102,14 @@ describe('Notifications on the real Portal', () => {
 		});
 		const log = await sys.call('GET', '/v1/admin/messages', { token: String(ticket.json.ticket), origin: ADMIN_ORIGIN });
 		expect(log.json.items).toEqual([expect.objectContaining({ id: res.json.id, status: 'sent' })]);
+		// counts equal the list's length, for the admin widget and the merchant's server (PLAN 0.8.10 K4)
+		const counted = await sys.call('GET', '/v1/admin/messages/count', {
+			token: String(ticket.json.ticket),
+			origin: ADMIN_ORIGIN,
+		});
+		expect(counted.json).toEqual({ count: log.json.items.length, capped: false });
+		const byChannel = await sys.call('GET', '/v1/messages/counts?by=channel', { token: server });
+		expect(byChannel.json).toEqual({ total: 1, groups: { email: 1 } });
 		// a feature that is off refuses its route
 		const sms = await sys.call('POST', '/v1/messages/sms', {
 			token: server,

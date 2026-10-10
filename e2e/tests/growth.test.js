@@ -188,6 +188,12 @@ describe('Growth on the real Portal', () => {
 		expect(report.json.totals).toEqual({ visits: 2, pageViews: 2 });
 		expect(report.json.funnel.steps.map((/** @type {{ count: number }} */ s) => s.count)).toEqual([1, 1, 0, 1]);
 		expect(report.json.searches).toEqual([{ key: 'phones', count: 2 }]);
+		// the raw events list and its count agree (PLAN 0.8.10 K4)
+		const raw = await sys.call('GET', '/v1/events?limit=100', { token: tokens.server });
+		const count = await sys.call('GET', '/v1/events/count', { token: tokens.server });
+		expect(count.json).toEqual({ count: raw.json.items.length, capped: false });
+		const byType = await sys.call('GET', '/v1/events/counts?by=type', { token: tokens.server });
+		expect(byType.json.total).toBe(raw.json.items.length);
 		const elsewhere = await sys.call('GET', '/v1/admin/analytics', {
 			token: ticket.json.ticket,
 			origin: 'https://evil.example',
