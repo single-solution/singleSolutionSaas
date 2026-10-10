@@ -241,6 +241,65 @@ describe('cart', () => {
 		expect(textOf(unknown.host)).toContain(text('cart.unknownItem'));
 	});
 
+	it('shows a sold-out line with its problem and links lines to their variant pages', async () => {
+		const { host } = await setup({
+			quote: () =>
+				ok(
+					quoteOf({
+						lines: [
+							line({
+								url: 'https://shop.example.com/products/phone?colour=blue',
+								problems: [{ code: 'out_of_stock', message: 'This item is out of stock.' }],
+							}),
+							line({
+								productId: 'prd_2',
+								name: 'Case',
+								url: 'javascript:alert(1)',
+								problems: [{ code: 'sold_out', message: '' }],
+							}),
+						],
+						ready: false,
+					}),
+				),
+		});
+		const items = $$(host, 'ul.lines > li');
+		expect(items.map((item) => item.classList.contains('problem'))).toEqual([true, true]);
+		expect(items[0].querySelector('strong a').getAttribute('href')).toBe('https://shop.example.com/products/phone?colour=blue');
+		expect(items[1].querySelector('strong a')).toBeNull();
+		expect(textOf(host)).toContain(text('cart.problem.out_of_stock'));
+		expect(textOf(host)).toContain(text('cart.problem.sold_out'));
+		expect(textOf(host)).toContain(text('cart.notReady'));
+	});
+
+	it('shows the filled policies as HTML rebuilt from the allowed tags, the warranty policy among them', async () => {
+		const { host } = await setup({
+			settings: {
+				checkout: {
+					...SETTINGS.checkout,
+					policyFormat: 'html',
+					policies: {
+						terms: '<p>Be <strong>nice</strong>.</p>',
+						warranty:
+							'<p>12 months. <a href="https://shop.example.com/warranty">Details</a></p><script>window.bad = 1</script>',
+						shipping: '',
+						format: 'html',
+						other: '<p>Unknown</p>',
+					},
+				},
+			},
+		});
+		const policies = $$(host, 'section[aria-label] details');
+		expect(policies.map((node) => node.querySelector('summary').textContent)).toEqual([
+			text('checkout.policy.warranty'),
+			text('checkout.policy.terms'),
+		]);
+		expect(policies[0].querySelector('a').getAttribute('href')).toBe('https://shop.example.com/warranty');
+		expect(policies[0].querySelector('script')).toBeNull();
+		expect(policies[1].querySelector('strong').textContent).toBe('nice');
+		expect(textOf(host)).not.toContain('Unknown');
+		expect(/** @type {any} */ (globalThis).bad).toBeUndefined();
+	});
+
 	it('applies a coupon and shows why one does not apply', async () => {
 		/** @type {any} */
 		let problem = null;

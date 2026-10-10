@@ -5,7 +5,7 @@
  * (every missing combination of a product's set-up attribute values, for one product or many). Each route exists for
  * the merchant's server (`/v1/products…`, server token) and for the catalog admin widget (`/v1/admin/products…`,
  * ticket with `catalog.edit`), sharing one handler. The list has counts with the same filters (`count`, and `counts`
- * by `status`, `brand`, `stockState`, `featured` and `grade`; PLAN 0.8.10 K4). A changed slug keeps the old one (E13).
+ * by `status`, `brand`, `stockState`, `featured`, `grade` and `category`; PLAN 0.8.10 K4). A changed slug keeps the old one (E13).
  * Every write is in the activity log (with the product's name), tells the other parts (alerts) what changed, and sends
  * the page to IndexNow when the website asks (E16).
  * @module
@@ -193,16 +193,19 @@ export const createCatalogProducts = (product, service, common) => {
 		by: { status: 'status', brand: 'brandId', stockState: 'stockState', featured: 'featured' },
 	});
 
+	/** Counts by a list field: a product counts under each value it holds (`none` without), its total once. */
+	const LIST_COUNTS = Object.freeze(/** @type {Record<string, string>} */ ({ grade: 'grades', category: 'categoryIds' }));
+
 	/**
-	 * Counts by `grade` group each product under every grade its active variants have (a product without one is `none`);
-	 * the other fields are the kit's (K4).
-	 * @param {any} ctx
+	 * Counts by `grade` and `category` group each product under every grade its active variants have and every category
+	 * it is in (`none` without one); the other fields are the kit's (K4).
 	 */
 	const counts = {
 		count: kitCounts.count,
 		/** @param {any} ctx */
 		counts: async (ctx) => {
-			if (ctx.query.by !== 'grade') return kitCounts.counts(ctx);
+			const field = LIST_COUNTS[String(ctx.query.by)];
+			if (!field) return kitCounts.counts(ctx);
 			const { data, inner } = await staffSource(ctx);
 			const products = data.collection(COLLECTIONS.products);
 			const filter = { websiteId: data.websiteId, $and: [inner] };
@@ -212,7 +215,11 @@ export const createCatalogProducts = (product, service, common) => {
 					.aggregate(
 						[
 							{ $match: filter },
-							{ $project: { g: { $cond: [{ $gt: [{ $size: { $ifNull: ['$grades', []] } }, 0] }, '$grades', ['none']] } } },
+							{
+								$project: {
+									g: { $cond: [{ $gt: [{ $size: { $ifNull: [`$${field}`, []] } }, 0] }, `$${field}`, ['none']] },
+								},
+							},
 							{ $unwind: '$g' },
 							{ $group: { _id: '$g', n: { $sum: 1 } } },
 							{ $sort: { n: -1, _id: 1 } },

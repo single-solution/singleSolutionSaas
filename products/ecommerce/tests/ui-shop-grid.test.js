@@ -2,7 +2,7 @@
 /* global document, window */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { STORAGE_KEYS } from '../core/widgets.js';
-import { mountProductGrid } from '../ui/product-grid.js';
+import { mountProductGrid, pageNumbers } from '../ui/product-grid.js';
 import {
 	codeOf,
 	currencyOf,
@@ -16,6 +16,7 @@ import {
 	ratingText,
 	settingsOf,
 	textsOf,
+	warrantyText,
 } from '../ui/shop-common.js';
 import {
 	COMPARE_EVENT,
@@ -25,6 +26,7 @@ import {
 	removeCompare,
 	toggleCompare,
 } from '../ui/shop-compare-store.js';
+import { activeCount, clearedFilters, emptyKnown, filterControls, flattenCategories, remember } from '../ui/shop-filters.js';
 import { savedOf } from '../ui/shop-saved.js';
 import {
 	$,
@@ -72,18 +74,51 @@ const FACETS = {
 	attributes: [
 		{
 			id: 'atr_1',
+			slug: 'storage',
 			name: 'Storage',
 			unit: 'GB',
 			type: 'number',
 			values: [
-				{ value: 128, count: 2 },
-				{ value: 256, count: 1 },
+				{ value: 128, label: '128 GB', count: 2 },
+				{ value: 256, label: '256 GB', count: 1 },
 			],
 		},
-		{ id: 'atr_2', name: 'Fast charging', unit: '', type: 'boolean', values: [{ value: true, count: 1 }] },
-		{ id: 'atr_3', name: 'Colour', unit: '', type: 'choice', values: [{ value: 'Red', count: 1 }] },
+		{
+			id: 'atr_2',
+			slug: 'fast-charging',
+			name: 'Fast charging',
+			unit: '',
+			type: 'boolean',
+			values: [{ value: true, label: 'true', count: 1 }],
+		},
+		{ id: 'atr_3', name: 'Colour', unit: '', type: 'choice', values: [{ value: 'red', label: 'Red', count: 1 }] },
 	],
 	grades: [{ key: 'a', label: 'Like new', count: 2 }],
+};
+
+/** The category tree as `GET /v1/shop/categories` answers it. */
+const TREE = {
+	items: [
+		{
+			id: 'cat_1',
+			slug: 'phones',
+			name: 'Phones',
+			status: 'active',
+			count: 3,
+			children: [{ id: 'cat_2', slug: 'android', name: 'Android', status: 'active', count: 2, children: [] }],
+		},
+		{ id: 'cat_3', slug: 'tablets', name: 'Tablets', status: 'coming_soon', count: 0, children: [] },
+		{ bad: true },
+	],
+};
+
+/** The brands as `GET /v1/shop/brands` answers them. */
+const BRANDS = {
+	items: [
+		{ id: 'brd_1', slug: 'acme', name: 'Acme', count: 3 },
+		{ id: 'brd_2', slug: 'zeta', name: 'Zeta', count: 2 },
+		{ id: 'brd_3', slug: 'empty', name: 'Empty', count: 0 },
+	],
 };
 
 /**
@@ -117,96 +152,225 @@ const listing = () => {
 	};
 };
 
+/**
+ * The checkbox of the label with this text.
+ * @param {HTMLElement} host
+ * @param {string} label
+ * @returns {any}
+ */
+const checkOf = (host, label) => {
+	const found = $$(host, '.filter-panel label.check').find((node) => node.textContent === label);
+	if (!found) throw new Error(`no check ${label}`);
+	return found.querySelector('input');
+};
+
 describe('product grid', () => {
-	it('lists products from the data attributes and loads more with the cursor', async () => {
+	it('starts from the data attributes, counts, pages and loads more with the cursor', async () => {
 		const pages = listing();
 		pages.queue.push(
 			() =>
 				ok({
-					items: [card('prd_a'), card('prd_b', { inStock: false, image: null, rating: { average: 0, count: 0 } })],
+					items: [
+						card('prd_a', {
+							priceMax: 150000,
+							featured: true,
+							cardImages: [
+								{ url: 'https://cdn.example.com/1.png', alt: 'Red' },
+								{ url: 'https://cdn.example.com/2.png', alt: '' },
+								{ url: null, alt: 'Gone' },
+								{ url: 'https://cdn.example.com/3.png', alt: 'Blue' },
+								{ url: 'https://cdn.example.com/4.png', alt: 'Green' },
+								{ url: 'https://cdn.example.com/5.png', alt: 'Gold' },
+							],
+						}),
+						card('prd_b', {
+							inStock: false,
+							image: null,
+							rating: { average: 0, count: 0 },
+							cardImages: [{ url: 'https://cdn.example.com/only.png', alt: 'Only' }],
+						}),
+					],
 					next: 'c1',
+					hasMore: true,
+					total: 5,
+					capped: false,
 					facets: FACETS,
 				}),
-			() => ok({ items: [card('prd_c', { compareAtPrice: null, grades: [] })], next: null, facets: null }),
+			() => ok({ items: [card('prd_c', { compareAtPrice: null, grades: [] })], next: 'c2', facets: null }),
+			() => ok({ items: [card('prd_e')], next: null, page: 3, facets: null }),
 		);
 		const fake = makeShop({ features: ['catalog'], routes: { 'GET /v1/shop/products': pages.route } });
-		const host = await mountGrid(fake, { category: 'phones', query: 'pixel', limit: '2' });
+		const host = await mountGrid(fake, {
+			category: 'phones',
+			query: 'pixel',
+			limit: '2',
+			brand: 'acme, brd_2',
+			grade: 'a',
+			deal: 'dl_1',
+			featured: '1',
+			sort: 'updated',
+		});
 		expect(host.getAttribute('data-ss-mounted')).toBe('product-grid');
-		expect(fake.calls[0]?.query).toEqual({ q: 'pixel', category: 'phones', sort: 'newest', limit: '2' });
+		expect(fake.all('GET /v1/shop/products')[0]?.query).toEqual({
+			q: 'pixel',
+			category: 'phones',
+			brand: 'acme,brd_2',
+			grade: 'a',
+			featured: '1',
+			deal: 'dl_1',
+			sort: 'updated',
+			limit: '2',
+			count: '1',
+		});
+		// the categories, the brands of the category; no deals while that feature is off
+		expect(fake.last('GET /v1/shop/categories')?.query).toEqual({ include: 'coming_soon' });
+		expect(fake.last('GET /v1/shop/brands')?.query).toEqual({ category: 'phones' });
+		expect(fake.all('GET /v1/shop/deals')).toHaveLength(0);
 		const page = textOf(host);
 		expect(page).toContain('Phone prd_a');
-		expect(page).toContain('PKR 1,000.00');
+		expect(page).toContain(text('shop.priceRange', { min: 'PKR 1,000.00', max: 'PKR 1,500.00' }));
 		expect(page).toContain('PKR 1,200.00');
 		expect(page).toContain(text('shop.rating', { average: '4.5', count: 2 }));
 		expect(page).toContain(text('shop.outOfStock'));
 		expect(page).toContain('Like new');
 		expect($(host, 'a.name').getAttribute('href')).toBe('https://shop.example.com/products/prd_a');
-		expect($$(host, 'li.card')).toHaveLength(2);
+		const [first, second] = $$(host, 'li.card');
+		expect(first.querySelector('.badge.accent').textContent).toBe(text('shop.featured'));
+		expect([...first.querySelectorAll('.quad img')].map((img) => img.getAttribute('alt'))).toEqual([
+			'Red',
+			'Phone prd_a',
+			'Blue',
+			'Green',
+		]);
+		expect(second.querySelector('.quad')).toBeNull();
+		expect(second.querySelector('img').getAttribute('src')).toBe('https://cdn.example.com/only.png');
+		expect(second.querySelector('.badge.accent')).toBeNull();
 		// no wishlist or compare toggles while those features are off
 		expect($$(host, '[data-wish], [data-compare]')).toHaveLength(0);
+		// the footer: how many, page numbers and Load more
+		const summary = () => $(host, '.foot .meta').textContent;
+		expect(summary()).toBe(`${text('grid.showing', { from: 1, to: 2 })} · ${text('grid.total', { count: 5 })}`);
+		const numbers = () => $$(host, '.pages button').map((b) => b.textContent);
+		expect(numbers()).toEqual([text('grid.prevPage'), '1', '2', '3', text('grid.nextPage')]);
+		expect($(host, '.pages [aria-current="page"]').textContent).toBe('1');
+		expect(buttonOf(host, text('grid.prevPage')).disabled).toBe(true);
 		await click(buttonOf(host, text('grid.more')));
-		expect(fake.calls[1]?.query.cursor).toBe('c1');
+		expect(fake.all('GET /v1/shop/products')[1]?.query.cursor).toBe('c1');
+		expect(fake.all('GET /v1/shop/products')[1]?.query.count).toBeUndefined();
 		expect($$(host, 'li.card')).toHaveLength(3);
+		expect(summary()).toBe(`${text('grid.showing', { from: 1, to: 3 })} · ${text('grid.total', { count: 5 })}`);
+		expect($(host, '.pages [aria-current="page"]').textContent).toBe('2');
+		await click(buttonOf(host, text('grid.pageLabel', { n: 3 })));
+		const third = fake.all('GET /v1/shop/products')[2]?.query;
+		expect(third?.page).toBe('3');
+		expect(third?.cursor).toBeUndefined();
+		expect(third?.count).toBeUndefined();
+		expect($$(host, 'li.card')).toHaveLength(1);
+		expect(summary()).toBe(`${text('grid.showing', { from: 5, to: 5 })} · ${text('grid.total', { count: 5 })}`);
+		expect(buttonOf(host, text('grid.nextPage')).disabled).toBe(true);
 		expect(buttonOf(host, text('grid.more')).hidden).toBe(true);
+		// the facets of the first page stay while other pages are shown
+		expect($(host, '#ss-grid-category')).not.toBeNull();
 	});
 
-	it('filters by facets, price, stock, attributes and grade, sorts and searches', async () => {
+	it('filters by category, several brands, grades and attribute values, price, stock, featured and deal', async () => {
 		/** @type {any[]} */
 		const asked = [];
 		const fake = makeShop({
-			features: ['catalog'],
+			features: ['catalog', 'deals'],
 			routes: {
 				'GET /v1/shop/products': (call) => {
 					asked.push(call.query);
-					return ok({ items: [card('prd_a')], next: null, facets: FACETS });
+					return ok({ items: [card('prd_a')], next: null, total: 1, facets: FACETS });
 				},
+				'GET /v1/shop/categories': () => ok(TREE),
+				'GET /v1/shop/brands': () => ok(BRANDS),
+				'GET /v1/shop/deals': () => ok({ items: [{ id: 'dl_1', name: 'Autumn sale' }] }),
 			},
 		});
 		const host = await mountGrid(fake, {}, { catalog: { pageSize: 12 } });
-		expect(asked[0]).toEqual({ sort: 'newest', limit: '12' });
-		const selects = () => $$(host, 'details select');
-		await setValue(selects()[0], 'phones');
-		expect(asked.at(-1).category).toBe('phones');
-		await setValue(selects()[1], 'acme');
+		expect(asked[0]).toEqual({ sort: 'newest', limit: '12', count: '1' });
+		expect(fake.last('GET /v1/shop/brands')?.query).toEqual({});
+		expect(fake.last('GET /v1/shop/deals')?.query).toEqual({ limit: '50' });
+		// the filters open behind their button where the widget is narrow
+		const toggle = buttonOf(host, text('grid.filters'));
+		expect(toggle.getAttribute('aria-expanded')).toBe('false');
+		expect($(host, '.filter-panel').hasAttribute('data-open')).toBe(false);
+		await click(toggle);
+		expect(toggle.getAttribute('aria-expanded')).toBe('true');
+		expect($(host, '.filter-panel').hasAttribute('data-open')).toBe(true);
+		// the category tree: counts from the facets, a child indented, coming soon not to be chosen
+		const category = $(host, '#ss-grid-category');
+		const options = [...category.options].map((/** @type {any} */ o) => [o.value, o.textContent, o.disabled]);
+		expect(options).toEqual([
+			['', text('grid.allCategories'), false],
+			['phones', text('grid.facetValue', { value: 'Phones', count: 3 }), false],
+			['android', ' Android', false],
+			['tablets', text('grid.comingSoonOption', { name: 'Tablets' }), true],
+		]);
+		await setValue(category, 'android');
+		expect(asked.at(-1).category).toBe('android');
+		expect(fake.last('GET /v1/shop/brands')?.query).toEqual({ category: 'android' });
+		// brands of the category (a brand without products is left out), counts from the facets
+		expect(textOf(host)).not.toContain('Empty');
+		await setValue(checkOf(host, text('grid.facetValue', { value: 'Acme', count: 3 })), true);
 		expect(asked.at(-1).brand).toBe('acme');
-		expect($(host, 'details').hasAttribute('open')).toBe(true);
-		const prices = $$(host, 'details input[inputmode="decimal"]');
-		expect(prices[0].placeholder).toBe('500.00');
-		await setValue(prices[0], '500');
+		await setValue(checkOf(host, 'Zeta'), true);
+		expect(asked.at(-1).brand).toBe('acme,zeta');
+		await setValue(checkOf(host, text('grid.facetValue', { value: 'Acme', count: 3 })), false);
+		expect(asked.at(-1).brand).toBe('zeta');
+		expect(toggle.textContent).toBe(text('grid.filtersCount', { count: 2 }));
+		// prices
+		const prices = () => $$(host, '.filter-panel input[inputmode="decimal"]');
+		expect(prices()[0].placeholder).toBe('500.00');
+		await setValue(prices()[0], '500');
 		expect(asked.at(-1).minPrice).toBe('50000');
 		const count = asked.length;
-		await setValue($$(host, 'details input[inputmode="decimal"]')[1], 'abc');
+		await setValue(prices()[1], 'abc');
 		expect(asked).toHaveLength(count);
 		expect($(host, '[role="status"]').textContent).toBe(text('grid.priceInvalid'));
 		await submit($(host, 'form'));
 		expect(asked).toHaveLength(count);
-		await setValue($$(host, 'details input[inputmode="decimal"]')[1], '1500.5');
+		await setValue(prices()[1], '1500.5');
 		expect(asked.at(-1).maxPrice).toBe('150050');
-		const boxes = () => $$(host, 'details input[type="checkbox"]');
-		await setValue(boxes()[0], true);
-		expect(asked.at(-1).inStock).toBe('true');
-		await setValue(boxes()[1], true);
-		expect(asked.at(-1)['attr.atr_1']).toBe('128');
-		await setValue(boxes()[2], true);
-		expect(asked.at(-1)['attr.atr_1']).toBe('128,256');
-		await setValue(boxes()[1], false);
-		expect(asked.at(-1)['attr.atr_1']).toBe('256');
-		expect(textOf(host)).toContain(text('grid.facetValue', { value: text('shop.yes'), count: 1 }));
-		expect(textOf(host)).toContain(text('grid.facetValue', { value: '128 GB', count: 2 }));
-		expect(textOf(host)).toContain(text('grid.facetValue', { value: 'Red', count: 1 }));
-		await setValue(selects()[2], 'a');
+		// grades and attribute values by slug, several at once
+		await setValue(checkOf(host, text('grid.facetValue', { value: 'Like new', count: 2 })), true);
 		expect(asked.at(-1).grade).toBe('a');
-		await setValue($(host, '#ss-grid-sort'), 'price_asc');
-		expect(asked.at(-1).sort).toBe('price_asc');
+		await setValue(checkOf(host, text('grid.facetValue', { value: '128 GB', count: 2 })), true);
+		expect(asked.at(-1)['attr.storage']).toBe('128');
+		await setValue(checkOf(host, text('grid.facetValue', { value: '256 GB', count: 1 })), true);
+		expect(asked.at(-1)['attr.storage']).toBe('128,256');
+		await setValue(checkOf(host, text('grid.facetValue', { value: '128 GB', count: 2 })), false);
+		expect(asked.at(-1)['attr.storage']).toBe('256');
+		expect(textOf(host)).toContain(text('grid.facetValue', { value: text('shop.yes'), count: 1 }));
+		await setValue(checkOf(host, text('grid.facetValue', { value: 'Red', count: 1 })), true);
+		expect(asked.at(-1)['attr.atr_3']).toBe('red');
+		// in stock, featured, a deal
+		await setValue(checkOf(host, text('grid.inStock')), true);
+		expect(asked.at(-1).inStock).toBe('true');
+		await setValue(checkOf(host, text('grid.featured')), true);
+		expect(asked.at(-1).featured).toBe('1');
+		const deal = $(host, '#ss-grid-deal');
+		expect([...deal.options].map((/** @type {any} */ o) => o.textContent)).toEqual([text('grid.anyDeal'), 'Autumn sale']);
+		await setValue(deal, 'dl_1');
+		expect(asked.at(-1).deal).toBe('dl_1');
+		// sorts include recently updated and fewest sold
+		const sorts = [...$(host, '#ss-grid-sort').options].map((/** @type {any} */ o) => o.value);
+		expect(sorts).toContain('updated');
+		expect(sorts).toContain('sold_asc');
+		await setValue($(host, '#ss-grid-sort'), 'sold_asc');
+		expect(asked.at(-1).sort).toBe('sold_asc');
 		$(host, 'input[type="search"]').value = ' phone ';
 		await submit($(host, 'form'));
 		expect(asked.at(-1).q).toBe('phone');
+		expect(asked.at(-1).count).toBe('1');
 		await click(buttonOf(host, text('grid.clearFilters')));
-		expect(asked.at(-1)).toEqual({ q: 'phone', sort: 'price_asc', limit: '12' });
-		expect($(host, 'details').hasAttribute('open')).toBe(false);
+		expect(asked.at(-1)).toEqual({ q: 'phone', sort: 'sold_asc', limit: '12', count: '1' });
+		expect(fake.last('GET /v1/shop/brands')?.query).toEqual({});
+		expect(toggle.textContent).toBe(text('grid.filters'));
 	});
 
-	it('keeps a chosen category or brand the facets no longer list, and shows no filters without facets', async () => {
+	it('keeps chosen values the facets no longer list, and shows no filters without facets', async () => {
 		const pages = listing();
 		pages.queue.push(() =>
 			ok({
@@ -216,11 +380,20 @@ describe('product grid', () => {
 			}),
 		);
 		const fake = makeShop({ features: ['catalog'], routes: { 'GET /v1/shop/products': pages.route } });
-		const host = await mountGrid(fake, { category: 'cat_9', brand: 'brd_9' });
-		const selects = $$(host, 'details select');
-		expect(selects[0].value).toBe('cat_9');
-		expect(selects[1].value).toBe('brd_9');
-		expect($$(host, 'details input[inputmode="decimal"]')).toHaveLength(0);
+		const host = await mountGrid(
+			fake,
+			{ category: 'cat_9', brand: 'brd_9', grade: 'z' },
+			{ catalog: { grades: { a: 'Like new' } } },
+		);
+		expect($(host, '#ss-grid-category').value).toBe('cat_9');
+		expect(checkOf(host, 'brd_9').checked).toBe(true);
+		expect(checkOf(host, 'z').checked).toBe(true);
+		// the website's grades are offered before any facet names them
+		expect(checkOf(host, 'Like new').checked).toBe(false);
+		expect($$(host, '.filter-panel input[inputmode="decimal"]')).toHaveLength(0);
+		// a choice made before the panel opens it
+		expect($(host, '.filter-panel').hasAttribute('data-open')).toBe(true);
+		expect($(host, '.foot .meta').textContent).toBe('');
 
 		resetPage();
 		const empty = makeShop({
@@ -228,7 +401,81 @@ describe('product grid', () => {
 			routes: { 'GET /v1/shop/products': () => ok({ items: [card('prd_a')], next: null, facets: null }) },
 		});
 		const bare = await mountGrid(empty);
-		expect($(bare, 'details')).toBeNull();
+		expect($(bare, '.filter-panel').hidden).toBe(true);
+		expect(buttonOf(bare, text('grid.filters')).hidden).toBe(true);
+		expect($(bare, '.pages').children).toHaveLength(0);
+	});
+
+	it('says a coming-soon category is coming soon, and pages with gaps up to a capped total', async () => {
+		const fake = makeShop({
+			features: ['catalog'],
+			routes: {
+				'GET /v1/shop/products': (call) =>
+					call.query.category === 'tablets'
+						? ok({ items: [], next: null, total: 0, facets: null })
+						: ok({ items: [card('prd_a'), card('prd_b')], next: 'c', total: 10000, capped: true, facets: FACETS }),
+				'GET /v1/shop/categories': () => ok(TREE),
+				'GET /v1/shop/brands': () => fail(500, 'internal_error'),
+			},
+		});
+		const host = await mountGrid(fake, { category: 'tablets', limit: '2' });
+		expect($(host, '[role="status"]').textContent).toBe(text('grid.comingSoon', { name: 'Tablets' }));
+		// the chosen coming-soon category stays shown
+		expect([...$(host, '#ss-grid-category').options].find((/** @type {any} */ o) => o.value === 'tablets').disabled).toBe(
+			false,
+		);
+		await setValue($(host, '#ss-grid-category'), '');
+		expect($(host, '.foot .meta').textContent).toContain(text('grid.totalCapped', { count: 10000 }));
+		expect($$(host, '.pages button').map((b) => b.textContent)).toEqual([
+			text('grid.prevPage'),
+			'1',
+			'2',
+			'500',
+			text('grid.nextPage'),
+		]);
+		expect($$(host, '.pages .gap')).toHaveLength(1);
+		await click(buttonOf(host, text('grid.nextPage')));
+		expect(fake.last('GET /v1/shop/products')?.query.page).toBe('2');
+		await click(buttonOf(host, text('grid.prevPage')));
+		expect(fake.last('GET /v1/shop/products')?.query.page).toBe('1');
+		expect(pageNumbers(1, 1)).toEqual([1]);
+		expect(pageNumbers(5, 9)).toEqual([1, 0, 4, 5, 6, 0, 9]);
+		expect(pageNumbers(2, 3)).toEqual([1, 2, 3]);
+	});
+
+	it('shows the first values of a long list and the rest with Show all', async () => {
+		const many = Array.from({ length: 12 }, (_, i) => ({ id: `brd_${i}`, slug: `b${i}`, name: `Brand ${i}`, count: 1 }));
+		/** @type {any[]} */
+		const asked = [];
+		const fake = makeShop({
+			features: ['catalog'],
+			routes: {
+				'GET /v1/shop/products': (call) => {
+					asked.push(call.query);
+					return ok({ items: [card('prd_a')], next: null, facets: { ...FACETS, brands: [] } });
+				},
+				'GET /v1/shop/brands': () => ok({ items: many }),
+				'GET /v1/shop/categories': () => fail(500, 'internal_error'),
+			},
+		});
+		const host = await mountGrid(fake, { brand: 'b11' });
+		const brands = () => $$(host, '.filter-panel fieldset')[0].querySelectorAll('label.check');
+		// eight first, and the chosen one
+		expect(brands()).toHaveLength(9);
+		expect(checkOf(host, 'Brand 11').checked).toBe(true);
+		await click(buttonOf(host, text('grid.showAll', { count: 12 })));
+		expect(brands()).toHaveLength(12);
+		expect(buttonOf(host, text('grid.showFewer')).getAttribute('aria-expanded')).toBe('true');
+		await click(buttonOf(host, text('grid.showFewer')));
+		expect(brands()).toHaveLength(9);
+		// the category select falls back to the facets when the tree cannot be read
+		expect([...$(host, '#ss-grid-category').options].map((/** @type {any} */ o) => o.value)).toEqual(['', 'phones']);
+		// a new search forgets the attribute values seen before
+		expect(textOf(host)).toContain('Storage');
+		const before = asked.length;
+		$(host, 'input[type="search"]').value = 'x';
+		await submit($(host, 'form'));
+		expect(asked).toHaveLength(before + 1);
 	});
 
 	it('shows the empty and error states', async () => {
@@ -474,6 +721,97 @@ describe('shared helpers', () => {
 		keepFocus(box, render);
 		expect(host.shadowRoot?.activeElement).toBeNull();
 		expect(COMPARE_EVENT).toBe('ss-ecommerce:compare');
+	});
+
+	it('reads the catalog and checkout settings and words warranties', () => {
+		const settings = settingsOf(
+			configOf([], {
+				catalog: {
+					pageSize: 100,
+					lowStockShown: 3,
+					grades: [{ key: 'a', label: 'Like new' }, { key: 'b' }, { label: 'x' }, null],
+				},
+				checkout: { policyFormat: 'html' },
+			}),
+		);
+		expect(settings.catalog).toEqual({
+			pageSize: 60,
+			lowStockShown: 3,
+			grades: [
+				{ key: 'a', label: 'Like new' },
+				{ key: 'b', label: 'b' },
+			],
+		});
+		expect(settings.checkout.policyFormat).toBe('html');
+		expect(settingsOf(configOf([], { catalog: { grades: 'a' } })).catalog.grades).toEqual([]);
+		expect(settingsOf(configOf([])).checkout.policyFormat).toBe('text');
+		const t = textsOf(configOf([]));
+		expect(warrantyText(t, null)).toBe('');
+		expect(warrantyText(t, 0)).toBe('');
+		expect(warrantyText(t, 1.5)).toBe('');
+		expect(warrantyText(t, 60)).toBe(text('shop.warrantyMonths', { months: 2 }));
+		expect(warrantyText(t, 7)).toBe(text('shop.warrantyDays', { days: 7 }));
+	});
+
+	it('reads sparse categories and facets, and keeps a chosen attribute the facets no longer know', () => {
+		expect(flattenCategories(null)).toEqual([]);
+		expect(flattenCategories([{ id: 'cat_1' }, { id: 'cat_2', slug: 'b' }])).toEqual([
+			{ id: 'cat_1', slug: 'cat_1', name: 'cat_1', depth: 0, status: 'active' },
+			{ id: 'cat_2', slug: 'b', name: 'b', depth: 0, status: 'active' },
+		]);
+		const known = emptyKnown();
+		remember(known, null);
+		remember(known, {
+			attributes: [
+				{ id: 'atr_1', name: 'Size', type: 'text' },
+				{ id: 'atr_2', name: 'Fit', type: 'text', values: [{ value: 'slim' }] },
+			],
+		});
+		expect(known.attributes.get('atr_1')?.unit).toBe('');
+		expect([...(known.attributes.get('atr_2')?.values ?? [])]).toEqual([['slim', 'slim']]);
+		const t = textsOf(configOf([]));
+		/** @type {any[]} */
+		const changes = [];
+		const parts = filterControls({
+			doc: document,
+			t,
+			filters: {
+				q: '',
+				category: '',
+				brands: [],
+				grades: [],
+				attributes: new Map([['gone', ['x']]]),
+				minPrice: '5',
+				maxPrice: '',
+				inStock: false,
+				featured: false,
+				deal: 'dl_9',
+				sort: 'newest',
+			},
+			facets: { attributes: [{ id: 'atr_2', name: 'Fit', type: 'text' }] },
+			known,
+			currency: 'PKR',
+			expanded: new Set(),
+			onChange: (event, patch) => changes.push([event, patch]),
+		});
+		const text = parts.map((part) => part.textContent).join('|');
+		expect(text).toContain('gone');
+		expect(text).toContain('slim');
+		const deal = /** @type {HTMLSelectElement} */ (
+			parts.find((part) => part.querySelector('#ss-grid-deal'))?.querySelector('select')
+		);
+		expect(deal.value).toBe('dl_9');
+		const price = /** @type {HTMLInputElement} */ (
+			parts.find((part) => part.querySelector('#ss-grid-min'))?.querySelector('#ss-grid-min')
+		);
+		expect(price.placeholder).toBe('');
+		const gone = /** @type {HTMLInputElement} */ (
+			parts.find((part) => part.textContent?.startsWith('gone'))?.querySelector('input')
+		);
+		gone.checked = false;
+		gone.dispatchEvent(new window.Event('change'));
+		expect(changes.at(-1)).toEqual(['load', { attributes: new Map([['gone', []]]) }]);
+		expect(activeCount(/** @type {any} */ ({ ...clearedFilters(), q: '', sort: 'newest' }))).toBe(0);
 	});
 
 	it('shares one wishlist per shop and reads it again after a new sign-in', async () => {

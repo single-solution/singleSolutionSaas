@@ -2,8 +2,9 @@
  * Helpers the shopper widgets share (PLAN 0.8.8 Shopper widgets): widget texts with `{placeholders}` (every word is a
  * text the merchant can edit), the settings with defaults, money and dates (by the website's Format and business time
  * zone from the widget config, and the viewer's language and time zone; PLAN 0.8.10 K7), elements (text is always set
- * as text, never as HTML), problem codes of answers, the sign-in hint, product cards, the mount with the shop's CSS
- * and the dispatch of Growth's browser events (`../core/growth-events.js`).
+ * as text, never as HTML), rich text rebuilt from a parsed copy with only the allowed tags (E3), problem codes of
+ * answers, the sign-in hint, product cards (price ranges, Featured, a 2×2 grid of variant photos; E2, E6, E8), warranty
+ * texts (E12), the mount with the shop's CSS and the dispatch of Growth's browser events (`../core/growth-events.js`).
  * @module
  */
 import { DEFAULT_FORMAT, formatDate, formatMoney, formatText, mountWidget, viewerOf } from '@ss/app-kit/widget';
@@ -28,6 +29,26 @@ export const textsOf =
 	(key, values = {}) =>
 		formatText(config.texts[key] ?? key, values);
 
+/** Most products a listing gives at once (E8). */
+export const MAX_PAGE_SIZE = 60;
+
+/**
+ * The grades the widget config names (`settings.catalog.grades` while grades_serials is on): a list of `{ key, label }`
+ * or labels by key; anything else is left out.
+ * @param {unknown} value
+ * @returns {Array<{ key: string, label: string }>}
+ */
+const gradesOf = (value) => {
+	const entries = Array.isArray(value)
+		? value.map((entry) => [entry?.key, entry?.label ?? entry?.key])
+		: value && typeof value === 'object'
+			? Object.entries(value)
+			: [];
+	return entries.flatMap(([key, label]) =>
+		typeof key === 'string' && key && typeof label === 'string' ? [{ key, label: label || key }] : [],
+	);
+};
+
 /**
  * The settings the shopper widgets read (each part's `widgetSettings`), with defaults while a part is off.
  * @param {WidgetConfig} config
@@ -35,9 +56,15 @@ export const textsOf =
 export const settingsOf = (config) => {
 	const raw = /** @type {Record<string, any>} */ (config.settings ?? {});
 	const checkout = raw.checkout ?? {};
+	const catalog = raw.catalog ?? {};
 	return {
 		currency: isCurrency(raw.currency) ? raw.currency : '',
-		catalog: { pageSize: Number(raw.catalog?.pageSize) || 24 },
+		catalog: {
+			pageSize: Math.min(MAX_PAGE_SIZE, Number(catalog.pageSize) || 24),
+			/** what shoppers are told of stock (E9): the page says "Only N left" up to this many, else "N in stock" */
+			lowStockShown: Number(catalog.lowStockShown) || 5,
+			grades: gradesOf(catalog.grades),
+		},
 		checkout: {
 			paymentMethods: /** @type {string[]} */ (Array.isArray(checkout.paymentMethods) ? checkout.paymentMethods : []),
 			pickupLocations: /** @type {Array<{ id: string, name: string }>} */ (
@@ -45,6 +72,8 @@ export const settingsOf = (config) => {
 			),
 			cities: /** @type {string[]} */ (Array.isArray(checkout.delivery?.cities) ? checkout.delivery.cities : []),
 			policies: /** @type {Record<string, string>} */ (checkout.policies ?? {}),
+			/** policies are HTML (cleaned by the server) or plain text (E3) */
+			policyFormat: checkout.policyFormat === 'html' ? 'html' : 'text',
 			coupons: checkout.coupons === true,
 			loyalty: checkout.loyalty === true,
 			address: {
@@ -224,18 +253,21 @@ export const keepFocus = (root, renderFn) => {
 };
 
 /**
- * A price with the "was" price beside it when it is higher.
+ * A price with the "was" price beside it when it is higher; a range ("from – to") when the highest price is higher
+ * (E8).
  * @param {Document} doc
  * @param {Texts} t
  * @param {Formats} formats
- * @param {{ price: number, was?: number | null, currency: string, big?: boolean }} input
+ * @param {{ price: number, max?: number | null, was?: number | null, currency: string, big?: boolean }} input
  */
-export const priceNode = (doc, t, { money }, { price, was = null, currency, big = false }) =>
+export const priceNode = (doc, t, { money }, { price, max = null, was = null, currency, big = false }) =>
 	h(
 		doc,
 		'p',
 		{ class: big ? 'price big' : 'price' },
-		money(price, currency),
+		max !== null && max > price
+			? t('shop.priceRange', { min: money(price, currency), max: money(max, currency) })
+			: money(price, currency),
 		was !== null && was > price
 			? h(doc, 'span', { class: 'was' }, h(doc, 'span', { class: 'sr-only' }, t('shop.wasLabel')), money(was, currency))
 			: null,
@@ -250,11 +282,124 @@ export const ratingText = (t, rating) =>
 	rating && rating.count > 0 ? t('shop.rating', { average: Number(rating.average).toFixed(1), count: rating.count }) : '';
 
 /**
- * A product card (grid, wishlist): image, name linking to the product page, brand, price, rating, grades, stock.
+ * The warranty of an item as shoppers read it (E12): whole months when the days are a multiple of 30, else days; ''
+ * without a warranty.
+ * @param {Texts} t
+ * @param {unknown} days
+ */
+export const warrantyText = (t, days) => {
+	const n = Number(days);
+	if (days === null || !Number.isSafeInteger(n) || n <= 0) return '';
+	return n % 30 === 0 ? t('shop.warrantyMonths', { months: n / 30 }) : t('shop.warrantyDays', { days: n });
+};
+
+// ------------------------------------------------------------------------------------------------ rich text (E3)
+
+/** The tags rich text may hold (the server cleans to these; the widget rebuilds only these). */
+const RICH_TAGS = new Set(['p', 'br', 'strong', 'em', 'u', 'ul', 'ol', 'li', 'h3', 'h4', 'blockquote', 'a']);
+/** Equivalent tags folded into the allowed ones. @type {Record<string, string>} */
+const RICH_SYNONYMS = { b: 'strong', i: 'em' };
+/** Elements left out with everything inside them (any other unknown element keeps only its text). */
+const RICH_DROPPED = new Set([
+	'script',
+	'style',
+	'iframe',
+	'object',
+	'embed',
+	'template',
+	'noscript',
+	'svg',
+	'math',
+	'textarea',
+	'select',
+	'button',
+	'form',
+	'img',
+	'video',
+	'audio',
+	'picture',
+	'head',
+	'title',
+]);
+
+/**
+ * A link address rich text may keep: an https address (without a user name) or a path on the website (`/…`, never
+ * `//…` or `/\…`); '' otherwise.
+ * @param {string | null} value
+ */
+export const safeHref = (value) => {
+	const raw = (value ?? '').trim();
+	if (/^\/(?![/\\])[^\s\\]*$/.test(raw)) return raw;
+	try {
+		const url = new URL(raw);
+		return url.protocol === 'https:' && !url.username && !url.password ? url.href : '';
+	} catch {
+		return '';
+	}
+};
+
+/**
+ * Rich text (a product's `descriptionHtml`, an HTML policy) as nodes of `doc`: the HTML is parsed in an inert
+ * document (nothing loads or runs) and only the allowed elements are built again, with the `href` of links when it is
+ * safe; text is copied as text. The string itself is never inserted.
+ * @param {Document} doc
+ * @param {unknown} html
+ * @returns {DocumentFragment}
+ */
+export const richText = (doc, html) => {
+	const out = doc.createDocumentFragment();
+	if (typeof html !== 'string' || !html.trim()) return out;
+	const template = doc.implementation.createHTMLDocument('').createElement('template');
+	template.innerHTML = html;
+	/** @param {Node} from @param {Node} to */
+	const copy = (from, to) => {
+		for (const node of from.childNodes) {
+			if (node.nodeType === 3) to.appendChild(doc.createTextNode(node.nodeValue ?? ''));
+			if (node.nodeType !== 1) continue;
+			const lower = /** @type {Element} */ (node).localName.toLowerCase();
+			if (RICH_DROPPED.has(lower)) continue;
+			const name = RICH_SYNONYMS[lower] ?? lower;
+			if (!RICH_TAGS.has(name)) {
+				copy(node, to);
+				continue;
+			}
+			const made = doc.createElement(name);
+			if (name === 'a') {
+				const href = safeHref(/** @type {Element} */ (node).getAttribute('href'));
+				if (href) made.setAttribute('href', href);
+				if (href.startsWith('https://')) made.setAttribute('rel', 'noopener');
+			}
+			if (name !== 'br') copy(node, made);
+			to.appendChild(made);
+		}
+	};
+	copy(template.content, out);
+	return out;
+};
+
+/**
+ * Plain text as paragraphs (split at blank lines).
+ * @param {Document} doc
+ * @param {unknown} text
+ * @returns {HTMLElement[]}
+ */
+export const paragraphs = (doc, text) =>
+	String(text ?? '')
+		.split(/\n\s*\n/)
+		.map((part) => part.trim())
+		.filter(Boolean)
+		.map((part) => h(doc, 'p', {}, part));
+
+// -------------------------------------------------------------------------------------------------------- cards
+
+/**
+ * A product card (grid, wishlist): the picture (a 2×2 grid of the variants' first photos when there are several, E6),
+ * name linking to the product page, Featured (E2), brand, price or price range (E8), rating, grades, stock.
  * @param {Document} doc
  * @param {Texts} t
  * @param {Formats} formats
  * @param {{ id: string, name: string, url: string, image: string | null, price: number, compareAtPrice?: number | null,
+ *   priceMax?: number | null, featured?: boolean, cardImages?: Array<{ url: string | null, alt: string }>,
  *   currency: string, inStock: boolean, rating?: { average: number, count: number }, brand?: { name: string } | string | null,
  *   grades?: string[] }} card
  * @param {Child[]} [actions]
@@ -262,17 +407,41 @@ export const ratingText = (t, rating) =>
 export const productCard = (doc, t, formats, card, actions = []) => {
 	const brand = typeof card.brand === 'string' ? card.brand : (card.brand?.name ?? '');
 	const rating = ratingText(t, card.rating);
+	const photos = (card.cardImages ?? []).filter((photo) => typeof photo?.url === 'string' && photo.url);
+	const image = card.image ?? photos[0]?.url ?? null;
+	const picture =
+		photos.length > 1
+			? h(
+					doc,
+					'span',
+					{ class: 'quad' },
+					...photos
+						.slice(0, 4)
+						.map((photo) => h(doc, 'img', { src: String(photo.url), alt: photo.alt || card.name, loading: 'lazy' })),
+				)
+			: image
+				? h(doc, 'img', { src: image, alt: card.name, loading: 'lazy' })
+				: null;
+	const tags = [
+		card.featured ? h(doc, 'span', { class: 'badge accent' }, t('shop.featured')) : null,
+		card.inStock ? null : h(doc, 'span', { class: 'badge danger' }, t('shop.outOfStock')),
+	].filter(Boolean);
 	return h(
 		doc,
 		'li',
 		{ class: 'card', 'data-product': card.id },
-		card.image ? h(doc, 'img', { src: card.image, alt: card.name, loading: 'lazy' }) : null,
+		picture ? h(doc, 'a', { class: 'pic', href: card.url, tabindex: '-1', 'aria-hidden': 'true' }, picture) : null,
+		tags.length > 0 ? h(doc, 'span', { class: 'tags' }, ...tags) : null,
 		h(doc, 'a', { class: 'name', href: card.url }, card.name),
 		brand ? h(doc, 'span', { class: 'meta' }, brand) : null,
-		priceNode(doc, t, formats, { price: card.price, was: card.compareAtPrice ?? null, currency: card.currency }),
+		priceNode(doc, t, formats, {
+			price: card.price,
+			max: card.priceMax ?? null,
+			was: card.compareAtPrice ?? null,
+			currency: card.currency,
+		}),
 		rating ? h(doc, 'span', { class: 'meta' }, rating) : null,
 		card.grades && card.grades.length > 0 ? h(doc, 'span', { class: 'meta' }, card.grades.join(' · ')) : null,
-		card.inStock ? null : h(doc, 'span', { class: 'badge danger' }, t('shop.outOfStock')),
 		actions.some(Boolean) ? h(doc, 'div', { class: 'actions' }, ...actions) : null,
 	);
 };

@@ -19,6 +19,22 @@ import {
 	textOf,
 	type,
 } from './ui-admin-helpers.js';
+import {
+	chipCount,
+	chipOf,
+	confirmDialog,
+	detailOf,
+	dialogOf,
+	dialogStatus,
+	hasDialog,
+	listCount,
+	menuEntries,
+	openRow,
+	pickMenu,
+	rowOf,
+	rowsOf,
+	submitDialog,
+} from './ui-admin-screens.js';
 
 beforeEach(resetPage);
 afterEach(resetPage);
@@ -38,29 +54,29 @@ const customer = (over = {}) => ({
 	totalSpent: 500000,
 	totalSpentText: 'PKR 5,000.00',
 	ordersPlaced: 3,
+	createdAt: AT,
+	updatedAt: AT,
 	...over,
 });
 
 /** @param {Record<string, any>} [routes] @param {string[]} [features] */
-const start = (routes = {}, features = ['checkout', 'reviews', 'reports', 'csv']) =>
+const start = (routes = {}, features = ['checkout', 'reviews', 'reports', 'csv', 'returns']) =>
 	mountWith(mountCustomersAdmin, {
 		features,
+		settings: { orders: { statuses: [{ key: 'delivered', label: 'Delivered' }] } },
 		routes: {
 			'GET /v1/admin/customers': () =>
 				answer(200, {
-					items: [customer(), customer({ userId: 'u2', name: '', email: '', blocked: true, rtoCount: 0, phone: '' })],
+					items: [
+						customer(),
+						customer({ userId: 'u2', name: '', email: '', blocked: true, rtoCount: 0, phone: '', createdAt: null }),
+						customer({ userId: 'u3', name: 'Bo', rtoCount: 0 }),
+					],
 					nextCursor: null,
 					hasMore: false,
 				}),
-			...routes,
-		},
-	});
-
-describe('customers admin: customers', () => {
-	it('lists, filters and manages customers', async () => {
-		/** @type {any[]} */
-		const patches = [];
-		const { host, root, server } = await start({
+			'GET /v1/admin/customers/count': () => answer(200, { count: 3, capped: false }),
+			'GET /v1/admin/customers/counts': () => answer(200, { total: 3, groups: { true: 1, false: 1, none: 1 } }),
 			'GET /v1/admin/customers/u1': () =>
 				answer(200, {
 					...customer(),
@@ -69,119 +85,238 @@ describe('customers admin: customers', () => {
 					],
 				}),
 			'GET /v1/admin/customers/u2': () => problem(404, 'There is no such customer.'),
+			'GET /v1/admin/returns': () =>
+				answer(200, {
+					items: [{ id: 'ret_1', reference: 'R-1', orderNumber: 'SO-1', kind: 'warranty', status: 'requested' }],
+					nextCursor: null,
+					hasMore: false,
+				}),
+			...routes,
+		},
+	});
+
+describe('customers admin: customers', () => {
+	it('lists customers with counts and filters them', async () => {
+		const { host, root, server } = await start();
+		expect(host.getAttribute('data-ss-mounted')).toBe('customers-admin');
+		const panel = panelOf(root, 'customers');
+		expect(textOf(rowOf(panel, 'u1'))).toContain('ana@example.com · 0300 · 3 orders · 2 parcels returned');
+		expect(textOf(rowOf(panel, 'u1'))).toContain('PKR 5,000.00');
+		expect(rowOf(panel, 'u1').querySelector('.dot.warning')).not.toBeNull();
+		expect(rowOf(panel, 'u2').querySelector('.dot.danger')).not.toBeNull();
+		expect(rowOf(panel, 'u3').querySelector('.dot.neutral')?.getAttribute('aria-label')).toBe('Can order');
+		expect(textOf(rowOf(panel, 'u2'))).toContain('u2');
+		expect(listCount(panel)).toBe('3');
+		expect(chipCount(panel, 'true')).toBe('1');
+		expect(chipCount(panel, 'false')).toBe('2');
+		type(fieldIn(panel, 'Search'), 'ana');
+		await submit(fieldIn(panel, 'Search'));
+		await click(chipOf(panel, 'true'));
+		expect(Object.fromEntries(server.last('GET /v1/admin/customers')?.url.searchParams ?? [])).toEqual({
+			q: 'ana',
+			blocked: 'true',
+		});
+		expect(Object.fromEntries(server.last('GET /v1/admin/customers/counts')?.url.searchParams ?? [])).toEqual({
+			q: 'ana',
+			by: 'blocked',
+		});
+		server.routes['GET /v1/admin/customers/counts'] = () => problem(403, 'no');
+		await click(chipOf(panel, 'false'));
+		expect(chipCount(panel, 'true')).toBe('');
+		await openRow(panel, 'u2');
+		expect(statuses(detailOf(panel))).toContain('There is no such customer.');
+	});
+
+	it('shows a customer and blocks, unblocks, notes and resets them', async () => {
+		/** @type {any[]} */
+		const patches = [];
+		const { root, server } = await start({
 			'PATCH /v1/admin/customers/u1': (/** @type {any} */ call) => {
 				patches.push(call.body);
 				if (call.body.blocked === true && !call.body.blockedReason) return problem(422, 'Give the reason for blocking.');
+				if (call.body.blocked === false && patches.length === 3) return problem(500, 'Down.');
 				const blocked = call.body.blocked ?? false;
 				return answer(200, {
 					...customer({
 						blocked,
 						blockedReason: blocked ? call.body.blockedReason : '',
 						rtoCount: call.body.resetRto ? 0 : 2,
+						note: call.body.note ?? '',
 					}),
 					recentOrders: [],
 				});
 			},
 		});
-		expect(host.getAttribute('data-ss-mounted')).toBe('customers-admin');
 		const panel = panelOf(root, 'customers');
-		expect(textOf(panel)).toContain('ana@example.com · 0300 · 3 orders · PKR 5,000.00 · 2 parcels returned');
-		expect(textOf(panel)).toContain('u2');
-		type(fieldIn(panel, 'Search'), 'ana');
-		await submit(fieldIn(panel, 'Search'));
-		await change(fieldIn(panel, 'Blocked'), 'true');
-		expect(Object.fromEntries(server.last('GET /v1/admin/customers')?.url.searchParams ?? [])).toEqual({
-			q: 'ana',
-			blocked: 'true',
-		});
-		await click(buttonIn(panel, 'Open'));
-		expect(textOf(panel)).toContain('SO-1');
-		expect(textOf(panel)).toContain('PKR 10.00');
-		await click(buttonIn(panel, 'Block'));
-		expect(statuses(panel)).toContain('Give the reason for blocking.');
-		type(fieldIn(panel, 'Reason for blocking'), 'Fraud');
-		await click(buttonIn(panel, 'Block'));
-		expect(statuses(panel)).toContain('Blocked: this customer cannot order.');
-		expect(textOf(panel)).toContain('Blocked because');
-		expect(textOf(panel)).toContain('No orders yet.');
-		await click(buttonIn(panel, 'Unblock'));
-		expect(statuses(panel)).toContain('Unblocked.');
-		type(fieldIn(panel, 'Only staff see this note'), 'Gold');
-		await click(buttonIn(panel, 'Save'));
-		await click(buttonIn(panel, 'Reset returned parcels'));
-		expect(statuses(panel)).toContain('Returned parcels reset.');
-		expect(shows(panel, 'Reset returned parcels')).toBe(false);
-		expect(patches.slice(1)).toEqual([
+		const pane = detailOf(panel);
+		for (const part of [
+			'Ana',
+			'ana@example.com',
+			'u1',
+			'PKR 5,000.00',
+			'SO-1',
+			'Delivered',
+			'PKR 10.00',
+			'VIP',
+			'Customer since',
+		])
+			expect(textOf(pane)).toContain(part);
+		expect(server.last('GET /v1/admin/returns')?.url.searchParams.get('userId')).toBe('u1');
+		expect(textOf(pane)).toContain('R-1 · Order SO-1 · Warranty');
+		expect(menuEntries(pane)).toEqual(['Reset returned parcels']);
+		// block with a reason
+		await click(buttonIn(pane, 'Block'));
+		expect(textOf(dialogOf(root))).toContain('A blocked customer cannot order');
+		await submitDialog(root);
+		expect(dialogStatus(root)).toBe('Give the reason for blocking.');
+		type(fieldIn(dialogOf(root), 'Reason for blocking'), 'Fraud');
+		await submitDialog(root);
+		expect(hasDialog(root)).toBe(false);
+		expect(statuses(pane)).toContain('Blocked: this customer cannot order.');
+		expect(textOf(pane)).toContain('Blocked because');
+		expect(textOf(pane)).toContain('No orders yet.');
+		expect(rowOf(panel, 'u1').querySelector('.dot.danger')).not.toBeNull();
+		// unblock (a failure shows in the detail)
+		await click(buttonIn(pane, 'Unblock'));
+		expect(statuses(pane)).toContain('Down.');
+		await click(buttonIn(pane, 'Unblock'));
+		expect(statuses(pane)).toContain('Unblocked.');
+		// note
+		await click(buttonIn(pane, 'Edit note'));
+		type(fieldIn(dialogOf(root), 'Only staff see this note'), '');
+		await submitDialog(root);
+		expect(textOf(pane)).toContain('No staff note.');
+		// reset the returned parcels
+		await pickMenu(pane, 'Reset returned parcels');
+		expect(textOf(dialogOf(root))).toContain('Set the 2 returned parcels back to 0.');
+		await submitDialog(root);
+		expect(statuses(pane)).toContain('Returned parcels reset.');
+		expect(menuEntries(pane)).toEqual([]);
+		expect(patches).toEqual([
+			{ blocked: true, blockedReason: '' },
 			{ blocked: true, blockedReason: 'Fraud' },
 			{ blocked: false },
-			{ note: 'Gold' },
+			{ blocked: false },
+			{ note: '' },
 			{ resetRto: true },
 		]);
-		const loads = server.all('GET /v1/admin/customers').length;
-		await click(buttonIn(panel, 'Back'));
-		expect(server.all('GET /v1/admin/customers').length).toBe(loads + 1);
-		await click(buttonIn(panel, 'Open', 1));
-		expect(statuses(panel)).toContain('There is no such customer.');
-		await click(buttonIn(panel, 'Back'));
-		expect(shows(panel, 'Open')).toBe(true);
 	});
 
-	it('shows only switched-on tabs', async () => {
-		const { root } = await start({}, ['reviews']);
-		expect(root.querySelector('[data-section="customers"]')).toBeNull();
+	it('shows only switched-on sections, and no claims without returns', async () => {
+		const { root, server } = await start({}, ['checkout', 'reviews']);
+		expect(root.querySelector('[data-section="reports"]')).toBeNull();
 		expect(root.querySelector('[data-section="reviews"]')).not.toBeNull();
+		expect(textOf(detailOf(panelOf(root, 'customers')))).toContain('Ana');
+		expect(server.all('GET /v1/admin/returns')).toHaveLength(0);
+		const other = await start({}, ['reviews']);
+		expect(other.root.querySelector('[data-section="customers"]')).toBeNull();
+	});
+
+	it('shows an empty list', async () => {
+		const { root } = await start({
+			'GET /v1/admin/customers': () => answer(200, { items: [], nextCursor: null, hasMore: false }),
+		});
+		const panel = panelOf(root, 'customers');
+		expect(statuses(panel)).toContain('No customers match.');
+		expect(textOf(detailOf(panel))).toContain('No customers to show.');
 	});
 });
 
 describe('customers admin: reviews', () => {
-	it('moderates reviews', async () => {
-		const review = {
-			id: 'rev_1',
-			productId: 'prd_1',
-			userId: 'u1',
-			name: 'Ana',
-			rating: 4,
-			title: 'Good',
-			body: 'Works well',
-			reply: '',
-			status: 'pending',
-			createdAt: AT,
-		};
+	const review = {
+		id: 'rev_1',
+		productId: 'prd_1',
+		userId: 'u1',
+		orderId: 'ord_1',
+		name: 'Ana',
+		rating: 4,
+		title: 'Good',
+		body: 'Works well',
+		reply: '',
+		status: 'pending',
+		createdAt: AT,
+		updatedAt: AT,
+	};
+
+	it('moderates reviews with counts, replies, filters by product and deletes', async () => {
+		let reviews = [
+			{ ...review, productName: 'Phone' },
+			{ ...review, id: 'rev_2', title: '', status: 'approved', rating: 7, reply: 'Thanks', productName: '' },
+		];
 		const { root, server } = await start({
-			'GET /v1/admin/reviews': () =>
-				answer(200, {
-					items: [review, { ...review, id: 'rev_2', status: 'approved', rating: 7 }],
-					nextCursor: null,
-					hasMore: false,
-				}),
+			'GET /v1/admin/reviews': () => answer(200, { items: reviews, nextCursor: null, hasMore: false }),
+			'GET /v1/admin/reviews/count': () => answer(200, { count: 2, capped: false }),
+			'GET /v1/admin/reviews/counts': () => answer(200, { total: 2, groups: { pending: 1, approved: 1 } }),
 			'POST /v1/admin/reviews/rev_1/approve': () => answer(200, { ...review, status: 'approved' }),
-			'POST /v1/admin/reviews/rev_1/reject': () => answer(200, { ...review, status: 'rejected' }),
+			'POST /v1/admin/reviews/rev_1/reject': () => problem(403, 'no'),
 			'POST /v1/admin/reviews/rev_1/reply': (/** @type {any} */ call) =>
 				call.body.reply.length > 5
 					? problem(422, 'The reply is at most 2000 characters.')
-					: answer(200, { ...review, reply: call.body.reply }),
-			'DELETE /v1/admin/reviews/rev_1': () => answer(204),
+					: answer(200, { ...review, status: 'approved', reply: call.body.reply }),
+			'DELETE /v1/admin/reviews/rev_1': () => {
+				reviews = reviews.filter((item) => item.id !== 'rev_1');
+				return answer(204);
+			},
 		});
 		const panel = await openTab(root, 'reviews');
 		expect(server.last('GET /v1/admin/reviews')?.url.searchParams.get('status')).toBe('pending');
-		expect(textOf(panel)).toContain('★★★★☆ Good');
-		expect(textOf(panel)).toContain('Waiting · Ana · prd_1');
-		await click(buttonIn(panel, 'Approve'));
-		expect(textOf(panel)).toContain('Approved · Ana');
-		expect(statuses(panel)).toContain('Saved.');
-		await click(buttonIn(panel, 'Reject'));
-		expect(shows(panel, 'Approve')).toBe(true);
-		type(fieldIn(panel, 'Reply (shown under the review)'), 'Thanks!');
-		await click(buttonIn(panel, 'Save reply'));
-		expect(statuses(panel)).toContain('The reply is at most 2000 characters.');
-		type(fieldIn(panel, 'Reply (shown under the review)'), 'Ta');
-		await click(buttonIn(panel, 'Save reply'));
-		expect(fieldIn(panel, 'Reply (shown under the review)').value).toBe('Ta');
-		await click(buttonIn(panel, 'Delete'));
-		await click(buttonIn(panel, 'Confirm delete'));
-		expect(panel.querySelectorAll('.rows > li')).toHaveLength(1);
-		await change(fieldIn(panel, 'Status'), '');
+		expect(chipOf(panel, 'pending').getAttribute('aria-pressed')).toBe('true');
+		expect(chipCount(panel, 'pending')).toBe('1');
+		expect(chipCount(panel, 'rejected')).toBe('0');
+		expect(listCount(panel)).toBe('2');
+		expect(textOf(rowOf(panel, 'rev_1'))).toContain('Good');
+		expect(textOf(rowOf(panel, 'rev_1'))).toContain('★★★★☆');
+		expect(textOf(rowOf(panel, 'rev_1'))).toContain('Waiting · Ana · Phone');
+		expect(textOf(rowOf(panel, 'rev_2'))).toContain('★★★★★');
+		expect(textOf(rowOf(panel, 'rev_2'))).toContain('Approved · Ana · prd_1');
+		const pane = detailOf(panel);
+		expect(textOf(pane)).toContain('Works well');
+		expect(textOf(pane)).toContain('No reply yet.');
+		expect(textOf(pane)).toContain('4/5');
+		expect(textOf(pane)).toContain('Phone (prd_1)');
+		// moderation
+		await click(buttonIn(pane, 'Reject'));
+		expect(statuses(pane)).toContain('You are not allowed to do this.');
+		await click(buttonIn(pane, 'Approve'));
+		expect(statuses(pane)).toContain('Saved.');
+		expect(shows(pane, 'Approve')).toBe(false);
+		expect(textOf(rowOf(panel, 'rev_1'))).toContain('Approved · Ana · Phone');
+		// reply
+		await pickMenu(pane, 'Reply');
+		type(fieldIn(dialogOf(root), 'Reply (shown under the review)'), 'Thanks!');
+		await submitDialog(root);
+		expect(dialogStatus(root)).toBe('The reply is at most 2000 characters.');
+		type(fieldIn(dialogOf(root), 'Reply (shown under the review)'), 'Ta');
+		await submitDialog(root);
+		expect(textOf(pane)).toContain('Ta');
+		expect(menuEntries(pane)).toContain('Edit reply');
+		// the product's reviews, then all of them again
+		await pickMenu(pane, 'Reviews of this product');
+		expect(server.last('GET /v1/admin/reviews')?.url.searchParams.get('productId')).toBe('prd_1');
+		expect(server.last('GET /v1/admin/reviews/counts')?.url.searchParams.get('productId')).toBe('prd_1');
+		expect(textOf(panel)).toContain('Product Phone');
+		await click(/** @type {HTMLElement} */ (panel.querySelector('button[aria-label="Show the reviews of all products"]')));
+		expect(server.last('GET /v1/admin/reviews')?.url.searchParams.get('productId')).toBeNull();
+		// delete, behind the typed confirmation
+		await click(chipOf(panel, ''));
 		expect(server.last('GET /v1/admin/reviews')?.url.searchParams.get('status')).toBeNull();
+		await openRow(panel, 'rev_1');
+		await pickMenu(detailOf(panel), 'Delete review');
+		expect((await confirmDialog(root, 'delete')).disabled).toBe(false);
+		await submitDialog(root);
+		expect(rowsOf(panel)).toHaveLength(1);
+		expect(textOf(detailOf(panel))).toContain('Thanks');
+		expect(shows(detailOf(panel), 'Approve')).toBe(false);
+	});
+
+	it('shows no reviews', async () => {
+		const { root } = await start(
+			{ 'GET /v1/admin/reviews': () => answer(200, { items: [], nextCursor: null, hasMore: false }) },
+			['reviews'],
+		);
+		const panel = panelOf(root, 'reviews');
+		expect(statuses(panel)).toContain('No reviews match.');
+		expect(textOf(detailOf(panel))).toContain('No reviews to show.');
 	});
 });
 
@@ -252,7 +387,7 @@ describe('customers admin: reports and CSV', () => {
 			from: '2026-09-01',
 			to: '2026-09-30',
 		});
-		expect(textOf(panel)).toContain('2 orders · 3 units · PKR 3,000.00');
+		expect(textOf(panel.querySelector('.facts') ?? panel)).toContain('Orders2Units3SalesPKR 3,000.00DiscountPKR 10.00');
 		expect(textOf(panel)).toContain('None');
 		await click(buttonIn(panel, 'Download CSV'));
 		expect(saved[0]?.name).toBe('report-sales_product.csv');
@@ -291,7 +426,7 @@ describe('customers admin: reports and CSV', () => {
 		const panel = panelOf(root, 'reports');
 		await change(fieldIn(panel, 'Report'), 'margin');
 		await click(buttonIn(panel, 'Show'));
-		expect(textOf(panel)).toContain('Sales PKR 10.00 · cost PKR 6.00 · margin PKR 4.00');
+		expect(textOf(panel.querySelector('.facts') ?? panel)).toBe('SalesPKR 10.00CostPKR 6.00MarginPKR 4.00');
 		await click(buttonIn(panel, 'Download CSV'));
 		expect(saved[0]?.text).toContain('Phone,1,10.00,6.00,4.00');
 	});
@@ -316,12 +451,17 @@ describe('customers admin: reports and CSV', () => {
 			},
 		});
 		const panel = await openTab(root, 'csv');
+		expect(panel.querySelectorAll('.masonry > .card')).toHaveLength(3);
 		await click(buttonIn(panel, 'Export products'));
 		expect(saved[0]).toEqual({ name: 'products.csv', text: '﻿name\r\nPhone\r\n' });
 		expect(statuses(panel)).toContain('products.csv is ready.');
 		await change(fieldIn(panel, 'From'), '2026-09-01');
+		await change(fieldIn(panel, 'Status'), 'delivered');
 		await click(buttonIn(panel, 'Export orders'));
-		expect(server.last('GET /v1/admin/csv/orders')?.url.searchParams.get('from')).toBe('2026-09-01T00:00:00.000Z');
+		expect(Object.fromEntries(server.last('GET /v1/admin/csv/orders')?.url.searchParams ?? [])).toEqual({
+			from: '2026-09-01T00:00:00.000Z',
+			status: 'delivered',
+		});
 		expect(statuses(panel)).toContain('More than 10000 orders: choose shorter dates.');
 		// import
 		await click(buttonIn(panel, 'Check the file'));
@@ -357,9 +497,10 @@ describe('customers admin: reports and CSV', () => {
 		expect(statuses(panel)).toContain('Something went wrong. Please try again.');
 	});
 
-	it('cannot fetch files while signed out', async () => {
+	it('cannot fetch files while signed out, and has no status filter without the flow', async () => {
 		const { root, server } = await mountWith(mountCustomersAdmin, { features: ['csv'], ticket: null });
 		const panel = panelOf(root, 'csv');
+		expect(() => fieldIn(panel, 'Status')).toThrow();
 		await click(buttonIn(panel, 'Export products'));
 		expect(statuses(panel)).toContain('Signed out. Sign in again to keep working.');
 		expect(server.calls).toHaveLength(0);

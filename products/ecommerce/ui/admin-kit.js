@@ -520,6 +520,202 @@ const createKit = ({ root, config, api, win, save, open }) => {
 	/** A date and time for people, by the website's Format. @param {string | null | undefined} iso */
 	const when = (iso) => formatDate(iso, format, { timeZone, style: 'datetime', viewer });
 
+	// ------------------------------------------------------------------------------------ list and detail (PLAN 0.6)
+
+	/**
+	 * A status badge (green, amber and red only for status; neutral otherwise).
+	 * @param {string} label @param {Tone} [tone]
+	 */
+	const badge = (label, tone = 'neutral') => text('span', { class: `badge ${tone}` }, label);
+	/**
+	 * A status dot for a list row.
+	 * @param {Tone} tone @param {string} label
+	 */
+	const dot = (tone, label) => element(doc, 'span', { class: `dot ${tone}`, role: 'img', 'aria-label': label });
+	/**
+	 * A count shown as a badge next to a filter or a heading (nothing while it is unknown).
+	 * @param {number | null | undefined} count
+	 */
+	const countBadge = (count) => (typeof count === 'number' ? text('span', { class: 'count' }, String(count)) : null);
+
+	/**
+	 * A grid of labelled values; empty values are left out.
+	 * @param {Array<[string, Child | undefined]>} rows
+	 */
+	const fieldGrid = (rows) =>
+		h(
+			'dl',
+			{ class: 'facts' },
+			rows
+				.filter(([, value]) => value !== '' && value !== null && value !== undefined && value !== false)
+				.map(([label, value]) => h('div', {}, [text('dt', {}, label), h('dd', {}, [/** @type {Child} */ (value)])])),
+		);
+
+	/**
+	 * Cards of different heights laid out as a masonry of 1, 2 or 3 columns by the widget's width (PLAN 0.6).
+	 * @param {Child[]} cards
+	 */
+	const masonry = (cards) =>
+		h(
+			'div',
+			{ class: 'masonry' },
+			cards.map((card) => h('div', { class: 'card' }, [card])),
+		);
+
+	/**
+	 * The list-and-detail layout (PLAN 0.6): the list beside the picked item where the widget is wide (from 720 px of
+	 * its own width), a strip above it at medium widths, and on a narrow widget the list, then the item alone with Back.
+	 */
+	const splitView = () => {
+		const root = h('div', { class: 'split', 'data-view': 'list' });
+		const list = h('div', { class: 'pane list-pane' });
+		const detail = h('div', { class: 'pane detail-pane', tabindex: '-1' });
+		const back = text('button', { type: 'button', class: 'link back' }, t('admin.back'));
+		back.addEventListener('click', () => root.setAttribute('data-view', 'list'));
+		root.append(list, detail);
+		return {
+			root,
+			list,
+			detail,
+			back,
+			/** @param {'list' | 'detail'} view */
+			show: (view) => root.setAttribute('data-view', view),
+		};
+	};
+
+	/**
+	 * A row of a list-and-detail list: a status dot, the name, one figure and a line of facts; picking it opens the item.
+	 * @param {{ name: string, figure?: string, meta?: string, tone?: Tone, toneLabel?: string, current?: boolean,
+	 *   lead?: Child, onPick: () => void }} options
+	 */
+	const listRow = ({ name, figure = '', meta = '', tone = 'neutral', toneLabel = '', current = false, lead = null, onPick }) => {
+		const node = h('li', { class: 'item', tabindex: '0', role: 'button', 'aria-current': current ? 'true' : 'false' }, [
+			lead ?? dot(tone, toneLabel || name),
+			text('span', { class: 'name', title: name }, name),
+			figure ? text('span', { class: 'figure' }, figure) : h('span'),
+			meta ? text('span', { class: 'meta' }, meta) : null,
+		]);
+		node.addEventListener('click', onPick);
+		node.addEventListener('keydown', (event) => {
+			if (event.key !== 'Enter' && event.key !== ' ') return;
+			event.preventDefault();
+			onPick();
+		});
+		return node;
+	};
+
+	/**
+	 * The More menu (⋯): a button that opens a short list of actions, a destructive one last in danger text; Escape or a
+	 * press outside closes it.
+	 * @param {Array<{ label: string, onSelect: () => unknown, danger?: boolean } | null | false>} entries
+	 */
+	const moreMenu = (entries) => {
+		const items = /** @type {Array<{ label: string, onSelect: () => unknown, danger?: boolean }>} */ (entries.filter(Boolean));
+		const wrap = h('div', { class: 'more' });
+		const opener = text(
+			'button',
+			{
+				type: 'button',
+				class: 'secondary icon',
+				'aria-label': t('admin.moreActions'),
+				'aria-haspopup': 'menu',
+				'aria-expanded': 'false',
+			},
+			'⋯',
+		);
+		const menu = h('div', { role: 'menu', class: 'menu', 'aria-label': t('admin.moreActions') });
+		menu.hidden = true;
+		/** @param {Event} event */
+		const outside = (event) => {
+			if (!event.composedPath().includes(wrap)) close();
+		};
+		const close = () => {
+			menu.hidden = true;
+			opener.setAttribute('aria-expanded', 'false');
+			doc.removeEventListener('pointerdown', outside, true);
+		};
+		for (const item of items) {
+			const entry = text(
+				'button',
+				{ type: 'button', role: 'menuitem', ...(item.danger ? { class: 'danger' } : {}) },
+				item.label,
+			);
+			entry.addEventListener('click', () => {
+				close();
+				void item.onSelect();
+			});
+			menu.append(entry);
+		}
+		opener.addEventListener('click', () => {
+			if (!menu.hidden) return close();
+			menu.hidden = false;
+			opener.setAttribute('aria-expanded', 'true');
+			doc.addEventListener('pointerdown', outside, true);
+			/** @type {HTMLElement | null} */ (menu.querySelector('button'))?.focus();
+		});
+		wrap.addEventListener('keydown', (event) => {
+			if (event.key !== 'Escape') return;
+			close();
+			opener.focus();
+		});
+		wrap.append(opener, menu);
+		wrap.hidden = items.length === 0;
+		return wrap;
+	};
+
+	/**
+	 * A dialog for a secondary form, over the widget (a full-screen sheet below 640 px). `onSubmit` answers an error
+	 * text to show, or nothing to close. A `confirmText` makes the submit button wait until it is typed (PLAN 0.6:
+	 * destructive actions behind a typed confirmation).
+	 * @param {{ title: string, body: Child[], submitLabel: string, danger?: boolean, wide?: boolean, confirmText?: string,
+	 *   onSubmit: () => Promise<string | null | undefined | void> | string | null | undefined | void }} options
+	 */
+	const dialog = ({ title, body, submitLabel, danger = false, wide = false, confirmText = '', onSubmit }) => {
+		const overlay = h('div', { class: 'overlay' });
+		const form = h('form', {
+			class: wide ? 'dialog wide' : 'dialog',
+			role: 'dialog',
+			'aria-modal': 'true',
+			'aria-label': title,
+		});
+		const line = status();
+		const submit = /** @type {HTMLButtonElement} */ (
+			text('button', { type: 'submit', ...(danger ? { class: 'danger' } : {}) }, submitLabel)
+		);
+		const cancel = text('button', { type: 'button', class: 'secondary' }, t('admin.cancel'));
+		const typed = confirmText ? input('', { autocomplete: 'off' }) : null;
+		if (typed) {
+			submit.disabled = true;
+			typed.addEventListener('input', () => {
+				submit.disabled = typed.value.trim() !== confirmText;
+			});
+		}
+		form.append(
+			text('h3', {}, title),
+			.../** @type {Node[]} */ (body.filter((child) => child !== null && child !== undefined && child !== false)),
+			...(typed ? [field(t('admin.typeToConfirm', { text: confirmText }), typed)] : []),
+			line,
+			h('div', { class: 'actions' }, [submit, cancel]),
+		);
+		overlay.append(form);
+		const close = () => overlay.remove();
+		cancel.addEventListener('click', close);
+		overlay.addEventListener('keydown', (event) => {
+			if (event.key === 'Escape') close();
+		});
+		form.addEventListener('submit', async (event) => {
+			event.preventDefault();
+			submit.disabled = true;
+			const error = await onSubmit();
+			submit.disabled = false;
+			if (error) say(line, error, true);
+			else close();
+		});
+		root.append(overlay);
+		/** @type {HTMLElement | null} */ (form.querySelector('input, textarea, select, button'))?.focus();
+		return { close, form, line };
+	};
+
 	return Object.freeze({
 		doc,
 		win,
@@ -559,12 +755,22 @@ const createKit = ({ root, config, api, win, save, open }) => {
 		pager,
 		picker,
 		when,
+		badge,
+		dot,
+		countBadge,
+		fieldGrid,
+		masonry,
+		splitView,
+		listRow,
+		moreMenu,
+		dialog,
 		dispose: () => {
 			for (const url of blobs.splice(0)) win.URL.revokeObjectURL(url);
 		},
 	});
 };
 
+/** @typedef {'success' | 'warning' | 'danger' | 'neutral'} Tone */
 /** @typedef {ReturnType<typeof createKit>} Kit */
 
 /**

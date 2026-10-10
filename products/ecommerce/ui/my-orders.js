@@ -2,8 +2,10 @@
  * The shopper's orders (visitor widget `my_orders`, feature checkout; PLAN 0.8.8 "my orders + tracking + invoices +
  * returns"). Signed in, the shopper sees their orders (newest first, more with Load more) and each order's lines,
  * status history, payment (and the way to pay while it waits), delivery and tracking link, totals, the invoice
- * (`invoices`), downloads and licence keys (`digital_goods`), Cancel while the order allows it, and return or
- * warranty claims (`returns`) with their own list. Signed out, the sign-in hint shows.
+ * (`invoices`), downloads and licence keys (`digital_goods`), each line's serial numbers and warranty (PLAN 0.8.10
+ * E11, E12), Cancel while the order allows it, and return or warranty claims (`returns`) with their own list. Above the
+ * orders, the loyalty points balance with the points expiring soon and the points history (`loyalty`,
+ * `GET /v1/shop/loyalty`). Signed out, the sign-in hint shows.
  * @module
  */
 import {
@@ -18,6 +20,7 @@ import {
 	problemText,
 	settingsOf,
 	textsOf,
+	warrantyText,
 } from './shop-common.js';
 import { returnUrlOf } from './shop-checkout.js';
 import { renderClaimForm, renderClaims } from './shop-returns.js';
@@ -46,13 +49,82 @@ export const mountMyOrders = async ({ host, config, shop, win }) => {
 		name: 'my-orders',
 		render: (root) => {
 			const doc = root.ownerDocument;
+			const pointsBox = h(doc, 'section', { 'aria-label': t('orders.points.title') });
 			const listBox = h(doc, 'div');
 			const detailBox = h(doc, 'div');
 			const claimsBox = h(doc, 'section');
-			root.append(listBox, detailBox, claimsBox);
+			root.append(pointsBox, listBox, detailBox, claimsBox);
 			/** @type {string | null} */
 			let cursor = null;
 			let seq = 0;
+
+			// ------------------------------------------------------------------------------------------ points
+
+			/**
+			 * The loyalty points: the balance and what it is worth, the points expiring soon and the history.
+			 * @param {number} mine
+			 */
+			const showPoints = async (mine) => {
+				const answer = await shop.call('/v1/shop/loyalty');
+				if (mine !== seq) return;
+				if (!answer.ok) {
+					pointsBox.replaceChildren(h(doc, 'p', { class: 'meta' }, t('orders.points.error')));
+					return;
+				}
+				const account = answer.data;
+				const currency = currencyOf(settings, account.currency);
+				const history = Array.isArray(account.history) ? account.history : [];
+				const expiring = Array.isArray(account.expiringSoon) ? account.expiringSoon : [];
+				/** @param {number} points */
+				const signed = (points) => (points > 0 ? `+${points}` : `−${Math.abs(points)}`);
+				pointsBox.replaceChildren(
+					h(
+						doc,
+						'div',
+						{ class: 'box' },
+						h(doc, 'h2', {}, t('orders.points.title')),
+						h(
+							doc,
+							'p',
+							{ class: 'amount' },
+							t('orders.points.balance', { balance: account.balance, value: money(account.value, currency) }),
+						),
+						...expiring.map((/** @type {{ points: number, expiresAt: string }} */ entry) =>
+							h(
+								doc,
+								'p',
+								{ class: 'meta' },
+								t('orders.points.expiring', { points: entry.points, date: dateText(entry.expiresAt, { time: false }) }),
+							),
+						),
+						history.length > 0
+							? h(
+									doc,
+									'details',
+									{},
+									h(doc, 'summary', {}, t('orders.points.history')),
+									h(
+										doc,
+										'ul',
+										{},
+										...history.map((/** @type {{ at: string, kind: string, points: number }} */ entry) =>
+											h(
+												doc,
+												'li',
+												{},
+												t('orders.points.line', {
+													change: signed(entry.points),
+													kind: t(`orders.points.kind.${entry.kind}`),
+													date: dateText(entry.at, { time: false }),
+												}),
+											),
+										),
+									),
+								)
+							: null,
+					),
+				);
+			};
 
 			// -------------------------------------------------------------------------------------------- list
 
@@ -63,11 +135,14 @@ export const mountMyOrders = async ({ host, config, shop, win }) => {
 				detailBox.hidden = true;
 				listBox.hidden = false;
 				claimsBox.hidden = false;
+				pointsBox.hidden = false;
 				if (!shop.signIn()) {
 					listBox.replaceChildren(h(doc, 'p', { class: 'hint' }, t('orders.signIn')));
 					claimsBox.replaceChildren();
+					pointsBox.replaceChildren();
 					return;
 				}
+				if (shop.has('loyalty')) void showPoints(mine);
 				const list = h(doc, 'ul', { 'aria-label': t('orders.title') });
 				const status = h(doc, 'p', { class: 'status', role: 'status' }, t('orders.loading'));
 				const more = button(doc, t('orders.more'), () => void page(), { class: 'secondary more' });
@@ -120,6 +195,7 @@ export const mountMyOrders = async ({ host, config, shop, win }) => {
 				const mine = seq;
 				listBox.hidden = true;
 				claimsBox.hidden = true;
+				pointsBox.hidden = true;
 				detailBox.hidden = false;
 				detailBox.replaceChildren(h(doc, 'p', { class: 'status', role: 'status' }, t('orders.loading')));
 				const answer = await shop.call(`/v1/shop/orders/${encodeURIComponent(id)}`);
@@ -159,12 +235,17 @@ export const mountMyOrders = async ({ host, config, shop, win }) => {
 							{ class: 'secondary' },
 						),
 					);
+					const warranty = warrantyText(t, line.warrantyDays);
 					return h(
 						doc,
 						'li',
 						{},
 						h(doc, 'strong', {}, line.variantName ? `${line.name} (${line.variantName})` : line.name),
 						line.gradeLabel ? h(doc, 'span', { class: 'meta' }, t('cart.grade', { grade: line.gradeLabel })) : null,
+						Array.isArray(line.serials) && line.serials.length > 0
+							? h(doc, 'span', { class: 'meta' }, t('orders.serials', { serials: line.serials.join(', ') }))
+							: null,
+						warranty ? h(doc, 'span', { class: 'meta' }, warranty) : null,
 						h(
 							doc,
 							'span',

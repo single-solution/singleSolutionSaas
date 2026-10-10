@@ -1,10 +1,19 @@
 /**
- * The product page blocks (visitor widget `product_page`, feature catalog; PLAN 0.8.8 Shopper widgets): placed as
- * `<div data-ss-ecommerce="product_page" data-product="<id or slug>"></div>`. Gallery, name and brand, the price after
- * automatic deals (with the "was" price and the saving, while `deals` is on), the variant picker (options → variant;
- * combinations that do not exist are disabled), the condition grade, the stock state, the quantity and Add to cart,
- * the time picker of a booking product, the note of a digital item, back-in-stock and price-drop alerts (`alerts`,
- * signed in), the wishlist and compare toggles, the specs, the description and the reviews block (`reviews`).
+ * The product page blocks (visitor widget `product_page`, feature catalog; PLAN 0.8.8 Shopper widgets, 0.8.10 E3–E13):
+ * placed as `<div data-ss-ecommerce="product_page" data-product="<id or slug>"></div>`. A product whose slug changed
+ * answers `moved` (`kind: 'product'`), and the page reads it again by its new slug (the widget runs on the merchant's
+ * page, which does the redirect for search engines); a retired product that leads to its category (`kind: 'category'`)
+ * shows as not available with a link to the category.
+ *
+ * Gallery (each photo's detail and thumb sizes, width and height, and its blur placeholder while loading; a variant's
+ * own photos replace the product's while it is picked), name, Featured, brand, the price range, the price after
+ * automatic deals (with the "was" price and the saving, while `deals` is on), the variant picker (option axes, or the
+ * variants' attributes, and the condition when variants differ only by grade; a pick that has no exact variant moves
+ * to the nearest one), the grade's details, the stock ("Only N left", "N in stock", Sold out: shown and not added to
+ * the cart), the warranty of the variant, the Size guide, the quantity and Add to cart, the time picker of a booking
+ * product, the note of a digital item, back-in-stock and price-drop alerts (`alerts`, signed in; an alert already set
+ * shows with Stop), the wishlist and compare toggles, the specs, the rich description (rebuilt from the allowed tags)
+ * or the plain one, the video, the FAQs and the reviews block (`reviews`).
  * Growth's events (PLAN 0.8.9): `ss:view_item` once when the product is shown (its first in-stock variant; a variant
  * change does not fire it again) and `ss:add_to_cart` on each Add to cart, at the price shown.
  * @module
@@ -22,30 +31,47 @@ import {
 	h,
 	keepFocus,
 	mountShop,
+	paragraphs,
 	priceNode,
 	problemText,
 	ratingText,
+	richText,
+	safeHref,
 	settingsOf,
 	textsOf,
+	warrantyText,
 } from './shop-common.js';
 import { compareIds, onCompareChange, toggleCompare } from './shop-compare-store.js';
+import {
+	alertsOf,
+	axesOf,
+	buyable,
+	faqBlock,
+	gradeDetails,
+	nearestVariant,
+	photoOf,
+	pickVariant,
+	sizeGuide,
+	stockText,
+	videoBlock,
+} from './shop-page-parts.js';
 import { renderReviews } from './shop-reviews.js';
 import { savedOf } from './shop-saved.js';
 import { renderSlots } from './shop-slots.js';
 
-/**
- * @typedef {{ id: string, name: string, options: Record<string, string>, price: number, compareAtPrice: number | null,
- *   inStock: boolean, grade: { key: string, label: string, description: string } | null }} PageVariant
- */
+/** @typedef {import('./shop-page-parts.js').PageVariant} PageVariant */
+/** @typedef {import('./shop-page-parts.js').PageMedia} PageMedia */
+
+/** Moves followed before the page gives up (an earlier slug answers `moved` to the current one). */
+const MAX_MOVES = 3;
 
 /**
- * The variant of the chosen options (the only one when the product has no options).
- * @param {{ options: Array<{ name: string }>, variants: PageVariant[] }} item
+ * The variant of the chosen values (option names, attribute axes and the condition; the only one without options).
+ * @param {{ options: Array<{ name: string, values: string[] }>, variants: PageVariant[] }} item
  * @param {Record<string, string>} chosen
  * @returns {PageVariant | null}
  */
-export const variantFor = (item, chosen) =>
-	item.variants.find((variant) => item.options.every((option) => variant.options[option.name] === chosen[option.name])) ?? null;
+export const variantFor = (item, chosen) => pickVariant(axesOf(item), item.variants, chosen);
 
 /**
  * @param {import('./widget.js').VisitorMount} input
@@ -58,6 +84,7 @@ export const mountProductPage = async ({ host, config, shop, win }) => {
 	const { money } = formats;
 	const ref = host.dataset.product ?? '';
 	const saved = savedOf(shop);
+	const alerts = alertsOf(shop);
 
 	mountShop({
 		host,
@@ -75,21 +102,43 @@ export const mountProductPage = async ({ host, config, shop, win }) => {
 					status.textContent = t('page.notFound');
 					return;
 				}
-				const answer = await shop.call(`/v1/shop/products/${encodeURIComponent(ref)}`);
-				if (!answer.ok) {
-					status.textContent = t(answer.status === 404 ? 'page.notFound' : 'page.error');
-					return;
+				let at = ref;
+				for (let hop = 0; hop <= MAX_MOVES; hop += 1) {
+					const answer = await shop.call(`/v1/shop/products/${encodeURIComponent(at)}`);
+					if (!answer.ok) {
+						status.textContent = t(answer.status === 404 ? 'page.notFound' : 'page.error');
+						return;
+					}
+					const moved = answer.data?.moved;
+					if (!moved) return show(answer.data);
+					if (moved.kind === 'category') {
+						// a retired product leads to its category: the page links there
+						const link = typeof moved.url === 'string' ? safeHref(moved.url) : '';
+						status.textContent = t('page.notFound');
+						if (link) status.append(' ', h(doc, 'a', { href: link }, t('page.movedLink')));
+						return;
+					}
+					if (typeof moved.slug !== 'string' || !moved.slug || moved.slug === at) break;
+					at = moved.slug;
 				}
-				show(answer.data);
+				status.textContent = t('page.notFound');
 			};
 
 			/** @param {any} item */
 			const show = (item) => {
 				const currency = currencyOf(settings, item.currency);
 				const booking = item.kind === 'booking' && shop.has('bookings');
-				const first = item.variants.find((/** @type {PageVariant} */ v) => v.inStock) ?? item.variants[0] ?? null;
+				/** @type {PageVariant[]} */
+				const variants = Array.isArray(item.variants) ? item.variants : [];
+				const axes = axesOf({ options: Array.isArray(item.options) ? item.options : [], variants });
+				const first = variants.find((v) => buyable(v)) ?? variants[0] ?? null;
 				/** @type {Record<string, string>} */
-				const chosen = { ...(first?.options ?? {}) };
+				const chosen = {};
+				/** @param {PageVariant} of */
+				const choose = (of) => {
+					for (const axis of axes) chosen[axis.key] = axis.of(of);
+				};
+				if (first) choose(first);
 				/** @type {string | null} */
 				let slot = null;
 				let quantity = 1;
@@ -116,20 +165,32 @@ export const mountProductPage = async ({ host, config, shop, win }) => {
 							}),
 						]),
 					);
+				const variant = () => pickVariant(axes, variants, chosen);
 
 				// ------------------------------------------------------------------------------------------ gallery
-				const media = item.media.filter((/** @type {{ url: string | null }} */ m) => m.url);
+				/** @type {PageMedia[]} */
+				const productMedia = (Array.isArray(item.media) ? item.media : []).filter((/** @type {PageMedia} */ m) => m.url);
+				/** The photos shown: the picked variant's own, else the product's (E6); `from` is that variant's id or ''. */
+				const mediaNow = () => {
+					const current = variant();
+					const own = (current?.media ?? []).filter((m) => m.url);
+					return own.length > 0 ? { from: String(current?.id), list: own } : { from: '', list: productMedia };
+				};
+				let shownFrom = mediaNow().from;
+				let media = mediaNow().list;
 				const gallery = h(doc, 'section', { class: 'gallery', 'aria-label': t('page.gallery') });
 				let index = 0;
+				/** @param {PageMedia} m */
+				const isClip = (m) => String(m.type ?? '').startsWith('video/');
 				const renderGallery = () => {
 					const current = media[index];
 					if (!current) {
 						gallery.replaceChildren();
 						return;
 					}
-					const main = current.type.startsWith('video/')
-						? h(doc, 'video', { src: current.url, controls: '', 'aria-label': current.alt, preload: 'metadata' })
-						: h(doc, 'img', { src: current.url, alt: current.alt });
+					const main = isClip(current)
+						? h(doc, 'video', { src: String(current.url), controls: '', 'aria-label': current.alt, preload: 'metadata' })
+						: photoOf(doc, current, 'detail', current.alt);
 					const parts = [h(doc, 'div', { class: 'main' }, main)];
 					if (media.length > 1) {
 						/** @param {number} step */
@@ -150,10 +211,10 @@ export const mountProductPage = async ({ host, config, shop, win }) => {
 								doc,
 								'div',
 								{ class: 'thumbs' },
-								...media.map((/** @type {{ url: string, alt: string, type: string }} */ m, /** @type {number} */ i) => {
+								...media.map((m, i) => {
 									const thumb = button(
 										doc,
-										m.type.startsWith('video/') ? String(i + 1) : '',
+										isClip(m) ? String(i + 1) : '',
 										() => {
 											index = i;
 											keepFocus(root, renderGallery);
@@ -164,7 +225,7 @@ export const mountProductPage = async ({ host, config, shop, win }) => {
 											'data-focus': `thumb${i}`,
 										},
 									);
-									if (!m.type.startsWith('video/')) thumb.append(h(doc, 'img', { src: m.url, alt: '' }));
+									if (!isClip(m)) thumb.append(photoOf(doc, m, 'thumb', ''));
 									return thumb;
 								}),
 							),
@@ -177,27 +238,42 @@ export const mountProductPage = async ({ host, config, shop, win }) => {
 				// ---------------------------------------------------------------------------------------- buy box
 				const buy = h(doc, 'section', { class: 'stack', 'aria-label': t('page.buy') });
 				const priceBox = h(doc, 'div');
-				const pickers = h(doc, 'div');
-				const facts = h(doc, 'div');
+				const pickers = h(doc, 'div', { class: 'pickers' });
+				const facts = h(doc, 'div', { class: 'stack' });
 				const slotBox = h(doc, 'div');
 				const addBox = h(doc, 'div');
 				const extras = h(doc, 'div', { class: 'stack' });
 				const said = h(doc, 'p', { class: 'status', role: 'status' });
+				const layer = h(doc, 'div');
+				const rating = ratingText(t, item.rating);
+				const priceMax = Number(item.priceMax ?? 0);
 				fill(
 					buy,
+					item.featured
+						? h(doc, 'span', { class: 'tags' }, h(doc, 'span', { class: 'badge accent' }, t('shop.featured')))
+						: null,
 					h(doc, 'h2', { class: 'big' }, item.name),
 					item.brand ? h(doc, 'span', { class: 'meta' }, item.brand.name) : null,
-					ratingText(t, item.rating) ? h(doc, 'span', { class: 'meta' }, ratingText(t, item.rating)) : null,
+					rating ? h(doc, 'span', { class: 'meta' }, rating) : null,
 					item.summary ? h(doc, 'p', {}, item.summary) : null,
+					variants.length > 1 && priceMax > item.price
+						? h(
+								doc,
+								'span',
+								{ class: 'meta' },
+								t('shop.priceRange', { min: money(item.price, currency), max: money(priceMax, currency) }),
+							)
+						: null,
 					priceBox,
 					pickers,
 					facts,
+					item.sizeChart ? sizeGuide({ doc, t, chart: item.sizeChart, layer }) : null,
 					slotBox,
 					addBox,
 					said,
 					extras,
+					layer,
 				);
-				const variant = () => variantFor(item, chosen);
 
 				const renderPrice = async () => {
 					const current = variant();
@@ -233,54 +309,49 @@ export const mountProductPage = async ({ host, config, shop, win }) => {
 						...quote.deals.map((/** @type {{ name: string }} */ deal) => h(doc, 'span', { class: 'badge' }, deal.name)),
 					);
 				};
+
 				const renderPickers = () => {
-					const groups = item.options.map(
-						(/** @type {{ name: string, values: string[] }} */ option, /** @type {number} */ i) => {
-							const control = /** @type {HTMLSelectElement} */ (h(doc, 'select', { 'data-focus': `option${i}` }));
-							for (const value of option.values) {
-								const match = variantFor(item, { ...chosen, [option.name]: value });
-								const node = h(
-									doc,
-									'option',
-									{ value },
-									match && !match.inStock ? t('page.optionOutOfStock', { value }) : value,
-								);
-								if (!match) node.setAttribute('disabled', '');
-								control.append(node);
-							}
-							control.value = chosen[option.name] ?? '';
-							control.addEventListener('change', () => {
-								chosen[option.name] = control.value;
-								added = false;
-								refresh();
-							});
-							return field(doc, `ss-page-option-${i}`, option.name, control);
-						},
-					);
+					const groups = axes.map((axis, i) => {
+						const control = /** @type {HTMLSelectElement} */ (h(doc, 'select', { 'data-focus': `option${i}` }));
+						for (const { value, text } of axis.values) {
+							const exact = pickVariant(axes, variants, { ...chosen, [axis.key]: value });
+							const any = variants.some((other) => axis.of(other) === value);
+							const shown = axis.grade && !text ? t('page.gradeNone') : text;
+							const node = h(
+								doc,
+								'option',
+								{ value },
+								exact?.soldOut === true
+									? t('page.optionSoldOut', { value: shown })
+									: exact && !exact.inStock
+										? t('page.optionOutOfStock', { value: shown })
+										: shown,
+							);
+							if (!any) node.setAttribute('disabled', '');
+							control.append(node);
+						}
+						control.value = chosen[axis.key] ?? '';
+						control.addEventListener('change', () => {
+							const next = nearestVariant(axes, variants, chosen, axis, control.value);
+							if (next) choose(next);
+							else chosen[axis.key] = control.value;
+							added = false;
+							refresh();
+						});
+						return field(doc, `ss-page-option-${i}`, axis.grade ? t('page.condition') : axis.label, control);
+					});
 					pickers.replaceChildren(...groups);
 				};
 
 				const renderFacts = () => {
 					const current = variant();
+					const stock = current ? stockText(t, current, settings.catalog.lowStockShown) : null;
+					const warranty = current ? warrantyText(t, current.warrantyDays) : '';
 					fill(
 						facts,
-						current?.grade
-							? h(
-									doc,
-									'p',
-									{},
-									t('page.grade', { grade: current.grade.label }),
-									current.grade.description ? h(doc, 'span', { class: 'meta' }, current.grade.description) : null,
-								)
-							: null,
-						current
-							? h(
-									doc,
-									'p',
-									{ class: current.inStock ? 'save' : 'error' },
-									t(current.inStock ? 'page.inStock' : 'page.outOfStock'),
-								)
-							: null,
+						current?.grade ? gradeDetails(doc, t, current.grade) : null,
+						stock ? h(doc, 'p', { class: `stock ${stock.tone}` }, stock.text) : null,
+						warranty ? h(doc, 'p', { class: 'meta' }, warranty) : null,
 						item.kind === 'digital' ? h(doc, 'p', { class: 'hint' }, t('page.digitalNote')) : null,
 						item.booking
 							? h(doc, 'p', { class: 'meta' }, t('page.duration', { minutes: item.booking.durationMinutes }))
@@ -328,7 +399,7 @@ export const mountProductPage = async ({ host, config, shop, win }) => {
 						);
 						input.id = 'ss-page-qty';
 					}
-					const ready = Boolean(current?.inStock) && (!booking || slot !== null);
+					const ready = current !== null && buyable(current) && (!booking || slot !== null);
 					const add = button(
 						doc,
 						t(added ? 'page.added' : 'page.addToCart'),
@@ -352,6 +423,79 @@ export const mountProductPage = async ({ host, config, shop, win }) => {
 					parts.push(add);
 					if (booking && slot === null) parts.push(h(doc, 'p', { class: 'meta' }, t('page.chooseSlotFirst')));
 					addBox.replaceChildren(...parts);
+				};
+
+				/**
+				 * The alert buttons: set one, or see the one already set with Stop.
+				 * @param {PageVariant | null} current
+				 */
+				const alertRow = async (current) => {
+					if (!shop.signIn()) return h(doc, 'p', { class: 'hint' }, t('alerts.signIn'));
+					const mine = (await alerts.list()).filter(
+						(entry) =>
+							entry.status === 'waiting' &&
+							entry.productId === item.id &&
+							(entry.variantId === null || entry.variantId === current?.id),
+					);
+					/** @param {'back_in_stock' | 'price_drop'} kind @param {string} text */
+					const set = (kind, text) =>
+						button(
+							doc,
+							text,
+							async (event) => {
+								const node = /** @type {HTMLButtonElement} */ (event.currentTarget);
+								node.setAttribute('disabled', '');
+								const answer = await shop.call('/v1/shop/alerts', {
+									method: 'POST',
+									body: { kind, productId: item.id, variantId: variant()?.id ?? null },
+									idempotencyKey: shop.newKey(),
+								});
+								node.removeAttribute('disabled');
+								said.textContent = answer.ok
+									? t(kind === 'back_in_stock' ? 'alerts.stockSet' : 'alerts.priceSet')
+									: problemText(config, 'alerts.problem.', codeOf(answer), 'alerts.failed');
+								if (answer.ok) {
+									alerts.forget();
+									void renderExtras();
+								}
+							},
+							{ class: 'secondary', 'data-focus': kind },
+						);
+					/** @param {import('./shop-page-parts.js').ShopAlert} entry @param {string} text */
+					const active = (entry, text) =>
+						h(
+							doc,
+							'p',
+							{ class: 'meta' },
+							text,
+							' ',
+							button(
+								doc,
+								t('alerts.stop'),
+								async () => {
+									const answer = await shop.call(`/v1/shop/alerts/${encodeURIComponent(entry.id)}`, {
+										method: 'DELETE',
+									});
+									said.textContent = t(answer.ok ? 'alerts.stopped' : 'alerts.stopFailed');
+									alerts.forget();
+									void renderExtras();
+								},
+								{ class: 'link', 'data-focus': `stop.${entry.kind}` },
+							),
+						);
+					const stockAlert = mine.find((entry) => entry.kind === 'back_in_stock');
+					const priceAlert = mine.find((entry) => entry.kind === 'price_drop');
+					return h(
+						doc,
+						'div',
+						{ class: 'actions' },
+						current && !buyable(current)
+							? stockAlert
+								? active(stockAlert, t('alerts.stockActive'))
+								: set('back_in_stock', t('alerts.backInStock'))
+							: null,
+						priceAlert ? active(priceAlert, t('alerts.priceActive')) : set('price_drop', t('alerts.priceDrop')),
+					);
 				};
 
 				const renderExtras = async () => {
@@ -390,45 +534,19 @@ export const mountProductPage = async ({ host, config, shop, win }) => {
 						);
 					}
 					const row = parts.length > 0 ? [h(doc, 'div', { class: 'actions' }, ...parts)] : [];
-					if (shop.has('alerts')) {
-						if (!shop.signIn()) row.push(h(doc, 'p', { class: 'hint' }, t('alerts.signIn')));
-						else {
-							/** @param {'back_in_stock' | 'price_drop'} kind @param {string} text */
-							const alert = (kind, text) =>
-								button(
-									doc,
-									text,
-									async (event) => {
-										const node = /** @type {HTMLButtonElement} */ (event.currentTarget);
-										node.setAttribute('disabled', '');
-										const answer = await shop.call('/v1/shop/alerts', {
-											method: 'POST',
-											body: { kind, productId: item.id, variantId: variant()?.id ?? null },
-											idempotencyKey: shop.newKey(),
-										});
-										node.removeAttribute('disabled');
-										said.textContent = answer.ok
-											? t(kind === 'back_in_stock' ? 'alerts.stockSet' : 'alerts.priceSet')
-											: problemText(config, 'alerts.problem.', codeOf(answer), 'alerts.failed');
-									},
-									{ class: 'secondary', 'data-focus': kind },
-								);
-							row.push(
-								h(
-									doc,
-									'div',
-									{ class: 'actions' },
-									current && !current.inStock ? alert('back_in_stock', t('alerts.backInStock')) : null,
-									alert('price_drop', t('alerts.priceDrop')),
-								),
-							);
-						}
-					}
+					if (shop.has('alerts')) row.push(await alertRow(current));
 					keepFocus(root, () => extras.replaceChildren(...row));
 				};
 
 				const refresh = () => {
+					const now = mediaNow();
+					if (now.from !== shownFrom) {
+						shownFrom = now.from;
+						media = now.list;
+						index = 0;
+					}
 					keepFocus(root, () => {
+						renderGallery();
 						renderPickers();
 						renderFacts();
 						renderAdd();
@@ -452,9 +570,10 @@ export const mountProductPage = async ({ host, config, shop, win }) => {
 						},
 					});
 
-				// ------------------------------------------------------------------------------- specs, description
+				// ------------------------------------------------------------------- specs, description, video, FAQs
 				const blocks = [];
-				if (item.specs.length > 0)
+				const specs = Array.isArray(item.specs) ? item.specs : [];
+				if (specs.length > 0)
 					blocks.push(
 						h(
 							doc,
@@ -473,7 +592,7 @@ export const mountProductPage = async ({ host, config, shop, win }) => {
 										doc,
 										'tbody',
 										{},
-										...item.specs.map((/** @type {{ name: string, value: unknown, unit: string }} */ spec) =>
+										...specs.map((/** @type {{ name: string, value: unknown, unit: string, label?: string }} */ spec) =>
 											h(
 												doc,
 												'tr',
@@ -485,9 +604,11 @@ export const mountProductPage = async ({ host, config, shop, win }) => {
 													{},
 													typeof spec.value === 'boolean'
 														? t(spec.value ? 'shop.yes' : 'shop.no')
-														: spec.unit
-															? `${spec.value} ${spec.unit}`
-															: String(spec.value),
+														: spec.label
+															? spec.label
+															: spec.unit
+																? `${spec.value} ${spec.unit}`
+																: String(spec.value),
 												),
 											),
 										),
@@ -496,20 +617,19 @@ export const mountProductPage = async ({ host, config, shop, win }) => {
 							),
 						),
 					);
-				const paragraphs = String(item.description ?? '')
-					.split(/\n\s*\n/)
-					.map((part) => part.trim())
-					.filter(Boolean);
-				if (paragraphs.length > 0)
+				const rich = richText(doc, item.descriptionHtml);
+				const plainText = paragraphs(doc, item.description);
+				if (rich.childNodes.length > 0 || plainText.length > 0)
 					blocks.push(
 						h(
 							doc,
 							'section',
-							{ class: 'wide' },
+							{ class: 'wide description' },
 							h(doc, 'h2', {}, t('page.description')),
-							...paragraphs.map((text) => h(doc, 'p', {}, text)),
+							...(rich.childNodes.length > 0 ? [rich] : plainText),
 						),
 					);
+				blocks.push(videoBlock(doc, t, item.video, item.name), faqBlock(doc, t, item.faqs));
 				/** @type {{ identity: () => void } | null} */
 				let reviews = null;
 				if (shop.has('reviews')) {
@@ -520,7 +640,19 @@ export const mountProductPage = async ({ host, config, shop, win }) => {
 
 				// the frame is the size container: two columns where the widget itself is wide, not the screen
 				root.replaceChildren(
-					h(doc, 'div', { class: 'page-frame' }, h(doc, 'div', { class: 'page' }, gallery, buy, ...blocks)),
+					h(
+						doc,
+						'div',
+						{ class: 'page-frame' },
+						h(
+							doc,
+							'div',
+							{ class: 'page' },
+							gallery,
+							buy,
+							.../** @type {HTMLElement[]} */ (blocks.filter((block) => block !== null)),
+						),
+					),
 				);
 				refresh();
 				tell(GROWTH_EVENTS.viewItem, first, 1);

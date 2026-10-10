@@ -1,9 +1,11 @@
 /**
  * The cart, checkout and success page (visitor widget `cart`, feature checkout; PLAN 0.8.8). The cart lives in the
  * shopper's browser and is priced by the server (`POST /v1/shop/cart/quote`) whenever it changes (a short pause first,
- * so quick changes make one quote): lines with their problems, quantities, the coupon, loyalty points, the delivery
- * method (delivery to an address, or pickup), the address, the payment methods the quote allows, a note, the policies
- * and the totals. Placing the order needs the shopper's sign-in; the Idempotency-Key is kept while the same attempt
+ * so quick changes make one quote): lines linking to their variant's page, with their problems (a sold-out item says
+ * so and cannot be ordered), quantities, the coupon, loyalty points, the delivery method (delivery to an address, or
+ * pickup), the address, the payment methods the quote allows, a note, the shop's policies (filled and only the ones it
+ * wrote, from the widget config; HTML rebuilt from the allowed tags when the policies are HTML, PLAN 0.8.10 E3) and the
+ * totals. Placing the order needs the shopper's sign-in; the Idempotency-Key is kept while the same attempt
  * is retried after a lost answer. Then the shopper pays on Payments' page (`next.kind === 'pay'`), sees the success
  * page (`done`), or can start the payment again (`retry`). Coming back from Payments, the page's `ss_order` shows that
  * order's success page (reading it rechecks its payment). Growth's events (PLAN 0.8.9): `ss:begin_checkout` the first
@@ -24,7 +26,10 @@ import {
 	h,
 	keepFocus,
 	mountShop,
+	paragraphs,
 	problemText,
+	richText,
+	safeHref,
 	settingsOf,
 	textsOf,
 } from './shop-common.js';
@@ -35,6 +40,8 @@ const QUOTE_DELAY = 300;
 const ORDER_ID = /^ord_[A-Za-z0-9_-]{1,64}$/;
 /** Problems that mean the cart changed on the server: it is priced again at once. */
 const REQUOTE = ['out_of_stock', 'offer_unavailable', 'points_changed', 'slot_taken', 'cod_not_allowed', 'validation_failed'];
+/** The policies a checkout shows, in this order (`settings.checkout.policies`). */
+const POLICIES = Object.freeze(['shipping', 'returns', 'warranty', 'privacy', 'terms']);
 
 /** @typedef {import('./cart-store.js').CartLine} CartLine */
 
@@ -89,9 +96,16 @@ export const mountCart = async ({ host, config, shop, win }) => {
 			note.addEventListener('input', () => {
 				attemptKey = null;
 			});
-			const policies = Object.entries(settings.checkout.policies).filter(
-				([, text]) => typeof text === 'string' && text.trim(),
-			);
+			// the policies come filled, and only the ones the shop wrote (E3): HTML rebuilt from the allowed tags, or paragraphs
+			const policies = POLICIES.flatMap((key) => {
+				const text = settings.checkout.policies[key];
+				return typeof text === 'string' && text.trim() ? [/** @type {[string, string]} */ ([key, text])] : [];
+			});
+			/** @param {string} text */
+			const policyBody = (text) =>
+				settings.checkout.policyFormat === 'html'
+					? [h(doc, 'div', { class: 'rich' }, richText(doc, text))]
+					: paragraphs(doc, text);
 			const checkoutBox = h(
 				doc,
 				'div',
@@ -106,13 +120,7 @@ export const mountCart = async ({ host, config, shop, win }) => {
 							'section',
 							{ 'aria-label': t('checkout.policies') },
 							...policies.map(([key, text]) =>
-								h(
-									doc,
-									'details',
-									{},
-									h(doc, 'summary', {}, t(`checkout.policy.${key}`)),
-									...text.split(/\n\s*\n/).map((p) => h(doc, 'p', {}, p.trim())),
-								),
+								h(doc, 'details', {}, h(doc, 'summary', {}, t(`checkout.policy.${key}`)), ...policyBody(text)),
 							),
 						)
 					: null,
@@ -245,16 +253,18 @@ export const mountCart = async ({ host, config, shop, win }) => {
 								'aria-label': t('cart.removeLabel', { name }),
 							}),
 						);
+					const link = typeof line.url === 'string' ? safeHref(line.url) : '';
+					const problems = Array.isArray(line.problems) ? line.problems : [];
 					return h(
 						doc,
 						'li',
-						{},
+						problems.length > 0 ? { class: 'problem' } : {},
 						line.image ? h(doc, 'img', { src: line.image, alt: '' }) : h(doc, 'span'),
 						h(
 							doc,
 							'div',
 							{ class: 'body' },
-							h(doc, 'strong', {}, name),
+							h(doc, 'strong', {}, link ? h(doc, 'a', { href: link }, name) : name),
 							line.variantName ? h(doc, 'span', { class: 'meta' }, line.variantName) : null,
 							line.gradeLabel ? h(doc, 'span', { class: 'meta' }, t('cart.grade', { grade: line.gradeLabel })) : null,
 							line.slot ? h(doc, 'span', { class: 'meta' }, t('cart.slot', { start: dateText(line.slot.start) })) : null,
@@ -264,7 +274,7 @@ export const mountCart = async ({ host, config, shop, win }) => {
 							line.discount > 0
 								? h(doc, 'span', { class: 'save' }, t('cart.lineDiscount', { amount: money(line.discount, cur) }))
 								: null,
-							...line.problems.map((/** @type {{ code: string }} */ problem) =>
+							...problems.map((/** @type {{ code: string }} */ problem) =>
 								h(
 									doc,
 									'span',

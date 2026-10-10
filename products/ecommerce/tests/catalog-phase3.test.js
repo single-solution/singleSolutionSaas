@@ -193,6 +193,8 @@ describe('E2 featured flag and staff filters', () => {
 		const byState = await api('GET', '/v1/products/counts?by=stockState');
 		expect(byState.groups).toMatchObject({ partial: 1, full: 4 });
 		expect((await api('GET', '/v1/products/counts?by=featured')).groups).toMatchObject({ true: 1 });
+		const byCategory = await api('GET', '/v1/products/counts?by=category');
+		expect(byCategory.groups).toMatchObject({ [ids.dresses.id]: 2, none: 1 });
 		const ticket = await shop.ticket(['catalog.edit']);
 		expect((await shop.admin(ticket, 'GET', '/v1/admin/products/counts?by=grade')).json.groups['a-plus']).toBe(1);
 	});

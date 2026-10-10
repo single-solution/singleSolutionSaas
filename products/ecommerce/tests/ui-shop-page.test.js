@@ -157,14 +157,16 @@ describe('product page', () => {
 		expect(buttonOf(host, text('page.added'))).toBeTruthy();
 		expect($(host, '.buy-status, [role="status"]')).toBeTruthy();
 		expect(textOf(host)).toContain(text('page.addedStatus', { name: 'Phone One' }));
-		// out of stock variant: Add to cart disabled
+		// out of stock variant: Add to cart disabled; Red exists only with 128 GB, so picking Red moves there
 		await setValue($(host, '#ss-page-option-0'), 'Red');
-		await setValue($(host, '#ss-page-option-1'), '128 GB');
+		expect($(host, '#ss-page-option-1').value).toBe('128 GB');
 		expect(textOf(host)).toContain(text('page.outOfStock'));
 		expect(buttonOf(host, text('page.addToCart')).disabled).toBe(true);
-		// a combination that does not exist
+		// a combination that does not exist moves to the nearest variant with the value picked
 		await setValue($(host, '#ss-page-option-1'), '256 GB');
-		expect(textOf(host)).toContain(text('page.noVariant'));
+		expect($(host, '#ss-page-option-0').value).toBe('Blue');
+		expect(textOf(host)).toContain('PKR 1,200.00');
+		expect(textOf(host)).not.toContain(text('page.noVariant'));
 	});
 
 	it('shows the price after deals with the saving', async () => {

@@ -1,8 +1,9 @@
 /**
  * Compare products side by side (visitor widget `compare`, feature compare; PLAN 0.8.8 Shopper extras): the products
  * the shopper picked with the grid's and the product page's compare toggles (kept in the browser, at most the
- * `compare` setting's number), as a table of image, name, price, brand, condition grades, rating and every comparable
- * attribute (`GET /v1/shop/compare`). Each product can be taken off, or the whole list cleared.
+ * `compare` setting's number), as a table of image, name, price (a range when the answer gives `priceMax`), brand,
+ * condition grades, rating and every comparable attribute (`GET /v1/shop/compare`). Each product can be taken off, or
+ * the whole list cleared.
  * @module
  */
 import { button, currencyOf, formatsOf, h, mountShop, priceNode, ratingText, settingsOf, textsOf } from './shop-common.js';
@@ -68,6 +69,7 @@ export const mountCompare = async ({ host, config, shop, win }) => {
 						products.map((item) =>
 							priceNode(doc, t, formats, {
 								price: item.price,
+								max: item.priceMax ?? null,
 								was: item.compareAtPrice,
 								currency: currencyOf(settings, item.currency),
 							}),

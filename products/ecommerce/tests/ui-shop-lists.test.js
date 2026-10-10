@@ -80,6 +80,37 @@ describe('wishlist', () => {
 		expect(textOf(host)).toContain(text('wishlist.empty'));
 	});
 
+	it('shows the new card fields: price range, Featured and the variants’ photos', async () => {
+		const fake = makeShop({
+			signIn: 's1',
+			features: ['wishlist'],
+			routes: {
+				'GET /v1/shop/wishlist': () =>
+					ok({
+						items: [
+							card('prd_1', {
+								priceMax: 9000,
+								featured: true,
+								image: null,
+								cardImages: [
+									{ url: 'https://cdn.example.com/a.png', alt: 'A' },
+									{ url: 'https://cdn.example.com/b.png', alt: 'B' },
+								],
+							}),
+						],
+						max: 200,
+					}),
+			},
+		});
+		const host = place('wishlist');
+		await mountWishlist({ host, config: configOf(['wishlist']), shop: fake.shop, win: window });
+		await flush();
+		expect(textOf(host)).toContain(text('shop.priceRange', { min: 'PKR 50.00', max: 'PKR 90.00' }));
+		expect($(host, '.badge.accent').textContent).toBe(text('shop.featured'));
+		expect($$(host, '.quad img')).toHaveLength(2);
+		expect($(host, 'a.pic').getAttribute('href')).toBe('https://shop.example.com/products/prd_1');
+	});
+
 	it('shows an error and has no Add to cart without the cart', async () => {
 		let broken = true;
 		const fake = makeShop({
@@ -103,7 +134,7 @@ describe('wishlist', () => {
 describe('compare', () => {
 	const answer = {
 		products: [
-			{ ...card('prd_1'), brand: 'Acme', grades: ['Like new'] },
+			{ ...card('prd_1', { priceMax: 7000 }), brand: 'Acme', grades: ['Like new'] },
 			{ ...card('prd_2', { image: null, rating: { average: 0, count: 0 }, inStock: false }), brand: null, grades: [] },
 		],
 		rows: [
@@ -128,7 +159,7 @@ describe('compare', () => {
 		const page = textOf(host);
 		for (const part of [
 			'Item prd_1',
-			'PKR 50.00',
+			text('shop.priceRange', { min: 'PKR 50.00', max: 'PKR 70.00' }),
 			'PKR 60.00',
 			'Acme',
 			'Like new',
@@ -161,6 +192,8 @@ describe('texts', () => {
 		const files = [
 			'product-grid',
 			'product-page',
+			'shop-filters',
+			'shop-page-parts',
 			'cart',
 			'my-orders',
 			'wishlist',
@@ -178,12 +211,15 @@ describe('texts', () => {
 			),
 		].map((match) => String(match[1]));
 		const dynamic = [
-			...['newest', 'price_asc', 'price_desc', 'top', 'rating', 'name'].map((key) => `grid.sort.${key}`),
+			...['newest', 'price_asc', 'price_desc', 'top', 'rating', 'name', 'updated', 'sold_asc'].map(
+				(key) => `grid.sort.${key}`,
+			),
 			...['name', 'phone', 'line1', 'line2', 'city', 'area', 'postalCode', 'country', 'notes'].map(
 				(key) => `checkout.field.${key}`,
 			),
 			...['cod', 'online', 'bank_transfer', 'pickup'].map((key) => `checkout.method.${key}`),
-			...['shipping', 'returns', 'privacy', 'terms'].map((key) => `checkout.policy.${key}`),
+			...['shipping', 'returns', 'warranty', 'privacy', 'terms'].map((key) => `checkout.policy.${key}`),
+			...['earn', 'redeem', 'refund', 'expire', 'adjust', 'reverse'].map((key) => `orders.points.kind.${key}`),
 			...['unpaid', 'pending', 'paid', 'partially_refunded', 'refunded'].map((key) => `orders.payment.${key}`),
 			...['return', 'warranty'].map((key) => `returns.kind.${key}`),
 			...['requested', 'approved', 'rejected', 'received', 'refunded', 'closed'].map((key) => `returns.status.${key}`),
@@ -196,6 +232,7 @@ describe('texts', () => {
 				'slot_unavailable',
 				'slot_taken',
 				'one_per_slot',
+				'sold_out',
 			].map((key) => `cart.problem.${key}`),
 		];
 		const missing = [...used, ...dynamic].filter((key) => !Object.hasOwn(TEXTS, key));

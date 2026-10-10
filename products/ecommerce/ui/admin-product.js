@@ -1,707 +1,427 @@
 /**
- * The product editor of the catalog admin widget (PLAN 0.8.8 Catalog, Items): name, slug, kind, status, texts,
- * categories, brand, tags, specs by attribute, options and the variants table (SKU, price, was price, cost, stock —
- * per location with multi-location stock — grade, active), stock tracking, serials, digital and booking fields, SEO
- * text and return/warranty days; then, for a saved product, its images (upload, order, alternative text, remove),
- * stock changes, AI copy (fills the fields as suggestions; nothing is saved until Save), licence keys and digital
- * files. Prices are typed as decimals of the shop currency.
+ * A product's detail in the catalog admin widget (PLAN 0.6; PLAN 0.8.8 Catalog, Items; PLAN 0.8.10 E2–E16): the head
+ * (name, status and featured badges; Edit and Stock; a More menu with AI copy, Generate variants, Photos, Video and
+ * Delete behind a typed confirmation), the facts, and cards for variants, photos, video, the description (rich text
+ * built safely), specs, the attribute setup, FAQs, SEO and the digital delivery. The Stock dialog sets or adjusts the
+ * units of each variant (at a location with multi-location stock) and marks variants sold out; AI copy suggests the
+ * summary, description, SEO title and description and FAQs to check and apply. The editor is
+ * `./admin-product-editor.js`.
  * @module
  */
-import { safeFileName } from '../core/digital.js';
-import { entriesOf, wholeOf } from './admin-kit.js';
-import { categoryChoices, variantLabel } from './admin-taxonomy.js';
+import { wholeOf } from './admin-kit.js';
+import { faqsEditor, paragraphsOf, richNodes, seoFacts } from './admin-fields.js';
+import { digitalCard, photosDialog, videoDialog, videoText } from './admin-media.js';
+import { card, deleteEntry, detailHead, masonryOf, yesNo } from './admin-screen.js';
+import { variantLabel } from './admin-taxonomy.js';
+import { generateDialog, stockText } from './admin-variants.js';
 
 /** @typedef {import('./admin-kit.js').Kit} Kit */
-/** @typedef {import('./admin-taxonomy.js').Lookups} Lookups */
+/** @typedef {import('./admin-kit.js').Tone} Tone */
+/** @typedef {import('./admin-products.js').ProductContext} ProductContext */
 
-/** Fields AI copy writes. */
-const AI_FIELDS = Object.freeze(['summary', 'description', 'seoTitle', 'seoDescription']);
-/** Image types the catalog stores. */
-const IMAGE_ACCEPT = 'image/jpeg,image/png,image/webp,image/avif';
-
-/**
- * A new product's fields.
- * @returns {any}
- */
-const blank = () => ({
-	id: null,
-	name: '',
-	slug: '',
-	kind: 'physical',
-	status: 'draft',
-	summary: '',
-	description: '',
-	categoryIds: [],
-	brandId: null,
-	tags: [],
-	specs: {},
-	options: [],
-	variants: [
-		{ sku: '', options: {}, price: 0, compareAtPrice: null, cost: null, stock: 0, locations: {}, grade: null, active: true },
-	],
-	trackStock: true,
-	serialized: false,
-	digital: null,
-	booking: null,
-	seo: { title: '', description: '' },
-	returnDays: null,
-	warrantyDays: null,
-	media: [],
-});
+/** Product statuses and their status colours. */
+export const STATUS_TONES = Object.freeze(
+	/** @type {Record<string, Tone>} */ ({ active: 'success', draft: 'warning', archived: 'neutral' }),
+);
+/** The texts AI copy can suggest for a product. */
+const AI_FIELDS = Object.freeze(['summary', 'description', 'seoTitle', 'seoDescription', 'faqs']);
 
 /**
- * Every combination of option values (`[{ Colour: 'Red', Size: 'S' }, …]`).
- * @param {Array<{ name: string, values: string[] }>} axes
- * @returns {Array<Record<string, string>>}
- */
-const combinations = (axes) =>
-	axes.reduce(
-		/** @param {Array<Record<string, string>>} out */
-		(out, axis) => out.flatMap((combo) => axis.values.map((value) => ({ ...combo, [axis.name]: value }))),
-		[{}],
-	);
-
-/**
- * The product editor. `done(changed)` goes back to the list.
- * @param {Kit} kit
- * @param {{ id: string | null, lookups: Lookups, done: (changed: boolean) => void }} options
- * @returns {HTMLElement}
- */
-export const productEditor = (kit, { id, lookups, done }) => {
-	const { t, h, has } = kit;
-	const box = h('div');
-	const line = kit.status();
-	box.append(line);
-	let changed = false;
-
-	/** @param {any} product @param {string} [message] */
-	const render = (product, message = '') => {
-		const note = kit.status();
-		const isNew = !product.id;
-		const { categories, brands, attributes, locations } = lookups.state;
-
-		// ---------------------------------------------------------------------------------------------- basics
-		const name = kit.input(product.name, { maxlength: '200', required: '' });
-		const slug = kit.input(product.slug, { maxlength: '120' });
-		const kinds = [
-			'physical',
-			...(has('digital_goods') || product.kind === 'digital' ? ['digital'] : []),
-			...(has('bookings') || product.kind === 'booking' ? ['booking'] : []),
-		];
-		const kind = kit.select(
-			kinds.map((key) => ({ value: key, label: t(`catalogAdmin.kind.${key}`) })),
-			product.kind,
-		);
-		const status = kit.select(
-			['draft', 'active', 'archived'].map((key) => ({ value: key, label: t(`catalogAdmin.status.${key}`) })),
-			product.status,
-		);
-		const summary = kit.area(product.summary, { maxlength: '500' });
-		const description = kit.area(product.description, { rows: '6' });
-		const brand = kit.select(
-			[{ value: '', label: t('catalogAdmin.noBrand') }, ...brands.map((item) => ({ value: item.id, label: item.name }))],
-			product.brandId ?? '',
-		);
-		const tags = kit.input(product.tags.join(', '));
-		const categoryBoxes = categoryChoices(categories).map((choice) => ({
-			id: choice.value,
-			...kit.check(choice.label, product.categoryIds.includes(choice.value)),
-		}));
-
-		// ----------------------------------------------------------------------------------------------- specs
-		const specs = attributes.map((attribute) => {
-			const current = product.specs[attribute.id];
-			const value = current === undefined || current === null ? '' : String(current);
-			const control =
-				attribute.type === 'boolean'
-					? kit.select(
-							[
-								{ value: '', label: t('catalogAdmin.notSet') },
-								{ value: 'true', label: t('admin.yes') },
-								{ value: 'false', label: t('admin.no') },
-							],
-							value,
-						)
-					: attribute.type === 'choice'
-						? kit.select(
-								[
-									{ value: '', label: t('catalogAdmin.notSet') },
-									...attribute.choices.map((/** @type {string} */ choice) => ({ value: choice, label: choice })),
-								],
-								value,
-							)
-						: kit.input(value, attribute.type === 'number' ? { type: 'number', step: 'any' } : {});
-			return { attribute, control };
-		});
-
-		// --------------------------------------------------------------------------------------------- variants
-		const axes = [0, 1, 2].map((index) => ({
-			name: kit.input(product.options[index]?.name ?? '', { maxlength: '40' }),
-			values: kit.input((product.options[index]?.values ?? []).join(', ')),
-		}));
-		const axesOf = () =>
-			axes
-				.map((axis) => ({ name: axis.name.value.trim(), values: entriesOf(axis.values.value, true) }))
-				.filter((axis) => axis.name && axis.values.length > 0);
-		/** @typedef {{ variant: any, sku: HTMLInputElement, price: HTMLInputElement, was: HTMLInputElement, cost: HTMLInputElement,
-		 *   stock: HTMLInputElement | null, locations: Map<string, HTMLInputElement>, grade: HTMLInputElement | HTMLSelectElement,
-		 *   active: HTMLInputElement }} VariantRow */
-		/** @type {VariantRow[]} */
-		let rows = [];
-		const variantsBox = h('div');
-		/** @type {Array<{ key: string, label: string }>} */
-		const grades = gradesOf(kit);
-		/** @param {any} variant @returns {VariantRow} */
-		const rowFor = (variant) => {
-			const locationInputs = new Map(
-				has('multi_location') && !variant.id
-					? locations.map((location) => [
-							location.id,
-							kit.input(String(variant.locations?.[location.id] ?? 0), {
-								type: 'number',
-								min: '0',
-								step: '1',
-								'aria-label': t('catalogAdmin.stockAt', { location: location.name }),
-							}),
-						])
-					: [],
-			);
-			const label = variantLabel(kit, variant);
-			return {
-				variant,
-				sku: kit.input(variant.sku, { maxlength: '64', 'aria-label': t('catalogAdmin.skuOf', { variant: label }) }),
-				price: kit.input(kit.decimal(variant.price), {
-					inputmode: 'decimal',
-					'aria-label': t('catalogAdmin.priceOf', { variant: label }),
-				}),
-				was: kit.input(kit.decimal(variant.compareAtPrice), {
-					inputmode: 'decimal',
-					'aria-label': t('catalogAdmin.wasOf', { variant: label }),
-				}),
-				cost: kit.input(kit.decimal(variant.cost), {
-					inputmode: 'decimal',
-					'aria-label': t('catalogAdmin.costOf', { variant: label }),
-				}),
-				stock:
-					!variant.id && !has('multi_location')
-						? kit.input(String(variant.stock ?? 0), {
-								type: 'number',
-								min: '0',
-								step: '1',
-								'aria-label': t('catalogAdmin.stockOf', { variant: label }),
-							})
-						: null,
-				locations: locationInputs,
-				grade:
-					grades.length > 0
-						? kit.select(
-								[
-									{ value: '', label: t('catalogAdmin.noGrade') },
-									...grades.map((grade) => ({ value: grade.key, label: grade.label })),
-								],
-								variant.grade ?? '',
-								{ 'aria-label': t('catalogAdmin.gradeOf', { variant: label }) },
-							)
-						: kit.input(variant.grade ?? '', { 'aria-label': t('catalogAdmin.gradeOf', { variant: label }) }),
-				active: (() => {
-					const { box: active } = kit.check('', variant.active !== false);
-					active.setAttribute('aria-label', t('catalogAdmin.activeOf', { variant: label }));
-					return active;
-				})(),
-			};
-		};
-		const drawVariants = () => {
-			const optionNames = axesOf().map((axis) => axis.name);
-			const headers = [
-				...(has('variants') ? [t('catalogAdmin.variant')] : []),
-				t('catalogAdmin.sku'),
-				t('catalogAdmin.price'),
-				t('catalogAdmin.wasPrice'),
-				t('catalogAdmin.cost'),
-				t('catalogAdmin.stock'),
-				...(has('grades_serials') ? [t('catalogAdmin.grade')] : []),
-				t('catalogAdmin.active'),
-				...(has('variants') && rows.length > 1 ? [''] : []),
-			];
-			variantsBox.replaceChildren(
-				kit.table(
-					headers,
-					rows.map((entry) => [
-						...(has('variants') ? [optionNames.map((axis) => entry.variant.options?.[axis] ?? '').join(' / ') || '—'] : []),
-						entry.sku,
-						entry.price,
-						entry.was,
-						entry.cost,
-						entry.stock ??
-							(entry.locations.size > 0
-								? h('div', {}, [...entry.locations.values()])
-								: kit.text('span', {}, stockText(kit, entry.variant, locations))),
-						...(has('grades_serials') ? [entry.grade] : []),
-						entry.active,
-						...(has('variants') && rows.length > 1
-							? [
-									kit.button(t('admin.remove'), () => {
-										rows = rows.filter((other) => other !== entry);
-										drawVariants();
-									}),
-								]
-							: []),
-					]),
-				),
-			);
-		};
-		rows = product.variants.map(rowFor);
-		const makeVariants = kit.button(t('catalogAdmin.makeVariants'), () => {
-			const next = combinations(axesOf());
-			const key = (/** @type {Record<string, string>} */ options) => JSON.stringify(Object.entries(options).sort());
-			const known = new Map(rows.map((entry) => [key(entry.variant.options ?? {}), entry]));
-			rows = next.map(
-				(options) =>
-					known.get(key(options)) ??
-					rowFor({
-						sku: '',
-						options,
-						price: 0,
-						compareAtPrice: null,
-						cost: null,
-						stock: 0,
-						locations: {},
-						grade: null,
-						active: true,
-					}),
-			);
-			drawVariants();
-		});
-		drawVariants();
-
-		// ------------------------------------------------------------------------------------- stock and kinds
-		const trackStock = kit.check(t('catalogAdmin.trackStock'), product.trackStock);
-		const serialized = kit.check(t('catalogAdmin.serialized'), product.serialized);
-		const licenceKeys = kit.check(t('catalogAdmin.licenceKeys'), product.digital?.licenceKeys === true);
-		const downloadLimit = kit.input(String(product.digital?.downloadLimit ?? 0), { type: 'number', min: '0', step: '1' });
-		const duration = kit.input(String(product.booking?.durationMinutes ?? 60), {
-			type: 'number',
-			min: '5',
-			max: '1440',
-			step: '5',
-		});
-		const digitalGroup = kit.group(t('catalogAdmin.digital'), [
-			licenceKeys.node,
-			kit.field(t('catalogAdmin.downloadLimit'), downloadLimit),
-		]);
-		const bookingGroup = kit.group(t('catalogAdmin.booking'), [kit.field(t('catalogAdmin.duration'), duration)]);
-		const showKind = () => {
-			digitalGroup.hidden = kind.value !== 'digital';
-			bookingGroup.hidden = kind.value !== 'booking';
-		};
-		kind.addEventListener('change', showKind);
-		showKind();
-
-		const seoTitle = kit.input(product.seo.title, { maxlength: '200' });
-		const seoDescription = kit.area(product.seo.description, { maxlength: '500' });
-		const returnDays = kit.input(product.returnDays === null ? '' : String(product.returnDays), {
-			type: 'number',
-			min: '0',
-			step: '1',
-		});
-		const warrantyDays = kit.input(product.warrantyDays === null ? '' : String(product.warrantyDays), {
-			type: 'number',
-			min: '0',
-			step: '1',
-		});
-
-		// ------------------------------------------------------------------------------------------------ save
-		const bodyOf = () => {
-			/** @type {Record<string, string | number | boolean>} */
-			const specValues = {};
-			for (const { attribute, control } of specs) {
-				if (control.value === '') continue;
-				specValues[attribute.id] =
-					attribute.type === 'number'
-						? Number(control.value)
-						: attribute.type === 'boolean'
-							? control.value === 'true'
-							: control.value;
-			}
-			let bad = false;
-			/** @param {HTMLInputElement} input @param {boolean} required */
-			const priceOf = (input, required) => {
-				const value = kit.amount(input.value);
-				if (Number.isNaN(value) || (required && value === null)) bad = true;
-				return Number.isNaN(value) ? null : value;
-			};
-			const variants = rows.map((entry) => ({
-				...(entry.variant.id ? { id: entry.variant.id } : {}),
-				sku: entry.sku.value.trim(),
-				options: has('variants') ? (entry.variant.options ?? {}) : {},
-				price: priceOf(entry.price, true),
-				compareAtPrice: priceOf(entry.was, false),
-				cost: priceOf(entry.cost, false),
-				active: entry.active.checked,
-				...(has('grades_serials') ? { grade: entry.grade.value.trim() || null } : {}),
-				...(entry.variant.id
-					? {}
-					: entry.locations.size > 0
-						? { locations: Object.fromEntries([...entry.locations].map(([key, input]) => [key, Number(input.value) || 0])) }
-						: { stock: Number(entry.stock?.value) || 0 }),
-			}));
-			const days = [returnDays, warrantyDays].map((input) => wholeOf(input.value));
-			if (days.some((value) => Number.isNaN(value))) bad = true;
-			if (bad) return null;
-			return {
-				name: name.value,
-				slug: slug.value.trim(),
-				kind: kind.value,
-				status: status.value,
-				summary: summary.value,
-				description: description.value,
-				categoryIds: categoryBoxes.filter((entry) => entry.box.checked).map((entry) => entry.id),
-				brandId: brand.value || null,
-				tags: entriesOf(tags.value, true),
-				specs: specValues,
-				...(has('variants') ? { options: axesOf() } : {}),
-				variants,
-				trackStock: trackStock.box.checked,
-				...(has('grades_serials') ? { serialized: serialized.box.checked } : {}),
-				...(kind.value === 'digital'
-					? { digital: { licenceKeys: licenceKeys.box.checked, downloadLimit: Number(downloadLimit.value) || 0 } }
-					: {}),
-				...(kind.value === 'booking' ? { booking: { durationMinutes: Number(duration.value) } } : {}),
-				seo: { title: seoTitle.value, description: seoDescription.value },
-				...(has('returns') ? { returnDays: days[0], warrantyDays: days[1] } : {}),
-			};
-		};
-		const save = kit.button(
-			t('admin.save'),
-			async () => {
-				const body = bodyOf();
-				if (!body) return kit.say(note, t('admin.checkNumbers'), true);
-				const answer = await kit.call(
-					isNew ? 'POST' : 'PATCH',
-					isNew ? '/v1/admin/products' : `/v1/admin/products/${product.id}`,
-					body,
-				);
-				if (!answer.ok) {
-					kit.fail(note, answer);
-					return answer;
-				}
-				changed = true;
-				render(answer.data, t('admin.saved'));
-				return answer;
-			},
-			{ primary: true },
-		);
-		const ai =
-			!isNew && has('ai_copy')
-				? kit.button(t('catalogAdmin.aiCopy'), async () => {
-						kit.say(note, t('catalogAdmin.aiWorking'));
-						const answer = await kit.call('POST', `/v1/admin/products/${product.id}/ai-copy`, { fields: [...AI_FIELDS] });
-						if (!answer.ok) {
-							kit.fail(note, answer);
-							return answer;
-						}
-						const got = answer.data.suggestions ?? {};
-						/** @type {Array<[string, HTMLInputElement | HTMLTextAreaElement]>} */
-						const targets = [
-							['summary', summary],
-							['description', description],
-							['seoTitle', seoTitle],
-							['seoDescription', seoDescription],
-						];
-						for (const [key, control] of targets) if (typeof got[key] === 'string') control.value = got[key];
-						kit.say(note, t('catalogAdmin.aiFilled'));
-						return answer;
-					})
-				: null;
-		const remove = isNew
-			? null
-			: kit.confirmButton(t('admin.delete'), t('admin.confirmDelete'), async () => {
-					const answer = await kit.call('DELETE', `/v1/admin/products/${product.id}`);
-					if (!answer.ok) {
-						kit.fail(note, answer);
-						return answer;
-					}
-					done(true);
-					return answer;
-				});
-
-		kit.put(box, [
-			h('div', { class: 'head' }, [
-				kit.text('h3', {}, isNew ? t('catalogAdmin.newProduct') : t('admin.editing', { name: product.name })),
-				kit.button(t('admin.back'), () => done(changed)),
-			]),
-			h('div', { class: 'fields' }, [
-				kit.field(t('catalogAdmin.name'), name),
-				kit.field(t('catalogAdmin.slug'), slug),
-				kit.field(t('catalogAdmin.kind'), kind),
-				kit.field(t('admin.status'), status),
-				kit.field(t('catalogAdmin.brand'), brand),
-				kit.field(t('catalogAdmin.tags'), tags),
-			]),
-			kit.field(t('catalogAdmin.summary'), summary),
-			kit.field(t('catalogAdmin.description'), description),
-			categoryBoxes.length > 0
-				? kit.group(
-						t('catalogAdmin.categories'),
-						categoryBoxes.map((entry) => entry.node),
-					)
-				: null,
-			specs.length > 0
-				? kit.group(t('catalogAdmin.specs'), [
-						h(
-							'div',
-							{ class: 'fields' },
-							specs.map(({ attribute, control }) =>
-								kit.field(attribute.unit ? `${attribute.name} (${attribute.unit})` : attribute.name, control),
-							),
-						),
-					])
-				: null,
-			has('variants')
-				? kit.group(t('catalogAdmin.options'), [
-						...axes.map((axis, index) =>
-							h('div', { class: 'row' }, [
-								kit.field(t('catalogAdmin.optionName', { number: index + 1 }), axis.name),
-								kit.field(t('catalogAdmin.optionValues', { number: index + 1 }), axis.values),
-							]),
-						),
-						makeVariants,
-					])
-				: null,
-			kit.group(has('variants') ? t('catalogAdmin.variants') : t('catalogAdmin.priceAndStock'), [variantsBox]),
-			h('div', { class: 'fields' }, [trackStock.node, has('grades_serials') ? serialized.node : null]),
-			digitalGroup,
-			bookingGroup,
-			kit.group(t('catalogAdmin.seo'), [
-				kit.field(t('catalogAdmin.seoTitle'), seoTitle),
-				kit.field(t('catalogAdmin.seoDescription'), seoDescription),
-			]),
-			has('returns')
-				? h('div', { class: 'fields' }, [
-						kit.field(t('catalogAdmin.returnDays'), returnDays),
-						kit.field(t('catalogAdmin.warrantyDays'), warrantyDays),
-					])
-				: null,
-			h('div', { class: 'actions' }, [save, ai, remove]),
-			note,
-			isNew ? null : imagesOf(kit, product),
-			isNew || !product.trackStock
-				? null
-				: stockOf(kit, product, locations, (next) => render(next, t('catalogAdmin.stockSaved'))),
-			!isNew && product.kind === 'digital' && has('digital_goods') ? digitalOf(kit, product) : null,
-		]);
-		kit.say(note, message);
-	};
-
-	if (id === null) render(blank());
-	else
-		void kit.call('GET', `/v1/admin/products/${id}`).then((answer) => {
-			if (answer.ok) render(answer.data);
-			else {
-				kit.fail(line, answer);
-				box.append(kit.button(t('admin.back'), () => done(false)));
-			}
-		});
-	return box;
-};
-
-/**
- * Grades of the website, when the widget settings carry them (`settings.catalog.grades: [{ key, label }]`).
- * @param {Kit} kit
- * @returns {Array<{ key: string, label: string }>}
- */
-const gradesOf = (kit) => {
-	const list = kit.settings.catalog?.grades;
-	return Array.isArray(list) ? list : [];
-};
-
-/**
- * A saved variant's stock for people (per location with multi-location stock).
- * @param {Kit} kit @param {any} variant @param {Array<{ id: string, name: string }>} locations
- */
-const stockText = (kit, variant, locations) => {
-	const at = Object.entries(variant.locations ?? {});
-	if (at.length === 0) return String(variant.stock ?? 0);
-	const names = new Map(locations.map((location) => [location.id, location.name]));
-	return at
-		.map(([key, units]) => kit.t('catalogAdmin.unitsAt', { units: Number(units), location: names.get(key) ?? key }))
-		.join(', ');
-};
-
-/**
- * Images of a saved product: thumbnails with alternative text, move earlier or later, remove, and upload more.
+ * The price of a product for people: one price, or the lowest and highest.
  * @param {Kit} kit @param {any} product
  */
-const imagesOf = (kit, product) => {
-	const { t, h } = kit;
-	const note = kit.status();
-	const shown = h('div', { class: 'thumbs' });
-	/** @type {Array<{ key: string, url: string | null, alt: HTMLInputElement }>} */
-	let media = [];
-	/** @param {any[]} files */
-	const take = (files) => {
-		media = files.map((file) => ({
-			key: file.key,
-			url: file.url ?? null,
-			alt: kit.input(file.alt ?? '', { maxlength: '200' }),
-		}));
-		draw();
-	};
-	const draw = () =>
-		shown.replaceChildren(
-			...media.map((file, index) =>
-				h('figure', {}, [
-					file.url ? kit.h('img', { src: file.url, alt: file.alt.value }) : null,
-					kit.field(t('catalogAdmin.altText', { number: index + 1 }), file.alt),
-					h('div', { class: 'actions' }, [
-						index > 0
-							? kit.button(t('catalogAdmin.moveEarlier'), () => {
-									media.splice(index - 1, 0, ...media.splice(index, 1));
-									draw();
-								})
-							: null,
-						index < media.length - 1
-							? kit.button(t('catalogAdmin.moveLater'), () => {
-									media.splice(index + 1, 0, ...media.splice(index, 1));
-									draw();
-								})
-							: null,
-						kit.confirmButton(t('admin.remove'), t('admin.confirmRemove'), async () => {
-							const answer = await kit.call(
-								'DELETE',
-								`/v1/admin/products/${product.id}/media?key=${encodeURIComponent(file.key)}`,
-							);
-							if (!answer.ok) return kit.fail(note, answer);
-							take(answer.data.media);
-							return answer;
-						}),
-					]),
+const priceText = (kit, product) =>
+	typeof product.priceMax === 'number' && product.priceMax > product.price
+		? kit.t('catalogAdmin.priceRange', { from: kit.money(product.price), to: kit.money(product.priceMax) })
+		: kit.money(product.price);
+
+/**
+ * The Stock dialog: per variant set or adjust its units (at a location with multi-location stock), and sold out.
+ * @param {Kit} kit @param {any} product @param {ProductContext} context
+ */
+const stockDialog = (kit, product, context) => {
+	const { t, has } = kit;
+	const { locations } = context.lookups.state;
+	/** @type {any[]} */
+	const variants = product.variants;
+	const rows = variants.map((variant) => {
+		const label = variantLabel(kit, variant);
+		const mode = kit.select(
+			[
+				{ value: 'adjust', label: t('catalogAdmin.adjustBy') },
+				{ value: 'set', label: t('catalogAdmin.setTo') },
+			],
+			'adjust',
+			{ 'aria-label': t('catalogAdmin.howOf', { variant: label }) },
+		);
+		const units = kit.input('', { type: 'number', step: '1', 'aria-label': t('catalogAdmin.unitsOf', { variant: label }) });
+		const location = kit.select(
+			locations.map((item) => ({ value: item.id, label: item.name })),
+			'',
+			{ 'aria-label': t('catalogAdmin.locationOf', { variant: label }) },
+		);
+		const soldOut = kit.check('', variant.soldOut === true);
+		soldOut.box.setAttribute('aria-label', t('catalogAdmin.soldOutOf', { variant: label }));
+		return { variant, label, mode, units, location, soldOut: soldOut.box };
+	});
+	kit.dialog({
+		title: t('catalogAdmin.stockOfProduct', { name: product.name }),
+		wide: true,
+		body: [
+			kit.text('p', { class: 'muted' }, t(product.trackStock ? 'catalogAdmin.stockNote' : 'catalogAdmin.stockNotTracked')),
+			kit.table(
+				[
+					t('catalogAdmin.variant'),
+					t('catalogAdmin.stockNow'),
+					t('catalogAdmin.how'),
+					t('catalogAdmin.units'),
+					...(has('multi_location') ? [t('catalogAdmin.location')] : []),
+					t('catalogAdmin.soldOut'),
+				],
+				rows.map((row) => [
+					row.label,
+					stockText(kit, row.variant, locations),
+					row.mode,
+					row.units,
+					...(has('multi_location') ? [row.location] : []),
+					row.soldOut,
 				]),
 			),
-		);
-	take(product.media ?? []);
-	const arrange = kit.button(t('catalogAdmin.saveImages'), async () => {
-		const answer = await kit.call('PUT', `/v1/admin/products/${product.id}/media`, {
-			items: media.map((file) => ({ key: file.key, alt: file.alt.value })),
-		});
-		if (!answer.ok) return kit.fail(note, answer);
-		take(answer.data.media);
-		kit.say(note, t('admin.saved'));
-		return answer;
+		],
+		submitLabel: t('catalogAdmin.changeStock'),
+		onSubmit: async () => {
+			/** @type {Array<Record<string, unknown>>} */
+			const changes = [];
+			for (const row of rows) {
+				const value = wholeOf(row.units.value);
+				if (Number.isNaN(value)) return t('admin.checkNumbers');
+				const soldOut = row.soldOut.checked !== (row.variant.soldOut === true);
+				if (value === null && !soldOut) continue;
+				changes.push({
+					variantId: row.variant.id,
+					...(value === null
+						? {}
+						: { [row.mode.value]: value, ...(has('multi_location') ? { locationId: row.location.value } : {}) }),
+					...(soldOut ? { soldOut: row.soldOut.checked } : {}),
+				});
+			}
+			if (changes.length === 0) return t('catalogAdmin.nothingToChange');
+			const answer = await kit.call('POST', `/v1/admin/products/${product.id}/stock`, { changes });
+			if (!answer.ok) return kit.reason(answer);
+			context.show(answer.data, t('catalogAdmin.stockSaved'));
+			return null;
+		},
 	});
-	const picker = kit.input('', { type: 'file', accept: IMAGE_ACCEPT, multiple: '' });
-	picker.addEventListener('change', async () => {
-		for (const file of [...(picker.files ?? [])]) {
-			kit.say(note, t('admin.uploading'));
-			const asked = await kit.call('POST', '/v1/admin/catalog/uploads', {
-				for: 'product',
-				id: product.id,
-				type: file.type,
-				size: file.size,
+};
+
+/**
+ * AI copy (E16): ask for suggestions of the texts picked, change them if needed, and apply the ones ticked.
+ * @param {Kit} kit @param {any} product @param {ProductContext} context
+ */
+const aiDialog = (kit, product, context) => {
+	const { t, h } = kit;
+	const note = kit.status();
+	const picks = AI_FIELDS.map((key) => ({ key, ...kit.check(t(`catalogAdmin.aiField.${key}`), true) }));
+	const results = h('div');
+	/** @type {Array<{ key: string, use: HTMLInputElement, node: HTMLElement, read: () => any }>} */
+	let got = [];
+	const suggest = kit.button(
+		t('catalogAdmin.suggest'),
+		async () => {
+			kit.say(note, t('catalogAdmin.aiWorking'));
+			const answer = await kit.call('POST', `/v1/admin/products/${product.id}/ai-copy`, {
+				fields: picks.filter((pick) => pick.box.checked).map((pick) => pick.key),
 			});
-			if (!asked.ok) return kit.fail(note, asked);
-			if (!(await kit.upload(asked.data.upload, file))) return kit.say(note, t('admin.uploadFailed'), true);
-			const added = await kit.call('POST', `/v1/admin/products/${product.id}/media`, { key: asked.data.key, alt: '' });
-			if (!added.ok) return kit.fail(note, added);
-			take(added.data.media);
-		}
-		picker.value = '';
-		kit.say(note, t('admin.saved'));
+			if (!answer.ok) return kit.fail(note, answer);
+			const suggestions = answer.data.suggestions;
+			got = AI_FIELDS.filter((key) => suggestions[key] !== undefined).map((key) => {
+				const use = kit.check(t('catalogAdmin.applyField', { field: t(`catalogAdmin.aiField.${key}`) }), true);
+				if (key === 'faqs') {
+					const editor = faqsEditor(kit, suggestions.faqs, t('catalogAdmin.aiField.faqs'));
+					return { key, use: use.box, node: h('div', {}, [use.node, editor.node]), read: () => editor.value() };
+				}
+				const control =
+					key === 'description' || key === 'seoDescription'
+						? kit.area(String(suggestions[key]), { rows: key === 'description' ? '6' : '3' })
+						: kit.input(String(suggestions[key]));
+				return {
+					key,
+					use: use.box,
+					node: h('div', {}, [use.node, kit.field(t(`catalogAdmin.aiField.${key}`), control)]),
+					read: () => control.value,
+				};
+			});
+			kit.put(
+				results,
+				got.map((entry) => entry.node),
+			);
+			kit.say(note, t('catalogAdmin.aiCheck'));
+			return answer;
+		},
+		{ primary: true },
+	);
+	kit.dialog({
+		title: t('catalogAdmin.aiCopy'),
+		wide: true,
+		body: [
+			h(
+				'div',
+				{ class: 'checks' },
+				picks.map((pick) => pick.node),
+			),
+			suggest,
+			note,
+			results,
+		],
+		submitLabel: t('catalogAdmin.applySuggestions'),
+		onSubmit: async () => {
+			const chosen = new Map(got.filter((entry) => entry.use.checked).map((entry) => [entry.key, entry.read()]));
+			if (chosen.size === 0) return t('catalogAdmin.nothingToApply');
+			/** @type {Record<string, unknown>} */
+			const body = {};
+			if (chosen.has('summary')) body.summary = chosen.get('summary');
+			if (chosen.has('description')) body.descriptionHtml = paragraphsOf(String(chosen.get('description')));
+			if (chosen.has('faqs')) body.faqs = chosen.get('faqs');
+			if (chosen.has('seoTitle') || chosen.has('seoDescription'))
+				body.seo = {
+					...(chosen.has('seoTitle') ? { title: chosen.get('seoTitle') } : {}),
+					...(chosen.has('seoDescription') ? { description: chosen.get('seoDescription') } : {}),
+				};
+			const answer = await kit.call('PATCH', `/v1/admin/products/${product.id}`, body);
+			if (!answer.ok) return kit.reason(answer);
+			context.show(answer.data, t('catalogAdmin.aiApplied'));
+			return null;
+		},
 	});
-	return kit.group(t('catalogAdmin.images'), [shown, arrange, kit.field(t('catalogAdmin.addImages'), picker), note]);
 };
 
 /**
- * Change the stock of a saved product's variant: add or take units, or set the count (at a location with
- * multi-location stock).
- * @param {Kit} kit @param {any} product @param {Array<{ id: string, name: string }>} locations
- * @param {(product: any) => void} changed
+ * Whether a product's setup has values of variant attributes to generate from (E7).
+ * @param {any} product @param {import('./admin-taxonomy.js').Lookups} lookups
  */
-const stockOf = (kit, product, locations, changed) => {
-	const { t, h } = kit;
-	const note = kit.status();
-	const variant = kit.select(
-		product.variants.map((/** @type {any} */ item) => ({ value: item.id, label: variantLabel(kit, item) })),
+const canGenerate = (product, lookups) =>
+	(product.attributeSetup ?? []).some(
+		(/** @type {any} */ entry) =>
+			lookups.state.attributes.find((attribute) => attribute.id === entry.attributeId)?.on === 'variant' &&
+			entry.values.length + entry.customValues.length > 0,
 	);
-	const location = kit.select(locations.map((item) => ({ value: item.id, label: item.name })));
-	const mode = kit.select([
-		{ value: 'adjust', label: t('catalogAdmin.adjustBy') },
-		{ value: 'set', label: t('catalogAdmin.setTo') },
-	]);
-	const units = kit.input('', { type: 'number', step: '1' });
-	const apply = kit.button(t('catalogAdmin.changeStock'), async () => {
-		const value = wholeOf(units.value);
-		if (value === null || Number.isNaN(value)) return kit.say(note, t('admin.checkNumbers'), true);
-		const answer = await kit.call('POST', `/v1/admin/products/${product.id}/stock`, {
-			changes: [
-				{
-					variantId: variant.value,
-					[mode.value]: value,
-					...(kit.has('multi_location') ? { locationId: location.value } : {}),
-				},
+
+/**
+ * The detail of a product.
+ * @param {Kit} kit @param {any} product @param {ProductContext} context @param {string} [message]
+ * @returns {import('./admin-kit.js').Child[]}
+ */
+export const productDetail = (kit, product, context, message = '') => {
+	const { t, h, has } = kit;
+	const { lookups } = context;
+	const note = kit.status();
+	kit.say(note, message);
+	/** @type {any[]} */
+	const variants = product.variants;
+	const active = variants.filter((variant) => variant.active);
+	const grades = new Map(lookups.grades().map((grade) => [grade.key, grade.label]));
+	const attributes = new Map(lookups.state.attributes.map((attribute) => [attribute.id, attribute]));
+	/** @param {any} attribute @param {unknown} value */
+	const valueText = (attribute, value) =>
+		(Array.isArray(value) ? value : [value])
+			.map((entry) =>
+				attribute?.type === 'boolean'
+					? yesNo(kit, entry === true)
+					: ((attribute?.choices ?? []).find((/** @type {any} */ choice) => (choice.value ?? choice) === entry)?.label ??
+						String(entry)),
+			)
+			.join(', ');
+	const descriptionNodes = product.descriptionHtml
+		? richNodes(kit.doc, product.descriptionHtml)
+		: product.description
+			? [kit.text('p', { class: 'prose' }, product.description)]
+			: [kit.text('p', { class: 'muted' }, t('catalogAdmin.nothingYet'))];
+	/** @param {string} key */
+	const open = (key) => () => {
+		// a removed photo also leaves the variants (as the server does)
+		if (key === 'photos')
+			photosDialog(kit, product, (media) => {
+				const kept = new Set(media.map((file) => file.key));
+				context.show({
+					...product,
+					media,
+					variants: variants.map((variant) => ({
+						...variant,
+						media: (variant.media ?? []).filter((/** @type {any} */ file) => kept.has(file.key)),
+					})),
+				});
+			});
+		if (key === 'video') videoDialog(kit, product, (next) => context.show(next, t('admin.saved')));
+	};
+	return [
+		detailHead(kit, {
+			title: product.name,
+			badges: [
+				kit.badge(t(`catalogAdmin.status.${product.status}`), STATUS_TONES[product.status] ?? 'neutral'),
+				product.featured ? kit.badge(t('catalogAdmin.featured')) : null,
+				product.kind === 'physical' ? null : kit.badge(t(`catalogAdmin.kind.${product.kind}`)),
 			],
-		});
-		if (!answer.ok) return kit.fail(note, answer);
-		changed(answer.data);
-		return answer;
-	});
-	return kit.group(t('catalogAdmin.stockChange'), [
-		h('div', { class: 'fields' }, [
-			kit.field(t('catalogAdmin.variant'), variant),
-			kit.has('multi_location') ? kit.field(t('catalogAdmin.location'), location) : null,
-			kit.field(t('catalogAdmin.how'), mode),
-			kit.field(t('catalogAdmin.units'), units),
+			actions: [
+				kit.button(t('admin.edit'), () => context.edit(product), { primary: true }),
+				kit.button(t('catalogAdmin.stockButton'), () => stockDialog(kit, product, context)),
+			],
+			more: [
+				has('ai_copy') ? { label: t('catalogAdmin.aiCopy'), onSelect: () => aiDialog(kit, product, context) } : null,
+				has('variants') && canGenerate(product, lookups)
+					? {
+							label: t('catalogAdmin.generateVariants'),
+							onSelect: () =>
+								generateDialog(kit, {
+									productId: product.id,
+									done: (next, added) => context.show(next, t('catalogAdmin.generated', { added })),
+								}),
+						}
+					: null,
+				{ label: t('catalogAdmin.managePhotos'), onSelect: open('photos') },
+				{ label: t('catalogAdmin.changeVideo'), onSelect: open('video') },
+				deleteEntry(kit, { name: product.name, path: `/v1/admin/products/${product.id}`, done: context.removed }),
+			],
+		}),
+		note,
+		kit.fieldGrid([
+			[t('catalogAdmin.price'), priceText(kit, product)],
+			[
+				t('catalogAdmin.stock'),
+				product.trackStock
+					? t('catalogAdmin.inStockCount', { count: active.reduce((sum, variant) => sum + variant.stock, 0) })
+					: t('catalogAdmin.notTracked'),
+			],
+			[t('catalogAdmin.stockStateTitle'), product.stockState ? t(`catalogAdmin.stockState.${product.stockState}`) : ''],
+			[t('catalogAdmin.variants'), t('catalogAdmin.variantCount', { count: variants.length, active: active.length })],
+			[
+				t('catalogAdmin.categories'),
+				product.categoryIds.map((/** @type {string} */ id) => lookups.nameOf('categories', id)).join(', '),
+			],
+			[t('catalogAdmin.brand'), lookups.nameOf('brands', product.brandId)],
+			[t('catalogAdmin.tagsTitle'), product.tags.join(', ')],
+			[t('catalogAdmin.slug'), product.slug],
+			[t('catalogAdmin.earlierSlugsTitle'), (product.previousSlugs ?? []).join(', ')],
+			[
+				t('catalogAdmin.returnDaysTitle'),
+				product.returnDays === null || product.returnDays === undefined ? '' : String(product.returnDays),
+			],
+			[
+				t('catalogAdmin.warrantyDaysTitle'),
+				product.warrantyDays === null || product.warrantyDays === undefined ? '' : String(product.warrantyDays),
+			],
+			[
+				t('catalogAdmin.serialized'),
+				has('grades_serials')
+					? product.serialized === null
+						? t('catalogAdmin.asCategories')
+						: yesNo(kit, product.serialized)
+					: '',
+			],
+			[
+				t('catalogAdmin.sizeChart'),
+				has('size_charts')
+					? product.hideSizeGuide
+						? t('catalogAdmin.sizeGuideHidden')
+						: lookups.nameOf('charts', product.sizeChartId) || t('catalogAdmin.chartFromBrand')
+					: '',
+			],
+			[
+				t('catalogAdmin.duration'),
+				product.kind === 'booking' && product.booking ? String(product.booking.durationMinutes) : '',
+			],
+			[t('catalogAdmin.updated'), product.updatedAt ? kit.when(product.updatedAt) : ''],
 		]),
-		apply,
-		note,
-	]);
-};
-
-/**
- * Licence keys (one per line) and downloadable files of a saved digital product.
- * @param {Kit} kit @param {any} product
- */
-const digitalOf = (kit, product) => {
-	const { t, h } = kit;
-	const note = kit.status();
-	const keys = kit.area('', { rows: '4' });
-	const files = h('ul', { class: 'rows' });
-	/** @param {{ name: string, size: number }} file */
-	const listed = (file) =>
-		kit.text('li', {}, t('catalogAdmin.fileLine', { name: file.name, size: Math.ceil(file.size / 1024) }));
-	files.append(
-		...(product.digital?.files ?? []).map((/** @type {any} */ file) =>
-			listed({ name: file.alt || file.key.split('/').pop(), size: file.size }),
-		),
-	);
-	const addKeys = kit.button(t('catalogAdmin.addLicences'), async () => {
-		const answer = await kit.call('POST', `/v1/admin/products/${product.id}/licences`, { keys: entriesOf(keys.value) });
-		if (!answer.ok) return kit.fail(note, answer);
-		keys.value = '';
-		kit.say(note, t('catalogAdmin.licencesAdded', { added: answer.data.added, available: answer.data.available }));
-		return answer;
-	});
-	const picker = kit.input('', { type: 'file' });
-	picker.addEventListener('change', async () => {
-		const file = picker.files?.[0];
-		if (!file) return;
-		kit.say(note, t('admin.uploading'));
-		const asked = await kit.call('POST', `/v1/admin/products/${product.id}/files`, {
-			name: safeFileName(file.name) ?? 'file',
-			type: file.type || 'application/octet-stream',
-			size: file.size,
-		});
-		if (!asked.ok) return kit.fail(note, asked);
-		if (!(await kit.upload(asked.data.upload, file))) return kit.say(note, t('admin.uploadFailed'), true);
-		files.append(listed(asked.data.file));
-		picker.value = '';
-		kit.say(note, t('catalogAdmin.fileAdded', { name: asked.data.file.name }));
-	});
-	return kit.group(t('catalogAdmin.digitalDelivery'), [
-		kit.field(t('catalogAdmin.licencesOnePerLine'), keys),
-		addKeys,
-		files,
-		kit.field(t('catalogAdmin.addFile'), picker),
-		note,
-	]);
+		masonryOf(kit, [
+			card(kit, has('variants') ? t('catalogAdmin.variants') : t('catalogAdmin.priceAndStock'), [
+				kit.table(
+					[
+						t('catalogAdmin.variant'),
+						t('catalogAdmin.sku'),
+						t('catalogAdmin.price'),
+						t('catalogAdmin.stock'),
+						...(has('grades_serials') ? [t('catalogAdmin.grade')] : []),
+						t('admin.status'),
+					],
+					variants.map((variant) => [
+						variantLabel(kit, variant),
+						variant.sku,
+						variant.compareAtPrice
+							? `${kit.money(variant.price)} (${kit.money(variant.compareAtPrice)})`
+							: kit.money(variant.price),
+						stockText(kit, variant, lookups.state.locations),
+						...(has('grades_serials') ? [variant.grade ? (grades.get(variant.grade) ?? variant.grade) : ''] : []),
+						!variant.active
+							? kit.badge(t('catalogAdmin.offSale'))
+							: variant.soldOut
+								? kit.badge(t('catalogAdmin.soldOut'), 'warning')
+								: kit.badge(t('catalogAdmin.onSale'), 'success'),
+					]),
+				),
+			]),
+			card(
+				kit,
+				t('catalogAdmin.images'),
+				[
+					product.media.length === 0
+						? kit.text('p', { class: 'muted' }, t('catalogAdmin.noPhotosYet'))
+						: h(
+								'div',
+								{ class: 'thumbs' },
+								product.media.map((/** @type {any} */ file) =>
+									h('figure', {}, [
+										file.url
+											? kit.h('img', { src: file.url, alt: file.alt ?? '' })
+											: kit.text('span', {}, file.alt || file.key),
+									]),
+								),
+							),
+				],
+				[kit.button(t('catalogAdmin.managePhotos'), open('photos'))],
+			),
+			card(
+				kit,
+				t('catalogAdmin.video'),
+				[kit.text('p', {}, videoText(kit, product.video))],
+				[kit.button(t('catalogAdmin.changeVideo'), open('video'))],
+			),
+			card(kit, t('catalogAdmin.description'), [
+				product.summary ? kit.text('p', { class: 'summary-line' }, product.summary) : null,
+				h('div', { class: 'rich' }, descriptionNodes),
+			]),
+			Object.keys(product.specs).length > 0
+				? card(kit, t('catalogAdmin.specs'), [
+						kit.fieldGrid(
+							Object.entries(product.specs).map(([id, value]) => [
+								attributes.get(id)?.name ?? id,
+								valueText(attributes.get(id), value),
+							]),
+						),
+					])
+				: null,
+			(product.attributeSetup ?? []).length > 0
+				? card(kit, t('catalogAdmin.attributeSetup'), [
+						kit.fieldGrid(
+							product.attributeSetup.map((/** @type {any} */ entry) => [
+								attributes.get(entry.attributeId)?.name ?? entry.attributeId,
+								[...entry.values, ...entry.customValues].map(String).join(', '),
+							]),
+						),
+					])
+				: null,
+			card(kit, t('catalogAdmin.faqs'), [
+				(product.faqs ?? []).length > 0
+					? h(
+							'dl',
+							{ class: 'faqs' },
+							product.faqs.flatMap((/** @type {any} */ faq) => [
+								kit.text('dt', {}, faq.question),
+								kit.text('dd', {}, faq.answer),
+							]),
+						)
+					: kit.text('p', { class: 'muted' }, t('catalogAdmin.nothingYet')),
+			]),
+			card(kit, t('catalogAdmin.seo'), [kit.fieldGrid(seoFacts(kit, product.seo))]),
+			product.kind === 'digital' && has('digital_goods') ? digitalCard(kit, product) : null,
+		]),
+	];
 };

@@ -142,6 +142,85 @@ describe('my orders', () => {
 		expect(buttonOf(host, text('orders.more')).hidden).toBe(true);
 	});
 
+	it('shows each line’s serial numbers and warranty', async () => {
+		const fake = makeShop({
+			signIn: 's1',
+			features: ['checkout'],
+			routes: {
+				'GET /v1/shop/orders': () => ok({ items: [row('ord_1', 'SO-1')], nextCursor: null }),
+				'GET /v1/shop/orders/ord_1': () => {
+					const order = /** @type {any} */ (detail());
+					order.lines = [
+						{ ...order.lines[0], serials: ['356938035643809', '490154203237518'], warrantyDays: 365 },
+						{ ...order.lines[1], serials: [], warrantyDays: 0 },
+						{ ...order.lines[1], id: 'oln_3', name: 'Case', warrantyDays: 90 },
+					];
+					return ok(order);
+				},
+			},
+		});
+		const host = await mountOrders(fake);
+		await click(buttonOf(host, text('orders.open', { number: 'SO-1' })));
+		const lines = $$(host, `ul[aria-label="${text('orders.lines')}"] > li`);
+		expect(lines[0].textContent).toContain(text('orders.serials', { serials: '356938035643809, 490154203237518' }));
+		expect(lines[0].textContent).toContain(text('shop.warrantyDays', { days: 365 }));
+		expect(lines[1].textContent).not.toContain(text('orders.serials', { serials: '' }));
+		expect(lines[1].textContent).not.toContain(text('shop.warrantyDays', { days: 0 }));
+		expect(lines[2].textContent).toContain(text('shop.warrantyMonths', { months: 3 }));
+	});
+
+	it('shows the loyalty points above the orders: balance, points expiring soon and history', async () => {
+		let points = ok({
+			balance: 1250,
+			value: 125000,
+			currency: 'PKR',
+			pointValue: 100,
+			minRedeem: 100,
+			maxPercent: 20,
+			history: [
+				{ at: '2026-10-02T10:00:00.000Z', kind: 'earn', points: 300, orderId: 'ord_1', note: '' },
+				{ at: '2026-10-03T10:00:00.000Z', kind: 'redeem', points: -50, orderId: 'ord_2', note: '' },
+			],
+			expiringSoon: [{ points: 200, expiresAt: '2026-11-01T00:00:00.000Z' }],
+		});
+		const fake = makeShop({
+			features: ['checkout', 'loyalty'],
+			routes: {
+				'GET /v1/shop/orders': () => ok({ items: [row('ord_1', 'SO-1')], nextCursor: null }),
+				'GET /v1/shop/orders/ord_1': () => ok(detail()),
+				'GET /v1/shop/loyalty': () => points,
+			},
+		});
+		const host = await mountOrders(fake);
+		// a guest: no points read
+		expect(fake.all('GET /v1/shop/loyalty')).toHaveLength(0);
+		fake.identify('s1');
+		await flush();
+		const box = () => $(host, 'section[aria-label="' + text('orders.points.title') + '"]');
+		expect(box().textContent).toContain(text('orders.points.balance', { balance: 1250, value: 'PKR 1,250.00' }));
+		expect(box().textContent).toContain(text('orders.points.expiring', { points: 200, date: 'Nov 1, 2026' }));
+		expect(box().querySelector('summary').textContent).toBe(text('orders.points.history'));
+		expect([...box().querySelectorAll('li')].map((li) => li.textContent)).toEqual([
+			text('orders.points.line', { change: '+300', kind: text('orders.points.kind.earn'), date: 'Oct 2, 2026' }),
+			text('orders.points.line', { change: '−50', kind: text('orders.points.kind.redeem'), date: 'Oct 3, 2026' }),
+		]);
+		// hidden while an order is open
+		await click(buttonOf(host, text('orders.open', { number: 'SO-1' })));
+		expect(box().hidden).toBe(true);
+		points = fail(500, 'internal_error');
+		await click(buttonOf(host, text('orders.back')));
+		expect(box().hidden).toBe(false);
+		expect(box().textContent).toBe(text('orders.points.error'));
+		points = ok({ balance: 0, value: 0, currency: 'PKR', history: 'x', expiringSoon: null });
+		fake.identify('s2');
+		await flush();
+		expect(box().textContent).toContain(text('orders.points.balance', { balance: 0, value: 'PKR 0.00' }));
+		expect(box().querySelector('details')).toBeNull();
+		fake.identify(null);
+		await flush();
+		expect(box().children).toHaveLength(0);
+	});
+
 	it('shows the empty list and errors', async () => {
 		const empty = makeShop({ signIn: 's1', routes: { 'GET /v1/shop/orders': () => ok({ items: [], nextCursor: null }) } });
 		expect(textOf(await mountOrders(empty))).toContain(text('orders.empty'));

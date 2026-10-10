@@ -10,7 +10,6 @@ import {
 	click,
 	fieldIn,
 	mountWith,
-	openTab,
 	panelOf,
 	problem,
 	resetPage,
@@ -21,6 +20,22 @@ import {
 	tick,
 	type,
 } from './ui-admin-helpers.js';
+import {
+	chipCount,
+	chipOf,
+	confirmDialog,
+	detailOf,
+	dialogOf,
+	dialogStatus,
+	hasDialog,
+	listCount,
+	menuEntries,
+	openRow,
+	pickMenu,
+	rowOf,
+	rowsOf,
+	submitDialog,
+} from './ui-admin-screens.js';
 
 beforeEach(resetPage);
 afterEach(resetPage);
@@ -61,6 +76,7 @@ const detail = (over = {}) => ({
 			unitPrice: 100000,
 			total: 200000,
 			serials: ['S1'],
+			warrantyDays: 365,
 		},
 		{
 			id: 'oln_2',
@@ -73,11 +89,12 @@ const detail = (over = {}) => ({
 			unitPrice: 50000,
 			total: 50000,
 			serials: [],
+			warrantyDays: 0,
 		},
 	],
 	totals: { subtotal: 250000, discount: 1000, delivery: 0, tax: 500, total: 250000, currency: 'PKR', taxIncluded: true },
-	promotions: { couponCode: 'SAVE' },
-	payment: { method: 'online', state: 'paid', paid: 250000, refunded: 1000, refundable: 249000 },
+	promotions: { couponCode: 'SAVE', pointsRedeemed: 20, pointsEarned: 25 },
+	payment: { method: 'online', state: 'paid', paid: 250000, refunded: 1000, refundable: 249000, advance: 5000 },
 	address: {
 		name: 'Ana',
 		phone: '0300',
@@ -119,7 +136,7 @@ const detail = (over = {}) => ({
 	...over,
 });
 
-const FEATURES = ['checkout', 'returns', 'bulk_actions', 'invoices', 'grades_serials', 'courier_apis'];
+const FEATURES = ['checkout', 'returns', 'bulk_actions', 'invoices', 'grades_serials', 'courier_apis', 'csv'];
 const SETTINGS = {
 	orders: {
 		statuses: [
@@ -128,6 +145,19 @@ const SETTINGS = {
 		],
 		couriers: [{ key: 'fast', name: 'Fast' }],
 	},
+};
+
+/** Counts answers by the `by` parameter. @param {any} call */
+const counts = (call) => {
+	const by = call.url.searchParams.get('by');
+	/** @type {Record<string, Record<string, number>>} */
+	const groups = {
+		status: { confirmed: 1, packed: 1 },
+		role: { open: 1, packed: 1 },
+		paymentState: { unpaid: 2 },
+		paymentMethod: { cod: 2 },
+	};
+	return answer(200, { total: 2, groups: groups[by] ?? {} });
 };
 
 /** @param {Record<string, any>} [routes] @param {string[]} [features] @param {Record<string, any>} [settings] */
@@ -139,21 +169,97 @@ const start = (routes = {}, features = FEATURES, settings = SETTINGS) =>
 			'GET /v1/admin/orders': (/** @type {any} */ call) =>
 				call.url.searchParams.get('cursor')
 					? answer(200, {
-							items: [summary({ id: 'ord_2', number: 'SO2026-2', status: 'packed', statusLabel: 'Packed' })],
+							items: [
+								summary({ id: 'ord_2', number: 'SO2026-2', status: 'packed', statusLabel: 'Packed', role: 'packed' }),
+							],
 							nextCursor: null,
 							hasMore: false,
 						})
 					: answer(200, { items: [summary()], nextCursor: 'c', hasMore: true }),
 			'GET /v1/admin/orders/ord_1': () => answer(200, detail()),
+			'GET /v1/admin/orders/ord_2': () => answer(200, detail({ id: 'ord_2', number: 'SO2026-2' })),
+			'GET /v1/admin/orders/count': () => answer(200, { count: 2, capped: false }),
+			'GET /v1/admin/orders/counts': counts,
+			'GET /v1/admin/returns': () => answer(200, { items: [], nextCursor: null, hasMore: false }),
 			...routes,
 		},
 	});
 
-describe('orders admin: orders', () => {
-	it('lists orders with filters and moves them in bulk', async () => {
+/** The query of the last call to a route. @param {any} server @param {string} key */
+const paramsOf = (server, key) => Object.fromEntries(server.last(key)?.url.searchParams ?? []);
+
+describe('orders admin: the list', () => {
+	it('lists orders with counts, filters them and opens the first', async () => {
+		const { host, root, server } = await start();
+		expect(host.getAttribute('data-ss-mounted')).toBe('orders-admin');
+		const panel = panelOf(root, 'orders');
+		const row = rowOf(panel, 'ord_1');
+		expect(textOf(row)).toContain('SO2026-1');
+		expect(textOf(row)).toContain('PKR 2,500.00');
+		expect(textOf(row)).toContain('Confirmed · Ana · Lahore');
+		expect(textOf(row)).toContain('Cash on delivery · Unpaid');
+		expect(row.getAttribute('aria-current')).toBe('true');
+		// the first order opens by itself, without leaving the list on a narrow widget
+		expect(textOf(detailOf(panel))).toContain('Order SO2026-1');
+		expect(panel.querySelector('.split')?.getAttribute('data-view')).toBe('list');
+		expect(listCount(panel)).toBe('2');
+		expect(chipCount(panel, '')).toBe('2');
+		expect(chipCount(panel, 'packed')).toBe('1');
+		expect(fieldIn(panel, 'Stage').options[1].textContent).toBe('Awaiting payment (0)');
+		expect(fieldIn(panel, 'Payment').options[0].textContent).toBe('All (2)');
+		expect(fieldIn(panel, 'Paid by').options[1].textContent).toBe('Cash on delivery (2)');
+		// load more, then pick the second order
+		await click(buttonIn(panel, 'Load more'));
+		expect(rowsOf(panel)).toHaveLength(2);
+		await openRow(panel, 'ord_2');
+		expect(textOf(detailOf(panel))).toContain('Order SO2026-2');
+		expect(panel.querySelector('.split')?.getAttribute('data-view')).toBe('detail');
+		await click(buttonIn(panel, 'Back'));
+		expect(panel.querySelector('.split')?.getAttribute('data-view')).toBe('list');
+		rowOf(panel, 'ord_1').dispatchEvent(new window.KeyboardEvent('keydown', { key: 'a' }));
+		rowOf(panel, 'ord_1').dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', cancelable: true }));
+		// filters: search, status chip, stage, payment, method and days
+		type(fieldIn(panel, 'Search'), 'ana');
+		await submit(fieldIn(panel, 'Search'));
+		await click(chipOf(panel, 'packed'));
+		await click(chipOf(panel, 'packed'));
+		expect(chipOf(panel, 'packed').getAttribute('aria-pressed')).toBe('true');
+		await change(fieldIn(panel, 'Stage'), 'packed');
+		await change(fieldIn(panel, 'Payment'), 'paid');
+		await change(fieldIn(panel, 'Paid by'), 'online');
+		await change(fieldIn(panel, 'From'), '2026-10-01');
+		await change(fieldIn(panel, 'To'), '2026-10-02');
+		const filters = {
+			q: 'ana',
+			status: 'packed',
+			role: 'packed',
+			paymentState: 'paid',
+			paymentMethod: 'online',
+			from: '2026-10-01T00:00:00.000Z',
+			to: '2026-10-03T00:00:00.000Z',
+		};
+		expect(paramsOf(server, 'GET /v1/admin/orders')).toEqual(filters);
+		expect(paramsOf(server, 'GET /v1/admin/orders/count')).toEqual(filters);
+		const byField = (/** @type {string} */ by) =>
+			Object.fromEntries(
+				server
+					.all('GET /v1/admin/orders/counts')
+					.filter((call) => call.url.searchParams.get('by') === by)
+					.at(-1)?.url.searchParams ?? [],
+			);
+		expect(byField('status')).toEqual({ ...filters, status: undefined, by: 'status' });
+		expect(byField('role').role).toBeUndefined();
+		expect(byField('paymentState').paymentState).toBeUndefined();
+		expect(byField('paymentMethod')).toMatchObject({ paymentState: 'paid', by: 'paymentMethod' });
+		// the open order stays open while it is in the list
+		expect(server.last('GET /v1/admin/orders/ord_1')).toBeDefined();
+		expect(rowOf(panel, 'ord_1').getAttribute('aria-current')).toBe('true');
+	});
+
+	it('moves the selected orders and exports the filtered orders', async () => {
 		/** @type {any[]} */
 		const moves = [];
-		const { host, root, server } = await start({
+		const { root, server, saved } = await start({
 			'POST /v1/admin/orders/bulk-move': (/** @type {any} */ call) => {
 				moves.push(call.body);
 				return moves.length === 1
@@ -166,147 +272,279 @@ describe('orders admin: orders', () => {
 						})
 					: problem(403, 'no');
 			},
+			'GET /v1/admin/csv/orders': () => new Response('number\r\nSO2026-1\r\n', { status: 200 }),
 		});
-		expect(host.getAttribute('data-ss-mounted')).toBe('orders-admin');
 		const panel = panelOf(root, 'orders');
-		expect(textOf(panel)).toContain('Order SO2026-1 · Confirmed');
-		expect(textOf(panel)).toContain('Cash on delivery · Unpaid');
-		await click(buttonIn(panel, 'Load more'));
-		type(fieldIn(panel, 'Search'), 'ana');
-		await change(fieldIn(panel, 'Status'), 'packed');
-		await change(fieldIn(panel, 'Payment'), 'paid');
-		await change(fieldIn(panel, 'Paid by'), 'online');
-		await change(fieldIn(panel, 'From'), '2026-10-01');
-		await change(fieldIn(panel, 'To'), '2026-10-02');
-		await submit(fieldIn(panel, 'Search'));
-		expect(Object.fromEntries(server.last('GET /v1/admin/orders')?.url.searchParams ?? [])).toEqual({
-			q: 'ana',
-			status: 'packed',
-			paymentState: 'paid',
-			paymentMethod: 'online',
-			from: '2026-10-01T00:00:00.000Z',
-			to: '2026-10-03T00:00:00.000Z',
-		});
-		// bulk
 		await click(buttonIn(panel, 'Move selected'));
 		expect(statuses(panel)).toContain('Select at least one first.');
+		expect(hasDialog(root)).toBe(false);
 		const pick = /** @type {HTMLInputElement} */ (panel.querySelector('input[aria-label="Select SO2026-1"]'));
-		await tick(pick, true);
+		pick.dispatchEvent(new window.KeyboardEvent('keydown', { key: ' ' }));
+		pick.click();
 		await tick(pick, false);
 		await tick(pick, true);
-		const to = fieldIn(panel, 'Move to');
-		to.dispatchEvent(new window.Event('focus'));
-		await change(to, 'packed');
-		type(fieldIn(panel, 'Note (optional)'), 'batch');
+		expect(rowOf(panel, 'ord_1').getAttribute('aria-current')).toBe('true');
 		await click(buttonIn(panel, 'Move selected'));
+		const dialog = dialogOf(root);
+		expect(textOf(dialog)).toContain('1 orders selected.');
+		await change(fieldIn(dialog, 'Move to'), 'packed');
+		type(fieldIn(dialog, 'Note (optional)'), 'batch');
+		await submitDialog(root);
 		expect(moves[0]).toEqual({ ids: ['ord_1'], to: 'packed', note: 'batch' });
+		expect(hasDialog(root)).toBe(false);
 		expect(statuses(panel)).toContain('Moved 1 of 2 orders.');
 		expect(textOf(panel)).toContain('ord_2: Not from packed.');
-		await tick(/** @type {HTMLInputElement} */ (panel.querySelector('input[aria-label="Select SO2026-1"]')), true);
+		// select all shown, then a refusal stays in the dialog
+		await click(buttonIn(panel, 'Load more'));
+		await tick(checkIn(panel, 'Select all shown'), true);
+		await tick(checkIn(panel, 'Select all shown'), false);
+		await tick(checkIn(panel, 'Select all shown'), true);
 		await click(buttonIn(panel, 'Move selected'));
+		expect(textOf(dialogOf(root))).toContain('2 orders selected.');
+		await submitDialog(root);
+		expect(moves[1].ids).toEqual(['ord_1', 'ord_2']);
+		expect(dialogStatus(root)).toBe('You are not allowed to do this.');
+		await click(buttonIn(dialogOf(root), 'Cancel'));
+		// CSV of the orders the filters match
+		await click(chipOf(panel, 'confirmed'));
+		await change(fieldIn(panel, 'From'), '2026-10-01');
+		await pickMenu(panel, 'Export these orders (CSV)');
+		expect(paramsOf(server, 'GET /v1/admin/csv/orders')).toEqual({ status: 'confirmed', from: '2026-10-01T00:00:00.000Z' });
+		expect(saved).toEqual([{ name: 'orders.csv', text: 'number\r\nSO2026-1\r\n' }]);
+		expect(statuses(panel)).toContain('orders.csv is ready.');
+		server.routes['GET /v1/admin/csv/orders'] = () => problem(403, 'no');
+		await pickMenu(panel, 'Export these orders (CSV)');
 		expect(statuses(panel)).toContain('You are not allowed to do this.');
-		expect(buttonIn(panel, 'Move selected').disabled).toBe(true);
 	});
 
-	it('filters by role and offers seen statuses without flow settings', async () => {
-		const { root, server } = await start({}, ['checkout', 'bulk_actions'], {});
+	it('uses roles without flow settings, hides failed counts and shows an empty list', async () => {
+		const { root, server } = await start(
+			{
+				'GET /v1/admin/orders/count': () => problem(503, 'Counting took longer than 3 seconds.'),
+				'GET /v1/admin/orders/counts': () => problem(503, 'Counting took longer than 3 seconds.'),
+			},
+			['checkout', 'bulk_actions'],
+			{},
+		);
 		expect(root.querySelector('[data-section="returns"]')).toBeNull();
 		const panel = panelOf(root, 'orders');
-		await change(fieldIn(panel, 'Status'), 'shipped');
-		expect(server.last('GET /v1/admin/orders')?.url.searchParams.get('role')).toBe('shipped');
-		expect([...fieldIn(panel, 'Move to').options].map((/** @type {any} */ o) => o.value)).toEqual(['confirmed']);
+		expect(listCount(panel)).toBe('');
+		expect(chipCount(panel, '')).toBe('');
+		expect(() => fieldIn(panel, 'Stage')).toThrow();
+		expect(fieldIn(panel, 'Payment').options[0].textContent).toBe('All');
+		expect(menuEntries(panel)).not.toContain('Export these orders (CSV)');
+		await click(chipOf(panel, 'shipped'));
+		expect(paramsOf(server, 'GET /v1/admin/orders')).toEqual({ role: 'shipped' });
 		await click(buttonIn(panel, 'Load more'));
-		fieldIn(panel, 'Move to').dispatchEvent(new window.Event('focus'));
-		expect([...fieldIn(panel, 'Move to').options].map((/** @type {any} */ o) => o.value)).toEqual(['confirmed', 'packed']);
+		await tick(/** @type {HTMLInputElement} */ (panel.querySelector('input[aria-label="Select SO2026-1"]')), true);
+		await click(buttonIn(panel, 'Move selected'));
+		expect([...fieldIn(dialogOf(root), 'Move to').options].map((/** @type {any} */ o) => o.value)).toEqual([
+			'confirmed',
+			'packed',
+		]);
+		server.routes['GET /v1/admin/orders'] = () => answer(200, { items: [], nextCursor: null, hasMore: false });
+		await click(chipOf(panel, ''));
+		expect(statuses(panel)).toContain('No orders match.');
+		expect(textOf(detailOf(panel))).toContain('No orders to show.');
+		server.routes['GET /v1/admin/orders'] = () => problem(500, 'Down.');
+		await click(chipOf(panel, 'open'));
+		expect(statuses(panel)).toContain('Down.');
 	});
 
 	it('shows money and dates by the Format and picks days in the business time zone', async () => {
 		const { root, server } = await mountWith(mountOrdersAdmin, {
-			features: FEATURES,
+			features: ['checkout'],
 			settings: SETTINGS,
 			format: { locale: 'en-GB', currencyDisplay: 'custom', currencySymbol: 'Rs', wholeUnits: true, times: 'business' },
 			timeZone: 'Asia/Karachi',
-			routes: { 'GET /v1/admin/orders': () => answer(200, { items: [summary()], nextCursor: null, hasMore: false }) },
+			routes: {
+				'GET /v1/admin/orders': () => answer(200, { items: [summary()], nextCursor: null, hasMore: false }),
+				'GET /v1/admin/orders/ord_1': () => answer(200, detail()),
+			},
 		});
 		const panel = panelOf(root, 'orders');
-		expect(textOf(panel)).toContain('1 Oct 2026, 15:00 · Ana · Lahore · Rs 2,500');
+		expect(textOf(rowOf(panel, 'ord_1'))).toContain('Confirmed · Ana · Lahore · 1 Oct 2026, 15:00');
+		expect(textOf(rowOf(panel, 'ord_1'))).toContain('Rs 2,500');
 		await change(fieldIn(panel, 'From'), '2026-10-01');
 		await change(fieldIn(panel, 'To'), '2026-10-02');
-		await submit(fieldIn(panel, 'Search'));
 		expect(server.last('GET /v1/admin/orders')?.url.searchParams.get('from')).toBe('2026-09-30T19:00:00.000Z');
 		expect(server.last('GET /v1/admin/orders')?.url.searchParams.get('to')).toBe('2026-10-02T19:00:00.000Z');
 	});
+});
 
-	it('shows an order and moves it with serials and a shipment', async () => {
+describe('orders admin: one order', () => {
+	it('shows the order in a grid and cards with its claims', async () => {
+		const { root, server } = await start({
+			'GET /v1/admin/returns': () =>
+				answer(200, {
+					items: [{ id: 'ret_1', reference: 'R-ABC', kind: 'return', status: 'approved', orderNumber: 'SO2026-1' }],
+					nextCursor: null,
+					hasMore: false,
+				}),
+		});
+		const pane = detailOf(panelOf(root, 'orders'));
+		const text = textOf(pane);
+		for (const part of [
+			'Order SO2026-1',
+			'Confirmed',
+			'Phone · Red · A',
+			'365 days',
+			'None',
+			'S1',
+			'PKR 2,490.00',
+			'PKR 50.00',
+			'Blocked: Fraud',
+			'Careful',
+			'Ring twice',
+			'VIP',
+			'TN1',
+			'In transit',
+			'Awaiting confirmation → Confirmed · Sam · ok',
+			'SAVE',
+			'Points used20',
+			'Points earned25',
+			'Return claims',
+			'R-ABC · Return',
+		])
+			expect(text).toContain(part);
+		expect(server.last('GET /v1/admin/returns')?.url.searchParams.get('orderId')).toBe('ord_1');
+		expect(pane.querySelector('a')?.getAttribute('href')).toBe('https://track.example/TN1');
+		expect(shows(pane, 'Move to Packed')).toBe(true);
+		expect(shows(pane, 'Refund')).toBe(true);
+		expect(menuEntries(pane)).toEqual([
+			'Move to Dispatched',
+			'Edit delivery address',
+			'Edit staff note',
+			'Invoice',
+			'Packing slip',
+			'Move to Cancelled',
+		]);
+		expect(pane.querySelector('.menu button.danger')?.textContent).toBe('Move to Cancelled');
+	});
+
+	it('moves an order with serial numbers, a shipment or a typed confirmation', async () => {
 		/** @type {any[]} */
 		const moves = [];
-		let reply = () => answer(200, { ...detail({ status: 'packed', statusLabel: 'Packed' }), warnings: ['Message not sent.'] });
-		const { root, server } = await start({
+		let reply = () =>
+			answer(200, { ...detail({ status: 'packed', statusLabel: 'Packed', role: 'packed' }), warnings: ['Message not sent.'] });
+		const { root } = await start({
 			'POST /v1/admin/orders/ord_1/move': (/** @type {any} */ call) => {
 				moves.push(call.body);
 				return reply();
 			},
 		});
 		const panel = panelOf(root, 'orders');
-		await click(buttonIn(panel, 'Open'));
-		const text = textOf(panel);
-		for (const part of [
-			'Order SO2026-1 · Confirmed',
-			'Phone · Red · A',
-			'PKR 1,000.00',
-			'S1',
-			'Blocked: Fraud',
-			'Careful',
-			'Ring twice',
-			'TN1',
-			'Awaiting confirmation → Confirmed · Sam · ok',
-			'SAVE',
-		])
-			expect(text).toContain(part);
-		expect(panel.querySelector('a')?.getAttribute('href')).toBe('https://track.example/TN1');
-		// packed: serials per unit of physical lines
-		expect(panel.querySelector('input[aria-label="Serial number 1 of Phone"]')).not.toBeNull();
-		type(panel.querySelector('input[aria-label="Serial number 2 of Phone"]'), 'S2');
-		type(fieldIn(panel, 'Note (optional)'), 'boxed');
-		await click(buttonIn(panel, 'Move'));
+		const pane = detailOf(panel);
+		// packing: one serial number per unit of the lines that take them
+		await click(buttonIn(pane, 'Move to Packed'));
+		let dialog = dialogOf(root);
+		expect(textOf(dialog)).toContain('Warranty: 365 days');
+		expect(dialog.querySelector('input[aria-label="Serial number 1 of Ebook"]')).toBeNull();
+		type(dialog.querySelector('input[aria-label="Serial number 1 of Phone"]'), '');
+		type(dialog.querySelector('input[aria-label="Serial number 2 of Phone"]'), 'S2');
+		await submitDialog(root);
+		expect(dialogStatus(root)).toBe('Phone: give one serial number per unit, or leave them all empty.');
+		type(dialog.querySelector('input[aria-label="Serial number 1 of Phone"]'), ' S1 ');
+		type(fieldIn(dialog, 'Note (optional)'), 'boxed');
+		await submitDialog(root);
 		expect(moves[0]).toEqual({ to: 'packed', note: 'boxed', serials: { oln_1: ['S1', 'S2'] }, shipment: null, updatedAt: AT });
-		expect(statuses(panel)).toContain('Moved to Packed. Message not sent.');
-		// shipped: courier and tracking number, then booking
-		await change(fieldIn(panel, 'Move to'), 'dispatched');
-		expect(panel.querySelector('input[aria-label="Serial number 1 of Phone"]')).toBeNull();
-		await click(buttonIn(panel, 'Move'));
-		expect(moves[1].shipment).toBeNull();
-		await change(fieldIn(panel, 'Move to'), 'dispatched');
-		await change(fieldIn(panel, 'Courier'), 'fast');
-		type(fieldIn(panel, 'Tracking number'), ' T9 ');
-		await click(buttonIn(panel, 'Move'));
-		expect(moves[2].shipment).toEqual({ courier: 'fast', trackingNumber: 'T9' });
-		await change(fieldIn(panel, 'Move to'), 'dispatched');
-		await change(fieldIn(panel, 'Courier'), 'fast');
-		await tick(checkIn(panel, 'Book with the courier API'), true);
-		await click(buttonIn(panel, 'Move'));
-		expect(moves[3].shipment).toEqual({ book: true, courier: 'fast' });
-		await change(fieldIn(panel, 'Move to'), 'dispatched');
-		await tick(checkIn(panel, 'Book with the courier API'), true);
-		await change(fieldIn(panel, 'Courier'), '');
-		await click(buttonIn(panel, 'Move'));
-		expect(moves[4].shipment).toEqual({ book: true });
+		expect(statuses(pane)).toContain('Moved to Packed. Message not sent.');
+		expect(textOf(rowOf(panel, 'ord_1'))).toContain('Packed');
+		// all empty: the line is left out
+		await click(buttonIn(pane, 'Move to Packed'));
+		dialog = dialogOf(root);
+		type(dialog.querySelector('input[aria-label="Serial number 1 of Phone"]'), '');
+		await submitDialog(root);
+		expect(moves[1].serials).toEqual({});
+		// shipping: courier and tracking number, then booking
+		await pickMenu(pane, 'Move to Dispatched');
+		await submitDialog(root);
+		expect(moves[2].shipment).toBeNull();
+		await pickMenu(pane, 'Move to Dispatched');
+		dialog = dialogOf(root);
+		await change(fieldIn(dialog, 'Courier'), 'fast');
+		type(fieldIn(dialog, 'Tracking number'), ' T9 ');
+		await submitDialog(root);
+		expect(moves[3].shipment).toEqual({ courier: 'fast', trackingNumber: 'T9' });
+		await pickMenu(pane, 'Move to Dispatched');
+		dialog = dialogOf(root);
+		await change(fieldIn(dialog, 'Courier'), 'fast');
+		await tick(checkIn(dialog, 'Book with the courier API'), true);
+		expect(() => fieldIn(dialog, 'Tracking number')).toThrow();
+		await submitDialog(root);
+		expect(moves[4].shipment).toEqual({ book: true, courier: 'fast' });
+		await pickMenu(pane, 'Move to Dispatched');
+		await tick(checkIn(dialogOf(root), 'Book with the courier API'), true);
+		await submitDialog(root);
+		expect(moves[5].shipment).toEqual({ book: true });
+		// cancelling asks for the order number
+		await pickMenu(pane, 'Move to Cancelled');
+		dialog = dialogOf(root);
+		expect(textOf(dialog)).toContain('Order SO2026-1 will be cancelled');
+		expect(/** @type {HTMLButtonElement} */ (dialog.querySelector('button[type="submit"]')).disabled).toBe(true);
+		expect((await confirmDialog(root, 'SO2026-1')).disabled).toBe(false);
 		reply = () => problem(409, 'The order changed meanwhile; reload it and try again.');
-		await click(buttonIn(panel, 'Move'));
-		expect(statuses(panel)).toContain('The order changed meanwhile; reload it and try again.');
-		const lists = server.all('GET /v1/admin/orders').length;
-		await click(buttonIn(panel, 'Back'));
-		expect(server.all('GET /v1/admin/orders').length).toBe(lists + 1);
+		await submitDialog(root);
+		expect(moves[6]).toMatchObject({ to: 'cancelled', serials: {}, shipment: null });
+		expect(dialogStatus(root)).toBe('The order changed meanwhile; reload it and try again.');
+	});
+
+	it('checks typed serial numbers as IMEIs and saves them later', async () => {
+		/** @type {any[]} */
+		const patches = [];
+		const typed = detail({
+			lines: [
+				{ ...detail().lines[0], serials: [], serialized: true, warrantyDays: null },
+				{ ...detail().lines[0], id: 'oln_3', name: 'Case', quantity: 1, serials: ['C1'], serialized: false },
+			],
+			nextStatuses: [{ key: 'packed', label: 'Packed', role: 'packed' }],
+		});
+		const { root } = await start(
+			{
+				'GET /v1/admin/orders/ord_1': () => answer(200, typed),
+				'PATCH /v1/admin/orders/ord_1': (/** @type {any} */ call) => {
+					patches.push(call.body);
+					return patches.length === 1
+						? problem(422, 'Phone: give 2 serial number(s), one per unit.')
+						: answer(200, detail({ lines: [{ ...typed.lines[0], serials: call.body.serials.oln_1 }], nextStatuses: [] }));
+				},
+			},
+			FEATURES,
+			{ ...SETTINGS, catalog: { serialMode: 'typed', serialCheck: 'imei' } },
+		);
+		const pane = detailOf(panelOf(root, 'orders'));
+		expect(textOf(pane)).toContain('Missing');
+		expect(shows(pane, 'Type serial numbers')).toBe(true);
+		expect(menuEntries(pane)).toContain('Refund');
+		await click(buttonIn(pane, 'Type serial numbers'));
+		const dialog = dialogOf(root);
+		expect(textOf(dialog)).toContain('They can be typed at packing or later');
+		expect(dialog.querySelector('input[aria-label="Serial number 1 of Case"]')).toBeNull();
+		await submitDialog(root);
+		expect(dialogStatus(root)).toBe('Type or change the serial numbers of at least one item first.');
+		type(dialog.querySelector('input[aria-label="Serial number 1 of Phone"]'), '490154203237518');
+		type(dialog.querySelector('input[aria-label="Serial number 2 of Phone"]'), '490154203237519');
+		await submitDialog(root);
+		expect(dialogStatus(root)).toBe('490154203237519 is not an IMEI: 15 digits ending in its check digit.');
+		type(dialog.querySelector('input[aria-label="Serial number 2 of Phone"]'), '356938035643809');
+		await submitDialog(root);
+		expect(dialogStatus(root)).toBe('Phone: give 2 serial number(s), one per unit.');
+		await submitDialog(root);
+		expect(patches[1]).toEqual({ serials: { oln_1: ['490154203237518', '356938035643809'] } });
+		expect(statuses(pane)).toContain('Serial numbers saved.');
+		expect(shows(pane, 'Type serial numbers')).toBe(false);
+		expect(menuEntries(pane)).toContain('Type serial numbers');
+		// typing again with nothing changed is refused
+		await pickMenu(pane, 'Type serial numbers');
+		expect(dialogOf(root).querySelector('input[placeholder="Unit 2"]')).not.toBeNull();
+		await submitDialog(root);
+		expect(dialogStatus(root)).toBe('Type or change the serial numbers of at least one item first.');
 	});
 
 	it('edits the note and address, refunds and opens documents', async () => {
 		window.URL.createObjectURL = vi.fn(() => 'blob:doc');
 		window.URL.revokeObjectURL = vi.fn();
-		let refund = () =>
-			answer(201, {
-				order: detail({ payment: { method: 'online', state: 'refunded', paid: 250000, refunded: 250000, refundable: 0 } }),
-				refund: {},
-			});
+		let refund = () => problem(422, 'Give a reason of at most 500 characters.');
 		const { root, server, opened, host } = await start({
 			'PATCH /v1/admin/orders/ord_1': (/** @type {any} */ call) =>
 				call.body.address?.city === ''
@@ -316,52 +554,55 @@ describe('orders admin: orders', () => {
 			'GET /v1/admin/orders/ord_1/invoice': () => new Response('<h1>Invoice</h1>', { status: 200 }),
 			'GET /v1/admin/orders/ord_1/packing-slip': () => problem(403, 'no'),
 		});
-		const panel = panelOf(root, 'orders');
-		await click(buttonIn(panel, 'Open'));
-		type(fieldIn(panel, 'Only staff see this note'), 'Gold');
-		await click(buttonIn(panel, 'Save note'));
+		const pane = detailOf(panelOf(root, 'orders'));
+		await pickMenu(pane, 'Edit staff note');
+		expect(fieldIn(dialogOf(root), 'Only staff see this note').value).toBe('VIP');
+		type(fieldIn(dialogOf(root), 'Only staff see this note'), 'Gold');
+		await submitDialog(root);
 		expect(server.last('PATCH /v1/admin/orders/ord_1')?.body).toEqual({ staffNote: 'Gold' });
-		expect(statuses(panel)).toContain('Saved.');
-		type(fieldIn(panel, 'City'), '');
-		await click(buttonIn(panel, 'Save address'));
-		expect(statuses(panel)).toContain('This field is required.');
-		type(fieldIn(panel, 'City'), 'Karachi');
-		await click(buttonIn(panel, 'Save address'));
+		expect(statuses(pane)).toContain('Saved.');
+		expect(textOf(pane)).toContain('Gold');
+		await pickMenu(pane, 'Edit delivery address');
+		type(fieldIn(dialogOf(root), 'City'), '');
+		await submitDialog(root);
+		expect(dialogStatus(root)).toBe('This field is required.');
+		type(fieldIn(dialogOf(root), 'City'), 'Karachi');
+		await submitDialog(root);
 		expect(server.last('PATCH /v1/admin/orders/ord_1')?.body.address).toMatchObject({ city: 'Karachi', line1: 'Street 1' });
 		server.routes['PATCH /v1/admin/orders/ord_1'] = () => problem(500, 'Down.');
-		await click(buttonIn(panel, 'Save note'));
-		expect(statuses(panel)).toContain('Down.');
+		await pickMenu(pane, 'Edit staff note');
+		await submitDialog(root);
+		expect(dialogStatus(root)).toBe('Down.');
+		await click(buttonIn(dialogOf(root), 'Cancel'));
 		// documents
-		await click(buttonIn(panel, 'Invoice'));
+		await pickMenu(pane, 'Invoice');
 		expect(opened).toEqual(['blob:doc']);
-		await click(buttonIn(panel, 'Packing slip'));
-		expect(statuses(panel)).toContain('You are not allowed to do this.');
-		server.routes['GET /v1/admin/orders/ord_1/packing-slip'] = () => new Response('not json', { status: 500 });
-		await click(buttonIn(panel, 'Invoice'));
-		expect(opened).toHaveLength(2);
+		expect(statuses(pane)).toContain('Invoice opened in a new tab.');
+		await pickMenu(pane, 'Packing slip');
+		expect(statuses(pane)).toContain('You are not allowed to do this.');
 		// refunds
-		expect(textOf(panel)).toContain('Up to PKR 2,490.00 can be refunded.');
-		type(fieldIn(panel, 'Amount (PKR)'), 'x');
-		await click(buttonIn(panel, 'Refund'));
-		expect(statuses(panel)).toContain('Check the amounts and numbers you typed.');
-		type(fieldIn(panel, 'Amount (PKR)'), '10');
-		type(fieldIn(panel, 'Reason'), 'damaged');
-		refund = () => problem(422, 'Give a reason of at most 500 characters.');
-		await click(buttonIn(panel, 'Refund'));
-		expect(statuses(panel)).toContain('Give a reason of at most 500 characters.');
+		await click(buttonIn(pane, 'Refund'));
+		expect(textOf(dialogOf(root))).toContain('Up to PKR 2,490.00 can be refunded.');
+		type(fieldIn(dialogOf(root), 'Amount (PKR)'), 'x');
+		await submitDialog(root);
+		expect(dialogStatus(root)).toBe('Check the amounts and numbers you typed.');
+		type(fieldIn(dialogOf(root), 'Amount (PKR)'), '10');
+		type(fieldIn(dialogOf(root), 'Reason'), 'damaged');
+		await submitDialog(root);
+		expect(dialogStatus(root)).toBe('Give a reason of at most 500 characters.');
 		refund = () =>
 			answer(201, {
 				order: detail({ payment: { method: 'online', state: 'refunded', paid: 250000, refunded: 250000, refundable: 0 } }),
 				refund: {},
 			});
-		await click(buttonIn(panel, 'Refund'));
+		await submitDialog(root);
 		expect(server.last('POST /v1/admin/orders/ord_1/refunds')?.body).toEqual({ amount: 1000, reason: 'damaged' });
-		expect(statuses(panel)).toContain('PKR 10.00 refunded.');
-		expect(shows(panel, 'Refund')).toBe(false);
+		expect(statuses(pane)).toContain('PKR 10.00 refunded.');
+		expect(shows(pane, 'Refund')).toBe(false);
 		host.remove();
 	});
 
-	it('shows a shipped order without moves or address edits, and a missing order', async () => {
+	it('shows a delivered order without moves, and a missing order', async () => {
 		const { root, server } = await start(
 			{
 				'GET /v1/admin/orders/ord_1': () =>
@@ -370,6 +611,8 @@ describe('orders admin: orders', () => {
 						detail({
 							role: 'delivered',
 							nextStatuses: [],
+							note: '',
+							staffNote: '',
 							payment: { method: 'cod', state: 'paid', paid: 250000, refunded: 0, refundable: 0 },
 							shipment: { courier: 'Fast', trackingNumber: 'TN1', trackingUrl: 'javascript:alert(1)', status: '' },
 							customerFlags: undefined,
@@ -385,21 +628,22 @@ describe('orders admin: orders', () => {
 							promotions: undefined,
 						}),
 					),
+				'GET /v1/admin/orders/ord_2': () => problem(404, 'There is no such order.'),
 			},
 			['checkout'],
 			{},
 		);
 		const panel = panelOf(root, 'orders');
-		await click(buttonIn(panel, 'Open'));
-		expect(textOf(panel)).toContain('Street 1, Lahore, PK');
-		expect(textOf(panel)).toContain('USD 10.00');
-		expect(panel.querySelector('a')).toBeNull();
-		expect(shows(panel, 'Move')).toBe(false);
-		expect(shows(panel, 'Invoice')).toBe(false);
-		await click(buttonIn(panel, 'Back'));
-		server.routes['GET /v1/admin/orders/ord_1'] = () => problem(404, 'There is no such order.');
-		await click(buttonIn(panel, 'Open'));
-		expect(statuses(panel)).toContain('There is no such order.');
+		const pane = detailOf(panel);
+		expect(textOf(pane)).toContain('Street 1, Lahore, PK');
+		expect(textOf(pane)).toContain('USD 10.00');
+		expect(textOf(pane)).not.toContain('Notes');
+		expect(pane.querySelector('a')).toBeNull();
+		expect(pane.querySelector('.detail-head button.secondary:not(.icon)')).toBeNull();
+		expect(menuEntries(pane)).toEqual(['Edit staff note']);
+		await click(buttonIn(panel, 'Load more'));
+		await openRow(panel, 'ord_2');
+		expect(statuses(pane)).toContain('There is no such order.');
 		server.routes['GET /v1/admin/orders/ord_1'] = () =>
 			answer(
 				200,
@@ -410,11 +654,10 @@ describe('orders admin: orders', () => {
 					lines: [],
 				}),
 			);
-		await click(buttonIn(panel, 'Back'));
-		await click(buttonIn(panel, 'Open'));
-		expect(textOf(panel)).not.toContain('Delivery address');
-		expect(panel.querySelector('input[aria-label^="Serial number"]')).toBeNull();
-		expect(fieldIn(panel, 'Move to').value).toBe('packed');
+		await openRow(panel, 'ord_1');
+		expect(textOf(pane)).not.toContain('Delivery address');
+		await click(buttonIn(pane, 'Move to Packed'));
+		expect(dialogOf(root).querySelector('input[aria-label^="Serial number"]')).toBeNull();
 	});
 
 	it('takes a typed courier key when the settings list none', async () => {
@@ -424,23 +667,42 @@ describe('orders admin: orders', () => {
 			{
 				'POST /v1/admin/orders/ord_1/move': (/** @type {any} */ call) => {
 					moves.push(call.body);
-					return answer(200, { ...detail(), warnings: [] });
+					return answer(200, { ...detail() });
 				},
 			},
 			['checkout'],
 			{},
 		);
-		const panel = panelOf(root, 'orders');
-		await click(buttonIn(panel, 'Open'));
-		await change(fieldIn(panel, 'Move to'), 'dispatched');
-		type(fieldIn(panel, 'Courier'), 'fast');
-		type(fieldIn(panel, 'Tracking number'), 'T1');
-		expect(textOf(panel)).not.toContain('Book with the courier API');
-		await click(buttonIn(panel, 'Move'));
+		const pane = detailOf(panelOf(root, 'orders'));
+		await pickMenu(pane, 'Move to Dispatched');
+		const dialog = dialogOf(root);
+		type(fieldIn(dialog, 'Courier'), 'fast');
+		type(fieldIn(dialog, 'Tracking number'), 'T1');
+		expect(textOf(dialog)).not.toContain('Book with the courier API');
+		await submitDialog(root);
 		expect(moves[0].shipment).toEqual({ courier: 'fast', trackingNumber: 'T1' });
-		await change(fieldIn(panel, 'Move to'), 'packed');
-		await click(buttonIn(panel, 'Move'));
+		expect(statuses(pane)).toContain('Moved to Confirmed.');
+		await click(buttonIn(pane, 'Move to Packed'));
+		expect(dialogOf(root).querySelector('input[aria-label^="Serial number"]')).toBeNull();
+		await submitDialog(root);
 		expect(moves[1].serials).toEqual({});
+	});
+
+	it('drops a late answer for an order no longer shown', async () => {
+		/** @type {(value: Response) => void} */
+		let release = () => {};
+		const { root } = await start({
+			'GET /v1/admin/orders/ord_2': () => new Promise((resolve) => (release = resolve)),
+		});
+		const panel = panelOf(root, 'orders');
+		await click(buttonIn(panel, 'Load more'));
+		await openRow(panel, 'ord_2');
+		expect(textOf(detailOf(panel))).toContain('Loading…');
+		await openRow(panel, 'ord_1');
+		release(answer(200, detail({ id: 'ord_2', number: 'SO2026-2' })));
+		await click(buttonIn(panel, 'Back'));
+		expect(textOf(detailOf(panel))).toContain('Order SO2026-1');
+		expect(textOf(detailOf(panel))).not.toContain('Order SO2026-2');
 	});
 });
 
@@ -470,6 +732,7 @@ const claim = (over = {}) => ({
 		customer: { name: 'Ana', email: 'ana@example.com' },
 		currency: 'PKR',
 		total: 250000,
+		deliveredAt: AT,
 	},
 	refundable: 100000,
 	refundsOnline: true,
@@ -479,19 +742,63 @@ const claim = (over = {}) => ({
 });
 
 describe('orders admin: returns', () => {
-	it('lists claims and moves, refunds and restocks them', async () => {
-		/** @type {any[]} */
-		const posts = [];
-		let next = claim({ status: 'approved', actions: ['reject', 'receive', 'refund', 'close', 'restock'] });
-		const { root, server } = await start({
-			'GET /v1/admin/returns': () => answer(200, { items: [claim()], nextCursor: null, hasMore: false }),
+	/** @param {Record<string, any>} [routes] */
+	const startReturns = async (routes = {}) => {
+		const mounted = await start({
+			'GET /v1/admin/returns': () =>
+				answer(200, {
+					items: [claim(), claim({ id: 'ret_2', reference: 'R-2', refundAmount: 5000 })],
+					nextCursor: null,
+					hasMore: false,
+				}),
+			'GET /v1/admin/returns/count': () => answer(200, { count: 100000, capped: true }),
+			'GET /v1/admin/returns/counts': () => answer(200, { total: 2, groups: { requested: 2 } }),
 			'GET /v1/admin/returns/ret_1': () => answer(200, claim()),
 			'GET /v1/admin/returns/ret_2': () => problem(404, 'No such claim.'),
+			...routes,
+		});
+		await click(/** @type {HTMLElement} */ (mounted.root.querySelector('[data-section="returns"]')));
+		return { ...mounted, panel: panelOf(mounted.root, 'returns') };
+	};
+
+	it('lists claims with counts and filters, and narrows to an order or a customer', async () => {
+		const { panel, server } = await startReturns();
+		expect(textOf(rowOf(panel, 'ret_1'))).toContain('R-ABC123');
+		expect(textOf(rowOf(panel, 'ret_1'))).toContain('Order SO2026-1 · Return · Requested');
+		expect(textOf(rowOf(panel, 'ret_2'))).toContain('PKR 50.00');
+		expect(listCount(panel)).toBe('100000+');
+		expect(chipCount(panel, 'requested')).toBe('2');
+		expect(chipCount(panel, 'closed')).toBe('0');
+		const pane = detailOf(panel);
+		expect(textOf(pane)).toContain('Claim R-ABC123');
+		await click(chipOf(panel, 'requested'));
+		await change(fieldIn(panel, 'Kind'), 'return');
+		expect(paramsOf(server, 'GET /v1/admin/returns')).toEqual({ status: 'requested', kind: 'return' });
+		expect(paramsOf(server, 'GET /v1/admin/returns/counts')).toEqual({ kind: 'return', by: 'status' });
+		await pickMenu(pane, 'Claims of this order');
+		expect(paramsOf(server, 'GET /v1/admin/returns')).toMatchObject({ orderId: 'ord_1' });
+		expect(textOf(panel.querySelector('ul.chips') ?? panel)).toContain('Order SO2026-1');
+		await pickMenu(pane, 'Claims of this customer');
+		expect(paramsOf(server, 'GET /v1/admin/returns')).toMatchObject({ userId: 'u1' });
+		expect(paramsOf(server, 'GET /v1/admin/returns').orderId).toBeUndefined();
+		expect(textOf(panel)).toContain('Claims of Ana · ana@example.com');
+		await click(/** @type {HTMLElement} */ (panel.querySelector('button[aria-label="Show all claims"]')));
+		expect(paramsOf(server, 'GET /v1/admin/returns').userId).toBeUndefined();
+		await openRow(panel, 'ret_2');
+		expect(statuses(pane)).toContain('No such claim.');
+	});
+
+	it('moves, refunds and restocks a claim, and rejects it with its reference', async () => {
+		/** @type {any[]} */
+		const posts = [];
+		const { root, panel } = await startReturns({
 			'POST /v1/admin/returns/ret_1/approve': (/** @type {any} */ call) => {
 				posts.push(call.body);
-				return answer(200, next);
+				return answer(200, claim({ status: 'approved', actions: ['reject', 'receive', 'refund', 'close', 'restock'] }));
 			},
 			'POST /v1/admin/returns/ret_1/reject': () => problem(422, 'Add a note for the shopper.'),
+			'POST /v1/admin/returns/ret_1/receive': () =>
+				answer(200, claim({ status: 'received', actions: ['reject', 'refund', 'close', 'restock'], userId: '' })),
 			'POST /v1/admin/returns/ret_1/refund': (/** @type {any} */ call) => {
 				posts.push(call.body);
 				return answer(
@@ -506,48 +813,79 @@ describe('orders admin: returns', () => {
 				);
 			},
 			'POST /v1/admin/returns/ret_1/restock': () =>
-				answer(200, claim({ status: 'closed', restockedAt: AT, actions: [], order: null, history: [] })),
+				answer(
+					200,
+					claim({ status: 'refunded', restockedAt: AT, refundable: 0, actions: ['close'], order: null, history: [] }),
+				),
+			'POST /v1/admin/returns/ret_1/close': () =>
+				answer(200, claim({ status: 'closed', actions: [], order: null, photos: [] })),
 		});
-		const panel = await openTab(root, 'returns');
-		expect(textOf(panel)).toContain('Claim R-ABC123 · order SO2026-1');
-		expect(textOf(panel)).toContain('Return · Requested');
-		await change(fieldIn(panel, 'Status'), 'requested');
-		await change(fieldIn(panel, 'Kind'), 'return');
-		expect(Object.fromEntries(server.last('GET /v1/admin/returns')?.url.searchParams ?? [])).toEqual({
-			status: 'requested',
-			kind: 'return',
-		});
-		await click(buttonIn(panel, 'Open'));
-		expect(textOf(panel)).toContain('1 of 2');
-		expect(textOf(panel)).toContain('Ana · ana@example.com');
-		expect(panel.querySelectorAll('.thumbs img')).toHaveLength(1);
-		expect(shows(panel, 'Refund')).toBe(false);
-		await click(buttonIn(panel, 'Reject'));
-		expect(statuses(panel)).toContain('Add a note for the shopper.');
-		type(fieldIn(panel, "Shopper's note"), 'Fine');
-		await click(buttonIn(panel, 'Approve'));
+		const pane = detailOf(panel);
+		expect(textOf(pane)).toContain('1 of 2');
+		expect(textOf(pane)).toContain('Ana · ana@example.com');
+		expect(pane.querySelectorAll('.thumbs img')).toHaveLength(1);
+		expect(shows(pane, 'Approve')).toBe(true);
+		// reject: last in the More menu, with a note and the reference
+		await pickMenu(pane, 'Reject');
+		expect(textOf(dialogOf(root))).toContain('A rejected claim cannot be moved again.');
+		await confirmDialog(root, 'R-ABC123');
+		await submitDialog(root);
+		expect(dialogStatus(root)).toBe('Add a note for the shopper.');
+		await click(buttonIn(dialogOf(root), 'Cancel'));
+		// approve
+		await click(buttonIn(pane, 'Approve'));
+		type(fieldIn(dialogOf(root), 'Note for the shopper (optional)'), 'Fine');
+		await submitDialog(root);
 		expect(posts[0]).toEqual({ note: 'Fine' });
-		expect(statuses(panel)).toContain('Approved.');
-		expect(textOf(panel)).toContain('Refunds go back through the online payment.');
-		type(fieldIn(panel, 'Amount (PKR)'), '0');
-		await click(buttonIn(panel, 'Refund'));
-		expect(statuses(panel)).toContain('Check the amounts and numbers you typed.');
-		type(fieldIn(panel, 'Amount (PKR)'), '500');
-		await click(buttonIn(panel, 'Refund'));
+		expect(statuses(pane)).toContain('Approved.');
+		expect(textOf(rowOf(panel, 'ret_1'))).toContain('Approved');
+		expect(shows(pane, 'Mark received')).toBe(true);
+		expect(shows(pane, 'Refund')).toBe(true);
+		expect(menuEntries(pane)).toEqual([
+			'Put back in stock',
+			'Close',
+			'Claims of this order',
+			'Claims of this customer',
+			'Reject',
+		]);
+		await click(buttonIn(pane, 'Mark received'));
+		await submitDialog(root);
+		expect(statuses(pane)).toContain('Marked received.');
+		expect(menuEntries(pane)).not.toContain('Claims of this customer');
+		// refund
+		await click(buttonIn(pane, 'Refund'));
+		expect(textOf(dialogOf(root))).toContain('Refunds go back through the online payment.');
+		type(fieldIn(dialogOf(root), 'Amount (PKR)'), '0');
+		await submitDialog(root);
+		expect(dialogStatus(root)).toBe('Check the amounts and numbers you typed.');
+		type(fieldIn(dialogOf(root), 'Amount (PKR)'), '500');
+		await submitDialog(root);
 		expect(posts[1]).toEqual({ amount: 50000, note: '' });
-		expect(statuses(panel)).toContain('PKR 500.00 refunded.');
-		expect(textOf(panel)).toContain('PKR 500.00');
-		await click(buttonIn(panel, 'Put back in stock'));
-		expect(statuses(panel)).toContain('Put back in stock.');
-		expect(shows(panel, 'Put back in stock')).toBe(false);
-		await click(buttonIn(panel, 'Back'));
-		server.routes['GET /v1/admin/returns'] = () =>
-			answer(200, { items: [claim({ id: 'ret_2' })], nextCursor: null, hasMore: false });
-		await change(fieldIn(panel, 'Kind'), '');
-		await click(buttonIn(panel, 'Open'));
-		expect(statuses(panel)).toContain('There is no such order.'.replace('There is no such order.', 'No such claim.'));
-		await click(buttonIn(panel, 'Back'));
-		next = claim();
-		expect(next.id).toBe('ret_1');
+		expect(statuses(pane)).toContain('PKR 500.00 refunded.');
+		expect(textOf(pane)).toContain('The refund is recorded; pay it back yourself.');
+		// restock, then close
+		await click(buttonIn(pane, 'Put back in stock'));
+		expect(textOf(dialogOf(root))).toContain('This is done once per claim.');
+		await submitDialog(root);
+		expect(statuses(pane)).toContain('Put back in stock.');
+		expect(shows(pane, 'Put back in stock')).toBe(false);
+		await click(buttonIn(pane, 'Close'));
+		await submitDialog(root);
+		expect(statuses(pane)).toContain('Closed.');
+		expect(pane.querySelector('.detail-head .actions > button')).toBeNull();
+	});
+
+	it('refuses claim actions the ticket does not allow', async () => {
+		const { root, panel } = await startReturns({
+			'GET /v1/admin/returns/ret_1': () =>
+				answer(200, claim({ status: 'approved', actions: ['refund', 'restock', 'close'], refundable: 0 })),
+			'POST /v1/admin/returns/ret_1/restock': () => problem(409, 'This claim was already restocked.'),
+			'POST /v1/admin/returns/ret_1/refund': () => problem(403, 'no'),
+		});
+		const pane = detailOf(panel);
+		expect(shows(pane, 'Refund')).toBe(false);
+		await click(buttonIn(pane, 'Put back in stock'));
+		await submitDialog(root);
+		expect(dialogStatus(root)).toBe('This claim was already restocked.');
 	});
 });

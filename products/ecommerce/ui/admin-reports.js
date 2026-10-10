@@ -1,12 +1,14 @@
 /**
- * Reports and CSV in the customers admin widget (PLAN 0.8.8 Admin tools): reports (feature `reports`, `reports.read`)
- * — sales by product, category, brand or city, stock age, return rate and margin over a date range, shown as tables
- * and downloadable as CSV; and CSV (feature `csv`, `csv.run`) — export products, import products (a dry run lists
- * every problem per row before anything is written), export orders by date range.
+ * Reports and CSV in the customers admin widget (PLAN 0.8.8 Admin tools, 0.6: plain pages of cards and tables): reports
+ * (feature `reports`, `reports.read`) — sales by product, category, brand or city, stock age, return rate and margin
+ * over a date range, with their totals as figures and their rows as a table, downloadable as CSV; and CSV (feature
+ * `csv`, `csv.run`) as cards — export products, import products (a dry run lists every problem per row before anything
+ * is written), export orders by date range and status.
  * @module
  */
 import { toCsv } from '../core/csv.js';
 import { dayEnd, dayStart, query } from './admin-kit.js';
+import { card } from './admin-lists.js';
 
 /** @typedef {import('./admin-kit.js').Kit} Kit */
 /** @typedef {{ label: string, value: (row: any) => string | number | null, money?: boolean }} Column */
@@ -118,20 +120,19 @@ export const reportsTab = (kit, panel) => {
 						)
 					: null,
 				totals
-					? kit.text(
-							'p',
-							{ class: 'amount' },
+					? kit.fieldGrid(
 							key === 'margin'
-								? t('customersAdmin.marginTotals', {
-										revenue: kit.money(totals.revenue),
-										cost: kit.money(totals.cost),
-										margin: kit.money(totals.margin),
-									})
-								: t('customersAdmin.salesTotals', {
-										orders: totals.orders,
-										units: totals.units,
-										revenue: kit.money(totals.revenue),
-									}),
+								? [
+										[t('customersAdmin.revenue'), kit.money(totals.revenue)],
+										[t('customersAdmin.cost'), kit.money(totals.cost)],
+										[t('customersAdmin.margin'), kit.money(totals.margin)],
+									]
+								: [
+										[t('customersAdmin.orders'), String(totals.orders)],
+										[t('customersAdmin.units'), String(totals.units)],
+										[t('customersAdmin.revenue'), kit.money(totals.revenue)],
+										[t('customersAdmin.discount'), kit.money(totals.discount)],
+									],
 						)
 					: null,
 				kit.table(
@@ -167,7 +168,7 @@ export const reportsTab = (kit, panel) => {
 };
 
 /**
- * The CSV section: export products, import products (dry run first), export orders by date range.
+ * The CSV section, as cards: export products, export orders by date range and status, import products (dry run first).
  * @param {Kit} kit @param {HTMLElement} panel
  */
 export const csvTab = (kit, panel) => {
@@ -247,26 +248,43 @@ export const csvTab = (kit, panel) => {
 
 	const from = kit.input('', { type: 'date' });
 	const to = kit.input('', { type: 'date' });
+	/** @type {Array<{ key: string, label: string }>} */
+	const flow = Array.isArray(kit.settings.orders?.statuses) ? kit.settings.orders.statuses : [];
+	const status = kit.select([
+		{ value: '', label: t('admin.all') },
+		...flow.map((item) => ({ value: item.key, label: item.label })),
+	]);
 	panel.append(
-		kit.group(t('customersAdmin.products'), [
-			kit.button(t('customersAdmin.exportProducts'), exporter('/v1/admin/csv/products', 'products.csv')),
-		]),
-		kit.group(t('customersAdmin.importProducts'), [
-			kit.text('p', { class: 'muted' }, t('customersAdmin.importHint')),
-			kit.field(t('customersAdmin.csvFile'), file),
-			h('div', { class: 'actions' }, [check, importButton]),
-			note,
-			problems,
-		]),
-		kit.group(t('customersAdmin.orders'), [
-			h('div', { class: 'row' }, [kit.field(t('admin.from'), from), kit.field(t('admin.to'), to)]),
-			kit.button(t('customersAdmin.exportOrders'), () =>
-				exporter(
-					`/v1/admin/csv/orders${query({ from: dayStart(from.value, kit.timeZone), to: dayEnd(to.value, kit.timeZone) })}`,
-					'orders.csv',
-				)(),
-			),
-		]),
 		line,
+		kit.masonry([
+			card(kit, t('customersAdmin.products'), [
+				kit.text('p', { class: 'muted' }, t('customersAdmin.exportHint')),
+				kit.button(t('customersAdmin.exportProducts'), exporter('/v1/admin/csv/products', 'products.csv')),
+			]),
+			card(kit, t('customersAdmin.orders'), [
+				h('div', { class: 'fields' }, [
+					kit.field(t('admin.from'), from),
+					kit.field(t('admin.to'), to),
+					flow.length > 0 ? kit.field(t('admin.status'), status) : null,
+				]),
+				kit.button(t('customersAdmin.exportOrders'), () =>
+					exporter(
+						`/v1/admin/csv/orders${query({
+							from: dayStart(from.value, kit.timeZone),
+							to: dayEnd(to.value, kit.timeZone),
+							status: status.value,
+						})}`,
+						'orders.csv',
+					)(),
+				),
+			]),
+			card(kit, t('customersAdmin.importProducts'), [
+				kit.text('p', { class: 'muted' }, t('customersAdmin.importHint')),
+				kit.field(t('customersAdmin.csvFile'), file),
+				h('div', { class: 'actions' }, [check, importButton]),
+				note,
+				problems,
+			]),
+		]),
 	);
 };
