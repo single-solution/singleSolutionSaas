@@ -4,8 +4,10 @@
  * - `createFakePortal()`: the Portal side of the Product ↔ Portal contract (PLAN 0.4.12): connect, price and feature
  *   reports, status (settable), websites, revocations, directory and launch consume, plus helpers that sign tokens,
  *   launches and notices;
- * - `createAccountsDouble()`: Accounts as products see it: it receives activity copies, serves sign-in keys and
- *   calls a product's data-rights routes with a pasted server token;
+ * - `createAccountsDouble()`: Accounts as products see it: it receives activity copies, serves sign-in keys and the
+ *   users with a permission (staff alerts), and calls a product's data-rights routes with a pasted server token;
+ * - `createNotificationsDouble()`: Notifications as products see it: it takes events (`POST /v1/events`) and messages
+ *   (`POST /v1/messages/<channel>`) and keeps them;
  * - `createNetwork(handlers)`: routes `fetch` and outbound calls (`outboundSend`) to in-process handlers by origin;
  * - `createMemoryStore()`.
  * @module
@@ -439,7 +441,8 @@ export const createFakePortal = async ({ url = 'https://portal.test', now = Date
 
 /**
  * Accounts as products see it (PLAN 0.4.6, 0.4.11): receives activity copies at `POST /v1/activity-copies`, serves a
- * website's sign-in keys at `GET /v1/websites/:websiteId/keys` (`{ issuer, keys }`), signs sign-ins
+ * website's sign-in keys at `GET /v1/websites/:websiteId/keys` (`{ issuer, keys }`) and the users whose role grants a
+ * permission at `GET /v1/users?permission=&blocked=false` (`setUsers`; staff alerts, PLAN 0.8.10 K6), signs sign-ins
  * (`signIn({ websiteId, sub, … })`, 15 minutes) and calls a product's data-rights routes with a pasted server token.
  * @param {{ url?: string, now?: () => number }} [options]
  */
@@ -447,6 +450,10 @@ export const createAccountsDouble = ({ url = 'https://accounts.test', now = Date
 	/** @type {Array<{ token: string, copy: import('@ss/contracts').ActivityCopy }>} */
 	const copies = [];
 	let failing = false;
+	/** @type {Array<{ id: string, name?: string, email?: string, phone?: string, blocked?: boolean, permissions: string[] }>} */
+	let users = [];
+	/** Users reads (`permission` asked), for cache tests. @type {string[]} */
+	const userReads = [];
 	/** @type {Promise<{ privateJwk: Record<string, any>, signer: import('@ss/protocol').Signer }> | null} */
 	let key = null;
 	const keyOf = () => {
@@ -465,6 +472,19 @@ export const createAccountsDouble = ({ url = 'https://accounts.test', now = Date
 			if (failing) return fail(url, 'unavailable', 503);
 			const { privateJwk } = await keyOf();
 			return json(200, { issuer: url, keys: [{ ...toPublicJwk(privateJwk), alg: 'EdDSA', use: 'sig' }] });
+		}
+		if (request.method === 'GET' && path === '/v1/users') {
+			if (!token) return fail(url, 'invalid_token', 401);
+			if (failing) return fail(url, 'unavailable', 503);
+			const query = new URL(request.url).searchParams;
+			const permission = query.get('permission') ?? '';
+			userReads.push(permission);
+			const items = users.filter(
+				(user) =>
+					(permission === '' || user.permissions.includes(permission) || user.permissions.includes('*')) &&
+					(query.get('blocked') !== 'false' || user.blocked !== true),
+			);
+			return json(200, { items, nextCursor: null, hasMore: false });
 		}
 		if (request.method !== 'POST' || path !== '/v1/activity-copies') return fail(url, 'not_found', 404);
 		if (!token) return fail(url, 'invalid_token', 401);
@@ -519,7 +539,62 @@ export const createAccountsDouble = ({ url = 'https://accounts.test', now = Date
 		setFailing: (value) => {
 			failing = value;
 		},
+		/**
+		 * The users `GET /v1/users` answers (each with the permissions its role grants, `*` for all).
+		 * @param {Array<{ id: string, name?: string, email?: string, phone?: string, blocked?: boolean, permissions: string[] }>} list
+		 */
+		setUsers: (list) => {
+			users = list.map((user) => ({ ...user }));
+		},
+		userReads,
 		exportUser: dataRights('export'),
 		deleteUser: dataRights('delete'),
+	});
+};
+
+/**
+ * Notifications as products see it (PLAN 0.3, 0.8.10 K5, K6): `POST /v1/events` (an event to the merchant's webhook
+ * URLs; a repeated `Idempotency-Key` answers 409) and `POST /v1/messages/<channel>` (a template to a recipient). It
+ * keeps what it was sent; `setFailing(true)` answers 503.
+ * @param {{ url?: string }} [options]
+ */
+export const createNotificationsDouble = ({ url = 'https://notifications.test' } = {}) => {
+	/** @type {Array<{ token: string, key: string | null, body: any }>} */
+	const events = [];
+	/** @type {Array<{ token: string, channel: string, body: any }>} */
+	const messages = [];
+	const keys = new Set();
+	let failing = false;
+
+	/** @type {Handler} */
+	const handle = async (request) => {
+		const token = /^Bearer\s+(\S+)$/.exec(request.headers.get('authorization') ?? '')?.[1];
+		const path = new URL(request.url).pathname;
+		if (request.method !== 'POST') return fail(url, 'not_found', 404);
+		if (!token) return fail(url, 'invalid_token', 401);
+		if (failing) return fail(url, 'unavailable', 503);
+		const body = await request.json().catch(() => null);
+		if (path === '/v1/events') {
+			const key = request.headers.get('idempotency-key');
+			if (key && keys.has(key)) return fail(url, 'duplicate_request', 409);
+			if (key) keys.add(key);
+			events.push({ token, key, body });
+			return json(202, { queued: 1 });
+		}
+		const channel = /^\/v1\/messages\/([a-z-]+)$/.exec(path)?.[1];
+		if (!channel) return fail(url, 'not_found', 404);
+		messages.push({ token, channel, body });
+		return json(202, { id: `msg_${messages.length}`, status: 'queued' });
+	};
+
+	return Object.freeze({
+		url,
+		handle,
+		events,
+		messages,
+		/** @param {boolean} value answer 503 while true */
+		setFailing: (value) => {
+			failing = value;
+		},
 	});
 };

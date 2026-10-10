@@ -2,6 +2,9 @@
  * `@ss/app-kit/widget` — the browser side of widgets (PLAN 0.4.10). No Node.js imports: products bundle it into their
  * own `widget.js`.
  *
+ * `formatMoney` and `formatDate` are the kit's one formatter (PLAN 0.8.10 K7): widgets pass the website's Format and
+ * business time zone from their widget config, and `viewerOf(window)` (the browser's language and time zone).
+ *
  * `mountWidget({ host, theme, css, customCss, render })` attaches an open Shadow DOM to `host`, so the site's CSS
  * cannot break the widget, and injects into that shadow root only: the theme as CSS variables
  * (`--ss-color-<name>`, `--ss-font-family`, `--ss-radius`), the product CSS and the merchant's custom CSS. The mode is
@@ -9,9 +12,30 @@
  * product CSS styles both with `:host([data-ss-mode="dark"])`.
  * @module
  */
+import { DEFAULT_FORMAT, formatDate, formatMoney, normaliseFormat } from '@ss/contracts/format';
 import { formatText } from './text.js';
 
-export { formatText };
+export { DEFAULT_FORMAT, formatDate, formatMoney, formatText, normaliseFormat };
+
+/**
+ * The viewer of a widget: the browser's language and time zone (for a Format whose locale is '' and whose times are
+ * `viewer`).
+ * @param {{ navigator?: { language?: string } } | null | undefined} [win]
+ * @returns {{ locale?: string, timeZone?: string }}
+ */
+export const viewerOf = (win) => {
+	/** @type {{ locale?: string, timeZone?: string }} */
+	const viewer = {};
+	const language = win?.navigator?.language;
+	if (typeof language === 'string' && language !== '') viewer.locale = language;
+	try {
+		const zone = new Intl.DateTimeFormat().resolvedOptions().timeZone;
+		if (zone) viewer.timeZone = zone;
+	} catch {
+		// the runtime knows no time zones: the business time zone is used
+	}
+	return viewer;
+};
 
 /**
  * @typedef {{ colors?: Record<string, string>, fontFamily?: string, radius?: number, mode?: 'light' | 'dark' | 'auto' }} WidgetTheme

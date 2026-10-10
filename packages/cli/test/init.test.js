@@ -113,13 +113,32 @@ describe('ss app init → validate → own tests (integration)', () => {
 		expect(await read(dir, 'server/widget-script.js')).toContain('export const WIDGET_SCRIPT = ');
 		const openapi = await json(dir, 'openapi.json');
 		expect(Object.keys(openapi.paths)).toEqual([
+			'/v1/activity',
+			'/v1/activity/count',
+			'/v1/activity/counts',
 			'/v1/admin/notes',
+			'/v1/connections',
+			'/v1/connections/{name}',
+			'/v1/connections/{name}/test',
 			'/v1/data-rights/delete',
 			'/v1/data-rights/export',
+			'/v1/features',
+			'/v1/format',
+			'/v1/lists/{list}',
 			'/v1/notes',
 			'/v1/permissions',
+			'/v1/settings',
+			'/v1/settings/{key}',
+			'/v1/texts',
+			'/v1/texts/{key}',
+			'/v1/theme',
 			'/v1/tickets',
 		]);
+		// visitor routes also take the server token with SS-Visitor-IP; server routes take the SS-Actor headers
+		expect(openapi.paths['/v1/notes'].post.security).toEqual([{ browserToken: [] }, { serverToken: [] }]);
+		expect(openapi.paths['/v1/notes'].post.parameters).toContainEqual({ $ref: '#/components/parameters/SSVisitorIp' });
+		expect(openapi.paths['/v1/settings/{key}'].put.parameters).toContainEqual({ $ref: '#/components/parameters/SSActorId' });
+		expect(openapi.components.parameters.SSVisitorIp.name).toBe('SS-Visitor-IP');
 		expect(openapi.paths['/v1/admin/notes'].get).toMatchObject({ 'x-ss-auth': 'ticket', 'x-ss-feature': 'notes' });
 
 		expect((await validateProject(dir)).problems).toEqual([]);

@@ -370,10 +370,15 @@ describe('helpers', () => {
 		);
 		expect(doc.info).toEqual({ title: 'Product API', version: '0.0.0' });
 		expect(doc.servers).toEqual([{ url: '/' }]);
-		expect(doc.paths['/v1/items/{itemId}'].delete.parameters.map((/** @type {any} */ p) => p.name)).toEqual([
+		expect(doc.paths['/v1/items/{itemId}'].delete.parameters.map((/** @type {any} */ p) => p.name ?? p.$ref)).toEqual([
 			'itemId',
 			'Idempotency-Key',
+			'#/components/parameters/SSActorId',
+			'#/components/parameters/SSActorName',
+			'#/components/parameters/SSActorRole',
+			'#/components/parameters/SSActorEmail',
 		]);
+		expect(doc.paths['/v1/items/{itemId}'].delete.security).toEqual([{ serverToken: [] }]);
 		expect(doc.paths['/v1/x'].get).toMatchObject({ 'x-ss-permission': 'x.read', security: [{ ticket: [] }] });
 		expect(doc.paths['/v1/x'].get['x-ss-feature']).toBeUndefined();
 		expect(doc.paths['/docs']).toBeUndefined();

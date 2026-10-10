@@ -1,7 +1,13 @@
 import { manifest as manifestFixture } from '@ss/contracts/testing';
 import { MongoClient } from 'mongodb';
 import { createProduct, defineRoute } from '../src/index.js';
-import { createAccountsDouble, createFakePortal, createMemoryStore, createNetwork } from '../src/testing.js';
+import {
+	createAccountsDouble,
+	createFakePortal,
+	createMemoryStore,
+	createNetwork,
+	createNotificationsDouble,
+} from '../src/testing.js';
 
 export const T0 = Date.parse('2026-10-01T10:00:00Z');
 export const BASE = 'https://notes.example.dev';
@@ -128,19 +134,20 @@ export const productRoutes = () => [
 /**
  * A connected product with one website, its tokens and helpers.
  * @param {{ store?: any, connections?: Record<string, any>, hooks?: any, strings?: Record<string, string>, connect?: boolean,
- *   nodeEnv?: string, routes?: any[] }} [options]
+ *   nodeEnv?: string, routes?: any[], manifest?: any, lists?: Record<string, any>, events?: boolean, imports?: any }} [options]
  */
 export const setup = async (options = {}) => {
 	const clock = createClock();
 	const { logger, entries } = createTestLogger();
 	const portal = await createFakePortal({ now: clock.now });
 	const accounts = createAccountsDouble({ now: clock.now });
+	const notifications = createNotificationsDouble();
 	/** @type {Record<string, (request: Request) => Promise<Response>>} */
-	const handlers = { [portal.url]: portal.handle, [accounts.url]: accounts.handle };
+	const handlers = { [portal.url]: portal.handle, [accounts.url]: accounts.handle, [notifications.url]: notifications.handle };
 	const network = createNetwork(handlers);
 	const store = options.store ?? createMemoryStore({ now: clock.now });
 	const product = createProduct({
-		manifest: manifest(),
+		manifest: options.manifest ?? manifest(),
 		strings: options.strings ?? { ...STRINGS },
 		config: { mongodbUri: '', connectSecret: SECRET, encryptionKey: ENCRYPTION_KEY },
 		store,
@@ -152,6 +159,9 @@ export const setup = async (options = {}) => {
 		outboundSend: network.send,
 		...(options.connections ? { connections: options.connections } : {}),
 		...(options.hooks ? { hooks: options.hooks } : {}),
+		...(options.lists ? { lists: options.lists } : {}),
+		...(options.events ? { events: true } : {}),
+		...(options.imports ? { imports: options.imports } : {}),
 	});
 	/** @type {Array<() => Promise<unknown>>} */
 	const tasks = [];
@@ -163,6 +173,7 @@ export const setup = async (options = {}) => {
 	if (options.connect !== false) await portal.connect({ handler, baseUrl: BASE, secret: SECRET });
 	const websiteId = portal.addWebsite({ domain: DOMAIN });
 	portal.addProduct({ productId: 'accounts', baseUrl: accounts.url });
+	portal.addProduct({ productId: 'notifications', baseUrl: notifications.url });
 	const browser = await portal.issueToken({ websiteId, productId: 'notes', kind: 'browser' });
 	const server = await portal.issueToken({ websiteId, productId: 'notes', kind: 'server' });
 
@@ -230,6 +241,7 @@ export const setup = async (options = {}) => {
 		clock,
 		portal,
 		accounts,
+		notifications,
 		network,
 		handlers,
 		product,

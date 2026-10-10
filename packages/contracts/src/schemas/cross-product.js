@@ -3,8 +3,9 @@
  *
  * - Data rights request (`POST /v1/data-rights/export` and `/delete`): `{ user: { id?, email?, phone? } }` with at
  *   least one member. Answers: export `{ records: object }`, delete `{ deleted: integer, anonymised: integer }`.
- * - Activity copy (sent to Accounts after a logged action): `{ websiteId, productId, actor: { kind, id, name? }, action,
- *   target, at }`. Never message contents.
+ * - Activity copy (sent to Accounts after a logged action): `{ websiteId, productId, actor: { kind, id, name?, role? },
+ *   action, target, label?, detail?, at }` (PLAN 0.8.10 K9: `label` names the target, for example an order number;
+ *   `detail` is plain text). Never message contents, secrets or addresses.
  * @module
  */
 import { deepFreeze } from '../util.js';
@@ -54,10 +55,13 @@ export const activityCopySchema = deepFreeze({
 				kind: { type: 'string', pattern: '^[a-z][a-z_]{0,31}$' },
 				id: { type: 'string', minLength: 1, maxLength: 256 },
 				name: { type: 'string', maxLength: 200 },
+				role: { type: 'string', maxLength: 40 },
 			},
 		},
 		action: { type: 'string', pattern: '^[a-z][a-z0-9_.]{0,63}$' },
 		target: { type: 'string', minLength: 1, maxLength: 256 },
+		label: { type: 'string', maxLength: 200 },
+		detail: { type: 'string', maxLength: 2000 },
 		at: ref('timestamp'),
 	},
 });

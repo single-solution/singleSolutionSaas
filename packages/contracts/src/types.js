@@ -135,9 +135,11 @@
  * @typedef {object} ActivityCopy
  * @property {string} websiteId
  * @property {string} productId
- * @property {{ kind: string, id: string, name?: string }} actor
+ * @property {{ kind: string, id: string, name?: string, role?: string }} actor
  * @property {string} action
  * @property {string} target
+ * @property {string} [label] what the target is called (for example an order number), at most 200 characters
+ * @property {string} [detail] plain text, at most 2,000 characters; never message contents, secrets or addresses
  * @property {string} at ISO-8601 UTC
  */
 

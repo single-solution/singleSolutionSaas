@@ -27,6 +27,18 @@ export {
 } from './validate.js';
 export { RULES, checkManifest, checkSettingsRules, findCycles, manifestPriceList } from './semantics.js';
 export { BUSINESS_JSON_TEMPLATE, isTimeZone, validateBusinessJson } from './business.js';
+export {
+	DEFAULT_FORMAT,
+	FORMAT_FIELDS,
+	currencyDigits,
+	formatDate,
+	formatMoney,
+	formatViolation,
+	normaliseFormat,
+	zonedDay,
+	zonedDayStart,
+	zonedParts,
+} from './format.js';
 export { PROBLEM_CODES, problem, createProblemFactory } from './errors.js';
 export {
 	ID_PREFIXES,
@@ -40,6 +52,10 @@ export {
 	hostMatchesDomain,
 } from './ids.js';
 
+/** @typedef {import('./format.js').Format} Format */
+/** @typedef {import('./format.js').Viewer} Viewer */
+/** @typedef {import('./format.js').DateStyle} DateStyle */
+/** @typedef {import('./format.js').ZonedParts} ZonedParts */
 /** @typedef {import('./errors.js').Problem} Problem */
 /** @typedef {import('./errors.js').ProblemFactory} ProblemFactory */
 /** @typedef {import('./validate.js').Validator} Validator */

@@ -20,12 +20,21 @@ The exact API is in [API.md](./API.md).
 - **Reports** — price reports (Prices screen, and once after a deploy that changed the feature list) and feature
   reports (Features screen); switches are saved only after the Portal accepts.
 - **Settings** — one value per website × setting with global defaults and schema defaults; widget texts with the same
-  placeholders as the English text; the theme (colours, font, radius, mode, custom CSS). Every change goes to Recent
-  changes.
+  placeholders as the English text; the theme (colours, font, radius, mode, custom CSS); the Format (locale, currency
+  display, whole units, times). Every change goes to Recent changes.
+- **The merchant's server** (PLAN 0.8.10 K1–K4, K9) — the settings API (`/v1/features`, `/v1/settings`, `/v1/texts`,
+  `/v1/theme`, `/v1/format`, `/v1/lists`, `/v1/connections`) with a merchant's rights; the acting user named by
+  `SS-Actor-*` headers; visitor calls with the server token (`SS-Visitor-IP`, their own rate window); counts of lists
+  (`countHandlers`); the activity log (`GET /v1/activity`).
+- **Events, staff alerts and imports** (K5, K6, K10) — events kept 30 days and forwarded through Notifications; staff
+  alerts to recipients, Accounts staff with a permission and the assignee; checked, idempotent NDJSON import routes.
+- **Format and time zone** (K7, K8) — `formatMoney`, `formatDate` and the calendar helpers from `@ss/contracts`, fed by
+  the website's Format and its business.json time zone (`product.format(websiteId)`, the widget config).
 - **Connections** — the merchant's database, storage, provider keys and pasted tokens, encrypted with a key derived
   from `ENCRYPTION_KEY`, write-only, tested live when saved. `callProduct` calls another product with a pasted token.
 - **Merchant database** — guarded access (`websiteId` on every query, no cross-collection stages, inserts stamped
-  with `websiteId` and `merchantId`) to collections `ss_<product id>_<name>`.
+  with `websiteId` and `merchantId`; Atlas Search only as a first `$search` whose compound filter pins the website) to
+  collections `ss_<product id>_<name>`.
 - **business.json**, **data rights** (`POST /v1/data-rights/export|delete`), the **activity log** with copies to
   Accounts, **Recent changes**.
 - **Product dashboard** — `GET /sso?launch=` sessions, the switcher, roles and the dashboard API every product's
@@ -34,8 +43,8 @@ The exact API is in [API.md](./API.md).
   `data-token` it fetches the website's widget config (`GET /v1/widget/config`, browser token; admin widgets
   `GET /v1/widget/admin/config` with a ticket): texts, theme, custom CSS, switched-on features and the product's
   widget settings. `@ss/app-kit/widget` mounts a widget into an open Shadow DOM with the theme and custom CSS.
-- **Testing** — `@ss/app-kit/testing` has a fake Portal, an Accounts double, an in-process network and the memory
-  store.
+- **Testing** — `@ss/app-kit/testing` has a fake Portal, Accounts and Notifications doubles, an in-process network and
+  the memory store.
 
 There is no background work: everything runs inside a request or right after it (Next.js `after`). The kit has no
 health or status endpoints.

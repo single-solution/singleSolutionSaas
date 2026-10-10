@@ -1,13 +1,18 @@
 /**
  * Recent changes (PLAN 0.4.3): every change made in the product dashboard (features, prices, defaults, settings, widget
- * texts, theme, connections) with who, what and when, in the product database. Entries with `websiteId: null` are
+ * texts, theme, Format, connections), or through the settings API of the merchant's server (PLAN 0.8.10 K1), with who,
+ * what and when, in the product database. Entries with `websiteId: null` are
  * global (prices, defaults) and are listed on the Defaults and Prices screens only.
  * @module
  */
 import { randomToken } from './util.js';
 
 /** @typedef {import('./stores/types.js').Store} Store */
-/** @typedef {{ kind: 'merchant' | 'admin', id: string, name: string, role?: 'owner' | 'support' }} Who */
+/**
+ * Who changed something: a dashboard session (merchant or admin), the member of the merchant's staff a server-token call
+ * named (`user`, PLAN 0.8.10 K2), or the merchant's server (`server`).
+ * @typedef {{ kind: 'merchant' | 'admin' | 'user' | 'server', id: string, name: string, role?: string }} Who
+ */
 /** @typedef {{ websiteId: string | null, who: Who, what: string, detail: string, at: string }} RecentChange */
 
 /** Entries a list returns. */

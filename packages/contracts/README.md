@@ -75,7 +75,23 @@ knows (returned in canonical form). `BUSINESS_JSON_TEMPLATE` is the example ever
 
 - `validateDataRightsRequest`: `{ user: { id?, email?, phone? } }` with at least one member. Answers: export
   `{ records }`, delete `{ deleted, anonymised }` (types `DataRightsExport`, `DataRightsDelete`).
-- `validateActivityCopy`: `{ websiteId, productId, actor: { kind, id, name? }, action, target, at }`.
+- `validateActivityCopy`: `{ websiteId, productId, actor: { kind, id, name?, role? }, action, target, label?, detail?, at }`
+  (`label` at most 200 characters, `detail` at most 2,000 plain-text characters; PLAN 0.8.10 K9).
+- `IMPORT_LIMITS`: one call of a product's import route takes NDJSON of at most 1,000 records and 4 MB (K10).
+
+## Format and time zone (`@ss/contracts/format`, PLAN 0.8.10 K7, K8)
+
+Pure and browser-safe, so products' `core/` and widgets (through `@ss/app-kit/widget`) use the same code.
+
+- `DEFAULT_FORMAT` `{ locale: '', currencyDisplay: 'code', currencySymbol: '', wholeUnits: false, times: 'viewer' }`,
+  `FORMAT_FIELDS`, `formatViolation(field, value)`, `normaliseFormat(value)`.
+- `formatMoney(amount, currency, format?, viewer?)`: integer minor units (ISO 4217 exponents, `currencyDigits`) as
+  `PKR 12,500.00` (code), `Rs 12,500.00` (symbol), a custom symbol, or without minor units (`wholeUnits`). The locale is
+  the Format's, else the viewer's (widgets), else `en`.
+- `formatDate(value, format?, { timeZone, style: 'date' | 'datetime' | 'time', viewer })`: text the server makes
+  (`viewer` null) uses the business time zone; widgets use the viewer's unless `times` is `business`.
+- `zonedParts(at, timeZone)`, `zonedDay(at, timeZone)` (`YYYY-MM-DD`) and `zonedDayStart(day, timeZone)` (epoch ms):
+  every calendar rule in the business.json time zone, UTC when missing.
 
 ## Problems (RFC 9457)
 

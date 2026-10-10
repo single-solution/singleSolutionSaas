@@ -64,6 +64,35 @@ describe('tenant guard (pure)', () => {
 		expect(() => guardPipeline(/** @type {any} */ ('x'), WEBSITE)).toThrow();
 	});
 
+	it('accepts Atlas Search first only when its compound filter pins the website (K11)', () => {
+		const search = (/** @type {unknown} */ filter) => ({
+			$search: {
+				index: 'ss_ecommerce_products_search',
+				compound: { filter, must: [{ autocomplete: { path: 'name', query: 'iph' } }] },
+			},
+		});
+		const pinned = { equals: { path: 'websiteId', value: WEBSITE } };
+		expect(guardPipeline([search([pinned]), { $limit: 10 }], WEBSITE)).toHaveLength(2);
+		expect(guardPipeline([search(pinned)], WEBSITE)).toHaveLength(1);
+		expect(guardPipeline([search([{ equals: { path: 'status', value: 'active' } }, pinned])], WEBSITE)).toHaveLength(1);
+		for (const bad of [
+			[search([{ equals: { path: 'websiteId', value: WEBSITE_2 } }])],
+			[search([{ equals: { path: 'status', value: 'active' } }])],
+			[search([{ text: { path: 'websiteId', query: WEBSITE } }])],
+			[search(undefined)],
+			[{ $search: { index: 'x', text: { path: 'name', query: 'a' } } }],
+			[{ $search: 'x' }],
+			[{ $search: { compound: { filter: [pinned] } }, $limit: 1 }],
+			[search([pinned]), { $lookup: { from: 'x' } }],
+		])
+			expect(() => guardPipeline(bad, WEBSITE)).toThrow(/tenant|first stage|\$search|\$lookup/);
+		expect(() => guardPipeline([{ $match: { websiteId: WEBSITE } }, search([pinned])], WEBSITE)).toThrow(
+			/only as the first stage/,
+		);
+		expect(() => guardPipeline([{ $match: { websiteId: WEBSITE } }, { $searchMeta: {} }], WEBSITE)).toThrow();
+		expect(() => guardPipeline([{ $vectorSearch: {} }], WEBSITE)).toThrow(/first stage/);
+	});
+
 	it('forbids changing websiteId and stamps updatedAt', () => {
 		const at = new Date(0);
 		expect(guardUpdate({ $set: { a: 1 } }, WEBSITE, at, 'u')).toEqual({ $set: { a: 1, updatedAt: at } });

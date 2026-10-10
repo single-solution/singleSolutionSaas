@@ -9,8 +9,8 @@
 /** @typedef {'merchant' | 'owner' | 'support'} DashboardRole */
 /**
  * A fixed-window rate limit (a code constant): `per: 'website'` counts per website (the default when the request names
- * one), `per: 'visitor'` per client IP.
- * @typedef {{ limit: number, windowSeconds: number, per?: 'website' | 'visitor' }} RateLimit
+ * one), `per: 'visitor'` per client IP. Routes with the same `bucket` share one counter (default: one per route).
+ * @typedef {{ limit: number, windowSeconds: number, per?: 'website' | 'visitor', bucket?: string }} RateLimit
  */
 
 /**
@@ -73,7 +73,8 @@ export const defineRoute = (definition) => {
 			limit.limit < 1 ||
 			!Number.isInteger(limit.windowSeconds) ||
 			limit.windowSeconds < 1 ||
-			(limit.per !== undefined && limit.per !== 'website' && limit.per !== 'visitor')
+			(limit.per !== undefined && limit.per !== 'website' && limit.per !== 'visitor') ||
+			(limit.bucket !== undefined && (typeof limit.bucket !== 'string' || limit.bucket.length === 0))
 		)
 			throw new TypeError(`rateLimit needs integer limit and windowSeconds, per website or visitor ${where}`);
 	}

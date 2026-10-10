@@ -3,11 +3,11 @@
  * against the feature's settings schema. Reading returns the website's saved value, else the global default (the same
  * store with `websiteId: null`, Owner only), else the schema default. Reset deletes the saved value. Widget texts
  * (English defaults from `strings/en.json`; a text is saved only with the same `{placeholders}`) and the theme
- * (colours, font family, radius, mode, custom CSS) are stored the same way, one value per field. Every change writes
- * Recent changes.
+ * (colours, font family, radius, mode, custom CSS) are stored the same way, one value per field, and so is the Format
+ * (PLAN 0.8.10 K7: locale, currency display and symbol, whole units, times). Every change writes Recent changes.
  * @module
  */
-import { validateSettingValue } from '@ss/contracts';
+import { DEFAULT_FORMAT, FORMAT_FIELDS, formatViolation, validateSettingValue } from '@ss/contracts';
 import { problem } from './http/results.js';
 import { samePlaceholders } from './text.js';
 import { isObject } from './util.js';
@@ -253,6 +253,49 @@ export const createSettings = ({ store, manifest, strings, recent, now }) => {
 		return { ok: true };
 	};
 
+	/**
+	 * The Format with the source of each field (K7).
+	 * @param {string | null} websiteId
+	 * @returns {Promise<{ format: import('@ss/contracts').Format, sources: Record<keyof import('@ss/contracts').Format, Source> }>}
+	 */
+	const formatOf = async (websiteId) => {
+		const resolve = await snapshot(websiteId);
+		const entries = FORMAT_FIELDS.map(
+			(field) => /** @type {const} */ ([field, resolve('format', field, DEFAULT_FORMAT[field])]),
+		);
+		return {
+			format: /** @type {import('@ss/contracts').Format} */ (
+				Object.fromEntries(entries.map(([field, { value }]) => [field, value]))
+			),
+			sources: /** @type {Record<keyof import('@ss/contracts').Format, Source>} */ (
+				Object.fromEntries(entries.map(([field, { source }]) => [field, source]))
+			),
+		};
+	};
+
+	/**
+	 * Save Format fields; a field set to `null` is reset (K7).
+	 * @param {{ websiteId: string | null, format: unknown, who: Who }} input
+	 * @returns {Promise<Change>}
+	 */
+	const setFormat = async ({ websiteId, format, who }) => {
+		if (!isObject(format) || Object.keys(format).length === 0)
+			return { ok: false, problem: problem('validation_failed', 'Send the Format fields to change.') };
+		for (const [field, value] of Object.entries(format)) {
+			const violation =
+				value === null && FORMAT_FIELDS.includes(/** @type {any} */ (field)) ? null : formatViolation(field, value);
+			if (violation)
+				return {
+					ok: false,
+					problem: problem('validation_failed', violation, { errors: [{ path: `/${field}`, message: violation }] }),
+				};
+		}
+		for (const [field, value] of Object.entries(format))
+			await write(websiteId, 'format', field, value === null ? undefined : value);
+		await log(websiteId, who, 'format', `Format: ${Object.keys(format).join(', ')} changed`);
+		return { ok: true };
+	};
+
 	return Object.freeze({
 		featureOf,
 		settingsOf,
@@ -276,6 +319,8 @@ export const createSettings = ({ store, manifest, strings, recent, now }) => {
 		setText,
 		themeOf,
 		setTheme,
+		formatOf,
+		setFormat,
 	});
 };
 

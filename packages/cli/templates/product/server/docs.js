@@ -1,9 +1,11 @@
 /**
  * The public docs at `/docs` (PLAN 0.4.10): per-feature guides with their routes and widgets, the widget snippets,
- * the ticket server snippet (Node.js fetch and cURL), the business.json template, the localhost note and the API
- * reference from `openapi.json`. Plain HTML; every value is escaped.
+ * the ticket server snippet (Node.js fetch and cURL), the kit's routes for your server (settings, acting user, visitor
+ * calls, counts, activity, Format; PLAN 0.8.10), the business.json template, the localhost note and the API reference
+ * from `openapi.json`. Plain HTML; every value is escaped.
  * @module
  */
+import { KIT_GUIDE } from '@ss/app-kit';
 import { BUSINESS_JSON_TEMPLATE } from '@ss/contracts';
 import guide from '../docs/guide.json' with { type: 'json' };
 import openapi from '../openapi.json' with { type: 'json' };
@@ -129,6 +131,7 @@ ${block(adminSnippet)}
 ${para(guide.tickets)}
 ${block(nodeSnippet)}
 ${block(curlSnippet)}
+${KIT_GUIDE.map((section) => `<h2 id="${escape(section.id)}">${escape(section.title)}</h2>\n${section.paragraphs.map(para).join('\n')}`).join('\n')}
 <h2>business.json</h2>
 ${para(guide.business)}
 ${block(JSON.stringify(BUSINESS_JSON_TEMPLATE, null, 2))}

@@ -6,7 +6,7 @@
  *   (HttpOnly, Secure, SameSite=Lax, host-only) ending at the launch's `sessionExpiresAt`, and redirects to the
  *   dashboard: `<dashboard>?websiteId=<id>`, or `<dashboard>?view=defaults` for an admin launch without a website.
  * - Merchants reach only the websites of their launch; admins any website that has this product (not removed).
- * - Rights: features on/off → Owner or Support; prices and global defaults → Owner; settings, texts, theme and
+ * - Rights: features on/off → Owner or Support; prices and global defaults → Owner; settings, texts, theme, Format and
  *   connections → the merchant (settings of switched-on features only) and Owner or Support.
  * - Writes are refused unless their Origin is the product's own address; dashboard responses are never framed.
  * @module
@@ -399,6 +399,26 @@ export const createDashboard = (kit) => {
 		}),
 		defineRoute({
 			method: 'GET',
+			path: `${W}/format`,
+			auth: 'dashboard',
+			handler: async (ctx) => kit.settings.formatOf(website(ctx)),
+		}),
+		defineRoute({
+			method: 'PUT',
+			path: `${W}/format`,
+			auth: 'dashboard',
+			handler: async (ctx) =>
+				outcome(
+					await kit.settings.setFormat({
+						websiteId: website(ctx),
+						format: objectBody(ctx.body),
+						who: whoOf(sessionOf(ctx)),
+					}),
+					() => kit.settings.formatOf(website(ctx)),
+				),
+		}),
+		defineRoute({
+			method: 'GET',
 			path: `${W}/connections`,
 			auth: 'dashboard',
 			handler: async (ctx) => ({ connections: await kit.connections.list(website(ctx)) }),
@@ -445,13 +465,14 @@ export const createDashboard = (kit) => {
 			auth: 'dashboard',
 			roles: OWNER,
 			handler: async () => {
-				const [values, texts, theme, recentChanges] = await Promise.all([
+				const [values, texts, theme, format, recentChanges] = await Promise.all([
 					kit.settings.settingsOfFeatures(
 						null,
 						manifest.features.map((f) => f.key),
 					),
 					kit.settings.textsOf(null),
 					kit.settings.themeOf(null),
+					kit.settings.formatOf(null),
 					kit.recent.list(null),
 				]);
 				const features = manifest.features.map((f) => ({
@@ -460,7 +481,7 @@ export const createDashboard = (kit) => {
 					schema: f.settings,
 					values: values[f.key] ?? {},
 				}));
-				return { features, texts, theme, recentChanges };
+				return { features, texts, theme, format, recentChanges };
 			},
 		}),
 		defineRoute({
@@ -475,6 +496,7 @@ export const createDashboard = (kit) => {
 				const who = whoOf(sessionOf(ctx));
 				const key = ctx.params.key ?? '';
 				if (key === 'theme') return outcome(await kit.settings.setTheme({ websiteId: null, theme: body.value, who }));
+				if (key === 'format') return outcome(await kit.settings.setFormat({ websiteId: null, format: body.value, who }));
 				if (key.startsWith('text.'))
 					return outcome(await kit.settings.setText({ websiteId: null, key: key.slice(5), value, who }));
 				return outcome(await kit.settings.setSetting({ websiteId: null, ...splitKey(key), value, who }));

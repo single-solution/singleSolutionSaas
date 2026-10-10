@@ -8,7 +8,9 @@
  * - Collections are `ss_<product id>_<name>`.
  * - The tenant guard refuses any read, update, delete or aggregate whose filter (or first `$match`) does not pin
  *   `websiteId` to this website by equality (no `$in`), refuses cross-collection aggregation stages, forbids changing
- *   `websiteId`, and stamps `websiteId`, `merchantId`, `createdAt` and `updatedAt` on inserts.
+ *   `websiteId`, and stamps `websiteId`, `merchantId`, `createdAt` and `updatedAt` on inserts. An Atlas Search pipeline
+ *   may start with `$search` instead of `$match`, only when its `compound.filter` holds an `equals` on `websiteId` with
+ *   this website (PLAN 0.8.10 K11).
  * - `ensureIndexes` is idempotent per pool and requires `websiteId` first in every index (TTL indexes excepted).
  * @module
  */
@@ -38,6 +40,8 @@ const DENIED_STAGES = new Set([
 	'$listLocalSessions',
 	'$documents',
 	'$changeStream',
+	'$searchMeta',
+	'$vectorSearch',
 ]);
 
 /**
@@ -106,7 +110,22 @@ const denyStages = (pipeline, op) => {
 };
 
 /**
- * Throw unless the pipeline starts with a `$match` that pins websiteId.
+ * True when an Atlas Search stage's `compound.filter` holds `{ equals: { path: 'websiteId', value: <this website> } }`.
+ * @param {unknown} search the `$search` stage body
+ * @param {string} websiteId
+ */
+const searchPinsWebsite = (search, websiteId) => {
+	if (!isObject(search) || !isObject(search.compound)) return false;
+	const filters = [search.compound.filter ?? []].flat();
+	return filters.some(
+		(clause) =>
+			isObject(clause) && isObject(clause.equals) && clause.equals.path === 'websiteId' && clause.equals.value === websiteId,
+	);
+};
+
+/**
+ * Throw unless the pipeline starts with a `$match` that pins websiteId, or with an Atlas Search `$search` whose
+ * `compound.filter` holds an `equals` on websiteId with this website (K11).
  * @param {unknown} pipeline
  * @param {string} websiteId
  * @returns {Document[]}
@@ -114,9 +133,17 @@ const denyStages = (pipeline, op) => {
 export const guardPipeline = (pipeline, websiteId) => {
 	if (!Array.isArray(pipeline) || pipeline.length === 0) throw tenantError('aggregate', 'a pipeline is required');
 	const first = pipeline[0];
-	if (!isObject(first) || !isObject(first.$match))
-		throw tenantError('aggregate', 'the first stage must be $match with websiteId');
-	guardFilter(first.$match, websiteId, 'aggregate');
+	if (isObject(first) && Object.keys(first).length === 1 && '$search' in first) {
+		if (!searchPinsWebsite(first.$search, websiteId))
+			throw tenantError('aggregate', '$search needs compound.filter with an equals on websiteId for this website');
+	} else {
+		if (!isObject(first) || !isObject(first.$match))
+			throw tenantError('aggregate', 'the first stage must be $match with websiteId');
+		guardFilter(first.$match, websiteId, 'aggregate');
+	}
+	for (const stage of pipeline.slice(1))
+		if (isObject(stage) && ('$search' in stage || '$searchMeta' in stage || '$vectorSearch' in stage))
+			throw tenantError('aggregate', 'a search stage is allowed only as the first stage');
 	denyStages(pipeline, 'aggregate');
 	return /** @type {Document[]} */ (pipeline);
 };

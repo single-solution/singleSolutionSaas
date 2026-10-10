@@ -1,7 +1,7 @@
 {
 	"name": "@ss/app-kit",
 	"version": "0.2.0",
-	"description": "The kit every product is built on: Portal connection, tokens and tickets, status checks, notices, price and feature reports, settings, widget texts and theme, encrypted connections, the merchant database guard, business.json, data rights, activity log, Recent changes, the product dashboard API and the widget mount.",
+	"description": "The kit every product is built on: Portal connection, tokens and tickets, status checks, notices, price and feature reports, settings, widget texts, theme and Format, encrypted connections, the merchant database guard, business.json, data rights, the activity log and its reads, Recent changes, the product dashboard API, the settings API for the merchant's server, acting users and server visitor calls, counts, events, staff alerts, imports and the widget mount.",
 	"type": "module",
 	"license": "UNLICENSED",
 	"exports": {

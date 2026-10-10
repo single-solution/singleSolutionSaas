@@ -10,6 +10,126 @@
 		}
 	],
 	"paths": {
+		"/v1/activity": {
+			"get": {
+				"summary": "The activity log, newest first",
+				"x-ss-auth": "server",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"responses": {
+					"2XX": {
+						"description": "Success (JSON)"
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/activity/count": {
+			"get": {
+				"summary": "Count the activity log",
+				"x-ss-auth": "server",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"responses": {
+					"2XX": {
+						"description": "Success (JSON)"
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/activity/counts": {
+			"get": {
+				"summary": "Count the activity log by action, actor or kind",
+				"x-ss-auth": "server",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"responses": {
+					"2XX": {
+						"description": "Success (JSON)"
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/v1/admin/analytics": {
 			"get": {
 				"x-ss-auth": "ticket",
@@ -103,7 +223,20 @@
 						"serverToken": []
 					}
 				],
-				"parameters": [],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
 				"responses": {
 					"2XX": {
 						"description": "Success (JSON)"
@@ -133,9 +266,210 @@
 				"security": [
 					{
 						"browserToken": []
+					},
+					{
+						"serverToken": []
 					}
 				],
-				"parameters": [],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/SSVisitorIp"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"responses": {
+					"2XX": {
+						"description": "Success (JSON)"
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/connections": {
+			"get": {
+				"summary": "Connections (state and last 4 characters only)",
+				"x-ss-auth": "server",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"responses": {
+					"2XX": {
+						"description": "Success (JSON)"
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/connections/{name}": {
+			"delete": {
+				"summary": "Remove a connection",
+				"x-ss-auth": "server",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"name": "name",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"responses": {
+					"2XX": {
+						"description": "Success (JSON)"
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			},
+			"put": {
+				"summary": "Save a connection ({ value }), tested live",
+				"x-ss-auth": "server",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"name": "name",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"responses": {
+					"2XX": {
+						"description": "Success (JSON)"
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/connections/{name}/test": {
+			"post": {
+				"summary": "Test a connection again",
+				"x-ss-auth": "server",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"name": "name",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
 				"responses": {
 					"2XX": {
 						"description": "Success (JSON)"
@@ -162,7 +496,20 @@
 						"serverToken": []
 					}
 				],
-				"parameters": [],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
 				"responses": {
 					"2XX": {
 						"description": "Success (JSON)"
@@ -189,7 +536,20 @@
 						"serverToken": []
 					}
 				],
-				"parameters": [],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
 				"responses": {
 					"2XX": {
 						"description": "Success (JSON)"
@@ -216,7 +576,138 @@
 						"serverToken": []
 					}
 				],
-				"parameters": [],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"responses": {
+					"2XX": {
+						"description": "Success (JSON)"
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/features": {
+			"get": {
+				"summary": "Features with on/off and hourly price",
+				"x-ss-auth": "server",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"responses": {
+					"2XX": {
+						"description": "Success (JSON)"
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/format": {
+			"get": {
+				"summary": "The Format of money and dates",
+				"x-ss-auth": "server",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"responses": {
+					"2XX": {
+						"description": "Success (JSON)"
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			},
+			"put": {
+				"summary": "Save Format fields (null resets one)",
+				"x-ss-auth": "server",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
 				"responses": {
 					"2XX": {
 						"description": "Success (JSON)"
@@ -243,7 +734,20 @@
 						"serverToken": []
 					}
 				],
-				"parameters": [],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
 				"responses": {
 					"2XX": {
 						"description": "Success (JSON)"
@@ -270,7 +774,114 @@
 						"serverToken": []
 					}
 				],
-				"parameters": [],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"responses": {
+					"2XX": {
+						"description": "Success (JSON)"
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/lists/{list}": {
+			"get": {
+				"summary": "A list setting ({ value })",
+				"x-ss-auth": "server",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"name": "list",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"responses": {
+					"2XX": {
+						"description": "Success (JSON)"
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			},
+			"put": {
+				"summary": "Save a whole list setting ({ value })",
+				"x-ss-auth": "server",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"name": "list",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
 				"responses": {
 					"2XX": {
 						"description": "Success (JSON)"
@@ -297,7 +908,20 @@
 						"serverToken": []
 					}
 				],
-				"parameters": [],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
 				"responses": {
 					"2XX": {
 						"description": "Success (JSON)"
@@ -324,7 +948,20 @@
 						"serverToken": []
 					}
 				],
-				"parameters": [],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
 				"responses": {
 					"2XX": {
 						"description": "Success (JSON)"
@@ -351,7 +988,366 @@
 						"serverToken": []
 					}
 				],
-				"parameters": [],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"responses": {
+					"2XX": {
+						"description": "Success (JSON)"
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/settings": {
+			"get": {
+				"summary": "Settings schemas, and values of switched-on features",
+				"x-ss-auth": "server",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"responses": {
+					"2XX": {
+						"description": "Success (JSON)"
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/settings/{key}": {
+			"delete": {
+				"summary": "Reset one setting to the default",
+				"x-ss-auth": "server",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"name": "key",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"responses": {
+					"2XX": {
+						"description": "Success (JSON)"
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			},
+			"put": {
+				"summary": "Save one setting (<feature>.<setting>, { value })",
+				"x-ss-auth": "server",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"name": "key",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"responses": {
+					"2XX": {
+						"description": "Success (JSON)"
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/texts": {
+			"get": {
+				"summary": "Widget texts",
+				"x-ss-auth": "server",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"responses": {
+					"2XX": {
+						"description": "Success (JSON)"
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/texts/{key}": {
+			"delete": {
+				"summary": "Reset one widget text to English",
+				"x-ss-auth": "server",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"name": "key",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"responses": {
+					"2XX": {
+						"description": "Success (JSON)"
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			},
+			"put": {
+				"summary": "Save one widget text ({ value })",
+				"x-ss-auth": "server",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"name": "key",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"responses": {
+					"2XX": {
+						"description": "Success (JSON)"
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/theme": {
+			"get": {
+				"summary": "The widgets' theme",
+				"x-ss-auth": "server",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"responses": {
+					"2XX": {
+						"description": "Success (JSON)"
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			},
+			"put": {
+				"summary": "Save theme fields (null resets one)",
+				"x-ss-auth": "server",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
 				"responses": {
 					"2XX": {
 						"description": "Success (JSON)"
@@ -378,7 +1374,20 @@
 						"serverToken": []
 					}
 				],
-				"parameters": [],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
 				"responses": {
 					"2XX": {
 						"description": "Success (JSON)"
@@ -405,7 +1414,20 @@
 						"serverToken": []
 					}
 				],
-				"parameters": [],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
 				"responses": {
 					"2XX": {
 						"description": "Success (JSON)"
@@ -434,12 +1456,62 @@
 			"serverToken": {
 				"type": "http",
 				"scheme": "bearer",
-				"description": "The website's server token: the merchant's server only, never with an Origin header."
+				"description": "The website's server token: the merchant's server only, never with an Origin header. It also reaches every visitor route, acting for the visitor named by SS-Visitor-IP (and SS-Sign-In)."
 			},
 			"ticket": {
 				"type": "http",
 				"scheme": "bearer",
 				"description": "A ticket from POST /v1/tickets: admin widgets, only from the origin it names."
+			}
+		},
+		"parameters": {
+			"SSVisitorIp": {
+				"name": "SS-Visitor-IP",
+				"in": "header",
+				"required": false,
+				"description": "With the server token: the visitor's IP address (required on writes, else 400 visitor_ip_required). These calls count in their own window of 3,000 requests per minute per route per website, plus the per-visitor limits.",
+				"schema": {
+					"type": "string",
+					"maxLength": 45
+				}
+			},
+			"SSActorId": {
+				"name": "SS-Actor-Id",
+				"in": "header",
+				"required": false,
+				"description": "With the server token: the member of your staff the call acts for (1–64 of A–Z a–z 0–9 _ . : @ -).",
+				"schema": {
+					"type": "string",
+					"pattern": "^[A-Za-z0-9_.:@-]{1,64}$"
+				}
+			},
+			"SSActorName": {
+				"name": "SS-Actor-Name",
+				"in": "header",
+				"required": false,
+				"description": "The acting member's name, percent-encoded UTF-8, at most 120 characters (with SS-Actor-Id).",
+				"schema": {
+					"type": "string"
+				}
+			},
+			"SSActorRole": {
+				"name": "SS-Actor-Role",
+				"in": "header",
+				"required": false,
+				"description": "The acting member's role, percent-encoded UTF-8, at most 40 characters.",
+				"schema": {
+					"type": "string"
+				}
+			},
+			"SSActorEmail": {
+				"name": "SS-Actor-Email",
+				"in": "header",
+				"required": false,
+				"description": "The acting member's e-mail address.",
+				"schema": {
+					"type": "string",
+					"maxLength": 320
+				}
 			}
 		},
 		"schemas": {

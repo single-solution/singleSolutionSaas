@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /* global document, window */
 import { describe, expect, it, vi } from 'vitest';
-import { formatText, mountWidget, themeCss } from '../src/widget.js';
+import { DEFAULT_FORMAT, formatDate, formatMoney, formatText, mountWidget, themeCss, viewerOf } from '../src/widget.js';
 import { placeholdersOf, samePlaceholders } from '../src/text.js';
 
 describe('widget texts', () => {
@@ -84,5 +84,24 @@ describe('mountWidget', () => {
 	it('leaves out theme values that do not fit', () => {
 		expect(themeCss({ fontFamily: 'x;} body{', radius: 99 })).toBe(':host {  }');
 		expect(themeCss()).toBe(':host { --ss-font-family: inherit; }');
+	});
+});
+
+describe('formatting in widgets (K7)', () => {
+	it('uses the viewer’s language and time zone unless the Format says otherwise', () => {
+		const viewer = viewerOf(/** @type {any} */ ({ navigator: { language: 'en-GB' } }));
+		expect(viewer.locale).toBe('en-GB');
+		expect(typeof viewer.timeZone).toBe('string');
+		expect(viewerOf(undefined)).not.toHaveProperty('locale');
+		expect(viewerOf(/** @type {any} */ ({ navigator: { language: '' } }))).not.toHaveProperty('locale');
+		expect(formatMoney(1_250_000, 'PKR', DEFAULT_FORMAT, viewer)).toBe('PKR 12,500.00');
+		expect(formatDate('2026-03-12T19:30:00Z', { times: 'business' }, { timeZone: 'Asia/Karachi', viewer, style: 'date' })).toBe(
+			'13 Mar 2026',
+		);
+		const zone = vi.spyOn(Intl.DateTimeFormat.prototype, 'resolvedOptions').mockImplementation(() => {
+			throw new Error('no zones');
+		});
+		expect(viewerOf(window)).not.toHaveProperty('timeZone');
+		zone.mockRestore();
 	});
 });

@@ -8,17 +8,26 @@
  *   problems for every error.
  *
  * Auth: `browser` (browser token from `Authorization: Bearer`; the Origin must be `https://<exact domain>` or local,
- * CORS only for it), `server` (server token; refused when an Origin header is
- * present; no CORS), `ticket` (ticket bound to the request's Origin; CORS only for it), `dashboard` (session cookie;
- * writes only from the product's own address; never framed) and `none`. Every token or ticket failure is the same
- * 401 `invalid_token`.
+ * CORS only for it; without an Origin, the server token: a visitor call from the merchant's server, PLAN 0.8.10 K3),
+ * `server` (server token; refused when an Origin header is present; no CORS), `ticket` (ticket bound to the request's
+ * Origin; CORS only for it), `dashboard` (session cookie; writes only from the product's own address; never framed)
+ * and `none`. Every token or ticket failure is the same 401 `invalid_token`.
+ *
+ * Server-token requests may name the acting member of the merchant's staff with `SS-Actor-*` headers (K2; 400
+ * `invalid_actor` when malformed). A visitor call from the merchant's server names its visitor with `SS-Visitor-IP`
+ * (required on writes, else 400 `visitor_ip_required`), counts in its own window of 3,000 requests per minute per
+ * route per website instead of the browser one, keeps the per-visitor limits (by that address) and never counts as
+ * widget installed.
  *
  * Right after the response (Next.js `after`, through `toNextRoute`): a pending price report, a stale business.json,
- * unsent activity copies, the staff named in a ticket and the widget last-seen time.
+ * unsent activity copies and events, the staff named in a ticket or by the actor headers, and the widget last-seen
+ * time.
  * @module
  */
+import { isIP } from 'node:net';
 import { canonicalOrigin, isLocalOrigin, isProtocolError, originAllowed, verifyToken } from '@ss/protocol';
 import { createId } from '@ss/contracts';
+import { parseActor } from '../actor.js';
 import { isKitError, sha256Hex } from '../util.js';
 import { isProblem, isResult, noContent, ok, problem } from './results.js';
 import { compileRoutes, matchPath, matchRoute, splitPath } from './routes.js';
@@ -47,6 +56,12 @@ import { compileRoutes, matchPath, matchRoute, splitPath } from './routes.js';
  * @property {import('@ss/contracts').StatusResponse | null} status the status response of the website
  * @property {import('@ss/protocol').TokenClaims | null} token browser or server token claims
  * @property {import('@ss/protocol').TicketClaims | null} ticket
+ * @property {import('../actor.js').ActingUser | null} actor the member of the merchant's staff a server-token request
+ *   names with `SS-Actor-*` headers (PLAN 0.8.10 K2), else null
+ * @property {{ server: boolean, ip: string | null }} visitor on browser routes: `server` when the merchant's server
+ *   called with the server token for one visitor (K3), `ip` that visitor's `SS-Visitor-IP` (null when not sent)
+ * @property {string} clientIp the visitor's address for per-visitor limits and risk checks: `SS-Visitor-IP` on a
+ *   server-token visitor call, else the first `X-Forwarded-For` address (`unknown` when there is none)
  * @property {import('../dashboard.js').Session | null} session dashboard session
  * @property {(task: () => Promise<unknown>) => void} after run work right after the response
  * @property {() => Promise<import('../data.js').WebsiteData>} data the website's merchant database (tenant guard)
@@ -70,8 +85,11 @@ const IDEMPOTENCY_KEY = /^[\x21-\x7e]{1,255}$/;
 const BODY_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const DUPLICATE_WINDOW_MS = 24 * 60 * 60_000;
 // `ss-sign-in`: a visitor's Accounts sign-in next to the browser token (signed-in visitor routes);
-// `ss-guest`: a Chat guest's device key (Chat's guest visitor routes)
-const CORS_HEADERS = 'authorization, content-type, idempotency-key, ss-guest, ss-sign-in, x-request-id';
+// `ss-guest`: a Chat guest's device key (Chat's guest visitor routes); `ss-order-key`: a guest order's key (Ecommerce)
+const CORS_HEADERS = 'authorization, content-type, idempotency-key, ss-guest, ss-order-key, ss-sign-in, x-request-id';
+/** Visitor calls from the merchant's server: their own window per route per website (PLAN 0.8.10 K3, code constant). */
+export const SERVER_VISITOR_LIMIT = Object.freeze({ limit: 3000, windowSeconds: 60 });
+const VISITOR_IP_HEADER = 'ss-visitor-ip';
 const LAST_SEEN_EVERY_MS = 60 * 60_000;
 const STAFF_EVERY_MS = 10 * 60_000;
 const NO_FRAMES = Object.freeze({ 'x-frame-options': 'DENY', 'content-security-policy': "frame-ancestors 'none'" });
@@ -179,16 +197,16 @@ export const createRequestHandler = (kit, routes, options = {}) => {
 	};
 
 	/**
-	 * Browser or server token of a request.
+	 * Browser or server token of a request. A browser route without an Origin takes the server token: a visitor call
+	 * from the merchant's server (PLAN 0.8.10 K3).
 	 * @param {CompiledRoute} r
 	 * @param {Request} request
 	 * @param {string | null} rawOrigin
 	 * @returns {Promise<import('@ss/protocol').TokenClaims | null>}
 	 */
 	const verifyWebsiteToken = async (r, request, rawOrigin) => {
-		const kind = r.auth === 'browser' ? 'browser' : 'server';
+		const kind = r.auth === 'browser' && rawOrigin !== null ? 'browser' : 'server';
 		if (kind === 'server' && rawOrigin !== null) return null;
-		if (kind === 'browser' && rawOrigin === null) return null;
 		const token = bearerOf(request.headers.get('authorization'));
 		if (!token) return null;
 		const { portalUrl, portalKeys } = kit.connection.active();
@@ -228,27 +246,38 @@ export const createRequestHandler = (kit, routes, options = {}) => {
 				if (r.database !== false) await kit.activity.retry(websiteId, ctx.merchantId);
 			},
 			async () => {
-				// widget installed: a visitor-widget request from the real domain (never a local origin)
-				if (r.auth !== 'browser' || ctx.origin === null || isLocalOrigin(ctx.origin)) return;
+				// widget installed: a visitor-widget request from the real domain (never a local origin, never the server)
+				if (r.auth !== 'browser' || ctx.visitor.server || ctx.origin === null || isLocalOrigin(ctx.origin)) return;
 				if (now() - (lastWrites.get(`seen|${websiteId}`) ?? -Infinity) < LAST_SEEN_EVERY_MS) return;
 				lastWrites.set(`seen|${websiteId}`, now());
 				await store.put('widget', websiteId, { websiteId, lastSeenAt: now() });
 			},
 			async () => {
-				// the merchant's staff named in a ticket
-				const user = ctx.ticket?.user;
-				if (!user || r.database === false) return;
+				// the merchant's staff named in a ticket, or by the actor headers of a server-token call (K2)
+				const ticketUser = ctx.ticket?.user;
+				const actor = ctx.actor;
+				const user = ticketUser ? { id: ticketUser.id, name: ticketUser.name, email: ticketUser.email } : actor;
+				if (!user) return;
+				if (r.database === false && (await kit.connections.value(websiteId, 'database')) === null) return;
 				const key = `staff|${websiteId}|${user.id}`;
 				if (now() - (lastWrites.get(key) ?? -Infinity) < STAFF_EVERY_MS) return;
 				lastWrites.set(key, now());
 				const db = await ctx.data();
-				await db
-					.collection('staff')
-					.updateOne(
-						{ websiteId, id: user.id },
-						{ $set: { name: user.name, email: user.email, lastSeenAt: new Date(now()) } },
-						{ upsert: true },
-					);
+				await db.collection('staff').updateOne(
+					{ websiteId, id: user.id },
+					{
+						$set: {
+							name: user.name,
+							...(user.email ? { email: user.email } : {}),
+							...(actor?.role ? { role: actor.role } : {}),
+							lastSeenAt: new Date(now()),
+						},
+					},
+					{ upsert: true },
+				);
+			},
+			async () => {
+				if (r.database !== false) await kit.events.drain(websiteId, ctx.merchantId);
 			},
 		];
 		for (const task of tasks) await task().catch((error) => logger.warn('work after the request failed', { websiteId, error }));
@@ -365,6 +394,9 @@ export const createRequestHandler = (kit, routes, options = {}) => {
 				status: null,
 				token: null,
 				ticket: null,
+				actor: null,
+				visitor: { server: false, ip: null },
+				clientIp: request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown',
 				session: null,
 				after: (task) => {
 					afterTasks.push(task);
@@ -391,6 +423,20 @@ export const createRequestHandler = (kit, routes, options = {}) => {
 				ctx.websiteId = claims.websiteId;
 				if (r.auth === 'browser' && ctx.origin)
 					Object.assign(extra, { 'access-control-allow-origin': ctx.origin, vary: 'Origin' });
+				if (claims.kind === 'server') {
+					const named = parseActor(request.headers);
+					if (!named.ok) return fail(problem('invalid_actor', named.message));
+					ctx.actor = named.actor;
+				}
+				if (r.auth === 'browser' && claims.kind === 'server') {
+					// a visitor call from the merchant's server (K3): its visitor's address names the visitor
+					const ip = (request.headers.get(VISITOR_IP_HEADER) ?? '').trim();
+					const known = isIP(ip) !== 0 ? ip : null;
+					ctx.visitor = { server: true, ip: known };
+					ctx.clientIp = known ?? 'unknown';
+					if (method !== 'GET' && method !== 'HEAD' && known === null)
+						return fail(problem('visitor_ip_required', `Send the visitor's IP address in SS-Visitor-IP.`));
+				}
 			} else if (r.auth === 'ticket') {
 				const ticket = bearerOf(request.headers.get('authorization')) ?? '';
 				try {
@@ -445,13 +491,21 @@ export const createRequestHandler = (kit, routes, options = {}) => {
 				}
 			}
 
-			for (const limit of r.rateLimit === undefined ? [] : [r.rateLimit].flat()) {
-				const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+			const declared = r.rateLimit === undefined ? [] : [r.rateLimit].flat();
+			// a visitor call from the merchant's server: its own window per route per website instead of the browser
+			// one, plus the per-visitor limits by the visitor's address when it is sent (K3)
+			const limits = ctx.visitor.server
+				? [
+						{ ...SERVER_VISITOR_LIMIT, per: /** @type {const} */ ('website'), bucket: `server|${r.id}` },
+						...(ctx.visitor.ip ? declared.filter((limit) => limit.per === 'visitor') : []),
+					]
+				: declared;
+			for (const limit of limits) {
 				const per = limit.per ?? (ctx.websiteId ? 'website' : 'visitor');
-				const subject = per === 'website' && ctx.websiteId ? `w:${ctx.websiteId}` : `ip:${ip}`;
+				const subject = per === 'website' && ctx.websiteId ? `w:${ctx.websiteId}` : `ip:${ctx.clientIp}`;
 				try {
 					const windowMs = limit.windowSeconds * 1000;
-					const { count, resetAt } = await store.hit(`${r.id}|${per}|${subject}`, windowMs, now());
+					const { count, resetAt } = await store.hit(`${limit.bucket ?? r.id}|${per}|${subject}`, windowMs, now());
 					if (count > limit.limit) {
 						extra['retry-after'] = String(Math.max(1, Math.ceil((resetAt - now()) / 1000)));
 						return fail(problem('rate_limited', 'Too many requests.'));

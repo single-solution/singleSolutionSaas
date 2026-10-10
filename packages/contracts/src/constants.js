@@ -28,6 +28,12 @@ export const NOTICE_TYPES = Object.freeze(
 /** Statuses for which a product refuses service; the `reason` of a `product_unavailable` problem. */
 export const PRODUCT_UNAVAILABLE_REASONS = Object.freeze(/** @type {const} */ (['stopped', 'suspended', 'removed']));
 
+/**
+ * One call of a product's import route (PLAN 0.8.10 K10, Migration): NDJSON of at most this many records and bytes.
+ * The importer splits its files to fit.
+ */
+export const IMPORT_LIMITS = Object.freeze({ records: 1000, bytes: 4 * 1024 * 1024 });
+
 /** @typedef {typeof PRODUCT_IDS[number]} KnownProductId */
 /** @typedef {typeof PRODUCT_STATUSES[number]} ProductStatus */
 /** @typedef {typeof MERCHANT_STATUSES[number]} MerchantStatus */
