@@ -440,8 +440,10 @@ describe('listings', () => {
 				{ grades: { $in: ['a', 'b'] } },
 			],
 		});
-		expect(staffFilter({ featured: '0', hasMedia: '1' }, { categoryIds: null, brandIds: null, lowStock: 1 })).toEqual({
-			$and: [{ featured: { $ne: true } }, { 'media.0': { $exists: true } }],
+		expect(
+			staffFilter({ featured: '0', hasMedia: '1', ids: 'p1,p2' }, { categoryIds: null, brandIds: null, lowStock: 1 }),
+		).toEqual({
+			$and: [{ featured: { $ne: true } }, { 'media.0': { $exists: true } }, { id: { $in: ['p1', 'p2'] } }],
 		});
 		const priceSort = {
 			field: 'price',

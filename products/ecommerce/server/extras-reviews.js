@@ -169,7 +169,23 @@ export const createReviews = (product, service) => {
 				.find({ ...filter, ...afterFilter(NEWEST, page.after) }, { ...NO_ID, sort: sortOf(NEWEST), limit: page.fetchLimit })
 				.toArray()
 		);
-		return page.respond(rows.map(staffView), (view) => keyOf(NEWEST, view));
+		// each review names its product, for the moderation list (names read once per page)
+		const data = await (await service.site(ctx)).data();
+		const names = new Map(
+			(
+				await data
+					.collection(COLLECTIONS.products)
+					.find(
+						{ websiteId: data.websiteId, id: { $in: [...new Set(rows.map((row) => row.productId))] } },
+						{ projection: { _id: 0, id: 1, name: 1 } },
+					)
+					.toArray()
+			).map((row) => [String(row.id), String(row.name)]),
+		);
+		return page.respond(
+			rows.map((row) => ({ ...staffView(row), productName: names.get(row.productId) ?? '' })),
+			(view) => keyOf(NEWEST, view),
+		);
 	};
 
 	/**

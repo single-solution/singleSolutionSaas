@@ -416,7 +416,7 @@ const STOCK_STATES = Object.freeze(['none', 'out', 'partial', 'full']);
 /**
  * The staff's product list filter (the caller adds `websiteId`).
  * @param {Record<string, string>} query `q`, `status`, `kind`, `lowStock`, `featured`, `stockState` (one or several),
- *   `hasMedia`, `grade` (one or several)
+ *   `hasMedia`, `grade` (one or several), `ids` (product ids, at most 20)
  * @param {{ categoryIds: string[] | null, brandIds: string[] | null, lowStock: number }} resolved
  * @returns {Record<string, unknown>}
  */
@@ -439,5 +439,7 @@ export const staffFilter = (query, resolved) => {
 	if (query.hasMedia === 'false' || query.hasMedia === '0') and.push({ 'media.0': { $exists: false } });
 	const grades = listOf(query.grade);
 	if (grades.length > 0) and.push({ grades: { $in: grades } });
+	const ids = listOf(query.ids);
+	if (ids.length > 0) and.push({ id: { $in: ids } });
 	return and.length === 0 ? {} : { $and: and };
 };

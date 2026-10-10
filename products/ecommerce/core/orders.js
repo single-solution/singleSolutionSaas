@@ -530,16 +530,21 @@ const customerFlags = (customer) => ({
  * An order as staff see it: everything, with status names, the statuses it may move to next and the customer's flags.
  * @param {OrderRecord} order
  * @param {OrderFlow} flow
- * @param {{ customer: Partial<CustomerRecord> | null, images: Map<string, string | null>, money: Money }} extras
- *   `images`: line id → address
+ * @param {{ customer: Partial<CustomerRecord> | null, images: Map<string, string | null>, money: Money,
+ *   serialized?: Set<string> | null }} extras `images`: line id → address; `serialized`: the order's serialized products
  */
-export const orderDetail = (order, flow, { customer, images, money }) => {
+export const orderDetail = (order, flow, { customer, images, money, serialized = null }) => {
 	const plain = wire(order);
 	return {
 		...plain,
 		statusLabel: statusLabel(flow, order.status),
 		totalText: money(order.totals.total, order.totals.currency),
-		lines: plain.lines.map((/** @type {any} */ line) => ({ ...line, imageUrl: images.get(line.id) ?? null })),
+		lines: plain.lines.map((/** @type {any} */ line) => ({
+			...line,
+			imageUrl: images.get(line.id) ?? null,
+			// which lines take serial numbers (E11), while Grades and serials is on
+			...(serialized ? { serialized: line.kind === 'physical' && serialized.has(line.productId) } : {}),
+		})),
 		payment: { ...plain.payment, refundable: refundable(order) },
 		history: plain.history.map((/** @type {any} */ entry) => ({
 			...entry,

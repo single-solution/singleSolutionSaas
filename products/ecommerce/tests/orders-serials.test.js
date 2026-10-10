@@ -128,6 +128,7 @@ describe('E11 serial capture', () => {
 				.status,
 		).toBe(422);
 		const typed = await api('PATCH', `/v1/orders/${order.id}`, { serials: { [line.id]: ['490154203237518'] } });
+		expect(typed.lines[0].serialized).toBe(true);
 		expect(typed.lines[0].serials).toEqual(['490154203237518']);
 		const recorded = await (
 			await shop.db()

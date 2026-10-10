@@ -431,6 +431,7 @@ describe('reviews', () => {
 		expect((await pub()).json).toMatchObject({ items: [], summary: { count: 0, average: 0 } });
 		const pending = await shop.admin(ticket, 'GET', `/v1/admin/reviews?status=pending&productId=${item.id}`);
 		expect(pending.json.items.map((/** @type {any} */ r) => r.id)).toEqual([first.json.id]);
+		expect(pending.json.items[0].productName).toBe(item.name);
 		await shop.admin(ticket, 'POST', `/v1/admin/reviews/${first.json.id}/approve`, {});
 		await shop.admin(ticket, 'POST', `/v1/admin/reviews/${first.json.id}/approve`, {});
 		expect((await productOf(item.id)).rating).toEqual({ average: 5, count: 1 });

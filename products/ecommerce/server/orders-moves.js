@@ -562,7 +562,7 @@ export const createMoves = (product, service) => {
 		};
 	};
 
-	return Object.freeze({ move, refund, typeSerials });
+	return Object.freeze({ move, refund, typeSerials, serializedOf });
 };
 
 /** @typedef {ReturnType<typeof createMoves>} Moves */

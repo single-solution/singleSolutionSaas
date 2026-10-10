@@ -120,7 +120,8 @@ export const createOrders = (product, service) => {
 		/** @type {Map<string, string | null>} */
 		const images = new Map();
 		for (const line of order.lines) images.set(line.id, await media.mediaUrl(s, line.image));
-		return orderDetail(order, flow, { customer, images, money });
+		const serialized = s.has('grades_serials') ? await moves.serializedOf(s, order) : null;
+		return orderDetail(order, flow, { customer, images, money, serialized });
 	};
 
 	// ------------------------------------------------------------------------------------------------- handlers
