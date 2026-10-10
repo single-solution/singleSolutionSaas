@@ -1233,6 +1233,47 @@ in, before any other page opens. A merchant with no websites sees a short welcom
 - **Account**: business details (business name, owner name, phone, address, country), login e-mail (confirmed by e-mail)
   and password, two-step sign-in (on/off, recovery codes), own activity.
 
+**Fuller screens (owner request 2026-10-10)**: empty space is filled with what the Portal API already has, never with
+decoration; no exports, no new bulk actions, nothing for monitoring. Rights stay as in 0.2 (a button or menu item
+shows only to the roles that may use it).
+
+- **Shared**: list panes show a count beside their title (Merchants `50+` while more pages load). Pages filtered by UTC
+  days have a **Period** dropdown (last 7, 30 or 90 days, this month, last month; typed dates show as Custom dates)
+  beside the date fields. Activity tables (Activity, merchant page, Overview, an admin's page) link the admin and
+  merchant names to the Activity page filtered by them, and admin views show each entry's **Changes** (its before and
+  after fields) under the action. Own activity (My account, Account) has Load more. Website cards (both consoles)
+  have **Visit website** and **Copy domain** in their menu, before Remove website.
+- **Admin Overview**: Add merchant in the header; the hero card also shows credits added this month (UTC) and the
+  number of merchants needing attention; tiles for merchants, websites, products on websites and connected products
+  (active count); **Needs attention** (low, grace, stopped; checked now) with Add credits on each row (Owner, Finance)
+  and a link to Credits and billing, shown only while a merchant needs attention; each product card has a More menu
+  (View product, Open as admin; Owner); Recent activity has View all.
+- **Merchants**: the status filter also offers **Setup pending** (merchants whose password is not set yet). The merchant
+  page shows a warning under the header while the merchant is low (days left), in grace (when it ends) or stopped,
+  with Add credits; a **Details** card (owner, login e-mail, phone, country, address, added, last sign-in, two-step
+  with recovery codes left, password set or not, websites, products on websites); the header's More menu also has
+  **Usage, all websites** (a dialog with the 30-day usage by website, product and feature), **Receipts in Credits and
+  billing** and **Open in Activity** (both filtered by the merchant); Activity has Load more and Open in Activity.
+- **Products**: the list sorts by name, credits this month or websites. The product shows a features tile (how many,
+  how many with a price); **Features and prices** (each feature with its description, the features it needs, and its
+  price per hour and per day from the last accepted price list; read-only, prices are set in the product dashboard);
+  **Connection** (product id, product version, price list version, widget script, docs, connected and reconnected);
+  and in the More menu **Open docs** and **Copy address** before Reconnect.
+- **Credits and billing**: Add credits in the header (pick the merchant, then the receipt form); tiles for credits
+  added, receipts and credits charged in the period, and merchants needing attention; the receipt filter has a
+  merchant dropdown (by name), the Period dropdown, method suggestions from the receipts shown and Clear filters;
+  charges by day also show a bar chart; merchant and product names in the charges open their pages.
+- **Activity**: the merchant filter is a dropdown of merchants by name and, for Owners, the admin filter a dropdown of
+  admins; Period dropdown and Clear filters.
+- **Admins**: the list has a role filter. The admin shows **Details** (status, role, two-step with recovery codes left,
+  last sign-in, added), **What this role can do** (the 0.2 rights in four lines) and its **Recent activity** (latest 10) with Open in Activity.
+- **Merchant console**: Overview adds **Recent activity** (latest 8, View all opens Account) and **Latest credits added**
+  (latest 5, View all opens Usage and credits). A website's page adds tiles for its spend over the last 30 UTC days,
+  features on and the day it was added, and a 30-day spend chart when there was spend. Usage and credits has the
+  Period dropdown.
+- **API addition**: `GET /v1/admin/merchants?setup=pending` lists only merchants whose password is not set yet (it
+  combines with `status` and `q`; any other value is refused with 422).
+
 ### 0.8.3 Chat — full specification
 
 Chat (`products/chat`, 0.12 step 8) does everything the ibrahimMobiles chat does, plus the kept extras below. Every
