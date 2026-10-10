@@ -6,8 +6,8 @@ import { mountProductGrid } from '../ui/product-grid.js';
 import {
 	codeOf,
 	currencyOf,
-	dateText,
 	fill,
+	formatsOf,
 	h,
 	keepFocus,
 	mountShop,
@@ -414,10 +414,26 @@ describe('shared helpers', () => {
 		expect(codeOf({ ok: false, status: 0, data: null })).toBe('offline');
 		expect(codeOf({ ok: false, status: 500, data: null })).toBe('');
 		expect(codeOf({ ok: false, status: 409, data: { type: 'https://x/problems/slot_taken' } })).toBe('slot_taken');
-		expect(dateText(null)).toBe('');
-		expect(dateText('not a date')).toBe('');
-		expect(dateText('2026-10-01T10:00:00Z', { timeZone: 'Nowhere/Never' })).toBe('2026-10-01T10:00:00.000Z');
-		expect(dateText('2026-10-01T10:00:00Z', { timeZone: 'UTC', time: false })).toContain('2026');
+		// money and dates by the website's Format and business time zone (widget config) and the viewer (PLAN 0.8.10 K7)
+		const viewer = { navigator: { language: 'en-US' } };
+		const plain = formatsOf(config, viewer);
+		expect(plain.dateText(null)).toBe('');
+		expect(plain.dateText('not a date')).toBe('');
+		expect(plain.money(250000, 'PKR')).toBe('PKR 2,500.00');
+		expect(plain.money(undefined, 'PKR')).toBe('PKR 0.00');
+		const business = formatsOf(
+			{
+				...config,
+				format: { locale: 'en-GB', currencyDisplay: 'custom', currencySymbol: 'Rs', wholeUnits: true, times: 'business' },
+				timeZone: 'Asia/Karachi',
+			},
+			viewer,
+		);
+		expect(business.money(1250000, 'PKR')).toBe('Rs 12,500');
+		expect(business.dateText('2026-03-12T20:00:00Z', { time: false })).toBe('13 Mar 2026');
+		expect(business.dateText('2026-03-12T20:00:00Z')).toBe('13 Mar 2026, 01:00');
+		expect(business.timeText('2026-03-12T20:00:00Z', 'UTC')).toBe('20:00');
+		expect(business.dateText('2026-03-12T20:00:00Z', { time: false, zone: 'Nowhere/Never' })).toBe('12 Mar 2026');
 		expect(ratingText(t, null)).toBe('');
 		expect(ratingText(t, { average: 0, count: 0 })).toBe('');
 	});
@@ -436,10 +452,11 @@ describe('shared helpers', () => {
 		const box = /** @type {HTMLElement} */ (/** @type {unknown} */ (root));
 		const doc = document;
 		const t = textsOf(configOf([]));
-		const node = productCard(doc, t, { ...card('prd_x'), image: null, brand: 'Plain', grades: [], rating: undefined });
+		const formats = formatsOf(configOf([]), window);
+		const node = productCard(doc, t, formats, { ...card('prd_x'), image: null, brand: 'Plain', grades: [], rating: undefined });
 		expect(node.querySelector('img')).toBeNull();
 		expect(node.textContent).toContain('Plain');
-		const nobrand = productCard(doc, t, { ...card('prd_y'), brand: null });
+		const nobrand = productCard(doc, t, formats, { ...card('prd_y'), brand: null });
 		expect(nobrand.querySelectorAll('.meta')).toHaveLength(2);
 		const render = () =>
 			fill(

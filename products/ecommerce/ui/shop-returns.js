@@ -4,7 +4,7 @@
  * and photos uploaded straight to the merchant's storage with a signed address) and the shopper's own claims.
  * @module
  */
-import { button, codeOf, dateText, field, h, money, problemText, select } from './shop-common.js';
+import { button, codeOf, field, formatsOf, h, problemText, select } from './shop-common.js';
 
 /** @typedef {import('./shop-common.js').Texts} Texts */
 /** @typedef {import('./shop-common.js').ShopSettings} ShopSettings */
@@ -55,6 +55,7 @@ const upload = async ({ t, shop, config, win }, files) => {
 export const renderClaimForm = async (input) => {
 	const { box, t, shop, config, settings, orderId, onDone } = input;
 	const doc = /** @type {Document} */ (box.ownerDocument);
+	const { dateText } = formatsOf(config, input.win);
 	box.replaceChildren(h(doc, 'p', { class: 'status', role: 'status' }, t('returns.loading')));
 	const answer = await shop.call(`/v1/shop/orders/${encodeURIComponent(orderId)}/returnable`);
 	if (!answer.ok) {
@@ -167,8 +168,9 @@ export const renderClaimForm = async (input) => {
  * The shopper's claims, newest first, with Load more.
  * @param {ClaimContext & { box: HTMLElement }} input
  */
-export const renderClaims = async ({ box, t, shop, settings }) => {
+export const renderClaims = async ({ box, t, shop, config, settings, win }) => {
 	const doc = /** @type {Document} */ (box.ownerDocument);
+	const { money, dateText } = formatsOf(config, win);
 	const list = h(doc, 'ul', { 'aria-label': t('returns.mine') });
 	const status = h(doc, 'p', { class: 'status', role: 'status' });
 	/** @type {string | null} */

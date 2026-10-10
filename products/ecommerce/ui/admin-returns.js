@@ -5,7 +5,6 @@
  * shopper), mark received, refund (through Payments when paid online, else recorded), restock (exactly once) and close.
  * @module
  */
-import { formatMoney } from '../core/money.js';
 import { CLAIM_KINDS, CLAIM_STATUSES } from '../core/returns.js';
 import { query } from './admin-kit.js';
 
@@ -92,7 +91,7 @@ const claimDetail = (kit, { id, done }) => {
 		const note = kit.status();
 		const currency = claim.order?.currency ?? kit.currency;
 		/** @param {number} minor */
-		const money = (minor) => formatMoney(minor, currency);
+		const money = (minor) => kit.money(minor, currency);
 		/** @param {{ ok: boolean, status: number, data: any }} answer @param {string} text */
 		const after = (answer, text) => {
 			if (!answer.ok) {

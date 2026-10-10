@@ -8,7 +8,7 @@
  * run inside a transaction, the driver session.
  * @module
  */
-import { createId } from '@ss/contracts';
+import { createId, zonedParts } from '@ss/contracts';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import { balanceOf, compactLots, expireLots, spendFromLots, takeFromLots } from '../core/points.js';
 
@@ -370,7 +370,8 @@ const releaseSlots = (data, orderId, session) =>
 	data.collection(COLLECTIONS.slots).deleteMany({ websiteId: data.websiteId, orderId }, { session });
 
 /**
- * The next order number of a year: `<prefix><year>-<6-digit sequence>` (`2026-000042`).
+ * The next order number of a year (the year in the business time zone, PLAN 0.8.10 K8):
+ * `<prefix><year>-<6-digit sequence>` (`2026-000042`).
  * @param {WebsiteData} data
  * @param {{ prefix: string, year: number, session?: Session }} options
  */
@@ -419,10 +420,11 @@ const refused = (result) => Object.assign(new Error(result.code), { refused: res
  * booked slots and insert it. Nothing is written when any part fails.
  * @param {WebsiteData} data
  * @param {Placement} placement
- * @param {{ now: number }} clock
+ * @param {{ now: number, timeZone?: string }} clock `timeZone`: the business.json time zone (UTC when missing), whose
+ *   year numbers the order
  * @returns {Promise<PlacementResult>}
  */
-export const placeOrder = async (data, placement, { now }) => {
+export const placeOrder = async (data, placement, { now, timeZone = 'UTC' }) => {
 	const { order } = placement;
 	const orders = data.collection(COLLECTIONS.orders);
 	const existing = async () =>
@@ -438,7 +440,7 @@ export const placeOrder = async (data, placement, { now }) => {
 		const placed = await data.transaction(async (session) => {
 			const number = await nextOrderNumber(data, {
 				prefix: placement.numberPrefix,
-				year: new Date(now).getUTCFullYear(),
+				year: zonedParts(now, timeZone).year,
 				session,
 			});
 			const stock = await holdStock(

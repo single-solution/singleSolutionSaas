@@ -1,5 +1,5 @@
 /**
- * The order flow (PLAN 0.8.8: merchant-defined statuses and allowed moves, defaulting to the ibrahimMobiles flow:
+ * The order flow (PLAN 0.8.8: merchant-defined statuses and allowed moves, defaulting to this flow:
  * placed → confirmed → packed with serials → dispatched → delivered, with cancel and return-to-origin rules). The
  * merchant names the statuses, adds their own and chooses the moves; each status has a role (`core/model.js`
  * `STATUS_ROLES`) and the role rules below hold whatever the flow, so stock, offer uses, points and money stay right:
@@ -23,7 +23,7 @@ const MAX_STATUSES = 30;
 /** A status key. */
 const KEY = /^[a-z][a-z0-9_]{1,39}$/;
 
-/** The default flow (ibrahimMobiles). @type {OrderFlow} */
+/** The default flow. @type {OrderFlow} */
 export const DEFAULT_FLOW = {
 	statuses: [
 		{ key: 'pending_payment', label: 'Awaiting payment', role: /** @type {StatusRole} */ ('awaiting_payment') },

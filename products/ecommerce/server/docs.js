@@ -4,10 +4,13 @@
  * through Payments and the success page, the order flow and its roles, the Notifications templates, couriers (tracking
  * links and the courier API adapter), the storage CORS rule, what the merchant's site serves from the API (sitemap,
  * product meta, feeds, llms.txt, policies), the Chat lookups, the Accounts Orders lookup, data rights, per-feature
- * guides with their routes and widgets, the admin widgets and the ticket snippet (Node.js and cURL), the business.json
- * template, the localhost note and the API reference from `openapi.json`. Plain HTML; every value is escaped.
+ * guides with their routes and widgets, the admin widgets and the ticket snippet (Node.js and cURL), the kit's routes
+ * for your server (settings and lists, the acting user, visitor calls, counts, activity, Format; PLAN 0.8.10), the
+ * business.json template, the localhost note and the API reference from `openapi.json`. Plain HTML; every value is
+ * escaped.
  * @module
  */
+import { KIT_GUIDE } from '@ss/app-kit';
 import { BUSINESS_JSON_TEMPLATE } from '@ss/contracts';
 import guide from '../docs/guide.json' with { type: 'json' };
 import openapi from '../openapi.json' with { type: 'json' };
@@ -208,6 +211,8 @@ ${para(guide.tickets)}
 ${permissionList}
 ${block(snippets.ticketNode)}
 ${block(snippets.ticketCurl)}
+${KIT_GUIDE.map((section) => `<h2 id="${escape(section.id)}">${escape(section.title)}</h2>\n${section.paragraphs.map(para).join('\n')}`).join('\n')}
+${para(guide.kit)}
 <h2 id="business">business.json</h2>
 ${para(guide.business)}
 ${block(JSON.stringify(BUSINESS_JSON_TEMPLATE, null, 2))}

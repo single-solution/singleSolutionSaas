@@ -1,6 +1,5 @@
 /**
- * Loyalty rules (PLAN 0.8.8 Promotions: earn, redeem, expiry, history), from the `loyalty` settings and ported from
- * ibrahimMobiles (`packages/shared/src/loyalty.ts`): an order earns a percentage of what was paid for the goods back
+ * Loyalty rules (PLAN 0.8.8 Promotions: earn, redeem, expiry, history), from the `loyalty` settings: an order earns a percentage of what was paid for the goods back
  * as points (`earnPercent`, on the order total without delivery and tax, worth `pointValue` minor units each); at
  * checkout points are worth `pointValue` each, at least `minRedeem` points are redeemed at once and they pay at most
  * `maxPercent` of the order; earned points expire `expiryDays` after they are earned (0 = never). Checkout and orders

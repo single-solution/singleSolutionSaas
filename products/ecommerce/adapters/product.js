@@ -3,9 +3,9 @@
  * manifest (each feature's settings schema from `schemas/` inline), its widget texts, its Connections (storage, the
  * Accounts, Payments and Notifications tokens, courier keys and the AI key), the merchant database indexes of every
  * part, the data-rights and widget-config hooks (filled in by `server/routes.js`), and adds the list settings (product
- * database), the courier APIs and the AI provider on the same outbound policy. The Next.js route and the tests pass the
- * rest (config, store, clock, network). Public entry `./product` of this package, so a system test can compose the
- * product with `./routes`.
+ * database; also served to the merchant's server by the kit's `GET|PUT /v1/lists/:list`, PLAN 0.8.10 K1), the courier
+ * APIs and the AI provider on the same outbound policy. The Next.js route and the tests pass the rest (config, store,
+ * clock, network). Public entry `./product` of this package, so a system test can compose the product with `./routes`.
  * @module
  */
 import { createMemoryStore, createMongoStore, createProduct } from '@ss/app-kit';
@@ -47,7 +47,7 @@ import { createCouriers } from './couriers.js';
 import { INDEXES as EXTRAS_INDEXES } from './extras-store.js';
 import { INDEXES as FULFILMENT_INDEXES } from './fulfilment-store.js';
 import { LEDGER_INDEXES } from './ledger.js';
-import { createLists } from './lists.js';
+import { LISTS, createLists } from './lists.js';
 import { INDEXES as ORDERS_INDEXES } from './orders-store.js';
 import { INDEXES as PROMOTIONS_INDEXES } from './promotions-store.js';
 
@@ -223,6 +223,18 @@ export const createProductInstance = (options) => {
 			widgetConfig: (ctx) => /** @type {NonNullable<typeof hooks.widgetConfig>} */ (hooks.widgetConfig)(ctx),
 		},
 		data: { indexes: INDEXES },
+		// the list settings for the merchant's server (`GET|PUT /v1/lists/:list`, server token)
+		lists: Object.fromEntries(
+			/** @type {Array<keyof typeof LISTS>} */ (Object.keys(LISTS)).map((name) => [
+				name,
+				{
+					feature: LISTS[name].feature,
+					title: LISTS[name].title,
+					get: (/** @type {string} */ websiteId) => lists.get(websiteId, name),
+					save: (/** @type {string} */ websiteId, /** @type {unknown} */ value) => lists.save(websiteId, name, value),
+				},
+			]),
+		),
 	});
 	return Object.freeze({
 		...product,

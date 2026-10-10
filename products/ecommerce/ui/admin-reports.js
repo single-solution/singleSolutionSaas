@@ -261,7 +261,10 @@ export const csvTab = (kit, panel) => {
 		kit.group(t('customersAdmin.orders'), [
 			h('div', { class: 'row' }, [kit.field(t('admin.from'), from), kit.field(t('admin.to'), to)]),
 			kit.button(t('customersAdmin.exportOrders'), () =>
-				exporter(`/v1/admin/csv/orders${query({ from: dayStart(from.value), to: dayEnd(to.value) })}`, 'orders.csv')(),
+				exporter(
+					`/v1/admin/csv/orders${query({ from: dayStart(from.value, kit.timeZone), to: dayEnd(to.value, kit.timeZone) })}`,
+					'orders.csv',
+				)(),
 			),
 		]),
 		line,

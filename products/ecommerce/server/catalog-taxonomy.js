@@ -127,7 +127,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 				.catch((error) => {
 					throw slugClash(error);
 				});
-			await service.log(ctx, 'category.created', id);
+			await service.log(ctx, 'category.created', id, { label: record.name });
 			return created(await withImage(s, record, 'image'));
 		},
 		/** @param {any} ctx */
@@ -152,7 +152,10 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			if (moved)
 				for (const next of movedPaths(existing.id, path, all))
 					await collection.updateOne({ websiteId: data.websiteId, id: next.id }, { $set: { path: next.path } });
-			await service.log(ctx, 'category.updated', existing.id);
+			await service.log(ctx, 'category.updated', existing.id, {
+				label: checked.value.name,
+				...(moved ? { detail: 'Moved in the category tree' } : {}),
+			});
 			return withImage(s, await one(data, COLLECTIONS.categories, existing.id, 'category'), 'image');
 		},
 		/** @param {any} ctx */
@@ -171,7 +174,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 				const storage = await product.connections.storage(s.websiteId);
 				await storage?.deleteObject({ key: existing.image.key }).catch(() => null);
 			}
-			await service.log(ctx, 'category.deleted', existing.id);
+			await service.log(ctx, 'category.deleted', existing.id, { label: existing.name });
 			return undefined;
 		},
 	};
@@ -208,7 +211,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 				.catch((error) => {
 					throw slugClash(error);
 				});
-			await service.log(ctx, 'brand.created', id);
+			await service.log(ctx, 'brand.created', id, { label: record.name });
 			return created(await withImage(s, record, 'logo'));
 		},
 		/** @param {any} ctx */
@@ -225,7 +228,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 				.catch((error) => {
 					throw slugClash(error);
 				});
-			await service.log(ctx, 'brand.updated', existing.id);
+			await service.log(ctx, 'brand.updated', existing.id, { label: checked.value.name });
 			return withImage(s, await one(data, COLLECTIONS.brands, existing.id, 'brand'), 'logo');
 		},
 		/** @param {any} ctx */
@@ -240,7 +243,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 				const storage = await product.connections.storage(s.websiteId);
 				await storage?.deleteObject({ key: existing.logo.key }).catch(() => null);
 			}
-			await service.log(ctx, 'brand.deleted', existing.id);
+			await service.log(ctx, 'brand.deleted', existing.id, { label: existing.name });
 			return undefined;
 		},
 	};
@@ -261,7 +264,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			/** @type {AttributeRecord} */
 			const record = { id: createId(ID_PREFIX.attribute), ...checked.value };
 			await data.collection(COLLECTIONS.attributes).insertOne({ ...record });
-			await service.log(ctx, 'attribute.created', record.id);
+			await service.log(ctx, 'attribute.created', record.id, { label: record.name });
 			return created(record);
 		},
 		/** @param {any} ctx */
@@ -279,7 +282,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			await data
 				.collection(COLLECTIONS.attributes)
 				.updateOne({ websiteId: data.websiteId, id: existing.id }, { $set: checked.value });
-			await service.log(ctx, 'attribute.updated', existing.id);
+			await service.log(ctx, 'attribute.updated', existing.id, { label: checked.value.name });
 			return { id: existing.id, ...checked.value };
 		},
 		/** @param {any} ctx */
@@ -290,7 +293,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			if ((await productsWith(data, { [`specs.${existing.id}`]: { $exists: true } })) > 0)
 				throw problem('conflict', 'Products have values of this attribute: remove them first.');
 			await data.collection(COLLECTIONS.attributes).deleteOne({ websiteId: data.websiteId, id: existing.id });
-			await service.log(ctx, 'attribute.deleted', existing.id);
+			await service.log(ctx, 'attribute.deleted', existing.id, { label: existing.name });
 			return undefined;
 		},
 	};
@@ -311,7 +314,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			/** @type {LocationRecord} */
 			const record = { id: createId(ID_PREFIX.location), ...checked.value };
 			await data.collection(COLLECTIONS.locations).insertOne({ ...record });
-			await service.log(ctx, 'location.created', record.id);
+			await service.log(ctx, 'location.created', record.id, { label: record.name });
 			return created(record);
 		},
 		/** @param {any} ctx */
@@ -324,7 +327,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			await data
 				.collection(COLLECTIONS.locations)
 				.updateOne({ websiteId: data.websiteId, id: existing.id }, { $set: checked.value });
-			await service.log(ctx, 'location.updated', existing.id);
+			await service.log(ctx, 'location.updated', existing.id, { label: checked.value.name });
 			return { id: existing.id, ...checked.value };
 		},
 		/** @param {any} ctx */
@@ -341,7 +344,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 					{ websiteId: data.websiteId, [`variants.locations.${existing.id}`]: { $exists: true } },
 					{ $unset: { [`variants.$[].locations.${existing.id}`]: '' } },
 				);
-			await service.log(ctx, 'location.deleted', existing.id);
+			await service.log(ctx, 'location.deleted', existing.id, { label: existing.name });
 			return undefined;
 		},
 	};
@@ -392,7 +395,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 				.collection(COLLECTIONS.products)
 				.findOne(
 					{ websiteId: data.websiteId, id: String(body.productId), 'variants.id': String(body.variantId) },
-					{ projection: { _id: 0, id: 1 } },
+					{ projection: { _id: 0, id: 1, name: 1 } },
 				);
 			if (!found) throw refuse([{ path: '/variantId', message: 'There is no such product variant.' }]);
 			const locationId = typeof body.locationId === 'string' && body.locationId ? body.locationId : null;
@@ -423,7 +426,10 @@ export const createCatalogTaxonomy = (product, service, common) => {
 				.catch((error) => {
 					throw isDuplicate(error) ? problem('conflict', 'A serial number is already recorded.') : error;
 				});
-			await service.log(ctx, 'serials.added', String(body.variantId));
+			await service.log(ctx, 'serials.added', String(body.variantId), {
+				label: String(found.name),
+				detail: `${records.length} serial number(s) added`,
+			});
 			return created({ items: records });
 		},
 		/** PATCH `{ status: 'in_stock' | 'faulty' }`. @param {any} ctx */
@@ -438,7 +444,10 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			await data
 				.collection(COLLECTIONS.serials)
 				.updateOne({ websiteId: data.websiteId, id: existing.id, status: { $ne: 'sold' } }, { $set: { status } });
-			await service.log(ctx, `serial.${status}`, existing.id);
+			await service.log(ctx, `serial.${status}`, existing.id, {
+				label: existing.serial,
+				detail: `${existing.status} → ${status}`,
+			});
 			return one(data, COLLECTIONS.serials, existing.id, 'serial number');
 		},
 		/** @param {any} ctx */
@@ -450,7 +459,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			await data
 				.collection(COLLECTIONS.serials)
 				.deleteOne({ websiteId: data.websiteId, id: existing.id, status: { $ne: 'sold' } });
-			await service.log(ctx, 'serial.deleted', existing.id);
+			await service.log(ctx, 'serial.deleted', existing.id, { label: existing.serial });
 			return undefined;
 		},
 	};

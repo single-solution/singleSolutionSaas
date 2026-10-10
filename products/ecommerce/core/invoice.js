@@ -3,13 +3,19 @@
  * printable, self-contained HTML: inline `<style>`, no script, every value HTML-escaped. Everything printed comes from
  * the order snapshot, business.json (name, address, e-mail, phone) and the `invoices` settings, whose texts the
  * merchant edits (`INVOICE_TEXTS` are the English defaults). The invoice number is the order number; the packing slip
- * has no prices. Dates are `YYYY-MM-DD` in the business's time zone (no language is assumed). No I/O.
+ * has no prices. Money and dates follow the website's Format, dates in the business time zone (PLAN 0.8.10 K7, K8). No
+ * I/O.
  * @module
  */
-import { formatMoney } from './money.js';
+import { formatDate, formatMoney } from '@ss/contracts/format';
 
 /** @typedef {import('./model.js').OrderRecord} OrderRecord */
-/** @typedef {{ name: string, email: string | null, phone: string | null, address: string | null, timeZone: string | null }} BusinessLike */
+/** @typedef {{ name: string, email: string | null, phone: string | null, address: string | null }} BusinessLike */
+/**
+ * What a document is printed with: the business, the texts, and the website's Format and business time zone.
+ * @typedef {{ business: BusinessLike, texts: InvoiceTexts, format: import('@ss/contracts/format').Format,
+ *   timeZone: string }} DocumentContext
+ */
 
 /** The editable texts (the `invoices` settings) and their defaults. */
 export const INVOICE_TEXTS = Object.freeze({
@@ -78,25 +84,11 @@ export const invoiceTexts = (settings) =>
 	);
 
 /**
- * A date as `YYYY-MM-DD` in a time zone (UTC when the zone is missing or unknown).
- * @param {Date | null} date
- * @param {string | null} timeZone
+ * The day an order was placed, by the Format in the business time zone.
+ * @param {OrderRecord} order
+ * @param {DocumentContext} context
  */
-export const isoDate = (date, timeZone) => {
-	if (!date) return '';
-	try {
-		const parts = new Intl.DateTimeFormat('en-US', {
-			timeZone: timeZone || 'UTC',
-			year: 'numeric',
-			month: '2-digit',
-			day: '2-digit',
-		}).formatToParts(date);
-		const part = (/** @type {string} */ type) => parts.find((p) => p.type === type)?.value ?? '';
-		return `${part('year')}-${part('month')}-${part('day')}`;
-	} catch {
-		return date.toISOString().slice(0, 10);
-	}
-};
+const placedOn = (order, { format, timeZone }) => formatDate(order.placedAt, format, { timeZone, style: 'date' });
 
 const CSS = `
 @page { margin: 12mm; }
@@ -182,11 +174,12 @@ const STATE_TEXT = {
 /**
  * The invoice of an order.
  * @param {OrderRecord} order
- * @param {{ business: BusinessLike, texts: InvoiceTexts }} context
+ * @param {DocumentContext} context
  */
-export const invoiceHtml = (order, { business, texts: t }) => {
+export const invoiceHtml = (order, context) => {
+	const { business, texts: t, format } = context;
 	const { currency } = order.totals;
-	const money = (/** @type {number} */ amount) => esc(formatMoney(amount, currency));
+	const money = (/** @type {number} */ amount) => esc(formatMoney(amount, currency, format));
 	const rows = order.lines
 		.map(
 			(line) =>
@@ -223,16 +216,17 @@ export const invoiceHtml = (order, { business, texts: t }) => {
 		: order.delivery.method === 'pickup'
 			? `<div><h2>${esc(t.labelShipTo)}</h2><p>${esc(t.labelPickup)}</p></div>`
 			: '<div></div>';
-	const body = `<header><div><h1>${esc(t.title)}</h1><p>${esc(t.labelNumber)} <strong class="mono">${esc(order.number)}</strong></p><p>${esc(t.labelDate)} ${esc(isoDate(order.placedAt, business.timeZone))}</p></div>${businessBlock(business)}</header><div class="grid"><div><h2>${esc(t.labelBilledTo)}</h2>${billed}</div>${shipTo}</div><table><thead><tr><th>${esc(t.labelItem)}</th><th class="num">${esc(t.labelQuantity)}</th><th class="num">${esc(t.labelUnitPrice)}</th><th class="num">${esc(t.labelAmount)}</th></tr></thead><tbody>${rows}</tbody></table><table class="totals"><tbody>${totalsRows}</tbody></table><p>${esc(t.labelPayment)}: ${esc(method)} · ${esc(state)}</p>${t.footer ? `<div class="footer small">${esc(t.footer)}</div>` : ''}`;
+	const body = `<header><div><h1>${esc(t.title)}</h1><p>${esc(t.labelNumber)} <strong class="mono">${esc(order.number)}</strong></p><p>${esc(t.labelDate)} ${esc(placedOn(order, context))}</p></div>${businessBlock(business)}</header><div class="grid"><div><h2>${esc(t.labelBilledTo)}</h2>${billed}</div>${shipTo}</div><table><thead><tr><th>${esc(t.labelItem)}</th><th class="num">${esc(t.labelQuantity)}</th><th class="num">${esc(t.labelUnitPrice)}</th><th class="num">${esc(t.labelAmount)}</th></tr></thead><tbody>${rows}</tbody></table><table class="totals"><tbody>${totalsRows}</tbody></table><p>${esc(t.labelPayment)}: ${esc(method)} · ${esc(state)}</p>${t.footer ? `<div class="footer small">${esc(t.footer)}</div>` : ''}`;
 	return page(`${t.title} ${order.number}`, body);
 };
 
 /**
  * The packing slip of an order (no prices).
  * @param {OrderRecord} order
- * @param {{ business: BusinessLike, texts: InvoiceTexts }} context
+ * @param {DocumentContext} context
  */
-export const packingSlipHtml = (order, { business, texts: t }) => {
+export const packingSlipHtml = (order, context) => {
+	const { business, texts: t } = context;
 	const rows = order.lines
 		.filter((line) => line.kind === 'physical')
 		.map(
@@ -247,6 +241,6 @@ export const packingSlipHtml = (order, { business, texts: t }) => {
 		? `<p>${esc(t.labelCourier)}: ${esc(order.shipment.courier)}</p><p>${esc(t.labelTracking)}: <span class="mono">${esc(order.shipment.trackingNumber)}</span></p>`
 		: '';
 	const note = order.note ? `<p class="small">${esc(t.labelNote)}: ${esc(order.note)}</p>` : '';
-	const body = `<header><div><h1>${esc(t.packingSlipTitle)}</h1><p><strong class="mono">${esc(order.number)}</strong></p><p>${esc(t.labelDate)} ${esc(isoDate(order.placedAt, business.timeZone))}</p></div>${businessBlock(business)}</header><div class="grid"><div><h2>${esc(t.labelShipTo)}</h2>${shipTo}</div><div class="end">${shipment}</div></div><table><thead><tr><th>${esc(t.labelItem)}</th><th class="num">${esc(t.labelQuantity)}</th></tr></thead><tbody>${rows}</tbody></table>${note}${t.footer ? `<div class="footer small">${esc(t.footer)}</div>` : ''}`;
+	const body = `<header><div><h1>${esc(t.packingSlipTitle)}</h1><p><strong class="mono">${esc(order.number)}</strong></p><p>${esc(t.labelDate)} ${esc(placedOn(order, context))}</p></div>${businessBlock(business)}</header><div class="grid"><div><h2>${esc(t.labelShipTo)}</h2>${shipTo}</div><div class="end">${shipment}</div></div><table><thead><tr><th>${esc(t.labelItem)}</th><th class="num">${esc(t.labelQuantity)}</th></tr></thead><tbody>${rows}</tbody></table>${note}${t.footer ? `<div class="footer small">${esc(t.footer)}</div>` : ''}`;
 	return page(`${t.packingSlipTitle} ${order.number}`, body);
 };

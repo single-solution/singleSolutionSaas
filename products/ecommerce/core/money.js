@@ -1,6 +1,8 @@
 /**
  * Money (PLAN 0.4.13): amounts are integer minor units plus an ISO 4217 currency code. The shop's currency is the
- * `catalog` setting `currency`; no currency, language or country is assumed in code. No I/O.
+ * `catalog` setting `currency`; no currency, language or country is assumed in code. These are the decimal helpers of
+ * gateways, inputs, CSV and sums; text for people is made with the kit's `formatMoney` and the website's Format
+ * (PLAN 0.8.10 K7). No I/O.
  * @module
  */
 
@@ -78,17 +80,6 @@ export const fromDecimal = (text, currency) => {
 	if (fraction.length > exponent && !/^0*$/.test(fraction.slice(exponent))) return null;
 	const minor = Number(`${match[1]}${fraction.slice(0, exponent).padEnd(exponent, '0')}`);
 	return isAmount(minor) ? minor : null;
-};
-
-/**
- * An amount for people: the currency code and the decimal with thousands grouped by commas (`PKR 1,250.00`).
- * @param {number} amount
- * @param {string} currency
- */
-export const formatMoney = (amount, currency) => {
-	const [whole = '0', fraction] = toDecimal(amount, currency).split('.');
-	const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-	return `${currency} ${fraction === undefined ? grouped : `${grouped}.${fraction}`}`;
 };
 
 /**

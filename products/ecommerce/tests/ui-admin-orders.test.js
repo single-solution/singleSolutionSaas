@@ -220,6 +220,23 @@ describe('orders admin: orders', () => {
 		expect([...fieldIn(panel, 'Move to').options].map((/** @type {any} */ o) => o.value)).toEqual(['confirmed', 'packed']);
 	});
 
+	it('shows money and dates by the Format and picks days in the business time zone', async () => {
+		const { root, server } = await mountWith(mountOrdersAdmin, {
+			features: FEATURES,
+			settings: SETTINGS,
+			format: { locale: 'en-GB', currencyDisplay: 'custom', currencySymbol: 'Rs', wholeUnits: true, times: 'business' },
+			timeZone: 'Asia/Karachi',
+			routes: { 'GET /v1/admin/orders': () => answer(200, { items: [summary()], nextCursor: null, hasMore: false }) },
+		});
+		const panel = panelOf(root, 'orders');
+		expect(textOf(panel)).toContain('1 Oct 2026, 15:00 · Ana · Lahore · Rs 2,500');
+		await change(fieldIn(panel, 'From'), '2026-10-01');
+		await change(fieldIn(panel, 'To'), '2026-10-02');
+		await submit(fieldIn(panel, 'Search'));
+		expect(server.last('GET /v1/admin/orders')?.url.searchParams.get('from')).toBe('2026-09-30T19:00:00.000Z');
+		expect(server.last('GET /v1/admin/orders')?.url.searchParams.get('to')).toBe('2026-10-02T19:00:00.000Z');
+	});
+
 	it('shows an order and moves it with serials and a shipment', async () => {
 		/** @type {any[]} */
 		const moves = [];

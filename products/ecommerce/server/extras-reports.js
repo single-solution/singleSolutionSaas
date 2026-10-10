@@ -2,7 +2,8 @@
  * Reports (feature `reports`, PLAN 0.8.8): sales by product, category, brand and city, stock age, return rate and
  * margin, for the merchant's server and the admin widget (permission `reports.read`). Each report reads the merchant
  * database with aggregation pipelines that start with a `$match` on the website (`core/reports.js`); names of
- * categories and brands are read separately (no `$lookup`). Money is minor units of the shop's currency.
+ * categories and brands are read separately (no `$lookup`). Money is minor units of the shop's currency; a day in
+ * `from` and `to` is a day in the business time zone (PLAN 0.8.10 K8).
  * @module
  */
 import { defineRoute } from '@ss/app-kit';
@@ -39,9 +40,9 @@ export const createReports = (_product, service) => {
 	 * @param {any} ctx
 	 */
 	const begin = async (ctx) => {
-		const parsed = parseRange(ctx.query, service.now());
-		if (!parsed.ok) throw service.invalid(parsed.field, parsed.message);
 		const s = await service.site(ctx);
+		const parsed = parseRange(ctx.query, service.now(), (await s.business()).timeZone ?? 'UTC');
+		if (!parsed.ok) throw service.invalid(parsed.field, parsed.message);
 		return { s, data: await s.data(), range: parsed.range };
 	};
 

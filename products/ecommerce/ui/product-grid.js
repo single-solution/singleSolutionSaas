@@ -13,6 +13,7 @@ import {
 	codeOf,
 	currencyOf,
 	field,
+	formatsOf,
 	h,
 	keepFocus,
 	mountShop,
@@ -49,6 +50,7 @@ const MAX_LIMIT = 48;
 export const mountProductGrid = async ({ host, config, shop, win }) => {
 	const t = textsOf(config);
 	const settings = settingsOf(config);
+	const formats = formatsOf(config, win);
 	const data = host.dataset;
 	const limit = Math.min(MAX_LIMIT, Math.max(1, Number(data.limit) || settings.catalog.pageSize));
 	const wishlistOn = shop.has('wishlist');
@@ -353,7 +355,7 @@ export const mountProductGrid = async ({ host, config, shop, win }) => {
 							},
 						),
 					);
-				return productCard(doc, t, item, actions);
+				return productCard(doc, t, formats, item, actions);
 			};
 
 			const renderList = () => {

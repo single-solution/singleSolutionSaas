@@ -56,7 +56,7 @@ export const createDigital = (product, service) => {
 			item.id,
 			checked.value.map((key) => ({ id: createId(ID_PREFIX.licence), key })),
 		);
-		await service.log(ctx, 'product.licences_added', item.id);
+		await service.log(ctx, 'product.licences_added', item.id, { label: item.name, detail: `${added} licence key(s) added` });
 		return { added, available: await store.countLicences(item.id) };
 	};
 
@@ -82,7 +82,7 @@ export const createDigital = (product, service) => {
 			licenceKeys: item.digital?.licenceKeys ?? false,
 			downloadLimit: item.digital?.downloadLimit ?? 0,
 		});
-		await service.log(ctx, 'product.file_added', item.id);
+		await service.log(ctx, 'product.file_added', item.id, { label: item.name, detail: `File ${name}` });
 		return {
 			file: { name, type: file.type, size: file.size },
 			upload: { method: signed.method, url: signed.url, headers: signed.headers, expiresAt: signed.expiresAt },

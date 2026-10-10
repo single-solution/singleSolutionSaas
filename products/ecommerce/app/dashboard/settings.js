@@ -2,17 +2,18 @@
 /**
  * Settings tab (PLAN 0.4.3, 0.8.8): the kit's settings forms of the features the viewer may see, split into sections per
  * area of the shop (picked from an inner list, so no long scroll), with the list editors (order flow, couriers,
- * delivery zones, tax rules, grades, booking hours), the widget texts and the theme. Forms are rendered from the
- * schemas the settings API returns; the `checkout` feature's settings are spread over Checkout and payment, Orders and
- * messages, and Policies. A section shows only when it has something for the visible features (merchants: switched-on
- * features; admins: all, off ones marked). Defaults uses the same sections for the global defaults.
+ * delivery zones, tax rules, grades, booking hours), the widget texts, the theme and the Format (PLAN 0.8.10 K7, side
+ * by side in one masonry). Forms are rendered from the schemas the settings API returns; the `checkout` feature's
+ * settings are spread over Checkout and payment, Orders and messages, and Policies. A section shows only when it has
+ * something for the visible features (merchants: switched-on features; admins: all, off ones marked). Defaults uses
+ * the same sections for the global defaults.
  * @module
  */
 import { startTransition, useState } from 'react';
 import { Masonry, Section, Select, SwapTransition, cx } from '@ss/ui';
 import { call, useLoad } from './api.js';
 import { BookingHoursEditor, CouriersEditor, GradesEditor, OrderFlowEditor, TaxRulesEditor, ZonesEditor } from './lists.js';
-import { Loaded, SettingsForms, TextsForm, ThemeForm, hasSettings } from './parts.js';
+import { FormatForm, Loaded, SettingsForms, TextsForm, ThemeForm, hasSettings } from './parts.js';
 import { TEXTS } from './texts.js';
 
 /** @typedef {import('./parts.js').FeatureSettings} FeatureSettings */
@@ -186,6 +187,7 @@ export function SettingsTab({ websiteId: id }) {
 	const settings = useLoad(`${base}/settings`);
 	const texts = useLoad(`${base}/texts`);
 	const theme = useLoad(`${base}/theme`);
+	const format = useLoad(`${base}/format`);
 	return (
 		<Loaded answer={settings.answer}>
 			{(data) => {
@@ -231,15 +233,26 @@ export function SettingsTab({ websiteId: id }) {
 								</Loaded>
 							),
 							theme: (
-								<Loaded answer={theme.answer}>
-									{(found) => (
-										<ThemeForm
-											theme={found.theme}
-											save={(next) => call('PUT', `${base}/theme`, next)}
-											reload={theme.reload}
-										/>
-									)}
-								</Loaded>
+								<Masonry columns={2} wideAlone>
+									<Loaded answer={theme.answer}>
+										{(found) => (
+											<ThemeForm
+												theme={found.theme}
+												save={(next) => call('PUT', `${base}/theme`, next)}
+												reload={theme.reload}
+											/>
+										)}
+									</Loaded>
+									<Loaded answer={format.answer}>
+										{(found) => (
+											<FormatForm
+												format={found.format}
+												save={(next) => call('PUT', `${base}/format`, next)}
+												reload={format.reload}
+											/>
+										)}
+									</Loaded>
+								</Masonry>
 							),
 						}}
 					/>

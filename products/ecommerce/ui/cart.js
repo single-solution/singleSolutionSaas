@@ -18,12 +18,11 @@ import {
 	button,
 	codeOf,
 	currencyOf,
-	dateText,
 	field,
 	fill,
+	formatsOf,
 	h,
 	keepFocus,
-	money,
 	mountShop,
 	problemText,
 	settingsOf,
@@ -46,6 +45,7 @@ const REQUOTE = ['out_of_stock', 'offer_unavailable', 'points_changed', 'slot_ta
 export const mountCart = async ({ host, config, shop, win }) => {
 	const t = textsOf(config);
 	const settings = settingsOf(config);
+	const { money, dateText } = formatsOf(config, win);
 	const cart = shop.cart;
 
 	mountShop({

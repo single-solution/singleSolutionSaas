@@ -2,9 +2,10 @@
  * Reports (PLAN 0.8.8: sales by product/category/brand/city, stock age, return rate, margin): the date range, the
  * aggregation pipelines over orders (each starts with a `$match` on the website; no `$lookup`) and the rows built from
  * their results. Money is minor units of the shop's currency; only orders in that currency and not cancelled count.
- * No I/O.
+ * Days are business days: a `YYYY-MM-DD` day is that day in the business.json time zone (PLAN 0.8.10 K8). No I/O.
  * @module
  */
+import { dayBounds } from './calendar.js';
 import { DAY_MS } from './returns.js';
 
 /** The longest range, in days. */
@@ -19,16 +20,17 @@ export const SALES_BY = Object.freeze(/** @type {const} */ (['product', 'categor
 /** @typedef {{ from: Date, to: Date }} Range `to` is exclusive */
 
 /**
- * A date (`2026-10-01`, the start of that UTC day; for `to`, the end of it) or an ISO-8601 time.
+ * A date (`2026-10-01`, the start of that day in the business time zone; for `to`, the end of it) or an ISO-8601 time.
  * @param {unknown} value
  * @param {boolean} end
+ * @param {string} timeZone
  * @returns {number | null}
  */
-const timeOf = (value, end) => {
+const timeOf = (value, end, timeZone) => {
 	if (typeof value !== 'string') return null;
 	if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-		const day = Date.parse(`${value}T00:00:00Z`);
-		return Number.isNaN(day) ? null : day + (end ? DAY_MS : 0);
+		const day = dayBounds(value, timeZone);
+		return day ? (end ? day.end : day.start) : null;
 	}
 	if (!/^\d{4}-\d{2}-\d{2}T[\d:.]+(Z|[+-]\d{2}:\d{2})$/.test(value)) return null;
 	const time = Date.parse(value);
@@ -39,12 +41,14 @@ const timeOf = (value, end) => {
  * The range of `?from=&to=` (default: the last 30 days up to now).
  * @param {Record<string, unknown>} query
  * @param {number} now
+ * @param {string} [timeZone] the business.json time zone (UTC when missing)
  * @returns {{ ok: true, range: Range } | { ok: false, field: string, message: string }}
  */
-export const parseRange = (query, now) => {
-	const to = query.to === undefined || query.to === '' ? now : timeOf(query.to, true);
+export const parseRange = (query, now, timeZone = 'UTC') => {
+	const to = query.to === undefined || query.to === '' ? now : timeOf(query.to, true, timeZone);
 	if (to === null) return { ok: false, field: 'to', message: 'to is a date (YYYY-MM-DD) or an ISO-8601 time.' };
-	const from = query.from === undefined || query.from === '' ? to - DEFAULT_RANGE_DAYS * DAY_MS : timeOf(query.from, false);
+	const from =
+		query.from === undefined || query.from === '' ? to - DEFAULT_RANGE_DAYS * DAY_MS : timeOf(query.from, false, timeZone);
 	if (from === null) return { ok: false, field: 'from', message: 'from is a date (YYYY-MM-DD) or an ISO-8601 time.' };
 	if (from >= to) return { ok: false, field: 'from', message: 'from is before to.' };
 	if (to - from > MAX_RANGE_DAYS * DAY_MS)

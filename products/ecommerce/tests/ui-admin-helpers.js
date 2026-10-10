@@ -81,9 +81,11 @@ const tickets = (ticket = 't1') => {
 /**
  * Mount an admin widget with a fake server.
  * @param {(input: any) => Promise<void>} mount
- * @param {{ features: string[], settings?: Record<string, any>, routes?: Record<string, Route>, ticket?: string | null }} options
+ * @param {{ features: string[], settings?: Record<string, any>, routes?: Record<string, Route>, ticket?: string | null,
+ *   format?: Record<string, unknown>, timeZone?: string }} options `format` and `timeZone`: the website's Format and
+ *   business time zone (widget config)
  */
-export const mountWith = async (mount, { features, settings = {}, routes = {}, ticket = 't1' }) => {
+export const mountWith = async (mount, { features, settings = {}, routes = {}, ticket = 't1', format, timeZone }) => {
 	const host = document.createElement('div');
 	document.body.append(host);
 	const server = serve(routes);
@@ -100,6 +102,8 @@ export const mountWith = async (mount, { features, settings = {}, routes = {}, t
 			customCss: '',
 			features,
 			settings: { currency: 'PKR', ...settings },
+			...(format ? { format } : {}),
+			...(timeZone ? { timeZone } : {}),
 		},
 		api: {
 			base: BASE,

@@ -11,7 +11,6 @@ import { created, defineRoute, noContent, ok, problem } from '@ss/app-kit';
 import { isDuplicate, userIdsOf } from '../adapters/extras-store.js';
 import { MAX_ALERTS, SEND_BATCH, checkAlertInput, dueConditions, isDue, priceOf } from '../core/alerts.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
-import { formatMoney } from '../core/money.js';
 import { VISITOR_LIMITS, VISITOR_WRITE_LIMITS } from './service.js';
 
 /** Rate limits (mutable copies of the shared constants, as route definitions take them). */
@@ -108,7 +107,7 @@ export const createAlerts = (_product, service, cards) => {
 				s,
 				alert.kind === 'back_in_stock' ? 'ecommerce.back_in_stock' : 'ecommerce.price_drop',
 				{ email: alert.email, phone: alert.phone },
-				{ name: item.name, price: formatMoney(price, s.currency), url: (await cards.card(s, item)).url },
+				{ name: item.name, price: (await s.format()).money(price, s.currency), url: (await cards.card(s, item)).url },
 				Array.isArray(channels) ? channels : ['email'],
 			);
 			if (result !== 'sent')

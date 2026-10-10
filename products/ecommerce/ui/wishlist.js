@@ -6,7 +6,7 @@
  * @module
  */
 import { GROWTH_EVENTS, growthItem, itemsDetail } from '../core/growth-events.js';
-import { announce, button, currencyOf, h, mountShop, productCard, settingsOf, textsOf } from './shop-common.js';
+import { announce, button, currencyOf, formatsOf, h, mountShop, productCard, settingsOf, textsOf } from './shop-common.js';
 import { savedOf } from './shop-saved.js';
 
 /**
@@ -16,6 +16,7 @@ import { savedOf } from './shop-saved.js';
 export const mountWishlist = async ({ host, config, shop, win }) => {
 	const t = textsOf(config);
 	const settings = settingsOf(config);
+	const formats = formatsOf(config, win);
 	const saved = savedOf(shop);
 
 	mountShop({
@@ -33,7 +34,7 @@ export const mountWishlist = async ({ host, config, shop, win }) => {
 			const show = (items) => {
 				list.replaceChildren(
 					...items.map((item) =>
-						productCard(doc, t, item, [
+						productCard(doc, t, formats, item, [
 							shop.has('checkout')
 								? button(
 										doc,

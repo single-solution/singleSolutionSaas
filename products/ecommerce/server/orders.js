@@ -4,10 +4,12 @@
  * may move to, moves through the merchant's flow (`server/orders-moves.js`), refunds, the staff note and address edits,
  * the courier's tracking status (read again on view, at most every 30 minutes), invoices and packing slips (also the
  * shopper's own invoice), customers and the blocklist (`server/orders-customers.js`), bulk moves, and the data-rights
- * answers for orders and customer records. Checkout (`server/checkout.js`) places orders and handles waiting ones.
+ * answers for orders and customer records. Checkout (`server/checkout.js`) places orders and handles waiting ones. The
+ * order and customer lists have counts with the same filters (PLAN 0.8.10 K4): orders by `status`, `role` (the role of
+ * each status key in the website's order flow), `paymentMethod` and `paymentState`; customers by `blocked`.
  * @module
  */
-import { created, defineRoute, paginate, problem } from '@ss/app-kit';
+import { countHandlers, created, defineRoute, paginate, problem } from '@ss/app-kit';
 import { createFulfilmentStore } from '../adapters/fulfilment-store.js';
 import { invoiceHtml, invoiceTexts, packingSlipHtml } from '../core/invoice.js';
 import {
@@ -22,6 +24,7 @@ import {
 	orderSummary,
 	wire,
 } from '../core/orders.js';
+import { statusOf } from '../core/flow.js';
 import { COLLECTIONS } from '../core/model.js';
 import { createMedia } from './catalog-media.js';
 import { createCustomers } from './orders-customers.js';
@@ -109,30 +112,63 @@ export const createOrders = (product, service) => {
 	 * @param {Site} s @param {OrderRecord} order
 	 */
 	const detailOf = async (s, order) => {
-		const [flow, customer] = await Promise.all([
+		const [flow, customer, { money }] = await Promise.all([
 			flowOf(s),
 			order.customer.userId ? (await storeOf(s)).customers.get(order.customer.userId) : null,
+			s.format(),
 		]);
 		/** @type {Map<string, string | null>} */
 		const images = new Map();
 		for (const line of order.lines) images.set(line.id, await media.mediaUrl(s, line.image));
-		return orderDetail(order, flow, { customer, images });
+		return orderDetail(order, flow, { customer, images, money });
 	};
 
 	// ------------------------------------------------------------------------------------------------- handlers
 
+	/**
+	 * The order list's website and filter (without `websiteId` and the page); the list and its counts share it. Bad
+	 * filters are refused before anything is read.
+	 * @param {any} ctx
+	 */
+	const orderSource = async (ctx) => {
+		const filters = orderFilters(ctx.query);
+		if (!filters.ok) throw service.invalid(filters.field, filters.message);
+		return { s: await service.site(ctx), filter: orderQuery(filters.value) };
+	};
+
+	/** The order flow a count read, per request (to group status keys by their role). @type {WeakMap<object, import('../core/model.js').OrderFlow>} */
+	const countedFlows = new WeakMap();
+	const orderCounts = countHandlers({
+		source: async (ctx) => {
+			const { s, filter } = await orderSource(ctx);
+			countedFlows.set(ctx, await flowOf(s));
+			return { collection: (await s.data()).collection(COLLECTIONS.orders), filter: { websiteId: s.websiteId, ...filter } };
+		},
+		by: {
+			status: 'status',
+			role: {
+				path: 'status',
+				map: (key, ctx) => {
+					const flow = countedFlows.get(ctx);
+					return (flow && statusOf(flow, String(key))?.role) ?? null;
+				},
+			},
+			paymentMethod: 'payment.method',
+			paymentState: 'payment.state',
+		},
+	});
+
 	/** @param {any} ctx */
 	const listOrders = async (ctx) => {
 		const page = paginate({ cursor: ctx.query.cursor, limit: ctx.query.limit, url: ctx.request.url }, { defaultLimit: 25 });
-		const filters = orderFilters(ctx.query);
-		if (!filters.ok) throw service.invalid(filters.field, filters.message);
-		const s = await service.site(ctx);
-		const [flow, rows] = await Promise.all([
+		const { s, filter } = await orderSource(ctx);
+		const [flow, rows, { money }] = await Promise.all([
 			flowOf(s),
-			(await storeOf(s)).orders.list({ filter: orderQuery(filters.value), after: page.after, limit: page.fetchLimit }),
+			(await storeOf(s)).orders.list({ filter, after: page.after, limit: page.fetchLimit }),
+			s.format(),
 		]);
 		return page.respond(
-			rows.map((order) => orderSummary(order, flow)),
+			rows.map((order) => orderSummary(order, flow, money)),
 			(view) => [view.createdAt, view.id],
 		);
 	};
@@ -175,7 +211,13 @@ export const createOrders = (product, service) => {
 			{ $set: input.value },
 		);
 		if (result.modifiedCount !== 1) throw problem('conflict', 'The order changed meanwhile; reload it and try again.');
-		await service.log(ctx, input.value.address ? 'order.address_changed' : 'order.noted', order.id);
+		await service.log(ctx, input.value.address ? 'order.address_changed' : 'order.noted', order.id, {
+			label: order.number,
+			detail: [
+				...(input.value.address ? ['Delivery address changed'] : []),
+				...(input.value.staffNote === undefined ? [] : ['Staff note changed']),
+			].join(', '),
+		});
 		return detailOf(s, /** @type {OrderRecord} */ (await (await storeOf(s)).orders.get(order.id)));
 	};
 
@@ -184,10 +226,12 @@ export const createOrders = (product, service) => {
 	 * @param {Site} s @param {OrderRecord} order @param {'invoice' | 'packing_slip'} kind
 	 */
 	const document = async (s, order, kind) => {
-		const [business, settings] = await Promise.all([s.business(), s.values('invoices')]);
+		const [business, settings, { format, timeZone }] = await Promise.all([s.business(), s.values('invoices'), s.format()]);
 		const context = {
 			business: /** @type {import('../core/invoice.js').BusinessLike} */ (business),
 			texts: invoiceTexts(settings),
+			format,
+			timeZone,
 		};
 		const html = kind === 'invoice' ? invoiceHtml(order, context) : packingSlipHtml(order, context);
 		return new Response(html, { headers: DOCUMENT_HEADERS });
@@ -247,8 +291,14 @@ export const createOrders = (product, service) => {
 				results.push({ id, ok: false, code: failed.code, detail: String(detail) });
 			}
 		}
-		await service.log(ctx, 'orders.bulk_moved', `${results.filter((result) => result.ok).length} orders`);
-		return { moved: results.filter((result) => result.ok).length, results };
+		const movedCount = results.filter((result) => result.ok).length;
+		await service.log(ctx, 'orders.bulk_moved', `${movedCount} orders`, {
+			label: `${movedCount} orders`,
+			detail: `To ${statusOf(flow, input.value.to)?.label ?? input.value.to}${
+				movedCount < results.length ? `; ${results.length - movedCount} not moved` : ''
+			}`,
+		});
+		return { moved: movedCount, results };
 	};
 
 	// ------------------------------------------------------------------------------------------------ data rights
@@ -298,6 +348,40 @@ export const createOrders = (product, service) => {
 				permission: 'orders.read',
 				rateLimit: serverLimits,
 				handler: listOrders,
+			}),
+			defineRoute({
+				method: 'GET',
+				path: '/v1/orders/count',
+				auth: 'server',
+				feature: 'checkout',
+				rateLimit: serverLimits,
+				handler: orderCounts.count,
+			}),
+			defineRoute({
+				method: 'GET',
+				path: '/v1/orders/counts',
+				auth: 'server',
+				feature: 'checkout',
+				rateLimit: serverLimits,
+				handler: orderCounts.counts,
+			}),
+			defineRoute({
+				method: 'GET',
+				path: '/v1/admin/orders/count',
+				auth: 'ticket',
+				feature: 'checkout',
+				permission: 'orders.read',
+				rateLimit: serverLimits,
+				handler: orderCounts.count,
+			}),
+			defineRoute({
+				method: 'GET',
+				path: '/v1/admin/orders/counts',
+				auth: 'ticket',
+				feature: 'checkout',
+				permission: 'orders.read',
+				rateLimit: serverLimits,
+				handler: orderCounts.counts,
 			}),
 			defineRoute({
 				method: 'GET',
@@ -454,6 +538,40 @@ export const createOrders = (product, service) => {
 				permission: 'customers.manage',
 				rateLimit: serverLimits,
 				handler: customers.list,
+			}),
+			defineRoute({
+				method: 'GET',
+				path: '/v1/customers/count',
+				auth: 'server',
+				feature: 'checkout',
+				rateLimit: serverLimits,
+				handler: customers.count,
+			}),
+			defineRoute({
+				method: 'GET',
+				path: '/v1/customers/counts',
+				auth: 'server',
+				feature: 'checkout',
+				rateLimit: serverLimits,
+				handler: customers.counts,
+			}),
+			defineRoute({
+				method: 'GET',
+				path: '/v1/admin/customers/count',
+				auth: 'ticket',
+				feature: 'checkout',
+				permission: 'customers.manage',
+				rateLimit: serverLimits,
+				handler: customers.count,
+			}),
+			defineRoute({
+				method: 'GET',
+				path: '/v1/admin/customers/counts',
+				auth: 'ticket',
+				feature: 'checkout',
+				permission: 'customers.manage',
+				rateLimit: serverLimits,
+				handler: customers.counts,
 			}),
 			defineRoute({
 				method: 'GET',

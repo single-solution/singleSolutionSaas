@@ -98,7 +98,10 @@ export const createCatalogTools = (product, service, common) => {
 			brandSlugs: new Map(brands.map((b) => [b.id, b.slug])),
 			locationIds,
 		});
-		await service.log(ctx, 'csv.products_exported', 'products');
+		await service.log(ctx, 'csv.products_exported', 'products', {
+			label: 'products.csv',
+			detail: `${products.length} products`,
+		});
 		return csvFile('products.csv', toCsv(productHeader(locationIds), rows, { delimiter: await delimiterOf(s) }));
 	};
 
@@ -123,7 +126,7 @@ export const createCatalogTools = (product, service, common) => {
 		if ((await orders.countDocuments(filter, { limit: MAX_EXPORT_ORDERS + 1 })) > MAX_EXPORT_ORDERS)
 			throw refuse([{ path: '/from', message: `More than ${MAX_EXPORT_ORDERS} orders: choose shorter dates.` }]);
 		const found = /** @type {OrderRecord[]} */ (await orders.find(filter, NO_ID).sort({ placedAt: 1, id: 1 }).toArray());
-		await service.log(ctx, 'csv.orders_exported', 'orders');
+		await service.log(ctx, 'csv.orders_exported', 'orders', { label: 'orders.csv', detail: `${found.length} orders` });
 		return csvFile('orders.csv', toCsv(ORDER_COLUMNS, orderRows(found), { delimiter: await delimiterOf(s) }));
 	};
 
@@ -306,7 +309,10 @@ export const createCatalogTools = (product, service, common) => {
 				written.push(item.id);
 			}
 		}
-		await service.log(ctx, 'csv.products_imported', `${written.length} products`);
+		await service.log(ctx, 'csv.products_imported', `${written.length} products`, {
+			label: `${written.length} products`,
+			detail: `${creating} created, ${updating} updated`,
+		});
 		await common.changed(s, before, written);
 		return { dryRun: false, rows: parsed.rows.length - 1, created: creating, updated: updating, errors: [] };
 	};
@@ -396,7 +402,10 @@ export const createCatalogTools = (product, service, common) => {
 				before.push(done.before);
 			}
 		}
-		await service.log(ctx, `products.bulk_${action}`, `${changed} products`);
+		await service.log(ctx, `products.bulk_${action}`, `${changed} products`, {
+			label: `${changed} products`,
+			detail: `${action.replace('_', ' ')}: ${changed} of ${ids.length} changed`,
+		});
 		await common.changed(s, before);
 		return { matched: ids.length - missing.length, changed, missing };
 	};

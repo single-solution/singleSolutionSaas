@@ -3,7 +3,8 @@
  * exactly the endpoints of `products/chat/core/shop.js`) and the customer orders lookup Accounts' Orders tab and
  * Chat's context panel use. All read-only with small answers. The `me` lookups take the visitor's Accounts sign-in
  * forwarded in `SS-Sign-In`, verify it here and answer only that user's data — never street addresses or phone
- * numbers; any query value naming another user is ignored.
+ * numbers; any query value naming another user is ignored. Every price and total comes with its text (`priceText`,
+ * `totalText` …) by the website's Format (PLAN 0.8.10 K7).
  * @module
  */
 import { defineRoute } from '@ss/app-kit';
@@ -21,7 +22,6 @@ import {
 	statusLabel,
 } from '../core/lookup.js';
 import { COLLECTIONS } from '../core/model.js';
-import { formatMoney } from '../core/money.js';
 import { applyPromotions } from '../core/promotions.js';
 import { SERVER_LIMITS } from './service.js';
 import { activeProduct, brandNames, categoriesById } from './seo-reads.js';
@@ -81,16 +81,19 @@ export const createChatLookup = (product, service, media) => {
 	 * @param {Site} s
 	 * @param {ProductRecord[]} items
 	 */
-	const cards = (s, items) =>
-		Promise.all(
+	const cards = async (s, items) => {
+		const { money } = await s.format();
+		return Promise.all(
 			items.map(async (item) =>
 				productCard(item, {
 					currency: s.currency,
 					image: await media.mediaUrl(s, item.media?.[0]?.key),
 					url: await media.productUrl(s, item),
+					money,
 				}),
 			),
 		);
+	};
 
 	/**
 	 * The loyalty balance of a user (0 while loyalty is off).
@@ -189,7 +192,7 @@ export const createChatLookup = (product, service, media) => {
 		const data = await s.data();
 		const item = await activeProduct(data, ctx.params.id);
 		const specIds = Object.keys(item.specs);
-		const [brands, attributes, grades] = await Promise.all([
+		const [brands, attributes, grades, { money }] = await Promise.all([
 			brandNames(data, [item.brandId]),
 			specIds.length === 0
 				? []
@@ -198,11 +201,13 @@ export const createChatLookup = (product, service, media) => {
 						.find({ websiteId: data.websiteId, id: { $in: specIds } }, { projection: { _id: 0, id: 1, name: 1, unit: 1 } })
 						.toArray(),
 			s.has('grades_serials') ? s.list('grades') : Promise.resolve([]),
+			s.format(),
 		]);
 		return productDetails(item, {
 			currency: s.currency,
 			image: await media.mediaUrl(s, item.media?.[0]?.key),
 			url: await media.productUrl(s, item),
+			money,
 			brand: item.brandId ? (brands.get(item.brandId) ?? null) : null,
 			attributes: new Map(attributes.map((row) => [String(row.id), { name: String(row.name), unit: String(row.unit) }])),
 			grades: gradeLabels(grades),
@@ -243,11 +248,15 @@ export const createChatLookup = (product, service, media) => {
 			: null;
 		const savings = Math.min(price, Math.max(0, result?.lines[0]?.dealDiscount ?? 0));
 		const names = new Map(offers.deals.map((deal) => [deal.id, deal.name]));
+		const { money } = await s.format();
 		return {
 			productId: item.id,
 			price,
+			priceText: money(price, s.currency),
 			priceAfterDeals: price - savings,
+			priceAfterDealsText: money(price - savings, s.currency),
 			savings,
+			savingsText: money(savings, s.currency),
 			currency: s.currency,
 			deals: result && savings > 0 ? result.dealIds.map((id) => names.get(id) ?? '').filter(Boolean) : [],
 		};
@@ -273,12 +282,13 @@ export const createChatLookup = (product, service, media) => {
 		const s = await service.site(ctx);
 		const shopper = await service.requireShopper(s);
 		const data = await s.data();
-		const [orders, flow, loyaltyPoints] = await Promise.all([
+		const [orders, flow, loyaltyPoints, { money }] = await Promise.all([
 			ordersOf(data, shopper.id, limitOf(ctx.query.limit, 5, 10)),
 			flowOf(s),
 			pointsOf(s, data, shopper.id),
+			s.format(),
 		]);
-		return { items: orders.map((order) => orderSummary(order, flow)), loyaltyPoints, name: shopper.name };
+		return { items: orders.map((order) => orderSummary(order, flow, money)), loyaltyPoints, name: shopper.name };
 	};
 
 	/** @param {any} ctx */
@@ -302,10 +312,11 @@ export const createChatLookup = (product, service, media) => {
 		const s = await service.site(ctx);
 		const data = await s.data();
 		const userId = String(ctx.params.userId);
-		const [orders, flow, loyaltyPoints] = await Promise.all([
+		const [orders, flow, loyaltyPoints, { money }] = await Promise.all([
 			ordersOf(data, userId, limitOf(ctx.query.limit, 10, 50)),
 			flowOf(s),
 			pointsOf(s, data, userId),
+			s.format(),
 		]);
 		return {
 			items: orders.map((order) => ({
@@ -314,7 +325,7 @@ export const createChatLookup = (product, service, media) => {
 				status: order.status,
 				statusLabel: statusLabel(flow, order.status),
 				total: order.totals.total,
-				totalText: formatMoney(order.totals.total, order.totals.currency),
+				totalText: money(order.totals.total, order.totals.currency),
 				currency: order.totals.currency,
 				createdAt: new Date(order.placedAt).toISOString(),
 			})),

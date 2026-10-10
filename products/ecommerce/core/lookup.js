@@ -1,7 +1,8 @@
 /**
  * The Chat lookups' answers (PLAN 0.8.3 Shop tools; the endpoints in `products/chat/core/shop.js`): small, read-only
  * views of products, deals, and one signed-in shopper's orders, account and shipments. Answers never carry street
- * addresses or phone numbers. Pure functions, no I/O.
+ * addresses or phone numbers. Every amount (integer minor units) comes with its text (`priceText`, `totalText` …) by
+ * the website's Format (PLAN 0.8.10 K7). Pure functions, no I/O.
  * @module
  */
 import { statusOf } from './flow.js';
@@ -11,6 +12,7 @@ import { activeVariants, variantInStock } from './seo.js';
 /** @typedef {import('./model.js').VariantRecord} VariantRecord */
 /** @typedef {import('./model.js').OrderRecord} OrderRecord */
 /** @typedef {import('./model.js').OrderFlow} OrderFlow */
+/** An amount as text, by the website's Format. @typedef {(amount: number, currency: string) => string} Money */
 
 /** A product description in a details answer is cut to this many characters. */
 const DETAILS_DESCRIPTION_LENGTH = 1500;
@@ -80,14 +82,16 @@ export const priceRange = (product) => {
 /**
  * A product as a Chat card.
  * @param {ProductRecord} product
- * @param {{ currency: string, image: string | null, url: string }} context
+ * @param {{ currency: string, image: string | null, url: string, money: Money }} context
  */
-export const productCard = (product, { currency, image, url }) => {
+export const productCard = (product, { currency, image, url, money }) => {
 	const variant = cardVariant(product);
+	const price = variant ? variant.price : product.price;
 	return {
 		id: product.id,
 		name: product.name,
-		price: variant ? variant.price : product.price,
+		price,
+		priceText: money(price, currency),
 		currency,
 		image: image && /^https:\/\//.test(image) ? image : null,
 		url,
@@ -99,12 +103,15 @@ export const productCard = (product, { currency, image, url }) => {
 /**
  * A product's details for Chat (`get_product_details`).
  * @param {ProductRecord} product
- * @param {{ currency: string, image: string | null, url: string, brand: string | null,
+ * @param {{ currency: string, image: string | null, url: string, money: Money, brand: string | null,
  *   attributes: Map<string, { name: string, unit: string }>, grades: Map<string, string> }} context
  *   `attributes`: attribute id → name and unit; `grades`: grade key → label
  */
 export const productDetails = (product, context) => {
 	const description = String(product.description ?? '').trim();
+	const range = priceRange(product);
+	/** @param {number} amount */
+	const text = (amount) => context.money(amount, context.currency);
 	return {
 		...productCard(product, context),
 		summary: product.summary,
@@ -114,7 +121,7 @@ export const productDetails = (product, context) => {
 				: description,
 		brand: context.brand,
 		options: product.options.map((option) => ({ name: option.name, values: [...option.values] })),
-		priceRange: priceRange(product),
+		priceRange: { ...range, minText: text(range.min), maxText: text(range.max) },
 		specs: Object.entries(product.specs ?? {}).map(([id, value]) => {
 			const attribute = context.attributes.get(id);
 			return { name: attribute?.name ?? id, value, unit: attribute?.unit ?? '' };
@@ -125,7 +132,9 @@ export const productDetails = (product, context) => {
 				id: variant.id,
 				options: { ...variant.options },
 				price: variant.price,
+				priceText: text(variant.price),
 				compareAtPrice: variant.compareAtPrice,
+				compareAtPriceText: variant.compareAtPrice === null ? null : text(variant.compareAtPrice),
 				grade: variant.grade ? (context.grades.get(variant.grade) ?? variant.grade) : null,
 				inStock: variantInStock(product, variant),
 			})),
@@ -155,11 +164,13 @@ export const statusLabel = (flow, key) => statusOf(flow, key)?.label ?? key;
  * An order as Chat's `get_my_orders` sees it.
  * @param {OrderRecord} order
  * @param {OrderFlow} flow
+ * @param {Money} money
  */
-export const orderSummary = (order, flow) => ({
+export const orderSummary = (order, flow, money) => ({
 	number: order.number,
 	status: statusLabel(flow, order.status),
 	total: order.totals.total,
+	totalText: money(order.totals.total, order.totals.currency),
 	currency: order.totals.currency,
 	placedAt: new Date(order.placedAt).toISOString(),
 });

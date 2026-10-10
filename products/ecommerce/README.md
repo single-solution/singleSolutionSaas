@@ -25,6 +25,16 @@ Exactly three variables (`.env.example`; nothing else is read):
 4. The merchant's site serves the sitemap, feeds, llms.txt and policies from the server-token routes (snippets in
    `/docs`).
 
+## API
+
+Every route is in `openapi.json` and in `/docs`. Besides the shop's own routes, the merchant's server reaches the kit's
+settings API (features, settings, texts, theme, Format, connections, and the lists `order_flow`, `couriers`,
+`delivery_zones`, `tax_rules`, `grades` and `booking_hours` at `/v1/lists/:list`), the activity log (`/v1/activity`) and
+counts of the main lists (`/v1/orders`, `/v1/products`, `/v1/customers`, `/v1/reviews` and `/v1/returns`, each with
+`/count` and `/counts?by=`, and ticket twins under `/v1/admin/`). Server-token calls may name the acting staff member
+with the `SS-Actor-*` headers, and the shopper routes (`/v1/shop/…`) also take the server token with `SS-Sign-In` and
+`SS-Visitor-IP`.
+
 ## Scripts
 
 `pnpm dev` and `pnpm build` regenerate `openapi.json` and `server/widget-script.js` first; `pnpm check` runs format, lint,

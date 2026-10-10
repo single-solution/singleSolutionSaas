@@ -5,7 +5,7 @@
  * (`review_not_allowed`), and a second review is refused (`already_reviewed`).
  * @module
  */
-import { button, codeOf, dateText, field, h, problemText, select } from './shop-common.js';
+import { button, codeOf, field, formatsOf, h, problemText, select } from './shop-common.js';
 
 /** @typedef {import('./shop-common.js').Texts} Texts */
 /** @typedef {import('./widget.js').Shop} Shop */
@@ -21,6 +21,7 @@ const PAGE = 10;
  */
 export const renderReviews = ({ box, t, shop, config, productId }) => {
 	const doc = /** @type {Document} */ (box.ownerDocument);
+	const { dateText } = formatsOf(config, doc.defaultView);
 	const summary = h(doc, 'div');
 	const list = h(doc, 'ul', { 'aria-label': t('reviews.list') });
 	const status = h(doc, 'p', { class: 'status', role: 'status' });

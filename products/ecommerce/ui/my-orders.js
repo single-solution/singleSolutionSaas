@@ -10,11 +10,10 @@ import {
 	button,
 	codeOf,
 	currencyOf,
-	dateText,
 	fill,
+	formatsOf,
 	h,
 	keepFocus,
-	money,
 	mountShop,
 	problemText,
 	settingsOf,
@@ -37,6 +36,7 @@ const CLAIMABLE_ROLES = ['delivered', 'refunded'];
 export const mountMyOrders = async ({ host, config, shop, win }) => {
 	const t = textsOf(config);
 	const settings = settingsOf(config);
+	const { money, dateText } = formatsOf(config, win);
 	/** An HTML document behind the browser token (the invoice), when the widget runtime offers it. */
 	const fetchDocument = /** @type {{ document?: DocumentCall }} */ (/** @type {unknown} */ (shop)).document;
 

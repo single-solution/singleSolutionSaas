@@ -2,9 +2,9 @@
  * Invoices and packing slips (PLAN 0.8.8: serials per line): printable HTML for staff and the merchant's server, the
  * shopper's own invoice, texts from the `invoices` settings, business details from business.json.
  */
-import { createId } from '@ss/contracts';
+import { DEFAULT_FORMAT, createId } from '@ss/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { INVOICE_TEXTS, esc, invoiceHtml, invoiceTexts, isoDate, packingSlipHtml } from '../core/invoice.js';
+import { INVOICE_TEXTS, esc, invoiceHtml, invoiceTexts, packingSlipHtml } from '../core/invoice.js';
 import { COLLECTIONS } from '../core/model.js';
 import { ALL, readyShop } from './helpers.js';
 
@@ -140,7 +140,7 @@ describe('printable documents', () => {
 		expect(html).toContain('Sara &lt;b&gt;Shopper&lt;/b&gt;');
 		expect(html).toContain(order.number);
 		expect(html).toContain('Invoice no.');
-		expect(html).toContain('2026-10-04');
+		expect(html).toContain('Oct 4, 2026');
 		expect(html).toContain('Black / 128 GB · SKU PH-128 · Grade: Grade A');
 		expect(html).toContain('Serial numbers: IMEI-111, IMEI-222');
 		expect(html).toContain('USD 1,000.00');
@@ -220,7 +220,8 @@ describe('printable documents', () => {
 
 describe('document parts', () => {
 	it('prints pickup orders, paid and refunded states, and falls back to the default texts', () => {
-		const business = { name: 'B & Co', email: null, phone: null, address: '1 Road', timeZone: 'Asia/Tokyo' };
+		const business = { name: 'B & Co', email: null, phone: null, address: '1 Road' };
+		const context = { format: DEFAULT_FORMAT, timeZone: 'Asia/Tokyo' };
 		const order = orderOf({
 			address: null,
 			delivery: { method: 'pickup', zone: '', fee: 0, locationId: null },
@@ -240,27 +241,38 @@ describe('document parts', () => {
 		const texts = invoiceTexts({ title: '', labelTotal: 'Sum', footer: '', other: 1 });
 		expect(texts.title).toBe('Invoice');
 		expect(texts.labelTotal).toBe('Sum');
-		const html = invoiceHtml(order, { business, texts });
+		const html = invoiceHtml(order, { business, texts, ...context });
 		expect(html).toContain('B &amp; Co');
 		expect(html).toContain('1 Road');
 		expect(html).toContain('Store pickup');
 		expect(html).toContain('Tax included');
 		expect(html).toContain('−USD 3.00');
 		expect(html).toContain('Paid online · Partially refunded');
-		expect(html).toContain('2026-10-05');
+		expect(html).toContain('Oct 5, 2026');
 		expect(html).not.toContain('Balance due');
-		const slip = packingSlipHtml(order, { business, texts });
+		const slip = packingSlipHtml(order, { business, texts, ...context });
 		expect(slip).toContain('Store pickup');
 		const none = orderOf({
 			address: null,
 			delivery: { method: 'none', zone: '', fee: 0, locationId: null },
 			payment: { ...order.payment, method: /** @type {any} */ ('other'), state: /** @type {any} */ ('odd') },
 		});
-		expect(invoiceHtml(none, { business, texts })).toContain('Paid online · Unpaid');
-		expect(packingSlipHtml(none, { business, texts })).toContain('Sara &lt;b&gt;Shopper&lt;/b&gt;');
-		expect(isoDate(new Date('2026-01-02T03:04:05Z'), 'Not/AZone')).toBe('2026-01-02');
-		expect(isoDate(null, 'UTC')).toBe('');
-		expect(isoDate(new Date('2026-01-02T23:04:05Z'), null)).toBe('2026-01-02');
+		expect(invoiceHtml(none, { business, texts, ...context })).toContain('Paid online · Unpaid');
+		expect(packingSlipHtml(none, { business, texts, ...context })).toContain('Sara &lt;b&gt;Shopper&lt;/b&gt;');
+		const local = {
+			...context,
+			format: {
+				...DEFAULT_FORMAT,
+				locale: 'en-GB',
+				currencyDisplay: /** @type {const} */ ('custom'),
+				currencySymbol: 'Rs',
+				wholeUnits: true,
+			},
+		};
+		const formatted = invoiceHtml(order, { business, texts, ...local, timeZone: 'Not/AZone' });
+		expect(formatted).toContain('4 Oct 2026');
+		expect(formatted).toContain('Rs 10');
+		expect(formatted).toContain('−Rs 3');
 		expect(esc(null)).toBe('');
 		expect(Object.keys(INVOICE_TEXTS)).toContain('labelSerials');
 	});

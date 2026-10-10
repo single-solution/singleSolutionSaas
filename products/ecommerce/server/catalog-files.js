@@ -117,7 +117,7 @@ export const createCatalogFiles = (product, service, common) => {
 		await data
 			.collection(COLLECTIONS.products)
 			.updateOne({ websiteId: data.websiteId, id: record.id, 'media.key': { $ne: file.key } }, { $push: { media: file } });
-		await service.log(ctx, 'product.image_added', record.id);
+		await service.log(ctx, 'product.image_added', record.id, { label: String(record.name) });
 		return mediaView(s, (await recordOf(data, 'product', record.id)).media);
 	};
 
@@ -147,7 +147,7 @@ export const createCatalogFiles = (product, service, common) => {
 			media.push({ ...file, alt });
 		});
 		await data.collection(COLLECTIONS.products).updateOne({ websiteId: data.websiteId, id: record.id }, { $set: { media } });
-		await service.log(ctx, 'product.images_arranged', record.id);
+		await service.log(ctx, 'product.images_arranged', record.id, { label: String(record.name) });
 		return mediaView(s, media);
 	};
 
@@ -162,7 +162,7 @@ export const createCatalogFiles = (product, service, common) => {
 			.collection(COLLECTIONS.products)
 			.updateOne({ websiteId: data.websiteId, id: record.id }, { $pull: { media: { key } } });
 		await deleteFile(s, key);
-		await service.log(ctx, 'product.image_removed', record.id);
+		await service.log(ctx, 'product.image_removed', record.id, { label: String(record.name) });
 		return mediaView(s, (await recordOf(data, 'product', record.id)).media);
 	};
 
@@ -180,7 +180,7 @@ export const createCatalogFiles = (product, service, common) => {
 				.collection(OWNERS[owner].collection)
 				.updateOne({ websiteId: data.websiteId, id: record.id }, { $set: { [field]: file } });
 			if (record[field] && record[field].key !== file.key) await deleteFile(s, record[field].key);
-			await service.log(ctx, `${owner}.${field}_set`, record.id);
+			await service.log(ctx, `${owner}.${field}_set`, record.id, { label: String(record.name) });
 			return { [field]: await withUrl(s, file) };
 		},
 		/** @param {any} ctx */
@@ -192,7 +192,7 @@ export const createCatalogFiles = (product, service, common) => {
 					.collection(OWNERS[owner].collection)
 					.updateOne({ websiteId: data.websiteId, id: record.id }, { $set: { [field]: null } });
 				await deleteFile(s, record[field].key);
-				await service.log(ctx, `${owner}.${field}_removed`, record.id);
+				await service.log(ctx, `${owner}.${field}_removed`, record.id, { label: String(record.name) });
 			}
 			return { [field]: null };
 		},

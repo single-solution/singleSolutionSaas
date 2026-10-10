@@ -2,11 +2,10 @@
  * Messages to the shopper about their order (PLAN 0.8.8: messages go through Notifications): the order placed, and a
  * move into a status listed in the `checkout` setting `notifyStatuses`, on the channels of `messageChannels`. Template
  * keys (edited in Notifications): `ecommerce.order_placed` and `ecommerce.order_status`, with the values `number`,
- * `name`, `status` (the status's name), `total` (formatted), `courier`, `trackingNumber` and `trackingUrl`. A failed or
- * unconnected send never fails the order.
+ * `name`, `status` (the status's name), `total` (by the website's Format, PLAN 0.8.10 K7), `courier`, `trackingNumber`
+ * and `trackingUrl`. A failed or unconnected send never fails the order.
  * @module
  */
-import { formatMoney } from '../core/money.js';
 
 /** @typedef {import('./service.js').Service} Service */
 /** @typedef {import('./service.js').Site} Site */
@@ -32,7 +31,7 @@ export const createOrderMessages = (service) => {
 				number: order.number,
 				name: order.customer.name,
 				status: statusLabel,
-				total: formatMoney(order.totals.total, order.totals.currency),
+				total: (await s.format()).money(order.totals.total, order.totals.currency),
 				courier: order.shipment?.courier ?? '',
 				trackingNumber: order.shipment?.trackingNumber ?? '',
 				trackingUrl: order.shipment?.trackingUrl ?? '',

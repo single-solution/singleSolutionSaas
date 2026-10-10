@@ -2,7 +2,7 @@
  * Promotions pricing (PLAN 0.8.8): which deals, bundles and coupon apply to a cart and how much each takes off each
  * line. Checkout calls `applyPromotions` when it prices a cart and again when it places the order (the ledger then
  * counts the uses in the order transaction); the Chat lookups and the product page quote one product with
- * `quoteProduct`. The order, following ibrahimMobiles:
+ * `quoteProduct`. The order:
  * 1. deals: each line takes its single best live deal, per unit (`core/deals.js`);
  * 2. bundles: sets form on the cart's units; a unit a bundle discounts takes no deal, and a set forms only when it saves
  *    more than those deals (`core/bundles.js`);

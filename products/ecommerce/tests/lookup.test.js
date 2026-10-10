@@ -2,7 +2,7 @@
  * The lookups Chat's shop tools call (exactly `products/chat/core/shop.js`) and the customer orders lookup, all with
  * the server token; the `me` lookups only with the visitor's verified Accounts sign-in, and only that user's data.
  */
-import { createId } from '@ss/contracts';
+import { DEFAULT_FORMAT, createId, formatMoney } from '@ss/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
 	cardVariant,
@@ -87,7 +87,7 @@ describe('core/lookup', () => {
 		variants: [
 			variant({ id: 'var_cheap_out', price: 500, stock: 0 }),
 			variant({ id: 'var_in', price: 800, grade: 'a' }),
-			variant({ id: 'var_in2', price: 900, grade: 'zz' }),
+			variant({ id: 'var_in2', price: 900, compareAtPrice: 1200, grade: 'zz' }),
 			variant({ id: 'var_off', price: 100, active: false }),
 		],
 	});
@@ -122,12 +122,21 @@ describe('core/lookup', () => {
 		expect(priceRange({ ...product, variants: [] })).toEqual({ min: 500, max: 500 });
 	});
 
-	it('shapes cards and details', () => {
-		const context = { currency: 'USD', image: 'http://insecure.example/i.jpg', url: 'https://s.example/p' };
+	it('shapes cards and details, every price with its text by the Format', () => {
+		const symbol = {
+			...DEFAULT_FORMAT,
+			currencyDisplay: /** @type {const} */ ('custom'),
+			currencySymbol: 'Rs',
+			wholeUnits: true,
+		};
+		/** @param {number} amount @param {string} currency */
+		const money = (amount, currency) => formatMoney(amount, currency, symbol);
+		const context = { currency: 'USD', image: 'http://insecure.example/i.jpg', url: 'https://s.example/p', money };
 		expect(productCard(product, context)).toEqual({
 			id: 'prd_1',
 			name: 'Phone',
 			price: 800,
+			priceText: 'Rs 8',
 			currency: 'USD',
 			image: null,
 			url: 'https://s.example/p',
@@ -149,6 +158,9 @@ describe('core/lookup', () => {
 			{ name: 'att_gone', value: true, unit: '' },
 		]);
 		expect(details.variants.map((v) => v.grade)).toEqual([null, 'Grade A', 'zz']);
+		expect(details.priceRange).toEqual({ min: 500, max: 900, minText: 'Rs 5', maxText: 'Rs 9' });
+		expect(details.variants[0]).toMatchObject({ priceText: expect.stringMatching(/^Rs /) });
+		expect(details.variants.map((v) => v.compareAtPriceText)).toEqual([null, null, 'Rs 12']);
 		const short = productDetails(
 			{ ...product, description: 'Short', specs: /** @type {any} */ (undefined) },
 			{ ...context, brand: 'B', attributes: new Map(), grades: new Map() },
@@ -159,10 +171,11 @@ describe('core/lookup', () => {
 	it('shapes orders and shipments', () => {
 		const placed = new Date('2026-10-01T00:00:00Z');
 		const record = /** @type {any} */ (order({ userId: 'u', number: 'N-1', placedAt: placed }));
-		expect(orderSummary(record, DEFAULT_FLOW)).toEqual({
+		expect(orderSummary(record, DEFAULT_FLOW, (amount, currency) => formatMoney(amount, currency))).toEqual({
 			number: 'N-1',
 			status: 'Confirmed',
 			total: 5000,
+			totalText: 'USD 50.00',
 			currency: 'USD',
 			placedAt: '2026-10-01T00:00:00.000Z',
 		});
@@ -276,6 +289,7 @@ describe('Chat lookups', () => {
 			id: phone.id,
 			name: 'Galaxy S24',
 			price: 70000,
+			priceText: 'USD 700.00',
 			currency: 'USD',
 			image: expect.stringMatching(/^https:\/\//),
 			url: 'https://shop.example.com/products/galaxy-s24',
@@ -327,9 +341,30 @@ describe('Chat lookups', () => {
 		expect(orders.status).toBe(200);
 		expect(orders.json).toEqual({
 			items: [
-				{ number: 'S-3', status: 'my_custom', total: 5000, currency: 'USD', placedAt: '2026-09-20T00:00:00.000Z' },
-				{ number: 'S-2', status: 'Dispatched', total: 5000, currency: 'USD', placedAt: '2026-09-10T00:00:00.000Z' },
-				{ number: 'S-1', status: 'Delivered', total: 5000, currency: 'USD', placedAt: '2026-09-01T00:00:00.000Z' },
+				{
+					number: 'S-3',
+					status: 'my_custom',
+					total: 5000,
+					totalText: 'USD 50.00',
+					currency: 'USD',
+					placedAt: '2026-09-20T00:00:00.000Z',
+				},
+				{
+					number: 'S-2',
+					status: 'Dispatched',
+					total: 5000,
+					totalText: 'USD 50.00',
+					currency: 'USD',
+					placedAt: '2026-09-10T00:00:00.000Z',
+				},
+				{
+					number: 'S-1',
+					status: 'Delivered',
+					total: 5000,
+					totalText: 'USD 50.00',
+					currency: 'USD',
+					placedAt: '2026-09-01T00:00:00.000Z',
+				},
 			],
 			loyaltyPoints: 120,
 			name: 'Sara Shopper',

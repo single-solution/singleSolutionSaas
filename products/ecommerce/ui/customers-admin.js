@@ -81,7 +81,7 @@ const customersTab = (kit, panel) => {
 					[
 						customer.email,
 						customer.phone,
-						t('customersAdmin.ordersSpent', { orders: customer.ordersPlaced, spent: customer.totalSpentText }),
+						t('customersAdmin.ordersSpent', { orders: customer.ordersPlaced, spent: kit.money(customer.totalSpent) }),
 						customer.rtoCount > 0 ? t('customersAdmin.rtoCount', { count: customer.rtoCount }) : '',
 					]
 						.filter(Boolean)
@@ -167,7 +167,7 @@ const customerDetail = (kit, { userId, done }) => {
 					[t('customersAdmin.phone'), customer.phone],
 					[t('customersAdmin.userId'), customer.userId],
 					[t('customersAdmin.ordersPlaced'), String(customer.ordersPlaced)],
-					[t('customersAdmin.totalSpent'), customer.totalSpentText],
+					[t('customersAdmin.totalSpent'), kit.money(customer.totalSpent)],
 					[t('customersAdmin.rto'), String(customer.rtoCount)],
 					[t('customersAdmin.blockedReason'), customer.blocked ? customer.blockedReason : ''],
 				]
@@ -201,7 +201,7 @@ const customerDetail = (kit, { userId, done }) => {
 							customer.recentOrders.map((/** @type {any} */ order) => [
 								order.number,
 								order.statusLabel,
-								order.totalText,
+								kit.money(order.total, order.currency),
 								kit.when(order.placedAt),
 							]),
 						),

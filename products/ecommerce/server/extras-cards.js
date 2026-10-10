@@ -1,10 +1,9 @@
 /**
- * Product cards of the shopper extras (wishlist, alerts, compare): name, price, main image, page address and whether
- * it can be bought now, read from the products collection.
+ * Product cards of the shopper extras (wishlist, alerts, compare): name, price (with its text by the website's Format,
+ * PLAN 0.8.10 K7), main image, page address and whether it can be bought now, read from the products collection.
  * @module
  */
 import { COLLECTIONS } from '../core/model.js';
-import { formatMoney } from '../core/money.js';
 import { createMedia } from './catalog-media.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
@@ -54,7 +53,7 @@ export const createCards = (product) => {
 			url: await media.productUrl(s, item),
 			image: await media.mediaUrl(s, item.media[0]?.key),
 			price: item.price,
-			priceText: formatMoney(item.price, s.currency),
+			priceText: (await s.format()).money(item.price, s.currency),
 			compareAtPrice: cheapest?.compareAtPrice ?? null,
 			currency: s.currency,
 			inStock: item.inStock,

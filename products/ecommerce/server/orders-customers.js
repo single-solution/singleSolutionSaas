@@ -1,11 +1,13 @@
 /**
  * Customers for the merchant (PLAN 0.8.8: Ecommerce keeps only shop records linked to the Accounts user id): the list
  * and search with what each customer paid, one customer with their latest orders, and the blocklist (a blocked
- * shopper cannot order; checkout reads `blocked`), the staff note and the return-to-origin count.
+ * shopper cannot order; checkout reads `blocked`), the staff note and the return-to-origin count. The list has counts
+ * (`count`, and `counts` by `blocked`; PLAN 0.8.10 K4) with the same filters.
  * @module
  */
-import { paginate, problem } from '@ss/app-kit';
-import { createFulfilmentStore } from '../adapters/fulfilment-store.js';
+import { countHandlers, paginate, problem } from '@ss/app-kit';
+import { createFulfilmentStore, customerFilter } from '../adapters/fulfilment-store.js';
+import { COLLECTIONS } from '../core/model.js';
 import { MAX_SEARCH, checkCustomerEdit, customerView, orderSummary } from '../core/orders.js';
 
 /** @typedef {import('./service.js').Service} Service */
@@ -30,18 +32,37 @@ export const createCustomers = (service) => {
 		return userId;
 	};
 
-	/** @param {any} ctx */
-	const list = async (ctx) => {
-		const page = paginate({ cursor: ctx.query.cursor, limit: ctx.query.limit, url: ctx.request.url }, { defaultLimit: 25 });
-		const s = await service.site(ctx);
+	/**
+	 * The list's search and blocked filter (an over-long search is refused, as the list refuses it).
+	 * @param {any} ctx
+	 */
+	const queryOf = (ctx) => {
 		const q = typeof ctx.query.q === 'string' ? ctx.query.q.trim() : '';
 		if (q.length > MAX_SEARCH) throw service.invalid('q', `Search for at most ${MAX_SEARCH} characters.`);
 		const blocked = ctx.query.blocked === 'true' ? true : ctx.query.blocked === 'false' ? false : null;
+		return { q, blocked };
+	};
+
+	const counts = countHandlers({
+		source: async (ctx) => {
+			const query = queryOf(ctx);
+			const s = await service.site(ctx);
+			return { collection: (await s.data()).collection(COLLECTIONS.customers), filter: customerFilter(s.websiteId, query) };
+		},
+		by: { blocked: 'blocked' },
+	});
+
+	/** @param {any} ctx */
+	const list = async (ctx) => {
+		const page = paginate({ cursor: ctx.query.cursor, limit: ctx.query.limit, url: ctx.request.url }, { defaultLimit: 25 });
+		const query = queryOf(ctx);
+		const s = await service.site(ctx);
 		const store = await storeOf(s);
-		const rows = await store.customers.list({ q, blocked, after: page.after, limit: page.fetchLimit });
+		const rows = await store.customers.list({ ...query, after: page.after, limit: page.fetchLimit });
 		const spent = await store.orders.spent(rows.map((row) => row.userId));
+		const { money } = await s.format();
 		return page.respond(
-			rows.map((row) => customerView(row, spent.get(row.userId) ?? { total: 0, count: 0 }, s.currency)),
+			rows.map((row) => customerView(row, spent.get(row.userId) ?? { total: 0, count: 0 }, s.currency, money)),
 			(view) => [view.name, view.userId],
 		);
 	};
@@ -68,9 +89,10 @@ export const createCustomers = (service) => {
 		const { store, record, recent, details } = await find(s, userId);
 		const spent = (await store.orders.spent([userId])).get(userId) ?? { total: 0, count: 0 };
 		const flow = /** @type {import('../core/model.js').OrderFlow} */ (/** @type {unknown} */ (await s.list('order_flow')));
+		const { money } = await s.format();
 		return {
-			...customerView(record ?? { userId, ...details }, spent, s.currency),
-			recentOrders: recent.map((order) => orderSummary(order, flow)),
+			...customerView(record ?? { userId, ...details }, spent, s.currency, money),
+			recentOrders: recent.map((order) => orderSummary(order, flow, money)),
 		};
 	};
 
@@ -100,9 +122,17 @@ export const createCustomers = (service) => {
 				: blocked === false && record?.blocked === true
 					? 'customer.unblocked'
 					: 'customer.edited';
-		await service.log(ctx, action, userId);
+		const changes = [
+			...(action === 'customer.blocked' ? ['blocked'] : action === 'customer.unblocked' ? ['unblocked'] : []),
+			...(note === undefined ? [] : ['note changed']),
+			...(resetRto ? ['returned parcels reset'] : []),
+		];
+		await service.log(ctx, action, userId, {
+			label: (record?.name || details.name || userId).slice(0, 200),
+			...(changes.length > 0 ? { detail: changes.join(', ') } : {}),
+		});
 		return view(s, userId);
 	};
 
-	return Object.freeze({ list, read, edit });
+	return Object.freeze({ list, read, edit, count: counts.count, counts: counts.counts });
 };

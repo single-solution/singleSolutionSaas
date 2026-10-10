@@ -39,8 +39,8 @@ const SERVER_RATE = [...SERVER_LIMITS];
  */
 const KINDS = {
 	coupons: { check: checkCouponInput, view: couponView, name: 'coupon', prefix: ID_PREFIX.coupon, label: (r) => r.code },
-	deals: { check: checkDealInput, view: dealView, name: 'deal', prefix: ID_PREFIX.deal, label: (r) => r.id },
-	bundles: { check: checkBundleInput, view: bundleView, name: 'bundle', prefix: ID_PREFIX.bundle, label: (r) => r.id },
+	deals: { check: checkDealInput, view: dealView, name: 'deal', prefix: ID_PREFIX.deal, label: (r) => r.name },
+	bundles: { check: checkBundleInput, view: bundleView, name: 'bundle', prefix: ID_PREFIX.bundle, label: (r) => r.name },
 };
 
 /**
@@ -118,7 +118,7 @@ export const createOfferRoutes = (product, service) => {
 		} catch (error) {
 			return codeTaken(error);
 		}
-		await service.log(ctx, `${KINDS[kind].name}.created`, KINDS[kind].label(record));
+		await service.log(ctx, `${KINDS[kind].name}.created`, record.id, { label: KINDS[kind].label(record) });
 		return created(KINDS[kind].view(/** @type {any} */ (await getOffer(data, kind, record.id))));
 	};
 
@@ -141,7 +141,7 @@ export const createOfferRoutes = (product, service) => {
 			return codeTaken(error);
 		}
 		if (!changed) return problem('not_found', `No such ${KINDS[kind].name}.`);
-		await service.log(ctx, `${KINDS[kind].name}.updated`, KINDS[kind].label(changed));
+		await service.log(ctx, `${KINDS[kind].name}.updated`, changed.id, { label: KINDS[kind].label(changed) });
 		return KINDS[kind].view(changed);
 	};
 
@@ -151,7 +151,7 @@ export const createOfferRoutes = (product, service) => {
 		const id = String(ctx.params.id);
 		const found = await getOffer(data, kind, id);
 		if (!found || !(await deleteOffer(data, kind, id))) return problem('not_found', `No such ${KINDS[kind].name}.`);
-		await service.log(ctx, `${KINDS[kind].name}.deleted`, KINDS[kind].label(found));
+		await service.log(ctx, `${KINDS[kind].name}.deleted`, found.id, { label: KINDS[kind].label(found) });
 		return undefined;
 	};
 
@@ -179,7 +179,10 @@ export const createOfferRoutes = (product, service) => {
 		const records = [...codes].map((code) => ({ id: createId(ID_PREFIX.coupon), ...coupon, code, used: 0 }));
 		const ids = new Set(await insertOffers(data, 'coupons', records, { skipDuplicates: true }));
 		const made = records.filter((record) => ids.has(record.id));
-		await service.log(ctx, 'coupons.generated', `${prefix || '(no prefix)'} × ${made.length}`);
+		await service.log(ctx, 'coupons.generated', `${prefix || '(no prefix)'} × ${made.length}`, {
+			label: `${prefix || '(no prefix)'} × ${made.length}`,
+			detail: `${made.length} codes made`,
+		});
 		return created({ created: made.length, codes: made.map((record) => record.code) });
 	};
 

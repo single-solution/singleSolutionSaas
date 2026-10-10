@@ -2,12 +2,13 @@
  * Products for the merchant's staff (PLAN 0.8.8 Catalog): list with search and filters, create, read, change, delete,
  * and stock (set or adjust per variant, per location with multi-location stock). Each route exists for the merchant's
  * server (`/v1/products…`, server token) and for the catalog admin widget (`/v1/admin/products…`, ticket with
- * `catalog.edit`), sharing one handler. Every write is in the activity log and tells the other parts (alerts) what
- * changed.
+ * `catalog.edit`), sharing one handler. The list has counts with the same filters (`count`, and `counts` by `status`
+ * and `brand`; PLAN 0.8.10 K4). Every write is in the activity log (with the product's name) and tells the other parts
+ * (alerts) what changed.
  * @module
  */
 import { createId } from '@ss/contracts';
-import { created, defineRoute, ok, paginate, problem } from '@ss/app-kit';
+import { countHandlers, created, defineRoute, ok, paginate, problem } from '@ss/app-kit';
 import {
 	NO_ID,
 	brandsOf,
@@ -36,6 +37,21 @@ import { bodyOf, refuse, STAFF_LIMITS } from './catalog-common.js';
 
 /** The staff list's order. */
 const STAFF_SORT = /** @type {const} */ ({ field: 'createdAt', dir: -1 });
+
+/**
+ * What a stock change did, for the activity log: `<SKU or option values>: <before> → <after>` per changed variant.
+ * @param {VariantRecord[]} before
+ * @param {VariantRecord[]} after
+ */
+const stockDetail = (before, after) =>
+	after
+		.flatMap((variant) => {
+			const was = before.find((v) => v.id === variant.id)?.stock;
+			if (was === undefined || was === variant.stock) return [];
+			const name = variant.sku || Object.values(variant.options).join(' / ') || variant.id;
+			return [`${name}: ${was} → ${variant.stock}`];
+		})
+		.join(', ');
 
 /**
  * @param {Product} product
@@ -72,9 +88,12 @@ export const createCatalogProducts = (product, service, common) => {
 		if (taken.length > 0) throw problem('conflict', `Another product already uses the SKU ${taken.join(', ')}.`);
 	};
 
-	/** @param {any} ctx */
-	const list = async (ctx) => {
-		const page = paginate({ cursor: ctx.query.cursor, limit: ctx.query.limit, url: ctx.request.url }, { defaultLimit: 25 });
+	/**
+	 * The staff list's filter (`q`, `status`, `kind`, `category` with its subcategories, `brand`, `lowStock`), without
+	 * `websiteId` and the page; the list and its counts share it.
+	 * @param {any} ctx
+	 */
+	const staffSource = async (ctx) => {
 		const { s, data } = await common.open(ctx);
 		/** @type {string[] | null} */
 		let categoryIds = null;
@@ -88,7 +107,21 @@ export const createCatalogProducts = (product, service, common) => {
 		if (ctx.query.brand)
 			brandId = (await brandsOf(data)).find((b) => b.id === ctx.query.brand || b.slug === ctx.query.brand)?.id ?? '';
 		const { lowStock } = await s.values('catalog');
-		const inner = staffFilter(ctx.query, { categoryIds, brandId, lowStock: Number(lowStock) });
+		return { s, data, inner: staffFilter(ctx.query, { categoryIds, brandId, lowStock: Number(lowStock) }) };
+	};
+
+	const counts = countHandlers({
+		source: async (ctx) => {
+			const { data, inner } = await staffSource(ctx);
+			return { collection: data.collection(COLLECTIONS.products), filter: { websiteId: data.websiteId, $and: [inner] } };
+		},
+		by: { status: 'status', brand: 'brandId' },
+	});
+
+	/** @param {any} ctx */
+	const list = async (ctx) => {
+		const page = paginate({ cursor: ctx.query.cursor, limit: ctx.query.limit, url: ctx.request.url }, { defaultLimit: 25 });
+		const { s, data, inner } = await staffSource(ctx);
 		const after = page.after === null ? null : afterFilter(STAFF_SORT, page.after);
 		if (page.after !== null && !after) throw problem('bad_request', 'cursor is invalid');
 		const found = /** @type {ProductRecord[]} */ (
@@ -137,7 +170,7 @@ export const createCatalogProducts = (product, service, common) => {
 			if (isDuplicate(error)) throw problem('conflict', 'Another product already uses this slug.');
 			throw error;
 		}
-		await service.log(ctx, 'product.created', id);
+		await service.log(ctx, 'product.created', id, { label: record.name, detail: `Status: ${record.status}` });
 		await common.changed(s, [], [id]);
 		return created(await staffView(s, /** @type {ProductRecord} */ (await findProduct(data, id))));
 	};
@@ -177,7 +210,10 @@ export const createCatalogProducts = (product, service, common) => {
 			{ now: now() },
 		);
 		if (!done.found || !done.product) throw problem('not_found', 'There is no such product.');
-		await service.log(ctx, 'product.updated', existing.id);
+		await service.log(ctx, 'product.updated', existing.id, {
+			label: done.product.name,
+			...(done.before.status === done.product.status ? {} : { detail: `${done.before.status} → ${done.product.status}` }),
+		});
 		await common.changed(s, [done.before]);
 		return staffView(s, done.product);
 	};
@@ -195,7 +231,7 @@ export const createCatalogProducts = (product, service, common) => {
 		const storage = existing.media.length > 0 ? await product.connections.storage(s.websiteId) : null;
 		for (const file of storage ? existing.media : [])
 			await /** @type {any} */ (storage).deleteObject({ key: file.key }).catch(() => null);
-		await service.log(ctx, 'product.deleted', existing.id);
+		await service.log(ctx, 'product.deleted', existing.id, { label: existing.name });
 		return undefined;
 	};
 
@@ -229,7 +265,10 @@ export const createCatalogProducts = (product, service, common) => {
 			{ now: now() },
 		);
 		if (!done.found || !done.product) throw problem('not_found', 'There is no such product.');
-		await service.log(ctx, 'product.stock_changed', existing.id);
+		await service.log(ctx, 'product.stock_changed', existing.id, {
+			label: done.product.name,
+			detail: stockDetail(done.before.variants, done.product.variants),
+		});
 		await common.changed(s, [done.before]);
 		return staffView(s, done.product);
 	};
@@ -242,6 +281,22 @@ export const createCatalogProducts = (product, service, common) => {
 			feature: 'catalog',
 			rateLimit: STAFF_LIMITS,
 			handler: list,
+		}),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/products/count',
+			auth: 'server',
+			feature: 'catalog',
+			rateLimit: STAFF_LIMITS,
+			handler: counts.count,
+		}),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/products/counts',
+			auth: 'server',
+			feature: 'catalog',
+			rateLimit: STAFF_LIMITS,
+			handler: counts.counts,
 		}),
 		defineRoute({
 			method: 'POST',
@@ -292,6 +347,22 @@ export const createCatalogProducts = (product, service, common) => {
 			permission: 'catalog.edit',
 			rateLimit: STAFF_LIMITS,
 			handler: list,
+		}),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/admin/products/count',
+			auth: 'ticket',
+			permission: 'catalog.edit',
+			rateLimit: STAFF_LIMITS,
+			handler: counts.count,
+		}),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/admin/products/counts',
+			auth: 'ticket',
+			permission: 'catalog.edit',
+			rateLimit: STAFF_LIMITS,
+			handler: counts.counts,
 		}),
 		defineRoute({
 			method: 'POST',

@@ -5,7 +5,7 @@
  * attribute (`GET /v1/shop/compare`). Each product can be taken off, or the whole list cleared.
  * @module
  */
-import { button, currencyOf, h, mountShop, priceNode, ratingText, settingsOf, textsOf } from './shop-common.js';
+import { button, currencyOf, formatsOf, h, mountShop, priceNode, ratingText, settingsOf, textsOf } from './shop-common.js';
 import { clearCompare, compareIds, onCompareChange, removeCompare } from './shop-compare-store.js';
 
 /**
@@ -15,6 +15,7 @@ import { clearCompare, compareIds, onCompareChange, removeCompare } from './shop
 export const mountCompare = async ({ host, config, shop, win }) => {
 	const t = textsOf(config);
 	const settings = settingsOf(config);
+	const formats = formatsOf(config, win);
 
 	mountShop({
 		host,
@@ -65,7 +66,7 @@ export const mountCompare = async ({ host, config, shop, win }) => {
 					row(
 						t('compare.price'),
 						products.map((item) =>
-							priceNode(doc, t, {
+							priceNode(doc, t, formats, {
 								price: item.price,
 								was: item.compareAtPrice,
 								currency: currencyOf(settings, item.currency),

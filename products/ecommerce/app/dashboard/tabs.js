@@ -29,7 +29,7 @@ import manifest from '../../manifest.json' with { type: 'json' };
 import { SITE_ROUTES, createSnippets } from '../../core/snippets.js';
 import { call, fill, useLoad } from './api.js';
 import { ConnectionForm, FORMS } from './forms.js';
-import { Loaded, Outcome, RecentChanges, SettingsForms, StatusBanner, TextsForm, ThemeForm } from './parts.js';
+import { FormatForm, Loaded, Outcome, RecentChanges, SettingsForms, StatusBanner, TextsForm, ThemeForm } from './parts.js';
 import { SettingsSections, SettingsTab } from './settings.js';
 import { TEXTS } from './texts.js';
 
@@ -529,11 +529,18 @@ function DefaultsTab() {
 								/>
 							),
 							theme: (
-								<ThemeForm
-									theme={data.theme.theme}
-									save={(next) => call('PUT', saveUrl('theme'), { value: next })}
-									reload={reload}
-								/>
+								<Masonry columns={2} wideAlone>
+									<ThemeForm
+										theme={data.theme.theme}
+										save={(next) => call('PUT', saveUrl('theme'), { value: next })}
+										reload={reload}
+									/>
+									<FormatForm
+										format={data.format.format}
+										save={(next) => call('PUT', saveUrl('format'), { value: next })}
+										reload={reload}
+									/>
+								</Masonry>
 							),
 						}}
 					/>

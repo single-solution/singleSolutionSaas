@@ -548,7 +548,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 				couponPerCustomer: q.coupon?.perCustomer ?? null,
 				slots,
 			},
-			{ now },
+			{ now, timeZone: (await s.business()).timeZone ?? 'UTC' },
 		);
 		if (!placed.ok) {
 			if (placed.code === 'out_of_stock')

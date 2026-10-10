@@ -6,7 +6,6 @@
  * and packing slip (opened in a new tab).
  * @module
  */
-import { formatMoney } from '../core/money.js';
 import { EDITABLE_ROLES } from '../core/orders.js';
 
 /** @typedef {import('./admin-kit.js').Kit} Kit */
@@ -61,7 +60,7 @@ export const orderDetail = (kit, { id, done }) => {
 		};
 		const currency = order.totals.currency;
 		/** @param {number} minor */
-		const money = (minor) => formatMoney(minor, currency);
+		const money = (minor) => kit.money(minor, currency);
 		const flags = order.customerFlags ?? {};
 
 		// ---------------------------------------------------------------------------------------- what it is
@@ -88,7 +87,7 @@ export const orderDetail = (kit, { id, done }) => {
 			[t('ordersAdmin.discount'), order.totals.discount > 0 ? money(order.totals.discount) : ''],
 			[t('ordersAdmin.deliveryFee'), money(order.totals.delivery)],
 			[t('ordersAdmin.tax'), order.totals.tax > 0 ? money(order.totals.tax) : ''],
-			[t('ordersAdmin.total'), order.totalText],
+			[t('ordersAdmin.total'), money(order.totals.total)],
 			[t('ordersAdmin.paymentMethod'), t(`ordersAdmin.method.${order.payment.method}`)],
 			[t('ordersAdmin.paymentState'), t(`ordersAdmin.payment.${order.payment.state}`)],
 			[t('ordersAdmin.paid'), money(order.payment.paid)],

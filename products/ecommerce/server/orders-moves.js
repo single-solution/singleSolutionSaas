@@ -15,8 +15,9 @@
  * - `refunded`: what is left is refunded (through Payments for what Payments took, else recorded) and earned points
  *   are taken back.
  *
- * Every move is written to the order's history with the staff member's name, the activity log, the `order.moved` hook
- * and the shopper's message.
+ * Every move is written to the order's history with the name of the staff member who made it (a ticket's user, or the
+ * one a server-token call names in its `SS-Actor-*` headers, else `Server`; PLAN 0.8.10 K2), the activity log (with the
+ * order number and the move), the `order.moved` hook and the shopper's message.
  * @module
  */
 import { problem } from '@ss/app-kit';
@@ -25,7 +26,6 @@ import { courierOf, trackingLink } from '../core/couriers.js';
 import { canMove, statusOf } from '../core/flow.js';
 import { expiryFor, pointsToEarn } from '../core/loyalty.js';
 import { COLLECTIONS } from '../core/model.js';
-import { formatMoney } from '../core/money.js';
 import { CASH_METHODS, refundSplit, refundable, serialPlan, stateAfterRefund, statusLabel } from '../core/orders.js';
 import { createOrderMessages } from './order-messages.js';
 
@@ -136,11 +136,17 @@ export const createMoves = (product, service) => {
 	};
 
 	/**
-	 * Refund through Payments; a refusal or failure becomes the problem Payments gave.
-	 * @param {Site} s @param {OrderRecord} order @param {number} amount @param {string} reason @param {string} key
+	 * Refund through Payments, naming who asked; a refusal or failure becomes the problem Payments gave.
+	 * @param {Site} s @param {any} ctx @param {OrderRecord} order @param {number} amount @param {string} reason
+	 * @param {string} key
 	 */
-	const refundOnline = (s, order, amount, reason, key) =>
-		service.payments.refund(s, /** @type {string} */ (order.payment.paymentId), { amount, reason, idempotencyKey: key });
+	const refundOnline = (s, ctx, order, amount, reason, key) =>
+		service.payments.refund(s, /** @type {string} */ (order.payment.paymentId), {
+			amount,
+			reason,
+			idempotencyKey: key,
+			by: service.actor(ctx),
+		});
 
 	/**
 	 * Move an order. Throws a problem when the move is not allowed, the input is wrong or the order changed meanwhile.
@@ -291,7 +297,7 @@ export const createMoves = (product, service) => {
 				if (online > 0) {
 					try {
 						const refunded = order.payment.refunded + online;
-						await refundOnline(s, order, online, input.note || 'Order cancelled', `${order.id}:cancel`);
+						await refundOnline(s, ctx, order, online, input.note || 'Order cancelled', `${order.id}:cancel`);
 						await orders.updateOne(
 							{ websiteId: s.websiteId, id: order.id },
 							{ $set: { 'payment.refunded': refunded, 'payment.state': stateAfterRefund(order.payment.paid, refunded) } },
@@ -314,6 +320,7 @@ export const createMoves = (product, service) => {
 				if (online > 0)
 					await refundOnline(
 						s,
+						ctx,
 						order,
 						online,
 						input.note || 'Order refunded',
@@ -344,7 +351,10 @@ export const createMoves = (product, service) => {
 		const after = /** @type {OrderRecord} */ (
 			await orders.findOne({ websiteId: s.websiteId, id: order.id }, { projection: { _id: 0 } })
 		);
-		await service.log(ctx, 'order.moved', order.id);
+		await service.log(ctx, 'order.moved', order.id, {
+			label: order.number,
+			detail: `${statusLabel(flow, from)} → ${target.label}`,
+		});
 		await service.emit('order.moved', s, { order: after, from, to: input.to });
 		await messages.status(s, after, target.label);
 		return { order: after, warnings };
@@ -382,12 +392,12 @@ export const createMoves = (product, service) => {
 		let refundId = null;
 		let recorded = manual > 0;
 		if (online > 0) {
-			const done = await refundOnline(s, order, online, input.reason, `${order.id}:refund:${order.payment.refunded}`);
+			const done = await refundOnline(s, ctx, order, online, input.reason, `${order.id}:refund:${order.payment.refunded}`);
 			refundId = done.refundId;
 			recorded = recorded || done.manual;
 		}
 		const refunded = order.payment.refunded + input.amount;
-		const money = formatMoney(input.amount, order.totals.currency);
+		const money = (await s.format()).money(input.amount, order.totals.currency);
 		const orders = (await s.data()).collection(COLLECTIONS.orders);
 		const result = await orders.updateOne(
 			{ websiteId: s.websiteId, id: order.id, 'payment.refunded': order.payment.refunded },
@@ -405,7 +415,10 @@ export const createMoves = (product, service) => {
 			},
 		);
 		if (result.modifiedCount !== 1) throw changed();
-		await service.log(ctx, 'order.refunded', order.id);
+		await service.log(ctx, 'order.refunded', order.id, {
+			label: order.number,
+			detail: `Refunded ${money}${recorded ? ' (recorded)' : ''}`,
+		});
 		return {
 			order: /** @type {OrderRecord} */ (
 				await orders.findOne({ websiteId: s.websiteId, id: order.id }, { projection: { _id: 0 } })

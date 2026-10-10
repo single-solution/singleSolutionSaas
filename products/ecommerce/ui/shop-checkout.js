@@ -4,7 +4,7 @@
  * status, totals and, while it waits for a payment, the way to pay) and paying an order again.
  * @module
  */
-import { button, codeOf, currencyOf, dateText, field, h, money, problemText } from './shop-common.js';
+import { button, codeOf, currencyOf, field, formatsOf, h, problemText } from './shop-common.js';
 
 /** @typedef {import('./shop-common.js').Texts} Texts */
 /** @typedef {import('./shop-common.js').ShopSettings} ShopSettings */
@@ -99,6 +99,7 @@ export const returnUrlOf = (shop) => {
  */
 export const renderSuccess = ({ box, t, shop, config, settings, order }) => {
 	const doc = /** @type {Document} */ (box.ownerDocument);
+	const { money, dateText } = formatsOf(config, doc.defaultView);
 	const currency = currencyOf(settings, order.totals?.currency);
 	const status = h(doc, 'p', { class: 'status', role: 'status' });
 	const waiting = order.role === 'awaiting_payment' && order.payment?.state === 'pending';

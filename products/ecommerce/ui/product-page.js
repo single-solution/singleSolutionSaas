@@ -18,9 +18,9 @@ import {
 	currencyOf,
 	field,
 	fill,
+	formatsOf,
 	h,
 	keepFocus,
-	money,
 	mountShop,
 	priceNode,
 	problemText,
@@ -54,6 +54,8 @@ export const variantFor = (item, chosen) =>
 export const mountProductPage = async ({ host, config, shop, win }) => {
 	const t = textsOf(config);
 	const settings = settingsOf(config);
+	const formats = formatsOf(config, win);
+	const { money } = formats;
 	const ref = host.dataset.product ?? '';
 	const saved = savedOf(shop);
 
@@ -205,7 +207,7 @@ export const mountProductPage = async ({ host, config, shop, win }) => {
 					}
 					const plain = () =>
 						priceBox.replaceChildren(
-							priceNode(doc, t, { price: current.price, was: current.compareAtPrice, currency, big: true }),
+							priceNode(doc, t, formats, { price: current.price, was: current.compareAtPrice, currency, big: true }),
 						);
 					if (!shop.has('deals')) return plain();
 					let quote = quotes.get(current.id);
@@ -221,7 +223,7 @@ export const mountProductPage = async ({ host, config, shop, win }) => {
 					if (!(quote.savings > 0)) return plain();
 					const was = Math.max(quote.price, current.compareAtPrice ?? 0);
 					priceBox.replaceChildren(
-						priceNode(doc, t, {
+						priceNode(doc, t, formats, {
 							price: quote.priceAfterDeals,
 							was,
 							currency: currencyOf(settings, quote.currency, currency),
@@ -439,6 +441,7 @@ export const mountProductPage = async ({ host, config, shop, win }) => {
 					renderSlots({
 						box: slotBox,
 						t,
+						formats,
 						shop,
 						productId: item.id,
 						now: () => Date.now(),

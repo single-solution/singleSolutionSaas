@@ -1,19 +1,20 @@
 /**
  * Orders for the merchant (PLAN 0.8.8), the pure part: the staff order list's filters, what staff send to move,
  * refund and edit an order (checked), serial numbers captured when packing, how much of a refund goes back through
- * Payments, and the order views staff see. Records are `core/model.js` shapes; times become ISO-8601 UTC on the wire.
- * No I/O.
+ * Payments, and the order views staff see. Records are `core/model.js` shapes; times become ISO-8601 UTC on the wire;
+ * amounts stay minor units, with a text (`totalText` …) made by the website's Format (PLAN 0.8.10 K7). No I/O.
  * @module
  */
 import { nextStatuses, statusOf } from './flow.js';
 import { STATUS_ROLES } from './model.js';
-import { formatMoney, isAmount } from './money.js';
+import { isAmount } from './money.js';
 import { MAX_TRACKING, cleanTracking, hasControl } from './couriers.js';
 
 /** @typedef {import('./model.js').OrderRecord} OrderRecord */
 /** @typedef {import('./model.js').OrderFlow} OrderFlow */
 /** @typedef {import('./model.js').StatusRole} StatusRole */
 /** @typedef {import('./model.js').CustomerRecord} CustomerRecord */
+/** An amount as text, by the website's Format (`product.format(websiteId).money`). @typedef {(amount: number, currency: string) => string} Money */
 
 /** Payment methods. */
 export const PAYMENT_METHODS = Object.freeze(/** @type {const} */ (['cod', 'online', 'bank_transfer', 'pickup']));
@@ -406,8 +407,9 @@ export const statusLabel = (flow, key) => statusOf(flow, key)?.label ?? key;
  * An order in the staff list.
  * @param {OrderRecord} order
  * @param {OrderFlow} flow
+ * @param {Money} money
  */
-export const orderSummary = (order, flow) => ({
+export const orderSummary = (order, flow, money) => ({
 	id: order.id,
 	number: order.number,
 	status: order.status,
@@ -417,7 +419,7 @@ export const orderSummary = (order, flow) => ({
 	city: order.address?.city ?? '',
 	itemCount: order.lines.reduce((sum, line) => sum + line.quantity, 0),
 	total: order.totals.total,
-	totalText: formatMoney(order.totals.total, order.totals.currency),
+	totalText: money(order.totals.total, order.totals.currency),
 	currency: order.totals.currency,
 	payment: { method: order.payment.method, state: order.payment.state },
 	shipment: order.shipment ? { courier: order.shipment.courier, trackingNumber: order.shipment.trackingNumber } : null,
@@ -447,14 +449,15 @@ const customerFlags = (customer) => ({
  * An order as staff see it: everything, with status names, the statuses it may move to next and the customer's flags.
  * @param {OrderRecord} order
  * @param {OrderFlow} flow
- * @param {{ customer: Partial<CustomerRecord> | null, images: Map<string, string | null> }} extras `images`: line id → address
+ * @param {{ customer: Partial<CustomerRecord> | null, images: Map<string, string | null>, money: Money }} extras
+ *   `images`: line id → address
  */
-export const orderDetail = (order, flow, { customer, images }) => {
+export const orderDetail = (order, flow, { customer, images, money }) => {
 	const plain = wire(order);
 	return {
 		...plain,
 		statusLabel: statusLabel(flow, order.status),
-		totalText: formatMoney(order.totals.total, order.totals.currency),
+		totalText: money(order.totals.total, order.totals.currency),
 		lines: plain.lines.map((/** @type {any} */ line) => ({ ...line, imageUrl: images.get(line.id) ?? null })),
 		payment: { ...plain.payment, refundable: refundable(order) },
 		history: plain.history.map((/** @type {any} */ entry) => ({
@@ -472,15 +475,16 @@ export const orderDetail = (order, flow, { customer, images }) => {
  * @param {Partial<CustomerRecord> & { createdAt?: Date, updatedAt?: Date }} customer
  * @param {{ total: number, count: number }} spent orders that were not cancelled
  * @param {string} currency
+ * @param {Money} money
  */
-export const customerView = (customer, spent, currency) => ({
+export const customerView = (customer, spent, currency, money) => ({
 	userId: customer.userId ?? '',
 	name: customer.name ?? '',
 	email: customer.email ?? '',
 	phone: customer.phone ?? '',
 	...customerFlags(customer),
 	totalSpent: spent.total,
-	totalSpentText: formatMoney(spent.total, currency),
+	totalSpentText: money(spent.total, currency),
 	ordersPlaced: spent.count,
 	createdAt: customer.createdAt ? wire(customer.createdAt) : null,
 	updatedAt: customer.updatedAt ? wire(customer.updatedAt) : null,

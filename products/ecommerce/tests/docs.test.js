@@ -1,3 +1,4 @@
+import { KIT_GUIDE } from '@ss/app-kit';
 import { describe, expect, it } from 'vitest';
 import manifest from '../manifest.json' with { type: 'json' };
 import guide from '../docs/guide.json' with { type: 'json' };
@@ -117,6 +118,22 @@ describe('renderDocs', () => {
 		expect(html).toContain('/v1/customers/');
 		for (const entry of SITE_ROUTES) expect(html).toContain(`GET ${entry.route}`);
 		expect(html).toContain('Needs: Catalog.');
+	});
+
+	it('explains the kit routes for the merchant’s server: settings and lists, acting user, visitor calls, counts, activity, Format', () => {
+		for (const section of KIT_GUIDE) {
+			expect(html).toContain(`<h2 id="${section.id}">${escape(section.title)}</h2>`);
+			for (const paragraph of section.paragraphs) expect(html).toContain(escape(paragraph));
+		}
+		expect(html).toContain(escape(guide.kit));
+		for (const route of [
+			'/v1/lists/{list}',
+			'/v1/orders/counts',
+			'/v1/admin/products/count',
+			'/v1/customers/counts',
+			'/v1/activity',
+		])
+			expect(html).toContain(route);
 	});
 
 	it('lists the API reference from openapi.json, with one feature or a list', () => {

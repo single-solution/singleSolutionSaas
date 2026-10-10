@@ -10,6 +10,7 @@ import { defineRoute, problem } from '@ss/app-kit';
 import { givePoints, loyaltyAccount, takePoints } from '../adapters/ledger.js';
 import { activeProduct, categoryTrail, deletePerson, loadOffers, personRecords } from '../adapters/promotions-store.js';
 import { byShowOrder, publicDeal } from '../core/deals.js';
+import { COLLECTIONS } from '../core/model.js';
 import { expiringSoon, expiryFor, historyView, loyaltyRules, pointsValue, SHOPPER_HISTORY } from '../core/loyalty.js';
 import { quoteProduct } from '../core/promotions.js';
 import { checkText, checkWhole } from '../core/promotions-rules.js';
@@ -118,7 +119,13 @@ export const createPromotions = (product, service) => {
 				);
 				if (!taken.ok) continue;
 			}
-			await service.log(ctx, 'loyalty.adjusted', `${userId} ${points.value > 0 ? '+' : ''}${points.value}`);
+			const customer = await data
+				.collection(COLLECTIONS.customers)
+				.findOne({ websiteId: data.websiteId, userId }, { projection: { _id: 0, name: 1 } });
+			await service.log(ctx, 'loyalty.adjusted', userId, {
+				label: customer?.name ? String(customer.name) : userId,
+				detail: `${points.value > 0 ? '+' : ''}${points.value} points`,
+			});
 			return accountView(s, await loyaltyAccount(data, userId, { now: now() }));
 		}
 		return problem('points_changed', 'The points changed meanwhile: try again.');

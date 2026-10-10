@@ -9,7 +9,6 @@ import { defineRoute, problem } from '@ss/app-kit';
 import { GOOGLE_FOOT, MAX_FEED_ROWS, META_HEADER, feedRows, googleHead, googleItem, metaLine } from '../core/feeds.js';
 import { buildLlmsTxt, MAX_LLMS_CATEGORIES, treeOrder } from '../core/llms.js';
 import { COLLECTIONS } from '../core/model.js';
-import { formatMoney } from '../core/money.js';
 import {
 	SITEMAP_FOOT,
 	SITEMAP_HEAD,
@@ -313,7 +312,12 @@ export const createSeo = (product, service) => {
 	const llmsTxt = async (ctx) => {
 		const s = await service.site(ctx);
 		const data = await s.data();
-		const [settings, business, categories] = await Promise.all([s.values('llms_txt'), s.business(), allCategories(data)]);
+		const [settings, business, categories, { money }] = await Promise.all([
+			s.values('llms_txt'),
+			s.business(),
+			allCategories(data),
+			s.format(),
+		]);
 		const count = Math.max(0, Math.min(200, Number(settings.products)));
 		const top =
 			count === 0
@@ -347,7 +351,7 @@ export const createSeo = (product, service) => {
 				top.map(async (item) => ({
 					name: item.name,
 					url: await media.productUrl(s, item),
-					price: formatMoney(item.price, s.currency),
+					price: money(item.price, s.currency),
 					summary: item.summary,
 				})),
 			),

@@ -1,13 +1,15 @@
 /**
  * What the admin widgets share (PLAN 0.4.5, 0.4.10): the widget shell with its `Signed out` line, widget texts with
- * `{placeholders}`, money in the shop currency (decimals in inputs, minor units on the wire), calls with the ticket
- * (JSON, and plain text for CSV files and printable documents), problem texts (a 403 means the ticket's permissions do
- * not allow it), and small builders: labelled fields, tables, sections, paged lists, id pickers, two-step buttons and
- * uploads to presigned addresses. Text is always set as text, never as HTML.
+ * `{placeholders}`, money in the shop currency (decimals in inputs, minor units on the wire; shown by the website's
+ * Format, PLAN 0.8.10 K7), dates and times by the Format and the business time zone, the business days of date
+ * pickers (K8), calls with the ticket (JSON, and plain text for CSV files and printable documents), problem texts (a
+ * 403 means the ticket's permissions do not allow it), and small builders: labelled fields, tables, sections, paged
+ * lists, id pickers, two-step buttons and uploads to presigned addresses. Text is always set as text, never as HTML.
  * @module
  */
-import { mountWidget } from '@ss/app-kit/widget';
-import { formatMoney, fromDecimal, toDecimal } from '../core/money.js';
+import { DEFAULT_FORMAT, formatDate, formatMoney, mountWidget, viewerOf } from '@ss/app-kit/widget';
+import { dayBounds } from '../core/calendar.js';
+import { fromDecimal, toDecimal } from '../core/money.js';
 import { ADMIN_CSS } from './admin-styles.js';
 import { element } from './dom.js';
 import { WIDGET_CSS } from './styles.js';
@@ -16,8 +18,6 @@ import { adminCall } from './tickets.js';
 /** @typedef {{ ok: boolean, status: number, data: any }} Answer status 0 when signed out or unreachable */
 /** @typedef {Node | string | null | undefined | false} Child */
 /** @typedef {{ value: string, label: string }} Choice */
-
-const DAY_MS = 86_400_000;
 
 /**
  * A text with its `{placeholders}` filled.
@@ -28,21 +28,24 @@ const fill = (text, values) =>
 	text.replace(/\{(\w+)\}/g, (match, key) => (Object.hasOwn(values, key) ? String(values[key]) : match));
 
 /**
- * The start of a day (`YYYY-MM-DD` from a date input) as ISO-8601, or ''.
+ * The start of a day (`YYYY-MM-DD` from a date input) in the business time zone as ISO-8601, or ''.
  * @param {string} value
+ * @param {string} timeZone the business.json time zone (widget config)
  */
-export const dayStart = (value) => {
-	const time = Date.parse(`${value}T00:00:00.000Z`);
-	return value && !Number.isNaN(time) ? new Date(time).toISOString() : '';
+export const dayStart = (value, timeZone) => {
+	const day = dayBounds(value, timeZone);
+	return day ? new Date(day.start).toISOString() : '';
 };
 
 /**
- * The end of a day (the next day's start, for filters whose end is exclusive) as ISO-8601, or ''.
+ * The end of a day (the next day's start, for filters whose end is exclusive) in the business time zone as ISO-8601,
+ * or ''.
  * @param {string} value
+ * @param {string} timeZone
  */
-export const dayEnd = (value) => {
-	const start = dayStart(value);
-	return start ? new Date(Date.parse(start) + DAY_MS).toISOString() : '';
+export const dayEnd = (value, timeZone) => {
+	const day = dayBounds(value, timeZone);
+	return day ? new Date(day.end).toISOString() : '';
 };
 
 /**
@@ -115,6 +118,9 @@ export const wholeOf = (text) => {
 const createKit = ({ root, config, api, win, save, open }) => {
 	const doc = /** @type {Document} */ (root.ownerDocument);
 	const currency = String(config.settings?.currency ?? '');
+	const format = config.format ?? DEFAULT_FORMAT;
+	const timeZone = config.timeZone ?? 'UTC';
+	const viewer = viewerOf(win);
 	/** @type {string[]} */
 	const blobs = [];
 	let ids = 0;
@@ -126,8 +132,13 @@ const createKit = ({ root, config, api, win, save, open }) => {
 
 	// ------------------------------------------------------------------------------------------------- money
 
-	/** An amount for people. @param {number | null | undefined} minor */
-	const money = (minor) => (typeof minor === 'number' ? formatMoney(minor, currency) : '');
+	/**
+	 * An amount for people, by the website's Format.
+	 * @param {number | null | undefined} minor
+	 * @param {string} [inCurrency] the order's currency (default: the shop's)
+	 */
+	const money = (minor, inCurrency = currency) =>
+		typeof minor === 'number' ? formatMoney(minor, inCurrency || currency, format, viewer) : '';
 	/** An amount in an input. @param {number | null | undefined} minor */
 	const decimal = (minor) => (typeof minor === 'number' ? toDecimal(minor, currency) : '');
 	/**
@@ -506,13 +517,15 @@ const createKit = ({ root, config, api, win, save, open }) => {
 		};
 	};
 
-	/** A time for people. @param {string | null | undefined} iso */
-	const when = (iso) => (iso ? new Date(iso).toLocaleString() : '');
+	/** A date and time for people, by the website's Format. @param {string | null | undefined} iso */
+	const when = (iso) => formatDate(iso, format, { timeZone, style: 'datetime', viewer });
 
 	return Object.freeze({
 		doc,
 		win,
 		currency,
+		/** The business.json time zone (days of date pickers). */
+		timeZone,
 		/** @type {Record<string, any>} */
 		settings: config.settings ?? {},
 		t,

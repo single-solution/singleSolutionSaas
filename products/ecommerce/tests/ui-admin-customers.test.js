@@ -64,7 +64,9 @@ describe('customers admin: customers', () => {
 			'GET /v1/admin/customers/u1': () =>
 				answer(200, {
 					...customer(),
-					recentOrders: [{ id: 'ord_1', number: 'SO-1', statusLabel: 'Delivered', totalText: 'PKR 10.00', placedAt: AT }],
+					recentOrders: [
+						{ id: 'ord_1', number: 'SO-1', statusLabel: 'Delivered', total: 1000, currency: 'PKR', placedAt: AT },
+					],
 				}),
 			'GET /v1/admin/customers/u2': () => problem(404, 'There is no such customer.'),
 			'PATCH /v1/admin/customers/u1': (/** @type {any} */ call) => {
@@ -94,6 +96,7 @@ describe('customers admin: customers', () => {
 		});
 		await click(buttonIn(panel, 'Open'));
 		expect(textOf(panel)).toContain('SO-1');
+		expect(textOf(panel)).toContain('PKR 10.00');
 		await click(buttonIn(panel, 'Block'));
 		expect(statuses(panel)).toContain('Give the reason for blocking.');
 		type(fieldIn(panel, 'Reason for blocking'), 'Fraud');

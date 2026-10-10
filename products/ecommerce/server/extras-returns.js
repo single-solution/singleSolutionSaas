@@ -3,16 +3,17 @@
  * order within each item's window, with photos uploaded straight to the merchant's storage; the merchant's staff (or
  * server) approve or reject, mark the parcel received, refund (through Payments when the order was paid online, else
  * recorded), restock exactly once (the ledger's `restockClaim`) and close. Loyalty points earned on the returned part
- * are taken back on the first refund. The shopper gets a message (`ecommerce.return_status`) at each step.
+ * are taken back on the first refund. The shopper gets a message (`ecommerce.return_status`) at each step. Each step's
+ * history entry names who did it (a ticket's user, the staff member a server-token call names in its `SS-Actor-*`
+ * headers, else `Server`), and its activity entry the claim (order number and reference) and the move.
  * @module
  */
 import { createId } from '@ss/contracts';
-import { created, defineRoute, paginate, problem } from '@ss/app-kit';
+import { countHandlers, created, defineRoute, paginate, problem } from '@ss/app-kit';
 import { restockClaim, takePoints } from '../adapters/ledger.js';
 import { userIdsOf } from '../adapters/extras-store.js';
 import { afterFilter, keyOf, sortOf } from '../core/extras-pages.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
-import { formatMoney } from '../core/money.js';
 import {
 	CLAIM_ACTIONS,
 	CLAIM_KINDS,
@@ -69,6 +70,9 @@ const bodyOf = (ctx) => (typeof ctx.body === 'object' && ctx.body !== null ? ctx
 
 /** @param {Date | null | undefined} at */
 const iso = (at) => (at ? new Date(at).toISOString() : null);
+
+/** A claim as the activity log names it: its order number and reference. @param {ReturnRecord} claim */
+const claimLabel = (claim) => `${claim.orderNumber} ${claimReference(claim.id)}`;
 
 /**
  * @param {Product} product
@@ -166,7 +170,7 @@ export const createReturns = (product, service) => {
 				claim: claimReference(claim.id),
 				kind: claim.kind,
 				status: claim.status,
-				amount: claim.refundAmount > 0 ? formatMoney(claim.refundAmount, order.totals.currency) : '',
+				amount: claim.refundAmount > 0 ? (await s.format()).money(claim.refundAmount, order.totals.currency) : '',
 				name: order.customer.name,
 			},
 			Array.isArray(messageChannels) ? messageChannels : ['email'],
@@ -343,25 +347,34 @@ export const createReturns = (product, service) => {
 
 	// --------------------------------------------------------------------------------------------------- staff
 
+	/**
+	 * The staff claim list's collection and filter (`status`, `kind`, `orderId`, `userId`), shared by the list and its
+	 * counts (PLAN 0.8.10 K4).
+	 * @param {any} ctx
+	 */
+	const claimSource = async (ctx) => {
+		const data = await (await service.site(ctx)).data();
+		const { status, kind, orderId, userId } = ctx.query;
+		return {
+			collection: claims(data),
+			filter: {
+				websiteId: data.websiteId,
+				...(CLAIM_STATUSES.includes(status) ? { status } : {}),
+				...(CLAIM_KINDS.includes(kind) ? { kind } : {}),
+				...(typeof orderId === 'string' && orderId ? { orderId } : {}),
+				...(typeof userId === 'string' && userId ? { userId } : {}),
+			},
+		};
+	};
+	const claimCounts = countHandlers({ source: claimSource, by: { status: 'status' } });
+
 	/** @param {any} ctx */
 	const listClaims = async (ctx) => {
 		const page = paginate({ cursor: ctx.query.cursor, limit: ctx.query.limit, url: ctx.request.url }, { defaultLimit: 25 });
-		const s = await service.site(ctx);
-		const data = await s.data();
-		const { status, kind, orderId, userId } = ctx.query;
+		const { collection, filter } = await claimSource(ctx);
 		const rows = /** @type {StoredClaim[]} */ (
-			await claims(data)
-				.find(
-					{
-						websiteId: data.websiteId,
-						...(CLAIM_STATUSES.includes(status) ? { status } : {}),
-						...(CLAIM_KINDS.includes(kind) ? { kind } : {}),
-						...(typeof orderId === 'string' && orderId ? { orderId } : {}),
-						...(typeof userId === 'string' && userId ? { userId } : {}),
-						...afterFilter(NEWEST, page.after),
-					},
-					{ ...NO_ID, sort: sortOf(NEWEST), limit: page.fetchLimit },
-				)
+			await collection
+				.find({ ...filter, ...afterFilter(NEWEST, page.after) }, { ...NO_ID, sort: sortOf(NEWEST), limit: page.fetchLimit })
 				.toArray()
 		);
 		return page.respond(rows.map(staffView), (view) => keyOf(NEWEST, view));
@@ -448,7 +461,10 @@ export const createReturns = (product, service) => {
 			)
 		);
 		if (!moved) throw problem('move_not_allowed', 'The claim changed meanwhile; reload it.');
-		await service.log(ctx, `return.${status}`, claim.id);
+		await service.log(ctx, `return.${status}`, claim.id, {
+			label: claimLabel(claim),
+			detail: `${claim.status} → ${status}`,
+		});
 		await tell(s, await findOrder(data, { id: claim.orderId }), moved);
 		return detailOf(s, moved);
 	};
@@ -471,11 +487,12 @@ export const createReturns = (product, service) => {
 			throw service.invalid('amount', `The refund is a whole amount in minor units from 1 to ${cap}.`);
 		const first = claim.refundAmount === 0;
 		const total = claim.refundAmount + amount;
+		const money = (await s.format()).money(amount, order.totals.currency);
 		const entry = {
 			at: new Date(service.now()),
 			status: 'refunded',
 			by: service.actor(ctx).name,
-			note: note.note || formatMoney(amount, order.totals.currency),
+			note: note.note || money,
 		};
 		// reserve the refund on the claim first, so two refunds at once cannot both pass the cap
 		const reserved = await claims(data).updateOne(
@@ -491,6 +508,7 @@ export const createReturns = (product, service) => {
 					amount,
 					reason: `${order.number} ${claimReference(claim.id)}`,
 					idempotencyKey: `${claim.id}-${claim.refundAmount}`,
+					by: service.actor(ctx),
 				});
 				refundId = done.refundId || null;
 			} catch (error) {
@@ -534,7 +552,7 @@ export const createReturns = (product, service) => {
 					{ now: service.now() },
 				);
 		}
-		await service.log(ctx, 'return.refunded', claim.id);
+		await service.log(ctx, 'return.refunded', claim.id, { label: claimLabel(claim), detail: `Refunded ${money}` });
 		const done = await claimOf(data, claim.id);
 		await tell(s, order, done);
 		return detailOf(s, done);
@@ -578,7 +596,10 @@ export const createReturns = (product, service) => {
 				},
 			},
 		);
-		await service.log(ctx, 'return.restocked', claim.id);
+		await service.log(ctx, 'return.restocked', claim.id, {
+			label: claimLabel(claim),
+			detail: `${lines.reduce((sum, line) => sum + line.quantity, 0)} unit(s) back in stock`,
+		});
 		await service.emit('products.changed', s, {
 			productIds,
 			before: new Map(before.map((p) => [p.id, { price: p.price, inStock: p.inStock }])),
@@ -675,6 +696,22 @@ export const createReturns = (product, service) => {
 		}),
 		defineRoute({
 			method: 'GET',
+			path: '/v1/returns/count',
+			auth: 'server',
+			feature: 'returns',
+			rateLimit: SERVER,
+			handler: claimCounts.count,
+		}),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/returns/counts',
+			auth: 'server',
+			feature: 'returns',
+			rateLimit: SERVER,
+			handler: claimCounts.counts,
+		}),
+		defineRoute({
+			method: 'GET',
 			path: '/v1/returns/:id',
 			auth: 'server',
 			feature: 'returns',
@@ -740,6 +777,24 @@ export const createReturns = (product, service) => {
 			permission: 'returns.manage',
 			rateLimit: SERVER,
 			handler: listClaims,
+		}),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/admin/returns/count',
+			auth: 'ticket',
+			feature: 'returns',
+			permission: 'returns.manage',
+			rateLimit: SERVER,
+			handler: claimCounts.count,
+		}),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/admin/returns/counts',
+			auth: 'ticket',
+			feature: 'returns',
+			permission: 'returns.manage',
+			rateLimit: SERVER,
+			handler: claimCounts.counts,
 		}),
 		defineRoute({
 			method: 'GET',

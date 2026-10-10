@@ -7,7 +7,7 @@
  * `callProduct` (pasted tokens only, PLAN 0.4.6).
  * @module
  */
-import { problem } from '@ss/app-kit';
+import { actorOf, problem } from '@ss/app-kit';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
 /** @typedef {import('@ss/app-kit').WebsiteData} WebsiteData */
@@ -29,8 +29,33 @@ export const VISITOR_WRITE_LIMITS = Object.freeze([
 	{ limit: 10, windowSeconds: 60, per: /** @type {const} */ ('visitor') },
 ]);
 
-/** The server token as an actor. */
+/** The server token as an actor, when a call names no member of the staff (PLAN 0.8.10 K2). */
 const SERVER_ACTOR = Object.freeze({ kind: 'server', id: 'server', name: 'Server' });
+
+/** What the `SS-Actor-*` headers take (the kit's rules), so a refund asked of Payments names its staff member. */
+const ACTOR_ID = /^[A-Za-z0-9_.:@-]{1,64}$/;
+const MAX_ACTOR_NAME = 120;
+const MAX_ACTOR_ROLE = 40;
+
+/** @param {string} text */
+const plainText = (text) => [...text].every((ch) => ch.charCodeAt(0) >= 0x20 && ch.charCodeAt(0) !== 0x7f);
+
+/**
+ * The `SS-Actor-*` headers naming a member of the staff on a call to another product (K2), or none for the server or
+ * a name the headers cannot carry.
+ * @param {{ kind: string, id: string, name?: string, role?: string }} who
+ * @returns {Record<string, string>}
+ */
+export const actorHeaders = (who) => {
+	const name = who.name ?? '';
+	if (who.kind === 'server' || !ACTOR_ID.test(who.id) || !name || name.length > MAX_ACTOR_NAME || !plainText(name)) return {};
+	const role = who.role && who.role.length <= MAX_ACTOR_ROLE && plainText(who.role) ? who.role : '';
+	return {
+		'ss-actor-id': who.id,
+		'ss-actor-name': encodeURIComponent(name),
+		...(role ? { 'ss-actor-role': encodeURIComponent(role) } : {}),
+	};
+};
 
 /**
  * A shopper: the Accounts user of a verified sign-in (PLAN 0.4.6).
@@ -51,6 +76,8 @@ const SERVER_ACTOR = Object.freeze({ kind: 'server', id: 'server', name: 'Server
  * @property {() => ReturnType<Product['business']>} business business.json (defaults: name = the domain, time zone UTC)
  * @property {() => Promise<Record<string, string>>} texts the website's widget texts
  * @property {(name: string) => Promise<any[]>} list a list setting of the product database (`adapters/lists.js`)
+ * @property {() => ReturnType<Product['format']>} format the Format and business time zone, with `money` and `date` for
+ *   text the server makes (PLAN 0.8.10 K7, K8)
  * @property {string} currency the shop's currency (`catalog` setting)
  */
 
@@ -111,6 +138,8 @@ export const createService = (product) => {
 		let data = null;
 		/** @type {Map<string, Promise<any[]>>} */
 		const lists = new Map();
+		/** @type {ReturnType<Product['format']> | null} */
+		let formatted = null;
 		const catalog = await product.settings.values(websiteId, 'catalog');
 		/** @type {Site} */
 		const s = {
@@ -141,6 +170,10 @@ export const createService = (product) => {
 					lists.set(name, found);
 				}
 				return found;
+			},
+			format: () => {
+				formatted ??= product.format(websiteId);
+				return formatted;
 			},
 			currency: typeof catalog.currency === 'string' && catalog.currency ? catalog.currency : 'USD',
 		};
@@ -175,21 +208,25 @@ export const createService = (product) => {
 	};
 
 	/**
-	 * Who acts: the member of the merchant's staff in the ticket, or the server.
+	 * Who acts (PLAN 0.8.10 K2): the member of the merchant's staff in the ticket, else the one a server-token call names
+	 * in its `SS-Actor-*` headers (with their role), else the server.
 	 * @param {any} ctx
+	 * @returns {{ kind: string, id: string, name: string, role?: string, email?: string }}
 	 */
 	const actor = (ctx) =>
-		ctx.ticket ? { kind: 'staff', id: String(ctx.ticket.user.id), name: String(ctx.ticket.user.name) } : SERVER_ACTOR;
+		/** @type {{ kind: string, id: string, name: string, role?: string, email?: string }} */ (actorOf(ctx, SERVER_ACTOR));
 
 	/**
 	 * Write an activity-log entry for what the merchant's staff or server did (copied to Accounts when its token is
-	 * pasted, PLAN 0.4.11).
+	 * pasted, PLAN 0.4.11), with the target's `label` (an order number, a product name …) and a short plain-text
+	 * `detail` (never message contents, secrets or addresses; K9).
 	 * @param {any} ctx @param {string} action @param {string} target
+	 * @param {{ label?: string, detail?: string }} [about]
 	 */
-	const log = (ctx, action, target) =>
+	const log = (ctx, action, target, { label, detail } = {}) =>
 		product.activity.record(
 			{ websiteId: ctx.websiteId, merchantId: ctx.merchantId, after: ctx.after },
-			{ actor: actor(ctx), action, target },
+			{ actor: actor(ctx), action, target, ...(label ? { label } : {}), ...(detail ? { detail } : {}) },
 		);
 
 	/**
@@ -294,18 +331,19 @@ export const createService = (product) => {
 			};
 		},
 		/**
-		 * Refund (all or part) of a payment through Payments.
+		 * Refund (all or part) of a payment through Payments, naming the member of the staff who asked (K2).
 		 * @param {Site} s @param {string} paymentId
-		 * @param {{ amount: number, reason: string, idempotencyKey: string }} refund
+		 * @param {{ amount: number, reason: string, idempotencyKey: string,
+		 *   by: { kind: string, id: string, name?: string, role?: string } }} refund
 		 * @returns {Promise<{ refundId: string, manual: boolean }>}
 		 */
-		refund: async (s, paymentId, { amount, reason, idempotencyKey }) => {
+		refund: async (s, paymentId, { amount, reason, idempotencyKey, by }) => {
 			const body = await callPayments(
 				s,
 				'POST',
 				`/v1/payments/${encodeURIComponent(paymentId)}/refunds`,
 				{ amount, reason },
-				{ 'idempotency-key': idempotencyKey },
+				{ 'idempotency-key': idempotencyKey, ...actorHeaders(by) },
 			);
 			const refunds = Array.isArray(body.refunds) ? body.refunds : [];
 			const last = refunds[refunds.length - 1] ?? {};

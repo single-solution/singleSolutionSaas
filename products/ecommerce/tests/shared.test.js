@@ -13,7 +13,7 @@ import {
 	statusOf,
 	statusWithRole,
 } from '../core/flow.js';
-import { allocate, formatMoney, fromDecimal, isPrice, percentOf, toDecimal } from '../core/money.js';
+import { allocate, fromDecimal, isPrice, percentOf, toDecimal } from '../core/money.js';
 import { readyShop } from './helpers.js';
 
 describe('the order flow', () => {
@@ -60,7 +60,7 @@ describe('the order flow', () => {
 });
 
 describe('money', () => {
-	it('converts, formats, splits and checks amounts', () => {
+	it('converts, splits and checks amounts', () => {
 		expect(toDecimal(5, 'USD')).toBe('0.05');
 		expect(toDecimal(5, 'JPY')).toBe('5');
 		expect(toDecimal(1234, 'KWD')).toBe('1.234');
@@ -69,8 +69,6 @@ describe('money', () => {
 		expect(fromDecimal('1.005', 'USD')).toBeNull();
 		expect(fromDecimal('1.000', 'USD')).toBe(100);
 		expect(fromDecimal(null, 'USD')).toBeNull();
-		expect(formatMoney(123456789, 'USD')).toBe('USD 1,234,567.89');
-		expect(formatMoney(1500, 'JPY')).toBe('JPY 1,500');
 		expect(isPrice(0)).toBe(true);
 		expect(isPrice(-1)).toBe(false);
 		expect(percentOf(1000, 12.5)).toBe(125);

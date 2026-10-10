@@ -78,8 +78,11 @@ describe('Chat deal lookups', () => {
 		expect(answer.json).toEqual({
 			productId: phone.id,
 			price: 10000,
+			priceText: 'USD 100.00',
 			priceAfterDeals: 8500,
+			priceAfterDealsText: 'USD 85.00',
 			savings: 1500,
+			savingsText: 'USD 15.00',
 			currency: 'USD',
 			deals: ['Autumn sale'],
 		});

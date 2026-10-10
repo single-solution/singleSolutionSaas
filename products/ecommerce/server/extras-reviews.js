@@ -5,7 +5,7 @@
  * @module
  */
 import { createId } from '@ss/contracts';
-import { created, defineRoute, noContent, ok, paginate, problem } from '@ss/app-kit';
+import { countHandlers, created, defineRoute, noContent, ok, paginate, problem } from '@ss/app-kit';
 import { isDuplicate, refreshRating, reviewSummary, userIdsOf } from '../adapters/extras-store.js';
 import { afterFilter, keyOf, sortOf } from '../core/extras-pages.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
@@ -141,26 +141,46 @@ export const createReviews = (product, service) => {
 		return ok({ ...body, summary: await reviewSummary(data, productId) }, { headers: link ? { link } : {} });
 	};
 
+	/**
+	 * The staff review list's collection and filter (`status`, `productId`), shared by the list and its counts
+	 * (PLAN 0.8.10 K4).
+	 * @param {any} ctx
+	 */
+	const reviewSource = async (ctx) => {
+		const data = await (await service.site(ctx)).data();
+		const { status, productId } = ctx.query;
+		return {
+			collection: reviews(data),
+			filter: {
+				websiteId: data.websiteId,
+				...(REVIEW_STATUSES.includes(status) ? { status } : {}),
+				...(typeof productId === 'string' && productId ? { productId } : {}),
+			},
+		};
+	};
+	const reviewCounts = countHandlers({ source: reviewSource, by: { status: 'status' } });
+
 	/** @param {any} ctx */
 	const list = async (ctx) => {
 		const page = paginate({ cursor: ctx.query.cursor, limit: ctx.query.limit, url: ctx.request.url }, { defaultLimit: 25 });
-		const s = await service.site(ctx);
-		const data = await s.data();
-		const { status, productId } = ctx.query;
+		const { collection, filter } = await reviewSource(ctx);
 		const rows = /** @type {StoredReview[]} */ (
-			await reviews(data)
-				.find(
-					{
-						websiteId: data.websiteId,
-						...(REVIEW_STATUSES.includes(status) ? { status } : {}),
-						...(typeof productId === 'string' && productId ? { productId } : {}),
-						...afterFilter(NEWEST, page.after),
-					},
-					{ ...NO_ID, sort: sortOf(NEWEST), limit: page.fetchLimit },
-				)
+			await collection
+				.find({ ...filter, ...afterFilter(NEWEST, page.after) }, { ...NO_ID, sort: sortOf(NEWEST), limit: page.fetchLimit })
 				.toArray()
 		);
 		return page.respond(rows.map(staffView), (view) => keyOf(NEWEST, view));
+	};
+
+	/**
+	 * A review as the activity log names it: the name of its product.
+	 * @param {WebsiteData} data @param {StoredReview} review
+	 */
+	const reviewLabel = async (data, review) => {
+		const found = await data
+			.collection(COLLECTIONS.products)
+			.findOne({ websiteId: data.websiteId, id: review.productId }, { projection: { _id: 0, name: 1 } });
+		return { label: `${found ? String(found.name) : review.productId} (${review.rating}★)` };
 	};
 
 	/**
@@ -174,7 +194,10 @@ export const createReviews = (product, service) => {
 		if (review.status !== status) {
 			await reviews(data).updateOne({ websiteId: data.websiteId, id: review.id }, { $set: { status } });
 			await refreshRating(data, review.productId);
-			await service.log(ctx, `review.${status}`, review.id);
+			await service.log(ctx, `review.${status}`, review.id, {
+				...(await reviewLabel(data, review)),
+				detail: `${review.status} → ${status}`,
+			});
 		}
 		return staffView(await reviewOf(data, review.id));
 	};
@@ -187,7 +210,10 @@ export const createReviews = (product, service) => {
 		const checked = checkReply(bodyOf(ctx).reply);
 		if (!checked.ok) throw service.invalid('reply', checked.message);
 		await reviews(data).updateOne({ websiteId: data.websiteId, id: review.id }, { $set: { reply: checked.reply } });
-		await service.log(ctx, 'review.replied', review.id);
+		await service.log(ctx, 'review.replied', review.id, {
+			...(await reviewLabel(data, review)),
+			detail: checked.reply ? 'Reply saved' : 'Reply removed',
+		});
 		return staffView(await reviewOf(data, review.id));
 	};
 
@@ -198,7 +224,7 @@ export const createReviews = (product, service) => {
 		const review = await reviewOf(data, ctx.params.id);
 		await reviews(data).deleteOne({ websiteId: data.websiteId, id: review.id });
 		if (review.status === 'approved') await refreshRating(data, review.productId);
-		await service.log(ctx, 'review.deleted', review.id);
+		await service.log(ctx, 'review.deleted', review.id, await reviewLabel(data, review));
 		return noContent();
 	};
 
@@ -256,6 +282,22 @@ export const createReviews = (product, service) => {
 
 		defineRoute({ method: 'GET', path: '/v1/reviews', auth: 'server', feature: 'reviews', rateLimit: SERVER, handler: list }),
 		defineRoute({
+			method: 'GET',
+			path: '/v1/reviews/count',
+			auth: 'server',
+			feature: 'reviews',
+			rateLimit: SERVER,
+			handler: reviewCounts.count,
+		}),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/reviews/counts',
+			auth: 'server',
+			feature: 'reviews',
+			rateLimit: SERVER,
+			handler: reviewCounts.counts,
+		}),
+		defineRoute({
 			method: 'POST',
 			path: '/v1/reviews/:id/approve',
 			auth: 'server',
@@ -296,6 +338,24 @@ export const createReviews = (product, service) => {
 			permission: 'reviews.moderate',
 			rateLimit: SERVER,
 			handler: list,
+		}),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/admin/reviews/count',
+			auth: 'ticket',
+			feature: 'reviews',
+			permission: 'reviews.moderate',
+			rateLimit: SERVER,
+			handler: reviewCounts.count,
+		}),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/admin/reviews/counts',
+			auth: 'ticket',
+			feature: 'reviews',
+			permission: 'reviews.moderate',
+			rateLimit: SERVER,
+			handler: reviewCounts.counts,
 		}),
 		defineRoute({
 			method: 'POST',

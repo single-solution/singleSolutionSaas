@@ -53,6 +53,29 @@ const namePage = (after) => {
 };
 
 /**
+ * The staff customer list's filter: a search (name, start of the e-mail, the user id, 4 or more digits of the phone)
+ * and blocked or not. The list and its counts share it (PLAN 0.8.10 K4).
+ * @param {string} websiteId
+ * @param {{ q: string, blocked: boolean | null }} input
+ * @returns {Record<string, unknown>}
+ */
+export const customerFilter = (websiteId, { q, blocked }) => {
+	/** @type {Record<string, unknown>} */
+	const filter = { websiteId, ...(blocked === null ? {} : { blocked }) };
+	if (q) {
+		const term = escapeRegex(q);
+		const digits = q.replace(/\D/g, '');
+		filter.$or = [
+			{ name: { $regex: term, $options: 'i' } },
+			{ email: { $regex: `^${term}`, $options: 'i' } },
+			{ userId: q },
+			...(digits.length >= 4 ? [{ phone: { $regex: escapeRegex(digits) } }] : []),
+		];
+	}
+	return filter;
+};
+
+/**
  * @param {WebsiteData} data the website's guarded merchant database
  */
 export const createFulfilmentStore = (data) => {
@@ -155,30 +178,15 @@ export const createFulfilmentStore = (data) => {
 			 * @param {{ q: string, blocked: boolean | null, after: unknown, limit: number }} input
 			 * @returns {Promise<Array<CustomerRecord & { createdAt?: Date, updatedAt?: Date }>>}
 			 */
-			list: async ({ q, blocked, after, limit }) => {
-				/** @type {Record<string, unknown>[]} */
-				const and = [namePage(after)];
-				if (q) {
-					const term = escapeRegex(q);
-					const digits = q.replace(/\D/g, '');
-					and.push({
-						$or: [
-							{ name: { $regex: term, $options: 'i' } },
-							{ email: { $regex: `^${term}`, $options: 'i' } },
-							{ userId: q },
-							...(digits.length >= 4 ? [{ phone: { $regex: escapeRegex(digits) } }] : []),
-						],
-					});
-				}
-				return as(
+			list: async ({ q, blocked, after, limit }) =>
+				as(
 					await customers
 						.find(
-							{ websiteId, ...(blocked === null ? {} : { blocked }), $and: and },
+							{ ...customerFilter(websiteId, { q, blocked }), $and: [namePage(after)] },
 							{ ...NO_ID, sort: { name: 1, userId: 1 }, limit },
 						)
 						.toArray(),
-				);
-			},
+				),
 			/** @param {string} userId @returns {Promise<(CustomerRecord & { createdAt?: Date, updatedAt?: Date }) | null>} */
 			get: async (userId) => as(await customers.findOne({ websiteId, userId }, NO_ID)),
 			/**

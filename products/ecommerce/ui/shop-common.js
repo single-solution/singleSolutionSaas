@@ -1,12 +1,13 @@
 /**
  * Helpers the shopper widgets share (PLAN 0.8.8 Shopper widgets): widget texts with `{placeholders}` (every word is a
- * text the merchant can edit), the settings with defaults, money, dates, elements (text is always set as text, never
- * as HTML), problem codes of answers, the sign-in hint, product cards, the mount with the shop's CSS and the
- * dispatch of Growth's browser events (`../core/growth-events.js`).
+ * text the merchant can edit), the settings with defaults, money and dates (by the website's Format and business time
+ * zone from the widget config, and the viewer's language and time zone; PLAN 0.8.10 K7), elements (text is always set
+ * as text, never as HTML), problem codes of answers, the sign-in hint, product cards, the mount with the shop's CSS
+ * and the dispatch of Growth's browser events (`../core/growth-events.js`).
  * @module
  */
-import { formatText, mountWidget } from '@ss/app-kit/widget';
-import { formatMoney, isCurrency } from '../core/money.js';
+import { DEFAULT_FORMAT, formatDate, formatMoney, formatText, mountWidget, viewerOf } from '@ss/app-kit/widget';
+import { isCurrency } from '../core/money.js';
 import { element } from './dom.js';
 import { SHOP_CSS } from './shop-styles.js';
 import { WIDGET_CSS } from './styles.js';
@@ -79,26 +80,35 @@ export const currencyOf = (settings, ...candidates) => {
  */
 export const announce = (win, name, detail) => void win.dispatchEvent(new win.CustomEvent(name, { detail }));
 
-/** @param {number} amount @param {string} currency */
-export const money = (amount, currency) => formatMoney(Math.round(Number(amount) || 0), currency);
+/**
+ * Money and dates as the widgets show them (PLAN 0.8.10 K7).
+ * @typedef {object} Formats
+ * @property {(amount: unknown, currency: string) => string} money an amount in minor units
+ * @property {(iso: string | null | undefined, options?: { time?: boolean, zone?: string }) => string} dateText a date
+ *   (and time, unless `time` is false); `zone` shows it in that time zone whatever the Format says (booking slots,
+ *   which are the business's own hours)
+ * @property {(iso: string | null | undefined, zone?: string) => string} timeText a time of day
+ */
 
 /**
- * A date and time in the shopper's own language and time zone (or the one given).
- * @param {string | null | undefined} iso
- * @param {{ timeZone?: string, time?: boolean }} [options]
+ * The formatters of a widget: the website's Format and business time zone (widget config) and the viewer's language
+ * and time zone.
+ * @param {WidgetConfig} config
+ * @param {{ navigator?: { language?: string } } | null | undefined} win
+ * @returns {Formats}
  */
-export const dateText = (iso, { timeZone, time = true } = {}) => {
-	const at = iso ? new Date(iso) : null;
-	if (!at || Number.isNaN(at.getTime())) return '';
-	try {
-		return new Intl.DateTimeFormat(undefined, {
-			dateStyle: 'medium',
-			...(time ? { timeStyle: 'short' } : {}),
-			...(timeZone ? { timeZone } : {}),
-		}).format(at);
-	} catch {
-		return at.toISOString();
-	}
+export const formatsOf = (config, win) => {
+	const format = config.format ?? DEFAULT_FORMAT;
+	const timeZone = config.timeZone ?? 'UTC';
+	const viewer = viewerOf(win);
+	/** @param {string | null | undefined} iso @param {'date' | 'datetime' | 'time'} style @param {string} [zone] */
+	const at = (iso, style, zone) =>
+		formatDate(iso, zone ? { ...format, times: 'business' } : format, { timeZone: zone ?? timeZone, style, viewer });
+	return Object.freeze({
+		money: (amount, currency) => formatMoney(Math.round(Number(amount) || 0), currency, format, viewer),
+		dateText: (iso, { time = true, zone } = {}) => at(iso, time ? 'datetime' : 'date', zone),
+		timeText: (iso, zone) => at(iso, 'time', zone),
+	});
 };
 
 /**
@@ -217,9 +227,10 @@ export const keepFocus = (root, renderFn) => {
  * A price with the "was" price beside it when it is higher.
  * @param {Document} doc
  * @param {Texts} t
+ * @param {Formats} formats
  * @param {{ price: number, was?: number | null, currency: string, big?: boolean }} input
  */
-export const priceNode = (doc, t, { price, was = null, currency, big = false }) =>
+export const priceNode = (doc, t, { money }, { price, was = null, currency, big = false }) =>
 	h(
 		doc,
 		'p',
@@ -242,12 +253,13 @@ export const ratingText = (t, rating) =>
  * A product card (grid, wishlist): image, name linking to the product page, brand, price, rating, grades, stock.
  * @param {Document} doc
  * @param {Texts} t
+ * @param {Formats} formats
  * @param {{ id: string, name: string, url: string, image: string | null, price: number, compareAtPrice?: number | null,
  *   currency: string, inStock: boolean, rating?: { average: number, count: number }, brand?: { name: string } | string | null,
  *   grades?: string[] }} card
  * @param {Child[]} [actions]
  */
-export const productCard = (doc, t, card, actions = []) => {
+export const productCard = (doc, t, formats, card, actions = []) => {
 	const brand = typeof card.brand === 'string' ? card.brand : (card.brand?.name ?? '');
 	const rating = ratingText(t, card.rating);
 	return h(
@@ -257,7 +269,7 @@ export const productCard = (doc, t, card, actions = []) => {
 		card.image ? h(doc, 'img', { src: card.image, alt: card.name, loading: 'lazy' }) : null,
 		h(doc, 'a', { class: 'name', href: card.url }, card.name),
 		brand ? h(doc, 'span', { class: 'meta' }, brand) : null,
-		priceNode(doc, t, { price: card.price, was: card.compareAtPrice ?? null, currency: card.currency }),
+		priceNode(doc, t, formats, { price: card.price, was: card.compareAtPrice ?? null, currency: card.currency }),
 		rating ? h(doc, 'span', { class: 'meta' }, rating) : null,
 		card.grades && card.grades.length > 0 ? h(doc, 'span', { class: 'meta' }, card.grades.join(' · ')) : null,
 		card.inStock ? null : h(doc, 'span', { class: 'badge danger' }, t('shop.outOfStock')),
