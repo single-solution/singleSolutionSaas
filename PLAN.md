@@ -1736,6 +1736,10 @@ so and wins.
 
 #### Principles
 
+- **Latest, not legacy** (owner, 2026-10-10). The stores were built the old way; the products keep the current,
+  correct way of doing each thing (official gateway protocols, current libraries, the products' own data shapes). "No
+  visible change" means the same features, wording, URLs and outcomes for merchants, staff and shoppers, never copying
+  a store's internals or bugs.
 - **Options with safe defaults.** Every behaviour a store has that the products lack becomes a general option of the
   product it belongs to, per website, open to every merchant. Its default keeps today's behaviour. A change that is
   plainly better for every website has no switch and is marked **always**; no merchant is live yet, so these break
@@ -2036,15 +2040,8 @@ takes the server token with `SS-Visitor-IP` and answers the refresh token in the
 - Key: kit (each route keeps its feature).
 - Data: none.
 
-**A13. Session hand-over at cut-over** (open question 3).
-
-- Why: nobody is signed out when a store switches (SB, CT, IM).
-- Key: feature `import` (Migration).
-- API: `POST /v1/users/:id/sessions` (server token only) `{ remember, device }` → `{ refreshToken, expiresAt }`. The
-  store's server calls it once for a visitor whose old store session is still valid and hands the token to its page,
-  which gives it to the sign-in widget (`SSAccounts.adopt(refreshToken)`) or keeps it server-side. Activity
-  `user.session_handed_over`.
-- Data: a normal session with the method `handover`.
+**A13. Session hand-over: not built** (owner, 2026-10-10). Everyone signs in once after the cut-over, with the same
+password; no hand-over route is added.
 
 #### Notifications
 
@@ -2086,8 +2083,9 @@ sends as button components.
 
 #### Payments
 
-**Open:** whether `payfast_pk` also speaks the stores' exact PayFast Pakistan protocol (open question 1). If so, it is a
-`protocol` setting of `payfast_pk`, not a new feature.
+**PayFast Pakistan** (owner, 2026-10-10): `payfast_pk` keeps the protocol built in 97ac5ea from PayFast's integration
+guide (GetAccessToken, then PostTransaction, checked with `validation_hash`); the stores' older protocol is not
+copied. It is tested in PayFast's sandbox before a store switches.
 
 **P1. Bank details for the merchant's server.**
 
@@ -2578,6 +2576,9 @@ Orders:
   `ai_replies`; Ecommerce token).
 - API: with `shop_context`, each AI reply adds Ecommerce's `GET /v1/chat/context` (E37) for the product named by
   `setPage`, cached 60 s per website and per verified sign-in.
+- Never disclose (owner, 2026-10-10): setting `neverDisclose` of `ai_replies`, default off. While on, Chat's built-in
+  instructions tell the AI not to say it is a bot, answers that do are re-asked once, the AI label is hidden, and
+  Settings show the law warning of 0.8.3.
 - Data: none.
 
 **C2. Rich answers.**
@@ -2862,13 +2863,13 @@ the staff record's). Codes that must be exactly 26 characters use `createId`.
    webhook at Notifications.
 8. Deploy the rewired store and lift the freeze. Downtime: minutes to an hour, by row counts.
 9. After: the old collections stay untouched for rollback (redeploy the old store; orders taken meanwhile are copied
-   back by hand). `import` is switched off once the hand-over window ends (A13; the longest session, 30 days).
+   back by hand). `import` is switched off once the import is verified.
 
 **Entered by hand.** Every secret (merchant database, storage, gateway keys, SMTP, WhatsApp and Connectivity.pk keys, AI
 keys, social sign-in keys, `legacy_pepper`), pasted tokens, feature switches, business.json, Meta template approvals,
 and the gateway and webhook addresses.
 
-**One-time visible effects.** Everyone signs in once if A13 is not built (open question 3); open carts re-price once,
+**One-time visible effects.** Everyone signs in once (A13); open carts re-price once,
 because their old offer locks are not carried; images that lived outside the store's bucket get new URLs; IM's raw
 analytics history starts empty (its daily totals are kept).
 
@@ -2930,7 +2931,7 @@ are built in parallel; a phase starts when the one before it is done.
    business time zone, and serves activity reads; Notifications forwards kit events; e2e covers a settings round trip
    per product, a staff name on an order move and on a chat reply, counts equal to list lengths, the separate server
    window, and an import dry run on a fixture.
-2. **Accounts, Notifications and Payments** (A1–A13, N1–N5, P1–P3). Done when: imported bcrypt and PBKDF2 hashes sign in
+2. **Accounts, Notifications and Payments** (A1–A12, N1–N5, P1–P3). Done when: imported bcrypt and PBKDF2 hashes sign in
    and are re-hashed; phone + password, staff codes and setup links, role requests, the guards, paused roles and the
    remember options work through the widget and through the server; an old recovery code works once; a WhatsApp template
    with a copy-code button and a per-status template with optional sections are sent; bank details are readable and bank
@@ -2952,14 +2953,12 @@ are built in parallel; a phase starts when the one before it is done.
    order page, account, admin orders, dashboard, chat) shows no visible change beyond the one-time effects; the cut-over
    steps are written in the importer's README. Rewiring a store follows only with owner approval (0.12 step 14).
 
-#### Open questions for the owner
+#### Owner answers (2026-10-10)
 
-1. **PayFast Pakistan**: keep the built `payfast_pk` only (GetAccessToken, then PostTransaction, checked with
-   `validation_hash`), or also speak the stores' exact protocol (their `ipg1.apps.net.pk` form post and notice checks)
-   as a `protocol` setting of `payfast_pk`, so their gateway accounts and callbacks stay exactly as they are?
-2. **Bot persona**: IM and CT never say the assistant is a bot and filter answers that do. Offer a "never disclose"
-   option in Chat (with the law warning), or keep only hiding the AI label?
-3. **Session hand-over** (A13): build it, so nobody is signed out at cut-over, or accept one sign-in for everyone?
+1. **PayFast Pakistan**: the built `payfast_pk` protocol only; the stores' legacy protocol is not copied (Payments, above).
+2. **Bot persona**: Chat offers a "never disclose" option (C1 instructions may tell the AI never to say it is a bot, and
+   the AI label can be hidden), with the law warning shown in Settings while it is on; off by default.
+3. **Session hand-over**: not built; everyone signs in once after the cut-over (A13).
 
 ### 0.8.4 Still open
 
@@ -2974,8 +2973,6 @@ are built in parallel; a phase starts when the one before it is done.
    - Growth: how it learns about orders, carts and item changes (0.3) — answered in 0.8.9 (browser events).
 - **Before charging real merchants** (0.12 step 14): which commercial host, the mail setup and the final domains, chosen
   by the owner.
-- **Converting existing stores** (0.8.10): its three open questions (PayFast Pakistan protocol, bot persona, session
-  hand-over).
 - **Open owner questions** (from the Part 0 review of 2026-10-07). Each is answered by the owner and written into the
   section named before the step that needs it is built:
    - **Start** (0.12): is building authorised now, and must step 1 be finished before step 2?
