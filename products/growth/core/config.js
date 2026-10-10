@@ -73,11 +73,49 @@ export const searchParamsOf = (value) => {
  */
 const timeOf = (value) => (value === '' ? undefined : Date.parse(value));
 
+/** Most `hideOnPages` patterns read (settings schemas have no list limit). */
+const MAX_HIDDEN_PAGES = 50;
+
 /**
- * The notice bar now: its text and link while the dates say it is on (checked on use), else null.
+ * Whether a page's path matches a path pattern: an exact path, `*` one segment, `**` any number of segments (the query
+ * string and fragment are ignored; `/` is the home page).
+ * @param {string} pattern
+ * @param {string} path
+ */
+export const pathMatches = (pattern, path) => {
+	const split = (/** @type {string} */ value) =>
+		(value.split(/[?#]/)[0] ?? '').split('/').filter((segment) => segment.length > 0);
+	const p = split(pattern.trim());
+	const s = split(path);
+	/** @param {number} i @param {number} j @returns {boolean} */
+	const match = (i, j) => {
+		if (i === p.length) return j === s.length;
+		const part = p[i];
+		if (part === '**') return match(i + 1, j) || (j < s.length && match(i, j + 1));
+		if (j === s.length) return false;
+		return (part === '*' || part === s[j]) && match(i + 1, j + 1);
+	};
+	return pattern.trim().startsWith('/') && match(0, 0);
+};
+
+/**
+ * The `hideOnPages` patterns of the notice bar (G6): path patterns only, at most {@link MAX_HIDDEN_PAGES}.
+ * @param {unknown} value
+ * @returns {string[]}
+ */
+export const hiddenPagesOf = (value) =>
+	(Array.isArray(value) ? value : [])
+		.filter((pattern) => typeof pattern === 'string' && pattern.trim().startsWith('/'))
+		.map((pattern) => String(pattern).trim())
+		.slice(0, MAX_HIDDEN_PAGES);
+
+/**
+ * The notice bar now: its text and link while the dates say it is on (checked on use), how long a closed bar stays
+ * closed and the pages it is hidden on (PLAN 0.8.10 G6), else null.
  * @param {FeatureValues} values
  * @param {number} now
- * @returns {{ text: string, linkUrl: string | null, linkText: string, dismissible: boolean } | null}
+ * @returns {{ text: string, linkUrl: string | null, linkText: string, dismissible: boolean,
+ *   dismissFor: 'visit' | 'page', hideOnPages: string[] } | null}
  */
 export const noticeOf = (values, now) => {
 	const message = text(values, 'notice_bar', 'text');
@@ -92,7 +130,24 @@ export const noticeOf = (values, now) => {
 		linkUrl,
 		linkText: linkUrl === null ? '' : text(values, 'notice_bar', 'linkText'),
 		dismissible: values.notice_bar?.dismissible !== false,
+		dismissFor: values.notice_bar?.dismissFor === 'page' ? 'page' : 'visit',
+		hideOnPages: hiddenPagesOf(values.notice_bar?.hideOnPages),
 	};
+};
+
+/**
+ * What `GET /v1/notice` answers for custom UIs (G6): the notice bar now, or null — also null on a page it is hidden on
+ * when the page's `path` is given.
+ * @param {FeatureValues} values
+ * @param {number} now
+ * @param {unknown} path
+ * @returns {{ text: string, linkText: string, linkUrl: string | null, dismissible: boolean } | null}
+ */
+export const noticeAnswer = (values, now, path) => {
+	const notice = noticeOf(values, now);
+	if (notice === null) return null;
+	if (typeof path === 'string' && notice.hideOnPages.some((pattern) => pathMatches(pattern, path))) return null;
+	return { text: notice.text, linkText: notice.linkText, linkUrl: notice.linkUrl, dismissible: notice.dismissible };
 };
 
 /**

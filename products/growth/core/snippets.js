@@ -107,6 +107,12 @@ export const createSnippets = ({ base, widgets, permissions }) => {
 		"  -H 'Content-Type: application/json' \\",
 		`  -d '${JSON.stringify({ urls: ['https://shop.example.com/products/new-phone'] })}'`,
 	].join('\n');
+	const notice = [
+		'// your own notice bar: the notice while it shows, else null ({ text, linkText, linkUrl, dismissible })',
+		`const notice = await fetch('${base}/v1/notice?path=' + encodeURIComponent(location.pathname), {`,
+		"  headers: { authorization: 'Bearer YOUR_BROWSER_TOKEN' },",
+		'}).then((response) => response.json());',
+	].join('\n');
 	const seo = [
 		`curl -X POST '${base}/v1/seo/checks' \\`,
 		'  -H "Authorization: Bearer $SS_SERVER_TOKEN" \\',
@@ -125,5 +131,5 @@ export const createSnippets = ({ base, widgets, permissions }) => {
 		`curl '${base}/v1/events/count?type=purchase' -H "Authorization: Bearer $SS_SERVER_TOKEN"`,
 		`curl '${base}/v1/events/counts?by=type' -H "Authorization: Bearer $SS_SERVER_TOKEN"`,
 	].join('\n');
-	return { pageScript, consent, page, events, admin, ticketNode, ticketCurl, robots, indexNow, seo, analytics };
+	return { pageScript, consent, page, events, admin, ticketNode, ticketCurl, robots, indexNow, seo, analytics, notice };
 };

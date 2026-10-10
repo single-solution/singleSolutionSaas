@@ -10,6 +10,7 @@
  */
 import { actorOf, countHandlers, defineRoute, formatText, ok, paginate, problem } from '@ss/app-kit';
 import { buildReport, rangeOf } from '../core/analytics.js';
+import { noticeAnswer } from '../core/config.js';
 import { COLLECT_FEATURES, EVENT_FEATURES, checkBatch, countryOf, dayOf, expiryOf, mergeTotals } from '../core/events.js';
 import {
 	checksActivity,
@@ -34,6 +35,11 @@ import { WIDGET_SCRIPT } from './widget-script.js';
 const COLLECT_LIMITS = [
 	{ limit: 3000, windowSeconds: 60, per: /** @type {const} */ ('website') },
 	{ limit: 120, windowSeconds: 60, per: /** @type {const} */ ('visitor') },
+];
+/** Rate limits of the notice read of custom UIs (code constants protecting our hosting). */
+const NOTICE_LIMITS = [
+	{ limit: 3000, windowSeconds: 60, per: /** @type {const} */ ('website') },
+	{ limit: 60, windowSeconds: 60, per: /** @type {const} */ ('visitor') },
 ];
 /** Rate limits of the on-request work that reads other sites (SEO checklist, IndexNow). */
 const WEB_LIMITS = [{ limit: 10, windowSeconds: 3600, per: /** @type {const} */ ('website') }];
@@ -209,6 +215,19 @@ export const createRoutes = (product) => {
 				});
 				return ok({ accepted: kept.length }, { status: 202 });
 			},
+		}),
+
+		// ------------------------------------------------------------------- the notice bar for custom UIs (G6)
+		defineRoute({
+			method: 'GET',
+			path: '/v1/notice',
+			auth: 'browser',
+			feature: 'notice_bar',
+			database: false,
+			rateLimit: NOTICE_LIMITS,
+			// `{ text, linkText, linkUrl, dismissible }` while the dates say so, else null; `?path=` leaves out pages it hides on
+			handler: async (ctx) =>
+				ok(noticeAnswer({ notice_bar: await product.settings.values(ctx.websiteId, 'notice_bar') }, now(), ctx.query.path)),
 		}),
 
 		// --------------------------------------------------------------------------- analytics (server, ticket)

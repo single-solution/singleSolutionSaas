@@ -426,6 +426,26 @@ describe('store-conversion options with the real page script (PLAN 0.8.10 G1–G
 			{ type: 'search', path: '/search', term: 'cables', results: 0 },
 		]);
 	});
+
+	it('G6: the notice bar closes for the page only and stays off the pages it hides on', async () => {
+		window.history.replaceState(null, '', '/shop');
+		serve({
+			[`GET ${CONFIG_PATH}`]: () =>
+				answer(200, configOf(['notice_bar'], { notice_bar: { text: 'Sale', dismissFor: 'page', hideOnPages: ['/'] } })),
+		});
+		await startWidget({ window, script: script('t') }).ready;
+		inside(hostOf('notice_bar'), 'button').click();
+		expect(hostOf('notice_bar')).toBeNull();
+		expect(window.sessionStorage.getItem(NOTICE_STORAGE_KEY)).toBeNull();
+		// the next page shows it again
+		await startWidget({ window, script: script('t') }).ready;
+		expect(inside(hostOf('notice_bar'), '.notice span').textContent).toBe('Sale');
+		document.body.replaceChildren();
+		// the home page hides it
+		window.history.replaceState(null, '', '/');
+		await startWidget({ window, script: script('t') }).ready;
+		expect(hostOf('notice_bar')).toBeNull();
+	});
 });
 
 describe('page facts', () => {

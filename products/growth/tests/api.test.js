@@ -211,7 +211,29 @@ describe('the widget config', () => {
 			linkUrl: '/deals',
 			linkText: 'See deals',
 			dismissible: true,
+			dismissFor: 'visit',
+			hideOnPages: [],
 		});
+	});
+
+	it('answers the notice to custom UIs, with the browser and the server token (G6)', async () => {
+		await env.setting('notice_bar', 'hideOnPages', ['/', '/checkout/**', 'not-a-path']);
+		await env.setting('notice_bar', 'dismissFor', 'page');
+		const read = async (/** @type {string} */ query, /** @type {any} */ init) =>
+			(await env.call('GET', `/v1/notice${query}`, init)).json();
+		const notice = { text: 'Free delivery this week', linkText: 'See deals', linkUrl: '/deals', dismissible: true };
+		expect(await read('', { token: env.browser, origin: ORIGIN })).toEqual(notice);
+		expect(await read('?path=/shop/phones', { token: env.server })).toEqual(notice);
+		expect(await read('?path=/', { token: env.browser, origin: ORIGIN })).toBeNull();
+		expect(await read('?path=/checkout/pay', { token: env.server })).toBeNull();
+		const settings = (await (await env.call('GET', '/v1/widget/config', { token: env.browser, origin: ORIGIN })).json())
+			.settings;
+		expect(settings.notice).toMatchObject({ dismissFor: 'page', hideOnPages: ['/', '/checkout/**'] });
+		await env.setting('notice_bar', 'endsAt', '2026-10-01T00:00:00Z');
+		expect(await read('', { token: env.server })).toBeNull();
+		await env.setting('notice_bar', 'endsAt', '');
+		await env.setting('notice_bar', 'hideOnPages', []);
+		await env.setting('notice_bar', 'dismissFor', 'visit');
 	});
 });
 

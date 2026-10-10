@@ -1,7 +1,8 @@
 /**
  * The notice bar (visitor widget `notice_bar`; PLAN 0.8.9): the merchant's text and optional link, shown while the
- * dates of its settings say so (the server checks them when the page loads). A visitor who closes it does not see the
- * same text again during the visit (sessionStorage).
+ * dates of its settings say so (the server checks them when the page loads), not on the pages it is hidden on. A
+ * visitor who closes it does not see the same text again during the visit (sessionStorage), or, with `dismissFor`
+ * `page`, until they open another page (PLAN 0.8.10 G6).
  * @module
  */
 import { mountWidget } from '@ss/app-kit/widget';
@@ -17,7 +18,7 @@ export const NOTICE_STORAGE_KEY = 'ss-growth-notice-closed';
  */
 export const mountNoticeBar = ({ host, config, visits }) => {
 	const notice = config.settings.notice;
-	if (!notice || visits.getItem(NOTICE_STORAGE_KEY) === notice.text) return false;
+	if (!notice || (notice.dismissFor === 'visit' && visits.getItem(NOTICE_STORAGE_KEY) === notice.text)) return false;
 	/** @param {string} key */
 	const t = (key) => config.texts[key] ?? key;
 	const mounted = mountWidget({
@@ -34,7 +35,7 @@ export const mountNoticeBar = ({ host, config, visits }) => {
 				const close = element(doc, 'button', { type: 'button', 'aria-label': t('notice.close') }, '×');
 				close.addEventListener('click', () => {
 					try {
-						visits.setItem(NOTICE_STORAGE_KEY, notice.text);
+						if (notice.dismissFor === 'visit') visits.setItem(NOTICE_STORAGE_KEY, notice.text);
 					} catch {
 						// closed for this page only
 					}

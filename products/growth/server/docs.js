@@ -115,6 +115,7 @@ ${para(guide.checklist)}
 ${block(snippets.seo)}
 <h2>Notice bar</h2>
 ${para(guide.notice)}
+${block(snippets.notice)}
 <h2>Features</h2>
 ${featureSections.join('\n')}
 <h2>Admin widgets and tickets</h2>

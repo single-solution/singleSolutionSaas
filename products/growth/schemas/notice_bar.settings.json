@@ -39,8 +39,25 @@
 		"dismissible": {
 			"type": "boolean",
 			"title": "Visitors can close it",
-			"description": "A closed bar stays closed for the rest of the visit.",
+			"description": "Shows a close button; how long a closed bar stays closed is set below.",
 			"default": true
+		},
+		"dismissFor": {
+			"type": "string",
+			"title": "A closed bar stays closed",
+			"description": "visit: for the rest of the visit. page: until the visitor opens another page.",
+			"default": "visit",
+			"enum": ["visit", "page"]
+		},
+		"hideOnPages": {
+			"type": "array",
+			"title": "Hide on pages",
+			"description": "Path patterns where the bar is not shown: an exact path (/ is the home page), * = one segment, ** = any (for example /checkout/**). At most 50.",
+			"default": [],
+			"items": {
+				"type": "string",
+				"maxLength": 200
+			}
 		}
 	}
 }

@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { buildReport, dayStart, daysOf, lastDays, rangeOf } from '../core/analytics.js';
-import { linkOf, noticeOf, searchParamsOf, tagsOf, tagsReady, widgetSettings } from '../core/config.js';
+import {
+	hiddenPagesOf,
+	linkOf,
+	noticeAnswer,
+	noticeOf,
+	pathMatches,
+	searchParamsOf,
+	tagsOf,
+	tagsReady,
+	widgetSettings,
+} from '../core/config.js';
 import { consentMode, granted, makeChoice, readChoice, tagChoice } from '../core/consent.js';
 import { checkBatch, checkEvent, countryOf, dayOf, expiryOf, mergeTotals, pathOf, ratingOf, textOf } from '../core/events.js';
 import { decimalsOf, isAmount, toMajor } from '../core/money.js';
@@ -221,7 +231,28 @@ describe('page script settings', () => {
 			linkUrl: null,
 			linkText: '',
 			dismissible: false,
+			dismissFor: 'visit',
+			hideOnPages: [],
 		});
+		// G6: closed per page, hidden on pages; the answer of GET /v1/notice
+		const hidden = { text: 'Hi', dismissFor: 'page', hideOnPages: ['/', ' /checkout/** ', 'x', 7] };
+		expect(at(hidden)).toMatchObject({ dismissFor: 'page', hideOnPages: ['/', '/checkout/**'] });
+		expect(hiddenPagesOf(Array.from({ length: 60 }, (_, i) => `/p${i}`))).toHaveLength(50);
+		expect(noticeAnswer({ notice_bar: hidden }, NOW, '/checkout/pay')).toBeNull();
+		expect(noticeAnswer({ notice_bar: hidden }, NOW, '/shop')).toEqual({
+			text: 'Hi',
+			linkText: '',
+			linkUrl: null,
+			dismissible: true,
+		});
+		expect(noticeAnswer({ notice_bar: { text: '' } }, NOW, '/')).toBeNull();
+		expect(pathMatches('/', '/')).toBe(true);
+		expect(pathMatches('/', '/shop')).toBe(false);
+		expect(pathMatches('/shop/*', '/shop/phones?x=1')).toBe(true);
+		expect(pathMatches('/shop/*', '/shop/phones/blue')).toBe(false);
+		expect(pathMatches('/**', '/anything/at/all')).toBe(true);
+		expect(pathMatches('/a/**/z', '/a/b/c/z')).toBe(true);
+		expect(pathMatches('shop', '/shop')).toBe(false);
 		expect(
 			at({ text: 'Hi', linkUrl: 'https://x.example/a', startsAt: '2026-10-01T00:00:00Z', endsAt: '2026-11-01T00:00:00Z' }),
 		).toMatchObject({ linkUrl: 'https://x.example/a' });
@@ -471,6 +502,7 @@ describe('snippets', () => {
 		expect(snippets.admin).toContain('data-ss-growth="analytics_dashboard"');
 		expect(snippets.admin).not.toContain('consent_banner');
 		expect(snippets.ticketNode).toContain('["analytics.read"]');
+		expect(snippets.notice).toContain('https://growth.example.dev/v1/notice?path=');
 		expect(snippets.analytics).toContain('/v1/events/counts?by=type');
 	});
 });

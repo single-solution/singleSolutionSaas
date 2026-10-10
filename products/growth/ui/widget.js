@@ -13,6 +13,7 @@
  */
 import { viewerOf } from '@ss/app-kit/widget';
 import { granted } from '../core/consent.js';
+import { pathMatches } from '../core/config.js';
 import { contactOf, detailOf, funnelEvent, searchOf } from '../core/pixels.js';
 import { BROWSER_EVENTS, SITE_EVENTS, WIDGET_ATTRIBUTE, WIDGET_FEATURES, WIDGET_GLOBAL } from '../core/widgets.js';
 import { mountAnalyticsDashboard } from './analytics-dashboard.js';
@@ -164,7 +165,12 @@ export const startWidget = ({ window: win, script }) => {
 		if (on(config, 'consent_banner') && config.settings.consent.banner)
 			banner = mountConsentBanner({ host: hostFor('consent_banner', 'end'), config, consent });
 		const notice = config.settings.notice;
-		if (on(config, 'notice_bar') && notice && visits.getItem(NOTICE_STORAGE_KEY) !== notice.text)
+		if (
+			on(config, 'notice_bar') &&
+			notice &&
+			!notice.hideOnPages.some((pattern) => pathMatches(pattern, path())) &&
+			(notice.dismissFor === 'page' || visits.getItem(NOTICE_STORAGE_KEY) !== notice.text)
+		)
 			mountNoticeBar({ host: hostFor('notice_bar', 'start'), config, visits });
 
 		if (record.visits) collector.record(() => pageView({ window: win, visits, now }));

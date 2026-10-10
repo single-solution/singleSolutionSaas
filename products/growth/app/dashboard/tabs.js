@@ -834,6 +834,7 @@ function DevelopersTab({ websiteId, portal }) {
 						<CodeBlock code={snippets.robots} />
 						<CodeBlock code={snippets.indexNow} />
 						<CodeBlock code={snippets.seo} />
+						<CodeBlock code={snippets.notice} />
 					</Section>
 					<Section title={TEXTS.developers.widgets} description={TEXTS.developers.widgetsHelp}>
 						<CodeBlock code={snippets.admin} />
