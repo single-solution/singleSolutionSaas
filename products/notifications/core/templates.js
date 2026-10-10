@@ -86,6 +86,16 @@ export const placeholdersOf = (text) => [
 ];
 
 /**
+ * Every value name a text uses, in order of first use: its placeholders and the names of its optional sections (the
+ * template editors ask for a sample of each to preview the words).
+ * @param {string} text
+ * @returns {string[]}
+ */
+export const valueNamesOf = (text) => [
+	...new Set([...text.matchAll(/\{\??([A-Za-z][A-Za-z0-9_]{0,63})\}/g)].map((match) => /** @type {string} */ (match[1]))),
+];
+
+/**
  * What is wrong with the optional sections of a text, or null: every `{?name}` is closed by a later `{/name}`,
  * sections nest without crossing, and a section never sits inside one of the same name.
  * @param {string} text

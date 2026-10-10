@@ -271,6 +271,78 @@ describe('admin widgets', () => {
 		expect(statusOf(host)).toBe(strings['log.failed']);
 	});
 
+	it('the delivery log counts by status, finds a recipient and opens a message to every attempt', async () => {
+		const host = place('delivery_log');
+		/** @type {URL[]} */
+		const counted = [];
+		/** @type {URL[]} */
+		const listed = [];
+		const message = {
+			id: 'msg_1',
+			template: 'accounts.code',
+			source: 'api',
+			channel: 'whatsapp',
+			to: '+923001234567',
+			status: 'sent',
+			reason: null,
+			subject: '',
+			text: '482913 is your code.',
+			attempts: [
+				{ channel: 'whatsapp', provider: 'meta', at: '2026-10-01T10:00:00.000Z', outcome: 'failed', error: 'HTTP 503' },
+				{ channel: 'whatsapp', provider: 'meta', at: '2026-10-01T10:05:00.000Z', outcome: 'sent' },
+			],
+			dueAt: '2026-10-01T10:05:00.000Z',
+			sentAt: '2026-10-01T10:05:00.000Z',
+			createdAt: '2026-10-01T10:00:00.000Z',
+		};
+		await startAdmin({
+			'GET /v1/admin/messages/counts': (init, url) => {
+				counted.push(url);
+				return url.searchParams.get('to') === 'nobody'
+					? answer(500)
+					: answer(200, { total: 3, groups: { sent: 2, failed: 1 } });
+			},
+			'GET /v1/admin/messages': (init, url) => {
+				listed.push(url);
+				return answer(200, { items: [message], nextCursor: null, hasMore: false });
+			},
+		});
+		const [status] = /** @type {HTMLSelectElement[]} */ ([...(host.shadowRoot?.querySelectorAll('select') ?? [])]);
+		const options = () => [...(status?.querySelectorAll('option') ?? [])].map((option) => option.textContent);
+		expect(options()).toEqual(['All (3)', 'Waiting (0)', 'Retrying (0)', 'Sent (2)', 'Failed (1)', 'Not sent (0)']);
+		expect(inside(host, '.count').textContent).toBe('3 messages');
+		expect(counted[0]?.searchParams.get('by')).toBe('status');
+		/** @type {HTMLSelectElement} */ (status).value = 'failed';
+		status?.dispatchEvent(new window.Event('change'));
+		await flush();
+		expect(inside(host, '.count').textContent).toBe('1 messages');
+		expect(counted.at(-1)?.searchParams.has('status')).toBe(false);
+		const to = /** @type {HTMLInputElement} */ (inside(host, 'input[type="search"]'));
+		to.value = ' +923001234567 ';
+		to.dispatchEvent(new window.Event('change'));
+		await flush();
+		expect(listed.at(-1)?.searchParams.get('to')).toBe('+923001234567');
+		expect(counted.at(-1)?.searchParams.get('to')).toBe('+923001234567');
+		const details = inside(host, 'details');
+		expect(details.querySelector('summary').textContent).toContain('+923001234567 · accounts.code');
+		const shown = [...details.querySelectorAll('dt')].map((dt, i) => [
+			dt.textContent,
+			details.querySelectorAll('dd')[i].textContent,
+		]);
+		expect(shown).toEqual([
+			[strings['log.text'], '482913 is your code.'],
+			[strings['log.source'], strings['log.source.api']],
+			[strings['log.sentAt'], expect.any(String)],
+			[strings['log.attemptList'], expect.stringContaining('WhatsApp · meta · failed · HTTP 503\n')],
+			[strings['log.id'], 'msg_1'],
+		]);
+		// counts that cannot be read leave the badges as they were and no total
+		to.value = 'nobody';
+		to.dispatchEvent(new window.Event('change'));
+		await flush();
+		expect(inside(host, '.count').textContent).toBe('');
+	});
+
 	it('the delivery log shows times with the website’s Format and business time zone', async () => {
 		const host = place('delivery_log');
 		const message = {
@@ -426,6 +498,92 @@ describe('admin widgets', () => {
 		expect(saved[1].buttons).toEqual([]);
 		button(host, strings['templates.new']).click();
 		expect(rowFields()).toHaveLength(0);
+	});
+
+	it('the template editor previews the words with samples and sends the saved template as a test', async () => {
+		const host = place('template_editor');
+		/** @type {any[]} */
+		const sends = [];
+		const items = [
+			{
+				key: 'ecommerce.order_status',
+				channel: 'email',
+				language: 'default',
+				subject: 'Order {order}',
+				text: 'Order {order} is {status}.{?reason} Reason: {reason}{/reason} {unsubscribeUrl}',
+				required: false,
+				urgent: false,
+				providerTemplate: '',
+			},
+		];
+		await startAdmin({
+			'GET /v1/admin/templates': () => answer(200, { items }),
+			'POST /v1/admin/messages': (init) => {
+				sends.push(JSON.parse(String(init?.body)));
+				return sends.length === 1
+					? answer(201, { status: 'sent' })
+					: answer(422, { detail: 'There is no email template x.' });
+			},
+		});
+		/** @type {HTMLButtonElement} */ (inside(host, 'li button')).click();
+		const samples = () =>
+			/** @type {HTMLInputElement[]} */ ([...(host.shadowRoot?.querySelectorAll('input[data-name]') ?? [])]);
+		expect(samples().map((input) => input.dataset.name)).toEqual(['order', 'status', 'reason']);
+		const preview = () => inside(host, '.preview').textContent;
+		expect(preview()).toBe(`Order {order}Order {order} is {status}. ${strings['templates.sampleUnsubscribe']}`);
+		const [order, status, reason] = samples();
+		for (const [input, value] of /** @type {const} */ ([
+			[order, 'IM-2026-0044'],
+			[status, 'cancelled'],
+			[reason, 'Out of stock'],
+		])) {
+			/** @type {HTMLInputElement} */ (input).value = value;
+			input?.dispatchEvent(new window.Event('input'));
+		}
+		expect(preview()).toBe(
+			`Order IM-2026-0044Order IM-2026-0044 is cancelled. Reason: Out of stock ${strings['templates.sampleUnsubscribe']}`,
+		);
+		// the samples stay while the words change
+		const text = /** @type {HTMLTextAreaElement} */ (inside(host, 'textarea'));
+		text.value = 'Order {order}: {status}';
+		text.dispatchEvent(new window.Event('input'));
+		expect(samples().map((input) => input.value)).toEqual(['IM-2026-0044', 'cancelled']);
+		const to = /** @type {HTMLInputElement} */ (
+			[...(host.shadowRoot?.querySelectorAll('input') ?? [])].find((input) => input.getAttribute('autocomplete') === 'off')
+		);
+		to.value = 'me@shop.example.com';
+		button(host, strings['templates.testSend']).click();
+		await flush();
+		expect(sends[0]).toEqual({
+			channel: 'email',
+			to: 'me@shop.example.com',
+			template: 'ecommerce.order_status',
+			language: 'default',
+			values: { order: 'IM-2026-0044', status: 'cancelled' },
+		});
+		expect(statusOf(host)).toBe('Test: Sent');
+		button(host, strings['templates.testSend']).click();
+		await flush();
+		expect(statusOf(host)).toBe('The test was not sent: There is no email template x.');
+		// push templates have no test send; a WhatsApp template at Meta previews its buttons
+		const channel = /** @type {HTMLSelectElement} */ (host.shadowRoot?.querySelectorAll('select')[0]);
+		channel.value = 'push';
+		channel.dispatchEvent(new window.Event('change'));
+		expect(to.parentElement?.hidden).toBe(true);
+		channel.value = 'whatsapp';
+		channel.dispatchEvent(new window.Event('change'));
+		const name = /** @type {HTMLInputElement} */ (
+			[...(host.shadowRoot?.querySelectorAll('input') ?? [])].find((input) => input.getAttribute('maxlength') === '512')
+		);
+		name.value = 'order_update';
+		name.dispatchEvent(new window.Event('input'));
+		button(host, strings['templates.addButton']).click();
+		const value = /** @type {HTMLInputElement} */ (inside(host, '.buttons .row input[maxlength="2000"]'));
+		value.value = 'orders/{order}';
+		value.dispatchEvent(new window.Event('input', { bubbles: true }));
+		expect(preview()).toContain('Button 0 (Copy code): orders/IM-2026-0044');
+		button(host, strings['templates.removeButton']).click();
+		expect(preview()).not.toContain('Button 0');
 	});
 
 	it('the template editor says when the list cannot be loaded', async () => {

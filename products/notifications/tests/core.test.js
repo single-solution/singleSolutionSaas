@@ -22,6 +22,7 @@ import {
 	renderTemplate,
 	sectionProblem,
 	templateView,
+	valueNamesOf,
 } from '../core/templates.js';
 import {
 	RETRY_PLANS,
@@ -234,6 +235,11 @@ describe('templates', () => {
 		);
 		expect(fillText(text, { order: 'IM-1', status: 'shipped', tracking: '  ', courier: 'TCS' })).toBe('Order IM-1 is shipped.');
 		expect(fillText('{?a}A{/a}-{?a}again{/a}', { a: 'x' })).toBe('A-again');
+		expect(valueNamesOf('{?tracking}Track {tracking} with {courier}{/tracking} {order} {1x}')).toEqual([
+			'tracking',
+			'courier',
+			'order',
+		]);
 		expect(fillText('{?reason}\nReason: {reason}{/reason}', {})).toBe('');
 		expect(sectionProblem('{?a}x{/a} and {?b}{?c}y{/c}{/b}')).toBeNull();
 		expect(sectionProblem('{?a}x')).toBe('Close {?a} with {/a}.');

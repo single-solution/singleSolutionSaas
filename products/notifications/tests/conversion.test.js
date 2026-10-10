@@ -3,7 +3,7 @@
  * the long retry plan, the template routes for the merchant's server and webhook URLs per event.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { setup } from './helpers.js';
+import { ADMIN_ORIGIN, setup } from './helpers.js';
 
 /** @type {Awaited<ReturnType<typeof setup>>} */
 let env;
@@ -286,5 +286,46 @@ describe('webhook URLs per event (N5)', () => {
 		expect((await env.dashboard(cookie, 'PUT', list(), { value: [] })).status).toBe(200);
 		await env.switchOn(['whatsapp', 'email', 'sms', 'webhooks', 'send_api']);
 		expect((await env.dashboard(merchant, 'PUT', list(), { value: [{ url: `${HOOKS}/all` }] })).status).toBe(200);
+	});
+});
+
+describe('a test send of a saved template from the template editor (tickets)', () => {
+	it('sends the template with sample values to the member of staff, logged as a staff message', async () => {
+		const ticket = await env.ticket(['messages.send', 'templates.edit']);
+		/** @param {unknown} body */
+		const post = async (body) => {
+			const response = await env.call('POST', '/v1/admin/messages', { token: ticket, origin: ADMIN_ORIGIN, body });
+			return { status: response.status, json: await response.json() };
+		};
+		const sent = await post({
+			channel: 'whatsapp',
+			to: '+92 300 1234567',
+			template: 'accounts.code',
+			language: 'default',
+			values: { code: '111222' },
+		});
+		expect(sent).toMatchObject({ status: 201, json: { status: 'sent', source: 'staff', template: 'accounts.code' } });
+		expect(lastMeta().template.components[1]).toEqual({
+			type: 'button',
+			sub_type: 'url',
+			index: '0',
+			parameters: [{ type: 'text', text: '111222' }],
+		});
+		const activity = await (await env.call('GET', '/v1/activity?action=message.sent', { token: env.server })).json();
+		expect(activity.items[0]).toMatchObject({
+			actor: { kind: 'staff', id: 'u_1', name: 'Sam Staff' },
+			detail: 'Template accounts.code by WhatsApp: sent',
+		});
+		for (const [body, path] of /** @type {const} */ ([
+			[{ channel: 'whatsapp', to: '+923001234567', template: 'Bad Key' }, '/template'],
+			[{ channel: 'whatsapp', to: '+923001234567', template: 'accounts.code', values: { 'a b': 1 } }, '/values'],
+			[{ channel: 'whatsapp', to: '+923001234567', template: 'accounts.code', language: 'Klingon!' }, '/language'],
+		])) {
+			const refused = await post(body);
+			expect(refused.status).toBe(422);
+			expect(refused.json.errors[0].path).toBe(path);
+		}
+		const missing = await post({ channel: 'email', to: 'me@shop.example.com', template: 'nothing.here' });
+		expect(missing.json.type).toMatch(/template_not_found$/);
 	});
 });

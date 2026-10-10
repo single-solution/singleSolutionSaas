@@ -516,22 +516,48 @@ export const createRoutes = (product) => {
 						'to',
 						channel === 'email' ? 'Enter an e-mail address.' : 'Enter a phone number with its country code.',
 					);
-				const text = typeof body.text === 'string' ? body.text.trim() : '';
-				const subject = typeof body.subject === 'string' ? body.subject.trim() : '';
-				if (text.length === 0 || text.length > 4096) return invalid('text', 'Write the message (at most 4096 characters).');
-				if (channel === 'email' && (subject.length === 0 || subject.length > 200 || /[\r\n]/.test(subject)))
-					return invalid('subject', 'Write the subject (one line, at most 200 characters).');
-				const s = await siteOf(ctx);
-				const result = await sending.accept(s, {
-					channel,
-					template: null,
-					content: { subject: channel === 'email' ? subject : '', text },
-					to: { email, phone, subscriberId: null, staffId: null, language: null, timeZone: null },
-					values: {},
-					language: null,
-					sendAt: null,
-					source: 'staff',
-				});
+				const to = { email, phone, subscriberId: null, staffId: null, language: null, timeZone: null };
+				// a saved template with sample values (the template editor's test send), else the words typed now
+				const template = body.template;
+				/** @type {Awaited<ReturnType<typeof sending.accept>>} */
+				let result;
+				if (template !== undefined) {
+					if (typeof template !== 'string' || !/^[a-z][a-z0-9_.-]{0,63}$/.test(template))
+						return invalid('template', 'Name the template key.');
+					const values = checkValues(body.values);
+					if (!values.ok)
+						return invalid('values', 'values must map up to 50 names to text or numbers (at most 1000 characters).');
+					const language = body.language === undefined ? null : languageOfSegment(body.language);
+					if (body.language !== undefined && language === null)
+						return invalid('language', 'Use a language code such as en, ur or pt-BR.');
+					result = await sending.accept(await siteOf(ctx), {
+						channel,
+						template,
+						content: null,
+						to: { ...to, language: language || null },
+						values: values.value,
+						language: language || null,
+						sendAt: null,
+						source: 'staff',
+					});
+				} else {
+					const text = typeof body.text === 'string' ? body.text.trim() : '';
+					const subject = typeof body.subject === 'string' ? body.subject.trim() : '';
+					if (text.length === 0 || text.length > 4096)
+						return invalid('text', 'Write the message (at most 4096 characters).');
+					if (channel === 'email' && (subject.length === 0 || subject.length > 200 || /[\r\n]/.test(subject)))
+						return invalid('subject', 'Write the subject (one line, at most 200 characters).');
+					result = await sending.accept(await siteOf(ctx), {
+						channel,
+						template: null,
+						content: { subject: channel === 'email' ? subject : '', text },
+						to,
+						values: {},
+						language: null,
+						sendAt: null,
+						source: 'staff',
+					});
+				}
 				if (!result.ok) return result.problem;
 				await product.activity.record(
 					{ websiteId: ctx.websiteId, merchantId: ctx.merchantId, after: ctx.after },
@@ -540,7 +566,10 @@ export const createRoutes = (product) => {
 						action: 'message.sent',
 						target: result.message.id,
 						label: result.message.id,
-						detail: `One-off ${CHANNEL_NAMES[channel]} message: ${result.message.status}`,
+						detail:
+							template === undefined
+								? `One-off ${CHANNEL_NAMES[channel]} message: ${result.message.status}`
+								: `Template ${template} by ${CHANNEL_NAMES[channel]}: ${result.message.status}`,
 					},
 				);
 				return created(messageView(result.message));

@@ -1,11 +1,14 @@
 /**
  * The admin widget `template_editor` (permission `templates.edit`): the merchant's staff write the templates per
  * template key, channel and language in their own admin. Picking a template from the list loads it into the form. A
- * WhatsApp template at Meta lists the buttons that take a value (PLAN 0.8.10 N1).
+ * WhatsApp template at Meta lists the buttons that take a value (PLAN 0.8.10 N1). A live preview fills the words with
+ * samples typed for each value, and a member of staff who may send messages sends the saved template to themselves as
+ * a test with those samples.
  * @module
  */
 import { formatText, mountWidget } from '@ss/app-kit/widget';
 import { CHANNELS } from '../core/channels.js';
+import { fillText, valueNamesOf } from '../core/templates.js';
 import { element } from './dom.js';
 import { WIDGET_CSS } from './styles.js';
 import { adminCall } from './tickets.js';
@@ -88,6 +91,7 @@ export const mountTemplateEditor = ({ host, api, config }) => {
 					buttonFields = buttonFields.filter((entry) => entry !== fields);
 					row.remove();
 					addButton.toggleAttribute('disabled', false);
+					renderPreview();
 				});
 				for (const part of [index, type, value]) {
 					const cell = element(doc, 'div');
@@ -109,6 +113,77 @@ export const mountTemplateEditor = ({ host, api, config }) => {
 			});
 			channel.input.addEventListener('change', showButtons);
 			providerTemplate.input.addEventListener('input', showButtons);
+			// the preview: a sample per value the words use, and the words as a recipient gets them
+			/** @type {Map<string, string>} */
+			const samples = new Map();
+			const sampleFields = element(doc, 'div', { class: 'row' });
+			const previewOut = element(doc, 'div', { class: 'preview', 'aria-live': 'polite' });
+			const previewBox = element(doc, 'div');
+			previewBox.append(element(doc, 'label', {}, t('templates.preview')), sampleFields, previewOut);
+			/** The buttons as typed (a WhatsApp template at Meta only). */
+			const typedButtons = () =>
+				atMeta()
+					? buttonFields.map((entry) => ({ index: entry.index.value, type: entry.type.value, value: entry.value.value }))
+					: [];
+			const titled = () => ['email', 'push', 'staff_push'].includes(channel.input.value);
+			/** The samples typed for the values the words use now (a value without one stays as written). */
+			const sampleValues = () =>
+				Object.fromEntries(
+					[...sampleFields.querySelectorAll('input')]
+						.map((input) => [input.dataset.name ?? '', samples.get(input.dataset.name ?? '') ?? ''])
+						.filter(([, value]) => value !== ''),
+				);
+			const renderPreview = () => {
+				const names = valueNamesOf(
+					[titled() ? subject.input.value : '', text.input.value, ...typedButtons().map((button) => button.value)].join(
+						'\n',
+					),
+				).filter((name) => name !== 'unsubscribeUrl');
+				const shown = [...sampleFields.querySelectorAll('input')].map((input) => input.dataset.name);
+				if (shown.join('|') !== names.join('|'))
+					sampleFields.replaceChildren(
+						...names.map((name) => {
+							const sample = field('input', name, { 'data-name': name, maxlength: '1000' });
+							sample.input.value = samples.get(name) ?? '';
+							sample.input.addEventListener('input', () => {
+								samples.set(name, sample.input.value);
+								renderPreview();
+							});
+							const cell = element(doc, 'div');
+							cell.append(sample.label, sample.input);
+							return cell;
+						}),
+					);
+				const values = { ...sampleValues(), unsubscribeUrl: t('templates.sampleUnsubscribe') };
+				previewOut.replaceChildren(
+					...(titled() ? [element(doc, 'strong', {}, fillText(subject.input.value, values))] : []),
+					element(doc, 'p', {}, fillText(text.input.value, values)),
+					...typedButtons().map((button) =>
+						element(
+							doc,
+							'p',
+							{ class: 'meta' },
+							formatText(t('templates.previewButton'), {
+								index: button.index,
+								type: t(`templates.buttonType.${button.type}`),
+								value: fillText(button.value, values),
+							}),
+						),
+					),
+				);
+			};
+			// a test send of the saved template, with the samples
+			const testTo = field('input', t('templates.testTo'), { maxlength: '254', autocomplete: 'off' });
+			const testSend = element(doc, 'button', { type: 'button', class: 'secondary' }, t('templates.testSend'));
+			const testBox = element(doc, 'div');
+			testBox.append(element(doc, 'p', { class: 'meta' }, t('templates.testHelp')), testTo.label, testTo.input, testSend);
+			const showTest = () => testBox.toggleAttribute('hidden', !['email', 'sms', 'whatsapp'].includes(channel.input.value));
+			for (const input of [subject.input, text.input, providerTemplate.input]) input.addEventListener('input', renderPreview);
+			channel.input.addEventListener('change', () => {
+				renderPreview();
+				showTest();
+			});
+			rows.addEventListener('input', renderPreview);
 			const save = element(doc, 'button', { type: 'submit' }, t('templates.save'));
 			const remove = element(doc, 'button', { type: 'button', class: 'secondary' }, t('templates.delete'));
 			const fresh = element(doc, 'button', { type: 'button', class: 'secondary' }, t('templates.new'));
@@ -134,9 +209,11 @@ export const mountTemplateEditor = ({ host, api, config }) => {
 				providerTemplate.label,
 				providerTemplate.input,
 				buttonsBox,
+				previewBox,
 				save,
 				remove,
 				fresh,
+				testBox,
 				note,
 			);
 			root.append(form);
@@ -156,6 +233,8 @@ export const mountTemplateEditor = ({ host, api, config }) => {
 				addButton.toggleAttribute('disabled', false);
 				for (const button of view.buttons ?? []) addRow(button);
 				showButtons();
+				showTest();
+				renderPreview();
 			};
 
 			const load = async () => {
@@ -225,6 +304,18 @@ export const mountTemplateEditor = ({ host, api, config }) => {
 				}
 			});
 			fresh.addEventListener('click', () => fill({}));
+			testSend.addEventListener('click', async () => {
+				const answer = await adminCall(api, 'POST', '/v1/admin/messages', {
+					channel: channel.input.value,
+					to: testTo.input.value.trim(),
+					template: key.input.value.trim(),
+					language: language.input.value.trim() || 'default',
+					values: sampleValues(),
+				});
+				note.textContent = answer.ok
+					? formatText(t('templates.testDone'), { status: t(`status.${answer.data.status}`) })
+					: formatText(t('templates.testFailed'), { reason: answer.data?.detail ?? '' });
+			});
 			fill({});
 			void load();
 			return undefined;

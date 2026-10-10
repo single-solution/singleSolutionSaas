@@ -23,4 +23,10 @@ button[disabled] { opacity: 0.6; cursor: default; }
 ul { list-style: none; margin: 0; padding: 0; }
 li { padding: 8px 0; border-top: 1px solid var(--ss-color-border, #e5e7eb); overflow-wrap: anywhere; }
 .meta { display: block; font-size: 0.8em; opacity: 0.7; }
+.preview { margin-top: 8px; padding: 8px; border: 1px dashed var(--ss-color-border, #d1d5db);
+  border-radius: var(--ss-radius, 8px); white-space: pre-wrap; overflow-wrap: anywhere; }
+.preview p { margin: 4px 0 0; }
+.count { margin: 8px 0 0; font-size: 0.85em; opacity: 0.8; }
+details > summary { cursor: pointer; }
+dl { margin: 8px 0 0; font-size: 0.85em; } dt { font-weight: 600; margin-top: 4px; } dd { margin: 0; white-space: pre-wrap; }
 `;
