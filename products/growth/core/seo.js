@@ -26,12 +26,30 @@ const DESCRIPTION_LENGTH = Object.freeze({ min: 50, max: 160 });
 
 // ------------------------------------------------------------------------------------------------- robots and tags
 
-/** The verification meta tags: setting → tag name. */
+/** The verification meta tags: setting → tag name (Yandex: PLAN 0.8.10 G4). */
 const VERIFICATION_TAGS = Object.freeze({
 	googleVerification: 'google-site-verification',
 	bingVerification: 'msvalidate.01',
 	metaVerification: 'facebook-domain-verification',
+	yandexVerification: 'yandex-verification',
 });
+
+/**
+ * Crawlers that only collect AI training data (PLAN 0.8.10 G4: the list is kept in code). Search engines and AI
+ * answer bots that cite pages (Googlebot, Bingbot, OAI-SearchBot, ChatGPT-User, PerplexityBot, Claude-SearchBot) are
+ * not on it.
+ */
+export const AI_TRAINING_CRAWLERS = Object.freeze([
+	'GPTBot',
+	'Google-Extended',
+	'CCBot',
+	'ClaudeBot',
+	'anthropic-ai',
+	'Applebot-Extended',
+	'Bytespider',
+	'meta-externalagent',
+	'cohere-training-data-crawler',
+]);
 
 /**
  * A verification token from what the merchant pasted: the token itself, or the `content` of a pasted meta tag.
@@ -74,8 +92,9 @@ export const siteUrlOf = (value, domain) => {
 };
 
 /**
- * The robots.txt the merchant's site serves: their rules (control characters removed) and a `Sitemap:` line per
- * sitemap URL on the website's domain.
+ * The robots.txt the merchant's site serves: their rules (control characters removed), with `blockAiCrawlers` a group
+ * that keeps the AI training crawlers off the whole site (G4), and a `Sitemap:` line per sitemap URL on the website's
+ * domain.
  * @param {Record<string, unknown>} values the `robots_verification` settings
  * @param {string} domain
  */
@@ -91,7 +110,11 @@ export const robotsTxtOf = (values, domain) => {
 		.filter((url) => url !== null)
 		.slice(0, 50);
 	while (lines.length > 0 && lines[lines.length - 1] === '') lines.pop();
-	return `${[...lines, ...(sitemaps.length > 0 ? ['', ...sitemaps.map((url) => `Sitemap: ${url}`)] : [])].join('\n')}\n`;
+	const blocked =
+		values.blockAiCrawlers === true
+			? [...(lines.length > 0 ? [''] : []), ...AI_TRAINING_CRAWLERS.map((name) => `User-agent: ${name}`), 'Disallow: /']
+			: [];
+	return `${[...lines, ...blocked, ...(sitemaps.length > 0 ? ['', ...sitemaps.map((url) => `Sitemap: ${url}`)] : [])].join('\n')}\n`;
 };
 
 /** @param {unknown} value */

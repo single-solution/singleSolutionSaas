@@ -72,7 +72,7 @@
 	"seo.check.sitemap.title": "A sitemap is reachable",
 	"seo.check.sitemap.fix": "Publish a sitemap (Ecommerce serves one) and list it in robots.txt with a Sitemap line (the sitemaps of robots and verification), then submit it in Search Console and Bing Webmaster Tools.",
 	"seo.check.verification.title": "Search engine verification",
-	"seo.check.verification.fix": "Add your site in Google Search Console and Bing Webmaster Tools, choose the HTML tag method, paste the tag's content into the robots and verification settings and include Growth's verification tags in your page head.",
+	"seo.check.verification.fix": "Add your site in Google Search Console, Bing Webmaster Tools or Yandex Webmaster, choose the HTML tag method, paste the tag's content into the robots and verification settings and include Growth's verification tags in your page head.",
 	"seo.check.reachable.title": "The page opens",
 	"seo.check.reachable.fix": "The page answered {status}. Make sure it exists, answers 200 and does not send visitors to another site.",
 	"seo.check.noindex.title": "The page can be indexed",

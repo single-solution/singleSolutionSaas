@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { AI_TRAINING_CRAWLERS } from '../core/seo.js';
 import { ADMIN_ORIGIN, ALL, BASE, DOMAIN, ORIGIN, setup } from './helpers.js';
 
 /** @type {Awaited<ReturnType<typeof setup>>} */
@@ -227,6 +228,29 @@ describe('robots and verification', () => {
 			tags: [{ name: 'google-site-verification', content: 'tok-1' }],
 			html: '<meta name="google-site-verification" content="tok-1">',
 		});
+	});
+
+	it('blocks the AI training crawlers and adds the Yandex tag when the merchant asks (G4)', async () => {
+		await env.setting('robots_verification', 'blockAiCrawlers', true);
+		await env.setting('robots_verification', 'yandexVerification', 'ya-123');
+		const robots = await (await env.call('GET', '/v1/robots.txt', { token: env.server })).text();
+		expect(robots).toBe(
+			[
+				'User-agent: *',
+				'Disallow: /admin',
+				'',
+				...AI_TRAINING_CRAWLERS.map((name) => `User-agent: ${name}`),
+				'Disallow: /',
+				'',
+				`Sitemap: ${ORIGIN}/sitemap.xml`,
+				'',
+			].join('\n'),
+		);
+		expect(robots).toContain('User-agent: GPTBot\nUser-agent: Google-Extended');
+		const tags = await (await env.call('GET', '/v1/verification', { token: env.server })).json();
+		expect(tags.tags).toContainEqual({ name: 'yandex-verification', content: 'ya-123' });
+		await env.setting('robots_verification', 'robotsRules', '');
+		expect(await (await env.call('GET', '/v1/robots.txt', { token: env.server })).text()).toMatch(/^User-agent: GPTBot\n/);
 	});
 });
 
