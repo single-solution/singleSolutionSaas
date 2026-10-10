@@ -21,6 +21,12 @@
 				"maxLength": 500
 			},
 			"description": "For languages written in Latin letters: one line per language, for example `tl: po salamat ako`."
+		},
+		"strict": {
+			"type": "boolean",
+			"title": "Strict check",
+			"default": false,
+			"description": "A reply must also match the visitor’s language by its share of marker words."
 		}
 	}
 }

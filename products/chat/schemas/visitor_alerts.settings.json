@@ -1,0 +1,14 @@
+{
+	"type": "object",
+	"additionalProperties": false,
+	"properties": {
+		"awaySeconds": {
+			"type": "integer",
+			"title": "Away for (seconds)",
+			"default": 60,
+			"minimum": 0,
+			"maximum": 3600,
+			"description": "A staff reply alerts the visitor (WhatsApp to their phone, else e-mail) when they have not checked the chat for this long; once until they check again."
+		}
+	}
+}

@@ -23,6 +23,8 @@ export const STATUSES = Object.freeze(/** @type {const} */ (['open', 'awaiting_v
  * @property {string | null} staffId
  * @property {string | null} name staff name (or the bot name for AI replies)
  * @property {string} text
+ * @property {'text' | 'markdown'} [format] how the text is written (C2: AI and staff messages are markdown; missing =
+ *   text)
  * @property {boolean} internal an internal note
  * @property {string[]} [buttons] a flow question's buttons
  * @property {Attachment | null} attachment
@@ -56,8 +58,16 @@ export const STATUSES = Object.freeze(/** @type {const} */ (['open', 'awaiting_v
  * @property {Date | null} firstStaffReplyAt
  * @property {number} aiReplies
  * @property {Date | null} handedOffAt
- * @property {PageContext | null} page
+ * @property {PageContext | null} page the page the chat started on
+ * @property {PageContext | null} [currentPage] the page of the visitor's latest message (C14)
  * @property {string} device
+ * @property {Date | null} [visitorCheckedAt] the visitor's widget last read the conversation (C6)
+ * @property {Date | null} [visitorAlertedAt] a reply alert went to the visitor (C6)
+ * @property {{ kind: string, id: string, name: string } | null} [aiPausedBy] who paused the AI (C11)
+ * @property {Date | null} [aiPausedAt]
+ * @property {string | null} [aiPausedReason]
+ * @property {string | null} [note] the single note (C11, notes mode `single`)
+ * @property {boolean} [pendingHandoff] the AI answers the message that asked for a person first (C4)
  * @property {Record<string, string | number | boolean>} fields custom field values and flow answers
  * @property {{ id: string, step: number } | null} flow the running flow
  * @property {string[]} flowsRun
@@ -170,6 +180,7 @@ export const visitorMessageView = (m, urlOf, { cards = false } = {}) => ({
 	author: m.author,
 	name: m.author === 'visitor' ? null : m.name,
 	text: m.text,
+	format: m.format === 'markdown' ? 'markdown' : 'text',
 	...(m.buttons && m.buttons.length > 0 ? { buttons: m.buttons } : {}),
 	...(m.attachment
 		? { attachment: { name: m.attachment.name, type: m.attachment.type, size: m.attachment.size, url: urlOf(m.attachment) } }

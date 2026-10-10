@@ -2,16 +2,19 @@
  * The inbox (PLAN 0.8.3 Inbox, staff and assignment): admin widget routes with a ticket (`/v1/admin/*`, the staff
  * member is the ticket's user) and the same work for the merchant's server with the server token (`/v1/*`, acting for
  * the member of staff its `SS-Actor-*` headers name, else as the team, PLAN 0.8.10 K2). Filters, search, counts,
- * unread counts, replies and attachments, internal notes, status, AI pause, assignment with presence and max chats,
- * custom field values, the AI summary, transcripts, rating requests, saved replies and the staff list. Staff actions
- * are written to the activity log with a label (the visitor's name, a title) and a short detail, never message
- * contents.
+ * unread counts, replies (markdown, PLAN 0.8.10 C2) and attachments (staff types up to 100 MB, C12), internal notes
+ * (a timeline, or one note per conversation, C11), status, AI pause (with who, when and why; by reply or manage
+ * rights as the inbox setting says, C11), assignment with presence and max chats (and the first replier, C11),
+ * custom field values, the AI summary, transcripts, rating requests, delete, saved replies and the staff list. Older
+ * messages page by sequence (C8). Guest chats can stay hidden until handed to a person (C11). A staff reply alerts a
+ * visitor who left (C6). Staff actions are written to the activity log with a label (the visitor's name, a title) and
+ * a short detail, never message contents.
  * @module
  */
 import { actorOf as kitActorOf, countHandlers, created, noContent, paginate, problem } from '@ss/app-kit';
 import { STATUSES, messageText, statusAfter } from '../core/conversation.js';
 import { checkFieldValue } from '../core/fields.js';
-import { checkUpload, presign } from './visitor.js';
+import { checkUpload, pagingOf, presign } from './visitor.js';
 import { PRESENCE_MS, bodyOf, invalid } from './service.js';
 
 /** @typedef {import('./service.js').Site} Site */
@@ -20,6 +23,11 @@ import { PRESENCE_MS, bodyOf, invalid } from './service.js';
 
 const PRESENCES = Object.freeze(['online', 'away', 'offline']);
 const MAX_SAVED_REPLIES = 200;
+/** The longest single note (C11) and pause reason. */
+const NOTE_MAX = 4000;
+const REASON_MAX = 200;
+/** An Accounts user id in a list filter. */
+const USER_ID = /^[A-Za-z0-9_.:@-]{1,64}$/;
 
 /** The merchant's server when no member of staff is named: the team. */
 const TEAM = Object.freeze({ kind: 'server', id: 'server', name: 'Team' });
@@ -76,17 +84,36 @@ export const createInbox = (product, service, reply) => {
 	 * @param {any} ctx
 	 * @param {Site} s
 	 */
-	const whereOf = (ctx, s) => {
+	const whereOf = async (ctx, s) => {
 		/** @type {Record<string, unknown>} */
-		const filter = {};
+		const filter = await shown(s);
 		if (STATUSES.includes(ctx.query.status)) filter.status = ctx.query.status;
 		if (ctx.query.waiting === '1') filter.waiting = true;
 		if (ctx.query.visitor === 'guest' || ctx.query.visitor === 'user') filter['visitor.kind'] = ctx.query.visitor;
 		if (s.on.includes('assignment') && ctx.query.assigned === 'unassigned') filter.assignedTo = null;
 		if (s.on.includes('assignment') && ctx.query.assigned === 'me') filter.assignedTo = actorOf(ctx).id;
+		if (s.on.includes('assignment') && typeof ctx.query.assignee === 'string' && USER_ID.test(ctx.query.assignee))
+			filter.assignedTo = ctx.query.assignee;
+		if (ctx.query.unread === '1') filter.unreadStaff = { $gt: 0 };
+		// one customer's conversations: an Accounts user id (C11)
+		if (typeof ctx.query.userId === 'string' && USER_ID.test(ctx.query.userId)) {
+			filter['visitor.kind'] = 'user';
+			filter['visitor.id'] = ctx.query.userId;
+		}
 		const q = typeof ctx.query.q === 'string' && ctx.query.q.trim() ? ctx.query.q.trim().slice(0, 100) : null;
 		return s.store.conversations.where({ filter, q });
 	};
+
+	/**
+	 * The conversations the inbox shows: with the inbox setting `guests` = `escalated`, guest chats only once handed to
+	 * a person (C11).
+	 * @param {Site} s
+	 * @returns {Promise<Record<string, unknown>>}
+	 */
+	const shown = async (s) =>
+		(await s.values('inbox')).guests === 'escalated'
+			? { $or: [{ 'visitor.kind': 'user' }, { handedOffAt: { $ne: null } }] }
+			: {};
 
 	/** @param {any} ctx */
 	const list = async (ctx) => {
@@ -100,7 +127,7 @@ export const createInbox = (product, service, reply) => {
 		const staff = new Map((await s.store.staff.list()).map((m) => [m.id, m.name]));
 		const items = await Promise.all(rows.map((c) => service.inboxView(s, c, { staff })));
 		const answer = page.page(items, (c) => [/** @type {string} */ (c.lastMessageAt), c.id]);
-		return { ...answer, unread: await s.store.conversations.unread() };
+		return { ...answer, unread: (await s.store.conversations.unread(await shown(s))).total };
 	};
 
 	/**
@@ -123,13 +150,15 @@ export const createInbox = (product, service, reply) => {
 	/** @param {any} ctx */
 	const get = async (ctx) => {
 		const { s, c } = await found(ctx);
-		const after = /^\d{1,9}$/.test(String(ctx.query.after ?? '')) ? Number(ctx.query.after) : null;
-		const messages = await s.store.messages.list(c.id, {
-			after,
-			limit: after === null ? 100 : 200,
-			internal: s.on.includes('internal_notes'),
-		});
-		return { conversation: await service.inboxView(s, c, { full: true }), messages: await service.staffMessages(s, messages) };
+		const paging = pagingOf(ctx.query, { latest: 100, newer: 200 });
+		const internal = s.on.includes('internal_notes');
+		const messages = await s.store.messages.list(c.id, { ...paging, internal });
+		const first = messages[0];
+		return {
+			conversation: await service.inboxView(s, c, { full: true }),
+			messages: await service.staffMessages(s, messages),
+			...(paging.after === null ? { earlier: first ? await s.store.messages.earlier(c.id, first.seq, internal) : false } : {}),
+		};
 	};
 
 	/** @param {any} ctx */
@@ -149,16 +178,26 @@ export const createInbox = (product, service, reply) => {
 			needs(s, 'attachments');
 			const a = bodyOf(body.attachment);
 			if (typeof a.key !== 'string' || !a.key.startsWith('chat/staff/')) throw invalid(['Upload the file first.']);
-			attachment = checkUpload(a, await s.values('attachments'));
+			attachment = checkUpload(a, await s.values('attachments'), 'staff');
 		}
-		const text = messageText(body.text, { allowEmpty: attachment !== null });
-		if (text === null) throw invalid(['Write a reply (up to 4000 characters).']);
+		const typed = messageText(body.text, { allowEmpty: attachment !== null });
+		if (typed === null) throw invalid(['Write a reply (up to 4000 characters).']);
+		const text = await reply.linksOf(s, typed);
+		// the first member of staff who replies takes an unassigned chat (C11)
+		const takes =
+			s.on.includes('assignment') &&
+			c.assignedTo === null &&
+			actor.kind !== TEAM.kind &&
+			(await s.values('assignment')).autoAssign === 'first_replier';
+		if (takes) await s.store.staff.checkIn(/** @type {any} */ (actor));
+		const assign = takes && (await hasRoom(s, actor.id)) ? { assignedTo: actor.id } : {};
 		const { message, conversation } = await service.append(
 			s,
 			c,
-			{ author: 'staff', text, name: actor.name, staffId: actor.id, attachment },
+			{ author: 'staff', text, name: actor.name, staffId: actor.id, attachment, format: 'markdown' },
 			{
 				set: {
+					...assign,
 					status: statusAfter(c.status, 'staff'),
 					waiting: false,
 					waitingSince: null,
@@ -175,13 +214,71 @@ export const createInbox = (product, service, reply) => {
 			label: conversationLabel(conversation),
 			detail: attachment ? 'Reply with an attachment' : 'Reply',
 		});
+		if (assign.assignedTo)
+			await service.log(s, actor, 'conversation.assigned', conversation.id, {
+				label: conversationLabel(conversation),
+				detail: `Assigned to ${actor.name} (first reply)`,
+			});
+		await service.visitorAlert(s, conversation, { staff: actor.name, text: text || attachment?.name || '' });
 		const [view] = await service.staffMessages(s, [message]);
 		return created({ message: view });
+	};
+
+	/** Notes are one note per conversation (C11). @param {Site} s */
+	const singleNotes = async (s) => (await s.values('internal_notes')).mode === 'single';
+
+	/**
+	 * `PUT …/note` `{ text }`: the single note (notes mode `single`, C11); '' clears it.
+	 * @param {any} ctx
+	 */
+	const setNote = async (ctx) => {
+		const { s, c, actor } = await found(ctx);
+		if (!(await singleNotes(s))) throw problem('conflict', 'Notes are a timeline here: add a note instead.');
+		const raw = bodyOf(ctx.body).text;
+		if (typeof raw !== 'string' || [...raw.trim()].length > NOTE_MAX)
+			throw invalid([`Write the note (up to ${NOTE_MAX} characters).`]);
+		const text = raw.trim();
+		const updated = /** @type {ConversationRecord} */ (
+			await s.store.conversations.update(c.id, { set: { note: text || null } })
+		);
+		await service.log(s, actor, 'conversation.note_changed', c.id, {
+			label: conversationLabel(c),
+			detail: text ? 'Note saved' : 'Note cleared',
+		});
+		return { conversation: await service.inboxView(s, updated, { full: true }) };
+	};
+
+	/**
+	 * `PUT …/ai` `{ paused, reason? }`: pause or resume the AI in a conversation, keeping who, when and why (C11). It
+	 * needs reply rights, or manage rights when the inbox setting `pauseNeeds` says so.
+	 * @param {any} ctx
+	 */
+	const setAi = async (ctx) => {
+		const { s, c, actor } = await found(ctx);
+		if (ctx.ticket && (await s.values('inbox')).pauseNeeds !== 'reply' && !ctx.ticket.permissions.includes('inbox.manage'))
+			throw problem('forbidden', 'Pausing the AI needs the inbox.manage permission here.');
+		const body = bodyOf(ctx.body);
+		if (typeof body.paused !== 'boolean') throw invalid(['paused is true or false.']);
+		if (
+			body.reason !== undefined &&
+			body.reason !== null &&
+			(typeof body.reason !== 'string' || body.reason.length > REASON_MAX)
+		)
+			throw invalid([`The reason is up to ${REASON_MAX} characters.`]);
+		const updated = /** @type {ConversationRecord} */ (
+			await s.store.conversations.update(c.id, { set: pauseSet(actor, body.paused, body.reason, new Date(now())) })
+		);
+		await service.log(s, actor, 'conversation.ai_paused_changed', c.id, {
+			label: conversationLabel(updated),
+			detail: body.paused ? 'AI paused' : 'AI resumed',
+		});
+		return { conversation: await service.inboxView(s, updated, { full: true }) };
 	};
 
 	/** @param {any} ctx */
 	const note = async (ctx) => {
 		const { s, c, actor } = await found(ctx);
+		if (await singleNotes(s)) throw problem('conflict', 'Notes are one note here: save the note instead.');
 		const text = messageText(bodyOf(ctx.body).text);
 		if (text === null) throw invalid(['Write the note (up to 4000 characters).']);
 		const { message } = await service.append(s, c, {
@@ -234,7 +331,8 @@ export const createInbox = (product, service, reply) => {
 		}
 		if (body.aiPaused !== undefined) {
 			if (typeof body.aiPaused !== 'boolean') throw invalid(['aiPaused is true or false.']);
-			set.aiPaused = body.aiPaused;
+			const reason = typeof body.aiPausedReason === 'string' ? body.aiPausedReason.slice(0, REASON_MAX) : null;
+			Object.assign(set, pauseSet(actor, body.aiPaused, reason, new Date(now())));
 			actions.push({ action: 'conversation.ai_paused_changed', detail: body.aiPaused ? 'AI paused' : 'AI resumed' });
 		}
 		if (body.assignedTo !== undefined) {
@@ -315,11 +413,19 @@ export const createInbox = (product, service, reply) => {
 	/** @param {any} ctx */
 	const upload = async (ctx) => {
 		const s = await service.site(ctx);
-		return presign(product, s, 'chat/staff', ctx.body, await s.values('attachments'));
+		return presign(product, s, 'chat/staff', ctx.body, await s.values('attachments'), 'staff');
 	};
 
-	/** @param {any} ctx */
-	const unread = async (ctx) => ({ unread: await (await service.site(ctx)).store.conversations.unread() });
+	/**
+	 * The unread badge: unread visitor messages, the conversations they are in, and the open conversations (C11).
+	 * @param {any} ctx
+	 */
+	const unread = async (ctx) => {
+		const s = await service.site(ctx);
+		const where = await shown(s);
+		const found = await s.store.conversations.unread(where);
+		return { unread: found.total, conversations: found.conversations, open: await s.store.conversations.open(where) };
+	};
 
 	// ------------------------------------------------------------------------------------------------ staff
 
@@ -445,6 +551,8 @@ export const createInbox = (product, service, reply) => {
 		read,
 		reply: replyTo,
 		note,
+		setNote,
+		setAi,
 		update,
 		remove,
 		summary,
@@ -463,6 +571,20 @@ export const createInbox = (product, service, reply) => {
 		lead,
 	});
 };
+
+/**
+ * The conversation fields of a pause or resume: who, when and why (C11); a resume clears them.
+ * @param {Actor} actor
+ * @param {boolean} paused
+ * @param {unknown} reason
+ * @param {Date} at
+ */
+const pauseSet = (actor, paused, reason, at) => ({
+	aiPaused: paused,
+	aiPausedBy: paused ? { kind: actor.kind, id: actor.id, name: actor.name } : null,
+	aiPausedAt: paused ? at : null,
+	aiPausedReason: paused && typeof reason === 'string' && reason.trim() ? reason.trim() : null,
+});
 
 /**
  * Delete conversations with their messages, attachments and guest records (the API and data rights).

@@ -26,6 +26,9 @@ export const SIGN_IN_HEADER = 'ss-sign-in';
 /** A guest's device key (the kit's CORS headers allow it). */
 export const GUEST_HEADER = 'ss-guest';
 
+/** What a guest key may be: 16–128 characters of `A–Z a–z 0–9 - _`, so a store's own guest cookie works once imported (C7). */
+export const GUEST_KEY = /^[A-Za-z0-9_-]{16,128}$/;
+
 /** Where the widget keeps the guest key (with its expiry) on the visitor's device. */
 export const GUEST_STORAGE_KEY = 'ss-chat-guest';
 
@@ -68,13 +71,53 @@ export const MAX_MESSAGE_LENGTH = 4000;
 /** File types attachments may ever have (the setting picks among them); never SVG, HTML or executables. */
 export const ATTACHMENT_TYPES = Object.freeze(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf']);
 
-/** The hard cap of an attachment, whatever the setting. */
+/** The hard cap of a visitor attachment, whatever the setting. */
 export const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 
-/** The Notifications templates Chat sends (e-mail) and the values each one gets (`business` is always added). */
+/** File types staff may also send (C12): Word, Excel and plain text, offered as downloads only. */
+export const STAFF_ONLY_TYPES = Object.freeze([
+	'application/msword',
+	'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+	'application/vnd.ms-excel',
+	'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+	'text/plain',
+]);
+
+/** Every file type staff may ever send (the setting picks among them). */
+export const STAFF_TYPES = Object.freeze([...ATTACHMENT_TYPES, ...STAFF_ONLY_TYPES]);
+
+/** The hard cap of a staff attachment, whatever the setting (C12). */
+export const MAX_STAFF_ATTACHMENT_BYTES = 100 * 1024 * 1024;
+
+/** The file name extension of each attachment type. */
+export const EXTENSIONS = Object.freeze({
+	'image/jpeg': 'jpg',
+	'image/png': 'png',
+	'image/webp': 'webp',
+	'image/gif': 'gif',
+	'application/pdf': 'pdf',
+	'application/msword': 'doc',
+	'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+	'application/vnd.ms-excel': 'xls',
+	'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+	'text/plain': 'txt',
+});
+
+/** How long a send with `?wait=1` waits for the AI reply (C10). */
+export const WAIT_MS = 20_000;
+
+/** Most messages one page of older messages holds (C8). */
+export const PAGE_MAX = 50;
+
+/**
+ * The Notifications templates Chat sends and the values each one gets (`business` is always added). Staff alerts go
+ * by e-mail, WhatsApp or SMS through the kit's staff alerts (K6); the transcript by e-mail; the reply alert (C6) by
+ * WhatsApp to the visitor's phone, else by e-mail.
+ */
 export const MESSAGE_TEMPLATES = Object.freeze({
-	'chat.new_message': Object.freeze(['visitor', 'preview', 'link', 'conversationId', 'business']),
-	'chat.needs_you': Object.freeze(['visitor', 'preview', 'link', 'conversationId', 'business']),
+	'chat.staff_new_message': Object.freeze(['visitor', 'preview', 'link', 'conversationId', 'business']),
+	'chat.staff_needs_you': Object.freeze(['visitor', 'preview', 'link', 'conversationId', 'business']),
+	'chat.staff_cost_alert': Object.freeze(['used', 'cap', 'percent', 'business']),
 	'chat.transcript': Object.freeze(['transcript', 'date', 'business']),
-	'chat.cost_alert': Object.freeze(['used', 'cap', 'percent', 'business']),
+	'chat.staff_reply': Object.freeze(['name', 'staff', 'preview', 'link', 'business']),
 });

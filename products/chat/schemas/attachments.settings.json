@@ -24,6 +24,34 @@
 			"default": 5,
 			"minimum": 1,
 			"maximum": 10
+		},
+		"staffTypes": {
+			"type": "array",
+			"title": "Types staff may send",
+			"default": ["image/jpeg", "image/png", "image/webp", "image/gif", "application/pdf"],
+			"items": {
+				"type": "string",
+				"enum": [
+					"image/jpeg",
+					"image/png",
+					"image/webp",
+					"image/gif",
+					"application/pdf",
+					"application/msword",
+					"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+					"application/vnd.ms-excel",
+					"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+					"text/plain"
+				]
+			},
+			"description": "Word, Excel and text files are offered as downloads only."
+		},
+		"staffMaxSizeMb": {
+			"type": "integer",
+			"title": "Largest staff file (MB)",
+			"default": 10,
+			"minimum": 1,
+			"maximum": 100
 		}
 	}
 }

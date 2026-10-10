@@ -57,10 +57,19 @@
 		{
 			"key": "ai_instructions",
 			"name": "AI instructions",
-			"description": "Your own instructions for the AI (up to 12,000 characters), on top of the built-in neutral ones.",
+			"description": "Your own instructions for the AI (up to 32,000 characters), on top of the built-in neutral ones.",
 			"dependsOn": ["ai_replies"],
 			"settings": {
 				"$ref": "schemas/ai_instructions.settings.json"
+			}
+		},
+		{
+			"key": "fallback_answers",
+			"name": "Fallback answers",
+			"description": "Your own answers, filled with live shop data, when the AI fails, reaches a cap or its answer is refused.",
+			"dependsOn": ["ai_replies"],
+			"settings": {
+				"$ref": "schemas/fallback_answers.settings.json"
 			}
 		},
 		{
@@ -187,6 +196,15 @@
 			"dependsOn": ["shop_search"],
 			"settings": {
 				"$ref": "schemas/product_cards.settings.json"
+			}
+		},
+		{
+			"key": "shop_context",
+			"name": "Store context",
+			"description": "Each AI reply also gets your store’s policies, newest products, deals and the product the visitor is viewing, with the pasted Ecommerce token.",
+			"dependsOn": ["ai_replies"],
+			"settings": {
+				"$ref": "schemas/shop_context.settings.json"
 			}
 		},
 		{
@@ -345,10 +363,19 @@
 		{
 			"key": "staff_alerts",
 			"name": "Staff alerts",
-			"description": "E-mails your staff about new messages and handoffs, through Notifications.",
+			"description": "Alerts your staff by e-mail, WhatsApp or SMS about new messages and handoffs, through Notifications.",
 			"dependsOn": ["inbox"],
 			"settings": {
 				"$ref": "schemas/staff_alerts.settings.json"
+			}
+		},
+		{
+			"key": "visitor_alerts",
+			"name": "Reply alerts to visitors",
+			"description": "A visitor who left the chat gets a WhatsApp or an e-mail when your staff reply, through Notifications.",
+			"dependsOn": ["inbox"],
+			"settings": {
+				"$ref": "schemas/visitor_alerts.settings.json"
 			}
 		},
 		{

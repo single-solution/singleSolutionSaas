@@ -1,5 +1,13 @@
 {
 	"type": "object",
 	"additionalProperties": false,
-	"properties": {}
+	"properties": {
+		"mode": {
+			"type": "string",
+			"title": "Notes",
+			"default": "timeline",
+			"enum": ["timeline", "single"],
+			"description": "timeline: notes between the messages. single: one editable note per chat (up to 4,000 characters)."
+		}
+	}
 }

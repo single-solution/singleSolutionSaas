@@ -8,7 +8,7 @@
 import { problem } from '@ss/app-kit';
 import { reportRange, summarise } from '../core/reports.js';
 import { dayStart } from '../core/time.js';
-import { MAX_ATTACHMENT_BYTES } from '../core/widgets.js';
+import { uploadRules } from './visitor.js';
 import { LISTS } from '../adapters/lists.js';
 import { createStore } from '../adapters/store.js';
 import { deleteConversations } from './inbox.js';
@@ -182,6 +182,9 @@ export const createAdmin = (product, service) => {
 		const leads = await values('leads_flows');
 		const attachments = await values('attachments');
 		const ratings = await values('ratings');
+		const ai = await values('ai_replies');
+		const idle = await values('proactive_idle');
+		const receipts = await values('typing_receipts');
 		const flows = on.includes('leads_flows') ? await product.lists.get(websiteId, 'flows') : [];
 		return {
 			look: {
@@ -192,23 +195,43 @@ export const createAdmin = (product, service) => {
 				windowStyle: look.windowStyle,
 				fullScreenOnMobile: look.fullScreenOnMobile,
 				hideOnPages: look.hideOnPages,
+				showTimes: look.showTimes,
+				showPaused: look.showPaused,
 			},
 			guests: { messageLimit: guests.messageLimit, rememberDays: guests.rememberDays, contactCapture: guests.contactCapture },
 			signInUrl: on.includes('signed_in_chat') ? (await values('signed_in_chat')).signInUrl : '',
-			ai: { showLabel: (await values('ai_replies')).showAiLabel },
+			// "never disclose" hides the AI label (C1)
+			ai: { showLabel: ai.showAiLabel === true && ai.neverDisclose !== true },
+			handoff: { showButton: (await values('handoff')).showButton },
+			receipts: { typing: receipts.showTyping, seen: receipts.showSeen },
 			proactive: {
-				idleMinutes: (await values('proactive_idle')).idleMinutes,
+				idleMinutes: idle.idleMinutes,
 				dismissDays: look.proactiveDismissDays,
 				pageRules: on.includes('proactive_pages') ? await product.lists.get(websiteId, 'page_rules') : [],
+				messages: {
+					product: idle.messageProduct,
+					category: idle.messageCategory,
+					deals: idle.messageDeals,
+					cart: idle.messageCart,
+				},
+				oncePer: idle.oncePer,
+				hideOnMobile: idle.hideOnMobile,
 			},
 			flows: flows.filter((f) => f.start.kind === 'page').map((f) => ({ id: f.id, name: f.name, start: f.start })),
 			leads: { fields: leads.leadFields, customFields: leads.customLeadFields, consentText: leads.consentText },
 			customFields: on.includes('custom_fields') ? await product.lists.get(websiteId, 'custom_fields') : [],
 			attachments: {
 				visitors: attachments.visitorUploads,
-				types: attachments.allowedTypes,
-				maxBytes: Math.min(Number(attachments.maxSizeMb) * 1024 * 1024, MAX_ATTACHMENT_BYTES),
+				types: uploadRules(attachments, 'visitor').types,
+				maxBytes: uploadRules(attachments, 'visitor').max,
+				staffTypes: uploadRules(attachments, 'staff').types,
+				staffMaxBytes: uploadRules(attachments, 'staff').max,
 				storage: on.includes('attachments') && (await product.connections.storage(websiteId)) !== null,
+			},
+			inbox: {
+				notes: (await values('internal_notes')).mode,
+				pauseNeeds: (await values('inbox')).pauseNeeds,
+				guests: (await values('inbox')).guests,
 			},
 			ratings: { scale: Number(ratings.scale), askWhen: ratings.askWhen, comment: ratings.askComment },
 			queuePosition: (await values('presence_queue')).queuePosition,

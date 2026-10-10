@@ -8,6 +8,7 @@
  *   replaces the whole answer (never a partial burst).
  * - **Link policy**: markdown links keep their label when the target is not allowed; bare disallowed URLs are removed.
  * - **Blocked terms** (the merchant's own list in any language): masked or rejected.
+ * - **The website's own contact** (PLAN 0.8.10 C15, always): the business.json e-mail and phone are never redacted.
  *
  * Without the Moderation feature, AI answers still go through the credential check (never switchable).
  * @module
@@ -57,14 +58,25 @@ export const ibanValid = (raw) => {
 	return remainder === 1;
 };
 
+/** A phone's last 9 digits, so national and international forms of one number match. @param {string} value */
+const phoneTail = (value) => value.replace(/\D/g, '').slice(-9);
+
 /**
- * Redact the selected PII kinds.
+ * The website's own contact, kept by redaction (C15).
+ * @typedef {{ email?: string | null, phone?: string | null }} OwnContact
+ */
+
+/**
+ * Redact the selected PII kinds; the website's own e-mail and phone stay.
  * @param {string} text
  * @param {readonly string[]} kinds
  * @param {Record<string, string>} labels replacement per kind (from the string catalog)
+ * @param {OwnContact} [own] the business.json contact, never redacted
  * @returns {{ text: string, found: Record<string, number> }}
  */
-export const redact = (text, kinds, labels) => {
+export const redact = (text, kinds, labels, own = {}) => {
+	const ownEmail = typeof own.email === 'string' ? own.email.trim().toLowerCase() : '';
+	const ownPhone = typeof own.phone === 'string' && phoneTail(own.phone).length === 9 ? phoneTail(own.phone) : '';
 	let out = String(text ?? '');
 	/** @type {Record<string, number>} */
 	const found = {};
@@ -76,11 +88,13 @@ export const redact = (text, kinds, labels) => {
 	// order matters: cards and IBANs before phones (long digit runs)
 	if (want.has('card')) out = out.replace(CARD_CANDIDATE, (match) => (luhn(match.replace(/\D/g, '')) ? hit('card') : match));
 	if (want.has('iban')) out = out.replace(IBAN_CANDIDATE, (match) => (ibanValid(match) ? hit('iban') : match));
-	if (want.has('email')) out = out.replace(EMAIL, () => hit('email'));
+	if (want.has('email'))
+		out = out.replace(EMAIL, (match) => (ownEmail !== '' && match.toLowerCase() === ownEmail ? match : hit('email')));
 	if (want.has('ip')) out = out.replace(IPV4, () => hit('ip'));
 	if (want.has('phone'))
 		out = out.replace(PHONE_CANDIDATE, (match) => {
 			const digits = match.replace(/\D/g, '');
+			if (ownPhone !== '' && phoneTail(digits) === ownPhone) return match;
 			return digits.length >= 8 && digits.length <= 15 && !/^\d{4}[-/.]\d{2}[-/.]\d{2}$/.test(match.trim())
 				? hit('phone')
 				: match;
@@ -136,7 +150,7 @@ const hostIn = (host, hosts) => hosts.some((h) => host === h || host.endsWith(`.
  * @param {string} target
  * @param {LinkPolicy} policy
  */
-const linkAllowed = (target, policy) => {
+export const linkAllowed = (target, policy) => {
 	const value = target.trim();
 	if (policy.mode === 'none') return false;
 	if (value.startsWith('/') && !value.startsWith('//')) return true;
@@ -152,7 +166,8 @@ const linkAllowed = (target, policy) => {
 	if (policy.mode === 'any') return true;
 	const host = url.hostname.toLowerCase();
 	const hosts = [...(policy.hosts ?? [])].map((h) => h.toLowerCase());
-	if (policy.mode === 'website' && policy.websiteDomain) hosts.push(policy.websiteDomain.toLowerCase());
+	// the website's own links are always in the allow-list too (PLAN 0.8.10 C2)
+	if (policy.websiteDomain) hosts.push(policy.websiteDomain.toLowerCase());
 	return hostIn(host, hosts);
 };
 
@@ -230,17 +245,18 @@ const applyBlockedTerms = (text, terms, action) => {
  */
 
 /**
- * A visitor message before it is stored: blocked terms, then personal data hidden.
+ * A visitor message before it is stored: blocked terms, then personal data hidden (the website's own contact stays).
  * @param {string} text
  * @param {ModerationConfig | null} config null = moderation off
  * @param {Record<string, string>} labels
+ * @param {OwnContact} [own]
  * @returns {{ ok: true, text: string } | { ok: false }}
  */
-export const moderateInbound = (text, config, labels) => {
+export const moderateInbound = (text, config, labels, own = {}) => {
 	if (!config) return { ok: true, text };
 	const terms = applyBlockedTerms(text, config.blockedTerms, config.blockedAction);
 	if (!terms.ok) return { ok: false };
-	return { ok: true, text: redact(terms.text, config.redact, labels).text };
+	return { ok: true, text: redact(terms.text, config.redact, labels, own).text };
 };
 
 /**
@@ -248,12 +264,13 @@ export const moderateInbound = (text, config, labels) => {
  * merchant's phrases with moderation on). A failed check drops the whole answer.
  * @param {string} text
  * @param {ModerationConfig | null} config
- * @param {{ labels: Record<string, string>, websiteDomain: string }} context
+ * @param {{ labels: Record<string, string>, websiteDomain: string, own?: OwnContact }} context `own`: the website's own
+ *   contact, never redacted
  * @returns {{ ok: boolean, text: string }}
  */
-export const moderateOutbound = (text, config, { labels, websiteDomain }) => {
+export const moderateOutbound = (text, config, { labels, websiteDomain, own = {} }) => {
 	if (!config) return { ok: leakCheck(text).ok, text };
 	const linked = applyLinkPolicy(text, { mode: config.linkPolicy, hosts: config.allowedLinkHosts, websiteDomain });
-	const cleaned = tidy(redact(linked, config.redact, labels).text, 8000);
+	const cleaned = tidy(redact(linked, config.redact, labels, own).text, 8000);
 	return { ok: leakCheck(cleaned, { phrases: config.leakPhrases }).ok, text: cleaned };
 };

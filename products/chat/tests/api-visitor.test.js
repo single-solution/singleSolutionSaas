@@ -131,7 +131,7 @@ describe('handoff, office hours and failures', () => {
 		const state = await v('GET', '/v1/chat');
 		expect(state.json.messages.map((/** @type {any} */ m) => m.author)).toEqual(['visitor', 'system', 'system']);
 		const sentAlerts = sys.messages().map((m) => m.template);
-		expect(sentAlerts).toEqual(['chat.new_message', 'chat.needs_you']);
+		expect(sentAlerts).toEqual(['chat.staff_new_message', 'chat.staff_needs_you']);
 		expect(sys.messages()[1].values.link).toBe(
 			`https://admin.shop.example.com/inbox?conversation=${state.json.conversation.id}`,
 		);
@@ -140,7 +140,7 @@ describe('handoff, office hours and failures', () => {
 		await v('POST', '/v1/chat/messages', { text: 'hello?' });
 		expect(sys.aiCalls()).toHaveLength(1);
 		// the new-message alert went out once until staff open or reply
-		expect(sys.messages().filter((m) => m.template === 'chat.new_message')).toHaveLength(1);
+		expect(sys.messages().filter((m) => m.template === 'chat.staff_new_message')).toHaveLength(1);
 		const contact = await v('POST', '/v1/chat/contact', { name: 'Ann', email: 'ann@example.com' });
 		expect(contact.json.chat.conversation.contactNeeded).toBe(false);
 		expect((await v('POST', '/v1/chat/contact', { name: 'Ann' })).status).toBe(422);
@@ -192,7 +192,7 @@ describe('handoff, office hours and failures', () => {
 		expect(sys.aiCalls()).toHaveLength(2);
 		const texts = (await v('GET', '/v1/chat')).json.messages.map((/** @type {any} */ m) => m.text);
 		expect(texts.at(-1)).toBe('Sorry, I cannot answer right now.');
-		expect(sys.messages().filter((m) => m.template === 'chat.cost_alert')).toEqual([
+		expect(sys.messages().filter((m) => m.template === 'chat.staff_cost_alert')).toEqual([
 			expect.objectContaining({
 				to: { email: 'boss@shop.example.com' },
 				values: expect.objectContaining({ cap: 200, percent: 50 }),

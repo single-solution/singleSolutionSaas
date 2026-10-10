@@ -1,5 +1,16 @@
 {
 	"type": "object",
 	"additionalProperties": false,
-	"properties": {}
+	"properties": {
+		"showTyping": {
+			"type": "boolean",
+			"title": "Show typing while the AI prepares a reply",
+			"default": true
+		},
+		"showSeen": {
+			"type": "boolean",
+			"title": "Show Seen",
+			"default": true
+		}
+	}
 }

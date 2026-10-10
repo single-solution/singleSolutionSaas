@@ -4,10 +4,13 @@
  * - `site(ctx)`: the website of a request (merchant database store, switched-on features, settings and texts read
  *   once per request).
  * - `visitorOf(site)`: who is chatting — the Accounts user of a sign-in verified on this request (signed-in chat on),
- *   else the guest of the device's guest key; a device showing both moves the guest's chats to the account.
+ *   else the guest of the device's guest key (any key of 16–128 characters, so imported store cookies work); a device
+ *   showing both moves the guest's chats to the account, merged by time into the account's own conversation when it has
+ *   one, and with "claim by phone" guest chats whose captured phone is the verified phone move too (PLAN 0.8.10 C7).
  * - Views of a conversation for the visitor and for staff, attachment links, the queue position and office hours; the
  *   context panel's shop info from Ecommerce (pasted token) for a signed-in visitor.
- * - Messages through Notifications (pasted token): staff alerts, AI cost alerts and transcripts.
+ * - Messages through Notifications (pasted token): staff alerts and AI cost alerts through the kit's staff alerts (K6:
+ *   e-mail, WhatsApp or SMS, C5), transcripts, and reply alerts to a visitor who left the chat (C6).
  * - AI token counts per day and month window, the caps and the monthly cost alert.
  * @module
  */
@@ -19,7 +22,8 @@ import { iso, previewOf, staffMessageView, visitorMessageView } from '../core/co
 import { waitingView } from '../core/flows.js';
 import { officeState, parseOfficeHours } from '../core/handoff.js';
 import { zoneOr } from '../core/time.js';
-import { GUEST_HEADER, SIGN_IN_HEADER } from '../core/widgets.js';
+import { plainOf } from '../core/markdown.js';
+import { GUEST_HEADER, GUEST_KEY, SIGN_IN_HEADER } from '../core/widgets.js';
 import { randomSecret, sha256 } from '../adapters/crypto.js';
 import { createStore } from '../adapters/store.js';
 
@@ -121,11 +125,30 @@ export const createService = (product) => {
 	// ------------------------------------------------------------------------------------------------- visitors
 
 	/**
-	 * Who is chatting. A sign-in that does not verify counts as no sign-in (the visitor may still chat as a guest).
+	 * Move a guest's conversations to an account: merged by time into the account's latest conversation when it has
+	 * one, else moved as they are (C7).
 	 * @param {Site} s
+	 * @param {ConversationRecord[]} guestConversations
+	 * @param {string} userId
+	 */
+	const claim = async (s, guestConversations, userId) => {
+		if (guestConversations.length === 0) return;
+		const own = await s.store.conversations.current({ kind: 'user', id: userId });
+		if (own) await s.store.conversations.merge(own, guestConversations);
+		else
+			for (const guestId of new Set(guestConversations.map((c) => c.visitor.id)))
+				await s.store.conversations.moveGuest(guestId, userId);
+	};
+
+	/**
+	 * Who is chatting. A sign-in that does not verify counts as no sign-in (the visitor may still chat as a guest).
+	 * `claim`: also move guest chats whose captured phone is the verified phone (claim by phone on; the first read and
+	 * sends, not every check).
+	 * @param {Site} s
+	 * @param {{ claim?: boolean }} [options]
 	 * @returns {Promise<Visitor | null>}
 	 */
-	const visitorOf = async (s) => {
+	const visitorOf = async (s, { claim: byPhone = false } = {}) => {
 		const signIn = await s.signIn();
 		/** @type {Visitor | null} */
 		const user = signIn
@@ -138,8 +161,10 @@ export const createService = (product) => {
 				}
 			: null;
 		const key = s.ctx.headers.get(GUEST_HEADER);
-		const guest = key && key.length >= 20 && key.length <= 100 ? await s.store.guests.byKey(sha256(key)) : null;
-		if (user && guest) await s.store.conversations.moveGuest(guest.id, user.id);
+		const guest = key && GUEST_KEY.test(key) ? await s.store.guests.byKey(sha256(key)) : null;
+		if (user && guest) await claim(s, await s.store.conversations.ofGuest(guest.id), user.id);
+		if (user && byPhone && user.phone && (await s.values('signed_in_chat')).claimByPhone)
+			await claim(s, await s.store.conversations.guestsByPhone(user.phone), user.id);
 		if (user) return user;
 		return guest ? { kind: 'guest', id: guest.id, name: null, email: null, phone: null } : null;
 	};
@@ -163,7 +188,7 @@ export const createService = (product) => {
 	 * @param {ConversationRecord} c
 	 * @param {{ author: Author, text: string, name?: string | null, staffId?: string | null, internal?: boolean,
 	 *   buttons?: string[], attachment?: import('../core/conversation.js').Attachment | null,
-	 *   cards?: import('../core/shop.js').ProductCard[] }} input
+	 *   cards?: import('../core/shop.js').ProductCard[], format?: 'text' | 'markdown' }} input
 	 * @param {{ set?: Record<string, unknown>, inc?: Record<string, number> }} [change] more changes with it
 	 * @returns {Promise<{ message: MessageRecord, conversation: ConversationRecord }>}
 	 */
@@ -174,7 +199,12 @@ export const createService = (product) => {
 		const bumped = await s.store.conversations.update(c.id, {
 			set: {
 				...(visible
-					? { lastMessageAt: new Date(now()), preview: previewOf(input.text || input.attachment?.name || '') }
+					? {
+							lastMessageAt: new Date(now()),
+							preview: previewOf(
+								(input.format === 'markdown' ? plainOf(input.text) : input.text) || input.attachment?.name || '',
+							),
+						}
 					: {}),
 				...change.set,
 			},
@@ -195,6 +225,7 @@ export const createService = (product) => {
 			staffId: input.staffId ?? null,
 			name: input.name ?? null,
 			text: input.text,
+			...(input.format === 'markdown' ? { format: 'markdown' } : {}),
 			internal,
 			...(input.buttons ? { buttons: input.buttons } : {}),
 			...(input.cards && input.cards.length > 0 ? { cards: input.cards } : {}),
@@ -220,7 +251,7 @@ export const createService = (product) => {
 	// ------------------------------------------------------------------------------------------------- views
 
 	/**
-	 * A link to an attachment for 10 minutes (PDFs as downloads), or null without storage.
+	 * A link to an attachment for 10 minutes (images open; PDFs and staff files are downloads), or null without storage.
 	 * @param {Site} s
 	 */
 	const linker = async (s) => {
@@ -230,7 +261,7 @@ export const createService = (product) => {
 				? storage.presignGet({
 						key: attachment.key,
 						expiresIn: LINK_SECONDS,
-						...(attachment.type === 'application/pdf' ? { downloadName: attachment.name } : {}),
+						...(attachment.type.startsWith('image/') ? {} : { downloadName: attachment.name }),
 					}).url
 				: null;
 	};
@@ -269,7 +300,8 @@ export const createService = (product) => {
 	 * @param {ConversationRecord | null} c
 	 */
 	const chatView = async (s, visitor, c) => {
-		const receipts = s.on.includes('typing_receipts');
+		const receipts = s.on.includes('typing_receipts') ? await s.values('typing_receipts') : null;
+		const { showPaused } = await s.values('visitor_chat');
 		const guestChat = s.on.includes('guest_chat');
 		const limit = visitor?.kind !== 'user' && guestChat ? Number((await s.values('guest_chat')).messageLimit) : 0;
 		/** @type {Record<string, unknown> | null} */
@@ -290,8 +322,9 @@ export const createService = (product) => {
 				status: c.status,
 				waiting: c.waiting,
 				unread: c.unreadVisitor,
-				aiPending: receipts ? c.aiPending : false,
-				staffSeenSeq: receipts ? c.staffSeenSeq : null,
+				aiPending: receipts?.showTyping ? c.aiPending : false,
+				staffSeenSeq: receipts?.showSeen ? c.staffSeenSeq : null,
+				paused: showPaused === true && c.aiPaused === true && c.status !== 'resolved',
 				queuePosition: queue,
 				officeHours: hours ? { open: hours.open, backAt: hours.backAt } : null,
 				rating: c.rating ? { score: c.rating.score, comment: c.rating.comment } : null,
@@ -309,6 +342,7 @@ export const createService = (product) => {
 				? { kind: visitor.kind, name: c?.name ?? visitor.name, email: visitor.email ?? c?.email ?? null }
 				: { kind: 'none', name: null, email: null },
 			guestLimit: limit > 0 ? { limit, used: c?.visitorMessages ?? 0 } : null,
+			guestMessagesLeft: limit > 0 ? Math.max(0, limit - (c?.visitorMessages ?? 0)) : null,
 			lastSeq: c?.lastSeq ?? 0,
 		};
 	};
@@ -332,21 +366,32 @@ export const createService = (product) => {
 	 */
 	const inboxView = async (s, c, { full = false, staff } = {}) => {
 		const names = staff ?? new Map((await s.store.staff.list()).map((m) => [m.id, m.name]));
+		const seen = s.on.includes('typing_receipts') && (await s.values('typing_receipts')).showSeen;
+		const single = s.on.includes('internal_notes') && (await s.values('internal_notes')).mode === 'single';
 		return {
 			id: c.id,
 			visitor: { kind: c.visitor.kind, id: c.visitor.id, name: c.name, email: c.email, phone: c.phone },
 			status: c.status,
 			waiting: c.waiting,
 			aiPaused: c.aiPaused,
+			...(c.aiPaused
+				? {
+						aiPausedBy: c.aiPausedBy ?? null,
+						aiPausedAt: iso(c.aiPausedAt ?? null),
+						aiPausedReason: c.aiPausedReason ?? null,
+					}
+				: {}),
 			assignedTo: c.assignedTo ? { id: c.assignedTo, name: names.get(c.assignedTo) ?? c.assignedTo } : null,
 			unread: c.unreadStaff,
 			preview: c.preview,
 			lastMessageAt: iso(c.lastMessageAt),
 			createdAt: iso(c.createdAt),
-			...(s.on.includes('typing_receipts') ? { visitorSeenSeq: c.visitorSeenSeq } : {}),
+			...(seen ? { visitorSeenSeq: c.visitorSeenSeq } : {}),
+			handedOffAt: iso(c.handedOffAt),
 			...(full
 				? {
 						fields: c.fields,
+						...(single ? { note: c.note ?? '' } : {}),
 						...(s.on.includes('ai_summary') ? { summary: c.summary } : {}),
 						...(s.on.includes('ratings')
 							? { rating: c.rating ? { score: c.rating.score, comment: c.rating.comment } : null }
@@ -358,6 +403,7 @@ export const createService = (product) => {
 										email: c.email,
 										phone: c.phone,
 										page: c.page,
+										currentPage: c.currentPage ?? null,
 										device: c.device,
 										conversations: await s.store.conversations.countOf(c.visitor),
 										shop: await shopInfo(s, c),
@@ -396,18 +442,19 @@ export const createService = (product) => {
 	// ------------------------------------------------------------------------------------------ notifications
 
 	/**
-	 * Send one template through Notifications (e-mail).
+	 * Send one template through Notifications.
 	 * @param {Site} s
 	 * @param {string} template
-	 * @param {string} email
+	 * @param {{ email: string } | { phone: string }} to e-mail, or WhatsApp to a phone
 	 * @param {Record<string, string | number>} values
 	 * @returns {Promise<'sent' | 'not_connected' | 'failed'>}
 	 */
-	const notify = async (s, template, email, values) => {
+	const notify = async (s, template, to, values) => {
 		const business = (await s.business()).name;
-		const answer = await product.callProduct(s.websiteId, 'notifications', '/v1/messages/email', {
+		const channel = 'phone' in to ? 'whatsapp' : 'email';
+		const answer = await product.callProduct(s.websiteId, 'notifications', `/v1/messages/${channel}`, {
 			method: 'POST',
-			body: { template, to: { email }, values: { ...values, business } },
+			body: { template, to, values: { ...values, business } },
 		});
 		if (!answer.ok) return answer.reason === 'not_connected' ? 'not_connected' : 'failed';
 		const status = bodyOf(answer.body).status;
@@ -415,37 +462,73 @@ export const createService = (product) => {
 	};
 
 	/**
-	 * The staff alert recipients plus the assigned person's e-mail.
+	 * The link of an alert: the Inbox address setting with the conversation id.
 	 * @param {Site} s
-	 * @param {ConversationRecord | null} c
+	 * @param {string} conversationId
 	 */
-	const recipients = async (s, c) => {
-		const { recipients: list } = await s.values('staff_alerts');
-		const assigned = c?.assignedTo ? await s.store.staff.get(c.assignedTo) : null;
-		return [...new Set([...list, ...(assigned?.email ? [assigned.email] : [])].map((e) => String(e).toLowerCase()))];
+	const inboxLink = async (s, conversationId) => {
+		const { inboxUrl } = await s.values('staff_alerts');
+		return inboxUrl ? `${inboxUrl}${String(inboxUrl).includes('?') ? '&' : '?'}conversation=${conversationId}` : '';
 	};
 
 	/**
-	 * A staff alert (`new_message`: at most once until staff reply or open it; `needs_you`: on handoff), after the
-	 * answer.
+	 * A staff alert through the kit's staff alerts (K6; the recipients setting with e-mail addresses and phones, Accounts
+	 * staff with the permission setting, and the assigned person): `new_message` on a visitor message — with frequency
+	 * `first_unanswered` at most once until staff reply or open it, with `every_message` every time — and `needs_you`
+	 * on handoff. Sent after the answer.
 	 * @param {Site} s
 	 * @param {ConversationRecord} c
 	 * @param {'new_message' | 'needs_you'} kind
 	 */
 	const staffAlert = async (s, c, kind) => {
 		if (!s.on.includes('staff_alerts')) return;
-		if (kind === 'new_message') {
+		if (kind === 'new_message' && (await s.values('staff_alerts')).frequency !== 'every_message') {
 			const claimed = await s.store.conversations.update(c.id, { set: { alerted: true }, unless: { alerted: false } });
 			if (!claimed) return;
 		}
-		const to = await recipients(s, c);
-		if (to.length === 0) return;
-		const { inboxUrl } = await s.values('staff_alerts');
-		const link = inboxUrl ? `${inboxUrl}${String(inboxUrl).includes('?') ? '&' : '?'}conversation=${c.id}` : '';
-		const values = { visitor: c.name ?? c.email ?? c.phone ?? 'Guest', preview: c.preview, link, conversationId: c.id };
-		s.ctx.after(async () => {
-			for (const email of to) await notify(s, `chat.${kind}`, email, values);
+		const assigned = c.assignedTo ? await s.store.staff.get(c.assignedTo) : null;
+		await product.staffAlerts.send(s.ctx, {
+			feature: 'staff_alerts',
+			event: kind,
+			values: {
+				visitor: c.name ?? c.email ?? c.phone ?? 'Guest',
+				preview: c.preview,
+				link: await inboxLink(s, c.id),
+				conversationId: c.id,
+				business: (await s.business()).name,
+			},
+			assignee: assigned?.email ? { email: assigned.email } : null,
 		});
+	};
+
+	/**
+	 * A reply alert to the visitor (C6, reply alerts on): when staff reply to a visitor with a phone or e-mail who has
+	 * not checked the conversation for the away time, `chat.staff_reply` goes by WhatsApp to the phone, else by e-mail;
+	 * once until the visitor checks again. Sent after the answer.
+	 * @param {Site} s
+	 * @param {ConversationRecord} c the conversation after the reply
+	 * @param {{ staff: string, text: string }} reply
+	 */
+	const visitorAlert = async (s, c, reply) => {
+		if (!s.on.includes('visitor_alerts') || (!c.phone && !c.email)) return;
+		const { awaySeconds } = await s.values('visitor_alerts');
+		const checked = c.visitorCheckedAt ? new Date(c.visitorCheckedAt).getTime() : 0;
+		if (now() - checked < Number(awaySeconds) * 1000) return;
+		if (c.visitorAlertedAt && new Date(c.visitorAlertedAt).getTime() >= checked) return;
+		const claimed = await s.store.conversations.update(c.id, {
+			set: { visitorAlertedAt: new Date(now()) },
+			unless: { visitorAlertedAt: c.visitorAlertedAt ?? null },
+		});
+		if (!claimed) return;
+		/** @type {{ email: string } | { phone: string }} */
+		const to = c.phone ? { phone: c.phone } : { email: /** @type {string} */ (c.email) };
+		const values = {
+			name: c.name ?? '',
+			staff: reply.staff,
+			preview: previewOf(plainOf(reply.text)),
+			link: c.currentPage?.url || c.page?.url || '',
+		};
+		s.ctx.after(() => notify(s, 'chat.staff_reply', to, values));
 	};
 
 	/**
@@ -465,12 +548,12 @@ export const createService = (product) => {
 					: m.author === 'staff'
 						? (m.name ?? texts['transcript.team'])
 						: (m.name ?? botName);
-			return `${who}: ${m.text || m.attachment?.name || ''}`;
+			return `${who}: ${(m.format === 'markdown' ? plainOf(m.text) : m.text) || m.attachment?.name || ''}`;
 		});
 		let transcript = lines.join('\n');
 		if (transcript.length > TRANSCRIPT_MAX) transcript = `…${transcript.slice(-(TRANSCRIPT_MAX - 1))}`;
 		const date = (await s.format()).date(c.createdAt, 'date');
-		const outcome = await notify(s, 'chat.transcript', email, { transcript, date });
+		const outcome = await notify(s, 'chat.transcript', { email }, { transcript, date });
 		if (outcome === 'not_connected')
 			throw problem('notifications_not_connected', 'Notifications not connected: paste its token in Connections.');
 		if (outcome === 'failed') throw problem('not_sent', 'The transcript could not be sent. Try again later.');
@@ -515,14 +598,15 @@ export const createService = (product) => {
 			percent: Number(alertPercent),
 		});
 		if (!crossed || !(await s.store.usage.markAlerted(keys.month))) return;
-		const to = await recipients(s, null);
-		s.ctx.after(async () => {
-			for (const email of to)
-				await notify(s, 'chat.cost_alert', email, {
-					used: month + tokens,
-					cap: Number(monthlyTokens),
-					percent: Number(alertPercent),
-				});
+		await product.staffAlerts.send(s.ctx, {
+			feature: 'staff_alerts',
+			event: 'cost_alert',
+			values: {
+				used: month + tokens,
+				cap: Number(monthlyTokens),
+				percent: Number(alertPercent),
+				business: (await s.business()).name,
+			},
 		});
 	};
 
@@ -558,6 +642,7 @@ export const createService = (product) => {
 		closedText,
 		notify,
 		staffAlert,
+		visitorAlert,
 		sendTranscript,
 		capped,
 		spend,

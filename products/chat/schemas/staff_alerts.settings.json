@@ -15,10 +15,29 @@
 			"default": [],
 			"items": {
 				"type": "string",
-				"maxLength": 254,
-				"format": "email"
+				"maxLength": 254
 			},
-			"description": "E-mail addresses; the assigned person is added."
+			"description": "E-mail addresses and international phone numbers (+ or 00 first; phones get WhatsApp or SMS), up to 20. The assigned person is added."
+		},
+		"frequency": {
+			"type": "string",
+			"title": "New message alerts",
+			"default": "first_unanswered",
+			"enum": ["first_unanswered", "every_message"],
+			"description": "first_unanswered: once until staff reply or open the chat. every_message: on every visitor message."
+		},
+		"staffPermission": {
+			"type": "string",
+			"title": "Also alert Accounts staff who can",
+			"default": "",
+			"enum": ["", "inbox.reply"],
+			"description": "inbox.reply: every unblocked Accounts user whose role may reply in the inbox (needs the Accounts token). Empty = only the list above."
+		},
+		"phoneChannel": {
+			"type": "string",
+			"title": "Phones get",
+			"default": "whatsapp",
+			"enum": ["whatsapp", "sms"]
 		}
 	}
 }

@@ -116,7 +116,7 @@ describe('widgets and docs', () => {
 		expect(script.headers.get('content-type')).toContain('javascript');
 		const docs = await sys.call('GET', '/docs');
 		expect(docs.text).toContain('Chat docs');
-		expect(docs.text).toContain('chat.needs_you');
+		expect(docs.text).toContain('chat.staff_needs_you');
 		expect(docs.text).toContain(`${BASE}/v1/tickets`);
 		expect(docs.text).toContain('search_catalog');
 		// the kit's routes for the merchant's server, and Chat's lists and counts

@@ -170,7 +170,7 @@ describe('shop tools', () => {
 			'/v1/chat/products/prd_phone',
 			'/v1/chat/products/prd_phone/quote',
 			'/v1/chat/products/top?kind=new&limit=5',
-			'/v1/chat/products?q=phone%20x&limit=5',
+			'/v1/chat/products?q=phone+x&limit=5',
 		]);
 		expect(sys.shopCalls().every((c) => c.headers.authorization === `Bearer ${sys.ecommerceToken}`)).toBe(true);
 		expect(sys.shopCalls().every((c) => !c.headers['ss-sign-in'])).toBe(true);
@@ -274,7 +274,7 @@ describe('shop tools', () => {
 		expect(toolAnswers(sys.aiCalls()[1])).toEqual([
 			SHOP_UNAVAILABLE,
 			SHOP_UNAVAILABLE,
-			'Say what to search for.',
+			'Say what to search for, or give a filter.',
 			'Give the product id from a search result.',
 		]);
 		expect((await v('GET', '/v1/chat')).json.messages[1].text).toBe('Sorry.');

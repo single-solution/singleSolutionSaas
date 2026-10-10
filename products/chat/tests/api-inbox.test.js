@@ -75,7 +75,7 @@ describe('inbox', () => {
 			conversations: 1,
 		});
 		expect((await sys.admin(ticket, 'POST', `/v1/admin/conversations/${id}/read`)).status).toBe(204);
-		expect((await sys.admin(ticket, 'GET', '/v1/admin/inbox/unread')).json).toEqual({ unread: 1 });
+		expect((await sys.admin(ticket, 'GET', '/v1/admin/inbox/unread')).json).toEqual({ unread: 1, conversations: 1, open: 2 });
 		expect((await ann('GET', '/v1/chat')).json.conversation.staffSeenSeq).toBe(2);
 
 		const replied = await sys.admin(ticket, 'POST', `/v1/admin/conversations/${id}/messages`, { text: 'On its way.' });
@@ -218,7 +218,7 @@ describe('inbox', () => {
 		const sent = await v('POST', '/v1/chat/messages', { text: 'photo', attachment: upload.json.attachment });
 		const id = sent.json.chat.conversation.id;
 		expect((await sys.serverCall('GET', '/v1/conversations')).json.items).toHaveLength(1);
-		expect((await sys.serverCall('GET', '/v1/inbox/unread')).json).toEqual({ unread: 1 });
+		expect((await sys.serverCall('GET', '/v1/inbox/unread')).json).toEqual({ unread: 1, conversations: 1, open: 1 });
 		const replied = await sys.serverCall('POST', `/v1/conversations/${id}/messages`, { text: 'Nice photo.' });
 		expect(replied.json.message.name).toBe('Team');
 		expect((await sys.serverCall('PATCH', `/v1/conversations/${id}`, { assignedTo: null })).status).toBe(403);

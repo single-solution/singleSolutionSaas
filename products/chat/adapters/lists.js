@@ -1,10 +1,11 @@
 /**
  * Chat's list settings and the tool signing secret, in the product database (PLAN 0.8.3 Chat data): webhook tools,
- * flows, custom field definitions and proactive page rules are kept per website in the kit's settings collection (so
+ * flows, custom field definitions, proactive page rules and fallback answers (PLAN 0.8.10 C3) are kept per website in the kit's settings collection (so
  * a removed website's lists go with its settings), each checked by its feature's rules and recorded in Recent changes.
  * Lists have no global defaults. The tool signing secret is sealed with `ENCRYPTION_KEY`; it is made on first use.
  * @module
  */
+import { checkFallbackAnswers } from '../core/fallback.js';
 import { checkCustomFields, checkPageRules } from '../core/fields.js';
 import { checkFlows } from '../core/flows.js';
 import { checkTools } from '../core/tools.js';
@@ -16,6 +17,7 @@ export const LISTS = Object.freeze({
 	flows: { feature: 'leads_flows', title: 'Flows', check: checkFlows },
 	custom_fields: { feature: 'custom_fields', title: 'Custom fields', check: checkCustomFields },
 	page_rules: { feature: 'proactive_pages', title: 'Page rules', check: checkPageRules },
+	fallback_answers: { feature: 'fallback_answers', title: 'Fallback answers', check: checkFallbackAnswers },
 });
 
 /** @typedef {keyof typeof LISTS} ListName */

@@ -3,7 +3,8 @@
  * the model may request tools, which run and feed their results back, for at most `maxRounds` rounds; the last round
  * offers no tools so the model must answer in text. One shared deadline covers every call; the token budget is checked
  * before each call and charged after it (provider usage, else an estimate). An answer in the wrong language is retried
- * once with an explicit instruction and dropped if it is still wrong.
+ * once with an explicit instruction and dropped if it is still wrong; so is an answer any other check refuses (an
+ * answer that says it is a bot while "never disclose" is on, PLAN 0.8.10 C1).
  * @module
  */
 import { estimateTokens } from './providers.js';
@@ -27,11 +28,13 @@ import { estimateTokens } from './providers.js';
  * @property {number} maxRounds
  * @property {((text: string) => boolean) | null} [languageOk]
  * @property {string} [retryInstruction]
+ * @property {Array<{ ok: (text: string) => boolean, retry: string, failure: string }>} [checks] more checks of the
+ *   answer: a failed one asks again once with its `retry` instruction, then drops the answer with its `failure`
  */
 /**
  * @typedef {object} AssistantResult
  * @property {string} text '' when no usable answer
- * @property {string | null} failure provider_error | timeout | budget | empty | language | null
+ * @property {string | null} failure provider_error | timeout | budget | empty | language | a check's failure | null
  * @property {{ input: number, output: number }} usage
  * @property {number} calls provider calls made
  * @property {Array<{ name: string, ok: boolean }>} tools tools run
@@ -44,7 +47,10 @@ import { estimateTokens } from './providers.js';
  * @param {AssistantDeps} deps
  * @returns {Promise<AssistantResult>}
  */
-export const runAssistant = async ({ messages, tools, maxRounds, languageOk = null, retryInstruction = '' }, deps) => {
+export const runAssistant = async (
+	{ messages, tools, maxRounds, languageOk = null, retryInstruction = '', checks = [] },
+	deps,
+) => {
 	const conversation = [...messages];
 	const usage = { input: 0, output: 0 };
 	/** @type {Array<{ name: string, ok: boolean }>} */
@@ -89,12 +95,13 @@ export const runAssistant = async ({ messages, tools, maxRounds, languageOk = nu
 	if (!result.ok) return done(result.code === 'timeout' || result.code === 'budget' ? result.code : 'provider_error');
 	const text = result.value.text.trim();
 	if (!text) return done('empty');
-	if (languageOk && !languageOk(text)) {
-		if (!retryInstruction) return done('language');
-		conversation.push({ role: 'assistant', content: text }, { role: 'user', content: retryInstruction });
-		const retry = await ask([]);
-		const retried = retry.ok ? retry.value.text.trim() : '';
-		return retried && languageOk(retried) ? done(null, retried, true) : done('language', '', true);
-	}
-	return done(null, text);
+	const all = [...(languageOk ? [{ ok: languageOk, retry: retryInstruction, failure: 'language' }] : []), ...checks];
+	const failed = all.find((check) => !check.ok(text));
+	if (!failed) return done(null, text);
+	if (!failed.retry) return done(failed.failure);
+	conversation.push({ role: 'assistant', content: text }, { role: 'user', content: failed.retry });
+	const retry = await ask([]);
+	const retried = retry.ok ? retry.value.text.trim() : '';
+	const still = retried ? all.find((check) => !check.ok(retried)) : failed;
+	return still ? done(still.failure, '', true) : done(null, retried, true);
 };

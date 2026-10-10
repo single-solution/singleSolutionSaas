@@ -1,5 +1,20 @@
 {
 	"type": "object",
 	"additionalProperties": false,
-	"properties": {}
+	"properties": {
+		"guests": {
+			"type": "string",
+			"title": "Guest chats in the inbox",
+			"default": "all",
+			"enum": ["all", "escalated"],
+			"description": "escalated: guest chats show only once handed to a person."
+		},
+		"pauseNeeds": {
+			"type": "string",
+			"title": "Pausing the AI needs",
+			"default": "manage",
+			"enum": ["manage", "reply"],
+			"description": "The ticket permission inbox.manage, or inbox.reply."
+		}
+	}
 }

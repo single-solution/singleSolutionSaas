@@ -158,16 +158,21 @@ export const createStore = (data, { now }) => {
 						.toArray()
 				);
 			},
-			/** Visitor messages no staff member has opened, over every conversation. */
-			unread: async () => {
+			/**
+			 * Visitor messages no staff member has opened, over the conversations the inbox shows (`where`, default all).
+			 * @param {Record<string, unknown>} [where]
+			 */
+			unread: async (where = {}) => {
 				const [row] = await conversations
 					.aggregate([
-						{ $match: { websiteId: w, unreadStaff: { $gt: 0 } } },
-						{ $group: { _id: null, total: { $sum: '$unreadStaff' } } },
+						{ $match: { ...where, websiteId: w, unreadStaff: { $gt: 0 } } },
+						{ $group: { _id: null, total: { $sum: '$unreadStaff' }, conversations: { $sum: 1 } } },
 					])
 					.toArray();
-				return Number(row?.total ?? 0);
+				return { total: Number(row?.total ?? 0), conversations: Number(row?.conversations ?? 0) };
 			},
+			/** Open conversations the inbox shows (`where`). @param {Record<string, unknown>} [where] */
+			open: (where = {}) => conversations.countDocuments({ ...where, websiteId: w, status: 'open' }),
 			/** Open conversations assigned to each staff member. @returns {Promise<Map<string, number>>} */
 			openByStaff: async () => {
 				const rows = await conversations
@@ -203,6 +208,121 @@ export const createStore = (data, { now }) => {
 						{ $set: { visitor: { kind: 'user', id: userId }, updatedAt: date() }, $addToSet: { guestIds: guestId } },
 					)
 				).modifiedCount,
+			/**
+			 * Merge conversations into one by time (C7): their messages join the target's, in the order they were written,
+			 * and are numbered again; counters, contact details, custom fields and the guests behind them move along; the
+			 * merged conversations are deleted. One transaction.
+			 * @param {ConversationRecord} target
+			 * @param {ConversationRecord[]} sources
+			 * @returns {Promise<ConversationRecord | null>}
+			 */
+			merge: async (target, sources) => {
+				if (sources.length === 0) return target;
+				const all = [target, ...sources];
+				const ids = all.map((c) => c.id);
+				return data.transaction(async (session) => {
+					const found = /** @type {MessageRecord[]} */ (
+						/** @type {unknown} */ (
+							await messages.find({ websiteId: w, conversationId: { $in: ids } }, { ...HIDDEN, session }).toArray()
+						)
+					);
+					const order = new Map(ids.map((id, index) => [id, index]));
+					found.sort(
+						(a, b) =>
+							new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime() ||
+							Number(order.get(a.conversationId)) - Number(order.get(b.conversationId)) ||
+							a.seq - b.seq,
+					);
+					/** @type {Map<string, number>} old conversation and seq → new seq */
+					const renumbered = new Map(found.map((m, index) => [`${m.conversationId}:${m.seq}`, index + 1]));
+					/** @param {ConversationRecord} c @param {number} seen */
+					const seenOf = (c, seen) => {
+						let best = 0;
+						for (const m of found)
+							if (m.conversationId === c.id && m.seq <= seen) best = Number(renumbered.get(`${c.id}:${m.seq}`));
+						return best;
+					};
+					await messages.deleteMany({ websiteId: w, conversationId: { $in: ids } }, { session });
+					if (found.length > 0)
+						await messages.insertMany(
+							found.map((m, index) => ({ ...m, conversationId: target.id, seq: index + 1 })),
+							{ session },
+						);
+					const sum = (/** @type {'visitorMessages' | 'unreadStaff' | 'unreadVisitor' | 'aiReplies'} */ key) =>
+						all.reduce((total, c) => total + Number(c[key] ?? 0), 0);
+					/** @param {'firstVisitorAt' | 'firstStaffReplyAt' | 'handedOffAt' | 'createdAt'} key */
+					const earliest = (key) =>
+						all
+							.map((c) => c[key])
+							.filter((value) => value !== null && value !== undefined)
+							.map((value) => new Date(/** @type {Date} */ (value)))
+							.sort((a, b) => a.getTime() - b.getTime())[0] ?? null;
+					const latest = [...all].sort(
+						(a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime(),
+					)[0];
+					const guests = [
+						...new Set([
+							...all.flatMap((c) => c.guestIds ?? []),
+							...sources.filter((c) => c.visitor.kind === 'guest').map((c) => c.visitor.id),
+						]),
+					];
+					const merged = await conversations.findOneAndUpdate(
+						{ websiteId: w, id: target.id },
+						{
+							$set: {
+								guestIds: guests,
+								lastSeq: found.length,
+								visitorMessages: sum('visitorMessages'),
+								unreadStaff: sum('unreadStaff'),
+								unreadVisitor: sum('unreadVisitor'),
+								aiReplies: sum('aiReplies'),
+								staffSeenSeq: Math.max(...all.map((c) => seenOf(c, Number(c.staffSeenSeq ?? 0)))),
+								visitorSeenSeq: Math.max(...all.map((c) => seenOf(c, Number(c.visitorSeenSeq ?? 0)))),
+								name: all.find((c) => c.name)?.name ?? null,
+								email: all.find((c) => c.email)?.email ?? null,
+								phone: all.find((c) => c.phone)?.phone ?? null,
+								fields: Object.assign({}, ...[...all].reverse().map((c) => c.fields ?? {})),
+								staffReplied: all.some((c) => c.staffReplied),
+								firstVisitorAt: earliest('firstVisitorAt'),
+								firstStaffReplyAt: earliest('firstStaffReplyAt'),
+								createdAt: earliest('createdAt'),
+								lastMessageAt: latest?.lastMessageAt ?? target.lastMessageAt,
+								preview: latest?.preview ?? target.preview,
+								updatedAt: date(),
+							},
+						},
+						{ ...HIDDEN, returnDocument: 'after', session },
+					);
+					await conversations.deleteMany({ websiteId: w, id: { $in: sources.map((c) => c.id) } }, { session });
+					return /** @type {any} */ (merged);
+				});
+			},
+			/**
+			 * A guest's conversations.
+			 * @param {string} guestId
+			 * @returns {Promise<ConversationRecord[]>}
+			 */
+			ofGuest: async (guestId) =>
+				/** @type {any} */ (
+					await conversations
+						.find({ websiteId: w, 'visitor.kind': 'guest', 'visitor.id': guestId }, { ...HIDDEN, limit: 50 })
+						.toArray()
+				),
+			/**
+			 * Guest conversations whose captured phone is this phone (its last 9 digits; C7 claim by phone).
+			 * @param {string} phone
+			 * @returns {Promise<ConversationRecord[]>}
+			 */
+			guestsByPhone: async (phone) => {
+				const digits = phone.replace(/\D/g, '').slice(-9);
+				if (digits.length < 9) return [];
+				const pattern = new RegExp(`${digits.split('').join('\\D*')}\\D*$`);
+				return /** @type {any} */ (
+					await conversations
+						.find({ websiteId: w, 'visitor.kind': 'guest', phone: { $regex: pattern } }, { ...HIDDEN, limit: 50 })
+						.toArray()
+				);
+			},
 			/** @param {{ kind: 'guest' | 'user', id: string }} visitor */
 			countOf: (visitor) =>
 				conversations.countDocuments({ websiteId: w, 'visitor.kind': visitor.kind, 'visitor.id': visitor.id }),
@@ -241,20 +361,33 @@ export const createStore = (data, { now }) => {
 				return record;
 			},
 			/**
-			 * Messages of a conversation in order: after a seq, else the last `limit`.
+			 * Messages of a conversation in order: after a seq, else the last `limit` (before a seq when given, C8).
 			 * @param {string} conversationId
-			 * @param {{ after?: number | null, limit: number, internal: boolean }} query
+			 * @param {{ after?: number | null, before?: number | null, limit: number, internal: boolean }} query
 			 * @returns {Promise<MessageRecord[]>}
 			 */
-			list: async (conversationId, { after = null, limit, internal }) => {
+			list: async (conversationId, { after = null, before = null, limit, internal }) => {
 				const where = { websiteId: w, conversationId, ...(internal ? {} : { internal: false }) };
 				if (after !== null)
 					return /** @type {any} */ (
 						await messages.find({ ...where, seq: { $gt: after } }, { ...HIDDEN, sort: { seq: 1 }, limit }).toArray()
 					);
-				const last = await messages.find(where, { ...HIDDEN, sort: { seq: -1 }, limit }).toArray();
+				const last = await messages
+					.find(before === null ? where : { ...where, seq: { $lt: before } }, { ...HIDDEN, sort: { seq: -1 }, limit })
+					.toArray();
 				return /** @type {any} */ (last.reverse());
 			},
+			/**
+			 * Whether a conversation has messages before a seq.
+			 * @param {string} conversationId
+			 * @param {number} seq
+			 * @param {boolean} internal internal notes count
+			 */
+			earlier: async (conversationId, seq, internal) =>
+				(await messages.countDocuments(
+					{ websiteId: w, conversationId, seq: { $lt: seq }, ...(internal ? {} : { internal: false }) },
+					{ limit: 1 },
+				)) > 0,
 			/** @param {string[]} conversationIds @returns {Promise<MessageRecord[]>} */
 			ofConversations: async (conversationIds) =>
 				/** @type {any} */ (

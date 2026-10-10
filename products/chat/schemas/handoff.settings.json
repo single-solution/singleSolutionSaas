@@ -39,6 +39,32 @@
 				"maxLength": 40
 			},
 			"description": "One line per window in the time zone of business.json, for example `mon-fri 09:00-17:00`. Empty = always open."
+		},
+		"answerFirst": {
+			"type": "boolean",
+			"title": "The AI answers the message that asked for a person",
+			"default": false,
+			"description": "Then the chat goes to a person. Off: it goes to a person at once."
+		},
+		"notice": {
+			"type": "string",
+			"title": "Handoff notice",
+			"default": "A person from our team will reply here.",
+			"maxLength": 500,
+			"description": "Shown to the visitor when the chat goes to a person. Empty = no notice."
+		},
+		"showButton": {
+			"type": "boolean",
+			"title": "Show the Talk to a person button",
+			"default": true
+		},
+		"reassureAfterMinutes": {
+			"type": "integer",
+			"title": "Reassure after (minutes)",
+			"default": 0,
+			"minimum": 0,
+			"maximum": 1440,
+			"description": "From this many minutes after the handoff, the AI answers the visitor’s next messages with reassurance only, until staff reply. 0 = off."
 		}
 	}
 }

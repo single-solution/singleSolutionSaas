@@ -255,14 +255,19 @@ export const isLanguageNeutral = (text) => {
 	return lines.length > 0 && lines.every((line) => /^\|.+\|$/.test(line) || /^[-:| ]+$/.test(line));
 };
 
+/** The least share of a reply's words that must be marker words of its language in a strict check. */
+export const STRICT_SHARE = 0.1;
+
 /**
  * Does an answer match the required language? Non-Latin languages need their script to dominate; Latin-script
  * languages must not be dominated by another script nor clearly by another configured Latin language.
+ * With `strict` (PLAN 0.8.10 C14), a Latin-script language that has marker words must also have its share of them:
+ * at least one, and at least `STRICT_SHARE` of the reply's words.
  * @param {string} reply
  * @param {string} required
- * @param {{ markers?: readonly MarkerSet[] }} [options]
+ * @param {{ markers?: readonly MarkerSet[], strict?: boolean }} [options]
  */
-export const replyMatchesLanguage = (reply, required, { markers = [] } = {}) => {
+export const replyMatchesLanguage = (reply, required, { markers = [], strict = false } = {}) => {
 	const text = String(reply ?? '').trim();
 	if (!text) return false;
 	if (isLanguageNeutral(text)) return true;
@@ -280,6 +285,10 @@ export const replyMatchesLanguage = (reply, required, { markers = [] } = {}) => 
 	);
 	const mine = scores.find((s) => primary(s.language) === primary(required))?.hits ?? 0;
 	const other = scores.find((s) => primary(s.language) !== primary(required));
+	if (strict && markers.some((set) => primary(set.language) === primary(required))) {
+		const words = tokenize(text, { minLength: 1 }).length;
+		if (mine === 0 || mine / Math.max(1, words) < STRICT_SHARE || (other !== undefined && other.hits > mine)) return false;
+	}
 	if (!other) return true;
 	return !(other.hits >= 3 && other.hits >= 2 * Math.max(1, mine) && mine < 2);
 };

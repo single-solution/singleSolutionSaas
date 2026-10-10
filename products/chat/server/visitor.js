@@ -1,7 +1,10 @@
 /**
  * The visitor API (browser token; PLAN 0.8.3 Visitor chat, Guests and signed-in visitors): the chat state and new
- * messages, sending, read receipts, ending a chat, asking for a person, guest contact details, leads, flows, ratings,
- * transcripts and attachment uploads. One ongoing conversation per visitor: a message reopens a resolved one.
+ * messages (older ones by sequence, PLAN 0.8.10 C8), sending (with the AI reply in the same request, `?wait=1`, C10),
+ * read receipts, ending a chat, asking for a person, guest contact details, leads, flows, ratings, transcripts and
+ * attachment uploads. One ongoing conversation per visitor: a message reopens a resolved one. Every message keeps the
+ * page it came from as the conversation's current page (C14), and every read marks when the visitor last checked the
+ * chat (reply alerts, C6).
  * @module
  */
 import { created, noContent, problem } from '@ss/app-kit';
@@ -9,13 +12,45 @@ import { deviceOf, guestLimitReached, limitNext, messageText, pageContext, statu
 import { checkFieldValue, checkLead } from '../core/fields.js';
 import { answerStep, pageFlowMatches } from '../core/flows.js';
 import { moderateInbound } from '../core/moderation.js';
-import { ATTACHMENT_TYPES, MAX_ATTACHMENT_BYTES } from '../core/widgets.js';
+import {
+	ATTACHMENT_TYPES,
+	EXTENSIONS,
+	MAX_ATTACHMENT_BYTES,
+	MAX_STAFF_ATTACHMENT_BYTES,
+	PAGE_MAX,
+	STAFF_TYPES,
+} from '../core/widgets.js';
 import { labelsOf } from './reply.js';
 import { bodyOf, invalid } from './service.js';
 
 /** @typedef {import('./service.js').Site} Site */
 /** @typedef {import('./service.js').Visitor} Visitor */
 /** @typedef {import('../core/conversation.js').ConversationRecord} ConversationRecord */
+
+/** A visitor's check is written at most this often (ms; reply alerts, C6). */
+const CHECKED_EVERY_MS = 15_000;
+
+/**
+ * The paging of a messages read: `after` (newer than a seq), `before` (older than a seq, C8) and `limit` (1–50 with
+ * `before`).
+ * @param {Record<string, unknown>} query
+ * @param {{ latest: number, newer: number }} limits the page without `before` / `after`, and with `after`
+ */
+export const pagingOf = (query, limits) => {
+	const seq = (/** @type {unknown} */ value) => (/^\d{1,9}$/.test(String(value ?? '')) ? Number(value) : null);
+	const after = seq(query.after);
+	const before = after === null ? seq(query.before) : null;
+	const asked = seq(query.limit);
+	const limit =
+		after !== null
+			? limits.newer
+			: before !== null
+				? Math.max(1, Math.min(PAGE_MAX, asked ?? PAGE_MAX))
+				: asked !== null
+					? Math.max(1, Math.min(limits.latest, asked))
+					: limits.latest;
+	return { after, before, limit };
+};
 
 /**
  * A new conversation record.
@@ -116,13 +151,34 @@ export const createVisitorApi = (product, service, reply) => {
 		return { s, visitor, c };
 	};
 
+	/**
+	 * The visitor checked the conversation (reply alerts, C6): written at most every 15 s.
+	 * @param {Site} s
+	 * @param {ConversationRecord} c
+	 */
+	const checked = async (s, c) => {
+		const last = c.visitorCheckedAt ? new Date(c.visitorCheckedAt).getTime() : 0;
+		if (now() - last < CHECKED_EVERY_MS) return c;
+		return (await s.store.conversations.update(c.id, { set: { visitorCheckedAt: new Date(now()) } })) ?? c;
+	};
+
 	/** @param {any} ctx */
 	const state = async (ctx) => {
-		const { s, visitor } = await who(ctx);
-		const c = visitor ? await s.store.conversations.current(visitor) : null;
-		const after = /^\d{1,9}$/.test(String(ctx.query.after ?? '')) ? Number(ctx.query.after) : null;
-		const messages = c ? await s.store.messages.list(c.id, { after, limit: after === null ? 50 : 100, internal: false }) : [];
-		return { ...(await service.chatView(s, visitor, c)), messages: await service.visitorMessages(s, messages) };
+		const paging = pagingOf(ctx.query, { latest: 50, newer: 100 });
+		const s = await service.site(ctx);
+		// the first read (no paging) may claim guest chats by phone (C7)
+		const visitor = await service.visitorOf(s, { claim: paging.after === null && paging.before === null });
+		const found = visitor ? await s.store.conversations.current(visitor) : null;
+		const c = found ? await checked(s, found) : null;
+		const messages = c ? await s.store.messages.list(c.id, { ...paging, internal: false }) : [];
+		const first = messages[0];
+		return {
+			...(await service.chatView(s, visitor, c)),
+			messages: await service.visitorMessages(s, messages),
+			...(paging.after === null
+				? { earlier: c && first ? await s.store.messages.earlier(c.id, first.seq, false) : false }
+				: {}),
+		};
 	};
 
 	/** @param {any} ctx */
@@ -153,9 +209,11 @@ export const createVisitorApi = (product, service, reply) => {
 	/** @param {any} ctx */
 	const send = async (ctx) => {
 		const body = bodyOf(ctx.body);
+		const wait = ctx.query.wait === '1' || ctx.query.wait === 'true';
 		let text = messageText(body.text, { allowEmpty: body.attachment !== undefined && body.attachment !== null });
 		if (text === null) throw invalid(['Write a message (up to 4000 characters).']);
-		const { s, visitor: known } = await who(ctx);
+		const s = await service.site(ctx);
+		const known = await service.visitorOf(s, { claim: true });
 		const { visitor, guestKey } = await visitorOrGuest(s, known);
 		const attachment = await visitorAttachment(s, visitor, body.attachment);
 		let c = await conversationOf(s, visitor, body.page);
@@ -171,11 +229,16 @@ export const createVisitorApi = (product, service, reply) => {
 			}
 		}
 		if (s.on.includes('moderation') && text) {
-			const moderated = moderateInbound(text, /** @type {any} */ (await s.values('moderation')), labelsOf(await s.texts()));
+			const { email, phone } = await s.business();
+			const moderated = moderateInbound(text, /** @type {any} */ (await s.values('moderation')), labelsOf(await s.texts()), {
+				email,
+				phone,
+			});
 			if (!moderated.ok) throw problem('message_rejected', 'This message cannot be sent.');
 			text = moderated.text;
 		}
-		const firstPage = c.visitorMessages === 0 && body.page ? { page: pageContext(body.page) } : {};
+		const page = body.page ? pageContext(body.page) : null;
+		const firstPage = c.visitorMessages === 0 && page ? { page } : {};
 		const appended = await service.append(
 			s,
 			c,
@@ -184,6 +247,8 @@ export const createVisitorApi = (product, service, reply) => {
 				set: {
 					status: statusAfter(c.status, 'visitor'),
 					...firstPage,
+					...(page ? { currentPage: page } : {}),
+					visitorCheckedAt: new Date(now()),
 					...(c.firstVisitorAt ? {} : { firstVisitorAt: new Date(now()) }),
 					...(visitor.kind === 'user'
 						? { name: c.name ?? visitor.name, email: c.email ?? visitor.email, phone: c.phone ?? visitor.phone }
@@ -191,15 +256,29 @@ export const createVisitorApi = (product, service, reply) => {
 				},
 			},
 		);
-		c = await reply.afterVisitorMessage(s, appended.conversation, text);
+		c = await reply.afterVisitorMessage(s, appended.conversation, text, { inline: wait });
 		const [message] = await service.visitorMessages(s, [appended.message]);
-		return created({ message, ...(guestKey ? { guestKey } : {}), chat: await service.chatView(s, visitor, c) });
+		// with `?wait=1` the AI reply came within the request: the messages after the visitor's (C10)
+		const replies = wait
+			? await service.visitorMessages(
+					s,
+					await s.store.messages.list(c.id, { after: appended.message.seq, limit: 20, internal: false }),
+				)
+			: null;
+		return created({
+			message,
+			...(replies ? { replies } : {}),
+			...(guestKey ? { guestKey } : {}),
+			chat: await service.chatView(s, visitor, c),
+		});
 	};
 
 	/** @param {any} ctx */
 	const read = async (ctx) => {
 		const { s, c } = await existing(ctx);
-		await s.store.conversations.update(c.id, { set: { visitorSeenSeq: c.lastSeq, unreadVisitor: 0 } });
+		await s.store.conversations.update(c.id, {
+			set: { visitorSeenSeq: c.lastSeq, unreadVisitor: 0, visitorCheckedAt: new Date(now()) },
+		});
 		return noContent();
 	};
 
@@ -393,13 +472,30 @@ export const createVisitorApi = (product, service, reply) => {
 };
 
 /**
+ * What a file may be: the visitor rules (the allowed types and size, at most 10 MB), or the staff rules (C12: the
+ * staff types and size, at most 100 MB).
+ * @param {Record<string, any>} settings the attachment settings
+ * @param {'visitor' | 'staff'} who
+ */
+export const uploadRules = (settings, who) =>
+	who === 'staff'
+		? {
+				types: STAFF_TYPES.filter((type) => (settings.staffTypes ?? []).includes(type)),
+				max: Math.min(Number(settings.staffMaxSizeMb) * 1024 * 1024, MAX_STAFF_ATTACHMENT_BYTES),
+			}
+		: {
+				types: ATTACHMENT_TYPES.filter((type) => settings.allowedTypes.includes(type)),
+				max: Math.min(Number(settings.maxSizeMb) * 1024 * 1024, MAX_ATTACHMENT_BYTES),
+			};
+
+/**
  * Check a file's name, type and size against the attachment settings.
  * @param {Record<string, unknown>} a
  * @param {Record<string, any>} settings
+ * @param {'visitor' | 'staff'} [who]
  */
-export const checkUpload = (a, settings) => {
-	const allowed = ATTACHMENT_TYPES.filter((type) => settings.allowedTypes.includes(type));
-	const max = Math.min(Number(settings.maxSizeMb) * 1024 * 1024, MAX_ATTACHMENT_BYTES);
+export const checkUpload = (a, settings, who = 'visitor') => {
+	const { types: allowed, max } = uploadRules(settings, who);
 	const name = typeof a.name === 'string' ? a.name.replace(/[\\/\r\n"]/g, '_').slice(0, 120) : '';
 	if (!name || typeof a.type !== 'string' || !allowed.includes(a.type))
 		throw invalid([`Allowed types: ${allowed.join(', ') || 'none'}.`]);
@@ -415,18 +511,13 @@ export const checkUpload = (a, settings) => {
  * @param {string} folder
  * @param {unknown} body
  * @param {Record<string, any>} settings
+ * @param {'visitor' | 'staff'} [who]
  */
-export const presign = async (product, s, folder, body, settings) => {
+export const presign = async (product, s, folder, body, settings, who = 'visitor') => {
 	const storage = await product.connections.storage(s.websiteId);
 	if (!storage) throw problem('storage_not_connected', 'Storage not connected: connect it in the product dashboard.');
-	const file = checkUpload({ ...bodyOf(body), key: '' }, settings);
-	const extension = {
-		'image/jpeg': 'jpg',
-		'image/png': 'png',
-		'image/webp': 'webp',
-		'image/gif': 'gif',
-		'application/pdf': 'pdf',
-	}[file.type];
+	const file = checkUpload({ ...bodyOf(body), key: '' }, settings, who);
+	const extension = EXTENSIONS[/** @type {keyof typeof EXTENSIONS} */ (file.type)];
 	const key = `${folder}/${crypto.randomUUID()}.${extension}`;
 	const signed = storage.presignPut({ key, contentType: file.type, contentLength: file.size, expiresIn: 300 });
 	return {

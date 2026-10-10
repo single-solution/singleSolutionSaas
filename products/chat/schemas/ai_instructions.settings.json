@@ -6,7 +6,7 @@
 			"type": "string",
 			"title": "AI instructions",
 			"default": "",
-			"maxLength": 12000,
+			"maxLength": 32000,
 			"x-ui": {
 				"widget": "textarea"
 			}

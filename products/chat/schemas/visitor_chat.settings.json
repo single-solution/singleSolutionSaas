@@ -80,6 +80,23 @@
 			"x-ui": {
 				"group": "Proactive"
 			}
+		},
+		"showTimes": {
+			"type": "boolean",
+			"title": "Show times and day dividers",
+			"default": false,
+			"x-ui": {
+				"group": "Window"
+			}
+		},
+		"showPaused": {
+			"type": "boolean",
+			"title": "Tell visitors while the team reviews",
+			"default": false,
+			"description": "While staff paused the AI, the visitor sees the paused notice (Texts).",
+			"x-ui": {
+				"group": "Window"
+			}
 		}
 	}
 }

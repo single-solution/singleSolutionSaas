@@ -50,6 +50,20 @@
 			"minimum": 0,
 			"maximum": 100000,
 			"description": "0 = no limit."
+		},
+		"neverDisclose": {
+			"type": "boolean",
+			"title": "Never say it is a bot",
+			"default": false,
+			"description": "The AI never says it is a bot or an AI, answers that do are asked again once, and the AI label is hidden. Laws in some places (for example the EU AI Act and California’s bot disclosure law) require telling visitors they are talking to a bot; you are responsible for following the law where you operate."
+		},
+		"bubbles": {
+			"type": "integer",
+			"title": "Most messages per answer",
+			"default": 1,
+			"minimum": 1,
+			"maximum": 5,
+			"description": "The AI may split an answer on lines of three dashes (---) into up to this many messages."
 		}
 	}
 }

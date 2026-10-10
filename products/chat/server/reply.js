@@ -1,29 +1,46 @@
 /**
  * What happens after a visitor message (PLAN 0.8.3): a running flow ends when the visitor types; a keyword starts a
- * flow; a handoff phrase or keyword hands the chat to a person; otherwise the AI answers right after the response
- * (`after()`, the widget checks every 3 s meanwhile) unless the chat waits for a person, staff paused the AI, or a
- * limit or cap is reached. The AI uses the website's own provider (backup on failure, when on), knowledge from
- * switched-on features, the merchant's webhook tools, the booking endpoint and the shop tools (Ecommerce, pasted token;
- * the products they return become product cards on the answer), the language lock and moderation. On
- * failure the on-failure setting applies; N failures in a row hand off. Staff alerts go out as the features say.
+ * flow; a handoff phrase or keyword hands the chat to a person (after the AI answered that message, with the handoff
+ * setting `answerFirst`, PLAN 0.8.10 C4); otherwise the AI answers right after the response (`after()`, the widget
+ * checks every 3 s meanwhile; or within the request with `?wait=1`, C10) unless the chat waits for a person (from
+ * `reassureAfterMinutes` after the handoff the AI then only reassures, C4), staff paused the AI, or a limit or cap is
+ * reached. The AI uses the website's own provider (backup on failure, when on), knowledge from switched-on features,
+ * the store context from Ecommerce (C1), the merchant's webhook tools, the booking endpoint and the shop tools
+ * (Ecommerce, pasted token; the products they return become product cards on the answer), the language lock (strict,
+ * C14), "never disclose" (C1) and moderation. Answers are markdown, split on `---` lines into at most `bubbles`
+ * messages (C2). When the AI fails, a cap is reached or the answer is refused, the first matching fallback answer
+ * replies (C3), else the on-failure setting applies; N failures in a row hand off. Staff alerts go out as the features
+ * say.
  * @module
  */
 import { problem } from '@ss/app-kit';
 import { runAssistant } from '../core/assistant.js';
 import { checkAiConnection } from '../core/models.js';
 import { advance, keywordFlow } from '../core/flows.js';
+import {
+	PLACEHOLDERS as PLACEHOLDER_FEATURES,
+	budgetOf,
+	fillFallback,
+	matchingFallbacks,
+	placeholdersOf,
+	productList,
+	tableOf,
+} from '../core/fallback.js';
+import { keepLinks, splitBubbles } from '../core/markdown.js';
 import { handoffReason } from '../core/handoff.js';
 import {
+	DISCLOSE_RETRY,
 	PASSAGE_CHARS,
 	HISTORY_TURNS,
 	MAX_TOOL_ROUNDS,
 	SUMMARY_PROMPT,
 	buildSystemPrompt,
+	disclosesBot,
 	languageRetry,
 } from '../core/prompt.js';
 import { RETRIEVAL, passages, queryTerms, rank } from '../core/knowledge.js';
 import { detectLanguage, replyMatchesLanguage } from '../core/language.js';
-import { moderateOutbound } from '../core/moderation.js';
+import { linkAllowed, moderateOutbound } from '../core/moderation.js';
 import {
 	BUILTIN,
 	TOOL_RESPONSE_MAX_BYTES,
@@ -36,9 +53,20 @@ import {
 	toolOutput,
 	webhookSchema,
 } from '../core/tools.js';
-import { SHOP_LIMIT, SHOP_UNAVAILABLE, cardOf, shopAnswer, shopRequest, shopSchemas } from '../core/shop.js';
+import {
+	SHOP_LIMIT,
+	SHOP_UNAVAILABLE,
+	cardOf,
+	contextPath,
+	contextText,
+	needsCurrency,
+	shopAnswer,
+	shopRequest,
+	shopSchemas,
+} from '../core/shop.js';
 import { dayKey } from '../core/time.js';
-import { SIGN_IN_HEADER } from '../core/widgets.js';
+import { SIGN_IN_HEADER, WAIT_MS } from '../core/widgets.js';
+import { currencyDigits } from '@ss/contracts/format';
 import { jsonOf } from '@ss/net';
 import { signTool } from '../adapters/crypto.js';
 
@@ -51,6 +79,36 @@ import { signTool } from '../adapters/crypto.js';
 const DAY_MS = 86_400_000;
 /** One answer's deadline over every provider and tool call (ms). */
 const ANSWER_DEADLINE_MS = 45_000;
+/** How long a store context is kept per website, sign-in and product (C1). */
+const CONTEXT_CACHE_MS = 60_000;
+/** How long the shop's currency is kept per website (prices the AI gives in whole units become minor units). */
+const CURRENCY_CACHE_MS = 60 * 60_000;
+/** Most store contexts and currencies kept per instance. */
+const CACHE_MAX = 500;
+
+/**
+ * A small time-limited cache (per instance; dropped oldest first past `CACHE_MAX`).
+ * @template T
+ * @param {number} ttl
+ * @param {() => number} now
+ */
+const timedCache = (ttl, now) => {
+	/** @type {Map<string, { at: number, value: T }>} */
+	const entries = new Map();
+	return {
+		/** @param {string} key @returns {{ value: T } | null} */
+		get: (key) => {
+			const hit = entries.get(key);
+			return hit && now() - hit.at < ttl ? { value: hit.value } : null;
+		},
+		/** @param {string} key @param {T} value */
+		set: (key, value) => {
+			entries.delete(key);
+			entries.set(key, { at: now(), value });
+			if (entries.size > CACHE_MAX) entries.delete(/** @type {string} */ (entries.keys().next().value));
+		},
+	};
+};
 
 /** Marker words setting lines (`ur: hai kya mein`) → marker sets. @param {string[]} lines */
 const markerSets = (lines) =>
@@ -74,6 +132,70 @@ const markerSets = (lines) =>
  */
 export const createReply = (product, service) => {
 	const { now } = product;
+	/** @type {ReturnType<typeof timedCache<string | null>>} */
+	const contexts = timedCache(CONTEXT_CACHE_MS, now);
+	/** @type {ReturnType<typeof timedCache<string>>} */
+	const currencies = timedCache(CURRENCY_CACHE_MS, now);
+
+	/** The website's own domain (links in answers). @param {Site} s */
+	const domainOf = async (s) => {
+		const serving = await product.serving(s.websiteId);
+		return serving.ok ? String(/** @type {any} */ (serving.status).domain ?? '') : '';
+	};
+
+	/** Products per search (setting `maxResults` of `shop_search`, C13). @param {Site} s */
+	const shopLimit = async (s) =>
+		s.on.includes('shop_search') ? Number((await s.values('shop_search')).maxResults) : SHOP_LIMIT;
+
+	/** Keep the shop's currency from an Ecommerce answer. @param {Site} s @param {unknown} body */
+	const rememberCurrency = (s, body) => {
+		const b = /** @type {any} */ (body);
+		const currency = b?.currency ?? b?.items?.[0]?.currency;
+		if (typeof currency === 'string' && /^[A-Z]{3}$/.test(currency)) currencies.set(s.websiteId, currency);
+	};
+
+	/**
+	 * Whole units of the shop's currency → minor units (prices the AI and fallback budgets give); the currency is learnt
+	 * from Ecommerce's answers, else asked once with the newest product.
+	 * @param {Site} s
+	 */
+	const minorUnits = async (s) => {
+		let currency = currencies.get(s.websiteId)?.value ?? null;
+		if (currency === null) {
+			const answer = await product.callProduct(s.websiteId, 'ecommerce', '/v1/chat/products/top?kind=new&limit=1');
+			// unknown stays unknown for the cache time (2 digits), so a shop without products is not asked every time
+			currencies.set(s.websiteId, '');
+			if (answer.ok) rememberCurrency(s, answer.body);
+			currency = currencies.get(s.websiteId)?.value ?? '';
+		}
+		const factor = 10 ** (currency ? currencyDigits(currency) : 2);
+		return (/** @type {number} */ amount) => Math.round(amount * factor);
+	};
+
+	/**
+	 * The store context of an AI reply (store context on, C1): Ecommerce's `GET /v1/chat/context` for the product the
+	 * visitor is viewing, with the verified sign-in forwarded; cached 60 s per website, sign-in and product.
+	 * @param {Site} s
+	 * @param {ConversationRecord} c
+	 * @param {string | null} signIn
+	 */
+	const storeContext = async (s, c, signIn) => {
+		if (!s.on.includes('shop_context')) return null;
+		const path = contextPath((c.currentPage ?? c.page)?.productId);
+		const who = signIn ? (c.visitor.kind === 'user' ? c.visitor.id : '') : '';
+		const key = `${s.websiteId}|${who}|${path}`;
+		const cached = contexts.get(key);
+		if (cached) return cached.value;
+		const answer = await product.callProduct(
+			s.websiteId,
+			'ecommerce',
+			path,
+			signIn ? { headers: { [SIGN_IN_HEADER]: signIn } } : {},
+		);
+		const text = answer.ok ? contextText(answer.body) : null;
+		if (answer.ok) contexts.set(key, text);
+		return text;
+	};
 
 	/**
 	 * Hand a conversation to a person (handoff on): the flag, the AI stops, a bot message (or office hours), the
@@ -97,13 +219,9 @@ export const createReply = (product, service) => {
 		);
 		const texts = await s.texts();
 		const hours = await service.officeHours(s);
-		current = (
-			await service.botMessage(
-				s,
-				current,
-				hours && !hours.open ? await service.closedText(s, hours) : String(texts['chat.handoff']),
-			)
-		).conversation;
+		const { notice } = await s.values('handoff');
+		const said = hours && !hours.open ? await service.closedText(s, hours) : String(notice ?? '').trim();
+		if (said) current = (await service.botMessage(s, current, said)).conversation;
 		if (current.visitor.kind === 'guest' && !current.email && !current.phone)
 			current = (await service.botMessage(s, current, String(texts['chat.contactAsk']))).conversation;
 		await service.staffAlert(s, current, 'needs_you');
@@ -147,13 +265,41 @@ export const createReply = (product, service) => {
 	};
 
 	/**
-	 * After a visitor message was stored.
+	 * Whether the AI reassures a visitor waiting for a person (C4): from `reassureAfterMinutes` after the handoff, while
+	 * the office is open.
+	 * @param {Site} s
+	 * @param {ConversationRecord} c
+	 */
+	const reassureDue = async (s, c) => {
+		if (!c.waiting || !c.handedOffAt || !s.on.includes('handoff')) return false;
+		const minutes = Number((await s.values('handoff')).reassureAfterMinutes);
+		if (minutes <= 0 || now() - new Date(c.handedOffAt).getTime() < minutes * 60_000) return false;
+		const hours = await service.officeHours(s);
+		return !hours || hours.open;
+	};
+
+	/**
+	 * Start the AI answer: right after the response, or within the request (`inline`, C10).
+	 * @param {Site} s
+	 * @param {ConversationRecord} c
+	 * @param {boolean} inline
+	 */
+	const startAnswer = async (s, c, inline) => {
+		const pending = /** @type {ConversationRecord} */ (await s.store.conversations.update(c.id, { set: { aiPending: true } }));
+		if (inline) await answer(s, pending.id, { deadlineMs: WAIT_MS });
+		else s.ctx.after(() => answer(s, pending.id));
+		return inline ? /** @type {ConversationRecord} */ (await s.store.conversations.get(c.id)) : pending;
+	};
+
+	/**
+	 * After a visitor message was stored. `inline`: the AI answers within the request (C10).
 	 * @param {Site} s
 	 * @param {ConversationRecord} c
 	 * @param {string} text
+	 * @param {{ inline?: boolean }} [options]
 	 * @returns {Promise<ConversationRecord>}
 	 */
-	const afterVisitorMessage = async (s, c, text) => {
+	const afterVisitorMessage = async (s, c, text, { inline = false } = {}) => {
 		let current = c;
 		if (current.flow)
 			current = /** @type {ConversationRecord} */ (await s.store.conversations.update(current.id, { set: { flow: null } }));
@@ -162,20 +308,24 @@ export const createReply = (product, service) => {
 			const flow = keywordFlow(await s.list('flows'), text, current.flowsRun);
 			if (flow) return startFlow(s, current, flow);
 		}
+		const aiOn = s.on.includes('ai_replies') && !current.aiPaused;
 		if (s.on.includes('handoff') && text && !current.waiting) {
 			const settings = await s.values('handoff');
-			if (handoffReason(text, { askPhrases: settings.askPhrases, keywords: settings.keywords })) return handOff(s, current);
+			if (handoffReason(text, { askPhrases: settings.askPhrases, keywords: settings.keywords })) {
+				if (!settings.answerFirst || !aiOn) return handOff(s, current);
+				// the AI answers this message first, then the chat goes to a person (C4)
+				current = /** @type {ConversationRecord} */ (
+					await s.store.conversations.update(current.id, { set: { pendingHandoff: true } })
+				);
+				return startAnswer(s, current, inline);
+			}
 		}
 		if (current.waiting) {
-			const hours = await service.officeHours(s);
-			if (hours && !hours.open) return current;
+			if (aiOn && (await reassureDue(s, current))) return startAnswer(s, current, inline);
+			return current;
 		}
-		if (!s.on.includes('ai_replies') || current.waiting || current.aiPaused) return current;
-		const pending = /** @type {ConversationRecord} */ (
-			await s.store.conversations.update(current.id, { set: { aiPending: true } })
-		);
-		s.ctx.after(() => answer(s, pending.id));
-		return pending;
+		if (!aiOn) return current;
+		return startAnswer(s, current, inline);
 	};
 
 	// -------------------------------------------------------------------------------------------------- AI
@@ -288,6 +438,7 @@ export const createReply = (product, service) => {
 		];
 		const signedIn = visitor?.kind === 'user' ? { id: visitor.id, email: visitor.email } : null;
 		const withCards = s.on.includes('product_cards');
+		const limit = await shopLimit(s);
 		/** @type {import('../core/shop.js').ProductCard[]} */
 		const cards = [];
 		/**
@@ -296,7 +447,10 @@ export const createReply = (product, service) => {
 		 * @param {import('../core/providers.js').ToolCall} call
 		 */
 		const shopCall = async (call) => {
-			const request = shopRequest(call.name, call.arguments);
+			const request = shopRequest(call.name, call.arguments, {
+				limit,
+				...(needsCurrency(call.name, call.arguments) ? { minor: await minorUnits(s) } : {}),
+			});
 			if (!request.ok) return { ok: false, content: request.content };
 			const answer = await product.callProduct(
 				s.websiteId,
@@ -306,10 +460,11 @@ export const createReply = (product, service) => {
 				request.signIn ? { headers: { [SIGN_IN_HEADER]: String(signIn) } } : {},
 			);
 			if (!answer.ok) return { ok: false, content: SHOP_UNAVAILABLE };
+			rememberCurrency(s, answer.body);
 			const found = shopAnswer(call.name, answer.body, await s.format());
 			if (withCards)
 				for (const item of found.products)
-					if (cards.length < SHOP_LIMIT && !cards.some((card) => card.productId === item.id)) cards.push(cardOf(item));
+					if (cards.length < limit && !cards.some((card) => card.productId === item.id)) cards.push(cardOf(item));
 			return { ok: true, content: toolOutput(found.content) };
 		};
 		/** @param {import('../core/providers.js').ToolCall} call */
@@ -375,16 +530,136 @@ export const createReply = (product, service) => {
 	};
 
 	/**
-	 * The AI answer to the conversation's last visitor message (run after the response).
+	 * A shop read for a fallback answer (Ecommerce, pasted token): the tool's answer as the AI would get it, or null.
+	 * @param {Site} s
+	 * @param {string} tool
+	 * @param {Record<string, unknown>} args
+	 * @param {string | null} signIn the verified sign-in for the visitor's own data
+	 */
+	const shopRead = async (s, tool, args, signIn) => {
+		const request = shopRequest(tool, args, {
+			limit: await shopLimit(s),
+			...(needsCurrency(tool, args) ? { minor: await minorUnits(s) } : {}),
+		});
+		if (!request.ok || (request.signIn && !signIn)) return null;
+		const answer = await product.callProduct(
+			s.websiteId,
+			'ecommerce',
+			request.path,
+			request.signIn ? { headers: { [SIGN_IN_HEADER]: String(signIn) } } : {},
+		);
+		if (!answer.ok) return null;
+		rememberCurrency(s, answer.body);
+		return shopAnswer(tool, answer.body, await s.format()).content;
+	};
+
+	/**
+	 * The text of a fallback placeholder from the shop tools that are on, or null.
+	 * @param {Site} s
+	 * @param {keyof typeof import('../core/fallback.js').PLACEHOLDERS} name
+	 * @param {{ message: string, signIn: string | null }} input
+	 */
+	const placeholderText = async (s, name, { message, signIn }) => {
+		const texts = await s.texts();
+		const outOfStock = String(texts['chat.outOfStock'] ?? 'out of stock');
+		/** @param {any} content */
+		const products = (content) =>
+			Array.isArray(content?.products) && content.products.length > 0 ? productList(content.products, { outOfStock }) : null;
+		if (name === 'deals_table') {
+			const content = /** @type {any} */ (await shopRead(s, 'list_active_deals', {}, null));
+			if (!Array.isArray(content?.deals) || content.deals.length === 0) return null;
+			return tableOf(
+				[texts['chat.dealName'] ?? 'Deal', texts['chat.dealDetails'] ?? 'Details', texts['chat.dealEnds'] ?? 'Ends'],
+				content.deals.map((/** @type {any} */ d) => [
+					String(d.name),
+					String(d.offer ?? d.description ?? ''),
+					String(d.endsAt ?? ''),
+				]),
+			);
+		}
+		if (name === 'top_products') return products(await shopRead(s, 'get_top_products', { kind: 'top' }, null));
+		if (name === 'products_under') {
+			const budget = budgetOf(message);
+			if (budget === null) return null;
+			return products(await shopRead(s, 'search_catalog', { query: '', maxPrice: budget, inStock: true }, null));
+		}
+		const content = /** @type {any} */ (await shopRead(s, 'get_my_orders', {}, signIn));
+		if (!Array.isArray(content?.orders) || content.orders.length === 0) return null;
+		return content.orders
+			.map((/** @type {any} */ o) => `- ${[o.number, o.status, o.total, o.placedAt].filter(Boolean).join(' — ')}`)
+			.join('\n');
+	};
+
+	/**
+	 * The first fallback answer that matches the visitor's message and whose placeholders fill (fallback answers on).
+	 * @param {Site} s
+	 * @param {{ message: string, language: string | null, signIn: string | null }} input
+	 * @returns {Promise<string | null>}
+	 */
+	const fallbackAnswer = async (s, { message, language, signIn }) => {
+		if (!s.on.includes('fallback_answers') || !message) return null;
+		const items = /** @type {import('../core/fallback.js').FallbackAnswer[]} */ (await s.list('fallback_answers'));
+		/** @type {Map<string, string | null>} */
+		const filled = new Map();
+		for (const item of matchingFallbacks(items, { message, language })) {
+			/** @type {Record<string, string | null>} */
+			const values = {};
+			for (const name of placeholdersOf(item.text)) {
+				if (!s.on.includes(PLACEHOLDER_FEATURES[name])) values[name] = null;
+				else {
+					if (!filled.has(name)) filled.set(name, await placeholderText(s, name, { message, signIn }));
+					values[name] = filled.get(name) ?? null;
+				}
+			}
+			const text = fillFallback(item.text, values);
+			if (text) return text;
+		}
+		return null;
+	};
+
+	/**
+	 * Links of a markdown message: kept on the website, or as the moderation link policy allows (moderation on).
+	 * @param {Site} s
+	 * @param {string} text
+	 */
+	const linksOf = async (s, text) => {
+		const moderation = s.on.includes('moderation') ? /** @type {any} */ (await s.values('moderation')) : null;
+		const websiteDomain = await domainOf(s);
+		return keepLinks(text, {
+			websiteDomain,
+			allowed: moderation
+				? (target) => linkAllowed(target, { mode: moderation.linkPolicy, hosts: moderation.allowedLinkHosts, websiteDomain })
+				: null,
+		});
+	};
+
+	/**
+	 * The AI answer to the conversation's last visitor message (run after the response, or within it with `?wait=1`).
 	 * @param {Site} s
 	 * @param {string} conversationId
+	 * @param {{ deadlineMs?: number }} [options]
 	 */
-	const answer = async (s, conversationId) => {
+	const answer = async (s, conversationId, { deadlineMs = ANSWER_DEADLINE_MS } = {}) => {
 		let c = await s.store.conversations.get(conversationId);
 		if (!c) return;
 		const done = (/** @type {Record<string, unknown>} */ set = {}) =>
 			s.store.conversations.update(conversationId, { set: { aiPending: false, ...set } });
-		if (c.waiting || c.aiPaused) return void (await done());
+		/** The handoff the answered message asked for (C4), once the answer is out. */
+		const settle = async () => {
+			const current = await s.store.conversations.get(conversationId);
+			if (!current?.pendingHandoff) return;
+			await handOff(
+				s,
+				/** @type {ConversationRecord} */ (
+					await s.store.conversations.update(conversationId, { set: { pendingHandoff: false } })
+				),
+			);
+		};
+		const reassure = c.waiting && (await reassureDue(s, c));
+		if ((c.waiting && !reassure) || c.aiPaused) {
+			await done();
+			return settle();
+		}
 		const visitor = /** @type {Visitor | null} */ (
 			c.visitor.kind === 'user' ? { kind: 'user', id: c.visitor.id, name: c.name, email: c.email, phone: c.phone } : null
 		);
@@ -394,23 +669,24 @@ export const createReply = (product, service) => {
 		const last = [...history].reverse().find((m) => m.author === 'visitor');
 		const connections = await connectionsOf(s, { backup: true });
 		const allowed = connections.length > 0 && (await withinReplyLimits(s, c)) && !(await service.capped(s));
+		const lock = s.on.includes('language_lock') ? await s.values('language_lock') : null;
+		const markers = lock ? markerSets(lock.markerWords) : [];
+		const language =
+			lock && last
+				? detectLanguage(last.text, { fallback: lock.allowedLanguages[0] ?? 'en', allowed: lock.allowedLanguages, markers })
+						.language
+				: null;
+		// the shop's sign-in tools only for the user whose sign-in Chat verified on this request
+		const signIn = await s.signIn();
+		const verified = signIn && visitor && signIn.user.id === visitor.id ? signIn.token : null;
+		const settings = await s.values('ai_replies');
 		/** @type {{ text: string, failure: string | null, escalation: { reason: string } | null }} */
 		let result = { text: '', failure: 'unavailable', escalation: null };
 		/** @type {import('../core/shop.js').ProductCard[]} */
 		let cards = [];
 		if (allowed && last) {
-			const lock = s.on.includes('language_lock') ? await s.values('language_lock') : null;
-			const markers = lock ? markerSets(lock.markerWords) : [];
-			const language = lock
-				? detectLanguage(last.text, { fallback: lock.allowedLanguages[0] ?? 'en', allowed: lock.allowedLanguages, markers })
-						.language
-				: null;
-			const settings = await s.values('ai_replies');
 			const { botName } = await s.values('visitor_chat');
-			// the shop's sign-in tools only for the user whose sign-in Chat verified on this request
-			const signIn = await s.signIn();
-			const verified = signIn && visitor && signIn.user.id === visitor.id ? signIn.token : null;
-			const tools = await toolsOf(s, c, visitor, verified);
+			const tools = reassure ? null : await toolsOf(s, c, visitor, verified);
 			const system = buildSystemPrompt({
 				botName: String(botName),
 				business: await s.business(),
@@ -419,11 +695,15 @@ export const createReply = (product, service) => {
 					: null,
 				dontKnow: String(settings.dontKnow),
 				language,
-				passages: await knowledge(s, last.text),
+				passages: reassure ? [] : await knowledge(s, last.text),
 				visitor: { signedIn: visitor !== null, name: c.name },
-				page: c.page,
-				handoff: s.on.includes('handoff'),
-				shop: { tools: tools.shop, cards: tools.shop && s.on.includes('product_cards') },
+				page: c.currentPage ?? c.page,
+				handoff: !reassure && s.on.includes('handoff'),
+				shop: { tools: tools?.shop ?? false, cards: (tools?.shop ?? false) && s.on.includes('product_cards') },
+				neverDisclose: settings.neverDisclose === true,
+				bubbles: reassure ? 1 : Number(settings.bubbles),
+				context: reassure ? null : await storeContext(s, c, verified),
+				reassure,
 			});
 			/** @type {ChatMessage[]} */
 			const messages = [
@@ -432,56 +712,89 @@ export const createReply = (product, service) => {
 					(m) => /** @type {ChatMessage} */ ({ role: m.author === 'visitor' ? 'user' : 'assistant', content: m.text }),
 				),
 			];
-			const deadline = now() + ANSWER_DEADLINE_MS;
+			const deadline = now() + deadlineMs;
 			result = await runAssistant(
 				{
 					messages,
-					tools: tools.schemas,
-					maxRounds: tools.schemas.length > 0 ? MAX_TOOL_ROUNDS : 0,
-					languageOk: language ? (text) => replyMatchesLanguage(text, language, { markers }) : null,
+					tools: tools?.schemas ?? [],
+					maxRounds: tools && tools.schemas.length > 0 ? MAX_TOOL_ROUNDS : 0,
+					languageOk: language
+						? (text) => replyMatchesLanguage(text, language, { markers, strict: lock?.strict === true })
+						: null,
 					retryInstruction: language ? languageRetry(language) : '',
+					checks:
+						settings.neverDisclose === true
+							? [{ ok: (text) => !disclosesBot(text), retry: DISCLOSE_RETRY, failure: 'disclosed' }]
+							: [],
 				},
 				{
 					call: (request) => complete(s, connections, request),
-					execute: tools.execute,
+					execute: tools ? tools.execute : async () => ({ ok: false, content: 'No such tool.' }),
 					remainingTokens: () => Number.POSITIVE_INFINITY,
 					spend: (usage) => service.spend(s, usage.input + usage.output),
 					expired: () => now() > deadline,
 				},
 			);
-			cards = tools.cards();
+			cards = tools ? tools.cards() : [];
 		}
 		c = /** @type {ConversationRecord} */ (await s.store.conversations.get(conversationId));
-		if (c.waiting || c.aiPaused) return void (await done());
+		if ((c.waiting && !reassure) || c.aiPaused) {
+			await done();
+			return settle();
+		}
 		const texts = await s.texts();
+		const { botName } = await s.values('visitor_chat');
+		/** Post an answer as the assistant: markdown, split into bubbles, the cards on the last one. @param {string[]} parts */
+		const post = async (parts) => {
+			let current = c;
+			for (const [index, part] of parts.entries()) {
+				const last = index === parts.length - 1;
+				current = (
+					await service.append(
+						s,
+						current,
+						{ author: 'ai', text: part, name: String(botName), format: 'markdown', ...(last ? { cards } : {}) },
+						last ? { set: { aiPending: false, aiFailures: 0 }, inc: { aiReplies: 1 } } : {},
+					)
+				).conversation;
+			}
+			return current;
+		};
 		if (result.text) {
 			const moderation = s.on.includes('moderation') ? /** @type {any} */ (await s.values('moderation')) : null;
-			const { domain } = await product.serving(s.websiteId).then((serving) => (serving.ok ? serving.status : { domain: '' }));
-			const checked = moderateOutbound(result.text, moderation, { labels: labelsOf(texts), websiteDomain: domain });
+			const { email, phone } = await s.business();
+			const checked = moderateOutbound(result.text, moderation, {
+				labels: labelsOf(texts),
+				websiteDomain: await domainOf(s),
+				own: { email, phone },
+			});
 			if (checked.ok) {
-				const { botName } = await s.values('visitor_chat');
-				const appended = await service.append(
-					s,
-					c,
-					{ author: 'ai', text: checked.text, name: String(botName), cards },
-					{
-						set: { aiPending: false, aiFailures: 0 },
-						inc: { aiReplies: 1 },
-					},
-				);
-				if (result.escalation) await handOff(s, appended.conversation);
-				return;
+				const parts = splitBubbles(await linksOf(s, checked.text), reassure ? 1 : Number(settings.bubbles));
+				const posted = await post(parts.length > 0 ? parts : [checked.text]);
+				if (result.escalation) await handOff(s, posted);
+				return settle();
 			}
+		}
+		if (reassure) {
+			await done();
+			return;
 		}
 		if (result.escalation) {
 			await handOff(s, /** @type {ConversationRecord} */ (await done()));
-			return;
+			return settle();
+		}
+		// a fallback answer from the merchant's list, filled with live shop data (C3)
+		const fallback = await fallbackAnswer(s, { message: last?.text ?? '', language, signIn: verified });
+		if (fallback) {
+			cards = [];
+			await post([await linksOf(s, fallback)]);
+			return settle();
 		}
 		// the AI could not answer: the on-failure setting, and a handoff after N failures in a row
 		const failed = /** @type {ConversationRecord} */ (
 			await s.store.conversations.update(conversationId, { set: { aiPending: false }, inc: { aiFailures: 1 } })
 		);
-		const { onFailure } = await s.values('ai_replies');
+		const { onFailure } = settings;
 		const { failuresBeforeHandoff } = await s.values('handoff');
 		const handoffNow =
 			s.on.includes('handoff') &&
@@ -490,6 +803,7 @@ export const createReply = (product, service) => {
 		if (onFailure !== 'handoff' || !s.on.includes('handoff'))
 			current = (await service.botMessage(s, current, String(texts['chat.aiUnavailable']))).conversation;
 		if (handoffNow) await handOff(s, current);
+		await settle();
 	};
 
 	/**
@@ -518,7 +832,7 @@ export const createReply = (product, service) => {
 		return summary;
 	};
 
-	return Object.freeze({ afterVisitorMessage, handOff, startFlow, runFlow, summarise, answer });
+	return Object.freeze({ afterVisitorMessage, handOff, startFlow, runFlow, summarise, answer, linksOf });
 };
 
 /**

@@ -23,6 +23,7 @@ import attachments from '../schemas/attachments.settings.json' with { type: 'jso
 import bookSlot from '../schemas/book_slot.settings.json' with { type: 'json' };
 import contextPanel from '../schemas/context_panel.settings.json' with { type: 'json' };
 import customFields from '../schemas/custom_fields.settings.json' with { type: 'json' };
+import fallbackAnswers from '../schemas/fallback_answers.settings.json' with { type: 'json' };
 import guestChat from '../schemas/guest_chat.settings.json' with { type: 'json' };
 import handoff from '../schemas/handoff.settings.json' with { type: 'json' };
 import inbox from '../schemas/inbox.settings.json' with { type: 'json' };
@@ -43,6 +44,7 @@ import reports from '../schemas/reports.settings.json' with { type: 'json' };
 import savedReplies from '../schemas/saved_replies.settings.json' with { type: 'json' };
 import shopDeals from '../schemas/shop_deals.settings.json' with { type: 'json' };
 import shopMyOrders from '../schemas/shop_my_orders.settings.json' with { type: 'json' };
+import shopContext from '../schemas/shop_context.settings.json' with { type: 'json' };
 import shopSearch from '../schemas/shop_search.settings.json' with { type: 'json' };
 import shopTop from '../schemas/shop_top.settings.json' with { type: 'json' };
 import signedInChat from '../schemas/signed_in_chat.settings.json' with { type: 'json' };
@@ -50,6 +52,7 @@ import staffAlerts from '../schemas/staff_alerts.settings.json' with { type: 'js
 import trackShipment from '../schemas/track_shipment.settings.json' with { type: 'json' };
 import transcripts from '../schemas/transcripts.settings.json' with { type: 'json' };
 import typingReceipts from '../schemas/typing_receipts.settings.json' with { type: 'json' };
+import visitorAlerts from '../schemas/visitor_alerts.settings.json' with { type: 'json' };
 import visitorChat from '../schemas/visitor_chat.settings.json' with { type: 'json' };
 import webhookTools from '../schemas/webhook_tools.settings.json' with { type: 'json' };
 import { createAi } from './ai.js';
@@ -65,6 +68,7 @@ const SETTINGS = {
 	ai_replies: aiReplies,
 	ai_backup: aiBackup,
 	ai_instructions: aiInstructions,
+	fallback_answers: fallbackAnswers,
 	ai_caps: aiCaps,
 	ai_cost_alerts: aiCostAlerts,
 	language_lock: languageLock,
@@ -79,6 +83,7 @@ const SETTINGS = {
 	shop_my_orders: shopMyOrders,
 	track_shipment: trackShipment,
 	product_cards: productCards,
+	shop_context: shopContext,
 	proactive_idle: proactiveIdle,
 	proactive_pages: proactivePages,
 	proactive_exit: proactiveExit,
@@ -97,6 +102,7 @@ const SETTINGS = {
 	context_panel: contextPanel,
 	ai_summary: aiSummary,
 	staff_alerts: staffAlerts,
+	visitor_alerts: visitorAlerts,
 	moderation,
 	reports,
 };
@@ -181,16 +187,24 @@ export const createProductInstance = (options) => {
 				neededBy: ['signed_in_chat'],
 			},
 			notifications: {
-				label: 'Notifications token (staff alerts, transcripts, AI cost alerts)',
+				label: 'Notifications token (staff alerts, reply alerts to visitors, transcripts, AI cost alerts)',
 				kind: 'token',
 				productId: 'notifications',
-				neededBy: ['ai_cost_alerts', 'transcripts', 'staff_alerts'],
+				neededBy: ['ai_cost_alerts', 'transcripts', 'staff_alerts', 'visitor_alerts'],
 			},
 			ecommerce: {
-				label: 'Ecommerce token (shop tools, track shipment, product cards, shop info in the context panel)',
+				label: 'Ecommerce token (shop tools, track shipment, product cards, store context, shop info in the context panel)',
 				kind: 'token',
 				productId: 'ecommerce',
-				neededBy: ['shop_search', 'shop_deals', 'shop_top', 'shop_my_orders', 'track_shipment', 'product_cards'],
+				neededBy: [
+					'shop_search',
+					'shop_deals',
+					'shop_top',
+					'shop_my_orders',
+					'track_shipment',
+					'product_cards',
+					'shop_context',
+				],
 			},
 		},
 		// the routes fill these in (they need the merchant database store and the services)
