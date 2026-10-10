@@ -1,0 +1,27 @@
+{
+	"type": "object",
+	"additionalProperties": false,
+	"properties": {
+		"codeMinutes": {
+			"type": "integer",
+			"title": "Sign-in codes valid for (minutes)",
+			"default": 15,
+			"minimum": 5,
+			"maximum": 60
+		},
+		"setupDays": {
+			"type": "integer",
+			"title": "Setup links valid for (days)",
+			"default": 7,
+			"minimum": 1,
+			"maximum": 30
+		},
+		"setupPageUrl": {
+			"type": "string",
+			"title": "Setup page",
+			"description": "Your page that takes the link's code, for example https://shop.com/account/setup/{code}. Empty: the page with the sign-in widget, with ?ss_setup=<code>.",
+			"default": "",
+			"maxLength": 2048
+		}
+	}
+}

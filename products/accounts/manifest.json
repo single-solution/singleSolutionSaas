@@ -19,6 +19,15 @@
 			}
 		},
 		{
+			"key": "phone_password",
+			"name": "Phone + password",
+			"description": "Sign-up and sign-in with a phone number and a password, with password rules, login limits and Forgot password (a code by SMS or WhatsApp, or your own page).",
+			"dependsOn": [],
+			"settings": {
+				"$ref": "schemas/phone_password.settings.json"
+			}
+		},
+		{
 			"key": "email_password",
 			"name": "Email + password",
 			"description": "Sign-up and sign-in with an e-mail address and a password, with password rules, login limits and Forgot password (reset links through Notifications).",
@@ -143,6 +152,24 @@
 			"settings": {
 				"$ref": "schemas/orders_tab.settings.json"
 			}
+		},
+		{
+			"key": "staff_links",
+			"name": "Staff sign-in codes and setup links",
+			"description": "Staff make a one-time sign-in code to read to a user, or a setup link to send them (for example by WhatsApp) to choose a password.",
+			"dependsOn": [],
+			"settings": {
+				"$ref": "schemas/staff_links.settings.json"
+			}
+		},
+		{
+			"key": "role_requests",
+			"name": "Role requests",
+			"description": "Visitors ask for a role (for example membership) with their name and number; staff invite them with a setup link or decline.",
+			"dependsOn": ["roles"],
+			"settings": {
+				"$ref": "schemas/role_requests.settings.json"
+			}
 		}
 	],
 	"permissions": [
@@ -165,12 +192,12 @@
 	"widgets": [
 		{
 			"key": "sign_in",
-			"feature": ["phone_code", "email_password", "email_code", "google", "apple", "facebook"],
+			"feature": ["phone_code", "phone_password", "email_password", "email_code", "google", "apple", "facebook"],
 			"kind": "visitor"
 		},
 		{
 			"key": "my_account",
-			"feature": ["phone_code", "email_password", "email_code", "google", "apple", "facebook"],
+			"feature": ["phone_code", "phone_password", "email_password", "email_code", "google", "apple", "facebook"],
 			"kind": "visitor"
 		},
 		{

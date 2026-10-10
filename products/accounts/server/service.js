@@ -13,11 +13,13 @@
 import { problem } from '@ss/app-kit';
 import { createId } from '@ss/contracts';
 import { detailOf, labelOf } from '../core/activity.js';
-import { DEFAULT_ROLE, READY_ROLES, sessionEnd } from '../core/roles.js';
-import { selfView } from '../core/profile.js';
+import { normalisePhone } from '../core/identifiers.js';
+import { DEFAULT_ROLE, READY_ROLES, remembered, sessionEnd, signInRefusal } from '../core/roles.js';
+import { checkAddresses, selfView } from '../core/profile.js';
 import { OPEN_SIGN_UP, deviceIdOf, deviceOf } from '../core/rules.js';
 import { SIGN_IN_HEADER, SIGN_IN_METHODS, SIGN_IN_SECONDS } from '../core/widgets.js';
 import {
+	importedTwoStep,
 	dummyPasswordCheck,
 	generateSigningKey,
 	generateTotpSecret,
@@ -45,8 +47,12 @@ import { createStore } from '../adapters/store.js';
  * @property {string[]} on switched-on features
  * @property {string} domain
  * @property {string} base Accounts' address (the issuer)
+ * @property {string} ip the visitor's address (`unknown` without one)
+ * @property {((task: () => Promise<unknown>) => void) | null} after work right after the answer (the activity log)
  */
 
+/** The visitor's browser on a sign-in from the merchant's server (A12; the device list names it). */
+export const VISITOR_AGENT_HEADER = 'ss-visitor-agent';
 /** Time a two-step step or a social hand-over stays open. */
 const STEP_MS = 10 * 60_000;
 /** Data exports are single-use links valid for 15 minutes (PLAN 0.4.11). */
@@ -122,22 +128,27 @@ export const createService = (product) => {
 			domain: ctx.status?.domain ?? '',
 			base: product.address() ?? new URL(ctx.request.url).origin,
 			data: await ctx.data(),
+			ip: String(ctx.clientIp || 'unknown'),
+			after: ctx.after,
 		});
 		ctx.after(() => afterWork(s));
 		return s;
 	};
 
 	/**
-	 * @param {{ websiteId: string, merchantId: string | null, domain: string, base: string, data: import('@ss/app-kit').WebsiteData }} input
+	 * @param {{ websiteId: string, merchantId: string | null, domain: string, base: string, data: import('@ss/app-kit').WebsiteData,
+	 *   ip?: string, after?: Site['after'] }} input
 	 * @returns {Promise<Site>}
 	 */
-	const siteOf = async ({ websiteId, merchantId, domain, base, data }) => ({
+	const siteOf = async ({ websiteId, merchantId, domain, base, data, ip = 'unknown', after = null }) => ({
 		websiteId,
 		merchantId,
 		store: createStore(data, { now }),
 		on: await product.featuresOn(websiteId),
 		domain,
 		base,
+		ip,
+		after,
 	});
 
 	/** @param {Site} s @param {string} feature */
@@ -148,6 +159,16 @@ export const createService = (product) => {
 		s.on.includes('approval')
 			? /** @type {import('../core/rules.js').SignUpRules} */ (/** @type {unknown} */ (await settings(s, 'approval')))
 			: OPEN_SIGN_UP;
+
+	/**
+	 * A phone number as typed, in E.164 with the website's phone format (shared by Phone code and Phone + password), or
+	 * null.
+	 * @param {Site} s @param {unknown} value
+	 */
+	const phoneOf = async (s, value) => {
+		const { defaultCallingCode, trunkPrefix } = await settings(s, 'phone');
+		return normalisePhone(value, { defaultCallingCode: String(defaultCallingCode), trunkPrefix: String(trunkPrefix) });
+	};
 
 	/** The user's role (the default role when theirs is gone). @param {Site} s @param {UserRecord} user */
 	const roleOf = async (s, user) =>
@@ -186,8 +207,10 @@ export const createService = (product) => {
 	 * @param {{ method: string, remember: boolean, device: string }} how
 	 * @param {Record<string, unknown>} [extra] more members of the answer (recovery codes)
 	 */
-	const issue = async (s, user, { method, remember, device }, extra = {}) => {
+	const issue = async (s, user, { method, remember: asked, device }, extra = {}) => {
 		const role = await roleOf(s, user);
+		// the role's "remember me" (A6): `always` remembers whatever the box said
+		const remember = s.on.includes('roles') ? remembered(role, asked) : asked;
 		const secret = randomSecret(32);
 		const expiresAt = new Date(sessionEnd({ now: now(), remember, role }));
 		const session = await s.store.sessions.create({
@@ -202,7 +225,13 @@ export const createService = (product) => {
 			revokedAt: null,
 		});
 		const fresh =
-			(await s.store.users.update(user.id, { lastSignInAt: new Date(now()), failedLogins: 0, lockedUntil: null })) ?? user;
+			(await s.store.users.update(user.id, {
+				lastSignInAt: new Date(now()),
+				failedLogins: 0,
+				lockedUntil: null,
+				lockLevel: 0,
+			})) ?? user;
+		await logSignIn(s, fresh, 'user.signed_in', `Method: ${method}`);
 		return {
 			status: /** @type {const} */ ('signed_in'),
 			...(await signInFor(s, fresh, session.id)),
@@ -222,6 +251,7 @@ export const createService = (product) => {
 	const finish = async (s, user, how) => {
 		if (user.blocked) throw problem('blocked', 'This account is blocked.');
 		if (user.status === 'pending') throw problem('pending_approval', 'This account is waiting for approval.');
+		await allowSignIn(s, await roleOf(s, user), how.method);
 		let current = user;
 		if (s.on.includes('terms')) {
 			const { version, url } = await settings(s, 'terms');
@@ -254,6 +284,54 @@ export const createService = (product) => {
 			}
 		}
 		return issue(s, current, how);
+	};
+
+	/**
+	 * Refuse a sign-in the role does not allow (A6, while Roles and permissions is on): its sign-in is paused, or the
+	 * method is not one of its methods. Runs before any code is sent and after the first step of every method.
+	 * @param {Site} s @param {import('../core/roles.js').Role} role @param {string} method
+	 */
+	const allowSignIn = async (s, role, method) => {
+		if (!s.on.includes('roles')) return;
+		const refusal = signInRefusal(role, method);
+		if (refusal === 'sign_in_paused') throw problem('sign_in_paused', await pausedText(s));
+		if (refusal === 'method_refused') throw problem('method_refused', 'This account signs in another way.');
+	};
+
+	/** The paused text the merchant set (the refusal's detail, so their own screens can show it). @param {Site} s */
+	const pausedText = async (s) => (await product.settings.texts(s.websiteId))['signIn.paused'] ?? 'Sign-in is paused.';
+
+	/**
+	 * The role of the address a code goes to, before it is sent (A6): its user's role, or the default role for a new
+	 * sign-up.
+	 * @param {Site} s @param {UserRecord | null} user @param {string} method
+	 */
+	const allowCode = async (s, user, method) => {
+		if (!s.on.includes('roles')) return;
+		const role = user
+			? await roleOf(s, user)
+			: ((await s.store.roles.get(DEFAULT_ROLE)) ?? /** @type {any} */ (READY_ROLES[0]));
+		await allowSignIn(s, role, method);
+	};
+
+	/**
+	 * A sign-in event in the activity log (A10), when the user's role logs them: who, what, and the visitor's address.
+	 * @param {Site} s @param {UserRecord} user @param {string} action @param {string} [more]
+	 */
+	const logSignIn = async (s, user, action, more = '') => {
+		if (!s.on.includes('roles') || !s.after) return;
+		const role = await roleOf(s, user);
+		if (!role.logSignIns) return;
+		await product.activity.record(
+			{ websiteId: s.websiteId, merchantId: s.merchantId, after: s.after },
+			{
+				actor: { kind: 'user', id: user.id, ...(user.name ? { name: user.name } : {}), role: role.key },
+				action,
+				target: user.id,
+				label: labelOf(user.name || user.email || user.phone),
+				detail: detailOf([`IP: ${s.ip}`, more]),
+			},
+		);
 	};
 
 	/**
@@ -292,7 +370,8 @@ export const createService = (product) => {
 		const body = bodyOf(ctx.body);
 		return {
 			remember: body.remember === true,
-			device: deviceOf(ctx.headers.get('user-agent')),
+			// on a visitor call from the merchant's server, the visitor's browser comes in SS-Visitor-Agent (A12)
+			device: deviceOf((ctx.visitor?.server ? ctx.headers.get(VISITOR_AGENT_HEADER) : null) ?? ctx.headers.get('user-agent')),
 			deviceId: deviceIdOf(body.deviceId),
 			network: String(ctx.clientIp || 'unknown'),
 		};
@@ -335,6 +414,37 @@ export const createService = (product) => {
 		const ok = await verifyPassword(password, stored, { pepper: typeof pepper === 'string' ? pepper : null });
 		if (ok && isLegacyHash(stored)) await s.store.users.update(user.id, { passwordHash: await hashPassword(password) });
 		return ok;
+	};
+
+	/**
+	 * The password method of a user (A2): Email + password for a user with an e-mail address while it is on, else
+	 * Phone + password for a user with a phone number while it is on; null when neither fits.
+	 * @param {Site} s @param {Pick<UserRecord, 'email' | 'phone'>} user
+	 * @returns {'email_password' | 'phone_password' | null}
+	 */
+	const passwordMethodOf = (s, user) => {
+		if (user.email && s.on.includes('email_password')) return 'email_password';
+		if (user.phone && s.on.includes('phone_password')) return 'phone_password';
+		return null;
+	};
+
+	/**
+	 * A user's whole address list, checked with the website's Profile settings (A11).
+	 * @param {Site} s @param {unknown} input @param {Pick<UserRecord, 'addresses'> | null} user null for a new user
+	 */
+	const addressesOf = async (s, input, user) => {
+		const { maxAddresses, keepOneAddress, addressRequired } = await settings(s, 'profile');
+		const checked = checkAddresses(input, () => createId('adr'), {
+			max: Number(maxAddresses),
+			required: /** @type {string[]} */ (addressRequired),
+			keepOne: keepOneAddress === true,
+			before: user?.addresses.length ?? 0,
+		});
+		if (!checked.ok)
+			throw problem('validation_failed', checked.message, {
+				errors: [{ path: `/${checked.field}`, message: checked.message, code: 'invalid' }],
+			});
+		return checked.value;
 	};
 
 	/** Whether any sign-in method is on. @param {Site} s */
@@ -469,9 +579,18 @@ export const createService = (product) => {
 		return { url: `${s.base}/v1/exports/${s.websiteId}/${id}.${secret}`, expiresAt: expireAt.toISOString() };
 	};
 
+	/**
+	 * Two-step sign-in as the importer writes it (A8): the plain TOTP secret sealed for this user at once, and the old
+	 * system's recovery-code hashes (`sha256("recovery:" + code)`), each working once.
+	 * @param {string} websiteId @param {string} userId @param {{ secret: string, recoveryHashes: string[] }} input
+	 */
+	const twoStepFromImport = (websiteId, userId, { secret, recoveryHashes }) =>
+		importedTwoStep(sealer, { secret, recoveryHashes, aad: totpAad(websiteId, userId), now: now() });
+
 	return Object.freeze({
 		site,
 		siteOf,
+		twoStepFromImport,
 		settings,
 		signUpRules,
 		roleOf,
@@ -483,6 +602,12 @@ export const createService = (product) => {
 		howOf,
 		signedIn,
 		checkPassword,
+		passwordMethodOf,
+		addressesOf,
+		phoneOf,
+		allowSignIn,
+		allowCode,
+		logSignIn,
 		anyMethod,
 		notify,
 		erase,

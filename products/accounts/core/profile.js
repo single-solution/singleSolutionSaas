@@ -5,7 +5,12 @@
  * @module
  */
 
-const MAX_ADDRESSES = 10;
+/** Most addresses a user can keep (the Profile setting `maxAddresses` may lower it, PLAN 0.8.10 A11). */
+export const MAX_ADDRESSES = 10;
+/** The address fields; `addressRequired` names the ones that must be filled (A11). */
+export const ADDRESS_FIELDS = Object.freeze(
+	/** @type {const} */ (['name', 'line1', 'line2', 'area', 'city', 'region', 'postalCode', 'country', 'phone']),
+);
 export const MAX_CUSTOM_FIELDS = 50;
 const FIELD_TYPES = Object.freeze(/** @type {const} */ (['text', 'number', 'date', 'choice']));
 const FIELD_KEY = /^[a-z][a-z0-9_]{0,39}$/;
@@ -28,11 +33,13 @@ const COUNTRY = /^[A-Z]{2}$/;
  * @property {string} name
  * @property {string} line1
  * @property {string} line2
+ * @property {string} area the area or neighbourhood (A11)
  * @property {string} city
  * @property {string} region
  * @property {string} postalCode
  * @property {string} country ISO 3166-1 alpha-2, or ''
  * @property {string} phone
+ * @property {boolean} default the user's default address: one per user, the first when none is chosen (A11)
  */
 
 /**
@@ -118,14 +125,27 @@ export const checkCustomValues = (fields, input, { complete, current = {} }) => 
 };
 
 /**
- * Check the user's addresses (the whole list is saved at once).
+ * Check the user's addresses (the whole list is saved at once) with the website's Profile settings (A11): at most
+ * `max` addresses, the `required` fields filled, the last one kept with `keepOne`, and one default address (the first
+ * when none is chosen).
  * @param {unknown} input
  * @param {(index: number) => string} idOf a new id for an address without one
+ * @param {{ max?: number, required?: ReadonlyArray<string>, keepOne?: boolean, before?: number }} [rules] `before`: how
+ *   many addresses the user has now
  * @returns {{ ok: true, value: Address[] } | { ok: false, field: string, message: string }}
  */
-export const checkAddresses = (input, idOf) => {
-	if (!Array.isArray(input) || input.length > MAX_ADDRESSES)
-		return { ok: false, field: 'addresses', message: `Send up to ${MAX_ADDRESSES} addresses.` };
+export const checkAddresses = (
+	input,
+	idOf,
+	{ max = MAX_ADDRESSES, required = ['line1', 'city'], keepOne = false, before = 0 } = {},
+) => {
+	const most = Math.min(max, MAX_ADDRESSES);
+	if (!Array.isArray(input) || input.length > most)
+		return { ok: false, field: 'addresses', message: `Send up to ${most} addresses.` };
+	if (keepOne && before > 0 && input.length === 0)
+		return { ok: false, field: 'addresses', message: 'Keep at least one address.' };
+	if (input.filter((raw) => raw?.default === true).length > 1)
+		return { ok: false, field: 'addresses', message: 'Only one address can be the default.' };
 	/** @type {Address[]} */
 	const out = [];
 	for (const [index, raw] of input.entries()) {
@@ -135,6 +155,7 @@ export const checkAddresses = (input, idOf) => {
 			name: text(a.name, 120),
 			line1: text(a.line1, 200),
 			line2: text(a.line2, 200),
+			area: text(a.area, 100),
 			city: text(a.city, 100),
 			region: text(a.region, 100),
 			postalCode: text(a.postalCode, 20),
@@ -144,14 +165,15 @@ export const checkAddresses = (input, idOf) => {
 		const bad = Object.entries(fields).find(([, v]) => v === null);
 		if (bad) return { ok: false, field: `addresses/${index}/${bad[0]}`, message: 'This value is too long.' };
 		const f = /** @type {Record<keyof typeof fields, string>} */ (fields);
-		if (f.line1 === '' || f.city === '')
-			return { ok: false, field: `addresses/${index}/line1`, message: 'An address needs a street line and a city.' };
+		const missing = required.find((name) => name in f && f[/** @type {keyof typeof f} */ (name)] === '');
+		if (missing) return { ok: false, field: `addresses/${index}/${missing}`, message: 'Fill in this part of the address.' };
 		const country = f.country.toUpperCase();
 		if (country !== '' && !COUNTRY.test(country))
 			return { ok: false, field: `addresses/${index}/country`, message: 'Use a two-letter country code.' };
 		const id = typeof a.id === 'string' && /^adr_[0-9a-z]{6,40}$/.test(a.id) ? a.id : idOf(index);
-		out.push({ id, ...f, country });
+		out.push({ id, ...f, country, default: a.default === true });
 	}
+	if (out.length > 0 && !out.some((address) => address.default)) /** @type {Address} */ (out[0]).default = true;
 	return { ok: true, value: out };
 };
 
@@ -171,9 +193,13 @@ export const checkAddresses = (input, idOf) => {
  * @property {string} role
  * @property {Record<string, string>} providers social sign-ins: provider → the provider's user id
  * @property {string | null} passwordHash
- * @property {{ sealed: string, lastStep: number | null, recovery: string[], enabledAt: Date | null } | null} twoStep
+ * @property {{ sealed: string, lastStep: number | null, recovery: Array<{ hash: string, format: 'v1' | 'sha256_prefixed' } | string>,
+ *   enabledAt: Date | null } | null} twoStep recovery codes as hashes with their format (A8)
  * @property {number} failedLogins
  * @property {Date | null} lockedUntil
+ * @property {number} [lockLevel] how far a growing lock has grown (A9)
+ * @property {string | null} [phoneDigits] the last 10 digits of the phone (A4)
+ * @property {Date} [roleSince] when the role was last set (A5: "Member since")
  * @property {{ version: string, acceptedAt: Date } | null} terms
  * @property {{ requestedAt: Date, dueAt: Date | null } | null} deletion
  * @property {string | null} deviceHash
@@ -215,4 +241,7 @@ export const staffView = (user) => ({
 	blocked: user.blocked ? { at: user.blocked.at.toISOString(), reason: user.blocked.reason } : null,
 	status: user.status,
 	lastSignInAt: user.lastSignInAt?.toISOString() ?? null,
+	roleSince: (user.roleSince ?? user.createdAt).toISOString(),
+	lockedUntil: user.lockedUntil?.toISOString() ?? null,
+	recoveryCodesLeft: user.twoStep?.enabledAt ? user.twoStep.recovery.length : null,
 });

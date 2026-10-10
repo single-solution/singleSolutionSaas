@@ -180,8 +180,12 @@ describe('the acting user and the labels of Accounts’ own activity log (K2, K9
 		await fromServer('PATCH', `/v1/users/${quinn.id}`, { body: { role: 'editor' } });
 		expect((await env.admin(t, 'DELETE', '/v1/admin/roles/editor')).status).toBe(204);
 		const [changed, created] = await activity('action=role.saved');
-		expect(created).toMatchObject({ target: 'editor', label: 'Editor', detail: 'New role; 1 permission; two-step optional' });
-		expect(changed).toMatchObject({ label: 'Editor', detail: 'Changed; 0 permissions; two-step required' });
+		expect(created).toMatchObject({
+			target: 'editor',
+			label: 'Editor',
+			detail: 'New role; 1 permission; two-step optional; rank 600',
+		});
+		expect(changed).toMatchObject({ label: 'Editor', detail: 'Changed; 0 permissions; two-step required; rank 600' });
 		expect((await activity('action=role.deleted'))[0]).toMatchObject({
 			label: 'Editor',
 			detail: '1 user moved to the role customer',

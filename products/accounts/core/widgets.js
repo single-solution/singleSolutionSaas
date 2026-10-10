@@ -11,7 +11,7 @@ export const WIDGET_ATTRIBUTE = 'data-ss-accounts';
 
 /** The sign-in methods (features). The sign-in and My account widgets and the routes of a signed-in user work while any is on. */
 export const SIGN_IN_METHODS = Object.freeze(
-	/** @type {const} */ (['phone_code', 'email_password', 'email_code', 'google', 'apple', 'facebook']),
+	/** @type {const} */ (['phone_code', 'phone_password', 'email_password', 'email_code', 'google', 'apple', 'facebook']),
 );
 
 /** Social sign-in providers (each its own feature and connection). */
@@ -42,6 +42,9 @@ export const LINK_PARAMS = Object.freeze({
 	invite: 'ss_accounts_invite',
 	error: 'ss_accounts_error',
 });
+
+/** The query parameter of a setup link to the sign-in widget's page (PLAN 0.8.10 A3; the setup page may take `{code}`). */
+export const SETUP_PARAM = 'ss_setup';
 
 /** Where the widget keeps the refresh token: localStorage with "remember me", else sessionStorage. */
 export const REFRESH_STORAGE_KEY = 'ss-accounts-session';

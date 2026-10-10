@@ -22,12 +22,18 @@ import facebook from '../schemas/facebook.settings.json' with { type: 'json' };
 import google from '../schemas/google.settings.json' with { type: 'json' };
 import ordersTab from '../schemas/orders_tab.settings.json' with { type: 'json' };
 import phoneCode from '../schemas/phone_code.settings.json' with { type: 'json' };
+import phonePassword from '../schemas/phone_password.settings.json' with { type: 'json' };
+import phoneShared from '../schemas/phone.shared.json' with { type: 'json' };
+import profileShared from '../schemas/profile.shared.json' with { type: 'json' };
+import roleRequests from '../schemas/role_requests.settings.json' with { type: 'json' };
+import staffLinks from '../schemas/staff_links.settings.json' with { type: 'json' };
 import riskChecks from '../schemas/risk_checks.settings.json' with { type: 'json' };
 import roles from '../schemas/roles.settings.json' with { type: 'json' };
 import terms from '../schemas/terms.settings.json' with { type: 'json' };
 import twoStep from '../schemas/two_step.settings.json' with { type: 'json' };
 import { normaliseEmail, normalisePhone } from '../core/identifiers.js';
 import { selfView } from '../core/profile.js';
+import { DEFAULT_ROLE } from '../core/roles.js';
 import { createSealer } from './crypto.js';
 import { createProviders } from './providers.js';
 import { INDEXES, createStore } from './store.js';
@@ -35,6 +41,7 @@ import { INDEXES, createStore } from './store.js';
 /** Settings schema of each feature (manifest.json points at them with `$ref`). @type {Record<string, unknown>} */
 const SETTINGS = {
 	phone_code: phoneCode,
+	phone_password: phonePassword,
 	email_password: emailPassword,
 	email_code: emailCode,
 	google,
@@ -49,6 +56,21 @@ const SETTINGS = {
 	data_rights: dataRights,
 	activity_copies: activityCopies,
 	orders_tab: ordersTab,
+	staff_links: staffLinks,
+	role_requests: roleRequests,
+};
+
+/** Every sign-in method (feature). */
+const SIGN_IN_FEATURES = ['phone_code', 'phone_password', 'email_password', 'email_code', 'google', 'apple', 'facebook'];
+
+/**
+ * Settings several features use (PLAN 0.8.10 A2, A11): the phone format of Phone code and Phone + password, and the
+ * Profile settings of every sign-in method.
+ * @type {Record<string, { name: string, features: string[], settings: any }>}
+ */
+export const SHARED_SETTINGS = {
+	phone: { name: 'Phone numbers', features: ['phone_code', 'phone_password'], settings: phoneShared },
+	profile: { name: 'Profile', features: SIGN_IN_FEATURES, settings: profileShared },
 };
 
 /** The manifest as the kit and the Portal take it: settings schemas inline. */
@@ -83,6 +105,12 @@ const PROBLEM_CODES = Object.freeze({
 	provider_failed: Object.freeze({ status: 502, title: 'Provider failed' }),
 	product_not_connected: Object.freeze({ status: 503, title: 'Product not connected' }),
 	two_step_required: Object.freeze({ status: 403, title: 'Two-step sign-in required' }),
+	code_cooldown: Object.freeze({ status: 429, title: 'Wait before asking for another code' }),
+	code_limit: Object.freeze({ status: 429, title: 'Too many codes' }),
+	country_not_allowed: Object.freeze({ status: 422, title: 'Country not allowed' }),
+	sign_in_paused: Object.freeze({ status: 403, title: 'Sign-in paused' }),
+	method_refused: Object.freeze({ status: 403, title: 'Sign-in method not allowed' }),
+	self_reset_off: Object.freeze({ status: 403, title: 'Password reset is off' }),
 });
 
 /**
@@ -158,6 +186,7 @@ export const createProductInstance = (options) => {
 		connections: {
 			notifications: token('notifications', 'Notifications token (codes, invites and resets)', [
 				'phone_code',
+				'phone_password',
 				'email_password',
 				'email_code',
 				'approval',
@@ -196,15 +225,47 @@ export const createProductInstance = (options) => {
 					: { mode: 'open', requiredFields: [] };
 				const password = await product.settings.values(websiteId, 'email_password');
 				const termsSettings = on.includes('terms') ? await product.settings.values(websiteId, 'terms') : null;
+				const phonePassword = on.includes('phone_password')
+					? await product.settings.values(websiteId, 'phone_password')
+					: null;
+				const profile = await product.settings.values(websiteId, 'profile');
+				// the role every sign-up gets: its "remember me" and paused sign-in shape the sign-in widget (A6)
+				const signUpRole = on.includes('roles') ? await store.roles.get(DEFAULT_ROLE) : null;
+				const requests = on.includes('role_requests') ? await product.settings.values(websiteId, 'role_requests') : null;
+				const roleNames = requests ? await store.roles.list() : [];
 				return {
 					signUp: { mode: rules.mode, requiredFields: rules.requiredFields },
 					customFields: on.includes('custom_fields') ? await store.fields.list() : [],
 					passwordMinLength: password.minLength,
+					phonePassword: phonePassword
+						? {
+								minLength: phonePassword.minLength,
+								letterAndDigit: phonePassword.letterAndDigit,
+								selfReset: phonePassword.selfReset,
+								forgotUrl: phonePassword.forgotUrl,
+							}
+						: null,
 					terms: termsSettings ? { version: termsSettings.version, url: termsSettings.url } : null,
+					remember: signUpRole?.remember ?? 'ask',
+					signInPaused: signUpRole?.signIn === 'paused',
+					profile: {
+						maxAddresses: profile.maxAddresses,
+						keepOneAddress: profile.keepOneAddress,
+						addressRequired: profile.addressRequired,
+					},
+					roleRequests: requests
+						? {
+								roles: roleNames
+									.filter((role) => /** @type {string[]} */ (requests.requestableRoles).includes(role.key))
+									.map((role) => ({ key: role.key, name: role.name })),
+								requireNote: requests.requireNote,
+							}
+						: null,
 				};
 			},
 		},
 		data: { indexes: INDEXES },
+		sharedSettings: SHARED_SETTINGS,
 	});
 	return Object.freeze({ ...product, providers, sealer, now, send });
 };

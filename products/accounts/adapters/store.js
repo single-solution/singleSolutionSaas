@@ -12,10 +12,13 @@
  * - `signups`: hashed device and network of each sign-up (risk checks), TTL 30 days
  * - `deletions`: users erased here whose erasure some connected products have not confirmed yet
  * - `copies`: the activity-log copies other products send
+ * - `requests`: role requests (PLAN 0.8.10 A5)
+ * - `counters`: short counters with a TTL (codes per hour per phone and per website, A7; tries per network and
+ *   address, A9)
  * @module
  */
 import { createId } from '@ss/contracts';
-import { DEFAULT_ROLE, READY_ROLES } from '../core/roles.js';
+import { DEFAULT_ROLE, READY_ROLES, roleWithDefaults } from '../core/roles.js';
 
 /** @typedef {import('@ss/app-kit').WebsiteData} WebsiteData */
 /** @typedef {import('../core/profile.js').UserRecord} UserRecord */
@@ -38,15 +41,36 @@ import { DEFAULT_ROLE, READY_ROLES } from '../core/roles.js';
  */
 
 /**
- * @typedef {'phone' | 'email' | 'link' | 'reset' | 'invite' | 'step' | 'handoff' | 'export'} CodeKind
+ * @typedef {'phone' | 'email' | 'link' | 'reset' | 'invite' | 'step' | 'handoff' | 'export' | 'phone_reset' | 'staff_code'
+ *   | 'setup'} CodeKind
  * @typedef {{ id: string, kind: CodeKind, target: string, hash: string, attempts: number, expireAt: Date,
  *   data: Record<string, any>, createdAt: Date }} CodeRecord
  */
 
 /**
- * The filters of the users list (and its counts): text in the name, e-mail or phone; a role; a status (`active`,
- * `pending`, `invited`, or `blocked` for blocked users); users who asked to be deleted.
- * @typedef {{ q?: string, role?: string, status?: string, deletion?: boolean }} UserQuery
+ * The filters of the users list (and its counts): text in the name, e-mail or phone; roles (one or several); a status
+ * (`active`, `pending`, `invited`, or `blocked` for blocked users); blocked or not; users who asked to be deleted; an
+ * exact phone, the last 10 digits of a phone, and users made after a time (PLAN 0.8.10 A4).
+ * @typedef {{ q?: string, roles?: string[], status?: string, blocked?: boolean, deletion?: boolean, phone?: string,
+ *   phoneDigits?: string, createdAfter?: Date }} UserQuery
+ */
+
+/**
+ * A role request (A5): someone without an account asks for a role.
+ * @typedef {object} RequestRecord
+ * @property {string} id `rrq_…`
+ * @property {string} role
+ * @property {string} name
+ * @property {string | null} phone
+ * @property {string | null} email
+ * @property {string} note
+ * @property {'pending' | 'invited' | 'completed' | 'declined'} status stored; `expired` is judged on read
+ * @property {string | null} userId
+ * @property {{ kind: string, id: string, name?: string } | null} invitedBy
+ * @property {Date | null} invitedAt
+ * @property {Date | null} setupExpiresAt when the setup link answered at the invite expires
+ * @property {Date | null} completedAt
+ * @property {Date} createdAt
  */
 
 /**
@@ -73,6 +97,8 @@ const KEYS = 'keys';
 const SIGNUPS = 'signups';
 const DELETIONS = 'deletions';
 const COPIES = 'copies';
+const REQUESTS = 'requests';
+const COUNTERS = 'counters';
 
 const present = { $type: 'string' };
 
@@ -97,6 +123,7 @@ export const INDEXES = [
 	{ collection: USERS, keys: { websiteId: 1, role: 1 }, name: 'by_role' },
 	{ collection: USERS, keys: { websiteId: 1, status: 1 }, name: 'by_status' },
 	{ collection: USERS, keys: { websiteId: 1, 'deletion.dueAt': 1 }, name: 'deletions_due' },
+	{ collection: USERS, keys: { websiteId: 1, phoneDigits: 1 }, name: 'by_phone_digits' },
 	{ collection: SESSIONS, keys: { websiteId: 1, id: 1 }, name: 'by_id', unique: true },
 	{ collection: SESSIONS, keys: { websiteId: 1, userId: 1 }, name: 'by_user' },
 	{ collection: CODES, keys: { websiteId: 1, id: 1 }, name: 'by_id', unique: true },
@@ -116,7 +143,15 @@ export const INDEXES = [
 	{ collection: COPIES, keys: { websiteId: 1, productId: 1, at: -1, id: -1 }, name: 'by_product' },
 	{ collection: COPIES, keys: { websiteId: 1, 'actor.id': 1, at: -1 }, name: 'by_actor' },
 	{ collection: COPIES, keys: { websiteId: 1, target: 1, at: -1 }, name: 'by_target' },
+	{ collection: REQUESTS, keys: { websiteId: 1, id: 1 }, name: 'by_id', unique: true },
+	{ collection: REQUESTS, keys: { websiteId: 1, createdAt: -1, id: -1 }, name: 'newest' },
+	{ collection: REQUESTS, keys: { websiteId: 1, status: 1 }, name: 'by_status' },
+	{ collection: COUNTERS, keys: { websiteId: 1, key: 1 }, name: 'by_key', unique: true },
+	{ collection: COUNTERS, keys: { expireAt: 1 }, name: 'expire', expireAfterSeconds: 0 },
 ];
+
+/** The last 10 digits of an E.164 number (A4: a number found however it was typed). @param {string | null} phone */
+export const phoneDigitsOf = (phone) => (phone ? phone.replace(/\D/g, '').slice(-10) : null);
 
 const NO_ID = { projection: { _id: 0 } };
 const MAX_LIST = 100;
@@ -149,18 +184,25 @@ export const createStore = (data, { now }) => {
 	 * The filter of the users list and of its counts (one builder, so a count always equals the list).
 	 * @param {UserQuery} query
 	 */
-	const usersFilter = ({ q, role, status, deletion }) => {
+	const usersFilter = ({ q, roles: anyRole, status, blocked, deletion, phone, phoneDigits, createdAfter }) => {
 		/** @type {Record<string, unknown>} */
 		const filter = {};
+		/** @type {Record<string, unknown>[]} */
+		const and = [];
 		if (q) {
 			const pattern = { $regex: escapeRegex(q.slice(0, 100)), $options: 'i' };
 			filter.$or = [{ name: pattern }, { email: pattern }, { phone: pattern }];
 		}
-		if (role) filter.role = role;
+		if (anyRole) filter.role = anyRole.length === 1 ? anyRole[0] : { $in: anyRole };
 		if (status === 'blocked') filter.blocked = { $ne: null };
 		else if (status) filter.status = status;
+		if (blocked === true) and.push({ blocked: { $ne: null } });
+		if (blocked === false) and.push({ blocked: null });
 		if (deletion) filter.deletion = { $ne: null };
-		return { ...filter, websiteId };
+		if (phone) filter.phone = phone;
+		if (phoneDigits) filter.phoneDigits = phoneDigits;
+		if (createdAfter) filter.createdAt = { $gt: createdAfter };
+		return { ...filter, ...(and.length > 0 ? { $and: and } : {}), websiteId };
 	};
 
 	/**
@@ -175,6 +217,9 @@ export const createStore = (data, { now }) => {
 		for (const role of READY_ROLES)
 			await roles.updateOne({ websiteId, key: role.key }, { $setOnInsert: { ...role } }, { upsert: true });
 	};
+
+	const requests = data.collection(REQUESTS);
+	const counters = data.collection(COUNTERS);
 
 	return Object.freeze({
 		users: Object.freeze({
@@ -204,7 +249,7 @@ export const createStore = (data, { now }) => {
 			create: async (user) => {
 				const id = createId('usr');
 				try {
-					await users.insertOne({ ...user, id });
+					await users.insertOne({ ...user, id, phoneDigits: phoneDigitsOf(user.phone), roleSince: at() });
 				} catch (error) {
 					if (/** @type {{ code?: number }} */ (error).code === 11000) return null;
 					throw error;
@@ -216,11 +261,17 @@ export const createStore = (data, { now }) => {
 			 * @returns {Promise<UserRecord | null>} null when missing or the e-mail or phone is taken
 			 */
 			update: async (id, set, more = {}) => {
+				// the phone's last digits and the time the role was set follow the fields they come from (A4, A5)
+				const full = {
+					...set,
+					...('phone' in set ? { phoneDigits: phoneDigitsOf(/** @type {string | null} */ (set.phone)) } : {}),
+					...('role' in set ? { roleSince: at() } : {}),
+				};
 				try {
 					return as(
 						await users.findOneAndUpdate(
 							{ websiteId, id },
-							{ ...(Object.keys(set).length > 0 ? { $set: set } : {}), ...more },
+							{ ...(Object.keys(full).length > 0 ? { $set: full } : {}), ...more },
 							{ returnDocument: 'after', ...NO_ID },
 						),
 					);
@@ -249,6 +300,7 @@ export const createStore = (data, { now }) => {
 					? {
 							...filter,
 							$and: [
+								.../** @type {Record<string, unknown>[]} */ (filter.$and ?? []),
 								{
 									$or: [
 										{ createdAt: { $lt: new Date(after[0]) } },
@@ -279,6 +331,8 @@ export const createStore = (data, { now }) => {
 						.limit(limit)
 						.toArray(),
 				),
+			/** Unblocked users of a role (A4: the last unblocked Owner stays). @param {string} role */
+			unblockedOf: (role) => users.countDocuments({ websiteId, role, blocked: null }),
 			/** @param {string} id */
 			remove: async (id) => (await users.deleteOne({ websiteId, id })).deletedCount === 1,
 			/** Move users of a deleted role to the default role. @param {string} role */
@@ -383,12 +437,15 @@ export const createStore = (data, { now }) => {
 			/** @returns {Promise<Role[]>} */
 			list: async () => {
 				await seedRoles();
-				return as(await roles.find({ websiteId }, NO_ID).sort({ ready: -1, key: 1 }).limit(200).toArray());
+				/** @type {Role[]} */
+				const all = as(await roles.find({ websiteId }, NO_ID).limit(200).toArray());
+				return all.map(roleWithDefaults).sort((a, b) => a.rank - b.rank || a.key.localeCompare(b.key));
 			},
 			/** @param {string} key @returns {Promise<Role | null>} */
 			get: async (key) => {
 				await seedRoles();
-				return as(await roles.findOne({ websiteId, key }, NO_ID));
+				const found = as(await roles.findOne({ websiteId, key }, NO_ID));
+				return found ? roleWithDefaults(found) : null;
 			},
 			count: () => roles.countDocuments({ websiteId }),
 			/** @param {Omit<Role, 'ready'>} role */
@@ -399,7 +456,7 @@ export const createStore = (data, { now }) => {
 					{ $set: { ...role }, $setOnInsert: { ready: false } },
 					{ upsert: true },
 				);
-				return /** @type {Role} */ (as(await roles.findOne({ websiteId, key: role.key }, NO_ID)));
+				return roleWithDefaults(as(await roles.findOne({ websiteId, key: role.key }, NO_ID)));
 			},
 			/** Delete a role of the merchant's own (never a ready-made one). @param {string} key */
 			remove: async (key) => (await roles.deleteOne({ websiteId, key, ready: false })).deletedCount === 1,
@@ -476,6 +533,81 @@ export const createStore = (data, { now }) => {
 			update: async (userId, pending) => {
 				if (pending.length === 0) await deletions.deleteOne({ websiteId, userId });
 				else await deletions.updateOne({ websiteId, userId }, { $set: { pending } });
+			},
+		}),
+
+		requests: Object.freeze({
+			/** @param {Omit<RequestRecord, 'id' | 'createdAt'>} request @returns {Promise<RequestRecord>} */
+			create: async (request) => {
+				const id = createId('rrq');
+				await requests.insertOne({ ...request, id });
+				return as(await requests.findOne({ websiteId, id }, NO_ID));
+			},
+			/** @param {string} id @returns {Promise<RequestRecord | null>} */
+			get: async (id) => as(await requests.findOne({ websiteId, id }, NO_ID)),
+			/** @param {string} id @param {Record<string, unknown>} set @returns {Promise<RequestRecord | null>} */
+			update: async (id, set) =>
+				as(await requests.findOneAndUpdate({ websiteId, id }, { $set: set }, { returnDocument: 'after', ...NO_ID })),
+			/** The open request of a user (invited, waiting for their password), if any. @param {string} userId @returns {Promise<RequestRecord | null>} */
+			invitedFor: async (userId) => as(await requests.findOne({ websiteId, userId, status: 'invited' }, NO_ID)),
+			/**
+			 * A page of requests, newest first, with a filter of the stored fields.
+			 * @param {{ after: [string, string] | null, limit: number, filter: Record<string, unknown> }} query
+			 * @returns {Promise<RequestRecord[]>}
+			 */
+			list: async ({ after, limit, filter }) => {
+				/** @type {Record<string, unknown>} */
+				const own = { ...filter, websiteId };
+				const page = after
+					? {
+							...own,
+							$and: [
+								.../** @type {Record<string, unknown>[]} */ (own.$and ?? []),
+								{
+									$or: [
+										{ createdAt: { $lt: new Date(after[0]) } },
+										{ createdAt: new Date(after[0]), id: { $lt: after[1] } },
+									],
+								},
+							],
+						}
+					: own;
+				return as(
+					await requests
+						.find(page, NO_ID)
+						.sort({ createdAt: -1, id: -1 })
+						.limit(Math.min(limit, MAX_LIST + 1))
+						.toArray(),
+				);
+			},
+			/** The collection and filter of the requests list, for its counts (K4). @param {Record<string, unknown>} filter */
+			counting: (filter) => ({ collection: requests, filter: { ...filter, websiteId } }),
+		}),
+
+		counters: Object.freeze({
+			/**
+			 * Count one use in a fixed window and say whether it stays within the limit (removed by TTL after the window).
+			 * @param {string} key @param {number} windowMs @param {number} limit
+			 */
+			take: async (key, windowMs, limit) => {
+				const window = Math.floor(now() / windowMs);
+				const id = `${key}|${window}`;
+				const bump = () =>
+					counters.findOneAndUpdate(
+						{ websiteId, key: id },
+						{ $inc: { n: 1 }, $setOnInsert: { expireAt: new Date((window + 1) * windowMs) } },
+						{ upsert: true, returnDocument: 'after', projection: { _id: 0, n: 1 } },
+					);
+				/** @type {any} */
+				let doc;
+				try {
+					doc = await bump();
+				} catch (error) {
+					// two first uses at once: the second insert lost, so count on the one that won
+					if (/** @type {{ code?: number }} */ (error).code !== 11000) throw error;
+					doc = await bump();
+				}
+				return Number(doc?.n ?? 0) <= limit;
 			},
 		}),
 

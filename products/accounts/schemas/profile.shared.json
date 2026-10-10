@@ -1,0 +1,28 @@
+{
+	"type": "object",
+	"additionalProperties": false,
+	"properties": {
+		"maxAddresses": {
+			"type": "integer",
+			"title": "Addresses per user",
+			"default": 10,
+			"minimum": 1,
+			"maximum": 10
+		},
+		"keepOneAddress": {
+			"type": "boolean",
+			"title": "Keep at least one address",
+			"description": "Once a user has an address, the last one cannot be removed.",
+			"default": false
+		},
+		"addressRequired": {
+			"type": "array",
+			"title": "Required address fields",
+			"default": ["line1", "city"],
+			"items": {
+				"type": "string",
+				"enum": ["name", "line1", "line2", "area", "city", "region", "postalCode", "country", "phone"]
+			}
+		}
+	}
+}

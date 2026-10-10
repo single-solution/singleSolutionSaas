@@ -8,6 +8,7 @@
 	"signIn.back": "Back",
 	"signIn.working": "One moment…",
 	"signIn.signOut": "Sign out",
+	"signIn.paused": "Signing in is paused right now.",
 	"signUp.title": "Create an account",
 	"signUp.submit": "Create account",
 	"signUp.toSignIn": "Already have an account? Sign in",

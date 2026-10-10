@@ -104,3 +104,177 @@ describe('A1: legacy password hashes', () => {
 		expect((await signIn('change@example.com', 'brand new password 2')).json.status).toBe('signed_in');
 	});
 });
+
+describe('A2: phone + password', () => {
+	/** @param {Record<string, unknown>} body */
+	const phoneSignIn = (body) => env.visitor('POST', '/v1/sign-in/phone-password', body);
+
+	it('signs up and in with a phone number and a password in the website’s phone format', async () => {
+		expect(code(await env.visitor('POST', '/v1/sign-up/phone-password', { phone: '+923001110000', password: 'x' }))).toBe(
+			'feature_off',
+		);
+		await env.switchOn(['email_password', 'phone_password']);
+		// the phone format is shared by Phone code and Phone + password, and shown while either is on
+		const cookie = await env.merchantSession();
+		const listed = await env.dashboard(cookie, 'GET', `/v1/dashboard/websites/${env.websiteId}/settings`);
+		expect(listed.json.features.map((/** @type {{ key: string }} */ f) => f.key)).toEqual(
+			expect.arrayContaining(['phone_password', 'email_password', 'phone', 'profile']),
+		);
+		expect(listed.json.features.map((/** @type {{ key: string }} */ f) => f.key)).not.toContain('phone_code');
+		await env.setting('phone', 'defaultCallingCode', '+92');
+		await env.setting('phone', 'trunkPrefix', '0');
+		expect(code(await env.visitor('POST', '/v1/sign-up/phone-password', { phone: 'nope', password: 'abc12345' }))).toBe(
+			'validation_failed',
+		);
+		const up = await env.visitor('POST', '/v1/sign-up/phone-password', {
+			phone: '0300 1110000',
+			password: 'abc12345',
+			name: 'Sana',
+			remember: true,
+		});
+		expect(up.json).toMatchObject({
+			status: 'signed_in',
+			user: { phone: '+923001110000', phoneVerified: false, name: 'Sana' },
+		});
+		expect(
+			code(await env.visitor('POST', '/v1/sign-up/phone-password', { phone: '+923001110000', password: 'abc12345' })),
+		).toBe('already_exists');
+		const sessions = await env.visitor('GET', '/v1/me/sessions', undefined, up.json.signIn);
+		expect(sessions.json.items[0].method).toBe('phone_password');
+		expect(code(await phoneSignIn({ phone: '03001110000', password: 'wrong one' }))).toBe('sign_in_failed');
+		expect(code(await phoneSignIn({ phone: '03009999999', password: 'abc12345' }))).toBe('sign_in_failed');
+		expect((await phoneSignIn({ phone: '03001110000', password: 'abc12345' })).json.status).toBe('signed_in');
+	});
+
+	it('uses its own password rules: length 6 to 128 and a letter with a digit', async () => {
+		await env.setting('phone_password', 'minLength', 6);
+		await env.setting('phone_password', 'letterAndDigit', true);
+		const refused = await env.visitor('POST', '/v1/sign-up/phone-password', {
+			phone: '+923001110001',
+			password: 'onlyletters',
+		});
+		expect(code(refused)).toBe('weak_password');
+		expect(refused.json.detail).toMatch(/letter and one digit/);
+		expect(code(await env.visitor('POST', '/v1/sign-up/phone-password', { phone: '+923001110001', password: 'a1b2' }))).toBe(
+			'weak_password',
+		);
+		const ok = await env.visitor('POST', '/v1/sign-up/phone-password', { phone: '+923001110001', password: 'a1b2c3' });
+		expect(ok.json.status).toBe('signed_in');
+		// My account changes the password of a phone user with the same rules
+		expect(code(await env.visitor('PUT', '/v1/me/password', { current: 'a1b2c3', password: 'zzzzzz' }, ok.json.signIn))).toBe(
+			'weak_password',
+		);
+		expect(
+			(await env.visitor('PUT', '/v1/me/password', { current: 'a1b2c3', password: 'new1pass' }, ok.json.signIn)).status,
+		).toBe(204);
+		expect((await phoneSignIn({ phone: '+923001110001', password: 'new1pass' })).json.status).toBe('signed_in');
+	});
+
+	it('Forgot password sends a code through Notifications; the code sets a new password and signs devices out', async () => {
+		const before = env.messages().length;
+		expect((await env.visitor('POST', '/v1/password/phone/forgot', { phone: '+923009999999' })).status).toBe(202);
+		expect(env.messages().length).toBe(before);
+		expect((await env.visitor('POST', '/v1/password/phone/forgot', { phone: '03001110000' })).status).toBe(202);
+		const sent = env.messages().at(-1);
+		expect(sent).toMatchObject({ channel: 'sms', template: 'accounts.phone_code', to: { phone: '+923001110000' } });
+		expect(code(await env.visitor('POST', '/v1/password/phone/forgot', { phone: '03001110000' }))).toBe('code_cooldown');
+		const signedIn = await phoneSignIn({ phone: '+923001110000', password: 'abc12345' });
+		expect(
+			code(
+				await env.visitor('POST', '/v1/password/phone/reset', {
+					phone: '+923001110000',
+					code: sent.values.code === '000000' ? '111111' : '000000',
+					password: 'n3w password',
+				}),
+			),
+		).toBe('code_invalid');
+		expect(
+			code(
+				await env.visitor('POST', '/v1/password/phone/reset', {
+					phone: '+923009999999',
+					code: sent.values.code,
+					password: 'x1',
+				}),
+			),
+		).toBe('code_invalid');
+		const reset = await env.visitor('POST', '/v1/password/phone/reset', {
+			phone: '+923001110000',
+			code: sent.values.code,
+			password: 'n3w password',
+		});
+		expect(reset.status).toBe(204);
+		expect(code(await env.visitor('GET', '/v1/me', undefined, signedIn.json.signIn))).toBe('signed_out');
+		expect((await phoneSignIn({ phone: '+923001110000', password: 'n3w password' })).json.status).toBe('signed_in');
+		expect(
+			code(
+				await env.visitor('POST', '/v1/password/phone/reset', {
+					phone: '+923001110000',
+					code: sent.values.code,
+					password: 'n3w password',
+				}),
+			),
+		).toBe('code_invalid');
+	});
+
+	it('with Forgot password off, the reset routes refuse and the widget config names the page', async () => {
+		await env.setting('phone_password', 'selfReset', 'off');
+		await env.setting('phone_password', 'forgotUrl', 'https://wa.me/923001234567');
+		expect(code(await env.visitor('POST', '/v1/password/phone/forgot', { phone: '+923001110000' }))).toBe('self_reset_off');
+		expect(
+			code(await env.visitor('POST', '/v1/password/phone/reset', { phone: '+923001110000', code: '1', password: 'x' })),
+		).toBe('self_reset_off');
+		const config = await env.visitor('GET', '/v1/widget/config');
+		expect(config.json.settings.phonePassword).toMatchObject({ selfReset: 'off', forgotUrl: 'https://wa.me/923001234567' });
+		await env.setting('phone_password', 'selfReset', 'code');
+	});
+});
+
+describe('A9: password and lock options', () => {
+	it('a growing lock: free failures, then 1, 2, 4 … up to 60 minutes; a good password resets it', async () => {
+		await env.setting('email_password', 'lockMode', 'growing');
+		await env.setting('email_password', 'maxAttempts', 4);
+		await env.visitor('POST', '/v1/sign-up/password', { email: 'grow@example.com', password: 'growing password 1' });
+		for (let i = 0; i < 4; i += 1) expect(code(await signIn('grow@example.com', 'bad'))).toBe('sign_in_failed');
+		expect(code(await signIn('grow@example.com', 'bad'))).toBe('sign_in_failed');
+		const locked = await signIn('grow@example.com', 'growing password 1');
+		expect(code(locked)).toBe('locked');
+		expect(Date.parse(locked.json.lockedUntil) - env.now()).toBe(60_000);
+		env.advance(60_000);
+		expect(code(await signIn('grow@example.com', 'bad'))).toBe('sign_in_failed');
+		expect(Date.parse((await signIn('grow@example.com', 'x')).json.lockedUntil) - env.now()).toBe(120_000);
+		for (let level = 3; level <= 8; level += 1) {
+			env.advance(3_600_000);
+			await signIn('grow@example.com', 'bad');
+		}
+		expect(Date.parse((await signIn('grow@example.com', 'x')).json.lockedUntil) - env.now()).toBe(3_600_000);
+		env.advance(3_600_000);
+		expect((await signIn('grow@example.com', 'growing password 1')).json.status).toBe('signed_in');
+		expect(code(await signIn('grow@example.com', 'bad'))).toBe('sign_in_failed');
+		expect((await signIn('grow@example.com', 'growing password 1')).json.status).toBe('signed_in');
+		await env.setting('email_password', 'lockMode', 'fixed');
+	});
+
+	it('a network limit per address, minimum lengths up to 128 and the personal check', async () => {
+		await env.setting('email_password', 'networkLimit', 3);
+		env.setNetwork('198.51.100.7');
+		for (let i = 0; i < 3; i += 1) expect(code(await signIn('limit@example.com', 'x'))).toBe('sign_in_failed');
+		expect(code(await signIn('limit@example.com', 'x'))).toBe('rate_limited');
+		// another address from the same network still gets its tries
+		expect(code(await signIn('other@example.com', 'x'))).toBe('sign_in_failed');
+		env.advance(15 * 60_000);
+		expect(code(await signIn('limit@example.com', 'x'))).toBe('sign_in_failed');
+		env.setNetwork(null);
+		await env.setting('email_password', 'networkLimit', 0);
+		await env.setting('email_password', 'minLength', 128);
+		await env.setting('email_password', 'minLength', 12);
+		await env.setting('email_password', 'personalCheck', true);
+		/** @param {string} password */
+		const tryPassword = (password) =>
+			env.visitor('POST', '/v1/sign-up/password', { email: 'farhan.ali@example.com', name: 'Farhan Ali', password });
+		for (const password of ['my farhan password', 'farhan.ali the best', 'long password 1234', 'long qwerty password'])
+			expect(code(await tryPassword(password)), password).toBe('weak_password');
+		expect((await tryPassword('correct horse battery')).json.status).toBe('signed_in');
+		await env.setting('email_password', 'personalCheck', false);
+		await env.setting('email_password', 'minLength', 8);
+	});
+});

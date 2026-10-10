@@ -278,19 +278,46 @@ export const generateRecoveryCodes = () => {
 };
 
 /**
- * Index of the stored hash matching a recovery code, or -1.
- * @param {unknown} code
- * @param {ReadonlyArray<string>} hashes
+ * The hash of a recovery code imported from an older system (PLAN 0.8.10 A8): SHA-256 hex of `recovery:` and the code
+ * without spaces or dashes, in capitals.
+ * @param {string} code
  */
-export const matchRecoveryCode = (code, hashes) => {
+const legacyRecoveryHash = (code) => sha256(`recovery:${code.replace(/[\s-]/g, '').toUpperCase()}`);
+
+/**
+ * A stored recovery code: its hash and format (`v1`, Accounts' own; `sha256_prefixed`, imported, A8). Records saved
+ * before A8 hold the hash alone (v1).
+ * @typedef {{ hash: string, format: 'v1' | 'sha256_prefixed' } | string} RecoveryItem
+ */
+
+/**
+ * Index of the stored recovery code matching a code, or -1: Accounts' own format first, then the imported one.
+ * @param {unknown} code
+ * @param {ReadonlyArray<RecoveryItem>} items
+ */
+export const matchRecoveryCode = (code, items) => {
 	if (typeof code !== 'string' || code.length > 32) return -1;
-	const hash = recoveryHash(code);
+	const hashes = { v1: recoveryHash(code), sha256_prefixed: legacyRecoveryHash(code) };
 	let found = -1;
-	hashes.forEach((stored, index) => {
-		if (safeEqual(stored, hash) && found === -1) found = index;
+	items.forEach((item, index) => {
+		const { hash, format } = typeof item === 'string' ? { hash: item, format: /** @type {const} */ ('v1') } : item;
+		if (found === -1 && format in hashes && safeEqual(hash, hashes[format])) found = index;
 	});
 	return found;
 };
+
+/**
+ * Two-step sign-in imported from an older system (A8; the importer, Migration): the plain TOTP secret sealed at once,
+ * and the older system's recovery-code hashes, each working once.
+ * @param {Sealer} sealer
+ * @param {{ secret: string, recoveryHashes: ReadonlyArray<string>, aad: string, now: number }} input
+ */
+export const importedTwoStep = (sealer, { secret, recoveryHashes, aad, now }) => ({
+	sealed: sealer.seal(secret.toUpperCase().replace(/[\s=-]/g, ''), aad),
+	lastStep: null,
+	recovery: recoveryHashes.map((hash) => ({ hash: hash.toLowerCase(), format: /** @type {const} */ ('sha256_prefixed') })),
+	enabledAt: new Date(now),
+});
 
 /**
  * Verify a compact EdDSA JWS against public JWKs (by `kid`) and return its claims, or null. Header-borne keys and

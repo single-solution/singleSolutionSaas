@@ -1,0 +1,21 @@
+{
+	"type": "object",
+	"additionalProperties": false,
+	"properties": {
+		"requestableRoles": {
+			"type": "array",
+			"title": "Roles visitors can ask for",
+			"description": "Role keys, for example member.",
+			"default": [],
+			"items": {
+				"type": "string",
+				"maxLength": 40
+			}
+		},
+		"requireNote": {
+			"type": "boolean",
+			"title": "A note is required",
+			"default": false
+		}
+	}
+}

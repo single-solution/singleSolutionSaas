@@ -5,7 +5,7 @@
  * @module
  */
 import { problem } from '@ss/app-kit';
-import { checkAddresses, checkCustomValues, checkName, selfView } from '../core/profile.js';
+import { checkCustomValues, checkName, selfView } from '../core/profile.js';
 import { CODE_ATTEMPTS } from '../core/rules.js';
 import {
 	generateRecoveryCodes,
@@ -54,11 +54,7 @@ export const createAccount = (product, service, flows) => {
 			if (!checked.ok) throw invalid(checked.field, checked.message);
 			set.custom = checked.value;
 		}
-		if (body.addresses !== undefined) {
-			const checked = checkAddresses(body.addresses, () => service.newAddressId());
-			if (!checked.ok) throw invalid(checked.field, checked.message);
-			set.addresses = checked.value;
-		}
+		if (body.addresses !== undefined) set.addresses = await service.addressesOf(s, body.addresses, user);
 		return selfView((await s.store.users.update(user.id, set)) ?? user);
 	};
 
@@ -91,14 +87,19 @@ export const createAccount = (product, service, flows) => {
 		return undefined;
 	};
 
-	/** Set or change the password (the current one is asked when there is one). @param {any} ctx */
+	/**
+	 * Set or change the password (the current one is asked when there is one): users with an e-mail address while Email
+	 * + password is on, and users with a phone number while Phone + password is on (A2), each with that method's rules.
+	 * @param {any} ctx
+	 */
 	const changePassword = async (ctx) => {
 		const { s, user, session } = await service.signedIn(ctx);
 		const body = bodyOf(ctx.body);
-		if (!user.email) throw problem('validation_failed', 'Passwords go with an e-mail address.');
+		const method = service.passwordMethodOf(s, user);
+		if (!method) throw problem('validation_failed', 'Passwords go with an e-mail address or a phone number.');
 		if (user.passwordHash && (typeof body.current !== 'string' || !(await service.checkPassword(s, user, body.current))))
 			throw problem('sign_in_failed', 'The current password is wrong.');
-		const passwordHash = await flows.newPassword(s, body.password);
+		const passwordHash = await flows.newPassword(s, body.password, { method, who: user });
 		await s.store.users.update(user.id, { passwordHash });
 		// the other devices sign in again
 		for (const other of await s.store.sessions.ofUser(user.id))
@@ -154,7 +155,7 @@ export const createAccount = (product, service, flows) => {
 			twoStep: {
 				sealed: record.data.setup,
 				lastStep: /** @type {{ step: number }} */ (checked).step,
-				recovery: hashes,
+				recovery: hashes.map((hash) => ({ hash, format: 'v1' })),
 				enabledAt: new Date(now()),
 			},
 		});

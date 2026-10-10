@@ -251,14 +251,14 @@ describe('phone code and e-mail code', () => {
 	it('signs up and in with a code sent by SMS or WhatsApp through Notifications', async () => {
 		await env.switchOn(['email_password', 'phone_code', 'email_code']);
 		expect(code(await env.visitor('POST', '/v1/sign-in/phone/code', { phone: '0300 1234567' }))).toBe('validation_failed');
-		await env.setting('phone_code', 'defaultCallingCode', '+92');
-		await env.setting('phone_code', 'trunkPrefix', '0');
+		await env.setting('phone', 'defaultCallingCode', '+92');
+		await env.setting('phone', 'trunkPrefix', '0');
 		const asked = await env.visitor('POST', '/v1/sign-in/phone/code', { phone: '0300 1234567' });
 		expect(asked.status).toBe(202);
 		const sent = lastMessage();
 		expect(sent).toMatchObject({ channel: 'sms', template: 'accounts.phone_code', to: { phone: '+923001234567' } });
 		expect(String(sent.values.code)).toMatch(/^\d{6}$/);
-		expect(code(await env.visitor('POST', '/v1/sign-in/phone/code', { phone: '+923001234567' }))).toBe('too_soon');
+		expect(code(await env.visitor('POST', '/v1/sign-in/phone/code', { phone: '+923001234567' }))).toBe('code_cooldown');
 		const wrong = await env.visitor('POST', '/v1/sign-in/phone', {
 			phone: '+923001234567',
 			code: '000000' === sent.values.code ? '111111' : '000000',
@@ -300,7 +300,7 @@ describe('phone code and e-mail code', () => {
 			await env.visitor('POST', '/v1/sign-in/phone/code', { phone: '+15550001111' });
 		}
 		env.advance(31_000);
-		expect(code(await env.visitor('POST', '/v1/sign-in/phone/code', { phone: '+15550001111' }))).toBe('too_soon');
+		expect(code(await env.visitor('POST', '/v1/sign-in/phone/code', { phone: '+15550001111' }))).toBe('code_limit');
 		env.responders.set(`${NOTIFY}/v1/messages/whatsapp`, () => ({ status: 201, body: { status: 'failed' } }));
 		expect(code(await env.visitor('POST', '/v1/sign-in/phone/code', { phone: '+15550002222' }))).toBe('not_sent');
 		env.responders.delete(`${NOTIFY}/v1/messages/whatsapp`);
@@ -955,7 +955,8 @@ describe('edges', () => {
 			acceptTerms: true,
 		});
 		const t = pat.json.signIn;
-		expect(code(await env.visitor('PUT', '/v1/me/password', { password: 'a long new password' }, t))).toBe('validation_failed');
+		// a phone user sets a password while Phone + password is on (PLAN 0.8.10 A2)
+		expect((await env.visitor('PUT', '/v1/me/password', { password: 'a long new password' }, t)).status).toBe(204);
 		expect((await env.visitor('POST', '/v1/me/two-step/disable', { code: '1' }, t)).status).toBe(204);
 		expect(code(await env.visitor('POST', '/v1/me/two-step/enable', { challenge: 'x', code: '1' }, t))).toBe('code_invalid');
 		const cookie = await env.adminSession();
