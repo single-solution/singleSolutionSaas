@@ -94,7 +94,7 @@ export const createServerApi = (kit, lists) => {
 	};
 	/** @param {RequestContext} ctx @param {string} feature */
 	const requireOn = async (ctx, feature) => {
-		if (!(await kit.reports.isOn(website(ctx), feature)))
+		if (!kit.settings.sectionOn(feature, (await kit.reports.switches(website(ctx))).on))
 			throw problem('feature_off', `The feature ${feature} is off: its settings cannot be changed.`);
 	};
 
@@ -188,16 +188,16 @@ export const createServerApi = (kit, lists) => {
 					kit.reports.switches(website(ctx)),
 					kit.settings.settingsOfFeatures(
 						website(ctx),
-						manifest.features.map((f) => f.key),
+						kit.settings.sections.map((f) => f.key),
 					),
 				]);
 				return {
-					features: manifest.features.map((f) => ({
+					features: kit.settings.sections.map((f) => ({
 						key: f.key,
 						name: f.name,
-						on: on.includes(f.key),
+						on: kit.settings.sectionOn(f.key, on),
 						schema: f.settings,
-						values: on.includes(f.key) ? (values[f.key] ?? {}) : null,
+						values: kit.settings.sectionOn(f.key, on) ? (values[f.key] ?? {}) : null,
 					})),
 				};
 			},

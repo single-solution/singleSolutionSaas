@@ -179,7 +179,8 @@ export const createDashboard = (kit) => {
 		return body;
 	};
 	/** Merchants edit only settings of switched-on features. @param {RequestContext} ctx @param {string} feature */
-	const editable = async (ctx, feature) => !isMerchant(ctx) || (await kit.reports.isOn(website(ctx), feature));
+	const editable = async (ctx, feature) =>
+		!isMerchant(ctx) || kit.settings.sectionOn(feature, (await kit.reports.switches(website(ctx))).on);
 	/** @param {string} key */
 	const splitKey = (key) => {
 		const dot = key.indexOf('.');
@@ -325,19 +326,20 @@ export const createDashboard = (kit) => {
 			auth: 'dashboard',
 			handler: async (ctx) => {
 				// the switches and every saved value at once (one read of the values for all features)
+				const { sections, sectionOn } = kit.settings;
 				const [{ on }, values] = await Promise.all([
 					kit.reports.switches(website(ctx)),
 					kit.settings.settingsOfFeatures(
 						website(ctx),
-						manifest.features.map((f) => f.key),
+						sections.map((f) => f.key),
 					),
 				]);
-				const visible = manifest.features.filter((f) => !isMerchant(ctx) || on.includes(f.key));
+				const visible = sections.filter((f) => !isMerchant(ctx) || sectionOn(f.key, on));
 				return {
 					features: visible.map((f) => ({
 						key: f.key,
 						name: f.name,
-						on: on.includes(f.key),
+						on: sectionOn(f.key, on),
 						schema: f.settings,
 						values: values[f.key] ?? {},
 					})),
@@ -468,14 +470,14 @@ export const createDashboard = (kit) => {
 				const [values, texts, theme, format, recentChanges] = await Promise.all([
 					kit.settings.settingsOfFeatures(
 						null,
-						manifest.features.map((f) => f.key),
+						kit.settings.sections.map((f) => f.key),
 					),
 					kit.settings.textsOf(null),
 					kit.settings.themeOf(null),
 					kit.settings.formatOf(null),
 					kit.recent.list(null),
 				]);
-				const features = manifest.features.map((f) => ({
+				const features = kit.settings.sections.map((f) => ({
 					key: f.key,
 					name: f.name,
 					schema: f.settings,

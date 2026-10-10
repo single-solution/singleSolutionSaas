@@ -224,6 +224,64 @@ describe('settings API for the merchant’s server (K1)', () => {
 	});
 });
 
+describe('shared settings (several features use one setting)', () => {
+	const sharedSettings = {
+		layout: {
+			name: 'Layout',
+			features: ['notes', 'inbox'],
+			settings: {
+				type: 'object',
+				additionalProperties: false,
+				properties: { columns: { type: 'integer', title: 'Columns', default: 2, minimum: 1, maximum: 4 } },
+			},
+		},
+	};
+
+	it('stores one value under the group, shown and editable while any of its features is on', async () => {
+		const { call, server, switchOn, session, dash, websiteId, product } = await setup({ sharedSettings });
+		const merchant = await session({ kind: 'merchant' });
+		const listed = async () =>
+			(await (await dash(merchant, 'GET', `/v1/dashboard/websites/${websiteId}/settings`)).json()).features.map(
+				(/** @type {{ key: string }} */ f) => f.key,
+			);
+		expect(await listed()).toEqual([]);
+		const refused = await dash(merchant, 'PUT', `/v1/dashboard/websites/${websiteId}/settings/layout.columns`, { value: 3 });
+		expect(refused.status).toBe(403);
+		expect((await call('PUT', '/v1/settings/layout.columns', { token: server.token, body: { value: 3 } })).status).toBe(403);
+		await switchOn(['notes']);
+		expect(await listed()).toEqual(['notes', 'layout']);
+		const saved = await dash(merchant, 'PUT', `/v1/dashboard/websites/${websiteId}/settings/layout.columns`, { value: 3 });
+		expect(saved.status).toBe(204);
+		expect(await product.settings.values(websiteId, 'layout')).toEqual({ columns: 3 });
+		const api = await (await call('GET', '/v1/settings', { token: server.token })).json();
+		expect(api.features.at(-1)).toMatchObject({ key: 'layout', name: 'Layout', on: true, values: { columns: { value: 3 } } });
+		const put = await call('PUT', '/v1/settings/layout.columns', { token: server.token, body: { value: 4 } });
+		expect(await put.json()).toEqual({ key: 'layout.columns', value: 4, source: 'website' });
+		await switchOn(['notes', 'inbox']);
+		expect(await listed()).toEqual(['notes', 'inbox', 'layout']);
+		await switchOn([]);
+		expect(await listed()).toEqual([]);
+		expect(await product.settings.values(websiteId, 'layout')).toEqual({ columns: 4 });
+		const admin = await session();
+		const defaults = await (await dash(admin, 'GET', '/v1/dashboard/defaults')).json();
+		expect(defaults.features.map((/** @type {{ key: string }} */ f) => f.key)).toEqual(['notes', 'inbox', 'layout']);
+		expect((await dash(admin, 'PUT', '/v1/dashboard/defaults/layout.columns', { value: 1 })).status).toBe(204);
+	});
+
+	it('refuses shared settings that clash with a feature or name unknown features', async () => {
+		const settings = { type: 'object', properties: {} };
+		await expect(setup({ sharedSettings: { notes: { name: 'x', features: ['inbox'], settings } } })).rejects.toThrow(
+			/shared settings/,
+		);
+		await expect(setup({ sharedSettings: { other: { name: 'x', features: ['nope'], settings } } })).rejects.toThrow(
+			/shared settings/,
+		);
+		await expect(setup({ sharedSettings: { other: { name: 'x', features: [], settings } } })).rejects.toThrow(
+			/shared settings/,
+		);
+	});
+});
+
 describe('Format in the dashboard and the widgets (K7)', () => {
 	it('is edited per website and as a global default, and reaches the widget config with the time zone', async () => {
 		const { session, dash, websiteId, call, browser, switchOn, connectDatabase } = await setup();

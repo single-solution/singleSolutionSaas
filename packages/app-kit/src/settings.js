@@ -5,6 +5,10 @@
  * (English defaults from `strings/en.json`; a text is saved only with the same `{placeholders}`) and the theme
  * (colours, font family, radius, mode, custom CSS) are stored the same way, one value per field, and so is the Format
  * (PLAN 0.8.10 K7: locale, currency display and symbol, whole units, times). Every change writes Recent changes.
+ *
+ * Settings come in sections: each feature's settings, plus the product's shared settings (PLAN 0.8.10 A2, A11): a
+ * group of settings several features use, stored once under the group's key (`<group>.<setting>`) and in use, and
+ * shown to merchants, while any of its features is on.
  * @module
  */
 import { DEFAULT_FORMAT, FORMAT_FIELDS, formatViolation, validateSettingValue } from '@ss/contracts';
@@ -20,6 +24,11 @@ import { isObject } from './util.js';
 /** @typedef {'website' | 'default' | 'built-in'} Source where a value comes from */
 /** @typedef {{ colors: Record<string, string>, fontFamily: string, radius: number, mode: 'light' | 'dark' | 'auto', customCss: string }} Theme */
 /** @typedef {{ ok: true } | { ok: false, problem: ProblemResult }} Change */
+/** @typedef {{ name: string, features: string[], settings: ManifestFeature['settings'] }} SharedSettings */
+/**
+ * A settings section: a feature's settings, or shared settings with the features that use them.
+ * @typedef {{ key: string, name: string, settings: ManifestFeature['settings'], features: string[] }} Section
+ */
 
 /** The theme before anyone changes it: product CSS supplies the colours. */
 const DEFAULT_THEME = Object.freeze({
@@ -75,9 +84,24 @@ const themeViolation = (field, value) => {
 
 /**
  * @param {{ store: Store, manifest: Manifest, strings: Record<string, string>, recent: import('./recent.js').RecentChanges,
- *   now: () => number }} options
+ *   now: () => number, shared?: Record<string, SharedSettings> }} options
  */
-export const createSettings = ({ store, manifest, strings, recent, now }) => {
+export const createSettings = ({ store, manifest, strings, recent, now, shared = {} }) => {
+	/** Every settings section: the features', then the shared ones. @type {ReadonlyArray<Section>} */
+	const sections = Object.freeze([
+		...manifest.features.map((feature) => ({
+			key: feature.key,
+			name: feature.name,
+			settings: feature.settings,
+			features: [feature.key],
+		})),
+		...Object.entries(shared).map(([key, group]) => ({
+			key,
+			name: group.name,
+			settings: group.settings,
+			features: [...group.features],
+		})),
+	]);
 	/** @param {string | null} websiteId @param {string} kind @param {string} key */
 	const idOf = (websiteId, kind, key) => `${websiteId ?? '*'}|${kind}|${key}`;
 	/**
@@ -120,8 +144,15 @@ export const createSettings = ({ store, manifest, strings, recent, now }) => {
 	const log = (websiteId, who, what, detail) =>
 		recent.record({ websiteId, who, what: websiteId === null ? 'defaults' : what, detail });
 
-	/** @param {string} key @returns {ManifestFeature | undefined} */
-	const featureOf = (key) => manifest.features.find((feature) => feature.key === key);
+	/** A feature's settings or shared settings, by key. @param {string} key @returns {Section | undefined} */
+	const featureOf = (key) => sections.find((section) => section.key === key);
+
+	/**
+	 * Whether a section's settings are in use: its feature, or any feature sharing them, is on.
+	 * @param {string} key
+	 * @param {ReadonlyArray<string>} on the switched-on features
+	 */
+	const sectionOn = (key, on) => (featureOf(key)?.features ?? []).some((feature) => on.includes(feature));
 
 	/**
 	 * The settings of a feature with their values and sources, from a snapshot.
@@ -297,6 +328,8 @@ export const createSettings = ({ store, manifest, strings, recent, now }) => {
 	};
 
 	return Object.freeze({
+		sections,
+		sectionOn,
 		featureOf,
 		settingsOf,
 		settingsOfFeatures,

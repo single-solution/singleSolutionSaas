@@ -59,6 +59,9 @@ import { verifyToken } from '@ss/protocol';
  *   always there)
  * @property {{ indexes?: import('./data.js').IndexDefinition[], createClient?: (uri: string, options: import('mongodb').MongoClientOptions) => MongoClient }} [data]
  *   merchant database indexes (created on a website's first use per instance) and a client factory (tests)
+ * @property {Record<string, import('./settings.js').SharedSettings>} [sharedSettings] settings several features use
+ *   (PLAN 0.8.10 A2, A11): `{ <group>: { name, features, settings } }`, stored once as `<group>.<setting>`, read with
+ *   `product.settings.values(websiteId, '<group>')` and shown while any of `features` is on
  * @property {Record<string, import('./server-api.js').ListDefinition>} [lists] the product's list settings, which the
  *   settings API serves at `GET|PUT /v1/lists/:list` (K1)
  * @property {boolean} [events] the product publishes events (K5): `product.events.emit`, forwarded through
@@ -156,7 +159,17 @@ export const createProduct = (options) => {
 	const recent = createRecentChanges({ store, now, randomBytes });
 	const status = createStatus({ store, client: () => connection.active().client, now, logger });
 	const reports = createReports({ store, manifest, connection, status, recent, now, logger });
-	const settings = createSettings({ store, manifest, strings, recent, now });
+	const shared = options.sharedSettings ?? {};
+	for (const [key, group] of Object.entries(shared))
+		if (
+			!/^[a-z][a-z0-9_]{0,40}$/.test(key) ||
+			manifest.features.some((/** @type {{ key: string }} */ f) => f.key === key) ||
+			group.features.length === 0 ||
+			group.features.some((feature) => !manifest.features.some((/** @type {{ key: string }} */ f) => f.key === feature)) ||
+			group.settings?.type !== 'object'
+		)
+			throw kitError('invalid_config', `shared settings ${key} must name features of the manifest and have a key of its own`);
+	const settings = createSettings({ store, manifest, strings, recent, now, shared });
 	const sealer = createSealer(
 		healthy ? /** @type {string} */ (config?.encryptionKey) : Buffer.from(randomBytes(32)).toString('hex'),
 		randomBytes,
