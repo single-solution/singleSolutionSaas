@@ -48,6 +48,8 @@ export const TEXTS = Object.freeze({
 		noFeatures: 'No features on',
 		today: "Today's cost",
 		checklist: 'Setup checklist',
+		webhookUrlsAdded: '{count} added',
+		webhookUrlsNone: 'Add a URL in Settings',
 		widget: 'Widget installed',
 		widgetSeen: 'Last seen {time}',
 		widgetMissing: 'Not seen on your website in the last 7 days',

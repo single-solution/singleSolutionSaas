@@ -149,6 +149,7 @@ function OverviewTab({ websiteId }) {
 	const base = `/v1/dashboard/websites/${websiteId}`;
 	const { answer, reload } = useLoad(`${base}/overview`);
 	const templates = useLoad(`${base}/templates`);
+	const webhookUrls = useLoad(`${base}/lists/webhook_urls`);
 	const [busy, setBusy] = useState(false);
 	return (
 		<Loaded answer={answer}>
@@ -202,6 +203,17 @@ function OverviewTab({ websiteId }) {
 											detail={item.message}
 										/>
 									))}
+									{data.featuresOn.includes('webhooks') && webhookUrls.answer?.ok ? (
+										<CheckRow
+											tone={webhookUrls.answer.data.value.length > 0 ? 'success' : 'warning'}
+											badge={
+												webhookUrls.answer.data.value.length > 0
+													? fill(TEXTS.overview.webhookUrlsAdded, { count: webhookUrls.answer.data.value.length })
+													: TEXTS.overview.webhookUrlsNone
+											}
+											label={TEXTS.settings.webhooks.title}
+										/>
+									) : null}
 									{data.checklist.widget ? (
 										<CheckRow
 											tone={data.checklist.widget.installed ? 'success' : 'warning'}
