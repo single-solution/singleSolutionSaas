@@ -19,6 +19,7 @@ import {
 	pickVersion,
 	placeholdersOf,
 	renderTemplate,
+	sectionProblem,
 	templateView,
 } from '../core/templates.js';
 import { checkSendAt, isQuietHour, localTime, nextAttemptAt, quietUntil, withinLimits } from '../core/timing.js';
@@ -131,6 +132,49 @@ describe('templates', () => {
 			updatedAt: '1970-01-01T00:00:00.000Z',
 		});
 		expect(templateView({ ...template, language: 'ur' })).not.toHaveProperty('updatedAt');
+	});
+
+	it('shows an optional section only when its value is not empty (PLAN 0.8.10 N2)', () => {
+		const text = 'Order {order} is {status}.{?tracking} Track it: {tracking}{?courier} ({courier}){/courier}.{/tracking}';
+		expect(fillText(text, { order: 'IM-1', status: 'shipped', tracking: 'TRK9', courier: 'TCS' })).toBe(
+			'Order IM-1 is shipped. Track it: TRK9 (TCS).',
+		);
+		expect(fillText(text, { order: 'IM-1', status: 'shipped', tracking: 'TRK9' })).toBe(
+			'Order IM-1 is shipped. Track it: TRK9.',
+		);
+		expect(fillText(text, { order: 'IM-1', status: 'shipped', tracking: '  ', courier: 'TCS' })).toBe('Order IM-1 is shipped.');
+		expect(fillText('{?a}A{/a}-{?a}again{/a}', { a: 'x' })).toBe('A-again');
+		expect(fillText('{?reason}\nReason: {reason}{/reason}', {})).toBe('');
+		expect(sectionProblem('{?a}x{/a} and {?b}{?c}y{/c}{/b}')).toBeNull();
+		expect(sectionProblem('{?a}x')).toBe('Close {?a} with {/a}.');
+		expect(sectionProblem('x{/a}')).toBe('{/a} closes no {?a}.');
+		expect(sectionProblem('{?a}{?b}x{/a}{/b}')).toBe('Close {?b} before {/a}.');
+		expect(sectionProblem('{?a}{?a}x{/a}{/a}')).toBe('{?a} is already open: close it with {/a} first.');
+		expect(checkTemplate({ key: 'a', channel: 'sms', text: '{?reason}Reason: {reason}' })).toMatchObject({
+			ok: false,
+			field: 'text',
+			message: 'Close {?reason} with {/reason}.',
+		});
+		expect(checkTemplate({ key: 'a', channel: 'email', subject: 'Hi{/name}', text: 'x' })).toMatchObject({
+			ok: false,
+			field: 'subject',
+		});
+		const checked = checkTemplate({
+			key: 'ecommerce.order_cancelled',
+			channel: 'email',
+			subject: 'Order {order} cancelled{?reason}: {reason}{/reason}',
+			text: 'Your order {order} was cancelled.{?reason} Reason: {reason}{/reason}',
+		});
+		expect(checked.ok).toBe(true);
+		if (!checked.ok) return;
+		expect(renderTemplate(checked.value, { order: 'IM-2', reason: 'Out of stock' })).toMatchObject({
+			subject: 'Order IM-2 cancelled: Out of stock',
+			text: 'Your order IM-2 was cancelled. Reason: Out of stock',
+		});
+		expect(renderTemplate(checked.value, { order: 'IM-2' })).toMatchObject({
+			subject: 'Order IM-2 cancelled',
+			text: 'Your order IM-2 was cancelled.',
+		});
 	});
 
 	it('checks the values of a send', () => {

@@ -1,7 +1,8 @@
 /**
  * Templates (PLAN 0.8.5): one per template key × channel × language. Products and the send API name a template key
  * and the values; the merchant writes the words. A template's text fills `{placeholders}` from the values as plain
- * text. No I/O: the API, the dashboard and the widgets share it.
+ * text, and shows an optional section `{?name}…{/name}` only when the value `name` is not empty (PLAN 0.8.10 N2).
+ * No I/O: the API, the dashboard and the widgets share it.
  * @module
  */
 import { CHANNELS } from './channels.js';
@@ -26,6 +27,10 @@ const SUBJECT_LIMIT = 200;
 const BUILT_IN_VALUES = Object.freeze(['unsubscribeUrl']);
 
 const PLACEHOLDER = /\{([A-Za-z][A-Za-z0-9_]{0,63})\}/g;
+/** An optional section's opening `{?name}` or closing `{/name}` tag. */
+const SECTION_TAG = /\{([?/])([A-Za-z][A-Za-z0-9_]{0,63})\}/g;
+/** A whole optional section (sections of one name never nest, so the first closing tag of its name ends it). */
+const SECTION = /\{\?([A-Za-z][A-Za-z0-9_]{0,63})\}([\s\S]*?)\{\/\1\}/g;
 const LANGUAGE = /^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8}){0,3}$/;
 
 /** @typedef {import('./channels.js').Channel} Channel */
@@ -65,6 +70,28 @@ export const placeholdersOf = (text) => [
 ];
 
 /**
+ * What is wrong with the optional sections of a text, or null: every `{?name}` is closed by a later `{/name}`,
+ * sections nest without crossing, and a section never sits inside one of the same name.
+ * @param {string} text
+ * @returns {string | null}
+ */
+export const sectionProblem = (text) => {
+	/** @type {string[]} */
+	const open = [];
+	for (const [, kind, name] of text.matchAll(SECTION_TAG)) {
+		if (kind === '?') {
+			if (open.includes(/** @type {string} */ (name))) return `{?${name}} is already open: close it with {/${name}} first.`;
+			open.push(/** @type {string} */ (name));
+		} else if (open.at(-1) === name) open.pop();
+		else
+			return open.includes(/** @type {string} */ (name))
+				? `Close {?${open.at(-1)}} before {/${name}}.`
+				: `{/${name}} closes no {?${name}}.`;
+	}
+	return open.length > 0 ? `Close {?${open.at(-1)}} with {/${open.at(-1)}}.` : null;
+};
+
+/**
  * Check a template the merchant saves.
  * @param {unknown} input
  * @returns {{ ok: true, value: Template } | { ok: false, field: string, message: string }}
@@ -89,6 +116,10 @@ export const checkTemplate = (input) => {
 	if (titled && subject.length === 0) return fail('subject', channel === 'email' ? 'Write the subject.' : 'Write the title.');
 	if (subject.length > SUBJECT_LIMIT || /[\r\n]/.test(subject))
 		return fail('subject', `Use one line of at most ${SUBJECT_LIMIT} characters.`);
+	const textSections = sectionProblem(text);
+	if (textSections) return fail('text', textSections);
+	const subjectSections = titled ? sectionProblem(subject) : null;
+	if (subjectSections) return fail('subject', subjectSections);
 	const providerTemplate = typeof body.providerTemplate === 'string' ? body.providerTemplate.trim() : '';
 	if (providerTemplate !== '' && (channel !== 'whatsapp' || !/^[a-z0-9_]{1,512}$/.test(providerTemplate)))
 		return fail('providerTemplate', 'Only WhatsApp templates have a provider template name (lower case, digits and _).');
@@ -108,12 +139,31 @@ export const checkTemplate = (input) => {
 };
 
 /**
- * Fill `{placeholders}` with values (plain text; unknown placeholders stay as written).
+ * Whether a value is given and not empty (blank counts as empty).
+ * @param {Readonly<Record<string, string>>} values
+ * @param {string} name
+ */
+const hasValue = (values, name) => Object.hasOwn(values, name) && /** @type {string} */ (values[name]).trim() !== '';
+
+/**
+ * Keep the optional sections whose value is not empty (without their tags) and drop the others, inner ones too.
+ * @param {string} text
+ * @param {Readonly<Record<string, string>>} values
+ * @returns {string}
+ */
+const showSections = (text, values) =>
+	text.replace(SECTION, (_match, name, inner) => (hasValue(values, name) ? showSections(inner, values) : ''));
+
+/**
+ * Fill a text: optional sections `{?name}…{/name}` show only when `name` is not empty, then `{placeholders}` get their
+ * values (plain text; unknown placeholders stay as written).
  * @param {string} text
  * @param {Readonly<Record<string, string>>} values
  */
 export const fillText = (text, values) =>
-	text.replace(PLACEHOLDER, (match, name) => (Object.hasOwn(values, name) ? /** @type {string} */ (values[name]) : match));
+	showSections(text, values).replace(PLACEHOLDER, (match, name) =>
+		Object.hasOwn(values, name) ? /** @type {string} */ (values[name]) : match,
+	);
 
 /**
  * Check the values of a send: up to 50 names, each a string or a number of at most 1000 characters.

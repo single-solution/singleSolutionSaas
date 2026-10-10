@@ -72,7 +72,7 @@ export const TEXTS = Object.freeze({
 	settings: Object.freeze({
 		templatesTitle: 'Templates',
 		templatesHelp:
-			'One per template key, channel and language. Write {name} where a value goes; optional messages can use {unsubscribeUrl}. Keys of other products start with their id (accounts., ecommerce., chat., payments., growth.).',
+			'One per template key, channel and language. Write {name} where a value goes, and {?name}…{/name} around text shown only when name has a value; optional messages can use {unsubscribeUrl}. Keys of other products start with their id (accounts., ecommerce., chat., payments., growth.).',
 		featuresTitle: 'Feature settings',
 		featuresHelp: 'How each feature behaves on this website.',
 		looksTitle: 'Words and look',
