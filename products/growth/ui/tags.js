@@ -7,11 +7,12 @@
  *
  * Options (PLAN 0.8.10 G1): with `consentRequired` off, Consent Mode starts granted and every tag loads at once until
  * the visitor chooses (a choice they make is followed); with `ga4ViaGtm` on, Google Analytics 4 is left to the Tag
- * Manager container, which takes the events from the `dataLayer`.
+ * Manager container, which takes the events from the `dataLayer`. Site searches and contacts go to the loaded pixels
+ * too (G2), items named by the `contentIds` setting.
  * @module
  */
 import { consentMode, granted, tagChoice } from '../core/consent.js';
-import { pixelCalls } from '../core/pixels.js';
+import { contactCalls, pixelCalls, searchCalls } from '../core/pixels.js';
 
 /** @typedef {import('../core/config.js').Tags} Tags */
 /** @typedef {import('../core/consent.js').Choice} Choice */
@@ -141,31 +142,44 @@ export const createTags = ({ window: win, tags }) => {
 		if (tags.scripts.marketing) once('scripts.marketing', marketing, () => injectScripts(doc, tags.scripts.marketing));
 	};
 
+	/** The pixels loaded now. @returns {import('../core/pixels.js').Loaded} */
+	const loadedNow = () => ({
+		meta: loaded.has('meta'),
+		google: loaded.has('ga4') || loaded.has('ads'),
+		gtm: loaded.has('gtm'),
+		ads:
+			loaded.has('ads') && tags.ads !== null && tags.adsPurchaseLabel !== null
+				? { id: tags.ads, label: tags.adsPurchaseLabel }
+				: null,
+		tiktok: loaded.has('tiktok'),
+	});
+
 	/**
-	 * Pass a shop event to the loaded pixels.
-	 * @param {import('../core/pixels.js').Step} step
-	 * @param {import('../core/pixels.js').Detail} detail
+	 * Make pixel calls; a pixel the page removed since is skipped.
+	 * @param {import('../core/pixels.js').PixelCall[]} calls
 	 */
-	const forward = (step, detail) => {
-		const calls = pixelCalls(step, detail, {
-			meta: loaded.has('meta'),
-			google: loaded.has('ga4') || loaded.has('ads'),
-			gtm: loaded.has('gtm'),
-			ads:
-				loaded.has('ads') && tags.ads !== null && tags.adsPurchaseLabel !== null
-					? { id: tags.ads, label: tags.adsPurchaseLabel }
-					: null,
-			tiktok: loaded.has('tiktok'),
-		});
-		// a pixel the page removed since is skipped
-		const send = {
+	const send = (calls) => {
+		const to = {
 			meta: typeof w.fbq === 'function' ? w.fbq : null,
 			google: typeof w.gtag === 'function' ? w.gtag : null,
 			datalayer: Array.isArray(w.dataLayer) ? (/** @type {unknown} */ entry) => w.dataLayer.push(entry) : null,
 			tiktok: typeof w.ttq?.track === 'function' ? (/** @type {unknown[]} */ ...args) => w.ttq.track(...args) : null,
 		};
-		for (const call of calls) send[call.vendor]?.(...call.args);
+		for (const call of calls) to[call.vendor]?.(...call.args);
 	};
 
-	return Object.freeze({ apply, forward, loaded: () => [...loaded] });
+	/**
+	 * Pass a shop event to the loaded pixels.
+	 * @param {import('../core/pixels.js').Step} step
+	 * @param {import('../core/pixels.js').Detail} detail
+	 */
+	const forward = (step, detail) => send(pixelCalls(step, detail, loadedNow(), tags.contentIds));
+
+	/** Pass a site search to the loaded pixels (G2). @param {string} term */
+	const search = (term) => send(searchCalls(term, loadedNow()));
+
+	/** Pass a contact to the loaded pixels (G2). @param {string | null} method */
+	const contact = (method) => send(contactCalls(method, loadedNow()));
+
+	return Object.freeze({ apply, forward, search, contact, loaded: () => [...loaded] });
 };

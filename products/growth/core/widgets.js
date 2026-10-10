@@ -6,7 +6,10 @@
  * @module
  */
 
-/** The browser global `widget.js` sets: `window.SSGrowth.admin({ getTicket })`, `.consent`, `.search()`, `.notFound()`. */
+/**
+ * The browser global `widget.js` sets: `window.SSGrowth.admin({ getTicket })`, `.consent`, `.search()`, `.contact()`,
+ * `.notFound()`.
+ */
 export const WIDGET_GLOBAL = 'SSGrowth';
 
 /** Widgets mount only into elements with this attribute; its value is the widget key from manifest.json. */
@@ -33,6 +36,14 @@ export const BROWSER_EVENTS = Object.freeze({
 	'ss:begin_checkout': 'begin_checkout',
 	'ss:purchase': 'purchase',
 });
+
+/**
+ * More browser events the page script listens for (PLAN 0.8.10 G2): a site search (`detail`: `{ term, results? }`,
+ * also `SSGrowth.search(term, { results })`) and a contact (`detail`: `{ method? }`, for example a WhatsApp or phone
+ * link; also `SSGrowth.contact({ method })`). Both go to the loaded pixels; a search is also recorded (Searches and
+ * 404s).
+ */
+export const SITE_EVENTS = Object.freeze({ 'ss:search': 'search', 'ss:contact': 'contact' });
 
 /** The funnel steps, in order. */
 export const FUNNEL_STEPS = Object.freeze(['view_item', 'add_to_cart', 'begin_checkout', 'purchase']);

@@ -4,6 +4,10 @@
  * Tag Manager container is loaded, the same GA4 event pushed to its `dataLayer` as `{ event, ecommerce }`, which its
  * tags take, for example Google Analytics 4 inside Tag Manager, PLAN 0.8.10 G1) and TikTok (`ttq.track(…)`). Money
  * arrives in minor units with a currency and goes to the pixels in major units.
+ *
+ * Also (PLAN 0.8.10 G2): a site search (Meta `Search`, GA4 `search`, TikTok `Search`) and a contact (Meta `Contact`,
+ * GA4 `generate_lead`, TikTok `Contact`); items are named by their product id, or by their variant id with the
+ * `contentIds` setting `variant`.
  * @module
  */
 import { isAmount, isCurrency, toMajor } from './money.js';
@@ -17,6 +21,7 @@ const PIXEL_EVENTS = Object.freeze({
 });
 
 /** @typedef {keyof typeof PIXEL_EVENTS} Step */
+/** @typedef {'product' | 'variant'} ContentIds which id names an item */
 /** @typedef {{ id: string, variantId: string | null, name: string, price: number | null, quantity: number }} Item */
 /** @typedef {{ items: Item[], value: number | null, currency: string | null, orderId: string | null }} Detail */
 /** @typedef {{ vendor: 'meta' | 'google' | 'datalayer' | 'tiktok', args: unknown[] }} PixelCall */
@@ -83,13 +88,21 @@ const googleEvent = (name, params, loaded, ecommerce) => [
 ];
 
 /**
+ * The id that names an item: its product id, or with `variant` its variant id (the product id without one).
+ * @param {Item} item
+ * @param {ContentIds} contentIds
+ */
+const itemIdOf = (item, contentIds) => (contentIds === 'variant' ? (item.variantId ?? item.id) : item.id);
+
+/**
  * The pixel calls of one funnel event, for the tags that are loaded.
  * @param {Step} step
  * @param {Detail} detail
  * @param {Loaded} loaded
+ * @param {ContentIds} [contentIds]
  * @returns {PixelCall[]}
  */
-export const pixelCalls = (step, detail, loaded) => {
+export const pixelCalls = (step, detail, loaded, contentIds = 'product') => {
 	const names = PIXEL_EVENTS[step];
 	const currency = detail.currency;
 	const value = currency !== null && detail.value !== null ? toMajor(detail.value, currency) : undefined;
@@ -105,7 +118,7 @@ export const pixelCalls = (step, detail, loaded) => {
 				'track',
 				names.meta,
 				{
-					content_ids: detail.items.map((item) => item.id),
+					content_ids: detail.items.map((item) => itemIdOf(item, contentIds)),
 					content_type: 'product',
 					num_items: detail.items.reduce((sum, item) => sum + item.quantity, 0),
 					...money,
@@ -120,7 +133,7 @@ export const pixelCalls = (step, detail, loaded) => {
 				...money,
 				...(detail.orderId ? { transaction_id: detail.orderId } : {}),
 				items: detail.items.map((item) => ({
-					item_id: item.id,
+					item_id: itemIdOf(item, contentIds),
 					...(item.name ? { item_name: item.name } : {}),
 					...(item.variantId ? { item_variant: item.variantId } : {}),
 					quantity: item.quantity,
@@ -150,13 +163,70 @@ export const pixelCalls = (step, detail, loaded) => {
 			args: [
 				names.tiktok,
 				{
-					contents: detail.items.map((item) => ({ content_id: item.id, quantity: item.quantity, ...major(item.price) })),
+					contents: detail.items.map((item) => ({
+						content_id: itemIdOf(item, contentIds),
+						quantity: item.quantity,
+						...major(item.price),
+					})),
 					content_type: 'product',
 					...money,
 				},
 			],
 		});
 	return calls;
+};
+
+/**
+ * A site search's `detail` (`ss:search`, `SSGrowth.search`), checked: the term (at most 100 characters) and how many
+ * results the page found; null without a term.
+ * @param {unknown} raw
+ * @returns {{ term: string, results: number | null } | null}
+ */
+export const searchOf = (raw) => {
+	const detail = isObject(raw) ? raw : {};
+	const term = typeof detail.term === 'string' ? detail.term.replace(/\s+/g, ' ').trim().slice(0, 100) : '';
+	if (term === '') return null;
+	const results = Number.isSafeInteger(detail.results) && detail.results >= 0 ? detail.results : null;
+	return { term, results };
+};
+
+/**
+ * A contact's `detail` (`ss:contact`, `SSGrowth.contact`), checked: how the visitor got in touch (for example
+ * `whatsapp`; letters, digits, `_` and `-`, at most 40), or null.
+ * @param {unknown} raw
+ * @returns {{ method: string | null }}
+ */
+export const contactOf = (raw) => {
+	const method = isObject(raw) && typeof raw.method === 'string' ? raw.method.trim().toLowerCase() : '';
+	return { method: /^[a-z0-9_-]{1,40}$/.test(method) ? method : null };
+};
+
+/**
+ * The pixel calls of a site search (G2): Meta `Search`, GA4 `search`, TikTok `Search`.
+ * @param {string} term
+ * @param {Loaded} loaded
+ * @returns {PixelCall[]}
+ */
+export const searchCalls = (term, loaded) => [
+	...(loaded.meta ? [{ vendor: /** @type {const} */ ('meta'), args: ['track', 'Search', { search_string: term }] }] : []),
+	...googleEvent('search', { search_term: term }, loaded, false),
+	...(loaded.tiktok ? [{ vendor: /** @type {const} */ ('tiktok'), args: ['Search', { query: term }] }] : []),
+];
+
+/**
+ * The pixel calls of a contact (G2): Meta `Contact`, GA4 `generate_lead`, TikTok `Contact`, each with the method when
+ * there is one.
+ * @param {string | null} method
+ * @param {Loaded} loaded
+ * @returns {PixelCall[]}
+ */
+export const contactCalls = (method, loaded) => {
+	const params = method === null ? {} : { method };
+	return [
+		...(loaded.meta ? [{ vendor: /** @type {const} */ ('meta'), args: ['track', 'Contact', params] }] : []),
+		...googleEvent('generate_lead', params, loaded, false),
+		...(loaded.tiktok ? [{ vendor: /** @type {const} */ ('tiktok'), args: ['Contact', params] }] : []),
+	];
 };
 
 /**

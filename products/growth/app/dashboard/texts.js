@@ -126,7 +126,8 @@ export const TEXTS = Object.freeze({
 		scriptHelp:
 			'Add it to the head of every page, before the other products’ scripts; it shows the consent banner and the notice bar, loads your tags after consent and records analytics.',
 		events: 'Shop events',
-		eventsHelp: 'Browser events Ecommerce’s widgets send by themselves and your own code may send; also searches and 404s.',
+		eventsHelp:
+			'Browser events Ecommerce’s widgets send by themselves and your own code may send; also site searches, contacts and 404s.',
 		api: 'API',
 		apiHelp:
 			'Your server reads analytics, serves robots.txt and the verification tags, submits to IndexNow and runs the SEO checklist with the server token.',

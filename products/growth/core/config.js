@@ -98,7 +98,8 @@ export const noticeOf = (values, now) => {
 /**
  * The merchant's tags of switched-on features (malformed ids left out), and how they load (PLAN 0.8.10 G1): whether
  * they wait for consent (the `tags` shared setting `consentRequired`, true unless the merchant turns it off) and
- * whether Google Analytics 4 runs inside the Tag Manager container (`ga4ViaGtm`: Growth then does not load it).
+ * whether Google Analytics 4 runs inside the Tag Manager container (`ga4ViaGtm`: Growth then does not load it); and
+ * which item ids the pixels get (the `pixels` shared setting `contentIds`, G2: the product's, or the variant's).
  * @param {ReadonlyArray<string>} on
  * @param {FeatureValues} values
  */
@@ -108,6 +109,7 @@ export const tagsOf = (on, values) => {
 	return {
 		consentRequired: values.tags?.consentRequired !== false,
 		ga4ViaGtm: google && values.google_tags?.ga4ViaGtm === true,
+		contentIds: values.pixels?.contentIds === 'variant' ? /** @type {const} */ ('variant') : /** @type {const} */ ('product'),
 		meta: on.includes('meta_pixel') ? idOf(text(values, 'meta_pixel', 'pixelId'), TAG_IDS.meta) : null,
 		ga4: google ? idOf(text(values, 'google_tags', 'ga4Id'), TAG_IDS.ga4) : null,
 		ads: adsId,

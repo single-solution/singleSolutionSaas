@@ -35,7 +35,7 @@ import {
 import manifest from '../../manifest.json' with { type: 'json' };
 import { tagsOf, tagsReady } from '../../core/config.js';
 import { createSnippets } from '../../core/snippets.js';
-import { BROWSER_EVENTS } from '../../core/widgets.js';
+import { BROWSER_EVENTS, SITE_EVENTS } from '../../core/widgets.js';
 import { call, fill, useLoad } from './api.js';
 import { TEXTS } from './texts.js';
 
@@ -825,7 +825,7 @@ function DevelopersTab({ websiteId, portal }) {
 						<CodeBlock code={snippets.consent} />
 					</Section>
 					<Section title={TEXTS.developers.events} description={TEXTS.developers.eventsHelp}>
-						<CodeBlock code={Object.keys(BROWSER_EVENTS).join('\n')} />
+						<CodeBlock code={[...Object.keys(BROWSER_EVENTS), ...Object.keys(SITE_EVENTS)].join('\n')} />
 						<CodeBlock code={snippets.events} />
 						<CodeBlock code={snippets.page} />
 					</Section>

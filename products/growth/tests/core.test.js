@@ -4,7 +4,7 @@ import { linkOf, noticeOf, searchParamsOf, tagsOf, tagsReady, widgetSettings } f
 import { consentMode, granted, makeChoice, readChoice, tagChoice } from '../core/consent.js';
 import { checkBatch, checkEvent, countryOf, dayOf, expiryOf, mergeTotals, pathOf, ratingOf, textOf } from '../core/events.js';
 import { decimalsOf, isAmount, toMajor } from '../core/money.js';
-import { detailOf, funnelEvent, pixelCalls } from '../core/pixels.js';
+import { contactCalls, contactOf, detailOf, funnelEvent, pixelCalls, searchCalls, searchOf } from '../core/pixels.js';
 import {
 	attributesOf,
 	blocksAll,
@@ -183,6 +183,7 @@ describe('page script settings', () => {
 		expect(tagsOf(all, values)).toEqual({
 			consentRequired: true,
 			ga4ViaGtm: false,
+			contentIds: 'product',
 			meta: '123456789',
 			ga4: 'G-ABCD12',
 			ads: 'AW-123456',
@@ -203,6 +204,7 @@ describe('page script settings', () => {
 		expect(tagsOf(['google_tags'], viaGtm)).toMatchObject({ consentRequired: false, ga4ViaGtm: true, ga4: 'G-ABCD12' });
 		expect(tagsReady(['google_tags'], viaGtm)).toEqual({ ready: 0, total: 1 });
 		expect(tagsOf([], viaGtm).ga4ViaGtm).toBe(false);
+		expect(tagsOf([], { pixels: { contentIds: 'variant' } }).contentIds).toBe('variant');
 	});
 
 	it('shows the notice bar only between its dates, with a safe link', () => {
@@ -333,6 +335,29 @@ describe('pixels and money', () => {
 			},
 		]);
 		expect(funnelEvent('purchase', detail, '/c')).toMatchObject({ type: 'purchase', orderId: 'o1', value: 2500 });
+		// G2: variant ids, searches and contacts
+		const all = { meta: true, google: true, gtm: true, ads: null, tiktok: true };
+		const byVariant = pixelCalls('add_to_cart', detail, all, 'variant');
+		expect(byVariant[0]?.args[2]).toMatchObject({ content_ids: ['v', 'b'] });
+		expect(byVariant.at(-1)?.args[1]).toMatchObject({ contents: [{ content_id: 'v' }, { content_id: 'b' }] });
+		expect(searchOf({ term: ' a  b ', results: 2 })).toEqual({ term: 'a b', results: 2 });
+		expect(searchOf({ term: 'x', results: -1 })).toEqual({ term: 'x', results: null });
+		expect(searchOf(null)).toBeNull();
+		expect(contactOf({ method: 'Phone' })).toEqual({ method: 'phone' });
+		expect(contactOf({ method: 'no spaces allowed' })).toEqual({ method: null });
+		expect(contactOf(undefined)).toEqual({ method: null });
+		expect(searchCalls('shoes', all).map((call) => [call.vendor, ...call.args])).toEqual([
+			['meta', 'track', 'Search', { search_string: 'shoes' }],
+			['google', 'event', 'search', { search_term: 'shoes' }],
+			['datalayer', { event: 'search', search_term: 'shoes' }],
+			['tiktok', 'Search', { query: 'shoes' }],
+		]);
+		expect(contactCalls(null, { ...all, gtm: false })).toEqual([
+			{ vendor: 'meta', args: ['track', 'Contact', {}] },
+			{ vendor: 'google', args: ['event', 'generate_lead', {}] },
+			{ vendor: 'tiktok', args: ['Contact', {}] },
+		]);
+		expect(searchCalls('x', { meta: false, google: false, gtm: false, ads: null, tiktok: false })).toEqual([]);
 		expect(funnelEvent('view_item', bare, '/c')).toEqual({ type: 'view_item', path: '/c', items: [] });
 	});
 });

@@ -104,7 +104,7 @@ describe('the page script', () => {
 		const fetch = serve({ [`GET ${CONFIG_PATH}`]: () => answer(403) });
 		await startWidget({ window, script: script(null) }).ready;
 		expect(fetch).not.toHaveBeenCalled();
-		expect(Object.keys(w[WIDGET_GLOBAL])).toEqual(['admin', 'consent', 'search', 'notFound']);
+		expect(Object.keys(w[WIDGET_GLOBAL])).toEqual(['admin', 'consent', 'search', 'contact', 'notFound']);
 		await startWidget({ window, script: script('browser-token') }).ready;
 		expect(document.body.children).toHaveLength(0);
 		fetch.mockImplementation(async () => {
@@ -363,6 +363,68 @@ describe('store-conversion options with the real page script (PLAN 0.8.10 G1–G
 		await vi.advanceTimersByTimeAsync(0);
 		await next.ready;
 		expect(sources()).toEqual([]);
+	});
+
+	it('G2: searches and contacts reach the pixels, with variant ids when the merchant picks them', async () => {
+		vi.useFakeTimers({ toFake: ['setTimeout'] });
+		window.history.replaceState(null, '', '/search?q=Blue+case');
+		serve({
+			[`GET ${CONFIG_PATH}`]: () =>
+				answer(
+					200,
+					configOf(['visitor_analytics', 'searches_404s', 'meta_pixel', 'google_tags', 'tiktok_pixel'], {
+						tags: { consentRequired: false },
+						pixels: { contentIds: 'variant' },
+						visitor_analytics: { requireConsent: false },
+						meta_pixel: { pixelId: '1234567' },
+						google_tags: { ga4Id: 'G-ABCD12' },
+						tiktok_pixel: { pixelId: 'CABCDEFGHIJ12' },
+					}),
+				),
+			'POST /v1/collect': () => answer(202),
+		});
+		const page = startWidget({ window, script: script('t') });
+		// a search the page dispatches before the config is there waits for it
+		window.dispatchEvent(new window.CustomEvent('ss:search', { detail: { term: '  red   phone ', results: 3 } }));
+		await vi.advanceTimersByTimeAsync(0);
+		await page.ready;
+		w.ttq.track = vi.fn();
+		window.dispatchEvent(new window.CustomEvent('ss:contact', { detail: { method: 'WhatsApp' } }));
+		w[WIDGET_GLOBAL].contact();
+		w[WIDGET_GLOBAL].search('cables', { results: 0 });
+		window.dispatchEvent(new window.CustomEvent('ss:search', { detail: { term: '' } }));
+		window.dispatchEvent(
+			new window.CustomEvent('ss:view_item', {
+				detail: { currency: 'USD', value: 1250, items: [{ id: 'prd_1', variantId: 'var_9', price: 1250 }, { id: 'prd_2' }] },
+			}),
+		);
+		const meta = w.fbq.queue.map((/** @type {unknown[]} */ call) => call.slice(1, 3));
+		expect(meta).toEqual(
+			expect.arrayContaining([
+				['Search', { search_string: 'Blue case' }],
+				['Search', { search_string: 'red phone' }],
+				['Contact', { method: 'whatsapp' }],
+				['Contact', {}],
+				['Search', { search_string: 'cables' }],
+			]),
+		);
+		expect(meta).toContainEqual(['ViewContent', expect.objectContaining({ content_ids: ['var_9', 'prd_2'] })]);
+		const google = [...w.dataLayer].filter((entry) => entry[0] === 'event').map((entry) => [entry[1], entry[2]]);
+		expect(google).toEqual(
+			expect.arrayContaining([
+				['search', { search_term: 'red phone' }],
+				['generate_lead', { method: 'whatsapp' }],
+				['view_item', expect.objectContaining({ items: [expect.objectContaining({ item_id: 'var_9' }), expect.anything()] })],
+			]),
+		);
+		expect(w.ttq.track).toHaveBeenCalledWith('Contact', { method: 'whatsapp' });
+		expect(w.ttq.track).toHaveBeenCalledWith('Search', { query: 'cables' });
+		await vi.advanceTimersByTimeAsync(1000);
+		expect(collected().filter((event) => event.type === 'search')).toEqual([
+			{ type: 'search', path: '/search', term: 'Blue case' },
+			{ type: 'search', path: '/search', term: 'red phone', results: 3 },
+			{ type: 'search', path: '/search', term: 'cables', results: 0 },
+		]);
 	});
 });
 

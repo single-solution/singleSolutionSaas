@@ -4,16 +4,17 @@
  * keeps the visitor's consent (the banner, or `SSGrowth.consent.set()` from the merchant's own tool), loads the tags
  * once their category is granted, shows the notice bar, records anonymous analytics (page views, searches, 404s, Web
  * Vitals) and the shop events (`ss:view_item`, `ss:add_to_cart`, `ss:begin_checkout`, `ss:purchase`), which it also
- * passes to the loaded pixels. It listens for the shop events from the moment it runs and keeps them until the config
- * is there. Without `data-token` (the merchant's admin pages) it only offers `window.SSGrowth.admin({ getTicket })`,
+ * passes to the loaded pixels, and site searches and contacts (`ss:search`, `ss:contact`, `SSGrowth.search()`,
+ * `SSGrowth.contact()`; PLAN 0.8.10 G2), which also go to the pixels. It listens for these events from the moment it
+ * runs and keeps them until the config is there. Without `data-token` (the merchant's admin pages) it only offers `window.SSGrowth.admin({ getTicket })`,
  * which mounts the admin widgets of switched-on features: `analytics_dashboard` and `seo_checklist`. Nothing renders
  * while the product is stopped, its features are off or the merchant database is not connected.
  * @module
  */
 import { viewerOf } from '@ss/app-kit/widget';
 import { granted } from '../core/consent.js';
-import { detailOf, funnelEvent } from '../core/pixels.js';
-import { BROWSER_EVENTS, WIDGET_ATTRIBUTE, WIDGET_FEATURES, WIDGET_GLOBAL } from '../core/widgets.js';
+import { contactOf, detailOf, funnelEvent, searchOf } from '../core/pixels.js';
+import { BROWSER_EVENTS, SITE_EVENTS, WIDGET_ATTRIBUTE, WIDGET_FEATURES, WIDGET_GLOBAL } from '../core/widgets.js';
 import { mountAnalyticsDashboard } from './analytics-dashboard.js';
 import { createCollector, markedNotFound, pageView, searchOnPage, watchVitals } from './collect.js';
 import { createConsent, mountConsentBanner, storageOf } from './consent.js';
@@ -113,6 +114,37 @@ export const startWidget = ({ window: win, script }) => {
 			});
 		});
 
+	/**
+	 * A site search: recorded (Searches and 404s) and passed to the pixels (G2).
+	 * @param {unknown} raw `{ term, results? }`
+	 * @param {string} at the page's path
+	 */
+	const siteSearch = (raw, at) => {
+		const found = searchOf(raw);
+		if (found === null) return;
+		whenReady(({ config, collector, tags }) => {
+			if (config.settings.record.searches)
+				collector.record(() => ({
+					type: 'search',
+					path: at,
+					term: found.term,
+					...(found.results === null ? {} : { results: found.results }),
+				}));
+			tags.search(found.term);
+		});
+	};
+	/** A contact, passed to the pixels (G2). @param {unknown} raw `{ method? }` */
+	const contact = (raw) => {
+		const { method } = contactOf(raw);
+		whenReady(({ tags }) => tags.contact(method));
+	};
+	for (const [name, kind] of Object.entries(SITE_EVENTS))
+		win.addEventListener(name, (event) => {
+			const detail = /** @type {CustomEvent} */ (event).detail;
+			if (kind === 'search') siteSearch(detail, path());
+			else contact(detail);
+		});
+
 	const ready = (async () => {
 		if (!token) return;
 		const config = await loadConfig(request, `${base}${CONFIG_PATH}`, token);
@@ -136,11 +168,13 @@ export const startWidget = ({ window: win, script }) => {
 			mountNoticeBar({ host: hostFor('notice_bar', 'start'), config, visits });
 
 		if (record.visits) collector.record(() => pageView({ window: win, visits, now }));
-		if (record.searches) {
-			const found = searchOnPage(win, record.searchParams);
-			if (found) collector.record(() => found);
-			if (markedNotFound(doc)) collector.record(() => ({ type: 'not_found', path: path() }));
+		// a search results page: recorded, and passed to the pixels loaded now (G2)
+		const found = searchOnPage(win, record.searchParams);
+		if (found) {
+			if (record.searches) collector.record(() => found);
+			tags.search(String(found.term));
 		}
+		if (record.searches && markedNotFound(doc)) collector.record(() => ({ type: 'not_found', path: path() }));
 		if (record.vitals)
 			watchVitals({
 				window: win,
@@ -197,21 +231,15 @@ export const startWidget = ({ window: win, script }) => {
 			get: () => consent.get(),
 		}),
 		/**
-		 * Record a site search the page ran itself.
+		 * A site search the page ran itself: recorded and passed to the pixels (as `ss:search`).
 		 * @param {unknown} term @param {{ results?: number }} [options]
 		 */
-		search: (term, options = {}) => {
-			const at = path();
-			whenReady(({ config, collector }) => {
-				if (config.settings.record.searches && typeof term === 'string' && term.trim() !== '')
-					collector.record(() => ({
-						type: 'search',
-						path: at,
-						term,
-						...(Number.isSafeInteger(options.results) ? { results: options.results } : {}),
-					}));
-			});
-		},
+		search: (term, options = {}) => siteSearch({ term, results: options?.results }, path()),
+		/**
+		 * The visitor got in touch (for example a WhatsApp link): passed to the pixels (as `ss:contact`).
+		 * @param {{ method?: string }} [detail]
+		 */
+		contact: (detail) => contact(detail),
 		/** Record this page as one that does not exist (404). */
 		notFound: () => {
 			const at = path();

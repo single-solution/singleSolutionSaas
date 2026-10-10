@@ -37,7 +37,10 @@ export const createSnippets = ({ base, widgets, permissions }) => {
 		`  ${WIDGET_GLOBAL}.notFound(); // or call it from your code`,
 		'  // a site search your page runs itself (search result pages with ?q= are found by themselves)',
 		`  ${WIDGET_GLOBAL}.search('blue shoes', { results: 0 });`,
+		"  // or as a browser event: window.dispatchEvent(new CustomEvent('ss:search', { detail: { term: 'blue shoes', results: 0 } }))",
 		'</script>',
+		'<!-- a contact: the pixels get Contact (Meta, TikTok) and generate_lead (Google Analytics) -->',
+		`<a href="https://wa.me/15550000000" onclick="${WIDGET_GLOBAL}.contact({ method: 'whatsapp' })">WhatsApp us</a>`,
 	].join('\n');
 	const events = [
 		'// Ecommerce’s widgets send these by themselves; your own code may send them too.',

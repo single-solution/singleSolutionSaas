@@ -25,6 +25,7 @@ import tiktokPixel from '../schemas/tiktok_pixel.settings.json' with { type: 'js
 import visitorAnalytics from '../schemas/visitor_analytics.settings.json' with { type: 'json' };
 import webVitals from '../schemas/web_vitals.settings.json' with { type: 'json' };
 import tagsShared from '../schemas/tags.shared.json' with { type: 'json' };
+import pixelsShared from '../schemas/pixels.shared.json' with { type: 'json' };
 import { widgetSettings } from '../core/config.js';
 import { INDEXES } from './store.js';
 import { createWeb } from './web.js';
@@ -48,7 +49,7 @@ const SETTINGS = {
 
 /**
  * Settings several features use, stored once as `<group>.<setting>` and shown while any of their features is on
- * (PLAN 0.8.10 G1, G2): whether the tags wait for consent.
+ * (PLAN 0.8.10 G1, G2): whether the tags wait for consent, and which item ids the pixels get.
  * @type {Record<string, { name: string, features: string[], settings: any }>}
  */
 export const SHARED_SETTINGS = {
@@ -57,6 +58,7 @@ export const SHARED_SETTINGS = {
 		features: ['meta_pixel', 'google_tags', 'tiktok_pixel', 'custom_scripts'],
 		settings: tagsShared,
 	},
+	pixels: { name: 'Pixel events', features: ['meta_pixel', 'google_tags', 'tiktok_pixel'], settings: pixelsShared },
 };
 
 /** The manifest as the kit and the Portal take it: settings schemas inline. */
