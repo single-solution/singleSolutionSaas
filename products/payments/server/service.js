@@ -377,17 +377,43 @@ export const createService = (product) => {
 	};
 
 	/**
-	 * The merchant confirms a bank transfer arrived.
-	 * @param {Site} s @param {PaymentRecord} payment @param {Actor} by
+	 * The payer's proof of a bank transfer is in the merchant's storage: recorded with the transfer's reference, and
+	 * told to the merchant (`payment.proof_uploaded`, PLAN 0.8.10 P3).
+	 * @param {Site} s @param {PaymentRecord} payment
+	 * @param {{ key: string, type: string, size: number }} proof @param {string} reference
+	 * @returns {Promise<boolean>} false when the payment changed meanwhile
 	 */
-	const confirmTransfer = async (s, payment, by) => {
+	const recordProof = async (s, payment, proof, reference) => {
+		const changed = await s.store.payments.change(
+			payment.id,
+			['pending'],
+			{ proof: { ...proof, at: new Date(now()) } },
+			{ event: 'proof', ...(reference ? { reference } : {}) },
+		);
+		if (!changed) return false;
+		await emit(s, 'payment.proof_uploaded', paymentEventData(view(s, changed)));
+		return true;
+	};
+
+	/**
+	 * The merchant confirms a bank transfer arrived, with the transfer's reference and a note (PLAN 0.8.10 P3).
+	 * @param {Site} s @param {PaymentRecord} payment @param {Actor} by
+	 * @param {{ reference: string, note: string }} [input]
+	 */
+	const confirmTransfer = async (s, payment, by, { reference, note } = { reference: '', note: '' }) => {
 		if (payment.gateway !== 'bank_transfer' || payment.status !== 'pending')
 			throw problem('conflict', 'Only a pending bank transfer can be confirmed.');
 		const paid = await s.store.payments.change(
 			payment.id,
 			['pending'],
 			{ status: 'paid', paidAt: new Date(now()) },
-			{ event: 'paid', detail: 'transfer confirmed', by: nameOf(by) },
+			{
+				event: 'paid',
+				detail: 'transfer confirmed',
+				by: nameOf(by),
+				...(reference ? { reference } : {}),
+				...(note ? { note } : {}),
+			},
 		);
 		if (!paid) throw problem('conflict', 'The payment changed meanwhile; read it again.');
 		if (paid.linkId) await s.store.links.countPaid(paid.linkId);
@@ -465,6 +491,7 @@ export const createService = (product) => {
 		apply,
 		recheck,
 		refund,
+		recordProof,
 		confirmTransfer,
 		subscribe,
 		recheckSubscription,

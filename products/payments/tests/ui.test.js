@@ -8,6 +8,7 @@ import { mountPaymentsAdmin } from '../ui/payments-admin.js';
 import { mountSubscriptionsAdmin } from '../ui/subscriptions-admin.js';
 import { createTicketSource } from '../ui/tickets.js';
 import { ADMIN_CONFIG_PATH, CONFIG_PATH, startWidget } from '../ui/widget.js';
+import { PAY_SCRIPT, renderBankPage } from '../server/pages.js';
 
 const BASE = 'https://payments.example.dev';
 
@@ -357,6 +358,8 @@ describe('Payments admin widget', () => {
 	it('shows details: refunds, confirms a transfer, opens the proof', async () => {
 		const host = place('payments_admin');
 		const pending = { ...PAYMENT, id: 'pay_5', status: 'pending', proof: { type: 'image/png', size: 1 } };
+		/** @type {any[]} */
+		const confirmBodies = [];
 		let refundReply = answer(422, { detail: 'Too much' });
 		const open = vi.fn();
 		const client = api({
@@ -364,7 +367,17 @@ describe('Payments admin widget', () => {
 			'GET /v1/admin/payments/pay_1': () => answer(200, PAYMENT),
 			'GET /v1/admin/payments/pay_5': () => answer(200, pending),
 			'POST /v1/admin/payments/pay_1/refunds': () => refundReply,
-			'POST /v1/admin/payments/pay_5/confirm': () => answer(200, { ...pending, status: 'paid' }),
+			'POST /v1/admin/payments/pay_5/confirm': (/** @type {any} */ init) => {
+				confirmBodies.push(JSON.parse(init.body));
+				return answer(200, {
+					...pending,
+					status: 'paid',
+					history: [
+						...pending.history,
+						{ at: pending.createdAt, event: 'paid', reference: 'TRX-1', note: 'In the bank app' },
+					],
+				});
+			},
 			'GET /v1/admin/payments/pay_5/proof': () => answer(200, { url: 'https://bucket/proof' }),
 			'GET /v1/admin/payments/pay_1/proof': () => answer(404),
 		});
@@ -404,10 +417,18 @@ describe('Payments admin widget', () => {
 		press(/** @type {HTMLElement} */ (second), strings['admin.proof']);
 		await flush();
 		expect(open).toHaveBeenCalledWith('https://bucket/proof');
+		// the transfer's reference and a note go with the confirmation (PLAN 0.8.10 P3)
+		const fields = /** @type {HTMLElement} */ (second?.querySelector('.details .confirm'));
+		expect(fields.textContent).toBe(`${strings['admin.confirmReference']}${strings['admin.confirmNote']}`);
+		/** @type {HTMLInputElement} */ (fields.querySelector('input[name="reference"]')).value = ' TRX-1 ';
+		/** @type {HTMLInputElement} */ (fields.querySelector('input[name="note"]')).value = 'In the bank app';
 		press(/** @type {HTMLElement} */ (second), strings['admin.confirm']);
 		await flush();
+		expect(confirmBodies).toEqual([{ reference: 'TRX-1', note: 'In the bank app' }]);
 		expect(second?.querySelector('.details [role="status"]')?.textContent).toBe(strings['admin.confirmed']);
 		expect(second?.textContent).toContain('Paid');
+		expect(second?.querySelector('.details')?.textContent).toContain('paid · TRX-1 · In the bank app');
+		expect(second?.querySelector('.details .confirm')).toBeNull();
 	});
 
 	it('says when confirming fails, the list is empty or cannot load, and when signed out', async () => {
@@ -620,5 +641,44 @@ describe('admin widgets through widget.js', () => {
 		scheduled[0]?.();
 		await flush();
 		expect(source.current()).toBe('b');
+	});
+});
+
+describe('the hosted bank page and /pay.js', () => {
+	it('uploads the proof straight to storage with the reference the payer typed (P3)', async () => {
+		const html = renderBankPage({
+			texts: strings,
+			business: 'Shop',
+			amount: 250000,
+			currency: 'PKR',
+			reference: 'INV-9',
+			bank: { accountTitle: '', bankName: '', accountNumber: '', iban: '', instructions: 'We send details on WhatsApp.' },
+			proof: { action: 'https://payments.example.dev/pay/web_1/pay_1/proof', maxBytes: 1000 },
+			uploaded: false,
+		});
+		document.body.innerHTML = new window.DOMParser().parseFromString(html, 'text/html').body.innerHTML;
+		expect(document.body.textContent).toContain('as explained below');
+		/** @type {Array<{ url: string, body: unknown }>} */
+		const calls = [];
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async (/** @type {string} */ url, /** @type {any} */ init) => {
+				calls.push({ url, body: init.body });
+				if (url.endsWith('/proof'))
+					return new Response(JSON.stringify({ upload: { method: 'PUT', url: 'https://bucket/p', headers: {} }, key: 'k' }));
+				return new Response('{}');
+			}),
+		);
+		const form = /** @type {HTMLFormElement} */ (document.querySelector('form[data-proof]'));
+		const file = new window.File(['png'], 'proof.png', { type: 'image/png' });
+		Object.defineProperty(form.querySelector('input[type="file"]'), 'files', { value: [file] });
+		/** @type {HTMLInputElement} */ (form.querySelector('input[name="reference"]')).value = ' TRX-9 ';
+		new Function(PAY_SCRIPT)();
+		form.dispatchEvent(new window.Event('submit', { cancelable: true }));
+		await flush();
+		expect(calls.map((call) => call.url)).toEqual([form.action, 'https://bucket/p', `${form.action}/done`]);
+		expect(JSON.parse(String(calls[2]?.body))).toEqual({ key: 'k', reference: 'TRX-9' });
+		expect(form.querySelector('[role="status"]')?.textContent).toBe(strings['bank.uploaded']);
+		vi.unstubAllGlobals();
 	});
 });

@@ -86,7 +86,9 @@ export const mountPaymentsAdmin = ({ host, api, config, save, open }) => {
 							doc,
 							'li',
 							{},
-							[date(entry.at), entry.event, entry.detail ?? '', entry.by ?? ''].filter(Boolean).join(' · '),
+							[date(entry.at), entry.event, entry.detail ?? '', entry.by ?? '', entry.reference ?? '', entry.note ?? '']
+								.filter(Boolean)
+								.join(' · '),
 						),
 					),
 				);
@@ -134,9 +136,27 @@ export const mountPaymentsAdmin = ({ host, api, config, save, open }) => {
 				}
 				const actions = element(doc, 'div', { class: 'actions' });
 				if (can('bank_transfer') && payment.gateway === 'bank_transfer' && payment.status === 'pending') {
+					// the transfer's reference and a note go with the confirmation (PLAN 0.8.10 P3)
+					const reference = /** @type {HTMLInputElement} */ (
+						element(doc, 'input', { name: 'reference', maxlength: '120', 'aria-label': t('admin.confirmReference') })
+					);
+					const remark = /** @type {HTMLInputElement} */ (
+						element(doc, 'input', { name: 'note', maxlength: '500', 'aria-label': t('admin.confirmNote') })
+					);
+					const fields = element(doc, 'div', { class: 'confirm' });
+					fields.append(
+						element(doc, 'label', {}, t('admin.confirmReference')),
+						reference,
+						element(doc, 'label', {}, t('admin.confirmNote')),
+						remark,
+					);
+					panel.append(fields);
 					const confirm = element(doc, 'button', { type: 'button' }, t('admin.confirm'));
 					confirm.addEventListener('click', async () => {
-						const answer = await adminCall(api, 'POST', `/v1/admin/payments/${payment.id}/confirm`);
+						const answer = await adminCall(api, 'POST', `/v1/admin/payments/${payment.id}/confirm`, {
+							reference: reference.value.trim(),
+							note: remark.value.trim(),
+						});
 						if (!answer.ok) {
 							note.textContent = fill(t('admin.confirmFailed'), { reason: answer.data?.detail ?? '' });
 							return;

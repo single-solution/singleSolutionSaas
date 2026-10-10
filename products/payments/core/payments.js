@@ -19,7 +19,13 @@ export const SUBSCRIPTION_STATUSES = Object.freeze(
  * Notifications as `payments.<type>`).
  */
 export const EVENT_TYPES = Object.freeze(
-	/** @type {const} */ (['payment.paid', 'payment.failed', 'payment.refunded', 'subscription.updated']),
+	/** @type {const} */ ([
+		'payment.paid',
+		'payment.failed',
+		'payment.refunded',
+		'payment.proof_uploaded',
+		'subscription.updated',
+	]),
 );
 /** The largest event data the kit takes (16 kB of JSON). */
 export const EVENT_DATA_LIMIT = 16 * 1024;
@@ -248,6 +254,23 @@ export const statusAfterRefund = (payment, amount) =>
 	payment.refunded + amount >= payment.amount ? 'refunded' : 'partially_refunded';
 
 /**
+ * What the payer or the merchant adds to a bank transfer (PLAN 0.8.10 P3): the transfer's `reference` (at most 120
+ * characters) with a proof or a confirmation, and the merchant's `note` (at most 500) with a confirmation. Plain
+ * one-line texts; '' when absent.
+ * @param {unknown} body
+ * @param {{ note?: boolean }} [options] `note`: a note is taken too (confirmations)
+ * @returns {{ ok: true, value: { reference: string, note: string } } | { ok: false, field: string, message: string }}
+ */
+export const checkTransferInput = (body, { note: withNote = false } = {}) => {
+	const input = isObject(body) ? body : {};
+	const reference = cleanText(input.reference, 120);
+	if (reference === null) return { ok: false, field: 'reference', message: 'reference is at most 120 characters.' };
+	const note = withNote ? cleanText(input.note, 500) : '';
+	if (note === null) return { ok: false, field: 'note', message: 'note is at most 500 characters.' };
+	return { ok: true, value: { reference, note } };
+};
+
+/**
  * Whether a payment is confirmed for the exact amount and currency (PLAN 0.3: Ecommerce marks an order paid only for
  * the same website and the order's exact amount). A payment refunded later was still paid.
  * @param {{ status: string, amount: number, currency: string }} payment
@@ -295,6 +318,8 @@ export const paymentView = (payment, checkoutUrl) => ({
 		event: entry.event,
 		...(entry.detail ? { detail: entry.detail } : {}),
 		...(entry.by ? { by: entry.by } : {}),
+		...(entry.reference ? { reference: entry.reference } : {}),
+		...(entry.note ? { note: entry.note } : {}),
 	})),
 	checkoutUrl,
 	paidAt: iso(payment.paidAt),

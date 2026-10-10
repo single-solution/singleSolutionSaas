@@ -626,14 +626,38 @@ describe('bank transfer', () => {
 		expect(signed.json.upload.url).toContain(BUCKET);
 		expect((await env.call('POST', `${base}/done`, { body: { key: 'other/key.png' } })).status).toBe(422);
 		expect((await env.call('POST', `${base}/done`, { body: { key: `payments/proofs/${payment.id}.gif` } })).status).toBe(422);
-		expect((await env.call('POST', `${base}/done`, { body: { key: signed.json.key } })).json).toEqual({ uploaded: true });
+		const longReference = { key: signed.json.key, reference: 'r'.repeat(121) };
+		expect((await env.call('POST', `${base}/done`, { body: longReference })).status).toBe(422);
+		const done = await env.call('POST', `${base}/done`, { body: { key: signed.json.key, reference: ' TRX-5501 ' } });
+		expect(done.json).toEqual({ uploaded: true });
 		expect((await env.call('POST', base, { body: { type: 'image/png', size: 1 } })).status).toBe(404);
 		expect((await page(`/pay/${env.websiteId}/${payment.id}`)).text).toContain('Your proof was received');
+		// the merchant hears of the proof (PLAN 0.8.10 P3, through the kit's events)
+		const told = events.filter((e) => e.type === 'payments.payment.proof_uploaded');
+		expect(told).toHaveLength(1);
+		expect(told[0].data.payment).toMatchObject({ id: payment.id, status: 'pending', proof: { type: 'image/png' } });
+		expect(told[0].data.payment.history.at(-1)).toMatchObject({ event: 'proof', reference: 'TRX-5501' });
+		const listed = await env.api('GET', '/v1/events?types=payments.payment.proof_uploaded');
+		expect(listed.json.items.map((/** @type {any} */ item) => item.data.payment.id)).toEqual([payment.id]);
 
 		const proof = await env.api('GET', `/v1/payments/${payment.id}/proof`);
 		expect(proof.json.url).toContain('X-Amz-Signature');
-		const confirmed = await env.api('POST', `/v1/payments/${payment.id}/confirm`, {});
+		const tooLong = await env.api('POST', `/v1/payments/${payment.id}/confirm`, { note: 'n'.repeat(501) });
+		expect(tooLong.json.errors[0].path).toBe('/note');
+		expect((await env.api('POST', `/v1/payments/${payment.id}/confirm`, { reference: 7 })).status).toBe(422);
+		const confirmed = await env.api('POST', `/v1/payments/${payment.id}/confirm`, {
+			reference: 'TRX-5501',
+			note: 'Seen in the bank app',
+		});
 		expect(confirmed.json).toMatchObject({ status: 'paid', proof: { type: 'image/png', size: 1234 } });
+		expect(confirmed.json.history.at(-1)).toMatchObject({
+			event: 'paid',
+			by: 'Server',
+			reference: 'TRX-5501',
+			note: 'Seen in the bank app',
+		});
+		const logged = await env.api('GET', `/v1/activity?target=${payment.id}&action=payment.transfer_confirmed`);
+		expect(logged.json.items[0].detail).toContain('(reference TRX-5501)');
 		expect((await env.api('POST', `/v1/payments/${payment.id}/confirm`, {})).status).toBe(409);
 		const refund = await env.api('POST', `/v1/payments/${payment.id}/refunds`, { amount: 100 });
 		expect(refund.json.refunds[0].manual).toBe(true);

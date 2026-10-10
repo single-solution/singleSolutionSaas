@@ -13,7 +13,11 @@
 import { createId } from '@ss/contracts';
 
 /** @typedef {import('@ss/app-kit').WebsiteData} WebsiteData */
-/** @typedef {{ at: Date, event: string, detail?: string, by?: string }} HistoryEntry */
+/**
+ * One step of a payment's or subscription's history; a bank transfer's proof and confirmation carry the transfer's
+ * `reference`, and a confirmation the merchant's `note` (PLAN 0.8.10 P3).
+ * @typedef {{ at: Date, event: string, detail?: string, by?: string, reference?: string, note?: string }} HistoryEntry
+ */
 /**
  * @typedef {object} PaymentRecord
  * @property {string} id

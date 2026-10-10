@@ -19,6 +19,7 @@ import {
 	checkLinkInput,
 	checkPaymentInput,
 	checkSubscriptionInput,
+	checkTransferInput,
 	isConfirmedFor,
 	linkView,
 	subscriptionView,
@@ -236,17 +237,24 @@ export const createRoutes = (product) => {
 		return created(service.view(s, refunded));
 	};
 
-	/** @param {any} ctx */
+	/**
+	 * The merchant confirms a bank transfer arrived: `{ reference?, note? }` are kept with the confirmation (PLAN 0.8.10
+	 * P3).
+	 * @param {any} ctx
+	 */
 	const confirmPayment = async (ctx) => {
+		const checked = checkTransferInput(ctx.body, { note: true });
+		if (!checked.ok) return invalid(checked.field, checked.message);
 		const s = await siteOf(ctx);
-		const paid = await service.confirmTransfer(s, await paymentOf(s, ctx.params.id), who(ctx));
+		const paid = await service.confirmTransfer(s, await paymentOf(s, ctx.params.id), who(ctx), checked.value);
 		const { money } = await product.format(s.websiteId);
+		const { reference } = checked.value;
 		await log(
 			ctx,
 			'payment.transfer_confirmed',
 			paid.id,
 			paid.reference || paid.id,
-			`Bank transfer of ${money(paid.amount, paid.currency)} confirmed`,
+			`Bank transfer of ${money(paid.amount, paid.currency)} confirmed${reference ? ` (reference ${reference})` : ''}`,
 		);
 		return service.view(s, paid);
 	};
@@ -524,7 +532,8 @@ export const createRoutes = (product) => {
 	};
 
 	/**
-	 * The bank-transfer proof upload of a payer: a presigned PUT into the merchant's storage, then its confirmation.
+	 * The bank-transfer proof upload of a payer: a presigned PUT into the merchant's storage, then its confirmation,
+	 * which may name the transfer's `reference` (PLAN 0.8.10 P3).
 	 * @param {'presign' | 'done'} step
 	 */
 	const proofUpload = (step) => async (/** @type {any} */ ctx) => {
@@ -561,14 +570,13 @@ export const createRoutes = (product) => {
 			!Object.values(PROOF_TYPES).includes(body.key.slice(prefix.length))
 		)
 			return invalid('key', 'Name the uploaded proof.');
+		const checked = checkTransferInput(body);
+		if (!checked.ok) return invalid(checked.field, checked.message);
 		const head = await storage.headObject({ key: body.key });
 		if (!head.exists) return invalid('key', 'The proof was not uploaded.');
-		await s.store.payments.change(
-			payment.id,
-			['pending'],
-			{ proof: { key: body.key, type: String(head.contentType ?? ''), size: head.size, at: new Date(product.now()) } },
-			{ event: 'proof' },
-		);
+		const proof = { key: body.key, type: String(head.contentType ?? ''), size: head.size };
+		if (!(await service.recordProof(s, payment, proof, checked.value.reference)))
+			return problem('not_found', 'No proof can be uploaded for this payment.');
 		return { uploaded: true };
 	};
 

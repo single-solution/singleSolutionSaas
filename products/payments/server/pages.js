@@ -20,7 +20,10 @@ export const PAGE_HEADERS = Object.freeze({
 	'referrer-policy': 'no-referrer',
 });
 
-/** `/pay.js`: posts a gateway form marked `data-autosubmit`, and uploads a bank-transfer proof (presigned PUT). */
+/**
+ * `/pay.js`: posts a gateway form marked `data-autosubmit`, and uploads a bank-transfer proof (presigned PUT) with the
+ * transfer's reference the payer typed (PLAN 0.8.10 P3).
+ */
 export const PAY_SCRIPT = `(() => {
   const auto = document.querySelector('form[data-autosubmit]');
   if (auto) auto.submit();
@@ -39,7 +42,8 @@ export const PAY_SCRIPT = `(() => {
       const { upload, key } = await signed.json();
       const put = await fetch(upload.url, { method: upload.method, headers: upload.headers, body: file });
       if (!put.ok) throw new Error('upload');
-      const done = await json(form.action + '/done', { key });
+      const reference = form.querySelector('input[name="reference"]');
+      const done = await json(form.action + '/done', { key, reference: reference ? reference.value.trim() : '' });
       if (!done.ok) throw new Error('done');
       status.textContent = form.dataset.done;
       form.querySelector('button').disabled = true;
@@ -272,6 +276,8 @@ export const renderBankPage = ({
 			? `<form method="post" action="${escape(proof.action)}" data-proof data-uploading="${escape(t('bank.uploading'))}" data-done="${escape(t('bank.uploaded'))}" data-failed="${escape(t('bank.uploadFailed'))}">
 <label for="proof">${escape(t('bank.proof'))}</label>
 <input id="proof" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" required>
+<label for="proof-reference">${escape(t('bank.proofReference'))}</label>
+<input id="proof-reference" name="reference" maxlength="120" autocomplete="off">
 <button type="submit">${escape(t('bank.upload'))}</button>
 <p class="muted" role="status"></p>
 </form>`

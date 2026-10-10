@@ -175,8 +175,9 @@ export const createProductInstance = (options) => {
 		},
 		hooks: dataRights(now),
 		data: { indexes: INDEXES },
-		// payment events (`payment.paid`, `payment.failed`, `payment.refunded`, `subscription.updated`) on the kit's
-		// mechanism: stored in `ss_payments_events`, listed by GET /v1/events, forwarded through Notifications
+		// payment events (`payment.paid`, `payment.failed`, `payment.refunded`, `payment.proof_uploaded`,
+		// `subscription.updated`) on the kit's mechanism: stored in `ss_payments_events`, listed by GET /v1/events,
+		// forwarded through Notifications
 		events: true,
 	});
 	return Object.freeze({ ...product, gateways, now, send });
