@@ -90,6 +90,32 @@ export const trackingLink = (template, trackingNumber) =>
 	template && isTrackingTemplate(template) ? template.replaceAll(TRACKING_TOKEN, encodeURIComponent(trackingNumber)) : '';
 
 /**
+ * A parcel's tracking page, built on read from today's `couriers` list (E28): the courier is found by its key or its
+ * name (any case); without a template, the address kept on the shipment (a courier API's answer), else ''.
+ * @param {unknown} couriers the `couriers` list
+ * @param {{ courier: string, trackingNumber: string, trackingUrl?: string } | null} shipment
+ */
+export const shipmentLink = (couriers, shipment) => {
+	if (!shipment) return '';
+	const list = Array.isArray(couriers) ? /** @type {Courier[]} */ (couriers) : [];
+	const name = String(shipment.courier ?? '')
+		.trim()
+		.toLowerCase();
+	const courier =
+		courierOf(list, shipment.courier) ??
+		list.find(
+			(item) =>
+				String(item?.name ?? '')
+					.trim()
+					.toLowerCase() === name,
+		) ??
+		null;
+	const built = courier && shipment.trackingNumber ? trackingLink(courier.trackingUrl, shipment.trackingNumber) : '';
+	const kept = typeof shipment.trackingUrl === 'string' && /^https:\/\//.test(shipment.trackingUrl) ? shipment.trackingUrl : '';
+	return built || kept;
+};
+
+/**
  * A tracking number staff typed or a courier API answered: trimmed, 1–{@link MAX_TRACKING} visible characters.
  * @param {unknown} value
  * @returns {string | null}

@@ -208,6 +208,30 @@ export const createService = (product) => {
 	};
 
 	/**
+	 * The signed-in shopper's own Accounts profile (`GET /v1/me` with the forwarded sign-in, through the pasted
+	 * Accounts token, K3): their name and default address's city and area. Null without a sign-in or when Accounts does
+	 * not answer.
+	 * @param {Site} s
+	 * @returns {Promise<{ name: string, city: string, area: string } | null>}
+	 */
+	const accountProfile = async (s) => {
+		const token = s.ctx.headers?.get?.(SIGN_IN_HEADER);
+		if (!token) return null;
+		const answer = await product
+			.callProduct(s.websiteId, 'accounts', '/v1/me', { headers: { [SIGN_IN_HEADER]: token } })
+			.catch(() => /** @type {const} */ ({ ok: false }));
+		if (!answer.ok || answer.status !== 200 || typeof answer.body !== 'object' || answer.body === null) return null;
+		const body = /** @type {Record<string, any>} */ (answer.body);
+		const addresses = Array.isArray(body.addresses) ? body.addresses : [];
+		const home = addresses.find((address) => address?.default === true) ?? addresses[0] ?? null;
+		return {
+			name: typeof body.name === 'string' ? body.name : '',
+			city: typeof home?.city === 'string' ? home.city : '',
+			area: typeof home?.area === 'string' ? home.area : '',
+		};
+	};
+
+	/**
 	 * Who acts (PLAN 0.8.10 K2): the member of the merchant's staff in the ticket, else the one a server-token call names
 	 * in its `SS-Actor-*` headers (with their role), else the server.
 	 * @param {any} ctx
@@ -390,6 +414,7 @@ export const createService = (product) => {
 		whenUsed,
 		shopper,
 		requireShopper,
+		accountProfile,
 		actor,
 		log,
 		invalid,

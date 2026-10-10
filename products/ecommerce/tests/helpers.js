@@ -14,7 +14,7 @@ import { createRoutes } from '../server/routes.js';
 import { COLLECTIONS } from '../core/model.js';
 
 const BASE = 'https://ecommerce.example.dev';
-const ACCOUNTS = 'https://accounts.example.dev';
+export const ACCOUNTS = 'https://accounts.example.dev';
 const NOTIFY = 'https://notifications.example.dev';
 export const PAYMENTS = 'https://payments.example.dev';
 export const STORAGE = 'https://bucket.example.org';
@@ -80,7 +80,9 @@ export const setup = async ({ start = Date.parse('2026-10-05T10:00:00Z') } = {})
 	/** @type {Record<string, (request: Request) => Promise<Response>>} */
 	const handlers = {
 		[portal.url]: portal.handle,
-		[ACCOUNTS]: accounts.handle,
+		// the Accounts double, except for paths a test answers itself (`responders`)
+		[ACCOUNTS]: (/** @type {Request} */ request) =>
+			responders.has(`${ACCOUNTS}${new URL(request.url).pathname}`) ? fake(ACCOUNTS)(request) : accounts.handle(request),
 		...Object.fromEntries([NOTIFY, PAYMENTS, STORAGE, COURIER, AI, ORIGIN, GROWTH].map((origin) => [origin, fake(origin)])),
 	};
 	// Notifications queues every message

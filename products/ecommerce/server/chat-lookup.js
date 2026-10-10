@@ -4,30 +4,46 @@
  * Chat's context panel use. All read-only with small answers. The `me` lookups take the visitor's Accounts sign-in
  * forwarded in `SS-Sign-In`, verify it here and answer only that user's data — never street addresses or phone
  * numbers; any query value naming another user is ignored. Every price and total comes with its text (`priceText`,
- * `totalText` …) by the website's Format (PLAN 0.8.10 K7).
+ * `totalText` …) by the website's Format (PLAN 0.8.10 K7). E37 adds search filters, warranties, quotes per variant and
+ * payment method with fees and delivery, deal display fields, fuller orders and accounts, and the live store context
+ * (`GET /v1/chat/context`) Chat's AI replies add (C1).
  * @module
  */
 import { defineRoute, problem } from '@ss/app-kit';
 import { loyaltyAccount } from '../adapters/ledger.js';
 import { loadOffers } from '../adapters/promotions-store.js';
+import { htmlToText } from '../core/catalog-content.js';
+import { stockLeftOf } from '../core/catalog-views.js';
+import { CONTEXT_DEALS, CONTEXT_PRODUCTS, contextText } from '../core/chat-context.js';
+import { shipmentLink } from '../core/couriers.js';
+import { byShowOrder } from '../core/deals.js';
+import { gradesByKey } from '../core/grades.js';
 import {
-	cardVariant,
+	MAX_QUOTE_QUANTITY,
+	chatDeal,
+	chatFilters,
+	filtersGiven,
 	gradeLabels,
+	gradePrices,
 	limitOf,
+	matchingVariant,
 	orderSummary,
 	productCard,
 	productDetails,
 	searchTerms,
 	shipmentSummary,
 	statusLabel,
+	variantFilter,
+	warrantyOf,
 } from '../core/lookup.js';
-import { stockLeftOf } from '../core/catalog-views.js';
 import { COLLECTIONS } from '../core/model.js';
-import { applyPromotions } from '../core/promotions.js';
+import { PAYMENT_METHODS } from '../core/orders.js';
 import { createCatalogSearch } from './catalog-search.js';
 import { hiddenFor, visible, visibleMatch } from './catalog-visibility.js';
+import { createQuoting } from './checkout-quote.js';
+import { policiesOf } from './policies.js';
 import { SERVER_LIMITS } from './service.js';
-import { activeProduct, brandNames, categoriesById } from './seo-reads.js';
+import { activeProduct, brandNames } from './seo-reads.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
 /** @typedef {import('./service.js').Service} Service */
@@ -42,6 +58,48 @@ import { activeProduct, brandNames, categoriesById } from './seo-reads.js';
 const SERVER_RATE = [...SERVER_LIMITS];
 
 /**
+ * A first name: the first word of a name.
+ * @param {string} name
+ */
+const firstNameOf = (name) =>
+	String(name ?? '')
+		.trim()
+		.split(/\s+/)[0] ?? '';
+
+/**
+ * Read a Chat quote's query (E37): `variantId`, `quantity` (1–5), `paymentMethod` and `city`.
+ * @param {Record<string, unknown>} query
+ * @returns {{ variantId: string | null, quantity: number, paymentMethod: import('../core/model.js').PaymentMethod | null,
+ *   city: string }}
+ */
+const quoteQuery = (query) => {
+	const variantId = query.variantId === undefined || query.variantId === '' ? null : query.variantId;
+	if (variantId !== null && (typeof variantId !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(variantId)))
+		throw invalidQuery('variantId', 'variantId is a variant id.');
+	const quantity = query.quantity === undefined || query.quantity === '' ? 1 : Number(query.quantity);
+	if (!Number.isInteger(quantity) || quantity < 1 || quantity > MAX_QUOTE_QUANTITY || !/^\d+$/.test(String(query.quantity ?? 1)))
+		throw invalidQuery('quantity', `quantity is a whole number from 1 to ${MAX_QUOTE_QUANTITY}.`);
+	const method = query.paymentMethod === undefined || query.paymentMethod === '' ? null : query.paymentMethod;
+	if (method !== null && !PAYMENT_METHODS.includes(/** @type {any} */ (method)))
+		throw invalidQuery('paymentMethod', `paymentMethod is one of ${PAYMENT_METHODS.join(', ')}.`);
+	const city = typeof query.city === 'string' ? query.city.trim() : '';
+	if (city.length > 80) throw invalidQuery('city', 'city is at most 80 characters.');
+	return {
+		variantId: /** @type {string | null} */ (variantId),
+		quantity,
+		paymentMethod: /** @type {import('../core/model.js').PaymentMethod | null} */ (method),
+		city,
+	};
+};
+
+/**
+ * A 422 naming a query field.
+ * @param {string} field @param {string} message
+ */
+const invalidQuery = (field, message) =>
+	problem('validation_failed', message, { errors: [{ path: `/${field}`, message, code: 'invalid' }] });
+
+/**
  * The website's order flow.
  * @param {Site} s
  * @returns {Promise<import('../core/model.js').OrderFlow>}
@@ -54,6 +112,7 @@ const CARD_FIELDS = Object.freeze({
 	id: 1,
 	slug: 1,
 	name: 1,
+	kind: 1,
 	media: 1,
 	variants: 1,
 	trackStock: 1,
@@ -61,6 +120,8 @@ const CARD_FIELDS = Object.freeze({
 	inStock: 1,
 	categoryIds: 1,
 	brandId: 1,
+	warrantyDays: 1,
+	publishedAt: 1,
 });
 
 /** What the order lookups read of an order (never the address or the customer's phone). */
@@ -69,8 +130,12 @@ const ORDER_FIELDS = Object.freeze({
 	id: 1,
 	number: 1,
 	status: 1,
+	role: 1,
 	totals: 1,
+	lines: 1,
+	payment: 1,
 	shipment: 1,
+	media: 1,
 	placedAt: 1,
 	createdAt: 1,
 });
@@ -82,6 +147,7 @@ const ORDER_FIELDS = Object.freeze({
  */
 export const createChatLookup = (product, service, media) => {
 	const atlas = createCatalogSearch(product);
+	const quoting = createQuoting(product, service);
 
 	/**
 	 * An active product shoppers may see (E1), or 404.
@@ -94,32 +160,65 @@ export const createChatLookup = (product, service, media) => {
 	};
 
 	/**
-	 * Product cards of products.
+	 * What cards and details need of the website: the Format, grade labels, stock shown (E9) and warranties (E12).
+	 * @param {Site} s
+	 */
+	const cardRules = async (s) => {
+		const [{ money, date }, catalog, returns, grades] = await Promise.all([
+			s.format(),
+			s.values('catalog'),
+			s.values('returns'),
+			s.has('grades_serials') ? s.list('grades') : Promise.resolve([]),
+		]);
+		const byKey = gradesByKey(grades);
+		const stock = { showStock: String(catalog.showStock ?? 'none'), lowStockShown: Number(catalog.lowStockShown ?? 5) };
+		return {
+			money,
+			date,
+			labels: gradeLabels(grades),
+			/** @param {ProductRecord} item */
+			stockLeft: (item) => (/** @type {import('../core/model.js').VariantRecord} */ variant) =>
+				stockLeftOf(variant, item.trackStock, stock),
+			/** @param {ProductRecord} item */
+			warranty: (item) => (/** @type {import('../core/model.js').VariantRecord} */ variant) =>
+				warrantyOf(item, variant, { grades: byKey, fallback: Number(returns.warrantyDays ?? 0) }),
+		};
+	};
+
+	/**
+	 * Product cards of products, each with the variant Chat's filters matched (when given).
 	 * @param {Site} s
 	 * @param {ProductRecord[]} items
+	 * @param {import('../core/lookup.js').ChatFilters | null} [filters]
 	 */
-	const cards = async (s, items) => {
-		const { money } = await s.format();
+	const cards = async (s, items, filters = null) => {
+		const rules = await cardRules(s);
 		return Promise.all(
 			items.map(async (item) =>
-				productCard(item, {
-					currency: s.currency,
-					image: await media.mediaUrl(s, item.media?.[0]?.key),
-					url: await media.productUrl(s, item),
-					money,
-				}),
+				productCard(
+					item,
+					{
+						currency: s.currency,
+						image: await media.mediaUrl(s, item.media?.[0]?.key),
+						url: await media.productUrl(s, item),
+						money: rules.money,
+						grades: rules.labels,
+						stockLeft: rules.stockLeft(item),
+					},
+					filters ? matchingVariant(item, filters) : null,
+				),
 			),
 		);
 	};
 
 	/**
-	 * The loyalty balance of a user (0 while loyalty is off).
+	 * The loyalty balance of a user (null while loyalty is off).
 	 * @param {Site} s
 	 * @param {WebsiteData} data
 	 * @param {string} userId
 	 */
 	const pointsOf = async (s, data, userId) =>
-		s.has('loyalty') ? (await loyaltyAccount(data, userId, { now: service.now() })).balance : 0;
+		s.has('loyalty') ? (await loyaltyAccount(data, userId, { now: service.now() })).balance : null;
 
 	/**
 	 * A user's most recent orders.
@@ -142,42 +241,79 @@ export const createChatLookup = (product, service, media) => {
 				.toArray()
 		);
 
-	/** @param {any} ctx */
+	/**
+	 * The categories a `category` filter names (by id or slug), with every category below it; null when there is no
+	 * such category.
+	 * @param {WebsiteData} data
+	 * @param {string} ref
+	 * @returns {Promise<string[] | null>}
+	 */
+	const categoryScope = async (data, ref) => {
+		const found = await data
+			.collection(COLLECTIONS.categories)
+			.findOne(
+				{ websiteId: data.websiteId, $or: [{ id: ref }, { slug: ref.toLowerCase() }] },
+				{ projection: { _id: 0, id: 1 } },
+			);
+		if (!found) return null;
+		const below = await data
+			.collection(COLLECTIONS.categories)
+			.find({ websiteId: data.websiteId, path: found.id }, { projection: { _id: 0, id: 1 } })
+			.toArray();
+		return [String(found.id), ...below.map((row) => String(row.id))];
+	};
+
+	/**
+	 * GET /v1/chat/products: words and filters (E37: category, grade, price range, in stock; at most 12 answers). With
+	 * filters the words may be left out.
+	 * @param {any} ctx
+	 */
 	const search = async (ctx) => {
 		const s = await service.site(ctx);
 		const data = await s.data();
 		const terms = searchTerms(ctx.query.q);
-		if (terms.length === 0) return { items: [] };
-		const limit = limitOf(ctx.query.limit, 5, 10);
-		const hidden = visibleMatch(await hiddenFor(s));
-		// Atlas Search first when the website uses it, the basic search when it fails (E14)
+		const read = chatFilters(ctx.query);
+		if (!read.ok) throw service.invalid(read.field, read.message);
+		const filters = read.value;
+		if (terms.length === 0 && !filtersGiven(filters)) return { items: [] };
+		/** @type {Record<string, unknown>[]} */
+		const and = [];
+		if (filters.category !== null) {
+			const scope = await categoryScope(data, filters.category);
+			if (!scope) return { items: [] };
+			and.push({ categoryIds: { $in: scope } });
+		}
+		const variant = variantFilter(filters);
+		if (variant) and.push(variant);
+		const base = { websiteId: data.websiteId, status: 'active', ...visibleMatch(await hiddenFor(s)) };
+		const narrowed = and.length > 0 ? { ...base, $and: and } : base;
 		const q = terms.join(' ');
-		if (await atlas.useAtlas(s, q)) {
+		// Atlas Search first when the website uses it, the basic search when it fails (E14)
+		if (q && (await atlas.useAtlas(s, q))) {
 			const found = await atlas.run(s, data, q, {
-				match: { websiteId: data.websiteId, status: 'active', ...hidden },
+				match: narrowed,
 				sort: null,
 				skip: 0,
-				limit,
+				limit: filters.limit,
 				project: CARD_FIELDS,
 			});
-			if (found.ok) return { items: await cards(s, /** @type {ProductRecord[]} */ (found.items)) };
+			if (found.ok) return { items: await cards(s, /** @type {ProductRecord[]} */ (found.items), filters) };
 		}
-		const brands = await data
-			.collection(COLLECTIONS.brands)
-			.find(
-				{ websiteId: data.websiteId, $or: terms.map((term) => ({ name: { $regex: term, $options: 'i' } })) },
-				{ projection: { _id: 0, id: 1, name: 1 } },
-			)
-			.limit(50)
-			.toArray();
-		const filter = {
-			websiteId: data.websiteId,
-			status: 'active',
-			...hidden,
-			$and: terms.map((term) => {
+		/** @type {Record<string, unknown>[]} */
+		const words = [];
+		if (terms.length > 0) {
+			const brands = await data
+				.collection(COLLECTIONS.brands)
+				.find(
+					{ websiteId: data.websiteId, $or: terms.map((term) => ({ name: { $regex: term, $options: 'i' } })) },
+					{ projection: { _id: 0, id: 1, name: 1 } },
+				)
+				.limit(50)
+				.toArray();
+			for (const term of terms) {
 				const pattern = { $regex: term, $options: 'i' };
 				const brandIds = brands.filter((brand) => new RegExp(term, 'i').test(String(brand.name))).map((brand) => brand.id);
-				return {
+				words.push({
 					$or: [
 						{ name: pattern },
 						{ summary: pattern },
@@ -185,18 +321,19 @@ export const createChatLookup = (product, service, media) => {
 						{ 'variants.sku': pattern },
 						...(brandIds.length > 0 ? [{ brandId: { $in: brandIds } }] : []),
 					],
-				};
-			}),
-		};
+				});
+			}
+		}
+		const all = [...and, ...words];
 		const found = /** @type {ProductRecord[]} */ (
 			await data
 				.collection(COLLECTIONS.products)
-				.find(filter, { projection: CARD_FIELDS })
+				.find(all.length > 0 ? { ...base, $and: all } : base, { projection: CARD_FIELDS })
 				.sort({ inStock: -1, sold: -1, id: 1 })
-				.limit(limit)
+				.limit(filters.limit)
 				.toArray()
 		);
-		return { items: await cards(s, found) };
+		return { items: await cards(s, found, filters) };
 	};
 
 	/** @param {any} ctx */
@@ -214,20 +351,19 @@ export const createChatLookup = (product, service, media) => {
 					{ projection: CARD_FIELDS },
 				)
 				.sort(kind === 'new' ? { publishedAt: -1, id: -1 } : { sold: -1, publishedAt: -1, id: -1 })
-				.limit(limitOf(ctx.query.limit, 5, 10))
+				.limit(limitOf(ctx.query.limit, 5, 12))
 				.toArray()
 		);
 		return { items: await cards(s, found) };
 	};
 
-	/** @param {any} ctx */
-	const details = async (ctx) => {
-		const s = await service.site(ctx);
-		const data = await s.data();
-		const item = await shownProduct(s, data, ctx.params.id);
-		const specIds = Object.keys(item.specs);
-		const { showStock, lowStockShown } = await s.values('catalog');
-		const [brands, attributes, grades, { money }] = await Promise.all([
+	/**
+	 * A product's details: variants with grade, price, stock left (E9) and warranty (E12).
+	 * @param {Site} s @param {WebsiteData} data @param {ProductRecord} item
+	 */
+	const detailsOf = async (s, data, item) => {
+		const specIds = Object.keys(item.specs ?? {});
+		const [brands, attributes, rules] = await Promise.all([
 			brandNames(data, [item.brandId]),
 			specIds.length === 0
 				? []
@@ -235,83 +371,160 @@ export const createChatLookup = (product, service, media) => {
 						.collection(COLLECTIONS.attributes)
 						.find({ websiteId: data.websiteId, id: { $in: specIds } }, { projection: { _id: 0, id: 1, name: 1, unit: 1 } })
 						.toArray(),
-			s.has('grades_serials') ? s.list('grades') : Promise.resolve([]),
-			s.format(),
+			cardRules(s),
 		]);
 		return productDetails(item, {
 			currency: s.currency,
 			image: await media.mediaUrl(s, item.media?.[0]?.key),
 			url: await media.productUrl(s, item),
-			money,
+			money: rules.money,
 			brand: item.brandId ? (brands.get(item.brandId) ?? null) : null,
 			attributes: new Map(attributes.map((row) => [String(row.id), { name: String(row.name), unit: String(row.unit) }])),
-			grades: gradeLabels(grades),
-			stockLeft: (variant) =>
-				stockLeftOf(variant, item.trackStock, { showStock: String(showStock), lowStockShown: Number(lowStockShown) }),
+			grades: rules.labels,
+			stockLeft: rules.stockLeft(item),
+			warrantyDays: rules.warranty(item),
 		});
 	};
 
 	/** @param {any} ctx */
+	const details = async (ctx) => {
+		const s = await service.site(ctx);
+		const data = await s.data();
+		return detailsOf(s, data, await shownProduct(s, data, ctx.params.id));
+	};
+
+	/**
+	 * GET /v1/chat/products/:id/quote: one variant (`variantId`, else the card variant) times `quantity` (1–5), priced
+	 * exactly as the cart prices it for the payment method asked (deals, fees, delivery to `city` and its free-delivery
+	 * threshold; a forwarded sign-in adds role pricing) (E37).
+	 * @param {any} ctx
+	 */
 	const quote = async (ctx) => {
 		const s = await service.site(ctx);
 		const data = await s.data();
 		const item = await shownProduct(s, data, ctx.params.id);
-		const variant = cardVariant(item);
-		const price = variant ? variant.price : item.price;
-		const now = service.now();
-		const categories = await categoriesById(data, item.categoryIds);
-		const categoryIds = [...new Set([...item.categoryIds, ...categories.flatMap((category) => category.path)])];
-		const offers = await loadOffers(data, { now, deals: true, bundles: false });
-		const result = variant
-			? applyPromotions({
-					lines: [
-						{
-							key: `${item.id}|${variant.id}`,
-							productId: item.id,
-							variantId: variant.id,
-							categoryIds,
-							brandId: item.brandId,
-							unitPrice: price,
-							quantity: 1,
-						},
-					],
-					deals: offers.deals,
-					bundles: [],
-					coupon: null,
-					couponCode: '',
-					customer: { orderCount: 0, couponUses: 0 },
-					now,
-				})
-			: null;
-		const savings = Math.min(price, Math.max(0, result?.lines[0]?.dealDiscount ?? 0));
-		const names = new Map(offers.deals.map((deal) => [deal.id, deal.name]));
+		const { variantId, quantity, paymentMethod, city } = quoteQuery(ctx.query);
+		const variant = variantId
+			? item.variants.find((candidate) => candidate.id === variantId && candidate.active)
+			: matchingVariant(item, { grades: [], minPrice: null, maxPrice: null, inStock: false });
+		if (!variant) throw problem('not_found', 'There is no such variant.');
+		const shopper = await service.shopper(s);
+		const q = await quoting.quote(
+			s,
+			{
+				lines: [{ productId: item.id, variantId: variant.id, quantity, slot: null }],
+				coupon: '',
+				points: 0,
+				delivery: { method: paymentMethod === 'pickup' ? 'pickup' : null, city, area: '', country: '', locationId: null },
+				payment: paymentMethod,
+			},
+			shopper,
+		);
 		const { money } = await s.format();
+		/** @param {number} amount */
+		const text = (amount) => money(amount, s.currency);
+		const line = q.lines[0];
+		const priced = q.prices[0];
+		const unitPrice = variant.price;
+		const dealOff = Math.min(unitPrice * quantity, priced?.promotions ?? 0);
+		const savings = Math.floor(dealOff / quantity);
+		const offers = q.promotions?.applied.filter((entry) => entry.kind === 'deal') ?? [];
+		const deals = s.has('deals') ? (await loadOffers(data, { now: service.now(), deals: true })).deals : [];
+		const { date } = await s.format();
+		const totals = /** @type {Record<string, number>} */ (/** @type {unknown} */ (q.totals));
+		const delivery = q.delivery.method === 'none' ? null : q.delivery;
+		const freeOver = delivery?.freeOver ?? 0;
 		return {
 			productId: item.id,
-			price,
-			priceText: money(price, s.currency),
-			priceAfterDeals: price - savings,
-			priceAfterDealsText: money(price - savings, s.currency),
+			variantId: variant.id,
+			quantity,
+			price: unitPrice,
+			priceText: text(unitPrice),
+			priceAfterDeals: unitPrice - savings,
+			priceAfterDealsText: text(unitPrice - savings),
 			savings,
-			savingsText: money(savings, s.currency),
+			savingsText: text(savings),
 			currency: s.currency,
-			deals: result && savings > 0 ? result.dealIds.map((id) => names.get(id) ?? '').filter(Boolean) : [],
+			deals: offers.map((entry) => entry.name),
+			dealsApplied: offers.map((entry) => {
+				const deal = deals.find((candidate) => candidate.id === entry.id);
+				return {
+					...(deal
+						? chatDeal(deal, { currency: s.currency, money, date: (at) => date(at, 'date') })
+						: { id: entry.id, name: entry.name }),
+					amount: entry.amount,
+					amountText: text(entry.amount),
+				};
+			}),
+			inStock: line ? !line.problems.some((found) => found.code === 'out_of_stock') : false,
+			problems: line?.problems ?? [],
+			paymentMethod,
+			paymentMethods: q.payments.map((option) => ({ ...option, advanceText: text(option.advance) })),
+			subtotal: q.totals.subtotal,
+			subtotalText: text(q.totals.subtotal),
+			discount: q.totals.discount,
+			discountText: text(q.totals.discount),
+			roleDiscount: Number(totals.roleDiscount ?? 0),
+			roleDiscountText: text(Number(totals.roleDiscount ?? 0)),
+			fee: Number(totals.fee ?? 0),
+			feeText: text(Number(totals.fee ?? 0)),
+			tax: q.totals.tax,
+			taxText: text(q.totals.tax),
+			delivery: delivery
+				? {
+						method: delivery.method,
+						name: delivery.name,
+						fee: delivery.fee,
+						feeText: text(delivery.fee),
+						minDays: delivery.minDays,
+						maxDays: delivery.maxDays,
+					}
+				: null,
+			freeDeliveryOver: freeOver > 0 ? freeOver : null,
+			freeDeliveryOverText: freeOver > 0 ? text(freeOver) : '',
+			total: q.totals.total,
+			totalText: text(q.totals.total),
 		};
+	};
+
+	/**
+	 * The live deals as Chat shows them (E37: with their display fields), in the shoppers' order.
+	 * @param {Site} s @param {WebsiteData} data @param {number} limit
+	 */
+	const dealRows = async (s, data, limit) => {
+		const offers = await loadOffers(data, { now: service.now(), deals: true, bundles: false });
+		const { money, date } = await s.format();
+		return Promise.all(
+			[...offers.deals]
+				.sort(byShowOrder)
+				.slice(0, limit)
+				.map(async (/** @type {DealRecord} */ deal) =>
+					chatDeal(deal, {
+						currency: s.currency,
+						money,
+						date: (at) => date(at, 'date'),
+						bannerUrl: await media.mediaUrl(s, /** @type {any} */ (deal).banner?.key),
+					}),
+				),
+		);
 	};
 
 	/** @param {any} ctx */
 	const deals = async (ctx) => {
 		const s = await service.site(ctx);
-		const data = await s.data();
-		const offers = await loadOffers(data, { now: service.now(), deals: true, bundles: false });
-		return {
-			items: offers.deals.slice(0, limitOf(ctx.query.limit, 10, 20)).map((/** @type {DealRecord} */ deal) => ({
-				id: deal.id,
-				name: deal.name,
-				description: deal.description,
-				endsAt: deal.endsAt ? new Date(deal.endsAt).toISOString() : null,
-			})),
-		};
+		return { items: await dealRows(s, await s.data(), limitOf(ctx.query.limit, 10, 20)) };
+	};
+
+	/**
+	 * What order lookups add: each order's tracking page from today's couriers and its dispatch video (E28).
+	 * @param {Site} s
+	 */
+	const orderExtras = async (s) => {
+		const couriers = s.has('checkout') ? await s.list('couriers') : [];
+		return async (/** @type {OrderRecord} */ order) => ({
+			trackingUrl: shipmentLink(couriers, order.shipment),
+			video: await media.dispatchVideo(s, order),
+		});
 	};
 
 	/** @param {any} ctx */
@@ -319,20 +532,55 @@ export const createChatLookup = (product, service, media) => {
 		const s = await service.site(ctx);
 		const shopper = await service.requireShopper(s);
 		const data = await s.data();
-		const [orders, flow, loyaltyPoints, { money }] = await Promise.all([
+		const [orders, flow, loyaltyPoints, { money }, extras] = await Promise.all([
 			ordersOf(data, shopper.id, limitOf(ctx.query.limit, 5, 10)),
 			flowOf(s),
 			pointsOf(s, data, shopper.id),
 			s.format(),
+			orderExtras(s),
 		]);
-		return { items: orders.map((order) => orderSummary(order, flow, money)), loyaltyPoints, name: shopper.name };
+		return {
+			items: await Promise.all(orders.map(async (order) => orderSummary(order, flow, money, await extras(order)))),
+			loyaltyPoints: loyaltyPoints ?? 0,
+			name: shopper.name,
+		};
+	};
+
+	/**
+	 * The shopper's city: their default address's in Accounts, else the city of their last delivered-to order.
+	 * @param {WebsiteData} data @param {string} userId @param {{ city: string } | null} profile
+	 */
+	const cityOf = async (data, userId, profile) => {
+		if (profile?.city) return profile.city;
+		const customer = await data
+			.collection(COLLECTIONS.customers)
+			.findOne({ websiteId: data.websiteId, userId }, { projection: { _id: 0, city: 1 } });
+		if (typeof customer?.city === 'string' && customer.city) return customer.city;
+		const last = await data
+			.collection(COLLECTIONS.orders)
+			.find(
+				{ websiteId: data.websiteId, 'customer.userId': userId, 'address.city': { $nin: [null, ''] } },
+				{ projection: { _id: 0, 'address.city': 1 } },
+			)
+			.sort({ placedAt: -1 })
+			.limit(1)
+			.toArray();
+		return String(last[0]?.address?.city ?? '');
 	};
 
 	/** @param {any} ctx */
 	const myAccount = async (ctx) => {
 		const s = await service.site(ctx);
 		const shopper = await service.requireShopper(s);
-		return { name: shopper.name, loyaltyPoints: await pointsOf(s, await s.data(), shopper.id) };
+		const data = await s.data();
+		const [points, profile] = await Promise.all([pointsOf(s, data, shopper.id), service.accountProfile(s)]);
+		return {
+			name: shopper.name,
+			firstName: firstNameOf(shopper.name),
+			loyaltyPoints: points ?? 0,
+			city: await cityOf(data, shopper.id, profile),
+			area: profile?.area ?? '',
+		};
 	};
 
 	/** @param {any} ctx */
@@ -340,8 +588,80 @@ export const createChatLookup = (product, service, media) => {
 		const s = await service.site(ctx);
 		const shopper = await service.requireShopper(s);
 		const data = await s.data();
-		const [orders, flow] = await Promise.all([ordersOf(data, shopper.id, limitOf(ctx.query.limit, 5, 10), true), flowOf(s)]);
-		return { items: orders.map((order) => shipmentSummary(order, flow)).filter((found) => found !== null) };
+		const [orders, flow, extras] = await Promise.all([
+			ordersOf(data, shopper.id, limitOf(ctx.query.limit, 5, 10), true),
+			flowOf(s),
+			orderExtras(s),
+		]);
+		const found = await Promise.all(orders.map(async (order) => shipmentSummary(order, flow, await extras(order))));
+		return { items: found.filter((entry) => entry !== null) };
+	};
+
+	/**
+	 * GET /v1/chat/context?productId=: the live store context of Chat's AI replies (E37, C1): the policies, the 10
+	 * newest products with their price per grade, the deals table, the product named (id or slug) and, with a forwarded
+	 * sign-in, the visitor's first name, city and points; `text` (at most 6,000 characters) holds all of it for the AI's
+	 * instructions. Each part is there only while its feature is on.
+	 * @param {any} ctx
+	 */
+	const context = async (ctx) => {
+		const s = await service.site(ctx);
+		const data = await s.data();
+		const hidden = visibleMatch(await hiddenFor(s));
+		const ref = typeof ctx.query.productId === 'string' && ctx.query.productId ? ctx.query.productId : null;
+		if (ref !== null && !/^[A-Za-z0-9_-]{1,120}$/.test(ref))
+			throw service.invalid('productId', 'productId is a product id or slug.');
+		const [business, rules, filled, newest, dealList, viewed, shopper] = await Promise.all([
+			s.business(),
+			cardRules(s),
+			s.has('checkout') ? policiesOf(s) : Promise.resolve(null),
+			data
+				.collection(COLLECTIONS.products)
+				.find({ websiteId: data.websiteId, status: 'active', ...hidden }, { projection: CARD_FIELDS })
+				.sort({ publishedAt: -1, id: -1 })
+				.limit(CONTEXT_PRODUCTS)
+				.toArray(),
+			s.has('deals') ? dealRows(s, data, CONTEXT_DEALS) : Promise.resolve([]),
+			ref === null ? Promise.resolve(null) : shownProduct(s, data, ref).catch(() => null),
+			service.shopper(s),
+		]);
+		const product = viewed ? await detailsOf(s, data, viewed) : null;
+		const products = await Promise.all(
+			/** @type {ProductRecord[]} */ (newest).map(async (item) => ({
+				id: item.id,
+				name: item.name,
+				url: await media.productUrl(s, item),
+				inStock: item.inStock,
+				prices: gradePrices(item).map((entry) => ({
+					grade: entry.grade ? (rules.labels.get(entry.grade) ?? entry.grade) : null,
+					price: entry.price,
+					priceText: rules.money(entry.price, s.currency),
+					inStock: entry.inStock,
+				})),
+			})),
+		);
+		const policies = filled
+			? Object.entries(filled.policies).map(([key, value]) => ({
+					key,
+					text: filled.format === 'html' ? htmlToText(String(value)) : String(value),
+				}))
+			: [];
+		/** @type {{ firstName: string, city: string, points: number | null } | null} */
+		let visitor = null;
+		if (shopper) {
+			const [points, profile] = await Promise.all([pointsOf(s, data, shopper.id), service.accountProfile(s)]);
+			visitor = { firstName: firstNameOf(shopper.name), city: await cityOf(data, shopper.id, profile), points };
+		}
+		return {
+			text: contextText({ business: business.name, policies, products, deals: dealList, product, visitor }),
+			business: business.name,
+			currency: s.currency,
+			policies,
+			products,
+			deals: dealList,
+			product,
+			visitor,
+		};
 	};
 
 	/** @param {any} ctx */
@@ -366,7 +686,7 @@ export const createChatLookup = (product, service, media) => {
 				currency: order.totals.currency,
 				createdAt: new Date(order.placedAt).toISOString(),
 			})),
-			loyaltyPoints,
+			loyaltyPoints: loyaltyPoints ?? 0,
 		};
 	};
 
@@ -436,6 +756,14 @@ export const createChatLookup = (product, service, media) => {
 				feature: 'checkout',
 				rateLimit: SERVER_RATE,
 				handler: myShipments,
+			}),
+			defineRoute({
+				method: 'GET',
+				path: '/v1/chat/context',
+				auth: 'server',
+				feature: 'catalog',
+				rateLimit: SERVER_RATE,
+				handler: context,
 			}),
 			defineRoute({
 				method: 'GET',

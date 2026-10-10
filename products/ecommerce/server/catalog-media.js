@@ -39,6 +39,25 @@ export const createMedia = (product) => {
 		return storage.presignGet({ key, expiresIn: SIGNED_MEDIA_SECONDS }).url;
 	};
 
+	/**
+	 * An order's dispatch video as shoppers get it (E28): an upload's address, or the YouTube or https address kept;
+	 * null when the order has none.
+	 * @param {Site} s
+	 * @param {{ media?: Array<{ kind: string, key?: string | null, url?: string | null }> }} order
+	 * @returns {Promise<{ kind: 'file' | 'youtube' | 'url', url: string } | null>}
+	 */
+	const dispatchVideo = async (s, order) => {
+		const entry = (order.media ?? []).findLast((item) => item.kind === 'dispatch_video');
+		if (!entry) return null;
+		if (entry.key) {
+			const url = await mediaUrl(s, entry.key);
+			return url ? { kind: 'file', url } : null;
+		}
+		const url = typeof entry.url === 'string' && /^https:\/\//.test(entry.url) ? entry.url : '';
+		if (!url) return null;
+		return { kind: /^https:\/\/www\.youtube-nocookie\.com\/embed\//.test(url) ? 'youtube' : 'url', url };
+	};
+
 	/** The categories and brands links are made of, read once per request. @type {WeakMap<Site, Promise<LinkContext>>} */
 	const contexts = new WeakMap();
 
@@ -107,7 +126,7 @@ export const createMedia = (product) => {
 		return categoryLink(String(template), category, await linkContext(s));
 	};
 
-	return Object.freeze({ mediaUrl, productUrl, variantUrl, categoryUrl, linkContext });
+	return Object.freeze({ mediaUrl, dispatchVideo, productUrl, variantUrl, categoryUrl, linkContext });
 };
 
 /** @typedef {ReturnType<typeof createMedia>} Media */

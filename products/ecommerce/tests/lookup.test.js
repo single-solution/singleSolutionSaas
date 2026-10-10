@@ -137,11 +137,15 @@ describe('core/lookup', () => {
 			name: 'Phone',
 			price: 800,
 			priceText: 'Rs 8',
+			priceMax: 900,
+			priceMaxText: 'Rs 9',
 			currency: 'USD',
 			image: null,
 			url: 'https://s.example/p',
 			inStock: true,
 			variantId: 'var_in',
+			grade: 'a',
+			stockLeft: null,
 		});
 		expect(productCard({ ...product, variants: [] }, context)).toMatchObject({ price: 500, variantId: null });
 		const details = productDetails(product, {
@@ -172,12 +176,26 @@ describe('core/lookup', () => {
 		const placed = new Date('2026-10-01T00:00:00Z');
 		const record = /** @type {any} */ (order({ userId: 'u', number: 'N-1', placedAt: placed }));
 		expect(orderSummary(record, DEFAULT_FLOW, (amount, currency) => formatMoney(amount, currency))).toEqual({
+			id: record.id,
 			number: 'N-1',
 			status: 'Confirmed',
+			statusKey: 'confirmed',
 			total: 5000,
 			totalText: 'USD 50.00',
 			currency: 'USD',
 			placedAt: '2026-10-01T00:00:00.000Z',
+			paymentMethod: null,
+			paid: 0,
+			paidText: 'USD 0.00',
+			balanceDue: 5000,
+			balanceDueText: 'USD 50.00',
+			lines: [],
+			courier: '',
+			trackingNumber: '',
+			trackingUrl: '',
+			trackingNote: '',
+			expectedAt: null,
+			dispatchVideo: null,
 		});
 		expect(statusLabel(DEFAULT_FLOW, 'gone')).toBe('gone');
 		expect(shipmentSummary(record, DEFAULT_FLOW)).toBeNull();
@@ -191,6 +209,8 @@ describe('core/lookup', () => {
 			courier: 'C',
 			trackingNumber: 'T',
 			trackingUrl: '',
+			trackingNote: '',
+			expectedAt: null,
 			status: 'Dispatched',
 		});
 	});
@@ -290,11 +310,15 @@ describe('Chat lookups', () => {
 			name: 'Galaxy S24',
 			price: 70000,
 			priceText: 'USD 700.00',
+			priceMax: 80000,
+			priceMaxText: 'USD 800.00',
 			currency: 'USD',
 			image: expect.stringMatching(/^https:\/\//),
 			url: 'https://shop.example.com/products/galaxy-s24',
 			inStock: true,
 			variantId: phone.variants[0]?.id,
+			grade: 'a',
+			stockLeft: null,
 		});
 		const galaxy = await shop.api('GET', '/v1/chat/products?q=galaxy&limit=5');
 		expect(galaxy.json.items.map((/** @type {any} */ item) => item.name)).toEqual(['Galaxy S24', 'Old Galaxy']);
@@ -339,7 +363,7 @@ describe('Chat lookups', () => {
 		const headers = { 'ss-sign-in': token };
 		const orders = await shop.api('GET', `/v1/chat/me/orders?userId=${other}`, undefined, headers);
 		expect(orders.status).toBe(200);
-		expect(orders.json).toEqual({
+		expect(orders.json).toMatchObject({
 			items: [
 				{
 					number: 'S-3',
@@ -356,6 +380,8 @@ describe('Chat lookups', () => {
 					totalText: 'USD 50.00',
 					currency: 'USD',
 					placedAt: '2026-09-10T00:00:00.000Z',
+					courier: 'Fast',
+					trackingUrl: 'https://track.example/TRK1',
 				},
 				{
 					number: 'S-1',
@@ -369,11 +395,12 @@ describe('Chat lookups', () => {
 			loyaltyPoints: 120,
 			name: 'Sara Shopper',
 		});
+		expect(orders.json.items).toHaveLength(3);
 		expect(orders.text).not.toContain('Secret Street');
 		expect(orders.text).not.toContain('+1555');
 		expect((await shop.api('GET', '/v1/chat/me/orders?limit=1', undefined, headers)).json.items).toHaveLength(1);
 		const account = await shop.api('GET', '/v1/chat/me/account', undefined, headers);
-		expect(account.json).toEqual({ name: 'Sara Shopper', loyaltyPoints: 120 });
+		expect(account.json).toEqual({ name: 'Sara Shopper', firstName: 'Sara', loyaltyPoints: 120, city: 'Town', area: '' });
 		const shipments = await shop.api('GET', '/v1/chat/me/shipments', undefined, headers);
 		expect(shipments.json).toEqual({
 			items: [
@@ -382,6 +409,8 @@ describe('Chat lookups', () => {
 					courier: 'Fast',
 					trackingNumber: 'TRK1',
 					trackingUrl: 'https://track.example/TRK1',
+					trackingNote: '',
+					expectedAt: null,
 					status: 'Dispatched',
 				},
 			],

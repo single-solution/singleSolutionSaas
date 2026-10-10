@@ -16,7 +16,6 @@ import { gradeCondition, gradesByKey } from '../core/grades.js';
 import { absolute } from '../core/links.js';
 import { buildLlmsFull, buildLlmsTxt, MAX_LLMS_CATEGORIES, treeOrder } from '../core/llms.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
-import { fillPolicies } from '../core/policies.js';
 import {
 	SITEMAP_FOOT,
 	SITEMAP_HEAD,
@@ -35,6 +34,7 @@ import { createMedia } from './catalog-media.js';
 import { hiddenFor, visible, visibleMatch } from './catalog-visibility.js';
 import { createChatLookup } from './chat-lookup.js';
 import { createLandings } from './seo-landings.js';
+import { policiesOf } from './policies.js';
 import { SERVER_LIMITS, VISITOR_LIMITS } from './service.js';
 import { allCategories, brandNames, lineage, streamed, trailOf } from './seo-reads.js';
 
@@ -93,19 +93,6 @@ const LISTING_FIELDS = Object.freeze({
 	inStock: 1,
 	updatedAt: 1,
 });
-
-/**
- * The shop's policies, filled (E3): `{ format, policies }`.
- * @param {Site} s
- */
-export const policiesOf = async (s) => {
-	const [checkout, returns, business] = await Promise.all([s.values('checkout'), s.values('returns'), s.business()]);
-	return fillPolicies(checkout, {
-		returnDays: Number(returns.returnDays ?? 0),
-		warrantyDays: Number(returns.warrantyDays ?? 0),
-		business: business.name,
-	});
-};
 
 /**
  * @param {Product} product

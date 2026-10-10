@@ -40,6 +40,7 @@ const DAY_MS = 86_400_000;
  * @property {string | null} locationId pickup location
  * @property {number | null} minDays
  * @property {number | null} maxDays
+ * @property {number} [freeOver] delivery is free from this amount of goods after promotions (0 = never; E37)
  */
 
 /**
@@ -178,11 +179,11 @@ export const createQuoting = (product, service) => {
 			const zones = zonesOn ? /** @type {import('../core/delivery.js').Zone[]} */ (await s.list('delivery_zones')) : [];
 			const zone = zonesOn ? matchZone(zones, where) : null;
 			const defaults = zonesOn ? await s.values('delivery_zones') : null;
-			const fee = zone
-				? zoneFee(zone, merchandise)
-				: defaults
-					? zoneFee({ fee: Number(defaults.defaultFee ?? 0), freeOver: Number(defaults.defaultFreeOver ?? 0) }, merchandise)
-					: 0;
+			const rule = zone ?? {
+				fee: Number(defaults?.defaultFee ?? 0),
+				freeOver: Number(defaults?.defaultFreeOver ?? 0),
+			};
+			const fee = zonesOn ? zoneFee(rule, merchandise) : 0;
 			deliveryOptions.push({
 				method: 'delivery',
 				zone: zone?.key ?? '',
@@ -191,6 +192,7 @@ export const createQuoting = (product, service) => {
 				locationId: null,
 				minDays: zone?.minDays ?? null,
 				maxDays: zone?.maxDays ?? null,
+				freeOver: zonesOn ? rule.freeOver : 0,
 			});
 			for (const location of pickups)
 				deliveryOptions.push({

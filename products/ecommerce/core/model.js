@@ -57,6 +57,9 @@ export const ID_PREFIX = Object.freeze({
 	alert: 'alr',
 	sizeChart: 'szc',
 	landing: 'lnd',
+	customer: 'cus',
+	orderPayment: 'opy',
+	orderRefund: 'orf',
 });
 
 // ------------------------------------------------------------------------------------------------------- catalog
@@ -237,7 +240,10 @@ export const ID_PREFIX = Object.freeze({
  * - `delivered`: points are earned, reviews open, return windows start;
  * - `cancelled`: before shipping only; stock, offer use and points are given back; paid money is refunded;
  * - `returned_to_origin`: the parcel came back (RTO); stock comes back and the customer's RTO count rises;
- * - `refunded`: money returned after `delivered` or `returned_to_origin`.
+ * - `refunded`: money returned (after `delivered`, `returned_to_origin` or `returned`; before dispatch only when
+ *   something was paid and refunds cover it, E27);
+ * - `returned`: a customer return after delivery (E27): earned points are taken back, redeemed ones given back, and
+ *   stock comes back as the `returnRestock` setting says.
  */
 export const STATUS_ROLES = Object.freeze([
 	'awaiting_payment',
@@ -249,6 +255,7 @@ export const STATUS_ROLES = Object.freeze([
 	'cancelled',
 	'returned_to_origin',
 	'refunded',
+	'returned',
 ]);
 
 /** @typedef {(typeof STATUS_ROLES)[number]} StatusRole */
@@ -294,24 +301,41 @@ export const STATUS_ROLES = Object.freeze([
  * @typedef {object} OrderRecord
  * @property {string} id `ord_…`
  * @property {string} number human number, unique per website (`<prefix><year>-<sequence>`)
- * @property {{ userId: string, name: string, email: string, phone: string }} customer from the Accounts sign-in
+ * @property {{ userId: string, name: string, email: string, phone: string, customerId?: string }} customer from the
+ *   Accounts sign-in, or the guest's details (`userId` '' for guests, E21); `customerId` the shop's customer record
  * @property {{ name: string, phone: string, line1: string, line2: string, city: string, area: string, postalCode: string,
  *   country: string, notes: string } | null} address null for pickup, digital and booking-only orders
  * @property {{ method: 'delivery' | 'pickup' | 'none', zone: string, fee: number, locationId: string | null }} delivery
  * @property {OrderLineRecord[]} lines
  * @property {{ subtotal: number, discount: number, delivery: number, tax: number, total: number, currency: string,
- *   taxIncluded: boolean }} totals `discount` = deals + bundles + coupon + points
+ *   taxIncluded: boolean, fee?: number, roleDiscount?: number }} totals `discount` = deals + bundles + coupon + points
+ *   (+ the role discount, E19); `fee` the payment method's fee (COD cash handling, E23), included in `total`
  * @property {{ couponId: string | null, couponCode: string, dealIds: string[], bundleIds: string[], pointsRedeemed: number,
- *   pointsValue: number, pointsEarned: number, released: boolean }} promotions `released`: offer uses and points were given
- *   back (cancel), exactly once
+ *   pointsValue: number, pointsEarned: number, released: boolean, role?: { key: string, percent: number, label: string } | null,
+ *   pointsCredited?: boolean, pointsBlocked?: boolean }} promotions `released`: offer uses and points were given back
+ *   (cancel), exactly once; `role`: the role price applied (E19); `pointsCredited`: points fixed at placement were
+ *   credited (E20 `earnAt`); `pointsBlocked`: a deal without points applied (E18 `allowPoints`)
  * @property {{ method: PaymentMethod, state: PaymentState, paymentId: string | null, advance: number, paid: number,
- *   refunded: number, checkedAt: Date | null, checkoutUrl?: string }} payment `paymentId`: the Payments payment; `advance`: the
- *   COD advance; `checkoutUrl`: Payments' page for paying it
+ *   refunded: number, checkedAt: Date | null, checkoutUrl?: string, via?: 'payments' | 'manual',
+ *   proof?: { key: string, reference: string, at: Date } | null }} payment `paymentId`: the Payments payment; `advance`:
+ *   the COD advance; `checkoutUrl`: Payments' page for paying it; `via`: a bank transfer or advance taken through
+ *   Payments or recorded by staff (E23, E24); `proof`: the shopper's transfer proof (E24). `paid` and `refunded` add up
+ *   `payments` and `refunds` (E26)
+ * @property {OrderPaymentEntry[]} [payments] money received (E26)
+ * @property {OrderRefundEntry[]} [refunds] money given back (E26)
  * @property {string} status a status key of the website's order flow
  * @property {StatusRole} role the role of `status`
- * @property {Array<{ at: Date, from: string | null, to: string, by: string, note: string }>} history
+ * @property {Array<{ at: Date, from: string | null, to: string, by: string, note: string, reason?: string,
+ *   kind?: 'edited' | 'payment' | 'refund' }>} history `reason` of a move (E27: `rto` | `customer_return`, or a cancel's
+ *   `staff` | `shopper` | `expired`)
  * @property {{ courier: string, trackingNumber: string, trackingUrl: string, booked: boolean, status: string,
- *   checkedAt: Date | null } | null} shipment
+ *   checkedAt: Date | null, trackingNote?: string, estimatedDeliveryAt?: Date | null } | null} shipment the courier by
+ *   name or key, its link built on read from the `couriers` list (E28)
+ * @property {Array<{ kind: 'dispatch_video', key?: string | null, url?: string | null, at?: Date, by?: string }>} [media]
+ *   the dispatch video: an upload key, or a YouTube or https address (E28)
+ * @property {string[]} [seenBy] staff ids who opened it (E31, at most 50)
+ * @property {string} [phoneDigits] the last 10 digits of the customer's phone (E31)
+ * @property {string | null} [accessKeyHash] the hash of a guest order's key (E21)
  * @property {boolean} stockHeld stock (and booked slots) are held by this order; false after cancel or RTO
  * @property {Date | null} holdUntil an unconfirmed order is cancelled after this time (on use)
  * @property {string} idempotencyKey the checkout's Idempotency-Key, unique per customer
@@ -324,9 +348,24 @@ export const STATUS_ROLES = Object.freeze([
  */
 
 /**
- * Shop records about one Accounts user (PLAN 0.8.8: only shop records, linked to the Accounts user id).
- * @typedef {{ userId: string, name: string, email: string, phone: string, blocked: boolean, blockedReason: string,
- *   rtoCount: number, orderCount: number, note: string }} CustomerRecord
+ * One payment staff record or Payments confirms (E26).
+ * @typedef {{ id: string, method: 'bank_transfer' | 'cash' | 'other' | 'online', amount: number, reference: string,
+ *   proofKey: string | null, note: string, by: { kind: string, id: string, name: string, role?: string }, at: Date }}
+ *   OrderPaymentEntry
+ */
+/**
+ * One refund (E26): through Payments (`online`) or recorded.
+ * @typedef {{ id: string, method: 'online' | 'bank_transfer' | 'cash' | 'other', amount: number, reference: string,
+ *   claimId: string | null, note: string, by: { kind: string, id: string, name: string, role?: string }, at: Date,
+ *   refundId?: string | null }} OrderRefundEntry
+ */
+
+/**
+ * Shop records about one shopper (PLAN 0.8.8: only shop records, linked to the Accounts user id; E21: guests too,
+ * unique by normalised phone).
+ * @typedef {{ id?: string, userId: string, guest?: boolean, name: string, email: string, phone: string,
+ *   phoneDigits?: string, city?: string, blocked: boolean, blockedReason: string, rtoCount: number, orderCount: number,
+ *   note: string, seenBy?: string[], lastOrderAt?: Date | null }} CustomerRecord
  */
 
 // ---------------------------------------------------------------------------------------------------- promotions
@@ -355,9 +394,28 @@ export const STATUS_ROLES = Object.freeze([
  */
 
 /**
- * An automatic offer: a percent or a fixed amount off the price of the items in scope.
- * @typedef {{ id: string, name: string, description: string, type: 'percent' | 'fixed', value: number, scope: OfferScope,
- *   startsAt: Date | null, endsAt: Date | null, limit: number | null, used: number, priority: number, active: boolean }} DealRecord
+ * A deal's conditions (E18): lists `in` or `not_in` the line's product, categories, brand, attributes and grade, the
+ * variant's price range, a minimum quantity per line, a cart total and payment methods; `match` joins them (`all` |
+ * `any`), one level of groups.
+ * @typedef {object} DealConditions
+ * @property {'all' | 'any'} match
+ * @property {Array<{ field: 'products' | 'categories' | 'brands' | 'grades' | 'attribute', op: 'in' | 'not_in',
+ *   values: string[], attributeId?: string }>} rules
+ * @property {Array<{ match: 'all' | 'any', rules: DealConditions['rules'] }>} groups
+ * @property {{ min: number | null, max: number | null } | null} priceRange
+ * @property {number} minQuantity per line (0 = none)
+ * @property {number} cartTotal the least the cart's goods come to (0 = none)
+ * @property {string[]} paymentMethods [] = any
+ */
+
+/**
+ * An automatic offer: a percent or a fixed amount off the price of the items in scope, or free delivery (E18).
+ * @typedef {{ id: string, name: string, description: string, type: 'percent' | 'fixed' | 'free_delivery', value: number,
+ *   scope: OfferScope, startsAt: Date | null, endsAt: Date | null, limit: number | null, used: number, priority: number,
+ *   active: boolean, slug?: string, badgeLabel?: string, discountLabel?: string, color?: string,
+ *   banner?: MediaRecord | null, content?: string, seo?: { title: string, description: string }, sort?: number,
+ *   conditions?: DealConditions | null, target?: 'items' | 'cart', days?: number[], timeFrom?: string, timeTo?: string,
+ *   allowPoints?: boolean }} DealRecord
  */
 
 /**
@@ -369,9 +427,10 @@ export const STATUS_ROLES = Object.freeze([
  */
 
 /**
- * Loyalty account of one Accounts user. Points are earned in lots that expire; spending takes the oldest lots first.
- * Expired lots are written off when the account is read or changed (no scheduled job).
- * @typedef {{ userId: string, balance: number, lots: Array<{ id: string, points: number, left: number, earnedAt: Date,
+ * Loyalty account of one shopper (E20: keyed by `customerId`, with `userId`; guests earn on their phone). Points are
+ * earned in lots that expire; spending takes the oldest lots first. Expired lots are written off when the account is
+ * read or changed (no scheduled job).
+ * @typedef {{ userId: string, customerId?: string, lifetimeEarned?: number, balance: number, lots: Array<{ id: string, points: number, left: number, earnedAt: Date,
  *   expiresAt: Date | null, orderId: string | null }>, history: Array<{ at: Date, kind: 'earn' | 'redeem' | 'refund' |
  *   'expire' | 'adjust' | 'reverse', points: number, orderId: string | null, note: string }>, version: number }} LoyaltyRecord
  */
@@ -399,22 +458,29 @@ export const STATUS_ROLES = Object.freeze([
  * @property {string} orderNumber
  * @property {string} userId
  * @property {'return' | 'warranty'} kind
- * @property {Array<{ lineId: string, quantity: number, serials: string[] }>} lines
+ * @property {Array<{ lineId: string, quantity: number, serials: string[], restock?: boolean,
+ *   restockedAt?: Date | null }>} lines `restock`: staff's choice when received (E33)
  * @property {string} reason
  * @property {MediaRecord[]} photos
- * @property {'requested' | 'approved' | 'rejected' | 'received' | 'refunded' | 'closed'} status
+ * @property {'requested' | 'approved' | 'rejected' | 'received' | 'refunded' | 'replaced' | 'repaired' | 'closed'} status
  * @property {number} refundAmount minor units (0 = none)
  * @property {string | null} refundId the Payments refund id, or null when recorded only
  * @property {Date | null} restockedAt
  * @property {Array<{ at: Date, status: string, by: string, note: string }>} history
+ * @property {string} [reference] the claim's reference (`R-…`, E33)
+ * @property {Array<{ at: Date, by: string, text: string }>} [notes] staff notes (E33)
+ * @property {string} [refundMethod] how the refund was given (E33)
+ * @property {string} [refundReference]
  */
 /**
  * @typedef {{ id: string, productId: string, userId: string, orderId: string, name: string, rating: number, title: string,
- *   body: string, status: 'pending' | 'approved' | 'rejected', reply: string }} ReviewRecord
+ *   body: string, status: 'pending' | 'approved' | 'rejected', reply: string, lineId?: string | null,
+ *   variantName?: string }} ReviewRecord
  */
 /** @typedef {{ userId: string, productIds: string[] }} WishlistRecord */
 /**
  * @typedef {{ id: string, kind: 'back_in_stock' | 'price_drop', productId: string, variantId: string | null, userId: string,
- *   email: string, phone: string, price: number | null, status: 'waiting' | 'sent' | 'failed' }} AlertRecord
+ *   email: string, phone: string, price: number | null, status: 'waiting' | 'sent' | 'failed', customerId?: string | null,
+ *   targetPrice?: number | null, tokenHash?: string }} AlertRecord
  */
 /** A member of the merchant's staff seen in a ticket (PLAN 0.4.5). @typedef {{ id: string, name: string, email: string, lastSeenAt: Date }} StaffRecord */

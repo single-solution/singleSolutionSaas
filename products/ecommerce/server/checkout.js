@@ -12,7 +12,7 @@ import { zoneCities } from '../core/delivery.js';
 import { createDigital } from './checkout-digital.js';
 import { createOrdering } from './checkout-orders.js';
 import { createQuoting } from './checkout-quote.js';
-import { policiesOf } from './seo.js';
+import { policiesOf } from './policies.js';
 import { SERVER_LIMITS, VISITOR_LIMITS, VISITOR_WRITE_LIMITS } from './service.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
