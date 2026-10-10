@@ -17,7 +17,9 @@ The store-conversion kit (PLAN 0.8.10, Phase 1) has its own tests: `settings-api
 through the server token, with an acting user), `server-calls` (visitor calls from the merchant's server in their own
 rate window, counts equal to list lengths) and `import` (an `ss-import` dry run of the importer's fixture into Notes,
 whose test-only `import` feature mounts the kit's import routes); the product tests add a staff name on an order move
-and on a chat reply, counts of the main lists and kit events forwarded by Notifications.
+and on a chat reply, counts of the main lists and kit events forwarded by Notifications. Later phases add their
+"done when" tests (for example `accounts-phase2`, and `growth-phase3`: every Growth option of 0.8.10 set through the
+settings API, then the real page script in jsdom).
 
 ```sh
 pnpm --filter @ss/e2e check   # from the root; or `pnpm check` in this folder

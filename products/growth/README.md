@@ -5,6 +5,11 @@ after consent, a consent banner with Google Consent Mode v2, anonymous first-par
 database, the shop funnel, searches, 404s, Web Vitals, robots.txt and verification tags, IndexNow, an SEO checklist and
 a notice bar. Feature keys are in `manifest.json`, the public docs at `/docs`.
 
+The store-conversion options (PLAN.md 0.8.10 G1–G7) are settings with safe defaults: tags without a consent step and
+GA4 inside Tag Manager, search and contact pixel events with product or variant ids, detailed analytics with sessions,
+the AI crawler block and Yandex verification, the IndexNow key file path, the notice bar's close and hidden pages with
+`GET /v1/notice`, and Web Vitals to GA4.
+
 ## Environment
 
 Exactly three variables (`.env.example`; nothing else is read):
@@ -20,7 +25,8 @@ Exactly three variables (`.env.example`; nothing else is read):
 1. Create a Vercel project with the root directory `products/growth` and set the three variables for Production only.
 2. Deploy, then in the Portal: Products → **Add product** with its address and `CONNECT_SECRET`, then **Set active**.
 3. Merchants add the page script in the page head before Ecommerce's, serve `/robots.txt`, the verification tags and
-   `/<key>.txt` from the routes in `/docs`, and let their database user create indexes (a TTL index).
+   the IndexNow key file (`/<key>.txt` or their own path) from the routes in `/docs`, and let their database user create
+   indexes (a TTL index).
 
 ## Scripts
 

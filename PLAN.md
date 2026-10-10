@@ -3254,6 +3254,84 @@ The owner confirms or changes each one.
   the dashboard, and `GET /v1/activity`: Accounts' own log has no ticket route in the kit, so the Activity widget shows
   the other products' copies).
 
+#### Builder choices, Phase 3 (Growth) (awaiting owner review)
+
+- **Shared settings**: G1's `consentRequired` is the shared group `tags` (Tags and consent: Meta pixel, Google tags,
+  TikTok pixel and Custom scripts) and G2's `contentIds` the shared group `pixels` (Pixel events: the three pixels), as
+  Accounts' groups (Phase 2): stored once, shown while any of their features is on, in Settings, Defaults and K1.
+- **G1**: with `consentRequired` off and no choice yet, Consent Mode starts granted and every tag loads at once; a choice
+  the visitor makes (the banner, which still shows while it is on, or `SSGrowth.consent.set()`) is followed from then
+  on, on later pages too. `requireConsent` of Visitor analytics stays its own setting. The law warning sits on the Tags
+  and consent card while the setting is off (and on Defaults). With `ga4ViaGtm` Growth loads no gtag.js for GA4 (its id
+  stays in the settings); while the Tag Manager container is loaded every GA4 event is also pushed to its `dataLayer`
+  (shop events as `{ event, ecommerce }` after `{ ecommerce: null }`, the others flat), whether or not `ga4ViaGtm` is on:
+  before, with Tag Manager alone, events reached the `dataLayer` only as gtag arguments, which its tags cannot fire on
+  (fixed, not copied). `gtag('event')` is called only while GA4 or Google Ads is loaded by Growth; the Ads purchase
+  conversion needs gtag.js. With `ga4ViaGtm` and no well-formed container id no GA4 loads, and the Google tags card says
+  so; Overview's Tags ready tile counts GA4 only when Growth loads it.
+- **G2**: `ss:search` takes `{ term, results? }` and `ss:contact` `{ method? }` (letters, digits, `_` and `-`, at most 40,
+  lower-cased), also before the config arrives. Params: Meta `Search { search_string }`, GA4 `search { search_term }`,
+  TikTok `Search { query }`; Meta and TikTok `Contact` and GA4 `generate_lead` with `{ method }` when there is one. A
+  search found from the page's search parameters goes to the pixels too. Searches reach the pixels whether or not
+  Searches and 404s is on (recorded only while it is); contacts are not recorded (G2 "Data: none"). As with shop events,
+  only pixels loaded at that moment get them. `variant` falls back to the product id; GA4 keeps `item_variant`.
+- **G3, the browser**: the session id is 32 hex characters from `crypto.getRandomValues`, kept with the last page time
+  and the page count in the tab's sessionStorage (`ss-growth-session`), created only once an event may be sent (the
+  consent rule) and ended after 30 minutes without a page view (the visit rule), so a session is a visit. The browser
+  and system families are worked out in the browser from its user agent, which is never sent: `chrome`, `safari`,
+  `edge`, `firefox`, `samsung`, `opera`, `other`; `android`, `ios` (an iPad that names itself a Mac included), `windows`,
+  `macos`, `chromeos`, `linux`, `other`. A page view carries its page number and the time since the session's last page
+  view; a 404 carries where the visitor came from (a path on the website, or another site's host).
+- **G3, the server**: session ids are 8–64 of `A–Z a–z 0–9 _ -` (a merchant's server may send its own); in `anonymous`
+  mode session facts are dropped even when sent. The city comes from `x-vercel-ip-city` (URL-decoded), `cf-ipcity` or
+  `cloudfront-viewer-city`, only with `sessions` and Record country on (now titled "country (and city)"); on a visitor
+  call from the merchant's server it is the server's, as the country. Events of one batch are stored 1 ms apart so a
+  journey keeps their order. New daily-total metrics: `sessions`, `engaged` (a second page), `session_pages`,
+  `duration` (the gaps between a session's page views, each at most 30 minutes), `browser`, `os`, `city`
+  (`Lahore, PK`), `vital_page` (`<path>\n<vital>`) and `not_found_from` (`<path>\n<from or (direct)>`). The report adds,
+  only while `detail` is `sessions`: `sessions` `{ count, bounces, bounceRate (percent, one decimal), averageDuration
+(seconds, first to last page), pagesPerSession }`, `browsers`, `systems`, `cities`, `vitalPages` (each page's averages,
+  the slowest largest paint first), `notFoundFrom`, `live` `{ visitors, pages }` (sessions with an event in the last 5
+  minutes, a code constant, and the page each last viewed) and `journeys` (the 20 latest sessions of the range, a code
+  constant, with their first 30 steps, Web Vitals left out). `GET /v1/analytics` also takes `top` (1–100, default 10).
+  The raw events filter by `session` (new partial index `by_session`).
+- **G4**: the crawler list is GPTBot, Google-Extended, CCBot, ClaudeBot, anthropic-ai, Applebot-Extended, Bytespider,
+  meta-externalagent and cohere-training-data-crawler (as IM blocks them; AI answer bots are not on it), written as one
+  group of `User-agent` lines with `Disallow: /`, after the merchant's rules and before the `Sitemap` lines. The SEO
+  checklist counts the Yandex tag as a verification tag.
+- **G5**: `keyPath` is checked on use (a path on the website, at most 300 characters, without query, fragment, spaces or
+  backslashes); another value refuses submissions with 422 `validation_failed` at `/keyPath`. `keyLocation` is always
+  sent; `GET /v1/indexnow/key.txt` still answers the key.
+- **G6**: `dismissFor` `page` remembers nothing: the bar shows again on the next page. `hideOnPages` takes Chat's path
+  patterns (exact, `*`, `**`), at most 50 used, checked in the browser. `GET /v1/notice` belongs to `notice_bar`, takes
+  the browser token and the server token (K3), needs no merchant database (settings only), counts 3,000 per minute per
+  website and 60 per visitor (code constants), and takes an optional `?path=` that answers null on a hidden page; the
+  answer is exactly `{ text, linkText, linkUrl, dismissible }` (`linkUrl` null when not an https address or a path) or
+  `null`.
+- **G7**: the GA4 event is named after the vital with `value` (whole milliseconds; CLS × 1000), `metric_value`,
+  `metric_rating` (`good`, `needs-improvement`, `poor`) and `non_interaction`, sent once when the page is first hidden,
+  only while GA4 is loaded by Growth or the Tag Manager container is (then through its `dataLayer`).
+- **Every server action in the UI** (owner request relayed 2026-10-10): the ticket widget config gains `admin` (the
+  checklist's pages, the IndexNow key file, the analytics detail and retention; never in the visitor config). The
+  analytics dashboard has range chips (today, 7, 30 and 90 days, this month, last month, 12 months = 365 days), a custom
+  range and Refresh in its More menu, asks `top=50` and shows six rows per card with See all in a dialog, the live
+  visitors and session tiles, the funnel with each step's share of the one before, journeys opening a dialog with the
+  steps and every event of the visit, and an event log (chips per type with counts, Load more, each event's fields in a
+  dialog) on new ticket twins `GET /v1/admin/events`, `/count` and `/counts` (`analytics.read`). The SEO checklist names
+  its default pages, shows passed / improve / fix tiles, filter chips with counts, a card for the whole site (robots.txt,
+  sitemap, verification) and one per page whose More menu opens the page, checks it again or submits it to IndexNow,
+  checks other pages in a dialog, and has an IndexNow card with the key file address and a submit dialog. The dashboard
+  (setup only) adds Overview's Setup at a glance and, on the Settings cards, the robots.txt and verification tags the
+  site serves, the key file address, the notice bar now, tag ids not loaded, GA4 left to a missing container and Web
+  Vitals to GA4 without Google tags.
+- **Server-only on purpose**: `POST /v1/collect` (the page script; the merchant's server for its visitors), `GET
+/v1/robots.txt`, `/v1/verification` and `/v1/indexnow/key.txt` (served by the merchant's site; Settings shows what
+  they serve), `GET /v1/notice` (custom UIs; the notice bar widget gets the same from its config and Settings shows its
+  state), `GET /v1/analytics`, `/v1/events` and their counts, `POST /v1/indexnow` and `/v1/seo/checks` (their ticket
+  twins are in the widgets; `/v1/admin/events/count` gives what the log's chips already show), and the kit's routes.
+- **Not changed**: Ecommerce's widgets dispatch no `ss:search` or `ss:contact` (the store's code, or a later Ecommerce
+  change, can).
+
 ### 0.8.4 Still open
 
 - **The grilling of each later product** (Notifications, Accounts, Payments, Ecommerce, Growth), held right before it is
