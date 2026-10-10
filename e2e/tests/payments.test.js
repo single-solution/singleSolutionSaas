@@ -3,7 +3,8 @@
  * price list), price and feature reports, a payment link created with the Portal-issued server token, a payer paying it
  * through the hosted page on a faked Stripe (no real network call), the signed Stripe confirmation marking it paid, the
  * server-to-server check for the exact amount, a partial refund, the merchant notified through Notifications' signed
- * webhook, and the hourly charge.
+ * webhook, and the hourly charge. Phase 2 of the store conversion (PLAN 0.8.10 P1–P3): the bank details read by the
+ * merchant's server, bank transfer ready without details, and a confirmation's reference and note.
  */
 import { createHmac } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -306,5 +307,75 @@ describe('Payments on the real Portal', () => {
 		sys.clock.advance(HOUR);
 		const after = await sys.dashboard(cookie, 'GET', `/v1/dashboard/websites/${websiteId}/overview`);
 		expect(after.json.todayMillicredits).toBe(before.json.todayMillicredits + 1500);
+	});
+});
+
+describe('Phase 2: bank transfer for the merchant’s server (PLAN 0.8.10 P1–P3)', () => {
+	/** @param {string} method @param {string} path @param {unknown} [body] */
+	const server = (method, path, body) => sys.call(method, path, { token: payTokens.server, body });
+	let transferId = '';
+
+	it('bank details are readable with the Portal-issued server token, kept through the settings API', async () => {
+		expect((await server('GET', '/v1/bank-transfer')).json.type).toMatch(/feature_off$/);
+		const support = await sys.admin('support');
+		const cookie = await sys.adminSession(support.client, websiteId);
+		const on = ['payment_api', 'payment_links', 'refunds', 'stripe', 'bank_transfer'];
+		expect([...(await sys.switchFeatures(cookie, websiteId, on)).on].sort()).toEqual([...on].sort());
+		expect((await server('GET', '/v1/bank-transfer')).json).toMatchObject({ ready: false, accountNumber: '' });
+		const details = {
+			accountTitle: 'Shop Ltd',
+			bankName: 'Example Bank',
+			accountNumber: '0123-4567890',
+			iban: 'PK36SCBL0000001123456702',
+			instructions: 'Quote your order number.',
+		};
+		for (const [name, value] of Object.entries(details))
+			expect((await server('PUT', `/v1/settings/bank_transfer.${name}`, { value })).status).toBe(200);
+		expect((await server('GET', '/v1/bank-transfer')).json).toEqual({ ready: true, ...details });
+		const payment = await server('POST', '/v1/payments', {
+			amount: 450_000,
+			currency: 'PKR',
+			gateway: 'bank_transfer',
+			reference: 'ORD-1001',
+		});
+		expect(payment.status).toBe(201);
+		transferId = payment.json.id;
+		const shown = await sys.call('GET', `/pay/${websiteId}/${transferId}`);
+		for (const text of ['Example Bank', '0123-4567890', 'ORD-1001', 'Quote your order number.'])
+			expect(shown.json).toContain(text);
+	});
+
+	it('bank transfer is ready without details when they are not required', async () => {
+		for (const name of ['accountTitle', 'bankName', 'accountNumber', 'iban'])
+			expect((await server('DELETE', `/v1/settings/bank_transfer.${name}`)).status).toBe(200);
+		expect((await server('GET', '/v1/bank-transfer')).json.ready).toBe(false);
+		const refused = await server('POST', '/v1/payments', { amount: 1000, currency: 'PKR', gateway: 'bank_transfer' });
+		expect(refused.json.type).toMatch(/gateway_not_ready$/);
+		await server('PUT', '/v1/settings/bank_transfer.requireDetails', { value: false });
+		await server('PUT', '/v1/settings/bank_transfer.instructions', { value: 'We send our bank details on WhatsApp.' });
+		expect((await server('GET', '/v1/bank-transfer')).json).toEqual({
+			ready: true,
+			accountTitle: '',
+			bankName: '',
+			accountNumber: '',
+			iban: '',
+			instructions: 'We send our bank details on WhatsApp.',
+		});
+		const payment = await server('POST', '/v1/payments', { amount: 1000, currency: 'PKR', gateway: 'bank_transfer' });
+		expect(payment.status).toBe(201);
+		const shown = await sys.call('GET', `/pay/${websiteId}/${payment.json.id}`);
+		expect(shown.json).toContain('We send our bank details on WhatsApp.');
+		expect(shown.json).not.toContain('Account number');
+	});
+
+	it('the merchant confirms a transfer with its reference and a note, and is told through Notifications', async () => {
+		const confirmed = await server('POST', `/v1/payments/${transferId}/confirm`, {
+			reference: 'TRX-88',
+			note: 'Seen in the bank app',
+		});
+		expect(confirmed.json).toMatchObject({ status: 'paid', gateway: 'bank_transfer' });
+		expect(confirmed.json.history.at(-1)).toMatchObject({ event: 'paid', reference: 'TRX-88', note: 'Seen in the bank app' });
+		const told = hooks.map((hook) => JSON.parse(hook.body)).find((body) => body.data?.payment?.id === transferId);
+		expect(told).toMatchObject({ type: 'payments.payment.paid', data: { payment: { status: 'paid' } } });
 	});
 });

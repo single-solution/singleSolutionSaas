@@ -1162,6 +1162,37 @@ describe('kit features (PLAN 0.8.10)', () => {
 		expect((await page(`/pay/${env.websiteId}/${payment.id}`)).text).toContain('PKR 2,500.00');
 	});
 
+	it('serves a store’s payment setup to its server: features, bank settings and gateway keys (K1)', async () => {
+		const features = await env.api('GET', '/v1/features');
+		expect(features.json.features.map((/** @type {any} */ feature) => feature.key)).toEqual(ALL);
+		const settings = await env.api('GET', '/v1/settings');
+		const bank = settings.json.features.find((/** @type {any} */ feature) => feature.key === 'bank_transfer');
+		expect(Object.keys(bank.values)).toEqual([
+			'accountTitle',
+			'bankName',
+			'accountNumber',
+			'iban',
+			'requireDetails',
+			'instructions',
+			'proofUpload',
+			'proofMaxMb',
+		]);
+		const listed = await env.api('GET', '/v1/connections');
+		const byName = Object.fromEntries(listed.json.connections.map((/** @type {any} */ c) => [c.name, c]));
+		for (const name of ['stripe', 'paypal', 'payfast', 'payfast_pk', 'jazzcash', 'easypaisa', 'rapid', 'generic', 'storage'])
+			expect(byName[name]).toMatchObject({ state: 'connected' });
+		expect(byName.payfast_pk).toMatchObject({ kind: 'secret', neededBy: ['payfast_pk'], last4: '0123' });
+		expect(listed.text).not.toContain(PAYFAST_PK.securedKey);
+		// the merchant's server replaces a gateway's keys: tested live with the gateway, as in the dashboard
+		env.gateways.respond('https://ipg1.apps.net.pk', () => ({ status: 401 }));
+		const other = { ...PAYFAST_PK, securedKey: 'secured-key-9999' };
+		const failed = await env.api('PUT', '/v1/connections/payfast_pk', { value: other }, ACTOR);
+		expect(failed.json).toMatchObject({ name: 'payfast_pk', state: 'test_failed', last4: '9999' });
+		env.gateways.respond('https://ipg1.apps.net.pk', () => ({ status: 200, body: { ACCESS_TOKEN: 'tok' } }));
+		expect((await env.api('POST', '/v1/connections/payfast_pk/test', {})).json.state).toBe('connected');
+		expect((await env.api('PUT', '/v1/connections/payfast_pk', { value: PAYFAST_PK })).json.last4).toBe('0123');
+	});
+
 	it('explains the kit’s routes in the docs', async () => {
 		const docs = await page('/docs');
 		for (const id of ['server-settings', 'acting-user', 'server-visitors', 'counts', 'activity', 'format'])
