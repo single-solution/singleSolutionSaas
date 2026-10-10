@@ -128,7 +128,7 @@ export const mountTemplateEditor = ({ host, api, config }) => {
 				subject.input,
 				text.label,
 				text.input,
-				element(doc, 'p', { class: 'meta' }, t('templates.help')),
+				element(doc, 'p', { class: 'meta' }, formatText(t('templates.help'), { section: '{?name}…{/name}' })),
 				required.wrap,
 				urgent.wrap,
 				providerTemplate.label,

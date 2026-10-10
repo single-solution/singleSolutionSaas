@@ -123,3 +123,70 @@ describe('the long retry plan (N3)', () => {
 		expect(short.json.status).toBe('sent');
 	});
 });
+
+describe('templates for the merchant’s server (N4)', () => {
+	const ACTOR = { 'ss-actor-id': 'usr_7', 'ss-actor-name': encodeURIComponent('Ayesha Khan'), 'ss-actor-role': 'Manager' };
+	/** @param {string} method @param {string} path @param {unknown} [body] @param {Record<string, string>} [headers] */
+	const server = async (method, path, body, headers) => {
+		const response = await env.call(method, path, { token: env.server, body, ...(headers ? { headers } : {}) });
+		return { status: response.status, json: response.status === 204 ? null : await response.json() };
+	};
+	const recent = async () =>
+		(await (await env.dashboard(await env.adminSession(), 'GET', `/v1/dashboard/websites/${env.websiteId}/overview`)).json())
+			.recentChanges;
+
+	it('lists, saves and deletes templates of switched-on channels, by the acting user', async () => {
+		// a push template saved in the dashboard while browser push is off is not the server's
+		await env.template({ key: 'alert', channel: 'push', subject: 'Back in stock', text: '{item} is back' });
+		const listed = await server('GET', '/v1/templates');
+		expect(listed.status).toBe(200);
+		expect(listed.json.items.map((/** @type {any} */ t) => t.channel)).not.toContain('push');
+		expect(listed.json.items).toContainEqual(expect.objectContaining({ key: 'accounts.code', channel: 'whatsapp' }));
+
+		const saved = await server(
+			'PUT',
+			'/v1/templates',
+			{
+				key: 'ecommerce.order_cancelled',
+				channel: 'sms',
+				text: 'Order {order} was cancelled.{?reason} Reason: {reason}{/reason}',
+				required: true,
+			},
+			ACTOR,
+		);
+		expect(saved).toMatchObject({
+			status: 200,
+			json: { key: 'ecommerce.order_cancelled', channel: 'sms', language: 'default', required: true, buttons: [] },
+		});
+		expect(await recent()).toContainEqual(
+			expect.objectContaining({
+				who: { kind: 'user', id: 'usr_7', name: 'Ayesha Khan', role: 'Manager' },
+				what: 'templates',
+				detail: 'Template ecommerce.order_cancelled (sms, default): saved',
+			}),
+		);
+		// the dashboard's checks
+		const bad = await server('PUT', '/v1/templates', { key: 'x', channel: 'sms', text: '{?reason}open' });
+		expect(bad.status).toBe(422);
+		expect(bad.json.errors[0].path).toBe('/text');
+		// a channel whose feature is off
+		const off = await server('PUT', '/v1/templates', { key: 'x', channel: 'push', subject: 'T', text: 'x' });
+		expect(off.status).toBe(403);
+		expect(off.json.type).toMatch(/feature_off$/);
+		expect((await server('DELETE', '/v1/templates/alert/push/default')).status).toBe(403);
+
+		expect((await server('DELETE', '/v1/templates/ecommerce.order_cancelled/sms/default')).status).toBe(204);
+		expect((await server('DELETE', '/v1/templates/ecommerce.order_cancelled/sms/default')).status).toBe(404);
+		expect((await server('DELETE', '/v1/templates/x/fax/default')).status).toBe(404);
+		expect(await recent()).toContainEqual(
+			expect.objectContaining({
+				who: { kind: 'server', id: 'server', name: 'Server' },
+				detail: 'Template ecommerce.order_cancelled (sms, default): deleted',
+			}),
+		);
+		// every channel off: the routes answer feature_off
+		await env.switchOn(['webhooks', 'send_api']);
+		expect((await server('GET', '/v1/templates')).status).toBe(403);
+		await env.switchOn(['whatsapp', 'email', 'sms', 'webhooks', 'send_api']);
+	});
+});

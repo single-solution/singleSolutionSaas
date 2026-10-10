@@ -10,7 +10,7 @@
  */
 import { isId } from '@ss/contracts';
 import { actorOf, countHandlers, created, defineRoute, noContent, ok, paginate, problem } from '@ss/app-kit';
-import { CHANNELS, checkRecipient, normaliseEmail, normalisePhone } from '../core/channels.js';
+import { CHANNELS, CHANNEL_FEATURES, checkRecipient, normaliseEmail, normalisePhone } from '../core/channels.js';
 import { isOptOut, repliesOf } from '../core/inbound.js';
 import { logFilters } from '../core/log.js';
 import { verifyMeta, verifyTwilio } from '../adapters/signatures.js';
@@ -38,6 +38,14 @@ const VISITOR_LIMITS = [
 
 /** Who acts when neither a ticket nor the `SS-Actor-*` headers name a member of the merchant's staff. */
 const SERVER = Object.freeze({ kind: 'server', id: 'server', name: 'Server' });
+
+/**
+ * Template writes of the merchant's server: they share the settings API's counter of 60 writes per minute per website
+ * (PLAN 0.8.10 K1 and N4; the kit's bucket name).
+ */
+const TEMPLATE_WRITE_LIMITS = [
+	{ limit: 60, windowSeconds: 60, per: /** @type {const} */ ('website'), bucket: 'kit-settings-writes' },
+];
 
 /** Fields the delivery log is counted by (`GET /v1/messages/counts?by=`). */
 const MESSAGE_COUNT_FIELDS = Object.freeze({ status: 'status', channel: 'channel', template: 'template', source: 'source' });
@@ -140,30 +148,48 @@ export const createRoutes = (product) => {
 	});
 
 	/**
-	 * Templates: list, save and delete (dashboard and the template editor widget).
-	 * @param {'dashboard' | 'widget'} via
+	 * Templates: list, save and delete (dashboard, the template editor widget and the merchant's server). The server's
+	 * routes work per channel while its feature is on (PLAN 0.8.10 N4).
+	 * @param {'dashboard' | 'widget' | 'server'} via
 	 */
 	const templateHandlers = (via) => {
 		/** @param {any} ctx */
-		const storeOf = async (ctx) => (via === 'widget' ? (await siteOf(ctx)).store : createStore(await ctx.data(), { now }));
+		const storeOf = async (ctx) => (via === 'dashboard' ? createStore(await ctx.data(), { now }) : (await siteOf(ctx)).store);
 		/**
-		 * A Recent change (dashboard) or an activity entry by who acts (widget): the template's key, channel and language
-		 * are its label; the detail names the change, never the words.
+		 * Whether the merchant's server may use a channel's templates now: its feature is on.
+		 * @param {any} ctx
+		 * @param {Channel} channel
+		 */
+		const channelOn = async (ctx, channel) =>
+			via !== 'server' || (await product.featuresOn(ctx.websiteId)).includes(CHANNEL_FEATURES[channel]);
+		/** @param {Channel} channel */
+		const channelOff = (channel) =>
+			problem('feature_off', `The ${CHANNEL_FEATURES[channel]} feature is off: its templates cannot be changed.`);
+		/**
+		 * A Recent change (dashboard: the session; server: the acting user, else the server) or an activity entry by who
+		 * acts (widget): the template's key, channel and language are its label; the detail names the change, never the
+		 * words.
 		 * @param {any} ctx
 		 * @param {{ change: 'saved' | 'deleted', key: string, channel: string, language: string, detail?: string }} input
 		 */
 		const record = async (ctx, { change, key, channel, language, detail }) => {
 			const label = `${key} (${channel}, ${language || 'default'})`;
-			if (via === 'dashboard') {
+			if (via !== 'widget') {
 				const session = ctx.session;
+				const actor = ctx.actor;
 				await product.recentChanges.record({
 					websiteId: ctx.websiteId,
-					who: {
-						kind: session.kind,
-						id: session.subject,
-						name: session.name,
-						...(session.role ? { role: session.role } : {}),
-					},
+					who:
+						via === 'dashboard'
+							? {
+									kind: session.kind,
+									id: session.subject,
+									name: session.name,
+									...(session.role ? { role: session.role } : {}),
+								}
+							: actor
+								? { kind: 'user', id: actor.id, name: actor.name, ...(actor.role ? { role: actor.role } : {}) }
+								: SERVER,
 					what: 'templates',
 					detail: `Template ${label}: ${change}`,
 				});
@@ -181,11 +207,20 @@ export const createRoutes = (product) => {
 		};
 		return {
 			/** @param {any} ctx */
-			list: async (ctx) => ({ items: (await (await storeOf(ctx)).templates.list()).map(templateView) }),
+			list: async (ctx) => {
+				const items = await (await storeOf(ctx)).templates.list();
+				const on = via === 'server' ? await product.featuresOn(ctx.websiteId) : null;
+				return {
+					items: items
+						.filter((template) => on === null || on.includes(CHANNEL_FEATURES[template.channel]))
+						.map(templateView),
+				};
+			},
 			/** @param {any} ctx */
 			save: async (ctx) => {
 				const checked = checkTemplate(ctx.body);
 				if (!checked.ok) return invalid(checked.field, checked.message);
+				if (!(await channelOn(ctx, checked.value.channel))) return channelOff(checked.value.channel);
 				const store = await storeOf(ctx);
 				if ((await store.templates.save(checked.value)) === 'full')
 					return problem('validation_failed', 'A website can have at most 1000 templates.');
@@ -203,6 +238,7 @@ export const createRoutes = (product) => {
 			remove: async (ctx) => {
 				const language = languageOfSegment(ctx.params.language);
 				if (language === null || !CHANNELS.includes(ctx.params.channel)) return problem('not_found', 'No such template.');
+				if (!(await channelOn(ctx, ctx.params.channel))) return channelOff(ctx.params.channel);
 				const store = await storeOf(ctx);
 				if (!(await store.templates.remove(ctx.params.key, ctx.params.channel, language)))
 					return problem('not_found', 'No such template.');
@@ -213,6 +249,7 @@ export const createRoutes = (product) => {
 	};
 	const dashboardTemplates = templateHandlers('dashboard');
 	const widgetTemplates = templateHandlers('widget');
+	const serverTemplates = templateHandlers('server');
 
 	/**
 	 * A website a public page or a provider names: it must exist, be served and have its merchant database.
@@ -355,6 +392,31 @@ export const createRoutes = (product) => {
 				const message = await (await siteOf(ctx)).store.messages.get(ctx.params.id);
 				return message ? messageView(message) : problem('not_found', 'No such message.');
 			},
+		}),
+
+		// templates for the merchant's server (PLAN 0.8.10 N4): each channel's templates while its feature is on
+		defineRoute({
+			method: 'GET',
+			path: '/v1/templates',
+			auth: 'server',
+			feature: ['email', 'sms', 'whatsapp', 'browser_push', 'staff_push'],
+			handler: serverTemplates.list,
+		}),
+		defineRoute({
+			method: 'PUT',
+			path: '/v1/templates',
+			auth: 'server',
+			feature: ['email', 'sms', 'whatsapp', 'browser_push', 'staff_push'],
+			rateLimit: TEMPLATE_WRITE_LIMITS,
+			handler: serverTemplates.save,
+		}),
+		defineRoute({
+			method: 'DELETE',
+			path: '/v1/templates/:key/:channel/:language',
+			auth: 'server',
+			feature: ['email', 'sms', 'whatsapp', 'browser_push', 'staff_push'],
+			rateLimit: TEMPLATE_WRITE_LIMITS,
+			handler: serverTemplates.remove,
 		}),
 
 		// ------------------------------------------------------------------------------- browser push (visitors)
