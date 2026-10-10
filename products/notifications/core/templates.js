@@ -44,7 +44,23 @@ const LANGUAGE = /^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8}){0,3}$/;
  * @property {boolean} required required messages (sign-in codes, order and account updates) ignore unsubscribes
  * @property {boolean} urgent urgent messages ignore quiet hours
  * @property {string} providerTemplate WhatsApp: the name of an approved Meta template (`''` = plain text)
+ * @property {Button[]} [buttons] WhatsApp templates at Meta: the buttons that take a value (PLAN 0.8.10 N1); missing on
+ *   templates saved before them
  */
+/**
+ * A button of a WhatsApp template at Meta that takes a value: a URL button's variable part, or the code a copy-code
+ * button copies. `index` is the button's place in the template at Meta (0–9); `value` may hold placeholders and
+ * optional sections, for example `{code}`.
+ * @typedef {{ index: number, type: ButtonType, value: string }} Button
+ */
+/** @typedef {'url' | 'copy_code'} ButtonType */
+
+/** Button types (PLAN 0.8.10 N1). */
+export const BUTTON_TYPES = Object.freeze(/** @type {ButtonType[]} */ (['url', 'copy_code']));
+/** Most buttons a template at Meta has. */
+const MAX_BUTTONS = 10;
+/** Longest button value (characters, as written). */
+const BUTTON_VALUE_LIMIT = 2000;
 
 /**
  * Whether a template key belongs to another product's own events.
@@ -92,6 +108,45 @@ export const sectionProblem = (text) => {
 };
 
 /**
+ * Check the buttons of a template: only a WhatsApp template with a template name at Meta has them; each names its
+ * place (0–9, once), its type and its value. Sorted by place.
+ * @param {unknown} input
+ * @param {{ channel: Channel, providerTemplate: string }} template
+ * @returns {{ ok: true, value: Button[] } | { ok: false, field: string, message: string }}
+ */
+export const checkButtons = (input, { channel, providerTemplate }) => {
+	/** @param {string} field @param {string} message */
+	const fail = (field, message) => /** @type {const} */ ({ ok: false, field, message });
+	if (input === undefined || input === null) return { ok: true, value: [] };
+	if (!Array.isArray(input)) return fail('buttons', 'buttons is a list of { index, type, value }.');
+	if (input.length === 0) return { ok: true, value: [] };
+	if (channel !== 'whatsapp' || providerTemplate === '')
+		return fail('buttons', 'Only WhatsApp templates with a template name at Meta have buttons.');
+	if (input.length > MAX_BUTTONS) return fail('buttons', `A template has at most ${MAX_BUTTONS} buttons.`);
+	/** @type {Button[]} */
+	const value = [];
+	for (const [at, raw] of input.entries()) {
+		const button = typeof raw === 'object' && raw !== null ? /** @type {Record<string, unknown>} */ (raw) : {};
+		const index = button.index;
+		if (typeof index !== 'number' || !Number.isInteger(index) || index < 0 || index >= MAX_BUTTONS)
+			return fail(`buttons/${at}/index`, 'The index is the button’s place in the template at Meta, from 0 to 9.');
+		if (value.some((other) => other.index === index)) return fail(`buttons/${at}/index`, `Button ${index} is listed twice.`);
+		if (!BUTTON_TYPES.includes(/** @type {ButtonType} */ (button.type)))
+			return fail(`buttons/${at}/type`, 'Pick url or copy_code.');
+		const text = typeof button.value === 'string' ? button.value.trim() : '';
+		if (text.length === 0 || text.length > BUTTON_VALUE_LIMIT)
+			return fail(
+				`buttons/${at}/value`,
+				`Write the button’s value (at most ${BUTTON_VALUE_LIMIT} characters), for example {code}.`,
+			);
+		const sections = sectionProblem(text);
+		if (sections) return fail(`buttons/${at}/value`, sections);
+		value.push({ index, type: /** @type {ButtonType} */ (button.type), value: text });
+	}
+	return { ok: true, value: value.sort((a, b) => a.index - b.index) };
+};
+
+/**
  * Check a template the merchant saves.
  * @param {unknown} input
  * @returns {{ ok: true, value: Template } | { ok: false, field: string, message: string }}
@@ -123,6 +178,8 @@ export const checkTemplate = (input) => {
 	const providerTemplate = typeof body.providerTemplate === 'string' ? body.providerTemplate.trim() : '';
 	if (providerTemplate !== '' && (channel !== 'whatsapp' || !/^[a-z0-9_]{1,512}$/.test(providerTemplate)))
 		return fail('providerTemplate', 'Only WhatsApp templates have a provider template name (lower case, digits and _).');
+	const buttons = checkButtons(body.buttons, { channel, providerTemplate });
+	if (!buttons.ok) return buttons;
 	return {
 		ok: true,
 		value: {
@@ -134,6 +191,7 @@ export const checkTemplate = (input) => {
 			required: body.required === true,
 			urgent: body.urgent === true,
 			providerTemplate,
+			buttons: buttons.value,
 		},
 	};
 };
@@ -210,13 +268,14 @@ export const pickVersion = (versions, language, multiLanguage) => {
  * The message a template makes for one send.
  * @param {Template} template
  * @param {Readonly<Record<string, string>>} values the send's values plus the built-in ones
- * @returns {{ subject: string, text: string, parameters: string[] }} `parameters`: the values in the order the text
- *   uses them (a WhatsApp provider template's body parameters)
+ * @returns {{ subject: string, text: string, parameters: string[], buttons: Button[] }} `parameters`: the values in the
+ *   order the text uses them (a WhatsApp provider template's body parameters); `buttons`: their values filled
  */
 export const renderTemplate = (template, values) => ({
 	subject: fillText(template.subject, values),
 	text: fillText(template.text, values),
 	parameters: placeholdersOf(template.text).map((name) => values[name] ?? ''),
+	buttons: (template.buttons ?? []).map((button) => ({ ...button, value: fillText(button.value, values) })),
 });
 
 /**
@@ -232,5 +291,6 @@ export const templateView = (template) => ({
 	required: template.required,
 	urgent: template.urgent,
 	providerTemplate: template.providerTemplate,
+	buttons: template.buttons ?? [],
 	...(template.updatedAt ? { updatedAt: new Date(template.updatedAt).toISOString() } : {}),
 });

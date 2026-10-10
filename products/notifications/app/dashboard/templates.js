@@ -1,7 +1,8 @@
 'use client';
 /**
  * Settings → Templates (PLAN 0.8.5): the merchant and our admins write every template per template key, channel and
- * language. Templates live in the merchant database, so they need it connected.
+ * language. Templates live in the merchant database, so they need it connected. A WhatsApp template at Meta lists the
+ * buttons that take a value (PLAN 0.8.10 N1).
  * @module
  */
 import { useState } from 'react';
@@ -13,6 +14,7 @@ import {
 	Checkbox,
 	Dialog,
 	EmptyState,
+	FieldGrid,
 	Form,
 	Input,
 	Section,
@@ -24,9 +26,10 @@ import {
 import { call, useLoad } from './api.js';
 import { TEXTS } from './texts.js';
 
+/** @typedef {{ index: number, type: string, value: string }} TemplateButton */
 /**
  * @typedef {{ key: string, channel: string, language: string, subject: string, text: string, required: boolean,
- *   urgent: boolean, providerTemplate: string }} Template
+ *   urgent: boolean, providerTemplate: string, buttons: TemplateButton[] }} Template
  */
 
 const CHANNELS = /** @type {const} */ (['email', 'sms', 'whatsapp', 'push', 'staff_push']);
@@ -40,8 +43,70 @@ const EMPTY = {
 	required: false,
 	urgent: false,
 	providerTemplate: '',
+	buttons: [],
 };
 const T = TEXTS.settings.template;
+/** Most buttons a template at Meta has. */
+const MAX_BUTTONS = 10;
+
+/**
+ * The buttons of a WhatsApp template at Meta that take a value, edited in the template's dialog.
+ * @param {{ buttons: TemplateButton[], onChange: (buttons: TemplateButton[]) => void }} props
+ */
+function ButtonsEditor({ buttons, onChange }) {
+	/** @param {number} at @param {Partial<TemplateButton>} patch */
+	const set = (at, patch) => onChange(buttons.map((button, i) => (i === at ? { ...button, ...patch } : button)));
+	const free = Array.from({ length: MAX_BUTTONS }, (_, index) => index).find(
+		(index) => !buttons.some((button) => button.index === index),
+	);
+	return (
+		<div className="space-y-3">
+			<div>
+				<p className="text-sm font-semibold text-fg">{T.buttons}</p>
+				<p className="text-sm text-muted">{T.buttonsHelp}</p>
+			</div>
+			{buttons.map((button, at) => (
+				<div key={at} className="space-y-3 rounded-2xl bg-surface-2 p-4">
+					<FieldGrid>
+						<Input
+							label={T.buttonIndex}
+							type="number"
+							min={0}
+							max={MAX_BUTTONS - 1}
+							value={String(button.index)}
+							onChange={(event) => set(at, { index: Number(event.target.value) })}
+						/>
+						<Select
+							label={T.buttonType}
+							value={button.type}
+							options={[
+								{ value: 'copy_code', label: T.buttonTypes.copy_code },
+								{ value: 'url', label: T.buttonTypes.url },
+							]}
+							onChange={(event) => set(at, { type: event.target.value })}
+						/>
+						<Input
+							label={T.buttonValue}
+							value={button.value}
+							maxLength={2000}
+							onChange={(event) => set(at, { value: event.target.value })}
+						/>
+					</FieldGrid>
+					<Button size="sm" variant="ghost" onClick={() => onChange(buttons.filter((_, i) => i !== at))}>
+						{T.removeButton}
+					</Button>
+				</div>
+			))}
+			<Button
+				size="sm"
+				variant="secondary"
+				disabled={free === undefined}
+				onClick={() => onChange([...buttons, { index: free ?? 0, type: 'copy_code', value: '' }])}>
+				{T.addButton}
+			</Button>
+		</div>
+	);
+}
 
 /** @param {{ websiteId: string }} props */
 export function TemplatesSection({ websiteId }) {
@@ -60,7 +125,8 @@ export function TemplatesSection({ websiteId }) {
 	const save = async () => {
 		if (!draft) return;
 		const { isNew: _isNew, ...template } = draft;
-		const next = await call('PUT', base, template);
+		const atMeta = template.channel === 'whatsapp' && template.providerTemplate.trim() !== '';
+		const next = await call('PUT', base, { ...template, buttons: atMeta ? template.buttons : [] });
 		if (!next.ok) return setProblem(next.problem);
 		setResult(next);
 		setDraft(null);
@@ -99,9 +165,13 @@ export function TemplatesSection({ websiteId }) {
 									<Badge>{item.language === 'default' ? T.default : item.language}</Badge>
 									{item.required ? <Badge>{T.required_badge}</Badge> : null}
 									{item.urgent ? <Badge>{T.urgent_badge}</Badge> : null}
+									{item.buttons?.length ? <Badge>{T.buttons_badge}</Badge> : null}
 								</span>
 								<span className="flex flex-wrap gap-2">
-									<Button size="sm" variant="secondary" onClick={() => open({ ...item, isNew: false })}>
+									<Button
+										size="sm"
+										variant="secondary"
+										onClick={() => open({ ...item, buttons: item.buttons ?? [], isNew: false })}>
 										{T.edit}
 									</Button>
 									<Button
@@ -153,6 +223,9 @@ export function TemplatesSection({ websiteId }) {
 								value={draft.providerTemplate}
 								onChange={(event) => edit({ providerTemplate: event.target.value })}
 							/>
+						) : null}
+						{draft.channel === 'whatsapp' && draft.providerTemplate.trim() !== '' ? (
+							<ButtonsEditor buttons={draft.buttons} onChange={(buttons) => edit({ buttons })} />
 						) : null}
 						{draft.channel === 'sms' || draft.channel === 'whatsapp' ? null : (
 							<Input

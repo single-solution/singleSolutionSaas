@@ -1,6 +1,7 @@
 /**
  * The admin widget `template_editor` (permission `templates.edit`): the merchant's staff write the templates per
- * template key, channel and language in their own admin. Picking a template from the list loads it into the form.
+ * template key, channel and language in their own admin. Picking a template from the list loads it into the form. A
+ * WhatsApp template at Meta lists the buttons that take a value (PLAN 0.8.10 N1).
  * @module
  */
 import { formatText, mountWidget } from '@ss/app-kit/widget';
@@ -9,10 +10,14 @@ import { element } from './dom.js';
 import { WIDGET_CSS } from './styles.js';
 import { adminCall } from './tickets.js';
 
+/** @typedef {{ index: number, type: string, value: string }} ButtonView */
 /**
  * @typedef {{ key: string, channel: string, language: string, subject: string, text: string, required: boolean,
- *   urgent: boolean, providerTemplate: string }} TemplateView
+ *   urgent: boolean, providerTemplate: string, buttons?: ButtonView[] }} TemplateView
  */
+
+/** Most buttons a template at Meta has. */
+const MAX_BUTTONS = 10;
 
 /**
  * @param {{ host: HTMLElement, api: import('./tickets.js').AdminApi, config: import('./widget.js').WidgetConfig }} input
@@ -54,6 +59,56 @@ export const mountTemplateEditor = ({ host, api, config }) => {
 			const required = check(t('templates.required'));
 			const urgent = check(t('templates.urgent'));
 			const providerTemplate = field('input', t('templates.providerTemplate'), { maxlength: '512' });
+			const rows = element(doc, 'div');
+			const addButton = element(doc, 'button', { type: 'button', class: 'secondary' }, t('templates.addButton'));
+			const buttonsBox = element(doc, 'div', { class: 'buttons' });
+			buttonsBox.append(
+				element(doc, 'label', {}, t('templates.buttons')),
+				element(doc, 'p', { class: 'meta' }, t('templates.buttonsHelp')),
+				rows,
+				addButton,
+			);
+			/** @type {Array<{ index: HTMLInputElement, type: HTMLInputElement, value: HTMLInputElement }>} */
+			let buttonFields = [];
+			/** @param {ButtonView} button */
+			const addRow = (button) => {
+				const row = element(doc, 'div', { class: 'row' });
+				const index = field('input', t('templates.buttonIndex'), { type: 'number', min: '0', max: String(MAX_BUTTONS - 1) });
+				const type = field('select', t('templates.buttonType'));
+				type.input.append(
+					...['copy_code', 'url'].map((value) => element(doc, 'option', { value }, t(`templates.buttonType.${value}`))),
+				);
+				const value = field('input', t('templates.buttonValue'), { maxlength: '2000' });
+				index.input.value = String(button.index);
+				type.input.value = button.type;
+				value.input.value = button.value;
+				const remove = element(doc, 'button', { type: 'button', class: 'secondary' }, t('templates.removeButton'));
+				const fields = { index: index.input, type: type.input, value: value.input };
+				remove.addEventListener('click', () => {
+					buttonFields = buttonFields.filter((entry) => entry !== fields);
+					row.remove();
+					addButton.toggleAttribute('disabled', false);
+				});
+				for (const part of [index, type, value]) {
+					const cell = element(doc, 'div');
+					cell.append(part.label, part.input);
+					row.append(cell);
+				}
+				row.append(remove);
+				rows.append(row);
+				buttonFields.push(fields);
+				addButton.toggleAttribute('disabled', buttonFields.length >= MAX_BUTTONS);
+			};
+			/** Buttons only for a WhatsApp template at Meta. */
+			const atMeta = () => channel.input.value === 'whatsapp' && providerTemplate.input.value.trim() !== '';
+			const showButtons = () => buttonsBox.toggleAttribute('hidden', !atMeta());
+			addButton.addEventListener('click', () => {
+				const used = buttonFields.map((entry) => Number(entry.index.value));
+				const free = Array.from({ length: MAX_BUTTONS }, (_, index) => index).find((index) => !used.includes(index)) ?? 0;
+				addRow({ index: free, type: 'copy_code', value: '' });
+			});
+			channel.input.addEventListener('change', showButtons);
+			providerTemplate.input.addEventListener('input', showButtons);
 			const save = element(doc, 'button', { type: 'submit' }, t('templates.save'));
 			const remove = element(doc, 'button', { type: 'button', class: 'secondary' }, t('templates.delete'));
 			const fresh = element(doc, 'button', { type: 'button', class: 'secondary' }, t('templates.new'));
@@ -78,6 +133,7 @@ export const mountTemplateEditor = ({ host, api, config }) => {
 				urgent.wrap,
 				providerTemplate.label,
 				providerTemplate.input,
+				buttonsBox,
 				save,
 				remove,
 				fresh,
@@ -95,6 +151,11 @@ export const mountTemplateEditor = ({ host, api, config }) => {
 				required.input.checked = view.required === true;
 				urgent.input.checked = view.urgent === true;
 				providerTemplate.input.value = view.providerTemplate ?? '';
+				rows.replaceChildren();
+				buttonFields = [];
+				addButton.toggleAttribute('disabled', false);
+				for (const button of view.buttons ?? []) addRow(button);
+				showButtons();
 			};
 
 			const load = async () => {
@@ -137,6 +198,13 @@ export const mountTemplateEditor = ({ host, api, config }) => {
 					required: required.input.checked,
 					urgent: urgent.input.checked,
 					providerTemplate: providerTemplate.input.value.trim(),
+					buttons: atMeta()
+						? buttonFields.map((entry) => ({
+								index: Number(entry.index.value),
+								type: entry.type.value,
+								value: entry.value.value,
+							}))
+						: [],
 				});
 				note.textContent = answer.ok
 					? t('templates.saved')

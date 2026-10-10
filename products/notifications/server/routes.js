@@ -58,6 +58,7 @@ const templateDetail = (template) =>
 		template.required ? 'Required' : 'Optional',
 		template.urgent ? 'urgent' : 'not urgent',
 		...(template.providerTemplate ? [`WhatsApp template ${template.providerTemplate}`] : []),
+		...(template.buttons?.length ? [`${template.buttons.length} button${template.buttons.length === 1 ? '' : 's'}`] : []),
 	].join(', ');
 
 /**

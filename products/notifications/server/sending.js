@@ -44,7 +44,7 @@ import { createStore } from '../adapters/store.js';
  */
 
 /** Rendered words of a message on one channel. */
-/** @typedef {Pick<MessageRecord, 'subject' | 'text' | 'parameters' | 'providerTemplate' | 'language'>} Words */
+/** @typedef {Pick<MessageRecord, 'subject' | 'text' | 'parameters' | 'providerTemplate' | 'language'> & { buttons: import('../core/templates.js').Button[] }} Words */
 
 /**
  * A message as the API and the delivery log answer it.
@@ -199,6 +199,7 @@ export const createSending = (product) => {
 				text: message.text,
 				parameters: message.parameters,
 				providerTemplate: message.providerTemplate,
+				buttons: message.buttons ?? [],
 				language: message.language,
 				...extra,
 			});
@@ -251,6 +252,7 @@ export const createSending = (product) => {
 				text: message.text,
 				parameters: [],
 				providerTemplate: '',
+				buttons: [],
 				language: DEFAULT_LANGUAGE,
 			};
 		}
@@ -376,6 +378,7 @@ export const createSending = (product) => {
 					text: content.text,
 					parameters: [],
 					providerTemplate: '',
+					buttons: [],
 					language: DEFAULT_LANGUAGE,
 				},
 			};

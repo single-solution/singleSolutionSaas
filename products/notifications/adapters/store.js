@@ -42,6 +42,8 @@ import { LEASE_MS } from '../core/timing.js';
  * @property {string} text
  * @property {string[]} parameters
  * @property {string} providerTemplate
+ * @property {import('../core/templates.js').Button[]} [buttons] a WhatsApp template's buttons, values filled (PLAN 0.8.10
+ *   N1); missing on messages accepted before them
  * @property {boolean} required
  * @property {boolean} urgent
  * @property {import('../core/log.js').MessageStatus} status
@@ -96,6 +98,7 @@ const TEMPLATE_PROJECTION = {
 	required: 1,
 	urgent: 1,
 	providerTemplate: 1,
+	buttons: 1,
 	updatedAt: 1,
 };
 

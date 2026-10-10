@@ -363,6 +363,71 @@ describe('admin widgets', () => {
 		expect(key.value).toBe('');
 	});
 
+	it('the template editor edits the buttons of a WhatsApp template at Meta (PLAN 0.8.10 N1)', async () => {
+		const host = place('template_editor');
+		/** @type {any[]} */
+		const saved = [];
+		const items = [
+			{
+				key: 'accounts.code',
+				channel: 'whatsapp',
+				language: 'default',
+				subject: '',
+				text: '{code} is your code.',
+				required: true,
+				urgent: true,
+				providerTemplate: 'authentication',
+				buttons: [{ index: 0, type: 'copy_code', value: '{code}' }],
+			},
+		];
+		await startAdmin({
+			'GET /v1/admin/templates': () => answer(200, { items }),
+			'PUT /v1/admin/templates': (init) => {
+				saved.push(JSON.parse(String(init?.body)));
+				return answer(200, saved.at(-1));
+			},
+		});
+		const box = inside(host, '.buttons');
+		expect(box.hidden).toBe(true);
+		/** @type {HTMLButtonElement} */ (inside(host, 'li button')).click();
+		expect(box.hidden).toBe(false);
+		const rowFields = () => [...box.querySelectorAll('.row')].map((row) => [...row.querySelectorAll('input, select')]);
+		expect(rowFields().map((fields) => fields.map((input) => input.value))).toEqual([['0', 'copy_code', '{code}']]);
+		const add = button(host, strings['templates.addButton']);
+		add.click();
+		const [, second] = rowFields();
+		expect(second?.map((input) => input.value)).toEqual(['1', 'copy_code', '']);
+		if (!second) return;
+		const [, type, value] = second;
+		type.value = 'url';
+		value.value = 'orders/{order}';
+		const form = /** @type {HTMLFormElement} */ (inside(host, 'form'));
+		form.dispatchEvent(new window.Event('submit', { cancelable: true }));
+		await flush();
+		expect(saved[0].buttons).toEqual([
+			{ index: 0, type: 'copy_code', value: '{code}' },
+			{ index: 1, type: 'url', value: 'orders/{order}' },
+		]);
+		// removing a row frees its place; ten buttons at most
+		/** @type {HTMLButtonElement} */ (
+			[...box.querySelectorAll('button')].find((b) => b.textContent === strings['templates.removeButton'])
+		).click();
+		expect(rowFields()).toHaveLength(1);
+		for (let i = 0; i < 9; i += 1) add.click();
+		expect(rowFields()).toHaveLength(10);
+		expect(add.disabled).toBe(true);
+		// another channel has no buttons: hidden and sent as none
+		const channel = /** @type {HTMLSelectElement} */ (host.shadowRoot?.querySelectorAll('select')[0]);
+		channel.value = 'sms';
+		channel.dispatchEvent(new window.Event('change'));
+		expect(box.hidden).toBe(true);
+		form.dispatchEvent(new window.Event('submit', { cancelable: true }));
+		await flush();
+		expect(saved[1].buttons).toEqual([]);
+		button(host, strings['templates.new']).click();
+		expect(rowFields()).toHaveLength(0);
+	});
+
 	it('the template editor says when the list cannot be loaded', async () => {
 		const host = place('template_editor');
 		await startAdmin({ 'GET /v1/admin/templates': () => answer(500) });

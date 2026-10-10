@@ -218,6 +218,26 @@ describe('SMS and WhatsApp providers', () => {
 			{ ...MESSAGE, to: '+15550002222', providerTemplate: 'hello', language: 'ur' },
 		);
 		expect(JSON.parse(calls[3]?.init.body).template).toEqual({ name: 'hello', language: { code: 'ur' } });
+		// buttons that take a value (PLAN 0.8.10 N1): a copy-code button as Meta's authentication templates take it
+		await providers.sendMessage(
+			'whatsapp',
+			{ provider: 'meta', phoneNumberId: '123456', secret: 'm' },
+			{
+				...MESSAGE,
+				to: '+15550002222',
+				providerTemplate: 'authentication',
+				parameters: ['482913'],
+				buttons: [
+					{ index: 0, type: 'copy_code', value: '482913' },
+					{ index: 1, type: 'url', value: 'orders/IM-1' },
+				],
+			},
+		);
+		expect(JSON.parse(calls[4]?.init.body).template.components).toEqual([
+			{ type: 'body', parameters: [{ type: 'text', text: '482913' }] },
+			{ type: 'button', sub_type: 'url', index: '0', parameters: [{ type: 'text', text: '482913' }] },
+			{ type: 'button', sub_type: 'url', index: '1', parameters: [{ type: 'text', text: 'orders/IM-1' }] },
+		]);
 		expect(await providers.sendMessage('sms', { provider: 'meta' }, MESSAGE)).toMatchObject({
 			ok: false,
 			retryable: false,

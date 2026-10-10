@@ -31,6 +31,7 @@ import { isObject } from './util.js';
  * @property {string} text
  * @property {string[]} parameters WhatsApp provider templates: body parameters
  * @property {string} providerTemplate WhatsApp: approved Meta template name (`''` = plain text)
+ * @property {import('../core/templates.js').Button[]} [buttons] WhatsApp templates at Meta: the buttons' values
  * @property {string} language the template's language (`''` = default)
  * @property {string} [replyTo] e-mail
  * @property {Record<string, string>} [headers] e-mail headers (List-Unsubscribe)
@@ -296,12 +297,30 @@ export const createProviders = ({ send, policy, now, createTransport }) => {
 	};
 
 	/**
-	 * Send through the WhatsApp Cloud API: plain text, or an approved template with the values as body parameters.
+	 * The components of an approved template: the values as body parameters, then each button's value (PLAN 0.8.10 N1).
+	 * A URL button takes its variable part as text. A copy-code button is sent as Meta's authentication templates take
+	 * it: a `url` button whose text parameter is the code.
+	 * @param {ProviderMessage} m
+	 */
+	const metaComponents = (m) => [
+		...(m.parameters.length > 0 ? [{ type: 'body', parameters: m.parameters.map((text) => ({ type: 'text', text })) }] : []),
+		...(m.buttons ?? []).map((button) => ({
+			type: 'button',
+			sub_type: 'url',
+			index: String(button.index),
+			parameters: [{ type: 'text', text: button.value }],
+		})),
+	];
+
+	/**
+	 * Send through the WhatsApp Cloud API: plain text, or an approved template with the values as body parameters and
+	 * its buttons' values.
 	 * @param {ProviderValue} v
 	 * @param {ProviderMessage} m
 	 */
-	const meta = (v, m) =>
-		call(`https://graph.facebook.com/${META_API_VERSION}/${encodeURIComponent(String(v.phoneNumberId))}/messages`, {
+	const meta = (v, m) => {
+		const components = metaComponents(m);
+		return call(`https://graph.facebook.com/${META_API_VERSION}/${encodeURIComponent(String(v.phoneNumberId))}/messages`, {
 			headers: { authorization: `Bearer ${String(v.secret)}`, 'content-type': 'application/json' },
 			body: JSON.stringify({
 				messaging_product: 'whatsapp',
@@ -312,14 +331,13 @@ export const createProviders = ({ send, policy, now, createTransport }) => {
 							template: {
 								name: m.providerTemplate,
 								language: { code: m.language || 'en' },
-								...(m.parameters.length > 0
-									? { components: [{ type: 'body', parameters: m.parameters.map((text) => ({ type: 'text', text })) }] }
-									: {}),
+								...(components.length > 0 ? { components } : {}),
 							},
 						}
 					: { type: 'text', text: { body: m.text } }),
 			}),
 		});
+	};
 
 	/**
 	 * Send one message through the channel's connection value.

@@ -11,6 +11,7 @@ import { gatewayOutcome } from '../core/gateway.js';
 import { isOptOut, repliesOf } from '../core/inbound.js';
 import { STATUSES, logFilters } from '../core/log.js';
 import {
+	checkButtons,
 	checkTemplate,
 	checkValues,
 	fillText,
@@ -93,6 +94,7 @@ describe('templates', () => {
 				required: true,
 				urgent: false,
 				providerTemplate: '',
+				buttons: [],
 			},
 		});
 		expect(
@@ -126,12 +128,91 @@ describe('templates', () => {
 			urgent: false,
 			providerTemplate: 'sale',
 		};
-		expect(renderTemplate(template, { pct: '5%' })).toEqual({ subject: '', text: 'Sale 5% on {item}', parameters: ['5%', ''] });
+		expect(renderTemplate(template, { pct: '5%' })).toEqual({
+			subject: '',
+			text: 'Sale 5% on {item}',
+			parameters: ['5%', ''],
+			buttons: [],
+		});
 		expect(templateView({ ...template, updatedAt: new Date(0) })).toMatchObject({
 			language: 'default',
 			updatedAt: '1970-01-01T00:00:00.000Z',
 		});
 		expect(templateView({ ...template, language: 'ur' })).not.toHaveProperty('updatedAt');
+	});
+
+	it('checks the buttons of a WhatsApp template at Meta and fills their values (PLAN 0.8.10 N1)', () => {
+		const at = { channel: /** @type {const} */ ('whatsapp'), providerTemplate: 'authentication' };
+		expect(checkButtons(undefined, at)).toEqual({ ok: true, value: [] });
+		expect(checkButtons([], { channel: 'sms', providerTemplate: '' })).toEqual({ ok: true, value: [] });
+		expect(checkButtons('x', at)).toMatchObject({ ok: false, field: 'buttons' });
+		const one = [{ index: 0, type: 'copy_code', value: '{code}' }];
+		expect(checkButtons(one, { channel: 'whatsapp', providerTemplate: '' })).toMatchObject({
+			ok: false,
+			field: 'buttons',
+			message: 'Only WhatsApp templates with a template name at Meta have buttons.',
+		});
+		expect(checkButtons(one, { channel: 'sms', providerTemplate: '' })).toMatchObject({ field: 'buttons' });
+		const many = Array.from({ length: 11 }, (_, index) => ({ index, type: 'url', value: 'x' }));
+		expect(checkButtons(many, at)).toMatchObject({ field: 'buttons' });
+		expect(checkButtons([null], at)).toMatchObject({ field: 'buttons/0/index' });
+		expect(checkButtons([{ index: 10, type: 'url', value: 'x' }], at)).toMatchObject({ field: 'buttons/0/index' });
+		expect(checkButtons([{ index: 1.5, type: 'url', value: 'x' }], at)).toMatchObject({ field: 'buttons/0/index' });
+		expect(
+			checkButtons(
+				[
+					{ index: 1, type: 'url', value: 'x' },
+					{ index: 1, type: 'url', value: 'y' },
+				],
+				at,
+			),
+		).toMatchObject({ field: 'buttons/1/index', message: 'Button 1 is listed twice.' });
+		expect(checkButtons([{ index: 0, type: 'quick_reply', value: 'x' }], at)).toMatchObject({ field: 'buttons/0/type' });
+		expect(checkButtons([{ index: 0, type: 'url', value: ' ' }], at)).toMatchObject({ field: 'buttons/0/value' });
+		expect(checkButtons([{ index: 0, type: 'url', value: 'x'.repeat(2001) }], at)).toMatchObject({
+			field: 'buttons/0/value',
+		});
+		expect(checkButtons([{ index: 0, type: 'url', value: '{?a}x' }], at)).toMatchObject({ field: 'buttons/0/value' });
+		expect(
+			checkButtons(
+				[
+					{ index: 1, type: 'url', value: ' track/{order} ' },
+					{ index: 0, type: 'copy_code', value: '{code}' },
+				],
+				at,
+			),
+		).toEqual({
+			ok: true,
+			value: [
+				{ index: 0, type: 'copy_code', value: '{code}' },
+				{ index: 1, type: 'url', value: 'track/{order}' },
+			],
+		});
+		const checked = checkTemplate({
+			key: 'accounts.code',
+			channel: 'whatsapp',
+			text: 'Your code is {code}.',
+			providerTemplate: 'authentication',
+			required: true,
+			urgent: true,
+			buttons: one,
+		});
+		expect(checked).toMatchObject({ ok: true, value: { buttons: one } });
+		expect(
+			checkTemplate({ key: 'a', channel: 'whatsapp', text: 'x', providerTemplate: 'p', buttons: [{ index: 0 }] }),
+		).toMatchObject({ ok: false, field: 'buttons/0/type' });
+		if (!checked.ok) return;
+		expect(renderTemplate(checked.value, { code: '482913' })).toEqual({
+			subject: '',
+			text: 'Your code is 482913.',
+			parameters: ['482913'],
+			buttons: [{ index: 0, type: 'copy_code', value: '482913' }],
+		});
+		expect(templateView(checked.value).buttons).toEqual(one);
+		const older = { ...checked.value };
+		delete older.buttons;
+		expect(templateView(older).buttons).toEqual([]);
+		expect(renderTemplate(older, { code: '1' }).buttons).toEqual([]);
 	});
 
 	it('shows an optional section only when its value is not empty (PLAN 0.8.10 N2)', () => {
