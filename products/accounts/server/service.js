@@ -18,14 +18,18 @@ import { selfView } from '../core/profile.js';
 import { OPEN_SIGN_UP, deviceIdOf, deviceOf } from '../core/rules.js';
 import { SIGN_IN_HEADER, SIGN_IN_METHODS, SIGN_IN_SECONDS } from '../core/widgets.js';
 import {
+	dummyPasswordCheck,
 	generateSigningKey,
 	generateTotpSecret,
+	hashPassword,
+	isLegacyHash,
 	randomSecret,
 	safeEqual,
 	sha256,
 	signJwt,
 	totpUri,
 	verifyJwt,
+	verifyPassword,
 } from '../adapters/crypto.js';
 import { OTHER_PRODUCTS } from '../adapters/product.js';
 import { createStore } from '../adapters/store.js';
@@ -318,6 +322,21 @@ export const createService = (product) => {
 		return { s, user, session };
 	};
 
+	/**
+	 * Check a user's password (PLAN 0.8.10 A1): Accounts' own scrypt hash, or an imported bcrypt or peppered PBKDF2
+	 * hash (the pepper from the `legacy_pepper` connection), which is replaced with scrypt after a good check. A user
+	 * without a password takes as long as a real check.
+	 * @param {Site} s @param {UserRecord} user @param {string} password
+	 */
+	const checkPassword = async (s, user, password) => {
+		const stored = user.passwordHash;
+		if (!stored) return dummyPasswordCheck();
+		const pepper = stored.startsWith('pbkdf2$') ? await product.connections.value(s.websiteId, 'legacy_pepper') : null;
+		const ok = await verifyPassword(password, stored, { pepper: typeof pepper === 'string' ? pepper : null });
+		if (ok && isLegacyHash(stored)) await s.store.users.update(user.id, { passwordHash: await hashPassword(password) });
+		return ok;
+	};
+
 	/** Whether any sign-in method is on. @param {Site} s */
 	const anyMethod = (s) => SIGN_IN_METHODS.some((key) => s.on.includes(key));
 
@@ -463,6 +482,7 @@ export const createService = (product) => {
 		takeSecret,
 		howOf,
 		signedIn,
+		checkPassword,
 		anyMethod,
 		notify,
 		erase,

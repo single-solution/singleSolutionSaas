@@ -29,7 +29,6 @@ import {
 	randomSecret,
 	safeEqual,
 	sha256,
-	verifyPassword,
 	verifyTotp,
 } from '../adapters/crypto.js';
 import { parseSecret } from './service.js';
@@ -299,7 +298,7 @@ export const createFlows = (product, service) => {
 			throw problem('locked', 'Too many wrong passwords. Try again later.', {
 				extensions: { lockedUntil: user.lockedUntil.toISOString() },
 			});
-		if (!(await verifyPassword(body.password, user.passwordHash))) {
+		if (!(await service.checkPassword(s, user, body.password))) {
 			const { maxAttempts, lockMinutes } = await service.settings(s, 'email_password');
 			if ((await s.store.users.failedLogin(user.id)) >= maxAttempts)
 				await s.store.users.update(user.id, { failedLogins: 0, lockedUntil: new Date(now() + lockMinutes * 60_000) });

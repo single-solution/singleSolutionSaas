@@ -6,11 +6,13 @@
  *   from `ENCRYPTION_KEY`, bound to the website and purpose. Lost or changed `ENCRYPTION_KEY`: the signing key is made
  *   again (everyone signs in again) and two-step users use a recovery code.
  * - **Hashes**: one-time codes, links and refresh tokens are kept as SHA-256 of high-entropy values (or of the code
- *   with its record id); passwords with scrypt (N=16384, r=8, p=1, 16-byte salt).
+ *   with its record id); passwords with scrypt (N=16384, r=8, p=1, 16-byte salt). Imported bcrypt and peppered PBKDF2
+ *   hashes are checked too and replaced with scrypt after a good check (PLAN 0.8.10 A1).
  * - **Sign-ins** are compact JWS, `alg: EdDSA`, signed with the website's Ed25519 key.
  * - **TOTP** (RFC 6238) and recovery codes, ported from the Portal's two-step.
  * @module
  */
+import bcrypt from 'bcryptjs';
 import {
 	createCipheriv,
 	createDecipheriv,
@@ -20,6 +22,7 @@ import {
 	createPublicKey,
 	generateKeyPairSync,
 	hkdfSync,
+	pbkdf2 as pbkdf2Callback,
 	randomBytes as nodeRandomBytes,
 	scrypt as scryptCallback,
 	sign as cryptoSign,
@@ -31,6 +34,7 @@ import { promisify } from 'node:util';
 const scrypt = /** @type {(password: string, salt: Buffer, length: number, options: object) => Promise<Buffer>} */ (
 	promisify(scryptCallback)
 );
+const pbkdf2 = promisify(pbkdf2Callback);
 
 /** @param {number} n */
 export const randomBytes = (n) => new Uint8Array(nodeRandomBytes(n));
@@ -98,13 +102,48 @@ export const hashPassword = async (password) => {
 	return `scrypt$${salt.toString('base64url')}$${hash.toString('base64url')}`;
 };
 
-/** @param {string} password @param {string} stored */
-export const verifyPassword = async (password, stored) => {
+/** A bcrypt hash (`$2a$`, `$2b$`, `$2y$`, any cost; PLAN 0.8.10 A1). */
+const BCRYPT = /^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$/;
+/** `pbkdf2$<iterations>$<salt>$<hash>`, salt and hash in base64 (PLAN 0.8.10 A1). */
+const PBKDF2 = /^pbkdf2\$(\d{1,7})\$([A-Za-z0-9+/]+={0,2})\$([A-Za-z0-9+/]+={0,2})$/;
+/** Most PBKDF2 iterations a stored hash may ask for (code constant: one check stays under a second). */
+const MAX_PBKDF2_ITERATIONS = 2_000_000;
+
+/**
+ * Check a password against a stored hash: Accounts' own `scrypt$…`, or a hash imported from an older system (A1):
+ * bcrypt, or PBKDF2-HMAC-SHA256 of `<pepper>:<password>` (no Unicode normalisation on that path; needs the
+ * `legacy_pepper` connection). A hash that cannot be checked takes as long as the dummy check and fails.
+ * @param {string} password
+ * @param {string} stored
+ * @param {{ pepper?: string | null }} [options]
+ */
+export const verifyPassword = async (password, stored, { pepper = null } = {}) => {
 	const [kind, salt, hash] = stored.split('$');
-	if (kind !== 'scrypt' || !salt || !hash) return false;
-	const candidate = await scrypt(password.normalize('NFKC'), Buffer.from(salt, 'base64url'), 32, SCRYPT);
-	return safeEqual(candidate.toString('base64url'), hash);
+	if (kind === 'scrypt' && salt && hash) {
+		const candidate = await scrypt(password.normalize('NFKC'), Buffer.from(salt, 'base64url'), 32, SCRYPT);
+		return safeEqual(candidate.toString('base64url'), hash);
+	}
+	if (BCRYPT.test(stored)) return bcrypt.compare(password, stored);
+	const legacy = PBKDF2.exec(stored);
+	const iterations = Number(legacy?.[1]);
+	if (legacy && pepper && iterations >= 1 && iterations <= MAX_PBKDF2_ITERATIONS) {
+		const expected = Buffer.from(String(legacy[3]), 'base64');
+		if (expected.length >= 16 && expected.length <= 64) {
+			const candidate = await pbkdf2(
+				`${pepper}:${password}`,
+				Buffer.from(String(legacy[2]), 'base64'),
+				iterations,
+				expected.length,
+				'sha256',
+			);
+			return timingSafeEqual(candidate, expected);
+		}
+	}
+	return dummyPasswordCheck();
 };
+
+/** Whether a stored hash is not Accounts' own (it is replaced with scrypt after the next good check). @param {string} stored */
+export const isLegacyHash = (stored) => !stored.startsWith('scrypt$');
 
 /** A password check that takes as long as a real one (unknown users). */
 export const dummyPasswordCheck = async () => {

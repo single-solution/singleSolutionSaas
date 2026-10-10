@@ -181,6 +181,8 @@ export const createProductInstance = (options) => {
 			chat: token('chat', 'Chat token (permissions, data rights)', []),
 			payments: token('payments', 'Payments token (permissions, data rights)', []),
 			growth: token('growth', 'Growth token (permissions, data rights)', []),
+			// the pepper of imported `pbkdf2$` password hashes (PLAN 0.8.10 A1): write-only, needed by no feature
+			legacy_pepper: { label: 'Pepper of imported passwords', kind: 'secret', neededBy: [] },
 		},
 		hooks: {
 			...ownDataRights(now),

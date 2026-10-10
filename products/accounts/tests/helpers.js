@@ -9,6 +9,7 @@
 import { generateKeyPairSync } from 'node:crypto';
 import { createFakePortal, createMemoryStore, createNetwork } from '@ss/app-kit/testing';
 import { createProductInstance, manifest } from '../adapters/product.js';
+import { createStore } from '../adapters/store.js';
 import { createRoutes } from '../server/routes.js';
 
 const BASE = 'https://accounts.example.dev';
@@ -285,6 +286,8 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 		refreshBusiness,
 		flush,
 		connectDatabase: () => connect('database', merchantDatabase()),
+		/** The website's records in the merchant database (tests put imported records straight in). */
+		store: async () => createStore(await product.data.forWebsite(websiteId), { now }),
 		/** Pin the network of the next requests (null: a new one each request). @param {string | null} value */
 		setNetwork: (value) => {
 			pinnedNetwork = value;

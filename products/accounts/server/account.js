@@ -14,7 +14,6 @@ import {
 	safeEqual,
 	sha256,
 	totpUri,
-	verifyPassword,
 	verifyTotp,
 } from '../adapters/crypto.js';
 import { invalid } from './flows.js';
@@ -97,7 +96,7 @@ export const createAccount = (product, service, flows) => {
 		const { s, user, session } = await service.signedIn(ctx);
 		const body = bodyOf(ctx.body);
 		if (!user.email) throw problem('validation_failed', 'Passwords go with an e-mail address.');
-		if (user.passwordHash && (typeof body.current !== 'string' || !(await verifyPassword(body.current, user.passwordHash))))
+		if (user.passwordHash && (typeof body.current !== 'string' || !(await service.checkPassword(s, user, body.current))))
 			throw problem('sign_in_failed', 'The current password is wrong.');
 		const passwordHash = await flows.newPassword(s, body.password);
 		await s.store.users.update(user.id, { passwordHash });

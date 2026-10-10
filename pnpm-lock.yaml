@@ -456,6 +456,9 @@ importers:
       '@ss/ui':
         specifier: workspace:^
         version: link:../../packages/ui
+      bcryptjs:
+        specifier: ^3.0.3
+        version: 3.0.3
       mongodb:
         specifier: ^6.21.0
         version: 6.21.0
@@ -1823,6 +1826,10 @@ packages:
   baseline-browser-mapping@2.11.26:
     resolution: {integrity: sha512-GLQdD3y6UF8iVuMJl5fHgE4jdn/ua7n+toKfLgNlg3BqQtOZjpy68T8Tup8/wGWZCDlm7KMg7tPb4MPn7oN0TQ==}
     engines: {node: '>=6.0.0'}
+    hasBin: true
+
+  bcryptjs@3.0.3:
+    resolution: {integrity: sha512-GlF5wPWnSa/X5LKM1o0wz0suXIINz1iHRLvTS+sLyi7XPbe5ycmYI3DlZqVGZZtDgl4DmasFg7gOB3JYbphV5g==}
     hasBin: true
 
   brace-expansion@1.1.21:
@@ -3553,6 +3560,8 @@ snapshots:
       bare-path: 3.1.2
 
   baseline-browser-mapping@2.11.26: {}
+
+  bcryptjs@3.0.3: {}
 
   brace-expansion@1.1.21:
     dependencies:
