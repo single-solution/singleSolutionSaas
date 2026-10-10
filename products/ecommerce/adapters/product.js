@@ -1,7 +1,7 @@
 /**
  * The product on the kit: `createProductInstance(options)` wires `@ss/app-kit` `createProduct` with Ecommerce's
  * manifest (each feature's settings schema from `schemas/` inline), its widget texts, its Connections (storage, the
- * Accounts, Payments and Notifications tokens, courier keys and the AI key), the merchant database indexes of every
+ * Accounts, Payments, Notifications and Growth tokens, courier keys and the AI key), the merchant database indexes of every
  * part, the data-rights and widget-config hooks (filled in by `server/routes.js`), and adds the list settings (product
  * database; also served to the merchant's server by the kit's `GET|PUT /v1/lists/:list`, PLAN 0.8.10 K1), the courier
  * APIs and the AI provider on the same outbound policy. The Next.js route and the tests pass the rest (config, store,
@@ -15,6 +15,7 @@ import manifestFile from '../manifest.json' with { type: 'json' };
 import strings from '../strings/en.json' with { type: 'json' };
 import catalogSettings from '../schemas/catalog.settings.json' with { type: 'json' };
 import variantsSettings from '../schemas/variants.settings.json' with { type: 'json' };
+import sizeChartsSettings from '../schemas/size_charts.settings.json' with { type: 'json' };
 import multiLocationSettings from '../schemas/multi_location.settings.json' with { type: 'json' };
 import gradesSerialsSettings from '../schemas/grades_serials.settings.json' with { type: 'json' };
 import digitalGoodsSettings from '../schemas/digital_goods.settings.json' with { type: 'json' };
@@ -38,6 +39,7 @@ import csvSettings from '../schemas/csv.settings.json' with { type: 'json' };
 import bulkActionsSettings from '../schemas/bulk_actions.settings.json' with { type: 'json' };
 import reportsSettings from '../schemas/reports.settings.json' with { type: 'json' };
 import seoSettings from '../schemas/seo.settings.json' with { type: 'json' };
+import landingPagesSettings from '../schemas/landing_pages.settings.json' with { type: 'json' };
 import feedsSettings from '../schemas/feeds.settings.json' with { type: 'json' };
 import aiCopySettings from '../schemas/ai_copy.settings.json' with { type: 'json' };
 import llmsTxtSettings from '../schemas/llms_txt.settings.json' with { type: 'json' };
@@ -50,11 +52,13 @@ import { LEDGER_INDEXES } from './ledger.js';
 import { LISTS, createLists } from './lists.js';
 import { INDEXES as ORDERS_INDEXES } from './orders-store.js';
 import { INDEXES as PROMOTIONS_INDEXES } from './promotions-store.js';
+import { createSearchState } from './search-state.js';
 
 /** Settings schema of each feature (manifest.json points at them with `$ref`). @type {Record<string, unknown>} */
 const SETTINGS = {
 	catalog: catalogSettings,
 	variants: variantsSettings,
+	size_charts: sizeChartsSettings,
 	multi_location: multiLocationSettings,
 	grades_serials: gradesSerialsSettings,
 	digital_goods: digitalGoodsSettings,
@@ -78,6 +82,7 @@ const SETTINGS = {
 	bulk_actions: bulkActionsSettings,
 	reports: reportsSettings,
 	seo: seoSettings,
+	landing_pages: landingPagesSettings,
 	feeds: feedsSettings,
 	ai_copy: aiCopySettings,
 	llms_txt: llmsTxtSettings,
@@ -168,6 +173,7 @@ export const createProductInstance = (options) => {
 	const couriers = createCouriers({ send });
 	const ai = createAi({ send });
 	const lists = createLists({ store, now });
+	const searchState = createSearchState({ store, now });
 	/** @type {NonNullable<import('@ss/app-kit').ProductOptions['hooks']>} */
 	const hooks = {};
 
@@ -200,6 +206,12 @@ export const createProductInstance = (options) => {
 				kind: 'token',
 				productId: 'notifications',
 				neededBy: ['alerts'],
+			},
+			growth: {
+				label: 'Growth token (send changed addresses to IndexNow)',
+				kind: 'token',
+				productId: 'growth',
+				neededBy: [],
 			},
 			courier: {
 				label: 'Courier API keys',
@@ -239,6 +251,7 @@ export const createProductInstance = (options) => {
 	return Object.freeze({
 		...product,
 		lists,
+		searchState,
 		couriers,
 		ai,
 		send,

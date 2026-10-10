@@ -36,7 +36,8 @@
 			"maxLength": 20000,
 			"x-ui": {
 				"widget": "textarea"
-			}
+			},
+			"description": "With placeholders {returnDays}, {warrantyDays}, {warrantyMonths} and {business}."
 		},
 		"policyReturns": {
 			"type": "string",
@@ -45,7 +46,8 @@
 			"maxLength": 20000,
 			"x-ui": {
 				"widget": "textarea"
-			}
+			},
+			"description": "With placeholders {returnDays}, {warrantyDays}, {warrantyMonths} and {business}."
 		},
 		"policyPrivacy": {
 			"type": "string",
@@ -54,7 +56,8 @@
 			"maxLength": 20000,
 			"x-ui": {
 				"widget": "textarea"
-			}
+			},
+			"description": "With placeholders {returnDays}, {warrantyDays}, {warrantyMonths} and {business}."
 		},
 		"policyTerms": {
 			"type": "string",
@@ -63,7 +66,25 @@
 			"maxLength": 20000,
 			"x-ui": {
 				"widget": "textarea"
+			},
+			"description": "With placeholders {returnDays}, {warrantyDays}, {warrantyMonths} and {business}."
+		},
+		"policyWarranty": {
+			"type": "string",
+			"title": "Warranty policy",
+			"description": "With placeholders {returnDays}, {warrantyDays}, {warrantyMonths} and {business}.",
+			"default": "",
+			"maxLength": 20000,
+			"x-ui": {
+				"widget": "textarea"
 			}
+		},
+		"policyFormat": {
+			"type": "string",
+			"title": "Policy format",
+			"description": "Plain text, or HTML (paragraphs, lists, headings, bold, italic, underline, quotes and links).",
+			"default": "text",
+			"enum": ["text", "html"]
 		},
 		"paymentMethods": {
 			"type": "array",

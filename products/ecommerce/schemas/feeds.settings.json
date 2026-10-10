@@ -25,9 +25,29 @@
 		"gradedCondition": {
 			"type": "string",
 			"title": "Condition of graded items",
-			"description": "The condition sent for items that have a condition grade. Items without a grade are new.",
+			"description": "The condition sent for graded items whose grade names no condition. Items without a grade are new.",
 			"default": "used",
 			"enum": ["used", "refurbished", "new"]
+		},
+		"itemId": {
+			"type": "string",
+			"title": "Item ids",
+			"description": "Variant ids, or legacy ids (<product>_<variant> from imported records), so shopping catalogues keep their items.",
+			"default": "variant",
+			"enum": ["variant", "legacy"]
+		},
+		"googleCategory": {
+			"type": "string",
+			"title": "Google product category",
+			"description": "The Google product category of your items (an id or a path), sent with every item.",
+			"default": "",
+			"maxLength": 250
+		},
+		"gradeLabel": {
+			"type": "boolean",
+			"title": "Grade as custom label 0",
+			"description": "Send each item's grade label as custom_label_0.",
+			"default": false
 		}
 	}
 }

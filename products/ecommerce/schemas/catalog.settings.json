@@ -12,16 +12,30 @@
 		"productUrl": {
 			"type": "string",
 			"title": "Product page address",
-			"description": "Where a product's page is on your website: a path with {slug} (or {id}), for example /products/{slug}.",
+			"description": "Where a product's page is on your website: a path with {slug} (or {id}), and optionally {category} (its first category's slug), {categoryPath} (that category's slugs from the top) and {brand}; for example /{category}/{slug}.",
 			"default": "/products/{slug}",
 			"maxLength": 200
 		},
 		"categoryUrl": {
 			"type": "string",
 			"title": "Category page address",
-			"description": "Where a category's page is on your website: a path with {slug}, for example /categories/{slug}.",
+			"description": "Where a category's page is on your website: a path with {slug}, or {path} (its slugs from the top category), for example /categories/{slug}.",
 			"default": "/categories/{slug}",
 			"maxLength": 200
+		},
+		"variantQuery": {
+			"type": "string",
+			"title": "Variant address",
+			"description": "What is added to a product's address to open one variant: {grade} and {attributes} (the variant's attribute slug=value pairs), for example grade={grade}&{attributes}. Empty: variants have no address of their own.",
+			"default": "",
+			"maxLength": 200
+		},
+		"retiredUrl": {
+			"type": "string",
+			"title": "Archived products",
+			"description": "Where an archived product's address leads: nowhere (not found), or its category's page.",
+			"default": "none",
+			"enum": ["none", "category"]
 		},
 		"mediaBaseUrl": {
 			"type": "string",
@@ -33,10 +47,10 @@
 		"pageSize": {
 			"type": "integer",
 			"title": "Products per page",
-			"description": "How many products the product grid shows at a time (1 to 48).",
+			"description": "How many products the product grid shows at a time (1 to 60).",
 			"default": 24,
 			"minimum": 1,
-			"maximum": 48
+			"maximum": 60
 		},
 		"lowStock": {
 			"type": "integer",
@@ -53,6 +67,43 @@
 			"default": 5242880,
 			"minimum": 100000,
 			"maximum": 20971520
+		},
+		"showStock": {
+			"type": "string",
+			"title": "Show stock to shoppers",
+			"description": "Whether shoppers see how many units are left: never, only when few are left, or always.",
+			"default": "none",
+			"enum": ["none", "low", "always"]
+		},
+		"lowStockShown": {
+			"type": "integer",
+			"title": "Few left at",
+			"description": "With Show stock set to only when few are left, the number of units left is shown at this many or fewer.",
+			"default": 5,
+			"minimum": 1,
+			"maximum": 1000
+		},
+		"videoMaxBytes": {
+			"type": "integer",
+			"title": "Largest product video (bytes)",
+			"description": "The largest product video (MP4 or WebM) that can be uploaded, in bytes.",
+			"default": 67108864,
+			"minimum": 1000000,
+			"maximum": 209715200
+		},
+		"search": {
+			"type": "string",
+			"title": "Search",
+			"description": "Basic search matches every word; Atlas Search is fuzzy and ranked, and needs the search index described in the docs on your database (MongoDB Atlas). If the index is missing, basic search answers and Overview says so.",
+			"default": "basic",
+			"enum": ["basic", "atlas"]
+		},
+		"searchIndex": {
+			"type": "string",
+			"title": "Atlas Search index name",
+			"description": "The name of the Atlas Search index on the products collection.",
+			"default": "ss_ecommerce_products_search",
+			"maxLength": 100
 		}
 	}
 }

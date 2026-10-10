@@ -7,7 +7,7 @@
  * `totalText` …) by the website's Format (PLAN 0.8.10 K7).
  * @module
  */
-import { defineRoute } from '@ss/app-kit';
+import { defineRoute, problem } from '@ss/app-kit';
 import { loyaltyAccount } from '../adapters/ledger.js';
 import { loadOffers } from '../adapters/promotions-store.js';
 import {
@@ -21,8 +21,11 @@ import {
 	shipmentSummary,
 	statusLabel,
 } from '../core/lookup.js';
+import { stockLeftOf } from '../core/catalog-views.js';
 import { COLLECTIONS } from '../core/model.js';
 import { applyPromotions } from '../core/promotions.js';
+import { createCatalogSearch } from './catalog-search.js';
+import { hiddenFor, visible, visibleMatch } from './catalog-visibility.js';
 import { SERVER_LIMITS } from './service.js';
 import { activeProduct, brandNames, categoriesById } from './seo-reads.js';
 
@@ -56,6 +59,8 @@ const CARD_FIELDS = Object.freeze({
 	trackStock: 1,
 	price: 1,
 	inStock: 1,
+	categoryIds: 1,
+	brandId: 1,
 });
 
 /** What the order lookups read of an order (never the address or the customer's phone). */
@@ -76,6 +81,18 @@ const ORDER_FIELDS = Object.freeze({
  * @param {Media} media
  */
 export const createChatLookup = (product, service, media) => {
+	const atlas = createCatalogSearch(product);
+
+	/**
+	 * An active product shoppers may see (E1), or 404.
+	 * @param {Site} s @param {WebsiteData} data @param {unknown} ref
+	 */
+	const shownProduct = async (s, data, ref) => {
+		const item = await activeProduct(data, ref);
+		if (!visible(item, await hiddenFor(s))) throw problem('not_found', 'There is no such product.');
+		return item;
+	};
+
 	/**
 	 * Product cards of products.
 	 * @param {Site} s
@@ -132,6 +149,19 @@ export const createChatLookup = (product, service, media) => {
 		const terms = searchTerms(ctx.query.q);
 		if (terms.length === 0) return { items: [] };
 		const limit = limitOf(ctx.query.limit, 5, 10);
+		const hidden = visibleMatch(await hiddenFor(s));
+		// Atlas Search first when the website uses it, the basic search when it fails (E14)
+		const q = terms.join(' ');
+		if (await atlas.useAtlas(s, q)) {
+			const found = await atlas.run(s, data, q, {
+				match: { websiteId: data.websiteId, status: 'active', ...hidden },
+				sort: null,
+				skip: 0,
+				limit,
+				project: CARD_FIELDS,
+			});
+			if (found.ok) return { items: await cards(s, /** @type {ProductRecord[]} */ (found.items)) };
+		}
 		const brands = await data
 			.collection(COLLECTIONS.brands)
 			.find(
@@ -143,6 +173,7 @@ export const createChatLookup = (product, service, media) => {
 		const filter = {
 			websiteId: data.websiteId,
 			status: 'active',
+			...hidden,
 			$and: terms.map((term) => {
 				const pattern = { $regex: term, $options: 'i' };
 				const brandIds = brands.filter((brand) => new RegExp(term, 'i').test(String(brand.name))).map((brand) => brand.id);
@@ -178,7 +209,10 @@ export const createChatLookup = (product, service, media) => {
 		const found = /** @type {ProductRecord[]} */ (
 			await data
 				.collection(COLLECTIONS.products)
-				.find({ websiteId: data.websiteId, status: 'active' }, { projection: CARD_FIELDS })
+				.find(
+					{ websiteId: data.websiteId, status: 'active', ...visibleMatch(await hiddenFor(s)) },
+					{ projection: CARD_FIELDS },
+				)
 				.sort(kind === 'new' ? { publishedAt: -1, id: -1 } : { sold: -1, publishedAt: -1, id: -1 })
 				.limit(limitOf(ctx.query.limit, 5, 10))
 				.toArray()
@@ -190,8 +224,9 @@ export const createChatLookup = (product, service, media) => {
 	const details = async (ctx) => {
 		const s = await service.site(ctx);
 		const data = await s.data();
-		const item = await activeProduct(data, ctx.params.id);
+		const item = await shownProduct(s, data, ctx.params.id);
 		const specIds = Object.keys(item.specs);
+		const { showStock, lowStockShown } = await s.values('catalog');
 		const [brands, attributes, grades, { money }] = await Promise.all([
 			brandNames(data, [item.brandId]),
 			specIds.length === 0
@@ -211,6 +246,8 @@ export const createChatLookup = (product, service, media) => {
 			brand: item.brandId ? (brands.get(item.brandId) ?? null) : null,
 			attributes: new Map(attributes.map((row) => [String(row.id), { name: String(row.name), unit: String(row.unit) }])),
 			grades: gradeLabels(grades),
+			stockLeft: (variant) =>
+				stockLeftOf(variant, item.trackStock, { showStock: String(showStock), lowStockShown: Number(lowStockShown) }),
 		});
 	};
 
@@ -218,7 +255,7 @@ export const createChatLookup = (product, service, media) => {
 	const quote = async (ctx) => {
 		const s = await service.site(ctx);
 		const data = await s.data();
-		const item = await activeProduct(data, ctx.params.id);
+		const item = await shownProduct(s, data, ctx.params.id);
 		const variant = cardVariant(item);
 		const price = variant ? variant.price : item.price;
 		const now = service.now();

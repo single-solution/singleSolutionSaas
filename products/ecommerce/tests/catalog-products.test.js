@@ -96,7 +96,10 @@ describe('categories, brands and attributes', () => {
 			choices: ['Black', 'Blue'],
 			filterable: true,
 		});
-		expect(colour.json.choices).toEqual(['Black', 'Blue']);
+		expect(colour.json.choices).toEqual([
+			{ value: 'Black', label: 'Black' },
+			{ value: 'Blue', label: 'Blue' },
+		]);
 		expect(
 			(await api('PATCH', `/v1/attributes/${colour.json.id}`, { choices: ['Black', 'Blue', 'Green'] })).json.choices,
 		).toHaveLength(3);

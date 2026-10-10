@@ -28,6 +28,15 @@
 			}
 		},
 		{
+			"key": "size_charts",
+			"name": "Size charts",
+			"description": "Size charts in inches or centimetres with fit advice, shown on product pages from the product, its brand or its category.",
+			"dependsOn": ["catalog"],
+			"settings": {
+				"$ref": "schemas/size_charts.settings.json"
+			}
+		},
+		{
 			"key": "multi_location",
 			"name": "Multi-location stock",
 			"description": "Stock kept per location (warehouses, shops); orders take stock from the first location that has it.",
@@ -232,6 +241,15 @@
 			"dependsOn": ["catalog"],
 			"settings": {
 				"$ref": "schemas/seo.settings.json"
+			}
+		},
+		{
+			"key": "landing_pages",
+			"name": "Landing pages",
+			"description": "Category, brand and grade landing pages with their own copy, indexed while enough products are in stock, and glossary pages of attributes and grades.",
+			"dependsOn": ["seo"],
+			"settings": {
+				"$ref": "schemas/landing_pages.settings.json"
 			}
 		},
 		{

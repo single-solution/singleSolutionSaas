@@ -9,6 +9,7 @@
  * @module
  */
 import { createId, zonedParts } from '@ss/contracts';
+import { summarize } from '../core/catalog.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import { balanceOf, compactLots, expireLots, spendFromLots, takeFromLots } from '../core/points.js';
 
@@ -80,7 +81,8 @@ export const mergeStockLines = (lines) => {
 };
 
 /**
- * Recompute `inStock` and `price` of products after their variants changed.
+ * Recompute what listings use of products after their variants changed: `price`, `priceMax`, `inStock`, `stockState`
+ * and `grades` (PLAN 0.8.10 E2, E8).
  * @param {WebsiteData} data
  * @param {string[]} productIds
  * @param {Session} [session]
@@ -90,11 +92,14 @@ export const refreshProducts = async (data, productIds, session) => {
 	for (const id of [...new Set(productIds)]) {
 		const product = /** @type {any} */ (await products.findOne({ websiteId: data.websiteId, id }, { session }));
 		if (!product) continue;
-		const active = (product.variants ?? []).filter((/** @type {any} */ v) => v.active);
-		const inStock = active.some((/** @type {any} */ v) => !product.trackStock || v.stock > 0);
-		const price = active.length > 0 ? Math.min(...active.map((/** @type {any} */ v) => v.price)) : 0;
-		if (inStock !== product.inStock || price !== product.price)
-			await products.updateOne({ websiteId: data.websiteId, id }, { $set: { inStock, price } }, { session });
+		const next = summarize(product.variants ?? [], product.trackStock === true);
+		const same =
+			next.price === product.price &&
+			next.priceMax === product.priceMax &&
+			next.inStock === product.inStock &&
+			next.stockState === product.stockState &&
+			JSON.stringify(next.grades) === JSON.stringify(product.grades ?? null);
+		if (!same) await products.updateOne({ websiteId: data.websiteId, id }, { $set: next }, { session });
 	}
 };
 
@@ -114,10 +119,13 @@ export const holdStock = async (data, lines, { locationOrder = [], session } = {
 		const product = /** @type {any} */ (
 			await products.findOne(
 				{ websiteId: data.websiteId, id: line.productId },
-				{ session, projection: { _id: 0, trackStock: 1 } },
+				{ session, projection: { _id: 0, trackStock: 1, variants: { id: 1, active: 1, soldOut: 1 } } },
 			)
 		);
 		if (!product) return { ok: false, productId: line.productId, variantId: line.variantId };
+		// a variant marked sold out is not sold, whatever its stock (E9)
+		const variant = (product.variants ?? []).find((/** @type {any} */ v) => v.id === line.variantId);
+		if (variant?.soldOut === true) return { ok: false, productId: line.productId, variantId: line.variantId };
 		if (!product.trackStock) {
 			taken.push({ ...line, locationId: null });
 			continue;
@@ -126,7 +134,7 @@ export const holdStock = async (data, lines, { locationOrder = [], session } = {
 		let held = false;
 		for (const locationId of tries) {
 			/** @type {Record<string, unknown>} */
-			const match = { id: line.variantId, active: true, stock: { $gte: line.quantity } };
+			const match = { id: line.variantId, active: true, soldOut: { $ne: true }, stock: { $gte: line.quantity } };
 			/** @type {Record<string, number>} */
 			const inc = { 'variants.$.stock': -line.quantity };
 			if (locationId !== null) {

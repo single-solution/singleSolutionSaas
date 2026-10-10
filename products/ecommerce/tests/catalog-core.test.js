@@ -25,8 +25,10 @@ import {
 	cursorKey,
 	facetsOf,
 	readShopQuery,
+	scopeFilter,
 	searchFilter,
 	shopFilter,
+	sortDocument,
 	staffFilter,
 	storedValues,
 } from '../core/catalog-query.js';
@@ -95,8 +97,26 @@ describe('text and slugs', () => {
 		expect(freeSlug('a', ['a', 'a-2'])).toBe('a-3');
 		expect(freeSlug('x'.repeat(120), ['x'.repeat(120)])).toHaveLength(120);
 		expect(variantName([{ name: 'Size' }, { name: 'Colour' }], { Colour: 'Red', Size: 'M' })).toBe('M / Red');
-		expect(summarize([], true)).toEqual({ price: 0, inStock: false });
-		expect(summarize([{ active: true, price: 5, stock: 0 }], false)).toEqual({ price: 5, inStock: true });
+		expect(summarize([], true)).toEqual({ price: 0, priceMax: 0, inStock: false, stockState: 'none', grades: [] });
+		expect(summarize([{ active: true, price: 5, stock: 0 }], false)).toEqual({
+			price: 5,
+			priceMax: 5,
+			inStock: true,
+			stockState: 'none',
+			grades: [],
+		});
+		const mixed = [
+			{ active: true, price: 5, stock: 2, grade: 'a' },
+			{ active: true, price: 9, stock: 0, grade: 'b' },
+			{ active: true, price: 7, stock: 4, soldOut: true, grade: 'a' },
+			{ active: false, price: 1, stock: 9, grade: 'c' },
+		];
+		expect(summarize(mixed, true)).toEqual({ price: 5, priceMax: 9, inStock: true, stockState: 'partial', grades: ['a', 'b'] });
+		expect(summarize([{ active: true, price: 5, stock: 1 }], true).stockState).toBe('full');
+		expect(summarize([{ active: true, price: 5, stock: 1, soldOut: true }], true)).toMatchObject({
+			stockState: 'out',
+			inStock: false,
+		});
 	});
 });
 
@@ -319,15 +339,124 @@ describe('listings', () => {
 		expect(storedValues(attributes.get('att_b'), ['true', 'no'])).toEqual([true]);
 		expect(storedValues(undefined, ['a'])).toEqual([]);
 		expect(
-			shopFilter(/** @type {any} */ ({ q: '', minPrice: null, maxPrice: null, inStock: false, attributes: [], grade: null }), {
+			shopFilter(/** @type {any} */ ({ q: '', minPrice: null, maxPrice: null, inStock: false, attributes: [], grades: [] }), {
 				categoryIds: null,
-				brandId: null,
+				brandIds: null,
 				attributes,
 			}),
 		).toEqual({
 			status: 'active',
 		});
-		expect(staffFilter({}, { categoryIds: null, brandId: null, lowStock: 1 })).toEqual({});
+		const many = readShopQuery({
+			brand: 'a, b',
+			grade: 'new,used',
+			page: '3',
+			count: '1',
+			featured: 'true',
+			deal: 'summer',
+			sort: 'sold_asc',
+		});
+		expect(many.ok && many.value).toMatchObject({
+			brands: ['a', 'b'],
+			grades: ['new', 'used'],
+			page: 3,
+			count: true,
+			featured: true,
+			deal: 'summer',
+			sort: 'sold_asc',
+		});
+		expect(readShopQuery({ page: '0' }).ok).toBe(false);
+		expect(readShopQuery({ page: '501' }).ok).toBe(false);
+		const variantAttributes = new Map([
+			...attributes,
+			[
+				'att_v',
+				/** @type {any} */ ({ id: 'att_v', slug: 'colour', name: 'V', type: 'choice', on: 'variant', choices: ['red'] }),
+			],
+		]);
+		const filter = shopFilter(
+			/** @type {any} */ ({
+				q: '',
+				minPrice: 5,
+				maxPrice: 9,
+				inStock: true,
+				attributes: [
+					{ id: 'colour', values: ['red'] },
+					{ id: 'att_n', values: ['2'] },
+				],
+				grades: ['a'],
+				featured: true,
+			}),
+			{
+				categoryIds: ['c'],
+				brandIds: ['b'],
+				attributes: variantAttributes,
+				hidden: { categoryIds: ['h'], brandIds: ['hb'] },
+				deal: { id: { $in: ['p'] } },
+			},
+		);
+		const selling = { active: true, price: { $gte: 5, $lte: 9 }, grade: { $in: ['a'] }, 'attributes.att_v': { $in: ['red'] } };
+		expect(filter).toEqual({
+			$and: [
+				{ status: 'active' },
+				{ categoryIds: { $nin: ['h'] } },
+				{ brandId: { $nin: ['hb'] } },
+				{ categoryIds: { $in: ['c'] } },
+				{ brandId: { $in: ['b'] } },
+				{ featured: true },
+				{ id: { $in: ['p'] } },
+				{ 'specs.att_n': { $in: [2] } },
+				{
+					$or: [
+						{ trackStock: false, variants: { $elemMatch: { ...selling, soldOut: { $ne: true } } } },
+						{ variants: { $elemMatch: { ...selling, soldOut: { $ne: true }, stock: { $gt: 0 } } } },
+					],
+				},
+			],
+		});
+		expect(
+			shopFilter(/** @type {any} */ ({ q: '', minPrice: 1, maxPrice: null, inStock: false, attributes: [], grades: [] }), {
+				categoryIds: null,
+				brandIds: null,
+				attributes,
+			}),
+		).toEqual({ $and: [{ status: 'active' }, { variants: { $elemMatch: { active: true, price: { $gte: 1 } } } }] });
+		expect(scopeFilter({ productIds: [], categoryIds: [], brandIds: [] }, (id) => [id])).toBeNull();
+		expect(scopeFilter({ productIds: ['p'], categoryIds: ['c'], brandIds: ['b'] }, (id) => [id, `${id}2`])).toEqual({
+			$or: [{ id: { $in: ['p'] } }, { categoryIds: { $in: ['c', 'c2'] } }, { brandId: { $in: ['b'] } }],
+		});
+		expect(staffFilter({}, { categoryIds: null, brandIds: null, lowStock: 1 })).toEqual({});
+		expect(
+			staffFilter(
+				{ featured: '1', stockState: 'out,full,bad', hasMedia: 'false', grade: 'a,b' },
+				{ categoryIds: null, brandIds: ['x'], lowStock: 1 },
+			),
+		).toEqual({
+			$and: [
+				{ brandId: { $in: ['x'] } },
+				{ featured: true },
+				{ stockState: { $in: ['out', 'full'] } },
+				{ 'media.0': { $exists: false } },
+				{ grades: { $in: ['a', 'b'] } },
+			],
+		});
+		expect(staffFilter({ featured: '0', hasMedia: '1' }, { categoryIds: null, brandIds: null, lowStock: 1 })).toEqual({
+			$and: [{ featured: { $ne: true } }, { 'media.0': { $exists: true } }],
+		});
+		const priceSort = {
+			field: 'price',
+			dir: /** @type {1} */ (1),
+			then: [{ field: 'publishedAt', dir: /** @type {-1} */ (-1) }],
+		};
+		expect(sortDocument(priceSort)).toEqual({ price: 1, publishedAt: -1, id: -1 });
+		expect(cursorKey({ id: 'a', price: 5, publishedAt: new Date(7) }, priceSort)).toEqual([5, 7, 'a']);
+		expect(afterFilter(priceSort, [5, 7, 'a'])).toEqual({
+			$or: [
+				{ price: { $gt: 5 } },
+				{ price: 5, publishedAt: { $lt: new Date(7) } },
+				{ price: 5, publishedAt: new Date(7), id: { $lt: 'a' } },
+			],
+		});
 		expect(afterFilter({ field: 'publishedAt', dir: -1 }, ['x', 'id'])).toBeNull();
 		expect(afterFilter({ field: 'price', dir: 1 }, 'x')).toBeNull();
 		expect(cursorKey({ id: 'a', rating: null }, { field: 'rating.average', dir: -1 })).toEqual([null, 'a']);
@@ -356,12 +485,13 @@ describe('listings', () => {
 			attributes: [
 				{
 					id: 'att_c',
+					slug: 'att_c',
 					name: 'C',
 					unit: '',
 					type: 'choice',
 					values: [
-						{ value: 'a', count: 2 },
-						{ value: 'b', count: 1 },
+						{ value: 'a', label: 'a', count: 2 },
+						{ value: 'b', label: 'b', count: 1 },
 					],
 				},
 			],
@@ -527,7 +657,7 @@ describe('CSV', () => {
 describe('grades', () => {
 	it('checks the grades list', () => {
 		expect(checkGrades('x')).toEqual({ ok: false, errors: ['A list is expected.'] });
-		expect(checkGrades(Array.from({ length: 21 }, () => ({})))).toEqual({ ok: false, errors: ['At most 20 grades.'] });
+		expect(checkGrades(Array.from({ length: 101 }, () => ({})))).toEqual({ ok: false, errors: ['At most 100 grades.'] });
 		const bad = checkGrades([
 			null,
 			{ key: 'A' },
@@ -537,7 +667,22 @@ describe('grades', () => {
 		expect(bad.ok ? 0 : bad.errors.length).toBe(8);
 		expect(checkGrades([{ key: ' new ', label: ' New ', description: ' Box ', returnDays: 7 }])).toEqual({
 			ok: true,
-			value: [{ key: 'new', label: 'New', description: 'Box', returnDays: 7, warrantyDays: null }],
+			value: [
+				{
+					key: 'new',
+					label: 'New',
+					description: 'Box',
+					returnDays: 7,
+					warrantyDays: null,
+					categoryIds: [],
+					color: '',
+					video: '',
+					content: { summary: '', bullets: [] },
+					active: true,
+					condition: null,
+					seo: { title: '', description: '', body: '', faqs: [] },
+				},
+			],
 		});
 		expect(gradesByKey('x').size).toBe(0);
 	});

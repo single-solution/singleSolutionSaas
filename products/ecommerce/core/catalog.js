@@ -8,10 +8,12 @@
  * @module
  */
 import { isPrice } from './money.js';
+import { checkFaqs, checkHtml, checkSeo, checkVideo, htmlToText, mediaExtras } from './catalog-content.js';
 
 /** @typedef {import('./model.js').ProductRecord} ProductRecord */
 /** @typedef {import('./model.js').VariantRecord} VariantRecord */
 /** @typedef {import('./model.js').AttributeRecord} AttributeRecord */
+/** @typedef {import('./model.js').MediaRecord} MediaRecord */
 /** @typedef {{ path: string, message: string }} FieldError */
 /** @typedef {{ ok: true, value: any } | { ok: false, errors: FieldError[] }} Checked */
 
@@ -23,7 +25,7 @@ export const LIMITS = Object.freeze({
 	tags: 30,
 	tag: 40,
 	categories: 20,
-	axes: 3,
+	axes: 6,
 	axisName: 40,
 	axisValues: 50,
 	axisValue: 60,
@@ -38,6 +40,13 @@ export const LIMITS = Object.freeze({
 	downloadLimit: 1000,
 	media: 20,
 	alt: 200,
+	variantMedia: 24,
+	allVariantMedia: 200,
+	faqs: 20,
+	setup: 20,
+	setupValues: 100,
+	attributeValues: 20,
+	generated: 250,
 });
 
 /** Product kinds and statuses. */
@@ -121,24 +130,44 @@ export const variantName = (options, values) =>
 		.join(' / ');
 
 /**
- * Price and availability of a product from its variants (as the ledger's `refreshProducts` computes them).
- * @param {Array<Pick<VariantRecord, 'active' | 'price' | 'stock'>>} variants
+ * A variant can be sold now: active, not marked sold out (E9) and with stock (when stock is tracked).
+ * @param {Pick<VariantRecord, 'active' | 'stock' | 'soldOut'>} variant
+ * @param {boolean} trackStock
+ */
+export const variantInStock = (variant, trackStock) =>
+	variant.active && variant.soldOut !== true && (!trackStock || variant.stock > 0);
+
+/**
+ * How much of a product can be sold (E2): `none` when stock is not tracked or nothing is active, `out` when no active
+ * variant can be sold, `full` when every one can, else `partial`.
+ * @param {Array<Pick<VariantRecord, 'active' | 'stock' | 'soldOut'>>} variants
+ * @param {boolean} trackStock
+ * @returns {'none' | 'out' | 'partial' | 'full'}
+ */
+export const stockStateOf = (variants, trackStock) => {
+	const active = variants.filter((variant) => variant.active);
+	if (!trackStock || active.length === 0) return 'none';
+	const selling = active.filter((variant) => variantInStock(variant, true)).length;
+	return selling === 0 ? 'out' : selling === active.length ? 'full' : 'partial';
+};
+
+/**
+ * What a product's listings use, from its variants (as the ledger's `refreshProducts` computes them): the lowest and
+ * highest active price, whether something can be sold, the stock state and the grades on sale.
+ * @param {Array<Pick<VariantRecord, 'active' | 'price' | 'stock'> & Partial<Pick<VariantRecord, 'soldOut' | 'grade'>>>} variants
  * @param {boolean} trackStock
  */
 export const summarize = (variants, trackStock) => {
 	const active = variants.filter((variant) => variant.active);
+	const prices = active.map((variant) => variant.price);
 	return {
-		price: active.length > 0 ? Math.min(...active.map((variant) => variant.price)) : 0,
-		inStock: active.some((variant) => !trackStock || variant.stock > 0),
+		price: prices.length > 0 ? Math.min(...prices) : 0,
+		priceMax: prices.length > 0 ? Math.max(...prices) : 0,
+		inStock: active.some((variant) => variantInStock(variant, trackStock)),
+		stockState: stockStateOf(variants, trackStock),
+		grades: [...new Set(active.map((variant) => variant.grade).filter((grade) => typeof grade === 'string'))],
 	};
 };
-
-/**
- * A variant can be sold now.
- * @param {Pick<VariantRecord, 'active' | 'stock'>} variant
- * @param {boolean} trackStock
- */
-export const variantInStock = (variant, trackStock) => variant.active && (!trackStock || variant.stock > 0);
 
 /**
  * What a check needs to know about the website.
@@ -154,6 +183,8 @@ export const variantInStock = (variant, trackStock) => variant.active && (!track
  * @property {ReadonlySet<string>} brandIds
  * @property {ReadonlyMap<string, AttributeRecord>} attributes
  * @property {(prefix: string) => string} newId
+ * @property {boolean} [sizeCharts] the `size_charts` feature is on (E5)
+ * @property {ReadonlySet<string>} [sizeChartIds]
  */
 
 /**
@@ -161,22 +192,67 @@ export const variantInStock = (variant, trackStock) => variant.active && (!track
  * and the timestamps are kept by the adapter and the ledger).
  * @typedef {Pick<ProductRecord, 'slug' | 'name' | 'kind' | 'status' | 'summary' | 'description' | 'categoryIds' | 'brandId'
  *   | 'tags' | 'specs' | 'options' | 'variants' | 'trackStock' | 'serialized' | 'digital' | 'booking' | 'seo' | 'returnDays'
- *   | 'warrantyDays'>} ProductFields `slug` '' = make one from the name
+ *   | 'warrantyDays'> & Required<Pick<ProductRecord, 'featured' | 'descriptionHtml' | 'video' | 'sizeChartId' | 'hideSizeGuide'
+ *   | 'attributeSetup' | 'faqs'>>} ProductFields `slug` '' = make one from the name
  */
 
 /**
- * Check a spec value against its attribute's type.
+ * The choices of an attribute as `{ value, label }` (older records hold plain strings).
+ * @param {Pick<AttributeRecord, 'choices'>} attribute
+ * @returns {import('./model.js').AttributeChoice[]}
+ */
+export const choicesOf = (attribute) =>
+	(attribute.choices ?? []).map((choice) =>
+		typeof choice === 'string'
+			? { value: choice, label: choice }
+			: /** @type {import('./model.js').AttributeChoice} */ (choice),
+	);
+
+/**
+ * Check one value against its attribute's type (a choice must be one of its choices or of `extra`).
  * @param {AttributeRecord} attribute
  * @param {unknown} value
+ * @param {ReadonlyArray<string>} [extra] more allowed values (a product's own values, E7)
  * @returns {string | number | boolean | null} null when invalid
  */
-export const specValue = (attribute, value) => {
+const oneValue = (attribute, value, extra = []) => {
 	if (attribute.type === 'number') return typeof value === 'number' && Number.isFinite(value) ? value : null;
 	if (attribute.type === 'boolean') return typeof value === 'boolean' ? value : null;
 	const text = cleanText(value, LIMITS.specText);
 	if (!text) return null;
-	if (attribute.type === 'choice') return attribute.choices.includes(text) ? text : null;
+	if (attribute.type === 'choice')
+		return choicesOf(attribute).some((choice) => choice.value === text) || extra.includes(text) ? text : null;
 	return text;
+};
+
+/**
+ * Check a spec or variant attribute value against its attribute: one value, or several different ones when the
+ * attribute takes several (E7).
+ * @param {AttributeRecord} attribute
+ * @param {unknown} value
+ * @param {ReadonlyArray<string>} [extra] more allowed choice values
+ * @returns {string | number | boolean | Array<string | number> | null} null when invalid
+ */
+export const specValue = (attribute, value, extra = []) => {
+	if (!Array.isArray(value)) return oneValue(attribute, value, extra);
+	if (!attribute.multiple || value.length === 0 || value.length > LIMITS.attributeValues) return null;
+	const out = value.map((entry) => oneValue(attribute, entry, extra));
+	if (out.some((entry) => entry === null || typeof entry === 'boolean')) return null;
+	const list = /** @type {Array<string | number>} */ (out);
+	return new Set(list).size === list.length ? list : null;
+};
+
+/**
+ * A value as shoppers read it: a choice's label, a number with its unit, several values joined with commas.
+ * @param {AttributeRecord} attribute
+ * @param {unknown} value
+ * @returns {string}
+ */
+export const valueLabel = (attribute, value) => {
+	if (Array.isArray(value)) return value.map((entry) => valueLabel(attribute, entry)).join(', ');
+	if (attribute.type === 'choice') return choicesOf(attribute).find((choice) => choice.value === value)?.label ?? String(value);
+	if (attribute.type === 'number') return attribute.unit ? `${String(value)} ${attribute.unit}` : String(value);
+	return String(value ?? '');
 };
 
 /**
@@ -253,15 +329,93 @@ const stockOf = (input, rules, path, errors) => {
 };
 
 /**
+ * A variant's attribute values (E7): only attributes kept on variants, each value checked (a choice may also be one of
+ * the product's own values for it).
+ * @param {Record<string, any>} input
+ * @param {VariantRecord | null} existing
+ * @param {CatalogRules & { custom?: ReadonlyMap<string, string[]> }} rules
+ * @param {string} path
+ * @param {FieldError[]} errors
+ * @returns {NonNullable<VariantRecord['attributes']>}
+ */
+const variantAttributesOf = (input, existing, rules, path, errors) => {
+	if (input.attributes === undefined) return existing?.attributes ?? {};
+	if (!isObject(input.attributes)) {
+		errors.push({ path: `${path}/attributes`, message: 'Give the attribute values by attribute id.' });
+		return existing?.attributes ?? {};
+	}
+	/** @type {NonNullable<VariantRecord['attributes']>} */
+	const out = {};
+	for (const [id, value] of Object.entries(input.attributes)) {
+		if (value === null || value === '' || (Array.isArray(value) && value.length === 0)) continue;
+		const attribute = rules.attributes.get(id);
+		if (!attribute || attribute.on !== 'variant') {
+			errors.push({ path: `${path}/attributes/${id}`, message: 'There is no such variant attribute.' });
+			continue;
+		}
+		const checked = specValue(attribute, value, rules.custom?.get(id) ?? []);
+		if (checked === null || typeof checked === 'boolean')
+			errors.push({ path: `${path}/attributes/${id}`, message: `This is not a valid value of ${attribute.name}.` });
+		else out[id] = checked;
+	}
+	return out;
+};
+
+/**
+ * A variant's photos (E6): files uploaded for the product (the route checks new ones in the bucket).
+ * @param {Record<string, any>} input
+ * @param {VariantRecord | null} existing
+ * @param {string | null} folder the product's storage folder (null for a new product)
+ * @param {string} path
+ * @param {FieldError[]} errors
+ * @returns {MediaRecord[]}
+ */
+const variantMediaOf = (input, existing, folder, path, errors) => {
+	if (input.media === undefined) return existing?.media ?? [];
+	if (!Array.isArray(input.media) || input.media.length > LIMITS.variantMedia) {
+		errors.push({ path: `${path}/media`, message: `A variant has at most ${LIMITS.variantMedia} photos.` });
+		return existing?.media ?? [];
+	}
+	if (input.media.length > 0 && folder === null) {
+		errors.push({ path: `${path}/media`, message: 'Add variant photos once the product is saved.' });
+		return [];
+	}
+	const known = new Map((existing?.media ?? []).map((file) => [file.key, file]));
+	/** @type {MediaRecord[]} */
+	const out = [];
+	input.media.forEach((entry, index) => {
+		const at = `${path}/media/${index}`;
+		const key = isObject(entry) && typeof entry.key === 'string' ? entry.key : '';
+		if (!folder || !key.startsWith(folder) || key.includes('..') || out.some((file) => file.key === key)) {
+			errors.push({ path: `${at}/key`, message: 'Give the key of a photo uploaded for this product, once.' });
+			return;
+		}
+		const alt = entry.alt === undefined ? (known.get(key)?.alt ?? '') : cleanText(entry.alt, LIMITS.alt);
+		if (alt === null) errors.push({ path: `${at}/alt`, message: `Alternative text has at most ${LIMITS.alt} characters.` });
+		const before = known.get(key);
+		out.push({
+			key,
+			type: before?.type ?? '',
+			size: before?.size ?? 0,
+			alt: alt ?? '',
+			...(before ? { ...before, alt: alt ?? before.alt } : {}),
+			...mediaExtras(entry, folder, at, errors),
+		});
+	});
+	return out;
+};
+
+/**
  * A variant from input, merged over the existing one (whose stock is kept).
  * @param {Record<string, any>} input
  * @param {VariantRecord | null} existing
  * @param {CatalogRules} rules
  * @param {string} path
  * @param {FieldError[]} errors
+ * @param {string | null} [folder] the product's storage folder (variant photos)
  * @returns {VariantRecord}
  */
-const variantOf = (input, existing, rules, path, errors) => {
+const variantOf = (input, existing, rules, path, errors, folder = null) => {
 	/** @param {string} field @param {string} message */
 	const fail = (field, message) => errors.push({ path: `${path}/${field}`, message });
 	const sku = input.sku === undefined ? (existing?.sku ?? '') : cleanText(input.sku, LIMITS.sku);
@@ -284,6 +438,11 @@ const variantOf = (input, existing, rules, path, errors) => {
 		else grade = input.grade;
 	}
 	if (input.active !== undefined && typeof input.active !== 'boolean') fail('active', 'Active is true or false.');
+	if (input.soldOut !== undefined && typeof input.soldOut !== 'boolean') fail('soldOut', 'Sold out is true or false.');
+	const warrantyDays = input.warrantyDays === undefined ? (existing?.warrantyDays ?? null) : input.warrantyDays;
+	if (!isDays(warrantyDays)) fail('warrantyDays', `Give whole days from 0 to ${LIMITS.days}, or null.`);
+	const attributes = variantAttributesOf(input, existing, rules, path, errors);
+	const media = variantMediaOf(input, existing, folder, path, errors);
 	const stock = existing ? { stock: existing.stock, locations: existing.locations } : stockOf(input, rules, path, errors);
 	/** @type {Record<string, string>} */
 	const options = {};
@@ -303,6 +462,10 @@ const variantOf = (input, existing, rules, path, errors) => {
 		locations: stock.locations,
 		grade,
 		active: typeof input.active === 'boolean' ? input.active : (existing?.active ?? true),
+		attributes,
+		media,
+		soldOut: typeof input.soldOut === 'boolean' ? input.soldOut : (existing?.soldOut ?? false),
+		warrantyDays: isDays(warrantyDays) ? warrantyDays : (existing?.warrantyDays ?? null),
 	};
 };
 
@@ -310,15 +473,44 @@ const variantOf = (input, existing, rules, path, errors) => {
 const SHORTCUT = Object.freeze(['sku', 'price', 'compareAtPrice', 'cost', 'stock', 'locations', 'grade']);
 
 /**
- * The variants of the next product.
+ * The option axes and each variant's option values derived from variant attributes (E7): one axis per attribute used,
+ * in the attributes' order, its values as shoppers read them (several values joined with commas).
+ * @param {VariantRecord[]} variants
+ * @param {ReadonlyMap<string, AttributeRecord>} attributes
+ */
+export const optionsFromAttributes = (variants, attributes) => {
+	const used = [...attributes.values()]
+		.filter((attribute) => variants.some((variant) => variant.attributes?.[attribute.id] !== undefined))
+		.sort((a, b) => a.sort - b.sort || a.name.localeCompare(b.name));
+	/** @type {Array<{ name: string, values: string[] }>} */
+	const axes = used.map((attribute) => ({ name: attribute.name, values: [] }));
+	const next = variants.map((variant) => {
+		/** @type {Record<string, string>} */
+		const options = {};
+		used.forEach((attribute, index) => {
+			const value = variant.attributes?.[attribute.id];
+			if (value === undefined) return;
+			const label = valueLabel(attribute, value).slice(0, LIMITS.axisValue);
+			options[attribute.name] = label;
+			const axis = /** @type {{ name: string, values: string[] }} */ (axes[index]);
+			if (!axis.values.includes(label)) axis.values.push(label);
+		});
+		return { ...variant, options };
+	});
+	return { axes, variants: next };
+};
+
+/**
+ * The variants of the next product, with the option axes (given, or derived from variant attributes).
  * @param {Record<string, any>} input
  * @param {ProductRecord | null} existing
- * @param {Array<{ name: string, values: string[] }>} options the next option axes
- * @param {CatalogRules} rules
+ * @param {Array<{ name: string, values: string[] }>} given the option axes as given or kept
+ * @param {CatalogRules & { custom?: ReadonlyMap<string, string[]> }} rules
  * @param {FieldError[]} errors
- * @returns {VariantRecord[]}
+ * @returns {{ variants: VariantRecord[], options: Array<{ name: string, values: string[] }> }}
  */
-const variantsOf = (input, existing, options, rules, errors) => {
+const variantsOf = (input, existing, given, rules, errors) => {
+	const folder = existing ? `ecommerce/products/${existing.id}/` : null;
 	const shortcut = SHORTCUT.some((field) => input[field] !== undefined);
 	/** @type {Record<string, any>} the single variant's fields given at the top level */
 	const single = Object.fromEntries(
@@ -330,7 +522,7 @@ const variantsOf = (input, existing, options, rules, errors) => {
 		if (shortcut) errors.push({ path: '/variants', message: 'Give either variants or the single price and SKU.' });
 		if (!Array.isArray(input.variants) || input.variants.length === 0 || input.variants.length > LIMITS.variants) {
 			errors.push({ path: '/variants', message: `Give 1 to ${LIMITS.variants} variants.` });
-			return existing?.variants ?? [];
+			return { variants: existing?.variants ?? [], options: given };
 		}
 		const known = new Map((existing?.variants ?? []).map((variant) => [variant.id, variant]));
 		const seen = new Set();
@@ -347,39 +539,142 @@ const variantsOf = (input, existing, options, rules, errors) => {
 					errors.push({ path: `${path}/id`, message: 'This variant is not part of the product.' });
 				seen.add(entry.id);
 			}
-			return variantOf(entry, before, rules, path, errors);
+			return variantOf(entry, before, rules, path, errors, folder);
 		});
 	} else if (existing) {
 		if (shortcut && existing.variants.length !== 1)
 			errors.push({ path: '/variants', message: 'This product has several variants: change them in variants.' });
 		variants =
 			shortcut && existing.variants.length === 1
-				? [variantOf(single, /** @type {VariantRecord} */ (existing.variants[0]), rules, '', errors)]
+				? [variantOf(single, /** @type {VariantRecord} */ (existing.variants[0]), rules, '', errors, folder)]
 				: existing.variants;
-	} else variants = [variantOf(single, null, rules, '', errors)];
+	} else variants = [variantOf(single, null, rules, '', errors, folder)];
 
 	if (!rules.variants && variants.length !== 1)
 		errors.push({ path: '/variants', message: 'Switch on Variants to sell more than one variant.' });
-	if (options.length === 0) {
+	const total = variants.reduce((sum, variant) => sum + (variant.media?.length ?? 0), 0);
+	if (total > LIMITS.allVariantMedia)
+		errors.push({ path: '/variants', message: `A product's variants have at most ${LIMITS.allVariantMedia} photos together.` });
+
+	// variant attributes decide the options (E7); two variants may share options when their grades differ
+	const byAttributes = variants.some((variant) => Object.keys(variant.attributes ?? {}).length > 0);
+	/** @type {Array<{ name: string, values: string[] }>} */
+	let options = given;
+	if (byAttributes) {
+		const derived = optionsFromAttributes(variants, rules.attributes);
+		if (derived.axes.length > LIMITS.axes)
+			errors.push({ path: '/variants', message: `Variants use at most ${LIMITS.axes} attributes.` });
+		options = derived.axes;
+		variants = derived.variants;
+	} else if (given.length === 0) {
 		if (variants.length > 1) errors.push({ path: '/variants', message: 'Several variants need options (such as Size).' });
-		return variants.map((variant) => ({ ...variant, options: {} }));
+		return { variants: variants.map((variant) => ({ ...variant, options: {} })), options };
 	}
 	const combinations = new Set();
 	variants.forEach((variant, index) => {
-		const names = Object.keys(variant.options);
-		const fits =
-			names.length === options.length &&
-			options.every((axis) => axis.values.includes(/** @type {string} */ (variant.options[axis.name])));
-		if (!fits) {
-			errors.push({ path: `/variants/${index}/options`, message: 'Give one value of each option.' });
-			return;
+		if (!byAttributes) {
+			const names = Object.keys(variant.options);
+			const fits =
+				names.length === options.length &&
+				options.every((axis) => axis.values.includes(/** @type {string} */ (variant.options[axis.name])));
+			if (!fits) {
+				errors.push({ path: `/variants/${index}/options`, message: 'Give one value of each option.' });
+				return;
+			}
 		}
-		const key = JSON.stringify(options.map((axis) => variant.options[axis.name]));
+		const key = JSON.stringify([...options.map((axis) => variant.options[axis.name] ?? null), variant.grade]);
 		if (combinations.has(key))
-			errors.push({ path: `/variants/${index}/options`, message: 'Two variants have the same options.' });
+			errors.push({ path: `/variants/${index}/options`, message: 'Two variants have the same options and grade.' });
 		combinations.add(key);
 	});
-	return variants;
+	return { variants, options };
+};
+
+/**
+ * A product's attribute setup (E7): per attribute, the values it uses (the generator makes variants of them), its own
+ * extra values and the value picked first.
+ * @param {Record<string, any>} input
+ * @param {ProductRecord | null} existing
+ * @param {CatalogRules} rules
+ * @param {FieldError[]} errors
+ * @returns {NonNullable<ProductRecord['attributeSetup']>}
+ */
+const setupOf = (input, existing, rules, errors) => {
+	const before = existing?.attributeSetup ?? [];
+	if (input.attributeSetup === undefined) return before;
+	if (!Array.isArray(input.attributeSetup) || input.attributeSetup.length > LIMITS.setup) {
+		errors.push({ path: '/attributeSetup', message: `Set up at most ${LIMITS.setup} attributes.` });
+		return before;
+	}
+	/** @type {NonNullable<ProductRecord['attributeSetup']>} */
+	const out = [];
+	input.attributeSetup.forEach((entry, index) => {
+		const path = `/attributeSetup/${index}`;
+		const attribute = isObject(entry) ? rules.attributes.get(String(entry.attributeId)) : undefined;
+		if (!isObject(entry) || !attribute || out.some((other) => other.attributeId === attribute.id))
+			return void errors.push({ path: `${path}/attributeId`, message: 'Pick an attribute once.' });
+		/** @type {string[]} */
+		const customValues = [];
+		for (const value of Array.isArray(entry.customValues) ? entry.customValues : []) {
+			const text = cleanText(value, LIMITS.specText);
+			if (text && !customValues.includes(text)) customValues.push(text);
+		}
+		if (
+			entry.customValues !== undefined &&
+			(!Array.isArray(entry.customValues) || customValues.length !== entry.customValues.length)
+		)
+			errors.push({ path: `${path}/customValues`, message: 'Give different values of up to 200 characters.' });
+		const raw = entry.values === undefined ? [] : entry.values;
+		/** @type {Array<string | number>} */
+		const values = [];
+		if (!Array.isArray(raw) || raw.length > LIMITS.setupValues)
+			errors.push({ path: `${path}/values`, message: `Give at most ${LIMITS.setupValues} values.` });
+		else
+			for (const value of raw) {
+				const checked = specValue({ ...attribute, multiple: false }, value, customValues);
+				if (checked === null || typeof checked === 'boolean' || Array.isArray(checked) || values.includes(checked))
+					errors.push({ path: `${path}/values`, message: `Give different values of ${attribute.name}.` });
+				else values.push(checked);
+			}
+		const defaultValue = entry.defaultValue ?? null;
+		if (defaultValue !== null && !values.includes(defaultValue) && !customValues.includes(String(defaultValue)))
+			errors.push({ path: `${path}/defaultValue`, message: 'The default is one of its values.' });
+		out.push({ attributeId: attribute.id, values, customValues, defaultValue });
+	});
+	return out;
+};
+
+/**
+ * Every missing combination of a product's set-up variant attribute values (E7), as new variants with a price and
+ * stock; null when the product would have more than {@link LIMITS.variants} variants.
+ * @param {Pick<ProductRecord, 'attributeSetup' | 'variants'>} product
+ * @param {ReadonlyMap<string, AttributeRecord>} attributes
+ * @param {{ price: number, stock: number | null }} start `stock` null: none given (multi-location stock)
+ * @returns {Array<Record<string, any>> | null} the variants to add, as product input (attributes, price, stock)
+ */
+export const missingVariants = (product, attributes, { price, stock }) => {
+	const axes = (product.attributeSetup ?? [])
+		.map((entry) => ({ attribute: attributes.get(entry.attributeId), values: [...entry.values, ...entry.customValues] }))
+		.filter((axis) => axis.attribute?.on === 'variant' && axis.values.length > 0);
+	if (axes.length === 0) return [];
+	/** @type {Array<Record<string, string | number>>} */
+	let combos = [{}];
+	for (const axis of axes)
+		combos = combos.flatMap((combo) =>
+			axis.values.map((value) => ({ ...combo, [/** @type {AttributeRecord} */ (axis.attribute).id]: value })),
+		);
+	/** @param {Record<string, unknown>} values */
+	const keyOf = (values) =>
+		JSON.stringify(
+			axes.map((axis) => {
+				const value = values[/** @type {AttributeRecord} */ (axis.attribute).id];
+				return Array.isArray(value) && value.length === 1 ? value[0] : (value ?? null);
+			}),
+		);
+	const have = new Set(product.variants.map((variant) => keyOf(variant.attributes ?? {})));
+	const missing = combos.filter((combo) => !have.has(keyOf(combo)));
+	if (product.variants.length + missing.length > LIMITS.generated) return null;
+	return missing.map((values) => ({ attributes: values, price, ...(stock === null ? {} : { stock }) }));
 };
 
 /**
@@ -471,7 +766,11 @@ export const checkProduct = (body, rules, existing) => {
 		`Give at most ${LIMITS.tags} tags of up to ${LIMITS.tag} characters.`,
 	);
 
-	/** @type {Record<string, string | number | boolean>} */
+	const attributeSetup = setupOf(input, existing, rules, errors);
+	/** @type {Map<string, string[]>} the product's own values per attribute (E7) */
+	const custom = new Map(attributeSetup.map((entry) => [entry.attributeId, entry.customValues]));
+
+	/** @type {ProductRecord['specs']} */
 	let specs = existing?.specs ?? {};
 	if (input.specs !== undefined) {
 		if (!isObject(input.specs) || Object.keys(input.specs).length > LIMITS.specs)
@@ -479,19 +778,19 @@ export const checkProduct = (body, rules, existing) => {
 		else {
 			specs = {};
 			for (const [id, value] of Object.entries(input.specs)) {
-				if (value === null || value === '') continue;
+				if (value === null || value === '' || (Array.isArray(value) && value.length === 0)) continue;
 				const attribute = rules.attributes.get(id);
-				const checked = attribute ? specValue(attribute, value) : null;
-				if (!attribute) fail(`/specs/${id}`, 'There is no such attribute.');
+				const checked = attribute ? specValue(attribute, value, custom.get(id) ?? []) : null;
+				if (!attribute || attribute.on === 'variant') fail(`/specs/${id}`, 'There is no such product attribute.');
 				else if (checked === null) fail(`/specs/${id}`, `This is not a valid ${attribute.type} for ${attribute.name}.`);
 				else specs[id] = checked;
 			}
 		}
 	}
 
-	const options = input.options === undefined ? (existing?.options ?? []) : optionsOf(input.options, errors);
-	if (options.length > 0 && !rules.variants) fail('/options', 'Switch on Variants to give options.');
-	const variants = variantsOf(input, existing, options, rules, errors);
+	const given = input.options === undefined ? (existing?.options ?? []) : optionsOf(input.options, errors);
+	if (given.length > 0 && !rules.variants) fail('/options', 'Switch on Variants to give options.');
+	const { variants, options } = variantsOf(input, existing, given, { ...rules, custom }, errors);
 	const skus = variants.map((variant) => variant.sku).filter(Boolean);
 	if (new Set(skus).size !== skus.length) fail('/variants', 'Each variant needs its own SKU.');
 
@@ -501,7 +800,12 @@ export const checkProduct = (body, rules, existing) => {
 		kind === 'physical',
 		'Track stock is true or false.',
 	);
-	const serialized = field('serialized', (v) => (typeof v === 'boolean' ? v : null), false, 'Serialized is true or false.');
+	/** @type {boolean | null} */
+	let serialized = existing ? (existing.serialized ?? null) : false;
+	if (input.serialized !== undefined) {
+		if (input.serialized === null || typeof input.serialized === 'boolean') serialized = input.serialized;
+		else fail('/serialized', 'Serialized is true, false or null (as its categories say).');
+	}
 	if (!rules.grades && input.serialized === true) fail('/serialized', 'Switch on Grades and serials first.');
 
 	/** @type {ProductRecord['digital']} */
@@ -530,17 +834,50 @@ export const checkProduct = (body, rules, existing) => {
 		else booking = { durationMinutes: Number(minutes) };
 	}
 
-	let seo = existing?.seo ?? { title: '', description: '' };
-	if (input.seo !== undefined) {
-		const title =
-			isObject(input.seo) && input.seo.title !== undefined ? cleanText(input.seo.title, LIMITS.seoTitle) : seo.title;
-		const text =
-			isObject(input.seo) && input.seo.description !== undefined
-				? cleanText(input.seo.description, LIMITS.seoDescription)
-				: seo.description;
-		if (title === null) fail('/seo/title', `An SEO title has at most ${LIMITS.seoTitle} characters.`);
-		if (text === null) fail('/seo/description', `An SEO description has at most ${LIMITS.seoDescription} characters.`);
-		seo = { title: title ?? seo.title, description: text ?? seo.description };
+	const seo = checkSeo(input.seo, existing?.seo, '/seo', errors);
+	let faqs = existing?.faqs ?? [];
+	if (input.faqs !== undefined) faqs = checkFaqs(input.faqs, LIMITS.faqs, '/faqs', errors) ?? faqs;
+	const featured = field('featured', (v) => (typeof v === 'boolean' ? v : null), false, 'Featured is true or false.');
+	const hideSizeGuide = field(
+		'hideSizeGuide',
+		(v) => (typeof v === 'boolean' ? v : null),
+		false,
+		'Hide size guide is true or false.',
+	);
+	let sizeChartId = existing?.sizeChartId ?? null;
+	if (input.sizeChartId !== undefined) {
+		if (input.sizeChartId === null || input.sizeChartId === '') sizeChartId = null;
+		else if (rules.sizeCharts && typeof input.sizeChartId === 'string' && rules.sizeChartIds?.has(input.sizeChartId))
+			sizeChartId = input.sizeChartId;
+		else fail('/sizeChartId', rules.sizeCharts ? 'Pick an existing size chart.' : 'Switch on Size charts first.');
+	}
+	// a rich description (E3): cleaned, and the plain description is derived from it
+	let descriptionHtml = existing?.descriptionHtml ?? '';
+	let plain = description;
+	if (input.descriptionHtml !== undefined) {
+		const html = checkHtml(input.descriptionHtml);
+		if (html === null) fail('/descriptionHtml', `A rich description has at most ${LIMITS.description} characters.`);
+		else descriptionHtml = html;
+	}
+	if (descriptionHtml) plain = htmlToText(descriptionHtml).slice(0, LIMITS.description);
+	else if (input.descriptionHtml !== undefined && input.description === undefined && existing?.descriptionHtml) plain = '';
+	/** @type {ProductRecord['video']} */
+	let video = existing?.video ?? null;
+	if (input.video !== undefined) {
+		const checked = checkVideo(input.video, '/video', errors);
+		if (checked !== undefined) {
+			const folder = existing ? `ecommerce/products/${existing.id}/` : null;
+			if (checked?.kind === 'file' && (!folder || !checked.key.startsWith(folder) || checked.key.includes('..')))
+				fail('/video/key', 'Give the key of a video uploaded for this product (save the product first).');
+			// a file keeps its type and size when it is the same file; the route fills them for a new one
+			else
+				video =
+					checked?.kind === 'file'
+						? existing?.video?.kind === 'file' && existing.video.key === checked.key
+							? existing.video
+							: { kind: 'file', key: checked.key, type: '', size: 0 }
+						: checked;
+		}
 	}
 	/** @param {'returnDays' | 'warrantyDays'} name */
 	const daysOf = (name) => {
@@ -564,7 +901,7 @@ export const checkProduct = (body, rules, existing) => {
 			kind,
 			status,
 			summary,
-			description,
+			description: plain,
 			categoryIds,
 			brandId,
 			tags,
@@ -578,6 +915,13 @@ export const checkProduct = (body, rules, existing) => {
 			seo,
 			returnDays,
 			warrantyDays,
+			featured,
+			descriptionHtml,
+			video,
+			sizeChartId,
+			hideSizeGuide,
+			attributeSetup,
+			faqs,
 		},
 	};
 };
@@ -626,10 +970,10 @@ export const changedStock = (variant, { set, adjust, locationId = null }) => {
 };
 
 /**
- * Check a list of stock changes.
+ * Check a list of stock changes: set or adjust units, and/or mark a variant sold out (E9).
  * @param {unknown} value
  * @param {{ locations: boolean }} rules
- * @returns {{ ok: true, value: Array<{ variantId: string, set?: number, adjust?: number, locationId: string | null }> } | { ok: false, errors: FieldError[] }}
+ * @returns {{ ok: true, value: Array<{ variantId: string, set?: number, adjust?: number, locationId: string | null, soldOut?: boolean }> } | { ok: false, errors: FieldError[] }}
  */
 export const checkStockChanges = (value, rules) => {
 	const list = isObject(value) && Array.isArray(value.changes) ? value.changes : null;
@@ -637,7 +981,7 @@ export const checkStockChanges = (value, rules) => {
 		return { ok: false, errors: [{ path: '/changes', message: `Give 1 to ${LIMITS.variants} stock changes.` }] };
 	/** @type {FieldError[]} */
 	const errors = [];
-	/** @type {Array<{ variantId: string, set?: number, adjust?: number, locationId: string | null }>} */
+	/** @type {Array<{ variantId: string, set?: number, adjust?: number, locationId: string | null, soldOut?: boolean }>} */
 	const out = [];
 	list.forEach((entry, index) => {
 		const path = `/changes/${index}`;
@@ -645,16 +989,28 @@ export const checkStockChanges = (value, rules) => {
 			return void errors.push({ path, message: 'Name the variant.' });
 		const hasSet = entry.set !== undefined;
 		const hasAdjust = entry.adjust !== undefined;
-		if (hasSet === hasAdjust) return void errors.push({ path, message: 'Give either set or adjust.' });
+		const hasSoldOut = entry.soldOut !== undefined;
+		if (hasSoldOut && typeof entry.soldOut !== 'boolean')
+			return void errors.push({ path: `${path}/soldOut`, message: 'Sold out is true or false.' });
+		if (hasSet && hasAdjust) return void errors.push({ path, message: 'Give either set or adjust.' });
+		if (!hasSet && !hasAdjust && !hasSoldOut) return void errors.push({ path, message: 'Give set, adjust or soldOut.' });
 		if (hasSet && !isCount(entry.set, LIMITS.stock))
 			return void errors.push({ path: `${path}/set`, message: 'Stock is a whole number from 0.' });
 		if (hasAdjust && (!Number.isSafeInteger(entry.adjust) || Math.abs(entry.adjust) > LIMITS.stock))
 			return void errors.push({ path: `${path}/adjust`, message: 'Adjust by a whole number.' });
 		const locationId = typeof entry.locationId === 'string' && entry.locationId ? entry.locationId : null;
-		if (rules.locations && !locationId) return void errors.push({ path: `${path}/locationId`, message: 'Name the location.' });
-		if (!rules.locations && locationId)
-			return void errors.push({ path: `${path}/locationId`, message: 'Switch on Multi-location stock first.' });
-		out.push({ variantId: entry.variantId, ...(hasSet ? { set: entry.set } : { adjust: entry.adjust }), locationId });
+		if (hasSet || hasAdjust) {
+			if (rules.locations && !locationId)
+				return void errors.push({ path: `${path}/locationId`, message: 'Name the location.' });
+			if (!rules.locations && locationId)
+				return void errors.push({ path: `${path}/locationId`, message: 'Switch on Multi-location stock first.' });
+		}
+		out.push({
+			variantId: entry.variantId,
+			...(hasSet ? { set: entry.set } : hasAdjust ? { adjust: entry.adjust } : {}),
+			locationId,
+			...(hasSoldOut ? { soldOut: entry.soldOut } : {}),
+		});
 	});
 	return errors.length > 0 ? { ok: false, errors } : { ok: true, value: out };
 };

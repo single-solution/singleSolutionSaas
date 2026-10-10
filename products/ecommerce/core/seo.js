@@ -14,8 +14,6 @@ import { toDecimal } from './money.js';
 
 const SCHEMA = 'https://schema.org';
 
-/** At most this many addresses in one sitemap file (the sitemaps.org limit). */
-const SITEMAP_LIMIT = 50_000;
 /** A meta description is cut to this many characters. */
 const DESCRIPTION_LENGTH = 160;
 
@@ -98,11 +96,11 @@ export const metaDescription = (...texts) => {
 };
 
 /**
- * Whether a variant can be bought now.
+ * Whether a variant can be bought now (a variant marked sold out cannot, E9).
  * @param {Pick<ProductRecord, 'trackStock'>} product
- * @param {Pick<VariantRecord, 'stock'>} variant
+ * @param {Pick<VariantRecord, 'stock' | 'soldOut'>} variant
  */
-export const variantInStock = (product, variant) => !product.trackStock || variant.stock > 0;
+export const variantInStock = (product, variant) => variant.soldOut !== true && (!product.trackStock || variant.stock > 0);
 
 /**
  * The condition of a variant: physical goods with a grade take the merchant's setting, other physical goods are new;
@@ -149,6 +147,17 @@ const breadcrumbJsonLd = (trail) => ({
 	itemListElement: trail.map((step, index) => ({ '@type': 'ListItem', position: index + 1, name: step.name, item: step.url })),
 });
 
+/** schema.org `variesBy` properties for option names shoppers commonly use (others are named as they are). */
+const VARIES_BY = Object.freeze(
+	/** @type {Record<string, string>} */ ({
+		size: `${SCHEMA}/size`,
+		colour: `${SCHEMA}/color`,
+		color: `${SCHEMA}/color`,
+		material: `${SCHEMA}/material`,
+		pattern: `${SCHEMA}/pattern`,
+	}),
+);
+
 /**
  * @typedef {object} ProductPage
  * @property {ProductRecord} product
@@ -157,86 +166,205 @@ const breadcrumbJsonLd = (trail) => ({
  * @property {string} description
  * @property {string | null} brand brand name
  * @property {string} currency
- * @property {Condition} graded the condition of graded items
+ * @property {(variant: VariantRecord) => Condition | ''} condition the condition of a variant (its grade's, E10)
  * @property {string} seller the business name
  * @property {Array<{ name: string, url: string }>} trail home and categories, without the product
+ * @property {(variant: VariantRecord) => string} [variantUrl] a variant's page (E13)
+ * @property {(variant: VariantRecord) => string | null} [variantImage] a variant's first photo (E6)
+ * @property {{ fee: number, country: string } | null} [shipping] the default delivery fee (E16)
+ * @property {{ days: number, country: string } | null} [returns] the return window (E16)
+ * @property {Array<{ name: string, rating: number, title: string, body: string, at: Date | string | null }>} [reviews]
+ *   approved reviews shown as review nodes (E16)
  */
 
 /**
- * `Product` with one `Offer` per active variant, plus its `BreadcrumbList`, as a JSON-LD graph.
+ * The offer details every offer of a product shares: shipping and the return policy (E16).
+ * @param {Pick<ProductPage, 'currency' | 'shipping' | 'returns'>} page
+ */
+const offerExtras = ({ currency, shipping, returns }) => ({
+	shippingDetails: shipping
+		? {
+				'@type': 'OfferShippingDetails',
+				shippingRate: { '@type': 'MonetaryAmount', value: toDecimal(shipping.fee, currency), currency },
+				...(shipping.country ? { shippingDestination: { '@type': 'DefinedRegion', addressCountry: shipping.country } } : {}),
+			}
+		: null,
+	hasMerchantReturnPolicy: returns
+		? compact({
+				'@type': 'MerchantReturnPolicy',
+				applicableCountry: returns.country,
+				returnPolicyCategory: `${SCHEMA}/${returns.days > 0 ? 'MerchantReturnFiniteReturnWindow' : 'MerchantReturnNotPermitted'}`,
+				merchantReturnDays: returns.days > 0 ? returns.days : null,
+			})
+		: null,
+});
+
+/**
+ * `FAQPage` of a page's questions, or null.
+ * @param {Array<{ question: string, answer: string }> | undefined} faqs
+ * @param {string} url
+ */
+export const faqJsonLd = (faqs, url) =>
+	faqs && faqs.length > 0
+		? {
+				'@type': 'FAQPage',
+				'@id': `${url}#faq`,
+				mainEntity: faqs.map((faq) => ({
+					'@type': 'Question',
+					name: faq.question,
+					acceptedAnswer: { '@type': 'Answer', text: faq.answer },
+				})),
+			}
+		: null;
+
+/**
+ * Product structured data as a JSON-LD graph (E16): a `ProductGroup` with each active variant as a `Product` (its own
+ * condition by grade, offer, shipping and return policy) when there are several, else one `Product`; the rating and
+ * review nodes; the `BreadcrumbList`; and a `FAQPage` of the product's questions.
  * @param {ProductPage} page
  */
-export const productJsonLd = ({ product, url, images, description, brand, currency, graded, seller, trail }) => {
+export const productJsonLd = (page) => {
+	const { product, url, images, description, brand, currency, seller, trail } = page;
 	const variants = activeVariants(product);
-	const single = variants.length === 1;
-	const conditions = new Set(variants.map((variant) => conditionOf(product, variant, graded)));
-	const [sole] = [...conditions];
-	const offers = variants.map((variant) => {
-		const condition = conditionOf(product, variant, graded);
-		return compact({
+	const extras = offerExtras(page);
+	/** @param {VariantRecord} variant */
+	const offerOf = (variant) =>
+		compact({
 			'@type': 'Offer',
-			url,
-			sku: variant.sku,
-			name: single ? '' : variantLabel(variant),
+			url: page.variantUrl?.(variant) ?? url,
 			price: toDecimal(variant.price, currency),
 			priceCurrency: currency,
 			availability: `${SCHEMA}/${variantInStock(product, variant) ? 'InStock' : 'OutOfStock'}`,
-			itemCondition: condition ? CONDITION_URL[condition] : '',
+			itemCondition: (() => {
+				const condition = page.condition(variant);
+				return condition ? CONDITION_URL[condition] : '';
+			})(),
 			seller: seller ? { '@type': 'Organization', name: seller } : null,
+			...extras,
 		});
-	});
-	const node = compact({
-		'@type': 'Product',
-		'@id': `${url}#product`,
-		name: product.name,
+	const rating =
+		product.rating.count > 0
+			? {
+					'@type': 'AggregateRating',
+					ratingValue: Math.round(product.rating.average * 10) / 10,
+					reviewCount: product.rating.count,
+					bestRating: 5,
+					worstRating: 1,
+				}
+			: null;
+	const reviews = (page.reviews ?? []).map((review) =>
+		compact({
+			'@type': 'Review',
+			name: review.title,
+			reviewBody: review.body,
+			datePublished: review.at ? new Date(review.at).toISOString().slice(0, 10) : '',
+			author: { '@type': 'Person', name: review.name },
+			reviewRating: { '@type': 'Rating', ratingValue: review.rating, bestRating: 5, worstRating: 1 },
+		}),
+	);
+	const shared = {
 		description,
-		url,
 		image: images,
-		sku: single ? variants[0]?.sku : '',
 		brand: brand ? { '@type': 'Brand', name: brand } : null,
-		itemCondition: conditions.size === 1 && sole ? CONDITION_URL[sole] : '',
-		aggregateRating:
-			product.rating.count > 0
-				? {
-						'@type': 'AggregateRating',
-						ratingValue: Math.round(product.rating.average * 10) / 10,
-						reviewCount: product.rating.count,
-						bestRating: 5,
-						worstRating: 1,
-					}
-				: null,
-		offers: single ? offers[0] : offers,
-	});
-	return { '@context': SCHEMA, '@graph': [node, breadcrumbJsonLd([...trail, { name: product.name, url }])] };
+		aggregateRating: rating,
+		review: reviews,
+	};
+	/** @type {Record<string, unknown>} */
+	let node;
+	if (variants.length > 1) {
+		node = compact({
+			'@type': 'ProductGroup',
+			'@id': `${url}#product`,
+			name: product.name,
+			url,
+			productGroupID: product.id,
+			variesBy: product.options.map((axis) => VARIES_BY[axis.name.toLowerCase()] ?? axis.name),
+			...shared,
+			hasVariant: variants.map((variant) =>
+				compact({
+					'@type': 'Product',
+					name: variantLabel(variant) ? `${product.name} - ${variantLabel(variant)}` : product.name,
+					sku: variant.sku,
+					image: page.variantImage?.(variant) ?? '',
+					...Object.fromEntries(
+						Object.entries(variant.options ?? {}).flatMap(([axis, value]) => {
+							const property = VARIES_BY[axis.toLowerCase()];
+							return property ? [[property.slice(SCHEMA.length + 1), value]] : [];
+						}),
+					),
+					offers: offerOf(variant),
+				}),
+			),
+		});
+	} else {
+		const sole = variants[0];
+		node = compact({
+			'@type': 'Product',
+			'@id': `${url}#product`,
+			name: product.name,
+			url,
+			sku: sole?.sku ?? '',
+			...shared,
+			offers: sole ? offerOf(sole) : null,
+		});
+	}
+	return {
+		'@context': SCHEMA,
+		'@graph': [node, breadcrumbJsonLd([...trail, { name: product.name, url }]), faqJsonLd(product.faqs, url)].filter(
+			(entry) => entry !== null,
+		),
+	};
 };
 
 /**
- * `CollectionPage` of a category, plus its `BreadcrumbList`, as a JSON-LD graph.
- * @param {{ name: string, description: string, url: string, image: string | null, trail: Array<{ name: string, url: string }> }} page
- *   `trail`: home and the ancestors, without the category
+ * `CollectionPage` of a category or landing page, with its `ItemList` of products, its `BreadcrumbList` and a
+ * `FAQPage` of its questions, as a JSON-LD graph (E15, E16).
+ * @param {{ name: string, description: string, url: string, image: string | null, trail: Array<{ name: string, url: string }>,
+ *   items?: Array<{ name: string, url: string }>, faqs?: Array<{ question: string, answer: string }> }} page
+ *   `trail`: home and the ancestors, without the page itself
  */
-export const categoryJsonLd = ({ name, description, url, image, trail }) => ({
+export const categoryJsonLd = ({ name, description, url, image, trail, items = [], faqs = [] }) => ({
 	'@context': SCHEMA,
 	'@graph': [
 		compact({ '@type': 'CollectionPage', '@id': `${url}#page`, name, description, url, image }),
+		items.length > 0
+			? {
+					'@type': 'ItemList',
+					'@id': `${url}#items`,
+					itemListElement: items.map((item, index) => ({
+						'@type': 'ListItem',
+						position: index + 1,
+						url: item.url,
+						name: item.name,
+					})),
+				}
+			: null,
 		breadcrumbJsonLd([...trail, { name, url }]),
-	],
+		faqJsonLd(faqs, url),
+	].filter((entry) => entry !== null),
 });
 
-/** The start of a sitemap file. */
+/**
+ * The robots value of a page: `index, follow` unless its SEO fields say otherwise.
+ * @param {{ noindex?: boolean, nofollow?: boolean } | undefined} seo
+ */
+export const robotsOf = (seo) => `${seo?.noindex ? 'noindex' : 'index'}, ${seo?.nofollow ? 'nofollow' : 'follow'}`;
+
+/** The start of a sitemap file (with the image extension, E16). */
 export const SITEMAP_HEAD =
-	'<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n';
+	'<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">\n';
 /** The end of a sitemap file. */
 export const SITEMAP_FOOT = '</urlset>\n';
 
 /**
- * One address of a sitemap.
- * @param {{ loc: string, lastmod: Date | string | null | undefined }} entry
+ * One address of a sitemap, with its images (E16).
+ * @param {{ loc: string, lastmod: Date | string | null | undefined, images?: string[] }} entry
  */
-export const sitemapEntry = ({ loc, lastmod }) => {
+export const sitemapEntry = ({ loc, lastmod, images = [] }) => {
 	const date = lastmod ? new Date(lastmod) : null;
 	const when = date && !Number.isNaN(date.getTime()) ? `<lastmod>${date.toISOString()}</lastmod>` : '';
-	return `<url><loc>${escapeXml(loc)}</loc>${when}</url>\n`;
+	const pictures = images.map((image) => `<image:image><image:loc>${escapeXml(image)}</image:loc></image:image>`).join('');
+	return `<url><loc>${escapeXml(loc)}</loc>${when}${pictures}</url>\n`;
 };
 
 /**
@@ -249,30 +377,25 @@ export const sitemapIndex = (locs) =>
 		.join('')}</sitemapindex>\n`;
 
 /**
- * The address of one page of a split sitemap on the merchant's website.
+ * The address of one file of a split sitemap on the merchant's website: the sitemap address with `file=<name>` (E16).
  * @param {string} base the sitemap address (`/sitemap.xml` or an https address)
  * @param {string} domain
- * @param {number} page 1-based
+ * @param {string} file `categories`, `landings` or `products-<n>`
  */
-export const sitemapPageUrl = (base, domain, page) => {
+export const sitemapFileUrl = (base, domain, file) => {
 	const path = String(base || '/sitemap.xml');
 	const absolute = /^https:\/\//.test(path) ? path : `https://${domain}${path.startsWith('/') ? '' : '/'}${path}`;
-	return `${absolute}${absolute.includes('?') ? '&' : '?'}page=${page}`;
+	return `${absolute}${absolute.includes('?') ? '&' : '?'}file=${encodeURIComponent(file)}`;
 };
 
 /**
- * Which slice of the categories and the products one sitemap page holds (categories first, then products).
- * @param {{ categories: number, products: number, page: number, size?: number }} input
- * @returns {{ pages: number, categories: { skip: number, limit: number }, products: { skip: number, limit: number } }}
+ * The files of a sitemap index (E16): the categories, the landing and glossary pages, and the products in files of at
+ * most `size` addresses each. Empty parts have no file.
+ * @param {{ categories: number, landings: number, products: number, size: number }} counts
+ * @returns {string[]}
  */
-export const sitemapSlice = ({ categories, products, page, size = SITEMAP_LIMIT }) => {
-	const total = categories + products;
-	const pages = Math.max(1, Math.ceil(total / size));
-	const start = (page - 1) * size;
-	const end = Math.min(total, start + size);
-	const catEnd = Math.min(end, categories);
-	const categorySlice = start < categories ? { skip: start, limit: catEnd - start } : { skip: 0, limit: 0 };
-	const productStart = Math.max(start, categories) - categories;
-	const productSlice = end > categories ? { skip: productStart, limit: end - categories - productStart } : { skip: 0, limit: 0 };
-	return { pages, categories: categorySlice, products: productSlice };
-};
+export const sitemapFiles = ({ categories, landings, products, size }) => [
+	...(categories > 0 ? ['categories'] : []),
+	...(landings > 0 ? ['landings'] : []),
+	...Array.from({ length: Math.ceil(products / size) }, (_, index) => `products-${index + 1}`),
+];

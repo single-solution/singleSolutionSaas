@@ -104,8 +104,10 @@ export const productCard = (product, { currency, image, url, money }) => {
  * A product's details for Chat (`get_product_details`).
  * @param {ProductRecord} product
  * @param {{ currency: string, image: string | null, url: string, money: Money, brand: string | null,
- *   attributes: Map<string, { name: string, unit: string }>, grades: Map<string, string> }} context
- *   `attributes`: attribute id → name and unit; `grades`: grade key → label
+ *   attributes: Map<string, { name: string, unit: string }>, grades: Map<string, string>,
+ *   stockLeft?: (variant: VariantRecord) => number | null }} context
+ *   `attributes`: attribute id → name and unit; `grades`: grade key → label; `stockLeft`: units shoppers are told are
+ *   left, as the `catalog` settings allow (E9)
  */
 export const productDetails = (product, context) => {
 	const description = String(product.description ?? '').trim();
@@ -137,6 +139,7 @@ export const productDetails = (product, context) => {
 				compareAtPriceText: variant.compareAtPrice === null ? null : text(variant.compareAtPrice),
 				grade: variant.grade ? (context.grades.get(variant.grade) ?? variant.grade) : null,
 				inStock: variantInStock(product, variant),
+				stockLeft: context.stockLeft?.(variant) ?? null,
 			})),
 	};
 };

@@ -5,7 +5,7 @@
  * functions, no I/O.
  * @module
  */
-import { activeVariants, conditionOf, escapeXml, variantInStock, variantLabel } from './seo.js';
+import { activeVariants, escapeXml, variantInStock, variantLabel } from './seo.js';
 import { toDecimal } from './money.js';
 
 /** @typedef {import('./model.js').ProductRecord} ProductRecord */
@@ -34,6 +34,10 @@ const DESCRIPTION_LENGTH = 5000;
  * @property {string} gtin
  * @property {string} mpn
  * @property {string} productType category path (`Phones > Android`)
+ * @property {string} [googleCategory] the Google product category (E17)
+ * @property {string} [customLabel0] the grade's label (E17)
+ * @property {string} [shipping] the delivery fee (`250 PKR`) for the business's country (E17)
+ * @property {string} [shippingCountry]
  */
 
 /**
@@ -43,10 +47,46 @@ const DESCRIPTION_LENGTH = 5000;
  * @property {string} brand
  * @property {string} productType
  * @property {string} currency
- * @property {Condition} graded condition of graded items
+ * @property {(variant: import('./model.js').VariantRecord) => Condition | ''} condition the condition of a variant (its
+ *   grade's, else the setting for graded items; E10)
  * @property {'none' | 'mpn' | 'gtin'} skuAs
  * @property {boolean} includeOutOfStock
+ * @property {'variant' | 'legacy'} [itemId] legacy: `<product hex>_<variant hex>` of imported ids (E17)
+ * @property {string} [googleCategory]
+ * @property {(variant: import('./model.js').VariantRecord) => string} [gradeLabel] the grade label for custom_label_0
+ * @property {{ fee: number, country: string } | null} [shipping] the default delivery fee
+ * @property {boolean} [wholeUnits] amounts without minor units (K7, E17)
+ * @property {(variant: import('./model.js').VariantRecord) => string} [variantLink] a variant's page (E13)
+ * @property {(variant: import('./model.js').VariantRecord) => string} [variantImage] a variant's first photo (E6)
  */
+
+/** Imported ids: a prefix and an ObjectId's 24 hex digits. */
+const IMPORTED = /^[a-z]+_([0-9a-f]{24})$/;
+
+/**
+ * A feed item id: the variant id, or with `legacy` the `<product hex>_<variant hex>` of imported ids (E17); a variant
+ * whose ids were not imported keeps its own id.
+ * @param {string} productId
+ * @param {string} variantId
+ * @param {'variant' | 'legacy'} mode
+ */
+export const feedItemId = (productId, variantId, mode) => {
+	if (mode !== 'legacy') return variantId;
+	const product = IMPORTED.exec(productId)?.[1];
+	const variant = IMPORTED.exec(variantId)?.[1];
+	return product && variant ? `${product}_${variant}` : variantId;
+};
+
+/**
+ * An amount as feeds take it: decimals and the currency code, or whole units (rounded half up) with `wholeUnits`.
+ * @param {number} amount
+ * @param {string} currency
+ * @param {boolean} whole
+ */
+export const feedMoney = (amount, currency, whole) => {
+	const decimal = toDecimal(amount, currency);
+	return `${whole ? String(Math.round(Number(decimal))) : decimal} ${currency}`;
+};
 
 /**
  * Text on one line (feeds take no line breaks in titles) cut to `max` characters.
@@ -64,7 +104,7 @@ const line = (value, max) => value.replace(/\s+/g, ' ').trim().slice(0, max);
 export const feedRows = (product, context) => {
 	const variants = activeVariants(product);
 	const many = variants.length > 1;
-	const money = (/** @type {number} */ amount) => `${toDecimal(amount, context.currency)} ${context.currency}`;
+	const money = (/** @type {number} */ amount) => feedMoney(amount, context.currency, context.wholeUnits === true);
 	return variants
 		.filter((variant) => context.includeOutOfStock || variantInStock(product, variant))
 		.map((variant) => {
@@ -72,20 +112,24 @@ export const feedRows = (product, context) => {
 			const onSale = typeof variant.compareAtPrice === 'number' && variant.compareAtPrice > variant.price;
 			const sku = variant.sku ?? '';
 			return {
-				id: variant.id,
+				id: feedItemId(product.id, variant.id, context.itemId ?? 'variant'),
 				itemGroupId: many ? product.id : '',
 				title: line(many && label ? `${product.name} - ${label}` : product.name, TITLE_LENGTH),
 				description: (product.description || product.summary || product.name).trim().slice(0, DESCRIPTION_LENGTH),
-				link: context.link,
-				image: context.image,
+				link: context.variantLink?.(variant) ?? context.link,
+				image: context.variantImage?.(variant) || context.image,
 				price: money(onSale ? /** @type {number} */ (variant.compareAtPrice) : variant.price),
 				salePrice: onSale ? money(variant.price) : '',
 				inStock: variantInStock(product, variant),
-				condition: conditionOf(product, variant, context.graded),
+				condition: context.condition(variant),
 				brand: context.brand,
 				gtin: context.skuAs === 'gtin' ? sku : '',
 				mpn: context.skuAs === 'mpn' ? sku : '',
 				productType: context.productType,
+				googleCategory: context.googleCategory ?? '',
+				customLabel0: context.gradeLabel?.(variant) ?? '',
+				shipping: context.shipping ? money(context.shipping.fee) : '',
+				shippingCountry: context.shipping?.country ?? '',
 			};
 		});
 };
@@ -122,12 +166,18 @@ export const googleItem = (row) => {
 		['g:gtin', row.gtin],
 		['g:mpn', row.mpn],
 		['g:product_type', row.productType],
+		['g:google_product_category', row.googleCategory ?? ''],
+		['g:custom_label_0', row.customLabel0 ?? ''],
 	];
 	const body = fields
 		.filter(([, value]) => value !== '')
 		.map(([name, value]) => `<${name}>${escapeXml(value)}</${name}>`)
 		.join('');
-	return `<item>${body}</item>\n`;
+	const shipping =
+		row.shipping && row.shippingCountry
+			? `<g:shipping><g:country>${escapeXml(row.shippingCountry)}</g:country><g:price>${escapeXml(row.shipping)}</g:price></g:shipping>`
+			: '';
+	return `<item>${body}${shipping}</item>\n`;
 };
 
 /** The columns of a Meta catalog CSV. */
@@ -142,6 +192,8 @@ const META_COLUMNS = Object.freeze([
 	'image_link',
 	'brand',
 	'item_group_id',
+	'google_product_category',
+	'custom_label_0',
 ]);
 
 /**
@@ -170,6 +222,8 @@ export const metaLine = (row) =>
 		row.image,
 		row.brand,
 		row.itemGroupId,
+		row.googleCategory ?? '',
+		row.customLabel0 ?? '',
 	]
 		.map(csvCell)
 		.join(',')}\r\n`;

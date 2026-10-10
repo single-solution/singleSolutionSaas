@@ -8,7 +8,9 @@
 			"description": "A short description of your shop for AI assistants, shown under your business name.",
 			"default": "",
 			"maxLength": 2000,
-			"x-ui": { "widget": "textarea" }
+			"x-ui": {
+				"widget": "textarea"
+			}
 		},
 		"products": {
 			"type": "integer",
@@ -23,6 +25,12 @@
 			"title": "Include policy summaries",
 			"description": "A short summary of your delivery, returns, privacy and terms texts (Cart and checkout settings).",
 			"default": true
+		},
+		"full": {
+			"type": "boolean",
+			"title": "Full product list",
+			"description": "Also serve llms-full.txt: every product in stock with its price range, and the grades of each category.",
+			"default": false
 		}
 	}
 }

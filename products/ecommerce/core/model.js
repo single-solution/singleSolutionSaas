@@ -32,6 +32,8 @@ export const COLLECTIONS = Object.freeze({
 	wishlists: 'wishlists',
 	alerts: 'alerts',
 	staff: 'staff',
+	sizeCharts: 'size_charts',
+	landings: 'landings',
 });
 
 /** Id prefixes (`createId(prefix)` from `@ss/contracts`). */
@@ -53,6 +55,8 @@ export const ID_PREFIX = Object.freeze({
 	claim: 'ret',
 	review: 'rev',
 	alert: 'alr',
+	sizeChart: 'szc',
+	landing: 'lnd',
 });
 
 // ------------------------------------------------------------------------------------------------------- catalog
@@ -67,6 +71,11 @@ export const ID_PREFIX = Object.freeze({
  * @property {string} type content type
  * @property {number} size bytes
  * @property {string} alt alternative text
+ * @property {Partial<Record<'thumb' | 'card' | 'detail', string>>} [sizes] storage keys of smaller copies the uploader
+ *   made (there is no server image processing)
+ * @property {number} [width] pixels
+ * @property {number} [height] pixels
+ * @property {string} [blur] a tiny placeholder image as a data URI (at most 2 kB)
  */
 
 /**
@@ -82,6 +91,11 @@ export const ID_PREFIX = Object.freeze({
  * @property {Record<string, number>} locations location id → units (multi_location); its values add up to `stock`
  * @property {string | null} grade a grade key of the `grades` list (grades_serials)
  * @property {boolean} active
+ * @property {Record<string, string | number | boolean | Array<string | number>>} [attributes] variant attribute id →
+ *   value or values (E7); `options` are derived from them
+ * @property {MediaRecord[]} [media] this variant's photos (E6)
+ * @property {boolean} [soldOut] shown as sold out without changing stock (E9)
+ * @property {number | null} [warrantyDays] null = the product's, then the grade's, then the setting (E12)
  */
 
 /**
@@ -97,14 +111,28 @@ export const ID_PREFIX = Object.freeze({
  * @property {string | null} brandId
  * @property {string[]} tags
  * @property {MediaRecord[]} media the first is the main image
- * @property {Record<string, string | number | boolean>} specs attribute id → value
+ * @property {Record<string, string | number | boolean | Array<string | number>>} specs attribute id → value (or values,
+ *   E7)
  * @property {Array<{ name: string, values: string[] }>} options variant axes (variants)
  * @property {VariantRecord[]} variants at least one
  * @property {boolean} trackStock false = never runs out (services, made to order)
- * @property {boolean} serialized each unit has a serial number captured when packed (grades_serials)
+ * @property {boolean | null} serialized each unit has a serial number captured when packed (grades_serials); null =
+ *   as its categories say (E11)
  * @property {{ files: MediaRecord[], licenceKeys: boolean, downloadLimit: number } | null} digital digital goods
  * @property {{ durationMinutes: number } | null} booking bookings
- * @property {{ title: string, description: string }} seo '' = derived from name and summary
+ * @property {import('./catalog-content.js').SeoRecord} seo '' = derived from name and summary (E16)
+ * @property {boolean} [featured] (E2)
+ * @property {'none' | 'out' | 'partial' | 'full'} [stockState] derived on save (E2)
+ * @property {string[]} [grades] grade keys of the active variants, derived on save (E2 counts)
+ * @property {number} [priceMax] highest active variant price, derived on save (E8)
+ * @property {string} [descriptionHtml] cleaned rich description; `description` is derived from it (E3)
+ * @property {import('./catalog-content.js').Video | null} [video] (E4)
+ * @property {string | null} [sizeChartId] (E5)
+ * @property {boolean} [hideSizeGuide] (E5)
+ * @property {Array<{ attributeId: string, values: Array<string | number>, customValues: string[],
+ *   defaultValue: string | number | null }>} [attributeSetup] (E7)
+ * @property {import('./catalog-content.js').Faq[]} [faqs] (E16)
+ * @property {string[]} [previousSlugs] (E13)
  * @property {number | null} returnDays this item's return window in days after delivery (null = the grade's, else the
  *   `returns` setting)
  * @property {number | null} warrantyDays this item's warranty in days after delivery (null = the grade's, else the setting)
@@ -118,14 +146,73 @@ export const ID_PREFIX = Object.freeze({
  */
 
 /**
- * @typedef {{ id: string, slug: string, name: string, parentId: string | null, path: string[], description: string,
- *   seo: { title: string, description: string }, image: MediaRecord | null, sort: number }} CategoryRecord
- *   `path`: ancestor ids from the root, without itself
+ * @typedef {object} CategoryRecord
+ * @property {string} id
+ * @property {string} slug
+ * @property {string} name
+ * @property {string | null} parentId
+ * @property {string[]} path ancestor ids from the root, without itself
+ * @property {string} description
+ * @property {import('./catalog-content.js').SeoRecord} seo
+ * @property {MediaRecord | null} image
+ * @property {number} sort
+ * @property {'active' | 'coming_soon' | 'hidden'} [status] coming_soon: listed, its products hidden; hidden: neither (E1)
+ * @property {string} [icon] a name the website maps to its icon (E1)
+ * @property {import('./catalog-content.js').Content} [content] (E1)
+ * @property {import('./catalog-content.js').Faq[]} [faqs] (E1)
+ * @property {string | null} [sizeChartId] (E5)
+ * @property {boolean | null} [requiresSerial] null = as its parent (E11)
+ * @property {string[]} [previousSlugs] (E13)
  */
-/** @typedef {{ id: string, slug: string, name: string, description: string, logo: MediaRecord | null }} BrandRecord */
 /**
- * @typedef {{ id: string, name: string, type: 'text' | 'number' | 'boolean' | 'choice', choices: string[], unit: string,
- *   filterable: boolean, comparable: boolean, sort: number }} AttributeRecord
+ * @typedef {object} BrandRecord
+ * @property {string} id
+ * @property {string} slug
+ * @property {string} name
+ * @property {string} description
+ * @property {MediaRecord | null} logo
+ * @property {'active' | 'hidden'} [status] hidden: its products are hidden (E1)
+ * @property {string[]} [categoryIds] the categories it belongs to ([] = all) (E1)
+ * @property {import('./catalog-content.js').SeoRecord} [seo] (E1, E16)
+ * @property {string | null} [sizeChartId] (E5)
+ */
+/** @typedef {{ value: string, label: string }} AttributeChoice */
+/**
+ * When an attribute is shown (E7): always, for some brands or grades, or when another attribute has a value.
+ * @typedef {{ when: 'always' | 'brands' | 'grades' | 'attribute', ids: string[], attributeId: string | null,
+ *   value: string | null }} AttributeVisibility
+ */
+/**
+ * @typedef {object} AttributeRecord
+ * @property {string} id
+ * @property {string} name
+ * @property {'text' | 'number' | 'boolean' | 'choice'} type
+ * @property {Array<AttributeChoice | string>} choices (E7; older records hold plain strings, read with `choicesOf`)
+ * @property {string} unit
+ * @property {boolean} filterable
+ * @property {boolean} comparable
+ * @property {number} sort
+ * @property {string} [slug] the filter name `attr.<slug>` (E7)
+ * @property {string[]} [categoryIds] [] = every category (E7)
+ * @property {'product' | 'variant'} [on] where its values live (E7)
+ * @property {boolean} [multiple] several values at once (E7)
+ * @property {AttributeVisibility} [visibility] (E7)
+ * @property {'none' | 'image' | 'chips'} [card] how product cards show it (E7)
+ * @property {boolean} [active] (E7)
+ * @property {{ title: string, description: string, body: string, faqs: import('./catalog-content.js').Faq[] }} [seo]
+ *   its glossary page (E7, E15)
+ */
+/**
+ * A size chart (E5): shown from the product, else its brand, else its category.
+ * @typedef {{ id: string, name: string, unit: 'in' | 'cm', columns: Array<{ key: string, label: string }>,
+ *   rows: Array<{ size: string, label: string, values: Record<string, string> }>, fitAdvice: string, notes: string,
+ *   active: boolean }} SizeChartRecord
+ */
+/**
+ * A landing page (E15): a category, brand and grade combination with its own copy.
+ * @typedef {{ id: string, categoryId: string | null, brandId: string | null, grade: string | null, h1: string,
+ *   title: string, description: string, intro: string, faqs: import('./catalog-content.js').Faq[],
+ *   indexable: 'auto' | 'yes' | 'no' }} LandingRecord
  */
 /** @typedef {{ id: string, name: string, pickup: boolean, sort: number }} LocationRecord */
 /**
@@ -198,6 +285,8 @@ export const STATUS_ROLES = Object.freeze([
  * @property {string[]} licences licence ids given after payment (digital)
  * @property {number} [downloads] downloads made so far (digital)
  * @property {number} returnedQuantity units returned through approved return claims
+ * @property {number | null} [warrantyDays] the warranty at placement: the variant's, else the product's, the grade's or
+ *   the setting (E12)
  */
 
 /**

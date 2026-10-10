@@ -1,10 +1,11 @@
 /**
  * The catalog (PLAN 0.8.8 Catalog, Items, Admin tools, Catalog SEO): products with variants, categories, brands,
- * attributes, stock locations and stock, grades and serials, images in the merchant's storage, search, listings and
- * filters, the product page, CSV, bulk actions and AI copy. The routes live in `catalog-*.js`; this joins them and
+ * attributes, stock locations and stock, grades and serials, images and videos in the merchant's storage, size charts,
+ * search (basic or Atlas Search), listings and filters, the product page, CSV, bulk actions and AI copy. The routes live in `catalog-*.js`; this joins them and
  * gives the visitor widgets their settings. The catalog holds no personal data (no data-rights answers).
  * @module
  */
+import { createCatalogCharts } from './catalog-charts.js';
 import { createCatalogCommon } from './catalog-common.js';
 import { createCatalogFiles } from './catalog-files.js';
 import { createCatalogProducts } from './catalog-products.js';
@@ -29,15 +30,17 @@ export const createCatalog = (product, service) => {
 			...createCatalogProducts(product, service, common),
 			...createCatalogFiles(product, service, common),
 			...createCatalogTaxonomy(product, service, common),
+			...createCatalogCharts(product, service, common),
 			...createCatalogTools(product, service, common),
 		],
 		/**
-		 * What the product grid and page need: where product and category pages are, and the page size.
+		 * What the product grid and page need: where product and category pages are, the page size and what shoppers
+		 * are told of stock (E9).
 		 * @param {Site} s
 		 */
 		widgetSettings: async (s) => {
-			const { productUrl, categoryUrl, pageSize } = await s.values('catalog');
-			return { catalog: { productUrl, categoryUrl, pageSize } };
+			const { productUrl, categoryUrl, variantQuery, pageSize, showStock, lowStockShown } = await s.values('catalog');
+			return { catalog: { productUrl, categoryUrl, variantQuery, pageSize, showStock, lowStockShown } };
 		},
 	};
 };

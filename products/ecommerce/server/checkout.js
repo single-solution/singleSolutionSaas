@@ -12,6 +12,7 @@ import { zoneCities } from '../core/delivery.js';
 import { createDigital } from './checkout-digital.js';
 import { createOrdering } from './checkout-orders.js';
 import { createQuoting } from './checkout-quote.js';
+import { policiesOf } from './seo.js';
 import { SERVER_LIMITS, VISITOR_LIMITS, VISITOR_WRITE_LIMITS } from './service.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
@@ -92,12 +93,10 @@ export const createCheckout = (product, service) => {
 					cities: zonesOn ? zoneCities(await s.list('delivery_zones')) : [],
 				},
 				pricesIncludeTax: s.has('taxes') ? (await s.values('taxes')).pricesIncludeTax === true : true,
-				policies: {
-					shipping: checkout.policyShipping,
-					returns: checkout.policyReturns,
-					privacy: checkout.policyPrivacy,
-					terms: checkout.policyTerms,
-				},
+				...(await (async () => {
+					const filled = await policiesOf(s);
+					return { policies: filled.policies, policyFormat: filled.format };
+				})()),
 				bookings: s.has('bookings'),
 				digital: s.has('digital_goods'),
 				coupons: s.has('coupons'),

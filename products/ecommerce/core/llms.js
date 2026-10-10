@@ -120,3 +120,41 @@ export const treeOrder = (categories) => {
 	walk(null, 0);
 	return out;
 };
+
+/** Longest llms-full.txt (it lists every product in stock). */
+export const MAX_LLMS_FULL_CHARS = 5_000_000;
+
+/**
+ * llms-full.txt (E16): the shop, then each category with its grades and every product in stock with its price range;
+ * products without a category come last under the products heading.
+ * @param {{ name: string, description: string, home: string, sections: Array<{ name: string, url: string | null,
+ *   grades: string[], products: Array<{ name: string, url: string, price: string }> }>,
+ *   headings: { grades: string } }} input
+ */
+export const buildLlmsFull = ({ name, description, home, sections, headings }) => {
+	const lines = [`# ${markdownText(name)}`, ''];
+	const about = String(description ?? '')
+		.replace(/\s+/g, ' ')
+		.trim();
+	if (about) lines.push(`> ${about}`, '');
+	lines.push(`- [${markdownText(name)}](${markdownUrl(home)})`, '');
+	for (const section of sections) {
+		if (section.products.length === 0) continue;
+		lines.push(
+			section.url ? `## [${markdownText(section.name)}](${markdownUrl(section.url)})` : `## ${markdownText(section.name)}`,
+			'',
+		);
+		if (section.grades.length > 0) lines.push(`${headings.grades}: ${section.grades.map(markdownText).join(', ')}`, '');
+		for (const item of section.products) lines.push(linkLine({ name: item.name, url: item.url, note: item.price }));
+		lines.push('');
+	}
+	let size = 0;
+	/** @type {string[]} */
+	const kept = [];
+	for (const text of lines) {
+		size += text.length + 1;
+		if (size > MAX_LLMS_FULL_CHARS) break;
+		kept.push(text);
+	}
+	return `${kept.join('\n').trimEnd()}\n`;
+};

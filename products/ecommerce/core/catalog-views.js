@@ -5,7 +5,8 @@
  * in. No I/O.
  * @module
  */
-import { summarize, variantInStock, variantName } from './catalog.js';
+import { summarize, valueLabel, variantInStock, variantName } from './catalog.js';
+import { gradeView } from './grades.js';
 
 /** @typedef {import('./model.js').ProductRecord} ProductRecord */
 /** @typedef {import('./model.js').VariantRecord} VariantRecord */
@@ -53,16 +54,51 @@ const gradeLabels = (product, grades) => {
  * @property {{ id: string, name: string } | null} brand
  * @property {string[]} grades
  * @property {number} variantCount
+ * @property {number} priceMax the highest active variant price (E8)
+ * @property {boolean} featured (E2)
+ * @property {Array<{ url: string | null, alt: string }>} cardImages the first photo of up to 4 variants that look
+ *   different (E6)
  */
+
+/**
+ * The variants whose first photos a card shows (E6): active variants with photos, one per photo (variants that share
+ * their first photo look the same), at most 4.
+ * @param {ProductRecord} product
+ * @returns {Array<import('./model.js').MediaRecord>}
+ */
+export const cardPhotos = (product) => {
+	/** @type {Array<import('./model.js').MediaRecord>} */
+	const out = [];
+	for (const variant of product.variants) {
+		const first = variant.active ? variant.media?.[0] : undefined;
+		if (first && !out.some((file) => file.key === first.key)) out.push(first);
+		if (out.length === 4) break;
+	}
+	return out;
+};
+
+/**
+ * How many units shoppers are told are left (E9): never, only at `low` or fewer, or always; 0 for a variant marked sold
+ * out; null when not shown or stock is not tracked.
+ * @param {Pick<VariantRecord, 'stock' | 'soldOut' | 'active'>} variant
+ * @param {boolean} trackStock
+ * @param {{ showStock: string, lowStockShown: number }} settings
+ * @returns {number | null}
+ */
+export const stockLeftOf = (variant, trackStock, { showStock, lowStockShown }) => {
+	if (!trackStock || showStock === 'none') return null;
+	const left = variant.soldOut === true || !variant.active ? 0 : variant.stock;
+	return showStock === 'always' || left <= lowStockShown ? left : null;
+};
 
 /**
  * A product card (grid, search results, wishlist, compare, Chat).
  * @param {ProductRecord} product
  * @param {{ currency: string, image: string | null, url: string, brand: { id: string, name: string } | null,
- *   grades: ReadonlyMap<string, Grade> }} context
+ *   grades: ReadonlyMap<string, Grade>, cardImages?: Array<{ url: string | null, alt: string }> }} context
  * @returns {Card}
  */
-export const cardOf = (product, { currency, image, url, brand, grades }) => ({
+export const cardOf = (product, { currency, image, url, brand, grades, cardImages = [] }) => ({
 	id: product.id,
 	slug: product.slug,
 	name: product.name,
@@ -76,6 +112,9 @@ export const cardOf = (product, { currency, image, url, brand, grades }) => ({
 	brand,
 	grades: gradeLabels(product, grades),
 	variantCount: product.variants.filter((variant) => variant.active).length,
+	priceMax: summarize(product.variants, product.trackStock).priceMax,
+	featured: product.featured === true,
+	cardImages,
 });
 
 /**
@@ -90,20 +129,41 @@ export const specsOf = (product, attributes) =>
 		.sort((a, b) => a.attribute.sort - b.attribute.sort || a.attribute.name.localeCompare(b.attribute.name))
 		.map(({ attribute, value }) => ({
 			id: attribute.id,
+			slug: attribute.slug ?? attribute.id,
 			name: attribute.name,
 			value,
+			label: valueLabel(attribute, value),
 			unit: attribute.unit,
 			comparable: attribute.comparable,
 		}));
 
 /**
+ * A photo as shoppers get it: its address, text, size and placeholder, and the addresses of its smaller copies.
+ * @typedef {{ url: string | null, alt: string, type: string, width?: number, height?: number, blur?: string,
+ *   sizes?: Partial<Record<'thumb' | 'card' | 'detail', string | null>> }} MediaView
+ */
+
+/**
  * The product page's data.
  * @param {ProductRecord} product
- * @param {{ currency: string, url: string, media: Array<{ url: string | null, alt: string, type: string }>,
- *   brand: { id: string, slug: string, name: string } | null, breadcrumb: Array<{ id: string, slug: string, name: string, url: string }>,
- *   attributes: ReadonlyMap<string, AttributeRecord>, grades: ReadonlyMap<string, Grade> }} context
+ * @param {object} context
+ * @param {string} context.currency
+ * @param {string} context.url
+ * @param {MediaView[]} context.media
+ * @param {{ id: string, slug: string, name: string } | null} context.brand
+ * @param {Array<{ id: string, slug: string, name: string, url: string }>} context.breadcrumb
+ * @param {ReadonlyMap<string, AttributeRecord>} context.attributes
+ * @param {ReadonlyMap<string, Grade>} context.grades
+ * @param {ReadonlyMap<string, MediaView[]>} [context.variantMedia] each variant's photos (E6)
+ * @param {ReadonlyMap<string, string>} [context.variantUrls] each variant's page (E13)
+ * @param {{ showStock: string, lowStockShown: number }} [context.stock] what shoppers are told of stock (E9)
+ * @param {number | null} [context.warrantyDays] the `returns` setting (E12)
+ * @param {ReturnType<typeof import('./size-charts.js').chartView> | null} [context.sizeChart] (E5)
+ * @param {Record<string, unknown> | null} [context.video] (E4)
  */
-export const pageOf = (product, { currency, url, media, brand, breadcrumb, attributes, grades }) => {
+export const pageOf = (product, context) => {
+	const { currency, url, media, brand, breadcrumb, attributes, grades } = context;
+	const stock = context.stock ?? { showStock: 'none', lowStockShown: 0 };
 	const variants = product.variants
 		.filter((variant) => variant.active)
 		.map((variant) => {
@@ -113,11 +173,22 @@ export const pageOf = (product, { currency, url, media, brand, breadcrumb, attri
 				name: variantName(product.options, variant.options),
 				sku: variant.sku,
 				options: variant.options,
+				attributes: Object.entries(variant.attributes ?? {}).flatMap(([id, value]) => {
+					const attribute = attributes.get(id);
+					return attribute
+						? [{ id, slug: attribute.slug ?? id, name: attribute.name, value, label: valueLabel(attribute, value) }]
+						: [];
+				}),
 				price: variant.price,
 				compareAtPrice:
 					variant.compareAtPrice !== null && variant.compareAtPrice > variant.price ? variant.compareAtPrice : null,
 				inStock: variantInStock(variant, product.trackStock),
-				grade: grade ? { key: grade.key, label: grade.label, description: grade.description } : null,
+				soldOut: variant.soldOut === true,
+				stockLeft: stockLeftOf(variant, product.trackStock, stock),
+				grade: grade ? gradeView(grade) : null,
+				warrantyDays: variant.warrantyDays ?? product.warrantyDays ?? grade?.warrantyDays ?? context.warrantyDays ?? null,
+				media: context.variantMedia?.get(variant.id) ?? [],
+				url: context.variantUrls?.get(variant.id) ?? url,
 			};
 		});
 	return {
@@ -127,12 +198,16 @@ export const pageOf = (product, { currency, url, media, brand, breadcrumb, attri
 		kind: product.kind,
 		summary: product.summary,
 		description: product.description,
+		descriptionHtml: product.descriptionHtml ?? '',
 		price: product.price,
+		priceMax: summarize(product.variants, product.trackStock).priceMax,
 		compareAtPrice: compareAtOf(product),
 		currency,
 		inStock: product.inStock,
+		featured: product.featured === true,
 		url,
 		media,
+		video: context.video ?? null,
 		options: product.options,
 		variants,
 		specs: specsOf(product, attributes),
@@ -141,6 +216,8 @@ export const pageOf = (product, { currency, url, media, brand, breadcrumb, attri
 		tags: product.tags,
 		rating: product.rating ?? { average: 0, count: 0 },
 		booking: product.kind === 'booking' && product.booking ? { durationMinutes: product.booking.durationMinutes } : null,
+		sizeChart: context.sizeChart ?? null,
+		faqs: product.faqs ?? [],
 		seo: {
 			title: product.seo.title || product.name,
 			description: product.seo.description || product.summary,
@@ -170,17 +247,27 @@ export const staffRowOf = (product, { image }) => {
 		image,
 		categoryIds: product.categoryIds,
 		brandId: product.brandId,
+		featured: product.featured === true,
+		stockState: product.stockState ?? summarize(product.variants, product.trackStock).stockState,
+		grades: product.grades ?? [],
+		mediaCount: product.media.length,
 		updatedAt: product.updatedAt,
 	};
 };
 
 /**
- * The whole product for staff (read without the database's own fields), with its images' addresses.
+ * The whole product for staff (read without the database's own fields), with the addresses of its images, its
+ * variants' photos and its video file.
  * @param {ProductRecord} product
- * @param {{ media: Array<string | null> }} context
+ * @param {{ media: Array<string | null>, variantMedia?: ReadonlyMap<string, Array<string | null>>, video?: string | null }} context
  */
-export const staffProductOf = (product, { media }) => ({
+export const staffProductOf = (product, { media, variantMedia = new Map(), video = null }) => ({
 	...product,
 	...summarize(product.variants, product.trackStock),
 	media: product.media.map((item, index) => ({ ...item, url: media[index] ?? null })),
+	variants: product.variants.map((variant) => ({
+		...variant,
+		media: (variant.media ?? []).map((item, index) => ({ ...item, url: variantMedia.get(variant.id)?.[index] ?? null })),
+	})),
+	...(product.video ? { video: { ...product.video, url: video } } : {}),
 });

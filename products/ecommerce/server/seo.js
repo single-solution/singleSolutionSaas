@@ -1,14 +1,22 @@
 /**
- * Catalog SEO (meta and structured data, sitemaps), product feeds, llms.txt, the shop's policies and the lookups other
- * products call (Chat's shop tools, the customer orders of Accounts and Chat). Everything that must appear on the
- * merchant's domain is served by the merchant's site from these server-token routes (PLAN 0.4.10); the docs give the
- * snippets. Read-only; no personal data is kept, so there is nothing to export or delete.
+ * Catalog SEO (meta and structured data, sitemaps), product feeds, llms.txt and llms-full.txt, the shop's policies,
+ * landing and glossary pages (`./seo-landings.js`) and the lookups other products call (Chat's shop tools, the customer
+ * orders of Accounts and Chat). Everything that must appear on the merchant's domain is served by the merchant's site
+ * from these server-token routes (PLAN 0.4.10); the docs give the snippets. Only what shoppers may see is listed (PLAN
+ * 0.8.10 E1); every link follows the URL templates (E13); slugs answer `moved` for the site's 308 (E13). Product
+ * JSON-LD is a ProductGroup with its variants, conditions by grade, shipping and return policy, reviews and FAQs; the
+ * sitemap becomes an index of files above `sitemapSize` addresses, with images (E16). Read-only.
  * @module
  */
 import { defineRoute, problem } from '@ss/app-kit';
+import { findBySlugHistory } from '../adapters/catalog-store.js';
+import { htmlToText, siteAddress } from '../core/catalog-content.js';
 import { GOOGLE_FOOT, MAX_FEED_ROWS, META_HEADER, feedRows, googleHead, googleItem, metaLine } from '../core/feeds.js';
-import { buildLlmsTxt, MAX_LLMS_CATEGORIES, treeOrder } from '../core/llms.js';
-import { COLLECTIONS } from '../core/model.js';
+import { gradeCondition, gradesByKey } from '../core/grades.js';
+import { absolute } from '../core/links.js';
+import { buildLlmsFull, buildLlmsTxt, MAX_LLMS_CATEGORIES, treeOrder } from '../core/llms.js';
+import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
+import { fillPolicies } from '../core/policies.js';
 import {
 	SITEMAP_FOOT,
 	SITEMAP_HEAD,
@@ -16,45 +24,55 @@ import {
 	fillTitle,
 	metaDescription,
 	productJsonLd,
+	robotsOf,
 	scriptJson,
 	sitemapEntry,
+	sitemapFileUrl,
+	sitemapFiles,
 	sitemapIndex,
-	sitemapPageUrl,
-	sitemapSlice,
 } from '../core/seo.js';
 import { createMedia } from './catalog-media.js';
+import { hiddenFor, visible, visibleMatch } from './catalog-visibility.js';
 import { createChatLookup } from './chat-lookup.js';
+import { createLandings } from './seo-landings.js';
 import { SERVER_LIMITS, VISITOR_LIMITS } from './service.js';
-import {
-	activeProduct,
-	allCategories,
-	brandNames,
-	categoriesById,
-	categoryByRef,
-	lineage,
-	streamed,
-	trailOf,
-} from './seo-reads.js';
+import { allCategories, brandNames, lineage, streamed, trailOf } from './seo-reads.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
 /** @typedef {import('./service.js').Service} Service */
 /** @typedef {import('./service.js').Site} Site */
 /** @typedef {import('../core/model.js').ProductRecord} ProductRecord */
 /** @typedef {import('../core/model.js').CategoryRecord} CategoryRecord */
+/** @typedef {import('../core/model.js').VariantRecord} VariantRecord */
+/** @typedef {import('@ss/app-kit').WebsiteData} WebsiteData */
 
 /** The rate limits of these routes. @type {Array<{ limit: number, windowSeconds: number, per?: 'website' | 'visitor' }>} */
 const SERVER_RATE = [...SERVER_LIMITS];
 /** @type {Array<{ limit: number, windowSeconds: number, per?: 'website' | 'visitor' }>} */
 const VISITOR_RATE = [...VISITOR_LIMITS];
 
-/** At most this many images per product in structured data. */
+/** At most this many images per product in structured data and sitemaps. */
 const MAX_IMAGES = 10;
 /** Sitemap text is sent in pieces of about this many characters. */
 const CHUNK = 16_384;
 /** Products are read in batches of this size while writing sitemaps and feeds. */
 const BATCH = 200;
+/** Reviews shown as review nodes of a product. */
+const REVIEW_NODES = 5;
+/** Products in a category's ItemList. */
+const LIST_ITEMS = 20;
+/** Most products llms-full.txt reads. */
+const MAX_FULL_PRODUCTS = 50_000;
 /** The llms.txt section names (the llms.txt convention's structure, not shop wording). */
-const LLMS_HEADINGS = Object.freeze({ categories: 'Categories', products: 'Products', policies: 'Policies' });
+const LLMS_HEADINGS = Object.freeze({ categories: 'Categories', products: 'Products', policies: 'Policies', grades: 'Grades' });
+/** The llms.txt names of the policies (the convention's structure). */
+const POLICY_TITLES = Object.freeze({
+	shipping: 'Delivery',
+	returns: 'Returns',
+	privacy: 'Privacy',
+	terms: 'Terms',
+	warranty: 'Warranty',
+});
 
 /** What the feeds and sitemaps read of a product. */
 const LISTING_FIELDS = Object.freeze({
@@ -71,22 +89,22 @@ const LISTING_FIELDS = Object.freeze({
 	variants: 1,
 	trackStock: 1,
 	price: 1,
+	priceMax: 1,
 	inStock: 1,
 	updatedAt: 1,
 });
 
 /**
- * The shop's policy texts (`checkout` settings).
+ * The shop's policies, filled (E3): `{ format, policies }`.
  * @param {Site} s
  */
-const policiesOf = async (s) => {
-	const values = await s.values('checkout');
-	return {
-		shipping: String(values.policyShipping),
-		returns: String(values.policyReturns),
-		privacy: String(values.policyPrivacy),
-		terms: String(values.policyTerms),
-	};
+export const policiesOf = async (s) => {
+	const [checkout, returns, business] = await Promise.all([s.values('checkout'), s.values('returns'), s.business()]);
+	return fillPolicies(checkout, {
+		returnDays: Number(returns.returnDays ?? 0),
+		warrantyDays: Number(returns.warrantyDays ?? 0),
+		business: business.name,
+	});
 };
 
 /**
@@ -96,33 +114,119 @@ const policiesOf = async (s) => {
  */
 export const createSeo = (product, service) => {
 	const media = createMedia(product);
+	const landings = createLandings(product, service, media);
 
 	/**
-	 * A page number from `?page=` (1 when absent), or 404 past the last page.
-	 * @param {unknown} value
+	 * The condition of a variant for structured data and feeds (E10).
+	 * @param {Site} s @param {'used' | 'refurbished' | 'new'} graded
 	 */
-	const pageOf = (value) => {
-		if (value === undefined || value === null || value === '') return 1;
-		const n = typeof value === 'string' && /^\d{1,6}$/.test(value) ? Number(value) : 0;
-		if (n < 1) throw problem('bad_request', 'page must be a whole number from 1.');
-		return n;
+	const conditionsOf = async (s, graded) => {
+		const grades = s.has('grades_serials') ? gradesByKey(await s.list('grades')) : new Map();
+		return {
+			grades,
+			/** @param {Pick<ProductRecord, 'kind'>} item @param {VariantRecord} variant */
+			of: (item, variant) => gradeCondition(item, variant, grades, graded),
+		};
 	};
 
-	/** @param {any} ctx */
+	/**
+	 * The delivery fee where no zone matches, for structured data and feeds (E16, E17); null without delivery zones.
+	 * @param {Site} s
+	 */
+	const shippingOf = async (s) => {
+		if (!s.has('delivery_zones')) return null;
+		const [{ defaultFee }, business] = await Promise.all([s.values('delivery_zones'), s.business()]);
+		return { fee: Number(defaultFee ?? 0), country: String(business.country ?? '') };
+	};
+
+	/**
+	 * The addresses of a product's photos (at most {@link MAX_IMAGES}).
+	 * @param {Site} s @param {ProductRecord} item
+	 */
+	const imagesOf = async (s, item) => {
+		/** @type {string[]} */
+		const out = [];
+		for (const file of item.media.slice(0, MAX_IMAGES)) {
+			const address = await media.mediaUrl(s, file.key);
+			if (address) out.push(address);
+		}
+		return out;
+	};
+
+	/**
+	 * An active product shoppers may see by id, slug or an earlier slug; a `moved` answer, or 404 (E1, E13).
+	 * @param {Site} s @param {WebsiteData} data @param {unknown} ref
+	 * @returns {Promise<{ item: ProductRecord } | { moved: { slug: string, url: string } }>}
+	 */
+	const productOf = async (s, data, ref) => {
+		const found = typeof ref === 'string' ? await findBySlugHistory(data, COLLECTIONS.products, ref, ID_PREFIX.product) : null;
+		const item = /** @type {ProductRecord | undefined} */ (found?.record);
+		if (!found || !item) throw problem('not_found', 'There is no such product.');
+		const hidden = await hiddenFor(s);
+		if (item.status !== 'active') {
+			const { retiredUrl } = await s.values('catalog');
+			const [category] = /** @type {CategoryRecord[]} */ (
+				await data
+					.collection(COLLECTIONS.categories)
+					.find({ websiteId: data.websiteId, id: item.categoryIds[0] ?? '' }, { projection: { _id: 0 } })
+					.toArray()
+			);
+			if (item.status === 'archived' && retiredUrl === 'category' && category && !hidden.unlisted.has(category.id))
+				return { moved: { slug: category.slug, url: await media.categoryUrl(s, category) } };
+			throw problem('not_found', 'There is no such product.');
+		}
+		if (!visible(item, hidden)) throw problem('not_found', 'There is no such product.');
+		if (found.moved) return { moved: { slug: item.slug, url: await media.productUrl(s, item) } };
+		return { item };
+	};
+
+	/** GET /v1/seo/products/:ref. @param {any} ctx */
 	const productSeo = async (ctx) => {
 		const s = await service.site(ctx);
 		const data = await s.data();
-		const item = await activeProduct(data, ctx.params.ref);
-		const [settings, business] = await Promise.all([s.values('seo'), s.business()]);
+		const found = await productOf(s, data, ctx.params.ref);
+		if ('moved' in found) return found;
+		const { item } = found;
+		const [settings, business, attributes] = await Promise.all([
+			s.values('seo'),
+			s.business(),
+			data
+				.collection(COLLECTIONS.attributes)
+				.find({ websiteId: data.websiteId }, { projection: { _id: 0, id: 1, slug: 1 } })
+				.toArray(),
+		]);
 		const url = await media.productUrl(s, item);
-		const images = [];
-		for (const file of item.media.slice(0, MAX_IMAGES)) {
-			const address = await media.mediaUrl(s, file.key);
-			if (address) images.push(address);
-		}
-		const [primary] = await categoriesById(data, item.categoryIds.slice(0, 1));
+		const images = await imagesOf(s, item);
+		const [primary] = /** @type {CategoryRecord[]} */ (
+			await data
+				.collection(COLLECTIONS.categories)
+				.find({ websiteId: data.websiteId, id: item.categoryIds[0] ?? '' }, { projection: { _id: 0 } })
+				.toArray()
+		);
 		const brand = item.brandId ? ((await brandNames(data, [item.brandId])).get(item.brandId) ?? null) : null;
-		const description = metaDescription(item.seo?.description, item.summary, item.description);
+		const description = metaDescription(item.seo?.description, item.summary, item.description, settings.defaultDescription);
+		const conditions = await conditionsOf(s, settings.gradedCondition);
+		const bySlug = new Map(attributes.map((row) => [String(row.id), { slug: row.slug ? String(row.slug) : undefined }]));
+		/** @type {Map<string, string>} */
+		const variantUrls = new Map();
+		/** @type {Map<string, string | null>} */
+		const variantImages = new Map();
+		for (const variant of item.variants.filter((v) => v.active)) {
+			variantUrls.set(variant.id, await media.variantUrl(s, item, variant, bySlug));
+			variantImages.set(variant.id, variant.media?.[0] ? await media.mediaUrl(s, variant.media[0].key) : null);
+		}
+		const returns = s.has('returns') ? Number((await s.values('returns')).returnDays ?? 0) : null;
+		const reviews = s.has('reviews')
+			? await data
+					.collection(COLLECTIONS.reviews)
+					.find(
+						{ websiteId: data.websiteId, productId: item.id, status: 'approved' },
+						{ projection: { _id: 0, name: 1, rating: 1, title: 1, body: 1, createdAt: 1 } },
+					)
+					.sort({ createdAt: -1, id: -1 })
+					.limit(REVIEW_NODES)
+					.toArray()
+			: [];
 		const jsonLd = productJsonLd({
 			product: item,
 			url,
@@ -130,116 +234,255 @@ export const createSeo = (product, service) => {
 			description,
 			brand,
 			currency: s.currency,
-			graded: settings.gradedCondition,
+			condition: (variant) => conditions.of(item, variant),
 			seller: business.name,
 			trail: await trailOf(s, data, media, primary ?? null, true, business.name),
+			variantUrl: (variant) => variantUrls.get(variant.id) ?? url,
+			variantImage: (variant) => variantImages.get(variant.id) ?? null,
+			shipping: await shippingOf(s),
+			returns: returns === null ? null : { days: returns, country: String(business.country ?? '') },
+			reviews: reviews.map((row) => ({
+				name: String(row.name ?? ''),
+				rating: Number(row.rating),
+				title: String(row.title ?? ''),
+				body: String(row.body ?? ''),
+				at: row.createdAt ?? null,
+			})),
 		});
+		const ogImage = siteAddress(item.seo?.ogImage ?? '');
 		return {
 			title: fillTitle(String(settings.titleTemplate), { name: item.seo?.title || item.name, business: business.name }),
 			description,
-			canonical: url,
-			image: images[0] ?? null,
+			canonical: item.seo?.canonicalUrl ? absolute(item.seo.canonicalUrl, s.domain) : url,
+			image: ogImage ? absolute(ogImage, s.domain) : (images[0] ?? (siteAddress(settings.defaultImage) || null)),
+			robots: robotsOf(item.seo),
+			focusKeyword: item.seo?.focusKeyword ?? '',
 			jsonLd: scriptJson(jsonLd),
 		};
 	};
 
-	/** @param {any} ctx */
+	/** GET /v1/seo/categories/:ref. @param {any} ctx */
 	const categorySeo = async (ctx) => {
 		const s = await service.site(ctx);
 		const data = await s.data();
-		const category = await categoryByRef(data, ctx.params.ref);
-		const [settings, business] = await Promise.all([s.values('seo'), s.business()]);
+		const found =
+			typeof ctx.params.ref === 'string'
+				? await findBySlugHistory(data, COLLECTIONS.categories, ctx.params.ref, ID_PREFIX.category)
+				: null;
+		const category = /** @type {CategoryRecord | undefined} */ (found?.record);
+		const hidden = await hiddenFor(s);
+		if (!found || !category || hidden.unlisted.has(category.id)) throw problem('not_found', 'There is no such category.');
+		if (found.moved) return { moved: { slug: category.slug, url: await media.categoryUrl(s, category) } };
+		const [settings, business, categories] = await Promise.all([s.values('seo'), s.business(), allCategories(data)]);
 		const url = await media.categoryUrl(s, category);
 		const image = category.image ? await media.mediaUrl(s, category.image.key) : null;
-		const description = metaDescription(category.seo?.description, category.description, category.name);
+		const description = metaDescription(
+			category.seo?.description,
+			category.content?.summary,
+			category.description,
+			settings.defaultDescription,
+			category.name,
+		);
+		const below = categories.filter((c) => c.id === category.id || c.path.includes(category.id)).map((c) => c.id);
+		const comingSoon = hidden.categoryIds.includes(category.id);
+		const items = comingSoon
+			? []
+			: await data
+					.collection(COLLECTIONS.products)
+					.find(
+						{ websiteId: data.websiteId, status: 'active', categoryIds: { $in: below }, ...visibleMatch(hidden) },
+						{ projection: { _id: 0, id: 1, slug: 1, name: 1, categoryIds: 1, brandId: 1 } },
+					)
+					.sort({ publishedAt: -1, id: -1 })
+					.limit(LIST_ITEMS)
+					.toArray();
+		const canonical = category.seo?.canonicalUrl ? absolute(category.seo.canonicalUrl, s.domain) : url;
 		const jsonLd = categoryJsonLd({
 			name: category.name,
 			description,
 			url,
 			image,
 			trail: await trailOf(s, data, media, category, false, business.name),
+			items: await Promise.all(
+				items.map(async (row) => ({ name: String(row.name), url: await media.productUrl(s, /** @type {any} */ (row)) })),
+			),
+			faqs: category.faqs ?? [],
 		});
+		const ogImage = siteAddress(category.seo?.ogImage ?? '');
 		return {
 			title: fillTitle(String(settings.titleTemplate), {
 				name: category.seo?.title || category.name,
 				business: business.name,
 			}),
 			description,
-			canonical: url,
-			image,
+			canonical,
+			image: ogImage ? absolute(ogImage, s.domain) : (image ?? (siteAddress(settings.defaultImage) || null)),
+			robots: comingSoon ? 'noindex, follow' : robotsOf(category.seo),
+			status: comingSoon ? 'coming_soon' : 'active',
 			jsonLd: scriptJson(jsonLd),
 		};
 	};
 
-	/** @param {any} ctx */
+	/**
+	 * What a sitemap lists, for one website and request (E1, E16): categories shoppers see, indexable landing and
+	 * glossary pages, and active, visible products, leaving out pages marked noindex.
+	 * @param {Site} s
+	 */
+	const sitemapParts = async (s) => {
+		const data = await s.data();
+		const hidden = await hiddenFor(s);
+		const categoryFilter = {
+			websiteId: data.websiteId,
+			...(hidden.categoryIds.length > 0 ? { id: { $nin: hidden.categoryIds } } : {}),
+			'seo.noindex': { $ne: true },
+		};
+		const productFilter = {
+			websiteId: data.websiteId,
+			status: 'active',
+			...visibleMatch(hidden),
+			'seo.noindex': { $ne: true },
+		};
+		const [categories, products, pages, { sitemapSize, sitemapUrl }] = await Promise.all([
+			data.collection(COLLECTIONS.categories).countDocuments(categoryFilter),
+			data.collection(COLLECTIONS.products).countDocuments(productFilter),
+			landings.sitemapPages(s, data),
+			s.values('seo'),
+		]);
+		return {
+			data,
+			categoryFilter,
+			productFilter,
+			counts: { categories, landings: pages.length, products },
+			pages,
+			size: Math.max(1000, Math.min(50_000, Number(sitemapSize) || 10_000)),
+			sitemapUrl: String(sitemapUrl),
+		};
+	};
+
+	/**
+	 * The addresses of one part of a sitemap.
+	 * @param {Site} s
+	 * @param {Awaited<ReturnType<typeof sitemapParts>>} parts
+	 * @param {'categories' | 'landings' | 'products'} part
+	 * @param {{ skip: number, limit: number }} [range] products only
+	 */
+	async function* entriesOf(s, parts, part, range = { skip: 0, limit: 0 }) {
+		const { data } = parts;
+		if (part === 'landings') {
+			yield parts.pages.map((page) => sitemapEntry(page)).join('');
+			return;
+		}
+		const rows =
+			part === 'categories'
+				? data
+						.collection(COLLECTIONS.categories)
+						.find(parts.categoryFilter, { projection: { _id: 0, id: 1, slug: 1, updatedAt: 1 } })
+						.sort({ id: 1 })
+						.batchSize(BATCH * 5)
+				: data
+						.collection(COLLECTIONS.products)
+						.find(parts.productFilter, {
+							projection: {
+								_id: 0,
+								id: 1,
+								slug: 1,
+								categoryIds: 1,
+								brandId: 1,
+								updatedAt: 1,
+								media: { $slice: MAX_IMAGES },
+							},
+						})
+						.sort({ id: 1 })
+						.skip(range.skip)
+						.limit(range.limit)
+						.batchSize(BATCH * 5);
+		let chunk = '';
+		for await (const row of rows) {
+			const record = /** @type {any} */ (row);
+			if (part === 'categories') chunk += sitemapEntry({ loc: await media.categoryUrl(s, record), lastmod: record.updatedAt });
+			else {
+				/** @type {string[]} */
+				const images = [];
+				for (const file of record.media ?? []) {
+					const address = await media.mediaUrl(s, file.key);
+					if (address) images.push(address);
+				}
+				chunk += sitemapEntry({ loc: await media.productUrl(s, record), lastmod: record.updatedAt, images });
+			}
+			if (chunk.length > CHUNK) {
+				yield chunk;
+				chunk = '';
+			}
+		}
+		if (chunk) yield chunk;
+	}
+
+	/**
+	 * GET /v1/seo/sitemap.xml: one sitemap, or an index of files above `sitemapSize` addresses (E16).
+	 * @param {any} ctx
+	 */
 	const sitemap = async (ctx) => {
 		const s = await service.site(ctx);
-		const data = await s.data();
-		const asked = ctx.query.page;
-		const page = pageOf(asked);
-		const filter = { websiteId: data.websiteId, status: 'active' };
-		const [categories, products] = await Promise.all([
-			data.collection(COLLECTIONS.categories).countDocuments({ websiteId: data.websiteId }),
-			data.collection(COLLECTIONS.products).countDocuments(filter),
-		]);
-		const slice = sitemapSlice({ categories, products, page });
-		if (page > slice.pages) throw problem('not_found', 'There is no such sitemap page.');
-		if (slice.pages > 1 && (asked === undefined || asked === '')) {
-			const { sitemapUrl } = await s.values('seo');
-			const locs = Array.from({ length: slice.pages }, (_, index) => sitemapPageUrl(String(sitemapUrl), s.domain, index + 1));
-			return new Response(sitemapIndex(locs), { headers: { 'content-type': 'application/xml; charset=utf-8' } });
+		const parts = await sitemapParts(s);
+		const total = parts.counts.categories + parts.counts.landings + parts.counts.products;
+		if (total > parts.size) {
+			const files = sitemapFiles({ ...parts.counts, size: parts.size });
+			return new Response(sitemapIndex(files.map((file) => sitemapFileUrl(parts.sitemapUrl, s.domain, file))), {
+				headers: { 'content-type': 'application/xml; charset=utf-8' },
+			});
 		}
 		async function* pieces() {
 			yield SITEMAP_HEAD;
-			if (slice.categories.limit > 0) {
-				const rows = data
-					.collection(COLLECTIONS.categories)
-					.find({ websiteId: data.websiteId }, { projection: { _id: 0, id: 1, slug: 1, updatedAt: 1 } })
-					.sort({ id: 1 })
-					.skip(slice.categories.skip)
-					.limit(slice.categories.limit)
-					.batchSize(BATCH * 5);
-				let chunk = '';
-				for await (const row of rows) {
-					chunk += sitemapEntry({ loc: await media.categoryUrl(s, /** @type {any} */ (row)), lastmod: row.updatedAt });
-					if (chunk.length > CHUNK) {
-						yield chunk;
-						chunk = '';
-					}
-				}
-				if (chunk) yield chunk;
-			}
-			if (slice.products.limit > 0) {
-				const rows = data
-					.collection(COLLECTIONS.products)
-					.find(filter, { projection: { _id: 0, id: 1, slug: 1, updatedAt: 1 } })
-					.sort({ id: 1 })
-					.skip(slice.products.skip)
-					.limit(slice.products.limit)
-					.batchSize(BATCH * 5);
-				let chunk = '';
-				for await (const row of rows) {
-					chunk += sitemapEntry({ loc: await media.productUrl(s, /** @type {any} */ (row)), lastmod: row.updatedAt });
-					if (chunk.length > CHUNK) {
-						yield chunk;
-						chunk = '';
-					}
-				}
-				if (chunk) yield chunk;
-			}
+			yield* entriesOf(s, parts, 'categories');
+			yield* entriesOf(s, parts, 'landings');
+			yield* entriesOf(s, parts, 'products', { skip: 0, limit: parts.counts.products });
 			yield SITEMAP_FOOT;
 		}
 		return streamed(pieces(), 'application/xml; charset=utf-8');
 	};
 
 	/**
-	 * The feed rows of every active product, in batches.
+	 * GET /v1/seo/sitemaps/:file: one file of a sitemap index (`categories`, `landings`, `products-<n>`).
+	 * @param {any} ctx
+	 */
+	const sitemapFile = async (ctx) => {
+		const s = await service.site(ctx);
+		const file = String(ctx.params.file).replace(/\.xml$/, '');
+		const parts = await sitemapParts(s);
+		const files = sitemapFiles({ ...parts.counts, size: parts.size });
+		if (!files.includes(file)) throw problem('not_found', 'There is no such sitemap file.');
+		const number = /^products-(\d+)$/.exec(file);
+		async function* pieces() {
+			yield SITEMAP_HEAD;
+			if (number) yield* entriesOf(s, parts, 'products', { skip: (Number(number[1]) - 1) * parts.size, limit: parts.size });
+			else yield* entriesOf(s, parts, /** @type {'categories' | 'landings'} */ (file));
+			yield SITEMAP_FOOT;
+		}
+		return streamed(pieces(), 'application/xml; charset=utf-8');
+	};
+
+	/**
+	 * The feed rows of every active product shoppers may see, in batches (E17).
 	 * @param {Site} s
 	 */
 	const feedBatches = async function* (s) {
 		const data = await s.data();
-		const [settings, categories, brands] = await Promise.all([s.values('feeds'), allCategories(data), brandNames(data)]);
+		const [settings, categories, brands, hidden, seo, format, attributes] = await Promise.all([
+			s.values('feeds'),
+			allCategories(data),
+			brandNames(data),
+			hiddenFor(s),
+			s.has('seo') ? s.values('seo') : Promise.resolve({}),
+			s.format(),
+			data
+				.collection(COLLECTIONS.attributes)
+				.find({ websiteId: data.websiteId }, { projection: { _id: 0, id: 1, slug: 1 } })
+				.toArray(),
+		]);
 		const byId = new Map(categories.map((category) => [category.id, category]));
+		const conditions = await conditionsOf(s, settings.gradedCondition ?? /** @type {any} */ (seo).gradedCondition ?? 'used');
+		const shipping = await shippingOf(s);
+		const bySlug = new Map(attributes.map((row) => [String(row.id), { slug: row.slug ? String(row.slug) : undefined }]));
 		const withImages = settings.items !== 'all';
 		const rows = data
 			.collection(COLLECTIONS.products)
@@ -247,6 +490,7 @@ export const createSeo = (product, service) => {
 				{
 					websiteId: data.websiteId,
 					status: 'active',
+					...visibleMatch(hidden),
 					...(withImages ? { 'media.0': { $exists: true } } : {}),
 					...(settings.includeOutOfStock === false ? { inStock: true } : {}),
 				},
@@ -261,6 +505,13 @@ export const createSeo = (product, service) => {
 			const item = /** @type {ProductRecord} */ (/** @type {unknown} */ (row));
 			const primary = byId.get(item.categoryIds[0] ?? '');
 			const image = (await media.mediaUrl(s, item.media[0]?.key)) ?? '';
+			/** @type {Map<string, { link: string, image: string }>} */
+			const perVariant = new Map();
+			for (const variant of item.variants.filter((v) => v.active))
+				perVariant.set(variant.id, {
+					link: await media.variantUrl(s, item, variant, bySlug),
+					image: variant.media?.[0] ? ((await media.mediaUrl(s, variant.media[0].key)) ?? '') : '',
+				});
 			const made = feedRows(item, {
 				link: await media.productUrl(s, item),
 				image,
@@ -271,9 +522,17 @@ export const createSeo = (product, service) => {
 							.join(' > ')
 					: '',
 				currency: s.currency,
-				graded: settings.gradedCondition,
+				condition: (variant) => conditions.of(item, variant),
 				skuAs: settings.skuAs,
 				includeOutOfStock: settings.includeOutOfStock !== false,
+				itemId: settings.itemId === 'legacy' ? 'legacy' : 'variant',
+				googleCategory: String(settings.googleCategory ?? ''),
+				gradeLabel: (variant) =>
+					settings.gradeLabel === true && variant.grade ? (conditions.grades.get(variant.grade)?.label ?? '') : '',
+				shipping,
+				wholeUnits: format.format.wholeUnits === true,
+				variantLink: (variant) => perVariant.get(variant.id)?.link ?? '',
+				variantImage: (variant) => perVariant.get(variant.id)?.image ?? '',
 			}).slice(0, MAX_FEED_ROWS - count);
 			count += made.length;
 			batch.push(...made);
@@ -308,15 +567,24 @@ export const createSeo = (product, service) => {
 		return streamed(pieces(), 'text/csv; charset=utf-8');
 	};
 
+	/**
+	 * The categories shoppers see, in tree order.
+	 * @param {Site} s @param {WebsiteData} data
+	 */
+	const shownCategories = async (s, data) => {
+		const hidden = await hiddenFor(s);
+		return treeOrder((await allCategories(data)).filter((category) => !hidden.categoryIds.includes(category.id)));
+	};
+
 	/** @param {any} ctx */
 	const llmsTxt = async (ctx) => {
 		const s = await service.site(ctx);
 		const data = await s.data();
-		const [settings, business, categories, { money }] = await Promise.all([
+		const [settings, business, { money }, hidden] = await Promise.all([
 			s.values('llms_txt'),
 			s.business(),
-			allCategories(data),
 			s.format(),
+			hiddenFor(s),
 		]);
 		const count = Math.max(0, Math.min(200, Number(settings.products)));
 		const top =
@@ -326,14 +594,14 @@ export const createSeo = (product, service) => {
 						await data
 							.collection(COLLECTIONS.products)
 							.find(
-								{ websiteId: data.websiteId, status: 'active' },
-								{ projection: { _id: 0, id: 1, slug: 1, name: 1, summary: 1, price: 1 } },
+								{ websiteId: data.websiteId, status: 'active', ...visibleMatch(hidden) },
+								{ projection: { _id: 0, id: 1, slug: 1, name: 1, summary: 1, price: 1, categoryIds: 1, brandId: 1 } },
 							)
 							.sort({ sold: -1, publishedAt: -1, id: 1 })
 							.limit(count)
 							.toArray()
 					);
-		const ordered = treeOrder(categories).slice(0, MAX_LLMS_CATEGORIES);
+		const ordered = (await shownCategories(s, data)).slice(0, MAX_LLMS_CATEGORIES);
 		const policies = settings.policies === false ? null : await policiesOf(s);
 		const text = buildLlmsTxt({
 			name: business.name,
@@ -356,20 +624,87 @@ export const createSeo = (product, service) => {
 				})),
 			),
 			policies: policies
-				? [
-						{ title: 'Delivery', text: policies.shipping },
-						{ title: 'Returns', text: policies.returns },
-						{ title: 'Privacy', text: policies.privacy },
-						{ title: 'Terms', text: policies.terms },
-					]
+				? Object.entries(policies.policies).map(([key, value]) => ({
+						title: POLICY_TITLES[/** @type {keyof typeof POLICY_TITLES} */ (key)],
+						text: policies.format === 'html' ? htmlToText(String(value)) : String(value),
+					}))
 				: [],
 			headings: LLMS_HEADINGS,
 		});
 		return new Response(text, { headers: { 'content-type': 'text/plain; charset=utf-8' } });
 	};
 
-	/** @param {any} ctx */
-	const policies = async (ctx) => policiesOf(await service.site(ctx));
+	/**
+	 * GET /v1/llms-full.txt (E16): every product in stock with its price range, by category with its grades; served
+	 * while the `llms_txt` setting `full` is on.
+	 * @param {any} ctx
+	 */
+	const llmsFull = async (ctx) => {
+		const s = await service.site(ctx);
+		const settings = await s.values('llms_txt');
+		if (settings.full !== true) throw problem('not_found', 'Switch on the full list in the llms.txt settings first.');
+		const data = await s.data();
+		const [business, { money }, hidden, ordered] = await Promise.all([
+			s.business(),
+			s.format(),
+			hiddenFor(s),
+			shownCategories(s, data),
+		]);
+		const grades = s.has('grades_serials') ? [...gradesByKey(await s.list('grades')).values()] : [];
+		/** @type {Map<string, Array<{ name: string, url: string, price: string }>>} */
+		const byCategory = new Map();
+		const rows = data
+			.collection(COLLECTIONS.products)
+			.find(
+				{ websiteId: data.websiteId, status: 'active', inStock: true, ...visibleMatch(hidden) },
+				{ projection: { _id: 0, id: 1, slug: 1, name: 1, price: 1, priceMax: 1, categoryIds: 1, brandId: 1 } },
+			)
+			.sort({ name: 1, id: 1 })
+			.limit(MAX_FULL_PRODUCTS)
+			.batchSize(BATCH * 5);
+		for await (const row of rows) {
+			const item = /** @type {ProductRecord} */ (/** @type {unknown} */ (row));
+			const low = money(item.price, s.currency);
+			const high = item.priceMax !== undefined && item.priceMax > item.price ? money(item.priceMax, s.currency) : '';
+			const key = item.categoryIds[0] ?? '';
+			byCategory.set(key, [
+				...(byCategory.get(key) ?? []),
+				{ name: item.name, url: await media.productUrl(s, item), price: high ? `${low} – ${high}` : low },
+			]);
+		}
+		const sections = await Promise.all(
+			ordered.map(async (category) => ({
+				name: category.name,
+				url: await media.categoryUrl(s, category),
+				grades: grades
+					.filter(
+						(grade) =>
+							grade.active !== false &&
+							((grade.categoryIds ?? []).length === 0 ||
+								(grade.categoryIds ?? []).some((id) => id === category.id || category.path.includes(id))),
+					)
+					.map((grade) => grade.label),
+				products: byCategory.get(category.id) ?? [],
+			})),
+		);
+		const loose = [...byCategory.entries()]
+			.filter(([id]) => !ordered.some((category) => category.id === id))
+			.flatMap(([, list]) => list);
+		const text = buildLlmsFull({
+			name: business.name,
+			description: String(settings.description),
+			home: `https://${s.domain}/`,
+			sections: [...sections, { name: LLMS_HEADINGS.products, url: null, grades: [], products: loose }],
+			headings: { grades: LLMS_HEADINGS.grades },
+		});
+		return new Response(text, { headers: { 'content-type': 'text/plain; charset=utf-8' } });
+	};
+
+	/** GET /v1/policies and /v1/shop/policies: `{ format, <policy>… }`, empty ones left out (E3). @param {any} ctx */
+	const policies = async (ctx) => {
+		const { format, policies: filled } = await policiesOf(await service.site(ctx));
+		return { format, ...filled };
+	};
 
 	const lookup = createChatLookup(product, service, media);
 
@@ -401,6 +736,14 @@ export const createSeo = (product, service) => {
 			}),
 			defineRoute({
 				method: 'GET',
+				path: '/v1/seo/sitemaps/:file',
+				auth: 'server',
+				feature: 'seo',
+				rateLimit: SERVER_RATE,
+				handler: sitemapFile,
+			}),
+			defineRoute({
+				method: 'GET',
 				path: '/v1/feeds/products.xml',
 				auth: 'server',
 				feature: 'feeds',
@@ -425,6 +768,14 @@ export const createSeo = (product, service) => {
 			}),
 			defineRoute({
 				method: 'GET',
+				path: '/v1/llms-full.txt',
+				auth: 'server',
+				feature: 'llms_txt',
+				rateLimit: SERVER_RATE,
+				handler: llmsFull,
+			}),
+			defineRoute({
+				method: 'GET',
 				path: '/v1/shop/policies',
 				auth: 'browser',
 				feature: 'checkout',
@@ -439,6 +790,7 @@ export const createSeo = (product, service) => {
 				rateLimit: SERVER_RATE,
 				handler: policies,
 			}),
+			...landings.routes,
 			...lookup.routes,
 		],
 	};

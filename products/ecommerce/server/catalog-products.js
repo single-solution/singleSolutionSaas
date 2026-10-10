@@ -1,10 +1,13 @@
 /**
- * Products for the merchant's staff (PLAN 0.8.8 Catalog): list with search and filters, create, read, change, delete,
- * and stock (set or adjust per variant, per location with multi-location stock). Each route exists for the merchant's
- * server (`/v1/products…`, server token) and for the catalog admin widget (`/v1/admin/products…`, ticket with
- * `catalog.edit`), sharing one handler. The list has counts with the same filters (`count`, and `counts` by `status`
- * and `brand`; PLAN 0.8.10 K4). Every write is in the activity log (with the product's name) and tells the other parts
- * (alerts) what changed.
+ * Products for the merchant's staff (PLAN 0.8.8 Catalog; PLAN 0.8.10 E2–E13): list with search and filters (status,
+ * kind, category, several brands and grades, featured, stock state, photos, low stock), create, read, change, delete,
+ * stock (set or adjust per variant, per location with multi-location stock, and sold out), and the variant generator
+ * (every missing combination of a product's set-up attribute values, for one product or many). Each route exists for
+ * the merchant's server (`/v1/products…`, server token) and for the catalog admin widget (`/v1/admin/products…`,
+ * ticket with `catalog.edit`), sharing one handler. The list has counts with the same filters (`count`, and `counts`
+ * by `status`, `brand`, `stockState`, `featured` and `grade`; PLAN 0.8.10 K4). A changed slug keeps the old one (E13).
+ * Every write is in the activity log (with the product's name), tells the other parts (alerts) what changed, and sends
+ * the page to IndexNow when the website asks (E16).
  * @module
  */
 import { createId } from '@ss/contracts';
@@ -20,12 +23,14 @@ import {
 	skusTaken,
 	slugTaken,
 } from '../adapters/catalog-store.js';
-import { checkProduct, checkStockChanges, changedStock, summarize } from '../core/catalog.js';
-import { afterFilter, cursorKey, staffFilter } from '../core/catalog-query.js';
+import { LIMITS, checkProduct, checkStockChanges, changedStock, missingVariants, summarize } from '../core/catalog.js';
+import { VIDEO_TYPES } from '../core/catalog-content.js';
+import { afterFilter, cursorKey, listOf, staffFilter } from '../core/catalog-query.js';
+import { nextPreviousSlugs } from '../core/links.js';
 import { withDescendants } from '../core/catalog-taxonomy.js';
 import { staffProductOf, staffRowOf } from '../core/catalog-views.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
-import { bodyOf, refuse, STAFF_LIMITS } from './catalog-common.js';
+import { IMAGE_TYPES, bodyOf, refuse, STAFF_LIMITS } from './catalog-common.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
 /** @typedef {import('./service.js').Service} Service */
@@ -37,6 +42,8 @@ import { bodyOf, refuse, STAFF_LIMITS } from './catalog-common.js';
 
 /** The staff list's order. */
 const STAFF_SORT = /** @type {const} */ ({ field: 'createdAt', dir: -1 });
+/** Most products of one bulk generation (E7). */
+const MAX_GENERATE = 100;
 
 /**
  * What a stock change did, for the activity log: `<SKU or option values>: <before> → <after>` per changed variant.
@@ -54,6 +61,22 @@ const stockDetail = (before, after) =>
 		.join(', ');
 
 /**
+ * Which variants were marked sold out or for sale again, for the activity log.
+ * @param {VariantRecord[]} before
+ * @param {VariantRecord[]} after
+ */
+const soldOutDetail = (before, after) =>
+	after
+		.flatMap((variant) => {
+			const was = before.find((v) => v.id === variant.id)?.soldOut === true;
+			const now = variant.soldOut === true;
+			if (was === now) return [];
+			const name = variant.sku || Object.values(variant.options).join(' / ') || variant.id;
+			return [`${name}: ${now ? 'sold out' : 'for sale'}`];
+		})
+		.join(', ');
+
+/**
  * @param {Product} product
  * @param {Service} service
  * @param {CatalogCommon} common
@@ -62,7 +85,58 @@ export const createCatalogProducts = (product, service, common) => {
 	const { now } = product;
 
 	/** @param {Site} s @param {ProductRecord} item */
-	const staffView = async (s, item) => staffProductOf(item, { media: await common.mediaUrls(s, item) });
+	const staffView = async (s, item) =>
+		staffProductOf(item, {
+			media: await common.mediaUrls(s, item),
+			variantMedia: await common.variantMediaUrls(s, item),
+			video: item.video?.kind === 'file' ? await common.media.mediaUrl(s, item.video.key) : null,
+		});
+
+	/**
+	 * Fill in the type and size of files the change names that the product did not have yet (its video, variant
+	 * photos), checked in the bucket first (E4, E6).
+	 * @param {Site} s @param {ProductRecord | null} before @param {import('../core/catalog.js').ProductFields} fields
+	 */
+	const checkFiles = async (s, before, fields) => {
+		const known = new Set([
+			...(before?.media ?? []).map((file) => file.key),
+			...(before?.variants ?? []).flatMap((variant) => (variant.media ?? []).map((file) => file.key)),
+		]);
+		const photos = [...new Set(fields.variants.flatMap((v) => (v.media ?? []).map((file) => file.key)))].filter(
+			(key) => !known.has(key),
+		);
+		const { imageMaxBytes, videoMaxBytes } = await s.values('catalog');
+		const facts = await common.fileFacts(s, photos, {
+			types: Object.keys(IMAGE_TYPES),
+			maxBytes: Number(imageMaxBytes),
+			path: '/variants',
+			what: 'A variant photo',
+		});
+		const productFacts = new Map((before?.media ?? []).map((file) => [file.key, { type: file.type, size: file.size }]));
+		const variants = fields.variants.map((variant) => ({
+			...variant,
+			media: (variant.media ?? []).map((file) => ({ ...file, ...(facts.get(file.key) ?? productFacts.get(file.key) ?? {}) })),
+		}));
+		let video = fields.video;
+		if (video?.kind === 'file' && !video.type) {
+			const found = await common.fileFacts(s, [video.key], {
+				types: Object.keys(VIDEO_TYPES),
+				maxBytes: Number(videoMaxBytes),
+				path: '/video/key',
+				what: 'The video',
+			});
+			video = { ...video, .../** @type {{ type: string, size: number }} */ (found.get(video.key)) };
+		}
+		return { ...fields, variants, video };
+	};
+
+	/**
+	 * Send an active product's page to IndexNow (E16).
+	 * @param {Site} s @param {ProductRecord} item
+	 */
+	const announce = async (s, item) => {
+		if (item.status === 'active') await common.indexNow(s, [await common.media.productUrl(s, item)]);
+	};
 
 	/**
 	 * The product of a route's `:id` (an id or a slug), or 404.
@@ -102,21 +176,55 @@ export const createCatalogProducts = (product, service, common) => {
 			const found = categories.find((c) => c.id === ctx.query.category || c.slug === ctx.query.category);
 			categoryIds = found ? withDescendants(found.id, categories) : [];
 		}
-		/** @type {string | null} */
-		let brandId = null;
-		if (ctx.query.brand)
-			brandId = (await brandsOf(data)).find((b) => b.id === ctx.query.brand || b.slug === ctx.query.brand)?.id ?? '';
+		/** @type {string[] | null} several brands: any of them (E2) */
+		let brandIds = null;
+		const wanted = listOf(ctx.query.brand);
+		if (wanted.length > 0)
+			brandIds = (await brandsOf(data)).filter((b) => wanted.includes(b.id) || wanted.includes(b.slug)).map((b) => b.id);
 		const { lowStock } = await s.values('catalog');
-		return { s, data, inner: staffFilter(ctx.query, { categoryIds, brandId, lowStock: Number(lowStock) }) };
+		return { s, data, inner: staffFilter(ctx.query, { categoryIds, brandIds, lowStock: Number(lowStock) }) };
 	};
 
-	const counts = countHandlers({
+	const kitCounts = countHandlers({
 		source: async (ctx) => {
 			const { data, inner } = await staffSource(ctx);
 			return { collection: data.collection(COLLECTIONS.products), filter: { websiteId: data.websiteId, $and: [inner] } };
 		},
-		by: { status: 'status', brand: 'brandId' },
+		by: { status: 'status', brand: 'brandId', stockState: 'stockState', featured: 'featured' },
 	});
+
+	/**
+	 * Counts by `grade` group each product under every grade its active variants have (a product without one is `none`);
+	 * the other fields are the kit's (K4).
+	 * @param {any} ctx
+	 */
+	const counts = {
+		count: kitCounts.count,
+		/** @param {any} ctx */
+		counts: async (ctx) => {
+			if (ctx.query.by !== 'grade') return kitCounts.counts(ctx);
+			const { data, inner } = await staffSource(ctx);
+			const products = data.collection(COLLECTIONS.products);
+			const filter = { websiteId: data.websiteId, $and: [inner] };
+			const [total, rows] = await Promise.all([
+				products.countDocuments(filter, { maxTimeMS: 3000 }),
+				products
+					.aggregate(
+						[
+							{ $match: filter },
+							{ $project: { g: { $cond: [{ $gt: [{ $size: { $ifNull: ['$grades', []] } }, 0] }, '$grades', ['none']] } } },
+							{ $unwind: '$g' },
+							{ $group: { _id: '$g', n: { $sum: 1 } } },
+							{ $sort: { n: -1, _id: 1 } },
+							{ $limit: 50 },
+						],
+						{ maxTimeMS: 3000 },
+					)
+					.toArray(),
+			]);
+			return { total, groups: Object.fromEntries(rows.map((row) => [String(row._id), Number(row.n)])) };
+		},
+	};
 
 	/** @param {any} ctx */
 	const list = async (ctx) => {
@@ -162,6 +270,7 @@ export const createCatalogProducts = (product, service, common) => {
 			sold: 0,
 			rating: { average: 0, count: 0 },
 			...summarize(fields.variants, fields.trackStock),
+			previousSlugs: [],
 			publishedAt: fields.status === 'active' ? new Date(now()) : null,
 		};
 		try {
@@ -172,7 +281,9 @@ export const createCatalogProducts = (product, service, common) => {
 		}
 		await service.log(ctx, 'product.created', id, { label: record.name, detail: `Status: ${record.status}` });
 		await common.changed(s, [], [id]);
-		return created(await staffView(s, /** @type {ProductRecord} */ (await findProduct(data, id))));
+		const saved = /** @type {ProductRecord} */ (await findProduct(data, id));
+		await announce(s, saved);
+		return created(await staffView(s, saved));
 	};
 
 	/** @param {any} ctx */
@@ -187,13 +298,34 @@ export const createCatalogProducts = (product, service, common) => {
 		const existing = await productOf(data, ctx);
 		const rules = await common.rulesOf(s, data);
 		const body = bodyOf(ctx);
+		// new files are checked in the bucket before the transaction (E4, E6)
+		const first = checkProduct(body, rules, existing);
+		if (!first.ok) throw refuse(first.errors);
+		const files = await checkFiles(s, existing, first.value);
 		const done = await rewriteProduct(
 			data,
 			existing.id,
 			async (before, session) => {
 				const checked = checkProduct(body, rules, before);
 				if (!checked.ok) throw refuse(checked.errors);
-				const fields = checked.value;
+				const facts = new Map(
+					[...files.variants.flatMap((v) => v.media ?? []), ...before.media].map((file) => [file.key, file]),
+				);
+				const fields = {
+					...checked.value,
+					variants: checked.value.variants.map((variant) => ({
+						...variant,
+						media: (variant.media ?? []).map((file) => ({
+							...file,
+							type: facts.get(file.key)?.type ?? file.type,
+							size: facts.get(file.key)?.size ?? file.size,
+						})),
+					})),
+					video:
+						checked.value.video?.kind === 'file' && !checked.value.video.type && files.video?.kind === 'file'
+							? files.video
+							: checked.value.video,
+				};
 				await checkSkus(data, fields.variants, before.id, session);
 				let slug = fields.slug;
 				if (!slug)
@@ -205,7 +337,11 @@ export const createCatalogProducts = (product, service, common) => {
 					});
 				else if (slug !== before.slug && (await slugTaken(data, COLLECTIONS.products, slug, before.id, session)))
 					throw problem('conflict', 'Another product already uses this slug.');
-				return { set: { ...fields, slug }, result: null };
+				// the old slug keeps finding the product (E13)
+				return {
+					set: { ...fields, slug, previousSlugs: nextPreviousSlugs(before.previousSlugs, before.slug, slug) },
+					result: null,
+				};
 			},
 			{ now: now() },
 		);
@@ -215,6 +351,7 @@ export const createCatalogProducts = (product, service, common) => {
 			...(done.before.status === done.product.status ? {} : { detail: `${done.before.status} → ${done.product.status}` }),
 		});
 		await common.changed(s, [done.before]);
+		await announce(s, done.product);
 		return staffView(s, done.product);
 	};
 
@@ -228,9 +365,16 @@ export const createCatalogProducts = (product, service, common) => {
 		if (ordered > 0) throw problem('conflict', 'This product is in orders: archive it instead.');
 		await data.collection(COLLECTIONS.products).deleteOne({ websiteId: data.websiteId, id: existing.id });
 		await data.collection(COLLECTIONS.serials).deleteMany({ websiteId: data.websiteId, productId: existing.id });
-		const storage = existing.media.length > 0 ? await product.connections.storage(s.websiteId) : null;
-		for (const file of storage ? existing.media : [])
-			await /** @type {any} */ (storage).deleteObject({ key: file.key }).catch(() => null);
+		// every file of the product: photos with their sizes, variant photos and the video (E4, E6)
+		const keys = new Set([
+			...[...existing.media, ...existing.variants.flatMap((variant) => variant.media ?? [])].flatMap((file) => [
+				file.key,
+				...Object.values(file.sizes ?? {}),
+			]),
+			...(existing.video?.kind === 'file' ? [existing.video.key] : []),
+		]);
+		const storage = keys.size > 0 ? await product.connections.storage(s.websiteId) : null;
+		for (const key of storage ? keys : []) await /** @type {any} */ (storage).deleteObject({ key }).catch(() => null);
 		await service.log(ctx, 'product.deleted', existing.id, { label: existing.name });
 		return undefined;
 	};
@@ -256,6 +400,8 @@ export const createCatalogProducts = (product, service, common) => {
 						throw refuse([{ path: `/changes/${index}/variantId`, message: 'This variant is not part of the product.' }]);
 					if (change.locationId && !known.has(change.locationId))
 						throw refuse([{ path: `/changes/${index}/locationId`, message: 'There is no such location.' }]);
+					if (change.soldOut !== undefined) variant.soldOut = change.soldOut;
+					if (change.set === undefined && change.adjust === undefined) return;
 					const next = changedStock(variant, change);
 					if (!next) throw problem('conflict', 'Stock cannot go below 0.');
 					Object.assign(variant, next);
@@ -267,13 +413,137 @@ export const createCatalogProducts = (product, service, common) => {
 		if (!done.found || !done.product) throw problem('not_found', 'There is no such product.');
 		await service.log(ctx, 'product.stock_changed', existing.id, {
 			label: done.product.name,
-			detail: stockDetail(done.before.variants, done.product.variants),
+			detail: [
+				stockDetail(done.before.variants, done.product.variants),
+				soldOutDetail(done.before.variants, done.product.variants),
+			]
+				.filter(Boolean)
+				.join(', '),
 		});
 		await common.changed(s, [done.before]);
 		return staffView(s, done.product);
 	};
 
+	/**
+	 * Add every missing combination of a product's set-up variant attribute values (E7).
+	 * @param {Site} s @param {WebsiteData} data @param {any} ctx @param {string} id
+	 * @param {{ price: number | null, stock: number }} start null price: the product's lowest price
+	 */
+	const generateFor = async (s, data, ctx, id, start) => {
+		const rules = await common.rulesOf(s, data);
+		const done = await rewriteProduct(
+			data,
+			id,
+			async (before) => {
+				const missing = missingVariants(before, rules.attributes, {
+					price: start.price ?? before.price,
+					stock: rules.locations ? null : start.stock,
+				});
+				if (missing === null) throw problem('conflict', `A product has at most ${LIMITS.generated} variants.`);
+				if (missing.length === 0) return { refuse: 0 };
+				const checked = checkProduct(
+					{ variants: [...before.variants.map((variant) => ({ id: variant.id })), ...missing] },
+					rules,
+					before,
+				);
+				if (!checked.ok) throw refuse(checked.errors);
+				return { set: { variants: checked.value.variants, options: checked.value.options }, result: missing.length };
+			},
+			{ now: now() },
+		);
+		if (!done.found) throw problem('not_found', 'There is no such product.');
+		if (done.changed && done.product) {
+			await service.log(ctx, 'product.variants_generated', id, {
+				label: done.product.name,
+				detail: `${done.result} variant(s) added`,
+			});
+			await common.changed(s, [done.before]);
+		}
+		return { added: Number(done.result ?? 0), product: done.product ?? done.before };
+	};
+
+	/**
+	 * The generator's starting price and stock from the body.
+	 * @param {Record<string, any>} body
+	 */
+	const startOf = (body) => {
+		const price = body.price ?? null;
+		const stock = body.stock ?? 0;
+		if (price !== null && (!Number.isSafeInteger(price) || price < 0))
+			throw refuse([{ path: '/price', message: 'The price is a whole number of minor units from 0.' }]);
+		if (!Number.isSafeInteger(stock) || stock < 0)
+			throw refuse([{ path: '/stock', message: 'Stock is a whole number from 0.' }]);
+		return { price: /** @type {number | null} */ (price), stock: /** @type {number} */ (stock) };
+	};
+
+	/** POST /v1/products/:id/variants/generate `{ price, stock }`. @param {any} ctx */
+	const generate = async (ctx) => {
+		const { s, data } = await common.open(ctx);
+		const existing = await productOf(data, ctx);
+		const body = bodyOf(ctx);
+		if (body.price === undefined) throw refuse([{ path: '/price', message: 'Give the price of the new variants.' }]);
+		const done = await generateFor(s, data, ctx, existing.id, startOf(body));
+		return { added: done.added, product: await staffView(s, done.product) };
+	};
+
+	/** POST /v1/products/variants/generate `{ ids, price?, stock? }`: up to 100 products. @param {any} ctx */
+	const generateMany = async (ctx) => {
+		const body = bodyOf(ctx);
+		const ids = Array.isArray(body.ids) ? [...new Set(body.ids.filter((id) => typeof id === 'string'))] : [];
+		if (ids.length === 0 || ids.length > MAX_GENERATE)
+			throw refuse([{ path: '/ids', message: `Give 1 to ${MAX_GENERATE} product ids.` }]);
+		const start = startOf(body);
+		const { s, data } = await common.open(ctx);
+		/** @type {Array<{ id: string, added: number } | { id: string, error: string }>} */
+		const results = [];
+		for (const id of ids) {
+			try {
+				results.push({ id, added: (await generateFor(s, data, ctx, id, start)).added });
+			} catch (error) {
+				results.push({
+					id,
+					error: String(/** @type {any} */ (error)?.body?.detail ?? /** @type {any} */ (error)?.detail ?? 'failed'),
+				});
+			}
+		}
+		return { results, added: results.reduce((sum, row) => sum + ('added' in row ? row.added : 0), 0) };
+	};
+
 	return [
+		defineRoute({
+			method: 'POST',
+			path: '/v1/products/variants/generate',
+			auth: 'server',
+			feature: 'variants',
+			rateLimit: STAFF_LIMITS,
+			handler: generateMany,
+		}),
+		defineRoute({
+			method: 'POST',
+			path: '/v1/products/:id/variants/generate',
+			auth: 'server',
+			feature: 'variants',
+			rateLimit: STAFF_LIMITS,
+			handler: generate,
+		}),
+		defineRoute({
+			method: 'POST',
+			path: '/v1/admin/products/variants/generate',
+			auth: 'ticket',
+			permission: 'catalog.edit',
+			feature: 'variants',
+			rateLimit: STAFF_LIMITS,
+			handler: generateMany,
+		}),
+		defineRoute({
+			method: 'POST',
+			path: '/v1/admin/products/:id/variants/generate',
+			auth: 'ticket',
+			permission: 'catalog.edit',
+			feature: 'variants',
+			rateLimit: STAFF_LIMITS,
+			handler: generate,
+		}),
 		defineRoute({
 			method: 'GET',
 			path: '/v1/products',

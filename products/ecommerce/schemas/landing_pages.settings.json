@@ -1,0 +1,35 @@
+{
+	"type": "object",
+	"additionalProperties": false,
+	"properties": {
+		"landingMinProducts": {
+			"type": "integer",
+			"title": "Products in stock to index",
+			"description": "A landing page set to Automatic is indexed by search engines while at least this many of its products are in stock.",
+			"default": 3,
+			"minimum": 1,
+			"maximum": 1000
+		},
+		"landingUrl": {
+			"type": "string",
+			"title": "Landing page address",
+			"description": "Where a landing page is on your website: {categoryUrl} (its category's page), {category}, {brand} and {grade}, for example {categoryUrl}?brand={brand}&grade={grade}. Empty values are left out.",
+			"default": "{categoryUrl}?brand={brand}&grade={grade}",
+			"maxLength": 300
+		},
+		"attributeUrl": {
+			"type": "string",
+			"title": "Attribute glossary address",
+			"description": "Where an attribute's glossary page is on your website, with {slug}, for example /glossary/{slug}. Empty: there are no attribute glossary pages (they are left out of the sitemap).",
+			"default": "",
+			"maxLength": 200
+		},
+		"gradeUrl": {
+			"type": "string",
+			"title": "Grade glossary address",
+			"description": "Where a grade's glossary page is on your website, with {key}, for example /grades/{key}. Empty: there are no grade glossary pages (they are left out of the sitemap).",
+			"default": "",
+			"maxLength": 200
+		}
+	}
+}

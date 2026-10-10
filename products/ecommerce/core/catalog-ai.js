@@ -5,6 +5,7 @@
  * @module
  */
 import { LIMITS, cleanText, isObject } from './catalog.js';
+import { checkFaqs } from './catalog-content.js';
 
 /** The texts AI copy can suggest, with their longest length. */
 const AI_FIELDS = Object.freeze({
@@ -12,7 +13,11 @@ const AI_FIELDS = Object.freeze({
 	summary: LIMITS.summary,
 	seoTitle: 70,
 	seoDescription: 160,
+	faqs: 8,
 });
+
+/** What a landing page's copy suggestions may hold (E15), with their longest lengths (FAQs: how many). */
+const LANDING_FIELDS = Object.freeze({ h1: 120, title: 70, description: 160, intro: 2000, faqs: 8 });
 
 /** @typedef {keyof typeof AI_FIELDS} AiField */
 
@@ -40,12 +45,14 @@ const FIELD_NOTES = Object.freeze({
 	summary: () => '"summary": one or two plain sentences (at most 300 characters)',
 	seoTitle: () => '"seoTitle": a page title for search engines (at most 60 characters)',
 	seoDescription: () => '"seoDescription": a meta description for search engines (at most 155 characters)',
+	faqs: () =>
+		'"faqs": 3 to 6 questions shoppers ask about this product with short factual answers, as [{ "question", "answer" }]',
 });
 
 /**
  * The prompt: the product's facts and what to write, answered as one JSON object.
  * @param {{ name: string, summary: string, description: string, brand: string | null, categories: string[],
- *   specs: Array<{ name: string, value: string | number | boolean, unit: string }>, options: Array<{ name: string, values: string[] }>,
+ *   specs: Array<{ name: string, value: string | number | boolean | Array<string | number>, unit: string }>, options: Array<{ name: string, values: string[] }>,
  *   kind: string }} facts
  * @param {{ fields: AiField[], tone: string, language: string, words: number }} request
  * @returns {{ system: string, prompt: string }}
@@ -80,13 +87,15 @@ export const aiPrompt = (facts, { fields, tone, language, words }) => {
 };
 
 /**
- * The suggestions in the model's answer: the JSON object (possibly inside a code block or text), each field cleaned
- * and cut to its length. A single field may also be answered as plain text.
+ * The suggestions in the AI's answer: the JSON object it was asked for (or the whole text when one text field was
+ * asked), each text field cleaned and cut to its length, FAQs checked and cut to their count.
+ * @template {string} F
  * @param {string} text
- * @param {AiField[]} fields
- * @returns {Partial<Record<AiField, string>> | null} null when nothing usable came back
+ * @param {F[]} fields
+ * @param {Readonly<Record<F, number>>} [limits] each field's longest length (FAQs: how many)
+ * @returns {Partial<Record<F, string | import('./catalog-content.js').Faq[]>> | null} null when nothing usable came back
  */
-export const readSuggestions = (text, fields) => {
+export const readSuggestions = (text, fields, limits = /** @type {any} */ (AI_FIELDS)) => {
 	const start = text.indexOf('{');
 	const end = text.lastIndexOf('}');
 	/** @type {Record<string, unknown> | null} */
@@ -98,15 +107,78 @@ export const readSuggestions = (text, fields) => {
 		} catch {
 			parsed = null;
 		}
-	if (!parsed && fields.length === 1 && text.trim()) parsed = { [/** @type {AiField} */ (fields[0])]: text.trim() };
+	if (!parsed && fields.length === 1 && fields[0] !== 'faqs' && text.trim()) parsed = { [String(fields[0])]: text.trim() };
 	if (!parsed) return null;
-	/** @type {Partial<Record<AiField, string>>} */
+	/** @type {Partial<Record<F, string | import('./catalog-content.js').Faq[]>>} */
 	const out = {};
 	for (const field of fields) {
 		const raw = parsed[field];
+		const limit = limits[field];
+		if (field === 'faqs') {
+			const faqs = Array.isArray(raw) ? checkFaqs(raw.slice(0, limit), limit, '/faqs', []) : null;
+			if (faqs && faqs.length > 0) out[field] = faqs;
+			continue;
+		}
 		if (typeof raw !== 'string') continue;
-		const clean = cleanText(raw.slice(0, AI_FIELDS[field]), AI_FIELDS[field], { multiline: field === 'description' });
+		const clean = cleanText(raw.slice(0, limit), limit, { multiline: field === 'description' || field === 'intro' });
 		if (clean) out[field] = clean;
 	}
 	return Object.keys(out).length > 0 ? out : null;
+};
+
+/** @typedef {keyof typeof LANDING_FIELDS} LandingField */
+
+/**
+ * Check a landing page copy request (E15): the fields wanted, a tone and a language.
+ * @param {unknown} body
+ * @returns {{ ok: true, value: { fields: LandingField[], tone: string, language: string } } | { ok: false, path: string, message: string }}
+ */
+export const checkLandingAiRequest = (body) => {
+	const input = isObject(body) ? body : {};
+	const fields = Array.isArray(input.fields) ? [...new Set(input.fields)] : Object.keys(LANDING_FIELDS);
+	if (fields.length === 0 || !fields.every((field) => Object.hasOwn(LANDING_FIELDS, field)))
+		return { ok: false, path: '/fields', message: `Pick fields among ${Object.keys(LANDING_FIELDS).join(', ')}.` };
+	const tone = input.tone === undefined ? '' : cleanText(input.tone, 100);
+	const language = input.language === undefined ? '' : cleanText(input.language, 40);
+	if (tone === null || language === null)
+		return { ok: false, path: '/tone', message: 'A tone has at most 100 characters and a language 40.' };
+	return { ok: true, value: { fields: /** @type {LandingField[]} */ (fields), tone, language } };
+};
+
+/** What each landing field is, for the prompt. */
+const LANDING_NOTES = Object.freeze({
+	h1: '"h1": the page heading (at most 80 characters)',
+	title: '"title": a page title for search engines (at most 60 characters)',
+	description: '"description": a meta description for search engines (at most 155 characters)',
+	intro: '"intro": an introduction of two short plain paragraphs separated by a blank line',
+	faqs: '"faqs": 3 to 6 questions shoppers ask about these products with short factual answers, as [{ "question", "answer" }]',
+});
+
+/**
+ * The prompt for a landing page's copy (E15): what it lists (category, brand, grade) and some of its products.
+ * @param {{ category: string | null, brand: string | null, grade: string | null, products: string[] }} facts
+ * @param {{ fields: LandingField[], tone: string, language: string }} request
+ */
+export const landingPrompt = (facts, { fields, tone, language }) => {
+	const system = [
+		'You write copy for a page of an online shop that lists products.',
+		'Use only the facts given; never invent specifications, prices, offers or guarantees.',
+		`Write in ${language || 'the language of the facts'}.`,
+		tone ? `Tone: ${tone}.` : '',
+		'Answer with one JSON object and nothing else.',
+	]
+		.filter(Boolean)
+		.join(' ');
+	const prompt = [
+		'Page facts:',
+		facts.category ? `Category: ${facts.category}` : '',
+		facts.brand ? `Brand: ${facts.brand}` : '',
+		facts.grade ? `Condition grade: ${facts.grade}` : '',
+		facts.products.length > 0 ? `Some products: ${facts.products.slice(0, 20).join(', ')}` : '',
+		'',
+		`Write these fields: ${fields.map((field) => LANDING_NOTES[field]).join('; ')}.`,
+	]
+		.filter((line, index, all) => line !== '' || all[index - 1] !== '')
+		.join('\n');
+	return { system, prompt, limits: LANDING_FIELDS };
 };

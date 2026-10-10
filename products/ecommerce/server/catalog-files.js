@@ -10,6 +10,7 @@ import { createId } from '@ss/contracts';
 import { defineRoute, problem } from '@ss/app-kit';
 import { NO_ID } from '../adapters/catalog-store.js';
 import { LIMITS, cleanText, isObject } from '../core/catalog.js';
+import { VIDEO_TYPES, mediaExtras } from '../core/catalog-content.js';
 import { COLLECTIONS } from '../core/model.js';
 import { IMAGE_TYPES, bodyOf, refuse, STAFF_LIMITS } from './catalog-common.js';
 
@@ -74,7 +75,16 @@ export const createCatalogFiles = (product, service, common) => {
 			await storage.deleteObject({ key }).catch(() => null);
 			throw refuse([{ path: '/key', message: 'The file is not an image of an allowed type and size.' }]);
 		}
-		return { key, type, size: head.size, alt };
+		// the smaller copies the uploader made, their size and placeholder (E6)
+		/** @type {Array<{ path: string, message: string }>} */
+		const errors = [];
+		const extras = mediaExtras(body, `ecommerce/${OWNERS[owner].folder}/${id}/`, '', errors);
+		if (errors.length > 0) throw refuse(errors);
+		for (const [name, sized] of Object.entries(extras.sizes ?? {})) {
+			const found = await storage.headObject({ key: sized }).catch(() => ({ exists: false }));
+			if (!found.exists) throw refuse([{ path: `/sizes/${name}`, message: 'This size has not been uploaded.' }]);
+		}
+		return { key, type, size: head.size, alt, ...extras };
 	};
 
 	/** @param {Site} s @param {MediaRecord} file */
@@ -86,18 +96,26 @@ export const createCatalogFiles = (product, service, common) => {
 		if (storage) await storage.deleteObject({ key }).catch(() => null);
 	};
 
-	/** POST …/uploads `{ for, id, type, size }` → a presigned upload. @param {any} ctx */
+	/**
+	 * POST …/uploads `{ for, id, type, size }` → a presigned upload: an image (also each smaller copy of a photo, E6),
+	 * or a product video (MP4 or WebM up to `videoMaxBytes`, E4).
+	 * @param {any} ctx
+	 */
 	const upload = async (ctx) => {
 		const body = bodyOf(ctx);
 		const owner = /** @type {Owner} */ (body.for);
 		if (!Object.hasOwn(OWNERS, owner)) throw refuse([{ path: '/for', message: 'Upload for a product, category or brand.' }]);
 		const type = String(body.type);
-		const extension = /** @type {Record<string, string>} */ (IMAGE_TYPES)[type];
-		if (!extension) throw refuse([{ path: '/type', message: 'Images are JPEG, PNG, WebP or AVIF.' }]);
+		const video = owner === 'product' && Object.hasOwn(VIDEO_TYPES, type);
+		const extension = video
+			? /** @type {Record<string, string>} */ (VIDEO_TYPES)[type]
+			: /** @type {Record<string, string>} */ (IMAGE_TYPES)[type];
+		if (!extension)
+			throw refuse([{ path: '/type', message: 'Images are JPEG, PNG, WebP or AVIF; product videos MP4 or WebM.' }]);
 		const { s, data } = await common.open(ctx);
-		const limit = await maxBytes(s);
+		const limit = video ? Number((await s.values('catalog')).videoMaxBytes) : await maxBytes(s);
 		if (!Number.isSafeInteger(body.size) || body.size < 1 || body.size > limit)
-			throw refuse([{ path: '/size', message: `An image has at most ${limit} bytes.` }]);
+			throw refuse([{ path: '/size', message: `${video ? 'A video' : 'An image'} has at most ${limit} bytes.` }]);
 		const record = await recordOf(data, owner, String(body.id));
 		const storage = await common.storageOf(s);
 		const key = `ecommerce/${OWNERS[owner].folder}/${record.id}/${createId('img').slice(4).toLowerCase()}.${extension}`;
@@ -139,13 +157,16 @@ export const createCatalogFiles = (product, service, common) => {
 			throw refuse([{ path: '/items', message: 'List every image of the product once.' }]);
 		/** @type {MediaRecord[]} */
 		const media = [];
+		/** @type {Array<{ path: string, message: string }>} */
+		const errors = [];
 		items.forEach((item, index) => {
 			const file = /** @type {MediaRecord} */ (current.find((f) => f.key === item.key));
 			const alt = item.alt === undefined ? file.alt : cleanText(item.alt, LIMITS.alt);
 			if (alt === null)
 				throw refuse([{ path: `/items/${index}/alt`, message: `Alternative text has at most ${LIMITS.alt} characters.` }]);
-			media.push({ ...file, alt });
+			media.push({ ...file, alt, ...mediaExtras(item, `ecommerce/products/${record.id}/`, `/items/${index}`, errors) });
 		});
+		if (errors.length > 0) throw refuse(errors);
 		await data.collection(COLLECTIONS.products).updateOne({ websiteId: data.websiteId, id: record.id }, { $set: { media } });
 		await service.log(ctx, 'product.images_arranged', record.id, { label: String(record.name) });
 		return mediaView(s, media);
@@ -160,8 +181,9 @@ export const createCatalogFiles = (product, service, common) => {
 			throw problem('not_found', 'The product has no such image.');
 		await data
 			.collection(COLLECTIONS.products)
-			.updateOne({ websiteId: data.websiteId, id: record.id }, { $pull: { media: { key } } });
-		await deleteFile(s, key);
+			.updateOne({ websiteId: data.websiteId, id: record.id }, { $pull: { media: { key }, 'variants.$[].media': { key } } });
+		const removed = /** @type {MediaRecord} */ (record.media.find((/** @type {MediaRecord} */ file) => file.key === key));
+		for (const sized of [key, ...Object.values(removed.sizes ?? {})]) await deleteFile(s, sized);
 		await service.log(ctx, 'product.image_removed', record.id, { label: String(record.name) });
 		return mediaView(s, (await recordOf(data, 'product', record.id)).media);
 	};

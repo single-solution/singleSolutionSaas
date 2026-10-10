@@ -4,7 +4,7 @@
  */
 import { createId } from '@ss/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { csvCell, feedRows, googleItem, metaLine } from '../core/feeds.js';
+import { csvCell, feedItemId, feedMoney, feedRows, googleItem, metaLine } from '../core/feeds.js';
 import { buildLlmsTxt, markdownText, MAX_LLMS_CHARS, treeOrder } from '../core/llms.js';
 import { COLLECTIONS } from '../core/model.js';
 import {
@@ -14,10 +14,11 @@ import {
 	fillTitle,
 	metaDescription,
 	scriptJson,
+	robotsOf,
 	sitemapEntry,
+	sitemapFileUrl,
+	sitemapFiles,
 	sitemapIndex,
-	sitemapPageUrl,
-	sitemapSlice,
 } from '../core/seo.js';
 import { DOMAIN, ORIGIN, readyShop } from './helpers.js';
 
@@ -86,29 +87,29 @@ describe('core/seo', () => {
 		expect(sitemapIndex(['https://a.example/s.xml?page=1'])).toContain(
 			'<sitemap><loc>https://a.example/s.xml?page=1</loc></sitemap>',
 		);
-		expect(sitemapPageUrl('/sitemap.xml', 'a.example', 2)).toBe('https://a.example/sitemap.xml?page=2');
-		expect(sitemapPageUrl('sitemap.php?x=1', 'a.example', 3)).toBe('https://a.example/sitemap.php?x=1&page=3');
-		expect(sitemapPageUrl('https://cdn.example/map.xml', 'a.example', 1)).toBe('https://cdn.example/map.xml?page=1');
-		expect(sitemapPageUrl('', 'a.example', 1)).toBe('https://a.example/sitemap.xml?page=1');
+		expect(sitemapEntry({ loc: 'https://a.example/', lastmod: null, images: ['https://c.example/a&b.jpg'] })).toBe(
+			'<url><loc>https://a.example/</loc><image:image><image:loc>https://c.example/a&amp;b.jpg</image:loc></image:image></url>\n',
+		);
+		expect(sitemapFileUrl('/sitemap.xml', 'a.example', 'products-2')).toBe('https://a.example/sitemap.xml?file=products-2');
+		expect(sitemapFileUrl('sitemap.php?x=1', 'a.example', 'categories')).toBe(
+			'https://a.example/sitemap.php?x=1&file=categories',
+		);
+		expect(sitemapFileUrl('https://cdn.example/map.xml', 'a.example', 'landings')).toBe(
+			'https://cdn.example/map.xml?file=landings',
+		);
+		expect(sitemapFileUrl('', 'a.example', 'categories')).toBe('https://a.example/sitemap.xml?file=categories');
+		expect(robotsOf(undefined)).toBe('index, follow');
+		expect(robotsOf({ noindex: true, nofollow: true })).toBe('noindex, nofollow');
 	});
 
-	it('splits categories and products over sitemap pages', () => {
-		expect(sitemapSlice({ categories: 3, products: 4, page: 1, size: 5 })).toEqual({
-			pages: 2,
-			categories: { skip: 0, limit: 3 },
-			products: { skip: 0, limit: 2 },
-		});
-		expect(sitemapSlice({ categories: 3, products: 4, page: 2, size: 5 })).toEqual({
-			pages: 2,
-			categories: { skip: 0, limit: 0 },
-			products: { skip: 2, limit: 2 },
-		});
-		expect(sitemapSlice({ categories: 7, products: 1, page: 1, size: 5 })).toEqual({
-			pages: 2,
-			categories: { skip: 0, limit: 5 },
-			products: { skip: 0, limit: 0 },
-		});
-		expect(sitemapSlice({ categories: 0, products: 0, page: 1 }).pages).toBe(1);
+	it('names the files of a sitemap index', () => {
+		expect(sitemapFiles({ categories: 3, landings: 0, products: 2500, size: 1000 })).toEqual([
+			'categories',
+			'products-1',
+			'products-2',
+			'products-3',
+		]);
+		expect(sitemapFiles({ categories: 0, landings: 2, products: 0, size: 1000 })).toEqual(['landings']);
 	});
 });
 
@@ -133,7 +134,8 @@ describe('core/feeds and core/llms', () => {
 		brand: 'Brand',
 		productType: 'Phones > Android',
 		currency: 'USD',
-		graded: /** @type {const} */ ('refurbished'),
+		condition: (/** @type {VariantRecord} */ v) =>
+			/** @type {'refurbished' | 'new'} */ (conditionOf(product, v, 'refurbished')),
 		skuAs: /** @type {const} */ ('mpn'),
 		includeOutOfStock: true,
 	};
@@ -159,6 +161,43 @@ describe('core/feeds and core/llms', () => {
 		]);
 		const single = feedRows({ ...product, variants: [variant({ id: 'var_s' })], description: 'Long' }, context);
 		expect(single[0]).toMatchObject({ itemGroupId: '', title: 'Phone', description: 'Long' });
+		// E17: legacy ids, the Google category, the grade label, shipping, whole units, variant links and photos
+		const legacy = feedRows(
+			{
+				...product,
+				id: 'prd_0123456789abcdef01234567',
+				variants: [variant({ id: 'var_76543210fedcba9876543210', price: 1250, grade: 'a' }), variant({ id: 'var_new' })],
+			},
+			{
+				...context,
+				itemId: 'legacy',
+				googleCategory: '267',
+				gradeLabel: (v) => (v.grade ? 'Grade A' : ''),
+				shipping: { fee: 250, country: 'PK' },
+				wholeUnits: true,
+				variantLink: (v) => `https://shop.example/p?v=${v.id}`,
+				variantImage: (v) => (v.grade ? 'https://cdn.example/v.jpg' : ''),
+			},
+		);
+		expect(legacy[0]).toMatchObject({
+			id: '0123456789abcdef01234567_76543210fedcba9876543210',
+			googleCategory: '267',
+			customLabel0: 'Grade A',
+			shipping: '3 USD',
+			shippingCountry: 'PK',
+			price: '13 USD',
+			link: 'https://shop.example/p?v=var_76543210fedcba9876543210',
+			image: 'https://cdn.example/v.jpg',
+		});
+		expect(legacy[1]).toMatchObject({ id: 'var_new', customLabel0: '', image: 'https://cdn.example/i.jpg' });
+		const item = googleItem(/** @type {any} */ (legacy[0]));
+		expect(item).toContain('<g:google_product_category>267</g:google_product_category>');
+		expect(item).toContain('<g:custom_label_0>Grade A</g:custom_label_0>');
+		expect(item).toContain('<g:shipping><g:country>PK</g:country><g:price>3 USD</g:price></g:shipping>');
+		expect(feedItemId('prd_x', 'var_y', 'legacy')).toBe('var_y');
+		expect(feedItemId('prd_x', 'var_y', 'variant')).toBe('var_y');
+		expect(feedMoney(1050, 'PKR', false)).toBe('10.50 PKR');
+		expect(feedMoney(1050, 'PKR', true)).toBe('11 PKR');
 	});
 
 	it('writes Google items and Meta lines', () => {
@@ -171,7 +210,7 @@ describe('core/feeds and core/llms', () => {
 		const out = googleItem(/** @type {any} */ ({ ...row, inStock: false }));
 		expect(out).toContain('out_of_stock');
 		expect(metaLine(/** @type {any} */ (row))).toBe(
-			'var_a,Phone - Red,Summary,in stock,refurbished,9.00 USD,https://shop.example/p,https://cdn.example/i.jpg,Brand,prd_1\r\n',
+			'var_a,Phone - Red,Summary,in stock,refurbished,9.00 USD,https://shop.example/p,https://cdn.example/i.jpg,Brand,prd_1,,\r\n',
 		);
 		expect(metaLine(/** @type {any} */ ({ ...row, inStock: false, condition: '', salePrice: '' }))).toContain(
 			'out of stock,new,12.00 USD',
@@ -330,23 +369,29 @@ describe('SEO, feeds, llms.txt and policies routes', () => {
 		expect(answer.jsonLd).not.toContain('</script>');
 		const graph = JSON.parse(answer.jsonLd)['@graph'];
 		const [node, crumbs] = graph;
+		expect(answer.robots).toBe('index, follow');
 		expect(node).toMatchObject({
-			'@type': 'Product',
+			'@type': 'ProductGroup',
 			name: 'Acme </script> Phone',
+			productGroupID: phone.id,
+			variesBy: ['https://schema.org/color'],
 			brand: { '@type': 'Brand', name: 'Acme' },
 			aggregateRating: { ratingValue: 4.4, reviewCount: 3 },
 		});
-		expect(node.itemCondition).toBeUndefined();
-		expect(node.offers).toHaveLength(2);
-		expect(node.offers[0]).toMatchObject({
+		expect(node.hasVariant).toHaveLength(2);
+		expect(node.hasVariant[0]).toMatchObject({
+			'@type': 'Product',
+			name: 'Acme </script> Phone - Red',
+			sku: 'AP-R',
+			color: 'Red',
+		});
+		expect(node.hasVariant[0].offers).toMatchObject({
 			price: '250.00',
 			priceCurrency: 'USD',
 			availability: 'https://schema.org/InStock',
 			itemCondition: 'https://schema.org/RefurbishedCondition',
-			sku: 'AP-R',
-			name: 'Red',
 		});
-		expect(node.offers[1]).toMatchObject({
+		expect(node.hasVariant[1].offers).toMatchObject({
 			availability: 'https://schema.org/OutOfStock',
 			itemCondition: 'https://schema.org/NewCondition',
 		});
@@ -365,6 +410,7 @@ describe('SEO, feeds, llms.txt and policies routes', () => {
 		expect(answer.title).toBe('Ebook');
 		expect(answer.image).toBeNull();
 		const [node, crumbs] = JSON.parse(answer.jsonLd)['@graph'];
+		expect(node['@type']).toBe('Product');
 		expect(node.offers).toMatchObject({ '@type': 'Offer', price: '5.00', availability: 'https://schema.org/InStock' });
 		expect(node.offers.itemCondition).toBeUndefined();
 		expect(node.aggregateRating).toBeUndefined();
@@ -381,8 +427,14 @@ describe('SEO, feeds, llms.txt and policies routes', () => {
 			canonical: `${ORIGIN}/categories/android`,
 		});
 		expect(android.image).toMatch(/^https:\/\//);
-		const [page, crumbs] = JSON.parse(android.jsonLd)['@graph'];
+		const graph = JSON.parse(android.jsonLd)['@graph'];
+		const [page, list] = graph;
+		const crumbs = graph.find((/** @type {any} */ node) => node['@type'] === 'BreadcrumbList');
 		expect(page).toMatchObject({ '@type': 'CollectionPage', name: 'Android' });
+		expect(list).toMatchObject({
+			'@type': 'ItemList',
+			itemListElement: [{ position: 1, url: `${ORIGIN}/products/acme-phone` }],
+		});
 		expect(crumbs.itemListElement.map((/** @type {any} */ step) => step.name).slice(1)).toEqual(['Phones', 'Android']);
 		const root = (await shop.api('GET', '/v1/seo/categories/cat_root')).json;
 		expect(root).toMatchObject({ title: 'Phones', description: 'Every phone we sell.', image: null });
@@ -393,14 +445,14 @@ describe('SEO, feeds, llms.txt and policies routes', () => {
 		const answer = await shop.api('GET', '/v1/seo/sitemap.xml');
 		expect(answer.status).toBe(200);
 		expect(answer.headers.get('content-type')).toContain('application/xml');
-		expect(answer.text).toContain('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">');
+		expect(answer.text).toContain('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image=');
 		expect(answer.text).toContain(`<loc>${ORIGIN}/products/acme-phone</loc><lastmod>`);
+		expect(answer.text).toContain('<image:image><image:loc>https://');
 		expect(answer.text).toContain(`<loc>${ORIGIN}/categories/android</loc>`);
 		expect(answer.text).not.toContain('hidden');
 		expect((answer.text.match(/<url>/g) ?? []).length).toBe(4);
-		expect((await shop.api('GET', '/v1/seo/sitemap.xml?page=1')).text).toBe(answer.text);
-		expect((await shop.api('GET', '/v1/seo/sitemap.xml?page=2')).status).toBe(404);
-		expect((await shop.api('GET', '/v1/seo/sitemap.xml?page=0')).status).toBe(400);
+		expect((await shop.api('GET', '/v1/seo/sitemaps/categories')).status).toBe(200);
+		expect((await shop.api('GET', '/v1/seo/sitemaps/nothing')).status).toBe(404);
 	});
 
 	it('serves the Google and Meta feeds', async () => {
@@ -416,7 +468,9 @@ describe('SEO, feeds, llms.txt and policies routes', () => {
 		const csv = await shop.api('GET', '/v1/feeds/products.csv');
 		expect(csv.headers.get('content-type')).toContain('text/csv');
 		const lines = csv.text.trim().split('\r\n');
-		expect(lines[0]).toBe('id,title,description,availability,condition,price,link,image_link,brand,item_group_id');
+		expect(lines[0]).toBe(
+			'id,title,description,availability,condition,price,link,image_link,brand,item_group_id,google_product_category,custom_label_0',
+		);
 		expect(lines).toHaveLength(3);
 		expect(lines[2]).toContain('out of stock');
 
@@ -451,16 +505,35 @@ describe('SEO, feeds, llms.txt and policies routes', () => {
 
 	it('answers the policies to visitors and the server', async () => {
 		await shop.setting('checkout', 'policyShipping', 'Ships in 2 days.');
+		await shop.setting(
+			'checkout',
+			'policyWarranty',
+			'{business} repairs within {warrantyDays} days ({warrantyMonths} months).',
+		);
+		await shop.setting('returns', 'warrantyDays', 90);
 		const server = await shop.api('GET', '/v1/policies');
-		expect(server.json).toEqual({ shipping: 'Ships in 2 days.', returns: 'Returns within 14 days.', privacy: '', terms: '' });
+		expect(server.json).toEqual({
+			format: 'text',
+			shipping: 'Ships in 2 days.',
+			returns: 'Returns within 14 days.',
+			warranty: 'Shop repairs within 90 days (3 months).',
+		});
 		const visitor = await shop.visitor('GET', '/v1/shop/policies');
 		expect(visitor.json).toEqual(server.json);
 		expect(DOMAIN).toBe(new URL(ORIGIN).host);
+		await shop.setting('checkout', 'policyFormat', 'html');
+		await shop.setting('checkout', 'policyPrivacy', '<p onclick="x()">We <b>never</b> sell data.</p><script>bad()</script>');
+		const html = (await shop.api('GET', '/v1/policies')).json;
+		expect(html).toMatchObject({ format: 'html', privacy: '<p>We <strong>never</strong> sell data.</p>' });
+		const llms = (await shop.api('GET', '/v1/llms.txt')).text;
+		expect(llms).not.toContain('<p>');
+		await shop.setting('checkout', 'policyFormat', 'text');
 	});
 
-	it('splits a large sitemap into pages behind an index', async () => {
+	it('splits a large sitemap into files behind an index', async () => {
 		const data = await shop.db();
-		const docs = Array.from({ length: 50_001 }, (_, index) => ({
+		await shop.setting('seo', 'sitemapSize', 1000);
+		const docs = Array.from({ length: 1001 }, (_, index) => ({
 			id: `cat_bulk${String(index).padStart(6, '0')}`,
 			slug: `bulk-${index}`,
 			name: `Bulk ${index}`,
@@ -474,10 +547,14 @@ describe('SEO, feeds, llms.txt and policies routes', () => {
 		await data.collection(COLLECTIONS.categories).insertMany(docs);
 		const index = await shop.api('GET', '/v1/seo/sitemap.xml');
 		expect(index.text).toContain('<sitemapindex');
-		expect(index.text).toContain(`<loc>${ORIGIN}/sitemap.xml?page=2</loc>`);
-		const second = await shop.api('GET', '/v1/seo/sitemap.xml?page=2');
-		expect((second.text.match(/<url>/g) ?? []).length).toBe(50_005 - 50_000);
-		expect(second.text).toContain('/products/');
+		expect(index.text).toContain(`<loc>${ORIGIN}/sitemap.xml?file=categories</loc>`);
+		expect(index.text).toContain(`<loc>${ORIGIN}/sitemap.xml?file=products-1</loc>`);
+		const categories = await shop.api('GET', '/v1/seo/sitemaps/categories');
+		expect((categories.text.match(/<url>/g) ?? []).length).toBe(1003);
+		const products = await shop.api('GET', '/v1/seo/sitemaps/products-1.xml');
+		expect(products.text).toContain('/products/acme-phone');
+		expect((await shop.api('GET', '/v1/seo/sitemaps/products-2')).status).toBe(404);
+		expect((await shop.api('GET', '/v1/seo/sitemaps/landings')).status).toBe(404);
 	}, 120_000);
 
 	it('writes many products in pieces', async () => {
@@ -499,7 +576,7 @@ describe('SEO, feeds, llms.txt and policies routes', () => {
 		const google = await shop.api('GET', '/v1/feeds/products.xml');
 		expect(google.text.match(/<item>/g)).toHaveLength(302);
 		expect(google.text).toContain('<title>Bulk 299</title>');
-		const page = await shop.api('GET', '/v1/seo/sitemap.xml?page=2');
+		const page = await shop.api('GET', '/v1/seo/sitemaps/products-1');
 		expect(page.text).toContain('/products/bulk-product-299</loc>');
 		const answer = (await shop.api('GET', '/v1/seo/products/bulk-product-1')).json;
 		const [node] = JSON.parse(answer.jsonLd)['@graph'];

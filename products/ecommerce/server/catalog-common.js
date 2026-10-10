@@ -5,6 +5,7 @@
  */
 import { problem } from '@ss/app-kit';
 import { loadRules } from '../adapters/catalog-store.js';
+import { COLLECTIONS } from '../core/model.js';
 import { isObject } from '../core/catalog.js';
 import { gradesByKey } from '../core/grades.js';
 import { createMedia } from './catalog-media.js';
@@ -66,15 +67,43 @@ export const createCatalogCommon = (product, service) => {
 	 * What a product check needs for this website.
 	 * @param {Site} s @param {WebsiteData} data
 	 */
-	const rulesOf = async (s, data) =>
-		loadRules(data, {
+	const rulesOf = async (s, data) => ({
+		...(await loadRules(data, {
 			variants: s.has('variants'),
 			locations: s.has('multi_location'),
 			grades: s.has('grades_serials'),
 			digital: s.has('digital_goods'),
 			bookings: s.has('bookings'),
 			gradeKeys: [...(await gradesOf(s)).keys()],
-		});
+		})),
+		sizeCharts: s.has('size_charts'),
+		sizeChartIds: new Set(
+			s.has('size_charts')
+				? (await data.collection(COLLECTIONS.sizeCharts).distinct('id', { websiteId: data.websiteId })).map(String)
+				: [],
+		),
+	});
+
+	/**
+	 * A photo as shoppers get it (E6): its address, text, type, size and placeholder, and its smaller copies' addresses.
+	 * @param {Site} s @param {import('../core/model.js').MediaRecord} file @param {string} [fallbackAlt]
+	 * @returns {Promise<import('../core/catalog-views.js').MediaView>}
+	 */
+	const mediaView = async (s, file, fallbackAlt = '') => {
+		/** @type {Partial<Record<'thumb' | 'card' | 'detail', string | null>>} */
+		const sizes = {};
+		for (const [name, key] of Object.entries(file.sizes ?? {}))
+			sizes[/** @type {'thumb' | 'card' | 'detail'} */ (name)] = await media.mediaUrl(s, key);
+		return {
+			url: await media.mediaUrl(s, file.key),
+			alt: file.alt || fallbackAlt,
+			type: file.type,
+			...(file.width ? { width: file.width } : {}),
+			...(file.height ? { height: file.height } : {}),
+			...(file.blur ? { blur: file.blur } : {}),
+			...(Object.keys(sizes).length > 0 ? { sizes } : {}),
+		};
+	};
 
 	/**
 	 * Tell the other parts (alerts) that products may have changed price, stock or status.
@@ -106,7 +135,83 @@ export const createCatalogCommon = (product, service) => {
 	 */
 	const mediaUrls = (s, item) => Promise.all(item.media.map((file) => media.mediaUrl(s, file.key)));
 
-	return Object.freeze({ media, open, gradesOf, rulesOf, changed, storageOf, mediaUrls });
+	/**
+	 * The addresses of each variant's photos (E6).
+	 * @param {Site} s @param {ProductRecord} item
+	 * @returns {Promise<Map<string, Array<string | null>>>}
+	 */
+	const variantMediaUrls = async (s, item) =>
+		new Map(
+			await Promise.all(
+				item.variants.map(
+					async (variant) =>
+						/** @type {[string, Array<string | null>]} */ ([
+							variant.id,
+							await Promise.all((variant.media ?? []).map((file) => media.mediaUrl(s, file.key))),
+						]),
+				),
+			),
+		);
+
+	/**
+	 * Check files the staff named that are new to a record (a product video, variant photos) in the bucket: they must
+	 * exist with one of `types` and at most `maxBytes`. Answers each file's type and size.
+	 * @param {Site} s
+	 * @param {string[]} keys
+	 * @param {{ types: readonly string[], maxBytes: number, path: string, what: string }} rules
+	 * @returns {Promise<Map<string, { type: string, size: number }>>}
+	 */
+	const fileFacts = async (s, keys, { types, maxBytes, path, what }) => {
+		/** @type {Map<string, { type: string, size: number }>} */
+		const out = new Map();
+		if (keys.length === 0) return out;
+		const storage = await storageOf(s);
+		for (const key of keys) {
+			const head = await storage.headObject({ key }).catch(() => {
+				throw problem('upstream_error', 'Your storage cannot be reached right now.');
+			});
+			if (!head.exists) throw refuse([{ path, message: `${what} is not uploaded.` }]);
+			const type = String(head.contentType ?? '')
+				.replace(/;.*$/, '')
+				.trim();
+			if (!types.includes(type) || head.size > maxBytes)
+				throw refuse([{ path, message: `${what} is not of an allowed type and size.` }]);
+			out.set(key, { type, size: head.size });
+		}
+		return out;
+	};
+
+	/**
+	 * Send changed page addresses to search engines through Growth's IndexNow, right after the request, when the
+	 * `seo` setting `indexNowOnSave` is on and the Growth token is pasted (E16). Failures are only logged.
+	 * @param {Site} s
+	 * @param {string[]} urls
+	 */
+	const indexNow = async (s, urls) => {
+		if (urls.length === 0 || !s.has('seo') || (await s.values('seo')).indexNowOnSave !== true) return;
+		if (typeof s.ctx.after !== 'function') return;
+		s.ctx.after(async () => {
+			const sent = await product.callProduct(s.websiteId, 'growth', '/v1/indexnow', {
+				method: 'POST',
+				body: { urls: [...new Set(urls)] },
+			});
+			if (!sent.ok) s.ctx.log?.warn?.('indexnow not sent', { reason: sent.reason });
+		});
+	};
+
+	return Object.freeze({
+		media,
+		open,
+		gradesOf,
+		rulesOf,
+		changed,
+		storageOf,
+		mediaUrls,
+		mediaView,
+		variantMediaUrls,
+		fileFacts,
+		indexNow,
+	});
 };
 
 /** @typedef {ReturnType<typeof createCatalogCommon>} CatalogCommon */

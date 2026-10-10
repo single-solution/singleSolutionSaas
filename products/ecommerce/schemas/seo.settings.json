@@ -12,7 +12,7 @@
 		"gradedCondition": {
 			"type": "string",
 			"title": "Condition of graded items",
-			"description": "The condition search engines are told for items that have a condition grade. Items without a grade are new.",
+			"description": "The condition search engines are told for graded items whose grade names no condition. Items without a grade are new.",
 			"default": "used",
 			"enum": ["used", "refurbished", "new"]
 		},
@@ -22,6 +22,37 @@
 			"description": "Where your website serves the sitemap. With more than 50,000 pages it is split into pages at this address with ?page=1, ?page=2 …",
 			"default": "/sitemap.xml",
 			"maxLength": 200
+		},
+		"sitemapSize": {
+			"type": "integer",
+			"title": "Addresses per sitemap file",
+			"description": "Above this many addresses the sitemap becomes an index of files (categories, landing pages, products-1, products-2 …).",
+			"default": 10000,
+			"minimum": 1000,
+			"maximum": 50000
+		},
+		"defaultDescription": {
+			"type": "string",
+			"title": "Default description",
+			"description": "Used when a page has no description of its own.",
+			"default": "",
+			"maxLength": 500,
+			"x-ui": {
+				"widget": "textarea"
+			}
+		},
+		"defaultImage": {
+			"type": "string",
+			"title": "Default image",
+			"description": "An https address used when a page has no image of its own.",
+			"default": "",
+			"maxLength": 500
+		},
+		"indexNowOnSave": {
+			"type": "boolean",
+			"title": "Send changes to IndexNow",
+			"description": "When a product or category is saved, its address is sent to search engines through Growth's IndexNow (paste the Growth token in Connections).",
+			"default": false
 		}
 	}
 }

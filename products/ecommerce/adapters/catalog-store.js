@@ -39,6 +39,12 @@ export const INDEXES = [
 	{ collection: COLLECTIONS.products, keys: { websiteId: 1, categoryIds: 1 }, name: 'by_category' },
 	{ collection: COLLECTIONS.products, keys: { websiteId: 1, brandId: 1 }, name: 'by_brand' },
 	{ collection: COLLECTIONS.products, keys: { websiteId: 1, createdAt: -1, id: -1 }, name: 'staff_list' },
+	{ collection: COLLECTIONS.products, keys: { websiteId: 1, status: 1, updatedAt: -1, id: -1 }, name: 'updated' },
+	{ collection: COLLECTIONS.products, keys: { websiteId: 1, featured: 1, status: 1 }, name: 'by_featured' },
+	{ collection: COLLECTIONS.products, keys: { websiteId: 1, stockState: 1 }, name: 'by_stock_state' },
+	{ collection: COLLECTIONS.products, keys: { websiteId: 1, grades: 1 }, name: 'by_grade' },
+	{ collection: COLLECTIONS.products, keys: { websiteId: 1, 'variants.grade': 1, status: 1 }, name: 'by_variant_grade' },
+	{ collection: COLLECTIONS.products, keys: { websiteId: 1, previousSlugs: 1 }, name: 'by_previous_slug' },
 	{ collection: COLLECTIONS.categories, keys: { websiteId: 1, id: 1 }, name: 'by_id', unique: true },
 	{
 		collection: COLLECTIONS.categories,
@@ -48,6 +54,7 @@ export const INDEXES = [
 		partialFilterExpression: { slug: { $type: 'string' } },
 	},
 	{ collection: COLLECTIONS.categories, keys: { websiteId: 1, parentId: 1 }, name: 'by_parent' },
+	{ collection: COLLECTIONS.categories, keys: { websiteId: 1, previousSlugs: 1 }, name: 'by_previous_slug' },
 	{ collection: COLLECTIONS.brands, keys: { websiteId: 1, id: 1 }, name: 'by_id', unique: true },
 	{
 		collection: COLLECTIONS.brands,
@@ -57,6 +64,21 @@ export const INDEXES = [
 		partialFilterExpression: { slug: { $type: 'string' } },
 	},
 	{ collection: COLLECTIONS.attributes, keys: { websiteId: 1, id: 1 }, name: 'by_id', unique: true },
+	{
+		collection: COLLECTIONS.attributes,
+		keys: { websiteId: 1, slug: 1 },
+		name: 'by_slug',
+		unique: true,
+		partialFilterExpression: { slug: { $type: 'string' } },
+	},
+	{ collection: COLLECTIONS.sizeCharts, keys: { websiteId: 1, id: 1 }, name: 'by_id', unique: true },
+	{ collection: COLLECTIONS.landings, keys: { websiteId: 1, id: 1 }, name: 'by_id', unique: true },
+	{
+		collection: COLLECTIONS.landings,
+		keys: { websiteId: 1, categoryId: 1, brandId: 1, grade: 1 },
+		name: 'by_combination',
+		unique: true,
+	},
 	{ collection: COLLECTIONS.locations, keys: { websiteId: 1, id: 1 }, name: 'by_id', unique: true },
 	{ collection: COLLECTIONS.serials, keys: { websiteId: 1, id: 1 }, name: 'by_id', unique: true },
 	{ collection: COLLECTIONS.serials, keys: { websiteId: 1, serial: 1 }, name: 'by_serial', unique: true },
@@ -149,6 +171,24 @@ const findByRef = async (data, collection, ref, prefix, session) =>
  * @returns {Promise<ProductRecord | null>}
  */
 export const findProduct = (data, ref, session) => findByRef(data, COLLECTIONS.products, ref, ID_PREFIX.product, session);
+
+/**
+ * A product or category by id, by slug in any case, or by an earlier slug (E13): `moved` when found by an earlier slug.
+ * @template T
+ * @param {WebsiteData} data
+ * @param {string} collection
+ * @param {string} ref
+ * @param {string} prefix
+ * @returns {Promise<{ record: T, moved: boolean } | null>}
+ */
+export const findBySlugHistory = async (data, collection, ref, prefix) => {
+	const key = ref.startsWith(`${prefix}_`) ? ref : ref.toLowerCase();
+	const found = await findByRef(data, collection, key, prefix);
+	if (found) return { record: /** @type {T} */ (found), moved: false };
+	if (key.startsWith(`${prefix}_`)) return null;
+	const old = await data.collection(collection).findOne({ websiteId: data.websiteId, previousSlugs: key }, NO_ID);
+	return old ? { record: /** @type {T} */ (old), moved: true } : null;
+};
 
 /**
  * The first free slug for a record of a collection, from the wanted slug or else the name.
@@ -250,16 +290,17 @@ export const productsByIds = async (data, ids) => {
 };
 
 /**
- * Products grouped by their category lists, for counts (active products only).
+ * Products grouped by their category lists, for counts (active products shoppers may see).
  * @param {WebsiteData} data
+ * @param {Record<string, unknown>} [visible] conditions that leave hidden products out (E1)
  * @returns {Promise<Array<{ categoryIds: string[], count: number }>>}
  */
-export const categoryGroups = async (data) =>
+export const categoryGroups = async (data, visible = {}) =>
 	(
 		await data
 			.collection(COLLECTIONS.products)
 			.aggregate([
-				{ $match: { websiteId: data.websiteId, status: 'active' } },
+				{ $match: { websiteId: data.websiteId, status: 'active', ...visible } },
 				{ $group: { _id: '$categoryIds', count: { $sum: 1 } } },
 			])
 			.toArray()

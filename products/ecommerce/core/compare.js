@@ -35,7 +35,7 @@ export const parseCompareIds = (value, max) => {
  * when it has none).
  * @param {Array<Pick<ProductRecord, 'specs'>>} products in the visitor's order
  * @param {AttributeRecord[]} attributes
- * @returns {Array<{ attributeId: string, name: string, unit: string, values: Array<string | number | boolean | null> }>}
+ * @returns {Array<{ attributeId: string, name: string, unit: string, values: Array<string | number | boolean | Array<string | number> | null> }>}
  */
 export const compareRows = (products, attributes) =>
 	[...attributes]

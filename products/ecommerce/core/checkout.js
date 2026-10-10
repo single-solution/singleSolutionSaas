@@ -346,6 +346,11 @@ export const resolveLines = (inputs, { products, ancestors, gradeLabel, features
 		/** @type {number | null} */
 		let available = null;
 		let wanted = 0;
+		// a variant marked sold out is not sold, whatever its stock (E9)
+		if (product.variants.find((variant) => variant.id === line.variantId)?.soldOut === true) {
+			line.problems.push(problemOf('out_of_stock'));
+			continue;
+		}
 		if (line.kind === 'physical' && product.trackStock) {
 			available = product.variants.find((variant) => variant.id === line.variantId)?.stock ?? 0;
 			wanted = out.filter((other) => other.priced && other.variantId === line.variantId).reduce((n, o) => n + o.quantity, 0);

@@ -106,8 +106,8 @@ describe('the product grid', () => {
 		expect(facets.categories.map((/** @type {any} */ c) => c.name).sort()).toEqual(['Android', 'Cases', 'Phones']);
 		expect(facets.attributes.map((/** @type {any} */ a) => a.name)).toEqual(['RAM', 'Colour', '5G']);
 		expect(facets.attributes[0].values).toEqual([
-			{ value: 8, count: 1 },
-			{ value: 12, count: 1 },
+			{ value: 8, label: '8 GB', count: 1 },
+			{ value: 12, label: '12 GB', count: 1 },
 		]);
 		expect(facets.grades).toEqual([
 			{ key: 'new', label: 'New', count: 1 },
@@ -140,7 +140,7 @@ describe('the product grid', () => {
 		expect(names(await get('/v1/shop/products?sort=rating')).at(0)).toBe('Bestseller');
 		expect((await get('/v1/shop/products?sort=random')).status).toBe(422);
 		expect((await get('/v1/shop/products?minPrice=abc')).status).toBe(422);
-		expect((await get('/v1/shop/products?limit=49')).status).toBe(400);
+		expect((await get('/v1/shop/products?limit=61')).status).toBe(400);
 		expect((await get('/v1/shop/products?cursor=eyJrIjoiYSJ9')).status).toBe(400);
 	});
 
@@ -206,7 +206,7 @@ describe('the product page', () => {
 			['Colour', 'Black', ''],
 			['5G', true, ''],
 		]);
-		expect(page.json.variants).toEqual([
+		expect(page.json.variants).toMatchObject([
 			{
 				id: ids.pixel.variants[0].id,
 				name: '128 GB',
@@ -215,7 +215,10 @@ describe('the product page', () => {
 				price: 70000,
 				compareAtPrice: 75000,
 				inStock: true,
-				grade: { key: 'new', label: 'New', description: 'Sealed box' },
+				soldOut: false,
+				stockLeft: null,
+				media: [],
+				grade: { key: 'new', label: 'New', description: 'Sealed box', color: '', condition: null },
 			},
 			{
 				id: ids.pixel.variants[1].id,
@@ -267,8 +270,8 @@ describe('categories and brands', () => {
 	});
 
 	it('gives brands with counts', async () => {
-		expect((await get('/v1/shop/brands')).json.items).toEqual([
-			{ id: ids.acme.id, slug: 'acme', name: 'Acme', description: '', logo: null, count: 1 },
+		expect((await get('/v1/shop/brands')).json.items).toMatchObject([
+			{ id: ids.acme.id, slug: 'acme', name: 'Acme', description: '', logo: null, count: 1, categoryIds: [] },
 		]);
 	});
 });
