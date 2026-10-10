@@ -17,7 +17,7 @@ import {
 	seoFacts,
 	triSelect,
 } from './admin-fields.js';
-import { card, createScreen, deleteEntry, detailHead, fieldsOf, saveDialog, yesNo } from './admin-screen.js';
+import { card, createScreen, deleteEntry, detailHead, fieldsOf, readFrom, saveDialog, yesNo } from './admin-screen.js';
 
 /** @typedef {import('./admin-kit.js').Kit} Kit */
 /** @typedef {import('./admin-kit.js').Choice} Choice */
@@ -428,6 +428,7 @@ export const categoriesTab = (kit, panel, lookups) => {
 			}),
 		],
 		empty: t('catalogAdmin.noCategories'),
+		read: readFrom(kit, path),
 		idOf: (item) => item.id,
 		row: (item) => {
 			const state = item.status ?? 'active';
@@ -569,6 +570,7 @@ export const brandsTab = (kit, panel, lookups) => {
 			}),
 		],
 		empty: t('catalogAdmin.noBrands'),
+		read: readFrom(kit, path),
 		idOf: (item) => item.id,
 		row: (item) => {
 			const state = item.status ?? 'active';

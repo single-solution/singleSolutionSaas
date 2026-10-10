@@ -18,7 +18,7 @@ import { categoryChoices } from './admin-taxonomy.js';
 /**
  * What the product's detail and editor ask of the list.
  * @typedef {{ lookups: Lookups, show: (product: any, message?: string) => void, edit: (product: any | null) => void,
- *   removed: () => Promise<unknown> }} ProductContext
+ *   removed: () => Promise<unknown>, serials: (product: any) => void }} ProductContext
  */
 
 /** Stock states (E2). */
@@ -62,8 +62,9 @@ const signedAmount = (kit, text) => {
 /**
  * The products section.
  * @param {Kit} kit @param {HTMLElement} panel @param {Lookups} lookups
+ * @param {import('./admin-serials.js').Links} links
  */
-export const productsTab = (kit, panel, lookups) => {
+export const productsTab = (kit, panel, lookups, links) => {
 	const { t, h, has } = kit;
 	const filters = {
 		status: '',
@@ -440,6 +441,7 @@ export const productsTab = (kit, panel, lookups) => {
 			return screen.view.show('detail');
 		},
 		removed: () => reload(),
+		serials: (product) => links.serialsOf({ id: product.id, name: product.name, variants: product.variants }),
 	};
 
 	/** @param {any} row */

@@ -11,15 +11,17 @@ import { chartsTab } from './admin-charts.js';
 import { mountAdmin } from './admin-kit.js';
 import { landingsTab } from './admin-landings.js';
 import { productsTab } from './admin-products.js';
-import { serialsTab } from './admin-serials.js';
+import { createSerialFilter, serialsTab } from './admin-serials.js';
 import { brandsTab, categoriesTab, createLookups, locationsTab } from './admin-taxonomy.js';
 
 /** @typedef {import('./admin-kit.js').Kit} Kit */
 /** @typedef {import('./admin-taxonomy.js').Lookups} Lookups */
+/** @typedef {import('./admin-serials.js').Links} Links */
 
 /**
  * The sections: a key, the feature it needs and how it is built.
- * @type {ReadonlyArray<{ key: string, feature: string | null, build: (kit: Kit, panel: HTMLElement, lookups: Lookups) => void }>}
+ * @type {ReadonlyArray<{ key: string, feature: string | null,
+ *   build: (kit: Kit, panel: HTMLElement, lookups: Lookups, links: Links) => void }>}
  */
 const SECTIONS = Object.freeze([
 	{ key: 'products', feature: null, build: productsTab },
@@ -40,14 +42,21 @@ export const mountCatalogAdmin = async (input) => {
 	mountAdmin(input, 'catalog-admin', 'catalogAdmin.title', (kit, box) => {
 		const lookups = createLookups(kit);
 		const ready = lookups.reload();
-		box.append(
-			kit.sections(
-				SECTIONS.filter((section) => section.feature === null || kit.has(section.feature)).map((section) => ({
-					key: section.key,
-					label: kit.t(`catalogAdmin.${section.key}`),
-					render: (/** @type {HTMLElement} */ panel) => void ready.then(() => section.build(kit, panel, lookups)),
-				})),
-			),
+		/** @type {Links} */
+		const links = {
+			serialFilter: createSerialFilter(),
+			serialsOf: (product) => {
+				links.serialFilter.set(product);
+				/** @type {HTMLElement | null} */ (sections.querySelector('[data-section="serials"]'))?.click();
+			},
+		};
+		const sections = kit.sections(
+			SECTIONS.filter((section) => section.feature === null || kit.has(section.feature)).map((section) => ({
+				key: section.key,
+				label: kit.t(`catalogAdmin.${section.key}`),
+				render: (/** @type {HTMLElement} */ panel) => void ready.then(() => section.build(kit, panel, lookups, links)),
+			})),
 		);
+		box.append(sections);
 	});
 };

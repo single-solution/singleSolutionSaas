@@ -7,7 +7,7 @@
  */
 import { query } from './admin-kit.js';
 import { faqsEditor } from './admin-fields.js';
-import { card, createScreen, deleteEntry, detailHead, fieldsOf, masonryOf, saveDialog } from './admin-screen.js';
+import { card, createScreen, deleteEntry, detailHead, fieldsOf, masonryOf, readFrom, saveDialog } from './admin-screen.js';
 import { categoryChoices, faqList } from './admin-taxonomy.js';
 
 /** @typedef {import('./admin-kit.js').Kit} Kit */
@@ -252,6 +252,7 @@ export const landingsTab = (kit, panel, lookups) => {
 			h('div', { class: 'tools' }, [filters, kit.button(t('catalogAdmin.newLanding'), () => edit(null), { primary: true })]),
 		],
 		empty: t('catalogAdmin.noLandings'),
+		read: readFrom(kit, path),
 		idOf: (landing) => landing.id,
 		row: (landing) => ({
 			name: nameOf(landing),

@@ -5,7 +5,7 @@
  * used (the answer is shown).
  * @module
  */
-import { card, createScreen, deleteEntry, detailHead, fieldsOf, masonryOf, saveDialog } from './admin-screen.js';
+import { card, createScreen, deleteEntry, detailHead, fieldsOf, masonryOf, readFrom, saveDialog } from './admin-screen.js';
 
 /** @typedef {import('./admin-kit.js').Kit} Kit */
 /** @typedef {import('./admin-taxonomy.js').Lookups} Lookups */
@@ -271,6 +271,7 @@ export const chartsTab = (kit, panel, lookups) => {
 			]),
 		],
 		empty: t('catalogAdmin.noCharts'),
+		read: readFrom(kit, path),
 		idOf: (chart) => chart.id,
 		row: (chart) => ({
 			name: chart.name,

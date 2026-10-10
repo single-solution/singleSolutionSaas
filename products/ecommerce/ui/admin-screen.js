@@ -18,12 +18,13 @@
  */
 
 /**
- * A list-and-detail screen in a section panel.
+ * A list-and-detail screen in a section panel. With `read`, an opened item is read again (the list's record shows
+ * when the read is refused) and its row follows the fresh record.
  * @template T
  * @param {Kit} kit
  * @param {HTMLElement} panel
  * @param {{ tools: Child[], empty: string, idOf: (item: T) => string, row: (item: T) => RowSpec,
- *   detail: (item: T) => Child[] }} spec
+ *   detail: (item: T) => Child[], read?: (item: T) => Promise<T | null> }} spec
  */
 export const createScreen = (kit, panel, spec) => {
 	const view = kit.splitView();
@@ -59,7 +60,22 @@ export const createScreen = (kit, panel, spec) => {
 	const open = (item, picked = false) => {
 		current = item === null ? null : spec.idOf(item);
 		draw();
-		kit.put(view.detail, [view.back, ...(item === null ? [kit.text('p', { class: 'muted' }, spec.empty)] : spec.detail(item))]);
+		if (item === null || !spec.read)
+			kit.put(view.detail, [
+				view.back,
+				...(item === null ? [kit.text('p', { class: 'muted' }, spec.empty)] : spec.detail(item)),
+			]);
+		else {
+			const id = spec.idOf(item);
+			kit.put(view.detail, [view.back, kit.text('p', { class: 'muted' }, kit.t('catalogAdmin.loading'))]);
+			void spec.read(item).then((fresh) => {
+				if (current !== id) return;
+				const shown = fresh ? { ...item, ...fresh } : item;
+				items = items.map((other) => (spec.idOf(other) === id ? shown : other));
+				draw();
+				kit.put(view.detail, [view.back, ...spec.detail(shown)]);
+			});
+		}
 		if (picked) view.show('detail');
 	};
 
@@ -102,6 +118,17 @@ export const createScreen = (kit, panel, spec) => {
 		items: () => items,
 		current: () => current,
 	};
+};
+
+/**
+ * A `read` of a list-and-detail screen: the record at `<path>/<id>`, or null when it cannot be read.
+ * @template {{ id: string }} T
+ * @param {Kit} kit @param {string} path
+ * @returns {(item: T) => Promise<T | null>}
+ */
+export const readFrom = (kit, path) => async (item) => {
+	const answer = await kit.call('GET', `${path}/${item.id}`);
+	return answer.ok ? answer.data : null;
 };
 
 /**

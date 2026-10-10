@@ -277,6 +277,9 @@ export const productDetail = (kit, product, context, message = '') => {
 								}),
 						}
 					: null,
+				has('grades_serials')
+					? { label: t('catalogAdmin.serialsOfProduct'), onSelect: () => context.serials(product) }
+					: null,
 				{ label: t('catalogAdmin.managePhotos'), onSelect: open('photos') },
 				{ label: t('catalogAdmin.changeVideo'), onSelect: open('video') },
 				deleteEntry(kit, { name: product.name, path: `/v1/admin/products/${product.id}`, done: context.removed }),

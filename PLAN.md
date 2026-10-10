@@ -3425,6 +3425,27 @@ The owner confirms or changes each one.
 - **E17**: legacy ids only when both ids are imported (a prefix and 24 hex digits), else the variant id; shipping is
   sent only with a business.json country (Google needs one); whole units round half up; each row links to its variant's
   page and uses its variant's first photo; the Meta CSV adds `google_product_category` and `custom_label_0`.
+- **Additions the widgets needed** (small, no new feature): `GET /v1/(admin/)products/counts?by=category` (each product
+  under every category it is in) and the staff product filter `ids`; staff order lines carry `serialized` while Grades
+  and serials is on; staff reviews carry `productName`; `moved` answers carry `kind` (`product` | `category`); shop grades
+  carry `videoUrl` (a YouTube embed address or the file's address); wishlist, compare and alert cards carry `priceMax`,
+  `featured` and `cardImages`; site addresses refuse backslashes (`/\host` is another host to browsers).
+- **Widgets (0.6)**: every Ecommerce admin widget is now list-and-detail screens with count chips and badges, More
+  menus (destructive last, typed confirmation) and dialogs; the catalog admin shows one section at a time (Products,
+  Categories, Brands, Attributes, and Size charts, Landing pages, Locations and Serial numbers while their features are
+  on), and the product editor is a full form in the detail pane (it would still scroll a lot as a dialog). Reports and
+  CSV stay plain pages of cards; loyalty stays a lookup by user id (there is no list route). The rich-text editor is a
+  toolbar over the allowed tags with a live preview built safely. In the shopper grid, the brand, grade and attribute
+  lists keep the values earlier facets showed while the shopper picks (facets apply each group's own filter); page
+  numbers sit beside Load more; picking an option value with no exact variant moves to the nearest variant that has it.
+  The dashboard's grades editor takes category ids as tags (the dashboard reads no business data, 0.4.3); enum settings
+  show their raw values, as in every product's dashboard (`SchemaForm` has no labels hint yet).
+- **Server-only on purpose**: what the merchant's site serves on its own domain (`/v1/seo/*`, `/v1/feeds/*`,
+  `/v1/llms.txt`, `/v1/llms-full.txt`, `/v1/policies`; the landing pages admin shows each page's address, products in
+  stock and whether it is indexed), Chat's lookups (`/v1/chat/*`) and the customer orders lookup
+  (`/v1/customers/:userId/orders`, Accounts and Chat), `GET /v1/shop/policies` (the cart reads the same filled policies
+  from its widget config), the dashboard mirrors of K1 and the kit's routes (tickets, permissions, data rights,
+  activity).
 
 ### 0.8.4 Still open
 
