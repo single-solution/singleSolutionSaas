@@ -13,9 +13,11 @@ import {
 	DRAIN_BATCH,
 	LEASE_MS,
 	MAX_WEBHOOK_ATTEMPTS,
+	RETRY_PLANS,
 	WEBHOOK_DELAYS_MS,
 	nextAttemptAt,
 	quietUntil,
+	retryPlanOf,
 	withinLimits,
 } from '../core/timing.js';
 import { SIGNATURE_HEADER, webhookUrls } from '../core/webhooks.js';
@@ -110,6 +112,18 @@ export const createSending = (product) => {
 			words: { ...rendered, providerTemplate: version.providerTemplate, language: version.language },
 		};
 	};
+
+	/**
+	 * The retry plan of a channel's setting `retryPlan` (e-mail, SMS and WhatsApp; push channels retry on the short
+	 * plan). A message keeps the plan it was accepted with (PLAN 0.8.10 N3).
+	 * @param {Site} s
+	 * @param {Channel} channel
+	 * @returns {Promise<import('../core/timing.js').RetryPlan>}
+	 */
+	const planOf = async (s, channel) =>
+		channel === 'email' || channel === 'sms' || channel === 'whatsapp'
+			? retryPlanOf((await product.settings.values(s.websiteId, channel)).retryPlan)
+			: 'short';
 
 	/**
 	 * Queue outgoing webhook events (sent right after the request, signed).
@@ -297,7 +311,7 @@ export const createSending = (product) => {
 			return sent;
 		}
 		const failed = message.channelAttempts + 1;
-		const next = result.retryable ? nextAttemptAt(failed, now()) : null;
+		const next = result.retryable ? nextAttemptAt(failed, now(), RETRY_PLANS[retryPlanOf(message.retryPlan)]) : null;
 		if (next !== null)
 			return s.store.messages.update(message.id, {
 				status: 'retrying',
@@ -313,6 +327,7 @@ export const createSending = (product) => {
 				...fallback,
 				attempts,
 				channelAttempts: 0,
+				retryPlan: await planOf(s, fallback.channel),
 				fellBack: true,
 				status: 'queued',
 				reason: null,
@@ -399,6 +414,7 @@ export const createSending = (product) => {
 			reason: null,
 			attempts: [],
 			channelAttempts: 0,
+			retryPlan: await planOf(s, input.channel),
 			fellBack: false,
 			dueAt: new Date(t),
 			leaseUntil: null,

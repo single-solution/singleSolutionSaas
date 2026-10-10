@@ -1,5 +1,5 @@
 /**
- * Timing (PLAN 0.8.5): retries on the next uses, quiet hours, send limits and delayed send. Nothing runs on a timer:
+ * Timing (PLAN 0.8.5): retries on the next uses (short or long plan, PLAN 0.8.10 N3), quiet hours, send limits and delayed send. Nothing runs on a timer:
  * a waiting message gets a due time and is sent on the first use of the website after it. Quiet hours are a wall-clock
  * rule in the recipient's time zone, else the business.json time zone (UTC when missing; PLAN 0.8.10 K8); send limits
  * and the delayed-send horizon are rolling spans of time, not calendar days. No I/O.
@@ -7,10 +7,28 @@
  */
 import { zonedParts } from '@ss/contracts/format';
 
-/** Attempts on one channel before the message fails there (then the fallback channel, if any). */
-const MAX_ATTEMPTS = 3;
-/** Wait before attempt 2 and 3 (judged on the next use after it). */
-const RETRY_DELAYS_MS = Object.freeze([60_000, 5 * 60_000]);
+/** @typedef {'short' | 'long'} RetryPlan */
+/**
+ * Retry plans of e-mail, SMS and WhatsApp (PLAN 0.8.10 N3): the attempts on one channel before the message fails there
+ * (then the fallback channel, if any) and the waits before attempts 2, 3, …, each judged on the next use after it.
+ * Short: now, then 1 and 5 minutes later. Long: now, then 5 and 15 minutes and 1, 3 and 6 hours later.
+ */
+export const RETRY_PLANS = Object.freeze({
+	short: Object.freeze({ max: 3, delays: Object.freeze([60_000, 5 * 60_000]) }),
+	long: Object.freeze({
+		max: 6,
+		delays: Object.freeze([5 * 60_000, 15 * 60_000, 3_600_000, 3 * 3_600_000, 6 * 3_600_000]),
+	}),
+});
+const MAX_ATTEMPTS = RETRY_PLANS.short.max;
+const RETRY_DELAYS_MS = RETRY_PLANS.short.delays;
+
+/**
+ * A retry plan by its name (a message accepted before plans, or any other value, has the short one).
+ * @param {unknown} value
+ * @returns {RetryPlan}
+ */
+export const retryPlanOf = (value) => (value === 'long' ? 'long' : 'short');
 /** Attempts to deliver one outgoing webhook event. */
 export const MAX_WEBHOOK_ATTEMPTS = 5;
 /** Wait before webhook attempts 2–5. */

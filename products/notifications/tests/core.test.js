@@ -23,7 +23,16 @@ import {
 	sectionProblem,
 	templateView,
 } from '../core/templates.js';
-import { checkSendAt, isQuietHour, localTime, nextAttemptAt, quietUntil, withinLimits } from '../core/timing.js';
+import {
+	RETRY_PLANS,
+	checkSendAt,
+	isQuietHour,
+	localTime,
+	nextAttemptAt,
+	quietUntil,
+	retryPlanOf,
+	withinLimits,
+} from '../core/timing.js';
 import { checkForwardedEvent, eventTime, webhookUrls } from '../core/webhooks.js';
 import { keyBytes } from '../core/widgets.js';
 
@@ -274,6 +283,19 @@ describe('timing', () => {
 		expect(nextAttemptAt(2, 0)).toBe(300_000);
 		expect(nextAttemptAt(3, 0)).toBeNull();
 		expect(nextAttemptAt(4, 0, { max: 5, delays: [1, 2] })).toBe(2);
+		// the long plan (PLAN 0.8.10 N3): now, then 5 and 15 minutes and 1, 3 and 6 hours later
+		const MIN = 60_000;
+		expect([1, 2, 3, 4, 5, 6].map((failed) => nextAttemptAt(failed, 0, RETRY_PLANS.long))).toEqual([
+			5 * MIN,
+			15 * MIN,
+			60 * MIN,
+			180 * MIN,
+			360 * MIN,
+			null,
+		]);
+		expect(retryPlanOf('long')).toBe('long');
+		expect(retryPlanOf(undefined)).toBe('short');
+		expect(retryPlanOf('weekly')).toBe('short');
 	});
 
 	it('holds non-urgent messages until the end of quiet hours in the recipient’s time zone', () => {

@@ -50,6 +50,8 @@ import { LEASE_MS } from '../core/timing.js';
  * @property {string | null} reason why it failed or was skipped
  * @property {Attempt[]} attempts every attempt, on every channel
  * @property {number} channelAttempts failed attempts on `channel`
+ * @property {import('../core/timing.js').RetryPlan} [retryPlan] the retry plan on `channel`, kept from when the message
+ *   was accepted (or moved to its fallback channel); missing on messages accepted before plans (short)
  * @property {boolean} fellBack
  * @property {Date} dueAt
  * @property {Date | null} leaseUntil
