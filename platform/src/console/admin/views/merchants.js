@@ -41,6 +41,7 @@ import { ADMIN, BILLING, MERCHANT_FIELDS, MORE, TWO_STEP, WEBSITE } from '../../
 import { api } from '../../paths.js';
 import { DaysLeft, LocalTime, MerchantStatusBadge } from '../../views/billing.js';
 import { MerchantFieldsForm, countryOptions } from '../../views/account.js';
+import { COUNTRY_NAMES } from '../../../modules/identity/core/countries.js';
 import { HeaderActions, ListDetail, ListPane, ListRow, ListSearch } from '../../views/common.js';
 import { ActivityTable, useActivityPages } from '../../views/login-settings.js';
 import { AddWebsiteDialog, MerchantUsageDialog, WebsiteCard } from '../../views/website.js';
@@ -389,14 +390,7 @@ function MerchantList({ props, admin, selectedId, autoId = null }) {
 }
 
 /** @param {string | null | undefined} code ISO 3166-1 alpha-2 */
-const countryName = (code) => {
-	if (!code) return '—';
-	try {
-		return new Intl.DisplayNames(['en'], { type: 'region' }).of(code) ?? code;
-	} catch {
-		return code;
-	}
-};
+const countryName = (code) => (code ? (COUNTRY_NAMES[code] ?? code) : '—');
 
 /**
  * The merchant's details (the fields the header does not show), its sign-in and its websites.

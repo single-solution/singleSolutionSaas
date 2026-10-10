@@ -227,6 +227,17 @@ describe('display', () => {
 					}}
 				/>
 				<HeroCard label="Empty" value="0" chart={{ label: 'None', data: [] }} />
+				<HeroCard
+					label="Zeros"
+					value="0"
+					chart={{
+						label: 'Only zeros',
+						data: [
+							{ label: 'a', value: 0 },
+							{ label: 'b', value: 0 },
+						],
+					}}
+				/>
 			</div>,
 		);
 		// one accent: tiles stay neutral, a kind puts the icon badge, chip and empty-state icon in the indigo tint
@@ -242,6 +253,9 @@ describe('display', () => {
 		expect(container.querySelector('section[aria-label="Credit balance"] svg[role="img"]')).not.toBeNull();
 		expect(container.querySelector('section[aria-label="Credit balance"] dd')?.textContent).toBe('12 days');
 		expect(container.textContent).toContain('No data for this period.');
+		// only zeros: the empty text, not a row of empty tracks that reads like full bars
+		expect(container.querySelector('svg[aria-label^="Only zeros"]')).toBeNull();
+		expect(container.textContent.match(/No data for this period\./g)?.length).toBe(2);
 	});
 
 	it('Meter exposes its value; Stepper marks the current step', () => {

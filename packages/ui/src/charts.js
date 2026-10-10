@@ -156,7 +156,8 @@ export function HeroCard({ label, value, icon = 'wallet', details = [], chart, c
 }
 
 /**
- * Bars of the hero card (light bars on the solid colour, a soft track behind each bar).
+ * Bars of the hero card (light bars on the solid colour, a soft track behind each bar). With no data, or only zeros,
+ * it shows `emptyText` instead of empty tracks that read like full bars.
  * @param {{ label: string, data: Datum[], format?: (value: number) => string, emptyText?: string }} props
  */
 function HeroBars({ label, data, format = String, emptyText = 'No data for this period.' }) {
@@ -167,7 +168,7 @@ function HeroBars({ label, data, format = String, emptyText = 'No data for this 
 	return (
 		<figure className="flex min-w-0 flex-col justify-end gap-2">
 			<figcaption className="text-xs font-semibold text-on-hero-muted">{label}</figcaption>
-			{data.length === 0 ? (
+			{max === 0 ? (
 				<p className="py-10 text-sm text-on-hero-muted">{emptyText}</p>
 			) : (
 				<>

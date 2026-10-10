@@ -385,7 +385,7 @@
 	--ss-on-hero: #ffffff;
 	--ss-on-hero-muted: #e0e7ff;
 	--ss-hero-bar: rgb(255 255 255 / 0.9);
-	--ss-hero-track: rgb(255 255 255 / 0.16);
+	--ss-hero-track: rgb(255 255 255 / 0.08);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -424,7 +424,7 @@
 		--ss-on-hero: #ffffff;
 		--ss-on-hero-muted: #e0e7ff;
 		--ss-hero-bar: rgb(255 255 255 / 0.88);
-		--ss-hero-track: rgb(255 255 255 / 0.14);
+		--ss-hero-track: rgb(255 255 255 / 0.08);
 	}
 }
 
@@ -463,7 +463,7 @@
 	--ss-on-hero: #ffffff;
 	--ss-on-hero-muted: #e0e7ff;
 	--ss-hero-bar: rgb(255 255 255 / 0.88);
-	--ss-hero-track: rgb(255 255 255 / 0.14);
+	--ss-hero-track: rgb(255 255 255 / 0.08);
 }
 
 @layer base {

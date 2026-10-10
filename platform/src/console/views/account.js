@@ -7,7 +7,7 @@
  */
 import { useState } from 'react';
 import { Button, Card, Form, FormError, Input, Masonry, PageHeader, Select, fieldErrors, useToast } from '@ss/ui';
-import { COUNTRY_CODES } from '../../modules/identity/core/countries.js';
+import { COUNTRY_CODES, COUNTRY_NAMES } from '../../modules/identity/core/countries.js';
 import { LOGIN, MERCHANT, MERCHANT_FIELDS } from '../../texts/console.js';
 import { apiFetch, useResource } from '../client.js';
 import { api } from '../paths.js';
@@ -18,24 +18,16 @@ import { FrameBilling } from './frame-billing.js';
 /** @typedef {import('@ss/ui').Problem} Problem */
 
 /**
- * Country options, shown by name in the viewer's language and stored as the ISO 3166-1 alpha-2 code.
+ * Country options, shown by their fixed English name and stored as the ISO 3166-1 alpha-2 code. The names and the order
+ * are the same on the server and in the browser (no `Intl` or locale comparison), so the page hydrates cleanly.
  * @param {string} noneLabel
  */
-export const countryOptions = (noneLabel) => {
-	/** @type {Intl.DisplayNames | null} */
-	let names = null;
-	try {
-		names = new Intl.DisplayNames(['en'], { type: 'region' });
-	} catch {
-		names = null;
-	}
-	return [
-		{ value: '', label: noneLabel },
-		...COUNTRY_CODES.map((code) => ({ value: code, label: names?.of(code) ?? code })).sort((a, b) =>
-			String(a.label).localeCompare(String(b.label)),
-		),
-	];
-};
+export const countryOptions = (noneLabel) => [
+	{ value: '', label: noneLabel },
+	...COUNTRY_CODES.map((code) => ({ value: code, label: COUNTRY_NAMES[code] ?? code })).sort((a, b) =>
+		a.label < b.label ? -1 : a.label > b.label ? 1 : 0,
+	),
+];
 
 /**
  * The merchant fields form (Account and the admin Details tab).
