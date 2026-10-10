@@ -1,13 +1,23 @@
 /**
- * The gateways (PLAN 0.8.7): their ids, the feature that switches each on, the connection holding the merchant's keys,
- * the currencies each one takes and how it refunds. Every gateway is a redirect to the gateway's own page or form:
- * card details never reach Payments. No I/O.
+ * The gateways (PLAN 0.8.7): their ids (`payfast` is PayFast South Africa, `payfast_pk` PayFast Pakistan), the feature
+ * that switches each on, the connection holding the merchant's keys, the currencies each one takes and how it refunds.
+ * Every gateway is a redirect to the gateway's own page or form: card details never reach Payments. No I/O.
  * @module
  */
 
 /** Gateway ids, in the order payers see them. */
 export const GATEWAYS = Object.freeze(
-	/** @type {const} */ (['stripe', 'paypal', 'payfast', 'jazzcash', 'easypaisa', 'bank_transfer', 'generic']),
+	/** @type {const} */ ([
+		'stripe',
+		'paypal',
+		'payfast',
+		'payfast_pk',
+		'jazzcash',
+		'easypaisa',
+		'rapid',
+		'bank_transfer',
+		'generic',
+	]),
 );
 
 /** @typedef {typeof GATEWAYS[number]} Gateway */
@@ -17,8 +27,10 @@ export const GATEWAY_FEATURES = Object.freeze({
 	stripe: 'stripe',
 	paypal: 'paypal',
 	payfast: 'payfast',
+	payfast_pk: 'payfast_pk',
 	jazzcash: 'jazzcash',
 	easypaisa: 'easypaisa',
+	rapid: 'rapid',
 	bank_transfer: 'bank_transfer',
 	generic: 'generic_gateway',
 });
@@ -28,8 +40,10 @@ export const GATEWAY_CONNECTIONS = Object.freeze({
 	stripe: 'stripe',
 	paypal: 'paypal',
 	payfast: 'payfast',
+	payfast_pk: 'payfast_pk',
 	jazzcash: 'jazzcash',
 	easypaisa: 'easypaisa',
+	rapid: 'rapid',
 	bank_transfer: null,
 	generic: 'generic',
 });
@@ -71,8 +85,10 @@ export const GATEWAY_CURRENCIES = Object.freeze({
 	stripe: null,
 	paypal: PAYPAL_CURRENCIES,
 	payfast: Object.freeze(['ZAR']),
+	payfast_pk: Object.freeze(['PKR']),
 	jazzcash: Object.freeze(['PKR']),
 	easypaisa: Object.freeze(['PKR']),
+	rapid: Object.freeze(['PKR']),
 	bank_transfer: null,
 	generic: null,
 });

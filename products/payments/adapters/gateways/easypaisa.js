@@ -39,10 +39,11 @@ export const hashedRequest = (fields, hashKey) => {
 };
 
 /**
- * Easypay's local mobile number format (`03…`) of an international Pakistani number, or ''.
+ * The local mobile number format (`03…`) of an international Pakistani number, or '' (Easypay and PayFast Pakistan
+ * take it).
  * @param {string | undefined} phone
  */
-const localMobile = (phone) => (phone && /^\+923\d{9}$/.test(phone) ? `0${phone.slice(3)}` : '');
+export const localMobile = (phone) => (phone && /^\+923\d{9}$/.test(phone) ? `0${phone.slice(3)}` : '');
 
 /** @type {GatewayAdapter} */
 export const easypaisa = {

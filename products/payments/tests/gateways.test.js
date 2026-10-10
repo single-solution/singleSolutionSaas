@@ -6,6 +6,8 @@ import { createAdapters, genericCurrencies } from '../adapters/gateways/index.js
 import { apiSignature, formSignature } from '../adapters/gateways/payfast.js';
 import { pakistanTime, secureHash, shortRef } from '../adapters/gateways/jazzcash.js';
 import { hashedRequest } from '../adapters/gateways/easypaisa.js';
+import { payfastAmount, validationHash } from '../adapters/gateways/payfast-pk.js';
+import { webhookSignature, wholeUnits } from '../adapters/gateways/rapid.js';
 import { checkoutSignature } from '../adapters/gateways/generic.js';
 import { call, failure } from '../adapters/gateways/types.js';
 import { formFields, phpUrlencode, signTimestamped, verifyTimestamped } from '../adapters/util.js';
@@ -567,6 +569,184 @@ describe('PayFast', () => {
 	});
 });
 
+describe('PayFast (Pakistan)', () => {
+	const keys = { merchantId: '102', securedKey: 'secured-key-0123', merchantName: 'Shop Ltd', sandbox: true };
+	const payfastPk = adapters.payfast_pk;
+	const UAT = 'https://ipguat.apps.net.pk';
+	/** PayFast's token API: a token for any basket. */
+	const tokens = () =>
+		fake.respond(UAT, (c) =>
+			c.path === '/Ecommerce/api/Transaction/GetAccessToken' ? { status: 200, body: { ACCESS_TOKEN: ' tok-1 ' } } : undefined,
+		);
+	/** A signed answer as PayFast sends it (query names as PayFast writes them). @param {Record<string, string>} fields */
+	const answer = (fields) => ({
+		...fields,
+		validation_hash: validationHash(fields.basket_id ?? '', fields.err_code ?? '', keys),
+	});
+	it('checks the keys and tests them by asking for an access token', async () => {
+		expect(payfastPk.violation(null)).toMatch(/merchant id/);
+		expect(payfastPk.violation({ merchantId: 'MC1' })).toMatch(/number/);
+		expect(payfastPk.violation({ merchantId: '102', securedKey: 'a b' })).toMatch(/secured key/);
+		expect(payfastPk.violation({ merchantId: '102', securedKey: 'k', merchantName: ' ' })).toMatch(/merchant name/);
+		expect(payfastPk.violation({ ...keys, merchantName: 'x'.repeat(101) })).toMatch(/100/);
+		expect(payfastPk.violation({ ...keys, sandbox: 'yes' })).toMatch(/sandbox/);
+		expect(payfastPk.violation(keys)).toBeNull();
+		tokens();
+		expect(await payfastPk.test(keys, ctx)).toEqual({ ok: true });
+		const asked = fake.calls.at(-1);
+		expect(asked?.method).toBe('POST');
+		expect(Object.fromEntries(new URLSearchParams(asked?.body))).toEqual({
+			MERCHANT_ID: '102',
+			SECURED_KEY: keys.securedKey,
+			BASKET_ID: `SS-TEST-${NOW / 1000}`,
+			TXNAMT: '1',
+			CURRENCY_CODE: 'PKR',
+		});
+		fake.respond(UAT, () => ({ status: 200, body: { error: 'Invalid' } }));
+		expect(await payfastPk.test(keys, ctx)).toEqual({
+			ok: false,
+			message: 'PayFast (Pakistan) gave no access token: check the merchant id and the secured key.',
+		});
+		fake.respond('https://ipg1.apps.net.pk', () => ({ status: 500 }));
+		expect(await payfastPk.test({ ...keys, sandbox: false }, ctx)).toEqual({
+			ok: false,
+			message: 'PayFast (Pakistan) answered HTTP 500.',
+		});
+	});
+	it('gets a token for the payment, then hands the payer a form for PayFast’s page', async () => {
+		expect(payfastAmount(250000, 'PKR')).toBe('2500');
+		expect(payfastAmount(250050, 'PKR')).toBe('2500.50');
+		tokens();
+		const started = await payfastPk.start({ payment: PAYMENT, keys, urls: URLS }, ctx);
+		if (started.kind !== 'form') throw new Error('form expected');
+		expect(started.action).toBe(`${UAT}/Ecommerce/api/Transaction/PostTransaction`);
+		expect(started.ref).toBe(PAYMENT.id);
+		expect(Object.fromEntries(new URLSearchParams(fake.calls.at(-1)?.body))).toMatchObject({
+			BASKET_ID: PAYMENT.id,
+			TXNAMT: '2500',
+			CURRENCY_CODE: 'PKR',
+		});
+		expect(Object.fromEntries(started.fields)).toEqual({
+			CURRENCY_CODE: 'PKR',
+			MERCHANT_ID: '102',
+			MERCHANT_NAME: 'Shop Ltd',
+			TOKEN: 'tok-1',
+			BASKET_ID: PAYMENT.id,
+			TXNAMT: '2500',
+			ORDER_DATE: '2026-10-01 15:00:00',
+			SUCCESS_URL: URLS.return,
+			FAILURE_URL: URLS.return,
+			CHECKOUT_URL: URLS.notify,
+			CUSTOMER_EMAIL_ADDRESS: 'ana@example.com',
+			CUSTOMER_MOBILE_NO: '03001234567',
+			SIGNATURE: createHash('md5').update(`102:Shop Ltd:2500:${PAYMENT.id}`).digest('hex'),
+			VERSION: 'MERCHANTCART-0.1',
+			TXNDESC: 'Order 1042',
+			PROCCODE: '00',
+			TRAN_TYPE: 'ECOMM_PURCHASE',
+		});
+		const bare = await payfastPk.start(
+			{ payment: { ...PAYMENT, customer: {}, description: '', reference: '' }, keys, urls: URLS },
+			ctx,
+		);
+		const fields = bare.kind === 'form' ? Object.fromEntries(bare.fields) : {};
+		expect(fields.TXNDESC).toBe('Payment');
+		expect(fields.CUSTOMER_EMAIL_ADDRESS).toBeUndefined();
+		expect(fields.CUSTOMER_MOBILE_NO).toBeUndefined();
+		fake.respond(UAT, () => ({ status: 401 }));
+		expect(await payfastPk.start({ payment: PAYMENT, keys, urls: URLS }, ctx)).toEqual({
+			kind: 'error',
+			message: 'PayFast (Pakistan) refused the keys.',
+		});
+		fake.respond('https://ipg1.apps.net.pk', () => ({ status: 200, body: { ACCESS_TOKEN: 'live' } }));
+		const live = await payfastPk.start({ payment: PAYMENT, keys: { ...keys, sandbox: false }, urls: URLS }, ctx);
+		expect(live.kind === 'form' && live.action).toBe('https://ipg1.apps.net.pk/Ecommerce/api/Transaction/PostTransaction');
+	});
+	it('trusts a return only with a valid hash for the payment’s basket', async () => {
+		const paid = answer({
+			basket_id: PAYMENT.id,
+			err_code: '000',
+			err_msg: 'Success',
+			transaction_id: 'T-9',
+			transaction_amount: '2500.00',
+			transaction_currency: 'PKR',
+		});
+		expect(await payfastPk.returned?.(incoming({}, '', paid), PAYMENT, keys, ctx)).toEqual({
+			news: {
+				kind: 'payment',
+				paymentId: PAYMENT.id,
+				ref: PAYMENT.id,
+				outcome: 'paid',
+				amount: 250000,
+				currency: 'PKR',
+				capture: 'T-9',
+			},
+		});
+		// mixed-case names, the numeric currency code and a hash in capitals
+		const upper = { ...paid, validation_hash: paid.validation_hash.toUpperCase(), transaction_currency: '586' };
+		expect(await payfastPk.returned?.(incoming({}, new URLSearchParams(upper).toString()), PAYMENT, keys, ctx)).toMatchObject({
+			news: { outcome: 'paid', currency: 'PKR' },
+		});
+		expect(
+			await payfastPk.returned?.(incoming({}, '', answer({ basket_id: PAYMENT.id, err_code: '00' })), PAYMENT, keys, ctx),
+		).toMatchObject({ news: { outcome: 'paid', capture: null } });
+		for (const [code, outcome] of /** @type {Array<[string, string]>} */ ([
+			['001', 'pending'],
+			['002', 'failed'],
+		])) {
+			const news = await payfastPk.returned?.(
+				incoming({}, '', answer({ basket_id: PAYMENT.id, err_code: code })),
+				PAYMENT,
+				keys,
+				ctx,
+			);
+			expect(news?.news).toMatchObject({ outcome });
+			expect(news?.news?.amount).toBeUndefined();
+		}
+		const other = answer({ basket_id: 'pay_0000000000other', err_code: '000' });
+		expect(await payfastPk.returned?.(incoming({}, '', other), PAYMENT, keys, ctx)).toEqual({ news: null });
+		expect(
+			await payfastPk.returned?.(incoming({}, '', { ...paid, err_code: '000', validation_hash: 'abc' }), PAYMENT, keys, ctx),
+		).toEqual({ news: null });
+		expect(await payfastPk.returned?.(incoming({}, '', { ...paid, err_code: '00' }), PAYMENT, keys, ctx)).toEqual({
+			news: null,
+		});
+		expect(await payfastPk.returned?.(incoming({}, '', { basket_id: PAYMENT.id }), PAYMENT, keys, ctx)).toEqual({ news: null });
+		expect(await payfastPk.returned?.(incoming(), PAYMENT, keys, ctx)).toEqual({ news: null });
+	});
+	it('reads signed notices on its CHECKOUT_URL and records refunds by hand', async () => {
+		const fields = answer({ basket_id: PAYMENT.id, err_code: '000', transaction_amount: '2500', transaction_id: 'T-9' });
+		expect(await payfastPk.notice?.(incoming({}, '', fields), keys, ctx)).toEqual({
+			ok: true,
+			news: [
+				{
+					kind: 'payment',
+					paymentId: PAYMENT.id,
+					ref: PAYMENT.id,
+					outcome: 'paid',
+					amount: 250000,
+					currency: 'PKR',
+					capture: 'T-9',
+				},
+			],
+		});
+		expect(await payfastPk.notice?.(incoming({}, new URLSearchParams(fields).toString()), keys, ctx)).toMatchObject({
+			ok: true,
+		});
+		expect(
+			await payfastPk.notice?.(incoming({}, '', answer({ basket_id: 'ORDER-7', err_code: '000' })), keys, ctx),
+		).toMatchObject({
+			news: [{ paymentId: null, ref: 'ORDER-7' }],
+		});
+		expect(await payfastPk.notice?.(incoming({}, '', { ...fields, validation_hash: 'x' }), keys, ctx)).toEqual({ ok: false });
+		expect(await payfastPk.notice?.(incoming(), keys, ctx)).toEqual({ ok: false });
+		expect(await payfastPk.refund({ payment: PAYMENT, amount: 1, reason: '', refundId: 'r' }, keys, ctx)).toEqual({
+			ok: true,
+			manual: true,
+		});
+	});
+});
+
 describe('JazzCash', () => {
 	const keys = { merchantId: 'MC123', password: 'pass', integritySalt: 'salt123', sandbox: true };
 	const jazzcash = adapters.jazzcash;
@@ -761,6 +941,118 @@ describe('Easypaisa', () => {
 		expect(await easypaisa.status?.(payment, keys, ctx)).toMatchObject({ outcome: 'pending' });
 		fake.respond('https://easypaystg.easypaisa.com.pk', () => ({ status: 200, body: { responseCode: '0001' } }));
 		expect(await easypaisa.status?.(payment, keys, ctx)).toBeNull();
+	});
+});
+
+describe('Rapid Gateway', () => {
+	const keys = { secretKey: 'rg_sk_test_123', webhookSecret: 'rg_whsec_456', sandbox: true };
+	const rapid = adapters.rapid;
+	const SANDBOX = 'https://sandbox.api.rapidgateway.pk';
+	/** A webhook as Rapid signs it. @param {unknown} body @param {string} [secret] */
+	const hook = (body, secret = keys.webhookSecret) => {
+		const text = JSON.stringify(body);
+		return incoming({ 'x-rg-signature': webhookSignature(text, secret) }, text);
+	};
+	it('checks the keys by their shape', async () => {
+		expect(rapid.violation(null)).toMatch(/secret key/);
+		expect(rapid.violation({ secretKey: 'short' })).toBe('Fill in the secret key.');
+		expect(rapid.violation({ secretKey: 'rg sk test 123' })).toBe('Fill in the secret key.');
+		expect(rapid.violation({ secretKey: keys.secretKey, webhookSecret: '' })).toBe('Fill in the webhook secret.');
+		expect(rapid.violation({ ...keys, sandbox: 1 })).toMatch(/sandbox/);
+		expect(rapid.violation(keys)).toBeNull();
+		expect(await rapid.test(keys, ctx)).toEqual({ ok: true });
+		expect(await rapid.test({}, ctx)).toMatchObject({ ok: false });
+	});
+	it('creates the payment at Rapid and redirects the payer to its checkout', async () => {
+		expect(wholeUnits(250000, 'PKR')).toBe(2500);
+		expect(wholeUnits(250050, 'PKR')).toBeNull();
+		expect(wholeUnits(7, 'JPY')).toBe(7);
+		fake.respond(SANDBOX, () => ({ status: 201, body: { id: 'rp_1', checkout_url: 'https://checkout.rapidgateway.pk/rp_1' } }));
+		expect(await rapid.start({ payment: PAYMENT, keys, urls: URLS }, ctx)).toEqual({
+			kind: 'redirect',
+			url: 'https://checkout.rapidgateway.pk/rp_1',
+			ref: 'rp_1',
+		});
+		const sent = fake.calls.at(-1);
+		expect(sent?.path).toBe('/v1/payments');
+		expect(sent?.headers.authorization).toBe(`Bearer ${keys.secretKey}`);
+		expect(sent?.headers['idempotency-key']).toBe(`ss-${PAYMENT.id}`);
+		expect(JSON.parse(sent?.body ?? '{}')).toEqual({
+			amount: 2500,
+			currency: 'PKR',
+			methods: ['card', 'easypaisa', 'jazzcash', 'raast'],
+			customer: { phone: '+923001234567' },
+			metadata: { ss_payment: PAYMENT.id, ss_website: PAYMENT.websiteId },
+			return_url: URLS.return,
+			webhook_url: URLS.notify,
+		});
+		await rapid.start({ payment: { ...PAYMENT, customer: {} }, keys, urls: URLS }, ctx);
+		expect(JSON.parse(fake.calls.at(-1)?.body ?? '{}').customer).toEqual({});
+		expect(await rapid.start({ payment: { ...PAYMENT, amount: 250050 }, keys, urls: URLS }, ctx)).toEqual({
+			kind: 'error',
+			message: 'Rapid Gateway takes whole amounts only.',
+		});
+		fake.respond(SANDBOX, () => ({ status: 422, body: { message: 'Amount too low' } }));
+		expect(await rapid.start({ payment: PAYMENT, keys, urls: URLS }, ctx)).toEqual({
+			kind: 'error',
+			message: 'Amount too low',
+		});
+		fake.respond(SANDBOX, () => ({ status: 200, body: { id: 'rp_2', checkout_url: 'http://insecure.example/x' } }));
+		expect(await rapid.start({ payment: PAYMENT, keys, urls: URLS }, ctx)).toEqual({
+			kind: 'error',
+			message: 'Rapid Gateway answered HTTP 200.',
+		});
+		fake.respond('https://api.rapidgateway.pk', () => ({ status: 401 }));
+		expect(await rapid.start({ payment: PAYMENT, keys: { ...keys, sandbox: false }, urls: URLS }, ctx)).toEqual({
+			kind: 'error',
+			message: 'Rapid Gateway refused the keys.',
+		});
+		expect(fake.calls.at(-1)?.url).toBe('https://api.rapidgateway.pk/v1/payments');
+	});
+	it('trusts only webhooks signed with the webhook secret', async () => {
+		const body = { id: 'rp_1', status: 'succeeded', amount: 2500, currency: 'PKR', metadata: { ss_payment: PAYMENT.id } };
+		expect(await rapid.notice?.(hook(body), keys, ctx)).toEqual({
+			ok: true,
+			news: [
+				{
+					kind: 'payment',
+					paymentId: PAYMENT.id,
+					ref: 'rp_1',
+					outcome: 'paid',
+					amount: 250000,
+					currency: 'PKR',
+					capture: 'rp_1',
+				},
+			],
+		});
+		for (const [status, outcome] of [
+			['PAID', 'paid'],
+			['success', 'paid'],
+			['failed', 'failed'],
+			['cancelled', 'cancelled'],
+			['canceled', 'cancelled'],
+			['processing', 'pending'],
+		])
+			expect(await rapid.notice?.(hook({ ...body, status }), keys, ctx)).toMatchObject({ news: [{ outcome }] });
+		expect(await rapid.notice?.(hook({ status: 7, amount: 'x', currency: '' }), keys, ctx)).toEqual({
+			ok: true,
+			news: [{ kind: 'payment', paymentId: null, ref: null, outcome: 'pending', currency: 'PKR', capture: null }],
+		});
+		const signed = hook(body);
+		const upper = incoming({ 'x-rg-signature': (signed.headers.get('x-rg-signature') ?? '').toUpperCase() }, signed.rawBody);
+		expect(await rapid.notice?.(upper, keys, ctx)).toMatchObject({ ok: true });
+		expect(await rapid.notice?.(hook(body, 'another-secret'), keys, ctx)).toEqual({ ok: false });
+		expect(await rapid.notice?.(incoming({}, JSON.stringify(body)), keys, ctx)).toEqual({ ok: false });
+		expect(
+			await rapid.notice?.(incoming({ 'x-rg-signature': webhookSignature('x', keys.webhookSecret) }, 'x'), keys, ctx),
+		).toEqual({
+			ok: false,
+		});
+		expect(await rapid.notice?.(hook([1]), keys, ctx)).toEqual({ ok: false });
+		expect(await rapid.refund({ payment: PAYMENT, amount: 1, reason: '', refundId: 'r' }, keys, ctx)).toEqual({
+			ok: true,
+			manual: true,
+		});
 	});
 });
 

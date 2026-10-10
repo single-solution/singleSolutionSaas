@@ -16,8 +16,10 @@ export const callbackUrls = (base, websiteId = '<websiteId>') => ({
 	stripe: `${base}/v1/gateways/stripe/${websiteId}`,
 	paypal: `${base}/v1/gateways/paypal/${websiteId}`,
 	payfast: `${base}/v1/gateways/payfast/${websiteId}`,
+	payfast_pk: `${base}/v1/gateways/payfast_pk/${websiteId}`,
 	jazzcash: `${base}/return/jazzcash/${websiteId}`,
 	easypaisa: `${base}/return/easypaisa/${websiteId}`,
+	rapid: `${base}/v1/gateways/rapid/${websiteId}`,
 	generic: `${base}/v1/gateways/generic/${websiteId}`,
 });
 

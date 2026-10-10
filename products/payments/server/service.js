@@ -96,7 +96,16 @@ export const createService = (product) => {
 		const ready = new Set();
 		/** @type {string[]} */
 		let own = [];
-		for (const gateway of /** @type {const} */ (['stripe', 'paypal', 'payfast', 'jazzcash', 'easypaisa', 'generic'])) {
+		for (const gateway of /** @type {const} */ ([
+			'stripe',
+			'paypal',
+			'payfast',
+			'payfast_pk',
+			'jazzcash',
+			'easypaisa',
+			'rapid',
+			'generic',
+		])) {
 			if (!s.on.includes(GATEWAY_FEATURES[gateway])) continue;
 			const keys = await keysOf(s, gateway);
 			if (keys) ready.add(gateway);
@@ -304,8 +313,8 @@ export const createService = (product) => {
 
 	/**
 	 * Refund a payment (all of what is left when `amount` is undefined). Gateways with a refund API refund there; the
-	 * others (JazzCash, Easypaisa, bank transfer, the generic adapter without a refund address) are recorded: the merchant
-	 * returns the money themselves.
+	 * others (PayFast Pakistan, JazzCash, Easypaisa, Rapid Gateway, bank transfer, the generic adapter without a refund
+	 * address) are recorded: the merchant returns the money themselves.
 	 * @param {Site} s @param {PaymentRecord} payment @param {{ amount: unknown, reason: unknown }} input @param {Actor} by
 	 * @returns {Promise<PaymentRecord>}
 	 */

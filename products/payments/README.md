@@ -1,9 +1,9 @@
 # Payments
 
-Online payments with the merchant's own gateway keys (PLAN.md 0.8.7): Stripe, PayPal, PayFast, JazzCash, Easypaisa,
-bank transfer and a generic adapter; payment links, the payment API, subscriptions and refunds. Payers always pay on
-the gateway's own page, so card details never reach Payments. Feature keys are in `manifest.json`, the public docs at
-`/docs`.
+Online payments with the merchant's own gateway keys (PLAN.md 0.8.7): Stripe, PayPal, PayFast (South Africa), PayFast
+(Pakistan), JazzCash, Easypaisa, Rapid Gateway, bank transfer and a generic adapter; payment links, the payment API,
+subscriptions and refunds. Payers always pay on the gateway's own page, so card details never reach Payments. Feature
+keys are in `manifest.json`, the public docs at `/docs`.
 
 ## Environment
 
@@ -21,15 +21,17 @@ Exactly three variables (`.env.example`; nothing else is read):
 2. Deploy, then in the Portal: Products → **Add product** with its address and `CONNECT_SECRET`, then **Set active**.
 3. Merchants register these addresses with their gateways (`<base>` is this product's address):
 
-| Gateway       | Address                                                                                               |
-| ------------- | ----------------------------------------------------------------------------------------------------- |
-| Stripe        | webhook endpoint `<base>/v1/gateways/stripe/<websiteId>`                                              |
-| PayPal        | webhook `<base>/v1/gateways/paypal/<websiteId>` (its id goes into the PayPal connection)              |
-| PayFast       | none: `notify_url` `<base>/v1/gateways/payfast/<websiteId>` is sent with every payment                |
-| JazzCash      | return URL `<base>/return/jazzcash/<websiteId>/<paymentId>` (sent per payment; whitelist `<base>`)    |
-| Easypaisa     | postBack URL `<base>/return/easypaisa/<websiteId>/<paymentId>` (sent per payment; whitelist `<base>`) |
-| Generic       | notice `<base>/v1/gateways/generic/<websiteId>` (sent per payment as `notify_url`)                    |
-| Bank transfer | none; storage CORS allows `PUT` from `<base>` for proof uploads                                       |
+| Gateway       | Address                                                                                                           |
+| ------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Stripe        | webhook endpoint `<base>/v1/gateways/stripe/<websiteId>`                                                          |
+| PayPal        | webhook `<base>/v1/gateways/paypal/<websiteId>` (its id goes into the PayPal connection)                          |
+| PayFast (ZA)  | none: `notify_url` `<base>/v1/gateways/payfast/<websiteId>` is sent with every payment                            |
+| PayFast (PK)  | none: `CHECKOUT_URL` `<base>/v1/gateways/payfast_pk/<websiteId>` is sent with every payment                       |
+| JazzCash      | return URL `<base>/return/jazzcash/<websiteId>/<paymentId>` (sent per payment; whitelist `<base>`)                |
+| Easypaisa     | postBack URL `<base>/return/easypaisa/<websiteId>/<paymentId>` (sent per payment; whitelist `<base>`)             |
+| Rapid Gateway | webhook `<base>/v1/gateways/rapid/<websiteId>` (also sent per payment; its secret goes into the Rapid connection) |
+| Generic       | notice `<base>/v1/gateways/generic/<websiteId>` (sent per payment as `notify_url`)                                |
+| Bank transfer | none; storage CORS allows `PUT` from `<base>` for proof uploads                                                   |
 
 ## Scripts
 

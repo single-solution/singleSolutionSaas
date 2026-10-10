@@ -911,7 +911,8 @@ export const createRoutes = (product) => {
 			rateLimit: VISITOR_LIMITS,
 			handler: proofUpload('done'),
 		}),
-		// the payer coming back from a gateway: GET or a form POST (JazzCash, Easypaisa)
+		// the payer coming back from a gateway: GET (PayFast Pakistan's signed answer in the query) or a form POST
+		// (JazzCash, Easypaisa)
 		defineRoute({
 			method: 'GET',
 			path: '/return/:gateway/:websiteId/:id',
@@ -952,6 +953,30 @@ export const createRoutes = (product) => {
 			rawBody: true,
 			rateLimit: NOTICE_LIMITS,
 			handler: notice('payfast'),
+		}),
+		// PayFast (Pakistan) calls its CHECKOUT_URL with the answer's fields in the query or a form body
+		defineRoute({
+			method: 'GET',
+			path: '/v1/gateways/payfast_pk/:websiteId',
+			auth: 'none',
+			rateLimit: NOTICE_LIMITS,
+			handler: notice('payfast_pk'),
+		}),
+		defineRoute({
+			method: 'POST',
+			path: '/v1/gateways/payfast_pk/:websiteId',
+			auth: 'none',
+			rawBody: true,
+			rateLimit: NOTICE_LIMITS,
+			handler: notice('payfast_pk'),
+		}),
+		defineRoute({
+			method: 'POST',
+			path: '/v1/gateways/rapid/:websiteId',
+			auth: 'none',
+			rawBody: true,
+			rateLimit: NOTICE_LIMITS,
+			handler: notice('rapid'),
 		}),
 		defineRoute({
 			method: 'POST',

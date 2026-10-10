@@ -29,11 +29,20 @@
 		},
 		{
 			"key": "payfast",
-			"name": "PayFast",
-			"description": "Payments on PayFast's own page with the merchant's own PayFast account.",
+			"name": "PayFast (South Africa)",
+			"description": "Payments on PayFast South Africa's own page (payfast.co.za, ZAR) with the merchant's own PayFast account.",
 			"dependsOn": [],
 			"settings": {
 				"$ref": "schemas/payfast.settings.json"
+			}
+		},
+		{
+			"key": "payfast_pk",
+			"name": "PayFast (Pakistan)",
+			"description": "Payments on PayFast Pakistan's hosted checkout (gopayfast, PKR) with the merchant's own PayFast account.",
+			"dependsOn": [],
+			"settings": {
+				"$ref": "schemas/payfast_pk.settings.json"
 			}
 		},
 		{
@@ -52,6 +61,15 @@
 			"dependsOn": [],
 			"settings": {
 				"$ref": "schemas/easypaisa.settings.json"
+			}
+		},
+		{
+			"key": "rapid",
+			"name": "Rapid Gateway",
+			"description": "Payments on Rapid Gateway's hosted checkout (card, Easypaisa, JazzCash, Raast; PKR) with the merchant's own Rapid account.",
+			"dependsOn": [],
+			"settings": {
+				"$ref": "schemas/rapid.settings.json"
 			}
 		},
 		{

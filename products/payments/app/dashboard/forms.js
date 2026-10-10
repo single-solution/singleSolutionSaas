@@ -8,7 +8,10 @@ import { useState } from 'react';
 import { Button, Checkbox, FieldGrid, Input } from '@ss/ui';
 import { TEXTS } from './texts.js';
 
-/** @typedef {{ name: string, secret?: boolean, optional?: boolean, check?: boolean }} Field */
+/**
+ * A field of a connection form; `text`: the key of its label when that is not `name`.
+ * @typedef {{ name: string, secret?: boolean, optional?: boolean, check?: boolean, text?: string }} Field
+ */
 
 /** @type {Field} */
 const SANDBOX = { name: 'sandbox', check: true };
@@ -29,6 +32,7 @@ export const FORMS = Object.freeze({
 	],
 	paypal: [{ name: 'clientId' }, { name: 'secret', secret: true }, { name: 'webhookId' }, SANDBOX],
 	payfast: [{ name: 'merchantId' }, { name: 'merchantKey' }, { name: 'passphrase', secret: true }, SANDBOX],
+	payfast_pk: [{ name: 'merchantId' }, { name: 'securedKey', secret: true }, { name: 'merchantName' }, SANDBOX],
 	jazzcash: [{ name: 'merchantId' }, { name: 'password', secret: true }, { name: 'integritySalt', secret: true }, SANDBOX],
 	easypaisa: [
 		{ name: 'storeId' },
@@ -36,6 +40,11 @@ export const FORMS = Object.freeze({
 		{ name: 'username' },
 		{ name: 'password', secret: true },
 		{ name: 'accountNum' },
+		SANDBOX,
+	],
+	rapid: [
+		{ name: 'secretKey', secret: true, text: 'rapidSecretKey' },
+		{ name: 'webhookSecret', secret: true, text: 'rapidWebhookSecret' },
 		SANDBOX,
 	],
 	generic: [
@@ -64,14 +73,14 @@ export function ConnectionForm({ name, onSave }) {
 					field.check ? (
 						<Checkbox
 							key={field.name}
-							label={labels[field.name] ?? field.name}
+							label={labels[field.text ?? field.name] ?? field.name}
 							checked={values[field.name] === true}
 							onChange={(event) => setValues({ ...values, [field.name]: event.target.checked })}
 						/>
 					) : (
 						<Input
 							key={field.name}
-							label={labels[field.name] ?? field.name}
+							label={labels[field.text ?? field.name] ?? field.name}
 							type={field.secret ? 'password' : 'text'}
 							autoComplete="off"
 							value={String(values[field.name] ?? '')}

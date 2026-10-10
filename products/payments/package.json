@@ -1,7 +1,7 @@
 {
 	"name": "@ss/product-payments",
 	"version": "0.1.0",
-	"description": "Payments: online payments with the merchant's own gateway keys — Stripe, PayPal, PayFast, JazzCash, Easypaisa, manual bank transfer and a generic adapter; payment links, the payment API, gateway-managed subscriptions and refunds (PLAN 0.8.7).",
+	"description": "Payments: online payments with the merchant's own gateway keys — Stripe, PayPal, PayFast (South Africa), PayFast (Pakistan), JazzCash, Easypaisa, Rapid Gateway, manual bank transfer and a generic adapter; payment links, the payment API, gateway-managed subscriptions and refunds (PLAN 0.8.7).",
 	"type": "module",
 	"private": true,
 	"license": "UNLICENSED",

@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { formSignature } from '../adapters/gateways/payfast.js';
 import { secureHash } from '../adapters/gateways/jazzcash.js';
+import { validationHash } from '../adapters/gateways/payfast-pk.js';
+import { webhookSignature } from '../adapters/gateways/rapid.js';
 import { signTimestamped } from '../adapters/util.js';
 import { ADMIN_ORIGIN, ALL, BASE, BUCKET, DOMAIN, NOTIFY_BASE, ORIGIN, setup } from './helpers.js';
 
@@ -19,6 +21,8 @@ const EASYPAISA = {
 	accountNum: '987',
 	sandbox: false,
 };
+const PAYFAST_PK = { merchantId: '102', securedKey: 'secured-key-0123', merchantName: 'Shop Ltd', sandbox: false };
+const RAPID = { secretKey: 'rg_sk_live_0123', webhookSecret: 'rg_whsec_4567', sandbox: false };
 const GENERIC = { name: 'PayNow', url: 'https://gateway.example.org/checkout', secret: 'g'.repeat(32) };
 const STORAGE = {
 	endpoint: BUCKET,
@@ -445,6 +449,99 @@ describe('the other gateways', () => {
 		expect((await page(`/return/payfast/${env.websiteId}/${payment.id}`)).headers.get('location')).toBe(
 			`${RETURN}?ss_payment=${payment.id}`,
 		);
+	});
+
+	it('PayFast (Pakistan): access token, form to PayFast, signed return and CHECKOUT_URL notices', async () => {
+		env.gateways.respond('https://ipg1.apps.net.pk', (c) =>
+			c.path === '/Ecommerce/api/Transaction/GetAccessToken' ? { status: 200, body: { ACCESS_TOKEN: 'tok' } } : undefined,
+		);
+		expect(await env.connect('payfast_pk', PAYFAST_PK)).toMatchObject({ status: 'connected', last4: '0123' });
+		const payment = await createPayment({ gateway: 'payfast_pk' });
+		const form = await page(`/pay/${env.websiteId}/${payment.id}`);
+		expect(form.text).toContain('https://ipg1.apps.net.pk/Ecommerce/api/Transaction/PostTransaction');
+		expect(form.text).toContain(`${BASE}/v1/gateways/payfast_pk/${env.websiteId}`);
+		expect(form.text).toContain('Continue to PayFast (Pakistan)');
+		/** PayFast's signed answer. @param {string} basket @param {string} code */
+		const signed = (basket, code) =>
+			new URLSearchParams({
+				basket_id: basket,
+				err_code: code,
+				transaction_id: 'T-1',
+				transaction_amount: '2500',
+				validation_hash: validationHash(basket, code, PAYFAST_PK),
+			}).toString();
+		// what the browser brings back unsigned changes nothing
+		const forged = await page(`/return/payfast_pk/${env.websiteId}/${payment.id}?basket_id=${payment.id}&err_code=000`);
+		expect(forged.headers.get('location')).toBe(`${RETURN}?ss_payment=${payment.id}`);
+		expect((await env.api('GET', `/v1/payments/${payment.id}`)).json.status).toBe('pending');
+		const back = await page(`/return/payfast_pk/${env.websiteId}/${payment.id}?${signed(payment.id, '000')}`);
+		expect(back.headers.get('location')).toBe(`${RETURN}?ss_payment=${payment.id}`);
+		expect((await env.api('GET', `/v1/payments/${payment.id}`)).json).toMatchObject({
+			status: 'paid',
+			gatewayReference: payment.id,
+		});
+		// PayFast's own call to CHECKOUT_URL, by GET or POST: a second confirmation changes nothing
+		const notice = await env.call('GET', `/v1/gateways/payfast_pk/${env.websiteId}?${signed(payment.id, '000')}`);
+		expect(notice.json).toEqual({ received: true });
+		const posted = await env.call('POST', `/v1/gateways/payfast_pk/${env.websiteId}`, { form: signed(payment.id, '000') });
+		expect(posted.status).toBe(200);
+		const unsigned = await env.call('GET', `/v1/gateways/payfast_pk/${env.websiteId}?basket_id=${payment.id}&err_code=000`);
+		expect(unsigned.status).toBe(401);
+		// a payment confirmed by the notice alone, and a failed one sent back to the pay page
+		const second = await createPayment({ gateway: 'payfast_pk' });
+		await page(`/pay/${env.websiteId}/${second.id}`);
+		await env.call('GET', `/v1/gateways/payfast_pk/${env.websiteId}?${signed(second.id, '000')}`);
+		expect((await env.api('GET', `/v1/payments/${second.id}`)).json.status).toBe('paid');
+		const third = await createPayment({ gateway: 'payfast_pk' });
+		await page(`/pay/${env.websiteId}/${third.id}`);
+		const failed = await page(`/return/payfast_pk/${env.websiteId}/${third.id}?${signed(third.id, '002')}`);
+		expect(failed.headers.get('location')).toBe(`/pay/${env.websiteId}/${third.id}`);
+		expect((await env.api('GET', `/v1/payments/${third.id}`)).json.status).toBe('failed');
+		// no refund call at PayFast Pakistan: recorded for the merchant to return
+		const refund = await env.api('POST', `/v1/payments/${payment.id}/refunds`, { amount: 1000 });
+		expect(refund.json.refunds[0]).toMatchObject({ manual: true, amount: 1000 });
+	});
+
+	it('Rapid Gateway: payment created at Rapid, redirect, confirmed by the signed webhook only', async () => {
+		env.gateways.respond('https://api.rapidgateway.pk', (c) => {
+			const sent = JSON.parse(c.body);
+			return { status: 201, body: { id: `rp_${sent.metadata.ss_payment}`, checkout_url: 'https://checkout.rapid.test/x' } };
+		});
+		expect(await env.connect('rapid', RAPID)).toMatchObject({ status: 'connected', last4: '0123' });
+		const payment = await createPayment({ gateway: 'rapid' });
+		const go = await page(`/pay/${env.websiteId}/${payment.id}`);
+		expect(go.headers.get('location')).toBe('https://checkout.rapid.test/x');
+		// back from Rapid: still pending until the webhook
+		const back = await page(`/return/rapid/${env.websiteId}/${payment.id}`);
+		expect(back.headers.get('location')).toBe(`${RETURN}?ss_payment=${payment.id}`);
+		expect((await env.api('GET', `/v1/payments/${payment.id}`)).json.status).toBe('pending');
+		/** @param {object} event @param {string} [signature] */
+		const hook = (event, signature) => {
+			const body = JSON.stringify(event);
+			return env.call('POST', `/v1/gateways/rapid/${env.websiteId}`, {
+				body,
+				headers: { 'x-rg-signature': signature ?? webhookSignature(body, RAPID.webhookSecret) },
+			});
+		};
+		const event = { id: `rp_${payment.id}`, status: 'succeeded', amount: 2500, metadata: { ss_payment: payment.id } };
+		expect((await hook(event, 'x')).status).toBe(401);
+		expect((await hook(event)).json).toEqual({ received: true });
+		expect((await env.api('GET', `/v1/payments/${payment.id}`)).json).toMatchObject({
+			status: 'paid',
+			gatewayReference: `rp_${payment.id}`,
+		});
+		// a webhook for another amount is recorded and pays nothing
+		const other = await createPayment({ gateway: 'rapid' });
+		await page(`/pay/${env.websiteId}/${other.id}`);
+		await hook({ id: `rp_${other.id}`, status: 'paid', amount: 25, metadata: { ss_payment: other.id } });
+		const unpaid = (await env.api('GET', `/v1/payments/${other.id}`)).json;
+		expect(unpaid.status).toBe('pending');
+		expect(unpaid.history.at(-1)).toMatchObject({ event: 'mismatch', detail: 'rapid confirmed 2500 PKR' });
+		// paisa cannot be paid at Rapid
+		const fraction = await createPayment({ gateway: 'rapid', amount: 250050 });
+		expect((await page(`/pay/${env.websiteId}/${fraction.id}`)).status).toBe(502);
+		const refund = await env.api('POST', `/v1/payments/${payment.id}/refunds`, {});
+		expect(refund.json).toMatchObject({ status: 'refunded', refunds: [{ manual: true, amount: 250000 }] });
 	});
 
 	it('the generic adapter: signed checkout fields, signed notice, refunds recorded', async () => {

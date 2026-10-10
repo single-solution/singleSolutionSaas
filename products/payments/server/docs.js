@@ -107,15 +107,21 @@ ${block(urls.stripe)}
 <h3>PayPal</h3>
 ${para(guide.paypal)}
 ${block(urls.paypal)}
-<h3>PayFast</h3>
+<h3>PayFast (South Africa)</h3>
 ${para(guide.payfast)}
 ${block(urls.payfast)}
+<h3>PayFast (Pakistan)</h3>
+${para(guide.payfast_pk)}
+${block(urls.payfast_pk)}
 <h3>JazzCash</h3>
 ${para(guide.jazzcash)}
 ${block(`${urls.jazzcash}/<paymentId>`)}
 <h3>Easypaisa</h3>
 ${para(guide.easypaisa)}
 ${block(`${urls.easypaisa}/<paymentId>`)}
+<h3>Rapid Gateway</h3>
+${para(guide.rapid)}
+${block(urls.rapid)}
 <h3>Generic gateway adapter</h3>
 ${para(guide.generic)}
 ${block(urls.generic)}

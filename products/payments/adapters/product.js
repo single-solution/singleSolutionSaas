@@ -16,9 +16,11 @@ import easypaisaSettings from '../schemas/easypaisa.settings.json' with { type: 
 import genericGateway from '../schemas/generic_gateway.settings.json' with { type: 'json' };
 import jazzcashSettings from '../schemas/jazzcash.settings.json' with { type: 'json' };
 import payfastSettings from '../schemas/payfast.settings.json' with { type: 'json' };
+import payfastPkSettings from '../schemas/payfast_pk.settings.json' with { type: 'json' };
 import paymentApi from '../schemas/payment_api.settings.json' with { type: 'json' };
 import paymentLinks from '../schemas/payment_links.settings.json' with { type: 'json' };
 import paypalSettings from '../schemas/paypal.settings.json' with { type: 'json' };
+import rapidSettings from '../schemas/rapid.settings.json' with { type: 'json' };
 import refunds from '../schemas/refunds.settings.json' with { type: 'json' };
 import stripeSettings from '../schemas/stripe.settings.json' with { type: 'json' };
 import subscriptions from '../schemas/subscriptions.settings.json' with { type: 'json' };
@@ -31,8 +33,10 @@ const SETTINGS = {
 	stripe: stripeSettings,
 	paypal: paypalSettings,
 	payfast: payfastSettings,
+	payfast_pk: payfastPkSettings,
 	jazzcash: jazzcashSettings,
 	easypaisa: easypaisaSettings,
+	rapid: rapidSettings,
 	bank_transfer: bankTransfer,
 	generic_gateway: genericGateway,
 	payment_links: paymentLinks,
@@ -155,9 +159,11 @@ export const createProductInstance = (options) => {
 			storage: { label: 'Storage for transfer proofs (S3-compatible)', kind: 'storage', neededBy: ['bank_transfer'] },
 			stripe: gateway('stripe', 'Stripe keys', 'stripe', 'secretKey'),
 			paypal: gateway('paypal', 'PayPal app', 'paypal', 'secret'),
-			payfast: gateway('payfast', 'PayFast account', 'payfast', 'merchantKey'),
+			payfast: gateway('payfast', 'PayFast (South Africa) account', 'payfast', 'merchantKey'),
+			payfast_pk: gateway('payfast_pk', 'PayFast (Pakistan) account', 'payfast_pk', 'securedKey'),
 			jazzcash: gateway('jazzcash', 'JazzCash account', 'jazzcash', 'integritySalt'),
 			easypaisa: gateway('easypaisa', 'Easypaisa store', 'easypaisa', 'hashKey'),
+			rapid: gateway('rapid', 'Rapid Gateway account', 'rapid', 'secretKey'),
 			generic: gateway('generic', 'Generic gateway', 'generic_gateway', 'secret'),
 			notifications: {
 				label: 'Notifications token (signed webhooks to your server)',
