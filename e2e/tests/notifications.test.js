@@ -2,7 +2,8 @@
  * PLAN 0.12 step 6: Notifications against the REAL Portal — connect (manifest and price list), price and feature
  * reports, a send through the send API with the server token the Portal issued (the e-mail provider is a fake in this
  * process: no real network call), the delivery log through a ticket, and the hourly charge for the switched-on
- * features.
+ * features. PLAN 0.8.10 phase 2: a WhatsApp template with a copy-code button and a per-status template with optional
+ * sections, written by the merchant's server, are sent.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createProductInstance, manifest, strings } from '@ss/product-notifications/product';
@@ -21,6 +22,14 @@ const resend = async (request) => {
 	return Response.json({ id: `re_${sent.length}` });
 };
 
+/** @type {any[]} */
+const whatsapp = [];
+/** The merchant's WhatsApp Cloud API (Meta), faked in process: its account read and its sends. @param {Request} request */
+const meta = async (request) => {
+	if (request.method === 'POST') whatsapp.push(await request.json());
+	return Response.json(request.method === 'POST' ? { messages: [{ id: `wamid.${whatsapp.length}` }] } : { id: '1234567890' });
+};
+
 /** @type {import('./helpers.js').System} */
 let sys;
 /** @type {Awaited<ReturnType<import('./helpers.js').System['merchant']>>} */
@@ -28,7 +37,14 @@ let m;
 let websiteId = '';
 beforeAll(async () => {
 	sys = await startSystem({
-		unit: { createProductInstance, createRoutes, manifest, strings, url: URL_, handlers: { 'https://api.resend.com': resend } },
+		unit: {
+			createProductInstance,
+			createRoutes,
+			manifest,
+			strings,
+			url: URL_,
+			handlers: { 'https://api.resend.com': resend, 'https://graph.facebook.com': meta },
+		},
 	});
 });
 afterAll(async () => {
@@ -134,5 +150,80 @@ describe('Notifications on the real Portal', () => {
 		sys.clock.advance(HOUR);
 		const after = await sys.dashboard(cookie, 'GET', `/v1/dashboard/websites/${websiteId}/overview`);
 		expect(after.json.todayMillicredits).toBe(before.json.todayMillicredits + 1500);
+	});
+	it('sends a WhatsApp template with a copy-code button and a per-status template with optional sections', async () => {
+		const cookie = await sys.adminSession(await sys.owner(), websiteId);
+		await sys.switchFeatures(cookie, websiteId, ['email', 'send_api', 'whatsapp']);
+		const connected = await sys.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${websiteId}/connections/whatsapp`, {
+			value: { provider: 'meta', phoneNumberId: '1234567890', secret: 'meta-token-0042' },
+		});
+		expect(connected.json).toMatchObject({ status: 'connected' });
+		const { server } = await sys.tokens(m.merchantId, websiteId);
+		const actor = { 'ss-actor-id': 'usr_1', 'ss-actor-name': encodeURIComponent('Ayesha Khan') };
+		// the merchant's server writes both templates (PLAN 0.8.10 N4)
+		const code = await sys.call('PUT', '/v1/templates', {
+			token: server,
+			headers: actor,
+			body: {
+				key: 'accounts.code',
+				channel: 'whatsapp',
+				text: '{code} is your verification code.',
+				providerTemplate: 'authentication',
+				required: true,
+				urgent: true,
+				buttons: [{ index: 0, type: 'copy_code', value: '{code}' }],
+			},
+		});
+		expect(code.status).toBe(200);
+		const status = await sys.call('PUT', '/v1/templates', {
+			token: server,
+			headers: actor,
+			body: {
+				key: 'ecommerce.order_status',
+				channel: 'email',
+				subject: 'Order {order}: {status}',
+				text: 'Your order {order} is {status}.{?tracking} Track it with {courier}: {tracking}.{/tracking}{?reason} Reason: {reason}.{/reason}',
+				required: true,
+			},
+		});
+		expect(status.status).toBe(200);
+
+		const otp = await sys.call('POST', '/v1/messages/whatsapp', {
+			token: server,
+			body: { template: 'accounts.code', to: { phone: '+923001234567' }, values: { code: '482913' } },
+		});
+		expect(otp).toMatchObject({ status: 201, json: { status: 'sent', text: '482913 is your verification code.' } });
+		expect(whatsapp.at(-1)).toEqual({
+			messaging_product: 'whatsapp',
+			to: '923001234567',
+			type: 'template',
+			template: {
+				name: 'authentication',
+				language: { code: 'en' },
+				components: [
+					{ type: 'body', parameters: [{ type: 'text', text: '482913' }] },
+					{ type: 'button', sub_type: 'url', index: '0', parameters: [{ type: 'text', text: '482913' }] },
+				],
+			},
+		});
+
+		/** @param {Record<string, string>} values */
+		const order = (values) =>
+			sys.call('POST', '/v1/messages/email', {
+				token: server,
+				body: { template: 'ecommerce.order_status', to: { email: 'buyer@example.com' }, values },
+			});
+		const shipped = await order({ order: 'IM-2026-0043', status: 'shipped', courier: 'TCS', tracking: 'TRK9' });
+		expect(shipped.json).toMatchObject({
+			status: 'sent',
+			subject: 'Order IM-2026-0043: shipped',
+			text: 'Your order IM-2026-0043 is shipped. Track it with TCS: TRK9.',
+		});
+		const cancelled = await order({ order: 'IM-2026-0044', status: 'cancelled', reason: 'Out of stock' });
+		expect(cancelled.json.text).toBe('Your order IM-2026-0044 is cancelled. Reason: Out of stock.');
+		const confirmed = await order({ order: 'IM-2026-0045', status: 'confirmed', tracking: '' });
+		expect(confirmed.json.text).toBe('Your order IM-2026-0045 is confirmed.');
+		// the e-mail provider got exactly those words
+		expect(sent.at(-1)?.body).toMatchObject({ to: ['buyer@example.com'], text: 'Your order IM-2026-0045 is confirmed.' });
 	});
 });
