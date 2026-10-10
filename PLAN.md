@@ -3048,6 +3048,38 @@ The owner confirms or changes each one.
   as the kit's, other names), which the kit cannot create next to them; drop `ss_payments_events` in any such
   development database (no merchant is live).
 
+#### Builder choices, Phase 2 (Payments) (awaiting owner review)
+
+- **P1**: `GET /v1/bank-transfer` belongs to `bank_transfer` (403 `feature_off` while it is off, like every feature
+  route) and needs no merchant database (it reads settings only). `ready` is the rule the payers' gateway list uses; the
+  details come back as saved whether or not it is ready.
+- **P2**: with `requireDetails` off, bank transfer is ready by its switch alone, even with empty instructions (CT offers
+  it by its switch). The bank page leaves out empty detail rows and then opens with its own text (`bank.introNoDetails`,
+  "as explained below"). The dashboard's gateways-ready tile and a new setup-checklist line (Bank transfer: Ready / Not
+  offered yet) use the same rule.
+- **P3**: the payer types the reference on the bank page (optional); it is sent with the proof's last step
+  (`/pay/<websiteId>/<paymentId>/proof/done` `{ key, reference }`). The confirmation's `note` is one line of at most 500
+  characters (P3 names no limit); both are trimmed, and empty ones are not stored. They live on the history entries
+  (`proof`, `paid`) only, not on the proof mark. `payment.proof_uploaded` carries the payment view like Payments' other
+  events. A confirmation's activity detail names the reference; the note stays out of the activity log.
+- **K1 and K5**: no new settings were needed: gateway keys stay connections (`/v1/connections`, tested live, never
+  answered) and bank details stay `bank_transfer` settings; feature switches stay our admins'. Every Payments event goes
+  through the kit's `events.emit`; `payment.proof_uploaded` joins the list.
+- **Every server action in the UI** (owner request relayed 2026-10-10): the Payments admin and Subscriptions admin are
+  list-and-detail screens (0.6) with dialogs and More menus (status filter with counts, total badge, counts per
+  gateway, every field, refunds and history; Refund and Confirm transfer received as buttons; View proof, Copy pay
+  link, Open pay page, Copy id and, last, Cancel subscription in the menus). A new **Payment links admin** widget
+  (`links_admin`, feature `payment_links`, permissions `links.read` and `links.manage`) on the ticket routes
+  `GET|POST /v1/admin/links` and `GET|PATCH /v1/admin/links/:id` creates, copies, opens and turns links off or on;
+  this replaces 0.12 step 9's "links created by API only". Link writes are activity entries (`link.created`,
+  `link.turned_off`, `link.turned_on`). The dashboard puts Remove connection behind a More menu and a confirmation.
+- **Server-only on purpose**: creating and verifying payments (`POST /v1/payments`, `…/verify`: the merchant's server
+  or Ecommerce does it for its orders; staff take ad-hoc payments with links), starting a subscription (the payer's
+  checkout on the merchant's plan), the event feed (`/v1/events`; Notifications' delivery log shows the sends), the
+  bank details read (the dashboard shows the same settings), the activity read (copied to Accounts), tickets,
+  permissions and data rights (Accounts' calls), and the K1 routes (mirrors of the dashboard). Payments and
+  subscriptions never show in the dashboard: our admins see setup only (0.8.7).
+
 ### 0.8.4 Still open
 
 - **The grilling of each later product** (Notifications, Accounts, Payments, Ecommerce, Growth), held right before it is
