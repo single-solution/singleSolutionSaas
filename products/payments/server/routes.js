@@ -3,14 +3,15 @@
  * dashboard API). Every browser-token, server-token and ticket route belongs to one feature; `openapi.json` is
  * generated from these definitions (`ss app assets`), so `method`, `path`, `auth`, `feature` and `permission` stay
  * string literals. Public routes: the widget script, the docs, the hosted link and pay pages, the payer's return from a
- * gateway and the gateways' signed notices. Every website route sends due payment events right after it answers.
+ * gateway and the gateways' signed notices. Payment events are the kit's (PLAN 0.8.10 K5): every route that makes one,
+ * public ones included, hands the kit its request's `after()`, so the event is forwarded right after the answer.
  * Public entry `./routes` of this package: `product.handler(createRoutes(product))`.
  * @module
  */
 import { isId } from '@ss/contracts';
-import { created, defineRoute, formatText, paginate, problem } from '@ss/app-kit';
+import { actorOf, countHandlers, created, defineRoute, formatMoney, formatText, paginate, problem } from '@ss/app-kit';
 import { GATEWAY_FEATURES, isGateway } from '../core/gateways.js';
-import { formatMoney, fromDecimal } from '../core/money.js';
+import { fromDecimal } from '../core/money.js';
 import {
 	PAYMENT_STATUSES,
 	SUBSCRIPTION_STATUSES,
@@ -24,6 +25,7 @@ import {
 } from '../core/payments.js';
 import { PROOF_TYPES } from '../core/widgets.js';
 import { strings } from '../adapters/product.js';
+import { createStore } from '../adapters/store.js';
 import { formFields } from '../adapters/util.js';
 import { renderDocs } from './docs.js';
 import {
@@ -55,6 +57,16 @@ const NOTICE_LIMITS = [{ limit: 600, windowSeconds: 60, per: /** @type {const} *
 /** A presigned proof upload or download lasts this long. */
 const PROOF_SECONDS = 300;
 
+/**
+ * The look of a page for a website that cannot be served: the English texts, no theme, the default Format.
+ * @type {{ texts: Record<string, string>, theme: undefined, money: (amount: number, currency: string) => string }}
+ */
+const DEFAULT_LOOK = Object.freeze({
+	texts: strings,
+	theme: undefined,
+	money: (amount, currency) => formatMoney(amount, currency),
+});
+
 /** @param {string} field @param {string} message @param {string} [code] */
 const invalid = (field, message, code = 'invalid') =>
 	problem('validation_failed', message, { errors: [{ path: `/${field}`, message, code }] });
@@ -83,20 +95,18 @@ export const createRoutes = (product) => {
 	const service = createService(product);
 
 	/**
-	 * The website of a token or ticket request; due events are sent right after the answer.
+	 * The website of a token or ticket request.
 	 * @param {any} ctx
 	 * @returns {Promise<Site>}
 	 */
-	const siteOf = async (ctx) => {
-		const s = await service.site({
+	const siteOf = (ctx) =>
+		service.site({
 			websiteId: ctx.websiteId,
 			merchantId: ctx.merchantId,
 			domain: ctx.status.domain,
 			base: new URL(ctx.request.url).origin,
+			after: ctx.after,
 		});
-		ctx.after(() => service.drain(s));
-		return s;
-	};
 
 	/**
 	 * The website a public page or a gateway names: it must exist, be served and have its merchant database.
@@ -108,34 +118,45 @@ export const createRoutes = (product) => {
 		if (!isId(websiteId, 'web')) return null;
 		const serving = await product.serving(websiteId);
 		if (!serving.ok || (await product.connections.value(websiteId, 'database')) === null) return null;
-		const s = await service.site({
+		// a public page or a notice has no website token, but events (its own and older ones still due) are forwarded
+		// right after it all the same, as after a token request
+		const merchantId = serving.status.merchantId;
+		ctx.after(() => product.events.drain(websiteId, merchantId));
+		return service.site({
 			websiteId,
 			merchantId: serving.status.merchantId,
 			domain: serving.status.domain,
 			base: new URL(ctx.request.url).origin,
+			after: ctx.after,
 		});
-		ctx.after(() => service.drain(s));
-		return s;
 	};
 
-	/** Who acts: the member of the merchant's staff in the ticket, or the server. @param {any} ctx */
-	const actorOf = (ctx) =>
-		ctx.ticket ? { kind: 'staff', id: String(ctx.ticket.user.id), name: String(ctx.ticket.user.name) } : SERVER_ACTOR;
+	/**
+	 * Who acts (PLAN 0.8.10 K2): the ticket's member of the merchant's staff, else the acting user a server-token call
+	 * names with `SS-Actor-*` headers, else the server.
+	 * @param {any} ctx
+	 */
+	const who = (ctx) => actorOf(ctx, SERVER_ACTOR);
 
 	/**
-	 * Write an activity-log entry for what the merchant's staff or server did.
-	 * @param {any} ctx @param {string} action @param {string} target
+	 * Write an activity-log entry for what the merchant's staff or server did, with the target's label (the payment's
+	 * reference, else its id) and a short plain-text detail (PLAN 0.8.10 K9).
+	 * @param {any} ctx @param {string} action @param {string} target @param {string} label @param {string} detail
 	 */
-	const log = (ctx, action, target) =>
+	const log = (ctx, action, target, label, detail) =>
 		product.activity.record(
 			{ websiteId: ctx.websiteId, merchantId: ctx.merchantId, after: ctx.after },
-			{ actor: actorOf(ctx), action, target },
+			{ actor: who(ctx), action, target, label, detail },
 		);
 
-	/** @param {string} websiteId */
+	/**
+	 * The look of the hosted pages: the website's texts and theme, and its Format for money (PLAN 0.8.10 K7).
+	 * @param {string} websiteId
+	 */
 	const lookOf = async (websiteId) => {
 		const theme = await product.settings.theme(websiteId);
-		return { texts: await product.settings.texts(websiteId), theme };
+		const { money } = await product.format(websiteId);
+		return { texts: await product.settings.texts(websiteId), theme, money };
 	};
 
 	/**
@@ -159,22 +180,38 @@ export const createRoutes = (product) => {
 	};
 
 	/**
+	 * The payments list's filters (`?status=&q=`), shared by the list and its counts; an unknown status or an empty
+	 * search filters nothing.
+	 * @param {any} ctx
+	 * @returns {import('../adapters/store.js').PaymentQuery}
+	 */
+	const paymentQuery = (ctx) => ({
+		status: /** @type {readonly string[]} */ (PAYMENT_STATUSES).includes(ctx.query.status) ? ctx.query.status : undefined,
+		q: typeof ctx.query.q === 'string' && ctx.query.q.trim() !== '' ? ctx.query.q : undefined,
+	});
+
+	/**
 	 * One page of payments (`?cursor=&limit=&status=&q=`), newest first.
 	 * @param {any} ctx
 	 */
 	const listPayments = async (ctx) => {
 		const page = paginate({ cursor: ctx.query.cursor, limit: ctx.query.limit, url: ctx.request.url }, { defaultLimit: 25 });
 		const s = await siteOf(ctx);
-		const status = /** @type {readonly string[]} */ (PAYMENT_STATUSES).includes(ctx.query.status)
-			? ctx.query.status
-			: undefined;
-		const q = typeof ctx.query.q === 'string' && ctx.query.q.trim() !== '' ? ctx.query.q : undefined;
-		const rows = await s.store.payments.list({ after: page.after, limit: page.fetchLimit, status, q });
+		const rows = await s.store.payments.list({ after: page.after, limit: page.fetchLimit, ...paymentQuery(ctx) });
 		return page.respond(
 			rows.map((payment) => service.view(s, payment)),
 			(view) => [view.createdAt, view.id],
 		);
 	};
+
+	/**
+	 * Counts of the payments list (PLAN 0.8.10 K4): `/count` with the list's filters, `/counts?by=state|gateway` (`state`
+	 * is the payment's status; `none` for a payment no gateway was picked for yet).
+	 */
+	const paymentCounts = countHandlers({
+		source: async (ctx) => createStore(await ctx.data(), { now: product.now }).payments.counted(paymentQuery(ctx)),
+		by: { state: 'status', gateway: 'gateway' },
+	});
 
 	/** @param {any} ctx */
 	const readPayment = async (ctx) => {
@@ -186,16 +223,31 @@ export const createRoutes = (product) => {
 	const refundPayment = async (ctx) => {
 		const s = await siteOf(ctx);
 		const body = typeof ctx.body === 'object' && ctx.body !== null ? ctx.body : {};
-		const refunded = await service.refund(s, await paymentOf(s, ctx.params.id), body, actorOf(ctx));
-		await log(ctx, 'payment.refunded', refunded.id);
+		const refunded = await service.refund(s, await paymentOf(s, ctx.params.id), body, who(ctx));
+		const refund = /** @type {import('../adapters/store.js').PaymentRecord['refunds'][number]} */ (refunded.refunds.at(-1));
+		const { money } = await product.format(s.websiteId);
+		await log(
+			ctx,
+			'payment.refunded',
+			refunded.id,
+			refunded.reference || refunded.id,
+			`Refunded ${money(refund.amount, refunded.currency)}${refund.manual ? ' (recorded; returned outside the gateway)' : ''}`,
+		);
 		return created(service.view(s, refunded));
 	};
 
 	/** @param {any} ctx */
 	const confirmPayment = async (ctx) => {
 		const s = await siteOf(ctx);
-		const paid = await service.confirmTransfer(s, await paymentOf(s, ctx.params.id), actorOf(ctx));
-		await log(ctx, 'payment.transfer_confirmed', paid.id);
+		const paid = await service.confirmTransfer(s, await paymentOf(s, ctx.params.id), who(ctx));
+		const { money } = await product.format(s.websiteId);
+		await log(
+			ctx,
+			'payment.transfer_confirmed',
+			paid.id,
+			paid.reference || paid.id,
+			`Bank transfer of ${money(paid.amount, paid.currency)} confirmed`,
+		);
 		return service.view(s, paid);
 	};
 
@@ -226,8 +278,14 @@ export const createRoutes = (product) => {
 		const s = await siteOf(ctx);
 		const found = isId(ctx.params.id, 'sub') ? await s.store.subscriptions.get(ctx.params.id) : null;
 		if (!found) throw problem('not_found', 'No such subscription.');
-		const cancelled = await service.cancelSubscription(s, found, actorOf(ctx));
-		await log(ctx, 'subscription.cancelled', cancelled.id);
+		const cancelled = await service.cancelSubscription(s, found, who(ctx));
+		await log(
+			ctx,
+			'subscription.cancelled',
+			cancelled.id,
+			cancelled.reference || cancelled.id,
+			`Cancelled at ${cancelled.gateway === 'stripe' ? 'Stripe' : 'PayPal'} (plan ${cancelled.plan})`,
+		);
 		return subscriptionView(cancelled);
 	};
 
@@ -282,7 +340,7 @@ export const createRoutes = (product) => {
 	const payPage = async (ctx) => {
 		const { websiteId, paymentId } = ctx.params;
 		const s = await publicSite(ctx, websiteId);
-		const look = s ? await lookOf(websiteId) : { texts: strings };
+		const look = s ? await lookOf(websiteId) : DEFAULT_LOOK;
 		if (!s) return html(renderResultPage({ ...look, state: 'unavailable' }), 404);
 		const found = isId(paymentId, 'pay') ? await s.store.payments.get(paymentId) : null;
 		if (!found) return html(renderResultPage({ ...look, state: 'notFound' }), 404);
@@ -527,7 +585,7 @@ export const createRoutes = (product) => {
 	const linkPage = (step) => async (/** @type {any} */ ctx) => {
 		const { websiteId, linkId } = ctx.params;
 		const s = await publicSite(ctx, websiteId);
-		const look = s ? await lookOf(websiteId) : { texts: strings };
+		const look = s ? await lookOf(websiteId) : DEFAULT_LOOK;
 		const link = s ? await activeLink(s, linkId) : null;
 		if (!s || !link) return html(renderResultPage({ ...look, state: 'notFound' }), 404);
 		const business = (await product.business(websiteId)).name;
@@ -537,9 +595,7 @@ export const createRoutes = (product) => {
 		const form = Object.fromEntries(formFields(ctx.rawBody));
 		const made = await payLink(s, link, { amount: form.amount, gateway: form.gateway, name: form.name, email: form.email });
 		if (made.ok) return seeOther(`/pay/${websiteId}/${made.payment.id}`);
-		const error = formatText(/** @type {Record<string, string>} */ (look.texts)[made.key] ?? made.key, {
-			min: formatMoney(Number(link.minAmount ?? 1), link.currency),
-		});
+		const error = formatText(look.texts[made.key] ?? made.key, { min: look.money(Number(link.minAmount ?? 1), link.currency) });
 		return html(renderLinkPage({ ...look, business, link, gateways, action, error, values: form }), 422);
 	};
 
@@ -582,6 +638,20 @@ export const createRoutes = (product) => {
 			},
 		}),
 		defineRoute({ method: 'GET', path: '/v1/payments', auth: 'server', feature: 'payment_api', handler: listPayments }),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/payments/count',
+			auth: 'server',
+			feature: 'payment_api',
+			handler: paymentCounts.count,
+		}),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/payments/counts',
+			auth: 'server',
+			feature: 'payment_api',
+			handler: paymentCounts.counts,
+		}),
 		defineRoute({ method: 'GET', path: '/v1/payments/:id', auth: 'server', feature: 'payment_api', handler: readPayment }),
 		defineRoute({
 			method: 'POST',
@@ -596,29 +666,27 @@ export const createRoutes = (product) => {
 				return { verified: isConfirmedFor(payment, body), payment: service.view(s, payment) };
 			},
 		}),
+		// payment events (the kit's, PLAN 0.8.10 K5): `?since=&types=&cursor=&limit=`, newest first, and their counts
 		defineRoute({
 			method: 'GET',
 			path: '/v1/events',
 			auth: 'server',
 			feature: 'payment_api',
-			handler: async (ctx) => {
-				const page = paginate(
-					{ cursor: ctx.query.cursor, limit: ctx.query.limit, url: ctx.request.url },
-					{ defaultLimit: 25 },
-				);
-				const s = await siteOf(ctx);
-				const rows = await s.store.events.list({ after: page.after, limit: page.fetchLimit });
-				return page.respond(
-					rows.map((event) => ({
-						id: event.id,
-						type: `payments.${event.type}`,
-						data: event.data,
-						delivery: event.delivery,
-						createdAt: new Date(event.createdAt).toISOString(),
-					})),
-					(view) => [view.createdAt, view.id],
-				);
-			},
+			handler: (ctx) => product.events.list(ctx),
+		}),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/events/count',
+			auth: 'server',
+			feature: 'payment_api',
+			handler: (ctx) => product.events.count(ctx),
+		}),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/events/counts',
+			auth: 'server',
+			feature: 'payment_api',
+			handler: (ctx) => product.events.counts(ctx),
 		}),
 		defineRoute({
 			method: 'POST',
@@ -821,6 +889,20 @@ export const createRoutes = (product) => {
 			auth: 'ticket',
 			permission: 'payments.read',
 			handler: listPayments,
+		}),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/admin/payments/count',
+			auth: 'ticket',
+			permission: 'payments.read',
+			handler: paymentCounts.count,
+		}),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/admin/payments/counts',
+			auth: 'ticket',
+			permission: 'payments.read',
+			handler: paymentCounts.counts,
 		}),
 		defineRoute({
 			method: 'GET',

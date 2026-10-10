@@ -5,7 +5,7 @@
  * @module
  */
 import { formatText, mountWidget } from '@ss/app-kit/widget';
-import { customInputs, errorText, fieldMaker, setHidden, termsBox, textsOf, webAddress, when } from './common.js';
+import { customInputs, datesOf, errorText, fieldMaker, moneyText, setHidden, termsBox, textsOf, webAddress } from './common.js';
 import { element } from './dom.js';
 import { WIDGET_CSS } from './styles.js';
 
@@ -47,8 +47,10 @@ const addressLine = (address) =>
 /**
  * @param {MyAccountInput} input
  */
-export const mountMyAccount = ({ host, config, session }) => {
+export const mountMyAccount = ({ host, win, config, session }) => {
 	const t = textsOf(config);
+	// dates and money in the website's Format and business time zone, for this browser (PLAN 0.8.10 K7)
+	const when = datesOf(config, win);
 	const { settings } = config;
 	/** @param {string} feature */
 	const on = (feature) => config.features.includes(feature);
@@ -111,7 +113,7 @@ export const mountMyAccount = ({ host, config, session }) => {
 					void run(accept, async () => {
 						const answer = await session.me('POST', '/v1/me/terms', { accept: true });
 						if (!answer.ok) {
-							note.textContent = errorText(t, answer);
+							note.textContent = errorText(t, answer, when);
 							return;
 						}
 						if (answer.data?.id) session.setUser(answer.data);
@@ -144,7 +146,7 @@ export const mountMyAccount = ({ host, config, session }) => {
 							...(settings.customFields.length > 0 ? { custom: custom.read(true) } : {}),
 						});
 						if (answer.ok) session.setUser(answer.data);
-						note.textContent = answer.ok ? t('account.saved') : errorText(t, answer);
+						note.textContent = answer.ok ? t('account.saved') : errorText(t, answer, when);
 					});
 				});
 				return section;
@@ -164,7 +166,7 @@ export const mountMyAccount = ({ host, config, session }) => {
 				const save = async (next) => {
 					const answer = await session.me('PATCH', '/v1/me', { addresses: next });
 					if (!answer.ok) {
-						note.textContent = errorText(t, answer);
+						note.textContent = errorText(t, answer, when);
 						return false;
 					}
 					addresses = Array.isArray(answer.data?.addresses) ? answer.data.addresses : next;
@@ -252,7 +254,7 @@ export const mountMyAccount = ({ host, config, session }) => {
 							...(current ? { current: current.input.value } : {}),
 							password: next.input.value,
 						});
-						note.textContent = answer.ok ? t('account.passwordSaved') : errorText(t, answer);
+						note.textContent = answer.ok ? t('account.passwordSaved') : errorText(t, answer, when);
 						if (answer.ok) /** @type {HTMLFormElement} */ (form).reset();
 					});
 				});
@@ -278,7 +280,7 @@ export const mountMyAccount = ({ host, config, session }) => {
 									enabled = false;
 									paint();
 								}
-								note.textContent = answer.ok ? t('account.twoStepTurnedOff') : errorText(t, answer);
+								note.textContent = answer.ok ? t('account.twoStepTurnedOff') : errorText(t, answer, when);
 							}),
 						);
 						return;
@@ -288,7 +290,7 @@ export const mountMyAccount = ({ host, config, session }) => {
 					turnOn.addEventListener('click', () =>
 						run(turnOn, async () => {
 							const answer = await session.me('POST', '/v1/me/two-step/setup');
-							note.textContent = answer.ok ? '' : errorText(t, answer);
+							note.textContent = answer.ok ? '' : errorText(t, answer, when);
 							if (answer.ok) setup(answer.data);
 						}),
 					);
@@ -315,7 +317,7 @@ export const mountMyAccount = ({ host, config, session }) => {
 								code: code.input.value.trim(),
 							});
 							if (!answer.ok) {
-								note.textContent = errorText(t, answer);
+								note.textContent = errorText(t, answer, when);
 								return;
 							}
 							enabled = true;
@@ -342,7 +344,7 @@ export const mountMyAccount = ({ host, config, session }) => {
 				const load = async () => {
 					const answer = await session.me('GET', '/v1/me/sessions');
 					if (!answer.ok) {
-						note.textContent = errorText(t, answer);
+						note.textContent = errorText(t, answer, when);
 						return;
 					}
 					/** @type {Array<Record<string, any>>} */
@@ -367,7 +369,7 @@ export const mountMyAccount = ({ host, config, session }) => {
 								out.addEventListener('click', () =>
 									run(out, async () => {
 										const done = await session.me('DELETE', `/v1/me/sessions/${encodeURIComponent(device.id)}`);
-										note.textContent = done.ok ? t('account.deviceSignedOut') : errorText(t, done);
+										note.textContent = done.ok ? t('account.deviceSignedOut') : errorText(t, done, when);
 										if (done.ok) await load();
 									}),
 								);
@@ -381,7 +383,7 @@ export const mountMyAccount = ({ host, config, session }) => {
 					run(everywhere, async () => {
 						const answer = await session.me('POST', '/v1/me/sign-out-everywhere');
 						if (answer.ok) session.forget();
-						else note.textContent = errorText(t, answer);
+						else note.textContent = errorText(t, answer, when);
 					}),
 				);
 				void load();
@@ -391,7 +393,7 @@ export const mountMyAccount = ({ host, config, session }) => {
 			/** @param {{ dueAt?: string | null }} deletion */
 			const deletionText = (deletion) =>
 				deletion.dueAt
-					? formatText(t('account.deletionDue'), { date: new Date(deletion.dueAt).toLocaleDateString() })
+					? formatText(t('account.deletionDue'), { date: when(deletion.dueAt, 'date') })
 					: t('account.deletionWaiting');
 
 			/** @param {Record<string, any>} user */
@@ -406,7 +408,7 @@ export const mountMyAccount = ({ host, config, session }) => {
 						const answer = await session.me('POST', '/v1/me/export');
 						const url = answer.ok ? webAddress(answer.data?.url) : null;
 						if (!url) {
-							note.textContent = errorText(t, answer);
+							note.textContent = errorText(t, answer, when);
 							return;
 						}
 						note.textContent = '';
@@ -435,7 +437,7 @@ export const mountMyAccount = ({ host, config, session }) => {
 							run(yes, async () => {
 								const answer = await session.me('POST', '/v1/me/delete');
 								if (!answer.ok) {
-									note.textContent = errorText(t, answer);
+									note.textContent = errorText(t, answer, when);
 									return;
 								}
 								deletion.replaceChildren(para(deletionText(answer.data ?? {})));
@@ -471,9 +473,10 @@ export const mountMyAccount = ({ host, config, session }) => {
 								{},
 								formatText(t('account.order'), { number: String(order.number ?? order.id ?? '') }),
 							);
-							const total = [order.totalText, order.total].find(
-								(value) => typeof value === 'string' || typeof value === 'number',
-							);
+							// the amount in this website's Format; else the text Ecommerce made
+							const total =
+								moneyText(config, win, order.total, order.currency) ??
+								[order.totalText, order.total].find((value) => typeof value === 'string' || typeof value === 'number');
 							// Ecommerce's statuses are merchant-defined: its label first, else the status key
 							const status =
 								typeof order.statusLabel === 'string' && order.statusLabel !== ''

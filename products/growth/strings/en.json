@@ -27,6 +27,7 @@
 	"analytics.visits": "Visits",
 	"analytics.pageViews": "Page views",
 	"analytics.perDay": "Visits per day",
+	"analytics.timeZone": "Days are in the {timeZone} time zone.",
 	"analytics.pages": "Top pages",
 	"analytics.sources": "Sources",
 	"analytics.devices": "Devices",

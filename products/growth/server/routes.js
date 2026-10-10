@@ -3,14 +3,17 @@
  * dashboard API). Every browser-token, server-token and ticket route belongs to its feature (or features);
  * `openapi.json` is generated from these definitions (`ss app assets`), so `method`, `path`, `auth`, `feature` and
  * `permission` stay string literals. Nothing runs on a timer: events are written as they arrive, the SEO checklist and
- * IndexNow run when the merchant asks.
+ * IndexNow run when the merchant asks. Days (daily totals, analytics ranges) are days of the website's business time
+ * zone (business.json `timeZone`, UTC when missing; PLAN 0.8.10 K8).
  * Public entry `./routes` of this package: `product.handler(createRoutes(product))`.
  * @module
  */
-import { defineRoute, formatText, ok, paginate, problem } from '@ss/app-kit';
+import { actorOf, countHandlers, defineRoute, formatText, ok, paginate, problem } from '@ss/app-kit';
 import { buildReport, rangeOf } from '../core/analytics.js';
 import { COLLECT_FEATURES, EVENT_FEATURES, checkBatch, countryOf, dayOf, expiryOf, mergeTotals } from '../core/events.js';
 import {
+	checksActivity,
+	indexNowActivity,
 	indexNowSubmission,
 	pageChecks,
 	pagesOf,
@@ -35,6 +38,9 @@ const COLLECT_LIMITS = [
 /** Rate limits of the on-request work that reads other sites (SEO checklist, IndexNow). */
 const WEB_LIMITS = [{ limit: 10, windowSeconds: 3600, per: /** @type {const} */ ('website') }];
 
+/** Who acts when no member of the merchant's staff is named (PLAN 0.8.10 K2). */
+const SERVER = Object.freeze({ kind: 'server', id: 'server', name: 'Server' });
+
 /** @param {string} field @param {string} message */
 const invalid = (field, message) =>
 	problem('validation_failed', message, { errors: [{ path: `/${field}`, message, code: 'invalid' }] });
@@ -49,16 +55,36 @@ export const createRoutes = (product) => {
 	const storeOf = async (ctx) => createStore(await ctx.data(), { merchantId: String(ctx.merchantId) });
 
 	/**
-	 * The analytics report of a range of days (`?from=&to=`, UTC days; the last 30 days by default).
+	 * The website's business time zone (business.json `timeZone`, else UTC): the zone of every day Growth counts.
+	 * @param {any} ctx
+	 */
+	const timeZoneOf = async (ctx) => (await product.business(ctx.websiteId)).timeZone ?? 'UTC';
+
+	/**
+	 * The analytics report of a range of days (`?from=&to=`, days of the business time zone; the last 30 days by
+	 * default).
 	 * @param {any} ctx
 	 */
 	const analytics = async (ctx) => {
-		const range = rangeOf(ctx.query, now());
+		const timeZone = await timeZoneOf(ctx);
+		const range = rangeOf(ctx.query, now(), timeZone);
 		if (!range.ok) return invalid('from', range.message);
 		const on = await product.featuresOn(ctx.websiteId);
 		const { totals, days } = await (await storeOf(ctx)).totals(range.from, range.to);
-		return buildReport({ from: range.from, to: range.to, on, totals, days });
+		return buildReport({ from: range.from, to: range.to, timeZone, on, totals, days });
 	};
+
+	/**
+	 * The raw events' filter of `GET /v1/events` and its counts: `type`, one event type (any other value is ignored).
+	 * @param {any} ctx
+	 */
+	const eventQuery = (ctx) => ({ type: Object.hasOwn(EVENT_FEATURES, ctx.query.type) ? String(ctx.query.type) : undefined });
+
+	/** `GET /v1/events/count` and `/counts?by=type`: the list's own filter (PLAN 0.8.10 K4). */
+	const eventCounts = countHandlers({
+		source: async (ctx) => (await storeOf(ctx)).eventSource(eventQuery(ctx)),
+		by: { type: 'type' },
+	});
 
 	/**
 	 * Run the SEO checklist: read the website's robots.txt, its sitemap and its pages (the paths asked for, else the
@@ -70,7 +96,10 @@ export const createRoutes = (product) => {
 		const domain = String(ctx.status.domain);
 		const asked = ctx.body?.paths;
 		if (asked !== undefined && (!Array.isArray(asked) || asked.length > 20))
-			return { ok: false, problem: invalid('paths', 'paths is a list of at most 20 paths on your website.') };
+			return {
+				ok: /** @type {const} */ (false),
+				problem: invalid('paths', 'paths is a list of at most 20 paths on your website.'),
+			};
 		const { paths } = await product.settings.values(ctx.websiteId, 'seo_checklist');
 		const pages = pagesOf(asked ?? paths, domain);
 		const robots = await web.read(`https://${domain}/robots.txt`);
@@ -85,14 +114,16 @@ export const createRoutes = (product) => {
 		const texts = await product.settings.texts(ctx.websiteId);
 		const report = reportOf(checks, now());
 		return {
-			ok: true,
-			...report,
-			pages,
-			checks: report.checks.map((check) => ({
-				...check,
-				title: texts[`seo.check.${check.id}.title`] ?? check.id,
-				fix: check.status === 'pass' ? '' : formatText(texts[`seo.check.${check.id}.fix`] ?? '', check.detail),
-			})),
+			ok: /** @type {const} */ (true),
+			report: {
+				...report,
+				pages,
+				checks: report.checks.map((check) => ({
+					...check,
+					title: texts[`seo.check.${check.id}.title`] ?? check.id,
+					fix: check.status === 'pass' ? '' : formatText(texts[`seo.check.${check.id}.fix`] ?? '', check.detail),
+				})),
+			},
 		};
 	};
 
@@ -103,7 +134,7 @@ export const createRoutes = (product) => {
 	const submitIndexNow = async (ctx) => {
 		const { key } = await product.settings.values(ctx.websiteId, 'indexnow');
 		const submission = indexNowSubmission({ urls: ctx.body?.urls, key, domain: String(ctx.status.domain) });
-		if (!submission.ok) return { ok: false, problem: invalid(submission.field, submission.message) };
+		if (!submission.ok) return { ok: /** @type {const} */ (false), problem: invalid(submission.field, submission.message) };
 		const answer = await web.indexNow(submission.body);
 		if (!answer.ok) {
 			const refused = problem(
@@ -116,19 +147,25 @@ export const createRoutes = (product) => {
 							? 'IndexNow asks to send fewer submissions; try again later.'
 							: `IndexNow answered ${answer.status ?? 'nothing'}.`,
 			);
-			return { ok: false, problem: refused };
+			return { ok: /** @type {const} */ (false), problem: refused };
 		}
-		return { ok: true, submitted: submission.body.urlList.length, status: answer.status };
+		return {
+			ok: /** @type {const} */ (true),
+			answer: { submitted: submission.body.urlList.length, status: answer.status },
+			urls: submission.body.urlList,
+		};
 	};
 
 	/**
-	 * A staff action through a ticket, in the activity log.
-	 * @param {any} ctx @param {string} action @param {string} target
+	 * An action in the activity log (PLAN 0.8.10 K2, K9): by the ticket's member of the merchant's staff, else the
+	 * acting user a server-token call named, else `Server`; with a label and a short detail.
+	 * @param {any} ctx
+	 * @param {{ action: string, target: string, label: string, detail: string }} entry
 	 */
-	const logStaff = (ctx, action, target) =>
+	const logAction = (ctx, entry) =>
 		product.activity.record(
 			{ websiteId: ctx.websiteId, merchantId: ctx.merchantId, after: ctx.after },
-			{ actor: { kind: 'staff', id: ctx.ticket.user.id, name: ctx.ticket.user.name }, action, target },
+			{ actor: actorOf(ctx, SERVER), ...entry },
 		);
 
 	return [
@@ -152,8 +189,13 @@ export const createRoutes = (product) => {
 			maxBodyBytes: 65_536,
 			rateLimit: COLLECT_LIMITS,
 			handler: async (ctx) => {
-				const on = (await product.featuresOn(ctx.websiteId)).filter((key) => COLLECT_FEATURES.includes(key));
-				const { recordCountry, retentionMonths } = await product.settings.values(ctx.websiteId, 'visitor_analytics');
+				const [features, { recordCountry, retentionMonths }, timeZone] = await Promise.all([
+					product.featuresOn(ctx.websiteId),
+					product.settings.values(ctx.websiteId, 'visitor_analytics'),
+					timeZoneOf(ctx),
+				]);
+				const on = features.filter((key) => COLLECT_FEATURES.includes(key));
+				// the host's country header; on a visitor call from the merchant's server it is the server's own
 				const country = recordCountry === false ? null : countryOf((name) => ctx.headers.get(name));
 				const kept = checkBatch(ctx.body, { on, domain: String(ctx.status.domain), country });
 				const at = now();
@@ -161,7 +203,7 @@ export const createRoutes = (product) => {
 					await storeOf(ctx)
 				).record(kept, {
 					at,
-					day: dayOf(at),
+					day: dayOf(at, timeZone),
 					expiresAt: expiryOf(at, Number(retentionMonths) || 13),
 					totals: mergeTotals(kept),
 				});
@@ -181,13 +223,26 @@ export const createRoutes = (product) => {
 					{ cursor: ctx.query.cursor, limit: ctx.query.limit, url: ctx.request.url },
 					{ defaultLimit: 50 },
 				);
-				const type = Object.hasOwn(EVENT_FEATURES, ctx.query.type) ? ctx.query.type : undefined;
-				const rows = await (await storeOf(ctx)).list({ after: page.after, limit: page.fetchLimit, type });
+				const rows = await (await storeOf(ctx)).list({ after: page.after, limit: page.fetchLimit, ...eventQuery(ctx) });
 				return page.respond(
 					rows.map((row) => ({ ...row, at: row.at.toISOString(), expiresAt: row.expiresAt.toISOString() })),
 					(row) => [row.at, row.id],
 				);
 			},
+		}),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/events/count',
+			auth: 'server',
+			feature: 'visitor_analytics',
+			handler: eventCounts.count,
+		}),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/events/counts',
+			auth: 'server',
+			feature: 'visitor_analytics',
+			handler: eventCounts.counts,
 		}),
 		defineRoute({
 			method: 'GET',
@@ -240,8 +295,8 @@ export const createRoutes = (product) => {
 			database: false,
 			rateLimit: WEB_LIMITS,
 			handler: async (ctx) => {
-				const { ok: done, ...answer } = await submitIndexNow(ctx);
-				return done ? answer : answer.problem;
+				const submitted = await submitIndexNow(ctx);
+				return submitted.ok ? submitted.answer : submitted.problem;
 			},
 		}),
 		defineRoute({
@@ -251,10 +306,14 @@ export const createRoutes = (product) => {
 			permission: 'indexnow.submit',
 			rateLimit: WEB_LIMITS,
 			handler: async (ctx) => {
-				const { ok: done, ...answer } = await submitIndexNow(ctx);
-				if (!done) return answer.problem;
-				await logStaff(ctx, 'indexnow.submitted', `${answer.submitted} URLs`);
-				return answer;
+				const submitted = await submitIndexNow(ctx);
+				if (!submitted.ok) return submitted.problem;
+				await logAction(ctx, {
+					action: 'indexnow.submitted',
+					target: 'indexnow',
+					...indexNowActivity(submitted.urls, submitted.answer.status),
+				});
+				return submitted.answer;
 			},
 		}),
 
@@ -267,8 +326,8 @@ export const createRoutes = (product) => {
 			database: false,
 			rateLimit: WEB_LIMITS,
 			handler: async (ctx) => {
-				const { ok: done, ...report } = await seoChecks(ctx);
-				return done ? report : report.problem;
+				const checked = await seoChecks(ctx);
+				return checked.ok ? checked.report : checked.problem;
 			},
 		}),
 		defineRoute({
@@ -278,10 +337,14 @@ export const createRoutes = (product) => {
 			permission: 'seo.check',
 			rateLimit: WEB_LIMITS,
 			handler: async (ctx) => {
-				const { ok: done, ...report } = await seoChecks(ctx);
-				if (!done) return report.problem;
-				await logStaff(ctx, 'seo.checked', `${'pages' in report ? report.pages.length : 0} pages`);
-				return report;
+				const checked = await seoChecks(ctx);
+				if (!checked.ok) return checked.problem;
+				await logAction(ctx, {
+					action: 'seo.checked',
+					target: 'seo_checklist',
+					...checksActivity(checked.report.pages, checked.report.summary),
+				});
+				return checked.report;
 			},
 		}),
 

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { GATEWAYS, gatewaysFor, isGateway, takesCurrency } from '../core/gateways.js';
 import { MAX_AMOUNT, exponentOf, formatMoney, fromDecimal, isAmount, isCurrency, toDecimal } from '../core/money.js';
 import {
+	EVENT_DATA_LIMIT,
 	checkCustomer,
 	checkLinkInput,
 	checkMetadata,
@@ -11,6 +12,7 @@ import {
 	isConfirmedFor,
 	linkView,
 	mirrorStatus,
+	paymentEventData,
 	paymentView,
 	paymentsCsv,
 	refundAmount,
@@ -219,6 +221,27 @@ describe('payments', () => {
 		});
 		expect(csv.split('\r\n')[1]).toBe(`pay_1,${at.toISOString()},paid,PKR 10.00,0.00,stripe,"o-1, ""x""",a@b.co,'=SUM(A1)`);
 		expect(paymentsCsv([{ ...view, gateway: null, customer: {} }], /** @type {any} */ ({})).split('\r\n')[1]).toContain(',,');
+	});
+});
+
+describe('payment events', () => {
+	it('carry the payment as the API answers it, without metadata and history when that is too large', () => {
+		const at = new Date('2026-10-01T10:00:00Z');
+		const base = { id: 'pay_1', status: 'paid', amount: 100, currency: 'PKR', refunded: 0, createdAt: at, updatedAt: at };
+		const small = paymentView({ ...base, metadata: { order: '7' }, history: [{ at, event: 'paid' }] }, 'https://p/pay/1');
+		expect(paymentEventData(small, { refund: { id: 'rfd_1', amount: 5 } })).toEqual({
+			payment: small,
+			refund: { id: 'rfd_1', amount: 5 },
+		});
+		/** @type {Record<string, string>} */
+		const metadata = {};
+		for (let i = 0; i < 20; i += 1) metadata[`field_${i}`] = 'x'.repeat(500);
+		const history = Array.from({ length: 150 }, () => ({ at, event: 'started', detail: 'stripe' }));
+		const large = paymentView({ ...base, metadata, history }, 'https://p/pay/1');
+		const data = /** @type {any} */ (paymentEventData(large));
+		expect(JSON.stringify({ payment: large }).length).toBeGreaterThan(EVENT_DATA_LIMIT);
+		expect(data.payment).toMatchObject({ id: 'pay_1', status: 'paid', metadata: {}, history: [] });
+		expect(JSON.stringify(data).length).toBeLessThanOrEqual(EVENT_DATA_LIMIT);
 	});
 });
 

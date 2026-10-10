@@ -7,7 +7,18 @@
  */
 import { formatText, mountWidget } from '@ss/app-kit/widget';
 import { PROVIDERS } from '../core/widgets.js';
-import { customInputs, errorText, fieldMaker, problemCode, say, setHidden, termsBox, textsOf, webAddress } from './common.js';
+import {
+	customInputs,
+	datesOf,
+	errorText,
+	fieldMaker,
+	problemCode,
+	say,
+	setHidden,
+	termsBox,
+	textsOf,
+	webAddress,
+} from './common.js';
 import { element } from './dom.js';
 import { WIDGET_CSS } from './styles.js';
 
@@ -31,6 +42,8 @@ const FORM_METHODS = /** @type {const} */ (['email_password', 'phone_code', 'ema
  */
 export const mountSignIn = ({ host, win, config, session, link = null }) => {
 	const t = textsOf(config);
+	// dates in the website's Format and business time zone, for this browser (PLAN 0.8.10 K7)
+	const when = datesOf(config, win);
 	const { settings } = config;
 	/** @param {string} feature */
 	const on = (feature) => config.features.includes(feature);
@@ -104,7 +117,7 @@ export const mountSignIn = ({ host, win, config, session, link = null }) => {
 						terms.point(answer.data?.url ?? settings.terms?.url);
 						setHidden(terms.wrap, false);
 					}
-					say(note, errorText(t, answer));
+					say(note, errorText(t, answer, when));
 					return;
 				}
 				const data = answer.data ?? {};
@@ -193,7 +206,7 @@ export const mountSignIn = ({ host, win, config, session, link = null }) => {
 							});
 							const url = answer.ok ? webAddress(answer.data?.url) : null;
 							if (url) win.location.assign(url);
-							else say(note, errorText(t, answer));
+							else say(note, errorText(t, answer, when));
 						}),
 					);
 				});
@@ -320,7 +333,7 @@ export const mountSignIn = ({ host, win, config, session, link = null }) => {
 					void run(send, note, async () => {
 						const answer = await requestCode(kind, value);
 						if (answer.ok) codeStep(area, note, kind, value);
-						else say(note, errorText(t, answer));
+						else say(note, errorText(t, answer, when));
 					});
 				});
 				area.replaceChildren(form);
@@ -391,7 +404,7 @@ export const mountSignIn = ({ host, win, config, session, link = null }) => {
 				again.addEventListener('click', () =>
 					run(again, note, async () => {
 						const answer = await requestCode(kind, value);
-						say(note, answer.ok ? sent : errorText(t, answer));
+						say(note, answer.ok ? sent : errorText(t, answer, when));
 					}),
 				);
 				back.addEventListener('click', () => codeForm(area, note, kind));
@@ -471,7 +484,7 @@ export const mountSignIn = ({ host, win, config, session, link = null }) => {
 							email: email.input.value.trim(),
 							returnTo: returnTo(),
 						});
-						say(note, answer.ok ? t('forgot.sent') : errorText(t, answer));
+						say(note, answer.ok ? t('forgot.sent') : errorText(t, answer, when));
 					});
 				});
 			};
@@ -496,7 +509,7 @@ export const mountSignIn = ({ host, win, config, session, link = null }) => {
 							method = methods.includes('email_password') ? 'email_password' : method;
 							signUp = false;
 							start(t('reset.done'));
-						} else say(note, errorText(t, answer));
+						} else say(note, errorText(t, answer, when));
 					});
 				});
 			};
@@ -555,7 +568,7 @@ export const mountSignIn = ({ host, win, config, session, link = null }) => {
 						: await session.call('POST', '/v1/sign-in/email', { link: value, ...terms, ...extras() });
 				if (!answer.ok && problemCode(answer.data) === 'terms_required')
 					termsStep(answer.data, () => void linkSignIn(kind, value, true));
-				else if (!answer.ok) start(errorText(t, answer));
+				else if (!answer.ok) start(errorText(t, answer, when));
 				else handle(answer, note, null);
 			};
 
@@ -578,7 +591,8 @@ export const mountSignIn = ({ host, win, config, session, link = null }) => {
 			if (link?.kind === 'reset') resetView(link.value);
 			else if (link?.kind === 'invite') inviteView(link.value);
 			else if (link?.kind === 'handoff' || link?.kind === 'magic') void linkSignIn(link.kind, link.value, false);
-			else if (link?.kind === 'error') home(errorText(t, { ok: false, status: 0, data: { type: `/problems/${link.value}` } }));
+			else if (link?.kind === 'error')
+				home(errorText(t, { ok: false, status: 0, data: { type: `/problems/${link.value}` } }, when));
 			else home();
 			return () => void off();
 		},

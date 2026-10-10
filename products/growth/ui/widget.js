@@ -10,6 +10,7 @@
  * while the product is stopped, its features are off or the merchant database is not connected.
  * @module
  */
+import { viewerOf } from '@ss/app-kit/widget';
 import { granted } from '../core/consent.js';
 import { detailOf, funnelEvent } from '../core/pixels.js';
 import { BROWSER_EVENTS, WIDGET_ATTRIBUTE, WIDGET_FEATURES, WIDGET_GLOBAL } from '../core/widgets.js';
@@ -31,9 +32,13 @@ export const ADMIN_CONFIG_PATH = '/v1/widget/admin/config';
  * @property {Record<string, string>} texts the widget texts (the website's own, else the defaults)
  * @property {import('@ss/app-kit/widget').WidgetTheme} theme
  * @property {string} customCss
+ * @property {Partial<import('@ss/contracts/format').Format>} format how money and dates look (PLAN 0.8.10 K7)
+ * @property {string} timeZone the business.json time zone (UTC without it; K8)
  * @property {string[]} features the switched-on features
  * @property {import('../core/config.js').WidgetSettings} settings what the page script needs
  */
+
+/** The browser's language and time zone, for a Format that leaves them to the viewer. @typedef {ReturnType<typeof viewerOf>} Viewer */
 
 /**
  * @param {typeof globalThis.fetch} request
@@ -175,9 +180,11 @@ export const startWidget = ({ window: win, script }) => {
 			now,
 		});
 		const api = { base, tickets, fetch: request };
+		const viewer = viewerOf(win);
 		if (on(config, 'analytics_dashboard'))
-			for (const host of hosts('analytics_dashboard')) mountAnalyticsDashboard({ host, api, config, now });
-		if (on(config, 'seo_checklist')) for (const host of hosts('seo_checklist')) mountSeoChecklist({ host, api, config });
+			for (const host of hosts('analytics_dashboard')) mountAnalyticsDashboard({ host, api, config, viewer, now });
+		if (on(config, 'seo_checklist'))
+			for (const host of hosts('seo_checklist')) mountSeoChecklist({ host, api, config, viewer });
 	};
 
 	const api = Object.freeze({

@@ -11,13 +11,25 @@ import { ADMIN_CONFIG_PATH, CONFIG_PATH, startWidget } from '../ui/widget.js';
 
 const BASE = 'https://payments.example.dev';
 
-/** @param {string[]} features */
-const configOf = (features) => ({
+/**
+ * A widget config as the kit answers it (PLAN 0.8.10 K7: with the website's Format and business time zone).
+ * @param {string[]} features
+ * @param {{ format?: Record<string, unknown>, timeZone?: string }} [look]
+ */
+const configOf = (features, { format = {}, timeZone = 'UTC' } = {}) => ({
 	texts: { ...strings },
 	theme: { mode: /** @type {const} */ ('light') },
 	customCss: '',
+	format,
+	timeZone,
 	features,
 });
+
+/** A Format like the stores': "Rs 12,500" and "1 Oct 2026, 15:00" in the business time zone. */
+const STORE_LOOK = {
+	format: { locale: 'en-GB', currencyDisplay: 'custom', currencySymbol: 'Rs', wholeUnits: true, times: 'business' },
+	timeZone: 'Asia/Karachi',
+};
 
 /** @param {string} key @param {Record<string, string>} [data] */
 const place = (key, data = {}) => {
@@ -230,6 +242,40 @@ describe('pay button', () => {
 		await startWidget({ window, script: script('browser-token') }).ready;
 		expect(offline.shadowRoot).toBeNull();
 	});
+
+	it('shows amounts in the website’s Format from the widget config', async () => {
+		const host = place('pay_button', { link: 'link_6' });
+		serve({
+			[`GET ${CONFIG_PATH}`]: () => answer(200, configOf(['payment_links'], STORE_LOOK)),
+			'GET /v1/checkout/links/link_6': () =>
+				answer(200, {
+					title: 'Invoice',
+					description: '',
+					amount: null,
+					minAmount: 50000,
+					currency: 'PKR',
+					gateways: [{ id: 'jazzcash', name: 'JazzCash' }],
+				}),
+			'POST /v1/checkout/links/link_6': () => answer(422, { errors: [{ path: '/amount' }] }),
+		});
+		await startWidget({ window, script: script('browser-token') }).ready;
+		expect(host.shadowRoot?.textContent).toContain('At least Rs 500');
+		inside(host, 'form').dispatchEvent(new window.Event('submit'));
+		await flush();
+		expect(statusText(host)).toBe('Enter an amount of at least Rs 500.');
+		const fixed = place('pay_button', { payment: 'pay_6' });
+		await mountPayButton({
+			host: fixed,
+			config: configOf(['payment_api'], STORE_LOOK),
+			call: async () => ({
+				ok: true,
+				status: 200,
+				data: { status: 'paid', amount: 1250050, currency: 'PKR', description: '' },
+			}),
+			go: vi.fn(),
+		});
+		expect(inside(fixed, '.amount').textContent).toBe('Rs 12,501 · Paid');
+	});
 });
 
 describe('Payments admin widget', () => {
@@ -281,6 +327,31 @@ describe('Payments admin widget', () => {
 		expect(name).toBe('payments.csv');
 		expect(csv.split('\r\n')).toHaveLength(3);
 		expect(queries.at(-1)).toContain('limit=100');
+	});
+
+	it('shows amounts and times in the website’s Format and time zone; the CSV keeps stored values', async () => {
+		const host = place('payments_admin');
+		const client = api({
+			'GET /v1/admin/payments': () =>
+				answer(200, { items: [{ ...PAYMENT, refunded: 50000 }], nextCursor: null, hasMore: false }),
+			'GET /v1/admin/payments/pay_1': () => answer(200, PAYMENT),
+		});
+		const save = vi.fn();
+		mountPaymentsAdmin({ host, api: client, config: configOf(['payment_api'], STORE_LOOK), save, open: vi.fn() });
+		await flush();
+		const text = host.shadowRoot?.textContent ?? '';
+		expect(text).toContain('Rs 2,500 · Paid · o-1');
+		expect(text).toContain('1 Oct 2026, 15:00');
+		expect(text).toContain('Refunded Rs 500');
+		button(host, strings['admin.open']).click();
+		await flush();
+		expect(inside(host, '.details li').textContent).toBe('1 Oct 2026, 15:00 · created');
+		button(host, strings['admin.export']).click();
+		await flush();
+		const [, csv] = save.mock.calls[0] ?? [];
+		expect(csv.split('\r\n')[1]).toBe(
+			'pay_1,2026-10-01T10:00:00.000Z,paid,"PKR 2,500.00",500.00,bank_transfer,o-1,ana@example.com,Order 1',
+		);
 	});
 
 	it('shows details: refunds, confirms a transfer, opens the proof', async () => {
@@ -441,6 +512,33 @@ describe('Subscriptions admin widget', () => {
 		source.emit(true);
 		source.emit(false);
 		expect(statusText(host)).toBe(strings['subs.signedOut']);
+	});
+
+	it('shows times in the website’s Format and business time zone', async () => {
+		const host = place('subscriptions_admin');
+		const items = [
+			{
+				id: 'sub_9',
+				status: 'active',
+				gateway: 'paypal',
+				plan: 'P-1',
+				reference: 'r',
+				customer: {},
+				createdAt: '2026-10-01T20:30:00.000Z',
+			},
+		];
+		mountSubscriptionsAdmin({
+			host,
+			api: {
+				base: BASE,
+				tickets: tickets(),
+				fetch: /** @type {any} */ (vi.fn(async () => answer(200, { items, nextCursor: null, hasMore: false }))),
+			},
+			config: configOf(['subscriptions'], STORE_LOOK),
+		});
+		await flush();
+		// 20:30 UTC is the next day in Karachi (UTC+5)
+		expect(inside(host, '.meta').textContent).toContain('2 Oct 2026, 01:30');
 	});
 
 	it('says when there are none, when they cannot load and when signed out', async () => {

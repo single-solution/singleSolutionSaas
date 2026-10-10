@@ -557,12 +557,69 @@ function ThemeForm({ theme, save, reload }) {
 	);
 }
 
+/**
+ * How money and dates look in the widgets, messages, invoices and hosted pages (one Format per website, PLAN 0.8.10 K7).
+ * @param {{ format: { locale: string, currencyDisplay: string, currencySymbol: string, wholeUnits: boolean, times: string },
+ *   save: (format: Record<string, unknown>) => Promise<import('./api.js').Answer>, reload: () => void }} props
+ */
+function FormatForm({ format, save, reload }) {
+	const [draft, setDraft] = useState(format);
+	const [result, setResult] = useState(/** @type {import('./api.js').Answer | null} */ (null));
+	return (
+		<Card title={TEXTS.settings.format} subtitle={TEXTS.settings.formatHelp}>
+			<FieldGrid>
+				<Input
+					label={TEXTS.settings.locale}
+					help={TEXTS.settings.localeHelp}
+					placeholder="en-GB"
+					value={draft.locale}
+					onChange={(event) => setDraft({ ...draft, locale: event.target.value.trim() })}
+				/>
+				<Select
+					label={TEXTS.settings.currencyDisplay}
+					value={draft.currencyDisplay}
+					options={Object.entries(TEXTS.settings.currencyDisplays).map(([value, label]) => ({ value, label }))}
+					onChange={(event) => setDraft({ ...draft, currencyDisplay: event.target.value })}
+				/>
+				<Input
+					label={TEXTS.settings.currencySymbol}
+					maxLength={8}
+					disabled={draft.currencyDisplay !== 'custom'}
+					value={draft.currencySymbol}
+					onChange={(event) => setDraft({ ...draft, currencySymbol: event.target.value })}
+				/>
+				<Select
+					label={TEXTS.settings.times}
+					value={draft.times}
+					options={Object.entries(TEXTS.settings.timesOptions).map(([value, label]) => ({ value, label }))}
+					onChange={(event) => setDraft({ ...draft, times: event.target.value })}
+				/>
+				<Checkbox
+					label={TEXTS.settings.wholeUnits}
+					checked={draft.wholeUnits}
+					onChange={(event) => setDraft({ ...draft, wholeUnits: event.target.checked })}
+				/>
+			</FieldGrid>
+			<Button
+				className="mt-4"
+				onClick={async () => {
+					setResult(await save(draft));
+					reload();
+				}}>
+				{TEXTS.save}
+			</Button>
+			<Outcome result={result} />
+		</Card>
+	);
+}
+
 /** @param {TabProps} props */
 function SettingsTab({ websiteId }) {
 	const base = `/v1/dashboard/websites/${websiteId}`;
 	const settings = useLoad(`${base}/settings`);
 	const texts = useLoad(`${base}/texts`);
 	const theme = useLoad(`${base}/theme`);
+	const format = useLoad(`${base}/format`);
 	return (
 		<div className="space-y-8">
 			<FieldsSection websiteId={/** @type {string} */ (websiteId)} />
@@ -597,6 +654,15 @@ function SettingsTab({ websiteId }) {
 					<Loaded answer={theme.answer}>
 						{(data) => (
 							<ThemeForm theme={data.theme} save={(next) => call('PUT', `${base}/theme`, next)} reload={theme.reload} />
+						)}
+					</Loaded>
+					<Loaded answer={format.answer}>
+						{(data) => (
+							<FormatForm
+								format={data.format}
+								save={(next) => call('PUT', `${base}/format`, next)}
+								reload={format.reload}
+							/>
 						)}
 					</Loaded>
 				</Masonry>
@@ -802,6 +868,11 @@ function DefaultsTab() {
 						<ThemeForm
 							theme={data.theme.theme}
 							save={(next) => call('PUT', saveUrl('theme'), { value: next })}
+							reload={reload}
+						/>
+						<FormatForm
+							format={data.format.format}
+							save={(next) => call('PUT', saveUrl('format'), { value: next })}
 							reload={reload}
 						/>
 					</Masonry>

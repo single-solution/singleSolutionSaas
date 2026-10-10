@@ -1,12 +1,15 @@
 /**
- * The merchant's side (PLAN 0.8.6): users (list, search, block, roles, notes, invites, approvals and deletion
+ * The merchant's side (PLAN 0.8.6): users (list, search, counts, block, roles, notes, invites, approvals and deletion
  * requests) and roles with their permissions, through the merchant's server (server token) and the Users and Roles
- * admin widgets (tickets); the activity-log copies other products send; and the custom fields set in the dashboard.
- * Every change made through the server token or a ticket is written to the activity log.
+ * admin widgets (tickets); the activity-log copies other products send (with their filters and counts); and the custom
+ * fields set in the dashboard. Every change made through the server token or a ticket is written to the activity log
+ * with the acting user (the ticket's member of staff, else the `SS-Actor-*` user of a server-token call, else the
+ * server; PLAN 0.8.10 K2), the target's label and a short detail (K9).
  * @module
  */
-import { paginate, problem } from '@ss/app-kit';
+import { actorOf, countHandlers, paginate, problem } from '@ss/app-kit';
 import { validateActivityCopy } from '@ss/contracts';
+import { copyFilter, detailOf, labelOf } from '../core/activity.js';
 import { normaliseEmail, normalisePhone } from '../core/identifiers.js';
 import { MAX_CUSTOM_FIELDS, checkCustomValues, checkFieldDefinition, checkName, staffView } from '../core/profile.js';
 import { DEFAULT_ROLE, MAX_ROLES, ROLE_KEY, checkOwnPermissions, checkRole, permissionCatalog } from '../core/roles.js';
@@ -24,6 +27,29 @@ import { invalid } from './flows.js';
 /** @param {unknown} value */
 const bodyOf = (value) => (typeof value === 'object' && value !== null ? /** @type {Record<string, any>} */ (value) : {});
 const PERMISSIONS_TTL_MS = 5 * 60_000;
+/** The users list's statuses (`blocked`: blocked users, whatever their status). */
+const USER_STATUSES = Object.freeze(['active', 'pending', 'invited', 'blocked']);
+
+/** Who acts without a ticket or acting-user headers: the merchant's server (PLAN 0.8.10 K2). */
+export const SERVER_ACTOR = Object.freeze({ kind: 'server', id: 'server', name: 'Server' });
+
+/** @param {number} n @param {string} one @param {string} many */
+const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+
+/**
+ * An activity-log copy as the API answers it: `label` and `detail` null when absent.
+ * @param {import('../adapters/store.js').CopyRecord} row
+ */
+const copyView = (row) => ({
+	id: row.id,
+	productId: row.productId,
+	actor: row.actor,
+	action: row.action,
+	target: row.target,
+	label: row.label ?? null,
+	detail: row.detail ?? null,
+	at: row.at.toISOString(),
+});
 
 /**
  * @param {Product} product
@@ -35,21 +61,18 @@ export const createManage = (product, service, flows) => {
 	/** Permission lists of pasted products, per website and product (5 minutes). @type {Map<string, { until: number, permissions: Array<{ key: string, name: string }> }>} */
 	const permissionCache = new Map();
 
-	/** Who acts: the member of staff in the ticket, or the merchant's server. @param {any} ctx */
-	const actorOf = (ctx) =>
-		ctx.ticket
-			? { kind: 'staff', id: String(ctx.ticket.user.id), name: String(ctx.ticket.user.name) }
-			: { kind: 'server', id: 'server' };
+	/** Who acts (PLAN 0.8.10 K2). @param {any} ctx */
+	const actor = (ctx) => actorOf(ctx, SERVER_ACTOR);
 
-	/** @param {any} ctx @param {string} action @param {string} target */
-	const log = (ctx, action, target) =>
+	/**
+	 * An activity-log entry by the acting user.
+	 * @param {any} ctx @param {string} action @param {string} target
+	 * @param {{ label?: string, detail?: string }} [about] the target's name and a short plain-text detail (never addresses)
+	 */
+	const log = (ctx, action, target, about = {}) =>
 		product.activity.record(
 			{ websiteId: ctx.websiteId, merchantId: ctx.merchantId, after: ctx.after },
-			{
-				actor: actorOf(ctx),
-				action,
-				target,
-			},
+			{ actor: actor(ctx), action, target, ...about },
 		);
 
 	/** @param {import('./service.js').Site} s @param {string} id */
@@ -61,21 +84,43 @@ export const createManage = (product, service, flows) => {
 
 	// ------------------------------------------------------------------------------------------------------ users
 
+	/**
+	 * The filters of the users list and its counts: `q`, `role`, `status` (active, pending, invited, blocked) and
+	 * `deletion=1`; a role or status that does not fit is ignored.
+	 * @param {any} ctx
+	 * @returns {import('../adapters/store.js').UserQuery}
+	 */
+	const userQuery = (ctx) => {
+		const { q, role, status, deletion } = ctx.query;
+		return {
+			...(typeof q === 'string' && q.trim() ? { q: q.trim() } : {}),
+			...(typeof role === 'string' && ROLE_KEY.test(role) ? { role } : {}),
+			...(USER_STATUSES.includes(status) ? { status } : {}),
+			deletion: deletion === '1',
+		};
+	};
+
 	/** `?cursor=&limit=&q=&role=&status=` (active, pending, invited, blocked) `&deletion=1`. @param {any} ctx */
 	const listUsers = async (ctx) => {
 		const page = paginate({ cursor: ctx.query.cursor, limit: ctx.query.limit, url: ctx.request.url }, { defaultLimit: 25 });
 		const s = await service.site(ctx);
-		const status = ['active', 'pending', 'invited', 'blocked'].includes(ctx.query.status) ? ctx.query.status : undefined;
 		const rows = await s.store.users.list({
 			after: /** @type {[string, string] | null} */ (page.after),
 			limit: page.fetchLimit,
-			...(typeof ctx.query.q === 'string' && ctx.query.q.trim() ? { q: ctx.query.q.trim() } : {}),
-			...(typeof ctx.query.role === 'string' && ROLE_KEY.test(ctx.query.role) ? { role: ctx.query.role } : {}),
-			...(status ? { status } : {}),
-			deletion: ctx.query.deletion === '1',
+			...userQuery(ctx),
 		});
 		return page.respond(rows.map(staffView), (user) => [user.createdAt, user.id]);
 	};
+
+	/**
+	 * `GET /v1/users/count` and `/counts?by=status|role` (and their ticket twins): the list's own filters (PLAN 0.8.10
+	 * K4). `status` groups by the stored status (active, pending, invited); blocked users are counted with
+	 * `status=blocked`.
+	 */
+	const userCounts = countHandlers({
+		source: async (ctx) => (await service.site(ctx)).store.users.counting(userQuery(ctx)),
+		by: { status: 'status', role: 'role' },
+	});
 
 	/** @param {any} ctx */
 	const getUser = async (ctx) => staffView(await userOr404(await service.site(ctx), ctx.params.id));
@@ -87,42 +132,54 @@ export const createManage = (product, service, flows) => {
 		const body = bodyOf(ctx.body);
 		/** @type {Record<string, unknown>} */
 		const set = {};
-		/** @type {string[]} */
+		/** What changed, in the order of the log: the action and its detail. @type {Array<{ action: string, detail?: string }>} */
 		const changes = [];
 		if (body.role !== undefined) {
 			if (typeof body.role !== 'string' || !(await s.store.roles.get(body.role)))
 				throw invalid('role', 'There is no such role.');
 			set.role = body.role;
-			changes.push('role');
+			changes.push({ action: 'user.role_changed', detail: `Role: ${user.role} → ${body.role}` });
 		}
 		if (body.notes !== undefined) {
 			if (typeof body.notes !== 'string' || body.notes.length > 5000)
 				throw invalid('notes', 'Notes are text of at most 5000 characters.');
 			set.notes = body.notes;
-			changes.push('notes');
+			// the notes themselves stay out of the log
+			changes.push({ action: 'user.notes_changed' });
 		}
+		/** @type {string} */
+		let reason = '';
 		if (body.blocked !== undefined) {
-			const reason = typeof body.blockedReason === 'string' ? body.blockedReason.trim().slice(0, 300) : '';
+			reason = typeof body.blockedReason === 'string' ? body.blockedReason.trim().slice(0, 300) : '';
 			set.blocked = body.blocked === true ? { at: new Date(now()), reason } : null;
-			changes.push(body.blocked === true ? 'blocked' : 'unblocked');
+			changes.push({ action: body.blocked === true ? 'user.blocked' : 'user.unblocked' });
 		}
 		if (body.name !== undefined) {
 			const name = checkName(body.name);
 			if (name === null) throw invalid('name', 'The name is too long.');
 			set.name = name;
-			changes.push('name');
+			changes.push({ action: 'user.name_changed', ...(user.name ? { detail: `Was: ${user.name}` } : {}) });
 		}
 		if (body.custom !== undefined) {
 			const checked = checkCustomValues(await s.store.fields.list(), body.custom, { complete: false, current: user.custom });
 			if (!checked.ok) throw invalid(checked.field, checked.message);
 			set.custom = checked.value;
-			changes.push('custom');
+			changes.push({ action: 'user.custom_changed', detail: `Fields: ${Object.keys(bodyOf(body.custom)).join(', ')}` });
 		}
 		const updated = (await s.store.users.update(user.id, set)) ?? user;
 		// a blocked user is signed out everywhere at once (sign-ins already issued end within 15 minutes)
-		if (body.blocked === true) await s.store.sessions.revokeAll(user.id);
-		for (const change of changes)
-			await log(ctx, `user.${change === 'blocked' || change === 'unblocked' ? change : `${change}_changed`}`, user.id);
+		const signedOut = body.blocked === true ? await s.store.sessions.revokeAll(user.id) : 0;
+		const label = labelOf(updated.name);
+		for (const { action, detail } of changes) {
+			const blockDetail =
+				action === 'user.blocked'
+					? detailOf([
+							reason && `Reason: ${reason}`,
+							signedOut > 0 && `${plural(signedOut, 'device', 'devices')} signed out`,
+						])
+					: detail;
+			await log(ctx, action, user.id, { label, detail: blockDetail });
+		}
 		return staffView(updated);
 	};
 
@@ -130,8 +187,11 @@ export const createManage = (product, service, flows) => {
 	const signOutUser = async (ctx) => {
 		const s = await service.site(ctx);
 		const user = await userOr404(s, ctx.params.id);
-		await s.store.sessions.revokeAll(user.id);
-		await log(ctx, 'user.signed_out', user.id);
+		const signedOut = await s.store.sessions.revokeAll(user.id);
+		await log(ctx, 'user.signed_out', user.id, {
+			label: labelOf(user.name),
+			detail: `${plural(signedOut, 'device', 'devices')} signed out`,
+		});
 		return undefined;
 	};
 
@@ -164,13 +224,16 @@ export const createManage = (product, service, flows) => {
 			replace: true,
 		});
 		const values = { link: `${page}#${LINK_PARAMS.invite}=${id}.${secret}`, name: name || '', days: inviteDays };
+		/** @type {string} */
+		let sentBy = 'email';
 		try {
 			if (email) await service.notify(s, 'email', 'accounts.invite', { email }, values);
 			else {
 				const { channel } = await service.settings(s, 'phone_code');
+				sentBy = s.on.includes('phone_code') ? channel : 'sms';
 				await service.notify(
 					s,
-					s.on.includes('phone_code') ? channel : 'sms',
+					/** @type {'sms' | 'whatsapp'} */ (sentBy),
 					'accounts.invite',
 					{ phone: /** @type {string} */ (phone) },
 					values,
@@ -180,7 +243,10 @@ export const createManage = (product, service, flows) => {
 			await s.store.users.remove(user.id);
 			throw error;
 		}
-		await log(ctx, 'user.invited', user.id);
+		await log(ctx, 'user.invited', user.id, {
+			label: labelOf(name),
+			detail: `Role: ${role}; sent by ${sentBy === 'email' ? 'e-mail' : sentBy === 'sms' ? 'SMS' : 'WhatsApp'}; valid for ${plural(inviteDays, 'day', 'days')}`,
+		});
 		return new Response(JSON.stringify(staffView(user)), { status: 201, headers: { 'content-type': 'application/json' } });
 	};
 
@@ -190,7 +256,7 @@ export const createManage = (product, service, flows) => {
 		const user = await userOr404(s, ctx.params.id);
 		if (user.status !== 'pending') throw problem('conflict', 'This user is not waiting for approval.');
 		const updated = await s.store.users.update(user.id, { status: 'active' });
-		await log(ctx, 'user.approved', user.id);
+		await log(ctx, 'user.approved', user.id, { label: labelOf(user.name), detail: `Role: ${user.role}` });
 		return staffView(updated ?? user);
 	};
 
@@ -200,7 +266,7 @@ export const createManage = (product, service, flows) => {
 		const user = await userOr404(s, ctx.params.id);
 		if (user.status !== 'pending') throw problem('conflict', 'This user is not waiting for approval.');
 		await s.store.users.remove(user.id);
-		await log(ctx, 'user.declined', user.id);
+		await log(ctx, 'user.declined', user.id, { label: labelOf(user.name), detail: 'The sign-up was removed' });
 		return undefined;
 	};
 
@@ -209,7 +275,7 @@ export const createManage = (product, service, flows) => {
 		const s = await service.site(ctx);
 		const user = await userOr404(s, ctx.params.id);
 		if (!user.deletion) throw problem('conflict', 'This user did not ask to be deleted.');
-		const { pending } = await service.erase(s, user, actorOf(ctx), ctx);
+		const { pending } = await service.erase(s, user, actor(ctx), ctx, 'Deletion request approved');
 		return { deleted: true, pending };
 	};
 
@@ -219,7 +285,7 @@ export const createManage = (product, service, flows) => {
 		const user = await userOr404(s, ctx.params.id);
 		if (!user.deletion) throw problem('conflict', 'This user did not ask to be deleted.');
 		const updated = await s.store.users.update(user.id, { deletion: null });
-		await log(ctx, 'user.deletion_rejected', user.id);
+		await log(ctx, 'user.deletion_rejected', user.id, { label: labelOf(user.name), detail: 'The account stays' });
 		return staffView(updated ?? user);
 	};
 
@@ -233,20 +299,32 @@ export const createManage = (product, service, flows) => {
 		const s = await service.site(ctx);
 		const checked = checkRole(ctx.params.key, ctx.body);
 		if (!checked.ok) throw invalid(checked.field, checked.message);
-		if (!(await s.store.roles.get(checked.value.key)) && (await s.store.roles.count()) >= MAX_ROLES)
+		const existing = await s.store.roles.get(checked.value.key);
+		if (!existing && (await s.store.roles.count()) >= MAX_ROLES)
 			throw problem('validation_failed', `A website can have at most ${MAX_ROLES} roles.`);
 		const role = await s.store.roles.save(checked.value);
-		await log(ctx, 'role.saved', role.key);
+		await log(ctx, 'role.saved', role.key, {
+			label: labelOf(role.name) ?? role.key,
+			detail: detailOf([
+				existing ? 'Changed' : 'New role',
+				plural(role.permissions.length, 'permission', 'permissions'),
+				`two-step ${role.twoStep}`,
+			]),
+		});
 		return role;
 	};
 
 	/** Delete one of the merchant's own roles; its users get the Customer role. @param {any} ctx */
 	const deleteRole = async (ctx) => {
 		const s = await service.site(ctx);
+		const role = await s.store.roles.get(ctx.params.key);
 		if (!(await s.store.roles.remove(ctx.params.key)))
 			throw problem('not_found', 'No such role of your own (ready-made roles stay).');
-		await s.store.users.resetRole(ctx.params.key);
-		await log(ctx, 'role.deleted', ctx.params.key);
+		const moved = await s.store.users.resetRole(ctx.params.key);
+		await log(ctx, 'role.deleted', ctx.params.key, {
+			label: labelOf(role?.name) ?? ctx.params.key,
+			detail: `${plural(moved, 'user', 'users')} moved to the role ${DEFAULT_ROLE}`,
+		});
 		return undefined;
 	};
 
@@ -289,39 +367,74 @@ export const createManage = (product, service, flows) => {
 		const checked = checkOwnPermissions(bodyOf(ctx.body).permissions);
 		if (!checked.ok) throw invalid('permissions', checked.message);
 		await s.store.permissions.replace(checked.value);
-		await log(ctx, 'permissions.saved', `${checked.value.length}`);
+		await log(ctx, 'permissions.saved', `${checked.value.length}`, {
+			label: 'Own permissions',
+			detail:
+				checked.value.length > 0 ? detailOf([checked.value.map((p) => `site:${p.key}`).join(', ')]) : 'No own permissions',
+		});
 		return { permissions: checked.value };
 	};
 
 	// --------------------------------------------------------------------------------------- activity-log copies
 
-	/** Another product sends one activity-log entry (PLAN 0.4.11), with this website's Accounts server token. @param {any} ctx */
+	/**
+	 * Another product sends one activity-log entry (PLAN 0.4.11), with this website's Accounts server token: who (with
+	 * the acting user's role), what, on what with its label, a short detail and when (K9).
+	 * @param {any} ctx
+	 */
 	const receiveCopy = async (ctx) => {
 		const checked = validateActivityCopy(ctx.body);
 		if (!checked.ok || checked.value.websiteId !== ctx.websiteId)
-			return problem('validation_failed', 'Send { websiteId, productId, actor, action, target, at } for this website.');
+			return problem(
+				'validation_failed',
+				'Send { websiteId, productId, actor, action, target, label?, detail?, at } for this website.',
+			);
 		const s = await service.site(ctx);
-		const { productId, actor, action, target, at } = checked.value;
-		await s.store.copies.add({ productId, actor, action, target, at: new Date(at) });
+		const { productId, actor: who, action, target, label, detail, at } = checked.value;
+		await s.store.copies.add({
+			productId,
+			actor: who,
+			action,
+			target,
+			...(label ? { label } : {}),
+			...(detail ? { detail } : {}),
+			at: new Date(at),
+		});
 		return new Response(JSON.stringify({ received: true }), { status: 201, headers: { 'content-type': 'application/json' } });
 	};
 
-	/** `?cursor=&limit=&productId=`, newest first. @param {any} ctx */
+	/**
+	 * The website and the copies filter of a request (`productId`, `actor`, `action`, `target`, `q`, `from`, `to`; days in
+	 * the business time zone); a filter that does not fit answers 422.
+	 * @param {any} ctx
+	 */
+	const copySource = async (ctx) => {
+		const s = await service.site(ctx);
+		const built = copyFilter(ctx.query, (await product.business(s.websiteId)).timeZone ?? 'UTC');
+		if (!built.ok) throw invalid(built.field, built.message);
+		return { s, filter: built.filter };
+	};
+
+	/** `?productId=&actor=&action=&target=&q=&from=&to=&cursor=&limit=`, newest first. @param {any} ctx */
 	const listCopies = async (ctx) => {
 		const page = paginate({ cursor: ctx.query.cursor, limit: ctx.query.limit, url: ctx.request.url }, { defaultLimit: 50 });
-		const s = await service.site(ctx);
+		const { s, filter } = await copySource(ctx);
 		const rows = await s.store.copies.list({
 			after: /** @type {[string, string] | null} */ (page.after),
 			limit: page.fetchLimit,
-			...(typeof ctx.query.productId === 'string' && /^[a-z][a-z0-9-]{1,30}$/.test(ctx.query.productId)
-				? { productId: ctx.query.productId }
-				: {}),
+			filter,
 		});
-		return page.respond(
-			rows.map((row) => ({ ...row, at: row.at.toISOString() })),
-			(row) => [row.at, row.id],
-		);
+		return page.respond(rows.map(copyView), (row) => [row.at, row.id]);
 	};
+
+	/** `GET /v1/activity-copies/count` and `/counts?by=productId|action|actor`: the list's own filters (K4, K9). */
+	const copyCounts = countHandlers({
+		source: async (ctx) => {
+			const { s, filter } = await copySource(ctx);
+			return s.store.copies.counting(filter);
+		},
+		by: { productId: 'productId', action: 'action', actor: 'actor.id' },
+	});
 
 	// ------------------------------------------------------------------------------------- custom fields (dashboard)
 
@@ -376,6 +489,8 @@ export const createManage = (product, service, flows) => {
 
 	return Object.freeze({
 		listUsers,
+		countUsers: userCounts.count,
+		countUsersBy: userCounts.counts,
 		getUser,
 		updateUser,
 		signOutUser,
@@ -391,6 +506,8 @@ export const createManage = (product, service, flows) => {
 		saveOwnPermissions,
 		receiveCopy,
 		listCopies,
+		countCopies: copyCounts.count,
+		countCopiesBy: copyCounts.counts,
 		listFields,
 		saveField,
 		deleteField,

@@ -14,10 +14,15 @@ export const PAYMENT_STATUSES = Object.freeze(
 export const SUBSCRIPTION_STATUSES = Object.freeze(
 	/** @type {const} */ (['pending', 'active', 'past_due', 'paused', 'cancelled', 'expired']),
 );
-/** Payment events (sent to the merchant through Notifications as `payments.<type>` and listed by the API). */
+/**
+ * Payment events (the kit's events, PLAN 0.8.10 K5: listed by `GET /v1/events` and sent to the merchant through
+ * Notifications as `payments.<type>`).
+ */
 export const EVENT_TYPES = Object.freeze(
 	/** @type {const} */ (['payment.paid', 'payment.failed', 'payment.refunded', 'subscription.updated']),
 );
+/** The largest event data the kit takes (16 kB of JSON). */
+export const EVENT_DATA_LIMIT = 16 * 1024;
 
 /** @typedef {typeof PAYMENT_STATUSES[number]} PaymentStatus */
 /** @typedef {typeof SUBSCRIPTION_STATUSES[number]} SubscriptionStatus */
@@ -296,6 +301,19 @@ export const paymentView = (payment, checkoutUrl) => ({
 	createdAt: iso(payment.createdAt),
 	updatedAt: iso(payment.updatedAt),
 });
+
+/**
+ * The data of a payment event: the payment as the API answers it (plus `extra`, for example the refund). A payment
+ * whose metadata and history make it larger than an event may be is sent without them; read the payment for them.
+ * @param {ReturnType<typeof paymentView>} view
+ * @param {Record<string, unknown>} [extra]
+ * @returns {Record<string, unknown>}
+ */
+export const paymentEventData = (view, extra = {}) => {
+	const data = { payment: view, ...extra };
+	if (JSON.stringify(data).length <= EVENT_DATA_LIMIT) return data;
+	return { payment: { ...view, metadata: {}, history: [] }, ...extra };
+};
 
 /**
  * A payment link as the API answers it.

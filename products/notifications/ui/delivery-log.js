@@ -1,15 +1,15 @@
 /**
  * The admin widget `delivery_log` (permission `log.read`): the merchant's staff read the delivery log in their own
- * admin, newest first, filtered by status and channel, page by page.
+ * admin, newest first, filtered by status and channel, page by page. Times follow the website's Format and business
+ * time zone from the widget config (PLAN 0.8.10 K7).
  * @module
  */
-import { formatText, mountWidget } from '@ss/app-kit/widget';
+import { formatDate, formatText, mountWidget, viewerOf } from '@ss/app-kit/widget';
 import { CHANNELS } from '../core/channels.js';
+import { STATUSES } from '../core/log.js';
 import { element } from './dom.js';
 import { WIDGET_CSS } from './styles.js';
 import { adminCall } from './tickets.js';
-
-const STATUSES = ['queued', 'retrying', 'sent', 'failed', 'skipped'];
 
 /**
  * @param {{ host: HTMLElement, api: import('./tickets.js').AdminApi, config: import('./widget.js').WidgetConfig }} input
@@ -17,6 +17,9 @@ const STATUSES = ['queued', 'retrying', 'sent', 'failed', 'skipped'];
 export const mountDeliveryLog = ({ host, api, config }) => {
 	/** @param {string} key */
 	const t = (key) => config.texts[key] ?? key;
+	const viewer = viewerOf(host.ownerDocument.defaultView);
+	/** @param {string} value an ISO-8601 time */
+	const when = (value) => formatDate(value, config.format, { timeZone: config.timeZone, style: 'datetime', viewer });
 	return mountWidget({
 		host,
 		theme: config.theme,
@@ -24,7 +27,7 @@ export const mountDeliveryLog = ({ host, api, config }) => {
 		css: WIDGET_CSS,
 		render: (root) => {
 			const doc = /** @type {Document} */ (root.ownerDocument);
-			/** @param {string} label @param {string[]} values @param {(value: string) => string} name */
+			/** @param {string} label @param {ReadonlyArray<string>} values @param {(value: string) => string} name */
 			const select = (label, values, name) => {
 				const field = element(doc, 'select', { 'aria-label': label });
 				field.append(
@@ -34,7 +37,7 @@ export const mountDeliveryLog = ({ host, api, config }) => {
 				return /** @type {HTMLSelectElement} */ (field);
 			};
 			const status = select(t('log.status'), STATUSES, (value) => t(`status.${value}`));
-			const channel = select(t('log.channel'), [...CHANNELS], (value) => t(`channel.${value}`));
+			const channel = select(t('log.channel'), CHANNELS, (value) => t(`channel.${value}`));
 			const note = element(doc, 'p', { class: 'status', role: 'status' });
 			const list = element(doc, 'ul');
 			const more = element(doc, 'button', { type: 'button', class: 'secondary', hidden: '' }, t('log.more'));
@@ -74,7 +77,7 @@ export const mountDeliveryLog = ({ host, api, config }) => {
 								t(`channel.${message.channel}`),
 								t(`status.${message.status}`),
 								formatText(t('log.attempts'), { count: message.attempts.length }),
-								new Date(message.createdAt).toLocaleString(),
+								when(message.createdAt),
 								message.reason ?? '',
 							]
 								.filter((part) => part !== '')

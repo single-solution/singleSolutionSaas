@@ -354,6 +354,9 @@ export const createRoutes = (product) => {
 
 		// ------------------------------------------------------------------- the merchant's server (server token)
 		defineRoute({ method: 'GET', path: '/v1/users', auth: 'server', feature: 'roles', handler: manage.listUsers }),
+		// counts with the list's filters (PLAN 0.8.10 K4)
+		defineRoute({ method: 'GET', path: '/v1/users/count', auth: 'server', feature: 'roles', handler: manage.countUsers }),
+		defineRoute({ method: 'GET', path: '/v1/users/counts', auth: 'server', feature: 'roles', handler: manage.countUsersBy }),
 		defineRoute({ method: 'GET', path: '/v1/users/:id', auth: 'server', feature: 'roles', handler: manage.getUser }),
 		defineRoute({ method: 'PATCH', path: '/v1/users/:id', auth: 'server', feature: 'roles', handler: manage.updateUser }),
 		defineRoute({
@@ -425,6 +428,20 @@ export const createRoutes = (product) => {
 			feature: 'activity_copies',
 			handler: manage.listCopies,
 		}),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/activity-copies/count',
+			auth: 'server',
+			feature: 'activity_copies',
+			handler: manage.countCopies,
+		}),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/activity-copies/counts',
+			auth: 'server',
+			feature: 'activity_copies',
+			handler: manage.countCopiesBy,
+		}),
 
 		// --------------------------------------------------------------- admin widgets: Users and Roles (tickets)
 		defineRoute({
@@ -433,6 +450,20 @@ export const createRoutes = (product) => {
 			auth: 'ticket',
 			permission: 'users.read',
 			handler: manage.listUsers,
+		}),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/admin/users/count',
+			auth: 'ticket',
+			permission: 'users.read',
+			handler: manage.countUsers,
+		}),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/admin/users/counts',
+			auth: 'ticket',
+			permission: 'users.read',
+			handler: manage.countUsersBy,
 		}),
 		defineRoute({
 			method: 'GET',

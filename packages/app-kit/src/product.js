@@ -299,7 +299,14 @@ export const createProduct = (options) => {
 		business: businessOf,
 		format: formatOf,
 		activity: Object.freeze({ record: activity.record }),
-		events: Object.freeze({ emit: events.emit, list: events.list, count: events.count, counts: events.counts }),
+		events: Object.freeze({
+			emit: events.emit,
+			list: events.list,
+			count: events.count,
+			counts: events.counts,
+			/** Forward due events of a website after a public request (token requests do it by themselves). */
+			drain: events.drain,
+		}),
 		staffAlerts: Object.freeze({ send: staffAlerts.send }),
 		imports: Object.freeze({ upsert: imports.upsert, finish: imports.finish, status: imports.status }),
 		recentChanges: Object.freeze({ record: recent.record, list: recent.list }),

@@ -2,14 +2,21 @@
  * The payments service (PLAN 0.8.7): creating payments and links, starting a payment on its gateway, applying what a
  * gateway confirmed (signed notices, returns asked server to server, status checks), refunds, bank-transfer
  * confirmation, subscriptions, and the payment events. There is no background work: an unconfirmed payment is asked
- * again when the merchant reads it (PLAN 0.8.4), and events are sent to the merchant through Notifications right after
- * (`after()`) requests for that website, retried on later ones.
+ * again when the merchant reads it (PLAN 0.8.4), and events are the kit's (PLAN 0.8.10 K5): sent to the merchant
+ * through Notifications right after (`after()`) the request that made them, retried on later requests for that website.
  * @module
  */
 import { problem } from '@ss/app-kit';
 import { originAllowed } from '@ss/protocol';
 import { GATEWAY_CONNECTIONS, GATEWAY_FEATURES, gatewaysFor, takesCurrency } from '../core/gateways.js';
-import { mirrorStatus, paymentView, refundAmount, statusAfterRefund, subscriptionView } from '../core/payments.js';
+import {
+	mirrorStatus,
+	paymentEventData,
+	paymentView,
+	refundAmount,
+	statusAfterRefund,
+	subscriptionView,
+} from '../core/payments.js';
 import { genericCurrencies } from '../adapters/gateways/index.js';
 import { createStore } from '../adapters/store.js';
 
@@ -21,22 +28,25 @@ import { createStore } from '../adapters/store.js';
 /** @typedef {import('../adapters/gateways/types.js').News} News */
 /** @typedef {import('../adapters/gateways/types.js').Started} Started */
 /**
- * A website while serving it: its store, switched-on features, domain and the product's own address.
- * @typedef {{ websiteId: string, merchantId: string | null, domain: string, store: Store, on: string[], base: string }} Site
+ * A website while serving it: its store, switched-on features, domain, the product's own address, and the request's
+ * `after()` (events are forwarded right after it).
+ * @typedef {{ websiteId: string, merchantId: string | null, domain: string, store: Store, on: string[], base: string,
+ *   after: (task: () => Promise<unknown>) => void }} Site
  */
-/** @typedef {{ kind: string, id: string, name: string }} Actor who did it (a member of the merchant's staff, or the server) */
+/**
+ * Who did it: a member of the merchant's staff (a ticket's user, or the acting user a server-token call names with
+ * `SS-Actor-*` headers, PLAN 0.8.10 K2), or the server.
+ * @typedef {{ kind: string, id: string, name?: string, role?: string }} Actor
+ */
 
-/** Events sent per request, at most. */
-const DRAIN_BATCH = 5;
-/** Delivery attempts of one event, and the waits between them. */
-const EVENT_DELAYS_MS = Object.freeze([60_000, 5 * 60_000, 30 * 60_000, 2 * 3_600_000]);
-/** A claimed event is not claimed again for this long. */
-const LEASE_MS = 60_000;
 /** A pending payment is asked of its gateway again at most this often. */
 const RECHECK_MS = 30_000;
 
-/** The server token as an actor. @type {Actor} */
+/** The server token as an actor (when a server-token call names no acting user). */
 export const SERVER_ACTOR = Object.freeze({ kind: 'server', id: 'server', name: 'Server' });
+
+/** The name recorded for an actor (`by` in histories and refunds). @param {Actor} actor */
+export const nameOf = (actor) => actor.name ?? actor.id;
 
 /**
  * @param {Product} product
@@ -47,16 +57,18 @@ export const createService = (product) => {
 
 	/**
 	 * The website as the service sees it.
-	 * @param {{ websiteId: string, merchantId: string | null, domain: string, base: string }} input
+	 * @param {{ websiteId: string, merchantId: string | null, domain: string, base: string,
+	 *   after: (task: () => Promise<unknown>) => void }} input
 	 * @returns {Promise<Site>}
 	 */
-	const site = async ({ websiteId, merchantId, domain, base }) => ({
+	const site = async ({ websiteId, merchantId, domain, base, after }) => ({
 		websiteId,
 		merchantId,
 		domain,
 		store: createStore(await product.data.forWebsite(websiteId, merchantId ? { merchantId } : {}), { now }),
 		on: await product.featuresOn(websiteId),
 		base: product.address() ?? base,
+		after,
 	});
 
 	/** @param {Site} s @param {string} id */
@@ -134,10 +146,12 @@ export const createService = (product) => {
 	};
 
 	/**
-	 * Record an event (listed by the API, sent through Notifications right after the request).
+	 * Record an event on the kit (`payments.<type>`: listed by the API, sent through Notifications right after the
+	 * request, retried on later ones).
 	 * @param {Site} s @param {import('../core/payments.js').EVENT_TYPES[number]} type @param {Record<string, unknown>} data
 	 */
-	const emit = (s, type, data) => s.store.events.add(type, data);
+	const emit = (s, type, data) =>
+		product.events.emit({ websiteId: s.websiteId, merchantId: s.merchantId, after: s.after }, type, data);
 
 	/**
 	 * Create a payment (API or a payment link).
@@ -240,7 +254,7 @@ export const createService = (product) => {
 			);
 			if (!paid) return payment;
 			if (paid.linkId) await s.store.links.countPaid(paid.linkId);
-			await emit(s, 'payment.paid', { payment: view(s, paid) });
+			await emit(s, 'payment.paid', paymentEventData(view(s, paid)));
 			return paid;
 		}
 		if (news.outcome === 'failed' || news.outcome === 'cancelled') {
@@ -251,7 +265,7 @@ export const createService = (product) => {
 				{ event: news.outcome, detail: via },
 			);
 			if (!changed) return payment;
-			if (news.outcome === 'failed') await emit(s, 'payment.failed', { payment: view(s, changed) });
+			if (news.outcome === 'failed') await emit(s, 'payment.failed', paymentEventData(view(s, changed)));
 			return changed;
 		}
 		return payment;
@@ -349,14 +363,18 @@ export const createService = (product) => {
 				amount: checked.amount,
 				reason,
 				manual: done.manual === true,
-				by: by.name,
+				by: nameOf(by),
 				at: new Date(now()),
 				gatewayRef: done.manual ? null : done.ref,
 			},
 			statusAfterRefund(payment, checked.amount),
 		);
 		if (!refunded) throw problem('conflict', 'The payment changed meanwhile; read it again.');
-		await emit(s, 'payment.refunded', { payment: view(s, refunded), refund: { id: refundId, amount: checked.amount } });
+		await emit(
+			s,
+			'payment.refunded',
+			paymentEventData(view(s, refunded), { refund: { id: refundId, amount: checked.amount } }),
+		);
 		return refunded;
 	};
 
@@ -371,11 +389,11 @@ export const createService = (product) => {
 			payment.id,
 			['pending'],
 			{ status: 'paid', paidAt: new Date(now()) },
-			{ event: 'paid', detail: 'transfer confirmed', by: by.name },
+			{ event: 'paid', detail: 'transfer confirmed', by: nameOf(by) },
 		);
 		if (!paid) throw problem('conflict', 'The payment changed meanwhile; read it again.');
 		if (paid.linkId) await s.store.links.countPaid(paid.linkId);
-		await emit(s, 'payment.paid', { payment: view(s, paid) });
+		await emit(s, 'payment.paid', paymentEventData(view(s, paid)));
 		return paid;
 	};
 
@@ -428,39 +446,10 @@ export const createService = (product) => {
 		const done = await gateways[subscription.gateway].cancelSubscription?.(subscription, keys, ctx);
 		if (!done?.ok) throw problem('gateway_failed', done?.message ?? 'The gateway refused.');
 		const updated = /** @type {SubscriptionRecord} */ (
-			await s.store.subscriptions.update(subscription.id, { status: 'cancelled' }, { event: 'cancelled', by: by.name })
+			await s.store.subscriptions.update(subscription.id, { status: 'cancelled' }, { event: 'cancelled', by: nameOf(by) })
 		);
 		await emit(s, 'subscription.updated', { subscription: subscriptionView(updated) });
 		return updated;
-	};
-
-	/**
-	 * Right after a request for the website: send due events to the merchant through Notifications (its
-	 * `POST /v1/events`, which signs them and posts them to the merchant's webhook URLs). Without the Notifications token
-	 * an event stays readable through the API only.
-	 * @param {Site} s
-	 */
-	const drain = async (s) => {
-		for (let i = 0; i < DRAIN_BATCH; i += 1) {
-			const event = await s.store.events.claimDue(LEASE_MS);
-			if (!event) return;
-			const answer = await product.callProduct(s.websiteId, 'notifications', '/v1/events', {
-				method: 'POST',
-				body: { type: `payments.${event.type}`, data: event.data },
-				headers: { 'idempotency-key': event.id },
-			});
-			if (answer.ok || answer.status === 409)
-				await s.store.events.update(event.id, { delivery: 'sent', attempts: event.attempts + 1 });
-			else if (answer.reason === 'not_connected') await s.store.events.update(event.id, { delivery: 'not_connected' });
-			else {
-				const attempts = event.attempts + 1;
-				const wait = EVENT_DELAYS_MS[attempts - 1];
-				await s.store.events.update(
-					event.id,
-					wait === undefined ? { delivery: 'failed', attempts } : { attempts, dueAt: new Date(now() + wait) },
-				);
-			}
-		}
 	};
 
 	return Object.freeze({
@@ -482,7 +471,6 @@ export const createService = (product) => {
 		subscribe,
 		recheckSubscription,
 		cancelSubscription,
-		drain,
 	});
 };
 

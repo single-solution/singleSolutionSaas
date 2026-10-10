@@ -1,4 +1,5 @@
 import { createDecipheriv, createHmac } from 'node:crypto';
+import { createId } from '@ss/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { verifyWebhook } from '../adapters/signatures.js';
 import { ADMIN_ORIGIN, GATEWAY_URL, HOOK_URL, ORIGIN, PUSH_ORIGIN, browserSubscription, pushKeys, setup } from './helpers.js';
@@ -389,6 +390,22 @@ describe('the send API', () => {
 		await env.setting('quiet_hours', 'endHour', 21);
 	});
 
+	it('holds them by the business.json time zone when the recipient names none', async () => {
+		await env.businessJson({ name: 'Shop', timeZone: 'Asia/Karachi' });
+		await env.setting('quiet_hours', 'endHour', 8);
+		// 17:30 UTC is 22:30 in Karachi: quiet there, not in UTC
+		env.advance(Date.parse('2026-10-03T17:30:00Z') - env.now());
+		const held = await env.send('sms', { template: 'welcome', to: { phone: '+15550008899' } });
+		expect(held.json).toMatchObject({ status: 'queued', dueAt: '2026-10-04T03:00:00.000Z' });
+		// the recipient's own time zone still wins
+		const own = await env.send('sms', { template: 'welcome', to: { phone: '+15550008898', timeZone: 'UTC' } });
+		expect(own.json.status).toBe('sent');
+		await env.businessJson({ name: 'shop.example.com', timeZone: 'UTC' });
+		const utc = await env.send('sms', { template: 'welcome', to: { phone: '+15550008897' } });
+		expect(utc.json.status).toBe('sent');
+		await env.setting('quiet_hours', 'endHour', 21);
+	});
+
 	it('sends a delayed message on the first use after its time', async () => {
 		const sendAt = new Date(env.now() + 2 * 3_600_000).toISOString();
 		const later = await env.send('email', { template: 'accounts.reset', to: { email: 'later@example.com' }, sendAt });
@@ -512,6 +529,60 @@ describe('the send API', () => {
 		expect(await (await relay({ type: 'payments.payment.paid', data: {} })).json()).toEqual({ queued: 0 });
 		await env.connect('webhook_secret', WEBHOOK_SECRET);
 	});
+
+	it('relays a forwarded kit event { id, type, at, data } with its own id and time', async () => {
+		/** @param {unknown} body @param {string} [key] */
+		const relay = (body, key) =>
+			env.call('POST', '/v1/events', { token: env.server, body, ...(key ? { headers: { 'idempotency-key': key } } : {}) });
+		const id = createId('evt');
+		const at = '2026-10-01T09:30:00.000Z';
+		const before = env.providers.callsTo('https://hooks.example.org').length;
+		// exactly what a product's kit sends: the event id is also the Idempotency-Key
+		const event = { id, type: 'ecommerce.order.placed', at, data: { orderId: 'ord_1', number: 'A-1001' } };
+		const res = await relay(event, id);
+		expect(res.status).toBe(202);
+		expect(await res.json()).toEqual({ queued: 1 });
+		const calls = env.providers.callsTo('https://hooks.example.org');
+		expect(calls).toHaveLength(before + 1);
+		const last = /** @type {import('./helpers.js').ProviderCall} */ (calls.at(-1));
+		expect(
+			verifyWebhook({ body: last.body, header: last.headers['ss-signature'] ?? null, secret: WEBHOOK_SECRET, now: env.now() }),
+		).toBe(true);
+		expect(JSON.parse(last.body)).toEqual({
+			id,
+			type: 'ecommerce.order.placed',
+			createdAt: at,
+			websiteId: env.websiteId,
+			data: { orderId: 'ord_1', number: 'A-1001' },
+		});
+		// the kit forwards again after a lost answer: refused as a repeat, which the kit takes as delivered
+		expect((await relay(event, id)).status).toBe(409);
+		expect(env.providers.callsTo('https://hooks.example.org')).toHaveLength(before + 1);
+		// a time with an offset is kept as the same instant
+		await relay({ id: createId('evt'), type: 'chat.conversation.opened', at: '2026-10-01T15:00+05:00', data: {} });
+		expect(JSON.parse(env.providers.callsTo('https://hooks.example.org').at(-1)?.body ?? '{}').createdAt).toBe(
+			'2026-10-01T10:00:00.000Z',
+		);
+		// without them: a new id and now
+		await relay({ type: 'chat.conversation.opened', data: {} });
+		const plain = JSON.parse(env.providers.callsTo('https://hooks.example.org').at(-1)?.body ?? '{}');
+		expect(plain.id).toMatch(/^evt_[0-9a-z]{26}$/);
+		expect(plain.id).not.toBe(id);
+		expect(plain.createdAt).toBe(new Date(env.now()).toISOString());
+		for (const bad of [
+			{ id: 'evt_nope', type: 'chat.conversation.opened', data: {} },
+			{ id: createId('msg'), type: 'chat.conversation.opened', data: {} },
+			{ id: 42, type: 'chat.conversation.opened', data: {} },
+			{ at: 'yesterday', type: 'chat.conversation.opened', data: {} },
+			{ at: '2026-02-30T10:00:00Z', type: 'chat.conversation.opened', data: {} },
+			{ at: '2026-10-01T24:00:00Z', type: 'chat.conversation.opened', data: {} },
+			{ at: '2026-10-01T10:00:00', type: 'chat.conversation.opened', data: {} },
+		]) {
+			const refused = await relay(bad);
+			expect(refused.status).toBe(422);
+			expect((await refused.json()).errors[0].path).toBe(bad.id === undefined ? '/at' : '/id');
+		}
+	});
 });
 
 describe('the delivery log and the admin widgets (tickets)', () => {
@@ -526,6 +597,77 @@ describe('the delivery log and the admin widgets (tickets)', () => {
 		const one = await (await env.call('GET', '/v1/messages?to=%2B15550007777', { token: env.server })).json();
 		expect(one.items.every((/** @type {any} */ m) => m.to === '+15550007777')).toBe(true);
 		expect((await env.call('GET', '/v1/messages/msg_missing', { token: env.server })).status).toBe(404);
+	});
+
+	it('counts the log with exactly the list’s filters, by status, channel, template and source', async () => {
+		/** Every message the list answers for a query, page by page. @param {string} query */
+		const listed = async (query) => {
+			/** @type {any[]} */
+			const items = [];
+			let cursor = '';
+			for (;;) {
+				const page = await (
+					await env.call('GET', `/v1/messages?limit=100${query}${cursor ? `&cursor=${cursor}` : ''}`, { token: env.server })
+				).json();
+				items.push(...page.items);
+				if (!page.hasMore) return items;
+				cursor = page.nextCursor;
+			}
+		};
+		/** @param {string} path */
+		const get = async (path) => (await env.call('GET', path, { token: env.server })).json();
+		for (const query of [
+			'',
+			'&status=sent',
+			'&channel=sms',
+			'&channel=sms&status=sent',
+			'&status=skipped',
+			'&to=%2B15550007777',
+			'&to=OPT%40example.com',
+			'&status=bogus&channel=fax',
+		]) {
+			const items = await listed(query);
+			expect(await get(`/v1/messages/count?x=1${query}`)).toEqual({ count: items.length, capped: false });
+			for (const by of ['status', 'channel', 'template', 'source']) {
+				/** @type {Record<string, number>} */
+				const expected = {};
+				for (const item of items) {
+					const key = String(item[by] ?? 'none');
+					expected[key] = (expected[key] ?? 0) + 1;
+				}
+				const counted = await get(`/v1/messages/counts?by=${by}${query}`);
+				expect(counted.total).toBe(items.length);
+				expect(counted.groups).toEqual(expected);
+			}
+		}
+		const all = await get('/v1/messages/counts?by=status');
+		expect(all.total).toBeGreaterThan(20);
+		expect(Object.keys(all.groups)).toEqual(expect.arrayContaining(['sent', 'skipped', 'failed']));
+		expect((await get('/v1/messages/counts?by=channel')).groups.sms).toBe((await get('/v1/messages/count?channel=sms')).count);
+		const bad = await env.call('GET', '/v1/messages/counts?by=address', { token: env.server });
+		expect(bad.status).toBe(422);
+		expect((await bad.json()).detail).toBe('by is one of: status, channel, template, source.');
+		// the same feature as the list
+		await env.switchOn(ALL.filter((key) => key !== 'send_api'));
+		expect((await env.call('GET', '/v1/messages/count', { token: env.server })).status).toBe(403);
+		expect((await env.call('GET', '/v1/messages/counts?by=status', { token: env.server })).status).toBe(403);
+		await env.switchOn(ALL);
+		// the ticket twins: the delivery log's permission
+		const ticket = await env.ticket(['log.read']);
+		const total = (await get('/v1/messages/count')).count;
+		const twin = await env.call('GET', '/v1/admin/messages/count', { token: ticket, origin: ADMIN_ORIGIN });
+		expect(twin.status).toBe(200);
+		expect(twin.headers.get('access-control-allow-origin')).toBe(ADMIN_ORIGIN);
+		expect(await twin.json()).toEqual({ count: total, capped: false });
+		const twins = await (
+			await env.call('GET', '/v1/admin/messages/counts?by=channel&status=sent', { token: ticket, origin: ADMIN_ORIGIN })
+		).json();
+		expect(twins).toEqual(await get('/v1/messages/counts?by=channel&status=sent'));
+		const none = await env.ticket(['templates.edit']);
+		expect((await env.call('GET', '/v1/admin/messages/count', { token: none, origin: ADMIN_ORIGIN })).status).toBe(403);
+		expect((await env.call('GET', '/v1/admin/messages/counts?by=status', { token: none, origin: ADMIN_ORIGIN })).status).toBe(
+			403,
+		);
 	});
 
 	it('serves the delivery log, templates, one-off sends and staff push to tickets from their origin', async () => {
@@ -573,6 +715,38 @@ describe('the delivery log and the admin widgets (tickets)', () => {
 		expect((await env.call('GET', '/v1/admin/messages', { token: none, origin: ADMIN_ORIGIN })).status).toBe(403);
 	});
 
+	it('records who acted in the widgets in the activity log, with a label and a short detail', async () => {
+		/** @param {string} query */
+		const activity = async (query) =>
+			(await (await env.call('GET', `/v1/activity?${query}`, { token: env.server })).json()).items;
+		const saved = await activity('action=template.saved');
+		expect(saved[0]).toMatchObject({
+			actor: { kind: 'staff', id: 'u_1', name: 'Sam Staff' },
+			action: 'template.saved',
+			target: 'staff.note/sms/default',
+			label: 'staff.note (sms, default)',
+			detail: 'Optional, not urgent',
+		});
+		expect(await activity('action=template.deleted')).toEqual([
+			expect.objectContaining({
+				actor: expect.objectContaining({ name: 'Sam Staff' }),
+				target: 'staff.note/sms/default',
+				label: 'staff.note (sms, default)',
+				detail: null,
+			}),
+		]);
+		const [sent] = await activity('action=message.sent');
+		expect(sent).toMatchObject({
+			actor: { kind: 'staff', id: 'u_1', name: 'Sam Staff' },
+			label: sent.target,
+			detail: 'One-off e-mail message: sent',
+		});
+		expect(sent.target).toMatch(/^msg_/);
+		// never an address or the words
+		expect(JSON.stringify(await activity(''))).not.toMatch(/opt@example\.com|It shipped/);
+		expect((await activity('q=sam%20staff')).length).toBeGreaterThanOrEqual(3);
+	});
+
 	it('serves widget.js, the widget config with the public push key only, and the public docs', async () => {
 		const script = await env.call('GET', '/widget.js');
 		expect(await script.text()).toContain('/v1/widget/config');
@@ -594,6 +768,94 @@ describe('the delivery log and the admin widgets (tickets)', () => {
 		])
 			expect(html).toContain(part);
 		expect(GATEWAY_URL).toMatch(/^https:/);
+	});
+});
+
+describe('the merchant’s server and the widget config (PLAN 0.8.10)', () => {
+	it('takes visitor calls from the merchant’s server, by the visitor’s SS-Visitor-IP', async () => {
+		const browser = browserSubscription(`${PUSH_ORIGIN}/push/server-call`);
+		/** @param {Record<string, string>} headers */
+		const subscribe = (headers) =>
+			env.call('POST', '/v1/push/subscriptions', { token: env.server, body: { subscription: browser.subscription }, headers });
+		const missing = await subscribe({});
+		expect(missing.status).toBe(400);
+		expect((await missing.json()).type).toMatch(/visitor_ip_required$/);
+		const first = await subscribe({ 'ss-visitor-ip': '203.0.113.7' });
+		expect(first.status).toBe(201);
+		expect(first.headers.get('access-control-allow-origin')).toBeNull();
+		const { subscriberId } = await first.json();
+		expect(subscriberId).toMatch(/^sub_/);
+		// the per-visitor limit (20 a minute) counts that visitor's address, not the server's
+		for (let i = 1; i < 20; i += 1) expect((await subscribe({ 'ss-visitor-ip': '203.0.113.7' })).status).toBe(201);
+		expect((await subscribe({ 'ss-visitor-ip': '203.0.113.7' })).status).toBe(429);
+		expect((await subscribe({ 'ss-visitor-ip': '203.0.113.8' })).status).toBe(201);
+		const removed = await env.call('POST', '/v1/push/subscriptions/remove', {
+			token: env.server,
+			body: { subscriberId, endpoint: browser.subscription.endpoint },
+			headers: { 'ss-visitor-ip': '203.0.113.9' },
+		});
+		expect(removed.status).toBe(204);
+		const pushed = await env.send('push', { template: 'alert', to: { subscriberId } });
+		expect(pushed.json).toMatchObject({ status: 'failed', reason: 'No browser is subscribed for this recipient.' });
+	});
+
+	it('takes the SS-Actor headers on server calls and refuses malformed ones', async () => {
+		const named = await env.call('GET', '/v1/messages/count', {
+			token: env.server,
+			headers: { 'ss-actor-id': 'usr_42', 'ss-actor-name': encodeURIComponent('Zoë Admin'), 'ss-actor-role': 'Manager' },
+		});
+		expect(named.status).toBe(200);
+		const malformed = await env.call('GET', '/v1/messages/count', {
+			token: env.server,
+			headers: { 'ss-actor-id': 'usr 42', 'ss-actor-name': 'Zoe' },
+		});
+		expect(malformed.status).toBe(400);
+		expect((await malformed.json()).type).toMatch(/invalid_actor$/);
+		// a settings change from the server shows the acting user in Recent changes
+		const changed = await env.call('PUT', '/v1/settings/send_limits.perDay', {
+			token: env.server,
+			body: { value: 30 },
+			headers: { 'ss-actor-id': 'usr_42', 'ss-actor-name': encodeURIComponent('Zoë Admin') },
+		});
+		expect(changed.status).toBe(200);
+		const overview = await (
+			await env.dashboard(await env.adminSession(), 'GET', `/v1/dashboard/websites/${env.websiteId}/overview`)
+		).json();
+		expect(overview.recentChanges).toContainEqual(
+			expect.objectContaining({ who: { kind: 'user', id: 'usr_42', name: 'Zoë Admin' } }),
+		);
+	});
+
+	it('gives the widgets the Format and the business time zone', async () => {
+		await env.businessJson({ name: 'Shop', timeZone: 'Asia/Karachi' });
+		const cookie = await env.adminSession();
+		const saved = await env.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${env.websiteId}/format`, {
+			locale: 'en-GB',
+			times: 'business',
+		});
+		expect(saved.status).toBe(200);
+		const ticket = await env.ticket(['log.read']);
+		const admin = await (await env.call('GET', '/v1/widget/admin/config', { token: ticket, origin: ADMIN_ORIGIN })).json();
+		expect(admin).toMatchObject({ format: { locale: 'en-GB', times: 'business' }, timeZone: 'Asia/Karachi' });
+		const visitor = await (await env.call('GET', '/v1/widget/config', { token: env.browser, origin: ORIGIN })).json();
+		expect(visitor).toMatchObject({ format: { locale: 'en-GB', times: 'business' }, timeZone: 'Asia/Karachi' });
+		await env.businessJson({ name: 'shop.example.com', timeZone: 'UTC' });
+	});
+
+	it('explains the kit’s routes for the merchant’s server in the docs', async () => {
+		const html = await (await env.call('GET', '/docs')).text();
+		for (const part of [
+			'Settings from your server',
+			'SS-Actor-Id',
+			'SS-Visitor-IP',
+			'/v1/messages/count',
+			'/v1/messages/counts',
+			'/v1/admin/messages/counts',
+			'GET /v1/activity',
+			'Format and time zone',
+			'{ id, type, at, data }',
+		])
+			expect(html).toContain(part);
 	});
 });
 

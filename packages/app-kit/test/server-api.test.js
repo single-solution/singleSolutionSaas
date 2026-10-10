@@ -326,6 +326,12 @@ describe('activity reads (K9)', () => {
 		expect((await filtered('action=order.refunded,catalog.changed')).items).toHaveLength(2);
 		expect((await filtered('q=im-2026-0002')).items.map((/** @type {any} */ e) => e.target)).toEqual(['ord_2']);
 		expect((await filtered('q=Tia')).items).toHaveLength(1);
+		// the search holds on every page (the cursor's keyset does not replace it)
+		const searched = await filtered('q=im-2026-0001&limit=1');
+		expect(searched.items.map((/** @type {any} */ e) => e.action)).toEqual(['order.refunded']);
+		const searchedNext = await filtered(`q=im-2026-0001&limit=1&cursor=${searched.nextCursor}`);
+		expect(searchedNext.items.map((/** @type {any} */ e) => e.label)).toEqual(['IM-2026-0001']);
+		expect(searchedNext.hasMore).toBe(false);
 		expect((await filtered('from=2026-10-01T11:30:00Z&to=2026-10-01T12:30:00Z')).items).toHaveLength(1);
 		expect((await filtered('from=2026-10-01&to=2026-10-01')).items).toHaveLength(4);
 		expect((await filtered('from=2026-10-02')).items).toHaveLength(0);

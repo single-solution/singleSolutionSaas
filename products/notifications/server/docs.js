@@ -1,11 +1,14 @@
 /**
  * The public docs at `/docs` (PLAN 0.4.10, 0.8.5): the send API and template keys, retries and fallback, timing,
  * languages, providers (with the gateway example for Connectivity.pk), unsubscribe keywords, browser and staff push
- * (with the service worker), the webhook signature check, per-feature routes and widgets, the widget snippets, the
- * ticket server snippet (Node.js fetch and cURL), the business.json template, the localhost note and the API
- * reference from `openapi.json`. Plain HTML; every value is escaped.
+ * (with the service worker), the webhook signature check and other products' events, the delivery log and its counts,
+ * per-feature routes and widgets, the widget snippets, the ticket server snippet (Node.js fetch and cURL), the kit's
+ * routes for your server (settings, acting user, visitor calls, counts, activity, Format; PLAN 0.8.10), the
+ * business.json template, the localhost note and the API reference from `openapi.json`. Plain HTML; every value is
+ * escaped.
  * @module
  */
+import { KIT_GUIDE } from '@ss/app-kit';
 import { BUSINESS_JSON_TEMPLATE } from '@ss/contracts';
 import guide from '../docs/guide.json' with { type: 'json' };
 import openapi from '../openapi.json' with { type: 'json' };
@@ -118,6 +121,9 @@ ${block(pushSnippet)}
 ${para(guide.webhooks)}
 ${para(`Events: ${WEBHOOK_EVENTS.join(', ')}. Header: ${SIGNATURE_HEADER}.`)}
 ${block(webhookSnippet)}
+${para(guide.events)}
+<h2>Delivery log</h2>
+${para(guide.log)}
 <h2>Features</h2>
 ${featureSections.join('\n')}
 <h2>Install the widgets</h2>
@@ -129,6 +135,7 @@ ${block(adminSnippet)}
 ${para(guide.tickets)}
 ${block(nodeSnippet)}
 ${block(curlSnippet)}
+${KIT_GUIDE.map((section) => `<h2 id="${escape(section.id)}">${escape(section.title)}</h2>\n${section.paragraphs.map(para).join('\n')}`).join('\n')}
 <h2>business.json</h2>
 ${para(guide.business)}
 ${block(JSON.stringify(BUSINESS_JSON_TEMPLATE, null, 2))}

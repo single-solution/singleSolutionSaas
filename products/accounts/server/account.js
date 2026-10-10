@@ -235,7 +235,7 @@ export const createAccount = (product, service, flows) => {
 	/**
 	 * The Orders tab: the user's last 20 orders from Ecommerce, through the pasted Ecommerce token
 	 * (`GET /v1/customers/<userId>/orders` → `{ items: [{ id, number, status, statusLabel, total, totalText, currency,
-	 * createdAt }] }`), shown as given.
+	 * createdAt }] }`), answered as given (`total` in minor units; the widget shows it in this website's Format).
 	 * @param {any} ctx
 	 */
 	const orders = async (ctx) => {

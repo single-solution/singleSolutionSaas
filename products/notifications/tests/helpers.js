@@ -1,7 +1,8 @@
 /**
  * Test harness: Notifications on the kit, connected to the kit's fake Portal (`@ss/app-kit/testing`), with one
- * website, its two tokens, dashboard sessions, a merchant database on the run's MongoDB (`TEST_MONGODB_URI`) and fake
- * providers: every provider call is answered in process (no real network call is ever made).
+ * website, its two tokens, dashboard sessions, a merchant database on the run's MongoDB (`TEST_MONGODB_URI`), the
+ * website's business.json (404 until a test serves one) and fake providers: every provider call is answered in process
+ * (no real network call is ever made).
  * @module
  */
 import { createECDH } from 'node:crypto';
@@ -123,8 +124,17 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 	const now = () => t;
 	const portal = await createFakePortal({ now });
 	const providers = createFakeProviders();
+	/** The website's business.json, while a test serves one. @type {unknown} */
+	let business = null;
 	/** @type {Record<string, (request: Request) => Promise<Response>>} */
-	const handlers = { [portal.url]: portal.handle, ...providers.handlers };
+	const handlers = {
+		[portal.url]: portal.handle,
+		...providers.handlers,
+		[ORIGIN]: async (request) =>
+			new URL(request.url).pathname === '/.well-known/business.json' && business !== null
+				? new Response(JSON.stringify(business), { headers: { 'content-type': 'application/json' } })
+				: new Response('not found', { status: 404 }),
+	};
 	const network = createNetwork(handlers);
 	/** @type {Array<{ options: any, mail: any }>} */
 	const mails = [];
@@ -259,6 +269,15 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 		send,
 		ticket,
 		connectDatabase: () => connect('database', merchantDatabase()),
+		/**
+		 * Serve the website's business.json (null: 404) and read it again, as the dashboard's Refresh does.
+		 * @param {unknown} value
+		 */
+		businessJson: async (value) => {
+			business = value;
+			const response = await dashboard(await adminSession(), 'POST', `/v1/dashboard/websites/${websiteId}/business/refresh`);
+			if (response.status !== 200) throw new Error(`business: ${response.status} ${await response.text()}`);
+		},
 		/** Run the work queued after responses (for example after a notice). */
 		flush: async () => {
 			while (tasks.length > 0) await /** @type {() => Promise<unknown>} */ (tasks.shift())();

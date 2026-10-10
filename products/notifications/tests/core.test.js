@@ -9,6 +9,7 @@ import {
 } from '../core/channels.js';
 import { gatewayOutcome } from '../core/gateway.js';
 import { isOptOut, repliesOf } from '../core/inbound.js';
+import { STATUSES, logFilters } from '../core/log.js';
 import {
 	checkTemplate,
 	checkValues,
@@ -21,7 +22,7 @@ import {
 	templateView,
 } from '../core/templates.js';
 import { checkSendAt, isQuietHour, localTime, nextAttemptAt, quietUntil, withinLimits } from '../core/timing.js';
-import { webhookUrls } from '../core/webhooks.js';
+import { checkForwardedEvent, eventTime, webhookUrls } from '../core/webhooks.js';
 import { keyBytes } from '../core/widgets.js';
 
 describe('channels', () => {
@@ -164,6 +165,14 @@ describe('timing', () => {
 		expect(quietUntil(at, { startHour: 21, endHour: 8 }, 'UTC')).toBe(at);
 	});
 
+	it('reads the wall clock in the business time zone, UTC when it is missing or unknown', () => {
+		const at = Date.parse('2026-10-01T18:30:00Z');
+		expect(localTime(at, 'America/New_York')).toEqual({ hour: 14, minute: 30 });
+		expect(localTime(at, null)).toEqual({ hour: 18, minute: 30 });
+		expect(localTime(at, 'Nowhere/Town')).toEqual({ hour: 18, minute: 30 });
+		expect(quietUntil(at, { startHour: 18, endHour: 7 }, undefined)).toBe(Date.parse('2026-10-02T07:00:00Z'));
+	});
+
 	it('checks send limits and send times', () => {
 		expect(withinLimits({ lastHour: 4, lastDay: 19 }, { perHour: 5, perDay: 20 })).toBe(true);
 		expect(withinLimits({ lastHour: 5, lastDay: 5 }, { perHour: 5, perDay: 20 })).toBe(false);
@@ -176,8 +185,76 @@ describe('timing', () => {
 	});
 });
 
+describe('the delivery log’s filters', () => {
+	it('keep known statuses and channels and normalise the recipient', () => {
+		expect(STATUSES).toEqual(['queued', 'retrying', 'sent', 'failed', 'skipped']);
+		expect(logFilters({})).toEqual({});
+		expect(logFilters({ status: 'sent', channel: 'sms', to: '+44 7700 900123' })).toEqual({
+			status: 'sent',
+			channel: 'sms',
+			address: '+447700900123',
+		});
+		expect(logFilters({ status: 'bogus', channel: 'fax', to: '' })).toEqual({});
+		expect(logFilters({ to: 'Ana@Example.com' })).toEqual({ address: 'ana@example.com' });
+		expect(logFilters({ to: 'sub_1' })).toEqual({ address: 'sub_1' });
+		expect(logFilters({ status: ['sent'], to: 5 })).toEqual({});
+	});
+});
+
+describe('forwarded events', () => {
+	it('read real ISO-8601 times only', () => {
+		expect(eventTime('2026-10-01T10:00:00.000Z')).toBe(Date.parse('2026-10-01T10:00:00Z'));
+		expect(eventTime('2026-10-01T15:00+05:00')).toBe(Date.parse('2026-10-01T10:00:00Z'));
+		expect(eventTime('2026-10-01T10:00:00.123456Z')).toBe(Date.parse('2026-10-01T10:00:00.123Z'));
+		expect(eventTime('2028-02-29T00:00:00Z')).toBe(Date.parse('2028-02-29T00:00:00Z'));
+		for (const bad of [
+			'2026-02-29T00:00:00Z',
+			'2026-13-01T00:00:00Z',
+			'2026-10-01T24:00:00Z',
+			'2026-10-01T10:60:00Z',
+			'2026-10-01T10:00:60Z',
+			'2026-10-01T10:00:00+24:00',
+			'2026-10-01T10:00:00+05:60',
+			'2026-10-01T10:00:00',
+			'2026-10-01',
+			'0026-10-01T10:00:00Z',
+			'+2026-10-01T10:00:00Z',
+			1_790_848_800_000,
+			null,
+		])
+			expect(eventTime(bad)).toBeNull();
+	});
+
+	it('check type, data, id and time', () => {
+		const id = 'evt_0123456789abcdefghjkmnpqrs';
+		expect(checkForwardedEvent({ id, type: 'payments.payment.paid', at: '2026-10-01T10:00:00Z', data: { a: 1 } })).toEqual({
+			ok: true,
+			value: { id, type: 'payments.payment.paid', at: Date.parse('2026-10-01T10:00:00Z'), data: { a: 1 } },
+		});
+		expect(checkForwardedEvent({ type: 'growth.goal.reached', data: {} })).toEqual({
+			ok: true,
+			value: { id: null, type: 'growth.goal.reached', at: null, data: {} },
+		});
+		/** @param {unknown} input */
+		const field = (input) => {
+			const checked = checkForwardedEvent(input);
+			return checked.ok ? null : checked.field;
+		};
+		expect(field(null)).toBe('type');
+		expect(field({ type: 'message.sent', data: {} })).toBe('type');
+		expect(field({ type: 'notifications.message.sent', data: {} })).toBe('type');
+		expect(field({ type: 'payments.paid', data: null })).toBe('data');
+		expect(field({ type: 'payments.paid', data: [] })).toBe('data');
+		expect(field({ type: 'payments.paid', data: { x: 'y'.repeat(17_000) } })).toBe('data');
+		expect(field({ type: 'payments.paid', data: {}, id: 'msg_0123456789abcdefghjkmnpqrs' })).toBe('id');
+		expect(field({ type: 'payments.paid', data: {}, id: '' })).toBe('id');
+		expect(field({ type: 'payments.paid', data: {}, at: 'now' })).toBe('at');
+		expect(field({ type: 'payments.paid', data: {}, at: null })).toBe('at');
+	});
+});
+
 describe('provider answers, replies and webhook URLs', () => {
-	it('reads gateway answers like ibrahimMobiles did', () => {
+	it('reads gateway answers that report a refusal inside HTTP 200', () => {
 		expect(gatewayOutcome(500, '')).toMatchObject({ ok: false, retryable: true });
 		expect(gatewayOutcome(429, '')).toMatchObject({ ok: false, retryable: true });
 		expect(gatewayOutcome(400, '')).toMatchObject({ ok: false, retryable: false });

@@ -76,7 +76,7 @@ export const TEXTS = Object.freeze({
 		featuresTitle: 'Feature settings',
 		featuresHelp: 'How each feature behaves on this website.',
 		looksTitle: 'Words and look',
-		looksHelp: 'Every word of the widgets and the unsubscribe page, and their theme.',
+		looksHelp: 'Every word of the widgets and the unsubscribe page, their theme, and how dates look.',
 		template: Object.freeze({
 			key: 'Template key',
 			channel: 'Channel',
@@ -112,6 +112,23 @@ export const TEXTS = Object.freeze({
 		radius: 'Corner radius (0–24 px)',
 		accent: 'Accent colour',
 		customCss: 'Custom CSS',
+		format: 'Format',
+		formatHelp: 'How dates, times and amounts look in the widgets; the delivery log shows its times this way.',
+		locale: 'Language and region',
+		localeHelp: "A tag such as en-GB or ur-PK; empty uses each viewer's browser.",
+		currencyDisplay: 'Currency shown as',
+		currencyDisplays: Object.freeze({
+			code: 'Code (PKR 12,500.00)',
+			symbol: 'Symbol (Rs 12,500.00)',
+			custom: 'Your own symbol',
+		}),
+		currencySymbol: 'Your own symbol (up to 8 characters)',
+		times: 'Dates and times in',
+		timesOptions: Object.freeze({
+			viewer: "Each visitor's time zone",
+			business: 'Your business time zone (business.json)',
+		}),
+		wholeUnits: 'Whole amounts only (no minor units)',
 		off: 'This feature is off.',
 	}),
 	connections: Object.freeze({

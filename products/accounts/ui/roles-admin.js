@@ -5,7 +5,7 @@
  * @module
  */
 import { formatText, mountWidget } from '@ss/app-kit/widget';
-import { errorText, fieldMaker, setHidden, textsOf } from './common.js';
+import { datesOf, errorText, fieldMaker, setHidden, textsOf } from './common.js';
 import { element } from './dom.js';
 import { WIDGET_CSS } from './styles.js';
 import { adminCall } from './tickets.js';
@@ -33,6 +33,7 @@ const OWN_SOURCE = 'site';
  */
 export const mountRolesAdmin = ({ host, api, config }) => {
 	const t = textsOf(config);
+	const when = datesOf(config, host.ownerDocument.defaultView);
 	const twoStepOn = config.features.includes('two_step');
 	return mountWidget({
 		host,
@@ -59,7 +60,7 @@ export const mountRolesAdmin = ({ host, api, config }) => {
 			const button = (text, attributes = {}) => element(doc, 'button', { type: 'button', ...attributes }, text);
 			/** @param {import('./common.js').Answer} answer */
 			const failure = (answer) =>
-				answer.status === 0 && !api.tickets.current() ? t('roles.signedOut') : errorText(t, answer);
+				answer.status === 0 && !api.tickets.current() ? t('roles.signedOut') : errorText(t, answer, when);
 
 			// the list
 			const note = element(doc, 'p', { class: 'status', role: 'status' });

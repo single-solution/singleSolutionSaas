@@ -2,11 +2,13 @@
  * The analytics dashboard (admin widget `analytics_dashboard`, ticket `analytics.read`; PLAN 0.8.9): for a range of
  * days (the last 30 by default), visits as the hero card with a bar per day, page views, top pages, sources, devices
  * and countries; with the other features on, the funnel and revenue, searches and 404s, and Web Vitals. In the
- * dashboards' style (PLAN 0.6 "A + B"); every word is a widget text.
+ * dashboards' style (PLAN 0.6 "A + B"); every word is a widget text. Days are the days of the business time zone
+ * (business.json, UTC without it; PLAN 0.8.10 K8) and the widget says which zone; money and days follow the website's
+ * Format (K7).
  * @module
  */
-import { mountWidget } from '@ss/app-kit/widget';
-import { toMajor } from '../core/money.js';
+import { formatDate, formatMoney, mountWidget } from '@ss/app-kit/widget';
+import { dayStart, lastDays } from '../core/analytics.js';
 import { DIRECT, UNKNOWN } from '../core/events.js';
 import { adminCall } from './tickets.js';
 import { element } from './dom.js';
@@ -21,16 +23,19 @@ import { WIDGET_CSS } from './styles.js';
 const fill = (text, values) =>
 	text.replace(/\{(\w+)\}/g, (match, key) => (Object.hasOwn(values, key) ? String(values[key]) : match));
 
-/** @param {number} at */
-const dayText = (at) => new Date(at).toISOString().slice(0, 10);
-
 /**
  * @param {{ host: HTMLElement, api: import('./tickets.js').AdminApi, config: import('./widget.js').WidgetConfig,
- *   now: () => number }} input
+ *   viewer: import('./widget.js').Viewer, now: () => number }} input `viewer`: the browser's language and time zone
  */
-export const mountAnalyticsDashboard = ({ host, api, config, now }) => {
+export const mountAnalyticsDashboard = ({ host, api, config, viewer, now }) => {
 	/** @param {string} key @param {Record<string, string | number>} [values] */
 	const t = (key, values) => fill(config.texts[key] ?? key, values ?? {});
+	/**
+	 * A day of the report in the website's Format: always the business day, whatever the viewer's own zone.
+	 * @param {string} day @param {string} timeZone
+	 */
+	const dayText = (day, timeZone) =>
+		formatDate(dayStart(day, timeZone), { ...config.format, times: 'business' }, { timeZone, style: 'date', viewer });
 	return mountWidget({
 		host,
 		theme: config.theme,
@@ -42,8 +47,10 @@ export const mountAnalyticsDashboard = ({ host, api, config, now }) => {
 			const h = (tag, attributes, text) => element(doc, tag, attributes, text);
 			const from = /** @type {HTMLInputElement} */ (h('input', { type: 'date', id: 'ss-growth-from' }));
 			const to = /** @type {HTMLInputElement} */ (h('input', { type: 'date', id: 'ss-growth-to' }));
-			to.value = dayText(now());
-			from.value = dayText(now() - 29 * 86_400_000);
+			// the last 30 days up to today in the business time zone
+			const range = lastDays(now(), config.timeZone);
+			from.value = range.from;
+			to.value = range.to;
 			const show = h('button', { type: 'submit' }, t('analytics.show'));
 			const form = h('form', { class: 'row' });
 			const fromField = h('div');
@@ -94,6 +101,7 @@ export const mountAnalyticsDashboard = ({ host, api, config, now }) => {
 
 			/** @param {Report} report */
 			const draw = (report) => {
+				const zone = report.timeZone;
 				const hero = h('div', { class: 'hero' });
 				hero.append(
 					h('span', { class: 'label' }, t('analytics.visits')),
@@ -105,7 +113,7 @@ export const mountAnalyticsDashboard = ({ host, api, config, now }) => {
 					bars.append(
 						h('span', {
 							style: `height: ${Math.max(2, Math.round((day.visits / most) * 100))}%`,
-							title: `${day.day}: ${day.visits}`,
+							title: `${dayText(day.day, zone)}: ${day.visits}`,
 						}),
 					);
 				hero.append(bars);
@@ -117,13 +125,13 @@ export const mountAnalyticsDashboard = ({ host, api, config, now }) => {
 						? report.funnel.revenue.map((entry) =>
 								tile(
 									`${t('analytics.revenue')} · ${t('analytics.orders', { count: entry.orders })}`,
-									`${entry.currency} ${toMajor(entry.value, entry.currency).toLocaleString()}`,
+									formatMoney(entry.value, entry.currency, config.format, viewer),
 									'$',
 								),
 							)
 						: []),
 				);
-				const parts = [overview];
+				const parts = [h('p', { class: 'lead' }, t('analytics.timeZone', { timeZone: zone })), overview];
 				if (report.totals.visits === 0 && report.totals.pageViews === 0)
 					parts.push(h('p', { class: 'lead' }, t('analytics.empty')));
 				parts.push(

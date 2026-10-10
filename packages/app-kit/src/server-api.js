@@ -45,6 +45,14 @@ export const SETTINGS_WRITE_LIMIT = Object.freeze({
 	bucket: 'kit-settings-writes',
 });
 
+/**
+ * A list filter with a page's keyset: both may hold `$or` (the search and the cursor), so they are joined with `$and`.
+ * @param {Record<string, unknown>} filter pins `websiteId`
+ * @param {Record<string, unknown>} keyset
+ */
+export const withPage = (filter, keyset) =>
+	Object.keys(keyset).length === 0 ? filter : { websiteId: filter.websiteId, $and: [filter, keyset] };
+
 /** The merchant's server as the one who changed something. @type {Who} */
 const SERVER = Object.freeze({ kind: 'server', id: 'server', name: 'Server' });
 
@@ -309,7 +317,7 @@ export const createServerApi = (kit, lists) => {
 				);
 				const { collection, filter } = await activitySource(ctx);
 				const rows = await collection
-					.find({ ...filter, ...activityPage(page.after) }, { sort: { at: -1, _id: -1 }, limit: page.fetchLimit })
+					.find(withPage(filter, activityPage(page.after)), { sort: { at: -1, _id: -1 }, limit: page.fetchLimit })
 					.toArray();
 				const out = page.page(rows, (row) => [new Date(row.at).toISOString(), String(row._id)]);
 				const link = page.link(out.nextCursor);

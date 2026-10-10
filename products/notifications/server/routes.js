@@ -1,18 +1,22 @@
 /**
- * Notifications' routes (the kit adds its own: connect, notices, tickets, data rights, widget config, `/sso` and the
- * dashboard API). Every browser-token, server-token and ticket route belongs to one feature; `openapi.json` is
- * generated from these definitions (`ss app assets`), so `method`, `path`, `auth`, `feature` and `permission` stay
- * string literals. Every website route sends due messages and webhook events right after it answers (`drain`).
+ * Notifications' routes (the kit adds its own: connect, notices, tickets, data rights, widget config, `/sso`, the
+ * dashboard API, the settings API and the activity reads). Every browser-token, server-token and ticket route belongs
+ * to one feature; `openapi.json` is generated from these definitions (`ss app assets`), so `method`, `path`, `auth`,
+ * `feature` and `permission` stay string literals. Every website route sends due messages and webhook events right
+ * after it answers (`drain`). Who acts is the ticket's member of staff, else the `SS-Actor-*` user of a server-token
+ * call, else the server (PLAN 0.8.10 K2).
  * Public entry `./routes` of this package: `product.handler(createRoutes(product))`.
  * @module
  */
 import { isId } from '@ss/contracts';
-import { created, defineRoute, noContent, ok, paginate, problem } from '@ss/app-kit';
+import { actorOf, countHandlers, created, defineRoute, noContent, ok, paginate, problem } from '@ss/app-kit';
 import { CHANNELS, checkRecipient, normaliseEmail, normalisePhone } from '../core/channels.js';
 import { isOptOut, repliesOf } from '../core/inbound.js';
+import { logFilters } from '../core/log.js';
 import { verifyMeta, verifyTwilio } from '../adapters/signatures.js';
 import { checkTemplate, checkValues, isProductKey, languageOfSegment, templateView } from '../core/templates.js';
 import { checkSendAt } from '../core/timing.js';
+import { checkForwardedEvent } from '../core/webhooks.js';
 import { strings } from '../adapters/product.js';
 import { createStore } from '../adapters/store.js';
 import { checkSubscription } from '../adapters/webpush.js';
@@ -32,12 +36,29 @@ const VISITOR_LIMITS = [
 	{ limit: 20, windowSeconds: 60, per: /** @type {const} */ ('visitor') },
 ];
 
-/** Event types other products send through `POST /v1/events`: `<product id>.<event>`. */
-const PRODUCT_EVENT = /^(?:accounts|ecommerce|chat|payments|growth)\.[a-z][a-z0-9_.]{0,62}$/;
+/** Who acts when neither a ticket nor the `SS-Actor-*` headers name a member of the merchant's staff. */
+const SERVER = Object.freeze({ kind: 'server', id: 'server', name: 'Server' });
+
+/** Fields the delivery log is counted by (`GET /v1/messages/counts?by=`). */
+const MESSAGE_COUNT_FIELDS = Object.freeze({ status: 'status', channel: 'channel', template: 'template', source: 'source' });
+
+/** Channel names in activity details. */
+const CHANNEL_NAMES = Object.freeze({ email: 'e-mail', sms: 'SMS', whatsapp: 'WhatsApp' });
 
 /** @param {string} field @param {string} message @param {string} [code] */
 const invalid = (field, message, code = 'invalid') =>
 	problem('validation_failed', message, { errors: [{ path: `/${field}`, message, code }] });
+
+/**
+ * The short detail of a saved template in the activity log: how it is sent, never its words.
+ * @param {import('../core/templates.js').Template} template
+ */
+const templateDetail = (template) =>
+	[
+		template.required ? 'Required' : 'Optional',
+		template.urgent ? 'urgent' : 'not urgent',
+		...(template.providerTemplate ? [`WhatsApp template ${template.providerTemplate}`] : []),
+	].join(', ');
 
 /**
  * @param {Product} product
@@ -107,17 +128,15 @@ export const createRoutes = (product) => {
 	const listMessages = async (ctx) => {
 		const page = paginate({ cursor: ctx.query.cursor, limit: ctx.query.limit, url: ctx.request.url }, { defaultLimit: 25 });
 		const s = await siteOf(ctx);
-		const status = ['queued', 'retrying', 'sent', 'failed', 'skipped'].includes(ctx.query.status)
-			? ctx.query.status
-			: undefined;
-		const channel = CHANNELS.includes(ctx.query.channel) ? ctx.query.channel : undefined;
-		const address =
-			typeof ctx.query.to === 'string'
-				? (normaliseEmail(ctx.query.to) ?? normalisePhone(ctx.query.to) ?? ctx.query.to)
-				: undefined;
-		const rows = await s.store.messages.list({ after: page.after, limit: page.fetchLimit, status, channel, address });
+		const rows = await s.store.messages.list({ after: page.after, limit: page.fetchLimit, ...logFilters(ctx.query) });
 		return page.respond(rows.map(messageView), (message) => [message.createdAt, message.id]);
 	};
+
+	/** The delivery log's counts: the list's own filters (`?status=&channel=&to=`), counted (PLAN 0.8.10 K4). */
+	const messageCounts = countHandlers({
+		source: async (ctx) => (await siteOf(ctx)).store.messages.countSource(logFilters(ctx.query)),
+		by: MESSAGE_COUNT_FIELDS,
+	});
 
 	/**
 	 * Templates: list, save and delete (dashboard and the template editor widget).
@@ -126,8 +145,14 @@ export const createRoutes = (product) => {
 	const templateHandlers = (via) => {
 		/** @param {any} ctx */
 		const storeOf = async (ctx) => (via === 'widget' ? (await siteOf(ctx)).store : createStore(await ctx.data(), { now }));
-		/** @param {any} ctx @param {string} detail */
-		const record = async (ctx, detail) => {
+		/**
+		 * A Recent change (dashboard) or an activity entry by who acts (widget): the template's key, channel and language
+		 * are its label; the detail names the change, never the words.
+		 * @param {any} ctx
+		 * @param {{ change: 'saved' | 'deleted', key: string, channel: string, language: string, detail?: string }} input
+		 */
+		const record = async (ctx, { change, key, channel, language, detail }) => {
+			const label = `${key} (${channel}, ${language || 'default'})`;
 			if (via === 'dashboard') {
 				const session = ctx.session;
 				await product.recentChanges.record({
@@ -139,15 +164,17 @@ export const createRoutes = (product) => {
 						...(session.role ? { role: session.role } : {}),
 					},
 					what: 'templates',
-					detail,
+					detail: `Template ${label}: ${change}`,
 				});
 			} else
 				await product.activity.record(
 					{ websiteId: ctx.websiteId, merchantId: ctx.merchantId, after: ctx.after },
 					{
-						actor: { kind: 'staff', id: ctx.ticket.user.id, name: ctx.ticket.user.name },
-						action: 'template.saved',
-						target: detail,
+						actor: actorOf(ctx, SERVER),
+						action: `template.${change}`,
+						target: `${key}/${channel}/${language || 'default'}`,
+						label,
+						...(detail ? { detail } : {}),
 					},
 				);
 		};
@@ -162,7 +189,13 @@ export const createRoutes = (product) => {
 				if ((await store.templates.save(checked.value)) === 'full')
 					return problem('validation_failed', 'A website can have at most 1000 templates.');
 				const t = checked.value;
-				await record(ctx, `Template ${t.key} (${t.channel}, ${t.language || 'default'}): saved`);
+				await record(ctx, {
+					change: 'saved',
+					key: t.key,
+					channel: t.channel,
+					language: t.language,
+					detail: templateDetail(t),
+				});
 				return templateView(t);
 			},
 			/** @param {any} ctx */
@@ -172,7 +205,7 @@ export const createRoutes = (product) => {
 				const store = await storeOf(ctx);
 				if (!(await store.templates.remove(ctx.params.key, ctx.params.channel, language)))
 					return problem('not_found', 'No such template.');
-				await record(ctx, `Template ${ctx.params.key} (${ctx.params.channel}, ${language || 'default'}): deleted`);
+				await record(ctx, { change: 'deleted', key: ctx.params.key, channel: ctx.params.channel, language });
 				return noContent();
 			},
 		};
@@ -290,22 +323,28 @@ export const createRoutes = (product) => {
 			idempotent: true,
 			rateLimit: SEND_LIMITS,
 			handler: async (ctx) => {
-				const body = typeof ctx.body === 'object' && ctx.body !== null ? ctx.body : {};
-				if (typeof body.type !== 'string' || !PRODUCT_EVENT.test(body.type))
-					return invalid('type', 'Name the event as <product id>.<event>, for example payments.payment.paid.');
-				if (
-					typeof body.data !== 'object' ||
-					body.data === null ||
-					Array.isArray(body.data) ||
-					JSON.stringify(body.data).length > 16_384
-				)
-					return invalid('data', 'data is an object of at most 16 kB of JSON.');
+				const checked = checkForwardedEvent(ctx.body);
+				if (!checked.ok) return invalid(checked.field, checked.message);
 				const s = await siteOf(ctx);
-				return ok({ queued: await sending.relay(s, body.type, body.data) }, { status: 202 });
+				return ok({ queued: await sending.relay(s, checked.value) }, { status: 202 });
 			},
 		}),
-		// the delivery log for the merchant's server
+		// the delivery log for the merchant's server, and its counts with the same filters
 		defineRoute({ method: 'GET', path: '/v1/messages', auth: 'server', feature: 'send_api', handler: listMessages }),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/messages/count',
+			auth: 'server',
+			feature: 'send_api',
+			handler: messageCounts.count,
+		}),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/messages/counts',
+			auth: 'server',
+			feature: 'send_api',
+			handler: messageCounts.counts,
+		}),
 		defineRoute({
 			method: 'GET',
 			path: '/v1/messages/:id',
@@ -350,6 +389,20 @@ export const createRoutes = (product) => {
 		// ------------------------------------------------------------------------- admin widgets (tickets)
 		defineRoute({ method: 'GET', path: '/v1/admin/messages', auth: 'ticket', permission: 'log.read', handler: listMessages }),
 		defineRoute({
+			method: 'GET',
+			path: '/v1/admin/messages/count',
+			auth: 'ticket',
+			permission: 'log.read',
+			handler: messageCounts.count,
+		}),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/admin/messages/counts',
+			auth: 'ticket',
+			permission: 'log.read',
+			handler: messageCounts.counts,
+		}),
+		defineRoute({
 			method: 'POST',
 			path: '/v1/admin/messages',
 			auth: 'ticket',
@@ -387,9 +440,11 @@ export const createRoutes = (product) => {
 				await product.activity.record(
 					{ websiteId: ctx.websiteId, merchantId: ctx.merchantId, after: ctx.after },
 					{
-						actor: { kind: 'staff', id: ctx.ticket.user.id, name: ctx.ticket.user.name },
+						actor: actorOf(ctx, SERVER),
 						action: 'message.sent',
 						target: result.message.id,
+						label: result.message.id,
+						detail: `One-off ${CHANNEL_NAMES[channel]} message: ${result.message.status}`,
 					},
 				);
 				return created(messageView(result.message));

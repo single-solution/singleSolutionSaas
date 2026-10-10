@@ -6,7 +6,8 @@
  * - `payments`: one per payment, with its refunds and its history
  * - `links`: payment links
  * - `subscriptions`: gateway-managed subscriptions as Payments mirrors them
- * - `events`: payment events, listed by the API and sent to the merchant through Notifications
+ *
+ * Payment events live in the kit's `events` collection (`product.events`, PLAN 0.8.10 K5).
  * @module
  */
 import { createId } from '@ss/contracts';
@@ -49,15 +50,11 @@ import { createId } from '@ss/contracts';
  *   reference: string, returnUrl: string, cancelUrl: string | null, status: import('../core/payments.js').SubscriptionStatus,
  *   gatewayRef: string | null, checkoutUrl: string | null, history: HistoryEntry[], createdAt: Date, updatedAt: Date }} SubscriptionRecord
  */
-/**
- * @typedef {{ id: string, type: string, data: Record<string, unknown>, delivery: 'pending' | 'sent' | 'not_connected' | 'failed',
- *   attempts: number, dueAt: Date, createdAt: Date }} EventRecord
- */
+/** @typedef {{ status?: string, q?: string }} PaymentQuery the payments list's filters (and its counts', PLAN 0.8.10 K4) */
 
 const PAYMENTS = 'payments';
 const LINKS = 'links';
 const SUBSCRIPTIONS = 'subscriptions';
-const EVENTS = 'events';
 
 /** Merchant database indexes (created on a website's first use). @type {import('@ss/app-kit').IndexDefinition[]} */
 export const INDEXES = [
@@ -71,9 +68,6 @@ export const INDEXES = [
 	{ collection: SUBSCRIPTIONS, keys: { websiteId: 1, id: 1 }, name: 'by_id', unique: true },
 	{ collection: SUBSCRIPTIONS, keys: { websiteId: 1, gatewayRef: 1 }, name: 'by_ref' },
 	{ collection: SUBSCRIPTIONS, keys: { websiteId: 1, createdAt: -1, id: -1 }, name: 'newest' },
-	{ collection: EVENTS, keys: { websiteId: 1, id: 1 }, name: 'by_id', unique: true },
-	{ collection: EVENTS, keys: { websiteId: 1, createdAt: -1, id: -1 }, name: 'newest' },
-	{ collection: EVENTS, keys: { websiteId: 1, delivery: 1, dueAt: 1 }, name: 'due' },
 ];
 
 const NO_ID = { projection: { _id: 0 } };
@@ -102,7 +96,6 @@ export const createStore = (data, { now }) => {
 	const payments = data.collection(PAYMENTS);
 	const links = data.collection(LINKS);
 	const subscriptions = data.collection(SUBSCRIPTIONS);
-	const events = data.collection(EVENTS);
 	/** @param {unknown} doc */
 	const as = (doc) => /** @type {any} */ (doc);
 
@@ -113,6 +106,26 @@ export const createStore = (data, { now }) => {
 		if (user.email) or.push({ 'customer.email': user.email.trim().toLowerCase() });
 		if (user.phone) or.push({ 'customer.phone': user.phone.replace(/[\s()-]/g, '') });
 		return or.length === 0 ? null : { websiteId, $or: or };
+	};
+
+	/**
+	 * The filter of the payments list and of its counts (one builder, so a count always matches the list): `status`
+	 * exactly, `q` the id, the reference or the payer e-mail exactly, or a reference prefix.
+	 * @param {PaymentQuery} query
+	 */
+	const paymentFilter = ({ status, q }) => {
+		/** @type {Record<string, unknown>} */
+		const filter = { websiteId };
+		if (status) filter.status = status;
+		if (q) {
+			const term = q.trim().slice(0, 120);
+			filter.$or = [
+				{ id: term },
+				{ 'customer.email': term.toLowerCase() },
+				{ reference: { $regex: `^${escapeRegex(term)}` } },
+			];
+		}
+		return filter;
 	};
 
 	return Object.freeze({
@@ -184,26 +197,19 @@ export const createStore = (data, { now }) => {
 					),
 				),
 			/**
-			 * Newest first, keyset-paged; `q` matches the id, reference or payer e-mail exactly or a reference prefix.
-			 * @param {{ after: unknown, limit: number, status?: string, q?: string }} page
+			 * Newest first, keyset-paged, with the list's filters ({@link paymentFilter}).
+			 * @param {PaymentQuery & { after: unknown, limit: number }} page
 			 * @returns {Promise<PaymentRecord[]>}
 			 */
-			list: async ({ after, limit, status, q }) => {
-				/** @type {Record<string, unknown>[]} */
-				const and = [pageFilter(after)];
-				if (q) {
-					const term = q.trim().slice(0, 120);
-					and.push({
-						$or: [
-							{ id: term },
-							{ 'customer.email': term.toLowerCase() },
-							{ reference: { $regex: `^${escapeRegex(term)}` } },
-						],
-					});
-				}
-				const filter = { websiteId, ...(status ? { status } : {}), $and: and };
+			list: async ({ after, limit, ...query }) => {
+				const filter = { ...paymentFilter(query), $and: [pageFilter(after)] };
 				return as(await payments.find(filter, { ...NO_ID, sort: { createdAt: -1, id: -1 }, limit }).toArray());
 			},
+			/**
+			 * What the list's counts count (`countHandlers` source): the collection and the list's own filter.
+			 * @param {PaymentQuery} query
+			 */
+			counted: (query) => ({ collection: payments, filter: paymentFilter(query) }),
 			/** @param {{ id?: string, email?: string, phone?: string }} user @returns {Promise<PaymentRecord[]>} */
 			ofPerson: async (user) => {
 				const filter = personFilter(user);
@@ -293,39 +299,6 @@ export const createStore = (data, { now }) => {
 			anonymise: async (user) => {
 				const filter = personFilter(user);
 				return filter ? (await subscriptions.updateMany(filter, { $set: { customer: {} } })).modifiedCount : 0;
-			},
-		}),
-
-		events: Object.freeze({
-			/** @param {string} type @param {Record<string, unknown>} payload @returns {Promise<EventRecord>} */
-			add: async (type, payload) => {
-				const id = createId('evt');
-				await events.insertOne({ id, type, data: payload, delivery: 'pending', attempts: 0, dueAt: at() });
-				return as(await events.findOne({ websiteId, id }, NO_ID));
-			},
-			/** @param {{ after: unknown, limit: number }} page @returns {Promise<EventRecord[]>} */
-			list: async ({ after, limit }) =>
-				as(
-					await events
-						.find({ websiteId, ...pageFilter(after) }, { ...NO_ID, sort: { createdAt: -1, id: -1 }, limit })
-						.toArray(),
-				),
-			/**
-			 * Claim the oldest event due for sending (moves its due time on, so a parallel request skips it).
-			 * @param {number} leaseMs
-			 * @returns {Promise<EventRecord | null>}
-			 */
-			claimDue: async (leaseMs) =>
-				as(
-					await events.findOneAndUpdate(
-						{ websiteId, delivery: 'pending', dueAt: { $lte: at() } },
-						{ $set: { dueAt: new Date(now() + leaseMs) } },
-						{ sort: { dueAt: 1 }, returnDocument: 'after', ...NO_ID },
-					),
-				),
-			/** @param {string} id @param {Partial<EventRecord>} set */
-			update: async (id, set) => {
-				await events.updateOne({ websiteId, id }, { $set: set });
 			},
 		}),
 	});

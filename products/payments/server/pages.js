@@ -1,15 +1,14 @@
 /**
  * The hosted pages (PLAN 0.8.7), served by Payments with the website's widget texts (every word editable in Settings →
- * Texts), theme and custom CSS: the payment-link page (`/l/<websiteId>/<linkId>`), the pay page of one payment
+ * Texts), theme, custom CSS and Format (money as Settings → Format says, PLAN 0.8.10 K7): the payment-link page (`/l/<websiteId>/<linkId>`), the pay page of one payment
  * (`/pay/<websiteId>/<paymentId>`: pick a gateway, go on to it, or the bank details with the proof upload) and the
  * result page. Card details are never asked here: every gateway takes them on its own page. Plain HTML; every value is
  * escaped; the only script is `/pay.js` from the same address (it posts a gateway's form on its own and uploads a
  * transfer proof straight to the merchant's storage).
  * @module
  */
-import { formatText } from '@ss/app-kit';
+import { formatMoney, formatText } from '@ss/app-kit';
 import { themeCss } from '@ss/app-kit/widget';
-import { formatMoney } from '../core/money.js';
 
 /** Security headers of the hosted pages (forms may post to the gateways' own https pages). */
 export const PAGE_HEADERS = Object.freeze({
@@ -76,7 +75,12 @@ a { color: inherit; }
  * @typedef {object} PageLook
  * @property {Record<string, string>} texts the website's widget texts
  * @property {(import('@ss/app-kit/widget').WidgetTheme & { customCss?: string }) | undefined} [theme]
+ * @property {(amount: number, currency: string) => string} [money] the website's Format for money
+ *   (`product.format(websiteId).money`); the default Format without it
  */
+
+/** Money in the default Format (a page for a website that cannot be served). @param {number} amount @param {string} currency */
+const defaultMoney = (amount, currency) => formatMoney(amount, currency);
 
 /**
  * A whole page around `body`.
@@ -126,14 +130,24 @@ export const gatewayName = (texts, gateway, genericName = '') =>
  *   currency: string }, gateways: Array<{ id: string, name: string }>, action: string, error?: string,
  *   values?: Record<string, string> }} input
  */
-export const renderLinkPage = ({ texts, theme, business, link, gateways, action, error = '', values = {} }) => {
+export const renderLinkPage = ({
+	texts,
+	theme,
+	money = defaultMoney,
+	business,
+	link,
+	gateways,
+	action,
+	error = '',
+	values = {},
+}) => {
 	const t = translator(texts);
 	const amount =
 		link.amount === null
 			? `<label for="amount">${escape(t('link.amount', { currency: link.currency }))}</label>
 <input id="amount" name="amount" inputmode="decimal" required value="${escape(values.amount ?? '')}">
-<p class="muted">${escape(t('link.amountHelp', { min: formatMoney(link.minAmount ?? 1, link.currency) }))}</p>`
-			: `<p class="amount">${escape(formatMoney(link.amount, link.currency))}</p>`;
+<p class="muted">${escape(t('link.amountHelp', { min: money(link.minAmount ?? 1, link.currency) }))}</p>`
+			: `<p class="amount">${escape(money(link.amount, link.currency))}</p>`;
 	const methods =
 		gateways.length === 0
 			? `<p>${escape(t('page.noGateway'))}</p>`
@@ -164,7 +178,17 @@ ${methods}
  * @param {PageLook & { business: string, amount: number, currency: string, description: string,
  *   gateways: Array<{ id: string, name: string }>, action: string }} input
  */
-export const renderChoicePage = ({ texts, theme, business, amount, currency, description, gateways, action }) => {
+export const renderChoicePage = ({
+	texts,
+	theme,
+	money = defaultMoney,
+	business,
+	amount,
+	currency,
+	description,
+	gateways,
+	action,
+}) => {
 	const t = translator(texts);
 	return page({
 		texts,
@@ -172,7 +196,7 @@ export const renderChoicePage = ({ texts, theme, business, amount, currency, des
 		title: t('page.title'),
 		body: `<p class="muted">${escape(business)}</p>
 <h1>${escape(description || t('page.title'))}</h1>
-<p class="amount">${escape(formatMoney(amount, currency))}</p>
+<p class="amount">${escape(money(amount, currency))}</p>
 ${
 	gateways.length === 0
 		? `<p>${escape(t('page.noGateway'))}</p>`
@@ -187,7 +211,17 @@ ${
  * @param {PageLook & { business: string, amount: number, currency: string, gateway: string, action: string,
  *   fields: Array<[string, string]> }} input
  */
-export const renderGatewayForm = ({ texts, theme, business, amount, currency, gateway, action, fields }) => {
+export const renderGatewayForm = ({
+	texts,
+	theme,
+	money = defaultMoney,
+	business,
+	amount,
+	currency,
+	gateway,
+	action,
+	fields,
+}) => {
 	const t = translator(texts);
 	return page({
 		texts,
@@ -195,7 +229,7 @@ export const renderGatewayForm = ({ texts, theme, business, amount, currency, ga
 		title: t('page.title'),
 		script: true,
 		body: `<p class="muted">${escape(business)}</p>
-<p class="amount">${escape(formatMoney(amount, currency))}</p>
+<p class="amount">${escape(money(amount, currency))}</p>
 <p>${escape(t('page.continueHelp', { gateway }))}</p>
 <form method="post" action="${escape(action)}" data-autosubmit>
 ${fields.map(([name, value]) => `<input type="hidden" name="${escape(name)}" value="${escape(value)}">`).join('\n')}
@@ -210,7 +244,18 @@ ${fields.map(([name, value]) => `<input type="hidden" name="${escape(name)}" val
  *   bank: { accountTitle: string, bankName: string, accountNumber: string, iban: string, instructions: string },
  *   proof: { action: string, maxBytes: number } | null, uploaded: boolean }} input
  */
-export const renderBankPage = ({ texts, theme, business, amount, currency, reference, bank, proof, uploaded }) => {
+export const renderBankPage = ({
+	texts,
+	theme,
+	money = defaultMoney,
+	business,
+	amount,
+	currency,
+	reference,
+	bank,
+	proof,
+	uploaded,
+}) => {
 	const t = translator(texts);
 	/** @type {Array<[string, string]>} */
 	const rows = [
@@ -238,7 +283,7 @@ export const renderBankPage = ({ texts, theme, business, amount, currency, refer
 		script: proof !== null && !uploaded,
 		body: `<p class="muted">${escape(business)}</p>
 <h1>${escape(t('bank.title'))}</h1>
-<p>${escape(t('bank.intro', { amount: formatMoney(amount, currency) }))}</p>
+<p>${escape(t('bank.intro', { amount: money(amount, currency) }))}</p>
 <dl>${rows
 			.filter(([, value]) => value !== '')
 			.map(([key, value]) => `<dt>${escape(t(key))}</dt><dd>${escape(value)}</dd>`)
@@ -254,14 +299,24 @@ ${upload}`,
  * @param {PageLook & { state: 'paid' | 'pending' | 'failed' | 'cancelled' | 'refunded' | 'unavailable' | 'notFound' | 'error' | 'noGateway',
  *   business?: string, amount?: number, currency?: string, backUrl?: string | null, retry?: string | null }} input
  */
-export const renderResultPage = ({ texts, theme, state, business = '', amount, currency, backUrl = null, retry = null }) => {
+export const renderResultPage = ({
+	texts,
+	theme,
+	money = defaultMoney,
+	state,
+	business = '',
+	amount,
+	currency,
+	backUrl = null,
+	retry = null,
+}) => {
 	const t = translator(texts);
 	return page({
 		texts,
 		theme,
 		title: t('page.title'),
 		body: `${business ? `<p class="muted">${escape(business)}</p>` : ''}
-${amount !== undefined && currency ? `<p class="amount">${escape(formatMoney(amount, currency))}</p>` : ''}
+${amount !== undefined && currency ? `<p class="amount">${escape(money(amount, currency))}</p>` : ''}
 <h1>${escape(t(`page.${state}`))}</h1>
 ${retry ? `<form method="post" action="${escape(retry)}"><button type="submit" name="retry" value="1">${escape(t('page.tryAgain'))}</button></form>` : ''}
 ${backUrl ? `<p><a href="${escape(backUrl)}">${escape(t('page.back', { business }))}</a></p>` : ''}`,

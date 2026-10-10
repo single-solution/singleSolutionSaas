@@ -1,11 +1,12 @@
 /**
  * The Subscriptions admin widget (admin widget, ticket; PLAN 0.8.7): the website's subscriptions as Payments mirrors
  * them from Stripe and PayPal (`subscriptions.read`), and Cancel, which cancels at the gateway
- * (`subscriptions.cancel`).
+ * (`subscriptions.cancel`). Times follow the website's Format and time zone.
  * @module
  */
 import { mountWidget } from '@ss/app-kit/widget';
 import { element } from './dom.js';
+import { formattersOf } from './format.js';
 import { WIDGET_CSS } from './styles.js';
 import { adminCall } from './tickets.js';
 
@@ -19,6 +20,7 @@ const fill = (text, values) =>
 export const mountSubscriptionsAdmin = ({ host, api, config }) => {
 	/** @param {string} key */
 	const t = (key) => config.texts[key] ?? key;
+	const { date } = formattersOf(config, host);
 	return mountWidget({
 		host,
 		theme: config.theme,
@@ -51,7 +53,7 @@ export const mountSubscriptionsAdmin = ({ host, api, config }) => {
 						t(`gateway.${subscription.gateway}`),
 						subscription.plan,
 						subscription.customer?.email ?? '',
-						new Date(subscription.createdAt).toLocaleString(),
+						date(subscription.createdAt),
 						subscription.id,
 					]
 						.filter(Boolean)

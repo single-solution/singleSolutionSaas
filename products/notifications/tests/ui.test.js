@@ -271,6 +271,33 @@ describe('admin widgets', () => {
 		expect(statusOf(host)).toBe(strings['log.failed']);
 	});
 
+	it('the delivery log shows times with the website’s Format and business time zone', async () => {
+		const host = place('delivery_log');
+		const message = {
+			id: 'm1',
+			template: 'welcome',
+			channel: 'email',
+			to: 'a@example.com',
+			status: 'sent',
+			reason: null,
+			attempts: [{}],
+			createdAt: '2026-10-01T10:00:00.000Z',
+		};
+		serve({
+			[`GET ${ADMIN_CONFIG_PATH}`]: () =>
+				answer(200, {
+					...configOf(ADMIN_FEATURES),
+					format: { locale: 'en-GB', currencyDisplay: 'code', currencySymbol: '', wholeUnits: false, times: 'business' },
+					timeZone: 'Asia/Karachi',
+				}),
+			'GET /v1/admin/messages': () => answer(200, { items: [message], nextCursor: null, hasMore: false }),
+		});
+		const widget = startWidget({ window, script: script(null) });
+		await widget.admin({ getTicket: async () => TICKET });
+		await flush();
+		expect(inside(host, '.meta').textContent).toBe('E-mail · Sent · 1 attempts · 1 Oct 2026, 15:00');
+	});
+
 	it('the template editor lists, loads, saves and deletes templates', async () => {
 		const host = place('template_editor');
 		/** @type {any[]} */

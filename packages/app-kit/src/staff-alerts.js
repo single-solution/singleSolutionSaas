@@ -6,7 +6,8 @@
  *   `staffPermission` setting names a permission, every unblocked Accounts user whose role grants it (through the
  *   pasted Accounts token: `GET /v1/users?permission=<product>:<key>&blocked=false`, cached 5 minutes); plus the
  *   assignee where the product has one.
- * - An e-mail address gets e-mail; a phone gets WhatsApp, or SMS with the feature's `phoneChannel` setting.
+ * - An e-mail address gets e-mail; an international phone number gets WhatsApp, or SMS with the feature's
+ *   `phoneChannel` setting.
  * - Templates `<product>.staff_<event>` (required, not urgent); one message per address per event, sent right after the
  *   request; the link is built from the feature's `adminUrl` template (`{placeholders}` filled from the values) and
  *   sent as the value `link`.
@@ -24,12 +25,13 @@ const STAFF_CACHE_MS = 5 * 60_000;
 /** Most Accounts users read per permission. */
 const STAFF_PAGE = 100;
 const EMAIL = /^[^\s@]{1,64}@[^\s@]+\.[^\s@]+$/;
-const PHONE = /^\+?[0-9 ().-]{6,40}$/;
+const PHONE = /^(?:\+|00)[0-9 ().-]{8,40}$/;
 const EVENT = /^[a-z][a-z0-9_]{0,40}$/;
 const PERMISSION = /^[a-z][a-z0-9_.]{0,63}$/;
 
 /**
- * An address as a recipient: `{ email }` or `{ phone }` with its dedupe key, or null.
+ * An address as a recipient: `{ email }` or `{ phone }` with its dedupe key, or null. Phones are international
+ * (`+` or `00`, then 8–15 digits), as Notifications sends to them; a local number is left out.
  * @param {unknown} value
  * @returns {{ key: string, to: { email: string } | { phone: string } } | null}
  */
@@ -38,9 +40,10 @@ export const recipientOf = (value) => {
 	const text = value.trim();
 	if (EMAIL.test(text)) return { key: `e:${text.toLowerCase()}`, to: { email: text.toLowerCase() } };
 	if (PHONE.test(text)) {
-		const digits = text.replace(/[^0-9]/g, '');
-		if (digits.length < 6) return null;
-		return { key: `p:${digits}`, to: { phone: `${text.startsWith('+') ? '+' : ''}${digits}` } };
+		const compact = text.replace(/[^0-9+]/g, '');
+		const digits = compact.startsWith('00') ? compact.slice(2) : compact.slice(1);
+		if (!/^[1-9]\d{7,14}$/.test(digits)) return null;
+		return { key: `p:${digits}`, to: { phone: `+${digits}` } };
 	}
 	return null;
 };

@@ -11,7 +11,7 @@ import {
 	WIDGET_ATTRIBUTE,
 	WIDGET_GLOBAL,
 } from '../core/widgets.js';
-import { errorText, problemCode, textsOf, webAddress, when } from '../ui/common.js';
+import { datesOf, errorText, moneyText, problemCode, textsOf, webAddress } from '../ui/common.js';
 import { RENEW_BEFORE_MS, RETRY_MS, createSession } from '../ui/session.js';
 import { ADMIN_CONFIG_PATH, CONFIG_PATH, startWidget } from '../ui/widget.js';
 
@@ -32,11 +32,28 @@ const at = (ms) => new Date(START + ms).toISOString();
  * @property {{ version: string, url: string } | null} [terms]
  */
 
+/** The Format and time zone of the widget config before anyone changes them (PLAN 0.8.10 K7, K8). */
+const PLAIN_LOOKS = Object.freeze({
+	format: Object.freeze({
+		locale: '',
+		currencyDisplay: /** @type {const} */ ('code'),
+		currencySymbol: '',
+		wholeUnits: false,
+		times: /** @type {const} */ ('viewer'),
+	}),
+	timeZone: 'UTC',
+});
+/** The widget config's Format and time zone in the next widgets a test starts. */
+let looks = /** @type {{ format: Record<string, unknown>, timeZone: string }} */ (PLAIN_LOOKS);
+/** Dates as the widgets show them with the default Format (this browser's language and time zone). */
+const when = datesOf(PLAIN_LOOKS, window);
+
 /** @param {string[]} features @param {Settings} [settings] */
 const configOf = (features, settings = {}) => ({
 	texts: { ...strings },
 	theme: { mode: /** @type {const} */ ('light') },
 	customCss: '',
+	...looks,
 	features,
 	settings: {
 		signUp: { mode: 'open', requiredFields: [] },
@@ -251,6 +268,7 @@ afterEach(() => {
 	window.localStorage.clear();
 	window.sessionStorage.clear();
 	window.history.replaceState(null, '', '/');
+	looks = PLAIN_LOOKS;
 });
 
 describe('starting the widget', () => {
@@ -376,7 +394,7 @@ describe('e-mail and password', () => {
 		await submit(send);
 		expect(statusIn(root)).toBe(strings['error.sign_in_failed']);
 		await submit(send);
-		expect(statusIn(root)).toBe(`Too many tries. Try again after ${new Date(at(10 * 60_000)).toLocaleString()}.`);
+		expect(statusIn(root)).toBe(`Too many tries. Try again after ${when(at(10 * 60_000))}.`);
 		await submit(send);
 		expect(statusIn(root)).toBe(strings['error.rate_limited']);
 		await submit(send);
@@ -1093,15 +1111,59 @@ describe('My account', () => {
 		await click(buttonIn(privacy, strings['account.delete']));
 		await click(buttonIn(privacy, strings['account.deleteYes']));
 		expect(server.last('POST /v1/me/delete')).toBeTruthy();
-		expect(privacy.textContent).toContain(
-			`Your account will be deleted on ${new Date(at(30 * 86_400_000)).toLocaleDateString()}.`,
-		);
+		expect(privacy.textContent).toContain(`Your account will be deleted on ${when(at(30 * 86_400_000), 'date')}.`);
 		const orders = part(host, strings['account.orders']);
 		const rows = [...orders.querySelectorAll('li')];
 		expect(rows.map((li) => li.firstChild?.textContent)).toEqual(['Order A-100', 'Order A-101', 'Order ord_2', 'Order ']);
 		expect(rows[0]?.querySelector('.meta')?.textContent).toBe(`paid · $10.00 · ${when(at(0))}`);
 		expect(rows[1]?.querySelector('.meta')?.textContent).toBe('Being packed · PKR 1,250.00');
 		expect(rows[2]?.querySelector('.meta')?.textContent).toBe('');
+	});
+
+	it('shows dates and order totals in the Format and business time zone of the widget config', async () => {
+		looks = {
+			format: { locale: 'en-GB', currencyDisplay: 'custom', currencySymbol: 'Rs', wholeUnits: true, times: 'business' },
+			timeZone: 'Asia/Karachi',
+		};
+		const { host } = await open({
+			'GET /v1/me/sessions': () =>
+				answer(200, {
+					items: [
+						{
+							id: 'ses_1',
+							device: 'Firefox on Linux',
+							method: 'email_password',
+							signedInAt: at(0),
+							lastUsedAt: at(60_000),
+							current: true,
+						},
+					],
+				}),
+			'POST /v1/me/delete': () => answer(202, { requestedAt: at(0), dueAt: '2026-10-31T20:00:00Z' }),
+			'GET /v1/me/orders': () =>
+				answer(200, {
+					items: [
+						{
+							id: 'ord_1',
+							number: 'A-100',
+							status: 'paid',
+							total: 1250000,
+							totalText: 'PKR 12,500.00',
+							currency: 'PKR',
+							createdAt: '2026-10-01T22:30:00Z',
+						},
+					],
+				}),
+		});
+		// 10:01 UTC is 15:01 in Karachi; 22:30 UTC is already the next day there
+		const devices = part(host, strings['account.devices']);
+		expect(devices.querySelector('.meta')?.textContent).toBe('Signed in with Password · Last used 1 Oct 2026, 15:01');
+		const orders = part(host, strings['account.orders']);
+		expect(orders.querySelector('.meta')?.textContent).toBe('paid · Rs 12,500 · 2 Oct 2026, 03:30');
+		const privacy = part(host, strings['account.privacy']);
+		await click(buttonIn(privacy, strings['account.delete']));
+		await click(buttonIn(privacy, strings['account.deleteYes']));
+		expect(privacy.textContent).toContain('Your account will be deleted on 1 Nov 2026.');
 	});
 
 	it('shows a pending deletion, failures and the parts of switched-on features only', async () => {
@@ -1539,6 +1601,30 @@ describe('admin widgets', () => {
 		expect(statusIn(form)).toBe(strings['roles.signedOut']);
 	});
 
+	it('Users admin shows sign-in and deletion times in the Format and business time zone', async () => {
+		looks = {
+			format: { locale: 'en-GB', currencyDisplay: 'code', currencySymbol: '', wholeUnits: false, times: 'business' },
+			timeZone: 'Asia/Karachi',
+		};
+		const host = place('users_admin');
+		const ana = {
+			...USER,
+			notes: '',
+			blocked: null,
+			status: 'active',
+			lastSignInAt: '2026-10-01T22:30:00Z',
+			deletion: { requestedAt: at(0), dueAt: null },
+		};
+		await startAdmin({
+			'GET /v1/admin/roles': () => answer(200, { items: ROLES }),
+			'GET /v1/admin/users': () => answer(200, { items: [ana], nextCursor: null, hasMore: false }),
+		});
+		const root = shadow(host);
+		expect(root.querySelector('li .meta')?.textContent).toContain('Last sign-in 2 Oct 2026, 03:30');
+		await click(buttonIn(root, strings['users.open']));
+		expect(root.querySelector('section.part')?.textContent).toContain('Asked to be deleted on 1 Oct 2026, 15:00.');
+	});
+
 	it('Roles admin says when the roles cannot be loaded', async () => {
 		const host = place('roles_admin');
 		await startAdmin({
@@ -1554,13 +1640,38 @@ describe('helpers', () => {
 		const t = textsOf({ texts: TEXTS });
 		expect(problemCode(null)).toBe('');
 		expect(problemCode({ type: 'https://x/problems/locked' })).toBe('locked');
-		expect(errorText(t, { ok: false, status: 0, data: null })).toBe(strings['error.generic']);
-		expect(errorText(t, { ok: false, status: 400, data: { type: '/problems/weak_password' } })).toBe(strings['error.generic']);
+		expect(errorText(t, { ok: false, status: 0, data: null }, when)).toBe(strings['error.generic']);
+		expect(errorText(t, { ok: false, status: 400, data: { type: '/problems/weak_password' } }, when)).toBe(
+			strings['error.generic'],
+		);
+		// a lock without a real end time says to try again later
+		expect(errorText(t, { ok: false, status: 423, data: { type: '/problems/locked', lockedUntil: 'soon' } }, when)).toBe(
+			strings['error.rate_limited'],
+		);
 		expect(textsOf({ texts: {} })('missing.key')).toBe('missing.key');
 		expect(webAddress('not a url')).toBeNull();
 		expect(webAddress('ftp://example.com/x')).toBeNull();
 		expect(webAddress('https://example.com/x')).toBe('https://example.com/x');
 		expect(when('never')).toBe('');
+		expect(when({})).toBe('');
+		expect(moneyText(PLAIN_LOOKS, window, 125000, 'PKR')).toBe('PKR 1,250.00');
+		expect(moneyText(PLAIN_LOOKS, window, '125000', 'PKR')).toBeNull();
+		expect(moneyText(PLAIN_LOOKS, window, 125000, 'rupees')).toBeNull();
+		expect(moneyText(PLAIN_LOOKS, window, 125000, undefined)).toBeNull();
+	});
+
+	it('show dates and money in the Format and business time zone of the widget config', () => {
+		/** @type {import('../ui/common.js').Looks} */
+		const karachi = {
+			format: { locale: 'en-GB', currencyDisplay: 'custom', currencySymbol: 'Rs', wholeUnits: true, times: 'business' },
+			timeZone: 'Asia/Karachi',
+		};
+		const dates = datesOf(karachi, window);
+		expect(dates('2026-10-01T22:30:00Z')).toBe('2 Oct 2026, 03:30');
+		expect(dates(Date.parse('2026-10-01T22:30:00Z'), 'date')).toBe('2 Oct 2026');
+		expect(moneyText(karachi, window, 1250000, 'PKR')).toBe('Rs 12,500');
+		// no time zone in the config: UTC
+		expect(datesOf({ format: karachi.format }, null)('2026-10-01T22:30:00Z')).toBe('1 Oct 2026, 22:30');
 	});
 });
 

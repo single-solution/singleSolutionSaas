@@ -5,9 +5,11 @@
  * country the host's request header gave. Each event type belongs to one feature and is dropped while it is off.
  *
  * Every kept event becomes a raw event (removed by the database expiry index after the retention) and increments of
- * the daily totals (kept forever): `{ day, metric, key, count, sum }`.
+ * the daily totals (kept forever): `{ day, metric, key, count, sum }`, where `day` is the day in the website's business
+ * time zone (business.json `timeZone`, UTC when missing; PLAN 0.8.10 K8).
  * @module
  */
+import { zonedDay } from '@ss/contracts/format';
 import { FUNNEL_STEPS } from './widgets.js';
 import { isAmount, isCurrency } from './money.js';
 
@@ -246,10 +248,11 @@ export const checkBatch = (body, { on, domain, country }) => {
 };
 
 /**
- * The UTC day of a time, `YYYY-MM-DD`.
+ * The day of a time in the business time zone, `YYYY-MM-DD`: the key of the daily totals (PLAN 0.8.10 K8, always).
  * @param {number} at
+ * @param {string | null | undefined} timeZone the business.json time zone (UTC when missing or unknown)
  */
-export const dayOf = (at) => new Date(at).toISOString().slice(0, 10);
+export const dayOf = (at, timeZone) => zonedDay(at, timeZone);
 
 /**
  * The increments of a batch merged per metric and key (one database write each).

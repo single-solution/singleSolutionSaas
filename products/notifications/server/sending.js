@@ -133,23 +133,24 @@ export const createSending = (product) => {
 	};
 
 	/**
-	 * Queue another product's event (for example `payments.payment.paid`, PLAN 0.8.7) for the merchant's webhook URLs,
-	 * signed and retried like Notifications' own. Other products' events go to every URL; the Events setting picks
-	 * among Notifications' own events only.
+	 * Queue another product's event (for example `payments.payment.paid`, PLAN 0.8.7 and 0.8.10 K5) for the merchant's
+	 * webhook URLs, signed and retried like Notifications' own. The webhook keeps the product's own event id and time
+	 * when it sent them (so the merchant's server can match it with that product's `GET /v1/events`), else it gets a
+	 * new id and now. Other products' events go to every URL; the Events setting picks among Notifications' own events
+	 * only.
 	 * @param {Site} s
-	 * @param {string} type
-	 * @param {Record<string, unknown>} data
+	 * @param {import('../core/webhooks.js').ForwardedEvent} event
 	 * @returns {Promise<number>} deliveries queued (0 without the signing secret or URLs)
 	 */
-	const relay = async (s, type, data) => {
+	const relay = async (s, { id, type, at, data }) => {
 		if (typeof (await product.connections.value(s.websiteId, 'webhook_secret')) !== 'string') return 0;
 		const { urls } = await product.settings.values(s.websiteId, 'webhooks');
 		const targets = webhookUrls(urls);
 		if (targets.length === 0) return 0;
 		const body = JSON.stringify({
-			id: createId('evt'),
+			id: id ?? createId('evt'),
 			type,
-			createdAt: new Date(now()).toISOString(),
+			createdAt: new Date(at ?? now()).toISOString(),
 			websiteId: s.websiteId,
 			data,
 		});

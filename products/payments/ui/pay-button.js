@@ -2,13 +2,14 @@
  * The pay button (visitor widget, browser token; PLAN 0.8.7). Placed with `data-link="link_…"` it shows the payment
  * link (title, amount or an amount field, the payer's name and e-mail, the payment method) and makes the payment;
  * placed with `data-payment="pay_…"` it shows a payment the merchant's server created. Either way the payer then goes
- * to the pay page, and from there to the gateway's own page: card details are never asked here. It renders nothing
- * when the link or payment cannot be shown (feature off, product stopped, unknown id).
+ * to the pay page, and from there to the gateway's own page: card details are never asked here. Amounts follow the
+ * website's Format. It renders nothing when the link or payment cannot be shown (feature off, product stopped, unknown
+ * id).
  * @module
  */
 import { mountWidget } from '@ss/app-kit/widget';
-import { formatMoney } from '../core/money.js';
 import { element } from './dom.js';
+import { formattersOf } from './format.js';
 import { WIDGET_CSS } from './styles.js';
 
 /** @typedef {import('./widget.js').WidgetConfig} WidgetConfig */
@@ -40,6 +41,7 @@ export const mountPayButton = async ({ host, config, call, go }) => {
 	const answer = await call(path);
 	if (!answer.ok) return;
 	const data = answer.data;
+	const { money } = formattersOf(config, host);
 	mountWidget({
 		host,
 		theme: config.theme,
@@ -50,7 +52,7 @@ export const mountPayButton = async ({ host, config, call, go }) => {
 			const box = element(doc, 'form', { class: 'box' });
 			const status = element(doc, 'p', { class: 'status', role: 'status' });
 			if (path.startsWith('/v1/checkout/payments/')) {
-				const amount = formatMoney(data.amount, data.currency);
+				const amount = money(data.amount, data.currency);
 				if (data.description) box.append(element(doc, 'h2', {}, data.description));
 				if (['paid', 'partially_refunded', 'refunded'].includes(data.status))
 					box.append(element(doc, 'p', { class: 'amount' }, `${amount} · ${t('button.paid')}`));
@@ -75,14 +77,9 @@ export const mountPayButton = async ({ host, config, call, go }) => {
 				);
 				box.append(
 					amountInput,
-					element(
-						doc,
-						'span',
-						{ class: 'meta' },
-						fill(t('link.amountHelp'), { min: formatMoney(data.minAmount, data.currency) }),
-					),
+					element(doc, 'span', { class: 'meta' }, fill(t('link.amountHelp'), { min: money(data.minAmount, data.currency) })),
 				);
-			} else box.append(element(doc, 'p', { class: 'amount' }, formatMoney(data.amount, data.currency)));
+			} else box.append(element(doc, 'p', { class: 'amount' }, money(data.amount, data.currency)));
 			const name = /** @type {HTMLInputElement} */ (
 				element(doc, 'input', { id: 'ss-pay-name', autocomplete: 'name', maxlength: '120' })
 			);
@@ -127,7 +124,7 @@ export const mountPayButton = async ({ host, config, call, go }) => {
 				const field = made.data?.errors?.[0]?.path;
 				status.textContent =
 					field === '/amount'
-						? fill(t('link.invalidAmount'), { min: formatMoney(data.minAmount ?? 1, data.currency) })
+						? fill(t('link.invalidAmount'), { min: money(data.minAmount ?? 1, data.currency) })
 						: field === '/email'
 							? t('link.invalidEmail')
 							: field === '/gateway'

@@ -210,6 +210,8 @@ describe('the payment API and Stripe', () => {
 			data: { payment: { id: payment.id, status: 'paid' } },
 		});
 		expect(sent[0].key).toMatch(/^evt_/);
+		// the kit's event: its id is the Idempotency-Key, `at` its time
+		expect(sent[0]).toMatchObject({ id: sent[0].key, at: new Date(env.now()).toISOString() });
 
 		const result = await page(`/pay/${env.websiteId}/${payment.id}`);
 		expect(result.text).toContain('Payment received');
@@ -314,6 +316,22 @@ describe('the payment API and Stripe', () => {
 		const list = await env.api('GET', '/v1/events?limit=50');
 		expect(list.json.items.length).toBeGreaterThan(3);
 		expect(list.json.items.every((/** @type {any} */ e) => e.delivery === 'sent' && e.type.startsWith('payments.'))).toBe(true);
+		expect(Object.keys(list.json.items[0]).sort()).toEqual(['at', 'data', 'delivery', 'id', 'type']);
+	});
+
+	it('retries a due event after a public page too, as after a token request', async () => {
+		notifyStatus = 500;
+		const payment = await createPayment({ gateway: 'stripe' });
+		await stripePaid(payment.id, 250000);
+		const forwarded = () =>
+			events.filter((/** @type {any} */ e) => e.type === 'payments.payment.paid' && e.data.payment.id === payment.id).length;
+		// one refused attempt so far (the fake Notifications records every attempt)
+		expect(forwarded()).toBe(1);
+		notifyStatus = 202;
+		env.advance(61_000);
+		// the payer's page: no token, but the event that is due goes out right after it
+		expect((await page(`/pay/${env.websiteId}/${payment.id}`)).status).toBe(200);
+		expect(forwarded()).toBe(2);
 	});
 
 	it('retries an event Notifications did not take, and keeps it when the token is removed', async () => {
@@ -369,6 +387,10 @@ describe('the other gateways', () => {
 		});
 		expect(back.status).toBe(303);
 		expect(back.headers.get('location')).toBe(`${RETURN}?ss_payment=${payment.id}`);
+		// the payer's return is a public page: its paid event is forwarded right after it all the same
+		expect(
+			events.find((/** @type {any} */ e) => e.type === 'payments.payment.paid' && e.data.payment.id === payment.id),
+		).toBeTruthy();
 		expect((await env.api('GET', `/v1/payments/${payment.id}`)).json.status).toBe('paid');
 		const refund = await env.api('POST', `/v1/payments/${payment.id}/refunds`, { amount: 1000 });
 		expect(refund.json.refunds[0]).toMatchObject({ manual: true, amount: 1000 });
@@ -877,6 +899,195 @@ describe('admin widgets (tickets)', () => {
 			(await env.call('POST', `/v1/admin/payments/${target.id}/refunds`, { token: readOnly, origin: ADMIN_ORIGIN, body: {} }))
 				.status,
 		).toBe(403);
+	});
+});
+
+describe('kit features (PLAN 0.8.10)', () => {
+	/**
+	 * Every item of a list, following its cursors.
+	 * @param {string} path
+	 * @param {(path: string) => Promise<{ json: any }>} [read]
+	 */
+	const listAll = async (path, read = (p) => env.api('GET', p)) => {
+		/** @type {any[]} */
+		const items = [];
+		let cursor = '';
+		for (;;) {
+			const res = await read(`${path}${path.includes('?') ? '&' : '?'}limit=100${cursor ? `&cursor=${cursor}` : ''}`);
+			items.push(...res.json.items);
+			if (!res.json.hasMore) return items;
+			cursor = res.json.nextCursor;
+		}
+	};
+	const ACTOR = { 'ss-actor-id': 'staff_7', 'ss-actor-name': encodeURIComponent('Zoë Khan'), 'ss-actor-role': 'Manager' };
+
+	it('counts payments with the list’s own filters (K4), also with a ticket', async () => {
+		const all = await listAll('/v1/payments');
+		for (const query of ['', 'status=paid', 'status=pending', 'q=order-1042', 'q=ana@example.com', 'status=bogus', 'q=%20']) {
+			const listed = await listAll(`/v1/payments${query ? `?${query}` : ''}`);
+			const counted = await env.api('GET', `/v1/payments/count${query ? `?${query}` : ''}`);
+			expect(counted.json).toEqual({ count: listed.length, capped: false });
+		}
+		const byState = await env.api('GET', '/v1/payments/counts?by=state');
+		expect(byState.json.total).toBe(all.length);
+		for (const status of ['paid', 'pending', 'refunded', 'partially_refunded', 'failed'])
+			expect(byState.json.groups[status] ?? 0).toBe(all.filter((p) => p.status === status).length);
+		const byGateway = await env.api('GET', '/v1/payments/counts?by=gateway&status=paid');
+		const paid = all.filter((p) => p.status === 'paid');
+		expect(byGateway.json.total).toBe(paid.length);
+		expect(byGateway.json.groups.stripe).toBe(paid.filter((p) => p.gateway === 'stripe').length);
+		const none = await env.api('GET', '/v1/payments/counts?by=gateway&status=pending');
+		expect(none.json.groups.none).toBe(all.filter((p) => p.status === 'pending' && p.gateway === null).length);
+		const wrong = await env.api('GET', '/v1/payments/counts?by=status');
+		expect(wrong.status).toBe(422);
+		expect(wrong.json.errors[0].path).toBe('/by');
+
+		const ticket = await env.ticket(['payments.read']);
+		/** @param {string} path */
+		const admin = (path) => env.call('GET', path, { token: ticket, origin: ADMIN_ORIGIN });
+		const adminPaid = await listAll('/v1/admin/payments?status=paid', admin);
+		expect((await admin('/v1/admin/payments/count?status=paid')).json.count).toBe(adminPaid.length);
+		expect((await admin('/v1/admin/payments/counts?by=state')).json).toEqual(byState.json);
+		const other = await env.ticket(['subscriptions.read']);
+		expect((await env.call('GET', '/v1/admin/payments/count', { token: other, origin: ADMIN_ORIGIN })).status).toBe(403);
+	});
+
+	it('lists and counts the kit’s events by time and type (K5)', async () => {
+		const all = await listAll('/v1/events');
+		const refunded = await listAll('/v1/events?types=payments.payment.refunded');
+		expect(refunded.length).toBeGreaterThan(0);
+		expect(refunded.every((e) => e.type === 'payments.payment.refunded' && e.data.refund.amount > 0)).toBe(true);
+		expect((await env.api('GET', '/v1/events/count?types=payments.payment.refunded')).json.count).toBe(refunded.length);
+		const counts = await env.api('GET', '/v1/events/counts?by=type');
+		expect(counts.json.total).toBe(all.length);
+		expect(counts.json.groups['payments.payment.paid']).toBe(all.filter((e) => e.type === 'payments.payment.paid').length);
+		const middle = all[Math.floor(all.length / 2)];
+		const since = await listAll(`/v1/events?since=${encodeURIComponent(middle.at)}`);
+		expect(since.every((e) => e.at > middle.at)).toBe(true);
+		expect((await env.api('GET', '/v1/events?types=chat.message.sent')).status).toBe(422);
+		expect((await env.api('GET', '/v1/events/count?since=yesterday')).status).toBe(422);
+	});
+
+	it('records the acting user of a server-token call (K2) in histories, refunds and the activity log (K9)', async () => {
+		const transfer = await createPayment({ gateway: 'bank_transfer', reference: 'INV-77' });
+		const confirmed = await env.api('POST', `/v1/payments/${transfer.id}/confirm`, {}, ACTOR);
+		expect(confirmed.json.history.at(-1)).toMatchObject({ event: 'paid', by: 'Zoë Khan' });
+		const refund = await env.api('POST', `/v1/payments/${transfer.id}/refunds`, { amount: 50000 }, ACTOR);
+		expect(refund.json.refunds.at(-1)).toMatchObject({ by: 'Zoë Khan', amount: 50000, manual: true });
+		const sub = await env.api('POST', '/v1/subscriptions', {
+			gateway: 'stripe',
+			plan: 'price_2',
+			reference: 'club-9',
+			returnUrl: RETURN,
+		});
+		await stripeHook({
+			type: 'checkout.session.completed',
+			data: {
+				object: { mode: 'subscription', client_reference_id: sub.json.id, subscription: 'sub_stripe9', status: 'complete' },
+			},
+		});
+		const cancelled = await env.api('POST', `/v1/subscriptions/${sub.json.id}/cancel`, {}, ACTOR);
+		expect(cancelled.json.history.at(-1)).toMatchObject({ event: 'cancelled', by: 'Zoë Khan' });
+
+		const log = (await env.api('GET', '/v1/activity?actor=staff_7')).json.items;
+		expect(log.map((/** @type {any} */ e) => e.action).sort()).toEqual([
+			'payment.refunded',
+			'payment.transfer_confirmed',
+			'subscription.cancelled',
+		]);
+		for (const entry of log) expect(entry.actor).toEqual({ kind: 'user', id: 'staff_7', name: 'Zoë Khan', role: 'Manager' });
+		const byAction = Object.fromEntries(log.map((/** @type {any} */ e) => [e.action, e]));
+		expect(byAction['payment.transfer_confirmed']).toMatchObject({
+			target: transfer.id,
+			label: 'INV-77',
+			detail: 'Bank transfer of PKR 2,500.00 confirmed',
+		});
+		expect(byAction['payment.refunded']).toMatchObject({
+			label: 'INV-77',
+			detail: 'Refunded PKR 500.00 (recorded; returned outside the gateway)',
+		});
+		expect(byAction['subscription.cancelled']).toMatchObject({
+			target: sub.json.id,
+			label: 'club-9',
+			detail: 'Cancelled at Stripe (plan price_2)',
+		});
+		// the server itself, and a ticket's staff member
+		const plain = await createPayment({ gateway: 'bank_transfer' });
+		await env.api('POST', `/v1/payments/${plain.id}/confirm`, {});
+		const server = (await env.api('GET', `/v1/activity?target=${plain.id}`)).json.items[0];
+		expect(server).toMatchObject({ actor: { kind: 'server', id: 'server', name: 'Server' }, label: plain.id });
+		const malformed = await env.api('POST', `/v1/payments/${plain.id}/refunds`, {}, { 'ss-actor-id': 'not valid!' });
+		expect(malformed.status).toBe(400);
+		expect(malformed.json.type).toMatch(/invalid_actor$/);
+		expect((await env.api('GET', `/v1/payments/${plain.id}`)).json.refunded).toBe(0);
+	});
+
+	it('serves the pay button routes to the server for one visitor (K3)', async () => {
+		const link = (
+			await env.api('POST', '/v1/links', {
+				title: 'Server visit',
+				currency: 'PKR',
+				amount: 70000,
+				gateways: ['bank_transfer'],
+			})
+		).json;
+		const shown = await env.call('GET', `/v1/checkout/links/${link.id}`, { token: env.server });
+		expect(shown.status).toBe(200);
+		expect(shown.headers.get('access-control-allow-origin')).toBeNull();
+		expect(shown.json).toMatchObject({ title: 'Server visit', gateways: [{ id: 'bank_transfer' }] });
+		const body = { gateway: 'bank_transfer', customer: { email: 'visitor@example.com' } };
+		const noIp = await env.call('POST', `/v1/checkout/links/${link.id}`, { token: env.server, body });
+		expect(noIp.status).toBe(400);
+		expect(noIp.json.type).toMatch(/visitor_ip_required$/);
+		const made = await env.call('POST', `/v1/checkout/links/${link.id}`, {
+			token: env.server,
+			body,
+			headers: { 'ss-visitor-ip': '203.0.113.7' },
+		});
+		expect(made.status).toBe(201);
+		expect(made.json.checkoutUrl).toBe(`${BASE}/pay/${env.websiteId}/${made.json.paymentId}`);
+		const payment = await env.call('GET', `/v1/checkout/payments/${made.json.paymentId}`, { token: env.server });
+		expect(payment.json).toMatchObject({ amount: 70000, status: 'pending' });
+		// the per-visitor limit (30 a minute) counts by SS-Visitor-IP
+		env.advance(61_000);
+		/** @param {string} ip */
+		const visit = (ip) =>
+			env.call('GET', `/v1/checkout/links/${link.id}`, { token: env.server, headers: { 'ss-visitor-ip': ip } });
+		for (let i = 0; i < 30; i += 1) expect((await visit('198.51.100.1')).status).toBe(200);
+		expect((await visit('198.51.100.1')).status).toBe(429);
+		expect((await visit('198.51.100.2')).status).toBe(200);
+		env.advance(61_000);
+	});
+
+	it('formats money with the website’s Format on hosted pages, in activity details and in the widget config (K7)', async () => {
+		const saved = await env.api('PUT', '/v1/format', { currencyDisplay: 'custom', currencySymbol: 'Rs', wholeUnits: true });
+		expect(saved.status).toBe(200);
+		const config = await env.call('GET', '/v1/widget/config', { token: env.browser, origin: ORIGIN });
+		expect(config.json).toMatchObject({ format: { currencySymbol: 'Rs', wholeUnits: true }, timeZone: 'UTC' });
+		const payment = await createPayment({});
+		const choice = await page(`/pay/${env.websiteId}/${payment.id}`);
+		expect(choice.text).toContain('Rs 2,500');
+		expect(choice.text).not.toContain('PKR 2,500.00');
+		const link = (await env.api('POST', '/v1/links', { title: 'Tip', currency: 'PKR', amount: null, minAmount: 50000 })).json;
+		expect((await page(`/l/${env.websiteId}/${link.id}`)).text).toContain('At least Rs 500');
+		const low = await env.call('POST', `/l/${env.websiteId}/${link.id}`, { form: { amount: '1', gateway: 'bank_transfer' } });
+		expect(low.text).toContain('Enter an amount of at least Rs 500.');
+		const transfer = await createPayment({ gateway: 'bank_transfer' });
+		expect((await page(`/pay/${env.websiteId}/${transfer.id}`)).text).toContain('Rs 2,500');
+		await env.api('POST', `/v1/payments/${transfer.id}/confirm`, {});
+		const entry = (await env.api('GET', `/v1/activity?target=${transfer.id}`)).json.items[0];
+		expect(entry.detail).toBe('Bank transfer of Rs 2,500 confirmed');
+		// API JSON keeps minor units and ISO times
+		expect((await env.api('GET', `/v1/payments/${transfer.id}`)).json).toMatchObject({ amount: 250000, amountText: '2500.00' });
+		await env.api('PUT', '/v1/format', { currencyDisplay: null, currencySymbol: null, wholeUnits: null });
+		expect((await page(`/pay/${env.websiteId}/${payment.id}`)).text).toContain('PKR 2,500.00');
+	});
+
+	it('explains the kit’s routes in the docs', async () => {
+		const docs = await page('/docs');
+		for (const id of ['server-settings', 'acting-user', 'server-visitors', 'counts', 'activity', 'format'])
+			expect(docs.text).toContain(`id="${id}"`);
+		expect(docs.text).toContain('GET /v1/payments/count');
 	});
 });
 

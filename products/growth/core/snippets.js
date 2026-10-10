@@ -116,6 +116,10 @@ export const createSnippets = ({ base, widgets, permissions }) => {
 		'# raw events, newest first (kept for the retention you set)',
 		`curl '${base}/v1/events?type=purchase&limit=50' \\`,
 		'  -H "Authorization: Bearer $SS_SERVER_TOKEN"',
+		'',
+		'# how many raw events, in all and per type ({ count, capped }; { total, groups })',
+		`curl '${base}/v1/events/count?type=purchase' -H "Authorization: Bearer $SS_SERVER_TOKEN"`,
+		`curl '${base}/v1/events/counts?by=type' -H "Authorization: Bearer $SS_SERVER_TOKEN"`,
 	].join('\n');
 	return { pageScript, consent, page, events, admin, ticketNode, ticketCurl, robots, indexNow, seo, analytics };
 };

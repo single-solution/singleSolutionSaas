@@ -319,3 +319,54 @@ export const reportOf = (checks, now) => ({
 	},
 	checks,
 });
+
+// ------------------------------------------------------------------------------------------------- the activity log
+
+/**
+ * The path of a page address on the website (`https://shop.example.com/a?b` → `/a?b`); the text itself when it is not
+ * an address.
+ * @param {string} url
+ */
+const pathOfUrl = (url) => {
+	try {
+		const parsed = new URL(url);
+		return `${parsed.pathname}${parsed.search}`;
+	} catch {
+		return url;
+	}
+};
+
+/**
+ * Paths as a list: the first ones, then how many more (the activity log keeps short texts).
+ * @param {string[]} paths
+ * @param {number} shown
+ */
+const listOf = (paths, shown) =>
+	paths.length > shown ? `${paths.slice(0, shown).join(', ')} and ${paths.length - shown} more` : paths.join(', ');
+
+/**
+ * The activity-log texts of an IndexNow submission (PLAN 0.8.10 K9): how many pages as the label, what IndexNow
+ * answered and the pages' paths as the detail.
+ * @param {string[]} urls the submitted addresses (all on the website)
+ * @param {number | null} status what IndexNow answered
+ * @returns {{ label: string, detail: string }}
+ */
+export const indexNowActivity = (urls, status) => ({
+	label: `${urls.length} ${urls.length === 1 ? 'page' : 'pages'} submitted to IndexNow`,
+	detail: `IndexNow answered ${status ?? 'nothing'}. Pages: ${listOf(urls.map(pathOfUrl), 50)}`,
+});
+
+/**
+ * The activity-log texts of an SEO checklist run (PLAN 0.8.10 K9): the checked page (and how many more) as the label,
+ * the counts and the pages' paths as the detail.
+ * @param {string[]} pages the checked pages
+ * @param {{ pass: number, warn: number, fail: number }} summary
+ * @returns {{ label: string, detail: string }}
+ */
+export const checksActivity = (pages, summary) => {
+	const paths = pages.map(pathOfUrl);
+	return {
+		label: listOf(paths, 1),
+		detail: `${summary.pass} passed, ${summary.warn} to improve, ${summary.fail} to fix. Pages: ${listOf(paths, 20)}`,
+	};
+};

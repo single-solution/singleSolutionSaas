@@ -1,13 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { buildReport, daysOf, rangeOf } from '../core/analytics.js';
+import { buildReport, dayStart, daysOf, lastDays, rangeOf } from '../core/analytics.js';
 import { linkOf, noticeOf, searchParamsOf, tagsOf, tagsReady, widgetSettings } from '../core/config.js';
 import { consentMode, granted, makeChoice, readChoice } from '../core/consent.js';
-import { checkBatch, checkEvent, countryOf, expiryOf, mergeTotals, pathOf, ratingOf, textOf } from '../core/events.js';
+import { checkBatch, checkEvent, countryOf, dayOf, expiryOf, mergeTotals, pathOf, ratingOf, textOf } from '../core/events.js';
 import { decimalsOf, isAmount, toMajor } from '../core/money.js';
 import { detailOf, funnelEvent, pixelCalls } from '../core/pixels.js';
 import {
 	attributesOf,
 	blocksAll,
+	checksActivity,
+	indexNowActivity,
 	indexNowSubmission,
 	pageChecks,
 	pagesOf,
@@ -115,17 +117,36 @@ describe('events', () => {
 
 describe('analytics report', () => {
 	it('checks the range of days', () => {
-		expect(rangeOf({}, NOW)).toEqual({ ok: true, from: '2026-09-09', to: '2026-10-08' });
-		expect(rangeOf({ from: 'x' }, NOW).ok).toBe(false);
-		expect(rangeOf({ from: '2026-10-09', to: '2026-10-08' }, NOW).ok).toBe(false);
-		expect(rangeOf({ from: '2024-01-01', to: '2026-10-08' }, NOW).ok).toBe(false);
+		expect(rangeOf({}, NOW, 'UTC')).toEqual({ ok: true, from: '2026-09-09', to: '2026-10-08' });
+		expect(rangeOf({ to: '2026-03-01' }, NOW, 'UTC')).toEqual({ ok: true, from: '2026-01-31', to: '2026-03-01' });
+		expect(rangeOf({ from: 'x' }, NOW, 'UTC').ok).toBe(false);
+		expect(rangeOf({ to: 'x' }, NOW, 'UTC').ok).toBe(false);
+		expect(rangeOf({ from: '2026-02-30', to: '2026-03-02' }, NOW, 'UTC').ok).toBe(false);
+		expect(rangeOf({ from: '2026-10-09', to: '2026-10-08' }, NOW, 'UTC').ok).toBe(false);
+		expect(rangeOf({ from: '2024-01-01', to: '2026-10-08' }, NOW, 'UTC').ok).toBe(false);
 		expect(daysOf('2026-10-01', '2026-10-03')).toEqual(['2026-10-01', '2026-10-02', '2026-10-03']);
+		expect(daysOf('2026-03-28', '2026-03-30')).toEqual(['2026-03-28', '2026-03-29', '2026-03-30']);
+	});
+
+	it('counts days in the business time zone (UTC when missing)', () => {
+		const lateEvening = Date.parse('2026-10-08T20:00:00Z');
+		// Karachi is UTC+5: 20:00 UTC is already the next day there; Los Angeles is still on the same day
+		expect(dayOf(lateEvening, 'Asia/Karachi')).toBe('2026-10-09');
+		expect(dayOf(lateEvening, 'America/Los_Angeles')).toBe('2026-10-08');
+		expect(dayOf(lateEvening, null)).toBe('2026-10-08');
+		expect(dayOf(lateEvening, 'Not/AZone')).toBe('2026-10-08');
+		expect(rangeOf({}, lateEvening, 'Asia/Karachi')).toEqual({ ok: true, from: '2026-09-10', to: '2026-10-09' });
+		expect(rangeOf({}, Date.parse('2026-10-08T03:00:00Z'), 'America/Los_Angeles')).toMatchObject({ to: '2026-10-07' });
+		expect(lastDays(lateEvening, 'Asia/Karachi')).toEqual({ from: '2026-09-10', to: '2026-10-09' });
+		expect(new Date(dayStart('2026-10-09', 'Asia/Karachi')).toISOString()).toBe('2026-10-08T19:00:00.000Z');
+		expect(dayStart('2026-13-01', 'UTC')).toBeNaN();
 	});
 
 	it('leaves out the parts of features that are off', () => {
 		const report = buildReport({
 			from: '2026-10-01',
 			to: '2026-10-02',
+			timeZone: 'Asia/Karachi',
 			on: ['visitor_analytics', 'web_vitals'],
 			totals: [
 				{ metric: 'page', key: '/b', count: 2, sum: 0 },
@@ -138,6 +159,7 @@ describe('analytics report', () => {
 			{ key: '/a', count: 2 },
 			{ key: '/b', count: 2 },
 		]);
+		expect(report.timeZone).toBe('Asia/Karachi');
 		expect(report.days).toEqual([
 			{ day: '2026-10-01', visits: 0, pageViews: 0 },
 			{ day: '2026-10-02', visits: 4, pageViews: 0 },
@@ -348,6 +370,26 @@ describe('SEO', () => {
 		expect(site.map((c) => c.status)).toEqual(['warn', 'pass', 'warn', 'warn']);
 		expect(site[2]?.page).toBeNull();
 	});
+
+	it('writes the activity-log label and detail of a submission and a checklist run', () => {
+		const url = `https://${DOMAIN}`;
+		expect(indexNowActivity([`${url}/a`], 200)).toEqual({
+			label: '1 page submitted to IndexNow',
+			detail: 'IndexNow answered 200. Pages: /a',
+		});
+		const many = Array.from({ length: 52 }, (_, i) => `${url}/p${i}?v=1`);
+		const submitted = indexNowActivity(many, null);
+		expect(submitted.label).toBe('52 pages submitted to IndexNow');
+		expect(submitted.detail).toMatch(/^IndexNow answered nothing\. Pages: \/p0\?v=1, .*\/p49\?v=1 and 2 more$/);
+		expect(checksActivity([`${url}/`], { pass: 3, warn: 1, fail: 0 })).toEqual({
+			label: '/',
+			detail: '3 passed, 1 to improve, 0 to fix. Pages: /',
+		});
+		expect(checksActivity([`${url}/`, `${url}/shop`, 'not a url'], { pass: 1, warn: 2, fail: 3 })).toEqual({
+			label: '/ and 2 more',
+			detail: '1 passed, 2 to improve, 3 to fix. Pages: /, /shop, not a url',
+		});
+	});
 });
 
 describe('snippets', () => {
@@ -364,5 +406,6 @@ describe('snippets', () => {
 		expect(snippets.admin).toContain('data-ss-growth="analytics_dashboard"');
 		expect(snippets.admin).not.toContain('consent_banner');
 		expect(snippets.ticketNode).toContain('["analytics.read"]');
+		expect(snippets.analytics).toContain('/v1/events/counts?by=type');
 	});
 });

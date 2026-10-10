@@ -95,7 +95,10 @@ describe('staff alerts (K6)', () => {
 			to: { email: 'ops@shop.example.com' },
 		});
 		expect(recipientOf('+92 300 1234567')).toEqual({ key: 'p:923001234567', to: { phone: '+923001234567' } });
-		expect(recipientOf('0300-1234567')).toEqual({ key: 'p:03001234567', to: { phone: '03001234567' } });
+		expect(recipientOf('0092 300 1234567')).toEqual({ key: 'p:923001234567', to: { phone: '+923001234567' } });
+		// Notifications sends to international numbers only: a local number is left out
+		expect(recipientOf('0300-1234567')).toBeNull();
+		expect(recipientOf('+0300 1234567')).toBeNull();
 		expect(recipientOf('nope')).toBeNull();
 		expect(recipientOf('12-3')).toBeNull();
 		expect(recipientOf(7)).toBeNull();

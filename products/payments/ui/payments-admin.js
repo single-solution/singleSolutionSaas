@@ -2,13 +2,15 @@
  * The Payments admin widget (admin widget, ticket; PLAN 0.8.7): the website's payments, newest first, with search by
  * id, reference or e-mail and a status filter; each payment's details and history; refunds (full or partial,
  * `payments.refund`), confirming a bank transfer and viewing its proof (`payments.confirm`); and a CSV export of the
- * payments that match the filters.
+ * payments that match the filters. Amounts and times follow the website's Format and time zone; the CSV keeps the
+ * stored times and the amounts with their currency codes.
  * @module
  */
 import { mountWidget } from '@ss/app-kit/widget';
-import { formatMoney, fromDecimal, toDecimal } from '../core/money.js';
+import { fromDecimal, toDecimal } from '../core/money.js';
 import { PAYMENT_STATUSES, paymentsCsv } from '../core/payments.js';
 import { element } from './dom.js';
+import { formattersOf } from './format.js';
 import { WIDGET_CSS } from './styles.js';
 import { adminCall } from './tickets.js';
 
@@ -29,6 +31,7 @@ export const mountPaymentsAdmin = ({ host, api, config, save, open }) => {
 	/** @param {string} key */
 	const t = (key) => config.texts[key] ?? key;
 	const can = (/** @type {string} */ feature) => config.features.includes(feature);
+	const { money, date } = formattersOf(config, host);
 	return mountWidget({
 		host,
 		theme: config.theme,
@@ -83,9 +86,7 @@ export const mountPaymentsAdmin = ({ host, api, config, save, open }) => {
 							doc,
 							'li',
 							{},
-							[new Date(entry.at).toLocaleString(), entry.event, entry.detail ?? '', entry.by ?? '']
-								.filter(Boolean)
-								.join(' · '),
+							[date(entry.at), entry.event, entry.detail ?? '', entry.by ?? ''].filter(Boolean).join(' · '),
 						),
 					),
 				);
@@ -170,11 +171,7 @@ export const mountPaymentsAdmin = ({ host, api, config, save, open }) => {
 					doc,
 					'span',
 					{},
-					[
-						formatMoney(payment.amount, payment.currency),
-						t(`status.${payment.status}`),
-						payment.reference || payment.description,
-					]
+					[money(payment.amount, payment.currency), t(`status.${payment.status}`), payment.reference || payment.description]
 						.filter(Boolean)
 						.join(' · '),
 				);
@@ -183,12 +180,10 @@ export const mountPaymentsAdmin = ({ host, api, config, save, open }) => {
 					'span',
 					{ class: 'meta' },
 					[
-						new Date(payment.createdAt).toLocaleString(),
+						date(payment.createdAt),
 						payment.gateway ? t(`gateway.${payment.gateway}`).replace('{name}', payment.gateway) : '',
 						payment.customer?.email ?? '',
-						payment.refunded > 0
-							? fill(t('admin.refunded'), { amount: formatMoney(payment.refunded, payment.currency) })
-							: '',
+						payment.refunded > 0 ? fill(t('admin.refunded'), { amount: money(payment.refunded, payment.currency) }) : '',
 						payment.id,
 					]
 						.filter(Boolean)

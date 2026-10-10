@@ -140,7 +140,7 @@ export const createFlows = (product, service) => {
 			if (deviceHash && (await s.store.signups.byDevice(deviceHash)) >= rules.maxAccountsPerDevice)
 				throw problem('risk_refused', 'Too many accounts were made on this device.');
 			if ((await s.store.signups.byNetwork(networkHash, new Date(now() - 86_400_000))) >= rules.maxSignUpsPerNetworkPerDay)
-				throw problem('risk_refused', 'Too many accounts were made from this network today.');
+				throw problem('risk_refused', 'Too many accounts were made from this network in the last 24 hours.');
 		}
 		return { deviceHash, networkHash };
 	};
@@ -520,7 +520,7 @@ export const createFlows = (product, service) => {
 						remember: false,
 						device: '',
 						deviceId: pending.data.deviceId || null,
-						network: ctx.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown',
+						network: String(ctx.clientIp || 'unknown'),
 					},
 				);
 			}

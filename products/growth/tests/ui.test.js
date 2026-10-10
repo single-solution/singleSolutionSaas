@@ -17,11 +17,14 @@ const NOW = Date.parse('2026-10-08T12:00:00Z');
  * A widget config as the kit answers it.
  * @param {string[]} features
  * @param {Record<string, Record<string, unknown>>} [values]
+ * @param {{ format?: Record<string, unknown>, timeZone?: string }} [look] the website's Format and business time zone
  */
-const configOf = (features, values = {}) => ({
+const configOf = (features, values = {}, look = {}) => ({
 	texts: { ...strings },
 	theme: { mode: /** @type {const} */ ('light') },
 	customCss: '',
+	format: { locale: '', currencyDisplay: 'code', currencySymbol: '', wholeUnits: false, times: 'viewer', ...look.format },
+	timeZone: look.timeZone ?? 'UTC',
 	features,
 	settings: widgetSettings({ on: features, values, now: NOW }),
 });
@@ -476,6 +479,7 @@ describe('admin widgets', () => {
 	const REPORT = {
 		from: '2026-10-01',
 		to: '2026-10-02',
+		timeZone: 'UTC',
 		totals: { visits: 3, pageViews: 7 },
 		days: [
 			{ day: '2026-10-01', visits: 1, pageViews: 2 },
@@ -504,9 +508,12 @@ describe('admin widgets', () => {
 		],
 	};
 
-	/** @param {string[]} features @param {Record<string, (init: any, url: URL) => Response | Promise<Response>>} routes */
-	const startAdmin = async (features, routes) => {
-		serve({ [`GET ${ADMIN_CONFIG_PATH}`]: () => answer(200, configOf(features)), ...routes });
+	/**
+	 * @param {string[]} features @param {Record<string, (init: any, url: URL) => Response | Promise<Response>>} routes
+	 * @param {{ format?: Record<string, unknown>, timeZone?: string }} [look]
+	 */
+	const startAdmin = async (features, routes, look) => {
+		serve({ [`GET ${ADMIN_CONFIG_PATH}`]: () => answer(200, configOf(features, {}, look)), ...routes });
 		let tickets = 0;
 		const getTicket = vi.fn(async () => {
 			tickets += 1;
@@ -548,10 +555,48 @@ describe('admin widgets', () => {
 		expect(host.shadowRoot?.querySelectorAll('.bars span')).toHaveLength(2);
 		for (const words of ['Direct', 'Phones', 'Unknown', 'Purchased', 'USD 25', 'Pages not found (404)', '1800 ms', '0.30', '—'])
 			expect(text).toContain(words);
+		expect(text).toContain('Days are in the UTC time zone.');
 		fail = true;
 		inside(host, 'form').dispatchEvent(new window.Event('submit', { cancelable: true }));
 		await flush();
 		expect(inside(host, '[role="status"]').textContent).toBe(`${strings['analytics.failed']} Bad days.`);
+	});
+
+	it('the admin widgets follow the website’s Format and business time zone', async () => {
+		vi.useFakeTimers({ toFake: ['Date'] });
+		// 20:00 UTC on 8 October is 9 October in Karachi (UTC+5)
+		vi.setSystemTime(Date.parse('2026-10-08T20:00:00Z'));
+		const look = {
+			format: { locale: 'en-GB', currencyDisplay: 'custom', currencySymbol: 'Rs', wholeUnits: true, times: 'business' },
+			timeZone: 'Asia/Karachi',
+		};
+		const dashboard = place('analytics_dashboard');
+		const checklist = place('seo_checklist');
+		/** @type {URL[]} */
+		const asked = [];
+		await startAdmin(
+			['visitor_analytics', 'seo_checklist'],
+			{
+				'GET /v1/admin/analytics': (init, url) => {
+					asked.push(url);
+					return answer(200, { ...REPORT, timeZone: 'Asia/Karachi' });
+				},
+				'POST /v1/admin/seo/checks': () =>
+					answer(200, { checkedAt: '2026-10-08T12:00:00.000Z', summary: { pass: 0, warn: 0, fail: 0 }, checks: [] }),
+			},
+			look,
+		);
+		expect(asked[0]?.searchParams.get('from')).toBe('2026-09-10');
+		expect(asked[0]?.searchParams.get('to')).toBe('2026-10-09');
+		const text = dashboard.shadowRoot?.textContent ?? '';
+		expect(text).toContain('Rs 25');
+		expect(text).not.toContain('USD');
+		expect(text).toContain('Days are in the Asia/Karachi time zone.');
+		const bars = [...(dashboard.shadowRoot?.querySelectorAll('.bars span') ?? [])].map((bar) => bar.getAttribute('title'));
+		expect(bars).toEqual(['1 Oct 2026: 1', '2 Oct 2026: 2']);
+		button(checklist, strings['seo.run']).click();
+		await flush();
+		expect(inside(checklist, '[role="status"]').textContent).toBe('Checked 8 Oct 2026, 17:00');
 	});
 
 	it('the analytics dashboard says when nothing was recorded or the ticket is gone', async () => {

@@ -33,6 +33,14 @@ Exactly three variables (`.env.example`; nothing else is read):
 | Generic       | notice `<base>/v1/gateways/generic/<websiteId>` (sent per payment as `notify_url`)                                |
 | Bank transfer | none; storage CORS allows `PUT` from `<base>` for proof uploads                                                   |
 
+## API
+
+Routes are listed in `/docs` and `openapi.json` (generated from `server/routes.js`). Besides the payment, link,
+subscription and pay-button routes, Payments serves `GET /v1/payments/count` and `/v1/payments/counts?by=state|gateway`
+(and their ticket twins under `/v1/admin/payments/`), and the payment events on the kit's mechanism: `GET /v1/events`,
+`/v1/events/count` and `/v1/events/counts` (PLAN.md 0.8.10 K4, K5). The kit adds its own routes for the merchant's
+server (settings, texts, theme, Format, connections, activity log; `SS-Actor-*` headers name the acting member of staff).
+
 ## Scripts
 
 `pnpm dev` and `pnpm build` regenerate `openapi.json` and `server/widget-script.js` first; `pnpm check` runs format, lint,

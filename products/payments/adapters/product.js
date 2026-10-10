@@ -2,8 +2,8 @@
  * The product on the kit: `createProductInstance(options)` wires `@ss/app-kit` `createProduct` with Payments' manifest
  * (each feature's settings schema from `schemas/` inline), its widget and page texts, its Connections (storage for
  * bank-transfer proofs, each gateway's keys, the Notifications token for webhooks and the Accounts token for
- * activity-log copies), the merchant database indexes and the data-rights hooks, and adds the gateway adapters on the
- * same outbound policy. The Next.js route and the tests pass the rest (config, store, clock, network).
+ * activity-log copies), the merchant database indexes, the data-rights hooks and the kit's events (PLAN 0.8.10 K5:
+ * `payments.<type>`, forwarded through Notifications), and adds the gateway adapters on the same outbound policy. The Next.js route and the tests pass the rest (config, store, clock, network).
  * Public entry `./product` of this package, so a system test can compose the product with `./routes`.
  * @module
  */
@@ -113,7 +113,7 @@ const dataRights = (now) => ({
 });
 
 /**
- * @typedef {Omit<import('@ss/app-kit').ProductOptions, 'manifest' | 'strings' | 'hooks' | 'connections' | 'data' | 'problemCodes'>} InstanceOptions
+ * @typedef {Omit<import('@ss/app-kit').ProductOptions, 'manifest' | 'strings' | 'hooks' | 'connections' | 'data' | 'problemCodes' | 'events'>} InstanceOptions
  */
 
 /**
@@ -175,6 +175,9 @@ export const createProductInstance = (options) => {
 		},
 		hooks: dataRights(now),
 		data: { indexes: INDEXES },
+		// payment events (`payment.paid`, `payment.failed`, `payment.refunded`, `subscription.updated`) on the kit's
+		// mechanism: stored in `ss_payments_events`, listed by GET /v1/events, forwarded through Notifications
+		events: true,
 	});
 	return Object.freeze({ ...product, gateways, now, send });
 };

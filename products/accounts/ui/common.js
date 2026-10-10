@@ -1,13 +1,25 @@
 /**
- * Helpers the Accounts widgets share: the widget texts, the problem answers of the API turned into widget texts, and
- * labelled fields (custom fields and the terms checkbox included). Text is always set as text, never as HTML.
+ * Helpers the Accounts widgets share: the widget texts, dates in the website's Format and business time zone, the
+ * problem answers of the API turned into widget texts, and labelled fields (custom fields and the terms checkbox
+ * included). Text is always set as text, never as HTML.
  * @module
  */
-import { formatText } from '@ss/app-kit/widget';
+import { formatDate, formatMoney, formatText, viewerOf } from '@ss/app-kit/widget';
 import { element } from './dom.js';
 
 /** @typedef {{ ok: boolean, status: number, data: any }} Answer status 0 when signed out or unreachable */
 /** @typedef {(key: string) => string} Texts */
+/** @typedef {Parameters<typeof formatDate>[1]} Format how money and dates look (the widget config's `format`) */
+/**
+ * A date or time as text (`''` for a value that is not one): `datetime` by default, or `date`.
+ * @typedef {(value: unknown, style?: 'date' | 'datetime') => string} Dates
+ */
+/**
+ * What the widgets need of the widget config to show dates and money: the website's Format and its business.json
+ * time zone (PLAN 0.8.10 K7, K8).
+ * @typedef {{ format?: Format, timeZone?: string }} Looks
+ */
+/** The browser whose language and time zone a Format with an empty locale or `viewer` times follows. @typedef {{ navigator?: { language?: string } } | null | undefined} Viewer */
 
 /**
  * @typedef {object} CustomField
@@ -54,11 +66,42 @@ export const problemCode = (data) => {
 };
 
 /**
+ * Dates as text with the website's Format and business time zone, for this browser (PLAN 0.8.10 K7).
+ * @param {Looks} config the widget config
+ * @param {Viewer} win the browser window
+ * @returns {Dates}
+ */
+export const datesOf = (config, win) => {
+	const viewer = viewerOf(win);
+	return (value, style = 'datetime') =>
+		formatDate(typeof value === 'string' || typeof value === 'number' ? value : null, config.format, {
+			timeZone: config.timeZone ?? 'UTC',
+			style,
+			viewer,
+		});
+};
+
+/**
+ * An amount of money as text with the website's Format, for this browser (PLAN 0.8.10 K7); null when the amount is
+ * not integer minor units of a currency code.
+ * @param {Looks} config the widget config
+ * @param {Viewer} win the browser window
+ * @param {unknown} amount minor units
+ * @param {unknown} currency ISO 4217 code
+ * @returns {string | null}
+ */
+export const moneyText = (config, win, amount, currency) =>
+	Number.isSafeInteger(amount) && typeof currency === 'string' && /^[A-Z]{3}$/.test(currency)
+		? formatMoney(/** @type {number} */ (amount), currency, config.format, viewerOf(win))
+		: null;
+
+/**
  * The widget text for a failed answer.
  * @param {Texts} t
  * @param {Answer} answer
+ * @param {Dates} when dates as text (the lock's end)
  */
-export const errorText = (t, answer) => {
+export const errorText = (t, answer, when) => {
 	const data = answer.data ?? {};
 	const code = problemCode(data);
 	if (code === 'weak_password' || code === 'validation_failed') {
@@ -66,8 +109,8 @@ export const errorText = (t, answer) => {
 		return typeof detail === 'string' && detail !== '' ? detail : t('error.generic');
 	}
 	if (code === 'locked')
-		return typeof data.lockedUntil === 'string'
-			? formatText(t('error.locked'), { time: new Date(data.lockedUntil).toLocaleString() })
+		return typeof data.lockedUntil === 'string' && when(data.lockedUntil) !== ''
+			? formatText(t('error.locked'), { time: when(data.lockedUntil) })
 			: t('error.rate_limited');
 	return OWN_TEXT.has(code) ? t(`error.${code}`) : t('error.generic');
 };
@@ -191,13 +234,4 @@ export const termsBox = (doc, t, terms) => {
 	point(terms?.url);
 	wrap.append(link);
 	return { wrap, input, point };
-};
-
-/**
- * A short date and time.
- * @param {unknown} value
- */
-export const when = (value) => {
-	const time = Date.parse(String(value));
-	return Number.isNaN(time) ? '' : new Date(time).toLocaleString();
 };

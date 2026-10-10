@@ -1,6 +1,6 @@
 /**
- * Reading a provider's answer (ported from ibrahimMobiles' WhatsApp gateway client): many gateways answer HTTP 200
- * for a refused message with the failure in the body, so a 2xx alone does not mean sent. No I/O.
+ * Reading a provider's answer: many gateways answer HTTP 200 for a refused message with the failure in the body, so a
+ * 2xx alone does not mean sent. No I/O.
  * @module
  */
 

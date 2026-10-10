@@ -74,7 +74,7 @@ export const TEXTS = Object.freeze({
 		featuresHelp: 'How each feature behaves on this website.',
 		looksTitle: 'Words and look',
 		looksHelp:
-			'Every word of the consent banner, the notice bar and the admin widgets (the consent words included), and their theme.',
+			'Every word of the consent banner, the notice bar and the admin widgets (the consent words included), their theme, and how money and dates look.',
 		texts: 'Widget texts',
 		textsHelp: 'Every word the widgets show. A text must keep the same {placeholders} as the English text.',
 		theme: 'Theme',
@@ -84,6 +84,23 @@ export const TEXTS = Object.freeze({
 		radius: 'Corner radius (0–24 px)',
 		accent: 'Accent colour',
 		customCss: 'Custom CSS',
+		format: 'Format',
+		formatHelp: 'How money and dates look in the widgets (revenue and days in the analytics dashboard).',
+		locale: 'Language and region',
+		localeHelp: "A tag such as en-GB or ur-PK; empty uses each visitor's browser.",
+		currencyDisplay: 'Currency shown as',
+		currencyDisplays: Object.freeze({
+			code: 'Code (PKR 12,500.00)',
+			symbol: 'Symbol (Rs 12,500.00)',
+			custom: 'Your own symbol',
+		}),
+		currencySymbol: 'Your own symbol (up to 8 characters)',
+		times: 'Dates and times in',
+		timesOptions: Object.freeze({
+			viewer: "Each visitor's time zone",
+			business: 'Your business time zone (business.json)',
+		}),
+		wholeUnits: 'Whole amounts only (no minor units)',
 		off: 'This feature is off.',
 	}),
 	connections: Object.freeze({

@@ -29,6 +29,8 @@ const ERROR_PARAM = LINK_PARAMS.error;
  * @property {Record<string, string>} texts the widget texts (the website's own, else the defaults)
  * @property {import('@ss/app-kit/widget').WidgetTheme} theme
  * @property {string} customCss
+ * @property {import('./common.js').Format} format how money and dates look (Settings → Format, PLAN 0.8.10 K7)
+ * @property {string} timeZone the business.json time zone (UTC when missing, K8)
  * @property {string[]} features the switched-on features
  * @property {WidgetSettings} settings
  */

@@ -1,10 +1,12 @@
 /**
  * The public docs at `/docs` (PLAN 0.4.10, 0.8.9): the page script, consent and Google Consent Mode, privacy and
  * storage, the shop events, searches, 404s and Web Vitals, robots.txt and verification, IndexNow, the SEO checklist,
- * the notice bar, per-feature routes and widgets, the widget and ticket snippets, the business.json template, the
+ * the notice bar, per-feature routes and widgets, the widget and ticket snippets, the kit's routes for your server
+ * (settings, acting user, visitor calls, counts, activity, Format; PLAN 0.8.10), the business.json template, the
  * localhost note and the API reference from `openapi.json`. Plain HTML; every value is escaped.
  * @module
  */
+import { KIT_GUIDE } from '@ss/app-kit';
 import { BUSINESS_JSON_TEMPLATE } from '@ss/contracts';
 import guide from '../docs/guide.json' with { type: 'json' };
 import openapi from '../openapi.json' with { type: 'json' };
@@ -121,6 +123,7 @@ ${block(snippets.admin)}
 ${para(guide.tickets)}
 ${block(snippets.ticketNode)}
 ${block(snippets.ticketCurl)}
+${KIT_GUIDE.map((section) => `<h2 id="${escape(section.id)}">${escape(section.title)}</h2>\n${section.paragraphs.map(para).join('\n')}`).join('\n')}
 <h2>business.json</h2>
 ${para(guide.business)}
 ${block(JSON.stringify(BUSINESS_JSON_TEMPLATE, null, 2))}

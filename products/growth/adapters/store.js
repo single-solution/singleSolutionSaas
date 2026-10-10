@@ -5,7 +5,8 @@
  *
  * - `events`: raw events, removed by the database's expiry index at their `expiresAt` (the retention the merchant set
  *   when they were recorded; 13 months by default). No timer deletes anything.
- * - `daily`: daily totals `{ day, metric, key, count, sum }`, kept forever, updated as events arrive (`$inc` upserts).
+ * - `daily`: daily totals `{ day, metric, key, count, sum }` (`day`: the day in the business time zone), kept forever,
+ *   updated as events arrive (`$inc` upserts).
  * @module
  */
 import { createId } from '@ss/contracts';
@@ -37,6 +38,14 @@ export const createStore = (data, { merchantId }) => {
 	const events = data.collection(EVENTS);
 	const daily = data.collection(DAILY);
 	const websiteId = data.websiteId;
+
+	/**
+	 * The raw events' filter of a list or count request.
+	 * @param {{ type?: string }} query
+	 * @returns {Record<string, unknown>}
+	 */
+	const eventFilter = ({ type }) => ({ websiteId, ...(type ? { type } : {}) });
+
 	return Object.freeze({
 		/**
 		 * Keep a batch: its raw events (with their expiry) and the daily totals (one `$inc` upsert per metric × key).
@@ -96,13 +105,18 @@ export const createStore = (data, { merchantId }) => {
 		},
 
 		/**
+		 * The raw events' collection and filter of `GET /v1/events` and its counts (one filter for the list and the counts).
+		 * @param {{ type?: string }} query `type`: one event type
+		 */
+		eventSource: ({ type }) => ({ collection: events, filter: eventFilter({ type }) }),
+
+		/**
 		 * A page of raw events, newest first.
 		 * @param {{ after: unknown, limit: number, type?: string }} query `after`: the cursor's `[at, id]`
 		 * @returns {Promise<EventRecord[]>}
 		 */
 		list: async ({ after, limit, type }) => {
-			/** @type {Record<string, unknown>} */
-			const filter = { websiteId, ...(type ? { type } : {}) };
+			const filter = eventFilter({ type });
 			if (Array.isArray(after) && after.length === 2) {
 				const at = new Date(String(after[0]));
 				filter.$or = [{ at: { $lt: at } }, { at, id: { $lt: String(after[1]) } }];

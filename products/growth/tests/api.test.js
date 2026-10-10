@@ -147,7 +147,12 @@ describe('events and totals', () => {
 		const bad = await env.call('GET', '/v1/analytics?from=2026-10-05&to=2026-10-01', { token: env.server });
 		expect(bad.status).toBe(422);
 		const report = await (await env.call('GET', '/v1/analytics', { token: env.server })).json();
-		expect(report).toMatchObject({ from: '2026-09-02', to: '2026-10-01', totals: { visits: 2, pageViews: 5 } });
+		expect(report).toMatchObject({
+			from: '2026-09-02',
+			to: '2026-10-01',
+			timeZone: 'UTC',
+			totals: { visits: 2, pageViews: 5 },
+		});
 		expect(report.days).toHaveLength(30);
 		expect(report.funnel.steps[3]).toEqual({ step: 'purchase', count: 1 });
 		expect(report.funnel.revenue).toEqual([{ currency: 'USD', value: 2500, orders: 1 }]);
@@ -269,7 +274,14 @@ describe('IndexNow', () => {
 		expect(badWidget.status).toBe(422);
 		const db = await env.merchantDb();
 		const logged = await db.collection('ss_growth_activity').findOne({ action: 'indexnow.submitted' });
-		expect(logged).toMatchObject({ actor: { id: 'u_1' }, target: '1 URLs' });
+		expect(logged).toMatchObject({
+			actor: { kind: 'staff', id: 'u_1', name: 'Sam Staff' },
+			target: 'indexnow',
+			label: '1 page submitted to IndexNow',
+			detail: 'IndexNow answered 202. Pages: /d',
+		});
+		// the server token's own submissions are not in the activity log
+		expect(await db.collection('ss_growth_activity').countDocuments({ action: 'indexnow.submitted' })).toBe(1);
 	});
 });
 
@@ -308,6 +320,13 @@ describe('SEO checklist', () => {
 			body: { paths: ['/'] },
 		});
 		expect((await viaWidget.json()).pages).toEqual([`${ORIGIN}/`]);
+		const db = await env.merchantDb();
+		expect(await db.collection('ss_growth_activity').findOne({ action: 'seo.checked' })).toMatchObject({
+			actor: { kind: 'staff', id: 'u_1', name: 'Sam Staff' },
+			target: 'seo_checklist',
+			label: '/',
+			detail: expect.stringMatching(/^\d+ passed, \d+ to improve, \d+ to fix\. Pages: \/$/),
+		});
 		const badWidget = await env.call('POST', '/v1/admin/seo/checks', {
 			token: ticket,
 			origin: ADMIN_ORIGIN,
@@ -361,5 +380,162 @@ describe('statuses, data rights and public routes', () => {
 		expect(html).toContain('ss:purchase');
 		expect(html).toContain(`${BASE}/widget.js`);
 		expect(html).toContain('feature-seo_checklist');
+		for (const id of ['server-settings', 'acting-user', 'server-visitors', 'counts', 'activity', 'format'])
+			expect(html).toContain(`<h2 id="${id}">`);
+		expect(html).toContain('/v1/events/counts');
+	});
+});
+
+describe('store conversion kit (PLAN 0.8.10 K2–K9)', () => {
+	/** @type {Awaited<ReturnType<typeof setup>>} */
+	let kit;
+	const VISITOR = '203.0.113.7';
+
+	beforeAll(async () => {
+		// 20:00 UTC on 1 October is already 2 October in Karachi (UTC+5)
+		kit = await setup({ start: Date.parse('2026-10-01T20:00:00Z') });
+		await kit.switchOn(ALL);
+		await kit.connectDatabase();
+		kit.web.pages['/.well-known/business.json'] = {
+			status: 200,
+			body: JSON.stringify({ name: 'Shop', timeZone: 'Asia/Karachi' }),
+		};
+		const refreshed = await kit.dashboard(
+			await kit.adminSession(),
+			'POST',
+			`/v1/dashboard/websites/${kit.websiteId}/business/refresh`,
+		);
+		expect((await refreshed.json()).business.timeZone).toBe('Asia/Karachi');
+	});
+	afterAll(async () => {
+		await kit.close();
+	});
+
+	it('counts the daily totals and the analytics days in the business time zone (K8)', async () => {
+		await kit.collect([
+			{ type: 'page_view', path: '/', visit: true },
+			{ type: 'page_view', path: '/shop', visit: false },
+		]);
+		const db = await kit.merchantDb();
+		expect(await db.collection('ss_growth_daily').distinct('day')).toEqual(['2026-10-02']);
+		const report = await (await kit.call('GET', '/v1/analytics', { token: kit.server })).json();
+		expect(report).toMatchObject({
+			from: '2026-09-03',
+			to: '2026-10-02',
+			timeZone: 'Asia/Karachi',
+			totals: { visits: 1, pageViews: 2 },
+		});
+		expect(report.days.at(-1)).toEqual({ day: '2026-10-02', visits: 1, pageViews: 2 });
+		const utcDay = await (await kit.call('GET', '/v1/analytics?from=2026-10-01&to=2026-10-01', { token: kit.server })).json();
+		expect(utcDay.totals).toEqual({ visits: 0, pageViews: 0 });
+		const invalid = await kit.call('GET', '/v1/analytics?from=2026-02-30&to=2026-03-02', { token: kit.server });
+		expect(invalid.status).toBe(422);
+		const config = await (await kit.call('GET', '/v1/widget/config', { token: kit.browser, origin: ORIGIN })).json();
+		expect(config.timeZone).toBe('Asia/Karachi');
+	});
+
+	it('takes the page script’s events from the merchant’s server for one visitor (K3)', async () => {
+		/** @param {string | null} ip @param {unknown[]} [events] */
+		const fromServer = (ip, events = []) =>
+			kit.call('POST', '/v1/collect', {
+				token: kit.server,
+				body: { events },
+				headers: ip ? { 'ss-visitor-ip': ip } : {},
+			});
+		const noIp = await fromServer(null);
+		expect(noIp.status).toBe(400);
+		expect(await codeOf(noIp)).toBe('visitor_ip_required');
+		const sent = await fromServer(VISITOR, [{ type: 'search', path: '/search', term: 'phone case', results: 3 }]);
+		expect(sent.status).toBe(202);
+		expect(sent.headers.get('access-control-allow-origin')).toBeNull();
+		expect(await sent.json()).toEqual({ accepted: 1 });
+		const db = await kit.merchantDb();
+		expect(await db.collection('ss_growth_daily').findOne({ metric: 'search', key: 'phone case' })).toMatchObject({
+			day: '2026-10-02',
+			count: 1,
+		});
+		// the per-visitor limit (120 a minute) counts by SS-Visitor-IP
+		for (let i = 0; i < 119; i += 1) expect((await fromServer(VISITOR)).status).toBe(202);
+		const limited = await fromServer(VISITOR);
+		expect(limited.status).toBe(429);
+		expect((await fromServer('203.0.113.8')).status).toBe(202);
+		kit.advance(61_000);
+		expect((await fromServer(VISITOR)).status).toBe(202);
+	});
+
+	it('counts the raw events with the list’s own filter (K4)', async () => {
+		await kit.collect([
+			{ type: 'not_found', path: '/old' },
+			{ type: 'vital', path: '/', name: 'LCP', value: 900 },
+			{ type: 'page_view', path: '/a', visit: false },
+		]);
+		/** @param {string} path @returns {Promise<any>} */
+		const read = async (path) => {
+			const response = await kit.call('GET', path, { token: kit.server });
+			expect(response.status).toBe(200);
+			return response.json();
+		};
+		const all = (await read('/v1/events?limit=100')).items;
+		expect(all).toHaveLength(6);
+		expect(await read('/v1/events/count')).toEqual({ count: all.length, capped: false });
+		for (const type of ['page_view', 'search', 'vital', 'purchase']) {
+			const listed = (await read(`/v1/events?type=${type}&limit=100`)).items;
+			expect(await read(`/v1/events/count?type=${type}`)).toEqual({ count: listed.length, capped: false });
+		}
+		// an unknown type is ignored by the list, so by the count too
+		expect((await read('/v1/events?type=bogus&limit=100')).items).toHaveLength(all.length);
+		expect(await read('/v1/events/count?type=bogus')).toEqual({ count: all.length, capped: false });
+		expect(await read('/v1/events/counts?by=type')).toEqual({
+			total: 6,
+			groups: { page_view: 3, not_found: 1, search: 1, vital: 1 },
+		});
+		expect(await read('/v1/events/counts?by=type&type=vital')).toEqual({ total: 1, groups: { vital: 1 } });
+		const badBy = await kit.call('GET', '/v1/events/counts?by=path', { token: kit.server });
+		expect(badBy.status).toBe(422);
+		const viaBrowser = await kit.call('GET', '/v1/events/count', { token: kit.browser, origin: ORIGIN });
+		expect(viaBrowser.status).toBe(401);
+	});
+
+	it('names the acting user and the widgets’ Format (K2, K7, K9)', async () => {
+		const bad = await kit.call('GET', '/v1/analytics', { token: kit.server, headers: { 'ss-actor-id': 'u 1' } });
+		expect(bad.status).toBe(400);
+		expect(await codeOf(bad)).toBe('invalid_actor');
+		const format = await kit.call('PUT', '/v1/format', {
+			token: kit.server,
+			body: { locale: 'en-GB', currencyDisplay: 'custom', currencySymbol: 'Rs', wholeUnits: true, times: 'business' },
+			headers: { 'ss-actor-id': 'u_7', 'ss-actor-name': encodeURIComponent('Ayesha Khan'), 'ss-actor-role': 'Manager' },
+		});
+		expect(format.status).toBe(200);
+		const overview = await (
+			await kit.dashboard(await kit.adminSession(), 'GET', `/v1/dashboard/websites/${kit.websiteId}/overview`)
+		).json();
+		expect(overview.recentChanges[0].who).toEqual({ kind: 'user', id: 'u_7', name: 'Ayesha Khan', role: 'Manager' });
+		const config = await (await kit.call('GET', '/v1/widget/config', { token: kit.browser, origin: ORIGIN })).json();
+		expect(config.format).toEqual({
+			locale: 'en-GB',
+			currencyDisplay: 'custom',
+			currencySymbol: 'Rs',
+			wholeUnits: true,
+			times: 'business',
+		});
+		const ticket = await kit.ticket(['seo.check']);
+		const admin = await (await kit.call('GET', '/v1/widget/admin/config', { token: ticket, origin: ADMIN_ORIGIN })).json();
+		expect(admin).toMatchObject({ timeZone: 'Asia/Karachi', format: { currencySymbol: 'Rs' } });
+		kit.web.pages['/'] = { status: 200, body: HOME };
+		const checked = await kit.call('POST', '/v1/admin/seo/checks', {
+			token: ticket,
+			origin: ADMIN_ORIGIN,
+			body: { paths: ['/', '/shop'] },
+		});
+		expect(checked.status).toBe(200);
+		const activity = await (await kit.call('GET', '/v1/activity?action=seo.checked', { token: kit.server })).json();
+		expect(activity.items).toEqual([
+			expect.objectContaining({
+				actor: { kind: 'staff', id: 'u_1', name: 'Sam Staff' },
+				target: 'seo_checklist',
+				label: '/ and 1 more',
+				detail: expect.stringContaining('Pages: /, /shop'),
+			}),
+		]);
 	});
 });

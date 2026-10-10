@@ -1,8 +1,11 @@
 /**
  * Timing (PLAN 0.8.5): retries on the next uses, quiet hours, send limits and delayed send. Nothing runs on a timer:
- * a waiting message gets a due time and is sent on the first use of the website after it. No I/O.
+ * a waiting message gets a due time and is sent on the first use of the website after it. Quiet hours are a wall-clock
+ * rule in the recipient's time zone, else the business.json time zone (UTC when missing; PLAN 0.8.10 K8); send limits
+ * and the delayed-send horizon are rolling spans of time, not calendar days. No I/O.
  * @module
  */
+import { zonedParts } from '@ss/contracts/format';
 
 /** Attempts on one channel before the message fails there (then the fallback channel, if any). */
 const MAX_ATTEMPTS = 3;
@@ -30,20 +33,13 @@ export const nextAttemptAt = (attempts, now, { max = MAX_ATTEMPTS, delays = RETR
 };
 
 /**
- * The local hour and minute at an instant in a time zone.
+ * The local hour and minute at an instant in a time zone (UTC when the zone is missing or unknown).
  * @param {number} at epoch ms
- * @param {string} timeZone IANA
+ * @param {string | null | undefined} timeZone IANA
  */
 export const localTime = (at, timeZone) => {
-	const parts = new Intl.DateTimeFormat('en-GB', {
-		timeZone,
-		hour: '2-digit',
-		minute: '2-digit',
-		hourCycle: 'h23',
-	}).formatToParts(new Date(at));
-	/** @param {string} type */
-	const part = (type) => Number(parts.find((entry) => entry.type === type)?.value ?? 0);
-	return { hour: part('hour'), minute: part('minute') };
+	const { hour, minute } = zonedParts(at, timeZone);
+	return { hour, minute };
 };
 
 /**
@@ -59,10 +55,10 @@ export const isQuietHour = (hour, { startHour, endHour }) => {
 
 /**
  * When a non-urgent message may be sent: now, or the end of the quiet window in the recipient's time zone (their
- * morning).
+ * morning), else the business time zone.
  * @param {number} now
  * @param {{ startHour: number, endHour: number }} quiet
- * @param {string} timeZone
+ * @param {string | null | undefined} timeZone
  * @returns {number}
  */
 export const quietUntil = (now, quiet, timeZone) => {

@@ -2,7 +2,8 @@
  * Test harness: Accounts on the kit, connected to the kit's fake Portal (`@ss/app-kit/testing`), with one website, its
  * two tokens, dashboard sessions, a merchant database on the run's MongoDB (`TEST_MONGODB_URI`) and fakes for every
  * outside service: Notifications (records what Accounts sends), other products (permissions, data rights, orders),
- * Google, Apple, Facebook and the breached-password list. No real network call is ever made.
+ * Google, Apple, Facebook, the breached-password list and the website itself (business.json). No real network call is
+ * ever made.
  * @module
  */
 import { generateKeyPairSync } from 'node:crypto';
@@ -82,6 +83,7 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 		);
 	};
 	const origins = [
+		ORIGIN,
 		NOTIFY,
 		SHOP,
 		CHAT,
@@ -232,6 +234,13 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 		if (response.status !== 204) throw new Error(`setting: ${response.status} ${response.text}`);
 	};
 
+	/** Read business.json again (dashboard button), for example after a test changed its time zone. */
+	const refreshBusiness = async () => {
+		const response = await dashboard(await adminSession(), 'POST', `/v1/dashboard/websites/${websiteId}/business/refresh`);
+		if (response.status !== 200) throw new Error(`business: ${response.status} ${response.text}`);
+		return response.json;
+	};
+
 	/** A ticket for the admin widgets. @param {string[]} [permissions] */
 	const ticket = async (permissions = ['users.read', 'users.manage', 'roles.manage']) => {
 		const response = await serverCall('POST', '/v1/tickets', {
@@ -273,6 +282,7 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 		ticket,
 		admin,
 		messages,
+		refreshBusiness,
 		flush,
 		connectDatabase: () => connect('database', merchantDatabase()),
 		/** Pin the network of the next requests (null: a new one each request). @param {string | null} value */

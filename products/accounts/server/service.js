@@ -12,6 +12,7 @@
  */
 import { problem } from '@ss/app-kit';
 import { createId } from '@ss/contracts';
+import { detailOf, labelOf } from '../core/activity.js';
 import { DEFAULT_ROLE, READY_ROLES, sessionEnd } from '../core/roles.js';
 import { selfView } from '../core/profile.js';
 import { OPEN_SIGN_UP, deviceIdOf, deviceOf } from '../core/rules.js';
@@ -48,6 +49,8 @@ const STEP_MS = 10 * 60_000;
 const EXPORT_MS = 15 * 60_000;
 /** Erasures handled right after one request (code constant). */
 const ERASURES_PER_REQUEST = 3;
+/** Who erases a user whose deletion came due without approval (Data rights, after the days set in Settings). */
+const DELETION_DUE = Object.freeze({ kind: 'system', id: 'deletion-due', name: 'Data rights' });
 
 /**
  * A single-use secret as the user gets it (`<record id>.<secret>`) and its parts.
@@ -276,7 +279,9 @@ export const createService = (product) => {
 	};
 
 	/**
-	 * How the request's device signs in: remember me, the device name and the device id for risk checks.
+	 * How the request's device signs in: remember me, the device name, the device id and the network for risk checks.
+	 * The network is the kit's visitor address (`SS-Visitor-IP` on a visitor call from the merchant's server, else the
+	 * first `X-Forwarded-For` address; PLAN 0.8.10 K3).
 	 * @param {any} ctx
 	 */
 	const howOf = (ctx) => {
@@ -285,7 +290,7 @@ export const createService = (product) => {
 			remember: body.remember === true,
 			device: deviceOf(ctx.headers.get('user-agent')),
 			deviceId: deviceIdOf(body.deviceId),
-			network: ctx.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown',
+			network: String(ctx.clientIp || 'unknown'),
 		};
 	};
 
@@ -373,10 +378,11 @@ export const createService = (product) => {
 	/**
 	 * Erase a user here and in every connected product (PLAN 0.8.6): products that do not confirm are asked again
 	 * right after later requests for this website.
-	 * @param {Site} s @param {UserRecord} user @param {{ kind: string, id: string, name?: string }} actor
+	 * @param {Site} s @param {UserRecord} user @param {import('@ss/app-kit').Actor} actor
 	 * @param {any} [ctx] the request (for the activity log)
+	 * @param {string} [why] the activity log's detail
 	 */
-	const erase = async (s, user, actor, ctx) => {
+	const erase = async (s, user, actor, ctx, why) => {
 		const pending = await fanOutDelete(s, user, await connectedProducts(s.websiteId));
 		await s.store.sessions.removeAll(user.id);
 		for (const target of [user.id, user.email, user.phone]) if (target) await s.store.codes.removeTarget(target);
@@ -385,7 +391,13 @@ export const createService = (product) => {
 		if (ctx)
 			await product.activity.record(
 				{ websiteId: s.websiteId, merchantId: s.merchantId, after: ctx.after },
-				{ actor, action: 'user.deleted', target: user.id },
+				{
+					actor,
+					action: 'user.deleted',
+					target: user.id,
+					label: labelOf(user.name),
+					detail: detailOf([why, pending.length > 0 && `Not confirmed yet by: ${pending.join(', ')}`]),
+				},
 			);
 		return { pending };
 	};
@@ -393,8 +405,7 @@ export const createService = (product) => {
 	/** Right after a request: due erasures, then erasures some products have not confirmed. @param {Site} s */
 	const afterWork = async (s) => {
 		if (s.on.includes('data_rights'))
-			for (const user of await s.store.users.deletionsDue(ERASURES_PER_REQUEST))
-				await erase(s, user, { kind: 'system', id: 'deletion-due' });
+			for (const user of await s.store.users.deletionsDue(ERASURES_PER_REQUEST)) await erase(s, user, DELETION_DUE);
 		for (const entry of await s.store.deletions.pending(ERASURES_PER_REQUEST)) {
 			const still = await fanOutDelete(s, { id: entry.userId, email: entry.email, phone: entry.phone }, entry.pending);
 			await s.store.deletions.update(entry.userId, still);

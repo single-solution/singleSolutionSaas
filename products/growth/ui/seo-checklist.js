@@ -1,10 +1,11 @@
 /**
  * The SEO checklist (admin widget `seo_checklist`; PLAN 0.8.9): with the SEO checklist on (ticket `seo.check`), a
  * button checks the website's pages on request and lists every check (passed, improve, fix) with its fix steps; with
- * IndexNow on (ticket `indexnow.submit`), a box submits page addresses. Every word is a widget text.
+ * IndexNow on (ticket `indexnow.submit`), a box submits page addresses. Every word is a widget text; the time of a
+ * run follows the website's Format and time zone (PLAN 0.8.10 K7).
  * @module
  */
-import { mountWidget } from '@ss/app-kit/widget';
+import { formatDate, mountWidget } from '@ss/app-kit/widget';
 import { adminCall } from './tickets.js';
 import { element } from './dom.js';
 import { WIDGET_CSS } from './styles.js';
@@ -20,9 +21,10 @@ const fill = (text, values) =>
 const ORDER = Object.freeze({ fail: 0, warn: 1, pass: 2 });
 
 /**
- * @param {{ host: HTMLElement, api: import('./tickets.js').AdminApi, config: import('./widget.js').WidgetConfig }} input
+ * @param {{ host: HTMLElement, api: import('./tickets.js').AdminApi, config: import('./widget.js').WidgetConfig,
+ *   viewer: import('./widget.js').Viewer }} input `viewer`: the browser's language and time zone
  */
-export const mountSeoChecklist = ({ host, api, config }) => {
+export const mountSeoChecklist = ({ host, api, config, viewer }) => {
 	/** @param {string} key @param {Record<string, string | number>} [values] */
 	const t = (key, values) => fill(config.texts[key] ?? key, values ?? {});
 	const on = (/** @type {string} */ feature) => config.features.includes(feature);
@@ -59,7 +61,9 @@ export const mountSeoChecklist = ({ host, api, config }) => {
 						return;
 					}
 					const report = answer.data;
-					status.textContent = t('seo.checkedAt', { time: new Date(report.checkedAt).toLocaleString() });
+					status.textContent = t('seo.checkedAt', {
+						time: formatDate(report.checkedAt, config.format, { timeZone: config.timeZone, style: 'datetime', viewer }),
+					});
 					summary.textContent = t('seo.summary', report.summary);
 					const checks = [...report.checks].sort(
 						(a, b) =>

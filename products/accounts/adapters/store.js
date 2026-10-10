@@ -43,6 +43,25 @@ import { DEFAULT_ROLE, READY_ROLES } from '../core/roles.js';
  *   data: Record<string, any>, createdAt: Date }} CodeRecord
  */
 
+/**
+ * The filters of the users list (and its counts): text in the name, e-mail or phone; a role; a status (`active`,
+ * `pending`, `invited`, or `blocked` for blocked users); users who asked to be deleted.
+ * @typedef {{ q?: string, role?: string, status?: string, deletion?: boolean }} UserQuery
+ */
+
+/**
+ * An activity-log copy another product sent (PLAN 0.4.11, 0.8.10 K9).
+ * @typedef {object} CopyRecord
+ * @property {string} id
+ * @property {string} productId
+ * @property {{ kind: string, id: string, name?: string, role?: string }} actor
+ * @property {string} action
+ * @property {string} target
+ * @property {string} [label] what the target is called
+ * @property {string} [detail] plain text
+ * @property {Date} at
+ */
+
 const USERS = 'users';
 const SESSIONS = 'sessions';
 const CODES = 'codes';
@@ -75,6 +94,8 @@ export const INDEXES = [
 		partialFilterExpression: { phone: present },
 	},
 	{ collection: USERS, keys: { websiteId: 1, createdAt: -1, id: -1 }, name: 'newest' },
+	{ collection: USERS, keys: { websiteId: 1, role: 1 }, name: 'by_role' },
+	{ collection: USERS, keys: { websiteId: 1, status: 1 }, name: 'by_status' },
 	{ collection: USERS, keys: { websiteId: 1, 'deletion.dueAt': 1 }, name: 'deletions_due' },
 	{ collection: SESSIONS, keys: { websiteId: 1, id: 1 }, name: 'by_id', unique: true },
 	{ collection: SESSIONS, keys: { websiteId: 1, userId: 1 }, name: 'by_user' },
@@ -92,6 +113,9 @@ export const INDEXES = [
 	{ collection: SIGNUPS, keys: { createdAt: 1 }, name: 'expire', expireAfterSeconds: 30 * 24 * 3600 },
 	{ collection: DELETIONS, keys: { websiteId: 1, userId: 1 }, name: 'by_user', unique: true },
 	{ collection: COPIES, keys: { websiteId: 1, at: -1, id: -1 }, name: 'newest' },
+	{ collection: COPIES, keys: { websiteId: 1, productId: 1, at: -1, id: -1 }, name: 'by_product' },
+	{ collection: COPIES, keys: { websiteId: 1, 'actor.id': 1, at: -1 }, name: 'by_actor' },
+	{ collection: COPIES, keys: { websiteId: 1, target: 1, at: -1 }, name: 'by_target' },
 ];
 
 const NO_ID = { projection: { _id: 0 } };
@@ -120,6 +144,30 @@ export const createStore = (data, { now }) => {
 	const copies = data.collection(COPIES);
 	/** @param {unknown} doc */
 	const as = (doc) => /** @type {any} */ (doc);
+
+	/**
+	 * The filter of the users list and of its counts (one builder, so a count always equals the list).
+	 * @param {UserQuery} query
+	 */
+	const usersFilter = ({ q, role, status, deletion }) => {
+		/** @type {Record<string, unknown>} */
+		const filter = {};
+		if (q) {
+			const pattern = { $regex: escapeRegex(q.slice(0, 100)), $options: 'i' };
+			filter.$or = [{ name: pattern }, { email: pattern }, { phone: pattern }];
+		}
+		if (role) filter.role = role;
+		if (status === 'blocked') filter.blocked = { $ne: null };
+		else if (status) filter.status = status;
+		if (deletion) filter.deletion = { $ne: null };
+		return { ...filter, websiteId };
+	};
+
+	/**
+	 * A copies filter (`core/activity.js`) for this website.
+	 * @param {Record<string, unknown>} filter
+	 */
+	const copiesFilter = (filter) => ({ ...filter, websiteId });
 
 	/** Create the ready-made roles once per website. */
 	const seedRoles = async () => {
@@ -192,36 +240,37 @@ export const createStore = (data, { now }) => {
 				)?.failedLogins ?? 0,
 			/**
 			 * A page of users, newest first, filtered by text (name, e-mail, phone), role or status.
-			 * @param {{ after: [string, string] | null, limit: number, q?: string, role?: string, status?: string,
-			 *   deletion?: boolean }} query
+			 * @param {{ after: [string, string] | null, limit: number } & UserQuery} query
 			 * @returns {Promise<UserRecord[]>}
 			 */
-			list: async ({ after, limit, q, role, status, deletion }) => {
-				/** @type {Record<string, unknown>} */
-				const filter = { websiteId };
-				if (q) {
-					const pattern = { $regex: escapeRegex(q.slice(0, 100)), $options: 'i' };
-					filter.$or = [{ name: pattern }, { email: pattern }, { phone: pattern }];
-				}
-				if (role) filter.role = role;
-				if (status === 'blocked') filter.blocked = { $ne: null };
-				else if (status) filter.status = status;
-				if (deletion) filter.deletion = { $ne: null };
-				if (after) {
-					const [time, id] = after;
-					const cursorOr = [{ createdAt: { $lt: new Date(time) } }, { createdAt: new Date(time), id: { $lt: id } }];
-					if (filter.$or) filter.$and = [{ $or: filter.$or }, { $or: cursorOr }];
-					else filter.$or = cursorOr;
-					if (filter.$and) delete filter.$or;
-				}
+			list: async ({ after, limit, ...query }) => {
+				const filter = usersFilter(query);
+				const page = after
+					? {
+							...filter,
+							$and: [
+								{
+									$or: [
+										{ createdAt: { $lt: new Date(after[0]) } },
+										{ createdAt: new Date(after[0]), id: { $lt: after[1] } },
+									],
+								},
+							],
+						}
+					: filter;
 				return as(
 					await users
-						.find(filter, NO_ID)
+						.find(page, NO_ID)
 						.sort({ createdAt: -1, id: -1 })
 						.limit(Math.min(limit, MAX_LIST + 1))
 						.toArray(),
 				);
 			},
+			/**
+			 * The collection and filter of the users list, for its counts (PLAN 0.8.10 K4).
+			 * @param {UserQuery} query
+			 */
+			counting: (query) => ({ collection: users, filter: usersFilter(query) }),
 			/** Users whose deletion is due (no approval needed any more). @param {number} limit */
 			deletionsDue: async (limit) =>
 				as(
@@ -431,27 +480,38 @@ export const createStore = (data, { now }) => {
 		}),
 
 		copies: Object.freeze({
-			/** @param {{ productId: string, actor: { kind: string, id: string, name?: string }, action: string, target: string, at: Date }} copy */
+			/** @param {Omit<CopyRecord, 'id'>} copy */
 			add: async (copy) => {
 				await copies.insertOne({ ...copy, id: createId('act') });
 			},
 			/**
-			 * A page of copies, newest first (cursor: time and id).
-			 * @param {{ after: [string, string] | null, limit: number, productId?: string }} query
-			 * @returns {Promise<Array<{ id: string, productId: string, actor: { kind: string, id: string, name?: string }, action: string, target: string, at: Date }>>}
+			 * A page of copies, newest first (cursor: time and id), with a filter of `core/activity.js` `copyFilter`.
+			 * @param {{ after: [string, string] | null, limit: number, filter: Record<string, unknown> }} query
+			 * @returns {Promise<CopyRecord[]>}
 			 */
-			list: async ({ after, limit, productId }) => {
-				/** @type {Record<string, unknown>} */
-				const filter = { websiteId, ...(productId ? { productId } : {}) };
-				if (after) filter.$or = [{ at: { $lt: new Date(after[0]) } }, { at: new Date(after[0]), id: { $lt: after[1] } }];
+			list: async ({ after, limit, filter }) => {
+				const own = copiesFilter(filter);
+				const page = after
+					? {
+							...own,
+							$and: [{ $or: [{ at: { $lt: new Date(after[0]) } }, { at: new Date(after[0]), id: { $lt: after[1] } }] }],
+						}
+					: own;
 				return as(
 					await copies
-						.find(filter, { projection: { _id: 0, id: 1, productId: 1, actor: 1, action: 1, target: 1, at: 1 } })
+						.find(page, {
+							projection: { _id: 0, id: 1, productId: 1, actor: 1, action: 1, target: 1, label: 1, detail: 1, at: 1 },
+						})
 						.sort({ at: -1, id: -1 })
 						.limit(Math.min(limit, MAX_LIST + 1))
 						.toArray(),
 				);
 			},
+			/**
+			 * The collection and filter of the copies list, for its counts (PLAN 0.8.10 K4, K9).
+			 * @param {Record<string, unknown>} filter
+			 */
+			counting: (filter) => ({ collection: copies, filter: copiesFilter(filter) }),
 		}),
 	});
 };

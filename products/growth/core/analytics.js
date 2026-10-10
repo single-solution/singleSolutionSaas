@@ -2,9 +2,11 @@
  * The analytics report (PLAN 0.8.9 Own analytics) from the daily totals: visits and page views per day, top pages,
  * sources, devices and countries, the funnel (view → cart → checkout → purchase) with revenue per currency, site
  * searches and 404s, and Web Vitals (average and the share of good, needs-improvement and poor). Each part is there
- * only while its feature is on. Days are UTC.
+ * only while its feature is on. Days are the days of the website's business time zone (business.json `timeZone`, UTC
+ * when missing; PLAN 0.8.10 K8), and the report says which zone.
  * @module
  */
+import { zonedDay, zonedDayStart } from '@ss/contracts/format';
 import { FUNNEL_STEPS } from './widgets.js';
 import { VITALS } from './events.js';
 
@@ -26,24 +28,52 @@ const DAY = /^\d{4}-\d{2}-\d{2}$/;
  */
 
 /**
- * The days a report covers: `from` and `to` (`YYYY-MM-DD`, UTC, both included), else the last 30 days to today.
+ * The day `count` days after (or before) a day: calendar arithmetic on the `YYYY-MM-DD` label.
+ * @param {string} day
+ * @param {number} count
+ */
+const shiftDay = (day, count) => new Date(Date.parse(`${day}T00:00:00Z`) + count * DAY_MS).toISOString().slice(0, 10);
+
+/**
+ * True for a real calendar day `YYYY-MM-DD` (not 2026-02-30).
+ * @param {string} day
+ */
+const isDay = (day) => DAY.test(day) && !Number.isNaN(zonedDayStart(day, 'UTC'));
+
+/**
+ * The instant a day starts in the business time zone (epoch ms), for showing the day with the website's Format.
+ * @param {string} day `YYYY-MM-DD`
+ * @param {string | null | undefined} timeZone the business.json time zone (UTC when missing or unknown)
+ * @returns {number} NaN for a value that is not a day
+ */
+export const dayStart = (day, timeZone) => zonedDayStart(day, timeZone);
+
+/**
+ * The days a report covers when none are asked for: the last 30 days up to today in the business time zone.
+ * @param {number} now
+ * @param {string | null | undefined} timeZone the business.json time zone (UTC when missing or unknown)
+ */
+export const lastDays = (now, timeZone) => {
+	const to = zonedDay(now, timeZone);
+	return { from: shiftDay(to, -(DEFAULT_DAYS - 1)), to };
+};
+
+/**
+ * The days a report covers: `from` and `to` (`YYYY-MM-DD`, days of the business time zone, both included), else the
+ * last 30 days up to today in that zone.
  * @param {{ from?: unknown, to?: unknown }} query
  * @param {number} now
+ * @param {string | null | undefined} timeZone the business.json time zone (UTC when missing or unknown)
  * @returns {{ ok: true, from: string, to: string } | { ok: false, message: string }}
  */
-export const rangeOf = (query, now) => {
-	const today = new Date(now).toISOString().slice(0, 10);
-	const to = typeof query.to === 'string' && query.to !== '' ? query.to : today;
-	const from =
-		typeof query.from === 'string' && query.from !== ''
-			? query.from
-			: new Date(Date.parse(`${to}T00:00:00Z`) - (DEFAULT_DAYS - 1) * DAY_MS).toISOString().slice(0, 10);
-	const start = Date.parse(`${from}T00:00:00Z`);
-	const end = Date.parse(`${to}T00:00:00Z`);
-	if (!DAY.test(from) || !DAY.test(to) || Number.isNaN(start) || Number.isNaN(end))
-		return { ok: false, message: 'from and to are days (YYYY-MM-DD).' };
-	if (end < start) return { ok: false, message: 'from must not be after to.' };
-	if ((end - start) / DAY_MS + 1 > MAX_DAYS) return { ok: false, message: `A report covers at most ${MAX_DAYS} days.` };
+export const rangeOf = (query, now, timeZone) => {
+	const to = typeof query.to === 'string' && query.to !== '' ? query.to : zonedDay(now, timeZone);
+	if (!isDay(to)) return { ok: false, message: 'from and to are days (YYYY-MM-DD).' };
+	const from = typeof query.from === 'string' && query.from !== '' ? query.from : shiftDay(to, -(DEFAULT_DAYS - 1));
+	if (!isDay(from)) return { ok: false, message: 'from and to are days (YYYY-MM-DD).' };
+	const span = (Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / DAY_MS;
+	if (span < 0) return { ok: false, message: 'from must not be after to.' };
+	if (span + 1 > MAX_DAYS) return { ok: false, message: `A report covers at most ${MAX_DAYS} days.` };
 	return { ok: true, from, to };
 };
 
@@ -54,8 +84,7 @@ export const rangeOf = (query, now) => {
  */
 export const daysOf = (from, to) => {
 	const days = [];
-	for (let at = Date.parse(`${from}T00:00:00Z`); at <= Date.parse(`${to}T00:00:00Z`); at += DAY_MS)
-		days.push(new Date(at).toISOString().slice(0, 10));
+	for (let day = from; day <= to; day = shiftDay(day, 1)) days.push(day);
 	return days;
 };
 
@@ -80,9 +109,10 @@ const countOf = (rows, metric, key) => rows.find((row) => row.metric === metric 
 
 /**
  * The report.
- * @param {{ from: string, to: string, on: ReadonlyArray<string>, totals: TotalRow[], days: DayRow[] }} input
+ * @param {{ from: string, to: string, timeZone: string, on: ReadonlyArray<string>, totals: TotalRow[], days: DayRow[] }} input
+ *   `timeZone`: the zone of the days (the business.json time zone, else UTC)
  */
-export const buildReport = ({ from, to, on, totals, days }) => {
+export const buildReport = ({ from, to, timeZone, on, totals, days }) => {
 	const series = daysOf(from, to).map((day) => ({
 		day,
 		visits: days.find((row) => row.day === day && row.metric === 'visits')?.count ?? 0,
@@ -91,6 +121,7 @@ export const buildReport = ({ from, to, on, totals, days }) => {
 	return {
 		from,
 		to,
+		timeZone,
 		totals: { visits: countOf(totals, 'visits', ''), pageViews: countOf(totals, 'page_views', '') },
 		days: series,
 		pages: top(totals, 'page'),

@@ -19,6 +19,7 @@ import { LEASE_MS } from '../core/timing.js';
 /** @typedef {import('../core/templates.js').Template} Template */
 /** @typedef {import('../core/channels.js').Channel} Channel */
 /** @typedef {import('../core/channels.js').Recipient} Recipient */
+/** @typedef {import('../core/log.js').LogFilters} LogFilters */
 /**
  * @typedef {object} Attempt
  * @property {Channel} channel
@@ -43,7 +44,7 @@ import { LEASE_MS } from '../core/timing.js';
  * @property {string} providerTemplate
  * @property {boolean} required
  * @property {boolean} urgent
- * @property {'queued' | 'retrying' | 'sent' | 'failed' | 'skipped'} status
+ * @property {import('../core/log.js').MessageStatus} status
  * @property {string | null} reason why it failed or was skipped
  * @property {Attempt[]} attempts every attempt, on every channel
  * @property {number} channelAttempts failed attempts on `channel`
@@ -113,6 +114,17 @@ export const createStore = (data, { now }) => {
 	const events = data.collection(WEBHOOK_EVENTS);
 	/** @param {unknown} doc */
 	const as = (doc) => /** @type {any} */ (doc);
+	/**
+	 * The Mongo filter of the delivery log: the list and its counts share it.
+	 * @param {LogFilters} filters
+	 * @returns {Record<string, unknown>}
+	 */
+	const logFilter = ({ status, channel, address }) => ({
+		websiteId,
+		...(status ? { status } : {}),
+		...(channel ? { channel } : {}),
+		...(address ? { address } : {}),
+	});
 
 	return Object.freeze({
 		templates: Object.freeze({
@@ -196,20 +208,21 @@ export const createStore = (data, { now }) => {
 			sentSince: (address, since) => messages.countDocuments({ websiteId, address, sentAt: { $gte: new Date(since) } }),
 			/**
 			 * Newest first, keyset-paged by `[createdAt, id]`; optional filters.
-			 * @param {{ after: unknown, limit: number, status?: string, channel?: string, address?: string }} page
+			 * @param {LogFilters & { after: unknown, limit: number }} page
 			 * @returns {Promise<MessageRecord[]>}
 			 */
-			list: async ({ after, limit, status, channel, address }) => {
+			list: async ({ after, limit, ...filters }) => {
 				const [time, id] = Array.isArray(after) ? after : [];
-				/** @type {Record<string, unknown>} */
-				const filter = { websiteId };
-				if (status) filter.status = status;
-				if (channel) filter.channel = channel;
-				if (address) filter.address = address;
+				const filter = logFilter(filters);
 				if (typeof time === 'string' && typeof id === 'string')
 					filter.$or = [{ createdAt: { $lt: new Date(time) } }, { createdAt: new Date(time), id: { $lt: id } }];
 				return as(await messages.find(filter, { projection: { _id: 0 }, sort: { createdAt: -1, id: -1 }, limit }).toArray());
 			},
+			/**
+			 * What the delivery log's counts count: the collection and exactly the list's filter (PLAN 0.8.10 K4).
+			 * @param {LogFilters} filters
+			 */
+			countSource: (filters) => ({ collection: messages, filter: logFilter(filters) }),
 			/** @param {string[]} addresses @returns {Promise<MessageRecord[]>} */
 			byAddresses: async (addresses) => {
 				/** @type {MessageRecord[]} */
