@@ -119,6 +119,12 @@ describe('merchants (PLAN 0.2 Merchants, 0.5.9)', () => {
 		expect(await names('?q=shop.alpha')).toEqual(['Ålpha Traders']);
 		expect(await names('?status=suspended')).toEqual(['Beta Goods']);
 		expect((await o.get('/v1/admin/merchants?status=deleted')).status).toBe(422);
+		// Setup pending: merchants without a password yet (created by an admin, setup link not used)
+		const pending = await o.post('/v1/admin/merchants', { name: 'Gamma Pending', ownerName: 'G', email: 'gamma@three.test' });
+		expect(pending.status).toBe(201);
+		expect(await names('?setup=pending')).toEqual(['Gamma Pending']);
+		expect(await names('?setup=pending&status=suspended')).toEqual([]);
+		expect((await o.get('/v1/admin/merchants?setup=done')).status).toBe(422);
 		const page = await o.get('/v1/admin/merchants?limit=1');
 		expect(page.json.items).toHaveLength(1);
 		expect((await o.get(`/v1/admin/merchants?limit=1&cursor=${page.json.nextCursor}`)).json.items).toHaveLength(1);

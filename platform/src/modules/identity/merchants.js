@@ -220,13 +220,18 @@ export const createMerchants = (deps, hooks) => {
 		/**
 		 * Merchants page (by id), deleted ones excluded, optionally filtered by status and searched by `q`: a case- and
 		 * accent-insensitive prefix of the business name, or of the owner e-mail (`@`), or of a website domain (PLAN 0.6:
-		 * the Merchants search is how an admin finds a website).
-		 * @param {{ after: string | null, limit: number, status?: string, q?: string }} input
+		 * the Merchants search is how an admin finds a website). `setupPending` keeps the merchants whose password is not
+		 * set yet (Setup pending; the ones Resend setup link applies to).
+		 * @param {{ after: string | null, limit: number, status?: string, q?: string, setupPending?: boolean }} input
 		 */
-		list: async ({ after, limit, status, q }) => {
+		list: async ({ after, limit, status, q, setupPending = false }) => {
 			const search = parseMerchantQuery(q);
 			/** @type {Record<string, unknown>} */
-			const filter = { status: status ?? { $ne: 'deleted' }, ...(after ? { _id: { $gt: after } } : {}) };
+			const filter = {
+				status: status ?? { $ne: 'deleted' },
+				...(after ? { _id: { $gt: after } } : {}),
+				...(setupPending ? { passwordHash: null } : {}),
+			};
 			if (search?.kind === 'email') filter.email = { $regex: prefixPattern(search.prefix) };
 			if (search?.kind === 'name') {
 				const domainPrefix = String(q ?? '')

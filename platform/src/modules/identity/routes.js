@@ -427,6 +427,8 @@ export const identityRoutes = (ctx, service) => {
 					return problem('validation_failed', 'status must be active or suspended.');
 				const q = c.query.q;
 				if (q !== undefined && q.length > 120) return problem('validation_failed', 'q is at most 120 characters.');
+				const setup = c.query.setup;
+				if (setup !== undefined && setup !== 'pending') return problem('validation_failed', 'setup must be pending.');
 				const page = paginate({ cursor: c.query.cursor, limit: c.query.limit, url: c.request.url }, { defaultLimit: 50 });
 				const after = typeof page.after === 'string' ? page.after : null;
 				const items = await merchants.list({
@@ -434,6 +436,7 @@ export const identityRoutes = (ctx, service) => {
 					limit: page.fetchLimit,
 					...(status ? { status } : {}),
 					...(q ? { q } : {}),
+					...(setup ? { setupPending: true } : {}),
 				});
 				return page.respond(items, (m) => m.merchantId);
 			},

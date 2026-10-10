@@ -46,7 +46,7 @@ import { ActivityTable, useActivityPages } from '../../views/login-settings.js';
 import { AddWebsiteDialog, MerchantUsageDialog, WebsiteCard } from '../../views/website.js';
 import { useNavigation } from '../../navigation.js';
 import { adminFetch, usePagedList } from '../client.js';
-import { adminApi, adminRoutes } from '../paths.js';
+import { adminApi, adminRoutes, merchantFilter } from '../paths.js';
 import { AdminProblem, adminCan } from './common.js';
 import { AddCreditsDialog, MerchantCredits } from './finance.js';
 
@@ -205,7 +205,7 @@ function MerchantList({ props, admin, selectedId, autoId = null }) {
 	const [q, setQ] = useState(filter.q ?? '');
 	const [status, setStatus] = useState(filter.status ?? '');
 	const list = usePagedList(
-		(cursor) => adminApi.merchants({ status: filter.status, q: filter.q, cursor, limit: 50 }),
+		(cursor) => adminApi.merchants({ ...merchantFilter(filter.status), q: filter.q, cursor, limit: 50 }),
 		props.page,
 	);
 	const [selected, setSelected] = useState(/** @type {Set<string>} */ (new Set()));
@@ -281,6 +281,7 @@ function MerchantList({ props, admin, selectedId, autoId = null }) {
 								{ value: '', label: ADMIN.allStatuses },
 								{ value: 'active', label: ADMIN.status.active },
 								{ value: 'suspended', label: ADMIN.status.suspended },
+								{ value: 'setup_pending', label: ADMIN.setupPending },
 							]}
 						/>
 						<Button type="submit" variant="secondary" loading={nav.pending}>

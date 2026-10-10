@@ -43,8 +43,9 @@ export const adminApi = Object.freeze({
 	overview: () => '/v1/admin/overview',
 
 	// identity
-	merchants: (/** @type {{ status?: string | null, q?: string | null, cursor?: string | null, limit?: number }} */ q = {}) =>
-		`/v1/admin/merchants${query(q)}`,
+	merchants: (
+		/** @type {{ status?: string | null, setup?: 'pending' | null, q?: string | null, cursor?: string | null, limit?: number }} */ q = {},
+	) => `/v1/admin/merchants${query(q)}`,
 	merchant: (/** @type {string} */ m) => `/v1/admin/merchants/${e(m)}`,
 	/** `POST { name, ownerName, email, phone?, address?, country? }` → `{ merchant, setup: { link, expiresAt, mailed } }` */
 	createMerchant: () => '/v1/admin/merchants',
@@ -102,6 +103,14 @@ export const adminApi = Object.freeze({
 		/** @type {{ merchantId?: string | null, adminId?: string | null, from?: string | null, to?: string | null, cursor?: string | null }} */ q = {},
 	) => `/v1/admin/activity${query(q)}`,
 });
+
+/**
+ * The Merchants list filter as API query: `setup_pending` (Setup pending) is the `setup=pending` filter, the others
+ * are statuses.
+ * @param {string | null | undefined} status
+ */
+export const merchantFilter = (status) =>
+	status === 'setup_pending' ? { setup: /** @type {const} */ ('pending') } : { status: status ?? null };
 
 /** Id shapes accepted from query strings (anything else is ignored). */
 export const ID = Object.freeze({

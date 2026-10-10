@@ -7,7 +7,7 @@
  * @module
  */
 import { loadWebsiteRows } from '../loaders.js';
-import { ID, adminApi as paths } from './paths.js';
+import { ID, adminApi as paths, merchantFilter } from './paths.js';
 import { adminCan } from './rights.js';
 
 /** @typedef {import('../api.js').ConsoleApi} ConsoleApi */
@@ -67,7 +67,9 @@ const CURSOR = /^[A-Za-z0-9_=-]{1,512}$/;
  */
 const merchantOptions = async (api, selected) => {
 	const list = itemsOf(await api.get(paths.merchants({ limit: 100 })));
-	const options = list.map((m) => ({ value: String(m.merchantId), label: String(m.name) }));
+	const options = list
+		.map((m) => ({ value: String(m.merchantId), label: String(m.name) }))
+		.sort((a, b) => a.label.localeCompare(b.label));
 	if (selected && !options.some((o) => o.value === selected)) options.push({ value: selected, label: selected });
 	return options;
 };
@@ -110,7 +112,8 @@ export const loadAdminSession = async (api) => {
 };
 
 /**
- * Merchants page: search by business name, owner e-mail or website domain (prefixes), filter by status, paged at 50.
+ * Merchants page: search by business name, owner e-mail or website domain (prefixes), filter by status (or Setup
+ * pending), paged at 50.
  * @param {ConsoleApi} api
  * @param {{ status?: string, q?: string, cursor?: string }} [filter]
  */
@@ -125,9 +128,9 @@ export const loadMerchants = async (api, filter = {}) => {
  * @param {{ status?: string, q?: string, cursor?: string }} filter
  */
 const merchantPage = async (api, filter) => {
-	const status = oneOf(filter.status, ['active', 'suspended']);
+	const status = oneOf(filter.status, ['active', 'suspended', 'setup_pending']);
 	const q = pick(filter.q?.trim(), FREE_TEXT);
-	const list = await api.get(paths.merchants({ status, q, cursor: pick(filter.cursor, CURSOR), limit: 50 }));
+	const list = await api.get(paths.merchants({ ...merchantFilter(status), q, cursor: pick(filter.cursor, CURSOR), limit: 50 }));
 	const failed = firstFailure(list);
 	if (failed) return failed;
 	return { ok: /** @type {const} */ (true), filter: { status, q }, page: pageOf(list) };
