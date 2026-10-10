@@ -22,6 +22,7 @@
 		"@ss/app-kit": "workspace:^",
 		"@ss/config": "workspace:^",
 		"@ss/contracts": "workspace:^",
+		"@ss/importer": "workspace:^",
 		"@ss/platform": "workspace:^",
 		"@ss/product-accounts": "workspace:^",
 		"@ss/product-chat": "workspace:^",

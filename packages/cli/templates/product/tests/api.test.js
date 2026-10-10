@@ -79,6 +79,9 @@ describe('notes routes', () => {
 		const rest = await next.json();
 		expect(rest).toMatchObject({ hasMore: false, nextCursor: null });
 		expect(rest.items).toHaveLength(1);
+		// the count takes the list's filters: it equals the list's length
+		const count = await env.call('GET', '/v1/notes/count', { token: env.server });
+		expect(await count.json()).toEqual({ count: 3, capped: false });
 	});
 
 	it('list the notes for the admin widget with a ticket from its origin only', async () => {
@@ -87,6 +90,8 @@ describe('notes routes', () => {
 		expect(response.status).toBe(200);
 		expect(response.headers.get('access-control-allow-origin')).toBe(ADMIN_ORIGIN);
 		expect((await response.json()).items).toHaveLength(3);
+		const count = await env.call('GET', '/v1/admin/notes/count', { token: ticket, origin: ADMIN_ORIGIN });
+		expect(await count.json()).toEqual({ count: 3, capped: false });
 		expect((await env.call('GET', '/v1/admin/notes', { token: ticket, origin: ORIGIN })).status).toBe(401);
 		const without = await env.ticket([]);
 		expect((await env.call('GET', '/v1/admin/notes', { token: without, origin: ADMIN_ORIGIN })).status).toBe(403);

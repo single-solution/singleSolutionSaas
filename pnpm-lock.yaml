@@ -35,6 +35,9 @@ importers:
       '@ss/contracts':
         specifier: workspace:^
         version: link:../packages/contracts
+      '@ss/importer':
+        specifier: workspace:^
+        version: link:../packages/importer
       '@ss/platform':
         specifier: workspace:^
         version: link:../platform
@@ -228,6 +231,40 @@ importers:
       eslint:
         specifier: ^9.39.5
         version: 9.39.5(jiti@2.7.0)
+      prettier:
+        specifier: ^3.9.9
+        version: 3.9.9
+      typescript:
+        specifier: ~5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.7
+        version: 3.2.7(@types/node@22.20.4)(jiti@2.7.0)(jsdom@26.1.0)(lightningcss@1.32.0)
+
+  packages/importer:
+    dependencies:
+      '@ss/contracts':
+        specifier: workspace:^
+        version: link:../contracts
+      mongodb:
+        specifier: ^6.21.0
+        version: 6.21.0
+    devDependencies:
+      '@ss/config':
+        specifier: workspace:^
+        version: link:../config
+      '@types/node':
+        specifier: ^22.20.4
+        version: 22.20.4
+      '@vitest/coverage-v8':
+        specifier: ^3.2.7
+        version: 3.2.7(vitest@3.2.7(@types/node@22.20.4)(jiti@2.7.0)(jsdom@26.1.0)(lightningcss@1.32.0))
+      eslint:
+        specifier: ^9.39.5
+        version: 9.39.5(jiti@2.7.0)
+      mongodb-memory-server:
+        specifier: ^10.4.3
+        version: 10.4.3
       prettier:
         specifier: ^3.9.9
         version: 3.9.9

@@ -5,9 +5,9 @@
  * Public entry `./routes` of this package: `product.handler(createRoutes(product))`.
  * @module
  */
-import { created, defineRoute, paginate, problem } from '@ss/app-kit';
+import { countHandlers, created, defineRoute, paginate, problem } from '@ss/app-kit';
 import { checkNote, noteView } from '../core/notes.js';
-import { createNotesStore } from '../adapters/notes-store.js';
+import { NOTES, createNotesStore, notesFilter } from '../adapters/notes-store.js';
 import { renderDocs } from './docs.js';
 import { WIDGET_SCRIPT } from './widget-script.js';
 
@@ -29,6 +29,14 @@ const listNotes = async (ctx) => {
 	const rows = await createNotesStore(await ctx.data()).list({ after: page.after, limit: page.fetchLimit });
 	return page.respond(rows.map(noteView), (note) => [note.createdAt, note.id]);
 };
+
+/** The count of the notes list (`GET /v1/notes/count` → `{ count, capped }`), with the list's own filter. */
+const noteCounts = countHandlers({
+	source: async (ctx) => {
+		const data = await ctx.data();
+		return { collection: data.collection(NOTES), filter: notesFilter(data.websiteId) };
+	},
+});
 
 /**
  * @param {Product} product
@@ -72,6 +80,15 @@ export const createRoutes = (product) => [
 	defineRoute({ method: 'GET', path: '/v1/notes', auth: 'server', feature: 'notes', handler: listNotes }),
 	// the admin widget reads the notes (ticket with notes.read, from the ticket's origin)
 	defineRoute({ method: 'GET', path: '/v1/admin/notes', auth: 'ticket', permission: 'notes.read', handler: listNotes }),
+	// how many notes the list has (same filters as the list; ticket twin under /v1/admin)
+	defineRoute({ method: 'GET', path: '/v1/notes/count', auth: 'server', feature: 'notes', handler: noteCounts.count }),
+	defineRoute({
+		method: 'GET',
+		path: '/v1/admin/notes/count',
+		auth: 'ticket',
+		permission: 'notes.read',
+		handler: noteCounts.count,
+	}),
 	// public docs: no sign-in, no tokens
 	defineRoute({
 		method: 'GET',

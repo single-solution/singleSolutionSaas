@@ -3,12 +3,13 @@
 A **Portal** plus six separately hosted **products** (Notifications, Accounts, Chat, Payments, Ecommerce, Growth). Each
 product offers an API plus ready-made widgets and has its own setup dashboard. `PLAN.md` Part 0 is the binding plan.
 
-| Folder           | What it is                                                                        | Deployed                 |
-| ---------------- | --------------------------------------------------------------------------------- | ------------------------ |
-| `platform/`      | the Portal (merchant console, admin console at `/admin`, API)                     | yes, one deployment      |
-| `products/<id>/` | the six products                                                                  | yes, one deployment each |
-| `packages/`      | the shared kit (`app-kit`, `protocol`, `contracts`, `net`, `ui`, `cli`, `config`) | no, built into the above |
-| `e2e/`           | system tests: the products against the real Portal                                | no                       |
+| Folder              | What it is                                                                        | Deployed                 |
+| ------------------- | --------------------------------------------------------------------------------- | ------------------------ |
+| `platform/`         | the Portal (merchant console, admin console at `/admin`, API)                     | yes, one deployment      |
+| `products/<id>/`    | the six products                                                                  | yes, one deployment each |
+| `packages/`         | the shared kit (`app-kit`, `protocol`, `contracts`, `net`, `ui`, `cli`, `config`) | no, built into the above |
+| `packages/importer` | `ss-import`: moves a store's records into the products (PLAN 0.8.10 Migration)    | no, a command-line tool  |
+| `e2e/`              | system tests: the products against the real Portal                                | no                       |
 
 Every folder is a unit that builds and checks on its own, so it can be split into its own repository later (PLAN 0.10).
 Each deployable's README lists its environment variables and how to deploy it.
