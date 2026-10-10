@@ -24,7 +24,7 @@ import {
 	settingsOf,
 	textsOf,
 	uploadFile,
-	when,
+	whenOf,
 } from './common.js';
 import { element } from './dom.js';
 import { contextPart, savedReplies, staffPart } from './inbox-parts.js';
@@ -40,6 +40,7 @@ import { createChecks } from './transport.js';
 export const mountInbox = ({ host, win, api, config, clock, onUnread }) => {
 	const t = textsOf(config);
 	const s = settingsOf(config);
+	const when = whenOf(config, win);
 	/** @param {string} feature */
 	const on = (feature) => config.features.includes(feature);
 	const doc = win.document;

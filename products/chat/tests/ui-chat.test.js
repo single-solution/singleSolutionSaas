@@ -68,7 +68,7 @@ const keepGuest = () =>
 
 /**
  * @param {{ features?: string[], settings?: Record<string, any>, routes?: Record<string, import('./ui-helpers.js').Route>,
- *   token?: string | null, path?: string }} [input]
+ *   token?: string | null, path?: string, look?: { format?: Record<string, unknown>, timeZone?: string } }} [input]
  */
 const start = async ({
 	features = ['visitor_chat', 'guest_chat'],
@@ -76,11 +76,12 @@ const start = async ({
 	routes = {},
 	token = 'bt',
 	path = '/products/phone',
+	look = {},
 } = {}) => {
 	window.history.replaceState(null, '', path);
 	document.title = 'Phone page';
 	const time = clock();
-	const server = serve({ 'GET /v1/widget/config': () => answer(200, configOf(features, settings)), ...routes });
+	const server = serve({ 'GET /v1/widget/config': () => answer(200, configOf(features, settings, look)), ...routes });
 	const api = startWidget({ window, script: script(token), ...time });
 	await api.ready;
 	await flush();
@@ -860,6 +861,29 @@ describe('product cards', () => {
 		const plain = buttonIn(/** @type {HTMLElement} */ (root.querySelectorAll('.card')[1]), TEXTS['chat.addToCart']);
 		plain.click();
 		expect(root.querySelectorAll('.card .status')[1]?.textContent).toBe('');
+	});
+
+	it('shows prices and times in the website’s Format and business time zone (K7)', async () => {
+		keepGuest();
+		const closed = conv({ waiting: true, officeHours: { open: false, backAt: '2026-10-02T04:00:00Z' } });
+		const { root, api } = await start({
+			features: ['visitor_chat', 'guest_chat', 'ai_replies', 'product_cards', 'handoff'],
+			look: {
+				format: { locale: 'en-GB', currencyDisplay: 'custom', currencySymbol: 'Rs', wholeUnits: true, times: 'business' },
+				timeZone: 'Asia/Karachi',
+			},
+			routes: {
+				...ROUTES,
+				'GET /v1/chat': () =>
+					answer(200, {
+						...view({ conversation: closed }),
+						messages: [msg(1, 'visitor', 'Phones?'), msg(2, 'ai', 'Here you go.', { cards: CARDS })],
+					}),
+			},
+		});
+		await api.open();
+		expect(textsIn(root, '.card .price')).toEqual(['Rs 1,250', 'Rs 15', 'Rs 1']);
+		expect(textsIn(root, '.notices p')[0]).toBe('Our team is away right now. They are back 2 Oct 2026, 09:00.');
 	});
 
 	it('shows no cards while product cards is off', async () => {

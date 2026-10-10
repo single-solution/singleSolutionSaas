@@ -17,7 +17,7 @@ import { capReached, windowKeys, alertCrossed } from '../core/caps.js';
 import { customerOrdersPath, shopInfoOf } from '../core/shop.js';
 import { iso, previewOf, staffMessageView, visitorMessageView } from '../core/conversation.js';
 import { waitingView } from '../core/flows.js';
-import { backAtText, officeState, parseOfficeHours } from '../core/handoff.js';
+import { officeState, parseOfficeHours } from '../core/handoff.js';
 import { zoneOr } from '../core/time.js';
 import { GUEST_HEADER, SIGN_IN_HEADER } from '../core/widgets.js';
 import { randomSecret, sha256 } from '../adapters/crypto.js';
@@ -38,17 +38,20 @@ import { createStore } from '../adapters/store.js';
  * @property {(feature: string) => Promise<Record<string, any>>} values a feature's settings (read once per request)
  * @property {() => Promise<Record<string, string>>} texts the widget texts
  * @property {() => Promise<{ name: string, email?: string, phone?: string, address?: string, timeZone: string }>} business
+ * @property {() => Promise<Look>} format the website's Format and business time zone, with the formatters of text the
+ *   server makes (K7)
  * @property {(name: import('../adapters/lists.js').ListName) => Promise<any[]>} list
  * @property {() => Promise<SignIn | null>} signIn the visitor's Accounts sign-in, verified on this request (signed-in chat on)
  */
 /**
  * @typedef {{ token: string, user: { id: string, name?: string, email?: string, phone?: string } }} SignIn
  */
+/** @typedef {Awaited<ReturnType<Product['format']>>} Look */
 /**
  * @typedef {{ kind: 'user', id: string, name: string | null, email: string | null, phone: string | null }
  *   | { kind: 'guest', id: string, name: null, email: null, phone: null }} Visitor
  */
-/** @typedef {{ kind: string, id: string, name: string, email?: string }} Actor */
+/** @typedef {{ kind: string, id: string, name: string, role?: string, email?: string }} Actor */
 
 /** How long an attachment link lasts (seconds). */
 const LINK_SECONDS = 600;
@@ -103,6 +106,7 @@ export const createService = (product) => {
 					const found = /** @type {any} */ (await product.business(websiteId));
 					return { ...found, name: String(found.name), timeZone: zoneOr(found.timeZone) };
 				}),
+			format: () => once('format', () => product.format(websiteId)),
 			list: (name) => once(`l:${name}`, () => product.lists.get(websiteId, name)),
 			signIn: () =>
 				once('signIn', async () => {
@@ -249,15 +253,14 @@ export const createService = (product) => {
 	};
 
 	/**
-	 * The office-closed text with the time staff are back.
+	 * The office-closed text with the time staff are back, in the website's Format and business time zone.
 	 * @param {Site} s
-	 * @param {{ backAtMs: number | null, timeZone: string }} hours
+	 * @param {{ backAtMs: number | null }} hours
 	 */
-	const closedText = async (s, hours) =>
-		(await s.texts())['chat.officeClosed']?.replace(
-			'{time}',
-			hours.backAtMs === null ? '—' : backAtText(hours.backAtMs, hours.timeZone),
-		) ?? '';
+	const closedText = async (s, hours) => {
+		const time = hours.backAtMs === null ? '—' : (await s.format()).date(hours.backAtMs, 'datetime');
+		return (await s.texts())['chat.officeClosed']?.replace('{time}', time) ?? '';
+	};
 
 	/**
 	 * The visitor's view of the chat.
@@ -376,7 +379,7 @@ export const createService = (product) => {
 	const shopInfo = async (s, c) => {
 		if (c.visitor.kind !== 'user') return null;
 		const answer = await product.callProduct(s.websiteId, 'ecommerce', customerOrdersPath(c.visitor.id));
-		return answer.ok ? shopInfoOf(answer.body) : null;
+		return answer.ok ? shopInfoOf(answer.body, await s.format()) : null;
 	};
 
 	/**
@@ -466,7 +469,7 @@ export const createService = (product) => {
 		});
 		let transcript = lines.join('\n');
 		if (transcript.length > TRANSCRIPT_MAX) transcript = `…${transcript.slice(-(TRANSCRIPT_MAX - 1))}`;
-		const date = iso(c.createdAt)?.slice(0, 10) ?? '';
+		const date = (await s.format()).date(c.createdAt, 'date');
 		const outcome = await notify(s, 'chat.transcript', email, { transcript, date });
 		if (outcome === 'not_connected')
 			throw problem('notifications_not_connected', 'Notifications not connected: paste its token in Connections.');
@@ -524,14 +527,22 @@ export const createService = (product) => {
 	};
 
 	/**
-	 * Record a staff action in the activity log (copied to Accounts when its token is pasted).
+	 * Record a staff action in the activity log (copied to Accounts when its token is pasted): who (with the acting
+	 * user's role), what, on what, its label (a name or title) and a short detail, never message contents.
 	 * @param {Site} s
 	 * @param {Actor} actor
 	 * @param {string} action
 	 * @param {string} target
+	 * @param {{ label?: string, detail?: string }} [about]
 	 */
-	const log = (s, actor, action, target) =>
-		product.activity.record(s.ctx, { actor: { kind: actor.kind, id: actor.id, name: actor.name }, action, target });
+	const log = (s, actor, action, target, { label, detail } = {}) =>
+		product.activity.record(s.ctx, {
+			actor: { kind: actor.kind, id: actor.id, name: actor.name, ...(actor.role ? { role: actor.role } : {}) },
+			action,
+			target,
+			...(label ? { label } : {}),
+			...(detail ? { detail } : {}),
+		});
 
 	return Object.freeze({
 		site,

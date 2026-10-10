@@ -119,6 +119,11 @@ describe('widgets and docs', () => {
 		expect(docs.text).toContain('chat.needs_you');
 		expect(docs.text).toContain(`${BASE}/v1/tickets`);
 		expect(docs.text).toContain('search_catalog');
+		// the kit's routes for the merchant's server, and Chat's lists and counts
+		for (const id of ['server-settings', 'acting-user', 'server-visitors', 'counts', 'activity', 'format'])
+			expect(docs.text).toContain(`<h2 id="${id}">`);
+		expect(docs.text).toContain('GET /v1/conversations/counts?by=status|waiting|guest|unread');
+		expect(docs.text).toContain('<code>GET /v1/admin/conversations/count</code>');
 	});
 });
 

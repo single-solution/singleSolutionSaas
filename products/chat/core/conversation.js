@@ -179,7 +179,8 @@ export const visitorMessageView = (m, urlOf, { cards = false } = {}) => ({
 });
 
 /**
- * A message as staff see it.
+ * A message as staff see it: a staff message also carries who wrote it (`staffId`: the ticket's user, the acting user
+ * of a server call, or `server` for the team).
  * @param {MessageRecord} m
  * @param {(attachment: Attachment) => string | null} urlOf
  * @param {{ cards?: boolean }} [options]
@@ -187,6 +188,7 @@ export const visitorMessageView = (m, urlOf, { cards = false } = {}) => ({
 export const staffMessageView = (m, urlOf, options = {}) => ({
 	...visitorMessageView(m, urlOf, options),
 	name: m.author === 'visitor' ? null : m.name,
+	...(m.author === 'staff' ? { staffId: m.staffId ?? null } : {}),
 	internal: m.internal,
 });
 

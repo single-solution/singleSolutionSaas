@@ -29,7 +29,7 @@ import manifest from '../../manifest.json' with { type: 'json' };
 import { createSnippets } from '../../core/snippets.js';
 import { call, fill, useLoad } from './api.js';
 import { AiForm, FORMS, StorageForm } from './forms.js';
-import { Loaded, Outcome, RecentChanges, SettingsForms, StatusBanner, TextsForm, ThemeForm } from './parts.js';
+import { FormatForm, Loaded, Outcome, RecentChanges, SettingsForms, StatusBanner, TextsForm, ThemeForm } from './parts.js';
 import { SettingsTab, aiLabelNotice } from './settings.js';
 import { TEXTS } from './texts.js';
 
@@ -504,6 +504,11 @@ function DefaultsTab() {
 						<ThemeForm
 							theme={data.theme.theme}
 							save={(next) => call('PUT', saveUrl('theme'), { value: next })}
+							reload={reload}
+						/>
+						<FormatForm
+							format={data.format.format}
+							save={(next) => call('PUT', saveUrl('format'), { value: next })}
 							reload={reload}
 						/>
 					</Masonry>

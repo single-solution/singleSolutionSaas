@@ -12,7 +12,7 @@ import {
 	textsOf,
 	uploadFile,
 	webAddress,
-	when,
+	whenOf,
 } from '../ui/common.js';
 import { createMemory, isDesktop, pageFlow, startProactive } from '../ui/proactive.js';
 import { createTicketSource } from '../ui/tickets.js';
@@ -222,8 +222,14 @@ describe('common', () => {
 		expect(webAddress('javascript:alert(1)')).toBeNull();
 		expect(webAddress('::')).toBeNull();
 		expect(webAddress('/in', 'https://shop.test/a')).toBe('https://shop.test/in');
+		const when = whenOf({}, window);
 		expect(when('nope')).toBe('');
+		expect(when(null)).toBe('');
 		expect(when('2026-10-01T10:00:00Z')).not.toBe('');
+		// the website's Format: its locale, and the business time zone when times are `business`
+		const business = whenOf({ format: { locale: 'en-GB', times: 'business' }, timeZone: 'Asia/Karachi' }, window);
+		expect(business('2026-10-01T10:00:00Z')).toBe('1 Oct 2026, 15:00');
+		expect(business('2026-10-01T10:00:00Z', 'date')).toBe('1 Oct 2026');
 		expect(fileProblem({ type: 'image/svg+xml', size: 1 }, ['image/png'], 10)).toBe('type');
 		expect(fileProblem({ type: 'image/png', size: 11 }, ['image/png'], 10)).toBe('size');
 		expect(fileProblem({ type: 'image/png', size: 0 }, ['image/png'], 10)).toBe('size');

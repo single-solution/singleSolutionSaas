@@ -54,7 +54,7 @@ import visitorChat from '../schemas/visitor_chat.settings.json' with { type: 'js
 import webhookTools from '../schemas/webhook_tools.settings.json' with { type: 'json' };
 import { createAi } from './ai.js';
 import { createSealer } from './crypto.js';
-import { createLists } from './lists.js';
+import { LISTS, createLists } from './lists.js';
 import { INDEXES, createStore } from './store.js';
 
 /** Settings schema of each feature (manifest.json points at them with `$ref`). @type {Record<string, unknown>} */
@@ -200,6 +200,18 @@ export const createProductInstance = (options) => {
 			widgetConfig: (ctx) => /** @type {NonNullable<typeof hooks.widgetConfig>} */ (hooks.widgetConfig)(ctx),
 		},
 		data: { indexes: INDEXES },
+		// the settings API's `GET|PUT /v1/lists/:list` for the merchant's server (K1), checked like the dashboard's
+		lists: Object.fromEntries(
+			/** @type {import('./lists.js').ListName[]} */ (Object.keys(LISTS)).map((name) => [
+				name,
+				{
+					feature: LISTS[name].feature,
+					title: LISTS[name].title,
+					get: (/** @type {string} */ websiteId) => lists.get(websiteId, name),
+					save: (/** @type {string} */ websiteId, /** @type {unknown} */ value) => lists.save(websiteId, name, value),
+				},
+			]),
+		),
 	});
 	return Object.freeze({
 		...product,

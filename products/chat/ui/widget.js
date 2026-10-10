@@ -140,8 +140,8 @@ export const startWidget = ({
 				: [];
 		const inboxes = hosts('inbox');
 		for (const host of inboxes) mountInbox({ host, win, api, config, clock, onUnread: (count) => report('inbox', count) });
-		for (const host of hosts('knowledge_editor')) mountKnowledge({ host, api, config });
-		for (const host of hosts('reports')) mountReports({ host, api, config, now });
+		for (const host of hosts('knowledge_editor')) mountKnowledge({ host, win, api, config });
+		for (const host of hosts('reports')) mountReports({ host, win, api, config, now });
 		if (inboxes.length > 0) {
 			const checks = createChecks({
 				win,

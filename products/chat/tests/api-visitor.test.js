@@ -154,7 +154,8 @@ describe('handoff, office hours and failures', () => {
 		const asked = await v('POST', '/v1/chat/handoff');
 		expect(asked.json.chat.conversation.officeHours).toEqual({ open: false, backAt: '2026-10-06T09:00:00.000Z' });
 		const state = await v('GET', '/v1/chat');
-		expect(state.json.messages[1].text).toBe('Our team is away right now. They are back Tue 09:00.');
+		// the time in the website's Format (default: en) and the business time zone (UTC here)
+		expect(state.json.messages[1].text).toBe('Our team is away right now. They are back Oct 6, 2026, 9:00 AM.');
 	});
 
 	it('when the AI fails: the backup answers; then the message and a handoff', async () => {

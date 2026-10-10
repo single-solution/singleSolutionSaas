@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { runAssistant } from '../core/assistant.js';
-import { alertCrossed, capReached } from '../core/caps.js';
+import { alertCrossed, capReached, windowKeys } from '../core/caps.js';
 import { deviceOf, limitNext, messageText, pageContext, statusAfter } from '../core/conversation.js';
 import { checkCustomFields, checkFieldValue, checkLead, checkPageRules } from '../core/fields.js';
 import { advance, answerStep, checkFlows, waitingView } from '../core/flows.js';
@@ -16,9 +16,9 @@ import { applyLinkPolicy, ibanValid, leakCheck, moderateInbound, moderateOutboun
 import { buildSystemPrompt } from '../core/prompt.js';
 import { WIRE, estimateTokens, parseArguments } from '../core/providers.js';
 import { reportRange, summarise } from '../core/reports.js';
-import { cardsOf, exponentOf, formatPrice, shopAnswer, shopInfoOf, shopRequest } from '../core/shop.js';
+import { cardsOf, shopAnswer, shopInfoOf, shopRequest } from '../core/shop.js';
 import { pathMatches, truncate } from '../core/text.js';
-import { dayStart, isOpenAt, nextOpenAt, zoneOr } from '../core/time.js';
+import { dayKey, dayStart, isOpenAt, monthKey, nextOpenAt, zoneOr } from '../core/time.js';
 import { checkArguments, checkTools, slotRange, toolOutput } from '../core/tools.js';
 import { endpointOf } from '../adapters/ai.js';
 
@@ -308,6 +308,40 @@ describe('handoff, time, caps and reports', () => {
 		expect(new Date(dayStart('2026-07-01', 'America/New_York')).toISOString()).toBe('2026-07-01T04:00:00.000Z');
 	});
 
+	it('days and months of caps and reports are business days (K8)', () => {
+		// 2026-10-31 20:00 UTC is already 1 November in Karachi (UTC+5), still 31 October in New York
+		const at = Date.parse('2026-10-31T20:00:00Z');
+		expect([dayKey(at, 'Asia/Karachi'), monthKey(at, 'Asia/Karachi')]).toEqual(['2026-11-01', '2026-11']);
+		expect([dayKey(at, 'America/New_York'), monthKey(at, 'America/New_York')]).toEqual(['2026-10-31', '2026-10']);
+		expect(windowKeys(at, 'Asia/Karachi')).toEqual({ day: 'day:2026-11-01', month: 'month:2026-11' });
+		expect(dayKey(at, 'Not/AZone')).toBe('2026-10-31');
+		expect(new Date(dayStart('2026-11-01', 'Asia/Karachi')).toISOString()).toBe('2026-10-31T19:00:00.000Z');
+		expect(reportRange({}, at, 'Asia/Karachi')?.to).toBe('2026-11-01');
+		const late = summarise({
+			rows: [
+				{
+					createdAt: new Date(at),
+					visitorMessages: 1,
+					aiReplies: 0,
+					staffReplied: false,
+					handedOffAt: null,
+					firstVisitorAt: null,
+					firstStaffReplyAt: null,
+					status: 'open',
+					rating: null,
+				},
+			],
+			dates: ['2026-10-31', '2026-11-01'],
+			timeZone: 'Asia/Karachi',
+			leads: 0,
+			aiTokens: 0,
+		});
+		expect(late.days).toEqual([
+			{ date: '2026-10-31', conversations: 0 },
+			{ date: '2026-11-01', conversations: 1 },
+		]);
+	});
+
 	it('caps, alerts and report ranges', () => {
 		expect(capReached({ day: 10, month: 10 }, { dailyTokens: 10, monthlyTokens: 0 })).toBe(true);
 		expect(capReached({ day: 0, month: 0 }, { dailyTokens: 0, monthlyTokens: 0 })).toBe(false);
@@ -422,12 +456,39 @@ describe('moderation, language, knowledge and the prompt', () => {
 });
 
 describe('shop', () => {
-	it('formats minor units with the currency’s ISO decimals', () => {
-		expect([exponentOf('PKR'), exponentOf('JPY'), exponentOf('KWD')]).toEqual([2, 0, 3]);
-		expect(formatPrice(125000, 'PKR')).toBe('PKR 1,250.00');
-		expect(formatPrice(1250, 'JPY')).toBe('JPY 1,250');
-		expect(formatPrice(1250, 'KWD')).toBe('KWD 1.250');
-		expect(formatPrice(5, 'PKR', { locale: 'no-such-@@locale' })).toBe('PKR 0.05');
+	it('formats prices and dates of answers in the website’s Format and business time zone (K7)', () => {
+		/** @param {number} price @param {string} currency @param {import('../core/shop.js').Look} [look] */
+		const quoted = (price, currency, look) =>
+			/** @type {any} */ (shopAnswer('quote_product_savings', { price, priceAfterDeals: price, currency }, look).content)
+				.price;
+		// the default Format: the currency code and its ISO 4217 decimals
+		expect([quoted(125000, 'PKR'), quoted(1250, 'JPY'), quoted(1250, 'KWD')]).toEqual([
+			'PKR 1,250.00',
+			'JPY 1,250',
+			'KWD 1.250',
+		]);
+		const look = {
+			format: { locale: 'en-GB', currencyDisplay: /** @type {const} */ ('custom'), currencySymbol: 'Rs', wholeUnits: true },
+			timeZone: 'Asia/Karachi',
+		};
+		expect(quoted(125000, 'PKR', look)).toBe('Rs 1,250');
+		const orders = /** @type {any} */ (
+			shopAnswer(
+				'get_my_orders',
+				{ items: [{ number: 'A-1', total: 99900, currency: 'PKR', placedAt: '2026-10-01' }, { placedAt: 'soon' }] },
+				look,
+			).content
+		).orders;
+		// a calendar day stays that day; text that is not a time stays as it came
+		expect(orders.map((/** @type {any} */ o) => [o.total, o.placedAt])).toEqual([
+			['Rs 999', '1 Oct 2026'],
+			[null, 'soon'],
+		]);
+		const deals = /** @type {any} */ (
+			shopAnswer('list_active_deals', { items: [{ name: 'Sale', endsAt: '2026-10-06T09:00:00.000Z' }] }, look).content
+		).deals;
+		expect(deals[0].endsAt).toBe('6 Oct 2026, 14:00');
+		expect(shopInfoOf({ items: [{ number: 'A-1', total: 125000, currency: 'PKR' }] }, look).orders[0]?.total).toBe('Rs 1,250');
 	});
 
 	it('keeps only checked card fields and refuses unknown tools', () => {

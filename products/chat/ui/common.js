@@ -4,6 +4,7 @@
  * text, never as HTML.
  * @module
  */
+import { formatDate, viewerOf } from '@ss/app-kit/widget';
 import { element } from './dom.js';
 
 /** @typedef {{ ok: boolean, status: number, data: any }} Answer status 0 when signed out or unreachable */
@@ -40,6 +41,8 @@ import { element } from './dom.js';
  * @property {Record<string, string>} texts
  * @property {import('@ss/app-kit/widget').WidgetTheme} theme
  * @property {string} customCss
+ * @property {Partial<import('@ss/contracts/format').Format>} [format] how money and dates look (K7)
+ * @property {string} [timeZone] the business.json time zone (UTC when missing)
  * @property {string[]} features
  * @property {ChatSettings} settings
  */
@@ -150,12 +153,18 @@ export const setHidden = (node, hidden) => {
 };
 
 /**
- * A short date and time.
- * @param {unknown} value
+ * Dates and times as the website's Format says (K7): its locale (else the viewer's), in the viewer's time zone or the
+ * business one (`times`).
+ * @param {{ format?: WidgetConfig['format'], timeZone?: string }} config
+ * @param {{ navigator?: { language?: string } } | null | undefined} win the browser window (the viewer)
+ * @returns {(value: unknown, style?: 'date' | 'datetime' | 'time') => string} '' for a value that is not a time
  */
-export const when = (value) => {
-	const time = Date.parse(String(value));
-	return Number.isNaN(time) ? '' : new Date(time).toLocaleString();
+export const whenOf = (config, win) => {
+	const viewer = viewerOf(win);
+	return (value, style = 'datetime') => {
+		const time = Date.parse(String(value));
+		return Number.isNaN(time) ? '' : formatDate(time, config.format, { timeZone: config.timeZone, style, viewer });
+	};
 };
 
 /**

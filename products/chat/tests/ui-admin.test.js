@@ -39,12 +39,12 @@ const ticket = (/** @type {string} */ value = 'tk', minutes = 15) => ({
 
 /**
  * @param {{ features: string[], settings?: Record<string, any>, routes?: Record<string, import('./ui-helpers.js').Route>,
- *   getTicket?: () => Promise<any> }} input
+ *   getTicket?: () => Promise<any>, look?: { format?: Record<string, unknown>, timeZone?: string } }} input
  */
-const startAdmin = async ({ features, settings = {}, routes = {}, getTicket }) => {
+const startAdmin = async ({ features, settings = {}, routes = {}, getTicket, look = {} }) => {
 	const time = clock();
 	const hosts = { inbox: place('inbox'), knowledge: place('knowledge_editor'), reports: place('reports') };
-	const server = serve({ [`GET ${ADMIN_CONFIG_PATH}`]: () => answer(200, configOf(features, settings)), ...routes });
+	const server = serve({ [`GET ${ADMIN_CONFIG_PATH}`]: () => answer(200, configOf(features, settings, look)), ...routes });
 	const api = startWidget({ window, script: script(null), ...time });
 	const unread = vi.fn();
 	api.onUnread(unread);
@@ -136,6 +136,19 @@ describe('inbox', () => {
 		'attachments',
 		'typing_receipts',
 	];
+
+	it('shows times in the website’s Format and business time zone (K7)', async () => {
+		const { hosts } = await startAdmin({
+			features: ['inbox'],
+			look: { format: { locale: 'en-GB', times: 'business' }, timeZone: 'Asia/Karachi' },
+			routes: {
+				'GET /v1/admin/staff': () => answer(200, { items: [] }),
+				'GET /v1/admin/conversations': () => answer(200, { items: [item()], nextCursor: null, hasMore: false, unread: 2 }),
+			},
+		});
+		// 10:00 UTC is 15:00 in Karachi
+		expect(shadow(hosts.inbox).textContent).toContain('1 Oct 2026, 15:00');
+	});
 
 	it('lists, filters, opens and works a conversation', async () => {
 		/** @type {any} */
@@ -679,6 +692,21 @@ describe('reports', () => {
 		report = () => problem(500, 'x');
 		await submit(fieldIn(root, TEXTS['reports.from']));
 		expect(root.querySelector('[role="status"]')?.textContent).toBe(TEXTS['common.error']);
+	});
+
+	it('asks for business days and shows each day in the website’s Format (K7, K8)', async () => {
+		const { hosts, server } = await startAdmin({
+			features: ['reports'],
+			// 10:00 UTC on 1 October is already 2 October in Kiritimati (UTC+14)
+			look: { format: { locale: 'en-GB' }, timeZone: 'Pacific/Kiritimati' },
+			routes: {
+				'GET /v1/admin/reports': () =>
+					answer(200, { timeZone: 'Pacific/Kiritimati', days: [{ date: '2026-10-02', conversations: 1 }] }),
+			},
+		});
+		const query = server.last('GET /v1/admin/reports')?.url.searchParams;
+		expect([query?.get('from'), query?.get('to')]).toEqual(['2026-09-03', '2026-10-02']);
+		expect(textsIn(shadow(hosts.reports), '.bars .date')).toEqual(['2 Oct 2026']);
 	});
 
 	it('shows no access and Signed out', async () => {

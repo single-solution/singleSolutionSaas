@@ -83,7 +83,7 @@ export const TEXTS = Object.freeze({
 			}),
 			look: Object.freeze({
 				title: 'Widget look',
-				help: 'Bot name, avatar, launcher and window of the chat widget, its theme and custom CSS.',
+				help: 'Bot name, avatar, launcher and window of the chat widget, its theme and custom CSS, and how money and dates look.',
 			}),
 			texts: Object.freeze({ title: 'Texts', help: 'Every word the widgets show, welcome messages included.' }),
 			guests: Object.freeze({ title: 'Guests', help: 'Chatting without signing in, and signing in to chat.' }),
@@ -126,6 +126,23 @@ export const TEXTS = Object.freeze({
 		radius: 'Corner radius (0–24 px)',
 		accent: 'Accent colour',
 		customCss: 'Custom CSS',
+		format: 'Format',
+		formatHelp: 'How money and dates look in the widgets, messages, chat answers and pages.',
+		locale: 'Language and region',
+		localeHelp: "A tag such as en-GB or ur-PK; empty uses each visitor's browser (en in messages).",
+		currencyDisplay: 'Currency shown as',
+		currencyDisplays: Object.freeze({
+			code: 'Code (PKR 12,500.00)',
+			symbol: 'Symbol (Rs 12,500.00)',
+			custom: 'Your own symbol',
+		}),
+		currencySymbol: 'Your own symbol (up to 8 characters)',
+		times: 'Dates and times in',
+		timesOptions: Object.freeze({
+			viewer: "Each visitor's time zone",
+			business: 'Your business time zone (business.json)',
+		}),
+		wholeUnits: 'Whole amounts only (no minor units)',
 	}),
 	lists: Object.freeze({
 		add: 'Add',

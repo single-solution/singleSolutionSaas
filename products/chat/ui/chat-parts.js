@@ -4,7 +4,7 @@
  * product cards under an AI answer.
  * @module
  */
-import { formatPrice } from '../core/shop.js';
+import { formatMoney, viewerOf } from '@ss/app-kit/widget';
 import { ADD_TO_CART_EVENT } from '../core/widgets.js';
 import { buttonOf, customInput, formPart, webAddress } from './common.js';
 import { element } from './dom.js';
@@ -166,16 +166,17 @@ export const ratingPart = ({ doc, t, make, scale, comment, send }) => {
 };
 
 /**
- * The product cards under an AI answer (product cards): image, name linking to the product page, price and Add to
- * cart. Add to cart dispatches the cancelable `ss-ecommerce:add-to-cart` window event; when no widget on the page
- * (Ecommerce's) calls `preventDefault()`, the button follows its link to the product page.
+ * The product cards under an AI answer (product cards): image, name linking to the product page, price (in the
+ * website's Format, K7) and Add to cart. Add to cart dispatches the cancelable `ss-ecommerce:add-to-cart` window event;
+ * when no widget on the page (Ecommerce's) calls `preventDefault()`, the button follows its link to the product page.
  * @param {{ doc: Document, win: Window, t: import('./common.js').Texts,
+ *   config: { format?: import('./common.js').WidgetConfig['format'] },
  *   cards: Array<{ productId: string, variantId: string | null, name: string, price: number, currency: string,
  *   image: string | null, url: string | null, inStock: boolean }> }} input
  */
-export const cardsPart = ({ doc, win, t, cards }) => {
+export const cardsPart = ({ doc, win, t, config, cards }) => {
 	const list = element(doc, 'ul', { class: 'cards', 'aria-label': t('chat.products') });
-	const locale = doc.documentElement.lang || undefined;
+	const viewer = viewerOf(win);
 	for (const card of cards) {
 		const item = element(doc, 'li', { class: 'card' });
 		const url = card.url ? webAddress(card.url) : null;
@@ -183,7 +184,7 @@ export const cardsPart = ({ doc, win, t, cards }) => {
 		if (image) item.append(element(doc, 'img', { src: image, alt: '', loading: 'lazy' }));
 		item.append(
 			url ? element(doc, 'a', { href: url, class: 'name' }, card.name) : element(doc, 'span', { class: 'name' }, card.name),
-			element(doc, 'span', { class: 'price' }, formatPrice(card.price, card.currency, { locale, display: 'symbol' })),
+			element(doc, 'span', { class: 'price' }, formatMoney(card.price, card.currency, config.format, viewer)),
 		);
 		if (!card.inStock) {
 			item.append(element(doc, 'span', { class: 'meta' }, t('chat.outOfStock')));

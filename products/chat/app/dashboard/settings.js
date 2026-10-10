@@ -1,14 +1,15 @@
 'use client';
 /**
  * Settings tab (PLAN 0.8.3 Chat dashboard): the kit's settings forms of the features the viewer may see, grouped in
- * Chat's sections, with the list editors, the tool signing secret, the theme and the widget texts. A section shows only
- * when one of its features is visible (merchants: switched-on features; admins: all, off ones marked).
+ * Chat's sections, with the list editors, the tool signing secret, the theme, the Format (with the theme, in Widget
+ * look) and the widget texts. A section shows only when one of its features is visible (merchants: switched-on
+ * features; admins: all, off ones marked); Widget look always shows, for the Format.
  * @module
  */
 import { Callout, Masonry, Section } from '@ss/ui';
 import { call, useLoad } from './api.js';
 import { CustomFieldsEditor, FlowsEditor, PageRulesEditor, ToolSecret, ToolsEditor } from './lists.js';
-import { Loaded, SettingsForms, TextsForm, ThemeForm, hasSettings } from './parts.js';
+import { FormatForm, Loaded, SettingsForms, TextsForm, ThemeForm, hasSettings } from './parts.js';
 import { TEXTS } from './texts.js';
 
 /** @typedef {import('./parts.js').FeatureSettings} FeatureSettings */
@@ -57,6 +58,7 @@ export function SettingsTab({ websiteId: id }) {
 	const settings = useLoad(`${base}/settings`);
 	const texts = useLoad(`${base}/texts`);
 	const theme = useLoad(`${base}/theme`);
+	const format = useLoad(`${base}/format`);
 	return (
 		<Loaded answer={settings.answer}>
 			{(data) => {
@@ -87,17 +89,30 @@ export function SettingsTab({ websiteId: id }) {
 								<ToolSecret websiteId={websiteId} />
 							</>
 						) : null,
-					look: seen('visitor_chat') ? (
-						<Loaded answer={theme.answer}>
-							{(found) => (
-								<ThemeForm
-									theme={found.theme}
-									save={(next) => call('PUT', `${base}/theme`, next)}
-									reload={theme.reload}
-								/>
-							)}
-						</Loaded>
-					) : null,
+					look: (
+						<>
+							{seen('visitor_chat') ? (
+								<Loaded answer={theme.answer}>
+									{(found) => (
+										<ThemeForm
+											theme={found.theme}
+											save={(next) => call('PUT', `${base}/theme`, next)}
+											reload={theme.reload}
+										/>
+									)}
+								</Loaded>
+							) : null}
+							<Loaded answer={format.answer}>
+								{(found) => (
+									<FormatForm
+										format={found.format}
+										save={(next) => call('PUT', `${base}/format`, next)}
+										reload={format.reload}
+									/>
+								)}
+							</Loaded>
+						</>
+					),
 					texts: (
 						<Loaded answer={texts.answer}>
 							{(found) => (

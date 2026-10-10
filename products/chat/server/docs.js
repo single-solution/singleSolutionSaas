@@ -3,11 +3,13 @@
  * webhook tools and their signature check, the booking endpoint's two requests, handoff, flows, the Notifications
  * templates, attachments and the bucket's CORS rule, data rights and the activity log, the shop tools with the
  * Ecommerce routes they call, product cards and their add-to-cart event, the context panel's shop info, per-feature
- * routes and widgets, the widget snippets, the ticket server snippet (Node.js
- * fetch and cURL), the business.json template, the localhost note and the API reference from `openapi.json`. Plain
- * HTML; every value is escaped.
+ * routes and widgets, the widget snippets, the ticket server snippet (Node.js fetch and cURL), the kit's routes for
+ * your server (settings and Chat's lists, acting user, visitor calls, counts, activity, Format; PLAN 0.8.10), the
+ * business.json template, the localhost note and the API reference from `openapi.json`. Plain HTML; every value is
+ * escaped.
  * @module
  */
+import { KIT_GUIDE } from '@ss/app-kit';
 import { BUSINESS_JSON_TEMPLATE } from '@ss/contracts';
 import guide from '../docs/guide.json' with { type: 'json' };
 import openapi from '../openapi.json' with { type: 'json' };
@@ -143,6 +145,8 @@ ${block(snippets.admin)}
 ${para(guide.tickets)}
 ${block(snippets.ticketNode)}
 ${block(snippets.ticketCurl)}
+${KIT_GUIDE.map((section) => `<h2 id="${escape(section.id)}">${escape(section.title)}</h2>\n${section.paragraphs.map(para).join('\n')}`).join('\n')}
+${para(guide.serverApi)}
 <h2>business.json</h2>
 ${para(guide.business)}
 ${block(JSON.stringify(BUSINESS_JSON_TEMPLATE, null, 2))}

@@ -306,7 +306,7 @@ export const createReply = (product, service) => {
 				request.signIn ? { headers: { [SIGN_IN_HEADER]: String(signIn) } } : {},
 			);
 			if (!answer.ok) return { ok: false, content: SHOP_UNAVAILABLE };
-			const found = shopAnswer(call.name, answer.body);
+			const found = shopAnswer(call.name, answer.body, await s.format());
 			if (withCards)
 				for (const item of found.products)
 					if (cards.length < SHOP_LIMIT && !cards.some((card) => card.productId === item.id)) cards.push(cardOf(item));
@@ -360,7 +360,8 @@ export const createReply = (product, service) => {
 	 */
 	const withinReplyLimits = async (s, c) => {
 		const { repliesPerVisitorPerDay, repliesPerNetworkPerDay } = await s.values('ai_replies');
-		const ip = s.ctx.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+		// the visitor's address: SS-Visitor-IP on a visitor call from the merchant's server (K3), else the network's
+		const ip = String(s.ctx.clientIp ?? 'unknown');
 		const checks = /** @type {Array<[string, number]>} */ ([
 			[`chat-ai|${s.websiteId}|visitor|${c.visitor.kind}:${c.visitor.id}`, Number(repliesPerVisitorPerDay)],
 			[`chat-ai|${s.websiteId}|network|${ip}`, Number(repliesPerNetworkPerDay)],

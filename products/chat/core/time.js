@@ -1,9 +1,10 @@
 /**
- * Time in a zone (pure; `Intl` only): wall-clock parts, weekly working-hour windows (overnight windows belong to their
- * start day, `24:00` = end of day), the next opening, calendar day and month keys (token caps, reports) and the UTC
- * start of a local day.
+ * Time in a zone (pure): weekly working-hour windows (overnight windows belong to their start day, `24:00` = end of
+ * day), the next opening, and the calendar day and month keys (token caps, reports) and the start of a local day, all
+ * in the business.json time zone (PLAN 0.8.10 K8) with `@ss/contracts`' zone helpers.
  * @module
  */
+import { zonedDay, zonedDayStart, zonedParts } from '@ss/contracts/format';
 
 const MINUTE_MS = 60_000;
 const HOUR_MS = 60 * MINUTE_MS;
@@ -14,29 +15,9 @@ export const WEEK_DAYS = Object.freeze(/** @type {const} */ (['sun', 'mon', 'tue
 
 /** @typedef {(typeof WEEK_DAYS)[number]} WeekDay */
 /** @typedef {{ days: string[], start: string, end: string }} HoursWindow */
-/** @typedef {{ year: number, month: number, day: number, hour: number, minute: number, weekday: number }} LocalParts */
 
-/** @type {Map<string, Intl.DateTimeFormat>} */
-const formats = new Map();
-
-/** @param {string} timeZone */
-const formatFor = (timeZone) => {
-	let format = formats.get(timeZone);
-	if (!format) {
-		format = new Intl.DateTimeFormat('en-US', {
-			timeZone,
-			hourCycle: 'h23',
-			year: 'numeric',
-			month: 'numeric',
-			day: 'numeric',
-			hour: 'numeric',
-			minute: 'numeric',
-			weekday: 'short',
-		});
-		formats.set(timeZone, format);
-	}
-	return format;
-};
+/** Zones already checked (the office-hours search asks thousands of times). @type {Map<string, boolean>} */
+const known = new Map();
 
 /**
  * True when the runtime knows `timeZone`.
@@ -45,12 +26,18 @@ const formatFor = (timeZone) => {
  */
 const isTimeZone = (timeZone) => {
 	if (typeof timeZone !== 'string' || timeZone.length === 0 || timeZone.length > 64) return false;
-	try {
-		formatFor(timeZone);
-		return true;
-	} catch {
-		return false;
+	let ok = known.get(timeZone);
+	if (ok === undefined) {
+		try {
+			new Intl.DateTimeFormat('en-US', { timeZone });
+			ok = true;
+		} catch {
+			ok = false;
+		}
+		if (known.size >= 100) known.clear();
+		known.set(timeZone, ok);
 	}
+	return ok;
 };
 
 /**
@@ -62,26 +49,6 @@ const isTimeZone = (timeZone) => {
 export const zoneOr = (timeZone, fallback = 'UTC') => {
 	if (isTimeZone(timeZone)) return timeZone;
 	return isTimeZone(fallback) ? fallback : 'UTC';
-};
-
-/**
- * Wall-clock parts of an instant in a zone.
- * @param {number} ms
- * @param {string} timeZone
- * @returns {LocalParts}
- */
-const localParts = (ms, timeZone) => {
-	/** @type {Record<string, string>} */
-	const parts = {};
-	for (const part of formatFor(zoneOr(timeZone)).formatToParts(new Date(ms))) parts[part.type] = part.value;
-	return {
-		year: Number(parts.year),
-		month: Number(parts.month),
-		day: Number(parts.day),
-		hour: Number(parts.hour),
-		minute: Number(parts.minute),
-		weekday: WEEK_DAYS.indexOf(/** @type {WeekDay} */ (String(parts.weekday).slice(0, 3).toLowerCase())),
-	};
 };
 
 /**
@@ -108,7 +75,7 @@ const minutesOf = (text) => {
  */
 export const isOpenAt = (windows, ms, timeZone) => {
 	if (!windows || windows.length === 0) return true;
-	const now = localParts(ms, timeZone);
+	const now = zonedParts(ms, zoneOr(timeZone));
 	const minute = now.hour * 60 + now.minute;
 	const today = WEEK_DAYS[now.weekday];
 	const yesterday = WEEK_DAYS[(now.weekday + 6) % 7];
@@ -147,33 +114,18 @@ export const nextOpenAt = (windows, ms, timeZone, { horizonDays = 8 } = {}) => {
  * @param {number} ms
  * @param {string} timeZone
  */
-export const monthKey = (ms, timeZone) => {
-	const { year, month } = localParts(ms, timeZone);
-	return `${year}-${String(month).padStart(2, '0')}`;
-};
+export const monthKey = (ms, timeZone) => zonedDay(ms, zoneOr(timeZone)).slice(0, 7);
 
 /**
  * Calendar day key `YYYY-MM-DD` of an instant in a zone.
  * @param {number} ms
  * @param {string} timeZone
  */
-export const dayKey = (ms, timeZone) => {
-	const { year, month, day } = localParts(ms, timeZone);
-	return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-};
+export const dayKey = (ms, timeZone) => zonedDay(ms, zoneOr(timeZone));
 
 /**
  * The UTC instant of local midnight starting a calendar day (`YYYY-MM-DD`) in a zone.
  * @param {string} date
  * @param {string} timeZone
  */
-export const dayStart = (date, timeZone) => {
-	const guess = Date.parse(`${date}T00:00:00Z`);
-	const parts = localParts(guess, timeZone);
-	const shown = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute);
-	// the zone's offset at that instant; a second pass settles days where it changes
-	const first = guess - (shown - guess);
-	const again = localParts(first, timeZone);
-	const shownAgain = Date.UTC(again.year, again.month - 1, again.day, again.hour, again.minute);
-	return first - (shownAgain - guess);
-};
+export const dayStart = (date, timeZone) => zonedDayStart(date, zoneOr(timeZone));

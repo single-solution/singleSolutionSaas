@@ -1,6 +1,6 @@
 /**
- * Chat's routes (the kit adds its own: connect, notices, tickets, permissions, data rights, widget config, `/sso` and
- * the dashboard API). Every browser-token, server-token and ticket route belongs to one feature (ticket routes to their
+ * Chat's routes (the kit adds its own: connect, notices, tickets, permissions, data rights, widget config, `/sso`,
+ * the dashboard API, and for the merchant's server the settings API with Chat's lists, and the activity log). Every browser-token, server-token and ticket route belongs to one feature (ticket routes to their
  * permission's feature unless they name another); `openapi.json` is generated from these definitions
  * (`ss app assets`), so `method`, `path`, `auth`, `feature` and `permission` stay literals. Public entry
  * `./routes` of this package: `product.handler(createRoutes(product))`.
@@ -177,6 +177,20 @@ export const createRoutes = (product) => {
 			auth: 'ticket',
 			permission: 'inbox.read',
 			handler: inbox.list,
+		}),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/admin/conversations/count',
+			auth: 'ticket',
+			permission: 'inbox.read',
+			handler: inbox.count,
+		}),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/admin/conversations/counts',
+			auth: 'ticket',
+			permission: 'inbox.read',
+			handler: inbox.counts,
 		}),
 		defineRoute({
 			method: 'GET',
@@ -370,6 +384,20 @@ export const createRoutes = (product) => {
 			handler: admin.report,
 		}),
 		defineRoute({ method: 'GET', path: '/v1/conversations', auth: 'server', feature: 'inbox', handler: inbox.list }),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/conversations/count',
+			auth: 'server',
+			feature: 'inbox',
+			handler: inbox.count,
+		}),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/conversations/counts',
+			auth: 'server',
+			feature: 'inbox',
+			handler: inbox.counts,
+		}),
 		defineRoute({ method: 'GET', path: '/v1/conversations/:id', auth: 'server', feature: 'inbox', handler: inbox.get }),
 		defineRoute({
 			method: 'POST',

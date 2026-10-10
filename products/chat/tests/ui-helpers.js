@@ -17,11 +17,13 @@ export const TEXTS = strings;
  * A widget config.
  * @param {string[]} features
  * @param {Record<string, any>} [settings]
+ * @param {{ format?: Record<string, unknown>, timeZone?: string }} [look] the website's Format and business time zone
  */
-export const configOf = (features, settings = {}) => ({
+export const configOf = (features, settings = {}, look = {}) => ({
 	texts: { ...strings },
 	theme: { mode: /** @type {const} */ ('light') },
 	customCss: '',
+	...look,
 	features,
 	settings,
 });

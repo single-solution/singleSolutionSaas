@@ -1,7 +1,7 @@
 'use client';
 /**
  * Pieces the dashboard's tabs share: loading and outcome states, Recent changes, the status banner and the kit's
- * settings, texts and theme forms (a website's values or the global defaults).
+ * settings, texts, theme and Format forms (a website's values or the global defaults).
  * @module
  */
 import { ViewTransition, useState } from 'react';
@@ -9,6 +9,7 @@ import {
 	Button,
 	Callout,
 	Card,
+	Checkbox,
 	ErrorState,
 	FieldGrid,
 	Input,
@@ -268,6 +269,62 @@ export function ThemeForm({ theme, save, reload }) {
 				value={draft.customCss}
 				onChange={(event) => setDraft({ ...draft, customCss: event.target.value })}
 			/>
+			<Button
+				className="mt-4"
+				onClick={async () => {
+					setResult(await save(draft));
+					reload();
+				}}>
+				{TEXTS.save}
+			</Button>
+			<Outcome result={result} />
+		</Card>
+	);
+}
+
+/**
+ * How money and dates look in the widgets, messages, chat answers and pages (one Format per website, PLAN 0.8.10 K7).
+ * @param {{ format: { locale: string, currencyDisplay: string, currencySymbol: string, wholeUnits: boolean, times: string },
+ *   save: (format: Record<string, unknown>) => Promise<import('./api.js').Answer>, reload: () => void }} props
+ */
+export function FormatForm({ format, save, reload }) {
+	const [draft, setDraft] = useState(format);
+	const [result, setResult] = useState(/** @type {import('./api.js').Answer | null} */ (null));
+	return (
+		<Card title={TEXTS.settings.format} subtitle={TEXTS.settings.formatHelp}>
+			<FieldGrid>
+				<Input
+					label={TEXTS.settings.locale}
+					help={TEXTS.settings.localeHelp}
+					placeholder="en-GB"
+					value={draft.locale}
+					onChange={(event) => setDraft({ ...draft, locale: event.target.value.trim() })}
+				/>
+				<Select
+					label={TEXTS.settings.currencyDisplay}
+					value={draft.currencyDisplay}
+					options={Object.entries(TEXTS.settings.currencyDisplays).map(([value, label]) => ({ value, label }))}
+					onChange={(event) => setDraft({ ...draft, currencyDisplay: event.target.value })}
+				/>
+				<Input
+					label={TEXTS.settings.currencySymbol}
+					maxLength={8}
+					disabled={draft.currencyDisplay !== 'custom'}
+					value={draft.currencySymbol}
+					onChange={(event) => setDraft({ ...draft, currencySymbol: event.target.value })}
+				/>
+				<Select
+					label={TEXTS.settings.times}
+					value={draft.times}
+					options={Object.entries(TEXTS.settings.timesOptions).map(([value, label]) => ({ value, label }))}
+					onChange={(event) => setDraft({ ...draft, times: event.target.value })}
+				/>
+				<Checkbox
+					label={TEXTS.settings.wholeUnits}
+					checked={draft.wholeUnits}
+					onChange={(event) => setDraft({ ...draft, wholeUnits: event.target.checked })}
+				/>
+			</FieldGrid>
 			<Button
 				className="mt-4"
 				onClick={async () => {

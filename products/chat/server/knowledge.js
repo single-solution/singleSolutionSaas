@@ -1,7 +1,8 @@
 /**
  * Knowledge (PLAN 0.8.3): FAQ entries and articles (knowledge base) and website pages (fetched through `@ss/net` when
  * added and with Fetch again, never on a schedule), indexed as chunks for keyword retrieval. Edited in the knowledge
- * editor widget (ticket, `knowledge.edit`) or through the server API; edits are written to the activity log.
+ * editor widget (ticket, `knowledge.edit`) or through the server API (acting for the `SS-Actor-*` user); edits are
+ * written to the activity log with the entry's title or the page's title as their label.
  * @module
  */
 import { created, noContent, paginate, problem } from '@ss/app-kit';
@@ -25,6 +26,18 @@ const entryView = (e) => ({
 	title: e.title,
 	text: e.text,
 	updatedAt: new Date(e.updatedAt).toISOString(),
+});
+
+/** The kinds of entries in activity details. */
+const KINDS = Object.freeze({ faq: 'FAQ', article: 'Article' });
+
+/**
+ * A page's activity label (its title, else its address) and detail (fetched, or why not).
+ * @param {PageRecord} p
+ */
+const pageAbout = (p) => ({
+	label: p.title || p.url,
+	detail: p.status === 'ok' ? 'Fetched' : `Not fetched: ${p.error ?? 'unknown reason'}`,
 });
 
 /** @param {PageRecord} p */
@@ -65,7 +78,7 @@ export const createKnowledge = (product, service) => {
 		if ((await s.store.knowledge.countEntries()) >= MAX_ENTRIES) throw invalid([`Up to ${MAX_ENTRIES} entries.`]);
 		const entry = await s.store.knowledge.createEntry(checked.value);
 		await s.store.knowledge.replaceChunks(entry.id, entryChunks(entry));
-		await service.log(s, actorOf(ctx), 'knowledge.entry_created', entry.id);
+		await service.log(s, actorOf(ctx), 'knowledge.entry_created', entry.id, { label: entry.title, detail: KINDS[entry.kind] });
 		return created({ entry: entryView(entry) });
 	};
 
@@ -77,7 +90,7 @@ export const createKnowledge = (product, service) => {
 		const entry = await s.store.knowledge.updateEntry(String(ctx.params.id), checked.value);
 		if (!entry) throw problem('not_found', 'No such entry.');
 		await s.store.knowledge.replaceChunks(entry.id, entryChunks(entry));
-		await service.log(s, actorOf(ctx), 'knowledge.entry_updated', entry.id);
+		await service.log(s, actorOf(ctx), 'knowledge.entry_updated', entry.id, { label: entry.title, detail: KINDS[entry.kind] });
 		return { entry: entryView(entry) };
 	};
 
@@ -85,9 +98,10 @@ export const createKnowledge = (product, service) => {
 	const deleteEntry = async (ctx) => {
 		const s = await service.site(ctx);
 		const id = String(ctx.params.id);
-		if (!(await s.store.knowledge.removeEntry(id))) throw problem('not_found', 'No such entry.');
+		const removed = await s.store.knowledge.removeEntry(id);
+		if (!removed) throw problem('not_found', 'No such entry.');
 		await s.store.knowledge.replaceChunks(id, []);
-		await service.log(s, actorOf(ctx), 'knowledge.entry_deleted', id);
+		await service.log(s, actorOf(ctx), 'knowledge.entry_deleted', id, { label: removed.title, detail: KINDS[removed.kind] });
 		return noContent();
 	};
 
@@ -131,7 +145,7 @@ export const createKnowledge = (product, service) => {
 		if (!isHttpsUrl(url)) throw invalid(['Enter an https address.']);
 		if ((await s.store.knowledge.countPages()) >= MAX_PAGES) throw invalid([`Up to ${MAX_PAGES} pages.`]);
 		const page = await fetchPage(s, await s.store.knowledge.createPage(String(url)));
-		await service.log(s, actorOf(ctx), 'knowledge.page_added', page.id);
+		await service.log(s, actorOf(ctx), 'knowledge.page_added', page.id, pageAbout(page));
 		return created({ page: pageView(page) });
 	};
 
@@ -141,7 +155,7 @@ export const createKnowledge = (product, service) => {
 		const page = await s.store.knowledge.page(String(ctx.params.id));
 		if (!page) throw problem('not_found', 'No such page.');
 		const updated = await fetchPage(s, page);
-		await service.log(s, actorOf(ctx), 'knowledge.page_fetched', page.id);
+		await service.log(s, actorOf(ctx), 'knowledge.page_fetched', page.id, pageAbout(updated));
 		return { page: pageView(updated) };
 	};
 
@@ -149,9 +163,10 @@ export const createKnowledge = (product, service) => {
 	const deletePage = async (ctx) => {
 		const s = await service.site(ctx);
 		const id = String(ctx.params.id);
-		if (!(await s.store.knowledge.removePage(id))) throw problem('not_found', 'No such page.');
+		const removed = await s.store.knowledge.removePage(id);
+		if (!removed) throw problem('not_found', 'No such page.');
 		await s.store.knowledge.replaceChunks(id, []);
-		await service.log(s, actorOf(ctx), 'knowledge.page_deleted', id);
+		await service.log(s, actorOf(ctx), 'knowledge.page_deleted', id, { label: removed.title || removed.url });
 		return noContent();
 	};
 

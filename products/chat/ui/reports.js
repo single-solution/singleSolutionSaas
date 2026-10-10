@@ -1,10 +1,12 @@
 /**
- * The admin widget `reports` (permission `reports.read`): for a date range (default the last 30 days) the numbers of
- * Chat — conversations per day as a simple bar list, visitor messages, answered only by AI vs handed to a person,
- * median first staff reply, resolved, average rating, leads and AI tokens.
+ * The admin widget `reports` (permission `reports.read`): for a date range (default the last 30 days, in the business
+ * time zone like the report itself, K8) the numbers of Chat — conversations per day as a simple bar list (each day in
+ * the website's Format, K7), visitor messages, answered only by AI vs handed to a person, median first staff reply,
+ * resolved, average rating, leads and AI tokens.
  * @module
  */
-import { formatText, mountWidget } from '@ss/app-kit/widget';
+import { formatDate, formatText, mountWidget, viewerOf } from '@ss/app-kit/widget';
+import { dayKey } from '../core/time.js';
 import { fieldMaker, invalidText, textsOf } from './common.js';
 import { element } from './dom.js';
 import { WIDGET_CSS } from './styles.js';
@@ -13,21 +15,19 @@ import { adminCall } from './tickets.js';
 const DAY_MS = 86_400_000;
 
 /**
- * `YYYY-MM-DD` of a time in the browser's time zone.
- * @param {number} time
+ * @param {{ host: HTMLElement, win: Window, api: import('./tickets.js').AdminApi,
+ *   config: import('./common.js').WidgetConfig, now: () => number }} input
  */
-const isoDate = (time) => {
-	const date = new Date(time);
-	const pad = (/** @type {number} */ n) => String(n).padStart(2, '0');
-	return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
-};
-
-/**
- * @param {{ host: HTMLElement, api: import('./tickets.js').AdminApi, config: import('./common.js').WidgetConfig,
- *   now: () => number }} input
- */
-export const mountReports = ({ host, api, config, now }) => {
+export const mountReports = ({ host, win, api, config, now }) => {
 	const t = textsOf(config);
+	const timeZone = config.timeZone ?? 'UTC';
+	const viewer = viewerOf(win);
+	/**
+	 * A calendar day (`YYYY-MM-DD`) in the website's Format: the day itself, whatever the viewer's time zone.
+	 * @param {string} day
+	 */
+	const dayText = (day) =>
+		formatDate(`${day}T00:00:00Z`, { ...config.format, times: 'business' }, { timeZone: 'UTC', style: 'date', viewer }) || day;
 	/** @param {unknown} value */
 	const number = (value) => (typeof value === 'number' ? value.toLocaleString() : t('reports.none'));
 	/** @param {unknown} seconds */
@@ -50,8 +50,8 @@ export const mountReports = ({ host, api, config, now }) => {
 			const form = element(doc, 'form', { class: 'row' });
 			const from = make.field('input', t('reports.from'), { type: 'date', required: '' });
 			const to = make.field('input', t('reports.to'), { type: 'date', required: '' });
-			from.input.value = isoDate(now() - 29 * DAY_MS);
-			to.input.value = isoDate(now());
+			to.input.value = dayKey(now(), timeZone);
+			from.input.value = new Date(Date.parse(`${to.input.value}T00:00:00Z`) - 29 * DAY_MS).toISOString().slice(0, 10);
 			form.append(from.wrap, to.wrap, element(doc, 'button', { type: 'submit' }, t('reports.show')));
 			const note = element(doc, 'p', { class: 'status', role: 'status' });
 			const numbers = element(doc, 'dl', { class: 'numbers' });
@@ -106,7 +106,7 @@ export const mountReports = ({ host, api, config, now }) => {
 						const bar = element(doc, 'span', { class: 'bar' });
 						bar.style.width = `${Math.round((day.conversations / most) * 100)}%`;
 						item.append(
-							element(doc, 'span', { class: 'date' }, day.date),
+							element(doc, 'span', { class: 'date' }, dayText(day.date)),
 							bar,
 							element(doc, 'span', {}, String(day.conversations)),
 						);

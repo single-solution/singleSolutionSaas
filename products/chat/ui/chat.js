@@ -22,7 +22,7 @@ import {
 	textsOf,
 	uploadFile,
 	webAddress,
-	when,
+	whenOf,
 } from './common.js';
 import { element } from './dom.js';
 import { createMemory, pageFlow, startProactive } from './proactive.js';
@@ -59,6 +59,7 @@ const NO_CHAT = Object.freeze({
 export const mountChat = ({ win, host, config, visitor, clock, page, onUnread }) => {
 	const t = textsOf(config);
 	const s = settingsOf(config);
+	const when = whenOf(config, win);
 	/** @param {string} feature */
 	const on = (feature) => config.features.includes(feature);
 	const doc = win.document;
@@ -203,7 +204,7 @@ export const mountChat = ({ win, host, config, visitor, clock, page, onUnread })
 		if (message.text) item.append(element(doc, 'p', {}, message.text));
 		if (message.attachment) item.append(attachmentNode(doc, message.attachment));
 		if (message.cards && message.cards.length > 0 && on('product_cards'))
-			item.append(cardsPart({ doc, win, t, cards: message.cards }));
+			item.append(cardsPart({ doc, win, t, config, cards: message.cards }));
 		return item;
 	};
 	/** @param {Message} message */

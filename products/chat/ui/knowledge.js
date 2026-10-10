@@ -5,16 +5,17 @@
  * @module
  */
 import { formatText, mountWidget } from '@ss/app-kit/widget';
-import { buttonOf, fieldMaker, formPart, invalidText, setHidden, textsOf, webAddress, when } from './common.js';
+import { buttonOf, fieldMaker, formPart, invalidText, setHidden, textsOf, webAddress, whenOf } from './common.js';
 import { element } from './dom.js';
 import { WIDGET_CSS } from './styles.js';
 import { adminCall } from './tickets.js';
 
 /**
- * @param {{ host: HTMLElement, api: import('./tickets.js').AdminApi, config: import('./common.js').WidgetConfig }} input
+ * @param {{ host: HTMLElement, win: Window, api: import('./tickets.js').AdminApi, config: import('./common.js').WidgetConfig }} input
  */
-export const mountKnowledge = ({ host, api, config }) => {
+export const mountKnowledge = ({ host, win, api, config }) => {
 	const t = textsOf(config);
+	const when = whenOf(config, win);
 	/** @param {import('./common.js').Answer} answer */
 	const failure = (answer) => {
 		if (answer.status === 0 && !api.tickets.current()) return t('knowledge.signedOut');

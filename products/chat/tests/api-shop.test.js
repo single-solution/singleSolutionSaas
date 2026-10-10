@@ -194,7 +194,7 @@ describe('shop tools', () => {
 			savings: 'PKR 50.00',
 			deals: ['Eid sale'],
 		});
-		expect(deals.deals).toEqual([{ name: 'Eid sale', description: '5% off', endsAt: '2026-10-30T00:00:00.000Z' }]);
+		expect(deals.deals).toEqual([{ name: 'Eid sale', description: '5% off', endsAt: 'Oct 30, 2026, 12:00 AM' }]);
 		expect(top.products).toHaveLength(1);
 	});
 
@@ -223,7 +223,7 @@ describe('shop tools', () => {
 		expect(JSON.parse(String(answers[0]))).toEqual({
 			name: 'Rea Der',
 			loyaltyPoints: 120,
-			orders: [{ number: 'A-1001', status: 'Dispatched', total: 'PKR 1,250.00', placedAt: '2026-10-01' }],
+			orders: [{ number: 'A-1001', status: 'Dispatched', total: 'PKR 1,250.00', placedAt: 'Oct 1, 2026' }],
 		});
 		expect(JSON.parse(String(answers[1]))).toEqual({ name: 'Rea Der', loyaltyPoints: 120 });
 		expect(JSON.parse(String(answers[2])).shipments).toEqual([

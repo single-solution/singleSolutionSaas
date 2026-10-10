@@ -4,7 +4,8 @@
  *
  * - `conversations` and `messages` (separate, ordered by a per-conversation `seq`); never deleted because of age
  * - `guests`: guest device keys (hash only), removed by a TTL index when the device forgets them
- * - `staff`: the merchant's staff named in tickets (the kit records them), with presence and max chats
+ * - `staff`: the merchant's staff named in tickets or by the `SS-Actor-*` headers of server calls (the kit records
+ *   them), with presence and max chats
  * - `leads`, `saved_replies`, `entries` (knowledge), `pages` (website pages and their text), `chunks` (retrieval)
  * - `usage`: AI token counts per day and month window (and the month's cost alert)
  * - `activity`: the activity log (the kit writes it)
@@ -120,25 +121,41 @@ export const createStore = (data, { now }) => {
 					)
 				),
 			/**
+			 * The inbox's filter (the list and its counts share it): the website, the field filters and a search in the
+			 * visitor's name, e-mail and phone and in visible message texts.
+			 * @param {{ filter: Record<string, unknown>, q: string | null }} query
+			 * @returns {Promise<Record<string, unknown>>}
+			 */
+			where: async ({ filter, q }) => {
+				if (!q) return { websiteId: w, ...filter };
+				const pattern = new RegExp(escapeRegex(q), 'i');
+				const ids = await messages.distinct('conversationId', { websiteId: w, internal: false, text: pattern });
+				return {
+					websiteId: w,
+					...filter,
+					$and: [{ $or: [{ name: pattern }, { email: pattern }, { phone: pattern }, { id: { $in: ids.slice(0, 500) } }] }],
+				};
+			},
+			/**
 			 * A page of the inbox, newest activity first.
-			 * @param {{ filter: Record<string, unknown>, q: string | null, after: [string, string] | null, limit: number }} query
+			 * @param {{ where: Record<string, unknown>, after: [string, string] | null, limit: number }} query `where` from
+			 *   `where()`
 			 * @returns {Promise<ConversationRecord[]>}
 			 */
-			list: async ({ filter, q, after, limit }) => {
-				/** @type {Record<string, unknown>[]} */
-				const and = [];
-				if (q) {
-					const pattern = new RegExp(escapeRegex(q), 'i');
-					const ids = await messages.distinct('conversationId', { websiteId: w, internal: false, text: pattern });
-					and.push({ $or: [{ name: pattern }, { email: pattern }, { phone: pattern }, { id: { $in: ids.slice(0, 500) } }] });
-				}
-				if (after) {
-					const at = new Date(after[0]);
-					and.push({ $or: [{ lastMessageAt: { $lt: at } }, { lastMessageAt: at, id: { $lt: after[1] } }] });
-				}
-				const where = { websiteId: w, ...filter, ...(and.length > 0 ? { $and: and } : {}) };
+			list: async ({ where, after, limit }) => {
+				const at = after ? new Date(after[0]) : null;
+				const page = after
+					? {
+							$and: [
+								.../** @type {unknown[]} */ (where.$and ?? []),
+								{ $or: [{ lastMessageAt: { $lt: at } }, { lastMessageAt: at, id: { $lt: after[1] } }] },
+							],
+						}
+					: {};
 				return /** @type {any} */ (
-					await conversations.find(where, { ...HIDDEN, sort: { lastMessageAt: -1, id: -1 }, limit }).toArray()
+					await conversations
+						.find({ ...where, ...page, websiteId: w }, { ...HIDDEN, sort: { lastMessageAt: -1, id: -1 }, limit })
+						.toArray()
 				);
 			},
 			/** Visitor messages no staff member has opened, over every conversation. */
@@ -270,11 +287,16 @@ export const createStore = (data, { now }) => {
 				/** @type {any} */ (await staff.find({ websiteId: w }, { ...HIDDEN, sort: { name: 1 }, limit: 500 }).toArray()),
 			/** @param {string} id @returns {Promise<StaffRecord | null>} */
 			get: async (id) => /** @type {any} */ (await staff.findOne({ websiteId: w, id }, HIDDEN)),
-			/** The inbox checked in (presence is judged from it). @param {{ id: string, name: string, email: string }} user */
+			/**
+			 * The inbox checked in (presence is judged from it): a ticket's user, or the acting user of a server call.
+			 * @param {{ id: string, name: string, email?: string }} user
+			 */
 			checkIn: (user) =>
 				staff.updateOne(
 					{ websiteId: w, id: user.id },
-					{ $set: { name: user.name, email: user.email, checkedInAt: date(), updatedAt: date() } },
+					{
+						$set: { name: user.name, ...(user.email ? { email: user.email } : {}), checkedInAt: date(), updatedAt: date() },
+					},
 					{ upsert: true },
 				),
 			/** @param {string} id @param {Record<string, unknown>} set */
@@ -344,8 +366,11 @@ export const createStore = (data, { now }) => {
 			update: async (id, reply) =>
 				(await replies.updateOne({ websiteId: w, id }, { $set: { title: reply.title, text: reply.text, updatedAt: date() } }))
 					.matchedCount > 0,
-			/** @param {string} id */
-			remove: async (id) => (await replies.deleteOne({ websiteId: w, id })).deletedCount > 0,
+			/** Delete one; answers what it was, or null. @param {string} id @returns {Promise<{ id: string, title: string, text: string } | null>} */
+			remove: async (id) =>
+				/** @type {any} */ (
+					await replies.findOneAndDelete({ websiteId: w, id }, { projection: { _id: 0, id: 1, title: 1, text: 1 } })
+				),
 		}),
 
 		knowledge: Object.freeze({
@@ -386,8 +411,8 @@ export const createStore = (data, { now }) => {
 						)
 					)
 				),
-			/** @param {string} id */
-			removeEntry: async (id) => (await entries.deleteOne({ websiteId: w, id })).deletedCount > 0,
+			/** Delete one; answers what it was, or null. @param {string} id @returns {Promise<EntryRecord | null>} */
+			removeEntry: async (id) => /** @type {any} */ (await entries.findOneAndDelete({ websiteId: w, id }, HIDDEN)),
 			/** @returns {Promise<PageRecord[]>} */
 			pages: async () =>
 				/** @type {any} */ (await pages.find({ websiteId: w }, { ...HIDDEN, sort: { createdAt: -1 }, limit: 500 }).toArray()),
@@ -417,8 +442,8 @@ export const createStore = (data, { now }) => {
 						{ ...HIDDEN, returnDocument: 'after' },
 					)
 				),
-			/** @param {string} id */
-			removePage: async (id) => (await pages.deleteOne({ websiteId: w, id })).deletedCount > 0,
+			/** Delete one; answers what it was, or null. @param {string} id @returns {Promise<PageRecord | null>} */
+			removePage: async (id) => /** @type {any} */ (await pages.findOneAndDelete({ websiteId: w, id }, HIDDEN)),
 			/**
 			 * Replace the chunks of one source.
 			 * @param {string} sourceId

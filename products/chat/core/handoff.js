@@ -1,7 +1,7 @@
 /**
  * Handoff (pure, PLAN 0.8.3 Handoff), as in ibrahimMobiles: the visitor asks (button or phrases), a keyword matches, the
  * AI escalates, or N AI failures happen in a row. Office hours are lines such as `mon-fri 09:00-17:00` in the
- * business.json time zone; outside them the visitor is told when staff are back.
+ * business.json time zone; outside them the visitor is told when staff are back (in the website's Format).
  * @module
  */
 import { containsPhrase } from './text.js';
@@ -54,13 +54,3 @@ export const parseOfficeHours = (lines) =>
  */
 export const officeState = (windows, now, timeZone) =>
 	isOpenAt(windows, now, timeZone) ? { open: true, backAt: null } : { open: false, backAt: nextOpenAt(windows, now, timeZone) };
-
-/**
- * A time for the visitor, in the business time zone (`Mon 09:00`).
- * @param {number} ms
- * @param {string} timeZone
- */
-export const backAtText = (ms, timeZone) =>
-	new Intl.DateTimeFormat('en-GB', { timeZone, weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(
-		new Date(ms),
-	);

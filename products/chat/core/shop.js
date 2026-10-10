@@ -7,8 +7,12 @@
  * request: Chat forwards it in the `SS-Sign-In` header and Ecommerce verifies it itself and answers only that user's
  * data. The AI never chooses the user, the website or the token: those tools take no arguments, and whatever the model
  * passes is ignored. Only whitelisted fields are kept, so no street address or phone number ever reaches the AI.
+ * Prices and dates in what the AI and the context panel get follow the website's Format and business time zone
+ * (PLAN 0.8.10 K7), so the chat answers show them as the website does.
  * @module
  */
+import { formatDate, formatMoney } from '@ss/contracts/format';
+
 /** The shop tool names. */
 const SHOP_TOOLS = Object.freeze({
 	search: 'search_catalog',
@@ -97,6 +101,10 @@ export const SHOP_TOOL_NAMES = Object.freeze(Object.values(SHOP_TOOLS));
  * @property {boolean} inStock
  */
 /**
+ * The website's Format and business time zone (from the server's `product.format(websiteId)`).
+ * @typedef {{ format?: Partial<import('@ss/contracts/format').Format>, timeZone?: string }} Look
+ */
+/**
  * The context panel's shop info.
  * @typedef {{ orders: Array<{ number: string, status: string, total: string, createdAt: string | null }>, loyaltyPoints: number | null }} ShopInfo
  */
@@ -129,39 +137,28 @@ const pageUrl = (value) =>
 /** @param {unknown} value */
 const countOf = (value) => (Number.isSafeInteger(value) ? Number(value) : null);
 
-/** Currencies with no minor unit (ISO 4217 exponent 0); the same list as Ecommerce's money. */
-const ZERO_DECIMAL = new Set('BIF CLP DJF GNF ISK JPY KMF KRW PYG RWF UGX UYI VND VUV XAF XOF XPF'.split(' '));
-/** Currencies with three decimals (ISO 4217 exponent 3). */
-const THREE_DECIMAL = new Set('BHD IQD JOD KWD LYD OMR TND'.split(' '));
-
 /**
- * Decimals of a currency (ISO 4217 exponent; 2 unless listed), as Ecommerce stores its minor units.
- * @param {string} currency
- */
-export const exponentOf = (currency) => (ZERO_DECIMAL.has(currency) ? 0 : THREE_DECIMAL.has(currency) ? 3 : 2);
-
-/**
- * An amount in minor units for people, with the currency's ISO 4217 decimals (`125000`, `PKR` → `PKR 1,250.00`); the
- * code (or the locale's symbol with `display: 'symbol'`) comes from the currency, never from Chat.
+ * An amount in minor units for people, in the website's Format (`125000`, `PKR` → `PKR 1,250.00` by default).
  * @param {number} amount integer minor units
  * @param {string} currency ISO 4217
- * @param {{ locale?: string, display?: 'code' | 'symbol' }} [options]
+ * @param {Look} look
  */
-export const formatPrice = (amount, currency, { locale, display = 'code' } = {}) => {
-	const digits = exponentOf(currency);
-	try {
-		return new Intl.NumberFormat(locale || 'en', {
-			style: 'currency',
-			currency,
-			currencyDisplay: display,
-			minimumFractionDigits: digits,
-			maximumFractionDigits: digits,
-		})
-			.format(amount / 10 ** digits)
-			.replace(/\s/g, ' ');
-	} catch {
-		return `${currency} ${(amount / 10 ** digits).toFixed(digits)}`;
-	}
+const moneyText = (amount, currency, look) => formatMoney(amount, currency, look.format);
+
+/**
+ * A date or time from an answer for people, in the website's Format and business time zone (a calendar day such as
+ * `2026-10-01` stays that day); the text as it came when it is not a time.
+ * @param {unknown} value
+ * @param {Look} look
+ * @param {'date' | 'datetime'} style
+ */
+const dateText = (value, look, style) => {
+	const text = textOf(value, 40);
+	if (text === null) return null;
+	const formatted = /^\d{4}-\d{2}-\d{2}$/.test(text)
+		? formatDate(`${text}T00:00:00Z`, look.format, { timeZone: 'UTC', style: 'date' })
+		: formatDate(text, look.format, { timeZone: look.timeZone, style });
+	return formatted || text;
 };
 
 /**
@@ -307,11 +304,11 @@ export const shopRequest = (name, args) => {
 	return { ok: true, signIn: true, path: '/v1/chat/me/shipments' };
 };
 
-/** @param {ShopProduct} p */
-const productLine = (p) => ({
+/** @param {ShopProduct} p @param {Look} look */
+const productLine = (p, look) => ({
 	id: p.id,
 	name: p.name,
-	price: formatPrice(p.price, p.currency),
+	price: moneyText(p.price, p.currency, look),
 	inStock: p.inStock,
 	...(p.url ? { link: p.url } : {}),
 });
@@ -351,9 +348,10 @@ const optionsOf = (value) =>
  * What the AI gets from an Ecommerce answer, and the products that become cards.
  * @param {string} name
  * @param {unknown} body
+ * @param {Look} [look] the website's Format and business time zone
  * @returns {{ content: unknown, products: ShopProduct[] }}
  */
-export const shopAnswer = (name, body) => {
+export const shopAnswer = (name, body, look = {}) => {
 	const b = isObject(body) ? body : {};
 	if (name === SHOP_TOOLS.search || name === SHOP_TOOLS.top) {
 		const products = itemsOf(b.items)
@@ -362,14 +360,14 @@ export const shopAnswer = (name, body) => {
 			.slice(0, SHOP_LIMIT);
 		if (products.length === 0)
 			return { content: 'Nothing in the catalog matched. Do not invent products; suggest another search.', products };
-		return { content: { products: products.map(productLine) }, products };
+		return { content: { products: products.map((p) => productLine(p, look)) }, products };
 	}
 	if (name === SHOP_TOOLS.details) {
 		const product = productOf(b);
 		if (!product) return { content: 'No such product. Do not invent details.', products: [] };
 		return {
 			content: {
-				...productLine(product),
+				...productLine(product, look),
 				brand: textOf(b.brand, 120),
 				summary: textOf(b.summary, 500),
 				description: textOf(b.description, 1500),
@@ -385,9 +383,9 @@ export const shopAnswer = (name, body) => {
 		return {
 			content: {
 				productId: textOf(b.productId, 100),
-				price: formatPrice(Number(b.price), b.currency),
-				priceAfterDeals: formatPrice(Number(b.priceAfterDeals), b.currency),
-				savings: formatPrice(isMinor(b.savings) ? Number(b.savings) : 0, b.currency),
+				price: moneyText(Number(b.price), b.currency, look),
+				priceAfterDeals: moneyText(Number(b.priceAfterDeals), b.currency, look),
+				savings: moneyText(isMinor(b.savings) ? Number(b.savings) : 0, b.currency, look),
 				deals: listOfTexts(b.deals),
 			},
 			products: [],
@@ -397,7 +395,11 @@ export const shopAnswer = (name, body) => {
 		const deals = itemsOf(b.items)
 			.filter(isObject)
 			.slice(0, DEALS_LIMIT)
-			.map((d) => ({ name: textOf(d.name, 120), description: textOf(d.description, 300), endsAt: textOf(d.endsAt, 40) }))
+			.map((d) => ({
+				name: textOf(d.name, 120),
+				description: textOf(d.description, 300),
+				endsAt: dateText(d.endsAt, look, 'datetime'),
+			}))
 			.filter((d) => d.name);
 		return { content: deals.length > 0 ? { deals } : 'No deals are running right now.', products: [] };
 	}
@@ -408,8 +410,8 @@ export const shopAnswer = (name, body) => {
 			.map((o) => ({
 				number: textOf(o.number, 40),
 				status: textOf(o.status, 60),
-				total: isMinor(o.total) && isCurrency(o.currency) ? formatPrice(Number(o.total), o.currency) : null,
-				placedAt: textOf(o.placedAt, 40),
+				total: isMinor(o.total) && isCurrency(o.currency) ? moneyText(Number(o.total), o.currency, look) : null,
+				placedAt: dateText(o.placedAt, look, 'date'),
 			}));
 		return {
 			content: {
@@ -437,11 +439,13 @@ export const shopAnswer = (name, body) => {
 
 /**
  * The context panel's shop info from `GET /v1/customers/<userId>/orders`: number, the status label (statuses are
- * merchant-defined) and the total of the last orders, and the loyalty points.
+ * merchant-defined) and the total of the last orders (Ecommerce's `totalText`, else the total in the website's
+ * Format), and the loyalty points. `createdAt` stays the raw time.
  * @param {unknown} body
+ * @param {Look} [look] the website's Format
  * @returns {ShopInfo}
  */
-export const shopInfoOf = (body) => {
+export const shopInfoOf = (body, look = {}) => {
 	const b = isObject(body) ? body : {};
 	return {
 		orders: itemsOf(b.items)
@@ -452,7 +456,7 @@ export const shopInfoOf = (body) => {
 				status: textOf(o.statusLabel, 60) ?? textOf(o.status, 60) ?? '',
 				total:
 					textOf(o.totalText, 40) ??
-					(isMinor(o.total) && isCurrency(o.currency) ? formatPrice(Number(o.total), o.currency) : ''),
+					(isMinor(o.total) && isCurrency(o.currency) ? moneyText(Number(o.total), o.currency, look) : ''),
 				createdAt: textOf(o.createdAt, 40),
 			})),
 		loyaltyPoints: countOf(b.loyaltyPoints),
