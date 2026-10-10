@@ -121,15 +121,46 @@ export const robotsTxtOf = (values, domain) => {
 const isIndexNowKey = (value) => typeof value === 'string' && /^[A-Za-z0-9-]{8,128}$/.test(value);
 
 /**
- * An IndexNow submission: the URLs checked (https, the website's exact domain, no duplicates) and the body the
- * IndexNow endpoint takes, or the reason it cannot be sent.
- * @param {{ urls: unknown, key: unknown, domain: string }} input
- * @returns {{ ok: true, body: { host: string, key: string, keyLocation: string, urlList: string[] } }
- *   | { ok: false, field: 'urls' | 'key', message: string }}
+ * A key file path the merchant set (PLAN 0.8.10 G5): a path on the website (`/indexnow-key.txt`), at most 300
+ * characters, without a query, fragment or spaces; `''` when none is set; null when it is not a path.
+ * @param {unknown} value
+ * @returns {string | null}
  */
-export const indexNowSubmission = ({ urls, key, domain }) => {
+export const keyPathOf = (value) => {
+	const path = typeof value === 'string' ? value.trim() : '';
+	if (path === '') return '';
+	return path.startsWith('/') && !path.startsWith('//') && path.length <= 300 && !/[\s?#\\]/.test(path) ? path : null;
+};
+
+/**
+ * Where the merchant's site serves the IndexNow key: the `keyPath` setting, else `/<key>.txt` (G5); null when the
+ * setting is not a path.
+ * @param {{ key: unknown, keyPath?: unknown }} settings the `indexnow` settings
+ * @param {string} domain
+ */
+export const keyLocationOf = ({ key, keyPath }, domain) => {
+	const path = keyPathOf(keyPath);
+	if (path === null) return null;
+	return `https://${domain}${path === '' ? `/${String(key)}.txt` : path}`;
+};
+
+/**
+ * An IndexNow submission: the URLs checked (https, the website's exact domain, no duplicates) and the body the
+ * IndexNow endpoint takes (the key file at the `keyPath` setting, else `/<key>.txt`), or the reason it cannot be sent.
+ * @param {{ urls: unknown, key: unknown, keyPath?: unknown, domain: string }} input
+ * @returns {{ ok: true, body: { host: string, key: string, keyLocation: string, urlList: string[] } }
+ *   | { ok: false, field: 'urls' | 'key' | 'keyPath', message: string }}
+ */
+export const indexNowSubmission = ({ urls, key, keyPath, domain }) => {
 	if (!isIndexNowKey(key))
 		return { ok: false, field: 'key', message: 'Set your IndexNow key (8–128 letters, digits or dashes) in Settings first.' };
+	const keyLocation = keyLocationOf({ key, keyPath }, domain);
+	if (keyLocation === null)
+		return {
+			ok: false,
+			field: 'keyPath',
+			message: 'The key file address must be a path on your website, such as /indexnow-key.txt (Settings).',
+		};
 	if (!Array.isArray(urls) || urls.length === 0 || urls.length > MAX_INDEXNOW_URLS)
 		return { ok: false, field: 'urls', message: `Send 1 to ${MAX_INDEXNOW_URLS} URLs.` };
 	/** @type {string[]} */
@@ -141,7 +172,7 @@ export const indexNowSubmission = ({ urls, key, domain }) => {
 	}
 	return {
 		ok: true,
-		body: { host: domain, key: String(key), keyLocation: `https://${domain}/${String(key)}.txt`, urlList: list },
+		body: { host: domain, key: String(key), keyLocation, urlList: list },
 	};
 };
 

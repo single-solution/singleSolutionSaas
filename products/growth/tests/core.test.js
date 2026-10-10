@@ -11,6 +11,8 @@ import {
 	checksActivity,
 	indexNowActivity,
 	indexNowSubmission,
+	keyLocationOf,
+	keyPathOf,
 	pageChecks,
 	pagesOf,
 	robotsTxtOf,
@@ -381,6 +383,16 @@ describe('SEO', () => {
 
 	it('checks IndexNow submissions', () => {
 		expect(indexNowSubmission({ urls: [], key: 'short', domain: DOMAIN })).toMatchObject({ ok: false, field: 'key' });
+		// G5: the key file's own path
+		expect(keyPathOf(' /k.txt ')).toBe('/k.txt');
+		expect(keyPathOf(undefined)).toBe('');
+		for (const bad of ['k.txt', '//x/k.txt', '/a b.txt', '/k.txt?x', `/${'a'.repeat(300)}`]) expect(keyPathOf(bad)).toBeNull();
+		expect(keyLocationOf({ key: 'abcdefgh', keyPath: '' }, DOMAIN)).toBe(`https://${DOMAIN}/abcdefgh.txt`);
+		expect(keyLocationOf({ key: 'abcdefgh', keyPath: '/i/key.txt' }, DOMAIN)).toBe(`https://${DOMAIN}/i/key.txt`);
+		expect(indexNowSubmission({ urls: [], key: 'abcdefgh', keyPath: 'x', domain: DOMAIN })).toMatchObject({
+			ok: false,
+			field: 'keyPath',
+		});
 		expect(indexNowSubmission({ urls: 'x', key: 'abcdefgh', domain: DOMAIN })).toMatchObject({ ok: false, field: 'urls' });
 	});
 

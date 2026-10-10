@@ -5,9 +5,16 @@
 		"key": {
 			"type": "string",
 			"title": "IndexNow key",
-			"description": "Your key: 8 to 128 letters, digits or dashes. Your site must serve it as plain text at /<key>.txt.",
+			"description": "Your key: 8 to 128 letters, digits or dashes. Your site serves it as plain text at the key file address below.",
 			"default": "",
 			"maxLength": 128
+		},
+		"keyPath": {
+			"type": "string",
+			"title": "Key file address",
+			"description": "The path on your website where your site serves the key, for example /indexnow-key.txt. Empty: /<key>.txt.",
+			"default": "",
+			"maxLength": 300
 		}
 	}
 }

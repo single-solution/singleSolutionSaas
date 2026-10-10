@@ -132,8 +132,8 @@ export const createRoutes = (product) => {
 	 * @param {any} ctx
 	 */
 	const submitIndexNow = async (ctx) => {
-		const { key } = await product.settings.values(ctx.websiteId, 'indexnow');
-		const submission = indexNowSubmission({ urls: ctx.body?.urls, key, domain: String(ctx.status.domain) });
+		const { key, keyPath } = await product.settings.values(ctx.websiteId, 'indexnow');
+		const submission = indexNowSubmission({ urls: ctx.body?.urls, key, keyPath, domain: String(ctx.status.domain) });
 		if (!submission.ok) return { ok: /** @type {const} */ (false), problem: invalid(submission.field, submission.message) };
 		const answer = await web.indexNow(submission.body);
 		if (!answer.ok) {

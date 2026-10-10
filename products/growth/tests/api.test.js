@@ -307,6 +307,21 @@ describe('IndexNow', () => {
 		// the server token's own submissions are not in the activity log
 		expect(await db.collection('ss_growth_activity').countDocuments({ action: 'indexnow.submitted' })).toBe(1);
 	});
+
+	it('names the key file at the merchant’s own path (G5)', async () => {
+		env.advance(3_600_000);
+		await env.setting('indexnow', 'keyPath', '/indexnow-key.txt');
+		const sent = await env.call('POST', '/v1/indexnow', { token: env.server, body: { urls: [`${ORIGIN}/e`] } });
+		expect(sent.status).toBe(200);
+		expect(JSON.parse(env.web.calls.at(-1)?.body ?? '{}').keyLocation).toBe(`${ORIGIN}/indexnow-key.txt`);
+		await env.setting('indexnow', 'keyPath', 'https://other.example/key.txt');
+		const refused = await env.call('POST', '/v1/indexnow', { token: env.server, body: { urls: [`${ORIGIN}/e`] } });
+		expect(refused.status).toBe(422);
+		expect((await refused.json()).errors[0].path).toBe('/keyPath');
+		// the key itself is still served for the site's key file
+		expect(await (await env.call('GET', '/v1/indexnow/key.txt', { token: env.server })).text()).toBe('key-0123456789');
+		await env.setting('indexnow', 'keyPath', '');
+	});
 });
 
 describe('SEO checklist', () => {

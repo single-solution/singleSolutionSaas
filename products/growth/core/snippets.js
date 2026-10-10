@@ -100,7 +100,8 @@ export const createSnippets = ({ base, widgets, permissions }) => {
 		'// render <meta name={tag.name} content={tag.content} /> for each tag',
 	].join('\n');
 	const indexNow = [
-		'# your site serves the key at https://<your domain>/<key>.txt (GET /v1/indexnow/key.txt gives it)',
+		'# your site serves the key at https://<your domain>/<key>.txt, or at your key file address',
+		'# (Settings, for example /indexnow-key.txt); GET /v1/indexnow/key.txt gives it',
 		`curl -X POST '${base}/v1/indexnow' \\`,
 		'  -H "Authorization: Bearer $SS_SERVER_TOKEN" \\',
 		"  -H 'Content-Type: application/json' \\",
