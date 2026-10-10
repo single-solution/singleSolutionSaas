@@ -56,6 +56,10 @@ export const TEXTS = Object.freeze({
 		businessFound: 'Found',
 		businessMissing: 'business.json not found or invalid',
 		refresh: 'Refresh',
+		bank: 'Bank transfer',
+		bankReady: 'Ready',
+		bankNotReady: 'Not offered yet',
+		bankHelp: 'Set the account number or IBAN in Settings, or turn off Require bank details.',
 		recent: 'Recent changes',
 		noChanges: 'No changes yet.',
 	}),
@@ -147,6 +151,9 @@ export const TEXTS = Object.freeze({
 		replace: 'Replace',
 		test: 'Test',
 		remove: 'Remove',
+		more: 'More actions for {name}',
+		removeTitle: 'Remove {name}?',
+		removeHelp: 'The saved value is deleted here. The features that need it stop working until it is connected again.',
 		none: 'No connections.',
 	}),
 	developers: Object.freeze({
@@ -162,7 +169,8 @@ export const TEXTS = Object.freeze({
 		moreHelp:
 			'Payment links for any amount, full and partial refunds, the bank details for your checkout, gateway-managed subscriptions.',
 		widgets: 'Widget snippets',
-		widgetsHelp: 'The pay button on your website, and the admin widgets in your own admin.',
+		widgetsHelp:
+			'The pay button on your website, and the admin widgets in your own admin: payments, payment links and subscriptions.',
 		ticket: 'Ticket snippet',
 		ticketHelp: 'Your server asks for a ticket for the admin widgets after checking its user.',
 		intro: 'The docs show every feature, widget and route. Features that are off are marked.',

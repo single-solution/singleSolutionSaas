@@ -3,6 +3,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import strings from '../strings/en.json' with { type: 'json' };
 import { WIDGET_ATTRIBUTE, WIDGET_GLOBAL } from '../core/widgets.js';
+import { mountLinksAdmin } from '../ui/links-admin.js';
 import { mountPayButton } from '../ui/pay-button.js';
 import { mountPaymentsAdmin } from '../ui/payments-admin.js';
 import { mountSubscriptionsAdmin } from '../ui/subscriptions-admin.js';
@@ -279,22 +280,43 @@ describe('pay button', () => {
 	});
 });
 
-describe('Payments admin widget', () => {
-	/** @param {Record<string, (init: RequestInit | undefined, url: URL) => Response | Promise<Response>>} routes */
-	const api = (routes) => {
-		const fetch = vi.fn(async (/** @type {any} */ input, /** @type {any} */ init) => {
-			const url = new URL(String(input));
-			const route = routes[`${init?.method ?? 'GET'} ${url.pathname}`];
-			return route ? route(init, url) : answer(404);
-		});
-		return { base: BASE, tickets: tickets(), fetch: /** @type {any} */ (fetch), calls: fetch };
-	};
+/** A fake admin API answering by method and path. @param {Record<string, (init: any, url: URL) => Response | Promise<Response>>} routes @param {ReturnType<typeof tickets>} [source] */
+const adminApi = (routes, source = tickets()) => {
+	const fetch = vi.fn(async (/** @type {any} */ input, /** @type {any} */ init) => {
+		const url = new URL(String(input));
+		const route = routes[`${init?.method ?? 'GET'} ${url.pathname}`];
+		return route ? route(init, url) : answer(404);
+	});
+	return { base: BASE, tickets: source, fetch: /** @type {any} */ (fetch), calls: fetch };
+};
+/** @param {HTMLElement} host @param {string} text */
+const menuItem = (host, text) => {
+	inside(host, '.detail-pane [aria-haspopup="menu"]').click();
+	const item = /** @type {HTMLButtonElement | undefined} */ (
+		[...(host.shadowRoot?.querySelectorAll('[role="menuitem"]') ?? [])].find((b) => b.textContent === text)
+	);
+	return item;
+};
+/** @param {HTMLElement} host */
+const dialog = (host) => /** @type {HTMLFormElement | null} */ (host.shadowRoot?.querySelector('.dialog') ?? null);
+/** @param {HTMLElement} host */
+const submitDialog = async (host) => {
+	dialog(host)?.dispatchEvent(new window.Event('submit', { cancelable: true }));
+	await flush();
+};
+/** @param {HTMLElement} host */
+const detailText = (host) => inside(host, '.detail-pane')?.textContent ?? '';
+/** @param {HTMLElement} host */
+const detailStatus = (host) => inside(host, '.detail-pane [role="status"]')?.textContent;
+/** @param {HTMLElement} host */
+const rows = (host) => /** @type {HTMLElement[]} */ ([...(host.shadowRoot?.querySelectorAll('li.item') ?? [])]);
 
-	it('lists, filters, pages and exports payments', async () => {
+describe('Payments admin widget', () => {
+	it('lists, filters with counts, pages and exports payments', async () => {
 		const host = place('payments_admin');
 		/** @type {string[]} */
 		const queries = [];
-		const client = api({
+		const client = adminApi({
 			'GET /v1/admin/payments': (_init, url) => {
 				queries.push(url.search);
 				const cursor = url.searchParams.get('cursor');
@@ -304,12 +326,25 @@ describe('Payments admin widget', () => {
 					hasMore: !cursor,
 				});
 			},
+			'GET /v1/admin/payments/counts': (_init, url) =>
+				url.searchParams.get('by') === 'state'
+					? answer(200, { total: 2, groups: { paid: 1, partially_refunded: 1 } })
+					: answer(200, { total: 2, groups: { bank_transfer: 1, generic: 1, none: 0 } }),
+			'GET /v1/admin/payments/pay_1': () => answer(200, PAYMENT),
 		});
 		const save = vi.fn();
 		mountPaymentsAdmin({ host, api: client, config: configOf(['payment_api']), save, open: vi.fn() });
 		await flush();
-		expect(host.shadowRoot?.querySelectorAll('li')).toHaveLength(1);
-		expect(host.shadowRoot?.textContent).toContain('PKR 2,500.00 · Paid · o-1');
+		expect(rows(host)).toHaveLength(1);
+		expect(rows(host)[0]?.textContent).toContain('o-1');
+		expect(rows(host)[0]?.textContent).toContain('PKR 2,500.00');
+		expect(rows(host)[0]?.getAttribute('aria-current')).toBe('true');
+		expect(inside(host, 'h2 .badge').textContent).toBe('2');
+		const options = [...inside(host, 'select').options].map((option) => option.textContent);
+		expect(options).toContain('All (2)');
+		expect(options).toContain('Paid (1)');
+		expect(options).toContain('Failed (0)');
+		expect(inside(host, 'p.meta').textContent).toBe('Bank transfer 1 · generic 1');
 		button(host, strings['admin.more']).click();
 		await flush();
 		expect(host.shadowRoot?.textContent).toContain('Refunded PKR 1.00');
@@ -319,6 +354,7 @@ describe('Payments admin widget', () => {
 		await flush();
 		expect(queries.at(-1)).toContain('q=ana%40example.com');
 		expect(queries.at(-1)).toContain('status=paid');
+		expect(inside(host, 'select').value).toBe('paid');
 		inside(host, 'select').dispatchEvent(new window.Event('change'));
 		await flush();
 		button(host, strings['admin.export']).click();
@@ -332,7 +368,7 @@ describe('Payments admin widget', () => {
 
 	it('shows amounts and times in the website’s Format and time zone; the CSV keeps stored values', async () => {
 		const host = place('payments_admin');
-		const client = api({
+		const client = adminApi({
 			'GET /v1/admin/payments': () =>
 				answer(200, { items: [{ ...PAYMENT, refunded: 50000 }], nextCursor: null, hasMore: false }),
 			'GET /v1/admin/payments/pay_1': () => answer(200, PAYMENT),
@@ -340,13 +376,12 @@ describe('Payments admin widget', () => {
 		const save = vi.fn();
 		mountPaymentsAdmin({ host, api: client, config: configOf(['payment_api'], STORE_LOOK), save, open: vi.fn() });
 		await flush();
-		const text = host.shadowRoot?.textContent ?? '';
-		expect(text).toContain('Rs 2,500 · Paid · o-1');
+		const text = rows(host)[0]?.textContent ?? '';
+		expect(text).toContain('Rs 2,500');
 		expect(text).toContain('1 Oct 2026, 15:00');
 		expect(text).toContain('Refunded Rs 500');
-		button(host, strings['admin.open']).click();
-		await flush();
-		expect(inside(host, '.details li').textContent).toBe('1 Oct 2026, 15:00 · created');
+		expect(inside(host, '.detail-pane .sub li').textContent).toBe('1 Oct 2026, 15:00 · created');
+		expect(inside(host, 'p.meta').hasAttribute('hidden')).toBe(true);
 		button(host, strings['admin.export']).click();
 		await flush();
 		const [, csv] = save.mock.calls[0] ?? [];
@@ -355,19 +390,31 @@ describe('Payments admin widget', () => {
 		);
 	});
 
-	it('shows details: refunds, confirms a transfer, opens the proof', async () => {
+	it('shows every field and acts: refund and confirm in dialogs, proof and pay link in the More menu', async () => {
 		const host = place('payments_admin');
-		const pending = { ...PAYMENT, id: 'pay_5', status: 'pending', proof: { type: 'image/png', size: 1 } };
+		const pending = {
+			...PAYMENT,
+			id: 'pay_5',
+			status: 'pending',
+			reference: '',
+			description: '',
+			customer: { name: 'Ana', email: 'ana@example.com', phone: '+923001234567', id: 'usr_1' },
+			metadata: { order: '1042' },
+			source: 'api',
+			checkoutUrl: 'https://payments.example.dev/pay/web_1/pay_5',
+			proof: { type: 'image/png', size: 2048, uploadedAt: '2026-10-01T10:05:00.000Z' },
+		};
 		/** @type {any[]} */
 		const confirmBodies = [];
 		let refundReply = answer(422, { detail: 'Too much' });
 		const open = vi.fn();
-		const client = api({
+		const copy = vi.fn();
+		const client = adminApi({
 			'GET /v1/admin/payments': () => answer(200, { items: [PAYMENT, pending], nextCursor: null, hasMore: false }),
 			'GET /v1/admin/payments/pay_1': () => answer(200, PAYMENT),
 			'GET /v1/admin/payments/pay_5': () => answer(200, pending),
 			'POST /v1/admin/payments/pay_1/refunds': () => refundReply,
-			'POST /v1/admin/payments/pay_5/confirm': (/** @type {any} */ init) => {
+			'POST /v1/admin/payments/pay_5/confirm': (init) => {
 				confirmBodies.push(JSON.parse(init.body));
 				return answer(200, {
 					...pending,
@@ -381,77 +428,92 @@ describe('Payments admin widget', () => {
 			'GET /v1/admin/payments/pay_5/proof': () => answer(200, { url: 'https://bucket/proof' }),
 			'GET /v1/admin/payments/pay_1/proof': () => answer(404),
 		});
-		mountPaymentsAdmin({
-			host,
-			api: client,
-			config: configOf(['payment_api', 'refunds', 'bank_transfer']),
-			save: vi.fn(),
-			open,
-		});
+		const config = configOf(['payment_api', 'refunds', 'bank_transfer']);
+		mountPaymentsAdmin({ host, api: client, config, save: vi.fn(), open, copy });
 		await flush();
-		const [first, second] = /** @type {HTMLElement[]} */ ([...(host.shadowRoot?.querySelectorAll('ul > li') ?? [])]);
-		/** @param {HTMLElement} item @param {string} text */
-		const press = (item, text) => [...item.querySelectorAll('button')].find((b) => b.textContent === text)?.click();
-		press(/** @type {HTMLElement} */ (first), strings['admin.open']);
-		await flush();
-		expect(first?.querySelector('.details')?.textContent).toContain('paid · x · Sam');
-		const form = /** @type {HTMLFormElement} */ (first?.querySelector('.details form'));
-		expect(/** @type {HTMLInputElement} */ (form.querySelector('input')).value).toBe('2500.00');
-		form.dispatchEvent(new window.Event('submit'));
-		await flush();
-		expect(first?.querySelector('.details [role="status"]')?.textContent).toBe('Not refunded: Too much');
+		expect(detailText(host)).toContain('paid · x · Sam');
+		expect(detailText(host)).toContain(strings['admin.field.id']);
+		button(host, strings['admin.refund']).click();
+		expect(inside(host, '.dialog input[name="amount"]').value).toBe('2500.00');
+		await submitDialog(host);
+		expect(dialog(host)?.querySelector('[role="status"]')?.textContent).toBe('Not refunded: Too much');
 		refundReply = answer(201, { ...PAYMENT, status: 'refunded', refunded: 250000 });
-		/** @type {HTMLInputElement} */ (form.querySelector('input')).value = 'abc';
-		form.dispatchEvent(new window.Event('submit'));
+		await submitDialog(host);
+		expect(dialog(host)).toBeNull();
+		expect(detailStatus(host)).toBe(strings['admin.refundDone']);
+		expect(rows(host)[0]?.textContent).toContain('Refunded');
+		expect(button(host, strings['admin.refund'])).toBeUndefined();
+		menuItem(host, strings['admin.proof'])?.click();
 		await flush();
-		expect(first?.querySelector('.details [role="status"]')?.textContent).toBe(strings['admin.refundDone']);
-		expect(first?.textContent).toContain('Refunded');
-		press(/** @type {HTMLElement} */ (first), strings['admin.proof']);
-		await flush();
-		expect(first?.querySelector('.details [role="status"]')?.textContent).toBe(strings['admin.failed']);
-		press(/** @type {HTMLElement} */ (first), strings['admin.close']);
-		expect(first?.querySelector('.details')).toBeNull();
+		expect(detailStatus(host)).toBe(strings['admin.failed']);
+		expect(menuItem(host, strings['admin.copyPayLink'])).toBeUndefined();
 
-		press(/** @type {HTMLElement} */ (second), strings['admin.open']);
+		rows(host)[1]?.click();
 		await flush();
-		press(/** @type {HTMLElement} */ (second), strings['admin.proof']);
+		expect(inside(host, '.split').getAttribute('data-view')).toBe('detail');
+		for (const text of ['Ana', '+923001234567', 'usr_1', 'order', '1042', 'image/png · 2 kB', strings['admin.source.api']])
+			expect(detailText(host)).toContain(text);
+		menuItem(host, strings['admin.proof'])?.click();
 		await flush();
 		expect(open).toHaveBeenCalledWith('https://bucket/proof');
+		menuItem(host, strings['admin.copyPayLink'])?.click();
+		expect(copy).toHaveBeenCalledWith(pending.checkoutUrl);
+		menuItem(host, strings['admin.openPayPage'])?.click();
+		expect(open).toHaveBeenCalledWith(pending.checkoutUrl);
+		menuItem(host, strings['admin.copyId'])?.click();
+		expect(copy).toHaveBeenCalledWith('pay_5');
+		inside(host, '.detail-pane [aria-haspopup="menu"]').click();
+		inside(host, '[role="menu"]').dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+		expect(inside(host, '[role="menu"]').hasAttribute('hidden')).toBe(true);
+		inside(host, '.detail-pane [aria-haspopup="menu"]').click();
+		inside(host, '.detail-pane [aria-haspopup="menu"]').click();
+		expect(inside(host, '[role="menu"]').hasAttribute('hidden')).toBe(true);
+		inside(host, '.detail-pane [aria-haspopup="menu"]').click();
+		inside(host, '[role="menu"] button').dispatchEvent(new window.Event('pointerdown', { bubbles: true, composed: true }));
+		expect(inside(host, '[role="menu"]').hasAttribute('hidden')).toBe(false);
+		document.body.dispatchEvent(new window.Event('pointerdown', { bubbles: true }));
+		expect(inside(host, '[role="menu"]').hasAttribute('hidden')).toBe(true);
 		// the transfer's reference and a note go with the confirmation (PLAN 0.8.10 P3)
-		const fields = /** @type {HTMLElement} */ (second?.querySelector('.details .confirm'));
-		expect(fields.textContent).toBe(`${strings['admin.confirmReference']}${strings['admin.confirmNote']}`);
-		/** @type {HTMLInputElement} */ (fields.querySelector('input[name="reference"]')).value = ' TRX-1 ';
-		/** @type {HTMLInputElement} */ (fields.querySelector('input[name="note"]')).value = 'In the bank app';
-		press(/** @type {HTMLElement} */ (second), strings['admin.confirm']);
-		await flush();
+		button(host, strings['admin.confirm']).click();
+		expect(dialog(host)?.textContent).toContain('PKR 2,500.00');
+		inside(host, '.dialog input[name="reference"]').value = ' TRX-1 ';
+		inside(host, '.dialog textarea[name="note"]').value = 'In the bank app';
+		await submitDialog(host);
 		expect(confirmBodies).toEqual([{ reference: 'TRX-1', note: 'In the bank app' }]);
-		expect(second?.querySelector('.details [role="status"]')?.textContent).toBe(strings['admin.confirmed']);
-		expect(second?.textContent).toContain('Paid');
-		expect(second?.querySelector('.details')?.textContent).toContain('paid · TRX-1 · In the bank app');
-		expect(second?.querySelector('.details .confirm')).toBeNull();
+		expect(detailStatus(host)).toBe(strings['admin.confirmed']);
+		expect(detailText(host)).toContain('paid · TRX-1 · In the bank app');
+		expect(button(host, strings['admin.confirm'])).toBeUndefined();
+		button(host, strings['admin.back']).click();
+		expect(inside(host, '.split').getAttribute('data-view')).toBe('list');
+		rows(host)[0]?.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter' }));
+		await flush();
+		expect(rows(host)[0]?.getAttribute('aria-current')).toBe('true');
 	});
 
 	it('says when confirming fails, the list is empty or cannot load, and when signed out', async () => {
 		const pending = { ...PAYMENT, id: 'pay_6', status: 'pending', proof: null };
 		const host = place('payments_admin');
 		let list = answer(200, { items: [pending], nextCursor: null, hasMore: false });
-		const client = api({
+		const client = adminApi({
 			'GET /v1/admin/payments': () => list,
 			'GET /v1/admin/payments/pay_6': () => answer(200, pending),
 			'POST /v1/admin/payments/pay_6/confirm': () => answer(409, {}),
 		});
 		mountPaymentsAdmin({ host, api: client, config: configOf(['payment_api', 'bank_transfer']), save: vi.fn(), open: vi.fn() });
 		await flush();
-		const item = /** @type {HTMLElement} */ (host.shadowRoot?.querySelector('ul > li'));
-		[...item.querySelectorAll('button')].find((b) => b.textContent === strings['admin.open'])?.click();
-		await flush();
-		[...item.querySelectorAll('button')].find((b) => b.textContent === strings['admin.confirm'])?.click();
-		await flush();
-		expect(item.querySelector('.details [role="status"]')?.textContent).toBe('Not confirmed: ');
+		button(host, strings['admin.confirm']).click();
+		await submitDialog(host);
+		expect(dialog(host)?.querySelector('[role="status"]')?.textContent).toBe('Not confirmed: ');
+		dialog(host)?.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+		expect(dialog(host)).toBeNull();
+		button(host, strings['admin.confirm']).click();
+		button(host, strings['admin.close']).click();
+		expect(dialog(host)).toBeNull();
 		list = answer(200, { items: [], nextCursor: null, hasMore: false });
 		inside(host, 'form').dispatchEvent(new window.Event('submit'));
 		await flush();
 		expect(statusText(host)).toBe(strings['admin.empty']);
+		expect(detailText(host)).toBe('');
 		list = answer(500);
 		inside(host, 'form').dispatchEvent(new window.Event('submit'));
 		await flush();
@@ -474,89 +536,87 @@ describe('Payments admin widget', () => {
 		await flush();
 		expect(statusText(signedOut)).toBe(strings['admin.signedOut']);
 		const detailsFail = place('payments_admin');
-		const failing = api({
+		const failing = adminApi({
 			'GET /v1/admin/payments': () => answer(200, { items: [PAYMENT], nextCursor: null, hasMore: false }),
 		});
 		mountPaymentsAdmin({ host: detailsFail, api: failing, config: configOf(['payment_api']), save: vi.fn(), open: vi.fn() });
-		await flush();
-		button(detailsFail, strings['admin.open']).click();
 		await flush();
 		expect(statusText(detailsFail)).toBe(strings['admin.failed']);
 	});
 });
 
 describe('Subscriptions admin widget', () => {
-	it('lists subscriptions, cancels at the gateway and says what failed', async () => {
+	const sub = {
+		id: 'sub_1',
+		status: 'active',
+		gateway: 'stripe',
+		plan: 'price_1',
+		reference: '',
+		customer: { email: 'a@b.co', name: 'Bo' },
+		gatewayReference: 'sub_stripe_1',
+		history: [{ at: '2026-10-01T10:00:00.000Z', event: 'created' }],
+		createdAt: '2026-10-01T10:00:00.000Z',
+		updatedAt: '2026-10-01T10:00:00.000Z',
+	};
+
+	it('lists subscriptions with a status filter and cancels at the gateway after a confirmation', async () => {
 		const host = place('subscriptions_admin');
-		const sub = {
-			id: 'sub_1',
-			status: 'active',
-			gateway: 'stripe',
-			plan: 'price_1',
-			reference: '',
-			customer: { email: 'a@b.co' },
-			createdAt: '2026-10-01T10:00:00.000Z',
-		};
 		let cancel = answer(502, { detail: 'Stripe refused the keys.' });
-		const fetch = vi.fn(async (/** @type {any} */ input, /** @type {any} */ init) => {
-			const url = new URL(String(input));
-			if (url.pathname === '/v1/admin/subscriptions')
+		/** @type {string[]} */
+		const queries = [];
+		const copy = vi.fn();
+		const client = adminApi({
+			'GET /v1/admin/subscriptions': (_init, url) => {
+				queries.push(url.search);
 				return url.searchParams.get('cursor')
 					? answer(200, {
-							items: [{ ...sub, id: 'sub_2', status: 'cancelled', customer: {} }],
+							items: [{ ...sub, id: 'sub_2', status: 'cancelled', customer: {}, history: [] }],
 							nextCursor: null,
 							hasMore: false,
 						})
 					: answer(200, { items: [sub], nextCursor: 'c', hasMore: true });
-			if (init?.method === 'POST') return cancel;
-			return answer(404);
+			},
+			'POST /v1/admin/subscriptions/sub_1/cancel': () => cancel,
 		});
-		const source = tickets();
-		mountSubscriptionsAdmin({
-			host,
-			api: { base: BASE, tickets: source, fetch: /** @type {any} */ (fetch) },
-			config: configOf(['subscriptions']),
-		});
+		mountSubscriptionsAdmin({ host, api: client, config: configOf(['subscriptions']), copy });
 		await flush();
-		expect(host.shadowRoot?.textContent).toContain('Active · price_1');
-		button(host, strings['subs.cancel']).click();
-		await flush();
-		expect(statusText(host)).toBe('Not cancelled: Stripe refused the keys.');
+		expect(rows(host)[0]?.textContent).toContain('price_1');
+		for (const text of ['Bo', 'a@b.co', 'sub_stripe_1', 'created']) expect(detailText(host)).toContain(text);
+		menuItem(host, strings['subs.cancel'])?.click();
+		expect(dialog(host)?.textContent).toContain('price_1');
+		await submitDialog(host);
+		expect(dialog(host)?.querySelector('[role="status"]')?.textContent).toBe('Not cancelled: Stripe refused the keys.');
 		cancel = answer(200, { ...sub, status: 'cancelled' });
-		button(host, strings['subs.cancel']).click();
-		await flush();
-		expect(statusText(host)).toBe(strings['subs.cancelled']);
-		expect(button(host, strings['subs.cancel'])).toBeUndefined();
+		await submitDialog(host);
+		expect(dialog(host)).toBeNull();
+		expect(detailStatus(host)).toBe(strings['subs.cancelled']);
+		expect(menuItem(host, strings['subs.cancel'])).toBeUndefined();
+		menuItem(host, strings['subs.copyId'])?.click();
+		expect(copy).toHaveBeenCalledWith('sub_1');
 		button(host, strings['subs.more']).click();
 		await flush();
-		expect(host.shadowRoot?.querySelectorAll('ul > li')).toHaveLength(2);
-		source.emit(true);
-		source.emit(false);
+		expect(rows(host)).toHaveLength(2);
+		rows(host)[1]?.click();
+		expect(inside(host, '.split').getAttribute('data-view')).toBe('detail');
+		expect(detailText(host)).toContain('sub_2');
+		rows(host)[0]?.dispatchEvent(new window.KeyboardEvent('keydown', { key: ' ' }));
+		expect(detailText(host)).toContain('sub_1');
+		inside(host, 'select').value = 'active';
+		inside(host, 'select').dispatchEvent(new window.Event('change'));
+		await flush();
+		expect(queries.at(-1)).toContain('status=active');
+		/** @type {any} */ (client.tickets).emit(true);
+		/** @type {any} */ (client.tickets).emit(false);
 		expect(statusText(host)).toBe(strings['subs.signedOut']);
 	});
 
 	it('shows times in the website’s Format and business time zone', async () => {
 		const host = place('subscriptions_admin');
 		const items = [
-			{
-				id: 'sub_9',
-				status: 'active',
-				gateway: 'paypal',
-				plan: 'P-1',
-				reference: 'r',
-				customer: {},
-				createdAt: '2026-10-01T20:30:00.000Z',
-			},
+			{ ...sub, id: 'sub_9', gateway: 'paypal', plan: 'P-1', reference: 'r', createdAt: '2026-10-01T20:30:00.000Z' },
 		];
-		mountSubscriptionsAdmin({
-			host,
-			api: {
-				base: BASE,
-				tickets: tickets(),
-				fetch: /** @type {any} */ (vi.fn(async () => answer(200, { items, nextCursor: null, hasMore: false }))),
-			},
-			config: configOf(['subscriptions'], STORE_LOOK),
-		});
+		const client = adminApi({ 'GET /v1/admin/subscriptions': () => answer(200, { items, nextCursor: null, hasMore: false }) });
+		mountSubscriptionsAdmin({ host, api: client, config: configOf(['subscriptions'], STORE_LOOK) });
 		await flush();
 		// 20:30 UTC is the next day in Karachi (UTC+5)
 		expect(inside(host, '.meta').textContent).toContain('2 Oct 2026, 01:30');
@@ -564,30 +624,175 @@ describe('Subscriptions admin widget', () => {
 
 	it('says when there are none, when they cannot load and when signed out', async () => {
 		const empty = place('subscriptions_admin');
-		const fetch = vi.fn(async () => answer(200, { items: [], nextCursor: null, hasMore: false }));
-		mountSubscriptionsAdmin({
-			host: empty,
-			api: { base: BASE, tickets: tickets(), fetch: /** @type {any} */ (fetch) },
-			config: configOf(['subscriptions']),
-		});
+		const none = { 'GET /v1/admin/subscriptions': () => answer(200, { items: [], nextCursor: null, hasMore: false }) };
+		mountSubscriptionsAdmin({ host: empty, api: adminApi(none), config: configOf(['subscriptions']) });
 		await flush();
 		expect(statusText(empty)).toBe(strings['subs.empty']);
 		const failing = place('subscriptions_admin');
-		mountSubscriptionsAdmin({
-			host: failing,
-			api: { base: BASE, tickets: tickets(), fetch: /** @type {any} */ (vi.fn(async () => answer(500))) },
-			config: configOf(['subscriptions']),
-		});
+		mountSubscriptionsAdmin({ host: failing, api: adminApi({}), config: configOf(['subscriptions']) });
 		await flush();
 		expect(statusText(failing)).toBe(strings['subs.failed']);
 		const out = place('subscriptions_admin');
-		mountSubscriptionsAdmin({
-			host: out,
-			api: { base: BASE, tickets: tickets(null), fetch: /** @type {any} */ (fetch) },
-			config: configOf(['subscriptions']),
-		});
+		mountSubscriptionsAdmin({ host: out, api: adminApi(none, tickets(null)), config: configOf(['subscriptions']) });
 		await flush();
 		expect(statusText(out)).toBe(strings['subs.signedOut']);
+	});
+});
+
+describe('Payment links admin widget', () => {
+	const LINK = {
+		id: 'link_1',
+		title: 'Invoice 42',
+		description: 'Design work',
+		amount: 250000,
+		minAmount: null,
+		currency: 'PKR',
+		gateways: ['bank_transfer'],
+		returnUrl: 'https://shop.example.com/thanks',
+		reference: 'inv-42',
+		active: true,
+		paidCount: 2,
+		url: 'https://payments.example.dev/l/web_1/link_1',
+		createdAt: '2026-10-01T10:00:00.000Z',
+	};
+	const OPEN = {
+		...LINK,
+		id: 'link_2',
+		title: 'Donations',
+		amount: null,
+		minAmount: 500,
+		gateways: [],
+		active: false,
+		paidCount: 0,
+	};
+
+	it('lists links and shows one: copy, open and turn it off and on again', async () => {
+		const host = place('links_admin');
+		/** @type {any[]} */
+		const switches = [];
+		let switchReply = (/** @type {any} */ body) => answer(200, { ...LINK, active: body.active });
+		const open = vi.fn();
+		const copy = vi.fn();
+		const client = adminApi({
+			'GET /v1/admin/links': (_init, url) =>
+				url.searchParams.get('cursor')
+					? answer(200, { items: [OPEN], nextCursor: null, hasMore: false })
+					: answer(200, { items: [LINK], nextCursor: 'c', hasMore: true }),
+			'PATCH /v1/admin/links/link_1': (init) => {
+				const body = JSON.parse(init.body);
+				switches.push(body);
+				return switchReply(body);
+			},
+		});
+		mountLinksAdmin({ host, api: client, config: configOf(['payment_links', 'bank_transfer']), open, copy });
+		await flush();
+		expect(rows(host)[0]?.textContent).toContain('Invoice 42');
+		expect(rows(host)[0]?.textContent).toContain('2 paid');
+		for (const text of [LINK.url, 'PKR 2,500.00', 'Bank transfer', 'inv-42', 'Design work', LINK.returnUrl, 'link_1'])
+			expect(detailText(host)).toContain(text);
+		button(host, strings['links.copy']).click();
+		expect(copy).toHaveBeenCalledWith(LINK.url);
+		expect(detailStatus(host)).toBe(strings['links.copied']);
+		menuItem(host, strings['links.openPage'])?.click();
+		expect(open).toHaveBeenCalledWith(LINK.url);
+		menuItem(host, strings['links.copyId'])?.click();
+		expect(copy).toHaveBeenCalledWith('link_1');
+		menuItem(host, strings['links.turnOff'])?.click();
+		expect(dialog(host)?.textContent).toContain('Invoice 42');
+		await submitDialog(host);
+		expect(switches).toEqual([{ active: false }]);
+		expect(detailStatus(host)).toBe(strings['links.turnedOff']);
+		expect(inside(host, '.detail-pane .badge').textContent).toBe(strings['links.off']);
+		expect(button(host, strings['links.copy'])).toBeUndefined();
+		switchReply = () => answer(409, { detail: 'Try again.' });
+		menuItem(host, strings['links.turnOn'])?.click();
+		await flush();
+		expect(detailStatus(host)).toBe('Not changed: Try again.');
+		switchReply = (body) => answer(200, { ...LINK, active: body.active });
+		menuItem(host, strings['links.turnOn'])?.click();
+		await flush();
+		expect(detailStatus(host)).toBe(strings['links.turnedOn']);
+		button(host, strings['links.more']).click();
+		await flush();
+		expect(rows(host)).toHaveLength(2);
+		rows(host)[1]?.click();
+		expect(inside(host, '.split').getAttribute('data-view')).toBe('detail');
+		expect(detailText(host)).toContain('Payer enters it (at least PKR 5.00)');
+		expect(detailText(host)).toContain(strings['links.allGateways']);
+		rows(host)[0]?.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter' }));
+		expect(detailText(host)).toContain('Invoice 42');
+	});
+
+	it('creates a link in a dialog with the switched-on gateways', async () => {
+		const host = place('links_admin');
+		/** @type {any[]} */
+		const bodies = [];
+		let reply = answer(422, { detail: 'returnUrl must be on https://shop.example.com.' });
+		const client = adminApi({
+			'GET /v1/admin/links': () => answer(200, { items: [], nextCursor: null, hasMore: false }),
+			'POST /v1/admin/links': (init) => {
+				bodies.push(JSON.parse(init.body));
+				return reply;
+			},
+		});
+		mountLinksAdmin({ host, api: client, config: configOf(['payment_links', 'stripe', 'bank_transfer']), open: vi.fn() });
+		await flush();
+		expect(statusText(host)).toBe(strings['links.empty']);
+		button(host, strings['links.new']).click();
+		const form = /** @type {HTMLFormElement} */ (dialog(host));
+		const set = (/** @type {string} */ name, /** @type {string} */ value) => {
+			/** @type {HTMLInputElement} */ (form.querySelector(`[name="${name}"]`)).value = value;
+		};
+		const boxes = [...form.querySelectorAll('input[type="checkbox"]')].map((box) => /** @type {HTMLInputElement} */ (box));
+		expect(boxes.map((box) => box.value)).toEqual(['stripe', 'bank_transfer']);
+		set('title', ' Donations ');
+		set('currency', 'pkr');
+		set('minAmount', 'abc');
+		await submitDialog(host);
+		expect(form.querySelector('[role="status"]')?.textContent).toBe(strings['links.invalidAmount']);
+		set('minAmount', '100');
+		set('returnUrl', 'https://elsewhere.example.org/');
+		/** @type {HTMLInputElement} */ (boxes[1]).checked = true;
+		await submitDialog(host);
+		expect(form.querySelector('[role="status"]')?.textContent).toBe(
+			'Not created: returnUrl must be on https://shop.example.com.',
+		);
+		reply = answer(201, OPEN);
+		set('returnUrl', '');
+		set('amount', '');
+		await submitDialog(host);
+		expect(bodies.at(-1)).toEqual({
+			title: 'Donations',
+			description: '',
+			currency: 'PKR',
+			amount: null,
+			minAmount: 10000,
+			gateways: ['bank_transfer'],
+			reference: '',
+		});
+		expect(dialog(host)).toBeNull();
+		expect(rows(host)[0]?.textContent).toContain('Donations');
+		expect(detailStatus(host)).toBe(strings['links.created']);
+		expect(statusText(host)).toBe('');
+	});
+
+	it('says when links cannot load and when signed out', async () => {
+		const failing = place('links_admin');
+		mountLinksAdmin({ host: failing, api: adminApi({}), config: configOf(['payment_links']), open: vi.fn() });
+		await flush();
+		expect(statusText(failing)).toBe(strings['links.failed']);
+		const none = { 'GET /v1/admin/links': () => answer(200, { items: [], nextCursor: null, hasMore: false }) };
+		const out = place('links_admin');
+		mountLinksAdmin({ host: out, api: adminApi(none, tickets(null)), config: configOf(['payment_links']), open: vi.fn() });
+		await flush();
+		expect(statusText(out)).toBe(strings['links.signedOut']);
+		const later = place('links_admin');
+		const client = adminApi(none);
+		mountLinksAdmin({ host: later, api: client, config: configOf(['payment_links']), open: vi.fn() });
+		await flush();
+		/** @type {any} */ (client.tickets).emit(true);
+		/** @type {any} */ (client.tickets).emit(false);
+		expect(statusText(later)).toBe(strings['links.signedOut']);
 	});
 });
 
@@ -618,17 +823,20 @@ describe('admin widgets through widget.js', () => {
 		expect(subscriptions.shadowRoot).toBeNull();
 	});
 
-	it('mounts the subscriptions admin, and the ticket source renews', async () => {
+	it('mounts the subscriptions and links admins, and the ticket source renews', async () => {
 		const host = place('subscriptions_admin');
+		const links = place('links_admin');
 		serve({
-			[`GET ${ADMIN_CONFIG_PATH}`]: () => answer(200, configOf(['subscriptions', 'payment_api'])),
+			[`GET ${ADMIN_CONFIG_PATH}`]: () => answer(200, configOf(['subscriptions', 'payment_links'])),
 			'GET /v1/admin/subscriptions': () => answer(200, { items: [], nextCursor: null, hasMore: false }),
+			'GET /v1/admin/links': () => answer(200, { items: [], nextCursor: null, hasMore: false }),
 		});
 		await startWidget({ window, script: script(null) }).admin({
 			getTicket: async () => ({ ticket: 't1', expiresAt: new Date(Date.now() + 900_000).toISOString() }),
 		});
 		await flush();
 		expect(statusText(host)).toBe(strings['subs.empty']);
+		expect(statusText(links)).toBe(strings['links.empty']);
 		/** @type {Array<() => void>} */
 		const scheduled = [];
 		const source = createTicketSource({

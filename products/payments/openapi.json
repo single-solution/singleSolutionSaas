@@ -130,6 +130,142 @@
 				}
 			}
 		},
+		"/v1/admin/links": {
+			"get": {
+				"x-ss-auth": "ticket",
+				"x-ss-feature": "payment_links",
+				"x-ss-permission": "links.read",
+				"security": [
+					{
+						"ticket": []
+					}
+				],
+				"parameters": [],
+				"responses": {
+					"2XX": {
+						"description": "Success (JSON)"
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"x-ss-auth": "ticket",
+				"x-ss-feature": "payment_links",
+				"x-ss-permission": "links.manage",
+				"security": [
+					{
+						"ticket": []
+					}
+				],
+				"parameters": [
+					{
+						"name": "Idempotency-Key",
+						"in": "header",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"maxLength": 255
+						}
+					}
+				],
+				"responses": {
+					"2XX": {
+						"description": "Success (JSON)"
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/admin/links/{id}": {
+			"get": {
+				"x-ss-auth": "ticket",
+				"x-ss-feature": "payment_links",
+				"x-ss-permission": "links.read",
+				"security": [
+					{
+						"ticket": []
+					}
+				],
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"2XX": {
+						"description": "Success (JSON)"
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			},
+			"patch": {
+				"x-ss-auth": "ticket",
+				"x-ss-feature": "payment_links",
+				"x-ss-permission": "links.manage",
+				"security": [
+					{
+						"ticket": []
+					}
+				],
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"2XX": {
+						"description": "Success (JSON)"
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/v1/admin/payments": {
 			"get": {
 				"x-ss-auth": "ticket",

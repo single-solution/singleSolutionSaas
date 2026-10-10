@@ -15,6 +15,7 @@ export const WIDGET_ATTRIBUTE = 'data-ss-payments';
 export const WIDGET_FEATURES = Object.freeze({
 	pay_button: Object.freeze(['payment_links', 'payment_api']),
 	payments_admin: Object.freeze(['payment_api']),
+	links_admin: Object.freeze(['payment_links']),
 	subscriptions_admin: Object.freeze(['subscriptions']),
 });
 

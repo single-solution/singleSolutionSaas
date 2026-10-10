@@ -981,6 +981,35 @@ describe('admin widgets (tickets)', () => {
 	});
 });
 
+describe('payment links with a ticket', () => {
+	it('lists, creates, reads and turns off links in the admin widget (links.read, links.manage)', async () => {
+		const ticket = await env.ticket(['links.read', 'links.manage']);
+		/** @param {unknown} [body] */
+		const as = (body) => ({ token: ticket, origin: ADMIN_ORIGIN, ...(body === undefined ? {} : { body }) });
+		const made = await env.call('POST', '/v1/admin/links', as({ title: 'Deposit', currency: 'PKR', amount: 500000 }));
+		expect(made.status).toBe(201);
+		expect(made.json.url).toBe(`${BASE}/l/${env.websiteId}/${made.json.id}`);
+		expect((await env.call('POST', '/v1/admin/links', as({ currency: 'PKR' }))).status).toBe(422);
+		const listed = await env.call('GET', '/v1/admin/links?limit=100', as());
+		expect(listed.json.items.map((/** @type {any} */ link) => link.id)).toContain(made.json.id);
+		expect((await env.call('GET', `/v1/admin/links/${made.json.id}`, as())).json.title).toBe('Deposit');
+		expect((await env.call('GET', '/v1/admin/links/link_nope', as())).status).toBe(404);
+		const off = await env.call('PATCH', `/v1/admin/links/${made.json.id}`, as({ active: false }));
+		expect(off.json.active).toBe(false);
+		expect((await page(`/l/${env.websiteId}/${made.json.id}`)).status).toBe(404);
+		const activity = await env.api('GET', `/v1/activity?target=${made.json.id}`);
+		expect(activity.json.items.map((/** @type {any} */ entry) => entry.action)).toEqual(['link.turned_off', 'link.created']);
+		expect(activity.json.items[1]).toMatchObject({ label: 'Deposit', actor: { name: 'Sam Staff' } });
+		const readOnly = await env.ticket(['links.read']);
+		const refused = await env.call('PATCH', `/v1/admin/links/${made.json.id}`, {
+			token: readOnly,
+			origin: ADMIN_ORIGIN,
+			body: { active: true },
+		});
+		expect(refused.status).toBe(403);
+	});
+});
+
 describe('kit features (PLAN 0.8.10)', () => {
 	/**
 	 * Every item of a list, following its cursors.

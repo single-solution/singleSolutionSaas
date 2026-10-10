@@ -144,6 +144,16 @@
 			"feature": "bank_transfer"
 		},
 		{
+			"key": "links.read",
+			"name": "See payment links",
+			"feature": "payment_links"
+		},
+		{
+			"key": "links.manage",
+			"name": "Create and turn off payment links",
+			"feature": "payment_links"
+		},
+		{
 			"key": "subscriptions.read",
 			"name": "See subscriptions",
 			"feature": "subscriptions"
@@ -163,6 +173,11 @@
 		{
 			"key": "payments_admin",
 			"feature": "payment_api",
+			"kind": "admin"
+		},
+		{
+			"key": "links_admin",
+			"feature": "payment_links",
 			"kind": "admin"
 		},
 		{

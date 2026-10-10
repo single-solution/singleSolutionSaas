@@ -3,12 +3,13 @@
  * script tag (the website's browser token) it fetches the website's widget config and mounts the pay buttons
  * (`data-ss-payments="pay_button"` with `data-link` or `data-payment`) while payment links or the payment API is on.
  * Without it (the merchant's admin pages) it only offers `window.SSPayments.admin({ getTicket })`, which fetches the
- * config with a ticket and mounts the admin widgets of switched-on features: `payments_admin` and
+ * config with a ticket and mounts the admin widgets of switched-on features: `payments_admin`, `links_admin` and
  * `subscriptions_admin`. Widgets render nothing while the product is stopped, their feature is off or the merchant
  * database is not connected.
  * @module
  */
 import { WIDGET_ATTRIBUTE, WIDGET_FEATURES, WIDGET_GLOBAL } from '../core/widgets.js';
+import { mountLinksAdmin } from './links-admin.js';
 import { mountPayButton } from './pay-button.js';
 import { mountPaymentsAdmin } from './payments-admin.js';
 import { mountSubscriptionsAdmin } from './subscriptions-admin.js';
@@ -108,13 +109,18 @@ export const startWidget = ({ window: win, script }) => {
 			now: () => Date.now(),
 		});
 		const api = { base, tickets, fetch: request };
+		/** @param {string} url */
+		const open = (url) => void win.open(url, '_blank', 'noopener');
+		/** @param {string} text */
+		const copy = (text) => void win.navigator.clipboard?.writeText(text).catch(() => {});
 		if (on(config, 'payments_admin'))
 			for (const host of hosts('payments_admin'))
 				mountPaymentsAdmin({
 					host,
 					api,
 					config,
-					open: (url) => void win.open(url, '_blank', 'noopener'),
+					open,
+					copy,
 					save: (name, text) => {
 						const link = doc.createElement('a');
 						link.href = win.URL.createObjectURL(new win.Blob([text], { type: 'text/csv;charset=utf-8' }));
@@ -123,8 +129,9 @@ export const startWidget = ({ window: win, script }) => {
 						win.URL.revokeObjectURL(link.href);
 					},
 				});
+		if (on(config, 'links_admin')) for (const host of hosts('links_admin')) mountLinksAdmin({ host, api, config, open, copy });
 		if (on(config, 'subscriptions_admin'))
-			for (const host of hosts('subscriptions_admin')) mountSubscriptionsAdmin({ host, api, config });
+			for (const host of hosts('subscriptions_admin')) mountSubscriptionsAdmin({ host, api, config, copy });
 	};
 	Object.assign(win, { [WIDGET_GLOBAL]: Object.freeze({ admin }) });
 	return { admin, ready };

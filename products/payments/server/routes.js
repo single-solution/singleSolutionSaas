@@ -298,6 +298,55 @@ export const createRoutes = (product) => {
 	};
 
 	/**
+	 * A new payment link (API or the Payment links admin widget).
+	 * @param {any} ctx
+	 */
+	const createLink = async (ctx) => {
+		const checked = checkLinkInput(ctx.body);
+		if (!checked.ok) return invalid(checked.field, checked.message);
+		const s = await siteOf(ctx);
+		if (!service.allowedReturn(s, checked.value.returnUrl))
+			return invalid('returnUrl', `returnUrl must be on https://${s.domain} (or a local address while testing).`, 'origin');
+		const link = await s.store.links.add(checked.value);
+		await log(ctx, 'link.created', link.id, link.title, `Payment link in ${link.currency} created`);
+		return created(linkView(link, service.linkUrl(s, link.id)));
+	};
+
+	/**
+	 * One page of payment links (`?cursor=&limit=`), newest first.
+	 * @param {any} ctx
+	 */
+	const listLinks = async (ctx) => {
+		const page = paginate({ cursor: ctx.query.cursor, limit: ctx.query.limit, url: ctx.request.url }, { defaultLimit: 25 });
+		const s = await siteOf(ctx);
+		const rows = await s.store.links.list({ after: page.after, limit: page.fetchLimit });
+		return page.respond(
+			rows.map((link) => linkView(link, service.linkUrl(s, link.id))),
+			(view) => [view.createdAt, view.id],
+		);
+	};
+
+	/** @param {any} ctx */
+	const readLink = async (ctx) => {
+		const s = await siteOf(ctx);
+		const link = isId(ctx.params.id, 'link') ? await s.store.links.get(ctx.params.id) : null;
+		return link ? linkView(link, service.linkUrl(s, link.id)) : problem('not_found', 'No such link.');
+	};
+
+	/**
+	 * Turn a payment link off (its page is gone) or on again: `{ active }`.
+	 * @param {any} ctx
+	 */
+	const switchLink = async (ctx) => {
+		if (typeof ctx.body?.active !== 'boolean') return invalid('active', 'active is true or false.');
+		const s = await siteOf(ctx);
+		const link = isId(ctx.params.id, 'link') ? await s.store.links.setActive(ctx.params.id, ctx.body.active) : null;
+		if (!link) return problem('not_found', 'No such link.');
+		await log(ctx, link.active ? 'link.turned_on' : 'link.turned_off', link.id, link.title, '');
+		return linkView(link, service.linkUrl(s, link.id));
+	};
+
+	/**
 	 * A payment link of the website that is active and on, or null.
 	 * @param {Site} s @param {unknown} id
 	 */
@@ -732,61 +781,11 @@ export const createRoutes = (product) => {
 			feature: 'payment_links',
 			idempotent: true,
 			rateLimit: SERVER_LIMITS,
-			handler: async (ctx) => {
-				const checked = checkLinkInput(ctx.body);
-				if (!checked.ok) return invalid(checked.field, checked.message);
-				const s = await siteOf(ctx);
-				if (!service.allowedReturn(s, checked.value.returnUrl))
-					return invalid(
-						'returnUrl',
-						`returnUrl must be on https://${s.domain} (or a local address while testing).`,
-						'origin',
-					);
-				const link = await s.store.links.add(checked.value);
-				return created(linkView(link, service.linkUrl(s, link.id)));
-			},
+			handler: createLink,
 		}),
-		defineRoute({
-			method: 'GET',
-			path: '/v1/links',
-			auth: 'server',
-			feature: 'payment_links',
-			handler: async (ctx) => {
-				const page = paginate(
-					{ cursor: ctx.query.cursor, limit: ctx.query.limit, url: ctx.request.url },
-					{ defaultLimit: 25 },
-				);
-				const s = await siteOf(ctx);
-				const rows = await s.store.links.list({ after: page.after, limit: page.fetchLimit });
-				return page.respond(
-					rows.map((link) => linkView(link, service.linkUrl(s, link.id))),
-					(view) => [view.createdAt, view.id],
-				);
-			},
-		}),
-		defineRoute({
-			method: 'GET',
-			path: '/v1/links/:id',
-			auth: 'server',
-			feature: 'payment_links',
-			handler: async (ctx) => {
-				const s = await siteOf(ctx);
-				const link = isId(ctx.params.id, 'link') ? await s.store.links.get(ctx.params.id) : null;
-				return link ? linkView(link, service.linkUrl(s, link.id)) : problem('not_found', 'No such link.');
-			},
-		}),
-		defineRoute({
-			method: 'PATCH',
-			path: '/v1/links/:id',
-			auth: 'server',
-			feature: 'payment_links',
-			handler: async (ctx) => {
-				if (typeof ctx.body?.active !== 'boolean') return invalid('active', 'active is true or false.');
-				const s = await siteOf(ctx);
-				const link = isId(ctx.params.id, 'link') ? await s.store.links.setActive(ctx.params.id, ctx.body.active) : null;
-				return link ? linkView(link, service.linkUrl(s, link.id)) : problem('not_found', 'No such link.');
-			},
-		}),
+		defineRoute({ method: 'GET', path: '/v1/links', auth: 'server', feature: 'payment_links', handler: listLinks }),
+		defineRoute({ method: 'GET', path: '/v1/links/:id', auth: 'server', feature: 'payment_links', handler: readLink }),
+		defineRoute({ method: 'PATCH', path: '/v1/links/:id', auth: 'server', feature: 'payment_links', handler: switchLink }),
 
 		// ------------------------------------------------------------------------------------------- subscriptions
 		defineRoute({
@@ -944,6 +943,35 @@ export const createRoutes = (product) => {
 			auth: 'ticket',
 			permission: 'payments.confirm',
 			handler: proofLink,
+		}),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/admin/links',
+			auth: 'ticket',
+			permission: 'links.read',
+			handler: listLinks,
+		}),
+		defineRoute({
+			method: 'POST',
+			path: '/v1/admin/links',
+			auth: 'ticket',
+			permission: 'links.manage',
+			idempotent: true,
+			handler: createLink,
+		}),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/admin/links/:id',
+			auth: 'ticket',
+			permission: 'links.read',
+			handler: readLink,
+		}),
+		defineRoute({
+			method: 'PATCH',
+			path: '/v1/admin/links/:id',
+			auth: 'ticket',
+			permission: 'links.manage',
+			handler: switchLink,
 		}),
 		defineRoute({
 			method: 'GET',

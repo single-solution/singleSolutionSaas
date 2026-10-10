@@ -7,6 +7,7 @@
  */
 import { ViewTransition, useState } from 'react';
 import {
+	ActionMenu,
 	Badge,
 	Button,
 	Callout,
@@ -144,6 +145,23 @@ function StatusBanner({ status }) {
 }
 
 /**
+ * Bank transfer as payers and the merchant's server see it (PLAN 0.8.10 P1, P2), from the website's settings; null
+ * while they are not loaded or the feature is off.
+ * @param {import('./api.js').Answer | null} settings
+ */
+const bankOf = (settings) => {
+	const feature = settings?.ok
+		? settings.data.features.find((/** @type {{ key: string, on: boolean }} */ item) => item.key === 'bank_transfer' && item.on)
+		: undefined;
+	if (!feature) return null;
+	return bankTransfer(
+		Object.fromEntries(
+			Object.entries(feature.values ?? {}).map(([name, entry]) => [name, /** @type {{ value: unknown }} */ (entry).value]),
+		),
+	);
+};
+
+/**
  * Switched-on gateways whose keys are connected; bank transfer, whose details are settings, counts when it is ready
  * (its account number or IBAN set, or Require bank details off).
  * @param {{ featuresOn: string[], checklist: { connections: Array<{ name: string, status: string }> } }} data
@@ -152,15 +170,7 @@ function StatusBanner({ status }) {
 const gatewaysReady = (data, settings) =>
 	GATEWAYS.filter((gateway) => {
 		if (!data.featuresOn.includes(GATEWAY_FEATURES[gateway])) return false;
-		if (gateway === 'bank_transfer') {
-			const feature = settings?.ok
-				? settings.data.features.find((/** @type {{ key: string }} */ item) => item.key === 'bank_transfer')
-				: undefined;
-			const values = Object.fromEntries(
-				Object.entries(feature?.values ?? {}).map(([name, entry]) => [name, /** @type {{ value: unknown }} */ (entry).value]),
-			);
-			return feature !== undefined && bankTransfer(values).ready;
-		}
+		if (gateway === 'bank_transfer') return bankOf(settings)?.ready === true;
 		const name = GATEWAY_CONNECTIONS[gateway];
 		return data.checklist.connections.some((item) => item.name === name && item.status === 'connected');
 	}).length;
@@ -223,6 +233,14 @@ function OverviewTab({ websiteId }) {
 											detail={item.message}
 										/>
 									))}
+									{bankOf(settings.answer) ? (
+										<CheckRow
+											tone={bankOf(settings.answer)?.ready ? 'success' : 'warning'}
+											badge={bankOf(settings.answer)?.ready ? TEXTS.overview.bankReady : TEXTS.overview.bankNotReady}
+											label={TEXTS.overview.bank}
+											detail={bankOf(settings.answer)?.ready ? undefined : TEXTS.overview.bankHelp}
+										/>
+									) : null}
 									{data.checklist.widget ? (
 										<CheckRow
 											tone={data.checklist.widget.installed ? 'success' : 'warning'}
@@ -697,6 +715,7 @@ function ConnectionsTab({ websiteId }) {
 	const { answer, reload } = useLoad(base);
 	const [values, setValues] = useState(/** @type {Record<string, string>} */ ({}));
 	const [result, setResult] = useState(/** @type {import('./api.js').Answer | null} */ (null));
+	const [removing, setRemoving] = useState(/** @type {{ name: string, label: string } | null} */ (null));
 	/** @param {Promise<import('./api.js').Answer>} pending */
 	const act = async (pending) => {
 		setResult(await pending);
@@ -757,15 +776,37 @@ function ConnectionsTab({ websiteId }) {
 											onClick={() => act(call('POST', `${base}/${item.name}/test`))}>
 											{TEXTS.connections.test}
 										</Button>
-										<Button size="sm" variant="ghost" onClick={() => act(call('DELETE', `${base}/${item.name}`))}>
-											{TEXTS.connections.remove}
-										</Button>
+										{item.status === 'not_connected' ? null : (
+											<ActionMenu
+												label={fill(TEXTS.connections.more, { name: item.label })}
+												items={[
+													{
+														label: TEXTS.connections.remove,
+														danger: true,
+														onSelect: () => setRemoving({ name: item.name, label: item.label }),
+													},
+												]}
+											/>
+										)}
 									</div>
 								</Card>
 							);
 						})}
 					</Masonry>
 					<Outcome result={result} />
+					<ConfirmDialog
+						open={removing !== null}
+						title={fill(TEXTS.connections.removeTitle, { name: removing?.label ?? '' })}
+						confirmLabel={TEXTS.connections.remove}
+						danger
+						onClose={() => setRemoving(null)}
+						onConfirm={async () => {
+							const name = removing?.name ?? '';
+							setRemoving(null);
+							await act(call('DELETE', `${base}/${name}`));
+						}}>
+						<p>{TEXTS.connections.removeHelp}</p>
+					</ConfirmDialog>
 				</div>
 			)}
 		</Loaded>
