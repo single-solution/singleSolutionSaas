@@ -5,6 +5,7 @@
  */
 import { COLLECTIONS } from '../core/model.js';
 import { createMedia } from './catalog-media.js';
+import { hiddenFor, visibleMatch } from './catalog-visibility.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
 /** @typedef {import('./service.js').Site} Site */
@@ -17,7 +18,7 @@ export const createCards = (product) => {
 	const media = createMedia(product);
 
 	/**
-	 * Active products by id (in the order asked, missing ones left out).
+	 * Active products shoppers may see by id (in the order asked, missing and hidden ones left out; PLAN 0.8.10 E1).
 	 * @param {Site} s
 	 * @param {string[]} ids
 	 * @returns {Promise<ProductRecord[]>}
@@ -28,7 +29,10 @@ export const createCards = (product) => {
 		const found = /** @type {ProductRecord[]} */ (
 			await data
 				.collection(COLLECTIONS.products)
-				.find({ websiteId: s.websiteId, id: { $in: ids }, status: 'active' }, { projection: { _id: 0 } })
+				.find(
+					{ websiteId: s.websiteId, id: { $in: ids }, status: 'active', ...visibleMatch(await hiddenFor(s)) },
+					{ projection: { _id: 0 } },
+				)
 				.toArray()
 		);
 		const byId = new Map(found.map((p) => [p.id, p]));

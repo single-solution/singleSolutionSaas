@@ -25,8 +25,19 @@ import { givePoints, releaseOrder, returnToOrigin, takePoints } from '../adapter
 import { courierOf, trackingLink } from '../core/couriers.js';
 import { canMove, statusOf } from '../core/flow.js';
 import { expiryFor, pointsToEarn } from '../core/loyalty.js';
-import { COLLECTIONS } from '../core/model.js';
-import { CASH_METHODS, refundSplit, refundable, serialPlan, stateAfterRefund, statusLabel } from '../core/orders.js';
+import { createId } from '@ss/contracts';
+import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
+import {
+	CASH_METHODS,
+	isSerialized,
+	missingSerials,
+	refundSplit,
+	refundable,
+	serialCheckFailure,
+	serialPlan,
+	stateAfterRefund,
+	statusLabel,
+} from '../core/orders.js';
 import { createOrderMessages } from './order-messages.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
@@ -82,17 +93,115 @@ export const createMoves = (product, service) => {
 	};
 
 	/**
-	 * Serials of an order back in stock (cancel, return to origin).
+	 * Serials of an order back in stock (cancel, return to origin); serials typed for it (E11) were never in stock, so
+	 * their records go.
 	 * @param {Site} s @param {string} orderId @param {Session} session
 	 */
-	const releaseSerials = async (s, orderId, session) =>
-		(await s.data())
-			.collection(COLLECTIONS.serials)
-			.updateMany(
-				{ websiteId: s.websiteId, orderId, status: 'sold' },
-				{ $set: { status: 'in_stock', orderId: null, lineId: null } },
-				{ session },
-			);
+	const releaseSerials = async (s, orderId, session) => {
+		const serials = (await s.data()).collection(COLLECTIONS.serials);
+		await serials.deleteMany({ websiteId: s.websiteId, orderId, status: 'sold', typed: true }, { session });
+		await serials.updateMany(
+			{ websiteId: s.websiteId, orderId, status: 'sold' },
+			{ $set: { status: 'in_stock', orderId: null, lineId: null } },
+			{ session },
+		);
+	};
+
+	/**
+	 * The website's serial capture (E11): `registered` (picked from stock when packing) or `typed`, and the check.
+	 * @param {Site} s
+	 */
+	const serialRules = async (s) => {
+		const values = await s.values('grades_serials');
+		return {
+			mode: /** @type {'registered' | 'typed'} */ (values.serialMode === 'typed' ? 'typed' : 'registered'),
+			check: String(values.serialCheck ?? 'none'),
+		};
+	};
+
+	/**
+	 * The order's products that are serialized: their own switch, else as their categories say (E11).
+	 * @param {Site} s @param {OrderRecord} order
+	 */
+	const serializedOf = async (s, order) => {
+		const data = await s.data();
+		const ids = [...new Set(order.lines.filter((line) => line.kind === 'physical').map((line) => line.productId))];
+		const products = await data
+			.collection(COLLECTIONS.products)
+			.find({ websiteId: s.websiteId, id: { $in: ids } }, { projection: { _id: 0, id: 1, serialized: 1, categoryIds: 1 } })
+			.toArray();
+		const categories = new Map(
+			(
+				await data
+					.collection(COLLECTIONS.categories)
+					.find({ websiteId: s.websiteId }, { projection: { _id: 0, id: 1, path: 1, requiresSerial: 1 } })
+					.limit(5000)
+					.toArray()
+			).map((row) => [String(row.id), { path: row.path ?? [], requiresSerial: row.requiresSerial ?? null }]),
+		);
+		return new Set(
+			products
+				.filter((row) => isSerialized({ serialized: row.serialized ?? null, categoryIds: row.categoryIds ?? [] }, categories))
+				.map((row) => String(row.id)),
+		);
+	};
+
+	/**
+	 * Write the serial numbers of a plan: registered ones move from stock to the order; typed ones (E11) are recorded as
+	 * sold to it (a registered unit typed by staff is taken from stock; one sold to another order is refused).
+	 * @param {Site} s @param {OrderRecord} order
+	 * @param {Array<{ lineId: string, productId: string, variantId: string, serials: string[], before: string[] }>} plan
+	 * @param {'registered' | 'typed'} mode @param {Session} session
+	 */
+	const writeSerials = async (s, order, plan, mode, session) => {
+		const serials = (await s.data()).collection(COLLECTIONS.serials);
+		/** @param {string} lineId @param {string} message */
+		const fail = (lineId, message) =>
+			Object.assign(new Error('serial'), { problem: service.invalid(`serials/${lineId}`, message) });
+		for (const line of plan) {
+			const removed = line.before.filter((serial) => !line.serials.includes(serial));
+			if (removed.length > 0) {
+				const mine = {
+					websiteId: s.websiteId,
+					orderId: order.id,
+					lineId: line.lineId,
+					serial: { $in: removed },
+					status: 'sold',
+				};
+				await serials.deleteMany({ ...mine, typed: true }, { session });
+				await serials.updateMany(mine, { $set: { status: 'in_stock', orderId: null, lineId: null } }, { session });
+			}
+			for (const serial of line.serials) {
+				if (line.before.includes(serial)) continue;
+				const taken = await serials.updateOne(
+					{ websiteId: s.websiteId, variantId: line.variantId, serial, status: 'in_stock' },
+					{ $set: { status: 'sold', orderId: order.id, lineId: line.lineId } },
+					{ session },
+				);
+				if (taken.modifiedCount === 1) continue;
+				if (mode === 'registered') throw fail(line.lineId, `Serial number ${serial} is not in stock for this item.`);
+				const known = await serials.findOne(
+					{ websiteId: s.websiteId, serial },
+					{ session, projection: { _id: 0, orderId: 1 } },
+				);
+				if (known) throw fail(line.lineId, `Serial number ${serial} is already recorded for another unit.`);
+				await serials.insertOne(
+					{
+						id: createId(ID_PREFIX.serial),
+						productId: line.productId,
+						variantId: line.variantId,
+						serial,
+						status: 'sold',
+						orderId: order.id,
+						lineId: line.lineId,
+						locationId: null,
+						typed: true,
+					},
+					{ session },
+				);
+			}
+		}
+	};
 
 	/**
 	 * The shipment of an order entering a `shipped` status.
@@ -201,43 +310,13 @@ export const createMoves = (product, service) => {
 
 		switch (target.role) {
 			case 'packed': {
-				const plan = await packingPlan(s, order, input);
+				const { plan, mode } = await packingPlan(s, order, input);
 				if (plan.length === 0) {
 					await write(undefined);
 					break;
 				}
-				const serials = data.collection(COLLECTIONS.serials);
 				await transact(s, async (session) => {
-					for (const line of plan) {
-						const removed = line.before.filter((serial) => !line.serials.includes(serial));
-						if (removed.length > 0)
-							await serials.updateMany(
-								{
-									websiteId: s.websiteId,
-									orderId: order.id,
-									lineId: line.lineId,
-									serial: { $in: removed },
-									status: 'sold',
-								},
-								{ $set: { status: 'in_stock', orderId: null, lineId: null } },
-								{ session },
-							);
-						for (const serial of line.serials) {
-							if (line.before.includes(serial)) continue;
-							const taken = await serials.updateOne(
-								{ websiteId: s.websiteId, variantId: line.variantId, serial, status: 'in_stock' },
-								{ $set: { status: 'sold', orderId: order.id, lineId: line.lineId } },
-								{ session },
-							);
-							if (taken.modifiedCount !== 1)
-								throw Object.assign(new Error('serial'), {
-									problem: service.invalid(
-										`serials/${line.lineId}`,
-										`Serial number ${serial} is not in stock for this item.`,
-									),
-								});
-						}
-					}
+					await writeSerials(s, order, plan, mode, session);
 					const byLine = new Map(plan.map((line) => [line.lineId, line.serials]));
 					await write(session, {
 						lines: order.lines.map((line) => (byLine.has(line.id) ? { ...line, serials: byLine.get(line.id) } : line)),
@@ -248,6 +327,15 @@ export const createMoves = (product, service) => {
 				break;
 			}
 			case 'shipped': {
+				// typed serial numbers are needed before dispatch (E11)
+				if (s.has('grades_serials') && (await serialRules(s)).mode === 'typed') {
+					const missing = missingSerials(order, await serializedOf(s, order));
+					if (missing.length > 0)
+						throw service.invalid(
+							`serials/${missing[0]?.id}`,
+							`Type the serial numbers of ${missing.map((line) => line.name).join(', ')} before dispatch.`,
+						);
+				}
 				set.shipment = await shipmentOf(s, order, input.shipment);
 				await write(undefined);
 				break;
@@ -361,21 +449,68 @@ export const createMoves = (product, service) => {
 	};
 
 	/**
-	 * The serial numbers to capture when packing (none while Grades and serials is off).
+	 * The serial numbers to capture when packing (none while Grades and serials is off): with registered serials every
+	 * unit's, with typed ones those typed now (E11).
 	 * @param {Site} s @param {OrderRecord} order @param {MoveInput} input
 	 */
 	const packingPlan = async (s, order, input) => {
-		if (!s.has('grades_serials')) return [];
-		const ids = [...new Set(order.lines.filter((line) => line.kind === 'physical').map((line) => line.productId))];
-		const serialized = await (
-			await s.data()
-		)
-			.collection(COLLECTIONS.products)
-			.find({ websiteId: s.websiteId, id: { $in: ids }, serialized: true }, { projection: { _id: 0, id: 1 } })
-			.toArray();
-		const plan = serialPlan(order, new Set(serialized.map((row) => String(row.id))), input.serials);
+		if (!s.has('grades_serials')) return { plan: [], mode: /** @type {'registered' | 'typed'} */ ('registered') };
+		const { mode, check } = await serialRules(s);
+		const refused = serialCheckFailure(input.serials, check);
+		if (refused) throw service.invalid(refused.field, refused.message);
+		const plan = serialPlan(order, await serializedOf(s, order), input.serials, { mode });
 		if (!plan.ok) throw service.invalid(plan.field, plan.message);
-		return plan.value;
+		return { plan: plan.value.filter((line) => line.serials.length > 0 || line.before.length > 0), mode };
+	};
+
+	/**
+	 * Type serial numbers of a packed, shipped or delivered order (typed serials, E11): one per unit of each line sent.
+	 * @param {Site} s @param {any} ctx @param {OrderRecord} order @param {Record<string, string[]>} sent
+	 * @returns {Promise<OrderRecord>}
+	 */
+	const typeSerials = async (s, ctx, order, sent) => {
+		if (!s.has('grades_serials')) throw service.invalid('serials', 'Switch on Grades and serials first.');
+		const { mode, check } = await serialRules(s);
+		if (mode !== 'typed') throw service.invalid('serials', 'Serial numbers are picked from stock when the order is packed.');
+		if (!['packed', 'shipped', 'delivered'].includes(order.role))
+			throw service.invalid('serials', 'Serial numbers are typed once the order is packed.');
+		const refused = serialCheckFailure(sent, check);
+		if (refused) throw service.invalid(refused.field, refused.message);
+		const plan = serialPlan(order, await serializedOf(s, order), sent, { mode, only: true });
+		if (!plan.ok) throw service.invalid(plan.field, plan.message);
+		const orders = (await s.data()).collection(COLLECTIONS.orders);
+		const byLine = new Map(plan.value.map((line) => [line.lineId, line.serials]));
+		await transact(s, async (session) => {
+			await writeSerials(s, order, plan.value, mode, session);
+			const result = await orders.updateOne(
+				{ websiteId: s.websiteId, id: order.id, updatedAt: order.updatedAt },
+				{
+					$set: {
+						lines: order.lines.map((line) => (byLine.has(line.id) ? { ...line, serials: byLine.get(line.id) } : line)),
+					},
+					$push: {
+						history: {
+							at: new Date(product.now()),
+							from: order.status,
+							to: order.status,
+							by: service.actor(ctx).name,
+							note: 'Serial numbers typed',
+						},
+					},
+				},
+				{ session },
+			);
+			if (result.modifiedCount !== 1) throw stop('order');
+		}).catch((error) => {
+			throw error?.problem ?? error;
+		});
+		await service.log(ctx, 'order.serials_typed', order.id, {
+			label: order.number,
+			detail: `${[...byLine.values()].flat().length} serial number(s)`,
+		});
+		return /** @type {OrderRecord} */ (
+			await orders.findOne({ websiteId: s.websiteId, id: order.id }, { projection: { _id: 0 } })
+		);
 	};
 
 	/**
@@ -427,7 +562,7 @@ export const createMoves = (product, service) => {
 		};
 	};
 
-	return Object.freeze({ move, refund });
+	return Object.freeze({ move, refund, typeSerials });
 };
 
 /** @typedef {ReturnType<typeof createMoves>} Moves */

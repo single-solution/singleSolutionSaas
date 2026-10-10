@@ -319,6 +319,8 @@ export const createCatalogProducts = (product, service, common) => {
 							...file,
 							type: facts.get(file.key)?.type ?? file.type,
 							size: facts.get(file.key)?.size ?? file.size,
+							// a product photo used by a variant keeps its text unless the variant gives one
+							alt: file.alt || facts.get(file.key)?.alt || '',
 						})),
 					})),
 					video:

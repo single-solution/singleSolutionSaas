@@ -202,9 +202,16 @@ export const createOrders = (product, service) => {
 	/** @param {any} ctx */
 	const editOrder = async (ctx) => {
 		const s = await service.site(ctx);
-		const order = await orderOf(s, ctx);
+		let order = await orderOf(s, ctx);
 		const input = checkEdit(ctx.body, order);
 		if (!input.ok) throw service.invalid(input.field, input.message);
+		// serial numbers typed at packing or later (E11)
+		const { serials, ...rest } = input.value;
+		if (serials) {
+			order = await moves.typeSerials(s, ctx, order, serials);
+			if (rest.staffNote === undefined && rest.address === undefined) return detailOf(s, order);
+		}
+		input.value = rest;
 		const orders = (await s.data()).collection(COLLECTIONS.orders);
 		const result = await orders.updateOne(
 			{ websiteId: s.websiteId, id: order.id, updatedAt: order.updatedAt },

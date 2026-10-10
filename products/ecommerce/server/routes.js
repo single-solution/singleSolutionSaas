@@ -83,8 +83,15 @@ export const createRoutes = (product) => {
 				};
 			}
 			if (s.has('grades_serials')) {
-				const grades = (await s.list('grades')).map((/** @type {any} */ grade) => ({ key: grade.key, label: grade.label }));
-				settings.catalog = { .../** @type {object} */ (settings.catalog ?? {}), grades };
+				const grades = (await s.list('grades')).map((/** @type {any} */ grade) => ({
+					key: grade.key,
+					label: grade.label,
+					color: grade.color ?? '',
+					active: grade.active !== false,
+					categoryIds: grade.categoryIds ?? [],
+				}));
+				const { serialMode, serialCheck } = await s.values('grades_serials');
+				settings.catalog = { .../** @type {object} */ (settings.catalog ?? {}), grades, serialMode, serialCheck };
 			}
 			return settings;
 		},

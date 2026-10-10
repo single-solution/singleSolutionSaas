@@ -269,5 +269,5 @@ export const staffProductOf = (product, { media, variantMedia = new Map(), video
 		...variant,
 		media: (variant.media ?? []).map((item, index) => ({ ...item, url: variantMedia.get(variant.id)?.[index] ?? null })),
 	})),
-	...(product.video ? { video: { ...product.video, url: video } } : {}),
+	...(product.video?.kind === 'file' ? { video: { ...product.video, url: video } } : {}),
 });

@@ -2,9 +2,10 @@
  * The code snippets the public docs and the dashboard's Developers tab show (PLAN 0.4.10): the widget script with the
  * visitor widgets and their data attributes, the JS API (`identify`, `addToCart`, `cart.count`, `cart.onChange`) and
  * the add-to-cart event, the admin widgets with their ticket function, the ticket request (Node.js and cURL), what the
- * merchant's site serves from the API (sitemap, product meta and structured data, feeds, llms.txt, policies) as Next.js
- * route handlers proxying with the server token, the Accounts Orders lookup, the courier connection and the storage
- * CORS rule. Plain text; no I/O.
+ * merchant's site serves from the API as Next.js route handlers and pages fetching with the server token
+ * (`SS_SERVER_TOKEN`): the sitemap index and its files, feeds, llms.txt and llms-full.txt, the product page (meta,
+ * structured data and the 308 of a `moved` answer, PLAN 0.8.10 E13), a listing page with `/v1/seo/listing` (E15) and
+ * the policy pages; the Accounts Orders lookup, the courier connection and the storage CORS rule. Plain text; no I/O.
  * @module
  */
 import { ADD_TO_CART_EVENT, WIDGET_ATTRIBUTE, WIDGET_GLOBAL } from './widgets.js';
@@ -28,6 +29,7 @@ export const WIDGET_ATTRIBUTES = Object.freeze({
  * and the content type of the answer.
  */
 export const SITE_ROUTES = Object.freeze([
+	// the sitemap has its own handler (the index's files come from /v1/seo/sitemaps/:file): `sitemapRoute`
 	{ name: 'sitemap', file: 'app/sitemap.xml/route.js', route: '/v1/seo/sitemap.xml', feature: 'seo', type: 'application/xml' },
 	{
 		name: 'feedXml',
@@ -44,6 +46,13 @@ export const SITE_ROUTES = Object.freeze([
 		type: 'text/csv',
 	},
 	{ name: 'llms', file: 'app/llms.txt/route.js', route: '/v1/llms.txt', feature: 'llms_txt', type: 'text/plain' },
+	{
+		name: 'llmsFull',
+		file: 'app/llms-full.txt/route.js',
+		route: '/v1/llms-full.txt',
+		feature: 'llms_txt',
+		type: 'text/plain',
+	},
 ]);
 
 /**
@@ -54,15 +63,37 @@ export const SITE_ROUTES = Object.freeze([
 export const proxyRoute = (base, { file, route, type }) =>
 	[
 		`// ${file} (Next.js App Router): served from your own domain, fetched with the server token`,
-		'export async function GET(request) {',
-		'  const { search } = new URL(request.url); // ?page=2 of a split sitemap',
-		`  const response = await fetch(\`${base}${route}\${search}\`, {`,
+		'export async function GET() {',
+		`  const response = await fetch('${base}${route}', {`,
 		'    headers: { authorization: `Bearer ${process.env.SS_SERVER_TOKEN}` },',
 		'    next: { revalidate: 3600 }, // cache it for an hour',
 		'  });',
 		'  return new Response(await response.text(), {',
 		'    status: response.status,',
 		`    headers: { 'content-type': response.headers.get('content-type') ?? '${type}; charset=utf-8' },`,
+		'  });',
+		'}',
+	].join('\n');
+
+/**
+ * The sitemap's route handler on the merchant's site (E16): the sitemap, or above the `sitemapSize` setting a sitemap
+ * index whose files are this same address with `?file=<name>`, each fetched from `/v1/seo/sitemaps/:file`.
+ * @param {string} base Ecommerce's address
+ */
+export const sitemapRoute = (base) =>
+	[
+		'// app/sitemap.xml/route.js (Next.js App Router): the sitemap, or the sitemap index and its files, from your own domain',
+		'export async function GET(request) {',
+		'  // a large catalog answers an index of files at this address: ?file=categories, ?file=products-1 …',
+		"  const file = new URL(request.url).searchParams.get('file');",
+		"  const path = file ? `/v1/seo/sitemaps/${encodeURIComponent(file)}` : '/v1/seo/sitemap.xml';",
+		`  const response = await fetch(\`${base}\${path}\`, {`,
+		'    headers: { authorization: `Bearer ${process.env.SS_SERVER_TOKEN}` },',
+		'    next: { revalidate: 3600 }, // cache it for an hour',
+		'  });',
+		'  return new Response(await response.text(), {',
+		'    status: response.status,',
+		"    headers: { 'content-type': response.headers.get('content-type') ?? 'application/xml; charset=utf-8' },",
 		'  });',
 		'}',
 	].join('\n');
@@ -147,7 +178,9 @@ export const createSnippets = ({ base, widgets, permissions, browserToken = 'YOU
 		`  -d '${JSON.stringify(ticketBody)}'`,
 	].join('\n');
 	const productMeta = [
-		'// app/products/[slug]/page.js (Next.js App Router): meta tags and structured data from Ecommerce',
+		'// app/products/[slug]/page.js (Next.js App Router): meta tags, structured data and moved addresses from Ecommerce',
+		"import { notFound, permanentRedirect } from 'next/navigation';",
+		'',
 		'const seoOf = async (slug) => {',
 		`  const response = await fetch(\`${base}/v1/seo/products/\${encodeURIComponent(slug)}\`, {`,
 		'    headers: { authorization: `Bearer ${process.env.SS_SERVER_TOKEN}` },',
@@ -159,10 +192,13 @@ export const createSnippets = ({ base, widgets, permissions, browserToken = 'YOU
 		'export async function generateMetadata({ params }) {',
 		'  const seo = await seoOf((await params).slug);',
 		'  if (!seo) return {};',
+		'  // an earlier slug, or an archived product sent to its category: a 308 to its address now',
+		'  if (seo.moved) permanentRedirect(seo.moved.url);',
 		'  return {',
 		'    title: seo.title,',
 		'    description: seo.description,',
 		'    alternates: { canonical: seo.canonical },',
+		'    robots: seo.robots,',
 		'    openGraph: seo.image ? { images: [seo.image] } : undefined,',
 		'  };',
 		'}',
@@ -170,25 +206,78 @@ export const createSnippets = ({ base, widgets, permissions, browserToken = 'YOU
 		'export default async function ProductPage({ params }) {',
 		'  const { slug } = await params;',
 		'  const seo = await seoOf(slug);',
+		'  if (!seo) notFound();',
+		'  if (seo.moved) permanentRedirect(seo.moved.url);',
 		'  return (',
 		'    <>',
 		'      {/* jsonLd is already a string that is safe inside a script tag */}',
-		'      {seo ? <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: seo.jsonLd }} /> : null}',
+		'      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: seo.jsonLd }} />',
 		`      <div ${WIDGET_ATTRIBUTE}="product_page" data-product={slug} />`,
 		'    </>',
 		'  );',
 		'}',
 	].join('\n');
+	const listingPage = [
+		'// app/categories/[slug]/page.js (Next.js App Router): a category or landing page with its head from Ecommerce',
+		"import { notFound, permanentRedirect } from 'next/navigation';",
+		'',
+		'const listingOf = async (slug, filters) => {',
+		"  // your page's own query: brand, grade, page and any other filter (attr.<slug>, minPrice …)",
+		'  const query = new URLSearchParams({ ...filters, category: slug });',
+		`  const response = await fetch(\`${base}/v1/seo/listing?\${query}\`, {`,
+		'    headers: { authorization: `Bearer ${process.env.SS_SERVER_TOKEN}` },',
+		'    next: { revalidate: 300 },',
+		'  });',
+		'  return response.ok ? response.json() : null;',
+		'};',
+		'',
+		'export async function generateMetadata({ params, searchParams }) {',
+		'  const head = await listingOf((await params).slug, await searchParams);',
+		'  if (!head) return {};',
+		'  if (head.moved) permanentRedirect(head.moved.url); // an earlier category slug',
+		'  return {',
+		'    title: head.title,',
+		'    description: head.description,',
+		'    alternates: { canonical: head.canonical },',
+		'    robots: head.robots, // index only for the category (and its pages) and an indexable landing page',
+		'  };',
+		'}',
+		'',
+		'export default async function ListingPage({ params, searchParams }) {',
+		'  const { slug } = await params;',
+		'  const filters = await searchParams;',
+		'  const head = await listingOf(slug, filters);',
+		'  if (!head) notFound();',
+		'  if (head.moved) permanentRedirect(head.moved.url);',
+		'  return (',
+		'    <>',
+		'      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: head.jsonLd }} />',
+		'      <h1>{head.h1}</h1>',
+		'      {head.intro ? <p>{head.intro}</p> : null}',
+		`      <div ${WIDGET_ATTRIBUTE}="product_grid" data-category={slug} data-brand={filters.brand ?? ''} />`,
+		'      {head.faqs.map((faq) => (',
+		'        <details key={faq.question}>',
+		'          <summary>{faq.question}</summary>',
+		'          <p>{faq.answer}</p>',
+		'        </details>',
+		'      ))}',
+		'    </>',
+		'  );',
+		'}',
+	].join('\n');
 	const policies = [
-		'// app/policies/[name]/page.js (Next.js App Router): your shipping, returns, privacy and terms pages',
+		'// app/policies/[name]/page.js (Next.js App Router): your delivery, returns, privacy, terms and warranty pages',
 		'export default async function PolicyPage({ params }) {',
-		'  const { name } = await params; // shipping, returns, privacy or terms',
+		'  const { name } = await params; // shipping, returns, privacy, terms or warranty',
 		`  const response = await fetch('${base}/v1/policies', {`,
 		'    headers: { authorization: `Bearer ${process.env.SS_SERVER_TOKEN}` },',
 		'    next: { revalidate: 3600 },',
 		'  });',
 		'  const found = response.ok ? await response.json() : {};',
-		"  return <article style={{ whiteSpace: 'pre-wrap' }}>{found[name] ?? ''}</article>;",
+		"  const text = found[name] ?? '';",
+		'  // policyFormat html: HTML Ecommerce already cleaned to paragraphs, lists, headings, emphasis, quotes and links',
+		"  if (found.format === 'html') return <article dangerouslySetInnerHTML={{ __html: text }} />;",
+		"  return <article style={{ whiteSpace: 'pre-wrap' }}>{text}</article>;",
 		'}',
 	].join('\n');
 	const customerOrders = [
@@ -226,7 +315,9 @@ export const createSnippets = ({ base, widgets, permissions, browserToken = 'YOU
 		2,
 	);
 	/** @type {Record<string, string>} */
-	const site = Object.fromEntries(SITE_ROUTES.map((entry) => [entry.name, proxyRoute(base, entry)]));
+	const site = Object.fromEntries(
+		SITE_ROUTES.map((entry) => [entry.name, entry.name === 'sitemap' ? sitemapRoute(base) : proxyRoute(base, entry)]),
+	);
 	return Object.freeze({
 		visitor,
 		api,
@@ -235,6 +326,7 @@ export const createSnippets = ({ base, widgets, permissions, browserToken = 'YOU
 		ticketNode,
 		ticketCurl,
 		productMeta,
+		listingPage,
 		policies,
 		customerOrders,
 		courier,

@@ -214,6 +214,11 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			if (children > 0) throw problem('conflict', 'Move or delete its subcategories first.');
 			if ((await productsWith(data, { categoryIds: existing.id })) > 0)
 				throw problem('conflict', 'Products are in this category: move them first.');
+			if (
+				(await data.collection(COLLECTIONS.landings).countDocuments({ websiteId: data.websiteId, categoryId: existing.id })) >
+				0
+			)
+				throw problem('conflict', 'Landing pages use this category: change or delete them first.');
 			await data.collection(COLLECTIONS.categories).deleteOne({ websiteId: data.websiteId, id: existing.id });
 			if (existing.image) {
 				const storage = await product.connections.storage(s.websiteId);
@@ -287,6 +292,10 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			const existing = await one(data, COLLECTIONS.brands, String(ctx.params.id), 'brand');
 			if ((await productsWith(data, { brandId: existing.id })) > 0)
 				throw problem('conflict', 'Products have this brand: change them first.');
+			if (
+				(await data.collection(COLLECTIONS.landings).countDocuments({ websiteId: data.websiteId, brandId: existing.id })) > 0
+			)
+				throw problem('conflict', 'Landing pages use this brand: change or delete them first.');
 			await data.collection(COLLECTIONS.brands).deleteOne({ websiteId: data.websiteId, id: existing.id });
 			if (existing.logo) {
 				const storage = await product.connections.storage(s.websiteId);

@@ -72,6 +72,13 @@
 			"default": "Serial numbers",
 			"maxLength": 80
 		},
+		"labelWarranty": {
+			"type": "string",
+			"title": "Label: Warranty",
+			"description": "With {days}, the warranty days the line kept when it was ordered.",
+			"default": "Warranty: {days} days",
+			"maxLength": 80
+		},
 		"labelQuantity": {
 			"type": "string",
 			"title": "Label: Qty",

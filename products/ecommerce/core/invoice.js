@@ -30,6 +30,7 @@ export const INVOICE_TEXTS = Object.freeze({
 	labelSku: 'SKU',
 	labelGrade: 'Grade',
 	labelSerials: 'Serial numbers',
+	labelWarranty: 'Warranty: {days} days',
 	labelQuantity: 'Qty',
 	labelUnitPrice: 'Unit price',
 	labelAmount: 'Amount',
@@ -144,7 +145,7 @@ const addressLines = (address) =>
 		.join('');
 
 /**
- * What each line says under its name: the variant, SKU, grade and serial numbers.
+ * What each line says under its name: the variant, SKU, grade, warranty and serial numbers.
  * @param {OrderRecord['lines'][number]} line
  * @param {InvoiceTexts} t
  */
@@ -153,6 +154,10 @@ const lineDetail = (line, t) => {
 		line.variantName,
 		line.sku ? `${t.labelSku} ${line.sku}` : '',
 		line.gradeLabel ? `${t.labelGrade}: ${line.gradeLabel}` : '',
+		// the warranty kept at placement (E12)
+		typeof line.warrantyDays === 'number' && line.warrantyDays > 0
+			? t.labelWarranty.replaceAll('{days}', String(line.warrantyDays))
+			: '',
 	].filter(Boolean);
 	const detail = parts.length > 0 ? `<p class="small">${esc(parts.join(' · '))}</p>` : '';
 	const serials =

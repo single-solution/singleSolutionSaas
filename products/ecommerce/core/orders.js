@@ -34,7 +34,7 @@ const MAX_BULK = 200;
 const MAX_NOTE = 1000;
 const MAX_STAFF_NOTE = 5000;
 export const MAX_SEARCH = 120;
-const MAX_SERIAL = 80;
+const MAX_SERIAL = 64;
 /** A booked shipment's status is asked again at most this often (on read). */
 export const TRACK_EVERY_MS = 30 * 60_000;
 
@@ -219,23 +219,9 @@ export const checkMove = (body) => {
 	if (!/^[a-z][a-z0-9_]{1,39}$/.test(to)) return refuse('to', 'Name the status to move to.');
 	const note = input.note === undefined || input.note === null ? '' : input.note;
 	if (typeof note !== 'string' || note.length > MAX_NOTE) return refuse('note', `A note has at most ${MAX_NOTE} characters.`);
-	/** @type {Record<string, string[]>} */
-	const serials = {};
-	if (input.serials !== undefined && input.serials !== null) {
-		const raw = input.serials;
-		if (typeof raw !== 'object' || Array.isArray(raw)) return refuse('serials', 'Serials are listed per order line.');
-		for (const [lineId, list] of Object.entries(objectOf(raw))) {
-			if (!Array.isArray(list) || list.length > 1000)
-				return refuse(`serials/${lineId}`, 'A list of serial numbers is expected.');
-			const clean = list.map((serial) => (typeof serial === 'string' ? serial.trim() : ''));
-			if (clean.some((serial) => serial === '' || serial.length > MAX_SERIAL || hasControl(serial)))
-				return refuse(`serials/${lineId}`, `Serial numbers have 1–${MAX_SERIAL} characters.`);
-			if (new Set(clean).size !== clean.length) return refuse(`serials/${lineId}`, 'A serial number is listed twice.');
-			serials[lineId] = clean;
-		}
-		const all = Object.values(serials).flat();
-		if (new Set(all).size !== all.length) return refuse('serials', 'A serial number is listed on two lines.');
-	}
+	const parsed = serialsOf(input.serials);
+	if (!parsed.ok) return parsed;
+	const serials = parsed.value;
 	/** @type {ShipmentInput | null} */
 	let shipment = null;
 	if (input.shipment !== undefined && input.shipment !== null) {
@@ -284,15 +270,76 @@ const ADDRESS_FIELDS = Object.freeze({
 });
 
 /**
+ * Serial numbers sent per order line (moves and edits): trimmed (inner spaces kept), 1–64 characters, none twice.
+ * @param {unknown} raw
+ * @returns {{ ok: true, value: Record<string, string[]> } | Refusal}
+ */
+export const serialsOf = (raw) => {
+	/** @type {Record<string, string[]>} */
+	const serials = {};
+	if (raw === undefined || raw === null) return { ok: true, value: serials };
+	if (typeof raw !== 'object' || Array.isArray(raw)) return refuse('serials', 'Serials are listed per order line.');
+	for (const [lineId, list] of Object.entries(objectOf(raw))) {
+		if (!Array.isArray(list) || list.length > 1000) return refuse(`serials/${lineId}`, 'A list of serial numbers is expected.');
+		const clean = list.map((serial) => (typeof serial === 'string' ? serial.trim() : ''));
+		if (clean.some((serial) => serial === '' || serial.length > MAX_SERIAL || hasControl(serial)))
+			return refuse(`serials/${lineId}`, `Serial numbers have 1–${MAX_SERIAL} characters.`);
+		if (new Set(clean).size !== clean.length) return refuse(`serials/${lineId}`, 'A serial number is listed twice.');
+		serials[lineId] = clean;
+	}
+	const all = Object.values(serials).flat();
+	if (new Set(all).size !== all.length) return refuse('serials', 'A serial number is listed on two lines.');
+	return { ok: true, value: serials };
+};
+
+/**
+ * Whether a value is an IMEI: 15 digits whose last is the Luhn check digit (E11).
+ * @param {string} value
+ */
+export const isImei = (value) => {
+	if (!/^\d{15}$/.test(value)) return false;
+	let sum = 0;
+	for (let index = 0; index < 15; index += 1) {
+		let digit = Number(value[14 - index]);
+		if (index % 2 === 1) {
+			digit *= 2;
+			if (digit > 9) digit -= 9;
+		}
+		sum += digit;
+	}
+	return sum % 10 === 0;
+};
+
+/**
+ * Refuse serial numbers that fail the website's check (`serialCheck`: `imei` needs 15 digits passing Luhn).
+ * @param {Record<string, string[]>} serials
+ * @param {string} check
+ * @returns {Refusal | null}
+ */
+export const serialCheckFailure = (serials, check) => {
+	if (check !== 'imei') return null;
+	for (const [lineId, list] of Object.entries(serials)) {
+		const bad = list.find((serial) => !isImei(serial));
+		if (bad !== undefined) return refuse(`serials/${lineId}`, `${bad} is not an IMEI: 15 digits ending in its check digit.`);
+	}
+	return null;
+};
+
+/**
  * Check an edit staff make to an order: the staff note, and the delivery address before shipping.
  * @param {unknown} body
  * @param {OrderRecord} order
- * @returns {{ ok: true, value: { staffNote?: string, address?: NonNullable<OrderRecord['address']> } } | Refusal}
+ * @returns {{ ok: true, value: { staffNote?: string, address?: NonNullable<OrderRecord['address']>, serials?: Record<string, string[]> } } | Refusal}
  */
 export const checkEdit = (body, order) => {
 	const input = objectOf(body);
-	/** @type {{ staffNote?: string, address?: NonNullable<OrderRecord['address']> }} */
+	/** @type {{ staffNote?: string, address?: NonNullable<OrderRecord['address']>, serials?: Record<string, string[]> }} */
 	const value = {};
+	if (input.serials !== undefined) {
+		const serials = serialsOf(input.serials);
+		if (!serials.ok) return serials;
+		value.serials = serials.value;
+	}
 	if (input.staffNote !== undefined) {
 		if (typeof input.staffNote !== 'string' || input.staffNote.length > MAX_STAFF_NOTE)
 			return refuse('staffNote', `The staff note has at most ${MAX_STAFF_NOTE} characters.`);
@@ -314,8 +361,8 @@ export const checkEdit = (body, order) => {
 			if (!address[field]) return refuse(`address/${field}`, 'This field is required.');
 		value.address = /** @type {NonNullable<OrderRecord['address']>} */ (/** @type {unknown} */ (address));
 	}
-	if (value.staffNote === undefined && value.address === undefined)
-		return refuse('staffNote', 'Send a staff note or an address.');
+	if (value.staffNote === undefined && value.address === undefined && value.serials === undefined)
+		return refuse('staffNote', 'Send a staff note, an address or serial numbers.');
 	return { ok: true, value };
 };
 
@@ -368,14 +415,17 @@ export const checkBulkMove = (body) => {
 // ------------------------------------------------------------------------------------------------------- serials
 
 /**
- * The serial numbers each serialized line gets when its order is packed: the ones sent, else the ones it already has;
- * one per unit.
+ * The serial numbers each serialized line gets: the ones sent, else the ones it already has; one per unit. With
+ * `registered` serials (the default) every unit gets one when the order is packed; with `typed` serials (E11) they may
+ * be typed at packing or later, so a line may still have none (a list sent for a line still holds one per unit), and
+ * `only` limits the plan to the lines sent.
  * @param {OrderRecord} order
  * @param {Set<string>} serializedProducts ids of the order's products that are serialized
  * @param {Record<string, string[]>} sent
+ * @param {{ mode?: 'registered' | 'typed', only?: boolean }} [options]
  * @returns {{ ok: true, value: Array<{ lineId: string, productId: string, variantId: string, serials: string[], before: string[] }> } | Refusal}
  */
-export const serialPlan = (order, serializedProducts, sent) => {
+export const serialPlan = (order, serializedProducts, sent, { mode = 'registered', only = false } = {}) => {
 	const lines = new Map(order.lines.map((line) => [line.id, line]));
 	for (const lineId of Object.keys(sent)) {
 		const line = lines.get(lineId);
@@ -386,12 +436,43 @@ export const serialPlan = (order, serializedProducts, sent) => {
 	const plan = [];
 	for (const line of order.lines) {
 		if (line.kind !== 'physical' || !serializedProducts.has(line.productId)) continue;
+		if (only && sent[line.id] === undefined) continue;
 		const serials = sent[line.id] ?? line.serials;
-		if (serials.length !== line.quantity)
+		const typedLater = mode === 'typed' && serials.length === 0;
+		if (serials.length !== line.quantity && !typedLater)
 			return refuse(`serials/${line.id}`, `${line.name}: give ${line.quantity} serial number(s), one per unit.`);
 		plan.push({ lineId: line.id, productId: line.productId, variantId: line.variantId, serials, before: line.serials });
 	}
 	return { ok: true, value: plan };
+};
+
+/**
+ * The serialized lines of an order still missing serial numbers (typed serials must be complete before dispatch, E11).
+ * @param {OrderRecord} order
+ * @param {Set<string>} serializedProducts
+ */
+export const missingSerials = (order, serializedProducts) =>
+	order.lines.filter(
+		(line) => line.kind === 'physical' && serializedProducts.has(line.productId) && line.serials.length !== line.quantity,
+	);
+
+/**
+ * Whether a product is serialized (E11): its own switch, or with none (null) as its categories say — a category's
+ * `requiresSerial`, else its nearest ancestor's; serialized when any of its categories says so.
+ * @param {{ serialized: boolean | null, categoryIds: string[] }} product
+ * @param {ReadonlyMap<string, { path: string[], requiresSerial?: boolean | null }>} categories
+ */
+export const isSerialized = (product, categories) => {
+	if (typeof product.serialized === 'boolean') return product.serialized;
+	return product.categoryIds.some((id) => {
+		const category = categories.get(id);
+		if (!category) return false;
+		for (const step of [id, ...[...category.path].reverse()]) {
+			const rule = categories.get(step)?.requiresSerial;
+			if (typeof rule === 'boolean') return rule;
+		}
+		return false;
+	});
 };
 
 // --------------------------------------------------------------------------------------------------------- views

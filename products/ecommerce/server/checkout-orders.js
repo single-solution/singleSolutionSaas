@@ -22,6 +22,7 @@ import { createOrdersStore } from '../adapters/orders-store.js';
 import { STOCK_PROBLEMS, checkAddress, checkCart, checkOrderExtras } from '../core/checkout.js';
 import { WAITING_ROLES, cancelledStatus, confirmedStatus, statusOf, statusWithRole } from '../core/flow.js';
 import { pointsToEarn } from '../core/loyalty.js';
+import { gradesByKey } from '../core/grades.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import { createMedia } from './catalog-media.js';
 import { createOrderMessages } from './order-messages.js';
@@ -304,6 +305,8 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 						name: line.name,
 						variantName: line.variantName,
 						gradeLabel: line.gradeLabel,
+						serials: line.serials ?? [],
+						warrantyDays: line.warrantyDays ?? null,
 						image: await media.mediaUrl(s, line.image),
 						unitPrice: line.unitPrice,
 						quantity: line.quantity,
@@ -451,6 +454,14 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 			? Number(checkout.paymentWindowMinutes) * 60_000
 			: Number(checkout.confirmationHours) * 3_600_000;
 		const orderId = createId(ID_PREFIX.order);
+		// each physical line keeps its warranty from placement (E12): the variant's, the product's, the grade's, the setting
+		const grades = s.has('grades_serials') ? gradesByKey(await s.list('grades')) : new Map();
+		const warrantyDefault = Number((await s.values('returns')).warrantyDays ?? 0);
+		/** @param {{ kind: string, grade: string | null, warrantyDays?: number | null }} line */
+		const warrantyOf = (line) =>
+			line.kind === 'physical'
+				? (line.warrantyDays ?? (line.grade ? grades.get(line.grade)?.warrantyDays : null) ?? warrantyDefault)
+				: null;
 		/** @type {Array<{ productId: string, start: Date, end: Date, lineId: string }>} */
 		const slots = [];
 		/** @type {OrderLineRecord[]} */
@@ -480,6 +491,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 				brandId: line.brandId,
 				locationId: null,
 				serials: [],
+				warrantyDays: warrantyOf(line),
 				booking,
 				licences: [],
 				returnedQuantity: 0,

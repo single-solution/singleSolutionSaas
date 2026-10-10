@@ -15,6 +15,7 @@ import { merchandiseOf, paymentOptions, priceLines, resolveLines } from '../core
 import { matchZone, zoneFee } from '../core/delivery.js';
 import { maxRedeemable, pointsValue } from '../core/loyalty.js';
 import { applyPromotions } from '../core/promotions.js';
+import { COLLECTIONS } from '../core/model.js';
 import { createMedia } from './catalog-media.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
@@ -59,6 +60,7 @@ const DAY_MS = 86_400_000;
  * @property {import('../core/model.js').CustomerRecord | null} customer
  * @property {LocationRecord[]} locations stock locations in their order (multi_location)
  * @property {boolean} ready nothing stops placing it
+ * @property {Map<string, string>} [urls] each priced line's page by its key (E13)
  */
 
 /**
@@ -265,12 +267,30 @@ export const createQuoting = (product, service) => {
 			rtoCount: customer?.rtoCount ?? 0,
 		});
 
+		// each line links to its variant's page, by the URL templates (E13)
+		/** @type {Map<string, string>} */
+		const urls = new Map();
+		const attributes = new Map(
+			(
+				await data
+					.collection(COLLECTIONS.attributes)
+					.find({ websiteId: data.websiteId }, { projection: { _id: 0, id: 1, slug: 1 } })
+					.toArray()
+			).map((row) => [String(row.id), { slug: row.slug ? String(row.slug) : undefined }]),
+		);
+		for (const line of priced) {
+			const item = products.get(line.productId);
+			const variant = item?.variants.find((v) => v.id === line.variantId);
+			if (item && variant) urls.set(line.key, await media.variantUrl(s, item, variant, attributes));
+		}
+
 		return {
 			lines,
 			priced,
 			prices,
 			totals,
 			promotions,
+			urls,
 			coupon: promotions?.couponId ? offers.coupon : null,
 			delivery,
 			deliveryOptions,
@@ -302,6 +322,7 @@ export const createQuoting = (product, service) => {
 					name: line.name,
 					variantName: line.variantName,
 					gradeLabel: line.gradeLabel,
+					url: q.urls?.get(line.key) ?? null,
 					image: await media.mediaUrl(s, line.image),
 					slot: line.booking
 						? { start: new Date(line.booking.start).toISOString(), end: new Date(line.booking.end).toISOString() }

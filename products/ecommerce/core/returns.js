@@ -144,7 +144,12 @@ export const returnableLines = ({ order, claims, products, grades, defaults, now
 				claimable,
 				freeSerials: line.serials.filter((serial) => !taken?.serials.has(serial)),
 				return: windowOf(windowDays('return', product, grade, defaults), order.deliveredAt, now),
-				warranty: windowOf(windowDays('warranty', product, grade, defaults), order.deliveredAt, now),
+				// the warranty kept on the line at placement wins (E12); older orders use the product, grade and setting
+				warranty: windowOf(
+					typeof line.warrantyDays === 'number' ? line.warrantyDays : windowDays('warranty', product, grade, defaults),
+					order.deliveredAt,
+					now,
+				),
 			};
 		});
 };

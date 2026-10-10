@@ -20,6 +20,7 @@ export const PAYMENTS = 'https://payments.example.dev';
 export const STORAGE = 'https://bucket.example.org';
 export const COURIER = 'https://courier.example.org';
 export const AI = 'https://ai.example.org';
+export const GROWTH = 'https://growth.example.dev';
 export const DOMAIN = 'shop.example.com';
 export const ORIGIN = `https://${DOMAIN}`;
 const ADMIN_ORIGIN = 'https://admin.shop.example.com';
@@ -80,7 +81,7 @@ export const setup = async ({ start = Date.parse('2026-10-05T10:00:00Z') } = {})
 	const handlers = {
 		[portal.url]: portal.handle,
 		[ACCOUNTS]: accounts.handle,
-		...Object.fromEntries([NOTIFY, PAYMENTS, STORAGE, COURIER, AI, ORIGIN].map((origin) => [origin, fake(origin)])),
+		...Object.fromEntries([NOTIFY, PAYMENTS, STORAGE, COURIER, AI, ORIGIN, GROWTH].map((origin) => [origin, fake(origin)])),
 	};
 	// Notifications queues every message
 	responders.set(NOTIFY, (call) =>
@@ -149,6 +150,7 @@ export const setup = async ({ start = Date.parse('2026-10-05T10:00:00Z') } = {})
 	portal.addProduct({ productId: 'notifications', baseUrl: NOTIFY });
 	portal.addProduct({ productId: 'accounts', baseUrl: ACCOUNTS });
 	portal.addProduct({ productId: 'payments', baseUrl: PAYMENTS });
+	portal.addProduct({ productId: 'growth', baseUrl: GROWTH });
 	const browser = (await portal.issueToken({ websiteId, productId: manifest.id, kind: 'browser' })).token;
 	const server = (await portal.issueToken({ websiteId, productId: manifest.id, kind: 'server' })).token;
 

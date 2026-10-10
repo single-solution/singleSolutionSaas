@@ -206,6 +206,8 @@ export const checkOrderExtras = (body) => {
  * @property {string} sku
  * @property {string | null} grade
  * @property {string} gradeLabel
+ * @property {number | null} [warrantyDays] the variant's warranty, else the product's (E12; the grade's and the setting
+ *   are added at placement)
  * @property {string | null} image storage key of the main image
  * @property {number} unitPrice
  * @property {number} quantity
@@ -312,6 +314,7 @@ export const resolveLines = (inputs, { products, ancestors, gradeLabel, features
 			sku: variant.sku ?? '',
 			grade: variant.grade ?? null,
 			gradeLabel: variant.grade ? gradeLabel(variant.grade) : '',
+			warrantyDays: variant.warrantyDays ?? product.warrantyDays ?? null,
 			unitPrice: variant.price,
 			cost: variant.cost ?? null,
 			priced: true,
