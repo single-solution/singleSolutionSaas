@@ -33,7 +33,7 @@ import {
 	parseCredits,
 } from '@ss/ui';
 import manifest from '../../manifest.json' with { type: 'json' };
-import { GATEWAY_CONNECTIONS, GATEWAY_FEATURES, GATEWAYS } from '../../core/gateways.js';
+import { GATEWAY_CONNECTIONS, GATEWAY_FEATURES, GATEWAYS, bankTransfer } from '../../core/gateways.js';
 import { callbackUrls, createSnippets } from '../../core/snippets.js';
 import { call, fill, useLoad } from './api.js';
 import { ConnectionForm, FORMS } from './forms.js';
@@ -144,20 +144,32 @@ function StatusBanner({ status }) {
 }
 
 /**
- * Switched-on gateways whose keys are connected (bank transfer counts while it is on: its details are settings).
+ * Switched-on gateways whose keys are connected; bank transfer, whose details are settings, counts when it is ready
+ * (its account number or IBAN set, or Require bank details off).
  * @param {{ featuresOn: string[], checklist: { connections: Array<{ name: string, status: string }> } }} data
+ * @param {import('./api.js').Answer | null} settings the website's settings
  */
-const gatewaysReady = (data) =>
+const gatewaysReady = (data, settings) =>
 	GATEWAYS.filter((gateway) => {
 		if (!data.featuresOn.includes(GATEWAY_FEATURES[gateway])) return false;
+		if (gateway === 'bank_transfer') {
+			const feature = settings?.ok
+				? settings.data.features.find((/** @type {{ key: string }} */ item) => item.key === 'bank_transfer')
+				: undefined;
+			const values = Object.fromEntries(
+				Object.entries(feature?.values ?? {}).map(([name, entry]) => [name, /** @type {{ value: unknown }} */ (entry).value]),
+			);
+			return feature !== undefined && bankTransfer(values).ready;
+		}
 		const name = GATEWAY_CONNECTIONS[gateway];
-		return name === null || data.checklist.connections.some((item) => item.name === name && item.status === 'connected');
+		return data.checklist.connections.some((item) => item.name === name && item.status === 'connected');
 	}).length;
 
 /** @param {TabProps} props */
 function OverviewTab({ websiteId }) {
 	const base = `/v1/dashboard/websites/${websiteId}`;
 	const { answer, reload } = useLoad(`${base}/overview`);
+	const settings = useLoad(`${base}/settings`);
 	const [busy, setBusy] = useState(false);
 	return (
 		<Loaded answer={answer}>
@@ -192,7 +204,7 @@ function OverviewTab({ websiteId }) {
 								/>
 								<Stat
 									label={TEXTS.overview.gateways}
-									value={gatewaysReady(data)}
+									value={gatewaysReady(data, settings.answer)}
 									hint={TEXTS.overview.gatewaysHelp}
 									icon="coins"
 									kind="connection"

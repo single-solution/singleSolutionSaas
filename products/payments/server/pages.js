@@ -265,6 +265,8 @@ export const renderBankPage = ({
 		['bank.iban', bank.iban],
 		['bank.reference', reference],
 	];
+	// without an account (Require bank details off, PLAN 0.8.10 P2) the payer follows the instructions alone
+	const account = [bank.accountTitle, bank.bankName, bank.accountNumber, bank.iban].some((value) => value !== '');
 	const upload =
 		proof && !uploaded
 			? `<form method="post" action="${escape(proof.action)}" data-proof data-uploading="${escape(t('bank.uploading'))}" data-done="${escape(t('bank.uploaded'))}" data-failed="${escape(t('bank.uploadFailed'))}">
@@ -283,7 +285,7 @@ export const renderBankPage = ({
 		script: proof !== null && !uploaded,
 		body: `<p class="muted">${escape(business)}</p>
 <h1>${escape(t('bank.title'))}</h1>
-<p>${escape(t('bank.intro', { amount: money(amount, currency) }))}</p>
+<p>${escape(t(account ? 'bank.intro' : 'bank.introNoDetails', { amount: money(amount, currency) }))}</p>
 <dl>${rows
 			.filter(([, value]) => value !== '')
 			.map(([key, value]) => `<dt>${escape(t(key))}</dt><dd>${escape(value)}</dd>`)

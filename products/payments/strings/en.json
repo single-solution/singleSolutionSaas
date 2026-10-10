@@ -35,6 +35,7 @@
 	"gateway.generic": "{name}",
 	"bank.title": "Pay by bank transfer",
 	"bank.intro": "Transfer {amount} to the account below and quote the reference.",
+	"bank.introNoDetails": "Pay {amount} by bank transfer as explained below and quote the reference.",
 	"bank.accountTitle": "Account title",
 	"bank.bankName": "Bank",
 	"bank.accountNumber": "Account number",

@@ -28,6 +28,12 @@
 			"default": "",
 			"maxLength": 60
 		},
+		"requireDetails": {
+			"type": "boolean",
+			"title": "Require bank details",
+			"description": "Off: bank transfer is offered without an account number or IBAN, with only the instructions below (for example when you send your details to the payer yourself).",
+			"default": true
+		},
 		"instructions": {
 			"type": "string",
 			"title": "Instructions",

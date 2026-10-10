@@ -676,6 +676,36 @@ describe('bank transfer', () => {
 		await env.api('PUT', '/v1/settings/bank_transfer.accountNumber', { value: '0123-456789' });
 		expect((await read()).json).toMatchObject({ ready: true, accountNumber: '0123-456789' });
 	});
+
+	it('is ready without details when they are not required, with only its instructions (P2)', async () => {
+		const settings = await env.api('GET', '/v1/settings');
+		const bank = settings.json.features.find((/** @type {any} */ feature) => feature.key === 'bank_transfer');
+		expect(bank.values.requireDetails).toEqual({ value: true, source: 'built-in' });
+		for (const name of ['accountNumber', 'accountTitle']) await env.api('DELETE', `/v1/settings/bank_transfer.${name}`);
+		expect((await env.api('GET', '/v1/bank-transfer')).json.ready).toBe(false);
+		await env.api('PUT', '/v1/settings/bank_transfer.requireDetails', { value: false });
+		await env.api('PUT', '/v1/settings/bank_transfer.instructions', { value: 'We send our bank details on WhatsApp.' });
+		expect((await env.api('GET', '/v1/bank-transfer')).json).toEqual({
+			ready: true,
+			accountTitle: '',
+			bankName: '',
+			accountNumber: '',
+			iban: '',
+			instructions: 'We send our bank details on WhatsApp.',
+		});
+		const payment = await createPayment({ gateway: 'bank_transfer', reference: 'ORD-7' });
+		const shown = (await page(`/pay/${env.websiteId}/${payment.id}`)).text;
+		expect(shown).toContain('We send our bank details on WhatsApp.');
+		expect(shown).toContain('as explained below');
+		expect(shown).toContain('ORD-7');
+		expect(shown).not.toContain('Account number');
+		const choice = await createPayment({ currency: 'EUR' });
+		expect((await page(`/pay/${env.websiteId}/${choice.id}`)).text).toContain('value="bank_transfer"');
+		for (const name of ['requireDetails', 'instructions']) await env.api('DELETE', `/v1/settings/bank_transfer.${name}`);
+		await env.setting('bank_transfer', 'accountNumber', '0123-456789');
+		await env.setting('bank_transfer', 'accountTitle', 'Shop Ltd');
+		expect((await env.api('GET', '/v1/bank-transfer')).json).toMatchObject({ ready: true, accountTitle: 'Shop Ltd' });
+	});
 });
 
 describe('payment links and the pay button routes', () => {

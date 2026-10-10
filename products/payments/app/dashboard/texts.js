@@ -38,7 +38,8 @@ export const TEXTS = Object.freeze({
 		features: 'Features on',
 		connectionsReady: 'Connections ready',
 		gateways: 'Gateways ready',
-		gatewaysHelp: 'Switched-on gateways with their keys connected (bank transfer: account details set).',
+		gatewaysHelp:
+			'Switched-on gateways with their keys connected (bank transfer: account number or IBAN set, or Require bank details off).',
 		ofTotal: '{count} of {total}',
 		setup: 'Setup',
 		setupHelp: 'Only what the switched-on features need.',
