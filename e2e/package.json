@@ -33,6 +33,7 @@
 		"@ss/protocol": "workspace:^",
 		"@types/jsdom": "^21.1.7",
 		"@types/node": "^22.20.4",
+		"bcryptjs": "^3.0.3",
 		"eslint": "^9.39.5",
 		"jsdom": "^26.1.0",
 		"mongodb": "^6.21.0",

@@ -34,7 +34,7 @@ import twoStep from '../schemas/two_step.settings.json' with { type: 'json' };
 import { normaliseEmail, normalisePhone } from '../core/identifiers.js';
 import { selfView } from '../core/profile.js';
 import { DEFAULT_ROLE } from '../core/roles.js';
-import { createSealer } from './crypto.js';
+import { createSealer, importedTwoStep, totpAadOf } from './crypto.js';
 import { createProviders } from './providers.js';
 import { INDEXES, createStore } from './store.js';
 
@@ -267,7 +267,14 @@ export const createProductInstance = (options) => {
 		data: { indexes: INDEXES },
 		sharedSettings: SHARED_SETTINGS,
 	});
-	return Object.freeze({ ...product, providers, sealer, now, send });
+	/**
+	 * Two-step sign-in as the importer writes it for a user (PLAN 0.8.10 A8): the plain TOTP secret sealed at once and
+	 * the old system's recovery-code hashes (`sha256("recovery:" + code)`), each working once.
+	 * @param {string} websiteId @param {string} userId @param {{ secret: string, recoveryHashes: string[] }} input
+	 */
+	const twoStepFromImport = (websiteId, userId, { secret, recoveryHashes }) =>
+		importedTwoStep(sealer, { secret, recoveryHashes, aad: totpAadOf(websiteId, userId), now: now() });
+	return Object.freeze({ ...product, providers, sealer, now, send, twoStepFromImport });
 };
 
 /** @typedef {ReturnType<typeof createProductInstance>} Product */

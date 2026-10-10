@@ -5,7 +5,6 @@
 import { createHash } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { totpCode } from '../adapters/crypto.js';
-import { createService } from '../server/service.js';
 import { ALL, setup } from './helpers.js';
 
 /** @type {Awaited<ReturnType<typeof setup>>} */
@@ -203,11 +202,9 @@ describe('A8: imported two-step and old recovery codes', () => {
 				.update(`recovery:${c.replace('-', '')}`)
 				.digest('hex'),
 		);
-		const service = createService(env.product);
-		await (
-			await env.store()
-		).users.update(user.id, {
-			twoStep: service.twoStepFromImport(env.websiteId, user.id, { secret: secret.toLowerCase(), recoveryHashes: hashes }),
+		const store = await env.store();
+		await store.users.update(user.id, {
+			twoStep: env.product.twoStepFromImport(env.websiteId, user.id, { secret: secret.toLowerCase(), recoveryHashes: hashes }),
 		});
 		const first = await signIn('ira@example.com');
 		expect(first.json.status).toBe('two_step');

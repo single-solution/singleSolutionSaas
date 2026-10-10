@@ -19,7 +19,7 @@ import { checkAddresses, selfView } from '../core/profile.js';
 import { OPEN_SIGN_UP, deviceIdOf, deviceOf } from '../core/rules.js';
 import { SIGN_IN_HEADER, SIGN_IN_METHODS, SIGN_IN_SECONDS } from '../core/widgets.js';
 import {
-	importedTwoStep,
+	totpAadOf,
 	dummyPasswordCheck,
 	generateSigningKey,
 	generateTotpSecret,
@@ -88,8 +88,7 @@ export const createService = (product) => {
 
 	/** @param {string} websiteId @param {string} kid */
 	const keyAad = (websiteId, kid) => `accounts-key|${websiteId}|${kid}`;
-	/** @param {string} websiteId @param {string} userId */
-	const totpAad = (websiteId, userId) => `accounts-totp|${websiteId}|${userId}`;
+	const totpAad = totpAadOf;
 
 	/**
 	 * The website's signing key: made on first use; made again when it no longer opens (ENCRYPTION_KEY changed).
@@ -579,18 +578,9 @@ export const createService = (product) => {
 		return { url: `${s.base}/v1/exports/${s.websiteId}/${id}.${secret}`, expiresAt: expireAt.toISOString() };
 	};
 
-	/**
-	 * Two-step sign-in as the importer writes it (A8): the plain TOTP secret sealed for this user at once, and the old
-	 * system's recovery-code hashes (`sha256("recovery:" + code)`), each working once.
-	 * @param {string} websiteId @param {string} userId @param {{ secret: string, recoveryHashes: string[] }} input
-	 */
-	const twoStepFromImport = (websiteId, userId, { secret, recoveryHashes }) =>
-		importedTwoStep(sealer, { secret, recoveryHashes, aad: totpAad(websiteId, userId), now: now() });
-
 	return Object.freeze({
 		site,
 		siteOf,
-		twoStepFromImport,
 		settings,
 		signUpRules,
 		roleOf,

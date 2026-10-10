@@ -306,6 +306,9 @@ export const matchRecoveryCode = (code, items) => {
 	return found;
 };
 
+/** What a user's sealed TOTP secret is bound to. @param {string} websiteId @param {string} userId */
+export const totpAadOf = (websiteId, userId) => `accounts-totp|${websiteId}|${userId}`;
+
 /**
  * Two-step sign-in imported from an older system (A8; the importer, Migration): the plain TOTP secret sealed at once,
  * and the older system's recovery-code hashes, each working once.
