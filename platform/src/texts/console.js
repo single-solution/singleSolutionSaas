@@ -604,14 +604,13 @@ export const MORE = Object.freeze({
 	// Products
 	featuresTitle: 'Features and prices',
 	featuresIntro:
-		'The features this product reports and their hourly price from the last accepted price list. Prices are set in the product dashboard (Open as admin).',
+		'The features this product reports and their hourly price from the last accepted price list. Owners set prices in the product dashboard.',
 	featureColumns: Object.freeze({ feature: 'Feature', needs: 'Needs', perHour: 'Per hour', perDay: 'Per day' }),
 	noFeatures: 'This product reports no features.',
 	featuresCount: 'Features',
 	pricedCount: (/** @type {number} */ n) => `${n} with a price`,
 	connectionTitle: 'Connection',
 	connection: Object.freeze({
-		address: 'Address',
 		productId: 'Product id',
 		version: 'Product version',
 		priceList: 'Price list',

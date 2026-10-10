@@ -130,6 +130,14 @@ describe('website cards (jsdom)', () => {
 				document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
 			});
 			expect(document.querySelector('[role="menu"]')).toBeNull();
+			// Visit website opens the domain in a new tab; Copy domain copies it
+			await menu('Actions for shop.example.com');
+			await clickEl(menuItem('Visit website'));
+			expect(open).toHaveBeenCalledWith('https://shop.example.com', '_blank', 'noopener,noreferrer');
+			await menu('Actions for shop.example.com');
+			await clickEl(menuItem('Copy domain'));
+			await until(() => shows('Copied.'));
+			expect(writeText).toHaveBeenCalledWith('shop.example.com');
 
 			// ---------------------------------------------------------------- Add product, on the card: active products not on it
 			await press('Add product to shop.example.com');
@@ -290,7 +298,11 @@ describe('website cards (jsdom)', () => {
 			);
 			await closeDialog();
 			expect(buttons('Add product to shop.example.com')).toHaveLength(0);
-			expect(document.querySelector('button[aria-label="Actions for shop.example.com"]')).toBeNull();
+			// the merchant's website menu: Visit website and Copy domain, never Remove website
+			await menu('Actions for shop.example.com');
+			expect(menuItem('Visit website')).toBeTruthy();
+			expect(menuItem('Remove website')).toBeUndefined();
+			keydown(document, 'Escape');
 			expect(document.querySelector('button[aria-label="Actions for Notes"]')).toBeNull();
 			expect(shows('Your admin adds products to this website.')).toBe(false);
 			await press('Open Notes');
@@ -339,7 +351,9 @@ describe('website cards (jsdom)', () => {
 			expect(buttons('Add product to shop.example.com')).toHaveLength(0);
 			expect(buttons('Install and tokens of shop.example.com')).toHaveLength(0);
 			expect(buttons('Usage of shop.example.com')).toHaveLength(1);
-			expect(document.querySelector('button[aria-label="Actions for shop.example.com"]')).toBeNull();
+			await menu('Actions for shop.example.com');
+			expect(menuItem('Remove website')).toBeUndefined();
+			keydown(document, 'Escape');
 			expect(financeBrowser.calls.some((c) => c.path.endsWith('/tokens'))).toBe(false);
 			cleanup();
 

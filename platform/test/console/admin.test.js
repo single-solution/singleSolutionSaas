@@ -230,8 +230,14 @@ describe('admin console smoke', () => {
 				expect(productHtml).toContain(word);
 			// two actions as buttons; Reconnect in the header's More menu (PLAN 0.6 header actions)
 			expect(productRaw).toContain('aria-label="More actions for Notes"');
-			// the address once (the subtitle), and one line instead of an empty 30-day chart
-			expect(productHtml.split(String(product.product.baseUrl)).length - 1).toBe(1);
+			// the address once (the subtitle; the Connection card shows the widget script and docs URLs under it), and one
+			// line instead of an empty 30-day chart
+			const under = [product.product.widgetScriptUrl, product.product.docsUrl].filter((u) =>
+				String(u ?? '').startsWith(String(product.product.baseUrl)),
+			).length;
+			expect(productHtml.split(String(product.product.baseUrl)).length - 1).toBe(1 + under);
+			for (const word of ['Features and prices', 'Connection', 'Product version', 'Price list'])
+				expect(productHtml).toContain(word);
 			expect(productHtml).toContain('No credits earned in the last 30 UTC days.');
 			expect(productHtml).not.toContain('Credits earned per UTC day (last 30 days)');
 			expect(productRaw).toContain('title="shop.example.com"');
@@ -408,14 +414,7 @@ describe('admin console smoke', () => {
 			expect(financeHtml).toContain('Notes');
 			expect(financeHtml).toContain('Usage');
 			expect(financeHtml).toContain('Add credits');
-			for (const word of [
-				'Install and tokens',
-				'Add product',
-				'Actions for shop.example.com',
-				'Open Notes',
-				'Add website',
-				'Edit merchant',
-			])
+			for (const word of ['Install and tokens', 'Add product', 'Open Notes', 'Add website', 'Edit merchant'])
 				expect(financeHtml).not.toContain(word);
 			// the API refuses what the screens hide
 			expect((await financeBrowser.api.get(`/v1/merchants/${merchantId}/websites/${websiteId}/tokens`)).status).toBe(403);

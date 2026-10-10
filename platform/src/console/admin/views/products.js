@@ -6,7 +6,9 @@
  * the selected product — on wide screens the first one until another is picked: a header (name, Active / Inactive,
  * address and connected date; actions Open as admin, Set active / inactive, Reconnect), its numbers (credits earned
  * this month with the 30-day chart — one line while there is nothing to draw — and websites using it) and its websites
- * (domain with its merchant, status, features on, daily cost; paged). Owners manage products; Support sees them
+ * (domain with its merchant, status, features on, daily cost; paged), its features with their hourly prices and its
+ * connection (id, version, price list, widget script, docs). The list counts the products and sorts by name,
+ * credits this month or websites; the More menu also opens the docs and copies the address. Owners manage products; Support sees them
  * read-only. The Portal checks every right again.
  * @module
  */
@@ -22,6 +24,7 @@ import {
 	FormError,
 	Icon,
 	Input,
+	KeyValueList,
 	PageHeader,
 	Section,
 	Select,
@@ -29,6 +32,7 @@ import {
 	Stat,
 	StatGrid,
 	Table,
+	copyText,
 	describeProblem,
 	fieldErrors,
 	formatCredits,
@@ -36,7 +40,7 @@ import {
 	problemCode,
 	useToast,
 } from '@ss/ui';
-import { ADMIN, PRODUCTS } from '../../../texts/console.js';
+import { ADMIN, MORE, PRODUCTS } from '../../../texts/console.js';
 import { Link } from '../../link.js';
 import { useNavigation } from '../../navigation.js';
 import { LocalTime, ProductStatusBadge } from '../../views/billing.js';
@@ -142,19 +146,27 @@ function ProductList({ props, owner, selectedId, autoId = null }) {
 	const toast = useToast();
 	const [adding, setAdding] = useState(false);
 	const [q, setQ] = useState('');
+	const [sort, setSort] = useState(/** @type {'name' | 'earned' | 'websites'} */ ('name'));
 	const nav = useNavigation();
 	// the picked filter shows at once, while its list loads
 	const [picked, setPicked] = useState(/** @type {string | null} */ (null));
 	const needle = q.trim().toLowerCase();
 	const status = nav.pending && picked !== null ? picked : (props.filter.status ?? '');
-	const rows = /** @type {any[]} */ (props.items).filter(
-		(p) => !needle || String(p.name).toLowerCase().includes(needle) || String(p.productId).includes(needle),
-	);
+	const rows = /** @type {any[]} */ (props.items)
+		.filter((p) => !needle || String(p.name).toLowerCase().includes(needle) || String(p.productId).includes(needle))
+		.sort((a, b) =>
+			sort === 'earned'
+				? (b.earnedThisMonth ?? 0) - (a.earnedThisMonth ?? 0)
+				: sort === 'websites'
+					? (b.websites ?? 0) - (a.websites ?? 0)
+					: 0,
+		);
 	const keep = { status: props.filter.status };
 	return (
 		<>
 			<ListPane
 				title={PRODUCTS.title}
+				count={MORE.count(props.items.length)}
 				action={
 					owner ? (
 						<Button size="sm" onClick={() => setAdding(true)} icon={<Icon name="plus" size={14} />}>
@@ -180,6 +192,18 @@ function ProductList({ props, owner, selectedId, autoId = null }) {
 								const next = { status: e.currentTarget.value || null };
 								nav.go(selectedId ? adminRoutes.product(selectedId, next) : adminRoutes.products(next));
 							}}
+						/>
+						<Select
+							label={MORE.sort.label}
+							hideLabel
+							fieldClassName="min-w-0 flex-1"
+							value={sort}
+							options={[
+								{ value: 'name', label: `${MORE.sort.label}: ${MORE.sort.name}` },
+								{ value: 'earned', label: `${MORE.sort.label}: ${MORE.sort.earned}` },
+								{ value: 'websites', label: `${MORE.sort.label}: ${MORE.sort.websites}` },
+							]}
+							onChange={(e) => setSort(/** @type {'name'} */ (e.currentTarget.value))}
 						/>
 					</ListSearch>
 				}>
@@ -257,6 +281,11 @@ function ProductDetail({ detail, owner }) {
 		setProduct((/** @type {any} */ p) => ({ ...p, ...result.data.product }));
 		toast.show({ title: next === 'active' ? PRODUCTS.activated : PRODUCTS.deactivated });
 	};
+	const copyAddress = async () => {
+		const copied = await copyText(product.baseUrl);
+		toast.show(copied ? { title: MORE.copied } : { tone: 'danger', title: product.baseUrl });
+	};
+	const features = /** @type {any[]} */ (product.features ?? []);
 	const more = async () => {
 		setLoadingMore(true);
 		const result = await adminFetch(adminApi.productWebsites(product.productId, cursor));
@@ -295,7 +324,18 @@ function ProductDetail({ detail, owner }) {
 					owner ? (
 						<HeaderActions
 							label={ADMIN.moreActions(product.name)}
-							more={[{ label: PRODUCTS.reconnect, onSelect: () => setReconnecting(true) }]}>
+							more={[
+								...(product.docsUrl
+									? [
+											{
+												label: MORE.openDocs,
+												onSelect: () => void window.open(product.docsUrl, '_blank', 'noopener,noreferrer'),
+											},
+										]
+									: []),
+								{ label: MORE.copyAddress, onSelect: () => void copyAddress() },
+								{ label: PRODUCTS.reconnect, onSelect: () => setReconnecting(true) },
+							]}>
 							<Button
 								variant="secondary"
 								loading={busy === 'open'}
@@ -324,6 +364,13 @@ function ProductDetail({ detail, owner }) {
 					{...(isEmptySeries(earned) ? { hint: PRODUCTS.noEarnings } : {})}
 				/>
 				<Stat label={PRODUCTS.websitesUsing} value={numbers.websites ?? 0} icon="globe" kind="website" />
+				<Stat
+					label={MORE.featuresCount}
+					value={features.length}
+					hint={MORE.pricedCount(features.filter((f) => (f.millicreditsPerHour ?? 0) > 0).length)}
+					icon="sliders"
+					kind="product"
+				/>
 			</StatGrid>
 			{isEmptySeries(earned) ? null : (
 				<Card title={PRODUCTS.earnedChart}>
@@ -393,6 +440,91 @@ function ProductDetail({ detail, owner }) {
 					]}
 				/>
 			</Section>
+			<Section id="product-features" title={MORE.featuresTitle} description={MORE.featuresIntro}>
+				<Table
+					caption={MORE.featuresTitle}
+					captionHidden
+					rows={features}
+					rowKey={(f) => f.key}
+					empty={<EmptyState compact icon="sliders" kind="product" title={MORE.noFeatures} />}
+					columns={[
+						{
+							key: 'name',
+							header: MORE.featureColumns.feature,
+							rowHeader: true,
+							wrap: true,
+							render: (f) => (
+								<span className="block min-w-48 space-y-0.5">
+									<span className="block font-semibold text-fg">{f.name}</span>
+									{f.description ? <span className="block text-xs text-muted">{f.description}</span> : null}
+								</span>
+							),
+						},
+						{
+							key: 'needs',
+							header: MORE.featureColumns.needs,
+							wrap: true,
+							render: (f) =>
+								(f.dependsOn ?? []).length > 0 ? (
+									featureNames(features, f.dependsOn)
+								) : (
+									<span className="text-muted">—</span>
+								),
+						},
+						{
+							key: 'perHour',
+							header: MORE.featureColumns.perHour,
+							align: 'right',
+							className: 'whitespace-nowrap',
+							render: (f) => formatCredits(f.millicreditsPerHour ?? 0),
+						},
+						{
+							key: 'perDay',
+							header: MORE.featureColumns.perDay,
+							align: 'right',
+							className: 'whitespace-nowrap',
+							render: (f) => formatCredits(24 * (f.millicreditsPerHour ?? 0)),
+						},
+					]}
+				/>
+			</Section>
+			<Card title={MORE.connectionTitle}>
+				<KeyValueList
+					columns={2}
+					items={[
+						{ label: MORE.connection.productId, value: <span className="font-mono text-xs">{product.productId}</span> },
+						{ label: MORE.connection.version, value: product.version ?? '—' },
+						{ label: MORE.connection.priceList, value: MORE.priceListVersion(product.priceListVersion ?? 0) },
+						{
+							label: MORE.connection.widget,
+							value: product.widgetScriptUrl ? (
+								<span className="break-all font-mono text-xs">{product.widgetScriptUrl}</span>
+							) : (
+								MORE.noWidget
+							),
+						},
+						{
+							label: MORE.connection.docs,
+							value: product.docsUrl ? (
+								<a
+									href={product.docsUrl}
+									target="_blank"
+									rel="noopener noreferrer"
+									className="break-all font-semibold text-primary hover:underline">
+									{product.docsUrl}
+								</a>
+							) : (
+								'—'
+							),
+						},
+						{ label: MORE.connection.connected, value: <LocalTime value={product.connectedAt} /> },
+						{
+							label: MORE.connection.reconnected,
+							value: product.reconnectedAt ? <LocalTime value={product.reconnectedAt} /> : MORE.never,
+						},
+					]}
+				/>
+			</Card>
 			{owner ? (
 				<ConnectDialog
 					open={reconnecting}

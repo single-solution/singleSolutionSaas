@@ -4,9 +4,10 @@
  * features on, daily cost, Open) and, launched from the card as dialogs, everything the old website page did: **Add
  * product** and **Remove** a product (Owner, Support), **Install and tokens** (one block per product: widget script
  * tag, browser token, server token reveal / copy / regenerate, docs; never for Finance), **Usage** (30-day chart and
- * the table by product and feature) and **Remove website** (Owner, Support). The admin's merchant page shows one card
- * per website; the merchant console shows the selected website's card as the detail of its Websites screen. The
- * consoles pass the rights, the API client and the Open route; the Portal checks every right again.
+ * the table by product and feature), and in the card's menu **Visit website**, **Copy domain** and **Remove website**
+ * (Remove: Owner, Support). The admin's merchant page shows one card per website; the merchant console shows the
+ * selected website's card as the detail of its Websites screen. The consoles pass the rights, the API client and the
+ * Open route; the Portal checks every right again.
  * @module
  */
 import { useEffect, useState } from 'react';
@@ -34,7 +35,7 @@ import {
 	problemCode,
 	useToast,
 } from '@ss/ui';
-import { BILLING, WEBSITE } from '../../texts/console.js';
+import { BILLING, MORE, WEBSITE } from '../../texts/console.js';
 import { api } from '../paths.js';
 import { productTone, ProductStatusBadge, UsageView } from './billing.js';
 import { openDashboard } from './common.js';
@@ -45,6 +46,25 @@ import { openDashboard } from './common.js';
  * A product on a website (card).
  * @typedef {{ productId: string, name: string, status: string, featuresOn: string[], dailyCost: number }} ProductCard
  */
+/**
+ * Usage of all a merchant's websites, as a dialog: the last 30 UTC days by website, product and feature.
+ * @param {{ merchantId: string, title: string, fetcher: Fetcher, onClose: () => void }} props
+ */
+export function MerchantUsageDialog({ merchantId, title, fetcher, onClose }) {
+	const result = useOnce(fetcher, api.usage(merchantId));
+	return (
+		<Dialog open onClose={onClose} size="lg" title={title}>
+			{!result ? (
+				<Skeleton lines={4} />
+			) : !result.ok ? (
+				<Callout tone="danger">{describeProblem(result.problem)}</Callout>
+			) : (
+				<UsageView usage={result.data} chartTitle={BILLING.usageChart} />
+			)}
+		</Dialog>
+	);
+}
+
 /**
  * One product's install block.
  * @typedef {{ productId: string, name: string, widgetScriptUrl: string | null, docsUrl: string | null,
@@ -200,23 +220,37 @@ export function WebsiteCard({ website, cards: initial, can, fetcher, launch, add
 		onRemoved?.();
 	};
 
-	const menu = can.removeWebsite ? (
+	const copyDomain = async () => {
+		const copied = await copyText(website.domain);
+		toast.show(copied ? { title: MORE.copied } : { tone: 'danger', title: website.domain });
+	};
+	// Visit and Copy domain for everyone; Remove website (last, in danger text) for those who remove websites
+	const menu = (
 		<ActionMenu
 			label={WEBSITE.websiteActionsOf(website.domain)}
 			items={[
 				{
-					label: WEBSITE.removeWebsite,
-					danger: true,
-					disabled: cards.length > 0,
-					...(cards.length > 0 ? { hint: WEBSITE.removeProductsFirst } : {}),
-					onSelect: () => {
-						setProblem(null);
-						setDialog('removeWebsite');
-					},
+					label: MORE.visitWebsite,
+					onSelect: () => void window.open(`https://${website.domain}`, '_blank', 'noopener,noreferrer'),
 				},
+				{ label: MORE.copyDomain, onSelect: () => void copyDomain() },
+				...(can.removeWebsite
+					? [
+							{
+								label: WEBSITE.removeWebsite,
+								danger: true,
+								disabled: cards.length > 0,
+								...(cards.length > 0 ? { hint: WEBSITE.removeProductsFirst } : {}),
+								onSelect: () => {
+									setProblem(null);
+									setDialog('removeWebsite');
+								},
+							},
+						]
+					: []),
 			]}
 		/>
-	) : null;
+	);
 
 	const DomainHeading = headline ? 'h2' : 'h3';
 	return (

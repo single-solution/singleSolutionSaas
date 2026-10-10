@@ -4,9 +4,10 @@
  * domain; status filter; paged at 50; per row the name, a status dot and the balance; bulk Suspend / Resume with one
  * reason and Resend setup link) sits beside the selected merchant — on wide screens the first one until another is
  * picked. The merchant: a header (name, status, balance; Add credits and Edit merchant as buttons, and Suspend /
- * Resume, Resend or Copy setup link, Turn off two-step and Delete in its More menu, all as dialogs), a masonry of
- * website cards (products with Add product, tokens and usage in dialogs; Add website) and the Credits and Activity
- * sections. Rights follow the role (PLAN 0.2); the API checks them again.
+ * Resume, Resend or Copy setup link, Turn off two-step and Delete in its More menu, all as dialogs; the menu also opens
+ * the usage of all its websites, its receipts in Credits and billing and its Activity), a low-balance / grace / stopped
+ * warning with Add credits, its details (contact, sign-in, two-step, websites), a masonry of website cards (products
+ * with Add product, tokens and usage in dialogs; Add website) and the Credits and Activity (paged) sections. Rights follow the role (PLAN 0.2); the API checks them again.
  * @module
  */
 import { useState } from 'react';
@@ -14,6 +15,7 @@ import {
 	Badge,
 	Button,
 	Callout,
+	Card,
 	CodeBlock,
 	ConfirmDialog,
 	Dialog,
@@ -22,6 +24,7 @@ import {
 	FormError,
 	Icon,
 	Input,
+	KeyValueList,
 	Masonry,
 	PageHeader,
 	Section,
@@ -34,13 +37,13 @@ import {
 	formatCredits,
 	useToast,
 } from '@ss/ui';
-import { ADMIN, BILLING, MERCHANT_FIELDS, WEBSITE } from '../../../texts/console.js';
+import { ADMIN, BILLING, MERCHANT_FIELDS, MORE, TWO_STEP, WEBSITE } from '../../../texts/console.js';
 import { api } from '../../paths.js';
-import { MerchantStatusBadge } from '../../views/billing.js';
+import { DaysLeft, LocalTime, MerchantStatusBadge } from '../../views/billing.js';
 import { MerchantFieldsForm, countryOptions } from '../../views/account.js';
 import { HeaderActions, ListDetail, ListPane, ListRow, ListSearch } from '../../views/common.js';
-import { ActivityTable } from '../../views/login-settings.js';
-import { AddWebsiteDialog, WebsiteCard } from '../../views/website.js';
+import { ActivityTable, useActivityPages } from '../../views/login-settings.js';
+import { AddWebsiteDialog, MerchantUsageDialog, WebsiteCard } from '../../views/website.js';
 import { useNavigation } from '../../navigation.js';
 import { adminFetch, usePagedList } from '../client.js';
 import { adminApi, adminRoutes } from '../paths.js';
@@ -103,7 +106,7 @@ function CopyLinkDialog({ link, onClose }) {
  * Add merchant: the merchant fields; saving e-mails the setup link (or offers to copy it).
  * @param {{ open: boolean, onClose: () => void, onCreated: (merchant: any) => void }} props
  */
-function AddMerchantDialog({ open, onClose, onCreated }) {
+export function AddMerchantDialog({ open, onClose, onCreated }) {
 	const toast = useToast();
 	const [form, setForm] = useState({ name: '', ownerName: '', email: '', phone: '', address: '', country: '' });
 	const [busy, setBusy] = useState(false);
@@ -258,6 +261,7 @@ function MerchantList({ props, admin, selectedId, autoId = null }) {
 		<>
 			<ListPane
 				title={ADMIN.merchantsTitle}
+				count={MORE.count(list.items.length, Boolean(list.cursor))}
 				action={
 					canWrite ? (
 						<Button size="sm" onClick={() => setAdding(true)} icon={<Icon name="plus" size={14} />}>
@@ -383,6 +387,41 @@ function MerchantList({ props, admin, selectedId, autoId = null }) {
 	);
 }
 
+/** @param {string | null | undefined} code ISO 3166-1 alpha-2 */
+const countryName = (code) => {
+	if (!code) return '—';
+	try {
+		return new Intl.DisplayNames(['en'], { type: 'region' }).of(code) ?? code;
+	} catch {
+		return code;
+	}
+};
+
+/**
+ * The merchant's details (the fields the header does not show), its sign-in and its websites.
+ * @param {any} merchant
+ * @param {Array<{ website: any, cards: any[] }>} rows
+ */
+const detailItems = (merchant, rows) => [
+	{ label: MORE.fields.owner, value: merchant.ownerName ?? '—' },
+	{ label: MORE.fields.email, value: <span className="break-all">{merchant.email ?? '—'}</span> },
+	{ label: MORE.fields.phone, value: merchant.phone ?? '—' },
+	{ label: MORE.fields.country, value: <span suppressHydrationWarning>{countryName(merchant.country)}</span> },
+	{ label: MORE.fields.address, value: merchant.address ?? '—' },
+	{ label: MORE.fields.added, value: <LocalTime value={merchant.createdAt} /> },
+	{
+		label: MORE.fields.lastSignIn,
+		value: merchant.lastSignInAt ? <LocalTime value={merchant.lastSignInAt} /> : MORE.never,
+	},
+	{
+		label: MORE.fields.twoStep,
+		value: merchant.twoStep?.enabled ? MORE.twoStepOn(merchant.twoStep.recoveryCodesLeft ?? 0) : TWO_STEP.off,
+	},
+	{ label: MORE.fields.password, value: merchant.setupPending ? MORE.fields.setupPending : MORE.fields.passwordSet },
+	{ label: MORE.fields.websites, value: rows.length },
+	{ label: MORE.fields.products, value: rows.reduce((n, r) => n + r.cards.length, 0) },
+];
+
 /**
  * The selected merchant: header with the actions, website cards, credits and activity.
  * @param {{ detail: any, admin: any, back: string }} props `back`: the list's URL (after a delete)
@@ -392,7 +431,7 @@ function MerchantDetail({ detail, admin, back }) {
 	const [merchant, setMerchant] = useState(detail.merchant);
 	const [rows, setRows] = useState(/** @type {Array<{ website: any, cards: any[] }>} */ (detail.rows));
 	const [dialog, setDialog] = useState(
-		/** @type {null | 'suspend' | 'resume' | 'twoStep' | 'delete' | 'addWebsite' | 'edit' | 'credits'} */ (null),
+		/** @type {null | 'suspend' | 'resume' | 'twoStep' | 'delete' | 'addWebsite' | 'edit' | 'credits' | 'usage'} */ (null),
 	);
 	const [reason, setReason] = useState('');
 	const [link, setLink] = useState(/** @type {string | null} */ (null));
@@ -403,6 +442,7 @@ function MerchantDetail({ detail, admin, back }) {
 	const billing = detail.billing ?? null;
 	const balance = billing?.balance;
 	const nav = useNavigation();
+	const activity = useActivityPages(adminApi.merchantActivity(merchantId), detail.activity, adminFetch);
 
 	/**
 	 * @param {string} path
@@ -462,6 +502,9 @@ function MerchantDetail({ detail, admin, back }) {
 
 	/** @type {import('@ss/ui').MenuItem[]} */
 	const more = [
+		{ label: MORE.usageAll, onSelect: () => openDialog('usage') },
+		{ label: MORE.receiptsInBilling, onSelect: () => nav.go(adminRoutes.finance({ merchantId })) },
+		{ label: MORE.openInActivity, onSelect: () => nav.go(adminRoutes.activity({ merchantId })) },
 		...(can('merchants.suspend')
 			? [
 					merchant.status === 'suspended'
@@ -528,6 +571,30 @@ function MerchantDetail({ detail, admin, back }) {
 				actions={actions}
 			/>
 			{merchant.suspension ? <Callout tone="danger">{ADMIN.suspendedBecause(merchant.suspension.reason)}</Callout> : null}
+			{!merchant.suspension && billing && ['low_balance', 'grace', 'stopped'].includes(billing.status) ? (
+				<Callout
+					tone={billing.status === 'stopped' ? 'danger' : 'warning'}
+					actions={
+						can('credits.add') ? (
+							<Button size="sm" variant="secondary" onClick={() => openDialog('credits')}>
+								{BILLING.addCredits}
+							</Button>
+						) : null
+					}>
+					{billing.status === 'stopped' ? (
+						MORE.stoppedWarning
+					) : billing.status === 'grace' ? (
+						<>
+							{MORE.graceWarning} <DaysLeft summary={billing} />
+						</>
+					) : (
+						MORE.lowWarning(typeof billing.daysLeft === 'number' ? BILLING.days(billing.daysLeft) : '—')
+					)}
+				</Callout>
+			) : null}
+			<Card title={MORE.detailsTitle}>
+				<KeyValueList columns={3} items={detailItems(merchant, rows)} />
+			</Card>
 			<Section
 				id="merchant-websites"
 				title={ADMIN.websitesTitle}
@@ -570,8 +637,24 @@ function MerchantDetail({ detail, admin, back }) {
 			<Section id="merchant-credits" title={ADMIN.creditsTitle} description={ADMIN.creditsIntro}>
 				<MerchantCredits billing={billing} receipts={detail.receipts ?? []} dayCharges={detail.dayCharges ?? []} />
 			</Section>
-			<Section id="merchant-activity" title={ADMIN.activityTitle}>
-				<ActivityTable items={detail.activity?.items ?? []} empty={ADMIN.noActivity} />
+			<Section
+				id="merchant-activity"
+				title={ADMIN.activityTitle}
+				actions={
+					<Button variant="secondary" onClick={() => nav.go(adminRoutes.activity({ merchantId }))}>
+						{MORE.openInActivity}
+					</Button>
+				}>
+				{activity.problem ? <Callout tone="danger">{describeProblem(activity.problem)}</Callout> : null}
+				<ActivityTable
+					items={activity.items}
+					empty={ADMIN.noActivity}
+					details
+					filterHref={(q) => adminRoutes.activity(q)}
+					hasMore={activity.cursor !== null}
+					loadingMore={activity.loading}
+					onLoadMore={() => void activity.more()}
+				/>
 			</Section>
 			<Dialog open={dialog === 'edit'} onClose={() => setDialog(null)} title={ADMIN.editMerchant} size="lg">
 				<MerchantFieldsForm
@@ -645,6 +728,14 @@ function MerchantDetail({ detail, admin, back }) {
 				}}
 			/>
 			<CopyLinkDialog link={link} onClose={() => setLink(null)} />
+			{dialog === 'usage' ? (
+				<MerchantUsageDialog
+					merchantId={merchantId}
+					title={MORE.usageAllTitle(merchant.name)}
+					fetcher={adminFetch}
+					onClose={() => setDialog(null)}
+				/>
+			) : null}
 			{dialog === 'credits' ? (
 				<AddCreditsDialog
 					merchant={{ merchantId, name: merchant.name }}
