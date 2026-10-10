@@ -33,14 +33,17 @@ import {
 	parseCredits,
 } from '@ss/ui';
 import manifest from '../../manifest.json' with { type: 'json' };
-import { tagsOf, tagsReady } from '../../core/config.js';
+import { tagsReady } from '../../core/config.js';
 import { createSnippets } from '../../core/snippets.js';
 import { BROWSER_EVENTS, SITE_EVENTS } from '../../core/widgets.js';
 import { call, fill, useLoad } from './api.js';
+import { AtAGlance, settingsNotice } from './setup.js';
 import { TEXTS } from './texts.js';
 
 /** @typedef {{ kind: 'merchant' | 'admin', id: string, name: string, role?: 'owner' | 'support' }} Who */
-/** @typedef {{ websiteId: string | null, who: Who, support: { email: string, phone: string }, portal: string }} TabProps */
+/**
+ * @typedef {{ websiteId: string | null, domain: string, who: Who, support: { email: string, phone: string }, portal: string }} TabProps
+ */
 /** @typedef {{ key: string, name: string, description: string, dependsOn: string[], millicreditsPerHour: number, on?: boolean }} Feature */
 
 /**
@@ -156,7 +159,7 @@ const valuesOf = (data) =>
 	);
 
 /** @param {TabProps} props */
-function OverviewTab({ websiteId }) {
+function OverviewTab({ websiteId, domain }) {
 	const base = `/v1/dashboard/websites/${websiteId}`;
 	const { answer, reload } = useLoad(`${base}/overview`);
 	const settings = useLoad(`${base}/settings`);
@@ -203,6 +206,12 @@ function OverviewTab({ websiteId }) {
 								/>
 							</StatGrid>
 						</Section>
+						{settings.answer?.ok ? (
+							<AtAGlance
+								values={valuesOf(settings.answer.data)}
+								context={{ on: data.featuresOn, domain, now: Date.now() }}
+							/>
+						) : null}
 						<Section title={TEXTS.overview.setup} description={TEXTS.overview.setupHelp}>
 							<Card>
 								<ul className="divide-y divide-line-soft text-sm">
@@ -382,37 +391,14 @@ function FeaturesTab({ websiteId, who, support }) {
 }
 
 /**
- * What a settings card says above its form, from the values shown (edits included): the law warning while tags need
- * no consent (PLAN 0.8.10 G1, as 0.8.3 warns for Chat's AI label), and Google Analytics left to a Tag Manager container
- * that is not set.
- * @param {string} key the feature or shared group
- * @param {Record<string, unknown>} values
- * @returns {import('react').ReactNode}
- */
-export const settingsNotice = (key, values) => {
-	if (key === 'tags' && values.consentRequired === false)
-		return (
-			<Callout tone="warning" className="mb-4">
-				{TEXTS.settings.consentWarning}
-			</Callout>
-		);
-	if (key === 'google_tags' && values.ga4ViaGtm === true && !tagsOf(['google_tags'], { google_tags: values }).gtm)
-		return (
-			<Callout tone="warning" className="mb-4">
-				{TEXTS.settings.gtmMissing}
-			</Callout>
-		);
-	return null;
-};
-
-/**
  * Settings forms, one card per feature that has settings (and per shared group), each with its own Save and outcome: a
- * website's settings or the global defaults.
+ * website's settings or the global defaults. Each card starts with what it says about the setup (`settingsNotice`).
  * @param {{ features: Array<{ key: string, name: string, on?: boolean, schema: any, values: Record<string, { value: unknown, source: string }> }>,
- *   saveUrl: (key: string) => string, resetBody: boolean, savedSource: string, reload: () => void }} props
- *   `resetBody`: reset with `PUT { value: null }` (defaults) instead of `DELETE`
+ *   saveUrl: (key: string) => string, resetBody: boolean, savedSource: string, reload: () => void,
+ *   context: import('./setup.js').Context | null }} props
+ *   `resetBody`: reset with `PUT { value: null }` (defaults) instead of `DELETE`; `context`: the website (null on Defaults)
  */
-function SettingsForms({ features, saveUrl, resetBody, savedSource, reload }) {
+function SettingsForms({ features, saveUrl, resetBody, savedSource, reload, context }) {
 	const [edits, setEdits] = useState(/** @type {Record<string, Record<string, unknown>>} */ ({}));
 	const [result, setResult] = useState(/** @type {{ feature: string, answer: import('./api.js').Answer } | null} */ (null));
 	/** @param {string} feature @param {string} name */
@@ -439,7 +425,7 @@ function SettingsForms({ features, saveUrl, resetBody, savedSource, reload }) {
 					);
 					return (
 						<Card key={feature.key} title={feature.name} subtitle={feature.on === false ? TEXTS.settings.off : undefined}>
-							{settingsNotice(feature.key, values)}
+							{settingsNotice(feature.key, values, context)}
 							<SchemaForm
 								schema={feature.schema}
 								values={values}
@@ -652,7 +638,7 @@ function FormatForm({ format, save, reload }) {
 }
 
 /** @param {TabProps} props */
-function SettingsTab({ websiteId }) {
+function SettingsTab({ websiteId, domain }) {
 	const base = `/v1/dashboard/websites/${websiteId}`;
 	const settings = useLoad(`${base}/settings`);
 	const texts = useLoad(`${base}/texts`);
@@ -670,6 +656,13 @@ function SettingsTab({ websiteId }) {
 								resetBody={false}
 								savedSource="website"
 								reload={settings.reload}
+								context={{
+									on: data.features
+										.filter((/** @type {Feature} */ f) => f.on !== false)
+										.map((/** @type {Feature} */ f) => f.key),
+									domain,
+									now: Date.now(),
+								}}
 							/>
 						)}
 					</Loaded>
@@ -859,7 +852,14 @@ function DefaultsTab() {
 				<div className="space-y-4">
 					<Callout tone="info">{TEXTS.defaults.intro}</Callout>
 					<Masonry wideAlone>
-						<SettingsForms features={data.features} saveUrl={saveUrl} resetBody savedSource="default" reload={reload} />
+						<SettingsForms
+							features={data.features}
+							saveUrl={saveUrl}
+							resetBody
+							savedSource="default"
+							reload={reload}
+							context={null}
+						/>
 						<TextsForm
 							texts={data.texts}
 							saveUrl={(key) => saveUrl(`text.${key}`)}
