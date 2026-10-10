@@ -24,6 +24,7 @@ import seoChecklist from '../schemas/seo_checklist.settings.json' with { type: '
 import tiktokPixel from '../schemas/tiktok_pixel.settings.json' with { type: 'json' };
 import visitorAnalytics from '../schemas/visitor_analytics.settings.json' with { type: 'json' };
 import webVitals from '../schemas/web_vitals.settings.json' with { type: 'json' };
+import tagsShared from '../schemas/tags.shared.json' with { type: 'json' };
 import { widgetSettings } from '../core/config.js';
 import { INDEXES } from './store.js';
 import { createWeb } from './web.js';
@@ -43,6 +44,19 @@ const SETTINGS = {
 	indexnow,
 	seo_checklist: seoChecklist,
 	notice_bar: noticeBar,
+};
+
+/**
+ * Settings several features use, stored once as `<group>.<setting>` and shown while any of their features is on
+ * (PLAN 0.8.10 G1, G2): whether the tags wait for consent.
+ * @type {Record<string, { name: string, features: string[], settings: any }>}
+ */
+export const SHARED_SETTINGS = {
+	tags: {
+		name: 'Tags and consent',
+		features: ['meta_pixel', 'google_tags', 'tiktok_pixel', 'custom_scripts'],
+		settings: tagsShared,
+	},
 };
 
 /** The manifest as the kit and the Portal take it: settings schemas inline. */
@@ -79,14 +93,18 @@ export const createProductInstance = (options) => {
 	const web = createWeb({ send });
 
 	/**
-	 * The settings of each switched-on feature.
+	 * The settings of each switched-on feature, and of each shared group one of them uses.
 	 * @param {string} websiteId
 	 * @param {ReadonlyArray<string>} on
 	 */
-	const valuesOf = async (websiteId, on) =>
-		Object.fromEntries(
-			await Promise.all(on.map(async (feature) => [feature, await product.settings.values(websiteId, feature)])),
+	const valuesOf = async (websiteId, on) => {
+		const groups = Object.entries(SHARED_SETTINGS)
+			.filter(([, group]) => group.features.some((feature) => on.includes(feature)))
+			.map(([key]) => key);
+		return Object.fromEntries(
+			await Promise.all([...on, ...groups].map(async (key) => [key, await product.settings.values(websiteId, key)])),
 		);
+	};
 
 	const product = createProduct({
 		...options,
@@ -105,6 +123,7 @@ export const createProductInstance = (options) => {
 			},
 		},
 		data: { indexes: INDEXES },
+		sharedSettings: SHARED_SETTINGS,
 	});
 	return Object.freeze({ ...product, web, now, valuesOf });
 };

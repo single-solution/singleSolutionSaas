@@ -1,7 +1,9 @@
 /**
- * The four shop events (PLAN 0.8.9) as each pixel names them: Meta (`fbq('track', …)`), Google tags (`gtag('event', …)`,
- * GA4 ecommerce events and, for a purchase, the Google Ads conversion) and TikTok (`ttq.track(…)`). Money arrives in
- * minor units with a currency and goes to the pixels in major units.
+ * The four shop events (PLAN 0.8.9) as each pixel names them: Meta (`fbq('track', …)`), Google tags (`gtag('event', …)`
+ * for Google Analytics 4 and Google Ads loaded by Growth, with the Google Ads conversion of a purchase; and, while the
+ * Tag Manager container is loaded, the same GA4 event pushed to its `dataLayer` as `{ event, ecommerce }`, which its
+ * tags take, for example Google Analytics 4 inside Tag Manager, PLAN 0.8.10 G1) and TikTok (`ttq.track(…)`). Money
+ * arrives in minor units with a currency and goes to the pixels in major units.
  * @module
  */
 import { isAmount, isCurrency, toMajor } from './money.js';
@@ -17,7 +19,12 @@ const PIXEL_EVENTS = Object.freeze({
 /** @typedef {keyof typeof PIXEL_EVENTS} Step */
 /** @typedef {{ id: string, variantId: string | null, name: string, price: number | null, quantity: number }} Item */
 /** @typedef {{ items: Item[], value: number | null, currency: string | null, orderId: string | null }} Detail */
-/** @typedef {{ vendor: 'meta' | 'google' | 'tiktok', args: unknown[] }} PixelCall */
+/** @typedef {{ vendor: 'meta' | 'google' | 'datalayer' | 'tiktok', args: unknown[] }} PixelCall */
+/**
+ * The pixels loaded in the page: `google`, Google Analytics 4 or Google Ads through gtag.js; `gtm`, the Tag Manager
+ * container; `ads`, the Google Ads conversion of a purchase.
+ * @typedef {{ meta: boolean, google: boolean, gtm: boolean, ads: { id: string, label: string } | null, tiktok: boolean }} Loaded
+ */
 
 /** @param {unknown} value @returns {value is Record<string, any>} */
 const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -54,10 +61,32 @@ export const detailOf = (raw) => {
 };
 
 /**
+ * One Google Analytics 4 event: `gtag('event', …)` while gtag.js is loaded, and a `dataLayer` push while the Tag Manager
+ * container is (an ecommerce event as `{ event, ecommerce }`, after clearing the last `ecommerce` object, as Google
+ * asks).
+ * @param {string} name
+ * @param {Record<string, unknown>} params
+ * @param {Loaded} loaded
+ * @param {boolean} ecommerce
+ * @returns {PixelCall[]}
+ */
+const googleEvent = (name, params, loaded, ecommerce) => [
+	...(loaded.google ? [{ vendor: /** @type {const} */ ('google'), args: ['event', name, params] }] : []),
+	...(loaded.gtm
+		? ecommerce
+			? [
+					{ vendor: /** @type {const} */ ('datalayer'), args: [{ ecommerce: null }] },
+					{ vendor: /** @type {const} */ ('datalayer'), args: [{ event: name, ecommerce: params }] },
+				]
+			: [{ vendor: /** @type {const} */ ('datalayer'), args: [{ event: name, ...params }] }]
+		: []),
+];
+
+/**
  * The pixel calls of one funnel event, for the tags that are loaded.
  * @param {Step} step
  * @param {Detail} detail
- * @param {{ meta: boolean, google: boolean, ads: { id: string, label: string } | null, tiktok: boolean }} loaded
+ * @param {Loaded} loaded
  * @returns {PixelCall[]}
  */
 export const pixelCalls = (step, detail, loaded) => {
@@ -84,39 +113,37 @@ export const pixelCalls = (step, detail, loaded) => {
 				...(detail.orderId ? [{ eventID: `${step}-${detail.orderId}` }] : []),
 			],
 		});
-	if (loaded.google) {
+	calls.push(
+		...googleEvent(
+			names.google,
+			{
+				...money,
+				...(detail.orderId ? { transaction_id: detail.orderId } : {}),
+				items: detail.items.map((item) => ({
+					item_id: item.id,
+					...(item.name ? { item_name: item.name } : {}),
+					...(item.variantId ? { item_variant: item.variantId } : {}),
+					quantity: item.quantity,
+					...major(item.price),
+				})),
+			},
+			loaded,
+			true,
+		),
+	);
+	if (step === 'purchase' && loaded.google && loaded.ads)
 		calls.push({
 			vendor: 'google',
 			args: [
 				'event',
-				names.google,
+				'conversion',
 				{
+					send_to: `${loaded.ads.id}/${loaded.ads.label}`,
 					...money,
 					...(detail.orderId ? { transaction_id: detail.orderId } : {}),
-					items: detail.items.map((item) => ({
-						item_id: item.id,
-						...(item.name ? { item_name: item.name } : {}),
-						...(item.variantId ? { item_variant: item.variantId } : {}),
-						quantity: item.quantity,
-						...major(item.price),
-					})),
 				},
 			],
 		});
-		if (step === 'purchase' && loaded.ads)
-			calls.push({
-				vendor: 'google',
-				args: [
-					'event',
-					'conversion',
-					{
-						send_to: `${loaded.ads.id}/${loaded.ads.label}`,
-						...money,
-						...(detail.orderId ? { transaction_id: detail.orderId } : {}),
-					},
-				],
-			});
-	}
 	if (loaded.tiktok)
 		calls.push({
 			vendor: 'tiktok',

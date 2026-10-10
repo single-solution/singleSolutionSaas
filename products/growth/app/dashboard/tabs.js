@@ -33,7 +33,7 @@ import {
 	parseCredits,
 } from '@ss/ui';
 import manifest from '../../manifest.json' with { type: 'json' };
-import { tagsReady } from '../../core/config.js';
+import { tagsOf, tagsReady } from '../../core/config.js';
 import { createSnippets } from '../../core/snippets.js';
 import { BROWSER_EVENTS } from '../../core/widgets.js';
 import { call, fill, useLoad } from './api.js';
@@ -382,8 +382,32 @@ function FeaturesTab({ websiteId, who, support }) {
 }
 
 /**
- * Settings forms, one card per feature that has settings, each with its own Save and outcome: a website's settings or
- * the global defaults.
+ * What a settings card says above its form, from the values shown (edits included): the law warning while tags need
+ * no consent (PLAN 0.8.10 G1, as 0.8.3 warns for Chat's AI label), and Google Analytics left to a Tag Manager container
+ * that is not set.
+ * @param {string} key the feature or shared group
+ * @param {Record<string, unknown>} values
+ * @returns {import('react').ReactNode}
+ */
+export const settingsNotice = (key, values) => {
+	if (key === 'tags' && values.consentRequired === false)
+		return (
+			<Callout tone="warning" className="mb-4">
+				{TEXTS.settings.consentWarning}
+			</Callout>
+		);
+	if (key === 'google_tags' && values.ga4ViaGtm === true && !tagsOf(['google_tags'], { google_tags: values }).gtm)
+		return (
+			<Callout tone="warning" className="mb-4">
+				{TEXTS.settings.gtmMissing}
+			</Callout>
+		);
+	return null;
+};
+
+/**
+ * Settings forms, one card per feature that has settings (and per shared group), each with its own Save and outcome: a
+ * website's settings or the global defaults.
  * @param {{ features: Array<{ key: string, name: string, on?: boolean, schema: any, values: Record<string, { value: unknown, source: string }> }>,
  *   saveUrl: (key: string) => string, resetBody: boolean, savedSource: string, reload: () => void }} props
  *   `resetBody`: reset with `PUT { value: null }` (defaults) instead of `DELETE`
@@ -415,6 +439,7 @@ function SettingsForms({ features, saveUrl, resetBody, savedSource, reload }) {
 					);
 					return (
 						<Card key={feature.key} title={feature.name} subtitle={feature.on === false ? TEXTS.settings.off : undefined}>
+							{settingsNotice(feature.key, values)}
 							<SchemaForm
 								schema={feature.schema}
 								values={values}

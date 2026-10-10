@@ -308,6 +308,64 @@ describe('the page script', () => {
 	});
 });
 
+/** The addresses of the scripts loaded in the page head. */
+const sources = () => [...document.head.querySelectorAll('script[src]')].map((s) => /** @type {HTMLScriptElement} */ (s).src);
+
+describe('store-conversion options with the real page script (PLAN 0.8.10 G1–G7)', () => {
+	it('G1: tags load without a choice when the merchant turns consent off, and GA4 can run inside Tag Manager', async () => {
+		vi.useFakeTimers({ toFake: ['setTimeout'] });
+		serve({
+			[`GET ${CONFIG_PATH}`]: () =>
+				answer(
+					200,
+					configOf(['consent_banner', 'google_tags', 'meta_pixel'], {
+						tags: { consentRequired: false },
+						google_tags: { ga4Id: 'G-ABCD12', gtmId: 'GTM-ABCD1', ga4ViaGtm: true },
+						meta_pixel: { pixelId: '1234567' },
+					}),
+				),
+		});
+		const page = startWidget({ window, script: script('t') });
+		await vi.advanceTimersByTimeAsync(0);
+		await page.ready;
+		// Consent Mode starts granted and every tag loads before any choice; GA4 is left to the container
+		expect(w.dataLayer[0]).toEqual(
+			expect.objectContaining({ 0: 'consent', 1: 'default', 2: expect.objectContaining({ analytics_storage: 'granted' }) }),
+		);
+		expect(sources()).toEqual([
+			'https://www.googletagmanager.com/gtm.js?id=GTM-ABCD1',
+			'https://connect.facebook.net/en_US/fbevents.js',
+		]);
+		const banner = hostOf('consent_banner');
+		expect(inside(banner, '[role="dialog"]').hasAttribute('hidden')).toBe(false);
+		// shop events reach the container's dataLayer as GA4 ecommerce events
+		window.dispatchEvent(
+			new window.CustomEvent('ss:purchase', {
+				detail: { orderId: 'o1', currency: 'USD', value: 2500, items: [{ id: 'p1', price: 1250, quantity: 2 }] },
+			}),
+		);
+		expect(w.dataLayer).toContainEqual({ ecommerce: null });
+		expect(w.dataLayer).toContainEqual({
+			event: 'purchase',
+			ecommerce: expect.objectContaining({ transaction_id: 'o1', value: 25, currency: 'USD' }),
+		});
+		// a refusal the visitor makes is followed: Consent Mode denied, and the next page loads nothing
+		button(banner, strings['consent.rejectAll']).click();
+		expect(w.dataLayer.at(-1)).toEqual(
+			expect.objectContaining({ 0: 'consent', 1: 'update', 2: expect.objectContaining({ ad_storage: 'denied' }) }),
+		);
+		document.head.replaceChildren();
+		document.body.replaceChildren();
+		delete w.dataLayer;
+		delete w.gtag;
+		delete w.fbq;
+		const next = startWidget({ window, script: script('t') });
+		await vi.advanceTimersByTimeAsync(0);
+		await next.ready;
+		expect(sources()).toEqual([]);
+	});
+});
+
 describe('page facts', () => {
 	it('tells a visit’s first page, the referrer and the device', () => {
 		/** @type {Record<string, string>} */

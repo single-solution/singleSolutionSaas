@@ -102,6 +102,10 @@ export const TEXTS = Object.freeze({
 		}),
 		wholeUnits: 'Whole amounts only (no minor units)',
 		off: 'This feature is off.',
+		consentWarning:
+			'Tags load without waiting for consent. Laws in many places (for example the EU’s GDPR and ePrivacy rules and the UK’s PECR) require a visitor’s consent before tracking; you are responsible for following the law where you operate.',
+		gtmMissing:
+			'Google Analytics 4 is left to Tag Manager, but no well-formed Tag Manager container id is set, so Google Analytics gets nothing.',
 	}),
 	connections: Object.freeze({
 		token: 'Server token of that product for this website',

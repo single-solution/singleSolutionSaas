@@ -29,6 +29,12 @@
 			"description": "GTM-XXXXXXX. Loads after the visitor consents to analytics or marketing; Consent Mode tells its tags what was granted.",
 			"default": "",
 			"maxLength": 30
+		},
+		"ga4ViaGtm": {
+			"type": "boolean",
+			"title": "Google Analytics 4 runs inside Tag Manager",
+			"description": "On: Growth does not load Google Analytics itself; your Tag Manager container's Google Analytics tag takes the events from the dataLayer, so they are counted once. Needs the Tag Manager container id.",
+			"default": false
 		}
 	}
 }

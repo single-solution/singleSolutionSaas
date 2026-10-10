@@ -96,7 +96,9 @@ export const noticeOf = (values, now) => {
 };
 
 /**
- * The merchant's tags of switched-on features (malformed ids left out).
+ * The merchant's tags of switched-on features (malformed ids left out), and how they load (PLAN 0.8.10 G1): whether
+ * they wait for consent (the `tags` shared setting `consentRequired`, true unless the merchant turns it off) and
+ * whether Google Analytics 4 runs inside the Tag Manager container (`ga4ViaGtm`: Growth then does not load it).
  * @param {ReadonlyArray<string>} on
  * @param {FeatureValues} values
  */
@@ -104,6 +106,8 @@ export const tagsOf = (on, values) => {
 	const google = on.includes('google_tags');
 	const adsId = google ? idOf(text(values, 'google_tags', 'adsId'), TAG_IDS.ads) : null;
 	return {
+		consentRequired: values.tags?.consentRequired !== false,
+		ga4ViaGtm: google && values.google_tags?.ga4ViaGtm === true,
 		meta: on.includes('meta_pixel') ? idOf(text(values, 'meta_pixel', 'pixelId'), TAG_IDS.meta) : null,
 		ga4: google ? idOf(text(values, 'google_tags', 'ga4Id'), TAG_IDS.ga4) : null,
 		ads: adsId,
@@ -131,7 +135,7 @@ export const tagsReady = (on, values) => {
 	const tags = tagsOf(on, values);
 	const checks = [
 		on.includes('meta_pixel') ? tags.meta !== null : null,
-		on.includes('google_tags') ? tags.ga4 !== null || tags.ads !== null || tags.gtm !== null : null,
+		on.includes('google_tags') ? (tags.ga4 !== null && !tags.ga4ViaGtm) || tags.ads !== null || tags.gtm !== null : null,
 		on.includes('tiktok_pixel') ? tags.tiktok !== null : null,
 		on.includes('custom_scripts') ? tags.scripts.analytics !== '' || tags.scripts.marketing !== '' : null,
 	].filter((check) => check !== null);

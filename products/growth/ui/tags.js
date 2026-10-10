@@ -4,9 +4,13 @@
  * analytics; the Meta pixel, the TikTok pixel, Google Ads and the marketing scripts after marketing; the Tag Manager
  * container after either (Consent Mode tells its tags what was granted). Consent changes update Consent Mode. Shop
  * events go to the pixels that are loaded.
+ *
+ * Options (PLAN 0.8.10 G1): with `consentRequired` off, Consent Mode starts granted and every tag loads at once until
+ * the visitor chooses (a choice they make is followed); with `ga4ViaGtm` on, Google Analytics 4 is left to the Tag
+ * Manager container, which takes the events from the `dataLayer`.
  * @module
  */
-import { consentMode, granted } from '../core/consent.js';
+import { consentMode, granted, tagChoice } from '../core/consent.js';
 import { pixelCalls } from '../core/pixels.js';
 
 /** @typedef {import('../core/config.js').Tags} Tags */
@@ -38,7 +42,7 @@ export const injectScripts = (doc, pasted) => {
 export const createTags = ({ window: win, tags }) => {
 	const doc = win.document;
 	const w = /** @type {any} */ (win);
-	const google = tags.ga4 !== null || tags.ads !== null || tags.gtm !== null;
+	const google = (tags.ga4 !== null && !tags.ga4ViaGtm) || tags.ads !== null || tags.gtm !== null;
 	/** @type {Set<string>} */
 	const loaded = new Set();
 
@@ -59,7 +63,7 @@ export const createTags = ({ window: win, tags }) => {
 				// gtag.js reads the arguments object itself
 				w.dataLayer.push(arguments);
 			};
-		w.gtag('consent', 'default', { ...consentMode(null), wait_for_update: 500 });
+		w.gtag('consent', 'default', { ...consentMode(tagChoice(null, tags.consentRequired)), wait_for_update: 500 });
 	}
 
 	/** @param {string} id */
@@ -108,10 +112,12 @@ export const createTags = ({ window: win, tags }) => {
 	};
 
 	/**
-	 * Load what the choice now allows (each tag once) and update Consent Mode.
-	 * @param {Choice | null} choice
+	 * Load what the choice now allows (each tag once) and update Consent Mode. Without a choice, tags that need no
+	 * consent load as if everything were granted.
+	 * @param {Choice | null} chosen the visitor's choice, or null before they chose
 	 */
-	const apply = (choice) => {
+	const apply = (chosen) => {
+		const choice = tagChoice(chosen, tags.consentRequired);
 		if (choice === null) return;
 		if (google) w.gtag('consent', 'update', consentMode(choice));
 		const analytics = granted(choice, 'analytics');
@@ -127,7 +133,7 @@ export const createTags = ({ window: win, tags }) => {
 				w.dataLayer.push({ 'gtm.start': Date.now(), event: 'gtm.js' });
 				load(`https://www.googletagmanager.com/gtm.js?id=${encodeURIComponent(String(tags.gtm))}`);
 			});
-		if (tags.ga4 !== null) once('ga4', analytics, () => loadGtag(String(tags.ga4)));
+		if (tags.ga4 !== null && !tags.ga4ViaGtm) once('ga4', analytics, () => loadGtag(String(tags.ga4)));
 		if (tags.ads !== null) once('ads', marketing, () => loadGtag(String(tags.ads)));
 		if (tags.meta !== null) once('meta', marketing, loadMeta);
 		if (tags.tiktok !== null) once('tiktok', marketing, loadTikTok);
@@ -143,7 +149,8 @@ export const createTags = ({ window: win, tags }) => {
 	const forward = (step, detail) => {
 		const calls = pixelCalls(step, detail, {
 			meta: loaded.has('meta'),
-			google: loaded.has('ga4') || loaded.has('ads') || loaded.has('gtm'),
+			google: loaded.has('ga4') || loaded.has('ads'),
+			gtm: loaded.has('gtm'),
 			ads:
 				loaded.has('ads') && tags.ads !== null && tags.adsPurchaseLabel !== null
 					? { id: tags.ads, label: tags.adsPurchaseLabel }
@@ -154,6 +161,7 @@ export const createTags = ({ window: win, tags }) => {
 		const send = {
 			meta: typeof w.fbq === 'function' ? w.fbq : null,
 			google: typeof w.gtag === 'function' ? w.gtag : null,
+			datalayer: Array.isArray(w.dataLayer) ? (/** @type {unknown} */ entry) => w.dataLayer.push(entry) : null,
 			tiktok: typeof w.ttq?.track === 'function' ? (/** @type {unknown[]} */ ...args) => w.ttq.track(...args) : null,
 		};
 		for (const call of calls) send[call.vendor]?.(...call.args);

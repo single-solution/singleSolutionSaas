@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildReport, dayStart, daysOf, lastDays, rangeOf } from '../core/analytics.js';
 import { linkOf, noticeOf, searchParamsOf, tagsOf, tagsReady, widgetSettings } from '../core/config.js';
-import { consentMode, granted, makeChoice, readChoice } from '../core/consent.js';
+import { consentMode, granted, makeChoice, readChoice, tagChoice } from '../core/consent.js';
 import { checkBatch, checkEvent, countryOf, dayOf, expiryOf, mergeTotals, pathOf, ratingOf, textOf } from '../core/events.js';
 import { decimalsOf, isAmount, toMajor } from '../core/money.js';
 import { detailOf, funnelEvent, pixelCalls } from '../core/pixels.js';
@@ -181,6 +181,8 @@ describe('page script settings', () => {
 		};
 		const all = ['meta_pixel', 'google_tags', 'tiktok_pixel', 'custom_scripts'];
 		expect(tagsOf(all, values)).toEqual({
+			consentRequired: true,
+			ga4ViaGtm: false,
 			meta: '123456789',
 			ga4: 'G-ABCD12',
 			ads: 'AW-123456',
@@ -196,6 +198,11 @@ describe('page script settings', () => {
 		expect(tagsReady(all, values)).toEqual({ ready: 4, total: 4 });
 		expect(tagsReady(all, {})).toEqual({ ready: 0, total: 4 });
 		expect(tagsReady([], {})).toEqual({ ready: 0, total: 0 });
+		// G1: tags without a consent step; GA4 inside Tag Manager is not loaded by Growth
+		const viaGtm = { tags: { consentRequired: false }, google_tags: { ga4Id: 'G-ABCD12', ga4ViaGtm: true } };
+		expect(tagsOf(['google_tags'], viaGtm)).toMatchObject({ consentRequired: false, ga4ViaGtm: true, ga4: 'G-ABCD12' });
+		expect(tagsReady(['google_tags'], viaGtm)).toEqual({ ready: 0, total: 1 });
+		expect(tagsOf([], viaGtm).ga4ViaGtm).toBe(false);
 	});
 
 	it('shows the notice bar only between its dates, with a safe link', () => {
@@ -261,6 +268,10 @@ describe('consent', () => {
 		expect(consentMode(choice).analytics_storage).toBe('granted');
 		expect(granted(null, 'necessary')).toBe(true);
 		expect(granted(choice, 'marketing')).toBe(false);
+		// G1: without a choice, tags that need no consent follow "everything granted"
+		expect(tagChoice(null, true)).toBeNull();
+		expect(tagChoice(null, false)).toEqual({ analytics: true, marketing: true });
+		expect(tagChoice(choice, false)).toBe(choice);
 	});
 });
 
@@ -280,7 +291,13 @@ describe('pixels and money', () => {
 			items: [{ id: 'a', variantId: 'v', name: 'Case', price: 1250, quantity: 2 }, { id: 'b' }, null],
 		});
 		expect(detail.items).toHaveLength(2);
-		const calls = pixelCalls('purchase', detail, { meta: true, google: true, ads: { id: 'AW-1', label: 'L' }, tiktok: true });
+		const calls = pixelCalls('purchase', detail, {
+			meta: true,
+			google: true,
+			gtm: false,
+			ads: { id: 'AW-1', label: 'L' },
+			tiktok: true,
+		});
 		expect(calls.map((call) => [call.vendor, call.args[0], call.args[1]])).toEqual([
 			['meta', 'track', 'Purchase'],
 			['google', 'event', 'purchase'],
@@ -298,12 +315,23 @@ describe('pixels and money', () => {
 		});
 		expect(calls[0]?.args[3]).toEqual({ eventID: 'purchase-o1' });
 		const bare = detailOf('nothing');
-		expect(pixelCalls('view_item', bare, { meta: true, google: true, ads: null, tiktok: false })[0]?.args[2]).toEqual({
+		expect(
+			pixelCalls('view_item', bare, { meta: true, google: true, gtm: false, ads: null, tiktok: false })[0]?.args[2],
+		).toEqual({
 			content_ids: [],
 			content_type: 'product',
 			num_items: 0,
 		});
-		expect(pixelCalls('add_to_cart', bare, { meta: false, google: false, ads: null, tiktok: false })).toEqual([]);
+		expect(pixelCalls('add_to_cart', bare, { meta: false, google: false, gtm: false, ads: null, tiktok: false })).toEqual([]);
+		// the Tag Manager container takes GA4 ecommerce events from its dataLayer (G1); the Ads conversion needs gtag.js
+		const tagManager = pixelCalls('purchase', detail, { meta: false, google: false, gtm: true, ads: null, tiktok: false });
+		expect(tagManager).toEqual([
+			{ vendor: 'datalayer', args: [{ ecommerce: null }] },
+			{
+				vendor: 'datalayer',
+				args: [{ event: 'purchase', ecommerce: expect.objectContaining({ transaction_id: 'o1', value: 25 }) }],
+			},
+		]);
 		expect(funnelEvent('purchase', detail, '/c')).toMatchObject({ type: 'purchase', orderId: 'o1', value: 2500 });
 		expect(funnelEvent('view_item', bare, '/c')).toEqual({ type: 'view_item', path: '/c', items: [] });
 	});
