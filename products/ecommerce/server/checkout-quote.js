@@ -89,6 +89,13 @@ const BANK_DETAILS_MS = 5 * 60_000;
  */
 
 /**
+ * Re-pricing an order staff edit (E29): the order keeps the offers it was placed with (its deals, even ended, and its
+ * coupon with this order's use not counted twice), its role price and the points it spent; staff may set unit prices.
+ * @typedef {{ prices: Map<string, number>, deals: DealRecord[], coupon: import('../core/model.js').CouponRecord | null,
+ *   role: { role: string, percent: number, label: string } | null, points: { used: number, value: number } }} QuoteEdit
+ */
+
+/**
  * @param {Product} product
  * @param {Service} service
  */
@@ -164,11 +171,12 @@ export const createQuoting = (product, service) => {
 	 * @param {CartInput} cart
 	 * @param {Shopper | null} shopper
 	 * @param {Address | null} [address]
-	 * @param {{ customer?: import('../core/model.js').CustomerRecord | null }} [options] the guest's customer record
-	 *   (placing a guest order: RTO count)
+	 * @param {{ customer?: import('../core/model.js').CustomerRecord | null, edit?: QuoteEdit }} [options] the guest's
+	 *   customer record (placing a guest order: RTO count); `edit`: re-pricing an order staff edit (E29)
 	 * @returns {Promise<Quote>}
 	 */
 	const quote = async (s, cart, shopper, address = null, options = {}) => {
+		const edit = options.edit ?? null;
 		const data = await s.data();
 		const store = createOrdersStore(data);
 		const now = service.now();
@@ -209,7 +217,14 @@ export const createQuoting = (product, service) => {
 				return slotAt({ hours, durationMinutes, start, timeZone });
 			},
 		});
-		const priced = lines.filter((line) => line.priced);
+		// staff may set a line's unit price when editing an order (E29)
+		const priced = lines
+			.filter((line) => line.priced)
+			.map((line) =>
+				edit?.prices.has(line.variantId)
+					? { ...line, unitPrice: /** @type {number} */ (edit.prices.get(line.variantId)) }
+					: line,
+			);
 		const customer = options.customer ?? (shopper ? await store.customer(shopper.id) : null);
 		const [checkout, codSettings] = await Promise.all([s.values('checkout'), s.values('cod')]);
 		const zonesOn = s.has('delivery_zones');
@@ -285,11 +300,11 @@ export const createQuoting = (product, service) => {
 									: null,
 							};
 						}),
-						deals: [...offers.deals, ...kept],
-						bundles: offers.bundles,
-						coupon: offers.coupon,
-						couponCode,
-						customer: { orderCount: customer?.orderCount ?? 0, couponUses },
+						deals: edit ? edit.deals : [...offers.deals, ...kept],
+						bundles: edit ? [] : offers.bundles,
+						coupon: edit ? edit.coupon : offers.coupon,
+						couponCode: edit ? (edit.coupon?.code ?? '') : couponCode,
+						customer: edit ? { orderCount: 0, couponUses: 0 } : { orderCount: customer?.orderCount ?? 0, couponUses },
 						now,
 						cart: { paymentMethod: method, weekday: clock.weekday, minutes: clock.minutes },
 						unit,
@@ -300,7 +315,7 @@ export const createQuoting = (product, service) => {
 		// role pricing (E19)
 		/** @type {Array<{ role: string, percent: number, label: string }>} */
 		const rolePrices = s.has('role_pricing') && shopper?.role ? await s.list('role_prices') : [];
-		const role = rolePrices.find((entry) => entry.role === shopper?.role) ?? null;
+		const role = edit ? edit.role : (rolePrices.find((entry) => entry.role === shopper?.role) ?? null);
 		const rolePercent = role?.percent ?? 0;
 
 		const physical = priced.some((line) => line.kind === 'physical');
@@ -416,7 +431,10 @@ export const createQuoting = (product, service) => {
 			// loyalty points (E20): none while a deal that allows no points applies
 			/** @type {Quote['points']} */
 			let points = null;
-			if (account && loyaltySettings) {
+			if (edit && edit.points.used > 0) {
+				// an edited order keeps the points it spent, worth at most the goods (E29)
+				points = { balance: 0, max: edit.points.used, used: edit.points.used, value: Math.min(goods, edit.points.value) };
+			} else if (account && loyaltySettings) {
 				const settings = loyaltySettings;
 				const subtotal = priced.reduce((n, line) => n + line.unitPrice * line.quantity, 0);
 				const payable = loyaltyRules(settings).capBase === 'goods' ? subtotal : goods;

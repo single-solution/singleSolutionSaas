@@ -21,9 +21,9 @@
  * @module
  */
 import { problem } from '@ss/app-kit';
-import { givePoints, releaseOrder, returnToOrigin, takePoints } from '../adapters/ledger.js';
-import { courierOf, trackingLink } from '../core/couriers.js';
-import { canMove, statusOf } from '../core/flow.js';
+import { givePoints, heldStockBefore, releaseOrder, returnToOrigin, takePoints } from '../adapters/ledger.js';
+import { courierNamed, courierOf, trackingLink } from '../core/couriers.js';
+import { WAITING_ROLES as WAITING, canMove, confirmedStatus, statusOf } from '../core/flow.js';
 import { expiryFor, loyaltyRules, pointsToEarn } from '../core/loyalty.js';
 import { createId } from '@ss/contracts';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
@@ -31,6 +31,7 @@ import {
 	CASH_METHODS,
 	isSerialized,
 	missingSerials,
+	paymentStateOf,
 	refundSplit,
 	refundable,
 	serialCheckFailure,
@@ -229,12 +230,18 @@ export const createMoves = (product, service) => {
 				checkedAt: null,
 			};
 		}
-		const courier = courierOf(couriers, input.courier);
-		if (!courier) throw service.invalid('shipment/courier', 'There is no such courier.');
+		// the courier is kept by name and its link built on read from today's list (E28); a tracking number is needed
+		// unless the website says otherwise
+		const courier = input.courier ? courierNamed(couriers, input.courier) : null;
+		if (input.courier && !courier) throw service.invalid('shipment/courier', 'There is no such courier.');
+		if (!input.trackingNumber && (await s.values('checkout')).trackingRequired !== false)
+			throw service.invalid('shipment/trackingNumber', 'Give the tracking number.');
 		return {
-			courier: courier.name,
+			courier: courier?.name ?? '',
 			trackingNumber: input.trackingNumber,
-			trackingUrl: trackingLink(courier.trackingUrl, input.trackingNumber),
+			trackingUrl: courier && input.trackingNumber ? trackingLink(courier.trackingUrl, input.trackingNumber) : '',
+			trackingNote: input.trackingNote ?? '',
+			estimatedDeliveryAt: input.estimatedDeliveryAt ?? null,
 			booked: false,
 			status: '',
 			checkedAt: null,
@@ -255,6 +262,88 @@ export const createMoves = (product, service) => {
 		});
 
 	/**
+	 * Who an order's points belong to: the member, or the guest's customer record (E20), or nobody.
+	 * @param {OrderRecord} order
+	 * @returns {{ userId: string } | { customerId: string } | null}
+	 */
+	const ownerOf = (order) =>
+		order.customer.userId
+			? { userId: order.customer.userId }
+			: order.customer.customerId
+				? { customerId: order.customer.customerId }
+				: null;
+
+	/**
+	 * A refund entry of the order's log (E26).
+	 * @param {any} ctx
+	 * @param {{ method: 'online' | 'bank_transfer' | 'cash' | 'other', amount: number, reference?: string,
+	 *   refundId?: string | null, claimId?: string | null, note?: string }} refund
+	 */
+	const refundEntry = (ctx, { method, amount, reference = '', refundId = null, claimId = null, note = '' }) => ({
+		id: createId(ID_PREFIX.orderPayment),
+		method,
+		amount,
+		reference,
+		claimId,
+		note,
+		by: service.actor(ctx),
+		at: new Date(product.now()),
+		refundId,
+	});
+
+	/**
+	 * Points of a returned order (E27): what it earned is taken back (as far as the balance goes) and what it redeemed is
+	 * given back. Never fails the move.
+	 * @param {Site} s @param {OrderRecord} order @param {number} now
+	 */
+	const returnPoints = async (s, order, now) => {
+		const owner = ownerOf(order);
+		if (!owner) return;
+		const data = await s.data();
+		const earned = order.promotions.pointsCredited === false ? 0 : order.promotions.pointsEarned;
+		const redeemed = order.promotions.released ? 0 : order.promotions.pointsRedeemed;
+		try {
+			await transact(s, async (session) => {
+				if (earned > 0) {
+					const taken = await takePoints(
+						data,
+						{ userId: owner, points: earned, orderId: order.id, kind: 'reverse', note: order.number },
+						{ now, session },
+					);
+					if (!taken.ok) throw stop('points');
+				}
+				if (redeemed > 0)
+					await givePoints(
+						data,
+						{ userId: owner, points: redeemed, orderId: order.id, kind: 'refund', expiresAt: null, note: order.number },
+						{ now, session },
+					);
+				await data
+					.collection(COLLECTIONS.orders)
+					.updateOne({ websiteId: s.websiteId, id: order.id }, { $set: { 'promotions.released': true } }, { session });
+			});
+		} catch {
+			// the points stay as they were; staff can adjust the account
+		}
+	};
+
+	/**
+	 * Free the serial numbers an order took when it was packed, as it moves back to open or waiting (E27).
+	 * @param {Site} s @param {OrderRecord} order
+	 * @param {(session: Session | undefined, extra?: Record<string, unknown>) => Promise<void>} write
+	 */
+	const unpack = async (s, order, write) => {
+		if (order.role !== 'packed' || !order.lines.some((line) => (line.serials ?? []).length > 0)) {
+			await write(undefined);
+			return;
+		}
+		await transact(s, async (session) => {
+			await write(session, { lines: order.lines.map((line) => ({ ...line, serials: [] })) });
+			await releaseSerials(s, order.id, session);
+		});
+	};
+
+	/**
 	 * Move an order. Throws a problem when the move is not allowed, the input is wrong or the order changed meanwhile.
 	 * @param {Site} s
 	 * @param {any} ctx
@@ -272,14 +361,35 @@ export const createMoves = (product, service) => {
 				'move_not_allowed',
 				`An order cannot move from ${statusLabel(flow, from)} to ${target ? target.label : input.to}.`,
 			);
+		// refunds need the refund permission, also through a move (E27)
+		if (target.role === 'refunded' && ctx.ticket && !ctx.ticket.permissions.includes('orders.refund'))
+			throw problem('forbidden', 'Refunding an order needs the refund permission.');
 		const data = await s.data();
 		const orders = data.collection(COLLECTIONS.orders);
 		const now = product.now();
-		const entry = { at: new Date(now), from, to: input.to, by: service.actor(ctx).name, note: input.note };
+		const checkout = await s.values('checkout');
+		const restock = checkout.returnRestock !== 'no';
+		// a parcel coming back is a return to origin (counted) or a customer's return (not counted) (E27)
+		const reason =
+			target.role === 'returned_to_origin'
+				? (input.reason ?? 'rto')
+				: target.role === 'returned'
+					? 'customer_return'
+					: undefined;
+		const entry = {
+			at: new Date(now),
+			from,
+			to: input.to,
+			by: service.actor(ctx).name,
+			note: input.note,
+			...(reason ? { reason } : {}),
+		};
 		/** @type {Record<string, unknown>} */
 		const set = { status: input.to, role: target.role, holdUntil: null };
 		/** @type {string[]} */
 		const warnings = [];
+		/** What the move adds to the order's lists: its history entry, and payment or refund entries (E26). @type {Record<string, unknown>} */
+		const push = { history: entry };
 		const guard = { websiteId: s.websiteId, id: order.id, status: from, updatedAt: order.updatedAt };
 		/**
 		 * Write the move (inside a transaction: abort when the order changed).
@@ -287,7 +397,7 @@ export const createMoves = (product, service) => {
 		 * @param {Record<string, unknown>} [extra]
 		 */
 		const write = async (session, extra = {}) => {
-			const result = await orders.updateOne(guard, { $set: { ...set, ...extra }, $push: { history: entry } }, { session });
+			const result = await orders.updateOne(guard, { $set: { ...set, ...extra }, $push: push }, { session });
 			if (result.modifiedCount !== 1) throw session ? stop('order') : changed();
 		};
 		/**
@@ -297,7 +407,7 @@ export const createMoves = (product, service) => {
 		const writeReleased = async (session) => {
 			const result = await orders.updateOne(
 				{ websiteId: s.websiteId, id: order.id, status: from },
-				{ $set: set, $push: { history: entry } },
+				{ $set: set, $push: push },
 				{ session },
 			);
 			if (result.modifiedCount !== 1) return false;
@@ -305,8 +415,29 @@ export const createMoves = (product, service) => {
 			return true;
 		};
 
+		// stock an order gives back tells the alerts (E34): what its products were before
+		const held = ['cancelled', 'returned_to_origin', 'returned', 'refunded'].includes(target.role)
+			? await heldStockBefore(data, order)
+			: null;
 		switch (target.role) {
+			case 'awaiting_payment': {
+				// the order waits for its payment again and its window restarts (E27); serials taken when packing go back
+				const minutes = Number(checkout.paymentWindowMinutes ?? 0);
+				set.holdUntil = minutes > 0 ? new Date(now + minutes * 60_000) : null;
+				await unpack(s, order, write);
+				break;
+			}
+			case 'open': {
+				// back from packed: the serial numbers captured are freed (E27)
+				await unpack(s, order, write);
+				break;
+			}
 			case 'packed': {
+				// the dispatch video taken when packing, as the website asks (E28)
+				const videoRule = String(checkout.packingVideo ?? 'off');
+				if (videoRule === 'required' && !input.video && !(order.media ?? []).some((m) => m.kind === 'dispatch_video'))
+					throw service.invalid('video', 'Add the dispatch video before packing.');
+				if (videoRule !== 'off' && input.video) push.media = input.video;
 				const { plan, mode } = await packingPlan(s, order, input);
 				if (plan.length === 0) {
 					await write(undefined);
@@ -340,9 +471,30 @@ export const createMoves = (product, service) => {
 			case 'delivered': {
 				set.deliveredAt = new Date(now);
 				const cash = CASH_METHODS.includes(order.payment.method);
-				if (cash && order.payment.state !== 'refunded' && order.payment.state !== 'partially_refunded') {
+				// cash taken at the door counts as paid on delivery, unless staff record it (E23 `paidOnDelivery: false`)
+				const onDelivery = !s.has('cod') || (await s.values('cod')).paidOnDelivery !== false;
+				/** @type {Record<string, unknown> | null} */
+				let cashEntry = null;
+				if (
+					cash &&
+					onDelivery &&
+					order.payment.state !== 'refunded' &&
+					order.payment.state !== 'partially_refunded' &&
+					order.totals.total > order.payment.paid
+				) {
+					cashEntry = {
+						id: createId(ID_PREFIX.orderPayment),
+						method: 'cash',
+						amount: order.totals.total - order.payment.paid,
+						reference: '',
+						proofKey: null,
+						note: 'Paid on delivery',
+						by: service.actor(ctx),
+						at: new Date(now),
+					};
 					set['payment.state'] = 'paid';
 					set['payment.paid'] = order.totals.total;
+					push.payments = cashEntry;
 				}
 				// points go to the member, or to the guest's customer record when guests earn (E20); fixed at placement or
 				// worked out now, and credited once
@@ -390,15 +542,26 @@ export const createMoves = (product, service) => {
 				break;
 			}
 			case 'cancelled': {
+				// before shipping or a recalled parcel (E27): everything is given back once
 				if (!(await releaseOrder(data, order, { now, update: writeReleased }))) throw changed();
 				const { online } = refundSplit(order, refundable(order));
 				if (online > 0) {
 					try {
+						const done = await refundOnline(s, ctx, order, online, input.note || 'Order cancelled', `${order.id}:cancel`);
 						const refunded = order.payment.refunded + online;
-						await refundOnline(s, ctx, order, online, input.note || 'Order cancelled', `${order.id}:cancel`);
 						await orders.updateOne(
 							{ websiteId: s.websiteId, id: order.id },
-							{ $set: { 'payment.refunded': refunded, 'payment.state': stateAfterRefund(order.payment.paid, refunded) } },
+							{
+								$set: { 'payment.refunded': refunded, 'payment.state': stateAfterRefund(order.payment.paid, refunded) },
+								$push: {
+									refunds: refundEntry(ctx, {
+										method: 'online',
+										amount: online,
+										refundId: done.refundId,
+										note: 'Order cancelled',
+									}),
+								},
+							},
 						);
 					} catch (error) {
 						warnings.push(
@@ -409,33 +572,64 @@ export const createMoves = (product, service) => {
 				break;
 			}
 			case 'returned_to_origin': {
-				if (!(await returnToOrigin(data, order, { update: writeReleased }))) throw changed();
+				// an RTO counts on the customer's record, a customer's return does not; stock as `returnRestock` says (E27)
+				const done = await returnToOrigin(data, order, {
+					update: writeReleased,
+					restock,
+					countRto: reason !== 'customer_return',
+				});
+				if (!done) throw changed();
+				break;
+			}
+			case 'returned': {
+				// a customer's return after delivery (E27): stock as `returnRestock` says; earned points are taken back and
+				// redeemed ones given back
+				if (!(await returnToOrigin(data, order, { update: writeReleased, restock, countRto: false }))) throw changed();
+				await returnPoints(s, order, now);
 				break;
 			}
 			case 'refunded': {
 				const amount = refundable(order);
-				const { online } = refundSplit(order, amount);
+				const before = !['delivered', 'returned_to_origin', 'returned'].includes(order.role);
+				// before delivery a refund acts as a cancel, and only when something was paid (E27)
+				if (before && order.payment.paid <= 0)
+					throw problem('nothing_paid', 'Nothing was paid on this order; cancel it instead.');
+				const { online, manual } = refundSplit(order, amount);
+				/** @type {string | null} */
+				let refundId = null;
 				if (online > 0)
-					await refundOnline(
-						s,
-						ctx,
-						order,
-						online,
-						input.note || 'Order refunded',
-						`${order.id}:refund:${order.payment.refunded}`,
-					);
+					refundId = (
+						await refundOnline(
+							s,
+							ctx,
+							order,
+							online,
+							input.note || 'Order refunded',
+							`${order.id}:refund:${order.payment.refunded}`,
+						)
+					).refundId;
 				if (amount > 0) {
 					set['payment.refunded'] = order.payment.paid;
 					set['payment.state'] = 'refunded';
+					push.refunds = {
+						$each: [
+							...(online > 0
+								? [refundEntry(ctx, { method: 'online', amount: online, refundId, note: input.note || 'Order refunded' })]
+								: []),
+							...(manual > 0
+								? [refundEntry(ctx, { method: 'other', amount: manual, note: input.note || 'Order refunded' })]
+								: []),
+						],
+					};
+				}
+				if (before) {
+					if (!(await releaseOrder(data, order, { now, update: writeReleased }))) throw changed();
+					break;
 				}
 				// only points that were credited are taken back (an order refunded before delivery earned none)
 				const earned = order.promotions.pointsCredited === false ? 0 : order.promotions.pointsEarned;
-				const owner = order.customer.userId
-					? { userId: order.customer.userId }
-					: order.customer.customerId
-						? { customerId: order.customer.customerId }
-						: null;
-				if (earned > 0 && owner)
+				const owner = ownerOf(order);
+				if (earned > 0 && owner && order.role !== 'returned')
 					await transact(s, async (session) => {
 						await write(session);
 						const taken = await takePoints(
@@ -459,7 +653,8 @@ export const createMoves = (product, service) => {
 			label: order.number,
 			detail: `${statusLabel(flow, from)} → ${target.label}`,
 		});
-		await service.emit('order.moved', s, { order: after, from, to: input.to });
+		if (held && order.stockHeld && !after.stockHeld) await service.emit('products.changed', s, held);
+		await service.emit('order.moved', s, { order: after, from, to: input.to, by: entry.by, ...(reason ? { reason } : {}) });
 		return { order: after, warnings };
 	};
 
@@ -529,15 +724,20 @@ export const createMoves = (product, service) => {
 	};
 
 	/**
-	 * Refund part of what was paid without a status change: through Payments for what Payments took, the rest is
-	 * recorded as given back by hand (`manual`).
+	 * Refund part of what was paid without a status change (E26): through Payments for what Payments took (or as asked),
+	 * the rest recorded as given back by `method`, with its reference and the claim it is for. With `autoRefundedStatus`,
+	 * an order whose refunds reach what was paid moves to its refunded status.
 	 * @param {Site} s
 	 * @param {any} ctx
 	 * @param {OrderRecord} order
-	 * @param {{ amount: number, reason: string }} input
+	 * @param {import('../core/orders.js').RefundInput} input
 	 */
 	const refund = async (s, ctx, order, input) => {
-		const { online, manual } = refundSplit(order, input.amount);
+		const split = refundSplit(order, input.amount);
+		const online = input.method === null || input.method === 'online' ? split.online : 0;
+		const manual = input.amount - online;
+		if (input.method === 'online' && manual > 0)
+			throw service.invalid('amount', `At most ${split.online} can be refunded through Payments.`);
 		/** @type {string | null} */
 		let refundId = null;
 		let recorded = manual > 0;
@@ -548,18 +748,46 @@ export const createMoves = (product, service) => {
 		}
 		const refunded = order.payment.refunded + input.amount;
 		const money = (await s.format()).money(input.amount, order.totals.currency);
+		const recordedMethod = input.method === null || input.method === 'online' ? 'other' : input.method;
+		const entries = [
+			...(online > 0
+				? [
+						refundEntry(ctx, {
+							method: 'online',
+							amount: online,
+							reference: input.reference,
+							refundId,
+							claimId: input.claimId,
+							note: input.reason,
+						}),
+					]
+				: []),
+			...(manual > 0
+				? [
+						refundEntry(ctx, {
+							method: recordedMethod,
+							amount: manual,
+							reference: input.reference,
+							claimId: input.claimId,
+							note: input.reason,
+						}),
+					]
+				: []),
+		];
 		const orders = (await s.data()).collection(COLLECTIONS.orders);
 		const result = await orders.updateOne(
 			{ websiteId: s.websiteId, id: order.id, 'payment.refunded': order.payment.refunded },
 			{
 				$set: { 'payment.refunded': refunded, 'payment.state': stateAfterRefund(order.payment.paid, refunded) },
 				$push: {
+					refunds: { $each: entries },
 					history: {
 						at: new Date(product.now()),
 						from: order.status,
 						to: order.status,
 						by: service.actor(ctx).name,
 						note: `Refunded ${money}${recorded ? ' (recorded)' : ''}: ${input.reason}`,
+						kind: 'refund',
 					},
 				},
 			},
@@ -569,15 +797,123 @@ export const createMoves = (product, service) => {
 			label: order.number,
 			detail: `Refunded ${money}${recorded ? ' (recorded)' : ''}`,
 		});
-		return {
-			order: /** @type {OrderRecord} */ (
-				await orders.findOne({ websiteId: s.websiteId, id: order.id }, { projection: { _id: 0 } })
-			),
-			refund: { amount: input.amount, online, manual, refundId, recorded },
-		};
+		let after = /** @type {OrderRecord} */ (
+			await orders.findOne({ websiteId: s.websiteId, id: order.id }, { projection: { _id: 0 } })
+		);
+		await service.emit('order.refunded', s, { order: after, amount: input.amount, claimId: input.claimId });
+		/** @type {string[]} */
+		const warnings = [];
+		if ((await s.values('checkout')).autoRefundedStatus === true && after.payment.paid > 0 && refunded >= after.payment.paid) {
+			const flow = /** @type {OrderFlow} */ (/** @type {unknown} */ (await s.list('order_flow')));
+			const to = flow.statuses.find((status) => status.role === 'refunded' && canMove(flow, after.status, status.key));
+			if (to) {
+				const moved = await move(
+					s,
+					ctx,
+					after,
+					{ to: to.key, note: 'Refunds cover the payments', serials: {}, shipment: null, updatedAt: null },
+					flow,
+				);
+				after = moved.order;
+				warnings.push(...moved.warnings);
+			}
+		}
+		return { order: after, refund: { amount: input.amount, online, manual, refundId, recorded }, warnings };
 	};
 
-	return Object.freeze({ move, refund, typeSerials, serializedOf });
+	/**
+	 * Record a payment staff took (E26): a bank transfer, cash or another way, at most the balance due. With `confirm`, a
+	 * waiting order moves to its confirmed status in the same call.
+	 * @param {Site} s
+	 * @param {any} ctx
+	 * @param {OrderRecord} order
+	 * @param {import('../core/orders.js').PaymentInput} input
+	 * @param {OrderFlow} flow
+	 */
+	const recordPayment = async (s, ctx, order, input, flow) => {
+		const now = product.now();
+		const paid = order.payment.paid + input.amount;
+		const state = paymentStateOf({
+			total: order.totals.total,
+			paid,
+			refunded: order.payment.refunded,
+			state: order.payment.state,
+		});
+		const money = (await s.format()).money(input.amount, order.totals.currency);
+		const entry = {
+			id: createId(ID_PREFIX.orderPayment),
+			method: input.method,
+			amount: input.amount,
+			reference: input.reference,
+			proofKey: order.payment.proof?.key ?? null,
+			note: input.note,
+			by: service.actor(ctx),
+			at: new Date(now),
+		};
+		const orders = (await s.data()).collection(COLLECTIONS.orders);
+		const result = await orders.updateOne(
+			{ websiteId: s.websiteId, id: order.id, 'payment.paid': order.payment.paid },
+			{
+				$set: { 'payment.paid': paid, 'payment.state': state, 'payment.checkedAt': new Date(now) },
+				$push: {
+					payments: entry,
+					history: {
+						at: new Date(now),
+						from: order.status,
+						to: order.status,
+						by: service.actor(ctx).name,
+						note: `Payment of ${money} recorded${input.reference ? ` (${input.reference})` : ''}`,
+						kind: 'payment',
+					},
+				},
+			},
+		);
+		if (result.modifiedCount !== 1) throw changed();
+		await service.log(ctx, 'order.payment_recorded', order.id, { label: order.number, detail: `${money} by ${input.method}` });
+		let after = /** @type {OrderRecord} */ (
+			await orders.findOne({ websiteId: s.websiteId, id: order.id }, { projection: { _id: 0 } })
+		);
+		await service.emit('order.payment_recorded', s, { order: after, entry });
+		if (state === 'paid' && order.payment.state !== 'paid') await service.emit('order.paid', s, { order: after, entry });
+		/** @type {string[]} */
+		const warnings = [];
+		if (input.confirm && WAITING.includes(after.role)) {
+			const to = confirmedStatus(flow, after.status);
+			if (!to) throw problem('move_not_allowed', 'The order flow has no move from this status to a confirmed one.');
+			const moved = await move(
+				s,
+				ctx,
+				after,
+				{ to, note: 'Payment recorded', serials: {}, shipment: null, updatedAt: null },
+				flow,
+			);
+			after = moved.order;
+			warnings.push(...moved.warnings);
+		}
+		return { order: after, warnings };
+	};
+
+	/**
+	 * Give back what an order holds before it is deleted (E31), as a cancel does: its stock and slots, offer uses and
+	 * redeemed points (once), and its serial numbers.
+	 * @param {Site} s @param {OrderRecord} order
+	 */
+	const giveBack = async (s, order) => {
+		// delivered, returned and settled orders hold nothing any more (what was sold stays sold)
+		if (!['awaiting_payment', 'awaiting_confirmation', 'open', 'packed', 'shipped'].includes(order.role)) return;
+		const data = await s.data();
+		if (order.stockHeld || !order.promotions.released)
+			await releaseOrder(data, order, {
+				now: product.now(),
+				update: async (session) => {
+					await releaseSerials(s, order.id, session);
+					return true;
+				},
+			});
+		else await data.transaction((session) => releaseSerials(s, order.id, session));
+	};
+
+	return Object.freeze({ move, refund, recordPayment, giveBack, typeSerials, serializedOf });
 };
 
 /** @typedef {ReturnType<typeof createMoves>} Moves */

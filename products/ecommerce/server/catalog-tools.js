@@ -1,8 +1,10 @@
 /**
- * The catalog's admin tools (PLAN 0.8.8 Admin tools, Catalog SEO): CSV export of products and stock and of orders,
- * CSV import of products (a dry run lists every row's problems first), bulk actions on many products, and AI copy
- * (suggestions written with the merchant's own AI key, never saved by themselves). Each route exists for the
- * merchant's server and for the admin widgets (ticket: `csv.run`, `bulk.run`, `catalog.edit`).
+ * The catalog's admin tools (PLAN 0.8.8 Admin tools, Catalog SEO): CSV export of products and stock, of orders (one
+ * row per line, or per order, with the order list's filters, E36) and of customers (E36), CSV import of products (a dry
+ * run lists every row's problems first) and price and stock updates by CSV (E36 `mode=update`: stale rows fail, the
+ * rest are changed), bulk actions on many products, and AI copy (suggestions written with the merchant's own AI key,
+ * never saved by themselves). Each route exists for the merchant's server and for the admin widgets (ticket:
+ * `csv.run`, `bulk.run`, `catalog.edit`).
  * @module
  */
 import { createId } from '@ss/contracts';
@@ -20,17 +22,25 @@ import {
 import { LIMITS, changedPrice, changedStock, checkPriceChange, checkProduct, summarize } from '../core/catalog.js';
 import { aiPrompt, checkAiRequest, readSuggestions } from '../core/catalog-ai.js';
 import {
+	CUSTOMER_COLUMNS,
 	MAX_IMPORT_ROWS,
 	ORDER_COLUMNS,
+	ORDER_TOTAL_COLUMNS,
+	customerRows,
 	importGroups,
 	importInput,
 	orderRows,
+	orderTotalRows,
 	productHeader,
 	productRows,
+	updateRows,
+	updatedVariants,
 } from '../core/catalog-csv.js';
 import { parseCsv, recordsOf, toCsv } from '../core/csv.js';
 import { specsOf } from '../core/catalog-views.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
+import { orderFilters, orderQuery } from '../core/orders.js';
+import { createFulfilmentStore } from '../adapters/fulfilment-store.js';
 import { bodyOf, refuse, STAFF_LIMITS } from './catalog-common.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
@@ -41,11 +51,14 @@ import { bodyOf, refuse, STAFF_LIMITS } from './catalog-common.js';
 /** @typedef {import('../core/model.js').OrderRecord} OrderRecord */
 /** @typedef {import('../core/catalog.js').FieldError} FieldError */
 /** @typedef {import('../core/catalog-csv.js').ImportGroup} ImportGroup */
+/** @typedef {import('../core/catalog-csv.js').UpdateRow} UpdateRow */
+/** @typedef {{ stale: UpdateRow[], next: ReturnType<typeof updatedVariants> }} UpdateOutcome */
 /** @typedef {import('@ss/app-kit').WebsiteData} WebsiteData */
 
-/** Most products of an export, and of orders. */
+/** Most products of an export, of orders and of customers. */
 const MAX_EXPORT_PRODUCTS = 20_000;
 const MAX_EXPORT_ORDERS = 10_000;
+const MAX_EXPORT_CUSTOMERS = 20_000;
 /** Most products of one bulk action. */
 const MAX_BULK = 500;
 /** Largest import body. */
@@ -57,7 +70,7 @@ const BULK_ACTIONS = Object.freeze(['status', 'price', 'stock', 'add_category', 
  * A CSV file answer.
  * @param {string} name @param {string} csv
  */
-const csvFile = (name, csv) =>
+export const csvFile = (name, csv) =>
 	new Response(csv, {
 		headers: {
 			'content-type': 'text/csv; charset=utf-8',
@@ -105,29 +118,52 @@ export const createCatalogTools = (product, service, common) => {
 		return csvFile('products.csv', toCsv(productHeader(locationIds), rows, { delimiter: await delimiterOf(s) }));
 	};
 
-	/** GET …/csv/orders?from=&to=&status=. @param {any} ctx */
+	/**
+	 * GET …/csv/orders with the order list's filters (status, role, paymentState, paymentMethod, from, to, q): one row
+	 * per order line, or per order with `per=order` (E36).
+	 * @param {any} ctx
+	 */
 	const exportOrders = async (ctx) => {
+		const per = ctx.query.per ?? '';
+		if (!['', 'line', 'order'].includes(per)) throw refuse([{ path: '/per', message: 'Per is line or order.' }]);
+		const filters = orderFilters(ctx.query);
+		if (!filters.ok) throw refuse([{ path: `/${filters.field}`, message: filters.message }]);
 		const { s, data } = await common.open(ctx);
-		/** @type {Record<string, unknown>} */
-		const placedAt = {};
-		for (const [name, op] of /** @type {const} */ ([
-			['from', '$gte'],
-			['to', '$lt'],
-		])) {
-			if (!ctx.query[name]) continue;
-			const at = Date.parse(ctx.query[name]);
-			if (!Number.isFinite(at)) throw refuse([{ path: `/${name}`, message: 'Give a date (ISO 8601).' }]);
-			placedAt[op] = new Date(at);
-		}
-		/** @type {Record<string, unknown>} */
-		const filter = { websiteId: data.websiteId, ...(Object.keys(placedAt).length > 0 ? { placedAt } : {}) };
-		if (ctx.query.status) filter.status = String(ctx.query.status);
+		const filter = { websiteId: data.websiteId, ...orderQuery(filters.value) };
 		const orders = data.collection(COLLECTIONS.orders);
 		if ((await orders.countDocuments(filter, { limit: MAX_EXPORT_ORDERS + 1 })) > MAX_EXPORT_ORDERS)
 			throw refuse([{ path: '/from', message: `More than ${MAX_EXPORT_ORDERS} orders: choose shorter dates.` }]);
 		const found = /** @type {OrderRecord[]} */ (await orders.find(filter, NO_ID).sort({ placedAt: 1, id: 1 }).toArray());
 		await service.log(ctx, 'csv.orders_exported', 'orders', { label: 'orders.csv', detail: `${found.length} orders` });
-		return csvFile('orders.csv', toCsv(ORDER_COLUMNS, orderRows(found), { delimiter: await delimiterOf(s) }));
+		const delimiter = await delimiterOf(s);
+		return csvFile(
+			'orders.csv',
+			per === 'order'
+				? toCsv(ORDER_TOTAL_COLUMNS, orderTotalRows(found), { delimiter })
+				: toCsv(ORDER_COLUMNS, orderRows(found), { delimiter }),
+		);
+	};
+
+	/** GET …/csv/customers (E36): every customer record, A to Z, with their orders and what they spent. @param {any} ctx */
+	const exportCustomers = async (ctx) => {
+		const { s, data } = await common.open(ctx);
+		const customers = /** @type {import('../core/model.js').CustomerRecord[]} */ (
+			await data
+				.collection(COLLECTIONS.customers)
+				.find({ websiteId: data.websiteId }, NO_ID)
+				.sort({ name: 1, userId: 1 })
+				.limit(MAX_EXPORT_CUSTOMERS)
+				.toArray()
+		);
+		const spent = await createFulfilmentStore(data).orders.spent(customers.map((customer) => customer.userId).filter(Boolean));
+		await service.log(ctx, 'csv.customers_exported', 'customers', {
+			label: 'customers.csv',
+			detail: `${customers.length} customers`,
+		});
+		return csvFile(
+			'customers.csv',
+			toCsv(CUSTOMER_COLUMNS, customerRows(customers, spent, s.currency), { delimiter: await delimiterOf(s) }),
+		);
 	};
 
 	// ------------------------------------------------------------------------------------------------- import
@@ -220,8 +256,115 @@ export const createCatalogTools = (product, service, common) => {
 		return { rules, plans, errors };
 	};
 
-	/** POST …/csv/products `{ csv, dryRun }`. @param {any} ctx */
+	/**
+	 * Price and stock updates (E36 `mode=update`): each row's variant gets its price, stock and sold-out flag, unless the
+	 * row's `updated_at` is older than its product's (someone changed the product since the export) or the row is
+	 * not valid; those rows are reported as failed and the rest are changed. A dry run changes nothing.
+	 * @param {any} ctx @param {Site} s @param {WebsiteData} data @param {string[][]} table @param {boolean} dryRun
+	 */
+	const updateProducts = async (ctx, s, data, table, dryRun) => {
+		const locationIds = s.has('multi_location') ? (await locationsOf(data)).map((location) => location.id) : [];
+		const read = updateRows(recordsOf(table), { currency: s.currency, locationIds: new Set(locationIds) });
+		if (!read.ok) throw refuse([{ path: '/csv', message: read.message }]);
+		const failed = [...read.failed];
+		/** @param {UpdateRow} row @param {string} path @param {string} message */
+		const fail = (row, path, message) => void failed.push({ line: row.line, path, message });
+		// the product of each row, by its variant id, else its SKU
+		const found = /** @type {Array<{ id: string, variants: Array<{ id: string, sku: string }> }>} */ (
+			read.rows.length === 0
+				? []
+				: await data
+						.collection(COLLECTIONS.products)
+						.find(
+							{
+								websiteId: data.websiteId,
+								$or: [
+									{ 'variants.id': { $in: read.rows.map((row) => row.variantId).filter(Boolean) } },
+									{ 'variants.sku': { $in: read.rows.map((row) => row.sku).filter(Boolean) } },
+								],
+							},
+							{ projection: { _id: 0, id: 1, 'variants.id': 1, 'variants.sku': 1 } },
+						)
+						.toArray()
+		);
+		/** @type {Map<string, string>} */
+		const byVariant = new Map();
+		/** @type {Map<string, string[]>} */
+		const bySku = new Map();
+		for (const item of found)
+			for (const variant of item.variants) {
+				byVariant.set(variant.id, item.id);
+				if (variant.sku) bySku.set(variant.sku, [...(bySku.get(variant.sku) ?? []), item.id]);
+			}
+		/** @type {Map<string, UpdateRow[]>} product id → its rows */
+		const groups = new Map();
+		for (const row of read.rows) {
+			const owners = row.variantId ? [byVariant.get(row.variantId)].filter(Boolean) : (bySku.get(row.sku ?? '') ?? []);
+			if (owners.length !== 1) {
+				fail(
+					row,
+					row.variantId ? '/variant_id' : '/sku',
+					owners.length > 1 ? 'More than one product has this SKU: use variant_id.' : 'There is no such variant.',
+				);
+				continue;
+			}
+			const productId = /** @type {string} */ (owners[0]);
+			if (row.productId && row.productId !== productId) {
+				fail(row, '/product_id', 'This variant is not part of the product.');
+				continue;
+			}
+			groups.set(productId, [...(groups.get(productId) ?? []), row]);
+		}
+		/** @type {ProductRecord[]} */
+		const before = [];
+		/** @type {string[]} */
+		const written = [];
+		let updated = 0;
+		for (const [id, rows] of groups) {
+			// a retried transaction runs the change again: what it found is kept from its last run only
+			const done = await rewriteProduct(
+				data,
+				id,
+				/** @returns {Promise<{ set: Record<string, unknown>, result: UpdateOutcome } | { refuse: UpdateOutcome }>} */
+				async (current) => {
+					const at = new Date(current.updatedAt).getTime();
+					const next = updatedVariants(
+						current,
+						rows.filter((row) => row.updatedAt >= at),
+					);
+					const outcome = { stale: rows.filter((row) => row.updatedAt < at), next };
+					return next.changed > 0 && !dryRun ? { set: { variants: next.variants }, result: outcome } : { refuse: outcome };
+				},
+				{ now: now() },
+			);
+			if (!done.found) {
+				for (const row of rows) fail(row, '/variant_id', 'There is no such variant.');
+				continue;
+			}
+			for (const row of done.result.stale)
+				fail(row, '/updated_at', 'The product changed after this file was exported: export it again.');
+			failed.push(...done.result.next.failed);
+			updated += done.result.next.changed;
+			if (done.changed) {
+				before.push(done.before);
+				written.push(id);
+			}
+		}
+		failed.sort((a, b) => a.line - b.line);
+		if (!dryRun) {
+			await service.log(ctx, 'csv.products_updated', `${written.length} products`, {
+				label: `${written.length} products`,
+				detail: `${updated} variants changed, ${failed.length} rows failed`,
+			});
+			await common.changed(s, before, written);
+		}
+		return { dryRun, mode: 'update', rows: table.length - 1, updated, failed };
+	};
+
+	/** POST …/csv/products `{ csv, dryRun }` (`?mode=update`: price and stock updates, E36). @param {any} ctx */
 	const importProducts = async (ctx) => {
+		const mode = ctx.query.mode ?? '';
+		if (!['', 'import', 'update'].includes(mode)) throw refuse([{ path: '/mode', message: 'The mode is import or update.' }]);
 		const body = bodyOf(ctx);
 		if (typeof body.csv !== 'string' || body.csv.trim() === '') throw refuse([{ path: '/csv', message: 'Send the CSV text.' }]);
 		const dryRun = body.dryRun !== false;
@@ -238,6 +381,7 @@ export const createCatalogTools = (product, service, common) => {
 					}[parsed.code],
 				},
 			]);
+		if (mode === 'update') return updateProducts(ctx, s, data, parsed.rows, dryRun);
 		const locationIds = s.has('multi_location') ? (await locationsOf(data)).map((location) => location.id) : [];
 		const read = importGroups(recordsOf(parsed.rows), { currency: s.currency, locationIds: new Set(locationIds) });
 		const planned = read.errors.some((error) => error.line === 1) ? null : await plan(s, data, read.groups);
@@ -489,6 +633,14 @@ export const createCatalogTools = (product, service, common) => {
 		}),
 		defineRoute({
 			method: 'GET',
+			path: '/v1/csv/customers',
+			auth: 'server',
+			feature: 'csv',
+			rateLimit: STAFF_LIMITS,
+			handler: exportCustomers,
+		}),
+		defineRoute({
+			method: 'GET',
 			path: '/v1/admin/csv/products',
 			auth: 'ticket',
 			permission: 'csv.run',
@@ -511,6 +663,14 @@ export const createCatalogTools = (product, service, common) => {
 			permission: 'csv.run',
 			rateLimit: STAFF_LIMITS,
 			handler: exportOrders,
+		}),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/admin/csv/customers',
+			auth: 'ticket',
+			permission: 'csv.run',
+			rateLimit: STAFF_LIMITS,
+			handler: exportCustomers,
 		}),
 
 		// bulk actions

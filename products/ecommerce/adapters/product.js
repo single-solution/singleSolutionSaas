@@ -127,6 +127,7 @@ const PROBLEM_CODES = Object.freeze({
 	move_not_allowed: Object.freeze({ status: 409, title: 'Status move not allowed' }),
 	too_many_open_orders: Object.freeze({ status: 409, title: 'Too many open orders' }),
 	nothing_to_pay: Object.freeze({ status: 409, title: 'Nothing to pay' }),
+	nothing_paid: Object.freeze({ status: 409, title: 'Nothing was paid' }),
 	download_not_allowed: Object.freeze({ status: 403, title: 'Download not available' }),
 	cod_not_allowed: Object.freeze({ status: 422, title: 'Cash on delivery not possible' }),
 	not_returnable: Object.freeze({ status: 422, title: 'Not returnable' }),

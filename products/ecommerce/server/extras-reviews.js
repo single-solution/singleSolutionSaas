@@ -1,15 +1,27 @@
 /**
  * Reviews (feature `reviews`, PLAN 0.8.8: only after delivery, with moderation): a signed-in shopper whose delivered
- * order holds the product writes one review of it; visitors read the approved ones with the rating summary; the
- * merchant's staff (or server) approve, reject, reply and delete. The product's `rating` is kept right on every change.
+ * order holds the product writes one review of it; with `per: order_line` (E34) one review per order line instead,
+ * written from the order page by the order's owner (their sign-in, or a guest's order key in `SS-Order-Key`, E21).
+ * Visitors read the approved ones with the rating summary, `pageSize` at a time, each with `verified` (written from an
+ * order), the variant bought and the name as `nameFormat` shows it; the merchant's staff (or server) approve, reject,
+ * set back to pending, reply and delete. The product's `rating` is kept right on every change.
  * @module
  */
 import { createId } from '@ss/contracts';
 import { countHandlers, created, defineRoute, noContent, ok, paginate, problem } from '@ss/app-kit';
 import { isDuplicate, refreshRating, reviewSummary, userIdsOf } from '../adapters/extras-store.js';
 import { afterFilter, keyOf, sortOf } from '../core/extras-pages.js';
+import { keyOpens } from '../core/guests.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
-import { REVIEW_SORTS, REVIEW_STATUSES, checkReply, checkReviewInput, reviewSort } from '../core/reviews.js';
+import {
+	REVIEW_SORTS,
+	REVIEW_STATUSES,
+	checkLineReviewInput,
+	checkReply,
+	checkReviewInput,
+	reviewSort,
+	shownName,
+} from '../core/reviews.js';
 import { SERVER_LIMITS, VISITOR_LIMITS, VISITOR_WRITE_LIMITS } from './service.js';
 
 /** Rate limits (mutable copies of the shared constants, as route definitions take them). */
@@ -22,17 +34,30 @@ const VISITOR_WRITE = [...VISITOR_WRITE_LIMITS];
 /** @typedef {import('./service.js').Site} Site */
 /** @typedef {import('@ss/app-kit').WebsiteData} WebsiteData */
 /** @typedef {import('../core/model.js').ReviewRecord & { createdAt: Date, updatedAt: Date }} StoredReview */
+/** @typedef {import('../core/model.js').OrderRecord} OrderRecord */
+/** @typedef {import('../core/model.js').ReviewRecord} ReviewRecord */
 
 const NO_ID = { projection: { _id: 0 } };
 const NEWEST = REVIEW_SORTS.newest;
+/** The header a guest's order key comes in (E21). */
+const ORDER_KEY_HEADER = 'ss-order-key';
+/** What a review needs of its order. */
+const ORDER_FIELDS = { projection: { _id: 0, id: 1, customer: 1, accessKeyHash: 1, deliveredAt: 1, lines: 1 } };
 
 /** @param {any} ctx */
 const bodyOf = (ctx) => (typeof ctx.body === 'object' && ctx.body !== null ? ctx.body : {});
 
-/** @param {StoredReview} review */
-const publicView = (review) => ({
+/**
+ * A review as visitors see it: the name as `nameFormat` shows it, `verified` when written from an order, and the
+ * variant bought (E34).
+ * @param {StoredReview} review
+ * @param {unknown} [nameFormat]
+ */
+const publicView = (review, nameFormat = 'full') => ({
 	id: review.id,
-	name: review.name,
+	name: shownName(review.name, nameFormat),
+	verified: Boolean(review.orderId),
+	variantName: review.variantName ?? '',
 	rating: review.rating,
 	title: review.title,
 	body: review.body,
@@ -46,6 +71,7 @@ const staffView = (review) => ({
 	productId: review.productId,
 	userId: review.userId,
 	orderId: review.orderId,
+	lineId: review.lineId ?? null,
 	status: review.status,
 	updatedAt: new Date(review.updatedAt).toISOString(),
 });
@@ -72,59 +98,146 @@ export const createReviews = (product, service) => {
 		return found;
 	};
 
-	/** @param {any} ctx */
-	const write = async (ctx) => {
-		const s = await service.site(ctx);
-		const shopper = await service.requireShopper(s);
-		const checked = checkReviewInput(bodyOf(ctx));
-		if (!checked.ok) throw service.invalid(checked.field, checked.message);
-		const input = checked.value;
-		const data = await s.data();
-		const item = await data
-			.collection(COLLECTIONS.products)
-			.findOne({ websiteId: data.websiteId, id: input.productId, status: 'active' }, { projection: { _id: 0, id: 1 } });
-		if (!item) throw problem('not_found', 'No such product.');
-		const order = await data.collection(COLLECTIONS.orders).findOne(
-			{
-				websiteId: data.websiteId,
-				'customer.userId': shopper.id,
-				deliveredAt: { $ne: null },
-				'lines.productId': input.productId,
-			},
-			{ projection: { _id: 0, id: 1 }, sort: { deliveredAt: -1 } },
-		);
-		if (!order) throw problem('review_not_allowed', 'Products can be reviewed once an order with them was delivered.');
+	/**
+	 * Save a new review (approved at once with `moderation: auto`) and keep the product's rating right.
+	 * @param {Site} s
+	 * @param {WebsiteData} data
+	 * @param {Omit<import('../core/model.js').ReviewRecord, 'id' | 'status' | 'reply'>} input
+	 * @param {string} duplicate the answer to a second review
+	 */
+	const save = async (s, data, input, duplicate) => {
 		const { moderation } = await s.values('reviews');
 		/** @type {import('../core/model.js').ReviewRecord} */
 		const review = {
 			id: createId(ID_PREFIX.review),
-			productId: input.productId,
-			userId: shopper.id,
-			orderId: String(order.id),
-			name: shopper.name.trim().slice(0, 80),
-			rating: input.rating,
-			title: input.title,
-			body: input.body,
+			...input,
 			status: moderation === 'auto' ? 'approved' : 'pending',
 			reply: '',
 		};
 		try {
 			await reviews(data).insertOne({ ...review });
 		} catch (error) {
-			if (isDuplicate(error)) throw problem('already_reviewed', 'You have already reviewed this product.');
+			if (isDuplicate(error)) throw problem('already_reviewed', duplicate);
 			throw error;
 		}
 		if (review.status === 'approved') await refreshRating(data, review.productId);
+		await service.emit('review.submitted', s, { review });
 		return created(staffView(await reviewOf(data, review.id)));
+	};
+
+	/**
+	 * @param {WebsiteData} data
+	 * @param {string} productId
+	 */
+	const activeProduct = async (data, productId) => {
+		const item = await data
+			.collection(COLLECTIONS.products)
+			.findOne({ websiteId: data.websiteId, id: productId, status: 'active' }, { projection: { _id: 0, id: 1 } });
+		if (!item) throw problem('not_found', 'No such product.');
+	};
+
+	/**
+	 * A review of a product (`per: product`): by a signed-in shopper with a delivered order holding it.
+	 * @param {any} ctx @param {Site} s
+	 */
+	const writeProduct = async (ctx, s) => {
+		const shopper = await service.requireShopper(s);
+		const checked = checkReviewInput(bodyOf(ctx));
+		if (!checked.ok) throw service.invalid(checked.field, checked.message);
+		const input = checked.value;
+		const data = await s.data();
+		await activeProduct(data, input.productId);
+		const order = /** @type {Pick<OrderRecord, 'id' | 'lines'> | null} */ (
+			await data.collection(COLLECTIONS.orders).findOne(
+				{
+					websiteId: data.websiteId,
+					'customer.userId': shopper.id,
+					deliveredAt: { $ne: null },
+					'lines.productId': input.productId,
+				},
+				{ projection: { _id: 0, id: 1, lines: 1 }, sort: { deliveredAt: -1 } },
+			)
+		);
+		if (!order) throw problem('review_not_allowed', 'Products can be reviewed once an order with them was delivered.');
+		return save(
+			s,
+			data,
+			{
+				productId: input.productId,
+				userId: shopper.id,
+				orderId: String(order.id),
+				lineId: null,
+				variantName: order.lines.find((line) => line.productId === input.productId)?.variantName ?? '',
+				name: shopper.name.trim().slice(0, 80),
+				rating: input.rating,
+				title: input.title,
+				body: input.body,
+			},
+			'You have already reviewed this product.',
+		);
+	};
+
+	/**
+	 * A review of one order line (`per: order_line`, E34): by the order's owner — their sign-in, or the guest's order
+	 * key — once the order was delivered.
+	 * @param {any} ctx @param {Site} s
+	 */
+	const writeLine = async (ctx, s) => {
+		const shopper = await service.shopper(s);
+		const key = ctx.headers?.get?.(ORDER_KEY_HEADER);
+		if (!shopper && !key) throw problem('sign_in_required', 'Sign in to continue.');
+		const checked = checkLineReviewInput(bodyOf(ctx));
+		if (!checked.ok) throw service.invalid(checked.field, checked.message);
+		const input = checked.value;
+		const data = await s.data();
+		const order = /** @type {OrderRecord | null} */ (
+			await data.collection(COLLECTIONS.orders).findOne({ websiteId: data.websiteId, id: input.orderId }, ORDER_FIELDS)
+		);
+		const owner = order?.customer.userId ?? '';
+		const mine = order && ((shopper && owner === shopper.id) || (key && keyOpens(key, order.accessKeyHash ?? null)));
+		if (!order || !mine) throw problem('not_found', 'There is no such order.');
+		const line = order.lines.find((entry) => entry.id === input.lineId);
+		if (!line) throw service.invalid('lineId', 'This order has no such item.');
+		if (!order.deliveredAt) throw problem('review_not_allowed', 'Items can be reviewed once their order was delivered.');
+		await activeProduct(data, line.productId);
+		if (await reviews(data).findOne({ websiteId: data.websiteId, orderId: order.id, lineId: line.id }, NO_ID))
+			throw problem('already_reviewed', 'You have already reviewed this item.');
+		const name = shopper && owner === shopper.id ? shopper.name : order.customer.name;
+		return save(
+			s,
+			data,
+			{
+				productId: line.productId,
+				userId: owner,
+				orderId: order.id,
+				lineId: line.id,
+				variantName: line.variantName ?? '',
+				name: String(name ?? '')
+					.trim()
+					.slice(0, 80),
+				rating: input.rating,
+				title: input.title,
+				body: input.body,
+			},
+			'You have already reviewed this item.',
+		);
+	};
+
+	/** POST /v1/shop/reviews: of a product, or of an order line with `per: order_line` (E34). @param {any} ctx */
+	const write = async (ctx) => {
+		const s = await service.site(ctx);
+		const { per } = await s.values('reviews');
+		return per === 'order_line' ? writeLine(ctx, s) : writeProduct(ctx, s);
 	};
 
 	/** @param {any} ctx */
 	const productReviews = async (ctx) => {
+		const s = await service.site(ctx);
+		const { pageSize, nameFormat } = await s.values('reviews');
 		const page = paginate(
 			{ cursor: ctx.query.cursor, limit: ctx.query.limit, url: ctx.request.url },
-			{ defaultLimit: 10, maxLimit: 50 },
+			{ defaultLimit: Math.min(20, Math.max(5, Number(pageSize) || 10)), maxLimit: 50 },
 		);
-		const s = await service.site(ctx);
 		const data = await s.data();
 		const productId = String(ctx.params.id);
 		const fields = REVIEW_SORTS[reviewSort(ctx.query.sort)];
@@ -136,7 +249,10 @@ export const createReviews = (product, service) => {
 				)
 				.toArray()
 		);
-		const body = page.page(rows.map(publicView), (view) => keyOf(fields, view));
+		const body = page.page(
+			rows.map((row) => publicView(row, nameFormat)),
+			(view) => keyOf(fields, view),
+		);
 		const link = page.link(body.nextCursor);
 		return ok({ ...body, summary: await reviewSummary(data, productId) }, { headers: link ? { link } : {} });
 	};
@@ -200,8 +316,8 @@ export const createReviews = (product, service) => {
 	};
 
 	/**
-	 * Approve or reject.
-	 * @param {'approved' | 'rejected'} status
+	 * Approve, reject or set back to pending (E34).
+	 * @param {ReviewRecord['status']} status
 	 */
 	const moderate = (status) => async (/** @type {any} */ ctx) => {
 		const s = await service.site(ctx);
@@ -331,6 +447,14 @@ export const createReviews = (product, service) => {
 		}),
 		defineRoute({
 			method: 'POST',
+			path: '/v1/reviews/:id/pending',
+			auth: 'server',
+			feature: 'reviews',
+			rateLimit: SERVER,
+			handler: moderate('pending'),
+		}),
+		defineRoute({
+			method: 'POST',
 			path: '/v1/reviews/:id/reply',
 			auth: 'server',
 			feature: 'reviews',
@@ -390,6 +514,15 @@ export const createReviews = (product, service) => {
 			permission: 'reviews.moderate',
 			rateLimit: SERVER,
 			handler: moderate('rejected'),
+		}),
+		defineRoute({
+			method: 'POST',
+			path: '/v1/admin/reviews/:id/pending',
+			auth: 'ticket',
+			feature: 'reviews',
+			permission: 'reviews.moderate',
+			rateLimit: SERVER,
+			handler: moderate('pending'),
 		}),
 		defineRoute({
 			method: 'POST',

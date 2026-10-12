@@ -98,11 +98,14 @@ const claimsOf = (token) => {
  */
 
 /**
- * @typedef {'products.changed' | 'order.placed' | 'order.moved' | 'order.paid' | 'order.proof_uploaded'} HookName
+ * @typedef {'products.changed' | 'order.placed' | 'order.moved' | 'order.paid' | 'order.proof_uploaded'
+ *   | 'order.payment_recorded' | 'order.refunded' | 'return.requested' | 'return.status_changed' | 'review.submitted'} HookName
  *   `products.changed`: `{ productIds, before: Map<id, { price, inStock }> }` after catalog writes (alerts);
  *   `order.placed`: `{ order, statusLabel? }`; `order.moved`: `{ order, from, to, by?, reason? }` (the order after the
  *   move); `order.paid`: `{ order, entry }` (`entry` null when placed already paid); `order.proof_uploaded`:
- *   `{ order, reference }`
+ *   `{ order, reference }`; `order.payment_recorded`: `{ order, entry }` (E26); `order.refunded`: `{ order, amount, claimId }`;
+ *   `return.requested`: `{ claim, order }` when a shopper makes a claim (E33, for E32's `return_requested`);
+ *   `return.status_changed`: `{ claim, from, to }`; `review.submitted`: `{ review }` (E32)
  */
 
 /** Work that runs on use (PLAN 0.8.1: no scheduled jobs) runs at most this often per website and instance. */

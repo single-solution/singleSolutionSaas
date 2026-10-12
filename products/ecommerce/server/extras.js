@@ -57,8 +57,15 @@ export const createExtras = (product, service) => {
 				const { maxPhotos, photoMaxMb } = await s.values('returns');
 				settings.returns = { maxPhotos: Number(maxPhotos), photoMaxMb: Number(photoMaxMb) };
 			}
-			if (s.has('reviews'))
-				settings.reviews = { moderation: (await s.values('reviews')).moderation === 'auto' ? 'auto' : 'manual' };
+			if (s.has('reviews')) {
+				const { moderation, per, pageSize } = await s.values('reviews');
+				settings.reviews = {
+					moderation: moderation === 'auto' ? 'auto' : 'manual',
+					// reviews of order lines are written from the order page (E34)
+					per: per === 'order_line' ? 'order_line' : 'product',
+					pageSize: Math.min(20, Math.max(5, Number(pageSize) || 10)),
+				};
+			}
 			if (s.has('wishlist')) settings.wishlist = { max: MAX_WISHLIST };
 			if (s.has('compare')) {
 				const { maxProducts } = await s.values('compare');

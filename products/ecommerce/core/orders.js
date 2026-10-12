@@ -110,13 +110,18 @@ export const stateAfterRefund = (paid, refunded) => (refunded >= paid ? 'refunde
 
 /**
  * @typedef {object} OrderFilters
- * @property {string} [status]
+ * @property {string[]} [statuses] status keys (`status`, one or several, E31)
  * @property {StatusRole} [role]
  * @property {import('./model.js').PaymentState} [paymentState]
- * @property {import('./model.js').PaymentMethod} [paymentMethod]
+ * @property {import('./model.js').PaymentMethod[]} [paymentMethods] (`paymentMethod`, one or several, E31)
+ * @property {Array<'delivery' | 'pickup' | 'none'>} [deliveryMethods] (`deliveryMethod`, E31)
+ * @property {string} [city] the delivery city (E31)
+ * @property {string} [customer] a customer's user id or customer id (E31)
  * @property {Date} [from] placed at or after
  * @property {Date} [to] placed before
- * @property {string} [q] number, name, phone, e-mail or city
+ * @property {Date} [createdAfter] created after (E31)
+ * @property {boolean} [unseen] not yet opened by the acting staff member (E31; the server adds who)
+ * @property {string} [q] number, name, phone (its last digits), e-mail or city
  */
 
 /** @param {unknown} value */
@@ -124,6 +129,24 @@ const dateOf = (value) => {
 	if (typeof value !== 'string' || value === '' || value.length > 40) return null;
 	const time = Date.parse(value);
 	return Number.isNaN(time) ? null : new Date(time);
+};
+
+/** A status key (letters, digits, _ and -, E27). */
+const STATUS_KEY = /^[a-z][a-z0-9_-]{1,39}$/;
+
+/**
+ * Several values given comma-separated (or repeated), each one checked.
+ * @param {unknown} raw
+ * @param {(value: string) => boolean} valid
+ * @returns {string[] | null} null when one is not valid
+ */
+const several = (raw, valid) => {
+	const values = (Array.isArray(raw) ? raw : [raw])
+		.flatMap((value) => String(value).split(','))
+		.map((value) => value.trim())
+		.filter(Boolean);
+	if (values.length > 30 || !values.every(valid)) return null;
+	return [...new Set(values)];
 };
 
 /**
@@ -135,37 +158,55 @@ export const orderFilters = (query) => {
 	/** @type {OrderFilters} */
 	const value = {};
 	const text = (/** @type {string} */ name) =>
-		typeof query[name] === 'string' && query[name] !== '' ? String(query[name]) : null;
+		(typeof query[name] === 'string' || Array.isArray(query[name])) && query[name] !== '' ? query[name] : null;
 	const status = text('status');
 	if (status !== null) {
-		if (!/^[a-z][a-z0-9_]{1,39}$/.test(status)) return refuse('status', 'Unknown status.');
-		value.status = status;
+		const statuses = several(status, (key) => STATUS_KEY.test(key));
+		if (!statuses) return refuse('status', 'Unknown status.');
+		value.statuses = statuses;
 	}
 	const role = text('role');
 	if (role !== null) {
-		if (!(/** @type {readonly string[]} */ (STATUS_ROLES).includes(role))) return refuse('role', 'Unknown role.');
+		if (!(/** @type {readonly string[]} */ (STATUS_ROLES).includes(String(role)))) return refuse('role', 'Unknown role.');
 		value.role = /** @type {StatusRole} */ (role);
 	}
 	const paymentState = text('paymentState');
 	if (paymentState !== null) {
-		if (!(/** @type {readonly string[]} */ (PAYMENT_STATES).includes(paymentState)))
+		if (!(/** @type {readonly string[]} */ (PAYMENT_STATES).includes(String(paymentState))))
 			return refuse('paymentState', 'Unknown payment state.');
 		value.paymentState = /** @type {import('./model.js').PaymentState} */ (paymentState);
 	}
 	const paymentMethod = text('paymentMethod');
 	if (paymentMethod !== null) {
-		if (!(/** @type {readonly string[]} */ (PAYMENT_METHODS).includes(paymentMethod)))
-			return refuse('paymentMethod', 'Unknown payment method.');
-		value.paymentMethod = /** @type {import('./model.js').PaymentMethod} */ (paymentMethod);
+		const methods = several(paymentMethod, (method) => /** @type {readonly string[]} */ (PAYMENT_METHODS).includes(method));
+		if (!methods) return refuse('paymentMethod', 'Unknown payment method.');
+		value.paymentMethods = /** @type {import('./model.js').PaymentMethod[]} */ (methods);
 	}
-	for (const name of /** @type {const} */ (['from', 'to'])) {
+	const deliveryMethod = text('deliveryMethod');
+	if (deliveryMethod !== null) {
+		const methods = several(deliveryMethod, (method) => ['delivery', 'pickup', 'none'].includes(method));
+		if (!methods) return refuse('deliveryMethod', 'deliveryMethod is delivery, pickup or none.');
+		value.deliveryMethods = /** @type {Array<'delivery' | 'pickup' | 'none'>} */ (methods);
+	}
+	const city = text('city');
+	if (city !== null) {
+		if (String(city).length > 100) return refuse('city', 'At most 100 characters.');
+		value.city = String(city).trim();
+	}
+	const customer = text('customer');
+	if (customer !== null) {
+		if (!/^[A-Za-z0-9_-]{1,100}$/.test(String(customer))) return refuse('customer', 'Unknown customer.');
+		value.customer = String(customer);
+	}
+	for (const name of /** @type {const} */ (['from', 'to', 'createdAfter'])) {
 		const raw = text(name);
 		if (raw === null) continue;
 		const date = dateOf(raw);
 		if (!date) return refuse(name, 'Use an ISO-8601 date.');
 		value[name] = date;
 	}
-	const q = text('q')?.trim() ?? '';
+	if (query.unseen === '1' || query.unseen === 'true') value.unseen = true;
+	const q = typeof query.q === 'string' ? query.q.trim() : '';
 	if (q.length > MAX_SEARCH) return refuse('q', `Search for at most ${MAX_SEARCH} characters.`);
 	if (q) value.q = q;
 	return { ok: true, value };
@@ -174,17 +215,25 @@ export const orderFilters = (query) => {
 /**
  * The database filter of the order list (without `websiteId` and the page).
  * @param {OrderFilters} filters
+ * @param {{ seenBy?: string }} [options] the acting staff member, for `unseen`
  * @returns {Record<string, unknown>}
  */
-export const orderQuery = (filters) => {
+export const orderQuery = (filters, { seenBy = '' } = {}) => {
 	/** @type {Record<string, unknown>} */
 	const query = {};
-	if (filters.status) query.status = filters.status;
+	if (filters.statuses) query.status = filters.statuses.length === 1 ? filters.statuses[0] : { $in: filters.statuses };
 	if (filters.role) query.role = filters.role;
 	if (filters.paymentState) query['payment.state'] = filters.paymentState;
-	if (filters.paymentMethod) query['payment.method'] = filters.paymentMethod;
+	if (filters.paymentMethods) query['payment.method'] = { $in: filters.paymentMethods };
+	if (filters.deliveryMethods) query['delivery.method'] = { $in: filters.deliveryMethods };
+	if (filters.city) query['address.city'] = { $regex: `^${escapeRegex(filters.city)}$`, $options: 'i' };
+	// a customer id (`cus_…`, guests too) or an Accounts user id
+	if (filters.customer)
+		query[filters.customer.startsWith('cus_') ? 'customer.customerId' : 'customer.userId'] = filters.customer;
 	if (filters.from || filters.to)
 		query.placedAt = { ...(filters.from ? { $gte: filters.from } : {}), ...(filters.to ? { $lt: filters.to } : {}) };
+	if (filters.createdAfter) query.createdAt = { $gt: filters.createdAfter };
+	if (filters.unseen && seenBy) query.seenBy = { $ne: seenBy };
 	if (filters.q) {
 		const term = escapeRegex(filters.q);
 		const digits = filters.q.replace(/\D/g, '');
@@ -195,7 +244,12 @@ export const orderQuery = (filters) => {
 			{ 'address.name': { $regex: term, $options: 'i' } },
 			{ 'address.city': { $regex: `^${term}`, $options: 'i' } },
 			...(digits.length >= 4
-				? [{ 'customer.phone': { $regex: escapeRegex(digits) } }, { 'address.phone': { $regex: escapeRegex(digits) } }]
+				? [
+						// the last digits of a phone, whatever its format (E31)
+						{ phoneDigits: { $regex: `${escapeRegex(digits.slice(-10))}$` } },
+						{ 'customer.phone': { $regex: escapeRegex(digits) } },
+						{ 'address.phone': { $regex: escapeRegex(digits) } },
+					]
 				: []),
 		];
 	}
@@ -203,9 +257,12 @@ export const orderQuery = (filters) => {
 };
 
 /**
- * @typedef {{ courier: string, trackingNumber: string } | { book: true, courier?: string }} ShipmentInput
+ * @typedef {{ courier: string, trackingNumber: string, trackingNote?: string, estimatedDeliveryAt?: Date | null } |
+ *   { book: true, courier?: string }} ShipmentInput `trackingNumber` may be '' when the website does not require it (E28)
+ * @typedef {{ kind: 'dispatch_video', key: string } | { kind: 'dispatch_video', url: string }} OrderMedia
  * @typedef {{ to: string, note: string, serials: Record<string, string[]>, shipment: ShipmentInput | null,
- *   updatedAt: string | null }} MoveInput
+ *   updatedAt: string | null, reason?: 'rto' | 'customer_return', video?: OrderMedia }} MoveInput `reason`: why a
+ *   parcel came back (E27); `video`: the dispatch video taken when packing (E28)
  */
 
 /**
@@ -216,7 +273,7 @@ export const orderQuery = (filters) => {
 export const checkMove = (body) => {
 	const input = objectOf(body);
 	const to = typeof input.to === 'string' ? input.to : '';
-	if (!/^[a-z][a-z0-9_]{1,39}$/.test(to)) return refuse('to', 'Name the status to move to.');
+	if (!/^[a-z][a-z0-9_-]{1,39}$/.test(to)) return refuse('to', 'Name the status to move to.');
 	const note = input.note === undefined || input.note === null ? '' : input.note;
 	if (typeof note !== 'string' || note.length > MAX_NOTE) return refuse('note', `A note has at most ${MAX_NOTE} characters.`);
 	const parsed = serialsOf(input.serials);
@@ -229,21 +286,110 @@ export const checkMove = (body) => {
 		const courier = typeof raw.courier === 'string' ? raw.courier.trim() : '';
 		if (raw.book === true) shipment = courier ? { book: true, courier } : { book: true };
 		else {
-			const trackingNumber = cleanTracking(raw.trackingNumber);
-			if (!courier) return refuse('shipment/courier', 'Pick a courier.');
-			if (!trackingNumber) return refuse('shipment/trackingNumber', `A tracking number has 1–${MAX_TRACKING} characters.`);
-			shipment = { courier, trackingNumber };
+			const checked = shipmentFields(raw);
+			if (!checked.ok) return checked;
+			shipment = checked.value;
 		}
 	}
+	/** @type {OrderMedia | undefined} */
+	let video;
+	if (input.video !== undefined && input.video !== null && input.video !== '') {
+		const checked = videoOf(input.video);
+		if (!checked) return refuse('video', 'video is an upload key, a YouTube id or address, or an https address.');
+		video = checked;
+	}
 	const updatedAt = typeof input.updatedAt === 'string' && input.updatedAt !== '' ? input.updatedAt : null;
-	return { ok: true, value: { to, note: note.trim(), serials, shipment, updatedAt } };
+	if (input.reason !== undefined && input.reason !== null && input.reason !== 'rto' && input.reason !== 'customer_return')
+		return refuse('reason', 'reason is rto or customer_return.');
+	const reason = /** @type {'rto' | 'customer_return' | undefined} */ (input.reason ?? undefined);
+	return {
+		ok: true,
+		value: { to, note: note.trim(), serials, shipment, updatedAt, ...(reason ? { reason } : {}), ...(video ? { video } : {}) },
+	};
+};
+
+/** Longest tracking note. */
+const MAX_TRACKING_NOTE = 500;
+const YOUTUBE_ID = /^[A-Za-z0-9_-]{11}$/;
+/** An upload key in the merchant's bucket. */
+const UPLOAD_KEY = /^[A-Za-z0-9][A-Za-z0-9/_.-]{0,299}$/;
+
+/**
+ * A shipment's fields as staff send them (E28): the courier (by key or name), the tracking number ('' allowed here:
+ * the server knows whether the website requires one), a free-text tracking note and an expected delivery date.
+ * @param {Record<string, unknown>} raw
+ * @returns {{ ok: true, value: { courier: string, trackingNumber: string, trackingNote: string, estimatedDeliveryAt: Date | null } } | Refusal}
+ */
+export const shipmentFields = (raw) => {
+	const courier = typeof raw.courier === 'string' ? raw.courier.trim() : '';
+	if (courier.length > 80) return refuse('shipment/courier', 'Pick a courier.');
+	const given = raw.trackingNumber === undefined || raw.trackingNumber === null ? '' : raw.trackingNumber;
+	const trackingNumber = given === '' ? '' : cleanTracking(given);
+	if (trackingNumber === null || (given !== '' && !trackingNumber))
+		return refuse('shipment/trackingNumber', `A tracking number has 1–${MAX_TRACKING} characters.`);
+	const note = raw.trackingNote === undefined || raw.trackingNote === null ? '' : raw.trackingNote;
+	if (typeof note !== 'string' || note.length > MAX_TRACKING_NOTE || hasControl(note.replace(/\n/g, ' ')))
+		return refuse('shipment/trackingNote', `A tracking note has at most ${MAX_TRACKING_NOTE} characters.`);
+	let estimatedDeliveryAt = null;
+	if (raw.estimatedDeliveryAt !== undefined && raw.estimatedDeliveryAt !== null && raw.estimatedDeliveryAt !== '') {
+		estimatedDeliveryAt = dateOf(raw.estimatedDeliveryAt);
+		if (!estimatedDeliveryAt) return refuse('shipment/estimatedDeliveryAt', 'Give the expected delivery date (ISO 8601).');
+	}
+	if (!courier && trackingNumber) return refuse('shipment/courier', 'Pick a courier.');
+	return {
+		ok: true,
+		value: { courier, trackingNumber: trackingNumber ?? '', trackingNote: note.trim(), estimatedDeliveryAt },
+	};
 };
 
 /**
- * Check a refund without a status change.
+ * A dispatch video (E28): an upload key in the merchant's bucket, a YouTube id or address (kept as its private embed
+ * address), or an https address; null when it is none of these.
+ * @param {unknown} value
+ * @returns {OrderMedia | null}
+ */
+export const videoOf = (value) => {
+	if (typeof value !== 'string') return null;
+	const raw = value.trim();
+	if (YOUTUBE_ID.test(raw)) return { kind: 'dispatch_video', url: `https://www.youtube-nocookie.com/embed/${raw}` };
+	if (/^https:\/\//i.test(raw)) {
+		try {
+			const url = new URL(raw);
+			if (url.protocol !== 'https:' || raw.length > 2000) return null;
+			const host = url.hostname.replace(/^www\.|^m\./, '');
+			const id = host === 'youtu.be' ? url.pathname.slice(1) : host === 'youtube.com' ? (url.searchParams.get('v') ?? '') : '';
+			if (YOUTUBE_ID.test(id)) return { kind: 'dispatch_video', url: `https://www.youtube-nocookie.com/embed/${id}` };
+			return { kind: 'dispatch_video', url: url.toString() };
+		} catch {
+			return null;
+		}
+	}
+	return UPLOAD_KEY.test(raw) && !raw.includes('..') ? { kind: 'dispatch_video', key: raw } : null;
+};
+
+/** How staff say money came in or went back (E26); `online` is Payments' own. */
+export const RECORDED_METHODS = Object.freeze(/** @type {const} */ (['bank_transfer', 'cash', 'other']));
+/** Longest payment or refund reference. */
+const MAX_REFERENCE = 120;
+
+/**
+ * @typedef {{ amount: number, reason: string, method: 'online' | 'bank_transfer' | 'cash' | 'other' | null,
+ *   reference: string, claimId: string | null }} RefundInput `method` null: through Payments first, the rest recorded
+ */
+
+/** @param {unknown} value @returns {{ ok: true, value: string } | Refusal} */
+const referenceOf = (value) => {
+	const reference = value === undefined || value === null ? '' : value;
+	if (typeof reference !== 'string' || reference.trim().length > MAX_REFERENCE)
+		return refuse('reference', `A reference has at most ${MAX_REFERENCE} characters.`);
+	return { ok: true, value: reference.trim() };
+};
+
+/**
+ * Check a refund without a status change (E26: with how it was given back, a reference and the claim it is for).
  * @param {unknown} body
  * @param {OrderRecord} order
- * @returns {{ ok: true, value: { amount: number, reason: string } } | Refusal}
+ * @returns {{ ok: true, value: RefundInput } | Refusal}
  */
 export const checkRefund = (body, order) => {
 	const input = objectOf(body);
@@ -253,7 +399,80 @@ export const checkRefund = (body, order) => {
 		return refuse('amount', `Refund a whole amount in minor units from 1 to ${left}.`);
 	const reason = typeof input.reason === 'string' ? input.reason.trim() : '';
 	if (!reason || reason.length > 500) return refuse('reason', 'Give a reason of at most 500 characters.');
-	return { ok: true, value: { amount: /** @type {number} */ (input.amount), reason } };
+	const method = input.method === undefined || input.method === null ? null : input.method;
+	if (method !== null && method !== 'online' && !RECORDED_METHODS.includes(/** @type {any} */ (method)))
+		return refuse('method', 'method is online, bank_transfer, cash or other.');
+	if (method === 'online' && !order.payment.paymentId) return refuse('method', 'This order was not paid through Payments.');
+	const reference = referenceOf(input.reference);
+	if (!reference.ok) return reference;
+	const claimId = input.claimId === undefined || input.claimId === null ? null : input.claimId;
+	if (claimId !== null && (typeof claimId !== 'string' || !/^ret_[A-Za-z0-9_-]{1,64}$/.test(claimId)))
+		return refuse('claimId', 'claimId names a return claim.');
+	return {
+		ok: true,
+		value: {
+			amount: /** @type {number} */ (input.amount),
+			reason,
+			method: /** @type {RefundInput['method']} */ (method),
+			reference: reference.value,
+			claimId: /** @type {string | null} */ (claimId),
+		},
+	};
+};
+
+/**
+ * @typedef {{ method: 'bank_transfer' | 'cash' | 'other', amount: number, reference: string, note: string,
+ *   confirm: boolean }} PaymentInput
+ */
+
+/**
+ * Check a payment staff record (E26): at most the balance due.
+ * @param {unknown} body
+ * @param {OrderRecord} order
+ * @returns {{ ok: true, value: PaymentInput } | Refusal}
+ */
+export const checkPayment = (body, order) => {
+	const input = objectOf(body);
+	if (!RECORDED_METHODS.includes(/** @type {any} */ (input.method)))
+		return refuse('method', 'method is bank_transfer, cash or other.');
+	const due = balanceDue(order);
+	if (due <= 0) return refuse('amount', 'Nothing is left to pay on this order.');
+	if (!isAmount(input.amount) || /** @type {number} */ (input.amount) > due)
+		return refuse('amount', `Record a whole amount in minor units from 1 to ${due}.`);
+	const reference = referenceOf(input.reference);
+	if (!reference.ok) return reference;
+	const note = input.note === undefined || input.note === null ? '' : input.note;
+	if (typeof note !== 'string' || note.length > MAX_NOTE) return refuse('note', `A note has at most ${MAX_NOTE} characters.`);
+	if (input.confirm !== undefined && typeof input.confirm !== 'boolean') return refuse('confirm', 'confirm is true or false.');
+	return {
+		ok: true,
+		value: {
+			method: /** @type {PaymentInput['method']} */ (input.method),
+			amount: /** @type {number} */ (input.amount),
+			reference: reference.value,
+			note: note.trim(),
+			confirm: input.confirm === true,
+		},
+	};
+};
+
+/**
+ * What is still to pay on an order (before refunds).
+ * @param {OrderRecord} order
+ */
+export const balanceDue = (order) => Math.max(0, order.totals.total - order.payment.paid);
+
+/**
+ * The payment state from what was paid and refunded (E26): refunds first, then paid in full, part paid (`unpaid`: the
+ * rest is due), else as it was (waiting for Payments, or nothing yet).
+ * @param {{ total: number, paid: number, refunded: number, state: import('./model.js').PaymentState }} money
+ * @returns {import('./model.js').PaymentState}
+ */
+export const paymentStateOf = ({ total, paid, refunded, state }) => {
+	if (refunded > 0) return stateAfterRefund(paid, refunded);
+	if (paid >= total && total > 0) return 'paid';
+	if (paid > 0) return 'unpaid';
+	return state;
 };
 
 /** Address fields and their longest length. */
@@ -326,19 +545,28 @@ export const serialCheckFailure = (serials, check) => {
 };
 
 /**
- * Check an edit staff make to an order: the staff note, and the delivery address before shipping.
+ * Check an edit staff make to an order: the staff note, the delivery address before shipping, the shipment's details
+ * (E28) and serial numbers.
  * @param {unknown} body
  * @param {OrderRecord} order
- * @returns {{ ok: true, value: { staffNote?: string, address?: NonNullable<OrderRecord['address']>, serials?: Record<string, string[]> } } | Refusal}
+ * @returns {{ ok: true, value: OrderEdit } | Refusal}
  */
 export const checkEdit = (body, order) => {
 	const input = objectOf(body);
-	/** @type {{ staffNote?: string, address?: NonNullable<OrderRecord['address']>, serials?: Record<string, string[]> }} */
+	/** @type {OrderEdit} */
 	const value = {};
 	if (input.serials !== undefined) {
 		const serials = serialsOf(input.serials);
 		if (!serials.ok) return serials;
 		value.serials = serials.value;
+	}
+	const waiting = waitingEditOf(input);
+	if (!waiting.ok) return waiting;
+	if (waiting.value) value.waiting = waiting.value;
+	if (input.shipment !== undefined && input.shipment !== null) {
+		const checked = shipmentFields(objectOf(input.shipment));
+		if (!checked.ok) return checked;
+		value.shipment = checked.value;
 	}
 	if (input.staffNote !== undefined) {
 		if (typeof input.staffNote !== 'string' || input.staffNote.length > MAX_STAFF_NOTE)
@@ -346,11 +574,11 @@ export const checkEdit = (body, order) => {
 		value.staffNote = input.staffNote.trim();
 	}
 	if (input.address !== undefined) {
-		if (!order.address) return refuse('address', 'This order has no delivery address.');
+		if (!order.address && !value.waiting) return refuse('address', 'This order has no delivery address.');
 		if (!EDITABLE_ROLES.includes(order.role)) return refuse('address', 'The address cannot change once the order is shipped.');
 		const raw = objectOf(input.address);
 		/** @type {Record<string, string>} */
-		const address = { ...order.address };
+		const address = { ...(order.address ?? {}) };
 		for (const [field, max] of Object.entries(ADDRESS_FIELDS)) {
 			if (raw[field] === undefined) continue;
 			if (typeof raw[field] !== 'string' || String(raw[field]).length > max)
@@ -361,9 +589,82 @@ export const checkEdit = (body, order) => {
 			if (!address[field]) return refuse(`address/${field}`, 'This field is required.');
 		value.address = /** @type {NonNullable<OrderRecord['address']>} */ (/** @type {unknown} */ (address));
 	}
-	if (value.staffNote === undefined && value.address === undefined && value.serials === undefined)
-		return refuse('staffNote', 'Send a staff note, an address or serial numbers.');
+	if (Object.keys(value).length === 0)
+		return refuse('staffNote', 'Send a staff note, an address, a shipment or serial numbers.');
 	return { ok: true, value };
+};
+
+/**
+ * What staff change on an order (`PATCH /v1/orders/:id`): the staff note, the address, the shipment's details at any
+ * time (E28) and serial numbers.
+ * @typedef {{ staffNote?: string, address?: NonNullable<OrderRecord['address']>, serials?: Record<string, string[]>,
+ *   shipment?: { courier: string, trackingNumber: string, trackingNote: string, estimatedDeliveryAt: Date | null },
+ *   waiting?: WaitingEdit }} OrderEdit `waiting`: lines, payment and delivery changed while the order waits (E29)
+ */
+
+/**
+ * What staff change on an order that still waits (E29).
+ * @typedef {{ lines?: Array<{ variantId: string, quantity: number, unitPrice?: number }>,
+ *   paymentMethod?: import('./model.js').PaymentMethod,
+ *   delivery?: { method: 'delivery' | 'pickup' | null, city: string, area: string, country: string, locationId: string | null },
+ *   address?: NonNullable<OrderRecord['address']> }} WaitingEdit
+ */
+
+/** An edited order has at most this many lines and units per line (the checkout's own limits apply too). */
+const MAX_EDIT_LINES = 50;
+const MAX_EDIT_QUANTITY = 99;
+
+/**
+ * Check the lines, payment method and delivery staff send for a waiting order (E29).
+ * @param {Record<string, unknown>} input
+ * @returns {{ ok: true, value: WaitingEdit | null } | Refusal}
+ */
+const waitingEditOf = (input) => {
+	/** @type {WaitingEdit} */
+	const value = {};
+	if (input.lines !== undefined) {
+		if (!Array.isArray(input.lines) || input.lines.length === 0 || input.lines.length > MAX_EDIT_LINES)
+			return refuse('lines', `List 1–${MAX_EDIT_LINES} lines.`);
+		/** @type {NonNullable<WaitingEdit['lines']>} */
+		const lines = [];
+		for (const [index, raw] of input.lines.entries()) {
+			const line = objectOf(raw);
+			const variantId = typeof line.variantId === 'string' ? line.variantId : '';
+			if (!/^[A-Za-z0-9_-]{1,80}$/.test(variantId)) return refuse(`lines/${index}/variantId`, 'Name the item’s variant.');
+			if (lines.some((other) => other.variantId === variantId))
+				return refuse(`lines/${index}/variantId`, 'An item is listed twice.');
+			const quantity = line.quantity;
+			if (!Number.isSafeInteger(quantity) || Number(quantity) < 1 || Number(quantity) > MAX_EDIT_QUANTITY)
+				return refuse(`lines/${index}/quantity`, `A quantity is 1–${MAX_EDIT_QUANTITY}.`);
+			if (line.unitPrice !== undefined && line.unitPrice !== null && !(line.unitPrice === 0 || isAmount(line.unitPrice)))
+				return refuse(`lines/${index}/unitPrice`, 'A unit price is a whole amount in minor units.');
+			lines.push({
+				variantId,
+				quantity: Number(quantity),
+				...(line.unitPrice === undefined || line.unitPrice === null ? {} : { unitPrice: Number(line.unitPrice) }),
+			});
+		}
+		value.lines = lines;
+	}
+	if (input.paymentMethod !== undefined) {
+		if (!PAYMENT_METHODS.includes(/** @type {any} */ (input.paymentMethod)))
+			return refuse('paymentMethod', 'paymentMethod is cod, online, bank_transfer or pickup.');
+		value.paymentMethod = /** @type {import('./model.js').PaymentMethod} */ (input.paymentMethod);
+	}
+	if (input.delivery !== undefined) {
+		const raw = objectOf(input.delivery);
+		const method = raw.method === 'delivery' || raw.method === 'pickup' ? raw.method : null;
+		/** @param {unknown} v */
+		const text = (v) => (typeof v === 'string' ? v.trim().slice(0, 100) : '');
+		value.delivery = {
+			method,
+			city: text(raw.city),
+			area: text(raw.area),
+			country: text(raw.country),
+			locationId: typeof raw.locationId === 'string' && raw.locationId ? raw.locationId.slice(0, 64) : null,
+		};
+	}
+	return { ok: true, value: Object.keys(value).length > 0 ? value : null };
 };
 
 /**
@@ -397,19 +698,43 @@ export const checkCustomerEdit = (body) => {
 };
 
 /**
- * Check a bulk move.
+ * One order of a bulk move with what it takes (E28): its shipment, serial numbers and dispatch video.
+ * @typedef {{ id: string, shipment: ShipmentInput | null, serials: Record<string, string[]>, video?: OrderMedia }} BulkItem
+ */
+
+/**
+ * Check a bulk move: `ids`, or `items` with each order's shipment, serial numbers and video (E28).
  * @param {unknown} body
- * @returns {{ ok: true, value: { ids: string[], to: string, note: string } } | Refusal}
+ * @returns {{ ok: true, value: { ids: string[], to: string, note: string, items: Map<string, BulkItem> } } | Refusal}
  */
 export const checkBulkMove = (body) => {
 	const input = objectOf(body);
-	const ids = Array.isArray(input.ids) ? input.ids : null;
-	if (!ids || ids.length === 0 || ids.length > MAX_BULK) return refuse('ids', `List 1–${MAX_BULK} order ids.`);
+	const rawItems = Array.isArray(input.items) ? input.items : null;
+	const ids = rawItems ? rawItems.map((item) => objectOf(item).id) : Array.isArray(input.ids) ? input.ids : null;
+	const field = rawItems ? 'items' : 'ids';
+	if (!ids || ids.length === 0 || ids.length > MAX_BULK) return refuse(field, `List 1–${MAX_BULK} order ids.`);
 	if (!ids.every((id) => typeof id === 'string' && /^ord_[A-Za-z0-9_-]{1,64}$/.test(id)))
-		return refuse('ids', 'Unknown order id.');
+		return refuse(field, 'Unknown order id.');
 	const move = checkMove({ to: input.to, note: input.note });
 	if (!move.ok) return move;
-	return { ok: true, value: { ids: [.../** @type {Set<string>} */ (new Set(ids))], to: move.value.to, note: move.value.note } };
+	/** @type {Map<string, BulkItem>} */
+	const items = new Map();
+	for (const [index, raw] of (rawItems ?? []).entries()) {
+		const item = objectOf(raw);
+		const checked = checkMove({ to: input.to, shipment: item.shipment, serials: item.serials, video: item.video });
+		if (!checked.ok) return refuse(`items/${index}/${checked.field}`, checked.message);
+		const id = /** @type {string} */ (item.id);
+		items.set(id, {
+			id,
+			shipment: checked.value.shipment,
+			serials: checked.value.serials,
+			...(checked.value.video ? { video: checked.value.video } : {}),
+		});
+	}
+	return {
+		ok: true,
+		value: { ids: [.../** @type {Set<string>} */ (new Set(ids))], to: move.value.to, note: move.value.note, items },
+	};
 };
 
 // ------------------------------------------------------------------------------------------------------- serials

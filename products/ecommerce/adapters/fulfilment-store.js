@@ -53,27 +53,85 @@ const namePage = (after) => {
 };
 
 /**
- * The staff customer list's filter: a search (name, start of the e-mail, the user id, 4 or more digits of the phone)
- * and blocked or not. The list and its counts share it (PLAN 0.8.10 K4).
+ * @typedef {{ q: string, blocked: boolean | null, segment?: 'loyalty' | 'active' | 'guest' | null,
+ *   loyalty?: { userIds: string[], customerIds: string[] } | null, seenBy?: string, unseen?: boolean,
+ *   createdAfter?: Date | null }} CustomerQuery `loyalty`: the owners of loyalty accounts (segment `loyalty`)
+ */
+
+/**
+ * The staff customer list's filter: a search (name, start of the e-mail, the user or customer id, 4 or more digits of
+ * the phone, matched on its last digits), blocked or not, a segment, not yet opened by the acting staff member and
+ * created after a time (E31). The list and its counts share it (PLAN 0.8.10 K4).
  * @param {string} websiteId
- * @param {{ q: string, blocked: boolean | null }} input
+ * @param {CustomerQuery} input
  * @returns {Record<string, unknown>}
  */
-export const customerFilter = (websiteId, { q, blocked }) => {
+export const customerFilter = (
+	websiteId,
+	{ q, blocked, segment = null, loyalty = null, seenBy = '', unseen = false, createdAfter = null },
+) => {
 	/** @type {Record<string, unknown>} */
 	const filter = { websiteId, ...(blocked === null ? {} : { blocked }) };
+	/** @type {Record<string, unknown>[]} */
+	const and = [];
+	// segments (E31): guests have no Accounts user; active customers ordered at least once; loyalty customers have points
+	if (segment === 'guest') and.push({ $or: [{ userId: null }, { userId: '' }, { userId: { $exists: false } }] });
+	if (segment === 'active') and.push({ orderCount: { $gte: 1 } });
+	if (segment === 'loyalty')
+		and.push({ $or: [{ userId: { $in: loyalty?.userIds ?? [] } }, { id: { $in: loyalty?.customerIds ?? [] } }] });
+	if (unseen && seenBy) and.push({ seenBy: { $ne: seenBy } });
+	if (createdAfter) and.push({ createdAt: { $gt: createdAfter } });
 	if (q) {
 		const term = escapeRegex(q);
 		const digits = q.replace(/\D/g, '');
-		filter.$or = [
-			{ name: { $regex: term, $options: 'i' } },
-			{ email: { $regex: `^${term}`, $options: 'i' } },
-			{ userId: q },
-			...(digits.length >= 4 ? [{ phone: { $regex: escapeRegex(digits) } }] : []),
-		];
+		and.push({
+			$or: [
+				{ name: { $regex: term, $options: 'i' } },
+				{ email: { $regex: `^${term}`, $options: 'i' } },
+				{ userId: q },
+				{ id: q },
+				...(digits.length >= 4
+					? [
+							// the last digits of a phone, whatever its format (E31)
+							{ phoneDigits: { $regex: `${escapeRegex(digits.slice(-10))}$` } },
+							{ phone: { $regex: escapeRegex(digits) } },
+						]
+					: []),
+			],
+		});
 	}
+	if (and.length > 0) filter.$and = and;
 	return filter;
 };
+
+/** An order or customer keeps the staff who opened it, at most this many (E31). */
+const MAX_SEEN = 50;
+
+/**
+ * Mark a record seen by a staff member (E31): their id goes last in `seenBy`, which keeps the latest {@link MAX_SEEN}.
+ * @param {WebsiteData} data
+ * @param {string} collection
+ * @param {Record<string, unknown>} match the record (without `websiteId`)
+ * @param {string} staffId
+ */
+export const markSeenBy = (data, collection, match, staffId) =>
+	data.collection(collection).updateOne({ websiteId: data.websiteId, ...match }, [
+		{
+			$set: {
+				seenBy: {
+					$slice: [
+						{
+							$concatArrays: [
+								{ $filter: { input: { $ifNull: ['$seenBy', []] }, cond: { $ne: ['$$this', staffId] } } },
+								[staffId],
+							],
+						},
+						-MAX_SEEN,
+					],
+				},
+			},
+		},
+	]);
 
 /**
  * @param {WebsiteData} data the website's guarded merchant database
@@ -175,14 +233,17 @@ export const createFulfilmentStore = (data) => {
 		customers: Object.freeze({
 			/**
 			 * A page of customers, A to Z.
-			 * @param {{ q: string, blocked: boolean | null, after: unknown, limit: number }} input
+			 * @param {CustomerQuery & { after: unknown, limit: number }} input
 			 * @returns {Promise<Array<CustomerRecord & { createdAt?: Date, updatedAt?: Date }>>}
 			 */
-			list: async ({ q, blocked, after, limit }) =>
+			list: async ({ after, limit, ...query }) =>
 				as(
 					await customers
 						.find(
-							{ ...customerFilter(websiteId, { q, blocked }), $and: [namePage(after)] },
+							(() => {
+								const filter = customerFilter(websiteId, query);
+								return { ...filter, $and: [.../** @type {any[]} */ (filter.$and ?? []), namePage(after)] };
+							})(),
 							{ ...NO_ID, sort: { name: 1, userId: 1 }, limit },
 						)
 						.toArray(),

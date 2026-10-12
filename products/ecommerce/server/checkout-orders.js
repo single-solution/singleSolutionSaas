@@ -22,7 +22,7 @@
 import { created, paginate, problem } from '@ss/app-kit';
 import { createId } from '@ss/contracts';
 import { originAllowed } from '@ss/protocol';
-import { placeOrder, releaseOrder } from '../adapters/ledger.js';
+import { heldStockBefore, placeOrder, releaseOrder, swapOrderStock } from '../adapters/ledger.js';
 import { createOrdersStore } from '../adapters/orders-store.js';
 import { STOCK_PROBLEMS, checkAddress, checkCart, checkOrderExtras } from '../core/checkout.js';
 import { shipmentLink } from '../core/couriers.js';
@@ -262,6 +262,8 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		if (!role) return null;
 		const data = await s.data();
 		const now = service.now();
+		// stock coming back tells the alerts (E34)
+		const held = await heldStockBefore(data, order);
 		let done = false;
 		try {
 			done = await releaseOrder(data, order, {
@@ -282,6 +284,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 			if (/** @type {any} */ (error)?.message !== 'order changed') throw error;
 		}
 		if (!done) return null;
+		if (held) await service.emit('products.changed', s, held);
 		const after = /** @type {OrderRecord} */ (await createOrdersStore(data).order(order.id));
 		await service.emit('order.moved', s, { order: after, from: order.status, to, by, reason });
 		return after;
@@ -544,6 +547,221 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		return { shopper: null, guest: guest.value };
 	};
 
+	/**
+	 * The order lines of a quote (placing and editing an order), with the slots its booking lines hold.
+	 * @param {Site} s @param {import('./checkout-quote.js').Quote} q
+	 */
+	const linesOf = async (s, q) => {
+		// each physical line keeps its warranty from placement (E12): the variant's, the product's, the grade's, the setting
+		const grades = s.has('grades_serials') ? gradesByKey(await s.list('grades')) : new Map();
+		const warrantyDefault = Number((await s.values('returns')).warrantyDays ?? 0);
+		/** @param {{ kind: string, grade: string | null, warrantyDays?: number | null }} line */
+		const warrantyOf = (line) =>
+			line.kind === 'physical'
+				? (line.warrantyDays ?? (line.grade ? grades.get(line.grade)?.warrantyDays : null) ?? warrantyDefault)
+				: null;
+		/** @type {Array<{ productId: string, start: Date, end: Date, lineId: string }>} */
+		const slots = [];
+		/** @type {OrderLineRecord[]} */
+		const lines = q.priced.map((line, index) => {
+			const price = /** @type {import('../core/checkout.js').PricedLine} */ (q.prices[index]);
+			const id = createId(ID_PREFIX.line);
+			const booking = line.booking ? { start: new Date(line.booking.start), end: new Date(line.booking.end) } : null;
+			if (booking) slots.push({ productId: line.productId, start: booking.start, end: booking.end, lineId: id });
+			return {
+				id,
+				productId: line.productId,
+				variantId: line.variantId,
+				kind: line.kind,
+				name: line.name,
+				variantName: line.variantName,
+				sku: line.sku,
+				grade: line.grade,
+				gradeLabel: line.gradeLabel,
+				image: line.image,
+				unitPrice: line.unitPrice,
+				quantity: line.quantity,
+				discount: price.discount,
+				tax: price.tax,
+				total: price.total,
+				cost: line.cost,
+				categoryIds: line.categoryIds,
+				brandId: line.brandId,
+				locationId: null,
+				serials: [],
+				warrantyDays: warrantyOf(line),
+				booking,
+				licences: [],
+				returnedQuantity: 0,
+				dealId: q.promotions?.lines.find((entry) => entry.key === line.key)?.dealId ?? null,
+				...(line.kind === 'digital' ? { downloads: 0 } : {}),
+			};
+		});
+		return { lines, slots };
+	};
+
+	/**
+	 * Edit an order while it waits for payment or confirmation (E29): its lines (variant, quantity, an optional unit
+	 * price), payment method and delivery. It is priced again with the offers it was placed with, its stock holds are
+	 * swapped in one transaction, and a payment started through Payments for the old total is dropped (the shopper pays
+	 * the new one).
+	 * @param {Site} s
+	 * @param {any} ctx
+	 * @param {OrderRecord} order as read
+	 * @param {import('../core/orders.js').WaitingEdit} input
+	 * @returns {Promise<OrderRecord>}
+	 */
+	const editWaiting = async (s, ctx, order, input) => {
+		if (!WAITING_ROLES.includes(order.role)) throw service.invalid('lines', 'Only an order that still waits can be edited.');
+		if (order.payment.paid > 0) throw service.invalid('lines', 'This order has payments; refund them before editing it.');
+		if (order.lines.some((line) => line.kind !== 'physical'))
+			throw service.invalid('lines', 'Orders with digital items or bookings cannot be edited.');
+		const data = await s.data();
+		const store = createOrdersStore(data);
+		const checkout = await s.values('checkout');
+		const method = input.paymentMethod ?? order.payment.method;
+		// the lines: as sent, else as they are
+		const wanted =
+			input.lines ??
+			order.lines.map((line) => ({ variantId: line.variantId, quantity: line.quantity, unitPrice: line.unitPrice }));
+		const owners = await data
+			.collection(COLLECTIONS.products)
+			.find(
+				{ websiteId: data.websiteId, 'variants.id': { $in: wanted.map((line) => line.variantId) } },
+				{ projection: { _id: 0, id: 1, variants: { id: 1 } } },
+			)
+			.toArray();
+		/** @param {string} variantId */
+		const productOf = (variantId) =>
+			owners.find((row) => (row.variants ?? []).some((/** @type {any} */ v) => v.id === variantId))?.id ?? null;
+		for (const [index, line] of wanted.entries())
+			if (!productOf(line.variantId)) throw service.invalid(`lines/${index}/variantId`, 'There is no such item.');
+		/** @type {Map<string, number>} */
+		const prices = new Map();
+		for (const line of wanted)
+			if (line.unitPrice !== undefined && line.unitPrice !== null) prices.set(line.variantId, line.unitPrice);
+		const kept = order.promotions.dealIds.length
+			? /** @type {import('../core/model.js').DealRecord[]} */ (
+					await data
+						.collection(COLLECTIONS.deals)
+						.find({ websiteId: data.websiteId, id: { $in: order.promotions.dealIds } }, { projection: { _id: 0 } })
+						.toArray()
+				)
+			: [];
+		const coupon = order.promotions.couponId
+			? /** @type {import('../core/model.js').CouponRecord | null} */ (
+					await data
+						.collection(COLLECTIONS.coupons)
+						.findOne({ websiteId: data.websiteId, id: order.promotions.couponId }, { projection: { _id: 0 } })
+				)
+			: null;
+		const delivery = input.delivery ?? {
+			method: order.delivery.method === 'none' ? null : order.delivery.method,
+			city: order.address?.city ?? '',
+			area: order.address?.area ?? '',
+			country: order.address?.country ?? '',
+			locationId: order.delivery.locationId,
+		};
+		const given = input.address ?? order.address;
+		/** @type {string[]} */
+		const required = Array.isArray(checkout.addressRequired) ? checkout.addressRequired : ['line1', 'city'];
+		const checkedAddress = given ? checkAddress(given, required) : null;
+		if (checkedAddress && !checkedAddress.ok) throw service.invalid(checkedAddress.field, checkedAddress.message);
+		const address = checkedAddress?.ok ? checkedAddress.value : null;
+		const q = await quoting.quote(
+			s,
+			{
+				lines: wanted.map((line) => ({
+					productId: /** @type {string} */ (productOf(line.variantId)),
+					variantId: line.variantId,
+					quantity: line.quantity,
+					slot: null,
+					dealId: null,
+					lock: null,
+				})),
+				coupon: '',
+				points: 0,
+				payment: method,
+				delivery,
+			},
+			null,
+			address,
+			{
+				customer: order.customer.customerId ? await store.guestCustomer(order.customer.phone) : null,
+				edit: {
+					prices,
+					deals: kept,
+					coupon: coupon ? { ...coupon, used: Math.max(0, coupon.used - 1) } : null,
+					role: order.promotions.role
+						? {
+								role: order.promotions.role.key,
+								percent: order.promotions.role.percent,
+								label: order.promotions.role.label,
+							}
+						: null,
+					points: { used: order.promotions.pointsRedeemed, value: order.promotions.pointsValue },
+				},
+			},
+		);
+		// stock is checked by the swap below (the order's own holds go back first)
+		const other = q.lines.filter((line) => !line.priced || line.problems.some((issue) => !STOCK_PROBLEMS.includes(issue.code)));
+		if (other.length > 0) throw service.invalid('lines', 'Some items cannot be ordered.');
+		if (q.delivery.method === 'delivery' && !address) throw service.invalid('address', 'A delivery address is required.');
+		if (q.deliveryProblem) throw service.invalid('delivery/locationId', 'Choose a pickup location.');
+		const option = q.payments.find((entry) => entry.method === method);
+		if (!option?.available) throw service.invalid('paymentMethod', 'This payment method cannot be used for this order.');
+		const { lines } = await linesOf(s, q);
+		const now = service.now();
+		const restartPayment = order.payment.paymentId !== null;
+		/** @type {Record<string, unknown>} */
+		const set = {
+			lines,
+			totals: { ...q.totals, currency: order.totals.currency },
+			delivery: { method: q.delivery.method, zone: q.delivery.zone, fee: q.delivery.fee, locationId: q.delivery.locationId },
+			address: q.delivery.method === 'delivery' ? address : null,
+			'payment.method': method,
+			'payment.advance': method === 'cod' ? option.advance : 0,
+			// the offers stay as placed (their uses stay counted and go back on a cancel); the points' value may shrink
+			'promotions.pointsValue': q.points?.value ?? 0,
+			...(restartPayment ? { 'payment.paymentId': null, 'payment.checkoutUrl': '', 'payment.checkedAt': null } : {}),
+			updatedAt: new Date(now),
+		};
+		const swapped = await swapOrderStock(data, order, {
+			lines: lines
+				.filter((line) => line.kind === 'physical')
+				.map((line) => ({ productId: line.productId, variantId: line.variantId, quantity: line.quantity, locationId: null })),
+			update: async (session) => {
+				const result = await data.collection(COLLECTIONS.orders).updateOne(
+					{ websiteId: data.websiteId, id: order.id, updatedAt: order.updatedAt },
+					{
+						$set: { ...set, stockHeld: true },
+						$push: {
+							history: {
+								at: new Date(now),
+								from: order.status,
+								to: order.status,
+								by: service.actor(ctx).name,
+								note: 'Order edited',
+								kind: 'edited',
+							},
+						},
+					},
+					{ session },
+				);
+				return result.modifiedCount === 1;
+			},
+		});
+		if (!swapped.ok) {
+			if (swapped.code === 'changed') throw problem('conflict', 'The order changed meanwhile; reload it and try again.');
+			throw problem('out_of_stock', 'Some items are not in stock in the quantity asked.', {
+				extensions: { lines: [{ productId: swapped.productId, variantId: swapped.variantId }] },
+			});
+		}
+		const money = (await s.format()).money(q.totals.total, order.totals.currency);
+		await service.log(ctx, 'order.edited', order.id, { label: order.number, detail: `New total ${money}` });
+		return /** @type {OrderRecord} */ (await store.order(order.id));
+	};
+
 	/** @param {any} ctx */
 	const place = async (ctx) => {
 		if (!ctx.idempotencyKey) throw problem('idempotency_key_required', 'Send an Idempotency-Key header.');
@@ -633,51 +851,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 					? Number(checkout.confirmationHours) * 3_600_000
 					: 0;
 		const orderId = createId(ID_PREFIX.order);
-		// each physical line keeps its warranty from placement (E12): the variant's, the product's, the grade's, the setting
-		const grades = s.has('grades_serials') ? gradesByKey(await s.list('grades')) : new Map();
-		const warrantyDefault = Number((await s.values('returns')).warrantyDays ?? 0);
-		/** @param {{ kind: string, grade: string | null, warrantyDays?: number | null }} line */
-		const warrantyOf = (line) =>
-			line.kind === 'physical'
-				? (line.warrantyDays ?? (line.grade ? grades.get(line.grade)?.warrantyDays : null) ?? warrantyDefault)
-				: null;
-		/** @type {Array<{ productId: string, start: Date, end: Date, lineId: string }>} */
-		const slots = [];
-		/** @type {OrderLineRecord[]} */
-		const lines = q.priced.map((line, index) => {
-			const price = /** @type {import('../core/checkout.js').PricedLine} */ (q.prices[index]);
-			const id = createId(ID_PREFIX.line);
-			const booking = line.booking ? { start: new Date(line.booking.start), end: new Date(line.booking.end) } : null;
-			if (booking) slots.push({ productId: line.productId, start: booking.start, end: booking.end, lineId: id });
-			return {
-				id,
-				productId: line.productId,
-				variantId: line.variantId,
-				kind: line.kind,
-				name: line.name,
-				variantName: line.variantName,
-				sku: line.sku,
-				grade: line.grade,
-				gradeLabel: line.gradeLabel,
-				image: line.image,
-				unitPrice: line.unitPrice,
-				quantity: line.quantity,
-				discount: price.discount,
-				tax: price.tax,
-				total: price.total,
-				cost: line.cost,
-				categoryIds: line.categoryIds,
-				brandId: line.brandId,
-				locationId: null,
-				serials: [],
-				warrantyDays: warrantyOf(line),
-				booking,
-				licences: [],
-				returnedQuantity: 0,
-				dealId: q.promotions?.lines.find((entry) => entry.key === line.key)?.dealId ?? null,
-				...(line.kind === 'digital' ? { downloads: 0 } : {}),
-			};
-		});
+		const { lines, slots } = await linesOf(s, q);
 		const promotions = q.promotions;
 		const customer = await store.ensureCustomer(buyer);
 		const loyalty = s.has('loyalty') ? await s.values('loyalty') : null;
@@ -976,6 +1150,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 	return Object.freeze({
 		sweep,
 		place,
+		editWaiting,
 		list,
 		read,
 		readByNumber,
@@ -989,3 +1164,5 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		cancel,
 	});
 };
+
+/** @typedef {ReturnType<typeof createOrdering>} Ordering */

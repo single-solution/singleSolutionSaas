@@ -15,6 +15,8 @@ import { createCheckout } from './checkout.js';
 import { createDashboardSearch } from './dashboard-search.js';
 import { renderDocs } from './docs.js';
 import { createExtras } from './extras.js';
+import { createOrderDocuments } from './orders-documents.js';
+import { createOrderEvents } from './order-events.js';
 import { createOrders } from './orders.js';
 import { createPromotions } from './promotions.js';
 import { createSeo } from './seo.js';
@@ -39,10 +41,13 @@ import { WIDGET_SCRIPT } from './widget-script.js';
  */
 export const createRoutes = (product) => {
 	const service = createService(product);
+	const checkout = createCheckout(product, service);
 	const areas = [
 		createCatalog(product, service),
-		createCheckout(product, service),
-		createOrders(product, service),
+		checkout,
+		createOrders(product, service, { ordering: checkout.ordering }),
+		createOrderEvents(product, service),
+		createOrderDocuments(product, service),
 		createPromotions(product, service),
 		createExtras(product, service),
 		createSeo(product, service),

@@ -450,14 +450,14 @@ export const STATUS_ROLES = Object.freeze([
 // ------------------------------------------------------------------------------------------------- shopper extras
 
 /**
- * A return or warranty claim. Approving with a refund refunds through Payments (paid online) or records it; restocking
- * happens exactly once per claim (`restockedAt`).
+ * A return, warranty or exchange claim. Approving with a refund refunds through Payments (paid online) or records it;
+ * restocking happens exactly once per line (the line's `restockedAt`; `restockedAt` once every line is done).
  * @typedef {object} ReturnRecord
  * @property {string} id `ret_…`
  * @property {string} orderId
  * @property {string} orderNumber
  * @property {string} userId
- * @property {'return' | 'warranty'} kind
+ * @property {'return' | 'warranty' | 'exchange'} kind `exchange` (E33)
  * @property {Array<{ lineId: string, quantity: number, serials: string[], restock?: boolean,
  *   restockedAt?: Date | null }>} lines `restock`: staff's choice when received (E33)
  * @property {string} reason

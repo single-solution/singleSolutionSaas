@@ -1,7 +1,8 @@
 /**
  * The wishlist (feature `wishlist`) and compare (feature `compare`), PLAN 0.8.8. A signed-in shopper keeps up to
- * {@link MAX_WISHLIST} products, shown as product cards of the ones still active; visitors compare a few products
- * side by side on their comparable attributes, price, brand, grade, rating and image.
+ * {@link MAX_WISHLIST} products, shown as product cards of the ones still active; a guest's wishlist (kept in their
+ * browser) is merged into theirs at sign-in (E34). Visitors compare a few products side by side on their comparable
+ * attributes, price, brand, grade, rating and image.
  * @module
  */
 import { defineRoute, problem } from '@ss/app-kit';
@@ -82,6 +83,35 @@ export const createShopperLists = (_product, service, cards) => {
 				{ upsert: true },
 			);
 		}
+		return wishlistView(s, data, shopper.id);
+	};
+
+	/**
+	 * POST /v1/shop/wishlist/merge `{ productIds }` (E34): a guest's wishlist joins the signed-in shopper's. Products
+	 * already there keep their place; the active ones of the rest are added in the order given while there is room.
+	 * @param {any} ctx
+	 */
+	const merge = async (ctx) => {
+		const s = await service.site(ctx);
+		const shopper = await service.requireShopper(s);
+		const sent = typeof ctx.body === 'object' && ctx.body !== null ? ctx.body.productIds : undefined;
+		if (
+			!Array.isArray(sent) ||
+			sent.length > MAX_WISHLIST ||
+			!sent.every((id) => typeof id === 'string' && /^prd_[A-Za-z0-9]{1,64}$/.test(id))
+		)
+			throw service.invalid('productIds', `Send at most ${MAX_WISHLIST} product ids.`);
+		const data = await s.data();
+		const ids = await savedIds(data, shopper.id);
+		const fresh = [...new Set(/** @type {string[]} */ (sent))].filter((id) => !ids.includes(id));
+		const active = new Set((await cards.activeProducts(s, fresh)).map((item) => item.id));
+		const added = fresh.filter((id) => active.has(id)).slice(0, Math.max(0, MAX_WISHLIST - ids.length));
+		if (added.length > 0)
+			await wishlists(data).updateOne(
+				{ websiteId: data.websiteId, userId: shopper.id },
+				{ $addToSet: { productIds: { $each: added } }, $setOnInsert: { userId: shopper.id } },
+				{ upsert: true },
+			);
 		return wishlistView(s, data, shopper.id);
 	};
 
@@ -180,6 +210,14 @@ export const createShopperLists = (_product, service, cards) => {
 			feature: 'wishlist',
 			rateLimit: VISITOR_WRITE,
 			handler: add,
+		}),
+		defineRoute({
+			method: 'POST',
+			path: '/v1/shop/wishlist/merge',
+			auth: 'browser',
+			feature: 'wishlist',
+			rateLimit: VISITOR_WRITE,
+			handler: merge,
 		}),
 		defineRoute({
 			method: 'DELETE',

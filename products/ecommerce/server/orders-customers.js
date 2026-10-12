@@ -6,7 +6,7 @@
  * @module
  */
 import { countHandlers, paginate, problem } from '@ss/app-kit';
-import { createFulfilmentStore, customerFilter } from '../adapters/fulfilment-store.js';
+import { createFulfilmentStore, customerFilter, markSeenBy } from '../adapters/fulfilment-store.js';
 import { COLLECTIONS } from '../core/model.js';
 import { MAX_SEARCH, checkCustomerEdit, customerView, orderSummary } from '../core/orders.js';
 
@@ -17,6 +17,8 @@ import { MAX_SEARCH, checkCustomerEdit, customerView, orderSummary } from '../co
 const RECENT_ORDERS = 10;
 
 const USER_ID = /^[A-Za-z0-9_-]{1,100}$/;
+/** Customer list segments (E31). */
+const SEGMENTS = Object.freeze(['loyalty', 'active', 'guest']);
 
 /**
  * @param {Service} service
@@ -36,26 +38,65 @@ export const createCustomers = (service) => {
 	 * The list's search and blocked filter (an over-long search is refused, as the list refuses it).
 	 * @param {any} ctx
 	 */
-	const queryOf = (ctx) => {
+	const queryOf = async (ctx) => {
 		const q = typeof ctx.query.q === 'string' ? ctx.query.q.trim() : '';
 		if (q.length > MAX_SEARCH) throw service.invalid('q', `Search for at most ${MAX_SEARCH} characters.`);
 		const blocked = ctx.query.blocked === 'true' ? true : ctx.query.blocked === 'false' ? false : null;
-		return { q, blocked };
+		const segment = ctx.query.segment === undefined || ctx.query.segment === '' ? null : ctx.query.segment;
+		if (segment !== null && !SEGMENTS.includes(segment))
+			throw service.invalid('segment', 'segment is loyalty, active or guest.');
+		let createdAfter = null;
+		if (typeof ctx.query.createdAfter === 'string' && ctx.query.createdAfter !== '') {
+			const time = Date.parse(ctx.query.createdAfter);
+			if (Number.isNaN(time)) throw service.invalid('createdAfter', 'Use an ISO-8601 date.');
+			createdAfter = new Date(time);
+		}
+		const loyalty = segment === 'loyalty' ? await loyaltyOwners(ctx) : null;
+		return {
+			q,
+			blocked,
+			segment,
+			loyalty,
+			seenBy: service.actor(ctx).id,
+			unseen: ctx.query.unseen === '1' || ctx.query.unseen === 'true',
+			createdAfter,
+		};
+	};
+
+	/**
+	 * Who has a loyalty account with points earned or left (segment `loyalty`, E31), at most 5,000.
+	 * @param {any} ctx
+	 */
+	const loyaltyOwners = async (ctx) => {
+		const s = await service.site(ctx);
+		const rows = await (
+			await s.data()
+		)
+			.collection(COLLECTIONS.loyalty)
+			.find(
+				{ websiteId: s.websiteId, $or: [{ balance: { $gt: 0 } }, { lifetimeEarned: { $gt: 0 } }] },
+				{ projection: { _id: 0, userId: 1, customerId: 1 }, limit: 5000 },
+			)
+			.toArray();
+		return {
+			userIds: rows.map((row) => row.userId).filter((id) => typeof id === 'string' && id !== ''),
+			customerIds: rows.map((row) => row.customerId).filter((id) => typeof id === 'string' && id !== ''),
+		};
 	};
 
 	const counts = countHandlers({
 		source: async (ctx) => {
-			const query = queryOf(ctx);
+			const query = await queryOf(ctx);
 			const s = await service.site(ctx);
 			return { collection: (await s.data()).collection(COLLECTIONS.customers), filter: customerFilter(s.websiteId, query) };
 		},
-		by: { blocked: 'blocked' },
+		by: { blocked: 'blocked', segment: { path: 'userId', map: (userId) => (userId ? 'member' : 'guest') } },
 	});
 
 	/** @param {any} ctx */
 	const list = async (ctx) => {
 		const page = paginate({ cursor: ctx.query.cursor, limit: ctx.query.limit, url: ctx.request.url }, { defaultLimit: 25 });
-		const query = queryOf(ctx);
+		const query = await queryOf(ctx);
 		const s = await service.site(ctx);
 		const store = await storeOf(s);
 		const rows = await store.customers.list({ ...query, after: page.after, limit: page.fetchLimit });
@@ -134,5 +175,15 @@ export const createCustomers = (service) => {
 		return view(s, userId);
 	};
 
-	return Object.freeze({ list, read, edit, count: counts.count, counts: counts.counts });
+	/** POST /v1/customers/:userId/seen: the acting staff member opened the customer (a user id or customer id, E31). @param {any} ctx */
+	const seen = async (ctx) => {
+		const ref = userIdOf(ctx);
+		const s = await service.site(ctx);
+		const data = await s.data();
+		const done = await markSeenBy(data, COLLECTIONS.customers, { $or: [{ userId: ref }, { id: ref }] }, service.actor(ctx).id);
+		if (done.matchedCount !== 1) throw problem('not_found', 'There is no such customer.');
+		return { seen: true };
+	};
+
+	return Object.freeze({ list, read, edit, seen, count: counts.count, counts: counts.counts });
 };

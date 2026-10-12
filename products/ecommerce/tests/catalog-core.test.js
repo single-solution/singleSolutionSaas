@@ -625,7 +625,8 @@ describe('CSV', () => {
 			},
 		);
 		expect(rows[0]?.slice(5, 7)).toEqual(['cat_1', 'brd_1']);
-		expect(rows[0]?.at(-1)).toBe(0);
+		// the location's stock, then the sold-out flag and the product's updated_at (E36)
+		expect(rows[0]?.slice(-3)).toEqual([0, false, '']);
 		const order = /** @type {any} */ ({
 			number: '1',
 			placedAt: new Date(0),

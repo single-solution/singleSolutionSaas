@@ -82,6 +82,26 @@ export const courierOf = (list, key) =>
 	(Array.isArray(list) ? /** @type {Courier[]} */ (list) : []).find((courier) => courier?.key === key) ?? null;
 
 /**
+ * A courier of the list by its key or its name (staff may give either; an order keeps the name, E28).
+ * @param {unknown} list
+ * @param {string} keyOrName
+ * @returns {Courier | null}
+ */
+export const courierNamed = (list, keyOrName) => {
+	const name = keyOrName.trim().toLowerCase();
+	return (
+		courierOf(list, keyOrName) ??
+		(Array.isArray(list) ? /** @type {Courier[]} */ (list) : []).find(
+			(courier) =>
+				String(courier?.name ?? '')
+					.trim()
+					.toLowerCase() === name,
+		) ??
+		null
+	);
+};
+
+/**
  * The tracking link of a parcel ('' when the courier has no tracking page).
  * @param {string} template
  * @param {string} trackingNumber

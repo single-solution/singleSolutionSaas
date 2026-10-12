@@ -10,13 +10,16 @@
  * @module
  */
 import { countHandlers, created, defineRoute, paginate, problem } from '@ss/app-kit';
-import { createFulfilmentStore } from '../adapters/fulfilment-store.js';
+import { createFulfilmentStore, markSeenBy } from '../adapters/fulfilment-store.js';
+import { setOrderCounter } from '../adapters/ledger.js';
+import { courierNamed, trackingLink } from '../core/couriers.js';
 import { invoiceHtml, invoiceTexts, packingSlipHtml } from '../core/invoice.js';
 import {
 	TRACK_EVERY_MS,
 	checkBulkMove,
 	checkEdit,
 	checkMove,
+	checkPayment,
 	checkRefund,
 	orderDetail,
 	orderFilters,
@@ -24,7 +27,7 @@ import {
 	orderSummary,
 	wire,
 } from '../core/orders.js';
-import { statusOf } from '../core/flow.js';
+import { WAITING_ROLES, statusOf } from '../core/flow.js';
 import { COLLECTIONS } from '../core/model.js';
 import { createMedia } from './catalog-media.js';
 import { createCustomers } from './orders-customers.js';
@@ -37,7 +40,7 @@ import { SERVER_LIMITS, VISITOR_LIMITS } from './service.js';
 /** @typedef {import('../core/model.js').OrderRecord} OrderRecord */
 
 /** Headers of the printable documents: never cached, no scripts, nothing loaded but images. */
-const DOCUMENT_HEADERS = Object.freeze({
+export const DOCUMENT_HEADERS = Object.freeze({
 	'content-type': 'text/html; charset=utf-8',
 	'cache-control': 'no-store',
 	'x-content-type-options': 'nosniff',
@@ -59,9 +62,11 @@ const flowOf = async (s) => /** @type {any} */ (await s.list('order_flow'));
 /**
  * @param {Product} product
  * @param {Service} service
+ * @param {{ ordering?: { editWaiting: import('./checkout-orders.js').Ordering['editWaiting'] } | null }} [parts] checkout's
+ *   placing and editing of orders (editing a waiting order, E29)
  * @returns {import('./routes.js').Area}
  */
-export const createOrders = (product, service) => {
+export const createOrders = (product, service, { ordering = null } = {}) => {
 	const moves = createMoves(product, service);
 	const customers = createCustomers(service);
 	const media = createMedia(product);
@@ -134,7 +139,8 @@ export const createOrders = (product, service) => {
 	const orderSource = async (ctx) => {
 		const filters = orderFilters(ctx.query);
 		if (!filters.ok) throw service.invalid(filters.field, filters.message);
-		return { s: await service.site(ctx), filter: orderQuery(filters.value) };
+		const seenBy = service.actor(ctx).id;
+		return { s: await service.site(ctx), filter: orderQuery(filters.value, { seenBy }) };
 	};
 
 	/** The order flow a count read, per request (to group status keys by their role). @type {WeakMap<object, import('../core/model.js').OrderFlow>} */
@@ -197,7 +203,111 @@ export const createOrders = (product, service) => {
 		const input = checkRefund(ctx.body, order);
 		if (!input.ok) throw service.invalid(input.field, input.message);
 		const done = await moves.refund(s, ctx, order, input.value);
-		return created({ order: await detailOf(s, done.order), refund: done.refund });
+		return created({ order: await detailOf(s, done.order), refund: done.refund, warnings: done.warnings });
+	};
+
+	/** POST /v1/orders/:id/seen: the acting staff member opened the order (E31; the latest 50 are kept). @param {any} ctx */
+	const markSeen = async (ctx) => {
+		const s = await service.site(ctx);
+		const order = await orderOf(s, ctx);
+		await markSeenBy(await s.data(), COLLECTIONS.orders, { id: order.id }, service.actor(ctx).id);
+		return { seen: true };
+	};
+
+	/**
+	 * DELETE /v1/orders/:id (E31): what the order holds is given back as a cancel does (stock, slots, offer uses, points,
+	 * serials), then it is deleted; the activity entry keeps its number and total.
+	 * @param {any} ctx
+	 */
+	const deleteOrder = async (ctx) => {
+		const s = await service.site(ctx);
+		const order = await orderOf(s, ctx);
+		const data = await s.data();
+		const orders = data.collection(COLLECTIONS.orders);
+		await moves.giveBack(s, order);
+		await orders.deleteOne({ websiteId: s.websiteId, id: order.id });
+		const { money } = await s.format();
+		await service.log(ctx, 'order.deleted', order.id, {
+			label: order.number,
+			detail: `Total ${money(order.totals.total, order.totals.currency)}`,
+		});
+		return undefined;
+	};
+
+	/**
+	 * POST /v1/data/delete-all `{ scope, confirm }` (server token, E31): every record of a scope goes, after held stock
+	 * is given back; `confirm` repeats the website's domain.
+	 * @param {any} ctx
+	 */
+	const deleteAll = async (ctx) => {
+		const body = typeof ctx.body === 'object' && ctx.body !== null ? ctx.body : {};
+		const scope = body.scope;
+		if (scope !== 'catalog' && scope !== 'orders' && scope !== 'customers')
+			throw service.invalid('scope', 'scope is catalog, orders or customers.');
+		const s = await service.site(ctx);
+		if (body.confirm !== s.domain) throw service.invalid('confirm', `Type the website's domain (${s.domain}) to confirm.`);
+		const data = await s.data();
+		/** @type {Record<string, number>} */
+		const deleted = {};
+		/** @param {string} name */
+		const wipe = async (name) => {
+			deleted[name] = (await data.collection(name).deleteMany({ websiteId: s.websiteId })).deletedCount ?? 0;
+		};
+		if (scope === 'orders') {
+			const held = await data
+				.collection(COLLECTIONS.orders)
+				.find({ websiteId: s.websiteId, stockHeld: true }, { projection: { _id: 0 } })
+				.toArray();
+			for (const order of held) await moves.giveBack(s, /** @type {OrderRecord} */ (/** @type {unknown} */ (order)));
+			for (const name of [COLLECTIONS.orders, COLLECTIONS.slots, COLLECTIONS.couponUses, COLLECTIONS.returns])
+				await wipe(name);
+		} else if (scope === 'customers') {
+			for (const name of [COLLECTIONS.customers, COLLECTIONS.loyalty]) await wipe(name);
+		} else {
+			for (const name of [
+				COLLECTIONS.products,
+				COLLECTIONS.categories,
+				COLLECTIONS.brands,
+				COLLECTIONS.attributes,
+				COLLECTIONS.serials,
+				COLLECTIONS.sizeCharts,
+				COLLECTIONS.landings,
+			])
+				await wipe(name);
+		}
+		await service.log(ctx, 'data.deleted_all', scope, {
+			label: scope,
+			detail: Object.entries(deleted)
+				.map(([name, count]) => `${count} ${name}`)
+				.join(', '),
+		});
+		return { scope, deleted };
+	};
+
+	/** POST /v1/orders/counter `{ year, next }`: the next order number of a year (E30). @param {any} ctx */
+	const setCounter = async (ctx) => {
+		const body = typeof ctx.body === 'object' && ctx.body !== null ? ctx.body : {};
+		const year = body.year;
+		const next = body.next;
+		if (!Number.isSafeInteger(year) || year < 2000 || year > 9999) throw service.invalid('year', 'year is a four-digit year.');
+		if (!Number.isSafeInteger(next) || next < 1 || next > 99_999_999)
+			throw service.invalid('next', 'next is the next order number, from 1.');
+		const s = await service.site(ctx);
+		const prefix = String((await s.values('checkout')).numberPrefix ?? '');
+		const done = await setOrderCounter(await s.data(), { prefix, year, next });
+		if (!done.ok) throw service.invalid('next', `Order number ${done.used} of ${year} is already used; give a higher one.`);
+		await service.log(ctx, 'orders.counter_set', `${prefix}${year}`, { label: `${prefix}${year}`, detail: `Next ${next}` });
+		return { prefix, year, next: done.next };
+	};
+
+	/** POST /v1/orders/:id/payments: a payment staff took (E26). @param {any} ctx */
+	const recordPayment = async (ctx) => {
+		const s = await service.site(ctx);
+		const order = await orderOf(s, ctx);
+		const input = checkPayment(ctx.body, order);
+		if (!input.ok) throw service.invalid(input.field, input.message);
+		const done = await moves.recordPayment(s, ctx, order, input.value, await flowOf(s));
+		return created({ order: await detailOf(s, done.order), warnings: done.warnings });
 	};
 
 	/** @param {any} ctx */
@@ -207,33 +317,62 @@ export const createOrders = (product, service) => {
 		const input = checkEdit(ctx.body, order);
 		if (!input.ok) throw service.invalid(input.field, input.message);
 		// serial numbers typed at packing or later (E11)
-		const { serials, ...rest } = input.value;
+		const { serials, shipment, waiting, ...rest } = input.value;
+		// lines, payment and delivery of a waiting order are priced again by checkout (E29)
+		if (waiting) {
+			if (!ordering) throw service.invalid('lines', 'Orders cannot be edited here.');
+			order = await ordering.editWaiting(s, ctx, order, { ...waiting, ...(rest.address ? { address: rest.address } : {}) });
+			delete rest.address;
+			if (rest.staffNote === undefined && !shipment && !serials) return detailOf(s, order);
+		}
 		if (serials) {
 			order = await moves.typeSerials(s, ctx, order, serials);
-			if (rest.staffNote === undefined && rest.address === undefined) return detailOf(s, order);
+			if (rest.staffNote === undefined && rest.address === undefined && !shipment) return detailOf(s, order);
 		}
-		input.value = rest;
+		/** @type {Record<string, unknown>} */
+		const set = { ...rest };
+		// the shipment's details may change at any time; the courier is kept by name (E28)
+		if (shipment) {
+			const couriers = await s.list('couriers');
+			const courier = shipment.courier ? courierNamed(couriers, shipment.courier) : null;
+			if (shipment.courier && !courier) throw service.invalid('shipment/courier', 'There is no such courier.');
+			set.shipment = {
+				booked: false,
+				status: '',
+				checkedAt: null,
+				...(order.shipment ?? {}),
+				courier: courier?.name ?? '',
+				trackingNumber: shipment.trackingNumber,
+				trackingUrl: courier && shipment.trackingNumber ? trackingLink(courier.trackingUrl, shipment.trackingNumber) : '',
+				trackingNote: shipment.trackingNote,
+				estimatedDeliveryAt: shipment.estimatedDeliveryAt,
+			};
+		}
 		const orders = (await s.data()).collection(COLLECTIONS.orders);
-		const result = await orders.updateOne(
-			{ websiteId: s.websiteId, id: order.id, updatedAt: order.updatedAt },
-			{ $set: input.value },
-		);
+		const result = await orders.updateOne({ websiteId: s.websiteId, id: order.id, updatedAt: order.updatedAt }, { $set: set });
 		if (result.modifiedCount !== 1) throw problem('conflict', 'The order changed meanwhile; reload it and try again.');
-		await service.log(ctx, input.value.address ? 'order.address_changed' : 'order.noted', order.id, {
-			label: order.number,
-			detail: [
-				...(input.value.address ? ['Delivery address changed'] : []),
-				...(input.value.staffNote === undefined ? [] : ['Staff note changed']),
-			].join(', '),
-		});
+		await service.log(
+			ctx,
+			rest.address ? 'order.address_changed' : shipment ? 'order.shipment_changed' : 'order.noted',
+			order.id,
+			{
+				label: order.number,
+				detail: [
+					...(rest.address ? ['Delivery address changed'] : []),
+					...(shipment ? ['Shipment changed'] : []),
+					...(rest.staffNote === undefined ? [] : ['Staff note changed']),
+				].join(', '),
+			},
+		);
 		return detailOf(s, /** @type {OrderRecord} */ (await (await storeOf(s)).orders.get(order.id)));
 	};
 
 	/**
 	 * A printable document of an order.
 	 * @param {Site} s @param {OrderRecord} order @param {'invoice' | 'packing_slip'} kind
+	 * @param {import('../core/invoice.js').InvoiceOptions} [options] the shopper's copy has no staff names (E35)
 	 */
-	const document = async (s, order, kind) => {
+	const document = async (s, order, kind, options) => {
 		const [business, settings, { format, timeZone }] = await Promise.all([s.business(), s.values('invoices'), s.format()]);
 		const context = {
 			business: /** @type {import('../core/invoice.js').BusinessLike} */ (business),
@@ -241,7 +380,7 @@ export const createOrders = (product, service) => {
 			format,
 			timeZone,
 		};
-		const html = kind === 'invoice' ? invoiceHtml(order, context) : packingSlipHtml(order, context);
+		const html = kind === 'invoice' ? invoiceHtml(order, context, options) : packingSlipHtml(order, context);
 		return new Response(html, { headers: DOCUMENT_HEADERS });
 	};
 
@@ -265,7 +404,12 @@ export const createOrders = (product, service) => {
 		const order = ORDER_ID.test(id) ? await (await storeOf(s)).orders.get(id) : null;
 		if (!order || !order.customer.userId || order.customer.userId !== shopper.id)
 			throw problem('not_found', 'There is no such order.');
-		return document(s, order, 'invoice');
+		// with `shopperFrom` confirmed, the invoice comes once the order is confirmed: not while it waits, nor once
+		// cancelled (E35)
+		const { shopperFrom } = await s.values('invoices');
+		if (shopperFrom === 'confirmed' && (WAITING_ROLES.includes(order.role) || order.role === 'cancelled'))
+			throw problem('not_found', 'This order has no invoice yet.');
+		return document(s, order, 'invoice', { shopper: true });
 	};
 
 	/** @param {any} ctx */
@@ -284,11 +428,19 @@ export const createOrders = (product, service) => {
 				continue;
 			}
 			try {
+				const item = input.value.items.get(id);
 				const moved = await moves.move(
 					s,
 					ctx,
 					order,
-					{ to: input.value.to, note: input.value.note, serials: {}, shipment: null, updatedAt: null },
+					{
+						to: input.value.to,
+						note: input.value.note,
+						serials: item?.serials ?? {},
+						shipment: item?.shipment ?? null,
+						updatedAt: null,
+						...(item?.video ? { video: item.video } : {}),
+					},
 					flow,
 				);
 				results.push({ id, ok: true, number: order.number, status: moved.order.status, warnings: moved.warnings });
@@ -443,6 +595,75 @@ export const createOrders = (product, service) => {
 				idempotent: true,
 				rateLimit: serverLimits,
 				handler: moveOrder,
+			}),
+			defineRoute({
+				method: 'POST',
+				path: '/v1/orders/:id/seen',
+				auth: 'server',
+				feature: 'checkout',
+				rateLimit: serverLimits,
+				handler: markSeen,
+			}),
+			defineRoute({
+				method: 'POST',
+				path: '/v1/admin/orders/:id/seen',
+				auth: 'ticket',
+				feature: 'checkout',
+				permission: 'orders.read',
+				rateLimit: serverLimits,
+				handler: markSeen,
+			}),
+			defineRoute({
+				method: 'DELETE',
+				path: '/v1/orders/:id',
+				auth: 'server',
+				feature: 'checkout',
+				rateLimit: serverLimits,
+				handler: deleteOrder,
+			}),
+			defineRoute({
+				method: 'DELETE',
+				path: '/v1/admin/orders/:id',
+				auth: 'ticket',
+				feature: 'checkout',
+				permission: 'orders.delete',
+				rateLimit: serverLimits,
+				handler: deleteOrder,
+			}),
+			defineRoute({
+				method: 'POST',
+				path: '/v1/data/delete-all',
+				auth: 'server',
+				feature: 'bulk_actions',
+				rateLimit: serverLimits,
+				handler: deleteAll,
+			}),
+			defineRoute({
+				method: 'POST',
+				path: '/v1/orders/counter',
+				auth: 'server',
+				feature: 'checkout',
+				rateLimit: serverLimits,
+				handler: setCounter,
+			}),
+			defineRoute({
+				method: 'POST',
+				path: '/v1/orders/:id/payments',
+				auth: 'server',
+				feature: 'checkout',
+				idempotent: true,
+				rateLimit: serverLimits,
+				handler: recordPayment,
+			}),
+			defineRoute({
+				method: 'POST',
+				path: '/v1/admin/orders/:id/payments',
+				auth: 'ticket',
+				feature: 'checkout',
+				permission: 'orders.manage',
+				idempotent: true,
+				rateLimit: serverLimits,
+				handler: recordPayment,
 			}),
 			defineRoute({
 				method: 'POST',
@@ -614,6 +835,23 @@ export const createOrders = (product, service) => {
 				permission: 'customers.manage',
 				rateLimit: serverLimits,
 				handler: customers.edit,
+			}),
+			defineRoute({
+				method: 'POST',
+				path: '/v1/customers/:userId/seen',
+				auth: 'server',
+				feature: 'checkout',
+				rateLimit: serverLimits,
+				handler: customers.seen,
+			}),
+			defineRoute({
+				method: 'POST',
+				path: '/v1/admin/customers/:userId/seen',
+				auth: 'ticket',
+				feature: 'checkout',
+				permission: 'customers.manage',
+				rateLimit: serverLimits,
+				handler: customers.seen,
 			}),
 		],
 	};

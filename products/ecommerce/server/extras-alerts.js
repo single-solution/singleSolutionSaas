@@ -1,15 +1,23 @@
 /**
  * Back-in-stock and price-drop alerts (feature `alerts`, PLAN 0.8.8: via Notifications). A signed-in shopper sets an
  * alert on a product (or one variant); the contact is the e-mail and phone of their sign-in, and a price-drop alert
- * stores the price at that moment. When the catalog changes (`products.changed`) the alerts that became due are marked
+ * stores the price at that moment, with an optional target price (E34). While the `guests` setting allows, a guest
+ * sets one with a phone, normalised as checkout does (E21), and the alert keeps the guest's customer id so it moves to
+ * them at sign-in. When the catalog changes (`products.changed`: catalog writes, an import, a return's restock, and
+ * stock an order gives back on a cancel, an ended window or a return to origin) the alerts that became due are marked
  * and sent at once, at most {@link SEND_BATCH} per change; the rest go out on later uses of the website
- * (`service.whenUsed`). Each alert is sent once (`ecommerce.back_in_stock` / `ecommerce.price_drop`).
+ * (`service.whenUsed`). Each alert is sent once (`ecommerce.back_in_stock` / `ecommerce.price_drop`), with
+ * `{unsubscribeUrl}`: the website's `/alerts/unsubscribe/<token>` page, which calls
+ * `POST /v1/shop/alerts/unsubscribe/:token` to remove every alert of that phone or e-mail; only the token's hash is kept.
  * @module
  */
 import { createId } from '@ss/contracts';
 import { created, defineRoute, noContent, ok, problem } from '@ss/app-kit';
 import { isDuplicate, userIdsOf } from '../adapters/extras-store.js';
-import { MAX_ALERTS, SEND_BATCH, checkAlertInput, dueConditions, isDue, priceOf } from '../core/alerts.js';
+import { createOrdersStore } from '../adapters/orders-store.js';
+import { MAX_ALERTS, SEND_BATCH, checkAlertInput, checkTargetPrice, dueConditions, isDue, priceOf } from '../core/alerts.js';
+import { ORDER_KEY_LENGTH, newOrderKey, normalisePhone, orderKeyHash } from '../core/guests.js';
+import { absolute } from '../core/links.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import { VISITOR_LIMITS, VISITOR_WRITE_LIMITS } from './service.js';
 
@@ -54,6 +62,7 @@ export const createAlerts = (_product, service, cards) => {
 			productId: alert.productId,
 			variantId: alert.variantId,
 			price: alert.price,
+			targetPrice: alert.targetPrice ?? null,
 			status: alert.status,
 			createdAt: new Date(alert.createdAt).toISOString(),
 			product: item ? await cards.card(s, item) : null,
@@ -96,10 +105,11 @@ export const createAlerts = (_product, service, cards) => {
 				);
 				continue;
 			}
-			// each alert is sent once, even when two requests send at the same time
+			// each alert is sent once, even when two requests send at the same time; its unsubscribe token is kept as a hash
+			const token = newOrderKey();
 			const taken = await alerts(data).updateOne(
 				{ websiteId: data.websiteId, id: alert.id, status: 'waiting', dueAt: { $ne: null } },
-				{ $set: { status: 'sent', dueAt: null } },
+				{ $set: { status: 'sent', dueAt: null, tokenHash: orderKeyHash(token) } },
 			);
 			if (taken.modifiedCount !== 1) continue;
 			const price = priceOf(item, alert.variantId) ?? item.price;
@@ -107,7 +117,12 @@ export const createAlerts = (_product, service, cards) => {
 				s,
 				alert.kind === 'back_in_stock' ? 'ecommerce.back_in_stock' : 'ecommerce.price_drop',
 				{ email: alert.email, phone: alert.phone },
-				{ name: item.name, price: (await s.format()).money(price, s.currency), url: (await cards.card(s, item)).url },
+				{
+					name: item.name,
+					price: (await s.format()).money(price, s.currency),
+					url: (await cards.card(s, item)).url,
+					unsubscribeUrl: absolute(`/alerts/unsubscribe/${token}`, s.domain),
+				},
 				Array.isArray(channels) ? channels : ['email'],
 			);
 			if (result !== 'sent')
@@ -149,38 +164,66 @@ export const createAlerts = (_product, service, cards) => {
 		if (s.has('alerts')) await sendDue(s);
 	});
 
+	/**
+	 * Who an alert is for: the signed-in shopper (the e-mail and phone of their sign-in), else a guest's normalised
+	 * phone while the `guests` setting allows (E34); with their customer record's id when they have one (E21).
+	 * @param {Site} s @param {WebsiteData} data @param {Record<string, unknown>} body
+	 * @returns {Promise<{ userId: string, email: string, phone: string, customerId: string | null }>}
+	 */
+	const contactOf = async (s, data, body) => {
+		const store = createOrdersStore(data);
+		const shopper = await service.shopper(s);
+		if (shopper) {
+			if (!shopper.email && !shopper.phone)
+				throw service.invalid('kind', 'Add an e-mail or phone to your account to get alerts.');
+			const customer = await store.customer(shopper.id);
+			return { userId: shopper.id, email: shopper.email, phone: shopper.phone, customerId: customer?.id ?? null };
+		}
+		if ((await s.values('alerts')).guests !== true) throw problem('sign_in_required', 'Sign in to continue.');
+		const { defaultCallingCode, trunkPrefix } = await s.values('checkout');
+		const phone = normalisePhone(body.phone, {
+			defaultCallingCode: String(defaultCallingCode ?? ''),
+			trunkPrefix: String(trunkPrefix ?? ''),
+		});
+		if (!phone) throw service.invalid('phone', 'Give your phone number with its country code.');
+		const customer = await store.guestCustomer(phone);
+		return { userId: '', email: '', phone, customerId: customer?.id ?? null };
+	};
+
 	/** @param {any} ctx */
 	const subscribe = async (ctx) => {
 		const s = await service.site(ctx);
-		const shopper = await service.requireShopper(s);
-		const checked = checkAlertInput(ctx.body);
+		const body = typeof ctx.body === 'object' && ctx.body !== null ? /** @type {Record<string, unknown>} */ (ctx.body) : {};
+		const data = await s.data();
+		const contact = await contactOf(s, data, body);
+		const checked = checkAlertInput(body);
 		if (!checked.ok) throw service.invalid(checked.field, checked.message);
 		const { kind, productId, variantId } = checked.value;
-		if (!shopper.email && !shopper.phone)
-			throw service.invalid('kind', 'Add an e-mail or phone to your account to get alerts.');
-		const data = await s.data();
 		const [item] = await cards.activeProducts(s, [productId]);
 		if (!item) throw problem('not_found', 'No such product.');
 		const price = priceOf(item, variantId);
 		if (price === null) throw service.invalid('variantId', 'No such variant.');
 		if (kind === 'back_in_stock' && isDue({ kind, variantId, price: null }, item))
 			throw service.invalid('kind', 'This product is in stock now.');
+		const target = checkTargetPrice(body.targetPrice, kind, price);
+		if (!target.ok) throw service.invalid('targetPrice', target.message);
 		const record = {
 			id: createId(ID_PREFIX.alert),
 			kind,
 			productId,
 			variantId,
-			userId: shopper.id,
-			email: shopper.email,
-			phone: shopper.phone,
+			...contact,
 			price: kind === 'price_drop' ? price : null,
+			targetPrice: target.targetPrice,
 			status: /** @type {const} */ ('waiting'),
 			dueAt: null,
 		};
-		const filter = { websiteId: data.websiteId, userId: shopper.id, kind, productId, variantId, status: 'waiting' };
+		// a member's alerts are theirs; a guest's are their phone's
+		const owner = contact.userId ? { userId: contact.userId } : { userId: '', phone: contact.phone };
+		const filter = { websiteId: data.websiteId, ...owner, kind, productId, variantId, status: 'waiting' };
 		const existing = /** @type {StoredAlert | null} */ (await alerts(data).findOne(filter, NO_ID));
 		if (existing) return ok(await view(s, existing, new Map([[item.id, item]])));
-		if ((await alerts(data).countDocuments({ websiteId: data.websiteId, userId: shopper.id, status: 'waiting' })) >= MAX_ALERTS)
+		if ((await alerts(data).countDocuments({ websiteId: data.websiteId, ...owner, status: 'waiting' })) >= MAX_ALERTS)
 			throw service.invalid('productId', `You can keep at most ${MAX_ALERTS} alerts.`);
 		try {
 			await alerts(data).insertOne({ ...record });
@@ -189,6 +232,28 @@ export const createAlerts = (_product, service, cards) => {
 		}
 		const saved = /** @type {StoredAlert} */ (await alerts(data).findOne(filter, NO_ID));
 		return created(await view(s, saved, new Map([[item.id, item]])));
+	};
+
+	/**
+	 * POST /v1/shop/alerts/unsubscribe/:token (E34): every alert of the phone or e-mail the token's message went to is
+	 * removed. A token no longer known removes nothing.
+	 * @param {any} ctx
+	 */
+	const unsubscribe = async (ctx) => {
+		const s = await service.site(ctx);
+		const token = String(ctx.params.token);
+		if (token.length !== ORDER_KEY_LENGTH) return { removed: 0 };
+		const data = await s.data();
+		const found = /** @type {StoredAlert | null} */ (
+			await alerts(data).findOne({ websiteId: data.websiteId, tokenHash: orderKeyHash(token) }, NO_ID)
+		);
+		if (!found) return { removed: 0 };
+		const or = [...(found.email ? [{ email: found.email }] : []), ...(found.phone ? [{ phone: found.phone }] : [])];
+		const result = await alerts(data).deleteMany({
+			websiteId: data.websiteId,
+			...(or.length > 0 ? { $or: or } : { id: found.id }),
+		});
+		return { removed: result.deletedCount };
 	};
 
 	/** @param {any} ctx */
@@ -250,6 +315,7 @@ export const createAlerts = (_product, service, cards) => {
 				email: alert.email,
 				phone: alert.phone,
 				price: alert.price,
+				targetPrice: alert.targetPrice ?? null,
 				status: alert.status,
 				createdAt: new Date(alert.createdAt).toISOString(),
 			})),
@@ -284,6 +350,14 @@ export const createAlerts = (_product, service, cards) => {
 			feature: 'alerts',
 			rateLimit: VISITOR,
 			handler: mine,
+		}),
+		defineRoute({
+			method: 'POST',
+			path: '/v1/shop/alerts/unsubscribe/:token',
+			auth: 'browser',
+			feature: 'alerts',
+			rateLimit: VISITOR_WRITE,
+			handler: unsubscribe,
 		}),
 		defineRoute({
 			method: 'DELETE',

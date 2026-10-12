@@ -1,0 +1,558 @@
+/**
+ * Returns and warranty claims, E33: the `returns` settings (kinds with exchange, fixed reasons, the reference prefix,
+ * delivery inside the refund cap, points taken back), the `replaced` and `repaired` outcomes, restock per line when
+ * received, the refund's method and reference written on the order's `refunds`, staff notes and the
+ * `return.requested` hook, through the routes. Delivered orders are placed with the ledger and moved to delivered
+ * directly.
+ */
+import { createId } from '@ss/contracts';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { givePoints, loyaltyAccount, placeOrder } from '../adapters/ledger.js';
+import { INDEXES } from '../adapters/product.js';
+import { COLLECTIONS } from '../core/model.js';
+import {
+	actionsOf,
+	checkClaimInput,
+	checkRefundMethod,
+	checkRestockChoices,
+	claimReference,
+	deliveryLeft,
+	holdsUnits,
+	refundCap,
+} from '../core/returns.js';
+import { PAYMENTS, readyShop } from './helpers.js';
+
+/** Every hook the shop's service emits, in order. */
+const hooks = vi.hoisted(() => /** @type {Array<{ name: string, payload: any }>} */ ([]));
+vi.mock('../server/service.js', async (original) => {
+	const real = /** @type {typeof import('../server/service.js')} */ (await original());
+	return {
+		...real,
+		createService: (/** @type {any} */ product) => {
+			const service = real.createService(product);
+			return {
+				...service,
+				/** @type {typeof service.emit} */
+				emit: async (name, s, payload) => {
+					hooks.push({ name, payload });
+					await service.emit(name, s, payload);
+				},
+			};
+		},
+	};
+});
+
+/** @type {Awaited<ReturnType<typeof readyShop>>} */
+let shop;
+/** @type {import('@ss/app-kit').WebsiteData} */
+let data;
+/** @type {string} */
+let ticket;
+/** @type {string} */
+let sara;
+const SARA = 'usr_shopper0000001';
+
+beforeAll(async () => {
+	shop = await readyShop();
+	data = await shop.db();
+	await data.ensureIndexes(INDEXES);
+});
+afterAll(async () => shop.product.close());
+beforeEach(async () => {
+	shop.advance(61_000);
+	data = await shop.db();
+	sara = await shop.signIn();
+	ticket = await shop.ticket();
+	for (const [name, value] of Object.entries({
+		kinds: ['return', 'warranty'],
+		reasons: [],
+		referencePrefix: 'R-',
+		refundDelivery: false,
+		pointsBack: 'proportional',
+		warrantyDays: 0,
+	}))
+		await shop.setting('returns', name, value);
+});
+
+/**
+ * Place an order for Sara with the ledger and mark it delivered.
+ * @param {{ lines: Array<{ product: import('../core/model.js').ProductRecord, quantity?: number, serials?: string[] }>,
+ *   delivery?: number, payment?: Partial<import('../core/model.js').OrderRecord['payment']>, pointsEarned?: number }} input
+ * @returns {Promise<import('../core/model.js').OrderRecord>}
+ */
+const order = async ({ lines, delivery = 0, payment = {}, pointsEarned = 0 }) => {
+	const id = createId('ord');
+	const records = lines.map((line) => {
+		const quantity = line.quantity ?? 1;
+		const variant = /** @type {import('../core/model.js').VariantRecord} */ (line.product.variants[0]);
+		return {
+			id: createId('oln'),
+			productId: line.product.id,
+			variantId: variant.id,
+			kind: /** @type {const} */ ('physical'),
+			name: line.product.name,
+			variantName: '',
+			sku: '',
+			grade: null,
+			gradeLabel: '',
+			image: '',
+			unitPrice: variant.price,
+			quantity,
+			discount: 0,
+			tax: 0,
+			total: variant.price * quantity,
+			cost: null,
+			categoryIds: [],
+			brandId: null,
+			locationId: null,
+			serials: line.serials ?? [],
+			booking: null,
+			licences: [],
+			returnedQuantity: 0,
+		};
+	});
+	const subtotal = records.reduce((sum, line) => sum + line.total, 0);
+	const placed = await placeOrder(
+		data,
+		{
+			numberPrefix: 'T-',
+			order: {
+				id,
+				customer: { userId: SARA, name: 'Sara Shopper', email: 'sara@example.com', phone: '' },
+				address: {
+					name: 'Sara',
+					phone: '',
+					line1: 'x',
+					line2: '',
+					city: 'X',
+					area: '',
+					postalCode: '',
+					country: 'XX',
+					notes: '',
+				},
+				delivery: { method: 'delivery', zone: '', fee: delivery, locationId: null },
+				lines: records,
+				totals: { subtotal, discount: 0, delivery, tax: 0, total: subtotal + delivery, currency: 'USD', taxIncluded: true },
+				promotions: {
+					couponId: null,
+					couponCode: '',
+					dealIds: [],
+					bundleIds: [],
+					pointsRedeemed: 0,
+					pointsValue: 0,
+					pointsEarned,
+					released: false,
+				},
+				payment: {
+					method: 'cod',
+					state: 'paid',
+					paymentId: null,
+					advance: 0,
+					paid: subtotal + delivery,
+					refunded: 0,
+					checkedAt: null,
+					...payment,
+				},
+				status: 'confirmed',
+				role: 'open',
+				history: [],
+				shipment: null,
+				stockHeld: true,
+				holdUntil: null,
+				idempotencyKey: createId('key'),
+				note: '',
+				staffNote: '',
+				placedAt: new Date(shop.now()),
+				deliveredAt: null,
+			},
+		},
+		{ now: shop.now() },
+	);
+	if (!placed.ok) throw new Error(`not placed: ${placed.code}`);
+	await data
+		.collection(COLLECTIONS.orders)
+		.updateOne(
+			{ websiteId: data.websiteId, id },
+			{ $set: { status: 'delivered', role: 'delivered', deliveredAt: new Date(shop.now()) } },
+		);
+	return /** @type {any} */ (
+		await data.collection(COLLECTIONS.orders).findOne({ websiteId: data.websiteId, id }, { projection: { _id: 0 } })
+	);
+};
+
+/**
+ * Sara claims items of an order (each claim in a fresh minute: visitor writes are rate limited).
+ * @param {import('../core/model.js').OrderRecord} placed
+ * @param {Record<string, unknown>} body
+ */
+const claim = async (placed, body) => {
+	shop.advance(61_000);
+	return shop.visitor('POST', '/v1/shop/returns', {
+		signIn: sara,
+		key: createId('key'),
+		body: {
+			orderId: placed.id,
+			kind: 'return',
+			lines: placed.lines.map((line) => ({ lineId: line.id, quantity: line.quantity })),
+			reason: 'Broken',
+			...body,
+		},
+	});
+};
+
+/** @param {{ json: any }} answer */
+const codeOf = (answer) => String(answer.json.type).split('/').pop();
+/** @param {string} id */
+const orderOf = async (id) =>
+	/** @type {any} */ (await data.collection(COLLECTIONS.orders).findOne({ websiteId: data.websiteId, id }));
+/** @param {string} id */
+const stockOf = async (id) =>
+	/** @type {any} */ (await data.collection(COLLECTIONS.products).findOne({ websiteId: data.websiteId, id })).variants[0].stock;
+
+describe('claim settings', () => {
+	it('take only the kinds and reasons the shop lists, keep the prefixed reference and raise return.requested', async () => {
+		const item = await shop.seedProduct({ name: 'Headset', price: 800 });
+		const placed = await order({ lines: [{ product: item }] });
+
+		await shop.setting('returns', 'kinds', ['return']);
+		const warranty = await claim(placed, { kind: 'warranty' });
+		expect(warranty.status).toBe(422);
+		expect(warranty.json.errors[0]).toMatchObject({ path: '/kind', message: 'kind is return.' });
+		expect((await claim(placed, { kind: 'exchange' })).json.errors[0].path).toBe('/kind');
+
+		await shop.setting('returns', 'kinds', ['return', 'exchange']);
+		await shop.setting('returns', 'reasons', ['Damaged', 'Wrong item']);
+		await shop.setting('returns', 'referencePrefix', 'RR-');
+		expect((await claim(placed, { kind: 'exchange', reason: 'Changed mind' })).json.errors[0].path).toBe('/reason');
+		const before = hooks.length;
+		const made = await claim(placed, { kind: 'exchange', reason: 'Damaged' });
+		expect(made.status).toBe(201);
+		expect(made.json).toMatchObject({ kind: 'exchange', reason: 'Damaged', status: 'requested' });
+		expect(made.json.reference).toBe(`RR-${made.json.id.slice(-6).toUpperCase()}`);
+		expect(shop.messages().at(-1)).toMatchObject({
+			template: 'ecommerce.return_status',
+			values: { claim: made.json.reference, kind: 'exchange' },
+		});
+		const raised = hooks.slice(before).filter((hook) => hook.name === 'return.requested');
+		expect(raised).toHaveLength(1);
+		expect(raised[0]?.payload).toMatchObject({ claim: { id: made.json.id, kind: 'exchange' }, order: { id: placed.id } });
+
+		// the reference stays as it was made when the prefix changes
+		await shop.setting('returns', 'referencePrefix', 'X-');
+		const read = await shop.api('GET', `/v1/returns/${made.json.id}`);
+		expect(read.json).toMatchObject({ reference: made.json.reference, kind: 'exchange', notes: [] });
+		const list = await shop.api('GET', `/v1/returns?kind=exchange&orderId=${placed.id}`);
+		expect(list.json.items.map((/** @type {any} */ c) => c.id)).toEqual([made.json.id]);
+	});
+});
+
+describe('claim outcomes and notes', () => {
+	it('replace an exchange, repair a warranty claim (both final) and keep staff notes from the shopper', async () => {
+		await shop.setting('returns', 'kinds', ['return', 'warranty', 'exchange']);
+		await shop.setting('returns', 'warrantyDays', 30);
+		const item = await shop.seedProduct({ name: 'Watch', price: 2000 });
+		const swapped = await order({ lines: [{ product: item }] });
+		const exchange = await claim(swapped, { kind: 'exchange' });
+		const id = exchange.json.id;
+		const approved = await shop.api('POST', `/v1/returns/${id}/approve`, {});
+		expect(approved.json.actions).toEqual(['reject', 'receive', 'refund', 'replace', 'close', 'restock']);
+		expect(codeOf(await shop.api('POST', `/v1/returns/${id}/repair`, {}))).toBe('move_not_allowed');
+		const replaced = await shop.admin(ticket, 'POST', `/v1/admin/returns/${id}/replace`, { note: 'New one sent' });
+		expect(replaced.status).toBe(200);
+		expect(replaced.json).toMatchObject({ status: 'replaced', actions: ['restock'] });
+		expect(replaced.json.history.at(-1)).toMatchObject({ status: 'replaced', by: 'Sam Staff', note: 'New one sent' });
+		expect(shop.messages().at(-1)).toMatchObject({ values: { status: 'replaced' } });
+		for (const action of ['close', 'refund', 'reject', 'replace'])
+			expect(codeOf(await shop.api('POST', `/v1/returns/${id}/${action}`, { amount: 1, note: 'x' }))).toBe('move_not_allowed');
+		expect((await shop.api('GET', `/v1/returns?status=replaced&orderId=${swapped.id}`)).json.items).toHaveLength(1);
+
+		const fixed = await order({ lines: [{ product: item }] });
+		const warranty = await claim(fixed, { kind: 'warranty' });
+		await shop.api('POST', `/v1/returns/${warranty.json.id}/approve`, {});
+		await shop.api('POST', `/v1/returns/${warranty.json.id}/receive`, {});
+		const repaired = await shop.api('POST', `/v1/returns/${warranty.json.id}/repair`, {});
+		expect(repaired.json).toMatchObject({ status: 'repaired', actions: [] });
+		// a repaired item went back to the shopper: it can be claimed again
+		expect((await claim(fixed, { kind: 'warranty' })).status).toBe(201);
+
+		// staff notes, on both routes, never shown to the shopper
+		expect((await shop.api('POST', `/v1/returns/${id}/notes`, { text: ' ' })).json.errors[0].path).toBe('/text');
+		expect((await shop.api('POST', `/v1/returns/${id}/notes`, { text: 'x'.repeat(1001) })).status).toBe(422);
+		expect((await shop.api('POST', '/v1/returns/ret_missing/notes', { text: 'Hi' })).status).toBe(404);
+		const noted = await shop.api('POST', `/v1/returns/${id}/notes`, { text: 'Called the shopper' });
+		expect(noted.status).toBe(201);
+		expect(noted.json.notes).toEqual([{ at: expect.any(String), by: 'Server', text: 'Called the shopper' }]);
+		const twice = await shop.admin(ticket, 'POST', `/v1/admin/returns/${id}/notes`, { text: 'Courier booked' });
+		expect(twice.json.notes.map((/** @type {any} */ n) => [n.by, n.text])).toEqual([
+			['Server', 'Called the shopper'],
+			['Sam Staff', 'Courier booked'],
+		]);
+		expect(twice.json.status).toBe('replaced');
+		const mine = await shop.visitor('GET', '/v1/shop/returns', { signIn: sara });
+		const seen = mine.json.items.find((/** @type {any} */ c) => c.id === id);
+		expect(seen).toBeDefined();
+		expect(seen.notes).toBeUndefined();
+		expect(JSON.stringify(seen)).not.toContain('Called the shopper');
+	});
+});
+
+describe('restock per line', () => {
+	it('restocks the lines staff choose when received, each once, and leaves the rest out or for later', async () => {
+		const phone = await shop.seedProduct({ name: 'Phone B', price: 3000, stock: 4 });
+		const cover = await shop.seedProduct({ name: 'Cover', price: 200, stock: 10 });
+		const placed = await order({
+			lines: [
+				{ product: phone, serials: ['IMEI-B1'] },
+				{ product: cover, quantity: 2 },
+			],
+		});
+		await data.collection(COLLECTIONS.serials).insertOne({
+			id: createId('ser'),
+			productId: phone.id,
+			serial: 'IMEI-B1',
+			status: 'sold',
+			orderId: placed.id,
+			lineId: 'x',
+		});
+		const [phoneLine, coverLine] = /** @type {[string, string]} */ (placed.lines.map((line) => line.id));
+		const made = await claim(placed, {});
+		const id = made.json.id;
+		await shop.api('POST', `/v1/returns/${id}/approve`, {});
+		const phoneStock = await stockOf(phone.id);
+		const coverStock = await stockOf(cover.id);
+
+		expect((await shop.api('POST', `/v1/returns/${id}/receive`, { lines: 'all' })).json.errors[0].path).toBe('/lines');
+		expect(
+			(await shop.api('POST', `/v1/returns/${id}/receive`, { lines: [{ lineId: 'oln_other', restock: true }] })).json.errors[0]
+				.path,
+		).toBe('/lines/0/lineId');
+		expect(
+			(
+				await shop.api('POST', `/v1/returns/${id}/receive`, {
+					lines: [
+						{ lineId: phoneLine, restock: true },
+						{ lineId: phoneLine, restock: false },
+					],
+				})
+			).json.errors[0].path,
+		).toBe('/lines/1/lineId');
+		expect(
+			(await shop.api('POST', `/v1/returns/${id}/receive`, { lines: [{ lineId: phoneLine, restock: 'yes' }] })).json.errors[0]
+				.path,
+		).toBe('/lines/0/restock');
+		expect((await shop.api('GET', `/v1/returns/${id}`)).json.status).toBe('approved');
+
+		const received = await shop.admin(ticket, 'POST', `/v1/admin/returns/${id}/receive`, {
+			lines: [
+				{ lineId: phoneLine, restock: true },
+				{ lineId: coverLine, restock: false },
+			],
+		});
+		expect(received.status).toBe(200);
+		expect(received.json.status).toBe('received');
+		expect(received.json.lines).toMatchObject([
+			{ lineId: phoneLine, restock: true, restockedAt: expect.any(String) },
+			{ lineId: coverLine, restock: false, restockedAt: null },
+		]);
+		expect(received.json.restockedAt).not.toBeNull();
+		expect(received.json.actions).not.toContain('restock');
+		expect(received.json.history.map((/** @type {any} */ h) => h.note).at(-1)).toBe('restocked');
+		expect(await stockOf(phone.id)).toBe(phoneStock + 1);
+		expect(await stockOf(cover.id)).toBe(coverStock);
+		const serial = /** @type {any} */ (
+			await data.collection(COLLECTIONS.serials).findOne({ websiteId: data.websiteId, serial: 'IMEI-B1' })
+		);
+		expect(serial.status).toBe('in_stock');
+		expect(codeOf(await shop.api('POST', `/v1/returns/${id}/restock`, {}))).toBe('conflict');
+
+		// a line not named when received is restocked later, once (placing the order took one phone and two covers)
+		const second = await order({ lines: [{ product: phone }, { product: cover, quantity: 2 }] });
+		const [secondPhone, secondCover] = /** @type {[string, string]} */ (second.lines.map((line) => line.id));
+		const later = await claim(second, {});
+		await shop.api('POST', `/v1/returns/${later.json.id}/approve`, {});
+		const partly = await shop.api('POST', `/v1/returns/${later.json.id}/receive`, {
+			lines: [{ lineId: secondPhone, restock: true }],
+		});
+		expect(partly.json.restockedAt).toBeNull();
+		expect(partly.json.actions).toContain('restock');
+		expect(await stockOf(phone.id)).toBe(phoneStock + 1);
+		const rest = await shop.api('POST', `/v1/returns/${later.json.id}/restock`, {});
+		expect(rest.status).toBe(200);
+		expect(rest.json.lines).toMatchObject([
+			{ lineId: secondPhone, restockedAt: expect.any(String) },
+			{ lineId: secondCover, restockedAt: expect.any(String) },
+		]);
+		expect(rest.json.restockedAt).not.toBeNull();
+		expect(await stockOf(phone.id)).toBe(phoneStock + 1);
+		expect(await stockOf(cover.id)).toBe(coverStock);
+		expect(codeOf(await shop.api('POST', `/v1/returns/${later.json.id}/restock`, {}))).toBe('conflict');
+		expect(await stockOf(cover.id)).toBe(coverStock);
+	});
+});
+
+describe('claim refunds', () => {
+	it('record the method and reference on the order, keep delivery out of the cap unless allowed, and once', async () => {
+		const shoes = await shop.seedProduct({ name: 'Shoes', price: 1000 });
+		const placed = await order({ lines: [{ product: shoes }, { product: shoes }], delivery: 500 });
+		const [first, second] = /** @type {[string, string]} */ (placed.lines.map((line) => line.id));
+		const a = await claim(placed, { lines: [{ lineId: first, quantity: 1 }] });
+		const b = await claim(placed, { lines: [{ lineId: second, quantity: 1 }] });
+		for (const made of [a, b]) await shop.api('POST', `/v1/returns/${made.json.id}/approve`, {});
+		expect((await shop.api('GET', `/v1/returns/${a.json.id}`)).json.refundable).toBe(1000);
+		expect((await shop.api('POST', `/v1/returns/${a.json.id}/refund`, { amount: 1001 })).json.errors[0].path).toBe('/amount');
+
+		const refund = (/** @type {string} */ id, /** @type {Record<string, unknown>} */ body) =>
+			shop.api('POST', `/v1/returns/${id}/refund`, body);
+		expect((await refund(a.json.id, { amount: 100, method: 'online' })).json.errors[0].path).toBe('/method');
+		expect((await refund(a.json.id, { amount: 100, method: 'cheque' })).json.errors[0].path).toBe('/method');
+		expect((await refund(a.json.id, { amount: 100, reference: 'x'.repeat(121) })).json.errors[0].path).toBe('/reference');
+		expect((await refund(a.json.id, { amount: 100, reference: 7 })).json.errors[0].path).toBe('/reference');
+
+		await shop.setting('returns', 'refundDelivery', true);
+		expect((await shop.api('GET', `/v1/returns/${a.json.id}`)).json.refundable).toBe(1500);
+		const before = shop.callsTo(PAYMENTS).length;
+		const done = await shop.admin(ticket, 'POST', `/v1/admin/returns/${a.json.id}/refund`, {
+			amount: 1500,
+			method: 'bank_transfer',
+			reference: ' TX-1 ',
+			note: 'With delivery',
+		});
+		expect(done.status).toBe(200);
+		expect(done.json).toMatchObject({
+			status: 'refunded',
+			refundAmount: 1500,
+			refundMethod: 'bank_transfer',
+			refundReference: 'TX-1',
+			refundId: null,
+			refundable: 0,
+		});
+		expect(shop.callsTo(PAYMENTS).length).toBe(before);
+		let stored = await orderOf(placed.id);
+		expect(stored.payment).toMatchObject({ refunded: 1500, state: 'partially_refunded' });
+		expect(stored.refunds).toEqual([
+			{
+				id: expect.stringMatching(/^orf_/),
+				method: 'bank_transfer',
+				amount: 1500,
+				reference: 'TX-1',
+				claimId: a.json.id,
+				note: 'With delivery',
+				by: expect.objectContaining({ name: 'Sam Staff' }),
+				at: expect.any(Date),
+				refundId: null,
+			},
+		]);
+		// the delivery fee went back with the first claim: the second is capped at its line
+		expect((await shop.api('GET', `/v1/returns/${b.json.id}`)).json.refundable).toBe(1000);
+		const plain = await refund(b.json.id, { amount: 1000 });
+		expect(plain.json).toMatchObject({ refundMethod: 'other', refundReference: '' });
+		stored = await orderOf(placed.id);
+		expect(stored.payment).toMatchObject({ refunded: 2500, state: 'refunded' });
+		expect(stored.refunds.map((/** @type {any} */ r) => [r.claimId, r.method, r.amount])).toEqual([
+			[a.json.id, 'bank_transfer', 1500],
+			[b.json.id, 'other', 1000],
+		]);
+		// shoppers see the refunds on their order
+		const mine = await shop.visitor('GET', `/v1/shop/orders/${placed.id}`, { signIn: sara });
+		expect(JSON.stringify(mine.json)).toContain('TX-1');
+	});
+
+	it('go through Payments only for online refunds of orders paid online', async () => {
+		const tv = await shop.seedProduct({ name: 'TV', price: 5000 });
+		const placed = await order({
+			lines: [{ product: tv }],
+			payment: { method: 'online', state: 'paid', paymentId: 'pay_000000000077', paid: 5000 },
+		});
+		const made = await claim(placed, {});
+		await shop.api('POST', `/v1/returns/${made.json.id}/approve`, {});
+		const online = await shop.api('POST', `/v1/returns/${made.json.id}/refund`, { amount: 3000, reference: 'Web' });
+		expect(online.json).toMatchObject({ refundMethod: 'online', refundId: expect.stringMatching(/^rfd_/) });
+		expect(shop.callsTo(`${PAYMENTS}/v1/payments/pay_000000000077/refunds`)).toHaveLength(1);
+		const cash = await shop.api('POST', `/v1/returns/${made.json.id}/refund`, { amount: 2000, method: 'cash' });
+		expect(cash.json).toMatchObject({ refundMethod: 'cash', refundAmount: 5000 });
+		expect(shop.callsTo(`${PAYMENTS}/v1/payments/pay_000000000077/refunds`)).toHaveLength(1);
+		const stored = await orderOf(placed.id);
+		expect(stored.refunds.map((/** @type {any} */ r) => [r.method, r.amount, r.refundId])).toEqual([
+			['online', 3000, expect.stringMatching(/^rfd_/)],
+			['cash', 2000, null],
+		]);
+		expect(stored.payment).toMatchObject({ refunded: 5000, state: 'refunded' });
+
+		// Payments refusing undoes the claim's refund, method and reference
+		const again = await order({
+			lines: [{ product: tv }],
+			payment: { method: 'online', state: 'paid', paymentId: 'pay_000000000078', paid: 5000 },
+		});
+		const refused = await claim(again, {});
+		await shop.api('POST', `/v1/returns/${refused.json.id}/approve`, {});
+		shop.responders.set(`${PAYMENTS}/v1/payments/pay_000000000078/refunds`, () => ({ status: 400, body: { detail: 'No' } }));
+		expect((await shop.api('POST', `/v1/returns/${refused.json.id}/refund`, { amount: 100 })).status).toBeGreaterThan(499);
+		const kept = await shop.api('GET', `/v1/returns/${refused.json.id}`);
+		expect(kept.json).toMatchObject({ status: 'approved', refundAmount: 0, refundMethod: null, refundReference: '' });
+		expect((await orderOf(again.id)).refunds ?? []).toEqual([]);
+	});
+
+	it('take points back in proportion, or only once the order is fully refunded', async () => {
+		const lamp = await shop.seedProduct({ name: 'Lamp', price: 1000 });
+		const balance = async () => (await loyaltyAccount(data, SARA, { now: shop.now() })).balance;
+		const earn = async (/** @type {string} */ orderId) =>
+			givePoints(data, { userId: SARA, points: 20, orderId, kind: 'earn', expiresAt: null }, { now: shop.now() });
+
+		const proportional = await order({ lines: [{ product: lamp }, { product: lamp }], pointsEarned: 20 });
+		await earn(proportional.id);
+		const start = await balance();
+		const part = await claim(proportional, { lines: [{ lineId: proportional.lines[0]?.id, quantity: 1 }] });
+		await shop.api('POST', `/v1/returns/${part.json.id}/approve`, {});
+		await shop.api('POST', `/v1/returns/${part.json.id}/refund`, { amount: 500 });
+		expect(await balance()).toBe(start - 10);
+		await shop.api('POST', `/v1/returns/${part.json.id}/refund`, { amount: 500 });
+		expect(await balance()).toBe(start - 10);
+
+		await shop.setting('returns', 'pointsBack', 'full_refund_only');
+		const whole = await order({ lines: [{ product: lamp }, { product: lamp }], pointsEarned: 20 });
+		await earn(whole.id);
+		const held = await balance();
+		const [first, second] = /** @type {[string, string]} */ (whole.lines.map((line) => line.id));
+		const a = await claim(whole, { lines: [{ lineId: first, quantity: 1 }] });
+		const b = await claim(whole, { lines: [{ lineId: second, quantity: 1 }] });
+		for (const made of [a, b]) await shop.api('POST', `/v1/returns/${made.json.id}/approve`, {});
+		await shop.api('POST', `/v1/returns/${a.json.id}/refund`, { amount: 1000 });
+		expect(await balance()).toBe(held);
+		await shop.api('POST', `/v1/returns/${b.json.id}/refund`, { amount: 600 });
+		expect(await balance()).toBe(held);
+		await shop.api('POST', `/v1/returns/${b.json.id}/refund`, { amount: 400 });
+		expect((await orderOf(whole.id)).payment.state).toBe('refunded');
+		expect(await balance()).toBe(held - 20);
+	});
+});
+
+describe('claim rules', () => {
+	it('check kinds, reasons, refund methods, restock choices and the delivery left', () => {
+		const body = { orderId: 'ord_1', kind: 'exchange', lines: [{ lineId: 'oln_1', quantity: 1 }], reason: 'Damaged' };
+		expect(checkClaimInput(body, { maxPhotos: 0 })).toMatchObject({ field: 'kind', message: 'kind is return or warranty.' });
+		expect(checkClaimInput(body, { maxPhotos: 0, kinds: [] })).toMatchObject({ message: 'kind is not open.' });
+		expect(checkClaimInput(body, { maxPhotos: 0, kinds: ['exchange'], reasons: ['Damaged'] })).toMatchObject({ ok: true });
+		expect(checkRefundMethod(null, true)).toEqual({ ok: true, method: 'online', reference: '' });
+		expect(checkRefundMethod({ method: 'cash', reference: null }, false)).toEqual({ ok: true, method: 'cash', reference: '' });
+		expect(checkRestockChoices(undefined, { lines: [] })).toMatchObject({ ok: true });
+		expect(checkRestockChoices([null], { lines: [] })).toMatchObject({ field: 'lines/0/lineId' });
+		expect(checkRestockChoices(Array.from({ length: 51 }), { lines: [] })).toMatchObject({ field: 'lines' });
+		expect(claimReference('ret_abcdef123456', '')).toBe('123456');
+		expect(claimReference('ret_abcdef123456', 5)).toBe('R-123456');
+		expect(holdsUnits({ status: 'repaired', kind: 'warranty', refundAmount: 0 })).toBe(false);
+		expect(actionsOf({ status: 'approved', restockedAt: null })).toEqual(['reject', 'receive', 'refund', 'close']);
+		const order = /** @type {any} */ ({
+			lines: [{ id: 'oln_1', total: 1000, quantity: 1 }],
+			totals: { total: 1300, delivery: 300 },
+			payment: { refunded: 0 },
+		});
+		const claims = [
+			{ id: 'ret_1', lines: [{ lineId: 'oln_1', quantity: 1, serials: [] }], refundAmount: 1100 },
+			{ id: 'ret_2', lines: [{ lineId: 'oln_1', quantity: 1, serials: [] }], refundAmount: 0 },
+		];
+		expect(deliveryLeft(order, claims, 'ret_2')).toBe(200);
+		expect(deliveryLeft(order, claims, 'ret_1')).toBe(300);
+		expect(deliveryLeft({ ...order, totals: { total: 1000 } }, claims, 'ret_2')).toBe(0);
+		expect(refundCap(order, /** @type {any} */ (claims[1]), 200)).toBe(1200);
+	});
+});

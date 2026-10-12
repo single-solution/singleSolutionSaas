@@ -1,6 +1,7 @@
 /**
- * Reviews (PLAN 0.8.8: reviews only after delivery, with moderation): checking a shopper's review and a staff reply,
- * the sorts of the public list, and the rating summary kept on the product. No I/O.
+ * Reviews (PLAN 0.8.8: reviews only after delivery, with moderation): checking a shopper's review (of a product, or of
+ * one order line with `per: order_line`, E34) and a staff reply, the names shown (`nameFormat`), the sorts of the
+ * public list, and the rating summary kept on the product. No I/O.
  * @module
  */
 import { plainText } from './returns.js';
@@ -11,6 +12,8 @@ import { plainText } from './returns.js';
 const MAX_TITLE = 120;
 const MAX_BODY = 2000;
 const MAX_REPLY = 2000;
+/** The longest order and line ids taken. */
+const MAX_ID = 80;
 export const REVIEW_STATUSES = Object.freeze(/** @type {ReviewRecord['status'][]} */ (['pending', 'approved', 'rejected']));
 
 /** The public list's sorts (newest first by default). @type {Readonly<Record<'newest' | 'highest' | 'lowest', SortField[]>>} */
@@ -39,7 +42,22 @@ export const REVIEW_SORTS = Object.freeze({
 export const reviewSort = (value) => (value === 'highest' || value === 'lowest' ? value : 'newest');
 
 /**
- * Check a shopper's review.
+ * Check a review's rating, title and text.
+ * @param {Record<string, unknown>} input
+ * @returns {{ ok: true, value: { rating: number, title: string, body: string } } | { ok: false, field: string, message: string }}
+ */
+const checkWords = (input) => {
+	if (!Number.isInteger(input.rating) || Number(input.rating) < 1 || Number(input.rating) > 5)
+		return { ok: false, field: 'rating', message: 'The rating is a whole number from 1 to 5.' };
+	const title = plainText(input.title);
+	if (title.length > MAX_TITLE) return { ok: false, field: 'title', message: `The title is at most ${MAX_TITLE} characters.` };
+	const text = plainText(input.body);
+	if (text.length > MAX_BODY) return { ok: false, field: 'body', message: `The review is at most ${MAX_BODY} characters.` };
+	return { ok: true, value: { rating: Number(input.rating), title, body: text } };
+};
+
+/**
+ * Check a shopper's review of a product.
  * @param {unknown} body
  * @returns {{ ok: true, value: { productId: string, rating: number, title: string, body: string } } | { ok: false, field: string, message: string }}
  */
@@ -47,13 +65,37 @@ export const checkReviewInput = (body) => {
 	const input = typeof body === 'object' && body !== null ? /** @type {Record<string, unknown>} */ (body) : {};
 	if (typeof input.productId !== 'string' || !/^prd_[A-Za-z0-9]{1,64}$/.test(input.productId))
 		return { ok: false, field: 'productId', message: 'Name the product.' };
-	if (!Number.isInteger(input.rating) || Number(input.rating) < 1 || Number(input.rating) > 5)
-		return { ok: false, field: 'rating', message: 'The rating is a whole number from 1 to 5.' };
-	const title = plainText(input.title);
-	if (title.length > MAX_TITLE) return { ok: false, field: 'title', message: `The title is at most ${MAX_TITLE} characters.` };
-	const text = plainText(input.body);
-	if (text.length > MAX_BODY) return { ok: false, field: 'body', message: `The review is at most ${MAX_BODY} characters.` };
-	return { ok: true, value: { productId: input.productId, rating: Number(input.rating), title, body: text } };
+	const words = checkWords(input);
+	return words.ok ? { ok: true, value: { productId: input.productId, ...words.value } } : words;
+};
+
+/**
+ * Check a shopper's review of one order line (`per: order_line`, E34).
+ * @param {unknown} body
+ * @returns {{ ok: true, value: { orderId: string, lineId: string, rating: number, title: string, body: string } } | { ok: false, field: string, message: string }}
+ */
+export const checkLineReviewInput = (body) => {
+	const input = typeof body === 'object' && body !== null ? /** @type {Record<string, unknown>} */ (body) : {};
+	if (typeof input.orderId !== 'string' || !input.orderId || input.orderId.length > MAX_ID)
+		return { ok: false, field: 'orderId', message: 'Name the order.' };
+	if (typeof input.lineId !== 'string' || !input.lineId || input.lineId.length > MAX_ID)
+		return { ok: false, field: 'lineId', message: 'Name the item of the order.' };
+	const words = checkWords(input);
+	return words.ok ? { ok: true, value: { orderId: input.orderId, lineId: input.lineId, ...words.value } } : words;
+};
+
+/**
+ * The name a review shows (`nameFormat`): the whole name, or the first name and the last name's initial ("Ayesha K.").
+ * @param {string} name
+ * @param {unknown} format
+ */
+export const shownName = (name, format) => {
+	if (format !== 'first_initial') return name;
+	const words = name.trim().split(/\s+/).filter(Boolean);
+	const first = words[0] ?? '';
+	const last = words.length > 1 ? (words[words.length - 1] ?? '') : '';
+	const initial = [...last][0];
+	return initial ? `${first} ${initial.toUpperCase()}.` : first;
 };
 
 /**

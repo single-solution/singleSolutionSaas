@@ -16,8 +16,14 @@ export const INDEXES = [
 	{ collection: COLLECTIONS.returns, keys: { websiteId: 1, orderId: 1 }, name: 'by_order' },
 	{ collection: COLLECTIONS.returns, keys: { websiteId: 1, userId: 1, createdAt: -1 }, name: 'by_user' },
 	{ collection: COLLECTIONS.reviews, keys: { websiteId: 1, id: 1 }, name: 'by_id', unique: true },
-	// one review per product per shopper
-	{ collection: COLLECTIONS.reviews, keys: { websiteId: 1, productId: 1, userId: 1 }, name: 'one_per_user', unique: true },
+	// one review per product per shopper, or per order line with `per: order_line` (E34; a product review has no line)
+	{
+		collection: COLLECTIONS.reviews,
+		keys: { websiteId: 1, productId: 1, userId: 1, lineId: 1 },
+		name: 'one_per_reviewer',
+		unique: true,
+	},
+	{ collection: COLLECTIONS.reviews, keys: { websiteId: 1, orderId: 1, lineId: 1 }, name: 'by_line' },
 	{ collection: COLLECTIONS.reviews, keys: { websiteId: 1, productId: 1, status: 1, createdAt: -1 }, name: 'by_product' },
 	{ collection: COLLECTIONS.reviews, keys: { websiteId: 1, status: 1, createdAt: -1 }, name: 'by_status' },
 	{ collection: COLLECTIONS.reviews, keys: { websiteId: 1, userId: 1 }, name: 'by_user' },
@@ -26,13 +32,20 @@ export const INDEXES = [
 	{ collection: COLLECTIONS.alerts, keys: { websiteId: 1, userId: 1 }, name: 'by_user' },
 	{ collection: COLLECTIONS.alerts, keys: { websiteId: 1, productId: 1, status: 1 }, name: 'by_product' },
 	{ collection: COLLECTIONS.alerts, keys: { websiteId: 1, status: 1, dueAt: 1 }, name: 'due' },
-	// one waiting alert of a kind per shopper and product (or variant)
+	// one waiting alert of a kind per shopper (a guest: per phone, E34) and product (or variant)
 	{
 		collection: COLLECTIONS.alerts,
-		keys: { websiteId: 1, userId: 1, kind: 1, productId: 1, variantId: 1 },
-		name: 'one_waiting',
+		keys: { websiteId: 1, userId: 1, phone: 1, kind: 1, productId: 1, variantId: 1 },
+		name: 'one_waiting_per_contact',
 		unique: true,
 		partialFilterExpression: { status: 'waiting' },
+	},
+	// the unsubscribe link's token, kept as its hash (E34)
+	{
+		collection: COLLECTIONS.alerts,
+		keys: { websiteId: 1, tokenHash: 1 },
+		name: 'by_token',
+		partialFilterExpression: { tokenHash: { $type: 'string' } },
 	},
 ];
 

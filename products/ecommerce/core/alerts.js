@@ -1,6 +1,7 @@
 /**
  * Back-in-stock and price-drop alerts (PLAN 0.8.8: via Notifications): checking a shopper's alert, and when an alert
- * is due for a product as it is now (in stock again, or cheaper than the price stored when the alert was set). No I/O.
+ * is due for a product as it is now (in stock again, or cheaper than the price stored when the alert was set, or at
+ * most its target price, E34). No I/O.
  * @module
  */
 
@@ -35,6 +36,22 @@ export const checkAlertInput = (body) => {
 };
 
 /**
+ * Check an alert's optional target price (E34): a price-drop alert is then due once the price is at most this
+ * (minor units, below the price now).
+ * @param {unknown} value
+ * @param {AlertRecord['kind']} kind
+ * @param {number} price the price watched now
+ * @returns {{ ok: true, targetPrice: number | null } | { ok: false, message: string }}
+ */
+export const checkTargetPrice = (value, kind, price) => {
+	if (value === undefined || value === null) return { ok: true, targetPrice: null };
+	if (kind !== 'price_drop') return { ok: false, message: 'Only a price-drop alert takes a target price.' };
+	if (!Number.isSafeInteger(value) || Number(value) < 0 || Number(value) >= price)
+		return { ok: false, message: 'The target price is a whole amount in minor units, below the price now.' };
+	return { ok: true, targetPrice: Number(value) };
+};
+
+/**
  * Whether a variant can be sold now.
  * @param {Pick<ProductRecord, 'trackStock'>} product
  * @param {Pick<VariantRecord, 'active' | 'stock'>} variant
@@ -54,8 +71,9 @@ export const priceOf = (product, variantId) => {
 };
 
 /**
- * Whether an alert is due for the product as it is now.
- * @param {Pick<AlertRecord, 'kind' | 'variantId' | 'price'>} alert
+ * Whether an alert is due for the product as it is now: a price-drop alert with a target price once the price is at
+ * most the target, else once it is below the price stored.
+ * @param {Pick<AlertRecord, 'kind' | 'variantId' | 'price' | 'targetPrice'>} alert
  * @param {Pick<ProductRecord, 'status' | 'inStock' | 'trackStock' | 'price' | 'variants'> | null} product
  */
 export const isDue = (alert, product) => {
@@ -66,7 +84,9 @@ export const isDue = (alert, product) => {
 		return Boolean(variant && sellable(product, variant));
 	}
 	const price = priceOf(product, alert.variantId);
-	return price !== null && alert.price !== null && price < alert.price;
+	if (price === null) return false;
+	if (typeof alert.targetPrice === 'number') return price <= alert.targetPrice;
+	return alert.price !== null && price < alert.price;
 };
 
 /**
@@ -77,10 +97,12 @@ export const isDue = (alert, product) => {
 export const dueConditions = (product) => {
 	if (product.status !== 'active') return [];
 	const active = product.variants.filter((v) => v.active);
+	/** @param {number} price a price-drop alert's condition at this price (with or without a target price) */
+	const cheaper = (price) => [{ targetPrice: null, price: { $gt: price } }, { targetPrice: { $gte: price } }];
 	return [
 		...(product.inStock ? [{ kind: 'back_in_stock', variantId: null }] : []),
 		...active.filter((v) => sellable(product, v)).map((v) => ({ kind: 'back_in_stock', variantId: v.id })),
-		{ kind: 'price_drop', variantId: null, price: { $gt: product.price } },
-		...active.map((v) => ({ kind: 'price_drop', variantId: v.id, price: { $gt: v.price } })),
+		{ kind: 'price_drop', variantId: null, $or: cheaper(product.price) },
+		...active.map((v) => ({ kind: 'price_drop', variantId: v.id, $or: cheaper(v.price) })),
 	];
 };

@@ -1,8 +1,10 @@
 /**
- * Return and warranty claims (PLAN 0.8.8: claims with time windows per item/grade, photos, approval, refund through
- * Payments when paid online, restock exactly once). Pure rules: the windows of an order line (the product's own days,
- * else its condition grade's, else the `returns` settings), what is still claimable, checking a shopper's claim, the
- * staff moves between statuses, the refund cap and the loyalty points taken back. No I/O.
+ * Return, warranty and exchange claims (PLAN 0.8.8: claims with time windows per item/grade, photos, approval, refund
+ * through Payments when paid online, restock exactly once; E33: exchange claims, fixed reasons, replaced and repaired
+ * outcomes, restock per line, refund method and reference, delivery inside the refund cap, the reference prefix).
+ * Pure rules: the windows of an order line (the product's own days, else its condition grade's, else the `returns`
+ * settings), what is still claimable, checking a shopper's claim, the staff moves between statuses, the refund cap and
+ * the loyalty points taken back. No I/O.
  * @module
  */
 
@@ -19,48 +21,77 @@ const MAX_CLAIM_LINES = 50;
 const MAX_REASON = 1000;
 /** Longest staff note. */
 const MAX_NOTE = 1000;
+/** Longest refund reference. */
+const MAX_REFERENCE = 120;
 /** Photo uploads and photo links last this long. */
 export const PHOTO_SECONDS = 300;
 /** Photo types a shopper may upload, with their file extension. */
 const PHOTO_TYPES = Object.freeze({ 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' });
-export const CLAIM_KINDS = Object.freeze(/** @type {ClaimKind[]} */ (['return', 'warranty']));
+export const CLAIM_KINDS = Object.freeze(/** @type {ClaimKind[]} */ (['return', 'warranty', 'exchange']));
 export const CLAIM_STATUSES = Object.freeze(
-	/** @type {ClaimStatus[]} */ (['requested', 'approved', 'rejected', 'received', 'refunded', 'closed']),
+	/** @type {ClaimStatus[]} */ (['requested', 'approved', 'rejected', 'received', 'refunded', 'replaced', 'repaired', 'closed']),
 );
+/** How a refund was given back: `online` through Payments, the rest recorded by staff (E33, as E26). */
+export const REFUND_METHODS = Object.freeze(/** @type {const} */ (['online', 'bank_transfer', 'cash', 'other']));
+/** @typedef {typeof REFUND_METHODS[number]} RefundMethod */
 
 /**
  * What the merchant's staff do to a claim, from which statuses, and the status it leads to (refund keeps refunding
- * possible for a top-up; restock does not change the status).
- * @type {Readonly<Record<'approve' | 'reject' | 'receive' | 'refund' | 'close' | 'restock', { from: ClaimStatus[], to: ClaimStatus | null }>>}
+ * possible for a top-up; restock does not change the status). `replaced` and `repaired` are final (E33): a replacement
+ * is for exchange and warranty claims, a repair for warranty claims only (`kinds`).
+ * @type {Readonly<Record<'approve' | 'reject' | 'receive' | 'refund' | 'replace' | 'repair' | 'close' | 'restock',
+ *   { from: ClaimStatus[], to: ClaimStatus | null, kinds?: ClaimKind[] }>>}
  */
 export const CLAIM_ACTIONS = Object.freeze({
 	approve: { from: ['requested'], to: 'approved' },
 	reject: { from: ['requested', 'approved', 'received'], to: 'rejected' },
 	receive: { from: ['approved'], to: 'received' },
 	refund: { from: ['approved', 'received', 'refunded'], to: 'refunded' },
+	replace: { from: ['approved', 'received'], to: 'replaced', kinds: ['exchange', 'warranty'] },
+	repair: { from: ['approved', 'received'], to: 'repaired', kinds: ['warranty'] },
 	close: { from: ['approved', 'received', 'refunded'], to: 'closed' },
-	restock: { from: ['approved', 'received', 'refunded', 'closed'], to: null },
+	restock: { from: ['approved', 'received', 'refunded', 'replaced', 'closed'], to: null },
 });
 
 /** @typedef {keyof typeof CLAIM_ACTIONS} ClaimAction */
 
 /**
+ * Whether an action may be taken on a claim of this kind in this status.
+ * @param {ClaimAction} action
+ * @param {Pick<ReturnRecord, 'status'> & Partial<Pick<ReturnRecord, 'kind'>>} claim
+ */
+export const allows = (action, claim) => {
+	const { from, kinds } = CLAIM_ACTIONS[action];
+	return from.includes(claim.status) && (!kinds || (claim.kind !== undefined && kinds.includes(claim.kind)));
+};
+
+/**
+ * The claim's lines still to be put back in stock: not restocked yet, and not kept out by staff when received (E33).
+ * A claim restocked before lines had their own times counts as done.
+ * @param {Pick<ReturnRecord, 'restockedAt'> & Partial<Pick<ReturnRecord, 'lines'>>} claim
+ */
+export const linesToRestock = (claim) =>
+	claim.restockedAt ? [] : (claim.lines ?? []).filter((line) => line.restock !== false && !line.restockedAt);
+
+/**
  * The actions possible on a claim now.
- * @param {Pick<ReturnRecord, 'status' | 'restockedAt'>} claim
+ * @param {Pick<ReturnRecord, 'status' | 'restockedAt'> & Partial<Pick<ReturnRecord, 'kind' | 'lines'>>} claim
  * @returns {ClaimAction[]}
  */
 export const actionsOf = (claim) =>
 	/** @type {ClaimAction[]} */ (Object.keys(CLAIM_ACTIONS)).filter(
-		(action) => CLAIM_ACTIONS[action].from.includes(claim.status) && !(action === 'restock' && claim.restockedAt !== null),
+		(action) => allows(action, claim) && !(action === 'restock' && linesToRestock(claim).length === 0),
 	);
 
 /**
- * Whether a claim holds its units (they cannot be claimed again): every claim except a rejected one and a warranty
- * claim closed without a refund (a repair: the item went back to the shopper).
+ * Whether a claim holds its units (they cannot be claimed again): every claim except a rejected one, a repaired one and
+ * a warranty claim closed without a refund (a repair: the item went back to the shopper).
  * @param {Pick<ReturnRecord, 'status' | 'kind' | 'refundAmount'>} claim
  */
 export const holdsUnits = (claim) =>
-	claim.status !== 'rejected' && !(claim.kind === 'warranty' && claim.status === 'closed' && claim.refundAmount === 0);
+	claim.status !== 'rejected' &&
+	claim.status !== 'repaired' &&
+	!(claim.kind === 'warranty' && claim.status === 'closed' && claim.refundAmount === 0);
 
 /**
  * Units of each order line held by claims.
@@ -177,17 +208,19 @@ const plain = (value) =>
 export const plainText = plain;
 
 /**
- * Check a shopper's claim.
+ * Check a shopper's claim: its kind one the shop takes (the `kinds` setting) and, when the shop lists reasons, one of
+ * them (E33; no list = free text).
  * @param {unknown} body
- * @param {{ maxPhotos: number }} limits
+ * @param {{ maxPhotos: number, kinds?: readonly string[], reasons?: readonly string[] }} limits
  * @returns {{ ok: true, value: ClaimInput } | { ok: false, field: string, message: string }}
  */
-export const checkClaimInput = (body, { maxPhotos }) => {
+export const checkClaimInput = (body, { maxPhotos, kinds = ['return', 'warranty'], reasons = [] }) => {
 	const input = typeof body === 'object' && body !== null ? /** @type {Record<string, unknown>} */ (body) : {};
 	if (typeof input.orderId !== 'string' || !/^ord_[A-Za-z0-9]{1,64}$/.test(input.orderId))
 		return { ok: false, field: 'orderId', message: 'Name the order.' };
-	if (!CLAIM_KINDS.includes(/** @type {ClaimKind} */ (input.kind)))
-		return { ok: false, field: 'kind', message: 'kind is return or warranty.' };
+	const taken = CLAIM_KINDS.filter((kind) => kinds.includes(kind));
+	if (!taken.includes(/** @type {ClaimKind} */ (input.kind)))
+		return { ok: false, field: 'kind', message: `kind is ${taken.join(' or ') || 'not open'}.` };
 	if (!Array.isArray(input.lines) || input.lines.length === 0 || input.lines.length > MAX_CLAIM_LINES)
 		return { ok: false, field: 'lines', message: `Choose 1 to ${MAX_CLAIM_LINES} items.` };
 	/** @type {ClaimInput['lines']} */
@@ -203,6 +236,8 @@ export const checkClaimInput = (body, { maxPhotos }) => {
 	const reason = plain(input.reason);
 	if (reason === '' || reason.length > MAX_REASON)
 		return { ok: false, field: 'reason', message: `Say why, in at most ${MAX_REASON} characters.` };
+	if (reasons.length > 0 && !reasons.includes(reason))
+		return { ok: false, field: 'reason', message: 'Pick one of the reasons.' };
 	const photos = input.photos ?? [];
 	if (!Array.isArray(photos) || photos.length > maxPhotos || !photos.every((key) => typeof key === 'string'))
 		return { ok: false, field: 'photos', message: `Add at most ${maxPhotos} photos.` };
@@ -211,8 +246,9 @@ export const checkClaimInput = (body, { maxPhotos }) => {
 };
 
 /**
- * The claim's lines if every one is claimable now (its window of this kind open, enough units left), with the serial
- * numbers of the units claimed (the line's serials not held by other claims, in order).
+ * The claim's lines if every one is claimable now (its window of this kind open, enough units left; an exchange uses
+ * the return window), with the serial numbers of the units claimed (the line's serials not held by other claims, in
+ * order).
  * @param {ClaimKind} kind
  * @param {ClaimInput['lines']} wanted
  * @param {ReturnableLine[]} returnable
@@ -224,7 +260,8 @@ export const planClaim = (kind, wanted, returnable) => {
 	for (const want of wanted) {
 		const found = returnable.find((entry) => entry.line.id === want.lineId);
 		if (!found) return { ok: false, lineId: want.lineId, reason: 'unknown' };
-		if (!found[kind].open) return { ok: false, lineId: want.lineId, reason: 'window_closed' };
+		if (!found[kind === 'warranty' ? 'warranty' : 'return'].open)
+			return { ok: false, lineId: want.lineId, reason: 'window_closed' };
 		if (want.quantity > found.claimable) return { ok: false, lineId: want.lineId, reason: 'quantity' };
 		lines.push({ lineId: want.lineId, quantity: want.quantity, serials: found.freeSerials.slice(0, want.quantity) });
 	}
@@ -243,13 +280,77 @@ export const claimValue = (order, claim) =>
 	}, 0);
 
 /**
- * The most that can still be refunded on a claim: what its lines were paid minus what this claim refunded, never more
- * than the order's total minus everything refunded on it.
+ * The most that can still be refunded on a claim: what its lines were paid (plus the delivery still left to refund,
+ * when the `refundDelivery` setting is on) minus what this claim refunded, never more than the order's total minus
+ * everything refunded on it.
  * @param {Pick<OrderRecord, 'lines' | 'totals' | 'payment'>} order
  * @param {Pick<ReturnRecord, 'lines' | 'refundAmount'>} claim
+ * @param {number} [delivery] the delivery this claim may also refund ({@link deliveryLeft})
  */
-export const refundCap = (order, claim) =>
-	Math.max(0, Math.min(claimValue(order, claim) - claim.refundAmount, order.totals.total - order.payment.refunded));
+export const refundCap = (order, claim, delivery = 0) =>
+	Math.max(0, Math.min(claimValue(order, claim) + delivery - claim.refundAmount, order.totals.total - order.payment.refunded));
+
+/**
+ * The order's delivery fee not yet refunded by its other claims (a claim refunded beyond what its lines were paid gave
+ * back delivery), so the fee is refunded once across claims (E33 `refundDelivery`).
+ * @param {Pick<OrderRecord, 'lines' | 'totals'>} order
+ * @param {Array<Pick<ReturnRecord, 'id' | 'lines' | 'refundAmount'>>} claims the order's claims
+ * @param {string} claimId the claim being refunded (not counted)
+ */
+export const deliveryLeft = (order, claims, claimId) => {
+	const used = claims
+		.filter((claim) => claim.id !== claimId)
+		.reduce((sum, claim) => sum + Math.max(0, claim.refundAmount - claimValue(order, claim)), 0);
+	return Math.max(0, (order.totals.delivery ?? 0) - used);
+};
+
+/**
+ * Check how a claim's refund is given back and its reference (E33). Without a method an order paid online is
+ * refunded through Payments and any other is recorded as `other`; a recorded method never calls Payments.
+ * @param {unknown} body
+ * @param {boolean} online the order was paid online ({@link paidOnline})
+ * @returns {{ ok: true, method: RefundMethod, reference: string } | { ok: false, field: string, message: string }}
+ */
+export const checkRefundMethod = (body, online) => {
+	const input = typeof body === 'object' && body !== null ? /** @type {Record<string, unknown>} */ (body) : {};
+	const given = input.method === undefined || input.method === null ? null : input.method;
+	if (given !== null && !REFUND_METHODS.includes(/** @type {RefundMethod} */ (given)))
+		return { ok: false, field: 'method', message: 'method is online, bank_transfer, cash or other.' };
+	if (given === 'online' && !online) return { ok: false, field: 'method', message: 'This order was not paid through Payments.' };
+	const raw = input.reference === undefined || input.reference === null ? '' : input.reference;
+	if (typeof raw !== 'string' || plain(raw).length > MAX_REFERENCE)
+		return { ok: false, field: 'reference', message: `A reference has at most ${MAX_REFERENCE} characters.` };
+	const method = /** @type {RefundMethod} */ (given ?? (online ? 'online' : 'other'));
+	return { ok: true, method, reference: plain(raw) };
+};
+
+/**
+ * Check what staff decided for each received line (E33 `lines[].restock`): each named line is one of the claim's,
+ * once, with a yes or no.
+ * @param {unknown} value
+ * @param {Pick<ReturnRecord, 'lines'>} claim
+ * @returns {{ ok: true, choices: Map<string, boolean> } | { ok: false, field: string, message: string }}
+ */
+export const checkRestockChoices = (value, claim) => {
+	/** @type {Map<string, boolean>} */
+	const choices = new Map();
+	if (value === undefined || value === null) return { ok: true, choices };
+	if (!Array.isArray(value) || value.length > MAX_CLAIM_LINES)
+		return { ok: false, field: 'lines', message: 'lines lists the claimed items.' };
+	for (const [index, raw] of value.entries()) {
+		const line = typeof raw === 'object' && raw !== null ? /** @type {Record<string, unknown>} */ (raw) : {};
+		if (
+			typeof line.lineId !== 'string' ||
+			!claim.lines.some((claimed) => claimed.lineId === line.lineId) ||
+			choices.has(line.lineId)
+		)
+			return { ok: false, field: `lines/${index}/lineId`, message: 'Name each claimed item once.' };
+		if (typeof line.restock !== 'boolean')
+			return { ok: false, field: `lines/${index}/restock`, message: 'restock is true or false.' };
+		choices.set(line.lineId, line.restock);
+	}
+	return { ok: true, choices };
+};
 
 /**
  * Whether the order was paid online through Payments (a refund then goes through Payments).
@@ -268,7 +369,8 @@ export const refundedState = (order, refunded) =>
 	refunded >= (order.payment.paid > 0 ? order.payment.paid : order.totals.total) ? 'refunded' : 'partially_refunded';
 
 /**
- * Loyalty points earned on the returned part of an order, to take back (in proportion to what the lines were paid).
+ * Loyalty points earned on the returned part of an order, to take back (in proportion to what the lines were paid; the
+ * `pointsBack` setting `proportional`).
  * @param {Pick<OrderRecord, 'lines' | 'promotions'>} order
  * @param {Pick<ReturnRecord, 'lines'>} claim
  */
@@ -280,10 +382,17 @@ export const pointsToReverse = (order, claim) => {
 };
 
 /**
- * A short reference of a claim for people (`R-3F9A2C`).
+ * A short reference of a claim for people (`R-3F9A2C`), with the shop's prefix (E33 `referencePrefix`).
  * @param {string} id
+ * @param {unknown} [prefix]
  */
-export const claimReference = (id) => `R-${id.slice(-6).toUpperCase()}`;
+export const claimReference = (id, prefix = 'R-') => `${typeof prefix === 'string' ? prefix : 'R-'}${id.slice(-6).toUpperCase()}`;
+
+/**
+ * A claim's reference: the one kept when it was made, else (older claims) the default one.
+ * @param {Pick<ReturnRecord, 'id' | 'reference'>} claim
+ */
+export const referenceOf = (claim) => claim.reference ?? claimReference(claim.id);
 
 /**
  * The storage folder of a shopper's claim photos (`ecommerce/returns/<user>/`).

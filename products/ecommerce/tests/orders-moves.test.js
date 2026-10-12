@@ -175,7 +175,9 @@ describe('changed meanwhile', () => {
 		)
 			.collection(COLLECTIONS.orders)
 			.updateOne({ websiteId: shop.websiteId, id: paid.id }, { $set: { 'payment.refunded': 100 } });
-		await expect(moves.refund(s, ctx(), paid, { amount: 100, reason: 'x' })).rejects.toMatchObject({ code: 'conflict' });
+		await expect(
+			moves.refund(s, ctx(), paid, { amount: 100, reason: 'x', method: null, reference: '', claimId: null }),
+		).rejects.toMatchObject({ code: 'conflict' });
 	});
 });
 

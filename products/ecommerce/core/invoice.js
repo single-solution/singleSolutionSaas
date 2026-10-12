@@ -1,10 +1,12 @@
 /**
- * Invoices and packing slips (PLAN 0.8.8: invoices and packing slips with the serial numbers on each line) as
- * printable, self-contained HTML: inline `<style>`, no script, every value HTML-escaped. Everything printed comes from
- * the order snapshot, business.json (name, address, e-mail, phone) and the `invoices` settings, whose texts the
- * merchant edits (`INVOICE_TEXTS` are the English defaults). The invoice number is the order number; the packing slip
- * has no prices. Money and dates follow the website's Format, dates in the business time zone (PLAN 0.8.10 K7, K8). No
- * I/O.
+ * Invoices, packing slips and pick lists (PLAN 0.8.8: invoices and packing slips with the serial numbers on each line;
+ * E35) as printable, self-contained HTML: inline `<style>`, no script, every value HTML-escaped. Everything printed
+ * comes from the order snapshot, business.json (name, address, e-mail, phone) and the `invoices` settings, whose texts
+ * the merchant edits (`INVOICE_TEXTS` are the English defaults). The invoice number is the order number; the invoice
+ * shows the fee, the role discount and points apart, the payments and refunds (staff names on the staff copy only) and
+ * the cash due on delivery. The packing slip has no prices; the batch of slips adds the cash to collect and empty slots
+ * for serial numbers still to be written. The pick list adds up the units per variant. Money and dates follow the
+ * website's Format, dates in the business time zone (PLAN 0.8.10 K7, K8). No I/O.
  * @module
  */
 import { formatDate, formatMoney } from '@ss/contracts/format';
@@ -57,6 +59,13 @@ export const INVOICE_TEXTS = Object.freeze({
 	statePaid: 'Paid',
 	statePartiallyRefunded: 'Partially refunded',
 	stateRefunded: 'Refunded',
+	labelFee: 'Cash handling',
+	labelRoleDiscount: 'Member discount',
+	labelPoints: 'Points ({points})',
+	labelCashDue: 'Cash due on delivery',
+	labelPayments: 'Payments',
+	labelRefunds: 'Refunds',
+	pickListTitle: 'Pick list',
 });
 
 /** @typedef {Record<keyof typeof INVOICE_TEXTS, string>} InvoiceTexts */
@@ -112,7 +121,11 @@ td { border-bottom: 1px solid; }
 .totals td { border: 0; padding: 2px 4px; }
 .totals .grand td { border-top: 2px solid; font-size: 15px; font-weight: 700; padding-top: 6px; }
 .footer { border-top: 1px solid; margin-top: 24px; padding-top: 12px; white-space: pre-line; }
-@media print { body { padding: 0; } }
+.entries td { border-bottom: 1px dotted; }
+.due { border: 2px solid; display: inline-block; font-size: 15px; font-weight: 700; margin-bottom: 16px; padding: 6px 10px; }
+.slot { border-bottom: 1px solid; display: inline-block; height: 20px; margin: 4px 12px 0 0; min-width: 180px; }
+.sheet + .sheet { break-before: page; border-top: 2px dashed; margin-top: 32px; padding-top: 24px; }
+@media print { body { padding: 0; } .sheet + .sheet { border-top: 0; margin-top: 0; padding-top: 0; } }
 `;
 
 /**
@@ -167,6 +180,12 @@ const lineDetail = (line, t) => {
 
 /** @type {Record<string, keyof InvoiceTexts>} */
 const METHOD_TEXT = { cod: 'methodCod', online: 'methodOnline', bank_transfer: 'methodBankTransfer', pickup: 'methodPickup' };
+/**
+ * How a payment or refund entry was made (E26). Cash is taken by the courier or at the counter, so it reads as the cash
+ * method; `other` has no text of its own and shows its reference only.
+ * @type {Record<string, keyof InvoiceTexts>}
+ */
+const ENTRY_TEXT = { online: 'methodOnline', bank_transfer: 'methodBankTransfer', cash: 'methodCod' };
 /** @type {Record<string, keyof InvoiceTexts>} */
 const STATE_TEXT = {
 	unpaid: 'stateUnpaid',
@@ -177,11 +196,54 @@ const STATE_TEXT = {
 };
 
 /**
+ * What is still owed: the total less what was paid (nothing once refunded).
+ * @param {OrderRecord} order
+ */
+const dueOf = (order) => (order.payment.state === 'refunded' ? 0 : Math.max(0, order.totals.total - order.payment.paid));
+
+/**
+ * The cash the courier or the counter still collects: what is owed on a cash-on-delivery order not yet paid (E35).
+ * @param {OrderRecord} order
+ */
+export const cashToCollect = (order) =>
+	order.payment.method === 'cod' && (order.payment.state === 'unpaid' || order.payment.state === 'pending') ? dueOf(order) : 0;
+
+/**
+ * Who prints a document: staff (and the merchant's server) see who recorded each payment; the shopper does not.
+ * @typedef {{ shopper?: boolean }} InvoiceOptions
+ */
+
+/**
+ * The payments or the refunds of an order, each with its day, method, reference and amount (E26); staff also see the
+ * note and who recorded it.
+ * @param {string} title
+ * @param {Array<import('./model.js').OrderPaymentEntry | import('./model.js').OrderRefundEntry>} entries
+ * @param {DocumentContext} context
+ * @param {(amount: number) => string} money
+ * @param {boolean} shopper
+ */
+const entriesBlock = (title, entries, context, money, shopper) => {
+	if (entries.length === 0) return '';
+	const { texts: t, format, timeZone } = context;
+	const rows = entries
+		.map((entry) => {
+			const method = ENTRY_TEXT[entry.method];
+			const detail = [method ? t[method] : '', entry.reference, ...(shopper ? [] : [entry.note, entry.by?.name ?? ''])]
+				.filter(Boolean)
+				.join(' · ');
+			return `<tr><td>${esc(formatDate(entry.at, format, { timeZone, style: 'date' }))}</td><td>${esc(detail)}</td><td class="num">${money(entry.amount)}</td></tr>`;
+		})
+		.join('');
+	return `<h2>${esc(title)}</h2><table class="entries small"><tbody>${rows}</tbody></table>`;
+};
+
+/**
  * The invoice of an order.
  * @param {OrderRecord} order
  * @param {DocumentContext} context
+ * @param {InvoiceOptions} [options]
  */
-export const invoiceHtml = (order, context) => {
+export const invoiceHtml = (order, context, { shopper = false } = {}) => {
 	const { business, texts: t, format } = context;
 	const { currency } = order.totals;
 	const money = (/** @type {number} */ amount) => esc(formatMoney(amount, currency, format));
@@ -192,17 +254,27 @@ export const invoiceHtml = (order, context) => {
 		)
 		.join('');
 	const { subtotal, discount, delivery, tax, total, taxIncluded } = order.totals;
+	const fee = order.totals.fee ?? 0;
+	const roleDiscount = order.totals.roleDiscount ?? 0;
+	const { pointsValue, pointsRedeemed, role } = order.promotions;
+	// `discount` holds the role discount (E19) and the points (E20) too: they are printed apart
+	const offers = Math.max(0, discount - roleDiscount - pointsValue);
 	/** @type {Array<[string, string, boolean?]>} */
 	const totals = [[t.labelSubtotal, money(subtotal)]];
-	if (discount > 0) totals.push([t.labelDiscount, `−${money(discount)}`]);
+	if (offers > 0) totals.push([t.labelDiscount, `−${money(offers)}`]);
+	if (roleDiscount > 0) totals.push([role?.label || t.labelRoleDiscount, `−${money(roleDiscount)}`]);
+	if (pointsValue > 0) totals.push([t.labelPoints.replaceAll('{points}', String(pointsRedeemed)), `−${money(pointsValue)}`]);
 	if (delivery > 0) totals.push([t.labelDelivery, money(delivery)]);
+	if (fee > 0) totals.push([t.labelFee, money(fee)]);
 	if (tax > 0) totals.push([taxIncluded ? t.labelTaxIncluded : t.labelTax, money(tax)]);
 	totals.push([t.labelTotal, money(total), true]);
 	const { payment } = order;
 	if (payment.paid > 0) totals.push([t.labelPaid, money(payment.paid)]);
 	if (payment.refunded > 0) totals.push([t.labelRefunded, `−${money(payment.refunded)}`]);
-	const due = payment.state === 'refunded' ? 0 : Math.max(0, total - payment.paid);
+	const due = dueOf(order);
 	if (due > 0 && payment.paid > 0) totals.push([t.labelBalance, money(due)]);
+	const cash = cashToCollect(order);
+	if (cash > 0) totals.push([t.labelCashDue, money(cash), true]);
 	const totalsRows = totals
 		.map(
 			([label, value, grand]) =>
@@ -211,6 +283,9 @@ export const invoiceHtml = (order, context) => {
 		.join('');
 	const method = t[METHOD_TEXT[payment.method] ?? 'methodOnline'];
 	const state = t[STATE_TEXT[payment.state] ?? 'stateUnpaid'];
+	const entries =
+		entriesBlock(t.labelPayments, order.payments ?? [], context, money, shopper) +
+		entriesBlock(t.labelRefunds, order.refunds ?? [], context, money, shopper);
 	const customer = order.customer;
 	const billed = [customer.name, customer.email, customer.phone]
 		.filter(Boolean)
@@ -221,22 +296,28 @@ export const invoiceHtml = (order, context) => {
 		: order.delivery.method === 'pickup'
 			? `<div><h2>${esc(t.labelShipTo)}</h2><p>${esc(t.labelPickup)}</p></div>`
 			: '<div></div>';
-	const body = `<header><div><h1>${esc(t.title)}</h1><p>${esc(t.labelNumber)} <strong class="mono">${esc(order.number)}</strong></p><p>${esc(t.labelDate)} ${esc(placedOn(order, context))}</p></div>${businessBlock(business)}</header><div class="grid"><div><h2>${esc(t.labelBilledTo)}</h2>${billed}</div>${shipTo}</div><table><thead><tr><th>${esc(t.labelItem)}</th><th class="num">${esc(t.labelQuantity)}</th><th class="num">${esc(t.labelUnitPrice)}</th><th class="num">${esc(t.labelAmount)}</th></tr></thead><tbody>${rows}</tbody></table><table class="totals"><tbody>${totalsRows}</tbody></table><p>${esc(t.labelPayment)}: ${esc(method)} · ${esc(state)}</p>${t.footer ? `<div class="footer small">${esc(t.footer)}</div>` : ''}`;
+	const body = `<header><div><h1>${esc(t.title)}</h1><p>${esc(t.labelNumber)} <strong class="mono">${esc(order.number)}</strong></p><p>${esc(t.labelDate)} ${esc(placedOn(order, context))}</p></div>${businessBlock(business)}</header><div class="grid"><div><h2>${esc(t.labelBilledTo)}</h2>${billed}</div>${shipTo}</div><table><thead><tr><th>${esc(t.labelItem)}</th><th class="num">${esc(t.labelQuantity)}</th><th class="num">${esc(t.labelUnitPrice)}</th><th class="num">${esc(t.labelAmount)}</th></tr></thead><tbody>${rows}</tbody></table><table class="totals"><tbody>${totalsRows}</tbody></table><p>${esc(t.labelPayment)}: ${esc(method)} · ${esc(state)}</p>${entries}${t.footer ? `<div class="footer small">${esc(t.footer)}</div>` : ''}`;
 	return page(`${t.title} ${order.number}`, body);
 };
 
 /**
- * The packing slip of an order (no prices).
+ * One packing slip (no prices). In a batch (E35) it also shows the cash to collect on delivery and an empty slot for
+ * each serial number a serialized line still lacks.
  * @param {OrderRecord} order
  * @param {DocumentContext} context
+ * @param {{ serialized: ReadonlySet<string> } | null} batch ids of the serialized products, in a batch
  */
-export const packingSlipHtml = (order, context) => {
-	const { business, texts: t } = context;
+const slipBody = (order, context, batch) => {
+	const { business, texts: t, format } = context;
+	const slots = (/** @type {OrderRecord['lines'][number]} */ line) => {
+		const missing = batch && batch.serialized.has(line.productId) ? Math.max(0, line.quantity - line.serials.length) : 0;
+		return missing > 0 ? `<p class="small">${esc(t.labelSerials)}: ${'<span class="slot"></span>'.repeat(missing)}</p>` : '';
+	};
 	const rows = order.lines
 		.filter((line) => line.kind === 'physical')
 		.map(
 			(line) =>
-				`<tr><td><strong>${esc(line.name)}</strong>${lineDetail(line, t)}</td><td class="num">${line.quantity}</td></tr>`,
+				`<tr><td><strong>${esc(line.name)}</strong>${lineDetail(line, t)}${slots(line)}</td><td class="num">${line.quantity}</td></tr>`,
 		)
 		.join('');
 	const shipTo = order.address
@@ -245,7 +326,64 @@ export const packingSlipHtml = (order, context) => {
 	const shipment = order.shipment
 		? `<p>${esc(t.labelCourier)}: ${esc(order.shipment.courier)}</p><p>${esc(t.labelTracking)}: <span class="mono">${esc(order.shipment.trackingNumber)}</span></p>`
 		: '';
+	const cash = batch ? cashToCollect(order) : 0;
+	const collect =
+		cash > 0 ? `<p class="due">${esc(t.labelCashDue)}: ${esc(formatMoney(cash, order.totals.currency, format))}</p>` : '';
 	const note = order.note ? `<p class="small">${esc(t.labelNote)}: ${esc(order.note)}</p>` : '';
-	const body = `<header><div><h1>${esc(t.packingSlipTitle)}</h1><p><strong class="mono">${esc(order.number)}</strong></p><p>${esc(t.labelDate)} ${esc(placedOn(order, context))}</p></div>${businessBlock(business)}</header><div class="grid"><div><h2>${esc(t.labelShipTo)}</h2>${shipTo}</div><div class="end">${shipment}</div></div><table><thead><tr><th>${esc(t.labelItem)}</th><th class="num">${esc(t.labelQuantity)}</th></tr></thead><tbody>${rows}</tbody></table>${note}${t.footer ? `<div class="footer small">${esc(t.footer)}</div>` : ''}`;
-	return page(`${t.packingSlipTitle} ${order.number}`, body);
+	return `<header><div><h1>${esc(t.packingSlipTitle)}</h1><p><strong class="mono">${esc(order.number)}</strong></p><p>${esc(t.labelDate)} ${esc(placedOn(order, context))}</p></div>${businessBlock(business)}</header><div class="grid"><div><h2>${esc(t.labelShipTo)}</h2>${shipTo}</div><div class="end">${shipment}</div></div>${collect}<table><thead><tr><th>${esc(t.labelItem)}</th><th class="num">${esc(t.labelQuantity)}</th></tr></thead><tbody>${rows}</tbody></table>${note}${t.footer ? `<div class="footer small">${esc(t.footer)}</div>` : ''}`;
+};
+
+/**
+ * The packing slip of an order (no prices).
+ * @param {OrderRecord} order
+ * @param {DocumentContext} context
+ */
+export const packingSlipHtml = (order, context) =>
+	page(`${context.texts.packingSlipTitle} ${order.number}`, slipBody(order, context, null));
+
+/**
+ * The packing slips of several orders as one document, one slip per printed page (E35).
+ * @param {OrderRecord[]} orders
+ * @param {DocumentContext} context
+ * @param {ReadonlySet<string>} serialized ids of the orders' products that are serialized
+ */
+export const packingSlipsHtml = (orders, context, serialized) =>
+	page(
+		context.texts.packingSlipTitle,
+		orders.map((order) => `<section class="sheet">${slipBody(order, context, { serialized })}</section>`).join(''),
+	);
+
+/**
+ * The units to pick for several orders: their physical lines added up per variant (E35), by name, with the orders'
+ * numbers.
+ * @param {OrderRecord[]} orders
+ * @param {DocumentContext} context
+ */
+export const pickListHtml = (orders, context) => {
+	const { business, texts: t } = context;
+	/** @type {Map<string, { line: OrderRecord['lines'][number], quantity: number }>} */
+	const variants = new Map();
+	for (const order of orders)
+		for (const line of order.lines) {
+			if (line.kind !== 'physical') continue;
+			const known = variants.get(line.variantId);
+			if (known) known.quantity += line.quantity;
+			else variants.set(line.variantId, { line, quantity: line.quantity });
+		}
+	const rows = [...variants.values()]
+		.sort((a, b) => a.line.name.localeCompare(b.line.name) || a.line.variantName.localeCompare(b.line.variantName))
+		.map(({ line, quantity }) => {
+			const detail = [
+				line.variantName,
+				line.sku ? `${t.labelSku} ${line.sku}` : '',
+				line.gradeLabel ? `${t.labelGrade}: ${line.gradeLabel}` : '',
+			]
+				.filter(Boolean)
+				.join(' · ');
+			return `<tr><td><strong>${esc(line.name)}</strong>${detail ? `<p class="small">${esc(detail)}</p>` : ''}</td><td class="num">${quantity}</td></tr>`;
+		})
+		.join('');
+	const numbers = orders.map((order) => order.number).join(', ');
+	const body = `<header><div><h1>${esc(t.pickListTitle)}</h1><p class="small mono">${esc(numbers)}</p></div>${businessBlock(business)}</header><table><thead><tr><th>${esc(t.labelItem)}</th><th class="num">${esc(t.labelQuantity)}</th></tr></thead><tbody>${rows}</tbody></table>`;
+	return page(t.pickListTitle, body);
 };

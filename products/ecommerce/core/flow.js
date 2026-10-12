@@ -4,11 +4,15 @@
  * merchant names the statuses, adds their own and chooses the moves; each status has a role (`core/model.js`
  * `STATUS_ROLES`) and the role rules below hold whatever the flow, so stock, offer uses, points and money stay right:
  *
- * - exactly one `awaiting_payment` and one `awaiting_confirmation` status: orders start there and nothing moves into
- *   them;
- * - `cancelled` and `refunded` are final; `cancelled` only before shipping (from waiting, open or packed statuses);
- * - a `shipped` parcel is delivered, comes back (`returned_to_origin`) or moves to another `shipped` status;
- * - `delivered` may only become `refunded`; `returned_to_origin` only `refunded`, and only from `shipped`.
+ * - exactly one `awaiting_payment` and one `awaiting_confirmation` status: orders start there; an `open` or `packed`
+ *   order may wait for its payment again (PLAN 0.8.10 E27), nothing else moves into them;
+ * - `cancelled` and `refunded` are final; `cancelled` from waiting, open, packed or shipped statuses (a shipped parcel
+ *   is recalled, E27);
+ * - a `shipped` parcel is delivered, comes back (`returned_to_origin`), is recalled or moves to another `shipped`
+ *   status;
+ * - `delivered` may become `refunded` or `returned` (a customer return, E27); `returned_to_origin` and `returned` only
+ *   `refunded`; `returned_to_origin` only from `shipped`;
+ * - `refunded` also from waiting, open or packed statuses, when something was paid (E27: it acts as a cancel).
  *
  * Pure functions, no I/O.
  * @module
@@ -21,7 +25,7 @@ import { STATUS_ROLES } from './model.js';
 /** At most this many statuses in a flow. */
 const MAX_STATUSES = 30;
 /** A status key. */
-const KEY = /^[a-z][a-z0-9_]{1,39}$/;
+const KEY = /^[a-z][a-z0-9_-]{1,39}$/;
 
 /** The default flow. @type {OrderFlow} */
 export const DEFAULT_FLOW = {
@@ -56,15 +60,16 @@ export const DEFAULT_FLOW = {
 
 /** Roles that may move into each role (the role rules). @type {Record<StatusRole, ReadonlyArray<StatusRole>>} */
 const ALLOWED_FROM = /** @type {Record<StatusRole, ReadonlyArray<StatusRole>>} */ ({
-	awaiting_payment: [],
+	awaiting_payment: ['open', 'packed'],
 	awaiting_confirmation: [],
 	open: ['awaiting_payment', 'awaiting_confirmation', 'open', 'packed'],
 	packed: ['awaiting_payment', 'awaiting_confirmation', 'open', 'packed'],
 	shipped: ['open', 'packed', 'shipped'],
 	delivered: ['awaiting_payment', 'awaiting_confirmation', 'open', 'packed', 'shipped'],
-	cancelled: ['awaiting_payment', 'awaiting_confirmation', 'open', 'packed'],
+	cancelled: ['awaiting_payment', 'awaiting_confirmation', 'open', 'packed', 'shipped'],
 	returned_to_origin: ['shipped'],
-	refunded: ['delivered', 'returned_to_origin'],
+	refunded: ['awaiting_payment', 'awaiting_confirmation', 'open', 'packed', 'delivered', 'returned_to_origin', 'returned'],
+	returned: ['delivered'],
 });
 Object.freeze(ALLOWED_FROM);
 
@@ -94,7 +99,7 @@ export const checkOrderFlow = (value) => {
 		const label = typeof status.label === 'string' ? status.label.trim() : '';
 		const role = /** @type {StatusRole} */ (status.role);
 		if (!KEY.test(key)) {
-			errors.push(`Status key '${key}' must be 2–40 lowercase letters, digits or _ starting with a letter.`);
+			errors.push(`Status key '${key}' must be 2–40 lowercase letters, digits, _ or - starting with a letter.`);
 			continue;
 		}
 		if (roles.has(key)) errors.push(`Status '${key}' is listed twice.`);

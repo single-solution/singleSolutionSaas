@@ -762,6 +762,44 @@ export const releaseOrder = async (data, order, { now, update }) =>
 	});
 
 /**
+ * Swap the stock an edited order holds (E29), in one transaction: its old physical lines go back, the new ones are
+ * held, and `update` writes the order (claimed by its `updatedAt`). Nothing changes when the new stock is short or the
+ * order changed meanwhile.
+ * @param {WebsiteData} data
+ * @param {OrderRecord} order as read
+ * @param {{ lines: StockLine[], update: (session: Session) => Promise<boolean> }} swap
+ * @returns {Promise<{ ok: true } | { ok: false, code: 'out_of_stock', productId: string, variantId: string } | { ok: false, code: 'changed' }>}
+ */
+export const swapOrderStock = async (data, order, { lines, update }) => {
+	try {
+		return await data.transaction(async (session) => {
+			if (order.stockHeld)
+				await releaseStock(
+					data,
+					order.lines
+						.filter((line) => line.kind === 'physical')
+						.map((line) => ({
+							productId: line.productId,
+							variantId: line.variantId,
+							quantity: line.quantity,
+							locationId: line.locationId,
+						})),
+					session,
+				);
+			const held = await holdStock(data, lines, { session });
+			if (!held.ok) throw refused({ ok: false, code: 'out_of_stock', productId: held.productId, variantId: held.variantId });
+			if (!(await update(session))) throw Object.assign(new Error('changed'), { changed: true });
+			return /** @type {{ ok: true }} */ ({ ok: true });
+		});
+	} catch (error) {
+		const failed = /** @type {any} */ (error);
+		if (failed?.refused) return failed.refused;
+		if (failed?.changed) return { ok: false, code: 'changed' };
+		throw error;
+	}
+};
+
+/**
  * Put a parcel's stock back after a return to origin (RTO) or a customer return (E27), once (`stockHeld`), with the
  * status change in `update`. Offer uses stay counted and points stay spent (the shopper used them); an RTO raises the
  * customer's RTO count (`countRto`); `restock: false` keeps the stock out (`returnRestock: no`).
@@ -847,3 +885,73 @@ export const restockClaim = async (data, { claimId, lines, serials = [], now }) 
 				);
 		return true;
 	});
+
+/**
+ * Restock some lines of a return claim, each exactly once (the line's `restockedAt`), and mark their serials back in
+ * stock (E33: restock per line). When no line is left to restock (each restocked, or kept out by staff with
+ * `restock: false`), the claim's `restockedAt` is set too. A claim restocked as a whole before is left alone.
+ * @param {WebsiteData} data
+ * @param {{ claimId: string, lines: Array<StockLine & { lineId: string, serials: string[] }>, now: number }} restock
+ *   non-physical lines come with quantity 0 (only marked)
+ * @returns {Promise<string[]>} the line ids restocked now
+ */
+export const restockClaimLines = async (data, { claimId, lines, now }) =>
+	data.transaction(async (session) => {
+		const claims = data.collection(COLLECTIONS.returns);
+		const at = new Date(now);
+		/** @type {string[]} */
+		const done = [];
+		for (const line of lines) {
+			const marked = await claims.updateOne(
+				{
+					websiteId: data.websiteId,
+					id: claimId,
+					restockedAt: null,
+					lines: { $elemMatch: { lineId: line.lineId, restockedAt: null } },
+				},
+				{ $set: { 'lines.$.restockedAt': at } },
+				{ session },
+			);
+			if (marked.modifiedCount !== 1) continue;
+			done.push(line.lineId);
+			await releaseStock(data, [line], session);
+			if (line.serials.length > 0)
+				await data
+					.collection(COLLECTIONS.serials)
+					.updateMany(
+						{ websiteId: data.websiteId, serial: { $in: line.serials }, status: 'sold' },
+						{ $set: { status: 'in_stock', orderId: null, lineId: null } },
+						{ session },
+					);
+		}
+		const claim = /** @type {{ lines: Array<{ restock?: boolean, restockedAt?: Date | null }> } | null} */ (
+			await claims.findOne({ websiteId: data.websiteId, id: claimId }, { session, projection: { _id: 0, lines: 1 } })
+		);
+		if (claim && claim.lines.every((line) => line.restock === false || line.restockedAt))
+			await claims.updateOne(
+				{ websiteId: data.websiteId, id: claimId, restockedAt: null },
+				{ $set: { restockedAt: at } },
+				{ session },
+			);
+		return done;
+	});
+
+/**
+ * What the `products.changed` hook needs (`{ productIds, before }`, back-in-stock alerts, E34) about the stock an
+ * order holds, read before it is given back (cancel, an ended window, a refund before delivery, a return to origin or
+ * a customer's return); null when the order holds no stock.
+ * @param {WebsiteData} data
+ * @param {OrderRecord} order as read before
+ * @returns {Promise<{ productIds: string[], before: Map<string, { price: number, inStock: boolean }> } | null>}
+ */
+export const heldStockBefore = async (data, order) => {
+	const ids = [...new Set(order.lines.filter((line) => line.kind === 'physical').map((line) => line.productId))];
+	if (!order.stockHeld || ids.length === 0) return null;
+	const found = /** @type {Array<{ id: string, price: number, inStock: boolean }>} */ (
+		await data
+			.collection(COLLECTIONS.products)
+			.find({ websiteId: data.websiteId, id: { $in: ids } }, { projection: { _id: 0, id: 1, price: 1, inStock: 1 } })
+			.toArray()
+	);
+	return { productIds: ids, before: new Map(found.map((p) => [p.id, { price: p.price, inStock: p.inStock }])) };
+};

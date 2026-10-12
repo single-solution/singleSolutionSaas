@@ -1,17 +1,20 @@
 /**
  * The catalog's CSV files (PLAN 0.8.8 Admin tools): products and stock out (one row per variant), products in (rows
  * of one product share its id or slug; a product is updated when its id, one of its SKUs or its slug is known, else
- * created), and orders out (one row per order line). Prices are decimals of the shop's currency in the files and minor
+ * created), orders out (one row per order line, or per order, E36) and customers out (E36). Price and stock updates
+ * (E36 `mode=update`) change only the price, stock and sold-out flag of the variants they name, and only from rows whose
+ * `updated_at` is not older than the product's. Prices are decimals of the shop's currency in the files and minor
  * units inside. Empty cells keep a value (name, price, stock …) or clear it (texts, lists, the "was" price, cost,
  * grade); a column left out keeps the value. Import never deletes variants. No I/O.
  * @module
  */
-import { isObject, slugify } from './catalog.js';
+import { LIMITS, isObject, slugify } from './catalog.js';
 import { fromDecimal, toDecimal } from './money.js';
 
 /** @typedef {import('./model.js').ProductRecord} ProductRecord */
 /** @typedef {import('./model.js').VariantRecord} VariantRecord */
 /** @typedef {import('./model.js').OrderRecord} OrderRecord */
+/** @typedef {import('./model.js').CustomerRecord} CustomerRecord */
 /** @typedef {import('./catalog.js').FieldError} FieldError */
 /** @typedef {import('./csv.js').Cell} Cell */
 
@@ -48,6 +51,9 @@ const PRODUCT_COLUMNS = Object.freeze([
 	'active',
 ]);
 
+/** Columns after the location stock columns: what a price and stock update (E36) reads besides price and stock. */
+const UPDATE_COLUMNS = Object.freeze(['sold_out', 'updated_at']);
+
 /**
  * @typedef {object} CsvLookups
  * @property {string} currency
@@ -57,10 +63,15 @@ const PRODUCT_COLUMNS = Object.freeze([
  */
 
 /**
- * The products file's header (with a stock column per location when multi-location stock is on).
+ * The products file's header (with a stock column per location when multi-location stock is on, then the sold-out
+ * flag and the product's `updated_at`).
  * @param {string[]} locationIds
  */
-export const productHeader = (locationIds) => [...PRODUCT_COLUMNS, ...locationIds.map((id) => `${LOCATION_COLUMN}${id}`)];
+export const productHeader = (locationIds) => [
+	...PRODUCT_COLUMNS,
+	...locationIds.map((id) => `${LOCATION_COLUMN}${id}`),
+	...UPDATE_COLUMNS,
+];
 
 /**
  * One row per variant.
@@ -103,6 +114,8 @@ export const productRows = (products, { currency, categorySlugs, brandSlugs, loc
 				variant.grade ?? '',
 				variant.active,
 				...locationIds.map((id) => variant.locations[id] ?? 0),
+				variant.soldOut === true,
+				product.updatedAt ? new Date(product.updatedAt).toISOString() : '',
 			]);
 		}
 	return rows;
@@ -155,6 +168,116 @@ export const orderRows = (orders) => {
 				order.payment.method,
 				order.payment.state,
 			]);
+	}
+	return rows;
+};
+
+/** Columns of the orders file with one row per order (E36 `per=order`). */
+export const ORDER_TOTAL_COLUMNS = Object.freeze([
+	'number',
+	'placed_at',
+	'status',
+	'customer',
+	'city',
+	'lines',
+	'units',
+	'subtotal',
+	'discount',
+	'delivery',
+	'fee',
+	'tax',
+	'total',
+	'currency',
+	'payment_method',
+	'payment_state',
+	'paid',
+	'refunded',
+]);
+
+/**
+ * One row per order (E36 `per=order`).
+ * @param {Iterable<OrderRecord>} orders
+ * @returns {Cell[][]}
+ */
+export const orderTotalRows = (orders) => {
+	/** @type {Cell[][]} */
+	const rows = [];
+	for (const order of orders) {
+		const { totals } = order;
+		const currency = totals.currency;
+		/** @param {number | undefined} amount */
+		const money = (amount) => toDecimal(Number(amount ?? 0), currency);
+		rows.push([
+			order.number,
+			new Date(order.placedAt).toISOString(),
+			order.status,
+			order.customer.name,
+			order.address?.city ?? '',
+			order.lines.length,
+			order.lines.reduce((sum, line) => sum + line.quantity, 0),
+			money(totals.subtotal),
+			money(totals.discount),
+			money(totals.delivery),
+			money(totals.fee),
+			money(totals.tax),
+			money(totals.total),
+			currency,
+			order.payment.method,
+			order.payment.state,
+			money(order.payment.paid),
+			money(order.payment.refunded),
+		]);
+	}
+	return rows;
+};
+
+/** Columns of the customers file (E36). */
+export const CUSTOMER_COLUMNS = Object.freeze([
+	'user_id',
+	'name',
+	'email',
+	'phone',
+	'city',
+	'guest',
+	'orders',
+	'spent',
+	'currency',
+	'blocked',
+	'blocked_reason',
+	'returned_parcels',
+	'note',
+	'last_order_at',
+]);
+
+/**
+ * One row per customer record, with the orders they placed and what they paid (paid − refunded), as the customer list
+ * shows them.
+ * @param {Iterable<CustomerRecord>} customers
+ * @param {ReadonlyMap<string, { total: number, count: number }>} spent user id → what they spent
+ * @param {string} currency
+ * @returns {Cell[][]}
+ */
+export const customerRows = (customers, spent, currency) => {
+	/** @type {Cell[][]} */
+	const rows = [];
+	for (const customer of customers) {
+		const paid = spent.get(customer.userId) ?? { total: 0, count: 0 };
+		rows.push([
+			customer.userId,
+			customer.name,
+			customer.email,
+			customer.phone,
+			customer.city ?? '',
+			customer.guest === true,
+			paid.count,
+			paid.total < 0 ? -Number(toDecimal(-paid.total, currency)) : toDecimal(paid.total, currency),
+			currency,
+			customer.blocked === true,
+			customer.blockedReason ?? '',
+			customer.rtoCount ?? 0,
+			customer.note ?? '',
+			customer.lastOrderAt ? new Date(customer.lastOrderAt).toISOString() : '',
+		]);
 	}
 	return rows;
 };
@@ -417,4 +540,124 @@ export const importInput = (group, existing, lookups) => {
 	}
 	input.variants = variants;
 	return errors.length > 0 ? { ok: false, errors } : { ok: true, input, stock };
+};
+
+// ------------------------------------------------------------------------------------------------ update (E36)
+
+/**
+ * One row of a price and stock update: the variant it names and what to set (undefined = keep).
+ * @typedef {object} UpdateRow
+ * @property {number} line
+ * @property {string | null} productId
+ * @property {string | null} variantId
+ * @property {string | null} sku
+ * @property {number} updatedAt the product's `updated_at` the row was made from, epoch ms
+ * @property {number} [price]
+ * @property {number} [stock]
+ * @property {Record<string, number>} [locations]
+ * @property {boolean} [soldOut]
+ */
+
+/**
+ * Read the rows of a price and stock update (E36 `mode=update`): each row names a variant (`variant_id`, else `sku`)
+ * and gives the `updated_at` of its product from the export; `price`, `stock` (with multi-location stock, the
+ * `stock@<location id>` columns) and `sold_out` are set when their cell is not empty. Every other column is ignored. A
+ * header without `updated_at` or without a way to name variants refuses the file; a bad row is one failed row.
+ * @param {{ header: string[], records: Array<{ line: number, values: Record<string, string> }> }} file
+ * @param {{ currency: string, locationIds: ReadonlySet<string> }} context `locationIds`: empty without multi-location
+ *   stock
+ * @returns {{ ok: false, message: string } | { ok: true, rows: UpdateRow[], failed: Array<FieldError & { line: number }> }}
+ */
+export const updateRows = ({ header, records }, { currency, locationIds }) => {
+	const has = (/** @type {string} */ column) => header.includes(column);
+	if (!has('updated_at')) return { ok: false, message: 'The file needs the updated_at column of a products export.' };
+	if (!has('variant_id') && !has('sku')) return { ok: false, message: 'The file needs a variant_id or sku column.' };
+	const locationColumns = header.filter((column) => column.startsWith(LOCATION_COLUMN));
+	const unknown = locationColumns.find((column) => !locationIds.has(column.slice(LOCATION_COLUMN.length)));
+	if (unknown) return { ok: false, message: `There is no location ${unknown.slice(LOCATION_COLUMN.length)}.` };
+	/** @type {UpdateRow[]} */
+	const rows = [];
+	/** @type {Array<FieldError & { line: number }>} */
+	const failed = [];
+	for (const { line, values } of records) {
+		let bad = false;
+		/** @param {string} path @param {string} message */
+		const fail = (path, message) => {
+			bad = true;
+			failed.push({ line, path: `/${path}`, message });
+		};
+		const variantId = values.variant_id || null;
+		const sku = values.sku || null;
+		if (!variantId && !sku) {
+			fail('variant_id', 'Name the variant (variant_id or sku).');
+			continue;
+		}
+		const updatedAt = /^\d{4}-\d{2}-\d{2}T[\d:.]+(Z|[+-]\d{2}:\d{2})$/.test(values.updated_at ?? '')
+			? Date.parse(values.updated_at ?? '')
+			: Number.NaN;
+		if (Number.isNaN(updatedAt)) {
+			fail('updated_at', 'Give the updated_at of a products export.');
+			continue;
+		}
+		/** @type {UpdateRow} */
+		const row = { line, productId: values.product_id || null, variantId, sku, updatedAt };
+		if (values.price) {
+			const price = amountOf(values.price, currency);
+			if (price === null) fail('price', `This is not a price in ${currency}.`);
+			else row.price = price;
+		}
+		if (values.stock) {
+			if (locationIds.size > 0) fail('stock', 'Give the stock per location (stock@ columns).');
+			else if (!/^\d{1,10}$/.test(values.stock) || Number(values.stock) > LIMITS.stock)
+				fail('stock', 'Stock is a whole number from 0.');
+			else row.stock = Number(values.stock);
+		}
+		/** @type {Record<string, number>} */
+		const locations = {};
+		for (const column of locationColumns) {
+			const text = values[column] ?? '';
+			if (!text) continue;
+			if (!/^\d{1,10}$/.test(text) || Number(text) > LIMITS.stock) fail(column, 'Stock is a whole number from 0.');
+			else locations[column.slice(LOCATION_COLUMN.length)] = Number(text);
+		}
+		if (Object.keys(locations).length > 0) row.locations = locations;
+		if (values.sold_out) {
+			const soldOut = flag(values.sold_out);
+			if (soldOut === null) fail('sold_out', 'Sold out is true or false.');
+			else row.soldOut = soldOut;
+		}
+		if (!bad) rows.push(row);
+	}
+	return { ok: true, rows, failed };
+};
+
+/**
+ * A product after the update rows that name its variants (rows naming no variant of it fail). Only `price`, `stock`,
+ * `locations` and `soldOut` of variants change.
+ * @param {ProductRecord} product
+ * @param {UpdateRow[]} rows
+ * @returns {{ variants: VariantRecord[], changed: number, failed: Array<FieldError & { line: number }> }}
+ */
+export const updatedVariants = (product, rows) => {
+	const variants = product.variants.map((variant) => ({ ...variant, locations: { ...variant.locations } }));
+	/** @type {Array<FieldError & { line: number }>} */
+	const failed = [];
+	let changed = 0;
+	for (const row of rows) {
+		const variant = variants.find((v) => (row.variantId ? v.id === row.variantId : v.sku === row.sku));
+		if (!variant) {
+			failed.push({ line: row.line, path: row.variantId ? '/variant_id' : '/sku', message: 'There is no such variant.' });
+			continue;
+		}
+		const before = JSON.stringify([variant.price, variant.stock, variant.locations, variant.soldOut === true]);
+		if (row.price !== undefined) variant.price = row.price;
+		if (row.stock !== undefined) variant.stock = row.stock;
+		if (row.locations) {
+			Object.assign(variant.locations, row.locations);
+			variant.stock = Object.values(variant.locations).reduce((a, b) => a + b, 0);
+		}
+		if (row.soldOut !== undefined) variant.soldOut = row.soldOut;
+		if (JSON.stringify([variant.price, variant.stock, variant.locations, variant.soldOut === true]) !== before) changed += 1;
+	}
+	return { variants, changed, failed };
 };
