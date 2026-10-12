@@ -36,11 +36,70 @@
 		},
 		"expiryDays": {
 			"type": "integer",
-			"title": "Points expire after (days)",
-			"description": "Earned points expire this many days after they are earned. 0 = they never expire.",
+			"title": "Points expire after (days or months)",
+			"description": "Days, or calendar months with \"Expiry counted in\" months. 0 = never.",
 			"default": 0,
 			"minimum": 0,
 			"maximum": 36500
+		},
+		"roles": {
+			"type": "array",
+			"title": "Member roles that take part",
+			"description": "Accounts roles whose signed-in shoppers earn and redeem points. Empty = every signed-in shopper.",
+			"default": [],
+			"items": {
+				"type": "string",
+				"maxLength": 40
+			}
+		},
+		"guests": {
+			"type": "string",
+			"title": "Guests",
+			"description": "none: guests do not earn. earn: guests earn on their phone number and redeem once they sign in.",
+			"default": "none",
+			"enum": ["none", "earn"]
+		},
+		"earnBase": {
+			"type": "string",
+			"title": "Points earned on",
+			"description": "goods: what was paid for the items. total: the order total with delivery and fees.",
+			"default": "goods",
+			"enum": ["goods", "total"]
+		},
+		"earnAt": {
+			"type": "string",
+			"title": "Points worked out",
+			"description": "delivery: when the order is delivered. placement: fixed when the order is placed, credited when it is delivered.",
+			"default": "delivery",
+			"enum": ["delivery", "placement"]
+		},
+		"capBase": {
+			"type": "string",
+			"title": "The most paid with points is measured on",
+			"description": "order: the items after offers. goods: the items' full price.",
+			"default": "order",
+			"enum": ["order", "goods"]
+		},
+		"redeemMode": {
+			"type": "string",
+			"title": "Redeeming",
+			"description": "amount: shoppers choose how many points. maximum: one switch redeems the most allowed.",
+			"default": "amount",
+			"enum": ["amount", "maximum"]
+		},
+		"expiryUnit": {
+			"type": "string",
+			"title": "Expiry counted in",
+			"description": "days, or calendar months in your business time zone.",
+			"default": "days",
+			"enum": ["days", "months"]
+		},
+		"expiryRule": {
+			"type": "string",
+			"title": "Expiry follows",
+			"description": "at_earn: the setting when the points were earned. current: today's setting, so a change applies to past points too.",
+			"default": "at_earn",
+			"enum": ["at_earn", "current"]
 		}
 	}
 }

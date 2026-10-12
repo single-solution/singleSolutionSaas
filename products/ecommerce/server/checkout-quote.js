@@ -1,20 +1,25 @@
 /**
  * Pricing a cart against the website's catalog and settings (`core/checkout.js` does the arithmetic): the products
  * and variants, category ancestors, grade names, licence keys and booked slots it needs, the offers (`loadOffers` and
- * `applyPromotions`, while `deals`, `bundles` and `coupons` are on), loyalty points (while `loyalty` is on and the
- * shopper is signed in), delivery zones and pickup locations (`delivery_zones`), tax rules (`taxes`) and the payment
- * methods the cart may use. Used by the quote route and again, on the server, when an order is placed. Also the
- * bookable slots of a product (`bookings`).
+ * `applyPromotions`, while `deals`, `bundles` and `coupons` are on: conditions, hours in the business time zone, the
+ * payment method, the shopper's picked deal and signed deal locks, E18), the role price of a signed-in shopper
+ * (`role_pricing`, E19), loyalty points (while `loyalty` is on and the shopper takes part, E20), delivery zones, pickup
+ * locations or the one pickup point (`delivery_zones`, E22), tax rules (`taxes`), the payment methods in the merchant's
+ * order with their fees (COD cash handling, E23) and bank details (Payments P1, cached 5 minutes, E24). Every amount
+ * rounds to whole units with Format's `wholeUnits` (E25). Used by the quote route and again, on the server, when an
+ * order is placed. Also the bookable slots of a product (`bookings`).
  * @module
  */
 import { loyaltyAccount } from '../adapters/ledger.js';
 import { createOrdersStore } from '../adapters/orders-store.js';
 import { loadOffers } from '../adapters/promotions-store.js';
 import { MAX_SLOT_DAYS, slotAt, slotsBetween } from '../core/bookings.js';
-import { merchandiseOf, paymentOptions, priceLines, resolveLines } from '../core/checkout.js';
+import { merchandiseOf, paymentOptions, priceLines, resolveLines, roleDiscountOf } from '../core/checkout.js';
 import { matchZone, zoneFee } from '../core/delivery.js';
-import { maxRedeemable, pointsValue } from '../core/loyalty.js';
-import { applyPromotions } from '../core/promotions.js';
+import { readLock, signLock } from '../core/locks.js';
+import { loyaltyRules, maxRedeemable, pointsToEarn, pointsToRedeem, pointsValue, takesPart } from '../core/loyalty.js';
+import { roundDown } from '../core/money.js';
+import { applyPromotions, attributeValues } from '../core/promotions.js';
 import { COLLECTIONS } from '../core/model.js';
 import { createMedia } from './catalog-media.js';
 
@@ -28,8 +33,12 @@ import { createMedia } from './catalog-media.js';
 /** @typedef {import('../core/checkout.js').PricedLine} PricedLine */
 /** @typedef {import('../core/model.js').ProductRecord} ProductRecord */
 /** @typedef {import('../core/model.js').LocationRecord} LocationRecord */
+/** @typedef {import('../core/model.js').DealRecord} DealRecord */
+/** @typedef {import('../core/model.js').PaymentMethod} PaymentMethod */
 
 const DAY_MS = 86_400_000;
+/** Bank details are read from Payments at most this often per website (E24). */
+const BANK_DETAILS_MS = 5 * 60_000;
 
 /**
  * @typedef {object} DeliveryChoice
@@ -41,6 +50,14 @@ const DAY_MS = 86_400_000;
  * @property {number | null} minDays
  * @property {number | null} maxDays
  * @property {number} [freeOver] delivery is free from this amount of goods after promotions (0 = never; E37)
+ * @property {string} [address] the pickup point's address (E22)
+ * @property {string} [hours] the pickup point's hours (E22)
+ */
+
+/**
+ * The bank details a bank transfer shows (Payments P1).
+ * @typedef {{ ready: boolean, accountTitle: string, bankName: string, accountNumber: string, iban: string,
+ *   instructions: string }} BankDetails
  */
 
 /**
@@ -55,13 +72,20 @@ const DAY_MS = 86_400_000;
  * @property {DeliveryChoice} delivery the chosen delivery
  * @property {DeliveryChoice[]} deliveryOptions
  * @property {string | null} deliveryProblem `choose_pickup_location` when pickup names no location
- * @property {import('../core/checkout.js').PaymentOption[]} payments
+ * @property {import('../core/checkout.js').PaymentOption[]} payments in the merchant's order (E22)
+ * @property {PaymentMethod | null} paymentMethod the method priced: the one asked, else the first available (E22)
  * @property {{ balance: number, max: number, used: number, value: number } | null} points
+ * @property {number} pointsToEarn what the order would earn (E20; 0 without loyalty)
+ * @property {{ key: string, percent: number, label: string } | null} role the role price applied (E19)
  * @property {boolean} digital the cart has digital items
  * @property {import('../core/model.js').CustomerRecord | null} customer
  * @property {LocationRecord[]} locations stock locations in their order (multi_location)
  * @property {boolean} ready nothing stops placing it
  * @property {Map<string, string>} [urls] each priced line's page by its key (E13)
+ * @property {Map<string, DealRecord>} deals the deals of the lines and of free delivery, by id (their display fields)
+ * @property {Map<string, string>} locks each line's signed deal lock by its key (E18 `lockMinutes`)
+ * @property {BankDetails | null} bankDetails while bank transfer is offered (E24)
+ * @property {Record<string, string>} notes the texts per payment method and for delivery and pickup (E22)
  */
 
 /**
@@ -70,6 +94,8 @@ const DAY_MS = 86_400_000;
  */
 export const createQuoting = (product, service) => {
 	const media = createMedia(product);
+	/** Bank details per website, read at most every {@link BANK_DETAILS_MS}. @type {Map<string, { at: number, value: BankDetails | null }>} */
+	const bankCache = new Map();
 
 	/**
 	 * What booking checks need: the weekly hours, the business time zone, the lead time and the days ahead.
@@ -86,17 +112,68 @@ export const createQuoting = (product, service) => {
 	};
 
 	/**
+	 * The website's bank details from Payments (P1), cached; null when Payments does not answer.
+	 * @param {Site} s
+	 * @returns {Promise<BankDetails | null>}
+	 */
+	const bankDetails = async (s) => {
+		const now = service.now();
+		const cached = bankCache.get(s.websiteId);
+		if (cached && now - cached.at < BANK_DETAILS_MS) return cached.value;
+		const answer = await product
+			.callProduct(s.websiteId, 'payments', '/v1/bank-transfer', { method: 'GET' })
+			.catch(() => /** @type {const} */ ({ ok: false }));
+		/** @param {unknown} value */
+		const text = (value) => (typeof value === 'string' ? value : '');
+		/** @type {BankDetails | null} */
+		let value = null;
+		if (answer.ok && answer.status === 200 && typeof answer.body === 'object' && answer.body !== null) {
+			const body = /** @type {Record<string, unknown>} */ (answer.body);
+			value = {
+				ready: body.ready === true,
+				accountTitle: text(body.accountTitle),
+				bankName: text(body.bankName),
+				accountNumber: text(body.accountNumber),
+				iban: text(body.iban),
+				instructions: text(body.instructions),
+			};
+		} else if (answer.ok)
+			value = { ready: false, accountTitle: '', bankName: '', accountNumber: '', iban: '', instructions: '' };
+		bankCache.set(s.websiteId, { at: now, value });
+		return value;
+	};
+
+	/**
+	 * The texts a cart and an order show per payment method and for delivery and pickup (E22).
+	 * @param {Record<string, any>} checkout
+	 * @param {Record<string, any> | null} zones the `delivery_zones` settings
+	 */
+	const notesOf = (checkout, zones) => ({
+		cod: String(checkout.noteCod ?? ''),
+		online: String(checkout.noteOnline ?? ''),
+		bank_transfer: String(checkout.noteBankTransfer ?? ''),
+		pickup: String(checkout.notePickup ?? ''),
+		delivery: String(zones?.deliveryNote ?? ''),
+		prep: String(zones?.prepNote ?? ''),
+		pickupReady: String(zones?.pickupReadyNote ?? ''),
+	});
+
+	/**
 	 * Price a cart for a shopper (or a guest). `address` (placing an order) replaces the quote's city, area and country.
 	 * @param {Site} s
 	 * @param {CartInput} cart
 	 * @param {Shopper | null} shopper
 	 * @param {Address | null} [address]
+	 * @param {{ customer?: import('../core/model.js').CustomerRecord | null }} [options] the guest's customer record
+	 *   (placing a guest order: RTO count)
 	 * @returns {Promise<Quote>}
 	 */
-	const quote = async (s, cart, shopper, address = null) => {
+	const quote = async (s, cart, shopper, address = null, options = {}) => {
 		const data = await s.data();
 		const store = createOrdersStore(data);
 		const now = service.now();
+		const clock = await service.pricing(s);
+		const { unit } = clock;
 		const products = await store.products(cart.lines.map((line) => line.productId));
 		const paths = await store.categoryPaths([...products.values()].flatMap((item) => item.categoryIds));
 		/** @param {string[]} ids */
@@ -133,141 +210,267 @@ export const createQuoting = (product, service) => {
 			},
 		});
 		const priced = lines.filter((line) => line.priced);
-		const customer = shopper ? await store.customer(shopper.id) : null;
+		const customer = options.customer ?? (shopper ? await store.customer(shopper.id) : null);
+		const [checkout, codSettings] = await Promise.all([s.values('checkout'), s.values('cod')]);
+		const zonesOn = s.has('delivery_zones');
+		const zoneSettings = zonesOn ? await s.values('delivery_zones') : null;
 
-		// promotions
+		// offers, with the deals kept by valid locks (E18)
 		const couponCode = s.has('coupons') ? cart.coupon : '';
 		const offers = await loadOffers(data, { now, couponCode, deals: s.has('deals'), bundles: s.has('bundles') });
+		const dealSettings = s.has('deals') ? await s.values('deals') : { lockMinutes: 0, shopperChoice: false };
+		const lockMinutes = Number(dealSettings.lockMinutes ?? 0);
+		const secret = s.has('deals') && lockMinutes > 0 ? await product.secrets.get(s.websiteId) : null;
+		/** @type {Map<string, { dealId: string, perUnit: number, text: string }>} */
+		const locked = new Map();
+		if (secret)
+			for (const line of priced) {
+				const sent = cart.lines.find(
+					// a line sent without its variant is the product's only (default) variant
+					(input) => input.productId === line.productId && (input.variantId ?? line.variantId) === line.variantId,
+				);
+				const lock = readLock(sent?.lock, { secret, websiteId: s.websiteId, now });
+				if (!lock || lock.variantId !== line.variantId) continue;
+				// the price the lock kept: what the variant cost then less what the deal took off
+				locked.set(line.key, {
+					dealId: lock.dealId,
+					perUnit: Math.max(0, line.unitPrice - (lock.price - lock.perUnit)),
+					text: String(sent?.lock),
+				});
+			}
+		const keptIds = [...new Set([...locked.values()].map((lock) => lock.dealId))].filter(
+			(id) => !offers.deals.some((deal) => deal.id === id),
+		);
+		/** @type {DealRecord[]} */
+		const kept =
+			keptIds.length === 0
+				? []
+				: /** @type {DealRecord[]} */ (
+						await data
+							.collection(COLLECTIONS.deals)
+							.find(
+								{
+									websiteId: data.websiteId,
+									id: { $in: keptIds },
+									$or: [{ limit: null }, { $expr: { $lt: ['$used', '$limit'] } }],
+								},
+								{ projection: { _id: 0, websiteId: 0, merchantId: 0 } },
+							)
+							.toArray()
+					);
 		const couponUses = shopper && offers.coupon ? await store.couponUses(offers.coupon.id, shopper.id) : 0;
-		const promotions =
+		/** @param {PaymentMethod | null} method */
+		const promote = (method) =>
 			priced.length > 0
 				? applyPromotions({
-						lines: priced.map((line) => ({
-							key: line.key,
-							productId: line.productId,
-							variantId: line.variantId,
-							categoryIds: line.allCategoryIds,
-							brandId: line.brandId,
-							unitPrice: line.unitPrice,
-							quantity: line.quantity,
-						})),
-						deals: offers.deals,
+						lines: priced.map((line) => {
+							const item = products.get(line.productId);
+							const variant = item?.variants.find((v) => v.id === line.variantId);
+							const input = cart.lines.find(
+								(entry) => entry.productId === line.productId && (entry.variantId ?? '') === line.variantId,
+							);
+							return {
+								key: line.key,
+								productId: line.productId,
+								variantId: line.variantId,
+								categoryIds: line.allCategoryIds,
+								brandId: line.brandId,
+								unitPrice: line.unitPrice,
+								quantity: line.quantity,
+								grade: line.grade,
+								attributes: item && variant ? attributeValues(item, variant) : {},
+								dealId: input?.dealId ?? null,
+								lock: locked.has(line.key)
+									? { dealId: locked.get(line.key)?.dealId ?? '', perUnit: locked.get(line.key)?.perUnit ?? 0 }
+									: null,
+							};
+						}),
+						deals: [...offers.deals, ...kept],
 						bundles: offers.bundles,
 						coupon: offers.coupon,
 						couponCode,
 						customer: { orderCount: customer?.orderCount ?? 0, couponUses },
 						now,
+						cart: { paymentMethod: method, weekday: clock.weekday, minutes: clock.minutes },
+						unit,
+						shopperChoice: dealSettings.shopperChoice === true,
 					})
 				: null;
-		const merchandise = merchandiseOf(priced, promotions);
 
-		// delivery
+		// role pricing (E19)
+		/** @type {Array<{ role: string, percent: number, label: string }>} */
+		const rolePrices = s.has('role_pricing') && shopper?.role ? await s.list('role_prices') : [];
+		const role = rolePrices.find((entry) => entry.role === shopper?.role) ?? null;
+		const rolePercent = role?.percent ?? 0;
+
 		const physical = priced.some((line) => line.kind === 'physical');
 		const digital = priced.some((line) => line.kind === 'digital');
-		const zonesOn = s.has('delivery_zones');
 		const locations = physical && (zonesOn || s.has('multi_location')) ? await store.locations() : [];
-		const pickups = zonesOn && physical ? locations.filter((location) => location.pickup) : [];
+		const pickups = zonesOn && physical && s.has('multi_location') ? locations.filter((location) => location.pickup) : [];
+		// one pickup point of the settings while stock has no locations (E22)
+		const pickupPoint =
+			zonesOn && physical && !s.has('multi_location') && zoneSettings?.pickupEnabled === true
+				? {
+						name: String(zoneSettings.pickupName ?? ''),
+						address: String(zoneSettings.pickupAddress ?? ''),
+						hours: String(zoneSettings.pickupHours ?? ''),
+					}
+				: null;
+		const pickupPossible = pickups.length > 0 || pickupPoint !== null;
 		const where = {
 			city: address?.city ?? cart.delivery.city,
 			area: address?.area ?? cart.delivery.area,
 			country: address?.country ?? cart.delivery.country,
 		};
-		const free = promotions?.freeDelivery === true;
-		/** @type {DeliveryChoice[]} */
-		const deliveryOptions = [];
-		if (physical) {
-			const zones = zonesOn ? /** @type {import('../core/delivery.js').Zone[]} */ (await s.list('delivery_zones')) : [];
-			const zone = zonesOn ? matchZone(zones, where) : null;
-			const defaults = zonesOn ? await s.values('delivery_zones') : null;
-			const rule = zone ?? {
-				fee: Number(defaults?.defaultFee ?? 0),
-				freeOver: Number(defaults?.defaultFreeOver ?? 0),
-			};
-			const fee = zonesOn ? zoneFee(rule, merchandise) : 0;
-			deliveryOptions.push({
-				method: 'delivery',
-				zone: zone?.key ?? '',
-				name: zone?.name ?? '',
-				fee: free ? 0 : fee,
-				locationId: null,
-				minDays: zone?.minDays ?? null,
-				maxDays: zone?.maxDays ?? null,
-				freeOver: zonesOn ? rule.freeOver : 0,
-			});
-			for (const location of pickups)
-				deliveryOptions.push({
-					method: 'pickup',
-					zone: '',
-					name: location.name,
-					fee: 0,
-					locationId: location.id,
-					minDays: null,
-					maxDays: null,
-				});
-		}
-		const wantsPickup = physical && cart.delivery.method === 'pickup' && pickups.length > 0;
-		const pickup = wantsPickup
-			? (deliveryOptions.find((option) => option.method === 'pickup' && option.locationId === cart.delivery.locationId) ??
-				(cart.delivery.locationId === null && pickups.length === 1 ? deliveryOptions[1] : undefined))
-			: undefined;
-		/** @type {DeliveryChoice} */
-		const delivery = !physical
-			? { method: 'none', zone: '', name: '', fee: 0, locationId: null, minDays: null, maxDays: null }
-			: wantsPickup
-				? (pickup ?? { method: 'pickup', zone: '', name: '', fee: 0, locationId: null, minDays: null, maxDays: null })
-				: /** @type {DeliveryChoice} */ (deliveryOptions[0]);
-		const deliveryProblem =
-			physical && cart.delivery.method === 'pickup' && !pickup
-				? pickups.length === 0
-					? 'pickup_unavailable'
-					: 'choose_pickup_location'
-				: null;
-
-		// loyalty points
-		/** @type {Quote['points']} */
-		let points = null;
-		if (s.has('loyalty') && shopper) {
-			const settings = await s.values('loyalty');
-			const account = await loyaltyAccount(data, shopper.id, { now });
-			const max = maxRedeemable({ balance: account.balance, payable: merchandise }, settings);
-			const asked = Math.min(cart.points, max);
-			// fewer than the least redeemable at once: none
-			const used = maxRedeemable({ balance: asked, payable: merchandise }, settings) === asked ? asked : 0;
-			points = { balance: account.balance, max, used, value: Math.min(merchandise, pointsValue(used, settings)) };
-		}
-
-		// taxes
+		const zones = zonesOn ? /** @type {import('../core/delivery.js').Zone[]} */ (await s.list('delivery_zones')) : [];
+		const wantedMethod = cart.delivery.method ?? (zoneSettings?.defaultMethod === 'pickup' && pickupPossible ? 'pickup' : null);
 		const taxesOn = s.has('taxes');
 		const taxRules = taxesOn ? /** @type {import('../core/taxes.js').TaxRule[]} */ (await s.list('tax_rules')) : [];
 		const taxIncluded = taxesOn ? (await s.values('taxes')).pricesIncludeTax === true : true;
-		const region =
-			delivery.method === 'delivery' && (where.country || where.city) ? { country: where.country, city: where.city } : null;
-		const { lines: prices, totals } = priceLines({
-			lines: priced,
-			promotions,
-			delivery: delivery.fee,
-			pointsValue: points?.value ?? 0,
-			taxRules,
-			region,
-			taxIncluded,
-		});
+		const loyaltySettings = s.has('loyalty') ? await s.values('loyalty') : null;
+		const loyaltyOn = loyaltySettings !== null && shopper !== null && takesPart(loyaltySettings, shopper.role);
+		const account = loyaltyOn
+			? await loyaltyAccount(data, /** @type {Shopper} */ (shopper).id, {
+					now,
+					rules: { settings: /** @type {Record<string, any>} */ (loyaltySettings), timeZone: clock.timeZone },
+				})
+			: null;
+		const paymentsConnected = (await product.connections.value(s.websiteId, 'payments')) !== null;
+		/** @type {string[]} */
+		const offered = checkout.paymentMethods;
+		const bankManual = checkout.bankTransferVia === 'manual';
+		const bank = offered.includes('bank_transfer') && paymentsConnected ? await bankDetails(s) : null;
 
-		// payment methods
-		const checkout = await s.values('checkout');
-		const cod = await s.values('cod');
-		const payments = paymentOptions({
-			offered: checkout.paymentMethods,
-			paymentsConnected: (await product.connections.value(s.websiteId, 'payments')) !== null,
-			cod: {
-				on: s.has('cod'),
-				settings: /** @type {import('../core/cod.js').CodSettings} */ (cod),
-			},
-			pickupPossible: pickups.length > 0,
-			deliveryMethod: delivery.method,
-			digital,
-			total: totals.total,
-			rtoCount: customer?.rtoCount ?? 0,
-		});
+		/**
+		 * One pricing pass for a payment method.
+		 * @param {PaymentMethod | null} method
+		 */
+		const pass = (method) => {
+			const promotions = promote(method);
+			const merchandise = merchandiseOf(priced, promotions);
+			const goods = merchandise - roleDiscountOf(merchandise, rolePercent, unit);
+
+			// delivery
+			const free = promotions?.freeDelivery === true;
+			/** @type {DeliveryChoice[]} */
+			const deliveryOptions = [];
+			if (physical) {
+				const zone = zonesOn ? matchZone(zones, where) : null;
+				const rule = zone ?? {
+					fee: Number(zoneSettings?.defaultFee ?? 0),
+					freeOver: Number(zoneSettings?.defaultFreeOver ?? 0),
+				};
+				const fee = zonesOn ? zoneFee(rule, goods) : 0;
+				deliveryOptions.push({
+					method: 'delivery',
+					zone: zone?.key ?? '',
+					name: zone?.name ?? '',
+					fee: free ? 0 : fee,
+					locationId: null,
+					minDays: zone?.minDays ?? null,
+					maxDays: zone?.maxDays ?? null,
+					freeOver: zonesOn ? rule.freeOver : 0,
+				});
+				for (const location of pickups)
+					deliveryOptions.push({
+						method: 'pickup',
+						zone: '',
+						name: location.name,
+						fee: 0,
+						locationId: location.id,
+						minDays: null,
+						maxDays: null,
+					});
+				if (pickupPoint)
+					deliveryOptions.push({
+						method: 'pickup',
+						zone: '',
+						name: pickupPoint.name,
+						fee: 0,
+						locationId: null,
+						minDays: null,
+						maxDays: null,
+						address: pickupPoint.address,
+						hours: pickupPoint.hours,
+					});
+			}
+			const wantsPickup = physical && wantedMethod === 'pickup' && pickupPossible;
+			const pickupOptions = deliveryOptions.filter((option) => option.method === 'pickup');
+			const pickup = wantsPickup
+				? (pickupOptions.find((option) => option.locationId !== null && option.locationId === cart.delivery.locationId) ??
+					(pickupOptions.length === 1 && (cart.delivery.locationId === null || pickupPoint) ? pickupOptions[0] : undefined))
+				: undefined;
+			/** @type {DeliveryChoice} */
+			const delivery = !physical
+				? { method: 'none', zone: '', name: '', fee: 0, locationId: null, minDays: null, maxDays: null }
+				: wantsPickup
+					? (pickup ?? { method: 'pickup', zone: '', name: '', fee: 0, locationId: null, minDays: null, maxDays: null })
+					: /** @type {DeliveryChoice} */ (deliveryOptions[0]);
+			const deliveryProblem =
+				physical && wantedMethod === 'pickup' && !pickup
+					? !pickupPossible
+						? 'pickup_unavailable'
+						: 'choose_pickup_location'
+					: null;
+
+			// loyalty points (E20): none while a deal that allows no points applies
+			/** @type {Quote['points']} */
+			let points = null;
+			if (account && loyaltySettings) {
+				const settings = loyaltySettings;
+				const subtotal = priced.reduce((n, line) => n + line.unitPrice * line.quantity, 0);
+				const payable = loyaltyRules(settings).capBase === 'goods' ? subtotal : goods;
+				const max = promotions?.pointsBlocked ? 0 : maxRedeemable({ balance: account.balance, payable }, settings);
+				const used = pointsToRedeem(cart.points, max, settings, unit);
+				points = {
+					balance: account.balance,
+					max,
+					used,
+					value: Math.min(goods, roundDown(pointsValue(used, settings), unit)),
+				};
+			}
+
+			const region =
+				delivery.method === 'delivery' && (where.country || where.city) ? { country: where.country, city: where.city } : null;
+			const base = {
+				lines: priced,
+				promotions,
+				delivery: delivery.fee,
+				pointsValue: points?.value ?? 0,
+				taxRules,
+				region,
+				taxIncluded,
+				rolePercent,
+				unit,
+			};
+			const unpriced = priceLines(base);
+			const payments = paymentOptions({
+				offered,
+				order: Array.isArray(checkout.paymentOrder) ? checkout.paymentOrder : undefined,
+				paymentsConnected,
+				bankManual,
+				cod: { on: s.has('cod'), settings: /** @type {import('../core/cod.js').CodSettings} */ (codSettings) },
+				pickupPossible,
+				deliveryMethod: delivery.method,
+				digital,
+				total: unpriced.totals.total,
+				rtoCount: customer?.rtoCount ?? 0,
+				unit,
+			}).map((option) =>
+				option.method === 'bank_transfer' && !bankManual && bank !== null && !bank.ready
+					? { ...option, available: false, reason: 'not_ready' }
+					: option,
+			);
+			const effective = method ?? payments.find((option) => option.available)?.method ?? null;
+			const feePercent = effective === 'cod' && s.has('cod') ? Number(codSettings.feePercent ?? 0) : 0;
+			const { lines: prices, totals } = feePercent > 0 ? priceLines({ ...base, feePercent }) : unpriced;
+			return { promotions, delivery, deliveryOptions, deliveryProblem, points, prices, totals, payments, effective };
+		};
+
+		let result = pass(cart.payment);
+		// no method asked: price again for the first available one (its deals and fee, E18 and E22)
+		if (cart.payment === null && result.effective !== null) result = pass(result.effective);
+		const { promotions, delivery, deliveryOptions, deliveryProblem, points, prices, totals, payments } = result;
 
 		// each line links to its variant's page, by the URL templates (E13)
 		/** @type {Map<string, string>} */
@@ -286,6 +489,37 @@ export const createQuoting = (product, service) => {
 			if (item && variant) urls.set(line.key, await media.variantUrl(s, item, variant, attributes));
 		}
 
+		// the deals of the lines (display fields) and each line's signed lock (E18)
+		/** @type {Map<string, DealRecord>} */
+		const deals = new Map([...offers.deals, ...kept].map((deal) => [deal.id, deal]));
+		/** @type {Map<string, string>} */
+		const locks = new Map();
+		if (secret && promotions)
+			for (const entry of promotions.lines) {
+				const line = priced.find((candidate) => candidate.key === entry.key);
+				if (!line || !entry.dealId || !entry.perUnit) continue;
+				// a line its lock kept keeps that lock (and its end); others get a new one
+				const kept = entry.locked ? locked.get(entry.key)?.text : undefined;
+				locks.set(
+					entry.key,
+					kept ??
+						signLock(
+							{
+								dealId: entry.dealId,
+								variantId: line.variantId,
+								price: line.unitPrice,
+								perUnit: entry.perUnit,
+								exp: now + lockMinutes * 60_000,
+							},
+							{ secret, websiteId: s.websiteId },
+						),
+				);
+			}
+
+		const earnTotals = { total: totals.total, delivery: totals.delivery, tax: totals.tax, fee: totals.fee };
+		const earns =
+			loyaltySettings !== null &&
+			(shopper ? takesPart(loyaltySettings, shopper.role) : loyaltyRules(loyaltySettings).guests === 'earn');
 		return {
 			lines,
 			priced,
@@ -293,18 +527,44 @@ export const createQuoting = (product, service) => {
 			totals,
 			promotions,
 			urls,
+			deals,
+			locks,
 			coupon: promotions?.couponId ? offers.coupon : null,
 			delivery,
 			deliveryOptions,
 			deliveryProblem,
 			payments,
+			paymentMethod: result.effective,
 			points,
+			pointsToEarn: earns
+				? Math.max(0, Math.floor(pointsToEarn(earnTotals, /** @type {Record<string, any>} */ (loyaltySettings))))
+				: 0,
+			role: role && totals.roleDiscount > 0 ? { key: role.role, percent: role.percent, label: role.label } : null,
 			digital,
 			customer,
 			locations,
+			bankDetails: offered.includes('bank_transfer') ? bank : null,
+			notes: notesOf(checkout, zoneSettings),
 			ready: lines.length > 0 && lines.every((line) => line.priced && line.problems.length === 0) && deliveryProblem === null,
 		};
 	};
+
+	/**
+	 * A deal as a cart line shows it (E18 display fields).
+	 * @param {DealRecord | undefined} deal
+	 */
+	const dealBadge = (deal) =>
+		deal
+			? {
+					id: deal.id,
+					name: deal.name,
+					slug: deal.slug ?? '',
+					badgeLabel: deal.badgeLabel ?? '',
+					discountLabel: deal.discountLabel ?? '',
+					color: deal.color ?? '',
+					minQuantity: deal.conditions?.minQuantity ?? 0,
+				}
+			: null;
 
 	/**
 	 * A priced cart as the visitor sees it.
@@ -316,6 +576,7 @@ export const createQuoting = (product, service) => {
 		lines: await Promise.all(
 			q.lines.map(async (line) => {
 				const price = line.priced ? q.prices[q.priced.indexOf(line)] : undefined;
+				const promo = q.promotions?.lines.find((entry) => entry.key === line.key);
 				return {
 					key: line.key,
 					productId: line.productId,
@@ -332,8 +593,15 @@ export const createQuoting = (product, service) => {
 					unitPrice: line.unitPrice,
 					quantity: line.quantity,
 					discount: price?.discount ?? 0,
+					dealDiscount: promo?.dealDiscount ?? 0,
 					tax: price?.tax ?? 0,
 					total: price?.total ?? 0,
+					deal: dealBadge(promo?.dealId ? q.deals.get(promo.dealId) : undefined),
+					eligibleDeals: (promo?.eligibleDealIds ?? []).flatMap((id) => {
+						const badge = dealBadge(q.deals.get(id));
+						return badge ? [badge] : [];
+					}),
+					lock: q.locks.get(line.key) ?? null,
 					problems: line.problems,
 				};
 			}),
@@ -343,12 +611,18 @@ export const createQuoting = (product, service) => {
 			couponCode: q.promotions?.couponCode ?? '',
 			couponProblem: q.promotions?.couponProblem ?? null,
 			freeDelivery: q.promotions?.freeDelivery === true,
+			pointsBlocked: q.promotions?.pointsBlocked === true,
 		},
+		role: q.role,
 		delivery: q.delivery,
 		deliveryOptions: q.deliveryOptions,
 		deliveryProblem: q.deliveryProblem,
 		paymentMethods: q.payments,
+		paymentMethod: q.paymentMethod,
+		bankDetails: q.bankDetails,
+		notes: q.notes,
 		points: q.points,
+		pointsToEarn: q.pointsToEarn,
 		totals: q.totals,
 		ready: q.ready,
 	});
@@ -378,7 +652,7 @@ export const createQuoting = (product, service) => {
 		};
 	};
 
-	return Object.freeze({ quote, view, freeSlots });
+	return Object.freeze({ quote, view, freeSlots, bankDetailsOf: bankDetails });
 };
 
 /** @typedef {ReturnType<typeof createQuoting>} Quoting */

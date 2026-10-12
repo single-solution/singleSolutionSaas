@@ -312,9 +312,9 @@ export const STATUS_ROLES = Object.freeze([
  *   (+ the role discount, E19); `fee` the payment method's fee (COD cash handling, E23), included in `total`
  * @property {{ couponId: string | null, couponCode: string, dealIds: string[], bundleIds: string[], pointsRedeemed: number,
  *   pointsValue: number, pointsEarned: number, released: boolean, role?: { key: string, percent: number, label: string } | null,
- *   pointsCredited?: boolean, pointsBlocked?: boolean }} promotions `released`: offer uses and points were given back
+ *   pointsFixed?: boolean, pointsCredited?: boolean, pointsBlocked?: boolean }} promotions `released`: offer uses and points were given back
  *   (cancel), exactly once; `role`: the role price applied (E19); `pointsCredited`: points fixed at placement were
- *   credited (E20 `earnAt`); `pointsBlocked`: a deal without points applied (E18 `allowPoints`)
+ *   credited (E20 `earnAt`); `pointsFixed`: `pointsEarned` was fixed at placement; `pointsBlocked`: a deal without points applied (E18 `allowPoints`)
  * @property {{ method: PaymentMethod, state: PaymentState, paymentId: string | null, advance: number, paid: number,
  *   refunded: number, checkedAt: Date | null, checkoutUrl?: string, via?: 'payments' | 'manual',
  *   proof?: { key: string, reference: string, at: Date } | null }} payment `paymentId`: the Payments payment; `advance`:
@@ -431,7 +431,7 @@ export const STATUS_ROLES = Object.freeze([
  * earned in lots that expire; spending takes the oldest lots first. Expired lots are written off when the account is
  * read or changed (no scheduled job).
  * @typedef {{ userId: string, customerId?: string, lifetimeEarned?: number, balance: number, lots: Array<{ id: string, points: number, left: number, earnedAt: Date,
- *   expiresAt: Date | null, orderId: string | null }>, history: Array<{ at: Date, kind: 'earn' | 'redeem' | 'refund' |
+ *   expiresAt: Date | null, orderId: string | null, kind?: string }>, history: Array<{ at: Date, kind: 'earn' | 'redeem' | 'refund' |
  *   'expire' | 'adjust' | 'reverse', points: number, orderId: string | null, note: string }>, version: number }} LoyaltyRecord
  */
 

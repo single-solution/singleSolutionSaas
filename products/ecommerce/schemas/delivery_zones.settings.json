@@ -17,6 +17,64 @@
 			"default": 0,
 			"minimum": 0,
 			"maximum": 1000000000000
+		},
+		"defaultMethod": {
+			"type": "string",
+			"title": "Preselected delivery",
+			"description": "What the cart picks first.",
+			"default": "delivery",
+			"enum": ["delivery", "pickup"]
+		},
+		"pickupEnabled": {
+			"type": "boolean",
+			"title": "Store pickup",
+			"description": "Offer pickup at one point (without Multi-location stock; with it, pickup locations are used).",
+			"default": false
+		},
+		"pickupName": {
+			"type": "string",
+			"title": "Pickup point name",
+			"default": "",
+			"maxLength": 120
+		},
+		"pickupAddress": {
+			"type": "string",
+			"title": "Pickup point address",
+			"default": "",
+			"maxLength": 500,
+			"x-ui": {
+				"widget": "textarea"
+			}
+		},
+		"pickupHours": {
+			"type": "string",
+			"title": "Pickup hours",
+			"default": "",
+			"maxLength": 500,
+			"x-ui": {
+				"widget": "textarea"
+			}
+		},
+		"deliveryNote": {
+			"type": "string",
+			"title": "Delivery time text",
+			"description": "Shown with delivery in the cart and on orders, for example \"2–4 working days\".",
+			"default": "",
+			"maxLength": 500
+		},
+		"prepNote": {
+			"type": "string",
+			"title": "Preparation text",
+			"description": "Shown in the cart and on orders, for example \"Orders are packed within 24 hours\".",
+			"default": "",
+			"maxLength": 500
+		},
+		"pickupReadyNote": {
+			"type": "string",
+			"title": "Pickup ready text",
+			"description": "Shown on orders for pickup, for example \"We message you when it is ready\".",
+			"default": "",
+			"maxLength": 500
 		}
 	}
 }

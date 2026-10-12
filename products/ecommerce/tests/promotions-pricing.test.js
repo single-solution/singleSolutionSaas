@@ -152,7 +152,18 @@ describe('offer rules', () => {
 describe('deals', () => {
 	it('takes a percent off each unit of a line', () => {
 		const result = run({ lines: [line({ quantity: 2 })], deals: [deal()] });
-		expect(result.lines).toEqual([{ key: 'p1|v1', dealId: 'deal_1', dealDiscount: 200, bundleDiscount: 0, couponDiscount: 0 }]);
+		expect(result.lines).toEqual([
+			{
+				key: 'p1|v1',
+				dealId: 'deal_1',
+				dealDiscount: 200,
+				bundleDiscount: 0,
+				couponDiscount: 0,
+				eligibleDealIds: ['deal_1'],
+				locked: false,
+				perUnit: 100,
+			},
+		]);
 		expect(result.dealIds).toEqual(['deal_1']);
 		expect(result.applied).toEqual([{ id: 'deal_1', name: 'Deal', kind: 'deal', amount: 200 }]);
 		expect(result.couponProblem).toBeNull();
@@ -173,12 +184,12 @@ describe('deals', () => {
 	it('never takes more than the price and skips deals that are not live or not in scope', () => {
 		expect(run({ lines: [line()], deals: [deal({ type: 'fixed', value: 5000 })] }).lines[0]?.dealDiscount).toBe(1000);
 		const off = [
-			deal({ active: false }),
-			deal({ startsAt: new Date(NOW + DAY) }),
-			deal({ endsAt: new Date(NOW - 1) }),
-			deal({ limit: 1, used: 1 }),
-			deal({ scope: { ...empty(), productIds: ['p9'] } }),
-			deal({ value: 0.01 }),
+			deal({ id: 'deal_a', active: false }),
+			deal({ id: 'deal_b', startsAt: new Date(NOW + DAY) }),
+			deal({ id: 'deal_c', endsAt: new Date(NOW - 1) }),
+			deal({ id: 'deal_d', limit: 1, used: 1 }),
+			deal({ id: 'deal_e', scope: { ...empty(), productIds: ['p9'] } }),
+			deal({ id: 'deal_f', value: 0.01 }),
 		];
 		const result = run({
 			lines: [line(), line({ productId: 'p2', unitPrice: 0 }), line({ productId: 'p3', quantity: 0 })],
@@ -197,7 +208,7 @@ describe('deals', () => {
 		expect(dealUnitDiscount(deal({ type: 'fixed', value: 300 }), 200)).toBe(200);
 		expect(bestDeal({ productId: 'p1', categoryIds: [], brandId: null, unitPrice: 1000 }, [], NOW)).toBeNull();
 		const d = deal({ endsAt: new Date(NOW + DAY), scope: { ...empty(), brandIds: ['b1'] } });
-		expect(publicDeal(d)).toEqual({
+		expect(publicDeal(d)).toMatchObject({
 			id: 'deal_1',
 			name: 'Deal',
 			description: '',
@@ -448,6 +459,14 @@ describe('loyalty rules', () => {
 			minRedeem: 100,
 			maxPercent: 0,
 			expiryDays: 2,
+			roles: [],
+			guests: 'none',
+			earnBase: 'goods',
+			earnAt: 'delivery',
+			capBase: 'order',
+			redeemMode: 'amount',
+			expiryUnit: 'days',
+			expiryRule: 'at_earn',
 		});
 	});
 

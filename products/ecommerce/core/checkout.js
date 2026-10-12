@@ -13,8 +13,8 @@
  * Also the checks of the visitor's input and which payment methods a cart may use. Pure functions, no I/O.
  * @module
  */
-import { codDecision } from './cod.js';
-import { allocate } from './money.js';
+import { codDecision, codFee } from './cod.js';
+import { allocateUnits, roundHalfUp } from './money.js';
 import { taxOf, taxPercent } from './taxes.js';
 
 /** @typedef {import('./model.js').ProductRecord} ProductRecord */
@@ -24,18 +24,25 @@ import { taxOf, taxPercent } from './taxes.js';
 /** @typedef {import('./taxes.js').TaxRule} TaxRule */
 /** @typedef {import('./cod.js').CodSettings} CodSettings */
 
-/** At most this many lines in a cart, and this many of one line (the cart widget keeps the same limits). */
-const MAX_LINES = 50;
-const MAX_QUANTITY = 99;
-/** Payment methods, in the order they are offered. @type {ReadonlyArray<PaymentMethod>} */
-const PAYMENT_METHODS = Object.freeze(/** @type {PaymentMethod[]} */ (['cod', 'online', 'bank_transfer', 'pickup']));
-/** Address fields a merchant may make required (name, phone, line 1 and city always are). */
-export const OPTIONAL_ADDRESS_FIELDS = Object.freeze(['line2', 'area', 'postalCode', 'country']);
+/** At most this many lines in a cart, and this many of one line (the `checkout` settings `maxLines` and `maxQuantity`
+ * lower them, E22; the cart widget keeps the same limits). */
+export const MAX_LINES = 50;
+export const MAX_QUANTITY = 99;
+/** Payment methods, in their default order (`checkout.paymentOrder`, E22). @type {ReadonlyArray<PaymentMethod>} */
+export const PAYMENT_METHODS = Object.freeze(/** @type {PaymentMethod[]} */ (['cod', 'online', 'bank_transfer', 'pickup']));
+/** A deal lock's longest text (`core/locks.js`). */
+const MAX_LOCK = 600;
+/** Address fields a merchant may make required (`checkout.addressRequired`, E22; name and phone always are). */
+export const OPTIONAL_ADDRESS_FIELDS = Object.freeze(['line1', 'line2', 'area', 'city', 'postalCode', 'country']);
 
 const ID = /^[A-Za-z0-9_-]{1,64}$/;
 const PHONE = /^\+?[0-9][0-9 ()-]{5,22}$/;
 
-/** @typedef {{ productId: string, variantId: string | null, quantity: number, slot: number | null }} CartLineInput */
+/**
+ * @typedef {{ productId: string, variantId: string | null, quantity: number, slot: number | null, dealId?: string | null,
+ *   lock?: string | null }} CartLineInput `dealId`: the deal the shopper picked (E18 `shopperChoice`); `lock`: the deal
+ *   lock the last quote gave (E18 `lockMinutes`)
+ */
 /**
  * @typedef {{ method: 'delivery' | 'pickup' | null, city: string, area: string, country: string, locationId: string | null }} DeliveryInput
  */
@@ -64,13 +71,16 @@ const text = (value, max) => {
  * Check a cart sent by the visitor (`POST /v1/shop/cart/quote`, and the cart part of placing an order). Lines of the
  * same product, variant and slot are merged.
  * @param {unknown} body
+ * @param {{ maxLines?: number, maxQuantity?: number }} [limits] the `checkout` settings (E22)
  * @returns {{ ok: true, value: CartInput } | InputError}
  */
-export const checkCart = (body) => {
+export const checkCart = (body, { maxLines = MAX_LINES, maxQuantity = MAX_QUANTITY } = {}) => {
+	const lineCap = Math.min(MAX_LINES, Math.max(1, maxLines));
+	const quantityCap = Math.min(MAX_QUANTITY, Math.max(1, maxQuantity));
 	const input = isObject(body) ? /** @type {Record<string, unknown>} */ (body) : {};
 	const lines = input.lines;
-	if (!Array.isArray(lines) || lines.length === 0 || lines.length > MAX_LINES)
-		return { ok: false, field: 'lines', message: `lines lists 1–${MAX_LINES} items.` };
+	if (!Array.isArray(lines) || lines.length === 0 || lines.length > lineCap)
+		return { ok: false, field: 'lines', message: `lines lists 1–${lineCap} items.` };
 	/** @type {Map<string, CartLineInput>} */
 	const merged = new Map();
 	for (const [index, raw] of lines.entries()) {
@@ -81,8 +91,18 @@ export const checkCart = (body) => {
 		if (variantId !== null && (typeof variantId !== 'string' || !ID.test(variantId)))
 			return { ok: false, field: `lines/${index}/variantId`, message: 'variantId is a variant id.' };
 		const quantity = line.quantity ?? 1;
-		if (!Number.isSafeInteger(quantity) || Number(quantity) < 1 || Number(quantity) > MAX_QUANTITY)
-			return { ok: false, field: `lines/${index}/quantity`, message: `quantity is a whole number from 1 to ${MAX_QUANTITY}.` };
+		if (!Number.isSafeInteger(quantity) || Number(quantity) < 1 || Number(quantity) > quantityCap)
+			return {
+				ok: false,
+				field: `lines/${index}/quantity`,
+				message: `quantity is a whole number from 1 to ${quantityCap}.`,
+			};
+		const dealId = line.dealId ?? null;
+		if (dealId !== null && (typeof dealId !== 'string' || !ID.test(dealId)))
+			return { ok: false, field: `lines/${index}/dealId`, message: 'dealId is a deal id.' };
+		const lock = line.lock ?? null;
+		if (lock !== null && (typeof lock !== 'string' || lock.length > MAX_LOCK))
+			return { ok: false, field: `lines/${index}/lock`, message: 'lock is the lock a quote gave.' };
 		/** @type {number | null} */
 		let slot = null;
 		if (line.slot !== undefined && line.slot !== null) {
@@ -93,9 +113,16 @@ export const checkCart = (body) => {
 		const key = `${line.productId}|${variantId ?? ''}|${slot ?? ''}`;
 		const found = merged.get(key);
 		const total = (found?.quantity ?? 0) + Number(quantity);
-		if (total > MAX_QUANTITY)
-			return { ok: false, field: `lines/${index}/quantity`, message: `At most ${MAX_QUANTITY} of one item.` };
-		merged.set(key, { productId: line.productId, variantId: /** @type {string | null} */ (variantId), quantity: total, slot });
+		if (total > quantityCap)
+			return { ok: false, field: `lines/${index}/quantity`, message: `At most ${quantityCap} of one item.` };
+		merged.set(key, {
+			productId: line.productId,
+			variantId: /** @type {string | null} */ (variantId),
+			quantity: total,
+			slot,
+			dealId: found?.dealId ?? /** @type {string | null} */ (dealId),
+			lock: found?.lock ?? /** @type {string | null} */ (lock),
+		});
 	}
 	const coupon = text(input.coupon, 40);
 	if (coupon === null) return { ok: false, field: 'coupon', message: 'coupon is a code of at most 40 characters.' };
@@ -132,7 +159,8 @@ export const checkCart = (body) => {
 /**
  * Check a delivery address.
  * @param {unknown} body
- * @param {ReadonlyArray<string>} required optional fields the merchant requires (`OPTIONAL_ADDRESS_FIELDS`)
+ * @param {ReadonlyArray<string>} required the fields the merchant requires besides name and phone
+ *   (`OPTIONAL_ADDRESS_FIELDS`)
  * @returns {{ ok: true, value: Address } | InputError}
  */
 export const checkAddress = (body, required) => {
@@ -142,9 +170,9 @@ export const checkAddress = (body, required) => {
 	const fields = [
 		['name', 120, true],
 		['phone', 30, true],
-		['line1', 200, true],
+		['line1', 200, required.includes('line1')],
 		['line2', 200, required.includes('line2')],
-		['city', 80, true],
+		['city', 80, required.includes('city')],
 		['area', 80, required.includes('area')],
 		['postalCode', 20, required.includes('postalCode')],
 		['country', 60, required.includes('country')],
@@ -375,14 +403,17 @@ export const resolveLines = (inputs, { products, ancestors, gradeLabel, features
  * @property {string} key
  * @property {number} gross unitPrice × quantity
  * @property {number} promotions deals, bundles and coupon
+ * @property {number} role the role discount spread on this line (E19)
  * @property {number} points the points' value spread on this line
- * @property {number} discount promotions + points
+ * @property {number} discount promotions + role + points
  * @property {number} tax
  * @property {number} total gross − discount (+ tax when prices exclude tax)
  */
 
 /**
- * @typedef {{ subtotal: number, discount: number, delivery: number, tax: number, total: number, taxIncluded: boolean }} PriceTotals
+ * @typedef {{ subtotal: number, discount: number, delivery: number, tax: number, total: number, taxIncluded: boolean,
+ *   roleDiscount: number, fee: number }} PriceTotals `discount` holds the role discount; `fee` the payment method's fee
+ *   (COD cash handling, E23), included in `total`
  */
 
 /**
@@ -399,8 +430,18 @@ export const promotionDiscounts = (lines, promotions) =>
 	});
 
 /**
- * Price the priced lines: promotions, the points' value (spread in proportion, at most what is left of the items),
- * taxes and the totals with delivery.
+ * The role discount (E19): `percent` of the goods after offers, rounded half up to whole units.
+ * @param {number} merchandise the goods after offers
+ * @param {number} percent 0–90
+ * @param {number} [unit]
+ */
+export const roleDiscountOf = (merchandise, percent, unit = 1) =>
+	percent > 0 && merchandise > 0 ? Math.min(merchandise, roundHalfUp((merchandise * percent) / 100, unit)) : 0;
+
+/**
+ * Price the priced lines: promotions, the role discount (after offers, before delivery, E19), the points' value
+ * (spread in proportion, at most what is left of the items), taxes, the totals with delivery, and the payment
+ * method's fee on the whole (E23). Percentages and tax round half up to whole units (E25).
  * @param {object} input
  * @param {ResolvedLine[]} input.lines priced lines
  * @param {PromotionsResult | null} input.promotions
@@ -409,23 +450,41 @@ export const promotionDiscounts = (lines, promotions) =>
  * @param {TaxRule[]} input.taxRules [] without the `taxes` feature
  * @param {{ country: string, city: string } | null} input.region
  * @param {boolean} input.taxIncluded
+ * @param {number} [input.rolePercent] the shopper's role discount (E19)
+ * @param {number} [input.feePercent] the payment method's fee (E23)
+ * @param {number} [input.unit] whole units (E25)
  * @returns {{ lines: PricedLine[], totals: PriceTotals }}
  */
-export const priceLines = ({ lines, promotions, delivery, pointsValue, taxRules, region, taxIncluded }) => {
+export const priceLines = ({
+	lines,
+	promotions,
+	delivery,
+	pointsValue,
+	taxRules,
+	region,
+	taxIncluded,
+	rolePercent = 0,
+	feePercent = 0,
+	unit = 1,
+}) => {
 	const promo = promotionDiscounts(lines, promotions);
 	const after = lines.map((line, index) => line.unitPrice * line.quantity - (promo[index] ?? 0));
 	const merchandise = after.reduce((a, b) => a + b, 0);
-	const points = allocate(Math.min(Math.max(0, pointsValue), merchandise), after);
+	const roleTotal = roleDiscountOf(merchandise, rolePercent, unit);
+	const role = allocateUnits(roleTotal, after, unit);
+	const left = after.map((amount, index) => amount - (role[index] ?? 0));
+	const points = allocateUnits(Math.min(Math.max(0, pointsValue), merchandise - roleTotal), left, unit);
 	/** @type {PricedLine[]} */
 	const priced = lines.map((line, index) => {
 		const gross = line.unitPrice * line.quantity;
-		const lineDiscount = (promo[index] ?? 0) + (points[index] ?? 0);
+		const lineDiscount = (promo[index] ?? 0) + (role[index] ?? 0) + (points[index] ?? 0);
 		const net = gross - lineDiscount;
-		const tax = taxOf(net, taxPercent(taxRules, { categoryIds: line.allCategoryIds, region }), taxIncluded);
+		const tax = roundHalfUp(taxOf(net, taxPercent(taxRules, { categoryIds: line.allCategoryIds, region }), taxIncluded), unit);
 		return {
 			key: line.key,
 			gross,
 			promotions: promo[index] ?? 0,
+			role: role[index] ?? 0,
 			points: points[index] ?? 0,
 			discount: lineDiscount,
 			tax,
@@ -433,14 +492,18 @@ export const priceLines = ({ lines, promotions, delivery, pointsValue, taxRules,
 		};
 	});
 	const sum = (/** @type {(line: PricedLine) => number} */ pick) => priced.reduce((n, line) => n + pick(line), 0);
+	const beforeFee = sum((line) => line.total) + delivery;
+	const fee = feePercent > 0 ? codFee(beforeFee, { feePercent }, unit) : 0;
 	return {
 		lines: priced,
 		totals: {
 			subtotal: sum((line) => line.gross),
 			discount: sum((line) => line.discount),
+			roleDiscount: roleTotal,
 			delivery,
 			tax: sum((line) => line.tax),
-			total: sum((line) => line.total) + delivery,
+			fee,
+			total: beforeFee + fee,
 			taxIncluded,
 		},
 	};
@@ -455,47 +518,80 @@ export const merchandiseOf = (lines, promotions) => {
 // -------------------------------------------------------------------------------------------------- payment methods
 
 /**
- * @typedef {{ method: PaymentMethod, available: boolean, reason: string | null, advance: number }} PaymentOption
+ * @typedef {{ method: PaymentMethod, available: boolean, reason: string | null, advance: number, fee: number }} PaymentOption
  *   `reason` when not available: `needs_delivery`, `needs_pickup`, `digital_items`, `over_max`, `advance_unavailable`,
- *   `blocked`
+ *   `blocked`; `fee`: what choosing it adds (COD cash handling, E23)
  */
 
 /**
- * The payment methods a cart may use: COD while `cod` is on, delivered and without digital items (its largest value,
- * advance and RTO rules); online and bank transfer when the merchant offers them and Payments is connected; pay at
- * pickup when offered and the order is picked up. Digital items are paid before they are given, so they need online
- * payment or a bank transfer.
+ * The payment methods a cart may use, in the merchant's order (`paymentOrder`, E22): COD while `cod` is on, delivered
+ * (or picked up with `atPickup`, E23) and without digital items (its largest value, advance and RTO rules); online
+ * when offered and Payments is connected; bank transfer when offered and Payments is connected or transfers are
+ * recorded by staff (`bankTransferVia: manual`, E24); pay at pickup when offered and the order is picked up. Digital
+ * items are paid before they are given, so they need online payment or a bank transfer.
  * @param {object} input
  * @param {ReadonlyArray<string>} input.offered the `checkout` setting `paymentMethods`
+ * @param {ReadonlyArray<string>} [input.order] the `checkout` setting `paymentOrder`
  * @param {boolean} input.paymentsConnected
+ * @param {boolean} [input.bankManual] bank transfers are recorded by staff, no Payments payment (E24)
  * @param {{ on: boolean, settings: CodSettings }} input.cod
  * @param {boolean} input.pickupPossible store pickup is offered (pickup locations)
  * @param {'delivery' | 'pickup' | 'none'} input.deliveryMethod
  * @param {boolean} input.digital the cart has digital items
- * @param {number} input.total
- * @param {number} input.rtoCount the shopper's returned parcels (0 for guests)
+ * @param {number} input.total before any fee
+ * @param {number} input.rtoCount the shopper's returned parcels
+ * @param {number} [input.unit] whole units (E25)
  * @returns {PaymentOption[]}
  */
-export const paymentOptions = ({ offered, paymentsConnected, cod, pickupPossible, deliveryMethod, digital, total, rtoCount }) => {
+export const paymentOptions = ({
+	offered,
+	order = PAYMENT_METHODS,
+	paymentsConnected,
+	bankManual = false,
+	cod,
+	pickupPossible,
+	deliveryMethod,
+	digital,
+	total,
+	rtoCount,
+	unit = 1,
+}) => {
 	/** @type {PaymentOption[]} */
 	const out = [];
 	if (cod.on) {
-		if (deliveryMethod !== 'delivery') out.push({ method: 'cod', available: false, reason: 'needs_delivery', advance: 0 });
-		else if (digital) out.push({ method: 'cod', available: false, reason: 'digital_items', advance: 0 });
+		const collected = deliveryMethod === 'delivery' || (deliveryMethod === 'pickup' && cod.settings.atPickup === true);
+		if (!collected) out.push({ method: 'cod', available: false, reason: 'needs_delivery', advance: 0, fee: 0 });
+		else if (digital) out.push({ method: 'cod', available: false, reason: 'digital_items', advance: 0, fee: 0 });
 		else {
-			const decision = codDecision({ total, rtoCount, canCollectAdvance: paymentsConnected }, cod.settings);
+			const fee = codFee(total, cod.settings, unit);
+			const decision = codDecision(
+				{
+					total: total + fee,
+					rtoCount,
+					canCollectAdvance: paymentsConnected || cod.settings.advanceVia === 'manual',
+					unit,
+				},
+				cod.settings,
+			);
 			out.push(
 				decision.ok
-					? { method: 'cod', available: true, reason: null, advance: decision.advance }
-					: { method: 'cod', available: false, reason: decision.reason, advance: 0 },
+					? { method: 'cod', available: true, reason: null, advance: decision.advance, fee }
+					: { method: 'cod', available: false, reason: decision.reason, advance: 0, fee },
 			);
 		}
 	}
-	for (const method of /** @type {PaymentMethod[]} */ (['online', 'bank_transfer']))
-		if (paymentsConnected && offered.includes(method)) out.push({ method, available: true, reason: null, advance: 0 });
+	if (paymentsConnected && offered.includes('online'))
+		out.push({ method: 'online', available: true, reason: null, advance: 0, fee: 0 });
+	if ((paymentsConnected || bankManual) && offered.includes('bank_transfer'))
+		out.push({ method: 'bank_transfer', available: true, reason: null, advance: 0, fee: 0 });
 	if (pickupPossible && offered.includes('pickup')) {
 		const reason = deliveryMethod !== 'pickup' ? 'needs_pickup' : digital ? 'digital_items' : null;
-		out.push({ method: 'pickup', available: reason === null, reason, advance: 0 });
+		out.push({ method: 'pickup', available: reason === null, reason, advance: 0, fee: 0 });
 	}
-	return out;
+	/** @param {PaymentMethod} method */
+	const rank = (method) => {
+		const index = order.indexOf(method);
+		return index === -1 ? order.length + PAYMENT_METHODS.indexOf(method) : index;
+	};
+	return out.sort((a, b) => rank(a.method) - rank(b.method));
 };

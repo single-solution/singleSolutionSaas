@@ -8,9 +8,11 @@
 import { defineRoute, problem } from '@ss/app-kit';
 import { createOrdersStore } from '../adapters/orders-store.js';
 import { OPTIONAL_ADDRESS_FIELDS } from '../core/checkout.js';
+import { statusLabel } from '../core/orders.js';
 import { zoneCities } from '../core/delivery.js';
 import { createDigital } from './checkout-digital.js';
 import { createOrdering } from './checkout-orders.js';
+import { createOrderMessages } from './order-messages.js';
 import { createQuoting } from './checkout-quote.js';
 import { policiesOf } from './policies.js';
 import { SERVER_LIMITS, VISITOR_LIMITS, VISITOR_WRITE_LIMITS } from './service.js';
@@ -37,6 +39,17 @@ export const createCheckout = (product, service) => {
 
 	service.whenUsed(ordering.sweep);
 	service.on('order.paid', (s, { order }) => (s.has('digital_goods') ? digital.giveLicences(s, order) : undefined));
+
+	// the shopper's messages follow the hooks, whichever part placed or moved the order
+	const messages = createOrderMessages(service);
+	/** @param {Site} s @param {string} status */
+	const labelOf = async (s, status) => statusLabel(/** @type {any} */ (await s.list('order_flow')), status);
+	service.on('order.placed', async (s, { order, statusLabel }) => {
+		await messages.placed(s, order, statusLabel ?? (await labelOf(s, order.status)));
+	});
+	service.on('order.moved', async (s, { order, to }) => {
+		await messages.status(s, order, await labelOf(s, to));
+	});
 
 	/** The free slots of a booking product (`productId`, optional `from` and `to`, ISO 8601). @param {any} ctx */
 	const slots = async (ctx) => {
@@ -102,7 +115,7 @@ export const createCheckout = (product, service) => {
 				coupons: s.has('coupons'),
 				loyalty: s.has('loyalty'),
 				address: {
-					required: ['name', 'phone', 'line1', 'city', ...OPTIONAL_ADDRESS_FIELDS.filter((f) => required.includes(f))],
+					required: ['name', 'phone', ...OPTIONAL_ADDRESS_FIELDS.filter((f) => required.includes(f))],
 					optional: [...OPTIONAL_ADDRESS_FIELDS.filter((f) => !required.includes(f)), 'notes'],
 				},
 				paymentWindowMinutes: checkout.paymentWindowMinutes,
@@ -144,6 +157,30 @@ export const createCheckout = (product, service) => {
 				feature: 'checkout',
 				rateLimit: VISITOR,
 				handler: ordering.read,
+			}),
+			defineRoute({
+				method: 'GET',
+				path: '/v1/shop/orders/by-number/:number',
+				auth: 'browser',
+				feature: 'checkout',
+				rateLimit: VISITOR,
+				handler: ordering.readByNumber,
+			}),
+			defineRoute({
+				method: 'POST',
+				path: '/v1/shop/orders/:id/proof/upload',
+				auth: 'browser',
+				feature: 'checkout',
+				rateLimit: VISITOR_WRITE,
+				handler: ordering.proofUpload,
+			}),
+			defineRoute({
+				method: 'POST',
+				path: '/v1/shop/orders/:id/proof',
+				auth: 'browser',
+				feature: 'checkout',
+				rateLimit: VISITOR_WRITE,
+				handler: ordering.sendProof,
 			}),
 			defineRoute({
 				method: 'POST',

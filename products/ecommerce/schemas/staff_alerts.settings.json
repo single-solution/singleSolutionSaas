@@ -1,0 +1,45 @@
+{
+	"type": "object",
+	"additionalProperties": false,
+	"properties": {
+		"events": {
+			"type": "array",
+			"title": "Alert staff of",
+			"default": ["placed", "cancelled", "proof_uploaded", "return_requested"],
+			"items": {
+				"type": "string",
+				"enum": ["placed", "status", "paid", "proof_uploaded", "cancelled", "expired", "return_requested"]
+			}
+		},
+		"recipients": {
+			"type": "array",
+			"title": "Alert recipients",
+			"default": [],
+			"items": {
+				"type": "string",
+				"maxLength": 254
+			},
+			"description": "E-mail addresses and international phone numbers (+ or 00 first; phones get WhatsApp or SMS), up to 20."
+		},
+		"staffPermission": {
+			"type": "string",
+			"title": "Also alert Accounts staff who can",
+			"default": "",
+			"enum": ["", "orders.read", "orders.manage", "orders.refund", "returns.manage"],
+			"description": "Every unblocked Accounts user whose role has this Ecommerce permission (needs the Accounts token). Empty = only the list above."
+		},
+		"phoneChannel": {
+			"type": "string",
+			"title": "Phones get",
+			"default": "whatsapp",
+			"enum": ["whatsapp", "sms"]
+		},
+		"adminUrl": {
+			"type": "string",
+			"title": "Order page in your admin",
+			"default": "",
+			"maxLength": 500,
+			"description": "With {number} and {id}, for example https://admin.shop.com/orders/{id}. Alerts link to it."
+		}
+	}
+}

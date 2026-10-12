@@ -7,7 +7,8 @@
  * `callProduct` (pasted tokens only, PLAN 0.4.6).
  * @module
  */
-import { actorOf, problem } from '@ss/app-kit';
+import { actorOf, problem, zonedParts } from '@ss/app-kit';
+import { unitOf } from '../core/money.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
 /** @typedef {import('@ss/app-kit').WebsiteData} WebsiteData */
@@ -58,9 +59,24 @@ export const actorHeaders = (who) => {
 };
 
 /**
- * A shopper: the Accounts user of a verified sign-in (PLAN 0.4.6).
- * @typedef {{ id: string, name: string, email: string, phone: string }} Shopper
+ * A shopper: the Accounts user of a verified sign-in (PLAN 0.4.6), with their role (role pricing, loyalty roles) and
+ * whether Accounts verified their phone (guest orders move to them, E21).
+ * @typedef {{ id: string, name: string, email: string, phone: string, role?: string, phoneVerified?: boolean }} Shopper
  */
+
+/**
+ * The claims of a sign-in already verified (its middle part), or {}.
+ * @param {string} token
+ * @returns {Record<string, unknown>}
+ */
+const claimsOf = (token) => {
+	try {
+		const body = JSON.parse(Buffer.from(String(token.split('.')[1] ?? ''), 'base64url').toString('utf8'));
+		return typeof body === 'object' && body !== null ? body : {};
+	} catch {
+		return {};
+	}
+};
 
 /**
  * A website while serving one request. `values(feature)` and `data()` are read once per request.
@@ -82,9 +98,11 @@ export const actorHeaders = (who) => {
  */
 
 /**
- * @typedef {'products.changed' | 'order.placed' | 'order.moved' | 'order.paid'} HookName
+ * @typedef {'products.changed' | 'order.placed' | 'order.moved' | 'order.paid' | 'order.proof_uploaded'} HookName
  *   `products.changed`: `{ productIds, before: Map<id, { price, inStock }> }` after catalog writes (alerts);
- *   `order.placed`: `{ order }`; `order.moved`: `{ order, from, to }` (the order after the move); `order.paid`: `{ order }`
+ *   `order.placed`: `{ order, statusLabel? }`; `order.moved`: `{ order, from, to, by?, reason? }` (the order after the
+ *   move); `order.paid`: `{ order, entry }` (`entry` null when placed already paid); `order.proof_uploaded`:
+ *   `{ order, reference }`
  */
 
 /** Work that runs on use (PLAN 0.8.1: no scheduled jobs) runs at most this often per website and instance. */
@@ -193,7 +211,31 @@ export const createService = (product) => {
 		const verified = await product.accounts.verify({ websiteId: s.websiteId, token });
 		if (!verified.ok) return null;
 		const user = verified.user;
-		return { id: user.id, name: user.name ?? '', email: user.email ?? '', phone: user.phone ?? '' };
+		return {
+			id: user.id,
+			name: user.name ?? '',
+			email: user.email ?? '',
+			phone: user.phone ?? '',
+			role: user.role ?? '',
+			phoneVerified: Boolean(user.phone) && claimsOf(token).phone_verified === true,
+		};
+	};
+
+	/**
+	 * What pricing needs of the website now: the whole unit amounts round to (Format's `wholeUnits`, E25) and the
+	 * business time (weekday and minutes in the business.json time zone, K8) deal hours are judged by.
+	 * @param {Site} s
+	 * @returns {Promise<{ unit: number, weekday: number, minutes: number, timeZone: string }>}
+	 */
+	const pricing = async (s) => {
+		const { format, timeZone } = await s.format();
+		const parts = zonedParts(now(), timeZone || 'UTC');
+		return {
+			unit: unitOf(s.currency, format.wholeUnits === true),
+			weekday: parts.weekday,
+			minutes: parts.hour * 60 + parts.minute,
+			timeZone: timeZone || 'UTC',
+		};
 	};
 
 	/**
@@ -415,6 +457,7 @@ export const createService = (product) => {
 		shopper,
 		requireShopper,
 		accountProfile,
+		pricing,
 		actor,
 		log,
 		invalid,

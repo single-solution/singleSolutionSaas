@@ -32,6 +32,43 @@
 			"default": 5,
 			"minimum": 1,
 			"maximum": 20
+		},
+		"kinds": {
+			"type": "array",
+			"title": "Claims shoppers may make",
+			"default": ["return", "warranty"],
+			"items": {
+				"type": "string",
+				"enum": ["return", "warranty", "exchange"]
+			}
+		},
+		"reasons": {
+			"type": "array",
+			"title": "Reasons",
+			"description": "The reasons shoppers pick from. Empty = free text.",
+			"default": [],
+			"items": {
+				"type": "string",
+				"maxLength": 120
+			}
+		},
+		"referencePrefix": {
+			"type": "string",
+			"title": "Claim reference prefix",
+			"default": "R-",
+			"maxLength": 8
+		},
+		"refundDelivery": {
+			"type": "boolean",
+			"title": "Refunds may include delivery",
+			"default": false
+		},
+		"pointsBack": {
+			"type": "string",
+			"title": "Points taken back",
+			"description": "proportional: in proportion to what is refunded. full_refund_only: only when the whole order is refunded.",
+			"default": "proportional",
+			"enum": ["proportional", "full_refund_only"]
 		}
 	}
 }

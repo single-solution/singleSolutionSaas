@@ -234,6 +234,55 @@
 			"title": "Payment state: Refunded",
 			"default": "Refunded",
 			"maxLength": 80
+		},
+		"shopperFrom": {
+			"type": "string",
+			"title": "Shoppers get their invoice",
+			"description": "placed: as soon as the order is placed. confirmed: once it is confirmed.",
+			"default": "placed",
+			"enum": ["placed", "confirmed"]
+		},
+		"labelFee": {
+			"type": "string",
+			"title": "Label: Cash handling",
+			"default": "Cash handling",
+			"maxLength": 80
+		},
+		"labelRoleDiscount": {
+			"type": "string",
+			"title": "Label: Member discount",
+			"default": "Member discount",
+			"maxLength": 80
+		},
+		"labelPoints": {
+			"type": "string",
+			"title": "Label: Points",
+			"default": "Points ({points})",
+			"maxLength": 80
+		},
+		"labelCashDue": {
+			"type": "string",
+			"title": "Label: Cash due on delivery",
+			"default": "Cash due on delivery",
+			"maxLength": 80
+		},
+		"labelPayments": {
+			"type": "string",
+			"title": "Label: Payments",
+			"default": "Payments",
+			"maxLength": 80
+		},
+		"labelRefunds": {
+			"type": "string",
+			"title": "Label: Refunds",
+			"default": "Refunds",
+			"maxLength": 80
+		},
+		"pickListTitle": {
+			"type": "string",
+			"title": "Pick list title",
+			"default": "Pick list",
+			"maxLength": 80
 		}
 	}
 }

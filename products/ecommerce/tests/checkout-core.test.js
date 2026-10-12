@@ -79,8 +79,15 @@ describe('cart checks', () => {
 		expect(checked.ok).toBe(true);
 		if (!checked.ok) return;
 		expect(checked.value.lines).toEqual([
-			{ productId: 'prd_1', variantId: null, quantity: 5, slot: null },
-			{ productId: 'prd_2', variantId: 'var_2', quantity: 1, slot: Date.parse('2026-10-06T10:00:00Z') },
+			{ productId: 'prd_1', variantId: null, quantity: 5, slot: null, dealId: null, lock: null },
+			{
+				productId: 'prd_2',
+				variantId: 'var_2',
+				quantity: 1,
+				slot: Date.parse('2026-10-06T10:00:00Z'),
+				dealId: null,
+				lock: null,
+			},
 		]);
 		expect(checked.value.coupon).toBe('SAVE10');
 		expect(checked.value.delivery).toEqual({ method: 'pickup', city: 'X', area: '', country: '', locationId: 'loc_1' });
@@ -264,7 +271,16 @@ describe('pricing', () => {
 			[400, 160, 1760],
 			[100, 40, 440],
 		]);
-		expect(priced.totals).toEqual({ subtotal: 2500, discount: 500, delivery: 300, tax: 200, total: 2500, taxIncluded: false });
+		expect(priced.totals).toEqual({
+			subtotal: 2500,
+			discount: 500,
+			roleDiscount: 0,
+			delivery: 300,
+			fee: 0,
+			tax: 200,
+			total: 2500,
+			taxIncluded: false,
+		});
 	});
 
 	it('keeps tax inside prices that include it', () => {
@@ -313,10 +329,10 @@ describe('payment methods', () => {
 
 	it('offers COD with its advance, online, transfer and pickup', () => {
 		expect(paymentOptions(base)).toEqual([
-			{ method: 'cod', available: true, reason: null, advance: 100 },
-			{ method: 'online', available: true, reason: null, advance: 0 },
-			{ method: 'bank_transfer', available: true, reason: null, advance: 0 },
-			{ method: 'pickup', available: false, reason: 'needs_pickup', advance: 0 },
+			{ method: 'cod', available: true, reason: null, advance: 100, fee: 0 },
+			{ method: 'online', available: true, reason: null, advance: 0, fee: 0 },
+			{ method: 'bank_transfer', available: true, reason: null, advance: 0, fee: 0 },
+			{ method: 'pickup', available: false, reason: 'needs_pickup', advance: 0, fee: 0 },
 		]);
 	});
 

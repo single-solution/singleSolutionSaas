@@ -31,6 +31,9 @@ import loyaltySettings from '../schemas/loyalty.settings.json' with { type: 'jso
 import bundlesSettings from '../schemas/bundles.settings.json' with { type: 'json' };
 import reviewsSettings from '../schemas/reviews.settings.json' with { type: 'json' };
 import wishlistSettings from '../schemas/wishlist.settings.json' with { type: 'json' };
+import rolePricingSettings from '../schemas/role_pricing.settings.json' with { type: 'json' };
+import eventsSettings from '../schemas/events.settings.json' with { type: 'json' };
+import staffAlertsSettings from '../schemas/staff_alerts.settings.json' with { type: 'json' };
 import alertsSettings from '../schemas/alerts.settings.json' with { type: 'json' };
 import compareSettings from '../schemas/compare.settings.json' with { type: 'json' };
 import returnsSettings from '../schemas/returns.settings.json' with { type: 'json' };
@@ -53,6 +56,7 @@ import { LISTS, createLists } from './lists.js';
 import { INDEXES as ORDERS_INDEXES } from './orders-store.js';
 import { INDEXES as PROMOTIONS_INDEXES } from './promotions-store.js';
 import { createSearchState } from './search-state.js';
+import { createSiteSecrets } from './site-secret.js';
 
 /** Settings schema of each feature (manifest.json points at them with `$ref`). @type {Record<string, unknown>} */
 const SETTINGS = {
@@ -71,6 +75,7 @@ const SETTINGS = {
 	coupons: couponsSettings,
 	deals: dealsSettings,
 	loyalty: loyaltySettings,
+	role_pricing: rolePricingSettings,
 	bundles: bundlesSettings,
 	reviews: reviewsSettings,
 	wishlist: wishlistSettings,
@@ -81,6 +86,8 @@ const SETTINGS = {
 	csv: csvSettings,
 	bulk_actions: bulkActionsSettings,
 	reports: reportsSettings,
+	events: eventsSettings,
+	staff_alerts: staffAlertsSettings,
 	seo: seoSettings,
 	landing_pages: landingPagesSettings,
 	feeds: feedsSettings,
@@ -106,6 +113,7 @@ const PROBLEM_CODES = Object.freeze({
 	offer_unavailable: Object.freeze({ status: 409, title: 'Offer no longer available' }),
 	points_changed: Object.freeze({ status: 409, title: 'Loyalty balance changed' }),
 	coupon_code_taken: Object.freeze({ status: 409, title: 'Coupon code already in use' }),
+	slug_taken: Object.freeze({ status: 409, title: 'Slug already in use' }),
 	coupon_unknown: Object.freeze({ status: 422, title: 'Unknown coupon code' }),
 	coupon_inactive: Object.freeze({ status: 422, title: 'Coupon not active' }),
 	coupon_not_started: Object.freeze({ status: 422, title: 'Coupon not valid yet' }),
@@ -174,6 +182,7 @@ export const createProductInstance = (options) => {
 	const ai = createAi({ send });
 	const lists = createLists({ store, now });
 	const searchState = createSearchState({ store, now });
+	const secrets = createSiteSecrets({ store, now });
 	/** @type {NonNullable<import('@ss/app-kit').ProductOptions['hooks']>} */
 	const hooks = {};
 
@@ -193,7 +202,7 @@ export const createProductInstance = (options) => {
 				label: 'Accounts token (shoppers sign in, activity-log copies)',
 				kind: 'token',
 				productId: 'accounts',
-				neededBy: ['checkout', 'reviews', 'wishlist'],
+				neededBy: ['checkout', 'reviews', 'wishlist', 'role_pricing'],
 			},
 			payments: {
 				label: 'Payments token (online payments and bank transfers at checkout, refunds)',
@@ -202,10 +211,10 @@ export const createProductInstance = (options) => {
 				neededBy: [],
 			},
 			notifications: {
-				label: 'Notifications token (order messages and alerts)',
+				label: 'Notifications token (order messages, alerts, staff alerts and event webhooks)',
 				kind: 'token',
 				productId: 'notifications',
-				neededBy: ['alerts'],
+				neededBy: ['alerts', 'staff_alerts'],
 			},
 			growth: {
 				label: 'Growth token (send changed addresses to IndexNow)',
@@ -235,6 +244,8 @@ export const createProductInstance = (options) => {
 			widgetConfig: (ctx) => /** @type {NonNullable<typeof hooks.widgetConfig>} */ (hooks.widgetConfig)(ctx),
 		},
 		data: { indexes: INDEXES },
+		// order, return, review, catalog and stock events (PLAN 0.8.10 K5, E32)
+		events: true,
 		// the list settings for the merchant's server (`GET|PUT /v1/lists/:list`, server token)
 		lists: Object.fromEntries(
 			/** @type {Array<keyof typeof LISTS>} */ (Object.keys(LISTS)).map((name) => [
@@ -252,6 +263,7 @@ export const createProductInstance = (options) => {
 		...product,
 		lists,
 		searchState,
+		secrets,
 		couriers,
 		ai,
 		send,

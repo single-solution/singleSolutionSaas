@@ -8,6 +8,27 @@
 			"description": "Show new reviews at once, or only after your staff approve them.",
 			"default": "manual",
 			"enum": ["auto", "manual"]
+		},
+		"per": {
+			"type": "string",
+			"title": "Reviews per",
+			"description": "product: one per product. order_line: one per item bought.",
+			"default": "product",
+			"enum": ["product", "order_line"]
+		},
+		"nameFormat": {
+			"type": "string",
+			"title": "Names shown",
+			"description": "full, or first_initial (\"Ayesha K.\").",
+			"default": "full",
+			"enum": ["full", "first_initial"]
+		},
+		"pageSize": {
+			"type": "integer",
+			"title": "Reviews per page",
+			"default": 10,
+			"minimum": 5,
+			"maximum": 20
 		}
 	}
 }

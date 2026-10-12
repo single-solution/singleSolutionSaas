@@ -193,7 +193,7 @@ describe('placing with cash on delivery', () => {
 		const key = 'cod-order-1';
 		const response = await visit('POST', '/v1/shop/orders', { body, signIn: shopper.token, key });
 		expect(response.status).toBe(201);
-		expect(response.json.next).toEqual({ kind: 'done' });
+		expect(response.json.next).toEqual({ kind: 'done', url: null });
 		expect(response.json.order).toMatchObject({
 			status: 'awaiting_confirmation',
 			statusLabel: 'Awaiting confirmation',
@@ -451,6 +451,8 @@ describe("the shopper's orders", () => {
 			courier: 'Courier',
 			trackingNumber: 'TN1',
 			trackingUrl: 'https://track.example/TN1',
+			trackingNote: '',
+			estimatedDeliveryAt: null,
 		});
 	});
 
@@ -507,7 +509,7 @@ describe('waiting orders that end (on use)', () => {
 		});
 		expect(again.status).toBe(200);
 		expect(again.json.order).toMatchObject({ id: cod.id, status: 'cancelled' });
-		expect(again.json.next).toEqual({ kind: 'done' });
+		expect(again.json.next).toEqual({ kind: 'done', url: null });
 		expect(await stockOf(item.id)).toBe(9);
 	});
 

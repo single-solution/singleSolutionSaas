@@ -10,7 +10,7 @@
  * best saving first. Units are counted per line (never expanded), so large quantities stay cheap. No I/O.
  * @module
  */
-import { allocate, percentOf } from './money.js';
+import { allocateUnits, percentOf, roundDown } from './money.js';
 import {
 	checkAmount,
 	checkPercent,
@@ -84,9 +84,10 @@ const candidatesOf = (pools, keep) =>
  * The next set a bundle forms from the units left, or null.
  * @param {BundleRecord} bundle
  * @param {Pool[]} pools
+ * @param {number} [unit] whole units: savings round down to them (E25)
  * @returns {BundleSet | null}
  */
-export const nextSet = (bundle, pools) => {
+export const nextSet = (bundle, pools, unit = 1) => {
 	/** @type {Map<number, number>} */
 	const taken = new Map();
 	/** @param {{ index: number, units: number }} take */
@@ -105,8 +106,11 @@ export const nextSet = (bundle, pools) => {
 		}
 		const values = takes.map(valueOf);
 		const value = values.reduce((sum, v) => sum + v, 0);
-		const discount = bundle.price !== null ? Math.max(0, value - bundle.price) : percentOf(value, bundle.value);
-		const amounts = allocate(discount, values);
+		const discount = roundDown(
+			bundle.price !== null ? Math.max(0, value - bundle.price) : percentOf(value, bundle.value),
+			unit,
+		);
+		const amounts = allocateUnits(discount, values, unit);
 		return {
 			takes: takes.map((take, i) => ({ ...take, discounted: true, amount: amounts[i] ?? 0 })),
 			discount,
@@ -126,7 +130,11 @@ export const nextSet = (bundle, pools) => {
 	);
 	const got = takeUnits(getCandidates, taken, bundle.get);
 	if (!got) return null;
-	const discounted = got.map((take) => ({ ...take, discounted: true, amount: percentOf(valueOf(take), bundle.value) }));
+	const discounted = got.map((take) => ({
+		...take,
+		discounted: true,
+		amount: roundDown(percentOf(valueOf(take), bundle.value), unit),
+	}));
 	return {
 		takes: [...bought.map((take) => ({ ...take, discounted: false, amount: 0 })), ...discounted],
 		discount: discounted.reduce((sum, take) => sum + take.amount, 0),
@@ -140,11 +148,12 @@ export const nextSet = (bundle, pools) => {
  * @param {BundleRecord[]} bundles
  * @param {Array<Omit<Pool, 'available'> & { quantity: number }>} lines
  * @param {number} now
+ * @param {number} [unit] whole units (E25)
  * @returns {{ lines: Array<{ bundleDiscount: number, bundleUnits: number }>, savings: Map<string, number> }}
  *   per line: what bundles take off and how many of its units they discount; `savings`: bundle id → amount, in the order
  *   bundles first saved
  */
-export const formBundles = (bundles, lines, now) => {
+export const formBundles = (bundles, lines, now, unit = 1) => {
 	const pools = lines.map(({ quantity, ...line }) => ({ ...line, available: quantity }));
 	const out = lines.map(() => ({ bundleDiscount: 0, bundleUnits: 0 }));
 	/** @type {Map<string, number>} */
@@ -154,7 +163,7 @@ export const formBundles = (bundles, lines, now) => {
 		/** @type {{ bundle: BundleRecord, set: BundleSet } | null} */
 		let best = null;
 		for (const bundle of live) {
-			const set = nextSet(bundle, pools);
+			const set = nextSet(bundle, pools, unit);
 			if (!set || set.discount - set.lost <= 0) continue;
 			if (!best || set.discount - set.lost > best.set.discount - best.set.lost) best = { bundle, set };
 		}

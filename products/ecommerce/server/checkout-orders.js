@@ -1,17 +1,22 @@
 /**
- * Placing and paying orders, and the shopper's own orders (PLAN 0.8.8; payment confirmation PLAN 0.3).
+ * Placing and paying orders, and the shopper's own orders (PLAN 0.8.8; payment confirmation PLAN 0.3; PLAN 0.8.10
+ * E18–E25, E30).
  *
- * - Placing: the cart is priced again on the server, the shopper must be signed in (Accounts), COD safety and the
- *   blocklist and open-order cap apply, and the ledger places the order in one transaction (stock, offer uses, points,
- *   booked slots). Online, bank-transfer and COD-advance orders start awaiting payment and get a Payments payment
- *   (the shopper pays on Payments' page and comes back to `returnUrl?ss_order=<id>`); COD and pay-at-pickup orders
- *   start awaiting confirmation.
+ * - Placing: the cart is priced again on the server; a signed-in shopper (Accounts) or, while `guests` allows, a
+ *   guest with a name and phone (E21: normalised, one customer record per phone; `unless_password` sends members to
+ *   sign in) places it; COD safety, the blocklist and the open-order cap apply per customer; the ledger places the
+ *   order in one transaction (stock, offer uses — deals kept by locks too —, points, booked slots) with a number by
+ *   the business year and the yearly counter (E30). Online, bank-transfer and COD-advance orders start awaiting
+ *   payment and get a Payments payment, unless transfers or advances are recorded by staff (`manual`: the order waits
+ *   for the shopper's proof, E23, E24); COD orders start awaiting confirmation or confirmed (`startStatus`), pay-at-
+ *   pickup orders awaiting confirmation. A guest gets the order's key once (`orderKey`).
  * - Paying: an order is paid only when Payments says, server to server, that its payment is paid for exactly the
- *   order's amount (or advance) and currency. A waiting payment is asked again when the order is read (at most every
- *   30 seconds), on use, and once more before a waiting order is cancelled at the end of its window. Nothing runs on a
- *   timer: waiting orders whose window ended are cancelled on use (`service.whenUsed`), giving back what they held.
- * - The shopper's orders (list, detail with downloads and licence keys, cancel while waiting, pay again) and the
- *   shopper's success page (it reads `ss_order` and reads the order, which rechecks its payment).
+ *   order's amount (or advance) and currency; the payment is a log entry of the order (E26). A waiting payment is asked
+ *   again when the order is read (at most every 30 seconds), on use, and once more before a waiting order is cancelled
+ *   at the end of its window (0 = never). Nothing runs on a timer: waiting orders whose window ended are cancelled on
+ *   use (`service.whenUsed`), giving back what they held.
+ * - The shopper's orders: list, detail (by id or number, with the sign-in or the order's key, E21) with downloads and
+ *   licence keys, cancel in the roles `shopperCancel` lists (E27), pay again, and the transfer proof (E24).
  * @module
  */
 import { created, paginate, problem } from '@ss/app-kit';
@@ -20,12 +25,14 @@ import { originAllowed } from '@ss/protocol';
 import { placeOrder, releaseOrder } from '../adapters/ledger.js';
 import { createOrdersStore } from '../adapters/orders-store.js';
 import { STOCK_PROBLEMS, checkAddress, checkCart, checkOrderExtras } from '../core/checkout.js';
+import { shipmentLink } from '../core/couriers.js';
 import { WAITING_ROLES, cancelledStatus, confirmedStatus, statusOf, statusWithRole } from '../core/flow.js';
-import { pointsToEarn } from '../core/loyalty.js';
+import { checkGuest, keyOpens, newOrderKey, orderKeyHash, phoneDigitsOf } from '../core/guests.js';
+import { loyaltyRules, pointsToEarn, takesPart } from '../core/loyalty.js';
 import { gradesByKey } from '../core/grades.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import { createMedia } from './catalog-media.js';
-import { createOrderMessages } from './order-messages.js';
+import { createGuests } from './guests.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
 /** @typedef {import('./service.js').Service} Service */
@@ -41,9 +48,18 @@ import { createOrderMessages } from './order-messages.js';
 
 /** A waiting payment is asked of Payments at most this often per order. */
 const RECHECK_MS = 30_000;
+/** The header a guest sends their order's key in (the kit's CORS allows it). */
+const ORDER_KEY_HEADER = 'ss-order-key';
+/** Transfer proofs: what may be uploaded, and how big (E24). */
+const PROOF_TYPES = Object.freeze({ 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'application/pdf': 'pdf' });
+const PROOF_MAX_BYTES = 10 * 1_048_576;
+const PROOF_SECONDS = 900;
+/** Who confirms what Payments confirmed. */
+const PAYMENTS_ACTOR = Object.freeze({ kind: 'system', id: 'payments', name: 'Payments' });
 
 const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/;
 const E164 = /^\+[1-9]\d{6,14}$/;
+const ORDER_NUMBER = /^[A-Za-z0-9_-]{1,40}$/;
 
 /** @param {string} url @param {string} name @param {string} value */
 const withParam = (url, name, value) => {
@@ -62,13 +78,20 @@ const expectedOf = (order) => ({
 });
 
 /**
+ * A template address with `{number}` and `{id}` filled (E22 `successUrl` and `cancelUrl`).
+ * @param {string} template @param {OrderRecord} order
+ */
+const fillAddress = (template, order) =>
+	template.replaceAll('{number}', encodeURIComponent(order.number)).replaceAll('{id}', encodeURIComponent(order.id));
+
+/**
  * @param {Product} product
  * @param {Service} service
  * @param {{ quoting: Quoting, digital: Digital }} parts
  */
 export const createOrdering = (product, service, { quoting, digital }) => {
 	const media = createMedia(product);
-	const messages = createOrderMessages(service);
+	const guests = createGuests(product);
 
 	/** @param {Site} s @returns {Promise<OrderFlow>} */
 	const flowOf = async (s) => /** @type {OrderFlow} */ (/** @type {unknown} */ (await s.list('order_flow')));
@@ -89,6 +112,25 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		}
 	};
 
+	/**
+	 * Where the shopper goes back after paying or leaving the payment (E22): the address the widget sent (with
+	 * `ss_order`), else the `successUrl` and `cancelUrl` templates (when on the website), else nowhere.
+	 * @param {Site} s @param {OrderRecord} order @param {string | null} returnUrl
+	 */
+	const backOf = async (s, order, returnUrl) => {
+		if (returnUrl) {
+			const back = withParam(returnUrl, 'ss_order', order.id);
+			return { success: back, cancel: back };
+		}
+		const { successUrl, cancelUrl } = await s.values('checkout');
+		const success = successUrl ? fillAddress(String(successUrl), order) : '';
+		const cancel = cancelUrl ? fillAddress(String(cancelUrl), order) : success;
+		return {
+			success: success && allowedReturn(s, success) ? success : null,
+			cancel: cancel && allowedReturn(s, cancel) ? cancel : null,
+		};
+	};
+
 	// ------------------------------------------------------------------------------------------------- payments
 
 	/**
@@ -98,7 +140,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 	 * @returns {Promise<OrderRecord | null>}
 	 */
 	const startPayment = async (s, order, returnUrl, idempotencyKey) => {
-		const back = returnUrl ? withParam(returnUrl, 'ss_order', order.id) : null;
+		const back = await backOf(s, order, returnUrl);
 		const { customer } = order;
 		try {
 			const payment = await service.payments.create(s, {
@@ -107,14 +149,14 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 				description: `${order.payment.advance > 0 ? 'Advance for order' : 'Order'} ${order.number}`,
 				reference: order.number,
 				customer: {
-					id: customer.userId,
+					id: customer.userId || customer.customerId || '',
 					...(customer.name ? { name: customer.name.slice(0, 120) } : {}),
 					...(EMAIL.test(customer.email) ? { email: customer.email } : {}),
 					...(E164.test(customer.phone) ? { phone: customer.phone } : {}),
 				},
 				metadata: { orderId: order.id },
-				returnUrl: back,
-				cancelUrl: back,
+				returnUrl: back.success,
+				cancelUrl: back.cancel,
 				idempotencyKey,
 			});
 			const store = createOrdersStore(await s.data());
@@ -132,7 +174,8 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 	};
 
 	/**
-	 * Mark an order paid (Payments confirmed it) and move it to the flow's confirmed status.
+	 * Mark an order paid (Payments confirmed it: an `online` entry of its payments log, E26) and move it to the flow's
+	 * confirmed status.
 	 * @param {Site} s @param {OrderRecord} order
 	 * @returns {Promise<OrderRecord>}
 	 */
@@ -142,32 +185,39 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		const now = service.now();
 		const to = confirmedStatus(flow, order.status);
 		const advance = order.payment.advance > 0;
+		const amount = expectedOf(order).amount;
 		/** @type {Record<string, unknown>} */
 		const set = {
 			'payment.state': advance ? 'unpaid' : 'paid',
-			'payment.paid': expectedOf(order).amount,
+			'payment.paid': amount,
 			'payment.checkedAt': new Date(now),
 			holdUntil: null,
 		};
 		// the flow may have no move from waiting to an open status: the order is then paid but stays where it is
 		const next = statusOf(flow, to ?? '');
 		if (next) Object.assign(set, { status: next.key, role: next.role });
+		const entry = {
+			id: createId(ID_PREFIX.orderPayment),
+			method: 'online',
+			amount,
+			reference: order.payment.paymentId ?? '',
+			proofKey: null,
+			note: advance ? 'Advance' : '',
+			by: PAYMENTS_ACTOR,
+			at: new Date(now),
+		};
 		const moved = await store.change(order, set, {
 			where: { 'payment.state': 'pending' },
-			...(next
-				? {
-						push: {
-							history: { at: new Date(now), from: order.status, to: next.key, by: 'system', note: 'Payment confirmed' },
-						},
-					}
-				: {}),
+			push: {
+				payments: entry,
+				...(next
+					? { history: { at: new Date(now), from: order.status, to: next.key, by: 'system', note: 'Payment confirmed' } }
+					: {}),
+			},
 		});
 		if (!moved) return (await store.order(order.id)) ?? order;
-		await service.emit('order.paid', s, { order: moved });
-		if (next) {
-			await service.emit('order.moved', s, { order: moved, from: order.status, to: next.key });
-			await messages.status(s, moved, next.label);
-		}
+		await service.emit('order.paid', s, { order: moved, entry });
+		if (next) await service.emit('order.moved', s, { order: moved, from: order.status, to: next.key, by: 'system' });
 		return (await store.order(order.id)) ?? moved;
 	};
 
@@ -201,10 +251,11 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 
 	/**
 	 * Cancel a waiting order, giving back its stock, slots, offer uses and points (exactly once).
-	 * @param {Site} s @param {OrderRecord} order as just read @param {{ by: string, note: string }} who
+	 * @param {Site} s @param {OrderRecord} order as just read
+	 * @param {{ by: string, note: string, reason: 'staff' | 'shopper' | 'expired' }} who
 	 * @returns {Promise<OrderRecord | null>} null when it moved meanwhile or the flow has no cancelled status
 	 */
-	const cancel = async (s, order, { by, note }) => {
+	const cancel = async (s, order, { by, note, reason }) => {
 		const flow = await flowOf(s);
 		const to = cancelledStatus(flow, order.status) ?? '';
 		const role = statusOf(flow, to)?.role;
@@ -220,7 +271,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 						{ websiteId: data.websiteId, id: order.id, status: order.status },
 						{
 							$set: { status: to, role, holdUntil: null },
-							$push: { history: { at: new Date(now), from: order.status, to, by, note } },
+							$push: { history: { at: new Date(now), from: order.status, to, by, note, reason } },
 						},
 						{ session },
 					);
@@ -232,15 +283,14 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		}
 		if (!done) return null;
 		const after = /** @type {OrderRecord} */ (await createOrdersStore(data).order(order.id));
-		await service.emit('order.moved', s, { order: after, from: order.status, to });
-		await messages.status(s, after, labelOf(flow, to));
+		await service.emit('order.moved', s, { order: after, from: order.status, to, by, reason });
 		return after;
 	};
 
 	/**
 	 * End a waiting order whose window passed: a waiting payment is asked once more (paid: confirmed instead); else
-	 * cancelled. When Payments cannot be reached the order waits for the next use (it may have been paid), unless
-	 * the Payments token was removed.
+	 * cancelled with the reason `expired`. When Payments cannot be reached the order waits for the next use (it may have
+	 * been paid), unless the Payments token was removed.
 	 * @param {Site} s @param {OrderRecord} order
 	 */
 	const expire = async (s, order) => {
@@ -254,6 +304,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		await cancel(s, current, {
 			by: 'system',
 			note: order.role === 'awaiting_payment' ? 'Not paid in time' : 'Not confirmed in time',
+			reason: 'expired',
 		});
 	};
 
@@ -272,7 +323,24 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 	// --------------------------------------------------------------------------------------------------- views
 
 	/**
-	 * What the shopper sees of an order (never staff notes or who moved it).
+	 * Whether the shopper may cancel an order in its role (E27 `shopperCancel`).
+	 * @param {Site} s @param {OrderRecord} order
+	 */
+	const shopperMayCancel = async (s, order) => {
+		const { shopperCancel } = await s.values('checkout');
+		const roles = Array.isArray(shopperCancel) ? shopperCancel : WAITING_ROLES;
+		return roles.includes(order.role);
+	};
+
+	/**
+	 * Whether the shopper may send a transfer proof: the order waits for a payment staff record (E24).
+	 * @param {OrderRecord} order
+	 */
+	const takesProof = (order) =>
+		order.role === 'awaiting_payment' && order.payment.via === 'manual' && order.payment.state !== 'paid';
+
+	/**
+	 * What the shopper sees of an order (never staff notes or who moved or paid it).
 	 * @param {Site} s @param {OrderRecord} order @param {OrderFlow} flow
 	 */
 	const shopperView = async (s, order, flow) => {
@@ -287,6 +355,18 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 				: null;
 		const waitingPayment =
 			order.role === 'awaiting_payment' && order.payment.state === 'pending' && order.payment.paymentId !== null;
+		const [checkout, zones, couriers, invoices] = await Promise.all([
+			s.values('checkout'),
+			s.has('delivery_zones') ? s.values('delivery_zones') : Promise.resolve(null),
+			s.has('checkout') ? s.list('couriers') : Promise.resolve([]),
+			s.has('invoices') ? s.values('invoices') : Promise.resolve(null),
+		]);
+		const paid = (order.payments ?? []).reduce((sum, entry) => sum + entry.amount, 0) || order.payment.paid;
+		const refunded = (order.refunds ?? []).reduce((sum, entry) => sum + entry.amount, 0) || order.payment.refunded;
+		const settled = ['cancelled', 'returned_to_origin', 'refunded', 'returned'].includes(order.role);
+		const bankTransfer =
+			order.payment.method === 'bank_transfer' || (order.payment.via === 'manual' && order.payment.advance > 0);
+		const quoteBank = bankTransfer && order.role === 'awaiting_payment' ? await quoting.bankDetailsOf(s) : null;
 		return {
 			id: order.id,
 			number: order.number,
@@ -294,6 +374,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 			statusLabel: labelOf(flow, order.status),
 			role: order.role,
 			placedAt: iso(order.placedAt),
+			guest: !order.customer.userId,
 			lines: await Promise.all(
 				order.lines.map(async (line) => {
 					const extra = downloads.get(line.id);
@@ -320,44 +401,96 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 					};
 				}),
 			),
-			totals: order.totals,
+			totals: { fee: 0, roleDiscount: 0, ...order.totals },
 			promotions: {
 				couponCode: order.promotions.couponCode,
 				pointsRedeemed: order.promotions.pointsRedeemed,
 				pointsValue: order.promotions.pointsValue,
+				pointsEarned: order.promotions.pointsEarned,
+				role: order.promotions.role ? { label: order.promotions.role.label, percent: order.promotions.role.percent } : null,
 			},
 			address: order.address,
 			delivery: { ...order.delivery, locationName: location ? String(location.name) : '' },
 			payment: {
 				method: order.payment.method,
 				state: order.payment.state,
+				via: order.payment.via ?? 'payments',
 				advance: order.payment.advance,
-				paid: order.payment.paid,
-				refunded: order.payment.refunded,
-				payUrl: waitingPayment ? String(/** @type {any} */ (order.payment).checkoutUrl || '') || null : null,
+				paid,
+				refunded,
+				balanceDue: settled ? 0 : Math.max(0, order.totals.total - Math.max(0, paid - refunded)),
+				payUrl: waitingPayment ? String(order.payment.checkoutUrl || '') || null : null,
 				payBy: order.role === 'awaiting_payment' ? iso(order.holdUntil) : null,
+				proof: order.payment.proof ? { reference: order.payment.proof.reference, at: iso(order.payment.proof.at) } : null,
+				// the payments log without staff names (E26)
+				entries: (order.payments ?? []).map((entry) => ({
+					method: entry.method,
+					amount: entry.amount,
+					reference: entry.reference,
+					at: iso(entry.at),
+				})),
+				refunds: (order.refunds ?? []).map((entry) => ({
+					method: entry.method,
+					amount: entry.amount,
+					reference: entry.reference,
+					at: iso(entry.at),
+				})),
 			},
+			bankDetails: quoteBank,
+			canSendProof: takesProof(order),
+			notes: {
+				payment: String(
+					{
+						cod: checkout.noteCod,
+						online: checkout.noteOnline,
+						bank_transfer: checkout.noteBankTransfer,
+						pickup: checkout.notePickup,
+					}[order.payment.method] ?? '',
+				),
+				delivery: String(zones?.deliveryNote ?? ''),
+				prep: String(zones?.prepNote ?? ''),
+				pickupReady: order.delivery.method === 'pickup' ? String(zones?.pickupReadyNote ?? '') : '',
+			},
+			pickupPoint:
+				order.delivery.method === 'pickup' && !order.delivery.locationId && zones?.pickupEnabled
+					? {
+							name: String(zones.pickupName ?? ''),
+							address: String(zones.pickupAddress ?? ''),
+							hours: String(zones.pickupHours ?? ''),
+						}
+					: null,
 			history: order.history.map((entry) => ({ at: iso(entry.at), status: entry.to, label: labelOf(flow, entry.to) })),
 			shipment: order.shipment
 				? {
 						courier: order.shipment.courier,
 						trackingNumber: order.shipment.trackingNumber,
-						trackingUrl: order.shipment.trackingUrl,
+						trackingUrl: shipmentLink(couriers, order.shipment),
+						trackingNote: order.shipment.trackingNote ?? '',
+						estimatedDeliveryAt: iso(order.shipment.estimatedDeliveryAt),
 					}
 				: null,
+			dispatchVideo: await media.dispatchVideo(s, order),
 			note: order.note,
-			canCancel: WAITING_ROLES.includes(order.role),
+			canCancel: await shopperMayCancel(s, order),
+			invoice:
+				invoices !== null &&
+				(invoices.shopperFrom !== 'confirmed' || !WAITING_ROLES.includes(order.role)) &&
+				order.role !== 'cancelled',
 		};
 	};
 
 	/**
-	 * What to do next after placing or paying: pay on Payments' page, try starting the payment again, or nothing.
-	 * @param {OrderRecord} order
+	 * What to do next after placing or paying: pay on Payments' page, try starting the payment again, or nothing (with
+	 * the store's own success page, E22).
+	 * @param {Site} s @param {OrderRecord} order
 	 */
-	const nextOf = (order) => {
-		if (order.role !== 'awaiting_payment' || order.payment.state !== 'pending') return { kind: 'done' };
-		const url = /** @type {any} */ (order.payment).checkoutUrl;
-		return order.payment.paymentId && url ? { kind: 'pay', url: String(url) } : { kind: 'retry' };
+	const nextOf = async (s, order) => {
+		if (order.role === 'awaiting_payment' && order.payment.state === 'pending') {
+			const url = order.payment.checkoutUrl;
+			return order.payment.paymentId && url ? { kind: 'pay', url: String(url) } : { kind: 'retry' };
+		}
+		if (takesProof(order)) return { kind: 'proof', url: (await backOf(s, order, null)).success };
+		return { kind: 'done', url: (await backOf(s, order, null)).success };
 	};
 
 	// ---------------------------------------------------------------------------------------------------- placing
@@ -388,38 +521,72 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		});
 	};
 
+	/**
+	 * Who places an order: the signed-in shopper, else a guest while `guests` allows (E21).
+	 * @param {Site} s @param {any} ctx @param {Record<string, any>} checkout
+	 * @returns {Promise<{ shopper: Shopper | null, guest: { name: string, phone: string, email: string } | null }>}
+	 */
+	const buyerOf = async (s, ctx, checkout) => {
+		const shopper = await service.shopper(s);
+		if (shopper) {
+			await guests.claim(s, shopper);
+			return { shopper, guest: null };
+		}
+		const mode = String(checkout.guests ?? 'off');
+		if (mode === 'off') throw problem('sign_in_required', 'Sign in to continue.');
+		const body = typeof ctx.body === 'object' && ctx.body !== null ? ctx.body : {};
+		const guest = checkGuest(body.customer, checkout);
+		if (!guest.ok) throw service.invalid(guest.field, guest.message);
+		if (mode === 'unless_password' && (await guests.memberWithPassword(s, guest.value.phone)))
+			throw problem('sign_in_required', 'This phone number has an account: sign in to order.', {
+				extensions: { reason: 'member_phone' },
+			});
+		return { shopper: null, guest: guest.value };
+	};
+
 	/** @param {any} ctx */
 	const place = async (ctx) => {
 		if (!ctx.idempotencyKey) throw problem('idempotency_key_required', 'Send an Idempotency-Key header.');
 		const s = await service.site(ctx);
-		const shopper = await service.requireShopper(s);
-		const cart = checkCart(ctx.body);
+		const checkout = await s.values('checkout');
+		const { shopper, guest } = await buyerOf(s, ctx, checkout);
+		const cart = checkCart(ctx.body, {
+			maxLines: Number(checkout.maxLines ?? 50),
+			maxQuantity: Number(checkout.maxQuantity ?? 99),
+		});
 		if (!cart.ok) throw service.invalid(cart.field, cart.message);
 		const extras = checkOrderExtras(ctx.body);
 		if (!extras.ok) throw service.invalid(extras.field, extras.message);
 		const { payment: method, note, returnUrl } = extras.value;
 		if (returnUrl !== null && !allowedReturn(s, returnUrl))
 			throw service.invalid('returnUrl', `returnUrl must be on https://${s.domain} (or a local address while testing).`);
-		const checkout = await s.values('checkout');
 		const data = await s.data();
 		const store = createOrdersStore(data);
-		const customer = await store.customer(shopper.id);
-		if (customer?.blocked)
+		const buyer = shopper
+			? { userId: shopper.id, name: shopper.name, email: shopper.email, phone: shopper.phone }
+			: { userId: null, .../** @type {{ name: string, phone: string, email: string }} */ (guest) };
+		const known = shopper ? await store.customer(shopper.id) : await store.guestCustomer(buyer.phone);
+		if (known?.blocked)
 			throw problem('customer_blocked', 'Ordering is not possible for this account. Please contact the shop.');
 		const cap = Number(checkout.openOrderCap);
-		if (cap > 0 && (await store.countWaiting(shopper.id, WAITING_ROLES)) >= cap)
+		if (
+			cap > 0 &&
+			(await store.countWaiting({ userId: shopper?.id ?? null, customerId: known?.id ?? null }, WAITING_ROLES)) >= cap
+		)
 			throw problem(
 				'too_many_open_orders',
 				'You have orders waiting for payment or confirmation. Finish or cancel them first.',
 			);
 
 		/** @type {string[]} */
-		const required = checkout.addressRequired;
+		const required = Array.isArray(checkout.addressRequired) ? checkout.addressRequired : ['line1', 'city'];
 		const address =
 			extras.value.address === undefined || extras.value.address === null
 				? null
 				: checkAddress(extras.value.address, required);
-		const q = await quoting.quote(s, cart.value, shopper, address?.ok ? address.value : null);
+		const q = await quoting.quote(s, { ...cart.value, payment: method }, shopper, address?.ok ? address.value : null, {
+			customer: known,
+		});
 		refuseLines(q);
 		if (q.delivery.method === 'delivery' && !address?.ok)
 			throw service.invalid(
@@ -445,14 +612,26 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		const flow = await flowOf(s);
 		const now = service.now();
 		const total = q.totals.total;
+		const cod = await s.values('cod');
 		const advance = method === 'cod' ? option.advance : 0;
-		const viaPayments = total > 0 && (method === 'online' || method === 'bank_transfer' || advance > 0);
+		const bankManual = method === 'bank_transfer' && checkout.bankTransferVia === 'manual';
+		const advanceManual = method === 'cod' && advance > 0 && cod.advanceVia === 'manual';
+		const manual = bankManual || advanceManual;
+		const viaPayments = total > 0 && !manual && (method === 'online' || method === 'bank_transfer' || advance > 0);
+		const waitsPayment = viaPayments || (total > 0 && manual);
 		/** @type {StatusRole} */
-		const role = viaPayments ? 'awaiting_payment' : 'awaiting_confirmation';
+		const role = waitsPayment
+			? 'awaiting_payment'
+			: method === 'cod' && cod.startStatus === 'open'
+				? 'open'
+				: 'awaiting_confirmation';
 		const status = statusWithRole(flow, role);
-		const holdMs = viaPayments
-			? Number(checkout.paymentWindowMinutes) * 60_000
-			: Number(checkout.confirmationHours) * 3_600_000;
+		const holdMs =
+			role === 'awaiting_payment'
+				? Number(checkout.paymentWindowMinutes) * 60_000
+				: role === 'awaiting_confirmation'
+					? Number(checkout.confirmationHours) * 3_600_000
+					: 0;
 		const orderId = createId(ID_PREFIX.order);
 		// each physical line keeps its warranty from placement (E12): the variant's, the product's, the grade's, the setting
 		const grades = s.has('grades_serials') ? gradesByKey(await s.list('grades')) : new Map();
@@ -495,13 +674,24 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 				booking,
 				licences: [],
 				returnedQuantity: 0,
+				dealId: q.promotions?.lines.find((entry) => entry.key === line.key)?.dealId ?? null,
 				...(line.kind === 'digital' ? { downloads: 0 } : {}),
 			};
 		});
 		const promotions = q.promotions;
+		const customer = await store.ensureCustomer(buyer);
+		const loyalty = s.has('loyalty') ? await s.values('loyalty') : null;
+		const earns = loyalty !== null && (shopper ? takesPart(loyalty, shopper.role) : loyaltyRules(loyalty).guests === 'earn');
+		const orderKey = shopper ? null : newOrderKey();
 		const order = {
 			id: orderId,
-			customer: { userId: shopper.id, name: shopper.name, email: shopper.email, phone: shopper.phone },
+			customer: {
+				userId: shopper?.id ?? '',
+				name: buyer.name,
+				email: buyer.email,
+				phone: buyer.phone,
+				customerId: /** @type {string} */ (customer.id),
+			},
 			address: q.delivery.method === 'delivery' && address?.ok ? address.value : null,
 			delivery: { method: q.delivery.method, zone: q.delivery.zone, fee: q.delivery.fee, locationId: q.delivery.locationId },
 			lines,
@@ -513,14 +703,14 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 				bundleIds: promotions?.bundleIds ?? [],
 				pointsRedeemed: q.points?.used ?? 0,
 				pointsValue: q.points?.value ?? 0,
-				pointsEarned: s.has('loyalty')
-					? Math.max(
-							0,
-							Math.floor(
-								pointsToEarn({ total, delivery: q.totals.delivery, tax: q.totals.tax }, await s.values('loyalty')),
-							),
-						)
+				// worked out now; with `earnAt: placement` it stays fixed until delivery credits it (E20)
+				pointsEarned: earns
+					? Math.max(0, Math.floor(pointsToEarn(q.totals, /** @type {Record<string, any>} */ (loyalty))))
 					: 0,
+				pointsFixed: earns && loyaltyRules(loyalty).earnAt === 'placement',
+				pointsCredited: false,
+				pointsBlocked: promotions?.pointsBlocked === true,
+				role: q.role,
 				released: false,
 			},
 			payment: {
@@ -534,16 +724,24 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 				refunded: 0,
 				checkedAt: null,
 				checkoutUrl: '',
+				via: /** @type {'manual' | 'payments'} */ (manual ? 'manual' : 'payments'),
+				proof: null,
 			},
+			payments: [],
+			refunds: [],
 			status,
 			role,
-			history: [{ at: new Date(now), from: null, to: status, by: 'shopper', note: '' }],
+			history: [{ at: new Date(now), from: null, to: status, by: shopper ? 'shopper' : 'guest', note: '' }],
 			shipment: null,
+			media: [],
 			stockHeld: true,
-			holdUntil: new Date(now + holdMs),
+			holdUntil: holdMs > 0 ? new Date(now + holdMs) : null,
 			idempotencyKey: String(ctx.idempotencyKey),
 			note,
 			staffNote: '',
+			seenBy: [],
+			phoneDigits: phoneDigitsOf(buyer.phone),
+			accessKeyHash: orderKey ? orderKeyHash(orderKey) : null,
 			placedAt: new Date(now),
 			deliveredAt: null,
 		};
@@ -556,9 +754,13 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 			{
 				order,
 				numberPrefix: String(checkout.numberPrefix),
+				numberDigits: Number(checkout.numberDigits ?? 6),
 				locationOrder,
 				couponPerCustomer: q.coupon?.perCustomer ?? null,
 				slots,
+				lockedDealIds: (promotions?.lines ?? [])
+					.filter((entry) => entry.locked && entry.dealId)
+					.map((entry) => String(entry.dealId)),
 			},
 			{ now, timeZone: (await s.business()).timeZone ?? 'UTC' },
 		);
@@ -573,31 +775,46 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 				throw problem('points_changed', 'Your points balance changed. Check your cart again.');
 			throw problem('slot_taken', 'A chosen time is already booked.');
 		}
-		if (placed.duplicate) return { order: await shopperView(s, placed.order, flow), next: nextOf(placed.order) };
+		if (placed.duplicate) return { order: await shopperView(s, placed.order, flow), next: await nextOf(s, placed.order) };
 
 		let current = placed.order;
-		await store.recordCustomer(shopper);
+		await store.countOrder(/** @type {string} */ (customer.id), { city: order.address?.city ?? '', at: new Date(now) });
 		if (viaPayments) current = (await startPayment(s, current, returnUrl, current.id)) ?? current;
-		await messages.placed(s, current, labelOf(flow, status));
-		await service.emit('order.placed', s, { order: current });
+		await service.emit('order.placed', s, { order: current, statusLabel: labelOf(flow, status) });
 		// a free order is paid as it is placed (its digital items are given now)
 		if (current.payment.state === 'paid') {
-			await service.emit('order.paid', s, { order: current });
+			await service.emit('order.paid', s, { order: current, entry: null });
 			current = (await store.order(current.id)) ?? current;
 		}
-		return created({ order: await shopperView(s, current, flow), next: nextOf(current) });
+		return created({
+			order: await shopperView(s, current, flow),
+			next: await nextOf(s, current),
+			...(orderKey ? { orderKey } : {}),
+		});
 	};
 
 	// ------------------------------------------------------------------------------------------- shopper routes
 
-	/** @param {any} ctx */
-	const shopperOrder = async (ctx) => {
+	/**
+	 * The order a shopper asks for: their own with a sign-in, or any order whose key they send (E21).
+	 * @param {any} ctx
+	 * @param {(store: ReturnType<typeof createOrdersStore>) => Promise<OrderRecord | null>} find
+	 */
+	const ownOrder = async (ctx, find) => {
 		const s = await service.site(ctx);
-		const shopper = await service.requireShopper(s);
-		const found = await createOrdersStore(await s.data()).customerOrder(shopper.id, String(ctx.params.id));
-		if (!found) throw problem('not_found', 'There is no such order.');
+		const shopper = await service.shopper(s);
+		if (shopper) await guests.claim(s, shopper);
+		const key = ctx.headers?.get?.(ORDER_KEY_HEADER);
+		if (!shopper && !key) throw problem('sign_in_required', 'Sign in to continue.');
+		const found = await find(createOrdersStore(await s.data()));
+		const mine =
+			found && ((shopper && found.customer.userId === shopper.id) || (key && keyOpens(key, found.accessKeyHash ?? null)));
+		if (!found || !mine) throw problem('not_found', 'There is no such order.');
 		return { s, shopper, order: found };
 	};
+
+	/** @param {any} ctx */
+	const shopperOrder = (ctx) => ownOrder(ctx, (store) => store.order(String(ctx.params.id)));
 
 	/** @param {any} ctx */
 	const list = async (ctx) => {
@@ -607,6 +824,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		);
 		const s = await service.site(ctx);
 		const shopper = await service.requireShopper(s);
+		await guests.claim(s, shopper);
 		const flow = await flowOf(s);
 		const rows = await createOrdersStore(await s.data()).customerOrders(shopper.id, {
 			after: page.after,
@@ -635,14 +853,32 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		return shopperView(s, await refresh(s, order), await flowOf(s));
 	};
 
+	/** GET /v1/shop/orders/by-number/:number: order pages by number (E21). @param {any} ctx */
+	const readByNumber = async (ctx) => {
+		const number = String(ctx.params.number);
+		if (!ORDER_NUMBER.test(number)) throw problem('not_found', 'There is no such order.');
+		const { s, order } = await ownOrder(ctx, (store) => store.byNumber(number));
+		return shopperView(s, await refresh(s, order), await flowOf(s));
+	};
+
 	/** @param {any} ctx */
 	const cancelByShopper = async (ctx) => {
-		const { s, order } = await shopperOrder(ctx);
+		const { s, shopper, order } = await shopperOrder(ctx);
 		const current = await refresh(s, order);
-		if (!WAITING_ROLES.includes(current.role)) throw problem('move_not_allowed', 'This order can no longer be cancelled here.');
-		const cancelled = await cancel(s, current, { by: 'shopper', note: 'Cancelled by the shopper' });
+		const flow = await flowOf(s);
+		if (!(await shopperMayCancel(s, current)) || !cancelledStatus(flow, current.status))
+			throw problem('move_not_allowed', 'This order can no longer be cancelled here.');
+		// an open order (E27 `shopperCancel` may list `open`) is cancelled the same way while nothing was paid; money paid
+		// is given back by the shop's staff, who refund it
+		if (!WAITING_ROLES.includes(current.role) && current.payment.paid > 0)
+			throw problem('move_not_allowed', 'This order is paid; please ask the shop to cancel and refund it.');
+		const cancelled = await cancel(s, current, {
+			by: shopper ? 'shopper' : 'guest',
+			note: 'Cancelled by the shopper',
+			reason: 'shopper',
+		});
 		if (!cancelled) throw problem('move_not_allowed', 'This order can no longer be cancelled here.');
-		return { order: await shopperView(s, cancelled, await flowOf(s)) };
+		return { order: await shopperView(s, cancelled, flow) };
 	};
 
 	/** @param {any} ctx */
@@ -655,12 +891,68 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		let current = await refresh(s, order);
 		if (current.role !== 'awaiting_payment' || current.payment.state !== 'pending')
 			throw problem('nothing_to_pay', 'This order is not waiting for a payment.');
-		if (nextOf(current).kind !== 'pay') {
+		if ((await nextOf(s, current)).kind !== 'pay') {
 			const started = await startPayment(s, current, returnUrl, `${current.id}-${service.now()}`);
 			if (!started) throw problem('payments_unavailable', 'Payments cannot be reached right now. Try again in a moment.');
 			current = started;
 		}
-		return { order: await shopperView(s, current, await flowOf(s)), next: nextOf(current) };
+		return { order: await shopperView(s, current, await flowOf(s)), next: await nextOf(s, current) };
+	};
+
+	/** POST /v1/shop/orders/:id/proof/upload `{ type, size }`: a signed upload of a transfer proof (E24). @param {any} ctx */
+	const proofUpload = async (ctx) => {
+		const { s, order } = await shopperOrder(ctx);
+		if (!takesProof(order)) throw problem('nothing_to_pay', 'This order is not waiting for a transfer proof.');
+		const body = typeof ctx.body === 'object' && ctx.body !== null ? ctx.body : {};
+		const extension = Object.hasOwn(PROOF_TYPES, body.type)
+			? PROOF_TYPES[/** @type {keyof typeof PROOF_TYPES} */ (body.type)]
+			: null;
+		if (!extension) throw service.invalid('type', 'Upload a JPEG, PNG, WebP or PDF file.');
+		if (!Number.isSafeInteger(body.size) || body.size < 1 || body.size > PROOF_MAX_BYTES)
+			throw service.invalid('size', 'The largest proof is 10 MB.');
+		const storage = await product.connections.storage(s.websiteId);
+		if (!storage) throw problem('storage_not_connected', 'Uploads are not possible right now.');
+		const signed = storage.presignPut({
+			key: `ecommerce/proofs/${order.id}/${createId('prf')}.${extension}`,
+			contentType: body.type,
+			contentLength: body.size,
+			expiresIn: PROOF_SECONDS,
+		});
+		return created({
+			upload: { method: signed.method, url: signed.url, headers: signed.headers },
+			key: signed.key,
+			expiresAt: signed.expiresAt,
+		});
+	};
+
+	/** POST /v1/shop/orders/:id/proof `{ key, reference? }`: send the transfer proof (E24). @param {any} ctx */
+	const sendProof = async (ctx) => {
+		const { s, order } = await shopperOrder(ctx);
+		if (!takesProof(order)) throw problem('nothing_to_pay', 'This order is not waiting for a transfer proof.');
+		const body = typeof ctx.body === 'object' && ctx.body !== null ? ctx.body : {};
+		const key = typeof body.key === 'string' ? body.key : '';
+		const folder = `ecommerce/proofs/${order.id}/`;
+		if (!key.startsWith(folder) || !/^prf_[A-Za-z0-9_-]{1,64}\.(jpg|png|webp|pdf)$/.test(key.slice(folder.length)))
+			throw service.invalid('key', 'Upload the proof first.');
+		const reference = typeof body.reference === 'string' ? body.reference.trim() : '';
+		if (reference.length > 120) throw service.invalid('reference', 'The reference has at most 120 characters.');
+		const storage = await product.connections.storage(s.websiteId);
+		const head = storage ? await storage.headObject({ key }) : null;
+		if (!head?.exists) throw service.invalid('key', 'The proof was not uploaded.');
+		const now = service.now();
+		const store = createOrdersStore(await s.data());
+		const changed = await store.change(
+			order,
+			{ 'payment.proof': { key, reference, at: new Date(now) } },
+			{
+				push: {
+					history: { at: new Date(now), from: order.status, to: order.status, by: 'shopper', note: 'Transfer proof sent' },
+				},
+			},
+		);
+		if (!changed) throw problem('conflict', 'The order changed meanwhile; reload it and try again.');
+		await service.emit('order.proof_uploaded', s, { order: changed, reference });
+		return { order: await shopperView(s, changed, await flowOf(s)) };
 	};
 
 	/** @param {any} ctx */
@@ -672,10 +964,28 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 	/** @param {any} ctx */
 	const quoteCart = async (ctx) => {
 		const s = await service.site(ctx);
-		const cart = checkCart(ctx.body);
+		const checkout = await s.values('checkout');
+		const cart = checkCart(ctx.body, {
+			maxLines: Number(checkout.maxLines ?? 50),
+			maxQuantity: Number(checkout.maxQuantity ?? 99),
+		});
 		if (!cart.ok) throw service.invalid(cart.field, cart.message);
 		return quoting.view(s, await quoting.quote(s, cart.value, await service.shopper(s)));
 	};
 
-	return Object.freeze({ sweep, place, list, read, cancelByShopper, pay, downloadFile, quoteCart });
+	return Object.freeze({
+		sweep,
+		place,
+		list,
+		read,
+		readByNumber,
+		cancelByShopper,
+		pay,
+		proofUpload,
+		sendProof,
+		downloadFile,
+		quoteCart,
+		recheck,
+		cancel,
+	});
 };

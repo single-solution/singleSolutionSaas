@@ -145,6 +145,15 @@
 			}
 		},
 		{
+			"key": "role_pricing",
+			"name": "Role pricing",
+			"description": "Signed-in shoppers with a listed Accounts role get a percent off the goods after offers, shown as its own line on quotes, orders and invoices.",
+			"dependsOn": ["checkout"],
+			"settings": {
+				"$ref": "schemas/role_pricing.settings.json"
+			}
+		},
+		{
 			"key": "bundles",
 			"name": "Bundles",
 			"description": "Bundles and buy X get Y offers applied in the cart.",
@@ -235,6 +244,24 @@
 			}
 		},
 		{
+			"key": "events",
+			"name": "Events",
+			"description": "Order, return, review, catalog and stock events for your server: listed by the API and sent to your webhooks through Notifications.",
+			"dependsOn": ["catalog"],
+			"settings": {
+				"$ref": "schemas/events.settings.json"
+			}
+		},
+		{
+			"key": "staff_alerts",
+			"name": "Staff alerts",
+			"description": "E-mail or WhatsApp your staff about new orders, status changes, payments, transfer proofs, cancels, expiries and return claims, through Notifications.",
+			"dependsOn": ["checkout"],
+			"settings": {
+				"$ref": "schemas/staff_alerts.settings.json"
+			}
+		},
+		{
 			"key": "seo",
 			"name": "SEO",
 			"description": "Meta tags and structured data for products and categories, and sitemaps.",
@@ -299,6 +326,11 @@
 		{
 			"key": "orders.refund",
 			"name": "Refund orders",
+			"feature": "checkout"
+		},
+		{
+			"key": "orders.delete",
+			"name": "Delete orders",
 			"feature": "checkout"
 		},
 		{

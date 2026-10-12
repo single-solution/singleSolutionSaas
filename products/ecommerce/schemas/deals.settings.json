@@ -1,5 +1,20 @@
 {
 	"type": "object",
 	"additionalProperties": false,
-	"properties": {}
+	"properties": {
+		"lockMinutes": {
+			"type": "integer",
+			"title": "Keep a deal price in the cart for (minutes)",
+			"description": "Each cart line keeps the deal price it was quoted for this long, even if the deal ends or changes meanwhile (not when it is deleted or used up). 0 = off.",
+			"default": 0,
+			"minimum": 0,
+			"maximum": 10080
+		},
+		"shopperChoice": {
+			"type": "boolean",
+			"title": "Shoppers pick the deal",
+			"description": "When several deals fit a cart line, the shopper picks one; otherwise the best saving applies.",
+			"default": false
+		}
+	}
 }

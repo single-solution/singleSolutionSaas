@@ -1,7 +1,7 @@
 /**
  * Ecommerce's list settings, in the product database (like Chat's, PLAN 0.8.4 step 8): settings that are lists or
  * records, which a settings schema cannot hold — the order flow (statuses and allowed moves), delivery zones, couriers,
- * tax rules, condition grades and booking hours. They are kept per website in the kit's settings collection (so a
+ * tax rules, condition grades, booking hours and role prices (E19). They are kept per website in the kit's settings collection (so a
  * removed website's lists go with its settings), each checked by its feature's rules, edited in the dashboard
  * (Settings, `/v1/dashboard/websites/:websiteId/lists/:list`) and recorded in Recent changes. Lists have no global
  * defaults; an unsaved list reads as its code default.
@@ -12,6 +12,7 @@ import { checkCouriers } from '../core/couriers.js';
 import { checkZones } from '../core/delivery.js';
 import { DEFAULT_FLOW, checkOrderFlow } from '../core/flow.js';
 import { checkGrades } from '../core/grades.js';
+import { checkRolePrices } from '../core/role-pricing.js';
 import { checkTaxRules } from '../core/taxes.js';
 
 /**
@@ -27,6 +28,7 @@ export const LISTS = Object.freeze({
 	tax_rules: { feature: 'taxes', title: 'Tax rules', check: checkTaxRules, fallback: () => [] },
 	grades: { feature: 'grades_serials', title: 'Condition grades', check: checkGrades, fallback: () => [] },
 	booking_hours: { feature: 'bookings', title: 'Booking hours', check: checkBookingHours, fallback: () => [] },
+	role_prices: { feature: 'role_pricing', title: 'Role prices', check: checkRolePrices, fallback: () => [] },
 });
 
 /** @typedef {keyof typeof LISTS} ListName */

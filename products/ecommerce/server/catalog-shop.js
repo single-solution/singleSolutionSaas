@@ -11,6 +11,7 @@
  */
 import { defineRoute, paginate, problem } from '@ss/app-kit';
 import { NO_ID, attributesOf, brandsOf, categoriesOf, categoryGroups, findBySlugHistory } from '../adapters/catalog-store.js';
+import { categoryTrail, loadOffers } from '../adapters/promotions-store.js';
 import {
 	afterFilter,
 	cursorKey,
@@ -26,7 +27,9 @@ import {
 import { categoryTree, withDescendants } from '../core/catalog-taxonomy.js';
 import { youtubeId } from '../core/catalog-content.js';
 import { cardOf, cardPhotos, pageOf } from '../core/catalog-views.js';
+import { productDeals } from '../core/deals.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
+import { attributeValues } from '../core/promotions.js';
 import { chartView, resolveSizeChart } from '../core/size-charts.js';
 import { SHOP_LIMITS, refuse } from './catalog-common.js';
 import { createCatalogSearch } from './catalog-search.js';
@@ -50,8 +53,38 @@ const TOTAL_CAP = 10_000;
 /**
  * Product cards for any part that shows products (wishlist, compare, alerts, Chat lookups, feeds).
  * @param {CatalogCommon} common
+ * @param {Service} service
  */
-const createCards = (common) => {
+const createCards = (common, service) => {
+	/**
+	 * The live deals that cover each product (E18: cards carry `dealCount` and the first deal's badge); none while
+	 * Deals is off.
+	 * @param {Site} s @param {WebsiteData} data @param {ProductRecord[]} products
+	 * @returns {Promise<Map<string, import('../core/model.js').DealRecord[]>>}
+	 */
+	const dealsOf = async (s, data, products) => {
+		/** @type {Map<string, import('../core/model.js').DealRecord[]>} */
+		const out = new Map();
+		if (!s.has('deals')) return out;
+		const now = service.now();
+		const { deals } = await loadOffers(data, { now, deals: true });
+		if (deals.length === 0) return out;
+		const clock = await service.pricing(s);
+		for (const item of products) {
+			const categoryIds = await categoryTrail(data, item.categoryIds ?? []);
+			out.set(
+				item.id,
+				productDeals(item, deals, {
+					categoryIds,
+					now,
+					clock,
+					attributes: (variant) => attributeValues(item, variant),
+				}),
+			);
+		}
+		return out;
+	};
+
 	/**
 	 * @param {Site} s
 	 * @param {WebsiteData} data
@@ -61,23 +94,39 @@ const createCards = (common) => {
 		if (products.length === 0) return [];
 		const brands = new Map((await brandsOf(data)).map((brand) => [brand.id, brand]));
 		const grades = await common.gradesOf(s);
+		const deals = await dealsOf(s, data, products);
 		return Promise.all(
 			products.map(async (item) => {
 				const brand = item.brandId ? brands.get(item.brandId) : undefined;
 				const main = item.media?.[0];
-				return cardOf(item, {
-					currency: s.currency,
-					image: await common.media.mediaUrl(s, main?.sizes?.card ?? main?.key),
-					url: await common.media.productUrl(s, item),
-					brand: brand ? { id: brand.id, name: brand.name } : null,
-					grades,
-					cardImages: await Promise.all(
-						cardPhotos(item).map(async (file) => ({
-							url: await common.media.mediaUrl(s, file.sizes?.card ?? file.key),
-							alt: file.alt || item.name,
-						})),
-					),
-				});
+				const covering = deals.get(item.id) ?? [];
+				const first = covering[0];
+				return {
+					...cardOf(item, {
+						currency: s.currency,
+						image: await common.media.mediaUrl(s, main?.sizes?.card ?? main?.key),
+						url: await common.media.productUrl(s, item),
+						brand: brand ? { id: brand.id, name: brand.name } : null,
+						grades,
+						cardImages: await Promise.all(
+							cardPhotos(item).map(async (file) => ({
+								url: await common.media.mediaUrl(s, file.sizes?.card ?? file.key),
+								alt: file.alt || item.name,
+							})),
+						),
+					}),
+					dealCount: covering.length,
+					deal: first
+						? {
+								id: first.id,
+								slug: first.slug ?? '',
+								name: first.name,
+								badgeLabel: first.badgeLabel ?? '',
+								discountLabel: first.discountLabel ?? '',
+								color: first.color ?? '',
+							}
+						: null,
+				};
 			}),
 		);
 	};
@@ -89,7 +138,7 @@ const createCards = (common) => {
  * @param {CatalogCommon} common
  */
 export const createCatalogShop = (product, service, common) => {
-	const cards = createCards(common);
+	const cards = createCards(common, service);
 	const search = createCatalogSearch(product);
 
 	/**

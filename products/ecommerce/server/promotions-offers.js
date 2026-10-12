@@ -13,7 +13,7 @@ import { createId } from '@ss/contracts';
 import { bundleView, checkBundleInput } from '../core/bundles.js';
 import { checkBatchInput, checkCouponInput, couponView, drawCode } from '../core/coupons.js';
 import { checkDealInput, dealView } from '../core/deals.js';
-import { ID_PREFIX } from '../core/model.js';
+import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import {
 	deleteOffer,
 	getOffer,
@@ -86,6 +86,24 @@ export const createOfferRoutes = (product, service) => {
 		throw error;
 	};
 
+	/**
+	 * Refuse a deal slug another deal uses (E18: `GET /v1/shop/deals/:ref` takes an id or a slug).
+	 * @param {import('@ss/app-kit').WebsiteData} data
+	 * @param {OfferCollection} kind
+	 * @param {Record<string, any>} value checked offer fields
+	 * @param {string | null} id the deal being changed
+	 */
+	const slugFree = async (data, kind, value, id) => {
+		if (kind !== 'deals' || !value.slug) return true;
+		const other = await data
+			.collection(COLLECTIONS.deals)
+			.findOne(
+				{ websiteId: data.websiteId, slug: value.slug, ...(id ? { id: { $ne: id } } : {}) },
+				{ projection: { _id: 0, id: 1 } },
+			);
+		return other === null;
+	};
+
 	/** @param {OfferCollection} kind */
 	const list = (kind) => async (/** @type {any} */ ctx) => {
 		const page = paginate({ cursor: ctx.query.cursor, limit: ctx.query.limit, url: ctx.request.url }, { defaultLimit: 25 });
@@ -112,6 +130,7 @@ export const createOfferRoutes = (product, service) => {
 		if (!checked.ok) return invalid(checked.field, checked.message);
 		const data = await dataOf(ctx);
 		await checkRefs(data, checked.value);
+		if (!(await slugFree(data, kind, checked.value, null))) return problem('slug_taken', 'Another deal uses this slug.');
 		const record = { id: createId(KINDS[kind].prefix), ...checked.value, used: 0 };
 		try {
 			await insertOffers(data, kind, [record]);
@@ -133,6 +152,7 @@ export const createOfferRoutes = (product, service) => {
 		const checked = KINDS[kind].check({ ...found, ...ctx.body });
 		if (!checked.ok) return invalid(checked.field, checked.message);
 		await checkRefs(data, checked.value);
+		if (!(await slugFree(data, kind, checked.value, id))) return problem('slug_taken', 'Another deal uses this slug.');
 		/** @type {any} */
 		let changed;
 		try {

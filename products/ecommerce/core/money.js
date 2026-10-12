@@ -117,3 +117,45 @@ export const allocate = (total, weights) => {
 	}
 	return parts;
 };
+
+/**
+ * The smallest amount Ecommerce computes (PLAN 0.8.10 E25): one whole unit of the currency (100 minor units of PKR)
+ * while the website's Format shows whole units, else one minor unit.
+ * @param {string} currency
+ * @param {boolean} wholeUnits the Format's `wholeUnits`
+ */
+export const unitOf = (currency, wholeUnits) => (wholeUnits ? 10 ** exponentOf(currency) : 1);
+
+/**
+ * An amount rounded down to whole `unit`s (deal discounts and the points' value, E25).
+ * @param {number} amount minor units
+ * @param {number} [unit]
+ */
+export const roundDown = (amount, unit = 1) => (unit > 1 ? Math.floor(amount / unit) * unit : Math.floor(amount));
+
+/**
+ * An amount rounded half up to whole `unit`s (percentage fees, role discounts and tax, E25).
+ * @param {number} amount minor units (may have a fraction)
+ * @param {number} [unit]
+ */
+export const roundHalfUp = (amount, unit = 1) => Math.round(amount / unit + 1e-9) * unit;
+
+/**
+ * `allocate` in whole `unit`s: the parts are whole units when `total` is, and add up to `total` (a total that is not a
+ * multiple of `unit` leaves its remainder on the largest part).
+ * @param {number} total minor units
+ * @param {number[]} weights
+ * @param {number} [unit]
+ * @returns {number[]}
+ */
+export const allocateUnits = (total, weights, unit = 1) => {
+	if (unit <= 1) return allocate(total, weights);
+	const whole = Math.floor(total / unit);
+	const parts = allocate(whole, weights).map((part) => part * unit);
+	const rest = total - whole * unit;
+	if (rest > 0 && parts.length > 0) {
+		const largest = weights.reduce((best, weight, index) => (weight > (weights[best] ?? 0) ? index : best), 0);
+		parts[largest] = /** @type {number} */ (parts[largest]) + rest;
+	}
+	return parts;
+};

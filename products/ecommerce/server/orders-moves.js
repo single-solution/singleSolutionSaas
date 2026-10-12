@@ -24,7 +24,7 @@ import { problem } from '@ss/app-kit';
 import { givePoints, releaseOrder, returnToOrigin, takePoints } from '../adapters/ledger.js';
 import { courierOf, trackingLink } from '../core/couriers.js';
 import { canMove, statusOf } from '../core/flow.js';
-import { expiryFor, pointsToEarn } from '../core/loyalty.js';
+import { expiryFor, loyaltyRules, pointsToEarn } from '../core/loyalty.js';
 import { createId } from '@ss/contracts';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import {
@@ -38,7 +38,6 @@ import {
 	stateAfterRefund,
 	statusLabel,
 } from '../core/orders.js';
-import { createOrderMessages } from './order-messages.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
 /** @typedef {import('./service.js').Service} Service */
@@ -71,8 +70,6 @@ const changed = () => problem('conflict', 'The order changed meanwhile; reload i
  * @param {Service} service
  */
 export const createMoves = (product, service) => {
-	const messages = createOrderMessages(service);
-
 	/**
 	 * Run `work` in a transaction, again when the loyalty account changed meanwhile.
 	 * @param {Site} s
@@ -347,9 +344,22 @@ export const createMoves = (product, service) => {
 					set['payment.state'] = 'paid';
 					set['payment.paid'] = order.totals.total;
 				}
-				const loyalty = s.has('loyalty') && order.customer.userId ? await s.values('loyalty') : null;
-				const points = loyalty ? Math.max(0, Math.floor(pointsToEarn(order.totals, loyalty))) : 0;
-				if (points > 0) set['promotions.pointsEarned'] = points;
+				// points go to the member, or to the guest's customer record when guests earn (E20); fixed at placement or
+				// worked out now, and credited once
+				const owner = order.customer.userId
+					? { userId: order.customer.userId }
+					: order.customer.customerId
+						? { customerId: order.customer.customerId }
+						: null;
+				const loyalty = s.has('loyalty') && owner && !order.promotions.pointsCredited ? await s.values('loyalty') : null;
+				const earns = loyalty !== null && (order.customer.userId ? true : loyaltyRules(loyalty).guests === 'earn');
+				const points = !earns
+					? 0
+					: order.promotions.pointsFixed
+						? order.promotions.pointsEarned
+						: Math.max(0, Math.floor(pointsToEarn(order.totals, /** @type {Record<string, any>} */ (loyalty))));
+				if (points > 0) Object.assign(set, { 'promotions.pointsEarned': points, 'promotions.pointsCredited': true });
+				const timeZone = (await s.format()).timeZone || 'UTC';
 				const products = data.collection(COLLECTIONS.products);
 				await transact(s, async (session) => {
 					await write(session);
@@ -365,11 +375,11 @@ export const createMoves = (product, service) => {
 						!(await givePoints(
 							data,
 							{
-								userId: order.customer.userId,
+								userId: /** @type {any} */ (owner),
 								points,
 								orderId: order.id,
 								kind: 'earn',
-								expiresAt: expiryFor(now, loyalty),
+								expiresAt: expiryFor(now, /** @type {Record<string, any>} */ (loyalty), timeZone),
 								note: order.number,
 							},
 							{ now, session },
@@ -418,13 +428,19 @@ export const createMoves = (product, service) => {
 					set['payment.refunded'] = order.payment.paid;
 					set['payment.state'] = 'refunded';
 				}
-				const earned = order.promotions.pointsEarned;
-				if (earned > 0 && order.customer.userId)
+				// only points that were credited are taken back (an order refunded before delivery earned none)
+				const earned = order.promotions.pointsCredited === false ? 0 : order.promotions.pointsEarned;
+				const owner = order.customer.userId
+					? { userId: order.customer.userId }
+					: order.customer.customerId
+						? { customerId: order.customer.customerId }
+						: null;
+				if (earned > 0 && owner)
 					await transact(s, async (session) => {
 						await write(session);
 						const taken = await takePoints(
 							data,
-							{ userId: order.customer.userId, points: earned, orderId: order.id, kind: 'reverse', note: order.number },
+							{ userId: owner, points: earned, orderId: order.id, kind: 'reverse', note: order.number },
 							{ now, session },
 						);
 						if (!taken.ok) throw stop('points');
@@ -444,7 +460,6 @@ export const createMoves = (product, service) => {
 			detail: `${statusLabel(flow, from)} → ${target.label}`,
 		});
 		await service.emit('order.moved', s, { order: after, from, to: input.to });
-		await messages.status(s, after, target.label);
 		return { order: after, warnings };
 	};
 

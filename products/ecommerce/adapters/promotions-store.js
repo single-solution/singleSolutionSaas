@@ -252,6 +252,30 @@ export const categoryTrail = async (data, categoryIds) => {
 // ------------------------------------------------------------------------------------------------ data rights
 
 /**
+ * Points a member's orders will earn but have not yet (E20 `pending`): orders not delivered, cancelled or given back
+ * whose points are not credited.
+ * @param {WebsiteData} data
+ * @param {string} userId
+ * @returns {Promise<number>}
+ */
+export const pendingPoints = async (data, userId) => {
+	const rows = await data
+		.collection(COLLECTIONS.orders)
+		.find(
+			{
+				websiteId: data.websiteId,
+				'customer.userId': userId,
+				role: { $in: ['awaiting_payment', 'awaiting_confirmation', 'open', 'packed', 'shipped'] },
+				'promotions.pointsCredited': false,
+				'promotions.pointsEarned': { $gt: 0 },
+			},
+			{ projection: { _id: 0, 'promotions.pointsEarned': 1 }, limit: 500 },
+		)
+		.toArray();
+	return rows.reduce((n, row) => n + (Number(/** @type {any} */ (row).promotions?.pointsEarned) || 0), 0);
+};
+
+/**
  * A person's loyalty account (as stored) and coupon uses.
  * @param {WebsiteData} data
  * @param {string} userId

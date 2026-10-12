@@ -4,7 +4,9 @@
  * counts. Stock, offer uses, points and slots are changed only by the ledger (`adapters/ledger.js`).
  * @module
  */
-import { COLLECTIONS } from '../core/model.js';
+import { createId } from '@ss/contracts';
+import { phoneDigitsOf } from '../core/guests.js';
+import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 
 /** @typedef {import('@ss/app-kit').WebsiteData} WebsiteData */
 /** @typedef {import('../core/model.js').OrderRecord} OrderRecord */
@@ -18,7 +20,27 @@ export const INDEXES = [
 		keys: { websiteId: 1, 'customer.userId': 1, placedAt: -1, id: -1 },
 		name: 'by_customer',
 	},
+	{
+		collection: COLLECTIONS.orders,
+		keys: { websiteId: 1, 'customer.customerId': 1, placedAt: -1 },
+		name: 'by_customer_record',
+	},
+	{ collection: COLLECTIONS.orders, keys: { websiteId: 1, number: 1, id: 1 }, name: 'by_number_id' },
 	{ collection: COLLECTIONS.orders, keys: { websiteId: 1, role: 1, holdUntil: 1 }, name: 'by_role_hold' },
+	{
+		collection: COLLECTIONS.customers,
+		keys: { websiteId: 1, id: 1 },
+		name: 'by_id',
+		unique: true,
+		partialFilterExpression: { id: { $type: 'string' } },
+	},
+	{
+		collection: COLLECTIONS.customers,
+		keys: { websiteId: 1, phone: 1 },
+		name: 'one_guest_per_phone',
+		unique: true,
+		partialFilterExpression: { guest: true },
+	},
 	{ collection: COLLECTIONS.orders, keys: { websiteId: 1, 'payment.paymentId': 1 }, name: 'by_payment' },
 	{ collection: COLLECTIONS.licences, keys: { websiteId: 1, id: 1 }, name: 'by_id', unique: true },
 	{ collection: COLLECTIONS.licences, keys: { websiteId: 1, productId: 1, key: 1 }, name: 'one_key', unique: true },
@@ -104,8 +126,80 @@ export const createOrdersStore = (data) => {
 			/** @type {CustomerRecord | null} */ (
 				await data.collection(COLLECTIONS.customers).findOne({ websiteId, userId }, NO_ID)
 			),
+		/** A guest's record by their normalised phone (E21). @param {string} phone @returns {Promise<CustomerRecord | null>} */
+		guestCustomer: async (phone) =>
+			/** @type {CustomerRecord | null} */ (
+				await data.collection(COLLECTIONS.customers).findOne({ websiteId, guest: true, phone }, NO_ID)
+			),
 		/**
-		 * Keep the customer's latest details and count the order.
+		 * The customer record of a member or a guest, made when missing (its `cus_` id is kept for good), with their latest
+		 * details. A member is found by user id, a guest by normalised phone (E21).
+		 * @param {{ userId: string | null, name: string, email: string, phone: string }} who
+		 * @returns {Promise<CustomerRecord>}
+		 */
+		ensureCustomer: async (who) => {
+			const customers = data.collection(COLLECTIONS.customers);
+			const filter = who.userId ? { websiteId, userId: who.userId } : { websiteId, guest: true, phone: who.phone };
+			const set = {
+				name: who.name,
+				...(who.email || who.userId ? { email: who.email } : {}),
+				phone: who.phone,
+				phoneDigits: phoneDigitsOf(who.phone),
+			};
+			const insert = {
+				id: createId(ID_PREFIX.customer),
+				userId: who.userId ?? null,
+				guest: !who.userId,
+				blocked: false,
+				blockedReason: '',
+				rtoCount: 0,
+				orderCount: 0,
+				note: '',
+				city: '',
+				seenBy: [],
+				...(who.email || who.userId ? {} : { email: '' }),
+			};
+			/** @returns {Promise<any>} */
+			const write = () =>
+				customers.findOneAndUpdate(
+					filter,
+					{ $set: set, $setOnInsert: insert },
+					{
+						upsert: true,
+						returnDocument: 'after',
+						projection: { _id: 0 },
+					},
+				);
+			let found;
+			try {
+				found = await write();
+			} catch (error) {
+				// two first orders at once: the other made the record
+				if (/** @type {any} */ (error)?.code !== 11000) throw error;
+				found = await write();
+			}
+			// records made before customer ids (members) get one now
+			if (found && !found.id) {
+				const id = createId(ID_PREFIX.customer);
+				await customers.updateOne({ ...filter, id: { $exists: false } }, { $set: { id } });
+				found = await customers.findOne(filter, NO_ID);
+			}
+			return /** @type {CustomerRecord} */ (found);
+		},
+		/**
+		 * Count an order on its customer record, with the delivery city.
+		 * @param {string} customerId @param {{ city: string, at: Date }} order
+		 */
+		countOrder: async (customerId, { city, at }) => {
+			await data
+				.collection(COLLECTIONS.customers)
+				.updateOne(
+					{ websiteId, id: customerId },
+					{ $inc: { orderCount: 1 }, $set: { lastOrderAt: at, ...(city ? { city } : {}) } },
+				);
+		},
+		/**
+		 * Keep the customer's latest details and count the order (members made before customer ids).
 		 * @param {{ id: string, name: string, email: string, phone: string }} shopper
 		 */
 		recordCustomer: async (shopper) => {
@@ -147,8 +241,20 @@ export const createOrdersStore = (data) => {
 					.toArray()
 			);
 		},
-		/** Orders of a customer still waiting (payment or confirmation). @param {string} userId @param {ReadonlyArray<string>} roles */
-		countWaiting: (userId, roles) => orders.countDocuments({ websiteId, 'customer.userId': userId, role: { $in: [...roles] } }),
+		/**
+		 * Orders of a customer still waiting (payment or confirmation): a member's by user id, a guest's by customer id.
+		 * @param {{ userId: string | null, customerId: string | null }} who @param {ReadonlyArray<string>} roles
+		 */
+		countWaiting: (who, roles) =>
+			who.userId || who.customerId
+				? orders.countDocuments({
+						websiteId,
+						...(who.userId ? { 'customer.userId': who.userId } : { 'customer.customerId': who.customerId }),
+						role: { $in: [...roles] },
+					})
+				: Promise.resolve(0),
+		/** An order by its number (E21 order pages). @param {string} number @returns {Promise<OrderRecord | null>} */
+		byNumber: async (number) => /** @type {OrderRecord | null} */ (await orders.findOne({ websiteId, number }, NO_ID)),
 		/**
 		 * Waiting orders whose window ended, oldest first.
 		 * @param {ReadonlyArray<string>} roles @param {number} now

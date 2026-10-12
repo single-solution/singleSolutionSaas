@@ -5,7 +5,7 @@
  * delivery, first-order and per-customer limits. No I/O.
  * @module
  */
-import { allocate, isPrice, MAX_AMOUNT, percentOf } from './money.js';
+import { MAX_AMOUNT, allocateUnits, isPrice, percentOf, roundDown } from './money.js';
 import {
 	checkAmount,
 	checkBoolean,
@@ -79,10 +79,11 @@ export const couponBlocked = (coupon, { code, now, customer }) => {
  * What a coupon takes off, on what is left of each line after deals and bundles.
  * @param {CouponRecord} coupon a coupon that may be used (see {@link couponBlocked})
  * @param {Array<{ productId: string, categoryIds: string[], brandId: string | null, remaining: number }>} lines
+ * @param {number} [unit] whole units: the discount rounds down to them (E25)
  * @returns {{ ok: true, amounts: number[], freeDelivery: boolean } | { ok: false, code: CouponProblemCode }}
  *   `amounts`: per line, in the same order
  */
-export const couponDiscount = (coupon, lines) => {
+export const couponDiscount = (coupon, lines, unit = 1) => {
 	const subtotal = lines.reduce((sum, line) => sum + line.remaining, 0);
 	if (subtotal < coupon.minSubtotal) return { ok: false, code: 'coupon_min_subtotal' };
 	const weights = lines.map((line) => (line.remaining > 0 && inScope(line, coupon.scope) ? line.remaining : 0));
@@ -90,9 +91,12 @@ export const couponDiscount = (coupon, lines) => {
 	if (base === 0) return { ok: false, code: 'coupon_not_applicable' };
 	if (coupon.type === 'free_delivery') return { ok: true, amounts: lines.map(() => 0), freeDelivery: true };
 	const raw = coupon.type === 'percent' ? percentOf(base, coupon.value) : Math.min(coupon.value, base);
-	const total = coupon.type === 'percent' && coupon.maxDiscount !== null ? Math.min(raw, coupon.maxDiscount) : raw;
+	const total = roundDown(
+		coupon.type === 'percent' && coupon.maxDiscount !== null ? Math.min(raw, coupon.maxDiscount) : raw,
+		unit,
+	);
 	if (total <= 0) return { ok: false, code: 'coupon_not_applicable' };
-	return { ok: true, amounts: allocate(total, weights), freeDelivery: false };
+	return { ok: true, amounts: allocateUnits(total, weights, unit), freeDelivery: false };
 };
 
 // ----------------------------------------------------------------------------------------------- merchant input

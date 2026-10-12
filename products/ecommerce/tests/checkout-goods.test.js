@@ -221,7 +221,7 @@ describe('free orders', () => {
 		await shop.api('POST', `/v1/products/${item.id}/licences`, { keys: ['FREE-1'] });
 		const placed = await place(await newShopper(), { lines: [{ productId: item.id }], payment: 'online' });
 		expect(placed.status).toBe(201);
-		expect(placed.json.next).toEqual({ kind: 'done' });
+		expect(placed.json.next).toEqual({ kind: 'done', url: null });
 		expect(placed.json.order).toMatchObject({
 			status: 'awaiting_confirmation',
 			payment: { state: 'paid' },

@@ -7,7 +7,16 @@
 			"title": "Send alerts by",
 			"description": "How shoppers get back-in-stock and price-drop alerts, through Notifications, to the e-mail or phone of their sign-in.",
 			"default": ["email"],
-			"items": { "type": "string", "enum": ["email", "sms", "whatsapp"] }
+			"items": {
+				"type": "string",
+				"enum": ["email", "sms", "whatsapp"]
+			}
+		},
+		"guests": {
+			"type": "boolean",
+			"title": "Guests may ask for alerts",
+			"description": "With a phone number or e-mail address, without signing in.",
+			"default": false
 		}
 	}
 }

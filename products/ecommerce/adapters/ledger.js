@@ -11,6 +11,7 @@
 import { createId, zonedParts } from '@ss/contracts';
 import { summarize } from '../core/catalog.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
+import { lotsByRule } from '../core/loyalty.js';
 import { balanceOf, compactLots, expireLots, spendFromLots, takeFromLots } from '../core/points.js';
 
 /** @typedef {import('@ss/app-kit').WebsiteData} WebsiteData */
@@ -30,8 +31,8 @@ export const LEDGER_INDEXES = [
 	{ collection: COLLECTIONS.orders, keys: { websiteId: 1, number: 1 }, name: 'by_number', unique: true },
 	{
 		collection: COLLECTIONS.orders,
-		keys: { websiteId: 1, 'customer.userId': 1, idempotencyKey: 1 },
-		name: 'by_checkout_key',
+		keys: { websiteId: 1, 'customer.userId': 1, 'customer.customerId': 1, idempotencyKey: 1 },
+		name: 'by_checkout',
 		unique: true,
 	},
 	{ collection: COLLECTIONS.counters, keys: { websiteId: 1, id: 1 }, name: 'by_id', unique: true },
@@ -42,10 +43,29 @@ export const LEDGER_INDEXES = [
 		unique: true,
 	},
 	{ collection: COLLECTIONS.couponUses, keys: { websiteId: 1, orderId: 1 }, name: 'by_order' },
-	{ collection: COLLECTIONS.loyalty, keys: { websiteId: 1, userId: 1 }, name: 'by_user', unique: true },
+	{
+		collection: COLLECTIONS.loyalty,
+		keys: { websiteId: 1, userId: 1 },
+		name: 'by_user',
+		unique: true,
+		partialFilterExpression: { userId: { $type: 'string' } },
+	},
+	{
+		collection: COLLECTIONS.loyalty,
+		keys: { websiteId: 1, customerId: 1 },
+		name: 'by_customer',
+		unique: true,
+		partialFilterExpression: { customerId: { $type: 'string' } },
+	},
 	{ collection: COLLECTIONS.slots, keys: { websiteId: 1, productId: 1, start: 1 }, name: 'one_booking', unique: true },
 	{ collection: COLLECTIONS.slots, keys: { websiteId: 1, orderId: 1 }, name: 'by_order' },
-	{ collection: COLLECTIONS.customers, keys: { websiteId: 1, userId: 1 }, name: 'by_user', unique: true },
+	{
+		collection: COLLECTIONS.customers,
+		keys: { websiteId: 1, userId: 1 },
+		name: 'by_user',
+		unique: true,
+		partialFilterExpression: { userId: { $type: 'string' } },
+	},
 ];
 
 /**
@@ -194,11 +214,15 @@ const releaseStock = async (data, lines, session) => {
  * per-customer limit is held by a unique use record.
  * @param {WebsiteData} data
  * @param {{ couponId: string | null, dealIds: string[], bundleIds: string[], userId: string, orderId: string,
- *   perCustomer?: number | null }} uses
+ *   perCustomer?: number | null, lockedDealIds?: string[] }} uses `userId`: the member, or a guest's customer id
  * @param {Session} [session]
  * @returns {Promise<{ ok: true } | { ok: false, offerId: string }>}
  */
-const useOffers = async (data, { couponId, dealIds, bundleIds, userId, orderId, perCustomer = null }, session) => {
+const useOffers = async (
+	data,
+	{ couponId, dealIds, bundleIds, userId, orderId, perCustomer = null, lockedDealIds = [] },
+	session,
+) => {
 	const websiteId = data.websiteId;
 	const underLimit = { $or: [{ limit: null }, { $expr: { $lt: ['$used', '$limit'] } }] };
 	/** @type {Array<[string, string]>} */
@@ -208,9 +232,11 @@ const useOffers = async (data, { couponId, dealIds, bundleIds, userId, orderId, 
 		...bundleIds.map((id) => /** @type {[string, string]} */ ([COLLECTIONS.bundles, id])),
 	];
 	for (const [collection, id] of targets) {
+		// a deal a lock kept counts even when it ended or was switched off meanwhile (E18), never when deleted or used up
+		const kept = collection === COLLECTIONS.deals && lockedDealIds.includes(id);
 		const result = await data
 			.collection(collection)
-			.updateOne({ websiteId, id, active: true, ...underLimit }, { $inc: { used: 1 } }, { session });
+			.updateOne({ websiteId, id, ...(kept ? {} : { active: true }), ...underLimit }, { $inc: { used: 1 } }, { session });
 		if (result.modifiedCount !== 1) return { ok: false, offerId: id };
 	}
 	if (couponId) {
@@ -245,24 +271,58 @@ const releaseOffers = async (data, { couponId, dealIds, bundleIds, orderId }, se
 // ------------------------------------------------------------------------------------------------------- loyalty
 
 /**
- * A user's loyalty account with expired lots written off (written back when anything expired).
+ * Whose loyalty account (E20): a member by Accounts user id (a string is one), or a guest by their customer id (`cus_…`,
+ * E21); a member's account also carries their customer id.
+ * @typedef {string | { userId?: string | null, customerId?: string | null }} LoyaltyOwner
+ */
+
+/**
+ * The account's key in the collection.
+ * @param {LoyaltyOwner} owner
+ * @returns {{ userId: string } | { customerId: string }}
+ */
+const keyOf = (owner) => {
+	if (typeof owner === 'string') return { userId: owner };
+	if (owner.userId) return { userId: owner.userId };
+	return { customerId: String(owner.customerId ?? '') };
+};
+
+/**
+ * What expiry follows when the account is read (E20 `expiryRule: current`): the `loyalty` settings and the business
+ * time zone; without them each lot keeps the expiry it was given.
+ * @typedef {{ settings: Record<string, any>, timeZone: string }} LoyaltyRulesContext
+ */
+
+/**
+ * A loyalty account with expired lots written off (written back when anything expired).
  * @param {WebsiteData} data
- * @param {string} userId
- * @param {{ now: number, session?: Session }} options
+ * @param {LoyaltyOwner} owner
+ * @param {{ now: number, session?: Session, rules?: LoyaltyRulesContext }} options
  * @returns {Promise<LoyaltyRecord>}
  */
-export const loyaltyAccount = async (data, userId, { now, session }) => {
+export const loyaltyAccount = async (data, owner, { now, session, rules }) => {
 	const accounts = data.collection(COLLECTIONS.loyalty);
+	const key = keyOf(owner);
 	const found = /** @type {LoyaltyRecord | null} */ (
-		await accounts.findOne({ websiteId: data.websiteId, userId }, { session, projection: { _id: 0 } })
+		await accounts.findOne({ websiteId: data.websiteId, ...key }, { session, projection: { _id: 0 } })
 	);
-	if (!found) return { userId, balance: 0, lots: [], history: [], version: 0 };
-	const { lots, expired } = expireLots(found.lots, now);
-	if (expired === 0) return found;
+	if (!found)
+		return {
+			userId: 'userId' in key ? key.userId : /** @type {any} */ (null),
+			...('customerId' in key ? { customerId: key.customerId } : {}),
+			balance: 0,
+			lifetimeEarned: 0,
+			lots: [],
+			history: [],
+			version: 0,
+		};
+	const ruled = rules ? lotsByRule(found.lots, rules.settings, rules.timeZone) : found.lots;
+	const { lots, expired } = expireLots(ruled, now);
+	if (expired === 0) return { ...found, lots };
 	const next = { ...found, lots: compactLots(lots), balance: balanceOf(lots), version: found.version + 1 };
 	const entry = { at: new Date(now), kind: 'expire', points: expired, orderId: null, note: '' };
 	const result = await accounts.updateOne(
-		{ websiteId: data.websiteId, userId, version: found.version },
+		{ websiteId: data.websiteId, ...key, version: found.version },
 		{
 			$set: { lots: next.lots, balance: next.balance },
 			$inc: { version: 1 },
@@ -271,7 +331,7 @@ export const loyaltyAccount = async (data, userId, { now, session }) => {
 		{ session },
 	);
 	// someone else changed it meanwhile: read it again
-	if (result.modifiedCount !== 1) return loyaltyAccount(data, userId, { now, session });
+	if (result.modifiedCount !== 1) return loyaltyAccount(data, owner, { now, session, ...(rules ? { rules } : {}) });
 	return { ...next, history: [...found.history, /** @type {any} */ (entry)].slice(-HISTORY_KEPT) };
 };
 
@@ -286,37 +346,42 @@ export const loyaltyAccount = async (data, userId, { now, session }) => {
 const writeAccount = async (data, before, lots, entry, session) => {
 	const accounts = data.collection(COLLECTIONS.loyalty);
 	const compacted = compactLots(lots);
+	const key = before.userId ? { userId: before.userId } : { customerId: String(before.customerId ?? '') };
 	const update = {
 		$set: { lots: compacted, balance: balanceOf(compacted) },
-		$inc: { version: 1 },
+		$inc: { version: 1, ...(entry.kind === 'earn' ? { lifetimeEarned: entry.points } : {}) },
 		$push: { history: { $each: [entry], $slice: -HISTORY_KEPT } },
 	};
 	if (before.version === 0) {
 		const result = await accounts.updateOne(
-			{ websiteId: data.websiteId, userId: before.userId },
-			{ ...update, $setOnInsert: { userId: before.userId } },
+			{ websiteId: data.websiteId, ...key },
+			{
+				...update,
+				$setOnInsert: {
+					userId: before.userId ?? null,
+					...(before.customerId ? { customerId: before.customerId } : {}),
+				},
+			},
 			{ session, upsert: true },
 		);
 		return result.upsertedCount === 1 || result.modifiedCount === 1;
 	}
-	const result = await accounts.updateOne(
-		{ websiteId: data.websiteId, userId: before.userId, version: before.version },
-		update,
-		{ session },
-	);
+	const result = await accounts.updateOne({ websiteId: data.websiteId, ...key, version: before.version }, update, {
+		session,
+	});
 	return result.modifiedCount === 1;
 };
 
 /**
  * Spend points (redeemed at checkout).
  * @param {WebsiteData} data
- * @param {{ userId: string, points: number, orderId: string, note?: string }} spend
- * @param {{ now: number, session?: Session }} options
+ * @param {{ userId: LoyaltyOwner, points: number, orderId: string, note?: string }} spend
+ * @param {{ now: number, session?: Session, rules?: LoyaltyRulesContext }} options
  * @returns {Promise<boolean>} false when the balance is too low or changed meanwhile
  */
-export const spendPoints = async (data, { userId, points, orderId, note = '' }, { now, session }) => {
+export const spendPoints = async (data, { userId, points, orderId, note = '' }, { now, session, rules }) => {
 	if (points <= 0) return true;
-	const account = await loyaltyAccount(data, userId, { now, session });
+	const account = await loyaltyAccount(data, userId, { now, session, ...(rules ? { rules } : {}) });
 	const spent = spendFromLots(account.lots, points);
 	if (!spent.ok) return false;
 	return writeAccount(data, account, spent.lots, { at: new Date(now), kind: 'redeem', points, orderId, note }, session);
@@ -325,31 +390,73 @@ export const spendPoints = async (data, { userId, points, orderId, note = '' }, 
 /**
  * Give points: earned on a delivered order, given back after a cancel (`refund`), or a staff adjustment.
  * @param {WebsiteData} data
- * @param {{ userId: string, points: number, orderId: string | null, kind: 'earn' | 'refund' | 'adjust', expiresAt: Date | null,
- *   note?: string }} give
- * @param {{ now: number, session?: Session }} options
+ * @param {{ userId: LoyaltyOwner, points: number, orderId: string | null, kind: 'earn' | 'refund' | 'adjust',
+ *   expiresAt: Date | null, note?: string, customerId?: string | null }} give `customerId`: kept on a member's new account
+ * @param {{ now: number, session?: Session, rules?: LoyaltyRulesContext }} options
  * @returns {Promise<boolean>} false when the account changed meanwhile (try again)
  */
-export const givePoints = async (data, { userId, points, orderId, kind, expiresAt, note = '' }, { now, session }) => {
+export const givePoints = async (
+	data,
+	{ userId, points, orderId, kind, expiresAt, note = '', customerId = null },
+	{ now, session, rules },
+) => {
 	if (points <= 0) return true;
-	const account = await loyaltyAccount(data, userId, { now, session });
-	const lot = { id: createId('lot'), points, left: points, earnedAt: new Date(now), expiresAt, orderId };
+	const account = await loyaltyAccount(data, userId, { now, session, ...(rules ? { rules } : {}) });
+	if (account.version === 0 && customerId && !account.customerId) account.customerId = customerId;
+	const lot = { id: createId('lot'), points, left: points, earnedAt: new Date(now), expiresAt, orderId, kind };
 	return writeAccount(data, account, [...account.lots, lot], { at: new Date(now), kind, points, orderId, note }, session);
 };
 
 /**
  * Take points back (`reverse`: the order that earned them was returned; `adjust`: staff), never below 0.
  * @param {WebsiteData} data
- * @param {{ userId: string, points: number, orderId: string | null, kind: 'reverse' | 'adjust', note?: string }} take
- * @param {{ now: number, session?: Session }} options
+ * @param {{ userId: LoyaltyOwner, points: number, orderId: string | null, kind: 'reverse' | 'adjust', note?: string }} take
+ * @param {{ now: number, session?: Session, rules?: LoyaltyRulesContext }} options
  * @returns {Promise<{ ok: boolean, taken: number }>}
  */
-export const takePoints = async (data, { userId, points, orderId, kind, note = '' }, { now, session }) => {
-	const account = await loyaltyAccount(data, userId, { now, session });
+export const takePoints = async (data, { userId, points, orderId, kind, note = '' }, { now, session, rules }) => {
+	const account = await loyaltyAccount(data, userId, { now, session, ...(rules ? { rules } : {}) });
 	const { lots, taken } = takeFromLots(account.lots, points, orderId);
 	if (taken === 0) return { ok: true, taken: 0 };
 	const ok = await writeAccount(data, account, lots, { at: new Date(now), kind, points: taken, orderId, note }, session);
 	return { ok, taken: ok ? taken : 0 };
+};
+
+/**
+ * Move a guest's loyalty account into a member's (E21: the member's verified phone matches the guest): the guest's lots
+ * and history join the member's account, which takes the guest's customer id when it has none.
+ * @param {WebsiteData} data
+ * @param {{ customerId: string, userId: string }} move
+ * @param {Session} [session]
+ * @returns {Promise<number>} the points moved
+ */
+export const mergeLoyalty = async (data, { customerId, userId }, session) => {
+	const accounts = data.collection(COLLECTIONS.loyalty);
+	const guest = /** @type {LoyaltyRecord | null} */ (
+		await accounts.findOne({ websiteId: data.websiteId, customerId, userId: null }, { session, projection: { _id: 0 } })
+	);
+	if (!guest) return 0;
+	const member = /** @type {LoyaltyRecord | null} */ (
+		await accounts.findOne({ websiteId: data.websiteId, userId }, { session, projection: { _id: 0 } })
+	);
+	if (!member) {
+		await accounts.updateOne({ websiteId: data.websiteId, customerId, userId: null }, { $set: { userId } }, { session });
+		return guest.balance;
+	}
+	const lots = compactLots([...member.lots, ...guest.lots]);
+	const history = [...member.history, ...guest.history]
+		.sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime())
+		.slice(-HISTORY_KEPT);
+	await accounts.deleteOne({ websiteId: data.websiteId, customerId, userId: null }, { session });
+	await accounts.updateOne(
+		{ websiteId: data.websiteId, userId },
+		{
+			$set: { lots, history, balance: balanceOf(lots), ...(member.customerId ? {} : { customerId }) },
+			$inc: { version: 1, lifetimeEarned: guest.lifetimeEarned ?? 0 },
+		},
+		{ session },
+	);
+	return guest.balance;
 };
 
 // ------------------------------------------------------------------------------------------------- slots, numbers
@@ -377,23 +484,98 @@ const holdSlots = async (data, slots, session) => {
 const releaseSlots = (data, orderId, session) =>
 	data.collection(COLLECTIONS.slots).deleteMany({ websiteId: data.websiteId, orderId }, { session });
 
+/** Escape a text for a regular expression. @param {string} text */
+const escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 /**
- * The next order number of a year (the year in the business time zone, PLAN 0.8.10 K8):
- * `<prefix><year>-<6-digit sequence>` (`2026-000042`).
+ * The highest sequence already used by an order number of a prefix and year (0 when none), whatever its digits.
  * @param {WebsiteData} data
  * @param {{ prefix: string, year: number, session?: Session }} options
+ * @returns {Promise<number>}
  */
-const nextOrderNumber = async (data, { prefix, year, session }) => {
+export const highestNumber = async (data, { prefix, year, session }) => {
+	const [found] = await data
+		.collection(COLLECTIONS.orders)
+		.aggregate(
+			[
+				{ $match: { websiteId: data.websiteId, number: { $regex: `^${escapeRegex(prefix)}${year}-\\d{1,12}$` } } },
+				{ $project: { n: { $toLong: { $arrayElemAt: [{ $split: ['$number', '-'] }, -1] } } } },
+				{ $group: { _id: null, max: { $max: '$n' } } },
+			],
+			{ session },
+		)
+		.toArray();
+	return Number(found?.max ?? 0);
+};
+
+/**
+ * The counter of a prefix and year (E30).
+ * @param {string} prefix @param {number} year
+ */
+const counterId = (prefix, year) => `orders-${prefix}${year}`;
+
+/**
+ * The next order number of a year (the year in the business time zone, PLAN 0.8.10 K8; E30):
+ * `<prefix><year>-<sequence of numberDigits>` (`IM-2026-0043`). A missing yearly counter starts after the highest
+ * number already used for that prefix and year.
+ * @param {WebsiteData} data
+ * @param {{ prefix: string, year: number, digits?: number, session?: Session }} options
+ */
+const nextOrderNumber = async (data, { prefix, year, digits = 6, session }) => {
+	const counters = data.collection(COLLECTIONS.counters);
+	const id = counterId(prefix, year);
+	const bump = () =>
+		counters.findOneAndUpdate(
+			{ websiteId: data.websiteId, id },
+			{ $inc: { seq: 1 } },
+			{ session, returnDocument: 'after', projection: { _id: 0, seq: 1 } },
+		);
+	let counter = /** @type {any} */ (await bump());
+	if (!counter) {
+		const used = await highestNumber(data, { prefix, year, ...(session ? { session } : {}) });
+		try {
+			await counters.updateOne(
+				{ websiteId: data.websiteId, id },
+				{ $setOnInsert: { id, seq: used } },
+				{ session, upsert: true },
+			);
+		} catch (error) {
+			if (!isDuplicate(error)) throw error;
+		}
+		counter = /** @type {any} */ (await bump());
+	}
+	return `${prefix}${year}-${String(counter?.seq ?? 1).padStart(Math.min(8, Math.max(4, digits)), '0')}`;
+};
+
+/**
+ * Set the next order number of a prefix and year (E30 `POST /v1/orders/counter`), never at or below one already used.
+ * @param {WebsiteData} data
+ * @param {{ prefix: string, year: number, next: number }} input
+ * @returns {Promise<{ ok: true, next: number } | { ok: false, used: number }>}
+ */
+export const setOrderCounter = async (data, { prefix, year, next }) => {
+	const used = await highestNumber(data, { prefix, year });
+	if (next <= used) return { ok: false, used };
+	const id = counterId(prefix, year);
+	await data
+		.collection(COLLECTIONS.counters)
+		.updateOne({ websiteId: data.websiteId, id }, { $set: { seq: next - 1 }, $setOnInsert: { id } }, { upsert: true });
+	return { ok: true, next };
+};
+
+/**
+ * The next order number a prefix and year would get (the counter's next, else after the highest used).
+ * @param {WebsiteData} data
+ * @param {{ prefix: string, year: number }} input
+ */
+export const peekOrderCounter = async (data, { prefix, year }) => {
 	const counter = /** @type {any} */ (
 		await data
 			.collection(COLLECTIONS.counters)
-			.findOneAndUpdate(
-				{ websiteId: data.websiteId, id: `orders-${year}` },
-				{ $inc: { seq: 1 }, $setOnInsert: { id: `orders-${year}` } },
-				{ session, upsert: true, returnDocument: 'after', projection: { _id: 0, seq: 1 } },
-			)
+			.findOne({ websiteId: data.websiteId, id: counterId(prefix, year) }, { projection: { _id: 0, seq: 1 } })
 	);
-	return `${prefix}${year}-${String(counter?.seq ?? 1).padStart(6, '0')}`;
+	const used = await highestNumber(data, { prefix, year });
+	return { next: Math.max(Number(counter?.seq ?? 0), used) + 1, used };
 };
 
 // ------------------------------------------------------------------------------------------------- placing orders
@@ -403,6 +585,8 @@ const nextOrderNumber = async (data, { prefix, year, session }) => {
  * @property {Omit<OrderRecord, 'number' | 'createdAt' | 'updatedAt'>} order the order to insert (its lines' `locationId`
  *   are filled from where the stock was taken)
  * @property {string} numberPrefix the `checkout` setting (may be '')
+ * @property {number} [numberDigits] the `checkout` setting (E30; default 6)
+ * @property {string[]} [lockedDealIds] deals whose locks the order keeps (E18)
  * @property {string[]} [locationOrder] locations to take stock from, in order (multi_location)
  * @property {number | null} [couponPerCustomer] the coupon's per-customer limit
  * @property {Array<{ productId: string, start: Date, end: Date, lineId: string }>} [slots] booked slots
@@ -435,10 +619,17 @@ const refused = (result) => Object.assign(new Error(result.code), { refused: res
 export const placeOrder = async (data, placement, { now, timeZone = 'UTC' }) => {
 	const { order } = placement;
 	const orders = data.collection(COLLECTIONS.orders);
+	// a guest's checkout key is theirs: guests are told apart by their customer id
+	const owner = order.customer.userId || order.customer.customerId || '';
 	const existing = async () =>
 		/** @type {OrderRecord | null} */ (
 			await orders.findOne(
-				{ websiteId: data.websiteId, 'customer.userId': order.customer.userId, idempotencyKey: order.idempotencyKey },
+				{
+					websiteId: data.websiteId,
+					'customer.userId': order.customer.userId,
+					...(order.customer.userId ? {} : { 'customer.customerId': order.customer.customerId }),
+					idempotencyKey: order.idempotencyKey,
+				},
 				{ projection: { _id: 0 } },
 			)
 		);
@@ -449,6 +640,7 @@ export const placeOrder = async (data, placement, { now, timeZone = 'UTC' }) => 
 			const number = await nextOrderNumber(data, {
 				prefix: placement.numberPrefix,
 				year: zonedParts(now, timeZone).year,
+				digits: placement.numberDigits ?? 6,
 				session,
 			});
 			const stock = await holdStock(
@@ -468,9 +660,10 @@ export const placeOrder = async (data, placement, { now, timeZone = 'UTC' }) => 
 					couponId: promotions.couponId,
 					dealIds: promotions.dealIds,
 					bundleIds: promotions.bundleIds,
-					userId: order.customer.userId,
+					userId: owner,
 					orderId: order.id,
 					perCustomer: placement.couponPerCustomer ?? null,
+					lockedDealIds: placement.lockedDealIds ?? [],
 				},
 				session,
 			);
@@ -569,14 +762,15 @@ export const releaseOrder = async (data, order, { now, update }) =>
 	});
 
 /**
- * Put a parcel's stock back after a return to origin (RTO), once (`stockHeld`), with the status change in `update`.
- * Offer uses stay counted and points stay spent (the shopper used them); the customer's RTO count rises.
+ * Put a parcel's stock back after a return to origin (RTO) or a customer return (E27), once (`stockHeld`), with the
+ * status change in `update`. Offer uses stay counted and points stay spent (the shopper used them); an RTO raises the
+ * customer's RTO count (`countRto`); `restock: false` keeps the stock out (`returnRestock: no`).
  * @param {WebsiteData} data
  * @param {OrderRecord} order
- * @param {{ update: (session: Session) => Promise<boolean> }} options
+ * @param {{ update: (session: Session) => Promise<boolean>, restock?: boolean, countRto?: boolean }} options
  * @returns {Promise<boolean>}
  */
-export const returnToOrigin = async (data, order, { update }) =>
+export const returnToOrigin = async (data, order, { update, restock = true, countRto = true }) =>
 	data.transaction(async (session) => {
 		const claimed = await data
 			.collection(COLLECTIONS.orders)
@@ -587,7 +781,7 @@ export const returnToOrigin = async (data, order, { update }) =>
 			);
 		if (claimed.modifiedCount !== 1) return false;
 		if (!(await update(session))) throw new Error('order changed');
-		if (order.stockHeld)
+		if (order.stockHeld && restock)
 			await releaseStock(
 				data,
 				order.lines
@@ -600,15 +794,31 @@ export const returnToOrigin = async (data, order, { update }) =>
 					})),
 				session,
 			);
-		await data
-			.collection(COLLECTIONS.customers)
-			.updateOne(
-				{ websiteId: data.websiteId, userId: order.customer.userId },
-				{ $inc: { rtoCount: 1 }, $setOnInsert: { userId: order.customer.userId } },
-				{ session, upsert: true },
-			);
+		if (countRto) await countReturnedParcel(data, order, session);
 		return true;
 	});
+
+/**
+ * Count a parcel that came back on its customer's record (a guest's by customer id, a member's by user id).
+ * @param {WebsiteData} data @param {OrderRecord} order @param {Session} [session]
+ */
+const countReturnedParcel = async (data, order, session) => {
+	const customers = data.collection(COLLECTIONS.customers);
+	if (order.customer.customerId) {
+		const done = await customers.updateOne(
+			{ websiteId: data.websiteId, id: order.customer.customerId },
+			{ $inc: { rtoCount: 1 } },
+			{ session },
+		);
+		if (done.matchedCount === 1) return;
+	}
+	if (!order.customer.userId) return;
+	await customers.updateOne(
+		{ websiteId: data.websiteId, userId: order.customer.userId },
+		{ $inc: { rtoCount: 1 }, $setOnInsert: { userId: order.customer.userId } },
+		{ session, upsert: true },
+	);
+};
 
 /**
  * Restock the items of a return claim, exactly once (`restockedAt`), and mark the serials back in stock.

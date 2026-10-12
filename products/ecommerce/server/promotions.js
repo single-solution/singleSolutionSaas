@@ -8,12 +8,20 @@
  */
 import { defineRoute, problem } from '@ss/app-kit';
 import { givePoints, loyaltyAccount, takePoints } from '../adapters/ledger.js';
-import { activeProduct, categoryTrail, deletePerson, loadOffers, personRecords } from '../adapters/promotions-store.js';
+import {
+	activeProduct,
+	categoryTrail,
+	deletePerson,
+	loadOffers,
+	pendingPoints,
+	personRecords,
+} from '../adapters/promotions-store.js';
 import { byShowOrder, publicDeal } from '../core/deals.js';
 import { COLLECTIONS } from '../core/model.js';
 import { expiringSoon, expiryFor, historyView, loyaltyRules, pointsValue, SHOPPER_HISTORY } from '../core/loyalty.js';
 import { quoteProduct } from '../core/promotions.js';
 import { checkText, checkWhole } from '../core/promotions-rules.js';
+import { createMedia } from './catalog-media.js';
 import { createOfferRoutes } from './promotions-offers.js';
 import { SERVER_LIMITS, VISITOR_LIMITS } from './service.js';
 
@@ -41,6 +49,13 @@ const WRITE_TRIES = 3;
  */
 export const createPromotions = (product, service) => {
 	const { now, invalid } = service;
+	const media = createMedia(product);
+
+	/**
+	 * A live deal as shoppers get it, with its banner's address (E18).
+	 * @param {import('./service.js').Site} s @param {import('../core/model.js').DealRecord} deal
+	 */
+	const shopDeal = async (s, deal) => publicDeal(deal, { bannerUrl: await media.mediaUrl(s, deal.banner?.key) });
 
 	/** @param {unknown} value */
 	const userIdOf = (value) => {
@@ -189,7 +204,22 @@ export const createPromotions = (product, service) => {
 					if (!limit.ok) return invalid(limit.field, limit.message);
 					const s = await service.site(ctx);
 					const { deals } = await loadOffers(await s.data(), { now: now(), deals: true });
-					return { items: [...deals].sort(byShowOrder).slice(0, limit.value).map(publicDeal) };
+					const shown = [...deals].sort(byShowOrder).slice(0, limit.value);
+					return { items: await Promise.all(shown.map((deal) => shopDeal(s, deal))) };
+				},
+			}),
+			defineRoute({
+				method: 'GET',
+				path: '/v1/shop/deals/:ref',
+				auth: 'browser',
+				feature: 'deals',
+				rateLimit: VISITOR_RATE,
+				handler: async (ctx) => {
+					const ref = String(ctx.params.ref);
+					const s = await service.site(ctx);
+					const { deals } = await loadOffers(await s.data(), { now: now(), deals: true });
+					const found = deals.find((deal) => deal.id === ref || (deal.slug && deal.slug === ref));
+					return found ? shopDeal(s, found) : problem('not_found', 'There is no such deal on now.');
 				},
 			}),
 			defineRoute({
@@ -220,11 +250,27 @@ export const createPromotions = (product, service) => {
 				feature: 'loyalty',
 				rateLimit: VISITOR_RATE,
 				handler: async (ctx) => {
+					const limit = checkWhole(
+						ctx.query.limit === undefined || ctx.query.limit === '' ? undefined : Number(ctx.query.limit),
+						'limit',
+						{ min: 1, max: SHOPPER_HISTORY, fallback: SHOPPER_HISTORY },
+					);
+					if (!limit.ok) return invalid(limit.field, limit.message);
+					const offset = checkWhole(
+						ctx.query.offset === undefined || ctx.query.offset === '' ? undefined : Number(ctx.query.offset),
+						'offset',
+						{ min: 0, max: 10_000, fallback: 0 },
+					);
+					if (!offset.ok) return invalid(offset.field, offset.message);
 					const s = await service.site(ctx);
 					const shopper = await service.requireShopper(s);
 					const at = now();
-					const account = await loyaltyAccount(await s.data(), shopper.id, { now: at });
-					const rules = loyaltyRules(await s.values('loyalty'));
+					const data = await s.data();
+					const settings = await s.values('loyalty');
+					const timeZone = (await s.format()).timeZone || 'UTC';
+					const account = await loyaltyAccount(data, shopper.id, { now: at, rules: { settings, timeZone } });
+					const rules = loyaltyRules(settings);
+					const history = historyView(account.history);
 					return {
 						balance: account.balance,
 						value: account.balance * rules.pointValue,
@@ -232,7 +278,10 @@ export const createPromotions = (product, service) => {
 						pointValue: rules.pointValue,
 						minRedeem: rules.minRedeem,
 						maxPercent: rules.maxPercent,
-						history: historyView(account.history, SHOPPER_HISTORY),
+						lifetimeEarned: account.lifetimeEarned ?? 0,
+						pending: await pendingPoints(data, shopper.id),
+						history: history.slice(offset.value, offset.value + limit.value),
+						hasMore: history.length > offset.value + limit.value,
 						expiringSoon: expiringSoon(account.lots, at),
 					};
 				},

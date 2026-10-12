@@ -39,6 +39,40 @@
 			"title": "Flagged customers pay an advance",
 			"description": "Flagged customers may use cash on delivery only with the advance; without an advance set they must pay another way.",
 			"default": true
+		},
+		"startStatus": {
+			"type": "string",
+			"title": "Cash-on-delivery orders start",
+			"description": "awaiting_confirmation: staff confirm each order. open: confirmed as soon as it is placed.",
+			"default": "awaiting_confirmation",
+			"enum": ["awaiting_confirmation", "open"]
+		},
+		"atPickup": {
+			"type": "boolean",
+			"title": "Cash on delivery at pickup too",
+			"description": "Shoppers who pick up their order may also choose to pay cash when they collect it.",
+			"default": false
+		},
+		"feePercent": {
+			"type": "number",
+			"title": "Cash handling fee (%)",
+			"description": "Added to cash-on-delivery orders (shown as Cash handling). 0 = none.",
+			"default": 0,
+			"minimum": 0,
+			"maximum": 20
+		},
+		"paidOnDelivery": {
+			"type": "boolean",
+			"title": "Paid when delivered",
+			"description": "On: delivering a cash-on-delivery order marks it paid. Off: staff record the cash in the order's payments.",
+			"default": true
+		},
+		"advanceVia": {
+			"type": "string",
+			"title": "The advance is paid",
+			"description": "payments: through Payments before the order is confirmed. manual: by bank transfer; staff record it in the order's payments.",
+			"default": "payments",
+			"enum": ["payments", "manual"]
 		}
 	}
 }

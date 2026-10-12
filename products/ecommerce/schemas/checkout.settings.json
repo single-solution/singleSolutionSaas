@@ -5,7 +5,7 @@
 		"numberPrefix": {
 			"type": "string",
 			"title": "Order number prefix",
-			"description": "Put before every order number (for example SHOP-). Order numbers are <prefix><year>-<number>.",
+			"description": "Put before every order number (for example IM-). Order numbers are <prefix><year>-<number> by your business time zone's year.",
 			"default": "",
 			"maxLength": 12
 		},
@@ -99,17 +99,17 @@
 		"paymentWindowMinutes": {
 			"type": "integer",
 			"title": "Time to pay (minutes)",
-			"description": "An order paid online or by bank transfer (or a cash-on-delivery advance) that is not paid within this time is cancelled and its stock given back.",
+			"description": "An order paid online or by bank transfer (or a cash-on-delivery advance) that is not paid within this time is cancelled and its stock given back. 0 = never cancelled.",
 			"default": 60,
-			"minimum": 5,
+			"minimum": 0,
 			"maximum": 10080
 		},
 		"confirmationHours": {
 			"type": "integer",
 			"title": "Time to confirm (hours)",
-			"description": "A cash-on-delivery or pay-at-pickup order your staff do not confirm within this time is cancelled and its stock given back.",
+			"description": "A cash-on-delivery or pay-at-pickup order your staff do not confirm within this time is cancelled and its stock given back. 0 = never cancelled.",
 			"default": 24,
-			"minimum": 1,
+			"minimum": 0,
 			"maximum": 336
 		},
 		"openOrderCap": {
@@ -122,13 +122,165 @@
 		},
 		"addressRequired": {
 			"type": "array",
-			"title": "Also required in the address",
-			"description": "Name, phone, address line 1 and city are always required.",
-			"default": [],
+			"title": "Required address fields",
+			"description": "Besides the name and phone. Leave out the city for one free-text address.",
+			"default": ["line1", "city"],
 			"items": {
 				"type": "string",
-				"enum": ["line2", "area", "postalCode", "country"]
+				"enum": ["line1", "line2", "area", "city", "postalCode", "country"]
 			}
+		},
+		"guests": {
+			"type": "string",
+			"title": "Guest checkout",
+			"description": "off: shoppers sign in to order. on: anyone orders with a name and phone. unless_password: a phone that belongs to a member with a password must sign in (checked with Accounts).",
+			"default": "off",
+			"enum": ["off", "on", "unless_password"]
+		},
+		"defaultCallingCode": {
+			"type": "string",
+			"title": "Default calling code",
+			"description": "For guest phones typed without one, for example +92.",
+			"default": "",
+			"maxLength": 4
+		},
+		"trunkPrefix": {
+			"type": "string",
+			"title": "Trunk prefix",
+			"description": "Dropped from national numbers before the calling code, for example 0.",
+			"default": "",
+			"maxLength": 2
+		},
+		"paymentOrder": {
+			"type": "array",
+			"title": "Payment methods order",
+			"description": "The order the cart lists them; the first available is preselected.",
+			"default": ["cod", "online", "bank_transfer", "pickup"],
+			"items": {
+				"type": "string",
+				"enum": ["cod", "online", "bank_transfer", "pickup"]
+			}
+		},
+		"noteCod": {
+			"type": "string",
+			"title": "Note: cash on delivery",
+			"default": "",
+			"maxLength": 500
+		},
+		"noteOnline": {
+			"type": "string",
+			"title": "Note: online payment",
+			"default": "",
+			"maxLength": 500
+		},
+		"noteBankTransfer": {
+			"type": "string",
+			"title": "Note: bank transfer",
+			"default": "",
+			"maxLength": 500
+		},
+		"notePickup": {
+			"type": "string",
+			"title": "Note: pay at pickup",
+			"default": "",
+			"maxLength": 500
+		},
+		"maxLines": {
+			"type": "integer",
+			"title": "Most lines in a cart",
+			"default": 50,
+			"minimum": 1,
+			"maximum": 50
+		},
+		"maxQuantity": {
+			"type": "integer",
+			"title": "Most of one item",
+			"default": 99,
+			"minimum": 1,
+			"maximum": 99
+		},
+		"successUrl": {
+			"type": "string",
+			"title": "Success page",
+			"description": "Where shoppers return after placing or paying, with {number} and {id}. Empty = the page they ordered from with ss_order.",
+			"default": "",
+			"maxLength": 500
+		},
+		"cancelUrl": {
+			"type": "string",
+			"title": "Payment cancelled page",
+			"description": "Where shoppers return when they leave a payment, with {number} and {id}. Empty = as the success page.",
+			"default": "",
+			"maxLength": 500
+		},
+		"bankTransferVia": {
+			"type": "string",
+			"title": "Bank transfers",
+			"description": "payments: through Payments' bank page. manual: the order waits for the shopper's proof and staff record the payment.",
+			"default": "payments",
+			"enum": ["payments", "manual"]
+		},
+		"autoRefundedStatus": {
+			"type": "boolean",
+			"title": "Refunded status when fully refunded",
+			"description": "Move an order to the refunded status once its refunds reach what was paid.",
+			"default": false
+		},
+		"returnRestock": {
+			"type": "string",
+			"title": "Returned orders go back to stock",
+			"default": "yes",
+			"enum": ["yes", "no"]
+		},
+		"shopperCancel": {
+			"type": "array",
+			"title": "Shoppers may cancel in",
+			"description": "Roles of statuses in which shoppers may cancel their own order.",
+			"default": ["awaiting_payment", "awaiting_confirmation"],
+			"items": {
+				"type": "string",
+				"enum": ["awaiting_payment", "awaiting_confirmation", "open"]
+			}
+		},
+		"trackingRequired": {
+			"type": "boolean",
+			"title": "Dispatch needs a tracking number",
+			"default": true
+		},
+		"packingVideo": {
+			"type": "string",
+			"title": "Dispatch video when packing",
+			"default": "off",
+			"enum": ["off", "optional", "required"]
+		},
+		"numberDigits": {
+			"type": "integer",
+			"title": "Order number digits",
+			"description": "IM-2026-0043 has 4.",
+			"default": 6,
+			"minimum": 4,
+			"maximum": 8
+		},
+		"statusTemplates": {
+			"type": "string",
+			"title": "Status messages",
+			"description": "one: one template for every status. per_status: ecommerce.order_status.<status key> per status.",
+			"default": "one",
+			"enum": ["one", "per_status"]
+		},
+		"orderUrl": {
+			"type": "string",
+			"title": "Order page address",
+			"description": "For messages, with {number}, for example https://shop.com/orders/{number}.",
+			"default": "",
+			"maxLength": 500
+		},
+		"reviewUrl": {
+			"type": "string",
+			"title": "Review page address",
+			"description": "For messages, with {number}.",
+			"default": "",
+			"maxLength": 500
 		}
 	}
 }
