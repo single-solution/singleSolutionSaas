@@ -131,6 +131,17 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		};
 	};
 
+	/**
+	 * Where Payments sends the shopper back (it needs an address): the order's own return, else the website's home with
+	 * `ss_order`.
+	 * @param {Site} s @param {OrderRecord} order @param {string | null} returnUrl
+	 */
+	const paymentBackOf = async (s, order, returnUrl) => {
+		const back = await backOf(s, order, returnUrl);
+		const home = withParam(`https://${s.domain}/`, 'ss_order', order.id);
+		return { success: back.success ?? home, cancel: back.cancel ?? back.success ?? home };
+	};
+
 	// ------------------------------------------------------------------------------------------------- payments
 
 	/**
@@ -140,7 +151,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 	 * @returns {Promise<OrderRecord | null>}
 	 */
 	const startPayment = async (s, order, returnUrl, idempotencyKey) => {
-		const back = await backOf(s, order, returnUrl);
+		const back = await paymentBackOf(s, order, returnUrl);
 		const { customer } = order;
 		try {
 			const payment = await service.payments.create(s, {
@@ -542,7 +553,8 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		if (!guest.ok) throw service.invalid(guest.field, guest.message);
 		if (mode === 'unless_password' && (await guests.memberWithPassword(s, guest.value.phone)))
 			throw problem('sign_in_required', 'This phone number has an account: sign in to order.', {
-				extensions: { reason: 'member_phone' },
+				// `reason` is the kit's own extension; this one says why a sign-in is needed
+				extensions: { signIn: 'member_phone' },
 			});
 		return { shopper: null, guest: guest.value };
 	};

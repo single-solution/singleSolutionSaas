@@ -5,7 +5,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { COLLECTIONS } from '../core/model.js';
-import { ORIGIN, readyShop } from './helpers.js';
+import { ACCOUNTS, ORIGIN, PAYMENTS, readyShop } from './helpers.js';
 
 /** @type {Awaited<ReturnType<typeof readyShop>>} */
 let shop;
@@ -184,6 +184,26 @@ describe('guest checkout and order keys (E21)', () => {
 		await shop.setting('checkout', 'guests', 'off');
 	});
 
+	it('asks a guest whose phone has an account with a password to sign in', async () => {
+		await shop.setting('checkout', 'guests', 'unless_password');
+		shop.responders.set(`${ACCOUNTS}/v1/users`, () => ({
+			status: 200,
+			body: { items: [{ id: 'usr_member', phone: '+15550006666', hasPassword: true }], hasMore: false },
+		}));
+		const item = await shop.seedProduct({ price: 1000, stock: 10 });
+		const refused = await place({
+			lines: [{ productId: item.id }],
+			payment: 'cod',
+			address: ADDRESS,
+			customer: { name: 'Mo Member', phone: '+15550006666' },
+		});
+		shop.responders.delete(`${ACCOUNTS}/v1/users`);
+		expect(refused.status).toBe(403);
+		expect(refused.json).toMatchObject({ signIn: 'member_phone' });
+		expect(codeOf(refused)).toBe('sign_in_required');
+		await shop.setting('checkout', 'guests', 'off');
+	});
+
 	it('refuses guests while guest checkout is off', async () => {
 		const item = await shop.seedProduct({ price: 1000, stock: 10 });
 		const placed = await place({
@@ -237,6 +257,25 @@ describe('payment, delivery and COD options (E22, E23)', () => {
 		expect(placed.json.next).toEqual({ kind: 'done', url: `${ORIGIN}/thanks/${placed.json.order.number}` });
 		await shop.setting('checkout', 'maxQuantity', 99);
 		await shop.setting('checkout', 'successUrl', '');
+	});
+});
+
+describe('the way back from Payments (E22)', () => {
+	it('sends the shopper back to the website’s home with the order when nothing else is set', async () => {
+		const item = await shop.seedProduct({ price: 1000, stock: 10 });
+		const shopper = await newShopper();
+		const placed = await place({ lines: [{ productId: item.id }], payment: 'online', address: ADDRESS }, shopper.token);
+		expect(placed.json.next.kind).toBe('pay');
+		const create = JSON.parse(
+			String(
+				shop
+					.callsTo(PAYMENTS)
+					.filter((c) => c.path === '/v1/payments')
+					.at(-1)?.body,
+			),
+		);
+		expect(create.returnUrl).toBe(`${ORIGIN}/?ss_order=${placed.json.order.id}`);
+		expect(create.cancelUrl).toBe(create.returnUrl);
 	});
 });
 
