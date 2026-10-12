@@ -90,17 +90,17 @@ export const CONTEXT_ENDPOINT = Object.freeze({
 /** What each answer carries (product cards use the product fields). */
 export const SHOP_ANSWERS = Object.freeze({
 	product:
-		'id, name, price (integer minor units), priceText, currency, image (https or null), url (the product page), inStock, variantId (or null), grade, stockLeft, category',
+		'id, name, price (integer minor units), priceText, priceMax, priceMaxText, currency, image (https or null), url (the product page), inStock, variantId (or null), grade (label), stockLeft',
 	details:
-		'a product plus summary, description, brand, options, specs, warranty, variants: [{ id, options, price, priceText, grade, inStock, stockLeft, warranty }]',
-	quote: 'productId, variantId, quantity, paymentMethod, price, priceAfterDeals, savings, fees, delivery, freeDeliveryThreshold, total (each with its …Text), currency, deals: [name]',
-	deals: 'items: [{ id, name, description, endsAt, and display fields: offerText, appliesTo }]',
+		'a product plus summary, description, brand, options, specs, variants: [{ id, options, price, priceText, grade, gradeKey, inStock, soldOut, stockLeft, warrantyDays }]',
+	quote: 'productId, variantId, quantity, paymentMethod, price, priceAfterDeals, savings, subtotal, discount, roleDiscount, fee, tax, delivery { method, name, fee, minDays, maxDays }, freeDeliveryOver, total (amounts with their …Text), currency, inStock, deals: [name], dealsApplied, paymentMethods',
+	deals: 'items: [{ id, name, description, slug, type, valueText, badgeLabel, discountLabel, minQuantity, days, timeFrom, timeTo, endsAt, endsText }]',
 	orders:
-		'items: [{ number, status, total, totalText, currency, placedAt, expectedAt, trackingNote, dispatchVideo, lines: [{ name, variant, quantity, totalText }] }] (the last 5), loyaltyPoints, name',
-	account: 'name, loyaltyPoints, city, area',
-	shipments: 'items: [{ orderNumber, courier, trackingNumber, trackingUrl, status }]',
+		'items: [{ number, status, total, totalText, currency, placedAt, paymentMethod, paidText, balanceDue, balanceDueText, courier, trackingNumber, trackingUrl, trackingNote, expectedAt, dispatchVideo, lines: [{ name, variantName, gradeLabel, quantity, totalText, warrantyDays }] }] (the last 5), loyaltyPoints, name',
+	account: 'name, firstName, loyaltyPoints, city, area',
+	shipments: 'items: [{ orderNumber, courier, trackingNumber, trackingUrl, status, trackingNote, expectedAt }]',
 	context:
-		'text (at most 6,000 characters): the policies, the 10 newest products with grade prices, the deals table, the named product and, signed in, first name, city and points',
+		'text (at most 6,000 characters: the policies, the 10 newest products with their price per grade, the deals table, the named product and, signed in, first name, city and points), currency',
 	customerOrders: 'items: [{ id, number, status, statusLabel, total, totalText, currency, createdAt }], loyaltyPoints',
 });
 
@@ -120,6 +120,7 @@ export const SHOP_TOOL_NAMES = Object.freeze(Object.values(SHOP_TOOLS));
  * @property {boolean} inStock
  * @property {string | null} variantId
  * @property {string | null} priceText the price as the website shows it (Ecommerce, K7)
+ * @property {string | null} [priceMaxText] the highest variant price, when it is higher (E37)
  * @property {string | null} grade
  * @property {number | null} stockLeft
  */
@@ -219,6 +220,7 @@ const productOf = (raw) => {
 		inStock: raw.inStock === true,
 		variantId: textOf(raw.variantId, 100),
 		priceText: textOf(raw.priceText, 60),
+		priceMaxText: isMinor(raw.priceMax) && Number(raw.priceMax) > Number(raw.price) ? textOf(raw.priceMaxText, 60) : null,
 		grade: gradeOf(raw.grade),
 		stockLeft: countOf(raw.stockLeft),
 	};
@@ -268,8 +270,11 @@ const SCHEMAS = {
 		'Search the live shop catalog by name, brand, model or kind of product, optionally within a category, a grade, a price range or only in stock. Returns matching products with price, grade, stock, link and id. Use it for any product, price, budget or availability question.',
 		{
 			query: { type: 'string', description: 'What to search for, e.g. a product name or brand (may be empty with a filter).' },
-			category: { type: 'string', description: 'Only this category (its name).' },
-			grade: { type: 'string', description: 'Only this grade or condition.' },
+			category: { type: 'string', description: 'Only this category: its slug as in its link (e.g. ceiling-fans) or id.' },
+			grade: {
+				type: 'string',
+				description: 'Only these grades: grade keys (gradeKey in product details, e.g. new), separated by commas.',
+			},
 			minPrice: { type: 'number', description: 'Lowest price, in whole units of the shop’s currency.' },
 			maxPrice: {
 				type: 'number',
@@ -292,6 +297,7 @@ const SCHEMAS = {
 			variantId: { type: 'string', description: 'The variant id from get_product_details (optional).' },
 			quantity: { type: 'integer', description: 'How many (1–5, default 1).' },
 			paymentMethod: { type: 'string', description: 'The payment method the visitor asks about, e.g. cod (optional).' },
+			city: { type: 'string', description: 'The visitor’s city, for the delivery charge (optional).' },
 		},
 		['productId'],
 	),
@@ -333,6 +339,18 @@ const productId = (value) => (typeof value === 'string' && /^[A-Za-z0-9_.:-]{1,1
 /** @param {unknown} value @param {number} max */
 const word = (value, max) => (typeof value === 'string' && value.trim() !== '' ? value.trim().slice(0, max) : null);
 
+/** A category id or slug from the model (`Ceiling Fans` → `ceiling-fans`), else null. @param {unknown} value */
+const slugOf = (value) => {
+	if (typeof value !== 'string') return null;
+	const slug = value
+		.trim()
+		.toLowerCase()
+		.replace(/[^a-z0-9_-]+/g, '-')
+		.replace(/^-+|-+$/g, '')
+		.slice(0, 120);
+	return slug === '' ? null : slug;
+};
+
 /** A whole amount the model gave (whole units of the shop's currency), else null. @param {unknown} value */
 const wholeAmount = (value) => {
 	const number = typeof value === 'string' ? Number(value.replace(/[^\d.]/g, '')) : Number(value);
@@ -362,10 +380,13 @@ export const shopRequest = (name, args, { limit = SHOP_LIMIT, minor = (amount) =
 		const query = new URLSearchParams();
 		const q = word(args.query, 100);
 		if (q) query.set('q', q);
-		const category = word(args.category, 100);
+		const category = slugOf(args.category);
 		if (category) query.set('category', category);
-		const grade = word(args.grade, 60);
-		if (grade) query.set('grade', grade);
+		const grades = (typeof args.grade === 'string' ? args.grade.split(',') : [])
+			.map((key) => key.trim().toLowerCase().replace(/\s+/g, '_'))
+			.filter((key) => /^[a-z][a-z0-9_-]{0,39}$/.test(key))
+			.slice(0, 10);
+		if (grades.length > 0) query.set('grade', grades.join(','));
 		const min = wholeAmount(args.minPrice);
 		if (min !== null) query.set('minPrice', String(minor(min)));
 		const max = wholeAmount(args.maxPrice);
@@ -390,6 +411,8 @@ export const shopRequest = (name, args, { limit = SHOP_LIMIT, minor = (amount) =
 				? args.paymentMethod.trim()
 				: null;
 		if (method) query.set('paymentMethod', method);
+		const city = word(args.city, 80);
+		if (city) query.set('city', city);
 		const search = query.toString();
 		return { ok: true, signIn: false, path: `${path}/quote${search ? `?${search}` : ''}` };
 	}
@@ -444,7 +467,7 @@ const priceOf = (b, key, look) => {
 const productLine = (p, look) => ({
 	id: p.id,
 	name: p.name,
-	price: p.priceText ?? moneyText(p.price, p.currency, look),
+	price: `${p.priceText ?? moneyText(p.price, p.currency, look)}${p.priceMaxText ? ` – ${p.priceMaxText}` : ''}`,
 	inStock: p.inStock,
 	...(p.grade ? { grade: p.grade } : {}),
 	...(p.stockLeft !== null ? { stockLeft: p.stockLeft } : {}),
@@ -491,6 +514,9 @@ const warrantyOf = (value) => {
 	return textOf(value, 200);
 };
 
+/** A warranty in days as text, else null. @param {unknown} value */
+const daysOf = (value) => (Number.isSafeInteger(value) && Number(value) > 0 ? `${value} days` : null);
+
 /** @param {unknown} value */
 const variantOptions = (value) =>
 	isObject(value)
@@ -526,18 +552,21 @@ export const shopAnswer = (name, body, look = {}) => {
 			.slice(0, 30)
 			.map((v) => {
 				const grade = gradeOf(v.grade);
+				const gradeKey = textOf(v.gradeKey, 40);
 				const stockLeft = countOf(v.stockLeft);
-				const warranty = warrantyOf(v.warranty);
+				const warranty = warrantyOf(v.warranty) ?? daysOf(v.warrantyDays);
 				return {
 					id: textOf(v.id, 100),
 					options: variantOptions(v.options),
 					price: priceOf({ ...v, currency: product.currency }, 'price', look),
 					...(grade ? { grade } : {}),
-					inStock: v.inStock !== false,
+					...(gradeKey ? { gradeKey } : {}),
+					inStock: v.inStock !== false && v.soldOut !== true,
 					...(stockLeft !== null ? { stockLeft } : {}),
 					...(warranty ? { warranty } : {}),
 				};
 			});
+		const warranty = warrantyOf(b.warranty) ?? daysOf(b.warrantyDays);
 		return {
 			content: {
 				...productLine(product, look),
@@ -546,7 +575,7 @@ export const shopAnswer = (name, body, look = {}) => {
 				description: textOf(b.description, 1500),
 				options: optionsOf(b.options),
 				specs: specsOf(b.specs),
-				...(warrantyOf(b.warranty) ? { warranty: warrantyOf(b.warranty) } : {}),
+				...(warranty ? { warranty } : {}),
 				...(variants.length > 0 ? { variants } : {}),
 			},
 			products: [product],
@@ -566,23 +595,48 @@ export const shopAnswer = (name, body, look = {}) => {
 			savings: priceOf(b, 'savings', look) ?? moneyText(0, b.currency, look),
 			deals: listOfTexts(b.deals),
 		};
-		for (const key of ['fees', 'delivery', 'freeDeliveryThreshold', 'total']) {
+		// the cart's pricing for this payment method: amounts that are there, the total always
+		for (const key of ['subtotal', 'discount', 'roleDiscount', 'fee', 'tax', 'freeDeliveryOver', 'total']) {
+			if (key !== 'total' && key !== 'subtotal' && !(Number(b[key]) > 0)) continue;
 			const text = priceOf(b, key, look);
 			if (text) content[key] = text;
 		}
+		if (isObject(b.delivery)) {
+			const d = b.delivery;
+			const fee = priceOf({ ...d, currency: b.currency }, 'fee', look);
+			const days = countOf(d.minDays) !== null && countOf(d.maxDays) !== null ? `${d.minDays}–${d.maxDays} days` : null;
+			content.delivery = [textOf(d.name, 80), fee, days].filter(Boolean).join(', ');
+		}
+		if (b.inStock === false) content.inStock = false;
+		const methods = itemsOf(b.paymentMethods)
+			.filter(isObject)
+			.map((m) => textOf(m.label ?? m.name ?? m.key, 60))
+			.filter(Boolean)
+			.slice(0, 10);
+		if (methods.length > 0) content.paymentMethods = methods;
 		return { content, products: [] };
 	}
 	if (name === SHOP_TOOLS.deals) {
 		const deals = itemsOf(b.items)
 			.filter(isObject)
 			.slice(0, DEALS_LIMIT)
-			.map((d) => ({
-				name: textOf(d.name, 120),
-				description: textOf(d.description, 300),
-				...(textOf(d.offerText, 200) ? { offer: textOf(d.offerText, 200) } : {}),
-				...(textOf(d.appliesTo, 200) ? { appliesTo: textOf(d.appliesTo, 200) } : {}),
-				endsAt: dateText(d.endsAt, look, 'datetime'),
-			}))
+			.map((d) => {
+				const offer = textOf(d.discountLabel ?? d.valueText, 200);
+				const days = Array.isArray(d.days) ? d.days.filter((day) => typeof day === 'string').join(', ') : '';
+				const hours = textOf(d.timeFrom, 10) && textOf(d.timeTo, 10) ? `${d.timeFrom}–${d.timeTo}` : '';
+				const when = [days, hours].filter(Boolean).join(' ');
+				const badge = textOf(d.badgeLabel, 60);
+				const minQuantity = countOf(d.minQuantity);
+				return {
+					name: textOf(d.name, 120),
+					description: textOf(d.description, 300),
+					...(offer ? { offer } : {}),
+					...(badge ? { badge } : {}),
+					...(minQuantity ? { minQuantity } : {}),
+					...(when ? { when } : {}),
+					endsAt: textOf(d.endsText, 60) ?? dateText(d.endsAt, look, 'datetime'),
+				};
+			})
 			.filter((d) => d.name);
 		return { content: deals.length > 0 ? { deals } : 'No deals are running right now.', products: [] };
 	}
@@ -597,22 +651,34 @@ export const shopAnswer = (name, body, look = {}) => {
 					.map((line) =>
 						[
 							textOf(line.name, 120),
-							textOf(line.variant, 120),
+							textOf(line.variantName, 120),
+							textOf(line.gradeLabel, 60),
 							countOf(line.quantity) !== null ? `× ${line.quantity}` : null,
-							textOf(line.totalText ?? line.priceText, 60),
+							textOf(line.totalText, 60),
+							daysOf(line.warrantyDays) ? `warranty ${daysOf(line.warrantyDays)}` : null,
 						]
 							.filter(Boolean)
 							.join(' '),
 					);
-				const expected = dateText(o.expectedAt ?? o.expectedDate, look, 'date');
+				const expected = dateText(o.expectedAt, look, 'date');
 				const note = textOf(o.trackingNote, 300);
 				const video = pageUrl(o.dispatchVideo);
+				const due = Number(o.balanceDue) > 0 ? priceOf(o, 'balanceDue', look) : null;
+				const tracking = pageUrl(o.trackingUrl);
+				const courier = textOf(o.courier, 80);
+				const trackingNumber = textOf(o.trackingNumber, 80);
+				const method = textOf(o.paymentMethod, 40);
 				return {
 					number: textOf(o.number, 40),
 					status: textOf(o.status, 60),
 					total: priceOf(o, 'total', look),
 					placedAt: dateText(o.placedAt, look, 'date'),
+					...(method ? { paymentMethod: method } : {}),
+					...(due ? { balanceDue: due } : {}),
 					...(lines.length > 0 ? { items: lines } : {}),
+					...(courier ? { courier } : {}),
+					...(trackingNumber ? { trackingNumber } : {}),
+					...(tracking ? { trackingLink: tracking } : {}),
 					...(expected ? { expected } : {}),
 					...(note ? { trackingNote: note } : {}),
 					...(video ? { dispatchVideo: video } : {}),
@@ -627,26 +693,37 @@ export const shopAnswer = (name, body, look = {}) => {
 			products: [],
 		};
 	}
-	if (name === SHOP_TOOLS.account)
+	if (name === SHOP_TOOLS.account) {
+		const firstName = textOf(b.firstName, 60);
+		const city = textOf(b.city, 80);
+		const area = textOf(b.area, 80);
 		return {
 			content: {
 				name: textOf(b.name, 120),
+				...(firstName ? { firstName } : {}),
 				loyaltyPoints: countOf(b.loyaltyPoints),
-				...(textOf(b.city, 80) ? { city: textOf(b.city, 80) } : {}),
-				...(textOf(b.area, 80) ? { area: textOf(b.area, 80) } : {}),
+				...(city ? { city } : {}),
+				...(area ? { area } : {}),
 			},
 			products: [],
 		};
+	}
 	const shipments = itemsOf(b.items)
 		.filter(isObject)
 		.slice(0, 10)
-		.map((s) => ({
-			orderNumber: textOf(s.orderNumber, 40),
-			courier: textOf(s.courier, 80),
-			trackingNumber: textOf(s.trackingNumber, 80),
-			trackingLink: pageUrl(s.trackingUrl),
-			status: textOf(s.status, 120),
-		}));
+		.map((s) => {
+			const note = textOf(s.trackingNote, 300);
+			const expected = dateText(s.expectedAt, look, 'date');
+			return {
+				orderNumber: textOf(s.orderNumber, 40),
+				courier: textOf(s.courier, 80),
+				trackingNumber: textOf(s.trackingNumber, 80),
+				trackingLink: pageUrl(s.trackingUrl),
+				status: textOf(s.status, 120),
+				...(note ? { trackingNote: note } : {}),
+				...(expected ? { expected } : {}),
+			};
+		});
 	return { content: shipments.length > 0 ? { shipments } : 'No shipments on this account yet.', products: [] };
 };
 

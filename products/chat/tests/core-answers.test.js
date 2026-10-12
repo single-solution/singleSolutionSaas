@@ -233,10 +233,19 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 						total: 1000,
 						currency: 'USD',
 						placedAt: '2026-10-01T10:00:00Z',
-						expectedDate: '2026-10-09',
+						expectedAt: '2026-10-09T08:00:00Z',
 						trackingNote: 'With the courier',
 						dispatchVideo: 'https://cdn.example.com/v.mp4',
-						lines: [{ name: 'Fan', variant: 'White', quantity: 2, totalText: '$10.00' }, 'x'],
+						paymentMethod: 'cod',
+						balanceDue: 500,
+						balanceDueText: '$5.00',
+						courier: 'TCS',
+						trackingNumber: 'T1',
+						trackingUrl: 'https://t.example.com/T1',
+						lines: [
+							{ name: 'Fan', variantName: 'White', gradeLabel: 'New', quantity: 2, totalText: '$10.00', warrantyDays: 30 },
+							'x',
+						],
 					},
 				],
 			},
@@ -247,24 +256,50 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 				{
 					number: 'A-1',
 					total: 'USD 10.00',
-					items: ['Fan White × 2 $10.00'],
+					paymentMethod: 'cod',
+					balanceDue: '$5.00',
+					items: ['Fan White New × 2 $10.00 warranty 30 days'],
+					courier: 'TCS',
+					trackingNumber: 'T1',
+					trackingLink: 'https://t.example.com/T1',
 					expected: '9 Oct 2026',
 					trackingNote: 'With the courier',
 					dispatchVideo: 'https://cdn.example.com/v.mp4',
 				},
 			],
 		});
-		expect(shopAnswer('get_my_account', { name: 'A', loyaltyPoints: 3, city: 'Lahore', area: 'DHA' }).content).toEqual({
-			name: 'A',
-			loyaltyPoints: 3,
-			city: 'Lahore',
-			area: 'DHA',
-		});
 		expect(
-			shopAnswer('list_active_deals', { items: [{ name: 'D', offerText: '10% off', appliesTo: 'Fans' }] }).content,
-		).toEqual({
-			deals: [{ name: 'D', description: null, offer: '10% off', appliesTo: 'Fans', endsAt: null }],
+			shopAnswer('get_my_account', { name: 'A B', firstName: 'A', loyaltyPoints: 3, city: 'Lahore', area: 'DHA' }).content,
+		).toEqual({ name: 'A B', firstName: 'A', loyaltyPoints: 3, city: 'Lahore', area: 'DHA' });
+		const deal = {
+			name: 'D',
+			valueText: '10%',
+			badgeLabel: 'Hot',
+			minQuantity: 2,
+			days: ['fri'],
+			timeFrom: '10:00',
+			timeTo: '12:00',
+			endsText: 'Oct 9',
+		};
+		expect(shopAnswer('list_active_deals', { items: [deal] }).content).toEqual({
+			deals: [
+				{
+					name: 'D',
+					description: null,
+					offer: '10%',
+					badge: 'Hot',
+					minQuantity: 2,
+					when: 'fri 10:00–12:00',
+					endsAt: 'Oct 9',
+				},
+			],
 		});
+		const shipped = shopAnswer(
+			'track_shipment',
+			{ items: [{ orderNumber: 'A', trackingNote: 'Out', expectedAt: '2026-10-09T00:00:00Z' }] },
+			look,
+		);
+		expect(shipped.content).toMatchObject({ shipments: [{ trackingNote: 'Out', expected: '9 Oct 2026' }] });
 		const card = { productId: 'p', name: 'n', price: 1, currency: 'USD' };
 		expect(cardsOf(Array.from({ length: 14 }, () => card))).toHaveLength(12);
 		expect(

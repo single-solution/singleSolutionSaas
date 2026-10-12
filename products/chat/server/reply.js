@@ -193,7 +193,10 @@ export const createReply = (product, service) => {
 			signIn ? { headers: { [SIGN_IN_HEADER]: signIn } } : {},
 		);
 		const text = answer.ok ? contextText(answer.body) : null;
-		if (answer.ok) contexts.set(key, text);
+		if (answer.ok) {
+			contexts.set(key, text);
+			rememberCurrency(s, answer.body);
+		}
 		return text;
 	};
 

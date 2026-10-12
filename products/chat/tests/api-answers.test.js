@@ -137,7 +137,9 @@ describe('fallback answers (C3)', () => {
 		]);
 		sys.responders.set(`${ECOMMERCE}/v1/chat/deals`, () => ({
 			status: 200,
-			body: { items: [{ id: 'deal_1', name: 'Eid sale', description: '10% off fans', offerText: '10% off', endsAt: null }] },
+			body: {
+				items: [{ id: 'deal_1', name: 'Eid sale', description: '10% off fans', discountLabel: '10% off', endsAt: null }],
+			},
 		}));
 		sys.responders.set(`${ECOMMERCE}/v1/chat/products`, () => ({ status: 200, body: { items: [PRODUCT] } }));
 		sys.responders.set(`${ECOMMERCE}/v1/chat/products/top`, () => ({ status: 200, body: { items: [PRODUCT] } }));
@@ -233,7 +235,6 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 			status: 200,
 			body: {
 				...PRODUCT,
-				warranty: { text: '1 year' },
 				variants: [
 					{
 						id: 'var_white',
@@ -241,15 +242,19 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 						price: 1250000,
 						priceText: 'Rs 12,500',
 						grade: 'New',
+						gradeKey: 'new',
 						stockLeft: 3,
+						soldOut: false,
+						warrantyDays: 365,
 					},
 					{
 						id: 'var_used',
 						options: { Colour: 'Grey' },
 						price: 900000,
-						grade: { label: 'Used' },
-						inStock: false,
-						warranty: '3 months',
+						grade: 'Used',
+						gradeKey: 'used',
+						soldOut: true,
+						warrantyDays: 90,
 					},
 				],
 			},
@@ -264,11 +269,15 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 				price: 2500000,
 				priceAfterDeals: 2400000,
 				savings: 100000,
-				fees: 10000,
-				feesText: 'Rs 100',
-				delivery: 0,
-				freeDeliveryThreshold: 500000,
+				subtotal: 2500000,
+				discount: 100000,
+				fee: 10000,
+				feeText: 'Rs 100',
+				tax: 0,
+				delivery: { method: 'standard', name: 'Courier', fee: 0, feeText: 'Free', minDays: 2, maxDays: 4 },
+				freeDeliveryOver: 500000,
 				total: 2410000,
+				paymentMethods: [{ key: 'cod', label: 'Cash on delivery', advance: 0 }],
 				currency: 'PKR',
 				deals: ['Eid sale'],
 			},
@@ -278,12 +287,19 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 				tools: [
 					{
 						name: 'search_catalog',
-						arguments: { query: 'fan', category: 'Fans', grade: 'New', minPrice: 5000, maxPrice: '15,000', inStock: true },
+						arguments: {
+							query: 'fan',
+							category: 'Ceiling Fans',
+							grade: 'New, like new, !',
+							minPrice: 5000,
+							maxPrice: '15,000',
+							inStock: true,
+						},
 					},
 					{ name: 'get_product_details', arguments: { productId: 'prd_fan' } },
 					{
 						name: 'quote_product_savings',
-						arguments: { productId: 'prd_fan', variantId: 'var_white', quantity: 9, paymentMethod: 'cod' },
+						arguments: { productId: 'prd_fan', variantId: 'var_white', quantity: 9, paymentMethod: 'cod', city: 'Lahore' },
 					},
 				],
 			},
@@ -292,34 +308,52 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 		await sys.visitor()('POST', '/v1/chat/messages', { text: 'a new fan under 15000' });
 		const paths = sys.shopCalls().map((c) => new URL(c.url).pathname + new URL(c.url).search);
 		expect(paths).toContain(
-			'/v1/chat/products?q=fan&category=Fans&grade=New&minPrice=500000&maxPrice=1500000&inStock=1&limit=8',
+			'/v1/chat/products?q=fan&category=ceiling-fans&grade=new%2Clike_new&minPrice=500000&maxPrice=1500000&inStock=1&limit=8',
 		);
-		expect(paths).toContain('/v1/chat/products/prd_fan/quote?variantId=var_white&quantity=5&paymentMethod=cod');
+		expect(paths).toContain('/v1/chat/products/prd_fan/quote?variantId=var_white&quantity=5&paymentMethod=cod&city=Lahore');
 		const results = sys
 			.aiCalls()[1]
 			.messages.filter((/** @type {any} */ m) => m.role === 'tool')
 			.map((/** @type {any} */ m) => JSON.parse(m.content));
 		expect(results[0].products[0]).toMatchObject({ price: 'Rs 12,500', grade: 'New', stockLeft: 3 });
 		expect(results[1]).toMatchObject({
-			warranty: '1 year',
 			variants: [
-				{ id: 'var_white', options: 'Colour: White', price: 'Rs 12,500', grade: 'New', inStock: true, stockLeft: 3 },
+				{
+					id: 'var_white',
+					options: 'Colour: White',
+					price: 'Rs 12,500',
+					grade: 'New',
+					gradeKey: 'new',
+					inStock: true,
+					stockLeft: 3,
+					warranty: '365 days',
+				},
 				{
 					id: 'var_used',
 					options: 'Colour: Grey',
 					price: 'PKR 9,000.00',
 					grade: 'Used',
 					inStock: false,
-					warranty: '3 months',
+					warranty: '90 days',
 				},
 			],
 		});
-		expect(results[2]).toMatchObject({
+		expect(results[2]).toEqual({
+			productId: 'prd_fan',
+			variantId: 'var_white',
 			quantity: 2,
 			paymentMethod: 'cod',
-			fees: 'Rs 100',
-			delivery: 'PKR 0.00',
+			price: 'PKR 25,000.00',
+			priceAfterDeals: 'PKR 24,000.00',
+			savings: 'PKR 1,000.00',
+			deals: ['Eid sale'],
+			subtotal: 'PKR 25,000.00',
+			discount: 'PKR 1,000.00',
+			fee: 'Rs 100',
+			freeDeliveryOver: 'PKR 5,000.00',
 			total: 'PKR 24,100.00',
+			delivery: 'Courier, Free, 2–4 days',
+			paymentMethods: ['Cash on delivery'],
 		});
 	});
 
