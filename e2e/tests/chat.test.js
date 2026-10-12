@@ -275,7 +275,7 @@ describe('Chat on the real Portal', () => {
 			notifyCookie,
 			'PUT',
 			`/v1/dashboard/websites/${websiteId}/templates`,
-			{ key: 'chat.needs_you', channel: 'email', subject: 'Chat needs you', text: '{visitor}: {preview} {link}' },
+			{ key: 'chat.staff_needs_you', channel: 'email', subject: 'Chat needs you', text: '{visitor}: {preview} {link}' },
 			NOTIFY,
 		);
 		expect(template.status).toBe(200);
