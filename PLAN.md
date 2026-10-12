@@ -1781,6 +1781,9 @@ so and wins.
   correct way of doing each thing (official gateway protocols, current libraries, the products' own data shapes). "No
   visible change" means the same features, wording, URLs and outcomes for merchants, staff and shoppers, never copying
   a store's internals or bugs.
+- **The stores are references, not targets** (owner, 2026-10-12). Nothing is built for these three stores alone and
+  nothing about them is hardcoded; more stores will come. Each behaviour they show is a general option any merchant
+  sets, and the importer only writes the three stores' values (A14–A16, E38–E50, C16–C20 came from their audit).
 - **Options with safe defaults.** Every behaviour a store has that the products lack becomes a general option of the
   product it belongs to, per website, open to every merchant. Its default keeps today's behaviour. A change that is
   plainly better for every website has no switch and is marked **always**; no merchant is live yet, so these break
@@ -2083,6 +2086,26 @@ takes the server token with `SS-Visitor-IP` and answers the refresh token in the
 
 **A13. Session hand-over: not built** (owner, 2026-10-10). Everyone signs in once after the cut-over, with the same
 password; no hand-over route is added.
+
+**A14. Remember options per role, with "never".** (owner, 2026-10-12)
+
+- Why: every store's admin ends staff sign-in when the browser closes.
+- Key: A6 `remember` gains `never` (no box; the sign-in ends with the browser session, within the role's longest
+  session).
+- Data: none.
+
+**A15. Address labels.** (owner, 2026-10-12)
+
+- Why: shoppers name their saved addresses ("Home", "Office").
+- Key: always: profile addresses take an optional `label` (at most 40 characters), shown wherever addresses are listed.
+- Data: `addresses[].label`.
+
+**A16. Staff phones and the Owner rank.** (owner, 2026-10-12)
+
+- Why: staff profiles keep a phone, and some admins have a top rank only its own holders can change.
+- Key: always: staff users keep `phone` (shown and edited in staff management; not a sign-in method unless A6 says so);
+  a user with the role Owner can be demoted, blocked or deleted only by another Owner (with A4's last-Owner guard).
+- Data: none new.
 
 #### Notifications
 
@@ -2607,6 +2630,105 @@ Orders:
   carries `priceText` (K7).
 - Data: none.
 
+**E38. Messages on or off.** (owner, 2026-10-12)
+
+- Why: a merchant may stop every customer message, or only some statuses.
+- Key: settings of `checkout`: `messagesOn` (true); per status, `notifyStatuses` (E32) already decides.
+- Data: none.
+
+**E39. Points on returned orders.** (owner, 2026-10-12)
+
+- Why: some merchants keep the points a returned order earned.
+- Key: setting `returnPoints` of `loyalty` (`take_back` default | `keep`); changes E27's "(always)".
+- Data: none.
+
+**E40. Order moves as switches.** (owner, 2026-10-12)
+
+- Why: merchants differ on delivered → cancelled, refunds from any status (also unpaid) and moves between closed
+  statuses.
+- Key: the `order_flow` list gains `extraMoves` switches: `cancel_after_delivery`, `refund_unpaid`, `between_closed`
+  (all off). On, the role rules (E27) allow those moves where the flow lists them; a refund of an unpaid order records
+  no money and acts as a cancel.
+- Data: none.
+
+**E41. Shop health.** (owner, 2026-10-12)
+
+- Why: merchants want a dashboard card of what needs fixing.
+- Key: `reports`.
+- API: `GET /v1/reports/health` → checks with counts and links: active products without photos, archived products still
+  featured, out-of-stock and low-stock variants (E44's level), missing business name or website address, no payment
+  method on, badly formed pixel ids (Growth's, when its token is pasted).
+- Data: none.
+
+**E42. SEO score per record.** (owner, 2026-10-12)
+
+- Why: merchants see a focus-keyword checklist and score on products, categories, brands and deals.
+- Key: `seo`.
+- API: staff reads of those records add `seo.score` (0–100) and `seo.checks` (worked out on read from the record's SEO
+  fields, its focus keyword, content length, photos' alternative text and links); lists can sort by it.
+- Data: none (not stored).
+
+**E43. Automatic landing pages and SEO copy.** (owner, 2026-10-12)
+
+- Why: merchants get category × brand (× grade) pages without creating each, and SEO copy written as they save.
+- Key: settings of `landing_pages`: `auto` (`off` default | `category_brand` | `category_brand_grade`),
+  `autoMinProducts` (2), `autoMinInStockVariants` (3), `autoCopy` (`formula` default | `ai`); setting `autoSeo` of
+  `seo` (`off` default | `on_save`, with the merchant's AI key).
+- API: E15's landing reads and sitemaps include every eligible combination (no record needed; a stored landing page
+  wins); with `autoSeo`, saving a product or attribute writes its SEO title, description and FAQs when empty.
+- Data: none new.
+
+**E44. Low-stock level for counts and alerts.** (owner, 2026-10-12)
+
+- Why: dashboards and the bell count low stock by the merchant's level.
+- Key: the `catalog` setting `lowStock` (already there) also drives `products/count?lowStock=1` and E41.
+- Data: none.
+
+**E45. Attributes and grades per category.** (owner, 2026-10-12)
+
+- Why: the same attribute or grade slug may carry different labels, options, units, content and SEO in each category,
+  with glossary pages per category.
+- Key: always: attributes and grades may be defined per category (`categoryId`); one without a category applies to
+  all; E15 glossary reads take `/{category}/{slug}`; the importer stops merging them by slug.
+- Data: `AttributeRecord.categoryId`, grade entries' `categoryId`; `unit` on attributes.
+
+**E46. Customers without an account.** (owner, 2026-10-12)
+
+- Why: staff add customers by phone (with opening points) and keep their addresses; guest addresses are kept.
+- Key: `checkout`.
+- API: `POST /v1/customers` `{ name, phone, city?, points? }` creates a guest customer (`customers.manage`);
+  `PUT /v1/customers/:id/addresses`; a guest order saves its address on the customer record (at most 6, the newest
+  first).
+- Data: `CustomerRecord.addresses`.
+
+**E47. Loyalty member flag.** (owner, 2026-10-12)
+
+- Why: some merchants mark loyalty members by hand or on their first order.
+- Key: setting `memberFlag` of `loyalty` (`off` default | `manual` | `first_order`); with it on, only flagged customers
+  earn and see points, and E31's `loyalty` segment is the flag.
+- Data: `CustomerRecord.loyaltyMember`.
+
+**E48. A note on any status change.** (owner, 2026-10-12)
+
+- Why: staff explain a move on the order's timeline.
+- Key: always (the move's `note`, already accepted); the orders widget offers it on every move.
+- Data: none.
+
+**E49. Website-wide structured data.** (owner, 2026-10-12)
+
+- Why: stores publish Organization or LocalBusiness (hours, location, contact, social links) and WebSite with a search
+  box.
+- Key: `seo`.
+- API: `GET /v1/seo/site` → JSON-LD from business.json (and `seo` settings for the type and search address).
+- Data: none.
+
+**E50. Old gateway payments on import.** (owner, 2026-10-12)
+
+- Why: imported orders paid through a gateway the merchant no longer uses.
+- Key: the `import` feature.
+- API: such orders come in paid, with an `other` payment entry carrying the gateway's name and reference.
+- Data: none.
+
 #### Chat
 
 **C1. Longer instructions and store context** (changes 0.8.3).
@@ -2742,6 +2864,37 @@ Orders:
 
 - Why: IM's own phone number would be redacted as "[phone]".
 - Key: always: the business.json phone and e-mail are never redacted.
+- Data: none.
+
+**C16. Reply alert frequency.** (owner, 2026-10-12)
+
+- Why: some merchants message the visitor on every staff reply.
+- Key: setting `frequency` of `visitor_alerts` (`once` default: C6's rule | `every_reply`).
+- Data: none.
+
+**C17. Sign-in off lifts the guest limit.** (owner, 2026-10-12)
+
+- Why: a website that does not use sign-in has no reason to cap guests.
+- Key: setting `noLimitWithoutSignIn` of the guest limits (false); on, the limit does not apply while the Customer
+  role's sign-in is paused (A6).
+- Data: none.
+
+**C18. Comparison answer without the AI.** (owner, 2026-10-12)
+
+- Why: "X vs Y" gets a side-by-side table when the AI is off or fails.
+- Key: C3 fallback intents gain `compare` with the placeholder `{comparison}` (a markdown table from E37's details).
+- Data: none.
+
+**C19. Poll intervals.** (owner, 2026-10-12)
+
+- Why: merchants tune how often the widget checks for messages.
+- Key: settings `pollFocusedSeconds` (code default; 3–60) and `pollBackgroundSeconds` (code default; 10–300).
+- Data: none.
+
+**C20. Delete every conversation.** (owner, 2026-10-12)
+
+- Why: merchants clear test chats before going live.
+- API: `POST /v1/data/delete-all` `{ scope: 'conversations', confirm: '<domain>' }` (server token only).
 - Data: none.
 
 #### Growth
@@ -2914,6 +3067,14 @@ and the gateway and webhook addresses.
 because their old offer locks are not carried; images that lived outside the store's bucket get new URLs; IM's raw
 analytics history starts empty (its daily totals are kept).
 
+**Store facts corrected after the audit** (2026-10-12). IM has no card gateway code (its old gateway orders come in by
+E50; cut-over steps for Payments do not apply to it); IM's chat staff alerts go by e-mail; IM has one `returned` status
+(the split above adds `returned-delivered` behind the same label); IM's passwords are PBKDF2-SHA256 of
+`<AUTH_SECRET>:<password>`, 100,000 rounds, a 256-bit key, salt and hash in base64 (A1); SB has no deals page, About
+page or order-line warranty; CT has no site-wide phone-code cap and asks for a city in the profile. Order numbers in all
+three have 4 digits (`numberDigits: 4`); SB's loyalty is `guests: earn`, `earnAt: placement`; CT's is
+`earnBase: total`; SB and CT keep points on returns (E39 `keep`).
+
 **Not imported.** Sign-in codes; rate-limit, lockout, cron and ops collections; the drained outbox; sessions; cached SEO
 surfaces (landings keep their copy, E15).
 
@@ -2988,6 +3149,9 @@ are built in parallel; a phase starts when the one before it is done.
    restock), the payments log, `IM-2026-0043`, events, staff alerts and per-status messages, claims, invoices and
    reports pass e2e; Chat's store context, rich and fallback answers, handoff options, alerts, imported guest keys and
    paging pass e2e against the real Accounts, Notifications and Ecommerce.
+   4b. **Merchant options from the store audit** (A14–A16, E38–E50, C16–C20; owner, 2026-10-12): general options any
+   merchant sets, found by checking the three stores against Part 0. Done when: each option's default keeps today's
+   behaviour and its unit tests pass, and the importer sets the three stores' values through the settings API.
 5. **Importers and rehearsal** (the `import` features; the `@ss/importer` source mapping and `verify`). Done when: a
    read-only copy of each store's database imports into a scratch merchant database with no failed records; `verify`
    matches counts and sums; a side-by-side check of each store's key screens (listing, product page, cart, checkout,
