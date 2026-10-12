@@ -3447,6 +3447,54 @@ The owner confirms or changes each one.
   from its widget config), the dashboard mirrors of K1 and the kit's routes (tickets, permissions, data rights,
   activity).
 
+#### Builder choices, Phase 4 (Ecommerce checkout, orders and promotions) (awaiting owner review)
+
+- **E18**: deal slugs are unique per website (409 `slug_taken`); a cart line sent without its variant counts as the
+  product's only variant when reading its lock; product cards carry `dealCount` and the first live deal's badge,
+  judged without the cart-only conditions (minimum quantity, cart total, payment methods). `allowPoints: false` blocks
+  redeeming points, not earning them.
+- **E20**: `pending` points are those of a member's orders not yet delivered, cancelled or given back whose points are
+  not credited; guests' points (`guests: earn`) are credited to their customer record and move to the member at
+  sign-in; points are taken back on a refund only when they were credited.
+- **E21**: guest checkout returns the order key once; a wrong or missing key reads like a missing order.
+- **E26**: a payment staff record is at most the balance due; a part payment leaves the order `unpaid` with the rest
+  due; a payment recorded on a waiting order moves it only with `confirm`. A refund with no `method` goes through
+  Payments first and records the rest as `other`. Cash paid on delivery is written as a `cash` entry.
+- **E27**: a shopper may cancel an open order (`shopperCancel` with `open`) only while nothing was paid; paid orders
+  are cancelled and refunded by staff. A return to origin without `reason` counts as an RTO.
+- **E28**: a dispatch video is an upload key in the merchant's bucket, a YouTube id or address (kept as its private
+  embed address) or an https address; with `packingVideo: off` a video sent is ignored. A courier is given by key or
+  name and kept by name.
+- **E29**: only an order that still waits, has nothing paid and holds only physical items can be edited. It is priced
+  again with the deals and coupon it was placed with (their uses stay counted), its role price and the points it spent
+  (worth at most the new goods); new deals are not added. A payment started through Payments for the old total is
+  dropped, so the shopper pays the new one.
+- **E31**: segments: `guest` (no Accounts user), `active` (at least one order), `loyalty` (a loyalty account with
+  points earned or left). Deleting an order gives back what a cancel would only while it is waiting, open, packed or
+  shipped; a delivered or settled order is deleted as it is. `delete-all` with `orders` also deletes slots, coupon uses
+  and claims; with `customers`, loyalty accounts; with `catalog`, products, categories, brands, attributes, serials,
+  size charts and landing pages.
+- **E32**: staff alert values: `id`, `number`, `name`, `total`, `status`, `paymentMethod`, `business` (plus `from`,
+  `reason` or `reference` by event); a cancel's reason is `expired`, `shopper` or `staff`. `stock.low` is published on
+  each catalog or stock write that leaves an active variant at or under the catalog's `lowStock` level. Events carry
+  ids and small facts only (never addresses or contacts).
+- **E33**: an exchange uses the return window; `replace` works on exchange and warranty claims and `repair` on warranty
+  claims, from approved or received; a repaired claim frees its units to be claimed again. Lines marked to restock at
+  `receive` are restocked at once, those marked not are never, the rest wait for `restock`. With no `method`, an order
+  paid online is refunded through Payments, others are recorded as `other`. `full_refund_only` takes back all earned
+  points once, on the refund that makes the order fully refunded. The reference prefix is kept on each claim when made.
+- **E34**: a guest alert is by phone only and needs `alerts.guests`; a target price is for price-drop alerts and must
+  be below today's price; the unsubscribe link is `https://<domain>/alerts/unsubscribe/<token>` on the store's site and
+  an unknown or used token answers `{ removed: 0 }`. Order-line reviews need a delivered order. Two unique indexes
+  change (`one_per_user` → `one_per_reviewer`, `one_waiting` → `one_waiting_per_contact`).
+- **E35**: an unknown id in a batch of packing slips or a pick list refuses the whole request; cash to collect and
+  empty serial slots are on the batch slips only; a `cash` entry is named with the COD method's text.
+- **E36**: `series` is `day` only; `statuses` applies to the summary; sell-through is units sold over units sold plus
+  stock left, per product that tracks stock; oldest stock is per active variant with stock, by its last sale or the
+  product's publication. The product export ends with `sold_out` and `updated_at`, which `mode=update` needs; updates
+  are dry runs unless `dryRun: false`. The customers CSV takes no filters (at most 20,000 rows).
+- **Not yet**: the widgets and docs for E18–E36 come next; Phase 4's e2e covers the server.
+
 ### 0.8.4 Still open
 
 - **The grilling of each later product** (Notifications, Accounts, Payments, Ecommerce, Growth), held right before it is
