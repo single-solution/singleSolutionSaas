@@ -609,9 +609,7 @@ describe('E13 URL templates and slug history', () => {
 		expect(page.url).toBe(`https://shop.example.com/clothes/dresses/maison/${ids.featured.slug}`);
 		expect(page.variants[0].url).toBe(`${page.url}?grade=a-plus`);
 		const scarf = (await get(`/v1/shop/products/${ids.scarf.slug}`)).json;
-		expect(scarf.variants[0].url).toBe(
-			`https://shop.example.com/clothes/${ids.scarf.slug}?grade=a-plus&colour=red%2Cblue&size=S`,
-		);
+		expect(scarf.variants[0].url).toBe(`https://shop.example.com/clothes/${ids.scarf.slug}?grade=a-plus&colour=red&size=S`);
 		expect(page.breadcrumb.map((/** @type {any} */ c) => c.url)).toEqual([
 			'https://shop.example.com/clothes',
 			'https://shop.example.com/clothes/dresses',

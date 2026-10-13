@@ -15,12 +15,33 @@
 			"description": "Listed as out of stock; off leaves them out of the feeds.",
 			"default": true
 		},
+		"itemTitle": {
+			"type": "string",
+			"title": "Item titles",
+			"description": "{name} is the product, {brand} its brand, {variant} the variant's options on products with several variants, {options} the variant's options always. Empty brackets and separators left over are dropped.",
+			"default": "{name} - {variant}",
+			"maxLength": 160
+		},
+		"itemDescription": {
+			"type": "string",
+			"title": "Item descriptions",
+			"description": "The product's description (else its summary), or its SEO description first.",
+			"default": "body",
+			"enum": ["body", "seo"]
+		},
 		"skuAs": {
 			"type": "string",
 			"title": "Send the SKU as",
 			"description": "Shopping catalogues match items by GTIN (barcode) or MPN (manufacturer part number). Choose what your SKUs are.",
 			"default": "none",
 			"enum": ["none", "mpn", "gtin"]
+		},
+		"identifierExists": {
+			"type": "string",
+			"title": "Items without GTIN or MPN",
+			"description": "Automatic: nothing is sent and the catalogue decides. No: identifier_exists no is sent on items with neither (custom or handmade goods).",
+			"default": "auto",
+			"enum": ["auto", "no"]
 		},
 		"gradedCondition": {
 			"type": "string",

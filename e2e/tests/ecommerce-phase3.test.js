@@ -198,7 +198,7 @@ describe('Ecommerce phase 3 on the real Portal', () => {
 			['colour', 'Red, Gold'],
 			['size', 'S'],
 		]);
-		expect(page.json.variants[0].url).toBe('https://sisters.example.com/dresses/embroidered-dress?colour=red%2Cgold&size=S');
+		expect(page.json.variants[0].url).toBe('https://sisters.example.com/dresses/embroidered-dress?colour=red&size=S');
 		const listing = await serverCall(SB, 'GET', '/v1/shop/products?attr.colour=gold&inStock=1&count=1');
 		expect(listing.json).toMatchObject({ total: 1, items: [{ url: 'https://sisters.example.com/dresses/embroidered-dress' }] });
 		expect((await serverCall(SB, 'GET', '/v1/shop/products?attr.size=M&inStock=1')).json.items).toEqual([]);

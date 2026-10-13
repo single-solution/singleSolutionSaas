@@ -24,6 +24,23 @@
 			"default": "",
 			"maxLength": 200
 		},
+		"attributeTitle": {
+			"type": "string",
+			"title": "Attribute glossary title",
+			"description": "An attribute glossary page's part of the page title when it has no SEO title: {name} is the attribute, {unit} its unit, {values} its first values, {storeName} the name in titles, for example What is {name}?",
+			"default": "{name}",
+			"maxLength": 160
+		},
+		"attributeDescription": {
+			"type": "string",
+			"title": "Attribute glossary description",
+			"description": "Used when an attribute has no SEO description or text of its own, with the same placeholders. Set, every active attribute's glossary page is listed in the sitemap; empty, only those with their own text.",
+			"default": "",
+			"maxLength": 500,
+			"x-ui": {
+				"widget": "textarea"
+			}
+		},
 		"gradeUrl": {
 			"type": "string",
 			"title": "Grade glossary address",

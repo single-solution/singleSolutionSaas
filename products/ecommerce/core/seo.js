@@ -72,19 +72,57 @@ export const clip = (value, max) => {
 	return `${(space > max * 0.6 ? cut.slice(0, space) : cut).trimEnd()}…`;
 };
 
+/** A word that only separates others in a title (`|`, `-`, `·` …). */
+const SEPARATOR = /^[|\-–—·:/,•]+$/;
+
 /**
- * A page title from the merchant's pattern (`{name} | {business}`). An empty pattern is the name alone.
+ * A merchant's pattern filled (SG-5, SG-21): each `{placeholder}` of `values` replaced; empty brackets, and separators
+ * left at either end or doubled by an empty value, are dropped; spaces collapsed. Other text stays as typed.
  * @param {string} template
- * @param {{ name: string, business: string }} values
+ * @param {Record<string, string>} values
  */
-export const fillTitle = (template, { name, business }) => {
-	const filled = String(template || '{name}')
-		.replaceAll('{name}', name)
-		.replaceAll('{business}', business)
-		.replace(/\s+/g, ' ')
-		.trim();
-	return filled || name;
+export const fillTemplate = (template, values) => {
+	let text = String(template ?? '');
+	for (const [key, value] of Object.entries(values)) text = text.replaceAll(`{${key}}`, value);
+	/** @type {string[]} */
+	const words = [];
+	for (const word of text
+		.replace(/\(\s*\)|\[\s*\]/g, ' ')
+		.split(/\s+/)
+		.filter(Boolean)) {
+		const last = words.at(-1);
+		if (SEPARATOR.test(word) && (last === undefined || SEPARATOR.test(last))) continue;
+		words.push(word);
+	}
+	while (words.length > 0 && SEPARATOR.test(/** @type {string} */ (words.at(-1)))) words.pop();
+	return words.join(' ');
 };
+
+/**
+ * A page title from the merchant's pattern (`{name} | {business}`; `{storeName}` is the same name). An empty pattern
+ * is the name alone.
+ * @param {string} template
+ * @param {{ name: string, business: string }} values `business`: the SEO brand name, else the business name
+ */
+export const fillTitle = (template, { name, business }) =>
+	fillTemplate(String(template || '{name}'), { name, business, storeName: business }) || name;
+
+/**
+ * The page's part of the title (`{name}` of the title pattern) from the `productTitle` or `categoryTitle` pattern
+ * (SG-5): `{name}`, `{brand}`, `{category}` and `{storeName}`; the name alone when the pattern is empty or fills to
+ * nothing.
+ * @param {unknown} template
+ * @param {{ name: string, brand?: string, category?: string, storeName: string }} values
+ */
+export const pageName = (template, { name, brand = '', category = '', storeName }) =>
+	fillTemplate(String(template || '{name}'), { name, brand, category, storeName }) || name;
+
+/**
+ * A description from the `productDescription` or `categoryDescription` pattern (SG-5, SG-21), or '' when there is none.
+ * @param {unknown} template
+ * @param {Record<string, string>} values
+ */
+export const patternText = (template, values) => (template ? fillTemplate(String(template), values) : '');
 
 /**
  * The first text that is not empty, as a meta description.
@@ -171,21 +209,31 @@ const VARIES_BY = Object.freeze(
  * @property {Array<{ name: string, url: string }>} trail home and categories, without the product
  * @property {(variant: VariantRecord) => string} [variantUrl] a variant's page (E13)
  * @property {(variant: VariantRecord) => string | null} [variantImage] a variant's first photo (E6)
- * @property {{ fee: number, country: string } | null} [shipping] the default delivery fee (E16)
+ * @property {{ fee: number, freeOver?: number, country: string } | null} [shipping] the default delivery fee, free
+ *   from `freeOver` (0 = never; E16, SG-2)
  * @property {{ days: number, country: string } | null} [returns] the return window (E16)
  * @property {Array<{ name: string, rating: number, title: string, body: string, at: Date | string | null }>} [reviews]
  *   approved reviews shown as review nodes (E16)
  */
 
 /**
- * The offer details every offer of a product shares: shipping and the return policy (E16).
- * @param {Pick<ProductPage, 'currency' | 'shipping' | 'returns'>} page
+ * The delivery fee of one item at a price: free from the free-delivery amount (0 = never free), as the cart charges it
+ * (SG-2).
+ * @param {{ fee: number, freeOver?: number }} shipping
+ * @param {number} price
  */
-const offerExtras = ({ currency, shipping, returns }) => ({
+export const shippingFee = ({ fee, freeOver = 0 }, price) => (freeOver > 0 && price >= freeOver ? 0 : fee);
+
+/**
+ * The offer details of a product's offer: shipping at the offer's price and the return policy (E16, SG-2).
+ * @param {Pick<ProductPage, 'currency' | 'shipping' | 'returns'>} page
+ * @param {number} price
+ */
+const offerExtras = ({ currency, shipping, returns }, price) => ({
 	shippingDetails: shipping
 		? {
 				'@type': 'OfferShippingDetails',
-				shippingRate: { '@type': 'MonetaryAmount', value: toDecimal(shipping.fee, currency), currency },
+				shippingRate: { '@type': 'MonetaryAmount', value: toDecimal(shippingFee(shipping, price), currency), currency },
 				...(shipping.country ? { shippingDestination: { '@type': 'DefinedRegion', addressCountry: shipping.country } } : {}),
 			}
 		: null,
@@ -226,7 +274,6 @@ export const faqJsonLd = (faqs, url) =>
 export const productJsonLd = (page) => {
 	const { product, url, images, description, brand, currency, seller, trail } = page;
 	const variants = activeVariants(product);
-	const extras = offerExtras(page);
 	/** @param {VariantRecord} variant */
 	const offerOf = (variant) =>
 		compact({
@@ -240,7 +287,7 @@ export const productJsonLd = (page) => {
 				return condition ? CONDITION_URL[condition] : '';
 			})(),
 			seller: seller ? { '@type': 'Organization', name: seller } : null,
-			...extras,
+			...offerExtras(page, variant.price),
 		});
 	const rating =
 		product.rating.count > 0

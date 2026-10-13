@@ -3,9 +3,10 @@
  * category, brand and grade combination with its own copy, for the merchant's server (`/v1/landings…`, server token)
  * and the catalog admin widget (`/v1/admin/landings…`, ticket with `catalog.edit`), with AI copy suggestions (with
  * `ai_copy`). `GET /v1/seo/listing` answers the heading, title, description, introduction, FAQs, canonical address,
- * JSON-LD and robots of any listing the site renders: `index` only for a category (and its pages) and for an indexable
- * landing page, `noindex` for any other filter. Glossary pages explain an attribute or a grade. Indexable landing
- * pages and glossary pages are listed in the sitemaps.
+ * JSON-LD and robots of any listing the site renders: `index` only for a category (and its pages, unless the `seo`
+ * setting `pagedListings` says otherwise) and for an indexable landing page, `noindex` for any other filter. Glossary
+ * pages explain an attribute or a grade, with the merchant's title and description patterns when they have no copy of
+ * their own (SG-20). Indexable landing pages and glossary pages are listed in the sitemaps.
  * @module
  */
 import { createId } from '@ss/contracts';
@@ -18,11 +19,20 @@ import { withDescendants } from '../core/catalog-taxonomy.js';
 import { checkLanding, isIndexable, landingFor, landingLink } from '../core/landings.js';
 import { absolute } from '../core/links.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
-import { categoryJsonLd, faqJsonLd, fillTitle, metaDescription, robotsOf, scriptJson } from '../core/seo.js';
+import {
+	categoryJsonLd,
+	faqJsonLd,
+	fillTitle,
+	metaDescription,
+	pageName,
+	patternText,
+	robotsOf,
+	scriptJson,
+} from '../core/seo.js';
 import { gradesByKey } from '../core/grades.js';
 import { hiddenFor } from './catalog-visibility.js';
-import { SERVER_LIMITS } from './service.js';
-import { trailOf } from './seo-reads.js';
+import { SEO_LIMITS, SERVER_LIMITS } from './service.js';
+import { storeNameOf, trailOf } from './seo-reads.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
 /** @typedef {import('./service.js').Service} Service */
@@ -37,6 +47,13 @@ import { trailOf } from './seo-reads.js';
 
 /** @type {Array<{ limit: number, windowSeconds: number, per?: 'website' | 'visitor' }>} */
 const RATE = [...SERVER_LIMITS];
+/**
+ * The reads the merchant's server makes while rendering pages: their own higher window (SG-31).
+ * @type {Array<{ limit: number, windowSeconds: number, per?: 'website' | 'visitor' }>}
+ */
+const READ_RATE = [...SEO_LIMITS];
+/** Values of an attribute a glossary pattern's `{values}` names. */
+const PATTERN_VALUES = 5;
 /** At most this many landing pages per website. */
 const MAX_LANDINGS = 2000;
 /** Products in a listing's ItemList. */
@@ -358,15 +375,28 @@ export const createLandings = (product, service, media) => {
 		const indexed = categoryIndexable || (view?.indexed === true && exact);
 		const pageUrl = view ? view.url : category ? await media.categoryUrl(s, category) : `https://${s.domain}/`;
 		const canonicalBase = category?.seo?.canonicalUrl && !view ? absolute(category.seo.canonicalUrl, s.domain) : pageUrl;
-		const canonical = page > 1 ? `${canonicalBase}${canonicalBase.includes('?') ? '&' : '?'}page=${page}` : canonicalBase;
+		// pages after the first: indexed with their own address, or not indexed with the first page as canonical (SG-21)
+		const pagedOut = page > 1 && settings.pagedListings === 'noindex';
+		const canonical =
+			page > 1 && !pagedOut ? `${canonicalBase}${canonicalBase.includes('?') ? '&' : '?'}page=${page}` : canonicalBase;
 		const h1 = landing?.h1 || [category?.name, brand?.name, grade?.label].filter(Boolean).join(' ') || business.name;
+		const storeName = storeNameOf(settings, business);
+		// a category's own page takes the merchant's category patterns (SG-5, SG-21)
+		const own = category && !brand && !grade && !landing ? category : null;
+		const parent = own ? names.byCategory.get(own.path.at(-1) ?? '') : undefined;
+		const patternNames = { name: own?.name ?? '', category: parent?.name ?? '', storeName };
 		const title = fillTitle(String(settings.titleTemplate), {
-			name: landing?.title || (category && !brand && !grade ? category.seo?.title : '') || h1,
-			business: business.name,
+			name:
+				landing?.title ||
+				(category && !brand && !grade ? category.seo?.title : '') ||
+				(own ? pageName(settings.categoryTitle, patternNames) : '') ||
+				h1,
+			business: storeName,
 		});
 		const description = metaDescription(
 			landing?.description,
 			category?.seo?.description,
+			own ? patternText(settings.categoryDescription, patternNames) : '',
 			category?.content?.summary,
 			category?.description,
 			brand?.seo?.description,
@@ -402,7 +432,7 @@ export const createLandings = (product, service, media) => {
 			intro,
 			faqs,
 			canonical,
-			robots: indexed ? robotsOf(category?.seo) : 'noindex, follow',
+			robots: indexed && !pagedOut ? robotsOf(category?.seo) : 'noindex, follow',
 			landing: view ? { id: view.id, url: view.url, indexed: view.indexed, inStock: view.inStock } : null,
 			jsonLd: scriptJson(jsonLd),
 		};
@@ -418,16 +448,28 @@ export const createLandings = (product, service, media) => {
 	};
 
 	/**
-	 * The head of a glossary page.
+	 * The head of a glossary page: its own SEO copy, else the merchant's patterns (`pattern`, attributes; SG-20).
 	 * @param {Site} s
-	 * @param {{ name: string, url: string | null, seo: { title: string, description: string, body: string, faqs: Array<{ question: string, answer: string }> } | undefined, fallback: string }} page
+	 * @param {{ name: string, url: string | null, seo: { title: string, description: string, body: string, faqs: Array<{ question: string, answer: string }> } | undefined, fallback: string,
+	 *   pattern?: { title: unknown, description: unknown, values: Record<string, string> } }} page
 	 */
-	const glossaryHead = async (s, { name, url, seo, fallback }) => {
+	const glossaryHead = async (s, { name, url, seo, fallback, pattern }) => {
 		const [settings, business] = await Promise.all([s.values('seo'), s.business()]);
-		const description = metaDescription(seo?.description, seo?.body, fallback, settings.defaultDescription);
+		const storeName = storeNameOf(settings, business);
+		const values = { name, storeName, ...pattern?.values };
+		const description = metaDescription(
+			seo?.description,
+			seo?.body,
+			fallback,
+			patternText(pattern?.description, values),
+			settings.defaultDescription,
+		);
 		const at = url ?? `https://${s.domain}/`;
 		return {
-			title: fillTitle(String(settings.titleTemplate), { name: seo?.title || name, business: business.name }),
+			title: fillTitle(String(settings.titleTemplate), {
+				name: seo?.title || pageName(pattern?.title, { name, storeName }) || name,
+				business: storeName,
+			}),
 			description,
 			body: seo?.body ?? '',
 			faqs: seo?.faqs ?? [],
@@ -452,18 +494,31 @@ export const createLandings = (product, service, media) => {
 		);
 		if (!attribute) throw problem('not_found', 'There is no such attribute.');
 		const slug = attribute.slug ?? attribute.id;
+		const values = (attribute.choices ?? []).map((choice) =>
+			typeof choice === 'string' ? { value: choice, label: choice } : choice,
+		);
+		const settings = await s.values('landing_pages');
 		return {
 			name: attribute.name,
 			slug,
 			unit: attribute.unit,
-			values: (attribute.choices ?? []).map((choice) =>
-				typeof choice === 'string' ? { value: choice, label: choice } : choice,
-			),
+			values,
 			...(await glossaryHead(s, {
 				name: attribute.name,
 				url: await glossaryUrl(s, 'attributeUrl', '{slug}', slug),
 				seo: attribute.seo,
 				fallback: '',
+				pattern: {
+					title: settings.attributeTitle,
+					description: settings.attributeDescription,
+					values: {
+						unit: attribute.unit ?? '',
+						values: values
+							.slice(0, PATTERN_VALUES)
+							.map((value) => value.label)
+							.join(', '),
+					},
+				},
 			})),
 		};
 	};
@@ -516,8 +571,10 @@ export const createLandings = (product, service, media) => {
 		}
 		/** @param {{ seo?: { body?: string, description?: string } }} record */
 		const explained = (record) => Boolean(record.seo?.body || record.seo?.description);
+		// with a description pattern every attribute's page has a description (SG-20)
+		const described = Boolean((await s.values('landing_pages')).attributeDescription);
 		for (const attribute of await attributesOf(data)) {
-			if (attribute.active === false || !explained(attribute)) continue;
+			if (attribute.active === false || !(described || explained(attribute))) continue;
 			const url = await glossaryUrl(s, 'attributeUrl', '{slug}', attribute.slug ?? attribute.id);
 			if (url) out.push({ loc: url, lastmod: null });
 		}
@@ -535,7 +592,7 @@ export const createLandings = (product, service, media) => {
 			path: '/v1/landings',
 			auth: 'server',
 			feature: 'landing_pages',
-			rateLimit: RATE,
+			rateLimit: READ_RATE,
 			handler: landings.list,
 		}),
 		defineRoute({
@@ -552,7 +609,7 @@ export const createLandings = (product, service, media) => {
 			path: '/v1/landings/:id',
 			auth: 'server',
 			feature: 'landing_pages',
-			rateLimit: RATE,
+			rateLimit: READ_RATE,
 			handler: landings.read,
 		}),
 		defineRoute({
@@ -634,13 +691,20 @@ export const createLandings = (product, service, media) => {
 			rateLimit: RATE,
 			handler: landings.aiCopy,
 		}),
-		defineRoute({ method: 'GET', path: '/v1/seo/listing', auth: 'server', feature: 'seo', rateLimit: RATE, handler: listing }),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/seo/listing',
+			auth: 'server',
+			feature: 'seo',
+			rateLimit: READ_RATE,
+			handler: listing,
+		}),
 		defineRoute({
 			method: 'GET',
 			path: '/v1/seo/attributes/:slug',
 			auth: 'server',
 			feature: 'landing_pages',
-			rateLimit: RATE,
+			rateLimit: READ_RATE,
 			handler: attributeGlossary,
 		}),
 		defineRoute({
@@ -648,7 +712,7 @@ export const createLandings = (product, service, media) => {
 			path: '/v1/seo/grades/:key',
 			auth: 'server',
 			feature: 'landing_pages',
-			rateLimit: RATE,
+			rateLimit: READ_RATE,
 			handler: gradeGlossary,
 		}),
 	];

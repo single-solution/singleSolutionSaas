@@ -9,12 +9,60 @@
 			"default": "{name} | {business}",
 			"maxLength": 120
 		},
+		"brandName": {
+			"type": "string",
+			"title": "Name in titles",
+			"description": "The name {business} and {storeName} stand for in page titles and descriptions. Empty: your business name.",
+			"default": "",
+			"maxLength": 120
+		},
+		"productTitle": {
+			"type": "string",
+			"title": "Product title",
+			"description": "A product's part of the page title ({name} of the title pattern): {name} is the product, {brand} its brand, {category} its category, {storeName} the name in titles. A product's own SEO title replaces it.",
+			"default": "{name}",
+			"maxLength": 160
+		},
+		"categoryTitle": {
+			"type": "string",
+			"title": "Category title",
+			"description": "A category's part of the page title ({name} of the title pattern): {name} is the category, {category} the category above it, {storeName} the name in titles, for example Shop {name}. A category's own SEO title replaces it.",
+			"default": "{name}",
+			"maxLength": 160
+		},
+		"productDescription": {
+			"type": "string",
+			"title": "Product description pattern",
+			"description": "Used when a product has no SEO description of its own, before its summary and description: {name}, {brand}, {category} and {storeName}. Empty: the summary, then the description.",
+			"default": "",
+			"maxLength": 500,
+			"x-ui": {
+				"widget": "textarea"
+			}
+		},
+		"categoryDescription": {
+			"type": "string",
+			"title": "Category description pattern",
+			"description": "Used when a category has no SEO description of its own, before its summary and description: {name}, {category} and {storeName}, for example Browse {name} at {storeName}. Empty: the summary, then the description.",
+			"default": "",
+			"maxLength": 500,
+			"x-ui": {
+				"widget": "textarea"
+			}
+		},
 		"gradedCondition": {
 			"type": "string",
 			"title": "Condition of graded items",
 			"description": "The condition search engines are told for graded items whose grade names no condition. Items without a grade are new.",
 			"default": "used",
 			"enum": ["used", "refurbished", "new"]
+		},
+		"pagedListings": {
+			"type": "string",
+			"title": "Listing pages after the first",
+			"description": "Pages 2, 3 … of a category or landing page: indexed, each with its own address as canonical; or not indexed (noindex, follow), with the first page as canonical.",
+			"default": "index",
+			"enum": ["index", "noindex"]
 		},
 		"sitemapUrl": {
 			"type": "string",

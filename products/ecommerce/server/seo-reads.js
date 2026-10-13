@@ -1,6 +1,6 @@
 /**
  * Catalog reads shared by the SEO, feeds, llms.txt and Chat lookup routes: an active product or a category by id or
- * slug, brands and categories by id, a category's trail from the home page, and streaming a long text answer
+ * slug, brands and categories by id, a category's trail from the home page, the name in titles, and streaming a long text answer
  * (sitemaps and feeds) so its size never matters. Every query pins `websiteId`.
  * @module
  */
@@ -15,6 +15,14 @@ import { COLLECTIONS } from '../core/model.js';
 
 /** At most this many categories are read at once (trees, product types). */
 const MAX_CATEGORIES = 5000;
+
+/**
+ * The name `{business}` and `{storeName}` stand for in titles and descriptions: the `seo` setting `brandName`, else the
+ * business name (SG-5).
+ * @param {Record<string, unknown>} settings the `seo` settings
+ * @param {{ name: string }} business
+ */
+export const storeNameOf = (settings, business) => String(settings.brandName ?? '').trim() || business.name;
 
 /**
  * An id or slug from the path, or '' when it cannot be one.

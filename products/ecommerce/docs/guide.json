@@ -247,7 +247,7 @@
 				"id": "addresses",
 				"title": "Page addresses, slug history and moved pages",
 				"paragraphs": [
-					"The catalog setting productUrl takes {slug} (or {id}), {category} (its first category's slug), {categoryPath} (that category's slugs from the top) and {brand}, for example /{category}/{slug}; categoryUrl takes {slug} or {path}. variantQuery is added to a product's address to open one variant, with {grade} and {attributes} (its slug=value pairs), for example grade={grade}&{attributes}. Every link Ecommerce makes follows them: sitemaps, feeds, canonical addresses, structured data, llms.txt, Chat cards, messages and cart lines.",
+					"The catalog setting productUrl takes {slug} (or {id}), {category} (its first category's slug), {categoryPath} (that category's slugs from the top) and {brand}, for example /{category}/{slug}; categoryUrl takes {slug} or {path}. variantQuery is added to a product's address to open one variant, with {grade} and {attributes} (its slug=value pairs; an attribute with several values names the first), for example grade={grade}&{attributes}. Every link Ecommerce makes follows them: sitemaps, feeds, canonical addresses, structured data, llms.txt, Chat cards, messages and cart lines.",
 					"When a product's or category's slug changes, the old one is kept (at most 20 in previousSlugs). Lookups by slug ignore letter case and match old slugs, and then answer { moved: { slug, url } }: your site turns it into a 308 to url (see the product page below). With retiredUrl set to category, an archived product answers moved to its category's page instead of not found."
 				],
 				"routes": [
@@ -274,8 +274,8 @@
 				"title": "Landing pages, listing heads and glossary pages",
 				"paragraphs": [
 					"With Landing pages on (it needs SEO), a landing page is a category, brand and grade combination with its own h1, title, description, introduction and FAQs, one per combination (409 for a second). indexable is auto, yes or no; auto is indexed while at least landingMinProducts (3) of its products are in stock, judged on every read, and answers add url, inStock and indexed. Its address comes from the setting landingUrl ({categoryUrl}?brand={brand}&grade={grade} by default). With AI copy on, POST /v1/landings/<id>/ai-copy suggests its texts.",
-					"GET /v1/seo/listing gives the head of any listing your site shows (see Your site serves): robots is index only for a category (and its pages) and an indexable landing page, noindex for any other filter.",
-					"Glossary pages explain an attribute or a grade from its glossary SEO, at the addresses of the settings attributeUrl ({slug}) and gradeUrl ({key}); with an address and a text they are listed in the sitemaps, as are indexable landing pages."
+					"GET /v1/seo/listing gives the head of any listing your site shows (see Your site serves): robots is index only for a category (and its pages) and an indexable landing page, noindex for any other filter. With the seo setting pagedListings noindex, pages 2, 3 … are noindex, follow with the first page as canonical (index by default: each page its own canonical).",
+					"Glossary pages explain an attribute or a grade from its glossary SEO, at the addresses of the settings attributeUrl ({slug}) and gradeUrl ({key}); with an address and a text they are listed in the sitemaps, as are indexable landing pages. An attribute without its own SEO title or text takes the patterns attributeTitle ({name} by default, for example What is {name}?) and attributeDescription (empty by default) with {name}, {unit}, {values} (its first five choices) and {storeName}; with attributeDescription set, every active attribute's page is listed in the sitemaps."
 				],
 				"routes": [
 					["GET /v1/landings", "landing_pages"],
@@ -292,7 +292,8 @@
 				"title": "SEO fields, structured data, sitemaps, llms-full.txt and IndexNow",
 				"paragraphs": [
 					"Products, categories and brands have seo { title, description, canonicalUrl, ogImage, noindex, nofollow, focusKeyword }, and products at most 20 FAQs (AI copy can suggest them). The seo settings defaultDescription and defaultImage fill pages that have none.",
-					"A product's JSON-LD is a ProductGroup with its variants, the condition of each variant's grade, shipping details from your default delivery fee, the return policy, up to 5 reviews and a FAQPage; a category's adds an ItemList of its products.",
+					"Page titles follow the seo setting titleTemplate ({name} | {business}). Its {name} is a page's own SEO title, else the pattern productTitle or categoryTitle ({name} by default; products take {name}, {brand}, {category} and {storeName}, categories {name}, {category} for the category above and {storeName}, for example {brand} {name} or Shop {name}). Without an SEO description of its own a page takes the pattern productDescription or categoryDescription (empty by default), then its summary and description. brandName is the name {business} and {storeName} stand for (empty: your business name). Empty brackets and separators left over are dropped.",
+					"A product's JSON-LD is a ProductGroup with its variants, the condition of each variant's grade, shipping details from your default delivery fee (free for variants priced at or above the free-delivery amount), the return policy, up to 5 reviews and a FAQPage; a category's adds an ItemList of its products.",
 					"Above sitemapSize addresses the sitemap is an index of files (categories, landings, products-1, products-2 …) with image entries, served from GET /v1/seo/sitemaps/<file>. With the llms_txt setting full on, GET /v1/llms-full.txt lists every product in stock with its price range and the grades of each category.",
 					"With the seo setting indexNowOnSave on and the Growth token pasted in Connections, the address of a product or category is sent to search engines through Growth's IndexNow right after it is saved."
 				],
@@ -306,7 +307,7 @@
 				"id": "feed-options",
 				"title": "Feed options",
 				"paragraphs": [
-					"The feeds settings: itemId (variant ids, or legacy <product>_<variant> ids made from imported records, so Merchant Center keeps your items), googleCategory (sent with every item) and gradeLabel (each item's grade name as custom_label_0). Each item's condition follows its grade, shipping comes from the default delivery fee, and prices follow your Format with whole units."
+					"The feeds settings: itemId (variant ids, or legacy <product>_<variant> ids made from imported records, so Merchant Center keeps your items; legacy also sends the imported product id as item_group_id on every item), googleCategory (sent with every item), gradeLabel (each item's grade name as custom_label_0), itemTitle ({name} - {variant} by default, with {name}, {brand}, {variant} for the options on products with several variants and {options} for the options always), itemDescription (body: the description, else the summary; seo: the SEO description first) and identifierExists (auto: nothing sent; no: identifier_exists no on items without GTIN and MPN). Each item's condition follows its grade, shipping comes from the default delivery fee (0 at or above the free-delivery amount), prices follow your Format with whole units, and variants priced 0 are left out (the catalogues refuse free items)."
 				],
 				"routes": [
 					["GET /v1/feeds/products.xml", "feeds"],

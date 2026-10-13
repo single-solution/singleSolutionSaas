@@ -275,7 +275,7 @@ describe('links', () => {
 		]);
 		expect(
 			variantQueryOf('grade={grade}&{attributes}', { grade: 'a', attributes: { att_c: ['r', 'b'], att_x: 'y' } }, attributes),
-		).toBe('grade=a&colour=r%2Cb');
+		).toBe('grade=a&colour=r');
 		expect(variantQueryOf('grade={grade}&{attributes}', { grade: null }, attributes)).toBe('');
 		expect(variantQueryOf('', { grade: 'a' }, attributes)).toBe('');
 		expect(withQuery('https://x/p', 'a=1')).toBe('https://x/p?a=1');

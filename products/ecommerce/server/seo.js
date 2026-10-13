@@ -23,6 +23,8 @@ import {
 	categoryJsonLd,
 	fillTitle,
 	metaDescription,
+	pageName,
+	patternText,
 	productJsonLd,
 	robotsOf,
 	scriptJson,
@@ -36,8 +38,8 @@ import { hiddenFor, visible, visibleMatch } from './catalog-visibility.js';
 import { createChatLookup } from './chat-lookup.js';
 import { createLandings } from './seo-landings.js';
 import { policiesOf } from './policies.js';
-import { SERVER_LIMITS, VISITOR_LIMITS } from './service.js';
-import { allCategories, brandNames, lineage, streamed, trailOf } from './seo-reads.js';
+import { SEO_LIMITS, VISITOR_LIMITS } from './service.js';
+import { allCategories, brandNames, lineage, storeNameOf, streamed, trailOf } from './seo-reads.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
 /** @typedef {import('./service.js').Service} Service */
@@ -47,8 +49,11 @@ import { allCategories, brandNames, lineage, streamed, trailOf } from './seo-rea
 /** @typedef {import('../core/model.js').VariantRecord} VariantRecord */
 /** @typedef {import('@ss/app-kit').WebsiteData} WebsiteData */
 
-/** The rate limits of these routes. @type {Array<{ limit: number, windowSeconds: number, per?: 'website' | 'visitor' }>} */
-const SERVER_RATE = [...SERVER_LIMITS];
+/**
+ * The rate limits of these routes: the merchant's server reads them while rendering pages, so its own higher window
+ * (SG-31). @type {Array<{ limit: number, windowSeconds: number, per?: 'website' | 'visitor' }>}
+ */
+const SERVER_RATE = [...SEO_LIMITS];
 /** @type {Array<{ limit: number, windowSeconds: number, per?: 'website' | 'visitor' }>} */
 const VISITOR_RATE = [...VISITOR_LIMITS];
 
@@ -84,6 +89,7 @@ const LISTING_FIELDS = Object.freeze({
 	kind: 1,
 	summary: 1,
 	description: 1,
+	'seo.description': 1,
 	categoryIds: 1,
 	brandId: 1,
 	media: 1,
@@ -118,13 +124,14 @@ export const createSeo = (product, service) => {
 	};
 
 	/**
-	 * The delivery fee where no zone matches, for structured data and feeds (E16, E17); null without delivery zones.
+	 * The delivery fee where no zone matches and the amount it is free from, for structured data and feeds (E16, E17,
+	 * SG-2); null without delivery zones.
 	 * @param {Site} s
 	 */
 	const shippingOf = async (s) => {
 		if (!s.has('delivery_zones')) return null;
-		const [{ defaultFee }, business] = await Promise.all([s.values('delivery_zones'), s.business()]);
-		return { fee: Number(defaultFee ?? 0), country: String(business.country ?? '') };
+		const [{ defaultFee, defaultFreeOver }, business] = await Promise.all([s.values('delivery_zones'), s.business()]);
+		return { fee: Number(defaultFee ?? 0), freeOver: Number(defaultFreeOver ?? 0), country: String(business.country ?? '') };
 	};
 
 	/**
@@ -192,7 +199,20 @@ export const createSeo = (product, service) => {
 				.toArray()
 		);
 		const brand = item.brandId ? ((await brandNames(data, [item.brandId])).get(item.brandId) ?? null) : null;
-		const description = metaDescription(item.seo?.description, item.summary, item.description, settings.defaultDescription);
+		// the merchant's patterns (SG-5): the page's part of the title and the description when the product has none
+		const names = {
+			name: item.name,
+			brand: brand ?? '',
+			category: primary?.name ?? '',
+			storeName: storeNameOf(settings, business),
+		};
+		const description = metaDescription(
+			item.seo?.description,
+			patternText(settings.productDescription, names),
+			item.summary,
+			item.description,
+			settings.defaultDescription,
+		);
 		const conditions = await conditionsOf(s, settings.gradedCondition);
 		const bySlug = new Map(attributes.map((row) => [String(row.id), { slug: row.slug ? String(row.slug) : undefined }]));
 		/** @type {Map<string, string>} */
@@ -241,7 +261,10 @@ export const createSeo = (product, service) => {
 		});
 		const ogImage = siteAddress(item.seo?.ogImage ?? '');
 		return {
-			title: fillTitle(String(settings.titleTemplate), { name: item.seo?.title || item.name, business: business.name }),
+			title: fillTitle(String(settings.titleTemplate), {
+				name: item.seo?.title || pageName(settings.productTitle, names),
+				business: names.storeName,
+			}),
 			description,
 			canonical: item.seo?.canonicalUrl ? absolute(item.seo.canonicalUrl, s.domain) : url,
 			image: ogImage ? absolute(ogImage, s.domain) : (images[0] ?? (siteAddress(settings.defaultImage) || null)),
@@ -266,8 +289,11 @@ export const createSeo = (product, service) => {
 		const [settings, business, categories] = await Promise.all([s.values('seo'), s.business(), allCategories(data)]);
 		const url = await media.categoryUrl(s, category);
 		const image = category.image ? await media.mediaUrl(s, category.image.key) : null;
+		const parent = categories.find((c) => c.id === category.path.at(-1));
+		const names = { name: category.name, category: parent?.name ?? '', storeName: storeNameOf(settings, business) };
 		const description = metaDescription(
 			category.seo?.description,
+			patternText(settings.categoryDescription, names),
 			category.content?.summary,
 			category.description,
 			settings.defaultDescription,
@@ -301,8 +327,8 @@ export const createSeo = (product, service) => {
 		const ogImage = siteAddress(category.seo?.ogImage ?? '');
 		return {
 			title: fillTitle(String(settings.titleTemplate), {
-				name: category.seo?.title || category.name,
-				business: business.name,
+				name: category.seo?.title || pageName(settings.categoryTitle, names),
+				business: names.storeName,
 			}),
 			description,
 			canonical,
@@ -530,6 +556,9 @@ export const createSeo = (product, service) => {
 				gradeLabel: (variant) =>
 					settings.gradeLabel === true && variant.grade ? (conditions.grades.get(variant.grade)?.label ?? '') : '',
 				shipping,
+				title: String(settings.itemTitle ?? ''),
+				description: settings.itemDescription === 'seo' ? 'seo' : 'body',
+				identifierExists: settings.identifierExists === 'no' ? 'no' : 'auto',
 				wholeUnits: format.format.wholeUnits === true,
 				variantLink: (variant) => perVariant.get(variant.id)?.link ?? '',
 				variantImage: (variant) => perVariant.get(variant.id)?.image ?? '',

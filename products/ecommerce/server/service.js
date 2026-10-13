@@ -21,6 +21,12 @@ const SIGN_IN_HEADER = 'ss-sign-in';
 
 /** Rate limits of the merchant's server and admin routes (code constants protecting our hosting). */
 export const SERVER_LIMITS = Object.freeze([{ limit: 600, windowSeconds: 60, per: /** @type {const} */ ('website') }]);
+/**
+ * Rate limits of the SEO reads the merchant's server makes while rendering pages (titles, structured data, sitemaps,
+ * landing and glossary pages, policies, feeds): the window of visitor calls from the merchant's server (K3), so a
+ * crawl does not run out of it (SG-31).
+ */
+export const SEO_LIMITS = Object.freeze([{ limit: 3000, windowSeconds: 60, per: /** @type {const} */ ('website') }]);
 /** Rate limits of visitor routes. */
 export const VISITOR_LIMITS = Object.freeze([
 	{ limit: 600, windowSeconds: 60, per: /** @type {const} */ ('website') },

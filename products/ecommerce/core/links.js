@@ -80,7 +80,8 @@ export const categoryLink = (template, category, { domain, categories }) => {
 
 /**
  * The query that names a variant on its product's page (`variantQuery`): `{grade}` and `{attributes}` (the variant's
- * attribute `slug=value` pairs, several values joined with commas); pairs whose value is empty are left out.
+ * attribute `slug=value` pairs; an attribute with several values names the first, as a product page selects one value
+ * per attribute, SG-7); pairs whose value is empty are left out.
  * @param {string} template
  * @param {{ grade?: string | null, attributes?: Record<string, unknown> }} variant
  * @param {ReadonlyMap<string, { slug?: string }>} attributes by id
@@ -90,7 +91,7 @@ export const variantQueryOf = (template, variant, attributes) => {
 	const pairs = Object.entries(variant.attributes ?? {})
 		.map(([id, value]) => {
 			const slug = attributes.get(id)?.slug;
-			const text = Array.isArray(value) ? value.join(',') : String(value ?? '');
+			const text = String((Array.isArray(value) ? value[0] : value) ?? '');
 			return slug && text ? `${part(slug)}=${part(text)}` : '';
 		})
 		.filter(Boolean)
