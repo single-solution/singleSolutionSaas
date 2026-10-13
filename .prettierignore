@@ -6,3 +6,8 @@ e2e
 node_modules
 pnpm-lock.yaml
 coverage
+# local working notes kept out of git (handoff and audit)
+audit
+HANDOFF.md
+AUDIT-2026-10-12.md
+.claude
