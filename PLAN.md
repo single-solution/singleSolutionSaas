@@ -3065,6 +3065,48 @@ built and is raised with the owner (D1).
 - API: `POST /v1/data/delete-all` `{ scope: 'conversations', confirm: '<domain>' }` (server token only).
 - Data: none.
 
+Built after the re-audit (2026-10-13; commits 50d1ea0c, 17a53cd0, 385f3872, 1c53e560, 17074a3f, ea59fecf, and the
+default fix after them):
+
+**C21. Slow answers and stale replies (always; CH-1, RT-6).** `?wait=1` waits up to 20 s; a provider call due later
+goes on after the response (45 s deadline) and the answer carries `replyPending: true`; a reply pending for 2 minutes
+shows no typing, the visitor's next check starts it once more, then it counts as failed. Data: `aiPendingSince`,
+`aiRetried`.
+
+**C22. Language lock options (CH-2, CH-16–CH-19, CH-38, CH-39).** Why: shops that accept a language in Latin letters
+(Roman Urdu for Urdu), use other thresholds, check every bubble and fall back to English. Key: settings of
+`language_lock`: `defaultLanguage` ('' = the first allowed), `minMarkers` (2), `markerShare` (0 = off), `minWordsForShare`
+(4), `checkMode` (`whole` default | `presence`: each part needs a marker word or a letter of the script),
+`acceptLatinFor` ([]), `unavailableTexts` ([]). Always: languages that share a script are told apart by letters only
+some of them use plus marker words (Urdu script is no longer read as Arabic); quoted phrases count as one marker;
+Latin words under a non-Latin language mark `<code>-Latn`; a reply still in the wrong language after the retry never
+hands off by itself (N failures in a row still do).
+
+**C23. New guests and shared networks (CH-14, CH-15).** Key: `guest_chat.newGuestsPerNetwork` (0 = no limit, the
+default, since many shoppers can share one mobile network address; n = at most n new guests per network address in 15
+minutes, then `rate_limited`). Always: the per-network AI limit counts guests only, so signed-in visitors are never
+silenced by others on the same address.
+
+**C24. Handoff, assignment and sign-in fixes (always; CH-3, CH-5, CH-6, CH-7).** Resuming the AI clears waiting (inbox:
+Hand back to the AI); reassurance and the queue count from each handoff (`waitingSince`); `assignedTo` may be an
+Accounts user whose role grants `chat:inbox.reply`; a sign-in fills a moved or merged chat's name, e-mail and phone,
+and a merged chat is open when its newest message is the visitor's.
+
+**C25. Staff alerts (CH-9, RW-8).** Key: `staff_alerts.includePhone` (false); `{id}` in `inboxUrl` (always). Alerts
+gain `name`, `message` (500 characters, line breaks kept) and, with the setting, `phone`.
+
+**C26. Inbox and answer options (CH-13, CH-21).** Key: `inbox.guests` gains `signed_in`; `ai_replies.tableBubble`
+(false).
+
+**C27. Attachment links (CH-8).** Key: always; `attachments.pdfInline` (false; changes 0.8.3's "PDFs only as
+downloads" only when on). Views link to `GET /v1/files/<signed token>`, which redirects each use to a fresh 10-minute
+storage link, so links in old messages keep working.
+
+Open: an "every active staff user" alert mode needs a kit option and an Accounts staff filter (CH-12, ST-13); alerts to
+the assignee's phone (CH-12); chats merge into the account's latest chat where the stores merge into the oldest (CH-7);
+the inbox widget still lists only staff Chat has seen (CH-6); image sizes and blur for attachments are a missing
+feature (CH-8, owner's call).
+
 #### Growth
 
 **G1. Tags without a consent step.**
