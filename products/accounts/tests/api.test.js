@@ -185,6 +185,46 @@ describe('email + password', () => {
 		);
 		expect((await signIn('ana@example.com', 'brand new password')).json.status).toBe('signed_in');
 	});
+
+	it('Forgot password answers the same whatever the send gives; a link that cannot go now goes on later requests', async () => {
+		const email = `${NOTIFY}/v1/messages/email`;
+		/** Messages Accounts tried to send to an address. @param {string} to */
+		const tries = (to) => env.messages().filter((m) => m.to.email === to).length;
+		/** Any later request of a visitor (the kept messages go right after it). */
+		const later = () => signIn('nobody@example.com');
+		env.responders.set(email, () => ({ status: 201, body: { status: 'failed' } }));
+		const real = await env.visitor('POST', '/v1/password/forgot', { email: 'bo@example.com', returnTo: ORIGIN });
+		const unknown = await env.visitor('POST', '/v1/password/forgot', { email: 'ghost@example.com', returnTo: ORIGIN });
+		expect([real.status, real.text]).toEqual([202, '']);
+		expect([unknown.status, unknown.text]).toEqual([202, '']);
+		// tried once at once, and again right after the next request (ghost@ gets nothing)
+		expect(tries('bo@example.com')).toBe(2);
+		expect(tries('ghost@example.com')).toBe(0);
+		env.responders.delete(email);
+		await later();
+		expect(tries('bo@example.com')).toBe(3);
+		await later();
+		expect(tries('bo@example.com')).toBe(3);
+		const token = String(lastMessage().values.link).split('#ss_accounts_reset=')[1];
+		expect((await env.visitor('POST', '/v1/password/reset', { token, password: 'bo resets later' })).status).toBe(204);
+		expect((await signIn('bo@example.com', 'bo resets later')).json.status).toBe('signed_in');
+
+		// without Notifications the answer is the same; the link goes once it is connected, while it is valid
+		const cookie = await env.adminSession();
+		await env.dashboard(cookie, 'DELETE', `/v1/dashboard/websites/${env.websiteId}/connections/notifications`);
+		expect((await env.visitor('POST', '/v1/password/forgot', { email: 'bo@example.com', returnTo: ORIGIN })).status).toBe(202);
+		expect((await env.visitor('POST', '/v1/password/forgot', { email: 'bo@example.com', returnTo: ORIGIN })).status).toBe(202);
+		await env.paste('notifications');
+		await later();
+		expect(tries('bo@example.com')).toBe(4);
+		// a link kept past its life is dropped, never sent
+		env.responders.set(email, () => ({ status: 502, body: {} }));
+		await env.visitor('POST', '/v1/password/forgot', { email: 'bo@example.com', returnTo: ORIGIN });
+		env.responders.delete(email);
+		env.advance(61 * 60_000);
+		await later();
+		expect(tries('bo@example.com')).toBe(5);
+	});
 });
 
 describe('sessions', () => {

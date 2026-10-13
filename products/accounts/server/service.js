@@ -7,7 +7,8 @@
  * - Sign-ins: the website's Ed25519 key (made on first use, sealed in the merchant database), sign-ins of 15 minutes
  *   (`iss` = Accounts' address, `aud` = the website id), sessions with a rotating refresh token whose reuse ends the
  *   session, and `finish()`: blocked, approval, terms and two-step checks after the first step of any method.
- * - Messages through Notifications (pasted token), the data-rights fan-out to every connected product and the export.
+ * - Messages through Notifications (pasted token): a Forgot password message that cannot go now is kept and sent
+ *   again right after later requests; the data-rights fan-out to every connected product and the export.
  * @module
  */
 import { problem } from '@ss/app-kit';
@@ -59,6 +60,8 @@ const STEP_MS = 10 * 60_000;
 const EXPORT_MS = 15 * 60_000;
 /** Erasures handled right after one request (code constant). */
 const ERASURES_PER_REQUEST = 3;
+/** Kept messages tried again right after one request (code constant). */
+const MESSAGES_PER_REQUEST = 3;
 /** Who erases a user whose deletion came due without approval (Data rights, after the days set in Settings). */
 const DELETION_DUE = Object.freeze({ kind: 'system', id: 'deletion-due', name: 'Data rights' });
 
@@ -77,6 +80,13 @@ export const parseSecret = (value) => {
 
 /** @param {unknown} value */
 const bodyOf = (value) => (typeof value === 'object' && value !== null ? /** @type {Record<string, any>} */ (value) : {});
+
+/** Whether an error is a message Notifications did not send (refused, failed, or not connected). @param {unknown} error */
+const unsent = (error) =>
+	['not_sent', 'notifications_not_connected'].includes(String(/** @type {{ code?: unknown } | null} */ (error)?.code));
+
+/** The sealing context of a kept message. @param {string} websiteId @param {string} key */
+const outboxAad = (websiteId, key) => `accounts-outbox|${websiteId}|${key}`;
 
 /**
  * @param {Product} product
@@ -469,6 +479,41 @@ export const createService = (product) => {
 			throw problem('not_sent', 'The message could not be sent. Try again later.');
 	};
 
+	/**
+	 * Send a message the person waits for without seeing the answer (Forgot password): when Notifications cannot send
+	 * it now, it is kept (its values sealed) until `until` and sent again right after later requests for this website;
+	 * a newer message of the same template to the same address replaces it. A failed send never throws.
+	 * @param {Site} s @param {'email' | 'sms' | 'whatsapp'} channel @param {string} template
+	 * @param {{ email?: string, phone?: string }} to @param {Record<string, string | number>} values @param {Date} until
+	 */
+	const deliver = async (s, channel, template, to, values, until) => {
+		const key = `${template}|${to.email ?? to.phone ?? ''}`;
+		try {
+			await notify(s, channel, template, to, values);
+		} catch (error) {
+			if (!unsent(error)) throw error;
+			const sealed = sealer.seal(JSON.stringify(values), outboxAad(s.websiteId, key));
+			await s.store.outbox.keep({ key, channel, template, to, sealed, expireAt: until });
+			return;
+		}
+		await s.store.outbox.remove(key);
+	};
+
+	/** Send kept messages again, those expiring first first; stops at the first that still cannot go. @param {Site} s */
+	const resend = async (s) => {
+		for (const entry of await s.store.outbox.pending(MESSAGES_PER_REQUEST)) {
+			const values = sealer.open(entry.sealed, outboxAad(s.websiteId, entry.key));
+			if (values)
+				try {
+					await notify(s, entry.channel, entry.template, entry.to, JSON.parse(values));
+				} catch (error) {
+					if (unsent(error)) return;
+					throw error;
+				}
+			await s.store.outbox.sent(entry.id);
+		}
+	};
+
 	// ---------------------------------------------------------------------------------------------- data rights
 
 	/** The other products whose token is pasted for this website. @param {string} websiteId */
@@ -530,7 +575,10 @@ export const createService = (product) => {
 		return { pending };
 	};
 
-	/** Right after a request: due erasures, then erasures some products have not confirmed. @param {Site} s */
+	/**
+	 * Right after a request: due erasures, then erasures some products have not confirmed, then kept messages.
+	 * @param {Site} s
+	 */
 	const afterWork = async (s) => {
 		if (s.on.includes('data_rights'))
 			for (const user of await s.store.users.deletionsDue(ERASURES_PER_REQUEST)) await erase(s, user, DELETION_DUE);
@@ -538,6 +586,7 @@ export const createService = (product) => {
 			const still = await fanOutDelete(s, { id: entry.userId, email: entry.email, phone: entry.phone }, entry.pending);
 			await s.store.deletions.update(entry.userId, still);
 		}
+		await resend(s);
 	};
 
 	/**
@@ -600,6 +649,7 @@ export const createService = (product) => {
 		logSignIn,
 		anyMethod,
 		notify,
+		deliver,
 		erase,
 		exportFor,
 		connectedProducts,

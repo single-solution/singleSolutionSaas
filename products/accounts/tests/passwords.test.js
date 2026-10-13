@@ -4,7 +4,7 @@
 import { pbkdf2Sync, randomBytes } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { setup } from './helpers.js';
+import { NOTIFY, setup } from './helpers.js';
 
 /** @type {Awaited<ReturnType<typeof setup>>} */
 let env;
@@ -188,7 +188,10 @@ describe('A2: phone + password', () => {
 		expect((await env.visitor('POST', '/v1/password/phone/forgot', { phone: '03001110000' })).status).toBe(202);
 		const sent = env.messages().at(-1);
 		expect(sent).toMatchObject({ channel: 'sms', template: 'accounts.phone_code', to: { phone: '+923001110000' } });
-		expect(code(await env.visitor('POST', '/v1/password/phone/forgot', { phone: '03001110000' }))).toBe('code_cooldown');
+		// a second ask within the cooldown sends nothing, and the answer does not tell (ST-3)
+		const sentCount = env.messages().length;
+		expect((await env.visitor('POST', '/v1/password/phone/forgot', { phone: '03001110000' })).status).toBe(202);
+		expect(env.messages()).toHaveLength(sentCount);
 		const signedIn = await phoneSignIn({ phone: '+923001110000', password: 'abc12345' });
 		expect(
 			code(
@@ -225,6 +228,25 @@ describe('A2: phone + password', () => {
 				}),
 			),
 		).toBe('code_invalid');
+	});
+
+	it('a code that cannot go now goes on a later request while it is valid; the answer never tells', async () => {
+		const sms = `${NOTIFY}/v1/messages/sms`;
+		const tries = () => env.messages().filter((m) => m.to.phone === '+923001110000').length;
+		env.advance(31_000);
+		env.responders.set(sms, () => ({ status: 201, body: { status: 'skipped' } }));
+		const before = tries();
+		expect((await env.visitor('POST', '/v1/password/phone/forgot', { phone: '+923001110000' })).status).toBe(202);
+		expect(tries()).toBe(before + 1);
+		env.responders.delete(sms);
+		await phoneSignIn({ phone: '+923009999999', password: 'any later request' });
+		expect(tries()).toBe(before + 2);
+		const reset = await env.visitor('POST', '/v1/password/phone/reset', {
+			phone: '+923001110000',
+			code: env.messages().at(-1).values.code,
+			password: 'n3w password',
+		});
+		expect(reset.status).toBe(204);
 	});
 
 	it('with Forgot password off, the reset routes refuse and the widget config names the page', async () => {

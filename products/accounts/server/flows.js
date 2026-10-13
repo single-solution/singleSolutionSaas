@@ -50,6 +50,20 @@ export const STAFF_CODE_LENGTH = 6;
 /** @param {unknown} value */
 const bodyOf = (value) => (typeof value === 'object' && value !== null ? /** @type {Record<string, any>} */ (value) : {});
 
+/** Refusals of a code (cooldown, caps) that a Forgot password request never shows (ST-3). */
+const QUIET_REFUSALS = Object.freeze(['code_cooldown', 'code_limit']);
+
+/**
+ * Work right after the answer whose refusals the visitor never sees, so the answer is the same for every address.
+ * @param {any} ctx @param {() => Promise<unknown>} task
+ */
+const afterAnswer = (ctx, task) =>
+	ctx.after(() =>
+		task().catch((error) => {
+			if (!QUIET_REFUSALS.includes(String(/** @type {{ code?: unknown } | null} */ (error)?.code))) throw error;
+		}),
+	);
+
 /** @param {string} field @param {string} message */
 export const invalid = (field, message) =>
 	problem('validation_failed', message, { errors: [{ path: `/${field}`, message, code: 'invalid' }] });
@@ -278,7 +292,7 @@ export const createFlows = (product, service) => {
 	 * A one-time code for an address, sent through Notifications (cooldown and hourly cap are code constants).
 	 * @param {Site} s @param {'phone' | 'email' | 'phone_reset'} kind @param {string} target
 	 * @param {{ length: number, minutes: number, linkTo?: string | null }} shape
-	 * @param {(code: string, link: string | null) => Promise<void>} deliver
+	 * @param {(code: string, link: string | null, expireAt: Date) => Promise<void>} deliver
 	 */
 	const sendCode = async (s, kind, target, { length, minutes, linkTo }, deliver) => {
 		const latest = await s.store.codes.latest(kind, target);
@@ -313,7 +327,7 @@ export const createFlows = (product, service) => {
 		});
 		const link = linkTo && linkSecret ? `${linkTo}#${LINK_PARAMS.magic}=${id}.${linkSecret}` : null;
 		try {
-			await deliver(code, link);
+			await deliver(code, link, expireAt);
 		} catch (error) {
 			await s.store.codes.consume(id);
 			throw error;
@@ -432,20 +446,26 @@ export const createFlows = (product, service) => {
 		return passwordSignInOf(s, ctx, { method: 'phone_password', identifier: phone, user });
 	};
 
-	/** Forgot password (A2): a code by SMS or WhatsApp; the same answer whether or not the number has an account. @param {any} ctx */
+	/**
+	 * Forgot password (A2): a code by SMS or WhatsApp. The answer is the same, at once, whether or not the number has an
+	 * account and whatever the send gives (ST-3): the code is made and sent right after it (a cooldown or cap sends
+	 * nothing), and a code Notifications cannot send now is sent again on later requests while it is valid.
+	 * @param {any} ctx
+	 */
 	const phoneForgot = async (ctx) => {
 		const s = await service.site(ctx);
 		const { selfReset } = await service.settings(s, 'phone_password');
 		if (selfReset !== 'code') throw problem('self_reset_off', 'Passwords are not reset here: ask the shop.');
 		const phone = await service.phoneOf(s, bodyOf(ctx.body).phone);
 		if (!phone) throw invalid('phone', 'Enter the phone number with its country code.');
-		const user = await s.store.users.byPhone(phone);
-		if (user?.passwordHash && !user.blocked) {
+		afterAnswer(ctx, async () => {
+			const user = await s.store.users.byPhone(phone);
+			if (!user?.passwordHash || user.blocked) return;
 			const { channel, codeLength, codeMinutes } = await service.settings(s, 'phone_code');
-			await sendCode(s, 'phone_reset', phone, { length: codeLength, minutes: codeMinutes }, (code) =>
-				service.notify(s, channel, 'accounts.phone_code', { phone }, { code, minutes: codeMinutes }),
+			await sendCode(s, 'phone_reset', phone, { length: codeLength, minutes: codeMinutes }, (code, _link, expireAt) =>
+				service.deliver(s, channel, 'accounts.phone_code', { phone }, { code, minutes: codeMinutes }, expireAt),
 			);
-		}
+		});
 		return new Response(null, { status: 202 });
 	};
 
@@ -473,7 +493,12 @@ export const createFlows = (product, service) => {
 		return undefined;
 	};
 
-	/** @param {any} ctx */
+	/**
+	 * Forgot password (e-mail): the same answer, at once, whether or not the address has an account and whatever the
+	 * send gives (ST-3). The reset link is made and sent right after the answer; a link Notifications cannot send now
+	 * is sent again on later requests while it is valid.
+	 * @param {any} ctx
+	 */
 	const forgotPassword = async (ctx) => {
 		const s = await service.site(ctx);
 		const body = bodyOf(ctx.body);
@@ -481,26 +506,22 @@ export const createFlows = (product, service) => {
 		if (!email) throw invalid('email', 'Enter a valid e-mail address.');
 		const returnTo = returnAddress(body.returnTo, s.domain);
 		if (!returnTo) throw invalid('returnTo', 'returnTo must be a page of your website (or a local page while testing).');
-		const user = await s.store.users.byEmail(email);
-		if (user?.passwordHash && !user.blocked) {
+		afterAnswer(ctx, async () => {
+			const user = await s.store.users.byEmail(email);
+			if (!user?.passwordHash || user.blocked) return;
 			const { resetMinutes } = await service.settings(s, 'email_password');
 			const secret = randomSecret(32);
-			const id = await s.store.codes.add({
-				kind: 'reset',
-				target: user.id,
-				hash: sha256(secret),
-				expireAt: new Date(now() + resetMinutes * 60_000),
-				replace: true,
-			});
-			await service.notify(
+			const expireAt = new Date(now() + resetMinutes * 60_000);
+			const id = await s.store.codes.add({ kind: 'reset', target: user.id, hash: sha256(secret), expireAt, replace: true });
+			await service.deliver(
 				s,
 				'email',
 				'accounts.password_reset',
 				{ email },
 				{ link: `${returnTo}#${LINK_PARAMS.reset}=${id}.${secret}`, minutes: resetMinutes },
+				expireAt,
 			);
-		}
-		// the same answer whether or not the address has an account
+		});
 		return new Response(null, { status: 202 });
 	};
 

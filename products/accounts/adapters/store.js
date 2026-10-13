@@ -15,6 +15,8 @@
  * - `requests`: role requests (PLAN 0.8.10 A5)
  * - `counters`: short counters with a TTL (codes per hour per phone and per website, A7; tries per network and
  *   address, A9)
+ * - `outbox`: messages Notifications could not send yet (Forgot password), their values sealed, sent again right
+ *   after later requests until they expire (TTL)
  * @module
  */
 import { createId } from '@ss/contracts';
@@ -74,6 +76,12 @@ import { DEFAULT_ROLE, READY_ROLES, roleWithDefaults } from '../core/roles.js';
  */
 
 /**
+ * A message kept to be sent again (Forgot password): one per key (template and address), its values sealed.
+ * @typedef {{ id: string, key: string, channel: 'email' | 'sms' | 'whatsapp', template: string,
+ *   to: { email?: string, phone?: string }, sealed: string, expireAt: Date }} OutboxRecord
+ */
+
+/**
  * An activity-log copy another product sent (PLAN 0.4.11, 0.8.10 K9).
  * @typedef {object} CopyRecord
  * @property {string} id
@@ -99,6 +107,7 @@ const DELETIONS = 'deletions';
 const COPIES = 'copies';
 const REQUESTS = 'requests';
 const COUNTERS = 'counters';
+const OUTBOX = 'outbox';
 
 const present = { $type: 'string' };
 
@@ -148,6 +157,9 @@ export const INDEXES = [
 	{ collection: REQUESTS, keys: { websiteId: 1, status: 1 }, name: 'by_status' },
 	{ collection: COUNTERS, keys: { websiteId: 1, key: 1 }, name: 'by_key', unique: true },
 	{ collection: COUNTERS, keys: { expireAt: 1 }, name: 'expire', expireAfterSeconds: 0 },
+	{ collection: OUTBOX, keys: { websiteId: 1, key: 1 }, name: 'by_key' },
+	{ collection: OUTBOX, keys: { websiteId: 1, expireAt: 1 }, name: 'by_expiry' },
+	{ collection: OUTBOX, keys: { expireAt: 1 }, name: 'expire', expireAfterSeconds: 0 },
 ];
 
 /** The last 10 digits of an E.164 number (A4: a number found however it was typed). @param {string | null} phone */
@@ -220,6 +232,7 @@ export const createStore = (data, { now }) => {
 
 	const requests = data.collection(REQUESTS);
 	const counters = data.collection(COUNTERS);
+	const outbox = data.collection(OUTBOX);
 
 	return Object.freeze({
 		users: Object.freeze({
@@ -608,6 +621,34 @@ export const createStore = (data, { now }) => {
 					doc = await bump();
 				}
 				return Number(doc?.n ?? 0) <= limit;
+			},
+		}),
+
+		outbox: Object.freeze({
+			/**
+			 * Keep a message to send again; it replaces a kept one with the same key.
+			 * @param {Omit<OutboxRecord, 'id'>} message
+			 */
+			keep: async (message) => {
+				await outbox.deleteMany({ websiteId, key: message.key });
+				await outbox.insertOne({ ...message, id: createId('msg') });
+			},
+			/** Kept messages still valid, those expiring first first. @param {number} limit @returns {Promise<OutboxRecord[]>} */
+			pending: async (limit) =>
+				as(
+					await outbox
+						.find({ websiteId, expireAt: { $gt: at() } }, NO_ID)
+						.sort({ expireAt: 1 })
+						.limit(limit)
+						.toArray(),
+				),
+			/** A kept message was sent (or can no longer be). @param {string} id */
+			sent: async (id) => {
+				await outbox.deleteOne({ websiteId, id });
+			},
+			/** Drop kept messages of a key (a newer one went out). @param {string} key */
+			remove: async (key) => {
+				await outbox.deleteMany({ websiteId, key });
 			},
 		}),
 
