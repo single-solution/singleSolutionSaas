@@ -66,9 +66,23 @@ document (merges followed). A mapping may also read the website's settings (`set
 settings: { '<feature>.<key>': value }, lists } }`).
 
 Store names appear only in mappings (PLAN 0.13). The store mapping comes with the cut-over of each store, when the owner
-says so; until then the only mapping is **`fixture`** (`@ss/importer/fixture`): a small store-like `feedback`
-collection (a duplicate that merges, a hidden document that is not read, an empty one that is left out) mapped into the
-e2e test product Notes. The e2e suite imports it through the real kit (`e2e/tests/import.test.js`).
+says so; until then the mappings are test mappings (`@ss/importer/fixture`), both imported by the e2e suite through the
+real products (`e2e/tests/import.test.js`):
+
+- **`fixture`**: a small store-like `feedback` collection (a duplicate that merges, a hidden document that is not read,
+  an empty one that is left out) mapped into the e2e test product Notes.
+- **`example-shop`** (`src/fixture/shop.js`): a neutral example shop as an older shop system kept it (ObjectIds,
+  dollars, phones typed nationally, slugs instead of ids, a guest saved twice, loyalty transactions, chats with their
+  messages inside, daily analytics) mapped into Accounts (a role, staff and a member with bcrypt hashes), Ecommerce (a
+  size chart, categories, a brand, an attribute, products with variants, a deal, customers merged by phone, orders with
+  payment entries by the status rule, a loyalty account rebuilt from its transactions, a review, a return, an alert and
+  a wishlist), Chat (staff, the guest's old cookie as a hash, a conversation and its messages) and Growth (two days of
+  totals), with the website's settings (order number prefix, currency, image base) and the verification sums.
+
+A first dry run into an empty website checks each record on its own: a record that names records of an earlier file
+(a category's size chart, a product's brand, a message's conversation) or that needs a setting the run writes first
+(the order number's prefix) is listed as refused until the real run has written them; a dry run after the first real
+run checks everything.
 
 ## Checks
 
