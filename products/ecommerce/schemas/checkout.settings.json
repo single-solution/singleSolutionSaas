@@ -249,6 +249,13 @@
 				"enum": ["awaiting_payment", "awaiting_confirmation", "open"]
 			}
 		},
+		"freeOrderStart": {
+			"type": "string",
+			"title": "Free orders paid online or by transfer start",
+			"description": "For online and bank-transfer orders whose total is 0 (nothing to pay). awaiting_confirmation: staff confirm them. awaiting_payment: in your awaiting-payment status, like the other online and bank-transfer orders, where they wait for staff without a time to pay.",
+			"default": "awaiting_confirmation",
+			"enum": ["awaiting_confirmation", "awaiting_payment"]
+		},
 		"rewaitWindow": {
 			"type": "string",
 			"title": "Moved back to awaiting payment",

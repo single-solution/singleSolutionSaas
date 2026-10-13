@@ -9,8 +9,9 @@
  *   order in one transaction (stock, offer uses — deals kept by locks too —, points, booked slots) with a number by
  *   the business year and the yearly counter (E30). Online, bank-transfer and COD-advance orders start awaiting
  *   payment and get a Payments payment, unless transfers or advances are recorded by staff (`manual`: the order waits
- *   for the shopper's proof, E23, E24); COD orders start awaiting confirmation or confirmed (`startStatus`), pay-at-
- *   pickup orders awaiting confirmation. A guest gets the order's key once (`orderKey`).
+ *   for the shopper's proof, E23, E24); free ones start awaiting confirmation, or awaiting payment without a time to pay
+ *   (`freeOrderStart`, CK-41); COD orders start awaiting confirmation or confirmed (`startStatus`), pay-at-pickup orders
+ *   awaiting confirmation. A guest gets the order's key once (`orderKey`).
  * - Paying: an order is paid only when Payments says, server to server, that its payment is paid for exactly the
  *   order's amount (or advance) and currency; the payment is a log entry of the order (E26). A waiting payment is asked
  *   again when the order is read (at most every 30 seconds), on use, and once more before a waiting order is cancelled
@@ -798,7 +799,11 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		const advanceManual = method === 'cod' && advance > 0 && cod.advanceVia === 'manual';
 		const manual = bankManual || advanceManual;
 		const viaPayments = total > 0 && !manual && (method === 'online' || method === 'bank_transfer' || advance > 0);
-		const waitsPayment = viaPayments || (total > 0 && manual);
+		// a free online or bank-transfer order has nothing to pay: it starts as `freeOrderStart` says, and in awaiting
+		// payment it waits for staff without a time to pay (CK-41)
+		const freeWaits =
+			total === 0 && (method === 'online' || method === 'bank_transfer') && checkout.freeOrderStart === 'awaiting_payment';
+		const waitsPayment = viaPayments || (total > 0 && manual) || freeWaits;
 		/** @type {StatusRole} */
 		const role = waitsPayment
 			? 'awaiting_payment'
@@ -808,7 +813,9 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		const status = statusWithRole(flow, role);
 		const holdMs =
 			role === 'awaiting_payment'
-				? Number(checkout.paymentWindowMinutes) * 60_000
+				? freeWaits
+					? 0
+					: Number(checkout.paymentWindowMinutes) * 60_000
 				: role === 'awaiting_confirmation'
 					? Number(checkout.confirmationHours) * 3_600_000
 					: 0;

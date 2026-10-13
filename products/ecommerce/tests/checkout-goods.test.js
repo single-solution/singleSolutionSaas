@@ -228,6 +228,30 @@ describe('free orders', () => {
 			lines: [{ licenceKeys: ['FREE-1'], downloadsLeft: 5 }],
 		});
 	});
+
+	it('start awaiting payment with freeOrderStart, waiting for staff without a time to pay (CK-41)', async () => {
+		await shop.setting('checkout', 'freeOrderStart', 'awaiting_payment');
+		const item = await shop.seedProduct({ price: 0, stock: 5 });
+		const shopper = await newShopper();
+		const sentToPayments = shop.callsTo(PAYMENTS).filter((call) => call.method === 'POST').length;
+		const free = await place(shopper, { lines: [{ productId: item.id }], payment: 'bank_transfer', address: ADDRESS });
+		expect(free.status).toBe(201);
+		expect(free.json.next).toEqual({ kind: 'done', url: null });
+		expect(free.json.order).toMatchObject({ status: 'pending_payment', payment: { state: 'paid', payBy: null } });
+		const online = await place(shopper, { lines: [{ productId: item.id }], payment: 'online', address: ADDRESS });
+		expect(online.json.order).toMatchObject({ status: 'pending_payment', payment: { state: 'paid' } });
+		// nothing to pay: no Payments payment, and no window ends it
+		expect(shop.callsTo(PAYMENTS).filter((call) => call.method === 'POST')).toHaveLength(sentToPayments);
+		const record = /** @type {any} */ (
+			await (await shop.db()).collection(COLLECTIONS.orders).findOne({ websiteId: shop.websiteId, id: free.json.order.id })
+		);
+		expect(record).toMatchObject({ role: 'awaiting_payment', holdUntil: null });
+		// cash on delivery keeps its own start
+		const cod = await place(shopper, { lines: [{ productId: item.id }], payment: 'cod', address: ADDRESS });
+		expect(cod.json.order.status).toBe('awaiting_confirmation');
+		await shop.setting('checkout', 'freeOrderStart', 'awaiting_confirmation');
+		for (const placed of [free, online, cod]) await shop.api('DELETE', `/v1/orders/${placed.json.order.id}`);
+	});
 });
 
 describe('a shop with only the catalog and checkout', () => {

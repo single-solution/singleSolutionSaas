@@ -26,7 +26,7 @@
 	"orderFlow": "Orders move through your own statuses (Settings → Orders and messages). You name the statuses, add your own and choose the allowed moves; each status has a role, and the rules of the roles hold whatever the flow, so stock, offer uses, loyalty points and money stay right. Orders start in the one awaiting payment or awaiting confirmation status and nothing moves into those; cancelled and refunded are final. The default flow:",
 	"roles": {
 		"awaiting_payment": "Paid online, by bank transfer or with a cash on delivery advance: waits for Payments to confirm; cancelled when the payment window ends.",
-		"awaiting_confirmation": "Cash on delivery and pay at pickup: waits for your staff to confirm.",
+		"awaiting_confirmation": "Cash on delivery and pay at pickup, and free online or bank-transfer orders (with the checkout setting freeOrderStart: awaiting_payment they start awaiting payment instead, with no time to pay): waits for your staff to confirm.",
 		"open": "Confirmed and being prepared.",
 		"packed": "Packed; serial numbers are captured here with Grades and serials.",
 		"shipped": "Handed to the courier, with the tracking number and link.",
