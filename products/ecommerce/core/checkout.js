@@ -30,7 +30,7 @@ export const MAX_LINES = 50;
 export const MAX_QUANTITY = 99;
 /** Payment methods, in their default order (`checkout.paymentOrder`, E22). @type {ReadonlyArray<PaymentMethod>} */
 export const PAYMENT_METHODS = Object.freeze(/** @type {PaymentMethod[]} */ (['cod', 'online', 'bank_transfer', 'pickup']));
-/** A deal lock's longest text (`core/locks.js`). */
+/** A deal lock's longest text (`adapters/crypto.js`). */
 const MAX_LOCK = 600;
 /** Address fields a merchant may make required (`checkout.addressRequired`, E22; name and phone always are). */
 export const OPTIONAL_ADDRESS_FIELDS = Object.freeze(['line1', 'line2', 'area', 'city', 'postalCode', 'country']);

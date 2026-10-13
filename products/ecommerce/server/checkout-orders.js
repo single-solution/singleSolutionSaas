@@ -22,12 +22,13 @@
 import { created, paginate, problem } from '@ss/app-kit';
 import { createId } from '@ss/contracts';
 import { originAllowed } from '@ss/protocol';
+import { keyOpens, newOrderKey, orderKeyHash } from '../adapters/crypto.js';
 import { heldStockBefore, placeOrder, releaseOrder, swapOrderStock } from '../adapters/ledger.js';
 import { createOrdersStore } from '../adapters/orders-store.js';
 import { STOCK_PROBLEMS, checkAddress, checkCart, checkOrderExtras } from '../core/checkout.js';
 import { shipmentLink } from '../core/couriers.js';
 import { WAITING_ROLES, cancelledStatus, confirmedStatus, statusOf, statusWithRole } from '../core/flow.js';
-import { checkGuest, keyOpens, newOrderKey, orderKeyHash, phoneDigitsOf } from '../core/guests.js';
+import { checkGuest, phoneDigitsOf } from '../core/guests.js';
 import { loyaltyRules, pointsToEarn, takesPart } from '../core/loyalty.js';
 import { gradesByKey } from '../core/grades.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';

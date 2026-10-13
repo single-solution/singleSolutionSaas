@@ -8,9 +8,9 @@
  */
 import { createId } from '@ss/contracts';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { newOrderKey, orderKeyHash } from '../adapters/crypto.js';
 import { INDEXES } from '../adapters/product.js';
 import { DEFAULT_FLOW } from '../core/flow.js';
-import { newOrderKey, orderKeyHash } from '../core/guests.js';
 import { COLLECTIONS } from '../core/model.js';
 import { ALL, DOMAIN, ORIGIN, readyShop } from './helpers.js';
 

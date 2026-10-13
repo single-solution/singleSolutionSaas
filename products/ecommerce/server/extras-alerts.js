@@ -13,10 +13,11 @@
  */
 import { createId } from '@ss/contracts';
 import { created, defineRoute, noContent, ok, problem } from '@ss/app-kit';
+import { newOrderKey, orderKeyHash } from '../adapters/crypto.js';
 import { isDuplicate, userIdsOf } from '../adapters/extras-store.js';
 import { createOrdersStore } from '../adapters/orders-store.js';
 import { MAX_ALERTS, SEND_BATCH, checkAlertInput, checkTargetPrice, dueConditions, isDue, priceOf } from '../core/alerts.js';
-import { ORDER_KEY_LENGTH, newOrderKey, normalisePhone, orderKeyHash } from '../core/guests.js';
+import { ORDER_KEY_LENGTH, normalisePhone } from '../core/guests.js';
 import { absolute } from '../core/links.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import { VISITOR_LIMITS, VISITOR_WRITE_LIMITS } from './service.js';

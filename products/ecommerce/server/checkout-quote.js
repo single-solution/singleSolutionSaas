@@ -11,6 +11,7 @@
  * (`bookings`).
  * @module
  */
+import { readLock, signLock } from '../adapters/crypto.js';
 import { loyaltyAccount } from '../adapters/ledger.js';
 import { createOrdersStore } from '../adapters/orders-store.js';
 import { loadOffers } from '../adapters/promotions-store.js';
@@ -18,7 +19,6 @@ import { MAX_SLOT_DAYS, slotAt, slotsBetween } from '../core/bookings.js';
 import { feeBaseOf, merchandiseOf, paymentOptions, priceLines, resolveLines, roleDiscountOf } from '../core/checkout.js';
 import { matchZone, zoneFee } from '../core/delivery.js';
 import { dealRulesOf } from '../core/deals.js';
-import { readLock, signLock } from '../core/locks.js';
 import { loyaltyRules, maxRedeemable, pointsToEarn, pointsToRedeem, pointsValue, takesPart } from '../core/loyalty.js';
 import { roundDown } from '../core/money.js';
 import { applyPromotions, attributeValues } from '../core/promotions.js';

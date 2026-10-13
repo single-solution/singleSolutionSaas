@@ -2,18 +2,15 @@
  * Guest checkout (PLAN 0.8.10 E21): a guest orders with a name and phone (and an e-mail address when they like); the
  * phone is normalised to E.164 as Accounts does (`defaultCallingCode` and `trunkPrefix` of `checkout`), so one person
  * has one customer record. A guest order gets a key — 32 random characters, shown once and kept only as its hash —
- * that the guest sends as `SS-Order-Key` to read, pay, cancel and send proof for it. Orders and customers also keep
- * the phone's last 10 digits for search (E31). Pure (Node.js crypto only).
+ * that the guest sends as `SS-Order-Key` to read, pay, cancel and send proof for it (made and checked in
+ * `adapters/crypto.js`). Orders and customers also keep the phone's last 10 digits for search (E31). No I/O.
  * @module
  */
-import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 
 const E164 = /^\+[1-9]\d{6,14}$/;
 const CALLING_CODE = /^\+[1-9]\d{0,2}$/;
 const PHONE_CHARACTERS = /^[\d\s()+./-]+$/;
 const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/;
-/** An order key's characters. */
-const KEY_CHARACTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
 /** An order key's length. */
 export const ORDER_KEY_LENGTH = 32;
 
@@ -67,28 +64,4 @@ export const checkGuest = (body, settings) => {
 	if (input.email !== undefined && input.email !== null && input.email !== '' && !EMAIL.test(email))
 		return { ok: false, field: 'customer/email', message: 'Give a valid e-mail address or none.' };
 	return { ok: true, value: { name, phone, email } };
-};
-
-/** A new order key. */
-export const newOrderKey = () => {
-	const bytes = randomBytes(ORDER_KEY_LENGTH);
-	return [...bytes].map((byte) => KEY_CHARACTERS[byte % KEY_CHARACTERS.length]).join('');
-};
-
-/**
- * The hash an order keeps of its key.
- * @param {string} key
- */
-export const orderKeyHash = (key) => createHash('sha256').update(key).digest('base64url');
-
-/**
- * Whether a key sent opens an order.
- * @param {unknown} key
- * @param {string | null | undefined} hash
- */
-export const keyOpens = (key, hash) => {
-	if (typeof key !== 'string' || key.length !== ORDER_KEY_LENGTH || !hash) return false;
-	const given = Buffer.from(orderKeyHash(key));
-	const kept = Buffer.from(hash);
-	return given.length === kept.length && timingSafeEqual(given, kept);
 };

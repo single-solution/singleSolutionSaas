@@ -9,9 +9,9 @@
  */
 import { createId } from '@ss/contracts';
 import { countHandlers, created, defineRoute, noContent, ok, paginate, problem } from '@ss/app-kit';
+import { keyOpens } from '../adapters/crypto.js';
 import { isDuplicate, refreshRating, reviewSummary, userIdsOf } from '../adapters/extras-store.js';
 import { afterFilter, keyOf, sortOf } from '../core/extras-pages.js';
-import { keyOpens } from '../core/guests.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import {
 	REVIEW_SORTS,

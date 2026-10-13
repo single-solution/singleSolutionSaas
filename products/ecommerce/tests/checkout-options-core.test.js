@@ -14,16 +14,8 @@ import {
 	inWindow,
 	NO_CONDITIONS,
 } from '../core/deals.js';
-import {
-	checkGuest,
-	keyOpens,
-	newOrderKey,
-	normalisePhone,
-	ORDER_KEY_LENGTH,
-	orderKeyHash,
-	phoneDigitsOf,
-} from '../core/guests.js';
-import { readLock, signLock } from '../core/locks.js';
+import { keyOpens, newOrderKey, orderKeyHash, readLock, signLock } from '../adapters/crypto.js';
+import { checkGuest, normalisePhone, ORDER_KEY_LENGTH, phoneDigitsOf } from '../core/guests.js';
 import { expiryFor, lotsByRule, pointsToEarn, pointsToRedeem, takesPart } from '../core/loyalty.js';
 import { allocateUnits, roundDown, roundHalfUp, unitOf } from '../core/money.js';
 import { checkRolePrices } from '../core/role-pricing.js';
