@@ -11,6 +11,7 @@ import { afterResponse } from '../src/infra/request-scope.js';
 import { toNextRoute } from '../src/infra/http.js';
 import { getPortal, resetPortal } from '../src/runtime.js';
 import { MongoClient } from 'mongodb';
+import { MongoMemoryServer } from 'mongodb-memory-server';
 import { closeMongoClients, getMongoClient, isDatabaseUnavailable } from '../src/infra/db.js';
 import { createSystemStore } from '../src/infra/system.js';
 import {
@@ -799,6 +800,31 @@ describe('runtime', () => {
 		expect((await unreachable.json()).status).toBe('database_unavailable');
 		resetPortal();
 		await closeMongoClients();
+	}, 60_000);
+
+	it('serves again on the same instance once a control database that could not be reached at its start is back (K-16)', async () => {
+		// a database of its own (the shared one serves every test file), stopped while the instance starts; its client,
+		// made here first, waits 0.3 s for a server, not 5 s
+		const mongod = await MongoMemoryServer.create();
+		const uri = mongod.getUri('ss_portal_outage');
+		try {
+			await mongod.stop({ doCleanup: false });
+			resetPortal();
+			getMongoClient({ uri, createClient: (u, options) => new MongoClient(u, { ...options, serverSelectionTimeoutMS: 300 }) });
+			const failure = await getPortal({ env: await testEnv({ MONGODB_URI: uri }) }).catch((error) => error);
+			expect(isDatabaseUnavailable(failure)).toBe(true);
+			const api = await import('../app/api/[...path]/route.js');
+			const branding = () => api.GET(new Request('https://portal.example.test/api/v1/branding'));
+			const down = await branding();
+			expect([down.status, (await down.json()).status]).toEqual([503, 'database_unavailable']);
+			await mongod.start(true);
+			// the same request: mongodb 6.x closed the client's first topology, and the Portal connects it again
+			expect((await branding()).status).toBe(200);
+		} finally {
+			resetPortal();
+			await closeMongoClients();
+			await mongod.stop();
+		}
 	}, 60_000);
 });
 

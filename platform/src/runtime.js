@@ -13,7 +13,7 @@
  */
 import { createHash } from 'node:crypto';
 import { buildConfig, loadEnv } from './infra/config.js';
-import { getMongoClient } from './infra/db.js';
+import { connectMongoClient } from './infra/db.js';
 import { createLogger } from './infra/logger.js';
 import { createSystemStore } from './infra/system.js';
 import { modules as defaultModules } from './modules/index.js';
@@ -90,7 +90,8 @@ export const getPortal = async (given) => {
 			}
 		}
 		const envConfig = loadEnv(env);
-		const client = getMongoClient({ uri: envConfig.mongo.uri, maxPoolSize: envConfig.mongo.maxPoolSize });
+		// connected before use: a client whose first connect failed connects again here (K-16)
+		const client = await connectMongoClient({ uri: envConfig.mongo.uri, maxPoolSize: envConfig.mongo.maxPoolSize });
 		const db = client.db(envConfig.mongo.dbName);
 		const system = createSystemStore(db, {
 			encryptionKey: envConfig.encryptionKey,

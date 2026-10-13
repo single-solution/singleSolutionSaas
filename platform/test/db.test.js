@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
 	DATABASE_DEADLINES,
 	closeMongoClients,
+	connectMongoClient,
 	createLocks,
 	createRegistry,
 	createRepositories,
@@ -306,6 +307,8 @@ describe('getMongoClient', () => {
 		await closeMongoClients();
 		const real = getMongoClient({ uri: mongo.uri });
 		expect((await real.db('admin').command({ ping: 1 })).ok).toBe(1);
+		// connected before use: the cached client, connected (at once when it is already)
+		expect(await connectMongoClient({ uri: mongo.uri })).toBe(real);
 		await closeMongoClients();
 	});
 

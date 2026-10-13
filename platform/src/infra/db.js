@@ -2,9 +2,10 @@
  * Control-plane database access (PLAN 0.4.8: this database holds control-plane records only — never client data).
  *
  * - `getMongoClient` — one pooled `MongoClient` per URI, cached on `globalThis` so warm serverless invocations
- *   reuse it. The driver connects lazily on the first operation, so importing or building never needs a database.
- *   Every call has deadlines ({@link DATABASE_DEADLINES}); a database that cannot be reached or does not answer in time
- *   fails fast with an error {@link isDatabaseUnavailable} recognises, which requests answer 503 `database_unavailable`.
+ *   reuse it; importing never needs a database. `connectMongoClient` connects it before use (the Portal before it is
+ *   built), and again after a failed connect. Every call has deadlines ({@link DATABASE_DEADLINES}); a database that
+ *   cannot be reached or does not answer in time fails fast with an error {@link isDatabaseUnavailable} recognises,
+ *   which requests answer 503 `database_unavailable`.
  * - `defineCollection` / `createRegistry` — every module declares its collections (indexes, TTL, `appendOnly`,
  *   `tenant: 'merchant'`). Names are global and owned: a module's collections are named `<module>_<name>`.
  * - `ensureIndexes` — creates every declared index idempotently (and reports undeclared ones; never drops).
@@ -123,6 +124,17 @@ export const getMongoClient = ({ uri, maxPoolSize = 5, appName = 'ss-portal', cr
 	}
 	return client;
 };
+
+/**
+ * The cached client of `uri` (see {@link getMongoClient}), connected. A mongodb 6.x client whose first connect fails (the
+ * database cannot be reached while a serverless instance starts) keeps a closed topology, and every later call fails
+ * with `MongoTopologyClosedError`, even once the database is back; `client.connect()` opens a new one (within
+ * {@link DATABASE_DEADLINES}), so the next request after an outage succeeds on the same warm instance. On a connected
+ * client it returns at once (it finds its database again by itself after an outage); concurrent calls share one attempt.
+ * @param {Parameters<typeof getMongoClient>[0]} options
+ * @returns {Promise<MongoClient>}
+ */
+export const connectMongoClient = (options) => getMongoClient(options).connect();
 
 /** Close and forget every cached client (tests, scripts). */
 export const closeMongoClients = async () => {
