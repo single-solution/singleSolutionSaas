@@ -394,6 +394,16 @@ describe('A9: password and lock options', () => {
 		expect(code(await signIn('other@example.com', 'x'))).toBe('sign_in_failed');
 		env.advance(15 * 60_000);
 		expect(code(await signIn('limit@example.com', 'x'))).toBe('sign_in_failed');
+		// the right password clears the network's tries for the address (SA-13, ST-11): a person who signs in is not
+		// held back, and mistakes after it get their tries again
+		await env.visitor('POST', '/v1/sign-up/password', { email: 'often@example.com', password: 'often password 1' });
+		env.advance(15 * 60_000);
+		expect(code(await signIn('often@example.com', 'x'))).toBe('sign_in_failed');
+		expect(code(await signIn('often@example.com', 'x'))).toBe('sign_in_failed');
+		for (let i = 0; i < 4; i += 1)
+			expect((await signIn('often@example.com', 'often password 1')).json.status).toBe('signed_in');
+		for (let i = 0; i < 3; i += 1) expect(code(await signIn('often@example.com', 'x'))).toBe('sign_in_failed');
+		expect(code(await signIn('often@example.com', 'often password 1'))).toBe('rate_limited');
 		env.setNetwork(null);
 		await env.setting('email_password', 'networkLimit', 0);
 		await env.setting('email_password', 'minLength', 128);

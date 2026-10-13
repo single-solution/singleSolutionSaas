@@ -630,6 +630,10 @@ export const createStore = (data, { now }) => {
 				}
 				return Number(doc?.n ?? 0) <= limit;
 			},
+			/** Forget the uses of the current window (a good sign-in clears its network's tries, A9). @param {string} key @param {number} windowMs */
+			clear: async (key, windowMs) => {
+				await counters.deleteOne({ websiteId, key: `${key}|${Math.floor(now() / windowMs)}` });
+			},
 		}),
 
 		outbox: Object.freeze({

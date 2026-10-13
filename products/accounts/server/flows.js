@@ -258,7 +258,8 @@ export const createFlows = (product, service) => {
 
 	/**
 	 * A password sign-in (e-mail or phone, A2, A9): the network limit, the lock, the password (or, with Phone +
-	 * password, a sign-in code from staff, A3), the lock after a failure and the sign-in log (A10).
+	 * password, a sign-in code from staff, A3), the lock after a failure and the sign-in log (A10). The right password
+	 * clears the network's tries for the address: the limit holds back guessing, not a person who signs in.
 	 * @param {Site} s @param {any} ctx
 	 * @param {{ method: 'email_password' | 'phone_password', identifier: string | null, user: UserRecord | null }} who
 	 */
@@ -270,11 +271,8 @@ export const createFlows = (product, service) => {
 				'sign_in_failed',
 				method === 'phone_password' ? 'The phone number or password is wrong.' : 'The e-mail address or password is wrong.',
 			);
-		if (
-			identifier &&
-			rules.networkLimit > 0 &&
-			!(await s.store.counters.take(`tries|${sha256(`${s.ip}|${identifier}`)}`, NETWORK_WINDOW_MS, rules.networkLimit))
-		)
+		const tries = identifier && rules.networkLimit > 0 ? `tries|${sha256(`${s.ip}|${identifier}`)}` : null;
+		if (tries && !(await s.store.counters.take(tries, NETWORK_WINDOW_MS, rules.networkLimit)))
 			throw problem('rate_limited', 'Too many tries from this network. Try again later.');
 		if (!user || typeof body.password !== 'string' || body.password.length > 1024) {
 			await dummyPasswordCheck();
@@ -293,6 +291,7 @@ export const createFlows = (product, service) => {
 			await service.logSignIn(s, user, 'user.sign_in_failed', 'Wrong password');
 			throw failed();
 		}
+		if (tries) await s.store.counters.clear(tries, NETWORK_WINDOW_MS);
 		const answer = await service.finish(s, user, { method, ...service.howOf(ctx), acceptTerms: body.acceptTerms });
 		if (staffCode) await s.store.codes.consume(staffCode);
 		return answer;
