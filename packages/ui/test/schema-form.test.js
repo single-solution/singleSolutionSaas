@@ -317,6 +317,9 @@ describe('choiceLabel', () => {
 		expect(choiceLabel('cod_fee')).toBe('COD fee');
 		expect(choiceLabel('one-exclusive')).toBe('One exclusive');
 		expect(choiceLabel('Mixed Case')).toBe('Mixed Case');
+		expect(choiceLabel('iban')).toBe('IBAN');
+		expect(choiceLabel('postalCode')).toBe('Postal code');
+		expect(choiceLabel('line1')).toBe('Line 1');
 		expect(choiceLabel(30)).toBe('30');
 	});
 });

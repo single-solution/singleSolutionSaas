@@ -75,6 +75,7 @@ const WORD_CASE = Object.freeze({
 	cod: 'COD',
 	csv: 'CSV',
 	html: 'HTML',
+	iban: 'IBAN',
 	id: 'ID',
 	ip: 'IP',
 	pdf: 'PDF',
@@ -87,15 +88,21 @@ const WORD_CASE = Object.freeze({
 });
 
 /**
- * A readable label for a choice's value (`per_unit_down` → "Per unit down", `sms` → "SMS"); the stored value stays as
+ * A readable label for a choice's value (`per_unit_down` → "Per unit down", `sms` → "SMS", `postalCode` → "Postal
+ * code", `line1` → "Line 1"); the stored value stays as
  * it is. Values that are not plain words (numbers, mixed case) are shown as they are.
  * @param {unknown} value
  * @returns {string}
  */
 export const choiceLabel = (value) => {
 	const text = String(value);
-	if (!/^[a-z][a-z0-9]*(?:[_-][a-z0-9]+)*$/.test(text)) return text;
-	const words = text.split(/[_-]/).map((word) => WORD_CASE[/** @type {keyof typeof WORD_CASE} */ (word)] ?? word);
+	if (!/^[a-z][a-zA-Z0-9]*(?:[_-][a-zA-Z0-9]+)*$/.test(text)) return text;
+	const words = text
+		.replace(/([a-z])([A-Z])/g, '$1 $2')
+		.replace(/([a-zA-Z])([0-9])/g, '$1 $2')
+		.split(/[_\s-]+/)
+		.map((word) => word.toLowerCase())
+		.map((word) => WORD_CASE[/** @type {keyof typeof WORD_CASE} */ (word)] ?? word);
 	const [first = '', ...rest] = words;
 	return [first === first.toLowerCase() ? first.charAt(0).toUpperCase() + first.slice(1) : first, ...rest].join(' ');
 };
