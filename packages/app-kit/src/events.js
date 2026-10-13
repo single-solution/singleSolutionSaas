@@ -154,9 +154,9 @@ export const createEvents = ({ productId, enabled, data, connections, now, logge
 			const code = typeof type === 'string' ? type.split('/').pop() : '';
 			/** @type {Partial<EventRecord>} */
 			let set;
-			// a 409 duplicate_request is an earlier forward that got through; a 409 in_progress is one still running, which
-			// may yet fail, so it is tried again like any other failure (K-14)
-			if (answer.ok || (answer.status === 409 && code === 'duplicate_request'))
+			// a 409 is an earlier forward under the same key: one that got through (duplicate_request), or one still running
+			// (in_progress), which may yet fail, so that one is tried again like any other failure (K-14)
+			if (answer.ok || (answer.status === 409 && code !== 'in_progress'))
 				set = { delivery: 'sent', attempts: event.attempts + 1 };
 			else if (answer.reason === 'not_connected') set = { delivery: 'not_connected' };
 			else {
