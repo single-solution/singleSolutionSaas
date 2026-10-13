@@ -2219,6 +2219,12 @@ Built after the re-audit (2026-10-13; commits dbbfaac, b671fee, 20d76e6, e52441e
   while locked; a wrong first code while setting two-step up is not counted (ST-1).
 - **A12 + always:** a refresh token presented again within 30 seconds of its renewal gets the same new pair (parallel
   renewals from the merchant's server); later reuse still ends the session (RW-1).
+- **A6 + always (984bb9b4):** e-mail code, magic link and Google, Apple and Facebook open only an account whose e-mail is
+  verified, and social sign-in links only a verified address. An address held only unverified (typed at phone
+  sign-up, in a role request, or at e-mail + password sign-up) counts as unknown: the code is sent, and the sign-up
+  answers `already_exists`; that account is never opened or changed. A staff sign-in code proves no address. Open: the
+  e-mail Forgot password still sends a reset link to an unverified address on an account that has a password; fixing
+  it needs the account's sign-in identity stored (follow-up).
 
 #### Notifications
 
@@ -2285,6 +2291,15 @@ copied. It is tested in PayFast's sandbox before a store switches.
 - API: the proof upload takes `reference` (at most 120 characters); `POST /v1/payments/:id/confirm` takes `reference`
   and `note`; new event `payment.proof_uploaded` (K5).
 - Data: payment history entries carry them.
+
+**P4. Cancel a payment (always; K-13, 4309374c).** Key: `payment_api`. API: `POST /v1/payments/:id/cancel { reason? }`
+(server token) sets the new status `voided` (`voidedAt`), logs `payment.voided`, and closes the pay page, retry,
+gateway switch and bank-proof upload; Stripe's checkout is expired and an approved PayPal order is never captured
+(other gateways cannot be stopped). A paid payment answers 409 `already_paid` with the payment; a second cancel returns
+it. Money that arrives after a cancel (a gateway notice, or staff confirming a transfer) is recorded `paid` with
+`refundDue: true` until fully refunded, `verify` answers `verified: false`, and `payment.paid` carries the flag; the
+admin widget shows "Refund due". Ecommerce calls cancel whenever an unpaid order with a payment is cancelled (E-side
+work pending).
 
 #### Ecommerce
 
@@ -3622,6 +3637,8 @@ Built after the re-audit (2026-10-13, owner decisions D7 and D11; commits b122ce
   afterwards, so the importer writes it before importing.
 - **N8. Required messages (MS-4).** `accounts.*` templates are always required, and a send can say `required: true`.
   Unsubscribe links and STOP replies stop only optional messages; required e-mails carry no unsubscribe headers.
+- **N10. Sign-in messages are always urgent (c833aaeb).** `accounts.*` templates are always urgent: quiet hours and
+  `sendAt` never hold them, even when saved unticked; send limits still apply.
 - **N9. Nothing lost (K-17).** A message is saved before its first attempt. An attempt that fails or breaks off is a
   failed attempt (answered 201 `retrying`), retried on later uses by the plan, then the fallback channel. Retries still
   wait for the next request to that website; whether a quiet site needs D7's small retry timer is judged on the first
