@@ -2,8 +2,9 @@
  * The catalog's content fields that products, categories, brands, attributes, grades and landing pages share (PLAN
  * 0.8.10 E1, E3, E4, E6, E16): SEO fields (title, description, canonical address, social image, noindex, nofollow,
  * focus keyword), FAQs, content blocks (a summary and bullets with icons), rich descriptions cleaned to a short list
- * of tags, product videos and the extra sizes of a photo. Every check reads `input` over `existing`, so a change can
- * name only what it changes. No I/O.
+ * of tags, product videos, the extra sizes of a photo and which storage keys a record may name (new keys under its
+ * folder, keys it already holds whatever their folder: Migration "Storage", CA-5). Every check reads `input` over
+ * `existing`, so a change can name only what it changes. No I/O.
  * @module
  */
 
@@ -436,15 +437,32 @@ export const checkVideo = (value, path, errors) => {
 // --------------------------------------------------------------------------------------------- photo sizes (E6)
 
 /**
- * The extra fields of a photo (E6): `sizes` (storage keys of smaller copies the uploader made, under the same folder),
- * `width`, `height` and `blur` (a small data URI image).
+ * Whether a storage key may be named on a record (PLAN 0.8.10 Migration "Storage", CA-5): a key the record already
+ * holds whatever its folder (imported records keep their keys), else a new key under the record's folder; never one
+ * with `..`, and at most 500 characters.
+ * @param {unknown} key
+ * @param {string} folder the record's folder ('' = any folder: records moved in by an import)
+ * @param {ReadonlySet<string>} [held] the keys the record already holds
+ * @returns {key is string}
+ */
+export const keyAllowed = (key, folder, held) =>
+	typeof key === 'string' &&
+	key !== '' &&
+	key.length <= CONTENT_LIMITS.sizeKey &&
+	!key.includes('..') &&
+	(held?.has(key) === true || key.startsWith(folder));
+
+/**
+ * The extra fields of a photo (E6): `sizes` (storage keys of smaller copies the uploader made, under the same folder,
+ * or keys the record already holds, CA-5), `width`, `height` and `blur` (a small data URI image).
  * @param {Record<string, any>} input
- * @param {string} folder the storage folder the keys must be in (`ecommerce/products/<id>/`)
+ * @param {string} folder the storage folder new keys must be in (`ecommerce/products/<id>/`; '' = any, for imports)
  * @param {string} path
  * @param {FieldError[]} errors
+ * @param {ReadonlySet<string>} [held] keys the record already holds, accepted whatever their folder (CA-5)
  * @returns {{ sizes?: Partial<Record<'thumb' | 'card' | 'detail', string>>, width?: number, height?: number, blur?: string }}
  */
-export const mediaExtras = (input, folder, path, errors) => {
+export const mediaExtras = (input, folder, path, errors, held) => {
 	/** @type {{ sizes?: Partial<Record<'thumb' | 'card' | 'detail', string>>, width?: number, height?: number, blur?: string }} */
 	const out = {};
 	if (input.sizes !== undefined && input.sizes !== null) {
@@ -456,12 +474,7 @@ export const mediaExtras = (input, folder, path, errors) => {
 				if (key === null || key === undefined || key === '') continue;
 				if (!MEDIA_SIZES.includes(/** @type {any} */ (name)))
 					errors.push({ path: `${path}/sizes/${name}`, message: 'Sizes are thumb, card and detail.' });
-				else if (
-					typeof key !== 'string' ||
-					!key.startsWith(folder) ||
-					key.includes('..') ||
-					key.length > CONTENT_LIMITS.sizeKey
-				)
+				else if (!keyAllowed(key, folder, held))
 					errors.push({ path: `${path}/sizes/${name}`, message: 'Give the key of an upload made for this record.' });
 				else sizes[/** @type {'thumb' | 'card' | 'detail'} */ (name)] = key;
 			}

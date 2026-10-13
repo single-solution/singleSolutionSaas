@@ -478,7 +478,11 @@ export const createCatalogTools = (product, service, common) => {
 		if (action === 'status') {
 			if (!['draft', 'active', 'archived'].includes(body.status))
 				throw refuse([{ path: '/status', message: 'Status is draft, active or archived.' }]);
-			change = (item) => (item.status === body.status ? null : { status: body.status });
+			// a draft without variants (an imported shell, CA-2) stays off sale until it has one
+			change = (item) =>
+				item.status === body.status || (body.status === 'active' && item.variants.length === 0)
+					? null
+					: { status: body.status };
 		} else if (action === 'price') {
 			const price = checkPriceChange(body.price);
 			if (!price)

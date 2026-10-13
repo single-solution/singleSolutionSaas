@@ -14,7 +14,8 @@
  * A line takes one deal: the largest saving, then the higher priority, then the smaller id — or the deal the shopper
  * picked among its eligible ones (`shopperChoice`); the `deals` settings choose the first deal instead, put one
  * checkout-level deal after the item deals and round once per order (`DealRules`, D4). Discounts round down to whole
- * units with Format's `wholeUnits` (E25). Also the checks of a deal the merchant writes and the views of a deal. No I/O.
+ * units with Format's `wholeUnits` (E25). Also the checks of a deal the merchant writes (a banner key it already holds
+ * stays valid whatever its folder, CA-5) and the views of a deal. No I/O.
  * @module
  */
 import { exactPercentOf, percentOf, roundDown, roundHalfUp } from './money.js';
@@ -465,13 +466,29 @@ export const checkConditions = (value) => {
 };
 
 /**
+ * Which banner keys a deal may hold besides new uploads under `ecommerce/deals/`: the key it already holds whatever
+ * its folder (CA-5), or any key without `..` when the deal is moved in by an import (Migration "Storage").
+ * @typedef {{ held?: string | null, importing?: boolean }} BannerKeys
+ */
+
+/** Banner keys of any folder: at most 500 characters, no control characters. */
+// eslint-disable-next-line no-control-regex
+const ANY_KEY = /^[^\u0000-\u001f\u007f]{1,500}$/;
+
+/**
  * A banner photo: an upload key with its alternative text, or null.
  * @param {unknown} value
+ * @param {BannerKeys} [keys]
  * @returns {Checked}
  */
-const checkBanner = (value) => {
+const checkBanner = (value, { held = null, importing = false } = {}) => {
 	if (value === undefined || value === null) return { ok: true, value: null };
-	if (!isObject(value) || typeof value.key !== 'string' || !/^ecommerce\/deals\/[A-Za-z0-9_./-]{1,300}$/.test(value.key))
+	const kept = isObject(value) && typeof value.key === 'string' && (importing || value.key === held);
+	if (
+		!isObject(value) ||
+		typeof value.key !== 'string' ||
+		!(kept ? ANY_KEY : /^ecommerce\/deals\/[A-Za-z0-9_./-]{1,300}$/).test(value.key)
+	)
 		return fail('banner', 'banner is { key, alt } of a photo uploaded for deals, or null.');
 	if (value.key.includes('..')) return fail('banner', 'banner is { key, alt } of a photo uploaded for deals, or null.');
 	const alt = checkText(value.alt, 'banner/alt', { min: 0, max: 200, fallback: '' });
@@ -512,9 +529,10 @@ const checkWindow = (input) => {
 /**
  * The deal's display fields (E18).
  * @param {Record<string, any>} input
+ * @param {BannerKeys} keys
  * @returns {Checked}
  */
-const checkDisplay = (input) => {
+const checkDisplay = (input, keys) => {
 	const slug = input.slug ?? '';
 	if (typeof slug !== 'string' || (slug !== '' && (!SLUG.test(slug) || slug.length > 80)))
 		return fail('slug', 'slug is lowercase letters, digits and hyphens (at most 80), or empty.');
@@ -527,7 +545,7 @@ const checkDisplay = (input) => {
 		['discountLabel', () => checkText(input.discountLabel, 'discountLabel', { min: 0, max: 80, fallback: '' })],
 		['content', () => checkText(input.content, 'content', { min: 0, max: 5000, fallback: '' })],
 		['sort', () => checkWhole(input.sort, 'sort', { min: -100_000, max: 100_000, fallback: 0 })],
-		['banner', () => checkBanner(input.banner)],
+		['banner', () => checkBanner(input.banner, keys)],
 		[
 			'seo',
 			() =>
@@ -542,11 +560,12 @@ const checkDisplay = (input) => {
 };
 
 /**
- * A deal the merchant writes (create, or the merged record of an edit).
+ * A deal the merchant writes (create, or the merged record of an edit), or an import moves in.
  * @param {unknown} input
+ * @param {BannerKeys} [keys] the banner key the deal already holds (an edit), or an import's
  * @returns {Checked}
  */
-export const checkDealInput = (input) => {
+export const checkDealInput = (input, keys = {}) => {
 	if (!isObject(input)) return fail('', 'Send a deal object.');
 	if (!DEAL_TYPES.includes(input.type)) return fail('type', `type is one of ${DEAL_TYPES.join(', ')}.`);
 	/** @type {'percent' | 'fixed' | 'free_delivery'} */
@@ -569,7 +588,7 @@ export const checkDealInput = (input) => {
 		['conditions', () => checkConditions(input.conditions)],
 		['allowPoints', () => checkBoolean(input.allowPoints, 'allowPoints', true)],
 		['*', () => checkWindow(input)],
-		['*', () => checkDisplay(input)],
+		['*', () => checkDisplay(input, keys)],
 		...commonSteps(input),
 	]);
 	if (!checked.ok) return checked;

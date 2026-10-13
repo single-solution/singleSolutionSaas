@@ -305,6 +305,15 @@
 			"settings": {
 				"$ref": "schemas/llms_txt.settings.json"
 			}
+		},
+		{
+			"key": "import",
+			"name": "Import",
+			"description": "Catalog, customers, orders, promotions, loyalty and shopper records moved in from another system with ss-import (server token only; no messages, events or alerts). Our admins switch it on for a migration and off after it.",
+			"dependsOn": [],
+			"settings": {
+				"$ref": "schemas/import.settings.json"
+			}
 		}
 	],
 	"permissions": [

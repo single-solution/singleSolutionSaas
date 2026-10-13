@@ -220,7 +220,8 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			)
 				throw problem('conflict', 'Landing pages use this category: change or delete them first.');
 			await data.collection(COLLECTIONS.categories).deleteOne({ websiteId: data.websiteId, id: existing.id });
-			if (existing.image) {
+			// only a file under its folder: an imported key elsewhere may be shared (CA-5)
+			if (existing.image?.key.startsWith(`ecommerce/categories/${existing.id}/`)) {
 				const storage = await product.connections.storage(s.websiteId);
 				await storage?.deleteObject({ key: existing.image.key }).catch(() => null);
 			}
@@ -297,7 +298,8 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			)
 				throw problem('conflict', 'Landing pages use this brand: change or delete them first.');
 			await data.collection(COLLECTIONS.brands).deleteOne({ websiteId: data.websiteId, id: existing.id });
-			if (existing.logo) {
+			// only a file under its folder: an imported key elsewhere may be shared (CA-5)
+			if (existing.logo?.key.startsWith(`ecommerce/brands/${existing.id}/`)) {
 				const storage = await product.connections.storage(s.websiteId);
 				await storage?.deleteObject({ key: existing.logo.key }).catch(() => null);
 			}

@@ -3,13 +3,15 @@
  * upload (the bucket refuses another type or size) for a product image, a category image or a brand logo, then the
  * uploaded file is checked in the bucket and attached to its record; product images are reordered (the first is the
  * main image) and removed (the file is deleted from the bucket). Images are JPEG, PNG, WebP or AVIF up to the
- * `catalog` setting `imageMaxBytes`.
+ * `catalog` setting `imageMaxBytes`. New keys are under the record's folder; keys a product already holds (imported
+ * ones in their own folders) stay valid when its photos are rearranged, and only files under the record's folder are
+ * ever deleted (CA-5).
  * @module
  */
 import { createId } from '@ss/contracts';
 import { defineRoute, problem } from '@ss/app-kit';
 import { NO_ID } from '../adapters/catalog-store.js';
-import { LIMITS, cleanText, isObject } from '../core/catalog.js';
+import { LIMITS, cleanText, heldKeys, isObject } from '../core/catalog.js';
 import { VIDEO_TYPES, mediaExtras } from '../core/catalog-content.js';
 import { COLLECTIONS } from '../core/model.js';
 import { IMAGE_TYPES, bodyOf, refuse, STAFF_LIMITS } from './catalog-common.js';
@@ -90,8 +92,13 @@ export const createCatalogFiles = (product, service, common) => {
 	/** @param {Site} s @param {MediaRecord} file */
 	const withUrl = async (s, file) => ({ ...file, url: await common.media.mediaUrl(s, file.key) });
 
-	/** @param {Site} s @param {string} key */
-	const deleteFile = async (s, key) => {
+	/**
+	 * Delete a record's file from the bucket: only one under the record's own folder (a key an import kept in another
+	 * folder may be shared with other records, so it stays, CA-5).
+	 * @param {Site} s @param {string} key @param {Owner} owner @param {string} id
+	 */
+	const deleteFile = async (s, key, owner, id) => {
+		if (!key.startsWith(`ecommerce/${OWNERS[owner].folder}/${id}/`)) return;
 		const storage = await product.connections.storage(s.websiteId);
 		if (storage) await storage.deleteObject({ key }).catch(() => null);
 	};
@@ -159,12 +166,14 @@ export const createCatalogFiles = (product, service, common) => {
 		const media = [];
 		/** @type {Array<{ path: string, message: string }>} */
 		const errors = [];
+		// sizes the product already holds stay valid whatever their folder (CA-5)
+		const held = heldKeys(/** @type {import('../core/model.js').ProductRecord} */ (record));
 		items.forEach((item, index) => {
 			const file = /** @type {MediaRecord} */ (current.find((f) => f.key === item.key));
 			const alt = item.alt === undefined ? file.alt : cleanText(item.alt, LIMITS.alt);
 			if (alt === null)
 				throw refuse([{ path: `/items/${index}/alt`, message: `Alternative text has at most ${LIMITS.alt} characters.` }]);
-			media.push({ ...file, alt, ...mediaExtras(item, `ecommerce/products/${record.id}/`, `/items/${index}`, errors) });
+			media.push({ ...file, alt, ...mediaExtras(item, `ecommerce/products/${record.id}/`, `/items/${index}`, errors, held) });
 		});
 		if (errors.length > 0) throw refuse(errors);
 		await data.collection(COLLECTIONS.products).updateOne({ websiteId: data.websiteId, id: record.id }, { $set: { media } });
@@ -183,7 +192,7 @@ export const createCatalogFiles = (product, service, common) => {
 			.collection(COLLECTIONS.products)
 			.updateOne({ websiteId: data.websiteId, id: record.id }, { $pull: { media: { key }, 'variants.$[].media': { key } } });
 		const removed = /** @type {MediaRecord} */ (record.media.find((/** @type {MediaRecord} */ file) => file.key === key));
-		for (const sized of [key, ...Object.values(removed.sizes ?? {})]) await deleteFile(s, sized);
+		for (const sized of [key, ...Object.values(removed.sizes ?? {})]) await deleteFile(s, sized, 'product', record.id);
 		await service.log(ctx, 'product.image_removed', record.id, { label: String(record.name) });
 		return mediaView(s, (await recordOf(data, 'product', record.id)).media);
 	};
@@ -201,7 +210,7 @@ export const createCatalogFiles = (product, service, common) => {
 			await data
 				.collection(OWNERS[owner].collection)
 				.updateOne({ websiteId: data.websiteId, id: record.id }, { $set: { [field]: file } });
-			if (record[field] && record[field].key !== file.key) await deleteFile(s, record[field].key);
+			if (record[field] && record[field].key !== file.key) await deleteFile(s, record[field].key, owner, record.id);
 			await service.log(ctx, `${owner}.${field}_set`, record.id, { label: String(record.name) });
 			return { [field]: await withUrl(s, file) };
 		},
@@ -213,7 +222,7 @@ export const createCatalogFiles = (product, service, common) => {
 				await data
 					.collection(OWNERS[owner].collection)
 					.updateOne({ websiteId: data.websiteId, id: record.id }, { $set: { [field]: null } });
-				await deleteFile(s, record[field].key);
+				await deleteFile(s, record[field].key, owner, record.id);
 				await service.log(ctx, `${owner}.${field}_removed`, record.id, { label: String(record.name) });
 			}
 			return { [field]: null };

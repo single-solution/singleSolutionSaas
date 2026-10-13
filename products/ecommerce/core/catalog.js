@@ -3,12 +3,25 @@
  * what is switched on (variants, multi-location stock, grades and serials, digital goods, bookings) and the website's
  * categories, brands, attributes, locations and grades. A check returns the product's next editable fields (a new
  * product, or an existing one with the changes applied); the adapter writes them. Stock of an existing variant is
- * never changed here (that is the stock routes' job, so a product edit cannot undo an order's stock hold). Also the
- * text helpers (slugs, bounded text) and price changes of bulk actions. No I/O.
+ * never changed here (that is the stock routes' job, so a product edit cannot undo an order's stock hold). Storage keys
+ * a product already holds stay valid whatever their folder; only new ones must be under its folder (CA-5). A draft may
+ * have no variant yet (an imported shell, CA-2); it goes on sale once it has one. With `importing` (the `import`
+ * feature, PLAN 0.8.10 Migration) the record's own variant ids, stock, photo keys and file facts are taken as given.
+ * Also the text helpers (slugs, bounded text) and price changes of bulk actions. No I/O.
  * @module
  */
+import { isId } from '@ss/contracts';
 import { isPrice } from './money.js';
-import { checkFaqs, checkHtml, checkSeo, checkVideo, htmlToText, mediaExtras } from './catalog-content.js';
+import {
+	VIDEO_TYPES,
+	checkFaqs,
+	checkHtml,
+	checkSeo,
+	checkVideo,
+	htmlToText,
+	keyAllowed,
+	mediaExtras,
+} from './catalog-content.js';
 
 /** @typedef {import('./model.js').ProductRecord} ProductRecord */
 /** @typedef {import('./model.js').VariantRecord} VariantRecord */
@@ -185,7 +198,37 @@ export const summarize = (variants, trackStock) => {
  * @property {(prefix: string) => string} newId
  * @property {boolean} [sizeCharts] the `size_charts` feature is on (E5)
  * @property {ReadonlySet<string>} [sizeChartIds]
+ * @property {boolean} [importing] a record moved in by an import (PLAN 0.8.10 Migration): variants keep their given
+ *   ids and stock, photo and video keys of any folder keep their given type and size, and no variant is allowed (a
+ *   draft, CA-2)
  */
+
+/**
+ * Where a product's variant photos may come from: new keys under `folder` (null: none yet, the product is new; '' any
+ * folder, an import), and keys the product already holds (CA-5).
+ * @typedef {{ folder: string | null, held: ReadonlySet<string>, importing: boolean }} Place
+ */
+
+/** No storage keys. @type {ReadonlySet<string>} */
+const NO_KEYS = Object.freeze(new Set());
+
+/** A new product's place: no folder yet. @type {Place} */
+const NEW_PLACE = Object.freeze({ folder: null, held: NO_KEYS, importing: false });
+
+/**
+ * Every storage key a product holds: its photos and their sizes, its variants' photos and their sizes, and its video
+ * file (CA-5: these stay valid whatever their folder).
+ * @param {Pick<ProductRecord, 'media' | 'variants'> & Partial<Pick<ProductRecord, 'video'>>} product
+ * @returns {Set<string>}
+ */
+export const heldKeys = (product) =>
+	new Set([
+		...[...(product.media ?? []), ...(product.variants ?? []).flatMap((variant) => variant.media ?? [])].flatMap((file) => [
+			file.key,
+			...Object.values(file.sizes ?? {}),
+		]),
+		...(product.video?.kind === 'file' ? [product.video.key] : []),
+	]);
 
 /**
  * The editable fields of a product (everything the adapter writes; `price`, `inStock`, `sold`, `rating`, `publishedAt`
@@ -362,20 +405,40 @@ const variantAttributesOf = (input, existing, rules, path, errors) => {
 };
 
 /**
- * A variant's photos (E6): files uploaded for the product (the route checks new ones in the bucket).
+ * The type and size of a file moved in by an import, as given ('' and 0 when not known; no bucket check: the file is
+ * already in the merchant's storage).
+ * @param {Record<string, any>} entry
+ * @param {string} path
+ * @param {FieldError[]} errors
+ * @returns {{ type: string, size: number }}
+ */
+export const givenFacts = (entry, path, errors) => {
+	const type = entry.type ?? '';
+	const size = entry.size ?? 0;
+	const typeOk = typeof type === 'string' && type.length <= 100;
+	const sizeOk = isCount(size, Number.MAX_SAFE_INTEGER);
+	if (!typeOk) errors.push({ path: `${path}/type`, message: 'The type is a media type of at most 100 characters.' });
+	if (!sizeOk) errors.push({ path: `${path}/size`, message: 'The size is a whole number of bytes from 0.' });
+	return { type: typeOk ? type : '', size: sizeOk ? size : 0 };
+};
+
+/**
+ * A variant's photos (E6): files uploaded for the product (the route checks new ones in the bucket), or keys the
+ * product already holds whatever their folder (CA-5).
  * @param {Record<string, any>} input
  * @param {VariantRecord | null} existing
- * @param {string | null} folder the product's storage folder (null for a new product)
+ * @param {Place} place
  * @param {string} path
  * @param {FieldError[]} errors
  * @returns {MediaRecord[]}
  */
-const variantMediaOf = (input, existing, folder, path, errors) => {
+const variantMediaOf = (input, existing, place, path, errors) => {
 	if (input.media === undefined) return existing?.media ?? [];
 	if (!Array.isArray(input.media) || input.media.length > LIMITS.variantMedia) {
 		errors.push({ path: `${path}/media`, message: `A variant has at most ${LIMITS.variantMedia} photos.` });
 		return existing?.media ?? [];
 	}
+	const { folder, held, importing } = place;
 	if (input.media.length > 0 && folder === null) {
 		errors.push({ path: `${path}/media`, message: 'Add variant photos once the product is saved.' });
 		return [];
@@ -385,8 +448,8 @@ const variantMediaOf = (input, existing, folder, path, errors) => {
 	const out = [];
 	input.media.forEach((entry, index) => {
 		const at = `${path}/media/${index}`;
-		const key = isObject(entry) && typeof entry.key === 'string' ? entry.key : '';
-		if (!folder || !key.startsWith(folder) || key.includes('..') || out.some((file) => file.key === key)) {
+		const key = isObject(entry) ? entry.key : undefined;
+		if (folder === null || !keyAllowed(key, folder, held) || out.some((file) => file.key === key)) {
 			errors.push({ path: `${at}/key`, message: 'Give the key of a photo uploaded for this product, once.' });
 			return;
 		}
@@ -395,11 +458,10 @@ const variantMediaOf = (input, existing, folder, path, errors) => {
 		const before = known.get(key);
 		out.push({
 			key,
-			type: before?.type ?? '',
-			size: before?.size ?? 0,
+			...(importing ? givenFacts(entry, at, errors) : { type: before?.type ?? '', size: before?.size ?? 0 }),
 			alt: alt ?? '',
 			...(before ? { ...before, alt: alt ?? before.alt } : {}),
-			...mediaExtras(entry, folder, at, errors),
+			...mediaExtras(entry, folder, at, errors, held),
 		});
 	});
 	return out;
@@ -412,10 +474,11 @@ const variantMediaOf = (input, existing, folder, path, errors) => {
  * @param {CatalogRules} rules
  * @param {string} path
  * @param {FieldError[]} errors
- * @param {string | null} [folder] the product's storage folder (variant photos)
+ * @param {Place} [place] where its photos may come from
+ * @param {string} [id] its id as an import gives it
  * @returns {VariantRecord}
  */
-const variantOf = (input, existing, rules, path, errors, folder = null) => {
+const variantOf = (input, existing, rules, path, errors, place = NEW_PLACE, id = undefined) => {
 	/** @param {string} field @param {string} message */
 	const fail = (field, message) => errors.push({ path: `${path}/${field}`, message });
 	const sku = input.sku === undefined ? (existing?.sku ?? '') : cleanText(input.sku, LIMITS.sku);
@@ -442,7 +505,7 @@ const variantOf = (input, existing, rules, path, errors, folder = null) => {
 	const warrantyDays = input.warrantyDays === undefined ? (existing?.warrantyDays ?? null) : input.warrantyDays;
 	if (!isDays(warrantyDays)) fail('warrantyDays', `Give whole days from 0 to ${LIMITS.days}, or null.`);
 	const attributes = variantAttributesOf(input, existing, rules, path, errors);
-	const media = variantMediaOf(input, existing, folder, path, errors);
+	const media = variantMediaOf(input, existing, place, path, errors);
 	const stock = existing ? { stock: existing.stock, locations: existing.locations } : stockOf(input, rules, path, errors);
 	/** @type {Record<string, string>} */
 	const options = {};
@@ -452,7 +515,7 @@ const variantOf = (input, existing, rules, path, errors, folder = null) => {
 		if (text) options[name] = text;
 	}
 	return {
-		id: existing?.id ?? rules.newId('var'),
+		id: existing?.id ?? id ?? rules.newId('var'),
 		sku: sku ?? '',
 		options,
 		price: isPrice(price) ? price : 0,
@@ -510,7 +573,13 @@ export const optionsFromAttributes = (variants, attributes) => {
  * @returns {{ variants: VariantRecord[], options: Array<{ name: string, values: string[] }> }}
  */
 const variantsOf = (input, existing, given, rules, errors) => {
-	const folder = existing ? `ecommerce/products/${existing.id}/` : null;
+	const importing = rules.importing === true;
+	/** @type {Place} */
+	const place = importing
+		? { folder: '', held: NO_KEYS, importing }
+		: existing
+			? { folder: `ecommerce/products/${existing.id}/`, held: heldKeys(existing), importing }
+			: NEW_PLACE;
 	const shortcut = SHORTCUT.some((field) => input[field] !== undefined);
 	/** @type {Record<string, any>} the single variant's fields given at the top level */
 	const single = Object.fromEntries(
@@ -520,8 +589,10 @@ const variantsOf = (input, existing, given, rules, errors) => {
 	let variants;
 	if (input.variants !== undefined) {
 		if (shortcut) errors.push({ path: '/variants', message: 'Give either variants or the single price and SKU.' });
-		if (!Array.isArray(input.variants) || input.variants.length === 0 || input.variants.length > LIMITS.variants) {
-			errors.push({ path: '/variants', message: `Give 1 to ${LIMITS.variants} variants.` });
+		// an imported shell may have no variant yet (CA-2)
+		const least = importing ? 0 : 1;
+		if (!Array.isArray(input.variants) || input.variants.length < least || input.variants.length > LIMITS.variants) {
+			errors.push({ path: '/variants', message: `Give ${least} to ${LIMITS.variants} variants.` });
 			return { variants: existing?.variants ?? [], options: given };
 		}
 		const known = new Map((existing?.variants ?? []).map((variant) => [variant.id, variant]));
@@ -532,6 +603,13 @@ const variantsOf = (input, existing, given, rules, errors) => {
 				errors.push({ path, message: 'Each variant is an object.' });
 				return variantOf({}, null, rules, path, []);
 			}
+			if (importing) {
+				// an import gives every variant its own id (`var_…`)
+				if (!isId(entry.id, 'var') || seen.has(entry.id))
+					errors.push({ path: `${path}/id`, message: 'Give each variant its own id (var_…).' });
+				seen.add(entry.id);
+				return variantOf(entry, null, rules, path, errors, place, isId(entry.id, 'var') ? entry.id : undefined);
+			}
 			let before = null;
 			if (entry.id !== undefined) {
 				before = known.get(entry.id) ?? null;
@@ -539,18 +617,22 @@ const variantsOf = (input, existing, given, rules, errors) => {
 					errors.push({ path: `${path}/id`, message: 'This variant is not part of the product.' });
 				seen.add(entry.id);
 			}
-			return variantOf(entry, before, rules, path, errors, folder);
+			return variantOf(entry, before, rules, path, errors, place);
 		});
 	} else if (existing) {
-		if (shortcut && existing.variants.length !== 1)
+		if (shortcut && existing.variants.length > 1)
 			errors.push({ path: '/variants', message: 'This product has several variants: change them in variants.' });
-		variants =
-			shortcut && existing.variants.length === 1
-				? [variantOf(single, /** @type {VariantRecord} */ (existing.variants[0]), rules, '', errors, folder)]
-				: existing.variants;
-	} else variants = [variantOf(single, null, rules, '', errors, folder)];
+		// the single variant's fields change it, or make the first one of a draft without variants (CA-2)
+		variants = !shortcut
+			? existing.variants
+			: existing.variants.length === 1
+				? [variantOf(single, /** @type {VariantRecord} */ (existing.variants[0]), rules, '', errors, place)]
+				: existing.variants.length === 0
+					? [variantOf(single, null, rules, '', errors, place)]
+					: existing.variants;
+	} else variants = [variantOf(single, null, rules, '', errors, place)];
 
-	if (!rules.variants && variants.length !== 1)
+	if (!rules.variants && variants.length > 1)
 		errors.push({ path: '/variants', message: 'Switch on Variants to sell more than one variant.' });
 	const total = variants.reduce((sum, variant) => sum + (variant.media?.length ?? 0), 0);
 	if (total > LIMITS.allVariantMedia)
@@ -793,6 +875,8 @@ export const checkProduct = (body, rules, existing) => {
 	const { variants, options } = variantsOf(input, existing, given, { ...rules, custom }, errors);
 	const skus = variants.map((variant) => variant.sku).filter(Boolean);
 	if (new Set(skus).size !== skus.length) fail('/variants', 'Each variant needs its own SKU.');
+	// a draft without variants (an imported shell, CA-2) goes on sale once it has one
+	if (variants.length === 0 && status === 'active') fail('/status', 'Add a variant before the product goes on sale.');
 
 	const trackStock = field(
 		'trackStock',
@@ -866,9 +950,17 @@ export const checkProduct = (body, rules, existing) => {
 	if (input.video !== undefined) {
 		const checked = checkVideo(input.video, '/video', errors);
 		if (checked !== undefined) {
-			const folder = existing ? `ecommerce/products/${existing.id}/` : null;
-			if (checked?.kind === 'file' && (!folder || !checked.key.startsWith(folder) || checked.key.includes('..')))
+			// a new file is under the product's folder; a key it already holds stays whatever its folder (CA-5)
+			const folder = rules.importing ? '' : existing ? `ecommerce/products/${existing.id}/` : null;
+			const held = existing ? heldKeys(existing) : NO_KEYS;
+			if (checked?.kind === 'file' && (folder === null || !keyAllowed(checked.key, folder, held)))
 				fail('/video/key', 'Give the key of a video uploaded for this product (save the product first).');
+			else if (checked?.kind === 'file' && rules.importing) {
+				// an imported file keeps the type and size the import gives (MP4 or WebM)
+				const facts = givenFacts(/** @type {Record<string, any>} */ (input.video), '/video', errors);
+				if (!Object.hasOwn(VIDEO_TYPES, facts.type)) fail('/video/type', 'A video file is video/mp4 or video/webm.');
+				video = { kind: 'file', key: checked.key, ...facts };
+			}
 			// a file keeps its type and size when it is the same file; the route fills them for a new one
 			else
 				video =

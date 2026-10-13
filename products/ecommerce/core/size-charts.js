@@ -12,8 +12,8 @@ import { cleanText, isObject } from './catalog.js';
 /** Limits of a chart. */
 export const CHART_LIMITS = Object.freeze({ name: 120, columns: 12, rows: 40, label: 60, value: 60, text: 2000 });
 
-/** Column keys. */
-const COLUMN_KEY = /^[a-z][a-z0-9_]{0,39}$/;
+/** Column keys: lowercase letters, digits, `_` and `-` (keys made from labels with dashes, CA-16). */
+const COLUMN_KEY = /^[a-z0-9][a-z0-9_-]{0,39}$/;
 
 /**
  * The editable fields of a chart.
@@ -49,7 +49,7 @@ export const checkSizeChart = (body, existing) => {
 				const key = isObject(column) && typeof column.key === 'string' ? column.key.trim() : '';
 				const label = isObject(column) ? cleanText(column.label, CHART_LIMITS.label) : null;
 				if (!COLUMN_KEY.test(key) || columns.some((other) => other.key === key))
-					fail(`/columns/${index}/key`, 'Each column has its own key (lowercase letters, digits and _).');
+					fail(`/columns/${index}/key`, 'Each column has its own key (lowercase letters, digits, _ and -).');
 				else if (!label) fail(`/columns/${index}/label`, `A column label has 1 to ${CHART_LIMITS.label} characters.`);
 				else columns.push({ key, label });
 			});

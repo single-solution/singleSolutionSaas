@@ -23,7 +23,7 @@ import {
 	skusTaken,
 	slugTaken,
 } from '../adapters/catalog-store.js';
-import { LIMITS, checkProduct, checkStockChanges, changedStock, missingVariants, summarize } from '../core/catalog.js';
+import { LIMITS, checkProduct, checkStockChanges, changedStock, heldKeys, missingVariants, summarize } from '../core/catalog.js';
 import { VIDEO_TYPES } from '../core/catalog-content.js';
 import { afterFilter, cursorKey, listOf, staffFilter } from '../core/catalog-query.js';
 import { nextPreviousSlugs } from '../core/links.js';
@@ -374,15 +374,11 @@ export const createCatalogProducts = (product, service, common) => {
 		if (ordered > 0) throw problem('conflict', 'This product is in orders: archive it instead.');
 		await data.collection(COLLECTIONS.products).deleteOne({ websiteId: data.websiteId, id: existing.id });
 		await data.collection(COLLECTIONS.serials).deleteMany({ websiteId: data.websiteId, productId: existing.id });
-		// every file of the product: photos with their sizes, variant photos and the video (E4, E6)
-		const keys = new Set([
-			...[...existing.media, ...existing.variants.flatMap((variant) => variant.media ?? [])].flatMap((file) => [
-				file.key,
-				...Object.values(file.sizes ?? {}),
-			]),
-			...(existing.video?.kind === 'file' ? [existing.video.key] : []),
-		]);
-		const storage = keys.size > 0 ? await product.connections.storage(s.websiteId) : null;
+		// every file of the product under its folder: photos with their sizes, variant photos and the video (E4, E6);
+		// keys an import kept in other folders may be shared with other records, so they stay (CA-5)
+		const folder = `ecommerce/products/${existing.id}/`;
+		const keys = [...heldKeys(existing)].filter((key) => key.startsWith(folder));
+		const storage = keys.length > 0 ? await product.connections.storage(s.websiteId) : null;
 		for (const key of storage ? keys : []) await /** @type {any} */ (storage).deleteObject({ key }).catch(() => null);
 		await service.log(ctx, 'product.deleted', existing.id, { label: existing.name });
 		return undefined;

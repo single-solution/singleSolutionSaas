@@ -47,11 +47,13 @@ import landingPagesSettings from '../schemas/landing_pages.settings.json' with {
 import feedsSettings from '../schemas/feeds.settings.json' with { type: 'json' };
 import aiCopySettings from '../schemas/ai_copy.settings.json' with { type: 'json' };
 import llmsTxtSettings from '../schemas/llms_txt.settings.json' with { type: 'json' };
+import importSettings from '../schemas/import.settings.json' with { type: 'json' };
 import { createAi } from './ai.js';
 import { INDEXES as CATALOG_INDEXES } from './catalog-store.js';
 import { createCouriers } from './couriers.js';
 import { INDEXES as EXTRAS_INDEXES } from './extras-store.js';
 import { INDEXES as FULFILMENT_INDEXES } from './fulfilment-store.js';
+import { createImportOptions } from './imports.js';
 import { LEDGER_INDEXES } from './ledger.js';
 import { LISTS, createLists } from './lists.js';
 import { INDEXES as ORDERS_INDEXES } from './orders-store.js';
@@ -95,6 +97,7 @@ const SETTINGS = {
 	feeds: feedsSettings,
 	ai_copy: aiCopySettings,
 	llms_txt: llmsTxtSettings,
+	import: importSettings,
 };
 
 /** The manifest as the kit and the Portal take it: settings schemas inline. */
@@ -256,6 +259,13 @@ export const createProductInstance = (options) => {
 			resealProduct: () => secrets.reseal(),
 		},
 		data: { indexes: INDEXES },
+		// records moved in from another system with ss-import (feature `import`, PLAN 0.8.10 K10)
+		imports: createImportOptions({
+			list: (websiteId, name) => lists.get(websiteId, /** @type {any} */ (name)),
+			settings: (websiteId, feature) => product.settings.values(websiteId, feature),
+			featuresOn: (websiteId) => product.featuresOn(websiteId),
+			now,
+		}),
 		// order, return, review, catalog and stock events (PLAN 0.8.10 K5, E32)
 		events: true,
 		// the list settings for the merchant's server (`GET|PUT /v1/lists/:list`, server token)

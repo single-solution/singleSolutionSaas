@@ -15,6 +15,7 @@ import { createCheckout } from './checkout.js';
 import { createDashboardSearch } from './dashboard-search.js';
 import { renderDocs } from './docs.js';
 import { createExtras } from './extras.js';
+import { createImports } from './imports.js';
 import { createOrderDocuments } from './orders-documents.js';
 import { createOrderEvents } from './order-events.js';
 import { createOrders } from './orders.js';
@@ -51,6 +52,7 @@ export const createRoutes = (product) => {
 		createPromotions(product, service),
 		createExtras(product, service),
 		createSeo(product, service),
+		createImports(product),
 	];
 
 	product.attach({

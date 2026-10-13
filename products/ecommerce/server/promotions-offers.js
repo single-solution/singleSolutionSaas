@@ -34,7 +34,8 @@ const SERVER_RATE = [...SERVER_LIMITS];
 
 /**
  * How each kind of offer is checked, shown, named in the log and given an id.
- * @type {Record<OfferCollection, { check: (input: unknown) => import('../core/promotions-rules.js').Checked,
+ * @type {Record<OfferCollection, { check: (input: unknown, keys?: import('../core/deals.js').BannerKeys) =>
+ *   import('../core/promotions-rules.js').Checked,
  *   view: (record: any) => Record<string, unknown>, name: string, prefix: string, label: (record: any) => string }>}
  */
 const KINDS = {
@@ -149,7 +150,8 @@ export const createOfferRoutes = (product, service) => {
 		const id = String(ctx.params.id);
 		const found = await getOffer(data, kind, id);
 		if (!found) return problem('not_found', `No such ${KINDS[kind].name}.`);
-		const checked = KINDS[kind].check({ ...found, ...ctx.body });
+		// the banner a deal already holds stays valid whatever its folder (an imported one, CA-5)
+		const checked = KINDS[kind].check({ ...found, ...ctx.body }, { held: found.banner?.key ?? null });
 		if (!checked.ok) return invalid(checked.field, checked.message);
 		await checkRefs(data, checked.value);
 		if (!(await slugFree(data, kind, checked.value, id))) return problem('slug_taken', 'Another deal uses this slug.');

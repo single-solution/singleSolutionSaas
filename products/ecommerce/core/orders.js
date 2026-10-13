@@ -31,8 +31,8 @@ export const EDITABLE_ROLES = Object.freeze(
 /** Bulk moves take at most this many orders. */
 const MAX_BULK = 200;
 /** Longest note, staff note, search text and serial number. */
-const MAX_NOTE = 1000;
-const MAX_STAFF_NOTE = 5000;
+export const MAX_NOTE = 1000;
+export const MAX_STAFF_NOTE = 5000;
 export const MAX_SEARCH = 120;
 const MAX_SERIAL = 64;
 /** A booked shipment's status is asked again at most this often (on read). */
@@ -431,7 +431,7 @@ export const videoOf = (value) => {
 /** How staff say money came in or went back (E26); `online` is Payments' own. */
 export const RECORDED_METHODS = Object.freeze(/** @type {const} */ (['bank_transfer', 'cash', 'other']));
 /** Longest payment or refund reference. */
-const MAX_REFERENCE = 120;
+export const MAX_REFERENCE = 120;
 
 /**
  * @typedef {{ amount: number, reason: string, method: 'online' | 'bank_transfer' | 'cash' | 'other' | null,
@@ -533,8 +533,8 @@ export const paymentStateOf = ({ total, paid, refunded, state }) => {
 	return state;
 };
 
-/** Address fields and their longest length. */
-const ADDRESS_FIELDS = Object.freeze({
+/** Address fields and their longest length (staff edits; imported orders, K10). */
+export const ADDRESS_FIELDS = Object.freeze({
 	name: 120,
 	phone: 40,
 	line1: 200,
