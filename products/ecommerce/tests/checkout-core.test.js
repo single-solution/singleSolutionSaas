@@ -123,7 +123,7 @@ describe('cart checks', () => {
 		if (!checked.ok) expect(checked.field).toBe(field);
 	});
 
-	it('checks addresses, with the phone as E.164 (K12)', () => {
+	it('checks addresses, with the phone as E.164 when the website can read it (K12), else as typed', () => {
 		const rules = { defaultCallingCode: '', trunkPrefix: '' };
 		const good = { name: 'Sara', phone: '+1 555 000 1111', line1: '1 Main St', city: 'Town', notes: 'Ring' };
 		expect(checkAddress(good, [], rules)).toMatchObject({
@@ -135,8 +135,11 @@ describe('cart checks', () => {
 		expect(checkAddress({ ...good, line1: 'x'.repeat(201) }, [], rules)).toMatchObject({ ok: false, field: 'address/line1' });
 		expect(checkAddress(good, ['postalCode'], rules)).toMatchObject({ ok: false, field: 'address/postalCode' });
 		expect(checkAddress({ ...good, phone: 'call me' }, [], rules)).toMatchObject({ ok: false, field: 'address/phone' });
-		// a national number needs the website's calling code
-		expect(checkAddress({ ...good, phone: '0300 1234567' }, [], rules)).toMatchObject({ ok: false, field: 'address/phone' });
+		// with no calling code a national number is kept as typed (the courier calls it)
+		expect(checkAddress({ ...good, phone: '0300 1234567' }, [], rules)).toMatchObject({
+			ok: true,
+			value: { phone: '0300 1234567' },
+		});
 		const pk = { defaultCallingCode: '+92', trunkPrefix: '' };
 		for (const phone of ['923001234567', '+92 0320 4862403', '03001234567', '0300-1234567'])
 			expect(checkAddress({ ...good, phone }, [], pk)).toMatchObject({ ok: true });

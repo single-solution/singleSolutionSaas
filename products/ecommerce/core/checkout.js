@@ -38,6 +38,8 @@ const MAX_LOCK = 600;
 export const OPTIONAL_ADDRESS_FIELDS = Object.freeze(['line1', 'line2', 'area', 'city', 'postalCode', 'country']);
 
 const ID = /^[A-Za-z0-9_-]{1,64}$/;
+/** A phone as typed: digits, spaces, + ( ) - (kept when the website's phone rules cannot read it as E.164). */
+const PHONE = /^\+?[0-9][0-9 ()-]{5,22}$/;
 
 /**
  * @typedef {{ productId: string, variantId: string | null, quantity: number, slot: number | null, dealId?: string | null,
@@ -158,8 +160,8 @@ export const checkCart = (body, { maxLines = MAX_LINES, maxQuantity = MAX_QUANTI
 };
 
 /**
- * Check a delivery address; its phone (the one the courier calls) is kept as E.164, read by the website's phone rules
- * (K12).
+ * Check a delivery address; its phone (the one the courier calls) is kept as E.164 when the website's phone rules can
+ * read it (K12), else as typed, so a website with no calling code still takes national numbers.
  * @param {unknown} body
  * @param {ReadonlyArray<string>} required the fields the merchant requires besides name and phone
  *   (`OPTIONAL_ADDRESS_FIELDS`)
@@ -190,8 +192,9 @@ export const checkAddress = (body, required, phoneRules) => {
 		if (needed && value === '') return { ok: false, field: `address/${field}`, message: `address.${field} is required.` };
 		out[field] = value;
 	}
-	const phone = normalisePhone(out.phone, phoneRules);
-	if (!phone) return { ok: false, field: 'address/phone', message: 'address.phone is a phone number with its country code.' };
+	const phone = normalisePhone(out.phone, phoneRules) ?? (PHONE.test(String(out.phone)) ? String(out.phone) : null);
+	if (!phone)
+		return { ok: false, field: 'address/phone', message: 'address.phone is a phone number (digits, spaces, + ( ) -).' };
 	return { ok: true, value: /** @type {Address} */ (/** @type {unknown} */ ({ ...out, phone })) };
 };
 
