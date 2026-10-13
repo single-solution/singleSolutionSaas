@@ -6,7 +6,7 @@
  * pickup), the address, the payment methods the quote allows, a note, the shop's policies (filled and only the ones it
  * wrote, from the widget config; HTML rebuilt from the allowed tags when the policies are HTML, PLAN 0.8.10 E3) and the
  * totals. Placing the order needs the shopper's sign-in; the Idempotency-Key is kept while the same attempt
- * is retried after a lost answer. Then the shopper pays on Payments' page (`next.kind === 'pay'`), sees the success
+ * is retried after a lost answer or while the first press still runs (409 `in_progress`, after the runtime's own retries). Then the shopper pays on Payments' page (`next.kind === 'pay'`), sees the success
  * page (`done`), or can start the payment again (`retry`). Coming back from Payments, the page's `ss_order` shows that
  * order's success page (reading it rechecks its payment). Growth's events (PLAN 0.8.9): `ss:begin_checkout` the first
  * time the shopper presses Place order (once per cart widget, with the quoted lines), and `ss:purchase` as soon as
@@ -604,8 +604,10 @@ export const mountCart = async ({ host, config, shop, win }) => {
 					idempotencyKey: attemptKey,
 				});
 				placing = false;
-				// a lost answer or a server failure: the same attempt is retried with the same key
-				if (answer.status !== 0 && answer.status < 500) attemptKey = null;
+				const code = codeOf(answer);
+				// a lost answer, a server failure or the first press still running: the same attempt is retried with the same
+				// key, so it gets that order and never places a second one (K-14)
+				if (answer.status !== 0 && answer.status < 500 && code !== 'in_progress') attemptKey = null;
 				if (answer.ok) {
 					announce(win, GROWTH_EVENTS.purchase, purchaseDetail(answer.data.order));
 					sayPlace('');
@@ -613,7 +615,6 @@ export const mountCart = async ({ host, config, shop, win }) => {
 					if (answer.data.next?.kind === 'pay') return shop.go(answer.data.next.url);
 					return showSuccess(answer.data.order);
 				}
-				const code = codeOf(answer);
 				const path = answer.data?.errors?.[0]?.path;
 				sayPlace(
 					code === 'validation_failed' && typeof path === 'string' && path.startsWith('/address')

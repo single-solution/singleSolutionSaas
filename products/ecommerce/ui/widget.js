@@ -9,6 +9,10 @@
  * - `cart.count()`, `cart.onChange(listener)`: the cart for the merchant's own header;
  * - `admin({ getTicket })`: on the merchant's admin pages (no `data-token`), mounts the admin widgets with tickets.
  *
+ * A visitor call with an `Idempotency-Key` that the product answers 409 `in_progress` (the same request, sent before,
+ * still runs: K-14) is sent again with the same key after its `Retry-After`, a few times, so a shopper whose first press
+ * of Place order lost its answer gets that order, never a second one.
+ *
  * It also handles the `ss-ecommerce:add-to-cart` window event (Chat's product cards, PLAN 0.8.4). Both ways of adding
  * dispatch Growth's `ss:add_to_cart` (PLAN 0.8.9) once the product's name and price are read from the catalog (an
  * unreadable product still dispatches it, with an empty name and price 0). Widgets render nothing while the product
@@ -36,6 +40,21 @@ import { mountWishlist } from './wishlist.js';
 /** The kit's widget config routes (browser token; ticket). */
 export const CONFIG_PATH = '/v1/widget/config';
 export const ADMIN_CONFIG_PATH = '/v1/widget/admin/config';
+/** A call answered 409 `in_progress` is sent again with its Idempotency-Key at most this many times (K-14). */
+export const IN_PROGRESS_RETRIES = 4;
+/** The longest wait before such a retry (seconds), whatever `Retry-After` says; 1 second without one. */
+const IN_PROGRESS_MAX_WAIT_S = 5;
+
+/**
+ * Seconds to wait before sending a request still in progress again, from its `Retry-After` (seconds).
+ * @param {string | null} header
+ */
+const retryAfterSeconds = (header) => {
+	const seconds = Number(header);
+	return header !== null && header.trim() !== '' && Number.isFinite(seconds) && seconds >= 0
+		? Math.min(seconds, IN_PROGRESS_MAX_WAIT_S)
+		: 1;
+};
 
 /**
  * The website's widget config, from the kit.
@@ -151,23 +170,34 @@ export const startWidget = ({ window: win, script }) => {
 	/** @type {WidgetConfig | null} */
 	let visitorConfig = null;
 
+	/** @param {number} seconds */
+	const pause = (seconds) => new Promise((resolve) => win.setTimeout(resolve, seconds * 1000));
+
 	/** @type {Shop['call']} */
 	const call = async (path, init = {}) => {
-		try {
-			const response = await request(`${base}${path}`, {
-				method: init.method ?? 'GET',
-				headers: {
-					authorization: `Bearer ${token}`,
-					...(signIn ? { 'ss-sign-in': signIn } : {}),
-					...(init.idempotencyKey ? { 'idempotency-key': init.idempotencyKey } : {}),
-					...(init.body === undefined ? {} : { 'content-type': 'application/json' }),
-				},
-				...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
-			});
-			const data = response.status === 204 ? null : await response.json().catch(() => null);
-			return { ok: response.ok, status: response.status, data };
-		} catch {
-			return { ok: false, status: 0, data: null };
+		for (let retries = 0; ; retries += 1) {
+			try {
+				const response = await request(`${base}${path}`, {
+					method: init.method ?? 'GET',
+					headers: {
+						authorization: `Bearer ${token}`,
+						...(signIn ? { 'ss-sign-in': signIn } : {}),
+						...(init.idempotencyKey ? { 'idempotency-key': init.idempotencyKey } : {}),
+						...(init.body === undefined ? {} : { 'content-type': 'application/json' }),
+					},
+					...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
+				});
+				const data = response.status === 204 ? null : await response.json().catch(() => null);
+				// the same request sent before still runs: ask again with the same key once it may have finished (K-14)
+				const running = response.status === 409 && typeof data?.type === 'string' && data.type.endsWith('/in_progress');
+				if (running && init.idempotencyKey && retries < IN_PROGRESS_RETRIES) {
+					await pause(retryAfterSeconds(response.headers.get('retry-after')));
+					continue;
+				}
+				return { ok: response.ok, status: response.status, data };
+			} catch {
+				return { ok: false, status: 0, data: null };
+			}
 		}
 	};
 

@@ -41,7 +41,7 @@ vi.mock('../ui/customers-admin.js', () => ({
 	mountCustomersAdmin: async (/** @type {any} */ input) => void mounts.admin.push(['customers_admin', input]),
 }));
 
-const { ADMIN_CONFIG_PATH, CONFIG_PATH, startWidget } = await import('../ui/widget.js');
+const { ADMIN_CONFIG_PATH, CONFIG_PATH, IN_PROGRESS_RETRIES, startWidget } = await import('../ui/widget.js');
 
 const BASE = 'https://ecommerce.example.dev';
 
@@ -122,6 +122,60 @@ describe('visitor widgets', () => {
 		expect(shop.location().href).toBe(window.location.href);
 		fetch.mockRejectedValueOnce(new Error('offline'));
 		expect(await shop.call('/v1/shop/thing')).toEqual({ ok: false, status: 0, data: null });
+	});
+
+	it('send a call still in progress again with the same key after its Retry-After, a few times (K-14)', async () => {
+		place('cart');
+		/** @type {Array<{ status: number, retryAfter?: string }>} */
+		let queue = [];
+		const fetch = vi.spyOn(window, 'fetch').mockImplementation(async (input) => {
+			if (new URL(String(input)).pathname === CONFIG_PATH) return answer(200, configOf(['catalog', 'checkout']));
+			const next = queue.shift() ?? { status: 201 };
+			return next.status === 409
+				? new Response(JSON.stringify({ type: `${BASE}/problems/in_progress` }), {
+						status: 409,
+						headers: next.retryAfter === undefined ? {} : { 'retry-after': next.retryAfter },
+					})
+				: answer(next.status, { order: { id: 'ord_1' } });
+		});
+		/** @type {number[]} */
+		const waits = [];
+		vi.spyOn(window, 'setTimeout').mockImplementation(
+			/** @type {any} */ (
+				(/** @type {() => void} */ run, /** @type {number} */ ms) => {
+					waits.push(ms);
+					run();
+					return 0;
+				}
+			),
+		);
+		const { ready } = startWidget({ window, script: script('browser-token') });
+		await ready;
+		const shop = mounts.visitor[0][1].shop;
+		const orders = () => fetch.mock.calls.filter(([input]) => new URL(String(input)).pathname === '/v1/shop/orders');
+		const placeOrder = () => shop.call('/v1/shop/orders', { method: 'POST', body: { a: 1 }, idempotencyKey: 'k1' });
+
+		// still running twice, then the first answer: one order, every try with the same key
+		queue = [
+			{ status: 409, retryAfter: '1' },
+			{ status: 409, retryAfter: '30' },
+		];
+		expect(await placeOrder()).toEqual({ ok: true, status: 201, data: { order: { id: 'ord_1' } } });
+		expect(orders().map(([, init]) => /** @type {any} */ (init).headers['idempotency-key'])).toEqual(['k1', 'k1', 'k1']);
+		expect(waits).toEqual([1000, 5000]);
+
+		// still running after every retry: the 409 is the answer (the cart keeps its key for the next press)
+		waits.length = 0;
+		queue = Array.from({ length: IN_PROGRESS_RETRIES + 1 }, () => ({ status: 409 }));
+		const running = await placeOrder();
+		expect([running.status, running.data.type]).toEqual([409, `${BASE}/problems/in_progress`]);
+		expect(waits).toEqual(Array.from({ length: IN_PROGRESS_RETRIES }, () => 1000));
+
+		// a call without a key is never sent twice
+		waits.length = 0;
+		queue = [{ status: 409, retryAfter: '1' }];
+		expect((await shop.call('/v1/shop/orders', { method: 'POST', body: { a: 1 } })).status).toBe(409);
+		expect(waits).toEqual([]);
 	});
 
 	it('add to cart from the page API and from Chat’s card event, only while checkout is on', async () => {

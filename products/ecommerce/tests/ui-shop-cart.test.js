@@ -589,10 +589,11 @@ describe('checkout', () => {
 		expect(second.fake.went).toEqual(['https://pay.example.com/2']);
 	});
 
-	it('keeps the attempt key after a lost answer and shows refusals', async () => {
+	it('keeps the attempt key after a lost answer and while the first press still runs, and shows refusals', async () => {
 		/** @type {any[]} */
 		const answers = [
 			{ ok: false, status: 0, data: null },
+			fail(409, 'in_progress'),
 			fail(409, 'out_of_stock'),
 			fail(422, 'validation_failed', { errors: [{ path: '/address/phone', message: 'x' }] }),
 			fail(422, 'validation_failed', { errors: [{ path: '/note', message: 'x' }] }),
@@ -607,8 +608,11 @@ describe('checkout', () => {
 		await place();
 		expect(textOf(host)).toContain(text('checkout.problem.offline'));
 		await place();
+		expect(textOf(host)).toContain(text('checkout.problem.in_progress'));
+		await place();
 		const keys = fake.all('POST /v1/shop/orders').map((call) => call.key);
 		expect(keys[0]).toBe(keys[1]);
+		expect(keys[1]).toBe(keys[2]);
 		expect(textOf(host)).toContain(text('checkout.problem.out_of_stock'));
 		const quotes = fake.all('POST /v1/shop/cart/quote').length;
 		await flush();

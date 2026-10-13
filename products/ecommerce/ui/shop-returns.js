@@ -153,7 +153,8 @@ export const renderClaimForm = async (input) => {
 			idempotencyKey: attemptKey,
 		});
 		submit.removeAttribute('disabled');
-		if (sent.status !== 0 && sent.status < 500) attemptKey = null;
+		// a lost answer, a server failure or the first try still running: the same claim is sent again with the same key
+		if (sent.status !== 0 && sent.status < 500 && codeOf(sent) !== 'in_progress') attemptKey = null;
 		if (!sent.ok) {
 			status.textContent = problemText(config, 'returns.problem.', codeOf(sent), 'returns.failed');
 			return;

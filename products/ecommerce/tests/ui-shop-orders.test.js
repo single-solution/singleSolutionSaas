@@ -548,6 +548,14 @@ describe('returns', () => {
 			photos: ['returns/u/p1.png'],
 		});
 		expect(textOf(host)).toContain(text('returns.problem.not_returnable'));
+		// the first try still running (K-14): the same claim goes again with the same key
+		claimAnswer = fail(409, 'in_progress');
+		await submit(form());
+		expect(textOf(host)).toContain(text('returns.problem.in_progress'));
+		const running = fake.all('POST /v1/shop/returns').at(-1)?.key;
+		expect(running).not.toBe(fake.all('POST /v1/shop/returns').at(-2)?.key);
+		await submit(form());
+		expect(fake.all('POST /v1/shop/returns').at(-1)?.key).toBe(running);
 		// warranty lists the case too
 		await setValue($(host, '#ss-claim-kind'), 'warranty');
 		expect($(host, '#ss-claim-oln_3')).not.toBeNull();
