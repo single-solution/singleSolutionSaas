@@ -40,7 +40,7 @@ import {
 	languageRetry,
 } from '../core/prompt.js';
 import { RETRIEVAL, passages, queryTerms, rank } from '../core/knowledge.js';
-import { detectLanguage, replyMatchesLanguage } from '../core/language.js';
+import { detectLanguage, languageForms, markerSetsOf, replyMatchesLanguage, translationOf } from '../core/language.js';
 import { linkAllowed, moderateOutbound } from '../core/moderation.js';
 import {
 	BUILTIN,
@@ -111,22 +111,6 @@ const timedCache = (ttl, now) => {
 		},
 	};
 };
-
-/** Marker words setting lines (`ur: hai kya mein`) → marker sets. @param {string[]} lines */
-const markerSets = (lines) =>
-	lines.flatMap((line) => {
-		const match = /^\s*([a-zA-Z]{2,3}(?:-[A-Za-z0-9]{2,8})?)\s*:\s*(.+)$/.exec(line);
-		return match
-			? [
-					{
-						language: String(match[1]),
-						words: String(match[2])
-							.split(/[\s,]+/)
-							.filter(Boolean),
-					},
-				]
-			: [];
-	});
 
 /**
  * @param {import('../adapters/product.js').Product} product
@@ -722,12 +706,28 @@ export const createReply = (product, service) => {
 		const connections = giveUp ? [] : await connectionsOf(s, { backup: true });
 		const allowed = connections.length > 0 && (await withinReplyLimits(s, c)) && !(await service.capped(s));
 		const lock = s.on.includes('language_lock') ? await s.values('language_lock') : null;
-		const markers = lock ? markerSets(lock.markerWords) : [];
+		const markers = lock ? markerSetsOf(lock.markerWords) : [];
+		// the language of the visitor's last message: script, telling letters and marker words with the merchant's
+		// thresholds; when it shows none, the default language (else the first allowed one, else English; CH-38)
 		const language =
 			lock && last
-				? detectLanguage(last.text, { fallback: lock.allowedLanguages[0] ?? 'en', allowed: lock.allowedLanguages, markers })
-						.language
+				? detectLanguage(last.text, {
+						fallback: String(lock.defaultLanguage || lock.allowedLanguages[0] || 'en'),
+						allowed: lock.allowedLanguages,
+						markers,
+						minMarkers: Number(lock.minMarkers),
+						markerShare: Number(lock.markerShare),
+						minWordsForShare: Number(lock.minWordsForShare),
+					}).language
 				: null;
+		/** @type {import('../core/language.js').CheckOptions} */
+		const check = {
+			markers,
+			strict: lock?.strict === true,
+			mode: lock?.checkMode === 'presence' ? 'presence' : 'whole',
+			latinFor: lock?.acceptLatinFor ?? [],
+			minMarkers: Number(lock?.minMarkers ?? 2),
+		};
 		// the shop's sign-in tools only for the user whose sign-in Chat verified on this request
 		const signIn = await s.signIn();
 		const verified = signIn && visitor && signIn.user.id === visitor.id ? signIn.token : null;
@@ -747,6 +747,7 @@ export const createReply = (product, service) => {
 					: null,
 				dontKnow: String(settings.dontKnow),
 				language,
+				languageAlso: language ? (languageForms(language, check.latinFor ?? [])[1] ?? null) : null,
 				passages: reassure ? [] : await knowledge(s, last.text),
 				visitor: { signedIn: visitor !== null, name: c.name },
 				page: c.currentPage ?? c.page,
@@ -770,9 +771,7 @@ export const createReply = (product, service) => {
 					messages,
 					tools: tools?.schemas ?? [],
 					maxRounds: tools && tools.schemas.length > 0 ? MAX_TOOL_ROUNDS : 0,
-					languageOk: language
-						? (text) => replyMatchesLanguage(text, language, { markers, strict: lock?.strict === true })
-						: null,
+					languageOk: language ? (text) => replyMatchesLanguage(text, language, check) : null,
 					retryInstruction: language ? languageRetry(language) : '',
 					checks:
 						settings.neverDisclose === true
@@ -845,18 +844,22 @@ export const createReply = (product, service) => {
 			await post([await linksOf(s, fallback)]);
 			return settle();
 		}
-		// the AI could not answer: the on-failure setting, and a handoff after N failures in a row
+		// the AI could not answer: the on-failure setting, and a handoff after N failures in a row. An answer that stayed
+		// in the wrong language is a failure too, but never hands off by itself: the AI works, so the visitor gets the
+		// unavailable message (CH-19). That message is in the visitor's language when the language lock has it.
 		const failed = /** @type {ConversationRecord} */ (
 			await s.store.conversations.update(conversationId, { set: { aiPending: false }, inc: { aiFailures: 1 } })
 		);
 		const { onFailure } = settings;
 		const { failuresBeforeHandoff } = await s.values('handoff');
-		const handoffNow =
-			s.on.includes('handoff') &&
-			(onFailure !== 'message' || (Number(failuresBeforeHandoff) > 0 && failed.aiFailures >= Number(failuresBeforeHandoff)));
+		const wrongLanguage = result.failure === 'language';
+		const inARow = Number(failuresBeforeHandoff) > 0 && failed.aiFailures >= Number(failuresBeforeHandoff);
+		const handoffNow = s.on.includes('handoff') && (inARow || (onFailure !== 'message' && !wrongLanguage));
 		let current = failed;
-		if (onFailure !== 'handoff' || !s.on.includes('handoff'))
-			current = (await service.botMessage(s, current, String(texts['chat.aiUnavailable']))).conversation;
+		if (onFailure !== 'handoff' || !handoffNow) {
+			const translated = lock && language ? translationOf(lock.unavailableTexts ?? [], language) : null;
+			current = (await service.botMessage(s, current, translated ?? String(texts['chat.aiUnavailable']))).conversation;
+		}
 		if (handoffNow) await handOff(s, current);
 		await settle();
 	};

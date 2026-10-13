@@ -1,6 +1,6 @@
 /**
  * PLAN 0.8.10 Chat, fixes after the re-audit (CH-*): `?wait=1` lets a slow answer finish after the response and a
- * reply that went stale starts again (CH-1, RT-6).
+ * reply that went stale starts again (CH-1, RT-6); the language lock's new options (CH-16 to CH-19, CH-38).
  */
 import { afterAll, describe, expect, it } from 'vitest';
 import { AI, AI_KEY, ORIGIN, ready } from './helpers.js';
@@ -115,5 +115,44 @@ describe('the AI reply in the same request, and replies that went stale (CH-1, R
 		expect(texts(after.json).at(-1)).toEqual(['system', 'Sorry, I cannot answer right now.']);
 		expect(after.json.conversation.aiPending).toBe(false);
 		expect(sys.aiCalls()).toHaveLength(calls + 1);
+	});
+});
+
+describe('the language lock (CH-2, CH-16 to CH-19, CH-38)', () => {
+	it('answers a message in another script in that language or in Latin letters; the default language stays', async () => {
+		const sys = await start(['visitor_chat', 'guest_chat', 'ai_replies', 'language_lock']);
+		await sys.setting('language_lock', 'allowedLanguages', ['ur', 'en']);
+		await sys.setting('language_lock', 'defaultLanguage', 'en');
+		await sys.setting('language_lock', 'acceptLatinFor', ['ur']);
+		await sys.setting('language_lock', 'markerWords', ['ur: hai kya ye kitne ka bhai ji haan']);
+		sys.ai({ text: 'Ji, ye Rs 12,500 ka hai.' });
+		const v = sys.visitor();
+		await v('POST', '/v1/chat/messages', { text: 'یہ پنکھا کتنے کا ہے؟' });
+		expect(sys.aiCalls()).toHaveLength(1);
+		expect(sys.aiCalls()[0].messages[0].content).toContain(
+			'Answer only in Urdu (ur), whatever language the knowledge is in. Urdu (Latin) (ur-Latn) is fine too.',
+		);
+		expect(texts((await v('GET', '/v1/chat')).json).at(-1)).toEqual(['ai', 'Ji, ye Rs 12,500 ka hai.']);
+		sys.ai({ text: 'Yes, it is in stock.' });
+		await v('POST', '/v1/chat/messages', { text: 'Is this fan in stock?' });
+		expect(sys.aiCalls().at(-1).messages[0].content).toContain('Answer only in English (en)');
+	});
+
+	it('a reply still in the wrong language gets the unavailable message in the visitor’s language, no handoff', async () => {
+		const sys = await start(['visitor_chat', 'guest_chat', 'ai_replies', 'language_lock', 'inbox', 'handoff']);
+		await sys.setting('language_lock', 'markerWords', ['ur-Latn: hai kya ye kitne ka bhai']);
+		await sys.setting('language_lock', 'checkMode', 'presence');
+		await sys.setting('language_lock', 'unavailableTexts', ['ur-Latn: Maazrat, abhi jawab nahi de sakta.']);
+		sys.ai({ text: 'It costs Rs 12,500.' }, { text: 'The price is Rs 12,500.' });
+		const v = sys.visitor();
+		await v('POST', '/v1/chat/messages', { text: 'bhai ye kitne ka hai' });
+		let state = (await v('GET', '/v1/chat')).json;
+		expect(texts(state).at(-1)).toEqual(['system', 'Maazrat, abhi jawab nahi de sakta.']);
+		expect(state.conversation.waiting).toBe(false);
+		// two failures in a row (the handoff setting) still hand off
+		sys.ai({ text: 'It costs Rs 12,500.' }, { text: 'Rs 12,500, in stock.' });
+		await v('POST', '/v1/chat/messages', { text: 'kya ye hai bhai' });
+		state = (await v('GET', '/v1/chat')).json;
+		expect(state.conversation.waiting).toBe(true);
 	});
 });

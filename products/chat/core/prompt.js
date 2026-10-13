@@ -35,6 +35,7 @@ const CORE_RULES = Object.freeze([
  * @property {string | null} instructions the merchant's own (AI instructions on), else null
  * @property {string} dontKnow what to do when the answer is not known
  * @property {string | null} language the language the answer must be in (language lock), else null
+ * @property {string | null} [languageAlso] the same language in its other script, accepted too (`acceptLatinFor`)
  * @property {Array<{ title: string, url: string | null, text: string }>} passages
  * @property {{ signedIn: boolean, name: string | null }} visitor
  * @property {{ url: string, title: string, kind: string, productName: string | null } | null} page
@@ -74,7 +75,11 @@ export const buildSystemPrompt = (input) => {
 			'The products the shop tools return are shown under your answer as cards with a link and an Add to cart button.',
 		);
 	if (input.language)
-		lines.push(`Answer only in ${languageName(input.language)} (${input.language}), whatever language the knowledge is in.`);
+		lines.push(
+			`Answer only in ${languageName(input.language)} (${input.language}), whatever language the knowledge is in.${
+				input.languageAlso ? ` ${languageName(input.languageAlso)} (${input.languageAlso}) is fine too.` : ''
+			}`,
+		);
 	const contact = [
 		input.business.email && `e-mail ${input.business.email}`,
 		input.business.phone && `phone ${input.business.phone}`,

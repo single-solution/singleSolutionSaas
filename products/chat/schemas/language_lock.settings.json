@@ -12,6 +12,13 @@
 			},
 			"description": "Language codes such as en, ur, ar or pt-BR. Empty = any language."
 		},
+		"defaultLanguage": {
+			"type": "string",
+			"title": "Default language",
+			"default": "",
+			"maxLength": 20,
+			"description": "The language of answers when a message shows none, for example en. Empty = the first allowed language, else English."
+		},
 		"markerWords": {
 			"type": "array",
 			"title": "Marker words",
@@ -20,13 +27,62 @@
 				"type": "string",
 				"maxLength": 500
 			},
-			"description": "For languages written in Latin letters: one line per language, for example `tl: po salamat ako`."
+			"description": "One line per language, for example `tl: po salamat ako \"wala po\"` (quoted words count only together). Words in Latin letters under a language written in another script mark that language in Latin letters (<code>-Latn)."
+		},
+		"minMarkers": {
+			"type": "integer",
+			"title": "Marker words that pick a language",
+			"default": 2,
+			"minimum": 1,
+			"maximum": 10
+		},
+		"markerShare": {
+			"type": "number",
+			"title": "Or this share of the message's words",
+			"default": 0,
+			"minimum": 0,
+			"maximum": 1,
+			"description": "For example 0.15, counted from the number of words below. 0 = off: then one marker word is enough in a message of up to 3 words."
+		},
+		"minWordsForShare": {
+			"type": "integer",
+			"title": "Words a message needs for the share",
+			"default": 4,
+			"minimum": 1,
+			"maximum": 50
 		},
 		"strict": {
 			"type": "boolean",
 			"title": "Strict check",
 			"default": false,
-			"description": "A reply must also match the visitor’s language by its share of marker words."
+			"description": "With the whole-answer check: a reply must also match the visitor’s language by its share of marker words."
+		},
+		"checkMode": {
+			"type": "string",
+			"title": "How replies are checked",
+			"default": "whole",
+			"enum": ["whole", "presence"],
+			"description": "whole: the whole answer must be in the visitor's language. presence: each part of the answer needs one marker word of the language (or a letter of its script); a language without marker words fails with as many marker words of another language as pick it, or with letters of another script."
+		},
+		"acceptLatinFor": {
+			"type": "array",
+			"title": "Also accept in Latin letters",
+			"default": [],
+			"items": {
+				"type": "string",
+				"maxLength": 20
+			},
+			"description": "Languages written in another script whose replies may also be in Latin letters, and the reverse, for example hi. Latin replies are checked with the marker words of <code>-Latn."
+		},
+		"unavailableTexts": {
+			"type": "array",
+			"title": "The unavailable message in other languages",
+			"default": [],
+			"items": {
+				"type": "string",
+				"maxLength": 500
+			},
+			"description": "Sent instead of the unavailable text to a visitor writing that language, one line per language, for example `es: Lo siento, ahora no puedo responder.`"
 		}
 	}
 }

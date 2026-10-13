@@ -1,0 +1,103 @@
+/**
+ * PLAN 0.8.10 Chat, fixes after the re-audit (pure parts): the language lock tells languages of one script apart by
+ * their letters and the merchant's marker words, with the merchant's thresholds, quoted phrases and romanised marker
+ * lines; replies are checked whole or part by part, and a language may be accepted in Latin letters too (CH-16 to
+ * CH-19, CH-38, CH-39). Urdu and Roman Urdu are only examples here: nothing in Chat is about one language.
+ */
+import { describe, expect, it } from 'vitest';
+import { detectLanguage, markerSetsOf, replyMatchesLanguage, translationOf } from '../core/language.js';
+import { buildSystemPrompt } from '../core/prompt.js';
+
+const ROMAN = markerSetsOf(['ur-Latn: hai kya ye kitne ka bhai ji haan batao price "stock mein"']);
+
+describe('the language of a message (CH-16, CH-17, CH-38, CH-39)', () => {
+	it('tells languages of one script apart by their letters and marker words', () => {
+		const any = { fallback: 'en' };
+		expect(detectLanguage('یہ پنکھا کتنے کا ہے؟', any)).toMatchObject({ language: 'ur', script: 'Arabic' });
+		expect(detectLanguage('كم سعر هذه المروحة؟', any).language).toBe('ar');
+		expect(detectLanguage('این گوشی چند است', any).language).toBe('fa');
+		expect(detectLanguage('سلام', any).language).toBe('ar');
+		expect(detectLanguage('سلام', { fallback: 'ur' }).language).toBe('ur');
+		expect(detectLanguage('كم السعر', { fallback: 'en', allowed: ['en', 'ur'] }).language).toBe('ur');
+		expect(detectLanguage('خوب است', any).language).toBe('ar');
+		expect(detectLanguage('خوب است', { ...any, markers: markerSetsOf(['fa: خوب است']) }).language).toBe('fa');
+		expect(detectLanguage('Привет, как дела?', any).language).toBe('ru');
+		expect(detectLanguage('Привіт, як справи?', any).language).toBe('uk');
+		expect(detectLanguage('Къде е магазинът', any).language).toBe('bg');
+		expect(detectLanguage('Привет', { fallback: 'en', allowed: ['en'] })).toMatchObject({ language: 'en', confident: false });
+	});
+
+	it('takes the merchant’s thresholds for Latin-script languages; quoted words count together', () => {
+		const today = { fallback: 'en', markers: ROMAN };
+		expect(detectLanguage('stock hai?', today).language).toBe('ur-Latn');
+		expect(detectLanguage('is this fan available hai', today).language).toBe('en');
+		const shared = { ...today, markerShare: 0.15, minWordsForShare: 4 };
+		expect(detectLanguage('stock hai?', shared).language).toBe('en');
+		expect(detectLanguage('is this fan available hai', shared).language).toBe('ur-Latn');
+		expect(detectLanguage('price batao', shared).language).toBe('ur-Latn');
+		expect(detectLanguage('bhai price', { ...today, minMarkers: 3, markerShare: 0.9 }).language).toBe('en');
+		expect(detectLanguage('in stock?', shared).language).toBe('en');
+		expect(detectLanguage('is it in stock mein?', shared).language).toBe('ur-Latn');
+		expect(detectLanguage('Is this fan in stock?', { ...today, allowed: ['ur', 'en'] }).language).toBe('en');
+	});
+
+	it('reads marker lines: romanised words under a non-Latin language, phrases, bad lines', () => {
+		expect(markerSetsOf(['ur: hai kya, mein'])).toEqual([{ language: 'ur-Latn', words: ['hai', 'kya', 'mein'], phrases: [] }]);
+		expect(markerSetsOf(['ur: ہے "کیا"'])).toEqual([{ language: 'ur', words: ['ہے', 'کیا'], phrases: [] }]);
+		expect(markerSetsOf(['tl: po "salamat po" ""', 'no tag here'])).toEqual([
+			{ language: 'tl', words: ['po'], phrases: ['salamat po'] },
+		]);
+	});
+});
+
+describe('the language of a reply (CH-16, CH-18, CH-19)', () => {
+	it('accepts a language in its own script or in Latin letters when asked', () => {
+		const roman = 'Ji haan, ye Rs 12,500 ka hai.';
+		expect(replyMatchesLanguage('یہ 12,500 روپے کا ہے', 'ur')).toBe(true);
+		expect(replyMatchesLanguage(roman, 'ur', { markers: ROMAN })).toBe(false);
+		expect(replyMatchesLanguage(roman, 'ur', { markers: ROMAN, latinFor: ['ur'] })).toBe(true);
+		expect(replyMatchesLanguage('یہ 12,500 روپے کا ہے', 'ur-Latn', { markers: ROMAN, latinFor: ['ur'] })).toBe(true);
+		expect(replyMatchesLanguage('یہ 12,500 روپے کا ہے', 'ur-Latn', { markers: ROMAN })).toBe(false);
+		expect(replyMatchesLanguage('Hola amigo', 'es', { latinFor: ['es'] })).toBe(true);
+	});
+
+	it('checks each part by presence: one marker word, or no other language', () => {
+		const presence = { markers: ROMAN, mode: /** @type {const} */ ('presence') };
+		expect(replyMatchesLanguage('Yes, it is in stock.', 'ur-Latn', presence)).toBe(false);
+		expect(replyMatchesLanguage('Ji haan, the fan is in stock.', 'ur-Latn', presence)).toBe(true);
+		expect(replyMatchesLanguage('Yes, it is in stock.', 'ur', { ...presence, latinFor: ['ur'] })).toBe(false);
+		expect(replyMatchesLanguage('Ji, ye stock mein hai.', 'ur', { ...presence, latinFor: ['ur'] })).toBe(true);
+		expect(replyMatchesLanguage('Ji haan, ye hai.\n---\nThe warranty is one year.', 'ur-Latn', presence)).toBe(false);
+		expect(replyMatchesLanguage('Ji haan, ye hai.\n---\n| Fan | Rs 12,500 |\n|---|---|', 'ur-Latn', presence)).toBe(true);
+		expect(replyMatchesLanguage('Yes, the fan is in stock.', 'en', presence)).toBe(true);
+		expect(replyMatchesLanguage('Ji haan, the fan is in stock.', 'en', presence)).toBe(false);
+		expect(replyMatchesLanguage('Ji, the fan is in stock.', 'en', presence)).toBe(true);
+		expect(replyMatchesLanguage('The fan یہ is in stock.', 'en', presence)).toBe(false);
+		expect(replyMatchesLanguage('یہ ہے', 'ur', presence)).toBe(true);
+		expect(replyMatchesLanguage('12,500 ✓', 'ur', presence)).toBe(true);
+		expect(replyMatchesLanguage('\n---\n', 'en', presence)).toBe(false);
+	});
+
+	it('finds the unavailable message in the visitor’s language; the prompt names the other script', () => {
+		const lines = ['ur-Latn: Maazrat, abhi jawab nahi.', 'UR: معذرت', 'es: Lo siento.', 'not a line'];
+		expect(translationOf(lines, 'ur-Latn')).toBe('Maazrat, abhi jawab nahi.');
+		expect(translationOf(lines, 'ur')).toBe('معذرت');
+		expect(translationOf(lines, 'es-MX')).toBe('Lo siento.');
+		expect(translationOf(lines, 'pt-BR')).toBeNull();
+		const prompt = buildSystemPrompt({
+			botName: 'Bot',
+			business: { name: 'Shop' },
+			instructions: null,
+			dontKnow: 'Say so.',
+			language: 'ur',
+			languageAlso: 'ur-Latn',
+			passages: [],
+			visitor: { signedIn: false, name: null },
+			page: null,
+			handoff: false,
+		});
+		expect(prompt).toContain(
+			'Answer only in Urdu (ur), whatever language the knowledge is in. Urdu (Latin) (ur-Latn) is fine too.',
+		);
+	});
+});
