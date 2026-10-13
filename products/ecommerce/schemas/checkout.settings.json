@@ -5,7 +5,7 @@
 		"numberPrefix": {
 			"type": "string",
 			"title": "Order number prefix",
-			"description": "Put before every order number (for example IM-). Order numbers are <prefix><year>-<number> by your business time zone's year.",
+			"description": "Put before every order number (for example SH-). Order numbers are <prefix><year>-<number> by your business time zone's year.",
 			"default": "",
 			"maxLength": 12
 		},
@@ -544,7 +544,7 @@
 		"numberDigits": {
 			"type": "integer",
 			"title": "Order number digits",
-			"description": "IM-2026-0043 has 4.",
+			"description": "The digits of the number part: SH-2026-0043 has 4.",
 			"default": 6,
 			"minimum": 4,
 			"maximum": 8

@@ -558,7 +558,7 @@
 				"id": "order-numbers",
 				"title": "Order numbers and the counter",
 				"paragraphs": [
-					"Order numbers are <numberPrefix><year>-<number>: the year in your business time zone and the number with at least numberDigits digits (6; 4–8), for example IM-2026-0043 with 4. A year's counter that does not exist yet starts after the highest number already used with that prefix. POST /v1/orders/counter { year, next } (server token only) sets the next number of a year for today's prefix; a number already used answers 422."
+					"Order numbers are <numberPrefix><year>-<number>: the year in your business time zone and the number with at least numberDigits digits (6; 4–8), for example SH-2026-0043 with 4. A year's counter that does not exist yet starts after the highest number already used with that prefix. POST /v1/orders/counter { year, next } (server token only) sets the next number of a year for today's prefix; a number already used answers 422."
 				],
 				"routes": [["POST /v1/orders/counter", "checkout"]]
 			},
