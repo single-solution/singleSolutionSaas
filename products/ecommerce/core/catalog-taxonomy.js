@@ -468,6 +468,18 @@ export const checkAttribute = (body, existing) => {
 };
 
 /**
+ * A stored record as the API answers it: without the times the data layer stamps on every write (`createdAt`,
+ * `updatedAt`), so a record answers the same members whether it was just written or read back.
+ * @template {Record<string, any>} T
+ * @param {T} record
+ * @returns {Omit<T, 'createdAt' | 'updatedAt'>}
+ */
+export const withoutStamps = (record) =>
+	/** @type {Omit<T, 'createdAt' | 'updatedAt'>} */ (
+		Object.fromEntries(Object.entries(record).filter(([name]) => name !== 'createdAt' && name !== 'updatedAt'))
+	);
+
+/**
  * Check a new location or changes to one.
  * @param {unknown} body
  * @param {LocationRecord | null} existing

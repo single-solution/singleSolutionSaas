@@ -21,7 +21,15 @@ import {
 	slugTaken,
 } from '../adapters/catalog-store.js';
 import { cleanText, isObject } from '../core/catalog.js';
-import { checkAttribute, checkBrand, checkCategory, checkLocation, movedPaths, placeCategory } from '../core/catalog-taxonomy.js';
+import {
+	checkAttribute,
+	checkBrand,
+	checkCategory,
+	checkLocation,
+	movedPaths,
+	placeCategory,
+	withoutStamps,
+} from '../core/catalog-taxonomy.js';
 import { nextPreviousSlugs } from '../core/links.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import { bodyOf, refuse, STAFF_LIMITS } from './catalog-common.js';
@@ -64,9 +72,12 @@ export const createCatalogTaxonomy = (product, service, common) => {
 	const productsWith = (data, filter) =>
 		data.collection(COLLECTIONS.products).countDocuments({ websiteId: data.websiteId, ...filter }, { limit: 1 });
 
-	/** @param {Site} s @param {{ image?: any, logo?: any }} record @param {'image' | 'logo'} field */
+	/**
+	 * A category or brand as answered: its image or logo with its address (no write stamps).
+	 * @param {Site} s @param {{ image?: any, logo?: any }} record @param {'image' | 'logo'} field
+	 */
 	const withImage = async (s, record, field) => ({
-		...record,
+		...withoutStamps(record),
 		[field]: record[field] ? { ...record[field], url: await common.media.mediaUrl(s, record[field].key) } : null,
 	});
 
@@ -355,7 +366,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 		/** @param {any} ctx */
 		list: async (ctx) => {
 			const { data } = await common.open(ctx);
-			return { items: await attributesOf(data) };
+			return { items: (await attributesOf(data)).map(withoutStamps) };
 		},
 		/** @param {any} ctx */
 		create: async (ctx) => {
@@ -421,7 +432,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 		/** @param {any} ctx */
 		list: async (ctx) => {
 			const { data } = await common.open(ctx);
-			return { items: await locationsOf(data) };
+			return { items: (await locationsOf(data)).map(withoutStamps) };
 		},
 		/** @param {any} ctx */
 		create: async (ctx) => {
@@ -490,7 +501,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 				.sort({ serial: 1 })
 				.limit(page.fetchLimit)
 				.toArray();
-			const body = page.page(rows, (row) => row.serial);
+			const body = page.page(rows.map(withoutStamps), (row) => row.serial);
 			const link = page.link(body.nextCursor);
 			return ok(body, { headers: link ? { link } : {} });
 		},
@@ -565,7 +576,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 				label: existing.serial,
 				detail: `${existing.status} → ${status}`,
 			});
-			return one(data, COLLECTIONS.serials, existing.id, 'serial number');
+			return withoutStamps(/** @type {SerialRecord} */ (await one(data, COLLECTIONS.serials, existing.id, 'serial number')));
 		},
 		/** @param {any} ctx */
 		remove: async (ctx) => {

@@ -9,6 +9,7 @@ import { createId } from '@ss/contracts';
 import { created, defineRoute, problem } from '@ss/app-kit';
 import { NO_ID } from '../adapters/catalog-store.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
+import { withoutStamps } from '../core/catalog-taxonomy.js';
 import { checkSizeChart } from '../core/size-charts.js';
 import { refuse, STAFF_LIMITS } from './catalog-common.js';
 
@@ -63,14 +64,16 @@ export const createCatalogCharts = (product, service, common) => {
 				.limit(MAX_CHARTS)
 				.toArray()
 		);
-		return { items: await Promise.all(charts.map(async (chart) => ({ ...chart, uses: await usesOf(data, chart.id) }))) };
+		return {
+			items: await Promise.all(charts.map(async (chart) => ({ ...withoutStamps(chart), uses: await usesOf(data, chart.id) }))),
+		};
 	};
 
 	/** @param {any} ctx */
 	const read = async (ctx) => {
 		const { data } = await common.open(ctx);
 		const chart = await chartOf(data, String(ctx.params.id));
-		return { ...chart, uses: await usesOf(data, chart.id) };
+		return { ...withoutStamps(chart), uses: await usesOf(data, chart.id) };
 	};
 
 	/** @param {any} ctx */
