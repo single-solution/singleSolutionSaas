@@ -169,7 +169,8 @@ export const createVisitorApi = (product, service, reply) => {
 		// the first read (no paging) may claim guest chats by phone (C7)
 		const visitor = await service.visitorOf(s, { claim: paging.after === null && paging.before === null });
 		const found = visitor ? await s.store.conversations.current(visitor) : null;
-		const c = found ? await checked(s, found) : null;
+		// a reply that went stale starts again (RT-6)
+		const c = found ? await reply.resume(s, await checked(s, found)) : null;
 		const messages = c ? await s.store.messages.list(c.id, { ...paging, internal: false }) : [];
 		const first = messages[0];
 		return {
@@ -258,7 +259,8 @@ export const createVisitorApi = (product, service, reply) => {
 		);
 		c = await reply.afterVisitorMessage(s, appended.conversation, text, { inline: wait });
 		const [message] = await service.visitorMessages(s, [appended.message]);
-		// with `?wait=1` the AI reply came within the request: the messages after the visitor's (C10)
+		// with `?wait=1` the AI reply came within the request: the messages after the visitor's (C10); a reply that needs
+		// longer is still pending (`replyPending`) and comes with the next checks (CH-1)
 		const replies = wait
 			? await service.visitorMessages(
 					s,
@@ -267,7 +269,7 @@ export const createVisitorApi = (product, service, reply) => {
 			: null;
 		return created({
 			message,
-			...(replies ? { replies } : {}),
+			...(replies ? { replies, replyPending: c.aiPending } : {}),
 			...(guestKey ? { guestKey } : {}),
 			chat: await service.chatView(s, visitor, c),
 		});

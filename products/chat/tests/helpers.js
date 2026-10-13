@@ -60,7 +60,8 @@ export const setup = async ({ start = Date.parse('2026-10-05T10:00:00Z') } = {})
 	const calls = [];
 	/** @type {AiAnswer[]} */
 	const aiAnswers = [];
-	/** @type {Map<string, (call: Call) => { status: number, body?: unknown, type?: string }>} */
+	/** @typedef {{ status: number, body?: unknown, type?: string }} Answer */
+	/** @type {Map<string, (call: Call) => Answer | Promise<Answer>>} */
 	const responders = new Map();
 	/** @param {string} origin */
 	const fake = (origin) => async (/** @type {Request} */ request) => {
@@ -74,7 +75,8 @@ export const setup = async ({ start = Date.parse('2026-10-05T10:00:00Z') } = {})
 		calls.push(call);
 		const path = new URL(request.url).pathname;
 		const responder = responders.get(`${origin}${path}`) ?? responders.get(origin);
-		const answer = responder ? responder(call) : { status: 200, body: {} };
+		// a responder may answer later (a promise), so a test can hold a call until it lets it go
+		const answer = responder ? await responder(call) : { status: 200, body: {} };
 		return new Response(
 			answer.body === undefined ? null : typeof answer.body === 'string' ? answer.body : JSON.stringify(answer.body),
 			{ status: answer.status, headers: { 'content-type': answer.type ?? 'application/json' } },
@@ -148,11 +150,12 @@ export const setup = async ({ start = Date.parse('2026-10-05T10:00:00Z') } = {})
 	};
 
 	/**
+	 * A request, then the work after it (`after: false` leaves that work queued for `flush()`).
 	 * @param {string} method
 	 * @param {string} path
-	 * @param {{ token?: string, origin?: string, body?: unknown, cookie?: string, headers?: Record<string, string>, network?: string }} [init]
+	 * @param {{ token?: string, origin?: string, body?: unknown, cookie?: string, headers?: Record<string, string>, network?: string, after?: boolean }} [init]
 	 */
-	const call = async (method, path, { token, origin, body, cookie, headers = {}, network: ip } = {}) => {
+	const call = async (method, path, { token, origin, body, cookie, headers = {}, network: ip, after = true } = {}) => {
 		requests += 1;
 		const response = await handler(
 			new Request(`${BASE}${path}`, {
@@ -169,7 +172,7 @@ export const setup = async ({ start = Date.parse('2026-10-05T10:00:00Z') } = {})
 				...(body === undefined ? {} : { body: JSON.stringify(body) }),
 			}),
 		);
-		await flush();
+		if (after) await flush();
 		const text = await response.text();
 		/** @type {any} */
 		let json = null;

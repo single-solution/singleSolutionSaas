@@ -18,7 +18,7 @@ import { problem } from '@ss/app-kit';
 import { createId } from '@ss/contracts';
 import { capReached, windowKeys, alertCrossed } from '../core/caps.js';
 import { customerOrdersPath, shopInfoOf } from '../core/shop.js';
-import { iso, previewOf, staffMessageView, visitorMessageView } from '../core/conversation.js';
+import { iso, pendingStale, previewOf, staffMessageView, visitorMessageView } from '../core/conversation.js';
 import { waitingView } from '../core/flows.js';
 import { officeState, parseOfficeHours } from '../core/handoff.js';
 import { zoneOr } from '../core/time.js';
@@ -322,7 +322,7 @@ export const createService = (product) => {
 				status: c.status,
 				waiting: c.waiting,
 				unread: c.unreadVisitor,
-				aiPending: receipts?.showTyping ? c.aiPending : false,
+				aiPending: receipts?.showTyping ? c.aiPending && !pendingStale(c, now()) : false,
 				staffSeenSeq: receipts?.showSeen ? c.staffSeenSeq : null,
 				paused: showPaused === true && c.aiPaused === true && c.status !== 'resolved',
 				queuePosition: queue,

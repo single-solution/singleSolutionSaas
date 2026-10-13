@@ -2,9 +2,10 @@
  * What happens after a visitor message (PLAN 0.8.3): a running flow ends when the visitor types; a keyword starts a
  * flow; a handoff phrase or keyword hands the chat to a person (after the AI answered that message, with the handoff
  * setting `answerFirst`, PLAN 0.8.10 C4); otherwise the AI answers right after the response (`after()`, the widget
- * checks every 3 s meanwhile; or within the request with `?wait=1`, C10) unless the chat waits for a person (from
- * `reassureAfterMinutes` after the handoff the AI then only reassures, C4), staff paused the AI, or a limit or cap is
- * reached. The AI uses the website's own provider (backup on failure, when on), knowledge from switched-on features,
+ * checks every 3 s meanwhile; or within the request with `?wait=1`, C10, which waits up to 20 s and lets a slower
+ * answer finish after the response, CH-1; a reply that went stale starts again once, RT-6) unless the chat waits for a
+ * person (from `reassureAfterMinutes` after the handoff the AI then only reassures, C4), staff paused the AI, or a
+ * limit or cap is reached. The AI uses the website's own provider (backup on failure, when on), knowledge from switched-on features,
  * the store context from Ecommerce (C1), the merchant's webhook tools, the booking endpoint and the shop tools
  * (Ecommerce, pasted token; the products they return become product cards on the answer), the language lock (strict,
  * C14), "never disclose" (C1) and moderation. Answers are markdown, split on `---` lines into at most `bubbles`
@@ -64,6 +65,7 @@ import {
 	shopRequest,
 	shopSchemas,
 } from '../core/shop.js';
+import { pendingStale } from '../core/conversation.js';
 import { dayKey } from '../core/time.js';
 import { SIGN_IN_HEADER, WAIT_MS } from '../core/widgets.js';
 import { currencyDigits } from '@ss/contracts/format';
@@ -282,16 +284,61 @@ export const createReply = (product, service) => {
 	};
 
 	/**
-	 * Start the AI answer: right after the response, or within the request (`inline`, C10).
+	 * Start the AI answer: right after the response, or within the request (`inline`, C10). Within the request it waits
+	 * up to `WAIT_MS`: an answer that needs a provider call after that (a tool round, a retry) goes on right after the
+	 * response with its normal deadline, and the request answers with the reply still pending, which the visitor's
+	 * check picks up (CH-1); a provider call already running finishes first. An answer that throws stays pending and is
+	 * started again when it goes stale (RT-6).
 	 * @param {Site} s
 	 * @param {ConversationRecord} c
 	 * @param {boolean} inline
 	 */
 	const startAnswer = async (s, c, inline) => {
-		const pending = /** @type {ConversationRecord} */ (await s.store.conversations.update(c.id, { set: { aiPending: true } }));
-		if (inline) await answer(s, pending.id, { deadlineMs: WAIT_MS });
-		else s.ctx.after(() => answer(s, pending.id));
-		return inline ? /** @type {ConversationRecord} */ (await s.store.conversations.get(c.id)) : pending;
+		const pending = /** @type {ConversationRecord} */ (
+			await s.store.conversations.update(c.id, {
+				set: { aiPending: true, aiPendingSince: new Date(now()), aiRetried: false },
+			})
+		);
+		if (!inline) {
+			s.ctx.after(() => answer(s, pending.id));
+			return pending;
+		}
+		const until = now() + WAIT_MS;
+		/** @type {(later: boolean) => void} */
+		let release = () => undefined;
+		/** @type {Promise<boolean>} */
+		const released = new Promise((resolve) => {
+			release = resolve;
+		});
+		const running = answer(s, pending.id, { onCall: () => (now() > until ? release(true) : undefined) });
+		const later = await Promise.race([
+			running.then(
+				() => false,
+				() => true,
+			),
+			released,
+		]);
+		if (later) s.ctx.after(() => running);
+		return /** @type {ConversationRecord} */ (await s.store.conversations.get(c.id));
+	};
+
+	/**
+	 * A visitor checks the chat: an AI reply that went stale (cut short or failed, RT-6) starts again once right after
+	 * the response; stale again, it counts as failed (fallback answers, else the on-failure setting).
+	 * @param {Site} s
+	 * @param {ConversationRecord} c
+	 * @returns {Promise<ConversationRecord>}
+	 */
+	const resume = async (s, c) => {
+		if (!pendingStale(c, now())) return c;
+		const claimed = await s.store.conversations.update(c.id, {
+			set: { aiPendingSince: new Date(now()), aiRetried: true },
+			unless: { aiPending: true, aiPendingSince: c.aiPendingSince ?? null },
+		});
+		if (!claimed) return c;
+		const giveUp = c.aiRetried === true;
+		s.ctx.after(() => answer(s, c.id, { giveUp }));
+		return claimed;
 	};
 
 	/**
@@ -638,11 +685,13 @@ export const createReply = (product, service) => {
 
 	/**
 	 * The AI answer to the conversation's last visitor message (run after the response, or within it with `?wait=1`).
+	 * `onCall` runs before each provider call; `giveUp`: no AI call, straight to the fallback answers and the
+	 * on-failure setting (a reply that went stale twice, RT-6).
 	 * @param {Site} s
 	 * @param {string} conversationId
-	 * @param {{ deadlineMs?: number }} [options]
+	 * @param {{ onCall?: () => void, giveUp?: boolean }} [options]
 	 */
-	const answer = async (s, conversationId, { deadlineMs = ANSWER_DEADLINE_MS } = {}) => {
+	const answer = async (s, conversationId, { onCall, giveUp = false } = {}) => {
 		let c = await s.store.conversations.get(conversationId);
 		if (!c) return;
 		const done = (/** @type {Record<string, unknown>} */ set = {}) =>
@@ -670,7 +719,7 @@ export const createReply = (product, service) => {
 			(m) => m.author !== 'system' && m.text,
 		);
 		const last = [...history].reverse().find((m) => m.author === 'visitor');
-		const connections = await connectionsOf(s, { backup: true });
+		const connections = giveUp ? [] : await connectionsOf(s, { backup: true });
 		const allowed = connections.length > 0 && (await withinReplyLimits(s, c)) && !(await service.capped(s));
 		const lock = s.on.includes('language_lock') ? await s.values('language_lock') : null;
 		const markers = lock ? markerSets(lock.markerWords) : [];
@@ -715,7 +764,7 @@ export const createReply = (product, service) => {
 					(m) => /** @type {ChatMessage} */ ({ role: m.author === 'visitor' ? 'user' : 'assistant', content: m.text }),
 				),
 			];
-			const deadline = now() + deadlineMs;
+			const deadline = now() + ANSWER_DEADLINE_MS;
 			result = await runAssistant(
 				{
 					messages,
@@ -735,7 +784,10 @@ export const createReply = (product, service) => {
 					execute: tools ? tools.execute : async () => ({ ok: false, content: 'No such tool.' }),
 					remainingTokens: () => Number.POSITIVE_INFINITY,
 					spend: (usage) => service.spend(s, usage.input + usage.output),
-					expired: () => now() > deadline,
+					expired: () => {
+						onCall?.();
+						return now() > deadline;
+					},
 				},
 			);
 			cards = tools ? tools.cards() : [];
@@ -835,7 +887,7 @@ export const createReply = (product, service) => {
 		return summary;
 	};
 
-	return Object.freeze({ afterVisitorMessage, handOff, startFlow, runFlow, summarise, answer, linksOf });
+	return Object.freeze({ afterVisitorMessage, handOff, startFlow, runFlow, summarise, answer, resume, linksOf });
 };
 
 /**

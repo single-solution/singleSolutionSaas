@@ -44,6 +44,8 @@ export const STATUSES = Object.freeze(/** @type {const} */ (['open', 'awaiting_v
  * @property {Date | null} waitingSince
  * @property {boolean} aiPaused
  * @property {boolean} aiPending an AI reply is being prepared
+ * @property {Date | null} [aiPendingSince] when the pending AI reply started (stale after `PENDING_STALE_MS`, RT-6)
+ * @property {boolean} [aiRetried] the pending AI reply is the retry of one that went stale
  * @property {number} aiFailures AI failures in a row
  * @property {string | null} assignedTo staff id
  * @property {number} lastSeq
@@ -91,6 +93,21 @@ export const statusAfter = (current, author) => {
 	if (author === 'staff' && current === 'open') return 'awaiting_visitor';
 	return current;
 };
+
+/**
+ * How long an AI reply may stay pending (ms): longer than any answer can take (its 45 s deadline, then a provider call
+ * already running, main and backup). A reply still pending after it was cut short (the function stopped) or failed
+ * (RT-6): it shows no typing, and the visitor's next check starts it again once.
+ */
+export const PENDING_STALE_MS = 2 * 60_000;
+
+/**
+ * Whether a conversation's pending AI reply went stale (judged when read).
+ * @param {{ aiPending: boolean, aiPendingSince?: Date | null }} c
+ * @param {number} now
+ */
+export const pendingStale = (c, now) =>
+	c.aiPending && now - (c.aiPendingSince ? new Date(c.aiPendingSince).getTime() : 0) > PENDING_STALE_MS;
 
 /**
  * Whether a guest has used the messages of the guest limit (0 = no limit).
