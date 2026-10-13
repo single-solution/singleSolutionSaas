@@ -1,0 +1,1047 @@
+{
+	"$schemas": {
+		"Channel": {
+			"type": "string",
+			"enum": ["email", "sms", "whatsapp", "push", "staff_push"],
+			"description": "push is browser push to a visitor, staff_push browser push to a member of your staff."
+		},
+		"MessageStatus": {
+			"type": "string",
+			"enum": ["queued", "retrying", "sent", "failed", "skipped"],
+			"description": "queued: waiting for its time (a delayed send or quiet hours) or being sent; retrying: an attempt failed and it is tried again on a later use of your website; sent; failed: every attempt failed, the fallback channel's too; skipped: not sent (reason unsubscribed or limited)."
+		},
+		"Attempt": {
+			"type": "object",
+			"description": "One attempt at a provider.",
+			"required": ["channel", "provider", "at", "outcome"],
+			"additionalProperties": false,
+			"properties": {
+				"channel": {
+					"$ref": "#/components/schemas/Channel"
+				},
+				"provider": {
+					"type": "string",
+					"description": "smtp, resend, sendgrid, mailgun, ses, twilio, meta, http (a gateway over HTTP) or webpush; none when no provider was called (the feature is off, the channel is not connected, a database or provider was briefly unreachable)."
+				},
+				"at": {
+					"type": "string",
+					"format": "date-time"
+				},
+				"outcome": {
+					"type": "string",
+					"enum": ["sent", "failed"]
+				},
+				"error": {
+					"type": "string",
+					"description": "Why it failed, in English (failed attempts only)."
+				}
+			}
+		},
+		"Message": {
+			"type": "object",
+			"description": "A message as the delivery log keeps it. It never holds a secret: the values of a sensitive template (every accounts. template) and those the send named in secretValues show as ****** (or [link hidden] for a link) in subject and text; the recipient got the real words.",
+			"required": [
+				"id",
+				"template",
+				"source",
+				"channel",
+				"to",
+				"status",
+				"reason",
+				"subject",
+				"text",
+				"attempts",
+				"dueAt",
+				"sentAt",
+				"createdAt"
+			],
+			"additionalProperties": false,
+			"properties": {
+				"id": {
+					"type": "string",
+					"pattern": "^msg_[0-9a-z]{10,64}$"
+				},
+				"template": {
+					"type": ["string", "null"],
+					"description": "The template key; null for a one-off message from your staff."
+				},
+				"source": {
+					"type": "string",
+					"enum": ["api", "staff"],
+					"description": "api: your server or a product; staff: your staff in the admin widgets."
+				},
+				"channel": {
+					"$ref": "#/components/schemas/Channel",
+					"description": "The channel now: after a fallback, the fallback channel."
+				},
+				"to": {
+					"type": "string",
+					"description": "The address on channel: an e-mail address (lower case), a phone number (+ and digits), a browser push subscriber id or a staff user id."
+				},
+				"status": {
+					"$ref": "#/components/schemas/MessageStatus"
+				},
+				"reason": {
+					"type": ["string", "null"],
+					"description": "skipped: unsubscribed or limited (over a send limit); retrying and failed: the last error, in English; else null."
+				},
+				"subject": {
+					"type": "string",
+					"description": "The e-mail subject or push title ('' for SMS and WhatsApp), hidden values replaced."
+				},
+				"text": {
+					"type": "string",
+					"description": "The words, hidden values replaced."
+				},
+				"attempts": {
+					"type": "array",
+					"items": {
+						"$ref": "#/components/schemas/Attempt"
+					},
+					"description": "Every attempt, on every channel, oldest first."
+				},
+				"dueAt": {
+					"type": "string",
+					"format": "date-time",
+					"description": "When it is (or was) due: later for a delayed send, quiet hours or a retry."
+				},
+				"sentAt": {
+					"type": ["string", "null"],
+					"format": "date-time"
+				},
+				"createdAt": {
+					"type": "string",
+					"format": "date-time"
+				}
+			}
+		},
+		"MessagePage": {
+			"type": "object",
+			"description": "One page of the delivery log, newest first.",
+			"required": ["items", "nextCursor", "hasMore"],
+			"additionalProperties": false,
+			"properties": {
+				"items": {
+					"type": "array",
+					"items": {
+						"$ref": "#/components/schemas/Message"
+					}
+				},
+				"nextCursor": {
+					"type": ["string", "null"],
+					"description": "Pass it as cursor for the next page (null: the last page)."
+				},
+				"hasMore": {
+					"type": "boolean"
+				}
+			}
+		},
+		"Values": {
+			"type": "object",
+			"maxProperties": 50,
+			"propertyNames": {
+				"pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$"
+			},
+			"additionalProperties": {
+				"type": ["string", "number"],
+				"maxLength": 1000
+			},
+			"description": "The template's {placeholders}: up to 50 names (a letter, then letters, digits and _; not unsubscribeUrl, which Notifications fills) with texts of at most 1000 characters or numbers."
+		},
+		"EmailRecipient": {
+			"type": "object",
+			"description": "The recipient: email is required; phone is used by the fallback channel (SMS or WhatsApp). Each member given must be valid (422 validation_failed at to/<member>).",
+			"required": ["email"],
+			"properties": {
+				"email": {
+					"type": "string",
+					"maxLength": 254,
+					"description": "An e-mail address (kept in lower case)."
+				},
+				"phone": {
+					"type": "string",
+					"description": "With its calling code: + or 00 first, for example +923001234567; spaces, dashes, dots, slashes and brackets are dropped, and a trunk 0 after the code too."
+				},
+				"language": {
+					"type": "string",
+					"pattern": "^[a-z]{2,3}(-[A-Za-z0-9]{2,8}){0,3}$",
+					"description": "The recipient's language, for example en, ur or pt-BR: it picks the template version while Multi-language templates are on."
+				},
+				"timeZone": {
+					"type": "string",
+					"maxLength": 64,
+					"description": "An IANA time zone, for example Asia/Karachi: quiet hours end in it (else the business.json time zone)."
+				}
+			}
+		},
+		"PhoneRecipient": {
+			"type": "object",
+			"description": "The recipient: phone is required; email is used by the fallback channel (e-mail). Each member given must be valid (422 validation_failed at to/<member>).",
+			"required": ["phone"],
+			"properties": {
+				"phone": {
+					"type": "string",
+					"description": "With its calling code: + or 00 first, for example +923001234567; spaces, dashes, dots, slashes and brackets are dropped, and a trunk 0 after the code too."
+				},
+				"email": {
+					"type": "string",
+					"maxLength": 254,
+					"description": "An e-mail address (kept in lower case)."
+				},
+				"language": {
+					"type": "string",
+					"pattern": "^[a-z]{2,3}(-[A-Za-z0-9]{2,8}){0,3}$",
+					"description": "The recipient's language, for example en, ur or pt-BR: it picks the template version while Multi-language templates are on."
+				},
+				"timeZone": {
+					"type": "string",
+					"maxLength": 64,
+					"description": "An IANA time zone, for example Asia/Karachi: quiet hours end in it (else the business.json time zone)."
+				}
+			}
+		},
+		"SubscriberRecipient": {
+			"type": "object",
+			"description": "The recipient: a visitor's browser. Each member given must be valid (422 validation_failed at to/<member>).",
+			"required": ["subscriberId"],
+			"properties": {
+				"subscriberId": {
+					"type": "string",
+					"pattern": "^[A-Za-z0-9_-]{1,64}$",
+					"description": "The subscriber id the push-permission widget announces (the ss-notifications:subscribed event)."
+				},
+				"language": {
+					"type": "string",
+					"pattern": "^[a-z]{2,3}(-[A-Za-z0-9]{2,8}){0,3}$",
+					"description": "The recipient's language, for example en, ur or pt-BR: it picks the template version while Multi-language templates are on."
+				},
+				"timeZone": {
+					"type": "string",
+					"maxLength": 64,
+					"description": "An IANA time zone, for example Asia/Karachi: quiet hours end in it (else the business.json time zone)."
+				}
+			}
+		},
+		"StaffRecipient": {
+			"type": "object",
+			"description": "The recipient: a member of your staff, on every browser where they turned staff notifications on (at most 20). Each member given must be valid (422 validation_failed at to/<member>).",
+			"required": ["staffId"],
+			"properties": {
+				"staffId": {
+					"type": "string",
+					"pattern": "^[A-Za-z0-9_-]{1,64}$",
+					"description": "The user id in their ticket."
+				},
+				"language": {
+					"type": "string",
+					"pattern": "^[a-z]{2,3}(-[A-Za-z0-9]{2,8}){0,3}$",
+					"description": "The recipient's language, for example en, ur or pt-BR: it picks the template version while Multi-language templates are on."
+				},
+				"timeZone": {
+					"type": "string",
+					"maxLength": 64,
+					"description": "An IANA time zone, for example Asia/Karachi: quiet hours end in it (else the business.json time zone)."
+				}
+			}
+		},
+		"Button": {
+			"type": "object",
+			"description": "A button of a WhatsApp template at Meta that takes a value.",
+			"required": ["index", "type", "value"],
+			"additionalProperties": false,
+			"properties": {
+				"index": {
+					"type": "integer",
+					"minimum": 0,
+					"maximum": 9,
+					"description": "The button's place in the template at Meta (the first is 0), once each."
+				},
+				"type": {
+					"type": "string",
+					"enum": ["url", "copy_code"],
+					"description": "url: the value is added to the end of the button's address; copy_code: the button copies the value."
+				},
+				"value": {
+					"type": "string",
+					"minLength": 1,
+					"maxLength": 2000,
+					"description": "May hold placeholders and optional sections, for example {code}."
+				}
+			}
+		},
+		"Template": {
+			"type": "object",
+			"description": "A template: one per key, channel and language.",
+			"required": [
+				"key",
+				"channel",
+				"language",
+				"subject",
+				"text",
+				"required",
+				"urgent",
+				"providerTemplate",
+				"buttons",
+				"sensitive",
+				"updatedAt"
+			],
+			"additionalProperties": false,
+			"properties": {
+				"key": {
+					"type": "string",
+					"pattern": "^[a-z][a-z0-9_.-]{0,63}$",
+					"description": "Keys of other products' own events start with the product id (accounts., ecommerce., chat., payments., growth.); every other key is yours."
+				},
+				"channel": {
+					"$ref": "#/components/schemas/Channel"
+				},
+				"language": {
+					"type": "string",
+					"pattern": "^(default|[a-z]{2,3}(-[A-Za-z0-9]{2,8}){0,3})$",
+					"description": "default for the version every recipient falls back to, else a language code such as en, ur or pt-BR."
+				},
+				"subject": {
+					"type": "string",
+					"maxLength": 200,
+					"description": "The e-mail subject or push title ('' for SMS and WhatsApp)."
+				},
+				"text": {
+					"type": "string",
+					"minLength": 1,
+					"maxLength": 100000,
+					"description": "The words: {name} where a value goes, {?name}…{/name} around text shown only when name is not empty."
+				},
+				"required": {
+					"type": "boolean",
+					"description": "Sent also to people who unsubscribed (always true for accounts. templates)."
+				},
+				"urgent": {
+					"type": "boolean",
+					"description": "Sent during quiet hours (always true for accounts. templates)."
+				},
+				"providerTemplate": {
+					"type": "string",
+					"pattern": "^[a-z0-9_]{0,512}$",
+					"description": "WhatsApp: the name of an approved template at Meta ('' sends plain text)."
+				},
+				"buttons": {
+					"type": "array",
+					"maxItems": 10,
+					"items": {
+						"$ref": "#/components/schemas/Button"
+					},
+					"description": "By index; only a WhatsApp template with a providerTemplate has them."
+				},
+				"sensitive": {
+					"type": "boolean",
+					"description": "Its values are hidden in the delivery log (always true for accounts. templates)."
+				},
+				"updatedAt": {
+					"type": "string",
+					"format": "date-time"
+				}
+			}
+		},
+		"TemplateInput": {
+			"type": "object",
+			"description": "A template to save: one with the same key, channel and language is replaced.",
+			"required": ["key", "channel", "text"],
+			"properties": {
+				"key": {
+					"type": "string",
+					"pattern": "^[a-z][a-z0-9_.-]{0,63}$",
+					"description": "1–64 lower-case letters, digits, _, . or -, starting with a letter."
+				},
+				"channel": {
+					"$ref": "#/components/schemas/Channel"
+				},
+				"language": {
+					"type": ["string", "null"],
+					"description": "default ('', null or none) for the default version, else a language code such as en, ur or pt-BR."
+				},
+				"subject": {
+					"type": "string",
+					"description": "Required for email, push and staff_push: one line of at most 200 characters (trimmed); ignored for SMS and WhatsApp."
+				},
+				"text": {
+					"type": "string",
+					"description": "Trimmed, not empty; at most 100,000 characters for e-mail, 1600 for SMS, 4096 for WhatsApp and 500 for push. Every {?name} is closed by a later {/name}."
+				},
+				"required": {
+					"type": "boolean",
+					"default": false
+				},
+				"urgent": {
+					"type": "boolean",
+					"default": false
+				},
+				"sensitive": {
+					"type": "boolean",
+					"default": false
+				},
+				"providerTemplate": {
+					"type": "string",
+					"description": "WhatsApp only: the template name at Meta (lower case, digits and _, at most 512)."
+				},
+				"buttons": {
+					"type": "array",
+					"maxItems": 10,
+					"items": {
+						"$ref": "#/components/schemas/Button"
+					},
+					"description": "Only for a WhatsApp template with a providerTemplate."
+				}
+			}
+		},
+		"TemplateList": {
+			"type": "object",
+			"description": "The templates, by key, channel and language.",
+			"required": ["items"],
+			"additionalProperties": false,
+			"properties": {
+				"items": {
+					"type": "array",
+					"maxItems": 1000,
+					"items": {
+						"$ref": "#/components/schemas/Template"
+					}
+				}
+			}
+		},
+		"PushSubscriptionInput": {
+			"type": "object",
+			"description": "The browser's subscription as PushSubscription.toJSON() gives it.",
+			"required": ["endpoint", "keys"],
+			"properties": {
+				"endpoint": {
+					"type": "string",
+					"maxLength": 2048,
+					"pattern": "^https://\\S+$"
+				},
+				"keys": {
+					"type": "object",
+					"required": ["p256dh", "auth"],
+					"properties": {
+						"p256dh": {
+							"type": "string",
+							"description": "The browser's P-256 public key (65 bytes, base64url)."
+						},
+						"auth": {
+							"type": "string",
+							"description": "The auth secret (16 bytes, base64url)."
+						}
+					}
+				}
+			}
+		},
+		"Subscriber": {
+			"type": "object",
+			"required": ["subscriberId"],
+			"additionalProperties": false,
+			"properties": {
+				"subscriberId": {
+					"type": "string",
+					"pattern": "^sub_[0-9a-z]{10,64}$",
+					"description": "The same endpoint keeps its id."
+				}
+			}
+		}
+	},
+	"POST /v1/messages/email": {
+		"summary": "Send an e-mail from a template",
+		"description": "The answer is the message as the delivery log keeps it. It is saved before its first attempt and sent at once unless a delayed send or quiet hours hold it; an attempt that fails or breaks off answers retrying and is tried again on later uses of your website, then on the fallback channel. Someone who unsubscribed gets only required messages (else skipped, reason unsubscribed); send limits skip with reason limited. 422 template_not_found when the key has no e-mail template; 422 validation_failed for a field; 403 feature_off for your own keys without Merchant send API (send_api), or sendAt without Delayed send. Send an Idempotency-Key so a retried request sends once.",
+		"body": {
+			"type": "object",
+			"required": ["template", "to"],
+			"properties": {
+				"template": {
+					"type": "string",
+					"pattern": "^[a-z][a-z0-9_.-]{0,63}$",
+					"description": "The template key."
+				},
+				"to": {
+					"$ref": "#/components/schemas/EmailRecipient"
+				},
+				"values": {
+					"$ref": "#/components/schemas/Values"
+				},
+				"secretValues": {
+					"type": "array",
+					"maxItems": 50,
+					"items": {
+						"type": "string",
+						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$"
+					},
+					"description": "Names of values the delivery log hides, for example [\"code\", \"link\"]."
+				},
+				"required": {
+					"type": "boolean",
+					"default": false,
+					"description": "true sends it also to someone who unsubscribed (for example an order update from an optional template)."
+				},
+				"language": {
+					"type": "string",
+					"description": "A language code such as en, ur or pt-BR (default: to.language)."
+				},
+				"sendAt": {
+					"type": "string",
+					"format": "date-time",
+					"description": "Delayed send: at most the setting's days ahead (30 by default); a past time sends now. accounts. templates always go at once."
+				}
+			}
+		},
+		"status": 201,
+		"response": {
+			"$ref": "#/components/schemas/Message"
+		}
+	},
+	"POST /v1/messages/sms": {
+		"summary": "Send an SMS from a template",
+		"description": "The answer is the message as the delivery log keeps it. It is saved before its first attempt and sent at once unless a delayed send or quiet hours hold it; an attempt that fails or breaks off answers retrying and is tried again on later uses of your website, then on the fallback channel. Someone who unsubscribed (by link or STOP reply) gets only required messages (else skipped, reason unsubscribed); send limits skip with reason limited. 422 template_not_found when the key has no SMS template; 422 validation_failed for a field; 403 feature_off for your own keys without Merchant send API (send_api), or sendAt without Delayed send. Send an Idempotency-Key so a retried request sends once.",
+		"body": {
+			"type": "object",
+			"required": ["template", "to"],
+			"properties": {
+				"template": {
+					"type": "string",
+					"pattern": "^[a-z][a-z0-9_.-]{0,63}$",
+					"description": "The template key."
+				},
+				"to": {
+					"$ref": "#/components/schemas/PhoneRecipient"
+				},
+				"values": {
+					"$ref": "#/components/schemas/Values"
+				},
+				"secretValues": {
+					"type": "array",
+					"maxItems": 50,
+					"items": {
+						"type": "string",
+						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$"
+					},
+					"description": "Names of values the delivery log hides, for example [\"code\", \"link\"]."
+				},
+				"required": {
+					"type": "boolean",
+					"default": false,
+					"description": "true sends it also to someone who unsubscribed (for example an order update from an optional template)."
+				},
+				"language": {
+					"type": "string",
+					"description": "A language code such as en, ur or pt-BR (default: to.language)."
+				},
+				"sendAt": {
+					"type": "string",
+					"format": "date-time",
+					"description": "Delayed send: at most the setting's days ahead (30 by default); a past time sends now. accounts. templates always go at once."
+				}
+			}
+		},
+		"status": 201,
+		"response": {
+			"$ref": "#/components/schemas/Message"
+		}
+	},
+	"POST /v1/messages/whatsapp": {
+		"summary": "Send a WhatsApp message from a template",
+		"description": "The answer is the message as the delivery log keeps it. It is saved before its first attempt and sent at once unless a delayed send or quiet hours hold it; an attempt that fails or breaks off answers retrying and is tried again on later uses of your website, then on the fallback channel. Someone who unsubscribed (by link or STOP reply) gets only required messages (else skipped, reason unsubscribed); send limits skip with reason limited. A template with a providerTemplate is sent as that template at Meta, its values as body parameters in the order the text uses them. 422 template_not_found when the key has no WhatsApp template; 422 validation_failed for a field; 403 feature_off for your own keys without Merchant send API (send_api), or sendAt without Delayed send. Send an Idempotency-Key so a retried request sends once.",
+		"body": {
+			"type": "object",
+			"required": ["template", "to"],
+			"properties": {
+				"template": {
+					"type": "string",
+					"pattern": "^[a-z][a-z0-9_.-]{0,63}$",
+					"description": "The template key."
+				},
+				"to": {
+					"$ref": "#/components/schemas/PhoneRecipient"
+				},
+				"values": {
+					"$ref": "#/components/schemas/Values"
+				},
+				"secretValues": {
+					"type": "array",
+					"maxItems": 50,
+					"items": {
+						"type": "string",
+						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$"
+					},
+					"description": "Names of values the delivery log hides, for example [\"code\", \"link\"]."
+				},
+				"required": {
+					"type": "boolean",
+					"default": false,
+					"description": "true sends it also to someone who unsubscribed (for example an order update from an optional template)."
+				},
+				"language": {
+					"type": "string",
+					"description": "A language code such as en, ur or pt-BR (default: to.language)."
+				},
+				"sendAt": {
+					"type": "string",
+					"format": "date-time",
+					"description": "Delayed send: at most the setting's days ahead (30 by default); a past time sends now. accounts. templates always go at once."
+				}
+			}
+		},
+		"status": 201,
+		"response": {
+			"$ref": "#/components/schemas/Message"
+		}
+	},
+	"POST /v1/messages/push": {
+		"summary": "Send a browser push to a visitor from a template",
+		"description": "The template's subject is the title and its text the body; a url value (https://… or a path) opens on a click. The answer is the message as the delivery log keeps it: failed when no browser is subscribed for the subscriber id. An attempt that fails or breaks off answers retrying and is tried again on later uses of your website. 422 template_not_found when the key has no push template; 422 validation_failed for a field; 403 feature_off for your own keys without Merchant send API (send_api), or sendAt without Delayed send. Send an Idempotency-Key so a retried request sends once.",
+		"body": {
+			"type": "object",
+			"required": ["template", "to"],
+			"properties": {
+				"template": {
+					"type": "string",
+					"pattern": "^[a-z][a-z0-9_.-]{0,63}$",
+					"description": "The template key."
+				},
+				"to": {
+					"$ref": "#/components/schemas/SubscriberRecipient"
+				},
+				"values": {
+					"$ref": "#/components/schemas/Values"
+				},
+				"secretValues": {
+					"type": "array",
+					"maxItems": 50,
+					"items": {
+						"type": "string",
+						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$"
+					},
+					"description": "Names of values the delivery log hides, for example [\"code\", \"link\"]."
+				},
+				"required": {
+					"type": "boolean",
+					"default": false,
+					"description": "true sends it also to someone who unsubscribed."
+				},
+				"language": {
+					"type": "string",
+					"description": "A language code such as en, ur or pt-BR (default: to.language)."
+				},
+				"sendAt": {
+					"type": "string",
+					"format": "date-time",
+					"description": "Delayed send: at most the setting's days ahead (30 by default); a past time sends now."
+				}
+			}
+		},
+		"status": 201,
+		"response": {
+			"$ref": "#/components/schemas/Message"
+		}
+	},
+	"POST /v1/messages/staff-push": {
+		"summary": "Send a browser push to a member of your staff from a template",
+		"description": "Goes to every browser where they turned staff notifications on. The template's subject is the title and its text the body; a url value (https://… or a path) opens on a click. The answer is the message as the delivery log keeps it: failed when none of their browsers is subscribed. An attempt that fails or breaks off answers retrying and is tried again on later uses of your website. 422 template_not_found when the key has no staff_push template; 422 validation_failed for a field; 403 feature_off for your own keys without Merchant send API (send_api), or sendAt without Delayed send. Send an Idempotency-Key so a retried request sends once.",
+		"body": {
+			"type": "object",
+			"required": ["template", "to"],
+			"properties": {
+				"template": {
+					"type": "string",
+					"pattern": "^[a-z][a-z0-9_.-]{0,63}$",
+					"description": "The template key."
+				},
+				"to": {
+					"$ref": "#/components/schemas/StaffRecipient"
+				},
+				"values": {
+					"$ref": "#/components/schemas/Values"
+				},
+				"secretValues": {
+					"type": "array",
+					"maxItems": 50,
+					"items": {
+						"type": "string",
+						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$"
+					},
+					"description": "Names of values the delivery log hides, for example [\"code\", \"link\"]."
+				},
+				"required": {
+					"type": "boolean",
+					"default": false,
+					"description": "true sends it also to someone who unsubscribed."
+				},
+				"language": {
+					"type": "string",
+					"description": "A language code such as en, ur or pt-BR (default: to.language)."
+				},
+				"sendAt": {
+					"type": "string",
+					"format": "date-time",
+					"description": "Delayed send: at most the setting's days ahead (30 by default); a past time sends now."
+				}
+			}
+		},
+		"status": 201,
+		"response": {
+			"$ref": "#/components/schemas/Message"
+		}
+	},
+	"POST /v1/events": {
+		"summary": "Forward another product's event to your webhook URLs",
+		"description": "Products call it with the Notifications server token right after an event, with the event id as the Idempotency-Key. The event goes, signed, to each webhook URL that takes its type (or every event), and is tried there up to 5 times in all, on later uses of your website. The webhook keeps id and at as its id and createdAt (else a new id and the time it was received). 422 validation_failed for a field.",
+		"body": {
+			"type": "object",
+			"required": ["type", "data"],
+			"properties": {
+				"id": {
+					"type": "string",
+					"pattern": "^evt_[0-9a-z]{10,64}$",
+					"description": "The event id in your product."
+				},
+				"type": {
+					"type": "string",
+					"pattern": "^(accounts|ecommerce|chat|payments|growth)\\.[a-z][a-z0-9_.]{0,62}$",
+					"description": "<product id>.<event>, for example payments.payment.paid."
+				},
+				"at": {
+					"type": "string",
+					"format": "date-time",
+					"description": "When it happened (ISO 8601 with its offset)."
+				},
+				"data": {
+					"type": "object",
+					"description": "The event's data: at most 16 kB of JSON."
+				}
+			}
+		},
+		"status": 202,
+		"response": {
+			"type": "object",
+			"required": ["queued"],
+			"additionalProperties": false,
+			"properties": {
+				"queued": {
+					"type": "integer",
+					"minimum": 0,
+					"maximum": 5,
+					"description": "Deliveries queued, one per URL that takes the type (0 without the signing secret or such URLs)."
+				}
+			}
+		}
+	},
+	"GET /v1/messages": {
+		"summary": "The delivery log, newest first",
+		"query": {
+			"type": "object",
+			"properties": {
+				"cursor": {
+					"type": "string",
+					"description": "nextCursor of the previous page."
+				},
+				"limit": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 100,
+					"default": 25
+				},
+				"status": {
+					"$ref": "#/components/schemas/MessageStatus",
+					"description": "Only messages with this status (another value filters nothing)."
+				},
+				"channel": {
+					"$ref": "#/components/schemas/Channel",
+					"description": "Only messages on this channel (another value filters nothing)."
+				},
+				"to": {
+					"type": "string",
+					"description": "Only messages to this address: an e-mail address or a phone number (matched normalised), else a subscriber or staff id."
+				}
+			}
+		},
+		"response": {
+			"$ref": "#/components/schemas/MessagePage"
+		}
+	},
+	"GET /v1/messages/count": {
+		"summary": "Count the delivery log (the list's filters)",
+		"query": {
+			"type": "object",
+			"properties": {
+				"status": {
+					"$ref": "#/components/schemas/MessageStatus",
+					"description": "Only messages with this status (another value filters nothing)."
+				},
+				"channel": {
+					"$ref": "#/components/schemas/Channel",
+					"description": "Only messages on this channel (another value filters nothing)."
+				},
+				"to": {
+					"type": "string",
+					"description": "Only messages to this address: an e-mail address or a phone number (matched normalised), else a subscriber or staff id."
+				}
+			}
+		},
+		"response": {
+			"$ref": "#/components/schemas/Count"
+		}
+	},
+	"GET /v1/messages/counts": {
+		"summary": "Count the delivery log by status, channel, template or source",
+		"description": "by=template counts a one-off message from your staff under none.",
+		"query": {
+			"type": "object",
+			"required": ["by"],
+			"properties": {
+				"by": {
+					"type": "string",
+					"enum": ["status", "channel", "template", "source"]
+				},
+				"status": {
+					"$ref": "#/components/schemas/MessageStatus",
+					"description": "Only messages with this status (another value filters nothing)."
+				},
+				"channel": {
+					"$ref": "#/components/schemas/Channel",
+					"description": "Only messages on this channel (another value filters nothing)."
+				},
+				"to": {
+					"type": "string",
+					"description": "Only messages to this address: an e-mail address or a phone number (matched normalised), else a subscriber or staff id."
+				}
+			}
+		},
+		"response": {
+			"$ref": "#/components/schemas/Counts"
+		}
+	},
+	"GET /v1/messages/:id": {
+		"summary": "Read a message of the delivery log",
+		"description": "404 not_found when there is no such message (or it was removed after the days the delivery log keeps).",
+		"response": {
+			"$ref": "#/components/schemas/Message"
+		}
+	},
+	"GET /v1/templates": {
+		"summary": "The templates of the switched-on channels",
+		"description": "At most 1000, by key, channel and language.",
+		"response": {
+			"$ref": "#/components/schemas/TemplateList"
+		}
+	},
+	"PUT /v1/templates": {
+		"summary": "Save a template",
+		"description": "The same checks as the dashboard: 422 validation_failed for a field, or when the website already has 1000 templates; 403 feature_off while the channel's feature is off. Writes count in the settings API's 60 writes per minute (429 rate_limited). The change shows in Recent changes with the acting user (SS-Actor-* headers), else Server.",
+		"body": {
+			"$ref": "#/components/schemas/TemplateInput"
+		},
+		"response": {
+			"$ref": "#/components/schemas/Template"
+		}
+	},
+	"DELETE /v1/templates/:key/:channel/:language": {
+		"summary": "Delete a template",
+		"description": "language is default for the default version. 404 not_found when there is no such template; 403 feature_off while the channel's feature is off. Writes count in the settings API's 60 writes per minute (429 rate_limited).",
+		"status": 204
+	},
+	"POST /v1/push/subscriptions": {
+		"summary": "Turn on browser push for a visitor",
+		"description": "The push-permission widget calls it with the browser token; send to the answer's id with to: { subscriberId }. 422 validation_failed when the subscription is not an https endpoint with a 65-byte p256dh key and a 16-byte auth secret.",
+		"body": {
+			"type": "object",
+			"required": ["subscription"],
+			"properties": {
+				"subscription": {
+					"$ref": "#/components/schemas/PushSubscriptionInput"
+				}
+			}
+		},
+		"status": 201,
+		"response": {
+			"$ref": "#/components/schemas/Subscriber"
+		}
+	},
+	"POST /v1/push/subscriptions/remove": {
+		"summary": "Turn off browser push for a visitor",
+		"description": "Removes the subscription when the subscriber id and its endpoint match (the browser proves it holds it); 204 also when there is none.",
+		"body": {
+			"type": "object",
+			"required": ["subscriberId", "endpoint"],
+			"properties": {
+				"subscriberId": {
+					"type": "string"
+				},
+				"endpoint": {
+					"type": "string"
+				}
+			}
+		},
+		"status": 204
+	},
+	"GET /v1/admin/messages": {
+		"summary": "The delivery log, newest first (delivery log widget)",
+		"query": {
+			"type": "object",
+			"properties": {
+				"cursor": {
+					"type": "string",
+					"description": "nextCursor of the previous page."
+				},
+				"limit": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 100,
+					"default": 25
+				},
+				"status": {
+					"$ref": "#/components/schemas/MessageStatus",
+					"description": "Only messages with this status (another value filters nothing)."
+				},
+				"channel": {
+					"$ref": "#/components/schemas/Channel",
+					"description": "Only messages on this channel (another value filters nothing)."
+				},
+				"to": {
+					"type": "string",
+					"description": "Only messages to this address: an e-mail address or a phone number (matched normalised), else a subscriber or staff id."
+				}
+			}
+		},
+		"response": {
+			"$ref": "#/components/schemas/MessagePage"
+		}
+	},
+	"GET /v1/admin/messages/count": {
+		"summary": "Count the delivery log (delivery log widget)",
+		"query": {
+			"type": "object",
+			"properties": {
+				"status": {
+					"$ref": "#/components/schemas/MessageStatus",
+					"description": "Only messages with this status (another value filters nothing)."
+				},
+				"channel": {
+					"$ref": "#/components/schemas/Channel",
+					"description": "Only messages on this channel (another value filters nothing)."
+				},
+				"to": {
+					"type": "string",
+					"description": "Only messages to this address: an e-mail address or a phone number (matched normalised), else a subscriber or staff id."
+				}
+			}
+		},
+		"response": {
+			"$ref": "#/components/schemas/Count"
+		}
+	},
+	"GET /v1/admin/messages/counts": {
+		"summary": "Count the delivery log by status, channel, template or source (delivery log widget)",
+		"description": "by=template counts a one-off message from your staff under none.",
+		"query": {
+			"type": "object",
+			"required": ["by"],
+			"properties": {
+				"by": {
+					"type": "string",
+					"enum": ["status", "channel", "template", "source"]
+				},
+				"status": {
+					"$ref": "#/components/schemas/MessageStatus",
+					"description": "Only messages with this status (another value filters nothing)."
+				},
+				"channel": {
+					"$ref": "#/components/schemas/Channel",
+					"description": "Only messages on this channel (another value filters nothing)."
+				},
+				"to": {
+					"type": "string",
+					"description": "Only messages to this address: an e-mail address or a phone number (matched normalised), else a subscriber or staff id."
+				}
+			}
+		},
+		"response": {
+			"$ref": "#/components/schemas/Counts"
+		}
+	},
+	"POST /v1/admin/messages": {
+		"summary": "Send a message from your staff (send message and template editor widgets)",
+		"description": "Without template: a one-off message with the words typed now, required and urgent (it ignores unsubscribes and quiet hours, not send limits). With template: the saved template with sample values (the template editor's test send). Either is logged as a staff message and in the activity log. The answer is the message as the delivery log keeps it. 422 validation_failed for a field; 422 template_not_found. Send an Idempotency-Key so a retried request sends once.",
+		"body": {
+			"type": "object",
+			"required": ["channel", "to"],
+			"properties": {
+				"channel": {
+					"type": "string",
+					"enum": ["email", "sms", "whatsapp"]
+				},
+				"to": {
+					"type": "string",
+					"description": "An e-mail address for email; a phone number with its calling code for sms and whatsapp."
+				},
+				"subject": {
+					"type": "string",
+					"description": "A one-off e-mail: required, one line of at most 200 characters (trimmed)."
+				},
+				"text": {
+					"type": "string",
+					"description": "A one-off message: required, at most 4096 characters (trimmed)."
+				},
+				"template": {
+					"type": "string",
+					"pattern": "^[a-z][a-z0-9_.-]{0,63}$",
+					"description": "A test send of this saved template (subject and text are then not used)."
+				},
+				"language": {
+					"type": "string",
+					"description": "With template: the version to use, default or a language code such as en, ur or pt-BR."
+				},
+				"values": {
+					"$ref": "#/components/schemas/Values"
+				}
+			}
+		},
+		"status": 201,
+		"response": {
+			"$ref": "#/components/schemas/Message"
+		}
+	},
+	"GET /v1/admin/templates": {
+		"summary": "The templates of every channel (template editor widget)",
+		"description": "At most 1000, by key, channel and language.",
+		"response": {
+			"$ref": "#/components/schemas/TemplateList"
+		}
+	},
+	"PUT /v1/admin/templates": {
+		"summary": "Save a template (template editor widget)",
+		"description": "422 validation_failed for a field, or when the website already has 1000 templates. The change is in the activity log by the ticket's member of staff.",
+		"body": {
+			"$ref": "#/components/schemas/TemplateInput"
+		},
+		"response": {
+			"$ref": "#/components/schemas/Template"
+		}
+	},
+	"DELETE /v1/admin/templates/:key/:channel/:language": {
+		"summary": "Delete a template (template editor widget)",
+		"description": "language is default for the default version. 404 not_found when there is no such template.",
+		"status": 204
+	},
+	"POST /v1/admin/push/subscriptions": {
+		"summary": "Turn on staff push in this browser (staff notifications widget)",
+		"description": "Saves the browser's subscription for the ticket's user; send to them with to: { staffId: <the user id in the ticket> }. 422 validation_failed when the subscription is not an https endpoint with a 65-byte p256dh key and a 16-byte auth secret.",
+		"body": {
+			"type": "object",
+			"required": ["subscription"],
+			"properties": {
+				"subscription": {
+					"$ref": "#/components/schemas/PushSubscriptionInput"
+				}
+			}
+		},
+		"status": 201,
+		"response": {
+			"$ref": "#/components/schemas/Subscriber"
+		}
+	}
+}

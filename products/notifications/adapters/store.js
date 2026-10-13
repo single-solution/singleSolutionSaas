@@ -160,7 +160,11 @@ export const createStore = (data, { now }) => {
 			/** @param {string} key @param {Channel} channel @returns {Promise<Template[]>} */
 			versions: async (key, channel) =>
 				as(await templates.find({ websiteId, key, channel }, { projection: TEMPLATE_PROJECTION }).toArray()),
-			/** @param {Template} template @returns {Promise<'saved' | 'full'>} */
+			/**
+			 * Save a template (one with the same key, channel and language is replaced).
+			 * @param {Template} template
+			 * @returns {Promise<(Template & { updatedAt: Date }) | 'full'>} the template as saved, or `full` at 1000 templates
+			 */
 			save: async (template) => {
 				const existing = await templates.countDocuments({
 					websiteId,
@@ -174,7 +178,12 @@ export const createStore = (data, { now }) => {
 					{ $set: { ...template }, $setOnInsert: { createdAt: at() } },
 					{ upsert: true },
 				);
-				return 'saved';
+				return as(
+					await templates.findOne(
+						{ websiteId, key: template.key, channel: template.channel, language: template.language },
+						{ projection: TEMPLATE_PROJECTION },
+					),
+				);
 			},
 			/** @param {string} key @param {Channel} channel @param {string} language @returns {Promise<boolean>} */
 			remove: async (key, channel, language) =>

@@ -21,6 +21,89 @@
 				],
 				"parameters": [
 					{
+						"name": "actor",
+						"in": "query",
+						"required": false,
+						"description": "An actor id.",
+						"schema": {
+							"type": "string",
+							"maxLength": 256,
+							"description": "An actor id."
+						}
+					},
+					{
+						"name": "action",
+						"in": "query",
+						"required": false,
+						"description": "One action, or several separated by commas.",
+						"schema": {
+							"type": "string",
+							"description": "One action, or several separated by commas."
+						}
+					},
+					{
+						"name": "target",
+						"in": "query",
+						"required": false,
+						"description": "A target id.",
+						"schema": {
+							"type": "string",
+							"maxLength": 256,
+							"description": "A target id."
+						}
+					},
+					{
+						"name": "q",
+						"in": "query",
+						"required": false,
+						"description": "Searches labels, details, actor names and targets.",
+						"schema": {
+							"type": "string",
+							"description": "Searches labels, details, actor names and targets."
+						}
+					},
+					{
+						"name": "from",
+						"in": "query",
+						"required": false,
+						"description": "An ISO-8601 time, or a day (YYYY-MM-DD) in the business time zone.",
+						"schema": {
+							"type": "string",
+							"description": "An ISO-8601 time, or a day (YYYY-MM-DD) in the business time zone."
+						}
+					},
+					{
+						"name": "to",
+						"in": "query",
+						"required": false,
+						"description": "An ISO-8601 time, or a day (YYYY-MM-DD; its end) in the business time zone.",
+						"schema": {
+							"type": "string",
+							"description": "An ISO-8601 time, or a day (YYYY-MM-DD; its end) in the business time zone."
+						}
+					},
+					{
+						"name": "cursor",
+						"in": "query",
+						"required": false,
+						"description": "nextCursor of the previous page.",
+						"schema": {
+							"type": "string",
+							"description": "nextCursor of the previous page."
+						}
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 100,
+							"default": 50
+						}
+					},
+					{
 						"$ref": "#/components/parameters/SSActorId"
 					},
 					{
@@ -34,8 +117,38 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"items",
+										"nextCursor",
+										"hasMore"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"items": {
+											"type": "array",
+											"items": {
+												"$ref": "#/components/schemas/ActivityEntry"
+											}
+										},
+										"nextCursor": {
+											"type": [
+												"string",
+												"null"
+											]
+										},
+										"hasMore": {
+											"type": "boolean"
+										}
+									}
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -61,6 +174,56 @@
 				],
 				"parameters": [
 					{
+						"name": "actor",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"maxLength": 256
+						}
+					},
+					{
+						"name": "action",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "target",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"maxLength": 256
+						}
+					},
+					{
+						"name": "q",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "from",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "to",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
 						"$ref": "#/components/parameters/SSActorId"
 					},
 					{
@@ -74,8 +237,15 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Count"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -101,6 +271,69 @@
 				],
 				"parameters": [
 					{
+						"name": "by",
+						"in": "query",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"enum": [
+								"action",
+								"actor",
+								"kind"
+							]
+						}
+					},
+					{
+						"name": "actor",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"maxLength": 256
+						}
+					},
+					{
+						"name": "action",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "target",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"maxLength": 256
+						}
+					},
+					{
+						"name": "q",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "from",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "to",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
 						"$ref": "#/components/parameters/SSActorId"
 					},
 					{
@@ -114,8 +347,15 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Counts"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -132,6 +372,7 @@
 		},
 		"/v1/admin/messages": {
 			"get": {
+				"summary": "The delivery log, newest first (delivery log widget)",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "send_api",
 				"x-ss-permission": "log.read",
@@ -140,10 +381,69 @@
 						"ticket": []
 					}
 				],
-				"parameters": [],
+				"parameters": [
+					{
+						"name": "cursor",
+						"in": "query",
+						"required": false,
+						"description": "nextCursor of the previous page.",
+						"schema": {
+							"type": "string",
+							"description": "nextCursor of the previous page."
+						}
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 100,
+							"default": 25
+						}
+					},
+					{
+						"name": "status",
+						"in": "query",
+						"required": false,
+						"description": "Only messages with this status (another value filters nothing).",
+						"schema": {
+							"$ref": "#/components/schemas/MessageStatus",
+							"description": "Only messages with this status (another value filters nothing)."
+						}
+					},
+					{
+						"name": "channel",
+						"in": "query",
+						"required": false,
+						"description": "Only messages on this channel (another value filters nothing).",
+						"schema": {
+							"$ref": "#/components/schemas/Channel",
+							"description": "Only messages on this channel (another value filters nothing)."
+						}
+					},
+					{
+						"name": "to",
+						"in": "query",
+						"required": false,
+						"description": "Only messages to this address: an e-mail address or a phone number (matched normalised), else a subscriber or staff id.",
+						"schema": {
+							"type": "string",
+							"description": "Only messages to this address: an e-mail address or a phone number (matched normalised), else a subscriber or staff id."
+						}
+					}
+				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/MessagePage"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -158,6 +458,8 @@
 				}
 			},
 			"post": {
+				"summary": "Send a message from your staff (send message and template editor widgets)",
+				"description": "Without template: a one-off message with the words typed now, required and urgent (it ignores unsubscribes and quiet hours, not send limits). With template: the saved template with sample values (the template editor's test send). Either is logged as a staff message and in the activity log. The answer is the message as the delivery log keeps it. 422 validation_failed for a field; 422 template_not_found. Send an Idempotency-Key so a retried request sends once.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "send_api",
 				"x-ss-permission": "messages.send",
@@ -171,15 +473,71 @@
 						"name": "Idempotency-Key",
 						"in": "header",
 						"required": false,
+						"description": "A key of your own per request: the same request again within 24 hours gets the first answer (Idempotent-Replayed: true); another request with it answers 409 duplicate_request.",
 						"schema": {
 							"type": "string",
 							"maxLength": 255
 						}
 					}
 				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"channel",
+									"to"
+								],
+								"properties": {
+									"channel": {
+										"type": "string",
+										"enum": [
+											"email",
+											"sms",
+											"whatsapp"
+										]
+									},
+									"to": {
+										"type": "string",
+										"description": "An e-mail address for email; a phone number with its calling code for sms and whatsapp."
+									},
+									"subject": {
+										"type": "string",
+										"description": "A one-off e-mail: required, one line of at most 200 characters (trimmed)."
+									},
+									"text": {
+										"type": "string",
+										"description": "A one-off message: required, at most 4096 characters (trimmed)."
+									},
+									"template": {
+										"type": "string",
+										"pattern": "^[a-z][a-z0-9_.-]{0,63}$",
+										"description": "A test send of this saved template (subject and text are then not used)."
+									},
+									"language": {
+										"type": "string",
+										"description": "With template: the version to use, default or a language code such as en, ur or pt-BR."
+									},
+									"values": {
+										"$ref": "#/components/schemas/Values"
+									}
+								}
+							}
+						}
+					}
+				},
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"201": {
+						"description": "Created",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Message"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -196,6 +554,7 @@
 		},
 		"/v1/admin/messages/count": {
 			"get": {
+				"summary": "Count the delivery log (delivery log widget)",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "send_api",
 				"x-ss-permission": "log.read",
@@ -204,10 +563,48 @@
 						"ticket": []
 					}
 				],
-				"parameters": [],
+				"parameters": [
+					{
+						"name": "status",
+						"in": "query",
+						"required": false,
+						"description": "Only messages with this status (another value filters nothing).",
+						"schema": {
+							"$ref": "#/components/schemas/MessageStatus",
+							"description": "Only messages with this status (another value filters nothing)."
+						}
+					},
+					{
+						"name": "channel",
+						"in": "query",
+						"required": false,
+						"description": "Only messages on this channel (another value filters nothing).",
+						"schema": {
+							"$ref": "#/components/schemas/Channel",
+							"description": "Only messages on this channel (another value filters nothing)."
+						}
+					},
+					{
+						"name": "to",
+						"in": "query",
+						"required": false,
+						"description": "Only messages to this address: an e-mail address or a phone number (matched normalised), else a subscriber or staff id.",
+						"schema": {
+							"type": "string",
+							"description": "Only messages to this address: an e-mail address or a phone number (matched normalised), else a subscriber or staff id."
+						}
+					}
+				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Count"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -224,6 +621,8 @@
 		},
 		"/v1/admin/messages/counts": {
 			"get": {
+				"summary": "Count the delivery log by status, channel, template or source (delivery log widget)",
+				"description": "by=template counts a one-off message from your staff under none.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "send_api",
 				"x-ss-permission": "log.read",
@@ -232,10 +631,62 @@
 						"ticket": []
 					}
 				],
-				"parameters": [],
+				"parameters": [
+					{
+						"name": "by",
+						"in": "query",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"enum": [
+								"status",
+								"channel",
+								"template",
+								"source"
+							]
+						}
+					},
+					{
+						"name": "status",
+						"in": "query",
+						"required": false,
+						"description": "Only messages with this status (another value filters nothing).",
+						"schema": {
+							"$ref": "#/components/schemas/MessageStatus",
+							"description": "Only messages with this status (another value filters nothing)."
+						}
+					},
+					{
+						"name": "channel",
+						"in": "query",
+						"required": false,
+						"description": "Only messages on this channel (another value filters nothing).",
+						"schema": {
+							"$ref": "#/components/schemas/Channel",
+							"description": "Only messages on this channel (another value filters nothing)."
+						}
+					},
+					{
+						"name": "to",
+						"in": "query",
+						"required": false,
+						"description": "Only messages to this address: an e-mail address or a phone number (matched normalised), else a subscriber or staff id.",
+						"schema": {
+							"type": "string",
+							"description": "Only messages to this address: an e-mail address or a phone number (matched normalised), else a subscriber or staff id."
+						}
+					}
+				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Counts"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -252,6 +703,8 @@
 		},
 		"/v1/admin/push/subscriptions": {
 			"post": {
+				"summary": "Turn on staff push in this browser (staff notifications widget)",
+				"description": "Saves the browser's subscription for the ticket's user; send to them with to: { staffId: <the user id in the ticket> }. 422 validation_failed when the subscription is not an https endpoint with a 65-byte p256dh key and a 16-byte auth secret.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "staff_push",
 				"x-ss-permission": "push.subscribe",
@@ -261,9 +714,34 @@
 					}
 				],
 				"parameters": [],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"subscription"
+								],
+								"properties": {
+									"subscription": {
+										"$ref": "#/components/schemas/PushSubscriptionInput"
+									}
+								}
+							}
+						}
+					}
+				},
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"201": {
+						"description": "Created",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Subscriber"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -280,6 +758,8 @@
 		},
 		"/v1/admin/templates": {
 			"get": {
+				"summary": "The templates of every channel (template editor widget)",
+				"description": "At most 1000, by key, channel and language.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "send_api",
 				"x-ss-permission": "templates.edit",
@@ -290,8 +770,15 @@
 				],
 				"parameters": [],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/TemplateList"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -306,6 +793,8 @@
 				}
 			},
 			"put": {
+				"summary": "Save a template (template editor widget)",
+				"description": "422 validation_failed for a field, or when the website already has 1000 templates. The change is in the activity log by the ticket's member of staff.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "send_api",
 				"x-ss-permission": "templates.edit",
@@ -315,9 +804,26 @@
 					}
 				],
 				"parameters": [],
+				"requestBody": {
+					"required": false,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/TemplateInput"
+							}
+						}
+					}
+				},
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Template"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -334,6 +840,8 @@
 		},
 		"/v1/admin/templates/{key}/{channel}/{language}": {
 			"delete": {
+				"summary": "Delete a template (template editor widget)",
+				"description": "language is default for the default version. 404 not_found when there is no such template.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "send_api",
 				"x-ss-permission": "templates.edit",
@@ -369,8 +877,8 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"204": {
+						"description": "No content"
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -409,8 +917,27 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"connections"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"connections": {
+											"type": "array",
+											"items": {
+												"$ref": "#/components/schemas/Connection"
+											}
+										}
+									}
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -457,8 +984,8 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"204": {
+						"description": "No content"
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -502,9 +1029,38 @@
 						"$ref": "#/components/parameters/SSActorEmail"
 					}
 				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"value"
+								],
+								"properties": {
+									"value": {
+										"type": [
+											"string",
+											"object"
+										],
+										"description": "The secret, or its fields."
+									}
+								}
+							}
+						}
+					}
+				},
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Connection"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -551,8 +1107,15 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Connection"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -590,9 +1153,69 @@
 						"$ref": "#/components/parameters/SSActorEmail"
 					}
 				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"user"
+								],
+								"additionalProperties": false,
+								"properties": {
+									"user": {
+										"type": "object",
+										"additionalProperties": false,
+										"description": "At least one of id, email and phone.",
+										"properties": {
+											"id": {
+												"type": "string",
+												"minLength": 1,
+												"maxLength": 256
+											},
+											"email": {
+												"type": "string",
+												"format": "email",
+												"maxLength": 320
+											},
+											"phone": {
+												"type": "string",
+												"pattern": "^\\+?[0-9 ().-]{3,40}$"
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				},
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"deleted",
+										"anonymised"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"deleted": {
+											"type": "integer",
+											"minimum": 0
+										},
+										"anonymised": {
+											"type": "integer",
+											"minimum": 0,
+											"description": "Records kept without the person's details."
+										}
+									}
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -630,9 +1253,66 @@
 						"$ref": "#/components/parameters/SSActorEmail"
 					}
 				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"user"
+								],
+								"additionalProperties": false,
+								"properties": {
+									"user": {
+										"type": "object",
+										"additionalProperties": false,
+										"description": "At least one of id, email and phone.",
+										"properties": {
+											"id": {
+												"type": "string",
+												"minLength": 1,
+												"maxLength": 256
+											},
+											"email": {
+												"type": "string",
+												"format": "email",
+												"maxLength": 320
+											},
+											"phone": {
+												"type": "string",
+												"pattern": "^\\+?[0-9 ().-]{3,40}$"
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				},
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"records"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"records": {
+											"type": "object",
+											"additionalProperties": {
+												"type": "array"
+											},
+											"description": "The person's records by kind (each product names its own; staff: the kit's staff records)."
+										}
+									}
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -649,6 +1329,8 @@
 		},
 		"/v1/events": {
 			"post": {
+				"summary": "Forward another product's event to your webhook URLs",
+				"description": "Products call it with the Notifications server token right after an event, with the event id as the Idempotency-Key. The event goes, signed, to each webhook URL that takes its type (or every event), and is tried there up to 5 times in all, on later uses of your website. The webhook keeps id and at as its id and createdAt (else a new id and the time it was received). 422 validation_failed for a field.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "webhooks",
 				"security": [
@@ -661,6 +1343,7 @@
 						"name": "Idempotency-Key",
 						"in": "header",
 						"required": false,
+						"description": "A key of your own per request: the same request again within 24 hours gets the first answer (Idempotent-Replayed: true); another request with it answers 409 duplicate_request.",
 						"schema": {
 							"type": "string",
 							"maxLength": 255
@@ -679,9 +1362,63 @@
 						"$ref": "#/components/parameters/SSActorEmail"
 					}
 				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"type",
+									"data"
+								],
+								"properties": {
+									"id": {
+										"type": "string",
+										"pattern": "^evt_[0-9a-z]{10,64}$",
+										"description": "The event id in your product."
+									},
+									"type": {
+										"type": "string",
+										"pattern": "^(accounts|ecommerce|chat|payments|growth)\\.[a-z][a-z0-9_.]{0,62}$",
+										"description": "<product id>.<event>, for example payments.payment.paid."
+									},
+									"at": {
+										"type": "string",
+										"format": "date-time",
+										"description": "When it happened (ISO 8601 with its offset)."
+									},
+									"data": {
+										"type": "object",
+										"description": "The event's data: at most 16 kB of JSON."
+									}
+								}
+							}
+						}
+					}
+				},
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"202": {
+						"description": "Accepted",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"queued"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"queued": {
+											"type": "integer",
+											"minimum": 0,
+											"maximum": 5,
+											"description": "Deliveries queued, one per URL that takes the type (0 without the signing secret or such URLs)."
+										}
+									}
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -720,8 +1457,53 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"features"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"features": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"required": [
+													"key",
+													"name",
+													"description",
+													"on",
+													"millicreditsPerHour"
+												],
+												"additionalProperties": false,
+												"properties": {
+													"key": {
+														"type": "string"
+													},
+													"name": {
+														"type": "string"
+													},
+													"description": {
+														"type": "string"
+													},
+													"on": {
+														"type": "boolean"
+													},
+													"millicreditsPerHour": {
+														"type": "integer",
+														"minimum": 0
+													}
+												}
+											}
+										}
+									}
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -760,8 +1542,15 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Format"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -797,9 +1586,72 @@
 						"$ref": "#/components/parameters/SSActorEmail"
 					}
 				],
+				"requestBody": {
+					"required": false,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"additionalProperties": false,
+								"description": "The fields to change; null resets a field.",
+								"properties": {
+									"locale": {
+										"type": [
+											"string",
+											"null"
+										]
+									},
+									"currencyDisplay": {
+										"type": [
+											"string",
+											"null"
+										],
+										"enum": [
+											"code",
+											"symbol",
+											"custom",
+											null
+										]
+									},
+									"currencySymbol": {
+										"type": [
+											"string",
+											"null"
+										],
+										"maxLength": 8
+									},
+									"wholeUnits": {
+										"type": [
+											"boolean",
+											"null"
+										]
+									},
+									"times": {
+										"type": [
+											"string",
+											"null"
+										],
+										"enum": [
+											"viewer",
+											"business",
+											null
+										]
+									}
+								}
+							}
+						}
+					}
+				},
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Format"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -846,8 +1698,24 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"value"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"value": {
+											"description": "The saved list, else its default (each product describes its lists)."
+										}
+									}
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -891,9 +1759,41 @@
 						"$ref": "#/components/parameters/SSActorEmail"
 					}
 				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"value"
+								],
+								"properties": {
+									"value": {}
+								}
+							}
+						}
+					}
+				},
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"value"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"value": {
+											"description": "The list as saved."
+										}
+									}
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -910,6 +1810,7 @@
 		},
 		"/v1/messages": {
 			"get": {
+				"summary": "The delivery log, newest first",
 				"x-ss-auth": "server",
 				"x-ss-feature": "send_api",
 				"security": [
@@ -918,6 +1819,57 @@
 					}
 				],
 				"parameters": [
+					{
+						"name": "cursor",
+						"in": "query",
+						"required": false,
+						"description": "nextCursor of the previous page.",
+						"schema": {
+							"type": "string",
+							"description": "nextCursor of the previous page."
+						}
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 100,
+							"default": 25
+						}
+					},
+					{
+						"name": "status",
+						"in": "query",
+						"required": false,
+						"description": "Only messages with this status (another value filters nothing).",
+						"schema": {
+							"$ref": "#/components/schemas/MessageStatus",
+							"description": "Only messages with this status (another value filters nothing)."
+						}
+					},
+					{
+						"name": "channel",
+						"in": "query",
+						"required": false,
+						"description": "Only messages on this channel (another value filters nothing).",
+						"schema": {
+							"$ref": "#/components/schemas/Channel",
+							"description": "Only messages on this channel (another value filters nothing)."
+						}
+					},
+					{
+						"name": "to",
+						"in": "query",
+						"required": false,
+						"description": "Only messages to this address: an e-mail address or a phone number (matched normalised), else a subscriber or staff id.",
+						"schema": {
+							"type": "string",
+							"description": "Only messages to this address: an e-mail address or a phone number (matched normalised), else a subscriber or staff id."
+						}
+					},
 					{
 						"$ref": "#/components/parameters/SSActorId"
 					},
@@ -932,8 +1884,15 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/MessagePage"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -950,6 +1909,7 @@
 		},
 		"/v1/messages/count": {
 			"get": {
+				"summary": "Count the delivery log (the list's filters)",
 				"x-ss-auth": "server",
 				"x-ss-feature": "send_api",
 				"security": [
@@ -958,6 +1918,36 @@
 					}
 				],
 				"parameters": [
+					{
+						"name": "status",
+						"in": "query",
+						"required": false,
+						"description": "Only messages with this status (another value filters nothing).",
+						"schema": {
+							"$ref": "#/components/schemas/MessageStatus",
+							"description": "Only messages with this status (another value filters nothing)."
+						}
+					},
+					{
+						"name": "channel",
+						"in": "query",
+						"required": false,
+						"description": "Only messages on this channel (another value filters nothing).",
+						"schema": {
+							"$ref": "#/components/schemas/Channel",
+							"description": "Only messages on this channel (another value filters nothing)."
+						}
+					},
+					{
+						"name": "to",
+						"in": "query",
+						"required": false,
+						"description": "Only messages to this address: an e-mail address or a phone number (matched normalised), else a subscriber or staff id.",
+						"schema": {
+							"type": "string",
+							"description": "Only messages to this address: an e-mail address or a phone number (matched normalised), else a subscriber or staff id."
+						}
+					},
 					{
 						"$ref": "#/components/parameters/SSActorId"
 					},
@@ -972,8 +1962,15 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Count"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -990,6 +1987,8 @@
 		},
 		"/v1/messages/counts": {
 			"get": {
+				"summary": "Count the delivery log by status, channel, template or source",
+				"description": "by=template counts a one-off message from your staff under none.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "send_api",
 				"security": [
@@ -998,6 +1997,50 @@
 					}
 				],
 				"parameters": [
+					{
+						"name": "by",
+						"in": "query",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"enum": [
+								"status",
+								"channel",
+								"template",
+								"source"
+							]
+						}
+					},
+					{
+						"name": "status",
+						"in": "query",
+						"required": false,
+						"description": "Only messages with this status (another value filters nothing).",
+						"schema": {
+							"$ref": "#/components/schemas/MessageStatus",
+							"description": "Only messages with this status (another value filters nothing)."
+						}
+					},
+					{
+						"name": "channel",
+						"in": "query",
+						"required": false,
+						"description": "Only messages on this channel (another value filters nothing).",
+						"schema": {
+							"$ref": "#/components/schemas/Channel",
+							"description": "Only messages on this channel (another value filters nothing)."
+						}
+					},
+					{
+						"name": "to",
+						"in": "query",
+						"required": false,
+						"description": "Only messages to this address: an e-mail address or a phone number (matched normalised), else a subscriber or staff id.",
+						"schema": {
+							"type": "string",
+							"description": "Only messages to this address: an e-mail address or a phone number (matched normalised), else a subscriber or staff id."
+						}
+					},
 					{
 						"$ref": "#/components/parameters/SSActorId"
 					},
@@ -1012,8 +2055,15 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Counts"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -1030,6 +2080,8 @@
 		},
 		"/v1/messages/email": {
 			"post": {
+				"summary": "Send an e-mail from a template",
+				"description": "The answer is the message as the delivery log keeps it. It is saved before its first attempt and sent at once unless a delayed send or quiet hours hold it; an attempt that fails or breaks off answers retrying and is tried again on later uses of your website, then on the fallback channel. Someone who unsubscribed gets only required messages (else skipped, reason unsubscribed); send limits skip with reason limited. 422 template_not_found when the key has no e-mail template; 422 validation_failed for a field; 403 feature_off for your own keys without Merchant send API (send_api), or sendAt without Delayed send. Send an Idempotency-Key so a retried request sends once.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "email",
 				"security": [
@@ -1042,6 +2094,7 @@
 						"name": "Idempotency-Key",
 						"in": "header",
 						"required": false,
+						"description": "A key of your own per request: the same request again within 24 hours gets the first answer (Idempotent-Replayed: true); another request with it answers 409 duplicate_request.",
 						"schema": {
 							"type": "string",
 							"maxLength": 255
@@ -1060,9 +2113,66 @@
 						"$ref": "#/components/parameters/SSActorEmail"
 					}
 				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"template",
+									"to"
+								],
+								"properties": {
+									"template": {
+										"type": "string",
+										"pattern": "^[a-z][a-z0-9_.-]{0,63}$",
+										"description": "The template key."
+									},
+									"to": {
+										"$ref": "#/components/schemas/EmailRecipient"
+									},
+									"values": {
+										"$ref": "#/components/schemas/Values"
+									},
+									"secretValues": {
+										"type": "array",
+										"maxItems": 50,
+										"items": {
+											"type": "string",
+											"pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$"
+										},
+										"description": "Names of values the delivery log hides, for example [\"code\", \"link\"]."
+									},
+									"required": {
+										"type": "boolean",
+										"default": false,
+										"description": "true sends it also to someone who unsubscribed (for example an order update from an optional template)."
+									},
+									"language": {
+										"type": "string",
+										"description": "A language code such as en, ur or pt-BR (default: to.language)."
+									},
+									"sendAt": {
+										"type": "string",
+										"format": "date-time",
+										"description": "Delayed send: at most the setting's days ahead (30 by default); a past time sends now. accounts. templates always go at once."
+									}
+								}
+							}
+						}
+					}
+				},
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"201": {
+						"description": "Created",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Message"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -1079,6 +2189,8 @@
 		},
 		"/v1/messages/push": {
 			"post": {
+				"summary": "Send a browser push to a visitor from a template",
+				"description": "The template's subject is the title and its text the body; a url value (https://… or a path) opens on a click. The answer is the message as the delivery log keeps it: failed when no browser is subscribed for the subscriber id. An attempt that fails or breaks off answers retrying and is tried again on later uses of your website. 422 template_not_found when the key has no push template; 422 validation_failed for a field; 403 feature_off for your own keys without Merchant send API (send_api), or sendAt without Delayed send. Send an Idempotency-Key so a retried request sends once.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "browser_push",
 				"security": [
@@ -1091,6 +2203,7 @@
 						"name": "Idempotency-Key",
 						"in": "header",
 						"required": false,
+						"description": "A key of your own per request: the same request again within 24 hours gets the first answer (Idempotent-Replayed: true); another request with it answers 409 duplicate_request.",
 						"schema": {
 							"type": "string",
 							"maxLength": 255
@@ -1109,9 +2222,66 @@
 						"$ref": "#/components/parameters/SSActorEmail"
 					}
 				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"template",
+									"to"
+								],
+								"properties": {
+									"template": {
+										"type": "string",
+										"pattern": "^[a-z][a-z0-9_.-]{0,63}$",
+										"description": "The template key."
+									},
+									"to": {
+										"$ref": "#/components/schemas/SubscriberRecipient"
+									},
+									"values": {
+										"$ref": "#/components/schemas/Values"
+									},
+									"secretValues": {
+										"type": "array",
+										"maxItems": 50,
+										"items": {
+											"type": "string",
+											"pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$"
+										},
+										"description": "Names of values the delivery log hides, for example [\"code\", \"link\"]."
+									},
+									"required": {
+										"type": "boolean",
+										"default": false,
+										"description": "true sends it also to someone who unsubscribed."
+									},
+									"language": {
+										"type": "string",
+										"description": "A language code such as en, ur or pt-BR (default: to.language)."
+									},
+									"sendAt": {
+										"type": "string",
+										"format": "date-time",
+										"description": "Delayed send: at most the setting's days ahead (30 by default); a past time sends now."
+									}
+								}
+							}
+						}
+					}
+				},
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"201": {
+						"description": "Created",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Message"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -1128,6 +2298,8 @@
 		},
 		"/v1/messages/sms": {
 			"post": {
+				"summary": "Send an SMS from a template",
+				"description": "The answer is the message as the delivery log keeps it. It is saved before its first attempt and sent at once unless a delayed send or quiet hours hold it; an attempt that fails or breaks off answers retrying and is tried again on later uses of your website, then on the fallback channel. Someone who unsubscribed (by link or STOP reply) gets only required messages (else skipped, reason unsubscribed); send limits skip with reason limited. 422 template_not_found when the key has no SMS template; 422 validation_failed for a field; 403 feature_off for your own keys without Merchant send API (send_api), or sendAt without Delayed send. Send an Idempotency-Key so a retried request sends once.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "sms",
 				"security": [
@@ -1140,6 +2312,7 @@
 						"name": "Idempotency-Key",
 						"in": "header",
 						"required": false,
+						"description": "A key of your own per request: the same request again within 24 hours gets the first answer (Idempotent-Replayed: true); another request with it answers 409 duplicate_request.",
 						"schema": {
 							"type": "string",
 							"maxLength": 255
@@ -1158,9 +2331,66 @@
 						"$ref": "#/components/parameters/SSActorEmail"
 					}
 				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"template",
+									"to"
+								],
+								"properties": {
+									"template": {
+										"type": "string",
+										"pattern": "^[a-z][a-z0-9_.-]{0,63}$",
+										"description": "The template key."
+									},
+									"to": {
+										"$ref": "#/components/schemas/PhoneRecipient"
+									},
+									"values": {
+										"$ref": "#/components/schemas/Values"
+									},
+									"secretValues": {
+										"type": "array",
+										"maxItems": 50,
+										"items": {
+											"type": "string",
+											"pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$"
+										},
+										"description": "Names of values the delivery log hides, for example [\"code\", \"link\"]."
+									},
+									"required": {
+										"type": "boolean",
+										"default": false,
+										"description": "true sends it also to someone who unsubscribed (for example an order update from an optional template)."
+									},
+									"language": {
+										"type": "string",
+										"description": "A language code such as en, ur or pt-BR (default: to.language)."
+									},
+									"sendAt": {
+										"type": "string",
+										"format": "date-time",
+										"description": "Delayed send: at most the setting's days ahead (30 by default); a past time sends now. accounts. templates always go at once."
+									}
+								}
+							}
+						}
+					}
+				},
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"201": {
+						"description": "Created",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Message"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -1177,6 +2407,8 @@
 		},
 		"/v1/messages/staff-push": {
 			"post": {
+				"summary": "Send a browser push to a member of your staff from a template",
+				"description": "Goes to every browser where they turned staff notifications on. The template's subject is the title and its text the body; a url value (https://… or a path) opens on a click. The answer is the message as the delivery log keeps it: failed when none of their browsers is subscribed. An attempt that fails or breaks off answers retrying and is tried again on later uses of your website. 422 template_not_found when the key has no staff_push template; 422 validation_failed for a field; 403 feature_off for your own keys without Merchant send API (send_api), or sendAt without Delayed send. Send an Idempotency-Key so a retried request sends once.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "staff_push",
 				"security": [
@@ -1189,6 +2421,7 @@
 						"name": "Idempotency-Key",
 						"in": "header",
 						"required": false,
+						"description": "A key of your own per request: the same request again within 24 hours gets the first answer (Idempotent-Replayed: true); another request with it answers 409 duplicate_request.",
 						"schema": {
 							"type": "string",
 							"maxLength": 255
@@ -1207,9 +2440,66 @@
 						"$ref": "#/components/parameters/SSActorEmail"
 					}
 				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"template",
+									"to"
+								],
+								"properties": {
+									"template": {
+										"type": "string",
+										"pattern": "^[a-z][a-z0-9_.-]{0,63}$",
+										"description": "The template key."
+									},
+									"to": {
+										"$ref": "#/components/schemas/StaffRecipient"
+									},
+									"values": {
+										"$ref": "#/components/schemas/Values"
+									},
+									"secretValues": {
+										"type": "array",
+										"maxItems": 50,
+										"items": {
+											"type": "string",
+											"pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$"
+										},
+										"description": "Names of values the delivery log hides, for example [\"code\", \"link\"]."
+									},
+									"required": {
+										"type": "boolean",
+										"default": false,
+										"description": "true sends it also to someone who unsubscribed."
+									},
+									"language": {
+										"type": "string",
+										"description": "A language code such as en, ur or pt-BR (default: to.language)."
+									},
+									"sendAt": {
+										"type": "string",
+										"format": "date-time",
+										"description": "Delayed send: at most the setting's days ahead (30 by default); a past time sends now."
+									}
+								}
+							}
+						}
+					}
+				},
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"201": {
+						"description": "Created",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Message"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -1226,6 +2516,8 @@
 		},
 		"/v1/messages/whatsapp": {
 			"post": {
+				"summary": "Send a WhatsApp message from a template",
+				"description": "The answer is the message as the delivery log keeps it. It is saved before its first attempt and sent at once unless a delayed send or quiet hours hold it; an attempt that fails or breaks off answers retrying and is tried again on later uses of your website, then on the fallback channel. Someone who unsubscribed (by link or STOP reply) gets only required messages (else skipped, reason unsubscribed); send limits skip with reason limited. A template with a providerTemplate is sent as that template at Meta, its values as body parameters in the order the text uses them. 422 template_not_found when the key has no WhatsApp template; 422 validation_failed for a field; 403 feature_off for your own keys without Merchant send API (send_api), or sendAt without Delayed send. Send an Idempotency-Key so a retried request sends once.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "whatsapp",
 				"security": [
@@ -1238,6 +2530,7 @@
 						"name": "Idempotency-Key",
 						"in": "header",
 						"required": false,
+						"description": "A key of your own per request: the same request again within 24 hours gets the first answer (Idempotent-Replayed: true); another request with it answers 409 duplicate_request.",
 						"schema": {
 							"type": "string",
 							"maxLength": 255
@@ -1256,9 +2549,66 @@
 						"$ref": "#/components/parameters/SSActorEmail"
 					}
 				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"template",
+									"to"
+								],
+								"properties": {
+									"template": {
+										"type": "string",
+										"pattern": "^[a-z][a-z0-9_.-]{0,63}$",
+										"description": "The template key."
+									},
+									"to": {
+										"$ref": "#/components/schemas/PhoneRecipient"
+									},
+									"values": {
+										"$ref": "#/components/schemas/Values"
+									},
+									"secretValues": {
+										"type": "array",
+										"maxItems": 50,
+										"items": {
+											"type": "string",
+											"pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$"
+										},
+										"description": "Names of values the delivery log hides, for example [\"code\", \"link\"]."
+									},
+									"required": {
+										"type": "boolean",
+										"default": false,
+										"description": "true sends it also to someone who unsubscribed (for example an order update from an optional template)."
+									},
+									"language": {
+										"type": "string",
+										"description": "A language code such as en, ur or pt-BR (default: to.language)."
+									},
+									"sendAt": {
+										"type": "string",
+										"format": "date-time",
+										"description": "Delayed send: at most the setting's days ahead (30 by default); a past time sends now. accounts. templates always go at once."
+									}
+								}
+							}
+						}
+					}
+				},
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"201": {
+						"description": "Created",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Message"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -1275,6 +2625,8 @@
 		},
 		"/v1/messages/{id}": {
 			"get": {
+				"summary": "Read a message of the delivery log",
+				"description": "404 not_found when there is no such message (or it was removed after the days the delivery log keeps).",
 				"x-ss-auth": "server",
 				"x-ss-feature": "send_api",
 				"security": [
@@ -1305,8 +2657,15 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Message"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -1345,8 +2704,44 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"permissions"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"permissions": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"required": [
+													"key",
+													"name",
+													"feature"
+												],
+												"additionalProperties": false,
+												"properties": {
+													"key": {
+														"type": "string"
+													},
+													"name": {
+														"type": "string"
+													},
+													"feature": {
+														"type": "string"
+													}
+												}
+											}
+										}
+									}
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -1363,6 +2758,8 @@
 		},
 		"/v1/push/subscriptions": {
 			"post": {
+				"summary": "Turn on browser push for a visitor",
+				"description": "The push-permission widget calls it with the browser token; send to the answer's id with to: { subscriberId }. 422 validation_failed when the subscription is not an https endpoint with a 65-byte p256dh key and a 16-byte auth secret.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "browser_push",
 				"security": [
@@ -1390,9 +2787,34 @@
 						"$ref": "#/components/parameters/SSActorEmail"
 					}
 				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"subscription"
+								],
+								"properties": {
+									"subscription": {
+										"$ref": "#/components/schemas/PushSubscriptionInput"
+									}
+								}
+							}
+						}
+					}
+				},
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"201": {
+						"description": "Created",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Subscriber"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -1409,6 +2831,8 @@
 		},
 		"/v1/push/subscriptions/remove": {
 			"post": {
+				"summary": "Turn off browser push for a visitor",
+				"description": "Removes the subscription when the subscriber id and its endpoint match (the browser proves it holds it); 204 also when there is none.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "browser_push",
 				"security": [
@@ -1436,9 +2860,31 @@
 						"$ref": "#/components/parameters/SSActorEmail"
 					}
 				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"subscriberId",
+									"endpoint"
+								],
+								"properties": {
+									"subscriberId": {
+										"type": "string"
+									},
+									"endpoint": {
+										"type": "string"
+									}
+								}
+							}
+						}
+					}
+				},
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"204": {
+						"description": "No content"
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -1477,8 +2923,71 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"features"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"features": {
+											"type": "array",
+											"description": "Each feature's settings, then the settings several features share.",
+											"items": {
+												"type": "object",
+												"required": [
+													"key",
+													"name",
+													"on",
+													"schema",
+													"values"
+												],
+												"additionalProperties": false,
+												"properties": {
+													"key": {
+														"type": "string"
+													},
+													"name": {
+														"type": "string"
+													},
+													"on": {
+														"type": "boolean"
+													},
+													"schema": {
+														"type": "object",
+														"description": "The settings' JSON Schema (from the manifest)."
+													},
+													"values": {
+														"type": [
+															"object",
+															"null"
+														],
+														"description": "Setting → { value, source }; null while the feature is off.",
+														"additionalProperties": {
+															"type": "object",
+															"required": [
+																"source"
+															],
+															"additionalProperties": false,
+															"properties": {
+																"value": {},
+																"source": {
+																	"$ref": "#/components/schemas/ValueSource"
+																}
+															}
+														}
+													}
+												}
+											}
+										}
+									}
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -1525,8 +3034,29 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"key",
+										"source"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"key": {
+											"type": "string"
+										},
+										"value": {},
+										"source": {
+											"$ref": "#/components/schemas/ValueSource"
+										}
+									}
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -1542,6 +3072,7 @@
 			},
 			"put": {
 				"summary": "Save one setting (<feature>.<setting>, { value })",
+				"description": "The feature must be on (else 403 feature_off); an invalid value answers 422 validation_failed with errors.",
 				"x-ss-auth": "server",
 				"security": [
 					{
@@ -1570,9 +3101,48 @@
 						"$ref": "#/components/parameters/SSActorEmail"
 					}
 				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"value"
+								],
+								"properties": {
+									"value": {
+										"description": "A value the setting's schema allows (not null: DELETE resets)."
+									}
+								}
+							}
+						}
+					}
+				},
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"key",
+										"source"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"key": {
+											"type": "string"
+										},
+										"value": {},
+										"source": {
+											"$ref": "#/components/schemas/ValueSource"
+										}
+									}
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -1589,6 +3159,8 @@
 		},
 		"/v1/templates": {
 			"get": {
+				"summary": "The templates of the switched-on channels",
+				"description": "At most 1000, by key, channel and language.",
 				"x-ss-auth": "server",
 				"x-ss-feature": [
 					"email",
@@ -1617,8 +3189,15 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/TemplateList"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -1633,6 +3212,8 @@
 				}
 			},
 			"put": {
+				"summary": "Save a template",
+				"description": "The same checks as the dashboard: 422 validation_failed for a field, or when the website already has 1000 templates; 403 feature_off while the channel's feature is off. Writes count in the settings API's 60 writes per minute (429 rate_limited). The change shows in Recent changes with the acting user (SS-Actor-* headers), else Server.",
 				"x-ss-auth": "server",
 				"x-ss-feature": [
 					"email",
@@ -1660,9 +3241,26 @@
 						"$ref": "#/components/parameters/SSActorEmail"
 					}
 				],
+				"requestBody": {
+					"required": false,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/TemplateInput"
+							}
+						}
+					}
+				},
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Template"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -1679,6 +3277,8 @@
 		},
 		"/v1/templates/{key}/{channel}/{language}": {
 			"delete": {
+				"summary": "Delete a template",
+				"description": "language is default for the default version. 404 not_found when there is no such template; 403 feature_off while the channel's feature is off. Writes count in the settings API's 60 writes per minute (429 rate_limited).",
 				"x-ss-auth": "server",
 				"x-ss-feature": [
 					"email",
@@ -1731,8 +3331,8 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"204": {
+						"description": "No content"
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -1771,8 +3371,27 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"texts"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"texts": {
+											"type": "array",
+											"items": {
+												"$ref": "#/components/schemas/Text"
+											}
+										}
+									}
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -1819,8 +3438,15 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Text"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -1836,6 +3462,7 @@
 			},
 			"put": {
 				"summary": "Save one widget text ({ value })",
+				"description": "1–2000 characters with the same {placeholders} as the English text.",
 				"x-ss-auth": "server",
 				"security": [
 					{
@@ -1864,9 +3491,36 @@
 						"$ref": "#/components/parameters/SSActorEmail"
 					}
 				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"value"
+								],
+								"properties": {
+									"value": {
+										"type": "string",
+										"minLength": 1,
+										"maxLength": 2000
+									}
+								}
+							}
+						}
+					}
+				},
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Text"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -1905,8 +3559,15 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Theme"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -1942,9 +3603,68 @@
 						"$ref": "#/components/parameters/SSActorEmail"
 					}
 				],
+				"requestBody": {
+					"required": false,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"additionalProperties": false,
+								"description": "The fields to change; null resets a field.",
+								"properties": {
+									"colors": {
+										"type": [
+											"object",
+											"null"
+										]
+									},
+									"fontFamily": {
+										"type": [
+											"string",
+											"null"
+										]
+									},
+									"radius": {
+										"type": [
+											"integer",
+											"null"
+										],
+										"minimum": 0,
+										"maximum": 24
+									},
+									"mode": {
+										"type": [
+											"string",
+											"null"
+										],
+										"enum": [
+											"light",
+											"dark",
+											"auto",
+											null
+										]
+									},
+									"customCss": {
+										"type": [
+											"string",
+											"null"
+										]
+									}
+								}
+							}
+						}
+					}
+				},
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Theme"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -1962,6 +3682,7 @@
 		"/v1/tickets": {
 			"post": {
 				"summary": "Ticket for an admin widget (15 minutes)",
+				"description": "Your server asks for a ticket for the member of your staff who opens an admin widget. Permissions of switched-off features are left out of the ticket.",
 				"x-ss-auth": "server",
 				"security": [
 					{
@@ -1982,9 +3703,84 @@
 						"$ref": "#/components/parameters/SSActorEmail"
 					}
 				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"user",
+									"permissions",
+									"origin"
+								],
+								"properties": {
+									"user": {
+										"type": "object",
+										"required": [
+											"id",
+											"name",
+											"email"
+										],
+										"properties": {
+											"id": {
+												"type": "string",
+												"minLength": 1,
+												"maxLength": 256
+											},
+											"name": {
+												"type": "string",
+												"minLength": 1,
+												"maxLength": 200
+											},
+											"email": {
+												"type": "string",
+												"minLength": 1,
+												"maxLength": 320
+											}
+										}
+									},
+									"permissions": {
+										"type": "array",
+										"items": {
+											"type": "string"
+										},
+										"description": "Permissions of this product (GET /v1/permissions)."
+									},
+									"origin": {
+										"type": "string",
+										"description": "The https origin of the page that shows the widget (a local origin while testing)."
+									}
+								}
+							}
+						}
+					}
+				},
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"ticket",
+										"expiresAt"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"ticket": {
+											"type": "string",
+											"description": "Give it to the admin widget (data-ticket)."
+										},
+										"expiresAt": {
+											"type": "string",
+											"format": "date-time"
+										}
+									}
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -2069,8 +3865,535 @@
 			}
 		},
 		"schemas": {
+			"ActivityEntry": {
+				"type": "object",
+				"required": [
+					"id",
+					"actor",
+					"action",
+					"target",
+					"label",
+					"detail",
+					"at"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"actor": {
+						"$ref": "#/components/schemas/Actor"
+					},
+					"action": {
+						"type": "string",
+						"description": "What was done, for example payment.refunded."
+					},
+					"target": {
+						"type": "string",
+						"description": "The id of what it was done to."
+					},
+					"label": {
+						"type": [
+							"string",
+							"null"
+						],
+						"description": "A name for the target, for example an order number."
+					},
+					"detail": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"at": {
+						"type": "string",
+						"format": "date-time"
+					}
+				}
+			},
+			"Actor": {
+				"type": "object",
+				"description": "Who did it: user (the acting user of a server call), staff (a ticket's user) or server.",
+				"required": [
+					"kind",
+					"id"
+				],
+				"properties": {
+					"kind": {
+						"type": "string"
+					},
+					"id": {
+						"type": "string"
+					},
+					"name": {
+						"type": "string"
+					},
+					"role": {
+						"type": "string"
+					},
+					"email": {
+						"type": "string"
+					}
+				}
+			},
+			"Attempt": {
+				"type": "object",
+				"description": "One attempt at a provider.",
+				"required": [
+					"channel",
+					"provider",
+					"at",
+					"outcome"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"channel": {
+						"$ref": "#/components/schemas/Channel"
+					},
+					"provider": {
+						"type": "string",
+						"description": "smtp, resend, sendgrid, mailgun, ses, twilio, meta, http (a gateway over HTTP) or webpush; none when no provider was called (the feature is off, the channel is not connected, a database or provider was briefly unreachable)."
+					},
+					"at": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"outcome": {
+						"type": "string",
+						"enum": [
+							"sent",
+							"failed"
+						]
+					},
+					"error": {
+						"type": "string",
+						"description": "Why it failed, in English (failed attempts only)."
+					}
+				}
+			},
+			"Button": {
+				"type": "object",
+				"description": "A button of a WhatsApp template at Meta that takes a value.",
+				"required": [
+					"index",
+					"type",
+					"value"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"index": {
+						"type": "integer",
+						"minimum": 0,
+						"maximum": 9,
+						"description": "The button's place in the template at Meta (the first is 0), once each."
+					},
+					"type": {
+						"type": "string",
+						"enum": [
+							"url",
+							"copy_code"
+						],
+						"description": "url: the value is added to the end of the button's address; copy_code: the button copies the value."
+					},
+					"value": {
+						"type": "string",
+						"minLength": 1,
+						"maxLength": 2000,
+						"description": "May hold placeholders and optional sections, for example {code}."
+					}
+				}
+			},
+			"Channel": {
+				"type": "string",
+				"enum": [
+					"email",
+					"sms",
+					"whatsapp",
+					"push",
+					"staff_push"
+				],
+				"description": "push is browser push to a visitor, staff_push browser push to a member of your staff."
+			},
+			"Connection": {
+				"type": "object",
+				"description": "A connection as screens see it: secrets never come back.",
+				"required": [
+					"name",
+					"label",
+					"kind",
+					"neededBy",
+					"state",
+					"last4",
+					"message",
+					"testedAt"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"name": {
+						"type": "string"
+					},
+					"label": {
+						"type": "string"
+					},
+					"kind": {
+						"type": "string",
+						"enum": [
+							"database",
+							"storage",
+							"secret",
+							"token"
+						]
+					},
+					"neededBy": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						},
+						"description": "The features that use it."
+					},
+					"state": {
+						"type": "string",
+						"enum": [
+							"connected",
+							"not_connected",
+							"test_failed"
+						]
+					},
+					"last4": {
+						"type": "string",
+						"maxLength": 4,
+						"description": "The last 4 characters of the secret ('' when none)."
+					},
+					"message": {
+						"type": [
+							"string",
+							"null"
+						],
+						"description": "Why the last test failed."
+					},
+					"testedAt": {
+						"type": [
+							"string",
+							"null"
+						],
+						"format": "date-time"
+					}
+				}
+			},
+			"Count": {
+				"type": "object",
+				"description": "How many records match the list's filters.",
+				"required": [
+					"count",
+					"capped"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"count": {
+						"type": "integer",
+						"minimum": 0,
+						"maximum": 100000,
+						"description": "Exact up to 100,000."
+					},
+					"capped": {
+						"type": "boolean",
+						"description": "True when there are more than 100,000 (count is then 100,000)."
+					}
+				}
+			},
+			"Counts": {
+				"type": "object",
+				"description": "The matching records counted by one field.",
+				"required": [
+					"total",
+					"groups"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"total": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "All matching records."
+					},
+					"groups": {
+						"type": "object",
+						"maxProperties": 50,
+						"additionalProperties": {
+							"type": "integer",
+							"minimum": 1
+						},
+						"description": "Value → count, the 50 largest groups; a missing value is counted as none."
+					}
+				}
+			},
+			"EmailRecipient": {
+				"type": "object",
+				"description": "The recipient: email is required; phone is used by the fallback channel (SMS or WhatsApp). Each member given must be valid (422 validation_failed at to/<member>).",
+				"required": [
+					"email"
+				],
+				"properties": {
+					"email": {
+						"type": "string",
+						"maxLength": 254,
+						"description": "An e-mail address (kept in lower case)."
+					},
+					"phone": {
+						"type": "string",
+						"description": "With its calling code: + or 00 first, for example +923001234567; spaces, dashes, dots, slashes and brackets are dropped, and a trunk 0 after the code too."
+					},
+					"language": {
+						"type": "string",
+						"pattern": "^[a-z]{2,3}(-[A-Za-z0-9]{2,8}){0,3}$",
+						"description": "The recipient's language, for example en, ur or pt-BR: it picks the template version while Multi-language templates are on."
+					},
+					"timeZone": {
+						"type": "string",
+						"maxLength": 64,
+						"description": "An IANA time zone, for example Asia/Karachi: quiet hours end in it (else the business.json time zone)."
+					}
+				}
+			},
+			"Format": {
+				"type": "object",
+				"required": [
+					"format",
+					"sources"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"format": {
+						"type": "object",
+						"required": [
+							"locale",
+							"currencyDisplay",
+							"currencySymbol",
+							"wholeUnits",
+							"times"
+						],
+						"additionalProperties": false,
+						"properties": {
+							"locale": {
+								"type": "string",
+								"description": "A language tag (en, en-GB, ur-PK), or '' for the viewer's."
+							},
+							"currencyDisplay": {
+								"type": "string",
+								"enum": [
+									"code",
+									"symbol",
+									"custom"
+								]
+							},
+							"currencySymbol": {
+								"type": "string",
+								"maxLength": 8,
+								"description": "With currencyDisplay custom."
+							},
+							"wholeUnits": {
+								"type": "boolean",
+								"description": "Amounts without the minor unit."
+							},
+							"times": {
+								"type": "string",
+								"enum": [
+									"viewer",
+									"business"
+								],
+								"description": "Whose time zone dates use."
+							}
+						}
+					},
+					"sources": {
+						"type": "object",
+						"required": [
+							"locale",
+							"currencyDisplay",
+							"currencySymbol",
+							"wholeUnits",
+							"times"
+						],
+						"additionalProperties": false,
+						"properties": {
+							"locale": {
+								"$ref": "#/components/schemas/ValueSource"
+							},
+							"currencyDisplay": {
+								"$ref": "#/components/schemas/ValueSource"
+							},
+							"currencySymbol": {
+								"$ref": "#/components/schemas/ValueSource"
+							},
+							"wholeUnits": {
+								"$ref": "#/components/schemas/ValueSource"
+							},
+							"times": {
+								"$ref": "#/components/schemas/ValueSource"
+							}
+						}
+					}
+				}
+			},
+			"Message": {
+				"type": "object",
+				"description": "A message as the delivery log keeps it. It never holds a secret: the values of a sensitive template (every accounts. template) and those the send named in secretValues show as ****** (or [link hidden] for a link) in subject and text; the recipient got the real words.",
+				"required": [
+					"id",
+					"template",
+					"source",
+					"channel",
+					"to",
+					"status",
+					"reason",
+					"subject",
+					"text",
+					"attempts",
+					"dueAt",
+					"sentAt",
+					"createdAt"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"id": {
+						"type": "string",
+						"pattern": "^msg_[0-9a-z]{10,64}$"
+					},
+					"template": {
+						"type": [
+							"string",
+							"null"
+						],
+						"description": "The template key; null for a one-off message from your staff."
+					},
+					"source": {
+						"type": "string",
+						"enum": [
+							"api",
+							"staff"
+						],
+						"description": "api: your server or a product; staff: your staff in the admin widgets."
+					},
+					"channel": {
+						"$ref": "#/components/schemas/Channel",
+						"description": "The channel now: after a fallback, the fallback channel."
+					},
+					"to": {
+						"type": "string",
+						"description": "The address on channel: an e-mail address (lower case), a phone number (+ and digits), a browser push subscriber id or a staff user id."
+					},
+					"status": {
+						"$ref": "#/components/schemas/MessageStatus"
+					},
+					"reason": {
+						"type": [
+							"string",
+							"null"
+						],
+						"description": "skipped: unsubscribed or limited (over a send limit); retrying and failed: the last error, in English; else null."
+					},
+					"subject": {
+						"type": "string",
+						"description": "The e-mail subject or push title ('' for SMS and WhatsApp), hidden values replaced."
+					},
+					"text": {
+						"type": "string",
+						"description": "The words, hidden values replaced."
+					},
+					"attempts": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/Attempt"
+						},
+						"description": "Every attempt, on every channel, oldest first."
+					},
+					"dueAt": {
+						"type": "string",
+						"format": "date-time",
+						"description": "When it is (or was) due: later for a delayed send, quiet hours or a retry."
+					},
+					"sentAt": {
+						"type": [
+							"string",
+							"null"
+						],
+						"format": "date-time"
+					},
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					}
+				}
+			},
+			"MessagePage": {
+				"type": "object",
+				"description": "One page of the delivery log, newest first.",
+				"required": [
+					"items",
+					"nextCursor",
+					"hasMore"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"items": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/Message"
+						}
+					},
+					"nextCursor": {
+						"type": [
+							"string",
+							"null"
+						],
+						"description": "Pass it as cursor for the next page (null: the last page)."
+					},
+					"hasMore": {
+						"type": "boolean"
+					}
+				}
+			},
+			"MessageStatus": {
+				"type": "string",
+				"enum": [
+					"queued",
+					"retrying",
+					"sent",
+					"failed",
+					"skipped"
+				],
+				"description": "queued: waiting for its time (a delayed send or quiet hours) or being sent; retrying: an attempt failed and it is tried again on a later use of your website; sent; failed: every attempt failed, the fallback channel's too; skipped: not sent (reason unsubscribed or limited)."
+			},
+			"PhoneRecipient": {
+				"type": "object",
+				"description": "The recipient: phone is required; email is used by the fallback channel (e-mail). Each member given must be valid (422 validation_failed at to/<member>).",
+				"required": [
+					"phone"
+				],
+				"properties": {
+					"phone": {
+						"type": "string",
+						"description": "With its calling code: + or 00 first, for example +923001234567; spaces, dashes, dots, slashes and brackets are dropped, and a trunk 0 after the code too."
+					},
+					"email": {
+						"type": "string",
+						"maxLength": 254,
+						"description": "An e-mail address (kept in lower case)."
+					},
+					"language": {
+						"type": "string",
+						"pattern": "^[a-z]{2,3}(-[A-Za-z0-9]{2,8}){0,3}$",
+						"description": "The recipient's language, for example en, ur or pt-BR: it picks the template version while Multi-language templates are on."
+					},
+					"timeZone": {
+						"type": "string",
+						"maxLength": 64,
+						"description": "An IANA time zone, for example Asia/Karachi: quiet hours end in it (else the business.json time zone)."
+					}
+				}
+			},
 			"Problem": {
 				"type": "object",
+				"description": "An error (RFC 9457, application/problem+json). The last segment of type is a stable code, for example validation_failed.",
 				"required": [
 					"type",
 					"title",
@@ -2078,7 +4401,8 @@
 				],
 				"properties": {
 					"type": {
-						"type": "string"
+						"type": "string",
+						"description": "https://<product>/problems/<code>"
 					},
 					"title": {
 						"type": "string"
@@ -2086,13 +4410,427 @@
 					"status": {
 						"type": "integer"
 					},
-					"code": {
-						"type": "string"
-					},
 					"detail": {
 						"type": "string"
+					},
+					"instance": {
+						"type": "string",
+						"description": "The path of the request."
+					},
+					"requestId": {
+						"type": "string",
+						"description": "Quote it when you contact support."
+					},
+					"reason": {
+						"type": "string",
+						"enum": [
+							"stopped",
+							"suspended",
+							"removed"
+						],
+						"description": "product_unavailable only."
+					},
+					"errors": {
+						"type": "array",
+						"description": "validation_failed: what is wrong, field by field.",
+						"items": {
+							"type": "object",
+							"required": [
+								"path",
+								"message"
+							],
+							"properties": {
+								"path": {
+									"type": "string",
+									"description": "JSON Pointer of the field, for example /amount."
+								},
+								"message": {
+									"type": "string"
+								},
+								"keyword": {
+									"type": "string"
+								},
+								"code": {
+									"type": "string"
+								}
+							}
+						}
 					}
 				}
+			},
+			"PushSubscriptionInput": {
+				"type": "object",
+				"description": "The browser's subscription as PushSubscription.toJSON() gives it.",
+				"required": [
+					"endpoint",
+					"keys"
+				],
+				"properties": {
+					"endpoint": {
+						"type": "string",
+						"maxLength": 2048,
+						"pattern": "^https://\\S+$"
+					},
+					"keys": {
+						"type": "object",
+						"required": [
+							"p256dh",
+							"auth"
+						],
+						"properties": {
+							"p256dh": {
+								"type": "string",
+								"description": "The browser's P-256 public key (65 bytes, base64url)."
+							},
+							"auth": {
+								"type": "string",
+								"description": "The auth secret (16 bytes, base64url)."
+							}
+						}
+					}
+				}
+			},
+			"StaffRecipient": {
+				"type": "object",
+				"description": "The recipient: a member of your staff, on every browser where they turned staff notifications on (at most 20). Each member given must be valid (422 validation_failed at to/<member>).",
+				"required": [
+					"staffId"
+				],
+				"properties": {
+					"staffId": {
+						"type": "string",
+						"pattern": "^[A-Za-z0-9_-]{1,64}$",
+						"description": "The user id in their ticket."
+					},
+					"language": {
+						"type": "string",
+						"pattern": "^[a-z]{2,3}(-[A-Za-z0-9]{2,8}){0,3}$",
+						"description": "The recipient's language, for example en, ur or pt-BR: it picks the template version while Multi-language templates are on."
+					},
+					"timeZone": {
+						"type": "string",
+						"maxLength": 64,
+						"description": "An IANA time zone, for example Asia/Karachi: quiet hours end in it (else the business.json time zone)."
+					}
+				}
+			},
+			"Subscriber": {
+				"type": "object",
+				"required": [
+					"subscriberId"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"subscriberId": {
+						"type": "string",
+						"pattern": "^sub_[0-9a-z]{10,64}$",
+						"description": "The same endpoint keeps its id."
+					}
+				}
+			},
+			"SubscriberRecipient": {
+				"type": "object",
+				"description": "The recipient: a visitor's browser. Each member given must be valid (422 validation_failed at to/<member>).",
+				"required": [
+					"subscriberId"
+				],
+				"properties": {
+					"subscriberId": {
+						"type": "string",
+						"pattern": "^[A-Za-z0-9_-]{1,64}$",
+						"description": "The subscriber id the push-permission widget announces (the ss-notifications:subscribed event)."
+					},
+					"language": {
+						"type": "string",
+						"pattern": "^[a-z]{2,3}(-[A-Za-z0-9]{2,8}){0,3}$",
+						"description": "The recipient's language, for example en, ur or pt-BR: it picks the template version while Multi-language templates are on."
+					},
+					"timeZone": {
+						"type": "string",
+						"maxLength": 64,
+						"description": "An IANA time zone, for example Asia/Karachi: quiet hours end in it (else the business.json time zone)."
+					}
+				}
+			},
+			"Template": {
+				"type": "object",
+				"description": "A template: one per key, channel and language.",
+				"required": [
+					"key",
+					"channel",
+					"language",
+					"subject",
+					"text",
+					"required",
+					"urgent",
+					"providerTemplate",
+					"buttons",
+					"sensitive",
+					"updatedAt"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"key": {
+						"type": "string",
+						"pattern": "^[a-z][a-z0-9_.-]{0,63}$",
+						"description": "Keys of other products' own events start with the product id (accounts., ecommerce., chat., payments., growth.); every other key is yours."
+					},
+					"channel": {
+						"$ref": "#/components/schemas/Channel"
+					},
+					"language": {
+						"type": "string",
+						"pattern": "^(default|[a-z]{2,3}(-[A-Za-z0-9]{2,8}){0,3})$",
+						"description": "default for the version every recipient falls back to, else a language code such as en, ur or pt-BR."
+					},
+					"subject": {
+						"type": "string",
+						"maxLength": 200,
+						"description": "The e-mail subject or push title ('' for SMS and WhatsApp)."
+					},
+					"text": {
+						"type": "string",
+						"minLength": 1,
+						"maxLength": 100000,
+						"description": "The words: {name} where a value goes, {?name}…{/name} around text shown only when name is not empty."
+					},
+					"required": {
+						"type": "boolean",
+						"description": "Sent also to people who unsubscribed (always true for accounts. templates)."
+					},
+					"urgent": {
+						"type": "boolean",
+						"description": "Sent during quiet hours (always true for accounts. templates)."
+					},
+					"providerTemplate": {
+						"type": "string",
+						"pattern": "^[a-z0-9_]{0,512}$",
+						"description": "WhatsApp: the name of an approved template at Meta ('' sends plain text)."
+					},
+					"buttons": {
+						"type": "array",
+						"maxItems": 10,
+						"items": {
+							"$ref": "#/components/schemas/Button"
+						},
+						"description": "By index; only a WhatsApp template with a providerTemplate has them."
+					},
+					"sensitive": {
+						"type": "boolean",
+						"description": "Its values are hidden in the delivery log (always true for accounts. templates)."
+					},
+					"updatedAt": {
+						"type": "string",
+						"format": "date-time"
+					}
+				}
+			},
+			"TemplateInput": {
+				"type": "object",
+				"description": "A template to save: one with the same key, channel and language is replaced.",
+				"required": [
+					"key",
+					"channel",
+					"text"
+				],
+				"properties": {
+					"key": {
+						"type": "string",
+						"pattern": "^[a-z][a-z0-9_.-]{0,63}$",
+						"description": "1–64 lower-case letters, digits, _, . or -, starting with a letter."
+					},
+					"channel": {
+						"$ref": "#/components/schemas/Channel"
+					},
+					"language": {
+						"type": [
+							"string",
+							"null"
+						],
+						"description": "default ('', null or none) for the default version, else a language code such as en, ur or pt-BR."
+					},
+					"subject": {
+						"type": "string",
+						"description": "Required for email, push and staff_push: one line of at most 200 characters (trimmed); ignored for SMS and WhatsApp."
+					},
+					"text": {
+						"type": "string",
+						"description": "Trimmed, not empty; at most 100,000 characters for e-mail, 1600 for SMS, 4096 for WhatsApp and 500 for push. Every {?name} is closed by a later {/name}."
+					},
+					"required": {
+						"type": "boolean",
+						"default": false
+					},
+					"urgent": {
+						"type": "boolean",
+						"default": false
+					},
+					"sensitive": {
+						"type": "boolean",
+						"default": false
+					},
+					"providerTemplate": {
+						"type": "string",
+						"description": "WhatsApp only: the template name at Meta (lower case, digits and _, at most 512)."
+					},
+					"buttons": {
+						"type": "array",
+						"maxItems": 10,
+						"items": {
+							"$ref": "#/components/schemas/Button"
+						},
+						"description": "Only for a WhatsApp template with a providerTemplate."
+					}
+				}
+			},
+			"TemplateList": {
+				"type": "object",
+				"description": "The templates, by key, channel and language.",
+				"required": [
+					"items"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"items": {
+						"type": "array",
+						"maxItems": 1000,
+						"items": {
+							"$ref": "#/components/schemas/Template"
+						}
+					}
+				}
+			},
+			"Text": {
+				"type": "object",
+				"required": [
+					"key",
+					"english",
+					"value",
+					"source"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"key": {
+						"type": "string"
+					},
+					"english": {
+						"type": "string",
+						"description": "The built-in English text."
+					},
+					"value": {
+						"type": "string",
+						"description": "The text the widgets show."
+					},
+					"source": {
+						"$ref": "#/components/schemas/ValueSource"
+					}
+				}
+			},
+			"Theme": {
+				"type": "object",
+				"required": [
+					"theme",
+					"sources"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"theme": {
+						"type": "object",
+						"required": [
+							"colors",
+							"fontFamily",
+							"radius",
+							"mode",
+							"customCss"
+						],
+						"additionalProperties": false,
+						"properties": {
+							"colors": {
+								"type": "object",
+								"maxProperties": 24,
+								"additionalProperties": {
+									"type": "string",
+									"pattern": "^#[0-9a-fA-F]{6}$"
+								},
+								"description": "Colour name → #rrggbb (the product's CSS supplies the others)."
+							},
+							"fontFamily": {
+								"type": "string",
+								"description": "'inherit' or a font name."
+							},
+							"radius": {
+								"type": "integer",
+								"minimum": 0,
+								"maximum": 24,
+								"description": "Corner radius in px."
+							},
+							"mode": {
+								"type": "string",
+								"enum": [
+									"light",
+									"dark",
+									"auto"
+								]
+							},
+							"customCss": {
+								"type": "string",
+								"description": "At most 20 kB."
+							}
+						}
+					},
+					"sources": {
+						"type": "object",
+						"required": [
+							"colors",
+							"fontFamily",
+							"radius",
+							"mode",
+							"customCss"
+						],
+						"additionalProperties": false,
+						"properties": {
+							"colors": {
+								"$ref": "#/components/schemas/ValueSource"
+							},
+							"fontFamily": {
+								"$ref": "#/components/schemas/ValueSource"
+							},
+							"radius": {
+								"$ref": "#/components/schemas/ValueSource"
+							},
+							"mode": {
+								"$ref": "#/components/schemas/ValueSource"
+							},
+							"customCss": {
+								"$ref": "#/components/schemas/ValueSource"
+							}
+						}
+					}
+				}
+			},
+			"Values": {
+				"type": "object",
+				"maxProperties": 50,
+				"propertyNames": {
+					"pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$"
+				},
+				"additionalProperties": {
+					"type": [
+						"string",
+						"number"
+					],
+					"maxLength": 1000
+				},
+				"description": "The template's {placeholders}: up to 50 names (a letter, then letters, digits and _; not unsubscribeUrl, which Notifications fills) with texts of at most 1000 characters or numbers."
+			},
+			"ValueSource": {
+				"type": "string",
+				"enum": [
+					"website",
+					"default",
+					"built-in"
+				],
+				"description": "Where a value comes from: saved for this website, the global default, or built in."
 			}
 		}
 	}

@@ -2,14 +2,19 @@
  * Test harness: Notifications on the kit, connected to the kit's fake Portal (`@ss/app-kit/testing`), with one
  * website, its two tokens, dashboard sessions, a merchant database on the run's MongoDB (`TEST_MONGODB_URI`), the
  * website's business.json (404 until a test serves one) and fake providers: every provider call is answered in process
- * (no real network call is ever made).
+ * (no real network call is ever made). Every answer `call()` sees is checked against `schemas/api.json` and the kit's
+ * own routes: a test fails when an answer does not fit its description.
  * @module
  */
 import { createECDH } from 'node:crypto';
 import { MongoClient } from 'mongodb';
-import { createFakePortal, createMemoryStore, createNetwork } from '@ss/app-kit/testing';
+import { apiChecker, createFakePortal, createMemoryStore, createNetwork } from '@ss/app-kit/testing';
+import apiJson from '../schemas/api.json' with { type: 'json' };
 import { createProductInstance, manifest } from '../adapters/product.js';
 import { createRoutes } from '../server/routes.js';
+
+/** The API description every answer is checked against. */
+const API = apiChecker(apiJson);
 
 const BASE = 'https://notifications.example.dev';
 const DOMAIN = 'shop.example.com';
@@ -202,6 +207,15 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 			}),
 		);
 		while (after && tasks.length > 0) await /** @type {() => Promise<unknown>} */ (tasks.shift())();
+		const text = await response.clone().text();
+		/** @type {unknown} */
+		let json = null;
+		try {
+			json = text ? JSON.parse(text) : null;
+		} catch {
+			json = null;
+		}
+		API.assert({ method, path, status: response.status, body: json });
 		return response;
 	};
 

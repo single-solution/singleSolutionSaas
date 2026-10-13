@@ -236,9 +236,8 @@ export const createRoutes = (product) => {
 				const checked = checkTemplate(ctx.body);
 				if (!checked.ok) return invalid(checked.field, checked.message);
 				if (!(await channelOn(ctx, checked.value.channel))) return channelOff(checked.value.channel);
-				const store = await storeOf(ctx);
-				if ((await store.templates.save(checked.value)) === 'full')
-					return problem('validation_failed', 'A website can have at most 1000 templates.');
+				const saved = await (await storeOf(ctx)).templates.save(checked.value);
+				if (saved === 'full') return problem('validation_failed', 'A website can have at most 1000 templates.');
 				const t = checked.value;
 				await record(ctx, {
 					change: 'saved',
@@ -247,7 +246,8 @@ export const createRoutes = (product) => {
 					language: t.language,
 					detail: templateDetail(t),
 				});
-				return templateView(t);
+				// the template as saved, with the time the database stamped
+				return templateView(saved);
 			},
 			/** @param {any} ctx */
 			remove: async (ctx) => {
