@@ -461,6 +461,12 @@ describe('statuses, data rights and public routes', () => {
 		for (const id of ['server-settings', 'acting-user', 'server-visitors', 'counts', 'activity', 'format'])
 			expect(html).toContain(`<h2 id="${id}">`);
 		expect(html).toContain('/v1/events/counts');
+		// the API reference: every call with what it takes and answers; the route tables link to it
+		expect(html).toContain('<section class="ss-api-op" id="op-get-v1-notice">');
+		expect(html).toContain('<a href="#op-post-v1-import-collection-prune">');
+		expect(html).toContain('id="schema-Report"');
+		expect(html).toContain('text/plain, not JSON');
+		expect(await (await env.call('GET', '/docs')).text()).toBe(html);
 	});
 });
 
