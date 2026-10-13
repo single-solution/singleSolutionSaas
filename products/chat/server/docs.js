@@ -152,6 +152,8 @@ ${block(snippets.ticketNode)}
 ${block(snippets.ticketCurl)}
 ${KIT_GUIDE.map((section) => `<h2 id="${escape(section.id)}">${escape(section.title)}</h2>\n${section.paragraphs.map(para).join('\n')}`).join('\n')}
 ${para(guide.serverApi)}
+<h2 id="import">Import</h2>
+${para(guide.import)}
 <h2>business.json</h2>
 ${para(guide.business)}
 ${block(JSON.stringify(BUSINESS_JSON_TEMPLATE, null, 2))}

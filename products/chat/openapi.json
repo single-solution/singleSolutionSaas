@@ -1109,7 +1109,7 @@
 		"/v1/admin/conversations/{id}/messages": {
 			"post": {
 				"summary": "Reply to the visitor",
-				"description": "Markdown, written as the ticket's user. It ends waiting for a person, moves open to awaiting_visitor, and with Assignment set to first replier assigns an unassigned chat to a member of staff with room; a visitor who left gets a reply alert (Reply alerts to visitors). Links stay links when they point to your website, or as Moderation's link policy allows. 422 validation_failed; 403 feature_off (an attachment with Attachments off).",
+				"description": "Markdown, written as the ticket's user. It ends waiting for a person, moves open to awaiting_visitor, and with Assign automatically set to first replier assigns an unassigned chat to a member of staff with room; a visitor who left gets a reply alert (Reply alerts to visitors). Links stay links when they point to your website, or as Moderation's link policy allows. 422 validation_failed; 403 feature_off (an attachment with Attachments off).",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "inbox",
 				"x-ss-permission": "inbox.reply",
@@ -3671,7 +3671,7 @@
 		"/v1/chat/uploads": {
 			"post": {
 				"summary": "Upload a visitor file",
-				"description": "With visitor uploads allowed (everyone, or signed-in visitors only): a presigned PUT into your storage for an allowed type up to the size setting (at most 10 MB). A visitor without a key starts a new guest, answered in guestKey. 403 forbidden; 503 storage_not_connected; 422 validation_failed (type or size).",
+				"description": "With the setting Visitors may attach (everyone, or signed-in visitors only): a presigned PUT into your storage for an allowed type up to the size setting (at most 10 MB). A visitor without a key starts a new guest, answered in guestKey. 403 forbidden; 503 storage_not_connected; 422 validation_failed (type or size).",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "attachments",
 				"security": [
@@ -4892,7 +4892,7 @@
 		"/v1/conversations/{id}/messages": {
 			"post": {
 				"summary": "Reply to the visitor",
-				"description": "Markdown, written as the member of staff the SS-Actor headers name (else Team). It ends waiting for a person, moves open to awaiting_visitor, and with Assignment set to first replier assigns an unassigned chat to a member of staff with room; a visitor who left gets a reply alert (Reply alerts to visitors). Links stay links when they point to your website, or as Moderation's link policy allows. 422 validation_failed; 403 feature_off (an attachment with Attachments off).",
+				"description": "Markdown, written as the member of staff the SS-Actor headers name (else Team). It ends waiting for a person, moves open to awaiting_visitor, and with Assign automatically set to first replier assigns an unassigned chat to a member of staff with room; a visitor who left gets a reply alert (Reply alerts to visitors). Links stay links when they point to your website, or as Moderation's link policy allows. 422 validation_failed; 403 feature_off (an attachment with Attachments off).",
 				"x-ss-auth": "server",
 				"x-ss-feature": "inbox",
 				"security": [
@@ -9775,7 +9775,7 @@
 						},
 						"minItems": 1,
 						"maxItems": 12,
-						"description": "While Product cards is on: the products the shop tools found, up to the search size setting (default 5, at most 12)."
+						"description": "While Product cards is on: the products the shop tools found, up to the setting Products per search (default 5, at most 12)."
 					},
 					"createdAt": {
 						"type": "string",
@@ -10351,7 +10351,7 @@
 						},
 						"minItems": 1,
 						"maxItems": 12,
-						"description": "While Product cards is on: the products the shop tools found, up to the search size setting (default 5, at most 12)."
+						"description": "While Product cards is on: the products the shop tools found, up to the setting Products per search (default 5, at most 12)."
 					},
 					"createdAt": {
 						"type": "string",

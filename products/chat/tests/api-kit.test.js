@@ -132,6 +132,7 @@ describe('widgets and docs', () => {
 			'<td><code>status</code></td><td>query</td><td>&#34;open&#34; | &#34;awaiting_visitor&#34; | &#34;resolved&#34;</td>',
 			'<section class="ss-api-op" id="op-post-v1-import-collection"><h3><code>POST /v1/import/{collection}</code> Import records (NDJSON)</h3>',
 			'id="schema-ChatConversation"',
+			'<h2 id="import">Import</h2>',
 		])
 			expect(docs.text).toContain(part);
 	});
