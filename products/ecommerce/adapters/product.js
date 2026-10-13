@@ -112,6 +112,7 @@ const PROBLEM_CODES = Object.freeze({
 	out_of_stock: Object.freeze({ status: 409, title: 'Out of stock' }),
 	offer_unavailable: Object.freeze({ status: 409, title: 'Offer no longer available' }),
 	points_changed: Object.freeze({ status: 409, title: 'Loyalty balance changed' }),
+	price_changed: Object.freeze({ status: 409, title: 'Total changed' }),
 	coupon_code_taken: Object.freeze({ status: 409, title: 'Coupon code already in use' }),
 	slug_taken: Object.freeze({ status: 409, title: 'Slug already in use' }),
 	coupon_unknown: Object.freeze({ status: 422, title: 'Unknown coupon code' }),

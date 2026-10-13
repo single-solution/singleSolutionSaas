@@ -17,6 +17,7 @@ import {
 import { codAdvance, codDecision, isRtoFlagged } from '../core/cod.js';
 import { checkZones, matchZone, placeKey, zoneCities, zoneFee } from '../core/delivery.js';
 import { canDownload, checkLicenceKeys, downloadLimitOf, fileKey, fileNameOf, safeFileName } from '../core/digital.js';
+import { MAX_AMOUNT } from '../core/money.js';
 import { checkTaxRules, taxOf, taxPercent } from '../core/taxes.js';
 
 /** @returns {any} */
@@ -140,6 +141,14 @@ describe('cart checks', () => {
 		expect(checkOrderExtras(null)).toMatchObject({ ok: false, field: 'payment' });
 		expect(checkOrderExtras({ payment: 'cod', note: 'x'.repeat(1001) })).toMatchObject({ ok: false, field: 'note' });
 		expect(checkOrderExtras({ payment: 'cod', returnUrl: 5 })).toMatchObject({ ok: false, field: 'returnUrl' });
+	});
+
+	it('takes the total the shopper was shown (CK-14)', () => {
+		expect(checkOrderExtras({ payment: 'cod', expectedTotal: 0 })).toMatchObject({ ok: true, value: { expectedTotal: 0 } });
+		expect(checkOrderExtras({ payment: 'cod', expectedTotal: 465_200 })).toMatchObject({ value: { expectedTotal: 465_200 } });
+		expect(checkOrderExtras({ payment: 'cod', expectedTotal: null })).not.toHaveProperty('value.expectedTotal');
+		for (const bad of [-1, 1.5, '100', MAX_AMOUNT + 1])
+			expect(checkOrderExtras({ payment: 'cod', expectedTotal: bad })).toMatchObject({ ok: false, field: 'expectedTotal' });
 	});
 });
 

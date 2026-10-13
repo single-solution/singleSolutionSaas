@@ -838,6 +838,11 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 				);
 			throw service.invalid('payment', 'This payment method cannot be used for this order.');
 		}
+		// the shopper confirms the total they were shown: another total is not charged (CK-14)
+		if (extras.value.expectedTotal !== undefined && extras.value.expectedTotal !== q.totals.total)
+			throw problem('price_changed', 'The total of your order changed. Check your cart again.', {
+				extensions: { quote: await quoting.view(s, q) },
+			});
 
 		// the order record
 		const flow = await flowOf(s);

@@ -333,6 +333,25 @@ describe('payment, delivery and COD options (E22, E23)', () => {
 		await shop.setting('cod', 'feePercent', 0);
 	});
 
+	it('refuses a total other than the one the shopper was shown, with the new quote (CK-14)', async () => {
+		const item = await shop.seedProduct({ price: 10_000, stock: 10 });
+		const deal = await newDeal({ scope: { productIds: [item.id], categoryIds: [], brandIds: [] }, value: 10 });
+		const shopper = await newShopper();
+		const body = { lines: [{ productId: item.id }], delivery: { city: 'Springfield' }, payment: 'cod' };
+		const shown = (await quote(body, shopper.token)).json.totals.total;
+		expect(shown).toBe(9300);
+		// the deal ends before the order is placed
+		await shop.api('PATCH', `/v1/deals/${deal.id}`, { active: false });
+		const order = { lines: body.lines, payment: 'cod', address: ADDRESS, expectedTotal: shown };
+		const changed = await place(order, shopper.token);
+		expect(changed.status).toBe(409);
+		expect(codeOf(changed)).toBe('price_changed');
+		expect(changed.json.quote.totals).toMatchObject({ discount: 0, total: 10_300 });
+		expect((await place({ ...order, expectedTotal: 10_300 }, shopper.token)).status).toBe(201);
+		expect((await place({ ...order, expectedTotal: -5 }, shopper.token)).status).toBe(422);
+		await shop.api('DELETE', `/v1/deals/${deal.id}`);
+	});
+
 	it('limits lines and quantities and sends the shopper to the store’s own success page', async () => {
 		await shop.setting('checkout', 'maxQuantity', 3);
 		await shop.setting('checkout', 'successUrl', `${ORIGIN}/thanks/{number}`);

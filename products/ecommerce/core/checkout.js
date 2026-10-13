@@ -14,7 +14,7 @@
  * @module
  */
 import { codDecision, codFee } from './cod.js';
-import { allocateUnits, roundHalfUp } from './money.js';
+import { allocateUnits, isPrice, roundHalfUp } from './money.js';
 import { taxOf, taxPercent } from './taxes.js';
 
 /** @typedef {import('./model.js').ProductRecord} ProductRecord */
@@ -193,10 +193,12 @@ export const checkAddress = (body, required) => {
 };
 
 /**
- * Check what placing an order adds to the cart: the payment method, the shopper's note and the return address (its
- * origin is checked against the website by the caller). The address is checked when the order needs one.
+ * Check what placing an order adds to the cart: the payment method, the shopper's note, the return address (its
+ * origin is checked against the website by the caller) and the total the shopper was shown (`expectedTotal`, minor
+ * units: placement refuses another total, CK-14). The address is checked when the order needs one.
  * @param {unknown} body
- * @returns {{ ok: true, value: { payment: PaymentMethod, note: string, returnUrl: string | null, address: unknown } } | InputError}
+ * @returns {{ ok: true, value: { payment: PaymentMethod, note: string, returnUrl: string | null, address: unknown,
+ *   expectedTotal?: number } } | InputError}
  */
 export const checkOrderExtras = (body) => {
 	const input = isObject(body) ? /** @type {Record<string, unknown>} */ (body) : {};
@@ -207,6 +209,9 @@ export const checkOrderExtras = (body) => {
 	const returnUrl = input.returnUrl ?? null;
 	if (returnUrl !== null && (typeof returnUrl !== 'string' || returnUrl.length > 2000))
 		return { ok: false, field: 'returnUrl', message: 'returnUrl is an address of at most 2000 characters.' };
+	const expectedTotal = input.expectedTotal ?? null;
+	if (expectedTotal !== null && !isPrice(expectedTotal))
+		return { ok: false, field: 'expectedTotal', message: 'expectedTotal is the total shown, in minor units.' };
 	return {
 		ok: true,
 		value: {
@@ -214,6 +219,7 @@ export const checkOrderExtras = (body) => {
 			note,
 			returnUrl: /** @type {string | null} */ (returnUrl),
 			address: input.address,
+			...(expectedTotal === null ? {} : { expectedTotal }),
 		},
 	};
 };

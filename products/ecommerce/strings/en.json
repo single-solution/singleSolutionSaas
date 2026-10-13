@@ -276,6 +276,7 @@
 	"checkout.problem.out_of_stock": "Some items are no longer in stock in the quantity asked. Your cart was updated.",
 	"checkout.problem.offer_unavailable": "An offer in your cart is no longer available. Check your cart again.",
 	"checkout.problem.points_changed": "Your points balance changed. Check your cart again.",
+	"checkout.problem.price_changed": "The total of your order changed. Check your cart again.",
 	"checkout.problem.slot_taken": "A time you chose was just booked. Please choose another.",
 	"checkout.problem.cod_not_allowed": "Cash on delivery is not possible for this order. Please choose another way to pay.",
 	"checkout.problem.customer_blocked": "Ordering is not possible for this account. Please contact the shop.",
