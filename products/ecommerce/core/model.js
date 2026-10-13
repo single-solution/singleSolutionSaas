@@ -294,6 +294,7 @@ export const STATUS_ROLES = Object.freeze([
  * @property {number} returnedQuantity units returned through approved return claims
  * @property {number | null} [warrantyDays] the warranty at placement: the variant's, else the product's, the grade's or
  *   the setting (E12)
+ * @property {string | null} [dealId] the line's own deal at placement, else the checkout-level deal (E18)
  */
 
 /**

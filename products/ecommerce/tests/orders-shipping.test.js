@@ -163,6 +163,33 @@ describe('order editing and numbers (E29, E30)', () => {
 		expect(codeOf(late)).toBe('validation_failed');
 	});
 
+	it('keeps the deals an order was placed with when it is edited after they ended (OR-9)', async () => {
+		const item = await shop.seedProduct({ price: 10_000, stock: 10 });
+		const made = await shop.api('POST', '/v1/deals', {
+			name: 'Ten off',
+			type: 'percent',
+			value: 10,
+			limit: 1,
+			scope: { productIds: [item.id], categoryIds: [], brandIds: [] },
+		});
+		users += 1;
+		const token = await shop.signIn({ id: `usr_shipping${String(users).padStart(6, '0')}` });
+		const placed = await shop.call('POST', '/v1/shop/orders', {
+			token: shop.browser,
+			origin: ORIGIN,
+			body: { lines: [{ productId: item.id, quantity: 1 }], payment: 'cod', address: ADDRESS },
+			headers: { 'x-forwarded-for': `10.8.2.${users}`, 'ss-sign-in': token, 'idempotency-key': `edit-${users}` },
+		});
+		expect(placed.json.order.totals.discount).toBe(1000);
+		// this order took the deal's last use; then the deal is switched off
+		await shop.api('PATCH', `/v1/deals/${made.json.id}`, { active: false });
+		const variantId = /** @type {any} */ (item.variants[0]).id;
+		const edited = await shop.api('PATCH', `/v1/orders/${placed.json.order.id}`, { lines: [{ variantId, quantity: 2 }] });
+		expect(edited.status).toBe(200);
+		expect(edited.json.totals).toMatchObject({ subtotal: 20_000, discount: 2000 });
+		await shop.api('DELETE', `/v1/deals/${made.json.id}`);
+	});
+
 	it('sets the next order number, never below one used', async () => {
 		const year = new Date(shop.now()).getUTCFullYear();
 		const { id } = await confirmedOrder();

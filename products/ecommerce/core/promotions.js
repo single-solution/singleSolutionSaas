@@ -86,6 +86,8 @@ const utcClock = (now) => {
  * @param {number} [input.unit] whole units (E25)
  * @param {boolean} [input.shopperChoice] lines may name one of their eligible deals (E18)
  * @param {import('./deals.js').DealRules} [input.rules] how deals choose, combine and round (the `deals` settings, D4)
+ * @param {boolean} [input.asPlaced] `deals` and `coupon` are those an order was placed with (staff edit it, E29): they
+ *   apply whatever their switch, dates, hours and uses; their scope, conditions and the rules still count
  * @returns {PromotionsResult}
  */
 export const applyPromotions = ({
@@ -100,6 +102,7 @@ export const applyPromotions = ({
 	unit = 1,
 	shopperChoice = false,
 	rules = DEAL_RULES,
+	asPlaced = false,
 }) => {
 	const clock = { ...utcClock(now), ...(cart.weekday === undefined ? {} : { weekday: cart.weekday }) };
 	if (cart.minutes !== undefined) clock.minutes = cart.minutes;
@@ -108,7 +111,7 @@ export const applyPromotions = ({
 		paymentMethod: cart.paymentMethod ?? null,
 		...clock,
 	};
-	const live = deals.filter((deal) => dealLive(deal, now, clock));
+	const live = asPlaced ? deals : deals.filter((deal) => dealLive(deal, now, clock));
 	const priceable = lines.map((line) => line.quantity > 0 && line.unitPrice > 0);
 	const { rounding } = rules;
 	const exact = rounding === 'total_half_up';
@@ -390,7 +393,7 @@ export const applyPromotions = ({
 		),
 	};
 	if (code === '') return result;
-	const blocked = couponBlocked(coupon, { code, now, customer });
+	const blocked = asPlaced ? null : couponBlocked(coupon, { code, now, customer });
 	if (blocked || !coupon) return { ...result, couponProblem: couponProblem(blocked ?? 'coupon_unknown') };
 	const discount = couponDiscount(
 		coupon,

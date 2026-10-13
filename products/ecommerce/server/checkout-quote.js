@@ -91,8 +91,9 @@ const BANK_DETAILS_MS = 5 * 60_000;
  */
 
 /**
- * Re-pricing an order staff edit (E29): the order keeps the offers it was placed with (its deals, even ended, and its
- * coupon with this order's use not counted twice), its role price and the points it spent; staff may set unit prices.
+ * Re-pricing an order staff edit (E29): the order keeps the offers it was placed with (its deals and its coupon, even
+ * ended, switched off or used up, by the website's deal rules; OR-9), its role price and the points it spent; staff
+ * may set unit prices.
  * @typedef {{ prices: Map<string, number>, deals: DealRecord[], coupon: import('../core/model.js').CouponRecord | null,
  *   role: { role: string, percent: number, label: string } | null, points: { used: number, value: number } }} QuoteEdit
  */
@@ -313,6 +314,7 @@ export const createQuoting = (product, service) => {
 						unit,
 						shopperChoice: dealSettings.shopperChoice === true,
 						rules: dealRules,
+						asPlaced: edit !== null,
 					})
 				: null;
 

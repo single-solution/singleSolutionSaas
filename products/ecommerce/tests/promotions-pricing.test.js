@@ -412,6 +412,26 @@ describe('deals', () => {
 		});
 	});
 
+	it('keeps the deals and coupon an order was placed with when staff edit it (asPlaced, E29)', () => {
+		const ended = [
+			deal({ id: 'deal_a', active: false, value: 10 }),
+			deal({ id: 'deal_b', endsAt: new Date(NOW - DAY), value: 20, scope: { ...empty(), productIds: ['p2'] } }),
+			deal({ id: 'deal_c', limit: 1, used: 1, type: 'free_delivery' }),
+		];
+		const lines = [line(), line({ productId: 'p2' })];
+		expect(run({ lines, deals: ended })).toMatchObject({ dealIds: [], freeDelivery: false });
+		const kept = run({ lines, deals: ended, asPlaced: true });
+		expect(kept.lines.map((item) => item.dealDiscount)).toEqual([100, 200]);
+		expect(kept).toMatchObject({ dealIds: ['deal_a', 'deal_b', 'deal_c'], freeDelivery: true });
+		// scope and conditions still count
+		const narrow = { ...ended[0], scope: { ...empty(), productIds: ['p9'] } };
+		expect(run({ lines, deals: [/** @type {any} */ (narrow)], asPlaced: true }).dealIds).toEqual([]);
+		// the coupon too, even switched off
+		const off = coupon({ active: false });
+		expect(run({ lines, coupon: off, couponCode: 'SAVE10' }).couponProblem?.code).toBe('coupon_inactive');
+		expect(run({ lines, coupon: off, couponCode: 'SAVE10', asPlaced: true }).couponId).toBe('cpn_1');
+	});
+
 	it('adds up one deal used on several lines', () => {
 		const result = run({ lines: [line(), line({ productId: 'p2', categoryIds: ['c1'] })], deals: [deal()] });
 		expect(result.applied).toEqual([{ id: 'deal_1', name: 'Deal', kind: 'deal', amount: 200 }]);

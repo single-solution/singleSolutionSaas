@@ -614,9 +614,9 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 
 	/**
 	 * Edit an order while it waits for payment or confirmation (E29): its lines (variant, quantity, an optional unit
-	 * price), payment method and delivery. It is priced again with the offers it was placed with, its stock holds are
-	 * swapped in one transaction, and a payment started through Payments for the old total is dropped (the shopper pays
-	 * the new one).
+	 * price), payment method and delivery. It is priced again with the offers it was placed with (kept even when they
+	 * ended since, by the same deal rules, OR-9), its stock holds are swapped in one transaction, and a payment started
+	 * through Payments for the old total is dropped (the shopper pays the new one).
 	 * @param {Site} s
 	 * @param {any} ctx
 	 * @param {OrderRecord} order as read
@@ -688,7 +688,8 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 					variantId: line.variantId,
 					quantity: line.quantity,
 					slot: null,
-					dealId: null,
+					// the deal a line had (the shopper's pick, `shopperChoice`)
+					dealId: order.lines.find((placed) => placed.variantId === line.variantId)?.dealId ?? null,
 					lock: null,
 				})),
 				coupon: '',
