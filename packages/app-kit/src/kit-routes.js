@@ -6,7 +6,7 @@
  *   status and fetches it again right after the answer;
  * - `POST /v1/tickets` (server token): tickets for admin widgets (0.4.5);
  * - `POST /v1/data-rights/export` and `POST /v1/data-rights/delete` (server token, merchant database required, no
- *   feature): data rights for one end user (0.4.11);
+ *   feature): data rights for one end user (0.4.11); a deletion also removes the person's saved staff alerts;
  * - `GET /v1/permissions` (server token, no feature, no merchant database): the product's permissions, which Accounts
  *   reads with the pasted server token to offer them on roles (0.8.6);
  * - `GET /v1/widget/config` (browser token, Origin required) and `GET /v1/widget/admin/config` (ticket): what the
@@ -156,7 +156,12 @@ export const createKitRoutes = (kit, hooks) => {
 		}
 		const result = hooks.deleteUser ? await hooks.deleteUser(ctx, user) : { deleted: 0, anonymised: 0 };
 		const removed = filter ? (await staff.deleteMany(filter)).deletedCount : 0;
-		return { deleted: result.deleted + removed, anonymised: result.anonymised };
+		// saved staff alerts to the person or naming their e-mail address or phone (the product's hook removes those it
+		// names otherwise, for example by conversation)
+		const alerts = await kit.staffAlerts.forget(/** @type {{ websiteId: string, merchantId: string | null }} */ (ctx), {
+			addresses: [user.email, user.phone],
+		});
+		return { deleted: result.deleted + removed + alerts, anonymised: result.anonymised };
 	};
 
 	/**

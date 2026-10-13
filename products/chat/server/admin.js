@@ -165,7 +165,16 @@ export const createAdmin = (product, service) => {
 	const deleteUser = async (ctx, user) => {
 		const { store, conversations, leads } = await personOf(ctx, user);
 		const s = /** @type {Site} */ ({ websiteId: String(ctx.websiteId), store });
-		const deleted = (await deleteConversations(product, s, conversations)) + (await store.leads.remove(leads.map((l) => l.id)));
+		// staff alerts still waiting to be sent about the person's conversations carry their name and words (K-17)
+		const alerts = await product.staffAlerts.forget(
+			{ websiteId: String(ctx.websiteId), merchantId: ctx.merchantId },
+			{
+				addresses: conversations.flatMap((c) => [c.email, c.phone]),
+				values: { conversationId: conversations.map((c) => c.id) },
+			},
+		);
+		const deleted =
+			alerts + (await deleteConversations(product, s, conversations)) + (await store.leads.remove(leads.map((l) => l.id)));
 		return { deleted, anonymised: 0 };
 	};
 

@@ -49,7 +49,7 @@ const routes = () => [
 				queued: await holder.product.staffAlerts.send(ctx, {
 					feature: 'alerts',
 					event: body.event ?? 'note_created',
-					values: { noteId: 'not_42', preview: 'Hello' },
+					values: body.values ?? { noteId: 'not_42', preview: 'Hello' },
 					assignee: body.assignee ?? null,
 				}),
 			};
@@ -221,6 +221,48 @@ describe('staff alerts (K6)', () => {
 		}
 	});
 
+	it('a data-rights deletion removes the saved messages that hold the person’s details (as Ecommerce’s outbox, E63)', async () => {
+		const { set, alert, notifications, connectDatabase, call, server, settle, clock, websiteId } = await start();
+		const dbName = await connectDatabase();
+		await set('recipients', ['ops@shop.example.com', '+92 300 1234567']);
+		const { client, db } = await openDb(dbName);
+		const saved = db.collection('ss_notes_staff_alerts');
+		/** @param {{ email?: string, phone?: string }} user */
+		const remove = async (user) => {
+			const response = await call('POST', '/v1/data-rights/delete', { token: server.token, body: { user } });
+			expect(response.status).toBe(200);
+			return (await response.json()).deleted;
+		};
+		const left = async () =>
+			(await saved.find({}, { sort: { 'values.noteId': 1 } }).toArray()).map((row) => [row.values.noteId, row.to]);
+		try {
+			notifications.setFailing(true);
+			await alert({ values: { noteId: 'not_1', visitor: 'Sara@Example.com', preview: 'Hi' } });
+			await alert({ values: { noteId: 'not_2', visitor: 'Omar', phone: '+92 321 7654321' } });
+			await alert({ values: { noteId: 'not_3', visitor: 'Guest', preview: 'Hello' } });
+			expect(await saved.countDocuments({})).toBe(6);
+			// a value naming the person (an e-mail address without case, a phone in any form)
+			expect(await remove({ email: 'sara@example.com' })).toBe(2);
+			expect(await remove({ phone: '+923217654321' })).toBe(2);
+			// messages to the person (a staff member who is a recipient)
+			expect(await remove({ phone: '0092 300 1234567' })).toBe(1);
+			expect(await left()).toEqual([['not_3', { email: 'ops@shop.example.com' }]]);
+			// the product names the others by a value
+			expect(await holder.product.staffAlerts.forget({ websiteId }, { values: { noteId: ['not_9'] } })).toBe(0);
+			expect(await holder.product.staffAlerts.forget({ websiteId }, { values: { noteId: [] } })).toBe(0);
+			expect(await holder.product.staffAlerts.forget({ websiteId }, { values: { noteId: ['not_3'] } })).toBe(1);
+			expect(await remove({ email: 'nobody@example.com' })).toBe(0);
+			// nothing left to try again
+			notifications.setFailing(false);
+			clock.advance(RETRY_MS[0] ?? 0);
+			await call('GET', '/v1/server/ping', { token: server.token });
+			await settle();
+			expect(notifications.messages).toHaveLength(0);
+		} finally {
+			await client.close();
+		}
+	});
+
 	it('are never looked for in a product without a Notifications token connection', async () => {
 		let looked = 0;
 		const alerts = createStaffAlerts({
@@ -237,6 +279,7 @@ describe('staff alerts (K6)', () => {
 			logger: noopLogger,
 		});
 		await alerts.retry('web_0123456789abcdefghjkmnpq', null);
+		expect(await alerts.forget({ websiteId: 'web_0123456789abcdefghjkmnpq' }, { addresses: ['ops@shop.example.com'] })).toBe(0);
 		expect(looked).toBe(0);
 	});
 

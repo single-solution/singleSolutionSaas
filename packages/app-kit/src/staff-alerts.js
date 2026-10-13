@@ -15,6 +15,9 @@
  *   refused token, 408, 409 `in_progress` or 429) is saved in the merchant database (`ss_<product>_staff_alerts`) and
  *   tried again with the same key on the website's next uses ({@link RETRY_MS}, then every 3 hours), for at most a day;
  *   a TTL index removes rows a website never used again. Nothing runs in the background.
+ * - A data-rights deletion removes the saved messages that hold the person's details at once (as Ecommerce's outbox,
+ *   E63): those to one of their addresses, those with a value that is one of them, and those the product names by a
+ *   value (`forget`, for example Chat's alerts about the person's conversations).
  * @module
  */
 import { createId } from '@ss/contracts';
@@ -299,7 +302,37 @@ export const createStaffAlerts = ({ productId, settings, connections, data, now,
 		}
 	};
 
-	return Object.freeze({ send, retry, recipients: recipientsOf });
+	/**
+	 * Remove a person's saved messages (data rights): those to one of their `addresses`, those with a value that is one
+	 * of them (e-mail addresses compared without case, phones through the shared normaliser), and those whose value
+	 * `name` is one of `values[name]` (for example `{ conversationId: [...] }`). A product that cannot send alerts keeps
+	 * none, so it never looks. The saved messages are few (only those Notifications did not take, for a day at most), so
+	 * they are read and matched here.
+	 * @param {{ websiteId: string, merchantId?: string | null }} ctx
+	 * @param {{ addresses?: unknown[], values?: Record<string, unknown[]> }} person
+	 * @returns {Promise<number>} the messages removed
+	 */
+	const forget = async (ctx, { addresses = [], values = {} }) => {
+		const keys = new Set(addresses.map((value) => recipientOf(value)?.key).filter((key) => key !== undefined));
+		const named = new Map(Object.entries(values).map(([name, list]) => [name, new Set(list.map(String))]));
+		if (!sends || (keys.size === 0 && [...named.values()].every((list) => list.size === 0))) return 0;
+		const rows = await savedOf(ctx.websiteId, ctx.merchantId);
+		const saved = /** @type {Array<Pick<SavedAlert, 'id' | 'to' | 'values'>>} */ (
+			await rows.find({ websiteId: ctx.websiteId }, { projection: { _id: 0, id: 1, to: 1, values: 1 } }).toArray()
+		);
+		/** @param {unknown} value */
+		const isAddress = (value) => keys.has(recipientOf(value)?.key ?? '');
+		const ids = saved
+			.filter(
+				(row) =>
+					isAddress('email' in row.to ? row.to.email : row.to.phone) ||
+					Object.entries(row.values ?? {}).some(([name, value]) => isAddress(value) || named.get(name)?.has(String(value))),
+			)
+			.map((row) => row.id);
+		return ids.length === 0 ? 0 : (await rows.deleteMany({ websiteId: ctx.websiteId, id: { $in: ids } })).deletedCount;
+	};
+
+	return Object.freeze({ send, retry, forget, recipients: recipientsOf });
 };
 
 /** @typedef {ReturnType<typeof createStaffAlerts>} StaffAlerts */
