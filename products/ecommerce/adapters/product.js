@@ -2,7 +2,8 @@
  * The product on the kit: `createProductInstance(options)` wires `@ss/app-kit` `createProduct` with Ecommerce's
  * manifest (each feature's settings schema from `schemas/` inline), its widget texts, its Connections (storage, the
  * Accounts, Payments, Notifications and Growth tokens, courier keys and the AI key), the merchant database indexes of every
- * part, the data-rights and widget-config hooks (filled in by `server/routes.js`), and adds the list settings (product
+ * part, the data-rights and widget-config hooks (filled in by `server/routes.js`), the Owner's Re-seal of the deal-lock
+ * secrets (sealed with `ENCRYPTION_KEY`, RT-14), and adds the list settings (product
  * database; also served to the merchant's server by the kit's `GET|PUT /v1/lists/:list`, PLAN 0.8.10 K1), the courier
  * APIs and the AI provider on the same outbound policy. The Next.js route and the tests pass the rest (config, store,
  * clock, network). Public entry `./product` of this package, so a system test can compose the product with `./routes`.
@@ -57,7 +58,7 @@ import { INDEXES as ORDERS_INDEXES } from './orders-store.js';
 import { INDEXES as OUTBOX_INDEXES } from './outbox.js';
 import { INDEXES as PROMOTIONS_INDEXES } from './promotions-store.js';
 import { createSearchState } from './search-state.js';
-import { createSiteSecrets } from './site-secret.js';
+import { createSealer, createSiteSecrets } from './site-secret.js';
 
 /** Settings schema of each feature (manifest.json points at them with `$ref`). @type {Record<string, unknown>} */
 const SETTINGS = {
@@ -160,6 +161,8 @@ export const INDEXES = [
 
 /** Used only while the deployable is misconfigured (it then answers 503 everywhere). */
 const UNCONFIGURED = '';
+/** The fallback key a misconfigured product builds its sealer with (it answers 503 everywhere anyway). */
+const UNCONFIGURED_KEY = 'unconfigured-ecommerce-encryption-key-00000';
 
 /**
  * The product (kit routes, status, settings, connections, merchant database …) plus the list settings, the courier
@@ -186,7 +189,9 @@ export const createProductInstance = (options) => {
 	const ai = createAi({ send });
 	const lists = createLists({ store, now });
 	const searchState = createSearchState({ store, now });
-	const secrets = createSiteSecrets({ store, now });
+	const keys = healthy ? options.config : undefined;
+	const sealer = createSealer(keys?.encryptionKey || UNCONFIGURED_KEY, keys?.previousEncryptionKey ?? null);
+	const secrets = createSiteSecrets({ store, sealer, now });
 	/** @type {NonNullable<import('@ss/app-kit').ProductOptions['hooks']>} */
 	const hooks = {};
 
@@ -246,6 +251,8 @@ export const createProductInstance = (options) => {
 			exportUser: (ctx, user) => /** @type {NonNullable<typeof hooks.exportUser>} */ (hooks.exportUser)(ctx, user),
 			deleteUser: (ctx, user) => /** @type {NonNullable<typeof hooks.deleteUser>} */ (hooks.deleteUser)(ctx, user),
 			widgetConfig: (ctx) => /** @type {NonNullable<typeof hooks.widgetConfig>} */ (hooks.widgetConfig)(ctx),
+			// the Owner's Re-seal (RT-14): the deal-lock secrets in the product database
+			resealProduct: () => secrets.reseal(),
 		},
 		data: { indexes: INDEXES },
 		// order, return, review, catalog and stock events (PLAN 0.8.10 K5, E32)

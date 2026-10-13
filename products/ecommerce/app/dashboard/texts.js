@@ -391,4 +391,12 @@ export const TEXTS = Object.freeze({
 		intro: 'One hourly price per feature, in credits, for every merchant and website.',
 		perHour: 'Credits per hour',
 	}),
+	reseal: Object.freeze({
+		title: 'Encryption key',
+		intro: 'After ENCRYPTION_KEY is changed, with the old key set as ENCRYPTION_KEY_PREVIOUS, seal every stored secret again with the new key. Pressing again is safe.',
+		button: 'Re-seal stored secrets',
+		result: '{resealed} re-sealed, {current} already on the current key, {unreadable} could not be opened with either key.',
+		finished: 'Every stored secret that opens now uses the current key: ENCRYPTION_KEY_PREVIOUS can be removed.',
+		again: '{failed} websites could not be reached: press again later, and keep ENCRYPTION_KEY_PREVIOUS until none is left.',
+	}),
 });
