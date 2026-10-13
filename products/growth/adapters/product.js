@@ -77,7 +77,9 @@ const PROBLEM_CODES = Object.freeze({
 });
 
 /**
- * @typedef {Omit<import('@ss/app-kit').ProductOptions, 'manifest' | 'strings' | 'hooks' | 'connections' | 'data' | 'problemCodes'>} InstanceOptions
+ * @typedef {Omit<import('@ss/app-kit').ProductOptions, 'manifest' | 'strings' | 'hooks' | 'connections' | 'data' | 'problemCodes'>
+ *   & { data?: { createClient?: (uri: string, options: import('mongodb').MongoClientOptions) => import('mongodb').MongoClient } }} InstanceOptions
+ *   `data.createClient`: the merchant database client factory (tests watch its commands)
  */
 
 /**
@@ -126,7 +128,7 @@ export const createProductInstance = (options) => {
 				return widgetSettings({ on, values: await valuesOf(websiteId, on), now: now(), admin });
 			},
 		},
-		data: { indexes: INDEXES },
+		data: { indexes: INDEXES, ...(options.data?.createClient ? { createClient: options.data.createClient } : {}) },
 		sharedSettings: SHARED_SETTINGS,
 	});
 	return Object.freeze({ ...product, web, now, valuesOf });

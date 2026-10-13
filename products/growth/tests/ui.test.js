@@ -677,7 +677,7 @@ describe('page facts', () => {
 		});
 		/** @type {Array<[string, number]>} */
 		const reported = [];
-		watchVitals({ window: fakeWindow, report: (name, value) => reported.push([name, value]) });
+		watchVitals({ window: fakeWindow, report: (vitals) => reported.push(...vitals) });
 		observers['largest-contentful-paint']?.({ getEntries: () => [{ startTime: 900 }, { startTime: 1500 }] });
 		observers['largest-contentful-paint']?.({ getEntries: () => [] });
 		observers['layout-shift']?.({
@@ -723,22 +723,26 @@ describe('page facts', () => {
 				answer(200, configOf(['visitor_analytics', 'web_vitals'], { visitor_analytics: { requireConsent: false } })),
 			'POST /v1/collect': () => answer(202),
 		});
-		/** @type {any} */
-		let take = null;
+		/** @type {Record<string, any>} */
+		const take = {};
 		w.PerformanceObserver = function Observer(/** @type {any} */ fn) {
 			return {
 				observe: (/** @type {{ type: string }} */ options) => {
-					if (options.type === 'paint') take = fn;
+					take[options.type] = fn;
 				},
 			};
 		};
 		const page = startWidget({ window, script: script('t') });
 		await vi.advanceTimersByTimeAsync(0);
 		await page.ready;
-		take?.({ getEntries: () => [{ name: 'first-contentful-paint', startTime: 700 }] });
+		take.paint?.({ getEntries: () => [{ name: 'first-contentful-paint', startTime: 700 }] });
+		take['largest-contentful-paint']?.({ getEntries: () => [{ startTime: 1200 }] });
 		Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
 		document.dispatchEvent(new window.Event('visibilitychange'));
 		expect(collected()).toContainEqual({ type: 'vital', path: '/', name: 'FCP', value: 700 });
+		// the page view and the page's vitals in one batch (RT-2)
+		expect(requests.filter((r) => r.path === '/v1/collect')).toHaveLength(1);
+		expect(collected().map((event) => event.type)).toEqual(['page_view', 'vital', 'vital']);
 		Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
 		delete w.PerformanceObserver;
 	});

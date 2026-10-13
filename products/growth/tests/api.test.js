@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AI_TRAINING_CRAWLERS } from '../core/seo.js';
-import { ADMIN_ORIGIN, ALL, BASE, DOMAIN, ORIGIN, setup } from './helpers.js';
+import { ADMIN_ORIGIN, ALL, BASE, DOMAIN, ORIGIN, dailyRows, setup } from './helpers.js';
 
 /** @type {Awaited<ReturnType<typeof setup>>} */
 let env;
@@ -111,10 +111,12 @@ describe('events and totals', () => {
 		expect(first?.expiresAt.toISOString()).toBe('2027-11-01T10:00:00.000Z');
 		const indexes = await db.collection('ss_growth_events').indexes();
 		expect(indexes.find((index) => index.name === 'expiry')).toMatchObject({ key: { expiresAt: 1 }, expireAfterSeconds: 0 });
-		const daily = await db.collection('ss_growth_daily').find({}).toArray();
+		// one document for the day holds every total
+		expect(await db.collection('ss_growth_totals').countDocuments()).toBe(1);
+		const daily = await dailyRows(db);
 		/** @param {string} metric @param {string} key */
 		const total = (metric, key) => daily.find((row) => row.metric === metric && row.key === key);
-		expect(total('page_views', '')).toMatchObject({ day: '2026-10-01', count: 2 });
+		expect(total('page_views', '')).toMatchObject({ day: '2026-10-01', part: 0, count: 2 });
 		expect(total('visits', '')?.count).toBe(1);
 		expect(total('revenue', 'USD')).toMatchObject({ count: 1, sum: 2500 });
 		expect(total('search_empty', 'blue shoes')?.count).toBe(1);
@@ -122,7 +124,7 @@ describe('events and totals', () => {
 		expect(total('page_views', '')?.merchantId).toBeTruthy();
 
 		await env.collect([{ type: 'page_view', path: '/shop', visit: false }]);
-		const again = await db.collection('ss_growth_daily').findOne({ metric: 'page_views', key: '' });
+		const again = (await dailyRows(db)).find((row) => row.metric === 'page_views' && row.key === '');
 		expect(again?.count).toBe(3);
 	});
 
@@ -478,7 +480,7 @@ describe('store conversion kit (PLAN 0.8.10 K2–K9)', () => {
 			{ type: 'page_view', path: '/shop', visit: false },
 		]);
 		const db = await kit.merchantDb();
-		expect(await db.collection('ss_growth_daily').distinct('day')).toEqual(['2026-10-02']);
+		expect(await db.collection('ss_growth_totals').distinct('day')).toEqual(['2026-10-02']);
 		const report = await (await kit.call('GET', '/v1/analytics', { token: kit.server })).json();
 		expect(report).toMatchObject({
 			from: '2026-09-03',
@@ -511,7 +513,7 @@ describe('store conversion kit (PLAN 0.8.10 K2–K9)', () => {
 		expect(sent.headers.get('access-control-allow-origin')).toBeNull();
 		expect(await sent.json()).toEqual({ accepted: 1 });
 		const db = await kit.merchantDb();
-		expect(await db.collection('ss_growth_daily').findOne({ metric: 'search', key: 'phone case' })).toMatchObject({
+		expect((await dailyRows(db)).find((row) => row.metric === 'search' && row.key === 'phone case')).toMatchObject({
 			day: '2026-10-02',
 			count: 1,
 		});

@@ -5,8 +5,13 @@
  *
  * - `events`: raw events, removed by the database's expiry index at their `expiresAt` (the retention the merchant set
  *   when they were recorded; 13 months by default). No timer deletes anything.
- * - `daily`: daily totals `{ day, metric, key, count, sum }` (`day`: the day in the business time zone), kept forever,
- *   updated as events arrive (`$inc` upserts).
+ * - `totals`: the daily totals, kept forever: one document per day (`day`: the day in the business time zone) holding
+ *   `totals.<metric>.<key>` `{ c: count, s: sum }` (the key escaped, see {@link fieldOf}; no `s` while the sum is 0).
+ *   A batch of events costs one insert of its raw events and one `$inc` upsert of the day's document (RT-2: Atlas's
+ *   free tier allows about 100 operations a second for the whole cluster). A day whose document would grow past
+ *   MongoDB's 16 MB goes on in a next `part`; the parts of a day are read as one.
+ * - `daily`: the daily totals of earlier versions (one document per day, metric and key), still read with the others
+ *   and never written.
  *
  * With the `sessions` detail (PLAN 0.8.10 G3) raw events also keep `session`, `browser`, `os` and `city`; live visitors
  * and journeys are read from them when asked (nothing is kept per session besides the events).
@@ -26,7 +31,18 @@ import { createId } from '@ss/contracts';
 const JOURNEY_STEPS = 30;
 
 const EVENTS = 'events';
+const TOTALS = 'totals';
+/** The daily totals of earlier versions, read only. */
 const DAILY = 'daily';
+
+/** MongoDB's codes for an update that would grow a document past 16 MB. */
+const TOO_LARGE = Object.freeze([17419, 10334]);
+/** Most parts of one day's totals. */
+const MAX_PARTS = 64;
+/** Most rows of metric × key one report reads. */
+const MAX_ROWS = 20_000;
+/** The metrics a report also gives per day. */
+const DAY_METRICS = Object.freeze(['visits', 'page_views']);
 
 /** Merchant database indexes (created on a website's first use). @type {import('@ss/app-kit').IndexDefinition[]} */
 export const INDEXES = [
@@ -39,10 +55,56 @@ export const INDEXES = [
 		name: 'by_session',
 		partialFilterExpression: { session: { $exists: true } },
 	},
-	{ collection: DAILY, keys: { websiteId: 1, day: 1, metric: 1, key: 1 }, name: 'by_day', unique: true },
+	{ collection: TOTALS, keys: { websiteId: 1, day: 1, part: 1 }, name: 'by_day', unique: true },
 ];
 
 const NO_ID = { projection: { _id: 0, websiteId: 0, merchantId: 0, createdAt: 0, updatedAt: 0 } };
+
+/**
+ * The field of a total's key in a day's document: `_` and the key with `%`, `.` and `$` written as `%25`, `%2E` and
+ * `%24` (a field name may be neither empty nor hold a dot, and MongoDB reads a leading `$` as an operator).
+ * @param {string} key
+ */
+export const fieldOf = (key) => `_${key.replace(/[%.$]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`)}`;
+
+/**
+ * The key of a field of a day's document ({@link fieldOf} undone).
+ * @param {string} field
+ */
+export const keyOf = (field) => field.slice(1).replace(/%(25|2E|24)/g, (_, hex) => String.fromCharCode(Number.parseInt(hex, 16)));
+
+/**
+ * The `$inc` of a batch's totals: each metric × key's count, and its sum when there is one.
+ * @param {Array<{ metric: string, key: string, count: number, sum: number }>} totals merged per metric and key
+ */
+const incrementsOf = (totals) => {
+	/** @type {Record<string, number>} */
+	const inc = {};
+	for (const { metric, key, count, sum } of totals) {
+		const field = `totals.${metric}.${fieldOf(key)}`;
+		inc[`${field}.c`] = count;
+		if (sum !== 0) inc[`${field}.s`] = sum;
+	}
+	return inc;
+};
+
+/**
+ * Totals of metric × key from several sources added up, most counted first, at most {@link MAX_ROWS}.
+ * @param {Array<{ metric: string, key: string, count: number, sum: number }>} rows
+ */
+const addedUp = (rows) => {
+	/** @type {Map<string, { metric: string, key: string, count: number, sum: number }>} */
+	const added = new Map();
+	for (const row of rows) {
+		const id = `${row.metric}\n${row.key}`;
+		const found = added.get(id);
+		if (found) {
+			found.count += row.count;
+			found.sum += row.sum;
+		} else added.set(id, { ...row });
+	}
+	return [...added.values()].sort((a, b) => b.count - a.count).slice(0, MAX_ROWS);
+};
 
 /**
  * @param {WebsiteData} data the guarded merchant database of one website
@@ -50,8 +112,31 @@ const NO_ID = { projection: { _id: 0, websiteId: 0, merchantId: 0, createdAt: 0,
  */
 export const createStore = (data, { merchantId }) => {
 	const events = data.collection(EVENTS);
+	const totals = data.collection(TOTALS);
 	const daily = data.collection(DAILY);
 	const websiteId = data.websiteId;
+
+	/**
+	 * Add a batch's increments to a day's totals: one upsert of the day's document, or of its next part when it is full.
+	 * @param {string} day
+	 * @param {Record<string, number>} inc
+	 * @param {Date} createdAt
+	 * @param {number} [part]
+	 * @returns {Promise<void>}
+	 */
+	const addTotals = async (day, inc, createdAt, part = 0) => {
+		try {
+			await totals.updateOne(
+				{ websiteId, day, part },
+				{ $inc: inc, $setOnInsert: { merchantId, createdAt } },
+				{ upsert: true },
+			);
+		} catch (error) {
+			const code = Number(/** @type {{ code?: unknown }} */ (error)?.code);
+			if (!TOO_LARGE.includes(code) || part + 1 >= MAX_PARTS) throw error;
+			await addTotals(day, inc, createdAt, part + 1);
+		}
+	};
 
 	/**
 	 * The raw events' filter of a list or count request.
@@ -62,11 +147,12 @@ export const createStore = (data, { merchantId }) => {
 
 	return Object.freeze({
 		/**
-		 * Keep a batch: its raw events (with their expiry) and the daily totals (one `$inc` upsert per metric × key).
+		 * Keep a batch: its raw events (with their expiry; one insert) and the day's totals (one `$inc` upsert).
 		 * @param {KeptEvent[]} kept
 		 * @param {{ at: number, day: string, expiresAt: Date, totals: Array<{ metric: string, key: string, count: number, sum: number }> }} batch
+		 *   `totals`: merged per metric and key
 		 */
-		record: async (kept, { at, day, expiresAt, totals }) => {
+		record: async (kept, { at, day, expiresAt, totals: increments }) => {
 			if (kept.length === 0) return;
 			await events.insertMany(
 				kept.map((event, index) => ({
@@ -80,43 +166,73 @@ export const createStore = (data, { merchantId }) => {
 					...(event.visitor ?? {}),
 				})),
 			);
-			await Promise.all(
-				totals.map((total) =>
-					daily.updateOne(
-						{ websiteId, day, metric: total.metric, key: total.key },
-						{ $inc: { count: total.count, sum: total.sum }, $setOnInsert: { merchantId, createdAt: new Date(at) } },
-						{ upsert: true },
-					),
-				),
-			);
+			await addTotals(day, incrementsOf(increments), new Date(at));
 		},
 
 		/**
-		 * The totals of a range of days: per metric × key, and visits and page views per day.
+		 * The totals of a range of days: per metric × key, and visits and page views per day (the days' documents and
+		 * the rows of earlier versions added up).
 		 * @param {string} from
 		 * @param {string} to
 		 */
 		totals: async (from, to) => {
 			const range = { websiteId, day: { $gte: from, $lte: to } };
-			const [totals, days] = await Promise.all([
+			const [grouped, legacy, documents, legacyDays] = await Promise.all([
+				totals
+					.aggregate([
+						{ $match: range },
+						{ $project: { _id: 0, metrics: { $objectToArray: '$totals' } } },
+						{ $unwind: '$metrics' },
+						{ $project: { metric: '$metrics.k', keys: { $objectToArray: '$metrics.v' } } },
+						{ $unwind: '$keys' },
+						{
+							$group: {
+								_id: { metric: '$metric', key: '$keys.k' },
+								count: { $sum: '$keys.v.c' },
+								sum: { $sum: '$keys.v.s' },
+							},
+						},
+						{ $sort: { count: -1 } },
+						{ $limit: MAX_ROWS },
+					])
+					.toArray(),
 				daily
 					.aggregate([
 						{ $match: range },
 						{ $group: { _id: { metric: '$metric', key: '$key' }, count: { $sum: '$count' }, sum: { $sum: '$sum' } } },
 						{ $sort: { count: -1 } },
-						{ $limit: 20_000 },
+						{ $limit: MAX_ROWS },
 					])
 					.toArray(),
-				daily.find({ ...range, metric: { $in: ['visits', 'page_views'] } }, NO_ID).toArray(),
+				totals.find(range, { projection: { _id: 0, day: 1, 'totals.visits': 1, 'totals.page_views': 1 } }).toArray(),
+				daily.find({ ...range, metric: { $in: [...DAY_METRICS] } }, NO_ID).toArray(),
 			]);
+			/** @param {any} row @param {(key: string) => string} key */
+			const rowOf = (row, key) => ({
+				metric: String(row._id.metric),
+				key: key(String(row._id.key)),
+				count: Number(row.count),
+				sum: Number(row.sum),
+			});
+			/** @type {Map<string, Record<string, number>>} visits and page views of each day */
+			const perDay = new Map();
+			/** @param {string} day @param {string} metric @param {number} count */
+			const addDay = (day, metric, count) => {
+				const counts = perDay.get(day) ?? {};
+				counts[metric] = (counts[metric] ?? 0) + count;
+				perDay.set(day, counts);
+			};
+			for (const doc of documents)
+				for (const metric of DAY_METRICS)
+					addDay(String(doc.day), metric, Number(doc.totals?.[metric]?.[fieldOf('')]?.c ?? 0));
+			for (const row of legacyDays) addDay(String(row.day), String(row.metric), Number(row.count));
 			return {
-				totals: totals.map((row) => ({
-					metric: String(row._id.metric),
-					key: String(row._id.key),
-					count: Number(row.count),
-					sum: Number(row.sum),
-				})),
-				days: days.map((row) => ({ day: String(row.day), metric: String(row.metric), count: Number(row.count) })),
+				totals: addedUp([...grouped.map((row) => rowOf(row, keyOf)), ...legacy.map((row) => rowOf(row, String))]),
+				days: [...perDay].flatMap(([day, counts]) =>
+					Object.entries(counts)
+						.filter(([, count]) => count > 0)
+						.map(([metric, count]) => ({ day, metric, count })),
+				),
 			};
 		},
 

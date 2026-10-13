@@ -212,11 +212,14 @@ export const startWidget = ({ window: win, script }) => {
 		if (record.vitals)
 			watchVitals({
 				window: win,
-				report: (name, value) => {
-					collector.record(() => ({ type: 'vital', path: path(), name, value }));
+				// the page's vitals go in one batch (RT-2)
+				report: (vitals) => {
+					for (const [name, value] of vitals) {
+						collector.record(() => ({ type: 'vital', path: path(), name, value }));
+						if (record.vitalsToGa4 && Object.hasOwn(VITALS, name))
+							tags.vital(/** @type {import('../core/events.js').VitalName} */ (name), value);
+					}
 					collector.flush();
-					if (record.vitalsToGa4 && Object.hasOwn(VITALS, name))
-						tags.vital(/** @type {import('../core/events.js').VitalName} */ (name), value);
 				},
 			});
 		const leave = () => {

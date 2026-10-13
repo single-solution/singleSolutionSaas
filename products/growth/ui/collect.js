@@ -235,9 +235,10 @@ export const markedNotFound = (doc) =>
 	doc.querySelector(`meta[name="${PAGE_MARKER}"]`)?.getAttribute('content')?.trim().toLowerCase() === 'not_found';
 
 /**
- * Measure Web Vitals with the browser's PerformanceObserver and report each once when the page is first hidden:
- * LCP (last largest paint), CLS (shifts without recent input, × 1000), INP (the longest interaction), FCP and TTFB.
- * @param {{ window: Window & typeof globalThis, report: (name: string, value: number) => void }} input
+ * Measure Web Vitals with the browser's PerformanceObserver and report them together once when the page is first
+ * hidden (one batch, RT-2): LCP (last largest paint), CLS (shifts without recent input, × 1000), INP (the longest
+ * interaction), FCP and TTFB.
+ * @param {{ window: Window & typeof globalThis, report: (vitals: Array<[name: string, value: number]>) => void }} input
  */
 export const watchVitals = ({ window: win, report }) => {
 	const Observer = win.PerformanceObserver;
@@ -281,7 +282,7 @@ export const watchVitals = ({ window: win, report }) => {
 	const send = () => {
 		if (sent || win.document.visibilityState !== 'hidden') return;
 		sent = true;
-		for (const [name, value] of Object.entries(values)) report(name, value);
+		report(Object.entries(values));
 	};
 	win.document.addEventListener('visibilitychange', send);
 	win.addEventListener('pagehide', send);
