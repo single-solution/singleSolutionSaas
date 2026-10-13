@@ -353,6 +353,51 @@ describe('product page', () => {
 		expect(textOf(host)).toContain(text('page.noSlots'));
 	});
 
+	it('lets a guest set an alert with a phone and a target price when the settings allow (EN-1)', async () => {
+		let alertAnswer = ok({ id: 'alr_1' }, 201);
+		const fake = makeShop({
+			features: ['catalog', 'alerts'],
+			routes: {
+				'GET /v1/shop/products/phone': () => ok(product()),
+				'POST /v1/shop/alerts': () => alertAnswer,
+			},
+		});
+		const host = await mountPage(fake, 'phone', { alerts: { guests: true, targetPrice: true } });
+		expect(textOf(host)).not.toContain(text('alerts.signIn'));
+		await setValue($(host, '#ss-page-alert-phone'), '0300 1234567', 'input');
+		await setValue($(host, '#ss-page-alert-target'), '999.5', 'input');
+		await click(buttonOf(host, text('alerts.priceDrop')));
+		expect(fake.last('POST /v1/shop/alerts')?.body).toEqual({
+			kind: 'price_drop',
+			productId: 'prd_1',
+			variantId: 'var_b1',
+			phone: '0300 1234567',
+			targetPrice: 99950,
+		});
+		expect(textOf(host)).toContain(text('alerts.priceSet'));
+		// what the guest typed stays when the variant changes; a bad price or phone is told
+		await setValue($(host, '#ss-page-option-0'), 'Red');
+		await flush();
+		expect($(host, '#ss-page-alert-phone').value).toBe('0300 1234567');
+		await setValue($(host, '#ss-page-alert-target'), 'cheap', 'input');
+		await click(buttonOf(host, text('alerts.priceDrop')));
+		expect(textOf(host)).toContain(text('alerts.targetInvalid'));
+		expect(fake.all('POST /v1/shop/alerts')).toHaveLength(1);
+		alertAnswer = fail(422, 'validation_failed');
+		await click(buttonOf(host, text('alerts.backInStock')));
+		expect(fake.last('POST /v1/shop/alerts')?.body).toEqual({
+			kind: 'back_in_stock',
+			productId: 'prd_1',
+			variantId: 'var_r1',
+			phone: '0300 1234567',
+		});
+		expect(textOf(host)).toContain(text('alerts.checkPhone'));
+		// a guest without the setting is asked to sign in, and a price field shows only with targetPrice
+		const plain = await mountPage(makeShop({ features: ['catalog', 'alerts'], routes: fake.routes }), 'phone');
+		expect(textOf(plain)).toContain(text('alerts.signIn'));
+		expect($(plain, '#ss-page-alert-target')).toBeNull();
+	});
+
 	it('sets alerts, saves to the wishlist and compares when signed in', async () => {
 		let saved = /** @type {any[]} */ ([]);
 		let alertAnswer = ok({ id: 'alr_1' }, 201);

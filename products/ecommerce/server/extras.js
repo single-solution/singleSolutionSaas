@@ -67,6 +67,11 @@ export const createExtras = (product, service) => {
 				};
 			}
 			if (s.has('wishlist')) settings.wishlist = { max: MAX_WISHLIST };
+			if (s.has('alerts')) {
+				// a guest gives a phone; a price-drop alert may name its price (EN-1)
+				const { guests, targetPrice } = await s.values('alerts');
+				settings.alerts = { guests: guests === true, targetPrice: targetPrice === true };
+			}
 			if (s.has('compare')) {
 				const { maxProducts } = await s.values('compare');
 				settings.compare = { max: Math.min(MAX_COMPARE, Math.max(2, Number(maxProducts) || MAX_COMPARE)) };

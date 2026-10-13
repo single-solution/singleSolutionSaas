@@ -345,6 +345,7 @@ beforeAll(async () => {
 		['ecommerce.staff_cancelled', 'Cancelled: {number}', 'Order {number} was cancelled ({reason}).'],
 		['ecommerce.staff_proof_uploaded', 'Transfer proof: {number}', 'Proof for {number}, reference {reference}.'],
 		['ecommerce.staff_return_requested', 'Claim {reference}', 'A claim {reference} on order {number}.'],
+		['ecommerce.back_in_stock', 'Back in stock: {name}', '{name} is back for {price}: {url} Stop these alerts: {stopUrl}'],
 	])
 		await dashboardOf(NOTIFY, 'notifications', '/templates', { key, channel: 'email', subject, text });
 
@@ -365,6 +366,7 @@ beforeAll(async () => {
 		'reports',
 		'events',
 		'staff_alerts',
+		'alerts',
 	]);
 	const cookie = await sys.adminSession(owner, websiteId);
 	await sys.connectDatabase(cookie, websiteId);
@@ -967,6 +969,38 @@ describe('Ecommerce phase 4 on the real Portal, Accounts, Payments and Notificat
 		expect(stored.refunds.map((/** @type {any} */ r) => [r.method, r.amount, r.reference, r.claimId])).toEqual([
 			['bank_transfer', CASE_PRICE, 'RF-77', returned.json.id],
 		]);
+	});
+
+	it('sends a back-in-stock alert through the real Notifications with its stop link, which stops it (MS-2, EN-1)', async () => {
+		const charger = await write('POST', '/v1/products', {
+			name: 'Fast charger',
+			status: 'active',
+			price: 250_000,
+			sku: 'CHG-1',
+			stock: 0,
+		});
+		const sara = await signIn('03001112233');
+		const set = await shopper('POST', '/v1/shop/alerts', {
+			body: { kind: 'back_in_stock', productId: charger.id },
+			signIn: sara,
+			key: 'alert-charger',
+		});
+		expect(set.status, JSON.stringify(set.json)).toBe(201);
+		const before = mails.length;
+		const restocked = await server('POST', `/v1/products/${charger.id}/stock`, {
+			changes: [{ variantId: charger.variants[0].id, set: 5 }],
+		});
+		expect(restocked.status, JSON.stringify(restocked.json)).toBe(200);
+		const told = mailsTo(before, 'sara@example.com').find((mail) => mail.subject === 'Back in stock: Fast charger');
+		expect(told?.text).toContain('Fast charger is back for');
+		const link = /Stop these alerts: (\S+)$/.exec(String(told?.text))?.[1] ?? '';
+		expect(link).toMatch(new RegExp(`^${ORIGIN}/alerts/unsubscribe/[A-Za-z0-9]{32}$`));
+		// the alert was sent, not refused for a reserved value
+		const mine = await shopper('GET', '/v1/shop/alerts', { signIn: sara });
+		expect(mine.json.items.find((/** @type {any} */ a) => a.productId === charger.id)?.status).toBe('sent');
+		// the stop page's widget stops every alert of that address
+		const stopped = await shopper('POST', `/v1/shop/alerts/unsubscribe/${link.split('/').pop()}`);
+		expect(stopped.json).toEqual({ removed: 1 });
 	});
 
 	it('reports the summary by business day in the business time zone, as the order list adds up (E36)', async () => {

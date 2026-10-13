@@ -1,9 +1,10 @@
 /**
- * Back-in-stock and price-drop alerts (PLAN 0.8.8: via Notifications): checking a shopper's alert, and when an alert
- * is due for a product as it is now (in stock again, or cheaper than the price stored when the alert was set, or at
- * most its target price, E34). No I/O.
+ * Back-in-stock and price-drop alerts (PLAN 0.8.8: via Notifications): checking a shopper's alert, when an alert is due
+ * for a product as it is now (in stock again, or cheaper than the price stored when the alert was set, or at most its
+ * target price, E34), and the stop link each message carries (EN-1). No I/O.
  * @module
  */
+import { absolute } from './links.js';
 
 /** @typedef {import('./model.js').AlertRecord} AlertRecord */
 /** @typedef {import('./model.js').ProductRecord} ProductRecord */
@@ -14,6 +15,21 @@ const ALERT_KINDS = Object.freeze(/** @type {AlertRecord['kind'][]} */ (['back_i
 export const MAX_ALERTS = 100;
 /** Alerts sent per catalog change or per use, at most (the rest are sent on later uses). */
 export const SEND_BATCH = 100;
+/** The stop page of an alert's link while the `alerts` setting `stopUrl` names none (E34). */
+export const STOP_PATH = '/alerts/unsubscribe/{token}';
+
+/**
+ * An alert message's stop link (`{stopUrl}`, EN-1): the `alerts` setting `stopUrl` (a path or https address with
+ * `{token}`) on the website, else {@link STOP_PATH}; the page holds the `alerts_stop` widget.
+ * @param {unknown} template the `stopUrl` setting
+ * @param {string} token
+ * @param {string} domain
+ */
+export const stopLink = (template, token, domain) =>
+	absolute(
+		(typeof template === 'string' && template.includes('{token}') ? template : STOP_PATH).replaceAll('{token}', token),
+		domain,
+	);
 
 /**
  * Check a shopper's alert.

@@ -20,6 +20,7 @@ export const WIDGET_FEATURES = Object.freeze({
 	my_orders: Object.freeze(['checkout']),
 	wishlist: Object.freeze(['wishlist']),
 	compare: Object.freeze(['compare']),
+	alerts_stop: Object.freeze(['alerts']),
 	catalog_admin: Object.freeze(['catalog']),
 	orders_admin: Object.freeze(['checkout']),
 	promotions_admin: Object.freeze(['coupons', 'deals', 'bundles', 'loyalty']),

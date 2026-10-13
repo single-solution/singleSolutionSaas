@@ -11,14 +11,16 @@
  * variants' attributes, and the condition when variants differ only by grade; a pick that has no exact variant moves
  * to the nearest one), the grade's details, the stock ("Only N left", "N in stock", Sold out: shown and not added to
  * the cart), the warranty of the variant, the Size guide, the quantity and Add to cart, the time picker of a booking
- * product, the note of a digital item, back-in-stock and price-drop alerts (`alerts`, signed in; an alert already set
- * shows with Stop), the wishlist and compare toggles, the specs, the rich description (rebuilt from the allowed tags)
- * or the plain one, the video, the FAQs and the reviews block (`reviews`).
+ * product, the note of a digital item, back-in-stock and price-drop alerts (`alerts`: signed in, an alert already set
+ * shows with Stop; a guest gives a phone while the `alerts` setting `guests` allows; a price-drop alert names an
+ * optional price while `targetPrice` allows, EN-1), the wishlist and compare toggles, the specs, the rich description
+ * (rebuilt from the allowed tags) or the plain one, the video, the FAQs and the reviews block (`reviews`).
  * Growth's events (PLAN 0.8.9): `ss:view_item` once when the product is shown (its first in-stock variant; a variant
  * change does not fire it again) and `ss:add_to_cart` on each Add to cart, at the price shown.
  * @module
  */
 import { GROWTH_EVENTS, growthItem, itemsDetail } from '../core/growth-events.js';
+import { fromDecimal } from '../core/money.js';
 import { MAX_QUANTITY } from './cart-store.js';
 import {
 	announce,
@@ -244,6 +246,11 @@ export const mountProductPage = async ({ host, config, shop, win }) => {
 				const addBox = h(doc, 'div');
 				const extras = h(doc, 'div', { class: 'stack' });
 				const said = h(doc, 'p', { class: 'status', role: 'status' });
+				/**
+				 * What the shopper typed for an alert (phone, target price), kept across re-renders (EN-1).
+				 * @type {Map<string, string>}
+				 */
+				const typed = new Map();
 				const layer = h(doc, 'div');
 				const rating = ratingText(t, item.rating);
 				const priceMax = Number(item.priceMax ?? 0);
@@ -426,17 +433,32 @@ export const mountProductPage = async ({ host, config, shop, win }) => {
 				};
 
 				/**
-				 * The alert buttons: set one, or see the one already set with Stop.
+				 * A text field of the alert row whose value outlives a re-render (`typed`).
+				 * @param {string} id @param {string} label @param {Record<string, string>} attributes
+				 */
+				const alertField = (id, label, attributes) => {
+					const input = /** @type {HTMLInputElement} */ (h(doc, 'input', { ...attributes, 'data-focus': id }));
+					input.value = typed.get(id) ?? '';
+					input.addEventListener('input', () => void typed.set(id, input.value));
+					return field(doc, `ss-page-${id}`, label, input);
+				};
+
+				/**
+				 * The alert buttons: set one, or see the one already set with Stop. A guest gives a phone while guests may
+				 * (they cannot list their alerts); a price-drop alert names an optional price while the setting allows (EN-1).
 				 * @param {PageVariant | null} current
 				 */
 				const alertRow = async (current) => {
-					if (!shop.signIn()) return h(doc, 'p', { class: 'hint' }, t('alerts.signIn'));
-					const mine = (await alerts.list()).filter(
-						(entry) =>
-							entry.status === 'waiting' &&
-							entry.productId === item.id &&
-							(entry.variantId === null || entry.variantId === current?.id),
-					);
+					const member = Boolean(shop.signIn());
+					if (!member && !settings.alerts.guests) return h(doc, 'p', { class: 'hint' }, t('alerts.signIn'));
+					const mine = member
+						? (await alerts.list()).filter(
+								(entry) =>
+									entry.status === 'waiting' &&
+									entry.productId === item.id &&
+									(entry.variantId === null || entry.variantId === current?.id),
+							)
+						: [];
 					/** @param {'back_in_stock' | 'price_drop'} kind @param {string} text */
 					const set = (kind, text) =>
 						button(
@@ -444,17 +466,29 @@ export const mountProductPage = async ({ host, config, shop, win }) => {
 							text,
 							async (event) => {
 								const node = /** @type {HTMLButtonElement} */ (event.currentTarget);
+								const target =
+									kind === 'price_drop' && settings.alerts.targetPrice ? (typed.get('alert-target') ?? '').trim() : '';
+								const targetPrice = target === '' ? null : fromDecimal(target, currency);
+								if (target !== '' && targetPrice === null) return void (said.textContent = t('alerts.targetInvalid'));
 								node.setAttribute('disabled', '');
 								const answer = await shop.call('/v1/shop/alerts', {
 									method: 'POST',
-									body: { kind, productId: item.id, variantId: variant()?.id ?? null },
+									body: {
+										kind,
+										productId: item.id,
+										variantId: variant()?.id ?? null,
+										...(member ? {} : { phone: typed.get('alert-phone') ?? '' }),
+										...(targetPrice === null ? {} : { targetPrice }),
+									},
 									idempotencyKey: shop.newKey(),
 								});
 								node.removeAttribute('disabled');
 								said.textContent = answer.ok
 									? t(kind === 'back_in_stock' ? 'alerts.stockSet' : 'alerts.priceSet')
-									: problemText(config, 'alerts.problem.', codeOf(answer), 'alerts.failed');
-								if (answer.ok) {
+									: !member && codeOf(answer) === 'validation_failed'
+										? t('alerts.checkPhone')
+										: problemText(config, 'alerts.problem.', codeOf(answer), 'alerts.failed');
+								if (answer.ok && member) {
 									alerts.forget();
 									void renderExtras();
 								}
@@ -489,6 +523,10 @@ export const mountProductPage = async ({ host, config, shop, win }) => {
 						doc,
 						'div',
 						{ class: 'actions' },
+						member ? null : alertField('alert-phone', t('alerts.phone'), { type: 'tel', autocomplete: 'tel' }),
+						priceAlert || !settings.alerts.targetPrice
+							? null
+							: alertField('alert-target', t('alerts.targetPrice'), { inputmode: 'decimal' }),
 						current && !buyable(current)
 							? stockAlert
 								? active(stockAlert, t('alerts.stockActive'))

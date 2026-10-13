@@ -416,6 +416,11 @@
 			"kind": "visitor"
 		},
 		{
+			"key": "alerts_stop",
+			"feature": "alerts",
+			"kind": "visitor"
+		},
+		{
 			"key": "catalog_admin",
 			"feature": "catalog",
 			"kind": "admin"

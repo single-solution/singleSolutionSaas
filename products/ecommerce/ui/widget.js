@@ -18,6 +18,7 @@
 import { GROWTH_EVENTS, growthItem, itemsDetail } from '../core/growth-events.js';
 import { isCurrency } from '../core/money.js';
 import { ADD_TO_CART_EVENT, WIDGET_ATTRIBUTE, WIDGET_FEATURES, WIDGET_GLOBAL } from '../core/widgets.js';
+import { mountAlertsStop } from './alerts-stop.js';
 import { mountCart } from './cart.js';
 import { MAX_QUANTITY, createCartStore } from './cart-store.js';
 import { mountCatalogAdmin } from './catalog-admin.js';
@@ -86,6 +87,7 @@ const VISITOR = {
 	my_orders: mountMyOrders,
 	wishlist: mountWishlist,
 	compare: mountCompare,
+	alerts_stop: mountAlertsStop,
 };
 
 /** Admin widgets by key. @type {Record<string, (input: AdminMount) => Promise<void>>} */

@@ -86,6 +86,8 @@ export const settingsOf = (config) => {
 			photoMaxMb: Number(raw.returns?.photoMaxMb ?? 5),
 		},
 		compare: { max: Number(raw.compare?.max) || 4 },
+		/** guests set alerts with a phone; a price-drop alert names a price (EN-1) */
+		alerts: { guests: raw.alerts?.guests === true, targetPrice: raw.alerts?.targetPrice === true },
 	};
 };
 

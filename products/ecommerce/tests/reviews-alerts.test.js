@@ -507,6 +507,42 @@ describe('alerts', () => {
 		expect(backSince(from)).toEqual(['Imported']);
 		await shop.switchOn(ALL);
 	});
+
+	it('link to the stop page the setting names, and tell the widgets what guests and prices may do (EN-1)', async () => {
+		const defaults = await visit('GET', '/v1/widget/config');
+		expect(defaults.json.settings.alerts).toEqual({ guests: false, targetPrice: false });
+		await shop.setting('alerts', 'guests', true);
+		await shop.setting('alerts', 'targetPrice', true);
+		expect((await visit('GET', '/v1/widget/config')).json.settings.alerts).toEqual({ guests: true, targetPrice: true });
+
+		/** Sara watches a sold-out product; it comes back by an import; the link of the message sent. */
+		const linkOf = async () => {
+			const item = await shop.seedProduct({ name: 'Stop page', stock: 0, sku: `SKU-${createId('sku').slice(4, 10)}` });
+			await visit('POST', '/v1/shop/alerts', { body: { kind: 'back_in_stock', productId: item.id }, signIn: sara });
+			const from = shop.messages().length;
+			await shop.api('POST', '/v1/csv/products', {
+				csv: `name,slug,sku,price,stock\nStop page,${item.slug},${item.variants[0]?.sku},,3`,
+				dryRun: false,
+			});
+			const sent = shop
+				.messages()
+				.slice(from)
+				.find((m) => m.template === 'ecommerce.back_in_stock');
+			return String(sent?.values.stopUrl);
+		};
+		await shop.switchOn(ALL.filter((feature) => feature !== 'multi_location'));
+		await shop.setting('alerts', 'stopUrl', '/alerts/stop?token={token}');
+		expect(await linkOf()).toMatch(new RegExp(`^https://${DOMAIN.replace(/\./g, '\\.')}/alerts/stop\\?token=[A-Za-z0-9]{32}$`));
+		await shop.setting('alerts', 'stopUrl', 'https://help.example.com/alerts/{token}/stop');
+		expect(await linkOf()).toMatch(/^https:\/\/help\.example\.com\/alerts\/[A-Za-z0-9]{32}\/stop$/);
+		// a page without {token} cannot carry the token: the default page is used
+		await shop.setting('alerts', 'stopUrl', '/alerts/stop');
+		expect(await linkOf()).toMatch(/\/alerts\/unsubscribe\/[A-Za-z0-9]{32}$/);
+		await shop.setting('alerts', 'stopUrl', '');
+		await shop.setting('alerts', 'guests', false);
+		await shop.setting('alerts', 'targetPrice', false);
+		await shop.switchOn(ALL);
+	});
 });
 
 describe('wishlist merge', () => {

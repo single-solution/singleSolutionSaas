@@ -11,6 +11,7 @@
 		"my_orders": "The shopper's orders with tracking, invoices and returns.",
 		"wishlist": "The shopper's wishlist.",
 		"compare": "Products compared side by side.",
+		"alerts_stop": "The page an alert message's stop link opens ({stopUrl}): the shopper stops their back-in-stock and price-drop alerts. Make the page at /alerts/unsubscribe/<token> (or the alerts setting stopUrl) and place this widget on it.",
 		"catalog_admin": "Products, categories, brands, attributes, stock and media.",
 		"orders_admin": "Orders, status moves, shipments, refunds and returns.",
 		"promotions_admin": "Coupons, deals, bundles and loyalty points.",
@@ -360,7 +361,7 @@
 		"reviews": ["Ratings and reviews from shoppers whose order was delivered, moderated in the customers admin widget."],
 		"wishlist": ["Signed-in shoppers save products to their wishlist (wishlist widget, and the heart on product pages)."],
 		"alerts": [
-			"Back-in-stock and price-drop alerts by e-mail or SMS through Notifications (templates ecommerce.back_in_stock and ecommerce.price_drop). Paste the Notifications token."
+			"Back-in-stock and price-drop alerts by e-mail, SMS or WhatsApp through Notifications (templates ecommerce.back_in_stock and ecommerce.price_drop). Paste the Notifications token. With guests on, the product page asks a guest for a phone; with targetPrice on, a price-drop alert may name its price. Each message's {stopUrl} opens your stop page (/alerts/unsubscribe/<token>, or the stopUrl setting with {token}): place the alerts_stop widget there."
 		],
 		"compare": [
 			"Shoppers add products to compare and see them side by side (compare widget). The list lives in the shopper's browser."

@@ -7,9 +7,10 @@
  * stock an order gives back on a cancel, an ended window or a return to origin) the alerts that became due are marked
  * and sent at once, at most {@link SEND_BATCH} per change; the rest go out on later uses of the website
  * (`service.whenUsed`). Each alert is sent once (`ecommerce.back_in_stock` / `ecommerce.price_drop`), with
- * `{stopUrl}`: the website's `/alerts/unsubscribe/<token>` page, which calls `POST /v1/shop/alerts/unsubscribe/:token`
- * to remove every alert of that phone or e-mail; only the token's hash is kept. The link is not named `unsubscribeUrl`:
- * Notifications reserves that name for its own opt-out link and refuses a send that passes it (MS-2).
+ * `{stopUrl}`: the website's stop page (the `alerts` setting `stopUrl`, else `/alerts/unsubscribe/<token>`) holding the
+ * `alerts_stop` widget, which calls `POST /v1/shop/alerts/unsubscribe/:token` to remove every alert of that phone or
+ * e-mail (EN-1); only the token's hash is kept. The link is not named `unsubscribeUrl`: Notifications reserves that name
+ * for its own opt-out link and refuses a send that passes it (MS-2).
  * @module
  */
 import { createId } from '@ss/contracts';
@@ -17,9 +18,17 @@ import { created, defineRoute, noContent, ok, problem } from '@ss/app-kit';
 import { newOrderKey, orderKeyHash } from '../adapters/crypto.js';
 import { isDuplicate, userIdsOf } from '../adapters/extras-store.js';
 import { createOrdersStore } from '../adapters/orders-store.js';
-import { MAX_ALERTS, SEND_BATCH, checkAlertInput, checkTargetPrice, dueConditions, isDue, priceOf } from '../core/alerts.js';
+import {
+	MAX_ALERTS,
+	SEND_BATCH,
+	checkAlertInput,
+	checkTargetPrice,
+	dueConditions,
+	isDue,
+	priceOf,
+	stopLink,
+} from '../core/alerts.js';
 import { ORDER_KEY_LENGTH, normalisePhone } from '../core/guests.js';
-import { absolute } from '../core/links.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import { VISITOR_LIMITS, VISITOR_WRITE_LIMITS } from './service.js';
 
@@ -97,7 +106,7 @@ export const createAlerts = (_product, service, cards) => {
 			s,
 			due.map((alert) => alert.productId),
 		);
-		const { channels } = await s.values('alerts');
+		const { channels, stopUrl } = await s.values('alerts');
 		for (const alert of due) {
 			const item = products.get(alert.productId) ?? null;
 			if (!item || !isDue(alert, item)) {
@@ -123,7 +132,7 @@ export const createAlerts = (_product, service, cards) => {
 					name: item.name,
 					price: (await s.format()).money(price, s.currency),
 					url: (await cards.card(s, item)).url,
-					stopUrl: absolute(`/alerts/unsubscribe/${token}`, s.domain),
+					stopUrl: stopLink(stopUrl, token, s.domain),
 				},
 				Array.isArray(channels) ? channels : ['email'],
 			);
