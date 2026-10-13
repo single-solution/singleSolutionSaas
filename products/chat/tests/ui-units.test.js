@@ -238,6 +238,14 @@ describe('common', () => {
 		expect(bad.tagName).toBe('SPAN');
 		const pdf = attachmentNode(document, { name: 'a.pdf', type: 'application/pdf', url: 'https://files.test/a.pdf' });
 		expect(pdf.getAttribute('download')).toBe('a.pdf');
+		// a PDF that opens in the browser (CH-8)
+		const opens = attachmentNode(document, {
+			name: 'a.pdf',
+			type: 'application/pdf',
+			url: 'https://files.test/a.pdf',
+			inline: true,
+		});
+		expect([opens.getAttribute('download'), opens.getAttribute('target')]).toEqual([null, '_blank']);
 		const image = attachmentNode(document, { name: 'a.png', type: 'image/png', url: 'https://files.test/a.png' });
 		expect(image.querySelector('img')?.getAttribute('alt')).toBe('a.png');
 	});

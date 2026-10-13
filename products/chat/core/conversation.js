@@ -187,12 +187,13 @@ const iso = (date) => (date ? new Date(date).toISOString() : null);
 
 /**
  * A message as the visitor sees it (never internal notes: callers filter them out). Product cards only while that
- * feature is on.
+ * feature is on. An attachment says whether it opens in the browser (`inline`: images, and PDFs with `pdfInline`,
+ * CH-8) or is a download.
  * @param {MessageRecord} m
  * @param {(attachment: Attachment) => string | null} urlOf
- * @param {{ cards?: boolean }} [options]
+ * @param {{ cards?: boolean, pdfInline?: boolean }} [options]
  */
-export const visitorMessageView = (m, urlOf, { cards = false } = {}) => ({
+export const visitorMessageView = (m, urlOf, { cards = false, pdfInline = false } = {}) => ({
 	id: m.id,
 	seq: m.seq,
 	author: m.author,
@@ -201,7 +202,15 @@ export const visitorMessageView = (m, urlOf, { cards = false } = {}) => ({
 	format: m.format === 'markdown' ? 'markdown' : 'text',
 	...(m.buttons && m.buttons.length > 0 ? { buttons: m.buttons } : {}),
 	...(m.attachment
-		? { attachment: { name: m.attachment.name, type: m.attachment.type, size: m.attachment.size, url: urlOf(m.attachment) } }
+		? {
+				attachment: {
+					name: m.attachment.name,
+					type: m.attachment.type,
+					size: m.attachment.size,
+					url: urlOf(m.attachment),
+					inline: m.attachment.type.startsWith('image/') || (pdfInline && m.attachment.type === 'application/pdf'),
+				},
+			}
 		: {}),
 	...(cards && m.cards && m.cards.length > 0 ? { cards: cardsOf(m.cards) } : {}),
 	createdAt: iso(m.createdAt),
@@ -212,7 +221,7 @@ export const visitorMessageView = (m, urlOf, { cards = false } = {}) => ({
  * of a server call, or `server` for the team).
  * @param {MessageRecord} m
  * @param {(attachment: Attachment) => string | null} urlOf
- * @param {{ cards?: boolean }} [options]
+ * @param {{ cards?: boolean, pdfInline?: boolean }} [options]
  */
 export const staffMessageView = (m, urlOf, options = {}) => ({
 	...visitorMessageView(m, urlOf, options),

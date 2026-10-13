@@ -55,6 +55,8 @@ export const createRoutes = (product) => {
 					headers: { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'public, max-age=300' },
 				}),
 		}),
+		// attachment links: the link itself is signed (CH-8), so images and files open from any page
+		defineRoute({ method: 'GET', path: '/v1/files/:token', auth: 'none', handler: service.openFile }),
 		// public docs: no sign-in, no tokens
 		defineRoute({
 			method: 'GET',

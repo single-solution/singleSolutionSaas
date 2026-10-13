@@ -1,10 +1,11 @@
 /**
  * PLAN 0.8.10 Chat, fixes after the re-audit (CH-*): `?wait=1` lets a slow answer finish after the response and a
  * reply that went stale starts again (CH-1, RT-6); the language lock's new options (CH-16 to CH-19, CH-38); shared
- * networks and new guests (CH-14, CH-15).
+ * networks and new guests (CH-14, CH-15); handoffs, assignment, sign-in claims and staff alerts (CH-3, CH-5, CH-6, CH-7,
+ * CH-9); options from the settings draft (CH-13, CH-21, RW-8); attachment links that never expire (CH-8).
  */
 import { afterAll, describe, expect, it } from 'vitest';
-import { AI, AI_KEY, ORIGIN, ready } from './helpers.js';
+import { AI, AI_KEY, ORIGIN, STORAGE_KEY, ready } from './helpers.js';
 
 /** @type {Array<Awaited<ReturnType<typeof ready>>>} */
 const systems = [];
@@ -329,5 +330,37 @@ describe('options from the settings draft (CH-13, CH-21, RW-8)', () => {
 		expect((await sys.serverCall('GET', '/v1/inbox/unread')).json).toMatchObject({ unread: 1, conversations: 1, open: 1 });
 		await sys.setting('inbox', 'guests', 'all');
 		expect((await sys.serverCall('GET', '/v1/conversations/count')).json.count).toBe(2);
+	});
+});
+
+describe('attachment links (CH-8)', () => {
+	it('never expire: each use signs a fresh storage link; PDFs open in the browser with pdfInline', async () => {
+		const sys = await start(['visitor_chat', 'guest_chat', 'attachments']);
+		await sys.connect('storage', STORAGE_KEY);
+		await sys.setting('attachments', 'visitorUploads', 'everyone');
+		const v = sys.visitor();
+		const image = await v('POST', '/v1/chat/uploads', { name: 'fan.png', type: 'image/png', size: 100 });
+		await v('POST', '/v1/chat/messages', { attachment: image.json.attachment });
+		const pdf = await v('POST', '/v1/chat/uploads', { name: 'warranty.pdf', type: 'application/pdf', size: 100 });
+		await v('POST', '/v1/chat/messages', { attachment: pdf.json.attachment });
+		const [png, doc] = (await v('GET', '/v1/chat')).json.messages.map((/** @type {any} */ m) => m.attachment);
+		expect(png).toMatchObject({ name: 'fan.png', inline: true });
+		expect(doc).toMatchObject({ name: 'warranty.pdf', inline: false });
+		// an hour later the links of the loaded messages still open
+		sys.advance(60 * 60_000);
+		const first = await sys.open(png.url);
+		expect(first.status).toBe(302);
+		expect(first.location).toContain(image.json.attachment.key);
+		expect(first.location).toContain('X-Amz-Expires=600');
+		expect(first.location).not.toContain('response-content-disposition');
+		expect((await sys.open(doc.url)).location).toContain('response-content-disposition');
+		await sys.setting('attachments', 'pdfInline', true);
+		expect((await sys.open(doc.url)).location).not.toContain('response-content-disposition');
+		expect((await v('GET', '/v1/chat')).json.messages[1].attachment.inline).toBe(true);
+		// not Chat's link, or attachments off: not found
+		expect((await sys.open(`${doc.url.slice(0, -4)}AAAA`)).status).toBe(404);
+		expect((await sys.open('https://chat.example.dev/v1/files/not-a-link')).status).toBe(404);
+		await sys.switchOn(['visitor_chat', 'guest_chat']);
+		expect((await sys.open(doc.url)).status).toBe(404);
 	});
 });

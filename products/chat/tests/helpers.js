@@ -283,6 +283,15 @@ export const setup = async ({ start = Date.parse('2026-10-05T10:00:00Z') } = {})
 	const admin = (ticketValue, method, path, body) =>
 		call(method, path, { token: ticketValue, origin: ADMIN_ORIGIN, ...(body === undefined ? {} : { body }) });
 
+	/**
+	 * Follow an attachment link (Chat's own, CH-8): where it sends the browser.
+	 * @param {string} url
+	 */
+	const open = async (url) => {
+		const response = await call('GET', new URL(url).pathname);
+		return { status: response.status, location: response.headers.get('location') ?? '' };
+	};
+
 	/** Messages Chat sent through Notifications. */
 	const messages = () =>
 		calls
@@ -318,6 +327,7 @@ export const setup = async ({ start = Date.parse('2026-10-05T10:00:00Z') } = {})
 		ticket,
 		admin,
 		messages,
+		open,
 		shopCalls,
 		aiCalls,
 		flush,

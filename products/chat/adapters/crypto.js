@@ -6,9 +6,12 @@
  *   `ENCRYPTION_KEY`: the secret no longer opens and a new one is made (the merchant copies it again).
  * - **Guest keys**: random, kept only as SHA-256 hashes.
  * - **Tool signatures**: `t=<unix seconds>,v1=<hex HMAC-SHA256 of "<t>.<body>">` with the tool signing secret.
+ * - **Attachment links** (CH-8): `<payload>.<signature>`, the payload the website, object key, name and type of a file
+ *   (base64url JSON), the signature HMAC-SHA256 under a key derived from `ENCRYPTION_KEY`; a changed key ends old links
+ *   (the views make new ones).
  * @module
  */
-import { createCipheriv, createDecipheriv, createHash, createHmac, hkdfSync, randomBytes } from 'node:crypto';
+import { createCipheriv, createDecipheriv, createHash, createHmac, hkdfSync, randomBytes, timingSafeEqual } from 'node:crypto';
 import { signatureBase } from '../core/tools.js';
 
 /** A URL-safe random secret of `bytes` bytes. @param {number} [bytes] */
@@ -64,3 +67,44 @@ export const signTool = (secret, body, nowMs) => {
 	const t = Math.floor(nowMs / 1000);
 	return `t=${t},v1=${createHmac('sha256', secret).update(signatureBase(t, body)).digest('hex')}`;
 };
+
+/** @typedef {{ w: string, k: string, n: string, t: string }} SignedFile the website, object key, name and type */
+
+/** The longest attachment link token taken. */
+const FILE_TOKEN_MAX = 4096;
+
+/**
+ * @param {string} encryptionKey `ENCRYPTION_KEY` (at least 32 characters)
+ */
+export const createFileSigner = (encryptionKey) => {
+	const key = Buffer.from(hkdfSync('sha256', Buffer.from(encryptionKey, 'utf8'), Buffer.alloc(0), 'ss-chat.files.v1', 32));
+	/** @param {string} payload */
+	const mac = (payload) => createHmac('sha256', key).update(payload).digest();
+	return Object.freeze({
+		/** @param {SignedFile} file */
+		sign: (file) => {
+			const payload = Buffer.from(JSON.stringify({ w: file.w, k: file.k, n: file.n, t: file.t })).toString('base64url');
+			return `${payload}.${mac(payload).toString('base64url')}`;
+		},
+		/**
+		 * @param {unknown} token
+		 * @returns {SignedFile | null} null when it is not a link this key signed
+		 */
+		open: (token) => {
+			if (typeof token !== 'string' || token.length > FILE_TOKEN_MAX) return null;
+			const [payload, signature, extra] = token.split('.');
+			if (!payload || !signature || extra !== undefined) return null;
+			const given = Buffer.from(signature, 'base64url');
+			const expected = mac(payload);
+			if (given.length !== expected.length || !timingSafeEqual(given, expected)) return null;
+			try {
+				const file = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+				return ['w', 'k', 'n', 't'].every((field) => typeof file?.[field] === 'string') ? file : null;
+			} catch {
+				return null;
+			}
+		},
+	});
+};
+
+/** @typedef {ReturnType<typeof createFileSigner>} FileSigner */

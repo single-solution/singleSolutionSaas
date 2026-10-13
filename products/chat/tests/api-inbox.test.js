@@ -198,7 +198,7 @@ describe('inbox', () => {
 		const replied = await sys.admin(ticket, 'POST', `/v1/admin/conversations/${id}/messages`, {
 			attachment: upload.json.attachment,
 		});
-		expect(replied.json.message.attachment.url).toContain('response-content-disposition');
+		expect((await sys.open(replied.json.message.attachment.url)).location).toContain('response-content-disposition');
 		expect(
 			(await sys.admin(ticket, 'POST', `/v1/admin/conversations/${id}/messages`, { attachment: { key: 'elsewhere' } })).status,
 		).toBe(422);

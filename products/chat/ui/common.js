@@ -264,9 +264,10 @@ export const formPart = (doc, { title, nodes, label, submit }) => {
 };
 
 /**
- * An attachment: images inline (linked), PDFs and anything else as a download link.
+ * An attachment: images inline (linked), a file that opens in the browser (`inline`, PDFs with that setting, CH-8) as a
+ * link to a new tab, anything else as a download link.
  * @param {Document} doc
- * @param {{ name: string, type: string, url: string }} attachment
+ * @param {{ name: string, type: string, url: string, inline?: boolean }} attachment
  */
 export const attachmentNode = (doc, attachment) => {
 	const url = webAddress(attachment.url);
@@ -276,6 +277,8 @@ export const attachmentNode = (doc, attachment) => {
 		link.append(element(doc, 'img', { src: url, alt: attachment.name, loading: 'lazy' }));
 		return link;
 	}
+	if (attachment.inline === true)
+		return element(doc, 'a', { href: url, target: '_blank', rel: 'noopener noreferrer', class: 'file' }, attachment.name);
 	return element(doc, 'a', { href: url, download: attachment.name, rel: 'noopener noreferrer', class: 'file' }, attachment.name);
 };
 

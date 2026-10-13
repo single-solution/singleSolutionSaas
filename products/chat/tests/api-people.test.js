@@ -326,7 +326,7 @@ describe('staff attachments (C12)', () => {
 		const reply = await sys.admin(ticket, 'POST', `/v1/admin/conversations/${sent.json.chat.conversation.id}/messages`, {
 			attachment: big.json.attachment,
 		});
-		expect(reply.json.message.attachment.url).toContain('response-content-disposition');
+		expect((await sys.open(reply.json.message.attachment.url)).location).toContain('response-content-disposition');
 		await sys.setting('attachments', 'visitorUploads', 'everyone');
 		expect((await v('POST', '/v1/chat/uploads', { name: 'a.docx', type: docx, size: 10 })).status).toBe(422);
 		const config = await sys.call('GET', '/v1/widget/config', { token: sys.browser, origin: 'https://shop.example.com' });

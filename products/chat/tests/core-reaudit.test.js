@@ -6,6 +6,7 @@
  * messages of their own (CH-21).
  */
 import { describe, expect, it } from 'vitest';
+import { createFileSigner } from '../adapters/crypto.js';
 import { detectLanguage, markerSetsOf, replyMatchesLanguage, translationOf } from '../core/language.js';
 import { splitBubbles } from '../core/markdown.js';
 import { buildSystemPrompt } from '../core/prompt.js';
@@ -125,5 +126,19 @@ describe('tables in messages of their own (CH-21)', () => {
 		]);
 		expect(splitBubbles('| a | b |\n|---|---|', 5, { tables: true })).toEqual(['| a | b |\n|---|---|']);
 		expect(splitBubbles('a | b, no rule', 5, { tables: true })).toEqual(['a | b, no rule']);
+	});
+});
+
+describe('attachment links (CH-8)', () => {
+	it('opens only links this key signed, with every field', () => {
+		const files = createFileSigner('k'.repeat(32));
+		const file = { w: 'web_1', k: 'chat/guest-g1/a.png', n: 'a.png', t: 'image/png' };
+		const token = files.sign(file);
+		expect(files.open(token)).toEqual(file);
+		expect(files.open(`${token}A`)).toBeNull();
+		expect(files.open(`${token}.x`)).toBeNull();
+		expect(files.open(42)).toBeNull();
+		expect(createFileSigner('z'.repeat(32)).open(token)).toBeNull();
+		expect(files.open(files.sign(/** @type {any} */ ({ ...file, w: 1 })))).toBeNull();
 	});
 });

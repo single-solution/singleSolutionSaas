@@ -56,7 +56,7 @@ import visitorAlerts from '../schemas/visitor_alerts.settings.json' with { type:
 import visitorChat from '../schemas/visitor_chat.settings.json' with { type: 'json' };
 import webhookTools from '../schemas/webhook_tools.settings.json' with { type: 'json' };
 import { createAi } from './ai.js';
-import { createSealer } from './crypto.js';
+import { createFileSigner, createSealer } from './crypto.js';
 import { LISTS, createLists } from './lists.js';
 import { INDEXES, createStore } from './store.js';
 
@@ -159,6 +159,7 @@ export const createProductInstance = (options) => {
 	/** @type {import('./ai.js').Send} */
 	const send = options.outboundSend ?? ((url, init) => safeFetch(url, init, policy));
 	const sealer = createSealer(options.config?.encryptionKey ?? UNCONFIGURED_KEY);
+	const files = createFileSigner(options.config?.encryptionKey ?? UNCONFIGURED_KEY);
 	const ai = createAi({ send });
 	const lists = createLists({ store, sealer, now });
 	/** @type {NonNullable<import('@ss/app-kit').ProductOptions['hooks']>} */
@@ -231,6 +232,8 @@ export const createProductInstance = (options) => {
 		...product,
 		ai,
 		lists,
+		/** Stable attachment links (CH-8). */
+		files,
 		counters: store,
 		send,
 		now,

@@ -7,8 +7,9 @@
  *   else the guest of the device's guest key (any key of 16–128 characters, so imported store cookies work); a device
  *   showing both moves the guest's chats to the account, merged by time into the account's own conversation when it has
  *   one, and with "claim by phone" guest chats whose captured phone is the verified phone move too (PLAN 0.8.10 C7).
- * - Views of a conversation for the visitor and for staff, attachment links, the queue position and office hours; the
- *   context panel's shop info from Ecommerce (pasted token) for a signed-in visitor.
+ * - Views of a conversation for the visitor and for staff, attachment links (Chat's own, which never expire, CH-8),
+ *   the queue position and office hours; the context panel's shop info from Ecommerce (pasted token) for a signed-in
+ *   visitor.
  * - Messages through Notifications (pasted token): staff alerts and AI cost alerts through the kit's staff alerts (K6:
  *   e-mail, WhatsApp or SMS, C5), transcripts, and reply alerts to a visitor who left the chat (C6).
  * - AI token counts per day and month window, the caps and the monthly cost alert.
@@ -57,7 +58,7 @@ import { createStore } from '../adapters/store.js';
  */
 /** @typedef {{ kind: string, id: string, name: string, role?: string, email?: string }} Actor */
 
-/** How long an attachment link lasts (seconds). */
+/** How long a storage link to an attachment lasts (seconds); Chat's own links to it never expire (CH-8). */
 const LINK_SECONDS = 600;
 /** Presence: someone whose inbox has not checked in for this long is Offline. */
 export const PRESENCE_MS = 5 * 60_000;
@@ -262,19 +263,55 @@ export const createService = (product) => {
 	// ------------------------------------------------------------------------------------------------- views
 
 	/**
-	 * A link to an attachment for 10 minutes (images open; PDFs and staff files are downloads), or null without storage.
+	 * Whether a file opens in the browser: images, and PDFs with the attachment setting `pdfInline` (CH-8); everything
+	 * else is a download.
+	 * @param {string} type
+	 * @param {Record<string, any>} settings the attachment settings
+	 */
+	const opensInline = (type, settings) =>
+		type.startsWith('image/') || (type === 'application/pdf' && settings.pdfInline === true);
+
+	/**
+	 * The link of an attachment, or null without storage: Chat's own stable link, which signs a fresh 10-minute storage
+	 * link on each use, so links in a chat left open never expire (CH-8); before Chat knows its own address, the
+	 * 10-minute storage link itself.
 	 * @param {Site} s
 	 */
 	const linker = async (s) => {
 		const storage = s.on.includes('attachments') ? await product.connections.storage(s.websiteId) : null;
-		return (/** @type {import('../core/conversation.js').Attachment} */ attachment) =>
-			storage
-				? storage.presignGet({
-						key: attachment.key,
-						expiresIn: LINK_SECONDS,
-						...(attachment.type.startsWith('image/') ? {} : { downloadName: attachment.name }),
-					}).url
-				: null;
+		const settings = storage ? await s.values('attachments') : {};
+		const base = product.address();
+		return (/** @type {import('../core/conversation.js').Attachment} */ attachment) => {
+			if (!storage) return null;
+			if (base)
+				return `${base}/v1/files/${product.files.sign({ w: s.websiteId, k: attachment.key, n: attachment.name, t: attachment.type })}`;
+			return storage.presignGet({
+				key: attachment.key,
+				expiresIn: LINK_SECONDS,
+				...(opensInline(attachment.type, settings) ? {} : { downloadName: attachment.name }),
+			}).url;
+		};
+	};
+
+	/**
+	 * `GET /v1/files/:token` (no token header: the link itself is signed): a redirect to a fresh 10-minute link in the
+	 * website's storage, opening in the browser or downloading as the settings say now (CH-8). Not found when the link
+	 * is not Chat's, the website is not served, attachments are off or no storage is connected.
+	 * @param {any} ctx
+	 */
+	const openFile = async (ctx) => {
+		const file = product.files.open(String(ctx.params.token));
+		const serving = file ? await product.serving(file.w) : null;
+		const on = file && serving?.ok ? await product.featuresOn(file.w) : [];
+		const storage = file && on.includes('attachments') ? await product.connections.storage(file.w) : null;
+		if (!file || !storage || !file.k.startsWith('chat/')) throw problem('not_found', 'No such file.');
+		const settings = await product.settings.values(file.w, 'attachments');
+		const url = storage.presignGet({
+			key: file.k,
+			expiresIn: LINK_SECONDS,
+			...(opensInline(file.t, settings) ? {} : { downloadName: file.n }),
+		}).url;
+		return new Response(null, { status: 302, headers: { location: url, 'cache-control': 'private, max-age=60' } });
 	};
 
 	/**
@@ -366,7 +403,8 @@ export const createService = (product) => {
 	const visitorMessages = async (s, messages) => {
 		const urlOf = await linker(s);
 		const cards = s.on.includes('product_cards');
-		return messages.map((m) => visitorMessageView(m, urlOf, { cards }));
+		const pdfInline = s.on.includes('attachments') && (await s.values('attachments')).pdfInline === true;
+		return messages.map((m) => visitorMessageView(m, urlOf, { cards, pdfInline }));
 	};
 
 	/**
@@ -448,7 +486,8 @@ export const createService = (product) => {
 	const staffMessages = async (s, messages) => {
 		const urlOf = await linker(s);
 		const cards = s.on.includes('product_cards');
-		return messages.map((m) => staffMessageView(m, urlOf, { cards }));
+		const pdfInline = s.on.includes('attachments') && (await s.values('attachments')).pdfInline === true;
+		return messages.map((m) => staffMessageView(m, urlOf, { cards, pdfInline }));
 	};
 
 	// ------------------------------------------------------------------------------------------ notifications
@@ -658,6 +697,7 @@ export const createService = (product) => {
 		botMessage,
 		chatView,
 		visitorMessages,
+		openFile,
 		inboxView,
 		staffMessages,
 		officeHours,

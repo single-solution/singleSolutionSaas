@@ -166,7 +166,7 @@ describe('ratings, transcripts and attachments', () => {
 		const sent = await v('POST', '/v1/chat/messages', { attachment: upload.json.attachment });
 		expect(sent.status).toBe(201);
 		expect(sent.json.message.attachment).toMatchObject({ name: 'a.png', type: 'image/png', size: 100 });
-		expect(sent.json.message.attachment.url).toContain('X-Amz-Signature');
+		expect((await sys.open(sent.json.message.attachment.url)).location).toContain('X-Amz-Signature');
 		await sys.setting('attachments', 'visitorUploads', 'signed_in');
 		expect((await v('POST', '/v1/chat/uploads', { name: 'a.png', type: 'image/png', size: 100 })).status).toBe(403);
 		expect((await v('POST', '/v1/chat/messages', { attachment: upload.json.attachment })).status).toBe(403);

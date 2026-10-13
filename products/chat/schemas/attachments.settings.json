@@ -52,6 +52,12 @@
 			"default": 10,
 			"minimum": 1,
 			"maximum": 100
+		},
+		"pdfInline": {
+			"type": "boolean",
+			"title": "Open PDFs in the browser",
+			"default": false,
+			"description": "Off: PDFs are downloads. On: they open in a new tab. Word, Excel and text files are always downloads."
 		}
 	}
 }
