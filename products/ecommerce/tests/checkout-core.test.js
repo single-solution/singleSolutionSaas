@@ -123,14 +123,25 @@ describe('cart checks', () => {
 		if (!checked.ok) expect(checked.field).toBe(field);
 	});
 
-	it('checks addresses', () => {
-		const good = { name: 'Sara', phone: '+1 555 000', line1: '1 Main St', city: 'Town', notes: 'Ring' };
-		expect(checkAddress(good, [])).toMatchObject({ ok: true, value: { name: 'Sara', area: '', country: '' } });
-		expect(checkAddress(null, [])).toMatchObject({ ok: false, field: 'address' });
-		expect(checkAddress({ ...good, name: '' }, [])).toMatchObject({ ok: false, field: 'address/name' });
-		expect(checkAddress({ ...good, line1: 'x'.repeat(201) }, [])).toMatchObject({ ok: false, field: 'address/line1' });
-		expect(checkAddress(good, ['postalCode'])).toMatchObject({ ok: false, field: 'address/postalCode' });
-		expect(checkAddress({ ...good, phone: 'call me' }, [])).toMatchObject({ ok: false, field: 'address/phone' });
+	it('checks addresses, with the phone as E.164 (K12)', () => {
+		const rules = { defaultCallingCode: '', trunkPrefix: '' };
+		const good = { name: 'Sara', phone: '+1 555 000 1111', line1: '1 Main St', city: 'Town', notes: 'Ring' };
+		expect(checkAddress(good, [], rules)).toMatchObject({
+			ok: true,
+			value: { name: 'Sara', phone: '+15550001111', area: '', country: '' },
+		});
+		expect(checkAddress(null, [], rules)).toMatchObject({ ok: false, field: 'address' });
+		expect(checkAddress({ ...good, name: '' }, [], rules)).toMatchObject({ ok: false, field: 'address/name' });
+		expect(checkAddress({ ...good, line1: 'x'.repeat(201) }, [], rules)).toMatchObject({ ok: false, field: 'address/line1' });
+		expect(checkAddress(good, ['postalCode'], rules)).toMatchObject({ ok: false, field: 'address/postalCode' });
+		expect(checkAddress({ ...good, phone: 'call me' }, [], rules)).toMatchObject({ ok: false, field: 'address/phone' });
+		// a national number needs the website's calling code
+		expect(checkAddress({ ...good, phone: '0300 1234567' }, [], rules)).toMatchObject({ ok: false, field: 'address/phone' });
+		const pk = { defaultCallingCode: '+92', trunkPrefix: '' };
+		for (const phone of ['923001234567', '+92 0320 4862403', '03001234567', '0300-1234567'])
+			expect(checkAddress({ ...good, phone }, [], pk)).toMatchObject({ ok: true });
+		expect(checkAddress({ ...good, phone: '+92 0320 4862403' }, [], pk)).toMatchObject({ value: { phone: '+923204862403' } });
+		expect(checkAddress({ ...good, phone: '923001234567' }, [], pk)).toMatchObject({ value: { phone: '+923001234567' } });
 	});
 
 	it('checks what placing adds', () => {

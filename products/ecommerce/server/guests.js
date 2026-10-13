@@ -2,16 +2,24 @@
  * Guests becoming members (PLAN 0.8.10 E21): when a signed-in shopper's phone, verified by Accounts, is a guest's
  * phone, the guest's orders, loyalty points and alerts move to the member on that request, and the guest's customer
  * record is folded into the member's (order and RTO counts added, a block kept). Also the check of `unless_password`:
- * whether a phone belongs to an Accounts user with a password (through the pasted Accounts token).
+ * whether a phone belongs to an Accounts user with a password (through the pasted Accounts token), and the website's
+ * phone rules (K12).
  * @module
  */
 import { mergeLoyalty } from '../adapters/ledger.js';
 import { createOrdersStore } from '../adapters/orders-store.js';
+import { phoneRules } from '../core/guests.js';
 import { COLLECTIONS } from '../core/model.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
 /** @typedef {import('./service.js').Site} Site */
 /** @typedef {import('./service.js').Shopper} Shopper */
+
+/**
+ * How the website reads the phones shoppers type (K12): the `checkout` settings and its business.json country.
+ * @param {Site} s
+ */
+export const phoneRulesOf = async (s) => phoneRules(await s.values('checkout'), (await s.business()).country);
 
 /**
  * @param {Product} product

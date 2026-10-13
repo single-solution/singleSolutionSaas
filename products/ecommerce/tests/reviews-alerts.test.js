@@ -336,6 +336,9 @@ describe('alerts', () => {
 		const guest = await subscribe({ variantId: big?.id, phone: '0300 1234567', targetPrice: 11_000 }, undefined);
 		expect(guest.status).toBe(201);
 		expect((await subscribe({ variantId: big?.id, phone: '+92 300 1234567' }, undefined)).status).toBe(200);
+		// one number however it is typed (K12): already international without the +, or a trunk 0 after the code
+		expect((await subscribe({ variantId: big?.id, phone: '923001234567' }, undefined)).status).toBe(200);
+		expect((await subscribe({ variantId: big?.id, phone: '+92 0300 1234567' }, undefined)).status).toBe(200);
 		const stored = /** @type {any} */ (
 			await data.collection(COLLECTIONS.alerts).findOne({ websiteId: data.websiteId, id: guest.json.id })
 		);

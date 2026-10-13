@@ -307,6 +307,47 @@ describe('guest checkout and order keys (E21)', () => {
 		await shop.setting('checkout', 'guests', 'off');
 	});
 
+	it('reads a guest’s and an address’s phone as one E.164 number however it is typed (K12)', async () => {
+		await shop.setting('checkout', 'guests', 'on');
+		await shop.setting('checkout', 'defaultCallingCode', '+92');
+		const item = await shop.seedProduct({ price: 1000, stock: 10 });
+		const local = await place({
+			lines: [{ productId: item.id }],
+			payment: 'cod',
+			address: { ...ADDRESS, phone: 'call me' },
+			customer: { name: 'Ali Guest', phone: '03001234567' },
+		});
+		expect(local.json.errors[0].path).toBe('/address/phone');
+		/** @type {string[]} */
+		const ids = [];
+		for (const phone of ['03001234567', '923001234567', '+92 0300 1234567']) {
+			const placed = await place({
+				lines: [{ productId: item.id }],
+				payment: 'cod',
+				address: { ...ADDRESS, phone: '+92 0320 4862403' },
+				customer: { name: 'Ali Guest', phone },
+			});
+			expect(placed.status).toBe(201);
+			ids.push(placed.json.order.id);
+		}
+		for (const id of ids) {
+			const record = await orderRecord(id);
+			expect(record.customer.phone).toBe('+923001234567');
+			expect(record.address.phone).toBe('+923204862403');
+		}
+		const records = await (
+			await shop.db()
+		)
+			.collection(COLLECTIONS.customers)
+			.find({ websiteId: shop.websiteId, phone: '+923001234567' })
+			.toArray();
+		expect(records).toHaveLength(1);
+		expect(records[0]?.orderCount).toBe(3);
+		for (const id of ids) await shop.api('DELETE', `/v1/orders/${id}`);
+		await shop.setting('checkout', 'defaultCallingCode', '+1');
+		await shop.setting('checkout', 'guests', 'off');
+	});
+
 	it('asks a guest whose phone has an account with a password to sign in', async () => {
 		await shop.setting('checkout', 'guests', 'unless_password');
 		shop.responders.set(`${ACCOUNTS}/v1/users`, () => ({

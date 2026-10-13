@@ -15,7 +15,7 @@ import {
 	NO_CONDITIONS,
 } from '../core/deals.js';
 import { keyOpens, newOrderKey, orderKeyHash, readLock, signLock } from '../adapters/crypto.js';
-import { checkGuest, normalisePhone, ORDER_KEY_LENGTH, phoneDigitsOf } from '../core/guests.js';
+import { checkGuest, ORDER_KEY_LENGTH, phoneDigitsOf, phoneRules } from '../core/guests.js';
 import { expiryFor, lotsByRule, pointsToEarn, pointsToRedeem, takesPart } from '../core/loyalty.js';
 import { allocateUnits, roundDown, roundHalfUp, unitOf } from '../core/money.js';
 import { checkRolePrices } from '../core/role-pricing.js';
@@ -259,26 +259,43 @@ describe('loyalty options (E20)', () => {
 });
 
 describe('guests and order keys (E21)', () => {
-	it('normalises phones as Accounts does', () => {
-		expect(normalisePhone('+92 300 1234567')).toBe('+923001234567');
-		expect(normalisePhone('0092 300 1234567')).toBe('+923001234567');
-		expect(normalisePhone('0300-1234567', { defaultCallingCode: '+92', trunkPrefix: '0' })).toBe('+923001234567');
-		expect(normalisePhone('0300-1234567')).toBeNull();
-		expect(normalisePhone('3+00')).toBeNull();
-		expect(normalisePhone('call me')).toBeNull();
+	it('reads phones with the shared normaliser and the website’s rules (K12)', () => {
+		expect(phoneRules({ defaultCallingCode: '', trunkPrefix: '' }, 'PK')).toEqual({
+			defaultCallingCode: '+92',
+			trunkPrefix: '',
+		});
+		expect(phoneRules({ defaultCallingCode: '+44', trunkPrefix: '0' }, 'PK')).toEqual({
+			defaultCallingCode: '+44',
+			trunkPrefix: '0',
+		});
+		expect(phoneRules({}, null)).toEqual({ defaultCallingCode: '', trunkPrefix: '' });
 		expect(phoneDigitsOf('+923001234567')).toBe('3001234567');
+		expect(phoneDigitsOf(null)).toBe('');
 	});
 
 	it('checks a guest', () => {
-		const settings = { defaultCallingCode: '+92', trunkPrefix: '0' };
-		expect(checkGuest({ name: ' Ayesha ', phone: '03001234567', email: 'A@X.PK' }, settings)).toEqual({
+		const rules = phoneRules({}, 'PK');
+		expect(checkGuest({ name: ' Ayesha ', phone: '03001234567', email: 'A@X.PK' }, rules)).toEqual({
 			ok: true,
 			value: { name: 'Ayesha', phone: '+923001234567', email: 'a@x.pk' },
 		});
-		expect(checkGuest(null, settings)).toMatchObject({ ok: false, field: 'customer' });
-		expect(checkGuest({ name: '', phone: '03001234567' }, settings)).toMatchObject({ field: 'customer/name' });
-		expect(checkGuest({ name: 'A', phone: 'x' }, settings)).toMatchObject({ field: 'customer/phone' });
-		expect(checkGuest({ name: 'A', phone: '03001234567', email: 'nope' }, settings)).toMatchObject({ field: 'customer/email' });
+		// already international without the +, and a trunk 0 after the code: one number, no second code
+		for (const [typed, phone] of [
+			['923001234567', '+923001234567'],
+			['+92 0320 4862403', '+923204862403'],
+			['0300-1234567', '+923001234567'],
+			['0092 300 1234567', '+923001234567'],
+		])
+			expect(checkGuest({ name: 'A', phone: typed }, rules)).toMatchObject({ value: { phone } });
+		// without a calling code (no setting, no business country) only international numbers are read
+		const none = phoneRules({}, null);
+		expect(checkGuest({ name: 'A', phone: '03001234567' }, none)).toMatchObject({ field: 'customer/phone' });
+		expect(checkGuest({ name: 'A', phone: '+92 300 1234567' }, none)).toMatchObject({ value: { phone: '+923001234567' } });
+		expect(checkGuest(null, rules)).toMatchObject({ ok: false, field: 'customer' });
+		expect(checkGuest({ name: '', phone: '03001234567' }, rules)).toMatchObject({ field: 'customer/name' });
+		expect(checkGuest({ name: 'A', phone: 'x' }, rules)).toMatchObject({ field: 'customer/phone' });
+		expect(checkGuest({ name: 'A', phone: '3+00' }, rules)).toMatchObject({ field: 'customer/phone' });
+		expect(checkGuest({ name: 'A', phone: '03001234567', email: 'nope' }, rules)).toMatchObject({ field: 'customer/email' });
 	});
 
 	it('opens an order only with its own key', () => {

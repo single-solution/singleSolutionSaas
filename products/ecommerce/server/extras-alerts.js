@@ -2,7 +2,7 @@
  * Back-in-stock and price-drop alerts (feature `alerts`, PLAN 0.8.8: via Notifications). A signed-in shopper sets an
  * alert on a product (or one variant); the contact is the e-mail and phone of their sign-in, and a price-drop alert
  * stores the price at that moment, with an optional target price (E34). While the `guests` setting allows, a guest
- * sets one with a phone, normalised as checkout does (E21), and the alert keeps the guest's customer id so it moves to
+ * sets one with a phone, read as checkout reads it (E21, K12), and the alert keeps the guest's customer id so it moves to
  * them at sign-in. When the catalog changes (`products.changed`: catalog writes, an import, a return's restock, and
  * stock an order gives back on a cancel, an ended window or a return to origin) the alerts that became due are marked
  * and sent at once, at most {@link SEND_BATCH} per change; the rest go out on later uses of the website
@@ -14,6 +14,7 @@
  * @module
  */
 import { createId } from '@ss/contracts';
+import { normalisePhone } from '@ss/contracts/phone';
 import { created, defineRoute, noContent, ok, problem } from '@ss/app-kit';
 import { newOrderKey, orderKeyHash } from '../adapters/crypto.js';
 import { isDuplicate, userIdsOf } from '../adapters/extras-store.js';
@@ -28,8 +29,9 @@ import {
 	priceOf,
 	stopLink,
 } from '../core/alerts.js';
-import { ORDER_KEY_LENGTH, normalisePhone } from '../core/guests.js';
+import { ORDER_KEY_LENGTH } from '../core/guests.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
+import { phoneRulesOf } from './guests.js';
 import { VISITOR_LIMITS, VISITOR_WRITE_LIMITS } from './service.js';
 
 /** Rate limits (mutable copies of the shared constants, as route definitions take them). */
@@ -191,11 +193,7 @@ export const createAlerts = (_product, service, cards) => {
 			return { userId: shopper.id, email: shopper.email, phone: shopper.phone, customerId: customer?.id ?? null };
 		}
 		if ((await s.values('alerts')).guests !== true) throw problem('sign_in_required', 'Sign in to continue.');
-		const { defaultCallingCode, trunkPrefix } = await s.values('checkout');
-		const phone = normalisePhone(body.phone, {
-			defaultCallingCode: String(defaultCallingCode ?? ''),
-			trunkPrefix: String(trunkPrefix ?? ''),
-		});
+		const phone = normalisePhone(body.phone, await phoneRulesOf(s));
 		if (!phone) throw service.invalid('phone', 'Give your phone number with its country code.');
 		const customer = await store.guestCustomer(phone);
 		return { userId: '', email: '', phone, customerId: customer?.id ?? null };

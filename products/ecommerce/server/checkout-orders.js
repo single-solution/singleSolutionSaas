@@ -23,6 +23,7 @@
  */
 import { created, paginate, problem } from '@ss/app-kit';
 import { createId } from '@ss/contracts';
+import { normalisePhone } from '@ss/contracts/phone';
 import { originAllowed } from '@ss/protocol';
 import { keyOpens, newOrderKey, orderKeyHash } from '../adapters/crypto.js';
 import { heldStockBefore, placeOrder, releaseOrder, swapOrderStock } from '../adapters/ledger.js';
@@ -36,7 +37,7 @@ import { gradesByKey } from '../core/grades.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import { orderMoney } from '../core/orders.js';
 import { createMedia } from './catalog-media.js';
-import { createGuests } from './guests.js';
+import { createGuests, phoneRulesOf } from './guests.js';
 import { RECHECK_MS, createOrderPayments, expectedOf } from './order-payments.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
@@ -59,7 +60,6 @@ const PROOF_MAX_BYTES = 10 * 1_048_576;
 const PROOF_SECONDS = 900;
 
 const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/;
-const E164 = /^\+[1-9]\d{6,14}$/;
 const ORDER_NUMBER = /^[A-Za-z0-9_-]{1,40}$/;
 
 /** @param {string} url @param {string} name @param {string} value */
@@ -149,6 +149,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 	const startPayment = async (s, order, returnUrl, idempotencyKey) => {
 		const back = await paymentBackOf(s, order, returnUrl);
 		const { customer } = order;
+		const phone = normalisePhone(customer.phone);
 		try {
 			const payment = await service.payments.create(s, {
 				...expectedOf(order),
@@ -159,7 +160,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 					id: customer.userId || customer.customerId || '',
 					...(customer.name ? { name: customer.name.slice(0, 120) } : {}),
 					...(EMAIL.test(customer.email) ? { email: customer.email } : {}),
-					...(E164.test(customer.phone) ? { phone: customer.phone } : {}),
+					...(phone ? { phone } : {}),
 				},
 				metadata: { orderId: order.id },
 				returnUrl: back.success,
@@ -481,7 +482,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		const mode = String(checkout.guests ?? 'off');
 		if (mode === 'off') throw problem('sign_in_required', 'Sign in to continue.');
 		const body = typeof ctx.body === 'object' && ctx.body !== null ? ctx.body : {};
-		const guest = checkGuest(body.customer, checkout);
+		const guest = checkGuest(body.customer, await phoneRulesOf(s));
 		if (!guest.ok) throw service.invalid(guest.field, guest.message);
 		if (mode === 'unless_password' && (await guests.memberWithPassword(s, guest.value.phone)))
 			throw problem('sign_in_required', 'This phone number has an account: sign in to order.', {
@@ -609,7 +610,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		const given = input.address ?? order.address;
 		/** @type {string[]} */
 		const required = Array.isArray(checkout.addressRequired) ? checkout.addressRequired : ['line1', 'city'];
-		const checkedAddress = given ? checkAddress(given, required) : null;
+		const checkedAddress = given ? checkAddress(given, required, await phoneRulesOf(s)) : null;
 		if (checkedAddress && !checkedAddress.ok) throw service.invalid(checkedAddress.field, checkedAddress.message);
 		const address = checkedAddress?.ok ? checkedAddress.value : null;
 		const q = await quoting.quote(
@@ -757,7 +758,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		const address =
 			extras.value.address === undefined || extras.value.address === null
 				? null
-				: checkAddress(extras.value.address, required);
+				: checkAddress(extras.value.address, required, await phoneRulesOf(s));
 		const q = await quoting.quote(s, { ...cart.value, payment: method }, shopper, address?.ok ? address.value : null, {
 			customer: known,
 		});

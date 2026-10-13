@@ -13,6 +13,7 @@
  * Also the checks of the visitor's input and which payment methods a cart may use. Pure functions, no I/O.
  * @module
  */
+import { normalisePhone } from '@ss/contracts/phone';
 import { codDecision, codFee } from './cod.js';
 import { allocateUnits, isPrice, roundHalfUp } from './money.js';
 import { taxOf, taxPercent } from './taxes.js';
@@ -23,6 +24,7 @@ import { taxOf, taxPercent } from './taxes.js';
 /** @typedef {import('./promotions.js').PromotionsResult} PromotionsResult */
 /** @typedef {import('./taxes.js').TaxRule} TaxRule */
 /** @typedef {import('./cod.js').CodSettings} CodSettings */
+/** @typedef {import('./guests.js').PhoneRules} PhoneRules */
 
 /** At most this many lines in a cart, and this many of one line (the `checkout` settings `maxLines` and `maxQuantity`
  * lower them, E22; the cart widget keeps the same limits). */
@@ -36,7 +38,6 @@ const MAX_LOCK = 600;
 export const OPTIONAL_ADDRESS_FIELDS = Object.freeze(['line1', 'line2', 'area', 'city', 'postalCode', 'country']);
 
 const ID = /^[A-Za-z0-9_-]{1,64}$/;
-const PHONE = /^\+?[0-9][0-9 ()-]{5,22}$/;
 
 /**
  * @typedef {{ productId: string, variantId: string | null, quantity: number, slot: number | null, dealId?: string | null,
@@ -157,13 +158,15 @@ export const checkCart = (body, { maxLines = MAX_LINES, maxQuantity = MAX_QUANTI
 };
 
 /**
- * Check a delivery address.
+ * Check a delivery address; its phone (the one the courier calls) is kept as E.164, read by the website's phone rules
+ * (K12).
  * @param {unknown} body
  * @param {ReadonlyArray<string>} required the fields the merchant requires besides name and phone
  *   (`OPTIONAL_ADDRESS_FIELDS`)
+ * @param {PhoneRules} phoneRules
  * @returns {{ ok: true, value: Address } | InputError}
  */
-export const checkAddress = (body, required) => {
+export const checkAddress = (body, required, phoneRules) => {
 	if (!isObject(body)) return { ok: false, field: 'address', message: 'A delivery address is required.' };
 	const input = /** @type {Record<string, unknown>} */ (body);
 	/** @type {Array<[keyof Address, number, boolean]>} */
@@ -187,9 +190,9 @@ export const checkAddress = (body, required) => {
 		if (needed && value === '') return { ok: false, field: `address/${field}`, message: `address.${field} is required.` };
 		out[field] = value;
 	}
-	if (!PHONE.test(String(out.phone)))
-		return { ok: false, field: 'address/phone', message: 'address.phone is a phone number (digits, spaces, + ( ) -).' };
-	return { ok: true, value: /** @type {Address} */ (/** @type {unknown} */ (out)) };
+	const phone = normalisePhone(out.phone, phoneRules);
+	if (!phone) return { ok: false, field: 'address/phone', message: 'address.phone is a phone number with its country code.' };
+	return { ok: true, value: /** @type {Address} */ (/** @type {unknown} */ ({ ...out, phone })) };
 };
 
 /**

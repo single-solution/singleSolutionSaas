@@ -6,6 +6,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { COLLECTIONS } from '../core/model.js';
 import { outcomeOf } from '../server/service.js';
+import { recipientOf } from '../server/staff-alerts.js';
 import { ACCOUNTS, NOTIFY, ORIGIN, readyShop } from './helpers.js';
 
 /** @type {Awaited<ReturnType<typeof readyShop>>} */
@@ -88,6 +89,18 @@ describe('required messages (K-17)', () => {
 		expect(staff.map((m) => m.to)).toEqual([{ email: 'team@shop.example.com' }, { phone: '+923001234567' }]);
 		expect(staff[0].values).toMatchObject({ number: order.number, link: `https://admin.shop.example.com/orders/${order.id}` });
 		expect(await outbox()).toEqual([]);
+	});
+
+	it('reads staff alert phones with the shared normaliser, leaving local numbers out (K12)', () => {
+		expect(recipientOf('+92 0320 4862403')).toEqual({ key: 'p:923204862403', to: { phone: '+923204862403' } });
+		expect(recipientOf('0092 300 1234567')).toEqual(recipientOf('+92 300 1234567'));
+		expect(recipientOf(' Team@Shop.Example.com ')).toEqual({
+			key: 'e:team@shop.example.com',
+			to: { email: 'team@shop.example.com' },
+		});
+		expect(recipientOf('03001234567')).toBeNull();
+		expect(recipientOf('nobody')).toBeNull();
+		expect(recipientOf(42)).toBeNull();
 	});
 
 	it('keeps what Notifications did not take and sends it on a later use, once, with the same key', async () => {

@@ -9,6 +9,7 @@
  * @module
  */
 import { formatText } from '@ss/app-kit';
+import { normalisePhone } from '@ss/contracts/phone';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
 /** @typedef {import('./service.js').Service} Service */
@@ -22,12 +23,13 @@ const STAFF_CACHE_MS = 5 * 60_000;
 /** Most Accounts users read per permission. */
 const STAFF_PAGE = 100;
 const EMAIL = /^[^\s@]{1,64}@[^\s@]+\.[^\s@]+$/;
-const PHONE = /^(?:\+|00)[0-9 ().-]{8,40}$/;
 const EVENT = /^[a-z][a-z0-9_]{0,40}$/;
 const PERMISSION = /^[a-z][a-z0-9_.]{0,63}$/;
 
 /**
- * An address as a recipient: `{ email }` or `{ phone }` with its dedupe key, or null (a local phone number is left out).
+ * An address as a recipient: `{ email }` or `{ phone }` with its dedupe key, or null. Phones are E.164 through the
+ * normaliser every product shares (`@ss/contracts/phone`, K12), with their `+` or `00` and calling code, as the kit's
+ * staff alerts read them; a local number is left out.
  * @param {unknown} value
  * @returns {{ key: string, to: { email: string } | { phone: string } } | null}
  */
@@ -35,10 +37,8 @@ export const recipientOf = (value) => {
 	if (typeof value !== 'string') return null;
 	const text = value.trim();
 	if (EMAIL.test(text)) return { key: `e:${text.toLowerCase()}`, to: { email: text.toLowerCase() } };
-	if (!PHONE.test(text)) return null;
-	const compact = text.replace(/[^0-9+]/g, '');
-	const digits = compact.startsWith('00') ? compact.slice(2) : compact.slice(1);
-	return /^[1-9]\d{7,14}$/.test(digits) ? { key: `p:${digits}`, to: { phone: `+${digits}` } } : null;
+	const phone = normalisePhone(text);
+	return phone ? { key: `p:${phone.slice(1)}`, to: { phone } } : null;
 };
 
 /**
