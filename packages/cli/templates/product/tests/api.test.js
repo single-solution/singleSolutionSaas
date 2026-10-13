@@ -120,6 +120,11 @@ describe('notes routes', () => {
 			'localhost',
 			'data-token',
 			'notes.read',
+			// the API reference: what each call takes and answers
+			'<code>POST /v1/notes</code> Leave a note',
+			'<td><code>text</code></td><td>string</td><td>yes</td>',
+			'<h4>Answer 201 (JSON)</h4>',
+			'id="schema-Note"',
 		])
 			expect(html).toContain(part);
 		expect(html).toContain('/widget.js&#34; data-token');

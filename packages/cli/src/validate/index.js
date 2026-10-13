@@ -16,7 +16,9 @@
  * - package wiring: the kit and the tooling are dependencies, the standard scripts exist, and every imported package
  *   is listed in package.json (`package.*`);
  * - the deployment shape (at most two server functions: the API route and the dashboard page) and the generated files
- *   (`openapi.json`, `server/widget-script.js`) being up to date (`server.*`, `assets.*`).
+ *   (`openapi.json`, `server/widget-script.js`) being up to date (`server.*`, `assets.*`);
+ * - the API description `schemas/api.json`: valid (`api.invalid`), every entry names a browser, server or ticket route
+ *   of `server/` (`api.unknown`), and every such route has an entry (`api.missing`, a warning for now).
  * @module
  */
 import { builtinModules } from 'node:module';
@@ -25,6 +27,7 @@ import { validateManifest } from '@ss/contracts';
 import { isObject, parseJson } from '../fsutil.js';
 import { loadManifest, problemOf } from '../manifest.js';
 import { OPENAPI_FILE, WIDGET_ENTRY, assetStates } from '../assets.js';
+import { checkApiRoutes, loadApi } from '../api.js';
 import { projectFiles } from '../project.js';
 import { scanRoutes } from '../routes.js';
 import { findCssReferences, findDomGlobals, findImports, findStringKeys, lex } from './scan.js';
@@ -656,6 +659,7 @@ export const validateProject = async (dir) => {
 		}
 	}
 	const scanned = await scanRoutes(files);
+	const description = await loadApi(files);
 	problems.push(
 		...checkAnatomy(files),
 		...(await checkImports(files)),
@@ -665,6 +669,8 @@ export const validateProject = async (dir) => {
 		...(await checkCrons(files)),
 		...scanned.problems,
 		...(manifest === null ? [] : checkRoutes(scanned.routes, manifest)),
+		...description.problems,
+		...checkApiRoutes(description.api, scanned.routes),
 		...(await checkPackageWiring(files)),
 		...(await checkServerShape(files)),
 		...(await checkAssets(files, manifest)),

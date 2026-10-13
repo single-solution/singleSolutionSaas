@@ -306,6 +306,101 @@ describe('ss app validate', () => {
 	});
 });
 
+describe('API descriptions (schemas/api.json)', () => {
+	it('merge into openapi.json: summary, query, request body, the success answer and the shared schemas', async () => {
+		const openapi = JSON.parse(await readFile(path.join(base, 'openapi.json'), 'utf8'));
+		const post = openapi.paths['/v1/notes'].post;
+		expect(post.summary).toBe('Leave a note');
+		expect(post.description).toMatch(/maxLength setting/);
+		expect(post.requestBody).toMatchObject({
+			required: true,
+			content: { 'application/json': { schema: { required: ['text'] } } },
+		});
+		expect(post.responses['201']).toMatchObject({ description: 'Created', content: { 'application/json': { schema: {} } } });
+		expect(post.responses['2XX']).toBeUndefined();
+		const list = openapi.paths['/v1/notes'].get;
+		expect(list.parameters.filter((/** @type {any} */ p) => p.in === 'query')).toEqual([
+			{
+				name: 'cursor',
+				in: 'query',
+				required: false,
+				description: 'nextCursor of the previous page.',
+				schema: expect.any(Object),
+			},
+			{ name: 'limit', in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 } },
+		]);
+		expect(list.responses['200'].content['application/json'].schema).toEqual({ $ref: '#/components/schemas/NotePage' });
+		// the kit's own routes are described by the kit
+		expect(openapi.paths['/v1/tickets'].post.responses['200'].content['application/json'].schema.required).toEqual([
+			'ticket',
+			'expiresAt',
+		]);
+		expect(openapi.paths['/v1/connections/{name}'].delete.responses['204']).toEqual({ description: 'No content' });
+		expect(openapi.paths['/v1/activity/counts'].get.parameters).toContainEqual(
+			expect.objectContaining({ name: 'by', in: 'query', required: true }),
+		);
+		expect(Object.keys(openapi.components.schemas)).toEqual(expect.arrayContaining(['Count', 'Note', 'NotePage', 'Problem']));
+		expect(openapi.components.schemas.Problem.properties.errors.items.required).toEqual(['path', 'message']);
+	});
+
+	it('report invalid descriptions, entries without a route and routes without an entry', async () => {
+		const dir = await project();
+		await edit(dir, 'schemas/api.json', (text) => {
+			const api = JSON.parse(text);
+			delete api['GET /v1/notes/count'];
+			api['GET /v1/notes'].response = { $ref: '#/components/schemas/Nope' };
+			api['GET /v1/nope'] = {};
+			api['GET /v1/features'] = {};
+			api['GET /docs'] = {};
+			api['GET /v1/admin/notes/:id'] = {};
+			api['POST /v1/notes'].status = 200;
+			return JSON.stringify(api);
+		});
+		await edit(dir, 'server/routes.js', (text) =>
+			text.replace(
+				'// public docs: no sign-in',
+				"defineRoute({ method: 'GET', path: '/v1/admin/notes/:noteId', auth: 'ticket', permission: 'notes.read', handler: listNotes }),\n\t// public docs: no sign-in",
+			),
+		);
+		const report = await validateProject(dir);
+		expect(messages(report, 'api.invalid')).toEqual(["$ref names the shared schema 'Nope', which does not exist"]);
+		expect(report.problems.find((p) => p.rule === 'api.invalid')?.pointer).toBe('/GET ~1v1~1notes/response/$ref');
+		expect(messages(report, 'api.unknown')).toEqual([
+			'GET /v1/nope: no such route in server/',
+			'GET /v1/features is a route of the kit, which describes it itself',
+			'GET /docs is a public route (auth none): openapi.json documents browser, server and ticket routes only',
+			"GET /v1/admin/notes/:id: the route is written 'GET /v1/admin/notes/:noteId' in server/",
+		]);
+		expect(report.problems.filter((p) => p.rule === 'api.missing')).toEqual([
+			expect.objectContaining({ severity: 'warning', file: 'server/routes.js', line: expect.any(Number) }),
+			expect.objectContaining({
+				severity: 'warning',
+				message: expect.stringMatching(/^GET \/v1\/admin\/notes\/:noteId has no entry/),
+			}),
+		]);
+		expect(messages(report, 'api.missing')[0]).toBe(
+			'GET /v1/notes/count has no entry in schemas/api.json: describe what it takes and answers',
+		);
+		// ss app assets refuses an invalid description
+		await expect(writeAssets(dir)).rejects.toThrow(/schemas\/api.json is invalid \(1 problem; ss app validate lists them\)/);
+
+		const broken = await project();
+		await put(broken, 'schemas/api.json', '{ nope');
+		expect(rules(await validateProject(broken))).toContain('api.invalid');
+		await put(broken, 'schemas/api.json', '[]');
+		expect(messages(await validateProject(broken), 'api.invalid')).toEqual(['the API description is a JSON object']);
+
+		const none = await project();
+		await rm(path.join(none, 'schemas/api.json'));
+		await writeAssets(none);
+		const bare = await validateProject(none);
+		expect(bare.ok).toBe(true);
+		expect(messages(bare, 'api.missing')).toHaveLength(5);
+		const openapi = JSON.parse(await readFile(path.join(none, 'openapi.json'), 'utf8'));
+		expect(openapi.paths['/v1/notes'].get.responses['2XX']).toEqual({ description: 'Success (JSON)' });
+	});
+});
+
 describe('helpers', () => {
 	it('resolve layers, packages and imports', () => {
 		expect(layerOf('core/a.js')).toBe('core');

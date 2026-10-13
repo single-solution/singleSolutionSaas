@@ -1,7 +1,8 @@
 /**
  * `ss app assets` — the two files a product generates from its sources:
  *
- * - `openapi.json` from the route definitions in `server/` (PLAN 0.4.13: the OpenAPI file is generated from the routes);
+ * - `openapi.json` from the route definitions in `server/` (PLAN 0.4.13: the OpenAPI file is generated from the routes)
+ *   and the API descriptions (`schemas/api.json` and the kit's own: what every call takes and answers);
  * - `server/widget-script.js`, the product's widgets (`ui/entry.js` and what it imports, `@ss/app-kit/widget` included)
  *   bundled for browsers into one script, exported as the string `WIDGET_SCRIPT`: the public `/widget.js` route serves
  *   it, the same bytes for every website (the script fetches each website's widget config itself). Being a string,
@@ -14,6 +15,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
+import { API_FILE, loadApi } from './api.js';
 import { parseJson } from './fsutil.js';
 import { loadManifest } from './manifest.js';
 import { renderOpenapi } from './openapi.js';
@@ -82,14 +84,17 @@ const renderWidgetModule = async (dir) => {
 };
 
 /**
- * The OpenAPI document of a project, from its manifest and its routes.
+ * The OpenAPI document of a project, from its manifest, its routes and its API description, with the description's
+ * problems (`api.invalid`).
  * @param {string} dir
- * @returns {Promise<Record<string, unknown>>}
+ * @returns {Promise<{ openapi: Record<string, unknown>, problems: import('./manifest.js').Problem[] }>}
  */
 const renderProjectOpenapi = async (dir) => {
 	const loaded = await loadManifest(dir);
-	const { routes } = await scanRoutes(await projectFiles(dir));
-	return renderOpenapi({ manifest: loaded.manifest, routes });
+	const files = await projectFiles(dir);
+	const { routes } = await scanRoutes(files);
+	const { api, problems } = await loadApi(files);
+	return { openapi: renderOpenapi({ manifest: loaded.manifest, routes, api }), problems };
 };
 
 /**
@@ -111,7 +116,7 @@ export const assetStates = async (dir) => {
 		await mkdir(path.dirname(path.join(dir, file)), { recursive: true });
 		await writeFile(path.join(dir, file), text);
 	};
-	const openapi = await renderProjectOpenapi(dir);
+	const { openapi } = await renderProjectOpenapi(dir);
 	const existing = await current(OPENAPI_FILE);
 	const parsed = existing === null ? null : parseJson(existing);
 	const states = [
@@ -133,12 +138,19 @@ export const assetStates = async (dir) => {
 };
 
 /**
- * Write (or, with `check`, only compare) the generated files.
+ * Write (or, with `check`, only compare) the generated files. An invalid `schemas/api.json` is refused, so `openapi.json`
+ * and the docs never carry a broken description.
  * @param {string} dir project root
  * @param {{ check?: boolean }} [options]
  * @returns {Promise<AssetState[]>}
  */
 export const writeAssets = async (dir, { check = false } = {}) => {
+	const { problems } = await renderProjectOpenapi(dir);
+	const first = problems[0];
+	if (first)
+		throw new Error(
+			`${API_FILE} is invalid (${problems.length} problem${problems.length === 1 ? '' : 's'}; ss app validate lists them): ${first.pointer ?? ''} ${first.message}`,
+		);
 	const states = await assetStates(dir);
 	for (const state of states) if (!state.upToDate && !check) await state.write();
 	return states.map(({ file, upToDate }) => ({ file, upToDate }));

@@ -1,11 +1,17 @@
 /**
  * Test harness: this product on the kit, connected to the kit's fake Portal (`@ss/app-kit/testing`), with one website,
- * its two tokens, dashboard sessions and a merchant database on the run's MongoDB (`TEST_MONGODB_URI`).
+ * its two tokens, dashboard sessions and a merchant database on the run's MongoDB (`TEST_MONGODB_URI`). Every answer
+ * `call()` sees is checked against `schemas/api.json` (and the kit's own routes): a test fails when an answer does not
+ * fit its description.
  * @module
  */
-import { createFakePortal, createMemoryStore, createNetwork } from '@ss/app-kit/testing';
+import { apiChecker, createFakePortal, createMemoryStore, createNetwork } from '@ss/app-kit/testing';
+import apiJson from '../schemas/api.json' with { type: 'json' };
 import { createProductInstance, manifest } from '../adapters/product.js';
 import { createRoutes } from '../server/routes.js';
+
+/** The API description every answer is checked against. */
+const API = apiChecker(apiJson);
 
 export const BASE = 'https://product.example.dev';
 export const DOMAIN = 'shop.example.com';
@@ -72,6 +78,8 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 			}),
 		);
 		while (tasks.length > 0) await /** @type {() => Promise<unknown>} */ (tasks.shift())();
+		const json = (response.headers.get('content-type') ?? '').startsWith('application/json');
+		API.assert({ method, path, status: response.status, body: json ? await response.clone().json() : null });
 		return response;
 	};
 

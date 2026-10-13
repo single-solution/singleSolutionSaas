@@ -23,10 +23,11 @@ export const USAGE = `ss — Single Solution developer CLI
 Usage:
   ss app init <dir> --id <id> --name <name> [--base-url <url>] [--sdk-version <range>]
                                  generate a product (PLAN 0.4.13 layout) with the sample feature notes
-  ss app validate [dir] [--json] check the product standard: layout, manifest, routes, texts, .env.example,
-                                 import direction, package wiring, server shape, generated files
-  ss app assets [dir] [--check]  generate openapi.json (from the routes) and server/widget-script.js (ui/ bundled for
-                                 browsers); --check fails when either is out of date
+  ss app validate [dir] [--json] check the product standard: layout, manifest, routes, API descriptions, texts,
+                                 .env.example, import direction, package wiring, server shape, generated files
+  ss app assets [dir] [--check]  generate openapi.json (from the routes and schemas/api.json) and
+                                 server/widget-script.js (ui/ bundled for browsers); --check fails when either is out
+                                 of date
 
 Exit codes: 0 ok, 1 validation failed or command error, 2 usage error.
 `;

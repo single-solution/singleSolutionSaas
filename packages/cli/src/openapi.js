@@ -4,43 +4,58 @@
  * settings API and the activity log, PLAN 0.8.10 K1, K9). Each operation names its auth (`x-ss-auth`), its feature
  * (`x-ss-feature`: one key, or a list when any of them is enough) and, for ticket routes, its permission
  * (`x-ss-permission`). Server-token operations take the optional `SS-Actor-*` headers (K2); visitor (browser-token)
- * operations also take the server token with `SS-Visitor-IP` (K3). Errors are RFC 9457 problems with a stable `code`.
+ * operations also take the server token with `SS-Visitor-IP` (K3). Errors are RFC 9457 problems whose `type` ends with
+ * a stable code.
+ *
+ * What each call takes and answers comes from the API descriptions: the product's `schemas/api.json` and the kit's own
+ * (`@ss/app-kit/api`): summary and description, query parameters, the JSON request body, the success status with its
+ * JSON answer, and the shared schemas (`components.schemas`). A route without a description answers "2XX Success".
  * @module
  */
 import { isObject } from './fsutil.js';
+import { KIT_API, KIT_ROUTES } from './api.js';
 
 /** @typedef {import('./routes.js').ScannedRoute} ScannedRoute */
-/** @typedef {{ method: string, path: string, auth: string, idempotent?: boolean, summary: string }} KitRoute */
+/** @typedef {import('@ss/app-kit/api').ApiDescription} ApiDescription */
+/** @typedef {import('@ss/app-kit/api').ApiEntry} ApiEntry */
 
-/** API routes the kit serves for every product (server token, no feature). */
-const KIT_API_ROUTES = Object.freeze(
-	/** @type {KitRoute[]} */ ([
-		{ method: 'POST', path: '/v1/tickets', auth: 'server', summary: 'Ticket for an admin widget (15 minutes)' },
-		{ method: 'POST', path: '/v1/data-rights/export', auth: 'server', summary: "Export one user's records" },
-		{ method: 'POST', path: '/v1/data-rights/delete', auth: 'server', summary: "Delete one user's records" },
-		{ method: 'GET', path: '/v1/permissions', auth: 'server', summary: "This product's permissions (for Accounts roles)" },
-		{ method: 'GET', path: '/v1/features', auth: 'server', summary: 'Features with on/off and hourly price' },
-		{ method: 'GET', path: '/v1/settings', auth: 'server', summary: 'Settings schemas, and values of switched-on features' },
-		{ method: 'PUT', path: '/v1/settings/:key', auth: 'server', summary: 'Save one setting (<feature>.<setting>, { value })' },
-		{ method: 'DELETE', path: '/v1/settings/:key', auth: 'server', summary: 'Reset one setting to the default' },
-		{ method: 'GET', path: '/v1/texts', auth: 'server', summary: 'Widget texts' },
-		{ method: 'PUT', path: '/v1/texts/:key', auth: 'server', summary: 'Save one widget text ({ value })' },
-		{ method: 'DELETE', path: '/v1/texts/:key', auth: 'server', summary: 'Reset one widget text to English' },
-		{ method: 'GET', path: '/v1/theme', auth: 'server', summary: "The widgets' theme" },
-		{ method: 'PUT', path: '/v1/theme', auth: 'server', summary: 'Save theme fields (null resets one)' },
-		{ method: 'GET', path: '/v1/format', auth: 'server', summary: 'The Format of money and dates' },
-		{ method: 'PUT', path: '/v1/format', auth: 'server', summary: 'Save Format fields (null resets one)' },
-		{ method: 'GET', path: '/v1/lists/:list', auth: 'server', summary: 'A list setting ({ value })' },
-		{ method: 'PUT', path: '/v1/lists/:list', auth: 'server', summary: 'Save a whole list setting ({ value })' },
-		{ method: 'GET', path: '/v1/connections', auth: 'server', summary: 'Connections (state and last 4 characters only)' },
-		{ method: 'PUT', path: '/v1/connections/:name', auth: 'server', summary: 'Save a connection ({ value }), tested live' },
-		{ method: 'DELETE', path: '/v1/connections/:name', auth: 'server', summary: 'Remove a connection' },
-		{ method: 'POST', path: '/v1/connections/:name/test', auth: 'server', summary: 'Test a connection again' },
-		{ method: 'GET', path: '/v1/activity', auth: 'server', summary: 'The activity log, newest first' },
-		{ method: 'GET', path: '/v1/activity/count', auth: 'server', summary: 'Count the activity log' },
-		{ method: 'GET', path: '/v1/activity/counts', auth: 'server', summary: 'Count the activity log by action, actor or kind' },
-	]),
-);
+/** An error answer (RFC 9457) as the kit renders it. */
+const PROBLEM = Object.freeze({
+	type: 'object',
+	description:
+		'An error (RFC 9457, application/problem+json). The last segment of type is a stable code, for example validation_failed.',
+	required: ['type', 'title', 'status'],
+	properties: {
+		type: { type: 'string', description: 'https://<product>/problems/<code>' },
+		title: { type: 'string' },
+		status: { type: 'integer' },
+		detail: { type: 'string' },
+		instance: { type: 'string', description: 'The path of the request.' },
+		requestId: { type: 'string', description: 'Quote it when you contact support.' },
+		reason: { type: 'string', enum: ['stopped', 'suspended', 'removed'], description: 'product_unavailable only.' },
+		errors: {
+			type: 'array',
+			description: 'validation_failed: what is wrong, field by field.',
+			items: {
+				type: 'object',
+				required: ['path', 'message'],
+				properties: {
+					path: { type: 'string', description: 'JSON Pointer of the field, for example /amount.' },
+					message: { type: 'string' },
+					keyword: { type: 'string' },
+					code: { type: 'string' },
+				},
+			},
+		},
+	},
+});
+
+/**
+ * The shared schemas of a description.
+ * @param {ApiDescription} api
+ * @returns {Record<string, unknown>}
+ */
+const sharedOf = (api) => (isObject(api.$schemas) ? api.$schemas : {});
 
 /** Headers of the acting user on server-token calls (K2). */
 const ACTOR_PARAMETERS = Object.freeze(['SSActorId', 'SSActorName', 'SSActorRole', 'SSActorEmail']);
@@ -73,23 +88,85 @@ const manifestFacts = (manifest) => {
 };
 
 /**
+ * The route entries of a description by key.
+ * @param {ApiDescription} api
+ * @returns {Record<string, ApiEntry>}
+ */
+const entriesOf = (api) =>
+	/** @type {Record<string, ApiEntry>} */ (
+		Object.fromEntries(Object.entries(api).filter(([key, entry]) => key !== '$schemas' && isObject(entry)))
+	);
+
+/**
+ * The query parameters an entry describes (each property of its `query` schema).
+ * @param {unknown} query
+ */
+const queryParameters = (query) => {
+	if (!isObject(query) || !isObject(query.properties)) return [];
+	const required = Array.isArray(query.required) ? query.required : [];
+	return Object.entries(query.properties).map(([name, schema]) => ({
+		name,
+		in: 'query',
+		required: required.includes(name),
+		...(isObject(schema) && typeof schema.description === 'string' ? { description: schema.description } : {}),
+		schema,
+	}));
+};
+
+/**
+ * The JSON request body an entry describes (required when the schema requires a member).
+ * @param {unknown} body
+ */
+const requestBody = (body) =>
+	body === undefined
+		? {}
+		: {
+				requestBody: {
+					required: isObject(body) && Array.isArray(body.required) && body.required.length > 0,
+					content: { 'application/json': { schema: body } },
+				},
+			};
+
+/** Descriptions of success statuses. */
+const STATUS_TEXT = Object.freeze({ 200: 'Success', 201: 'Created', 202: 'Accepted', 204: 'No content' });
+
+/**
+ * The success answer of an operation: the described status and JSON answer, else any 2xx.
+ * @param {ApiEntry | undefined} entry
+ */
+const success = (entry) => {
+	if (entry === undefined) return { '2XX': { description: 'Success (JSON)' } };
+	const status = entry.status ?? 200;
+	return {
+		[status]: {
+			description: STATUS_TEXT[/** @type {keyof typeof STATUS_TEXT} */ (status)] ?? 'Success',
+			...(entry.response === undefined ? {} : { content: { 'application/json': { schema: entry.response } } }),
+		},
+	};
+};
+
+/**
  * The OpenAPI 3.1 document of a product.
- * @param {{ manifest: unknown, routes: readonly ScannedRoute[] }} input
+ * @param {{ manifest: unknown, routes: readonly ScannedRoute[], api?: ApiDescription }} input `api`: the product's
+ *   `schemas/api.json`
  * @returns {Record<string, unknown>}
  */
-export const renderOpenapi = ({ manifest, routes }) => {
+export const renderOpenapi = ({ manifest, routes, api = {} }) => {
 	const { name, version, base, featureOf } = manifestFacts(manifest);
 	/** @type {Map<string, Record<string, unknown>>} */
 	const paths = new Map();
-	const documented = [...routes.filter((route) => Object.hasOwn(SCHEMES, route.auth)), ...KIT_API_ROUTES];
+	const documented = [...routes.filter((route) => Object.hasOwn(SCHEMES, route.auth)), ...KIT_ROUTES];
+	const descriptions = { ...entriesOf(KIT_API), ...entriesOf(api) };
 	for (const route of documented) {
 		const params = [...route.path.matchAll(/:([A-Za-z_][\w]*)/g)].map((match) => match[1] ?? '');
 		const openPath = route.path.replace(/:([A-Za-z_][\w]*)/g, '{$1}');
 		const scanned = /** @type {Partial<ScannedRoute>} */ (route);
 		const feature = scanned.feature ?? (scanned.permission ? featureOf.get(scanned.permission) : undefined);
-		const summary = /** @type {Partial<KitRoute>} */ (route).summary;
+		const key = `${route.method} ${route.path}`;
+		const entry = Object.hasOwn(descriptions, key) ? descriptions[key] : undefined;
 		const operation = {
-			...(summary ? { summary } : {}),
+			...(entry?.summary ? { summary: entry.summary } : {}),
+			...(entry?.description ? { description: entry.description } : {}),
 			'x-ss-auth': route.auth,
 			...(feature ? { 'x-ss-feature': feature } : {}),
 			...(scanned.permission ? { 'x-ss-permission': scanned.permission } : {}),
@@ -97,7 +174,8 @@ export const renderOpenapi = ({ manifest, routes }) => {
 			...(route.auth === 'browser' ? { security: [{ browserToken: [] }, { serverToken: [] }] } : {}),
 			parameters: [
 				...params.map((param) => ({ name: param, in: 'path', required: true, schema: { type: 'string' } })),
-				...(route.idempotent
+				...queryParameters(entry?.query),
+				...(scanned.idempotent
 					? [{ name: 'Idempotency-Key', in: 'header', required: false, schema: { type: 'string', maxLength: 255 } }]
 					: []),
 				...(route.auth === 'browser' ? [{ $ref: '#/components/parameters/SSVisitorIp' }] : []),
@@ -105,8 +183,9 @@ export const renderOpenapi = ({ manifest, routes }) => {
 					? ACTOR_PARAMETERS.map((name) => ({ $ref: `#/components/parameters/${name}` }))
 					: []),
 			],
+			...requestBody(entry?.body),
 			responses: {
-				'2XX': { description: 'Success (JSON)' },
+				...success(entry),
 				default: {
 					description: 'Problem (RFC 9457) with a stable code',
 					content: { 'application/problem+json': { schema: { $ref: '#/components/schemas/Problem' } } },
@@ -189,19 +268,9 @@ export const renderOpenapi = ({ manifest, routes }) => {
 					schema: { type: 'string', maxLength: 320 },
 				},
 			},
-			schemas: {
-				Problem: {
-					type: 'object',
-					required: ['type', 'title', 'status'],
-					properties: {
-						type: { type: 'string' },
-						title: { type: 'string' },
-						status: { type: 'integer' },
-						code: { type: 'string' },
-						detail: { type: 'string' },
-					},
-				},
-			},
+			schemas: Object.fromEntries(
+				Object.entries({ ...sharedOf(KIT_API), ...sharedOf(api), Problem: PROBLEM }).sort(([a], [b]) => a.localeCompare(b)),
+			),
 		},
 	};
 };
