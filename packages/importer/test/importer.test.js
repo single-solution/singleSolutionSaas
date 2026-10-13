@@ -56,11 +56,26 @@ describe('mappings', () => {
 			['source', '1x', /source/],
 			['prefix', 'n', /prefix/],
 			['map', 'nope', /map/],
-			['mergeKey', 'nope', /mergeKey/],
+			['mergeKey', 'nope', /mergeKey is a function/],
+			['merge', () => ({}), /merge needs a mergeKey/],
+			['sums', 'nope', /sums is a function/],
 			['countPath', '/v1/notes', /countPath/],
+			['key', [], /key is 1–4/],
+			['key', ['a.b'], /key is 1–4/],
+			['key', 'id', /key is 1–4/],
+			['lookups', 'x', /lookups maps/],
+			['lookups', { 'Bad Table': () => null }, /lookups maps/],
+			['lookups', { slugs: 'x' }, /lookups maps/],
 		]))
 			expect(() => defineMapping({ name: 'x1', description: '', steps: [{ ...step, [field]: value }] })).toThrow(message);
-		expect(() => defineMapping({ name: 'x1', description: '', steps: [step, step] })).toThrow(/two steps/);
+		// several steps may feed one target, all with the same key
+		expect(defineMapping({ name: 'x1', description: '', steps: [step, step] }).steps).toHaveLength(2);
+		expect(() => defineMapping({ name: 'x1', description: '', steps: [step, { ...step, key: ['userId'] }] })).toThrow(
+			/names the same key/,
+		);
+		expect(() => defineMapping({ name: 'x1', description: '', steps: [step], settings: /** @type {any} */ ('x') })).toThrow(
+			/settings is a function/,
+		);
 	});
 
 	it('give deterministic ids from ObjectIds', () => {
@@ -105,16 +120,19 @@ describe('ss-import read', () => {
 		expect(manifest).toEqual({
 			mapping: 'fixture',
 			readAt: '2026-10-10T10:00:00.000Z',
-			steps: [
+			steps: [{ product: 'notes', collection: 'notes', source: 'feedback', file: '01-notes.notes.ndjson', ...EXPECTED }],
+			targets: [
 				{
 					product: 'notes',
 					collection: 'notes',
-					source: 'feedback',
+					key: ['id'],
 					file: '01-notes.notes.ndjson',
-					...EXPECTED,
+					records: 3,
 					countPath: '/v1/notes/count',
 				},
 			],
+			totals: {},
+			settings: null,
 		});
 		const records = linesOf(await readFile(path.join(dir, '01-notes.notes.ndjson'), 'utf8')).map((line) =>
 			JSON.parse(line.text),
@@ -200,6 +218,7 @@ describe('ss-import send and verify', () => {
 		expect(dry).toEqual({
 			dryRun: true,
 			ok: true,
+			settings: { changes: [], unchanged: 0, refused: [] },
 			steps: [
 				{
 					product: 'notes',
@@ -218,7 +237,8 @@ describe('ss-import send and verify', () => {
 		const before = await verify({ dir, products, fetch: product.fetch });
 		expect(before).toEqual({
 			ok: false,
-			steps: [{ product: 'notes', collection: 'notes', expected: 3, imported: null, counted: 0, match: false }],
+			steps: [{ product: 'notes', collection: 'notes', expected: 3, imported: null, stored: null, counted: 0, match: false }],
+			totals: [],
 		});
 
 		const real = await send({ dir, products, fetch: product.fetch });
@@ -228,7 +248,8 @@ describe('ss-import send and verify', () => {
 		expect(product.stored.get('notes')?.size).toBe(3);
 		expect(await verify({ dir, products, fetch: product.fetch })).toEqual({
 			ok: true,
-			steps: [{ product: 'notes', collection: 'notes', expected: 3, imported: 3, counted: 3, match: true }],
+			steps: [{ product: 'notes', collection: 'notes', expected: 3, imported: 3, stored: 3, counted: 3, match: true }],
+			totals: [],
 		});
 	});
 

@@ -1,21 +1,27 @@
 /**
- * `ss-import verify`: compares what `read` found with what each product holds: the record count of every import
- * collection (`GET <product>/v1/import/status`) and, where the mapping names one, the product's count route (K4).
+ * `ss-import verify` (PLAN 0.8.10 Migration, cut-over step 6): compares what `read` found with what each product holds.
+ * Per target: the records read with the records an import wrote and the product holds (`GET <product>/v1/import/status`
+ * `imported`; after a final pass with prune they are equal) and, where the mapping names one, the product's count
+ * route (K4). Per product: the verification sums the mapping's steps added up (order totals per status, stock units,
+ * points balances …) with the product's own (`status.totals`).
  * @module
  */
-import { callProduct, readManifest, targetOf } from './send.js';
+import { callProduct, targetOf } from './http.js';
+import { readManifest } from './send.js';
 
-/** @typedef {import('./send.js').ProductTarget} ProductTarget */
+/** @typedef {import('./http.js').ProductTarget} ProductTarget */
 /**
  * @typedef {object} VerifyStep
  * @property {string} product
  * @property {string} collection
  * @property {number} expected records `read` wrote
- * @property {number | null} imported the product's import status
+ * @property {number | null} imported records an import wrote that the product holds
+ * @property {number | null} stored every record of the collection (the merchant's own too)
  * @property {number | null} counted the product's count route, when the mapping names one
  * @property {boolean} match
  */
-/** @typedef {{ ok: boolean, steps: VerifyStep[] }} VerifyReport */
+/** @typedef {{ product: string, key: string, expected: number, actual: number | null, match: boolean }} VerifyTotal */
+/** @typedef {{ ok: boolean, steps: VerifyStep[], totals: VerifyTotal[] }} VerifyReport */
 
 /**
  * @param {{ dir: string, products: Record<string, ProductTarget>, fetch?: typeof globalThis.fetch }} options
@@ -23,27 +29,51 @@ import { callProduct, readManifest, targetOf } from './send.js';
  */
 export const verify = async ({ dir, products, fetch = globalThis.fetch }) => {
 	const manifest = await readManifest(dir);
-	/** @type {Map<string, Record<string, number>>} */
+	/** @type {Map<string, { collections: Record<string, number>, imported: Record<string, number> | null, totals: Record<string, number> }>} */
 	const statuses = new Map();
+	/** @param {string} product */
+	const statusOf = async (product) => {
+		const found = statuses.get(product);
+		if (found) return found;
+		const status = await callProduct(fetch, targetOf(products, product), 'GET', '/v1/import/status');
+		const read = {
+			collections: status?.collections ?? {},
+			imported: status?.imported ?? null,
+			totals: status?.totals ?? {},
+		};
+		statuses.set(product, read);
+		return read;
+	};
+	/** @param {unknown} value */
+	const countOf = (value) => (typeof value === 'number' ? value : null);
 	/** @type {VerifyStep[]} */
 	const steps = [];
-	for (const step of manifest.steps) {
-		const target = targetOf(products, step.product);
-		if (!statuses.has(step.product)) {
-			const status = await callProduct(fetch, target, 'GET', '/v1/import/status');
-			statuses.set(step.product, status?.collections ?? {});
-		}
-		const imported = statuses.get(step.product)?.[step.collection];
-		const counted = step.countPath ? Number((await callProduct(fetch, target, 'GET', step.countPath))?.count) : null;
-		const importedCount = typeof imported === 'number' ? imported : null;
+	for (const target of manifest.targets) {
+		const status = await statusOf(target.product);
+		const stored = countOf(status.collections[target.collection]);
+		// a product without import counts: every record of the collection
+		const imported = status.imported ? countOf(status.imported[target.collection]) : stored;
+		const counted = target.countPath
+			? Number((await callProduct(fetch, targetOf(products, target.product), 'GET', target.countPath))?.count)
+			: null;
 		steps.push({
-			product: step.product,
-			collection: step.collection,
-			expected: step.records,
-			imported: importedCount,
+			product: target.product,
+			collection: target.collection,
+			expected: target.records,
+			imported,
+			stored,
 			counted,
-			match: importedCount === step.records && (counted === null || counted === step.records),
+			match: imported === target.records && (counted === null || counted === target.records),
 		});
 	}
-	return { ok: steps.every((step) => step.match), steps };
+	/** @type {VerifyTotal[]} */
+	const totals = [];
+	for (const [product, sums] of Object.entries(manifest.totals ?? {})) {
+		const status = await statusOf(product);
+		for (const [key, expected] of Object.entries(sums)) {
+			const actual = countOf(status.totals[key]);
+			totals.push({ product, key, expected, actual, match: actual === expected });
+		}
+	}
+	return { ok: steps.every((step) => step.match) && totals.every((total) => total.match), steps, totals };
 };

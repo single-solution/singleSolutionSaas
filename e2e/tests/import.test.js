@@ -106,7 +106,8 @@ describe('importing a store into a product (K10, ss-import)', () => {
 		expect(list.json.items[2]).toMatchObject({ email: 'ayesha@example.com', createdAt: '2024-01-05T10:00:00.000Z' });
 		expect(await verify({ dir, products, fetch })).toEqual({
 			ok: true,
-			steps: [{ product: 'notes', collection: 'notes', expected: 3, imported: 3, counted: 3, match: true }],
+			steps: [{ product: 'notes', collection: 'notes', expected: 3, imported: 3, stored: 3, counted: 3, match: true }],
+			totals: [],
 		});
 		// each call wrote one activity entry, never copied to Accounts; the dry run wrote none
 		const activity = await sys.call('GET', '/v1/activity?action=import.notes', { token: tokens.server });
