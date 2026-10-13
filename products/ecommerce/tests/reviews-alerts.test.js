@@ -347,6 +347,21 @@ describe('alerts', () => {
 			body: { kind: 'back_in_stock', productId: item.id, variantId: big?.id, phone: '03001234567' },
 		});
 		expect(guestBack.status).toBe(422);
+		// phones only of the countries the website serves (SE-5): a guest's other phone is refused, a member's left out
+		await shop.setting('checkout', 'countries', ['PK']);
+		const abroad = await subscribe({ variantId: big?.id, phone: '+447700900123' }, undefined);
+		expect(abroad.json.errors[0]).toMatchObject({ path: '/phone', code: 'country_not_allowed' });
+		const lamp = await shop.seedProduct({ name: 'Lamp', price: 500, stock: 0 });
+		const memberAlert = await visit('POST', '/v1/shop/alerts', {
+			body: { kind: 'back_in_stock', productId: lamp.id },
+			signIn: sara,
+		});
+		expect(memberAlert.status).toBe(201);
+		expect(
+			await data.collection(COLLECTIONS.alerts).findOne({ websiteId: data.websiteId, id: memberAlert.json.id }),
+		).toMatchObject({ email: 'sara@example.com', phone: '' });
+		await data.collection(COLLECTIONS.alerts).deleteOne({ websiteId: data.websiteId, id: memberAlert.json.id });
+		await shop.setting('checkout', 'countries', []);
 
 		// the big variant drops to 10,800: Sara's target (10,500) waits, the guest's (11,000) and Sara's plain alert on
 		// the small variant (unchanged) do not fire, so only the guest's is sent

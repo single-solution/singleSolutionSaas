@@ -488,7 +488,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		if (mode === 'off') throw problem('sign_in_required', 'Sign in to continue.');
 		const body = typeof ctx.body === 'object' && ctx.body !== null ? ctx.body : {};
 		const guest = checkGuest(body.customer, await phoneRulesOf(s));
-		if (!guest.ok) throw service.invalid(guest.field, guest.message);
+		if (!guest.ok) throw service.invalid(guest.field, guest.message, guest.code);
 		if (mode === 'unless_password' && (await guests.memberWithPassword(s, guest.value.phone)))
 			throw problem('sign_in_required', 'This phone number has an account: sign in to order.', {
 				// `reason` is the kit's own extension; this one says why a sign-in is needed

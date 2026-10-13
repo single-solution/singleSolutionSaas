@@ -15,7 +15,7 @@ import {
 	NO_CONDITIONS,
 } from '../core/deals.js';
 import { keyOpens, newOrderKey, orderKeyHash, readLock, signLock } from '../adapters/crypto.js';
-import { checkGuest, ORDER_KEY_LENGTH, phoneDigitsOf, phoneRules } from '../core/guests.js';
+import { checkGuest, ORDER_KEY_LENGTH, phoneAllowed, phoneDigitsOf, phoneRules } from '../core/guests.js';
 import { expiryFor, lotsByRule, pointsToEarn, pointsToRedeem, takesPart } from '../core/loyalty.js';
 import { allocateUnits, roundDown, roundHalfUp, unitOf } from '../core/money.js';
 import { checkRolePrices } from '../core/role-pricing.js';
@@ -263,12 +263,15 @@ describe('guests and order keys (E21)', () => {
 		expect(phoneRules({ defaultCallingCode: '', trunkPrefix: '' }, 'PK')).toEqual({
 			defaultCallingCode: '+92',
 			trunkPrefix: '',
+			countries: [],
 		});
 		expect(phoneRules({ defaultCallingCode: '+44', trunkPrefix: '0' }, 'PK')).toEqual({
 			defaultCallingCode: '+44',
 			trunkPrefix: '0',
+			countries: [],
 		});
-		expect(phoneRules({}, null)).toEqual({ defaultCallingCode: '', trunkPrefix: '' });
+		expect(phoneRules({}, null)).toEqual({ defaultCallingCode: '', trunkPrefix: '', countries: [] });
+		expect(phoneRules({ countries: ['PK', 7] }, 'PK').countries).toEqual(['PK']);
 		expect(phoneDigitsOf('+923001234567')).toBe('3001234567');
 		expect(phoneDigitsOf(null)).toBe('');
 	});
@@ -296,6 +299,19 @@ describe('guests and order keys (E21)', () => {
 		expect(checkGuest({ name: 'A', phone: 'x' }, rules)).toMatchObject({ field: 'customer/phone' });
 		expect(checkGuest({ name: 'A', phone: '3+00' }, rules)).toMatchObject({ field: 'customer/phone' });
 		expect(checkGuest({ name: 'A', phone: '03001234567', email: 'nope' }, rules)).toMatchObject({ field: 'customer/email' });
+	});
+
+	it('takes guest phones only of the countries the website serves (SE-5)', () => {
+		const pk = phoneRules({ countries: ['PK'] }, 'PK');
+		expect(checkGuest({ name: 'A', phone: '03001234567' }, pk)).toMatchObject({ ok: true });
+		for (const phone of ['+447700900123', '00447700900123', '+8823123456789'])
+			expect(checkGuest({ name: 'A', phone }, pk)).toMatchObject({
+				ok: false,
+				field: 'customer/phone',
+				code: 'country_not_allowed',
+			});
+		expect(phoneAllowed('+447700900123', phoneRules({}, 'PK'))).toBe(true);
+		expect(phoneAllowed('+15550001111', phoneRules({ countries: ['CA'] }, 'PK'))).toBe(true);
 	});
 
 	it('opens an order only with its own key', () => {

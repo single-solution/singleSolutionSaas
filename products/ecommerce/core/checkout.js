@@ -163,7 +163,7 @@ export const checkCart = (body, { maxLines = MAX_LINES, maxQuantity = MAX_QUANTI
  * @param {unknown} body
  * @param {ReadonlyArray<string>} required the fields the merchant requires besides name and phone
  *   (`OPTIONAL_ADDRESS_FIELDS`)
- * @param {PhoneRules} phoneRules
+ * @param {Pick<PhoneRules, 'defaultCallingCode' | 'trunkPrefix'>} phoneRules (any country: a courier calls it)
  * @returns {{ ok: true, value: Address } | InputError}
  */
 export const checkAddress = (body, required, phoneRules) => {

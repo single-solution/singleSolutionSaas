@@ -348,6 +348,24 @@ describe('guest checkout and order keys (E21)', () => {
 		await shop.setting('checkout', 'guests', 'off');
 	});
 
+	it('takes a guest’s phone only of the countries the website serves (checkout.countries, SE-5)', async () => {
+		await shop.setting('checkout', 'guests', 'on');
+		await shop.setting('checkout', 'countries', ['US']);
+		const item = await shop.seedProduct({ price: 1000, stock: 10 });
+		/** @param {string} phone */
+		const asGuest = (phone) =>
+			place({ lines: [{ productId: item.id }], payment: 'cod', address: ADDRESS, customer: { name: 'Lee Guest', phone } });
+		const abroad = await asGuest('+447700900123');
+		expect(abroad.status).toBe(422);
+		expect(abroad.json.errors[0]).toMatchObject({ path: '/customer/phone', code: 'country_not_allowed' });
+		const local = await asGuest('+15550004444');
+		expect(local.status).toBe(201);
+		await shop.api('DELETE', `/v1/orders/${local.json.order.id}`);
+		await shop.setting('checkout', 'countries', []);
+		expect((await asGuest('+447700900123')).status).toBe(201);
+		await shop.setting('checkout', 'guests', 'off');
+	});
+
 	it('asks a guest whose phone has an account with a password to sign in', async () => {
 		await shop.setting('checkout', 'guests', 'unless_password');
 		shop.responders.set(`${ACCOUNTS}/v1/users`, () => ({

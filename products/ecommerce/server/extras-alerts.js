@@ -32,7 +32,7 @@ import {
 	priceOf,
 	stopLink,
 } from '../core/alerts.js';
-import { ORDER_KEY_LENGTH } from '../core/guests.js';
+import { COUNTRY_REFUSED, ORDER_KEY_LENGTH, phoneAllowed } from '../core/guests.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import { phoneRulesOf } from './guests.js';
 import { VISITOR_LIMITS, VISITOR_WRITE_LIMITS } from './service.js';
@@ -113,6 +113,7 @@ export const createAlerts = (_product, service, cards) => {
 			due.map((alert) => alert.productId),
 		);
 		const { channels, stopUrl } = await s.values('alerts');
+		const rules = await phoneRulesOf(s);
 		for (const alert of due) {
 			const item = products.get(alert.productId) ?? null;
 			if (!item || !isDue(alert, item)) {
@@ -143,7 +144,8 @@ export const createAlerts = (_product, service, cards) => {
 				const result = await service.notify(
 					s,
 					alert.kind === 'back_in_stock' ? 'ecommerce.back_in_stock' : 'ecommerce.price_drop',
-					{ email: alert.email, phone: alert.phone },
+					// never to a phone of a country the website does not serve (SE-5)
+					{ email: alert.email, phone: alert.phone && phoneAllowed(alert.phone, rules) ? alert.phone : '' },
 					values,
 					[channel],
 				);
@@ -206,22 +208,30 @@ export const createAlerts = (_product, service, cards) => {
 
 	/**
 	 * Who an alert is for: the signed-in shopper (the e-mail and phone of their sign-in), else a guest's normalised
-	 * phone while the `guests` setting allows (E34); with their customer record's id when they have one (E21).
+	 * phone while the `guests` setting allows (E34); with their customer record's id when they have one (E21). A phone
+	 * of a country the website does not serve (`checkout.countries`, SE-5) is refused for a guest and left out for a
+	 * member.
 	 * @param {Site} s @param {WebsiteData} data @param {Record<string, unknown>} body
 	 * @returns {Promise<{ userId: string, email: string, phone: string, customerId: string | null }>}
 	 */
 	const contactOf = async (s, data, body) => {
 		const store = createOrdersStore(data);
+		const rules = await phoneRulesOf(s);
 		const shopper = await service.shopper(s);
 		if (shopper) {
-			if (!shopper.email && !shopper.phone)
-				throw service.invalid('kind', 'Add an e-mail or phone to your account to get alerts.');
+			const phone = shopper.phone && phoneAllowed(shopper.phone, rules) ? shopper.phone : '';
+			if (!shopper.email && !phone)
+				throw service.invalid(
+					'kind',
+					'Add an e-mail or a phone of a country this shop serves to your account to get alerts.',
+				);
 			const customer = await store.customer(shopper.id);
-			return { userId: shopper.id, email: shopper.email, phone: shopper.phone, customerId: customer?.id ?? null };
+			return { userId: shopper.id, email: shopper.email, phone, customerId: customer?.id ?? null };
 		}
 		if ((await s.values('alerts')).guests !== true) throw problem('sign_in_required', 'Sign in to continue.');
-		const phone = normalisePhone(body.phone, await phoneRulesOf(s));
+		const phone = normalisePhone(body.phone, rules);
 		if (!phone) throw service.invalid('phone', 'Give your phone number with its country code.');
+		if (!phoneAllowed(phone, rules)) throw service.invalid('phone', COUNTRY_REFUSED.message, COUNTRY_REFUSED.code);
 		const customer = await store.guestCustomer(phone);
 		return { userId: '', email: '', phone, customerId: customer?.id ?? null };
 	};
