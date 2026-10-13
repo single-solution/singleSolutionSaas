@@ -90,7 +90,10 @@ beforeAll(async () => {
 	env = await setup();
 	env.gateways.respond(NOTIFY_BASE, (c) => {
 		events.push({ ...JSON.parse(c.body), authorization: c.headers.authorization, key: c.headers['idempotency-key'] });
-		return { status: notifyStatus, body: { queued: 1 } };
+		return {
+			status: notifyStatus,
+			body: notifyStatus === 409 ? { type: 'https://notifications.example.dev/problems/duplicate_request' } : { queued: 1 },
+		};
 	});
 });
 afterAll(async () => {

@@ -294,6 +294,9 @@ describe('merchant database (MongoDB)', () => {
 		expect(isDatabaseUnavailable(kitError('database_unreachable', 'x'))).toBe(true);
 		expect(isDatabaseUnavailable(kitError('database_not_connected', 'x'))).toBe(false);
 		expect(isDatabaseUnavailable(Object.assign(new Error('dup'), { code: 11000 }))).toBe(false);
+		// a mongodb+srv address whose DNS records cannot be read right now
+		expect(isDatabaseUnavailable(Object.assign(new Error('querySrv ENOTFOUND'), { code: 'ENOTFOUND' }))).toBe(true);
+		expect(isDatabaseUnavailable(Object.assign(new Error('querySrv'), { code: 'EAI_AGAIN' }))).toBe(true);
 		expect(isDatabaseUnavailable(null)).toBe(false);
 	});
 

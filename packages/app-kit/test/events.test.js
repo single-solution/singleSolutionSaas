@@ -186,6 +186,8 @@ describe('events (K5)', () => {
 		expect(await forward('duplicate_request')).toMatchObject({ delivery: 'sent', attempts: 1 });
 		// the earlier forward is still running and may yet fail: tried again a minute later
 		expect(await forward('in_progress')).toMatchObject({ delivery: 'pending', attempts: 1, dueAt: new Date(60_000) });
+		// a 409 that does not say the forward got through is not taken as delivered
+		expect(await forward('conflict')).toMatchObject({ delivery: 'pending', attempts: 1 });
 	});
 
 	it('settings.changed tells the merchant’s server about settings, texts, theme and Format changes (SG-14)', async () => {

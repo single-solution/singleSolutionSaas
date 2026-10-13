@@ -337,6 +337,7 @@ describe('getMongoClient', () => {
 		expect(isDatabaseUnavailable(Object.assign(new Error('x'), { code: 50 }))).toBe(true);
 		expect(isDatabaseUnavailable(Object.assign(new Error('dup'), { code: 11000 }))).toBe(false);
 		expect(isDatabaseUnavailable(new Error('db down'))).toBe(false);
+		expect(isDatabaseUnavailable(Object.assign(new Error('querySrv ENOTFOUND'), { code: 'ENOTFOUND' }))).toBe(true);
 		expect(isDatabaseUnavailable(null)).toBe(false);
 	});
 });

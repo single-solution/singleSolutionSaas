@@ -67,15 +67,20 @@ const UNAVAILABLE_ERRORS = new Set([
 	'MongoTopologyClosedError',
 ]);
 
+/** Network errors of a name lookup (a `mongodb+srv` address whose DNS records cannot be read right now). */
+const LOOKUP_ERRORS = new Set(['ENOTFOUND', 'EAI_AGAIN', 'ETIMEOUT', 'ESERVFAIL']);
+
 /**
  * True when an error means a database cannot be reached or did not answer in time (a merchant database that cannot be
- * reached, a driver network error or deadline, or an operation over its `maxTimeMS`).
+ * reached, a driver network error or deadline, a failed DNS lookup of its address, or an operation over its
+ * `maxTimeMS`).
  * @param {unknown} error
  * @returns {boolean}
  */
 export const isDatabaseUnavailable = (error) =>
 	isKitError(error, 'database_unreachable') ||
-	(isObject(error) && (UNAVAILABLE_ERRORS.has(String(error.name)) || error.code === 50));
+	(isObject(error) &&
+		(UNAVAILABLE_ERRORS.has(String(error.name)) || error.code === 50 || LOOKUP_ERRORS.has(String(error.code))));
 
 /**
  * Connect a database client before use: the returned function resolves once `client` is connected. A mongodb 6.x client
