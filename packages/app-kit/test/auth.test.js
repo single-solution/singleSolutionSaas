@@ -1,9 +1,11 @@
 import { MongoClient } from 'mongodb';
 import { describe, expect, it } from 'vitest';
 import { createProduct, created, defineRoute } from '../src/index.js';
-import { OFFLINE_GRACE_MS } from '../src/status.js';
+import { createPortalClient } from '../src/portal-client.js';
+import { OFFLINE_GRACE_MS, WAITED_FETCH_MS, createStatus } from '../src/status.js';
+import { noopLogger } from '../src/logger.js';
 import { createMemoryStore } from '../src/testing.js';
-import { BASE, DOMAIN, ENCRYPTION_KEY, SECRET, T0, manifest, productRoutes, setup } from './helpers.js';
+import { BASE, DOMAIN, ENCRYPTION_KEY, SECRET, T0, createClock, manifest, productRoutes, setup } from './helpers.js';
 
 const SITE = `https://${DOMAIN}`;
 
@@ -31,7 +33,7 @@ describe('browser tokens', () => {
 	});
 
 	it('refuse server tokens, other products, revoked ids and garbage with the same error', async () => {
-		const { call, portal, websiteId, browser, server, switchOn, clock } = await setup();
+		const { call, portal, websiteId, browser, server, switchOn, clock, settle } = await setup();
 		await switchOn(['notes']);
 		const other = await portal.issueToken({ websiteId, productId: 'chat', kind: 'browser' });
 		for (const token of [server.token, other.token, 'nope', 'a.b.c']) {
@@ -40,6 +42,9 @@ describe('browser tokens', () => {
 		}
 		portal.revoke(browser.jti);
 		clock.advance(5 * 60_000);
+		// fetched with the old status copy, right after the next use (K-19); a token.revoked notice fetches it at once
+		expect((await call('GET', '/v1/notes', { token: browser.token, origin: SITE })).status).toBe(200);
+		await settle();
 		expect((await call('GET', '/v1/notes', { token: browser.token, origin: SITE })).status).toBe(401);
 	});
 
@@ -75,9 +80,12 @@ describe('server tokens', () => {
 
 describe('status on use', () => {
 	it('obeys active, grace, stopped, suspended and removed', async () => {
-		const { call, server, portal, websiteId, clock } = await setup();
+		const { call, server, portal, websiteId, clock, settle } = await setup();
 		const expectStatus = async (/** @type {number} */ code, /** @type {string} */ reason = '') => {
 			clock.advance(5 * 60_000);
+			// an old copy answers once and is fetched again right after (K-19)
+			await call('GET', '/v1/server/open', { token: server.token });
+			await settle();
 			const response = await call('GET', '/v1/server/open', { token: server.token });
 			expect(response.status).toBe(code);
 			if (reason)
@@ -139,17 +147,26 @@ describe('status on use', () => {
 					? Promise.reject(new TypeError('fetch failed'))
 					: portal.fetch(url, init),
 		});
-		const handler = product.handler(productRoutes());
-		const use = async () =>
-			(await handler(new Request(`${BASE}/v1/server/open`, { headers: { authorization: `Bearer ${server.token}` } }))).status;
+		/** @type {Array<() => Promise<unknown>>} */
+		const tasks = [];
+		const handler = product.handler(productRoutes(), { after: (task) => tasks.push(task) });
+		const use = async () => {
+			const { status } = await handler(
+				new Request(`${BASE}/v1/server/open`, { headers: { authorization: `Bearer ${server.token}` } }),
+			);
+			while (tasks.length > 0) await /** @type {() => Promise<unknown>} */ (tasks.shift())();
+			return status;
+		};
 		expect(await use()).toBe(200);
 		failing = true;
 		clock.advance(OFFLINE_GRACE_MS - 6 * 60_000);
-		expect(await use()).toBe(200); // a fresh status, the list still within the grace
+		expect(await use()).toBe(200); // the status is fetched again after it, the list fails, still within the grace
 		clock.advance(6 * 60_000);
 		expect(await use()).toBe(503);
+		// a failed fetch is not waited for again within 30 seconds; back as soon as the list is fetched
 		failing = false;
-		clock.advance(5 * 60_000 + 1);
+		expect(await use()).toBe(503);
+		clock.advance(30_000);
 		expect(await use()).toBe(200);
 	});
 
@@ -157,6 +174,114 @@ describe('status on use', () => {
 		const { call, server, portal, websiteId } = await setup();
 		portal.deleteWebsite(websiteId);
 		expect((await call('GET', '/v1/server/open', { token: server.token })).status).toBe(401);
+	});
+});
+
+describe('status copies never hold a request for the Portal (K-19)', () => {
+	const WEBSITE = 'web_0123456789abcdefghjkmnpq';
+	/** @param {number} at */
+	const statusAt = (at) => ({
+		websiteId: WEBSITE,
+		merchantId: 'mer_0123456789abcdefghjkmnpq',
+		merchantName: 'Shop',
+		domain: DOMAIN,
+		status: /** @type {const} */ ('active'),
+		graceEndsAt: null,
+		todayMillicredits: 0,
+		featuresVersion: 1,
+		validUntil: new Date(at + 5 * 60_000).toISOString(),
+	});
+	/** A Portal whose answers the test releases; it records each call and its deadline. */
+	const slowPortal = () => {
+		/** @type {Array<{ what: string, timeoutMs: number | undefined, answer: (value?: unknown) => void, refuse: (error: unknown) => void }>} */
+		const calls = [];
+		/** @param {string} what @param {{ timeoutMs?: number }} [options] */
+		const pending = (what, options = {}) =>
+			new Promise((answer, refuse) => {
+				calls.push({ what, timeoutMs: options.timeoutMs, answer, refuse });
+			});
+		const client = /** @type {any} */ ({
+			status: (/** @type {string} */ _id, /** @type {any} */ options) => pending('status', options),
+			revocations: (/** @type {any} */ _cursor, /** @type {any} */ options) => pending('revocations', options),
+		});
+		return { calls, client };
+	};
+	const flush = () => new Promise((resolve) => setTimeout(resolve, 1));
+
+	it('use an old copy at once and fetch it again after the response, one fetch per website at a time', async () => {
+		const clock = createClock();
+		const store = createMemoryStore({ now: clock.now });
+		const portal = slowPortal();
+		const status = createStatus({ store, client: () => portal.client, now: clock.now, logger: noopLogger });
+		// no copy at all: the use waits, with the short deadline
+		const first = status.serving(WEBSITE);
+		await flush();
+		expect(portal.calls.map((c) => [c.what, c.timeoutMs])).toEqual([['status', WAITED_FETCH_MS]]);
+		expect(WAITED_FETCH_MS).toBe(5_000);
+		portal.calls[0]?.answer(statusAt(clock.now()));
+		expect(await first).toMatchObject({ ok: true });
+		// the revocation list is fetched after it, never waited for
+		await flush();
+		expect(portal.calls.map((c) => c.what)).toEqual(['status', 'revocations']);
+		portal.calls[1]?.answer({ tokenIds: [], cursor: 'c1' });
+
+		// an old copy within the offline grace: answered at once, fetched again after the response
+		clock.advance(10 * 60_000);
+		/** @type {Array<() => Promise<unknown>>} */
+		const after = [];
+		const uses = await Promise.all([1, 2, 3].map(() => status.serving(WEBSITE, { after: (task) => after.push(task) })));
+		expect(uses.every((use) => use.ok)).toBe(true);
+		expect(after).toHaveLength(1);
+		expect(portal.calls).toHaveLength(2);
+		const refresh = Promise.all(after.map((task) => task()));
+		// a use without `after` meanwhile shares the fetch already running
+		const detached = status.lookup(WEBSITE, { wait: true });
+		await flush();
+		expect(portal.calls.slice(2).map((c) => [c.what, c.timeoutMs])).toEqual([['status', undefined]]);
+		portal.calls[2]?.answer(statusAt(clock.now()));
+		expect(await detached).toMatchObject({ ok: true, fetchedAt: clock.now() });
+		await flush();
+		portal.calls[3]?.answer({ tokenIds: [], cursor: 'c2' });
+		await refresh;
+		expect(portal.calls.map((c) => c.what)).toEqual(['status', 'revocations', 'status', 'revocations']);
+
+		// the Portal down: a failed fetch is tried again after a later use, at most every 30 seconds per website
+		clock.advance(10 * 60_000);
+		after.length = 0;
+		await status.serving(WEBSITE, { after: (task) => after.push(task) });
+		await status.serving(WEBSITE, { after: (task) => after.push(task) });
+		expect(after).toHaveLength(1);
+		const failed = /** @type {() => Promise<unknown>} */ (after[0])();
+		await flush();
+		portal.calls[4]?.refuse(new Error('down'));
+		await failed;
+		clock.advance(30_000);
+		expect((await status.serving(WEBSITE, { after: (task) => after.push(task) })).ok).toBe(true);
+		expect(after).toHaveLength(2);
+		// without `after` (a product calling serving itself) the fetch starts at once and is not waited for
+		clock.advance(30_000);
+		expect((await status.serving(WEBSITE)).ok).toBe(true);
+		await flush();
+		expect(portal.calls.map((c) => c.what).slice(5)).toEqual(['status']);
+		portal.calls[5]?.refuse(
+			Object.assign(new Error('gone'), { name: 'AppKitError', code: 'portal_refused', details: { status: 404 } }),
+		);
+		await flush();
+		expect(await store.get('status', WEBSITE)).toBeNull();
+	});
+
+	it('give a Portal call the deadline it asks for', async () => {
+		const portal = createPortalClient({
+			portalUrl: 'https://portal.test',
+			productId: 'notes',
+			signer: { kid: 'k1', alg: 'EdDSA', sign: async () => new Uint8Array(64) },
+			fetch: (_url, init) =>
+				new Promise((_resolve, reject) => init?.signal?.addEventListener('abort', () => reject(init.signal?.reason))),
+		});
+		const started = Date.now();
+		await expect(portal.status(WEBSITE, { timeoutMs: 20 })).rejects.toMatchObject({ code: 'portal_unreachable' });
+		await expect(portal.revocations(null, { timeoutMs: 20 })).rejects.toMatchObject({ code: 'portal_unreachable' });
+		expect(Date.now() - started).toBeLessThan(2_000);
 	});
 });
 

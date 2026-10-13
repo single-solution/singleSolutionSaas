@@ -16,7 +16,7 @@ import { isObject, kitError } from './util.js';
 /** @typedef {import('@ss/contracts').WebsitesPage} WebsitesPage */
 /** @typedef {import('@ss/contracts').Revocations} Revocations */
 
-/** Deadline of one Portal call. */
+/** Deadline of one Portal call (a call may ask for a shorter one). */
 const PORTAL_TIMEOUT_MS = 10_000;
 
 /**
@@ -27,10 +27,10 @@ export const createPortalClient = ({ portalUrl, productId, signer, fetch = globa
 	/**
 	 * @param {'GET' | 'POST' | 'PUT'} method
 	 * @param {string} path
-	 * @param {{ body?: unknown, signed?: boolean }} [options]
+	 * @param {{ body?: unknown, signed?: boolean, timeoutMs?: number }} [options]
 	 * @returns {Promise<any>}
 	 */
-	const call = async (method, path, { body, signed = true } = {}) => {
+	const call = async (method, path, { body, signed = true, timeoutMs = PORTAL_TIMEOUT_MS } = {}) => {
 		const route = path.split('?')[0];
 		/** @type {Record<string, string>} */
 		const headers = { accept: 'application/json' };
@@ -54,7 +54,7 @@ export const createPortalClient = ({ portalUrl, productId, signer, fetch = globa
 				method,
 				headers,
 				...(body === undefined ? {} : { body: JSON.stringify(body) }),
-				signal: AbortSignal.timeout(PORTAL_TIMEOUT_MS),
+				signal: AbortSignal.timeout(timeoutMs),
 				redirect: 'error',
 			});
 			const text = await response.text();
@@ -106,10 +106,16 @@ export const createPortalClient = ({ portalUrl, productId, signer, fetch = globa
 				'features',
 			),
 		}),
-		/** @param {string} websiteId @returns {Promise<StatusResponse>} */
-		status: async (websiteId) =>
+		/**
+		 * @param {string} websiteId
+		 * @param {{ timeoutMs?: number }} [options] a shorter deadline for a request that waits for the answer
+		 * @returns {Promise<StatusResponse>}
+		 */
+		status: async (websiteId, { timeoutMs } = {}) =>
 			checked(
-				validateStatusResponse(await call('GET', `/v1/product/websites/${encodeURIComponent(websiteId)}/status`)),
+				validateStatusResponse(
+					await call('GET', `/v1/product/websites/${encodeURIComponent(websiteId)}/status`, timeoutMs ? { timeoutMs } : {}),
+				),
 				'status',
 			),
 		/** @param {string | null} [cursor] @returns {Promise<WebsitesPage>} */
@@ -120,11 +126,19 @@ export const createPortalClient = ({ portalUrl, productId, signer, fetch = globa
 				),
 				'websites',
 			),
-		/** @param {string | null} [since] @returns {Promise<Revocations>} */
-		revocations: async (since) =>
+		/**
+		 * @param {string | null} [since]
+		 * @param {{ timeoutMs?: number }} [options] a shorter deadline for a request that waits for the answer
+		 * @returns {Promise<Revocations>}
+		 */
+		revocations: async (since, { timeoutMs } = {}) =>
 			checked(
 				validateRevocations(
-					await call('GET', `/v1/product/revocations${since ? `?since=${encodeURIComponent(since)}` : ''}`),
+					await call(
+						'GET',
+						`/v1/product/revocations${since ? `?since=${encodeURIComponent(since)}` : ''}`,
+						timeoutMs ? { timeoutMs } : {},
+					),
 				),
 				'revocations',
 			),

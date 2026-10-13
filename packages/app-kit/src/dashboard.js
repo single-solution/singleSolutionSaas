@@ -90,7 +90,8 @@ export const createDashboard = (kit) => {
 				return refuse(problem('forbidden', 'This website is not yours.'));
 			return { ok: true, session, websiteId, merchantId: session.subject, status: null };
 		}
-		const found = await kit.status.lookup(websiteId);
+		// the dashboard shows the status and today's charges: it waits for a copy older than 5 minutes
+		const found = await kit.status.lookup(websiteId, { wait: true, after: ctx.after });
 		if (!found.ok)
 			return refuse(found.code === 'portal_unreachable' ? problem('portal_unreachable') : problem('website_not_found'));
 		if (found.status.status === 'removed')
@@ -165,7 +166,7 @@ export const createDashboard = (kit) => {
 	 */
 	const statusOf = async (ctx) => {
 		if (ctx.status) return ctx.status;
-		const found = await kit.status.lookup(website(ctx));
+		const found = await kit.status.lookup(website(ctx), { wait: true, after: ctx.after });
 		if (!found.ok) throw found.code === 'portal_unreachable' ? problem('portal_unreachable') : problem('website_not_found');
 		return found.status;
 	};

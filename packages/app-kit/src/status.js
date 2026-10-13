@@ -1,15 +1,22 @@
 /**
  * Status of the product on each website (PLAN 0.4.7, 0.8.1) and the revocation list (0.4.4).
  *
- * - The status response is cached per website in the product database until its `validUntil`, at most 5 minutes. A use
- *   without a fresh copy fetches it again (the Portal settles the merchant at that moment), together with the
- *   revocation list.
- * - `status.changed` notices mark the copy stale, so the next use refetches it; the copy itself is kept for offline
- *   grace.
+ * - The status response is cached per website in the product database until its `validUntil`, at most 5 minutes.
+ * - A request never waits for the Portal while it has a copy fetched within the offline grace (K-19): an older copy is
+ *   used as it is and fetched again right after the response (the request's `after`; without one, at once without
+ *   waiting for it), together with the revocation list. An instance runs one fetch per website at a time and starts
+ *   one after a response at most every {@link REFRESH_EVERY_MS}, so a Portal that is down is not asked on every request.
+ * - Only a use without a copy it may use (none, or one older than the offline grace) waits for the Portal, at most
+ *   {@link WAITED_FETCH_MS}; dashboards (`wait`) also wait for a copy older than 5 minutes, since they show the status
+ *   and today's charges. Notices and reports ask with `fresh`.
+ * - `status.changed` notices mark the copy changed, so the next use waits for it to be fetched again (and the notice
+ *   fetches it right after answering); the copy itself is kept for offline grace.
  * - While the Portal cannot be reached the last copy is used for up to {@link OFFLINE_GRACE_MS} (6 hours) after its
  *   fetch, then every use is refused with 503 `portal_unreachable` (PLAN 0.4.7, 0.10; shortened from 24 hours by the
  *   owner's decision 11, K-21). Revocations follow the same bound: when the revocation list could not be fetched for
- *   longer than that, every use is refused until it is fetched again. A `token.revoked` notice fetches it at once.
+ *   longer than that, a use waits for it (at most {@link WAITED_FETCH_MS}, and not again within
+ *   {@link REFRESH_EVERY_MS} of a failure on the instance) and is refused while it cannot be fetched. A
+ *   `token.revoked` notice fetches it at once.
  * - `graceEndsAt` in the past turns `grace` into `stopped` without asking the Portal.
  * - A fetched `removed` status turns the website's feature switches off: a re-add starts with every feature off.
  * @module
@@ -20,6 +27,11 @@ import { problem } from './http/results.js';
 /** @typedef {import('@ss/contracts').StatusResponse} StatusResponse */
 /** @typedef {import('./stores/types.js').Store} Store */
 /** @typedef {import('./http/results.js').ProblemResult} ProblemResult */
+/** Runs work right after the response (a request's `after`). @typedef {(task: () => Promise<unknown>) => void} After */
+/**
+ * A status copy: `changed` when a `status.changed` notice marked it (the next use waits for the Portal).
+ * @typedef {{ websiteId: string, status: StatusResponse, fetchedAt: number, validUntilMs: number, changed?: boolean }} StatusCopy
+ */
 
 /** Longest time a status copy is used without asking the Portal again. */
 const STATUS_MAX_AGE_MS = 5 * 60_000;
@@ -30,6 +42,10 @@ const STATUS_MAX_AGE_MS = 5 * 60_000;
  * six hours at most (24 hours before K-21). Notices still apply at once whenever the Portal is up.
  */
 export const OFFLINE_GRACE_MS = 6 * 60 * 60_000;
+/** Deadline of a Portal call a use waits for (it has no status copy it may use), shorter than a call's usual 10 s. */
+export const WAITED_FETCH_MS = 5_000;
+/** An instance starts a fetch after a response at most this often per website (also after a failed one). */
+const REFRESH_EVERY_MS = 30_000;
 const REVOCATION_PAGES = 10;
 /** How often an instance reads again when the revocation list was last fetched. */
 const REVOCATIONS_RECHECK_MS = 30_000;
@@ -53,14 +69,35 @@ export const effectiveStatus = (status, nowMs) =>
 export const createStatus = ({ store, client, now, logger }) => {
 	/** @type {{ at: number | null, readAt: number } | null} when the revocation list was last fetched, as last read */
 	let synced = null;
+	/** The shared revocation list fetch, if one runs (true when it was fetched). @type {Promise<boolean> | null} */
+	let syncing = null;
+	/** When a shared fetch of the revocation list last failed on this instance. */
+	let syncFailedAt = -Infinity;
+	/** Status fetches running on this instance, one per website. @type {Map<string, Promise<StatusCopy>>} */
+	const fetching = new Map();
+	/** When this instance last started a fetch after a response, per website. @type {Map<string, number>} */
+	const refreshedAt = new Map();
 
-	/** Fetch revoked token ids added since the stored cursor. */
-	const syncRevocations = async () => {
+	/**
+	 * Run work after the response: with the request's `after`, else at once without waiting for it.
+	 * @param {After | undefined} after
+	 * @param {() => Promise<unknown>} task never throws
+	 */
+	const later = (after, task) => {
+		if (after) after(task);
+		else void task();
+	};
+
+	/**
+	 * Fetch revoked token ids added since the stored cursor.
+	 * @param {{ timeoutMs?: number }} [options]
+	 */
+	const syncRevocations = async ({ timeoutMs } = {}) => {
 		const state = await store.get('state', 'revocations');
 		/** @type {string | null} */
 		let cursor = state?.cursor ?? null;
 		for (let page = 0; page < REVOCATION_PAGES; page += 1) {
-			const { tokenIds, cursor: next } = await client().revocations(cursor);
+			const { tokenIds, cursor: next } = await client().revocations(cursor, timeoutMs ? { timeoutMs } : {});
 			await Promise.all(tokenIds.map((jti) => store.put('revoked', jti, { at: now() })));
 			const moved = next !== cursor;
 			cursor = next;
@@ -70,6 +107,29 @@ export const createStatus = ({ store, client, now, logger }) => {
 		await store.put('state', 'revocations', { cursor, at });
 		synced = { at, readAt: at };
 	};
+
+	/**
+	 * Fetch the revocation list, one fetch at a time on an instance (after a response, or waited for when the list is
+	 * older than the offline grace). Never throws.
+	 * @param {number} [timeoutMs]
+	 * @returns {Promise<boolean>} true when it was fetched
+	 */
+	const syncShared = (timeoutMs) => {
+		syncing ??= syncRevocations(timeoutMs ? { timeoutMs } : {})
+			.then(
+				() => true,
+				(error) => {
+					syncFailedAt = now();
+					logger.warn('revocation list not fetched', { error });
+					return false;
+				},
+			)
+			.finally(() => {
+				syncing = null;
+			});
+		return syncing;
+	};
+	const syncLater = () => syncShared();
 
 	/**
 	 * A removed product is added again with every feature off (PLAN 0.5.9: the Portal resets its switches on the
@@ -84,37 +144,93 @@ export const createStatus = ({ store, client, now, logger }) => {
 	};
 
 	/**
-	 * The status of a website: the cached copy while fresh, else a new fetch (with the revocation list).
+	 * Fetch a website's status from the Portal and keep the copy; concurrent uses on an instance share one fetch.
 	 * @param {string} websiteId
-	 * @param {{ fresh?: boolean }} [options] `fresh` always asks the Portal
+	 * @param {number} [timeoutMs] a shorter deadline, for a use that waits
+	 * @returns {Promise<StatusCopy>}
+	 */
+	const fetchStatus = (websiteId, timeoutMs) => {
+		let running = fetching.get(websiteId);
+		if (!running) {
+			running = (async () => {
+				const t = now();
+				const status = await client().status(websiteId, timeoutMs ? { timeoutMs } : {});
+				if (status.websiteId !== websiteId) throw new Error('status names another website');
+				const validUntil = Date.parse(status.validUntil);
+				const doc = {
+					websiteId,
+					status,
+					fetchedAt: t,
+					validUntilMs: Math.min(Number.isFinite(validUntil) ? validUntil : t, t + STATUS_MAX_AGE_MS),
+				};
+				await store.put('status', websiteId, doc);
+				if (status.status === 'removed') await switchOff(websiteId, t);
+				return doc;
+			})().finally(() => fetching.delete(websiteId));
+			fetching.set(websiteId, running);
+		}
+		return running;
+	};
+
+	/**
+	 * After a failed fetch: a website the Portal does not know (404) loses its copy (true); anything else is logged.
+	 * @param {string} websiteId
+	 * @param {unknown} error
+	 */
+	const unknownWebsite = async (websiteId, error) => {
+		if (isKitError(error, 'portal_refused') && error.details?.status === 404) {
+			await store.delete('status', websiteId);
+			return true;
+		}
+		logger.warn('status not fetched', { websiteId, error });
+		return false;
+	};
+
+	/**
+	 * Fetch a website's status (and the revocation list) again after the response, at most every
+	 * {@link REFRESH_EVERY_MS} per website on this instance.
+	 * @param {string} websiteId
+	 * @param {After | undefined} after
+	 */
+	const refreshLater = (websiteId, after) => {
+		const t = now();
+		if (t - (refreshedAt.get(websiteId) ?? -Infinity) < REFRESH_EVERY_MS) return;
+		refreshedAt.set(websiteId, t);
+		later(after, async () => {
+			try {
+				await fetchStatus(websiteId);
+				await syncLater();
+			} catch (error) {
+				await unknownWebsite(websiteId, error).catch(() => false);
+			}
+		});
+	};
+
+	/**
+	 * The status of a website: the cached copy while fresh; a copy within the offline grace, fetched again after the
+	 * response; else a fetch the use waits for.
+	 * @param {string} websiteId
+	 * @param {{ fresh?: boolean, wait?: boolean, after?: After }} [options] `fresh` always asks the Portal; `wait` asks it
+	 *   when the copy is older than 5 minutes (dashboards); `after` runs the fetch after the response (default: at once,
+	 *   not waited for)
 	 * @returns {Promise<{ ok: true, status: StatusResponse, fetchedAt: number } | { ok: false, code: 'website_not_found' | 'portal_unreachable' }>}
 	 */
-	const lookup = async (websiteId, { fresh = false } = {}) => {
-		const cached = await store.get('status', websiteId);
+	const lookup = async (websiteId, { fresh = false, wait = false, after } = {}) => {
+		const cached = /** @type {StatusCopy | null} */ (await store.get('status', websiteId));
 		const t = now();
-		if (cached && !fresh && t < cached.validUntilMs) return { ok: true, status: cached.status, fetchedAt: cached.fetchedAt };
+		const usable = cached !== null && t - cached.fetchedAt < OFFLINE_GRACE_MS;
+		// a copy a `status.changed` notice marked is not used as it is: the next use learns the change at once
+		if (cached && !fresh && (t < cached.validUntilMs || (usable && !wait && cached.changed !== true))) {
+			if (t >= cached.validUntilMs) refreshLater(websiteId, after);
+			return { ok: true, status: cached.status, fetchedAt: cached.fetchedAt };
+		}
 		try {
-			const status = await client().status(websiteId);
-			if (status.websiteId !== websiteId) throw new Error('status names another website');
-			const validUntil = Date.parse(status.validUntil);
-			const doc = {
-				websiteId,
-				status,
-				fetchedAt: t,
-				validUntilMs: Math.min(Number.isFinite(validUntil) ? validUntil : t, t + STATUS_MAX_AGE_MS),
-			};
-			await store.put('status', websiteId, doc);
-			if (status.status === 'removed') await switchOff(websiteId, t);
-			await syncRevocations().catch((error) => logger.warn('revocation list not fetched', { error }));
-			return { ok: true, status, fetchedAt: t };
+			const doc = await fetchStatus(websiteId, fresh ? undefined : WAITED_FETCH_MS);
+			later(after, syncLater);
+			return { ok: true, status: doc.status, fetchedAt: doc.fetchedAt };
 		} catch (error) {
-			if (isKitError(error, 'portal_refused') && error.details?.status === 404) {
-				await store.delete('status', websiteId);
-				return { ok: false, code: 'website_not_found' };
-			}
-			logger.warn('status not fetched', { websiteId, error });
-			if (cached && t - cached.fetchedAt < OFFLINE_GRACE_MS)
-				return { ok: true, status: cached.status, fetchedAt: cached.fetchedAt };
+			if (await unknownWebsite(websiteId, error)) return { ok: false, code: 'website_not_found' };
+			if (cached && usable) return { ok: true, status: cached.status, fetchedAt: cached.fetchedAt };
 			return { ok: false, code: 'portal_unreachable' };
 		}
 	};
@@ -134,13 +250,20 @@ export const createStatus = ({ store, client, now, logger }) => {
 
 	/**
 	 * Whether the product serves this website now: `{ ok: true, status }`, or the problem to answer; also refused while
-	 * the revocation list is older than the offline grace.
+	 * the revocation list is older than the offline grace and cannot be fetched.
 	 * @param {string} websiteId
+	 * @param {{ after?: After }} [options] the request's `after`, for fetches the request does not wait for
 	 * @returns {Promise<{ ok: true, status: StatusResponse } | { ok: false, problem: ProblemResult }>}
 	 */
-	const serving = async (websiteId) => {
-		const found = await lookup(websiteId);
-		if (found.ok && (await revocationsStale())) {
+	const serving = async (websiteId, { after } = {}) => {
+		const found = await lookup(websiteId, after ? { after } : {});
+		// a list older than the offline grace is no copy to use: the use waits for it (short deadline), unless a fetch
+		// failed on this instance in the last 30 seconds
+		if (
+			found.ok &&
+			(await revocationsStale()) &&
+			!(now() - syncFailedAt >= REFRESH_EVERY_MS && (await syncShared(WAITED_FETCH_MS)))
+		) {
 			logger.warn('the revocation list is older than the offline grace', { websiteId });
 			return {
 				ok: false,
@@ -171,10 +294,14 @@ export const createStatus = ({ store, client, now, logger }) => {
 		lookup,
 		serving,
 		syncRevocations,
-		/** Mark a website's copy stale (`status.changed`); it is kept for offline grace. @param {string} websiteId */
+		/**
+		 * Mark a website's copy changed (`status.changed`): the next use waits for the Portal; the copy is kept for offline
+		 * grace.
+		 * @param {string} websiteId
+		 */
 		drop: async (websiteId) => {
 			const cached = await store.get('status', websiteId);
-			if (cached) await store.put('status', websiteId, { ...cached, validUntilMs: 0 });
+			if (cached) await store.put('status', websiteId, { ...cached, validUntilMs: 0, changed: true });
 		},
 		/** @param {string} jti @returns {Promise<boolean>} */
 		isRevoked: async (jti) => (await store.get('revoked', jti)) !== null,

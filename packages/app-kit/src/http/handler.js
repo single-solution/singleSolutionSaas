@@ -20,8 +20,8 @@
  * widget installed.
  *
  * Right after the response (Next.js `after`, through `toNextRoute`): a pending price report, a stale business.json,
- * unsent activity copies and events, the staff named in a ticket or by the actor headers, and the widget last-seen
- * time.
+ * unsent activity copies and events, the staff named in a ticket or by the actor headers, the widget last-seen time,
+ * the route's own work, and last a status copy older than 5 minutes and the revocation list, fetched again (K-19).
  * @module
  */
 import { isIP } from 'node:net';
@@ -313,6 +313,8 @@ export const createRequestHandler = (kit, routes, options = {}) => {
 		const extra = { 'x-request-id': requestId };
 		/** @type {Array<() => Promise<unknown>>} */
 		const afterTasks = [];
+		/** Portal fetches the request did not wait for (K-19), run after every other task. @type {Array<() => Promise<unknown>>} */
+		const portalTasks = [];
 		/** @type {CompiledRoute | null} */
 		let route = null;
 		/** @type {string | null} */
@@ -323,9 +325,10 @@ export const createRequestHandler = (kit, routes, options = {}) => {
 			/** @type {(task: () => Promise<unknown>) => void} */
 			const scheduler = SCHEDULERS.get(request) ?? options.after ?? ((task) => void task());
 			if (kit.connection.connected()) afterTasks.unshift(() => kit.reports.syncManifest());
-			if (afterTasks.length > 0)
+			const tasks = [...afterTasks, ...portalTasks];
+			if (tasks.length > 0)
 				scheduler(async () => {
-					for (const task of afterTasks) await task().catch((error) => log.warn('work after the request failed', { error }));
+					for (const task of tasks) await task().catch((error) => log.warn('work after the request failed', { error }));
 				});
 			log.info('request', {
 				method,
@@ -476,11 +479,10 @@ export const createRequestHandler = (kit, routes, options = {}) => {
 
 			if (r.auth === 'browser' || r.auth === 'server' || r.auth === 'ticket') {
 				const id = /** @type {string} */ (ctx.websiteId);
-				const serving = await kit.status.serving(id);
+				// never waits for the Portal while a status copy within the offline grace exists: an old copy is fetched
+				// again, with the revocation list, after the response (K-19)
+				const serving = await kit.status.serving(id, { after: (task) => portalTasks.push(task) });
 				if (!serving.ok) return fail(serving.problem);
-				// a status fetch also refreshes the revocation list: check the token (or the ticket's server token) again
-				if (await kit.status.isRevoked(ctx.token?.jti ?? ctx.ticket?.tid ?? ''))
-					return fail(problem('invalid_token', 'The token is not valid.'));
 				ctx.status = serving.status;
 				ctx.merchantId = serving.status.merchantId;
 				const feature = r.feature ?? (r.permission === undefined ? undefined : featureOfPermission.get(r.permission));

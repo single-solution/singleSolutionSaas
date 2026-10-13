@@ -64,6 +64,9 @@ describe('tickets', () => {
 		expect((await call('GET', '/v1/inbox', { token: bare.ticket, origin: ADMIN })).status).toBe(403);
 		portal.revoke(server.jti);
 		clock.advance(5 * 60_000);
+		// without a token.revoked notice: the list is fetched with the old status copy, right after the next use (K-19)
+		expect((await call('GET', '/v1/inbox', { token: ticket, origin: ADMIN })).status).toBe(200);
+		await settle();
 		expect((await call('GET', '/v1/inbox', { token: ticket, origin: ADMIN })).status).toBe(401);
 	});
 
