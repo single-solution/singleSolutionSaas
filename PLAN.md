@@ -2963,6 +2963,44 @@ contact details for up to about two days and are not removed by a data-rights de
 no `required` or retry for the other products; a failed back-in-stock or price-drop send ends `failed`; E46 is not
 built.
 
+Built after the re-audit, third batch (2026-10-13; commits 7e649523, c972e42e, aed9a696, 4715b132, 38abdcf8, 31cec4de):
+
+**E64. Cancel the Payments payment (always; K-13, P4).** Before an order whose Payments payment is still open is
+cancelled (staff, shopper or window), refunded before delivery, deleted or edited, Ecommerce calls `POST
+/v1/payments/:id/cancel` (`payment.voidedAt`). If it was paid just before (409 `already_paid`, not `refundDue`, the
+order's amount), the order is confirmed as paid and the cancel, edit or delete is refused. If Payments cannot be
+reached, the cancel goes on (`payment.voidPendingAt`) and is retried on use for 3 days; an edit is refused. Money paid
+after the cancel is looked for on read and on use for 3 days, recorded once as an `online` payment, and the order shows
+`refundDue` ("Refund due"); staff refund it the normal way. `POST /v1/orders/:id/payments` refuses closed orders.
+
+**E65. Payments' share of a refund (always; PM-2).** Only the `online` entries for the order's payment, less refunds made
+through Payments, go back through Payments; money staff recorded is never sent to the gateway.
+
+**E66. One money rule (always; CK-5, OR-3, OR-8, K-23).** `orderMoney`: due = total − paid (never a refunded amount;
+0 on closed orders), used by the shopper and staff views, Chat and staff lookups, the invoice, courier cash and staff
+payments. A claim refund is an order refund: capped at paid − refunded, split the same way, and moved to refunded when
+`autoRefundedStatus` is on; a claim on cash never recorded is refused ("record the payment first"). A refund Payments
+only records gets method `bank_transfer` or `other` with a "return by hand" warning. A delivered order that is refunded
+gives its redeemed points back; earned points are reversed once.
+
+**E67. Paid when staff confirm (OR-7).** Key: `checkout.paidOnConfirm` (`[]` default | any of `cod`, `online`,
+`bank_transfer`, `pickup`): when staff move a waiting order of a listed method to open, packed or shipped, its balance
+is recorded as a payment of that method, after its open Payments payment is cancelled.
+
+**E68. Guest claim points (always).** Points of a refunded claim are taken back from the guest's record by customer id.
+
+**E69. One restock per unit (always; OR-10).** A return leaves out units a claim already restocked; a claim after the
+return restocks nothing.
+
+**E70. Waiting again (OR-5).** Key: `checkout.rewaitWindow` (`restart` default | `none`: an order moved back to waiting
+gets no new time to pay).
+
+Open after E64–E70: Ecommerce has no receiver for Payments' `payment.paid` events (late money is found by asking
+Payments for 3 days, then by a staff read); no staff alert or "refund due" filter for late money; a payment staff
+record by hand does not cancel an open Payments payment, and two "pay" calls at once can race; "delete all orders" does
+not cancel payments; K-23 store rules for the owner (refunded move records the unrecorded part as `other`, RTO keeps
+redeemed points spent, restock on refund after delivery, dispatched→refunded); AO-1 and CU-3 (report and spend basis).
+
 #### Chat
 
 **C1. Longer instructions and store context** (changes 0.8.3).
