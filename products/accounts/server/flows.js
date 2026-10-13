@@ -7,7 +7,7 @@
 import { problem } from '@ss/app-kit';
 import { createId } from '@ss/contracts';
 import { normaliseEmail } from '../core/identifiers.js';
-import { checkCustomValues, checkName, selfView } from '../core/profile.js';
+import { checkCustomValues, checkName, identityOfMethod, resetsByEmail, selfView } from '../core/profile.js';
 import { DEFAULT_ROLE } from '../core/roles.js';
 import {
 	CODE_ATTEMPTS,
@@ -168,7 +168,8 @@ export const createFlows = (product, service) => {
 
 	/**
 	 * Create a user from a sign-up; `pending` when approval is required. Refused while the default role's sign-in is
-	 * paused or does not allow the method (A6).
+	 * paused or does not allow the method (A6). The account keeps the address it was made with (its identity), which
+	 * Forgot password by e-mail goes by.
 	 * @param {Site} s @param {Awaited<ReturnType<typeof signUpProfile>>} profile @param {Partial<UserRecord>} extra
 	 * @param {ReturnType<Service['howOf']>} how @param {string} method
 	 */
@@ -184,6 +185,7 @@ export const createFlows = (product, service) => {
 			terms: profile.terms,
 			status: profile.mode === 'approval' ? 'pending' : 'active',
 			deviceHash: risk.deviceHash,
+			identity: identityOfMethod(method),
 			...extra,
 		});
 		if (!user) throw problem('already_exists', 'An account with this e-mail address or phone number exists. Sign in instead.');
@@ -523,7 +525,9 @@ export const createFlows = (product, service) => {
 	/**
 	 * Forgot password (e-mail): the same answer, at once, whether or not the address has an account and whatever the
 	 * send gives (ST-3). The reset link is made and sent right after the answer; a link Notifications cannot send now
-	 * is sent again on later requests while it is valid.
+	 * is sent again on later requests while it is valid. It goes only to a proven address or to the address the account
+	 * was made with: an address typed but never proven on an account that signs in another way (a phone + password
+	 * member's) gets nothing, as an unknown one, so its owner cannot take that account over.
 	 * @param {any} ctx
 	 */
 	const forgotPassword = async (ctx) => {
@@ -535,7 +539,7 @@ export const createFlows = (product, service) => {
 		if (!returnTo) throw invalid('returnTo', 'returnTo must be a page of your website (or a local page while testing).');
 		afterAnswer(ctx, async () => {
 			const user = await s.store.users.byEmail(email);
-			if (!user?.passwordHash || user.blocked) return;
+			if (!user?.passwordHash || user.blocked || !resetsByEmail(user)) return;
 			const { resetMinutes } = await service.settings(s, 'email_password');
 			const secret = randomSecret(32);
 			const expireAt = new Date(now() + resetMinutes * 60_000);

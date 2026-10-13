@@ -262,6 +262,58 @@ describe('A2: phone + password', () => {
 	});
 });
 
+describe('Forgot password by e-mail: only a proven address or the one the account was made with', () => {
+	/** Messages sent to an address. @param {string} email */
+	const sentTo = (email) => env.messages().filter((m) => m.to.email === email);
+	/** @param {string} email */
+	const forgot = (email) => env.visitor('POST', '/v1/password/forgot', { email, returnTo: 'https://shop.example.com/reset' });
+
+	it('a phone + password member’s unproven e-mail address gets nothing, so its owner cannot take the account', async () => {
+		const member = await env.visitor('POST', '/v1/sign-up/phone-password', {
+			phone: '+923001112233',
+			password: 'member pass 1',
+			email: 'someone@example.com',
+		});
+		expect(member.json.user).toMatchObject({ email: 'someone@example.com', emailVerified: false });
+		// the same answer as for an unknown address, and no link
+		const asked = await forgot('someone@example.com');
+		expect([asked.status, asked.text]).toEqual([202, '']);
+		expect(sentTo('someone@example.com')).toHaveLength(0);
+		// once the address is proven (staff confirm it, a code or link), the link goes
+		await (await env.store()).users.update(member.json.user.id, { emailVerified: true });
+		expect((await forgot('someone@example.com')).status).toBe(202);
+		expect(sentTo('someone@example.com')).toHaveLength(1);
+	});
+
+	it('an e-mail + password account gets the link at the address it was made with, proven or not', async () => {
+		const up = await env.visitor('POST', '/v1/sign-up/password', {
+			email: 'own@example.com',
+			phone: '+923001112244',
+			password: 'own password 1',
+		});
+		expect(up.json.user).toMatchObject({ emailVerified: false, phoneVerified: false });
+		await forgot('own@example.com');
+		expect(sentTo('own@example.com')).toHaveLength(1);
+	});
+
+	it('an account made before its identity was kept: the e-mail address of an account without a phone number', async () => {
+		const store = await env.store();
+		const alone = await env.visitor('POST', '/v1/sign-up/password', { email: 'old1@example.com', password: 'old password 1' });
+		const both = await env.visitor('POST', '/v1/sign-up/password', {
+			email: 'old2@example.com',
+			phone: '+923001112255',
+			password: 'old password 2',
+		});
+		for (const id of [alone.json.user.id, both.json.user.id]) await store.users.update(id, {}, { $unset: { identity: '' } });
+		expect((await store.users.get(alone.json.user.id))?.identity).toBeUndefined();
+		await forgot('old1@example.com');
+		await forgot('old2@example.com');
+		expect(sentTo('old1@example.com')).toHaveLength(1);
+		// with a phone number too, which one it was made with is not known: nothing is sent
+		expect(sentTo('old2@example.com')).toHaveLength(0);
+	});
+});
+
 describe('A9: password and lock options', () => {
 	it('a growing lock: free failures, then 1, 2, 4 … up to 60 minutes; a good password resets it', async () => {
 		await env.setting('email_password', 'lockMode', 'growing');

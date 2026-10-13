@@ -178,6 +178,43 @@ export const checkAddresses = (
 };
 
 /**
+ * The address an account was made with, which it signs in by: `email` (an e-mail sign-up or invite), `phone` (a phone
+ * sign-up or invite) or `provider` (Google, Apple or Facebook).
+ * @typedef {'email' | 'phone' | 'provider'} Identity
+ */
+
+/** The identity of an account a sign-up method makes. @type {Readonly<Record<string, Identity>>} */
+const IDENTITY_OF_METHOD = Object.freeze({
+	email_password: 'email',
+	email_code: 'email',
+	phone_password: 'phone',
+	phone_code: 'phone',
+});
+
+/**
+ * The identity of an account a sign-up method makes (Google, Apple and Facebook: `provider`).
+ * @param {string} method
+ * @returns {Identity}
+ */
+export const identityOfMethod = (method) => IDENTITY_OF_METHOD[method] ?? 'provider';
+
+/**
+ * An account's identity. Accounts made before it was kept have none stored: one with an e-mail address and no phone
+ * number signs in by the address; for one with both, which one it was made with is not known (null).
+ * @param {Pick<UserRecord, 'identity' | 'email' | 'phone'>} user
+ * @returns {Identity | null}
+ */
+export const identityOf = (user) => user.identity ?? (user.email && !user.phone ? 'email' : null);
+
+/**
+ * Whether a password reset link may go to the user's e-mail address: a proven address, or the address the account was
+ * made with. An address typed but never proven on an account that signs in another way (for example at a phone +
+ * password sign-up) is no way in: its owner would take over that account.
+ * @param {Pick<UserRecord, 'identity' | 'email' | 'emailVerified' | 'phone'>} user
+ */
+export const resetsByEmail = (user) => user.emailVerified || identityOf(user) === 'email';
+
+/**
  * @typedef {object} UserRecord
  * @property {string} id
  * @property {string | null} email
@@ -192,6 +229,8 @@ export const checkAddresses = (
  * @property {'active' | 'pending' | 'invited'} status
  * @property {string} role
  * @property {Record<string, string>} providers social sign-ins: provider → the provider's user id
+ * @property {Identity} [identity] the address the account was made with and signs in by (absent on accounts made
+ *   before it was kept: see `identityOf`)
  * @property {string | null} passwordHash
  * @property {{ sealed: string, lastStep: number | null, recovery: Array<{ hash: string, format: 'v1' | 'sha256_prefixed' } | string>,
  *   enabledAt: Date | null } | null} twoStep recovery codes as hashes with their format (A8)

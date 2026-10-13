@@ -12,7 +12,16 @@ import {
 } from '../adapters/crypto.js';
 import { appleClientSecret, createProviders, pkceChallenge } from '../adapters/providers.js';
 import { emailDomain, maskAddress, normaliseEmail, normalisePhone } from '../core/identifiers.js';
-import { checkAddresses, checkCustomValues, checkFieldDefinition, selfView, staffView } from '../core/profile.js';
+import {
+	checkAddresses,
+	checkCustomValues,
+	checkFieldDefinition,
+	identityOf,
+	identityOfMethod,
+	resetsByEmail,
+	selfView,
+	staffView,
+} from '../core/profile.js';
 import { checkOwnPermissions, checkRole, permissionCatalog, sessionEnd } from '../core/roles.js';
 import {
 	deviceIdOf,
@@ -99,6 +108,29 @@ describe('profile', () => {
 		});
 		expect(selfView(user)).toMatchObject({ providers: [], deletion: { dueAt: null }, terms: { version: '1' } });
 		expect(staffView(user)).toMatchObject({ notes: 'n', blocked: { reason: 'r' }, lastSignInAt: null });
+	});
+});
+
+describe('identities', () => {
+	it('keeps the address an account was made with, and derives it for older accounts', () => {
+		expect(['email_password', 'email_code', 'phone_password', 'phone_code', 'google'].map(identityOfMethod)).toEqual([
+			'email',
+			'email',
+			'phone',
+			'phone',
+			'provider',
+		]);
+		const at = (/** @type {Record<string, unknown>} */ user) =>
+			/** @type {any} */ ({ email: 'a@example.com', emailVerified: false, phone: null, ...user });
+		expect(identityOf(at({ identity: 'phone' }))).toBe('phone');
+		expect(identityOf(at({}))).toBe('email');
+		expect(identityOf(at({ phone: '+15550001111' }))).toBeNull();
+		expect(identityOf(at({ email: null, phone: '+15550001111' }))).toBeNull();
+		expect(resetsByEmail(at({ identity: 'email' }))).toBe(true);
+		expect(resetsByEmail(at({ identity: 'phone' }))).toBe(false);
+		expect(resetsByEmail(at({ identity: 'phone', emailVerified: true }))).toBe(true);
+		expect(resetsByEmail(at({ identity: 'provider' }))).toBe(false);
+		expect(resetsByEmail(at({ phone: '+15550001111' }))).toBe(false);
 	});
 });
 

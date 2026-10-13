@@ -272,6 +272,7 @@ export const createManage = (product, service, flows) => {
 			...draft,
 			emailVerified: Boolean(draft.email),
 			phoneVerified: Boolean(draft.phone),
+			identity: draft.email ? 'email' : 'phone',
 			role,
 			passwordHash,
 			notes: typeof body.notes === 'string' ? body.notes : '',
@@ -505,7 +506,16 @@ export const createManage = (product, service, flows) => {
 		const role = typeof body.role === 'string' ? body.role : DEFAULT_ROLE;
 		if (!(await s.store.roles.get(role))) throw invalid('role', 'There is no such role.');
 		await guard(ctx, s, /** @type {any} */ ({ id: '', role: DEFAULT_ROLE, blocked: null }), { role });
-		const user = await s.store.users.create({ ...flows.blankUser(), email, phone, name, role, status: 'invited' });
+		// the invite goes to the e-mail address when there is one
+		const user = await s.store.users.create({
+			...flows.blankUser(),
+			email,
+			phone,
+			name,
+			role,
+			status: 'invited',
+			identity: email ? 'email' : 'phone',
+		});
 		if (!user) throw problem('already_exists', 'Someone with this e-mail address or phone number has an account.');
 		const secret = randomSecret(32);
 		const id = await s.store.codes.add({
@@ -722,12 +732,14 @@ export const createManage = (product, service, flows) => {
 			user = (await s.store.users.update(existing.id, { role: request.role })) ?? existing;
 		} else {
 			await guard(ctx, s, /** @type {any} */ ({ id: '', role: DEFAULT_ROLE, blocked: null }), { role: request.role });
+			// the setup link proves the phone number when there is one
 			const created = await s.store.users.create({
 				...flows.blankUser(),
 				name: request.name,
 				phone: request.phone,
 				email: request.email,
 				role: request.role,
+				identity: request.phone ? 'phone' : 'email',
 			});
 			if (!created) throw problem('conflict', 'Someone else has this phone number or e-mail address.');
 			user = created;
