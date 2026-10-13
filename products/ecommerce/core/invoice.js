@@ -10,6 +10,7 @@
  * @module
  */
 import { formatDate, formatMoney } from '@ss/contracts/format';
+import { WAITING_ROLES } from './flow.js';
 import { orderMoney } from './orders.js';
 
 /** @typedef {import('./model.js').OrderRecord} OrderRecord */
@@ -19,6 +20,15 @@ import { orderMoney } from './orders.js';
  * @typedef {{ business: BusinessLike, texts: InvoiceTexts, format: import('@ss/contracts/format').Format,
  *   timeZone: string }} DocumentContext
  */
+
+/**
+ * Whether a shopper may read their order's invoice (E35; `GET /v1/shop/orders/:id/invoice` and the order's `invoice`):
+ * with the invoices setting `shopperFrom: confirmed`, not while the order waits nor once it is cancelled; else always.
+ * @param {Pick<OrderRecord, 'role'>} order
+ * @param {Record<string, unknown>} settings the invoices settings
+ */
+export const shopperInvoiceReady = (order, settings) =>
+	settings.shopperFrom !== 'confirmed' || !(WAITING_ROLES.includes(order.role) || order.role === 'cancelled');
 
 /** The editable texts (the `invoices` settings) and their defaults. */
 export const INVOICE_TEXTS = Object.freeze({

@@ -357,7 +357,8 @@ export const mountMyOrders = async ({ host, config, shop, win }) => {
 
 				/** @type {HTMLElement[]} */
 				const actions = [];
-				if (shop.has('invoices') && typeof fetchDocument === 'function')
+				// the order says whether the shopper may open its invoice (invoices on, and shopperFrom)
+				if (order.invoice === true && typeof fetchDocument === 'function')
 					actions.push(
 						button(
 							doc,

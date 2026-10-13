@@ -249,6 +249,17 @@ describe('guest checkout and order keys (E21)', () => {
 		expect((await visit('GET', `/v1/shop/orders/${order.id}`)).status).toBeGreaterThanOrEqual(400);
 		const read = await visit('GET', `/v1/shop/orders/${order.id}`, { orderKey });
 		expect(read.json.number).toBe(order.number);
+		// the order says its invoice can be read, and the same key opens it (E21, E35)
+		expect(read.json.invoice).toBe(true);
+		const invoice = await visit('GET', `/v1/shop/orders/${order.id}/invoice`, { orderKey });
+		expect(invoice.status).toBe(200);
+		expect(invoice.text).toContain(order.number);
+		expect((await visit('GET', `/v1/shop/orders/${order.id}/invoice`)).json.type).toMatch(/sign_in_required$/);
+		expect((await visit('GET', `/v1/shop/orders/${order.id}/invoice`, { orderKey: 'x'.repeat(32) })).status).toBe(404);
+		await shop.setting('invoices', 'shopperFrom', 'confirmed');
+		expect((await visit('GET', `/v1/shop/orders/${order.id}`, { orderKey })).json.invoice).toBe(false);
+		expect((await visit('GET', `/v1/shop/orders/${order.id}/invoice`, { orderKey })).status).toBe(404);
+		await shop.setting('invoices', 'shopperFrom', 'placed');
 		const byNumber = await visit('GET', `/v1/shop/orders/by-number/${order.number}`, { orderKey });
 		expect(byNumber.json.id).toBe(order.id);
 		const wrong = await visit('GET', `/v1/shop/orders/by-number/${order.number}`, { orderKey: 'x'.repeat(32) });

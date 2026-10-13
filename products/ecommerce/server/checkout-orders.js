@@ -32,6 +32,7 @@ import { createOrdersStore } from '../adapters/orders-store.js';
 import { STOCK_PROBLEMS, checkAddress, checkCart, checkOrderExtras } from '../core/checkout.js';
 import { shipmentLink } from '../core/couriers.js';
 import { WAITING_ROLES, cancelledStatus, statusOf, statusWithRole } from '../core/flow.js';
+import { shopperInvoiceReady } from '../core/invoice.js';
 import { checkGuest, phoneDigitsOf } from '../core/guests.js';
 import { loyaltyRules, pointsToEarn, takesPart } from '../core/loyalty.js';
 import { gradesByKey } from '../core/grades.js';
@@ -427,10 +428,8 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 			dispatchVideo: await media.dispatchVideo(s, order),
 			note: order.note,
 			canCancel: await shopperMayCancel(s, order),
-			invoice:
-				invoices !== null &&
-				(invoices.shopperFrom !== 'confirmed' || !WAITING_ROLES.includes(order.role)) &&
-				order.role !== 'cancelled',
+			// the same sign-in or order key opens the invoice (GET /v1/shop/orders/:id/invoice)
+			invoice: invoices !== null && shopperInvoiceReady(order, invoices),
 		};
 	};
 
@@ -969,7 +968,10 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		return { s, shopper, order: found };
 	};
 
-	/** @param {any} ctx */
+	/**
+	 * The order of a shopper route's `:id`: their own with a sign-in, or the one their order key opens (E21).
+	 * @param {any} ctx
+	 */
 	const shopperOrder = (ctx) => ownOrder(ctx, (store) => store.order(String(ctx.params.id)));
 
 	/** @param {any} ctx */
@@ -1144,6 +1146,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		place,
 		editWaiting,
 		shopperView,
+		shopperOrder,
 		list,
 		read,
 		readByNumber,

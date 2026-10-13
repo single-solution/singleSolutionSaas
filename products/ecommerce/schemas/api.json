@@ -11391,7 +11391,7 @@
 				},
 				"invoice": {
 					"type": "boolean",
-					"description": "Its invoice can be read (GET /v1/shop/orders/{id}/invoice, invoices)."
+					"description": "Its invoice can be read now, with the same sign-in or order key (GET /v1/shop/orders/{id}/invoice: the invoices feature, and its setting shopperFrom)."
 				}
 			}
 		},
@@ -20534,15 +20534,20 @@
 		"status": 200
 	},
 	"GET /v1/shop/orders/:id/invoice": {
-		"summary": "The signed-in shopper's invoice of their order",
-		"description": "Needs the invoices feature. Answers text/html (charset utf-8, no-store, a strict Content-Security-Policy), not JSON: a printable document in the invoices settings' texts and the website's Format. The shopper's copy has no staff names. Needs the shopper's sign-in (403 sign_in_required without it). 404 not_found for an order that is not theirs, and with the invoices setting shopperFrom confirmed, while the order waits or once it is cancelled.",
+		"summary": "The shopper's invoice of their order",
+		"description": "Needs the invoices feature. Answers text/html (charset utf-8, no-store, a strict Content-Security-Policy), not JSON: a printable document in the invoices settings' texts and the website's Format. The shopper's copy has no staff names. Opened as the order page is: the shopper’s Accounts sign-in in SS-Sign-In (their own orders), or a guest order’s key in SS-Order-Key (the orderKey answered once when it was placed). 403 sign_in_required with neither; 404 not_found when the order is not the shopper’s and the key does not open it, and with the invoices setting shopperFrom confirmed, while the order waits or once it is cancelled (the order’s invoice field says whether it can be read).",
 		"headers": {
 			"type": "object",
-			"required": ["SS-Sign-In"],
 			"properties": {
 				"SS-Sign-In": {
 					"type": "string",
-					"description": "The shopper's Accounts sign-in (as the Accounts widgets give it)."
+					"description": "The shopper’s Accounts sign-in (verified here; a wrong or expired one counts as none). One of SS-Sign-In or SS-Order-Key."
+				},
+				"SS-Order-Key": {
+					"type": "string",
+					"minLength": 32,
+					"maxLength": 32,
+					"description": "A guest order’s key (orderKey, answered once when the order was placed). One of SS-Sign-In or SS-Order-Key."
 				}
 			}
 		},

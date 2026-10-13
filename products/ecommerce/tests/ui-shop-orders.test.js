@@ -106,6 +106,7 @@ const detail = (over = {}) => ({
 	shipment: { courier: 'Fast', trackingNumber: 'T1', trackingUrl: 'https://track.example.com/T1' },
 	note: 'Ring twice',
 	canCancel: true,
+	invoice: true,
 	...over,
 });
 
@@ -373,6 +374,20 @@ describe('my orders', () => {
 		const host = await mountOrders(fake);
 		await click(buttonOf(host, text('orders.open', { number: 'SO-1' })));
 		expect(() => buttonOf(host, text('orders.invoice'))).toThrow();
+		// an order without its invoice yet (invoice: false) has no button, whatever the runtime offers
+		resetPage();
+		const early = makeShop({
+			signIn: 's1',
+			features: ['checkout', 'invoices'],
+			routes: {
+				'GET /v1/shop/orders': () => ok({ items: [row('ord_1', 'SO-1')], nextCursor: null }),
+				'GET /v1/shop/orders/ord_1': () => ok(detail({ invoice: false })),
+			},
+			documents: { '/v1/shop/orders/ord_1/invoice': { ok: true, status: 200, text: '<html>invoice</html>' } },
+		});
+		const waiting = await mountOrders(early);
+		await click(buttonOf(waiting, text('orders.open', { number: 'SO-1' })));
+		expect(() => buttonOf(waiting, text('orders.invoice'))).toThrow();
 		expect($(host, 'a[href=""]')).toBeNull();
 		await click(buttonOf(host, text('orders.back')));
 		await click(buttonOf(host, text('orders.open', { number: 'SO-9' })));

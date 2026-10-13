@@ -14,7 +14,7 @@ import { createFulfilmentStore, markSeenBy } from '../adapters/fulfilment-store.
 import { setOrderCounter } from '../adapters/ledger.js';
 import { createOutbox } from '../adapters/outbox.js';
 import { courierNamed, trackingLink } from '../core/couriers.js';
-import { invoiceHtml, invoiceTexts, packingSlipHtml } from '../core/invoice.js';
+import { invoiceHtml, invoiceTexts, packingSlipHtml, shopperInvoiceReady } from '../core/invoice.js';
 import {
 	TRACK_EVERY_MS,
 	checkBulkMove,
@@ -29,7 +29,7 @@ import {
 	orderSummary,
 	warningsOf,
 } from '../core/orders.js';
-import { WAITING_ROLES, statusOf } from '../core/flow.js';
+import { statusOf } from '../core/flow.js';
 import { COLLECTIONS } from '../core/model.js';
 import { createMedia } from './catalog-media.js';
 import { createCustomers } from './orders-customers.js';
@@ -65,8 +65,8 @@ const flowOf = async (s) => /** @type {any} */ (await s.list('order_flow'));
 /**
  * @param {Product} product
  * @param {Service} service
- * @param {{ ordering: Pick<import('./checkout-orders.js').Ordering, 'editWaiting' | 'shopperView'> }} parts checkout's
- *   editing of a waiting order (E29) and what the shopper sees of an order
+ * @param {{ ordering: Pick<import('./checkout-orders.js').Ordering, 'editWaiting' | 'shopperView' | 'shopperOrder'> }} parts
+ *   checkout's editing of a waiting order (E29), what the shopper sees of an order and which order a shopper may open
  * @returns {import('./routes.js').Area}
  */
 export const createOrders = (product, service, { ordering }) => {
@@ -439,19 +439,15 @@ export const createOrders = (product, service, { ordering }) => {
 		return document(s, await orderOf(s, ctx), 'packing_slip');
 	};
 
-	/** @param {any} ctx */
+	/**
+	 * GET /v1/shop/orders/:id/invoice: the order the shopper may open, as on its page (their sign-in, or a guest order's
+	 * key in `SS-Order-Key`, E21); with `shopperFrom` confirmed, once the order is confirmed: not while it waits, nor once
+	 * cancelled (E35).
+	 * @param {any} ctx
+	 */
 	const shopInvoice = async (ctx) => {
-		const s = await service.site(ctx);
-		const shopper = await service.requireShopper(s);
-		const id = String(ctx.params.id);
-		const order = ORDER_ID.test(id) ? await (await storeOf(s)).orders.get(id) : null;
-		if (!order || !order.customer.userId || order.customer.userId !== shopper.id)
-			throw problem('not_found', 'There is no such order.');
-		// with `shopperFrom` confirmed, the invoice comes once the order is confirmed: not while it waits, nor once
-		// cancelled (E35)
-		const { shopperFrom } = await s.values('invoices');
-		if (shopperFrom === 'confirmed' && (WAITING_ROLES.includes(order.role) || order.role === 'cancelled'))
-			throw problem('not_found', 'This order has no invoice yet.');
+		const { s, order } = await ordering.shopperOrder(ctx);
+		if (!shopperInvoiceReady(order, await s.values('invoices'))) throw problem('not_found', 'This order has no invoice yet.');
 		return document(s, order, 'invoice', { shopper: true });
 	};
 
