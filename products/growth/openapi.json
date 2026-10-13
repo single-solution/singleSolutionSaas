@@ -372,6 +372,8 @@
 		},
 		"/v1/admin/analytics": {
 			"get": {
+				"summary": "The analytics report (analytics dashboard widget)",
+				"description": "As GET /v1/analytics.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "visitor_analytics",
 				"x-ss-permission": "analytics.read",
@@ -380,10 +382,53 @@
 						"ticket": []
 					}
 				],
-				"parameters": [],
+				"parameters": [
+					{
+						"name": "from",
+						"in": "query",
+						"required": false,
+						"description": "The first day (default: 29 days before to).",
+						"schema": {
+							"type": "string",
+							"format": "date",
+							"description": "The first day (default: 29 days before to)."
+						}
+					},
+					{
+						"name": "to",
+						"in": "query",
+						"required": false,
+						"description": "The last day (default: today).",
+						"schema": {
+							"type": "string",
+							"format": "date",
+							"description": "The last day (default: today)."
+						}
+					},
+					{
+						"name": "top",
+						"in": "query",
+						"required": false,
+						"description": "Rows of each top list (another value gives 10).",
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 100,
+							"default": 10,
+							"description": "Rows of each top list (another value gives 10)."
+						}
+					}
+				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Report"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -400,6 +445,8 @@
 		},
 		"/v1/admin/events": {
 			"get": {
+				"summary": "The event log (analytics dashboard widget)",
+				"description": "As GET /v1/events.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "visitor_analytics",
 				"x-ss-permission": "analytics.read",
@@ -408,10 +455,60 @@
 						"ticket": []
 					}
 				],
-				"parameters": [],
+				"parameters": [
+					{
+						"name": "type",
+						"in": "query",
+						"required": false,
+						"description": "Only events of this type (another value filters nothing).",
+						"schema": {
+							"$ref": "#/components/schemas/EventType",
+							"description": "Only events of this type (another value filters nothing)."
+						}
+					},
+					{
+						"name": "session",
+						"in": "query",
+						"required": false,
+						"description": "Only the events of this session (another value filters nothing).",
+						"schema": {
+							"type": "string",
+							"pattern": "^[A-Za-z0-9_-]{8,64}$",
+							"description": "Only the events of this session (another value filters nothing)."
+						}
+					},
+					{
+						"name": "cursor",
+						"in": "query",
+						"required": false,
+						"description": "nextCursor of the previous page.",
+						"schema": {
+							"type": "string",
+							"description": "nextCursor of the previous page."
+						}
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 100,
+							"default": 50
+						}
+					}
+				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/EventPage"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -428,6 +525,7 @@
 		},
 		"/v1/admin/events/count": {
 			"get": {
+				"summary": "Count the event log",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "visitor_analytics",
 				"x-ss-permission": "analytics.read",
@@ -436,10 +534,39 @@
 						"ticket": []
 					}
 				],
-				"parameters": [],
+				"parameters": [
+					{
+						"name": "type",
+						"in": "query",
+						"required": false,
+						"description": "Only events of this type (another value filters nothing).",
+						"schema": {
+							"$ref": "#/components/schemas/EventType",
+							"description": "Only events of this type (another value filters nothing)."
+						}
+					},
+					{
+						"name": "session",
+						"in": "query",
+						"required": false,
+						"description": "Only the events of this session (another value filters nothing).",
+						"schema": {
+							"type": "string",
+							"pattern": "^[A-Za-z0-9_-]{8,64}$",
+							"description": "Only the events of this session (another value filters nothing)."
+						}
+					}
+				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Count"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -456,6 +583,7 @@
 		},
 		"/v1/admin/events/counts": {
 			"get": {
+				"summary": "Count the event log by type",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "visitor_analytics",
 				"x-ss-permission": "analytics.read",
@@ -464,10 +592,50 @@
 						"ticket": []
 					}
 				],
-				"parameters": [],
+				"parameters": [
+					{
+						"name": "by",
+						"in": "query",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"enum": [
+								"type"
+							]
+						}
+					},
+					{
+						"name": "type",
+						"in": "query",
+						"required": false,
+						"description": "Only events of this type (another value filters nothing).",
+						"schema": {
+							"$ref": "#/components/schemas/EventType",
+							"description": "Only events of this type (another value filters nothing)."
+						}
+					},
+					{
+						"name": "session",
+						"in": "query",
+						"required": false,
+						"description": "Only the events of this session (another value filters nothing).",
+						"schema": {
+							"type": "string",
+							"pattern": "^[A-Za-z0-9_-]{8,64}$",
+							"description": "Only the events of this session (another value filters nothing)."
+						}
+					}
+				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Counts"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -484,6 +652,8 @@
 		},
 		"/v1/admin/indexnow": {
 			"post": {
+				"summary": "Submit pages to IndexNow (SEO checklist widget)",
+				"description": "As POST /v1/indexnow; each submission is written to the activity log.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "indexnow",
 				"x-ss-permission": "indexnow.submit",
@@ -493,9 +663,41 @@
 					}
 				],
 				"parameters": [],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"urls"
+								],
+								"properties": {
+									"urls": {
+										"type": "array",
+										"minItems": 1,
+										"maxItems": 10000,
+										"description": "https addresses on your website's exact domain (each sent once).",
+										"items": {
+											"type": "string",
+											"maxLength": 2048
+										}
+									}
+								}
+							}
+						}
+					}
+				},
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/IndexNowAnswer"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -512,6 +714,8 @@
 		},
 		"/v1/admin/seo/checks": {
 			"post": {
+				"summary": "Run the SEO checklist now (SEO checklist widget)",
+				"description": "As POST /v1/seo/checks; each run is written to the activity log.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "seo_checklist",
 				"x-ss-permission": "seo.check",
@@ -521,9 +725,36 @@
 					}
 				],
 				"parameters": [],
+				"requestBody": {
+					"required": false,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"properties": {
+									"paths": {
+										"type": "array",
+										"maxItems": 20,
+										"description": "The pages to check (paths from /; others are left out); the home page is always checked. Default: the checklist's settings.",
+										"items": {
+											"type": "string"
+										}
+									}
+								}
+							}
+						}
+					}
+				},
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/SeoReport"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -540,6 +771,8 @@
 		},
 		"/v1/analytics": {
 			"get": {
+				"summary": "The analytics report of a range of days",
+				"description": "Days are days of your business time zone. 422 validation_failed when from or to is not a day, from is after to, or the range is longer than 366 days.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "visitor_analytics",
 				"security": [
@@ -548,6 +781,41 @@
 					}
 				],
 				"parameters": [
+					{
+						"name": "from",
+						"in": "query",
+						"required": false,
+						"description": "The first day (default: 29 days before to).",
+						"schema": {
+							"type": "string",
+							"format": "date",
+							"description": "The first day (default: 29 days before to)."
+						}
+					},
+					{
+						"name": "to",
+						"in": "query",
+						"required": false,
+						"description": "The last day (default: today).",
+						"schema": {
+							"type": "string",
+							"format": "date",
+							"description": "The last day (default: today)."
+						}
+					},
+					{
+						"name": "top",
+						"in": "query",
+						"required": false,
+						"description": "Rows of each top list (another value gives 10).",
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 100,
+							"default": 10,
+							"description": "Rows of each top list (another value gives 10)."
+						}
+					},
 					{
 						"$ref": "#/components/parameters/SSActorId"
 					},
@@ -562,8 +830,15 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Report"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -580,6 +855,8 @@
 		},
 		"/v1/collect": {
 			"post": {
+				"summary": "Record the page script's events",
+				"description": "The page script sends these itself. Your server may send a visitor's events too: the server token without an Origin, naming the visitor's IP address in SS-Visitor-IP. Nothing answers an error for a bad event: invalid events, events of features that are off and any after the first 25 are dropped, and nothing is kept while Visitor analytics is off; accepted says how many were kept. At most 64 KB; 3,000 calls a minute per website and 120 per visitor.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": [
 					"visitor_analytics",
@@ -612,9 +889,47 @@
 						"$ref": "#/components/parameters/SSActorEmail"
 					}
 				],
+				"requestBody": {
+					"required": false,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"properties": {
+									"events": {
+										"type": "array",
+										"description": "The first 25 are read.",
+										"items": {
+											"$ref": "#/components/schemas/CollectEvent"
+										}
+									}
+								}
+							}
+						}
+					}
+				},
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"202": {
+						"description": "Accepted",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"accepted"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"accepted": {
+											"type": "integer",
+											"minimum": 0,
+											"maximum": 25,
+											"description": "Events kept."
+										}
+									}
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -1065,6 +1380,7 @@
 		},
 		"/v1/events": {
 			"get": {
+				"summary": "The recorded events, newest first",
 				"x-ss-auth": "server",
 				"x-ss-feature": "visitor_analytics",
 				"security": [
@@ -1073,6 +1389,48 @@
 					}
 				],
 				"parameters": [
+					{
+						"name": "type",
+						"in": "query",
+						"required": false,
+						"description": "Only events of this type (another value filters nothing).",
+						"schema": {
+							"$ref": "#/components/schemas/EventType",
+							"description": "Only events of this type (another value filters nothing)."
+						}
+					},
+					{
+						"name": "session",
+						"in": "query",
+						"required": false,
+						"description": "Only the events of this session (another value filters nothing).",
+						"schema": {
+							"type": "string",
+							"pattern": "^[A-Za-z0-9_-]{8,64}$",
+							"description": "Only the events of this session (another value filters nothing)."
+						}
+					},
+					{
+						"name": "cursor",
+						"in": "query",
+						"required": false,
+						"description": "nextCursor of the previous page.",
+						"schema": {
+							"type": "string",
+							"description": "nextCursor of the previous page."
+						}
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 100,
+							"default": 50
+						}
+					},
 					{
 						"$ref": "#/components/parameters/SSActorId"
 					},
@@ -1087,8 +1445,15 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/EventPage"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -1105,6 +1470,7 @@
 		},
 		"/v1/events/count": {
 			"get": {
+				"summary": "Count the recorded events (the list's filters)",
 				"x-ss-auth": "server",
 				"x-ss-feature": "visitor_analytics",
 				"security": [
@@ -1113,6 +1479,27 @@
 					}
 				],
 				"parameters": [
+					{
+						"name": "type",
+						"in": "query",
+						"required": false,
+						"description": "Only events of this type (another value filters nothing).",
+						"schema": {
+							"$ref": "#/components/schemas/EventType",
+							"description": "Only events of this type (another value filters nothing)."
+						}
+					},
+					{
+						"name": "session",
+						"in": "query",
+						"required": false,
+						"description": "Only the events of this session (another value filters nothing).",
+						"schema": {
+							"type": "string",
+							"pattern": "^[A-Za-z0-9_-]{8,64}$",
+							"description": "Only the events of this session (another value filters nothing)."
+						}
+					},
 					{
 						"$ref": "#/components/parameters/SSActorId"
 					},
@@ -1127,8 +1514,15 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Count"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -1145,6 +1539,7 @@
 		},
 		"/v1/events/counts": {
 			"get": {
+				"summary": "Count the recorded events by type",
 				"x-ss-auth": "server",
 				"x-ss-feature": "visitor_analytics",
 				"security": [
@@ -1153,6 +1548,38 @@
 					}
 				],
 				"parameters": [
+					{
+						"name": "by",
+						"in": "query",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"enum": [
+								"type"
+							]
+						}
+					},
+					{
+						"name": "type",
+						"in": "query",
+						"required": false,
+						"description": "Only events of this type (another value filters nothing).",
+						"schema": {
+							"$ref": "#/components/schemas/EventType",
+							"description": "Only events of this type (another value filters nothing)."
+						}
+					},
+					{
+						"name": "session",
+						"in": "query",
+						"required": false,
+						"description": "Only the events of this session (another value filters nothing).",
+						"schema": {
+							"type": "string",
+							"pattern": "^[A-Za-z0-9_-]{8,64}$",
+							"description": "Only the events of this session (another value filters nothing)."
+						}
+					},
 					{
 						"$ref": "#/components/parameters/SSActorId"
 					},
@@ -1167,8 +1594,15 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Counts"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -1418,6 +1852,8 @@
 		},
 		"/v1/import/finish": {
 			"post": {
+				"summary": "Finish an import",
+				"description": "Growth has nothing to derive; it writes the activity log entry.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "import",
 				"security": [
@@ -1440,8 +1876,24 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"finished"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"finished": {
+											"const": true
+										}
+									}
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -1458,6 +1910,7 @@
 		},
 		"/v1/import/status": {
 			"get": {
+				"summary": "What is stored, for ss-import verify",
 				"x-ss-auth": "server",
 				"x-ss-feature": "import",
 				"security": [
@@ -1480,8 +1933,76 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"collections",
+										"imported",
+										"totals"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"collections": {
+											"type": "object",
+											"required": [
+												"totals"
+											],
+											"additionalProperties": false,
+											"properties": {
+												"totals": {
+													"type": "integer",
+													"minimum": 0,
+													"description": "Documents of daily totals (imported and live)."
+												}
+											}
+										},
+										"imported": {
+											"type": "object",
+											"required": [
+												"totals"
+											],
+											"additionalProperties": false,
+											"properties": {
+												"totals": {
+													"type": "integer",
+													"minimum": 0,
+													"description": "Days an import wrote."
+												}
+											}
+										},
+										"totals": {
+											"type": "object",
+											"description": "The sums ss-import verify compares.",
+											"required": [
+												"days",
+												"visits",
+												"page_views"
+											],
+											"additionalProperties": false,
+											"properties": {
+												"days": {
+													"type": "integer",
+													"minimum": 0,
+													"description": "Days with totals."
+												},
+												"visits": {
+													"type": "integer",
+													"minimum": 0
+												},
+												"page_views": {
+													"type": "integer",
+													"minimum": 0
+												}
+											}
+										}
+									}
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -1498,6 +2019,8 @@
 		},
 		"/v1/import/{collection}": {
 			"post": {
+				"summary": "Import days of daily totals (ss-import)",
+				"description": "collection is totals. The body is NDJSON (Content-Type application/x-ndjson), not JSON: one day per line, { \"day\": \"YYYY-MM-DD\", \"part\": 0, \"totals\": { \"<metric>\": { \"<key>\": { \"c\": <count>, \"s\": <sum> } } } }, the day in your business time zone and the keys as readable text; at most 1,000 lines or 4 MB. Each metric must be one Growth counts, with keys of the form it writes, a whole count of 0 or more and a finite sum (only revenue, duration, vital_value and vital_page keep sums); unknown fields are refused by name. A day replaces the day's document, so totals counted live that day are replaced too. Nothing is sent and no raw events are made. 404 not_found for another collection; 415 unsupported_media_type without NDJSON.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "import",
 				"security": [
@@ -1515,6 +2038,20 @@
 						}
 					},
 					{
+						"name": "dryRun",
+						"in": "query",
+						"required": false,
+						"description": "Check and count only; nothing is written.",
+						"schema": {
+							"type": "string",
+							"enum": [
+								"1",
+								"true"
+							],
+							"description": "Check and count only; nothing is written."
+						}
+					},
+					{
 						"$ref": "#/components/parameters/SSActorId"
 					},
 					{
@@ -1528,8 +2065,83 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"inserted",
+										"updated",
+										"failed",
+										"dryRun"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"inserted": {
+											"type": "integer",
+											"minimum": 0,
+											"description": "New days (a dry run: days that would be new)."
+										},
+										"updated": {
+											"type": "integer",
+											"minimum": 0,
+											"description": "Days replaced."
+										},
+										"failed": {
+											"type": "array",
+											"description": "The lines not taken, in order.",
+											"items": {
+												"type": "object",
+												"required": [
+													"line",
+													"id",
+													"errors"
+												],
+												"additionalProperties": false,
+												"properties": {
+													"line": {
+														"type": "integer",
+														"minimum": 1
+													},
+													"id": {
+														"type": [
+															"string",
+															"null"
+														],
+														"description": "The day's key as <day>/<part>; null when the line has none."
+													},
+													"errors": {
+														"type": "array",
+														"items": {
+															"type": "object",
+															"required": [
+																"path",
+																"message"
+															],
+															"additionalProperties": false,
+															"properties": {
+																"path": {
+																	"type": "string",
+																	"description": "JSON Pointer into the record, for example /totals/page/c."
+																},
+																"message": {
+																	"type": "string"
+																}
+															}
+														}
+													}
+												}
+											}
+										},
+										"dryRun": {
+											"type": "boolean"
+										}
+									}
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -1546,6 +2158,8 @@
 		},
 		"/v1/import/{collection}/prune": {
 			"post": {
+				"summary": "Remove imported days the source no longer has",
+				"description": "collection is totals. Removes the days an import wrote whose key lies after after and up to through (open ends when left out) and is not in keep, at most 1,000 per call (more: call again). Days counted live are never removed. Send application/json; 415 unsupported_media_type otherwise, 422 validation_failed for a malformed keep.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "import",
 				"security": [
@@ -1563,6 +2177,20 @@
 						}
 					},
 					{
+						"name": "dryRun",
+						"in": "query",
+						"required": false,
+						"description": "Answer what would go; nothing is removed.",
+						"schema": {
+							"type": "string",
+							"enum": [
+								"1",
+								"true"
+							],
+							"description": "Answer what would go; nothing is removed."
+						}
+					},
+					{
 						"$ref": "#/components/parameters/SSActorId"
 					},
 					{
@@ -1575,9 +2203,90 @@
 						"$ref": "#/components/parameters/SSActorEmail"
 					}
 				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"keep"
+								],
+								"properties": {
+									"keep": {
+										"type": "array",
+										"maxItems": 1000,
+										"description": "The source's days in this range.",
+										"items": {
+											"$ref": "#/components/schemas/TotalsKey"
+										}
+									},
+									"after": {
+										"oneOf": [
+											{
+												"$ref": "#/components/schemas/TotalsKey"
+											},
+											{
+												"type": "null"
+											}
+										],
+										"description": "The range starts after this key."
+									},
+									"through": {
+										"oneOf": [
+											{
+												"$ref": "#/components/schemas/TotalsKey"
+											},
+											{
+												"type": "null"
+											}
+										],
+										"description": "The range ends with this key."
+									}
+								}
+							}
+						}
+					}
+				},
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"removed",
+										"keys",
+										"more",
+										"dryRun"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"removed": {
+											"type": "integer",
+											"minimum": 0,
+											"description": "Days removed (a dry run: all that would go)."
+										},
+										"keys": {
+											"type": "array",
+											"maxItems": 1000,
+											"description": "Their keys as <day>/<part>, in order.",
+											"items": {
+												"type": "string"
+											}
+										},
+										"more": {
+											"type": "boolean",
+											"description": "More are left to remove: call again."
+										},
+										"dryRun": {
+											"type": "boolean"
+										}
+									}
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -1594,6 +2303,8 @@
 		},
 		"/v1/indexnow": {
 			"post": {
+				"summary": "Submit pages of your website to IndexNow",
+				"description": "422 validation_failed (at /key, /keyPath or /urls) without a well-formed key, with a key file address that is not a path, or with an address that is not https on your exact domain. 502 indexnow_refused when IndexNow does not take it (403: the key file is not served; 422: the URLs do not match the host; 429: too many submissions) or does not answer. 10 calls an hour per website.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "indexnow",
 				"security": [
@@ -1615,9 +2326,41 @@
 						"$ref": "#/components/parameters/SSActorEmail"
 					}
 				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"urls"
+								],
+								"properties": {
+									"urls": {
+										"type": "array",
+										"minItems": 1,
+										"maxItems": 10000,
+										"description": "https addresses on your website's exact domain (each sent once).",
+										"items": {
+											"type": "string",
+											"maxLength": 2048
+										}
+									}
+								}
+							}
+						}
+					}
+				},
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/IndexNowAnswer"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -1634,6 +2377,8 @@
 		},
 		"/v1/indexnow/key.txt": {
 			"get": {
+				"summary": "Your IndexNow key file",
+				"description": "Answers the key as text/plain, not JSON: serve it at the key file address (https://<your domain>/<key>.txt, or the path you set). 404 not_found while no key is set.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "indexnow",
 				"security": [
@@ -1656,8 +2401,8 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success"
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -1816,6 +2561,8 @@
 		},
 		"/v1/notice": {
 			"get": {
+				"summary": "The notice bar now, for a bar you draw yourself",
+				"description": "Answers the notice while 'Show the notice bar' is on, it has a text and its dates say so (checked now), else null. 3,000 calls a minute per website and 60 per visitor.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "notice_bar",
 				"security": [
@@ -1827,6 +2574,16 @@
 					}
 				],
 				"parameters": [
+					{
+						"name": "path",
+						"in": "query",
+						"required": false,
+						"description": "The visitor's page: null on a page the bar is hidden on (Hide on pages).",
+						"schema": {
+							"type": "string",
+							"description": "The visitor's page: null on a page the bar is hidden on (Hide on pages)."
+						}
+					},
 					{
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
@@ -1844,8 +2601,22 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"oneOf": [
+										{
+											"$ref": "#/components/schemas/Notice"
+										},
+										{
+											"type": "null"
+										}
+									]
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -1938,6 +2709,8 @@
 		},
 		"/v1/robots.txt": {
 			"get": {
+				"summary": "The robots.txt your site serves",
+				"description": "Answers text/plain, not JSON: serve it as https://<your domain>/robots.txt. Your rules (control characters and their own Sitemap lines left out), then with 'Block AI training crawlers' a group keeping those crawlers off the whole site, then a Sitemap line per sitemap address on your domain (at most 50).",
 				"x-ss-auth": "server",
 				"x-ss-feature": "robots_verification",
 				"security": [
@@ -1960,8 +2733,8 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success"
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -1978,6 +2751,8 @@
 		},
 		"/v1/seo/checks": {
 			"post": {
+				"summary": "Run the SEO checklist now",
+				"description": "Reads your robots.txt, the first sitemap it names (else /sitemap.xml) and the pages, then checks them. 422 validation_failed when paths is not a list of at most 20. 10 calls an hour per website.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "seo_checklist",
 				"security": [
@@ -1999,9 +2774,36 @@
 						"$ref": "#/components/parameters/SSActorEmail"
 					}
 				],
+				"requestBody": {
+					"required": false,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"properties": {
+									"paths": {
+										"type": "array",
+										"maxItems": 20,
+										"description": "The pages to check (paths from /; others are left out); the home page is always checked. Default: the checklist's settings.",
+										"items": {
+											"type": "string"
+										}
+									}
+								}
+							}
+						}
+					}
+				},
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/SeoReport"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -2724,6 +3526,7 @@
 		},
 		"/v1/verification": {
 			"get": {
+				"summary": "The verification tags for your page head",
 				"x-ss-auth": "server",
 				"x-ss-feature": "robots_verification",
 				"security": [
@@ -2746,8 +3549,54 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"tags",
+										"html"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"tags": {
+											"type": "array",
+											"description": "The tags set (Google, Bing, Meta, Yandex), each once.",
+											"maxItems": 4,
+											"items": {
+												"type": "object",
+												"required": [
+													"name",
+													"content"
+												],
+												"additionalProperties": false,
+												"properties": {
+													"name": {
+														"type": "string",
+														"enum": [
+															"google-site-verification",
+															"msvalidate.01",
+															"facebook-domain-verification",
+															"yandex-verification"
+														]
+													},
+													"content": {
+														"type": "string",
+														"pattern": "^[A-Za-z0-9_.=-]{1,120}$"
+													}
+												}
+											}
+										},
+										"html": {
+											"type": "string",
+											"description": "The tags as <meta> lines for the page head ('' with none)."
+										}
+									}
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -2903,6 +3752,157 @@
 					}
 				}
 			},
+			"CollectEvent": {
+				"type": "object",
+				"description": "One event as the page script sends it. Members that do not belong to the type are ignored; an event without a known type or a path is dropped.",
+				"required": [
+					"type",
+					"path"
+				],
+				"properties": {
+					"type": {
+						"$ref": "#/components/schemas/EventType"
+					},
+					"path": {
+						"type": "string",
+						"description": "The page's path from / (not //); the query string and fragment are cut off; at most 300 characters, no spaces."
+					},
+					"visit": {
+						"type": "boolean",
+						"description": "page_view: true when it starts a visit (no page view in the last 30 minutes in this tab)."
+					},
+					"device": {
+						"type": "string",
+						"enum": [
+							"mobile",
+							"tablet",
+							"desktop"
+						],
+						"description": "page_view: the device class from the screen width (another value counts as desktop)."
+					},
+					"referrer": {
+						"type": "string",
+						"description": "page_view: the referring host (a host other than your domain becomes the source). not_found with the sessions detail: where the visitor came from (a path on your website or another site's host)."
+					},
+					"campaign": {
+						"type": "object",
+						"description": "page_view: the visit's campaign (utm_source, utm_medium, utm_campaign); a source replaces the referrer as the source.",
+						"properties": {
+							"source": {
+								"type": "string",
+								"description": "Kept in lower case, at most 100 characters."
+							},
+							"medium": {
+								"type": "string",
+								"description": "Kept in lower case, at most 100 characters."
+							},
+							"name": {
+								"type": "string",
+								"description": "At most 100 characters kept."
+							}
+						}
+					},
+					"items": {
+						"type": "array",
+						"description": "view_item, add_to_cart, begin_checkout, purchase: the items (the first 50 are kept; one without an id is dropped).",
+						"items": {
+							"type": "object",
+							"properties": {
+								"id": {
+									"type": "string",
+									"description": "The product id (at most 80 characters kept)."
+								},
+								"variantId": {
+									"type": "string",
+									"description": "The variant id (at most 80 characters kept)."
+								},
+								"quantity": {
+									"type": "integer",
+									"minimum": 1,
+									"maximum": 10000,
+									"description": "1 when missing or out of range."
+								}
+							}
+						}
+					},
+					"value": {
+						"type": "number",
+						"description": "Funnel events: the amount in minor units, a whole number 0–1,000,000,000,000 (kept only with currency, else 0). vital: the measurement in milliseconds (CLS × 1000), 0–600,000, rounded."
+					},
+					"currency": {
+						"type": "string",
+						"pattern": "^[A-Z]{3}$",
+						"description": "Funnel events: ISO 4217 code of value."
+					},
+					"orderId": {
+						"type": "string",
+						"description": "purchase: your order number (at most 80 characters kept)."
+					},
+					"term": {
+						"type": "string",
+						"description": "search: what was searched for (kept in lower case with spaces collapsed, at most 100 characters; an empty term drops the event)."
+					},
+					"results": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "search: how many results it found (0 also counts it as an empty search)."
+					},
+					"name": {
+						"type": "string",
+						"enum": [
+							"LCP",
+							"INP",
+							"CLS",
+							"FCP",
+							"TTFB"
+						],
+						"description": "vital: which Web Vital."
+					},
+					"session": {
+						"type": "string",
+						"pattern": "^[A-Za-z0-9_-]{8,64}$",
+						"description": "With the sessions detail: the tab's random session id (another value: no session facts are kept)."
+					},
+					"browser": {
+						"type": "string",
+						"enum": [
+							"chrome",
+							"safari",
+							"edge",
+							"firefox",
+							"samsung",
+							"opera",
+							"other"
+						],
+						"description": "With a session: the browser family (another value is kept as null)."
+					},
+					"os": {
+						"type": "string",
+						"enum": [
+							"android",
+							"ios",
+							"windows",
+							"macos",
+							"chromeos",
+							"linux",
+							"other"
+						],
+						"description": "With a session: the system family (another value is kept as null)."
+					},
+					"page": {
+						"type": "integer",
+						"minimum": 1,
+						"maximum": 10000,
+						"description": "page_view with a session: which page of the session it is (2 makes the session engaged)."
+					},
+					"gap": {
+						"type": "number",
+						"minimum": 0,
+						"maximum": 1800000,
+						"description": "page_view with a session: milliseconds since the session's last page view (adds to its duration)."
+					}
+				}
+			},
 			"Connection": {
 				"type": "object",
 				"description": "A connection as screens see it: secrets never come back.",
@@ -3015,6 +4015,152 @@
 					}
 				}
 			},
+			"Event": {
+				"type": "object",
+				"description": "One recorded event (anonymous: never an IP address, user agent, cookie or cross-site id). Removed at expiresAt by the database's expiry index.",
+				"required": [
+					"id",
+					"type",
+					"path",
+					"at",
+					"expiresAt",
+					"data"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"id": {
+						"type": "string",
+						"pattern": "^evt_[0-9a-z]{10,64}$"
+					},
+					"type": {
+						"$ref": "#/components/schemas/EventType"
+					},
+					"path": {
+						"type": "string",
+						"maxLength": 300,
+						"description": "The page's path (never the query string)."
+					},
+					"at": {
+						"type": "string",
+						"format": "date-time",
+						"description": "When it was recorded (events of one batch are a millisecond apart, in the order sent)."
+					},
+					"expiresAt": {
+						"type": "string",
+						"format": "date-time",
+						"description": "When it is removed: the retention set when it was recorded."
+					},
+					"data": {
+						"anyOf": [
+							{
+								"$ref": "#/components/schemas/PageViewData"
+							},
+							{
+								"$ref": "#/components/schemas/FunnelData"
+							},
+							{
+								"$ref": "#/components/schemas/SearchData"
+							},
+							{
+								"$ref": "#/components/schemas/NotFoundData"
+							},
+							{
+								"$ref": "#/components/schemas/VitalData"
+							}
+						],
+						"description": "What else is kept, by type."
+					},
+					"session": {
+						"type": "string",
+						"pattern": "^[A-Za-z0-9_-]{8,64}$",
+						"description": "With the sessions detail: the tab's random session id. Absent without it."
+					},
+					"browser": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"chrome",
+							"safari",
+							"edge",
+							"firefox",
+							"samsung",
+							"opera",
+							"other",
+							null
+						],
+						"description": "With a session: the browser family."
+					},
+					"os": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"android",
+							"ios",
+							"windows",
+							"macos",
+							"chromeos",
+							"linux",
+							"other",
+							null
+						],
+						"description": "With a session: the system family."
+					},
+					"city": {
+						"type": [
+							"string",
+							"null"
+						],
+						"maxLength": 80,
+						"description": "With a session and Record country on: the city your host's request header gave."
+					}
+				}
+			},
+			"EventPage": {
+				"type": "object",
+				"description": "One page of recorded events, newest first.",
+				"required": [
+					"items",
+					"nextCursor",
+					"hasMore"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"items": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/Event"
+						}
+					},
+					"nextCursor": {
+						"type": [
+							"string",
+							"null"
+						],
+						"description": "Pass it as cursor for the next page (null: the last page)."
+					},
+					"hasMore": {
+						"type": "boolean"
+					}
+				}
+			},
+			"EventType": {
+				"type": "string",
+				"enum": [
+					"page_view",
+					"view_item",
+					"add_to_cart",
+					"begin_checkout",
+					"purchase",
+					"search",
+					"not_found",
+					"vital"
+				],
+				"description": "page_view: Visitor analytics; view_item, add_to_cart, begin_checkout, purchase: Conversion funnel; search, not_found: Searches and 404s; vital: Web Vitals."
+			},
 			"Format": {
 				"type": "object",
 				"required": [
@@ -3095,6 +4241,349 @@
 					}
 				}
 			},
+			"FunnelData": {
+				"type": "object",
+				"description": "view_item, add_to_cart, begin_checkout and purchase.",
+				"required": [
+					"items",
+					"value",
+					"currency"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"items": {
+						"type": "array",
+						"maxItems": 50,
+						"items": {
+							"type": "object",
+							"required": [
+								"id",
+								"variantId",
+								"quantity"
+							],
+							"additionalProperties": false,
+							"properties": {
+								"id": {
+									"type": "string",
+									"minLength": 1,
+									"maxLength": 80
+								},
+								"variantId": {
+									"type": [
+										"string",
+										"null"
+									],
+									"maxLength": 80
+								},
+								"quantity": {
+									"type": "integer",
+									"minimum": 1,
+									"maximum": 10000
+								}
+							}
+						}
+					},
+					"value": {
+						"type": "integer",
+						"minimum": 0,
+						"maximum": 1000000000000,
+						"description": "Minor units (0 without a currency)."
+					},
+					"currency": {
+						"type": [
+							"string",
+							"null"
+						],
+						"pattern": "^[A-Z]{3}$"
+					},
+					"orderId": {
+						"type": [
+							"string",
+							"null"
+						],
+						"maxLength": 80,
+						"description": "purchase only."
+					}
+				}
+			},
+			"IndexNowAnswer": {
+				"type": "object",
+				"description": "IndexNow took the submission.",
+				"required": [
+					"submitted",
+					"status"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"submitted": {
+						"type": "integer",
+						"minimum": 1,
+						"maximum": 10000,
+						"description": "The URLs sent (each once)."
+					},
+					"status": {
+						"type": "integer",
+						"enum": [
+							200,
+							202
+						],
+						"description": "What IndexNow answered (202: received, the key is checked later)."
+					}
+				}
+			},
+			"Journey": {
+				"type": "object",
+				"description": "One session of the range with its first steps (the event log has them all).",
+				"required": [
+					"session",
+					"startedAt",
+					"endedAt",
+					"duration",
+					"events",
+					"pages",
+					"device",
+					"browser",
+					"os",
+					"country",
+					"city",
+					"source",
+					"steps"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"session": {
+						"type": "string",
+						"pattern": "^[A-Za-z0-9_-]{8,64}$",
+						"description": "Pass it as session to GET /v1/events for every event of the visit."
+					},
+					"startedAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"endedAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"duration": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "Seconds from its first to its last event."
+					},
+					"events": {
+						"type": "integer",
+						"minimum": 1
+					},
+					"pages": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "Its page views."
+					},
+					"device": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"mobile",
+							"tablet",
+							"desktop",
+							null
+						],
+						"description": "From the visit's first page view (null when the range does not hold it)."
+					},
+					"browser": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"chrome",
+							"safari",
+							"edge",
+							"firefox",
+							"samsung",
+							"opera",
+							"other",
+							null
+						]
+					},
+					"os": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"android",
+							"ios",
+							"windows",
+							"macos",
+							"chromeos",
+							"linux",
+							"other",
+							null
+						]
+					},
+					"country": {
+						"type": [
+							"string",
+							"null"
+						],
+						"description": "Two letters, or (unknown); from the visit's first page view."
+					},
+					"city": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"source": {
+						"type": [
+							"string",
+							"null"
+						],
+						"description": "A host, a campaign source or (direct); from the visit's first page view."
+					},
+					"steps": {
+						"type": "array",
+						"maxItems": 30,
+						"description": "The first 30 events in order, Web Vitals left out.",
+						"items": {
+							"type": "object",
+							"required": [
+								"type",
+								"path",
+								"at"
+							],
+							"additionalProperties": false,
+							"properties": {
+								"type": {
+									"type": "string",
+									"enum": [
+										"page_view",
+										"view_item",
+										"add_to_cart",
+										"begin_checkout",
+										"purchase",
+										"search",
+										"not_found"
+									]
+								},
+								"path": {
+									"type": "string"
+								},
+								"at": {
+									"type": "string",
+									"format": "date-time"
+								},
+								"term": {
+									"type": "string",
+									"description": "search only."
+								},
+								"value": {
+									"type": "integer",
+									"minimum": 0,
+									"description": "Funnel events with a currency: minor units."
+								},
+								"currency": {
+									"type": "string",
+									"pattern": "^[A-Z]{3}$"
+								}
+							}
+						}
+					}
+				}
+			},
+			"NotFoundData": {
+				"type": "object",
+				"description": "not_found: nothing more; with the sessions detail where the visitor came from.",
+				"additionalProperties": false,
+				"properties": {
+					"from": {
+						"type": [
+							"string",
+							"null"
+						],
+						"description": "A path on your website or another site's host; null when unknown."
+					}
+				}
+			},
+			"Notice": {
+				"type": "object",
+				"description": "The notice bar while it shows.",
+				"required": [
+					"text",
+					"linkText",
+					"linkUrl",
+					"dismissible"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"text": {
+						"type": "string",
+						"minLength": 1
+					},
+					"linkText": {
+						"type": "string",
+						"description": "'' without a link."
+					},
+					"linkUrl": {
+						"type": [
+							"string",
+							"null"
+						],
+						"description": "An https address or a path on your website; null when the setting is neither."
+					},
+					"dismissible": {
+						"type": "boolean",
+						"description": "Visitors may close it."
+					}
+				}
+			},
+			"PageViewData": {
+				"type": "object",
+				"description": "page_view. A visit's first page also keeps where the visit came from, the device and the country.",
+				"required": [
+					"visit"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"visit": {
+						"type": "boolean",
+						"description": "It starts a visit."
+					},
+					"source": {
+						"type": "string",
+						"description": "A visit's first page: the campaign source, the referring host, or (direct)."
+					},
+					"medium": {
+						"type": "string",
+						"description": "A visit's first page: the campaign medium ('' without one)."
+					},
+					"campaign": {
+						"type": "string",
+						"description": "A visit's first page: the campaign name ('' without one)."
+					},
+					"device": {
+						"type": "string",
+						"enum": [
+							"mobile",
+							"tablet",
+							"desktop"
+						],
+						"description": "A visit's first page."
+					},
+					"country": {
+						"type": "string",
+						"description": "A visit's first page: two letters from your host's request header, or (unknown)."
+					},
+					"page": {
+						"type": "integer",
+						"minimum": 1,
+						"maximum": 10000,
+						"description": "With a session: which page of the session it is."
+					}
+				}
+			},
 			"Problem": {
 				"type": "object",
 				"description": "An error (RFC 9457, application/problem+json). The last segment of type is a stable code, for example validation_failed.",
@@ -3158,6 +4647,679 @@
 									"type": "string"
 								}
 							}
+						}
+					}
+				}
+			},
+			"Report": {
+				"type": "object",
+				"description": "The analytics of a range of days, from the daily totals. Parts of a feature that is off, and the session parts without the sessions detail, are null.",
+				"required": [
+					"from",
+					"to",
+					"timeZone",
+					"totals",
+					"days",
+					"detail",
+					"pages",
+					"sources",
+					"devices",
+					"countries",
+					"sessions",
+					"browsers",
+					"systems",
+					"cities",
+					"live",
+					"journeys",
+					"funnel",
+					"searches",
+					"emptySearches",
+					"notFound",
+					"notFoundFrom",
+					"vitalPages",
+					"vitals"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"from": {
+						"type": "string",
+						"format": "date"
+					},
+					"to": {
+						"type": "string",
+						"format": "date"
+					},
+					"timeZone": {
+						"type": "string",
+						"description": "The zone of the days: business.json timeZone, else UTC."
+					},
+					"totals": {
+						"type": "object",
+						"required": [
+							"visits",
+							"pageViews"
+						],
+						"additionalProperties": false,
+						"properties": {
+							"visits": {
+								"type": "integer",
+								"minimum": 0
+							},
+							"pageViews": {
+								"type": "integer",
+								"minimum": 0
+							}
+						}
+					},
+					"days": {
+						"type": "array",
+						"description": "Every day of the range, in order.",
+						"items": {
+							"type": "object",
+							"required": [
+								"day",
+								"visits",
+								"pageViews"
+							],
+							"additionalProperties": false,
+							"properties": {
+								"day": {
+									"type": "string",
+									"format": "date"
+								},
+								"visits": {
+									"type": "integer",
+									"minimum": 0
+								},
+								"pageViews": {
+									"type": "integer",
+									"minimum": 0
+								}
+							}
+						}
+					},
+					"detail": {
+						"type": "string",
+						"enum": [
+							"anonymous",
+							"sessions"
+						],
+						"description": "The Detail setting of Visitor analytics."
+					},
+					"pages": {
+						"type": "array",
+						"description": "Page views by path, most first.",
+						"maxItems": 100,
+						"items": {
+							"$ref": "#/components/schemas/TopRow"
+						}
+					},
+					"sources": {
+						"type": "array",
+						"description": "Visits by source (a host, a campaign source or (direct)), most first.",
+						"maxItems": 100,
+						"items": {
+							"$ref": "#/components/schemas/TopRow"
+						}
+					},
+					"devices": {
+						"type": "array",
+						"description": "Visits by device class (mobile, tablet, desktop), most first.",
+						"maxItems": 100,
+						"items": {
+							"$ref": "#/components/schemas/TopRow"
+						}
+					},
+					"countries": {
+						"type": "array",
+						"description": "Visits by country (two letters, or (unknown)), most first.",
+						"maxItems": 100,
+						"items": {
+							"$ref": "#/components/schemas/TopRow"
+						}
+					},
+					"sessions": {
+						"type": [
+							"object",
+							"null"
+						],
+						"description": "Sessions detail only.",
+						"required": [
+							"count",
+							"bounces",
+							"bounceRate",
+							"averageDuration",
+							"pagesPerSession"
+						],
+						"additionalProperties": false,
+						"properties": {
+							"count": {
+								"type": "integer",
+								"minimum": 0
+							},
+							"bounces": {
+								"type": "integer",
+								"minimum": 0,
+								"description": "Sessions that saw one page."
+							},
+							"bounceRate": {
+								"type": [
+									"number",
+									"null"
+								],
+								"minimum": 0,
+								"maximum": 100,
+								"description": "Percent, one decimal (null without sessions)."
+							},
+							"averageDuration": {
+								"type": [
+									"integer",
+									"null"
+								],
+								"minimum": 0,
+								"description": "Seconds from a session's first to its last page (null without sessions)."
+							},
+							"pagesPerSession": {
+								"type": [
+									"number",
+									"null"
+								],
+								"minimum": 0,
+								"description": "One decimal (null without sessions)."
+							}
+						}
+					},
+					"browsers": {
+						"type": [
+							"array",
+							"null"
+						],
+						"description": "Sessions detail only: sessions by browser family, most first.",
+						"maxItems": 100,
+						"items": {
+							"$ref": "#/components/schemas/TopRow"
+						}
+					},
+					"systems": {
+						"type": [
+							"array",
+							"null"
+						],
+						"description": "Sessions detail only: sessions by system family, most first.",
+						"maxItems": 100,
+						"items": {
+							"$ref": "#/components/schemas/TopRow"
+						}
+					},
+					"cities": {
+						"type": [
+							"array",
+							"null"
+						],
+						"description": "Sessions detail only: sessions by city (for example Lahore, PK), most first.",
+						"maxItems": 100,
+						"items": {
+							"$ref": "#/components/schemas/TopRow"
+						}
+					},
+					"live": {
+						"type": [
+							"object",
+							"null"
+						],
+						"description": "Sessions detail only: sessions with an event in the last 5 minutes, judged when you ask.",
+						"required": [
+							"visitors",
+							"pages"
+						],
+						"additionalProperties": false,
+						"properties": {
+							"visitors": {
+								"type": "integer",
+								"minimum": 0
+							},
+							"pages": {
+								"type": "array",
+								"description": "The page each live session last viewed, most first.",
+								"maxItems": 10,
+								"items": {
+									"$ref": "#/components/schemas/TopRow"
+								}
+							}
+						}
+					},
+					"journeys": {
+						"type": [
+							"array",
+							"null"
+						],
+						"description": "Sessions detail only: the 20 latest sessions of the range, newest first.",
+						"maxItems": 20,
+						"items": {
+							"$ref": "#/components/schemas/Journey"
+						}
+					},
+					"funnel": {
+						"type": [
+							"object",
+							"null"
+						],
+						"description": "Conversion funnel only.",
+						"required": [
+							"steps",
+							"revenue"
+						],
+						"additionalProperties": false,
+						"properties": {
+							"steps": {
+								"type": "array",
+								"description": "The four steps in order.",
+								"minItems": 4,
+								"maxItems": 4,
+								"items": {
+									"type": "object",
+									"required": [
+										"step",
+										"count"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"step": {
+											"type": "string",
+											"enum": [
+												"view_item",
+												"add_to_cart",
+												"begin_checkout",
+												"purchase"
+											]
+										},
+										"count": {
+											"type": "integer",
+											"minimum": 0
+										}
+									}
+								}
+							},
+							"revenue": {
+								"type": "array",
+								"description": "Purchases per currency.",
+								"items": {
+									"type": "object",
+									"required": [
+										"currency",
+										"value",
+										"orders"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"currency": {
+											"type": "string",
+											"pattern": "^[A-Z]{3}$"
+										},
+										"value": {
+											"type": "number",
+											"description": "Minor units (a whole number unless an import brought fractions)."
+										},
+										"orders": {
+											"type": "integer",
+											"minimum": 0
+										}
+									}
+								}
+							}
+						}
+					},
+					"searches": {
+						"type": [
+							"array",
+							"null"
+						],
+						"description": "Searches and 404s only: site searches by term, most first.",
+						"maxItems": 100,
+						"items": {
+							"$ref": "#/components/schemas/TopRow"
+						}
+					},
+					"emptySearches": {
+						"type": [
+							"array",
+							"null"
+						],
+						"description": "Searches and 404s only: searches that found nothing, by term.",
+						"maxItems": 100,
+						"items": {
+							"$ref": "#/components/schemas/TopRow"
+						}
+					},
+					"notFound": {
+						"type": [
+							"array",
+							"null"
+						],
+						"description": "Searches and 404s only: missing pages by path.",
+						"maxItems": 100,
+						"items": {
+							"$ref": "#/components/schemas/TopRow"
+						}
+					},
+					"notFoundFrom": {
+						"type": [
+							"array",
+							"null"
+						],
+						"description": "Sessions detail and Searches and 404s only: each missing page and where its visitors came from, most first.",
+						"maxItems": 100,
+						"items": {
+							"type": "object",
+							"required": [
+								"path",
+								"from",
+								"count"
+							],
+							"additionalProperties": false,
+							"properties": {
+								"path": {
+									"type": "string"
+								},
+								"from": {
+									"type": "string",
+									"description": "A path on your website, another site's host, or (direct)."
+								},
+								"count": {
+									"type": "integer",
+									"minimum": 0
+								}
+							}
+						}
+					},
+					"vitalPages": {
+						"type": [
+							"array",
+							"null"
+						],
+						"description": "Sessions detail and Web Vitals only: each page's averages, the slowest largest paint first.",
+						"maxItems": 100,
+						"items": {
+							"type": "object",
+							"required": [
+								"path",
+								"samples",
+								"averages"
+							],
+							"additionalProperties": false,
+							"properties": {
+								"path": {
+									"type": "string"
+								},
+								"samples": {
+									"type": "integer",
+									"minimum": 0,
+									"description": "Measurements of every vital on the page."
+								},
+								"averages": {
+									"type": "object",
+									"description": "Milliseconds (CLS × 1000); null for a vital not measured there.",
+									"required": [
+										"LCP",
+										"INP",
+										"CLS",
+										"FCP",
+										"TTFB"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"LCP": {
+											"type": [
+												"integer",
+												"null"
+											]
+										},
+										"INP": {
+											"type": [
+												"integer",
+												"null"
+											]
+										},
+										"CLS": {
+											"type": [
+												"integer",
+												"null"
+											]
+										},
+										"FCP": {
+											"type": [
+												"integer",
+												"null"
+											]
+										},
+										"TTFB": {
+											"type": [
+												"integer",
+												"null"
+											]
+										}
+									}
+								}
+							}
+						}
+					},
+					"vitals": {
+						"type": [
+							"array",
+							"null"
+						],
+						"description": "Web Vitals only: each vital, in the order LCP, INP, CLS, FCP, TTFB.",
+						"minItems": 5,
+						"maxItems": 5,
+						"items": {
+							"type": "object",
+							"required": [
+								"name",
+								"count",
+								"average",
+								"good",
+								"needsImprovement",
+								"poor"
+							],
+							"additionalProperties": false,
+							"properties": {
+								"name": {
+									"type": "string",
+									"enum": [
+										"LCP",
+										"INP",
+										"CLS",
+										"FCP",
+										"TTFB"
+									]
+								},
+								"count": {
+									"type": "integer",
+									"minimum": 0
+								},
+								"average": {
+									"type": [
+										"integer",
+										"null"
+									],
+									"description": "Milliseconds (CLS × 1000); null without measurements."
+								},
+								"good": {
+									"type": "integer",
+									"minimum": 0
+								},
+								"needsImprovement": {
+									"type": "integer",
+									"minimum": 0
+								},
+								"poor": {
+									"type": "integer",
+									"minimum": 0
+								}
+							}
+						}
+					}
+				}
+			},
+			"SearchData": {
+				"type": "object",
+				"description": "search.",
+				"required": [
+					"term",
+					"results"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"term": {
+						"type": "string",
+						"minLength": 1,
+						"maxLength": 100,
+						"description": "Lower case."
+					},
+					"results": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 0,
+						"description": "null when not sent."
+					}
+				}
+			},
+			"SeoCheck": {
+				"type": "object",
+				"description": "One check, with its title and fix steps from your widget texts (Settings → Texts).",
+				"required": [
+					"id",
+					"status",
+					"page",
+					"detail",
+					"title",
+					"fix"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"id": {
+						"type": "string",
+						"enum": [
+							"robots_txt",
+							"robots_blocks",
+							"sitemap",
+							"verification",
+							"reachable",
+							"noindex",
+							"title",
+							"description",
+							"h1",
+							"canonical",
+							"lang",
+							"viewport",
+							"social",
+							"image_alt",
+							"structured_data"
+						],
+						"description": "robots_txt, robots_blocks, sitemap and verification check the whole site; the others each page."
+					},
+					"status": {
+						"type": "string",
+						"enum": [
+							"pass",
+							"warn",
+							"fail"
+						],
+						"description": "warn: to improve; fail: to fix."
+					},
+					"page": {
+						"type": [
+							"string",
+							"null"
+						],
+						"description": "The address checked (robots.txt, the sitemap or the page)."
+					},
+					"detail": {
+						"type": "object",
+						"description": "The figures the fix steps name.",
+						"additionalProperties": false,
+						"properties": {
+							"status": {
+								"type": "integer",
+								"minimum": 0,
+								"description": "reachable, robots_txt, sitemap: the HTTP status it answered (0: no answer)."
+							},
+							"length": {
+								"type": "integer",
+								"minimum": 0,
+								"description": "title, description: its length in characters."
+							},
+							"count": {
+								"type": "integer",
+								"minimum": 0,
+								"description": "h1, image_alt, structured_data, verification: how many."
+							}
+						}
+					},
+					"title": {
+						"type": "string"
+					},
+					"fix": {
+						"type": "string",
+						"description": "The steps to fix it ('' when it passed)."
+					}
+				}
+			},
+			"SeoReport": {
+				"type": "object",
+				"description": "The SEO checklist of the pages read just now.",
+				"required": [
+					"checkedAt",
+					"summary",
+					"checks",
+					"pages"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"checkedAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"summary": {
+						"type": "object",
+						"required": [
+							"pass",
+							"warn",
+							"fail"
+						],
+						"additionalProperties": false,
+						"properties": {
+							"pass": {
+								"type": "integer",
+								"minimum": 0
+							},
+							"warn": {
+								"type": "integer",
+								"minimum": 0
+							},
+							"fail": {
+								"type": "integer",
+								"minimum": 0
+							}
+						}
+					},
+					"checks": {
+						"type": "array",
+						"description": "The site's four checks, then each page's.",
+						"items": {
+							"$ref": "#/components/schemas/SeoCheck"
+						}
+					},
+					"pages": {
+						"type": "array",
+						"description": "The pages read, the home page first.",
+						"minItems": 1,
+						"maxItems": 20,
+						"items": {
+							"type": "string",
+							"format": "uri"
 						}
 					}
 				}
@@ -3270,6 +5432,43 @@
 					}
 				}
 			},
+			"TopRow": {
+				"type": "object",
+				"required": [
+					"key",
+					"count"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"key": {
+						"type": "string"
+					},
+					"count": {
+						"type": "integer",
+						"minimum": 0
+					}
+				}
+			},
+			"TotalsKey": {
+				"type": "object",
+				"description": "The key of an imported day.",
+				"required": [
+					"day",
+					"part"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"day": {
+						"type": "string",
+						"format": "date"
+					},
+					"part": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "0 for an imported day."
+					}
+				}
+			},
 			"ValueSource": {
 				"type": "string",
 				"enum": [
@@ -3278,6 +5477,43 @@
 					"built-in"
 				],
 				"description": "Where a value comes from: saved for this website, the global default, or built in."
+			},
+			"VitalData": {
+				"type": "object",
+				"description": "vital.",
+				"required": [
+					"name",
+					"value",
+					"rating"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"name": {
+						"type": "string",
+						"enum": [
+							"LCP",
+							"INP",
+							"CLS",
+							"FCP",
+							"TTFB"
+						]
+					},
+					"value": {
+						"type": "integer",
+						"minimum": 0,
+						"maximum": 600000,
+						"description": "Milliseconds (CLS × 1000)."
+					},
+					"rating": {
+						"type": "string",
+						"enum": [
+							"good",
+							"needs_improvement",
+							"poor"
+						],
+						"description": "By web.dev's thresholds."
+					}
+				}
 			}
 		}
 	}

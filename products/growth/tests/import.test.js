@@ -8,7 +8,7 @@
 import { afterAll, describe, expect, it } from 'vitest';
 import { checkDay, isDay } from '../core/imports.js';
 import { createRoutes } from '../server/routes.js';
-import { ALL, BASE, dailyRows, setup } from './helpers.js';
+import { ALL, BASE, checkAnswer, dailyRows, setup } from './helpers.js';
 
 /** @type {Array<Awaited<ReturnType<typeof setup>>>} */
 const systems = [];
@@ -32,6 +32,7 @@ const start = async (on = ALL) => {
 				...(body === undefined ? {} : { body }),
 			}),
 		);
+		await checkAnswer(method, path, response);
 		const text = await response.text();
 		return { status: response.status, json: text ? JSON.parse(text) : null };
 	};

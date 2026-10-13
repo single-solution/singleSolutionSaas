@@ -3,10 +3,14 @@
  * two tokens, dashboard sessions, a merchant database on the run's MongoDB (`TEST_MONGODB_URI`) and a faked web: the
  * merchant's site (pages, robots.txt, sitemap) and the IndexNow endpoint are answered in process (no real network call
  * is ever made). Every command sent to the merchant database is kept, so a test can count the operations of a request.
+ * Every answer `call()` sees is checked against `schemas/api.json` and the kit's own routes: a test fails when an
+ * answer does not fit its description.
  * @module
  */
 import { MongoClient } from 'mongodb';
-import { createFakePortal, createMemoryStore, createNetwork } from '@ss/app-kit/testing';
+import { validateValue } from '@ss/app-kit/api';
+import { apiChecker, createFakePortal, createMemoryStore, createNetwork } from '@ss/app-kit/testing';
+import apiJson from '../schemas/api.json' with { type: 'json' };
 import { createProductInstance, manifest } from '../adapters/product.js';
 import { keyOf } from '../adapters/store.js';
 import { createRoutes } from '../server/routes.js';
@@ -19,6 +23,34 @@ const SECRET = 'connect-secret-0123456789-abcdefghij';
 const ENCRYPTION_KEY = 'encryption-key-0123456789-abcdefghij';
 
 export const ALL = manifest.features.map((feature) => feature.key);
+
+/** The API description every answer is checked against. */
+const API = apiChecker(apiJson);
+
+/**
+ * Check an answer against `schemas/api.json` and the kit's own routes (throws when it does not fit). Only a JSON answer
+ * has a body (robots.txt and the IndexNow key are text). A JSON `null` (`GET /v1/notice` while no notice shows) is
+ * checked against the described answer here, as the checker reads null as no body.
+ * @param {string} method
+ * @param {string} path
+ * @param {Response} response
+ */
+export const checkAnswer = async (method, path, response) => {
+	const text = /json/.test(response.headers.get('content-type') ?? '') ? await response.clone().text() : '';
+	/** @type {unknown} */
+	const body = text ? JSON.parse(text) : null;
+	if (text.trim() === 'null' && response.status >= 200 && response.status < 300) {
+		const key = API.described(method, path);
+		const entry = key === null ? undefined : /** @type {Record<string, { response?: object }>} */ (apiJson)[key];
+		const problems = entry?.response
+			? validateValue(entry.response, null, { schemas: apiJson.$schemas })
+			: [{ path: '', message: 'answered null, but the description has no response' }];
+		if (problems.length > 0)
+			throw new Error(`the answer does not fit schemas/api.json:\n${method} ${path}: ${problems[0]?.message}`);
+		return;
+	}
+	API.assert({ method, path, status: response.status, body });
+};
 
 let databases = 0;
 
@@ -167,6 +199,7 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 			}),
 		);
 		while (tasks.length > 0) await /** @type {() => Promise<unknown>} */ (tasks.shift())();
+		await checkAnswer(method, path, response);
 		return response;
 	};
 
