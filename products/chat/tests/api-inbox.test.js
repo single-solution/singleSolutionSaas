@@ -159,6 +159,14 @@ describe('inbox', () => {
 		).toBe(202);
 		expect((await sys.admin(ticket, 'POST', `/v1/admin/conversations/${id}/rating-request`)).status).toBe(204);
 		expect((await ann('GET', '/v1/chat')).json.conversation.ratingRequested).toBe(true);
+		// the same from the merchant's server
+		sys.ai({ text: 'Asked about a parcel.' });
+		expect((await sys.serverCall('POST', `/v1/conversations/${id}/summary`)).json).toEqual({
+			summary: 'Asked about a parcel.',
+		});
+		const copy = await sys.serverCall('POST', `/v1/conversations/${id}/transcript`, { email: 'ann@example.com' });
+		expect([copy.status, copy.json]).toEqual([202, { sent: true }]);
+		expect((await sys.serverCall('POST', `/v1/conversations/${id}/rating-request`)).status).toBe(204);
 		const resolved = await sys.admin(ticket, 'PATCH', `/v1/admin/conversations/${id}`, { status: 'resolved' });
 		expect(resolved.json.conversation.status).toBe('resolved');
 		expect((await sys.admin(ticket, 'PATCH', `/v1/admin/conversations/${id}`, { status: 'closed' })).status).toBe(422);
@@ -261,6 +269,12 @@ describe('knowledge and reports', () => {
 		).toBe(404);
 		expect((await sys.admin(ticket, 'GET', '/v1/admin/knowledge/entries?q=care')).json.items).toHaveLength(1);
 		expect((await sys.serverCall('GET', '/v1/knowledge/entries?q=nothing')).json.items).toEqual([]);
+		const changed = await sys.serverCall('PUT', `/v1/knowledge/entries/${eid}`, {
+			kind: 'faq',
+			title: 'How do I wash it?',
+			text: 'Cold.',
+		});
+		expect(changed.json.entry).toMatchObject({ id: eid, kind: 'faq', title: 'How do I wash it?' });
 		expect((await sys.admin(ticket, 'DELETE', `/v1/admin/knowledge/entries/${eid}`)).status).toBe(204);
 		expect((await sys.admin(ticket, 'DELETE', `/v1/admin/knowledge/entries/${eid}`)).status).toBe(404);
 
@@ -278,6 +292,9 @@ describe('knowledge and reports', () => {
 		const again = await sys.serverCall('POST', `/v1/knowledge/pages/${page.json.page.id}/fetch`);
 		expect(again.json.page).toMatchObject({ status: 'ok', title: 'Back' });
 		expect((await sys.serverCall('GET', '/v1/knowledge/pages')).json.items).toHaveLength(1);
+		const fetched = await sys.admin(ticket, 'POST', `/v1/admin/knowledge/pages/${page.json.page.id}/fetch`);
+		expect(fetched.json.page).toMatchObject({ status: 'ok', error: null });
+		expect((await sys.admin(ticket, 'GET', '/v1/admin/knowledge/pages')).json.items).toEqual([fetched.json.page]);
 		expect((await sys.admin(ticket, 'DELETE', `/v1/admin/knowledge/pages/${page.json.page.id}`)).status).toBe(204);
 		expect((await sys.admin(ticket, 'DELETE', `/v1/admin/knowledge/pages/${page.json.page.id}`)).status).toBe(404);
 		expect((await sys.admin(ticket, 'POST', '/v1/admin/knowledge/pages/page_nope/fetch')).status).toBe(404);

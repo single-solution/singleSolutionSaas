@@ -3,12 +3,17 @@
  * tokens, dashboard sessions, a merchant database on the run's MongoDB (`TEST_MONGODB_URI`) and fakes for every outside
  * service: the AI provider (OpenAI-compatible answers queued by the test), Notifications (records what Chat sends), the
  * Accounts double (sign-ins and public keys), Ecommerce (answers set per test with `responders`), S3 storage, the merchant's tool and booking endpoints, and the website
- * (business.json and pages). No real network call is ever made.
+ * (business.json and pages). No real network call is ever made. Every answer `call()` sees is checked against
+ * `schemas/api.json` and the kit's own routes: a test fails when an answer does not fit its description.
  * @module
  */
-import { createAccountsDouble, createFakePortal, createMemoryStore, createNetwork } from '@ss/app-kit/testing';
+import { apiChecker, createAccountsDouble, createFakePortal, createMemoryStore, createNetwork } from '@ss/app-kit/testing';
+import apiJson from '../schemas/api.json' with { type: 'json' };
 import { createProductInstance, manifest } from '../adapters/product.js';
 import { createRoutes } from '../server/routes.js';
+
+/** The API description every answer is checked against (tests that send their own requests check with it too). */
+export const API = apiChecker(apiJson);
 
 export const BASE = 'https://chat.example.dev';
 const DOMAIN = 'shop.example.com';
@@ -181,6 +186,7 @@ export const setup = async ({ start = Date.parse('2026-10-05T10:00:00Z') } = {})
 		} catch {
 			json = text;
 		}
+		API.assert({ method, path, status: response.status, body: json });
 		return { status: response.status, headers: response.headers, json, text };
 	};
 

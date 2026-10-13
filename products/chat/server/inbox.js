@@ -482,7 +482,7 @@ export const createInbox = (product, service, reply) => {
 			return {
 				id: m.id,
 				name: m.name,
-				email: m.email,
+				email: m.email ?? null,
 				presence: now() - checkedIn > PRESENCE_MS ? 'offline' : (m.presence ?? 'online'),
 				maxChats: max,
 				open: open.get(m.id) ?? 0,
@@ -516,7 +516,9 @@ export const createInbox = (product, service, reply) => {
 			label: updated.name,
 			detail: `Max chats: ${max ?? 'default'}`,
 		});
-		return { staff: { id: updated.id, name: updated.name, email: updated.email, maxChats: updated.maxChats ?? null } };
+		return {
+			staff: { id: updated.id, name: updated.name, email: updated.email ?? null, maxChats: updated.maxChats ?? null },
+		};
 	};
 
 	// -------------------------------------------------------------------------------------------- saved replies
@@ -570,8 +572,7 @@ export const createInbox = (product, service, reply) => {
 			after: /** @type {[string, string] | null} */ (page.after),
 			limit: page.fetchLimit,
 		});
-		const items = rows.map((lead) => ({ ...lead, createdAt: new Date(lead.createdAt).toISOString() }));
-		return page.respond(items, (lead) => [lead.createdAt, lead.id]);
+		return page.respond(rows.map(leadView), (lead) => [lead.createdAt, lead.id]);
 	};
 
 	/** @param {any} ctx */
@@ -579,7 +580,7 @@ export const createInbox = (product, service, reply) => {
 		const s = await service.site(ctx);
 		const row = await s.store.leads.get(String(ctx.params.id));
 		if (!row) throw problem('not_found', 'No such lead.');
-		return { lead: { ...row, createdAt: new Date(row.createdAt).toISOString() } };
+		return { lead: leadView(row) };
 	};
 
 	return Object.freeze({
@@ -610,6 +611,22 @@ export const createInbox = (product, service, reply) => {
 		lead,
 	});
 };
+
+/**
+ * A lead as the API answers it (the stored record's own fields only).
+ * @param {import('../adapters/store.js').LeadRecord} lead
+ */
+const leadView = (lead) => ({
+	id: lead.id,
+	conversationId: lead.conversationId,
+	name: lead.name,
+	email: lead.email,
+	phone: lead.phone,
+	message: lead.message,
+	custom: lead.custom,
+	page: lead.page,
+	createdAt: new Date(lead.createdAt).toISOString(),
+});
 
 /**
  * The conversation fields of a pause or resume: who, when and why (C11); a resume clears them and hands a chat that

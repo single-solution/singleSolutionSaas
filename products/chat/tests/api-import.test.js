@@ -7,7 +7,7 @@
 import { createHash } from 'node:crypto';
 import { afterAll, describe, expect, it } from 'vitest';
 import { createRoutes } from '../server/routes.js';
-import { BASE, ready } from './helpers.js';
+import { API, BASE, ready } from './helpers.js';
 
 /** @type {Array<Awaited<ReturnType<typeof ready>>>} */
 const systems = [];
@@ -126,7 +126,9 @@ const start = async (on = ON) => {
 			}),
 		);
 		const text = await response.text();
-		return { status: response.status, json: text ? JSON.parse(text) : null };
+		const json = text ? JSON.parse(text) : null;
+		API.assert({ method, path, status: response.status, body: json });
+		return { status: response.status, json };
 	};
 	return {
 		...sys,

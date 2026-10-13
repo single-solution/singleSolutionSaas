@@ -1,0 +1,3572 @@
+{
+	"$schemas": {
+		"Attachment": {
+			"type": "object",
+			"description": "A file in a message.",
+			"required": ["name", "type", "size", "url", "inline"],
+			"additionalProperties": false,
+			"properties": {
+				"name": {
+					"type": "string",
+					"maxLength": 120
+				},
+				"type": {
+					"type": "string",
+					"enum": [
+						"image/jpeg",
+						"image/png",
+						"image/webp",
+						"image/gif",
+						"application/pdf",
+						"application/msword",
+						"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+						"application/vnd.ms-excel",
+						"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+						"text/plain"
+					]
+				},
+				"size": {
+					"type": "integer",
+					"minimum": 1,
+					"description": "Bytes."
+				},
+				"url": {
+					"type": ["string", "null"],
+					"format": "uri",
+					"description": "Chat's own link (/v1/files/…), which sends the browser on to a fresh 10-minute link in your storage each time, so it keeps working; null while Attachments is off or no storage is connected."
+				},
+				"inline": {
+					"type": "boolean",
+					"description": "Opens in the browser: images, and PDFs with the setting Open PDFs in the browser; anything else is a download."
+				}
+			}
+		},
+		"AttachmentInput": {
+			"type": "object",
+			"description": "A file uploaded first (the uploads route answers it as attachment): send it as it came.",
+			"required": ["key", "name", "type", "size"],
+			"properties": {
+				"key": {
+					"type": "string",
+					"description": "attachment.key of the upload's answer."
+				},
+				"name": {
+					"type": "string",
+					"description": "Cut to 120 characters; \\ / \" and line breaks become _."
+				},
+				"type": {
+					"type": "string",
+					"enum": [
+						"image/jpeg",
+						"image/png",
+						"image/webp",
+						"image/gif",
+						"application/pdf",
+						"application/msword",
+						"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+						"application/vnd.ms-excel",
+						"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+						"text/plain"
+					]
+				},
+				"size": {
+					"type": "integer",
+					"minimum": 1,
+					"description": "Bytes."
+				}
+			}
+		},
+		"Chat": {
+			"type": "object",
+			"description": "The visitor's chat.",
+			"required": ["conversation", "visitor", "guestLimit", "guestMessagesLeft", "lastSeq"],
+			"additionalProperties": false,
+			"properties": {
+				"conversation": {
+					"oneOf": [
+						{
+							"$ref": "#/components/schemas/ChatConversation"
+						},
+						{
+							"type": "null"
+						}
+					]
+				},
+				"visitor": {
+					"type": "object",
+					"required": ["kind", "name", "email"],
+					"additionalProperties": false,
+					"properties": {
+						"kind": {
+							"type": "string",
+							"enum": ["user", "guest", "none"],
+							"description": "user: a verified Accounts sign-in; guest: the SS-Guest key; none: neither yet."
+						},
+						"name": {
+							"type": ["string", "null"]
+						},
+						"email": {
+							"type": ["string", "null"]
+						}
+					}
+				},
+				"guestLimit": {
+					"oneOf": [
+						{
+							"type": "object",
+							"required": ["limit", "used"],
+							"additionalProperties": false,
+							"properties": {
+								"limit": {
+									"type": "integer",
+									"minimum": 1
+								},
+								"used": {
+									"type": "integer",
+									"minimum": 0
+								}
+							}
+						},
+						{
+							"type": "null"
+						}
+					],
+					"description": "A guest's message limit and the messages used (Guest chat with a limit); null otherwise."
+				},
+				"guestMessagesLeft": {
+					"type": ["integer", "null"],
+					"minimum": 0
+				},
+				"lastSeq": {
+					"type": "integer",
+					"minimum": 0,
+					"description": "The number of the conversation's last message (0: none)."
+				}
+			}
+		},
+		"ChatAnswer": {
+			"type": "object",
+			"required": ["chat"],
+			"additionalProperties": false,
+			"properties": {
+				"chat": {
+					"$ref": "#/components/schemas/Chat"
+				}
+			}
+		},
+		"ChatConversation": {
+			"type": "object",
+			"description": "The visitor's conversation.",
+			"required": [
+				"id",
+				"status",
+				"waiting",
+				"unread",
+				"aiPending",
+				"staffSeenSeq",
+				"paused",
+				"queuePosition",
+				"officeHours",
+				"rating",
+				"ratingRequested",
+				"flow",
+				"contactNeeded",
+				"createdAt",
+				"lastMessageAt"
+			],
+			"additionalProperties": false,
+			"properties": {
+				"id": {
+					"type": "string",
+					"pattern": "^conv_[0-9a-z]{10,64}$"
+				},
+				"status": {
+					"type": "string",
+					"enum": ["open", "awaiting_visitor", "resolved"],
+					"description": "A visitor message reopens a resolved conversation."
+				},
+				"waiting": {
+					"type": "boolean",
+					"description": "Waiting for a person (handed off): the AI stops until staff reply or hand it back."
+				},
+				"unread": {
+					"type": "integer",
+					"minimum": 0,
+					"description": "Replies the visitor has not seen (POST /v1/chat/read clears it)."
+				},
+				"aiPending": {
+					"type": "boolean",
+					"description": "An AI reply is being written (with Typing indicator on; false otherwise): check every 3 s for up to 45 s. A reply pending for 2 minutes shows false, and the visitor's next check starts it once more."
+				},
+				"staffSeenSeq": {
+					"type": ["integer", "null"],
+					"minimum": 0,
+					"description": "The last message staff saw (with Read receipts on; null otherwise)."
+				},
+				"paused": {
+					"type": "boolean",
+					"description": "Staff paused the AI, with the setting that shows visitors the paused notice."
+				},
+				"queuePosition": {
+					"type": ["integer", "null"],
+					"minimum": 1,
+					"description": "The visitor's place among the chats waiting for a person (Staff presence and queue position, with the setting on); null otherwise."
+				},
+				"officeHours": {
+					"oneOf": [
+						{
+							"type": "object",
+							"required": ["open", "backAt"],
+							"additionalProperties": false,
+							"properties": {
+								"open": {
+									"type": "boolean"
+								},
+								"backAt": {
+									"type": ["string", "null"],
+									"format": "date-time",
+									"description": "When staff are back (closed); null when open or never."
+								}
+							}
+						},
+						{
+							"type": "null"
+						}
+					],
+					"description": "With Human handoff on; null otherwise."
+				},
+				"rating": {
+					"oneOf": [
+						{
+							"$ref": "#/components/schemas/Rating"
+						},
+						{
+							"type": "null"
+						}
+					]
+				},
+				"ratingRequested": {
+					"type": "boolean",
+					"description": "Ask the visitor for a rating now."
+				},
+				"flow": {
+					"oneOf": [
+						{
+							"type": "object",
+							"required": ["id", "step"],
+							"additionalProperties": false,
+							"properties": {
+								"id": {
+									"type": "string"
+								},
+								"step": {
+									"oneOf": [
+										{
+											"$ref": "#/components/schemas/FlowStep"
+										},
+										{
+											"type": "null"
+										}
+									]
+								}
+							}
+						},
+						{
+							"type": "null"
+						}
+					],
+					"description": "The running flow and the step waiting for an answer (POST /v1/chat/flow); null when none runs."
+				},
+				"contactNeeded": {
+					"type": "boolean",
+					"description": "A guest waiting for a person left no e-mail or phone: ask for them (POST /v1/chat/contact)."
+				},
+				"createdAt": {
+					"type": "string",
+					"format": "date-time"
+				},
+				"lastMessageAt": {
+					"type": "string",
+					"format": "date-time"
+				}
+			}
+		},
+		"Conversation": {
+			"type": "object",
+			"description": "A conversation with what your features show of it.",
+			"required": [
+				"id",
+				"visitor",
+				"status",
+				"waiting",
+				"aiPaused",
+				"assignedTo",
+				"unread",
+				"preview",
+				"lastMessageAt",
+				"createdAt",
+				"handedOffAt",
+				"waitingSince",
+				"fields"
+			],
+			"additionalProperties": false,
+			"properties": {
+				"id": {
+					"type": "string",
+					"pattern": "^conv_[0-9a-z]{10,64}$"
+				},
+				"visitor": {
+					"$ref": "#/components/schemas/ConversationVisitor"
+				},
+				"status": {
+					"type": "string",
+					"enum": ["open", "awaiting_visitor", "resolved"],
+					"description": "A staff reply moves open to awaiting_visitor; a visitor message reopens resolved."
+				},
+				"waiting": {
+					"type": "boolean",
+					"description": "Waiting for a person (handed off)."
+				},
+				"aiPaused": {
+					"type": "boolean"
+				},
+				"aiPausedBy": {
+					"oneOf": [
+						{
+							"type": "object",
+							"required": ["kind", "id", "name"],
+							"additionalProperties": false,
+							"properties": {
+								"kind": {
+									"type": "string"
+								},
+								"id": {
+									"type": "string"
+								},
+								"name": {
+									"type": "string"
+								}
+							}
+						},
+						{
+							"type": "null"
+						}
+					],
+					"description": "While the AI is paused: who paused it."
+				},
+				"aiPausedAt": {
+					"type": ["string", "null"],
+					"format": "date-time",
+					"description": "While the AI is paused."
+				},
+				"aiPausedReason": {
+					"type": ["string", "null"],
+					"maxLength": 200,
+					"description": "While the AI is paused."
+				},
+				"assignedTo": {
+					"oneOf": [
+						{
+							"type": "object",
+							"required": ["id", "name"],
+							"additionalProperties": false,
+							"properties": {
+								"id": {
+									"type": "string"
+								},
+								"name": {
+									"type": "string"
+								}
+							}
+						},
+						{
+							"type": "null"
+						}
+					],
+					"description": "The staff member it is assigned to."
+				},
+				"unread": {
+					"type": "integer",
+					"minimum": 0,
+					"description": "Visitor messages no staff member opened."
+				},
+				"preview": {
+					"type": "string",
+					"maxLength": 140,
+					"description": "The last visible message, short."
+				},
+				"lastMessageAt": {
+					"type": "string",
+					"format": "date-time"
+				},
+				"createdAt": {
+					"type": "string",
+					"format": "date-time"
+				},
+				"visitorSeenSeq": {
+					"type": "integer",
+					"minimum": 0,
+					"description": "The last message the visitor saw (with Read receipts on)."
+				},
+				"handedOffAt": {
+					"type": ["string", "null"],
+					"format": "date-time",
+					"description": "When it was first handed to a person."
+				},
+				"waitingSince": {
+					"type": ["string", "null"],
+					"format": "date-time",
+					"description": "When the current handoff began."
+				},
+				"fields": {
+					"type": "object",
+					"additionalProperties": {
+						"type": ["string", "number", "boolean", "null"]
+					},
+					"description": "Custom field values and flow answers by key."
+				},
+				"note": {
+					"type": "string",
+					"maxLength": 4000,
+					"description": "The single note (Internal notes in the mode one note per chat)."
+				},
+				"summary": {
+					"type": ["string", "null"],
+					"maxLength": 2000,
+					"description": "The AI summary (with AI conversation summary on)."
+				},
+				"rating": {
+					"oneOf": [
+						{
+							"$ref": "#/components/schemas/Rating"
+						},
+						{
+							"type": "null"
+						}
+					],
+					"description": "With Ratings on."
+				},
+				"context": {
+					"type": "object",
+					"description": "With Conversation context panel on.",
+					"required": ["name", "email", "phone", "page", "currentPage", "device", "conversations", "shop"],
+					"additionalProperties": false,
+					"properties": {
+						"name": {
+							"type": ["string", "null"]
+						},
+						"email": {
+							"type": ["string", "null"]
+						},
+						"phone": {
+							"type": ["string", "null"]
+						},
+						"page": {
+							"oneOf": [
+								{
+									"$ref": "#/components/schemas/Page"
+								},
+								{
+									"type": "null"
+								}
+							],
+							"description": "The page the chat started on."
+						},
+						"currentPage": {
+							"oneOf": [
+								{
+									"$ref": "#/components/schemas/Page"
+								},
+								{
+									"type": "null"
+								}
+							],
+							"description": "The page of the visitor's latest message."
+						},
+						"device": {
+							"type": "string",
+							"description": "For example Phone · Safari."
+						},
+						"conversations": {
+							"type": "integer",
+							"minimum": 0,
+							"description": "The visitor's conversations."
+						},
+						"shop": {
+							"oneOf": [
+								{
+									"$ref": "#/components/schemas/ShopInfo"
+								},
+								{
+									"type": "null"
+								}
+							],
+							"description": "With the Ecommerce token pasted and a signed-in visitor; null for a guest, without the token or when Ecommerce cannot answer."
+						}
+					}
+				}
+			}
+		},
+		"ConversationAnswer": {
+			"type": "object",
+			"required": ["conversation"],
+			"additionalProperties": false,
+			"properties": {
+				"conversation": {
+					"$ref": "#/components/schemas/Conversation"
+				}
+			}
+		},
+		"ConversationPage": {
+			"type": "object",
+			"description": "One page of conversations, newest activity first.",
+			"required": ["items", "nextCursor", "hasMore", "unread"],
+			"additionalProperties": false,
+			"properties": {
+				"items": {
+					"type": "array",
+					"items": {
+						"$ref": "#/components/schemas/ConversationSummary"
+					}
+				},
+				"nextCursor": {
+					"type": ["string", "null"],
+					"description": "Pass it as cursor for the next page (null: the last page)."
+				},
+				"hasMore": {
+					"type": "boolean"
+				},
+				"unread": {
+					"type": "integer",
+					"minimum": 0,
+					"description": "Visitor messages no staff member opened, over every conversation the inbox shows."
+				}
+			}
+		},
+		"ConversationSummary": {
+			"type": "object",
+			"description": "A conversation in the inbox list.",
+			"required": [
+				"id",
+				"visitor",
+				"status",
+				"waiting",
+				"aiPaused",
+				"assignedTo",
+				"unread",
+				"preview",
+				"lastMessageAt",
+				"createdAt",
+				"handedOffAt",
+				"waitingSince"
+			],
+			"additionalProperties": false,
+			"properties": {
+				"id": {
+					"type": "string",
+					"pattern": "^conv_[0-9a-z]{10,64}$"
+				},
+				"visitor": {
+					"$ref": "#/components/schemas/ConversationVisitor"
+				},
+				"status": {
+					"type": "string",
+					"enum": ["open", "awaiting_visitor", "resolved"],
+					"description": "A staff reply moves open to awaiting_visitor; a visitor message reopens resolved."
+				},
+				"waiting": {
+					"type": "boolean",
+					"description": "Waiting for a person (handed off)."
+				},
+				"aiPaused": {
+					"type": "boolean"
+				},
+				"aiPausedBy": {
+					"oneOf": [
+						{
+							"type": "object",
+							"required": ["kind", "id", "name"],
+							"additionalProperties": false,
+							"properties": {
+								"kind": {
+									"type": "string"
+								},
+								"id": {
+									"type": "string"
+								},
+								"name": {
+									"type": "string"
+								}
+							}
+						},
+						{
+							"type": "null"
+						}
+					],
+					"description": "While the AI is paused: who paused it."
+				},
+				"aiPausedAt": {
+					"type": ["string", "null"],
+					"format": "date-time",
+					"description": "While the AI is paused."
+				},
+				"aiPausedReason": {
+					"type": ["string", "null"],
+					"maxLength": 200,
+					"description": "While the AI is paused."
+				},
+				"assignedTo": {
+					"oneOf": [
+						{
+							"type": "object",
+							"required": ["id", "name"],
+							"additionalProperties": false,
+							"properties": {
+								"id": {
+									"type": "string"
+								},
+								"name": {
+									"type": "string"
+								}
+							}
+						},
+						{
+							"type": "null"
+						}
+					],
+					"description": "The staff member it is assigned to."
+				},
+				"unread": {
+					"type": "integer",
+					"minimum": 0,
+					"description": "Visitor messages no staff member opened."
+				},
+				"preview": {
+					"type": "string",
+					"maxLength": 140,
+					"description": "The last visible message, short."
+				},
+				"lastMessageAt": {
+					"type": "string",
+					"format": "date-time"
+				},
+				"createdAt": {
+					"type": "string",
+					"format": "date-time"
+				},
+				"visitorSeenSeq": {
+					"type": "integer",
+					"minimum": 0,
+					"description": "The last message the visitor saw (with Read receipts on)."
+				},
+				"handedOffAt": {
+					"type": ["string", "null"],
+					"format": "date-time",
+					"description": "When it was first handed to a person."
+				},
+				"waitingSince": {
+					"type": ["string", "null"],
+					"format": "date-time",
+					"description": "When the current handoff began."
+				}
+			}
+		},
+		"ConversationThread": {
+			"type": "object",
+			"required": ["conversation", "messages"],
+			"additionalProperties": false,
+			"properties": {
+				"conversation": {
+					"$ref": "#/components/schemas/Conversation"
+				},
+				"messages": {
+					"type": "array",
+					"items": {
+						"$ref": "#/components/schemas/StaffMessage"
+					},
+					"description": "Oldest first; internal notes with Internal notes on."
+				},
+				"earlier": {
+					"type": "boolean",
+					"description": "Older messages exist: ask again with before=<seq of the first>. Not answered with after."
+				}
+			}
+		},
+		"ConversationVisitor": {
+			"type": "object",
+			"description": "Who the visitor is, with the contact details they left or signed in with.",
+			"required": ["kind", "id", "name", "email", "phone"],
+			"additionalProperties": false,
+			"properties": {
+				"kind": {
+					"type": "string",
+					"enum": ["guest", "user"]
+				},
+				"id": {
+					"type": "string",
+					"description": "The guest id, or the Accounts user id."
+				},
+				"name": {
+					"type": ["string", "null"]
+				},
+				"email": {
+					"type": ["string", "null"]
+				},
+				"phone": {
+					"type": ["string", "null"],
+					"description": "E.164."
+				}
+			}
+		},
+		"Entry": {
+			"type": "object",
+			"description": "A knowledge base entry.",
+			"required": ["id", "kind", "title", "text", "updatedAt"],
+			"additionalProperties": false,
+			"properties": {
+				"id": {
+					"type": "string",
+					"pattern": "^kb_[0-9a-z]{10,64}$"
+				},
+				"kind": {
+					"type": "string",
+					"enum": ["faq", "article"]
+				},
+				"title": {
+					"type": "string",
+					"maxLength": 300,
+					"description": "The question or title."
+				},
+				"text": {
+					"type": "string",
+					"maxLength": 20000,
+					"description": "The answer or text."
+				},
+				"updatedAt": {
+					"type": "string",
+					"format": "date-time"
+				}
+			}
+		},
+		"EntryAnswer": {
+			"type": "object",
+			"required": ["entry"],
+			"additionalProperties": false,
+			"properties": {
+				"entry": {
+					"$ref": "#/components/schemas/Entry"
+				}
+			}
+		},
+		"EntryInput": {
+			"type": "object",
+			"required": ["kind", "title", "text"],
+			"properties": {
+				"kind": {
+					"type": "string",
+					"enum": ["faq", "article"]
+				},
+				"title": {
+					"type": "string",
+					"minLength": 1,
+					"maxLength": 300,
+					"description": "The question or title (trimmed)."
+				},
+				"text": {
+					"type": "string",
+					"minLength": 1,
+					"maxLength": 20000,
+					"description": "The answer or text (trimmed)."
+				}
+			}
+		},
+		"EntryPage": {
+			"type": "object",
+			"description": "One page of entries, last changed first.",
+			"required": ["items", "nextCursor", "hasMore"],
+			"additionalProperties": false,
+			"properties": {
+				"items": {
+					"type": "array",
+					"items": {
+						"$ref": "#/components/schemas/Entry"
+					}
+				},
+				"nextCursor": {
+					"type": ["string", "null"],
+					"description": "Pass it as cursor for the next page (null: the last page)."
+				},
+				"hasMore": {
+					"type": "boolean"
+				}
+			}
+		},
+		"FlowStep": {
+			"oneOf": [
+				{
+					"type": "object",
+					"required": ["kind", "buttons"],
+					"additionalProperties": false,
+					"properties": {
+						"kind": {
+							"const": "question"
+						},
+						"buttons": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							},
+							"description": "Answer with one of them."
+						}
+					}
+				},
+				{
+					"type": "object",
+					"required": ["kind", "field", "type", "options"],
+					"additionalProperties": false,
+					"properties": {
+						"kind": {
+							"const": "collect"
+						},
+						"field": {
+							"type": "string",
+							"description": "name, email, phone, text, or the key of a custom field."
+						},
+						"type": {
+							"type": "string",
+							"enum": ["text", "email", "phone", "number", "yes_no", "choice"]
+						},
+						"options": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							},
+							"description": "The choices of a choice field."
+						}
+					}
+				}
+			],
+			"description": "What the running flow waits for."
+		},
+		"ImportCounts": {
+			"type": "object",
+			"required": ["staff", "guests", "conversations", "messages"],
+			"additionalProperties": false,
+			"properties": {
+				"staff": {
+					"type": "integer",
+					"minimum": 0
+				},
+				"guests": {
+					"type": "integer",
+					"minimum": 0
+				},
+				"conversations": {
+					"type": "integer",
+					"minimum": 0
+				},
+				"messages": {
+					"type": "integer",
+					"minimum": 0
+				}
+			}
+		},
+		"KnowledgePage": {
+			"type": "object",
+			"description": "A website page as knowledge.",
+			"required": ["id", "url", "title", "status", "error", "fetchedAt"],
+			"additionalProperties": false,
+			"properties": {
+				"id": {
+					"type": "string",
+					"pattern": "^page_[0-9a-z]{10,64}$"
+				},
+				"url": {
+					"type": "string",
+					"format": "uri",
+					"maxLength": 500
+				},
+				"title": {
+					"type": "string",
+					"description": "The page's title (its address until it was fetched)."
+				},
+				"status": {
+					"type": "string",
+					"enum": ["ok", "failed"]
+				},
+				"error": {
+					"type": ["string", "null"],
+					"description": "Why it could not be fetched (in English)."
+				},
+				"fetchedAt": {
+					"type": ["string", "null"],
+					"format": "date-time"
+				}
+			}
+		},
+		"KnowledgePageAnswer": {
+			"type": "object",
+			"required": ["page"],
+			"additionalProperties": false,
+			"properties": {
+				"page": {
+					"$ref": "#/components/schemas/KnowledgePage"
+				}
+			}
+		},
+		"Lead": {
+			"type": "object",
+			"description": "Contact details a visitor left (lead form, contact form, or a flow that collected an e-mail or phone).",
+			"required": ["id", "conversationId", "name", "email", "phone", "message", "custom", "page", "createdAt"],
+			"additionalProperties": false,
+			"properties": {
+				"id": {
+					"type": "string",
+					"pattern": "^lead_[0-9a-z]{10,64}$"
+				},
+				"conversationId": {
+					"type": ["string", "null"]
+				},
+				"name": {
+					"type": ["string", "null"]
+				},
+				"email": {
+					"type": ["string", "null"]
+				},
+				"phone": {
+					"type": ["string", "null"],
+					"description": "E.164."
+				},
+				"message": {
+					"type": ["string", "null"],
+					"maxLength": 2000
+				},
+				"custom": {
+					"type": "object",
+					"additionalProperties": {
+						"type": ["string", "number", "boolean"]
+					},
+					"description": "Custom field values by key."
+				},
+				"page": {
+					"oneOf": [
+						{
+							"$ref": "#/components/schemas/Page"
+						},
+						{
+							"type": "null"
+						}
+					]
+				},
+				"createdAt": {
+					"type": "string",
+					"format": "date-time"
+				}
+			}
+		},
+		"LeadPage": {
+			"type": "object",
+			"description": "One page of leads, newest first.",
+			"required": ["items", "nextCursor", "hasMore"],
+			"additionalProperties": false,
+			"properties": {
+				"items": {
+					"type": "array",
+					"items": {
+						"$ref": "#/components/schemas/Lead"
+					}
+				},
+				"nextCursor": {
+					"type": ["string", "null"],
+					"description": "Pass it as cursor for the next page (null: the last page)."
+				},
+				"hasMore": {
+					"type": "boolean"
+				}
+			}
+		},
+		"Message": {
+			"type": "object",
+			"description": "A message as the visitor sees it (never internal notes).",
+			"required": ["id", "seq", "author", "name", "text", "format", "createdAt"],
+			"additionalProperties": false,
+			"properties": {
+				"id": {
+					"type": "string",
+					"pattern": "^msg_[0-9a-z]{10,64}$"
+				},
+				"seq": {
+					"type": "integer",
+					"minimum": 1,
+					"description": "The message's number in the conversation (1, 2, 3 …): page with after and before."
+				},
+				"author": {
+					"type": "string",
+					"enum": ["visitor", "ai", "staff", "system"],
+					"description": "system: a bot message (flows, handoff, office hours, the unavailable message), signed with the bot name."
+				},
+				"name": {
+					"type": ["string", "null"],
+					"description": "The staff member's name, or the bot name; null for the visitor."
+				},
+				"text": {
+					"type": "string",
+					"description": "Visitor and staff messages have up to 4,000 characters; '' beside an attachment."
+				},
+				"format": {
+					"type": "string",
+					"enum": ["text", "markdown"],
+					"description": "AI and staff messages are markdown."
+				},
+				"buttons": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					},
+					"minItems": 1,
+					"description": "A flow question's buttons."
+				},
+				"attachment": {
+					"$ref": "#/components/schemas/Attachment"
+				},
+				"cards": {
+					"type": "array",
+					"items": {
+						"$ref": "#/components/schemas/ProductCard"
+					},
+					"minItems": 1,
+					"maxItems": 12,
+					"description": "While Product cards is on: the products the shop tools found, up to the search size setting (default 5, at most 12)."
+				},
+				"createdAt": {
+					"type": "string",
+					"format": "date-time"
+				}
+			}
+		},
+		"Page": {
+			"type": "object",
+			"description": "A page of your website a chat came from.",
+			"required": ["url", "title", "kind", "productId", "productName"],
+			"additionalProperties": false,
+			"properties": {
+				"url": {
+					"type": "string",
+					"maxLength": 500,
+					"description": "An http(s) address, or '' when none was given."
+				},
+				"title": {
+					"type": "string",
+					"maxLength": 200
+				},
+				"kind": {
+					"type": "string",
+					"enum": ["product", "category", "deals", "cart", "other"]
+				},
+				"productId": {
+					"type": ["string", "null"],
+					"maxLength": 100
+				},
+				"productName": {
+					"type": ["string", "null"],
+					"maxLength": 200
+				}
+			}
+		},
+		"PageInput": {
+			"type": "object",
+			"description": "The page the visitor is on (SSChat.setPage, or the address and title); other members are ignored. It becomes the conversation's current page, and its first page with the first message.",
+			"properties": {
+				"url": {
+					"type": "string",
+					"description": "The page's http(s) address (another address is kept as ''); cut to 500 characters."
+				},
+				"title": {
+					"type": "string",
+					"description": "Cut to 200 characters."
+				},
+				"kind": {
+					"type": "string",
+					"enum": ["product", "category", "deals", "cart", "other"],
+					"description": "Another value is kept as other."
+				},
+				"productId": {
+					"type": "string",
+					"description": "The product shown on the page; cut to 100 characters."
+				},
+				"productName": {
+					"type": "string",
+					"description": "Cut to 200 characters."
+				}
+			}
+		},
+		"ProductCard": {
+			"type": "object",
+			"description": "A product the shop tools found, shown under the AI answer (Product cards).",
+			"required": ["productId", "variantId", "name", "price", "currency", "image", "url", "inStock"],
+			"additionalProperties": false,
+			"properties": {
+				"productId": {
+					"type": "string"
+				},
+				"variantId": {
+					"type": ["string", "null"]
+				},
+				"name": {
+					"type": "string"
+				},
+				"price": {
+					"type": "integer",
+					"minimum": 0,
+					"description": "Minor units."
+				},
+				"currency": {
+					"type": "string",
+					"pattern": "^[A-Z]{3}$"
+				},
+				"image": {
+					"type": ["string", "null"],
+					"format": "uri",
+					"description": "https."
+				},
+				"url": {
+					"type": ["string", "null"],
+					"format": "uri",
+					"description": "The product page."
+				},
+				"inStock": {
+					"type": "boolean"
+				}
+			}
+		},
+		"Rating": {
+			"type": "object",
+			"description": "The visitor's rating.",
+			"required": ["score", "comment"],
+			"additionalProperties": false,
+			"properties": {
+				"score": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 5,
+					"description": "1 up to the Ratings scale (2, 3 or 5)."
+				},
+				"comment": {
+					"type": ["string", "null"],
+					"maxLength": 1000
+				}
+			}
+		},
+		"Report": {
+			"type": "object",
+			"description": "Numbers of the conversations started in a range of days.",
+			"required": [
+				"from",
+				"to",
+				"timeZone",
+				"days",
+				"conversations",
+				"visitorMessages",
+				"aiOnly",
+				"handedOff",
+				"medianFirstReplySeconds",
+				"resolved",
+				"rating",
+				"leads",
+				"aiTokens"
+			],
+			"additionalProperties": false,
+			"properties": {
+				"from": {
+					"type": "string",
+					"format": "date"
+				},
+				"to": {
+					"type": "string",
+					"format": "date"
+				},
+				"timeZone": {
+					"type": "string",
+					"description": "Days are counted in this time zone (business.json)."
+				},
+				"days": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": ["date", "conversations"],
+						"additionalProperties": false,
+						"properties": {
+							"date": {
+								"type": "string",
+								"format": "date"
+							},
+							"conversations": {
+								"type": "integer",
+								"minimum": 0
+							}
+						}
+					},
+					"description": "Conversations started each day."
+				},
+				"conversations": {
+					"type": "integer",
+					"minimum": 0,
+					"description": "Conversations started in the range."
+				},
+				"visitorMessages": {
+					"type": "integer",
+					"minimum": 0,
+					"description": "Visitor messages written in the range."
+				},
+				"aiOnly": {
+					"type": "integer",
+					"minimum": 0,
+					"description": "Conversations the AI answered with no staff reply and no handoff."
+				},
+				"handedOff": {
+					"type": "integer",
+					"minimum": 0
+				},
+				"medianFirstReplySeconds": {
+					"type": ["integer", "null"],
+					"minimum": 0,
+					"description": "From the visitor's first message to the first staff reply; null without staff replies."
+				},
+				"resolved": {
+					"type": "integer",
+					"minimum": 0
+				},
+				"rating": {
+					"type": "object",
+					"required": ["average", "count"],
+					"additionalProperties": false,
+					"properties": {
+						"average": {
+							"type": ["number", "null"],
+							"description": "Two decimals."
+						},
+						"count": {
+							"type": "integer",
+							"minimum": 0
+						}
+					}
+				},
+				"leads": {
+					"type": "integer",
+					"minimum": 0
+				},
+				"aiTokens": {
+					"type": "integer",
+					"minimum": 0
+				}
+			}
+		},
+		"SavedReply": {
+			"type": "object",
+			"required": ["id", "title", "text"],
+			"additionalProperties": false,
+			"properties": {
+				"id": {
+					"type": "string",
+					"pattern": "^reply_[0-9a-z]{10,64}$"
+				},
+				"title": {
+					"type": "string",
+					"maxLength": 100
+				},
+				"text": {
+					"type": "string",
+					"maxLength": 4000
+				}
+			}
+		},
+		"SavedReplyInput": {
+			"type": "object",
+			"required": ["title", "text"],
+			"properties": {
+				"title": {
+					"type": "string",
+					"minLength": 1,
+					"maxLength": 100,
+					"description": "Trimmed."
+				},
+				"text": {
+					"type": "string",
+					"minLength": 1,
+					"maxLength": 4000,
+					"description": "Trimmed."
+				}
+			}
+		},
+		"ShopInfo": {
+			"type": "object",
+			"description": "A signed-in visitor's last orders and loyalty points from Ecommerce.",
+			"required": ["orders", "loyaltyPoints"],
+			"additionalProperties": false,
+			"properties": {
+				"orders": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": ["number", "status", "total", "createdAt"],
+						"additionalProperties": false,
+						"properties": {
+							"number": {
+								"type": "string"
+							},
+							"status": {
+								"type": "string",
+								"description": "The status as your shop names it."
+							},
+							"total": {
+								"type": "string",
+								"description": "As your website shows it."
+							},
+							"createdAt": {
+								"type": ["string", "null"],
+								"description": "As Ecommerce answered it."
+							}
+						}
+					},
+					"maxItems": 5
+				},
+				"loyaltyPoints": {
+					"type": ["integer", "null"]
+				}
+			}
+		},
+		"Staff": {
+			"type": "object",
+			"description": "A member of staff: everyone named in a ticket or by SS-Actor headers, or assigned from Accounts.",
+			"required": ["id", "name", "email", "presence", "maxChats", "open", "full"],
+			"additionalProperties": false,
+			"properties": {
+				"id": {
+					"type": "string"
+				},
+				"name": {
+					"type": "string"
+				},
+				"email": {
+					"type": ["string", "null"]
+				},
+				"presence": {
+					"type": "string",
+					"enum": ["online", "away", "offline"],
+					"description": "Offline when their inbox has not checked in for 5 minutes."
+				},
+				"maxChats": {
+					"type": ["integer", "null"],
+					"minimum": 1,
+					"description": "Their limit of open chats (with Staff presence on; null: none or the feature is off)."
+				},
+				"open": {
+					"type": "integer",
+					"minimum": 0,
+					"description": "Open conversations assigned to them."
+				},
+				"full": {
+					"type": "boolean",
+					"description": "They have as many open chats as they can take."
+				},
+				"me": {
+					"const": true,
+					"description": "The ticket's user (or the SS-Actor-Id of a server call)."
+				}
+			}
+		},
+		"StaffMessage": {
+			"type": "object",
+			"description": "A message as your staff see it.",
+			"required": ["id", "seq", "author", "name", "text", "format", "createdAt", "internal"],
+			"additionalProperties": false,
+			"properties": {
+				"id": {
+					"type": "string",
+					"pattern": "^msg_[0-9a-z]{10,64}$"
+				},
+				"seq": {
+					"type": "integer",
+					"minimum": 1,
+					"description": "The message's number in the conversation (1, 2, 3 …): page with after and before."
+				},
+				"author": {
+					"type": "string",
+					"enum": ["visitor", "ai", "staff", "system"],
+					"description": "system: a bot message (flows, handoff, office hours, the unavailable message), signed with the bot name."
+				},
+				"name": {
+					"type": ["string", "null"],
+					"description": "The staff member's name, or the bot name; null for the visitor."
+				},
+				"text": {
+					"type": "string",
+					"description": "Visitor and staff messages have up to 4,000 characters; '' beside an attachment."
+				},
+				"format": {
+					"type": "string",
+					"enum": ["text", "markdown"],
+					"description": "AI and staff messages are markdown."
+				},
+				"buttons": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					},
+					"minItems": 1,
+					"description": "A flow question's buttons."
+				},
+				"attachment": {
+					"$ref": "#/components/schemas/Attachment"
+				},
+				"cards": {
+					"type": "array",
+					"items": {
+						"$ref": "#/components/schemas/ProductCard"
+					},
+					"minItems": 1,
+					"maxItems": 12,
+					"description": "While Product cards is on: the products the shop tools found, up to the search size setting (default 5, at most 12)."
+				},
+				"createdAt": {
+					"type": "string",
+					"format": "date-time"
+				},
+				"staffId": {
+					"type": ["string", "null"],
+					"description": "Staff messages: who wrote it (the ticket's user, the SS-Actor-Id of a server call, or server for the team)."
+				},
+				"internal": {
+					"type": "boolean",
+					"description": "An internal note: only your staff see it."
+				}
+			}
+		},
+		"StaffMessageAnswer": {
+			"type": "object",
+			"required": ["message"],
+			"additionalProperties": false,
+			"properties": {
+				"message": {
+					"$ref": "#/components/schemas/StaffMessage"
+				}
+			}
+		},
+		"Upload": {
+			"type": "object",
+			"description": "Upload the file straight to your storage with upload, then send attachment with the message.",
+			"required": ["upload", "attachment"],
+			"additionalProperties": false,
+			"properties": {
+				"upload": {
+					"type": "object",
+					"required": ["method", "url", "headers"],
+					"additionalProperties": false,
+					"properties": {
+						"method": {
+							"const": "PUT"
+						},
+						"url": {
+							"type": "string",
+							"format": "uri",
+							"description": "Valid for 5 minutes."
+						},
+						"headers": {
+							"type": "object",
+							"additionalProperties": {
+								"type": "string"
+							},
+							"description": "Send exactly these headers (content-type and content-length): the storage refuses another type or size."
+						}
+					}
+				},
+				"attachment": {
+					"type": "object",
+					"description": "Send it with the message once the file is uploaded.",
+					"required": ["key", "name", "type", "size"],
+					"additionalProperties": false,
+					"properties": {
+						"key": {
+							"type": "string",
+							"description": "The object key in your storage."
+						},
+						"name": {
+							"type": "string",
+							"maxLength": 120
+						},
+						"type": {
+							"type": "string",
+							"enum": [
+								"image/jpeg",
+								"image/png",
+								"image/webp",
+								"image/gif",
+								"application/pdf",
+								"application/msword",
+								"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+								"application/vnd.ms-excel",
+								"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+								"text/plain"
+							]
+						},
+						"size": {
+							"type": "integer",
+							"minimum": 1
+						}
+					}
+				}
+			}
+		}
+	},
+	"GET /v1/chat": {
+		"summary": "The visitor's chat and its messages",
+		"description": "Send the guest's key in SS-Guest (or a visitor's Accounts sign-in in SS-Sign-In). Without either the chat is empty (visitor.kind none). Without paging it answers the latest messages; after=<seq> answers the new ones since the last check. A reply that went stale starts again here.",
+		"query": {
+			"type": "object",
+			"properties": {
+				"after": {
+					"type": "integer",
+					"minimum": 0,
+					"description": "Only the messages after this seq (up to 100): the new ones since the last check."
+				},
+				"before": {
+					"type": "integer",
+					"minimum": 1,
+					"description": "The messages before this seq (older ones; ignored with after)."
+				},
+				"limit": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 50,
+					"default": 50,
+					"description": "How many of the latest (or of those before before); ignored with after."
+				}
+			}
+		},
+		"response": {
+			"type": "object",
+			"required": ["conversation", "visitor", "guestLimit", "guestMessagesLeft", "lastSeq", "messages"],
+			"additionalProperties": false,
+			"properties": {
+				"conversation": {
+					"oneOf": [
+						{
+							"$ref": "#/components/schemas/ChatConversation"
+						},
+						{
+							"type": "null"
+						}
+					]
+				},
+				"visitor": {
+					"type": "object",
+					"required": ["kind", "name", "email"],
+					"additionalProperties": false,
+					"properties": {
+						"kind": {
+							"type": "string",
+							"enum": ["user", "guest", "none"],
+							"description": "user: a verified Accounts sign-in; guest: the SS-Guest key; none: neither yet."
+						},
+						"name": {
+							"type": ["string", "null"]
+						},
+						"email": {
+							"type": ["string", "null"]
+						}
+					}
+				},
+				"guestLimit": {
+					"oneOf": [
+						{
+							"type": "object",
+							"required": ["limit", "used"],
+							"additionalProperties": false,
+							"properties": {
+								"limit": {
+									"type": "integer",
+									"minimum": 1
+								},
+								"used": {
+									"type": "integer",
+									"minimum": 0
+								}
+							}
+						},
+						{
+							"type": "null"
+						}
+					],
+					"description": "A guest's message limit and the messages used (Guest chat with a limit); null otherwise."
+				},
+				"guestMessagesLeft": {
+					"type": ["integer", "null"],
+					"minimum": 0
+				},
+				"lastSeq": {
+					"type": "integer",
+					"minimum": 0,
+					"description": "The number of the conversation's last message (0: none)."
+				},
+				"messages": {
+					"type": "array",
+					"items": {
+						"$ref": "#/components/schemas/Message"
+					},
+					"description": "Oldest first."
+				},
+				"earlier": {
+					"type": "boolean",
+					"description": "Older messages exist: ask with before=<seq of the first>. Not answered with after."
+				}
+			}
+		}
+	},
+	"GET /v1/chat/unread": {
+		"summary": "Replies the visitor has not seen",
+		"description": "A cheap check while the chat window is closed. Send the guest's key in SS-Guest (or a visitor's Accounts sign-in in SS-Sign-In).",
+		"response": {
+			"type": "object",
+			"required": ["unread"],
+			"additionalProperties": false,
+			"properties": {
+				"unread": {
+					"type": "integer",
+					"minimum": 0
+				}
+			}
+		}
+	},
+	"POST /v1/chat/messages": {
+		"summary": "Send a visitor message",
+		"description": "A visitor without a key starts a new guest (Guest chat on), answered once in guestKey: keep it on the device and send it in SS-Guest from then on. A message reopens a resolved conversation; the AI reply follows (AI replies on), and a keyword may start a flow or hand the chat to a person. With ?wait=1 the AI reply comes within the request (up to 20 s) in replies; a slower reply is still being written (replyPending: true) and comes with the next checks. 403 sign_in_required (Guest chat off and no sign-in); 403 guest_limit_reached with next (sign_in, lead or none); 422 message_rejected (Moderation's blocked terms); 429 rate_limited (too many new guests from one network); 422 validation_failed. Send an Idempotency-Key so a retried request sends one message.",
+		"query": {
+			"type": "object",
+			"properties": {
+				"wait": {
+					"type": "string",
+					"enum": ["1", "true"],
+					"description": "Wait for the AI reply (up to 20 s)."
+				}
+			}
+		},
+		"body": {
+			"type": "object",
+			"properties": {
+				"text": {
+					"type": "string",
+					"maxLength": 4000,
+					"description": "Trimmed, 1–4000 characters; may be '' or left out beside an attachment."
+				},
+				"attachment": {
+					"oneOf": [
+						{
+							"$ref": "#/components/schemas/AttachmentInput"
+						},
+						{
+							"type": "null"
+						}
+					],
+					"description": "With Attachments on and visitor uploads allowed: a file uploaded with POST /v1/chat/uploads."
+				},
+				"page": {
+					"$ref": "#/components/schemas/PageInput"
+				}
+			}
+		},
+		"status": 201,
+		"response": {
+			"type": "object",
+			"required": ["message", "chat"],
+			"additionalProperties": false,
+			"properties": {
+				"message": {
+					"$ref": "#/components/schemas/Message"
+				},
+				"replies": {
+					"type": "array",
+					"items": {
+						"$ref": "#/components/schemas/Message"
+					},
+					"description": "With ?wait=1: the messages after the visitor's (the AI reply, bot messages)."
+				},
+				"replyPending": {
+					"type": "boolean",
+					"description": "With ?wait=1: the AI reply is still being written."
+				},
+				"guestKey": {
+					"type": "string",
+					"description": "Only when a new guest was started: keep it and send it in SS-Guest."
+				},
+				"chat": {
+					"$ref": "#/components/schemas/Chat"
+				}
+			}
+		}
+	},
+	"POST /v1/chat/read": {
+		"summary": "The visitor read the replies",
+		"description": "Clears unread and marks the replies seen (staff see Seen with Read receipts on). 404 not_found when the visitor has no chat yet.",
+		"status": 204
+	},
+	"POST /v1/chat/end": {
+		"summary": "The visitor ends the chat",
+		"description": "The conversation becomes resolved (a new message reopens it); with Ratings asking on resolve (or after a staff reply that came), ratingRequested becomes true. 404 not_found when the visitor has no chat yet.",
+		"response": {
+			"$ref": "#/components/schemas/ChatAnswer"
+		}
+	},
+	"POST /v1/chat/handoff": {
+		"summary": "The visitor asks for a person",
+		"description": "The chat waits for a person and the AI stops until staff reply or hand it back. The visitor gets the handoff notice (outside office hours: when staff are back), a guest without contact details is asked for them, staff get the Chat needs you alert, and with AI conversation summary on a summary is written. Asking again while it waits changes nothing. 404 not_found when the visitor has no chat yet.",
+		"response": {
+			"$ref": "#/components/schemas/ChatAnswer"
+		}
+	},
+	"POST /v1/chat/contact": {
+		"summary": "Save the visitor's contact details",
+		"description": "On the visitor's conversation (made when there is none; a visitor without a key starts a new guest, answered in guestKey), and as a lead with Lead capture on. Phones are kept as E.164 (a number without its country code takes your business.json country's code). 422 validation_failed: a value that is not valid, or neither e-mail nor phone.",
+		"body": {
+			"type": "object",
+			"properties": {
+				"name": {
+					"type": "string",
+					"description": "Cut to 200 characters."
+				},
+				"email": {
+					"type": "string",
+					"format": "email"
+				},
+				"phone": {
+					"type": "string",
+					"description": "International, or national with your business.json country."
+				},
+				"page": {
+					"$ref": "#/components/schemas/PageInput"
+				}
+			}
+		},
+		"response": {
+			"type": "object",
+			"required": ["chat"],
+			"additionalProperties": false,
+			"properties": {
+				"guestKey": {
+					"type": "string",
+					"description": "Only when a new guest was started."
+				},
+				"chat": {
+					"$ref": "#/components/schemas/Chat"
+				}
+			}
+		}
+	},
+	"POST /v1/chat/leads": {
+		"summary": "Leave contact details (lead form)",
+		"description": "Each of name, email and phone the lead fields setting lists is required (message never is); the custom fields are those the setting names (with Custom fields on), checked as their type. With a consent text, consent must be true. The visitor's conversation, when there is one, gets the name, e-mail and phone it lacks. 422 validation_failed with every problem. Send an Idempotency-Key so a retried request makes one lead.",
+		"body": {
+			"type": "object",
+			"required": ["fields"],
+			"properties": {
+				"fields": {
+					"type": "object",
+					"properties": {
+						"name": {
+							"type": "string",
+							"description": "Cut to 200 characters."
+						},
+						"email": {
+							"type": "string",
+							"format": "email"
+						},
+						"phone": {
+							"type": "string",
+							"description": "International, or national with your business.json country."
+						},
+						"message": {
+							"type": "string",
+							"description": "Cut to 2000 characters."
+						}
+					},
+					"additionalProperties": {
+						"type": ["string", "number", "boolean"],
+						"description": "A custom field's value by its key."
+					}
+				},
+				"consent": {
+					"type": "boolean",
+					"description": "The visitor ticked the consent box."
+				},
+				"page": {
+					"$ref": "#/components/schemas/PageInput"
+				}
+			}
+		},
+		"status": 201,
+		"response": {
+			"type": "object",
+			"required": ["lead"],
+			"additionalProperties": false,
+			"properties": {
+				"lead": {
+					"type": "object",
+					"required": ["id"],
+					"additionalProperties": false,
+					"properties": {
+						"id": {
+							"type": "string",
+							"pattern": "^lead_[0-9a-z]{10,64}$"
+						}
+					}
+				}
+			}
+		}
+	},
+	"POST /v1/chat/flows/:flowId/start": {
+		"summary": "Start a page flow",
+		"description": "A flow started by a page rule, on a page its path pattern matches (page.url). It starts once per conversation and not while another flow runs (the chat is answered as it is). A visitor without a key starts a new guest, answered in guestKey. 404 not_found: no such flow for this page.",
+		"body": {
+			"type": "object",
+			"required": ["page"],
+			"properties": {
+				"page": {
+					"$ref": "#/components/schemas/PageInput"
+				}
+			}
+		},
+		"status": 201,
+		"response": {
+			"type": "object",
+			"required": ["chat"],
+			"additionalProperties": false,
+			"properties": {
+				"guestKey": {
+					"type": "string",
+					"description": "Only when a new guest was started."
+				},
+				"chat": {
+					"$ref": "#/components/schemas/Chat"
+				}
+			}
+		}
+	},
+	"POST /v1/chat/flow": {
+		"summary": "Answer the waiting flow step",
+		"description": "One of the question's buttons, or the value the step collects (checked as its field type). The answer is the visitor's message; the flow then goes on. 409 conflict: no flow waits for an answer; 422 validation_failed with your text chat.flowInvalid.",
+		"body": {
+			"type": "object",
+			"required": ["answer"],
+			"properties": {
+				"answer": {
+					"type": "string",
+					"maxLength": 2000,
+					"description": "Trimmed; cut to 2000 characters."
+				}
+			}
+		},
+		"response": {
+			"$ref": "#/components/schemas/ChatAnswer"
+		}
+	},
+	"POST /v1/chat/rating": {
+		"summary": "Rate the chat",
+		"description": "A new rating replaces the earlier one. 404 not_found when the visitor has no chat yet; 422 validation_failed.",
+		"body": {
+			"type": "object",
+			"required": ["score"],
+			"properties": {
+				"score": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 5,
+					"description": "1 up to the scale setting (2, 3 or 5)."
+				},
+				"comment": {
+					"type": "string",
+					"description": "Kept with the setting Ask for a comment; trimmed, cut to 1000 characters."
+				}
+			}
+		},
+		"response": {
+			"$ref": "#/components/schemas/ChatAnswer"
+		}
+	},
+	"POST /v1/chat/transcript": {
+		"summary": "E-mail the visitor a copy of the chat",
+		"description": "The template chat.transcript through Notifications (paste its token in Connections) with the most recent 1,000 characters of the chat. 503 notifications_not_connected; 502 not_sent; 422 validation_failed. 404 not_found when the visitor has no chat yet.",
+		"body": {
+			"type": "object",
+			"required": ["email"],
+			"properties": {
+				"email": {
+					"type": "string",
+					"format": "email"
+				}
+			}
+		},
+		"status": 202,
+		"response": {
+			"type": "object",
+			"required": ["sent"],
+			"additionalProperties": false,
+			"properties": {
+				"sent": {
+					"const": true
+				}
+			}
+		}
+	},
+	"POST /v1/chat/uploads": {
+		"summary": "Upload a visitor file",
+		"description": "With visitor uploads allowed (everyone, or signed-in visitors only): a presigned PUT into your storage for an allowed type up to the size setting (at most 10 MB). A visitor without a key starts a new guest, answered in guestKey. 403 forbidden; 503 storage_not_connected; 422 validation_failed (type or size).",
+		"body": {
+			"type": "object",
+			"required": ["name", "type", "size"],
+			"properties": {
+				"name": {
+					"type": "string",
+					"minLength": 1,
+					"description": "Cut to 120 characters; \\ / \" and line breaks become _."
+				},
+				"type": {
+					"type": "string",
+					"enum": ["image/jpeg", "image/png", "image/webp", "image/gif", "application/pdf"],
+					"description": "One of the allowed types setting."
+				},
+				"size": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 10485760,
+					"description": "Bytes, up to the size setting."
+				}
+			}
+		},
+		"response": {
+			"type": "object",
+			"required": ["upload", "attachment"],
+			"additionalProperties": false,
+			"properties": {
+				"upload": {
+					"type": "object",
+					"required": ["method", "url", "headers"],
+					"additionalProperties": false,
+					"properties": {
+						"method": {
+							"const": "PUT"
+						},
+						"url": {
+							"type": "string",
+							"format": "uri",
+							"description": "Valid for 5 minutes."
+						},
+						"headers": {
+							"type": "object",
+							"additionalProperties": {
+								"type": "string"
+							},
+							"description": "Send exactly these headers (content-type and content-length): the storage refuses another type or size."
+						}
+					}
+				},
+				"attachment": {
+					"type": "object",
+					"description": "Send it with the message once the file is uploaded.",
+					"required": ["key", "name", "type", "size"],
+					"additionalProperties": false,
+					"properties": {
+						"key": {
+							"type": "string",
+							"description": "The object key in your storage."
+						},
+						"name": {
+							"type": "string",
+							"maxLength": 120
+						},
+						"type": {
+							"type": "string",
+							"enum": [
+								"image/jpeg",
+								"image/png",
+								"image/webp",
+								"image/gif",
+								"application/pdf",
+								"application/msword",
+								"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+								"application/vnd.ms-excel",
+								"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+								"text/plain"
+							]
+						},
+						"size": {
+							"type": "integer",
+							"minimum": 1
+						}
+					}
+				},
+				"guestKey": {
+					"type": "string",
+					"description": "Only when a new guest was started."
+				}
+			}
+		}
+	},
+	"GET /v1/admin/conversations": {
+		"summary": "Conversations, newest activity first",
+		"description": "The inbox setting Guest chats in the inbox decides which conversations show: all, guest chats only once handed to a person (escalated), or signed-in visitors' only (signed_in). Opening the list checks the ticket's user in (presence).",
+		"query": {
+			"type": "object",
+			"properties": {
+				"cursor": {
+					"type": "string",
+					"description": "nextCursor of the previous page."
+				},
+				"limit": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 100,
+					"default": 25
+				},
+				"status": {
+					"type": "string",
+					"enum": ["open", "awaiting_visitor", "resolved"],
+					"description": "Only conversations with this status (another value filters nothing)."
+				},
+				"waiting": {
+					"type": "string",
+					"enum": ["1"],
+					"description": "1: only conversations waiting for a person."
+				},
+				"visitor": {
+					"type": "string",
+					"enum": ["guest", "user"],
+					"description": "Only guests' or signed-in visitors' conversations."
+				},
+				"assigned": {
+					"type": "string",
+					"enum": ["unassigned", "me"],
+					"description": "With Assignment on: unassigned ones, or those assigned to you (the ticket's user, or the SS-Actor-Id of a server call)."
+				},
+				"assignee": {
+					"type": "string",
+					"pattern": "^[A-Za-z0-9_.:@-]{1,64}$",
+					"description": "With Assignment on: those assigned to this staff id."
+				},
+				"unread": {
+					"type": "string",
+					"enum": ["1"],
+					"description": "1: only conversations with visitor messages no staff member opened."
+				},
+				"userId": {
+					"type": "string",
+					"pattern": "^[A-Za-z0-9_.:@-]{1,64}$",
+					"description": "One customer's conversations: their Accounts user id."
+				},
+				"q": {
+					"type": "string",
+					"description": "Search the visitor's name, e-mail and phone and the visible message texts (any case; the first 100 characters)."
+				}
+			}
+		},
+		"response": {
+			"$ref": "#/components/schemas/ConversationPage"
+		}
+	},
+	"GET /v1/admin/conversations/count": {
+		"summary": "Count the conversations (the list's filters)",
+		"description": "The list's own filters. The inbox setting Guest chats in the inbox decides which conversations show: all, guest chats only once handed to a person (escalated), or signed-in visitors' only (signed_in).",
+		"query": {
+			"type": "object",
+			"properties": {
+				"status": {
+					"type": "string",
+					"enum": ["open", "awaiting_visitor", "resolved"],
+					"description": "Only conversations with this status (another value filters nothing)."
+				},
+				"waiting": {
+					"type": "string",
+					"enum": ["1"],
+					"description": "1: only conversations waiting for a person."
+				},
+				"visitor": {
+					"type": "string",
+					"enum": ["guest", "user"],
+					"description": "Only guests' or signed-in visitors' conversations."
+				},
+				"assigned": {
+					"type": "string",
+					"enum": ["unassigned", "me"],
+					"description": "With Assignment on: unassigned ones, or those assigned to you (the ticket's user, or the SS-Actor-Id of a server call)."
+				},
+				"assignee": {
+					"type": "string",
+					"pattern": "^[A-Za-z0-9_.:@-]{1,64}$",
+					"description": "With Assignment on: those assigned to this staff id."
+				},
+				"unread": {
+					"type": "string",
+					"enum": ["1"],
+					"description": "1: only conversations with visitor messages no staff member opened."
+				},
+				"userId": {
+					"type": "string",
+					"pattern": "^[A-Za-z0-9_.:@-]{1,64}$",
+					"description": "One customer's conversations: their Accounts user id."
+				},
+				"q": {
+					"type": "string",
+					"description": "Search the visitor's name, e-mail and phone and the visible message texts (any case; the first 100 characters)."
+				}
+			}
+		},
+		"response": {
+			"$ref": "#/components/schemas/Count"
+		}
+	},
+	"GET /v1/admin/conversations/counts": {
+		"summary": "Count the conversations by status, waiting, guest or unread",
+		"description": "The list's own filters. The inbox setting Guest chats in the inbox decides which conversations show: all, guest chats only once handed to a person (escalated), or signed-in visitors' only (signed_in).",
+		"query": {
+			"type": "object",
+			"properties": {
+				"by": {
+					"type": "string",
+					"enum": ["status", "waiting", "guest", "unread"],
+					"description": "status; waiting (true/false); guest (the visitor is a guest: true/false); unread (visitor messages no staff member opened: true/false)."
+				},
+				"status": {
+					"type": "string",
+					"enum": ["open", "awaiting_visitor", "resolved"],
+					"description": "Only conversations with this status (another value filters nothing)."
+				},
+				"waiting": {
+					"type": "string",
+					"enum": ["1"],
+					"description": "1: only conversations waiting for a person."
+				},
+				"visitor": {
+					"type": "string",
+					"enum": ["guest", "user"],
+					"description": "Only guests' or signed-in visitors' conversations."
+				},
+				"assigned": {
+					"type": "string",
+					"enum": ["unassigned", "me"],
+					"description": "With Assignment on: unassigned ones, or those assigned to you (the ticket's user, or the SS-Actor-Id of a server call)."
+				},
+				"assignee": {
+					"type": "string",
+					"pattern": "^[A-Za-z0-9_.:@-]{1,64}$",
+					"description": "With Assignment on: those assigned to this staff id."
+				},
+				"unread": {
+					"type": "string",
+					"enum": ["1"],
+					"description": "1: only conversations with visitor messages no staff member opened."
+				},
+				"userId": {
+					"type": "string",
+					"pattern": "^[A-Za-z0-9_.:@-]{1,64}$",
+					"description": "One customer's conversations: their Accounts user id."
+				},
+				"q": {
+					"type": "string",
+					"description": "Search the visitor's name, e-mail and phone and the visible message texts (any case; the first 100 characters)."
+				}
+			},
+			"required": ["by"]
+		},
+		"response": {
+			"$ref": "#/components/schemas/Counts"
+		}
+	},
+	"GET /v1/admin/conversations/:id": {
+		"summary": "A conversation and its messages",
+		"description": "Without paging the latest 100 messages; after=<seq> answers the new ones. 404 not_found.",
+		"query": {
+			"type": "object",
+			"properties": {
+				"after": {
+					"type": "integer",
+					"minimum": 0,
+					"description": "Only the messages after this seq (up to 200)."
+				},
+				"before": {
+					"type": "integer",
+					"minimum": 1,
+					"description": "The messages before this seq (older ones, up to 50; ignored with after)."
+				},
+				"limit": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 100,
+					"default": 100,
+					"description": "How many of the latest (up to 100; with before up to 50, default 50); ignored with after."
+				}
+			}
+		},
+		"response": {
+			"$ref": "#/components/schemas/ConversationThread"
+		}
+	},
+	"POST /v1/admin/conversations/:id/read": {
+		"summary": "Mark the conversation read by staff",
+		"description": "Clears its unread count; the visitor sees Seen (Read receipts), and the next visitor message alerts staff again.",
+		"status": 204
+	},
+	"POST /v1/admin/conversations/:id/messages": {
+		"summary": "Reply to the visitor",
+		"description": "Markdown, written as the ticket's user. It ends waiting for a person, moves open to awaiting_visitor, and with Assignment set to first replier assigns an unassigned chat to a member of staff with room; a visitor who left gets a reply alert (Reply alerts to visitors). Links stay links when they point to your website, or as Moderation's link policy allows. 422 validation_failed; 403 feature_off (an attachment with Attachments off).",
+		"body": {
+			"type": "object",
+			"properties": {
+				"text": {
+					"type": "string",
+					"maxLength": 4000,
+					"description": "Trimmed, 1–4000 characters; may be '' or left out beside an attachment."
+				},
+				"attachment": {
+					"oneOf": [
+						{
+							"$ref": "#/components/schemas/AttachmentInput"
+						},
+						{
+							"type": "null"
+						}
+					],
+					"description": "A file uploaded with POST /v1/admin/uploads (staff types, up to the staff size setting)."
+				}
+			}
+		},
+		"status": 201,
+		"response": {
+			"$ref": "#/components/schemas/StaffMessageAnswer"
+		}
+	},
+	"POST /v1/admin/conversations/:id/notes": {
+		"summary": "Add an internal note",
+		"description": "Notes as a timeline (the default mode): a note between the messages that only your staff see. 409 conflict in the mode one note per chat (use PUT …/note); 422 validation_failed.",
+		"body": {
+			"type": "object",
+			"required": ["text"],
+			"properties": {
+				"text": {
+					"type": "string",
+					"minLength": 1,
+					"maxLength": 4000,
+					"description": "Trimmed."
+				}
+			}
+		},
+		"status": 201,
+		"response": {
+			"$ref": "#/components/schemas/StaffMessageAnswer"
+		}
+	},
+	"PUT /v1/admin/conversations/:id/note": {
+		"summary": "Save the conversation's single note",
+		"description": "Notes in the mode one note per chat. 409 conflict in the timeline mode (use POST …/notes); 422 validation_failed.",
+		"body": {
+			"type": "object",
+			"required": ["text"],
+			"properties": {
+				"text": {
+					"type": "string",
+					"maxLength": 4000,
+					"description": "Trimmed; '' clears the note."
+				}
+			}
+		},
+		"response": {
+			"$ref": "#/components/schemas/ConversationAnswer"
+		}
+	},
+	"PUT /v1/admin/conversations/:id/ai": {
+		"summary": "Pause or resume the AI in the conversation",
+		"description": "Keeps who paused it, when and why. Resuming also hands a chat waiting for a person back to the AI. It needs inbox.manage, or inbox.reply when the inbox setting Pausing the AI needs says so: 403 forbidden. 422 validation_failed.",
+		"body": {
+			"type": "object",
+			"required": ["paused"],
+			"properties": {
+				"paused": {
+					"type": "boolean"
+				},
+				"reason": {
+					"type": ["string", "null"],
+					"maxLength": 200,
+					"description": "Why (kept while paused)."
+				}
+			}
+		},
+		"response": {
+			"$ref": "#/components/schemas/ConversationAnswer"
+		}
+	},
+	"PATCH /v1/admin/conversations/:id": {
+		"summary": "Change status, AI pause, assignment or custom field values",
+		"description": "Send any of them (at least one). resolved ends waiting and, with Ratings asking on resolve (or after a staff reply that came), asks for a rating. assignedTo needs Assignment: someone on the staff list, or an Accounts user whose role may reply in the inbox (with the Accounts token); 409 staff_full when they have the most open chats they can take. fields needs Custom fields: null or '' clears a value. Each change is written to the activity log. 422 validation_failed; 403 feature_off.",
+		"body": {
+			"type": "object",
+			"properties": {
+				"status": {
+					"type": "string",
+					"enum": ["open", "awaiting_visitor", "resolved"]
+				},
+				"aiPaused": {
+					"type": "boolean",
+					"description": "false also hands a chat waiting for a person back to the AI."
+				},
+				"aiPausedReason": {
+					"type": "string",
+					"description": "With aiPaused true; cut to 200 characters."
+				},
+				"assignedTo": {
+					"type": ["string", "null"],
+					"pattern": "^[A-Za-z0-9_.:@-]{1,64}$",
+					"description": "A staff id; null unassigns."
+				},
+				"fields": {
+					"type": "object",
+					"additionalProperties": {
+						"type": ["string", "number", "boolean", "null"]
+					},
+					"description": "Custom field values by key, checked as the field's type."
+				}
+			}
+		},
+		"response": {
+			"$ref": "#/components/schemas/ConversationAnswer"
+		}
+	},
+	"DELETE /v1/admin/conversations/:id": {
+		"summary": "Delete a conversation for good",
+		"description": "With its messages, attachments (from your storage) and the guest records behind it. 404 not_found.",
+		"status": 204
+	},
+	"POST /v1/admin/conversations/:id/summary": {
+		"summary": "Write the AI summary now",
+		"description": "Kept on the conversation; it counts toward the AI token caps. 503 ai_unavailable (no AI key, a cap reached, or the AI failed).",
+		"response": {
+			"type": "object",
+			"required": ["summary"],
+			"additionalProperties": false,
+			"properties": {
+				"summary": {
+					"type": "string",
+					"minLength": 1,
+					"maxLength": 2000
+				}
+			}
+		}
+	},
+	"POST /v1/admin/conversations/:id/transcript": {
+		"summary": "E-mail a copy of the conversation",
+		"description": "The template chat.transcript through Notifications (paste its token in Connections) with the most recent 1,000 characters of the chat. 503 notifications_not_connected; 502 not_sent; 422 validation_failed.",
+		"body": {
+			"type": "object",
+			"required": ["email"],
+			"properties": {
+				"email": {
+					"type": "string",
+					"format": "email"
+				}
+			}
+		},
+		"status": 202,
+		"response": {
+			"type": "object",
+			"required": ["sent"],
+			"additionalProperties": false,
+			"properties": {
+				"sent": {
+					"const": true
+				}
+			}
+		}
+	},
+	"POST /v1/admin/conversations/:id/rating-request": {
+		"summary": "Ask the visitor for a rating",
+		"description": "The visitor's chat shows the rating question (ratingRequested).",
+		"status": 204
+	},
+	"POST /v1/admin/uploads": {
+		"summary": "Upload a staff file",
+		"description": "A presigned PUT into your storage for one of the staff types setting (Word, Excel and text files are downloads only) up to the staff size setting (at most 100 MB). 503 storage_not_connected; 422 validation_failed (type or size).",
+		"body": {
+			"type": "object",
+			"required": ["name", "type", "size"],
+			"properties": {
+				"name": {
+					"type": "string",
+					"minLength": 1,
+					"description": "Cut to 120 characters; \\ / \" and line breaks become _."
+				},
+				"type": {
+					"type": "string",
+					"enum": [
+						"image/jpeg",
+						"image/png",
+						"image/webp",
+						"image/gif",
+						"application/pdf",
+						"application/msword",
+						"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+						"application/vnd.ms-excel",
+						"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+						"text/plain"
+					],
+					"description": "One of the staff types setting."
+				},
+				"size": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 104857600,
+					"description": "Bytes, up to the staff size setting."
+				}
+			}
+		},
+		"response": {
+			"$ref": "#/components/schemas/Upload"
+		}
+	},
+	"GET /v1/admin/inbox/unread": {
+		"summary": "The unread badge",
+		"description": "Over the conversations the inbox shows. The inbox setting Guest chats in the inbox decides which conversations show: all, guest chats only once handed to a person (escalated), or signed-in visitors' only (signed_in).",
+		"response": {
+			"type": "object",
+			"required": ["unread", "conversations", "open"],
+			"additionalProperties": false,
+			"properties": {
+				"unread": {
+					"type": "integer",
+					"minimum": 0,
+					"description": "Visitor messages no staff member opened."
+				},
+				"conversations": {
+					"type": "integer",
+					"minimum": 0,
+					"description": "The conversations they are in."
+				},
+				"open": {
+					"type": "integer",
+					"minimum": 0,
+					"description": "Open conversations."
+				}
+			}
+		}
+	},
+	"GET /v1/admin/staff": {
+		"summary": "The staff list",
+		"description": "By name, with presence, open chats and limits (Staff presence and max chats).",
+		"response": {
+			"type": "object",
+			"required": ["items"],
+			"additionalProperties": false,
+			"properties": {
+				"items": {
+					"type": "array",
+					"items": {
+						"$ref": "#/components/schemas/Staff"
+					}
+				}
+			}
+		}
+	},
+	"PUT /v1/admin/staff/me/presence": {
+		"summary": "Set your presence",
+		"description": "The ticket's user is Online, Away or Offline (Offline anyway when their inbox has not checked in for 5 minutes). 422 validation_failed.",
+		"body": {
+			"type": "object",
+			"required": ["presence"],
+			"properties": {
+				"presence": {
+					"type": "string",
+					"enum": ["online", "away", "offline"]
+				}
+			}
+		},
+		"response": {
+			"type": "object",
+			"required": ["presence"],
+			"additionalProperties": false,
+			"properties": {
+				"presence": {
+					"type": "string",
+					"enum": ["online", "away", "offline"]
+				}
+			}
+		}
+	},
+	"PATCH /v1/admin/staff/:id": {
+		"summary": "Set a staff member's max chats",
+		"description": "Their own limit of open chats (null: the setting's). 404 not_found; 422 validation_failed.",
+		"body": {
+			"type": "object",
+			"required": ["maxChats"],
+			"properties": {
+				"maxChats": {
+					"type": ["integer", "null"],
+					"minimum": 1,
+					"maximum": 200
+				}
+			}
+		},
+		"response": {
+			"type": "object",
+			"required": ["staff"],
+			"additionalProperties": false,
+			"properties": {
+				"staff": {
+					"type": "object",
+					"required": ["id", "name", "email", "maxChats"],
+					"additionalProperties": false,
+					"properties": {
+						"id": {
+							"type": "string"
+						},
+						"name": {
+							"type": "string"
+						},
+						"email": {
+							"type": ["string", "null"]
+						},
+						"maxChats": {
+							"type": ["integer", "null"],
+							"minimum": 1,
+							"maximum": 200
+						}
+					}
+				}
+			}
+		}
+	},
+	"GET /v1/admin/saved-replies": {
+		"summary": "Saved replies, by title",
+		"response": {
+			"type": "object",
+			"required": ["items"],
+			"additionalProperties": false,
+			"properties": {
+				"items": {
+					"type": "array",
+					"items": {
+						"$ref": "#/components/schemas/SavedReply"
+					},
+					"maxItems": 500
+				}
+			}
+		}
+	},
+	"POST /v1/admin/saved-replies": {
+		"summary": "Save a reply",
+		"description": "Up to 200 saved replies. 422 validation_failed.",
+		"body": {
+			"$ref": "#/components/schemas/SavedReplyInput"
+		},
+		"status": 201,
+		"response": {
+			"type": "object",
+			"required": ["reply"],
+			"additionalProperties": false,
+			"properties": {
+				"reply": {
+					"$ref": "#/components/schemas/SavedReply"
+				}
+			}
+		}
+	},
+	"PUT /v1/admin/saved-replies/:id": {
+		"summary": "Change a saved reply",
+		"description": "404 not_found; 422 validation_failed.",
+		"body": {
+			"$ref": "#/components/schemas/SavedReplyInput"
+		},
+		"response": {
+			"type": "object",
+			"required": ["reply"],
+			"additionalProperties": false,
+			"properties": {
+				"reply": {
+					"$ref": "#/components/schemas/SavedReply"
+				}
+			}
+		}
+	},
+	"DELETE /v1/admin/saved-replies/:id": {
+		"summary": "Delete a saved reply",
+		"description": "404 not_found.",
+		"status": 204
+	},
+	"GET /v1/admin/knowledge/entries": {
+		"summary": "Knowledge base entries, last changed first",
+		"query": {
+			"type": "object",
+			"properties": {
+				"cursor": {
+					"type": "string",
+					"description": "nextCursor of the previous page."
+				},
+				"limit": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 100,
+					"default": 25
+				},
+				"q": {
+					"type": "string",
+					"description": "Search titles and texts (any case; the first 100 characters)."
+				}
+			}
+		},
+		"response": {
+			"$ref": "#/components/schemas/EntryPage"
+		}
+	},
+	"POST /v1/admin/knowledge/entries": {
+		"summary": "Add an FAQ entry or article",
+		"description": "Indexed for the AI at once. Up to 2,000 entries. 422 validation_failed.",
+		"body": {
+			"$ref": "#/components/schemas/EntryInput"
+		},
+		"status": 201,
+		"response": {
+			"$ref": "#/components/schemas/EntryAnswer"
+		}
+	},
+	"PUT /v1/admin/knowledge/entries/:id": {
+		"summary": "Change an entry",
+		"description": "404 not_found; 422 validation_failed.",
+		"body": {
+			"$ref": "#/components/schemas/EntryInput"
+		},
+		"response": {
+			"$ref": "#/components/schemas/EntryAnswer"
+		}
+	},
+	"DELETE /v1/admin/knowledge/entries/:id": {
+		"summary": "Delete an entry",
+		"description": "404 not_found.",
+		"status": 204
+	},
+	"GET /v1/admin/knowledge/pages": {
+		"summary": "Website pages as knowledge, newest first",
+		"response": {
+			"type": "object",
+			"required": ["items"],
+			"additionalProperties": false,
+			"properties": {
+				"items": {
+					"type": "array",
+					"items": {
+						"$ref": "#/components/schemas/KnowledgePage"
+					},
+					"maxItems": 500
+				}
+			}
+		}
+	},
+	"POST /v1/admin/knowledge/pages": {
+		"summary": "Add a website page",
+		"description": "Fetched now (10 s, at most 2 MB) and indexed; a page that cannot be fetched is kept with status failed and its error. Up to 200 pages. 422 validation_failed.",
+		"body": {
+			"type": "object",
+			"required": ["url"],
+			"properties": {
+				"url": {
+					"type": "string",
+					"format": "uri",
+					"maxLength": 500,
+					"description": "An https address."
+				}
+			}
+		},
+		"status": 201,
+		"response": {
+			"$ref": "#/components/schemas/KnowledgePageAnswer"
+		}
+	},
+	"POST /v1/admin/knowledge/pages/:id/fetch": {
+		"summary": "Fetch a page again",
+		"description": "Pages are fetched only when added and with this call, never on a schedule. 404 not_found.",
+		"response": {
+			"$ref": "#/components/schemas/KnowledgePageAnswer"
+		}
+	},
+	"DELETE /v1/admin/knowledge/pages/:id": {
+		"summary": "Delete a page",
+		"description": "404 not_found.",
+		"status": 204
+	},
+	"GET /v1/admin/reports": {
+		"summary": "Reports for a range of days",
+		"description": "Days in the business.json time zone. 422 validation_failed for another range.",
+		"query": {
+			"type": "object",
+			"properties": {
+				"from": {
+					"type": "string",
+					"format": "date",
+					"description": "YYYY-MM-DD; default 29 days before to."
+				},
+				"to": {
+					"type": "string",
+					"format": "date",
+					"description": "YYYY-MM-DD, not before from, at most 366 days in all; default today."
+				}
+			}
+		},
+		"response": {
+			"$ref": "#/components/schemas/Report"
+		}
+	},
+	"GET /v1/conversations": {
+		"summary": "Conversations, newest activity first",
+		"description": "The inbox setting Guest chats in the inbox decides which conversations show: all, guest chats only once handed to a person (escalated), or signed-in visitors' only (signed_in). With SS-Actor headers the acting user is checked in (presence).",
+		"query": {
+			"type": "object",
+			"properties": {
+				"cursor": {
+					"type": "string",
+					"description": "nextCursor of the previous page."
+				},
+				"limit": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 100,
+					"default": 25
+				},
+				"status": {
+					"type": "string",
+					"enum": ["open", "awaiting_visitor", "resolved"],
+					"description": "Only conversations with this status (another value filters nothing)."
+				},
+				"waiting": {
+					"type": "string",
+					"enum": ["1"],
+					"description": "1: only conversations waiting for a person."
+				},
+				"visitor": {
+					"type": "string",
+					"enum": ["guest", "user"],
+					"description": "Only guests' or signed-in visitors' conversations."
+				},
+				"assigned": {
+					"type": "string",
+					"enum": ["unassigned", "me"],
+					"description": "With Assignment on: unassigned ones, or those assigned to you (the ticket's user, or the SS-Actor-Id of a server call)."
+				},
+				"assignee": {
+					"type": "string",
+					"pattern": "^[A-Za-z0-9_.:@-]{1,64}$",
+					"description": "With Assignment on: those assigned to this staff id."
+				},
+				"unread": {
+					"type": "string",
+					"enum": ["1"],
+					"description": "1: only conversations with visitor messages no staff member opened."
+				},
+				"userId": {
+					"type": "string",
+					"pattern": "^[A-Za-z0-9_.:@-]{1,64}$",
+					"description": "One customer's conversations: their Accounts user id."
+				},
+				"q": {
+					"type": "string",
+					"description": "Search the visitor's name, e-mail and phone and the visible message texts (any case; the first 100 characters)."
+				}
+			}
+		},
+		"response": {
+			"$ref": "#/components/schemas/ConversationPage"
+		}
+	},
+	"GET /v1/conversations/count": {
+		"summary": "Count the conversations (the list's filters)",
+		"description": "The list's own filters. The inbox setting Guest chats in the inbox decides which conversations show: all, guest chats only once handed to a person (escalated), or signed-in visitors' only (signed_in).",
+		"query": {
+			"type": "object",
+			"properties": {
+				"status": {
+					"type": "string",
+					"enum": ["open", "awaiting_visitor", "resolved"],
+					"description": "Only conversations with this status (another value filters nothing)."
+				},
+				"waiting": {
+					"type": "string",
+					"enum": ["1"],
+					"description": "1: only conversations waiting for a person."
+				},
+				"visitor": {
+					"type": "string",
+					"enum": ["guest", "user"],
+					"description": "Only guests' or signed-in visitors' conversations."
+				},
+				"assigned": {
+					"type": "string",
+					"enum": ["unassigned", "me"],
+					"description": "With Assignment on: unassigned ones, or those assigned to you (the ticket's user, or the SS-Actor-Id of a server call)."
+				},
+				"assignee": {
+					"type": "string",
+					"pattern": "^[A-Za-z0-9_.:@-]{1,64}$",
+					"description": "With Assignment on: those assigned to this staff id."
+				},
+				"unread": {
+					"type": "string",
+					"enum": ["1"],
+					"description": "1: only conversations with visitor messages no staff member opened."
+				},
+				"userId": {
+					"type": "string",
+					"pattern": "^[A-Za-z0-9_.:@-]{1,64}$",
+					"description": "One customer's conversations: their Accounts user id."
+				},
+				"q": {
+					"type": "string",
+					"description": "Search the visitor's name, e-mail and phone and the visible message texts (any case; the first 100 characters)."
+				}
+			}
+		},
+		"response": {
+			"$ref": "#/components/schemas/Count"
+		}
+	},
+	"GET /v1/conversations/counts": {
+		"summary": "Count the conversations by status, waiting, guest or unread",
+		"description": "The list's own filters. The inbox setting Guest chats in the inbox decides which conversations show: all, guest chats only once handed to a person (escalated), or signed-in visitors' only (signed_in).",
+		"query": {
+			"type": "object",
+			"properties": {
+				"by": {
+					"type": "string",
+					"enum": ["status", "waiting", "guest", "unread"],
+					"description": "status; waiting (true/false); guest (the visitor is a guest: true/false); unread (visitor messages no staff member opened: true/false)."
+				},
+				"status": {
+					"type": "string",
+					"enum": ["open", "awaiting_visitor", "resolved"],
+					"description": "Only conversations with this status (another value filters nothing)."
+				},
+				"waiting": {
+					"type": "string",
+					"enum": ["1"],
+					"description": "1: only conversations waiting for a person."
+				},
+				"visitor": {
+					"type": "string",
+					"enum": ["guest", "user"],
+					"description": "Only guests' or signed-in visitors' conversations."
+				},
+				"assigned": {
+					"type": "string",
+					"enum": ["unassigned", "me"],
+					"description": "With Assignment on: unassigned ones, or those assigned to you (the ticket's user, or the SS-Actor-Id of a server call)."
+				},
+				"assignee": {
+					"type": "string",
+					"pattern": "^[A-Za-z0-9_.:@-]{1,64}$",
+					"description": "With Assignment on: those assigned to this staff id."
+				},
+				"unread": {
+					"type": "string",
+					"enum": ["1"],
+					"description": "1: only conversations with visitor messages no staff member opened."
+				},
+				"userId": {
+					"type": "string",
+					"pattern": "^[A-Za-z0-9_.:@-]{1,64}$",
+					"description": "One customer's conversations: their Accounts user id."
+				},
+				"q": {
+					"type": "string",
+					"description": "Search the visitor's name, e-mail and phone and the visible message texts (any case; the first 100 characters)."
+				}
+			},
+			"required": ["by"]
+		},
+		"response": {
+			"$ref": "#/components/schemas/Counts"
+		}
+	},
+	"GET /v1/conversations/:id": {
+		"summary": "A conversation and its messages",
+		"description": "Without paging the latest 100 messages; after=<seq> answers the new ones. 404 not_found.",
+		"query": {
+			"type": "object",
+			"properties": {
+				"after": {
+					"type": "integer",
+					"minimum": 0,
+					"description": "Only the messages after this seq (up to 200)."
+				},
+				"before": {
+					"type": "integer",
+					"minimum": 1,
+					"description": "The messages before this seq (older ones, up to 50; ignored with after)."
+				},
+				"limit": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 100,
+					"default": 100,
+					"description": "How many of the latest (up to 100; with before up to 50, default 50); ignored with after."
+				}
+			}
+		},
+		"response": {
+			"$ref": "#/components/schemas/ConversationThread"
+		}
+	},
+	"POST /v1/conversations/:id/read": {
+		"summary": "Mark the conversation read by staff",
+		"description": "Clears its unread count; the visitor sees Seen (Read receipts), and the next visitor message alerts staff again.",
+		"status": 204
+	},
+	"POST /v1/conversations/:id/messages": {
+		"summary": "Reply to the visitor",
+		"description": "Markdown, written as the member of staff the SS-Actor headers name (else Team). It ends waiting for a person, moves open to awaiting_visitor, and with Assignment set to first replier assigns an unassigned chat to a member of staff with room; a visitor who left gets a reply alert (Reply alerts to visitors). Links stay links when they point to your website, or as Moderation's link policy allows. 422 validation_failed; 403 feature_off (an attachment with Attachments off).",
+		"body": {
+			"type": "object",
+			"properties": {
+				"text": {
+					"type": "string",
+					"maxLength": 4000,
+					"description": "Trimmed, 1–4000 characters; may be '' or left out beside an attachment."
+				},
+				"attachment": {
+					"oneOf": [
+						{
+							"$ref": "#/components/schemas/AttachmentInput"
+						},
+						{
+							"type": "null"
+						}
+					],
+					"description": "A file uploaded with POST /v1/uploads (staff types, up to the staff size setting)."
+				}
+			}
+		},
+		"status": 201,
+		"response": {
+			"$ref": "#/components/schemas/StaffMessageAnswer"
+		}
+	},
+	"POST /v1/conversations/:id/notes": {
+		"summary": "Add an internal note",
+		"description": "Notes as a timeline (the default mode): a note between the messages that only your staff see. 409 conflict in the mode one note per chat (use PUT …/note); 422 validation_failed.",
+		"body": {
+			"type": "object",
+			"required": ["text"],
+			"properties": {
+				"text": {
+					"type": "string",
+					"minLength": 1,
+					"maxLength": 4000,
+					"description": "Trimmed."
+				}
+			}
+		},
+		"status": 201,
+		"response": {
+			"$ref": "#/components/schemas/StaffMessageAnswer"
+		}
+	},
+	"PUT /v1/conversations/:id/note": {
+		"summary": "Save the conversation's single note",
+		"description": "Notes in the mode one note per chat. 409 conflict in the timeline mode (use POST …/notes); 422 validation_failed.",
+		"body": {
+			"type": "object",
+			"required": ["text"],
+			"properties": {
+				"text": {
+					"type": "string",
+					"maxLength": 4000,
+					"description": "Trimmed; '' clears the note."
+				}
+			}
+		},
+		"response": {
+			"$ref": "#/components/schemas/ConversationAnswer"
+		}
+	},
+	"PUT /v1/conversations/:id/ai": {
+		"summary": "Pause or resume the AI in the conversation",
+		"description": "Keeps who paused it, when and why. Resuming also hands a chat waiting for a person back to the AI. 422 validation_failed.",
+		"body": {
+			"type": "object",
+			"required": ["paused"],
+			"properties": {
+				"paused": {
+					"type": "boolean"
+				},
+				"reason": {
+					"type": ["string", "null"],
+					"maxLength": 200,
+					"description": "Why (kept while paused)."
+				}
+			}
+		},
+		"response": {
+			"$ref": "#/components/schemas/ConversationAnswer"
+		}
+	},
+	"PATCH /v1/conversations/:id": {
+		"summary": "Change status, AI pause, assignment or custom field values",
+		"description": "Send any of them (at least one). resolved ends waiting and, with Ratings asking on resolve (or after a staff reply that came), asks for a rating. assignedTo needs Assignment: someone on the staff list, or an Accounts user whose role may reply in the inbox (with the Accounts token); 409 staff_full when they have the most open chats they can take. fields needs Custom fields: null or '' clears a value. Each change is written to the activity log. 422 validation_failed; 403 feature_off.",
+		"body": {
+			"type": "object",
+			"properties": {
+				"status": {
+					"type": "string",
+					"enum": ["open", "awaiting_visitor", "resolved"]
+				},
+				"aiPaused": {
+					"type": "boolean",
+					"description": "false also hands a chat waiting for a person back to the AI."
+				},
+				"aiPausedReason": {
+					"type": "string",
+					"description": "With aiPaused true; cut to 200 characters."
+				},
+				"assignedTo": {
+					"type": ["string", "null"],
+					"pattern": "^[A-Za-z0-9_.:@-]{1,64}$",
+					"description": "A staff id; null unassigns."
+				},
+				"fields": {
+					"type": "object",
+					"additionalProperties": {
+						"type": ["string", "number", "boolean", "null"]
+					},
+					"description": "Custom field values by key, checked as the field's type."
+				}
+			}
+		},
+		"response": {
+			"$ref": "#/components/schemas/ConversationAnswer"
+		}
+	},
+	"DELETE /v1/conversations/:id": {
+		"summary": "Delete a conversation for good",
+		"description": "With its messages, attachments (from your storage) and the guest records behind it. 404 not_found.",
+		"status": 204
+	},
+	"POST /v1/conversations/:id/summary": {
+		"summary": "Write the AI summary now",
+		"description": "Kept on the conversation; it counts toward the AI token caps. 503 ai_unavailable (no AI key, a cap reached, or the AI failed).",
+		"response": {
+			"type": "object",
+			"required": ["summary"],
+			"additionalProperties": false,
+			"properties": {
+				"summary": {
+					"type": "string",
+					"minLength": 1,
+					"maxLength": 2000
+				}
+			}
+		}
+	},
+	"POST /v1/conversations/:id/transcript": {
+		"summary": "E-mail a copy of the conversation",
+		"description": "The template chat.transcript through Notifications (paste its token in Connections) with the most recent 1,000 characters of the chat. 503 notifications_not_connected; 502 not_sent; 422 validation_failed.",
+		"body": {
+			"type": "object",
+			"required": ["email"],
+			"properties": {
+				"email": {
+					"type": "string",
+					"format": "email"
+				}
+			}
+		},
+		"status": 202,
+		"response": {
+			"type": "object",
+			"required": ["sent"],
+			"additionalProperties": false,
+			"properties": {
+				"sent": {
+					"const": true
+				}
+			}
+		}
+	},
+	"POST /v1/conversations/:id/rating-request": {
+		"summary": "Ask the visitor for a rating",
+		"description": "The visitor's chat shows the rating question (ratingRequested).",
+		"status": 204
+	},
+	"POST /v1/uploads": {
+		"summary": "Upload a staff file",
+		"description": "A presigned PUT into your storage for one of the staff types setting (Word, Excel and text files are downloads only) up to the staff size setting (at most 100 MB). 503 storage_not_connected; 422 validation_failed (type or size).",
+		"body": {
+			"type": "object",
+			"required": ["name", "type", "size"],
+			"properties": {
+				"name": {
+					"type": "string",
+					"minLength": 1,
+					"description": "Cut to 120 characters; \\ / \" and line breaks become _."
+				},
+				"type": {
+					"type": "string",
+					"enum": [
+						"image/jpeg",
+						"image/png",
+						"image/webp",
+						"image/gif",
+						"application/pdf",
+						"application/msword",
+						"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+						"application/vnd.ms-excel",
+						"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+						"text/plain"
+					],
+					"description": "One of the staff types setting."
+				},
+				"size": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 104857600,
+					"description": "Bytes, up to the staff size setting."
+				}
+			}
+		},
+		"response": {
+			"$ref": "#/components/schemas/Upload"
+		}
+	},
+	"GET /v1/inbox/unread": {
+		"summary": "The unread badge",
+		"description": "Over the conversations the inbox shows. The inbox setting Guest chats in the inbox decides which conversations show: all, guest chats only once handed to a person (escalated), or signed-in visitors' only (signed_in).",
+		"response": {
+			"type": "object",
+			"required": ["unread", "conversations", "open"],
+			"additionalProperties": false,
+			"properties": {
+				"unread": {
+					"type": "integer",
+					"minimum": 0,
+					"description": "Visitor messages no staff member opened."
+				},
+				"conversations": {
+					"type": "integer",
+					"minimum": 0,
+					"description": "The conversations they are in."
+				},
+				"open": {
+					"type": "integer",
+					"minimum": 0,
+					"description": "Open conversations."
+				}
+			}
+		}
+	},
+	"GET /v1/staff": {
+		"summary": "The staff list",
+		"description": "By name, with presence, open chats and limits (Staff presence and max chats).",
+		"response": {
+			"type": "object",
+			"required": ["items"],
+			"additionalProperties": false,
+			"properties": {
+				"items": {
+					"type": "array",
+					"items": {
+						"$ref": "#/components/schemas/Staff"
+					}
+				}
+			}
+		}
+	},
+	"GET /v1/leads": {
+		"summary": "Leads, newest first",
+		"query": {
+			"type": "object",
+			"properties": {
+				"cursor": {
+					"type": "string",
+					"description": "nextCursor of the previous page."
+				},
+				"limit": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 100,
+					"default": 25
+				}
+			}
+		},
+		"response": {
+			"$ref": "#/components/schemas/LeadPage"
+		}
+	},
+	"GET /v1/leads/:id": {
+		"summary": "A lead",
+		"description": "404 not_found.",
+		"response": {
+			"type": "object",
+			"required": ["lead"],
+			"additionalProperties": false,
+			"properties": {
+				"lead": {
+					"$ref": "#/components/schemas/Lead"
+				}
+			}
+		}
+	},
+	"GET /v1/knowledge/entries": {
+		"summary": "Knowledge base entries, last changed first",
+		"query": {
+			"type": "object",
+			"properties": {
+				"cursor": {
+					"type": "string",
+					"description": "nextCursor of the previous page."
+				},
+				"limit": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 100,
+					"default": 25
+				},
+				"q": {
+					"type": "string",
+					"description": "Search titles and texts (any case; the first 100 characters)."
+				}
+			}
+		},
+		"response": {
+			"$ref": "#/components/schemas/EntryPage"
+		}
+	},
+	"POST /v1/knowledge/entries": {
+		"summary": "Add an FAQ entry or article",
+		"description": "Indexed for the AI at once. Up to 2,000 entries. 422 validation_failed.",
+		"body": {
+			"$ref": "#/components/schemas/EntryInput"
+		},
+		"status": 201,
+		"response": {
+			"$ref": "#/components/schemas/EntryAnswer"
+		}
+	},
+	"PUT /v1/knowledge/entries/:id": {
+		"summary": "Change an entry",
+		"description": "404 not_found; 422 validation_failed.",
+		"body": {
+			"$ref": "#/components/schemas/EntryInput"
+		},
+		"response": {
+			"$ref": "#/components/schemas/EntryAnswer"
+		}
+	},
+	"DELETE /v1/knowledge/entries/:id": {
+		"summary": "Delete an entry",
+		"description": "404 not_found.",
+		"status": 204
+	},
+	"GET /v1/knowledge/pages": {
+		"summary": "Website pages as knowledge, newest first",
+		"response": {
+			"type": "object",
+			"required": ["items"],
+			"additionalProperties": false,
+			"properties": {
+				"items": {
+					"type": "array",
+					"items": {
+						"$ref": "#/components/schemas/KnowledgePage"
+					},
+					"maxItems": 500
+				}
+			}
+		}
+	},
+	"POST /v1/knowledge/pages": {
+		"summary": "Add a website page",
+		"description": "Fetched now (10 s, at most 2 MB) and indexed; a page that cannot be fetched is kept with status failed and its error. Up to 200 pages. 422 validation_failed.",
+		"body": {
+			"type": "object",
+			"required": ["url"],
+			"properties": {
+				"url": {
+					"type": "string",
+					"format": "uri",
+					"maxLength": 500,
+					"description": "An https address."
+				}
+			}
+		},
+		"status": 201,
+		"response": {
+			"$ref": "#/components/schemas/KnowledgePageAnswer"
+		}
+	},
+	"POST /v1/knowledge/pages/:id/fetch": {
+		"summary": "Fetch a page again",
+		"description": "Pages are fetched only when added and with this call, never on a schedule. 404 not_found.",
+		"response": {
+			"$ref": "#/components/schemas/KnowledgePageAnswer"
+		}
+	},
+	"DELETE /v1/knowledge/pages/:id": {
+		"summary": "Delete a page",
+		"description": "404 not_found.",
+		"status": 204
+	},
+	"GET /v1/reports": {
+		"summary": "Reports for a range of days",
+		"description": "Days in the business.json time zone. 422 validation_failed for another range.",
+		"query": {
+			"type": "object",
+			"properties": {
+				"from": {
+					"type": "string",
+					"format": "date",
+					"description": "YYYY-MM-DD; default 29 days before to."
+				},
+				"to": {
+					"type": "string",
+					"format": "date",
+					"description": "YYYY-MM-DD, not before from, at most 366 days in all; default today."
+				}
+			}
+		},
+		"response": {
+			"$ref": "#/components/schemas/Report"
+		}
+	},
+	"POST /v1/import/:collection": {
+		"summary": "Import records (NDJSON)",
+		"description": "collection is staff, guests, conversations or messages. The body is application/x-ndjson: one record per line in Chat's own shapes (at most 1,000 records or 4 MB per call), each written by its key (id; keyHash for guests) and replaced when it is there already, so running it again changes nothing. Unknown fields and the tenant fields are refused by name, and text longer than Chat keeps is refused, never cut. Import staff first, then guests, conversations and their messages, then call finish. Nothing is sent: no message, event, alert or AI call. ?dryRun=1 checks without writing. 404 not_found for another collection; 415 unsupported_media_type; 413 payload_too_large.",
+		"query": {
+			"type": "object",
+			"properties": {
+				"dryRun": {
+					"type": "string",
+					"enum": ["1", "true"],
+					"description": "Check only; nothing is written."
+				}
+			}
+		},
+		"response": {
+			"type": "object",
+			"required": ["inserted", "updated", "failed", "dryRun"],
+			"additionalProperties": false,
+			"properties": {
+				"inserted": {
+					"type": "integer",
+					"minimum": 0
+				},
+				"updated": {
+					"type": "integer",
+					"minimum": 0
+				},
+				"failed": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": ["line", "id", "errors"],
+						"additionalProperties": false,
+						"properties": {
+							"line": {
+								"type": "integer",
+								"minimum": 1
+							},
+							"id": {
+								"type": ["string", "null"],
+								"description": "The record's key (null when it has none)."
+							},
+							"errors": {
+								"type": "array",
+								"items": {
+									"type": "object",
+									"required": ["path", "message"],
+									"additionalProperties": false,
+									"properties": {
+										"path": {
+											"type": "string",
+											"description": "JSON Pointer into the record."
+										},
+										"message": {
+											"type": "string"
+										}
+									}
+								},
+								"minItems": 1
+							}
+						}
+					},
+					"description": "The records not written, by line."
+				},
+				"dryRun": {
+					"type": "boolean"
+				}
+			}
+		}
+	},
+	"POST /v1/import/:collection/prune": {
+		"summary": "Remove imported records the source no longer has",
+		"description": "collection is staff, guests, conversations or messages. Records an import wrote whose key lies after after and up to through (open ends when left out) and is not kept are removed, at most 1,000 per call (more: call again). Records made in Chat itself are never removed. ?dryRun=1 answers what would go. 415 unsupported_media_type (send application/json); 422 validation_failed.",
+		"query": {
+			"type": "object",
+			"properties": {
+				"dryRun": {
+					"type": "string",
+					"enum": ["1", "true"],
+					"description": "Count only; nothing is removed."
+				}
+			}
+		},
+		"body": {
+			"type": "object",
+			"required": ["keep"],
+			"properties": {
+				"keep": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					},
+					"maxItems": 1000,
+					"description": "The source's keys in this range, sorted."
+				},
+				"after": {
+					"type": "string",
+					"description": "Only keys after this one."
+				},
+				"through": {
+					"type": "string",
+					"description": "Only keys up to this one."
+				}
+			}
+		},
+		"response": {
+			"type": "object",
+			"required": ["removed", "keys", "more", "dryRun"],
+			"additionalProperties": false,
+			"properties": {
+				"removed": {
+					"type": "integer",
+					"minimum": 0
+				},
+				"keys": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					},
+					"maxItems": 1000,
+					"description": "The keys removed (or, with dryRun, that would go)."
+				},
+				"more": {
+					"type": "boolean"
+				},
+				"dryRun": {
+					"type": "boolean"
+				}
+			}
+		}
+	},
+	"POST /v1/import/finish": {
+		"summary": "Number the imported messages and derive what conversations keep",
+		"description": "The next 100 imported conversations by id: their messages numbered 1..n in time order (ties by id), and their counters, preview, last message time and read marks derived. While more is true, call again with ?after=<next>. Running it again changes nothing. 422 validation_failed for another after.",
+		"query": {
+			"type": "object",
+			"properties": {
+				"after": {
+					"type": "string",
+					"pattern": "^conv_[0-9a-z]{10,64}$",
+					"description": "next of the previous call."
+				}
+			}
+		},
+		"response": {
+			"type": "object",
+			"required": ["finished", "conversations", "renumbered", "updated", "next", "more"],
+			"additionalProperties": false,
+			"properties": {
+				"finished": {
+					"const": true
+				},
+				"conversations": {
+					"type": "integer",
+					"minimum": 0,
+					"maximum": 100,
+					"description": "Conversations in this batch."
+				},
+				"renumbered": {
+					"type": "integer",
+					"minimum": 0,
+					"description": "Messages whose number moved."
+				},
+				"updated": {
+					"type": "integer",
+					"minimum": 0,
+					"description": "Conversations whose derived fields changed."
+				},
+				"next": {
+					"type": ["string", "null"],
+					"description": "Pass it as after while more is true."
+				},
+				"more": {
+					"type": "boolean"
+				}
+			}
+		}
+	},
+	"GET /v1/import/status": {
+		"summary": "Import status and verification sums",
+		"description": "Records per collection, those an import wrote, and the sums ss-import verify compares.",
+		"response": {
+			"type": "object",
+			"required": ["collections", "imported", "totals"],
+			"additionalProperties": false,
+			"properties": {
+				"collections": {
+					"$ref": "#/components/schemas/ImportCounts"
+				},
+				"imported": {
+					"$ref": "#/components/schemas/ImportCounts"
+				},
+				"totals": {
+					"type": "object",
+					"required": [
+						"conversations",
+						"messages",
+						"conversations.open",
+						"conversations.awaiting_visitor",
+						"conversations.resolved",
+						"conversations.waiting"
+					],
+					"additionalProperties": false,
+					"properties": {
+						"conversations": {
+							"type": "integer",
+							"minimum": 0
+						},
+						"messages": {
+							"type": "integer",
+							"minimum": 0
+						},
+						"conversations.open": {
+							"type": "integer",
+							"minimum": 0
+						},
+						"conversations.awaiting_visitor": {
+							"type": "integer",
+							"minimum": 0
+						},
+						"conversations.resolved": {
+							"type": "integer",
+							"minimum": 0
+						},
+						"conversations.waiting": {
+							"type": "integer",
+							"minimum": 0,
+							"description": "Waiting for a person."
+						}
+					}
+				}
+			}
+		}
+	}
+}
