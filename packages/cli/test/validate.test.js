@@ -372,9 +372,9 @@ describe('API descriptions (schemas/api.json)', () => {
 			"GET /v1/admin/notes/:id: the route is written 'GET /v1/admin/notes/:noteId' in server/",
 		]);
 		expect(report.problems.filter((p) => p.rule === 'api.missing')).toEqual([
-			expect.objectContaining({ severity: 'warning', file: 'server/routes.js', line: expect.any(Number) }),
+			expect.objectContaining({ severity: 'error', file: 'server/routes.js', line: expect.any(Number) }),
 			expect.objectContaining({
-				severity: 'warning',
+				severity: 'error',
 				message: expect.stringMatching(/^GET \/v1\/admin\/notes\/:noteId has no entry/),
 			}),
 		]);
@@ -394,7 +394,8 @@ describe('API descriptions (schemas/api.json)', () => {
 		await rm(path.join(none, 'schemas/api.json'));
 		await writeAssets(none);
 		const bare = await validateProject(none);
-		expect(bare.ok).toBe(true);
+		// every route must be described (a product's developers build on it)
+		expect(bare.ok).toBe(false);
 		expect(messages(bare, 'api.missing')).toHaveLength(5);
 		const openapi = JSON.parse(await readFile(path.join(none, 'openapi.json'), 'utf8'));
 		expect(openapi.paths['/v1/notes'].get.responses['2XX']).toEqual({ description: 'Success (JSON)' });

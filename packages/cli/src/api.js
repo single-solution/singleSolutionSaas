@@ -63,7 +63,7 @@ const shapeOf = (route) => keyOf({ method: route.method, path: route.path.replac
 
 /**
  * The description against the routes: an entry names a documented route of `server/` (`api.unknown`, an error), and
- * every documented route has an entry (`api.missing`, a warning for now).
+ * every documented route has an entry (`api.missing`).
  * @param {ApiDescription} api
  * @param {readonly ScannedRoute[]} routes
  * @returns {Problem[]}
@@ -93,7 +93,6 @@ export const checkApiRoutes = (api, routes) => {
 		if (documented.has(keyOf(route)) && !described.has(keyOf(route)))
 			problems.push(
 				problemOf({
-					severity: 'warning',
 					rule: 'api.missing',
 					file: route.file,
 					line: route.line,

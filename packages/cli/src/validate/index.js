@@ -18,7 +18,7 @@
  * - the deployment shape (at most two server functions: the API route and the dashboard page) and the generated files
  *   (`openapi.json`, `server/widget-script.js`) being up to date (`server.*`, `assets.*`);
  * - the API description `schemas/api.json`: valid (`api.invalid`), every entry names a browser, server or ticket route
- *   of `server/` (`api.unknown`), and every such route has an entry (`api.missing`, a warning for now).
+ *   of `server/` (`api.unknown`), and every such route has an entry (`api.missing`).
  * @module
  */
 import { builtinModules } from 'node:module';
