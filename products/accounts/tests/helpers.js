@@ -3,11 +3,13 @@
  * two tokens, dashboard sessions, a merchant database on the run's MongoDB (`TEST_MONGODB_URI`) and fakes for every
  * outside service: Notifications (records what Accounts sends), other products (permissions, data rights, orders),
  * Google, Apple, Facebook, the breached-password list and the website itself (business.json). No real network call is
- * ever made.
+ * ever made. Every answer `call()` sees is checked against `schemas/api.json` and the kit's own routes: a test fails
+ * when an answer does not fit its description.
  * @module
  */
 import { generateKeyPairSync } from 'node:crypto';
-import { createFakePortal, createMemoryStore, createNetwork } from '@ss/app-kit/testing';
+import { apiChecker, createFakePortal, createMemoryStore, createNetwork } from '@ss/app-kit/testing';
+import apiJson from '../schemas/api.json' with { type: 'json' };
 import { createProductInstance, manifest } from '../adapters/product.js';
 import { createStore } from '../adapters/store.js';
 import { createRoutes } from '../server/routes.js';
@@ -23,6 +25,9 @@ const SECRET = 'connect-secret-0123456789-abcdefghij';
 const ENCRYPTION_KEY = 'encryption-key-0123456789-abcdefghij';
 export const ALL = manifest.features.map((feature) => feature.key);
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/605.1.15 Version/17.0 Safari/605.1.15';
+
+/** The API description every answer is checked against. */
+const API = apiChecker(apiJson);
 
 let databases = 0;
 /** A fresh merchant database URI on the shared MongoDB. */
@@ -166,11 +171,15 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 		const text = await response.text();
 		/** @type {any} */
 		let json = null;
+		/** @type {unknown} the parsed JSON body, or null */
+		let parsed = null;
 		try {
 			json = text ? JSON.parse(text) : null;
+			parsed = json;
 		} catch {
 			json = text;
 		}
+		API.assert({ method, path, status: response.status, body: parsed });
 		return { status: response.status, headers: response.headers, json, text };
 	};
 

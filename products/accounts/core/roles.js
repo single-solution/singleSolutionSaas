@@ -107,6 +107,28 @@ export const roleWithDefaults = (role) => {
 	});
 };
 
+/**
+ * A role as the API answers it: its own members only (never the website or the times the database stamps).
+ * @param {Role} role
+ * @returns {Role}
+ */
+export const roleView = (role) => ({
+	key: role.key,
+	name: role.name,
+	description: role.description,
+	permissions: role.permissions,
+	twoStep: role.twoStep,
+	sessionHours: role.sessionHours,
+	rememberDays: role.rememberDays,
+	sessionRolling: role.sessionRolling,
+	rank: role.rank,
+	remember: role.remember,
+	methods: role.methods,
+	signIn: role.signIn,
+	logSignIns: role.logSignIns,
+	ready: role.ready === true,
+});
+
 /** Ecommerce's published permission keys (its manifest), as `ecommerce:<key>`. */
 const shop = (/** @type {string[]} */ ...keys) => keys.map((key) => `ecommerce:${key}`);
 

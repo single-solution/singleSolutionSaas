@@ -235,12 +235,12 @@ export const createAccount = (product, service, flows) => {
 		return { recoveryCodes: codes };
 	};
 
-	/** Accept the current terms version. @param {any} ctx */
+	/** Accept the current terms version; answers the user as `GET /v1/me` does. @param {any} ctx */
 	const acceptTerms = async (ctx) => {
 		const { s, user } = await service.signedIn(ctx);
 		const { version } = await service.settings(s, 'terms');
 		if (bodyOf(ctx.body).accept !== true) throw invalid('accept', 'Send { accept: true }.');
-		return selfView((await s.store.users.update(user.id, { terms: { version, acceptedAt: new Date(now()) } })) ?? user);
+		return meView(s, (await s.store.users.update(user.id, { terms: { version, acceptedAt: new Date(now()) } })) ?? user);
 	};
 
 	/** Download my data: Accounts' records and every connected product's, as one single-use link (15 minutes). @param {any} ctx */

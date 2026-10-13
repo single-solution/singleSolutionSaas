@@ -485,3 +485,44 @@ describe('the admin widgets’ reads', () => {
 		expect(me.json.roleSince).toBeTruthy();
 	});
 });
+
+describe('the Users widget’s actions', () => {
+	it('adds a user, gives a setup link, signs them out and removes them; counts, declines and reopens requests', async () => {
+		const ticket = await env.ticket();
+		const added = await env.admin(ticket, 'POST', '/v1/admin/users', { name: 'Wendy Widget', phone: '0300 5550400' });
+		expect(added.status).toBe(201);
+		expect(added.json).toMatchObject({ name: 'Wendy Widget', phone: '+923005550400', phoneVerified: true, status: 'active' });
+		const link = await env.admin(ticket, 'POST', `/v1/admin/users/${added.json.id}/setup-link`);
+		const accepted = await env.visitor('POST', '/v1/setup-links/accept', {
+			code: setupCodeOf(link.json.url),
+			password: 'wendy pass 12',
+		});
+		expect(accepted.json.status).toBe('signed_in');
+		// the merchant's server signs her out everywhere: her refresh token no longer renews
+		expect((await server('POST', `/v1/users/${added.json.id}/sign-out`)).status).toBe(204);
+		expect(code(await env.visitor('POST', '/v1/session/refresh', { refreshToken: accepted.json.refreshToken }))).toBe(
+			'signed_out',
+		);
+		const removed = await env.admin(ticket, 'DELETE', `/v1/admin/users/${added.json.id}?scope=accounts`, {
+			reason: 'Left the team',
+		});
+		expect(removed.json).toEqual({ deleted: true, pending: [] });
+		expect(code(await server('GET', `/v1/users/${added.json.id}`))).toBe('not_found');
+
+		const pending = async () => (await server('GET', '/v1/role-requests/count?status=pending&role=member')).json;
+		const before = (await pending()).count;
+		const asked = await env.visitor('POST', '/v1/role-requests', {
+			role: 'member',
+			name: 'Ira',
+			email: 'ira@example.com',
+			note: 'Hi',
+		});
+		expect(await pending()).toEqual({ count: before + 1, capped: false });
+		const counts = await env.admin(ticket, 'GET', '/v1/admin/role-requests/counts?by=role&status=pending');
+		expect(counts.json).toEqual({ total: before + 1, groups: { member: before + 1 } });
+		const declined = await env.admin(ticket, 'POST', `/v1/admin/role-requests/${asked.json.id}/decline`);
+		expect(declined.json).toMatchObject({ id: asked.json.id, status: 'declined', email: 'ira@example.com' });
+		const reopened = await env.admin(ticket, 'POST', `/v1/admin/role-requests/${asked.json.id}/reopen`);
+		expect(reopened.json).toMatchObject({ id: asked.json.id, status: 'pending', invitedAt: null });
+	});
+});

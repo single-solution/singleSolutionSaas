@@ -21,6 +21,7 @@ import {
 	checkRole,
 	grants,
 	permissionCatalog,
+	roleView,
 } from '../core/roles.js';
 import { generateCode, returnAddress } from '../core/rules.js';
 import { LINK_PARAMS, SETUP_PARAM } from '../core/widgets.js';
@@ -808,7 +809,7 @@ export const createManage = (product, service, flows) => {
 	// ------------------------------------------------------------------------------------------------------ roles
 
 	/** @param {any} ctx */
-	const listRoles = async (ctx) => ({ items: await (await service.site(ctx)).store.roles.list() });
+	const listRoles = async (ctx) => ({ items: (await (await service.site(ctx)).store.roles.list()).map(roleView) });
 
 	/** Save a role (a ready-made one keeps its key and cannot be deleted). @param {any} ctx */
 	const saveRole = async (ctx) => {
@@ -829,7 +830,7 @@ export const createManage = (product, service, flows) => {
 				role.signIn === 'paused' && 'sign-in paused',
 			]),
 		});
-		return role;
+		return roleView(role);
 	};
 
 	/** Delete one of the merchant's own roles; its users get the Customer role. @param {any} ctx */
