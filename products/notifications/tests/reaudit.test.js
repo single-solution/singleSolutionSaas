@@ -1,6 +1,7 @@
 /**
  * Notifications after the re-audit (PLAN 0.8.10, owner decisions D7 and D11): the delivery log never keeps a secret,
- * and is kept for the days the merchant sets; required messages ignore opt-outs (PLAN 0.8.5).
+ * and is kept for the days the merchant sets; required messages ignore opt-outs (PLAN 0.8.5); nothing accepted is
+ * lost when an attempt breaks off.
  */
 import { createHmac } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -339,5 +340,40 @@ describe('required messages are never stopped by an opt-out (PLAN 0.8.5, MS-4)',
 			(await env.send('sms', { template: 'promo_sms', to: { phone: '+15550004041' }, values: { pct: '1%' } })).json.status,
 		).toBe('skipped');
 		expect((await env.send('sms', { template: 'promo_sms', to: { phone: '+15550004041' }, required: 'yes' })).status).toBe(422);
+	});
+});
+
+describe('nothing accepted is lost when an attempt breaks off (D7, K-17)', () => {
+	it('saves the message, records the failed attempt and retries it on the next uses, within the plan', async () => {
+		// the SMS connection cannot be read for a moment while the message is attempted
+		env.failReads(`connections|${env.websiteId}|sms`);
+		const sent = await env.send('sms', { template: 'note', to: { phone: '+15550005050' }, values: { n: '5' } });
+		expect(sent.status).toBe(201);
+		expect(sent.json).toMatchObject({
+			status: 'retrying',
+			reason: 'It could not be sent now (a database or provider was briefly unreachable).',
+			attempts: [{ channel: 'sms', provider: 'none', outcome: 'failed' }],
+		});
+		env.failReads();
+		env.advance(MIN + 1000);
+		await use();
+		expect(await read(sent.json.id)).toMatchObject({
+			status: 'sent',
+			attempts: [{ outcome: 'failed' }, { outcome: 'sent', provider: 'twilio' }],
+		});
+		expect(new URLSearchParams(lastBody('https://api.twilio.com')).get('Body')).toBe('Note 5');
+		// an outage that lasts ends the message after its plan, as a failure the log shows
+		env.failReads(`connections|${env.websiteId}|sms`);
+		const lost = await env.send('sms', { template: 'note', to: { phone: '+15550005051' }, values: { n: '6' } });
+		env.advance(MIN + 1000);
+		await use();
+		env.advance(5 * MIN + 1000);
+		await use();
+		env.advance(60 * MIN);
+		await use();
+		const done = await read(lost.json.id);
+		expect(done.status).toBe('failed');
+		expect(done.attempts).toHaveLength(3);
+		env.failReads();
 	});
 });

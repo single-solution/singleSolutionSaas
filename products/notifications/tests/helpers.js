@@ -139,7 +139,18 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 	const network = createNetwork(handlers);
 	/** @type {Array<{ options: any, mail: any }>} */
 	const mails = [];
-	const store = createMemoryStore({ now });
+	/** Product database reads that fail while a test says so (`<collection>|<id>` prefixes). @type {Set<string>} */
+	const failing = new Set();
+	const memory = createMemoryStore({ now });
+	/** @type {import('@ss/app-kit').Store} */
+	const store = Object.freeze({
+		...memory,
+		get: async (collection, id) => {
+			if ([...failing].some((prefix) => `${collection}|${id}`.startsWith(prefix)))
+				throw new Error('The database is briefly unreachable.');
+			return memory.get(collection, id);
+		},
+	});
 	const product = createProductInstance({
 		config: { mongodbUri: '', connectSecret: SECRET, encryptionKey: ENCRYPTION_KEY },
 		store,
@@ -304,6 +315,11 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 			const response = await dashboard(await adminSession(), 'POST', `/v1/dashboard/websites/${websiteId}/business/refresh`);
 			if (response.status !== 200) throw new Error(`business: ${response.status} ${await response.text()}`);
 		},
+		/**
+		 * Make reads of the product database fail (a brief outage), by `<collection>|<id>` prefix; none: they work again.
+		 * @param {string} [prefix]
+		 */
+		failReads: (prefix) => (prefix === undefined ? failing.clear() : void failing.add(prefix)),
 		/** Run the work queued after responses (for example after a notice). */
 		flush: async () => {
 			while (tasks.length > 0) await /** @type {() => Promise<unknown>} */ (tasks.shift())();

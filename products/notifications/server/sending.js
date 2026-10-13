@@ -2,7 +2,9 @@
  * Sending (PLAN 0.8.5): accepting a message, attempting it, retries on the next uses, the fallback channel, opt-out,
  * quiet hours, send limits, delayed send and outgoing webhooks. There is no background work: a message due now is
  * attempted inside the request that sends it; waiting messages and webhook events are sent right after (`after()`)
- * the next requests for the website (`drain`), a few at a time. The delivery log never keeps a secret (PLAN 0.8.10
+ * the next requests for the website (`drain`), a few at a time. Nothing accepted is lost (PLAN 0.8.10 D7): a message
+ * is saved before its first attempt, and an attempt that breaks off (a database or provider briefly unreachable) is a
+ * failed attempt, retried by the plan like any other. The delivery log never keeps a secret (PLAN 0.8.10
  * D11): the values of a sensitive message (and those the sender names as secret) are replaced in its saved words, and
  * the real ones are kept sealed only while it has attempts to make. A finished message or webhook event gets the time
  * the database's expiry index removes it, by the setting "keep the delivery log for N days" (default forever).
@@ -374,7 +376,8 @@ export const createSending = (product) => {
 
 	/**
 	 * Attempt a message now and save the outcome: sent; retrying later; on to the fallback channel; or failed. Every
-	 * attempt is added to the delivery log; a sent or failed message keeps no sealed words.
+	 * attempt is added to the delivery log; a sent or failed message keeps no sealed words. An attempt that throws
+	 * (a read of the connection, the settings or the subscriptions failing) is a failed attempt that may be retried.
 	 * @param {Site} s
 	 * @param {MessageRecord} message
 	 * @returns {Promise<MessageRecord>}
@@ -382,7 +385,12 @@ export const createSending = (product) => {
 	const attempt = async (s, message) => {
 		const real = reveal(s, message);
 		const result = real
-			? await deliver(s, real)
+			? await deliver(s, real).catch(() => ({
+					ok: false,
+					provider: 'none',
+					error: 'It could not be sent now (a database or provider was briefly unreachable).',
+					retryable: true,
+				}))
 			: { ok: false, provider: 'none', error: 'Its hidden values cannot be read: the encryption key changed.' };
 		const attempts = [
 			...message.attempts,
