@@ -37,16 +37,16 @@ import {
 	deliveryLeft,
 	isPhotoKey,
 	linesToRestock,
-	paidOnline,
 	photoFolder,
 	planClaim,
 	pointsToReverse,
 	referenceOf,
 	refundCap,
-	refundedState,
 	returnableLines,
 } from '../core/returns.js';
+import { earnedLeft, refundSplit, refundable } from '../core/orders.js';
 import { createMedia } from './catalog-media.js';
+import { createMoves } from './orders-moves.js';
 import { SERVER_LIMITS, VISITOR_LIMITS, VISITOR_WRITE_LIMITS } from './service.js';
 
 /** Rate limits (mutable copies of the shared constants, as route definitions take them). */
@@ -93,6 +93,14 @@ const claimLabel = (claim) => `${claim.orderNumber} ${referenceOf(claim)}`;
  */
 export const createReturns = (product, service) => {
 	const media = createMedia(product);
+	// a claim's refund is an order refund (OR-3)
+	const moves = createMoves(product, service);
+
+	/**
+	 * Whether some of what an order was paid can still go back through Payments (PM-2).
+	 * @param {OrderRecord} order
+	 */
+	const paidOnline = (order) => refundSplit(order, 1).online > 0;
 
 	/** @param {WebsiteData} data */
 	const claims = (data) => data.collection(COLLECTIONS.returns);
@@ -593,9 +601,12 @@ export const createReturns = (product, service) => {
 	};
 
 	/**
-	 * Refund a claim (a top-up refunds more): through Payments when the method is `online`, else recorded with its
-	 * method and reference (E33). The refund is also an entry of the order's `refunds` with the claim's id; the units
-	 * count as returned on the first refund; loyalty points go back as the `pointsBack` setting says.
+	 * Refund a claim (a top-up refunds more) as an order refund (OR-3): through Payments for what Payments took when the
+	 * method is `online` or none is given, else recorded with its method and reference (E33), never more than was paid
+	 * and not refunded yet; the order's refund entries carry the claim's id, and with `autoRefundedStatus` an order whose
+	 * refunds reach what was paid moves to its refunded status (its message, events and points as that move does). The
+	 * units count as returned on the first refund; loyalty points go back as the `pointsBack` setting says, never more
+	 * than the order earned and was not taken back yet (OR-10).
 	 * @param {any} ctx
 	 */
 	const refund = async (ctx) => {
@@ -611,6 +622,8 @@ export const createReturns = (product, service) => {
 		const how = checkRefundMethod(body, paidOnline(order));
 		if (!how.ok) throw service.invalid(how.field, how.message);
 		const cap = await capOf(s, data, order, claim);
+		if (cap <= 0 && refundable(order) <= 0)
+			throw service.invalid('amount', 'Nothing paid is left to refund on this order; record the payment first.');
 		const amount = body.amount;
 		if (!Number.isSafeInteger(amount) || amount < 1 || amount > cap)
 			throw service.invalid('amount', `The refund is a whole amount in minor units from 1 to ${cap}.`);
@@ -629,97 +642,89 @@ export const createReturns = (product, service) => {
 			},
 		);
 		if (reserved.modifiedCount !== 1) throw problem('move_not_allowed', 'The claim changed meanwhile; reload it.');
-		/** @type {string | null} */
-		let refundId = claim.refundId;
-		/** @type {string | null} */
-		let paymentsRefundId = null;
-		if (how.method === 'online')
-			try {
-				const done = await service.payments.refund(s, /** @type {string} */ (order.payment.paymentId), {
-					amount,
-					reason: `${order.number} ${referenceOf(claim)}`,
-					idempotencyKey: `${claim.id}-${claim.refundAmount}`,
-					by: actor,
-				});
-				refundId = done.refundId || null;
-				paymentsRefundId = refundId;
-			} catch (error) {
-				await claims(data).updateOne(
-					{ websiteId: data.websiteId, id: claim.id, refundAmount: total },
-					{
-						$set: {
-							status: claim.status,
-							refundAmount: claim.refundAmount,
-							...(claim.refundMethod === undefined ? {} : { refundMethod: claim.refundMethod }),
-							...(claim.refundReference === undefined ? {} : { refundReference: claim.refundReference }),
-						},
-						...(claim.refundMethod === undefined ? { $unset: { refundMethod: '', refundReference: '' } } : {}),
-						$pop: { history: 1 },
-					},
-				);
-				throw error;
-			}
-		await claims(data).updateOne({ websiteId: data.websiteId, id: claim.id }, { $set: { refundId } });
-		/** @type {OrderRefundEntry} */
-		const refundEntry = {
-			id: createId(ID_PREFIX.orderRefund),
-			method: how.method,
-			amount,
-			reference: how.reference,
-			claimId: claim.id,
-			note: note.note,
-			by: { kind: actor.kind, id: actor.id, name: actor.name, ...(actor.role ? { role: actor.role } : {}) },
-			at,
-			refundId: paymentsRefundId,
-		};
-		// the order: money given back (also as an entry of its refunds) and, on the first refund, the units returned
-		const lines = first ? claim.lines : [];
-		const after = /** @type {OrderRecord} */ (
-			await data.collection(COLLECTIONS.orders).findOneAndUpdate(
-				{ websiteId: data.websiteId, id: order.id },
+		// without a method the order's refund rule splits it: Payments' share through Payments, the rest recorded
+		const method = body.method === undefined || body.method === null ? null : how.method;
+		/** @type {Awaited<ReturnType<typeof moves.refund>>} */
+		let done;
+		try {
+			done = await moves.refund(s, ctx, order, {
+				amount,
+				reason: note.note || `Claim ${referenceOf(claim)}`,
+				method,
+				reference: how.reference,
+				claimId: claim.id,
+			});
+		} catch (error) {
+			await claims(data).updateOne(
+				{ websiteId: data.websiteId, id: claim.id, refundAmount: total },
 				{
-					$inc: {
-						'payment.refunded': amount,
-						...Object.fromEntries(lines.map((line, index) => [`lines.$[l${index}].returnedQuantity`, line.quantity])),
+					$set: {
+						status: claim.status,
+						refundAmount: claim.refundAmount,
+						...(claim.refundMethod === undefined ? {} : { refundMethod: claim.refundMethod }),
+						...(claim.refundReference === undefined ? {} : { refundReference: claim.refundReference }),
 					},
-					$push: { refunds: refundEntry },
+					...(claim.refundMethod === undefined ? { $unset: { refundMethod: '', refundReference: '' } } : {}),
+					$pop: { history: 1 },
 				},
-				{
-					returnDocument: 'after',
-					...NO_ID,
-					...(lines.length > 0 ? { arrayFilters: lines.map((line, index) => ({ [`l${index}.id`]: line.lineId })) } : {}),
+			);
+			throw error;
+		}
+		// the claim keeps how its money went back: the first entry written for it (Payments' share first)
+		await claims(data).updateOne(
+			{ websiteId: data.websiteId, id: claim.id },
+			{
+				$set: {
+					refundId: done.refund.refundId || claim.refundId,
+					refundMethod: done.entries[0]?.method ?? how.method,
 				},
-			)
+			},
 		);
-		const state = refundedState(after, after.payment.refunded);
-		await data
-			.collection(COLLECTIONS.orders)
-			.updateOne({ websiteId: data.websiteId, id: order.id }, { $set: { 'payment.state': state } });
+		// the order: on the first refund, the units returned
+		if (first)
+			await data
+				.collection(COLLECTIONS.orders)
+				.updateOne(
+					{ websiteId: data.websiteId, id: order.id },
+					{
+						$inc: Object.fromEntries(
+							claim.lines.map((line, index) => [`lines.$[l${index}].returnedQuantity`, line.quantity]),
+						),
+					},
+					{ arrayFilters: claim.lines.map((line, index) => ({ [`l${index}.id`]: line.lineId })) },
+				);
 		if (s.has('loyalty')) {
+			const after = /** @type {OrderRecord} */ (await findOrder(data, { id: order.id }));
 			const { pointsBack } = await s.values('returns');
 			// proportional: the claimed part's points on the claim's first refund; full_refund_only: every point the order
-			// earned, once, when this refund completes the order's refund
-			const points =
+			// earned, once, when this refund completes the order's refund; never more than is left (a move may have taken
+			// them already)
+			const wanted =
 				pointsBack === 'full_refund_only'
-					? state === 'refunded' && refundedState(order, order.payment.refunded) !== 'refunded'
+					? after.payment.refunded >= after.payment.paid && order.payment.refunded < order.payment.paid
 						? order.promotions.pointsEarned
 						: 0
 					: first
 						? pointsToReverse(order, claim)
 						: 0;
-			if (points > 0)
+			const points = Math.min(wanted, earnedLeft(after));
+			if (points > 0) {
 				await takePoints(
 					data,
 					{ userId: order.customer.userId, points, orderId: order.id, kind: 'reverse', note: order.number },
 					{ now: service.now() },
 				);
+				await data
+					.collection(COLLECTIONS.orders)
+					.updateOne({ websiteId: data.websiteId, id: order.id }, { $inc: { 'promotions.pointsReversed': points } });
+			}
 		}
 		await service.log(ctx, 'return.refunded', claim.id, { label: claimLabel(claim), detail: `Refunded ${money}` });
-		const done = await claimOf(data, claim.id);
-		if (done.status !== claim.status)
-			await service.emit('return.status_changed', s, { claim: done, from: claim.status, to: done.status });
-		await tell(s, order, done);
-		return detailOf(s, done);
+		const refunded = await claimOf(data, claim.id);
+		if (refunded.status !== claim.status)
+			await service.emit('return.status_changed', s, { claim: refunded, from: claim.status, to: refunded.status });
+		await tell(s, order, refunded);
+		return { ...(await detailOf(s, refunded)), warnings: done.warnings };
 	};
 
 	/**

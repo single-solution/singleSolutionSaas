@@ -565,7 +565,8 @@ export const createService = (product) => {
 		 * @param {Site} s @param {string} paymentId
 		 * @param {{ amount: number, reason: string, idempotencyKey: string,
 		 *   by: { kind: string, id: string, name?: string, role?: string } }} refund
-		 * @returns {Promise<{ refundId: string, manual: boolean }>}
+		 * @returns {Promise<{ refundId: string, manual: boolean, gateway: string }>} `manual`: Payments only recorded it (the
+		 *   shop returns the money by hand); `gateway`: the payment's gateway (`bank_transfer` …)
 		 */
 		refund: async (s, paymentId, { amount, reason, idempotencyKey, by }) => {
 			const body = await callPayments(
@@ -577,7 +578,7 @@ export const createService = (product) => {
 			);
 			const refunds = Array.isArray(body.refunds) ? body.refunds : [];
 			const last = refunds[refunds.length - 1] ?? {};
-			return { refundId: String(last.id ?? ''), manual: last.manual === true };
+			return { refundId: String(last.id ?? ''), manual: last.manual === true, gateway: String(body.gateway ?? '') };
 		},
 	});
 

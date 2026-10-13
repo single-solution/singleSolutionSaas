@@ -343,6 +343,13 @@ describe('returns and warranty claims', () => {
 		const second = await shop.visitor('POST', '/v1/shop/returns', { signIn: omar, body });
 		expect(second.status).toBe(201);
 		await shop.api('POST', `/v1/returns/${second.json.id}/approve`, {});
+		// cash never recorded is never refunded (OR-3); once it is, the claim refund is recorded
+		const unpaid = await shop.api('POST', `/v1/returns/${second.json.id}/refund`, { amount: 500 });
+		expect(unpaid.status).toBe(422);
+		expect(unpaid.json.errors[0].message).toContain('record the payment first');
+		await data
+			.collection(COLLECTIONS.orders)
+			.updateOne({ websiteId: data.websiteId, id: placed.id }, { $set: { 'payment.paid': 500, 'payment.state': 'paid' } });
 		const before = shop.callsTo(PAYMENTS).length;
 		const refunded = await shop.api('POST', `/v1/returns/${second.json.id}/refund`, { amount: 500 });
 		expect(refunded.json).toMatchObject({ status: 'refunded', refundId: null, refundsOnline: false });

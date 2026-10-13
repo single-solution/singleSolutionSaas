@@ -6,6 +6,7 @@
  * @module
  */
 import { statusOf } from './flow.js';
+import { orderMoney } from './orders.js';
 import { activeVariants, variantInStock } from './seo.js';
 
 /** @typedef {import('./model.js').ProductRecord} ProductRecord */
@@ -345,9 +346,6 @@ export const gradeLabels = (list) =>
  */
 export const statusLabel = (flow, key) => statusOf(flow, key)?.label ?? key;
 
-/** Roles in which nothing is left to pay. */
-const SETTLED_ROLES = Object.freeze(['cancelled', 'returned_to_origin', 'refunded', 'returned']);
-
 /**
  * What an order lookup adds from outside the record: the tracking page (built from today's couriers, E28) and the
  * dispatch video's address.
@@ -366,8 +364,9 @@ export const orderSummary = (order, flow, money, extras = {}) => {
 	const currency = order.totals.currency;
 	/** @param {number} amount */
 	const text = (amount) => money(amount, currency);
-	const paid = Math.max(0, Number(order.payment?.paid ?? 0) - Number(order.payment?.refunded ?? 0));
-	const due = SETTLED_ROLES.includes(order.role) ? 0 : Math.max(0, order.totals.total - paid);
+	// what the shop holds of it (paid less refunded) and what is still due, counted the one way (a refund never makes a
+	// debt, CK-5)
+	const { net: paid, due } = orderMoney(order);
 	const shipment = order.shipment ?? null;
 	const expected = shipment?.estimatedDeliveryAt ? new Date(shipment.estimatedDeliveryAt) : null;
 	return {

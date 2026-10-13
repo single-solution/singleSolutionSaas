@@ -28,6 +28,7 @@ import {
 	jsonInner,
 	readPath,
 } from '../core/couriers.js';
+import { CASH_METHODS, orderMoney } from '../core/orders.js';
 import { toDecimal } from '../core/money.js';
 
 /** @typedef {(url: string, init?: import('@ss/net').SafeFetchInit) => Promise<import('@ss/net').SafeResponse>} OutboundSend */
@@ -115,8 +116,8 @@ export const courierViolation = (value, policy) => {
 export const bookingValues = (order) => {
 	const address = order.address;
 	const { total, currency } = order.totals;
-	const cashMethods = ['cod', 'pickup'];
-	const toCollect = cashMethods.includes(order.payment.method) ? Math.max(0, total - order.payment.paid) : 0;
+	// the cash the courier collects: what is still due, counted the one way (orderMoney)
+	const toCollect = CASH_METHODS.includes(order.payment.method) ? orderMoney(order).due : 0;
 	return {
 		number: order.number,
 		name: address?.name || order.customer.name,

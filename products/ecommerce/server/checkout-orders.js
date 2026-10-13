@@ -33,6 +33,7 @@ import { checkGuest, phoneDigitsOf } from '../core/guests.js';
 import { loyaltyRules, pointsToEarn, takesPart } from '../core/loyalty.js';
 import { gradesByKey } from '../core/grades.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
+import { orderMoney } from '../core/orders.js';
 import { createMedia } from './catalog-media.js';
 import { createGuests } from './guests.js';
 
@@ -377,9 +378,8 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 			s.has('checkout') ? s.list('couriers') : Promise.resolve([]),
 			s.has('invoices') ? s.values('invoices') : Promise.resolve(null),
 		]);
-		const paid = (order.payments ?? []).reduce((sum, entry) => sum + entry.amount, 0) || order.payment.paid;
-		const refunded = (order.refunds ?? []).reduce((sum, entry) => sum + entry.amount, 0) || order.payment.refunded;
-		const settled = ['cancelled', 'returned_to_origin', 'refunded', 'returned'].includes(order.role);
+		// paid, refunded and due counted the one way (a refund never makes a debt, CK-5)
+		const sums = orderMoney(order);
 		const bankTransfer =
 			order.payment.method === 'bank_transfer' || (order.payment.via === 'manual' && order.payment.advance > 0);
 		const quoteBank = bankTransfer && order.role === 'awaiting_payment' ? await quoting.bankDetailsOf(s) : null;
@@ -432,9 +432,9 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 				state: order.payment.state,
 				via: order.payment.via ?? 'payments',
 				advance: order.payment.advance,
-				paid,
-				refunded,
-				balanceDue: settled ? 0 : Math.max(0, order.totals.total - Math.max(0, paid - refunded)),
+				paid: sums.paid,
+				refunded: sums.refunded,
+				balanceDue: sums.due,
 				payUrl: waitingPayment ? String(order.payment.checkoutUrl || '') || null : null,
 				payBy: order.role === 'awaiting_payment' ? iso(order.holdUntil) : null,
 				proof: order.payment.proof ? { reference: order.payment.proof.reference, at: iso(order.payment.proof.at) } : null,

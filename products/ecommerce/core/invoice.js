@@ -10,6 +10,7 @@
  * @module
  */
 import { formatDate, formatMoney } from '@ss/contracts/format';
+import { orderMoney } from './orders.js';
 
 /** @typedef {import('./model.js').OrderRecord} OrderRecord */
 /** @typedef {{ name: string, email: string | null, phone: string | null, address: string | null }} BusinessLike */
@@ -196,10 +197,11 @@ const STATE_TEXT = {
 };
 
 /**
- * What is still owed: the total less what was paid (nothing once refunded).
+ * What is still owed, counted the one way ({@link orderMoney}): the total less what was paid, nothing once the order is
+ * closed (a cancelled order never shows cash to collect).
  * @param {OrderRecord} order
  */
-const dueOf = (order) => (order.payment.state === 'refunded' ? 0 : Math.max(0, order.totals.total - order.payment.paid));
+const dueOf = (order) => orderMoney(order).due;
 
 /**
  * The cash the courier or the counter still collects: what is owed on a cash-on-delivery order not yet paid (E35).

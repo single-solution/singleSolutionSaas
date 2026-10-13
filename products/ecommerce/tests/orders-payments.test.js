@@ -151,6 +151,61 @@ describe('the payments log (E26)', () => {
 		expect((await orderRecord(order.id)).refunds.map((/** @type {any} */ e) => e.method)).toEqual(['other']);
 	});
 
+	it('counts paid, refunded and due one way: a refund is never owed, a closed order owes and takes nothing (CK-5)', async () => {
+		const { order, token } = await placeOrder();
+		await moveTo(order.id, 'confirmed');
+		await moveTo(order.id, 'delivered');
+		await refund(order.id, { amount: 300, reason: 'Scratched', method: 'cash' });
+		const mine = await shop.call('GET', `/v1/shop/orders/${order.id}`, {
+			token: shop.browser,
+			origin: ORIGIN,
+			headers: { 'ss-sign-in': token, 'x-forwarded-for': '10.7.1.9' },
+		});
+		expect(mine.json.payment).toMatchObject({ paid: 1000, refunded: 300, balanceDue: 0 });
+		const staff = await shop.api('GET', `/v1/orders/${order.id}`);
+		expect(staff.json.payment).toMatchObject({ balanceDue: 0, refundable: 700, refundDue: 0 });
+
+		// a cancelled cash order: nothing due, no cash to collect on its invoice, and no payment recorded on it
+		const cancelled = await placeOrder();
+		await moveTo(cancelled.order.id, 'cancelled');
+		expect((await shop.api('GET', `/v1/orders/${cancelled.order.id}`)).json.payment).toMatchObject({ balanceDue: 0 });
+		const invoice = await shop.api('GET', `/v1/orders/${cancelled.order.id}/invoice`);
+		expect(invoice.text).not.toContain('Cash due on delivery');
+		const closed = await pay(cancelled.order.id, { method: 'cash', amount: 1000 });
+		expect(closed.status).toBe(422);
+		expect(closed.json.errors[0].message).toContain('closed');
+	});
+
+	it('shows a refund Payments only recorded as money to return by hand, with a warning (OR-8)', async () => {
+		const { order, token } = await placeOrder({ payment: 'bank_transfer' });
+		const { paymentId } = (await orderRecord(order.id)).payment;
+		shop.payPayment(paymentId);
+		const read = await shop.call('GET', `/v1/shop/orders/${order.id}`, {
+			token: shop.browser,
+			origin: ORIGIN,
+			headers: { 'ss-sign-in': token, 'x-forwarded-for': '10.7.1.10' },
+		});
+		expect(read.json.payment).toMatchObject({ state: 'paid', paid: order.totals.total });
+		shop.responders.set(`${PAYMENTS}/v1/payments/${paymentId}/refunds`, (call) => ({
+			status: 201,
+			body: {
+				id: paymentId,
+				gateway: 'bank_transfer',
+				status: 'refunded',
+				refunds: [{ id: `rfd_${paymentId}_1`, amount: JSON.parse(call.body).amount, manual: true }],
+			},
+		}));
+		const cancelled = await moveTo(order.id, 'cancelled');
+		expect(cancelled.json.warnings).toEqual([
+			`Return USD ${(order.totals.total / 100).toFixed(2)} to the shopper by hand: Payments only recorded the refund.`,
+		]);
+		const record = await orderRecord(order.id);
+		expect(record.refunds).toEqual([
+			expect.objectContaining({ method: 'bank_transfer', manual: true, refundId: `rfd_${paymentId}_1` }),
+		]);
+		expect(record.payment).toMatchObject({ refunded: order.totals.total, state: 'refunded' });
+	});
+
 	it('takes cash on delivery as paid unless staff record it', async () => {
 		const first = await placeOrder();
 		await moveTo(first.order.id, 'confirmed');

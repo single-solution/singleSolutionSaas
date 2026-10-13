@@ -16,12 +16,10 @@ import {
 	claimValue,
 	holdsUnits,
 	isPhotoKey,
-	paidOnline,
 	photoFolder,
 	planClaim,
 	pointsToReverse,
 	refundCap,
-	refundedState,
 	returnableLines,
 	windowDays,
 	windowOf,
@@ -166,10 +164,9 @@ describe('claim windows', () => {
 		expect(refundCap(order, { ...claim, refundAmount: 2000 })).toBe(0);
 		expect(pointsToReverse(order, claim)).toBe(9);
 		expect(pointsToReverse({ ...order, promotions: { pointsEarned: 0 } }, claim)).toBe(0);
-		expect(paidOnline(order)).toBe(true);
-		expect(paidOnline({ payment: { ...order.payment, state: 'unpaid' } })).toBe(false);
-		expect(refundedState(order, 2999)).toBe('refunded');
-		expect(refundedState({ ...order, payment: { ...order.payment, paid: 0 } }, 100)).toBe('partially_refunded');
+		// never more than was paid and not refunded yet (OR-3): nothing on an order whose payment was not recorded
+		expect(refundCap({ ...order, payment: { ...order.payment, paid: 0 } }, claim)).toBe(0);
+		expect(refundCap({ ...order, payment: { ...order.payment, paid: 1500, refunded: 1000 } }, claim)).toBe(500);
 		expect(actionsOf({ status: 'refunded', restockedAt: new Date() })).toEqual(['refund', 'close']);
 		expect(actionsOf({ status: 'requested', restockedAt: null })).toEqual(['approve', 'reject']);
 	});

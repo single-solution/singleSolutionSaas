@@ -315,9 +315,10 @@ export const STATUS_ROLES = Object.freeze([
  *   (+ the role discount, E19); `fee` the payment method's fee (COD cash handling, E23), included in `total`
  * @property {{ couponId: string | null, couponCode: string, dealIds: string[], bundleIds: string[], pointsRedeemed: number,
  *   pointsValue: number, pointsEarned: number, released: boolean, role?: { key: string, percent: number, label: string } | null,
- *   pointsFixed?: boolean, pointsCredited?: boolean, pointsBlocked?: boolean }} promotions `released`: offer uses and points were given back
+ *   pointsFixed?: boolean, pointsCredited?: boolean, pointsBlocked?: boolean, pointsReversed?: number }} promotions `released`: offer uses and points were given back
  *   (cancel), exactly once; `role`: the role price applied (E19); `pointsCredited`: points fixed at placement were
- *   credited (E20 `earnAt`); `pointsFixed`: `pointsEarned` was fixed at placement; `pointsBlocked`: a deal without points applied (E18 `allowPoints`)
+ *   credited (E20 `earnAt`); `pointsFixed`: `pointsEarned` was fixed at placement; `pointsBlocked`: a deal without points applied (E18 `allowPoints`);
+ *   `pointsReversed`: earned points already taken back (a claim's refund, a return or a refund, OR-10)
  * @property {{ method: PaymentMethod, state: PaymentState, paymentId: string | null, advance: number, paid: number,
  *   refunded: number, checkedAt: Date | null, checkoutUrl?: string, via?: 'payments' | 'manual',
  *   proof?: { key: string, reference: string, at: Date } | null }} payment `paymentId`: the Payments payment; `advance`:
@@ -357,10 +358,11 @@ export const STATUS_ROLES = Object.freeze([
  *   OrderPaymentEntry
  */
 /**
- * One refund (E26): through Payments (`online`) or recorded.
+ * One refund (E26): through Payments (`online`) or recorded. `refundId`: Payments' refund; `manual`: Payments only
+ * recorded it and the shop returns the money by hand, `method` saying how (OR-8).
  * @typedef {{ id: string, method: 'online' | 'bank_transfer' | 'cash' | 'other', amount: number, reference: string,
  *   claimId: string | null, note: string, by: { kind: string, id: string, name: string, role?: string }, at: Date,
- *   refundId?: string | null }} OrderRefundEntry
+ *   refundId?: string | null, manual?: boolean }} OrderRefundEntry
  */
 
 /**

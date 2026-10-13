@@ -65,6 +65,7 @@ const order = ({ userId, number, status = 'confirmed', placedAt, shipment = null
 	status,
 	role: 'open',
 	totals: { subtotal: 5000, discount: 0, delivery: 0, tax: 0, total: 5000, currency: 'USD', taxIncluded: true },
+	payment: { paid: 0, refunded: 0 },
 	shipment,
 	idempotencyKey: `key-${number}`,
 	placedAt,

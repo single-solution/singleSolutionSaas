@@ -525,6 +525,40 @@ describe('claim refunds', () => {
 		expect((await orderOf(whole.id)).payment.state).toBe('refunded');
 		expect(await balance()).toBe(held - 20);
 	});
+
+	it('move a fully refunded order to refunded with autoRefundedStatus, its points settled once (OR-3, OR-10, K-23)', async () => {
+		await shop.setting('checkout', 'autoRefundedStatus', true);
+		const desk = await shop.seedProduct({ name: 'Desk', price: 2000 });
+		const balance = async () => (await loyaltyAccount(data, SARA, { now: shop.now() })).balance;
+		const placed = await order({ lines: [{ product: desk }], pointsEarned: 20 });
+		// it earned 20 points and the shopper paid 50 points with it
+		await data
+			.collection(COLLECTIONS.orders)
+			.updateOne({ websiteId: data.websiteId, id: placed.id }, { $set: { 'promotions.pointsRedeemed': 50 } });
+		await givePoints(
+			data,
+			{ userId: SARA, points: 20, orderId: placed.id, kind: 'earn', expiresAt: null },
+			{ now: shop.now() },
+		);
+		const start = await balance();
+		const made = await claim(placed, {});
+		await shop.api('POST', `/v1/returns/${made.json.id}/approve`, {});
+		const sent = shop.messages().length;
+		const done = await shop.api('POST', `/v1/returns/${made.json.id}/refund`, { amount: 2000, method: 'cash' });
+		expect(done.status).toBe(200);
+		const stored = await orderOf(placed.id);
+		expect(stored).toMatchObject({ status: 'refunded', payment: { refunded: 2000, state: 'refunded' } });
+		expect(stored.promotions).toMatchObject({ released: true, pointsReversed: 20 });
+		// earned points taken back once, redeemed ones given back once
+		expect(await balance()).toBe(start - 20 + 50);
+		expect(
+			shop
+				.messages()
+				.slice(sent)
+				.map((m) => m.template),
+		).toEqual(expect.arrayContaining(['ecommerce.order_status', 'ecommerce.return_status']));
+		await shop.setting('checkout', 'autoRefundedStatus', false);
+	});
 });
 
 describe('claim rules', () => {
@@ -545,7 +579,7 @@ describe('claim rules', () => {
 		const order = /** @type {any} */ ({
 			lines: [{ id: 'oln_1', total: 1000, quantity: 1 }],
 			totals: { total: 1300, delivery: 300 },
-			payment: { refunded: 0 },
+			payment: { paid: 1300, refunded: 0 },
 		});
 		const claims = [
 			{ id: 'ret_1', lines: [{ lineId: 'oln_1', quantity: 1, serials: [] }], refundAmount: 1100 },

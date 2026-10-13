@@ -281,14 +281,14 @@ export const claimValue = (order, claim) =>
 
 /**
  * The most that can still be refunded on a claim: what its lines were paid (plus the delivery still left to refund,
- * when the `refundDelivery` setting is on) minus what this claim refunded, never more than the order's total minus
- * everything refunded on it.
+ * when the `refundDelivery` setting is on) minus what this claim refunded, never more than what the order was paid
+ * minus everything refunded on it (OR-3: money never received is never refunded).
  * @param {Pick<OrderRecord, 'lines' | 'totals' | 'payment'>} order
  * @param {Pick<ReturnRecord, 'lines' | 'refundAmount'>} claim
  * @param {number} [delivery] the delivery this claim may also refund ({@link deliveryLeft})
  */
 export const refundCap = (order, claim, delivery = 0) =>
-	Math.max(0, Math.min(claimValue(order, claim) + delivery - claim.refundAmount, order.totals.total - order.payment.refunded));
+	Math.max(0, Math.min(claimValue(order, claim) + delivery - claim.refundAmount, order.payment.paid - order.payment.refunded));
 
 /**
  * The order's delivery fee not yet refunded by its other claims (a claim refunded beyond what its lines were paid gave
@@ -308,7 +308,7 @@ export const deliveryLeft = (order, claims, claimId) => {
  * Check how a claim's refund is given back and its reference (E33). Without a method an order paid online is
  * refunded through Payments and any other is recorded as `other`; a recorded method never calls Payments.
  * @param {unknown} body
- * @param {boolean} online the order was paid online ({@link paidOnline})
+ * @param {boolean} online some of what the order was paid can go back through Payments
  * @returns {{ ok: true, method: RefundMethod, reference: string } | { ok: false, field: string, message: string }}
  */
 export const checkRefundMethod = (body, online) => {
@@ -351,22 +351,6 @@ export const checkRestockChoices = (value, claim) => {
 	}
 	return { ok: true, choices };
 };
-
-/**
- * Whether the order was paid online through Payments (a refund then goes through Payments).
- * @param {Pick<OrderRecord, 'payment'>} order
- */
-export const paidOnline = (order) =>
-	Boolean(order.payment.paymentId) && (order.payment.state === 'paid' || order.payment.state === 'partially_refunded');
-
-/**
- * The order's payment state after `refunded` in total was given back.
- * @param {Pick<OrderRecord, 'payment' | 'totals'>} order
- * @param {number} refunded
- * @returns {'refunded' | 'partially_refunded'}
- */
-export const refundedState = (order, refunded) =>
-	refunded >= (order.payment.paid > 0 ? order.payment.paid : order.totals.total) ? 'refunded' : 'partially_refunded';
 
 /**
  * Loyalty points earned on the returned part of an order, to take back (in proportion to what the lines were paid; the

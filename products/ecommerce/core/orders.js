@@ -5,7 +5,7 @@
  * amounts stay minor units, with a text (`totalText` …) made by the website's Format (PLAN 0.8.10 K7). No I/O.
  * @module
  */
-import { nextStatuses, statusOf } from './flow.js';
+import { CLOSED_ROLES, nextStatuses, statusOf } from './flow.js';
 import { ID_PREFIX, STATUS_ROLES } from './model.js';
 import { isAmount } from './money.js';
 import { MAX_TRACKING, cleanTracking, hasControl } from './couriers.js';
@@ -73,9 +73,10 @@ export const wire = (value) => {
 
 /**
  * What Payments took for an order and has not refunded yet (online, bank transfer, a COD advance): the `online` entries
- * of its payments log for its Payments payment, less its `online` refunds (PM-2). Money staff recorded (a transfer, cash,
- * another way) is never Payments' to refund, even on an order that has a Payments payment. Records from before the
- * payments log (E26) have no entries: what was paid counts as before (all of it, or the COD advance).
+ * of its payments log for its Payments payment, less the refunds made through Payments (`online`, or with a Payments
+ * refund id when Payments only recorded them, OR-8) (PM-2). Money staff recorded (a transfer, cash, another way) is never
+ * Payments' to refund, even on an order that has a Payments payment. Records from before the payments log (E26) have no
+ * entries: what was paid counts as before (all of it, or the COD advance).
  * @param {OrderRecord} order
  */
 const leftAtPayments = (order) => {
@@ -94,15 +95,38 @@ const leftAtPayments = (order) => {
 	const gave =
 		entries.length === 0
 			? order.payment.refunded
-			: refunds.filter((entry) => entry.method === 'online').reduce((sum, entry) => sum + entry.amount, 0);
+			: refunds
+					.filter((entry) => entry.method === 'online' || Boolean(entry.refundId))
+					.reduce((sum, entry) => sum + entry.amount, 0);
 	return Math.max(0, took - gave);
 };
 
 /**
- * What can still be refunded.
+ * An order's money, the one way every view, invoice, message, lookup and check counts it (CK-5, K-23): `paid` and
+ * `refunded` as its payments and refunds logs add up (E26); `net` what the shop holds of it; `due` what is still to pay,
+ * the total less what was paid (a refund never makes a debt), and nothing once the order is closed (`CLOSED_ROLES`);
+ * `refundable` what can still be given back; `refundDue` the shopper's money a cancelled order still holds, to be
+ * refunded (a payment that came after the cancel, or money recorded by staff, K-13).
+ * @param {Pick<OrderRecord, 'role' | 'totals' | 'payment'>} order
+ */
+export const orderMoney = (order) => {
+	const { paid, refunded } = order.payment;
+	const net = Math.max(0, paid - refunded);
+	return {
+		paid,
+		refunded,
+		net,
+		due: CLOSED_ROLES.includes(order.role) ? 0 : Math.max(0, order.totals.total - paid),
+		refundable: net,
+		refundDue: order.role === 'cancelled' ? net : 0,
+	};
+};
+
+/**
+ * What can still be refunded ({@link orderMoney}).
  * @param {OrderRecord} order
  */
-export const refundable = (order) => Math.max(0, order.payment.paid - order.payment.refunded);
+export const refundable = (order) => orderMoney(order).refundable;
 
 /**
  * How a refund is split: through Payments first (as long as Payments' share is not refunded yet), the rest recorded
@@ -115,6 +139,13 @@ export const refundSplit = (order, amount) => {
 	const online = Math.min(amount, leftAtPayments(order));
 	return { online, manual: amount - online };
 };
+
+/**
+ * The points an order earned that were not taken back yet (`pointsReversed`: by a claim's refund or a move, OR-10), so
+ * no reversal ever takes more than the order earned.
+ * @param {Pick<OrderRecord, 'promotions'>} order
+ */
+export const earnedLeft = (order) => Math.max(0, order.promotions.pointsEarned - (order.promotions.pointsReversed ?? 0));
 
 /**
  * The payment state after refunds.
@@ -445,7 +476,8 @@ export const checkRefund = (body, order) => {
  */
 
 /**
- * Check a payment staff record (E26): at most the balance due.
+ * Check a payment staff record (E26): at most the balance due, never on a closed order (cancelled, returned or
+ * refunded: money for it is refunded, not taken, K-13).
  * @param {unknown} body
  * @param {OrderRecord} order
  * @returns {{ ok: true, value: PaymentInput } | Refusal}
@@ -454,7 +486,8 @@ export const checkPayment = (body, order) => {
 	const input = objectOf(body);
 	if (!RECORDED_METHODS.includes(/** @type {any} */ (input.method)))
 		return refuse('method', 'method is bank_transfer, cash or other.');
-	const due = balanceDue(order);
+	if (CLOSED_ROLES.includes(order.role)) return refuse('amount', 'This order is closed: no payment can be recorded on it.');
+	const { due } = orderMoney(order);
 	if (due <= 0) return refuse('amount', 'Nothing is left to pay on this order.');
 	if (!isAmount(input.amount) || /** @type {number} */ (input.amount) > due)
 		return refuse('amount', `Record a whole amount in minor units from 1 to ${due}.`);
@@ -474,12 +507,6 @@ export const checkPayment = (body, order) => {
 		},
 	};
 };
-
-/**
- * What is still to pay on an order (before refunds).
- * @param {OrderRecord} order
- */
-export const balanceDue = (order) => Math.max(0, order.totals.total - order.payment.paid);
 
 /**
  * The payment state from what was paid and refunded (E26): refunds first, then paid in full, part paid (`unpaid`: the
@@ -879,6 +906,8 @@ const customerFlags = (customer) => ({
  */
 export const orderDetail = (order, flow, { customer, images, money, serialized = null }) => {
 	const plain = wire(order);
+	// what is due, can be refunded and must be refunded, counted the one way
+	const sums = orderMoney(order);
 	return {
 		...plain,
 		statusLabel: statusLabel(flow, order.status),
@@ -889,7 +918,7 @@ export const orderDetail = (order, flow, { customer, images, money, serialized =
 			// which lines take serial numbers (E11), while Grades and serials is on
 			...(serialized ? { serialized: line.kind === 'physical' && serialized.has(line.productId) } : {}),
 		})),
-		payment: { ...plain.payment, refundable: refundable(order) },
+		payment: { ...plain.payment, refundable: sums.refundable, balanceDue: sums.due, refundDue: sums.refundDue },
 		history: plain.history.map((/** @type {any} */ entry) => ({
 			...entry,
 			fromLabel: entry.from ? statusLabel(flow, entry.from) : '',

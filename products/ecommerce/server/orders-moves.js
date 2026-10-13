@@ -29,6 +29,7 @@ import { createId } from '@ss/contracts';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import {
 	CASH_METHODS,
+	earnedLeft,
 	isSerialized,
 	missingSerials,
 	paymentStateOf,
@@ -277,10 +278,10 @@ export const createMoves = (product, service) => {
 	 * A refund entry of the order's log (E26).
 	 * @param {any} ctx
 	 * @param {{ method: 'online' | 'bank_transfer' | 'cash' | 'other', amount: number, reference?: string,
-	 *   refundId?: string | null, claimId?: string | null, note?: string }} refund
+	 *   refundId?: string | null, claimId?: string | null, note?: string, manual?: boolean }} refund
 	 */
-	const refundEntry = (ctx, { method, amount, reference = '', refundId = null, claimId = null, note = '' }) => ({
-		id: createId(ID_PREFIX.orderPayment),
+	const refundEntry = (ctx, { method, amount, reference = '', refundId = null, claimId = null, note = '', manual = false }) => ({
+		id: createId(ID_PREFIX.orderRefund),
 		method,
 		amount,
 		reference,
@@ -289,19 +290,44 @@ export const createMoves = (product, service) => {
 		by: service.actor(ctx),
 		at: new Date(product.now()),
 		refundId,
+		...(manual ? { manual: true } : {}),
 	});
 
 	/**
-	 * Points of a returned order (E27): what it earned is taken back (as far as the balance goes) and what it redeemed is
-	 * given back. Never fails the move.
+	 * The refund entry of money given back through Payments: `online`, or — when Payments only recorded the refund and
+	 * the shop returns the money by hand (a bank transfer, a gateway without a refund API, K-22) — the way it goes back
+	 * (`bank_transfer` for a transfer, else `other`), marked `manual`, with Payments' refund id (OR-8).
+	 * @param {any} ctx @param {{ refundId: string, manual: boolean, gateway: string }} done what Payments answered
+	 * @param {{ amount: number, reference?: string, claimId?: string | null, note?: string }} refund
+	 */
+	const paymentsRefundEntry = (ctx, done, refund) =>
+		refundEntry(ctx, {
+			...refund,
+			method: done.manual ? (done.gateway === 'bank_transfer' ? 'bank_transfer' : 'other') : 'online',
+			refundId: done.refundId || null,
+			manual: done.manual,
+		});
+
+	/**
+	 * What staff are told when Payments only recorded a refund: the shopper's money is not back yet (OR-8).
+	 * @param {Site} s @param {OrderRecord} order @param {number} amount
+	 */
+	const returnByHand = async (s, order, amount) =>
+		`Return ${(await s.format()).money(amount, order.totals.currency)} to the shopper by hand: Payments only recorded the refund.`;
+
+	/**
+	 * Points of a returned or refunded order (E27): what it earned and was not taken back yet (a claim's refund may have
+	 * taken some, `pointsReversed`, OR-10) is taken back, as far as the balance goes, and what it redeemed is given back,
+	 * once (`released`; K-23: also when a delivered order is refunded). Never fails the move.
 	 * @param {Site} s @param {OrderRecord} order @param {number} now
 	 */
 	const returnPoints = async (s, order, now) => {
 		const owner = ownerOf(order);
 		if (!owner) return;
 		const data = await s.data();
-		const earned = order.promotions.pointsCredited === false ? 0 : order.promotions.pointsEarned;
+		const earned = order.promotions.pointsCredited === false ? 0 : earnedLeft(order);
 		const redeemed = order.promotions.released ? 0 : order.promotions.pointsRedeemed;
+		if (earned <= 0 && redeemed <= 0) return;
 		try {
 			await transact(s, async (session) => {
 				if (earned > 0) {
@@ -320,7 +346,11 @@ export const createMoves = (product, service) => {
 					);
 				await data
 					.collection(COLLECTIONS.orders)
-					.updateOne({ websiteId: s.websiteId, id: order.id }, { $set: { 'promotions.released': true } }, { session });
+					.updateOne(
+						{ websiteId: s.websiteId, id: order.id },
+						{ $set: { 'promotions.released': true }, $inc: { 'promotions.pointsReversed': earned } },
+						{ session },
+					);
 			});
 		} catch {
 			// the points stay as they were; staff can adjust the account
@@ -553,16 +583,10 @@ export const createMoves = (product, service) => {
 							{ websiteId: s.websiteId, id: order.id },
 							{
 								$set: { 'payment.refunded': refunded, 'payment.state': stateAfterRefund(order.payment.paid, refunded) },
-								$push: {
-									refunds: refundEntry(ctx, {
-										method: 'online',
-										amount: online,
-										refundId: done.refundId,
-										note: 'Order cancelled',
-									}),
-								},
+								$push: { refunds: paymentsRefundEntry(ctx, done, { amount: online, note: 'Order cancelled' }) },
 							},
 						);
+						if (done.manual) warnings.push(await returnByHand(s, order, online));
 					} catch (error) {
 						warnings.push(
 							`The order is cancelled but the refund failed (${/** @type {any} */ (error).detail}); refund it from the order.`,
@@ -595,51 +619,30 @@ export const createMoves = (product, service) => {
 				if (before && order.payment.paid <= 0)
 					throw problem('nothing_paid', 'Nothing was paid on this order; cancel it instead.');
 				const { online, manual } = refundSplit(order, amount);
-				/** @type {string | null} */
-				let refundId = null;
-				if (online > 0)
-					refundId = (
-						await refundOnline(
-							s,
-							ctx,
-							order,
-							online,
-							input.note || 'Order refunded',
-							`${order.id}:refund:${order.payment.refunded}`,
-						)
-					).refundId;
+				const note = input.note || 'Order refunded';
+				const done =
+					online > 0
+						? await refundOnline(s, ctx, order, online, note, `${order.id}:refund:${order.payment.refunded}`)
+						: null;
 				if (amount > 0) {
 					set['payment.refunded'] = order.payment.paid;
 					set['payment.state'] = 'refunded';
 					push.refunds = {
 						$each: [
-							...(online > 0
-								? [refundEntry(ctx, { method: 'online', amount: online, refundId, note: input.note || 'Order refunded' })]
-								: []),
-							...(manual > 0
-								? [refundEntry(ctx, { method: 'other', amount: manual, note: input.note || 'Order refunded' })]
-								: []),
+							...(done ? [paymentsRefundEntry(ctx, done, { amount: online, note })] : []),
+							...(manual > 0 ? [refundEntry(ctx, { method: 'other', amount: manual, note })] : []),
 						],
 					};
 				}
+				if (done?.manual) warnings.push(await returnByHand(s, order, online));
 				if (before) {
 					if (!(await releaseOrder(data, order, { now, update: writeReleased }))) throw changed();
 					break;
 				}
-				// only points that were credited are taken back (an order refunded before delivery earned none)
-				const earned = order.promotions.pointsCredited === false ? 0 : order.promotions.pointsEarned;
-				const owner = ownerOf(order);
-				if (earned > 0 && owner && order.role !== 'returned')
-					await transact(s, async (session) => {
-						await write(session);
-						const taken = await takePoints(
-							data,
-							{ userId: owner, points: earned, orderId: order.id, kind: 'reverse', note: order.number },
-							{ now, session },
-						);
-						if (!taken.ok) throw stop('points');
-					});
-				else await write(undefined);
+				// after delivery: earned points not taken back yet are taken back (an order refunded before delivery earned
+				// none) and redeemed ones given back, once (K-23)
+				await write(undefined);
+				await returnPoints(s, order, now);
 				break;
 			}
 			default:
@@ -746,25 +749,21 @@ export const createMoves = (product, service) => {
 		const manual = input.amount - online;
 		if (input.method === 'online' && manual > 0)
 			throw service.invalid('amount', `At most ${split.online} can be refunded through Payments.`);
-		/** @type {string | null} */
-		let refundId = null;
-		let recorded = manual > 0;
-		if (online > 0) {
-			const done = await refundOnline(s, ctx, order, online, input.reason, `${order.id}:refund:${order.payment.refunded}`);
-			refundId = done.refundId;
-			recorded = recorded || done.manual;
-		}
+		const done =
+			online > 0
+				? await refundOnline(s, ctx, order, online, input.reason, `${order.id}:refund:${order.payment.refunded}`)
+				: null;
+		const refundId = done ? done.refundId : null;
+		const recorded = manual > 0 || done?.manual === true;
 		const refunded = order.payment.refunded + input.amount;
 		const money = (await s.format()).money(input.amount, order.totals.currency);
 		const recordedMethod = input.method === null || input.method === 'online' ? 'other' : input.method;
 		const entries = [
-			...(online > 0
+			...(done
 				? [
-						refundEntry(ctx, {
-							method: 'online',
+						paymentsRefundEntry(ctx, done, {
 							amount: online,
 							reference: input.reference,
-							refundId,
 							claimId: input.claimId,
 							note: input.reason,
 						}),
@@ -810,7 +809,7 @@ export const createMoves = (product, service) => {
 		);
 		await service.emit('order.refunded', s, { order: after, amount: input.amount, claimId: input.claimId });
 		/** @type {string[]} */
-		const warnings = [];
+		const warnings = done?.manual ? [await returnByHand(s, order, online)] : [];
 		if ((await s.values('checkout')).autoRefundedStatus === true && after.payment.paid > 0 && refunded >= after.payment.paid) {
 			const flow = /** @type {OrderFlow} */ (/** @type {unknown} */ (await s.list('order_flow')));
 			const to = flow.statuses.find((status) => status.role === 'refunded' && canMove(flow, after.status, status.key));
@@ -826,7 +825,7 @@ export const createMoves = (product, service) => {
 				warnings.push(...moved.warnings);
 			}
 		}
-		return { order: after, refund: { amount: input.amount, online, manual, refundId, recorded }, warnings };
+		return { order: after, refund: { amount: input.amount, online, manual, refundId, recorded }, warnings, entries };
 	};
 
 	/**

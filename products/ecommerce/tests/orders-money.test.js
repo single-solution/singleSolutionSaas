@@ -1,8 +1,12 @@
 /**
- * An order's money, the pure part (`core/orders.js`): how much of a refund goes back through Payments (PM-2).
+ * An order's money, the pure part (`core/orders.js`): how much of a refund goes back through Payments (PM-2), and paid,
+ * refunded and due counted one way for every view, invoice and lookup (CK-5, K-23).
  */
 import { describe, expect, it } from 'vitest';
-import { refundSplit } from '../core/orders.js';
+import { cashToCollect } from '../core/invoice.js';
+import { orderSummary } from '../core/lookup.js';
+import { DEFAULT_FLOW } from '../core/flow.js';
+import { earnedLeft, orderMoney, refundSplit } from '../core/orders.js';
 
 /** @param {string} method @param {number} amount @param {string} [reference] */
 const entry = (method, amount, reference = '') => ({ method, amount, reference });
@@ -54,5 +58,39 @@ describe('refundSplit (PM-2)', () => {
 	it('counts records from before the payments log as before', () => {
 		expect(refundSplit(order({ paid: 1000, refunded: 400 }), 600)).toEqual({ online: 600, manual: 0 });
 		expect(refundSplit(order({ method: 'cod', advance: 300, paid: 1000 }), 1000)).toEqual({ online: 300, manual: 700 });
+	});
+});
+
+describe('orderMoney (CK-5, K-23)', () => {
+	it('never makes a refund a debt and owes nothing on a closed order', () => {
+		// paid in full, part refunded: nothing due, the rest can be refunded
+		const partly = order({ paid: 1000, refunded: 300 }, { role: 'delivered' });
+		expect(orderMoney(partly)).toEqual({ paid: 1000, refunded: 300, net: 700, due: 0, refundable: 700, refundDue: 0 });
+		// part paid: the rest is due, until the order closes
+		expect(orderMoney(order({ paid: 400 })).due).toBe(600);
+		for (const role of ['cancelled', 'returned_to_origin', 'refunded', 'returned'])
+			expect(orderMoney(order({ paid: 400 }, { role })).due).toBe(0);
+		// a cancelled order still holding money owes it back
+		expect(orderMoney(order({ paid: 1000, refunded: 200 }, { role: 'cancelled' })).refundDue).toBe(800);
+		expect(orderMoney(order({ paid: 1000 }, { role: 'returned' })).refundDue).toBe(0);
+	});
+
+	it('is what the invoice, the lookup and the points use', () => {
+		const cod = { ...order({ method: 'cod', paymentId: null, state: 'unpaid' }), role: 'shipped' };
+		expect(cashToCollect(cod)).toBe(1000);
+		expect(cashToCollect({ ...cod, role: 'cancelled' })).toBe(0);
+		const looked = orderSummary(
+			{
+				...order({ paid: 1000, refunded: 300 }, { role: 'delivered' }),
+				status: 'delivered',
+				lines: [],
+				placedAt: new Date(0),
+			},
+			DEFAULT_FLOW,
+			(amount) => String(amount),
+		);
+		expect(looked).toMatchObject({ paid: 700, balanceDue: 0 });
+		expect(earnedLeft({ promotions: /** @type {any} */ ({ pointsEarned: 20 }) })).toBe(20);
+		expect(earnedLeft({ promotions: /** @type {any} */ ({ pointsEarned: 20, pointsReversed: 25 }) })).toBe(0);
 	});
 });

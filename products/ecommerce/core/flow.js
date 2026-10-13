@@ -76,6 +76,11 @@ Object.freeze(ALLOWED_FROM);
 /** Roles whose orders still wait (counted by the open-order cap; cancelled when their window ends). */
 export const WAITING_ROLES = Object.freeze(/** @type {StatusRole[]} */ (['awaiting_payment', 'awaiting_confirmation']));
 
+/** Roles of a closed order: nothing is left to pay on it and no payment is recorded on it any more. */
+export const CLOSED_ROLES = Object.freeze(
+	/** @type {StatusRole[]} */ (['cancelled', 'returned_to_origin', 'refunded', 'returned']),
+);
+
 /**
  * Check a flow the merchant saves.
  * @param {unknown} value
