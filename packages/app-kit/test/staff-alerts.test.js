@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { defineRoute } from '../src/index.js';
-import { ALERT_KEEP_MS, MAX_RECIPIENTS, RETRY_MS, alertOutcome, recipientOf } from '../src/staff-alerts.js';
+import { noopLogger } from '../src/logger.js';
+import { ALERT_KEEP_MS, MAX_RECIPIENTS, RETRY_MS, alertOutcome, createStaffAlerts, recipientOf } from '../src/staff-alerts.js';
 import { manifest, openDb, productRoutes, setup } from './helpers.js';
 
 /** The sample product with a staff-alerts feature (its settings as K6 names them). */
@@ -218,6 +219,25 @@ describe('staff alerts (K6)', () => {
 		} finally {
 			await client.close();
 		}
+	});
+
+	it('are never looked for in a product without a Notifications token connection', async () => {
+		let looked = 0;
+		const alerts = createStaffAlerts({
+			productId: 'notes',
+			settings: /** @type {any} */ ({}),
+			connections: /** @type {any} */ ({ definitions: { database: { kind: 'database' } } }),
+			data: /** @type {any} */ ({
+				forWebsite: async () => {
+					looked += 1;
+					throw new Error('not expected');
+				},
+			}),
+			now: () => 0,
+			logger: noopLogger,
+		});
+		await alerts.retry('web_0123456789abcdefghjkmnpq', null);
+		expect(looked).toBe(0);
 	});
 
 	it('read the answers of Notifications: taken, not connected, again or refused', () => {

@@ -114,6 +114,8 @@ export const createStaffAlerts = ({ productId, settings, connections, data, now,
 	const staffCache = new Map();
 	/** Per instance: when the saved messages of a website were last looked for. @type {Map<string, number>} */
 	const lookedAt = new Map();
+	/** A product without a Notifications token connection never sends an alert, so it never looks for saved ones. */
+	const sends = Object.values(connections.definitions).some((def) => def.kind === 'token' && def.productId === 'notifications');
 
 	/**
 	 * Send one message through Notifications (pasted token), required, with its own Idempotency-Key.
@@ -252,14 +254,14 @@ export const createStaffAlerts = ({ productId, settings, connections, data, now,
 
 	/**
 	 * Right after a request for the website: try again the saved messages that are due (at most {@link RETRY_BATCH};
-	 * an instance looks at most every minute). A message Notifications still does not take waits longer, and is given
-	 * up a day after its first try.
+	 * an instance looks at most every minute, and only in a product that can send alerts). A message Notifications
+	 * still does not take waits longer, and is given up a day after its first try.
 	 * @param {string} websiteId
 	 * @param {string | null} merchantId
 	 */
 	const retry = async (websiteId, merchantId) => {
 		const t = now();
-		if (t - (lookedAt.get(websiteId) ?? -Infinity) < LOOK_EVERY_MS) return;
+		if (!sends || t - (lookedAt.get(websiteId) ?? -Infinity) < LOOK_EVERY_MS) return;
 		lookedAt.set(websiteId, t);
 		const rows = await savedOf(websiteId, merchantId);
 		const due = /** @type {SavedAlert[]} */ (
