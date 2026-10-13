@@ -2,7 +2,8 @@
  * Search, listings and filters (PLAN 0.8.8 Catalog, the product grid): the shopper's query (words, category, brand,
  * price range, in stock, attribute values, grade, sort) as a database filter, the sort orders with their cursor keys
  * (every order ends with the product id, so pages never skip or repeat), and the facet counts of a listing. Search
- * matches every word anywhere in the name, summary, tags or SKUs, in any language. No I/O.
+ * matches every word anywhere in the name, summary, tags or SKUs, in any language, or with the `catalog` setting
+ * `searchMatch` at `phrase` the whole phrase in the name or a SKU (SF-10). No I/O.
  * @module
  */
 import { isObject, valueLabel } from './catalog.js';
@@ -42,11 +43,13 @@ const MAX_WORD = 50;
 const escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /**
- * Words of a search as a filter: every word must appear in the name, summary, a tag or a SKU (case-insensitive).
+ * Words of a search as a filter: every word must appear in the name, summary, a tag or a SKU; with `phrase`, the words
+ * in their order, as one phrase, in the name or a SKU (SF-10). Case-insensitive.
  * @param {string} q
+ * @param {'words' | 'phrase'} [match]
  * @returns {Record<string, unknown> | null} null for an empty search
  */
-export const searchFilter = (q) => {
+export const searchFilter = (q, match = 'words') => {
 	const words = q
 		.normalize('NFC')
 		.split(/\s+/)
@@ -54,6 +57,10 @@ export const searchFilter = (q) => {
 		.filter(Boolean)
 		.slice(0, MAX_WORDS);
 	if (words.length === 0) return null;
+	if (match === 'phrase') {
+		const pattern = { $regex: words.map(escapeRegex).join('\\s+'), $options: 'i' };
+		return { $or: [{ name: pattern }, { 'variants.sku': pattern }] };
+	}
 	return {
 		$and: words.map((word) => {
 			const pattern = { $regex: escapeRegex(word), $options: 'i' };
@@ -170,6 +177,7 @@ export const storedValues = (attribute, values) => {
  * @property {{ categoryIds: string[], brandIds: string[] }} [hidden] categories and brands whose products shoppers do
  *   not see (E1)
  * @property {Record<string, unknown> | null} [deal] the products a deal applies to (E8)
+ * @property {'words' | 'phrase'} [match] how the search's words match (the `catalog` setting `searchMatch`, SF-10)
  */
 
 /**
@@ -182,7 +190,7 @@ export const storedValues = (attribute, values) => {
 export const shopFilter = (query, resolved) => {
 	/** @type {Record<string, unknown>[]} */
 	const and = [{ status: 'active' }];
-	const search = searchFilter(query.q);
+	const search = searchFilter(query.q, resolved.match);
 	if (search) and.push(search);
 	and.push(...visibleFilter(resolved.hidden));
 	if (resolved.categoryIds) and.push({ categoryIds: { $in: resolved.categoryIds } });

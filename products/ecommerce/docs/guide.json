@@ -260,7 +260,7 @@
 				"id": "atlas-search",
 				"title": "Atlas Search",
 				"paragraphs": [
-					"Basic search matches every word. With the catalog setting search at atlas, shop and Chat searches use Atlas Search on your own database: fuzzy autocomplete on the product name (one typo allowed), text on the tags and summary, and the brands and categories whose names match, filtered on your website and active products and ranked by score (unless the shopper picks a sort); the listing's other filters follow.",
+					"Basic search matches every word anywhere in the name, summary, tags or SKUs; with the catalog setting searchMatch at phrase, the shop's basic search matches the whole phrase, words in order, in the name or a SKU. With the catalog setting search at atlas, shop and Chat searches use Atlas Search on your own database (chatSearch gives Chat its own mode: same as the shop by default, basic or atlas): fuzzy autocomplete on the product name (one typo allowed), text on the tags and summary, and the brands and categories whose names match, filtered on your website and active products and ranked by score (unless the shopper picks a sort); the listing's other filters follow.",
 					"Your database must be on MongoDB Atlas. In Atlas, open your cluster → Atlas Search → Create Search Index → JSON Editor, pick your shop's database and the ss_ecommerce_products collection, name the index as the catalog setting searchIndex (ss_ecommerce_products_search by default) and paste this definition:",
 					{
 						"code": "searchIndex"

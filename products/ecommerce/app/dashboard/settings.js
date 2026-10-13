@@ -199,14 +199,14 @@ export function SettingsSections({ features, forms, extras }) {
 }
 
 /**
- * The notice on a feature's settings card: with the `catalog` setting `search` at `atlas` (saved or being edited), the
- * index Atlas Search needs and where the docs explain it (E14).
+ * The notice on a feature's settings card: with the `catalog` setting `search` or `chatSearch` at `atlas` (saved or
+ * being edited), the index Atlas Search needs and where the docs explain it (E14, SF-13).
  * @param {string} key the feature
  * @param {Record<string, unknown>} values its settings shown in this section, edits included
  * @returns {import('react').ReactNode}
  */
 export const settingsNotice = (key, values) =>
-	key === 'catalog' && values.search === 'atlas' ? (
+	key === 'catalog' && (values.search === 'atlas' || values.chatSearch === 'atlas') ? (
 		<Callout
 			tone="info"
 			className="mb-4"

@@ -294,7 +294,7 @@ export const createChatLookup = (product, service, media) => {
 		const narrowed = and.length > 0 ? { ...base, $and: and } : base;
 		const q = terms.join(' ');
 		// Atlas Search first when the website uses it, the basic search when it fails (E14)
-		if (q && (await atlas.useAtlas(s, q))) {
+		if (q && (await atlas.useAtlas(s, q, 'chat'))) {
 			const found = await atlas.run(s, data, q, {
 				match: narrowed,
 				sort: null,

@@ -22,11 +22,17 @@ import { namesMatching, searchStage } from '../core/search.js';
  */
 export const createCatalogSearch = (product) => {
 	/**
-	 * Whether searches of this website go to Atlas Search.
+	 * Whether searches of this website go to Atlas Search: the shop's by the `catalog` setting `search`, Chat's by
+	 * `chatSearch` (`same`: as the shop; SF-13).
 	 * @param {Site} s
 	 * @param {string} q
+	 * @param {'shop' | 'chat'} [where]
 	 */
-	const useAtlas = async (s, q) => q.trim() !== '' && (await s.values('catalog')).search === 'atlas';
+	const useAtlas = async (s, q, where = 'shop') => {
+		if (q.trim() === '') return false;
+		const { search, chatSearch } = await s.values('catalog');
+		return (where === 'chat' && chatSearch && chatSearch !== 'same' ? chatSearch : search) === 'atlas';
+	};
 
 	/**
 	 * Whether the index answers for this website (SF-7): it finds one of the website's active products, or the website

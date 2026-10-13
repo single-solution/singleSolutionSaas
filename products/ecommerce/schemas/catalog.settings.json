@@ -98,6 +98,20 @@
 			"default": "basic",
 			"enum": ["basic", "atlas"]
 		},
+		"chatSearch": {
+			"type": "string",
+			"title": "Search for Chat",
+			"description": "How Chat's product lookups search: as the shop (Search above), basic, or Atlas Search (the same index).",
+			"default": "same",
+			"enum": ["same", "basic", "atlas"]
+		},
+		"searchMatch": {
+			"type": "string",
+			"title": "Basic search matches",
+			"description": "Every word anywhere in the name, summary, tags or SKUs; or the whole phrase, words in order, in the name or a SKU. For the shop's basic search.",
+			"default": "words",
+			"enum": ["words", "phrase"]
+		},
 		"searchIndex": {
 			"type": "string",
 			"title": "Atlas Search index name",

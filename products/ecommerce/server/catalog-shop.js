@@ -182,7 +182,7 @@ export const createCatalogShop = (product, service, common) => {
 	/** GET /v1/shop/products. @param {any} ctx */
 	const listing = async (ctx) => {
 		const { s, data } = await common.open(ctx);
-		const { pageSize } = await s.values('catalog');
+		const { pageSize, searchMatch } = await s.values('catalog');
 		const page = paginate(
 			{ cursor: ctx.query.page ? null : ctx.query.cursor, limit: ctx.query.limit },
 			{ defaultLimit: Math.min(MAX_PAGE, Number(pageSize)), maxLimit: MAX_PAGE },
@@ -216,6 +216,7 @@ export const createCatalogShop = (product, service, common) => {
 			attributes: byAttribute,
 			hidden,
 			deal: query.deal ? await dealFilter(data, query.deal, categories) : null,
+			match: searchMatch === 'phrase' ? /** @type {const} */ ('phrase') : /** @type {const} */ ('words'),
 		};
 		const sort = /** @type {import('../core/catalog-query.js').Sort} */ (SORTS[query.sort]);
 		const filterable = attributes.filter((attribute) => attribute.filterable && attribute.active !== false);

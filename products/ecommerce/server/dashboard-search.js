@@ -1,8 +1,8 @@
 /**
  * The dashboard's Atlas Search check (PLAN 0.8.10 E14): `GET /v1/dashboard/websites/:websiteId/search-index` answers
- * the `catalog` settings `search` and `searchIndex` and whether the index answered the last time a shop or Chat search
- * used it (`adapters/search-state.js`), so Overview shows `Search index: Ready` or `Search index missing` while search
- * is `atlas`. Setup only: no business data. `server/routes.js` mounts it next to the dashboard's list routes.
+ * whether the shop or Chat searches with Atlas (the `catalog` settings `search` and `chatSearch`, SF-13), the
+ * `searchIndex` and whether the index answered the last time a shop or Chat search used it (`adapters/search-state.js`),
+ * so Overview shows `Search index: Ready` or `Search index missing` while either is `atlas`. Setup only: no business data. `server/routes.js` mounts it next to the dashboard's list routes.
  * @module
  */
 import { defineRoute } from '@ss/app-kit';
@@ -33,7 +33,7 @@ export const createDashboardSearch = (product) => [
 				product.searchState.get(websiteId),
 			]);
 			return {
-				search: catalog.search === 'atlas' ? 'atlas' : 'basic',
+				search: catalog.search === 'atlas' || catalog.chatSearch === 'atlas' ? 'atlas' : 'basic',
 				index: String(catalog.searchIndex || DEFAULT_INDEX),
 				state: state
 					? { missing: state.missing === true, at: new Date(state.at).toISOString(), message: String(state.message ?? '') }
