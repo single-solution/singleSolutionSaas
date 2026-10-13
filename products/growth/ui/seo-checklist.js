@@ -9,7 +9,7 @@
  * @module
  */
 import { formatDate, mountWidget } from '@ss/app-kit/widget';
-import { chipGroup, fill, moreMenu, openDialog } from './admin-kit.js';
+import { PROBLEM_TEXTS, chipGroup, fill, moreMenu, openDialog, problemKey } from './admin-kit.js';
 import { adminCall } from './tickets.js';
 import { element } from './dom.js';
 import { WIDGET_CSS } from './styles.js';
@@ -19,6 +19,39 @@ const SITE_CHECKS = Object.freeze(['robots_txt', 'robots_blocks', 'sitemap', 've
 
 /** Order of the statuses in a card: what to fix first. */
 const ORDER = Object.freeze({ fail: 0, warn: 1, pass: 2 });
+
+/** The widget texts of the checklist's refused runs. */
+export const SEO_PROBLEMS = Object.freeze({
+	...PROBLEM_TEXTS,
+	'validation_failed:paths': 'seo.problem.paths',
+	rate_limited: 'seo.problem.rate_limited',
+});
+/** The widget texts of refused IndexNow submissions (what was wrong with them). */
+export const INDEXNOW_PROBLEMS = Object.freeze({
+	...PROBLEM_TEXTS,
+	'validation_failed:key': 'indexnow.noKey',
+	'validation_failed:keyPath': 'indexnow.badPath',
+	'validation_failed:urls': 'indexnow.problem.urls',
+	rate_limited: 'indexnow.problem.rate_limited',
+});
+/** What IndexNow answered when it refused a submission (the problem's `indexNowStatus`) → its widget text. */
+export const INDEXNOW_REFUSED = Object.freeze({
+	403: 'indexnow.refused.key',
+	422: 'indexnow.refused.host',
+	429: 'indexnow.refused.busy',
+});
+
+/**
+ * The widget texts of a refused IndexNow submission: with IndexNow's own refusal, its text.
+ * @param {{ data?: any }} answer
+ * @returns {Readonly<Record<string, string>>}
+ */
+const indexNowProblems = (answer) => {
+	const status = String(answer.data?.indexNowStatus);
+	return Object.hasOwn(INDEXNOW_REFUSED, status)
+		? { ...INDEXNOW_PROBLEMS, indexnow_refused: INDEXNOW_REFUSED[/** @type {'403' | '422' | '429'} */ (status)] }
+		: INDEXNOW_PROBLEMS;
+};
 
 /** @typedef {{ id: string, status: 'pass' | 'warn' | 'fail', page: string | null, title: string, fix: string }} Check */
 
@@ -53,9 +86,13 @@ export const mountSeoChecklist = ({ host, api, config, viewer, open = () => {} }
 			const doc = root.ownerDocument;
 			/** @param {string} tag @param {Record<string, string>} [attributes] @param {string} [text] */
 			const h = (tag, attributes, text) => element(doc, tag, attributes, text);
-			/** @param {{ ok: boolean, status: number, data: any }} answer @param {string} fallback */
-			const failure = (answer, fallback) =>
-				answer.status === 0 && !api.tickets.current() ? t('seo.signedOut') : (answer.data?.detail ?? t(fallback));
+			/**
+			 * @param {{ ok: boolean, status: number, data: any }} answer
+			 * @param {Readonly<Record<string, string>>} keys
+			 * @param {string} fallback
+			 */
+			const failure = (answer, keys, fallback) =>
+				answer.status === 0 && !api.tickets.current() ? t('seo.signedOut') : t(problemKey(answer, keys, fallback));
 			/** @param {string} label @param {HTMLElement} control */
 			const field = (label, control) => {
 				const node = h('label', {}, label);
@@ -72,7 +109,8 @@ export const mountSeoChecklist = ({ host, api, config, viewer, open = () => {} }
 			 */
 			const submit = async (urls) => {
 				const answer = await adminCall(api, 'POST', '/v1/admin/indexnow', { urls });
-				if (!answer.ok) return t('indexnow.failed', { reason: failure(answer, 'seo.failed') });
+				if (!answer.ok)
+					return t('indexnow.failed', { reason: failure(answer, indexNowProblems(answer), 'indexnow.refused.other') });
 				indexNowNote.textContent = t('indexnow.done', { count: answer.data.submitted });
 				return null;
 			};
@@ -126,7 +164,7 @@ export const mountSeoChecklist = ({ host, api, config, viewer, open = () => {} }
 					const answer = await adminCall(api, 'POST', '/v1/admin/seo/checks', paths ? { paths } : {});
 					run.removeAttribute('disabled');
 					if (!answer.ok) {
-						status.textContent = failure(answer, 'seo.failed');
+						status.textContent = failure(answer, SEO_PROBLEMS, 'seo.failed');
 						return status.textContent;
 					}
 					status.textContent = t('seo.checkedAt', {

@@ -2,8 +2,19 @@
 /* global document, window */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import strings from '../strings/en.json' with { type: 'json' };
+import { PRESETS } from '../core/analytics.js';
 import { widgetSettings } from '../core/config.js';
-import { CONSENT_STORAGE_KEY, SESSION_STORAGE_KEY, VISIT_STORAGE_KEY, WIDGET_ATTRIBUTE, WIDGET_GLOBAL } from '../core/widgets.js';
+import { BROWSERS, DEVICES, EVENT_FEATURES, SYSTEMS, VITALS, ratingOf } from '../core/events.js';
+import { pageChecks, siteChecks } from '../core/seo.js';
+import {
+	CONSENT_STORAGE_KEY,
+	FUNNEL_STEPS,
+	SESSION_STORAGE_KEY,
+	VISIT_STORAGE_KEY,
+	WIDGET_ATTRIBUTE,
+	WIDGET_GLOBAL,
+} from '../core/widgets.js';
+import { ANALYTICS_PROBLEMS } from '../ui/analytics-dashboard.js';
 import {
 	cameFrom,
 	createCollector,
@@ -18,6 +29,7 @@ import {
 } from '../ui/collect.js';
 import { storageOf } from '../ui/consent.js';
 import { NOTICE_STORAGE_KEY } from '../ui/notice-bar.js';
+import { INDEXNOW_PROBLEMS, INDEXNOW_REFUSED, SEO_PROBLEMS } from '../ui/seo-checklist.js';
 import { injectScripts } from '../ui/tags.js';
 import { ADMIN_CONFIG_PATH, CONFIG_PATH, startWidget } from '../ui/widget.js';
 
@@ -1260,7 +1272,13 @@ describe('admin widgets', () => {
 			'GET /v1/admin/analytics': (init, url) => {
 				expect(init.headers.authorization).toBe('Bearer ticket-1');
 				asked.push(url);
-				return fail ? answer(422, { detail: 'Bad days.' }) : answer(200, REPORT);
+				return fail
+					? answer(422, {
+							type: 'https://growth.example.dev/problems/validation_failed',
+							detail: 'Bad days.',
+							errors: [{ path: '/from', message: 'Bad days.' }],
+						})
+					: answer(200, REPORT);
 			},
 			...EVENTS,
 		});
@@ -1310,7 +1328,8 @@ describe('admin widgets', () => {
 		fail = true;
 		dialog(host).dispatchEvent(new window.Event('submit', { cancelable: true }));
 		await flush();
-		expect(dialog(host).querySelector('[role="status"]').textContent).toBe(`${strings['analytics.failed']} Bad days.`);
+		// the widget's own text, never the server's English detail (OT-4)
+		expect(dialog(host).querySelector('[role="status"]').textContent).toBe(strings['analytics.problem.range']);
 		fail = false;
 		dialog(host).dispatchEvent(new window.Event('submit', { cancelable: true }));
 		await flush();
@@ -1321,7 +1340,7 @@ describe('admin widgets', () => {
 		press(host, '⋯');
 		press(host, strings['analytics.refresh']);
 		await flush();
-		expect(inside(host, '[role="status"]').textContent).toBe(`${strings['analytics.failed']} Bad days.`);
+		expect(inside(host, '[role="status"]').textContent).toBe(strings['analytics.problem.range']);
 		// the event log: chips with counts, Load more, and an event's fields in a dialog
 		const chips = [...(host.shadowRoot?.querySelectorAll('.section:last-child .chip') ?? [])].map((c) => c.textContent);
 		expect(chips).toEqual(['All3', 'Viewed a page2', 'Purchased1']);
@@ -1473,6 +1492,8 @@ describe('admin widgets', () => {
 		/** @type {string[]} */
 		const opened = [];
 		let refuse = false;
+		/** What a refused submission answers (a failure of ours at first). */
+		let refusal = () => answer(500, {});
 		const page = 'https://shop.example.com/';
 		const shop = 'https://shop.example.com/shop';
 		w.open = (/** @type {string} */ url) => opened.push(url);
@@ -1512,7 +1533,7 @@ describe('admin widgets', () => {
 			},
 			'POST /v1/admin/indexnow': (init) => {
 				submitted.push(JSON.parse(init.body));
-				return refuse ? answer(502, { detail: 'IndexNow answered 500.' }) : answer(200, { submitted: 2 });
+				return refuse ? refusal() : answer(200, { submitted: 2 });
 			},
 		});
 		let tickets = 0;
@@ -1573,7 +1594,28 @@ describe('admin widgets', () => {
 		dialog(host).dispatchEvent(new window.Event('submit', { cancelable: true }));
 		await flush();
 		expect(submitted.at(-1)).toEqual({ urls: ['https://shop.example.com/a', 'https://shop.example.com/b'] });
-		expect(dialog(host).querySelector('[role="status"]').textContent).toBe('Not submitted: IndexNow answered 500.');
+		// the widget's own text for each refusal, never the server's English detail (OT-4)
+		const said = () => dialog(host).querySelector('[role="status"]').textContent;
+		expect(said()).toBe(`Not submitted: ${strings['indexnow.refused.other']}`);
+		/** @param {number} status @param {{ code: string, more?: object }} body */
+		const refuseWith = async (status, body) => {
+			refusal = () =>
+				answer(status, { type: `https://growth.example.dev/problems/${body.code}`, detail: 'English.', ...body.more });
+			dialog(host).dispatchEvent(new window.Event('submit', { cancelable: true }));
+			await flush();
+			return said();
+		};
+		expect(await refuseWith(502, { code: 'indexnow_refused', more: { indexNowStatus: 403 } })).toBe(
+			`Not submitted: ${strings['indexnow.refused.key']}`,
+		);
+		expect(await refuseWith(502, { code: 'indexnow_refused', more: { indexNowStatus: null } })).toBe(
+			`Not submitted: ${strings['indexnow.refused.other']}`,
+		);
+		expect(
+			await refuseWith(422, { code: 'validation_failed', more: { errors: [{ path: '/urls', message: 'English.' }] } }),
+		).toBe(`Not submitted: ${strings['indexnow.problem.urls']}`);
+		expect(await refuseWith(429, { code: 'rate_limited' })).toBe(`Not submitted: ${strings['indexnow.problem.rate_limited']}`);
+		expect(await refuseWith(403, { code: 'forbidden' })).toBe(`Not submitted: ${strings['problem.forbidden']}`);
 		press(host, strings['seo.cancel']);
 		delete w.open;
 	});
@@ -1652,5 +1694,38 @@ describe('admin widgets', () => {
 		inside(host, '.chip').click();
 		await vi.advanceTimersByTimeAsync(0);
 		expect(inside(host, '[role="status"]').textContent).toBe(strings['analytics.signedOut']);
+	});
+});
+
+describe('widget texts (OT-3)', () => {
+	it('every text a widget or the server names from a code value is in strings/en.json', () => {
+		const read = { url: 'https://shop.example.com/', status: 200, body: '' };
+		const checks = [
+			...siteChecks({ home: read, robots: read, sitemap: read }),
+			...pageChecks(read, 'shop.example.com'),
+			...pageChecks({ ...read, status: 404 }, 'shop.example.com'),
+		];
+		const ids = [...new Set(checks.map((check) => check.id))];
+		expect(ids).toHaveLength(15);
+		const keys = [
+			...['necessary', 'analytics', 'marketing'].flatMap((category) => [`consent.${category}`, `consent.${category}Help`]),
+			...PRESETS.map((preset) => `analytics.range.${preset}`),
+			...FUNNEL_STEPS.map((step) => `funnel.${step}`),
+			...Object.keys(VITALS).map((name) => `vital.${name}`),
+			...[0, 3000, 5000].map((value) => `rating.${ratingOf('LCP', value)}`),
+			...DEVICES.map((device) => `device.${device}`),
+			...BROWSERS.map((browser) => `browser.${browser}`),
+			...SYSTEMS.map((os) => `os.${os}`),
+			...Object.keys(EVENT_FEATURES).map((type) => `event.${type}`),
+			...['pass', 'warn', 'fail'].flatMap((status) => [`seo.count.${status}`, `seo.status.${status}`]),
+			...ids.flatMap((id) => [`seo.check.${id}.title`, `seo.check.${id}.fix`]),
+			// refused calls: the widgets' own texts, never the server's English detail (OT-4)
+			...Object.values(ANALYTICS_PROBLEMS),
+			...Object.values(SEO_PROBLEMS),
+			...Object.values(INDEXNOW_PROBLEMS),
+			...Object.values(INDEXNOW_REFUSED),
+			'indexnow.refused.other',
+		];
+		expect(keys.filter((key) => !Object.hasOwn(strings, key))).toEqual([]);
 	});
 });

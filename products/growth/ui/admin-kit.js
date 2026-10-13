@@ -1,7 +1,7 @@
 /**
  * What the admin widgets share (PLAN 0.6): texts with `{placeholders}`, filter chips with counts, the More menu (⋯) of
  * a header or a card, dialogs for secondary forms and long lists (full-screen sheets on phones), and ranked lists with
- * share bars. Text is always set as text, never as HTML.
+ * share bars, and the texts of refused calls. Text is always set as text, never as HTML.
  * @module
  */
 import { element } from './dom.js';
@@ -14,6 +14,31 @@ import { element } from './dom.js';
  */
 export const fill = (text, values) =>
 	text.replace(/\{(\w+)\}/g, (match, key) => (Object.hasOwn(values, key) ? String(values[key]) : match));
+
+/** The widget texts of the problem codes any admin widget may get. */
+export const PROBLEM_TEXTS = Object.freeze({
+	forbidden: 'problem.forbidden',
+	feature_off: 'problem.feature_off',
+	database_not_connected: 'problem.database_not_connected',
+	product_unavailable: 'problem.product_unavailable',
+	rate_limited: 'problem.rate_limited',
+});
+
+/**
+ * The widget text of a refused call (PLAN 0.4.10: never the server's English detail, OT-4): the text of the field a
+ * `validation_failed` problem names (`validation_failed:<field>`), else of its code, else `fallback`.
+ * @param {{ data?: any }} answer
+ * @param {Readonly<Record<string, string>>} keys text keys by problem code and by `validation_failed:<field>`
+ * @param {string} fallback
+ * @returns {string} a text key
+ */
+export const problemKey = (answer, keys, fallback) => {
+	const type = typeof answer.data?.type === 'string' ? answer.data.type : '';
+	const code = type.slice(type.lastIndexOf('/') + 1);
+	const field = `${code}:${String(answer.data?.errors?.[0]?.path ?? '').slice(1)}`;
+	const found = [field, code].find((name) => name !== '' && Object.hasOwn(keys, name));
+	return found === undefined ? fallback : /** @type {string} */ (keys[found]);
+};
 
 /**
  * The More menu (⋯): a button that opens a short list of actions; Escape or a press outside closes it.

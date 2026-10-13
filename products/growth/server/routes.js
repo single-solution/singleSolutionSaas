@@ -197,6 +197,7 @@ export const createRoutes = (product) => {
 		if (!submission.ok) return { ok: /** @type {const} */ (false), problem: invalid(submission.field, submission.message) };
 		const answer = await web.indexNow(submission.body);
 		if (!answer.ok) {
+			// what IndexNow answered goes with the problem, so a widget shows its own text for it (OT-4)
 			const refused = problem(
 				'indexnow_refused',
 				answer.status === 403
@@ -206,6 +207,7 @@ export const createRoutes = (product) => {
 						: answer.status === 429
 							? 'IndexNow asks to send fewer submissions; try again later.'
 							: `IndexNow answered ${answer.status ?? 'nothing'}.`,
+				{ extensions: { indexNowStatus: answer.status } },
 			);
 			return { ok: /** @type {const} */ (false), problem: refused };
 		}

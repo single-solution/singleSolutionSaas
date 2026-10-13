@@ -323,7 +323,10 @@ describe('IndexNow', () => {
 			env.web.indexNowAnswers(status);
 			const refused = await env.call('POST', '/v1/indexnow', { token: env.server, body: { urls: [`${ORIGIN}/c`] } });
 			expect(refused.status).toBe(502);
-			expect((await refused.json()).detail).toContain(words);
+			const problem = await refused.json();
+			expect(problem.detail).toContain(words);
+			// what IndexNow answered, for a widget's own text
+			expect(problem.indexNowStatus).toBe(status);
 		}
 		env.web.indexNowAnswers(202);
 		const ticket = await env.ticket(['indexnow.submit']);

@@ -13,7 +13,7 @@
 import { formatDate, formatMoney, mountWidget } from '@ss/app-kit/widget';
 import { PRESETS, dayStart, presetRange } from '../core/analytics.js';
 import { DIRECT, UNKNOWN } from '../core/events.js';
-import { chipGroup, fieldGrid, fill, moreMenu, openDialog, rankList } from './admin-kit.js';
+import { PROBLEM_TEXTS, chipGroup, fieldGrid, fill, moreMenu, openDialog, rankList, problemKey } from './admin-kit.js';
 import { adminCall } from './tickets.js';
 import { element } from './dom.js';
 import { WIDGET_CSS } from './styles.js';
@@ -37,6 +37,8 @@ const EVENT_TYPES = Object.freeze([
 	'not_found',
 	'vital',
 ]);
+/** The widget texts of refused calls (a range the report does not take: its days out of order or too many). */
+export const ANALYTICS_PROBLEMS = Object.freeze({ ...PROBLEM_TEXTS, 'validation_failed:from': 'analytics.problem.range' });
 
 /**
  * @param {{ host: HTMLElement, api: import('./tickets.js').AdminApi, config: import('./widget.js').WidgetConfig,
@@ -107,9 +109,7 @@ export const mountAnalyticsDashboard = ({ host, api, config, viewer, now }) => {
 			const failure = (answer) =>
 				answer.status === 0 && !api.tickets.current()
 					? t('analytics.signedOut')
-					: answer.data?.detail
-						? `${t('analytics.failed')} ${answer.data.detail}`
-						: t('analytics.failed');
+					: t(problemKey(answer, ANALYTICS_PROBLEMS, 'analytics.failed'));
 			/** @param {{ from: string, to: string }} days */
 			const fetchReport = (days) =>
 				adminCall(

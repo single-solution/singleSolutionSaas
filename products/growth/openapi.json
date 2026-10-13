@@ -2304,7 +2304,7 @@
 		"/v1/indexnow": {
 			"post": {
 				"summary": "Submit pages of your website to IndexNow",
-				"description": "422 validation_failed (at /key, /keyPath or /urls) without a well-formed key, with a key file address that is not a path, or with an address that is not https on your exact domain. 502 indexnow_refused when IndexNow does not take it (403: the key file is not served; 422: the URLs do not match the host; 429: too many submissions) or does not answer. 10 calls an hour per website.",
+				"description": "422 validation_failed (at /key, /keyPath or /urls) without a well-formed key, with a key file address that is not a path, or with an address that is not https on your exact domain. 502 indexnow_refused when IndexNow does not take it, with indexNowStatus what it answered (403: the key file is not served; 422: the URLs do not match the host; 429: too many submissions; null: no answer). 10 calls an hour per website.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "indexnow",
 				"security": [
