@@ -909,15 +909,19 @@ const customerFlags = (customer) => ({
 	note: customer?.note ?? '',
 });
 
+/** Members of an order record that only the shopper's browser may know (the staff view leaves them out). */
+const BROWSER_SECRETS = Object.freeze(['accessKeyHash', 'idempotencyKey']);
+
 /**
- * An order as staff see it: everything, with status names, the statuses it may move to next and the customer's flags.
+ * An order as staff see it: everything but the guest order's key hash and the checkout's Idempotency-Key (secrets of
+ * the shopper's browser), with status names, the statuses it may move to next and the customer's flags.
  * @param {OrderRecord} order
  * @param {OrderFlow} flow
  * @param {{ customer: Partial<CustomerRecord> | null, images: Map<string, string | null>, money: Money,
  *   serialized?: Set<string> | null }} extras `images`: line id → address; `serialized`: the order's serialized products
  */
 export const orderDetail = (order, flow, { customer, images, money, serialized = null }) => {
-	const plain = wire(order);
+	const plain = Object.fromEntries(Object.entries(wire(order)).filter(([key]) => !BROWSER_SECRETS.includes(key)));
 	// what is due, can be refunded and must be refunded, counted the one way
 	const sums = orderMoney(order);
 	return {

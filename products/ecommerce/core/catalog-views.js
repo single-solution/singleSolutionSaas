@@ -6,6 +6,7 @@
  * @module
  */
 import { summarize, valueLabel, variantInStock, variantName } from './catalog.js';
+import { EMPTY_SEO } from './catalog-content.js';
 import { gradeView } from './grades.js';
 
 /** @typedef {import('./model.js').ProductRecord} ProductRecord */
@@ -294,17 +295,35 @@ export const staffRowOf = (product, { image }) => {
 	};
 };
 
+/** What a product saved before a field existed answers for it (E2–E16), so staff always get every field. */
+const STAFF_DEFAULTS = Object.freeze({
+	descriptionHtml: '',
+	video: null,
+	sizeChartId: null,
+	attributeSetup: [],
+	faqs: [],
+	previousSlugs: [],
+});
+
 /**
  * The whole product for staff (read without the database's own fields), with the addresses of its images, its
- * variants' photos and its video file.
+ * variants' photos and its video file; fields an older record does not hold yet answer their defaults.
  * @param {ProductRecord} product
  * @param {{ media: Array<string | null>, variantMedia?: ReadonlyMap<string, Array<string | null>>, video?: string | null }} context
  */
 export const staffProductOf = (product, { media, variantMedia = new Map(), video = null }) => ({
+	...STAFF_DEFAULTS,
 	...product,
 	...summarize(product.variants, product.trackStock),
+	// a change of an older product could store null for these (fixed in `checkProduct`)
+	featured: product.featured === true,
+	hideSizeGuide: product.hideSizeGuide === true,
+	seo: { ...EMPTY_SEO, ...product.seo },
 	media: product.media.map((item, index) => ({ ...item, url: media[index] ?? null })),
 	variants: product.variants.map((variant) => ({
+		attributes: {},
+		soldOut: false,
+		warrantyDays: null,
 		...variant,
 		media: (variant.media ?? []).map((item, index) => ({ ...item, url: variantMedia.get(variant.id)?.[index] ?? null })),
 	})),

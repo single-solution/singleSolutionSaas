@@ -17,7 +17,7 @@
  */
 import { createId } from '@ss/contracts';
 import { normalisePhone } from '@ss/contracts/phone';
-import { created, defineRoute, noContent, ok, problem } from '@ss/app-kit';
+import { created, defineRoute, noContent, problem } from '@ss/app-kit';
 import { newOrderKey, orderKeyHash } from '../adapters/crypto.js';
 import { isDuplicate, userIdsOf } from '../adapters/extras-store.js';
 import { createOrdersStore } from '../adapters/orders-store.js';
@@ -267,8 +267,9 @@ export const createAlerts = (_product, service, cards) => {
 		// a member's alerts are theirs; a guest's are their phone's
 		const owner = contact.userId ? { userId: contact.userId } : { userId: '', phone: contact.phone };
 		const filter = { websiteId: data.websiteId, ...owner, kind, productId, variantId, status: 'waiting' };
+		// the same waiting alert set again is answered as it is (201, as a new one: the shopper's alert is set)
 		const existing = /** @type {StoredAlert | null} */ (await alerts(data).findOne(filter, NO_ID));
-		if (existing) return ok(await view(s, existing, new Map([[item.id, item]])));
+		if (existing) return created(await view(s, existing, new Map([[item.id, item]])));
 		if ((await alerts(data).countDocuments({ websiteId: data.websiteId, ...owner, status: 'waiting' })) >= MAX_ALERTS)
 			throw service.invalid('productId', `You can keep at most ${MAX_ALERTS} alerts.`);
 		try {

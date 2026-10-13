@@ -80,7 +80,7 @@ const seedOrder = async (input) => {
 		id,
 		number: `R-${id.slice(4, 12)}`,
 		idempotencyKey: id,
-		customer: { userId: input.userId ?? '', customerId: null, name: 'Sara Shopper', email: '', phone: '' },
+		customer: { userId: input.userId ?? '', customerId: '', name: 'Sara Shopper', email: '', phone: '' },
 		address: { name: '', phone: '', line1: '', line2: '', city: input.city ?? '', area: '', postalCode: '', country: '' },
 		delivery: { method: 'delivery', zone: '', fee: 0, locationId: null },
 		lines: [line],

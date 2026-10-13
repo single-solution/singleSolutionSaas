@@ -82,7 +82,7 @@ const seedOrder = async ({ userId = SARA, name = 'Sara Shopper', lines, key, pat
 	const record = {
 		id: createId('ord'),
 		number: `R-${createId('num').slice(4, 12)}`,
-		customer: { userId, customerId: null, name, email: '', phone: '' },
+		customer: { userId, customerId: '', name, email: '', phone: '' },
 		address: null,
 		delivery: { method: 'none', zone: '', fee: 0, locationId: null },
 		lines: lines.map((line) => {
@@ -335,10 +335,12 @@ describe('alerts', () => {
 		});
 		const guest = await subscribe({ variantId: big?.id, phone: '0300 1234567', targetPrice: 11_000 }, undefined);
 		expect(guest.status).toBe(201);
-		expect((await subscribe({ variantId: big?.id, phone: '+92 300 1234567' }, undefined)).status).toBe(200);
+		// the same alert set again answers the waiting one (201 all the same)
+		const same = await subscribe({ variantId: big?.id, phone: '+92 300 1234567' }, undefined);
+		expect([same.status, same.json.id]).toEqual([201, guest.json.id]);
 		// one number however it is typed (K12): already international without the +, or a trunk 0 after the code
-		expect((await subscribe({ variantId: big?.id, phone: '923001234567' }, undefined)).status).toBe(200);
-		expect((await subscribe({ variantId: big?.id, phone: '+92 0300 1234567' }, undefined)).status).toBe(200);
+		expect((await subscribe({ variantId: big?.id, phone: '923001234567' }, undefined)).json.id).toBe(guest.json.id);
+		expect((await subscribe({ variantId: big?.id, phone: '+92 0300 1234567' }, undefined)).json.id).toBe(guest.json.id);
 		const stored = /** @type {any} */ (
 			await data.collection(COLLECTIONS.alerts).findOne({ websiteId: data.websiteId, id: guest.json.id })
 		);
@@ -491,7 +493,7 @@ describe('alerts', () => {
 				...held,
 				status: 'dispatched',
 				role: 'shipped',
-				shipment: { courier: 'Post', trackingNumber: 'T1', trackingUrl: '', bookedAt: null },
+				shipment: { courier: 'Post', trackingNumber: 'T1', trackingUrl: '', booked: false, status: '', checkedAt: null },
 			},
 		});
 		for (const [order, to, name] of /** @type {Array<[{ id: string }, string, string]>} */ ([

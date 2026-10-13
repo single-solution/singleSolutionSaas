@@ -25,7 +25,7 @@ import {
 	SORTS,
 } from '../core/catalog-query.js';
 import { categoryTree, withDescendants } from '../core/catalog-taxonomy.js';
-import { youtubeId } from '../core/catalog-content.js';
+import { EMPTY_SEO, youtubeId } from '../core/catalog-content.js';
 import { cardOf, cardPhotos, cardVariantsOf, pageOf } from '../core/catalog-views.js';
 import { productDeals } from '../core/deals.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
@@ -436,7 +436,7 @@ export const createCatalogShop = (product, service, common) => {
 		for (const category of shown)
 			extras.set(category.id, {
 				description: category.description,
-				seo: category.seo,
+				seo: { ...EMPTY_SEO, ...category.seo },
 				status: productsHidden.has(category.id) ? 'coming_soon' : 'active',
 				icon: category.icon ?? '',
 				content: category.content ?? { summary: '', bullets: [] },
@@ -503,7 +503,7 @@ export const createCatalogShop = (product, service, common) => {
 					name: brand.name,
 					description: brand.description,
 					categoryIds: brand.categoryIds ?? [],
-					seo: brand.seo ?? { title: '', description: '' },
+					seo: { ...EMPTY_SEO, ...brand.seo },
 					logo: brand.logo ? { url: await common.media.mediaUrl(s, brand.logo.key), alt: brand.logo.alt } : null,
 					count: counts.get(brand.id) ?? 0,
 				})),

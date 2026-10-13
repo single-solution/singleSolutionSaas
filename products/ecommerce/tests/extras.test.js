@@ -530,7 +530,8 @@ describe('wishlist, alerts and compare', () => {
 		const back = await subscribe(sara, { kind: 'back_in_stock', productId: out.id });
 		expect(back.status).toBe(201);
 		expect(back.json).toMatchObject({ kind: 'back_in_stock', status: 'waiting', price: null, product: { name: 'Console' } });
-		expect((await subscribe(sara, { kind: 'back_in_stock', productId: out.id })).status).toBe(200);
+		const same = await subscribe(sara, { kind: 'back_in_stock', productId: out.id });
+		expect([same.status, same.json.id]).toEqual([201, back.json.id]);
 		const drop = await subscribe(omar, { kind: 'price_drop', productId: inStock.id });
 		expect(drop.json).toMatchObject({ price: 900 });
 		const noContact = await shop.signIn({ id: 'usr_shopper0000003', name: 'Nobody', email: '', phone: '' });

@@ -777,16 +777,19 @@ export const checkProduct = (body, rules, existing) => {
 	 * @template T
 	 * @param {string} field
 	 * @param {(value: unknown) => T | null | undefined} read null/undefined = invalid
-	 * @param {T} fallback
+	 * @param {T} fallback also for a product saved before the field existed (never stored as null)
 	 * @param {string} message
 	 * @returns {T}
 	 */
 	const field = (field, read, fallback, message) => {
-		if (input[field] === undefined) return existing ? /** @type {any} */ (existing)[field] : fallback;
+		/** @type {Record<string, any> | null} */
+		const before = existing;
+		const kept = before ? (before[field] ?? fallback) : fallback;
+		if (input[field] === undefined) return kept;
 		const value = read(input[field]);
 		if (value === null || value === undefined) {
 			fail(`/${field}`, message);
-			return existing ? /** @type {any} */ (existing)[field] : fallback;
+			return kept;
 		}
 		return value;
 	};
