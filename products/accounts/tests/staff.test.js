@@ -28,6 +28,10 @@ const server = (method, path, body, as = null) =>
 const create = async (body) => (await server('POST', '/v1/users', body)).json;
 /** @param {string} id */
 const asUser = (id, name = 'Staff') => ({ id, name });
+/** The claims of a sign-in (other products read `phone_verified` from it). @param {string} signIn */
+const claimsOf = (signIn) => JSON.parse(Buffer.from(String(signIn.split('.')[1]), 'base64url').toString('utf8'));
+/** The code of a setup link. @param {string} url */
+const setupCodeOf = (url) => new URL(url).searchParams.get('ss_setup');
 
 /** @type {Record<string, any>} */
 const people = {};
@@ -239,6 +243,24 @@ describe('A3: staff-issued sign-in codes and setup links', () => {
 		await env.setting('staff_links', 'setupPageUrl', '');
 	});
 
+	it('a used setup link proves the phone number and signs the other devices out', async () => {
+		const up = await env.visitor('POST', '/v1/sign-up/phone-password', {
+			phone: '0300 5550200',
+			password: 'own pass 12',
+			name: 'Pia',
+		});
+		expect(up.json.user.phoneVerified).toBe(false);
+		const link = await server('POST', `/v1/users/${up.json.user.id}/setup-link`);
+		const accepted = await env.visitor('POST', '/v1/setup-links/accept', {
+			code: setupCodeOf(link.json.url),
+			password: 'set by link 1',
+		});
+		expect(accepted.json.user).toMatchObject({ phone: '+923005550200', phoneVerified: true });
+		expect(claimsOf(accepted.json.signIn)).toMatchObject({ phone: '+923005550200', phone_verified: true });
+		expect(code(await env.visitor('POST', '/v1/session/refresh', { refreshToken: up.json.refreshToken }))).toBe('signed_out');
+		expect((await env.visitor('POST', '/v1/session/refresh', { refreshToken: accepted.json.refreshToken })).status).toBe(200);
+	});
+
 	it('invites can answer the link instead of sending it', async () => {
 		await env.switchOn(ALL.filter((key) => !['terms', 'two_step', 'risk_checks'].includes(key)));
 		await env.setting('approval', 'invitePageUrl', `${ORIGIN}/join`);
@@ -294,7 +316,9 @@ describe('A5: role requests', () => {
 		const setupCode = new URL(invited.json.setupLink.url).searchParams.get('ss_setup');
 		expect(code(await env.admin(ticket, 'POST', `/v1/admin/role-requests/${asked.json.id}/invite`))).toBe('conflict');
 		const done = await env.visitor('POST', '/v1/setup-links/accept', { code: setupCode, password: 'member pass 1' });
-		expect(done.json.user.role).toBe('member');
+		expect(done.json.user).toMatchObject({ role: 'member', phoneVerified: true });
+		// other products join the new member's guest orders and points by the verified phone
+		expect(claimsOf(done.json.signIn)).toMatchObject({ phone: '+923005550100', phone_verified: true });
 		const completed = await server('GET', '/v1/role-requests?status=completed');
 		expect(completed.json.items[0]).toMatchObject({ id: asked.json.id, status: 'completed' });
 		expect((await server('GET', `/v1/users/${invited.json.user.id}`)).json.roleSince).toBeTruthy();

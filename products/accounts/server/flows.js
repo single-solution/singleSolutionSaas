@@ -834,7 +834,8 @@ export const createFlows = (product, service) => {
 
 	/**
 	 * Accept a setup link (A3, A5): `{ code, password }` sets the password and signs in; an invited role request of the
-	 * user is completed.
+	 * user is completed. Staff send the link to the user's phone, so using it proves the number (other products then
+	 * join the user's guest orders and points to the account); like a reset, every other device signs in again.
 	 * @param {any} ctx
 	 */
 	const acceptSetup = async (ctx) => {
@@ -854,8 +855,10 @@ export const createFlows = (product, service) => {
 				failedLogins: 0,
 				lockedUntil: null,
 				lockLevel: 0,
+				...(user.phone ? { phoneVerified: true } : {}),
 				...(user.status === 'invited' ? { status: 'active' } : {}),
 			})) ?? user;
+		await s.store.sessions.revokeAll(user.id);
 		const request = await s.store.requests.invitedFor(user.id);
 		if (request) await s.store.requests.update(request.id, { status: 'completed', completedAt: new Date(now()) });
 		return service.finish(s, active, { method: 'setup_link', ...service.howOf(ctx), acceptTerms: body.acceptTerms });
