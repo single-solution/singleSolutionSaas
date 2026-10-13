@@ -3456,6 +3456,25 @@ one phone (ST-16, ST-17, A16). Merged ids are recorded in the id map. Codes that
 `createId`. The importer framework gains several source steps per target, merge reducers, one-to-many steps, slug
 lookup tables, a per-collection upsert key and a prune mode (IMP-21, IMP-22).
 
+**Built (2026-10-14; commits 1ce90931, 840b1e6a, cb12b76d, 447e4586, fea49997, 615e62c1, 37547482, 3298682b, 88599bfa,
+2162514d, 3d8038b4, c7ad89b7).** Every `import` collection finds records by its key (`id`; Accounts roles and fields
+`key`, Ecommerce loyalty `customerId` and wishlists `userId`, Growth totals `day`+`part`); a re-import replaces the
+record and keeps `createdAt`. `POST /v1/import/:collection/prune?dryRun=1` with `{ keep, after, through }` removes, at
+most 1,000 per call, records an import wrote (noted in `ss_<product>_imports`) that the source no longer has, never the
+merchant's own. `GET /v1/import/status` answers `{ collections, imported, totals }`. The checks get the business.json
+copy, so national phones take the website's calling code. Ecommerce `finish` recomputes product `sold` from delivered
+order lines only when the product has an order line, and `rating` from approved reviews only when it has a review;
+otherwise the imported numbers stay. A batched `finish` (Chat) takes `?after=` and answers `more` and `next`. `ss-import
+send` writes the settings and lists through K1 first (only what differs from a value the website holds itself; the dry
+run shows the diff), then each target in mapping order, each product's `finish` right after its last file (Accounts,
+then Ecommerce catalog and orders, Chat, Growth); `--prune` on the final pass, `--only` for pre-imports; `verify`
+compares counts and sums. The e2e imports a neutral example shop into all four products: a dry run writes nothing and
+lists every refusal, the real run refuses nothing, verify matches, a re-run changes nothing, a prune removes what the
+source deleted, members sign in with their old bcrypt password and old guest cookies open their chats. On an empty
+website the dry run also lists records that only fail because earlier files or settings are not written yet, so the
+rehearsal is a real run into a scratch database (step 2 of the cut-over). Open: Ecommerce `finish` is one call (no
+paging yet).
+
 **Per-store settings table.** One table, here and nowhere else, holds every value a store differs in (owner rule of
 2026-10-13: the products are global; stores differ only by values). Columns: product and feature, setting, product
 default, SB, CT, IM, where the value comes from (saved row, code default with file and line, env by hand, owner
