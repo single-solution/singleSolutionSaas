@@ -318,6 +318,36 @@ describe('features and the merchant database', () => {
 	});
 });
 
+describe('rate limits (SE-2)', () => {
+	it('one address flooding a route cannot lock out other visitors: the website window counts only what passed', async () => {
+		const routes = [
+			...productRoutes(),
+			defineRoute({
+				method: 'GET',
+				path: '/v1/catalog',
+				auth: 'browser',
+				database: false,
+				rateLimit: [
+					{ limit: 5, windowSeconds: 60 },
+					{ limit: 2, windowSeconds: 60, per: 'visitor' },
+				],
+				handler: () => ({ items: [] }),
+			}),
+		];
+		const { call, browser } = await setup({ routes });
+		const get = async (/** @type {string} */ ip) =>
+			(await call('GET', '/v1/catalog', { token: browser.token, origin: SITE, headers: { 'x-forwarded-for': ip } })).status;
+		const flood = [];
+		for (let i = 0; i < 10; i += 1) flood.push(await get('198.51.100.7'));
+		expect(flood).toEqual([200, 200, 429, 429, 429, 429, 429, 429, 429, 429]);
+		expect(await get('203.0.113.9')).toBe(200);
+		// the website window still holds: 5 passed requests in the minute, then every address waits
+		expect(await get('203.0.113.10')).toBe(200);
+		expect(await get('203.0.113.11')).toBe(200);
+		expect(await get('203.0.113.12')).toBe(429);
+	});
+});
+
 describe('idempotent routes (K-14)', () => {
 	/** Wait (real time) until a condition holds. @param {() => boolean} done */
 	const until = async (done) => {

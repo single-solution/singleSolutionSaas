@@ -9,7 +9,8 @@
 /** @typedef {'merchant' | 'owner' | 'support'} DashboardRole */
 /**
  * A fixed-window rate limit (a code constant): `per: 'website'` counts per website (the default when the request names
- * one), `per: 'visitor'` per client IP. Routes with the same `bucket` share one counter (default: one per route).
+ * one), `per: 'visitor'` per client IP. Routes with the same `bucket` share one counter (default: one per route). The
+ * per-visitor limits are checked first, and a website-wide one counts only requests that passed them (SE-2).
  * @typedef {{ limit: number, windowSeconds: number, per?: 'website' | 'visitor', bucket?: string }} RateLimit
  */
 

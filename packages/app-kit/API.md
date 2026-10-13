@@ -98,7 +98,8 @@ roles?, handler })`
   `duplicate_request`, and a repeat while the first still runs 409 `in_progress` with `Retry-After: 1`. A 5xx answer
   frees the key; answers larger than 64 kB are not kept (a repeat answers 409 `duplicate_request`).
 - `rateLimit`: `{ limit, windowSeconds, per?: 'website' | 'visitor', bucket? }` or a list of them (code constants);
-  routes with the same `bucket` share a counter.
+  routes with the same `bucket` share a counter. The per-visitor limits are checked first; a website-wide window counts
+  only requests that passed them, so one address cannot use it up for every visitor (SE-2).
 - `roles` (dashboard): `merchant`, `owner`, `support` (default all).
 
 Every website route also checks the status: 403 `product_unavailable` with `reason` (stopped, suspended, removed), 503

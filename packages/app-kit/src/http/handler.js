@@ -519,8 +519,16 @@ export const createRequestHandler = (kit, routes, options = {}) => {
 						...(ctx.visitor.ip ? declared.filter((limit) => limit.per === 'visitor') : []),
 					]
 				: declared;
-			for (const limit of limits) {
-				const per = limit.per ?? (ctx.websiteId ? 'website' : 'visitor');
+			/** @param {import('./routes.js').RateLimit} limit */
+			const perOf = (limit) => limit.per ?? (ctx.websiteId ? 'website' : 'visitor');
+			// the per-visitor limits first: a website-wide window counts only requests that passed them, so one address
+			// cannot use it up for every visitor (SE-2)
+			const ordered = [
+				...limits.filter((limit) => perOf(limit) === 'visitor'),
+				...limits.filter((limit) => perOf(limit) !== 'visitor'),
+			];
+			for (const limit of ordered) {
+				const per = perOf(limit);
 				const subject = per === 'website' && ctx.websiteId ? `w:${ctx.websiteId}` : `ip:${ctx.clientIp}`;
 				try {
 					const windowMs = limit.windowSeconds * 1000;
