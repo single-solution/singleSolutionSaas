@@ -11,6 +11,8 @@
  * - `createNetwork(handlers)`: routes `fetch` and outbound calls (`outboundSend`) to in-process handlers by origin;
  * - `productKeyOf({ store, encryptionKey })`: the product's own private key from its store (kept sealed, K-21), for
  *   tests that sign as the product;
+ * - `apiChecker(apiJson)`: checks every answer a test sees against the product's `schemas/api.json` and the kit's own
+ *   routes (`assert({ method, path, status, body })` throws on a mismatch), so the API descriptions cannot drift;
  * - `createMemoryStore()`.
  * @module
  */
@@ -36,6 +38,7 @@ import { createSealer, openKey } from './sealing.js';
 import { createMemoryStore } from './stores/memory.js';
 
 export { createMemoryStore };
+export { apiChecker } from './api.js';
 
 /**
  * The product's own private key as its product database keeps it (sealed with `ENCRYPTION_KEY`, K-21), for tests that

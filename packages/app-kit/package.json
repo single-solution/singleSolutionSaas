@@ -7,6 +7,7 @@
 	"exports": {
 		".": "./src/index.js",
 		"./testing": "./src/testing.js",
+		"./api": "./src/api.js",
 		"./widget": "./src/widget.js",
 		"./package.json": "./package.json"
 	},
@@ -28,6 +29,10 @@
 			"./testing": {
 				"types": "./types/src/testing.d.ts",
 				"default": "./src/testing.js"
+			},
+			"./api": {
+				"types": "./types/src/api.d.ts",
+				"default": "./src/api.js"
 			},
 			"./widget": {
 				"types": "./types/src/widget.d.ts",

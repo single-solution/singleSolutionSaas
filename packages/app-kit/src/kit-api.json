@@ -1,0 +1,519 @@
+{
+	"$schemas": {
+		"Count": {
+			"type": "object",
+			"description": "How many records match the list's filters.",
+			"required": ["count", "capped"],
+			"additionalProperties": false,
+			"properties": {
+				"count": { "type": "integer", "minimum": 0, "maximum": 100000, "description": "Exact up to 100,000." },
+				"capped": { "type": "boolean", "description": "True when there are more than 100,000 (count is then 100,000)." }
+			}
+		},
+		"Counts": {
+			"type": "object",
+			"description": "The matching records counted by one field.",
+			"required": ["total", "groups"],
+			"additionalProperties": false,
+			"properties": {
+				"total": { "type": "integer", "minimum": 0, "description": "All matching records." },
+				"groups": {
+					"type": "object",
+					"maxProperties": 50,
+					"additionalProperties": { "type": "integer", "minimum": 1 },
+					"description": "Value → count, the 50 largest groups; a missing value is counted as none."
+				}
+			}
+		},
+		"ValueSource": {
+			"type": "string",
+			"enum": ["website", "default", "built-in"],
+			"description": "Where a value comes from: saved for this website, the global default, or built in."
+		},
+		"Text": {
+			"type": "object",
+			"required": ["key", "english", "value", "source"],
+			"additionalProperties": false,
+			"properties": {
+				"key": { "type": "string" },
+				"english": { "type": "string", "description": "The built-in English text." },
+				"value": { "type": "string", "description": "The text the widgets show." },
+				"source": { "$ref": "#/components/schemas/ValueSource" }
+			}
+		},
+		"Theme": {
+			"type": "object",
+			"required": ["theme", "sources"],
+			"additionalProperties": false,
+			"properties": {
+				"theme": {
+					"type": "object",
+					"required": ["colors", "fontFamily", "radius", "mode", "customCss"],
+					"additionalProperties": false,
+					"properties": {
+						"colors": {
+							"type": "object",
+							"maxProperties": 24,
+							"additionalProperties": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
+							"description": "Colour name → #rrggbb (the product's CSS supplies the others)."
+						},
+						"fontFamily": { "type": "string", "description": "'inherit' or a font name." },
+						"radius": { "type": "integer", "minimum": 0, "maximum": 24, "description": "Corner radius in px." },
+						"mode": { "type": "string", "enum": ["light", "dark", "auto"] },
+						"customCss": { "type": "string", "description": "At most 20 kB." }
+					}
+				},
+				"sources": {
+					"type": "object",
+					"required": ["colors", "fontFamily", "radius", "mode", "customCss"],
+					"additionalProperties": false,
+					"properties": {
+						"colors": { "$ref": "#/components/schemas/ValueSource" },
+						"fontFamily": { "$ref": "#/components/schemas/ValueSource" },
+						"radius": { "$ref": "#/components/schemas/ValueSource" },
+						"mode": { "$ref": "#/components/schemas/ValueSource" },
+						"customCss": { "$ref": "#/components/schemas/ValueSource" }
+					}
+				}
+			}
+		},
+		"Format": {
+			"type": "object",
+			"required": ["format", "sources"],
+			"additionalProperties": false,
+			"properties": {
+				"format": {
+					"type": "object",
+					"required": ["locale", "currencyDisplay", "currencySymbol", "wholeUnits", "times"],
+					"additionalProperties": false,
+					"properties": {
+						"locale": { "type": "string", "description": "A language tag (en, en-GB, ur-PK), or '' for the viewer's." },
+						"currencyDisplay": { "type": "string", "enum": ["code", "symbol", "custom"] },
+						"currencySymbol": { "type": "string", "maxLength": 8, "description": "With currencyDisplay custom." },
+						"wholeUnits": { "type": "boolean", "description": "Amounts without the minor unit." },
+						"times": { "type": "string", "enum": ["viewer", "business"], "description": "Whose time zone dates use." }
+					}
+				},
+				"sources": {
+					"type": "object",
+					"required": ["locale", "currencyDisplay", "currencySymbol", "wholeUnits", "times"],
+					"additionalProperties": false,
+					"properties": {
+						"locale": { "$ref": "#/components/schemas/ValueSource" },
+						"currencyDisplay": { "$ref": "#/components/schemas/ValueSource" },
+						"currencySymbol": { "$ref": "#/components/schemas/ValueSource" },
+						"wholeUnits": { "$ref": "#/components/schemas/ValueSource" },
+						"times": { "$ref": "#/components/schemas/ValueSource" }
+					}
+				}
+			}
+		},
+		"Connection": {
+			"type": "object",
+			"description": "A connection as screens see it: secrets never come back.",
+			"required": ["name", "label", "kind", "neededBy", "state", "last4", "message", "testedAt"],
+			"additionalProperties": false,
+			"properties": {
+				"name": { "type": "string" },
+				"label": { "type": "string" },
+				"kind": { "type": "string", "enum": ["database", "storage", "secret", "token"] },
+				"neededBy": { "type": "array", "items": { "type": "string" }, "description": "The features that use it." },
+				"state": { "type": "string", "enum": ["connected", "not_connected", "test_failed"] },
+				"last4": { "type": "string", "maxLength": 4, "description": "The last 4 characters of the secret ('' when none)." },
+				"message": { "type": ["string", "null"], "description": "Why the last test failed." },
+				"testedAt": { "type": ["string", "null"], "format": "date-time" }
+			}
+		},
+		"Actor": {
+			"type": "object",
+			"description": "Who did it: user (the acting user of a server call), staff (a ticket's user) or server.",
+			"required": ["kind", "id"],
+			"properties": {
+				"kind": { "type": "string" },
+				"id": { "type": "string" },
+				"name": { "type": "string" },
+				"role": { "type": "string" },
+				"email": { "type": "string" }
+			}
+		},
+		"ActivityEntry": {
+			"type": "object",
+			"required": ["id", "actor", "action", "target", "label", "detail", "at"],
+			"additionalProperties": false,
+			"properties": {
+				"id": { "type": "string" },
+				"actor": { "$ref": "#/components/schemas/Actor" },
+				"action": { "type": "string", "description": "What was done, for example payment.refunded." },
+				"target": { "type": "string", "description": "The id of what it was done to." },
+				"label": { "type": ["string", "null"], "description": "A name for the target, for example an order number." },
+				"detail": { "type": ["string", "null"] },
+				"at": { "type": "string", "format": "date-time" }
+			}
+		}
+	},
+	"POST /v1/tickets": {
+		"summary": "Ticket for an admin widget (15 minutes)",
+		"description": "Your server asks for a ticket for the member of your staff who opens an admin widget. Permissions of switched-off features are left out of the ticket.",
+		"body": {
+			"type": "object",
+			"required": ["user", "permissions", "origin"],
+			"properties": {
+				"user": {
+					"type": "object",
+					"required": ["id", "name", "email"],
+					"properties": {
+						"id": { "type": "string", "minLength": 1, "maxLength": 256 },
+						"name": { "type": "string", "minLength": 1, "maxLength": 200 },
+						"email": { "type": "string", "minLength": 1, "maxLength": 320 }
+					}
+				},
+				"permissions": {
+					"type": "array",
+					"items": { "type": "string" },
+					"description": "Permissions of this product (GET /v1/permissions)."
+				},
+				"origin": {
+					"type": "string",
+					"description": "The https origin of the page that shows the widget (a local origin while testing)."
+				}
+			}
+		},
+		"response": {
+			"type": "object",
+			"required": ["ticket", "expiresAt"],
+			"additionalProperties": false,
+			"properties": {
+				"ticket": { "type": "string", "description": "Give it to the admin widget (data-ticket)." },
+				"expiresAt": { "type": "string", "format": "date-time" }
+			}
+		}
+	},
+	"POST /v1/data-rights/export": {
+		"summary": "Export one user's records",
+		"body": {
+			"type": "object",
+			"required": ["user"],
+			"additionalProperties": false,
+			"properties": {
+				"user": {
+					"type": "object",
+					"additionalProperties": false,
+					"description": "At least one of id, email and phone.",
+					"properties": {
+						"id": { "type": "string", "minLength": 1, "maxLength": 256 },
+						"email": { "type": "string", "format": "email", "maxLength": 320 },
+						"phone": { "type": "string", "pattern": "^\\+?[0-9 ().-]{3,40}$" }
+					}
+				}
+			}
+		},
+		"response": {
+			"type": "object",
+			"required": ["records"],
+			"additionalProperties": false,
+			"properties": {
+				"records": {
+					"type": "object",
+					"additionalProperties": { "type": "array" },
+					"description": "The person's records by kind (each product names its own; staff: the kit's staff records)."
+				}
+			}
+		}
+	},
+	"POST /v1/data-rights/delete": {
+		"summary": "Delete one user's records",
+		"body": {
+			"type": "object",
+			"required": ["user"],
+			"additionalProperties": false,
+			"properties": {
+				"user": {
+					"type": "object",
+					"additionalProperties": false,
+					"description": "At least one of id, email and phone.",
+					"properties": {
+						"id": { "type": "string", "minLength": 1, "maxLength": 256 },
+						"email": { "type": "string", "format": "email", "maxLength": 320 },
+						"phone": { "type": "string", "pattern": "^\\+?[0-9 ().-]{3,40}$" }
+					}
+				}
+			}
+		},
+		"response": {
+			"type": "object",
+			"required": ["deleted", "anonymised"],
+			"additionalProperties": false,
+			"properties": {
+				"deleted": { "type": "integer", "minimum": 0 },
+				"anonymised": { "type": "integer", "minimum": 0, "description": "Records kept without the person's details." }
+			}
+		}
+	},
+	"GET /v1/permissions": {
+		"summary": "This product's permissions (for Accounts roles)",
+		"response": {
+			"type": "object",
+			"required": ["permissions"],
+			"additionalProperties": false,
+			"properties": {
+				"permissions": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": ["key", "name", "feature"],
+						"additionalProperties": false,
+						"properties": {
+							"key": { "type": "string" },
+							"name": { "type": "string" },
+							"feature": { "type": "string" }
+						}
+					}
+				}
+			}
+		}
+	},
+	"GET /v1/features": {
+		"summary": "Features with on/off and hourly price",
+		"response": {
+			"type": "object",
+			"required": ["features"],
+			"additionalProperties": false,
+			"properties": {
+				"features": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": ["key", "name", "description", "on", "millicreditsPerHour"],
+						"additionalProperties": false,
+						"properties": {
+							"key": { "type": "string" },
+							"name": { "type": "string" },
+							"description": { "type": "string" },
+							"on": { "type": "boolean" },
+							"millicreditsPerHour": { "type": "integer", "minimum": 0 }
+						}
+					}
+				}
+			}
+		}
+	},
+	"GET /v1/settings": {
+		"summary": "Settings schemas, and values of switched-on features",
+		"response": {
+			"type": "object",
+			"required": ["features"],
+			"additionalProperties": false,
+			"properties": {
+				"features": {
+					"type": "array",
+					"description": "Each feature's settings, then the settings several features share.",
+					"items": {
+						"type": "object",
+						"required": ["key", "name", "on", "schema", "values"],
+						"additionalProperties": false,
+						"properties": {
+							"key": { "type": "string" },
+							"name": { "type": "string" },
+							"on": { "type": "boolean" },
+							"schema": { "type": "object", "description": "The settings' JSON Schema (from the manifest)." },
+							"values": {
+								"type": ["object", "null"],
+								"description": "Setting → { value, source }; null while the feature is off.",
+								"additionalProperties": {
+									"type": "object",
+									"required": ["source"],
+									"additionalProperties": false,
+									"properties": { "value": {}, "source": { "$ref": "#/components/schemas/ValueSource" } }
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	},
+	"PUT /v1/settings/:key": {
+		"summary": "Save one setting (<feature>.<setting>, { value })",
+		"description": "The feature must be on (else 403 feature_off); an invalid value answers 422 validation_failed with errors.",
+		"body": {
+			"type": "object",
+			"required": ["value"],
+			"properties": { "value": { "description": "A value the setting's schema allows (not null: DELETE resets)." } }
+		},
+		"response": {
+			"type": "object",
+			"required": ["key", "source"],
+			"additionalProperties": false,
+			"properties": { "key": { "type": "string" }, "value": {}, "source": { "$ref": "#/components/schemas/ValueSource" } }
+		}
+	},
+	"DELETE /v1/settings/:key": {
+		"summary": "Reset one setting to the default",
+		"response": {
+			"type": "object",
+			"required": ["key", "source"],
+			"additionalProperties": false,
+			"properties": { "key": { "type": "string" }, "value": {}, "source": { "$ref": "#/components/schemas/ValueSource" } }
+		}
+	},
+	"GET /v1/texts": {
+		"summary": "Widget texts",
+		"response": {
+			"type": "object",
+			"required": ["texts"],
+			"additionalProperties": false,
+			"properties": { "texts": { "type": "array", "items": { "$ref": "#/components/schemas/Text" } } }
+		}
+	},
+	"PUT /v1/texts/:key": {
+		"summary": "Save one widget text ({ value })",
+		"description": "1–2000 characters with the same {placeholders} as the English text.",
+		"body": {
+			"type": "object",
+			"required": ["value"],
+			"properties": { "value": { "type": "string", "minLength": 1, "maxLength": 2000 } }
+		},
+		"response": { "$ref": "#/components/schemas/Text" }
+	},
+	"DELETE /v1/texts/:key": {
+		"summary": "Reset one widget text to English",
+		"response": { "$ref": "#/components/schemas/Text" }
+	},
+	"GET /v1/theme": { "summary": "The widgets' theme", "response": { "$ref": "#/components/schemas/Theme" } },
+	"PUT /v1/theme": {
+		"summary": "Save theme fields (null resets one)",
+		"body": {
+			"type": "object",
+			"additionalProperties": false,
+			"description": "The fields to change; null resets a field.",
+			"properties": {
+				"colors": { "type": ["object", "null"] },
+				"fontFamily": { "type": ["string", "null"] },
+				"radius": { "type": ["integer", "null"], "minimum": 0, "maximum": 24 },
+				"mode": { "type": ["string", "null"], "enum": ["light", "dark", "auto", null] },
+				"customCss": { "type": ["string", "null"] }
+			}
+		},
+		"response": { "$ref": "#/components/schemas/Theme" }
+	},
+	"GET /v1/format": { "summary": "The Format of money and dates", "response": { "$ref": "#/components/schemas/Format" } },
+	"PUT /v1/format": {
+		"summary": "Save Format fields (null resets one)",
+		"body": {
+			"type": "object",
+			"additionalProperties": false,
+			"description": "The fields to change; null resets a field.",
+			"properties": {
+				"locale": { "type": ["string", "null"] },
+				"currencyDisplay": { "type": ["string", "null"], "enum": ["code", "symbol", "custom", null] },
+				"currencySymbol": { "type": ["string", "null"], "maxLength": 8 },
+				"wholeUnits": { "type": ["boolean", "null"] },
+				"times": { "type": ["string", "null"], "enum": ["viewer", "business", null] }
+			}
+		},
+		"response": { "$ref": "#/components/schemas/Format" }
+	},
+	"GET /v1/lists/:list": {
+		"summary": "A list setting ({ value })",
+		"response": {
+			"type": "object",
+			"required": ["value"],
+			"additionalProperties": false,
+			"properties": { "value": { "description": "The saved list, else its default (each product describes its lists)." } }
+		}
+	},
+	"PUT /v1/lists/:list": {
+		"summary": "Save a whole list setting ({ value })",
+		"body": { "type": "object", "required": ["value"], "properties": { "value": {} } },
+		"response": {
+			"type": "object",
+			"required": ["value"],
+			"additionalProperties": false,
+			"properties": { "value": { "description": "The list as saved." } }
+		}
+	},
+	"GET /v1/connections": {
+		"summary": "Connections (state and last 4 characters only)",
+		"response": {
+			"type": "object",
+			"required": ["connections"],
+			"additionalProperties": false,
+			"properties": { "connections": { "type": "array", "items": { "$ref": "#/components/schemas/Connection" } } }
+		}
+	},
+	"PUT /v1/connections/:name": {
+		"summary": "Save a connection ({ value }), tested live",
+		"body": {
+			"type": "object",
+			"required": ["value"],
+			"properties": { "value": { "type": ["string", "object"], "description": "The secret, or its fields." } }
+		},
+		"response": { "$ref": "#/components/schemas/Connection" }
+	},
+	"DELETE /v1/connections/:name": { "summary": "Remove a connection", "status": 204 },
+	"POST /v1/connections/:name/test": {
+		"summary": "Test a connection again",
+		"response": { "$ref": "#/components/schemas/Connection" }
+	},
+	"GET /v1/activity": {
+		"summary": "The activity log, newest first",
+		"query": {
+			"type": "object",
+			"properties": {
+				"actor": { "type": "string", "maxLength": 256, "description": "An actor id." },
+				"action": { "type": "string", "description": "One action, or several separated by commas." },
+				"target": { "type": "string", "maxLength": 256, "description": "A target id." },
+				"q": { "type": "string", "description": "Searches labels, details, actor names and targets." },
+				"from": { "type": "string", "description": "An ISO-8601 time, or a day (YYYY-MM-DD) in the business time zone." },
+				"to": {
+					"type": "string",
+					"description": "An ISO-8601 time, or a day (YYYY-MM-DD; its end) in the business time zone."
+				},
+				"cursor": { "type": "string", "description": "nextCursor of the previous page." },
+				"limit": { "type": "integer", "minimum": 1, "maximum": 100, "default": 50 }
+			}
+		},
+		"response": {
+			"type": "object",
+			"required": ["items", "nextCursor", "hasMore"],
+			"additionalProperties": false,
+			"properties": {
+				"items": { "type": "array", "items": { "$ref": "#/components/schemas/ActivityEntry" } },
+				"nextCursor": { "type": ["string", "null"] },
+				"hasMore": { "type": "boolean" }
+			}
+		}
+	},
+	"GET /v1/activity/count": {
+		"summary": "Count the activity log",
+		"query": {
+			"type": "object",
+			"properties": {
+				"actor": { "type": "string", "maxLength": 256 },
+				"action": { "type": "string" },
+				"target": { "type": "string", "maxLength": 256 },
+				"q": { "type": "string" },
+				"from": { "type": "string" },
+				"to": { "type": "string" }
+			}
+		},
+		"response": { "$ref": "#/components/schemas/Count" }
+	},
+	"GET /v1/activity/counts": {
+		"summary": "Count the activity log by action, actor or kind",
+		"query": {
+			"type": "object",
+			"required": ["by"],
+			"properties": {
+				"by": { "type": "string", "enum": ["action", "actor", "kind"] },
+				"actor": { "type": "string", "maxLength": 256 },
+				"action": { "type": "string" },
+				"target": { "type": "string", "maxLength": 256 },
+				"q": { "type": "string" },
+				"from": { "type": "string" },
+				"to": { "type": "string" }
+			}
+		},
+		"response": { "$ref": "#/components/schemas/Counts" }
+	}
+}

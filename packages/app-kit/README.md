@@ -50,8 +50,9 @@ The exact API is in [API.md](./API.md).
   `data-token` it fetches the website's widget config (`GET /v1/widget/config`, browser token; admin widgets
   `GET /v1/widget/admin/config` with a ticket): texts, theme, custom CSS, switched-on features and the product's
   widget settings. `@ss/app-kit/widget` mounts a widget into an open Shadow DOM with the theme and custom CSS.
-- **Testing** — `@ss/app-kit/testing` has a fake Portal, Accounts and Notifications doubles, an in-process network and
-  the memory store.
+- **Testing** — `@ss/app-kit/testing` has a fake Portal, Accounts and Notifications doubles, an in-process network,
+  the memory store and `apiChecker`, which checks every answer a product's tests see against its `schemas/api.json`
+  and the kit's own routes (`src/kit-api.json`), so the API descriptions cannot drift from the code.
 
 There is no background work: everything runs inside a request or right after it (Next.js `after`). The kit has no
 health or status endpoints.

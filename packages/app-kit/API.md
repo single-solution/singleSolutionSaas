@@ -1,6 +1,7 @@
 # @ss/app-kit API
 
-Three entries: `@ss/app-kit` (server), `@ss/app-kit/widget` (browser, no Node.js imports) and `@ss/app-kit/testing`.
+Four entries: `@ss/app-kit` (server), `@ss/app-kit/widget` (browser, no Node.js imports), `@ss/app-kit/testing` and
+`@ss/app-kit/api` (API descriptions, for `ss` and tests; never loaded in production).
 
 ## `@ss/app-kit`
 
@@ -25,6 +26,7 @@ Three entries: `@ss/app-kit` (server), `@ss/app-kit/widget` (browser, no Node.js
 | `countHandlers({ source, by })` → `{ count, counts }`                                                        | handlers of a list's `/count` and `/counts?by=` routes (K4; `COUNT_CAP`, `MAX_GROUPS`, `COUNT_TIMEOUT_MS`)                                                                                                                       |
 | `formatMoney`, `formatDate`, `zonedParts`, `zonedDay`, `zonedDayStart`, `DEFAULT_FORMAT`, `IMPORT_LIMITS`    | from `@ss/contracts` (K7, K8, K10)                                                                                                                                                                                               |
 | `KIT_GUIDE`                                                                                                  | the docs sections about the kit's server routes, for each product's `/docs`                                                                                                                                                      |
+| `renderApiReference(openapi, { only? })`, `apiAnchor(method, path)`                                          | the API reference of `/docs` from `openapi.json`: each operation's auth, feature, parameters, request and answer fields, then the shared objects (escaped HTML)                                                                  |
 | `PRODUCT_DATABASE_OPTIONS`, `DATABASE_DEADLINES`, `isDatabaseUnavailable(error)`                             | the product database client's options (`new MongoClient(uri, PRODUCT_DATABASE_OPTIONS)`), the deadlines of every database call (K-16) and the test of an error that means a database cannot be reached or did not answer in time |
 
 ### `createProduct(options)`
@@ -165,14 +167,15 @@ The host gets `data-ss-mode="light" | "dark"` (`auto` follows the device).
 
 ## `@ss/app-kit/testing`
 
-| Export                                        | What it is                                                                                           |
-| --------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `createFakePortal({ url?, now?, pageSize? })` | the Portal side of PLAN 0.4.12 (async)                                                               |
-| `createAccountsDouble({ url? })`              | receives activity copies; serves keys and users with a permission; calls data rights                 |
-| `createNotificationsDouble({ url? })`         | takes events (`POST /v1/events`) and messages (`POST /v1/messages/<channel>`)                        |
-| `createNetwork(handlers)`                     | `{ fetch, send }` routing to in-process handlers by origin (`send` fits `outboundSend`)              |
-| `productKeyOf({ store, encryptionKey })`      | the product's own private key from its store (kept sealed, K-21), for tests that sign as the product |
-| `createMemoryStore({ now? })`                 | the memory store                                                                                     |
+| Export                                        | What it is                                                                                              |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `createFakePortal({ url?, now?, pageSize? })` | the Portal side of PLAN 0.4.12 (async)                                                                  |
+| `createAccountsDouble({ url? })`              | receives activity copies; serves keys and users with a permission; calls data rights                    |
+| `createNotificationsDouble({ url? })`         | takes events (`POST /v1/events`) and messages (`POST /v1/messages/<channel>`)                           |
+| `createNetwork(handlers)`                     | `{ fetch, send }` routing to in-process handlers by origin (`send` fits `outboundSend`)                 |
+| `productKeyOf({ store, encryptionKey })`      | the product's own private key from its store (kept sealed, K-21), for tests that sign as the product    |
+| `createMemoryStore({ now? })`                 | the memory store                                                                                        |
+| `apiChecker(apiJson, { kit? })`               | `{ check, assert, described }`: answers checked against `schemas/api.json` and the kit's routes (below) |
 
 Fake Portal members: `url`, `jwks`, `handle(request)`, `fetch`, `setReachable(bool)`, `connect({ handler, baseUrl,
 secret, priceListVersion? })`, `addProduct({ productId, baseUrl })`, `addWebsite({ domain, websiteId?, merchantId?,
@@ -183,6 +186,14 @@ merchantName?, status?, graceEndsAt?, todayMillicredits? })`, `setStatus(website
 
 Accounts double (`createAccountsDouble({ url?, now? })`) members: `url`, `handle(request)` (activity copies, `GET /v1/websites/:websiteId/keys`, `GET /v1/users?permission=&blocked=`), `copies`, `signIn({ websiteId, sub, ttlSeconds?, …claims })`, `setFailing(bool)`, `setUsers(list)`, `userReads`, `exportUser({ handler, baseUrl, token,
 user })`, `deleteUser(…)`.
+
+`apiChecker(apiJson)` takes a product's `schemas/api.json` (and adds the kit's own routes unless `kit: false`); a
+product's test helper calls `assert({ method, path, status, body })` on every answer its `call()` sees, which throws
+when a 2xx answer's status or JSON body does not fit the description of its route (routes it does not describe are
+left alone). `@ss/app-kit/api` has the rest: `KIT_API` (the kit's own routes, `src/kit-api.json`),
+`checkApiDescription(api, { schemas? })`, `mergeApi`, `parseRouteKey`, `apiEntries`, `sharedSchemas`,
+`schemaProblems(schema, { schemas?, at? })` and `validateValue(schema, value, { schemas? })` (the JSON Schema subset;
+the format is in `@ss/cli`'s README).
 
 Notifications double (`createNotificationsDouble({ url? })`) members: `url`, `handle(request)`, `events`
 (`{ token, key, body }`; a repeated `Idempotency-Key` answers 409), `messages` (`{ token, channel, body }`),

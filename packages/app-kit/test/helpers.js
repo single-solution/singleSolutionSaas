@@ -2,6 +2,7 @@ import { manifest as manifestFixture } from '@ss/contracts/testing';
 import { MongoClient } from 'mongodb';
 import { createProduct, defineRoute } from '../src/index.js';
 import {
+	apiChecker,
 	createAccountsDouble,
 	createFakePortal,
 	createMemoryStore,
@@ -10,6 +11,8 @@ import {
 } from '../src/testing.js';
 
 export const T0 = Date.parse('2026-10-01T10:00:00Z');
+/** The kit's own routes as kit-api.json describes them: every answer of `call()` is checked against it. */
+const KIT_API = apiChecker({});
 export const BASE = 'https://notes.example.dev';
 export const DOMAIN = 'shop.example.com';
 export const SECRET = 'connect-secret-0123456789-abcdefghij';
@@ -185,8 +188,8 @@ export const setup = async (options = {}) => {
 	 * @param {string} path
 	 * @param {{ token?: string, origin?: string | null, body?: unknown, headers?: Record<string, string>, cookie?: string }} [init]
 	 */
-	const call = async (method, path, { token, origin, body, headers = {}, cookie } = {}) =>
-		handler(
+	const call = async (method, path, { token, origin, body, headers = {}, cookie } = {}) => {
+		const response = await handler(
 			new Request(`${BASE}${path}`, {
 				method,
 				headers: {
@@ -199,6 +202,10 @@ export const setup = async (options = {}) => {
 				...(body === undefined ? {} : { body: typeof body === 'string' ? body : JSON.stringify(body) }),
 			}),
 		);
+		const json = method !== 'HEAD' && (response.headers.get('content-type') ?? '').startsWith('application/json');
+		KIT_API.assert({ method, path, status: response.status, body: json ? await response.clone().json() : null });
+		return response;
+	};
 
 	/**
 	 * Open the dashboard as a merchant or an admin; returns the session cookie.

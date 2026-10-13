@@ -15,6 +15,7 @@ export { formatText } from './text.js';
 export { ACTOR_HEADERS, actorOf, parseActor } from './actor.js';
 export { COUNT_CAP, COUNT_TIMEOUT_MS, MAX_GROUPS, countHandlers } from './counts.js';
 export { KIT_GUIDE } from './guide.js';
+export { apiAnchor, renderApiReference } from './api-reference.js';
 export { DATABASE_DEADLINES, PRODUCT_DATABASE_OPTIONS, isDatabaseUnavailable } from './data.js';
 export { DEFAULT_FORMAT, IMPORT_LIMITS, formatDate, formatMoney, zonedDay, zonedDayStart, zonedParts } from '@ss/contracts';
 
