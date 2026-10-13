@@ -594,8 +594,8 @@ export const createMoves = (product, service) => {
 					set['payment.paid'] = order.totals.total;
 					push.payments = cashEntry;
 				}
-				// points go to the member, or to the guest's customer record when guests earn (E20); fixed at placement or
-				// worked out now, and credited once
+				// points go to the member, or to the guest's customer record when guests earn (E20); fixed at placement (0 for
+				// a member whose role the loyalty settings leave out) or worked out now, and credited once
 				const owner = pointsOwner(order);
 				const loyalty = s.has('loyalty') && owner && !order.promotions.pointsCredited ? await s.values('loyalty') : null;
 				const earns = loyalty !== null && (order.customer.userId ? true : loyaltyRules(loyalty).guests === 'earn');

@@ -611,7 +611,7 @@
 				"id": "loyalty-options",
 				"title": "Loyalty options",
 				"paragraphs": [
-					"The loyalty settings: roles (the Accounts roles that take part; empty = every signed-in shopper), guests (earn: guests earn on their phone and redeem once they sign in), earnBase (goods, or total with delivery and fees), earnAt (delivery: worked out when delivered; placement: fixed when placed), capBase, redeemMode (maximum: one switch redeems the most allowed), expiryUnit (days, or calendar months in your business time zone) and expiryRule (current: a change of the expiry applies to past points too). Points are credited when the order is delivered, and taken back when it is returned or refunded.",
+					"The loyalty settings: roles (the Accounts roles that take part, earning and redeeming; empty = every signed-in shopper; an order a shopper of another role places earns nothing, at delivery either), guests (earn: guests earn on their phone and redeem once they sign in), earnBase (goods, or total with delivery and fees), earnAt (delivery: worked out when delivered; placement: fixed when placed), capBase, redeemMode (maximum: one switch redeems the most allowed), expiryUnit (days, or calendar months in your business time zone) and expiryRule (current: a change of the expiry applies to past points too). Points are credited when the order is delivered, and taken back when it is returned or refunded.",
 					"Quotes answer pointsToEarn. GET /v1/shop/loyalty?limit=&offset= answers balance, value, lifetimeEarned, pending (points of orders not delivered yet), history (newest first, with hasMore) and expiringSoon (points ending within 30 days). Staff read and adjust an account at /v1/loyalty/accounts/<customer id or Accounts user id>."
 				],
 				"routes": [

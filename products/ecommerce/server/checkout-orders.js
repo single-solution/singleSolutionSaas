@@ -831,7 +831,10 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		const promotions = q.promotions;
 		const customer = member ?? (await store.ensureCustomer(buyer, { at: new Date(now) }));
 		const loyalty = s.has('loyalty') ? await s.values('loyalty') : null;
-		const earns = loyalty !== null && (shopper ? takesPart(loyalty, shopper.role) : loyaltyRules(loyalty).guests === 'earn');
+		// a signed-in shopper whose role the loyalty settings leave out earns nothing, at delivery either (E20 roles): 0 is
+		// fixed now
+		const leftOut = loyalty !== null && shopper !== null && !takesPart(loyalty, shopper.role);
+		const earns = loyalty !== null && !leftOut && (shopper !== null || loyaltyRules(loyalty).guests === 'earn');
 		const orderKey = shopper ? null : newOrderKey();
 		const order = {
 			id: orderId,
@@ -857,7 +860,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 				pointsEarned: earns
 					? Math.max(0, Math.floor(pointsToEarn(q.totals, /** @type {Record<string, any>} */ (loyalty))))
 					: 0,
-				pointsFixed: earns && loyaltyRules(loyalty).earnAt === 'placement',
+				pointsFixed: leftOut || (earns && loyaltyRules(loyalty).earnAt === 'placement'),
 				pointsCredited: false,
 				pointsBlocked: promotions?.pointsBlocked === true,
 				role: q.role,

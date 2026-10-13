@@ -39838,7 +39838,7 @@
 					},
 					"pointsFixed": {
 						"type": "boolean",
-						"description": "pointsEarned was fixed at placement."
+						"description": "pointsEarned was fixed at placement (earnAt placement, or 0 for a signed-in shopper whose role the loyalty setting roles leaves out)."
 					},
 					"pointsCredited": {
 						"type": "boolean",

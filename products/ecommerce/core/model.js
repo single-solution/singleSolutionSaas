@@ -317,7 +317,8 @@ export const STATUS_ROLES = Object.freeze([
  *   pointsValue: number, pointsEarned: number, released: boolean, role?: { key: string, percent: number, label: string } | null,
  *   pointsFixed?: boolean, pointsCredited?: boolean, pointsBlocked?: boolean, pointsReversed?: number }} promotions `released`: offer uses and points were given back
  *   (cancel), exactly once; `role`: the role price applied (E19); `pointsCredited`: points fixed at placement were
- *   credited (E20 `earnAt`); `pointsFixed`: `pointsEarned` was fixed at placement; `pointsBlocked`: a deal without points applied (E18 `allowPoints`);
+ *   credited (E20 `earnAt`); `pointsFixed`: `pointsEarned` was fixed at placement (`earnAt: placement`, or 0 for a
+ *   signed-in shopper whose role the loyalty settings leave out); `pointsBlocked`: a deal without points applied (E18 `allowPoints`);
  *   `pointsReversed`: earned points already taken back (a claim's refund, a return or a refund, OR-10)
  * @property {{ method: PaymentMethod, state: PaymentState, paymentId: string | null, advance: number, paid: number,
  *   refunded: number, checkedAt: Date | null, checkoutUrl?: string, via?: 'payments' | 'manual',

@@ -593,6 +593,48 @@ describe('loyalty options (E20)', () => {
 		expect(account.json).toMatchObject({ balance: 0, lifetimeEarned: 0, pending: 10, hasMore: false });
 		await shop.setting('loyalty', 'earnAt', 'delivery');
 	});
+
+	it('lets only the roles the settings name earn and redeem, at delivery too', async () => {
+		await shop.setting('loyalty', 'earnPercent', 10);
+		await shop.setting('loyalty', 'pointValue', 100);
+		await shop.setting('loyalty', 'roles', ['vip']);
+		const item = await shop.seedProduct({ price: 10_000, stock: 10 });
+		const body = { lines: [{ productId: item.id }], payment: 'cod', address: ADDRESS };
+		/** Place and deliver an order; the shopper's balance after. @param {{ token: string }} who */
+		const delivered = async (who) => {
+			const placed = await place(body, who.token);
+			expect(placed.status).toBe(201);
+			const id = placed.json.order.id;
+			for (const to of ['confirmed', 'delivered'])
+				expect((await shop.api('POST', `/v1/orders/${id}/move`, { to })).status).toBe(200);
+			return {
+				record: await orderRecord(id),
+				balance: (await visit('GET', '/v1/shop/loyalty', { signIn: who.token })).json.balance,
+			};
+		};
+		for (const earnAt of ['delivery', 'placement']) {
+			await shop.setting('loyalty', 'earnAt', earnAt);
+			const other = await newShopper({ role: 'customer' });
+			expect((await quote({ lines: [{ productId: item.id }] }, other.token)).json.pointsToEarn).toBe(0);
+			const left = await delivered(other);
+			expect(left.record.promotions, earnAt).toMatchObject({ pointsEarned: 0, pointsFixed: true });
+			expect(left.balance, earnAt).toBe(0);
+			const vip = await newShopper({ role: 'vip' });
+			expect((await delivered(vip)).balance, earnAt).toBe(10);
+		}
+		// points staff gave a shopper of another role are not redeemed at checkout; a vip's are
+		const other = await newShopper({ role: 'customer' });
+		const vip = await newShopper({ role: 'vip' });
+		for (const who of [other, vip])
+			expect((await shop.api('POST', `/v1/loyalty/accounts/${who.id}/adjust`, { points: 50 })).status).toBe(200);
+		await shop.setting('loyalty', 'minRedeem', 10);
+		const spend = { lines: [{ productId: item.id }], points: 20 };
+		expect((await quote(spend, other.token)).json.points).toBeNull();
+		expect((await quote(spend, vip.token)).json.points).toMatchObject({ balance: 50, used: 20 });
+		await shop.setting('loyalty', 'minRedeem', 100);
+		await shop.setting('loyalty', 'earnAt', 'delivery');
+		await shop.setting('loyalty', 'roles', []);
+	});
 });
 
 describe('whole-unit amounts (E25)', () => {
