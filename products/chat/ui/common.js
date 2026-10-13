@@ -30,7 +30,9 @@ import { element } from './dom.js';
  * @property {Array<{ id: string, name: string, start: { kind: string, path: string, delay: number } }>} flows
  * @property {{ fields: string[], customFields: string[], consentText: string }} leads
  * @property {CustomField[]} customFields
- * @property {{ visitors: string, types: string[], maxBytes: number, storage: boolean }} attachments
+ * @property {{ visitors: string, types: string[], maxBytes: number, staffTypes: string[], staffMaxBytes: number,
+ *   storage: boolean }} attachments what visitors may send (`types`, `maxBytes`) and staff (`staffTypes`,
+ *   `staffMaxBytes`), as the server checks it
  * @property {{ scale: number, askWhen: string, comment: boolean }} ratings
  * @property {boolean} queuePosition
  */
@@ -65,7 +67,7 @@ const DEFAULTS = {
 	flows: [],
 	leads: { fields: ['name', 'email'], customFields: [], consentText: '' },
 	customFields: [],
-	attachments: { visitors: 'off', types: [], maxBytes: 0, storage: false },
+	attachments: { visitors: 'off', types: [], maxBytes: 0, staffTypes: [], staffMaxBytes: 0, storage: false },
 	ratings: { scale: 5, askWhen: 'on_resolve', comment: false },
 	queuePosition: false,
 };

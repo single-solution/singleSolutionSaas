@@ -21,7 +21,12 @@ import { normalisePhone } from '@ss/contracts/phone';
 /** @typedef {{ name?: string | null, email?: string | null, phone?: string | null }} Contact */
 /** @typedef {{ id: string, conversationId: string | null, name: string | null, email: string | null, phone: string | null, message: string | null, custom: Record<string, unknown>, page: unknown, createdAt: Date }} LeadRecord */
 /** @typedef {{ id: string, kind: 'faq' | 'article', title: string, text: string, updatedAt: Date }} EntryRecord */
-/** @typedef {{ id: string, url: string, title: string, text: string, status: 'ok' | 'failed', error: string | null, fetchedAt: Date | null }} PageRecord */
+/**
+ * A website page as knowledge; a page that could not be fetched keeps why (`reason`, and the status it answered).
+ * @typedef {{ id: string, url: string, title: string, text: string, status: 'ok' | 'failed',
+ *   reason?: 'http_status' | 'unreachable' | null, httpStatus?: number | null, error: string | null,
+ *   fetchedAt: Date | null }} PageRecord
+ */
 
 const CONVERSATIONS = 'conversations';
 const MESSAGES = 'messages';

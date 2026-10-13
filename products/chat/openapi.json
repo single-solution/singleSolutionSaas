@@ -1838,7 +1838,7 @@
 			},
 			"post": {
 				"summary": "Add a website page",
-				"description": "Fetched now (10 s, at most 2 MB) and indexed; a page that cannot be fetched is kept with status failed and its error. Up to 200 pages. 422 validation_failed.",
+				"description": "Fetched now (10 s, at most 2 MB) and indexed; a page that cannot be fetched is kept with status failed and its reason. Up to 200 pages. 422 validation_failed.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "knowledge_pages",
 				"x-ss-permission": "knowledge.edit",
@@ -6666,7 +6666,7 @@
 			},
 			"post": {
 				"summary": "Add a website page",
-				"description": "Fetched now (10 s, at most 2 MB) and indexed; a page that cannot be fetched is kept with status failed and its error. Up to 200 pages. 422 validation_failed.",
+				"description": "Fetched now (10 s, at most 2 MB) and indexed; a page that cannot be fetched is kept with status failed and its reason. Up to 200 pages. 422 validation_failed.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "knowledge_pages",
 				"security": [
@@ -9545,6 +9545,8 @@
 					"url",
 					"title",
 					"status",
+					"reason",
+					"httpStatus",
 					"error",
 					"fetchedAt"
 				],
@@ -9570,12 +9572,33 @@
 							"failed"
 						]
 					},
+					"reason": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"http_status",
+							"unreachable",
+							null
+						],
+						"description": "Why it could not be fetched: http_status (the page answered httpStatus) or unreachable (no answer in 10 s, more than 2 MB, or an address Chat may not call); null when fetched."
+					},
+					"httpStatus": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 100,
+						"maximum": 599,
+						"description": "The status the page answered (reason http_status); null otherwise."
+					},
 					"error": {
 						"type": [
 							"string",
 							"null"
 						],
-						"description": "Why it could not be fetched (in English)."
+						"description": "The same reason as an English sentence for people (null when fetched); use reason in code."
 					},
 					"fetchedAt": {
 						"type": [

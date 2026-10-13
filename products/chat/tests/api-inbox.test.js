@@ -283,7 +283,12 @@ describe('knowledge and reports', () => {
 			422,
 		);
 		const page = await sys.admin(ticket, 'POST', '/v1/admin/knowledge/pages', { url: `${ORIGIN}/gone` });
-		expect(page.json.page).toMatchObject({ status: 'failed', error: 'The page answered 404.' });
+		expect(page.json.page).toMatchObject({
+			status: 'failed',
+			reason: 'http_status',
+			httpStatus: 404,
+			error: 'The page answered 404.',
+		});
 		sys.responders.set(`${ORIGIN}/gone`, () => ({
 			status: 200,
 			type: 'text/html',
@@ -293,11 +298,14 @@ describe('knowledge and reports', () => {
 		expect(again.json.page).toMatchObject({ status: 'ok', title: 'Back' });
 		expect((await sys.serverCall('GET', '/v1/knowledge/pages')).json.items).toHaveLength(1);
 		const fetched = await sys.admin(ticket, 'POST', `/v1/admin/knowledge/pages/${page.json.page.id}/fetch`);
-		expect(fetched.json.page).toMatchObject({ status: 'ok', error: null });
+		expect(fetched.json.page).toMatchObject({ status: 'ok', reason: null, httpStatus: null, error: null });
 		expect((await sys.admin(ticket, 'GET', '/v1/admin/knowledge/pages')).json.items).toEqual([fetched.json.page]);
 		expect((await sys.admin(ticket, 'DELETE', `/v1/admin/knowledge/pages/${page.json.page.id}`)).status).toBe(204);
 		expect((await sys.admin(ticket, 'DELETE', `/v1/admin/knowledge/pages/${page.json.page.id}`)).status).toBe(404);
 		expect((await sys.admin(ticket, 'POST', '/v1/admin/knowledge/pages/page_nope/fetch')).status).toBe(404);
+		// a page with no answer at all: unreachable
+		const nowhere = await sys.serverCall('POST', '/v1/knowledge/pages', { url: 'https://nowhere.example.org/faq' });
+		expect(nowhere.json.page).toMatchObject({ status: 'failed', reason: 'unreachable', httpStatus: null });
 	});
 
 	it('reports count conversations, answers, reply times, ratings, leads and AI tokens', async () => {

@@ -413,7 +413,15 @@ describe('inbox', () => {
 		let put = () => answer(500);
 		const { server, hosts } = await startAdmin({
 			features: ['inbox', 'attachments'],
-			settings: { attachments: { types: ['application/pdf'], maxBytes: 1024 } },
+			// staff send what the staff rules allow (C12), whatever visitors may send
+			settings: {
+				attachments: {
+					types: ['image/png'],
+					maxBytes: 4096,
+					staffTypes: ['application/pdf', 'text/plain'],
+					staffMaxBytes: 1024,
+				},
+			},
 			routes: {
 				'GET /v1/admin/conversations': () => answer(200, { items: [item()], hasMore: false, unread: 0 }),
 				'GET /v1/admin/conversations/c1': () =>
@@ -437,7 +445,7 @@ describe('inbox', () => {
 		const root = shadow(hosts.inbox);
 		await click(buttonIn(root, 'Ana'));
 		const file = /** @type {HTMLInputElement} */ (root.querySelector('input[type="file"]'));
-		expect(file.getAttribute('accept')).toBe('application/pdf');
+		expect(file.getAttribute('accept')).toBe('application/pdf,text/plain');
 		const clicked = vi.spyOn(file, 'click').mockImplementation(() => {});
 		await click(buttonIn(root, TEXTS['inbox.attach']));
 		expect(clicked).toHaveBeenCalled();
@@ -459,6 +467,9 @@ describe('inbox', () => {
 		});
 		expect(root.querySelector('.log a.file')?.textContent).toBe('a.pdf');
 		expect(shows(root, TEXTS['inbox.addNote'])).toBe(false);
+		// a text file is a staff type: it goes up too
+		await choose(file, new File(['notes'], 'notes.txt', { type: 'text/plain' }));
+		expect(server.last('POST /v1/admin/uploads')?.body).toEqual({ name: 'notes.txt', type: 'text/plain', size: 5 });
 	});
 
 	it('hands a chat waiting for a person back to the AI (CH-3)', async () => {
@@ -552,9 +563,37 @@ describe('knowledge editor', () => {
 		let entries = [{ id: 'e1', kind: 'faq', title: 'Returns?', text: '30 days', updatedAt: AT }];
 		let save = () => answer(201, { entry: {} });
 		const pages = [
-			{ id: 'p1', url: 'https://shop.test/about', title: 'About', status: 'ok', error: null, fetchedAt: AT },
-			{ id: 'p2', url: 'bad url', title: '', status: 'failed', error: 'The page cannot be reached.', fetchedAt: null },
-			{ id: 'p3', url: 'https://shop.test/gone', title: '', status: 'failed', error: 'The page answered 404.', fetchedAt: AT },
+			{
+				id: 'p1',
+				url: 'https://shop.test/about',
+				title: 'About',
+				status: 'ok',
+				reason: null,
+				httpStatus: null,
+				error: null,
+				fetchedAt: AT,
+			},
+			// the widget reads the stable reason, never the English error
+			{
+				id: 'p2',
+				url: 'bad url',
+				title: '',
+				status: 'failed',
+				reason: 'unreachable',
+				httpStatus: null,
+				error: 'Gone away',
+				fetchedAt: null,
+			},
+			{
+				id: 'p3',
+				url: 'https://shop.test/gone',
+				title: '',
+				status: 'failed',
+				reason: 'http_status',
+				httpStatus: 404,
+				error: 'Answered 404',
+				fetchedAt: AT,
+			},
 		];
 		let fetchAgain = () => problem(500, 'x');
 		let addPage = () => answer(201, { page: {} });
@@ -632,7 +671,8 @@ describe('knowledge editor', () => {
 		expect(pageList.querySelector('a')?.getAttribute('href')).toBe('https://shop.test/about');
 		expect(pageList.textContent).toContain(TEXTS['knowledge.pageUnreachable']);
 		expect(pageList.textContent).toContain(TEXTS['knowledge.pageStatus'].replace('{status}', '404'));
-		expect(pageList.textContent).not.toContain('The page');
+		expect(pageList.textContent).not.toContain('Gone away');
+		expect(pageList.textContent).not.toContain('Answered 404');
 		const fetchButtons = [...pageList.querySelectorAll('button')].filter((b) => b.textContent === TEXTS['knowledge.pageFetch']);
 		await click(/** @type {HTMLElement} */ (fetchButtons[0]));
 		expect(pageList.textContent).toContain(TEXTS['common.error']);

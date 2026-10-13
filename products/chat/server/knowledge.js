@@ -40,12 +40,18 @@ const pageAbout = (p) => ({
 	detail: p.status === 'ok' ? 'Fetched' : `Not fetched: ${p.error ?? 'unknown reason'}`,
 });
 
-/** @param {PageRecord} p */
+/**
+ * A page as the API answers it: why it could not be fetched as a stable `reason` (`http_status` with the `httpStatus`
+ * the page answered, or `unreachable`) beside the English `error`.
+ * @param {PageRecord} p
+ */
 const pageView = (p) => ({
 	id: p.id,
 	url: p.url,
 	title: p.title,
 	status: p.status,
+	reason: p.reason ?? null,
+	httpStatus: p.httpStatus ?? null,
 	error: p.error,
 	fetchedAt: p.fetchedAt ? new Date(p.fetchedAt).toISOString() : null,
 });
@@ -120,13 +126,18 @@ export const createKnowledge = (product, service) => {
 				headers: { accept: 'text/html' },
 			});
 			if (response.status < 200 || response.status > 299)
-				set = { status: 'failed', error: `The page answered ${response.status}.` };
+				set = {
+					status: 'failed',
+					reason: 'http_status',
+					httpStatus: response.status,
+					error: `The page answered ${response.status}.`,
+				};
 			else {
 				const { title, text } = htmlToText(textOf(response));
-				set = { title: title || page.url, text, status: 'ok', error: null };
+				set = { title: title || page.url, text, status: 'ok', reason: null, httpStatus: null, error: null };
 			}
 		} catch {
-			set = { status: 'failed', error: 'The page cannot be reached.' };
+			set = { status: 'failed', reason: 'unreachable', httpStatus: null, error: 'The page cannot be reached.' };
 		}
 		const updated = /** @type {PageRecord} */ (
 			await s.store.knowledge.updatePage(page.id, { ...set, fetchedAt: new Date(now()) })

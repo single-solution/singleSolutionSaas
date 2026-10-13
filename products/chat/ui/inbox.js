@@ -1,7 +1,7 @@
 /**
  * The admin widget `inbox` (permissions `inbox.read`, `inbox.reply`, `inbox.manage`): conversations newest activity
  * first, with filters (status, assigned, waiting, guest or signed in), search and unread counts; a conversation with
- * its messages and internal notes, reply (with attachments and saved replies), notes, status, AI paused, Hand back to
+ * its messages and internal notes, reply (with attachments of the staff file types and size, C12, and saved replies), notes, status, AI paused, Hand back to
  * the AI for a chat waiting for a person (CH-3), assignment (with presence and Full), custom field values, the context
  * panel with the AI summary, transcripts and rating requests; your own presence and the staff's max chats. Only parts of switched-on features show, and a part whose
  * route answers 403 hides itself. It checks for news with the same back-off as the visitor chat. Where the widget is
@@ -10,7 +10,7 @@
  * @module
  */
 import { formatText, mountWidget } from '@ss/app-kit/widget';
-import { ATTACHMENT_TYPES, MAX_ATTACHMENT_BYTES, MAX_MESSAGE_LENGTH } from '../core/widgets.js';
+import { MAX_MESSAGE_LENGTH, MAX_STAFF_ATTACHMENT_BYTES, STAFF_TYPES } from '../core/widgets.js';
 import {
 	attachmentNode,
 	buttonOf,
@@ -241,16 +241,16 @@ export const mountInbox = ({ host, win, api, config, clock, onUnread }) => {
 			const addNote = buttonOf(doc, t('inbox.addNote'), { class: 'secondary' });
 			const file = /** @type {HTMLInputElement} */ (element(doc, 'input', { type: 'file', hidden: '' }));
 			const attach = buttonOf(doc, t('inbox.attach'), { class: 'secondary' });
-			const fileTypes = s.attachments.types.filter((type) => ATTACHMENT_TYPES.includes(type));
-			const types = fileTypes.length > 0 ? fileTypes : [...ATTACHMENT_TYPES];
+			// what staff may send, as the server's widget config says (the staff types and size, C12): none, no Attach
+			const types = s.attachments.staffTypes.filter((type) => STAFF_TYPES.includes(type));
 			file.setAttribute('accept', types.join(','));
-			const maxBytes = Math.min(s.attachments.maxBytes || MAX_ATTACHMENT_BYTES, MAX_ATTACHMENT_BYTES);
+			const maxBytes = Math.min(s.attachments.staffMaxBytes, MAX_STAFF_ATTACHMENT_BYTES);
 			replyForm.append(
 				...(on('saved_replies') ? [saved.picker(reply)] : []),
 				reply,
 				send,
 				...(on('internal_notes') ? [addNote] : []),
-				...(on('attachments') ? [file, attach] : []),
+				...(on('attachments') && types.length > 0 ? [file, attach] : []),
 			);
 			const transcript = make.field('input', t('inbox.transcriptEmail'), { type: 'email', maxlength: '254', required: '' });
 			const transcriptForm = formPart(doc, {

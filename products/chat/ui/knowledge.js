@@ -27,14 +27,14 @@ export const mountKnowledge = ({ host, win, api, config }) => {
 		return isInvalid(answer) ? t(invalid) : t('common.error');
 	};
 	/**
-	 * Why a page could not be fetched, in the widget texts: the status the page answered, else that it cannot be
-	 * reached (the server keeps its own English reason in `error`).
-	 * @param {unknown} error
+	 * Why a page could not be fetched, in the widget texts, from the answer's `reason`: the status the page answered,
+	 * else that it cannot be reached (never the server's English `error`).
+	 * @param {{ reason?: string | null, httpStatus?: number | null }} page
 	 */
-	const pageProblem = (error) => {
-		const status = /\b([1-5]\d\d)\b/.exec(String(error ?? ''))?.[1];
-		return status ? formatText(t('knowledge.pageStatus'), { status }) : t('knowledge.pageUnreachable');
-	};
+	const pageProblem = (page) =>
+		page.reason === 'http_status'
+			? formatText(t('knowledge.pageStatus'), { status: page.httpStatus ?? '' })
+			: t('knowledge.pageUnreachable');
 	/** @type {Record<string, string>} */
 	const kinds = { faq: t('knowledge.faq'), article: t('knowledge.article') };
 
@@ -176,7 +176,7 @@ export const mountKnowledge = ({ host, win, api, config }) => {
 							'span',
 							{ class: 'meta' },
 							[
-								page.status === 'ok' ? t('knowledge.pageOk') : pageProblem(page.error),
+								page.status === 'ok' ? t('knowledge.pageOk') : pageProblem(page),
 								page.fetchedAt ? formatText(t('knowledge.pageFetched'), { time: when(page.fetchedAt) }) : '',
 							]
 								.filter(Boolean)
