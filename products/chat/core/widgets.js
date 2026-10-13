@@ -111,12 +111,31 @@ export const PAGE_MAX = 50;
 
 /**
  * The Notifications templates Chat sends and the values each one gets (`business` is always added). Staff alerts go
- * by e-mail, WhatsApp or SMS through the kit's staff alerts (K6); the transcript by e-mail; the reply alert (C6) by
- * WhatsApp to the visitor's phone, else by e-mail.
+ * by e-mail, WhatsApp or SMS through the kit's staff alerts (K6), `preview` cut to 140 characters on one line and
+ * `message` up to 500 with its line breaks, `phone` only with the staff alert setting `includePhone` (CH-9); the
+ * transcript by e-mail; the reply alert (C6) by WhatsApp to the visitor's phone, else by e-mail.
  */
 export const MESSAGE_TEMPLATES = Object.freeze({
-	'chat.staff_new_message': Object.freeze(['visitor', 'preview', 'link', 'conversationId', 'business']),
-	'chat.staff_needs_you': Object.freeze(['visitor', 'preview', 'link', 'conversationId', 'business']),
+	'chat.staff_new_message': Object.freeze([
+		'visitor',
+		'name',
+		'phone',
+		'preview',
+		'message',
+		'link',
+		'conversationId',
+		'business',
+	]),
+	'chat.staff_needs_you': Object.freeze([
+		'visitor',
+		'name',
+		'phone',
+		'preview',
+		'message',
+		'link',
+		'conversationId',
+		'business',
+	]),
 	'chat.staff_cost_alert': Object.freeze(['used', 'cap', 'percent', 'business']),
 	'chat.transcript': Object.freeze(['transcript', 'date', 'business']),
 	'chat.staff_reply': Object.freeze(['name', 'staff', 'preview', 'link', 'business']),

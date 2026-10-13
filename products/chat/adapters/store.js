@@ -5,7 +5,7 @@
  * - `conversations` and `messages` (separate, ordered by a per-conversation `seq`); never deleted because of age
  * - `guests`: guest device keys (hash only), removed by a TTL index when the device forgets them
  * - `staff`: the merchant's staff named in tickets or by the `SS-Actor-*` headers of server calls (the kit records
- *   them), with presence and max chats
+ *   them), or assigned from Accounts, with presence and max chats
  * - `leads`, `saved_replies`, `entries` (knowledge), `pages` (website pages and their text), `chunks` (retrieval)
  * - `usage`: AI token counts per day and month window (and the month's cost alert)
  * - `activity`: the activity log (the kit writes it)
@@ -17,6 +17,7 @@ import { createId } from '@ss/contracts';
 /** @typedef {import('../core/conversation.js').ConversationRecord} ConversationRecord */
 /** @typedef {import('../core/conversation.js').MessageRecord} MessageRecord */
 /** @typedef {{ id: string, name: string, email: string, presence?: 'online' | 'away' | 'offline', checkedInAt?: Date, maxChats?: number | null }} StaffRecord */
+/** @typedef {{ name?: string | null, email?: string | null, phone?: string | null }} Contact */
 /** @typedef {{ id: string, conversationId: string | null, name: string | null, email: string | null, phone: string | null, message: string | null, custom: Record<string, unknown>, page: unknown, createdAt: Date }} LeadRecord */
 /** @typedef {{ id: string, kind: 'faq' | 'article', title: string, text: string, updatedAt: Date }} EntryRecord */
 /** @typedef {{ id: string, url: string, title: string, text: string, status: 'ok' | 'failed', error: string | null, fetchedAt: Date | null }} PageRecord */
@@ -184,7 +185,8 @@ export const createStore = (data, { now }) => {
 				return new Map(rows.map((row) => [String(row._id), Number(row.n)]));
 			},
 			/**
-			 * The visitor's place in the queue: unassigned conversations waiting for a person, handed off earlier, + 1.
+			 * The visitor's place in the queue: unassigned conversations waiting for a person since earlier (this handoff,
+			 * not the first one, CH-5), + 1.
 			 * @param {ConversationRecord} c
 			 */
 			queuePosition: async (c) =>
@@ -194,29 +196,41 @@ export const createStore = (data, { now }) => {
 					waiting: true,
 					assignedTo: null,
 					status: { $ne: 'resolved' },
-					handedOffAt: { $lt: c.handedOffAt },
+					waitingSince: { $lt: c.waitingSince ?? c.handedOffAt },
 				})),
 			/**
-			 * Move a guest's conversations to an account (the same device showed both).
+			 * Move a guest's conversations to an account (the same device showed both); the name, e-mail and phone they
+			 * lack come from the sign-in (CH-7).
 			 * @param {string} guestId
 			 * @param {string} userId
+			 * @param {Contact} [contact]
 			 */
-			moveGuest: async (guestId, userId) =>
-				(
+			moveGuest: async (guestId, userId, contact = {}) => {
+				const moved = (
 					await conversations.updateMany(
 						{ websiteId: w, 'visitor.kind': 'guest', 'visitor.id': guestId },
 						{ $set: { visitor: { kind: 'user', id: userId }, updatedAt: date() }, $addToSet: { guestIds: guestId } },
 					)
-				).modifiedCount,
+				).modifiedCount;
+				for (const field of /** @type {const} */ (['name', 'email', 'phone']))
+					if (contact[field])
+						await conversations.updateMany(
+							{ websiteId: w, 'visitor.kind': 'user', 'visitor.id': userId, guestIds: guestId, [field]: null },
+							{ $set: { [field]: contact[field], updatedAt: date() } },
+						);
+				return moved;
+			},
 			/**
 			 * Merge conversations into one by time (C7): their messages join the target's, in the order they were written,
-			 * and are numbered again; counters, contact details, custom fields and the guests behind them move along; the
-			 * merged conversations are deleted. One transaction.
+			 * and are numbered again; counters, contact details (else the sign-in's, CH-7), custom fields and the guests
+			 * behind them move along; the merged conversations are deleted. The status is open when the newest message is
+			 * the visitor's, else the status of the conversation with the latest message (CH-7). One transaction.
 			 * @param {ConversationRecord} target
 			 * @param {ConversationRecord[]} sources
+			 * @param {Contact} [contact]
 			 * @returns {Promise<ConversationRecord | null>}
 			 */
-			merge: async (target, sources) => {
+			merge: async (target, sources, contact = {}) => {
 				if (sources.length === 0) return target;
 				const all = [target, ...sources];
 				const ids = all.map((c) => c.id);
@@ -278,9 +292,10 @@ export const createStore = (data, { now }) => {
 								aiReplies: sum('aiReplies'),
 								staffSeenSeq: Math.max(...all.map((c) => seenOf(c, Number(c.staffSeenSeq ?? 0)))),
 								visitorSeenSeq: Math.max(...all.map((c) => seenOf(c, Number(c.visitorSeenSeq ?? 0)))),
-								name: all.find((c) => c.name)?.name ?? null,
-								email: all.find((c) => c.email)?.email ?? null,
-								phone: all.find((c) => c.phone)?.phone ?? null,
+								status: found.at(-1)?.author === 'visitor' ? 'open' : (latest?.status ?? target.status),
+								name: all.find((c) => c.name)?.name ?? contact.name ?? null,
+								email: all.find((c) => c.email)?.email ?? contact.email ?? null,
+								phone: all.find((c) => c.phone)?.phone ?? contact.phone ?? null,
 								fields: Object.assign({}, ...[...all].reverse().map((c) => c.fields ?? {})),
 								staffReplied: all.some((c) => c.staffReplied),
 								firstVisitorAt: earliest('firstVisitorAt'),
@@ -430,6 +445,16 @@ export const createStore = (data, { now }) => {
 					{
 						$set: { name: user.name, ...(user.email ? { email: user.email } : {}), checkedInAt: date(), updatedAt: date() },
 					},
+					{ upsert: true },
+				),
+			/**
+			 * Add a member of staff known from Accounts (CH-6): Offline until they check in.
+			 * @param {{ id: string, name: string, email?: string }} user
+			 */
+			add: (user) =>
+				staff.updateOne(
+					{ websiteId: w, id: user.id },
+					{ $set: { name: user.name, ...(user.email ? { email: user.email } : {}), updatedAt: date() } },
 					{ upsert: true },
 				),
 			/** @param {string} id @param {Record<string, unknown>} set */

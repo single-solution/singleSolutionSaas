@@ -18,7 +18,7 @@ import { problem } from '@ss/app-kit';
 import { createId } from '@ss/contracts';
 import { capReached, windowKeys, alertCrossed } from '../core/caps.js';
 import { customerOrdersPath, shopInfoOf } from '../core/shop.js';
-import { iso, pendingStale, previewOf, staffMessageView, visitorMessageView } from '../core/conversation.js';
+import { excerptOf, iso, pendingStale, previewOf, staffMessageView, visitorMessageView } from '../core/conversation.js';
 import { waitingView } from '../core/flows.js';
 import { officeState, parseOfficeHours } from '../core/handoff.js';
 import { zoneOr } from '../core/time.js';
@@ -128,18 +128,19 @@ export const createService = (product) => {
 
 	/**
 	 * Move a guest's conversations to an account: merged by time into the account's latest conversation when it has
-	 * one, else moved as they are (C7).
+	 * one, else moved as they are (C7); the name, e-mail and phone they lack come from the sign-in at once (CH-7).
 	 * @param {Site} s
 	 * @param {ConversationRecord[]} guestConversations
-	 * @param {string} userId
+	 * @param {Visitor & { kind: 'user' }} user
 	 */
-	const claim = async (s, guestConversations, userId) => {
+	const claim = async (s, guestConversations, user) => {
 		if (guestConversations.length === 0) return;
-		const own = await s.store.conversations.current({ kind: 'user', id: userId });
-		if (own) await s.store.conversations.merge(own, guestConversations);
+		const contact = { name: user.name, email: user.email, phone: user.phone };
+		const own = await s.store.conversations.current({ kind: 'user', id: user.id });
+		if (own) await s.store.conversations.merge(own, guestConversations, contact);
 		else
 			for (const guestId of new Set(guestConversations.map((c) => c.visitor.id)))
-				await s.store.conversations.moveGuest(guestId, userId);
+				await s.store.conversations.moveGuest(guestId, user.id, contact);
 	};
 
 	/**
@@ -152,7 +153,7 @@ export const createService = (product) => {
 	 */
 	const visitorOf = async (s, { claim: byPhone = false } = {}) => {
 		const signIn = await s.signIn();
-		/** @type {Visitor | null} */
+		/** @type {(Visitor & { kind: 'user' }) | null} */
 		const user = signIn
 			? {
 					kind: 'user',
@@ -164,9 +165,9 @@ export const createService = (product) => {
 			: null;
 		const key = s.ctx.headers.get(GUEST_HEADER);
 		const guest = key && GUEST_KEY.test(key) ? await s.store.guests.byKey(sha256(key)) : null;
-		if (user && guest) await claim(s, await s.store.conversations.ofGuest(guest.id), user.id);
+		if (user && guest) await claim(s, await s.store.conversations.ofGuest(guest.id), user);
 		if (user && byPhone && user.phone && (await s.values('signed_in_chat')).claimByPhone)
-			await claim(s, await s.store.conversations.guestsByPhone(user.phone), user.id);
+			await claim(s, await s.store.conversations.guestsByPhone(user.phone), user);
 		if (user) return user;
 		return guest ? { kind: 'guest', id: guest.id, name: null, email: null, phone: null } : null;
 	};
@@ -398,6 +399,7 @@ export const createService = (product) => {
 			createdAt: iso(c.createdAt),
 			...(seen ? { visitorSeenSeq: c.visitorSeenSeq } : {}),
 			handedOffAt: iso(c.handedOffAt),
+			waitingSince: iso(c.waitingSince),
 			...(full
 				? {
 						fields: c.fields,
@@ -485,24 +487,31 @@ export const createService = (product) => {
 	 * A staff alert through the kit's staff alerts (K6; the recipients setting with e-mail addresses and phones, Accounts
 	 * staff with the permission setting, and the assigned person): `new_message` on a visitor message — with frequency
 	 * `first_unanswered` at most once until staff reply or open it, with `every_message` every time — and `needs_you`
-	 * on handoff. Sent after the answer.
+	 * on handoff. Besides the short `preview`, the values carry the visitor's `name` and latest `message` (up to 500
+	 * characters with its line breaks), and their `phone` with the setting `includePhone` (CH-9). Sent after the answer.
 	 * @param {Site} s
 	 * @param {ConversationRecord} c
 	 * @param {'new_message' | 'needs_you'} kind
 	 */
 	const staffAlert = async (s, c, kind) => {
 		if (!s.on.includes('staff_alerts')) return;
-		if (kind === 'new_message' && (await s.values('staff_alerts')).frequency !== 'every_message') {
+		const settings = await s.values('staff_alerts');
+		if (kind === 'new_message' && settings.frequency !== 'every_message') {
 			const claimed = await s.store.conversations.update(c.id, { set: { alerted: true }, unless: { alerted: false } });
 			if (!claimed) return;
 		}
 		const assigned = c.assignedTo ? await s.store.staff.get(c.assignedTo) : null;
+		const recent = await s.store.messages.list(c.id, { limit: 20, internal: false });
+		const latest = [...recent].reverse().find((m) => m.author === 'visitor');
 		await product.staffAlerts.send(s.ctx, {
 			feature: 'staff_alerts',
 			event: kind,
 			values: {
 				visitor: c.name ?? c.email ?? c.phone ?? 'Guest',
+				name: c.name ?? '',
+				...(settings.includePhone === true ? { phone: c.phone ?? '' } : {}),
 				preview: c.preview,
+				message: excerptOf(latest ? latest.text || latest.attachment?.name || '' : ''),
 				link: await inboxLink(s, c.id),
 				conversationId: c.id,
 				business: (await s.business()).name,

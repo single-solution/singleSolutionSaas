@@ -450,6 +450,29 @@ describe('inbox', () => {
 		expect(shows(root, TEXTS['inbox.addNote'])).toBe(false);
 	});
 
+	it('hands a chat waiting for a person back to the AI (CH-3)', async () => {
+		/** @type {any} */
+		let conversation = full({ aiPaused: false });
+		const { server, hosts } = await startAdmin({
+			features: ['inbox', 'ai_replies'],
+			routes: {
+				'GET /v1/admin/conversations': () => answer(200, { items: [item()], nextCursor: null, hasMore: false, unread: 2 }),
+				'GET /v1/admin/conversations/c1': () => answer(200, { conversation, messages: [message(1, 'visitor')] }),
+				'POST /v1/admin/conversations/c1/read': () => answer(204),
+				'PATCH /v1/admin/conversations/c1': () => {
+					conversation = { ...conversation, waiting: false };
+					return answer(200, { conversation });
+				},
+			},
+		});
+		const root = shadow(hosts.inbox);
+		await click(buttonIn(root, 'Ana'));
+		expect(shows(root, TEXTS['inbox.handBack'])).toBe(true);
+		await click(buttonIn(root, TEXTS['inbox.handBack']));
+		expect(server.last('PATCH /v1/admin/conversations/c1')?.body).toEqual({ aiPaused: false });
+		expect(shows(root, TEXTS['inbox.handBack'])).toBe(false);
+	});
+
 	it('handles failures, 403s and signing out', async () => {
 		const getTicket = vi.fn().mockResolvedValueOnce(ticket()).mockRejectedValueOnce(new Error('signed out'));
 		let list = () => problem(403, 'forbidden');

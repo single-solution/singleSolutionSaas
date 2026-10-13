@@ -4,10 +4,11 @@
  * the member of staff its `SS-Actor-*` headers name, else as the team, PLAN 0.8.10 K2). Filters, search, counts,
  * unread counts, replies (markdown, PLAN 0.8.10 C2) and attachments (staff types up to 100 MB, C12), internal notes
  * (a timeline, or one note per conversation, C11), status, AI pause (with who, when and why; by reply or manage
- * rights as the inbox setting says, C11), assignment with presence and max chats (and the first replier, C11),
- * custom field values, the AI summary, transcripts, rating requests, delete, saved replies and the staff list. Older
- * messages page by sequence (C8). Guest chats can stay hidden until handed to a person (C11). A staff reply alerts a
- * visitor who left (C6). Staff actions are written to the activity log with a label (the visitor's name, a title) and
+ * rights as the inbox setting says, C11; resuming hands a waiting chat back to the AI, CH-3), assignment with presence
+ * and max chats (the first replier, C11; anyone Accounts allows to reply in the inbox, CH-6), custom field values,
+ * the AI summary, transcripts, rating requests, delete, saved replies and the staff list. Older messages page by
+ * sequence (C8). Guest chats can stay hidden until handed to a person (C11). A staff reply alerts a visitor who left
+ * (C6). Staff actions are written to the activity log with a label (the visitor's name, a title) and
  * a short detail, never message contents.
  * @module
  */
@@ -28,6 +29,9 @@ const NOTE_MAX = 4000;
 const REASON_MAX = 200;
 /** An Accounts user id in a list filter. */
 const USER_ID = /^[A-Za-z0-9_.:@-]{1,64}$/;
+/** What an assignee from Accounts must be allowed (CH-6), and how many pages of 100 users are read to find them. */
+const ASSIGNEE_PERMISSION = 'chat:inbox.reply';
+const ASSIGNEE_PAGES = 5;
 
 /** The merchant's server when no member of staff is named: the team. */
 const TEAM = Object.freeze({ kind: 'server', id: 'server', name: 'Team' });
@@ -249,8 +253,9 @@ export const createInbox = (product, service, reply) => {
 	};
 
 	/**
-	 * `PUT …/ai` `{ paused, reason? }`: pause or resume the AI in a conversation, keeping who, when and why (C11). It
-	 * needs reply rights, or manage rights when the inbox setting `pauseNeeds` says so.
+	 * `PUT …/ai` `{ paused, reason? }`: pause or resume the AI in a conversation, keeping who, when and why (C11); a
+	 * resume also hands a chat waiting for a person back to the AI (CH-3). It needs reply rights, or manage rights when
+	 * the inbox setting `pauseNeeds` says so.
 	 * @param {any} ctx
 	 */
 	const setAi = async (ctx) => {
@@ -270,7 +275,7 @@ export const createInbox = (product, service, reply) => {
 		);
 		await service.log(s, actor, 'conversation.ai_paused_changed', c.id, {
 			label: conversationLabel(updated),
-			detail: body.paused ? 'AI paused' : 'AI resumed',
+			detail: pauseDetail(body.paused, c),
 		});
 		return { conversation: await service.inboxView(s, updated, { full: true }) };
 	};
@@ -291,6 +296,38 @@ export const createInbox = (product, service, reply) => {
 		await service.log(s, actor, 'conversation.note_added', c.id, { label: conversationLabel(c), detail: 'Internal note' });
 		const [view] = await service.staffMessages(s, [message]);
 		return created({ message: view });
+	};
+
+	/**
+	 * A member of staff Chat has not seen yet, from Accounts (pasted token): an unblocked user whose role may reply in
+	 * the inbox, added to the staff list so a chat can be assigned to them (CH-6); else null.
+	 * @param {Site} s
+	 * @param {string} id
+	 */
+	const staffFromAccounts = async (s, id) => {
+		/** @type {string | null} */
+		let cursor = null;
+		for (let page = 0; page < ASSIGNEE_PAGES; page += 1) {
+			const answer = await product.callProduct(
+				s.websiteId,
+				'accounts',
+				`/v1/users?permission=${encodeURIComponent(ASSIGNEE_PERMISSION)}&blocked=false&limit=100${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`,
+			);
+			if (!answer.ok) return null;
+			const body = bodyOf(answer.body);
+			const user = (Array.isArray(body.items) ? body.items : [])
+				.map(bodyOf)
+				.find((/** @type {Record<string, unknown>} */ each) => each.id === id);
+			if (user) {
+				const email = typeof user.email === 'string' && user.email ? user.email : null;
+				const name = typeof user.name === 'string' && user.name.trim() ? user.name.trim() : (email ?? id);
+				await s.store.staff.add({ id, name, ...(email ? { email } : {}) });
+				return s.store.staff.get(id);
+			}
+			if (body.hasMore !== true || typeof body.nextCursor !== 'string') return null;
+			cursor = body.nextCursor;
+		}
+		return null;
 	};
 
 	/**
@@ -333,14 +370,15 @@ export const createInbox = (product, service, reply) => {
 			if (typeof body.aiPaused !== 'boolean') throw invalid(['aiPaused is true or false.']);
 			const reason = typeof body.aiPausedReason === 'string' ? body.aiPausedReason.slice(0, REASON_MAX) : null;
 			Object.assign(set, pauseSet(actor, body.aiPaused, reason, new Date(now())));
-			actions.push({ action: 'conversation.ai_paused_changed', detail: body.aiPaused ? 'AI paused' : 'AI resumed' });
+			actions.push({ action: 'conversation.ai_paused_changed', detail: pauseDetail(body.aiPaused, c) });
 		}
 		if (body.assignedTo !== undefined) {
 			needs(s, 'assignment');
 			/** @type {string | null} */
 			let assignee = null;
 			if (body.assignedTo !== null) {
-				const member = typeof body.assignedTo === 'string' ? await s.store.staff.get(body.assignedTo) : null;
+				const id = typeof body.assignedTo === 'string' && USER_ID.test(body.assignedTo) ? body.assignedTo : null;
+				const member = id ? ((await s.store.staff.get(id)) ?? (await staffFromAccounts(s, id))) : null;
 				if (!member) throw invalid(['Assign to someone on the staff list.']);
 				if (body.assignedTo !== c.assignedTo && !(await hasRoom(s, body.assignedTo)))
 					throw problem('staff_full', 'This person has the most open chats they can take.');
@@ -573,7 +611,8 @@ export const createInbox = (product, service, reply) => {
 };
 
 /**
- * The conversation fields of a pause or resume: who, when and why (C11); a resume clears them.
+ * The conversation fields of a pause or resume: who, when and why (C11); a resume clears them and hands a chat that
+ * waits for a person back to the AI (CH-3).
  * @param {Actor} actor
  * @param {boolean} paused
  * @param {unknown} reason
@@ -584,7 +623,16 @@ const pauseSet = (actor, paused, reason, at) => ({
 	aiPausedBy: paused ? { kind: actor.kind, id: actor.id, name: actor.name } : null,
 	aiPausedAt: paused ? at : null,
 	aiPausedReason: paused && typeof reason === 'string' && reason.trim() ? reason.trim() : null,
+	...(paused ? {} : { waiting: false, waitingSince: null, pendingHandoff: false }),
 });
+
+/**
+ * The activity detail of a pause or resume.
+ * @param {boolean} paused
+ * @param {ConversationRecord} c the conversation before
+ */
+const pauseDetail = (paused, c) =>
+	paused ? 'AI paused' : c.waiting ? 'AI resumed (handed back from waiting for a person)' : 'AI resumed';
 
 /**
  * Delete conversations with their messages, attachments and guest records (the API and data rights).

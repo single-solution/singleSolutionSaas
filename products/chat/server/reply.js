@@ -254,15 +254,16 @@ export const createReply = (product, service) => {
 	};
 
 	/**
-	 * Whether the AI reassures a visitor waiting for a person (C4): from `reassureAfterMinutes` after the handoff, while
-	 * the office is open.
+	 * Whether the AI reassures a visitor waiting for a person (C4): from `reassureAfterMinutes` after this handoff (each
+	 * handoff waits again, CH-5), while the office is open.
 	 * @param {Site} s
 	 * @param {ConversationRecord} c
 	 */
 	const reassureDue = async (s, c) => {
-		if (!c.waiting || !c.handedOffAt || !s.on.includes('handoff')) return false;
+		const since = c.waitingSince ?? c.handedOffAt;
+		if (!c.waiting || !since || !s.on.includes('handoff')) return false;
 		const minutes = Number((await s.values('handoff')).reassureAfterMinutes);
-		if (minutes <= 0 || now() - new Date(c.handedOffAt).getTime() < minutes * 60_000) return false;
+		if (minutes <= 0 || now() - new Date(since).getTime() < minutes * 60_000) return false;
 		const hours = await service.officeHours(s);
 		return !hours || hours.open;
 	};

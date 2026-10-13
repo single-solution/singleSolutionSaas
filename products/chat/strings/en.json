@@ -102,6 +102,7 @@
 	"inbox.more": "Show more",
 	"inbox.close": "Close",
 	"inbox.pauseAi": "Pause the AI in this chat",
+	"inbox.handBack": "Hand back to the AI",
 	"inbox.assign": "Assigned to",
 	"inbox.full": "Full",
 	"inbox.reply": "Reply",

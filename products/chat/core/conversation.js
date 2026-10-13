@@ -6,6 +6,7 @@
  * @module
  */
 import { cardsOf } from './shop.js';
+import { truncate } from './text.js';
 import { MAX_MESSAGE_LENGTH, PAGE_KINDS } from './widgets.js';
 
 export const STATUSES = Object.freeze(/** @type {const} */ (['open', 'awaiting_visitor', 'resolved']));
@@ -219,6 +220,21 @@ export const staffMessageView = (m, urlOf, options = {}) => ({
 	...(m.author === 'staff' ? { staffId: m.staffId ?? null } : {}),
 	internal: m.internal,
 });
+
+/**
+ * A message for alerts (CH-9): up to `max` characters with its line breaks (more than one empty line becomes one).
+ * @param {string} text
+ * @param {number} [max]
+ */
+export const excerptOf = (text, max = 500) =>
+	truncate(
+		text
+			.replace(/\r\n?/g, '\n')
+			.replace(/[ \t]+\n/g, '\n')
+			.replace(/\n{3,}/g, '\n\n')
+			.trim(),
+		max,
+	);
 
 /**
  * The first characters of a message for lists and alerts.

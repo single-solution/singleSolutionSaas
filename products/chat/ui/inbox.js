@@ -1,8 +1,8 @@
 /**
  * The admin widget `inbox` (permissions `inbox.read`, `inbox.reply`, `inbox.manage`): conversations newest activity
  * first, with filters (status, assigned, waiting, guest or signed in), search and unread counts; a conversation with
- * its messages and internal notes, reply (with attachments and saved replies), notes, status, AI paused, assignment
- * (with presence and Full), custom field values, the context panel with the AI summary, transcripts and rating
+ * its messages and internal notes, reply (with attachments and saved replies), notes, status, AI paused, Hand back to
+ * the AI for a chat waiting for a person (CH-3), assignment (with presence and Full), custom field values, the context panel with the AI summary, transcripts and rating
  * requests; your own presence and the staff's max chats. Only parts of switched-on features show, and a part whose
  * route answers 403 hides itself. It checks for news with the same back-off as the visitor chat. Where the widget is
  * wide the open conversation sits beside the list; in a narrow one it replaces the list until it is closed (PLAN 0.6:
@@ -197,8 +197,15 @@ export const mountInbox = ({ host, win, api, config, clock, onUnread }) => {
 			const statusPick = make.field('select', t('inbox.status'));
 			statusPick.input.append(...Object.entries(statuses).map(([value, label]) => element(doc, 'option', { value }, label)));
 			const paused = make.check(t('inbox.pauseAi'));
+			// a chat waiting for a person goes back to the AI (CH-3)
+			const handBack = buttonOf(doc, t('inbox.handBack'), { class: 'secondary', hidden: '' });
 			const assign = make.field('select', t('inbox.assign'));
-			manage.append(statusPick.wrap, paused.wrap, ...(on('assignment') ? [assign.wrap] : []));
+			manage.append(
+				statusPick.wrap,
+				paused.wrap,
+				...(on('ai_replies') ? [handBack] : []),
+				...(on('assignment') ? [assign.wrap] : []),
+			);
 			const fields = (on('custom_fields') ? s.customFields : []).map((definition) => ({
 				definition,
 				...customInput(doc, make, t, definition),
@@ -303,6 +310,7 @@ export const mountInbox = ({ host, win, api, config, clock, onUnread }) => {
 				);
 				statusPick.input.value = current.status;
 				paused.input.checked = Boolean(current.aiPaused);
+				setHidden(handBack, !current.waiting);
 				assign.input.value = current.assignedTo?.id ?? '';
 				for (const field of fields) field.write(current.fields?.[field.definition.key]);
 				context.show(current);
@@ -409,6 +417,7 @@ export const mountInbox = ({ host, win, api, config, clock, onUnread }) => {
 
 			statusPick.input.addEventListener('change', () => void patch({ status: statusPick.input.value }));
 			paused.input.addEventListener('change', () => void patch({ aiPaused: paused.input.checked }));
+			handBack.addEventListener('click', () => void patch({ aiPaused: false }));
 			assign.input.addEventListener('change', () => void patch({ assignedTo: assign.input.value || null }));
 			replyForm.addEventListener('submit', async (event) => {
 				event.preventDefault();

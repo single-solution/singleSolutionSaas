@@ -38,6 +38,12 @@
 			"title": "Phones get",
 			"default": "whatsapp",
 			"enum": ["whatsapp", "sms"]
+		},
+		"includePhone": {
+			"type": "boolean",
+			"title": "Alerts carry the visitor's phone",
+			"default": false,
+			"description": "Adds the value {phone} (the phone the visitor signed in with or left) to the new message and Chat needs you alerts."
 		}
 	}
 }

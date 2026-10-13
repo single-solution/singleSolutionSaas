@@ -195,3 +195,107 @@ describe('shared networks and guests without their key (CH-14, CH-15)', () => {
 		for (let i = 0; i < 6; i += 1) expect((await send()).status).toBe(201);
 	});
 });
+
+describe('handoffs, assignment, sign-in claims and staff alerts (CH-3, CH-5, CH-6, CH-7, CH-9)', () => {
+	it('resuming the AI hands a waiting chat back; a later handoff waits its own grace', async () => {
+		const sys = await start(['visitor_chat', 'guest_chat', 'ai_replies', 'inbox', 'handoff']);
+		await sys.setting('handoff', 'reassureAfterMinutes', 3);
+		const v = sys.visitor();
+		await v('POST', '/v1/chat/messages', { text: 'talk to someone' });
+		const first = (await v('GET', '/v1/chat')).json.conversation;
+		expect(first.waiting).toBe(true);
+		const resumed = await sys.serverCall('PUT', `/v1/conversations/${first.id}/ai`, { paused: false });
+		expect(resumed.json.conversation).toMatchObject({ waiting: false, waitingSince: null, aiPaused: false });
+		sys.ai({ text: 'Happy to help.' });
+		await v('POST', '/v1/chat/messages', { text: 'what colours?' });
+		expect(texts((await v('GET', '/v1/chat')).json).at(-1)).toEqual(['ai', 'Happy to help.']);
+		const activity = (await sys.serverCall('GET', '/v1/activity?action=conversation.ai_paused_changed')).json.items;
+		expect(activity.map((/** @type {any} */ e) => e.detail)).toEqual(['AI resumed (handed back from waiting for a person)']);
+		// a second handoff 10 minutes after the first: quiet for 3 minutes again, then reassurance
+		sys.advance(10 * 60_000);
+		await v('POST', '/v1/chat/messages', { text: 'talk to someone again' });
+		const calls = sys.aiCalls().length;
+		await v('POST', '/v1/chat/messages', { text: 'hello?' });
+		expect(sys.aiCalls()).toHaveLength(calls);
+		sys.advance(3 * 60_000);
+		sys.ai({ text: 'A person will reply here soon.' });
+		await v('POST', '/v1/chat/messages', { text: 'anyone?' });
+		expect(texts((await v('GET', '/v1/chat')).json).at(-1)).toEqual(['ai', 'A person will reply here soon.']);
+		const view = (await sys.serverCall('GET', `/v1/conversations/${first.id}`)).json.conversation;
+		expect(Date.parse(view.waitingSince) - Date.parse(view.handedOffAt)).toBe(10 * 60_000);
+		// PATCH aiPaused false hands it back too
+		const patched = await sys.serverCall('PATCH', `/v1/conversations/${first.id}`, { aiPaused: false });
+		expect(patched.json.conversation).toMatchObject({ waiting: false, waitingSince: null });
+	});
+
+	it('assigns a chat to staff Chat has not seen yet when Accounts lets them reply in the inbox', async () => {
+		const sys = await start(['visitor_chat', 'guest_chat', 'inbox', 'assignment']);
+		const v = sys.visitor();
+		await v('POST', '/v1/chat/messages', { text: 'hi' });
+		const id = (await v('GET', '/v1/chat')).json.conversation.id;
+		const path = `/v1/conversations/${id}`;
+		expect((await sys.serverCall('PATCH', path, { assignedTo: 'usr_new' })).status).toBe(422);
+		await sys.paste('accounts');
+		sys.accounts.setUsers([
+			{ id: 'usr_new', name: 'Nia New', email: 'nia@shop.example.com', permissions: ['chat:inbox.reply'] },
+			{ id: 'usr_mail', email: 'mo@shop.example.com', permissions: ['chat:inbox.reply'] },
+			{ id: 'usr_view', name: 'Vic', permissions: ['chat:inbox.read'] },
+		]);
+		const assigned = await sys.serverCall('PATCH', path, { assignedTo: 'usr_new' });
+		expect(assigned.status).toBe(200);
+		expect(assigned.json.conversation.assignedTo).toEqual({ id: 'usr_new', name: 'Nia New' });
+		const staff = (await sys.serverCall('GET', '/v1/staff')).json.items;
+		expect(staff).toContainEqual(
+			expect.objectContaining({ id: 'usr_new', name: 'Nia New', email: 'nia@shop.example.com', presence: 'offline' }),
+		);
+		expect((await sys.serverCall('PATCH', path, { assignedTo: 'usr_mail' })).json.conversation.assignedTo.name).toBe(
+			'mo@shop.example.com',
+		);
+		expect((await sys.serverCall('PATCH', path, { assignedTo: 'usr_view' })).status).toBe(422);
+		expect((await sys.serverCall('PATCH', path, { assignedTo: 'bad id!' })).status).toBe(422);
+	});
+
+	it('a sign-in fills the moved guest chat’s name and phone, and a merged chat with a new question is open', async () => {
+		const sys = await start(['visitor_chat', 'guest_chat', 'signed_in_chat', 'inbox']);
+		await sys.paste('accounts');
+		// moved: the account has no conversation yet
+		const guest = sys.visitor();
+		await guest('POST', '/v1/chat/messages', { text: 'hello' });
+		const bob = await sys.accounts.signIn({ websiteId: sys.websiteId, sub: 'usr_bob', name: 'Bob', phone: '+923001234567' });
+		const moved = (await sys.visitor({ guestKey: guest.state.guestKey, signIn: bob })('GET', '/v1/chat')).json;
+		const view = (await sys.serverCall('GET', `/v1/conversations/${moved.conversation.id}`)).json.conversation;
+		expect(view.visitor).toMatchObject({ kind: 'user', id: 'usr_bob', name: 'Bob', phone: '+923001234567' });
+		// merged: the account's own conversation was resolved; the guest's newer question reopens it
+		const ann = await sys.accounts.signIn({ websiteId: sys.websiteId, sub: 'usr_ann', name: 'Ann' });
+		await sys.visitor({ signIn: ann })('POST', '/v1/chat/messages', { text: 'old question' });
+		const own = (await sys.visitor({ signIn: ann })('GET', '/v1/chat')).json.conversation.id;
+		await sys.serverCall('PATCH', `/v1/conversations/${own}`, { status: 'resolved' });
+		sys.advance(1000);
+		const device = sys.visitor();
+		await device('POST', '/v1/chat/messages', { text: 'new question' });
+		await sys.visitor({ guestKey: device.state.guestKey, signIn: ann })('GET', '/v1/chat');
+		const merged = (await sys.serverCall('GET', `/v1/conversations/${own}`)).json;
+		expect(merged.conversation.status).toBe('open');
+		expect(merged.messages.map((/** @type {any} */ m) => m.text)).toEqual(['old question', 'new question']);
+	});
+
+	it('staff alerts carry the name and the message up to 500 characters; the phone with includePhone', async () => {
+		const sys = await start(['visitor_chat', 'guest_chat', 'inbox', 'staff_alerts']);
+		await sys.paste('notifications');
+		await sys.setting('staff_alerts', 'recipients', ['boss@shop.example.com']);
+		const v = sys.visitor();
+		await v('POST', '/v1/chat/contact', { name: 'Ann', phone: '+923001234567' });
+		const long = `Is the white fan in stock?\n\n\n\nI need two of them, delivered to my shop by Friday. ${'Please call me. '.repeat(30)}`;
+		await v('POST', '/v1/chat/messages', { text: long });
+		const [alert] = sys.messages();
+		expect(alert.values.name).toBe('Ann');
+		expect(alert.values.phone).toBeUndefined();
+		expect(alert.values.preview).toHaveLength(140);
+		expect(alert.values.message).toHaveLength(500);
+		expect(alert.values.message.startsWith('Is the white fan in stock?\n\nI need two of them')).toBe(true);
+		await sys.setting('staff_alerts', 'includePhone', true);
+		await sys.setting('staff_alerts', 'frequency', 'every_message');
+		await v('POST', '/v1/chat/messages', { text: 'Call me' });
+		expect(sys.messages().at(-1).values).toMatchObject({ name: 'Ann', phone: '+923001234567', message: 'Call me' });
+	});
+});
