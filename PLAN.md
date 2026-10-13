@@ -2036,6 +2036,18 @@ ids and no side effects.
 `compound.filter` holds an `equals` on `websiteId` with the request's website; everything else stays refused (0.10).
 Needed by E14.
 
+**K12. Phone numbers (always; owner, 2026-10-13; commits 169941a3, 168b3b81, 9c54cd55, 404d77cd, 9e916c2e, bc2863e5).**
+One normaliser, `normalisePhone` of `@ss/contracts/phone`, reads every phone a product takes as E.164, for any country.
+With `+` or `00` the number names its calling code (any assigned code, +800 and +882 too). A trunk `0` or `(0)` right
+after the code is dropped, except where national numbers keep their 0. Without them, the number takes the website's
+default calling code (the product's setting, else the business.json `country`'s; none: refused) and is read as already
+international (`923001234567`), national after its trunk prefix, or national as typed. The country's usual lengths only
+pick the reading; when they cannot, the digits are kept as typed with no second code. Any reading of 8–15 digits is
+accepted (a wrong number fails at delivery rather than refusing a real foreign one). Lookups compare E.164 exactly.
+Accounts, Chat, Notifications and the kit's staff alerts use it; Ecommerce switches next; the importer normalises and
+merges customers with it. Why: `923001234567` became `+92923001234567` and `+92 0320…` became `+920320…` (K-7, CK-3,
+SA-3).
+
 #### Accounts
 
 **A1. Legacy password hashes.** Password checks also accept bcrypt (`$2a$`, `$2b$`, `$2y$`, any cost) and
