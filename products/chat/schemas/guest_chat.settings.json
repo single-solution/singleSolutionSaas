@@ -23,6 +23,14 @@
 			"default": "never",
 			"enum": ["never", "before_first", "on_handoff"],
 			"description": "Never, before the first message, or when the chat is handed to a person."
+		},
+		"newGuestsPerNetwork": {
+			"type": "integer",
+			"title": "New guests per network (IP) per 15 minutes",
+			"default": 5,
+			"minimum": 0,
+			"maximum": 1000,
+			"description": "A device that sends no guest key starts a new guest; more new guests than this from one network address in 15 minutes are refused for a while (too many requests). 0 = no limit."
 		}
 	}
 }

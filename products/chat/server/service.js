@@ -61,6 +61,8 @@ import { createStore } from '../adapters/store.js';
 const LINK_SECONDS = 600;
 /** Presence: someone whose inbox has not checked in for this long is Offline. */
 export const PRESENCE_MS = 5 * 60_000;
+/** The window of the new-guest limit per network address (CH-15). */
+const NEW_GUESTS_WINDOW_MS = 15 * 60_000;
 /** Longest transcript value Notifications accepts (characters). */
 const TRANSCRIPT_MAX = 1000;
 
@@ -170,11 +172,19 @@ export const createService = (product) => {
 	};
 
 	/**
-	 * A new guest for this device: the key is answered once and kept only as a hash.
+	 * A new guest for this device: the key is answered once and kept only as a hash. At most `newGuestsPerNetwork` new
+	 * guests per network address in 15 minutes, so a client that drops its key cannot start a new guest, conversation
+	 * and AI reply with every message (CH-15).
 	 * @param {Site} s
 	 */
 	const newGuest = async (s) => {
-		const { rememberDays } = await s.values('guest_chat');
+		const { rememberDays, newGuestsPerNetwork } = await s.values('guest_chat');
+		const limit = Number(newGuestsPerNetwork ?? 0);
+		const ip = String(s.ctx.clientIp ?? 'unknown');
+		if (limit > 0 && ip !== 'unknown') {
+			const { count } = await product.counters.hit(`chat-guest|${s.websiteId}|${ip}`, NEW_GUESTS_WINDOW_MS, now());
+			if (count > limit) throw problem('rate_limited', 'Too many new chats from this network. Try again in a few minutes.');
+		}
 		const key = `g_${randomSecret(24)}`;
 		const { id } = await s.store.guests.create(sha256(key), new Date(now() + Number(rememberDays) * 86_400_000));
 		return { key, visitor: /** @type {Visitor} */ ({ kind: 'guest', id, name: null, email: null, phone: null }) };

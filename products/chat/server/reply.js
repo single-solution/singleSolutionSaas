@@ -543,7 +543,9 @@ export const createReply = (product, service) => {
 	};
 
 	/**
-	 * Whether this visitor or network may have another AI reply today (code-constant windows, settings limits).
+	 * Whether this visitor or network may have another AI reply today (code-constant windows, settings limits). The
+	 * network limit counts guests only: a signed-in visitor is known by their account and has the visitor limit, so the
+	 * guests on a shared network address never use up their replies (CH-14).
 	 * @param {Site} s
 	 * @param {ConversationRecord} c
 	 */
@@ -553,7 +555,7 @@ export const createReply = (product, service) => {
 		const ip = String(s.ctx.clientIp ?? 'unknown');
 		const checks = /** @type {Array<[string, number]>} */ ([
 			[`chat-ai|${s.websiteId}|visitor|${c.visitor.kind}:${c.visitor.id}`, Number(repliesPerVisitorPerDay)],
-			[`chat-ai|${s.websiteId}|network|${ip}`, Number(repliesPerNetworkPerDay)],
+			...(c.visitor.kind === 'guest' ? [[`chat-ai|${s.websiteId}|network|${ip}`, Number(repliesPerNetworkPerDay)]] : []),
 		]);
 		for (const [key, limit] of checks) {
 			if (limit <= 0) continue;

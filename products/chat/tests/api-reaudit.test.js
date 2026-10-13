@@ -1,6 +1,7 @@
 /**
  * PLAN 0.8.10 Chat, fixes after the re-audit (CH-*): `?wait=1` lets a slow answer finish after the response and a
- * reply that went stale starts again (CH-1, RT-6); the language lock's new options (CH-16 to CH-19, CH-38).
+ * reply that went stale starts again (CH-1, RT-6); the language lock's new options (CH-16 to CH-19, CH-38); shared
+ * networks and new guests (CH-14, CH-15).
  */
 import { afterAll, describe, expect, it } from 'vitest';
 import { AI, AI_KEY, ORIGIN, ready } from './helpers.js';
@@ -154,5 +155,43 @@ describe('the language lock (CH-2, CH-16 to CH-19, CH-38)', () => {
 		await v('POST', '/v1/chat/messages', { text: 'kya ye hai bhai' });
 		state = (await v('GET', '/v1/chat')).json;
 		expect(state.conversation.waiting).toBe(true);
+	});
+});
+
+describe('shared networks and guests without their key (CH-14, CH-15)', () => {
+	it('the network limit counts guests only; a signed-in visitor keeps answers on a busy network', async () => {
+		const sys = await start(['visitor_chat', 'guest_chat', 'signed_in_chat', 'ai_replies']);
+		await sys.paste('accounts');
+		await sys.setting('ai_replies', 'repliesPerNetworkPerDay', 1);
+		await sys.setting('ai_replies', 'onFailure', 'message');
+		const network = '198.51.100.7';
+		sys.ai({ text: 'Hello guest.' }, { text: 'Hello Ann.' });
+		await sys.visitor({ network })('POST', '/v1/chat/messages', { text: 'hi' });
+		const other = sys.visitor({ network });
+		await other('POST', '/v1/chat/messages', { text: 'hi too' });
+		expect(texts((await other('GET', '/v1/chat')).json).at(-1)).toEqual(['system', 'Sorry, I cannot answer right now.']);
+		const signIn = await sys.accounts.signIn({ websiteId: sys.websiteId, sub: 'usr_ann', name: 'Ann' });
+		const ann = sys.visitor({ signIn, network });
+		await ann('POST', '/v1/chat/messages', { text: 'hello' });
+		expect(texts((await ann('GET', '/v1/chat')).json).at(-1)).toEqual(['ai', 'Hello Ann.']);
+	});
+
+	it('at most 5 new guests per network address in 15 minutes; 0 lifts the limit', async () => {
+		const sys = await start(['visitor_chat', 'guest_chat']);
+		const network = '198.51.100.8';
+		const send = () => sys.visitor({ network })('POST', '/v1/chat/messages', { text: 'hi' });
+		const kept = sys.visitor({ network });
+		expect((await kept('POST', '/v1/chat/messages', { text: 'hi' })).status).toBe(201);
+		for (let i = 0; i < 4; i += 1) expect((await send()).status).toBe(201);
+		const refused = await send();
+		expect(refused.status).toBe(429);
+		expect(refused.json.type).toMatch(/rate_limited$/);
+		// a guest that keeps its key goes on; another network is not affected; 15 minutes later new guests start again
+		expect((await kept('POST', '/v1/chat/messages', { text: 'again' })).status).toBe(201);
+		expect((await sys.visitor({ network: '198.51.100.9' })('POST', '/v1/chat/messages', { text: 'hi' })).status).toBe(201);
+		sys.advance(15 * 60_000);
+		expect((await send()).status).toBe(201);
+		await sys.setting('guest_chat', 'newGuestsPerNetwork', 0);
+		for (let i = 0; i < 6; i += 1) expect((await send()).status).toBe(201);
 	});
 });
