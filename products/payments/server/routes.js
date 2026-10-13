@@ -20,7 +20,9 @@ import {
 	checkPaymentInput,
 	checkSubscriptionInput,
 	checkTransferInput,
+	cleanText,
 	isConfirmedFor,
+	isRefundDue,
 	linkView,
 	subscriptionView,
 } from '../core/payments.js';
@@ -259,6 +261,28 @@ export const createRoutes = (product) => {
 		return service.view(s, paid);
 	};
 
+	/**
+	 * The merchant's server or Ecommerce cancels a payment it no longer wants, for example because its order was
+	 * cancelled or expired (K-13): `{ reason? }` (at most 200 characters, kept in the history). Answers the payment.
+	 * @param {any} ctx
+	 */
+	const cancelPayment = async (ctx) => {
+		const reason = cleanText(ctx.body?.reason, 200);
+		if (reason === null) return invalid('reason', 'reason is one line of at most 200 characters.');
+		const s = await siteOf(ctx);
+		const payment = await paymentOf(s, ctx.params.id);
+		const voided = await service.voidPayment(s, payment, reason, who(ctx));
+		if (payment.status !== 'voided')
+			await log(
+				ctx,
+				'payment.voided',
+				voided.id,
+				voided.reference || voided.id,
+				`Payment cancelled; it can no longer be paid${reason ? ` (${reason})` : ''}`,
+			);
+		return service.view(s, voided);
+	};
+
 	/** A presigned link to a bank-transfer proof (5 minutes). @param {any} ctx */
 	const proofLink = async (ctx) => {
 		const s = await siteOf(ctx);
@@ -406,8 +430,10 @@ export const createRoutes = (product) => {
 		const result = { ...look, business, amount: payment.amount, currency: payment.currency };
 		const back = payment.returnUrl ? withParam(payment.returnUrl, 'ss_payment', payment.id) : null;
 		if (payment.status === 'paid' || payment.status === 'partially_refunded')
-			return html(renderResultPage({ ...result, state: 'paid', backUrl: back }));
+			return html(renderResultPage({ ...result, state: isRefundDue(payment) ? 'refundDue' : 'paid', backUrl: back }));
 		if (payment.status === 'refunded') return html(renderResultPage({ ...result, state: 'refunded', backUrl: back }));
+		// the merchant cancelled it: nobody pays it any more (K-13)
+		if (payment.status === 'voided') return html(renderResultPage({ ...result, state: 'voided', backUrl: back }));
 		if (payment.status === 'failed' || payment.status === 'cancelled')
 			return html(
 				renderResultPage({ ...result, state: payment.status, retry: `/pay/${websiteId}/${payment.id}`, backUrl: back }),
@@ -704,6 +730,14 @@ export const createRoutes = (product) => {
 			handler: paymentCounts.counts,
 		}),
 		defineRoute({ method: 'GET', path: '/v1/payments/:id', auth: 'server', feature: 'payment_api', handler: readPayment }),
+		defineRoute({
+			method: 'POST',
+			path: '/v1/payments/:id/cancel',
+			auth: 'server',
+			feature: 'payment_api',
+			rateLimit: SERVER_LIMITS,
+			handler: cancelPayment,
+		}),
 		defineRoute({
 			method: 'POST',
 			path: '/v1/payments/:id/verify',

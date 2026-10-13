@@ -10,6 +10,7 @@ import {
 	checkSubscriptionInput,
 	cleanText,
 	isConfirmedFor,
+	isRefundDue,
 	linkView,
 	mirrorStatus,
 	paymentEventData,
@@ -164,6 +165,14 @@ describe('payments', () => {
 		expect(isConfirmedFor(payment, { amount: 999, currency: 'PKR' })).toBe(false);
 		expect(isConfirmedFor(payment, { amount: 1000, currency: 'USD' })).toBe(false);
 		expect(isConfirmedFor({ ...payment, status: 'pending' }, { amount: 1000, currency: 'PKR' })).toBe(false);
+		// money that arrived after the merchant cancelled the payment never confirms an order (K-13)
+		const late = { ...payment, voidedAt: new Date('2026-10-01T10:00:00Z') };
+		expect(isConfirmedFor(late, { amount: 1000, currency: 'PKR' })).toBe(false);
+		expect(isRefundDue(late)).toBe(true);
+		expect(isRefundDue({ ...late, status: 'partially_refunded' })).toBe(true);
+		expect(isRefundDue({ ...late, status: 'refunded' })).toBe(false);
+		expect(isRefundDue({ ...late, status: 'voided' })).toBe(false);
+		expect(isRefundDue(payment)).toBe(false);
 	});
 	it('shapes views, mirrors statuses and exports CSV', () => {
 		const at = new Date('2026-10-01T10:00:00Z');
@@ -191,7 +200,14 @@ describe('payments', () => {
 			updatedAt: at,
 		};
 		const view = paymentView(record, 'https://pay');
-		expect(view).toMatchObject({ amountText: '10.00', proof: { type: 'image/png' }, checkoutUrl: 'https://pay' });
+		expect(view).toMatchObject({
+			amountText: '10.00',
+			proof: { type: 'image/png' },
+			checkoutUrl: 'https://pay',
+			refundDue: false,
+			voidedAt: null,
+		});
+		expect(paymentView({ ...record, voidedAt: at }, '')).toMatchObject({ refundDue: true, voidedAt: at.toISOString() });
 		expect(paymentView({ ...record, proof: null, refunds: undefined, history: undefined, paidAt: null }, '').refunds).toEqual(
 			[],
 		);

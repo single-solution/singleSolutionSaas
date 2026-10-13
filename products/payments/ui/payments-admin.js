@@ -4,7 +4,8 @@
  * the total as a badge, the counts per gateway, paging and a CSV export of the payments that match the filters (at most
  * 2,000). The detail shows every field of the payment, its refunds and history, with Refund (full or partial,
  * `payments.refund`) and Confirm transfer received (with the transfer's reference and a note, `payments.confirm`, PLAN
- * 0.8.10 P3) as buttons, and View proof, Copy pay link, Open pay page and Copy payment id in its More menu; forms open
+ * 0.8.10 P3; also for a transfer that arrives after the payment was cancelled) as buttons, a Refund due mark on money
+ * that arrived after the merchant cancelled the payment (K-13), and View proof, Copy pay link, Open pay page and Copy payment id in its More menu; forms open
  * in dialogs. Amounts and times follow the website's Format and time zone; the CSV keeps the stored times and the
  * amounts with their currency codes.
  * @module
@@ -23,7 +24,14 @@ const PAGE_SIZE = 25;
 const EXPORT_PAGES = 20;
 
 /** The tone of each payment status. @type {Record<string, import('./admin-kit.js').Tone>} */
-const TONES = { pending: 'warning', paid: 'success', failed: 'danger', cancelled: 'neutral', partially_refunded: 'warning' };
+const TONES = {
+	pending: 'warning',
+	paid: 'success',
+	failed: 'danger',
+	cancelled: 'neutral',
+	voided: 'neutral',
+	partially_refunded: 'warning',
+};
 
 /**
  * @param {{ host: HTMLElement, api: import('./tickets.js').AdminApi, config: import('./widget.js').WidgetConfig,
@@ -168,7 +176,12 @@ export const mountPaymentsAdmin = ({ host, api, config, save, open, copy = () =>
 					});
 					buttons.push(refund);
 				}
-				if (can('bank_transfer') && payment.gateway === 'bank_transfer' && payment.status === 'pending') {
+				// a transfer that arrives after the payment was cancelled is confirmed too, and is then to be refunded
+				if (
+					can('bank_transfer') &&
+					payment.gateway === 'bank_transfer' &&
+					(payment.status === 'pending' || payment.status === 'voided')
+				) {
 					const confirm = element(doc, 'button', { type: 'button' }, t('admin.confirm'));
 					confirm.addEventListener('click', () => {
 						// the transfer's reference and a note go with the confirmation (PLAN 0.8.10 P3)
@@ -221,6 +234,7 @@ export const mountPaymentsAdmin = ({ host, api, config, save, open, copy = () =>
 				actions.append(...buttons, moreMenu(doc, t('admin.moreActions'), menu));
 				const heading = element(doc, 'h3', {}, money(payment.amount, payment.currency));
 				heading.append(badge(doc, t(`status.${payment.status}`), TONES[payment.status]));
+				if (payment.refundDue) heading.append(badge(doc, t('admin.refundDue'), 'danger'));
 				const top = element(doc, 'div', { class: 'head' });
 				top.append(heading, actions);
 				const customer = payment.customer ?? {};
@@ -244,6 +258,7 @@ export const mountPaymentsAdmin = ({ host, api, config, save, open, copy = () =>
 					[t('admin.field.proof'), proof],
 					[t('admin.field.created'), date(payment.createdAt)],
 					[t('admin.field.paid'), payment.paidAt ? date(payment.paidAt) : ''],
+					[t('admin.field.voided'), payment.voidedAt ? date(payment.voidedAt) : ''],
 					[t('admin.field.updated'), payment.updatedAt ? date(payment.updatedAt) : ''],
 					[t('admin.field.id'), payment.id],
 					...Object.entries(/** @type {Record<string, string>} */ (payment.metadata ?? {})).map(
@@ -301,6 +316,7 @@ export const mountPaymentsAdmin = ({ host, api, config, save, open, copy = () =>
 					{ class: 'meta' },
 					[
 						t(`status.${payment.status}`),
+						payment.refundDue ? t('admin.refundDue') : '',
 						date(payment.createdAt),
 						gatewayName(payment.gateway),
 						payment.customer?.email ?? '',

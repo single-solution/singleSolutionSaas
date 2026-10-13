@@ -304,7 +304,7 @@ ${upload}`,
 
 /**
  * The result page (or a page that says the payment cannot be shown).
- * @param {PageLook & { state: 'paid' | 'pending' | 'failed' | 'cancelled' | 'refunded' | 'unavailable' | 'notFound' | 'error' | 'noGateway',
+ * @param {PageLook & { state: 'paid' | 'pending' | 'failed' | 'cancelled' | 'voided' | 'refundDue' | 'refunded' | 'unavailable' | 'notFound' | 'error' | 'noGateway',
  *   business?: string, amount?: number, currency?: string, backUrl?: string | null, retry?: string | null }} input
  */
 export const renderResultPage = ({

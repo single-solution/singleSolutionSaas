@@ -145,14 +145,15 @@ export const paypal = {
 		if (!ok2xx(answer.status) || !url) return { kind: 'error', message: failure('PayPal', answer.status) };
 		return { kind: 'redirect', url, ref: String(answer.json.id) };
 	},
-	// the payer approved on PayPal's page: capture the order (server to server); an order captured before is read back
+	// the payer approved on PayPal's page: capture the order (server to server); an order captured before is read back.
+	// The order of a payment the merchant cancelled is never captured, so PayPal takes no money for it.
 	returned: async (_incoming, payment, keys, ctx) => ({ news: (await paypal.status?.(payment, keys, ctx)) ?? null }),
 	status: async (payment, keys, ctx) => {
 		if (!payment.gatewayRef) return null;
 		const ref = encodeURIComponent(payment.gatewayRef);
 		const order = await api(keys, ctx, 'GET', `/v2/checkout/orders/${ref}`);
 		if (!ok2xx(order.status)) return null;
-		if (order.json?.status !== 'APPROVED') return orderNews(order.json, payment.id);
+		if (order.json?.status !== 'APPROVED' || payment.status === 'voided') return orderNews(order.json, payment.id);
 		const captured = await api(keys, ctx, 'POST', `/v2/checkout/orders/${ref}/capture`, {}, `ss-${payment.id}-capture`);
 		return ok2xx(captured.status) ? orderNews(captured.json, payment.id) : null;
 	},

@@ -60,6 +60,7 @@ const PROBLEM_CODES = Object.freeze({
 	gateway_not_ready: Object.freeze({ status: 422, title: 'Gateway not ready' }),
 	currency_not_supported: Object.freeze({ status: 422, title: 'Currency not supported' }),
 	not_refundable: Object.freeze({ status: 409, title: 'Not refundable' }),
+	already_paid: Object.freeze({ status: 409, title: 'Already paid' }),
 	gateway_failed: Object.freeze({ status: 502, title: 'The gateway refused' }),
 	storage_not_connected: Object.freeze({ status: 503, title: 'Storage not connected' }),
 });

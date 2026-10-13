@@ -6,9 +6,13 @@
 import { isGateway, SUBSCRIPTION_GATEWAYS } from './gateways.js';
 import { formatMoney, isAmount, isCurrency, toDecimal } from './money.js';
 
-/** Payment statuses. `pending`: waiting for the payer or the gateway; `refunded` and `partially_refunded` were paid. */
+/**
+ * Payment statuses. `pending`: waiting for the payer or the gateway; `cancelled`: the payer cancelled at the gateway
+ * (they may try again); `voided`: the merchant cancelled it (`POST /v1/payments/:id/cancel`, for example its order was
+ * cancelled or expired), so nobody can pay it any more; `refunded` and `partially_refunded` were paid.
+ */
 export const PAYMENT_STATUSES = Object.freeze(
-	/** @type {const} */ (['pending', 'paid', 'failed', 'cancelled', 'partially_refunded', 'refunded']),
+	/** @type {const} */ (['pending', 'paid', 'failed', 'cancelled', 'voided', 'partially_refunded', 'refunded']),
 );
 /** Subscription statuses mirrored from the gateway. */
 export const SUBSCRIPTION_STATUSES = Object.freeze(
@@ -271,12 +275,22 @@ export const checkTransferInput = (body, { note: withNote = false } = {}) => {
 };
 
 /**
+ * Whether money arrived for a payment the merchant had cancelled (K-13): it is recorded as paid, and is to be
+ * refunded (until all of it is).
+ * @param {{ status: string, voidedAt?: Date | string | null }} payment
+ */
+export const isRefundDue = (payment) =>
+	Boolean(payment.voidedAt) && (payment.status === 'paid' || payment.status === 'partially_refunded');
+
+/**
  * Whether a payment is confirmed for the exact amount and currency (PLAN 0.3: Ecommerce marks an order paid only for
- * the same website and the order's exact amount). A payment refunded later was still paid.
- * @param {{ status: string, amount: number, currency: string }} payment
+ * the same website and the order's exact amount). A payment refunded later was still paid; one the merchant cancelled
+ * never confirms, even when money arrived after (it is to be refunded).
+ * @param {{ status: string, amount: number, currency: string, voidedAt?: Date | string | null }} payment
  * @param {{ amount: unknown, currency: unknown }} expected
  */
 export const isConfirmedFor = (payment, expected) =>
+	!payment.voidedAt &&
 	['paid', 'partially_refunded', 'refunded'].includes(payment.status) &&
 	payment.amount === expected.amount &&
 	payment.currency === expected.currency;
@@ -285,13 +299,15 @@ export const isConfirmedFor = (payment, expected) =>
 const iso = (at) => (at === null || at === undefined ? null : new Date(at).toISOString());
 
 /**
- * A payment as the API answers it (no gateway secrets; the proof as a mark only).
+ * A payment as the API answers it (no gateway secrets; the proof as a mark only). `voidedAt`: when the merchant
+ * cancelled it; `refundDue`: money arrived after that, and is to be refunded (K-13).
  * @param {any} payment the stored record
  * @param {string} checkoutUrl the payer's page for it
  */
 export const paymentView = (payment, checkoutUrl) => ({
 	id: payment.id,
 	status: payment.status,
+	refundDue: isRefundDue(payment),
 	amount: payment.amount,
 	currency: payment.currency,
 	amountText: toDecimal(payment.amount, payment.currency),
@@ -323,6 +339,7 @@ export const paymentView = (payment, checkoutUrl) => ({
 	})),
 	checkoutUrl,
 	paidAt: iso(payment.paidAt),
+	voidedAt: iso(payment.voidedAt),
 	createdAt: iso(payment.createdAt),
 	updatedAt: iso(payment.updatedAt),
 });

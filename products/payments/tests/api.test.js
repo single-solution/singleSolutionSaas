@@ -732,6 +732,118 @@ describe('bank transfer', () => {
 	});
 });
 
+describe('a payment the merchant cancels (K-13)', () => {
+	it('closes it everywhere and stops Stripe’s page; money that still arrives is paid with a refund due, never verified', async () => {
+		stripeAnswers();
+		const payment = await createPayment({ gateway: 'stripe', reference: 'order-77' });
+		await page(`/pay/${env.websiteId}/${payment.id}`);
+		expect((await env.api('POST', `/v1/payments/${payment.id}/cancel`, { reason: 'x'.repeat(201) })).status).toBe(422);
+		const before = env.gateways.callsTo('https://api.stripe.com').length;
+		const voided = await env.api('POST', `/v1/payments/${payment.id}/cancel`, { reason: 'Order expired' });
+		expect(voided.status).toBe(200);
+		expect(voided.json).toMatchObject({ status: 'voided', refundDue: false, voidedAt: new Date(env.now()).toISOString() });
+		expect(voided.json.history.slice(-2)).toMatchObject([
+			{ event: 'voided', detail: 'Order expired', by: 'Server' },
+			{ event: 'stopped', detail: 'stripe checkout closed' },
+		]);
+		expect(env.gateways.callsTo('https://api.stripe.com').slice(before)).toMatchObject([
+			{ method: 'POST', path: `/v1/checkout/sessions/cs_${payment.id}/expire` },
+		]);
+		const logged = await env.api('GET', `/v1/activity?target=${payment.id}&action=payment.voided`);
+		expect(logged.json.items[0]).toMatchObject({
+			label: 'order-77',
+			detail: 'Payment cancelled; it can no longer be paid (Order expired)',
+		});
+		// cancelling again changes nothing
+		const again = await env.api('POST', `/v1/payments/${payment.id}/cancel`, {});
+		expect(again.json.history).toHaveLength(voided.json.history.length);
+		// the pay page, the payer's retry and the pay button are closed
+		const closed = await page(`/pay/${env.websiteId}/${payment.id}`);
+		expect(closed.text).toContain('This payment was cancelled and can no longer be paid.');
+		expect(closed.text).not.toContain('Try again');
+		await env.call('POST', `/pay/${env.websiteId}/${payment.id}`, { form: { retry: '1' } });
+		await env.call('POST', `/pay/${env.websiteId}/${payment.id}`, { form: { gateway: 'jazzcash' } });
+		expect((await env.api('GET', `/v1/payments/${payment.id}`)).json).toMatchObject({ status: 'voided', gateway: 'stripe' });
+		expect((await env.api('GET', '/v1/payments/counts?by=state')).json.groups.voided).toBe(1);
+
+		// a payer who was already on Stripe's page pays: recorded as paid, to be refunded, and the event says so
+		const paidBefore = events.filter((e) => e.type === 'payments.payment.paid').length;
+		await stripePaid(payment.id, 250000);
+		const late = (await env.api('GET', `/v1/payments/${payment.id}`)).json;
+		expect(late).toMatchObject({ status: 'paid', refundDue: true, voidedAt: voided.json.voidedAt });
+		expect(late.history.slice(-2)).toMatchObject([
+			{ event: 'paid', detail: 'stripe notice' },
+			{ event: 'refund_due', detail: 'paid after the merchant cancelled it' },
+		]);
+		const told = events.filter((e) => e.type === 'payments.payment.paid');
+		expect(told).toHaveLength(paidBefore + 1);
+		expect(told.at(-1).data.payment).toMatchObject({ id: payment.id, status: 'paid', refundDue: true });
+		// it never verifies an order
+		const verify = await env.api('POST', `/v1/payments/${payment.id}/verify`, { amount: 250000, currency: 'PKR' });
+		expect(verify.json).toMatchObject({ verified: false, payment: { refundDue: true } });
+		expect((await page(`/pay/${env.websiteId}/${payment.id}`)).text).toContain('so it is to be refunded');
+		// a paid payment is not cancelled: it is refunded, which clears the mark
+		const paidAlready = await env.api('POST', `/v1/payments/${payment.id}/cancel`, {});
+		expect(paidAlready.status).toBe(409);
+		expect(paidAlready.json.type).toMatch(/already_paid$/);
+		expect(paidAlready.json.payment).toMatchObject({ id: payment.id, refundDue: true });
+		const refunded = await env.api('POST', `/v1/payments/${payment.id}/refunds`, {});
+		expect(refunded.json).toMatchObject({ status: 'refunded', refundDue: false });
+	});
+
+	it('a bank transfer takes no proof once cancelled, and one confirmed after is to be refunded; PayPal is never captured', async () => {
+		const transfer = await createPayment({ gateway: 'bank_transfer', reference: 'INV-77' });
+		await page(`/pay/${env.websiteId}/${transfer.id}`);
+		const voided = await env.api('POST', `/v1/payments/${transfer.id}/cancel`, { reason: 'Order cancelled' });
+		expect(voided.json).toMatchObject({ status: 'voided' });
+		expect(voided.json.history.at(-1)).toMatchObject({ event: 'voided', detail: 'Order cancelled' });
+		const proof = `/pay/${env.websiteId}/${transfer.id}/proof`;
+		expect((await env.call('POST', proof, { body: { type: 'image/png', size: 10 } })).status).toBe(404);
+		const confirmed = await env.api('POST', `/v1/payments/${transfer.id}/confirm`, { reference: 'TRX-77' });
+		expect(confirmed.json).toMatchObject({ status: 'paid', refundDue: true });
+		expect(confirmed.json.history.at(-1)).toMatchObject({ event: 'refund_due' });
+
+		// PayPal: the approved order of a cancelled payment is not captured when the payer comes back
+		env.gateways.respond('https://api-m.paypal.com', (c) => {
+			if (c.path === '/v1/oauth2/token') return { status: 200, body: { access_token: 'tok' } };
+			if (c.path === '/v2/checkout/orders')
+				return { status: 201, body: { id: 'ORD7', links: [{ rel: 'payer-action', href: 'https://paypal.test/a7' }] } };
+			if (c.path === '/v2/checkout/orders/ORD7') return { status: 200, body: { id: 'ORD7', status: 'APPROVED' } };
+			return { status: 500 };
+		});
+		const viaPaypal = await createPayment({ amount: 2500, currency: 'USD', gateway: 'paypal', reference: '' });
+		await page(`/pay/${env.websiteId}/${viaPaypal.id}`);
+		const stopped = await env.api('POST', `/v1/payments/${viaPaypal.id}/cancel`, {});
+		expect(stopped.json.history.at(-1)).toMatchObject({ event: 'voided', detail: 'cancelled by the merchant' });
+		const logged = await env.api('GET', `/v1/activity?target=${viaPaypal.id}&action=payment.voided`);
+		expect(logged.json.items[0]).toMatchObject({ label: viaPaypal.id, detail: 'Payment cancelled; it can no longer be paid' });
+		await page(`/return/paypal/${env.websiteId}/${viaPaypal.id}?token=ORD7`);
+		const paths = env.gateways.callsTo('https://api-m.paypal.com').map((c) => c.path);
+		expect(paths).toContain('/v2/checkout/orders/ORD7');
+		expect(paths).not.toContain('/v2/checkout/orders/ORD7/capture');
+		expect((await env.api('GET', `/v1/payments/${viaPaypal.id}`)).json.status).toBe('voided');
+
+		// Stripe could not stop its page: the history says so; payer-cancelled and unstarted payments are cancelled too
+		env.gateways.respond('https://api.stripe.com', (c) =>
+			c.path.endsWith('/expire')
+				? { status: 400, body: { error: { message: 'This session is not open.' } } }
+				: { status: 200, body: { id: `cs_${c.path}`, url: 'https://checkout.stripe.com/c/x' } },
+		);
+		const open = await createPayment({ gateway: 'stripe' });
+		await page(`/pay/${env.websiteId}/${open.id}`);
+		await page(`/return/cancel/${env.websiteId}/${open.id}`);
+		const notStopped = await env.api('POST', `/v1/payments/${open.id}/cancel`, {});
+		expect(notStopped.json.history.at(-1)).toMatchObject({
+			event: 'not_stopped',
+			detail: 'stripe did not stop it (This session is not open.): money that still arrives is to be refunded',
+		});
+		const unstarted = await createPayment({});
+		expect((await env.api('POST', `/v1/payments/${unstarted.id}/cancel`, {})).json).toMatchObject({ status: 'voided' });
+		expect((await env.api('POST', '/v1/payments/pay_nope/cancel', {})).status).toBe(404);
+		stripeAnswers();
+	});
+});
+
 describe('payment links and the pay button routes', () => {
 	/** @type {any} */
 	let fixed;

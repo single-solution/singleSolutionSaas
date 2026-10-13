@@ -3,6 +3,7 @@
  * mode; the payer pays on Stripe's page), refunds through the Refunds API, and subscriptions as Checkout Sessions in
  * `subscription` mode on the merchant's own Stripe price. Confirmations are Stripe webhooks checked with the endpoint's
  * signing secret (`Stripe-Signature`, HMAC-SHA256 of `<t>.<body>`, 5 minutes), or the session asked server to server.
+ * A payment the merchant cancels has its open Checkout Session expired, so Stripe's page no longer takes it.
  *
  * Connection `stripe`: `{ secretKey: sk_… | rk_…, webhookSecret: whsec_… }`. API version pinned with `Stripe-Version`.
  * @module
@@ -144,6 +145,17 @@ export const stripe = {
 		return news;
 	},
 	returned: async (_incoming, payment, keys, ctx) => ({ news: (await stripe.status?.(payment, keys, ctx)) ?? null }),
+	// the merchant cancelled the payment: its Checkout Session is expired, so Stripe's page no longer takes it
+	expire: async (payment, keys, ctx) => {
+		if (!payment.gatewayRef) return { ok: true };
+		const answer = await call(ctx, `${STRIPE_API}/v1/checkout/sessions/${encodeURIComponent(payment.gatewayRef)}/expire`, {
+			method: 'POST',
+			headers: headers(keys),
+		});
+		return ok2xx(answer.status)
+			? { ok: true }
+			: { ok: false, message: answer.json?.error?.message ?? failure('Stripe', answer.status) };
+	},
 	refund: async ({ payment, amount, refundId }, keys, ctx) => {
 		if (!payment.captureRef) return { ok: false, message: 'Stripe has not confirmed this payment.' };
 		const answer = await call(ctx, `${STRIPE_API}/v1/refunds`, {

@@ -42,6 +42,8 @@ import { createId } from '@ss/contracts';
  * @property {{ key: string, type: string, size: number, at: Date } | null} proof bank-transfer proof in the merchant's storage
  * @property {HistoryEntry[]} history
  * @property {Date | null} paidAt
+ * @property {Date | null} [voidedAt] when the merchant cancelled it (status `voided`, K-13); kept once it is paid after,
+ *   so the payment shows a refund is due (missing on payments made before)
  * @property {Date} createdAt
  * @property {Date} updatedAt
  */
@@ -135,7 +137,7 @@ export const createStore = (data, { now }) => {
 	return Object.freeze({
 		payments: Object.freeze({
 			/**
-			 * @param {Omit<PaymentRecord, 'id' | 'websiteId' | 'createdAt' | 'updatedAt' | 'status' | 'refunded' | 'refunds' | 'proof' | 'history' | 'paidAt' | 'gatewayRef' | 'captureRef' | 'checkout'>} input
+			 * @param {Omit<PaymentRecord, 'id' | 'websiteId' | 'createdAt' | 'updatedAt' | 'status' | 'refunded' | 'refunds' | 'proof' | 'history' | 'paidAt' | 'voidedAt' | 'gatewayRef' | 'captureRef' | 'checkout'>} input
 			 * @returns {Promise<PaymentRecord>}
 			 */
 			add: async (input) => {
@@ -152,6 +154,7 @@ export const createStore = (data, { now }) => {
 					proof: null,
 					history: [{ at: at(), event: 'created' }],
 					paidAt: null,
+					voidedAt: null,
 				});
 				return as(await payments.findOne({ websiteId, id }, NO_ID));
 			},

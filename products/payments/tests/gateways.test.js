@@ -190,6 +190,24 @@ describe('Stripe', () => {
 		const bad = incoming({ 'stripe-signature': signTimestamped('nope', keys.webhookSecret, NOW) }, 'nope');
 		expect(await stripe.notice?.(bad, keys, ctx)).toEqual({ ok: false });
 	});
+	it('expires the Checkout Session of a payment the merchant cancelled, so Stripe’s page refuses it', async () => {
+		expect(await stripe.expire?.(PAYMENT, keys, ctx)).toEqual({ ok: true });
+		expect(fake.calls).toHaveLength(0);
+		fake.respond('https://api.stripe.com', () => ({ status: 200, body: { id: 'cs_1', status: 'expired' } }));
+		expect(await stripe.expire?.({ ...PAYMENT, gatewayRef: 'cs_1' }, keys, ctx)).toEqual({ ok: true });
+		expect(fake.calls.at(-1)).toMatchObject({ method: 'POST', path: '/v1/checkout/sessions/cs_1/expire' });
+		fake.respond('https://api.stripe.com', () => ({ status: 400, body: { error: { message: 'The session is complete.' } } }));
+		expect(await stripe.expire?.({ ...PAYMENT, gatewayRef: 'cs_1' }, keys, ctx)).toEqual({
+			ok: false,
+			message: 'The session is complete.',
+		});
+		fake.respond('https://api.stripe.com', () => ({ status: 500 }));
+		expect(await stripe.expire?.({ ...PAYMENT, gatewayRef: 'cs_1' }, keys, ctx)).toEqual({
+			ok: false,
+			message: 'Stripe answered HTTP 500.',
+		});
+	});
+
 	it('asks a session, refunds and manages subscriptions', async () => {
 		const withRef = { ...PAYMENT, gatewayRef: 'cs_1', captureRef: 'pi_1' };
 		expect(await stripe.status?.(PAYMENT, keys, ctx)).toBeNull();
@@ -334,6 +352,12 @@ describe('PayPal', () => {
 				capture: 'CAP1',
 			},
 		});
+		// the order of a payment the merchant cancelled is never captured: PayPal takes no money
+		const calls = fake.calls.length;
+		expect(await paypal.returned?.(incoming(), { ...withRef, status: 'voided' }, keys, ctx)).toMatchObject({
+			news: { outcome: 'pending', capture: null },
+		});
+		expect(fake.calls.slice(calls).map((c) => c.path)).not.toContain('/v2/checkout/orders/ORDER1/capture');
 		paypalAnswers((c) => (c.method === 'GET' ? { status: 200, body: { id: 'ORDER1', status: 'APPROVED' } } : { status: 500 }));
 		expect(await paypal.status?.(withRef, keys, ctx)).toBeNull();
 		paypalAnswers(() => ({

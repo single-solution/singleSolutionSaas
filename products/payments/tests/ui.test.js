@@ -228,6 +228,19 @@ describe('pay button', () => {
 		}
 	});
 
+	it('shows no Pay button for a payment the merchant cancelled (K-13)', async () => {
+		/** @type {import('../ui/pay-button.js').VisitorCall} */
+		const call = async () => ({
+			ok: true,
+			status: 200,
+			data: { status: 'voided', amount: 1000, currency: 'USD', description: '', checkoutUrl: 'https://p/pay/4' },
+		});
+		const host = place('pay_button', { payment: 'pay_4' });
+		await mountPayButton({ host, config: configOf(['payment_api']), call, go: vi.fn() });
+		expect(inside(host, '.amount').textContent).toBe(`USD 10.00 · ${strings['button.voided']}`);
+		expect(host.shadowRoot?.querySelector('button')).toBeNull();
+	});
+
 	it('mounts a payment’s button through widget.js, which answers offline as not ok', async () => {
 		const host = place('pay_button', { payment: 'pay_4' });
 		serve({
@@ -488,6 +501,45 @@ describe('Payments admin widget', () => {
 		rows(host)[0]?.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter' }));
 		await flush();
 		expect(rows(host)[0]?.getAttribute('aria-current')).toBe('true');
+	});
+
+	it('marks money that arrived after the merchant cancelled the payment as a refund due (K-13)', async () => {
+		const host = place('payments_admin');
+		const voided = {
+			...PAYMENT,
+			id: 'pay_7',
+			status: 'voided',
+			refundDue: false,
+			voidedAt: '2026-10-01T11:00:00.000Z',
+			checkoutUrl: 'https://payments.example.dev/pay/web_1/pay_7',
+		};
+		const late = { ...voided, status: 'paid', refundDue: true, paidAt: '2026-10-01T12:00:00.000Z' };
+		const client = adminApi({
+			'GET /v1/admin/payments': () => answer(200, { items: [voided], nextCursor: null, hasMore: false }),
+			'GET /v1/admin/payments/pay_7': () => answer(200, voided),
+			'POST /v1/admin/payments/pay_7/confirm': () => answer(200, late),
+		});
+		mountPaymentsAdmin({
+			host,
+			api: client,
+			config: configOf(['payment_api', 'refunds', 'bank_transfer']),
+			save: vi.fn(),
+			open: vi.fn(),
+		});
+		await flush();
+		expect(inside(host, '.detail-pane .badge').textContent).toBe(strings['status.voided']);
+		expect(detailText(host)).toContain(strings['admin.field.voided']);
+		expect(menuItem(host, strings['admin.copyPayLink'])).toBeUndefined();
+		expect(button(host, strings['admin.refund'])).toBeUndefined();
+		// a transfer that arrives after is confirmed, and is then to be refunded
+		button(host, strings['admin.confirm']).click();
+		await submitDialog(host);
+		expect([...(host.shadowRoot?.querySelectorAll('.detail-pane .badge') ?? [])].map((b) => b.textContent)).toEqual([
+			strings['status.paid'],
+			strings['admin.refundDue'],
+		]);
+		expect(rows(host)[0]?.textContent).toContain(strings['admin.refundDue']);
+		expect(button(host, strings['admin.refund'])).toBeTruthy();
 	});
 
 	it('says when confirming fails, the list is empty or cannot load, and when signed out', async () => {

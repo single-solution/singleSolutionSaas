@@ -56,6 +56,9 @@ export const mountPayButton = async ({ host, config, call, go }) => {
 				if (data.description) box.append(element(doc, 'h2', {}, data.description));
 				if (['paid', 'partially_refunded', 'refunded'].includes(data.status))
 					box.append(element(doc, 'p', { class: 'amount' }, `${amount} · ${t('button.paid')}`));
+				// the merchant cancelled it: no Pay button (K-13)
+				else if (data.status === 'voided')
+					box.append(element(doc, 'p', { class: 'amount' }, `${amount} · ${t('button.voided')}`));
 				else {
 					box.append(element(doc, 'button', { type: 'submit' }, fill(t('button.pay'), { amount })));
 					box.addEventListener('submit', (event) => {

@@ -14,7 +14,8 @@ import { GATEWAY_TIMEOUT_MS, jsonOf } from '../util.js';
 /**
  * What an adapter knows of a payment.
  * @typedef {{ id: string, websiteId: string, amount: number, currency: string, description: string, reference: string,
- *   customer: import('../../core/payments.js').Customer, gatewayRef?: string | null, captureRef?: string | null }} PaymentLike
+ *   customer: import('../../core/payments.js').Customer, gatewayRef?: string | null, captureRef?: string | null,
+ *   status?: string }} PaymentLike
  */
 /** @typedef {{ id: string, plan: string, customer: import('../../core/payments.js').Customer, gatewayRef?: string | null }} SubscriptionLike */
 /** @typedef {{ return: string, cancel: string, notify: string }} Urls the payer's return and cancel addresses and the notice address */
@@ -47,6 +48,10 @@ import { GATEWAY_TIMEOUT_MS, jsonOf } from '../util.js';
  * @property {(incoming: Incoming, payment: PaymentLike, keys: Keys, ctx: GatewayContext) => Promise<{ news: PaymentNews | null, next?: Started }>} [returned]
  *   the payer came back from the gateway: what the gateway confirms (signed, or asked server to server)
  * @property {(payment: PaymentLike, keys: Keys, ctx: GatewayContext) => Promise<PaymentNews | null>} [status] ask the gateway
+ *   (it never takes the money of a payment the merchant cancelled, status `voided`)
+ * @property {(payment: PaymentLike, keys: Keys, ctx: GatewayContext) => Promise<{ ok: boolean, message?: string }>} [expire]
+ *   stop the payer's checkout at the gateway, so the gateway's page refuses to take the payment (the merchant
+ *   cancelled it)
  * @property {(input: { payment: PaymentLike, amount: number, reason: string, refundId: string }, keys: Keys, ctx: GatewayContext) => Promise<Refunded>} refund
  * @property {(input: { subscription: SubscriptionLike, keys: Keys, urls: Urls }, ctx: GatewayContext) => Promise<Started>} [subscribe]
  * @property {(subscription: SubscriptionLike, keys: Keys, ctx: GatewayContext) => Promise<SubscriptionNews | null>} [subscriptionStatus]

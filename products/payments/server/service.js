@@ -1,7 +1,7 @@
 /**
  * The payments service (PLAN 0.8.7): creating payments and links, starting a payment on its gateway, applying what a
  * gateway confirmed (signed notices, returns asked server to server, status checks), refunds, bank-transfer
- * confirmation, subscriptions, and the payment events. There is no background work: an unconfirmed payment is asked
+ * confirmation, the merchant's cancel, subscriptions, and the payment events. There is no background work: an unconfirmed payment is asked
  * again when the merchant reads it (PLAN 0.8.4), and events are the kit's (PLAN 0.8.10 K5): sent to the merchant
  * through Notifications right after (`after()`) the request that made them, retried on later requests for that website.
  * @module
@@ -216,8 +216,30 @@ export const createService = (product) => {
 	};
 
 	/**
+	 * What follows a payment becoming paid: its link counts it, and the merchant is told (`payment.paid`). Money for a
+	 * payment the merchant cancelled is not counted on its link, and its history says it is to be refunded (K-13).
+	 * @param {Site} s @param {PaymentRecord} paid
+	 * @returns {Promise<PaymentRecord>}
+	 */
+	const settle = async (s, paid) => {
+		const after = paid.voidedAt
+			? ((await s.store.payments.change(
+					paid.id,
+					['paid'],
+					{},
+					{ event: 'refund_due', detail: 'paid after the merchant cancelled it' },
+				)) ?? paid)
+			: paid;
+		if (after.linkId && !after.voidedAt) await s.store.links.countPaid(after.linkId);
+		await emit(s, 'payment.paid', paymentEventData(view(s, after)));
+		return after;
+	};
+
+	/**
 	 * Apply what a gateway confirmed about a payment of this website. A payment becomes paid only for its own amount and
-	 * currency (a mismatch is recorded and changes nothing); a confirmation that arrives twice changes nothing.
+	 * currency (a mismatch is recorded and changes nothing); a confirmation that arrives twice changes nothing. Money for
+	 * a payment the merchant cancelled is recorded too (the payer paid), with a history entry saying it is to be refunded:
+	 * the payment answers `refundDue: true`, also in its `payment.paid` event, and never verifies an order (K-13).
 	 * @param {Site} s @param {Gateway} gateway @param {import('../adapters/gateways/types.js').PaymentNews} news @param {string} via
 	 * @returns {Promise<PaymentRecord | null>} the payment after it, or null when it is not this website's
 	 */
@@ -241,7 +263,7 @@ export const createService = (product) => {
 			}
 			const paid = await s.store.payments.change(
 				payment.id,
-				['pending', 'failed', 'cancelled'],
+				['pending', 'failed', 'cancelled', 'voided'],
 				{
 					status: 'paid',
 					paidAt: new Date(now()),
@@ -250,10 +272,7 @@ export const createService = (product) => {
 				},
 				{ event: 'paid', detail: via },
 			);
-			if (!paid) return payment;
-			if (paid.linkId) await s.store.links.countPaid(paid.linkId);
-			await emit(s, 'payment.paid', paymentEventData(view(s, paid)));
-			return paid;
+			return paid ? settle(s, paid) : payment;
 		}
 		if (news.outcome === 'failed' || news.outcome === 'cancelled') {
 			const changed = await s.store.payments.change(
@@ -302,6 +321,49 @@ export const createService = (product) => {
 		for (const item of news)
 			if (item.kind === 'payment') await applyPayment(s, gateway, item, via);
 			else if (gateway === 'stripe' || gateway === 'paypal') await applySubscription(s, gateway, item);
+	};
+
+	/**
+	 * The merchant cancels a payment it no longer wants, for example because its order was cancelled or expired (K-13):
+	 * the payment becomes `voided`, its pay page and the payer's retry are closed, a bank transfer takes no proof, and
+	 * the gateway's own page is stopped where the gateway allows it (Stripe expires the Checkout Session; PayPal's
+	 * order is never captured). Money that still arrives is recorded with `refundDue`. A payment already paid is not
+	 * cancelled (409 `already_paid`, with the payment): refund it instead. Cancelling it again changes nothing.
+	 * @param {Site} s @param {PaymentRecord} payment @param {string} reason @param {Actor} by
+	 * @returns {Promise<PaymentRecord>}
+	 */
+	const voidPayment = async (s, payment, reason, by) => {
+		if (payment.status === 'voided') return payment;
+		if (!['pending', 'failed', 'cancelled'].includes(payment.status))
+			throw problem('already_paid', 'This payment was paid: refund it instead.', {
+				extensions: { payment: view(s, payment) },
+			});
+		const voided = await s.store.payments.change(
+			payment.id,
+			['pending', 'failed', 'cancelled'],
+			{ status: 'voided', voidedAt: new Date(now()), checkout: null },
+			{ event: 'voided', detail: reason || 'cancelled by the merchant', by: nameOf(by) },
+		);
+		// it changed meanwhile (paid, or cancelled by another call): judged again as it is now
+		if (!voided) return voidPayment(s, /** @type {PaymentRecord} */ (await s.store.payments.get(payment.id)), reason, by);
+		const gateway = payment.gateway;
+		const adapter = gateway && gateway !== 'bank_transfer' && payment.gatewayRef ? gateways[gateway] : null;
+		const keys = adapter?.expire ? await keysOf(s, /** @type {Exclude<Gateway, 'bank_transfer'>} */ (gateway)) : null;
+		if (!adapter?.expire || !keys) return voided;
+		const stopped = await adapter.expire({ ...payment, websiteId: s.websiteId }, keys, ctx);
+		return (
+			(await s.store.payments.change(
+				payment.id,
+				['voided'],
+				{},
+				stopped.ok
+					? { event: 'stopped', detail: `${gateway} checkout closed` }
+					: {
+							event: 'not_stopped',
+							detail: `${gateway} did not stop it (${stopped.message ?? 'refused'}): money that still arrives is to be refunded`,
+						},
+			)) ?? voided
+		);
 	};
 
 	/**
@@ -396,16 +458,18 @@ export const createService = (product) => {
 	};
 
 	/**
-	 * The merchant confirms a bank transfer arrived, with the transfer's reference and a note (PLAN 0.8.10 P3).
+	 * The merchant confirms a bank transfer arrived, with the transfer's reference and a note (PLAN 0.8.10 P3). A
+	 * transfer that arrives after the merchant cancelled the payment is confirmed too, and is then to be refunded
+	 * (`refundDue`, K-13).
 	 * @param {Site} s @param {PaymentRecord} payment @param {Actor} by
 	 * @param {{ reference: string, note: string }} [input]
 	 */
 	const confirmTransfer = async (s, payment, by, { reference, note } = { reference: '', note: '' }) => {
-		if (payment.gateway !== 'bank_transfer' || payment.status !== 'pending')
+		if (payment.gateway !== 'bank_transfer' || (payment.status !== 'pending' && payment.status !== 'voided'))
 			throw problem('conflict', 'Only a pending bank transfer can be confirmed.');
 		const paid = await s.store.payments.change(
 			payment.id,
-			['pending'],
+			['pending', 'voided'],
 			{ status: 'paid', paidAt: new Date(now()) },
 			{
 				event: 'paid',
@@ -416,9 +480,7 @@ export const createService = (product) => {
 			},
 		);
 		if (!paid) throw problem('conflict', 'The payment changed meanwhile; read it again.');
-		if (paid.linkId) await s.store.links.countPaid(paid.linkId);
-		await emit(s, 'payment.paid', paymentEventData(view(s, paid)));
-		return paid;
+		return settle(s, paid);
 	};
 
 	/**
@@ -490,6 +552,7 @@ export const createService = (product) => {
 		applyPayment,
 		apply,
 		recheck,
+		voidPayment,
 		refund,
 		recordProof,
 		confirmTransfer,
