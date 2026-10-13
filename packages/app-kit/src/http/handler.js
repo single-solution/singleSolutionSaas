@@ -545,7 +545,7 @@ export const createRequestHandler = (kit, routes, options = {}) => {
 				}
 			}
 
-			// a repeated Idempotency-Key (same website, route, address, body and visitor or staff member) gets the first
+			// a repeated Idempotency-Key (same website, route, address, body and visitor, signed-in shopper or staff member) gets the first
 			// answer again; another request under the key 409 duplicate_request; one still running 409 in_progress (K-14)
 			/** @type {string | null} */
 			let duplicateKey = null;
@@ -562,6 +562,7 @@ export const createRequestHandler = (kit, routes, options = {}) => {
 						ctx.actor?.id ?? '',
 						request.headers.get('ss-guest') ?? '',
 						request.headers.get('ss-order-key') ?? '',
+						request.headers.get('ss-sign-in') ?? '',
 						ctx.rawBody,
 					].join('\n'),
 				);

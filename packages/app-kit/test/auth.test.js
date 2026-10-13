@@ -319,6 +319,27 @@ describe('features and the merchant database', () => {
 	});
 });
 
+describe('repeated requests (K-14)', () => {
+	it('never replays one signed-in shopper’s answer to another who sends the same Idempotency-Key', async () => {
+		const { call, browser, switchOn, connectDatabase } = await setup();
+		await switchOn(['notes']);
+		await connectDatabase();
+		const post = (/** @type {string} */ signIn) =>
+			call('POST', '/v1/notes', {
+				token: browser.token,
+				origin: SITE,
+				body: { text: 'x' },
+				headers: { 'idempotency-key': 'k2', 'ss-sign-in': signIn },
+			});
+		expect((await post('shopper-a')).status).toBe(200);
+		const other = await post('shopper-b');
+		expect(other.status).toBe(409);
+		expect(await other.json()).toMatchObject({ type: 'https://notes.example.dev/problems/duplicate_request' });
+		const same = await post('shopper-a');
+		expect([same.status, same.headers.get('idempotent-replayed')]).toEqual([200, 'true']);
+	});
+});
+
 describe('rate limits (SE-2)', () => {
 	it('one address flooding a route cannot lock out other visitors: the website window counts only what passed', async () => {
 		const routes = [
