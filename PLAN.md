@@ -3051,6 +3051,52 @@ payment; the losing payment is cancelled.
 **E79. Phone countries (SE-5).** Key: `checkout.countries` ([] default = any | ISO codes). Guest order and alert phones
 of other countries are refused (`country_not_allowed`); a member's phone of another country is left out of alerts.
 
+Built after the re-audit, fifth batch (2026-10-13; commits 314076ea, 72c85505, 5ccabffc, 463924b7, f6b51d72):
+
+**E80. Sealed deal-lock secret (always; RT-14).** Sealed with the label `ecommerce`; a clear one is sealed on first use;
+Re-seal (Prices page) re-seals it; a key that no longer opens it gives a new secret.
+
+**E81. Free delivery in feeds and JSON-LD (always; SG-2).** A variant priced at or above `delivery_zones.defaultFreeOver`
+ships at 0.
+
+**E82. Title and description patterns (SG-5, SG-21).** Keys: `seo.brandName` ('' = the business name; what
+`{business}` and `{storeName}` stand for); `seo.productTitle` and `seo.categoryTitle` ('{name}' default: the page's part
+of `titleTemplate`); `seo.productDescription` and `seo.categoryDescription` ('' default, used after the page's own SEO
+description), with `{name}`, `{brand}`, `{category}`, `{storeName}`; empty brackets and leftover separators are dropped;
+`seo.pagedListings` (`index` default | `noindex`: pages 2+ are noindex, follow, with page 1 as canonical).
+
+**E83. Variant links (always; SG-7).** A multi-value attribute names its first value (`?colour=red&size=S`).
+
+**E84. Glossary patterns (SG-20).** Keys: `landing_pages.attributeTitle` ('{name}') and `attributeDescription` (''),
+with `{name}`, `{unit}`, `{values}`, `{storeName}`; when `attributeDescription` is set, every active attribute's page is
+in the sitemap.
+
+**E85. Feed options (SG-3, SG-22–SG-24).** Keys: `feeds.itemTitle` ('{name} - {variant}' default; also `{brand}`,
+`{options}`), `feeds.itemDescription` (`body` default | `seo`), `feeds.identifierExists` (`auto` default | `no`).
+Always: with `itemId: legacy`, `item_group_id` is the imported product id on every row; variants priced 0 are left out.
+
+**E86. SEO read window (always; SG-31).** Server-token SEO, policy, llms, feed and landing reads allow 3,000 per minute
+per website.
+
+**E87. Policies (always; SF-1).** `{email}`, `{phone}`, `{address}`, `{deliveryFee}` and `{freeDeliveryOver}` are filled,
+and every placeholder also works with double braces; cleaned HTML keeps `h2` and `mailto:`/`tel:` links.
+
+**E88. Default size chart (SF-3).** Key: `size_charts.defaultChartId` ('' = none), used after the product's, brand's and
+category's charts; that chart cannot be deleted (409).
+
+**E89. Card variants (always; SF-6).** `GET /v1/shop/products?variants=1` adds each card's active variants (id,
+options, attributes, price, compareAtPrice, inStock, grade, url); card brands carry their slug.
+
+**E90. Atlas fallback (always; SF-7, IMP-14).** When a first-page search finds nothing and the index finds none of the
+website's active products, the basic search answers and Overview says the index is missing.
+
+**E91. Search modes (SF-10, SF-13).** Keys: `catalog.searchMatch` (`words` default | `phrase`: the whole phrase in the
+name or a SKU) and `catalog.chatSearch` (`same` default | `basic` | `atlas`).
+
+Not built from these findings: Google category per category, a product_type template and extra images in feeds (SG-3);
+SEO-title overrides used as written (K-25); grade glossary patterns (SG-20); `identifier_exists` in the Meta CSV
+(SG-22); the kit's `/v1/settings` window (SG-31).
+
 #### Chat
 
 **C1. Longer instructions and store context** (changes 0.8.3).
