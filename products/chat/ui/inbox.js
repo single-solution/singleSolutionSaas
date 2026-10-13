@@ -2,8 +2,8 @@
  * The admin widget `inbox` (permissions `inbox.read`, `inbox.reply`, `inbox.manage`): conversations newest activity
  * first, with filters (status, assigned, waiting, guest or signed in), search and unread counts; a conversation with
  * its messages and internal notes, reply (with attachments and saved replies), notes, status, AI paused, Hand back to
- * the AI for a chat waiting for a person (CH-3), assignment (with presence and Full), custom field values, the context panel with the AI summary, transcripts and rating
- * requests; your own presence and the staff's max chats. Only parts of switched-on features show, and a part whose
+ * the AI for a chat waiting for a person (CH-3), assignment (with presence and Full), custom field values, the context
+ * panel with the AI summary, transcripts and rating requests; your own presence and the staff's max chats. Only parts of switched-on features show, and a part whose
  * route answers 403 hides itself. It checks for news with the same back-off as the visitor chat. Where the widget is
  * wide the open conversation sits beside the list; in a narrow one it replaces the list until it is closed (PLAN 0.6:
  * by the widget's own width, a container query).

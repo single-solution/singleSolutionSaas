@@ -2,8 +2,8 @@
  * Rich answers (PLAN 0.8.10 C2; pure): AI and staff messages carry `format: 'markdown'` with a small subset — bold,
  * italic, lists, tables and links. The server keeps a link only when it is site-relative, on the website's own domain,
  * or allowed by the moderation link policy (while moderation is on); any other link keeps just its label. An AI answer
- * splits on `---` lines (and around tables, with `tableBubble`) into at most `bubbles` messages. The widgets render the parsed blocks as DOM nodes, never as
- * HTML.
+ * splits on `---` lines (and around tables, with `tableBubble`, CH-21) into at most `bubbles` messages. The widgets
+ * render the parsed blocks as DOM nodes, never as HTML.
  * @module
  */
 

@@ -5,13 +5,14 @@
  * checks every 3 s meanwhile; or within the request with `?wait=1`, C10, which waits up to 20 s and lets a slower
  * answer finish after the response, CH-1; a reply that went stale starts again once, RT-6) unless the chat waits for a
  * person (from `reassureAfterMinutes` after the handoff the AI then only reassures, C4), staff paused the AI, or a
- * limit or cap is reached. The AI uses the website's own provider (backup on failure, when on), knowledge from switched-on features,
- * the store context from Ecommerce (C1), the merchant's webhook tools, the booking endpoint and the shop tools
- * (Ecommerce, pasted token; the products they return become product cards on the answer), the language lock (strict,
- * C14), "never disclose" (C1) and moderation. Answers are markdown, split on `---` lines into at most `bubbles`
+ * limit or cap is reached. The AI uses the website's own provider (backup on failure, when on), knowledge from
+ * switched-on features, the store context from Ecommerce (C1), the merchant's webhook tools, the booking endpoint and
+ * the shop tools (Ecommerce, pasted token; the products they return become product cards on the answer), the language
+ * lock (strict, C14; its options after the re-audit, CH-16 to CH-19, CH-38), "never disclose" (C1) and moderation.
+ * Answers are markdown, split on `---` lines (and around tables with `tableBubble`, CH-21) into at most `bubbles`
  * messages (C2). When the AI fails, a cap is reached or the answer is refused, the first matching fallback answer
- * replies (C3), else the on-failure setting applies; N failures in a row hand off. Staff alerts go out as the features
- * say.
+ * replies (C3), else the on-failure setting applies; N failures in a row hand off (an answer only in the wrong language
+ * never hands off by itself, CH-19). Staff alerts go out as the features say.
  * @module
  */
 import { problem } from '@ss/app-kit';
