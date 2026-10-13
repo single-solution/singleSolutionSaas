@@ -62,7 +62,8 @@ ones before it:
 | `deals`       | `deal_` | scope products, categories and brands                                                   |
 | `bundles`     | `bnd_`  | items and scopes                                                                        |
 
-Taken as given: ids, `createdAt`, `publishedAt` (else `createdAt` for an active product), `used`, `sold`, `rating`,
+Taken as given: ids, `createdAt`, `publishedAt` (else `createdAt` for an active product), `used`, `sold` and `rating`
+(finish derives them again only from imported order lines and reviews: a product with none keeps the given numbers),
 `previousSlugs`, stock (no stock is held) and storage keys of any folder with their `type` and `size` (`''` and `0` when
 left out; a video file is `video/mp4` or `video/webm`). A product with `variants: []` is stored as a draft (it goes on
 sale once it has a variant). Refused, each by its path: fields the record type does not have (a mapping mistake shows
@@ -86,12 +87,15 @@ Smallest records (one per line in a file):
 {"id":"bnd_000000000000000000000001","name":"Two dresses","type":"bundle","items":[{"productId":"prd_000000000000000000000001","quantity":2}],"price":8000,"used":4}
 ```
 
-`POST /v1/import/finish` (the catalog's part runs first) places every category under its parents and derives each
-product's price, highest price, stock state and grades again, in batches, writing only what changed; it answers
-`catalog: { categories: { checked, changed, orphans, cycles, tooDeep }, products: { checked, changed } }` (at most 20
-ids per list; `tooMany` above 5,000 categories). `GET /v1/import/status` adds the sums `products`, `products.active`,
-`products.draft`, `variants`, `variants.active`, `stock.units`, `serials.in_stock`, `serials.sold`, `serials.faulty`,
-`deals.used` and `bundles.used`. Imports and finish send no message, event, alert or IndexNow call.
+`POST /v1/import/finish` (the catalog's steps run first) places every category under its parents and derives each
+product's price, highest price, stock state and grades again, writing only what changed. It is paged: one call works on
+at most 200 records and answers `more` and `next`; while `more` is true, call again with `?after=<next>` (`ss-import
+send` does, and adds the numbers of every call up). Each call answers `categoriesChecked`, `categoriesChanged`,
+`productsChecked` and `productsChanged`, and the calls that reach the categories add `categoryProblems: { orphans,
+cycles, tooDeep }` (at most 20 ids per list; `{ tooMany: true }` above 5,000 categories: no path derived). `GET
+/v1/import/status` adds the sums `products`, `products.active`, `products.draft`, `variants`, `variants.active`,
+`stock.units`, `serials.in_stock`, `serials.sold`, `serials.faulty`, `deals.used` and `bundles.used`. Imports and finish
+send no message, event, alert or IndexNow call.
 
 Storage keys after the import: a product, a variant or a deal keeps the keys it holds whatever their folder when staff
 edit it (variant photos, photo sizes, the video, the deal banner); only new keys must be under the record's folder.
@@ -113,7 +117,8 @@ this order, then `POST /v1/import/finish`:
 
 The checks are the product's own, in import mode (`core/imports-orders.js`): ids, numbers and past times are taken as
 given; fields the record type does not have (with `websiteId` and `merchantId`) and text over a limit are refused by
-path (never cut). Customers: phones as E.164 (national numbers only with `checkout.defaultCallingCode`), a guest has a
+path (never cut). Customers: phones as E.164, or national numbers with the website's calling code (the
+`checkout.defaultCallingCode` setting, else the business.json country's; refused when there is neither), a guest has a
 name and a phone (one guest per phone), a block has its reason; `orderCount`, `rtoCount`, `lastOrderAt` and
 `phoneDigits` are ignored (0 until finish). Orders: `number` in the website's form (`<numberPrefix><year>-<at least
 numberDigits digits>`); `status` a key of the `order_flow` list, `role` the flow's (derived; a different one is
@@ -139,12 +144,13 @@ Smallest records (the default order flow, prefix `''`, 6 digits, USD):
 {"userId":"usr_000000000000000000000001","productIds":["prd_000000000000000000000001"]}
 ```
 
-Finish (after the catalog's part; in batches of at most 1,000 with aggregations, writing only what changed, so a second
-run changes nothing) counts each customer's orders, RTO parcels and last order; sets loyalty balances and lifetime
-points; sets products' `sold` (units of delivered orders) and `rating` (approved reviews); marks `sold` with their order
-and line the serials that lines of orders still holding them list (not cancelled, returned or refunded before delivery,
-nor put back by a claim); and moves each order counter (`orders-<prefix><year>`) up to the highest number used, so the
-next order gets the number after. It answers `customersUpdated`, `loyaltyUpdated`, `productsSoldRatingUpdated`,
-`serialsSold`, `serialsMissing` (listed on a line, no serial record), `serialsOnOtherOrders` and `countersSet`.
-`GET /v1/import/status` adds `orders.<status>.count`, `orders.<status>.total`, `customers`, `loyalty.points` (the sum of
-balances), `reviews` and `returns`.
+Finish (after the catalog's steps, in the same pages of at most 200 records, `?after=<next>` while `more`; writing only
+what changed, so a second run changes nothing) counts each customer's orders, RTO parcels and last order; sets loyalty
+balances and lifetime points; sets products' `sold` (units of delivered orders) where the product has imported order
+lines and `rating` (approved reviews) where it has imported reviews, and keeps the given numbers where there is nothing
+to derive; marks `sold` with their order and line the serials that lines of orders still holding them list (not
+cancelled, returned or refunded before delivery, nor put back by a claim); and moves each order counter
+(`orders-<prefix><year>`) up to the highest number used, so the next order gets the number after. It answers
+`customersUpdated`, `loyaltyUpdated`, `productsSoldRatingUpdated`, `serialsSold`, `serialsMissing` (listed on a line, no
+serial record), `serialsOnOtherOrders` and `countersSet`. `GET /v1/import/status` adds `orders.<status>.count`,
+`orders.<status>.total`, `customers`, `loyalty.points` (the sum of balances), `reviews` and `returns`.

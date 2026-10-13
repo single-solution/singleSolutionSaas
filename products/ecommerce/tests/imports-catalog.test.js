@@ -7,6 +7,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { FINISH_PAGE } from '../adapters/imports.js';
 import { ALL, GROWTH, NOTIFY, STORAGE, readyShop } from './helpers.js';
 
 /** @type {Awaited<ReturnType<typeof readyShop>>} */
@@ -790,5 +791,15 @@ describe('the README examples', () => {
 		const page = await fresh.visitor('GET', '/v1/shop/products/linen-dress');
 		expect(page.json).toMatchObject({ id: records[5].id, price: 4500 });
 		await fresh.product.close();
+	});
+
+	it('say how finish pages, which numbers it keeps and how national phones are read', () => {
+		const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8').replace(/\s+/g, ' ');
+		expect(readme).toContain(`one call works on at most ${FINISH_PAGE} records and answers \`more\` and \`next\``);
+		expect(readme).toContain('call again with `?after=<next>`');
+		expect(readme).not.toContain('catalog: { categories');
+		expect(readme).toContain('a product with none keeps the given numbers');
+		expect(readme).toContain('keeps the given numbers where there is nothing to derive');
+		expect(readme).toContain('the `checkout.defaultCallingCode` setting, else the business.json country');
 	});
 });
