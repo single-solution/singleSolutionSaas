@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { DOMAIN, setup } from './helpers.js';
+import { createProduct } from '../src/index.js';
+import { OFFLINE_GRACE_MS } from '../src/status.js';
+import { BASE, DOMAIN, ENCRYPTION_KEY, SECRET, manifest, productRoutes, setup } from './helpers.js';
 
 const SITE = `https://${DOMAIN}`;
 
@@ -105,16 +107,48 @@ describe('status on use', () => {
 		expect(statusCalls()).toBe(before);
 	});
 
-	it('keeps the last status 24 hours while the Portal is unreachable, then answers 503', async () => {
+	it('keeps the last status 2 hours while the Portal is unreachable, then answers 503 (K-21)', async () => {
 		const { call, server, portal, clock } = await setup();
+		expect(OFFLINE_GRACE_MS).toBe(2 * 60 * 60_000);
 		expect((await call('GET', '/v1/server/open', { token: server.token })).status).toBe(200);
 		portal.setReachable(false);
-		clock.advance(23 * 60 * 60_000);
+		clock.advance(OFFLINE_GRACE_MS - 60_000);
 		expect((await call('GET', '/v1/server/open', { token: server.token })).status).toBe(200);
-		clock.advance(2 * 60 * 60_000);
+		clock.advance(60_000);
 		const response = await call('GET', '/v1/server/open', { token: server.token });
 		expect(response.status).toBe(503);
 		expect(await response.json()).toMatchObject({ type: 'https://notes.example.dev/problems/portal_unreachable' });
+		// back as soon as the Portal answers
+		portal.setReachable(true);
+		expect((await call('GET', '/v1/server/open', { token: server.token })).status).toBe(200);
+	});
+
+	it('refuses every use while the revocation list could not be fetched for longer than the grace, even with a status (K-21)', async () => {
+		const { store, portal, clock, server } = await setup();
+		let failing = false;
+		const product = createProduct({
+			manifest: manifest(),
+			config: { mongodbUri: '', connectSecret: SECRET, encryptionKey: ENCRYPTION_KEY },
+			store,
+			now: clock.now,
+			nodeEnv: 'test',
+			fetch: (url, init) =>
+				failing && String(url).includes('/v1/product/revocations')
+					? Promise.reject(new TypeError('fetch failed'))
+					: portal.fetch(url, init),
+		});
+		const handler = product.handler(productRoutes());
+		const use = async () =>
+			(await handler(new Request(`${BASE}/v1/server/open`, { headers: { authorization: `Bearer ${server.token}` } }))).status;
+		expect(await use()).toBe(200);
+		failing = true;
+		clock.advance(OFFLINE_GRACE_MS - 6 * 60_000);
+		expect(await use()).toBe(200); // a fresh status, the list still within the grace
+		clock.advance(6 * 60_000);
+		expect(await use()).toBe(503);
+		failing = false;
+		clock.advance(5 * 60_000 + 1);
+		expect(await use()).toBe(200);
 	});
 
 	it('answers invalid_token when the Portal does not know the website', async () => {

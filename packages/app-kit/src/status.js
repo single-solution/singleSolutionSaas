@@ -6,8 +6,10 @@
  *   revocation list.
  * - `status.changed` notices mark the copy stale, so the next use refetches it; the copy itself is kept for offline
  *   grace.
- * - While the Portal cannot be reached the last copy is used for up to 24 hours after its fetch, then every use is
- *   refused with 503 `portal_unreachable`.
+ * - While the Portal cannot be reached the last copy is used for up to {@link OFFLINE_GRACE_MS} (2 hours) after its
+ *   fetch, then every use is refused with 503 `portal_unreachable` (PLAN 0.4.7, 0.10; shortened from 24 hours by the
+ *   owner's decision 11, K-21). Revocations follow the same bound: when the revocation list could not be fetched for
+ *   longer than that, every use is refused until it is fetched again. A `token.revoked` notice fetches it at once.
  * - `graceEndsAt` in the past turns `grace` into `stopped` without asking the Portal.
  * - A fetched `removed` status turns the website's feature switches off: a re-add starts with every feature off.
  * @module
@@ -21,9 +23,15 @@ import { problem } from './http/results.js';
 
 /** Longest time a status copy is used without asking the Portal again. */
 const STATUS_MAX_AGE_MS = 5 * 60_000;
-/** Offline grace: how long the last status copy is used while the Portal cannot be reached. */
-const OFFLINE_GRACE_MS = 24 * 60 * 60_000;
+/**
+ * Offline grace: how long the last status copy (and the last revocation list) is trusted while the Portal cannot be
+ * reached. Two hours ride out a short Portal outage or a bad deploy rolled back, while a website stopped, suspended or
+ * removed, or a token revoked, during an outage stops working within two hours at most (24 hours before K-21).
+ */
+export const OFFLINE_GRACE_MS = 2 * 60 * 60_000;
 const REVOCATION_PAGES = 10;
+/** How often an instance reads again when the revocation list was last fetched. */
+const REVOCATIONS_RECHECK_MS = 30_000;
 const REFUSED = Object.freeze(['removed', 'suspended', 'stopped']);
 
 /**
@@ -42,6 +50,9 @@ export const effectiveStatus = (status, nowMs) =>
  *   logger: import('./logger.js').Logger }} options
  */
 export const createStatus = ({ store, client, now, logger }) => {
+	/** @type {{ at: number | null, readAt: number } | null} when the revocation list was last fetched, as last read */
+	let synced = null;
+
 	/** Fetch revoked token ids added since the stored cursor. */
 	const syncRevocations = async () => {
 		const state = await store.get('state', 'revocations');
@@ -54,7 +65,9 @@ export const createStatus = ({ store, client, now, logger }) => {
 			cursor = next;
 			if (tokenIds.length === 0 || !moved) break;
 		}
-		await store.put('state', 'revocations', { cursor, at: now() });
+		const at = now();
+		await store.put('state', 'revocations', { cursor, at });
+		synced = { at, readAt: at };
 	};
 
 	/**
@@ -106,12 +119,33 @@ export const createStatus = ({ store, client, now, logger }) => {
 	};
 
 	/**
-	 * Whether the product serves this website now: `{ ok: true, status }`, or the problem to answer.
+	 * True when the revocation list was last fetched longer than the offline grace ago (never fetched: not stale). The
+	 * time is read from the product database at most every {@link REVOCATIONS_RECHECK_MS} per instance.
+	 */
+	const revocationsStale = async () => {
+		const t = now();
+		if (!synced || t - synced.readAt >= REVOCATIONS_RECHECK_MS) {
+			const state = await store.get('state', 'revocations');
+			synced = { at: typeof state?.at === 'number' ? state.at : null, readAt: t };
+		}
+		return synced.at !== null && t - synced.at >= OFFLINE_GRACE_MS;
+	};
+
+	/**
+	 * Whether the product serves this website now: `{ ok: true, status }`, or the problem to answer; also refused while
+	 * the revocation list is older than the offline grace.
 	 * @param {string} websiteId
 	 * @returns {Promise<{ ok: true, status: StatusResponse } | { ok: false, problem: ProblemResult }>}
 	 */
 	const serving = async (websiteId) => {
 		const found = await lookup(websiteId);
+		if (found.ok && (await revocationsStale())) {
+			logger.warn('the revocation list is older than the offline grace', { websiteId });
+			return {
+				ok: false,
+				problem: problem('portal_unreachable', 'The Portal cannot be reached.', { headers: { 'retry-after': '60' } }),
+			};
+		}
 		if (!found.ok) {
 			return found.code === 'website_not_found'
 				? { ok: false, problem: problem('invalid_token', 'The token is not valid.') }

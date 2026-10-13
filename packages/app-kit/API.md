@@ -98,7 +98,7 @@ roles?, handler })`
 - `roles` (dashboard): `merchant`, `owner`, `support` (default all).
 
 Every website route also checks the status: 403 `product_unavailable` with `reason` (stopped, suspended, removed), 503
-`portal_unreachable` after 24 hours without the Portal, and 401 `invalid_token` for every token or ticket failure.
+`portal_unreachable` after 2 hours without the Portal (the status or the revocation list; `OFFLINE_GRACE_MS`), and 401 `invalid_token` for every token or ticket failure.
 
 `ctx` (handler argument): `request`, `requestId`, `method`, `path`, `params`, `query`, `searchParams`, `headers`,
 `idempotencyKey`, `body`, `rawBody`, `origin`, `websiteId`, `merchantId`, `status`, `token`, `ticket`, `actor` (K2),
