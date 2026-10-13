@@ -7,7 +7,10 @@
  *    and hours in the business time zone) or, with `lineChoice: first`, the first of them in the shoppers' order that
  *    saves something; the deal the shopper picked among them (`shopperChoice`); or the deal its signed lock keeps
  *    (`lockMinutes`) when that saves more than today's deals (`core/deals.js`); cart deals take a percent of the lines
- *    they cover, or one fixed amount spread over them; a live free-delivery deal covering a line waives delivery;
+ *    they cover, or one fixed amount spread over them; a live free-delivery deal covering a line waives delivery. With
+ *    `cartOffer: one_after_items` lines take item deals only, and then at most one checkout-level deal (a cart deal or
+ *    free delivery: the first live one in the shoppers' order that applies) comes off what they left; with
+ *    `one_exclusive` only when no item deal applied;
  * 2. bundles: sets form on the cart's units; a unit a bundle discounts takes no deal, and a set forms only when it saves
  *    more than those deals (`core/bundles.js`);
  * 3. the coupon, on what is left of the lines in its scope (`core/coupons.js`); its minimum subtotal is measured after
@@ -19,7 +22,7 @@
  */
 import { formBundles } from './bundles.js';
 import { couponBlocked, couponDiscount, couponProblem, normaliseCode } from './coupons.js';
-import { bestDeal, better, byShowOrder, DEAL_RULES, dealCovers, dealLineDiscount, dealLive } from './deals.js';
+import { bestDeal, better, byShowOrder, checkoutLevel, DEAL_RULES, dealCovers, dealLineDiscount, dealLive } from './deals.js';
 import { allocateUnits, roundHalfUp } from './money.js';
 
 /** @typedef {import('./model.js').DealRecord} DealRecord */
@@ -45,8 +48,9 @@ import { allocateUnits, roundHalfUp } from './money.js';
  * @typedef {object} PromotionsResult
  * @property {Array<{ key: string, dealId: string | null, dealDiscount: number, bundleDiscount: number, couponDiscount: number,
  *   eligibleDealIds?: string[], locked?: boolean, perUnit?: number }>} lines one per input line, in the same order;
- *   discounts in minor units, never more than the line; `eligibleDealIds`: the deals the shopper may pick for it;
- *   `locked`: its deal comes from its lock; `perUnit`: what an item deal took off each unit (locks keep it)
+ *   discounts in minor units, never more than the line; `dealId`: the line's own deal, else the checkout-level deal;
+ *   `dealDiscount`: both (`cartOffer`); `eligibleDealIds`: the deals the shopper may pick for it; `locked`: its deal
+ *   comes from its lock; `perUnit`: what its item deal took off each unit (locks keep it)
  * @property {string[]} dealIds deals that took something off (or waived delivery)
  * @property {string[]} bundleIds bundles that took something off
  * @property {string | null} couponId the coupon, when it applies
@@ -80,7 +84,7 @@ const utcClock = (now) => {
  *   business time (weekday 0 = Sunday, minutes since midnight; default: UTC)
  * @param {number} [input.unit] whole units (E25)
  * @param {boolean} [input.shopperChoice] lines may name one of their eligible deals (E18)
- * @param {import('./deals.js').DealRules} [input.rules] how deals choose and round (the `deals` settings, D4)
+ * @param {import('./deals.js').DealRules} [input.rules] how deals choose, combine and round (the `deals` settings, D4)
  * @returns {PromotionsResult}
  */
 export const applyPromotions = ({
@@ -108,6 +112,9 @@ export const applyPromotions = ({
 	const { rounding } = rules;
 	const exact = rounding === 'total_half_up';
 	const first = rules.lineChoice === 'first';
+	// `cartOffer`: checkout-level deals (off the cart, or free delivery) compete with item deals for each line, or at
+	// most one of them comes after the item deals
+	const stacked = rules.cartOffer !== 'per_line_best';
 	// which lines each live deal covers (cart deals spread their fixed amount over them)
 	/** @type {Map<string, number[]>} */
 	const covered = new Map();
@@ -128,11 +135,25 @@ export const applyPromotions = ({
 		const share = total > 0 ? (deal.value * line.unitPrice * line.quantity) / total : 0;
 		return dealLineDiscount(deal, line, { unit, share, rounding });
 	};
+	/**
+	 * A fixed amount spread over amounts in proportion: in whole units (the part below a unit is dropped), or exactly
+	 * with `total_half_up`.
+	 * @param {number} total @param {number[]} amounts
+	 */
+	const spread = (total, amounts) => {
+		const sum = amounts.reduce((a, b) => a + b, 0);
+		return exact
+			? amounts.map((amount) => (sum > 0 ? (total * amount) / sum : 0))
+			: allocateUnits(total - (unit > 1 ? total % unit : 0), amounts, unit);
+	};
 
-	// 1. each line's deal
+	// 1. each line's deal (a cart deal never replaces an item deal while the checkout-level deal comes after them)
 	const chosen = lines.map((line, index) => {
 		if (!priceable[index]) return { deal: null, saving: 0, eligible: /** @type {string[]} */ ([]), locked: false };
-		const eligible = live.filter((deal) => deal.type !== 'free_delivery' && (covered.get(deal.id) ?? []).includes(index));
+		const eligible = live.filter(
+			(deal) =>
+				deal.type !== 'free_delivery' && !(stacked && checkoutLevel(deal)) && (covered.get(deal.id) ?? []).includes(index),
+		);
 		/** @type {{ deal: DealRecord, saving: number } | null} */
 		let best = null;
 		const picked = shopperChoice && line.dealId ? eligible.find((deal) => deal.id === line.dealId) : undefined;
@@ -197,20 +218,59 @@ export const applyPromotions = ({
 				line.unitPrice * Math.max(0, line.quantity - /** @type {{ bundleUnits: number }} */ (formed.lines[index]).bundleUnits)
 			);
 		});
-		const total = Math.min(
-			deal.value,
-			amounts.reduce((sum, amount) => sum + amount, 0),
+		const parts = spread(
+			Math.min(
+				deal.value,
+				amounts.reduce((sum, amount) => sum + amount, 0),
+			),
+			amounts,
 		);
-		const parts = exact
-			? amounts.map((amount) => (total * amount) / amounts.reduce((sum, value) => sum + value, 0))
-			: allocateUnits(total - (unit > 1 ? total % unit : 0), amounts, unit);
 		takers.forEach((index, i) => {
 			dealDiscounts[index] = Math.min(amounts[i] ?? 0, parts[i] ?? 0);
 		});
 	}
+	/** @param {number} index what is left of a line after its bundles */
+	const room = (index) =>
+		/** @type {PricingLine} */ (lines[index]).unitPrice * /** @type {PricingLine} */ (lines[index]).quantity -
+		/** @type {{ bundleDiscount: number }} */ (formed.lines[index]).bundleDiscount;
+
+	// the checkout-level deal after the item deals (`cartOffer`; with `one_exclusive` only while no item deal applied):
+	// the first live one in the shoppers' order that covers a line and takes something off what is left of the lines it
+	// covers (free delivery always counts)
+	const offer =
+		stacked && !(rules.cartOffer === 'one_exclusive' && dealDiscounts.some((amount) => amount > 0))
+			? live
+					.filter((deal) => checkoutLevel(deal) && (covered.get(deal.id) ?? []).length > 0)
+					.sort(byShowOrder)
+					.map((deal) => {
+						const indexes = covered.get(deal.id) ?? [];
+						const rest = lines.map((_, index) =>
+							indexes.includes(index) ? Math.max(0, room(index) - Math.max(0, dealDiscounts[index] ?? 0)) : 0,
+						);
+						const shares =
+							deal.type === 'fixed'
+								? spread(
+										Math.min(
+											deal.value,
+											rest.reduce((sum, amount) => sum + amount, 0),
+										),
+										rest,
+									)
+								: [];
+						return {
+							deal,
+							takes: rest.map((amount, index) =>
+								dealLineDiscount(deal, { unitPrice: amount, quantity: 1 }, { unit, share: shares[index] ?? 0, rounding }),
+							),
+						};
+					})
+					.find(({ deal, takes }) => deal.type === 'free_delivery' || takes.some((take) => take > 0))
+			: undefined;
+	const extras = lines.map((_, index) => offer?.takes[index] ?? 0);
+
 	// `total_half_up`: the exact deal discounts (not those locks keep) are rounded once, half up, and spread back
 	if (exact) {
-		const open = lines.map((_, index) => (chosen[index]?.locked ? 0 : Math.max(0, dealDiscounts[index] ?? 0)));
+		const open = [...lines.map((_, index) => (chosen[index]?.locked ? 0 : Math.max(0, dealDiscounts[index] ?? 0))), ...extras];
 		const parts = allocateUnits(
 			roundHalfUp(
 				open.reduce((sum, amount) => sum + amount, 0),
@@ -219,30 +279,31 @@ export const applyPromotions = ({
 			open,
 			unit,
 		);
-		lines.forEach((line, index) => {
-			if (open[index] === 0) return;
-			const room =
-				line.unitPrice * line.quantity - /** @type {{ bundleDiscount: number }} */ (formed.lines[index]).bundleDiscount;
-			dealDiscounts[index] = Math.min(room, parts[index] ?? 0);
+		lines.forEach((_, index) => {
+			if ((open[index] ?? 0) > 0) dealDiscounts[index] = Math.min(room(index), parts[index] ?? 0);
+			if ((extras[index] ?? 0) > 0)
+				extras[index] = Math.min(room(index) - Math.max(0, dealDiscounts[index] ?? 0), parts[lines.length + index] ?? 0);
 		});
 	}
+	const owns = lines.map((_, index) => Math.max(0, dealDiscounts[index] ?? 0));
 	const priced = lines.map((line, index) => {
 		const pick = /** @type {(typeof chosen)[number]} */ (chosen[index]);
 		const { bundleDiscount } = /** @type {{ bundleDiscount: number }} */ (formed.lines[index]);
-		const dealDiscount = Math.max(0, dealDiscounts[index] ?? 0);
+		const own = owns[index] ?? 0;
+		const extra = extras[index] ?? 0;
 		return {
 			key: line.key,
-			dealId: dealDiscount > 0 && pick.deal ? pick.deal.id : null,
-			dealDiscount,
+			// the line's own deal, else the checkout-level deal when it took something off the line
+			dealId: own > 0 && pick.deal ? pick.deal.id : extra > 0 && offer ? offer.deal.id : null,
+			dealDiscount: own + extra,
 			bundleDiscount,
 			couponDiscount: 0,
 			eligibleDealIds: pick.eligible,
-			locked: dealDiscount > 0 && pick.locked,
+			locked: own > 0 && pick.locked,
 			perUnit:
-				dealDiscount > 0 && pick.deal && (pick.deal.target ?? 'items') === 'items'
+				own > 0 && pick.deal && (pick.deal.target ?? 'items') === 'items'
 					? Math.floor(
-							dealDiscount /
-								Math.max(1, line.quantity - /** @type {{ bundleUnits: number }} */ (formed.lines[index]).bundleUnits),
+							own / Math.max(1, line.quantity - /** @type {{ bundleUnits: number }} */ (formed.lines[index]).bundleUnits),
 						)
 					: 0,
 		};
@@ -254,29 +315,32 @@ export const applyPromotions = ({
 	const dealIds = [];
 	/** @type {DealRecord[]} */
 	const used = [];
-	for (const [index, line] of priced.entries()) {
-		if (!line.dealId) continue;
+	for (const [index, own] of owns.entries()) {
+		if (own <= 0) continue;
 		const deal = /** @type {DealRecord} */ (chosen[index]?.deal);
 		const entry = applied.find((item) => item.kind === 'deal' && item.id === deal.id);
-		if (entry) entry.amount += line.dealDiscount;
+		if (entry) entry.amount += own;
 		else {
 			dealIds.push(deal.id);
 			used.push(deal);
-			applied.push({ id: deal.id, name: deal.name, kind: 'deal', amount: line.dealDiscount });
+			applied.push({ id: deal.id, name: deal.name, kind: 'deal', amount: own });
 		}
 	}
-	// free delivery: the best live free-delivery deal covering a line of the cart
-	const delivery = live
-		.filter((deal) => deal.type === 'free_delivery' && (covered.get(deal.id) ?? []).length > 0)
-		.reduce(
-			(/** @type {DealRecord | null} */ best, deal) =>
-				better({ deal, saving: 1 }, best ? { deal: best, saving: 1 } : null) ? deal : best,
-			null,
-		);
-	if (delivery) {
-		dealIds.push(delivery.id);
-		used.push(delivery);
-		applied.push({ id: delivery.id, name: delivery.name, kind: 'deal', amount: 0 });
+	// the checkout-level deal after the item deals; else free delivery: the best live free-delivery deal covering a line
+	const delivery = stacked
+		? null
+		: live
+				.filter((deal) => deal.type === 'free_delivery' && (covered.get(deal.id) ?? []).length > 0)
+				.reduce(
+					(/** @type {DealRecord | null} */ best, deal) =>
+						better({ deal, saving: 1 }, best ? { deal: best, saving: 1 } : null) ? deal : best,
+					null,
+				);
+	const last = offer?.deal ?? delivery;
+	if (last) {
+		dealIds.push(last.id);
+		used.push(last);
+		applied.push({ id: last.id, name: last.name, kind: 'deal', amount: extras.reduce((sum, take) => sum + take, 0) });
 	}
 	const bundleIds = [...formed.savings.keys()];
 	for (const [id, amount] of formed.savings) {
@@ -292,7 +356,7 @@ export const applyPromotions = ({
 		bundleIds,
 		couponId: null,
 		couponCode: code,
-		freeDelivery: delivery !== null,
+		freeDelivery: last?.type === 'free_delivery',
 		couponProblem: null,
 		applied,
 		pointsBlocked: used.some((deal) => deal.allowPoints === false),

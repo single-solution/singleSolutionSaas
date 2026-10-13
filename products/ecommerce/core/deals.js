@@ -11,9 +11,9 @@
  *   `free_delivery` waives the delivery fee while it applies to a line of the cart.
  *
  * A line takes one deal: the largest saving, then the higher priority, then the smaller id — or the deal the shopper
- * picked among its eligible ones (`shopperChoice`). Discounts round down to whole units with Format's `wholeUnits`
- * (E25), or are rounded once per order, half up (`rounding`, D4). Also the checks of a deal the merchant writes and
- * the views of a deal. No I/O.
+ * picked among its eligible ones (`shopperChoice`); the `deals` settings choose the first deal instead, put one
+ * checkout-level deal after the item deals and round once per order (`DealRules`, D4). Discounts round down to whole
+ * units with Format's `wholeUnits` (E25). Also the checks of a deal the merchant writes and the views of a deal. No I/O.
  * @module
  */
 import { exactPercentOf, percentOf, roundDown, roundHalfUp } from './money.js';
@@ -72,17 +72,23 @@ const COLOUR = /^[#A-Za-z0-9(),.%\s-]{0,40}$/;
  */
 
 /**
- * How deals choose and round (the `deals` settings, D4): `rounding` — `per_unit_down` rounds each deal down per unit
- * (item deals) or per line (cart deals); `total_half_up` works each deal out on the line or cart amount and rounds the
- * order's deal discounts once, half up. `lineChoice` — a line takes the `best` saving (then the higher priority, then
- * the smaller id) or the `first` deal in the shoppers' order that saves something.
- * @typedef {{ rounding: 'per_unit_down' | 'total_half_up', lineChoice: 'best' | 'first' }} DealRules
+ * How deals choose, combine and round (the `deals` settings, D4): `rounding` — `per_unit_down` rounds each deal down
+ * per unit (item deals) or per line (cart deals); `total_half_up` works each deal out on the line or cart amount and
+ * rounds the order's deal discounts once, half up. `lineChoice` — a line takes the `best` saving (then the higher
+ * priority, then the smaller id) or the `first` deal in the shoppers' order that saves something. `cartOffer` — how
+ * checkout-level deals (`target: 'cart'` and free delivery) combine with item deals: `per_line_best` (each line takes
+ * the best of its item and cart deals; the best free delivery is added), `one_after_items` (at most one checkout-level
+ * deal, the first live one in the shoppers' order that applies, on what the item deals left) or `one_exclusive` (the
+ * same, only when no item deal applied).
+ * @typedef {{ rounding: 'per_unit_down' | 'total_half_up', lineChoice: 'best' | 'first',
+ *   cartOffer: 'per_line_best' | 'one_after_items' | 'one_exclusive' }} DealRules
  */
 
 /** The values of each rule; the first is the default (today's arithmetic, E18 and E25). */
 const RULE_VALUES = Object.freeze({
 	rounding: Object.freeze(['per_unit_down', 'total_half_up']),
 	lineChoice: Object.freeze(['best', 'first']),
+	cartOffer: Object.freeze(['per_line_best', 'one_after_items', 'one_exclusive']),
 });
 
 /**
@@ -196,6 +202,12 @@ export const inWindow = (deal, { weekday, minutes }) => {
  * @param {{ weekday: number, minutes: number }} at the business time
  */
 export const dealLive = (deal, now, at) => isLive(deal, now) && inWindow(deal, at);
+
+/**
+ * Whether a deal is checkout-level: off the cart (`target: 'cart'`) or free delivery (`cartOffer`, D4).
+ * @param {Pick<DealRecord, 'type' | 'target'>} deal
+ */
+export const checkoutLevel = (deal) => (deal.target ?? 'items') === 'cart' || deal.type === 'free_delivery';
 
 /**
  * Whether a deal covers a line (scope and conditions; not its dates).

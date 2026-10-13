@@ -125,6 +125,38 @@ describe('deals (E18)', () => {
 		await shop.api('DELETE', `/v1/deals/${fixed.id}`);
 	});
 
+	it('puts one checkout deal after item deals with cartOffer one_after_items, none with one_exclusive (D4)', async () => {
+		const item = await shop.seedProduct({ price: 600_000, stock: 10 });
+		const own = await newDeal({ scope: { productIds: [item.id], categoryIds: [], brandIds: [] }, value: 10 });
+		const checkout = await newDeal({
+			name: 'Five off from 5,000',
+			target: 'cart',
+			value: 5,
+			conditions: { match: 'all', rules: [], groups: [], cartTotal: 500_000 },
+		});
+		const lines = [{ productId: item.id }];
+		// per_line_best: the line takes the larger of 10% and 5%
+		expect((await quote({ lines })).json.totals.discount).toBe(60_000);
+		await shop.setting('deals', 'cartOffer', 'one_after_items');
+		// 10% of 6,000, then 5% of the 5,400 left
+		const after = await quote({ lines });
+		expect(after.json.totals.discount).toBe(87_000);
+		expect(after.json.lines[0]).toMatchObject({ dealDiscount: 87_000, deal: { id: own.id } });
+		expect(after.json.promotions.applied.map((/** @type {any} */ entry) => [entry.id, entry.amount])).toEqual([
+			[own.id, 60_000],
+			[checkout.id, 27_000],
+		]);
+		const shopper = await newShopper();
+		const placed = await place({ lines, payment: 'cod', address: ADDRESS }, shopper.token);
+		expect(placed.json.order.totals.discount).toBe(87_000);
+		expect((await orderRecord(placed.json.order.id)).promotions.dealIds).toEqual([own.id, checkout.id]);
+		await shop.setting('deals', 'cartOffer', 'one_exclusive');
+		expect((await quote({ lines })).json.totals.discount).toBe(60_000);
+		await shop.setting('deals', 'cartOffer', 'per_line_best');
+		await shop.api('DELETE', `/v1/deals/${own.id}`);
+		await shop.api('DELETE', `/v1/deals/${checkout.id}`);
+	});
+
 	it('shows deals on product cards', async () => {
 		const item = await shop.seedProduct({ price: 1000, stock: 5 });
 		const deal = await newDeal({ scope: { productIds: [item.id], categoryIds: [], brandIds: [] }, badgeLabel: 'Hot' });

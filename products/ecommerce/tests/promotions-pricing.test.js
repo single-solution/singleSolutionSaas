@@ -25,6 +25,7 @@ import {
 	pointsValue,
 } from '../core/loyalty.js';
 import { applyPromotions, quoteProduct } from '../core/promotions.js';
+import { NO_CONDITIONS } from '../core/deals.js';
 import { checkDate, checkScope, checkText, checkWhole, gather, inScope, isLive, phaseOf } from '../core/promotions-rules.js';
 
 const NOW = Date.parse('2026-10-05T10:00:00Z');
@@ -274,6 +275,98 @@ describe('deals', () => {
 		expect(run({ lines: [line()], deals: [deal({ type: 'fixed', value: 5000 })], rules: exact }).lines[0]?.dealDiscount).toBe(
 			1000,
 		);
+	});
+
+	describe('checkout-level deals with item deals (cartOffer, D4)', () => {
+		const after = { ...DEAL_RULES, cartOffer: /** @type {const} */ ('one_after_items') };
+		const exclusive = { ...DEAL_RULES, cartOffer: /** @type {const} */ ('one_exclusive') };
+		const tenOnP1 = deal({ id: 'deal_item', value: 10, scope: { ...empty(), productIds: ['p1'] } });
+		/** 5% off the cart from 5,000 */
+		const fiveOver = deal({
+			id: 'deal_cart',
+			target: 'cart',
+			value: 5,
+			conditions: { ...NO_CONDITIONS, cartTotal: 500_000 },
+		});
+		const mixed = [line({ unitPrice: 1_000_000 }), line({ productId: 'p2', unitPrice: 500_000 })];
+
+		it('per_line_best: each line takes the best of its item and cart deals (today)', () => {
+			const result = run({ lines: mixed, deals: [tenOnP1, fiveOver] });
+			expect(result.lines.map((item) => [item.dealId, item.dealDiscount])).toEqual([
+				['deal_item', 100_000],
+				['deal_cart', 25_000],
+			]);
+			expect(result.lines[0]?.eligibleDealIds).toEqual(['deal_item', 'deal_cart']);
+		});
+
+		it('one_after_items: the checkout deal comes off what the item deals left', () => {
+			// 10% of 10,000 on the first line, then 5% of the 14,000 left: 1,700 (per_line_best: 1,250)
+			const result = run({ lines: mixed, deals: [tenOnP1, fiveOver], rules: after });
+			expect(result.lines.map((item) => [item.dealId, item.dealDiscount, item.perUnit])).toEqual([
+				['deal_item', 145_000, 100_000],
+				['deal_cart', 25_000, 0],
+			]);
+			expect(result.lines[0]?.eligibleDealIds).toEqual(['deal_item']);
+			expect(result.dealIds).toEqual(['deal_item', 'deal_cart']);
+			expect(result.applied).toEqual([
+				{ id: 'deal_item', name: 'Deal', kind: 'deal', amount: 100_000 },
+				{ id: 'deal_cart', name: 'Deal', kind: 'deal', amount: 70_000 },
+			]);
+			// a 6,000 line with a 10% deal and 5% over 5,000: 600, then 5% of 5,400 (870)
+			const one = run({ lines: [line({ unitPrice: 600_000 })], deals: [tenOnP1, fiveOver], rules: after });
+			expect(one.lines[0]?.dealDiscount).toBe(87_000);
+			expect(run({ lines: [line({ unitPrice: 600_000 })], deals: [tenOnP1, fiveOver] }).lines[0]?.dealDiscount).toBe(60_000);
+		});
+
+		it('one_exclusive: no checkout deal once an item deal applied', () => {
+			const result = run({ lines: mixed, deals: [tenOnP1, fiveOver], rules: exclusive });
+			expect(result.lines.map((item) => [item.dealId, item.dealDiscount])).toEqual([
+				['deal_item', 100_000],
+				[null, 0],
+			]);
+			expect(result.dealIds).toEqual(['deal_item']);
+			// without an item deal the checkout deal applies to the whole cart
+			const plain = run({
+				lines: [line({ productId: 'p2', unitPrice: 600_000 })],
+				deals: [tenOnP1, fiveOver],
+				rules: exclusive,
+			});
+			expect(plain.lines[0]).toMatchObject({ dealId: 'deal_cart', dealDiscount: 30_000 });
+		});
+
+		it('takes at most one checkout deal, the first in show order that applies; free delivery counts', () => {
+			const big = [line({ unitPrice: 10_500_000 })];
+			const thousandOff = deal({ id: 'deal_fixed', target: 'cart', type: 'fixed', value: 100_000, sort: 0 });
+			const percent = deal({ id: 'deal_pct', target: 'cart', value: 5, sort: 1 });
+			const freeShip = deal({ id: 'deal_ship', type: 'free_delivery', sort: 0 });
+			expect(run({ lines: big, deals: [percent, thousandOff] }).lines[0]?.dealDiscount).toBe(525_000);
+			const first = run({ lines: big, deals: [percent, thousandOff], rules: after });
+			expect(first.lines[0]).toMatchObject({ dealId: 'deal_fixed', dealDiscount: 100_000 });
+			expect(first.freeDelivery).toBe(false);
+			// free delivery first in show order: free delivery only; per_line_best adds both
+			const shipped = run({ lines: big, deals: [percent, freeShip], rules: after });
+			expect(shipped).toMatchObject({ freeDelivery: true, dealIds: ['deal_ship'] });
+			expect(shipped.lines[0]?.dealDiscount).toBe(0);
+			expect(shipped.applied).toEqual([{ id: 'deal_ship', name: 'Deal', kind: 'deal', amount: 0 }]);
+			const both = run({ lines: big, deals: [percent, freeShip] });
+			expect(both).toMatchObject({ freeDelivery: true, dealIds: ['deal_pct', 'deal_ship'] });
+			// a checkout deal that takes nothing is passed over
+			const nothing = deal({ id: 'deal_zero', target: 'cart', value: 0, sort: -1 });
+			expect(run({ lines: big, deals: [nothing, percent], rules: after }).dealIds).toEqual(['deal_pct']);
+			// a fixed checkout deal is spread over what the lines have left
+			const spread = run({ lines: mixed, deals: [tenOnP1, thousandOff], rules: after });
+			expect(spread.lines.map((item) => item.dealDiscount)).toEqual([100_000 + 64_286, 35_714]);
+		});
+
+		it('rounds item and checkout deals together, once, with total_half_up', () => {
+			const deals = [deal({ id: 'deal_item', value: 7 }), { ...fiveOver, conditions: null }];
+			const kurta = [line({ unitPrice: 499_900 })];
+			// 349.93 + 5% of 4,649.07 (232.45) = 582.38: 582 rounded once; per unit down 349 + 232 = 581
+			expect(run({ lines: kurta, deals, rules: after, unit: 100 }).lines[0]?.dealDiscount).toBe(58_100);
+			const exact = run({ lines: kurta, deals, rules: { ...after, rounding: 'total_half_up' }, unit: 100 });
+			expect(exact.lines[0]).toMatchObject({ dealDiscount: 58_200, perUnit: 35_000 });
+			expect(exact.applied.map((entry) => entry.amount)).toEqual([35_000, 23_200]);
+		});
 	});
 
 	it('adds up one deal used on several lines', () => {

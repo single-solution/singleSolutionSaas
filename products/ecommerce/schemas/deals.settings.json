@@ -23,6 +23,13 @@
 			"default": "best",
 			"enum": ["best", "first"]
 		},
+		"cartOffer": {
+			"type": "string",
+			"title": "Checkout deals with item deals",
+			"description": "How checkout deals (off the cart total, or free delivery) combine with item deals. per_line_best: each line takes the best of its item and checkout deals, and the best free delivery is added. one_after_items: at most one checkout deal, the first live one in your deals' show order that applies, taken off what is left after the item deals (free delivery counts as that deal). one_exclusive: the same, but none once an item deal applies.",
+			"default": "per_line_best",
+			"enum": ["per_line_best", "one_after_items", "one_exclusive"]
+		},
 		"rounding": {
 			"type": "string",
 			"title": "Rounding of deal discounts",

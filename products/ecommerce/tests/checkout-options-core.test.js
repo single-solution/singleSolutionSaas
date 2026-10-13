@@ -85,10 +85,11 @@ describe('whole units (E25)', () => {
 	});
 
 	it('reads the deal rules and works deals out exactly with total_half_up (D4)', () => {
-		expect(DEAL_RULES).toEqual({ rounding: 'per_unit_down', lineChoice: 'best' });
-		expect(dealRulesOf({ rounding: 'total_half_up', lineChoice: 'first' })).toEqual({
+		expect(DEAL_RULES).toEqual({ rounding: 'per_unit_down', lineChoice: 'best', cartOffer: 'per_line_best' });
+		expect(dealRulesOf({ rounding: 'total_half_up', lineChoice: 'first', cartOffer: 'one_exclusive' })).toEqual({
 			rounding: 'total_half_up',
 			lineChoice: 'first',
+			cartOffer: 'one_exclusive',
 		});
 		expect(dealRulesOf({ rounding: 'sideways', lineChoice: 7 })).toEqual(DEAL_RULES);
 		const exact = { rounding: /** @type {const} */ ('total_half_up') };
