@@ -268,6 +268,14 @@ describe('more moves (E27)', () => {
 		const record = await orderRecord(order.id);
 		expect(record.role).toBe('awaiting_payment');
 		expect(new Date(record.holdUntil).getTime()).toBe(shop.now() + 60 * 60_000);
+
+		// with rewaitWindow none it waits until staff move it again (OR-5)
+		await shop.setting('checkout', 'rewaitWindow', 'none');
+		const held = await placeOrder();
+		await moveTo(held.order.id, 'confirmed');
+		await moveTo(held.order.id, 'pending_payment');
+		expect((await orderRecord(held.order.id)).holdUntil).toBeNull();
+		await shop.setting('checkout', 'rewaitWindow', 'restart');
 	});
 
 	it('recalls a shipped parcel and gives everything back', async () => {

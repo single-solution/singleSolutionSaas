@@ -249,6 +249,13 @@
 				"enum": ["awaiting_payment", "awaiting_confirmation", "open"]
 			}
 		},
+		"rewaitWindow": {
+			"type": "string",
+			"title": "Moved back to awaiting payment",
+			"description": "restart: an order staff move back to awaiting payment gets a new time to pay and is cancelled when it ends. none: it waits until staff move it again.",
+			"default": "restart",
+			"enum": ["restart", "none"]
+		},
 		"paidOnConfirm": {
 			"type": "array",
 			"title": "Paid when staff confirm",

@@ -509,8 +509,9 @@ export const createMoves = (product, service) => {
 			: null;
 		switch (target.role) {
 			case 'awaiting_payment': {
-				// the order waits for its payment again and its window restarts (E27); serials taken when packing go back
-				const minutes = Number(checkout.paymentWindowMinutes ?? 0);
+				// the order waits for its payment again: its window restarts (E27), or with `rewaitWindow: none` it waits until
+				// staff move it again (OR-5); serials taken when packing go back
+				const minutes = checkout.rewaitWindow === 'none' ? 0 : Number(checkout.paymentWindowMinutes ?? 0);
 				set.holdUntil = minutes > 0 ? new Date(now + minutes * 60_000) : null;
 				await unpack(s, order, write);
 				break;

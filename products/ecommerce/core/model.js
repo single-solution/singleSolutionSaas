@@ -343,6 +343,9 @@ export const STATUS_ROLES = Object.freeze([
  * @property {string} [phoneDigits] the last 10 digits of the customer's phone (E31)
  * @property {string | null} [accessKeyHash] the hash of a guest order's key (E21)
  * @property {boolean} stockHeld stock (and booked slots) are held by this order; false after cancel or RTO
+ * @property {boolean} [returnRestocked] its return (RTO or a customer's return) put its units back in stock: a claim
+ *   restocked later puts none back (OR-10)
+ * @property {Date} [claimRestockedAt] when a return claim of it last put units back in stock (OR-10)
  * @property {Date | null} holdUntil an unconfirmed order is cancelled after this time (on use)
  * @property {string} idempotencyKey the checkout's Idempotency-Key, unique per customer
  * @property {string} note the shopper's note

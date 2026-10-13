@@ -528,7 +528,7 @@ export const createReturns = (product, service) => {
 				.find({ websiteId: data.websiteId, id: { $in: productIds } }, { projection: { _id: 0, id: 1, price: 1, inStock: 1 } })
 				.toArray()
 		);
-		const done = await restockClaimLines(data, { claimId: claim.id, lines, now: service.now() });
+		const done = await restockClaimLines(data, { claimId: claim.id, orderId: order.id, lines, now: service.now() });
 		if (done.length === 0) return 0;
 		await claims(data).updateOne(
 			{ websiteId: data.websiteId, id: claim.id },

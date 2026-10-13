@@ -9,6 +9,7 @@ import { createId } from '@ss/contracts';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { givePoints, loyaltyAccount, placeOrder } from '../adapters/ledger.js';
 import { INDEXES } from '../adapters/product.js';
+import { DEFAULT_FLOW } from '../core/flow.js';
 import { COLLECTIONS } from '../core/model.js';
 import {
 	actionsOf,
@@ -388,6 +389,45 @@ describe('restock per line', () => {
 		expect(await stockOf(cover.id)).toBe(coverStock);
 		expect(codeOf(await shop.api('POST', `/v1/returns/${later.json.id}/restock`, {}))).toBe('conflict');
 		expect(await stockOf(cover.id)).toBe(coverStock);
+	});
+});
+
+describe('a returned unit goes back in stock once (OR-10)', () => {
+	it('whether its claim or the order’s return restocks it first', async () => {
+		await shop.list('order_flow', {
+			statuses: [...DEFAULT_FLOW.statuses, { key: 'customer-returned', label: 'Returned', role: 'returned' }],
+			moves: [...DEFAULT_FLOW.moves, { from: 'delivered', to: 'customer-returned' }],
+		});
+		const phone = await shop.seedProduct({ name: 'Phone', price: 1000, stock: 5 });
+		/** Make, approve and (optionally) receive a claim of the whole order. @param {any} placed @param {boolean} restock */
+		const claimOf = async (placed, restock) => {
+			const made = await claim(placed, {});
+			await shop.api('POST', `/v1/returns/${made.json.id}/approve`, {});
+			if (restock)
+				await shop.api('POST', `/v1/returns/${made.json.id}/receive`, {
+					lines: [{ lineId: placed.lines[0].id, restock: true }],
+				});
+			return made.json.id;
+		};
+		// the claim first: the order's return puts nothing back again
+		const first = await order({ lines: [{ product: phone }] });
+		expect(await stockOf(phone.id)).toBe(4);
+		await claimOf(first, true);
+		expect(await stockOf(phone.id)).toBe(5);
+		expect((await shop.api('POST', `/v1/orders/${first.id}/move`, { to: 'customer-returned' })).status).toBe(200);
+		expect(await stockOf(phone.id)).toBe(5);
+		// the order's return first: the claim puts nothing back again
+		const second = await order({ lines: [{ product: phone }] });
+		expect(await stockOf(phone.id)).toBe(4);
+		const id = await claimOf(second, false);
+		expect((await shop.api('POST', `/v1/orders/${second.id}/move`, { to: 'customer-returned' })).status).toBe(200);
+		expect(await stockOf(phone.id)).toBe(5);
+		const received = await shop.api('POST', `/v1/returns/${id}/receive`, {
+			lines: [{ lineId: second.lines[0]?.id, restock: true }],
+		});
+		expect(received.json.lines[0].restockedAt).toEqual(expect.any(String));
+		expect(await stockOf(phone.id)).toBe(5);
+		await shop.list('order_flow', DEFAULT_FLOW);
 	});
 });
 

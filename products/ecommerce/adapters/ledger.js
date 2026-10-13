@@ -802,9 +802,34 @@ export const swapOrderStock = async (data, order, { lines, update }) => {
 };
 
 /**
+ * The units of an order's lines its return claims already put back in stock (each line restocked once, E33; a claim
+ * restocked as a whole before, every line it did not keep out).
+ * @param {WebsiteData} data @param {string} orderId @param {Session} [session]
+ * @returns {Promise<Map<string, number>>} order line id → units
+ */
+const restockedByClaims = async (data, orderId, session) => {
+	const claims =
+		/** @type {Array<{ restockedAt?: Date | null, lines: Array<{ lineId: string, quantity: number,
+		 *   restock?: boolean, restockedAt?: Date | null }> }>} */ (
+			await data
+				.collection(COLLECTIONS.returns)
+				.find({ websiteId: data.websiteId, orderId }, { session, projection: { _id: 0, restockedAt: 1, lines: 1 } })
+				.toArray()
+		);
+	/** @type {Map<string, number>} */
+	const back = new Map();
+	for (const claim of claims)
+		for (const line of claim.lines)
+			if (line.restockedAt || (claim.restockedAt && line.restock !== false))
+				back.set(line.lineId, (back.get(line.lineId) ?? 0) + line.quantity);
+	return back;
+};
+
+/**
  * Put a parcel's stock back after a return to origin (RTO) or a customer return (E27), once (`stockHeld`), with the
  * status change in `update`. Offer uses stay counted and points stay spent (the shopper used them); an RTO raises the
- * customer's RTO count (`countRto`); `restock: false` keeps the stock out (`returnRestock: no`).
+ * customer's RTO count (`countRto`); `restock: false` keeps the stock out (`returnRestock: no`). Units a return claim
+ * already put back are not put back again, and a claim restocked later puts none back (`returnRestocked`, OR-10).
  * @param {WebsiteData} data
  * @param {OrderRecord} order
  * @param {{ update: (session: Session) => Promise<boolean>, restock?: boolean, countRto?: boolean }} options
@@ -812,16 +837,18 @@ export const swapOrderStock = async (data, order, { lines, update }) => {
  */
 export const returnToOrigin = async (data, order, { update, restock = true, countRto = true }) =>
 	data.transaction(async (session) => {
+		const restocks = order.stockHeld && restock;
 		const claimed = await data
 			.collection(COLLECTIONS.orders)
 			.updateOne(
 				{ websiteId: data.websiteId, id: order.id, updatedAt: order.updatedAt },
-				{ $set: { stockHeld: false } },
+				{ $set: { stockHeld: false, ...(restocks ? { returnRestocked: true } : {}) } },
 				{ session },
 			);
 		if (claimed.modifiedCount !== 1) return false;
 		if (!(await update(session))) throw new Error('order changed');
-		if (order.stockHeld && restock)
+		if (restocks) {
+			const back = await restockedByClaims(data, order.id, session);
 			await releaseStock(
 				data,
 				order.lines
@@ -829,11 +856,12 @@ export const returnToOrigin = async (data, order, { update, restock = true, coun
 					.map((line) => ({
 						productId: line.productId,
 						variantId: line.variantId,
-						quantity: line.quantity,
+						quantity: Math.max(0, line.quantity - (back.get(line.id) ?? 0)),
 						locationId: line.locationId,
 					})),
 				session,
 			);
+		}
 		if (countRto) await countReturnedParcel(data, order, session);
 		return true;
 	});
@@ -894,19 +922,33 @@ export const restockClaim = async (data, { claimId, lines, serials = [], now }) 
 /**
  * Restock some lines of a return claim, each exactly once (the line's `restockedAt`), and mark their serials back in
  * stock (E33: restock per line). When no line is left to restock (each restocked, or kept out by staff with
- * `restock: false`), the claim's `restockedAt` is set too. A claim restocked as a whole before is left alone.
+ * `restock: false`), the claim's `restockedAt` is set too. A claim restocked as a whole before is left alone. When the
+ * order's own return already put its units back (`returnRestocked`), the lines are only marked (OR-10); the order is
+ * written in the same transaction, so a return and a claim restocking at once never both put the units back.
  * @param {WebsiteData} data
- * @param {{ claimId: string, lines: Array<StockLine & { lineId: string, serials: string[] }>, now: number }} restock
- *   non-physical lines come with quantity 0 (only marked)
+ * @param {{ claimId: string, orderId?: string, lines: Array<StockLine & { lineId: string, serials: string[] }>,
+ *   now: number }} restock non-physical lines come with quantity 0 (only marked)
  * @returns {Promise<string[]>} the line ids restocked now
  */
-export const restockClaimLines = async (data, { claimId, lines, now }) =>
+export const restockClaimLines = async (data, { claimId, orderId, lines, now }) =>
 	data.transaction(async (session) => {
 		const claims = data.collection(COLLECTIONS.returns);
 		const at = new Date(now);
+		const free = orderId
+			? (
+					await data
+						.collection(COLLECTIONS.orders)
+						.updateOne(
+							{ websiteId: data.websiteId, id: orderId, returnRestocked: { $ne: true } },
+							{ $set: { claimRestockedAt: at } },
+							{ session },
+						)
+				).matchedCount === 1
+			: true;
 		/** @type {string[]} */
 		const done = [];
-		for (const line of lines) {
+		for (const raw of lines) {
+			const line = free ? raw : { ...raw, quantity: 0 };
 			const marked = await claims.updateOne(
 				{
 					websiteId: data.websiteId,
