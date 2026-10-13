@@ -580,8 +580,9 @@ status response and notices (0.4.12) and checks it on use (0.8.1).
 - When a feature is off, its widgets render nothing and its routes answer 403 `feature_off`.
 - Until the merchant database is connected, widgets render nothing and the API answers 403 `database_not_connected`
   (0.4.8).
-- If the Portal cannot be reached, a product keeps the last status for the offline grace time (0.10; 24 hours until
-  shortened, 0.8.10 decision 11), then refuses with 503, problem code `portal_unreachable`.
+- If the Portal cannot be reached, a product keeps the last status for the offline grace time (0.10: 6 hours after the
+  last good fetch; 24 hours before 2026-10-13, decision D11), then refuses with 503, problem code `portal_unreachable`.
+  The same applies when the revocation list could not be fetched for longer than the grace.
 - Invalid, revoked or wrong-product tokens and tickets get 401, problem code `invalid_token`.
 - The status response carries `graceEndsAt`, so a product treats the website as stopped from that time by itself, unless
   a fresher status says otherwise.
@@ -613,15 +614,29 @@ status response and notices (0.4.12) and checks it on use (0.8.1).
      (0.8.10 decision 11): the private signing keys are stored encrypted with `ENCRYPTION_KEY` too (K-21). Passwords
      stay hashed; recovery codes stay HMAC-hashed.
    - `ENCRYPTION_KEY` is never stored in a database, never logged and never sent anywhere.
-   - **Changing `ENCRYPTION_KEY` safely** (owner, 2026-10-13, 0.8.10 decision 11; RT-14): the deployable also accepts an
-     optional `ENCRYPTION_KEY_PREVIOUS`; each stored value records which key sealed it, either key opens it, and an
-     Owner action re-seals everything with the new key, after which the previous key is removed. Changing keys stays
-     the owner's job.
+   - **One sealing format** (2026-10-13, commits 89a5dbf6, dfbbdffc): `ss2.<keyId>.<iv>.<tag>.<data>` (base64url,
+     AES-256-GCM) from `@ss/protocol`; the key comes from `ENCRYPTION_KEY` plus the unit's label, each value is bound
+     to where it is stored, and the key id (8 characters) is derived from the key, never the key itself. Values in the
+     older formats still open and are converted by Re-seal. Private signing keys are sealed too; keys kept in clear
+     before are sealed on first use.
+   - **Changing `ENCRYPTION_KEY` safely** (owner, 2026-10-13, 0.8.10 decision 11; RT-14), one deployable at a time:
+     (1) make a new random key (32+ characters) and keep offline copies of the old and the new; (2) in the host set
+     `ENCRYPTION_KEY_PREVIOUS` to the old key and `ENCRYPTION_KEY` to the new one, and redeploy; (3) as Owner press
+     **Re-seal stored secrets** (Portal: Settings → Encryption key; a product: its Prices page); (4) if the answer
+     names websites it could not reach, press again later until none are named; (5) press once more: it must say 0
+     re-sealed; (6) remove `ENCRYPTION_KEY_PREVIOUS` and redeploy. Re-seal is a button, not automatic, so the owner gets
+     a clear "nothing left on the old key". Changing keys stays the owner's job.
+   - Accounts staff can turn another user's two-step off (`PATCH /v1/users/:id { twoStep: false }`), and two-step can be
+     set up again when its secret no longer opens (ST-18, RT-11, b56558aa); ended sessions are deleted 7 days after
+     their end (TTL).
    - **If `ENCRYPTION_KEY` is lost**, or changed without the previous key, old values cannot be read. Products show
      those connections as `Not connected`, and merchants re-enter their keys and re-paste tokens. The Portal shows
      `Cannot be shown: regenerate` for server tokens; old tokens keep working at products until they are regenerated,
      because products verify signatures, not stored values. An Owner re-enters the SMTP password. People with two-step
-     sign in with a recovery code, or an Owner turns their two-step off, and they set it up again.
+     sign in with a recovery code, or an Owner turns their two-step off, and they set it up again. Since private
+     signing keys are sealed (2026-10-13): a product whose own key no longer opens stays not connected until it is
+     reconnected from the Portal (a new key); ticket keys are replaced; the Portal adds new signing keys and keeps
+     publishing the old public keys, so issued tokens keep working.
 
 ### 0.4.9 business.json
 
@@ -1135,7 +1150,7 @@ flowchart LR
   regenerated, website removed) reach products at once through notices (0.4.12), and the 5-minute refresh covers a lost
   notice. **Immediately** in this plan means as soon as the notice arrives, and never more than 5 minutes later while
   the product can reach the Portal. While it cannot (offline grace, 0.4.7), the change takes effect on the product's
-  first successful fetch, and after 24 hours the product refuses everything with 503.
+  first successful fetch, and after the offline grace (6 hours, 0.10) the product refuses everything with 503.
 - **Local testing**: a website's browser token also works on pages served from `localhost`, `*.localhost`, `127.0.0.1`
   or `[::1]`, on any port, over http or https. Localhost is not a website: it cannot be added, has no tokens of its own,
   and costs nothing beyond the normal hourly feature prices. Localhost use never counts as widget installed, and
@@ -4780,8 +4795,11 @@ These bind wherever the rest of Part 0 does not change them.
 - **Tenant guard**: every merchant-data query names one `websiteId` (equality, no `$in`); `$where` and cross-collection
   stages (`$lookup`, `$unionWith`, `$out`, `$merge`, also inside `$facet`) are refused; inserts are stamped with
   `websiteId` and `merchantId`.
-- **Offline grace**: a fixed time while the Portal cannot be reached (0.4.7); 24 hours until the owner's 2026-10-13
-  decision (0.8.10 decision 11) shortens it with the fix of K-21; the new value is written here when built.
+- **Offline grace**: 6 hours (`OFFLINE_GRACE_MS` in the kit) after the last good status fetch while the Portal cannot be
+  reached, then 503 `portal_unreachable`; the same when the revocation list has not been fetched for 6 hours (0.4.7).
+  Cut from 24 hours by the owner's 2026-10-13 decision D11 (K-21, commits baabf57c, d563e72a); 6 rather than 2 hours,
+  because on free hosting a longer Portal outage would otherwise stop every merchant's shop. Notices still apply at once
+  whenever the Portal is up.
 
 ## 0.11 Environment variables
 
