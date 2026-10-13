@@ -2224,7 +2224,30 @@ Built after the re-audit (2026-10-13; commits dbbfaac, b671fee, 20d76e6, e52441e
   sign-up, in a role request, or at e-mail + password sign-up) counts as unknown: the code is sent, and the sign-up
   answers `already_exists`; that account is never opened or changed. A staff sign-in code proves no address. Open: the
   e-mail Forgot password still sends a reset link to an unverified address on an account that has a password; fixing
-  it needs the account's sign-in identity stored (follow-up).
+  it needs the account's sign-in identity stored (follow-up, done below).
+
+Follow-ups (2026-10-13; commits 02e4be21, dba86054, abd05719, 90ad7bb8, 41202b3e):
+
+- **A6 + always:** users keep `identity` (`email` | `phone` | `provider`), set by the sign-up method; Add user and
+  invites use the e-mail when there is one, role-request invites the phone; older accounts with an e-mail and no phone
+  have the e-mail, with both the identity is unknown. Forgot password by e-mail sends its link only to a proven address
+  or the identity address; otherwise it answers 202 and sends nothing.
+- **A6 +** role field `sessionRolling` (false = a fixed end, as today; true = each renewal moves the end to the role's
+  session length or remember-me days from then) (K-27).
+- **A8 +** `POST /v1/me/two-step/recovery-codes` `{ code } | { recoveryCode }` gives 10 new codes and the old ones
+  stop working; wrong codes count toward the lock; activity `user.recovery_codes_replaced`; My account: New recovery
+  codes (K-27).
+- **A9 +** `email_password.letterAndDigit` (false); `email_password.maxLength` and `phone_password.maxLength` (256;
+  128–256) (ST-26). **Always:** `email_password.resetLimit` (3; 1–20) reset requests per address per 15 minutes, in TTL
+  counters, counted whether or not the address has an account; more answer 429 `rate_limited` (ST-12). **Always:** the
+  right password clears `networkLimit`'s tries for that network and address (SA-13, ST-11). There is no "no lock"
+  option (D1): the stores lock no account, only count tries per network; the closest product values are raised with
+  the owner.
+- **A12 +** `email_password.resetHosts` ([]): more merchant hosts (https, default port) that Forgot password's
+  `returnTo` may name, for an admin on its own host (K-27).
+
+Not built from K-27: staff and customer on one phone (phone is unique per user and a user has one role; a data-model
+decision); forgetting failed passwords after a quiet day.
 
 #### Notifications
 
