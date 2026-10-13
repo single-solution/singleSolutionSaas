@@ -86,7 +86,7 @@ export const TEXTS = Object.freeze({
 			subject: 'Subject (e-mail) or title (push)',
 			text: 'Message',
 			required: 'Required message: always sent, even to people who unsubscribed (always for accounts. templates)',
-			urgent: 'Urgent: sent during quiet hours',
+			urgent: 'Urgent: sent during quiet hours (always for accounts. templates)',
 			sensitive: 'Sensitive (codes, links): its values are hidden in the delivery log (always for accounts. templates)',
 			providerTemplate: 'WhatsApp template name at Meta (optional)',
 			buttons: 'Buttons',

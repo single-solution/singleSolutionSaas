@@ -377,3 +377,53 @@ describe('nothing accepted is lost when an attempt breaks off (D7, K-17)', () =>
 		env.failReads();
 	});
 });
+
+describe('Accounts’ messages are never held by quiet hours or a delayed send (PLAN 0.8.5)', () => {
+	it('sends sign-in codes at once at night and with a sendAt, even from a template saved as not urgent', async () => {
+		await env.switchOn(['email', 'sms', 'whatsapp', 'fallback', 'send_api', 'webhooks', 'quiet_hours', 'delayed_send']);
+		await env.template({ key: 'accounts.phone_code', channel: 'sms', text: 'Code {code}', urgent: false });
+		await env.template({ key: 'promo_sms', channel: 'sms', text: 'Sale {pct}' });
+		// a template saved before, not urgent
+		await (
+			await env.merchantCollection('templates')
+		).updateOne(
+			{ websiteId: env.websiteId, key: 'accounts.phone_code', channel: 'sms', language: '' },
+			{ $set: { urgent: false } },
+		);
+		// 23:00 UTC: inside the default quiet hours (21 to 8)
+		const night = new Date(env.now());
+		night.setUTCHours(23, 0, 0, 0);
+		if (night.getTime() <= env.now()) night.setUTCDate(night.getUTCDate() + 1);
+		env.advance(night.getTime() - env.now());
+		const to = { phone: '+15550006060', timeZone: 'UTC' };
+		const code = await env.send('sms', { template: 'accounts.phone_code', to, values: { code: '414141' } });
+		expect(code.json).toMatchObject({ status: 'sent' });
+		const promo = await env.send('sms', { template: 'promo_sms', to, values: { pct: '5%' } });
+		expect(promo.json.status).toBe('queued');
+		expect(new Date(promo.json.dueAt).getUTCHours()).toBe(8);
+		// a delayed send holds other messages, never a sign-in code
+		const sendAt = new Date(env.now() + 2 * 3_600_000).toISOString();
+		const asked = await env.send('sms', { template: 'accounts.phone_code', to, values: { code: '515151' }, sendAt });
+		expect(asked.json).toMatchObject({ status: 'sent' });
+		expect((await env.send('sms', { template: 'promo_sms', to, values: { pct: '6%' }, sendAt })).json.status).toBe('queued');
+		// the template shows as urgent wherever it is read, and stays urgent when saved unticked
+		const templates = await (
+			await env.dashboard(await env.adminSession(), 'GET', `/v1/dashboard/websites/${env.websiteId}/templates`)
+		).json();
+		expect(templates.items).toContainEqual(
+			expect.objectContaining({ key: 'accounts.phone_code', channel: 'sms', urgent: true }),
+		);
+		expect(templates.items).toContainEqual(expect.objectContaining({ key: 'promo_sms', channel: 'sms', urgent: false }));
+		await env.template({ key: 'accounts.phone_code', channel: 'sms', text: 'Code {code}', urgent: false });
+		const saved = await (
+			await env.merchantCollection('templates')
+		).findOne({
+			websiteId: env.websiteId,
+			key: 'accounts.phone_code',
+			channel: 'sms',
+			language: '',
+		});
+		expect(saved?.urgent).toBe(true);
+		await env.switchOn(['email', 'sms', 'whatsapp', 'fallback', 'send_api', 'webhooks']);
+	});
+});

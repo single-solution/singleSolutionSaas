@@ -410,8 +410,16 @@ describe('the send API', () => {
 
 	it('sends a delayed message on the first use after its time', async () => {
 		const sendAt = new Date(env.now() + 2 * 3_600_000).toISOString();
-		const later = await env.send('email', { template: 'accounts.reset', to: { email: 'later@example.com' }, sendAt });
+		const later = await env.send('email', {
+			template: 'promo',
+			to: { email: 'later@example.com' },
+			values: { pct: '5%' },
+			sendAt,
+		});
 		expect(later.json).toMatchObject({ status: 'queued', dueAt: sendAt });
+		// Accounts' messages never wait
+		const now = await env.send('email', { template: 'accounts.reset', to: { email: 'now@example.com' }, sendAt });
+		expect(now.json.status).toBe('sent');
 		expect(
 			(await env.send('email', { template: 'accounts.reset', to: { email: 'x@example.com' }, sendAt: 'tomorrow' })).status,
 		).toBe(422);

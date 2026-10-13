@@ -18,8 +18,8 @@ const PRODUCT_KEY_PREFIXES = Object.freeze(['accounts.', 'ecommerce.', 'chat.', 
 
 /**
  * Template keys of Accounts' messages (sign-in codes, magic, reset and setup links, account updates): always required
- * (no unsubscribe or STOP reply stops them, PLAN 0.8.5) and always sensitive (PLAN 0.8.10 D11), whatever the template
- * says.
+ * (no unsubscribe or STOP reply stops them, PLAN 0.8.5), always urgent (neither quiet hours nor a delayed send hold
+ * them) and always sensitive (PLAN 0.8.10 D11), whatever the template says.
  */
 const ACCOUNT_KEY_PREFIX = 'accounts.';
 
@@ -59,7 +59,7 @@ const LANGUAGE = /^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8}){0,3}$/;
  * @property {string} text
  * @property {boolean} required required messages (sign-in codes, order and account updates) ignore unsubscribes;
  *   Accounts' templates always are
- * @property {boolean} urgent urgent messages ignore quiet hours
+ * @property {boolean} urgent urgent messages ignore quiet hours; Accounts' templates always are
  * @property {string} providerTemplate WhatsApp: the name of an approved Meta template (`''` = plain text)
  * @property {Button[]} [buttons] WhatsApp templates at Meta: the buttons that take a value (PLAN 0.8.10 N1); missing on
  *   templates saved before them
@@ -99,6 +99,13 @@ export const isAccountKey = (key) => key.startsWith(ACCOUNT_KEY_PREFIX);
  * @param {Pick<Template, 'key' | 'required'>} template
  */
 export const isRequired = (template) => template.required === true || isAccountKey(template.key);
+
+/**
+ * Whether the messages of a template are urgent (sent during quiet hours): Accounts' always, else when the merchant
+ * marks the template.
+ * @param {Pick<Template, 'key' | 'urgent'>} template
+ */
+export const isUrgent = (template) => template.urgent === true || isAccountKey(template.key);
 
 /**
  * Whether the messages of a template are sensitive: Accounts' always, else when the merchant marks the template.
@@ -237,7 +244,7 @@ export const checkTemplate = (input) => {
 			subject: titled ? subject : '',
 			text,
 			required: isRequired({ key: body.key, required: body.required === true }),
-			urgent: body.urgent === true,
+			urgent: isUrgent({ key: body.key, urgent: body.urgent === true }),
 			providerTemplate,
 			buttons: buttons.value,
 			sensitive: isSensitive({ key: body.key, sensitive: body.sensitive === true }),
@@ -375,7 +382,7 @@ export const templateView = (template) => ({
 	subject: template.subject,
 	text: template.text,
 	required: isRequired(template),
-	urgent: template.urgent,
+	urgent: isUrgent(template),
 	providerTemplate: template.providerTemplate,
 	buttons: template.buttons ?? [],
 	sensitive: isSensitive(template),

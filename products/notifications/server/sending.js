@@ -17,8 +17,10 @@ import {
 	DEFAULT_LANGUAGE,
 	hiddenNamesOf,
 	hideValues,
+	isAccountKey,
 	isRequired,
 	isSensitive,
+	isUrgent,
 	pickVersion,
 	renderTemplate,
 } from '../core/templates.js';
@@ -114,7 +116,7 @@ export const createSending = (product) => {
 	/**
 	 * The words of a template on a channel for a recipient, with the unsubscribe link of optional templates: as sent, and
 	 * as the delivery log keeps them, with every value of a sensitive template and the values named secret hidden.
-	 * Accounts' templates are always required.
+	 * Accounts' templates are always required and urgent.
 	 * @param {Site} s
 	 * @param {{ key: string, channel: Channel, address: string, values: Record<string, string>, language: string | null,
 	 *   secretValues: string[] }} input
@@ -137,7 +139,7 @@ export const createSending = (product) => {
 		const words = wordsOf(values);
 		return {
 			required: isRequired(version),
-			urgent: version.urgent,
+			urgent: isUrgent(version),
 			words,
 			shown: hidden.length === 0 ? words : wordsOf(hideValues(values, hidden)),
 			hidden,
@@ -457,7 +459,8 @@ export const createSending = (product) => {
 	/**
 	 * Accept a message: opt-out, send limits, quiet hours and delayed send decide when (or whether) it goes; a message
 	 * due now is attempted at once. Opt-out stops only optional messages: a required one (by its template, Accounts'
-	 * templates or the sender) is always sent (PLAN 0.8.5).
+	 * templates or the sender) is always sent (PLAN 0.8.5). Quiet hours hold only messages that are not urgent, and
+	 * neither they nor a delayed send ever hold Accounts' messages.
 	 * @param {Site} s
 	 * @param {SendInput} input
 	 * @returns {Promise<{ ok: true, message: MessageRecord } | { ok: false, problem: ReturnType<typeof problem> }>}
@@ -555,7 +558,8 @@ export const createSending = (product) => {
 					}),
 				};
 		}
-		let dueAt = input.sendAt ?? t;
+		// Accounts' messages (sign-in codes and links) go at once: a delayed send never holds them either
+		let dueAt = input.template !== null && isAccountKey(input.template) ? t : (input.sendAt ?? t);
 		if (!made.urgent && s.on.includes('quiet_hours')) {
 			const quiet = await product.settings.values(s.websiteId, 'quiet_hours');
 			const timeZone = input.to.timeZone ?? (await product.business(s.websiteId)).timeZone ?? 'UTC';
