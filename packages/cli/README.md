@@ -87,15 +87,16 @@ browser-token, server-token and ticket route:
 }
 ```
 
-| Member        | What it is                                                                                                           |
-| ------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `summary`     | one line (the docs' route tables show it)                                                                            |
-| `description` | more text: rules, errors worth knowing                                                                               |
-| `query`       | an object schema; each property is a query parameter (`required` lists the required ones)                            |
-| `body`        | the JSON request body (`requestBody`, required when the schema requires a member)                                    |
-| `response`    | the JSON answer on success; leave it out for a 204                                                                   |
-| `status`      | the success status, 200–299 (default 200)                                                                            |
-| `$schemas`    | (top level) shared schemas by name, referenced as `{ "$ref": "#/components/schemas/<Name>" }` → `components.schemas` |
+| Member        | What it is                                                                                                                |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `summary`     | one line (the docs' route tables show it)                                                                                 |
+| `description` | more text: rules, errors worth knowing                                                                                    |
+| `query`       | an object schema; each property is a query parameter (`required` lists the required ones)                                 |
+| `headers`     | an object schema; each property is a request header the route reads (e.g. `SS-Guest`), `required` lists the required ones |
+| `body`        | the JSON request body (`requestBody`, required when the schema requires a member)                                         |
+| `response`    | the JSON answer on success; leave it out for a 204                                                                        |
+| `status`      | the success status, 200–299 (default 200)                                                                                 |
+| `$schemas`    | (top level) shared schemas by name, referenced as `{ "$ref": "#/components/schemas/<Name>" }` → `components.schemas`      |
 
 Schemas use a small JSON Schema subset (`@ss/app-kit/api`): `type` (one, or a list such as `["string", "null"]`),
 `properties`, `required`, `additionalProperties`, `items`, `minItems`, `maxItems`, `maxProperties`, `propertyNames`,

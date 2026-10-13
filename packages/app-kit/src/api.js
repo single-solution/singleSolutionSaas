@@ -23,6 +23,7 @@ import { isObject } from './util.js';
  * @property {string} [summary]
  * @property {string} [description]
  * @property {Schema} [query] an object schema: its properties are the query parameters
+ * @property {Schema} [headers] an object schema: its properties are the request headers the route reads
  * @property {Schema} [body] the JSON request body
  * @property {Schema} [response] the JSON answer on success
  * @property {number} [status] the success status (default 200)
@@ -34,7 +35,9 @@ import { isObject } from './util.js';
 export const KIT_API = /** @type {ApiDescription} */ (/** @type {unknown} */ (KIT_API_JSON));
 
 /** Members of a route's entry. */
-export const API_ENTRY_MEMBERS = Object.freeze(['summary', 'description', 'query', 'body', 'response', 'status']);
+/** A request header's name, as the route's own headers are named (`SS-Guest`, `SS-Order-Key` …). */
+const HEADER_NAME = /^[A-Za-z][A-Za-z0-9-]{0,63}$/;
+export const API_ENTRY_MEMBERS = Object.freeze(['summary', 'description', 'query', 'headers', 'body', 'response', 'status']);
 /** Methods a route may have. */
 const METHODS = Object.freeze(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
 const ROUTE_KEY = /^([A-Z]+) (\/\S*)$/;
@@ -139,6 +142,19 @@ export const checkApiDescription = (api, { schemas: base = {} } = {}) => {
 			if (!isObject(query) || query.type !== 'object' || !isObject(query.properties))
 				fail(`${at}/query`, 'query is an object schema whose properties are the query parameters');
 			checkSchema(query, `${at}/query`);
+		}
+		if (entry.headers !== undefined) {
+			const headers = entry.headers;
+			if (!isObject(headers) || headers.type !== 'object' || !isObject(headers.properties))
+				fail(`${at}/headers`, 'headers is an object schema whose properties are the request headers');
+			else
+				for (const name of Object.keys(headers.properties))
+					if (!HEADER_NAME.test(name))
+						fail(
+							`${at}/headers/${escapeToken(name)}`,
+							'a header name is a letter, then letters, digits and - (at most 64)',
+						);
+			checkSchema(headers, `${at}/headers`);
 		}
 		for (const member of ['body', 'response']) if (entry[member] !== undefined) checkSchema(entry[member], `${at}/${member}`);
 	}

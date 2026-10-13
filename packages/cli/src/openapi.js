@@ -102,15 +102,16 @@ const entriesOf = (api) =>
 	);
 
 /**
- * The query parameters an entry describes (each property of its `query` schema).
+ * The query or header parameters an entry describes (each property of its `query` or `headers` schema).
  * @param {unknown} query
+ * @param {'query' | 'header'} [where]
  */
-const queryParameters = (query) => {
+const queryParameters = (query, where = 'query') => {
 	if (!isObject(query) || !isObject(query.properties)) return [];
 	const required = Array.isArray(query.required) ? query.required : [];
 	return Object.entries(query.properties).map(([name, schema]) => ({
 		name,
-		in: 'query',
+		in: where,
 		required: required.includes(name),
 		...(isObject(schema) && typeof schema.description === 'string' ? { description: schema.description } : {}),
 		schema,
@@ -179,6 +180,7 @@ export const renderOpenapi = ({ manifest, routes, api = {} }) => {
 			parameters: [
 				...params.map((param) => ({ name: param, in: 'path', required: true, schema: { type: 'string' } })),
 				...queryParameters(entry?.query),
+				...queryParameters(entry?.headers, 'header'),
 				...(scanned.idempotent
 					? [
 							{

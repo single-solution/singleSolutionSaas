@@ -163,6 +163,10 @@ describe('API descriptions', () => {
 				'GET /v1/c': 'x',
 				'POST /v1/d': { summary: 1, status: 204, response: {}, extra: true, query: { type: 'string' }, body: { type: 'x' } },
 				'GET /v1/e': { status: 302 },
+				'GET /v1/f': {
+					headers: { type: 'object', properties: { 'SS-Guest': { type: 'string' }, '1x': { type: 'string' } } },
+				},
+				'GET /v1/g': { headers: { type: 'string' } },
 			},
 			{ schemas: /** @type {any} */ (KIT_API.$schemas) },
 		);
@@ -178,6 +182,8 @@ describe('API descriptions', () => {
 			{ pointer: '/POST ~1v1~1d/query', message: 'query is an object schema whose properties are the query parameters' },
 			{ pointer: '/POST ~1v1~1d/body/type', message: expect.stringMatching(/^type is one of/) },
 			{ pointer: '/GET ~1v1~1e/status', message: 'status is the success status, 200–299' },
+			{ pointer: '/GET ~1v1~1f/headers/1x', message: 'a header name is a letter, then letters, digits and - (at most 64)' },
+			{ pointer: '/GET ~1v1~1g/headers', message: 'headers is an object schema whose properties are the request headers' },
 		]);
 		expect(checkApiDescription({ 'GET /v1/a': { response: { $ref: '#/components/schemas/Count' } } })).toHaveLength(1);
 		expect(mergeApi({ 'GET /v1/a': { summary: 'kit' } }, { 'GET /v1/a': { summary: 'own' } })).toEqual({

@@ -442,6 +442,31 @@ describe('helpers', () => {
 		expect((await loadManifest(dir, { file: 'deep.json' })).problems[0]?.message).toMatch(/nests too deeply/);
 	});
 
+	it('lists the request headers an entry describes as header parameters', () => {
+		const doc = /** @type {any} */ (
+			renderOpenapi({
+				manifest: null,
+				routes: [{ file: 'server/a.js', line: 1, method: 'GET', path: '/v1/chat', auth: 'browser', idempotent: false }],
+				api: {
+					'GET /v1/chat': {
+						headers: {
+							type: 'object',
+							properties: { 'SS-Guest': { type: 'string', description: "The visitor's guest key." } },
+							required: ['SS-Guest'],
+						},
+					},
+				},
+			})
+		);
+		expect(doc.paths['/v1/chat'].get.parameters).toContainEqual({
+			name: 'SS-Guest',
+			in: 'header',
+			required: true,
+			description: "The visitor's guest key.",
+			schema: { type: 'string', description: "The visitor's guest key." },
+		});
+	});
+
 	it('renders OpenAPI from any manifest', () => {
 		const doc = /** @type {any} */ (
 			renderOpenapi({
