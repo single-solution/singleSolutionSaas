@@ -51,14 +51,53 @@ const gradeLabels = (product, grades) => {
  * @property {string} url
  * @property {boolean} inStock
  * @property {{ average: number, count: number }} rating
- * @property {{ id: string, name: string } | null} brand
+ * @property {{ id: string, name: string, slug?: string } | null} brand
  * @property {string[]} grades
  * @property {number} variantCount
  * @property {number} priceMax the highest active variant price (E8)
  * @property {boolean} featured (E2)
  * @property {Array<{ url: string | null, alt: string }>} cardImages the first photo of up to 4 variants that look
  *   different (E6)
+ * @property {CardVariant[]} [variants] the active variants, when the listing asks for them (SF-6)
  */
+
+/**
+ * A variant on a card (SF-6): what a website needs to draw its own cards (price ranges and "was" prices of its own
+ * rule, attribute chips, a link to the variant it picks), never stock counts or costs.
+ * @typedef {object} CardVariant
+ * @property {string} id
+ * @property {Record<string, string>} options
+ * @property {Array<{ slug: string, name: string, label: string }>} attributes
+ * @property {number} price
+ * @property {number | null} compareAtPrice the "was" price when higher than the price
+ * @property {boolean} inStock
+ * @property {string | null} grade the grade's key
+ * @property {string} url the variant's page (E13)
+ */
+
+/**
+ * The active variants of a product as cards carry them (SF-6).
+ * @param {ProductRecord} product
+ * @param {{ attributes: ReadonlyMap<string, AttributeRecord>, variantUrls: ReadonlyMap<string, string>, url: string }} context
+ * @returns {CardVariant[]}
+ */
+export const cardVariantsOf = (product, { attributes, variantUrls, url }) =>
+	product.variants
+		.filter((variant) => variant.active)
+		.map((variant) => ({
+			id: variant.id,
+			options: variant.options ?? {},
+			attributes: Object.entries(variant.attributes ?? {}).flatMap(([id, value]) => {
+				const attribute = attributes.get(id);
+				return attribute ? [{ slug: attribute.slug ?? id, name: attribute.name, label: valueLabel(attribute, value) }] : [];
+			}),
+			price: variant.price,
+			compareAtPrice:
+				variant.compareAtPrice !== null && variant.compareAtPrice > variant.price ? variant.compareAtPrice : null,
+			inStock: variantInStock(variant, product.trackStock),
+			grade: variant.grade ?? null,
+			url: variantUrls.get(variant.id) ?? url,
+		}));
 
 /**
  * The variants whose first photos a card shows (E6): active variants with photos, one per photo (variants that share
@@ -94,7 +133,7 @@ export const stockLeftOf = (variant, trackStock, { showStock, lowStockShown }) =
 /**
  * A product card (grid, search results, wishlist, compare, Chat).
  * @param {ProductRecord} product
- * @param {{ currency: string, image: string | null, url: string, brand: { id: string, name: string } | null,
+ * @param {{ currency: string, image: string | null, url: string, brand: { id: string, name: string, slug?: string } | null,
  *   grades: ReadonlyMap<string, Grade>, cardImages?: Array<{ url: string | null, alt: string }> }} context
  * @returns {Card}
  */

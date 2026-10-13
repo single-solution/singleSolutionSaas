@@ -240,8 +240,8 @@ export const iconOf = (value) => text(value, CONTENT_LIMITS.icon);
 
 // ---------------------------------------------------------------------------------------------- rich text (E3)
 
-/** The tags a rich description may hold; `a` keeps only an https or site-relative `href`. */
-const HTML_TAGS = new Set(['p', 'br', 'strong', 'em', 'u', 'ul', 'ol', 'li', 'h3', 'h4', 'blockquote', 'a']);
+/** The tags a rich description may hold; `a` keeps only an https, site-relative, `mailto:` or `tel:` `href`. */
+const HTML_TAGS = new Set(['p', 'br', 'strong', 'em', 'u', 'ul', 'ol', 'li', 'h2', 'h3', 'h4', 'blockquote', 'a']);
 /** Elements dropped with everything inside them. */
 const DROPPED = new Set([
 	'script',
@@ -257,7 +257,7 @@ const DROPPED = new Set([
 	'select',
 ]);
 /** Tags that start a new line in plain text. */
-const BLOCKS = new Set(['p', 'br', 'li', 'h3', 'h4', 'blockquote', 'ul', 'ol', 'div']);
+const BLOCKS = new Set(['p', 'br', 'li', 'h2', 'h3', 'h4', 'blockquote', 'ul', 'ol', 'div']);
 /** Equivalent tags folded into the allowed ones. */
 const SYNONYMS = Object.freeze(/** @type {Record<string, string>} */ ({ b: 'strong', i: 'em' }));
 
@@ -283,22 +283,26 @@ export const decodeEntities = (value) =>
 /** @param {string} value */
 const escapeHtml = (value) => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
+/** A contact link (SF-1): an e-mail address or a phone number, nothing a browser could run. */
+const CONTACT_LINK = /^(?:mailto:[^\s"'<>\\]{3,254}|tel:\+?[0-9][0-9 ().-]{2,30})$/i;
+
 /**
- * The `href` of an `a` tag, kept only when it is an https address or a path on the website.
+ * The `href` of an `a` tag, kept only when it is an https address, a path on the website, or a `mailto:` or `tel:`
+ * link.
  * @param {string} attributes the tag's attribute text
  */
 const hrefOf = (attributes) => {
 	const found = /\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i.exec(attributes);
 	if (!found) return '';
 	const raw = decodeEntities(found[1] ?? found[2] ?? found[3] ?? '').trim();
-	return siteAddress(raw) ?? '';
+	return CONTACT_LINK.test(raw) ? raw : (siteAddress(raw) ?? '');
 };
 
 /**
- * Clean rich text to the allowed tags (PLAN 0.8.10 E3): `p`, `br`, `strong`, `em`, `u`, `ul`, `ol`, `li`, `h3`, `h4`,
- * `blockquote` and `a` with an https or site-relative `href`. Every other tag is dropped (scripts, styles and frames
- * with their content), attributes are removed, text is escaped, and tags are balanced. The result is safe to insert as
- * HTML.
+ * Clean rich text to the allowed tags (PLAN 0.8.10 E3): `p`, `br`, `strong`, `em`, `u`, `ul`, `ol`, `li`, `h2`, `h3`,
+ * `h4`, `blockquote` and `a` with an https, site-relative, `mailto:` or `tel:` `href` (SF-1). Every other tag is
+ * dropped (scripts, styles and frames with their content), attributes are removed, text is escaped, and tags are
+ * balanced. The result is safe to insert as HTML.
  * @param {string} html
  */
 export const cleanHtml = (html) => {
@@ -344,7 +348,7 @@ export const cleanHtml = (html) => {
 		open.push(name);
 	}
 	while (open.length > 0) out += `</${open.pop()}>`;
-	return out.replace(/<(p|strong|em|u|h3|h4|blockquote|li|ul|ol|a)>\s*<\/\1>/g, '').trim();
+	return out.replace(/<(p|strong|em|u|h2|h3|h4|blockquote|li|ul|ol|a)>\s*<\/\1>/g, '').trim();
 };
 
 /**

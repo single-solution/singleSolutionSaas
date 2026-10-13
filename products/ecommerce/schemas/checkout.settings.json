@@ -37,7 +37,7 @@
 			"x-ui": {
 				"widget": "textarea"
 			},
-			"description": "With placeholders {returnDays}, {warrantyDays}, {warrantyMonths} and {business}."
+			"description": "With placeholders {returnDays}, {warrantyDays}, {warrantyMonths}, {business}, {email}, {phone}, {address}, {deliveryFee} and {freeDeliveryOver}."
 		},
 		"policyReturns": {
 			"type": "string",
@@ -47,7 +47,7 @@
 			"x-ui": {
 				"widget": "textarea"
 			},
-			"description": "With placeholders {returnDays}, {warrantyDays}, {warrantyMonths} and {business}."
+			"description": "With placeholders {returnDays}, {warrantyDays}, {warrantyMonths}, {business}, {email}, {phone}, {address}, {deliveryFee} and {freeDeliveryOver}."
 		},
 		"policyPrivacy": {
 			"type": "string",
@@ -57,7 +57,7 @@
 			"x-ui": {
 				"widget": "textarea"
 			},
-			"description": "With placeholders {returnDays}, {warrantyDays}, {warrantyMonths} and {business}."
+			"description": "With placeholders {returnDays}, {warrantyDays}, {warrantyMonths}, {business}, {email}, {phone}, {address}, {deliveryFee} and {freeDeliveryOver}."
 		},
 		"policyTerms": {
 			"type": "string",
@@ -67,12 +67,12 @@
 			"x-ui": {
 				"widget": "textarea"
 			},
-			"description": "With placeholders {returnDays}, {warrantyDays}, {warrantyMonths} and {business}."
+			"description": "With placeholders {returnDays}, {warrantyDays}, {warrantyMonths}, {business}, {email}, {phone}, {address}, {deliveryFee} and {freeDeliveryOver}."
 		},
 		"policyWarranty": {
 			"type": "string",
 			"title": "Warranty policy",
-			"description": "With placeholders {returnDays}, {warrantyDays}, {warrantyMonths} and {business}.",
+			"description": "With placeholders {returnDays}, {warrantyDays}, {warrantyMonths}, {business}, {email}, {phone}, {address}, {deliveryFee} and {freeDeliveryOver}.",
 			"default": "",
 			"maxLength": 20000,
 			"x-ui": {
@@ -82,7 +82,7 @@
 		"policyFormat": {
 			"type": "string",
 			"title": "Policy format",
-			"description": "Plain text, or HTML (paragraphs, lists, headings, bold, italic, underline, quotes and links).",
+			"description": "Plain text, or HTML (paragraphs, lists, headings, bold, italic, underline, quotes, and links to https addresses, your own pages, mailto: and tel:).",
 			"default": "text",
 			"enum": ["text", "html"]
 		},

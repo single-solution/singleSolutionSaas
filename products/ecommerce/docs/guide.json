@@ -85,7 +85,7 @@
 	},
 	"productMeta": "GET /v1/seo/products/<id or slug> answers { title, description, canonical, image, robots, focusKeyword, jsonLd } for your product page: the meta tags, robots (from the product's noindex and nofollow) and the JSON-LD structured data (a ProductGroup with its variants, as a string safe to put in a script tag). An earlier slug, a slug in other letter case or an archived product sent to its category (retiredUrl) answers { moved: { slug, url } } instead: answer it with a 308 to url. GET /v1/seo/categories/<id or slug> answers the same for a category page (with status coming_soon and robots noindex while it is coming soon).",
 	"listing": "GET /v1/seo/listing?category=<id or slug>&brand=&grade=&page=&… answers what a listing page (a category, a landing page, or any filtered list) puts in its head and above the grid: { h1, title, description, intro, faqs, canonical, robots, landing, jsonLd } (CollectionPage, ItemList and BreadcrumbList). robots is index only for a category and its pages without other filters and for an indexable landing page; any other filter is noindex, follow, so filtered lists never compete with your category pages. Pass your page's query as it is; an earlier category slug answers { moved } like a product.",
-	"policies": "GET /v1/policies answers { format, shipping, returns, privacy, terms, warranty } from Settings → Policies, for your own policy pages: empty policies are left out, and {returnDays}, {warrantyDays}, {warrantyMonths} and {business} are filled in. With the checkout setting policyFormat html the texts are HTML cleaned by Ecommerce to p, br, strong, em, u, ul, ol, li, h3, h4, blockquote and links (https or on your site):",
+	"policies": "GET /v1/policies answers { format, shipping, returns, privacy, terms, warranty } from Settings → Policies, for your own policy pages: empty policies are left out, and {returnDays}, {warrantyDays}, {warrantyMonths}, {business}, {email}, {phone}, {address} (from business.json), {deliveryFee} and {freeDeliveryOver} (the delivery fee where no zone matches and the amount delivery is free from, as money) are filled in, also written with double braces ({{business}}). With the checkout setting policyFormat html the texts are HTML cleaned by Ecommerce to p, br, strong, em, u, ul, ol, li, h2, h3, h4, blockquote and links (https, on your site, mailto: or tel:):",
 	"chat": "Chat's shop tools read your shop through these lookups with your website's Ecommerce server token (paste it into Chat's Connections). They only read. The me/* lookups take the visitor's Accounts sign-in forwarded in the SS-Sign-In header; Ecommerce verifies it with Accounts.",
 	"chatRoutes": [
 		"GET /v1/chat/products?q=<text>&category=<id or slug>&grade=<keys>&minPrice=&maxPrice=&inStock=1&limit=5: search the catalog by words and filters (up to 12 results; with filters the words may be left out)",
@@ -139,7 +139,7 @@
 				"title": "Rich descriptions and HTML policies",
 				"paragraphs": [
 					"A product's descriptionHtml is cleaned when saved to p, br, strong, em, u, ul, ol, li, h3, h4, blockquote and links with an https or site-relative href (at most 20,000 characters); the plain description is then made from it for search, feeds and AI copy. The product page widget builds the page from that cleaned copy.",
-					"Policies (Settings → Policies: delivery, returns, privacy, terms and warranty) are plain text or, with the checkout setting policyFormat html, the same cleaned HTML. {returnDays}, {warrantyDays}, {warrantyMonths} and {business} are filled in when they are read, and empty policies are left out."
+					"Policies (Settings → Policies: delivery, returns, privacy, terms and warranty) are plain text or, with the checkout setting policyFormat html, the same cleaned HTML. {returnDays}, {warrantyDays}, {warrantyMonths}, {business}, {email}, {phone}, {address}, {deliveryFee} and {freeDeliveryOver} (one or two braces) are filled in when they are read; other text in braces stays as written, and empty policies are left out."
 				],
 				"routes": [
 					["GET /v1/policies", "checkout"],
@@ -161,7 +161,7 @@
 				"id": "size-charts",
 				"title": "Size charts",
 				"paragraphs": [
-					"With Size charts on, a chart has a name, a unit (in or cm), at most 12 columns { key, label }, at most 40 rows { size, label, values }, fit advice, notes and active. Products, brands and categories take a sizeChartId: a product page shows the product's chart, else its brand's, else its category's (hideSizeGuide on a product shows none), with an in/cm switch. A chart in use cannot be deleted (409); its answer says where it is used."
+					"With Size charts on, a chart has a name, a unit (in or cm), at most 12 columns { key, label }, at most 40 rows { size, label, values }, fit advice, notes and active. Products, brands and categories take a sizeChartId: a product page shows the product's chart, else its brand's, else its category's, else the size_charts setting defaultChartId (empty by default: none; hideSizeGuide on a product shows none), with an in/cm switch. A chart in use or set as the default cannot be deleted (409); its answer says where it is used."
 				],
 				"routes": [
 					["GET /v1/size-charts", "size_charts"],
@@ -201,7 +201,7 @@
 				"id": "listing",
 				"title": "Listing filters, page numbers and totals",
 				"paragraphs": [
-					"GET /v1/shop/products filters by q, category, brand and grade (several values, comma-separated), attr.<slug>=a,b, minPrice, maxPrice, inStock, featured=1 and deal=<id or slug>; one active variant must match the price, attributes, grade and stock together. Sorts are newest, price_asc, price_desc, top, sold_asc, rating, name and updated (price ties go to the newest). page (1 to 500) works beside the cursor, and count=1 adds total (exact up to 10,000, else capped is true). Facets carry counts and labels, and cards carry priceMax for price ranges. The catalog setting pageSize goes up to 60."
+					"GET /v1/shop/products filters by q, category, brand and grade (several values, comma-separated), attr.<slug>=a,b, minPrice, maxPrice, inStock, featured=1 and deal=<id or slug>; one active variant must match the price, attributes, grade and stock together. Sorts are newest, price_asc, price_desc, top, sold_asc, rating, name and updated (price ties go to the newest). page (1 to 500) works beside the cursor, and count=1 adds total (exact up to 10,000, else capped is true). Facets carry counts and labels, cards carry priceMax for price ranges and their brand { id, name, slug }, and variants=1 adds each card's active variants { id, options, attributes [{ slug, name, label }], price, compareAtPrice, inStock, grade, url } for websites that draw their own cards (never stock counts). The catalog setting pageSize goes up to 60."
 				],
 				"routes": [["GET /v1/shop/products?page=2&count=1", "catalog"]]
 			},
@@ -265,7 +265,7 @@
 					{
 						"code": "searchIndex"
 					},
-					"If the index is missing or the search fails, basic search answers instead, and the dashboard's Overview shows Search index missing until a search works again."
+					"A new index is built first: wait until Atlas shows it ready (Status: Active / Queryable) before you switch search to atlas, for example when you move a shop's catalog. If the search fails, or finds nothing while the index finds none of your active products (Atlas answers nothing, without an error, for an index that is missing, named differently or still building), basic search answers instead, and the dashboard's Overview shows Search index missing until a search works again."
 				],
 				"routes": [["GET /v1/shop/products?q=<words>", "catalog"]]
 			},

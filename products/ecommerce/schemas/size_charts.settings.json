@@ -1,5 +1,13 @@
 {
 	"type": "object",
 	"additionalProperties": false,
-	"properties": {}
+	"properties": {
+		"defaultChartId": {
+			"type": "string",
+			"title": "Default size chart",
+			"description": "The id of the chart (szc_…) a product shows when neither it, its brand nor its categories have one. Empty: none. A product that hides its size guide shows none.",
+			"default": "",
+			"maxLength": 40
+		}
+	}
 }

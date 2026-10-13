@@ -111,27 +111,28 @@ export const checkSizeChart = (body, existing) => {
 
 /**
  * The chart a product shows: its own, else its brand's, else its first category's (or the nearest ancestor's that has
- * one); null when it hides the size guide or none is found or active.
+ * one), else the website's default chart (the `size_charts` setting `defaultChartId`, SF-3); null when it hides the
+ * size guide or none is found or active.
  * @param {{ sizeChartId?: string | null, hideSizeGuide?: boolean, categoryIds: string[] }} product
  * @param {{ sizeChartId?: string | null } | null} brand
  * @param {ReadonlyMap<string, { path: string[], sizeChartId?: string | null }>} categories by id
  * @param {ReadonlyMap<string, SizeChartRecord>} charts active charts by id
+ * @param {string | null} [defaultId] the default chart's id
  * @returns {SizeChartRecord | null}
  */
-export const resolveSizeChart = (product, brand, categories, charts) => {
+export const resolveSizeChart = (product, brand, categories, charts, defaultId = null) => {
 	if (product.hideSizeGuide) return null;
 	/** @param {string | null | undefined} id */
 	const found = (id) => (id ? (charts.get(id) ?? null) : null);
 	const own = found(product.sizeChartId) ?? found(brand?.sizeChartId);
 	if (own) return own;
 	const first = categories.get(product.categoryIds[0] ?? '');
-	if (!first) return null;
-	const trail = [product.categoryIds[0] ?? '', ...[...first.path].reverse()];
+	const trail = first ? [product.categoryIds[0] ?? '', ...[...first.path].reverse()] : [];
 	for (const id of trail) {
 		const chart = found(categories.get(id)?.sizeChartId);
 		if (chart) return chart;
 	}
-	return null;
+	return found(defaultId);
 };
 
 /**

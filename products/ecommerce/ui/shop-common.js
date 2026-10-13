@@ -298,7 +298,9 @@ export const warrantyText = (t, days) => {
 // ------------------------------------------------------------------------------------------------ rich text (E3)
 
 /** The tags rich text may hold (the server cleans to these; the widget rebuilds only these). */
-const RICH_TAGS = new Set(['p', 'br', 'strong', 'em', 'u', 'ul', 'ol', 'li', 'h3', 'h4', 'blockquote', 'a']);
+const RICH_TAGS = new Set(['p', 'br', 'strong', 'em', 'u', 'ul', 'ol', 'li', 'h2', 'h3', 'h4', 'blockquote', 'a']);
+/** A contact link rich text may keep (SF-1): an e-mail address or a phone number. */
+const CONTACT_LINK = /^(?:mailto:[^\s"'<>\\]{3,254}|tel:\+?[0-9][0-9 ().-]{2,30})$/i;
 /** Equivalent tags folded into the allowed ones. @type {Record<string, string>} */
 const RICH_SYNONYMS = { b: 'strong', i: 'em' };
 /** Elements left out with everything inside them (any other unknown element keeps only its text). */
@@ -367,7 +369,8 @@ export const richText = (doc, html) => {
 			}
 			const made = doc.createElement(name);
 			if (name === 'a') {
-				const href = safeHref(/** @type {Element} */ (node).getAttribute('href'));
+				const raw = String(/** @type {Element} */ (node).getAttribute('href') ?? '').trim();
+				const href = CONTACT_LINK.test(raw) ? raw : safeHref(raw);
 				if (href) made.setAttribute('href', href);
 				if (href.startsWith('https://')) made.setAttribute('rel', 'noopener');
 			}

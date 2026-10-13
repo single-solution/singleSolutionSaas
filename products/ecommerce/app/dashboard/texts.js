@@ -65,8 +65,8 @@ export const TEXTS = Object.freeze({
 		searchUnchecked: 'Not checked yet',
 		searchReadyDetail: 'Atlas Search index {index} answered {time}',
 		searchMissingDetail:
-			'Create the Atlas Search index {index} on ss_ecommerce_products; basic search answers until then. Last try {time}.',
-		searchMessage: 'The database said: {message}',
+			'Create the Atlas Search index {index} on ss_ecommerce_products and wait until Atlas shows it ready (a new index is built first); basic search answers until then. Last try {time}.',
+		searchMessage: 'Atlas Search: {message}',
 		searchUncheckedDetail: 'Atlas Search index {index}: checked by the first shop search. Create it first.',
 		searchDocs: 'How to create it',
 	}),
@@ -161,7 +161,8 @@ export const TEXTS = Object.freeze({
 		}),
 		wholeUnits: 'Whole amounts only (no minor units)',
 		nothing: 'No settings here for the features that are on.',
-		atlasNotice: 'Atlas Search needs the index {index} on the ss_ecommerce_products collection of your database.',
+		atlasNotice:
+			'Atlas Search needs the index {index} on the ss_ecommerce_products collection of your database, built and ready; until then basic search answers.',
 		atlasDocs: 'How to create it',
 	}),
 	lists: Object.freeze({

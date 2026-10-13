@@ -102,11 +102,13 @@ export const createCatalogCharts = (product, service, common) => {
 
 	/** @param {any} ctx */
 	const remove = async (ctx) => {
-		const { data } = await common.open(ctx);
+		const { s, data } = await common.open(ctx);
 		const existing = await chartOf(data, String(ctx.params.id));
 		const uses = await usesOf(data, existing.id);
 		if (uses.products + uses.brands + uses.categories > 0)
 			throw problem('conflict', 'Products, brands or categories use this size chart: change them first.');
+		if ((await s.values('size_charts')).defaultChartId === existing.id)
+			throw problem('conflict', 'This is the default size chart (Settings → Size charts): change it first.');
 		await data.collection(COLLECTIONS.sizeCharts).deleteOne({ websiteId: data.websiteId, id: existing.id });
 		await service.log(ctx, 'size_chart.deleted', existing.id, { label: existing.name });
 		return undefined;

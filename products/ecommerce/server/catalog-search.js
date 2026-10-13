@@ -1,9 +1,10 @@
 /**
  * Atlas Search for the shop and Chat (PLAN 0.8.10 E14): with the `catalog` setting `search` at `atlas`, a search runs
  * `$search` on the merchant's own index first (filtered on the website and active products, K11), then the listing's
- * other filters, ranked by score unless a sort is asked for. When the stage fails (the database is not Atlas or the
- * index is missing) the caller answers with the basic search, and the website's search state says the index is
- * missing until a search works again (Overview shows it).
+ * other filters, ranked by score unless a sort is asked for. When the stage fails (the database is not Atlas), or
+ * finds nothing while the index finds none of the website's active products (Atlas answers nothing, without an error,
+ * for an index that is missing, named differently or still building; SF-7), the caller answers with the basic search,
+ * and the website's search state says the index is missing until a search works again (Overview shows it).
  * @module
  */
 import { brandsOf, categoriesOf } from '../adapters/catalog-store.js';
@@ -26,6 +27,24 @@ export const createCatalogSearch = (product) => {
 	 * @param {string} q
 	 */
 	const useAtlas = async (s, q) => q.trim() !== '' && (await s.values('catalog')).search === 'atlas';
+
+	/**
+	 * Whether the index answers for this website (SF-7): it finds one of the website's active products, or the website
+	 * has none. Atlas answers nothing, without an error, when the index is missing, named differently or still building.
+	 * @param {WebsiteData} data
+	 * @param {string} index
+	 */
+	const indexAnswers = async (data, index) => {
+		const products = data.collection(COLLECTIONS.products);
+		const filter = [{ equals: { path: 'websiteId', value: data.websiteId } }, { equals: { path: 'status', value: 'active' } }];
+		const found = await products
+			.aggregate([{ $search: { index, compound: { filter } } }, { $limit: 1 }, { $project: { _id: 0, id: 1 } }])
+			.toArray();
+		if (found.length > 0) return true;
+		return (
+			(await products.findOne({ websiteId: data.websiteId, status: 'active' }, { projection: { _id: 0, id: 1 } })) === null
+		);
+	};
 
 	/**
 	 * Run a search on Atlas: the matching products of one page (and, when asked, their total and facets in the same
@@ -67,11 +86,18 @@ export const createCatalogSearch = (product) => {
 			},
 		];
 		try {
-			const [raw] = await data.collection(COLLECTIONS.products).aggregate(pipeline).toArray();
+			const products = data.collection(COLLECTIONS.products);
+			const [raw] = await products.aggregate(pipeline).toArray();
+			const items = raw?.items ?? [];
+			// nothing found: is it the index (missing, misnamed or not ready), or really nothing?
+			if (items.length === 0 && skip === 0 && !(await indexAnswers(data, String(stage.$search.index)))) {
+				await product.searchState.set(s.websiteId, true, 'the index found no product (missing, misnamed or still building)');
+				return { ok: false };
+			}
 			await product.searchState.set(s.websiteId, false);
 			return {
 				ok: true,
-				items: raw?.items ?? [],
+				items,
 				total: count ? Number(raw?.total?.[0]?.n ?? 0) : null,
 				facets: raw ?? null,
 			};

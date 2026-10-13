@@ -4,8 +4,8 @@
  * it renders (K3). Only active products of visible categories and brands are shown (E1), never costs; stock counts
  * only as the `catalog` settings allow (E9). A listing filters by several brands, grades and attribute values (one
  * active variant must match price, attributes, grade and stock together), by featured products and by a deal; it pages
- * by cursor or page number, can count its total, and its first page carries the facet counts. Searches go to Atlas
- * Search when the website uses it (E14). Slugs are found in any case and by their earlier values, answering `moved`
+ * by cursor or page number, can count its total, and its first page carries the facet counts; with `variants=1` each
+ * card carries its active variants (SF-6). Searches go to Atlas Search when the website uses it (E14). Slugs are found in any case and by their earlier values, answering `moved`
  * (E13).
  * @module
  */
@@ -26,7 +26,7 @@ import {
 } from '../core/catalog-query.js';
 import { categoryTree, withDescendants } from '../core/catalog-taxonomy.js';
 import { youtubeId } from '../core/catalog-content.js';
-import { cardOf, cardPhotos, pageOf } from '../core/catalog-views.js';
+import { cardOf, cardPhotos, cardVariantsOf, pageOf } from '../core/catalog-views.js';
 import { productDeals } from '../core/deals.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import { attributeValues } from '../core/promotions.js';
@@ -86,27 +86,43 @@ const createCards = (common, service) => {
 	};
 
 	/**
+	 * The active variants of a card, with their pages (SF-6).
+	 * @param {Site} s @param {ProductRecord} item @param {string} url
+	 * @param {ReadonlyMap<string, import('../core/model.js').AttributeRecord>} attributes
+	 */
+	const variantsOf = async (s, item, url, attributes) => {
+		/** @type {Map<string, string>} */
+		const variantUrls = new Map();
+		for (const variant of item.variants.filter((v) => v.active))
+			variantUrls.set(variant.id, await common.media.variantUrl(s, item, variant, attributes));
+		return cardVariantsOf(item, { attributes, variantUrls, url });
+	};
+
+	/**
 	 * @param {Site} s
 	 * @param {WebsiteData} data
 	 * @param {ProductRecord[]} products
+	 * @param {{ variants?: boolean }} [options] `variants`: each card carries its active variants (SF-6)
 	 */
-	return async (s, data, products) => {
+	return async (s, data, products, { variants = false } = {}) => {
 		if (products.length === 0) return [];
 		const brands = new Map((await brandsOf(data)).map((brand) => [brand.id, brand]));
 		const grades = await common.gradesOf(s);
 		const deals = await dealsOf(s, data, products);
+		const attributes = variants ? new Map((await attributesOf(data)).map((attribute) => [attribute.id, attribute])) : null;
 		return Promise.all(
 			products.map(async (item) => {
 				const brand = item.brandId ? brands.get(item.brandId) : undefined;
 				const main = item.media?.[0];
 				const covering = deals.get(item.id) ?? [];
 				const first = covering[0];
+				const url = await common.media.productUrl(s, item);
 				return {
 					...cardOf(item, {
 						currency: s.currency,
 						image: await common.media.mediaUrl(s, main?.sizes?.card ?? main?.key),
-						url: await common.media.productUrl(s, item),
-						brand: brand ? { id: brand.id, name: brand.name } : null,
+						url,
+						brand: brand ? { id: brand.id, name: brand.name, slug: brand.slug } : null,
 						grades,
 						cardImages: await Promise.all(
 							cardPhotos(item).map(async (file) => ({
@@ -115,6 +131,7 @@ const createCards = (common, service) => {
 							})),
 						),
 					}),
+					...(attributes ? { variants: await variantsOf(s, item, url, attributes) } : {}),
 					dealCount: covering.length,
 					deal: first
 						? {
@@ -173,6 +190,8 @@ export const createCatalogShop = (product, service, common) => {
 		const read = readShopQuery(ctx.query);
 		if (!read.ok) throw refuse(read.errors);
 		const query = read.value;
+		// variants=1: each card carries its active variants, for websites that draw their own cards (SF-6)
+		const withVariants = ctx.query.variants === '1' || ctx.query.variants === 'true';
 		const [categories, brands, attributes, hidden] = await Promise.all([
 			categoriesOf(data),
 			brandsOf(data),
@@ -227,7 +246,7 @@ export const createCatalogShop = (product, service, common) => {
 				const items = /** @type {ProductRecord[]} */ (found.items);
 				const body = page.page(items, (item) => ['atlas', offset + items.indexOf(item) + 1]);
 				return {
-					items: await cards(s, data, body.items),
+					items: await cards(s, data, body.items, { variants: withVariants }),
 					next: body.nextCursor,
 					hasMore: body.hasMore,
 					...(query.page === null ? {} : { page: query.page }),
@@ -262,7 +281,7 @@ export const createCatalogShop = (product, service, common) => {
 			Object.assign(totals, { total: Math.min(n, TOTAL_CAP), capped: n > TOTAL_CAP });
 		}
 		return {
-			items: await cards(s, data, body.items),
+			items: await cards(s, data, body.items, { variants: withVariants }),
 			next: body.nextCursor,
 			hasMore: body.hasMore,
 			...(query.page === null ? {} : { page: query.page }),
@@ -285,7 +304,7 @@ export const createCatalogShop = (product, service, common) => {
 	};
 
 	/**
-	 * The size chart a product shows (E5), or null.
+	 * The size chart a product shows (E5; the website's default chart when nothing else names one, SF-3), or null.
 	 * @param {Site} s @param {WebsiteData} data @param {ProductRecord} item @param {BrandRecord | null} brand
 	 * @param {CategoryRecord[]} categories
 	 */
@@ -303,6 +322,7 @@ export const createCatalogShop = (product, service, common) => {
 			brand,
 			new Map(categories.map((c) => [c.id, c])),
 			new Map(charts.map((c) => [c.id, c])),
+			String((await s.values('size_charts')).defaultChartId ?? '') || null,
 		);
 		return chart ? chartView(chart) : null;
 	};
