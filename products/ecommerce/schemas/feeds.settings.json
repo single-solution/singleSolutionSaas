@@ -39,7 +39,7 @@
 		"identifierExists": {
 			"type": "string",
 			"title": "Items without GTIN or MPN",
-			"description": "Automatic: nothing is sent and the catalogue decides. No: identifier_exists no is sent on items with neither (custom or handmade goods).",
+			"description": "Auto: nothing is sent and the catalogue decides. No: identifier_exists no is sent on items with neither (custom or handmade goods).",
 			"default": "auto",
 			"enum": ["auto", "no"]
 		},

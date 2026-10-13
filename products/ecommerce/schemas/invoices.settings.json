@@ -238,7 +238,7 @@
 		"shopperFrom": {
 			"type": "string",
 			"title": "Shoppers get their invoice",
-			"description": "placed: as soon as the order is placed. confirmed: once it is confirmed.",
+			"description": "Placed: as soon as the order is placed. Confirmed: once it is confirmed.",
 			"default": "placed",
 			"enum": ["placed", "confirmed"]
 		},

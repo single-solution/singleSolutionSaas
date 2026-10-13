@@ -133,7 +133,7 @@
 		"guests": {
 			"type": "string",
 			"title": "Guest checkout",
-			"description": "off: shoppers sign in to order. on: anyone orders with a name and phone. unless_password: a phone that belongs to a member with a password must sign in (checked with Accounts).",
+			"description": "Off: shoppers sign in to order. On: anyone orders with a name and phone. Unless password: a phone that belongs to a member with a password must sign in (checked with Accounts).",
 			"default": "off",
 			"enum": ["off", "on", "unless_password"]
 		},
@@ -411,7 +411,7 @@
 		"customerRecords": {
 			"type": "string",
 			"title": "Customers appear",
-			"description": "first_order: a customer record is made with their first order (or when staff open an Accounts user). sign_in: also as soon as a signed-in shopper uses the shop, before any order.",
+			"description": "First order: a customer record is made with their first order (or when staff open an Accounts user). Sign in: also as soon as a signed-in shopper uses the shop, before any order.",
 			"default": "first_order",
 			"enum": ["first_order", "sign_in"]
 		},
@@ -480,7 +480,7 @@
 		"bankTransferVia": {
 			"type": "string",
 			"title": "Bank transfers",
-			"description": "payments: through Payments' bank page. manual: the order waits for the shopper's proof and staff record the payment. Either way, while Payments is connected, bank transfer is offered only once its bank details are saved there (or its Require bank details is off).",
+			"description": "Payments: through Payments' bank page. Manual: the order waits for the shopper's proof and staff record the payment. Either way, while Payments is connected, bank transfer is offered only once its bank details are saved there (or its Require bank details is off).",
 			"default": "payments",
 			"enum": ["payments", "manual"]
 		},
@@ -509,14 +509,14 @@
 		"freeOrderStart": {
 			"type": "string",
 			"title": "Free orders paid online or by transfer start",
-			"description": "For online and bank-transfer orders whose total is 0 (nothing to pay). awaiting_confirmation: staff confirm them. awaiting_payment: in your awaiting-payment status, like the other online and bank-transfer orders, where they wait for staff without a time to pay.",
+			"description": "For online and bank-transfer orders whose total is 0 (nothing to pay). Awaiting confirmation: staff confirm them. Awaiting payment: in your awaiting-payment status, like the other online and bank-transfer orders, where they wait for staff without a time to pay.",
 			"default": "awaiting_confirmation",
 			"enum": ["awaiting_confirmation", "awaiting_payment"]
 		},
 		"rewaitWindow": {
 			"type": "string",
 			"title": "Moved back to awaiting payment",
-			"description": "restart: an order staff move back to awaiting payment gets a new time to pay and is cancelled when it ends. none: it waits until staff move it again.",
+			"description": "Restart: an order staff move back to awaiting payment gets a new time to pay and is cancelled when it ends. None: it waits until staff move it again.",
 			"default": "restart",
 			"enum": ["restart", "none"]
 		},
@@ -552,7 +552,7 @@
 		"statusTemplates": {
 			"type": "string",
 			"title": "Status messages",
-			"description": "one: one template for every status. per_status: ecommerce.order_status.<status key> per status.",
+			"description": "One: one template for every status. Per status: ecommerce.order_status.<status key> per status.",
 			"default": "one",
 			"enum": ["one", "per_status"]
 		},

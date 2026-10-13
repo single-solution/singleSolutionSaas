@@ -66,7 +66,7 @@
 		"pointsBack": {
 			"type": "string",
 			"title": "Points taken back",
-			"description": "proportional: in proportion to what is refunded. full_refund_only: only when the whole order is refunded.",
+			"description": "Proportional: in proportion to what is refunded. Full refund only: only when the whole order is refunded.",
 			"default": "proportional",
 			"enum": ["proportional", "full_refund_only"]
 		}

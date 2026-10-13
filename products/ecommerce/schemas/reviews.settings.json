@@ -12,14 +12,14 @@
 		"per": {
 			"type": "string",
 			"title": "Reviews per",
-			"description": "product: one per product. order_line: one per item bought.",
+			"description": "Product: one per product. Order line: one per item bought.",
 			"default": "product",
 			"enum": ["product", "order_line"]
 		},
 		"nameFormat": {
 			"type": "string",
 			"title": "Names shown",
-			"description": "full, or first_initial (\"Ayesha K.\").",
+			"description": "Full, or First initial (\"Ayesha K.\").",
 			"default": "full",
 			"enum": ["full", "first_initial"]
 		},

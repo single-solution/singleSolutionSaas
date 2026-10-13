@@ -49,7 +49,7 @@
 		"startStatus": {
 			"type": "string",
 			"title": "Cash-on-delivery orders start",
-			"description": "awaiting_confirmation: staff confirm each order. open: confirmed as soon as it is placed.",
+			"description": "Awaiting confirmation: staff confirm each order. Open: confirmed as soon as it is placed.",
 			"default": "awaiting_confirmation",
 			"enum": ["awaiting_confirmation", "open"]
 		},
@@ -70,7 +70,7 @@
 		"feeBase": {
 			"type": "string",
 			"title": "Cash handling fee is a percent of",
-			"description": "order_total: the order total (after points, with delivery and tax). goods_after_discounts: the goods after deals and the role discount, before points, delivery and tax.",
+			"description": "Order total: the order total (after points, with delivery and tax). Goods after discounts: the goods after deals and the role discount, before points, delivery and tax.",
 			"default": "order_total",
 			"enum": ["order_total", "goods_after_discounts"]
 		},
@@ -83,7 +83,7 @@
 		"advanceVia": {
 			"type": "string",
 			"title": "The advance is paid",
-			"description": "payments: through Payments before the order is confirmed. manual: by bank transfer; staff record it in the order's payments.",
+			"description": "Payments: through Payments before the order is confirmed. Manual: by bank transfer; staff record it in the order's payments.",
 			"default": "payments",
 			"enum": ["payments", "manual"]
 		}
