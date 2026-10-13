@@ -162,6 +162,37 @@ describe('deals', () => {
 		await shop.api('DELETE', `/v1/deals/${free.json.id}`);
 	});
 
+	it('gives a presigned upload for a deal’s banner under the deal’s folder, set with an edit', async () => {
+		const deal = (await shop.api('POST', '/v1/deals', { name: 'Banner', type: 'percent', value: 5 })).json;
+		const asked = await shop.api('POST', `/v1/deals/${deal.id}/banner/upload`, { type: 'image/webp', size: 2048 });
+		expect(asked.status).toBe(200);
+		expect(asked.json.key).toMatch(new RegExp(`^ecommerce/deals/${deal.id}/[a-z0-9]+\\.webp$`));
+		expect(asked.json.upload).toMatchObject({ method: 'PUT', headers: { 'content-type': 'image/webp' } });
+		const ticket = await shop.ticket(['deals.edit']);
+		const fromWidget = await shop.admin(ticket, 'POST', `/v1/admin/deals/${deal.id}/banner/upload`, {
+			type: 'image/png',
+			size: 10,
+		});
+		expect(fromWidget.json.key).toMatch(new RegExp(`^ecommerce/deals/${deal.id}/[a-z0-9]+\\.png$`));
+		const set = await shop.admin(ticket, 'PATCH', `/v1/admin/deals/${deal.id}`, {
+			banner: { key: fromWidget.json.key, alt: 'Big sale', type: 'image/png', size: 10 },
+		});
+		expect(set.json.banner).toEqual({ key: fromWidget.json.key, alt: 'Big sale', type: 'image/png', size: 10 });
+		/** @param {Record<string, unknown>} body @param {string} [id] */
+		const refused = async (body, id = deal.id) => {
+			const answer = await shop.api('POST', `/v1/deals/${id}/banner/upload`, body);
+			return [answer.status, answer.json.errors?.[0]?.path ?? answer.json.type.split('/').pop()];
+		};
+		expect(await refused({ type: 'image/gif', size: 10 })).toEqual([422, '/type']);
+		expect(await refused({ type: 'image/png', size: 0 })).toEqual([422, '/size']);
+		expect(await refused({ type: 'image/png', size: 100 * 1024 * 1024 })).toEqual([422, '/size']);
+		expect(await refused({ type: 'image/png', size: 10 }, createId('deal'))).toEqual([404, 'not_found']);
+		await shop.dashboard(await shop.adminSession(), 'DELETE', `/v1/dashboard/websites/${shop.websiteId}/connections/storage`);
+		expect(await refused({ type: 'image/png', size: 10 })).toEqual([503, 'storage_not_connected']);
+		await shop.connectStorage();
+		await shop.api('DELETE', `/v1/deals/${deal.id}`);
+	});
+
 	it('quotes one unit with the best item deal only', async () => {
 		const scope = { productIds: [phone.id] };
 		const night = await shop.api('POST', '/v1/deals', { name: 'Night', type: 'percent', value: 50, scope, days: [0] });

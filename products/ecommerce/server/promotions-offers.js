@@ -4,7 +4,8 @@
  * server (`/v1/<offers>`, server token) and for the promotions admin widget (`/v1/admin/<offers>`, ticket with
  * `coupons.edit`, `deals.edit` or `bundles.edit`), sharing one handler. Scopes must name existing products,
  * categories and brands; coupon codes are unique per website. Use counters (`used`) are shown, never written here.
- * Every write goes to the activity log.
+ * A deal's banner is uploaded first with a presigned upload under the deal's folder (`ecommerce/deals/<id>/`, as the
+ * catalog's photos), then set with an edit. Every write goes to the activity log.
  * @module
  */
 import { randomBytes } from 'node:crypto';
@@ -23,10 +24,13 @@ import {
 	missingRefs,
 	updateOffer,
 } from '../adapters/promotions-store.js';
+import { IMAGE_TYPES } from './catalog-common.js';
 import { SERVER_LIMITS } from './service.js';
 
 /** Rate limits of the merchant's server and admin routes. */
 const SERVER_RATE = [...SERVER_LIMITS];
+/** An upload link lasts this long (seconds), as the catalog's. */
+const UPLOAD_SECONDS = 900;
 
 /** @typedef {import('../adapters/product.js').Product} Product */
 /** @typedef {import('./service.js').Service} Service */
@@ -175,6 +179,30 @@ export const createOfferRoutes = (product, service) => {
 		if (!found || !(await deleteOffer(data, kind, id))) return problem('not_found', `No such ${KINDS[kind].name}.`);
 		await service.log(ctx, `${KINDS[kind].name}.deleted`, found.id, { label: KINDS[kind].label(found) });
 		return undefined;
+	};
+
+	/**
+	 * POST …/deals/:id/banner/upload `{ type, size }` → a presigned upload of the deal's banner under its folder
+	 * (`ecommerce/deals/<id>/`): a JPEG, PNG, WebP or AVIF image up to the catalog setting `imageMaxBytes`, as the
+	 * catalog's photos; then the deal is edited with `banner: { key, alt, type, size }`.
+	 * @param {any} ctx
+	 */
+	const bannerUpload = async (ctx) => {
+		const body = typeof ctx.body === 'object' && ctx.body !== null && !Array.isArray(ctx.body) ? ctx.body : {};
+		const type = String(body.type ?? '');
+		const extension = Object.hasOwn(IMAGE_TYPES, type) ? /** @type {Record<string, string>} */ (IMAGE_TYPES)[type] : '';
+		if (!extension) return invalid('type', 'A banner is a JPEG, PNG, WebP or AVIF image.');
+		const s = await service.site(ctx);
+		const limit = Number((await s.values('catalog')).imageMaxBytes);
+		if (!Number.isSafeInteger(body.size) || body.size < 1 || body.size > limit)
+			return invalid('size', `A banner has at most ${limit} bytes.`);
+		const found = await getOffer(await s.data(), 'deals', String(ctx.params.id));
+		if (!found) return problem('not_found', 'No such deal.');
+		const storage = await product.connections.storage(s.websiteId);
+		if (!storage) return problem('storage_not_connected', 'Connect your storage first (Connections).');
+		const key = `ecommerce/deals/${found.id}/${createId('img').slice(4).toLowerCase()}.${extension}`;
+		const signed = storage.presignPut({ key, contentType: type, contentLength: body.size, expiresIn: UPLOAD_SECONDS });
+		return { key, upload: { method: signed.method, url: signed.url, headers: signed.headers, expiresAt: signed.expiresAt } };
 	};
 
 	/** A batch of coupons with random codes (`{ prefix, count ≤ 500, coupon }`). @param {any} ctx */
@@ -404,6 +432,23 @@ export const createOfferRoutes = (product, service) => {
 			permission: 'deals.edit',
 			rateLimit: SERVER_RATE,
 			handler: remove('deals'),
+		}),
+		defineRoute({
+			method: 'POST',
+			path: '/v1/deals/:id/banner/upload',
+			auth: 'server',
+			feature: 'deals',
+			rateLimit: SERVER_RATE,
+			handler: bannerUpload,
+		}),
+		defineRoute({
+			method: 'POST',
+			path: '/v1/admin/deals/:id/banner/upload',
+			auth: 'ticket',
+			feature: 'deals',
+			permission: 'deals.edit',
+			rateLimit: SERVER_RATE,
+			handler: bannerUpload,
 		}),
 
 		// ------------------------------------------------------------------------------------------------ bundles

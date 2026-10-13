@@ -427,6 +427,66 @@ describe('promotions admin: deals and bundles', () => {
 		expect(fieldIn(dialogOf(root), 'Percent, or amount in PKR').value).toBe('15');
 	});
 
+	it('uploads, describes and removes a deal’s banner', async () => {
+		const KEY = 'ecommerce/deals/deal_1/abc.png';
+		/** @param {string} key */
+		const word = (key) => String(TEXTS[key]);
+		const { root, server } = await start({
+			'POST /v1/admin/deals/deal_1/banner/upload': (/** @type {any} */ call) =>
+				answer(200, {
+					key: KEY,
+					upload: { method: 'PUT', url: 'https://bucket.example/up', headers: { 'content-type': call.body.type } },
+				}),
+			'PUT /up': () => answer(200),
+			'PATCH /v1/admin/deals/deal_1': (/** @type {any} */ call) => answer(200, { ...DEAL, ...call.body }),
+		});
+		const panel = await openTab(root, 'deals');
+		const pane = detailOf(panel);
+		expect(textOf(pane)).toContain(word('promotionsAdmin.noBanner'));
+		await click(buttonIn(pane, word('promotionsAdmin.saveBanner')));
+		expect(statuses(pane)).toContain(word('promotionsAdmin.bannerPick'));
+		const picker = /** @type {HTMLInputElement} */ (fieldIn(pane, word('promotionsAdmin.bannerFile')));
+		Object.defineProperty(picker, 'files', {
+			configurable: true,
+			value: [new window.File(['x'], 'b.png', { type: 'image/png' })],
+		});
+		type(fieldIn(pane, word('promotionsAdmin.bannerAlt')), ' Autumn sale ');
+		server.routes['PUT /up'] = () => answer(403);
+		await click(buttonIn(pane, word('promotionsAdmin.saveBanner')));
+		expect(statuses(pane)).toContain(word('admin.uploadFailed'));
+		server.routes['PUT /up'] = () => answer(200);
+		await click(buttonIn(pane, word('promotionsAdmin.saveBanner')));
+		expect(server.last('POST /v1/admin/deals/deal_1/banner/upload')?.body).toEqual({ type: 'image/png', size: 1 });
+		expect(server.last('PUT /up')?.headers['content-type']).toBe('image/png');
+		expect(server.last('PATCH /v1/admin/deals/deal_1')?.body).toEqual({
+			banner: { key: KEY, alt: 'Autumn sale', type: 'image/png', size: 1 },
+		});
+		expect(textOf(pane)).toContain(word('promotionsAdmin.bannerFileName').replace('{name}', 'abc.png'));
+		expect(statuses(pane)).toContain(word('promotionsAdmin.bannerSaved'));
+		// without a file, Save changes the alternative text
+		type(fieldIn(pane, word('promotionsAdmin.bannerAlt')), 'Fall');
+		await click(buttonIn(pane, word('promotionsAdmin.saveBanner')));
+		expect(server.last('PATCH /v1/admin/deals/deal_1')?.body).toEqual({
+			banner: { key: KEY, alt: 'Fall', type: 'image/png', size: 1 },
+		});
+		server.routes['PATCH /v1/admin/deals/deal_1'] = () => invalid('/banner');
+		await click(buttonIn(pane, word('promotionsAdmin.removeBanner')));
+		expect(statuses(pane).join(' ')).not.toContain(word('promotionsAdmin.bannerRemoved'));
+		server.routes['PATCH /v1/admin/deals/deal_1'] = (/** @type {any} */ call) => answer(200, { ...DEAL, ...call.body });
+		await click(buttonIn(pane, word('promotionsAdmin.removeBanner')));
+		expect(server.last('PATCH /v1/admin/deals/deal_1')?.body).toEqual({ banner: null });
+		expect(textOf(pane)).toContain(word('promotionsAdmin.noBanner'));
+		expect(statuses(pane)).toContain(word('promotionsAdmin.bannerRemoved'));
+		server.routes['POST /v1/admin/deals/deal_1/banner/upload'] = () => problem(503, 'storage_not_connected');
+		const again = /** @type {HTMLInputElement} */ (fieldIn(pane, word('promotionsAdmin.bannerFile')));
+		Object.defineProperty(again, 'files', {
+			configurable: true,
+			value: [new window.File(['x'], 'b.png', { type: 'image/png' })],
+		});
+		await click(buttonIn(pane, word('promotionsAdmin.saveBanner')));
+		expect(statuses(pane)).toContain(word('problem.storage_not_connected'));
+	});
+
 	it('edits bundles and buy X get Y', async () => {
 		/** @type {any[]} */
 		const bodies = [];

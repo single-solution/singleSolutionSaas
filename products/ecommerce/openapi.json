@@ -3417,6 +3417,82 @@
 				}
 			}
 		},
+		"/v1/admin/deals/{id}/banner/upload": {
+			"post": {
+				"summary": "Get a presigned upload for a deal’s banner (Promotions admin widget)",
+				"description": "Upload the image with upload.method to upload.url and exactly upload.headers (the bucket refuses another type or size), then set it with PATCH /v1/admin/deals/:id { banner: { key, alt, type, size } }. The key is under the deal’s folder (ecommerce/deals/<id>/). JPEG, PNG, WebP or AVIF up to the catalog setting imageMaxBytes. 422 validation_failed at /type or /size; 404 not_found; 503 storage_not_connected.",
+				"x-ss-auth": "ticket",
+				"x-ss-feature": "deals",
+				"x-ss-permission": "deals.edit",
+				"security": [
+					{
+						"ticket": []
+					}
+				],
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"type",
+									"size"
+								],
+								"properties": {
+									"type": {
+										"type": "string",
+										"enum": [
+											"image/jpeg",
+											"image/png",
+											"image/webp",
+											"image/avif"
+										]
+									},
+									"size": {
+										"type": "integer",
+										"minimum": 1,
+										"description": "Bytes, at most the catalog setting imageMaxBytes."
+									}
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ProductUpload"
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/v1/admin/landings": {
 			"get": {
 				"summary": "The landing pages (Catalog admin widget)",
@@ -16015,6 +16091,93 @@
 							"application/json": {
 								"schema": {
 									"$ref": "#/components/schemas/Deal"
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/deals/{id}/banner/upload": {
+			"post": {
+				"summary": "Get a presigned upload for a deal’s banner",
+				"description": "Upload the image with upload.method to upload.url and exactly upload.headers (the bucket refuses another type or size), then set it with PATCH /v1/deals/:id { banner: { key, alt, type, size } }. The key is under the deal’s folder (ecommerce/deals/<id>/). JPEG, PNG, WebP or AVIF up to the catalog setting imageMaxBytes. 422 validation_failed at /type or /size; 404 not_found; 503 storage_not_connected.",
+				"x-ss-auth": "server",
+				"x-ss-feature": "deals",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"type",
+									"size"
+								],
+								"properties": {
+									"type": {
+										"type": "string",
+										"enum": [
+											"image/jpeg",
+											"image/png",
+											"image/webp",
+											"image/avif"
+										]
+									},
+									"size": {
+										"type": "integer",
+										"minimum": 1,
+										"description": "Bytes, at most the catalog setting imageMaxBytes."
+									}
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ProductUpload"
 								}
 							}
 						}
@@ -35707,7 +35870,7 @@
 							"object",
 							"null"
 						],
-						"description": "A photo uploaded for deals (key under ecommerce/deals/), or null. When editing, the key the deal already holds stays valid.",
+						"description": "A photo uploaded for deals (key under ecommerce/deals/, as POST /v1/deals/:id/banner/upload gives it), or null. When editing, the key the deal already holds stays valid.",
 						"required": [
 							"key"
 						],
@@ -36188,7 +36351,7 @@
 							"object",
 							"null"
 						],
-						"description": "A photo uploaded for deals (key under ecommerce/deals/), or null. When editing, the key the deal already holds stays valid.",
+						"description": "A photo uploaded for deals (key under ecommerce/deals/, as POST /v1/deals/:id/banner/upload gives it), or null. When editing, the key the deal already holds stays valid.",
 						"required": [
 							"key"
 						],

@@ -4,13 +4,15 @@
  * in the list's More menu (a batch of random codes, downloadable as CSV); each row with its state (active, off,
  * scheduled, ended or used up), the discount and its uses — beside one offer read fresh: its figures and what it
  * applies to, with Edit and Turn on / Turn off as buttons, and Duplicate and Delete (last, in danger text, behind its
- * typed confirmation) in the More menu. Editors open in dialogs (`./admin-offer-fields.js`).
+ * typed confirmation) in the More menu. Editors open in dialogs (`./admin-offer-fields.js`). A deal's banner is
+ * uploaded under the deal's folder (`POST …/deals/:id/banner/upload`) and set with its alternative text, or removed.
  * @module
  */
 import { toCsv } from '../core/csv.js';
 import { query } from './admin-kit.js';
 import { card, chipFilter, detailHead, listScreen } from './admin-lists.js';
 import { bundleFields, couponFields, dealFields } from './admin-offer-fields.js';
+import { IMAGE_ACCEPT } from './admin-taxonomy.js';
 
 /** @typedef {import('./admin-kit.js').Kit} Kit */
 /** @typedef {import('./admin-kit.js').Tone} Tone */
@@ -254,6 +256,65 @@ const productNames = async (kit, names, item) => {
 };
 
 /**
+ * A deal's banner: its file and alternative text; a new image is uploaded under the deal's folder and set on the deal
+ * (without a file, Save changes the alternative text), or the banner is removed.
+ * @param {Kit} kit @param {OfferContext} context @param {any} item
+ * @param {(saved: any, text: string) => void} done
+ */
+const bannerCard = (kit, context, item, done) => {
+	const { t, h } = kit;
+	const note = kit.status();
+	const banner = item.banner ?? null;
+	const picker = /** @type {HTMLInputElement} */ (kit.input('', { type: 'file', accept: IMAGE_ACCEPT }));
+	const alt = kit.input(banner?.alt ?? '', { maxlength: '200' });
+	const address = `${context.path}/${item.id}`;
+	/** @param {unknown} value @param {string} text */
+	const set = async (value, text) => {
+		const answer = await kit.call('PATCH', address, { banner: value });
+		if (!answer.ok) return kit.fail(note, answer);
+		done(answer.data, text);
+		return answer;
+	};
+	const save = async () => {
+		const file = picker.files?.[0];
+		if (!file) {
+			if (!banner) return kit.say(note, t('promotionsAdmin.bannerPick'), true);
+			return set({ ...banner, alt: alt.value.trim() }, t('promotionsAdmin.bannerSaved'));
+		}
+		kit.say(note, t('admin.uploading'));
+		const asked = await kit.call('POST', `${address}/banner/upload`, { type: file.type, size: file.size });
+		if (!asked.ok) return kit.fail(note, asked);
+		if (!(await kit.upload(asked.data.upload, file))) return kit.say(note, t('admin.uploadFailed'), true);
+		return set(
+			{ key: asked.data.key, alt: alt.value.trim(), type: file.type, size: file.size },
+			t('promotionsAdmin.bannerSaved'),
+		);
+	};
+	return card(kit, t('promotionsAdmin.banner'), [
+		kit.text(
+			'p',
+			{ class: 'muted' },
+			banner
+				? t('promotionsAdmin.bannerFileName', { name: String(banner.key).split('/').pop() ?? '' })
+				: t('promotionsAdmin.noBanner'),
+		),
+		h('div', { class: 'fields' }, [
+			kit.field(t('promotionsAdmin.bannerFile'), picker),
+			kit.field(t('promotionsAdmin.bannerAlt'), alt),
+		]),
+		h(
+			'div',
+			{ class: 'row inline' },
+			[
+				kit.button(t('promotionsAdmin.saveBanner'), save),
+				banner ? kit.button(t('promotionsAdmin.removeBanner'), () => set(null, t('promotionsAdmin.bannerRemoved'))) : null,
+			].filter((node) => node !== null),
+		),
+		note,
+	]);
+};
+
+/**
  * @param {Kit} kit @param {OfferContext} context @param {any} item @param {string} message
  */
 const renderOffer = (kit, context, item, message) => {
@@ -351,7 +412,9 @@ const renderOffer = (kit, context, item, message) => {
 				]
 			: kind === 'bundles'
 				? [scopeCard(t('promotionsAdmin.buyScope'), item.scope), scopeCard(t('promotionsAdmin.getScope'), item.getScope)]
-				: [scopeCard(t('promotionsAdmin.scope'), item.scope)];
+				: kind === 'deals'
+					? [scopeCard(t('promotionsAdmin.scope'), item.scope), bannerCard(kit, context, item, done)]
+					: [scopeCard(t('promotionsAdmin.scope'), item.scope)];
 	kit.put(detail.pane, [
 		detail.back,
 		detailHead(

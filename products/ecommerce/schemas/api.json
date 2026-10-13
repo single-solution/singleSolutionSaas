@@ -3942,7 +3942,7 @@
 				},
 				"banner": {
 					"type": ["object", "null"],
-					"description": "A photo uploaded for deals (key under ecommerce/deals/), or null. When editing, the key the deal already holds stays valid.",
+					"description": "A photo uploaded for deals (key under ecommerce/deals/, as POST /v1/deals/:id/banner/upload gives it), or null. When editing, the key the deal already holds stays valid.",
 					"required": ["key"],
 					"properties": {
 						"key": {
@@ -4318,7 +4318,7 @@
 				},
 				"banner": {
 					"type": ["object", "null"],
-					"description": "A photo uploaded for deals (key under ecommerce/deals/), or null. When editing, the key the deal already holds stays valid.",
+					"description": "A photo uploaded for deals (key under ecommerce/deals/, as POST /v1/deals/:id/banner/upload gives it), or null. When editing, the key the deal already holds stays valid.",
 					"required": ["key"],
 					"properties": {
 						"key": {
@@ -21630,6 +21630,50 @@
 		"summary": "Delete a deal (Promotions admin widget)",
 		"description": "404 not_found.",
 		"status": 204
+	},
+	"POST /v1/deals/:id/banner/upload": {
+		"summary": "Get a presigned upload for a deal’s banner",
+		"description": "Upload the image with upload.method to upload.url and exactly upload.headers (the bucket refuses another type or size), then set it with PATCH /v1/deals/:id { banner: { key, alt, type, size } }. The key is under the deal’s folder (ecommerce/deals/<id>/). JPEG, PNG, WebP or AVIF up to the catalog setting imageMaxBytes. 422 validation_failed at /type or /size; 404 not_found; 503 storage_not_connected.",
+		"body": {
+			"type": "object",
+			"required": ["type", "size"],
+			"properties": {
+				"type": {
+					"type": "string",
+					"enum": ["image/jpeg", "image/png", "image/webp", "image/avif"]
+				},
+				"size": {
+					"type": "integer",
+					"minimum": 1,
+					"description": "Bytes, at most the catalog setting imageMaxBytes."
+				}
+			}
+		},
+		"response": {
+			"$ref": "#/components/schemas/ProductUpload"
+		}
+	},
+	"POST /v1/admin/deals/:id/banner/upload": {
+		"summary": "Get a presigned upload for a deal’s banner (Promotions admin widget)",
+		"description": "Upload the image with upload.method to upload.url and exactly upload.headers (the bucket refuses another type or size), then set it with PATCH /v1/admin/deals/:id { banner: { key, alt, type, size } }. The key is under the deal’s folder (ecommerce/deals/<id>/). JPEG, PNG, WebP or AVIF up to the catalog setting imageMaxBytes. 422 validation_failed at /type or /size; 404 not_found; 503 storage_not_connected.",
+		"body": {
+			"type": "object",
+			"required": ["type", "size"],
+			"properties": {
+				"type": {
+					"type": "string",
+					"enum": ["image/jpeg", "image/png", "image/webp", "image/avif"]
+				},
+				"size": {
+					"type": "integer",
+					"minimum": 1,
+					"description": "Bytes, at most the catalog setting imageMaxBytes."
+				}
+			}
+		},
+		"response": {
+			"$ref": "#/components/schemas/ProductUpload"
+		}
 	},
 	"GET /v1/bundles": {
 		"summary": "The bundles, newest first",
