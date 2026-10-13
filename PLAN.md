@@ -2842,6 +2842,46 @@ Orders:
 - API: such orders come in paid, with an `other` payment entry carrying the gateway's name and reference.
 - Data: none.
 
+Built after the re-audit (2026-10-13, owner decision D4; commits 78214c5, 323b186, c40f343, 1bbf2ec, b629497, a67dd67,
+421eea8, 5abe111, dd0afbf). Each default keeps the arithmetic above; the importer writes the stores' values (all three
+stores: `total_half_up`, `first`, `one_after_items`, `after_item_deals`, `cart_offer`, `goods_after_discounts`).
+
+**E51. Deal rounding.** Why: the stores round the order's deal total once, half up (K-2). Key: `deals.rounding`
+(`per_unit_down` default, E25 | `total_half_up`: each deal is worked out exactly on the line or cart amount, the order's
+deal total is rounded once, half up, then spread over the lines). API: carts, product quotes, Chat quotes, orders and
+edits; the product quote now also applies whole units and deal hours (K-15). Data: none.
+
+**E52. First or best deal per line.** Why: the stores give a line the first deal in the merchant's order (CK-15). Key:
+`deals.lineChoice` (`best` default | `first`: the first live deal by `sort` that saves something; `shopperChoice` and
+locks still win). Data: none.
+
+**E53. Checkout deals with item deals.** Why: the stores take one checkout offer after the item deals (K-4, PR-2,
+PR-3). Key: `deals.cartOffer` (`per_line_best` default | `one_after_items`: lines take item deals only, then at most
+one checkout-level deal (cart target or free delivery), the first live one in show order that applies, comes off what
+is left | `one_exclusive`: the same, but none once an item deal applied). A cart deal never replaces an item deal in
+the last two. API: a line's `dealDiscount` includes its share of the checkout deal; `dealIds` and `applied` list both.
+
+**E54. Checkout-deal threshold base.** Why: the stores judge "over X" after item deals (PR-3). Key:
+`deals.cartThresholdBase` (`goods` default | `after_item_deals`), for cart deals and free delivery.
+
+**E55. Which deals block points.** Why: in the stores only the checkout offer blocks redeeming (K-5). Key:
+`deals.pointsBlockedBy` (`any_deal` default | `cart_offer`). Importer: item deals get `allowPoints: true` (PR-5).
+
+**E56. COD fee base.** Why: the stores take the COD fee on goods after offers and the member discount (K-3). Key:
+`cod.feeBase` (`order_total` default | `goods_after_discounts`: goods after deals and the role discount, before
+points, delivery and tax).
+
+**E57. Edits keep placed offers (always; E29, OR-9).** An edited order is priced with the deals and coupon it was placed
+with, even if they ended, were switched off or used up; scope, conditions and the rules still count.
+
+**E58. Expected total (always; CK-14).** `POST /v1/shop/orders` takes an optional `expectedTotal`; a different total
+answers 409 `price_changed` with the new `quote`, so a deal that ended between cart and order never charges more.
+
+Open after E51–E58: bundles are still dropped when an order is edited, and `cartThresholdBase` ignores bundles; the
+cart widget does not send `expectedTotal` yet; a free-delivery deal locked on a line is checkout-level in the product
+(the importer checks whether any store has such deals); `deals.lineLock` (only lines added while a deal was live) is not
+built and is raised with the owner (D1).
+
 #### Chat
 
 **C1. Longer instructions and store context** (changes 0.8.3).
@@ -3250,8 +3290,9 @@ three have 4 digits (`numberDigits: 4`); SB's loyalty is `guests: earn`, `earnAt
   "IM has no card gateway code" above describes the never-live branch; whether any IM order was paid by card is checked
   on the read-only copy before IM's turn. Live IM has no serials or IMEI, claims, stock or price alerts, wishlists,
   staff two-step sign-in, reservation window or outbox; the IM lines below that name them are re-checked then.
-- **IM does not stack offers the way K-4 said**; live IM's offers carry an `isStackable` flag, so IM's deal values are
-  read from live data at IM's turn (PR-1 was found on the branch).
+- **Live IM takes one checkout offer after item deals, like SB and CT** (checked 2026-10-13 in `offerEvaluator.ts` on
+  `main`): PR-1's "IM never stacks" was found on the never-live branch, so `deals.cartOffer: one_exclusive` matches no
+  live store today (E53).
 
 **Not imported.** Sign-in codes; rate-limit, lockout, cron and ops collections; sessions; cached SEO surfaces other
 than the landing copy (SG-30).
