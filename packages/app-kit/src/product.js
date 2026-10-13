@@ -14,7 +14,7 @@ import { createBusiness } from './business.js';
 import { createConnection } from './connection.js';
 import { checkConnectionDefinitions, createConnections } from './connections.js';
 import { createDashboard } from './dashboard.js';
-import { createData } from './data.js';
+import { PRODUCT_DATABASE_OPTIONS, createData } from './data.js';
 import { EVENT_INDEXES, createEvents } from './events.js';
 import { createImports } from './imports.js';
 import { createRequestHandler } from './http/handler.js';
@@ -102,6 +102,7 @@ const KIT_PROBLEM_CODES = Object.freeze({
 	invalid_actor: Object.freeze({ status: 400, title: 'Invalid acting user' }),
 	visitor_ip_required: Object.freeze({ status: 400, title: "The visitor's IP address is required" }),
 	count_timeout: Object.freeze({ status: 503, title: 'Counting took too long' }),
+	database_unavailable: Object.freeze({ status: 503, title: 'Database unavailable' }),
 });
 
 /**
@@ -131,7 +132,7 @@ export const createProduct = (options) => {
 		options.store ??
 		(healthy && config?.mongodbUri
 			? createMongoStore({
-					db: new MongoClient(config.mongodbUri, { maxPoolSize: 5, minPoolSize: 0, maxIdleTimeMS: 60_000 }).db(),
+					db: new MongoClient(config.mongodbUri, { ...PRODUCT_DATABASE_OPTIONS }).db(),
 					now,
 				})
 			: createMemoryStore({ now }));

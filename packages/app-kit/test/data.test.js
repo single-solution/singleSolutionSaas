@@ -1,7 +1,17 @@
 import { createOutboundPolicy } from '@ss/net';
-import { MongoClient } from 'mongodb';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createData, guardFilter, guardPipeline, guardUpdate, planIndexes } from '../src/data.js';
+import { Collection, MongoClient } from 'mongodb';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import {
+	DATABASE_DEADLINES,
+	PRODUCT_DATABASE_OPTIONS,
+	createData,
+	guardFilter,
+	guardPipeline,
+	guardUpdate,
+	isDatabaseUnavailable,
+	planIndexes,
+} from '../src/data.js';
+import { kitError } from '../src/util.js';
 import { createTestLogger, freshDb, mongoUri } from './helpers.js';
 
 const WEBSITE = 'web_0123456789abcdefghjkmnpq';
@@ -214,6 +224,75 @@ describe('merchant database (MongoDB)', () => {
 		await (await data.forWebsite(WEBSITE_2)).collection('coupons').insertOne({ code: 'A' });
 		const { data: fresh } = makeData();
 		expect((await (await fresh.forWebsite(WEBSITE)).ensureIndexes(defs)).created).toHaveLength(2);
+	});
+
+	it('creates the product indexes once per database and instance, every collection at once (K-16)', async () => {
+		/** @type {import('../src/index.js').IndexDefinition[]} */
+		const defs = [
+			{ collection: 'coupons', keys: { websiteId: 1, code: 1 } },
+			{ collection: 'orders', keys: { websiteId: 1, at: -1 } },
+			{ collection: 'carts', keys: { websiteId: 1, user: 1 } },
+		];
+		let running = 0;
+		let most = 0;
+		const original = Collection.prototype.createIndexes;
+		const spy = vi.spyOn(Collection.prototype, 'createIndexes').mockImplementation(
+			/** @this {Collection} @param {any} specs @param {any} options */
+			async function (specs, options) {
+				running += 1;
+				most = Math.max(most, running);
+				try {
+					return await original.call(this, specs, options);
+				} finally {
+					running -= 1;
+				}
+			},
+		);
+		try {
+			const { data, db } = makeData({ indexes: defs });
+			await Promise.all([data.forWebsite(WEBSITE), data.forWebsite(WEBSITE_2), data.forWebsite(WEBSITE)]);
+			await data.forWebsite(WEBSITE);
+			expect(spy).toHaveBeenCalledTimes(3);
+			expect(most).toBe(3);
+			expect((await db.collection('ss_coupon_box_orders').indexes()).map((i) => i.name)).toContain('websiteId_1_at_-1');
+			// a failed creation is tried again by the next request
+			spy.mockClear();
+			spy.mockRejectedValueOnce(new Error('index build failed'));
+			const { data: failing } = makeData({ indexes: defs.slice(0, 1) });
+			await expect(failing.forWebsite(WEBSITE)).rejects.toThrow('index build failed');
+			await failing.forWebsite(WEBSITE);
+			expect(spy).toHaveBeenCalledTimes(2);
+		} finally {
+			spy.mockRestore();
+		}
+	});
+
+	it('gives every database call deadlines and recognises a database that cannot be reached (K-16)', async () => {
+		expect(DATABASE_DEADLINES).toEqual({
+			serverSelectionTimeoutMS: 5_000,
+			connectTimeoutMS: 5_000,
+			waitQueueTimeoutMS: 5_000,
+			socketTimeoutMS: 10_000,
+		});
+		expect(PRODUCT_DATABASE_OPTIONS).toMatchObject({ maxPoolSize: 5, ...DATABASE_DEADLINES });
+		/** @type {any[]} */
+		const seen = [];
+		const { data } = makeData({
+			createClient: (/** @type {string} */ uri, /** @type {any} */ options) => {
+				seen.push(options);
+				return new MongoClient(uri, options);
+			},
+		});
+		await data.forWebsite(WEBSITE);
+		expect(seen[0]).toMatchObject({ maxPoolSize: 3, ...DATABASE_DEADLINES });
+		await data.closeAll();
+		for (const name of ['MongoServerSelectionError', 'MongoNetworkTimeoutError', 'MongoWaitQueueTimeoutError'])
+			expect(isDatabaseUnavailable(Object.assign(new Error('x'), { name }))).toBe(true);
+		expect(isDatabaseUnavailable(Object.assign(new Error('x'), { code: 50 }))).toBe(true);
+		expect(isDatabaseUnavailable(kitError('database_unreachable', 'x'))).toBe(true);
+		expect(isDatabaseUnavailable(kitError('database_not_connected', 'x'))).toBe(false);
+		expect(isDatabaseUnavailable(Object.assign(new Error('dup'), { code: 11000 }))).toBe(false);
+		expect(isDatabaseUnavailable(null)).toBe(false);
 	});
 
 	it('supports transactions', async () => {

@@ -11,15 +11,64 @@
  *   `websiteId`, and stamps `websiteId`, `merchantId`, `createdAt` and `updatedAt` on inserts. An Atlas Search pipeline
  *   may start with `$search` instead of `$match`, only when its `compound.filter` holds an `equals` on `websiteId` with
  *   this website (PLAN 0.8.10 K11).
- * - `ensureIndexes` is idempotent per pool and requires `websiteId` first in every index (TTL indexes excepted).
+ * - `ensureIndexes` is idempotent per pool and requires `websiteId` first in every index (TTL indexes excepted); the
+ *   product's indexes are created on a database's first use per instance, every collection at once, and concurrent
+ *   requests wait for the same creation.
+ * - Every database call has deadlines ({@link DATABASE_DEADLINES}): a database that cannot be reached or does not answer
+ *   in time fails fast with an error {@link isDatabaseUnavailable} recognises, which requests answer 503
+ *   `database_unavailable` (K-16).
  * @module
  */
 import { guardedLookup, isSafeMongoUri } from '@ss/net';
 import { MongoClient } from 'mongodb';
-import { collectionPrefix, isObject, kitError, sha256Hex } from './util.js';
+import { collectionPrefix, isKitError, isObject, kitError, sha256Hex } from './util.js';
 
 /** Connections per merchant database per instance (serverless instances multiply it; clusters may be free tiers). */
 const CLIENT_DB_POOL_SIZE = 3;
+
+/**
+ * Deadlines of every database call, for serverless functions (K-16): finding a server that answers (an unreachable
+ * database), opening a connection, waiting for a free pooled connection, and each send or receive on a connection
+ * (one operation that hangs). Code constants, the same for merchant and product databases.
+ */
+export const DATABASE_DEADLINES = Object.freeze({
+	serverSelectionTimeoutMS: 5_000,
+	connectTimeoutMS: 5_000,
+	waitQueueTimeoutMS: 5_000,
+	socketTimeoutMS: 10_000,
+});
+
+/**
+ * Options of the product database client (`new MongoClient(uri, PRODUCT_DATABASE_OPTIONS)`): a small fixed pool kept
+ * per instance (PLAN 0.10) and {@link DATABASE_DEADLINES}.
+ */
+export const PRODUCT_DATABASE_OPTIONS = Object.freeze({
+	maxPoolSize: 5,
+	minPoolSize: 0,
+	maxIdleTimeMS: 60_000,
+	...DATABASE_DEADLINES,
+});
+
+/** Driver errors of a database that cannot be reached, or that did not answer within a deadline. */
+const UNAVAILABLE_ERRORS = new Set([
+	'MongoServerSelectionError',
+	'MongoNetworkError',
+	'MongoNetworkTimeoutError',
+	'MongoWaitQueueTimeoutError',
+	'MongoOperationTimeoutError',
+	'MongoPoolClearedError',
+	'MongoTopologyClosedError',
+]);
+
+/**
+ * True when an error means a database cannot be reached or did not answer in time (a merchant database that cannot be
+ * reached, a driver network error or deadline, or an operation over its `maxTimeMS`).
+ * @param {unknown} error
+ * @returns {boolean}
+ */
+export const isDatabaseUnavailable = (error) =>
+	isKitError(error, 'database_unreachable') ||
+	(isObject(error) && (UNAVAILABLE_ERRORS.has(String(error.name)) || error.code === 50));
 
 /** @typedef {import('./logger.js').Logger} Logger */
 /** @typedef {import('mongodb').Document} Document */
@@ -374,6 +423,8 @@ export const createData = ({
 	planIndexes(indexes);
 	/** @type {Set<string>} */
 	const indexed = new Set();
+	/** Per instance: the creation of the product's indexes in each database, shared by concurrent requests. @type {Map<string, Promise<void>>} */
+	const ready = new Map();
 	const pools = poolRegistry();
 
 	/** Close pools unused for longer than `idleMs`. */
@@ -397,8 +448,7 @@ export const createData = ({
 				maxPoolSize: CLIENT_DB_POOL_SIZE,
 				minPoolSize: 0,
 				maxIdleTimeMS: 60_000,
-				serverSelectionTimeoutMS: 5_000,
-				connectTimeoutMS: 5_000,
+				...DATABASE_DEADLINES,
 				appName: `ss-${productId}`,
 				lookup: /** @type {any} */ (lookup),
 			};
@@ -444,16 +494,19 @@ export const createData = ({
 		const ensureIndexes = async (defs) => {
 			/** @type {string[]} */
 			const created = [];
-			for (const [name, specs] of planIndexes(defs)) {
-				const todo = specs.filter((spec) => !indexed.has(`${scopeKey}|${name}|${spec.name}`));
-				if (todo.length === 0) continue;
-				await db.collection(`${prefix}${name}`).createIndexes(todo);
-				for (const spec of todo) {
-					indexed.add(`${scopeKey}|${name}|${spec.name}`);
-					created.push(`${prefix}${name}.${spec.name}`);
-				}
-			}
-			return { created };
+			// every collection at once: a cold instance does not wait for one index creation after another (K-16)
+			await Promise.all(
+				[...planIndexes(defs)].map(async ([name, specs]) => {
+					const todo = specs.filter((spec) => !indexed.has(`${scopeKey}|${name}|${spec.name}`));
+					if (todo.length === 0) return;
+					await db.collection(`${prefix}${name}`).createIndexes(todo);
+					for (const spec of todo) {
+						indexed.add(`${scopeKey}|${name}|${spec.name}`);
+						created.push(`${prefix}${name}.${spec.name}`);
+					}
+				}),
+			);
+			return { created: created.sort() };
 		};
 
 		/** @type {WebsiteData['transaction']} */
@@ -471,7 +524,21 @@ export const createData = ({
 			}
 		};
 
-		if (indexes.length > 0) await ensureIndexes(indexes);
+		if (indexes.length > 0) {
+			// once per database and instance; a failed creation is tried again by the next request
+			let creating = ready.get(scopeKey);
+			if (!creating) {
+				creating = ensureIndexes(indexes).then(
+					() => {},
+					(error) => {
+						ready.delete(scopeKey);
+						throw error;
+					},
+				);
+				ready.set(scopeKey, creating);
+			}
+			await creating;
+		}
 		return Object.freeze({ websiteId, prefix, collection, ensureIndexes, transaction });
 	};
 

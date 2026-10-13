@@ -135,7 +135,7 @@ export const productRoutes = () => [
  * A connected product with one website, its tokens and helpers.
  * @param {{ store?: any, connections?: Record<string, any>, hooks?: any, strings?: Record<string, string>, connect?: boolean,
  *   nodeEnv?: string, routes?: any[], manifest?: any, lists?: Record<string, any>, events?: boolean, imports?: any,
- *   sharedSettings?: Record<string, any> }} [options]
+ *   sharedSettings?: Record<string, any>, data?: any }} [options]
  */
 export const setup = async (options = {}) => {
 	const clock = createClock();
@@ -164,6 +164,7 @@ export const setup = async (options = {}) => {
 		...(options.sharedSettings ? { sharedSettings: options.sharedSettings } : {}),
 		...(options.events ? { events: true } : {}),
 		...(options.imports ? { imports: options.imports } : {}),
+		...(options.data ? { data: options.data } : {}),
 	});
 	/** @type {Array<() => Promise<unknown>>} */
 	const tasks = [];

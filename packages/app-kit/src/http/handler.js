@@ -28,6 +28,7 @@ import { isIP } from 'node:net';
 import { canonicalOrigin, isLocalOrigin, isProtocolError, originAllowed, verifyToken } from '@ss/protocol';
 import { createId } from '@ss/contracts';
 import { parseActor } from '../actor.js';
+import { isDatabaseUnavailable } from '../data.js';
 import { isKitError, sha256Hex } from '../util.js';
 import { isProblem, isResult, noContent, ok, problem } from './results.js';
 import { compileRoutes, matchPath, matchRoute, splitPath } from './routes.js';
@@ -100,6 +101,11 @@ const VISITOR_IP_HEADER = 'ss-visitor-ip';
 const LAST_SEEN_EVERY_MS = 60 * 60_000;
 const STAFF_EVERY_MS = 10 * 60_000;
 const NO_FRAMES = Object.freeze({ 'x-frame-options': 'DENY', 'content-security-policy': "frame-ancestors 'none'" });
+/** The answer while a merchant or product database cannot be reached or does not answer in time (K-16). */
+const DATABASE_UNAVAILABLE = () =>
+	problem('database_unavailable', 'The database cannot be reached right now. Try again shortly.', {
+		headers: { 'retry-after': '5' },
+	});
 
 /** @param {URLSearchParams} params */
 const firstValues = (params) => {
@@ -571,7 +577,10 @@ export const createRequestHandler = (kit, routes, options = {}) => {
 				if (isProblem(error)) rendered = render(error, requestId, pathname);
 				else if (isKitError(error, 'database_not_connected'))
 					rendered = render(problem('database_not_connected'), requestId, pathname);
-				else {
+				else if (isDatabaseUnavailable(error)) {
+					log.warn('database unavailable', { error, route: r.id });
+					rendered = render(DATABASE_UNAVAILABLE(), requestId, pathname);
+				} else {
 					log.error('route handler failed', { error, route: r.id });
 					rendered = render(problem('internal_error'), requestId, pathname);
 				}
@@ -596,6 +605,10 @@ export const createRequestHandler = (kit, routes, options = {}) => {
 			}
 			return finish(rendered);
 		} catch (error) {
+			if (isDatabaseUnavailable(error)) {
+				log.warn('database unavailable', { error, ...(route ? { route: route.id } : {}) });
+				return fail(DATABASE_UNAVAILABLE());
+			}
 			log.error('request failed', { error, ...(route ? { route: route.id } : {}) });
 			return fail(problem('internal_error'));
 		}

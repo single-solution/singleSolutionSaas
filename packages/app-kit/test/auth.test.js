@@ -1,7 +1,9 @@
+import { MongoClient } from 'mongodb';
 import { describe, expect, it } from 'vitest';
 import { createProduct, created, defineRoute } from '../src/index.js';
 import { OFFLINE_GRACE_MS } from '../src/status.js';
-import { BASE, DOMAIN, ENCRYPTION_KEY, SECRET, manifest, productRoutes, setup } from './helpers.js';
+import { createMemoryStore } from '../src/testing.js';
+import { BASE, DOMAIN, ENCRYPTION_KEY, SECRET, T0, manifest, productRoutes, setup } from './helpers.js';
 
 const SITE = `https://${DOMAIN}`;
 
@@ -309,6 +311,68 @@ describe('idempotent routes (K-14)', () => {
 		expect(runs).toBe(7);
 		clock.advance(24 * 60 * 60_000);
 		expect(await (await post('/v1/orders', 'k1')).json()).toEqual({ n: 8, text: 'a' });
+	});
+});
+
+describe('databases that cannot be reached (K-16)', () => {
+	it('answer 503 database_unavailable, never 500, for the merchant and the product database', async () => {
+		let down = false;
+		let productDown = false;
+		const base = createMemoryStore({ now: () => T0 });
+		/** @type {any} */
+		const store = {
+			...base,
+			get: async (/** @type {any} */ collection, /** @type {string} */ id) => {
+				if (productDown) throw Object.assign(new Error('connection timed out'), { name: 'MongoNetworkTimeoutError' });
+				return base.get(collection, id);
+			},
+		};
+		const routes = [
+			...productRoutes(),
+			defineRoute({
+				method: 'GET',
+				path: '/v1/orders',
+				auth: 'server',
+				handler: async (ctx) => {
+					await (await ctx.data()).collection('orders').findOne({ websiteId: ctx.websiteId });
+					return { ok: true };
+				},
+			}),
+			defineRoute({
+				method: 'GET',
+				path: '/v1/slow',
+				auth: 'server',
+				database: false,
+				handler: () => {
+					throw Object.assign(new Error('operation exceeded time limit'), { code: 50 });
+				},
+			}),
+		];
+		const { call, server, connectDatabase, entries } = await setup({
+			routes,
+			store,
+			data: {
+				createClient: (/** @type {string} */ uri, /** @type {any} */ options) =>
+					new MongoClient(
+						down ? 'mongodb://127.0.0.1:1/x' : uri,
+						down ? { ...options, serverSelectionTimeoutMS: 200 } : options,
+					),
+			},
+		});
+		await connectDatabase();
+		down = true;
+		const merchant = await call('GET', '/v1/orders', { token: server.token });
+		expect([merchant.status, merchant.headers.get('retry-after')]).toEqual([503, '5']);
+		expect((await merchant.json()).type).toBe('https://notes.example.dev/problems/database_unavailable');
+		const slow = await call('GET', '/v1/slow', { token: server.token });
+		expect(slow.status).toBe(503);
+		productDown = true;
+		const product = await call('GET', '/v1/server/open', { token: server.token });
+		expect([product.status, (await product.json()).type]).toEqual([
+			503,
+			'https://notes.example.dev/problems/database_unavailable',
+		]);
+		expect(entries.filter((e) => e.level === 'error')).toEqual([]);
 	});
 });
 
