@@ -151,14 +151,14 @@ describe('Growth on the real Portal', () => {
 		const events = await merchantDb.collection('ss_growth_events').find({}).sort({ type: 1 }).toArray();
 		expect(events.map((e) => e.type).sort()).toEqual(['add_to_cart', 'page_view', 'purchase', 'search', 'view_item']);
 		expect(events.every((e) => e.websiteId === websiteId && e.expiresAt instanceof Date)).toBe(true);
-		const totals = await merchantDb.collection('ss_growth_daily').find({}).toArray();
+		const [day] = await merchantDb.collection('ss_growth_totals').find({}).toArray();
 		/** @param {string} metric @param {string} key */
-		const total = (metric, key) => totals.find((row) => row.metric === metric && row.key === key);
-		expect(total('visits', '')?.count).toBe(1);
-		expect(total('page', '/shop')?.count).toBe(1);
-		expect(total('search', 'phones')?.count).toBe(1);
-		expect(total('funnel', 'purchase')?.count).toBe(1);
-		expect(total('revenue', 'USD')).toMatchObject({ count: 1, sum: 2500 });
+		const total = (metric, key) => day?.totals?.[metric]?.[`_${key}`];
+		expect(total('visits', '')?.c).toBe(1);
+		expect(total('page', '/shop')?.c).toBe(1);
+		expect(total('search', 'phones')?.c).toBe(1);
+		expect(total('funnel', 'purchase')?.c).toBe(1);
+		expect(total('revenue', 'USD')).toMatchObject({ c: 1, s: 2500 });
 
 		// the same visitor back later (a new visit): the kept choice holds, no banner, the totals go up
 		const next = openPage(win.localStorage.getItem('ss-growth-consent'));
@@ -167,8 +167,8 @@ describe('Growth on the real Portal', () => {
 		expect(again.shadowRoot.querySelector('[role="dialog"]').hasAttribute('hidden')).toBe(true);
 		next.win.dispatchEvent(new next.win.Event('pagehide'));
 		await until(() => next.answers.some((answer) => answer.startsWith('/v1/collect 202')));
-		const after = await merchantDb.collection('ss_growth_daily').findOne({ metric: 'page_views', key: '' });
-		expect(after?.count).toBe(2);
+		const after = await merchantDb.collection('ss_growth_totals').findOne({});
+		expect(after?.totals.page_views._.c).toBe(2);
 	});
 
 	it('the analytics dashboard reads the totals with a ticket bound to the merchant’s admin page', async () => {

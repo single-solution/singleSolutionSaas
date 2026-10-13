@@ -227,13 +227,16 @@ describe('Growth options with the real page script (PLAN 0.8.10 G1–G7)', () =>
 		await new Promise((resolve) => setTimeout(resolve, 0));
 		leave(second.win);
 		// G7: the vital as a GA4 event, through the container
-		expect(second.win.dataLayer).toContainEqual({
-			event: 'LCP',
-			value: 4200,
-			metric_value: 4200,
-			metric_rating: 'poor',
-			non_interaction: true,
-		});
+		expect(second.win.dataLayer).toContainEqual(
+			expect.objectContaining({
+				event: 'LCP',
+				value: 4200,
+				metric_value: 4200,
+				metric_rating: 'poor',
+				event_category: 'web-vitals',
+				non_interaction: true,
+			}),
+		);
 		await until(async () => (await merchantDb.collection('ss_growth_events').countDocuments({ type: 'vital' })) > 0);
 
 		// G3: every event carries the session, the browser and system family and the city
