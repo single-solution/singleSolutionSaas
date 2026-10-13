@@ -6,7 +6,8 @@
  *   background work).
  * - Sign-ins: the website's Ed25519 key (made on first use, sealed in the merchant database), sign-ins of 15 minutes
  *   (`iss` = Accounts' address, `aud` = the website id), sessions with a rotating refresh token whose reuse ends the
- *   session, and `finish()`: blocked, approval, terms and two-step checks after the first step of any method.
+ *   session (after a 30-second grace for parallel renewals), and `finish()`: blocked, approval, terms and two-step
+ *   checks after the first step of any method.
  * - Messages through Notifications (pasted token): a Forgot password message that cannot go now is kept and sent
  *   again right after later requests; the data-rights fan-out to every connected product and the export.
  * @module

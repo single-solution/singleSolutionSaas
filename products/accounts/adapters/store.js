@@ -33,6 +33,9 @@ import { DEFAULT_ROLE, READY_ROLES, roleWithDefaults } from '../core/roles.js';
  * @property {string} userId
  * @property {string} refreshHash
  * @property {string[]} previousHashes
+ * @property {Array<{ hash: string, at: Date }>} [rotated] the last refresh tokens rotated away, with when (the grace
+ *   period of parallel renewals)
+ * @property {string | null} [sealedRefresh] the current refresh secret, sealed (answered again within the grace period)
  * @property {string} method how the user signed in
  * @property {string} device
  * @property {boolean} remember
@@ -362,16 +365,20 @@ export const createStore = (data, { now }) => {
 			/** @param {string} id @returns {Promise<SessionRecord | null>} */
 			get: async (id) => as(await sessions.findOne({ websiteId, id }, NO_ID)),
 			/**
-			 * Rotate the refresh token if it is still `expected` (two tabs racing lose cleanly).
-			 * @param {string} id @param {string} expected @param {string} next
+			 * Rotate the refresh token if it is still `expected` (of renewals racing, only the first rotates); the old hash is
+			 * kept with the time, and the new secret sealed, for the grace period.
+			 * @param {string} id @param {string} expected @param {string} next @param {string} sealed the new secret, sealed
 			 */
-			rotate: async (id, expected, next) =>
+			rotate: async (id, expected, next, sealed) =>
 				(
 					await sessions.updateOne(
 						{ websiteId, id, refreshHash: expected, revokedAt: null },
 						{
-							$set: { refreshHash: next, lastUsedAt: at() },
-							$push: { previousHashes: { $each: [expected], $slice: -20 } },
+							$set: { refreshHash: next, sealedRefresh: sealed, lastUsedAt: at() },
+							$push: {
+								previousHashes: { $each: [expected], $slice: -20 },
+								rotated: { $each: [{ hash: expected, at: at() }], $slice: -5 },
+							},
 						},
 					)
 				).modifiedCount === 1,

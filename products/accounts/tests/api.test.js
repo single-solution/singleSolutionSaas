@@ -234,6 +234,12 @@ describe('sessions', () => {
 		const renewed = await env.visitor('POST', '/v1/session/refresh', { refreshToken: first.json.refreshToken });
 		expect(renewed.json.status).toBe('signed_in');
 		expect(renewed.json.refreshToken).not.toBe(first.json.refreshToken);
+		// within 30 seconds the old token gets the same new pair (a retried renew)
+		env.advance(29_000);
+		const retried = await env.visitor('POST', '/v1/session/refresh', { refreshToken: first.json.refreshToken });
+		expect(retried.json.refreshToken).toBe(renewed.json.refreshToken);
+		expect((await env.visitor('GET', '/v1/me', undefined, retried.json.signIn)).status).toBe(200);
+		env.advance(2_000);
 		const reused = await env.visitor('POST', '/v1/session/refresh', { refreshToken: first.json.refreshToken });
 		expect(code(reused)).toBe('signed_out');
 		// the session ended, so the newer token is refused too
@@ -241,6 +247,24 @@ describe('sessions', () => {
 			'signed_out',
 		);
 		expect(code(await env.visitor('POST', '/v1/session/refresh', { refreshToken: 'garbage' }))).toBe('signed_out');
+	});
+
+	it('parallel renewals with one refresh token all get the same new pair; sign-out takes it too', async () => {
+		/** @param {{ json: any }} res */
+		const renew = (res) => env.visitor('POST', '/v1/session/refresh', { refreshToken: res.json.refreshToken });
+		const start = await signIn('ana@example.com', 'brand new password');
+		const answers = await Promise.all([renew(start), renew(start), renew(start)]);
+		expect(answers.map((res) => res.json.status)).toEqual(['signed_in', 'signed_in', 'signed_in']);
+		expect(new Set(answers.map((res) => res.json.refreshToken)).size).toBe(1);
+		expect(answers[0]?.json.refreshToken).not.toBe(start.json.refreshToken);
+		const next = await renew(/** @type {{ json: any }} */ (answers[0]));
+		expect(next.json.status).toBe('signed_in');
+		// a sign-out with a token renewed a moment ago ends the session
+		expect((await env.visitor('POST', '/v1/session/sign-out', { refreshToken: answers[0]?.json.refreshToken })).status).toBe(
+			204,
+		);
+		expect(code(await renew(next))).toBe('signed_out');
+		expect(code(await env.visitor('POST', '/v1/session/sign-out', { refreshToken: 'garbage' }))).toBe('');
 	});
 
 	it('lists devices, signs one out, signs out everywhere, and the session ends by its length', async () => {

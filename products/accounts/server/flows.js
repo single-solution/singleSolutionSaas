@@ -40,12 +40,18 @@ import { parseSecret } from './service.js';
 /** @typedef {import('./service.js').Service} Service */
 /** @typedef {import('./service.js').Site} Site */
 /** @typedef {import('../core/profile.js').UserRecord} UserRecord */
+/** @typedef {import('../adapters/store.js').SessionRecord} SessionRecord */
 
 /** Fixed windows of the network limit (A9) and of the hourly code caps (A7). */
 const NETWORK_WINDOW_MS = 15 * 60_000;
 const HOUR_MS = 3_600_000;
 /** Digits of a sign-in code staff make (A3). */
 export const STAFF_CODE_LENGTH = 6;
+/**
+ * A refresh token presented again this soon after its renewal gets the current pair instead of ending the session:
+ * the merchant's server renews from parallel requests, or retries a renew (RW-1; code constant).
+ */
+const REFRESH_GRACE_MS = 30_000;
 
 /** @param {unknown} value */
 const bodyOf = (value) => (typeof value === 'object' && value !== null ? /** @type {Record<string, any>} */ (value) : {});
@@ -817,26 +823,65 @@ export const createFlows = (product, service) => {
 
 	// -------------------------------------------------------------------------------------------------- sessions
 
-	/** Renew: a new sign-in and a new refresh token; an old refresh token ends the session. @param {any} ctx */
+	/** The sealing context of a session's current refresh secret. @param {Site} s @param {string} sessionId */
+	const refreshAad = (s, sessionId) => `accounts-refresh|${s.websiteId}|${sessionId}`;
+
+	/** Whether a session is still open. @param {SessionRecord | null} session @returns {session is SessionRecord} */
+	const live = (session) => session !== null && !session.revokedAt && session.expiresAt.getTime() > now();
+
+	/** Whether a refresh token was rotated away from the session within the grace period. @param {SessionRecord} session @param {string} hash */
+	const rotatedLately = (session, hash) =>
+		(session.rotated ?? []).some((entry) => entry.at.getTime() > now() - REFRESH_GRACE_MS && safeEqual(entry.hash, hash));
+
+	/**
+	 * The session's current refresh secret, for a token rotated away within the grace period; null otherwise.
+	 * @param {Site} s @param {SessionRecord} session @param {string} hash
+	 */
+	const currentSecret = (s, session, hash) => {
+		if (!rotatedLately(session, hash)) return null;
+		const secret = product.sealer.open(session.sealedRefresh, refreshAad(s, session.id));
+		return secret && safeEqual(session.refreshHash, sha256(secret)) ? secret : null;
+	};
+
+	/**
+	 * Rotate the session's current refresh token; when another renewal with the same token rotated it a moment ago,
+	 * the pair that renewal got.
+	 * @param {Site} s @param {SessionRecord} session @param {string} hash
+	 * @returns {Promise<{ session: SessionRecord | null, secret: string | null }>}
+	 */
+	const rotateOrJoin = async (s, session, hash) => {
+		const next = randomSecret(32);
+		if (await s.store.sessions.rotate(session.id, hash, sha256(next), product.sealer.seal(next, refreshAad(s, session.id))))
+			return { session, secret: next };
+		const again = await s.store.sessions.get(session.id);
+		return { session: again, secret: live(again) ? currentSecret(s, again, hash) : null };
+	};
+
+	/**
+	 * Renew: a new sign-in and a new refresh token. The token renewed less than 30 seconds ago gets the same new pair
+	 * (parallel renewals, a retry; RW-1); an older one came back because it was copied, so the session ends.
+	 * @param {any} ctx
+	 */
 	const refresh = async (ctx) => {
 		const s = await service.site(ctx);
 		const parsed = parseSecret(bodyOf(ctx.body).refreshToken);
-		const session = parsed ? await s.store.sessions.get(parsed.id) : null;
+		const found = parsed ? await s.store.sessions.get(parsed.id) : null;
 		const out = () => problem('signed_out', 'Sign in again.');
-		if (!parsed || !session || session.revokedAt || session.expiresAt.getTime() <= now()) throw out();
+		if (!parsed || !live(found)) throw out();
 		const hash = sha256(parsed.secret);
-		if (!safeEqual(session.refreshHash, hash)) {
-			// an old token came back: it was copied, so the session ends
-			if (session.previousHashes.includes(hash)) await s.store.sessions.revoke(session.userId, session.id);
+		const current = safeEqual(found.refreshHash, hash);
+		const lately = current ? null : currentSecret(s, found, hash);
+		if (!current && !lately) {
+			if (found.previousHashes.includes(hash)) await s.store.sessions.revoke(found.userId, found.id);
 			throw out();
 		}
-		const user = await s.store.users.get(session.userId);
+		const user = await s.store.users.get(found.userId);
 		if (!user || user.blocked || user.status !== 'active') {
-			await s.store.sessions.revoke(session.userId, session.id);
+			await s.store.sessions.revoke(found.userId, found.id);
 			throw out();
 		}
-		const secret = randomSecret(32);
-		if (!(await s.store.sessions.rotate(session.id, hash, sha256(secret)))) throw out();
+		const { session, secret } = current ? await rotateOrJoin(s, found, hash) : { session: found, secret: lately };
+		if (!session || !secret) throw out();
 		return {
 			status: 'signed_in',
 			...(await service.signInFor(s, user, session.id)),
@@ -847,12 +892,13 @@ export const createFlows = (product, service) => {
 		};
 	};
 
-	/** @param {any} ctx */
+	/** Sign out with the refresh token (or one renewed within the grace period). @param {any} ctx */
 	const signOut = async (ctx) => {
 		const s = await service.site(ctx);
 		const parsed = parseSecret(bodyOf(ctx.body).refreshToken);
 		const session = parsed ? await s.store.sessions.get(parsed.id) : null;
-		if (parsed && session && safeEqual(session.refreshHash, sha256(parsed.secret)))
+		const hash = parsed ? sha256(parsed.secret) : '';
+		if (session && (safeEqual(session.refreshHash, hash) || rotatedLately(session, hash)))
 			await s.store.sessions.revoke(session.userId, session.id);
 		return undefined;
 	};
