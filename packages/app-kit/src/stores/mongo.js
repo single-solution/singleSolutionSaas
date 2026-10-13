@@ -2,10 +2,13 @@
  * The production product database store on MongoDB (the product's own `MONGODB_URI`, never a merchant database).
  * Each collection is `<prefix><name>` (default prefix `kit_`). Indexes are created lazily and idempotently on first use:
  * `websiteId` on per-website collections, `subject` and `websiteIds` on sessions, and TTL indexes on `expireAt`.
- * Documents with a numeric `expiresAt` (epoch ms) are hidden once it has passed and removed by the TTL index.
+ * Documents with a numeric `expiresAt` (epoch ms) are hidden once it has passed and removed by the TTL index. The Db's
+ * client is connected before use, and again after a failed connect, so a database that could not be reached when the
+ * instance started is used as soon as it is back (K-16).
  * @module
  */
 
+import { connectBeforeUse } from '../data.js';
 import { omit } from '../util.js';
 
 /** @typedef {import('mongodb').Db} Db */
@@ -62,19 +65,26 @@ const toMongo = (id, doc) => ({
  */
 export const createMongoStore = ({ db, prefix = 'kit_', now = Date.now }) => {
 	if (!db || typeof db.collection !== 'function') throw new TypeError('createMongoStore needs a mongodb Db');
+	const connect = connectBeforeUse(db.client);
 	/** @param {string} name */
-	const col = (name) => db.collection(`${prefix}${name}`);
+	const named = (name) => db.collection(`${prefix}${name}`);
+	/** A collection, once the client is connected. @param {string} name */
+	const col = async (name) => {
+		await connect();
+		return named(name);
+	};
 	/** @type {Promise<void> | undefined} */
 	let ready;
 	const ensureIndexes = () => {
 		ready ??= (async () => {
+			await connect();
 			const ttl = { expireAfterSeconds: 0, name: 'ttl' };
 			await Promise.all([
-				...PER_WEBSITE.map((name) => col(name).createIndex({ websiteId: 1 }, { name: 'website' })),
-				col('changes').createIndex({ websiteId: 1, at: -1 }, { name: 'website_at' }),
-				col('sessions').createIndex({ subject: 1 }, { name: 'subject' }),
-				col('sessions').createIndex({ websiteIds: 1 }, { name: 'websites' }),
-				...['sessions', 'replay', 'rate', 'idempotency'].map((name) => col(name).createIndex({ expireAt: 1 }, ttl)),
+				...PER_WEBSITE.map((name) => named(name).createIndex({ websiteId: 1 }, { name: 'website' })),
+				named('changes').createIndex({ websiteId: 1, at: -1 }, { name: 'website_at' }),
+				named('sessions').createIndex({ subject: 1 }, { name: 'subject' }),
+				named('sessions').createIndex({ websiteIds: 1 }, { name: 'websites' }),
+				...['sessions', 'replay', 'rate', 'idempotency'].map((name) => named(name).createIndex({ expireAt: 1 }, ttl)),
 			]);
 		})().catch((error) => {
 			ready = undefined;
@@ -83,21 +93,25 @@ export const createMongoStore = ({ db, prefix = 'kit_', now = Date.now }) => {
 		return ready;
 	};
 	/** @param {string} name */
-	const check = (name) => {
+	const check = async (name) => {
 		if (!COLLECTIONS.includes(name)) throw new TypeError(`unknown collection ${name}`);
 		return col(name);
 	};
 
 	return Object.freeze({
 		ensureIndexes,
-		get: async (collection, id) => fromMongo(await check(collection).findOne(/** @type {any} */ ({ _id: id })), now()),
+		get: async (collection, id) => {
+			const c = await check(collection);
+			return fromMongo(await c.findOne(/** @type {any} */ ({ _id: id })), now());
+		},
 		put: async (collection, id, doc) => {
 			await ensureIndexes();
-			await check(collection).replaceOne(/** @type {any} */ ({ _id: id }), toMongo(id, doc), { upsert: true });
+			const c = await check(collection);
+			await c.replaceOne(/** @type {any} */ ({ _id: id }), toMongo(id, doc), { upsert: true });
 		},
 		insert: async (collection, id, doc) => {
 			await ensureIndexes();
-			const c = check(collection);
+			const c = await check(collection);
 			try {
 				await c.insertOne(/** @type {any} */ (toMongo(id, doc)));
 				return true;
@@ -109,11 +123,13 @@ export const createMongoStore = ({ db, prefix = 'kit_', now = Date.now }) => {
 			return taken.modifiedCount === 1;
 		},
 		delete: async (collection, id) => {
-			await check(collection).deleteOne(/** @type {any} */ ({ _id: id }));
+			const c = await check(collection);
+			await c.deleteOne(/** @type {any} */ ({ _id: id }));
 		},
 		list: async (collection, filter, { limit = 1000 } = {}) => {
 			const t = now();
-			const rows = await check(collection)
+			const c = await check(collection);
+			const rows = await c
 				.find(/** @type {any} */ ({ ...filter, expiresAt: { $not: { $lte: t } } }))
 				.sort({ at: -1, _id: 1 })
 				.limit(limit)
@@ -121,12 +137,13 @@ export const createMongoStore = ({ db, prefix = 'kit_', now = Date.now }) => {
 			return rows.map((row) => /** @type {Doc} */ (fromMongo(row, t)));
 		},
 		deleteWhere: async (collection, filter) => {
-			const result = await check(collection).deleteMany(/** @type {any} */ ({ ...filter }));
+			const c = await check(collection);
+			const result = await c.deleteMany(/** @type {any} */ ({ ...filter }));
 			return result.deletedCount;
 		},
 		seen: async (id, expiresAtMs) => {
 			await ensureIndexes();
-			const c = col('replay');
+			const c = await col('replay');
 			try {
 				await c.insertOne(/** @type {any} */ ({ _id: id, expireAt: new Date(expiresAtMs) }));
 				return false;
@@ -139,12 +156,14 @@ export const createMongoStore = ({ db, prefix = 'kit_', now = Date.now }) => {
 			return taken.modifiedCount === 0;
 		},
 		forget: async (id) => {
-			await col('replay').deleteOne(/** @type {any} */ ({ _id: id }));
+			const c = await col('replay');
+			await c.deleteOne(/** @type {any} */ ({ _id: id }));
 		},
 		hit: async (key, windowMs, t) => {
 			await ensureIndexes();
 			const start = Math.floor(t / windowMs) * windowMs;
-			const doc = await col('rate').findOneAndUpdate(
+			const c = await col('rate');
+			const doc = await c.findOneAndUpdate(
 				/** @type {any} */ ({ _id: `${key}|${start}` }),
 				{ $inc: { count: 1 }, $setOnInsert: { expireAt: new Date(start + windowMs + 60_000) } },
 				{ upsert: true, returnDocument: 'after' },

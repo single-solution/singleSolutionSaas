@@ -1,6 +1,7 @@
 import { MongoClient } from 'mongodb';
+import { MongoMemoryServer } from 'mongodb-memory-server';
 import { describe, expect, it } from 'vitest';
-import { createProduct, created, defineRoute } from '../src/index.js';
+import { PRODUCT_DATABASE_OPTIONS, createMongoStore, createProduct, created, defineRoute } from '../src/index.js';
 import { createPortalClient } from '../src/portal-client.js';
 import { OFFLINE_GRACE_MS, WAITED_FETCH_MS, createStatus } from '../src/status.js';
 import { noopLogger } from '../src/logger.js';
@@ -529,6 +530,33 @@ describe('databases that cannot be reached (K-16)', () => {
 		]);
 		expect(entries.filter((e) => e.level === 'error')).toEqual([]);
 	});
+
+	it('use a product database that could not be reached when the instance started as soon as it is back', async () => {
+		// a database of its own (the shared one serves every test file), stopped while the instance starts; its client
+		// waits 0.3 s for a server, not 5 s
+		const mongod = await MongoMemoryServer.create();
+		const client = new MongoClient(mongod.getUri('kit_product'), {
+			...PRODUCT_DATABASE_OPTIONS,
+			serverSelectionTimeoutMS: 300,
+		});
+		try {
+			await mongod.stop({ doCleanup: false });
+			const { portal, handler, call, server, switchOn } = await setup({
+				store: createMongoStore({ db: client.db(), now: () => T0 }),
+				connect: false,
+			});
+			const connect = () => portal.connect({ handler, baseUrl: BASE, secret: SECRET });
+			await expect(connect()).rejects.toThrow(/^connect failed with 503: .*database_unavailable/);
+			await mongod.start(true);
+			// the same request on the same instance, no restart (mongodb 6.x closed the client's first topology)
+			await connect();
+			await switchOn(['notes']);
+			expect((await call('GET', '/v1/features', { token: server.token })).status).toBe(200);
+		} finally {
+			await client.close();
+			await mongod.stop();
+		}
+	}, 30_000);
 });
 
 describe('request handling', () => {

@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
 	DATABASE_DEADLINES,
 	PRODUCT_DATABASE_OPTIONS,
+	connectBeforeUse,
 	createData,
 	guardFilter,
 	guardPipeline,
@@ -294,6 +295,26 @@ describe('merchant database (MongoDB)', () => {
 		expect(isDatabaseUnavailable(kitError('database_not_connected', 'x'))).toBe(false);
 		expect(isDatabaseUnavailable(Object.assign(new Error('dup'), { code: 11000 }))).toBe(false);
 		expect(isDatabaseUnavailable(null)).toBe(false);
+	});
+
+	it('connects a client before use, and again after a failed connect (K-16)', async () => {
+		let attempts = 0;
+		let down = true;
+		const client = {
+			connect: async () => {
+				attempts += 1;
+				if (down) throw Object.assign(new Error('no server'), { name: 'MongoServerSelectionError' });
+				return client;
+			},
+		};
+		const connect = connectBeforeUse(/** @type {any} */ (client));
+		// concurrent calls share one attempt; a failure is forgotten, so the next call tries again
+		await expect(Promise.all([connect(), connect()])).rejects.toMatchObject({ name: 'MongoServerSelectionError' });
+		expect(attempts).toBe(1);
+		down = false;
+		await Promise.all([connect(), connect()]);
+		await connect();
+		expect(attempts).toBe(2);
 	});
 
 	it('supports transactions', async () => {

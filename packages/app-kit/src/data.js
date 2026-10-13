@@ -77,6 +77,28 @@ export const isDatabaseUnavailable = (error) =>
 	isKitError(error, 'database_unreachable') ||
 	(isObject(error) && (UNAVAILABLE_ERRORS.has(String(error.name)) || error.code === 50));
 
+/**
+ * Connect a database client before use: the returned function resolves once `client` is connected. A mongodb 6.x client
+ * whose first connect fails (the database cannot be reached while a serverless instance starts) closes its topology,
+ * and every later call fails with `MongoTopologyClosedError`, even once the database is back; `client.connect()` opens
+ * a new one. So a failed connect (within the client's {@link DATABASE_DEADLINES}) is forgotten and tried again by the
+ * next call, on the same warm instance, as merchant database pools are; concurrent calls share one attempt, and a
+ * connected client is not asked again (it finds its database again by itself after an outage).
+ * @param {Pick<MongoClient, 'connect'>} client
+ * @returns {() => Promise<void>}
+ */
+export const connectBeforeUse = (client) => {
+	/** @type {Promise<unknown> | null} */
+	let connecting = null;
+	return async () => {
+		connecting ??= client.connect().catch((error) => {
+			connecting = null;
+			throw error;
+		});
+		await connecting;
+	};
+};
+
 /** @typedef {import('./logger.js').Logger} Logger */
 /** @typedef {import('mongodb').Document} Document */
 
