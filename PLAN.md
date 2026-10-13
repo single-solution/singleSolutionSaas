@@ -2063,6 +2063,22 @@ Accounts, Chat, Notifications and the kit's staff alerts use it; Ecommerce switc
 merges customers with it. Why: `923001234567` became `+92923001234567` and `+92 0320…` became `+920320…` (K-7, CK-3,
 SA-3).
 
+**K13. Reliability (always; 2026-10-13, re-audit K-14, K-16, K-17, K-19, SE-2, RT-5, SG-14; commits bc324b03, 449e6c31,
+1bf4b93f, f315a130, 04a98205, 391b8d1e, cdfd6435, f7beb27f, 9e811edb, 49a47886).** Idempotent routes give the first
+answer again (`Idempotent-Replayed: true`) to a repeat of the same request (method, address, body, ticket or acting
+user, `SS-Guest`, `SS-Order-Key`) within 24 hours; another request under the key gets 409 `duplicate_request`, and one
+still running 409 `in_progress` with `Retry-After: 1`; a 5xx frees the key. Database calls have deadlines (server
+selection and connect 5 s, pool wait and each send or receive 10 s; `DATABASE_DEADLINES`) and pools of 5, connections
+opening on demand and closing after 60 s idle; an unreachable or slow database answers 503 `database_unavailable` with
+`Retry-After: 5`, never a 500; indexes are built once per database and instance. A status copy within the offline grace
+never makes a request wait: it is refreshed after the response, one fetch per website per instance at a time (a request
+waits at most 5 s, only when it has no usable copy). The kit's staff alerts are sent `required`, with one
+Idempotency-Key each, and an alert Notifications did not take is saved (`ss_<product>_staff_alerts`, TTL) and retried on
+later uses (1, 5, 15, 60 minutes, then every 3 hours, for a day). Per-visitor rate limits come first, and the website's
+window counts only what passed them. Activity copies Accounts refuses pause for 15 minutes and are dropped after 3
+refusals. Products with events publish `<product>.settings.changed { what, key? }` on every settings, texts, theme,
+Format or list save.
+
 #### Accounts
 
 **A1. Legacy password hashes.** Password checks also accept bcrypt (`$2a$`, `$2b$`, `$2y$`, any cost) and
@@ -4817,8 +4833,10 @@ These bind wherever the rest of Part 0 does not change them.
   A message that would be lost with no way to send it again (order messages, staff alerts, chat replies) is saved
   before sending and retried on the next activity; if that is not enough, one small retry timer per product may resend
   those saved messages, and nothing else. Work that is only delayed, or that a person can simply repeat, stays
-  timer-free. **Connection budget**: one database and one database user per deployable on the one cluster;
-  Mongo clients are created once per instance and cached on `globalThis`, with small fixed pools.
+  timer-free. Ecommerce's outbox (E63), Notifications (N9) and the kit's staff alerts (K13) follow this exception by
+  retrying on later uses; no timer has been needed so far. **Connection budget**: one database and one database user per deployable on the one cluster;
+  Mongo clients are created once per instance and cached on `globalThis`, with pools of 5 per database and instance and
+  deadlines on every call (K13); about 6 products × 3 busy instances × 7 connections ≈ 130 of a free cluster's 500.
 - **Outbound calls**: every outbound call to an address a merchant or admin entered goes through `@ss/net`, the one SSRF
   guard for the Portal and the products: https only, no userinfo, ports 443 and 8443, public addresses only (every DNS
   answer is checked at connect time and the socket is pinned to the checked answers), redirects only for GET and HEAD
