@@ -8,6 +8,7 @@
  * @module
  */
 import { createProduct } from '@ss/app-kit';
+import { normalisePhone } from '@ss/contracts/phone';
 import { createOutboundPolicy, safeFetch } from '@ss/net';
 import manifestFile from '../manifest.json' with { type: 'json' };
 import strings from '../strings/en.json' with { type: 'json' };
@@ -31,7 +32,7 @@ import riskChecks from '../schemas/risk_checks.settings.json' with { type: 'json
 import roles from '../schemas/roles.settings.json' with { type: 'json' };
 import terms from '../schemas/terms.settings.json' with { type: 'json' };
 import twoStep from '../schemas/two_step.settings.json' with { type: 'json' };
-import { normaliseEmail, normalisePhone } from '../core/identifiers.js';
+import { normaliseEmail } from '../core/identifiers.js';
 import { selfView } from '../core/profile.js';
 import { DEFAULT_ROLE } from '../core/roles.js';
 import { createSealer, importedTwoStep, totpAadOf } from './crypto.js';

@@ -11,7 +11,8 @@ import {
 	verifyTotp,
 } from '../adapters/crypto.js';
 import { appleClientSecret, createProviders, pkceChallenge } from '../adapters/providers.js';
-import { emailDomain, maskAddress, normaliseEmail, normalisePhone } from '../core/identifiers.js';
+import { PHONE_COUNTRIES } from '@ss/contracts/phone';
+import { emailDomain, maskAddress, normaliseEmail } from '../core/identifiers.js';
 import {
 	checkAddresses,
 	checkCustomValues,
@@ -35,22 +36,20 @@ import {
 import { createSnippets } from '../core/snippets.js';
 import { parseSecret } from '../server/service.js';
 import { appleKey, idToken } from './helpers.js';
+import phoneCode from '../schemas/phone_code.settings.json' with { type: 'json' };
 
 describe('identifiers', () => {
-	it('normalises e-mail addresses and phone numbers', () => {
+	it('normalises e-mail addresses and masks addresses', () => {
 		expect(normaliseEmail(' Ana@Example.COM ')).toBe('ana@example.com');
 		for (const bad of [5, 'a@b', 'a@@b.com', '.a@b.com', 'a..b@b.com', 'a@b.123', 'a@-b.com', `${'a'.repeat(65)}@b.com`])
 			expect(normaliseEmail(bad)).toBeNull();
 		expect(emailDomain('a@shop.example.com')).toBe('shop.example.com');
-		expect(normalisePhone('+1 (555) 000-1111')).toBe('+15550001111');
-		expect(normalisePhone('0044 20 7946 0000')).toBe('+442079460000');
-		expect(normalisePhone('0300 1234567', { defaultCallingCode: '+92', trunkPrefix: '0' })).toBe('+923001234567');
-		expect(normalisePhone('0300 1234567')).toBeNull();
-		for (const bad of [5, '', '+1+2', '1+2', 'abc', '+0123456', '12', `+1${'2'.repeat(40)}`])
-			expect(normalisePhone(bad)).toBeNull();
-		expect(normalisePhone('12', { defaultCallingCode: '+1' })).toBeNull();
 		expect(maskAddress('ana@example.com')).toBe('a•••@example.com');
 		expect(maskAddress('+923001234567')).toBe('+92•••••••567');
+	});
+
+	it('the allowed phone countries are the shared normaliser’s countries', () => {
+		expect(phoneCode.properties.countries.items.enum).toEqual([...PHONE_COUNTRIES]);
 	});
 });
 

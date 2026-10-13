@@ -359,7 +359,12 @@ describe('phone code and e-mail code', () => {
 			code: '000000' === sent.values.code ? '111111' : '000000',
 		});
 		expect(code(wrong)).toBe('code_invalid');
-		const ok = await env.visitor('POST', '/v1/sign-in/phone', { phone: '0300-1234567', code: sent.values.code, name: 'Pat' });
+		// a code asked for one way of typing the number works with another (K-7, SA-3)
+		const ok = await env.visitor('POST', '/v1/sign-in/phone', {
+			phone: '+92 (0)300-1234567',
+			code: sent.values.code,
+			name: 'Pat',
+		});
 		expect(ok.json).toMatchObject({ status: 'signed_in', user: { phone: '+923001234567', phoneVerified: true, name: 'Pat' } });
 		// a code works once
 		expect(code(await env.visitor('POST', '/v1/sign-in/phone', { phone: '+923001234567', code: sent.values.code }))).toBe(
@@ -384,8 +389,12 @@ describe('phone code and e-mail code', () => {
 			'code_invalid',
 		);
 		env.advance(31_000);
-		await env.visitor('POST', '/v1/sign-in/phone/code', { phone: '+923001234567' });
-		const third = await env.visitor('POST', '/v1/sign-in/phone', { phone: '+923001234567', code: lastMessage().values.code });
+		await env.visitor('POST', '/v1/sign-in/phone/code', { phone: '92 300 1234567' });
+		expect(lastMessage().to).toMatchObject({ phone: '+923001234567' });
+		const third = await env.visitor('POST', '/v1/sign-in/phone', {
+			phone: '0092 0300 1234567',
+			code: lastMessage().values.code,
+		});
 		expect(third.json.status).toBe('signed_in');
 	});
 

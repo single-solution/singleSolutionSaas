@@ -6,6 +6,7 @@
  */
 import { problem } from '@ss/app-kit';
 import { createId } from '@ss/contracts';
+import { phoneInCountries } from '@ss/contracts/phone';
 import { normaliseEmail } from '../core/identifiers.js';
 import { checkCustomValues, checkName, identityOfMethod, resetsByEmail, selfView } from '../core/profile.js';
 import { DEFAULT_ROLE, sessionEnd } from '../core/roles.js';
@@ -19,7 +20,6 @@ import {
 	newUserNameOf,
 	normaliseCode,
 	passwordProblem,
-	phoneCountryAllowed,
 	returnAddress,
 } from '../core/rules.js';
 import { LINK_PARAMS } from '../core/widgets.js';
@@ -609,7 +609,7 @@ export const createFlows = (product, service) => {
 		const phone = await service.phoneOf(s, bodyOf(ctx.body).phone);
 		if (!phone) throw invalid('phone', 'Enter the phone number with its country code.');
 		const { channel, codeLength, codeMinutes, countries } = await service.settings(s, 'phone_code');
-		if (!phoneCountryAllowed(phone, countries))
+		if (!phoneInCountries(phone, countries))
 			throw problem('country_not_allowed', 'Codes go only to numbers of the countries this website serves.');
 		await service.allowCode(s, await s.store.users.byPhone(phone), 'phone_code');
 		const sent = await sendCode(s, 'phone', phone, { length: codeLength, minutes: codeMinutes }, (code) =>

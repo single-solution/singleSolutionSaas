@@ -5,7 +5,7 @@
 import { createHash } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { totpCode } from '../adapters/crypto.js';
-import { ALL, setup } from './helpers.js';
+import { ALL, ORIGIN, setup } from './helpers.js';
 
 /** @type {Awaited<ReturnType<typeof setup>>} */
 let env;
@@ -93,6 +93,29 @@ describe('A7: phone-code options', () => {
 			name: 'Own Name',
 		});
 		expect(own.json.user.name).toBe('Own Name');
+	});
+
+	it('reads a phone typed any usual way as one number, with the business.json country’s calling code (K-7, SA-3)', async () => {
+		env.advance(3_600_000);
+		// no calling code set and no country: a national number is refused
+		expect(code(await askCode('0300 1230008'))).toBe('validation_failed');
+		env.responders.set(`${ORIGIN}/.well-known/business.json`, () => ({
+			status: 200,
+			body: { name: 'shop.example.com', country: 'PK' },
+		}));
+		await env.refreshBusiness();
+		expect((await askCode('0300 1230008')).status).toBe(202);
+		const sent = env.messages().at(-1);
+		expect(sent.to).toMatchObject({ phone: '+923001230008' });
+		// the same number typed other ways waits for the cooldown
+		for (const typed of ['923001230008', '+92 0300 1230008']) expect(code(await askCode(typed))).toBe('code_cooldown');
+		const signedIn = await env.visitor('POST', '/v1/sign-in/phone', { phone: '+92 (0)300-1230008', code: sent.values.code });
+		expect(signedIn.json.user.phone).toBe('+923001230008');
+		// the website's own calling code comes first
+		await env.setting('phone', 'defaultCallingCode', '+44');
+		expect((await askCode('0300 1230008')).status).toBe(202);
+		expect(env.messages().at(-1).to).toMatchObject({ phone: '+443001230008' });
+		await env.setting('phone', 'defaultCallingCode', '');
 	});
 });
 

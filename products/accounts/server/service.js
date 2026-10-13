@@ -14,8 +14,8 @@
  */
 import { problem } from '@ss/app-kit';
 import { createId } from '@ss/contracts';
+import { normalisePhone, websiteCallingCode } from '@ss/contracts/phone';
 import { detailOf, labelOf } from '../core/activity.js';
-import { normalisePhone } from '../core/identifiers.js';
 import { DEFAULT_ROLE, READY_ROLES, remembered, sessionEnd, signInRefusal } from '../core/roles.js';
 import { checkAddresses, selfView } from '../core/profile.js';
 import { OPEN_SIGN_UP, deviceIdOf, deviceOf } from '../core/rules.js';
@@ -171,13 +171,15 @@ export const createService = (product) => {
 			: OPEN_SIGN_UP;
 
 	/**
-	 * A phone number as typed, in E.164 with the website's phone format (shared by Phone code and Phone + password), or
-	 * null.
+	 * A phone number as typed, in E.164 with the website's phone format (shared by Phone code and Phone + password; the
+	 * default calling code is the setting's, else the business.json country's), or null.
 	 * @param {Site} s @param {unknown} value
 	 */
 	const phoneOf = async (s, value) => {
 		const { defaultCallingCode, trunkPrefix } = await settings(s, 'phone');
-		return normalisePhone(value, { defaultCallingCode: String(defaultCallingCode), trunkPrefix: String(trunkPrefix) });
+		const code =
+			websiteCallingCode(defaultCallingCode) || websiteCallingCode('', (await product.business(s.websiteId)).country);
+		return normalisePhone(value, { defaultCallingCode: code, trunkPrefix: String(trunkPrefix) });
 	};
 
 	/** The user's role (the default role when theirs is gone). @param {Site} s @param {UserRecord} user */
