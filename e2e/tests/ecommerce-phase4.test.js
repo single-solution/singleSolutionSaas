@@ -743,6 +743,40 @@ describe('Ecommerce phase 4 on the real Portal, Accounts, Payments and Notificat
 		expect(mails.find((mail) => mail.subject === `Paid: ${order.number}`)).toBeTruthy();
 	});
 
+	it('cancels the Payments payment with its order; a transfer confirmed after shows a refund due, refunded through Payments (K-13)', async () => {
+		const sara = await signIn('03001112233');
+		const placed = await place({ lines: [caseLine()], payment: 'bank_transfer' }, sara);
+		expect(placed.status, JSON.stringify(placed.json)).toBe(201);
+		const { order } = placed.json;
+		const total = order.totals.total;
+		const { paymentId } = (await orderOf(order.id)).payment;
+		const payments = (/** @type {string} */ method, /** @type {string} */ path, /** @type {unknown} */ body = undefined) =>
+			sys.call(method, path, { base: PAYMENTS, token: tokens.payments?.server, ...(body === undefined ? {} : { body }) });
+		const cancelled = await shopper('POST', `/v1/shop/orders/${order.id}/cancel`, { signIn: sara });
+		expect(cancelled.json.order.status).toBe('cancelled');
+		expect((await payments('GET', `/v1/payments/${paymentId}`)).json).toMatchObject({ status: 'voided', refundDue: false });
+		// the money arrives anyway and the store's staff confirm it in Payments: it is to be refunded
+		const late = await payments('POST', `/v1/payments/${paymentId}/confirm`, { reference: 'TRX-9', note: 'Late' });
+		expect(late.json).toMatchObject({ status: 'paid', refundDue: true });
+		await dashboardOf(PAYMENTS, 'payments', '/features', { on: ['payment_api', 'bank_transfer', 'refunds'] });
+		sys.clock.advance(31_000);
+		const read = await orderOf(order.id);
+		expect(read).toMatchObject({ status: 'cancelled', payment: { paid: total, refundDue: total } });
+		// refunded the normal way: Payments records a bank transfer's refund, the shop returns the money by hand
+		const refunded = await server(
+			'POST',
+			`/v1/orders/${order.id}/refunds`,
+			{ amount: total, reason: 'Order was cancelled' },
+			{ staff: 'Ayesha Khan', key: `k13-${order.id}` },
+		);
+		expect(refunded.status, JSON.stringify(refunded.json)).toBe(201);
+		expect(refunded.json.refund).toMatchObject({ online: total, recorded: true });
+		expect(refunded.json.warnings[0]).toContain('by hand');
+		expect(refunded.json.order.payment).toMatchObject({ refundDue: 0, state: 'refunded' });
+		expect(refunded.json.order.refunds[0]).toMatchObject({ method: 'bank_transfer', manual: true });
+		expect((await payments('GET', `/v1/payments/${paymentId}`)).json).toMatchObject({ status: 'refunded', refundDue: false });
+	});
+
 	it('takes a manual bank transfer with the shopper’s proof, and the payments log records staff payments and refunds (E24, E26)', async () => {
 		await configure({ 'checkout.bankTransferVia': 'manual', 'checkout.autoRefundedStatus': true });
 		let sara = await signIn('03001112233');

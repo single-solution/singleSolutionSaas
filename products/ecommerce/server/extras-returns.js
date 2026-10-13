@@ -681,18 +681,17 @@ export const createReturns = (product, service) => {
 			},
 		);
 		// the order: on the first refund, the units returned
-		if (first)
+		if (first) {
+			const returned = claim.lines.map((line, index) => [`lines.$[l${index}].returnedQuantity`, line.quantity]);
+			const filters = claim.lines.map((line, index) => ({ [`l${index}.id`]: line.lineId }));
 			await data
 				.collection(COLLECTIONS.orders)
 				.updateOne(
 					{ websiteId: data.websiteId, id: order.id },
-					{
-						$inc: Object.fromEntries(
-							claim.lines.map((line, index) => [`lines.$[l${index}].returnedQuantity`, line.quantity]),
-						),
-					},
-					{ arrayFilters: claim.lines.map((line, index) => ({ [`l${index}.id`]: line.lineId })) },
+					{ $inc: Object.fromEntries(returned) },
+					{ arrayFilters: filters },
 				);
+		}
 		if (s.has('loyalty')) {
 			const after = /** @type {OrderRecord} */ (await findOrder(data, { id: order.id }));
 			const { pointsBack } = await s.values('returns');

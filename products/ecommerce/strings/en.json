@@ -1000,6 +1000,7 @@
 	"ordersAdmin.placedAt": "Placed",
 	"ordersAdmin.advance": "Advance paid",
 	"ordersAdmin.refundableAmount": "Can be refunded",
+	"ordersAdmin.refundDue": "Refund due",
 	"ordersAdmin.pointsUsed": "Points used",
 	"ordersAdmin.pointsEarned": "Points earned",
 	"ordersAdmin.warranty": "Warranty",

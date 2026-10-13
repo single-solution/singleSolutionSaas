@@ -183,10 +183,15 @@ export const createOrders = (product, service, { ordering = null } = {}) => {
 		);
 	};
 
-	/** @param {any} ctx */
+	/**
+	 * One order, with its waiting payment asked again (at most every 30 seconds), money paid after its cancel looked for
+	 * (K-13) and its booked parcel's status.
+	 * @param {any} ctx
+	 */
 	const readOrder = async (ctx) => {
 		const s = await service.site(ctx);
-		return detailOf(s, await refreshTracking(s, await orderOf(s, ctx)));
+		const order = (await moves.recheck(s, await orderOf(s, ctx))).order;
+		return detailOf(s, await refreshTracking(s, order));
 	};
 
 	/** @param {any} ctx */
@@ -219,7 +224,8 @@ export const createOrders = (product, service, { ordering = null } = {}) => {
 
 	/**
 	 * DELETE /v1/orders/:id (E31): what the order holds is given back as a cancel does (stock, slots, offer uses, points,
-	 * serials), then it is deleted; the activity entry keeps its number and total.
+	 * serials; its open Payments payment is cancelled, K-13), then it is deleted; the activity entry keeps its number and
+	 * total.
 	 * @param {any} ctx
 	 */
 	const deleteOrder = async (ctx) => {
@@ -227,7 +233,7 @@ export const createOrders = (product, service, { ordering = null } = {}) => {
 		const order = await orderOf(s, ctx);
 		const data = await s.data();
 		const orders = data.collection(COLLECTIONS.orders);
-		await moves.giveBack(s, order);
+		await moves.giveBack(s, order, { payments: true });
 		await orders.deleteOne({ websiteId: s.websiteId, id: order.id });
 		const { money } = await s.format();
 		await service.log(ctx, 'order.deleted', order.id, {

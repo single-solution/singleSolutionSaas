@@ -42,6 +42,14 @@ export const INDEXES = [
 		partialFilterExpression: { guest: true },
 	},
 	{ collection: COLLECTIONS.orders, keys: { websiteId: 1, 'payment.paymentId': 1 }, name: 'by_payment' },
+	// cancels Payments could not take yet, and cancelled orders watched for money paid after (K-13)
+	{
+		collection: COLLECTIONS.orders,
+		keys: { websiteId: 1, 'payment.voidPendingAt': 1 },
+		name: 'by_void_pending',
+		partialFilterExpression: { 'payment.voidPendingAt': { $type: 'date' } },
+	},
+	{ collection: COLLECTIONS.orders, keys: { websiteId: 1, role: 1, 'payment.voidedAt': 1 }, name: 'by_role_voided' },
 	{ collection: COLLECTIONS.licences, keys: { websiteId: 1, id: 1 }, name: 'by_id', unique: true },
 	{ collection: COLLECTIONS.licences, keys: { websiteId: 1, productId: 1, key: 1 }, name: 'one_key', unique: true },
 	{ collection: COLLECTIONS.licences, keys: { websiteId: 1, productId: 1, status: 1 }, name: 'by_status' },
@@ -280,6 +288,51 @@ export const createOrdersStore = (data) => {
 							role: 'awaiting_payment',
 							'payment.state': 'pending',
 							'payment.paymentId': { $ne: null },
+							$or: [{ 'payment.checkedAt': null }, { 'payment.checkedAt': { $lte: new Date(now - everyMs) } }],
+						},
+						NO_ID,
+					)
+					.sort({ 'payment.checkedAt': 1 })
+					.limit(RECHECK_BATCH)
+					.toArray()
+			),
+		/**
+		 * Orders cancelled while Payments could not take the cancel of their payment (K-13), within `windowMs` of the
+		 * cancel and not tried in the last `everyMs`, least recently tried first.
+		 * @param {number} now @param {number} everyMs @param {number} windowMs
+		 * @returns {Promise<OrderRecord[]>}
+		 */
+		voidsPending: async (now, everyMs, windowMs) =>
+			/** @type {OrderRecord[]} */ (
+				await orders
+					.find(
+						{
+							websiteId,
+							'payment.voidPendingAt': { $gte: new Date(now - windowMs) },
+							$or: [{ 'payment.checkedAt': null }, { 'payment.checkedAt': { $lte: new Date(now - everyMs) } }],
+						},
+						NO_ID,
+					)
+					.sort({ 'payment.checkedAt': 1 })
+					.limit(RECHECK_BATCH)
+					.toArray()
+			),
+		/**
+		 * Cancelled orders whose Payments payment was cancelled within `windowMs` and that hold no money from it, not
+		 * checked in the last `everyMs`, least recently checked first (money may still arrive, K-13).
+		 * @param {number} now @param {number} everyMs @param {number} windowMs
+		 * @returns {Promise<OrderRecord[]>}
+		 */
+		toWatch: async (now, everyMs, windowMs) =>
+			/** @type {OrderRecord[]} */ (
+				await orders
+					.find(
+						{
+							websiteId,
+							role: 'cancelled',
+							'payment.voidedAt': { $gte: new Date(now - windowMs) },
+							'payment.paymentId': { $ne: null },
+							payments: { $not: { $elemMatch: { method: 'online' } } },
 							$or: [{ 'payment.checkedAt': null }, { 'payment.checkedAt': { $lte: new Date(now - everyMs) } }],
 						},
 						NO_ID,

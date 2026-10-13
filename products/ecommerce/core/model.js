@@ -321,10 +321,12 @@ export const STATUS_ROLES = Object.freeze([
  *   `pointsReversed`: earned points already taken back (a claim's refund, a return or a refund, OR-10)
  * @property {{ method: PaymentMethod, state: PaymentState, paymentId: string | null, advance: number, paid: number,
  *   refunded: number, checkedAt: Date | null, checkoutUrl?: string, via?: 'payments' | 'manual',
- *   proof?: { key: string, reference: string, at: Date } | null }} payment `paymentId`: the Payments payment; `advance`:
- *   the COD advance; `checkoutUrl`: Payments' page for paying it; `via`: a bank transfer or advance taken through
- *   Payments or recorded by staff (E23, E24); `proof`: the shopper's transfer proof (E24). `paid` and `refunded` add up
- *   `payments` and `refunds` (E26)
+ *   proof?: { key: string, reference: string, at: Date } | null, voidedAt?: Date | null,
+ *   voidPendingAt?: Date | null }} payment `paymentId`: the Payments payment; `advance`: the COD advance;
+ *   `checkoutUrl`: Payments' page for paying it; `via`: a bank transfer or advance taken through Payments or recorded by
+ *   staff (E23, E24); `proof`: the shopper's transfer proof (E24); `voidedAt`: its Payments payment was cancelled with
+ *   the order; `voidPendingAt`: the order was cancelled while Payments could not take that cancel (tried again on use,
+ *   K-13); `checkedAt`: when Payments was last asked. `paid` and `refunded` add up `payments` and `refunds` (E26)
  * @property {OrderPaymentEntry[]} [payments] money received (E26)
  * @property {OrderRefundEntry[]} [refunds] money given back (E26)
  * @property {string} status a status key of the website's order flow

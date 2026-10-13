@@ -121,6 +121,11 @@ const RETRY_BATCH = 20;
 /** Why a call to Notifications is tried again: it did not take the message (unreachable, 5xx, no address, refused token). */
 const RETRY_REASONS = Object.freeze(['unreachable', 'unavailable', 'refused']);
 
+/**
+ * A Payments payment as Ecommerce reads it: `refundDue` when it was paid after the shop cancelled it (K-13).
+ * @typedef {{ status: string, amount: number, currency: string, refundDue: boolean }} PaymentFacts
+ */
+
 /** @typedef {import('../adapters/outbox.js').OutboxMessage} OutboxMessage */
 /** @typedef {import('../adapters/outbox.js').OutboxEntry} OutboxEntry */
 /** What became of a message. @typedef {'sent' | 'queued' | 'not_connected' | 'failed' | 'skipped'} SendResult */
@@ -534,6 +539,18 @@ export const createService = (product) => {
 		return answer.body;
 	};
 
+	/**
+	 * What Ecommerce needs of a Payments payment.
+	 * @param {any} body the payment as Payments answers it
+	 * @returns {PaymentFacts}
+	 */
+	const factsOf = (body) => ({
+		status: String(body.status ?? ''),
+		amount: Number(body.amount ?? 0),
+		currency: String(body.currency ?? ''),
+		refundDue: body.refundDue === true,
+	});
+
 	const payments = Object.freeze({
 		/**
 		 * Start a payment (`POST /v1/payments`): the shopper pays on Payments' page (`checkoutUrl`).
@@ -559,6 +576,38 @@ export const createService = (product) => {
 				status: String(body.payment?.status ?? ''),
 				refunded: Number(body.payment?.refunded ?? 0),
 			};
+		},
+		/**
+		 * A payment as Payments has it now: its status, amount and currency, and `refundDue` (paid after it was
+		 * cancelled, K-13).
+		 * @param {Site} s @param {string} paymentId
+		 * @returns {Promise<PaymentFacts>}
+		 */
+		read: async (s, paymentId) => factsOf(await callPayments(s, 'GET', `/v1/payments/${encodeURIComponent(paymentId)}`)),
+		/**
+		 * Cancel a payment the shop no longer wants (P4, K-13): `voided` (also when it was cancelled before), `paid` (it
+		 * was paid: 409 `already_paid`, with the payment), `gone` (Payments has no such payment, or refuses for good), or
+		 * `unreachable` (not connected, cannot be reached, the token refused, 408 or 429: try again later).
+		 * @param {Site} s @param {string} paymentId @param {string} reason
+		 * @returns {Promise<{ outcome: 'voided' } | { outcome: 'gone' } | { outcome: 'unreachable' } |
+		 *   { outcome: 'paid', payment: PaymentFacts }>}
+		 */
+		cancel: async (s, paymentId, reason) => {
+			const answer = await product.callProduct(
+				s.websiteId,
+				'payments',
+				`/v1/payments/${encodeURIComponent(paymentId)}/cancel`,
+				{
+					method: 'POST',
+					body: { reason: reason.replace(/\s+/g, ' ').trim().slice(0, 200) },
+				},
+			);
+			if (answer.ok) return { outcome: 'voided' };
+			const body = typeof answer.body === 'object' && answer.body !== null ? /** @type {any} */ (answer.body) : {};
+			const code = typeof body.type === 'string' ? body.type.split('/').pop() : '';
+			if (answer.status === 409 && code === 'already_paid') return { outcome: 'paid', payment: factsOf(body.payment ?? {}) };
+			if (answer.reason === 'failed' && answer.status !== 408 && answer.status !== 429) return { outcome: 'gone' };
+			return { outcome: 'unreachable' };
 		},
 		/**
 		 * Refund (all or part) of a payment through Payments, naming the member of the staff who asked (K2).

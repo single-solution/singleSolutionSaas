@@ -27,6 +27,7 @@ import { WAITING_ROLES as WAITING, canMove, confirmedStatus, statusOf } from '..
 import { expiryFor, loyaltyRules, pointsToEarn } from '../core/loyalty.js';
 import { createId } from '@ss/contracts';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
+import { createOrderPayments } from './order-payments.js';
 import {
 	CASH_METHODS,
 	earnedLeft,
@@ -72,6 +73,23 @@ const changed = () => problem('conflict', 'The order changed meanwhile; reload i
  * @param {Service} service
  */
 export const createMoves = (product, service) => {
+	const payments = createOrderPayments(product, service);
+
+	/**
+	 * Cancel at Payments the open payment of an order about to be cancelled or refunded before delivery (K-13): what
+	 * the move then writes with it, or a refusal when the shopper paid meanwhile (the order is paid now).
+	 * @param {Site} s @param {OrderRecord} order @param {string} reason
+	 */
+	const cancelAtPayments = async (s, order, reason) => {
+		const step = await payments.beforeCancel(s, order, reason);
+		if (step.paid)
+			throw problem(
+				'move_not_allowed',
+				'The shopper paid this order meanwhile, so it is paid now: move it again to cancel and refund it.',
+			);
+		return step;
+	};
+
 	/**
 	 * Run `work` in a transaction, again when the loyalty account changed meanwhile.
 	 * @param {Site} s
@@ -572,8 +590,18 @@ export const createMoves = (product, service) => {
 				break;
 			}
 			case 'cancelled': {
-				// before shipping or a recalled parcel (E27): everything is given back once
+				// before shipping or a recalled parcel (E27): its open payment is cancelled at Payments first (K-13), then
+				// everything is given back once
+				const step = await cancelAtPayments(s, order, input.note || 'Order cancelled');
+				Object.assign(set, step.set);
 				if (!(await releaseOrder(data, order, { now, update: writeReleased }))) throw changed();
+				await payments.afterCancel(
+					s,
+					/** @type {OrderRecord} */ (
+						await orders.findOne({ websiteId: s.websiteId, id: order.id }, { projection: { _id: 0 } })
+					),
+					step,
+				);
 				const { online } = refundSplit(order, refundable(order));
 				if (online > 0) {
 					try {
@@ -618,8 +646,10 @@ export const createMoves = (product, service) => {
 				// before delivery a refund acts as a cancel, and only when something was paid (E27)
 				if (before && order.payment.paid <= 0)
 					throw problem('nothing_paid', 'Nothing was paid on this order; cancel it instead.');
-				const { online, manual } = refundSplit(order, amount);
 				const note = input.note || 'Order refunded';
+				// as a cancel: a payment still open at Payments is cancelled there first (K-13)
+				if (before) Object.assign(set, (await cancelAtPayments(s, order, note)).set);
+				const { online, manual } = refundSplit(order, amount);
 				const done =
 					online > 0
 						? await refundOnline(s, ctx, order, online, note, `${order.id}:refund:${order.payment.refunded}`)
@@ -902,12 +932,15 @@ export const createMoves = (product, service) => {
 
 	/**
 	 * Give back what an order holds before it is deleted (E31), as a cancel does: its stock and slots, offer uses and
-	 * redeemed points (once), and its serial numbers.
-	 * @param {Site} s @param {OrderRecord} order
+	 * redeemed points (once), and its serial numbers. With `payments`, its open Payments payment is cancelled first and
+	 * a payment made meanwhile refuses the delete (K-13).
+	 * @param {Site} s @param {OrderRecord} order @param {{ payments?: boolean }} [options]
 	 */
-	const giveBack = async (s, order) => {
+	const giveBack = async (s, order, { payments: cancelPayment = false } = {}) => {
 		// delivered, returned and settled orders hold nothing any more (what was sold stays sold)
 		if (!['awaiting_payment', 'awaiting_confirmation', 'open', 'packed', 'shipped'].includes(order.role)) return;
+		if (cancelPayment && (await payments.beforeCancel(s, order, 'Order deleted')).paid)
+			throw problem('conflict', 'This order was paid meanwhile; refund it before deleting it.');
 		const data = await s.data();
 		if (order.stockHeld || !order.promotions.released)
 			await releaseOrder(data, order, {
@@ -920,7 +953,7 @@ export const createMoves = (product, service) => {
 		else await data.transaction((session) => releaseSerials(s, order.id, session));
 	};
 
-	return Object.freeze({ move, refund, recordPayment, giveBack, typeSerials, serializedOf });
+	return Object.freeze({ move, refund, recordPayment, giveBack, typeSerials, serializedOf, recheck: payments.recheck });
 };
 
 /** @typedef {ReturnType<typeof createMoves>} Moves */

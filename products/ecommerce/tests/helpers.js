@@ -93,13 +93,27 @@ export const setup = async ({ start = Date.parse('2026-10-05T10:00:00Z') } = {})
 				: { status: 201, body: { id: `msg_${calls.length}`, status: 'queued' } }
 			: { status: 200, body: {} },
 	);
-	// Payments: a new payment is pending; verify says no until a test says otherwise (payments.paid)
+	// Payments: a new payment is pending; verify says no until a test says otherwise (payments.paid); a cancelled
+	// payment is voided, unless it was paid (409 already_paid); money for a voided payment is flagged refundDue (P4)
 	const paid = new Set();
+	const voided = new Set();
+	/** @type {Map<string, { amount: number, currency: string }>} */
+	const amounts = new Map();
+	/** @param {string} id */
+	const paymentOf = (id) => ({
+		id,
+		status: paid.has(id) ? 'paid' : voided.has(id) ? 'voided' : 'pending',
+		refundDue: paid.has(id) && voided.has(id),
+		amount: amounts.get(id)?.amount ?? 0,
+		currency: amounts.get(id)?.currency ?? 'USD',
+		refunded: 0,
+	});
 	responders.set(PAYMENTS, (call) => {
 		const path = call.path.split('?')[0] ?? '';
 		if (call.method === 'POST' && path === '/v1/payments') {
 			const body = JSON.parse(call.body);
 			const id = `pay_${String(calls.length).padStart(12, '0')}`;
+			amounts.set(id, { amount: body.amount, currency: body.currency });
 			return {
 				status: 201,
 				body: { id, status: 'pending', amount: body.amount, currency: body.currency, checkoutUrl: `${PAYMENTS}/pay/w/${id}` },
@@ -112,11 +126,25 @@ export const setup = async ({ start = Date.parse('2026-10-05T10:00:00Z') } = {})
 			return {
 				status: 200,
 				body: {
-					verified: paid.has(id),
+					verified: paid.has(id) && !voided.has(id),
 					payment: { id, status: paid.has(id) ? 'paid' : 'pending', amount: body.amount, refunded: 0 },
 				},
 			};
 		}
+		const cancel = /^\/v1\/payments\/([^/]+)\/cancel$/.exec(path);
+		if (cancel) {
+			const id = /** @type {string} */ (cancel[1]);
+			if (paid.has(id))
+				return {
+					status: 409,
+					type: 'application/problem+json',
+					body: { type: 'https://errors.example/already_paid', status: 409, payment: paymentOf(id) },
+				};
+			voided.add(id);
+			return { status: 200, body: paymentOf(id) };
+		}
+		const read = /^\/v1\/payments\/([^/]+)$/.exec(path);
+		if (read && call.method === 'GET') return { status: 200, body: paymentOf(/** @type {string} */ (read[1])) };
 		const refund = /^\/v1\/payments\/([^/]+)\/refunds$/.exec(path);
 		if (refund) {
 			const body = JSON.parse(call.body);

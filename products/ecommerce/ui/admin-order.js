@@ -148,6 +148,8 @@ const renderOrder = (kit, order, detail, message) => {
 		[t('ordersAdmin.advance'), order.payment.advance > 0 ? money(order.payment.advance) : ''],
 		[t('ordersAdmin.refundedAmount'), order.payment.refunded > 0 ? money(order.payment.refunded) : ''],
 		[t('ordersAdmin.refundableAmount'), refundable > 0 ? money(refundable) : ''],
+		// money a cancelled order still holds (paid after its cancel, or recorded by staff): to be refunded (K-13)
+		[t('ordersAdmin.refundDue'), order.payment.refundDue > 0 ? money(order.payment.refundDue) : ''],
 		[t('ordersAdmin.subtotal'), money(order.totals.subtotal)],
 		[t('ordersAdmin.discount'), order.totals.discount > 0 ? money(order.totals.discount) : ''],
 		[t('ordersAdmin.deliveryFee'), money(order.totals.delivery)],

@@ -15,7 +15,8 @@
  *   order's amount (or advance) and currency; the payment is a log entry of the order (E26). A waiting payment is asked
  *   again when the order is read (at most every 30 seconds), on use, and once more before a waiting order is cancelled
  *   at the end of its window (0 = never). Nothing runs on a timer: waiting orders whose window ended are cancelled on
- *   use (`service.whenUsed`), giving back what they held.
+ *   use (`service.whenUsed`), giving back what they held. A cancelled order's Payments payment is cancelled there first
+ *   (`server/order-payments.js`, K-13).
  * - The shopper's orders: list, detail (by id or number, with the sign-in or the order's key, E21) with downloads and
  *   licence keys, cancel in the roles `shopperCancel` lists (E27), pay again, and the transfer proof (E24).
  * @module
@@ -28,7 +29,7 @@ import { heldStockBefore, placeOrder, releaseOrder, swapOrderStock } from '../ad
 import { createOrdersStore } from '../adapters/orders-store.js';
 import { STOCK_PROBLEMS, checkAddress, checkCart, checkOrderExtras } from '../core/checkout.js';
 import { shipmentLink } from '../core/couriers.js';
-import { WAITING_ROLES, cancelledStatus, confirmedStatus, statusOf, statusWithRole } from '../core/flow.js';
+import { WAITING_ROLES, cancelledStatus, statusOf, statusWithRole } from '../core/flow.js';
 import { checkGuest, phoneDigitsOf } from '../core/guests.js';
 import { loyaltyRules, pointsToEarn, takesPart } from '../core/loyalty.js';
 import { gradesByKey } from '../core/grades.js';
@@ -36,6 +37,7 @@ import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import { orderMoney } from '../core/orders.js';
 import { createMedia } from './catalog-media.js';
 import { createGuests } from './guests.js';
+import { RECHECK_MS, createOrderPayments, expectedOf } from './order-payments.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
 /** @typedef {import('./service.js').Service} Service */
@@ -49,16 +51,12 @@ import { createGuests } from './guests.js';
 /** @typedef {import('../core/model.js').OrderFlow} OrderFlow */
 /** @typedef {import('../core/model.js').StatusRole} StatusRole */
 
-/** A waiting payment is asked of Payments at most this often per order. */
-const RECHECK_MS = 30_000;
 /** The header a guest sends their order's key in (the kit's CORS allows it). */
 const ORDER_KEY_HEADER = 'ss-order-key';
 /** Transfer proofs: what may be uploaded, and how big (E24). */
 const PROOF_TYPES = Object.freeze({ 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'application/pdf': 'pdf' });
 const PROOF_MAX_BYTES = 10 * 1_048_576;
 const PROOF_SECONDS = 900;
-/** Who confirms what Payments confirmed. */
-const PAYMENTS_ACTOR = Object.freeze({ kind: 'system', id: 'payments', name: 'Payments' });
 
 const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/;
 const E164 = /^\+[1-9]\d{6,14}$/;
@@ -73,12 +71,6 @@ const withParam = (url, name, value) => {
 
 /** @param {Date | string | null | undefined} at */
 const iso = (at) => (at ? new Date(at).toISOString() : null);
-
-/** What Payments must confirm for an order: its advance (COD) or its total. @param {OrderRecord} order */
-const expectedOf = (order) => ({
-	amount: order.payment.advance > 0 ? order.payment.advance : order.totals.total,
-	currency: order.totals.currency,
-});
 
 /**
  * A template address with `{number}` and `{id}` filled (E22 `successUrl` and `cancelUrl`).
@@ -95,6 +87,7 @@ const fillAddress = (template, order) =>
 export const createOrdering = (product, service, { quoting, digital }) => {
 	const media = createMedia(product);
 	const guests = createGuests(product);
+	const payments = createOrderPayments(product, service);
 
 	/** @param {Site} s @returns {Promise<OrderFlow>} */
 	const flowOf = async (s) => /** @type {OrderFlow} */ (/** @type {unknown} */ (await s.list('order_flow')));
@@ -187,84 +180,15 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		}
 	};
 
-	/**
-	 * Mark an order paid (Payments confirmed it: an `online` entry of its payments log, E26) and move it to the flow's
-	 * confirmed status.
-	 * @param {Site} s @param {OrderRecord} order
-	 * @returns {Promise<OrderRecord>}
-	 */
-	const confirmPaid = async (s, order) => {
-		const store = createOrdersStore(await s.data());
-		const flow = await flowOf(s);
-		const now = service.now();
-		const to = confirmedStatus(flow, order.status);
-		const advance = order.payment.advance > 0;
-		const amount = expectedOf(order).amount;
-		/** @type {Record<string, unknown>} */
-		const set = {
-			'payment.state': advance ? 'unpaid' : 'paid',
-			'payment.paid': amount,
-			'payment.checkedAt': new Date(now),
-			holdUntil: null,
-		};
-		// the flow may have no move from waiting to an open status: the order is then paid but stays where it is
-		const next = statusOf(flow, to ?? '');
-		if (next) Object.assign(set, { status: next.key, role: next.role });
-		const entry = {
-			id: createId(ID_PREFIX.orderPayment),
-			method: 'online',
-			amount,
-			reference: order.payment.paymentId ?? '',
-			proofKey: null,
-			note: advance ? 'Advance' : '',
-			by: PAYMENTS_ACTOR,
-			at: new Date(now),
-		};
-		const moved = await store.change(order, set, {
-			where: { 'payment.state': 'pending' },
-			push: {
-				payments: entry,
-				...(next
-					? { history: { at: new Date(now), from: order.status, to: next.key, by: 'system', note: 'Payment confirmed' } }
-					: {}),
-			},
-		});
-		if (!moved) return (await store.order(order.id)) ?? order;
-		await service.emit('order.paid', s, { order: moved, entry });
-		if (next) await service.emit('order.moved', s, { order: moved, from: order.status, to: next.key, by: 'system' });
-		return (await store.order(order.id)) ?? moved;
-	};
-
-	/**
-	 * Ask Payments about an order's waiting payment (at most every {@link RECHECK_MS} unless `force`) and confirm the
-	 * order when it is paid. Never throws: when Payments cannot be reached the order is returned as it was.
-	 * @param {Site} s @param {OrderRecord} order @param {{ force?: boolean }} [options]
-	 * @returns {Promise<{ order: OrderRecord, reached: boolean }>}
-	 */
-	const recheck = async (s, order, { force = false } = {}) => {
-		if (order.role !== 'awaiting_payment' || order.payment.state !== 'pending' || !order.payment.paymentId)
-			return { order, reached: true };
-		const now = service.now();
-		const checkedAt = order.payment.checkedAt ? new Date(order.payment.checkedAt).getTime() : null;
-		if (!force && checkedAt !== null && now - checkedAt < RECHECK_MS) return { order, reached: true };
-		let verified = false;
-		try {
-			verified = (await service.payments.verify(s, order.payment.paymentId, expectedOf(order))).verified;
-		} catch {
-			return { order, reached: false };
-		}
-		if (verified) return { order: await confirmPaid(s, order), reached: true };
-		const store = createOrdersStore(await s.data());
-		return { order: (await store.change(order, { 'payment.checkedAt': new Date(now) })) ?? order, reached: true };
-	};
-
 	/** @param {Site} s @param {OrderRecord} order */
-	const refresh = async (s, order) => (await recheck(s, order)).order;
+	const refresh = async (s, order) => (await payments.recheck(s, order)).order;
 
 	// ------------------------------------------------------------------------------------------------- cancelling
 
 	/**
-	 * Cancel a waiting order, giving back its stock, slots, offer uses and points (exactly once).
+	 * Cancel a waiting order, giving back its stock, slots, offer uses and points (exactly once). Its open Payments
+	 * payment is cancelled first (K-13): when it was paid meanwhile the order is paid instead and is returned as it is now
+	 * (not cancelled).
 	 * @param {Site} s @param {OrderRecord} order as just read
 	 * @param {{ by: string, note: string, reason: 'staff' | 'shopper' | 'expired' }} who
 	 * @returns {Promise<OrderRecord | null>} null when it moved meanwhile or the flow has no cancelled status
@@ -274,6 +198,8 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		const to = cancelledStatus(flow, order.status) ?? '';
 		const role = statusOf(flow, to)?.role;
 		if (!role) return null;
+		const step = await payments.beforeCancel(s, order, note);
+		if (step.paid) return step.paid;
 		const data = await s.data();
 		const now = service.now();
 		// stock coming back tells the alerts (E34)
@@ -286,7 +212,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 					const result = await data.collection(COLLECTIONS.orders).updateOne(
 						{ websiteId: data.websiteId, id: order.id, status: order.status },
 						{
-							$set: { status: to, role, holdUntil: null },
+							$set: { status: to, role, holdUntil: null, ...step.set },
 							$push: { history: { at: new Date(now), from: order.status, to, by, note, reason } },
 						},
 						{ session },
@@ -299,7 +225,9 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		}
 		if (!done) return null;
 		if (held) await service.emit('products.changed', s, held);
-		const after = /** @type {OrderRecord} */ (await createOrdersStore(data).order(order.id));
+		const store = createOrdersStore(data);
+		await payments.afterCancel(s, /** @type {OrderRecord} */ (await store.order(order.id)), step);
+		const after = /** @type {OrderRecord} */ (await store.order(order.id));
 		await service.emit('order.moved', s, { order: after, from: order.status, to, by, reason });
 		return after;
 	};
@@ -313,7 +241,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 	const expire = async (s, order) => {
 		let current = order;
 		if (order.role === 'awaiting_payment' && order.payment.state === 'pending' && order.payment.paymentId) {
-			const checked = await recheck(s, order, { force: true });
+			const checked = await payments.recheck(s, order, { force: true });
 			if (!checked.reached && (await product.connections.value(s.websiteId, 'payments')) !== null) return;
 			current = checked.order;
 			if (current.status !== order.status || current.payment.state !== 'pending') return;
@@ -326,15 +254,17 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 	};
 
 	/**
-	 * Work on use: recheck waiting payments, then end waiting orders whose window passed (bounded batches).
+	 * Work on use: recheck waiting payments, end waiting orders whose window passed, then the Payments side of cancelled
+	 * orders (K-13) (bounded batches).
 	 * @param {Site} s
 	 */
 	const sweep = async (s) => {
 		if (!s.has('checkout') || (await product.connections.value(s.websiteId, 'database')) === null) return;
 		const store = createOrdersStore(await s.data());
 		const now = service.now();
-		for (const order of await store.toRecheck(now, RECHECK_MS)) await recheck(s, order);
+		for (const order of await store.toRecheck(now, RECHECK_MS)) await payments.recheck(s, order);
 		for (const order of await store.expired(WAITING_ROLES, now)) await expire(s, order);
+		await payments.sweep(s);
 	};
 
 	// --------------------------------------------------------------------------------------------------- views
@@ -618,7 +548,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 	 * Edit an order while it waits for payment or confirmation (E29): its lines (variant, quantity, an optional unit
 	 * price), payment method and delivery. It is priced again with the offers it was placed with (kept even when they
 	 * ended since, by the same deal rules, OR-9), its stock holds are swapped in one transaction, and a payment started
-	 * through Payments for the old total is dropped (the shopper pays the new one).
+	 * through Payments for the old total is cancelled there and dropped (the shopper pays the new one; K-13).
 	 * @param {Site} s
 	 * @param {any} ctx
 	 * @param {OrderRecord} order as read
@@ -741,6 +671,12 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 			...(restartPayment ? { 'payment.paymentId': null, 'payment.checkoutUrl': '', 'payment.checkedAt': null } : {}),
 			updatedAt: new Date(now),
 		};
+		// the payment started for the old total is cancelled at Payments, so it can no longer be paid (K-13, CK-21)
+		const dropped = restartPayment ? await payments.beforeCancel(s, order, 'Order edited') : null;
+		if (dropped?.paid || dropped?.late)
+			throw problem('conflict', 'This order was paid meanwhile; it can no longer be edited. Reload it.');
+		if (dropped && !dropped.reached)
+			throw problem('payments_unavailable', 'Payments cannot be reached to cancel the payment of the old total. Try again.');
 		const swapped = await swapOrderStock(data, order, {
 			lines: lines
 				.filter((line) => line.kind === 'physical')
@@ -767,6 +703,9 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 			},
 		});
 		if (!swapped.ok) {
+			// its cancelled payment is dropped: the shopper's next pay starts one for the total as it is
+			if (dropped)
+				await store.change(order, { 'payment.paymentId': null, 'payment.checkoutUrl': '', 'payment.checkedAt': null });
 			if (swapped.code === 'changed') throw problem('conflict', 'The order changed meanwhile; reload it and try again.');
 			throw problem('out_of_stock', 'Some items are not in stock in the quantity asked.', {
 				extensions: { lines: [{ productId: swapped.productId, variantId: swapped.variantId }] },
@@ -1074,6 +1013,9 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 			reason: 'shopper',
 		});
 		if (!cancelled) throw problem('move_not_allowed', 'This order can no longer be cancelled here.');
+		// paid at Payments just before (K-13): it is paid now, and staff cancel and refund paid orders
+		if (cancelled.role !== 'cancelled')
+			throw problem('move_not_allowed', 'This order is paid; please ask the shop to cancel and refund it.');
 		return { order: await shopperView(s, cancelled, flow) };
 	};
 
@@ -1182,7 +1124,6 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		sendProof,
 		downloadFile,
 		quoteCart,
-		recheck,
 		cancel,
 	});
 };
