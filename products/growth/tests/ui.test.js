@@ -721,6 +721,19 @@ describe('single-page apps (SG-4)', () => {
 		]);
 	});
 
+	it('passes a search page the app opens itself to the pixels, also with nothing recorded', async () => {
+		serve({
+			[`GET ${CONFIG_PATH}`]: () =>
+				answer(200, configOf(['meta_pixel'], { tags: { consentRequired: false }, meta_pixel: { pixelId: '1234567' } })),
+		});
+		await startWidget({ window, script: script('t') }).ready;
+		window.history.pushState(null, '', '/search?q=sofa');
+		expect(w.fbq.queue.filter((/** @type {unknown[]} */ call) => call[1] === 'Search')).toEqual([
+			['track', 'Search', { search_string: 'sofa' }],
+		]);
+		expect(requests.filter((r) => r.path === '/v1/collect')).toEqual([]);
+	});
+
 	it('a new visit started inside the app comes from the website itself', async () => {
 		vi.useFakeTimers({ toFake: ['setTimeout', 'Date'], now: NOW });
 		Object.defineProperty(document, 'referrer', { value: 'https://www.google.com/', configurable: true });

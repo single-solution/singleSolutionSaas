@@ -258,13 +258,12 @@ export const startWidget = ({ window: win, script }) => {
 		};
 		page(null);
 		// only the page script whose SSGrowth the page has follows its navigations (one loaded twice counts a page once)
-		if (record.visits || record.searches || config.settings.notice)
-			watchNavigation({
-				window: win,
-				change: (from) => {
-					if (/** @type {any} */ (win)[WIDGET_GLOBAL] === api) page(from);
-				},
-			});
+		watchNavigation({
+			window: win,
+			change: (from) => {
+				if (/** @type {any} */ (win)[WIDGET_GLOBAL] === api) page(from);
+			},
+		});
 
 		if (record.vitals || record.vitalsToGa4)
 			watchVitals({
