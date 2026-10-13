@@ -5,7 +5,7 @@
 		"mode": {
 			"type": "string",
 			"title": "Who can sign up",
-			"description": "open: anyone; invite: only invited people; approval: anyone, but a member of staff approves each new user.",
+			"description": "Open: anyone can sign up. Invite: only invited people. Approval: anyone, but a member of staff approves each new user.",
 			"default": "approval",
 			"enum": ["open", "invite", "approval"]
 		},
