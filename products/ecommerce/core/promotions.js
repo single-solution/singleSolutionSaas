@@ -115,14 +115,21 @@ export const applyPromotions = ({
 	// `cartOffer`: checkout-level deals (off the cart, or free delivery) compete with item deals for each line, or at
 	// most one of them comes after the item deals
 	const stacked = rules.cartOffer !== 'per_line_best';
-	// which lines each live deal covers (cart deals spread their fixed amount over them)
+	// which lines each live deal covers (cart deals spread their fixed amount over them); item deals first
 	/** @type {Map<string, number[]>} */
 	const covered = new Map();
-	for (const deal of live)
-		covered.set(
-			deal.id,
-			lines.flatMap((line, index) => (priceable[index] && dealCovers(deal, line, facts) ? [index] : [])),
-		);
+	/** @param {DealRecord[]} list @param {import('./deals.js').DealCart} on the cart facts they are judged on */
+	const cover = (list, on) => {
+		for (const deal of list)
+			covered.set(
+				deal.id,
+				lines.flatMap((line, index) => (priceable[index] && dealCovers(deal, line, on) ? [index] : [])),
+			);
+	};
+	cover(
+		live.filter((deal) => !checkoutLevel(deal)),
+		facts,
+	);
 	/** @param {DealRecord} deal @param {number} index */
 	const estimate = (deal, index) => {
 		const line = /** @type {PricingLine} */ (lines[index]);
@@ -147,12 +154,18 @@ export const applyPromotions = ({
 			: allocateUnits(total - (unit > 1 ? total % unit : 0), amounts, unit);
 	};
 
-	// 1. each line's deal (a cart deal never replaces an item deal while the checkout-level deal comes after them)
-	const chosen = lines.map((line, index) => {
+	/**
+	 * A line's deal among the live deals covering it (with cart deals or not): the shopper's pick, the first or the best
+	 * saving (`lineChoice`), or the deal its lock keeps when that saves more.
+	 * @param {number} index
+	 * @param {boolean} withCart
+	 */
+	const choose = (index, withCart) => {
+		const line = /** @type {PricingLine} */ (lines[index]);
 		if (!priceable[index]) return { deal: null, saving: 0, eligible: /** @type {string[]} */ ([]), locked: false };
 		const eligible = live.filter(
 			(deal) =>
-				deal.type !== 'free_delivery' && !(stacked && checkoutLevel(deal)) && (covered.get(deal.id) ?? []).includes(index),
+				deal.type !== 'free_delivery' && (withCart || !checkoutLevel(deal)) && (covered.get(deal.id) ?? []).includes(index),
 		);
 		/** @type {{ deal: DealRecord, saving: number } | null} */
 		let best = null;
@@ -179,7 +192,19 @@ export const applyPromotions = ({
 			eligible: eligible.map((deal) => deal.id),
 			locked,
 		};
-	});
+	};
+
+	// the item deals alone: what each line takes while the checkout-level deal comes after them, and what is left of
+	// the goods for the checkout-level deals' cart total (`cartThresholdBase: after_item_deals`)
+	const afterItems = rules.cartThresholdBase === 'after_item_deals';
+	const items = stacked || afterItems ? lines.map((_, index) => choose(index, false)) : [];
+	cover(
+		live.filter(checkoutLevel),
+		afterItems ? { ...facts, goods: facts.goods - items.reduce((sum, pick) => sum + pick.saving, 0) } : facts,
+	);
+
+	// 1. each line's deal (a cart deal never replaces an item deal while the checkout-level deal comes after them)
+	const chosen = stacked ? items : lines.map((_, index) => choose(index, true));
 
 	// 2. bundles, against what the chosen deals save per unit
 	const formed = formBundles(

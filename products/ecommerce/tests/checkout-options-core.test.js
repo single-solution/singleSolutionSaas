@@ -85,12 +85,19 @@ describe('whole units (E25)', () => {
 	});
 
 	it('reads the deal rules and works deals out exactly with total_half_up (D4)', () => {
-		expect(DEAL_RULES).toEqual({ rounding: 'per_unit_down', lineChoice: 'best', cartOffer: 'per_line_best' });
-		expect(dealRulesOf({ rounding: 'total_half_up', lineChoice: 'first', cartOffer: 'one_exclusive' })).toEqual({
+		expect(DEAL_RULES).toEqual({
+			rounding: 'per_unit_down',
+			lineChoice: 'best',
+			cartOffer: 'per_line_best',
+			cartThresholdBase: 'goods',
+		});
+		const set = {
 			rounding: 'total_half_up',
 			lineChoice: 'first',
 			cartOffer: 'one_exclusive',
-		});
+			cartThresholdBase: 'after_item_deals',
+		};
+		expect(dealRulesOf(set)).toEqual(set);
 		expect(dealRulesOf({ rounding: 'sideways', lineChoice: 7 })).toEqual(DEAL_RULES);
 		const exact = { rounding: /** @type {const} */ ('total_half_up') };
 		expect(dealLineDiscount(deal({ value: 7 }), { unitPrice: 499_900, quantity: 1 }, { unit: 100 })).toBe(34_900);

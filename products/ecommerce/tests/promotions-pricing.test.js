@@ -358,6 +358,31 @@ describe('deals', () => {
 			expect(spread.lines.map((item) => item.dealDiscount)).toEqual([100_000 + 64_286, 35_714]);
 		});
 
+		it('judges a checkout deal’s cart total on the goods, or after the item deals (cartThresholdBase)', () => {
+			const lines = [line({ unitPrice: 300_000 }), line({ productId: 'p2', unitPrice: 220_000 })];
+			const base = { ...after, cartThresholdBase: /** @type {const} */ ('after_item_deals') };
+			// 3,000 with 10% off and 2,200: goods 5,200 meet "from 5,000", after the item deal 4,900 do not
+			expect(run({ lines, deals: [tenOnP1, fiveOver], rules: after }).applied.map((entry) => entry.amount)).toEqual([
+				30_000, 24_500,
+			]);
+			expect(run({ lines, deals: [tenOnP1, fiveOver], rules: base }).applied.map((entry) => entry.amount)).toEqual([30_000]);
+			// per_line_best: 300 + 5% of 2,200 on the goods; 300 alone after the item deals
+			expect(run({ lines, deals: [tenOnP1, fiveOver] }).applied.map((entry) => entry.amount)).toEqual([30_000, 11_000]);
+			const perLine = { ...DEAL_RULES, cartThresholdBase: /** @type {const} */ ('after_item_deals') };
+			expect(run({ lines, deals: [tenOnP1, fiveOver], rules: perLine }).applied.map((entry) => entry.amount)).toEqual([
+				30_000,
+			]);
+			// free delivery from 10,000 on a 10,500 fan with 10% off: 9,450 after the deal
+			const fan = [line({ unitPrice: 1_050_000 })];
+			const ship = deal({ id: 'deal_ship', type: 'free_delivery', conditions: { ...NO_CONDITIONS, cartTotal: 1_000_000 } });
+			expect(run({ lines: fan, deals: [tenOnP1, ship] }).freeDelivery).toBe(true);
+			expect(run({ lines: fan, deals: [tenOnP1, ship], rules: perLine }).freeDelivery).toBe(false);
+			expect(run({ lines: fan, deals: [tenOnP1, ship], rules: base })).toMatchObject({
+				freeDelivery: false,
+				dealIds: ['deal_item'],
+			});
+		});
+
 		it('rounds item and checkout deals together, once, with total_half_up', () => {
 			const deals = [deal({ id: 'deal_item', value: 7 }), { ...fiveOver, conditions: null }];
 			const kurta = [line({ unitPrice: 499_900 })];

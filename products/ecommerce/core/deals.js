@@ -5,7 +5,8 @@
  *
  * - **conditions**: list rules (products, categories, brands, grades or an attribute's values, `in` or `not_in`) and
  *   one level of groups, joined by `match` (`all` | `any`); besides them, always all of: the variant's price range,
- *   a minimum quantity per line, a cart total (the goods before offers) and the payment methods;
+ *   a minimum quantity per line, a cart total (the goods before offers; for checkout-level deals, after the item
+ *   deals with `cartThresholdBase`) and the payment methods;
  * - **actions**: `percent` or `fixed` off each unit of the lines it covers (`target: 'items'`, the default), or off
  *   the covered lines together (`target: 'cart'`: a percent of their amount, or one fixed amount spread over them);
  *   `free_delivery` waives the delivery fee while it applies to a line of the cart.
@@ -79,9 +80,10 @@ const COLOUR = /^[#A-Za-z0-9(),.%\s-]{0,40}$/;
  * checkout-level deals (`target: 'cart'` and free delivery) combine with item deals: `per_line_best` (each line takes
  * the best of its item and cart deals; the best free delivery is added), `one_after_items` (at most one checkout-level
  * deal, the first live one in the shoppers' order that applies, on what the item deals left) or `one_exclusive` (the
- * same, only when no item deal applied).
+ * same, only when no item deal applied). `cartThresholdBase` — a checkout-level deal's cart total is judged on the
+ * `goods` before offers or on the goods less what the lines' item deals take off (`after_item_deals`).
  * @typedef {{ rounding: 'per_unit_down' | 'total_half_up', lineChoice: 'best' | 'first',
- *   cartOffer: 'per_line_best' | 'one_after_items' | 'one_exclusive' }} DealRules
+ *   cartOffer: 'per_line_best' | 'one_after_items' | 'one_exclusive', cartThresholdBase: 'goods' | 'after_item_deals' }} DealRules
  */
 
 /** The values of each rule; the first is the default (today's arithmetic, E18 and E25). */
@@ -89,6 +91,7 @@ const RULE_VALUES = Object.freeze({
 	rounding: Object.freeze(['per_unit_down', 'total_half_up']),
 	lineChoice: Object.freeze(['best', 'first']),
 	cartOffer: Object.freeze(['per_line_best', 'one_after_items', 'one_exclusive']),
+	cartThresholdBase: Object.freeze(['goods', 'after_item_deals']),
 });
 
 /**

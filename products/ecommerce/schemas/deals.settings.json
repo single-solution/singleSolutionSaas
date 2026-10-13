@@ -30,6 +30,13 @@
 			"default": "per_line_best",
 			"enum": ["per_line_best", "one_after_items", "one_exclusive"]
 		},
+		"cartThresholdBase": {
+			"type": "string",
+			"title": "Checkout deals' minimum cart total is judged on",
+			"description": "goods: the goods before any deal. after_item_deals: the goods after the item deals (a cart that item deals bring below a checkout deal's minimum does not get it).",
+			"default": "goods",
+			"enum": ["goods", "after_item_deals"]
+		},
 		"rounding": {
 			"type": "string",
 			"title": "Rounding of deal discounts",

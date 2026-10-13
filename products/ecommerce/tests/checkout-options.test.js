@@ -157,6 +157,24 @@ describe('deals (E18)', () => {
 		await shop.api('DELETE', `/v1/deals/${checkout.id}`);
 	});
 
+	it('judges a free-delivery deal’s cart total after item deals with cartThresholdBase (D4)', async () => {
+		const item = await shop.seedProduct({ price: 1_050_000, stock: 10 });
+		const own = await newDeal({ scope: { productIds: [item.id], categoryIds: [], brandIds: [] }, value: 10 });
+		const ship = await newDeal({
+			name: 'Free delivery from 10,000',
+			type: 'free_delivery',
+			conditions: { match: 'all', rules: [], groups: [], cartTotal: 1_000_000 },
+		});
+		const body = { lines: [{ productId: item.id }], delivery: { city: 'Springfield' } };
+		expect((await quote(body)).json.totals).toMatchObject({ discount: 105_000, delivery: 0 });
+		await shop.setting('deals', 'cartThresholdBase', 'after_item_deals');
+		// 10,500 less 10% is 9,450: below the free delivery's 10,000
+		expect((await quote(body)).json.totals).toMatchObject({ discount: 105_000, delivery: 300 });
+		await shop.setting('deals', 'cartThresholdBase', 'goods');
+		await shop.api('DELETE', `/v1/deals/${own.id}`);
+		await shop.api('DELETE', `/v1/deals/${ship.id}`);
+	});
+
 	it('shows deals on product cards', async () => {
 		const item = await shop.seedProduct({ price: 1000, stock: 5 });
 		const deal = await newDeal({ scope: { productIds: [item.id], categoryIds: [], brandIds: [] }, badgeLabel: 'Hot' });
