@@ -7923,6 +7923,8 @@
 		},
 		"/v1/admin/products/{id}/files": {
 			"post": {
+				"summary": "Add a file to a digital product (Catalog admin widget)",
+				"description": "Answers a signed upload: PUT the file to upload.url with upload.headers within 15 minutes. The file is listed on the product at once (a file of the same name is replaced); a product has at most 20 files. The name is cleaned to letters, digits, dot, dash and underscore (at most 120 characters). Shoppers download the files of paid orders (GET /v1/shop/orders/{id}/downloads/{lineId}/{file}). 422 validation_failed at /name, /type, /size or /id (not a digital product); 404 not_found; 503 storage_not_connected. The ticket needs catalog.edit.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "digital_goods",
 				"x-ss-permission": "catalog.edit",
@@ -7941,9 +7943,48 @@
 						}
 					}
 				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"name",
+									"type",
+									"size"
+								],
+								"properties": {
+									"name": {
+										"type": "string",
+										"description": "The file name."
+									},
+									"type": {
+										"type": "string",
+										"pattern": "^[a-z]+/[a-z0-9.+-]{1,100}$",
+										"description": "Its media type."
+									},
+									"size": {
+										"type": "integer",
+										"minimum": 1,
+										"maximum": 5368709120,
+										"description": "Bytes (at most 5 GB)."
+									}
+								}
+							}
+						}
+					}
+				},
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/DigitalFileUpload"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -7960,6 +8001,8 @@
 		},
 		"/v1/admin/products/{id}/licences": {
 			"post": {
+				"summary": "Add licence keys to a digital product (Catalog admin widget)",
+				"description": "Keys are trimmed; repeats and keys the product already has are skipped. When an order is paid each unit of a digital line gets one key (each key is given once). 422 validation_failed at /keys or /id (not a digital product); 404 not_found. The ticket needs catalog.edit.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "digital_goods",
 				"x-ss-permission": "catalog.edit",
@@ -7978,9 +8021,41 @@
 						}
 					}
 				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"keys"
+								],
+								"properties": {
+									"keys": {
+										"type": "array",
+										"items": {
+											"type": "string",
+											"minLength": 1,
+											"maxLength": 500
+										},
+										"minItems": 1,
+										"maxItems": 1000
+									}
+								}
+							}
+						}
+					}
+				},
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/LicenceKeysAdded"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -12914,6 +12989,8 @@
 		},
 		"/v1/chat/context": {
 			"get": {
+				"summary": "Chat’s live store context",
+				"description": "What Chat’s AI replies add to their instructions: the policies (checkout), the 10 newest products with their price per grade, the deals (deals), the product asked for and, with a forwarded Accounts sign-in in SS-Sign-In, the visitor’s first name, city and points. 422 validation_failed at /productId.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "catalog",
 				"security": [
@@ -12922,6 +12999,27 @@
 					}
 				],
 				"parameters": [
+					{
+						"name": "productId",
+						"in": "query",
+						"required": false,
+						"description": "The product the visitor views (id or slug).",
+						"schema": {
+							"type": "string",
+							"pattern": "^[A-Za-z0-9_-]{1,120}$",
+							"description": "The product the visitor views (id or slug)."
+						}
+					},
+					{
+						"name": "SS-Sign-In",
+						"in": "header",
+						"required": false,
+						"description": "The visitor’s Accounts sign-in, forwarded by the caller (verified here).",
+						"schema": {
+							"type": "string",
+							"description": "The visitor’s Accounts sign-in, forwarded by the caller (verified here)."
+						}
+					},
 					{
 						"$ref": "#/components/parameters/SSActorId"
 					},
@@ -12936,8 +13034,15 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ChatContext"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -12954,6 +13059,8 @@
 		},
 		"/v1/chat/deals": {
 			"get": {
+				"summary": "The live deals for Chat",
+				"description": "In the shoppers’ order, with their display fields.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "deals",
 				"security": [
@@ -12962,6 +13069,19 @@
 					}
 				],
 				"parameters": [
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"description": "Above 20 counts as 20; anything else as 10.",
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 20,
+							"default": 10,
+							"description": "Above 20 counts as 20; anything else as 10."
+						}
+					},
 					{
 						"$ref": "#/components/parameters/SSActorId"
 					},
@@ -12976,8 +13096,27 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"items"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"items": {
+											"type": "array",
+											"items": {
+												"$ref": "#/components/schemas/ChatDeal"
+											}
+										}
+									}
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -12994,6 +13133,8 @@
 		},
 		"/v1/chat/me/account": {
 			"get": {
+				"summary": "The signed-in visitor’s account for Chat",
+				"description": "Forward the visitor’s Accounts sign-in in SS-Sign-In (verified here): only that user’s data is answered; 403 sign_in_required without a valid one.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "checkout",
 				"security": [
@@ -13002,6 +13143,16 @@
 					}
 				],
 				"parameters": [
+					{
+						"name": "SS-Sign-In",
+						"in": "header",
+						"required": true,
+						"description": "The visitor’s Accounts sign-in, forwarded by the caller (verified here).",
+						"schema": {
+							"type": "string",
+							"description": "The visitor’s Accounts sign-in, forwarded by the caller (verified here)."
+						}
+					},
 					{
 						"$ref": "#/components/parameters/SSActorId"
 					},
@@ -13016,8 +13167,15 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ChatAccount"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -13034,6 +13192,8 @@
 		},
 		"/v1/chat/me/orders": {
 			"get": {
+				"summary": "The signed-in visitor’s latest orders for Chat",
+				"description": "Forward the visitor’s Accounts sign-in in SS-Sign-In (verified here): only that user’s data is answered; 403 sign_in_required without a valid one. Never the address or phone.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "checkout",
 				"security": [
@@ -13042,6 +13202,29 @@
 					}
 				],
 				"parameters": [
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"description": "Above 10 counts as 10; anything else as 5.",
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 10,
+							"default": 5,
+							"description": "Above 10 counts as 10; anything else as 5."
+						}
+					},
+					{
+						"name": "SS-Sign-In",
+						"in": "header",
+						"required": true,
+						"description": "The visitor’s Accounts sign-in, forwarded by the caller (verified here).",
+						"schema": {
+							"type": "string",
+							"description": "The visitor’s Accounts sign-in, forwarded by the caller (verified here)."
+						}
+					},
 					{
 						"$ref": "#/components/parameters/SSActorId"
 					},
@@ -13056,8 +13239,37 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"items",
+										"loyaltyPoints",
+										"name"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"items": {
+											"type": "array",
+											"items": {
+												"$ref": "#/components/schemas/ChatOrder"
+											}
+										},
+										"loyaltyPoints": {
+											"type": "integer",
+											"description": "0 while loyalty is off."
+										},
+										"name": {
+											"type": "string",
+											"description": "The shopper’s name."
+										}
+									}
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -13074,6 +13286,8 @@
 		},
 		"/v1/chat/me/shipments": {
 			"get": {
+				"summary": "The signed-in visitor’s latest shipments for Chat",
+				"description": "Forward the visitor’s Accounts sign-in in SS-Sign-In (verified here): only that user’s data is answered; 403 sign_in_required without a valid one. Only orders with a shipment, newest first.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "checkout",
 				"security": [
@@ -13082,6 +13296,29 @@
 					}
 				],
 				"parameters": [
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"description": "Above 10 counts as 10; anything else as 5.",
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 10,
+							"default": 5,
+							"description": "Above 10 counts as 10; anything else as 5."
+						}
+					},
+					{
+						"name": "SS-Sign-In",
+						"in": "header",
+						"required": true,
+						"description": "The visitor’s Accounts sign-in, forwarded by the caller (verified here).",
+						"schema": {
+							"type": "string",
+							"description": "The visitor’s Accounts sign-in, forwarded by the caller (verified here)."
+						}
+					},
 					{
 						"$ref": "#/components/parameters/SSActorId"
 					},
@@ -13096,8 +13333,27 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"items"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"items": {
+											"type": "array",
+											"items": {
+												"$ref": "#/components/schemas/ChatShipment"
+											}
+										}
+									}
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -13114,6 +13370,8 @@
 		},
 		"/v1/chat/products": {
 			"get": {
+				"summary": "Search products for Chat",
+				"description": "Words (name, summary, tags, SKU, brand) and filters; with filters the words may be left out, with neither the answer is empty. Each card shows the variant the filters matched (the cheapest in stock first). Atlas Search when the website uses it. Products hidden from shoppers are left out. 422 validation_failed at /category, /grade, /minPrice, /maxPrice or /inStock.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "catalog",
 				"security": [
@@ -13122,6 +13380,88 @@
 					}
 				],
 				"parameters": [
+					{
+						"name": "q",
+						"in": "query",
+						"required": false,
+						"description": "Search words (the first 6 words of the first 120 characters).",
+						"schema": {
+							"type": "string",
+							"description": "Search words (the first 6 words of the first 120 characters)."
+						}
+					},
+					{
+						"name": "category",
+						"in": "query",
+						"required": false,
+						"description": "A category id or slug, with the categories below it.",
+						"schema": {
+							"type": "string",
+							"pattern": "^[A-Za-z0-9_-]{1,120}$",
+							"description": "A category id or slug, with the categories below it."
+						}
+					},
+					{
+						"name": "grade",
+						"in": "query",
+						"required": false,
+						"description": "A grade key, or up to 10 separated by commas.",
+						"schema": {
+							"type": "string",
+							"description": "A grade key, or up to 10 separated by commas."
+						}
+					},
+					{
+						"name": "minPrice",
+						"in": "query",
+						"required": false,
+						"description": "Minor units: one active variant costs at least this.",
+						"schema": {
+							"type": "integer",
+							"minimum": 0,
+							"description": "Minor units: one active variant costs at least this."
+						}
+					},
+					{
+						"name": "maxPrice",
+						"in": "query",
+						"required": false,
+						"description": "Minor units, at least minPrice.",
+						"schema": {
+							"type": "integer",
+							"minimum": 0,
+							"description": "Minor units, at least minPrice."
+						}
+					},
+					{
+						"name": "inStock",
+						"in": "query",
+						"required": false,
+						"description": "Only items in stock.",
+						"schema": {
+							"type": "string",
+							"enum": [
+								"1",
+								"0",
+								"true",
+								"false"
+							],
+							"description": "Only items in stock."
+						}
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"description": "Above 12 counts as 12; anything else as 5.",
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 12,
+							"default": 5,
+							"description": "Above 12 counts as 12; anything else as 5."
+						}
+					},
 					{
 						"$ref": "#/components/parameters/SSActorId"
 					},
@@ -13136,8 +13476,15 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ChatProductList"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -13154,6 +13501,8 @@
 		},
 		"/v1/chat/products/top": {
 			"get": {
+				"summary": "Best-selling or newest products for Chat",
+				"description": "422 validation_failed at /kind for another kind.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "catalog",
 				"security": [
@@ -13162,6 +13511,34 @@
 					}
 				],
 				"parameters": [
+					{
+						"name": "kind",
+						"in": "query",
+						"required": false,
+						"description": "top: best sellers; new: newest published.",
+						"schema": {
+							"type": "string",
+							"enum": [
+								"top",
+								"new"
+							],
+							"default": "top",
+							"description": "top: best sellers; new: newest published."
+						}
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"description": "Above 12 counts as 12; anything else as 5.",
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 12,
+							"default": 5,
+							"description": "Above 12 counts as 12; anything else as 5."
+						}
+					},
 					{
 						"$ref": "#/components/parameters/SSActorId"
 					},
@@ -13176,8 +13553,15 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ChatProductList"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -13194,6 +13578,8 @@
 		},
 		"/v1/chat/products/{id}": {
 			"get": {
+				"summary": "A product’s details for Chat",
+				"description": ":id is a product id or slug. 404 not_found when it is not active or is hidden from shoppers.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "catalog",
 				"security": [
@@ -13224,8 +13610,15 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ChatProductDetails"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -13242,6 +13635,8 @@
 		},
 		"/v1/chat/products/{id}/quote": {
 			"get": {
+				"summary": "Price a product for Chat",
+				"description": "One variant (variantId, else the card variant) times quantity, priced exactly as the cart prices it for the payment method asked: deals, the payment method’s fee, delivery to city with its free-delivery threshold, taxes. A forwarded Accounts sign-in in SS-Sign-In adds the shopper’s role price. Needs the deals feature. 404 not_found (product or variant); 422 validation_failed at /variantId, /quantity, /paymentMethod or /city.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "deals",
 				"security": [
@@ -13259,6 +13654,61 @@
 						}
 					},
 					{
+						"name": "variantId",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"pattern": "^[A-Za-z0-9_-]{1,64}$"
+						}
+					},
+					{
+						"name": "quantity",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 5,
+							"default": 1
+						}
+					},
+					{
+						"name": "paymentMethod",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"enum": [
+								"cod",
+								"online",
+								"bank_transfer",
+								"pickup"
+							]
+						}
+					},
+					{
+						"name": "city",
+						"in": "query",
+						"required": false,
+						"description": "For the delivery zone.",
+						"schema": {
+							"type": "string",
+							"maxLength": 80,
+							"description": "For the delivery zone."
+						}
+					},
+					{
+						"name": "SS-Sign-In",
+						"in": "header",
+						"required": false,
+						"description": "The visitor’s Accounts sign-in, forwarded by the caller (verified here).",
+						"schema": {
+							"type": "string",
+							"description": "The visitor’s Accounts sign-in, forwarded by the caller (verified here)."
+						}
+					},
+					{
 						"$ref": "#/components/parameters/SSActorId"
 					},
 					{
@@ -13272,8 +13722,15 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ChatQuote"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -14822,6 +15279,8 @@
 		},
 		"/v1/customers/{userId}/orders": {
 			"get": {
+				"summary": "A customer’s latest orders and points",
+				"description": "For the Accounts Orders tab and Chat’s context panel. :userId is an Accounts user id, or a customer id (cus_…) for members and guests alike.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "checkout",
 				"security": [
@@ -14839,6 +15298,19 @@
 						}
 					},
 					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"description": "Above 50 counts as 50; anything else as 10.",
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 50,
+							"default": 10,
+							"description": "Above 50 counts as 50; anything else as 10."
+						}
+					},
+					{
 						"$ref": "#/components/parameters/SSActorId"
 					},
 					{
@@ -14852,8 +15324,15 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/CustomerOrdersLookup"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -21757,6 +22236,8 @@
 		},
 		"/v1/products/{id}/files": {
 			"post": {
+				"summary": "Add a file to a digital product",
+				"description": "Answers a signed upload: PUT the file to upload.url with upload.headers within 15 minutes. The file is listed on the product at once (a file of the same name is replaced); a product has at most 20 files. The name is cleaned to letters, digits, dot, dash and underscore (at most 120 characters). Shoppers download the files of paid orders (GET /v1/shop/orders/{id}/downloads/{lineId}/{file}). 422 validation_failed at /name, /type, /size or /id (not a digital product); 404 not_found; 503 storage_not_connected.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "digital_goods",
 				"security": [
@@ -21786,9 +22267,48 @@
 						"$ref": "#/components/parameters/SSActorEmail"
 					}
 				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"name",
+									"type",
+									"size"
+								],
+								"properties": {
+									"name": {
+										"type": "string",
+										"description": "The file name."
+									},
+									"type": {
+										"type": "string",
+										"pattern": "^[a-z]+/[a-z0-9.+-]{1,100}$",
+										"description": "Its media type."
+									},
+									"size": {
+										"type": "integer",
+										"minimum": 1,
+										"maximum": 5368709120,
+										"description": "Bytes (at most 5 GB)."
+									}
+								}
+							}
+						}
+					}
+				},
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/DigitalFileUpload"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -21805,6 +22325,8 @@
 		},
 		"/v1/products/{id}/licences": {
 			"post": {
+				"summary": "Add licence keys to a digital product",
+				"description": "Keys are trimmed; repeats and keys the product already has are skipped. When an order is paid each unit of a digital line gets one key (each key is given once). 422 validation_failed at /keys or /id (not a digital product); 404 not_found.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "digital_goods",
 				"security": [
@@ -21834,9 +22356,41 @@
 						"$ref": "#/components/parameters/SSActorEmail"
 					}
 				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"keys"
+								],
+								"properties": {
+									"keys": {
+										"type": "array",
+										"items": {
+											"type": "string",
+											"minLength": 1,
+											"maxLength": 500
+										},
+										"minItems": 1,
+										"maxItems": 1000
+									}
+								}
+							}
+						}
+					}
+				},
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/LicenceKeysAdded"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -26081,6 +26635,8 @@
 		},
 		"/v1/shop/cart/quote": {
 			"post": {
+				"summary": "Price a cart",
+				"description": "The cart lives in the browser; the server prices it on each quote and again when the order is placed: active products and variants, stock shortfalls per line (never the exact stock), deals, bundles and the coupon, delivery zones or pickup (delivery_zones), taxes (taxes) and the payment methods in the merchant’s order with their fees (cod), each while its feature is on. The shopper is the Accounts user of the sign-in sent in SS-Sign-In (verified here; a wrong or expired one counts as none). A signed-in shopper also gets their role price (role_pricing) and loyalty points (loyalty). A line that cannot be ordered is not refused: it lists its problems and ready is false. 422 validation_failed at /lines (1 to checkout.maxLines lines), /lines/<n>/productId, /variantId, /quantity (1 to checkout.maxQuantity), /slot, /dealId, /lock, /coupon, /points, /delivery or /payment.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "checkout",
 				"security": [
@@ -26092,6 +26648,16 @@
 					}
 				],
 				"parameters": [
+					{
+						"name": "SS-Sign-In",
+						"in": "header",
+						"required": false,
+						"description": "The shopper’s Accounts sign-in (verified here; a wrong or expired one counts as none).",
+						"schema": {
+							"type": "string",
+							"description": "The shopper’s Accounts sign-in (verified here; a wrong or expired one counts as none)."
+						}
+					},
 					{
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
@@ -26108,9 +26674,155 @@
 						"$ref": "#/components/parameters/SSActorEmail"
 					}
 				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"lines"
+								],
+								"properties": {
+									"lines": {
+										"type": "array",
+										"items": {
+											"type": "object",
+											"required": [
+												"productId"
+											],
+											"properties": {
+												"productId": {
+													"type": "string",
+													"pattern": "^[A-Za-z0-9_-]{1,64}$"
+												},
+												"variantId": {
+													"type": [
+														"string",
+														"null"
+													],
+													"pattern": "^[A-Za-z0-9_-]{1,64}$",
+													"description": "Leave it out for a product with one active variant."
+												},
+												"quantity": {
+													"type": "integer",
+													"minimum": 1,
+													"maximum": 99,
+													"default": 1,
+													"description": "At most checkout.maxQuantity (≤ 99) of one item."
+												},
+												"slot": {
+													"type": [
+														"string",
+														"null"
+													],
+													"format": "date-time",
+													"maxLength": 40,
+													"description": "A booking line’s slot start (GET /v1/shop/slots)."
+												},
+												"dealId": {
+													"type": [
+														"string",
+														"null"
+													],
+													"pattern": "^[A-Za-z0-9_-]{1,64}$",
+													"description": "The deal the shopper picked (eligibleDeals, deals.shopperChoice)."
+												},
+												"lock": {
+													"type": [
+														"string",
+														"null"
+													],
+													"maxLength": 600,
+													"description": "The lock the last quote gave the line."
+												}
+											}
+										},
+										"minItems": 1,
+										"maxItems": 50,
+										"description": "1 to checkout.maxLines (≤ 50) lines; lines of one product, variant and slot are merged."
+									},
+									"coupon": {
+										"type": [
+											"string",
+											"null"
+										],
+										"maxLength": 40,
+										"description": "A coupon code (any case)."
+									},
+									"points": {
+										"type": "integer",
+										"minimum": 0,
+										"default": 0,
+										"description": "Loyalty points to use (signed-in shoppers)."
+									},
+									"delivery": {
+										"type": "object",
+										"description": "Where it goes, for the delivery zone and taxes (placing an order: the address’s city, area and country win).",
+										"properties": {
+											"method": {
+												"type": [
+													"string",
+													"null"
+												],
+												"enum": [
+													"delivery",
+													"pickup",
+													null
+												],
+												"description": "null: delivery_zones.defaultMethod."
+											},
+											"city": {
+												"type": "string",
+												"maxLength": 80
+											},
+											"area": {
+												"type": "string",
+												"maxLength": 80
+											},
+											"country": {
+												"type": "string",
+												"maxLength": 60
+											},
+											"locationId": {
+												"type": [
+													"string",
+													"null"
+												],
+												"pattern": "^[A-Za-z0-9_-]{1,64}$",
+												"description": "The pickup location (deliveryOptions)."
+											}
+										}
+									},
+									"payment": {
+										"type": [
+											"string",
+											"null"
+										],
+										"enum": [
+											"cod",
+											"online",
+											"bank_transfer",
+											"pickup",
+											null
+										],
+										"description": "The method to price (null: the first available)."
+									}
+								}
+							}
+						}
+					}
+				},
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/CartQuote"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -26503,6 +27215,8 @@
 		},
 		"/v1/shop/orders": {
 			"get": {
+				"summary": "The signed-in shopper’s orders, newest first",
+				"description": "The shopper is the Accounts user of the sign-in sent in SS-Sign-In (verified here; a wrong or expired one counts as none). 403 sign_in_required without one. Guest orders of the sign-in’s verified phone become the shopper’s first. A waiting payment is asked of Payments again. 400 bad_request for another limit or a wrong cursor.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "checkout",
 				"security": [
@@ -26514,6 +27228,37 @@
 					}
 				],
 				"parameters": [
+					{
+						"name": "cursor",
+						"in": "query",
+						"required": false,
+						"description": "nextCursor of the previous page.",
+						"schema": {
+							"type": "string",
+							"description": "nextCursor of the previous page."
+						}
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 50,
+							"default": 20
+						}
+					},
+					{
+						"name": "SS-Sign-In",
+						"in": "header",
+						"required": true,
+						"description": "The shopper’s Accounts sign-in (verified here; a wrong or expired one counts as none).",
+						"schema": {
+							"type": "string",
+							"description": "The shopper’s Accounts sign-in (verified here; a wrong or expired one counts as none)."
+						}
+					},
 					{
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
@@ -26531,8 +27276,15 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ShopOrderPage"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -26547,6 +27299,8 @@
 				}
 			},
 			"post": {
+				"summary": "Place an order",
+				"description": "Send an Idempotency-Key (428 idempotency_key_required without one) so a retried request places one order: the same key with the same body answers the first answer again (Idempotent-Replayed: true), with another body 409 duplicate_request. The shopper is the Accounts user of the sign-in sent in SS-Sign-In (verified here; a wrong or expired one counts as none). Without a sign-in a guest orders with customer { name, phone } while checkout.guests is on or unless_password (off: 403 sign_in_required; unless_password and the phone belongs to an Accounts user with a password: 403 sign_in_required with signIn: member_phone); a phone a member already has makes the order that member’s. The cart is priced again here. How the order starts (order.role / order.payment.state / next.kind): online, bank_transfer and cash on delivery with an advance, through Payments: awaiting_payment / pending / pay (retry when Payments could not be reached); bank transfers or COD advances staff record (checkout.bankTransferVia or cod.advanceVia manual): awaiting_payment / unpaid / proof; cod: awaiting_confirmation (open with cod.startStatus open) / unpaid / done; pickup (pay at pickup): awaiting_confirmation / unpaid / done; a free order (total 0): paid, awaiting_confirmation (online or bank_transfer with checkout.freeOrderStart awaiting_payment: awaiting_payment without a time limit). Unpaid orders awaiting payment are cancelled after checkout.paymentWindowMinutes, unconfirmed ones after checkout.confirmationHours (0 = never), giving back what they held. A guest gets orderKey once. 422 validation_failed (the cart’s fields, /payment, /address/<field>, /customer/<field>, /returnUrl, /note, /expectedTotal, /delivery/locationId, /lines/<n> for a line that cannot be ordered); 422 cod_not_allowed (codReason over_max or advance_unavailable); 403 customer_blocked; 409 too_many_open_orders (checkout.openOrderCap); 409 price_changed when expectedTotal differs (quote: the new CartQuote); 409 out_of_stock (lines), slot_taken, offer_unavailable or points_changed.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "checkout",
 				"security": [
@@ -26558,6 +27312,16 @@
 					}
 				],
 				"parameters": [
+					{
+						"name": "SS-Sign-In",
+						"in": "header",
+						"required": false,
+						"description": "The shopper’s Accounts sign-in (verified here; a wrong or expired one counts as none).",
+						"schema": {
+							"type": "string",
+							"description": "The shopper’s Accounts sign-in (verified here; a wrong or expired one counts as none)."
+						}
+					},
 					{
 						"name": "Idempotency-Key",
 						"in": "header",
@@ -26584,9 +27348,250 @@
 						"$ref": "#/components/parameters/SSActorEmail"
 					}
 				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"lines",
+									"payment"
+								],
+								"properties": {
+									"lines": {
+										"type": "array",
+										"items": {
+											"type": "object",
+											"required": [
+												"productId"
+											],
+											"properties": {
+												"productId": {
+													"type": "string",
+													"pattern": "^[A-Za-z0-9_-]{1,64}$"
+												},
+												"variantId": {
+													"type": [
+														"string",
+														"null"
+													],
+													"pattern": "^[A-Za-z0-9_-]{1,64}$",
+													"description": "Leave it out for a product with one active variant."
+												},
+												"quantity": {
+													"type": "integer",
+													"minimum": 1,
+													"maximum": 99,
+													"default": 1,
+													"description": "At most checkout.maxQuantity (≤ 99) of one item."
+												},
+												"slot": {
+													"type": [
+														"string",
+														"null"
+													],
+													"format": "date-time",
+													"maxLength": 40,
+													"description": "A booking line’s slot start (GET /v1/shop/slots)."
+												},
+												"dealId": {
+													"type": [
+														"string",
+														"null"
+													],
+													"pattern": "^[A-Za-z0-9_-]{1,64}$",
+													"description": "The deal the shopper picked (eligibleDeals, deals.shopperChoice)."
+												},
+												"lock": {
+													"type": [
+														"string",
+														"null"
+													],
+													"maxLength": 600,
+													"description": "The lock the last quote gave the line."
+												}
+											}
+										},
+										"minItems": 1,
+										"maxItems": 50,
+										"description": "1 to checkout.maxLines (≤ 50) lines; lines of one product, variant and slot are merged."
+									},
+									"coupon": {
+										"type": [
+											"string",
+											"null"
+										],
+										"maxLength": 40,
+										"description": "A coupon code (any case)."
+									},
+									"points": {
+										"type": "integer",
+										"minimum": 0,
+										"default": 0,
+										"description": "Loyalty points to use (signed-in shoppers)."
+									},
+									"delivery": {
+										"type": "object",
+										"description": "Where it goes, for the delivery zone and taxes (placing an order: the address’s city, area and country win).",
+										"properties": {
+											"method": {
+												"type": [
+													"string",
+													"null"
+												],
+												"enum": [
+													"delivery",
+													"pickup",
+													null
+												],
+												"description": "null: delivery_zones.defaultMethod."
+											},
+											"city": {
+												"type": "string",
+												"maxLength": 80
+											},
+											"area": {
+												"type": "string",
+												"maxLength": 80
+											},
+											"country": {
+												"type": "string",
+												"maxLength": 60
+											},
+											"locationId": {
+												"type": [
+													"string",
+													"null"
+												],
+												"pattern": "^[A-Za-z0-9_-]{1,64}$",
+												"description": "The pickup location (deliveryOptions)."
+											}
+										}
+									},
+									"payment": {
+										"type": "string",
+										"enum": [
+											"cod",
+											"online",
+											"bank_transfer",
+											"pickup"
+										],
+										"description": "cod: cash on delivery; online: through Payments; bank_transfer; pickup: paid at the pickup counter."
+									},
+									"address": {
+										"type": "object",
+										"description": "Required when the order is delivered: name and phone always, and the fields checkout.addressRequired lists (of line1, line2, area, city, postalCode, country).",
+										"required": [
+											"name",
+											"phone"
+										],
+										"properties": {
+											"name": {
+												"type": "string",
+												"maxLength": 120
+											},
+											"phone": {
+												"type": "string",
+												"maxLength": 30,
+												"description": "Kept as E.164 when the website’s phone rules read it."
+											},
+											"line1": {
+												"type": "string",
+												"maxLength": 200
+											},
+											"line2": {
+												"type": "string",
+												"maxLength": 200
+											},
+											"city": {
+												"type": "string",
+												"maxLength": 80
+											},
+											"area": {
+												"type": "string",
+												"maxLength": 80
+											},
+											"postalCode": {
+												"type": "string",
+												"maxLength": 20
+											},
+											"country": {
+												"type": "string",
+												"maxLength": 60
+											},
+											"notes": {
+												"type": "string",
+												"maxLength": 500
+											}
+										}
+									},
+									"customer": {
+										"type": "object",
+										"description": "A guest’s details (without a sign-in, while checkout.guests allows guests).",
+										"required": [
+											"name",
+											"phone"
+										],
+										"properties": {
+											"name": {
+												"type": "string",
+												"minLength": 1,
+												"maxLength": 120
+											},
+											"phone": {
+												"type": "string",
+												"description": "Read by the website’s phone rules (checkout.defaultCallingCode …); of a country in checkout.countries."
+											},
+											"email": {
+												"type": [
+													"string",
+													"null"
+												],
+												"description": "An e-mail address, or '' or null for none."
+											}
+										}
+									},
+									"note": {
+										"type": [
+											"string",
+											"null"
+										],
+										"maxLength": 1000,
+										"description": "The shopper’s note."
+									},
+									"returnUrl": {
+										"type": [
+											"string",
+											"null"
+										],
+										"maxLength": 2000,
+										"description": "Where Payments sends the shopper back (with ss_order=<id>): an address on https://<the website’s domain> (a local address while testing). Default: checkout.successUrl / cancelUrl, else the website’s home."
+									},
+									"expectedTotal": {
+										"type": [
+											"integer",
+											"null"
+										],
+										"minimum": 0,
+										"maximum": 1000000000000,
+										"description": "The total the shopper was shown (minor units): another total answers 409 price_changed."
+									}
+								}
+							}
+						}
+					}
+				},
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"201": {
+						"description": "Created",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ShopOrderPlaced"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -26603,6 +27608,8 @@
 		},
 		"/v1/shop/orders/by-number/{number}": {
 			"get": {
+				"summary": "Read one of the shopper’s orders by its number",
+				"description": "For an order page by number. Send the shopper’s Accounts sign-in in SS-Sign-In (their own orders), or a guest order’s key in SS-Order-Key (the orderKey answered once when it was placed). 403 sign_in_required with neither; 404 not_found when the order is not the shopper’s and the key does not open it. A verified phone in the sign-in makes the guest orders of that phone the shopper’s first. A number of other characters than letters, digits, _ and - (or over 40) answers 404.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "checkout",
 				"security": [
@@ -26623,6 +27630,28 @@
 						}
 					},
 					{
+						"name": "SS-Sign-In",
+						"in": "header",
+						"required": false,
+						"description": "The shopper’s Accounts sign-in (verified here; a wrong or expired one counts as none). One of SS-Sign-In or SS-Order-Key.",
+						"schema": {
+							"type": "string",
+							"description": "The shopper’s Accounts sign-in (verified here; a wrong or expired one counts as none). One of SS-Sign-In or SS-Order-Key."
+						}
+					},
+					{
+						"name": "SS-Order-Key",
+						"in": "header",
+						"required": false,
+						"description": "A guest order’s key (orderKey, answered once when the order was placed). One of SS-Sign-In or SS-Order-Key.",
+						"schema": {
+							"type": "string",
+							"minLength": 32,
+							"maxLength": 32,
+							"description": "A guest order’s key (orderKey, answered once when the order was placed). One of SS-Sign-In or SS-Order-Key."
+						}
+					},
+					{
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
 					{
@@ -26639,8 +27668,15 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ShopOrder"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -26657,6 +27693,8 @@
 		},
 		"/v1/shop/orders/{id}": {
 			"get": {
+				"summary": "Read one of the shopper’s orders",
+				"description": "Send the shopper’s Accounts sign-in in SS-Sign-In (their own orders), or a guest order’s key in SS-Order-Key (the orderKey answered once when it was placed). 403 sign_in_required with neither; 404 not_found when the order is not the shopper’s and the key does not open it. A verified phone in the sign-in makes the guest orders of that phone the shopper’s first. A waiting payment is asked of Payments again (at most every 30 seconds). Downloads and licence keys are listed once the order is paid (digital_goods).",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "checkout",
 				"security": [
@@ -26677,6 +27715,28 @@
 						}
 					},
 					{
+						"name": "SS-Sign-In",
+						"in": "header",
+						"required": false,
+						"description": "The shopper’s Accounts sign-in (verified here; a wrong or expired one counts as none). One of SS-Sign-In or SS-Order-Key.",
+						"schema": {
+							"type": "string",
+							"description": "The shopper’s Accounts sign-in (verified here; a wrong or expired one counts as none). One of SS-Sign-In or SS-Order-Key."
+						}
+					},
+					{
+						"name": "SS-Order-Key",
+						"in": "header",
+						"required": false,
+						"description": "A guest order’s key (orderKey, answered once when the order was placed). One of SS-Sign-In or SS-Order-Key.",
+						"schema": {
+							"type": "string",
+							"minLength": 32,
+							"maxLength": 32,
+							"description": "A guest order’s key (orderKey, answered once when the order was placed). One of SS-Sign-In or SS-Order-Key."
+						}
+					},
+					{
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
 					{
@@ -26693,8 +27753,15 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ShopOrder"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -26711,6 +27778,8 @@
 		},
 		"/v1/shop/orders/{id}/cancel": {
 			"post": {
+				"summary": "Cancel an order as its shopper",
+				"description": "Only in the roles checkout.shopperCancel lists (default awaiting_payment and awaiting_confirmation; canCancel says it), else 409 move_not_allowed; also 409 move_not_allowed for an open order with money paid, or one paid at Payments meanwhile (staff cancel and refund it). Stock, booked slots, offer uses and points go back, and its Payments payment is cancelled. Send the shopper’s Accounts sign-in in SS-Sign-In (their own orders), or a guest order’s key in SS-Order-Key (the orderKey answered once when it was placed). 403 sign_in_required with neither; 404 not_found when the order is not the shopper’s and the key does not open it. A verified phone in the sign-in makes the guest orders of that phone the shopper’s first.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "checkout",
 				"security": [
@@ -26731,6 +27800,28 @@
 						}
 					},
 					{
+						"name": "SS-Sign-In",
+						"in": "header",
+						"required": false,
+						"description": "The shopper’s Accounts sign-in (verified here; a wrong or expired one counts as none). One of SS-Sign-In or SS-Order-Key.",
+						"schema": {
+							"type": "string",
+							"description": "The shopper’s Accounts sign-in (verified here; a wrong or expired one counts as none). One of SS-Sign-In or SS-Order-Key."
+						}
+					},
+					{
+						"name": "SS-Order-Key",
+						"in": "header",
+						"required": false,
+						"description": "A guest order’s key (orderKey, answered once when the order was placed). One of SS-Sign-In or SS-Order-Key.",
+						"schema": {
+							"type": "string",
+							"minLength": 32,
+							"maxLength": 32,
+							"description": "A guest order’s key (orderKey, answered once when the order was placed). One of SS-Sign-In or SS-Order-Key."
+						}
+					},
+					{
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
 					{
@@ -26747,8 +27838,24 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"order"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"order": {
+											"$ref": "#/components/schemas/ShopOrder"
+										}
+									}
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -26765,6 +27872,8 @@
 		},
 		"/v1/shop/orders/{id}/downloads/{lineId}/{file}": {
 			"get": {
+				"summary": "A download link for a file of a paid order",
+				"description": "Answers JSON { url, expiresAt }, not the file and not a redirect: send the browser to url (a signed link of the merchant’s storage, 5 minutes). :file is a downloads[].file of the order line. Each call counts one download of the line, up to the product’s download limit (else digital_goods.downloadLimit; 0 = no limit). 403 download_not_allowed until the order is paid (paid or partially_refunded) and once the limit is reached; 404 not_found for another line or file; 503 storage_not_connected. Send the shopper’s Accounts sign-in in SS-Sign-In (their own orders), or a guest order’s key in SS-Order-Key (the orderKey answered once when it was placed). 403 sign_in_required with neither; 404 not_found when the order is not the shopper’s and the key does not open it. A verified phone in the sign-in makes the guest orders of that phone the shopper’s first.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "digital_goods",
 				"security": [
@@ -26801,6 +27910,28 @@
 						}
 					},
 					{
+						"name": "SS-Sign-In",
+						"in": "header",
+						"required": false,
+						"description": "The shopper’s Accounts sign-in (verified here; a wrong or expired one counts as none). One of SS-Sign-In or SS-Order-Key.",
+						"schema": {
+							"type": "string",
+							"description": "The shopper’s Accounts sign-in (verified here; a wrong or expired one counts as none). One of SS-Sign-In or SS-Order-Key."
+						}
+					},
+					{
+						"name": "SS-Order-Key",
+						"in": "header",
+						"required": false,
+						"description": "A guest order’s key (orderKey, answered once when the order was placed). One of SS-Sign-In or SS-Order-Key.",
+						"schema": {
+							"type": "string",
+							"minLength": 32,
+							"maxLength": 32,
+							"description": "A guest order’s key (orderKey, answered once when the order was placed). One of SS-Sign-In or SS-Order-Key."
+						}
+					},
+					{
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
 					{
@@ -26817,8 +27948,31 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"description": "A 5-minute download link.",
+									"required": [
+										"url",
+										"expiresAt"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"url": {
+											"type": "string",
+											"description": "The signed download link."
+										},
+										"expiresAt": {
+											"type": "string",
+											"format": "date-time"
+										}
+									}
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -26901,6 +28055,8 @@
 		},
 		"/v1/shop/orders/{id}/pay": {
 			"post": {
+				"summary": "Pay an order awaiting payment (again)",
+				"description": "Only an order awaiting payment with a payment through Payments (else 409 nothing_to_pay; a payment staff record takes a proof instead). Answers next.kind pay with Payments’ page; starts a new Payments payment when the order has none (503 payments_unavailable when Payments cannot be reached). Send an Idempotency-Key so a retried request starts one payment. Send the shopper’s Accounts sign-in in SS-Sign-In (their own orders), or a guest order’s key in SS-Order-Key (the orderKey answered once when it was placed). 403 sign_in_required with neither; 404 not_found when the order is not the shopper’s and the key does not open it. A verified phone in the sign-in makes the guest orders of that phone the shopper’s first. 422 validation_failed at /returnUrl.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "checkout",
 				"security": [
@@ -26918,6 +28074,28 @@
 						"required": true,
 						"schema": {
 							"type": "string"
+						}
+					},
+					{
+						"name": "SS-Sign-In",
+						"in": "header",
+						"required": false,
+						"description": "The shopper’s Accounts sign-in (verified here; a wrong or expired one counts as none). One of SS-Sign-In or SS-Order-Key.",
+						"schema": {
+							"type": "string",
+							"description": "The shopper’s Accounts sign-in (verified here; a wrong or expired one counts as none). One of SS-Sign-In or SS-Order-Key."
+						}
+					},
+					{
+						"name": "SS-Order-Key",
+						"in": "header",
+						"required": false,
+						"description": "A guest order’s key (orderKey, answered once when the order was placed). One of SS-Sign-In or SS-Order-Key.",
+						"schema": {
+							"type": "string",
+							"minLength": 32,
+							"maxLength": 32,
+							"description": "A guest order’s key (orderKey, answered once when the order was placed). One of SS-Sign-In or SS-Order-Key."
 						}
 					},
 					{
@@ -26946,9 +28124,49 @@
 						"$ref": "#/components/parameters/SSActorEmail"
 					}
 				],
+				"requestBody": {
+					"required": false,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"properties": {
+									"returnUrl": {
+										"type": [
+											"string",
+											"null"
+										],
+										"maxLength": 2000,
+										"description": "Where Payments sends the shopper back (with ss_order=<id>): on https://<the website’s domain>."
+									}
+								}
+							}
+						}
+					}
+				},
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"order",
+										"next"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"order": {
+											"$ref": "#/components/schemas/ShopOrder"
+										},
+										"next": {
+											"$ref": "#/components/schemas/ShopOrderNext"
+										}
+									}
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -26965,6 +28183,8 @@
 		},
 		"/v1/shop/orders/{id}/proof": {
 			"post": {
+				"summary": "Send the bank-transfer proof",
+				"description": "After uploading it (POST /v1/shop/orders/{id}/proof/upload); staff are told and record the payment. Send the shopper’s Accounts sign-in in SS-Sign-In (their own orders), or a guest order’s key in SS-Order-Key (the orderKey answered once when it was placed). 403 sign_in_required with neither; 404 not_found when the order is not the shopper’s and the key does not open it. A verified phone in the sign-in makes the guest orders of that phone the shopper’s first. 409 nothing_to_pay when the order does not wait for a proof; 422 validation_failed at /key (not this order’s upload, or not uploaded) or /reference; 409 conflict when the order changed meanwhile.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "checkout",
 				"security": [
@@ -26985,6 +28205,28 @@
 						}
 					},
 					{
+						"name": "SS-Sign-In",
+						"in": "header",
+						"required": false,
+						"description": "The shopper’s Accounts sign-in (verified here; a wrong or expired one counts as none). One of SS-Sign-In or SS-Order-Key.",
+						"schema": {
+							"type": "string",
+							"description": "The shopper’s Accounts sign-in (verified here; a wrong or expired one counts as none). One of SS-Sign-In or SS-Order-Key."
+						}
+					},
+					{
+						"name": "SS-Order-Key",
+						"in": "header",
+						"required": false,
+						"description": "A guest order’s key (orderKey, answered once when the order was placed). One of SS-Sign-In or SS-Order-Key.",
+						"schema": {
+							"type": "string",
+							"minLength": 32,
+							"maxLength": 32,
+							"description": "A guest order’s key (orderKey, answered once when the order was placed). One of SS-Sign-In or SS-Order-Key."
+						}
+					},
+					{
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
 					{
@@ -27000,9 +28242,49 @@
 						"$ref": "#/components/parameters/SSActorEmail"
 					}
 				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"key"
+								],
+								"properties": {
+									"key": {
+										"type": "string",
+										"description": "The key the upload answered."
+									},
+									"reference": {
+										"type": "string",
+										"maxLength": 120,
+										"description": "The transfer’s reference."
+									}
+								}
+							}
+						}
+					}
+				},
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"order"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"order": {
+											"$ref": "#/components/schemas/ShopOrder"
+										}
+									}
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -27019,6 +28301,8 @@
 		},
 		"/v1/shop/orders/{id}/proof/upload": {
 			"post": {
+				"summary": "A signed upload for a bank-transfer proof",
+				"description": "Only while the order waits for a payment staff record (canSendProof; else 409 nothing_to_pay). PUT the file to upload.url with upload.headers before expiresAt (15 minutes), then send key to POST /v1/shop/orders/{id}/proof. Send the shopper’s Accounts sign-in in SS-Sign-In (their own orders), or a guest order’s key in SS-Order-Key (the orderKey answered once when it was placed). 403 sign_in_required with neither; 404 not_found when the order is not the shopper’s and the key does not open it. A verified phone in the sign-in makes the guest orders of that phone the shopper’s first. 422 validation_failed at /type or /size; 503 storage_not_connected.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "checkout",
 				"security": [
@@ -27039,6 +28323,28 @@
 						}
 					},
 					{
+						"name": "SS-Sign-In",
+						"in": "header",
+						"required": false,
+						"description": "The shopper’s Accounts sign-in (verified here; a wrong or expired one counts as none). One of SS-Sign-In or SS-Order-Key.",
+						"schema": {
+							"type": "string",
+							"description": "The shopper’s Accounts sign-in (verified here; a wrong or expired one counts as none). One of SS-Sign-In or SS-Order-Key."
+						}
+					},
+					{
+						"name": "SS-Order-Key",
+						"in": "header",
+						"required": false,
+						"description": "A guest order’s key (orderKey, answered once when the order was placed). One of SS-Sign-In or SS-Order-Key.",
+						"schema": {
+							"type": "string",
+							"minLength": 32,
+							"maxLength": 32,
+							"description": "A guest order’s key (orderKey, answered once when the order was placed). One of SS-Sign-In or SS-Order-Key."
+						}
+					},
+					{
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
 					{
@@ -27054,9 +28360,88 @@
 						"$ref": "#/components/parameters/SSActorEmail"
 					}
 				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"type",
+									"size"
+								],
+								"properties": {
+									"type": {
+										"type": "string",
+										"enum": [
+											"image/jpeg",
+											"image/png",
+											"image/webp",
+											"application/pdf"
+										]
+									},
+									"size": {
+										"type": "integer",
+										"minimum": 1,
+										"maximum": 10485760,
+										"description": "Bytes (at most 10 MB)."
+									}
+								}
+							}
+						}
+					}
+				},
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"201": {
+						"description": "Created",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"description": "A signed upload (15 minutes).",
+									"required": [
+										"upload",
+										"key",
+										"expiresAt"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"upload": {
+											"type": "object",
+											"required": [
+												"method",
+												"url",
+												"headers"
+											],
+											"additionalProperties": false,
+											"properties": {
+												"method": {
+													"type": "string",
+													"const": "PUT"
+												},
+												"url": {
+													"type": "string"
+												},
+												"headers": {
+													"type": "object",
+													"additionalProperties": {
+														"type": "string"
+													}
+												}
+											}
+										},
+										"key": {
+											"type": "string",
+											"description": "Send it to POST /v1/shop/orders/{id}/proof once uploaded."
+										},
+										"expiresAt": {
+											"type": "string",
+											"format": "date-time"
+										}
+									}
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -28138,6 +29523,8 @@
 		},
 		"/v1/shop/slots": {
 			"get": {
+				"summary": "The free slots of a booking product",
+				"description": "At most 14 days from from, inside the bookings settings’ leadMinutes and daysAhead, by the weekly booking hours in the business time zone; booked slots are left out. Send a slot’s start as a cart line’s slot. 422 validation_failed at /productId or /from (from must be before to); 404 not_found when it is not an active booking product.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "bookings",
 				"security": [
@@ -28149,6 +29536,39 @@
 					}
 				],
 				"parameters": [
+					{
+						"name": "productId",
+						"in": "query",
+						"required": true,
+						"description": "A booking product.",
+						"schema": {
+							"type": "string",
+							"maxLength": 64,
+							"description": "A booking product."
+						}
+					},
+					{
+						"name": "from",
+						"in": "query",
+						"required": false,
+						"description": "ISO 8601 (default: now).",
+						"schema": {
+							"type": "string",
+							"format": "date-time",
+							"description": "ISO 8601 (default: now)."
+						}
+					},
+					{
+						"name": "to",
+						"in": "query",
+						"required": false,
+						"description": "ISO 8601 (default: 7 days after from).",
+						"schema": {
+							"type": "string",
+							"format": "date-time",
+							"description": "ISO 8601 (default: 7 days after from)."
+						}
+					},
 					{
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
@@ -28166,8 +29586,15 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ShopSlots"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -30484,6 +31911,669 @@
 					}
 				}
 			},
+			"CartDealBadge": {
+				"type": "object",
+				"description": "A deal as a cart line shows it (its display fields).",
+				"required": [
+					"id",
+					"name",
+					"slug",
+					"badgeLabel",
+					"discountLabel",
+					"color",
+					"minQuantity"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"name": {
+						"type": "string"
+					},
+					"slug": {
+						"type": "string",
+						"description": "'' when the deal has no page."
+					},
+					"badgeLabel": {
+						"type": "string"
+					},
+					"discountLabel": {
+						"type": "string"
+					},
+					"color": {
+						"type": "string"
+					},
+					"minQuantity": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "The least quantity per line (0 = none)."
+					}
+				}
+			},
+			"CartDelivery": {
+				"type": "object",
+				"description": "A delivery or pickup option.",
+				"required": [
+					"method",
+					"zone",
+					"name",
+					"fee",
+					"locationId",
+					"minDays",
+					"maxDays"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"method": {
+						"type": "string",
+						"enum": [
+							"delivery",
+							"pickup",
+							"none"
+						],
+						"description": "none: nothing physical to deliver."
+					},
+					"zone": {
+						"type": "string",
+						"description": "The delivery zone's key ('' when no zone matched or zones are off)."
+					},
+					"name": {
+						"type": "string",
+						"description": "The zone's or the pickup location's name."
+					},
+					"fee": {
+						"type": "integer",
+						"description": "Minor units."
+					},
+					"locationId": {
+						"type": [
+							"string",
+							"null"
+						],
+						"description": "The pickup location (multi_location)."
+					},
+					"minDays": {
+						"type": [
+							"integer",
+							"null"
+						]
+					},
+					"maxDays": {
+						"type": [
+							"integer",
+							"null"
+						]
+					},
+					"freeOver": {
+						"type": "integer",
+						"description": "Delivery: free from this amount of goods after offers (0 = never). Only on a delivery option."
+					},
+					"address": {
+						"type": "string",
+						"description": "The pickup point's address (the delivery_zones pickup point only)."
+					},
+					"hours": {
+						"type": "string",
+						"description": "The pickup point's hours (the delivery_zones pickup point only)."
+					}
+				}
+			},
+			"CartLineProblem": {
+				"type": "object",
+				"description": "Why a line cannot be ordered as it is (never the exact stock).",
+				"required": [
+					"code",
+					"message"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"code": {
+						"type": "string",
+						"enum": [
+							"unavailable",
+							"choose_variant",
+							"out_of_stock",
+							"not_enough_stock",
+							"slot_required",
+							"slot_unavailable",
+							"slot_taken",
+							"one_per_slot"
+						]
+					},
+					"message": {
+						"type": "string",
+						"description": "For the shopper."
+					}
+				}
+			},
+			"CartPaymentOption": {
+				"type": "object",
+				"description": "A payment method, in the merchant’s order (checkout.paymentOrder).",
+				"required": [
+					"method",
+					"available",
+					"reason",
+					"advance",
+					"fee"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"method": {
+						"type": "string",
+						"enum": [
+							"cod",
+							"online",
+							"bank_transfer",
+							"pickup"
+						],
+						"description": "cod: cash on delivery; online: through Payments; bank_transfer; pickup: paid at the pickup counter."
+					},
+					"available": {
+						"type": "boolean"
+					},
+					"reason": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"needs_delivery",
+							"needs_pickup",
+							"digital_items",
+							"over_max",
+							"advance_unavailable",
+							"not_ready",
+							null
+						],
+						"description": "Why it cannot be used (null when available): needs_delivery / needs_pickup, digital_items (digital goods are paid first), over_max (cod.maxOrderValue), advance_unavailable (a returned-parcel customer needs an advance that cannot be paid), not_ready (Payments has no bank details)."
+					},
+					"advance": {
+						"type": "integer",
+						"description": "What a cash-on-delivery order pays first (0 = none)."
+					},
+					"fee": {
+						"type": "integer",
+						"description": "What choosing it adds (the COD cash-handling fee)."
+					}
+				}
+			},
+			"CartQuote": {
+				"type": "object",
+				"description": "A priced cart.",
+				"required": [
+					"currency",
+					"lines",
+					"promotions",
+					"role",
+					"delivery",
+					"deliveryOptions",
+					"deliveryProblem",
+					"paymentMethods",
+					"paymentMethod",
+					"bankDetails",
+					"notes",
+					"points",
+					"pointsToEarn",
+					"totals",
+					"ready"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"currency": {
+						"type": "string",
+						"description": "The shop’s currency (ISO 4217)."
+					},
+					"lines": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/CartQuoteLine"
+						}
+					},
+					"promotions": {
+						"type": "object",
+						"required": [
+							"applied",
+							"couponCode",
+							"couponProblem",
+							"freeDelivery",
+							"pointsBlocked"
+						],
+						"additionalProperties": false,
+						"properties": {
+							"applied": {
+								"type": "array",
+								"items": {
+									"type": "object",
+									"required": [
+										"id",
+										"name",
+										"kind",
+										"amount"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"id": {
+											"type": "string"
+										},
+										"name": {
+											"type": "string",
+											"description": "A deal or bundle by name, the coupon by its code."
+										},
+										"kind": {
+											"type": "string",
+											"enum": [
+												"deal",
+												"bundle",
+												"coupon"
+											]
+										},
+										"amount": {
+											"type": "integer",
+											"description": "0 for free delivery."
+										}
+									}
+								}
+							},
+							"couponCode": {
+								"type": "string",
+								"description": "The code entered, upper case."
+							},
+							"couponProblem": {
+								"oneOf": [
+									{
+										"type": "object",
+										"required": [
+											"code",
+											"message"
+										],
+										"additionalProperties": false,
+										"properties": {
+											"code": {
+												"type": "string",
+												"enum": [
+													"coupon_unknown",
+													"coupon_inactive",
+													"coupon_not_started",
+													"coupon_expired",
+													"coupon_used_up",
+													"coupon_first_order",
+													"coupon_per_customer",
+													"coupon_min_subtotal",
+													"coupon_not_applicable"
+												]
+											},
+											"message": {
+												"type": "string"
+											}
+										}
+									},
+									{
+										"type": "null"
+									}
+								]
+							},
+							"freeDelivery": {
+								"type": "boolean"
+							},
+							"pointsBlocked": {
+								"type": "boolean",
+								"description": "A deal that allows no points applies."
+							}
+						}
+					},
+					"role": {
+						"oneOf": [
+							{
+								"type": "object",
+								"description": "The role price applied (role_pricing).",
+								"required": [
+									"key",
+									"percent",
+									"label"
+								],
+								"additionalProperties": false,
+								"properties": {
+									"key": {
+										"type": "string"
+									},
+									"percent": {
+										"type": "number"
+									},
+									"label": {
+										"type": "string"
+									}
+								}
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
+					"delivery": {
+						"$ref": "#/components/schemas/CartDelivery"
+					},
+					"deliveryOptions": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/CartDelivery"
+						}
+					},
+					"deliveryProblem": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"pickup_unavailable",
+							"choose_pickup_location",
+							null
+						],
+						"description": "choose_pickup_location: pickup asked without a location."
+					},
+					"paymentMethods": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/CartPaymentOption"
+						}
+					},
+					"paymentMethod": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"cod",
+							"online",
+							"bank_transfer",
+							"pickup",
+							null
+						],
+						"description": "The method priced: the one asked, else the first available."
+					},
+					"bankDetails": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/CheckoutBankDetails"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"description": "While bank transfer is offered and Payments is connected."
+					},
+					"notes": {
+						"type": "object",
+						"description": "The merchant’s texts per payment method and for delivery and pickup.",
+						"required": [
+							"cod",
+							"online",
+							"bank_transfer",
+							"pickup",
+							"delivery",
+							"prep",
+							"pickupReady"
+						],
+						"additionalProperties": false,
+						"properties": {
+							"cod": {
+								"type": "string"
+							},
+							"online": {
+								"type": "string"
+							},
+							"bank_transfer": {
+								"type": "string"
+							},
+							"pickup": {
+								"type": "string"
+							},
+							"delivery": {
+								"type": "string"
+							},
+							"prep": {
+								"type": "string"
+							},
+							"pickupReady": {
+								"type": "string"
+							}
+						}
+					},
+					"points": {
+						"oneOf": [
+							{
+								"type": "object",
+								"description": "Loyalty points of a signed-in shopper (null otherwise or while loyalty is off).",
+								"required": [
+									"balance",
+									"max",
+									"used",
+									"value"
+								],
+								"additionalProperties": false,
+								"properties": {
+									"balance": {
+										"type": "integer"
+									},
+									"max": {
+										"type": "integer",
+										"description": "The most points this cart may use."
+									},
+									"used": {
+										"type": "integer"
+									},
+									"value": {
+										"type": "integer",
+										"description": "What the used points take off."
+									}
+								}
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
+					"pointsToEarn": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "What the order would earn (0 without loyalty)."
+					},
+					"totals": {
+						"$ref": "#/components/schemas/CartTotals"
+					},
+					"ready": {
+						"type": "boolean",
+						"description": "Nothing stops placing it (every line priced without problems, delivery chosen)."
+					}
+				}
+			},
+			"CartQuoteLine": {
+				"type": "object",
+				"description": "A cart line as priced.",
+				"required": [
+					"key",
+					"productId",
+					"variantId",
+					"kind",
+					"name",
+					"variantName",
+					"gradeLabel",
+					"url",
+					"image",
+					"slot",
+					"unitPrice",
+					"quantity",
+					"discount",
+					"dealDiscount",
+					"tax",
+					"total",
+					"deal",
+					"eligibleDeals",
+					"lock",
+					"problems"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"key": {
+						"type": "string",
+						"description": "<productId>|<variantId> (and |<slot start> for a booking)."
+					},
+					"productId": {
+						"type": "string"
+					},
+					"variantId": {
+						"type": [
+							"string",
+							"null"
+						],
+						"description": "null when no variant could be chosen."
+					},
+					"kind": {
+						"type": "string",
+						"enum": [
+							"physical",
+							"digital",
+							"booking"
+						]
+					},
+					"name": {
+						"type": "string"
+					},
+					"variantName": {
+						"type": "string",
+						"description": "The option values, e.g. Red / 128 GB."
+					},
+					"gradeLabel": {
+						"type": "string"
+					},
+					"url": {
+						"type": [
+							"string",
+							"null"
+						],
+						"description": "The variant's page (null when the line was not priced)."
+					},
+					"image": {
+						"type": [
+							"string",
+							"null"
+						],
+						"description": "The main image (null without one or without storage)."
+					},
+					"slot": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/Slot"
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
+					"unitPrice": {
+						"type": "integer",
+						"description": "Minor units."
+					},
+					"quantity": {
+						"type": "integer",
+						"minimum": 1
+					},
+					"discount": {
+						"type": "integer",
+						"description": "Offers, role price and points spread on the line."
+					},
+					"dealDiscount": {
+						"type": "integer",
+						"description": "What deals took off the line."
+					},
+					"tax": {
+						"type": "integer",
+						"description": "Minor units."
+					},
+					"total": {
+						"type": "integer",
+						"description": "Minor units."
+					},
+					"deal": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/CartDealBadge"
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
+					"eligibleDeals": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/CartDealBadge"
+						},
+						"description": "The deals the shopper may pick for this line (deals.shopperChoice): send one as dealId."
+					},
+					"lock": {
+						"type": [
+							"string",
+							"null"
+						],
+						"description": "Send it back as the line’s lock: it keeps the deal’s price until it ends (deals.lockMinutes)."
+					},
+					"problems": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/CartLineProblem"
+						}
+					}
+				}
+			},
+			"CartTotals": {
+				"type": "object",
+				"description": "All amounts in minor units of the shop’s currency.",
+				"required": [
+					"subtotal",
+					"discount",
+					"roleDiscount",
+					"delivery",
+					"tax",
+					"fee",
+					"total",
+					"taxIncluded"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"subtotal": {
+						"type": "integer",
+						"description": "Unit price × quantity of every priced line."
+					},
+					"discount": {
+						"type": "integer",
+						"description": "Deals, bundles, coupon, points and the role discount."
+					},
+					"roleDiscount": {
+						"type": "integer",
+						"description": "The role price’s part of discount."
+					},
+					"delivery": {
+						"type": "integer",
+						"description": "Minor units."
+					},
+					"tax": {
+						"type": "integer",
+						"description": "Included in the prices or added on top (taxIncluded)."
+					},
+					"fee": {
+						"type": "integer",
+						"description": "The payment method’s fee, included in total."
+					},
+					"total": {
+						"type": "integer",
+						"description": "Minor units."
+					},
+					"taxIncluded": {
+						"type": "boolean"
+					}
+				}
+			},
 			"Category": {
 				"type": "object",
 				"description": "A category of the catalog (nested: parentId and path).",
@@ -30777,6 +32867,1258 @@
 						"items": {
 							"$ref": "#/components/schemas/Category"
 						}
+					}
+				}
+			},
+			"ChatAccount": {
+				"type": "object",
+				"required": [
+					"name",
+					"firstName",
+					"loyaltyPoints",
+					"city",
+					"area"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"name": {
+						"type": "string"
+					},
+					"firstName": {
+						"type": "string"
+					},
+					"loyaltyPoints": {
+						"type": "integer",
+						"description": "0 while loyalty is off."
+					},
+					"city": {
+						"type": "string",
+						"description": "The default address’s city in Accounts, else the last delivered-to city."
+					},
+					"area": {
+						"type": "string"
+					}
+				}
+			},
+			"ChatContext": {
+				"type": "object",
+				"description": "Chat’s live store context.",
+				"required": [
+					"text",
+					"business",
+					"currency",
+					"policies",
+					"products",
+					"deals",
+					"product",
+					"visitor"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"text": {
+						"type": "string",
+						"description": "All of it as one plain text of at most 6000 characters, for the AI’s instructions."
+					},
+					"business": {
+						"type": "string",
+						"description": "The business name (business.json)."
+					},
+					"currency": {
+						"type": "string"
+					},
+					"policies": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"required": [
+								"key",
+								"text"
+							],
+							"additionalProperties": false,
+							"properties": {
+								"key": {
+									"type": "string"
+								},
+								"text": {
+									"type": "string",
+									"description": "Plain text."
+								}
+							}
+						},
+						"description": "While checkout is on."
+					},
+					"products": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"required": [
+								"id",
+								"name",
+								"url",
+								"inStock",
+								"prices"
+							],
+							"additionalProperties": false,
+							"properties": {
+								"id": {
+									"type": "string"
+								},
+								"name": {
+									"type": "string"
+								},
+								"url": {
+									"type": "string"
+								},
+								"inStock": {
+									"type": "boolean"
+								},
+								"prices": {
+									"type": "array",
+									"items": {
+										"type": "object",
+										"required": [
+											"grade",
+											"price",
+											"priceText",
+											"inStock"
+										],
+										"additionalProperties": false,
+										"properties": {
+											"grade": {
+												"type": [
+													"string",
+													"null"
+												]
+											},
+											"price": {
+												"type": "integer",
+												"description": "Minor units."
+											},
+											"priceText": {
+												"type": "string"
+											},
+											"inStock": {
+												"type": "boolean"
+											}
+										}
+									},
+									"description": "The lowest price per grade."
+								}
+							}
+						},
+						"description": "The 10 newest products."
+					},
+					"deals": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/ChatDeal"
+						},
+						"description": "At most 10, while deals is on."
+					},
+					"product": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/ChatProductDetails"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"description": "The product asked for (null when none or unknown)."
+					},
+					"visitor": {
+						"oneOf": [
+							{
+								"type": "object",
+								"description": "With a forwarded sign-in only.",
+								"required": [
+									"firstName",
+									"city",
+									"points"
+								],
+								"additionalProperties": false,
+								"properties": {
+									"firstName": {
+										"type": "string"
+									},
+									"city": {
+										"type": "string"
+									},
+									"points": {
+										"type": [
+											"integer",
+											"null"
+										],
+										"description": "null while loyalty is off."
+									}
+								}
+							},
+							{
+								"type": "null"
+							}
+						]
+					}
+				}
+			},
+			"ChatDeal": {
+				"type": "object",
+				"description": "A live deal as Chat shows it.",
+				"required": [
+					"id",
+					"name",
+					"description",
+					"slug",
+					"type",
+					"value",
+					"valueText",
+					"badgeLabel",
+					"discountLabel",
+					"color",
+					"bannerUrl",
+					"minQuantity",
+					"days",
+					"timeFrom",
+					"timeTo",
+					"endsAt",
+					"endsText"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"name": {
+						"type": "string"
+					},
+					"description": {
+						"type": "string"
+					},
+					"slug": {
+						"type": "string"
+					},
+					"type": {
+						"type": "string",
+						"enum": [
+							"percent",
+							"fixed",
+							"free_delivery"
+						]
+					},
+					"value": {
+						"type": "number",
+						"description": "Percent, or minor units for fixed; 0 for free delivery."
+					},
+					"valueText": {
+						"type": "string"
+					},
+					"badgeLabel": {
+						"type": "string"
+					},
+					"discountLabel": {
+						"type": "string"
+					},
+					"color": {
+						"type": "string"
+					},
+					"bannerUrl": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"minQuantity": {
+						"type": [
+							"integer",
+							"null"
+						]
+					},
+					"days": {
+						"type": "array",
+						"items": {
+							"type": "integer",
+							"minimum": 0,
+							"maximum": 6
+						},
+						"description": "Weekdays it runs (0 = Sunday; [] = every day)."
+					},
+					"timeFrom": {
+						"type": "string",
+						"description": "'' = all day."
+					},
+					"timeTo": {
+						"type": "string"
+					},
+					"endsAt": {
+						"type": [
+							"string",
+							"null"
+						],
+						"format": "date-time"
+					},
+					"endsText": {
+						"type": "string"
+					}
+				}
+			},
+			"ChatOrder": {
+				"type": "object",
+				"description": "An order for Chat (never the address or phone).",
+				"required": [
+					"id",
+					"number",
+					"status",
+					"statusKey",
+					"total",
+					"totalText",
+					"currency",
+					"placedAt",
+					"paymentMethod",
+					"paid",
+					"paidText",
+					"balanceDue",
+					"balanceDueText",
+					"lines",
+					"courier",
+					"trackingNumber",
+					"trackingUrl",
+					"trackingNote",
+					"expectedAt",
+					"dispatchVideo"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"number": {
+						"type": "string"
+					},
+					"status": {
+						"type": "string",
+						"description": "The status label."
+					},
+					"statusKey": {
+						"type": "string"
+					},
+					"total": {
+						"type": "integer",
+						"description": "Minor units."
+					},
+					"totalText": {
+						"type": "string"
+					},
+					"currency": {
+						"type": "string"
+					},
+					"placedAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"paymentMethod": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"cod",
+							"online",
+							"bank_transfer",
+							"pickup",
+							null
+						]
+					},
+					"paid": {
+						"type": "integer",
+						"description": "Paid less refunded."
+					},
+					"paidText": {
+						"type": "string"
+					},
+					"balanceDue": {
+						"type": "integer",
+						"description": "Minor units."
+					},
+					"balanceDueText": {
+						"type": "string"
+					},
+					"lines": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/ChatOrderLine"
+						}
+					},
+					"courier": {
+						"type": "string"
+					},
+					"trackingNumber": {
+						"type": "string"
+					},
+					"trackingUrl": {
+						"type": "string",
+						"description": "An http(s) address or ''."
+					},
+					"trackingNote": {
+						"type": "string"
+					},
+					"expectedAt": {
+						"type": [
+							"string",
+							"null"
+						],
+						"format": "date-time"
+					},
+					"dispatchVideo": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/ShopDispatchVideo"
+							},
+							{
+								"type": "null"
+							}
+						]
+					}
+				}
+			},
+			"ChatOrderLine": {
+				"type": "object",
+				"required": [
+					"name",
+					"variantName",
+					"gradeLabel",
+					"quantity",
+					"unitPrice",
+					"unitPriceText",
+					"total",
+					"totalText",
+					"warrantyDays"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"name": {
+						"type": "string"
+					},
+					"variantName": {
+						"type": "string"
+					},
+					"gradeLabel": {
+						"type": "string"
+					},
+					"quantity": {
+						"type": "integer"
+					},
+					"unitPrice": {
+						"type": "integer",
+						"description": "Minor units."
+					},
+					"unitPriceText": {
+						"type": "string"
+					},
+					"total": {
+						"type": "integer",
+						"description": "Minor units."
+					},
+					"totalText": {
+						"type": "string"
+					},
+					"warrantyDays": {
+						"type": [
+							"integer",
+							"null"
+						]
+					}
+				}
+			},
+			"ChatPaymentOption": {
+				"type": "object",
+				"description": "A payment method for the quoted item, in the merchant’s order.",
+				"required": [
+					"method",
+					"available",
+					"reason",
+					"advance",
+					"fee",
+					"advanceText"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"method": {
+						"type": "string",
+						"enum": [
+							"cod",
+							"online",
+							"bank_transfer",
+							"pickup"
+						],
+						"description": "cod: cash on delivery; online: through Payments; bank_transfer; pickup: paid at the pickup counter."
+					},
+					"available": {
+						"type": "boolean"
+					},
+					"reason": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"needs_delivery",
+							"needs_pickup",
+							"digital_items",
+							"over_max",
+							"advance_unavailable",
+							"not_ready",
+							null
+						],
+						"description": "Why it cannot be used (null when available), as in a cart quote."
+					},
+					"advance": {
+						"type": "integer",
+						"description": "What a cash-on-delivery order pays first (0 = none)."
+					},
+					"fee": {
+						"type": "integer",
+						"description": "What choosing it adds (the COD cash-handling fee)."
+					},
+					"advanceText": {
+						"type": "string"
+					}
+				}
+			},
+			"ChatProduct": {
+				"type": "object",
+				"description": "A product card for Chat.",
+				"required": [
+					"id",
+					"name",
+					"price",
+					"priceText",
+					"priceMax",
+					"priceMaxText",
+					"currency",
+					"image",
+					"url",
+					"inStock",
+					"variantId",
+					"grade",
+					"stockLeft"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"name": {
+						"type": "string"
+					},
+					"price": {
+						"type": "integer",
+						"description": "The card variant’s price (the cheapest active one in stock, or the one the filters matched)."
+					},
+					"priceText": {
+						"type": "string",
+						"description": "By the website’s Format."
+					},
+					"priceMax": {
+						"type": "integer",
+						"description": "The highest active variant price."
+					},
+					"priceMaxText": {
+						"type": "string"
+					},
+					"currency": {
+						"type": "string"
+					},
+					"image": {
+						"type": [
+							"string",
+							"null"
+						],
+						"description": "An https address, else null."
+					},
+					"url": {
+						"type": "string",
+						"description": "The product page."
+					},
+					"inStock": {
+						"type": "boolean"
+					},
+					"variantId": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"grade": {
+						"type": [
+							"string",
+							"null"
+						],
+						"description": "The card variant’s grade label."
+					},
+					"stockLeft": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"description": "Units shoppers are told are left (catalog.showStock), else null."
+					}
+				}
+			},
+			"ChatProductDetails": {
+				"type": "object",
+				"description": "A product’s details for Chat: the card with its active variants (at most 20).",
+				"required": [
+					"id",
+					"name",
+					"price",
+					"priceText",
+					"priceMax",
+					"priceMaxText",
+					"currency",
+					"image",
+					"url",
+					"inStock",
+					"variantId",
+					"grade",
+					"stockLeft",
+					"summary",
+					"description",
+					"brand",
+					"options",
+					"priceRange",
+					"specs",
+					"variants"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"name": {
+						"type": "string"
+					},
+					"price": {
+						"type": "integer",
+						"description": "Minor units."
+					},
+					"priceText": {
+						"type": "string"
+					},
+					"priceMax": {
+						"type": "integer",
+						"description": "Minor units."
+					},
+					"priceMaxText": {
+						"type": "string"
+					},
+					"currency": {
+						"type": "string"
+					},
+					"image": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"url": {
+						"type": "string"
+					},
+					"inStock": {
+						"type": "boolean"
+					},
+					"variantId": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"grade": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"stockLeft": {
+						"type": [
+							"integer",
+							"null"
+						]
+					},
+					"summary": {
+						"type": "string"
+					},
+					"description": {
+						"type": "string",
+						"description": "Plain text, at most 1,500 characters."
+					},
+					"brand": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"options": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"required": [
+								"name",
+								"values"
+							],
+							"additionalProperties": false,
+							"properties": {
+								"name": {
+									"type": "string"
+								},
+								"values": {
+									"type": "array",
+									"items": {
+										"type": "string"
+									}
+								}
+							}
+						}
+					},
+					"priceRange": {
+						"type": "object",
+						"required": [
+							"min",
+							"max",
+							"minText",
+							"maxText"
+						],
+						"additionalProperties": false,
+						"properties": {
+							"min": {
+								"type": "integer",
+								"description": "Minor units."
+							},
+							"max": {
+								"type": "integer",
+								"description": "Minor units."
+							},
+							"minText": {
+								"type": "string"
+							},
+							"maxText": {
+								"type": "string"
+							}
+						}
+					},
+					"specs": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"required": [
+								"name",
+								"value",
+								"unit"
+							],
+							"additionalProperties": false,
+							"properties": {
+								"name": {
+									"type": "string"
+								},
+								"value": {
+									"type": [
+										"string",
+										"number",
+										"boolean",
+										"array"
+									],
+									"items": {
+										"type": [
+											"string",
+											"number"
+										]
+									}
+								},
+								"unit": {
+									"type": "string"
+								}
+							}
+						}
+					},
+					"variants": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/ChatVariant"
+						},
+						"maxItems": 20
+					}
+				}
+			},
+			"ChatProductList": {
+				"type": "object",
+				"required": [
+					"items"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"items": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/ChatProduct"
+						}
+					}
+				}
+			},
+			"ChatQuote": {
+				"type": "object",
+				"description": "One variant priced as the cart prices it.",
+				"required": [
+					"productId",
+					"variantId",
+					"quantity",
+					"price",
+					"priceText",
+					"priceAfterDeals",
+					"priceAfterDealsText",
+					"savings",
+					"savingsText",
+					"currency",
+					"deals",
+					"dealsApplied",
+					"inStock",
+					"problems",
+					"paymentMethod",
+					"paymentMethods",
+					"subtotal",
+					"subtotalText",
+					"discount",
+					"discountText",
+					"roleDiscount",
+					"roleDiscountText",
+					"fee",
+					"feeText",
+					"tax",
+					"taxText",
+					"delivery",
+					"freeDeliveryOver",
+					"freeDeliveryOverText",
+					"total",
+					"totalText"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"productId": {
+						"type": "string"
+					},
+					"variantId": {
+						"type": "string"
+					},
+					"quantity": {
+						"type": "integer",
+						"minimum": 1,
+						"maximum": 5
+					},
+					"price": {
+						"type": "integer",
+						"description": "The unit price."
+					},
+					"priceText": {
+						"type": "string"
+					},
+					"priceAfterDeals": {
+						"type": "integer",
+						"description": "The unit price after deals."
+					},
+					"priceAfterDealsText": {
+						"type": "string"
+					},
+					"savings": {
+						"type": "integer",
+						"description": "Per unit."
+					},
+					"savingsText": {
+						"type": "string"
+					},
+					"currency": {
+						"type": "string"
+					},
+					"deals": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						},
+						"description": "Names of the deals applied."
+					},
+					"dealsApplied": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"description": "A deal applied (with its display fields while it is live; id and name only otherwise).",
+							"required": [
+								"id",
+								"name",
+								"amount",
+								"amountText"
+							],
+							"additionalProperties": false,
+							"properties": {
+								"id": {
+									"type": "string"
+								},
+								"name": {
+									"type": "string"
+								},
+								"description": {
+									"type": "string"
+								},
+								"slug": {
+									"type": "string"
+								},
+								"type": {
+									"type": "string",
+									"enum": [
+										"percent",
+										"fixed",
+										"free_delivery"
+									]
+								},
+								"value": {
+									"type": "number"
+								},
+								"valueText": {
+									"type": "string"
+								},
+								"badgeLabel": {
+									"type": "string"
+								},
+								"discountLabel": {
+									"type": "string"
+								},
+								"color": {
+									"type": "string"
+								},
+								"bannerUrl": {
+									"type": [
+										"string",
+										"null"
+									]
+								},
+								"minQuantity": {
+									"type": [
+										"integer",
+										"null"
+									]
+								},
+								"days": {
+									"type": "array",
+									"items": {
+										"type": "integer"
+									}
+								},
+								"timeFrom": {
+									"type": "string"
+								},
+								"timeTo": {
+									"type": "string"
+								},
+								"endsAt": {
+									"type": [
+										"string",
+										"null"
+									],
+									"format": "date-time"
+								},
+								"endsText": {
+									"type": "string"
+								},
+								"amount": {
+									"type": "integer",
+									"description": "What it takes off."
+								},
+								"amountText": {
+									"type": "string"
+								}
+							}
+						}
+					},
+					"inStock": {
+						"type": "boolean"
+					},
+					"problems": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/CartLineProblem"
+						}
+					},
+					"paymentMethod": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"cod",
+							"online",
+							"bank_transfer",
+							"pickup",
+							null
+						]
+					},
+					"paymentMethods": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/ChatPaymentOption"
+						}
+					},
+					"subtotal": {
+						"type": "integer",
+						"description": "Minor units."
+					},
+					"subtotalText": {
+						"type": "string"
+					},
+					"discount": {
+						"type": "integer",
+						"description": "Minor units."
+					},
+					"discountText": {
+						"type": "string"
+					},
+					"roleDiscount": {
+						"type": "integer",
+						"description": "Minor units."
+					},
+					"roleDiscountText": {
+						"type": "string"
+					},
+					"fee": {
+						"type": "integer",
+						"description": "Minor units."
+					},
+					"feeText": {
+						"type": "string"
+					},
+					"tax": {
+						"type": "integer",
+						"description": "Minor units."
+					},
+					"taxText": {
+						"type": "string"
+					},
+					"delivery": {
+						"oneOf": [
+							{
+								"type": "object",
+								"required": [
+									"method",
+									"name",
+									"fee",
+									"feeText",
+									"minDays",
+									"maxDays"
+								],
+								"additionalProperties": false,
+								"properties": {
+									"method": {
+										"type": "string",
+										"enum": [
+											"delivery",
+											"pickup"
+										]
+									},
+									"name": {
+										"type": "string"
+									},
+									"fee": {
+										"type": "integer",
+										"description": "Minor units."
+									},
+									"feeText": {
+										"type": "string"
+									},
+									"minDays": {
+										"type": [
+											"integer",
+											"null"
+										]
+									},
+									"maxDays": {
+										"type": [
+											"integer",
+											"null"
+										]
+									}
+								}
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
+					"freeDeliveryOver": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"description": "Free delivery from this amount of goods (null: never)."
+					},
+					"freeDeliveryOverText": {
+						"type": "string"
+					},
+					"total": {
+						"type": "integer",
+						"description": "Minor units."
+					},
+					"totalText": {
+						"type": "string"
+					}
+				}
+			},
+			"ChatShipment": {
+				"type": "object",
+				"required": [
+					"orderNumber",
+					"courier",
+					"trackingNumber",
+					"trackingUrl",
+					"trackingNote",
+					"expectedAt",
+					"status"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"orderNumber": {
+						"type": "string"
+					},
+					"courier": {
+						"type": "string"
+					},
+					"trackingNumber": {
+						"type": "string"
+					},
+					"trackingUrl": {
+						"type": "string",
+						"description": "An http(s) address or ''."
+					},
+					"trackingNote": {
+						"type": "string"
+					},
+					"expectedAt": {
+						"type": [
+							"string",
+							"null"
+						],
+						"format": "date-time"
+					},
+					"status": {
+						"type": "string",
+						"description": "The courier’s status, else the order’s status label."
+					}
+				}
+			},
+			"ChatVariant": {
+				"type": "object",
+				"required": [
+					"id",
+					"options",
+					"price",
+					"priceText",
+					"compareAtPrice",
+					"compareAtPriceText",
+					"grade",
+					"gradeKey",
+					"inStock",
+					"soldOut",
+					"stockLeft",
+					"warrantyDays"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"options": {
+						"type": "object",
+						"additionalProperties": {
+							"type": "string"
+						}
+					},
+					"price": {
+						"type": "integer",
+						"description": "Minor units."
+					},
+					"priceText": {
+						"type": "string"
+					},
+					"compareAtPrice": {
+						"type": [
+							"integer",
+							"null"
+						]
+					},
+					"compareAtPriceText": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"grade": {
+						"type": [
+							"string",
+							"null"
+						],
+						"description": "Label."
+					},
+					"gradeKey": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"inStock": {
+						"type": "boolean"
+					},
+					"soldOut": {
+						"type": "boolean"
+					},
+					"stockLeft": {
+						"type": [
+							"integer",
+							"null"
+						]
+					},
+					"warrantyDays": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"description": "Physical items with a warranty only."
+					}
+				}
+			},
+			"CheckoutBankDetails": {
+				"type": "object",
+				"description": "The bank details from Payments (read at most every 5 minutes; empty texts when not set).",
+				"required": [
+					"ready",
+					"accountTitle",
+					"bankName",
+					"accountNumber",
+					"iban",
+					"instructions"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"ready": {
+						"type": "boolean",
+						"description": "Bank transfer can be offered (its details are set, or Payments does not require them)."
+					},
+					"accountTitle": {
+						"type": "string"
+					},
+					"bankName": {
+						"type": "string"
+					},
+					"accountNumber": {
+						"type": "string"
+					},
+					"iban": {
+						"type": "string"
+					},
+					"instructions": {
+						"type": "string"
 					}
 				}
 			},
@@ -31852,6 +35194,67 @@
 					}
 				}
 			},
+			"CustomerOrdersLookup": {
+				"type": "object",
+				"description": "A customer’s latest orders, newest first, and their points.",
+				"required": [
+					"items",
+					"loyaltyPoints"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"items": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"required": [
+								"id",
+								"number",
+								"status",
+								"statusLabel",
+								"total",
+								"totalText",
+								"currency",
+								"createdAt"
+							],
+							"additionalProperties": false,
+							"properties": {
+								"id": {
+									"type": "string"
+								},
+								"number": {
+									"type": "string"
+								},
+								"status": {
+									"type": "string"
+								},
+								"statusLabel": {
+									"type": "string"
+								},
+								"total": {
+									"type": "integer",
+									"description": "Minor units."
+								},
+								"totalText": {
+									"type": "string"
+								},
+								"currency": {
+									"type": "string"
+								},
+								"createdAt": {
+									"type": "string",
+									"format": "date-time",
+									"description": "When it was placed."
+								}
+							}
+						}
+					},
+					"loyaltyPoints": {
+						"type": "integer",
+						"description": "0 while loyalty is off."
+					}
+				}
+			},
 			"CustomerPage": {
 				"type": "object",
 				"description": "One page of customers, A to Z by name.",
@@ -32865,6 +36268,97 @@
 					}
 				}
 			},
+			"DigitalFile": {
+				"type": "object",
+				"description": "A file of a digital product.",
+				"required": [
+					"file",
+					"name",
+					"type",
+					"size"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"file": {
+						"type": "string",
+						"description": "Its name in the download address (GET /v1/shop/orders/{id}/downloads/{lineId}/{file})."
+					},
+					"name": {
+						"type": "string"
+					},
+					"type": {
+						"type": "string",
+						"description": "Media type."
+					},
+					"size": {
+						"type": "integer",
+						"description": "Bytes."
+					}
+				}
+			},
+			"DigitalFileUpload": {
+				"type": "object",
+				"description": "A signed upload of a digital product’s file.",
+				"required": [
+					"file",
+					"upload"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"file": {
+						"type": "object",
+						"required": [
+							"name",
+							"type",
+							"size"
+						],
+						"additionalProperties": false,
+						"properties": {
+							"name": {
+								"type": "string",
+								"description": "The cleaned file name."
+							},
+							"type": {
+								"type": "string"
+							},
+							"size": {
+								"type": "integer"
+							}
+						}
+					},
+					"upload": {
+						"type": "object",
+						"description": "PUT the file to url with headers before expiresAt (15 minutes).",
+						"required": [
+							"method",
+							"url",
+							"headers",
+							"expiresAt"
+						],
+						"additionalProperties": false,
+						"properties": {
+							"method": {
+								"type": "string",
+								"const": "PUT"
+							},
+							"url": {
+								"type": "string"
+							},
+							"headers": {
+								"type": "object",
+								"additionalProperties": {
+									"type": "string"
+								},
+								"description": "Send them with the PUT."
+							},
+							"expiresAt": {
+								"type": "string",
+								"format": "date-time"
+							}
+						}
+					}
+				}
+			},
 			"ExtrasProductCard": {
 				"type": "object",
 				"description": "A product card of the wishlist, compare and alerts.",
@@ -33759,6 +37253,25 @@
 								}
 							}
 						}
+					}
+				}
+			},
+			"LicenceKeysAdded": {
+				"type": "object",
+				"description": "Licence keys added.",
+				"required": [
+					"added",
+					"available"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"added": {
+						"type": "integer",
+						"description": "Keys added (repeats and keys the product has are skipped)."
+					},
+					"available": {
+						"type": "integer",
+						"description": "Keys not given yet."
 					}
 				}
 			},
@@ -40223,6 +43736,28 @@
 					}
 				}
 			},
+			"ShopDispatchVideo": {
+				"type": "object",
+				"description": "The dispatch video staff added (an upload’s address, a YouTube embed or an https address).",
+				"required": [
+					"kind",
+					"url"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"kind": {
+						"type": "string",
+						"enum": [
+							"file",
+							"youtube",
+							"url"
+						]
+					},
+					"url": {
+						"type": "string"
+					}
+				}
+			},
 			"ShopFacets": {
 				"type": "object",
 				"required": [
@@ -40672,6 +44207,836 @@
 					}
 				},
 				"description": "A photo as shoppers get it."
+			},
+			"ShopOrder": {
+				"type": "object",
+				"description": "An order as its shopper sees it (never staff notes or who moved or paid it).",
+				"required": [
+					"id",
+					"number",
+					"status",
+					"statusLabel",
+					"role",
+					"placedAt",
+					"guest",
+					"lines",
+					"totals",
+					"promotions",
+					"address",
+					"delivery",
+					"payment",
+					"bankDetails",
+					"canSendProof",
+					"notes",
+					"pickupPoint",
+					"history",
+					"shipment",
+					"dispatchVideo",
+					"note",
+					"canCancel",
+					"invoice"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"number": {
+						"type": "string",
+						"description": "Unique per website: <checkout.numberPrefix><year>-<sequence>."
+					},
+					"status": {
+						"type": "string",
+						"description": "A status key of the website’s order flow."
+					},
+					"statusLabel": {
+						"type": "string"
+					},
+					"role": {
+						"type": "string",
+						"enum": [
+							"awaiting_payment",
+							"awaiting_confirmation",
+							"open",
+							"packed",
+							"shipped",
+							"delivered",
+							"cancelled",
+							"returned_to_origin",
+							"refunded",
+							"returned"
+						],
+						"description": "What the status means, whatever its name."
+					},
+					"placedAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"guest": {
+						"type": "boolean",
+						"description": "Placed by a guest (no Accounts user)."
+					},
+					"lines": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/ShopOrderLine"
+						}
+					},
+					"totals": {
+						"type": "object",
+						"description": "Minor units.",
+						"required": [
+							"subtotal",
+							"discount",
+							"roleDiscount",
+							"delivery",
+							"tax",
+							"fee",
+							"total",
+							"currency",
+							"taxIncluded"
+						],
+						"additionalProperties": false,
+						"properties": {
+							"subtotal": {
+								"type": "integer",
+								"description": "Minor units."
+							},
+							"discount": {
+								"type": "integer",
+								"description": "Minor units."
+							},
+							"roleDiscount": {
+								"type": "integer",
+								"description": "Minor units."
+							},
+							"delivery": {
+								"type": "integer",
+								"description": "Minor units."
+							},
+							"tax": {
+								"type": "integer",
+								"description": "Minor units."
+							},
+							"fee": {
+								"type": "integer",
+								"description": "Minor units."
+							},
+							"total": {
+								"type": "integer",
+								"description": "Minor units."
+							},
+							"currency": {
+								"type": "string"
+							},
+							"taxIncluded": {
+								"type": "boolean"
+							}
+						}
+					},
+					"promotions": {
+						"type": "object",
+						"required": [
+							"couponCode",
+							"pointsRedeemed",
+							"pointsValue",
+							"pointsEarned",
+							"role"
+						],
+						"additionalProperties": false,
+						"properties": {
+							"couponCode": {
+								"type": "string",
+								"description": "'' without a coupon."
+							},
+							"pointsRedeemed": {
+								"type": "integer"
+							},
+							"pointsValue": {
+								"type": "integer",
+								"description": "Minor units."
+							},
+							"pointsEarned": {
+								"type": "integer"
+							},
+							"role": {
+								"oneOf": [
+									{
+										"type": "object",
+										"required": [
+											"label",
+											"percent"
+										],
+										"additionalProperties": false,
+										"properties": {
+											"label": {
+												"type": "string"
+											},
+											"percent": {
+												"type": "number"
+											}
+										}
+									},
+									{
+										"type": "null"
+									}
+								]
+							}
+						}
+					},
+					"address": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/ShopOrderAddress"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"description": "null for pickup, digital and booking-only orders."
+					},
+					"delivery": {
+						"type": "object",
+						"required": [
+							"method",
+							"zone",
+							"fee",
+							"locationId",
+							"locationName"
+						],
+						"additionalProperties": false,
+						"properties": {
+							"method": {
+								"type": "string",
+								"enum": [
+									"delivery",
+									"pickup",
+									"none"
+								]
+							},
+							"zone": {
+								"type": "string"
+							},
+							"fee": {
+								"type": "integer",
+								"description": "Minor units."
+							},
+							"locationId": {
+								"type": [
+									"string",
+									"null"
+								]
+							},
+							"locationName": {
+								"type": "string",
+								"description": "The pickup location's name ('' otherwise)."
+							}
+						}
+					},
+					"payment": {
+						"type": "object",
+						"required": [
+							"method",
+							"state",
+							"via",
+							"advance",
+							"paid",
+							"refunded",
+							"balanceDue",
+							"payUrl",
+							"payBy",
+							"proof",
+							"entries",
+							"refunds"
+						],
+						"additionalProperties": false,
+						"properties": {
+							"method": {
+								"type": "string",
+								"enum": [
+									"cod",
+									"online",
+									"bank_transfer",
+									"pickup"
+								],
+								"description": "cod: cash on delivery; online: through Payments; bank_transfer; pickup: paid at the pickup counter."
+							},
+							"state": {
+								"type": "string",
+								"enum": [
+									"unpaid",
+									"pending",
+									"paid",
+									"partially_refunded",
+									"refunded"
+								]
+							},
+							"via": {
+								"type": "string",
+								"enum": [
+									"payments",
+									"manual"
+								],
+								"description": "manual: staff record the bank transfer or advance (the shopper sends a proof)."
+							},
+							"advance": {
+								"type": "integer",
+								"description": "The COD advance paid first (0 = none)."
+							},
+							"paid": {
+								"type": "integer",
+								"description": "Minor units."
+							},
+							"refunded": {
+								"type": "integer",
+								"description": "Minor units."
+							},
+							"balanceDue": {
+								"type": "integer",
+								"description": "Minor units."
+							},
+							"payUrl": {
+								"type": [
+									"string",
+									"null"
+								],
+								"description": "Payments’ page while a payment waits."
+							},
+							"payBy": {
+								"type": [
+									"string",
+									"null"
+								],
+								"format": "date-time",
+								"description": "When an order awaiting payment is cancelled unpaid (null: no time limit)."
+							},
+							"proof": {
+								"oneOf": [
+									{
+										"type": "object",
+										"description": "The transfer proof sent.",
+										"required": [
+											"reference",
+											"at"
+										],
+										"additionalProperties": false,
+										"properties": {
+											"reference": {
+												"type": "string"
+											},
+											"at": {
+												"type": "string",
+												"format": "date-time"
+											}
+										}
+									},
+									{
+										"type": "null"
+									}
+								]
+							},
+							"entries": {
+								"type": "array",
+								"items": {
+									"$ref": "#/components/schemas/ShopOrderMoney"
+								}
+							},
+							"refunds": {
+								"type": "array",
+								"items": {
+									"$ref": "#/components/schemas/ShopOrderMoney"
+								}
+							}
+						}
+					},
+					"bankDetails": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/CheckoutBankDetails"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"description": "Where to transfer, while a bank transfer (or a manual advance) awaits payment."
+					},
+					"canSendProof": {
+						"type": "boolean",
+						"description": "It waits for a payment staff record: send the transfer proof."
+					},
+					"notes": {
+						"type": "object",
+						"required": [
+							"payment",
+							"delivery",
+							"prep",
+							"pickupReady"
+						],
+						"additionalProperties": false,
+						"properties": {
+							"payment": {
+								"type": "string",
+								"description": "The merchant’s text for its payment method."
+							},
+							"delivery": {
+								"type": "string"
+							},
+							"prep": {
+								"type": "string"
+							},
+							"pickupReady": {
+								"type": "string"
+							}
+						}
+					},
+					"pickupPoint": {
+						"oneOf": [
+							{
+								"type": "object",
+								"description": "The pickup point (delivery_zones).",
+								"required": [
+									"name",
+									"address",
+									"hours"
+								],
+								"additionalProperties": false,
+								"properties": {
+									"name": {
+										"type": "string"
+									},
+									"address": {
+										"type": "string"
+									},
+									"hours": {
+										"type": "string"
+									}
+								}
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
+					"history": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"required": [
+								"at",
+								"status",
+								"label"
+							],
+							"additionalProperties": false,
+							"properties": {
+								"at": {
+									"type": "string",
+									"format": "date-time"
+								},
+								"status": {
+									"type": "string"
+								},
+								"label": {
+									"type": "string"
+								}
+							}
+						}
+					},
+					"shipment": {
+						"oneOf": [
+							{
+								"type": "object",
+								"required": [
+									"courier",
+									"trackingNumber",
+									"trackingUrl",
+									"trackingNote",
+									"estimatedDeliveryAt"
+								],
+								"additionalProperties": false,
+								"properties": {
+									"courier": {
+										"type": "string"
+									},
+									"trackingNumber": {
+										"type": "string"
+									},
+									"trackingUrl": {
+										"type": "string",
+										"description": "The tracking page ('' when unknown)."
+									},
+									"trackingNote": {
+										"type": "string"
+									},
+									"estimatedDeliveryAt": {
+										"type": [
+											"string",
+											"null"
+										],
+										"format": "date-time"
+									}
+								}
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
+					"dispatchVideo": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/ShopDispatchVideo"
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
+					"note": {
+						"type": "string",
+						"description": "The shopper’s note."
+					},
+					"canCancel": {
+						"type": "boolean",
+						"description": "The shopper may cancel it now (checkout.shopperCancel)."
+					},
+					"invoice": {
+						"type": "boolean",
+						"description": "Its invoice can be read (GET /v1/shop/orders/{id}/invoice, invoices)."
+					}
+				}
+			},
+			"ShopOrderAddress": {
+				"type": "object",
+				"description": "A delivery address.",
+				"required": [
+					"name",
+					"phone",
+					"line1",
+					"line2",
+					"city",
+					"area",
+					"postalCode",
+					"country",
+					"notes"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"name": {
+						"type": "string"
+					},
+					"phone": {
+						"type": "string",
+						"description": "E.164 when the website’s phone rules read it, else as typed."
+					},
+					"line1": {
+						"type": "string"
+					},
+					"line2": {
+						"type": "string"
+					},
+					"city": {
+						"type": "string"
+					},
+					"area": {
+						"type": "string"
+					},
+					"postalCode": {
+						"type": "string"
+					},
+					"country": {
+						"type": "string"
+					},
+					"notes": {
+						"type": "string"
+					}
+				}
+			},
+			"ShopOrderLine": {
+				"type": "object",
+				"description": "An order line at the price paid.",
+				"required": [
+					"id",
+					"productId",
+					"variantId",
+					"kind",
+					"name",
+					"variantName",
+					"gradeLabel",
+					"serials",
+					"warrantyDays",
+					"image",
+					"unitPrice",
+					"quantity",
+					"discount",
+					"tax",
+					"total",
+					"booking",
+					"downloads",
+					"downloadsLeft",
+					"licenceKeys"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"productId": {
+						"type": "string"
+					},
+					"variantId": {
+						"type": "string"
+					},
+					"kind": {
+						"type": "string",
+						"enum": [
+							"physical",
+							"digital",
+							"booking"
+						]
+					},
+					"name": {
+						"type": "string",
+						"description": "The product’s name when ordered."
+					},
+					"variantName": {
+						"type": "string"
+					},
+					"gradeLabel": {
+						"type": "string"
+					},
+					"serials": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						},
+						"description": "Serial numbers (e.g. IMEI) captured when packed."
+					},
+					"warrantyDays": {
+						"type": [
+							"integer",
+							"null"
+						]
+					},
+					"image": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"unitPrice": {
+						"type": "integer",
+						"description": "Minor units."
+					},
+					"quantity": {
+						"type": "integer",
+						"minimum": 1
+					},
+					"discount": {
+						"type": "integer",
+						"description": "Minor units."
+					},
+					"tax": {
+						"type": "integer",
+						"description": "Minor units."
+					},
+					"total": {
+						"type": "integer",
+						"description": "Minor units."
+					},
+					"booking": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/Slot"
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
+					"downloads": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/DigitalFile"
+						},
+						"description": "Digital lines of a paid order (digital_goods)."
+					},
+					"downloadsLeft": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"description": "null: no limit (or not a paid digital line)."
+					},
+					"licenceKeys": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						},
+						"description": "Given when the order is paid."
+					}
+				}
+			},
+			"ShopOrderMoney": {
+				"type": "object",
+				"description": "A payment received or a refund (without who recorded it).",
+				"required": [
+					"method",
+					"amount",
+					"reference",
+					"at"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"method": {
+						"type": "string",
+						"enum": [
+							"online",
+							"bank_transfer",
+							"cash",
+							"other"
+						]
+					},
+					"amount": {
+						"type": "integer",
+						"description": "Minor units."
+					},
+					"reference": {
+						"type": "string"
+					},
+					"at": {
+						"type": "string",
+						"format": "date-time"
+					}
+				}
+			},
+			"ShopOrderNext": {
+				"type": "object",
+				"description": "What to do next.",
+				"required": [
+					"kind"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"kind": {
+						"type": "string",
+						"enum": [
+							"pay",
+							"retry",
+							"proof",
+							"done"
+						],
+						"description": "pay: send the shopper to url (Payments’ page); retry: Payments could not be reached, call POST /v1/shop/orders/{id}/pay; proof: send the transfer proof; done: show url (checkout.successUrl) or your own page."
+					},
+					"url": {
+						"type": [
+							"string",
+							"null"
+						],
+						"description": "Not with retry; null when no success page is set."
+					}
+				}
+			},
+			"ShopOrderPage": {
+				"type": "object",
+				"description": "One page of the shopper’s orders, newest first.",
+				"required": [
+					"items",
+					"nextCursor",
+					"hasMore"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"items": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/ShopOrderSummary"
+						}
+					},
+					"nextCursor": {
+						"type": [
+							"string",
+							"null"
+						],
+						"description": "Pass it as cursor for the next page (null: the last page)."
+					},
+					"hasMore": {
+						"type": "boolean"
+					}
+				}
+			},
+			"ShopOrderPlaced": {
+				"type": "object",
+				"description": "A placed order.",
+				"required": [
+					"order",
+					"next"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"order": {
+						"$ref": "#/components/schemas/ShopOrder"
+					},
+					"next": {
+						"$ref": "#/components/schemas/ShopOrderNext"
+					},
+					"orderKey": {
+						"type": "string",
+						"pattern": "^[A-HJ-NP-Za-km-z2-9]{32}$",
+						"description": "Guest orders only, given once: send it as SS-Order-Key to read, pay, cancel and send proof for the order."
+					}
+				}
+			},
+			"ShopOrderSummary": {
+				"type": "object",
+				"description": "An order in the shopper’s list.",
+				"required": [
+					"id",
+					"number",
+					"status",
+					"statusLabel",
+					"total",
+					"currency",
+					"placedAt",
+					"itemCount",
+					"image"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"number": {
+						"type": "string"
+					},
+					"status": {
+						"type": "string"
+					},
+					"statusLabel": {
+						"type": "string"
+					},
+					"total": {
+						"type": "integer",
+						"description": "Minor units."
+					},
+					"currency": {
+						"type": "string"
+					},
+					"placedAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"itemCount": {
+						"type": "integer",
+						"description": "Units ordered."
+					},
+					"image": {
+						"type": [
+							"string",
+							"null"
+						],
+						"description": "The first line’s image."
+					}
+				}
 			},
 			"ShopPolicies": {
 				"type": "object",
@@ -41705,6 +46070,36 @@
 				},
 				"description": "A size chart as shoppers see it."
 			},
+			"ShopSlots": {
+				"type": "object",
+				"description": "The free slots of a booking product.",
+				"required": [
+					"productId",
+					"durationMinutes",
+					"timeZone",
+					"slots"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"productId": {
+						"type": "string"
+					},
+					"durationMinutes": {
+						"type": "integer"
+					},
+					"timeZone": {
+						"type": "string",
+						"description": "The business time zone the hours are in."
+					},
+					"slots": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/Slot"
+						},
+						"description": "Free slots in time order."
+					}
+				}
+			},
 			"ShopVariant": {
 				"type": "object",
 				"required": [
@@ -42086,6 +46481,25 @@
 							"minLength": 1,
 							"maxLength": 60
 						}
+					}
+				}
+			},
+			"Slot": {
+				"type": "object",
+				"description": "A booked or bookable time.",
+				"required": [
+					"start",
+					"end"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"start": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"end": {
+						"type": "string",
+						"format": "date-time"
 					}
 				}
 			},

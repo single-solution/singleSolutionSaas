@@ -922,7 +922,10 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 				throw problem('points_changed', 'Your points balance changed. Check your cart again.');
 			throw problem('slot_taken', 'A chosen time is already booked.');
 		}
-		if (placed.duplicate) return { order: await shopperView(s, placed.order, flow), next: await nextOf(s, placed.order) };
+		// the order this customer placed with the key before (after the kit forgot the key): answered as its first answer
+		// was, 201 (its key is not given again)
+		if (placed.duplicate)
+			return created({ order: await shopperView(s, placed.order, flow), next: await nextOf(s, placed.order) });
 
 		let current = placed.order;
 		await store.countOrder(/** @type {string} */ (customer.id), { city: order.address?.city ?? '', at: new Date(now) });

@@ -504,13 +504,13 @@ describe('waiting orders that end (on use)', () => {
 		shop.advance(24 * 3_600_000);
 		await nextUse();
 		expect((await orderRecord(cod.id)).status).toBe('cancelled');
-		// a day later the kit forgets the key; the ledger still answers with the order placed with it
+		// a day later the kit forgets the key; the ledger still answers with the order placed with it, as the first answer
 		const again = await visit('POST', '/v1/shop/orders', {
 			body: codBody,
 			signIn: await shop.signIn({ id: c.id }),
 			key: 'sweep-cod',
 		});
-		expect(again.status).toBe(200);
+		expect(again.status).toBe(201);
 		expect(again.json.order).toMatchObject({ id: cod.id, status: 'cancelled' });
 		expect(again.json.next).toEqual({ kind: 'done', url: null });
 		expect(await stockOf(item.id)).toBe(9);
