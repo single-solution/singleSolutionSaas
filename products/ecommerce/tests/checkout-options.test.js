@@ -283,7 +283,12 @@ describe('guest checkout and order keys (E21)', () => {
 			.find({ websiteId: shop.websiteId, phone: '+15550005555' })
 			.toArray();
 		expect(records).toHaveLength(1);
-		expect(records[0]).toMatchObject({ userId: member.id, orderCount: 2, name: 'Sara Shopper' });
+		expect(records[0]).toMatchObject({
+			userId: member.id,
+			orderCount: 2,
+			name: 'Sara Shopper',
+			createdAt: new Date(shop.now()),
+		});
 		expect((await orderRecord(asGuest.json.order.id)).customer).toMatchObject({
 			userId: member.id,
 			customerId: records[0]?.id,

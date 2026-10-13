@@ -9,6 +9,7 @@
  */
 import { countHandlers, paginate, problem } from '@ss/app-kit';
 import { createFulfilmentStore, customerFilter, markSeenBy } from '../adapters/fulfilment-store.js';
+import { createOrdersStore } from '../adapters/orders-store.js';
 import { COLLECTIONS } from '../core/model.js';
 import {
 	MAX_SEARCH,
@@ -30,6 +31,8 @@ const RECENT_ORDERS = 10;
 const CUSTOMER_REF = /^[A-Za-z0-9_-]{1,100}$/;
 /** Customer list segments (E31). */
 const SEGMENTS = Object.freeze(['loyalty', 'active', 'guest']);
+/** Most Accounts users one `userIds` filter names. */
+const MAX_USER_IDS = 100;
 
 /**
  * @param {Service} service
@@ -62,6 +65,13 @@ export const createCustomers = (service) => {
 			if (Number.isNaN(time)) throw service.invalid('createdAfter', 'Use an ISO-8601 date.');
 			createdAfter = new Date(time);
 		}
+		/** @type {string[] | null} */
+		let userIds = null;
+		if (typeof ctx.query.userIds === 'string' && ctx.query.userIds !== '') {
+			userIds = [...new Set(ctx.query.userIds.split(','))];
+			if (userIds.length > MAX_USER_IDS || !userIds.every((id) => CUSTOMER_REF.test(id)))
+				throw service.invalid('userIds', `userIds lists at most ${MAX_USER_IDS} Accounts user ids, comma-separated.`);
+		}
 		const loyalty = segment === 'loyalty' ? await loyaltyOwners(ctx) : null;
 		return {
 			q,
@@ -71,6 +81,7 @@ export const createCustomers = (service) => {
 			seenBy: service.actor(ctx).id,
 			unseen: ctx.query.unseen === '1' || ctx.query.unseen === 'true',
 			createdAfter,
+			userIds,
 		};
 	};
 
@@ -121,17 +132,25 @@ export const createCustomers = (service) => {
 
 	/**
 	 * A customer by customer id or user id (K-6): their record, else (a member) one made from their latest order, else
-	 * 404.
+	 * the record of an Accounts user without orders, made now (CU-2: staff open, note and block them before their first
+	 * order; joined when Accounts says), else 404.
 	 * @param {Site} s @param {string} ref
 	 */
 	const find = async (s, ref) => {
 		const store = await storeOf(s);
-		const record = await store.customers.find(ref);
+		let record = await store.customers.find(ref);
 		if (!record && isCustomerId(ref)) throw problem('not_found', 'There is no such customer.');
 		const owner = record ? customerOwner(record) : { userId: ref };
 		const recent = await store.orders.ofCustomer(owner, RECENT_ORDERS);
 		const latest = recent[0];
-		if (!record && !latest) throw problem('not_found', 'There is no such customer.');
+		if (!record && !latest) {
+			const user = await service.accountsUser(s, ref);
+			if (!user) throw problem('not_found', 'There is no such customer.');
+			record = await createOrdersStore(await s.data()).ensureCustomer(
+				{ userId: ref, name: user.name, email: user.email, phone: user.phone },
+				{ at: user.createdAt, refresh: false },
+			);
+		}
 		const details = latest
 			? { name: latest.customer.name, email: latest.customer.email, phone: latest.customer.phone }
 			: { name: '', email: '', phone: '' };
@@ -173,6 +192,7 @@ export const createCustomers = (service) => {
 				...(resetRto ? { rtoCount: 0 } : {}),
 			},
 			record ? { name: record.name, email: record.email, phone: record.phone } : details,
+			new Date(service.now()),
 		);
 		const action =
 			blocked === true && record?.blocked !== true

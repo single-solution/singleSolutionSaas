@@ -30,12 +30,10 @@ export const createGuests = (product) => {
 			const store = createOrdersStore(data);
 			const guest = await store.guestCustomer(shopper.phone);
 			if (!guest?.id) return 0;
-			const member = await store.ensureCustomer({
-				userId: shopper.id,
-				name: shopper.name,
-				email: shopper.email,
-				phone: shopper.phone,
-			});
+			const member = await store.ensureCustomer(
+				{ userId: shopper.id, name: shopper.name, email: shopper.email, phone: shopper.phone },
+				{ at: new Date(product.now()) },
+			);
 			let moved = 0;
 			await data.transaction(async (session) => {
 				const orders = await data

@@ -6,7 +6,7 @@
 import { createId } from '@ss/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { COLLECTIONS } from '../core/model.js';
-import { readyShop } from './helpers.js';
+import { ACCOUNTS, ORIGIN, readyShop } from './helpers.js';
 
 /** @type {Awaited<ReturnType<typeof readyShop>>} */
 let shop;
@@ -155,7 +155,9 @@ describe('customers', () => {
 		)
 			.collection(COLLECTIONS.customers)
 			.findOne({ websiteId: shop.websiteId, userId: 'usr_dan00000001' });
-		expect(record).toMatchObject({ email: 'dan@example.com', blocked: true, note: '' });
+		expect(record).toMatchObject({ email: 'dan@example.com', blocked: true, note: '', createdAt: new Date(shop.now()) });
+		expect(record?.id).toMatch(/^cus_/);
+		expect(dan.json.createdAt).toBe(new Date(shop.now()).toISOString());
 		expect((await shop.api('PATCH', '/v1/customers/usr_nobody0000001', { note: 'x' })).status).toBe(404);
 	});
 });
@@ -267,6 +269,14 @@ describe('guests and members by customer id (K-6, CU-5)', () => {
 		expect(loyalty.filter((account) => account.customerId === GUEST || account.userId === GUEST)).toHaveLength(1);
 		const member = await shop.api('POST', `/v1/loyalty/accounts/${MEMBER}/adjust`, { points: 5 });
 		expect(member.json).toMatchObject({ userId: 'usr_mia00000001', balance: 5 });
+		// a new loyalty account knows when it was made (CU-4)
+		expect(
+			await (
+				await shop.db()
+			)
+				.collection(COLLECTIONS.loyalty)
+				.findOne({ websiteId: shop.websiteId, userId: 'usr_mia00000001' }),
+		).toMatchObject({ createdAt: new Date(shop.now()) });
 		expect((await shop.api('GET', '/v1/loyalty/accounts/usr_mia00000001')).json.balance).toBe(5);
 		expect((await shop.api('GET', `/v1/loyalty/accounts/${createId('cus')}`)).status).toBe(404);
 	});
@@ -276,5 +286,80 @@ describe('guests and members by customer id (K-6, CU-5)', () => {
 		expect(orders.json.items).toHaveLength(2);
 		expect(orders.json.loyaltyPoints).toBe(35);
 		expect((await shop.api('GET', '/v1/customers/usr_mia00000001/orders')).json.items).toHaveLength(1);
+	});
+});
+
+describe('customers without orders and when records are made (CU-2, CU-4)', () => {
+	const JOINED = '2026-09-01T08:00:00.000Z';
+
+	it('makes the record of an Accounts user without orders when staff open them, joined when Accounts says', async () => {
+		shop.responders.set(`${ACCOUNTS}/v1/users/usr_noa00000001`, () => ({
+			status: 200,
+			body: { id: 'usr_noa00000001', name: 'Noa New', email: 'noa@example.com', phone: '+15550000020', createdAt: JOINED },
+		}));
+		shop.responders.set(`${ACCOUNTS}/v1/users/usr_ghost0000001`, () => ({ status: 404, body: { code: 'not_found' } }));
+		const noa = await shop.admin(ticket, 'GET', '/v1/admin/customers/usr_noa00000001');
+		expect(noa.status).toBe(200);
+		expect(noa.json).toMatchObject({
+			userId: 'usr_noa00000001',
+			name: 'Noa New',
+			phone: '+15550000020',
+			ordersPlaced: 0,
+			createdAt: JOINED,
+			recentOrders: [],
+		});
+		expect(noa.json.id).toMatch(/^cus_/);
+		const blocked = await shop.api('PATCH', '/v1/customers/usr_noa00000001', { blocked: true, blockedReason: 'Fraud' });
+		expect(blocked.json).toMatchObject({ blocked: true, createdAt: JOINED });
+		const listed = await shop.api('GET', '/v1/customers?userIds=usr_noa00000001,usr_amy00000001');
+		expect(listed.json.items.map((/** @type {any} */ c) => c.userId)).toEqual(['usr_amy00000001', 'usr_noa00000001']);
+		expect((await shop.api('GET', '/v1/customers/count?userIds=usr_noa00000001')).json.count).toBe(1);
+		expect((await shop.api('GET', '/v1/customers?userIds=a,b%20c')).status).toBe(422);
+		expect((await shop.api('GET', '/v1/customers/usr_ghost0000001')).status).toBe(404);
+		shop.responders.delete(`${ACCOUNTS}/v1/users/usr_noa00000001`);
+		shop.responders.delete(`${ACCOUNTS}/v1/users/usr_ghost0000001`);
+	});
+
+	it('makes a signed-in shopper’s record at their first visit with customerRecords sign_in only', async () => {
+		/** @param {string} sub */
+		const visit = async (sub) => {
+			const token = await shop.accounts.signIn({
+				websiteId: shop.websiteId,
+				sub,
+				name: 'Vic Visitor',
+				email: `${sub}@example.com`,
+				email_verified: true,
+				phone: '+15550000030',
+				phone_verified: true,
+			});
+			const answer = await shop.call('GET', '/v1/shop/orders', {
+				token: shop.browser,
+				origin: ORIGIN,
+				headers: { 'ss-sign-in': token },
+			});
+			expect(answer.status).toBe(200);
+		};
+		const recordOf = async (/** @type {string} */ userId) =>
+			(await shop.db()).collection(COLLECTIONS.customers).findOne({ websiteId: shop.websiteId, userId });
+		await visit('usr_vic00000001');
+		expect(await recordOf('usr_vic00000001')).toBeNull();
+		await shop.setting('checkout', 'customerRecords', 'sign_in');
+		await visit('usr_vic00000002');
+		expect(await recordOf('usr_vic00000002')).toMatchObject({
+			name: 'Vic Visitor',
+			phone: '+15550000030',
+			guest: false,
+			orderCount: 0,
+			createdAt: new Date(shop.now()),
+		});
+		// a record made once is not written again by later visits
+		await (
+			await shop.db()
+		)
+			.collection(COLLECTIONS.customers)
+			.updateOne({ websiteId: shop.websiteId, userId: 'usr_vic00000002' }, { $set: { name: 'Vic V.' } });
+		await visit('usr_vic00000002');
+		expect(await recordOf('usr_vic00000002')).toMatchObject({ name: 'Vic V.' });
+		await shop.setting('checkout', 'customerRecords', 'first_order');
 	});
 });

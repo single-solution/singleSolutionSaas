@@ -8,6 +8,7 @@
  * @module
  */
 import { actorOf, problem, zonedParts } from '@ss/app-kit';
+import { createOrdersStore } from '../adapters/orders-store.js';
 import { unitOf } from '../core/money.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
@@ -110,6 +111,8 @@ const claimsOf = (token) => {
 
 /** Work that runs on use (PLAN 0.8.1: no scheduled jobs) runs at most this often per website and instance. */
 const ON_USE_EVERY_MS = 60_000;
+/** Signed-in shoppers this instance made sure have a customer record (`customerRecords: sign_in`), at most this many. */
+const MAX_KNOWN_SHOPPERS = 10_000;
 
 /**
  * @param {Product} product
@@ -122,6 +125,8 @@ export const createService = (product) => {
 	const onUse = [];
 	/** @type {Map<string, number>} website id → last time the work on use ran */
 	const lastUse = new Map();
+	/** `<website id>|<user id>` of signed-in shoppers whose customer record this instance made sure of. @type {Set<string>} */
+	const knownShoppers = new Set();
 
 	/**
 	 * Run the parts' work on use right after the answer (expired waiting orders, rechecks …), at most every
@@ -214,13 +219,58 @@ export const createService = (product) => {
 		const verified = await product.accounts.verify({ websiteId: s.websiteId, token });
 		if (!verified.ok) return null;
 		const user = verified.user;
-		return {
+		/** @type {Shopper} */
+		const found = {
 			id: user.id,
 			name: user.name ?? '',
 			email: user.email ?? '',
 			phone: user.phone ?? '',
 			role: user.role ?? '',
 			phoneVerified: Boolean(user.phone) && claimsOf(token).phone_verified === true,
+		};
+		recordShopper(s, found);
+		return found;
+	};
+
+	/**
+	 * With the `checkout` setting `customerRecords: sign_in`, a signed-in shopper gets their customer record (CU-2) right
+	 * after the answer, the first time this instance sees them; their details are written only when it is made.
+	 * @param {Site} s @param {Shopper} found
+	 */
+	const recordShopper = (s, found) => {
+		const key = `${s.websiteId}|${found.id}`;
+		if (knownShoppers.has(key) || typeof s.ctx.after !== 'function') return;
+		s.ctx.after(async () => {
+			if (!s.has('checkout') || (await s.values('checkout')).customerRecords !== 'sign_in') return;
+			if (knownShoppers.size >= MAX_KNOWN_SHOPPERS) knownShoppers.clear();
+			await createOrdersStore(await s.data()).ensureCustomer(
+				{ userId: found.id, name: found.name, email: found.email, phone: found.phone },
+				{ at: new Date(now()), refresh: false },
+			);
+			knownShoppers.add(key);
+		});
+	};
+
+	/**
+	 * An Accounts user of the website (`GET /v1/users/:id` through the pasted Accounts token): their name, contacts and
+	 * when they joined; null when Accounts does not know them or cannot be asked.
+	 * @param {Site} s @param {string} userId
+	 * @returns {Promise<{ id: string, name: string, email: string, phone: string, createdAt: Date } | null>}
+	 */
+	const accountsUser = async (s, userId) => {
+		const answer = await product
+			.callProduct(s.websiteId, 'accounts', `/v1/users/${encodeURIComponent(userId)}`, { method: 'GET' })
+			.catch(() => /** @type {const} */ ({ ok: false }));
+		if (!answer.ok || answer.status !== 200 || typeof answer.body !== 'object' || answer.body === null) return null;
+		const body = /** @type {Record<string, any>} */ (answer.body);
+		if (body.id !== userId) return null;
+		const joined = Date.parse(String(body.createdAt ?? ''));
+		return {
+			id: userId,
+			name: typeof body.name === 'string' ? body.name : '',
+			email: typeof body.email === 'string' ? body.email : '',
+			phone: typeof body.phone === 'string' ? body.phone : '',
+			createdAt: new Date(Number.isNaN(joined) ? now() : joined),
 		};
 	};
 
@@ -460,6 +510,7 @@ export const createService = (product) => {
 		shopper,
 		requireShopper,
 		accountProfile,
+		accountsUser,
 		pricing,
 		actor,
 		log,

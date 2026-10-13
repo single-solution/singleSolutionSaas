@@ -875,7 +875,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		const orderId = createId(ID_PREFIX.order);
 		const { lines, slots } = await linesOf(s, q);
 		const promotions = q.promotions;
-		const customer = member ?? (await store.ensureCustomer(buyer));
+		const customer = member ?? (await store.ensureCustomer(buyer, { at: new Date(now) }));
 		const loyalty = s.has('loyalty') ? await s.values('loyalty') : null;
 		const earns = loyalty !== null && (shopper ? takesPart(loyalty, shopper.role) : loyaltyRules(loyalty).guests === 'earn');
 		const orderKey = shopper ? null : newOrderKey();

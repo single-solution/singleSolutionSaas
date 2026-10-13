@@ -142,12 +142,14 @@ export const createOrdersStore = (data) => {
 					.findOne({ websiteId, phone, userId: { $type: 'string', $ne: '' } }, { ...NO_ID, sort: { lastOrderAt: -1 } })
 			),
 		/**
-		 * The customer record of a member or a guest, made when missing (its `cus_` id is kept for good), with their latest
-		 * details. A member is found by user id, a guest by normalised phone (E21).
+		 * The customer record of a member or a guest, made when missing (its `cus_` id is kept for good, and when it was
+		 * made, CU-4), with their latest details (`refresh: false`: only when it is made). A member is found by user id, a
+		 * guest by normalised phone (E21).
 		 * @param {{ userId: string | null, name: string, email: string, phone: string }} who
+		 * @param {{ at: Date, refresh?: boolean }} when `at`: the record's `createdAt` when it is made
 		 * @returns {Promise<CustomerRecord>}
 		 */
-		ensureCustomer: async (who) => {
+		ensureCustomer: async (who, { at, refresh = true }) => {
 			const customers = data.collection(COLLECTIONS.customers);
 			const filter = who.userId ? { websiteId, userId: who.userId } : { websiteId, guest: true, phone: who.phone };
 			const set = {
@@ -168,12 +170,13 @@ export const createOrdersStore = (data) => {
 				city: '',
 				seenBy: [],
 				...(who.email || who.userId ? {} : { email: '' }),
+				createdAt: at,
 			};
 			/** @returns {Promise<any>} */
 			const write = () =>
 				customers.findOneAndUpdate(
 					filter,
-					{ $set: set, $setOnInsert: insert },
+					refresh ? { $set: set, $setOnInsert: insert } : { $setOnInsert: { ...set, ...insert } },
 					{
 						upsert: true,
 						returnDocument: 'after',
@@ -207,21 +210,6 @@ export const createOrdersStore = (data) => {
 					{ websiteId, id: customerId },
 					{ $inc: { orderCount: 1 }, $set: { lastOrderAt: at, ...(city ? { city } : {}) } },
 				);
-		},
-		/**
-		 * Keep the customer's latest details and count the order (members made before customer ids).
-		 * @param {{ id: string, name: string, email: string, phone: string }} shopper
-		 */
-		recordCustomer: async (shopper) => {
-			await data.collection(COLLECTIONS.customers).updateOne(
-				{ websiteId, userId: shopper.id },
-				{
-					$set: { name: shopper.name, email: shopper.email, phone: shopper.phone },
-					$inc: { orderCount: 1 },
-					$setOnInsert: { userId: shopper.id, blocked: false, blockedReason: '', rtoCount: 0, note: '' },
-				},
-				{ upsert: true },
-			);
 		},
 		/** Uses of a coupon by a customer. @param {string} couponId @param {string} userId */
 		couponUses: (couponId, userId) => data.collection(COLLECTIONS.couponUses).countDocuments({ websiteId, couponId, userId }),

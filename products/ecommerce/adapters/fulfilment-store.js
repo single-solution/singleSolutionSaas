@@ -5,7 +5,8 @@
  * `server/orders-moves.js`.
  * @module
  */
-import { COLLECTIONS } from '../core/model.js';
+import { createId } from '@ss/contracts';
+import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import { isCustomerId } from '../core/orders.js';
 
 /** @typedef {import('@ss/app-kit').WebsiteData} WebsiteData */
@@ -64,23 +65,28 @@ const namePage = (after) => {
 /**
  * @typedef {{ q: string, blocked: boolean | null, segment?: 'loyalty' | 'active' | 'guest' | null,
  *   loyalty?: { userIds: string[], customerIds: string[] } | null, seenBy?: string, unseen?: boolean,
- *   createdAfter?: Date | null }} CustomerQuery `loyalty`: the owners of loyalty accounts (segment `loyalty`)
+ *   createdAfter?: Date | null, userIds?: string[] | null }} CustomerQuery `loyalty`: the owners of loyalty accounts
+ *   (segment `loyalty`); `userIds`: only these Accounts users (a page of the store's own member list, CU-2)
  */
 
 /**
  * The staff customer list's filter: a search (name, start of the e-mail, the user or customer id, 4 or more digits of
- * the phone, matched on its last digits), blocked or not, a segment, not yet opened by the acting staff member and
- * created after a time (E31). The list and its counts share it (PLAN 0.8.10 K4).
+ * the phone, matched on its last digits), blocked or not, a segment, not yet opened by the acting staff member,
+ * created after a time (E31) and given Accounts users. The list and its counts share it (PLAN 0.8.10 K4).
  * @param {string} websiteId
  * @param {CustomerQuery} input
  * @returns {Record<string, unknown>}
  */
 export const customerFilter = (
 	websiteId,
-	{ q, blocked, segment = null, loyalty = null, seenBy = '', unseen = false, createdAfter = null },
+	{ q, blocked, segment = null, loyalty = null, seenBy = '', unseen = false, createdAfter = null, userIds = null },
 ) => {
 	/** @type {Record<string, unknown>} */
-	const filter = { websiteId, ...(blocked === null ? {} : { blocked }) };
+	const filter = {
+		websiteId,
+		...(blocked === null ? {} : { blocked }),
+		...(userIds === null ? {} : { userId: { $in: userIds } }),
+	};
 	/** @type {Record<string, unknown>[]} */
 	const and = [];
 	// segments (E31): guests have no Accounts user; active customers ordered at least once; loyalty customers have points
@@ -291,8 +297,9 @@ export const createFulfilmentStore = (data) => {
 			 * @param {{ userId: string } | { id: string }} key
 			 * @param {Record<string, unknown>} set
 			 * @param {{ name: string, email: string, phone: string }} details used only when the record is created
+			 * @param {Date} at the record's `createdAt` when it is created (CU-4)
 			 */
-			update: async (key, set, details) => {
+			update: async (key, set, details, at) => {
 				if ('id' in key) {
 					await customers.updateOne({ websiteId, id: key.id }, { $set: set });
 					return as(await customers.findOne({ websiteId, id: key.id }, NO_ID));
@@ -303,7 +310,9 @@ export const createFulfilmentStore = (data) => {
 					{
 						$set: set,
 						$setOnInsert: {
+							id: createId(ID_PREFIX.customer),
 							userId,
+							createdAt: at,
 							...details,
 							...Object.fromEntries(
 								Object.entries({ blocked: false, blockedReason: '', rtoCount: 0, orderCount: 0, note: '' }).filter(

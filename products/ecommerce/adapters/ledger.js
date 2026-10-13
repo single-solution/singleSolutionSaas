@@ -360,6 +360,8 @@ const writeAccount = async (data, before, lots, entry, session) => {
 				$setOnInsert: {
 					userId: before.userId ?? null,
 					...(before.customerId ? { customerId: before.customerId } : {}),
+					// an upsert gets no createdAt from the kit (CU-4)
+					createdAt: entry.at,
 				},
 			},
 			{ session, upsert: true },
@@ -853,7 +855,10 @@ const countReturnedParcel = async (data, order, session) => {
 	if (!order.customer.userId) return;
 	await customers.updateOne(
 		{ websiteId: data.websiteId, userId: order.customer.userId },
-		{ $inc: { rtoCount: 1 }, $setOnInsert: { userId: order.customer.userId } },
+		{
+			$inc: { rtoCount: 1 },
+			$setOnInsert: { id: createId(ID_PREFIX.customer), userId: order.customer.userId, createdAt: new Date(order.placedAt) },
+		},
 		{ session, upsert: true },
 	);
 };

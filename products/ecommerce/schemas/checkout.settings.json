@@ -151,6 +151,13 @@
 			"default": "",
 			"maxLength": 2
 		},
+		"customerRecords": {
+			"type": "string",
+			"title": "Customers appear",
+			"description": "first_order: a customer record is made with their first order (or when staff open an Accounts user). sign_in: also as soon as a signed-in shopper uses the shop, before any order.",
+			"default": "first_order",
+			"enum": ["first_order", "sign_in"]
+		},
 		"paymentOrder": {
 			"type": "array",
 			"title": "Payment methods order",
