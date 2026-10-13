@@ -109,6 +109,7 @@ export const createServerApi = (kit, lists) => {
 		if (ctx.method === 'PUT' && value === null)
 			throw problem('validation_failed', 'Send a value, or DELETE to reset to the default.');
 		orThrow(await kit.settings.setSetting({ websiteId: website(ctx), feature, key, value, who: whoOf(ctx) }));
+		await kit.events.settingsChanged(ctx, { what: 'settings', key: full });
 		const saved = (await kit.settings.settingsOf(website(ctx), feature))[key];
 		return { key: full, value: saved?.value, source: saved?.source };
 	};
@@ -118,6 +119,7 @@ export const createServerApi = (kit, lists) => {
 		const key = String(ctx.params.key ?? '');
 		const value = ctx.method === 'PUT' ? valueOf(ctx) : undefined;
 		orThrow(await kit.settings.setText({ websiteId: website(ctx), key, value, who: whoOf(ctx) }));
+		await kit.events.settingsChanged(ctx, { what: 'texts', key });
 		const found = (await kit.settings.textsOf(website(ctx))).find((entry) => entry.key === key);
 		return found ?? problem('not_found', 'No such text.');
 	};
@@ -218,6 +220,7 @@ export const createServerApi = (kit, lists) => {
 			rateLimit: writes,
 			handler: async (ctx) => {
 				orThrow(await kit.settings.setTheme({ websiteId: website(ctx), theme: objectBody(ctx.body), who: whoOf(ctx) }));
+				await kit.events.settingsChanged(ctx, { what: 'theme' });
 				return kit.settings.themeOf(website(ctx));
 			},
 		}),
@@ -228,6 +231,7 @@ export const createServerApi = (kit, lists) => {
 			rateLimit: writes,
 			handler: async (ctx) => {
 				orThrow(await kit.settings.setFormat({ websiteId: website(ctx), format: objectBody(ctx.body), who: whoOf(ctx) }));
+				await kit.events.settingsChanged(ctx, { what: 'format' });
 				return kit.settings.formatOf(website(ctx));
 			},
 		}),
@@ -244,7 +248,7 @@ export const createServerApi = (kit, lists) => {
 			path: '/v1/lists/:list',
 			rateLimit: writes,
 			handler: async (ctx) => {
-				const { definition } = listOf(ctx);
+				const { name, definition } = listOf(ctx);
 				const features = [definition.feature].flat();
 				const { on } = await kit.reports.switches(website(ctx));
 				if (!features.some((key) => on.includes(key)))
@@ -264,6 +268,7 @@ export const createServerApi = (kit, lists) => {
 					what: 'settings',
 					detail: `${definition.title}: changed`,
 				});
+				await kit.events.settingsChanged(ctx, { what: 'list', key: name });
 				return { value: saved.value };
 			},
 		}),

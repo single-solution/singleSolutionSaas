@@ -7,13 +7,14 @@
  * When the merchant pasted the Notifications token, each event is forwarded right after the request to Notifications'
  * `POST /v1/events` (the event id as its `Idempotency-Key`), which signs it and sends it to the merchant's webhook URLs.
  * A failed forward is retried on the website's later requests (1 min, 5 min, 30 min, 2 h); without the token an event
- * stays `not_connected` and readable through the API. Nothing runs in the background.
+ * stays `not_connected` and readable through the API. Nothing runs in the background. A settings, text, theme, Format
+ * or list change through the settings API or the dashboard raises `<product>.settings.changed` (SG-14).
  * @module
  */
 import { createId } from '@ss/contracts';
 import { paginate, problem } from './http/results.js';
 import { countHandlers } from './counts.js';
-import { isObject, kitError } from './util.js';
+import { isKitError, isObject, kitError } from './util.js';
 
 /** @typedef {'pending' | 'sent' | 'not_connected' | 'failed'} Delivery */
 /**
@@ -101,6 +102,26 @@ export const createEvents = ({ productId, enabled, data, connections, now, logge
 		clean.delete(ctx.websiteId);
 		ctx.after(() => drain(ctx.websiteId, ctx.merchantId));
 		return eventView(productId, event);
+	};
+
+	/**
+	 * A settings change of the website (the settings API or the dashboard): `<product>.settings.changed` with what
+	 * changed, so the merchant's cached storefront can learn about it (SG-14). Only when the product publishes events and
+	 * the merchant database is connected; never fails the change.
+	 * @param {{ websiteId: string | null, merchantId: string | null, after: EventContext['after'] }} ctx the request
+	 * @param {{ what: 'settings' | 'texts' | 'theme' | 'format' | 'list', key?: string }} change `key`: the setting
+	 *   (`<feature>.<setting>`), text or list
+	 */
+	const settingsChanged = async (ctx, change) => {
+		if (!enabled || !ctx.websiteId) return;
+		try {
+			await emit({ websiteId: ctx.websiteId, merchantId: ctx.merchantId, after: ctx.after }, 'settings.changed', {
+				...change,
+			});
+		} catch (error) {
+			if (!isKitError(error, 'database_not_connected'))
+				logger.warn('settings.changed not recorded', { websiteId: ctx.websiteId, error });
+		}
 	};
 
 	/**
@@ -208,7 +229,7 @@ export const createEvents = ({ productId, enabled, data, connections, now, logge
 		},
 	});
 
-	return Object.freeze({ emit, drain, list, count: counted.count, counts: counted.counts });
+	return Object.freeze({ emit, settingsChanged, drain, list, count: counted.count, counts: counted.counts });
 };
 
 /** @typedef {ReturnType<typeof createEvents>} Events */

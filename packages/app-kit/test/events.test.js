@@ -175,6 +175,39 @@ describe('events (K5)', () => {
 		expect(stored).toMatchObject({ delivery: 'sent', attempts: 1 });
 	});
 
+	it('settings.changed tells the merchant’s server about settings, texts, theme and Format changes (SG-14)', async () => {
+		const { call, server, session, dash, websiteId, settle, notifications } = await start();
+		expect((await call('PUT', '/v1/settings/notes.maxNotes', { token: server.token, body: { value: 9 } })).status).toBe(200);
+		expect((await call('PUT', '/v1/theme', { token: server.token, body: { radius: 12 } })).status).toBe(200);
+		expect((await call('PUT', '/v1/theme', { token: server.token, body: { radius: 99 } })).status).toBe(422);
+		const cookie = await session({ kind: 'merchant' });
+		const site = `/v1/dashboard/websites/${websiteId}`;
+		expect((await dash(cookie, 'PUT', `${site}/texts/form.title`, { value: 'Écrivez-nous' })).status).toBe(204);
+		expect((await dash(cookie, 'PUT', `${site}/format`, { wholeUnits: true })).status).toBe(200);
+		expect((await dash(cookie, 'PUT', `${site}/settings/notes.maxNotes`, { value: 7 })).status).toBe(204);
+		await settle();
+		const listed = await call('GET', '/v1/events?types=notes.settings.changed', { token: server.token });
+		const changes = (await listed.json()).items.map((/** @type {any} */ e) => JSON.stringify(e.data)).sort();
+		expect(changes).toEqual(
+			[
+				{ what: 'settings', key: 'notes.maxNotes' },
+				{ what: 'settings', key: 'notes.maxNotes' },
+				{ what: 'theme' },
+				{ what: 'texts', key: 'form.title' },
+				{ what: 'format' },
+			]
+				.map((change) => JSON.stringify(change))
+				.sort(),
+		);
+		expect(notifications.events.filter((e) => e.body.type === 'notes.settings.changed')).toHaveLength(5);
+		// without the merchant database the change is saved all the same (no event)
+		const bare = await setup({ events: true });
+		await bare.switchOn(['notes']);
+		expect(
+			(await bare.call('PUT', '/v1/settings/notes.maxNotes', { token: bare.server.token, body: { value: 3 } })).status,
+		).toBe(200);
+	});
+
 	it('check their type and size, and exist only for products that publish them', async () => {
 		const { emit, product, websiteId } = await start();
 		expect((await emit({ type: 'Bad' })).status).toBe(500);

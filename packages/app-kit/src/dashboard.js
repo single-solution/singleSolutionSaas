@@ -175,6 +175,17 @@ export const createDashboard = (kit) => {
 	 * @param {() => unknown} [answer]
 	 */
 	const outcome = (result, answer = () => noContent()) => (result.ok ? answer() : result.problem);
+	/**
+	 * The answer of a website's settings change; a saved one also raises `settings.changed` (K5, SG-14).
+	 * @param {RequestContext} ctx
+	 * @param {Parameters<import('./events.js').Events['settingsChanged']>[1]} change
+	 * @param {{ ok: true } | { ok: false, problem: ProblemResult }} result
+	 * @param {() => unknown} [answer]
+	 */
+	const changed = async (ctx, change, result, answer) => {
+		if (result.ok) await kit.events.settingsChanged(ctx, change);
+		return outcome(result, answer);
+	};
 	/** @param {unknown} body @returns {Record<string, any>} */
 	const objectBody = (body) => {
 		if (!isObject(body)) throw problem('bad_request', 'Send a JSON object.');
@@ -359,7 +370,9 @@ export const createDashboard = (kit) => {
 						return problem('feature_off', 'Settings of features that are off cannot be changed.');
 					const value = method === 'PUT' ? objectBody(ctx.body).value : undefined;
 					if (method === 'PUT' && value === undefined) return problem('validation_failed', 'Send { value }.');
-					return outcome(
+					return changed(
+						ctx,
+						{ what: 'settings', key: `${feature}.${key}` },
 						await kit.settings.setSetting({ websiteId: website(ctx), feature, key, value, who: whoOf(sessionOf(ctx)) }),
 					);
 				},
@@ -379,7 +392,9 @@ export const createDashboard = (kit) => {
 				handler: async (ctx) => {
 					const value = method === 'PUT' ? objectBody(ctx.body).value : undefined;
 					if (method === 'PUT' && value === undefined) return problem('validation_failed', 'Send { value }.');
-					return outcome(
+					return changed(
+						ctx,
+						{ what: 'texts', key: String(ctx.params.key) },
 						await kit.settings.setText({ websiteId: website(ctx), key: ctx.params.key, value, who: whoOf(sessionOf(ctx)) }),
 					);
 				},
@@ -396,7 +411,9 @@ export const createDashboard = (kit) => {
 			path: `${W}/theme`,
 			auth: 'dashboard',
 			handler: async (ctx) =>
-				outcome(
+				changed(
+					ctx,
+					{ what: 'theme' },
 					await kit.settings.setTheme({ websiteId: website(ctx), theme: objectBody(ctx.body), who: whoOf(sessionOf(ctx)) }),
 					() => kit.settings.themeOf(website(ctx)),
 				),
@@ -412,7 +429,9 @@ export const createDashboard = (kit) => {
 			path: `${W}/format`,
 			auth: 'dashboard',
 			handler: async (ctx) =>
-				outcome(
+				changed(
+					ctx,
+					{ what: 'format' },
 					await kit.settings.setFormat({
 						websiteId: website(ctx),
 						format: objectBody(ctx.body),
