@@ -343,7 +343,7 @@ export const createProduct = (options) => {
 			drain: events.drain,
 		}),
 		staffAlerts: Object.freeze({ send: staffAlerts.send, forget: staffAlerts.forget }),
-		imports: Object.freeze({ upsert: imports.upsert, finish: imports.finish, status: imports.status }),
+		imports: Object.freeze({ upsert: imports.upsert, prune: imports.prune, finish: imports.finish, status: imports.status }),
 		recentChanges: Object.freeze({ record: recent.record, list: recent.list }),
 		identity,
 		/** Accounts sign-ins of a website, verified offline with its pasted Accounts token (PLAN 0.4.6). */

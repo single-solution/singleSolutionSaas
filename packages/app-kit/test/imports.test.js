@@ -78,7 +78,7 @@ const routes = () => [
 		feature: 'notes',
 		rawBody: true,
 		maxBodyBytes: IMPORT_LIMITS.bytes + 1024,
-		handler: (ctx) => holder.product.imports.upsert.prune(ctx),
+		handler: (ctx) => holder.product.imports.prune(ctx),
 	}),
 	defineRoute({
 		method: 'POST',
@@ -234,7 +234,9 @@ describe('import routes (K10)', () => {
 			failed: [{ line: 2, errors: [{ message: 'A unique value is already taken.' }] }],
 		});
 		await client.close();
-		expect(product.imports).toBeDefined();
+		expect(Object.keys(product.imports).sort()).toEqual(['finish', 'prune', 'status', 'upsert']);
+		// the old name of prune still answers until every product's route calls imports.prune
+		expect(product.imports.upsert.prune).toBe(product.imports.prune);
 		const plain = await setup();
 		const status = await plain.product.imports.status({
 			data: async () => ({ collection: () => null, ensureIndexes: async () => ({ created: [] }) }),

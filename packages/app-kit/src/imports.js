@@ -18,15 +18,19 @@
  *   ever removed (the kit notes each key it writes in `ss_<product>_imports`): records the merchant made in the product
  *   itself, ready-made ones and live totals stay, and a wrong keep list can only take away what a re-import restores.
  *   A dry run answers what would go. Each real call writes one activity entry (`import.<collection>.prune`).
- * - `POST /v1/import/finish` runs the product's `finish` (derived values) and answers its summary.
+ * - `POST /v1/import/finish` runs the product's `finish` (derived values) and answers `{ finished: true, …summary }`.
+ *   A finish that works in bounded batches reads `ctx.query.after` and answers `more: true` with `next` while work is
+ *   left; the importer calls again with `?after=<next>` until `more` is false.
  * - `GET /v1/import/status` → `{ collections: { <name>: <records> }, imported: { <name>: <records an import wrote> },
  *   totals: { <name>: <number> } }` (`totals`: the product's verification sums, for `ss-import verify`).
  *
  * The product writes the routes as literal `defineRoute` calls with its `import` feature and the server token, with
- * the handlers `product.imports` gives (prune hangs on the upsert handler: `product.imports.upsert.prune`):
+ * the handlers `product.imports` gives (`upsert`, `prune`, `finish`, `status`):
  *
  *   defineRoute({ method: 'POST', path: '/v1/import/:collection', auth: 'server', feature: 'import', rawBody: true,
  *     maxBodyBytes: IMPORT_LIMITS.bytes, handler: product.imports.upsert })
+ *   defineRoute({ method: 'POST', path: '/v1/import/:collection/prune', auth: 'server', feature: 'import',
+ *     rawBody: true, maxBodyBytes: IMPORT_LIMITS.bytes, handler: product.imports.prune })
  * @module
  */
 import { IMPORT_LIMITS, isId } from '@ss/contracts';
@@ -458,7 +462,14 @@ export const createImports = ({ options, now, record, business }) => {
 		return { collections: counts, imported, totals };
 	};
 
-	return Object.freeze({ names: Object.keys(collections), upsert: Object.assign(upsert, { prune }), prune, finish, status });
+	return Object.freeze({
+		names: Object.keys(collections),
+		// `upsert.prune`: the old name of `prune`, kept until every product's prune route calls `imports.prune`
+		upsert: Object.assign(upsert, { prune }),
+		prune,
+		finish,
+		status,
+	});
 };
 
 /** @typedef {ReturnType<typeof createImports>} Imports */
