@@ -514,7 +514,7 @@ export const highestNumber = async (data, { prefix, year, session }) => {
  * The counter of a prefix and year (E30).
  * @param {string} prefix @param {number} year
  */
-const counterId = (prefix, year) => `orders-${prefix}${year}`;
+export const counterId = (prefix, year) => `orders-${prefix}${year}`;
 
 /**
  * The next order number of a year (the year in the business time zone, PLAN 0.8.10 K8; E30):

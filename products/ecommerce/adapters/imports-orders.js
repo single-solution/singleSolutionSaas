@@ -25,7 +25,7 @@ import {
 } from '../core/imports-orders.js';
 import { COLLECTIONS } from '../core/model.js';
 import { ratingSummary } from '../core/reviews.js';
-import { setOrderCounter } from './ledger.js';
+import { counterId, setOrderCounter } from './ledger.js';
 
 /** @typedef {import('@ss/app-kit').WebsiteData} WebsiteData */
 /** @typedef {import('../core/imports-orders.js').ImportRules} ImportRules */
@@ -33,12 +33,6 @@ import { setOrderCounter } from './ledger.js';
 
 /** Records read per batch in finish. */
 const BATCH = 1000;
-
-/**
- * The counter of a prefix and year, as the ledger names it (`adapters/ledger.js`, E30).
- * @param {string} prefix @param {number} year
- */
-const counterIdOf = (prefix, year) => `orders-${prefix}${year}`;
 
 /**
  * Walk a website's records batch by batch in `_id` order (bounded memory, one read per batch).
@@ -359,7 +353,7 @@ const finishCounters = async (data) => {
 		const highest = Number(row.highest);
 		const counter = await data
 			.collection(COLLECTIONS.counters)
-			.findOne({ websiteId, id: counterIdOf(prefix, year) }, { projection: { _id: 0, seq: 1 } });
+			.findOne({ websiteId, id: counterId(prefix, year) }, { projection: { _id: 0, seq: 1 } });
 		if (counter && Number(counter.seq) >= highest) continue;
 		await setOrderCounter(data, { prefix, year, next: highest + 1 });
 		set += 1;
