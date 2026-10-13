@@ -466,6 +466,7 @@ describe('statuses, data rights and public routes', () => {
 		expect(html).toContain('<a href="#op-post-v1-import-collection-prune">');
 		expect(html).toContain('id="schema-Report"');
 		expect(html).toContain('text/plain, not JSON');
+		expect(html).toContain('POST /v1/import/totals takes NDJSON');
 		expect(await (await env.call('GET', '/docs')).text()).toBe(html);
 	});
 });
