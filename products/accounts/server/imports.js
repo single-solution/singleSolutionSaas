@@ -30,7 +30,7 @@ export const createImports = (product) => [
 		feature: 'import',
 		rawBody: true,
 		maxBodyBytes: IMPORT_LIMITS.bytes + ENVELOPE,
-		handler: (ctx) => product.imports.upsert.prune(ctx),
+		handler: (ctx) => product.imports.prune(ctx),
 	}),
 	defineRoute({
 		method: 'POST',
