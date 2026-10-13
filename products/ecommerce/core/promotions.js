@@ -4,10 +4,10 @@
  * ledger then counts the uses in the order transaction); the Chat lookups and the product page quote one product with
  * `quoteProduct`. The order:
  * 1. deals: each line takes one deal — the best saving among the live deals covering it (scope, conditions, weekdays
- *    and hours in the business time zone), the deal the shopper picked among them (`shopperChoice`), or the deal its
- *    signed lock keeps (`lockMinutes`) when that saves more than today's deals (`core/deals.js`); cart deals take a
- *    percent of the lines they cover, or one fixed amount spread over them; a live free-delivery deal covering a line
- *    waives delivery;
+ *    and hours in the business time zone) or, with `lineChoice: first`, the first of them in the shoppers' order that
+ *    saves something; the deal the shopper picked among them (`shopperChoice`); or the deal its signed lock keeps
+ *    (`lockMinutes`) when that saves more than today's deals (`core/deals.js`); cart deals take a percent of the lines
+ *    they cover, or one fixed amount spread over them; a live free-delivery deal covering a line waives delivery;
  * 2. bundles: sets form on the cart's units; a unit a bundle discounts takes no deal, and a set forms only when it saves
  *    more than those deals (`core/bundles.js`);
  * 3. the coupon, on what is left of the lines in its scope (`core/coupons.js`); its minimum subtotal is measured after
@@ -19,7 +19,7 @@
  */
 import { formBundles } from './bundles.js';
 import { couponBlocked, couponDiscount, couponProblem, normaliseCode } from './coupons.js';
-import { bestDeal, better, DEAL_RULES, dealCovers, dealLineDiscount, dealLive } from './deals.js';
+import { bestDeal, better, byShowOrder, DEAL_RULES, dealCovers, dealLineDiscount, dealLive } from './deals.js';
 import { allocateUnits, roundHalfUp } from './money.js';
 
 /** @typedef {import('./model.js').DealRecord} DealRecord */
@@ -80,7 +80,7 @@ const utcClock = (now) => {
  *   business time (weekday 0 = Sunday, minutes since midnight; default: UTC)
  * @param {number} [input.unit] whole units (E25)
  * @param {boolean} [input.shopperChoice] lines may name one of their eligible deals (E18)
- * @param {import('./deals.js').DealRules} [input.rules] how deals round (the `deals` settings, D4)
+ * @param {import('./deals.js').DealRules} [input.rules] how deals choose and round (the `deals` settings, D4)
  * @returns {PromotionsResult}
  */
 export const applyPromotions = ({
@@ -107,6 +107,7 @@ export const applyPromotions = ({
 	const priceable = lines.map((line) => line.quantity > 0 && line.unitPrice > 0);
 	const { rounding } = rules;
 	const exact = rounding === 'total_half_up';
+	const first = rules.lineChoice === 'first';
 	// which lines each live deal covers (cart deals spread their fixed amount over them)
 	/** @type {Map<string, number[]>} */
 	const covered = new Map();
@@ -137,9 +138,10 @@ export const applyPromotions = ({
 		const picked = shopperChoice && line.dealId ? eligible.find((deal) => deal.id === line.dealId) : undefined;
 		if (picked) best = { deal: picked, saving: estimate(picked, index) };
 		else
-			for (const deal of eligible) {
+			for (const deal of first ? [...eligible].sort(byShowOrder) : eligible) {
 				const saving = estimate(deal, index);
-				if (saving > 0 && better({ deal, saving }, best)) best = { deal, saving };
+				// `lineChoice`: the first deal in the shoppers' order that saves something, or the best saving
+				if (saving > 0 && (first ? best === null : better({ deal, saving }, best))) best = { deal, saving };
 			}
 		let locked = false;
 		if (line.lock) {
@@ -334,7 +336,7 @@ export const applyPromotions = ({
  * @param {string} [input.currency] the shop's currency
  * @param {{ weekday: number, minutes: number }} [input.clock] the business time (deal hours)
  * @param {number} [input.unit] whole units (E25)
- * @param {import('./deals.js').DealRules} [input.rules] how deals round (the `deals` settings, D4)
+ * @param {import('./deals.js').DealRules} [input.rules] how deals choose and round (the `deals` settings, D4)
  * @returns {{ productId: string, variantId: string, price: number, priceAfterDeals: number, savings: number, currency: string,
  *   deals: Array<{ id: string, name: string }> } | null} null when the product has no such active variant
  */

@@ -72,15 +72,17 @@ const COLOUR = /^[#A-Za-z0-9(),.%\s-]{0,40}$/;
  */
 
 /**
- * How deals round (the `deals` settings, D4): `rounding` — `per_unit_down` rounds each deal down per unit (item deals)
- * or per line (cart deals); `total_half_up` works each deal out on the line or cart amount and rounds the order's
- * deal discounts once, half up.
- * @typedef {{ rounding: 'per_unit_down' | 'total_half_up' }} DealRules
+ * How deals choose and round (the `deals` settings, D4): `rounding` — `per_unit_down` rounds each deal down per unit
+ * (item deals) or per line (cart deals); `total_half_up` works each deal out on the line or cart amount and rounds the
+ * order's deal discounts once, half up. `lineChoice` — a line takes the `best` saving (then the higher priority, then
+ * the smaller id) or the `first` deal in the shoppers' order that saves something.
+ * @typedef {{ rounding: 'per_unit_down' | 'total_half_up', lineChoice: 'best' | 'first' }} DealRules
  */
 
-/** The values of each rule; the first is the default (today's arithmetic, E25). */
+/** The values of each rule; the first is the default (today's arithmetic, E18 and E25). */
 const RULE_VALUES = Object.freeze({
 	rounding: Object.freeze(['per_unit_down', 'total_half_up']),
+	lineChoice: Object.freeze(['best', 'first']),
 });
 
 /**
@@ -276,8 +278,8 @@ export const dealLineDiscount = (deal, line, { unit = 1, share = 0, rounding = '
 
 /**
  * The best live per-unit deal for a line (Chat and product quotes): the largest saving per unit, then the higher
- * priority, then the smaller id. Cart deals and free delivery are left out. With `total_half_up` one unit's saving
- * rounds half up.
+ * priority, then the smaller id (`lineChoice: first`: the first in the shoppers' order). Cart deals and free delivery
+ * are left out. With `total_half_up` one unit's saving rounds half up.
  * @param {DealLine} line
  * @param {DealRecord[]} deals
  * @param {number} now
@@ -289,7 +291,8 @@ export const bestDeal = (line, deals, now, { cart, unit = 1, rules = DEAL_RULES 
 	const facts = cart ?? { goods: line.unitPrice * (line.quantity ?? 1), paymentMethod: null, weekday: -1, minutes: -1 };
 	/** @type {{ deal: DealRecord, perUnit: number } | null} */
 	let best = null;
-	for (const deal of deals) {
+	const first = rules.lineChoice === 'first';
+	for (const deal of first ? [...deals].sort(byShowOrder) : deals) {
 		if ((deal.target ?? 'items') !== 'items' || deal.type === 'free_delivery') continue;
 		if (!isLive(deal, now) || (cart && !inWindow(deal, cart)) || !dealCovers(deal, line, facts)) continue;
 		const perUnit =
@@ -303,7 +306,8 @@ export const bestDeal = (line, deals, now, { cart, unit = 1, rules = DEAL_RULES 
 					)
 				: dealUnitDiscount(deal, line.unitPrice, unit);
 		if (perUnit <= 0) continue;
-		if (better({ deal, saving: perUnit }, best ? { deal: best.deal, saving: best.perUnit } : null)) best = { deal, perUnit };
+		if (first ? best === null : better({ deal, saving: perUnit }, best ? { deal: best.deal, saving: best.perUnit } : null))
+			best = { deal, perUnit };
 	}
 	return best;
 };

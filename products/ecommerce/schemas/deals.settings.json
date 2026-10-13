@@ -16,6 +16,13 @@
 			"description": "When several deals fit a cart line, the shopper picks one; otherwise the best saving applies.",
 			"default": false
 		},
+		"lineChoice": {
+			"type": "string",
+			"title": "Deal a cart line takes",
+			"description": "best: the largest saving (then the higher priority). first: the first deal in your deals' show order that saves something. A deal the shopper picked wins either way.",
+			"default": "best",
+			"enum": ["best", "first"]
+		},
 		"rounding": {
 			"type": "string",
 			"title": "Rounding of deal discounts",

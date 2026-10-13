@@ -109,6 +109,22 @@ describe('deals (E18)', () => {
 		await shop.api('DELETE', `/v1/deals/${deal.id}`);
 	});
 
+	it('gives a line the best saving, or the first deal in show order with lineChoice first (D4)', async () => {
+		const item = await shop.seedProduct({ price: 10_000, stock: 5 });
+		const scope = { productIds: [item.id], categoryIds: [], brandIds: [] };
+		const percent = await newDeal({ scope, value: 5, sort: 1 });
+		const fixed = await newDeal({ scope, type: 'fixed', value: 800, sort: 2 });
+		const best = await quote({ lines: [{ productId: item.id }] });
+		expect(best.json.lines[0]).toMatchObject({ dealDiscount: 800, deal: { id: fixed.id } });
+		await shop.setting('deals', 'lineChoice', 'first');
+		const first = await quote({ lines: [{ productId: item.id }] });
+		expect(first.json.lines[0]).toMatchObject({ dealDiscount: 500, deal: { id: percent.id } });
+		expect((await visit('GET', `/v1/shop/products/${item.id}/quote`)).json.savings).toBe(500);
+		await shop.setting('deals', 'lineChoice', 'best');
+		await shop.api('DELETE', `/v1/deals/${percent.id}`);
+		await shop.api('DELETE', `/v1/deals/${fixed.id}`);
+	});
+
 	it('shows deals on product cards', async () => {
 		const item = await shop.seedProduct({ price: 1000, stock: 5 });
 		const deal = await newDeal({ scope: { productIds: [item.id], categoryIds: [], brandIds: [] }, badgeLabel: 'Hot' });

@@ -199,6 +199,38 @@ describe('deals', () => {
 		expect(result.applied).toEqual([]);
 	});
 
+	it('takes the first deal in the shoppers’ order that saves something with lineChoice first (D4)', () => {
+		const first = { ...DEAL_RULES, lineChoice: /** @type {const} */ ('first') };
+		const fan = [line({ unitPrice: 1_000_000 })];
+		const deals = [
+			deal({ id: 'deal_b', type: 'fixed', value: 80_000, sort: 2 }),
+			deal({ id: 'deal_a', value: 5, sort: 1 }),
+			deal({ id: 'deal_z', value: 0.000_01, sort: 0 }),
+		];
+		// a 10,000 fan: the best saving is 800 off (B), the first in show order 5% (A); Z saves nothing
+		expect(run({ lines: fan, deals }).lines[0]).toMatchObject({ dealId: 'deal_b', dealDiscount: 80_000 });
+		expect(run({ lines: fan, deals, rules: first }).lines[0]).toMatchObject({
+			dealId: 'deal_a',
+			dealDiscount: 50_000,
+			eligibleDealIds: ['deal_b', 'deal_a', 'deal_z'],
+		});
+		// the shopper's pick still wins
+		const picked = [line({ unitPrice: 1_000_000, dealId: 'deal_b' })];
+		expect(run({ lines: picked, deals, rules: first, shopperChoice: true }).lines[0]?.dealId).toBe('deal_b');
+		// the product quote follows the same choice
+		const product = /** @type {any} */ ({
+			id: 'p1',
+			categoryIds: [],
+			brandId: null,
+			variants: [{ id: 'v1', price: 1_000_000, active: true }],
+		});
+		expect(quoteProduct({ product, deals, now: NOW })?.deals).toEqual([{ id: 'deal_b', name: 'Deal' }]);
+		expect(quoteProduct({ product, deals, now: NOW, rules: first })).toMatchObject({
+			savings: 50_000,
+			deals: [{ id: 'deal_a', name: 'Deal' }],
+		});
+	});
+
 	it('rounds the deals once per order, half up, with rounding total_half_up (D4)', () => {
 		const exact = { ...DEAL_RULES, rounding: /** @type {const} */ ('total_half_up') };
 		const seven = deal({ value: 7 });
