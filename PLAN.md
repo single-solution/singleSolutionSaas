@@ -4825,6 +4825,10 @@ These bind wherever the rest of Part 0 does not change them.
   `.env.example` and `vercel.json`. Splitting a unit later only replaces `workspace:^` ranges with published versions.
   Tests that need two or more deployables live in `e2e/`. The root only orchestrates (`pnpm check` runs the root
   files' format check, then every unit's `check`).
+- **Light enough for free plans, on both sides** (owner, 2026-10-14): the Portal and every product must run on free
+  hosting (Vercel Hobby, Atlas M0), and so must a merchant's own website that uses them: few functions, few database
+  operations per page, cacheable shop reads, one small widget script per product, nothing heavy on the merchant's
+  server. Every change is judged against this.
 - **No background work**: nothing runs unless something happens. No crons (no `vercel.json` has `crons`), timers, timed
   queue drains or background loops. Work happens inside, or right after (`after()`), the request that caused it, and
   only for what that request touched. Time-based state is judged when read; data that can simply disappear uses TTL
