@@ -3106,6 +3106,31 @@ built and is raised with the owner (D1).
 - Key: setting `toGa4` of `web_vitals` (false).
 - Data: none.
 
+Built after the re-audit (2026-10-13; commits f49adf8d, bce22e2a, 8cf247ea, f9562710, 631bad3d):
+
+**G8. Fewer database writes.** Why: 12–28 merchant-database operations per page view against a free cluster's ~100 a
+second for everything (RT-2). Key: always. API: a batch costs one insert and one update; a page's Web Vitals go in one
+batch (a page view costs 2 operations). Data: daily totals in `ss_growth_totals`, one document per day
+(`totals.<metric>.<key>` `{ c, s }`, keys escaped and prefixed `_`, a next `part` past 16 MB); `ss_growth_daily` is
+still read, never written; Migration step 8 writes the new shape.
+
+**G9. Single-page apps.** Why: shops that navigate without page loads were counted once per document (SG-4). Key:
+always. API: pushState and back/forward count a page when the path or query changes, replaceState when the path
+changes; each page re-checks the URL search once per path and term and reads its 404 marker after 1 s; the notice bar
+follows `hideOnPages` and `dismissFor`; vitals are filed under the page the document was loaded on.
+
+**G7 amended.** Web Vitals are measured by the standard (web.dev) rules (CLS: largest session window; INP near the 98th
+percentile; LCP and FCP only while the page is in view), and GA4 events add `metric_id`, `event_category: 'web-vitals'`
+and `event_label` (SG-26). `toGa4` works without `visitor_analytics`: vitals then go to GA4 only and nothing is stored
+(SG-27).
+
+**G10. Notice bar switch.** Why: staff turn the notice off themselves, without our admins switching the feature
+(AO-2). Key: `notice_bar.enabled` (true). API: `GET /v1/notice` answers null while off; the text and dates are kept.
+
+**G11. URL searches to pixels.** Why: some shops send no Search event to their pixels (SG-38). Key:
+`pixels.searchFromUrl` (true; off keeps searches found in the page address away from the pixels; `SSGrowth.search` and
+first-party recording are unchanged).
+
 #### Migration and importers
 
 **Where the code lives.**
