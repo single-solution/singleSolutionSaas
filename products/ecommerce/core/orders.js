@@ -72,12 +72,30 @@ export const wire = (value) => {
 // --------------------------------------------------------------------------------------------------------- money
 
 /**
- * The part of what was paid that went through Payments (online, bank transfer, a COD advance).
+ * What Payments took for an order and has not refunded yet (online, bank transfer, a COD advance): the `online` entries
+ * of its payments log for its Payments payment, less its `online` refunds (PM-2). Money staff recorded (a transfer, cash,
+ * another way) is never Payments' to refund, even on an order that has a Payments payment. Records from before the
+ * payments log (E26) have no entries: what was paid counts as before (all of it, or the COD advance).
  * @param {OrderRecord} order
  */
-const paidThroughPayments = (order) => {
-	if (!order.payment.paymentId) return 0;
-	return CASH_METHODS.includes(order.payment.method) ? Math.min(order.payment.advance, order.payment.paid) : order.payment.paid;
+const leftAtPayments = (order) => {
+	const { paymentId } = order.payment;
+	if (!paymentId) return 0;
+	const entries = order.payments ?? [];
+	const took =
+		entries.length === 0
+			? CASH_METHODS.includes(order.payment.method)
+				? Math.min(order.payment.advance, order.payment.paid)
+				: order.payment.paid
+			: entries
+					.filter((entry) => entry.method === 'online' && entry.reference === paymentId)
+					.reduce((sum, entry) => sum + entry.amount, 0);
+	const refunds = order.refunds ?? [];
+	const gave =
+		entries.length === 0
+			? order.payment.refunded
+			: refunds.filter((entry) => entry.method === 'online').reduce((sum, entry) => sum + entry.amount, 0);
+	return Math.max(0, took - gave);
 };
 
 /**
@@ -88,13 +106,13 @@ export const refundable = (order) => Math.max(0, order.payment.paid - order.paym
 
 /**
  * How a refund is split: through Payments first (as long as Payments' share is not refunded yet), the rest recorded
- * as cash given back by hand.
+ * as given back by hand.
  * @param {OrderRecord} order
  * @param {number} amount
  * @returns {{ online: number, manual: number }}
  */
 export const refundSplit = (order, amount) => {
-	const online = Math.min(amount, Math.max(0, paidThroughPayments(order) - order.payment.refunded));
+	const online = Math.min(amount, leftAtPayments(order));
 	return { online, manual: amount - online };
 };
 
@@ -402,7 +420,8 @@ export const checkRefund = (body, order) => {
 	const method = input.method === undefined || input.method === null ? null : input.method;
 	if (method !== null && method !== 'online' && !RECORDED_METHODS.includes(/** @type {any} */ (method)))
 		return refuse('method', 'method is online, bank_transfer, cash or other.');
-	if (method === 'online' && !order.payment.paymentId) return refuse('method', 'This order was not paid through Payments.');
+	if (method === 'online' && refundSplit(order, 1).online === 0)
+		return refuse('method', 'Nothing paid through Payments is left to refund on this order.');
 	const reference = referenceOf(input.reference);
 	if (!reference.ok) return reference;
 	const claimId = input.claimId === undefined || input.claimId === null ? null : input.claimId;

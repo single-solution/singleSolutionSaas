@@ -7,7 +7,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { DEFAULT_FLOW } from '../core/flow.js';
 import { COLLECTIONS } from '../core/model.js';
-import { ORIGIN, readyShop } from './helpers.js';
+import { ORIGIN, PAYMENTS, readyShop } from './helpers.js';
 
 /** @type {Awaited<ReturnType<typeof readyShop>>} */
 let shop;
@@ -136,6 +136,19 @@ describe('the payments log (E26)', () => {
 		]);
 		expect(codeOf(await refund(order.id, { amount: 1, reason: 'x', method: 'cheque' }))).toBe('validation_failed');
 		await shop.setting('checkout', 'autoRefundedStatus', false);
+	});
+
+	it('never sends money staff recorded to Payments, even when the order has a Payments payment (PM-2)', async () => {
+		const { order } = await placeOrder({ payment: 'online' });
+		expect((await orderRecord(order.id)).payment.paymentId).toMatch(/^pay_/);
+		await pay(order.id, { method: 'bank_transfer', amount: order.totals.total, reference: 'TRX-9', confirm: true });
+		const calls = shop.callsTo(PAYMENTS).filter((call) => call.path.endsWith('/refunds')).length;
+		expect(codeOf(await refund(order.id, { amount: 100, reason: 'x', method: 'online' }))).toBe('validation_failed');
+		const refunded = await moveTo(order.id, 'refunded');
+		expect(refunded.status).toBe(200);
+		expect(refunded.json.payment).toMatchObject({ state: 'refunded', refunded: order.totals.total });
+		expect(shop.callsTo(PAYMENTS).filter((call) => call.path.endsWith('/refunds'))).toHaveLength(calls);
+		expect((await orderRecord(order.id)).refunds.map((/** @type {any} */ e) => e.method)).toEqual(['other']);
 	});
 
 	it('takes cash on delivery as paid unless staff record it', async () => {
