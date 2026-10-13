@@ -190,8 +190,9 @@ export const createCatalogShop = (product, service, common) => {
 	const listing = async (ctx) => {
 		const { s, data } = await common.open(ctx);
 		const { pageSize, searchMatch } = await s.values('catalog');
+		// pages by cursor like every other list (`nextCursor`, `hasMore`); `next` is the cursor's old name
 		const page = paginate(
-			{ cursor: ctx.query.page ? null : ctx.query.cursor, limit: ctx.query.limit },
+			{ cursor: ctx.query.page ? null : (ctx.query.cursor ?? ctx.query.next), limit: ctx.query.limit },
 			{ defaultLimit: Math.min(MAX_PAGE, Number(pageSize)), maxLimit: MAX_PAGE },
 		);
 		const read = readShopQuery(ctx.query);
@@ -255,7 +256,7 @@ export const createCatalogShop = (product, service, common) => {
 				const body = page.page(items, (item) => ['atlas', offset + items.indexOf(item) + 1]);
 				return {
 					items: await cards(s, data, body.items, { variants: withVariants }),
-					next: body.nextCursor,
+					nextCursor: body.nextCursor,
 					hasMore: body.hasMore,
 					...(query.page === null ? {} : { page: query.page }),
 					...(found.total === null ? {} : { total: Math.min(found.total, TOTAL_CAP), capped: found.total > TOTAL_CAP }),
@@ -290,7 +291,7 @@ export const createCatalogShop = (product, service, common) => {
 		}
 		return {
 			items: await cards(s, data, body.items, { variants: withVariants }),
-			next: body.nextCursor,
+			nextCursor: body.nextCursor,
 			hasMore: body.hasMore,
 			...(query.page === null ? {} : { page: query.page }),
 			...totals,

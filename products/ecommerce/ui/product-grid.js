@@ -398,7 +398,7 @@ export const mountProductGrid = async ({ host, config, shop, win }) => {
 				}
 				const got = Array.isArray(answer.data.items) ? answer.data.items : [];
 				items = mode === 'more' ? [...items, ...got] : got;
-				next = answer.data.next ?? null;
+				next = answer.data.nextCursor ?? null;
 				if (mode === 'more') lastPage += 1;
 				else firstPage = lastPage = mode === 'page' ? pageNo : 1;
 				if (typeof answer.data.total === 'number') found = { total: answer.data.total, capped: answer.data.capped === true };

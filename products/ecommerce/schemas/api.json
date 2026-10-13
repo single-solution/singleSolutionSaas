@@ -12265,7 +12265,7 @@
 		},
 		"ShopProductPage": {
 			"type": "object",
-			"required": ["items", "next", "hasMore", "facets"],
+			"required": ["items", "nextCursor", "hasMore", "facets"],
 			"additionalProperties": false,
 			"properties": {
 				"items": {
@@ -12274,9 +12274,9 @@
 						"$ref": "#/components/schemas/ShopProductCard"
 					}
 				},
-				"next": {
+				"nextCursor": {
 					"type": ["string", "null"],
-					"description": "Pass it as cursor for the next page (null: the last page)."
+					"description": "Pass it as cursor for the next page (null: the last page), as every list pages."
 				},
 				"hasMore": {
 					"type": "boolean"
@@ -16621,13 +16621,17 @@
 	},
 	"GET /v1/shop/products": {
 		"summary": "The product grid: active products with filters, search and facets",
-		"description": "Browser token from your website (or the server token, for pages your server renders). Only active products of visible categories and brands. Filter by attribute values with attr.<slug or id>=value[,value] (one active variant must match the price range, variant attributes, grade and stock together). Pages by cursor (next) or by page number; limit defaults to the pageSize setting. With the catalog setting search at atlas a search runs on Atlas Search (ranked by relevance unless sort is given), else every word must appear in the name, summary, tags or SKUs (searchMatch phrase: the phrase in the name or a SKU). 422 validation_failed at /minPrice, /maxPrice, /sort or /page; 400 bad_request for an invalid cursor or limit.",
+		"description": "Browser token from your website (or the server token, for pages your server renders). Only active products of visible categories and brands. Filter by attribute values with attr.<slug or id>=value[,value] (one active variant must match the price range, variant attributes, grade and stock together). Pages by cursor (nextCursor and hasMore, as every list) or by page number; limit defaults to the pageSize setting. With the catalog setting search at atlas a search runs on Atlas Search (ranked by relevance unless sort is given), else every word must appear in the name, summary, tags or SKUs (searchMatch phrase: the phrase in the name or a SKU). 422 validation_failed at /minPrice, /maxPrice, /sort or /page; 400 bad_request for an invalid cursor or limit.",
 		"query": {
 			"type": "object",
 			"properties": {
 				"cursor": {
 					"type": "string",
 					"description": "nextCursor of the previous page."
+				},
+				"next": {
+					"type": "string",
+					"description": "The old name of cursor (read when cursor is not given)."
 				},
 				"limit": {
 					"type": "integer",

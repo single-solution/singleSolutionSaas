@@ -147,7 +147,7 @@ const listing = () => {
 		/** @param {any} call */
 		route: (call) => {
 			const next = queue.shift();
-			return next ? next(call) : ok({ items: [], next: null, facets: null });
+			return next ? next(call) : ok({ items: [], nextCursor: null, facets: null });
 		},
 	};
 };
@@ -190,14 +190,14 @@ describe('product grid', () => {
 							cardImages: [{ url: 'https://cdn.example.com/only.png', alt: 'Only' }],
 						}),
 					],
-					next: 'c1',
+					nextCursor: 'c1',
 					hasMore: true,
 					total: 5,
 					capped: false,
 					facets: FACETS,
 				}),
-			() => ok({ items: [card('prd_c', { compareAtPrice: null, grades: [] })], next: 'c2', facets: null }),
-			() => ok({ items: [card('prd_e')], next: null, page: 3, facets: null }),
+			() => ok({ items: [card('prd_c', { compareAtPrice: null, grades: [] })], nextCursor: 'c2', facets: null }),
+			() => ok({ items: [card('prd_e')], nextCursor: null, page: 3, facets: null }),
 		);
 		const fake = makeShop({ features: ['catalog'], routes: { 'GET /v1/shop/products': pages.route } });
 		const host = await mountGrid(fake, {
@@ -281,7 +281,7 @@ describe('product grid', () => {
 			routes: {
 				'GET /v1/shop/products': (call) => {
 					asked.push(call.query);
-					return ok({ items: [card('prd_a')], next: null, total: 1, facets: FACETS });
+					return ok({ items: [card('prd_a')], nextCursor: null, total: 1, facets: FACETS });
 				},
 				'GET /v1/shop/categories': () => ok(TREE),
 				'GET /v1/shop/brands': () => ok(BRANDS),
@@ -375,7 +375,7 @@ describe('product grid', () => {
 		pages.queue.push(() =>
 			ok({
 				items: [card('prd_a')],
-				next: null,
+				nextCursor: null,
 				facets: { ...FACETS, categories: [], brands: [], price: null, attributes: [], grades: [] },
 			}),
 		);
@@ -398,7 +398,7 @@ describe('product grid', () => {
 		resetPage();
 		const empty = makeShop({
 			features: ['catalog'],
-			routes: { 'GET /v1/shop/products': () => ok({ items: [card('prd_a')], next: null, facets: null }) },
+			routes: { 'GET /v1/shop/products': () => ok({ items: [card('prd_a')], nextCursor: null, facets: null }) },
 		});
 		const bare = await mountGrid(empty);
 		expect($(bare, '.filter-panel').hidden).toBe(true);
@@ -412,8 +412,8 @@ describe('product grid', () => {
 			routes: {
 				'GET /v1/shop/products': (call) =>
 					call.query.category === 'tablets'
-						? ok({ items: [], next: null, total: 0, facets: null })
-						: ok({ items: [card('prd_a'), card('prd_b')], next: 'c', total: 10000, capped: true, facets: FACETS }),
+						? ok({ items: [], nextCursor: null, total: 0, facets: null })
+						: ok({ items: [card('prd_a'), card('prd_b')], nextCursor: 'c', total: 10000, capped: true, facets: FACETS }),
 				'GET /v1/shop/categories': () => ok(TREE),
 				'GET /v1/shop/brands': () => fail(500, 'internal_error'),
 			},
@@ -452,7 +452,7 @@ describe('product grid', () => {
 			routes: {
 				'GET /v1/shop/products': (call) => {
 					asked.push(call.query);
-					return ok({ items: [card('prd_a')], next: null, facets: { ...FACETS, brands: [] } });
+					return ok({ items: [card('prd_a')], nextCursor: null, facets: { ...FACETS, brands: [] } });
 				},
 				'GET /v1/shop/brands': () => ok({ items: many }),
 				'GET /v1/shop/categories': () => fail(500, 'internal_error'),
@@ -481,10 +481,10 @@ describe('product grid', () => {
 	it('shows the empty and error states', async () => {
 		const pages = listing();
 		pages.queue.push(
-			() => ok({ items: [], next: null, facets: FACETS }),
+			() => ok({ items: [], nextCursor: null, facets: FACETS }),
 			() => fail(500, 'internal_error'),
 			() => fail(422, 'validation_failed'),
-			() => ok({ items: [card('prd_a')], next: 'c1', facets: FACETS }),
+			() => ok({ items: [card('prd_a')], nextCursor: 'c1', facets: FACETS }),
 			() => fail(503, 'unavailable'),
 		);
 		const fake = makeShop({ features: ['catalog'], routes: { 'GET /v1/shop/products': pages.route } });
@@ -508,12 +508,12 @@ describe('product grid', () => {
 		const pages = listing();
 		pages.queue.push(
 			() => new Promise((resolve) => (release = resolve)),
-			() => ok({ items: [card('prd_new')], next: null, facets: FACETS }),
+			() => ok({ items: [card('prd_new')], nextCursor: null, facets: FACETS }),
 		);
 		const fake = makeShop({ features: ['catalog'], routes: { 'GET /v1/shop/products': pages.route } });
 		const host = await mountGrid(fake);
 		await submit($(host, 'form'));
-		release(ok({ items: [card('prd_old')], next: null, facets: FACETS }));
+		release(ok({ items: [card('prd_old')], nextCursor: null, facets: FACETS }));
 		await flush();
 		expect(textOf(host)).toContain('Phone prd_new');
 		expect(textOf(host)).not.toContain('Phone prd_old');
@@ -525,7 +525,7 @@ describe('product grid', () => {
 		const fake = makeShop({
 			features: ['catalog', 'wishlist', 'compare'],
 			routes: {
-				'GET /v1/shop/products': () => ok({ items: [card('prd_a'), card('prd_b')], next: null, facets: FACETS }),
+				'GET /v1/shop/products': () => ok({ items: [card('prd_a'), card('prd_b')], nextCursor: null, facets: FACETS }),
 				'GET /v1/shop/wishlist': () => ok({ items: saved, max: 200 }),
 				'POST /v1/shop/wishlist/items/prd_b': () => {
 					if (refuse) return fail(422, 'validation_failed');

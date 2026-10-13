@@ -527,7 +527,11 @@ describe('E8 listing and filtering', () => {
 		expect(names(await get('/v1/shop/products?sort=updated'))[0]).toBe('Printed scarf');
 		expect(names(await get('/v1/shop/products?sort=sold_asc'))).toHaveLength(3);
 		const paged = (await get('/v1/shop/products?sort=price_asc&limit=1')).json;
-		expect(names(await get(`/v1/shop/products?sort=price_asc&limit=1&cursor=${paged.next}`))).toEqual(['Featured gown']);
+		expect(paged).toMatchObject({ hasMore: true, nextCursor: expect.any(String) });
+		expect(paged).not.toHaveProperty('next');
+		expect(names(await get(`/v1/shop/products?sort=price_asc&limit=1&cursor=${paged.nextCursor}`))).toEqual(['Featured gown']);
+		// next is the cursor's old name
+		expect(names(await get(`/v1/shop/products?sort=price_asc&limit=1&next=${paged.nextCursor}`))).toEqual(['Featured gown']);
 		expect((await get('/v1/shop/products?page=0')).status).toBe(422);
 		const card = (await get('/v1/shop/products?q=scarf')).json.items[0];
 		expect(card).toMatchObject({ price: 800, priceMax: 1200, featured: false });

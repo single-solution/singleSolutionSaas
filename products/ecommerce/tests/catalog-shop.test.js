@@ -155,7 +155,7 @@ describe('the product grid', () => {
 				expect(answer.status).toBe(200);
 				if (next) expect(answer.json.facets).toBeNull();
 				seen.push(...names(answer));
-				next = answer.json.next;
+				next = answer.json.nextCursor;
 				pages += 1;
 			} while (next && pages < 10);
 			expect(seen.sort()).toEqual(['Bestseller', 'Clear case', 'Galaxy S', 'Pixel 9']);
