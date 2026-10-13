@@ -332,8 +332,11 @@ export const STATUS_ROLES = Object.freeze([
  * @property {string} status a status key of the website's order flow
  * @property {StatusRole} role the role of `status`
  * @property {Array<{ at: Date, from: string | null, to: string, by: string, note: string, reason?: string,
- *   kind?: 'edited' | 'payment' | 'refund' }>} history `reason` of a move (E27: `rto` | `customer_return`, or a cancel's
- *   `staff` | `shopper` | `expired`)
+ *   kind?: 'edited' | 'payment' | 'refund', byKind?: string, code?: import('./orders.js').HistoryNote,
+ *   values?: import('./orders.js').NoteValues }>} history `reason` of a move (E27: `rto` | `customer_return`, or a
+ *   cancel's `staff` | `shopper` | `expired`); `byKind`: the kind of the actor `by` names (`staff`, `user` or `server`;
+ *   missing for `system`, `shopper` and `guest`, and on older entries); `code` and `values`: a note the server wrote
+ *   itself (`core/orders.js` `HISTORY_NOTES`; older entries have only the note)
  * @property {{ courier: string, trackingNumber: string, trackingUrl: string, booked: boolean, status: string,
  *   checkedAt: Date | null, trackingNote?: string, estimatedDeliveryAt?: Date | null } | null} shipment the courier by
  *   name or key, its link built on read from the `couriers` list (E28)
@@ -476,7 +479,9 @@ export const STATUS_ROLES = Object.freeze([
  * @property {number} refundAmount minor units (0 = none)
  * @property {string | null} refundId the Payments refund id, or null when recorded only
  * @property {Date | null} restockedAt
- * @property {Array<{ at: Date, status: string, by: string, note: string }>} history
+ * @property {Array<{ at: Date, status: string, by: string, note: string, byKind?: string,
+ *   code?: import('./returns.js').ClaimNote }>} history `byKind` and `code` as on an order's history (`code`:
+ *   `core/returns.js` `CLAIM_NOTES`)
  * @property {string} [reference] the claim's reference (`R-…`, E33)
  * @property {Array<{ at: Date, by: string, text: string }>} [notes] staff notes (E33)
  * @property {string} [refundMethod] how the refund was given (E33)

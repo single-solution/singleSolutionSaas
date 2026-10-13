@@ -36,7 +36,7 @@ import { checkGuest, phoneDigitsOf } from '../core/guests.js';
 import { loyaltyRules, pointsToEarn, takesPart } from '../core/loyalty.js';
 import { gradesByKey } from '../core/grades.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
-import { orderMoney } from '../core/orders.js';
+import { byActor, orderMoney, serverNote } from '../core/orders.js';
 import { createMedia } from './catalog-media.js';
 import { createGuests, phoneRulesOf } from './guests.js';
 import { RECHECK_MS, createOrderPayments, expectedOf } from './order-payments.js';
@@ -196,10 +196,11 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 	 * payment is cancelled first (K-13): when it was paid meanwhile the order is paid instead and is returned as it is now
 	 * (not cancelled).
 	 * @param {Site} s @param {OrderRecord} order as just read
-	 * @param {{ by: string, note: string, reason: 'staff' | 'shopper' | 'expired' }} who
+	 * @param {{ by: string, note: string, code: import('../core/orders.js').HistoryNote,
+	 *   reason: 'staff' | 'shopper' | 'expired' }} who `note` also tells Payments why its payment is cancelled
 	 * @returns {Promise<OrderRecord | null>} null when it moved meanwhile or the flow has no cancelled status
 	 */
-	const cancel = async (s, order, { by, note, reason }) => {
+	const cancel = async (s, order, { by, note, code, reason }) => {
 		const flow = await flowOf(s);
 		const to = cancelledStatus(flow, order.status) ?? '';
 		const role = statusOf(flow, to)?.role;
@@ -219,7 +220,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 						{ websiteId: data.websiteId, id: order.id, status: order.status },
 						{
 							$set: { status: to, role, holdUntil: null, ...step.set },
-							$push: { history: { at: new Date(now), from: order.status, to, by, note, reason } },
+							$push: { history: { at: new Date(now), from: order.status, to, by, ...serverNote(code, note), reason } },
 						},
 						{ session },
 					);
@@ -252,9 +253,11 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 			current = checked.order;
 			if (current.status !== order.status || current.payment.state !== 'pending') return;
 		}
+		const unpaid = order.role === 'awaiting_payment';
 		await cancel(s, current, {
 			by: 'system',
-			note: order.role === 'awaiting_payment' ? 'Not paid in time' : 'Not confirmed in time',
+			note: unpaid ? 'Not paid in time' : 'Not confirmed in time',
+			code: unpaid ? 'not_paid_in_time' : 'not_confirmed_in_time',
 			reason: 'expired',
 		});
 	};
@@ -697,8 +700,8 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 								at: new Date(now),
 								from: order.status,
 								to: order.status,
-								by: service.actor(ctx).name,
-								note: 'Order edited',
+								...byActor(service.actor(ctx)),
+								...serverNote('edited', 'Order edited'),
 								kind: 'edited',
 							},
 						},
@@ -1025,6 +1028,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		const cancelled = await cancel(s, current, {
 			by: shopper ? 'shopper' : 'guest',
 			note: 'Cancelled by the shopper',
+			code: 'shopper',
 			reason: 'shopper',
 		});
 		if (!cancelled) throw problem('move_not_allowed', 'This order can no longer be cancelled here.');
@@ -1099,7 +1103,13 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 			{ 'payment.proof': { key, reference, at: new Date(now) } },
 			{
 				push: {
-					history: { at: new Date(now), from: order.status, to: order.status, by: 'shopper', note: 'Transfer proof sent' },
+					history: {
+						at: new Date(now),
+						from: order.status,
+						to: order.status,
+						by: 'shopper',
+						...serverNote('proof_sent', 'Transfer proof sent'),
+					},
 				},
 			},
 		);

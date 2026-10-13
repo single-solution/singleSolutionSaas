@@ -77,7 +77,7 @@ describe('the catalog admin widget', () => {
 		expect(many.json).toEqual({
 			results: [
 				{ id, added: 1 },
-				{ id: 'prd_none', error: 'There is no such product.' },
+				{ id: 'prd_none', error: 'There is no such product.', code: 'not_found' },
 			],
 			added: 1,
 		});

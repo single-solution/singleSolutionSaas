@@ -8,10 +8,10 @@
  * the More menu, and reject last, in danger text behind its typed confirmation (it needs a note for the shopper).
  * @module
  */
-import { CLAIM_KINDS, CLAIM_STATUSES } from '../core/returns.js';
+import { CLAIM_KINDS, CLAIM_NOTES, CLAIM_STATUSES } from '../core/returns.js';
 import { query } from './admin-kit.js';
 import { card, chipFilter, detailHead, listScreen, scopeChip } from './admin-lists.js';
-import { CLAIM_TONES, historyBy } from './admin-order.js';
+import { CLAIM_TONES, historyBy, warningsText } from './admin-order.js';
 
 /** @typedef {import('./admin-kit.js').Kit} Kit */
 /** @typedef {import('./admin-lists.js').Detail} Detail */
@@ -19,8 +19,15 @@ import { CLAIM_TONES, historyBy } from './admin-order.js';
 /** The actions that move a claim forward, in the order they are offered (the claim's `actions` say which apply). */
 const FORWARD = Object.freeze(['approve', 'receive', 'replace', 'repair', 'refund', 'restock', 'close']);
 
-/** History notes the server writes as a code (`ordersAdmin.historyNote.<note>`); other notes are the staff's own. */
-const CLAIM_NOTES = Object.freeze(['restocked']);
+/**
+ * The note of a claim's history entry: the website's words for a note the server writes itself (its `code`, or on older
+ * entries the code as the note: `ordersAdmin.historyNote.<code>`), else the note as staff typed it.
+ * @param {Kit} kit @param {{ note: string, code?: string }} entry
+ */
+const claimNote = (kit, entry) => {
+	const code = entry.code ?? (CLAIM_NOTES.includes(/** @type {any} */ (entry.note)) ? entry.note : '');
+	return code ? kit.t(`ordersAdmin.historyNote.${code}`) : entry.note;
+};
 
 /**
  * The returns section.
@@ -223,7 +230,7 @@ const renderClaim = (kit, claim, detail, list, message) => {
 										kit.when(entry.at),
 										t(`ordersAdmin.claim.${entry.status}`),
 										historyBy(kit, entry),
-										CLAIM_NOTES.includes(entry.note) ? t(`ordersAdmin.historyNote.${entry.note}`) : entry.note,
+										claimNote(kit, entry),
 									]
 										.filter(Boolean)
 										.join(' · '),
@@ -289,7 +296,10 @@ const refundDialog = (kit, claim, money, done) => {
 			if (minor === null || Number.isNaN(minor) || minor <= 0) return t('admin.checkNumbers');
 			const answer = await kit.call('POST', `/v1/admin/returns/${claim.id}/refund`, { amount: minor, note: note.value });
 			if (!answer.ok) return kit.reason(answer);
-			done(answer.data, t('ordersAdmin.refundDone', { amount: money(minor) }));
+			done(
+				answer.data,
+				[t('ordersAdmin.refundDone', { amount: money(minor) }), ...warningsText(kit, answer.data, money)].join(' '),
+			);
 			return null;
 		},
 	});

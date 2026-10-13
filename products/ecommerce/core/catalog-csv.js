@@ -16,7 +16,6 @@ import { spentKey } from './orders.js';
 /** @typedef {import('./model.js').VariantRecord} VariantRecord */
 /** @typedef {import('./model.js').OrderRecord} OrderRecord */
 /** @typedef {import('./model.js').CustomerRecord} CustomerRecord */
-/** @typedef {import('./catalog.js').FieldError} FieldError */
 /** @typedef {import('./csv.js').Cell} Cell */
 
 /** Most data rows of an import. */
@@ -54,6 +53,53 @@ const PRODUCT_COLUMNS = Object.freeze([
 
 /** Columns after the location stock columns: what a price and stock update (E36) reads besides price and stock. */
 const UPDATE_COLUMNS = Object.freeze(['sold_out', 'updated_at']);
+
+/**
+ * Why a row of a products file fails (PLAN 0.4.10: the widgets show `customersAdmin.csvProblem.<code>`, never the
+ * English `message`): `columns` the header names no product (line 1); `unknown_location` (a `stock@` column);
+ * `no_name` a row names no product; `option_pair` an option without its value or name; `not_price` (`currency`);
+ * `not_stock`; `not_true_false`; `new_product_name` a new product has no name; `unknown_category` (`category`);
+ * `unknown_brand` (`brand`); `not_its_variant` the variant is not the product's; `new_variant_price` a new variant has no
+ * price; `stock_per_location` stock without the `stock@` columns; `unknown_product`; `skus_of_two` the row's SKUs belong
+ * to two products; `sku_taken` and `sku_twice` (`sku`) another product or another product of the file has the SKU;
+ * `slug_taken`; `invalid` the product check refused the field `path` names. A price and stock update (E36) adds
+ * `no_variant`, `no_updated_at`, `unknown_variant`, `sku_ambiguous` (use `variant_id`) and `stale` (the product changed
+ * after the export).
+ */
+export const CSV_PROBLEMS = Object.freeze(
+	/** @type {const} */ ([
+		'columns',
+		'unknown_location',
+		'no_name',
+		'option_pair',
+		'not_price',
+		'not_stock',
+		'not_true_false',
+		'new_product_name',
+		'unknown_category',
+		'unknown_brand',
+		'not_its_variant',
+		'new_variant_price',
+		'stock_per_location',
+		'unknown_product',
+		'skus_of_two',
+		'sku_taken',
+		'sku_twice',
+		'slug_taken',
+		'invalid',
+		'no_variant',
+		'no_updated_at',
+		'unknown_variant',
+		'sku_ambiguous',
+		'stale',
+	]),
+);
+/**
+ * A problem of one row of a CSV file: its line (1 is the header), the column (or the field) as a JSON pointer, the
+ * English message, and its code with the values its words take.
+ * @typedef {{ line: number, path: string, message: string, code: typeof CSV_PROBLEMS[number],
+ *   values?: Record<string, string> }} RowProblem
+ */
 
 /**
  * @typedef {object} CsvLookups
@@ -332,29 +378,33 @@ const amountOf = (value, currency) => (/^0+(\.0+)?$/.test(value) ? 0 : fromDecim
  * Read the rows of a products file into products.
  * @param {{ header: string[], records: Array<{ line: number, values: Record<string, string> }> }} file
  * @param {{ currency: string, locationIds: ReadonlySet<string> }} context
- * @returns {{ groups: ImportGroup[], errors: Array<FieldError & { line: number }> }}
+ * @returns {{ groups: ImportGroup[], errors: RowProblem[] }}
  */
 export const importGroups = ({ header, records }, { currency, locationIds }) => {
-	/** @type {Array<FieldError & { line: number }>} */
+	/** @type {RowProblem[]} */
 	const errors = [];
 	const has = (/** @type {string} */ column) => header.includes(column);
 	if (!has('name') && !has('slug') && !has('product_id') && !has('sku'))
-		return { groups: [], errors: [{ line: 1, path: '', message: 'The file needs a name, slug, product_id or sku column.' }] };
+		return {
+			groups: [],
+			errors: [{ line: 1, path: '', message: 'The file needs a name, slug, product_id or sku column.', code: 'columns' }],
+		};
 	const locationColumns = header.filter((column) => column.startsWith(LOCATION_COLUMN));
 	for (const column of locationColumns)
 		if (!locationIds.has(column.slice(LOCATION_COLUMN.length)))
-			errors.push({ line: 1, path: `/${column}`, message: 'There is no such location.' });
+			errors.push({ line: 1, path: `/${column}`, message: 'There is no such location.', code: 'unknown_location' });
 	/** @type {Map<string, ImportGroup>} */
 	const groups = new Map();
 	for (const { line, values } of records) {
-		/** @param {string} path @param {string} message */
-		const fail = (path, message) => errors.push({ line, path: `/${path}`, message });
+		/** @param {string} path @param {RowProblem['code']} code @param {string} message @param {Record<string, string>} [words] */
+		const fail = (path, code, message, words) =>
+			errors.push({ line, path: `/${path}`, message, code, ...(words ? { values: words } : {}) });
 		const productId = values.product_id || null;
 		const slug = values.slug || slugify(values.name ?? '');
 		const sku = values.sku ?? '';
 		const key = productId ?? (slug || (sku ? `sku:${sku}` : ''));
 		if (!key) {
-			fail('name', 'Give the product a name, slug or SKU.');
+			fail('name', 'no_name', 'Give the product a name, slug or SKU.');
 			continue;
 		}
 		/** @type {VariantRow} */
@@ -370,12 +420,12 @@ export const importGroups = ({ header, records }, { currency, locationIds }) => 
 			const name = values[`option${i}_name`] ?? '';
 			const value = values[`option${i}_value`] ?? '';
 			if (name && value) options[name] = value;
-			else if (name || value) fail(`option${i}_value`, 'Give both the option name and its value.');
+			else if (name || value) fail(`option${i}_value`, 'option_pair', 'Give both the option name and its value.');
 		}
 		if (optionColumns) variant.options = options;
 		if (values.price) {
 			const price = amountOf(values.price, currency);
-			if (price === null) fail('price', `This is not a price in ${currency}.`);
+			if (price === null) fail('price', 'not_price', `This is not a price in ${currency}.`, { currency });
 			else variant.price = price;
 		}
 		for (const [column, name] of /** @type {const} */ ([
@@ -385,11 +435,11 @@ export const importGroups = ({ header, records }, { currency, locationIds }) => 
 			if (!has(column)) continue;
 			const text = values[column] ?? '';
 			const amount = text ? amountOf(text, currency) : null;
-			if (text && amount === null) fail(column, `This is not a price in ${currency}.`);
+			if (text && amount === null) fail(column, 'not_price', `This is not a price in ${currency}.`, { currency });
 			else variant[name] = amount;
 		}
 		if (values.stock) {
-			if (!/^\d{1,10}$/.test(values.stock)) fail('stock', 'Stock is a whole number from 0.');
+			if (!/^\d{1,10}$/.test(values.stock)) fail('stock', 'not_stock', 'Stock is a whole number from 0.');
 			else variant.stock = Number(values.stock);
 		}
 		if (locationColumns.length > 0) {
@@ -398,7 +448,7 @@ export const importGroups = ({ header, records }, { currency, locationIds }) => 
 			for (const column of locationColumns) {
 				const text = values[column] ?? '';
 				if (!text) continue;
-				if (!/^\d{1,10}$/.test(text)) fail(column, 'Stock is a whole number from 0.');
+				if (!/^\d{1,10}$/.test(text)) fail(column, 'not_stock', 'Stock is a whole number from 0.');
 				else locations[column.slice(LOCATION_COLUMN.length)] = Number(text);
 			}
 			if (Object.keys(locations).length > 0) variant.locations = locations;
@@ -406,7 +456,7 @@ export const importGroups = ({ header, records }, { currency, locationIds }) => 
 		if (has('grade')) variant.grade = values.grade || null;
 		if (values.active) {
 			const active = flag(values.active);
-			if (active === null) fail('active', 'Active is true or false.');
+			if (active === null) fail('active', 'not_true_false', 'Active is true or false.');
 			else variant.active = active;
 		}
 
@@ -430,7 +480,7 @@ export const importGroups = ({ header, records }, { currency, locationIds }) => 
 				};
 			if (values.track_stock) {
 				const track = flag(values.track_stock);
-				if (track === null) fail('track_stock', 'Track stock is true or false.');
+				if (track === null) fail('track_stock', 'not_true_false', 'Track stock is true or false.');
 				else fields.trackStock = track;
 			}
 			group = {
@@ -477,29 +527,41 @@ const names = (row, variant) => {
  * @param {{ categoryIds: ReadonlyMap<string, string>, brandIds: ReadonlyMap<string, string> }} lookups slug, id or
  *   lowercase name → id
  * @returns {{ ok: true, input: Record<string, any>, stock: Map<string, { stock?: number, locations?: Record<string, number> }> }
- *   | { ok: false, errors: Array<FieldError & { line: number }> }}
+ *   | { ok: false, errors: RowProblem[] }}
  */
 export const importInput = (group, existing, lookups) => {
-	/** @type {Array<FieldError & { line: number }>} */
+	/** @type {RowProblem[]} */
 	const errors = [];
 	/** @type {Record<string, any>} */
 	const input = { ...group.fields };
 	if (!existing && input.name === undefined)
-		errors.push({ line: group.line, path: '/name', message: 'A new product needs a name.' });
+		errors.push({ line: group.line, path: '/name', message: 'A new product needs a name.', code: 'new_product_name' });
 	if (group.categories !== undefined) {
 		input.categoryIds = group.categories.map(
 			(ref) => lookups.categoryIds.get(ref) ?? lookups.categoryIds.get(ref.toLowerCase()),
 		);
 		group.categories.forEach((ref, index) => {
 			if (!input.categoryIds[index])
-				errors.push({ line: group.line, path: '/categories', message: `There is no category ${ref}.` });
+				errors.push({
+					line: group.line,
+					path: '/categories',
+					message: `There is no category ${ref}.`,
+					code: 'unknown_category',
+					values: { category: ref },
+				});
 		});
 	}
 	if (group.brand !== undefined) {
 		input.brandId =
 			group.brand === null ? null : (lookups.brandIds.get(group.brand) ?? lookups.brandIds.get(group.brand.toLowerCase()));
 		if (input.brandId === undefined)
-			errors.push({ line: group.line, path: '/brand', message: `There is no brand ${group.brand}.` });
+			errors.push({
+				line: group.line,
+				path: '/brand',
+				message: `There is no brand ${group.brand}.`,
+				code: 'unknown_brand',
+				values: { brand: String(group.brand) },
+			});
 	}
 	/** @type {Map<string, { stock?: number, locations?: Record<string, number> }>} */
 	const stock = new Map();
@@ -508,7 +570,7 @@ export const importInput = (group, existing, lookups) => {
 	for (const { line, variant: row } of group.rows) {
 		const found = existing?.variants.find((variant) => names(row, variant));
 		if (row.id && !found) {
-			errors.push({ line, path: '/variant_id', message: 'This variant is not part of the product.' });
+			errors.push({ line, path: '/variant_id', message: 'This variant is not part of the product.', code: 'not_its_variant' });
 			continue;
 		}
 		const { stock: units, locations, ...rest } = row;
@@ -518,7 +580,8 @@ export const importInput = (group, existing, lookups) => {
 			if (units !== undefined || locations !== undefined)
 				stock.set(found.id, { ...(units === undefined ? {} : { stock: units }), ...(locations ? { locations } : {}) });
 		} else {
-			if (rest.price === undefined) errors.push({ line, path: '/price', message: 'A new variant needs a price.' });
+			if (rest.price === undefined)
+				errors.push({ line, path: '/price', message: 'A new variant needs a price.', code: 'new_variant_price' });
 			variants.push({ ...rest, ...(units === undefined ? {} : { stock: units }), ...(locations ? { locations } : {}) });
 		}
 	}
@@ -570,7 +633,7 @@ export const importInput = (group, existing, lookups) => {
  * @param {{ header: string[], records: Array<{ line: number, values: Record<string, string> }> }} file
  * @param {{ currency: string, locationIds: ReadonlySet<string> }} context `locationIds`: empty without multi-location
  *   stock
- * @returns {{ ok: false, message: string } | { ok: true, rows: UpdateRow[], failed: Array<FieldError & { line: number }> }}
+ * @returns {{ ok: false, message: string } | { ok: true, rows: UpdateRow[], failed: RowProblem[] }}
  */
 export const updateRows = ({ header, records }, { currency, locationIds }) => {
 	const has = (/** @type {string} */ column) => header.includes(column);
@@ -581,39 +644,39 @@ export const updateRows = ({ header, records }, { currency, locationIds }) => {
 	if (unknown) return { ok: false, message: `There is no location ${unknown.slice(LOCATION_COLUMN.length)}.` };
 	/** @type {UpdateRow[]} */
 	const rows = [];
-	/** @type {Array<FieldError & { line: number }>} */
+	/** @type {RowProblem[]} */
 	const failed = [];
 	for (const { line, values } of records) {
 		let bad = false;
-		/** @param {string} path @param {string} message */
-		const fail = (path, message) => {
+		/** @param {string} path @param {RowProblem['code']} code @param {string} message @param {Record<string, string>} [words] */
+		const fail = (path, code, message, words) => {
 			bad = true;
-			failed.push({ line, path: `/${path}`, message });
+			failed.push({ line, path: `/${path}`, message, code, ...(words ? { values: words } : {}) });
 		};
 		const variantId = values.variant_id || null;
 		const sku = values.sku || null;
 		if (!variantId && !sku) {
-			fail('variant_id', 'Name the variant (variant_id or sku).');
+			fail('variant_id', 'no_variant', 'Name the variant (variant_id or sku).');
 			continue;
 		}
 		const updatedAt = /^\d{4}-\d{2}-\d{2}T[\d:.]+(Z|[+-]\d{2}:\d{2})$/.test(values.updated_at ?? '')
 			? Date.parse(values.updated_at ?? '')
 			: Number.NaN;
 		if (Number.isNaN(updatedAt)) {
-			fail('updated_at', 'Give the updated_at of a products export.');
+			fail('updated_at', 'no_updated_at', 'Give the updated_at of a products export.');
 			continue;
 		}
 		/** @type {UpdateRow} */
 		const row = { line, productId: values.product_id || null, variantId, sku, updatedAt };
 		if (values.price) {
 			const price = amountOf(values.price, currency);
-			if (price === null) fail('price', `This is not a price in ${currency}.`);
+			if (price === null) fail('price', 'not_price', `This is not a price in ${currency}.`, { currency });
 			else row.price = price;
 		}
 		if (values.stock) {
-			if (locationIds.size > 0) fail('stock', 'Give the stock per location (stock@ columns).');
+			if (locationIds.size > 0) fail('stock', 'stock_per_location', 'Give the stock per location (stock@ columns).');
 			else if (!/^\d{1,10}$/.test(values.stock) || Number(values.stock) > LIMITS.stock)
-				fail('stock', 'Stock is a whole number from 0.');
+				fail('stock', 'not_stock', 'Stock is a whole number from 0.');
 			else row.stock = Number(values.stock);
 		}
 		/** @type {Record<string, number>} */
@@ -621,13 +684,14 @@ export const updateRows = ({ header, records }, { currency, locationIds }) => {
 		for (const column of locationColumns) {
 			const text = values[column] ?? '';
 			if (!text) continue;
-			if (!/^\d{1,10}$/.test(text) || Number(text) > LIMITS.stock) fail(column, 'Stock is a whole number from 0.');
+			if (!/^\d{1,10}$/.test(text) || Number(text) > LIMITS.stock)
+				fail(column, 'not_stock', 'Stock is a whole number from 0.');
 			else locations[column.slice(LOCATION_COLUMN.length)] = Number(text);
 		}
 		if (Object.keys(locations).length > 0) row.locations = locations;
 		if (values.sold_out) {
 			const soldOut = flag(values.sold_out);
-			if (soldOut === null) fail('sold_out', 'Sold out is true or false.');
+			if (soldOut === null) fail('sold_out', 'not_true_false', 'Sold out is true or false.');
 			else row.soldOut = soldOut;
 		}
 		if (!bad) rows.push(row);
@@ -640,17 +704,22 @@ export const updateRows = ({ header, records }, { currency, locationIds }) => {
  * `locations` and `soldOut` of variants change.
  * @param {ProductRecord} product
  * @param {UpdateRow[]} rows
- * @returns {{ variants: VariantRecord[], changed: number, failed: Array<FieldError & { line: number }> }}
+ * @returns {{ variants: VariantRecord[], changed: number, failed: RowProblem[] }}
  */
 export const updatedVariants = (product, rows) => {
 	const variants = product.variants.map((variant) => ({ ...variant, locations: { ...variant.locations } }));
-	/** @type {Array<FieldError & { line: number }>} */
+	/** @type {RowProblem[]} */
 	const failed = [];
 	let changed = 0;
 	for (const row of rows) {
 		const variant = variants.find((v) => (row.variantId ? v.id === row.variantId : v.sku === row.sku));
 		if (!variant) {
-			failed.push({ line: row.line, path: row.variantId ? '/variant_id' : '/sku', message: 'There is no such variant.' });
+			failed.push({
+				line: row.line,
+				path: row.variantId ? '/variant_id' : '/sku',
+				message: 'There is no such variant.',
+				code: 'unknown_variant',
+			});
 			continue;
 		}
 		const before = JSON.stringify([variant.price, variant.stock, variant.locations, variant.soldOut === true]);

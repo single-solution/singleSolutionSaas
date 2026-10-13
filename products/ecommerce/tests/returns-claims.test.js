@@ -358,7 +358,13 @@ describe('restock per line', () => {
 		]);
 		expect(received.json.restockedAt).not.toBeNull();
 		expect(received.json.actions).not.toContain('restock');
-		expect(received.json.history.map((/** @type {any} */ h) => h.note).at(-1)).toBe('restocked');
+		expect(received.json.history.at(-1)).toMatchObject({ note: 'restocked', code: 'restocked' });
+		// the shopper never sees the shop's own note as a reply
+		const mine = await shop.visitor('GET', '/v1/shop/returns', { signIn: sara });
+		expect(mine.json.items.find((/** @type {any} */ c) => c.id === id).history.at(-1)).toMatchObject({
+			status: 'received',
+			note: '',
+		});
 		expect(await stockOf(phone.id)).toBe(phoneStock + 1);
 		expect(await stockOf(cover.id)).toBe(coverStock);
 		const serial = /** @type {any} */ (
@@ -516,6 +522,13 @@ describe('claim refunds', () => {
 		expect(stored.refunds.map((/** @type {any} */ r) => [r.method, r.amount, r.refundId])).toEqual([
 			['online', 3000, expect.stringMatching(/^rfd_/)],
 			['cash', 2000, null],
+		]);
+		// refunded without a note: the claim's reference, in the order's history too (PLAN 0.4.10)
+		const reference = made.json.reference;
+		expect(stored.refunds.map((/** @type {any} */ r) => r.note)).toEqual([`Claim ${reference}`, `Claim ${reference}`]);
+		expect(stored.history.slice(-2).map((/** @type {any} */ e) => [e.code, e.values])).toEqual([
+			['claim_refunded', { amount: 3000, reference }],
+			['claim_refunded_recorded', { amount: 2000, reference }],
 		]);
 		expect(stored.payment).toMatchObject({ refunded: 5000, state: 'refunded' });
 

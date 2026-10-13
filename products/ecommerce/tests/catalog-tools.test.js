@@ -115,6 +115,17 @@ describe('CSV', () => {
 		expect(problems).toEqual(
 			expect.arrayContaining(['2/categories', '2/brand', '3/name', '4/price', `4/stock@${ids.shopFloor.id}`, '4/active']),
 		);
+		// each problem's code and values, for the widget's words (PLAN 0.4.10)
+		expect(dry.json.errors).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({ line: 2, code: 'unknown_category', values: { category: 'nothing' } }),
+				expect.objectContaining({ line: 2, code: 'unknown_brand', values: { brand: 'Nobody' } }),
+				expect.objectContaining({ line: 3, code: 'no_name' }),
+				expect.objectContaining({ line: 4, path: '/price', code: 'not_price', values: { currency: 'USD' } }),
+				expect.objectContaining({ line: 4, code: 'not_stock' }),
+				expect.objectContaining({ line: 4, code: 'not_true_false' }),
+			]),
+		);
 		const refused = await shop.admin(staff, 'POST', '/v1/admin/csv/products', { csv: bad, dryRun: false });
 		expect(refused.status).toBe(422);
 		expect(refused.json.errors[0].path).toMatch(/^\/csv\/2\//);
@@ -160,22 +171,31 @@ describe('CSV', () => {
 		expect((await send('\n\n')).status).toBe(422);
 		expect((await send(`name,price\n${'A,1\n'.repeat(5001)}`)).json.detail).toContain('5000');
 		const columns = await api('POST', '/v1/csv/products', { csv: 'colour\nred' });
-		expect(columns.json.errors[0]).toMatchObject({ line: 1 });
+		expect(columns.json.errors[0]).toMatchObject({ line: 1, code: 'columns' });
 		const location = await api('POST', '/v1/csv/products', { csv: 'name,price,stock@loc_none\nA,1,1' });
-		expect(location.json.errors[0].path).toBe('/stock@loc_none');
+		expect(location.json.errors[0]).toMatchObject({ path: '/stock@loc_none', code: 'unknown_location' });
 		const plain = await api('POST', '/v1/csv/products', { csv: 'name,price,stock\nA,1,1' });
 		expect(plain.json.errors[0].message).toContain('per location');
 		const existing = await api('POST', '/v1/csv/products', { csv: 'sku,stock\nPH-1,3' });
+		expect(existing.json.errors[0]).toMatchObject({ code: 'stock_per_location' });
 		expect(existing.json.errors[0].message).toContain('per location');
 		const clash = await api('POST', '/v1/csv/products', {
 			csv: `product_id,sku,price\nprd_none,X,1\n${ids.phone.id},TB-1,1\n,,1`,
 		});
-		expect(clash.json.errors.map((/** @type {any} */ e) => e.path)).toEqual(['/product_id', '/sku', '/variants', '/name']);
+		expect(clash.json.errors.map((/** @type {any} */ e) => [e.path, e.code])).toEqual([
+			['/product_id', 'unknown_product'],
+			['/sku', 'sku_taken'],
+			['/variants', 'invalid'],
+			['/name', 'no_name'],
+		]);
 		const twice = await api('POST', '/v1/csv/products', {
 			csv: 'name,slug,sku,price\nA,a-one,Q1,1\nB,b-one,Q1,1\nC,tablet,Q2,1',
 		});
 		expect(twice.json.errors.map((/** @type {any} */ e) => e.message)).toEqual(
 			expect.arrayContaining(['The SKU Q1 is in two products of the file.']),
+		);
+		expect(twice.json.errors).toEqual(
+			expect.arrayContaining([expect.objectContaining({ code: 'sku_twice', values: { sku: 'Q1' } })]),
 		);
 		await shop.setting('csv', 'delimiter', ';');
 		const semi = await ok('POST', '/v1/csv/products', { csv: 'name;price\nSemi;1,5' });

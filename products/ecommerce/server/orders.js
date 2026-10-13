@@ -27,6 +27,7 @@ import {
 	orderFilters,
 	orderQuery,
 	orderSummary,
+	warningsOf,
 } from '../core/orders.js';
 import { WAITING_ROLES, statusOf } from '../core/flow.js';
 import { COLLECTIONS } from '../core/model.js';
@@ -203,7 +204,7 @@ export const createOrders = (product, service, { ordering }) => {
 		const s = await service.site(ctx);
 		const order = await orderOf(s, ctx);
 		const moved = await moves.move(s, ctx, order, input.value, await flowOf(s));
-		return { ...(await detailOf(s, moved.order)), warnings: moved.warnings };
+		return { ...(await detailOf(s, moved.order)), ...warningsOf(moved.warnings) };
 	};
 
 	/** @param {any} ctx */
@@ -213,7 +214,7 @@ export const createOrders = (product, service, { ordering }) => {
 		const input = checkRefund(ctx.body, order);
 		if (!input.ok) throw service.invalid(input.field, input.message);
 		const done = await moves.refund(s, ctx, order, input.value);
-		return created({ order: await detailOf(s, done.order), refund: done.refund, warnings: done.warnings });
+		return created({ order: await detailOf(s, done.order), refund: done.refund, ...warningsOf(done.warnings) });
 	};
 
 	/** POST /v1/orders/:id/seen: the acting staff member opened the order (E31; the latest 50 are kept). @param {any} ctx */
@@ -350,7 +351,7 @@ export const createOrders = (product, service, { ordering }) => {
 		const input = checkPayment(ctx.body, order);
 		if (!input.ok) throw service.invalid(input.field, input.message);
 		const done = await moves.recordPayment(s, ctx, order, input.value, await flowOf(s));
-		return created({ order: await detailOf(s, done.order), warnings: done.warnings });
+		return created({ order: await detailOf(s, done.order), ...warningsOf(done.warnings) });
 	};
 
 	/** @param {any} ctx */
@@ -461,7 +462,7 @@ export const createOrders = (product, service, { ordering }) => {
 		const s = await service.site(ctx);
 		const flow = await flowOf(s);
 		const found = new Map((await (await storeOf(s)).orders.many(input.value.ids)).map((order) => [order.id, order]));
-		/** @type {Array<{ id: string, ok: true, number: string, status: string, warnings: string[] } | { id: string, ok: false, code: string, detail: string }>} */
+		/** @type {Array<{ id: string, ok: true, number: string, status: string } & ReturnType<typeof warningsOf> | { id: string, ok: false, code: string, detail: string }>} */
 		const results = [];
 		for (const id of input.value.ids) {
 			const order = found.get(id);
@@ -485,7 +486,7 @@ export const createOrders = (product, service, { ordering }) => {
 					},
 					flow,
 				);
-				results.push({ id, ok: true, number: order.number, status: moved.order.status, warnings: moved.warnings });
+				results.push({ id, ok: true, number: order.number, status: moved.order.status, ...warningsOf(moved.warnings) });
 			} catch (error) {
 				const failed = /** @type {any} */ (error);
 				if (typeof failed?.code !== 'string' || !('headers' in failed)) throw error;

@@ -126,7 +126,7 @@ describe('the shop events (GET /v1/events)', () => {
 });
 
 describe('a guest’s order for staff', () => {
-	it('shows everything but the order key’s hash and the checkout’s Idempotency-Key, and its guest customer', async () => {
+	it('shows everything but the order key’s hash, the checkout’s Idempotency-Key and the search’s phone digits, and its guest customer', async () => {
 		await shop.setting('checkout', 'guests', 'on');
 		await shop.setting('checkout', 'defaultCallingCode', '+1');
 		const { order } = await placeOrder({ guest: true });
@@ -135,6 +135,7 @@ describe('a guest’s order for staff', () => {
 		expect(read.status).toBe(200);
 		expect(read.json).not.toHaveProperty('accessKeyHash');
 		expect(read.json).not.toHaveProperty('idempotencyKey');
+		expect(read.json).not.toHaveProperty('phoneDigits');
 		expect(read.json.customer).toMatchObject({ userId: '', name: 'Gina Guest', phone: '+15550007777' });
 		expect(read.json.customer.customerId).toMatch(/^cus_/);
 		expect(read.json).toMatchObject({
@@ -167,7 +168,7 @@ describe('a bulk move', () => {
 		expect(moved.json).toEqual({
 			moved: 1,
 			results: [
-				{ id: order.id, ok: true, number: order.number, status: 'confirmed', warnings: [] },
+				{ id: order.id, ok: true, number: order.number, status: 'confirmed', warnings: [], warningCodes: [] },
 				{ id: missing, ok: false, code: 'not_found', detail: 'There is no such order.' },
 			],
 		});

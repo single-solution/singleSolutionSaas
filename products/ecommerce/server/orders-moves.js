@@ -16,8 +16,9 @@
  *   are taken back.
  *
  * Every move is written to the order's history with the name of the staff member who made it (a ticket's user, or the
- * one a server-token call names in its `SS-Actor-*` headers, else `Server`; PLAN 0.8.10 K2), the activity log (with the
- * order number and the move), the `order.moved` hook and the shopper's message.
+ * one a server-token call names in its `SS-Actor-*` headers, else `Server`; PLAN 0.8.10 K2) and its kind, the activity
+ * log (with the order number and the move), the `order.moved` hook and the shopper's message. Notes the server writes
+ * itself and the warnings staff get carry a code and values besides their English (PLAN 0.4.10).
  * @module
  */
 import { problem } from '@ss/app-kit';
@@ -30,6 +31,7 @@ import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import { createOrderPayments } from './order-payments.js';
 import {
 	CASH_METHODS,
+	byActor,
 	earnedLeft,
 	isSerialized,
 	missingSerials,
@@ -40,6 +42,7 @@ import {
 	refundable,
 	serialCheckFailure,
 	serialPlan,
+	serverNote,
 	stateAfterRefund,
 	statusLabel,
 } from '../core/orders.js';
@@ -50,6 +53,7 @@ import {
 /** @typedef {import('../core/model.js').OrderRecord} OrderRecord */
 /** @typedef {import('../core/model.js').OrderFlow} OrderFlow */
 /** @typedef {import('../core/orders.js').MoveInput} MoveInput */
+/** @typedef {import('../core/orders.js').Warning} Warning */
 /** @typedef {import('mongodb').ClientSession} Session */
 
 /** Tries of a move whose loyalty account changed meanwhile. */
@@ -319,9 +323,13 @@ export const createMoves = (product, service) => {
 	/**
 	 * What staff are told when Payments only recorded a refund: the shopper's money is not back yet (OR-8).
 	 * @param {Site} s @param {OrderRecord} order @param {number} amount
+	 * @returns {Promise<Warning>}
 	 */
-	const returnByHand = async (s, order, amount) =>
-		`Return ${(await s.format()).money(amount, order.totals.currency)} to the shopper by hand: Payments only recorded the refund.`;
+	const returnByHand = async (s, order, amount) => ({
+		code: 'refund_by_hand',
+		values: { amount },
+		text: `Return ${(await s.format()).money(amount, order.totals.currency)} to the shopper by hand: Payments only recorded the refund.`,
+	});
 
 	/**
 	 * Points of a returned or refunded order (E27): what it earned and was not taken back yet (a claim's refund may have
@@ -430,7 +438,7 @@ export const createMoves = (product, service) => {
 	 * @param {OrderRecord} order as read
 	 * @param {MoveInput} input
 	 * @param {OrderFlow} flow
-	 * @returns {Promise<{ order: OrderRecord, warnings: string[] }>}
+	 * @returns {Promise<{ order: OrderRecord, warnings: Warning[] }>}
 	 */
 	const move = async (s, ctx, order, input, flow) => {
 		if (input.updatedAt !== null && input.updatedAt !== new Date(order.updatedAt).toISOString()) throw changed();
@@ -460,13 +468,14 @@ export const createMoves = (product, service) => {
 			at: new Date(now),
 			from,
 			to: input.to,
-			by: service.actor(ctx).name,
+			...byActor(service.actor(ctx)),
 			note: input.note,
+			...(input.code ? { code: input.code } : {}),
 			...(reason ? { reason } : {}),
 		};
 		/** @type {Record<string, unknown>} */
 		const set = { status: input.to, role: target.role, holdUntil: null };
-		/** @type {string[]} */
+		/** @type {Warning[]} */
 		const warnings = [];
 		/** What the move adds to the order's lists: its history entry, and payment or refund entries (E26). @type {Record<string, unknown>} */
 		const push = { history: entry };
@@ -653,9 +662,11 @@ export const createMoves = (product, service) => {
 						);
 						if (done.manual) warnings.push(await returnByHand(s, order, online));
 					} catch (error) {
-						warnings.push(
-							`The order is cancelled but the refund failed (${/** @type {any} */ (error).detail}); refund it from the order.`,
-						);
+						warnings.push({
+							code: 'cancel_refund_failed',
+							values: { amount: online },
+							text: `The order is cancelled but the refund failed (${/** @type {any} */ (error).detail}); refund it from the order.`,
+						});
 					}
 				}
 				break;
@@ -791,8 +802,8 @@ export const createMoves = (product, service) => {
 							at: new Date(product.now()),
 							from: order.status,
 							to: order.status,
-							by: service.actor(ctx).name,
-							note: 'Serial numbers typed',
+							...byActor(service.actor(ctx)),
+							...serverNote('serials_typed', 'Serial numbers typed'),
 						},
 					},
 				},
@@ -813,23 +824,23 @@ export const createMoves = (product, service) => {
 
 	/**
 	 * Refund part of what was paid without a status change (E26): through Payments for what Payments took (or as asked),
-	 * the rest recorded as given back by `method`, with its reference and the claim it is for. With `autoRefundedStatus`,
-	 * an order whose refunds reach what was paid moves to its refunded status.
+	 * the rest recorded as given back by `method`, with its reference and the claim it is for (a claim refunded without
+	 * a note gives `Claim <reference>` as the reason). With `autoRefundedStatus`, an order whose refunds reach what was
+	 * paid moves to its refunded status.
 	 * @param {Site} s
 	 * @param {any} ctx
 	 * @param {OrderRecord} order
 	 * @param {import('../core/orders.js').RefundInput} input
 	 */
 	const refund = async (s, ctx, order, input) => {
+		const reason = input.reason || `Claim ${input.claimReference ?? ''}`;
 		const split = refundSplit(order, input.amount);
 		const online = input.method === null || input.method === 'online' ? split.online : 0;
 		const manual = input.amount - online;
 		if (input.method === 'online' && manual > 0)
 			throw service.invalid('amount', `At most ${split.online} can be refunded through Payments.`);
 		const done =
-			online > 0
-				? await refundOnline(s, ctx, order, online, input.reason, `${order.id}:refund:${order.payment.refunded}`)
-				: null;
+			online > 0 ? await refundOnline(s, ctx, order, online, reason, `${order.id}:refund:${order.payment.refunded}`) : null;
 		const refundId = done ? done.refundId : null;
 		const recorded = manual > 0 || done?.manual === true;
 		const refunded = order.payment.refunded + input.amount;
@@ -842,7 +853,7 @@ export const createMoves = (product, service) => {
 							amount: online,
 							reference: input.reference,
 							claimId: input.claimId,
-							note: input.reason,
+							note: reason,
 						}),
 					]
 				: []),
@@ -853,11 +864,12 @@ export const createMoves = (product, service) => {
 							amount: manual,
 							reference: input.reference,
 							claimId: input.claimId,
-							note: input.reason,
+							note: reason,
 						}),
 					]
 				: []),
 		];
+		const said = `Refunded ${money}${recorded ? ' (recorded)' : ''}: ${reason}`;
 		const orders = (await s.data()).collection(COLLECTIONS.orders);
 		const result = await orders.updateOne(
 			{ websiteId: s.websiteId, id: order.id, 'payment.refunded': order.payment.refunded },
@@ -869,8 +881,13 @@ export const createMoves = (product, service) => {
 						at: new Date(product.now()),
 						from: order.status,
 						to: order.status,
-						by: service.actor(ctx).name,
-						note: `Refunded ${money}${recorded ? ' (recorded)' : ''}: ${input.reason}`,
+						...byActor(service.actor(ctx)),
+						...(input.reason
+							? serverNote(recorded ? 'refunded_recorded' : 'refunded', said, { amount: input.amount, reason })
+							: serverNote(recorded ? 'claim_refunded_recorded' : 'claim_refunded', said, {
+									amount: input.amount,
+									reference: input.claimReference ?? '',
+								})),
 						kind: 'refund',
 					},
 				},
@@ -885,7 +902,7 @@ export const createMoves = (product, service) => {
 			await orders.findOne({ websiteId: s.websiteId, id: order.id }, { projection: { _id: 0 } })
 		);
 		await service.emit('order.refunded', s, { order: after, amount: input.amount, claimId: input.claimId });
-		/** @type {string[]} */
+		/** @type {Warning[]} */
 		const warnings = done?.manual ? [await returnByHand(s, order, online)] : [];
 		if ((await s.values('checkout')).autoRefundedStatus === true && after.payment.paid > 0 && refunded >= after.payment.paid) {
 			const flow = /** @type {OrderFlow} */ (/** @type {unknown} */ (await s.list('order_flow')));
@@ -895,7 +912,14 @@ export const createMoves = (product, service) => {
 					s,
 					ctx,
 					after,
-					{ to: to.key, note: 'Refunds cover the payments', serials: {}, shipment: null, updatedAt: null },
+					{
+						to: to.key,
+						note: 'Refunds cover the payments',
+						code: 'refunds_cover_payments',
+						serials: {},
+						shipment: null,
+						updatedAt: null,
+					},
 					flow,
 				);
 				after = moved.order;
@@ -951,8 +975,13 @@ export const createMoves = (product, service) => {
 						at: new Date(now),
 						from: order.status,
 						to: order.status,
-						by: service.actor(ctx).name,
-						note: `Payment of ${money} recorded${input.reference ? ` (${input.reference})` : ''}`,
+						...byActor(service.actor(ctx)),
+						...(input.reference
+							? serverNote('payment_recorded_reference', `Payment of ${money} recorded (${input.reference})`, {
+									amount: input.amount,
+									reference: input.reference,
+								})
+							: serverNote('payment_recorded', `Payment of ${money} recorded`, { amount: input.amount })),
 						kind: 'payment',
 					},
 				},
@@ -965,7 +994,7 @@ export const createMoves = (product, service) => {
 		);
 		await service.emit('order.payment_recorded', s, { order: after, entry });
 		if (state === 'paid' && order.payment.state !== 'paid') await service.emit('order.paid', s, { order: after, entry });
-		/** @type {string[]} */
+		/** @type {Warning[]} */
 		const warnings = [];
 		if (input.confirm && WAITING.includes(after.role)) {
 			const to = confirmedStatus(flow, after.status);
@@ -974,7 +1003,7 @@ export const createMoves = (product, service) => {
 				s,
 				ctx,
 				after,
-				{ to, note: 'Payment recorded', serials: {}, shipment: null, updatedAt: null },
+				{ to, note: 'Payment recorded', code: 'confirmed_on_payment', serials: {}, shipment: null, updatedAt: null },
 				flow,
 			);
 			after = moved.order;

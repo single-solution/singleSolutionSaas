@@ -34,6 +34,12 @@ export const CLAIM_STATUSES = Object.freeze(
 /** How a refund was given back: `online` through Payments, the rest recorded by staff (E33, as E26). */
 export const REFUND_METHODS = Object.freeze(/** @type {const} */ (['online', 'bank_transfer', 'cash', 'other']));
 /** @typedef {typeof REFUND_METHODS[number]} RefundMethod */
+/**
+ * History entries of a claim the server writes itself (PLAN 0.4.10): the code is kept as `code` and as the `note`
+ * (the widgets' words `ordersAdmin.historyNote.<code>`). `restocked`: items went back in stock.
+ */
+export const CLAIM_NOTES = Object.freeze(/** @type {const} */ (['restocked']));
+/** @typedef {typeof CLAIM_NOTES[number]} ClaimNote */
 
 /**
  * What the merchant's staff do to a claim, from which statuses, and the status it leads to (refund keeps refunding

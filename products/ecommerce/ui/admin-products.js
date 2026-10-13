@@ -400,7 +400,7 @@ export const productsTab = (kit, panel, lookups, links) => {
 					...(units === null || has('multi_location') ? {} : { stock: units }),
 				});
 				if (!answer.ok) return kit.reason(answer);
-				/** @type {Array<{ id: string, added?: number, error?: string }>} */
+				/** @type {Array<{ id: string, added?: number, error?: string, code?: string, path?: string }>} */
 				const results = answer.data.results;
 				const failed = results.filter((row) => row.error);
 				await reload(screen.current());
@@ -409,7 +409,11 @@ export const productsTab = (kit, panel, lookups, links) => {
 					[
 						t('catalogAdmin.generatedMany', { added: answer.data.added }),
 						...failed.map((row) =>
-							t('catalogAdmin.generateFailed', { name: names.get(row.id) ?? row.id, reason: String(row.error) }),
+							t('catalogAdmin.generateFailed', {
+								name: names.get(row.id) ?? row.id,
+								// the website's words for the field or the problem, never the server's English (PLAN 0.4.10)
+								reason: kit.refusal(row.code ?? '', row.path ? [{ path: row.path }] : undefined),
+							}),
 						),
 					].join(' '),
 					failed.length > 0,

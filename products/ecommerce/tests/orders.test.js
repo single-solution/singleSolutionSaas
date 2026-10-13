@@ -270,7 +270,8 @@ describe('moving orders', () => {
 		expect((await move(order.id, 'confirmed', { note: 5 })).status).toBe(422);
 		const viaServer = await shop.api('POST', `/v1/orders/${order.id}/move`, { to: 'cancelled' });
 		expect(viaServer.status).toBe(200);
-		expect(viaServer.json.history.at(-1).by).toBe('Server');
+		// the server token keeps its kind, so the widgets tell it from a member of the staff named Server (PLAN 0.4.10)
+		expect(viaServer.json.history.at(-1)).toMatchObject({ by: 'Server', byKind: 'server' });
 		expect(
 			(await shop.admin(await shop.ticket(['orders.read']), 'POST', `/v1/admin/orders/${order.id}/move`, { to: 'x' })).status,
 		).toBe(403);
@@ -439,6 +440,7 @@ describe('moving orders', () => {
 			expect(cancelled.status).toBe(200);
 			expect(cancelled.json.status).toBe('cancelled');
 			expect(cancelled.json.warnings[0]).toContain('refund failed');
+			expect(cancelled.json.warningCodes).toEqual([{ code: 'cancel_refund_failed', values: { amount: 200 } }]);
 			expect(cancelled.json.payment).toMatchObject({ state: 'unpaid', refunded: 0, paid: 200, refundable: 200 });
 		} finally {
 			if (keep) shop.responders.set(PAYMENTS, keep);
@@ -509,7 +511,12 @@ describe('refunds without a status change', () => {
 		expect(first.json.refund).toMatchObject({ amount: 300, online: 300, manual: 0, recorded: false });
 		expect(first.json.refund.refundId).toMatch(/^rfd_/);
 		expect(first.json.order.payment).toMatchObject({ state: 'partially_refunded', refunded: 300, refundable: 700 });
-		expect(first.json.order.history.at(-1).note).toBe('Refunded USD 3.00: Scratched');
+		expect(first.json.order.history.at(-1)).toMatchObject({
+			note: 'Refunded USD 3.00: Scratched',
+			code: 'refunded',
+			values: { amount: 300, reason: 'Scratched' },
+			byKind: 'staff',
+		});
 		expect(first.json.order.status).toBe('confirmed');
 		const rest = await shop.api('POST', `/v1/orders/${order.id}/refunds`, { amount: 700, reason: 'Gave up' });
 		expect(rest.json.order.payment).toMatchObject({ state: 'refunded', refunded: 1000 });
@@ -527,7 +534,11 @@ describe('refunds without a status change', () => {
 		const cash = await shop.admin(ticket, 'POST', `/v1/admin/orders/${order.id}/refunds`, { amount: 400, reason: 'Discount' });
 		expect(cash.status).toBe(201);
 		expect(cash.json.refund).toMatchObject({ online: 0, manual: 400, recorded: true, refundId: null });
-		expect(cash.json.order.history.at(-1).note).toBe('Refunded USD 4.00 (recorded): Discount');
+		expect(cash.json.order.history.at(-1)).toMatchObject({
+			note: 'Refunded USD 4.00 (recorded): Discount',
+			code: 'refunded_recorded',
+			values: { amount: 400, reason: 'Discount' },
+		});
 		expect(shop.callsTo(PAYMENTS).length).toBe(before);
 	});
 });
@@ -568,8 +579,8 @@ describe('bulk moves', () => {
 		expect(answer.status).toBe(200);
 		expect(answer.json.moved).toBe(2);
 		expect(answer.json.results).toEqual([
-			{ id: a.order.id, ok: true, number: a.order.number, status: 'confirmed', warnings: [] },
-			{ id: b.order.id, ok: true, number: b.order.number, status: 'confirmed', warnings: [] },
+			{ id: a.order.id, ok: true, number: a.order.number, status: 'confirmed', warnings: [], warningCodes: [] },
+			{ id: b.order.id, ok: true, number: b.order.number, status: 'confirmed', warnings: [], warningCodes: [] },
 			expect.objectContaining({ id: c.order.id, ok: false, code: 'move_not_allowed' }),
 			{ id: 'ord_missing', ok: false, code: 'not_found', detail: 'There is no such order.' },
 		]);

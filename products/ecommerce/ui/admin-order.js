@@ -6,7 +6,8 @@
  * figures in a grid, the lines with their warranty and serial numbers (E12), and cards: customer (blocked, returned
  * parcels), delivery address, shipment, notes, the order's return claims and history (the website's words for who and
  * what the server wrote itself, PLAN 0.4.10). Forms open in dialogs (the packing step asks one serial number per unit;
- * shipping asks a courier and tracking number, or books the courier API).
+ * shipping asks a courier and tracking number, or books the courier API); the warnings a move or a refund answers show
+ * in the website's words too.
  * @module
  */
 import { EDITABLE_ROLES } from '../core/orders.js';
@@ -18,6 +19,7 @@ import { serialForm, serialLines, shipForm, typedSerials, warrantyOf } from './a
 /** @typedef {import('./admin-kit.js').Tone} Tone */
 /** @typedef {import('./admin-lists.js').Detail} Detail */
 /** @typedef {import('./admin-order-forms.js').SerialValues} SerialValues */
+/** A code the server wrote, with the values its words take. @typedef {{ code: string, values?: Record<string, string | number> }} Coded */
 
 /** Address fields staff may change before shipping. */
 const ADDRESS_FIELDS = Object.freeze(['name', 'phone', 'line1', 'line2', 'city', 'area', 'postalCode', 'country', 'notes']);
@@ -50,22 +52,57 @@ export const CLAIM_TONES = Object.freeze({
 
 /** Who made a history entry when it was not a member of the staff (`ordersAdmin.by.<by>`; staff are named). */
 export const HISTORY_ACTORS = Object.freeze(['system', 'shopper', 'guest']);
+/** The kind of actor the server token is when a call names no member of the staff (`ordersAdmin.by.server`). */
+export const SERVER_KIND = 'server';
 
 /**
- * Who made a history entry (of an order or a claim): the website's words for the shop itself, a shopper and a guest,
- * else the staff member's name.
- * @param {Kit} kit @param {{ by?: string }} entry
+ * Who made a history entry (of an order or a claim): the website's words for the server token, the shop itself, a
+ * shopper and a guest, else the staff member's name. Entries keep the kind of actor (`byKind`), so a member of the
+ * staff named like one of these keeps their name; older entries have only the name.
+ * @param {Kit} kit @param {{ by?: string, byKind?: string }} entry
  */
-export const historyBy = (kit, entry) =>
-	HISTORY_ACTORS.includes(String(entry.by)) ? kit.t(`ordersAdmin.by.${entry.by}`) : (entry.by ?? '');
+export const historyBy = (kit, entry) => {
+	if (entry.byKind === SERVER_KIND) return kit.t(`ordersAdmin.by.${SERVER_KIND}`);
+	if (entry.byKind) return entry.by ?? '';
+	return HISTORY_ACTORS.includes(String(entry.by)) ? kit.t(`ordersAdmin.by.${entry.by}`) : (entry.by ?? '');
+};
 
 /**
- * The note of an order's history entry: the website's words for the entries whose note the server writes itself (a
- * shopper's cancel, an order that ended unpaid or unconfirmed, an edit; `ordersAdmin.historyNote.<reason or kind>`),
- * else the note as staff typed it.
- * @param {Kit} kit @param {{ note?: string, reason?: string, kind?: string }} entry
+ * The website's words for what the server wrote as a code (PLAN 0.4.10): the text `<prefix><code>` filled with its
+ * values, an `amount` (minor units) as money of the order's currency by the website's Format.
+ * @param {Kit} kit @param {string} prefix @param {Coded} coded @param {(minor: number) => string} money
  */
-const historyNote = (kit, entry) => {
+export const codedText = (kit, prefix, { code, values = {} }, money) =>
+	kit.t(
+		`${prefix}${code}`,
+		Object.fromEntries(
+			Object.entries(values).map(([name, value]) => [
+				name,
+				name === 'amount' && typeof value === 'number' ? money(value) : value,
+			]),
+		),
+	);
+
+/**
+ * The warnings of an answer (a move, a refund) in the website's words (`ordersAdmin.warning.<code>`); from a server
+ * without their codes, as it wrote them.
+ * @param {Kit} kit @param {{ warnings?: string[], warningCodes?: Coded[] }} data @param {(minor: number) => string} money
+ * @returns {string[]}
+ */
+export const warningsText = (kit, data, money) =>
+	Array.isArray(data.warningCodes)
+		? data.warningCodes.map((warning) => codedText(kit, 'ordersAdmin.warning.', warning, money))
+		: (data.warnings ?? []);
+
+/**
+ * The note of an order's history entry: the website's words for the entries whose note the server writes itself
+ * (`ordersAdmin.historyNote.<code>` with its values; older entries by their reason or kind: a shopper's cancel, an order
+ * that ended unpaid or unconfirmed, an edit), else the note as staff typed it.
+ * @param {Kit} kit @param {{ note?: string, reason?: string, kind?: string } & Partial<Coded>} entry
+ * @param {(minor: number) => string} money
+ */
+const historyNote = (kit, entry, money) => {
+	if (entry.code) return codedText(kit, 'ordersAdmin.historyNote.', { code: entry.code, values: entry.values }, money);
 	const own = entry.kind === 'edited' ? 'edited' : entry.reason === 'shopper' || entry.reason === 'expired' ? entry.reason : '';
 	return own ? kit.t(`ordersAdmin.historyNote.${own}`) : (entry.note ?? '');
 };
@@ -275,7 +312,7 @@ const renderOrder = (kit, order, detail, message) => {
 							kit.when(entry.at),
 							entry.fromLabel ? `${entry.fromLabel} → ${entry.toLabel}` : entry.toLabel,
 							historyBy(kit, entry),
-							historyNote(kit, entry),
+							historyNote(kit, entry, money),
 						]
 							.filter(Boolean)
 							.join(' · '),
@@ -366,9 +403,12 @@ const moveDialog = (kit, order, status, done) => {
 				updatedAt: order.updatedAt,
 			});
 			if (!answer.ok) return kit.reason(answer);
-			/** @type {string[]} */
-			const warnings = answer.data.warnings ?? [];
-			done(answer.data, [t('ordersAdmin.moved', { status: answer.data.statusLabel }), ...warnings].join(' '));
+			/** @param {number} minor */
+			const money = (minor) => kit.money(minor, order.totals.currency);
+			done(
+				answer.data,
+				[t('ordersAdmin.moved', { status: answer.data.statusLabel }), ...warningsText(kit, answer.data, money)].join(' '),
+			);
 			return null;
 		},
 	});
@@ -425,7 +465,12 @@ const refundDialog = (kit, order, done) => {
 				reason: reason.value.trim(),
 			});
 			if (!answer.ok) return kit.reason(answer);
-			done(answer.data.order, t('ordersAdmin.refundDone', { amount: kit.money(minor, order.totals.currency) }));
+			/** @param {number} value */
+			const money = (value) => kit.money(value, order.totals.currency);
+			done(
+				answer.data.order,
+				[t('ordersAdmin.refundDone', { amount: money(minor) }), ...warningsText(kit, answer.data, money)].join(' '),
+			);
 			return null;
 		},
 	});

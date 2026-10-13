@@ -106,6 +106,12 @@ describe('the payments log (E26)', () => {
 			['bank_transfer', 400, 'TRX-1'],
 			['cash', 600, ''],
 		]);
+		// the server's own notes, with their codes and values for the widgets' words (PLAN 0.4.10)
+		expect(record.history.slice(-3).map((/** @type {any} */ e) => [e.code, e.values])).toEqual([
+			['payment_recorded_reference', { amount: 400, reference: 'TRX-1' }],
+			['payment_recorded', { amount: 600 }],
+			['confirmed_on_payment', undefined],
+		]);
 		const mine = await shop.call('GET', `/v1/shop/orders/${order.id}`, {
 			token: shop.browser,
 			origin: ORIGIN,
@@ -129,6 +135,10 @@ describe('the payments log (E26)', () => {
 		expect(part.json.order.status).toBe('confirmed');
 		const rest = await refund(order.id, { amount: 700, reason: 'Gone', method: 'bank_transfer', claimId: 'ret_abc' });
 		expect(rest.json.order).toMatchObject({ status: 'refunded', payment: { state: 'refunded', refunded: 1000 } });
+		expect(rest.json.order.history.at(-1)).toMatchObject({
+			note: 'Refunds cover the payments',
+			code: 'refunds_cover_payments',
+		});
 		const record = await orderRecord(order.id);
 		expect(record.refunds.map((/** @type {any} */ e) => [e.method, e.amount, e.reference, e.claimId])).toEqual([
 			['cash', 300, 'R-1', null],
@@ -199,6 +209,7 @@ describe('the payments log (E26)', () => {
 		expect(cancelled.json.warnings).toEqual([
 			`Return USD ${(order.totals.total / 100).toFixed(2)} to the shopper by hand: Payments only recorded the refund.`,
 		]);
+		expect(cancelled.json.warningCodes).toEqual([{ code: 'refund_by_hand', values: { amount: order.totals.total } }]);
 		const record = await orderRecord(order.id);
 		expect(record.refunds).toEqual([
 			expect.objectContaining({ method: 'bank_transfer', manual: true, refundId: `rfd_${paymentId}_1` }),

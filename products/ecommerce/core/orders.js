@@ -39,6 +39,82 @@ const MAX_SERIAL = 64;
 export const TRACK_EVERY_MS = 30 * 60_000;
 
 /**
+ * History entries the server writes itself (PLAN 0.4.10: every word a widget shows is a text the merchant can edit):
+ * each keeps its English `note` and gets its `code` (the widgets' words, `ordersAdmin.historyNote.<code>`) with its
+ * `values`. `shopper`: the shopper cancelled; `not_paid_in_time` and `not_confirmed_in_time`: a waiting order ended;
+ * `payment_confirmed`: Payments confirmed the payment (a move); `payments_took` and `paid_after_cancel` (`amount`):
+ * Payments took money outside that, after the cancel for the second; `proof_sent`: the shopper sent a transfer proof;
+ * `edited`; `serials_typed`; `refunded` and `refunded_recorded` (`amount`, `reason`), `claim_refunded` and
+ * `claim_refunded_recorded` (`amount`, the claim's `reference`; a claim refunded without a note): a refund, partly
+ * recorded for the `_recorded` ones; `refunds_cover_payments`: the move to the refunded status that follows;
+ * `payment_recorded` (`amount`) and `payment_recorded_reference` (`amount`, `reference`): staff recorded a payment;
+ * `confirmed_on_payment`: the move to the confirmed status that follows.
+ */
+export const HISTORY_NOTES = Object.freeze(
+	/** @type {const} */ ([
+		'shopper',
+		'not_paid_in_time',
+		'not_confirmed_in_time',
+		'payment_confirmed',
+		'payments_took',
+		'paid_after_cancel',
+		'proof_sent',
+		'edited',
+		'serials_typed',
+		'refunded',
+		'refunded_recorded',
+		'claim_refunded',
+		'claim_refunded_recorded',
+		'refunds_cover_payments',
+		'payment_recorded',
+		'payment_recorded_reference',
+		'confirmed_on_payment',
+	]),
+);
+/** @typedef {typeof HISTORY_NOTES[number]} HistoryNote */
+
+/**
+ * What staff are warned of after a move, a refund or a recorded payment (the widgets' words `ordersAdmin.warning.<code>`):
+ * `refund_by_hand` (`amount`): Payments only recorded a refund, so the shop gives the money back by hand (OR-8);
+ * `cancel_refund_failed` (`amount`): the order was cancelled but its refund through Payments failed.
+ */
+export const MOVE_WARNINGS = Object.freeze(/** @type {const} */ (['refund_by_hand', 'cancel_refund_failed']));
+
+/**
+ * The values of a code the server writes: `amount` in minor units of the order's currency, the text of a `reason` and a
+ * `reference`.
+ * @typedef {{ amount?: number, reason?: string, reference?: string }} NoteValues
+ */
+/**
+ * A warning for staff: its English `text`, and its `code` and `values` for the widgets' words.
+ * @typedef {{ code: typeof MOVE_WARNINGS[number], values: NoteValues, text: string }} Warning
+ */
+
+/**
+ * The note of a history entry the server writes itself: its English words, its code and its values.
+ * @param {HistoryNote} code @param {string} note @param {NoteValues} [values]
+ */
+export const serverNote = (code, note, values) => ({ note, code, ...(values ? { values } : {}) });
+
+/**
+ * Who made a history entry, as the entry keeps it: the actor's name and kind (`staff`: a ticket's user; `user`: the
+ * member of the staff a server call names in its `SS-Actor-*` headers; `server`: the server token, named `Server`), so
+ * the widgets tell the server from a member of the staff of the same name.
+ * @param {{ kind: string, name?: string }} actor
+ */
+export const byActor = (actor) => ({ by: actor.name ?? '', byKind: actor.kind });
+
+/**
+ * The warnings of an answer: their English texts (`warnings`) and, in the same order, their codes and values
+ * (`warningCodes`).
+ * @param {Warning[]} list
+ */
+export const warningsOf = (list) => ({
+	warnings: list.map((warning) => warning.text),
+	warningCodes: list.map(({ code, values }) => ({ code, values })),
+});
+
+/**
  * A problem found in what staff sent: the field (JSON pointer without the leading slash) and a message.
  * @typedef {{ ok: false, field: string, message: string }} Refusal
  */
@@ -322,8 +398,9 @@ export const orderQuery = (filters, { seenBy = '' } = {}) => {
  *   { book: true, courier?: string }} ShipmentInput `trackingNumber` may be '' when the website does not require it (E28)
  * @typedef {{ kind: 'dispatch_video', key: string } | { kind: 'dispatch_video', url: string }} OrderMedia
  * @typedef {{ to: string, note: string, serials: Record<string, string[]>, shipment: ShipmentInput | null,
- *   updatedAt: string | null, reason?: 'rto' | 'customer_return', video?: OrderMedia }} MoveInput `reason`: why a
- *   parcel came back (E27); `video`: the dispatch video taken when packing (E28)
+ *   updatedAt: string | null, reason?: 'rto' | 'customer_return', video?: OrderMedia, code?: HistoryNote }} MoveInput
+ *   `reason`: why a parcel came back (E27); `video`: the dispatch video taken when packing (E28); `code`: the code of a
+ *   note the server writes itself (a move that follows a refund or a recorded payment; never from what staff send)
  */
 
 /**
@@ -435,7 +512,8 @@ export const MAX_REFERENCE = 120;
 
 /**
  * @typedef {{ amount: number, reason: string, method: 'online' | 'bank_transfer' | 'cash' | 'other' | null,
- *   reference: string, claimId: string | null }} RefundInput `method` null: through Payments first, the rest recorded
+ *   reference: string, claimId: string | null, claimReference?: string }} RefundInput `method` null: through Payments
+ *   first, the rest recorded; `claimReference`: a claim's refund without a note (its reason is then `Claim <reference>`)
  */
 
 /** @param {unknown} value @returns {{ ok: true, value: string } | Refusal} */
@@ -909,19 +987,23 @@ const customerFlags = (customer) => ({
 	note: customer?.note ?? '',
 });
 
-/** Members of an order record that only the shopper's browser may know (the staff view leaves them out). */
-const BROWSER_SECRETS = Object.freeze(['accessKeyHash', 'idempotencyKey']);
+/**
+ * Members of an order record the staff view leaves out: what only the shopper's browser may know (the guest order's key
+ * hash, the checkout's Idempotency-Key) and the search's own copy of the phone's digits.
+ */
+const LEFT_OUT = Object.freeze(['accessKeyHash', 'idempotencyKey', 'phoneDigits']);
 
 /**
  * An order as staff see it: everything but the guest order's key hash and the checkout's Idempotency-Key (secrets of
- * the shopper's browser), with status names, the statuses it may move to next and the customer's flags.
+ * the shopper's browser) and the search's phone digits, with status names, the statuses it may move to next and the
+ * customer's flags.
  * @param {OrderRecord} order
  * @param {OrderFlow} flow
  * @param {{ customer: Partial<CustomerRecord> | null, images: Map<string, string | null>, money: Money,
  *   serialized?: Set<string> | null }} extras `images`: line id → address; `serialized`: the order's serialized products
  */
 export const orderDetail = (order, flow, { customer, images, money, serialized = null }) => {
-	const plain = Object.fromEntries(Object.entries(wire(order)).filter(([key]) => !BROWSER_SECRETS.includes(key)));
+	const plain = Object.fromEntries(Object.entries(wire(order)).filter(([key]) => !LEFT_OUT.includes(key)));
 	// what is due, can be refunded and must be refunded, counted the one way
 	const sums = orderMoney(order);
 	return {

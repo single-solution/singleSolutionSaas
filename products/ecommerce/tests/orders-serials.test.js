@@ -130,6 +130,7 @@ describe('E11 serial capture', () => {
 		const typed = await api('PATCH', `/v1/orders/${order.id}`, { serials: { [line.id]: ['490154203237518'] } });
 		expect(typed.lines[0].serialized).toBe(true);
 		expect(typed.lines[0].serials).toEqual(['490154203237518']);
+		expect(typed.history.at(-1)).toMatchObject({ note: 'Serial numbers typed', code: 'serials_typed', byKind: 'server' });
 		const recorded = await (
 			await shop.db()
 		)

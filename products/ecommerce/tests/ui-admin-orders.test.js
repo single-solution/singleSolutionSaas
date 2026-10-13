@@ -451,7 +451,11 @@ describe('orders admin: one order', () => {
 		/** @type {any[]} */
 		const moves = [];
 		let reply = () =>
-			answer(200, { ...detail({ status: 'packed', statusLabel: 'Packed', role: 'packed' }), warnings: ['Message not sent.'] });
+			answer(200, {
+				...detail({ status: 'packed', statusLabel: 'Packed', role: 'packed' }),
+				warnings: [SERVER_ENGLISH],
+				warningCodes: [{ code: 'refund_by_hand', values: { amount: 25000 } }],
+			});
 		const { root } = await start({
 			'POST /v1/admin/orders/ord_1/move': (/** @type {any} */ call) => {
 				moves.push(call.body);
@@ -473,7 +477,11 @@ describe('orders admin: one order', () => {
 		type(fieldIn(dialog, 'Note (optional)'), 'boxed');
 		await submitDialog(root);
 		expect(moves[0]).toEqual({ to: 'packed', note: 'boxed', serials: { oln_1: ['S1', 'S2'] }, shipment: null, updatedAt: AT });
-		expect(statuses(pane)).toContain('Moved to Packed. Message not sent.');
+		// a warning in the website's words, with its amount in the order's currency (PLAN 0.4.10)
+		expect(statuses(pane)).toContain(
+			`Moved to Packed. ${TEXTS['ordersAdmin.warning.refund_by_hand']?.replace('{amount}', 'PKR 250.00')}`,
+		);
+		expect(statuses(pane)).not.toContain(SERVER_ENGLISH);
 		expect(textOf(rowOf(panel, 'ord_1'))).toContain('Packed');
 		// all empty: the line is left out
 		await click(buttonIn(pane, 'Move to Packed'));
@@ -619,10 +627,12 @@ describe('orders admin: one order', () => {
 			answer(201, {
 				order: detail({ payment: { method: 'online', state: 'refunded', paid: 250000, refunded: 250000, refundable: 0 } }),
 				refund: {},
+				// from a server without the warnings' codes: as it wrote them
+				warnings: ['Return by hand.'],
 			});
 		await submitDialog(root);
 		expect(server.last('POST /v1/admin/orders/ord_1/refunds')?.body).toEqual({ amount: 1000, reason: 'damaged' });
-		expect(statuses(pane)).toContain('PKR 10.00 refunded.');
+		expect(statuses(pane)).toContain('PKR 10.00 refunded. Return by hand.');
 		expect(shows(pane, 'Refund')).toBe(false);
 		host.remove();
 	});
@@ -703,6 +713,26 @@ describe('orders admin: one order', () => {
 			moved('Confirmed', 'Confirmed', { by: 'Sam', note: SERVER_ENGLISH, kind: 'edited' }),
 			// a staff member's own words stay as typed
 			moved('Shipped', 'Returned to origin', { by: 'Sam', note: 'Refused at the door', reason: 'rto' }),
+			// what the server writes as a code, with its values; the server token by the website's words, and a member of
+			// the staff by their name even when it is one of those words
+			moved('Awaiting payment', 'Confirmed', { by: 'system', note: SERVER_ENGLISH, code: 'payment_confirmed' }),
+			moved('Delivered', 'Delivered', {
+				by: 'Server',
+				byKind: 'server',
+				note: SERVER_ENGLISH,
+				kind: 'refund',
+				code: 'refunded_recorded',
+				values: { amount: 25000, reason: 'Scratched' },
+			}),
+			moved('Delivered', 'Delivered', {
+				by: 'system',
+				byKind: 'staff',
+				note: SERVER_ENGLISH,
+				kind: 'payment',
+				code: 'payment_recorded_reference',
+				values: { amount: 1000, reference: 'TRX-1' },
+			}),
+			moved('Delivered', 'Refunded', { by: 'Server', byKind: 'user', note: 'Asked by phone' }),
 		];
 		const { root } = await start({ 'GET /v1/admin/orders/ord_1': () => answer(200, detail({ history })) });
 		const text = textOf(detailOf(panelOf(root, 'orders')));
@@ -712,6 +742,14 @@ describe('orders admin: one order', () => {
 			`Confirmed → Cancelled · ${TEXTS['ordersAdmin.by.shopper']} · ${TEXTS['ordersAdmin.historyNote.shopper']}`,
 			`Confirmed → Confirmed · Sam · ${TEXTS['ordersAdmin.historyNote.edited']}`,
 			'Shipped → Returned to origin · Sam · Refused at the door',
+			`Awaiting payment → Confirmed · ${TEXTS['ordersAdmin.by.system']} · ${TEXTS['ordersAdmin.historyNote.payment_confirmed']}`,
+			`Delivered → Delivered · ${TEXTS['ordersAdmin.by.server']} · ${TEXTS['ordersAdmin.historyNote.refunded_recorded']
+				?.replace('{amount}', 'PKR 250.00')
+				.replace('{reason}', 'Scratched')}`,
+			`Delivered → Delivered · system · ${TEXTS['ordersAdmin.historyNote.payment_recorded_reference']
+				?.replace('{amount}', 'PKR 10.00')
+				.replace('{reference}', 'TRX-1')}`,
+			'Delivered → Refunded · Server · Asked by phone',
 		])
 			expect(text).toContain(part);
 		expect(text).not.toContain(SERVER_ENGLISH);
@@ -858,16 +896,17 @@ describe('orders admin: returns', () => {
 				answer(200, claim({ status: 'received', actions: ['reject', 'refund', 'close', 'restock'], userId: '' })),
 			'POST /v1/admin/returns/ret_1/refund': (/** @type {any} */ call) => {
 				posts.push(call.body);
-				return answer(
-					200,
-					claim({
+				return answer(200, {
+					...claim({
 						status: 'refunded',
 						refundAmount: 50000,
 						refundable: 0,
 						actions: ['close', 'restock'],
 						refundsOnline: false,
 					}),
-				);
+					warnings: [SERVER_ENGLISH],
+					warningCodes: [{ code: 'refund_by_hand', values: { amount: 50000 } }],
+				});
 			},
 			'POST /v1/admin/returns/ret_1/restock': () =>
 				answer(
@@ -918,7 +957,10 @@ describe('orders admin: returns', () => {
 		type(fieldIn(dialogOf(root), 'Amount (PKR)'), '500');
 		await submitDialog(root);
 		expect(posts[1]).toEqual({ amount: 50000, note: '' });
-		expect(statuses(pane)).toContain('PKR 500.00 refunded.');
+		expect(statuses(pane)).toContain(
+			`PKR 500.00 refunded. ${TEXTS['ordersAdmin.warning.refund_by_hand']?.replace('{amount}', 'PKR 500.00')}`,
+		);
+		expect(statuses(pane)).not.toContain(SERVER_ENGLISH);
 		expect(textOf(pane)).toContain('The refund is recorded; pay it back yourself.');
 		// restock, then close
 		await click(buttonIn(pane, 'Put back in stock'));
@@ -942,6 +984,7 @@ describe('orders admin: returns', () => {
 			history: [
 				{ at: AT, status: 'requested', by: 'shopper', note: '' },
 				{ at: AT, status: 'received', by: 'Sam', note: 'restocked' },
+				{ at: AT, status: 'received', by: 'Server', byKind: 'server', note: 'restocked', code: 'restocked' },
 			],
 		});
 		const exchange = claim({ id: 'ret_2', reference: 'R-2', kind: 'exchange', status: 'replaced' });
@@ -957,6 +1000,9 @@ describe('orders admin: returns', () => {
 		const pane = detailOf(panel);
 		expect(textOf(pane)).toContain(`Requested · ${TEXTS['ordersAdmin.by.shopper']}`);
 		expect(textOf(pane)).toContain(`Received · Sam · ${TEXTS['ordersAdmin.historyNote.restocked']}`);
+		expect(textOf(pane)).toContain(
+			`Received · ${TEXTS['ordersAdmin.by.server']} · ${TEXTS['ordersAdmin.historyNote.restocked']}`,
+		);
 		expect(textOf(pane)).not.toContain('· restocked');
 		// replace and repair first (they end the claim), the rest in the More menu
 		expect(shows(pane, 'Mark replaced')).toBe(true);

@@ -6,15 +6,16 @@
 import { describe, expect, it } from 'vitest';
 import strings from '../strings/en.json' with { type: 'json' };
 import { SORTS } from '../core/catalog-query.js';
+import { CSV_PROBLEMS } from '../core/catalog-csv.js';
 import { BRAND_STATUSES, CATEGORY_STATUSES } from '../core/catalog-taxonomy.js';
 import { PAYMENT_METHODS as CHECKOUT_METHODS } from '../core/checkout.js';
 import { DEAL_TYPES } from '../core/deals.js';
 import { STATUS_ROLES } from '../core/model.js';
-import { ADDRESS_FIELDS, PAYMENT_METHODS, PAYMENT_STATES } from '../core/orders.js';
+import { ADDRESS_FIELDS, HISTORY_NOTES, MOVE_WARNINGS, PAYMENT_METHODS, PAYMENT_STATES } from '../core/orders.js';
 import { POLICY_SETTINGS } from '../core/policies.js';
-import { CLAIM_ACTIONS, CLAIM_KINDS, CLAIM_STATUSES } from '../core/returns.js';
+import { CLAIM_ACTIONS, CLAIM_KINDS, CLAIM_NOTES, CLAIM_STATUSES } from '../core/returns.js';
 import { REVIEW_STATUSES } from '../core/reviews.js';
-import { CLAIM_TONES, HISTORY_ACTORS, ROLE_TONES } from '../ui/admin-order.js';
+import { CLAIM_TONES, HISTORY_ACTORS, ROLE_TONES, SERVER_KIND } from '../ui/admin-order.js';
 import { codeOf, problemKey } from '../ui/admin-problems.js';
 import { GRID_SORTS } from '../ui/product-grid.js';
 
@@ -52,8 +53,15 @@ describe('widget texts named after a code (PLAN 0.4.10)', () => {
 			...keysOf('ordersAdmin.claimDone.', claimMoves),
 			...keysOf('ordersAdmin.address.', Object.keys(ADDRESS_FIELDS)),
 			...keysOf('checkout.field.', Object.keys(ADDRESS_FIELDS)),
-			...keysOf('ordersAdmin.by.', HISTORY_ACTORS),
-			...keysOf('ordersAdmin.historyNote.', ['shopper', 'expired', 'edited', 'restocked']),
+			...keysOf('ordersAdmin.by.', [...HISTORY_ACTORS, SERVER_KIND]),
+			// what the server writes itself, and `expired` of entries written before the codes
+			...keysOf('ordersAdmin.historyNote.', [...HISTORY_NOTES, ...CLAIM_NOTES, 'expired']),
+			...keysOf('ordersAdmin.warning.', MOVE_WARNINGS),
+			// a product check's refusal (`invalid`) shows the text of the field it names
+			...keysOf(
+				'customersAdmin.csvProblem.',
+				CSV_PROBLEMS.filter((code) => code !== 'invalid'),
+			),
 			...keysOf('promotionsAdmin.dealType.', DEAL_TYPES),
 			...keysOf('promotionsAdmin.couponType.', couponTypes),
 			...keysOf('promotionsAdmin.bundleType.', bundleTypes),
@@ -86,6 +94,20 @@ describe('widget texts named after a code (PLAN 0.4.10)', () => {
 			]),
 		];
 		expect(keys.filter((key) => !Object.hasOwn(TEXTS, key))).toEqual([]);
+		// the words of a server's code take only the values it gives
+		/** @param {string} prefix @param {string[]} names */
+		const strayValues = (prefix, names) =>
+			Object.entries(TEXTS)
+				.filter(([key]) => key.startsWith(prefix))
+				.flatMap(([key, text]) =>
+					[...text.matchAll(/\{(\w+)\}/g)]
+						.map((match) => match[1])
+						.filter((name) => !names.includes(String(name)))
+						.map(() => key),
+				);
+		expect(strayValues('ordersAdmin.historyNote.', ['amount', 'reason', 'reference'])).toEqual([]);
+		expect(strayValues('ordersAdmin.warning.', ['amount'])).toEqual([]);
+		expect(strayValues('customersAdmin.csvProblem.', ['currency', 'category', 'brand', 'sku'])).toEqual([]);
 		// every status has its tone
 		expect(STATUS_ROLES.filter((role) => !Object.hasOwn(ROLE_TONES, role))).toEqual([]);
 		expect(CLAIM_STATUSES.filter((status) => !Object.hasOwn(CLAIM_TONES, status))).toEqual([]);

@@ -14,6 +14,7 @@ import {
 	panelOf,
 	problem,
 	resetPage,
+	SERVER_ENGLISH,
 	statuses,
 	submit,
 	textOf,
@@ -258,7 +259,8 @@ describe('catalog admin: the product list', () => {
 					: answer(200, {
 							results: [
 								{ id: 'prd_1', added: 3 },
-								{ id: 'prd_9', error: 'There is no such product.' },
+								{ id: 'prd_9', error: SERVER_ENGLISH, code: 'not_found' },
+								{ id: 'prd_8', error: SERVER_ENGLISH, code: 'validation_failed', path: '/variants/3/price' },
 							],
 							added: 3,
 						});
@@ -281,7 +283,11 @@ describe('catalog admin: the product list', () => {
 		type(fieldIn(dialog, 'Stock of each new variant'), '2');
 		await submitDialog(root);
 		expect(sent.at(-1)).toEqual({ ids: ['prd_1'], stock: 2 });
-		expect(statuses(panel)).toContain('3 variants added. prd_9: There is no such product.');
+		// why a product got none, in the website's words for the problem or its field (PLAN 0.4.10)
+		expect(statuses(panel)).toContain(
+			`3 variants added. prd_9: ${TEXTS['problem.not_found']} prd_8: ${TEXTS['problem.field.price']}`,
+		);
+		expect(statuses(panel)).not.toContain(SERVER_ENGLISH);
 	});
 
 	it('filters with fewer features and counts not allowed, and sets stock in bulk without locations', async () => {

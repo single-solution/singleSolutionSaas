@@ -147,7 +147,7 @@ describe('order editing and numbers (E29, E30)', () => {
 		expect(edited.status).toBe(200);
 		expect(edited.json.totals).toMatchObject({ subtotal: 3500 });
 		const record = await orderRecord(id);
-		expect(record.history.at(-1)).toMatchObject({ kind: 'edited' });
+		expect(record.history.at(-1)).toMatchObject({ kind: 'edited', code: 'edited' });
 		const stock = async (/** @type {string} */ productId) =>
 			/** @type {any} */ (
 				await (await shop.db()).collection(COLLECTIONS.products).findOne({ websiteId: shop.websiteId, id: productId })

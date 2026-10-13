@@ -49,7 +49,7 @@ import { bodyOf, refuse, STAFF_LIMITS } from './catalog-common.js';
 /** @typedef {import('./catalog-common.js').CatalogCommon} CatalogCommon */
 /** @typedef {import('../core/model.js').ProductRecord} ProductRecord */
 /** @typedef {import('../core/model.js').OrderRecord} OrderRecord */
-/** @typedef {import('../core/catalog.js').FieldError} FieldError */
+/** @typedef {import('../core/catalog-csv.js').RowProblem} RowProblem */
 /** @typedef {import('../core/catalog-csv.js').ImportGroup} ImportGroup */
 /** @typedef {import('../core/catalog-csv.js').UpdateRow} UpdateRow */
 /** @typedef {{ stale: UpdateRow[], next: ReturnType<typeof updatedVariants> }} UpdateOutcome */
@@ -194,7 +194,7 @@ export const createCatalogTools = (product, service, common) => {
 			for (const variant of row.variants) if (variant.sku) bySku.set(String(variant.sku), String(row.id));
 		}
 		const ids = new Set(index.map((row) => String(row.id)));
-		/** @type {Array<FieldError & { line: number }>} */
+		/** @type {RowProblem[]} */
 		const errors = [];
 		/** @type {Array<{ group: ImportGroup, id: string | null, input: Record<string, any>, stock: Map<string, { stock?: number, locations?: Record<string, number> }>, fields: import('../core/catalog.js').ProductFields }>} */
 		const plans = [];
@@ -214,24 +214,25 @@ export const createCatalogTools = (product, service, common) => {
 			).map((p) => [p.id, p]),
 		);
 		for (const group of groups) {
-			/** @param {string} path @param {string} message */
-			const fail = (path, message) => errors.push({ line: group.line, path, message });
+			/** @param {string} path @param {RowProblem['code']} code @param {string} message @param {Record<string, string>} [values] */
+			const fail = (path, code, message, values) =>
+				errors.push({ line: group.line, path, message, code, ...(values ? { values } : {}) });
 			const owners = new Set(group.skus.map((sku) => bySku.get(sku)).filter(Boolean));
 			let id = group.productId;
 			if (id && !ids.has(id)) {
-				fail('/product_id', 'There is no such product.');
+				fail('/product_id', 'unknown_product', 'There is no such product.');
 				continue;
 			}
 			if (!id && owners.size > 1) {
-				fail('/sku', 'These SKUs belong to different products.');
+				fail('/sku', 'skus_of_two', 'These SKUs belong to different products.');
 				continue;
 			}
 			id ??= /** @type {string | undefined} */ ([...owners][0]) ?? bySlug.get(group.slug) ?? null;
 			for (const sku of group.skus) {
 				const owner = bySku.get(sku);
-				if (owner && owner !== id) fail('/sku', `Another product already uses the SKU ${sku}.`);
+				if (owner && owner !== id) fail('/sku', 'sku_taken', `Another product already uses the SKU ${sku}.`, { sku });
 				if (fileSkus.has(sku) && fileSkus.get(sku) !== group.key)
-					fail('/sku', `The SKU ${sku} is in two products of the file.`);
+					fail('/sku', 'sku_twice', `The SKU ${sku} is in two products of the file.`, { sku });
 				fileSkus.set(sku, group.key);
 			}
 			const before = id ? (existing.get(id) ?? null) : null;
@@ -242,15 +243,16 @@ export const createCatalogTools = (product, service, common) => {
 			}
 			const checked = checkProduct(built.input, rules, before);
 			if (!checked.ok) {
-				for (const error of checked.errors) fail(error.path, error.message);
+				for (const error of checked.errors) fail(error.path, 'invalid', error.message);
 				continue;
 			}
 			if (rules.locations)
 				for (const [variantId, units] of built.stock)
 					if (units.stock !== undefined && !units.locations)
-						fail('/stock', `Give the stock of variant ${variantId} per location (stock@ columns).`);
+						fail('/stock', 'stock_per_location', `Give the stock of variant ${variantId} per location (stock@ columns).`);
 			const slug = checked.value.slug;
-			if (slug && bySlug.has(slug) && bySlug.get(slug) !== id) fail('/slug', 'Another product already uses this slug.');
+			if (slug && bySlug.has(slug) && bySlug.get(slug) !== id)
+				fail('/slug', 'slug_taken', 'Another product already uses this slug.');
 			plans.push({ group, id: before ? before.id : null, input: built.input, stock: built.stock, fields: checked.value });
 		}
 		return { rules, plans, errors };
@@ -267,8 +269,8 @@ export const createCatalogTools = (product, service, common) => {
 		const read = updateRows(recordsOf(table), { currency: s.currency, locationIds: new Set(locationIds) });
 		if (!read.ok) throw refuse([{ path: '/csv', message: read.message }]);
 		const failed = [...read.failed];
-		/** @param {UpdateRow} row @param {string} path @param {string} message */
-		const fail = (row, path, message) => void failed.push({ line: row.line, path, message });
+		/** @param {UpdateRow} row @param {string} path @param {RowProblem['code']} code @param {string} message */
+		const fail = (row, path, code, message) => void failed.push({ line: row.line, path, message, code });
 		// the product of each row, by its variant id, else its SKU
 		const found = /** @type {Array<{ id: string, variants: Array<{ id: string, sku: string }> }>} */ (
 			read.rows.length === 0
@@ -301,16 +303,14 @@ export const createCatalogTools = (product, service, common) => {
 		for (const row of read.rows) {
 			const owners = row.variantId ? [byVariant.get(row.variantId)].filter(Boolean) : (bySku.get(row.sku ?? '') ?? []);
 			if (owners.length !== 1) {
-				fail(
-					row,
-					row.variantId ? '/variant_id' : '/sku',
-					owners.length > 1 ? 'More than one product has this SKU: use variant_id.' : 'There is no such variant.',
-				);
+				const path = row.variantId ? '/variant_id' : '/sku';
+				if (owners.length > 1) fail(row, path, 'sku_ambiguous', 'More than one product has this SKU: use variant_id.');
+				else fail(row, path, 'unknown_variant', 'There is no such variant.');
 				continue;
 			}
 			const productId = /** @type {string} */ (owners[0]);
 			if (row.productId && row.productId !== productId) {
-				fail(row, '/product_id', 'This variant is not part of the product.');
+				fail(row, '/product_id', 'not_its_variant', 'This variant is not part of the product.');
 				continue;
 			}
 			groups.set(productId, [...(groups.get(productId) ?? []), row]);
@@ -338,11 +338,11 @@ export const createCatalogTools = (product, service, common) => {
 				{ now: now() },
 			);
 			if (!done.found) {
-				for (const row of rows) fail(row, '/variant_id', 'There is no such variant.');
+				for (const row of rows) fail(row, '/variant_id', 'unknown_variant', 'There is no such variant.');
 				continue;
 			}
 			for (const row of done.result.stale)
-				fail(row, '/updated_at', 'The product changed after this file was exported: export it again.');
+				fail(row, '/updated_at', 'stale', 'The product changed after this file was exported: export it again.');
 			failed.push(...done.result.next.failed);
 			updated += done.result.next.changed;
 			if (done.changed) {

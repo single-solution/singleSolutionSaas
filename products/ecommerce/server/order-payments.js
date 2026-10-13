@@ -18,7 +18,7 @@ import { createId } from '@ss/contracts';
 import { createOrdersStore } from '../adapters/orders-store.js';
 import { confirmedStatus, statusOf } from '../core/flow.js';
 import { ID_PREFIX } from '../core/model.js';
-import { paymentStateOf } from '../core/orders.js';
+import { paymentStateOf, serverNote } from '../core/orders.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
 /** @typedef {import('./service.js').Service} Service */
@@ -123,7 +123,15 @@ export const createOrderPayments = (product, service) => {
 			push: {
 				payments: entry,
 				...(next
-					? { history: { at: new Date(now), from: order.status, to: next.key, by: 'system', note: 'Payment confirmed' } }
+					? {
+							history: {
+								at: new Date(now),
+								from: order.status,
+								to: next.key,
+								by: 'system',
+								...serverNote('payment_confirmed', 'Payment confirmed'),
+							},
+						}
 					: {}),
 			},
 		});
@@ -183,9 +191,11 @@ export const createOrderPayments = (product, service) => {
 						from: order.status,
 						to: order.status,
 						by: 'system',
-						note: late
-							? `Payment of ${money} arrived after the order was cancelled: refund it`
-							: `Payment of ${money} confirmed by Payments`,
+						...(late
+							? serverNote('paid_after_cancel', `Payment of ${money} arrived after the order was cancelled: refund it`, {
+									amount: payment.amount,
+								})
+							: serverNote('payments_took', `Payment of ${money} confirmed by Payments`, { amount: payment.amount })),
 						kind: 'payment',
 					},
 				},

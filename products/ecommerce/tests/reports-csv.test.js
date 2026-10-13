@@ -452,9 +452,20 @@ describe('CSV', () => {
 			.updateOne({ websiteId: shop.websiteId, id: case_.id }, { $set: { updatedAt: new Date(shop.now()) } });
 
 		const failed = [
-			{ line: 4, path: '/updated_at', message: 'The product changed after this file was exported: export it again.' },
-			{ line: 5, path: '/sku', message: 'There is no such variant.' },
-			{ line: 6, path: '/price', message: 'This is not a price in USD.' },
+			{
+				line: 4,
+				path: '/updated_at',
+				message: 'The product changed after this file was exported: export it again.',
+				code: 'stale',
+			},
+			{ line: 5, path: '/sku', message: 'There is no such variant.', code: 'unknown_variant' },
+			{
+				line: 6,
+				path: '/price',
+				message: 'This is not a price in USD.',
+				code: 'not_price',
+				values: { currency: 'USD' },
+			},
 		];
 		const dry = await shop.api('POST', '/v1/csv/products?mode=update', { csv });
 		expect(dry.json).toEqual({ dryRun: true, mode: 'update', rows: 5, updated: 2, failed });

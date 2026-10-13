@@ -27,6 +27,7 @@ import {
 	PHOTO_SECONDS,
 	actionsOf,
 	allows,
+	CLAIM_NOTES,
 	checkClaimInput,
 	checkNote,
 	checkPhotoInput,
@@ -44,7 +45,7 @@ import {
 	refundCap,
 	returnableLines,
 } from '../core/returns.js';
-import { earnedLeft, pointsOwner, refundSplit, refundable } from '../core/orders.js';
+import { byActor, earnedLeft, pointsOwner, refundSplit, refundable, warningsOf } from '../core/orders.js';
 import { createMedia } from './catalog-media.js';
 import { createMoves } from './orders-moves.js';
 import { SERVER_LIMITS, VISITOR_LIMITS, VISITOR_WRITE_LIMITS } from './service.js';
@@ -204,7 +205,10 @@ export const createReturns = (product, service) => {
 		);
 	};
 
-	/** @param {StoredClaim} claim */
+	/**
+	 * A claim as its shopper sees it: the staff's notes to them, never the shop's own notes (`restocked`).
+	 * @param {StoredClaim} claim
+	 */
 	const shopperView = (claim) => ({
 		id: claim.id,
 		reference: referenceOf(claim),
@@ -215,7 +219,11 @@ export const createReturns = (product, service) => {
 		reason: claim.reason,
 		status: claim.status,
 		refundAmount: claim.refundAmount,
-		history: claim.history.map((entry) => ({ at: iso(entry.at), status: entry.status, note: entry.note })),
+		history: claim.history.map((entry) => ({
+			at: iso(entry.at),
+			status: entry.status,
+			note: /** @type {readonly string[]} */ (CLAIM_NOTES).includes(entry.note) ? '' : entry.note,
+		})),
 		createdAt: iso(claim.createdAt),
 	});
 
@@ -534,7 +542,13 @@ export const createReturns = (product, service) => {
 			{ websiteId: data.websiteId, id: claim.id },
 			{
 				$push: {
-					history: { at: new Date(service.now()), status: claim.status, by: service.actor(ctx).name, note: 'restocked' },
+					history: {
+						at: new Date(service.now()),
+						status: claim.status,
+						...byActor(service.actor(ctx)),
+						note: 'restocked',
+						code: 'restocked',
+					},
 				},
 			},
 		);
@@ -568,7 +582,7 @@ export const createReturns = (product, service) => {
 		const restock = action === 'receive' ? checkRestockChoices(body.lines, claim) : null;
 		if (restock && !restock.ok) throw service.invalid(restock.field, restock.message);
 		const choices = restock?.ok ? restock.choices : new Map();
-		const entry = { at: new Date(service.now()), status, by: service.actor(ctx).name, note: note.note };
+		const entry = { at: new Date(service.now()), status, ...byActor(service.actor(ctx)), note: note.note };
 		const moved = /** @type {StoredClaim | null} */ (
 			await claims(data).findOneAndUpdate(
 				{ websiteId: data.websiteId, id: claim.id, status: claim.status },
@@ -630,9 +644,8 @@ export const createReturns = (product, service) => {
 		const first = claim.refundAmount === 0;
 		const total = claim.refundAmount + amount;
 		const money = (await s.format()).money(amount, order.totals.currency);
-		const actor = service.actor(ctx);
 		const at = new Date(service.now());
-		const entry = { at, status: 'refunded', by: actor.name, note: note.note || money };
+		const entry = { at, status: 'refunded', ...byActor(service.actor(ctx)), note: note.note || money };
 		// reserve the refund on the claim first, so two refunds at once cannot both pass the cap
 		const reserved = await claims(data).updateOne(
 			{ websiteId: data.websiteId, id: claim.id, status: claim.status, refundAmount: claim.refundAmount },
@@ -649,7 +662,8 @@ export const createReturns = (product, service) => {
 		try {
 			done = await moves.refund(s, ctx, order, {
 				amount,
-				reason: note.note || `Claim ${referenceOf(claim)}`,
+				reason: note.note,
+				claimReference: referenceOf(claim),
 				method,
 				reference: how.reference,
 				claimId: claim.id,
@@ -725,7 +739,7 @@ export const createReturns = (product, service) => {
 		if (refunded.status !== claim.status)
 			await service.emit('return.status_changed', s, { claim: refunded, from: claim.status, to: refunded.status });
 		await tell(s, order, refunded);
-		return { ...(await detailOf(s, refunded)), warnings: done.warnings };
+		return { ...(await detailOf(s, refunded)), ...warningsOf(done.warnings) };
 	};
 
 	/**

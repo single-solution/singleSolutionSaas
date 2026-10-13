@@ -358,6 +358,7 @@ describe('paying online and by bank transfer', () => {
 		});
 		expect(paid.json.history.map((/** @type {any} */ h) => h.status)).toEqual(['pending_payment', 'confirmed']);
 		expect(paid.json.history[0]).not.toHaveProperty('by');
+		expect((await orderRecord(id)).history.at(-1)).toMatchObject({ by: 'system', code: 'payment_confirmed' });
 		expect(
 			shop
 				.messages()
@@ -490,7 +491,11 @@ describe('waiting orders that end (on use)', () => {
 		shop.advance(61 * 60_000);
 		await nextUse();
 		expect((await orderRecord(online.id)).status).toBe('cancelled');
-		expect((await orderRecord(online.id)).history.at(-1)).toMatchObject({ by: 'system', note: 'Not paid in time' });
+		expect((await orderRecord(online.id)).history.at(-1)).toMatchObject({
+			by: 'system',
+			note: 'Not paid in time',
+			code: 'not_paid_in_time',
+		});
 		expect((await orderRecord(late.id)).status).toBe('confirmed');
 		expect((await orderRecord(cod.id)).status).toBe('awaiting_confirmation');
 		expect(await stockOf(item.id)).toBe(8);

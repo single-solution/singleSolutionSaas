@@ -544,6 +544,7 @@ describe('bank transfers recorded by staff (E24)', () => {
 		});
 		expect(sent.status).toBeLessThan(300);
 		expect((await orderRecord(id)).payment.proof).toMatchObject({ key: upload.json.key, reference: 'TRX-42' });
+		expect((await orderRecord(id)).history.at(-1)).toMatchObject({ by: 'shopper', code: 'proof_sent' });
 		const elsewhere = await visit('POST', `/v1/shop/orders/${id}/proof`, {
 			signIn: shopper.token,
 			body: { key: 'ecommerce/proofs/ord_other/x.png' },

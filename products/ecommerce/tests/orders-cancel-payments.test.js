@@ -92,6 +92,7 @@ describe('a cancelled order cancels its Payments payment (K-13)', () => {
 		expect(cancelled.json.order.status).toBe('cancelled');
 		expect(cancelsOf(paymentId).map((call) => JSON.parse(call.body))).toEqual([{ reason: 'Cancelled by the shopper' }]);
 		expect((await orderRecord(order.id)).payment.voidedAt).toBeInstanceOf(Date);
+		expect((await orderRecord(order.id)).history.at(-1)).toMatchObject({ by: 'shopper', reason: 'shopper', code: 'shopper' });
 
 		// paid just after the shopper's page asked Payments (asked at most every 30 seconds)
 		const paidFirst = await placeOrder();
@@ -103,6 +104,7 @@ describe('a cancelled order cancels its Payments payment (K-13)', () => {
 		const record = await orderRecord(paidFirst.order.id);
 		expect(record).toMatchObject({ status: 'confirmed', payment: { state: 'paid', paid: record.totals.total } });
 		expect(record.payments).toEqual([expect.objectContaining({ method: 'online', reference: paidFirst.paymentId })]);
+		expect(record.history.at(-1)).toMatchObject({ by: 'system', code: 'payment_confirmed' });
 	});
 
 	it('when staff cancel it, refusing once when the shopper paid meanwhile', async () => {
@@ -201,6 +203,7 @@ describe('when Payments cannot be reached, and money paid after the cancel (K-13
 		const record = await orderRecord(order.id);
 		expect(record).toMatchObject({ status: 'cancelled', payment: { paid: record.totals.total, voidPendingAt: null } });
 		expect(record.history.at(-1).note).toContain('arrived after the order was cancelled');
+		expect(record.history.at(-1)).toMatchObject({ code: 'paid_after_cancel', values: { amount: record.totals.total } });
 		expect((await shop.api('GET', `/v1/orders/${order.id}`)).json.payment.refundDue).toBe(record.totals.total);
 	});
 

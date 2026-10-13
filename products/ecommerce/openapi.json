@@ -31460,7 +31460,8 @@
 										"ok",
 										"number",
 										"status",
-										"warnings"
+										"warnings",
+										"warningCodes"
 									],
 									"additionalProperties": false,
 									"properties": {
@@ -31484,7 +31485,14 @@
 											"items": {
 												"type": "string"
 											},
-											"description": "What staff should know, for example a refund that failed or money to return by hand."
+											"description": "What staff should know, in English, for example a refund that failed or money to return by hand."
+										},
+										"warningCodes": {
+											"type": "array",
+											"items": {
+												"$ref": "#/components/schemas/OrderWarning"
+											},
+											"description": "The warnings' codes and values, in the same order as warnings."
 										}
 									}
 								},
@@ -34939,7 +34947,8 @@
 				"required": [
 					"line",
 					"path",
-					"message"
+					"message",
+					"code"
 				],
 				"additionalProperties": false,
 				"properties": {
@@ -34949,10 +34958,62 @@
 						"description": "The line of the file (1 is the header)."
 					},
 					"path": {
-						"type": "string"
+						"type": "string",
+						"description": "The column (or, for invalid, the product's field) as a JSON pointer ('' for the whole header)."
 					},
 					"message": {
-						"type": "string"
+						"type": "string",
+						"description": "In English."
+					},
+					"code": {
+						"type": "string",
+						"enum": [
+							"columns",
+							"unknown_location",
+							"no_name",
+							"option_pair",
+							"not_price",
+							"not_stock",
+							"not_true_false",
+							"new_product_name",
+							"unknown_category",
+							"unknown_brand",
+							"not_its_variant",
+							"new_variant_price",
+							"stock_per_location",
+							"unknown_product",
+							"skus_of_two",
+							"sku_taken",
+							"sku_twice",
+							"slug_taken",
+							"invalid",
+							"no_variant",
+							"no_updated_at",
+							"unknown_variant",
+							"sku_ambiguous",
+							"stale"
+						],
+						"description": "Why, for your own words: columns (the header names no product), unknown_location (a stock@ column), no_name, option_pair (an option without its value or name), not_price (values.currency), not_stock, not_true_false, new_product_name, unknown_category (values.category), unknown_brand (values.brand), not_its_variant, new_variant_price, stock_per_location, unknown_product, skus_of_two (the row's SKUs belong to two products), sku_taken and sku_twice (values.sku: another product, or another product of the file, has it), slug_taken, invalid (the product check refused the field path names); a price and stock update also no_variant, no_updated_at, unknown_variant, sku_ambiguous (use variant_id) and stale (the product changed after the export)."
+					},
+					"values": {
+						"type": "object",
+						"required": [],
+						"additionalProperties": false,
+						"properties": {
+							"currency": {
+								"type": "string"
+							},
+							"category": {
+								"type": "string"
+							},
+							"brand": {
+								"type": "string"
+							},
+							"sku": {
+								"type": "string"
+							}
+						},
+						"description": "The values the code's words take (as the code says)."
 					}
 				},
 				"description": "A problem of one row of a CSV file."
@@ -37692,7 +37753,7 @@
 			},
 			"Order": {
 				"type": "object",
-				"description": "An order as staff see it: everything but the guest order's key, with status names and the statuses it may move to.",
+				"description": "An order as staff see it: everything but the guest order's key, the checkout's Idempotency-Key and the search's phone digits, with status names and the statuses it may move to.",
 				"required": [
 					"id",
 					"number",
@@ -37830,10 +37891,6 @@
 						},
 						"maxItems": 50,
 						"description": "Ids of the staff who opened it (POST …/seen), the latest 50, oldest first."
-					},
-					"phoneDigits": {
-						"type": "string",
-						"description": "The last 10 digits of the customer's phone (for the search)."
 					},
 					"stockHeld": {
 						"type": "boolean",
@@ -38860,8 +38917,44 @@
 						"type": "string",
 						"description": "Who: a staff member's name, Server, shopper, guest or system."
 					},
+					"byKind": {
+						"type": "string",
+						"enum": [
+							"staff",
+							"user",
+							"server"
+						],
+						"description": "The kind of actor by names, on entries a member of the staff or the server made: staff (a ticket's user), user (named by a server call's SS-Actor-* headers) or server (the server token, by Server); missing for shopper, guest and system, and on older entries."
+					},
 					"note": {
-						"type": "string"
+						"type": "string",
+						"description": "What staff typed, or the server's own words in English (code then says which)."
+					},
+					"code": {
+						"type": "string",
+						"enum": [
+							"shopper",
+							"not_paid_in_time",
+							"not_confirmed_in_time",
+							"payment_confirmed",
+							"payments_took",
+							"paid_after_cancel",
+							"proof_sent",
+							"edited",
+							"serials_typed",
+							"refunded",
+							"refunded_recorded",
+							"claim_refunded",
+							"claim_refunded_recorded",
+							"refunds_cover_payments",
+							"payment_recorded",
+							"payment_recorded_reference",
+							"confirmed_on_payment"
+						],
+						"description": "An entry the server wrote itself, for your own words: shopper (the shopper cancelled), not_paid_in_time and not_confirmed_in_time (a waiting order ended), payment_confirmed (Payments confirmed the payment), payments_took and paid_after_cancel (amount: Payments took money outside that, after the cancel for the second), proof_sent, edited, serials_typed, refunded and refunded_recorded (amount, reason), claim_refunded and claim_refunded_recorded (amount, reference: a claim refunded without a note; _recorded: partly recorded), refunds_cover_payments (the move to the refunded status that follows), payment_recorded (amount) and payment_recorded_reference (amount, reference) for a payment staff recorded, confirmed_on_payment (the move to the confirmed status that follows). Missing on entries staff wrote and on older entries."
+					},
+					"values": {
+						"$ref": "#/components/schemas/OrderNoteValues"
 					},
 					"reason": {
 						"type": "string",
@@ -39156,7 +39249,8 @@
 					"updatedAt",
 					"customerFlags",
 					"nextStatuses",
-					"warnings"
+					"warnings",
+					"warningCodes"
 				],
 				"additionalProperties": false,
 				"properties": {
@@ -39269,10 +39363,6 @@
 						"maxItems": 50,
 						"description": "Ids of the staff who opened it (POST …/seen), the latest 50, oldest first."
 					},
-					"phoneDigits": {
-						"type": "string",
-						"description": "The last 10 digits of the customer's phone (for the search)."
-					},
 					"stockHeld": {
 						"type": "boolean",
 						"description": "The order holds its stock (and booked slots); false after a cancel or a return."
@@ -39341,7 +39431,14 @@
 						"items": {
 							"type": "string"
 						},
-						"description": "What staff should know, for example a refund that failed or money to return by hand."
+						"description": "What staff should know, in English, for example a refund that failed or money to return by hand."
+					},
+					"warningCodes": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/OrderWarning"
+						},
+						"description": "The warnings' codes and values, in the same order as warnings."
 					}
 				}
 			},
@@ -39376,6 +39473,27 @@
 							"refunded",
 							"returned"
 						]
+					}
+				}
+			},
+			"OrderNoteValues": {
+				"type": "object",
+				"description": "The values a code's words take: which ones, the code says.",
+				"required": [],
+				"additionalProperties": false,
+				"properties": {
+					"amount": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "An amount in minor units of the order's currency."
+					},
+					"reason": {
+						"type": "string",
+						"description": "A refund's reason."
+					},
+					"reference": {
+						"type": "string",
+						"description": "A recorded payment's reference, or the reference of the claim refunded."
 					}
 				}
 			},
@@ -39469,7 +39587,8 @@
 				"type": "object",
 				"required": [
 					"order",
-					"warnings"
+					"warnings",
+					"warningCodes"
 				],
 				"additionalProperties": false,
 				"properties": {
@@ -39481,7 +39600,14 @@
 						"items": {
 							"type": "string"
 						},
-						"description": "What staff should know, for example a refund that failed or money to return by hand."
+						"description": "What staff should know, in English, for example a refund that failed or money to return by hand."
+					},
+					"warningCodes": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/OrderWarning"
+						},
+						"description": "The warnings' codes and values, in the same order as warnings."
 					}
 				}
 			},
@@ -39803,7 +39929,8 @@
 				"required": [
 					"order",
 					"refund",
-					"warnings"
+					"warnings",
+					"warningCodes"
 				],
 				"additionalProperties": false,
 				"properties": {
@@ -39854,7 +39981,14 @@
 						"items": {
 							"type": "string"
 						},
-						"description": "What staff should know, for example a refund that failed or money to return by hand."
+						"description": "What staff should know, in English, for example a refund that failed or money to return by hand."
+					},
+					"warningCodes": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/OrderWarning"
+						},
+						"description": "The warnings' codes and values, in the same order as warnings."
 					}
 				}
 			},
@@ -40121,6 +40255,28 @@
 						"type": "integer",
 						"minimum": 0,
 						"description": "The role price’s part of discount (role_pricing). Minor units."
+					}
+				}
+			},
+			"OrderWarning": {
+				"type": "object",
+				"description": "A warning, for your own words.",
+				"required": [
+					"code",
+					"values"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"code": {
+						"type": "string",
+						"enum": [
+							"refund_by_hand",
+							"cancel_refund_failed"
+						],
+						"description": "refund_by_hand: Payments only recorded a refund of amount, so the shop gives it back by hand; cancel_refund_failed: the order was cancelled but refunding amount through Payments failed."
+					},
+					"values": {
+						"$ref": "#/components/schemas/OrderNoteValues"
 					}
 				}
 			},
@@ -41740,7 +41896,14 @@
 						"items": {
 							"type": "string"
 						},
-						"description": "Only in the answer of a refund: what staff must still do (for example return money by hand)."
+						"description": "Only in the answer of a refund: what staff must still do, in English (for example return money by hand)."
+					},
+					"warningCodes": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/OrderWarning"
+						},
+						"description": "Only in the answer of a refund: the warnings' codes and values, in the same order as warnings."
 					}
 				}
 			},
@@ -41880,9 +42043,25 @@
 						"type": "string",
 						"description": "shopper, the staff member (a ticket’s user or the SS-Actor-Name of a server call), or Server."
 					},
+					"byKind": {
+						"type": "string",
+						"enum": [
+							"staff",
+							"user",
+							"server"
+						],
+						"description": "The kind of actor by names, on entries a member of the staff or the server made: staff (a ticket's user), user (named by a server call's SS-Actor-* headers) or server (the server token, by Server); missing for shopper and on older entries."
+					},
 					"note": {
 						"type": "string",
 						"description": "'' for none; restocked when items went back in stock; a refund's amount when it had no note."
+					},
+					"code": {
+						"type": "string",
+						"enum": [
+							"restocked"
+						],
+						"description": "An entry the server wrote itself, for your own words: restocked (items went back in stock; note says restocked too)."
 					}
 				}
 			},
@@ -47126,7 +47305,8 @@
 									"type": "object",
 									"required": [
 										"id",
-										"error"
+										"error",
+										"code"
 									],
 									"additionalProperties": false,
 									"properties": {
@@ -47135,7 +47315,15 @@
 										},
 										"error": {
 											"type": "string",
-											"description": "Why this product got no variants."
+											"description": "Why this product got no variants, in English."
+										},
+										"code": {
+											"type": "string",
+											"description": "The problem code, for your own words: not_found, conflict (it would have too many variants, or it changed meanwhile), validation_failed (path names the field) …"
+										},
+										"path": {
+											"type": "string",
+											"description": "validation_failed: the field the product check refused, as a JSON pointer."
 										}
 									}
 								}

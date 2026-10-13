@@ -494,7 +494,7 @@ describe('E7 attributes on variants and the generator', () => {
 		expect(many).toEqual({
 			results: [
 				{ id: item.id, added: 0 },
-				{ id: 'prd_none', error: 'There is no such product.' },
+				{ id: 'prd_none', error: 'There is no such product.', code: 'not_found' },
 			],
 			added: 0,
 		});

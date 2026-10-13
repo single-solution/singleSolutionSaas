@@ -491,7 +491,12 @@ export const createCatalogProducts = (product, service, common) => {
 		return { added: done.added, product: await staffView(s, done.product) };
 	};
 
-	/** POST /v1/products/variants/generate `{ ids, price?, stock? }`: up to 100 products. @param {any} ctx */
+	/**
+	 * POST /v1/products/variants/generate `{ ids, price?, stock? }`: up to 100 products. A product that gets none says
+	 * why: the English `error`, the problem `code` and, for a refused check, the `path` of the field (the widgets show
+	 * their words for the field or the code, PLAN 0.4.10).
+	 * @param {any} ctx
+	 */
 	const generateMany = async (ctx) => {
 		const body = bodyOf(ctx);
 		const ids = Array.isArray(body.ids) ? [...new Set(body.ids.filter((id) => typeof id === 'string'))] : [];
@@ -499,15 +504,19 @@ export const createCatalogProducts = (product, service, common) => {
 			throw refuse([{ path: '/ids', message: `Give 1 to ${MAX_GENERATE} product ids.` }]);
 		const start = startOf(body);
 		const { s, data } = await common.open(ctx);
-		/** @type {Array<{ id: string, added: number } | { id: string, error: string }>} */
+		/** @type {Array<{ id: string, added: number } | { id: string, error: string, code: string, path?: string }>} */
 		const results = [];
 		for (const id of ids) {
 			try {
 				results.push({ id, added: (await generateFor(s, data, ctx, id, start)).added });
 			} catch (error) {
+				const failed = /** @type {any} */ (error);
+				const path = failed?.errors?.[0]?.path;
 				results.push({
 					id,
-					error: String(/** @type {any} */ (error)?.body?.detail ?? /** @type {any} */ (error)?.detail ?? 'failed'),
+					error: String(failed?.body?.detail ?? failed?.detail ?? 'failed'),
+					code: typeof failed?.code === 'string' ? failed.code : 'failed',
+					...(typeof path === 'string' ? { path } : {}),
 				});
 			}
 		}

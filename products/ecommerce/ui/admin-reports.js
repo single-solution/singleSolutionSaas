@@ -2,8 +2,8 @@
  * Reports and CSV in the customers admin widget (PLAN 0.8.8 Admin tools, 0.6: plain pages of cards and tables): reports
  * (feature `reports`, `reports.read`) — sales by product, category, brand or city, stock age, return rate and margin
  * over a date range, with their totals as figures and their rows as a table, downloadable as CSV; and CSV (feature
- * `csv`, `csv.run`) as cards — export products, import products (a dry run lists every problem per row before anything
- * is written), export orders by date range and status.
+ * `csv`, `csv.run`) as cards — export products, import products (a dry run lists every problem per row, in the
+ * website's words, before anything is written), export orders by date range and status.
  * @module
  */
 import { toCsv } from '../core/csv.js';
@@ -25,6 +25,16 @@ const REPORTS = Object.freeze({
 });
 
 /** @typedef {keyof typeof REPORTS} ReportKey */
+
+/**
+ * A problem of a row of a CSV file in the website's words (PLAN 0.4.10): its code's text
+ * (`customersAdmin.csvProblem.<code>` with its values); a product check's refusal (`invalid`) by the field it names.
+ * @param {Kit} kit @param {{ path: string, code?: string, values?: Record<string, string> }} problem
+ */
+const rowProblem = (kit, problem) =>
+	problem.code && problem.code !== 'invalid'
+		? kit.t(`customersAdmin.csvProblem.${problem.code}`, problem.values ?? {})
+		: kit.refusal('validation_failed', [{ path: problem.path }]);
 
 /**
  * The columns of a report.
@@ -218,7 +228,7 @@ export const csvTab = (kit, panel) => {
 			kit.fail(note, answer);
 			return answer;
 		}
-		/** @type {Array<{ line: number, path: string, message: string }>} */
+		/** @type {Array<{ line: number, path: string, code?: string, values?: Record<string, string> }>} */
 		const errors = answer.data.errors ?? [];
 		kit.say(
 			note,
@@ -234,7 +244,7 @@ export const csvTab = (kit, panel) => {
 			problems.append(
 				kit.table(
 					[t('customersAdmin.line'), t('customersAdmin.field'), t('customersAdmin.problem')],
-					errors.map((error) => [String(error.line), error.path, error.message]),
+					errors.map((error) => [String(error.line), error.path, rowProblem(kit, error)]),
 				),
 			);
 		importButton.hidden = errors.length > 0;

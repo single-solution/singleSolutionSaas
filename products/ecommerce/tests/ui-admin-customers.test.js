@@ -14,6 +14,7 @@ import {
 	panelOf,
 	problem,
 	resetPage,
+	SERVER_ENGLISH,
 	shows,
 	statuses,
 	submit,
@@ -466,7 +467,13 @@ describe('customers admin: reports and CSV', () => {
 				rows: 2,
 				created: 1,
 				updated: 0,
-				errors: [{ line: 3, path: '/price', message: 'Give a price.' }],
+				errors: [
+					{ line: 2, path: '/categories', message: SERVER_ENGLISH, code: 'unknown_category', values: { category: 'mugs' } },
+					// the product check names the field
+					{ line: 3, path: '/variants/0/price', message: SERVER_ENGLISH, code: 'invalid' },
+					// from a server without the codes: the column's field
+					{ line: 3, path: '/stock', message: SERVER_ENGLISH },
+				],
 			});
 		const { root, server, saved } = await start({
 			'GET /v1/admin/csv/products': () => new Response('﻿name\r\nPhone\r\n', { status: 200 }),
@@ -495,8 +502,15 @@ describe('customers admin: reports and CSV', () => {
 		const file = /** @type {any} */ ({ name: 'p.csv', type: 'text/csv', size: 10, text: async () => 'name,price\r\nMug,\r\n' });
 		await choose(fieldIn(panel, 'CSV file'), [file]);
 		await click(buttonIn(panel, 'Check the file'));
-		expect(statuses(panel)).toContain('1 problems in 2 rows. Fix them and check again.');
-		expect(textOf(panel)).toContain('Give a price.');
+		expect(statuses(panel)).toContain('3 problems in 2 rows. Fix them and check again.');
+		// every problem in the website's words, never the server's English (PLAN 0.4.10)
+		for (const words of [
+			TEXTS['customersAdmin.csvProblem.unknown_category']?.replace('{category}', 'mugs'),
+			TEXTS['problem.field.price'],
+			TEXTS['problem.field.stock'],
+		])
+			expect(textOf(panel)).toContain(words);
+		expect(textOf(panel)).not.toContain(SERVER_ENGLISH);
 		expect(shows(panel, 'Import')).toBe(false);
 		check = () => answer(200, { dryRun: true, rows: 2, created: 1, updated: 1, errors: [] });
 		await click(buttonIn(panel, 'Check the file'));
