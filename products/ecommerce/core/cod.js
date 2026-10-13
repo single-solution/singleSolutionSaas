@@ -10,8 +10,9 @@
 /**
  * @typedef {{ maxOrderValue: number, advanceAmount: number, advancePercent: number, rtoThreshold: number,
  *   rtoRequireAdvance: boolean, startStatus?: 'awaiting_confirmation' | 'open', atPickup?: boolean, feePercent?: number,
- *   paidOnDelivery?: boolean, advanceVia?: 'payments' | 'manual' }} CodSettings `startStatus`, `atPickup`, `feePercent`,
- *   `paidOnDelivery` and `advanceVia`: PLAN 0.8.10 E23
+ *   feeBase?: 'order_total' | 'goods_after_discounts', paidOnDelivery?: boolean, advanceVia?: 'payments' | 'manual' }}
+ *   CodSettings `startStatus`, `atPickup`, `feePercent`, `paidOnDelivery` and `advanceVia`: PLAN 0.8.10 E23; `feeBase`:
+ *   what the fee is a percent of (D4)
  */
 
 /** @param {unknown} value */
@@ -32,7 +33,8 @@ export const codAdvance = (total, settings, unit = 1) => {
 };
 
 /**
- * The cash-handling fee of a COD order (E23): `feePercent` (0–20) of the order total, rounded half up.
+ * The cash-handling fee of a COD order (E23): `feePercent` (0–20) of the amount it is taken on, rounded half up: the
+ * order total, or the goods after discounts (`feeBase`, D4; see `core/checkout.js`).
  * @param {number} total minor units, before the fee
  * @param {Pick<CodSettings, 'feePercent'>} settings
  * @param {number} [unit] whole units (E25)

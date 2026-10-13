@@ -5,16 +5,17 @@
  * payment method, the shopper's picked deal and signed deal locks, E18; how they round, D4), the role price of a
  * signed-in shopper (`role_pricing`, E19), loyalty points (while `loyalty` is on and the shopper takes part, E20),
  * delivery zones, pickup locations or the one pickup point (`delivery_zones`, E22), tax rules (`taxes`), the payment
- * methods in the merchant's order with their fees (COD cash handling, E23) and bank details (Payments P1, cached 5
- * minutes, E24). Every amount rounds to whole units with Format's `wholeUnits` (E25). Used by the quote route and
- * again, on the server, when an order is placed. Also the bookable slots of a product (`bookings`).
+ * methods in the merchant's order with their fees (COD cash handling on its `feeBase`, E23, D4) and bank details
+ * (Payments P1, cached 5 minutes, E24). Every amount rounds to whole units with Format's `wholeUnits` (E25). Used by
+ * the quote route and again, on the server, when an order is placed. Also the bookable slots of a product
+ * (`bookings`).
  * @module
  */
 import { loyaltyAccount } from '../adapters/ledger.js';
 import { createOrdersStore } from '../adapters/orders-store.js';
 import { loadOffers } from '../adapters/promotions-store.js';
 import { MAX_SLOT_DAYS, slotAt, slotsBetween } from '../core/bookings.js';
-import { merchandiseOf, paymentOptions, priceLines, resolveLines, roleDiscountOf } from '../core/checkout.js';
+import { feeBaseOf, merchandiseOf, paymentOptions, priceLines, resolveLines, roleDiscountOf } from '../core/checkout.js';
 import { matchZone, zoneFee } from '../core/delivery.js';
 import { dealRulesOf } from '../core/deals.js';
 import { readLock, signLock } from '../core/locks.js';
@@ -465,6 +466,7 @@ export const createQuoting = (product, service) => {
 				unit,
 			};
 			const unpriced = priceLines(base);
+			const feeBase = codSettings.feeBase === 'goods_after_discounts' ? 'goods_after_discounts' : 'order_total';
 			const payments = paymentOptions({
 				offered,
 				order: Array.isArray(checkout.paymentOrder) ? checkout.paymentOrder : undefined,
@@ -475,6 +477,7 @@ export const createQuoting = (product, service) => {
 				deliveryMethod: delivery.method,
 				digital,
 				total: unpriced.totals.total,
+				feeBase: feeBaseOf(unpriced, feeBase),
 				rtoCount: customer?.rtoCount ?? 0,
 				unit,
 			}).map((option) =>
@@ -484,7 +487,7 @@ export const createQuoting = (product, service) => {
 			);
 			const effective = method ?? payments.find((option) => option.available)?.method ?? null;
 			const feePercent = effective === 'cod' && s.has('cod') ? Number(codSettings.feePercent ?? 0) : 0;
-			const { lines: prices, totals } = feePercent > 0 ? priceLines({ ...base, feePercent }) : unpriced;
+			const { lines: prices, totals } = feePercent > 0 ? priceLines({ ...base, feePercent, feeBase }) : unpriced;
 			return { promotions, delivery, deliveryOptions, deliveryProblem, points, prices, totals, payments, effective };
 		};
 

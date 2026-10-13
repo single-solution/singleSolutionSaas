@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { codAdvance, codFee } from '../core/cod.js';
-import { paymentOptions, priceLines, roleDiscountOf } from '../core/checkout.js';
+import { feeBaseOf, paymentOptions, priceLines, roleDiscountOf } from '../core/checkout.js';
 import {
 	conditionsHold,
 	DEAL_RULES,
@@ -301,20 +301,20 @@ describe('guests and order keys (E21)', () => {
 	});
 });
 
+const COD = { maxOrderValue: 0, advanceAmount: 0, advancePercent: 0, rtoThreshold: 0, rtoRequireAdvance: false };
+const OPTIONS = {
+	offered: ['cod', 'online', 'bank_transfer', 'pickup'],
+	paymentsConnected: true,
+	cod: { on: true, settings: COD },
+	pickupPossible: true,
+	deliveryMethod: /** @type {'delivery'} */ ('delivery'),
+	digital: false,
+	total: 10_000,
+	rtoCount: 0,
+};
+
 describe('payment options (E22, E23, E24)', () => {
-	const base = {
-		offered: ['cod', 'online', 'bank_transfer', 'pickup'],
-		paymentsConnected: true,
-		cod: {
-			on: true,
-			settings: { maxOrderValue: 0, advanceAmount: 0, advancePercent: 0, rtoThreshold: 0, rtoRequireAdvance: false },
-		},
-		pickupPossible: true,
-		deliveryMethod: /** @type {'delivery'} */ ('delivery'),
-		digital: false,
-		total: 10_000,
-		rtoCount: 0,
-	};
+	const base = OPTIONS;
 
 	it('follows the merchant order, adds the COD fee and offers COD at pickup when asked', () => {
 		const order = ['bank_transfer', 'cod', 'online', 'pickup'];
@@ -351,5 +351,34 @@ describe('payment options (E22, E23, E24)', () => {
 			feePercent: 2,
 		});
 		expect(priced.totals).toMatchObject({ fee: 210, total: 10_710 });
+	});
+
+	it('takes the fee on the order total, or on the goods after discounts (feeBase, D4)', () => {
+		/** @type {any[]} */
+		const lines = [{ key: 'a', unitPrice: 10_000, quantity: 1, allCategoryIds: [] }];
+		const base = {
+			lines,
+			promotions: null,
+			delivery: 250,
+			pointsValue: 1000,
+			taxRules: [],
+			region: null,
+			taxIncluded: true,
+			feePercent: 2,
+		};
+		// 2% of 10,000 goods with 250 delivery and 1,000 of points: 185 on the order total, 200 on the goods
+		const whole = priceLines(base);
+		expect(whole.totals).toMatchObject({ fee: 185, total: 9435 });
+		const goods = priceLines({ ...base, feeBase: 'goods_after_discounts' });
+		expect(goods.totals).toMatchObject({ fee: 200, total: 9450 });
+		// the role discount comes off first: 2% of 9,000
+		expect(priceLines({ ...base, rolePercent: 10, feeBase: 'goods_after_discounts' }).totals.fee).toBe(180);
+		const unpriced = priceLines({ ...base, feePercent: 0 });
+		expect(feeBaseOf(unpriced)).toBe(9250);
+		expect(feeBaseOf(unpriced, 'goods_after_discounts')).toBe(10_000);
+		const cod = { on: true, settings: { ...COD, feePercent: 2 } };
+		const offered = { ...OPTIONS, cod, total: 9250 };
+		expect(paymentOptions(offered)[0]).toMatchObject({ method: 'cod', fee: 185 });
+		expect(paymentOptions({ ...offered, feeBase: 10_000 })[0]).toMatchObject({ method: 'cod', fee: 200 });
 	});
 });

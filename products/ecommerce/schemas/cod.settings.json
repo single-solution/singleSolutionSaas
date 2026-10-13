@@ -61,6 +61,13 @@
 			"minimum": 0,
 			"maximum": 20
 		},
+		"feeBase": {
+			"type": "string",
+			"title": "Cash handling fee is a percent of",
+			"description": "order_total: the order total (after points, with delivery and tax). goods_after_discounts: the goods after deals and the role discount, before points, delivery and tax.",
+			"default": "order_total",
+			"enum": ["order_total", "goods_after_discounts"]
+		},
 		"paidOnDelivery": {
 			"type": "boolean",
 			"title": "Paid when delivered",

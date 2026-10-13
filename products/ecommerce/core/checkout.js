@@ -441,7 +441,8 @@ export const roleDiscountOf = (merchandise, percent, unit = 1) =>
 /**
  * Price the priced lines: promotions, the role discount (after offers, before delivery, E19), the points' value
  * (spread in proportion, at most what is left of the items), taxes, the totals with delivery, and the payment
- * method's fee on the whole (E23). Percentages and tax round half up to whole units (E25).
+ * method's fee on the whole, or on the goods after offers and the role discount (E23, `feeBase`). Percentages and tax
+ * round half up to whole units (E25).
  * @param {object} input
  * @param {ResolvedLine[]} input.lines priced lines
  * @param {PromotionsResult | null} input.promotions
@@ -452,6 +453,7 @@ export const roleDiscountOf = (merchandise, percent, unit = 1) =>
  * @param {boolean} input.taxIncluded
  * @param {number} [input.rolePercent] the shopper's role discount (E19)
  * @param {number} [input.feePercent] the payment method's fee (E23)
+ * @param {CodSettings['feeBase']} [input.feeBase] what the fee is a percent of (`cod.feeBase`, D4)
  * @param {number} [input.unit] whole units (E25)
  * @returns {{ lines: PricedLine[], totals: PriceTotals }}
  */
@@ -465,6 +467,7 @@ export const priceLines = ({
 	taxIncluded,
 	rolePercent = 0,
 	feePercent = 0,
+	feeBase = 'order_total',
 	unit = 1,
 }) => {
 	const promo = promotionDiscounts(lines, promotions);
@@ -493,7 +496,10 @@ export const priceLines = ({
 	});
 	const sum = (/** @type {(line: PricedLine) => number} */ pick) => priced.reduce((n, line) => n + pick(line), 0);
 	const beforeFee = sum((line) => line.total) + delivery;
-	const fee = feePercent > 0 ? codFee(beforeFee, { feePercent }, unit) : 0;
+	const fee =
+		feePercent > 0
+			? codFee(feeBase === 'goods_after_discounts' ? merchandise - roleTotal : beforeFee, { feePercent }, unit)
+			: 0;
 	return {
 		lines: priced,
 		totals: {
@@ -508,6 +514,17 @@ export const priceLines = ({
 		},
 	};
 };
+
+/**
+ * What the COD fee is a percent of (`cod.feeBase`, D4): the order total before the fee (`order_total`), or the goods
+ * after offers and the role discount, before points, delivery and tax (`goods_after_discounts`).
+ * @param {{ lines: PricedLine[], totals: PriceTotals }} priced a pricing without the fee
+ * @param {CodSettings['feeBase']} [feeBase]
+ */
+export const feeBaseOf = ({ lines, totals }, feeBase = 'order_total') =>
+	feeBase === 'goods_after_discounts'
+		? lines.reduce((sum, line) => sum + line.gross - line.promotions - line.role, 0)
+		: totals.total - totals.fee;
 
 /** What the items cost after promotions (delivery's free-over and points are measured on it). @param {ResolvedLine[]} lines @param {PromotionsResult | null} promotions */
 export const merchandiseOf = (lines, promotions) => {
@@ -539,6 +556,7 @@ export const merchandiseOf = (lines, promotions) => {
  * @param {'delivery' | 'pickup' | 'none'} input.deliveryMethod
  * @param {boolean} input.digital the cart has digital items
  * @param {number} input.total before any fee
+ * @param {number} [input.feeBase] what the COD fee is a percent of (`feeBaseOf`; default `total`)
  * @param {number} input.rtoCount the shopper's returned parcels
  * @param {number} [input.unit] whole units (E25)
  * @returns {PaymentOption[]}
@@ -553,6 +571,7 @@ export const paymentOptions = ({
 	deliveryMethod,
 	digital,
 	total,
+	feeBase = total,
 	rtoCount,
 	unit = 1,
 }) => {
@@ -563,7 +582,7 @@ export const paymentOptions = ({
 		if (!collected) out.push({ method: 'cod', available: false, reason: 'needs_delivery', advance: 0, fee: 0 });
 		else if (digital) out.push({ method: 'cod', available: false, reason: 'digital_items', advance: 0, fee: 0 });
 		else {
-			const fee = codFee(total, cod.settings, unit);
+			const fee = codFee(feeBase, cod.settings, unit);
 			const decision = codDecision(
 				{
 					total: total + fee,

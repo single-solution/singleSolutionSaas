@@ -317,6 +317,22 @@ describe('payment, delivery and COD options (E22, E23)', () => {
 		await shop.setting('checkout', 'noteCod', '');
 	});
 
+	it('takes the COD fee on the goods after discounts with feeBase goods_after_discounts (D4)', async () => {
+		await shop.setting('cod', 'feePercent', 5);
+		await shop.setting('cod', 'feeBase', 'goods_after_discounts');
+		const item = await shop.seedProduct({ price: 10_000, stock: 10 });
+		const shopper = await newShopper();
+		const body = { lines: [{ productId: item.id }], delivery: { city: 'Springfield' }, payment: 'cod' };
+		// 5% of the 10,000 goods, not of the 10,300 with delivery (515)
+		const priced = await quote(body, shopper.token);
+		expect(priced.json.totals).toMatchObject({ delivery: 300, fee: 500, total: 10_800 });
+		expect(priced.json.paymentMethods.find((/** @type {any} */ m) => m.method === 'cod')).toMatchObject({ fee: 500 });
+		const placed = await place({ lines: body.lines, payment: 'cod', address: ADDRESS }, shopper.token);
+		expect(placed.json.order.totals).toMatchObject({ fee: 500, total: 10_800 });
+		await shop.setting('cod', 'feeBase', 'order_total');
+		await shop.setting('cod', 'feePercent', 0);
+	});
+
 	it('limits lines and quantities and sends the shopper to the store’s own success page', async () => {
 		await shop.setting('checkout', 'maxQuantity', 3);
 		await shop.setting('checkout', 'successUrl', `${ORIGIN}/thanks/{number}`);
