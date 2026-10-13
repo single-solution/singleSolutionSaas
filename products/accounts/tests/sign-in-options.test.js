@@ -229,6 +229,41 @@ describe('A8: imported two-step and old recovery codes', () => {
 		const logged = await activity('action=user.recovery_code_used');
 		expect(logged[0].detail).toMatch(/1 left$/);
 	});
+
+	it('wrong two-step and recovery codes count toward the lock like wrong passwords; the step is refused while locked', async () => {
+		const user = (
+			await env.serverCall('POST', '/v1/users', {
+				name: 'Ivo Guarded',
+				email: 'ivo@example.com',
+				role: 'support_staff',
+				password: 'correct horse battery',
+			})
+		).json;
+		const secret = 'KRUGS4ZANFZSAYJA';
+		const store = await env.store();
+		await store.users.update(user.id, {
+			twoStep: env.product.twoStepFromImport(env.websiteId, user.id, { secret, recoveryHashes: [] }),
+		});
+		const good = () => totpCode(secret, env.now());
+		// a code none of the accepted steps (now and one step either side) gives
+		const near = [-30_000, 0, 30_000].map((ms) => totpCode(secret, env.now() + ms));
+		const bad = ['000000', '111111', '222222', '333333'].find((c) => !near.includes(c));
+		/** @param {Record<string, unknown>} answer */
+		const step = async (answer) =>
+			env.visitor('POST', '/v1/sign-in/two-step', { challenge: (await signIn('ivo@example.com')).json.challenge, ...answer });
+		// 5 wrong tries over fresh challenges (each password sign-in gives a new one): the user is locked
+		for (let i = 0; i < 3; i += 1) expect(code(await step({ code: bad }))).toBe('code_invalid');
+		const open = (await signIn('ivo@example.com')).json.challenge;
+		for (let i = 0; i < 2; i += 1) expect(code(await step({ recoveryCode: 'ZZZZZ-ZZZZZ' }))).toBe('code_invalid');
+		// even the right code of a challenge given before the lock is refused while it lasts
+		const locked = await env.visitor('POST', '/v1/sign-in/two-step', { challenge: open, code: good() });
+		expect(code(locked)).toBe('locked');
+		expect(Date.parse(locked.json.lockedUntil) - env.now()).toBe(15 * 60_000);
+		expect(code(await signIn('ivo@example.com'))).toBe('locked');
+		env.advance(16 * 60_000);
+		expect((await step({ code: good() })).json.status).toBe('signed_in');
+		expect((await userOf(user.id)).lockedUntil).toBeNull();
+	});
 });
 
 describe('A11: profile options', () => {

@@ -769,20 +769,36 @@ export const createFlows = (product, service) => {
 
 	// ------------------------------------------------------------------------------------------------- two-step
 
-	/** @param {any} ctx */
+	/**
+	 * The second step of a sign-in: a code from the authenticator app or a recovery code, or the first code while the
+	 * user sets two-step up. Wrong codes and wrong recovery codes count toward the user's lock like wrong passwords,
+	 * and the step is refused while the user is locked (ST-1), so a known password does not give unlimited guesses.
+	 * @param {any} ctx
+	 */
 	const twoStep = async (ctx) => {
 		const s = await service.site(ctx);
 		const body = bodyOf(ctx.body);
 		const record = await service.takeSecret(s, body.challenge, 'step', { keep: true });
 		const user = record ? await s.store.users.get(record.target) : null;
 		if (!record || !user) throw problem('code_invalid', 'This step has expired. Sign in again.');
+		if (user.lockedUntil && user.lockedUntil.getTime() > now())
+			throw problem('locked', 'Too many wrong tries. Try again later.', {
+				extensions: { lockedUntil: user.lockedUntil.toISOString() },
+			});
 		const how = {
 			method: String(record.data.method),
 			remember: record.data.remember === true,
 			device: String(record.data.device),
 		};
-		const wrong = async () => {
+		/** @param {{ counted: boolean }} [options] `counted`: a guess at the user's secret (not while setting it up) */
+		const wrong = async ({ counted } = { counted: true }) => {
 			if ((await s.store.codes.attempt(record.id)) >= CODE_ATTEMPTS) await s.store.codes.consume(record.id);
+			if (counted) {
+				const failures = await s.store.users.failedLogin(user.id);
+				await s.store.users.update(user.id, {
+					...lockAfter({ ...(await passwordRules(s, how.method)), failures, now: now() }),
+				});
+			}
 			await service.logSignIn(s, user, 'user.sign_in_failed', 'Wrong two-step code');
 			return problem('code_invalid', 'The code is not valid.');
 		};
@@ -790,7 +806,8 @@ export const createFlows = (product, service) => {
 			// the role requires two-step and the user sets it up now
 			const secret = product.sealer.open(record.data.setup, service.totpAad(s.websiteId, user.id));
 			const checked = secret ? verifyTotp(secret, body.code, { now: now(), lastStep: null }) : { ok: false };
-			if (!secret || !checked.ok) throw await wrong();
+			// the user holds the new secret already: a wrong first code is no guess
+			if (!secret || !checked.ok) throw await wrong({ counted: false });
 			const { codes, hashes } = generateRecoveryCodes();
 			const updated = await s.store.users.update(user.id, {
 				twoStep: {
