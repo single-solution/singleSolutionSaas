@@ -48,8 +48,8 @@ export const mountPromotionsAdmin = async (input) => {
 };
 
 /**
- * The loyalty section: look up a shopper's account by Accounts user id, see the balance, lots and history, and add or
- * take points with a note.
+ * The loyalty section: look up a shopper's account by customer id (members and guests, K-6) or Accounts user id, see
+ * the balance, lots and history, and add or take points with a note.
  * @param {Kit} kit @param {HTMLElement} panel
  */
 const loyaltyTab = (kit, panel) => {
@@ -77,7 +77,8 @@ const loyaltyTab = (kit, panel) => {
 				onSubmit: async () => {
 					const value = wholeOf(points.value);
 					if (value === null || Number.isNaN(value) || value === 0) return t('admin.checkNumbers');
-					const answer = await kit.call('POST', `/v1/admin/loyalty/accounts/${encodeURIComponent(data.userId)}/adjust`, {
+					const owner = data.userId || data.customerId;
+					const answer = await kit.call('POST', `/v1/admin/loyalty/accounts/${encodeURIComponent(owner)}/adjust`, {
 						points: value,
 						note: reason.value,
 					});
@@ -90,7 +91,7 @@ const loyaltyTab = (kit, panel) => {
 		/** @type {any[]} */
 		const soon = data.expiringSoon ?? [];
 		kit.put(account, [
-			detailHead(kit, [data.userId], [kit.button(t('promotionsAdmin.adjust'), adjust, { primary: true })]),
+			detailHead(kit, [data.userId || data.customerId], [kit.button(t('promotionsAdmin.adjust'), adjust, { primary: true })]),
 			note,
 			kit.fieldGrid([
 				[t('promotionsAdmin.balanceLabel'), t('promotionsAdmin.pointsText', { points: data.balance })],

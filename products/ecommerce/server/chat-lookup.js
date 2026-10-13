@@ -10,6 +10,7 @@
  * @module
  */
 import { defineRoute, problem } from '@ss/app-kit';
+import { ownerOrders } from '../adapters/fulfilment-store.js';
 import { loyaltyAccount } from '../adapters/ledger.js';
 import { loadOffers } from '../adapters/promotions-store.js';
 import { htmlToText } from '../core/catalog-content.js';
@@ -37,7 +38,7 @@ import {
 	warrantyOf,
 } from '../core/lookup.js';
 import { COLLECTIONS } from '../core/model.js';
-import { PAYMENT_METHODS } from '../core/orders.js';
+import { PAYMENT_METHODS, customerOwner, isCustomerId } from '../core/orders.js';
 import { createCatalogSearch } from './catalog-search.js';
 import { hiddenFor, visible, visibleMatch } from './catalog-visibility.js';
 import { createQuoting } from './checkout-quote.js';
@@ -212,28 +213,32 @@ export const createChatLookup = (product, service, media) => {
 	};
 
 	/**
-	 * The loyalty balance of a user (null while loyalty is off).
+	 * The loyalty balance of a user, or of a guest by customer id (null while loyalty is off).
 	 * @param {Site} s
 	 * @param {WebsiteData} data
-	 * @param {string} userId
+	 * @param {string | { userId: string } | { customerId: string }} owner
 	 */
-	const pointsOf = async (s, data, userId) =>
-		s.has('loyalty') ? (await loyaltyAccount(data, userId, { now: service.now() })).balance : null;
+	const pointsOf = async (s, data, owner) =>
+		s.has('loyalty') ? (await loyaltyAccount(data, owner, { now: service.now() })).balance : null;
 
 	/**
-	 * A user's most recent orders.
+	 * A user's most recent orders, or a guest's by customer id.
 	 * @param {WebsiteData} data
-	 * @param {string} userId
+	 * @param {string | { userId: string } | { customerId: string }} owner
 	 * @param {number} limit
 	 * @param {boolean} [shipped] only orders with a shipment
 	 * @returns {Promise<OrderRecord[]>}
 	 */
-	const ordersOf = async (data, userId, limit, shipped = false) =>
+	const ordersOf = async (data, owner, limit, shipped = false) =>
 		/** @type {OrderRecord[]} */ (
 			await data
 				.collection(COLLECTIONS.orders)
 				.find(
-					{ websiteId: data.websiteId, 'customer.userId': userId, ...(shipped ? { shipment: { $ne: null } } : {}) },
+					{
+						websiteId: data.websiteId,
+						...ownerOrders(typeof owner === 'string' ? { userId: owner } : owner),
+						...(shipped ? { shipment: { $ne: null } } : {}),
+					},
 					{ projection: ORDER_FIELDS },
 				)
 				.sort({ placedAt: -1, id: -1 })
@@ -664,15 +669,25 @@ export const createChatLookup = (product, service, media) => {
 		};
 	};
 
-	/** @param {any} ctx */
+	/**
+	 * A customer's latest orders and points (the Accounts Orders tab, Chat's context panel): by Accounts user id, or by
+	 * customer id for members and guests alike (K-6).
+	 * @param {any} ctx
+	 */
 	const customerOrders = async (ctx) => {
 		const s = await service.site(ctx);
 		const data = await s.data();
-		const userId = String(ctx.params.userId);
+		const ref = String(ctx.params.userId);
+		const record = isCustomerId(ref)
+			? await data
+					.collection(COLLECTIONS.customers)
+					.findOne({ websiteId: data.websiteId, id: ref }, { projection: { _id: 0 } })
+			: null;
+		const owner = record ? customerOwner(record) : { userId: ref };
 		const [orders, flow, loyaltyPoints, { money }] = await Promise.all([
-			ordersOf(data, userId, limitOf(ctx.query.limit, 10, 50)),
+			ordersOf(data, owner, limitOf(ctx.query.limit, 10, 50)),
 			flowOf(s),
-			pointsOf(s, data, userId),
+			pointsOf(s, data, owner),
 			s.format(),
 		]);
 		return {

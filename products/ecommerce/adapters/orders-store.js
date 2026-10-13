@@ -132,6 +132,16 @@ export const createOrdersStore = (data) => {
 				await data.collection(COLLECTIONS.customers).findOne({ websiteId, guest: true, phone }, NO_ID)
 			),
 		/**
+		 * A member's record with this normalised phone (a returning customer ordering as a guest, K-6).
+		 * @param {string} phone @returns {Promise<CustomerRecord | null>}
+		 */
+		memberByPhone: async (phone) =>
+			/** @type {CustomerRecord | null} */ (
+				await data
+					.collection(COLLECTIONS.customers)
+					.findOne({ websiteId, phone, userId: { $type: 'string', $ne: '' } }, { ...NO_ID, sort: { lastOrderAt: -1 } })
+			),
+		/**
 		 * The customer record of a member or a guest, made when missing (its `cus_` id is kept for good), with their latest
 		 * details. A member is found by user id, a guest by normalised phone (E21).
 		 * @param {{ userId: string | null, name: string, email: string, phone: string }} who

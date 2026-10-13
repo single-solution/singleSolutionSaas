@@ -1,7 +1,8 @@
 /**
  * Promotions (PLAN 0.8.8): coupons, deals, bundles and loyalty points for the merchant and the shopper. The merchant's
  * coupons, deals and bundles are in `promotions-offers.js`; here are the loyalty accounts (look up a shopper's points
- * by Accounts user id and adjust them, server token and ticket with `loyalty.manage`), the shopper's routes (the live
+ * by customer id — members and guests alike, K-6 — or Accounts user id and adjust them, server token and ticket with
+ * `loyalty.manage`), the shopper's routes (the live
  * deals, a product's price after deals, the signed-in shopper's points), the data rights (the loyalty account and the
  * coupon uses of an Accounts user) and the loyalty settings the widgets need.
  * @module
@@ -18,6 +19,7 @@ import {
 } from '../adapters/promotions-store.js';
 import { byShowOrder, dealRulesOf, publicDeal } from '../core/deals.js';
 import { COLLECTIONS } from '../core/model.js';
+import { isCustomerId } from '../core/orders.js';
 import { expiringSoon, expiryFor, historyView, loyaltyRules, pointsValue, SHOPPER_HISTORY } from '../core/loyalty.js';
 import { quoteProduct } from '../core/promotions.js';
 import { checkText, checkWhole } from '../core/promotions-rules.js';
@@ -57,11 +59,25 @@ export const createPromotions = (product, service) => {
 	 */
 	const shopDeal = async (s, deal) => publicDeal(deal, { bannerUrl: await media.mediaUrl(s, deal.banner?.key) });
 
-	/** @param {unknown} value */
-	const userIdOf = (value) => {
-		const id = typeof value === 'string' ? value : '';
-		if (id.length === 0 || id.length > 128) throw problem('not_found', 'No such shopper.');
-		return id;
+	/**
+	 * Whose account a route names (K-6): a customer id (`cus_…`: the member's account when the customer has an Accounts
+	 * user, else the guest's) or an Accounts user id; with the customer's name for the activity log.
+	 * @param {import('@ss/app-kit').WebsiteData} data @param {unknown} value
+	 * @returns {Promise<{ owner: string | { customerId: string }, name: string }>}
+	 */
+	const ownerOf = async (data, value) => {
+		const ref = typeof value === 'string' ? value : '';
+		if (ref.length === 0 || ref.length > 128) throw problem('not_found', 'No such shopper.');
+		const customer = await data
+			.collection(COLLECTIONS.customers)
+			.findOne(
+				{ websiteId: data.websiteId, ...(isCustomerId(ref) ? { id: ref } : { userId: ref }) },
+				{ projection: { _id: 0, id: 1, userId: 1, name: 1 } },
+			);
+		if (!customer && isCustomerId(ref)) throw problem('not_found', 'No such shopper.');
+		const name = customer?.name ? String(customer.name) : '';
+		if (!isCustomerId(ref)) return { owner: ref, name };
+		return { owner: customer?.userId ? String(customer.userId) : { customerId: ref }, name };
 	};
 
 	/**
@@ -72,6 +88,7 @@ export const createPromotions = (product, service) => {
 		const settings = await s.values('loyalty');
 		return {
 			userId: account.userId,
+			customerId: account.customerId ?? null,
 			balance: account.balance,
 			value: pointsValue(account.balance, settings),
 			currency: s.currency,
@@ -91,8 +108,9 @@ export const createPromotions = (product, service) => {
 	/** @param {any} ctx */
 	const readAccount = async (ctx) => {
 		const s = await service.site(ctx);
-		const account = await loyaltyAccount(await s.data(), userIdOf(ctx.params.userId), { now: now() });
-		return accountView(s, account);
+		const data = await s.data();
+		const { owner } = await ownerOf(data, ctx.params.userId);
+		return accountView(s, await loyaltyAccount(data, owner, { now: now() }));
 	};
 
 	/** Add (+) or take (−) points with a note. @param {any} ctx */
@@ -103,9 +121,9 @@ export const createPromotions = (product, service) => {
 			return invalid('points', 'points is a whole number other than 0 (negative takes points).');
 		const note = checkText(body.note, 'note', { min: 0, max: 200, fallback: '' });
 		if (!note.ok) return invalid(note.field, note.message);
-		const userId = userIdOf(ctx.params.userId);
 		const s = await service.site(ctx);
 		const data = await s.data();
+		const { owner, name } = await ownerOf(data, ctx.params.userId);
 		const settings = await s.values('loyalty');
 		for (let attempt = 0; attempt < WRITE_TRIES; attempt += 1) {
 			const at = now();
@@ -113,7 +131,7 @@ export const createPromotions = (product, service) => {
 				const given = await givePoints(
 					data,
 					{
-						userId,
+						userId: owner,
 						points: points.value,
 						orderId: null,
 						kind: 'adjust',
@@ -124,24 +142,22 @@ export const createPromotions = (product, service) => {
 				);
 				if (!given) continue;
 			} else {
-				const account = await loyaltyAccount(data, userId, { now: at });
+				const account = await loyaltyAccount(data, owner, { now: at });
 				if (account.balance < -points.value)
 					return invalid('points', `The balance is ${account.balance} points; at most that many can be taken.`, 'too_many');
 				const taken = await takePoints(
 					data,
-					{ userId, points: -points.value, orderId: null, kind: 'adjust', note: note.value },
+					{ userId: owner, points: -points.value, orderId: null, kind: 'adjust', note: note.value },
 					{ now: at },
 				);
 				if (!taken.ok) continue;
 			}
-			const customer = await data
-				.collection(COLLECTIONS.customers)
-				.findOne({ websiteId: data.websiteId, userId }, { projection: { _id: 0, name: 1 } });
-			await service.log(ctx, 'loyalty.adjusted', userId, {
-				label: customer?.name ? String(customer.name) : userId,
+			const target = String(ctx.params.userId);
+			await service.log(ctx, 'loyalty.adjusted', target, {
+				label: name || target,
 				detail: `${points.value > 0 ? '+' : ''}${points.value} points`,
 			});
-			return accountView(s, await loyaltyAccount(data, userId, { now: now() }));
+			return accountView(s, await loyaltyAccount(data, owner, { now: now() }));
 		}
 		return problem('points_changed', 'The points changed meanwhile: try again.');
 	};

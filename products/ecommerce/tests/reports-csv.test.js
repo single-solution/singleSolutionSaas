@@ -352,7 +352,8 @@ describe('CSV', () => {
 				lastOrderAt: new Date('2026-10-04T20:30:00Z'),
 			},
 			{
-				userId: 'usr_zed',
+				id: 'cus_zed',
+				userId: null,
 				name: 'Zed',
 				email: 'zed@example.com',
 				phone: '',
@@ -360,17 +361,28 @@ describe('CSV', () => {
 				blocked: true,
 				blockedReason: 'Fake orders',
 				rtoCount: 0,
-				orderCount: 0,
+				orderCount: 1,
 				note: '=1+1',
 			},
 		]);
+		// a guest's orders are theirs by customer id (CU-5)
+		const guestOrder = /** @type {any} */ (
+			await data.collection(COLLECTIONS.orders).findOne({ websiteId: shop.websiteId }, { projection: { _id: 0 } })
+		);
+		await data.collection(COLLECTIONS.orders).insertOne({
+			...guestOrder,
+			id: 'ord_zed',
+			number: 'R-Z',
+			customer: { userId: '', customerId: 'cus_zed', name: 'Zed', email: 'zed@example.com', phone: '' },
+			payment: { ...guestOrder.payment, paid: 700, refunded: 0 },
+		});
 		const answer = await shop.api('GET', '/v1/csv/customers');
 		expect(answer.status).toBe(200);
 		expect(answer.headers.get('content-disposition')).toBe('attachment; filename="customers.csv"');
 		expect(linesOf(answer)).toEqual([
-			'user_id,name,email,phone,city,guest,orders,spent,currency,blocked,blocked_reason,returned_parcels,note,last_order_at',
-			"usr_ann,Ann,ann@example.com,'+15550001,Lahore,false,2,15.00,USD,false,,1,,2026-10-04T20:30:00.000Z",
-			"usr_zed,Zed,zed@example.com,,,true,0,0.00,USD,true,Fake orders,0,'=1+1,",
+			'user_id,customer_id,name,email,phone,city,guest,orders,spent,currency,blocked,blocked_reason,returned_parcels,note,last_order_at',
+			"usr_ann,,Ann,ann@example.com,'+15550001,Lahore,false,2,15.00,USD,false,,1,,2026-10-04T20:30:00.000Z",
+			",cus_zed,Zed,zed@example.com,,,true,1,7.00,USD,true,Fake orders,0,'=1+1,",
 		]);
 		const staff = await shop.ticket(['csv.run']);
 		expect(linesOf(await shop.admin(staff, 'GET', '/v1/admin/csv/customers'))).toHaveLength(3);

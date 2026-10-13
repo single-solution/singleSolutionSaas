@@ -546,6 +546,16 @@ describe('promotions admin: deals and bundles', () => {
 });
 
 describe('promotions admin: loyalty', () => {
+	const account = () => ({
+		userId: 'u 1',
+		balance: 120,
+		value: 1200,
+		currency: 'PKR',
+		lots: [{ id: 'l1', points: 150, left: 120, earnedAt: AT, expiresAt: null, orderId: 'ord_1' }],
+		history: [{ at: AT, kind: 'earn', points: 150, orderId: 'ord_1', note: '' }],
+		expiringSoon: [{ points: 20, expiresAt: AT }],
+	});
+
 	it('looks up an account and adjusts points', async () => {
 		const account = {
 			userId: 'u 1',
@@ -566,13 +576,13 @@ describe('promotions admin: loyalty', () => {
 			['loyalty'],
 		);
 		const panel = panelOf(root, 'loyalty');
-		await submit(fieldIn(panel, 'User id'));
+		await submit(fieldIn(panel, 'Customer or user id'));
 		expect(server.calls.filter((call) => call.path.includes('loyalty'))).toHaveLength(0);
-		type(fieldIn(panel, 'User id'), 'nobody');
-		await submit(fieldIn(panel, 'User id'));
+		type(fieldIn(panel, 'Customer or user id'), 'nobody');
+		await submit(fieldIn(panel, 'Customer or user id'));
 		expect(statuses(panel)).toContain('You are not allowed to do this.');
-		type(fieldIn(panel, 'User id'), 'u 1');
-		await submit(fieldIn(panel, 'User id'));
+		type(fieldIn(panel, 'Customer or user id'), 'u 1');
+		await submit(fieldIn(panel, 'Customer or user id'));
 		expect(textOf(panel)).toContain('Balance120 points');
 		expect(textOf(panel)).toContain('WorthPKR 12.00');
 		expect(textOf(panel)).toContain('20 points');
@@ -591,5 +601,25 @@ describe('promotions admin: loyalty', () => {
 		type(fieldIn(dialogOf(root), 'Points'), '-500');
 		await submitDialog(root);
 		expect(dialogStatus(root)).toBe('The balance is 130 points; at most that many can be taken.');
+	});
+
+	it('adjusts a guest’s points by their customer id (K-6)', async () => {
+		const guest = { ...account(), userId: null, customerId: 'cus_g1' };
+		const { root, server } = await start(
+			{
+				'GET /v1/admin/loyalty/accounts/cus_g1': () => answer(200, guest),
+				'POST /v1/admin/loyalty/accounts/cus_g1/adjust': () => answer(200, { ...guest, balance: 125 }),
+			},
+			['loyalty'],
+		);
+		const panel = panelOf(root, 'loyalty');
+		type(fieldIn(panel, 'Customer or user id'), 'cus_g1');
+		await submit(fieldIn(panel, 'Customer or user id'));
+		expect(textOf(panel)).toContain('cus_g1');
+		await click(buttonIn(panel, 'Change points'));
+		type(fieldIn(dialogOf(root), 'Points'), '5');
+		await submitDialog(root);
+		expect(server.last('POST /v1/admin/loyalty/accounts/cus_g1/adjust')?.body).toEqual({ points: 5, note: '' });
+		expect(textOf(panel)).toContain('125 points');
 	});
 });

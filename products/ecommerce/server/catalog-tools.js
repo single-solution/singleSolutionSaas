@@ -155,7 +155,7 @@ export const createCatalogTools = (product, service, common) => {
 				.limit(MAX_EXPORT_CUSTOMERS)
 				.toArray()
 		);
-		const spent = await createFulfilmentStore(data).orders.spent(customers.map((customer) => customer.userId).filter(Boolean));
+		const spent = await createFulfilmentStore(data).orders.spent(customers);
 		await service.log(ctx, 'csv.customers_exported', 'customers', {
 			label: 'customers.csv',
 			detail: `${customers.length} customers`,

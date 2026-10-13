@@ -119,7 +119,10 @@ export const createOrders = (product, service, { ordering = null } = {}) => {
 	const detailOf = async (s, order) => {
 		const [flow, customer, { money }] = await Promise.all([
 			flowOf(s),
-			order.customer.userId ? (await storeOf(s)).customers.get(order.customer.userId) : null,
+			// a guest order's customer by customer id (K-6), an older member order's by user id
+			order.customer.customerId || order.customer.userId
+				? (await storeOf(s)).customers.find(order.customer.customerId || order.customer.userId)
+				: null,
 			s.format(),
 		]);
 		/** @type {Map<string, string | null>} */

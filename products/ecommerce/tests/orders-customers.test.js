@@ -1,6 +1,7 @@
 /**
  * Customers for the merchant (PLAN 0.8.8: only shop records linked to the Accounts user id): list and search with
- * what each paid, one customer with their latest orders, the blocklist, the staff note and the RTO count.
+ * what each paid, one customer with their latest orders, the blocklist, the staff note and the RTO count; guests and
+ * members by customer id, with their orders, spend and points (K-6, CU-5).
  */
 import { createId } from '@ss/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -51,38 +52,6 @@ beforeAll(async () => {
 			note: '',
 		},
 	]);
-	/** @param {string} userId @param {string} name @param {number} paid @param {number} refunded */
-	const order = (userId, name, paid, refunded) => ({
-		id: createId('ord'),
-		number: `C-${createId('num').slice(4, 12)}`,
-		customer: { userId, name, email: `${name.toLowerCase()}@example.com`, phone: '' },
-		address: null,
-		delivery: { method: 'none', zone: '', fee: 0, locationId: null },
-		lines: [],
-		totals: { subtotal: paid, discount: 0, delivery: 0, tax: 0, total: paid, currency: 'USD', taxIncluded: true },
-		promotions: {
-			couponId: null,
-			couponCode: '',
-			dealIds: [],
-			bundleIds: [],
-			pointsRedeemed: 0,
-			pointsValue: 0,
-			pointsEarned: 0,
-			released: false,
-		},
-		payment: { method: 'online', state: 'paid', paymentId: 'pay_1', advance: 0, paid, refunded, checkedAt: null },
-		status: 'delivered',
-		role: 'delivered',
-		history: [],
-		shipment: null,
-		stockHeld: true,
-		holdUntil: null,
-		idempotencyKey: createId('key'),
-		note: '',
-		staffNote: '',
-		placedAt: new Date(shop.now()),
-		deliveredAt: null,
-	});
 	await data
 		.collection(COLLECTIONS.orders)
 		.insertMany([
@@ -92,6 +61,43 @@ beforeAll(async () => {
 		]);
 });
 afterAll(async () => shop.product.close());
+
+/**
+ * A delivered order paid online.
+ * @param {string} userId @param {string} name @param {number} paid @param {number} refunded
+ * @param {string} [customerId]
+ */
+const order = (userId, name, paid, refunded, customerId) => ({
+	id: createId('ord'),
+	number: `C-${createId('num').slice(4, 12)}`,
+	customer: { userId, name, email: `${name.toLowerCase()}@example.com`, phone: '', ...(customerId ? { customerId } : {}) },
+	address: null,
+	delivery: { method: 'none', zone: '', fee: 0, locationId: null },
+	lines: [],
+	totals: { subtotal: paid, discount: 0, delivery: 0, tax: 0, total: paid, currency: 'USD', taxIncluded: true },
+	promotions: {
+		couponId: null,
+		couponCode: '',
+		dealIds: [],
+		bundleIds: [],
+		pointsRedeemed: 0,
+		pointsValue: 0,
+		pointsEarned: 0,
+		released: false,
+	},
+	payment: { method: 'online', state: 'paid', paymentId: 'pay_1', advance: 0, paid, refunded, checkedAt: null },
+	status: 'delivered',
+	role: 'delivered',
+	history: [],
+	shipment: null,
+	stockHeld: true,
+	holdUntil: null,
+	idempotencyKey: createId('key'),
+	note: '',
+	staffNote: '',
+	placedAt: new Date(shop.now()),
+	deliveredAt: null,
+});
 
 describe('customers', () => {
 	it('lists customers A to Z with what they paid, searches and pages', async () => {
@@ -151,5 +157,124 @@ describe('customers', () => {
 			.findOne({ websiteId: shop.websiteId, userId: 'usr_dan00000001' });
 		expect(record).toMatchObject({ email: 'dan@example.com', blocked: true, note: '' });
 		expect((await shop.api('PATCH', '/v1/customers/usr_nobody0000001', { note: 'x' })).status).toBe(404);
+	});
+});
+
+describe('guests and members by customer id (K-6, CU-5)', () => {
+	const GUEST = createId('cus');
+	const MEMBER = createId('cus');
+	/** @type {any} */
+	let guestOrder;
+
+	beforeAll(async () => {
+		const data = await shop.db();
+		await data.collection(COLLECTIONS.customers).insertMany([
+			{
+				id: GUEST,
+				userId: null,
+				guest: true,
+				name: 'Gail Guest',
+				email: '',
+				phone: '+15550000009',
+				blocked: false,
+				blockedReason: '',
+				rtoCount: 0,
+				orderCount: 2,
+				note: '',
+			},
+			{
+				id: MEMBER,
+				userId: 'usr_mia00000001',
+				name: 'Mia Member',
+				email: 'mia@example.com',
+				phone: '+15550000010',
+				blocked: false,
+				blockedReason: '',
+				rtoCount: 0,
+				orderCount: 1,
+				note: '',
+			},
+		]);
+		guestOrder = order('', 'Gail', 3000, 0, GUEST);
+		await data
+			.collection(COLLECTIONS.orders)
+			.insertMany([guestOrder, order('', 'Gail', 1000, 1000, GUEST), order('usr_mia00000001', 'Mia', 700, 0, MEMBER)]);
+		await data.collection(COLLECTIONS.loyalty).insertOne({
+			websiteId: shop.websiteId,
+			userId: null,
+			customerId: GUEST,
+			balance: 40,
+			lifetimeEarned: 40,
+			lots: [{ id: 'lot_1', points: 40, left: 40, earnedAt: new Date(shop.now()), expiresAt: null, orderId: null }],
+			history: [],
+			version: 1,
+		});
+	});
+
+	it('lists a guest with their customer id, what they paid and their orders', async () => {
+		const listed = await shop.api('GET', '/v1/customers?segment=guest');
+		const gail = listed.json.items.find((/** @type {any} */ c) => c.name === 'Gail Guest');
+		expect(gail).toMatchObject({ id: GUEST, userId: '', guest: true, totalSpent: 3000, ordersPlaced: 2 });
+		const mia = (await shop.api('GET', '/v1/customers?q=Mia')).json.items[0];
+		expect(mia).toMatchObject({ id: MEMBER, userId: 'usr_mia00000001', guest: false, totalSpent: 700, ordersPlaced: 1 });
+	});
+
+	it('opens, notes, blocks and marks seen a guest by customer id, and a member by either id', async () => {
+		const gail = await shop.admin(ticket, 'GET', `/v1/admin/customers/${GUEST}`);
+		expect(gail.status).toBe(200);
+		expect(gail.json).toMatchObject({ id: GUEST, guest: true, name: 'Gail Guest', totalSpent: 3000 });
+		expect(gail.json.recentOrders).toHaveLength(2);
+		const blocked = await shop.admin(ticket, 'PATCH', `/v1/admin/customers/${GUEST}`, {
+			blocked: true,
+			blockedReason: 'Refused parcels',
+			note: 'Calls at night',
+		});
+		expect(blocked.json).toMatchObject({ id: GUEST, blocked: true, blockedReason: 'Refused parcels', note: 'Calls at night' });
+		const record = await (await shop.db()).collection(COLLECTIONS.customers).findOne({ websiteId: shop.websiteId, id: GUEST });
+		expect(record).toMatchObject({ userId: null, guest: true, blocked: true });
+		expect((await shop.api('POST', `/v1/customers/${GUEST}/seen`)).json).toEqual({ seen: true });
+		// the staff order view shows the guest's flags
+		const detail = await shop.api('GET', `/v1/orders/${guestOrder.id}`);
+		expect(detail.json.customerFlags).toMatchObject({ blocked: true, note: 'Calls at night', orderCount: 2 });
+		await shop.api('PATCH', `/v1/customers/${GUEST}`, { blocked: false });
+
+		const byId = await shop.api('GET', `/v1/customers/${MEMBER}`);
+		const byUser = await shop.api('GET', '/v1/customers/usr_mia00000001');
+		expect(byId.json).toMatchObject({ id: MEMBER, userId: 'usr_mia00000001', totalSpent: 700 });
+		expect(byUser.json).toEqual(byId.json);
+		const noted = await shop.api('PATCH', `/v1/customers/${MEMBER}`, { note: 'VIP' });
+		expect(noted.json).toMatchObject({ userId: 'usr_mia00000001', note: 'VIP' });
+		expect((await shop.api('GET', `/v1/customers/${createId('cus')}`)).status).toBe(404);
+		expect((await shop.api('PATCH', `/v1/customers/${createId('cus')}`, { note: 'x' })).status).toBe(404);
+	});
+
+	it('reads and adjusts a guest’s points by customer id, and a member’s through their customer id', async () => {
+		const read = await shop.api('GET', `/v1/loyalty/accounts/${GUEST}`);
+		expect(read.json).toMatchObject({ userId: null, customerId: GUEST, balance: 40 });
+		const given = await shop.admin(
+			await shop.ticket(['loyalty.manage']),
+			'POST',
+			`/v1/admin/loyalty/accounts/${GUEST}/adjust`,
+			{
+				points: 10,
+				note: 'Welcome back',
+			},
+		);
+		expect(given.json).toMatchObject({ customerId: GUEST, balance: 50 });
+		const taken = await shop.api('POST', `/v1/loyalty/accounts/${GUEST}/adjust`, { points: -15 });
+		expect(taken.json.balance).toBe(35);
+		const loyalty = await (await shop.db()).collection(COLLECTIONS.loyalty).find({ websiteId: shop.websiteId }).toArray();
+		expect(loyalty.filter((account) => account.customerId === GUEST || account.userId === GUEST)).toHaveLength(1);
+		const member = await shop.api('POST', `/v1/loyalty/accounts/${MEMBER}/adjust`, { points: 5 });
+		expect(member.json).toMatchObject({ userId: 'usr_mia00000001', balance: 5 });
+		expect((await shop.api('GET', '/v1/loyalty/accounts/usr_mia00000001')).json.balance).toBe(5);
+		expect((await shop.api('GET', `/v1/loyalty/accounts/${createId('cus')}`)).status).toBe(404);
+	});
+
+	it('lists a guest’s orders and points for Accounts and Chat by customer id', async () => {
+		const orders = await shop.api('GET', `/v1/customers/${GUEST}/orders`);
+		expect(orders.json.items).toHaveLength(2);
+		expect(orders.json.loyaltyPoints).toBe(35);
+		expect((await shop.api('GET', '/v1/customers/usr_mia00000001/orders')).json.items).toHaveLength(1);
 	});
 });

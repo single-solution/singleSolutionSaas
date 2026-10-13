@@ -6,7 +6,7 @@
  * @module
  */
 import { nextStatuses, statusOf } from './flow.js';
-import { STATUS_ROLES } from './model.js';
+import { ID_PREFIX, STATUS_ROLES } from './model.js';
 import { isAmount } from './money.js';
 import { MAX_TRACKING, cleanTracking, hasControl } from './couriers.js';
 
@@ -882,14 +882,37 @@ export const orderDetail = (order, flow, { customer, images, money, serialized =
 };
 
 /**
- * A customer as staff see it.
+ * Whether a customer reference is a customer id (`cus_…`, members and guests alike; K-6) rather than an Accounts user id.
+ * @param {string} ref
+ */
+export const isCustomerId = (ref) => ref.startsWith(`${ID_PREFIX.customer}_`);
+
+/**
+ * Whose orders, points and spend a customer record holds: a member's by Accounts user id, a guest's by customer id.
+ * @param {Partial<CustomerRecord>} customer
+ * @returns {{ userId: string } | { customerId: string }}
+ */
+export const customerOwner = (customer) =>
+	customer.userId ? { userId: customer.userId } : { customerId: String(customer.id ?? '') };
+
+/**
+ * The key a customer's spend is grouped under (`u:<user id>` for a member, `c:<customer id>` for a guest).
+ * @param {Partial<CustomerRecord>} customer
+ */
+export const spentKey = (customer) => (customer.userId ? `u:${customer.userId}` : `c:${customer.id ?? ''}`);
+
+/**
+ * A customer as staff see it: `id` is the customer id (`cus_…`) the staff routes take for members and guests alike
+ * (K-6), `guest` whether they have no Accounts user.
  * @param {Partial<CustomerRecord> & { createdAt?: Date, updatedAt?: Date }} customer
- * @param {{ total: number, count: number }} spent orders that were not cancelled
+ * @param {{ total: number, count: number }} spent what they paid (paid − refunded) over all their orders, and how many
  * @param {string} currency
  * @param {Money} money
  */
 export const customerView = (customer, spent, currency, money) => ({
+	id: customer.id ?? '',
 	userId: customer.userId ?? '',
+	guest: !customer.userId,
 	name: customer.name ?? '',
 	email: customer.email ?? '',
 	phone: customer.phone ?? '',

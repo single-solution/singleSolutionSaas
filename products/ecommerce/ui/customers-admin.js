@@ -40,10 +40,16 @@ export const mountCustomersAdmin = async (input) => {
 };
 
 /**
- * A customer's name for people: the name, else the e-mail, else the user id.
+ * A customer's name for people: the name, else the e-mail, else the user id or customer id.
  * @param {any} customer
  */
-const nameOf = (customer) => customer.name || customer.email || customer.userId;
+const nameOf = (customer) => customer.name || customer.email || customer.userId || customer.id;
+
+/**
+ * How the staff routes name a customer (K-6): their customer id (members and guests alike), else their user id.
+ * @param {any} customer
+ */
+const refOf = (customer) => customer.id || customer.userId;
 
 /**
  * The customers section.
@@ -114,8 +120,8 @@ const customersTab = (kit, panel) => {
 					? t('customersAdmin.rtoCount', { count: customer.rtoCount })
 					: t('customersAdmin.canOrder'),
 		}),
-		key: (customer) => customer.userId,
-		open: (customer, detail) => customerDetail(kit, customer.userId, detail),
+		key: (customer) => refOf(customer),
+		open: (customer, detail) => customerDetail(kit, refOf(customer), detail),
 		empty: t('customersAdmin.noCustomers'),
 		nothing: t('customersAdmin.nothing'),
 		filters: [form, chips.node],
@@ -126,13 +132,13 @@ const customersTab = (kit, panel) => {
 
 /**
  * Show one customer in the detail pane.
- * @param {Kit} kit @param {string} userId @param {Detail} detail
+ * @param {Kit} kit @param {string} ref the customer id or user id @param {Detail} detail
  */
-const customerDetail = async (kit, userId, detail) => {
+const customerDetail = async (kit, ref, detail) => {
 	const line = kit.status();
 	kit.put(detail.pane, [detail.back, line]);
 	kit.say(line, kit.t('customersAdmin.loading'));
-	const answer = await kit.call('GET', `/v1/admin/customers/${encodeURIComponent(userId)}`);
+	const answer = await kit.call('GET', `/v1/admin/customers/${encodeURIComponent(ref)}`);
 	if (!detail.current()) return;
 	if (answer.ok) renderCustomer(kit, answer.data, detail, '');
 	else kit.fail(line, answer);
@@ -143,7 +149,7 @@ const customerDetail = async (kit, userId, detail) => {
  */
 const renderCustomer = (kit, customer, detail, message) => {
 	const { t, has } = kit;
-	const path = `/v1/admin/customers/${encodeURIComponent(customer.userId)}`;
+	const path = `/v1/admin/customers/${encodeURIComponent(refOf(customer))}`;
 	const note = kit.status();
 	/** @param {Record<string, unknown>} body @param {string} text @returns {Promise<string | null>} */
 	const change = async (body, text) => {
@@ -218,7 +224,7 @@ const renderCustomer = (kit, customer, detail, message) => {
 		kit.fieldGrid([
 			[t('customersAdmin.email'), customer.email],
 			[t('customersAdmin.phone'), customer.phone],
-			[t('customersAdmin.userId'), customer.userId],
+			[t('customersAdmin.userId'), customer.userId || t('customersAdmin.guest')],
 			[t('customersAdmin.ordersPlaced'), String(customer.ordersPlaced)],
 			[t('customersAdmin.totalSpent'), kit.money(customer.totalSpent)],
 			[t('customersAdmin.rto'), String(customer.rtoCount)],
@@ -228,7 +234,8 @@ const renderCustomer = (kit, customer, detail, message) => {
 		cards,
 	]);
 	kit.say(note, message);
-	if (has('returns')) void claimsCard(kit, customer, cards, detail);
+	// claims are listed by Accounts user id: a guest's are on their orders
+	if (has('returns') && customer.userId) void claimsCard(kit, customer, cards, detail);
 };
 
 /**

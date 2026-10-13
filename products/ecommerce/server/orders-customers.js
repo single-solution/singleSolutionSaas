@@ -1,14 +1,24 @@
 /**
- * Customers for the merchant (PLAN 0.8.8: Ecommerce keeps only shop records linked to the Accounts user id): the list
- * and search with what each customer paid, one customer with their latest orders, and the blocklist (a blocked
- * shopper cannot order; checkout reads `blocked`), the staff note and the return-to-origin count. The list has counts
- * (`count`, and `counts` by `blocked`; PLAN 0.8.10 K4) with the same filters.
+ * Customers for the merchant (PLAN 0.8.8: Ecommerce keeps only shop records linked to the Accounts user id; E21:
+ * guests too): the list and search with what each customer paid, one customer with their latest orders, and the
+ * blocklist (a blocked shopper cannot order; checkout reads `blocked`), the staff note and the return-to-origin count.
+ * One customer is named by their customer id (`cus_…`, members and guests alike) or a member's Accounts user id (K-6);
+ * a guest's orders and spend are theirs by customer id. The list has counts (`count`, and `counts` by `blocked`; PLAN
+ * 0.8.10 K4) with the same filters.
  * @module
  */
 import { countHandlers, paginate, problem } from '@ss/app-kit';
 import { createFulfilmentStore, customerFilter, markSeenBy } from '../adapters/fulfilment-store.js';
 import { COLLECTIONS } from '../core/model.js';
-import { MAX_SEARCH, checkCustomerEdit, customerView, orderSummary } from '../core/orders.js';
+import {
+	MAX_SEARCH,
+	checkCustomerEdit,
+	customerOwner,
+	customerView,
+	isCustomerId,
+	orderSummary,
+	spentKey,
+} from '../core/orders.js';
 
 /** @typedef {import('./service.js').Service} Service */
 /** @typedef {import('./service.js').Site} Site */
@@ -16,7 +26,8 @@ import { MAX_SEARCH, checkCustomerEdit, customerView, orderSummary } from '../co
 /** A customer shows this many of their latest orders. */
 const RECENT_ORDERS = 10;
 
-const USER_ID = /^[A-Za-z0-9_-]{1,100}$/;
+/** A customer id (`cus_…`) or an Accounts user id. */
+const CUSTOMER_REF = /^[A-Za-z0-9_-]{1,100}$/;
 /** Customer list segments (E31). */
 const SEGMENTS = Object.freeze(['loyalty', 'active', 'guest']);
 
@@ -28,10 +39,10 @@ export const createCustomers = (service) => {
 	const storeOf = async (s) => createFulfilmentStore(await s.data());
 
 	/** @param {any} ctx */
-	const userIdOf = (ctx) => {
-		const userId = String(ctx.params.userId ?? '');
-		if (!USER_ID.test(userId)) throw problem('not_found', 'There is no such customer.');
-		return userId;
+	const refOf = (ctx) => {
+		const ref = String(ctx.params.userId ?? '');
+		if (!CUSTOMER_REF.test(ref)) throw problem('not_found', 'There is no such customer.');
+		return ref;
 	};
 
 	/**
@@ -100,56 +111,62 @@ export const createCustomers = (service) => {
 		const s = await service.site(ctx);
 		const store = await storeOf(s);
 		const rows = await store.customers.list({ ...query, after: page.after, limit: page.fetchLimit });
-		const spent = await store.orders.spent(rows.map((row) => row.userId));
+		const spent = await store.orders.spent(rows);
 		const { money } = await s.format();
 		return page.respond(
-			rows.map((row) => customerView(row, spent.get(row.userId) ?? { total: 0, count: 0 }, s.currency, money)),
+			rows.map((row) => customerView(row, spent.get(spentKey(row)) ?? { total: 0, count: 0 }, s.currency, money)),
 			(view) => [view.name, view.userId],
 		);
 	};
 
 	/**
-	 * A customer record, else one made from their latest order, else 404.
-	 * @param {Site} s @param {string} userId
+	 * A customer by customer id or user id (K-6): their record, else (a member) one made from their latest order, else
+	 * 404.
+	 * @param {Site} s @param {string} ref
 	 */
-	const find = async (s, userId) => {
+	const find = async (s, ref) => {
 		const store = await storeOf(s);
-		const [record, recent] = await Promise.all([store.customers.get(userId), store.orders.ofCustomer(userId, RECENT_ORDERS)]);
+		const record = await store.customers.find(ref);
+		if (!record && isCustomerId(ref)) throw problem('not_found', 'There is no such customer.');
+		const owner = record ? customerOwner(record) : { userId: ref };
+		const recent = await store.orders.ofCustomer(owner, RECENT_ORDERS);
 		const latest = recent[0];
 		if (!record && !latest) throw problem('not_found', 'There is no such customer.');
 		const details = latest
 			? { name: latest.customer.name, email: latest.customer.email, phone: latest.customer.phone }
 			: { name: '', email: '', phone: '' };
-		return { store, record, recent, details };
+		return { store, record, recent, details, userId: record ? (record.userId ?? '') : ref };
 	};
 
 	/**
-	 * @param {Site} s @param {string} userId
+	 * @param {Site} s @param {string} ref
 	 */
-	const view = async (s, userId) => {
-		const { store, record, recent, details } = await find(s, userId);
-		const spent = (await store.orders.spent([userId])).get(userId) ?? { total: 0, count: 0 };
+	const view = async (s, ref) => {
+		const { store, record, recent, details, userId } = await find(s, ref);
+		const shown = record ?? { userId, ...details };
+		const spent = (await store.orders.spent([shown])).get(spentKey(shown)) ?? { total: 0, count: 0 };
 		const flow = /** @type {import('../core/model.js').OrderFlow} */ (/** @type {unknown} */ (await s.list('order_flow')));
 		const { money } = await s.format();
 		return {
-			...customerView(record ?? { userId, ...details }, spent, s.currency, money),
+			...customerView(shown, spent, s.currency, money),
 			recentOrders: recent.map((order) => orderSummary(order, flow, money)),
 		};
 	};
 
 	/** @param {any} ctx */
-	const read = async (ctx) => view(await service.site(ctx), userIdOf(ctx));
+	const read = async (ctx) => view(await service.site(ctx), refOf(ctx));
 
 	/** @param {any} ctx */
 	const edit = async (ctx) => {
-		const userId = userIdOf(ctx);
+		const ref = refOf(ctx);
 		const checked = checkCustomerEdit(ctx.body);
 		if (!checked.ok) throw service.invalid(checked.field, checked.message);
 		const s = await service.site(ctx);
-		const { store, record, details } = await find(s, userId);
+		const { store, record, details, userId } = await find(s, ref);
 		const { blocked, blockedReason, note, resetRto } = checked.value;
 		await store.customers.update(
-			userId,
+			// a guest's record by its id; a member's by user id (made when missing)
+			userId ? { userId } : { id: /** @type {string} */ (record?.id) },
 			{
 				...(blocked === undefined ? {} : { blocked, blockedReason }),
 				...(note === undefined ? {} : { note }),
@@ -168,16 +185,16 @@ export const createCustomers = (service) => {
 			...(note === undefined ? [] : ['note changed']),
 			...(resetRto ? ['returned parcels reset'] : []),
 		];
-		await service.log(ctx, action, userId, {
-			label: (record?.name || details.name || userId).slice(0, 200),
+		await service.log(ctx, action, ref, {
+			label: (record?.name || details.name || ref).slice(0, 200),
 			...(changes.length > 0 ? { detail: changes.join(', ') } : {}),
 		});
-		return view(s, userId);
+		return view(s, ref);
 	};
 
 	/** POST /v1/customers/:userId/seen: the acting staff member opened the customer (a user id or customer id, E31). @param {any} ctx */
 	const seen = async (ctx) => {
-		const ref = userIdOf(ctx);
+		const ref = refOf(ctx);
 		const s = await service.site(ctx);
 		const data = await s.data();
 		const done = await markSeenBy(data, COLLECTIONS.customers, { $or: [{ userId: ref }, { id: ref }] }, service.actor(ctx).id);

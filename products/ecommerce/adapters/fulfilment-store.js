@@ -6,11 +6,20 @@
  * @module
  */
 import { COLLECTIONS } from '../core/model.js';
+import { isCustomerId } from '../core/orders.js';
 
 /** @typedef {import('@ss/app-kit').WebsiteData} WebsiteData */
 /** @typedef {import('../core/model.js').OrderRecord} OrderRecord */
 /** @typedef {import('../core/model.js').CustomerRecord} CustomerRecord */
 /** @typedef {{ id?: string, email?: string, phone?: string }} Person */
+/** Whose orders (K-6): a member's by Accounts user id, a guest's by customer id. @typedef {{ userId: string } | { customerId: string }} Owner */
+
+/**
+ * The orders of an owner: a member's by user id; a guest's by customer id (orders placed as that guest).
+ * @param {Owner} owner
+ */
+export const ownerOrders = (owner) =>
+	'userId' in owner ? { 'customer.userId': owner.userId } : { 'customer.customerId': owner.customerId, 'customer.userId': '' };
 
 /** Merchant database indexes of this part. @type {import('@ss/app-kit').IndexDefinition[]} */
 export const INDEXES = [
@@ -178,28 +187,47 @@ export const createFulfilmentStore = (data) => {
 			many: async (ids) => as(await orders.find({ websiteId, id: { $in: ids } }, NO_ID).toArray()),
 			/**
 			 * A customer's latest orders.
-			 * @param {string} userId @param {number} limit
+			 * @param {Owner} owner @param {number} limit
 			 * @returns {Promise<OrderRecord[]>}
 			 */
-			ofCustomer: async (userId, limit) =>
+			ofCustomer: async (owner, limit) =>
 				as(
 					await orders
-						.find({ websiteId, 'customer.userId': userId }, { ...NO_ID, sort: { createdAt: -1, id: -1 }, limit })
+						.find({ websiteId, ...ownerOrders(owner) }, { ...NO_ID, sort: { createdAt: -1, id: -1 }, limit })
 						.toArray(),
 				),
 			/**
-			 * What customers paid (paid − refunded) and how many orders they placed.
-			 * @param {string[]} userIds
+			 * What customers paid (paid − refunded) and how many orders they placed: a member's orders by user id, a
+			 * guest's by customer id (K-6, CU-5), keyed as `spentKey` (`core/orders.js`) keys them.
+			 * @param {Array<Partial<CustomerRecord>>} customers
 			 * @returns {Promise<Map<string, { total: number, count: number }>>}
 			 */
-			spent: async (userIds) => {
-				if (userIds.length === 0) return new Map();
+			spent: async (customers) => {
+				const userIds = customers.map((row) => row.userId).filter((id) => typeof id === 'string' && id !== '');
+				const customerIds = customers
+					.filter((row) => !row.userId && typeof row.id === 'string' && row.id !== '')
+					.map((row) => /** @type {string} */ (row.id));
+				if (userIds.length === 0 && customerIds.length === 0) return new Map();
 				const rows = await orders
 					.aggregate([
-						{ $match: { websiteId, 'customer.userId': { $in: userIds } } },
+						{
+							$match: {
+								websiteId,
+								$or: [
+									{ 'customer.userId': { $in: userIds } },
+									{ 'customer.userId': '', 'customer.customerId': { $in: customerIds } },
+								],
+							},
+						},
 						{
 							$group: {
-								_id: '$customer.userId',
+								_id: {
+									$cond: [
+										{ $gt: ['$customer.userId', ''] },
+										{ $concat: ['u:', '$customer.userId'] },
+										{ $concat: ['c:', '$customer.customerId'] },
+									],
+								},
 								total: { $sum: { $subtract: ['$payment.paid', '$payment.refunded'] } },
 								count: { $sum: 1 },
 							},
@@ -251,12 +279,25 @@ export const createFulfilmentStore = (data) => {
 			/** @param {string} userId @returns {Promise<(CustomerRecord & { createdAt?: Date, updatedAt?: Date }) | null>} */
 			get: async (userId) => as(await customers.findOne({ websiteId, userId }, NO_ID)),
 			/**
-			 * Change a customer record (created when missing, with the details of their latest order).
-			 * @param {string} userId
+			 * A customer by customer id (`cus_…`, members and guests) or Accounts user id (K-6).
+			 * @param {string} ref
+			 * @returns {Promise<(CustomerRecord & { createdAt?: Date, updatedAt?: Date }) | null>}
+			 */
+			find: async (ref) =>
+				as(await customers.findOne({ websiteId, ...(isCustomerId(ref) ? { id: ref } : { userId: ref }) }, NO_ID)),
+			/**
+			 * Change a customer record: a member's by user id (created when missing, with the details of their latest
+			 * order), any customer's by customer id (K-6).
+			 * @param {{ userId: string } | { id: string }} key
 			 * @param {Record<string, unknown>} set
 			 * @param {{ name: string, email: string, phone: string }} details used only when the record is created
 			 */
-			update: async (userId, set, details) => {
+			update: async (key, set, details) => {
+				if ('id' in key) {
+					await customers.updateOne({ websiteId, id: key.id }, { $set: set });
+					return as(await customers.findOne({ websiteId, id: key.id }, NO_ID));
+				}
+				const { userId } = key;
 				await customers.updateOne(
 					{ websiteId, userId },
 					{

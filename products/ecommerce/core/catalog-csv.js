@@ -10,6 +10,7 @@
  */
 import { LIMITS, isObject, slugify } from './catalog.js';
 import { fromDecimal, toDecimal } from './money.js';
+import { spentKey } from './orders.js';
 
 /** @typedef {import('./model.js').ProductRecord} ProductRecord */
 /** @typedef {import('./model.js').VariantRecord} VariantRecord */
@@ -234,6 +235,7 @@ export const orderTotalRows = (orders) => {
 /** Columns of the customers file (E36). */
 export const CUSTOMER_COLUMNS = Object.freeze([
 	'user_id',
+	'customer_id',
 	'name',
 	'email',
 	'phone',
@@ -253,7 +255,8 @@ export const CUSTOMER_COLUMNS = Object.freeze([
  * One row per customer record, with the orders they placed and what they paid (paid − refunded), as the customer list
  * shows them.
  * @param {Iterable<CustomerRecord>} customers
- * @param {ReadonlyMap<string, { total: number, count: number }>} spent user id → what they spent
+ * @param {ReadonlyMap<string, { total: number, count: number }>} spent what they spent, by `spentKey` (`core/orders.js`:
+ *   a member by user id, a guest by customer id)
  * @param {string} currency
  * @returns {Cell[][]}
  */
@@ -261,9 +264,10 @@ export const customerRows = (customers, spent, currency) => {
 	/** @type {Cell[][]} */
 	const rows = [];
 	for (const customer of customers) {
-		const paid = spent.get(customer.userId) ?? { total: 0, count: 0 };
+		const paid = spent.get(spentKey(customer)) ?? { total: 0, count: 0 };
 		rows.push([
-			customer.userId,
+			customer.userId ?? '',
+			customer.id ?? '',
 			customer.name,
 			customer.email,
 			customer.phone,

@@ -4,7 +4,8 @@
  *
  * - Placing: the cart is priced again on the server; a signed-in shopper (Accounts) or, while `guests` allows, a
  *   guest with a name and phone (E21: normalised, one customer record per phone; `unless_password` sends members to
- *   sign in) places it; COD safety, the blocklist and the open-order cap apply per customer; the ledger places the
+ *   sign in; a phone a member's record already has makes the order that member's, K-6) places it; COD safety, the
+ *   blocklist and the open-order cap apply per customer; the ledger places the
  *   order in one transaction (stock, offer uses — deals kept by locks too —, points, booked slots) with a number by
  *   the business year and the yearly counter (E30). Online, bank-transfer and COD-advance orders start awaiting
  *   payment and get a Payments payment, unless transfers or advances are recorded by staff (`manual`: the order waits
@@ -797,14 +798,16 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		const buyer = shopper
 			? { userId: shopper.id, name: shopper.name, email: shopper.email, phone: shopper.phone }
 			: { userId: null, .../** @type {{ name: string, phone: string, email: string }} */ (guest) };
-		const known = shopper ? await store.customer(shopper.id) : await store.guestCustomer(buyer.phone);
-		if (known?.blocked)
+		// a returning customer who orders as a guest is the customer their phone names (K-6): a member's record (the order,
+		// its points, the block and the cap are that member's), else their own guest record (E21)
+		const guestRecord = shopper ? null : await store.guestCustomer(buyer.phone);
+		const member = shopper ? null : await store.memberByPhone(buyer.phone);
+		const known = shopper ? await store.customer(shopper.id) : (member ?? guestRecord);
+		if (known?.blocked || guestRecord?.blocked)
 			throw problem('customer_blocked', 'Ordering is not possible for this account. Please contact the shop.');
+		const owner = shopper?.id ?? member?.userId ?? null;
 		const cap = Number(checkout.openOrderCap);
-		if (
-			cap > 0 &&
-			(await store.countWaiting({ userId: shopper?.id ?? null, customerId: known?.id ?? null }, WAITING_ROLES)) >= cap
-		)
+		if (cap > 0 && (await store.countWaiting({ userId: owner, customerId: known?.id ?? null }, WAITING_ROLES)) >= cap)
 			throw problem(
 				'too_many_open_orders',
 				'You have orders waiting for payment or confirmation. Finish or cancel them first.',
@@ -872,14 +875,14 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		const orderId = createId(ID_PREFIX.order);
 		const { lines, slots } = await linesOf(s, q);
 		const promotions = q.promotions;
-		const customer = await store.ensureCustomer(buyer);
+		const customer = member ?? (await store.ensureCustomer(buyer));
 		const loyalty = s.has('loyalty') ? await s.values('loyalty') : null;
 		const earns = loyalty !== null && (shopper ? takesPart(loyalty, shopper.role) : loyaltyRules(loyalty).guests === 'earn');
 		const orderKey = shopper ? null : newOrderKey();
 		const order = {
 			id: orderId,
 			customer: {
-				userId: shopper?.id ?? '',
+				userId: owner ?? '',
 				name: buyer.name,
 				email: buyer.email,
 				phone: buyer.phone,

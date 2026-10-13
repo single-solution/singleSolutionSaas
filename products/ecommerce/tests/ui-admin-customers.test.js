@@ -212,6 +212,30 @@ describe('customers admin: customers', () => {
 		expect(other.root.querySelector('[data-section="customers"]')).toBeNull();
 	});
 
+	it('opens a guest by customer id and lists no claims for them (K-6)', async () => {
+		const guest = customer({ id: 'cus_g1', userId: '', guest: true, name: 'Gail' });
+		/** @type {any[]} */
+		const patches = [];
+		const { root, server } = await start({
+			'GET /v1/admin/customers': () => answer(200, { items: [guest], nextCursor: null, hasMore: false }),
+			'GET /v1/admin/customers/cus_g1': () => answer(200, { ...guest, recentOrders: [] }),
+			'PATCH /v1/admin/customers/cus_g1': (/** @type {any} */ call) => {
+				patches.push(call.body);
+				return answer(200, { ...guest, note: call.body.note, recentOrders: [] });
+			},
+		});
+		const panel = panelOf(root, 'customers');
+		expect(rowOf(panel, 'cus_g1')).not.toBeNull();
+		const pane = detailOf(panel);
+		expect(textOf(pane)).toContain('Guest (no account)');
+		expect(server.all('GET /v1/admin/returns')).toHaveLength(0);
+		await click(buttonIn(pane, 'Edit note'));
+		type(fieldIn(dialogOf(root), 'Only staff see this note'), 'Calls at night');
+		await submitDialog(root);
+		expect(patches).toEqual([{ note: 'Calls at night' }]);
+		expect(textOf(pane)).toContain('Calls at night');
+	});
+
 	it('shows an empty list', async () => {
 		const { root } = await start({
 			'GET /v1/admin/customers': () => answer(200, { items: [], nextCursor: null, hasMore: false }),

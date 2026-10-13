@@ -261,6 +261,47 @@ describe('guest checkout and order keys (E21)', () => {
 		await shop.setting('checkout', 'guests', 'off');
 	});
 
+	it('makes a returning customer’s guest order theirs by phone, one record, and keeps their block (K-6)', async () => {
+		await shop.setting('checkout', 'guests', 'on');
+		await shop.setting('checkout', 'defaultCallingCode', '+1');
+		const item = await shop.seedProduct({ price: 1000, stock: 10 });
+		const member = await newShopper({ phone: '+15550005555' });
+		const first = await place({ lines: [{ productId: item.id }], payment: 'cod', address: ADDRESS }, member.token);
+		expect(first.status).toBe(201);
+		const asGuest = await place({
+			lines: [{ productId: item.id }],
+			payment: 'cod',
+			address: ADDRESS,
+			customer: { name: 'Sara', phone: '555 000 5555' },
+		});
+		expect(asGuest.status).toBe(201);
+		expect(asGuest.json.orderKey).toHaveLength(32);
+		const records = await (
+			await shop.db()
+		)
+			.collection(COLLECTIONS.customers)
+			.find({ websiteId: shop.websiteId, phone: '+15550005555' })
+			.toArray();
+		expect(records).toHaveLength(1);
+		expect(records[0]).toMatchObject({ userId: member.id, orderCount: 2, name: 'Sara Shopper' });
+		expect((await orderRecord(asGuest.json.order.id)).customer).toMatchObject({
+			userId: member.id,
+			customerId: records[0]?.id,
+		});
+		const mine = await visit('GET', '/v1/shop/orders', { signIn: member.token });
+		expect(mine.json.items.map((/** @type {any} */ o) => o.id)).toContain(asGuest.json.order.id);
+
+		await shop.api('PATCH', `/v1/customers/${records[0]?.id}`, { blocked: true, blockedReason: 'Refused parcels' });
+		const refused = await place({
+			lines: [{ productId: item.id }],
+			payment: 'cod',
+			address: ADDRESS,
+			customer: { name: 'Sara', phone: '+15550005555' },
+		});
+		expect(codeOf(refused)).toBe('customer_blocked');
+		await shop.setting('checkout', 'guests', 'off');
+	});
+
 	it('asks a guest whose phone has an account with a password to sign in', async () => {
 		await shop.setting('checkout', 'guests', 'unless_password');
 		shop.responders.set(`${ACCOUNTS}/v1/users`, () => ({
