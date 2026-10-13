@@ -176,4 +176,18 @@ describe('the dashboard (setup only)', () => {
 		expect(text).toContain(TEXTS.setup.noTags);
 		expect(text).not.toContain(TEXTS.settings.consentWarning);
 	});
+
+	it('Settings say where Web Vitals go while Visitor analytics is off (SG-27)', async () => {
+		VALUES.web_vitals = { toGa4: true };
+		serve(['web_vitals', 'google_tags']);
+		const Settings = TABS.settings;
+		const ga4 = render(<Settings {...props} />);
+		await settle();
+		expect(ga4.container.textContent).toContain(TEXTS.setup.vitalsGa4Only);
+		cleanup();
+		VALUES.web_vitals = { toGa4: false };
+		const nowhere = render(<Settings {...props} />);
+		await settle();
+		expect(nowhere.container.textContent).toContain(TEXTS.setup.vitalsNowhere);
+	});
 });

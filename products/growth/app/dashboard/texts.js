@@ -198,6 +198,9 @@ export const TEXTS = Object.freeze({
 		malformed: 'Not loaded, as they are not well formed: {fields}.',
 		vitalsNoGoogle:
 			'Web Vitals go to Google Analytics only while Google tags is on with a Google Analytics 4 id or a Tag Manager container.',
+		vitalsGa4Only: 'Visitor analytics is off: Web Vitals go to Google Analytics only and nothing is kept in your database.',
+		vitalsNowhere:
+			'Visitor analytics is off and Web Vitals do not go to Google Analytics, so nothing is measured: turn on one of them.',
 		robotsPreview: 'Your site serves this at https://{domain}/robots.txt (GET /v1/robots.txt):',
 		tagsPreview: 'Your page head includes these tags (GET /v1/verification):',
 		noTags: '(no verification tags yet)',

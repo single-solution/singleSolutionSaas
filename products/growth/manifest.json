@@ -84,8 +84,8 @@
 		{
 			"key": "web_vitals",
 			"name": "Web Vitals",
-			"description": "Measures how fast and stable pages are for real visitors (LCP, INP, CLS, FCP, TTFB).",
-			"dependsOn": ["visitor_analytics"],
+			"description": "Measures how fast and stable pages are for real visitors (LCP, INP, CLS, FCP, TTFB): kept in your analytics while Visitor analytics is on, and sent to Google Analytics 4 when you ask, also without it.",
+			"dependsOn": [],
 			"settings": {
 				"$ref": "schemas/web_vitals.settings.json"
 			}

@@ -3,7 +3,8 @@
  * What the dashboard tells about a website's setup, from its settings only (PLAN 0.4.3: setup, never business data):
  * the notes above a settings card (the law warning while tags need no consent, PLAN 0.8.10 G1; tag ids that are not
  * loaded; what robots.txt, the verification tags and the IndexNow key file serve, G4 and G5; the notice bar now, G6;
- * Web Vitals to Google Analytics without Google tags, G7) and Overview's setup at a glance.
+ * Web Vitals to Google Analytics without Google tags, G7, and without Visitor analytics, SG-27) and Overview's setup at
+ * a glance.
  * @module
  */
 import { Badge, Callout, Card, CodeBlock, KeyValueList, Masonry, Section, formatDateTime } from '@ss/ui';
@@ -101,6 +102,12 @@ export const settingsNotice = (key, values, context) => {
 		notes.push(
 			<Callout key="ga4" tone="info">
 				{TEXTS.setup.vitalsNoGoogle}
+			</Callout>,
+		);
+	if (key === 'web_vitals' && context && !context.on.includes('visitor_analytics'))
+		notes.push(
+			<Callout key="kept" tone={values.toGa4 === true ? 'info' : 'warning'}>
+				{values.toGa4 === true ? TEXTS.setup.vitalsGa4Only : TEXTS.setup.vitalsNowhere}
 			</Callout>,
 		);
 	if (context && key === 'robots_verification') {

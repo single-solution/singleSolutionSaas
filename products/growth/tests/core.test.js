@@ -601,20 +601,39 @@ describe('pixels and money', () => {
 			{ vendor: 'tiktok', args: ['Contact', {}] },
 		]);
 		expect(searchCalls('x', { meta: false, google: false, gtm: false, ads: null, tiktok: false })).toEqual([]);
-		// G7: a Web Vital as a GA4 event
-		expect(vitalCalls('CLS', 125.4, 'needs_improvement', { ...all, gtm: false })).toEqual([
+		// G7: a Web Vital as a GA4 event, labelled as web.dev and the stores' reports have it (SG-26)
+		expect(vitalCalls('CLS', 125.4, 'needs_improvement', { ...all, gtm: false }, 'v1-1-CLS')).toEqual([
 			{
 				vendor: 'google',
 				args: [
 					'event',
 					'CLS',
-					{ value: 125, metric_value: 0.125, metric_rating: 'needs-improvement', non_interaction: true },
+					{
+						value: 125,
+						metric_id: 'v1-1-CLS',
+						metric_value: 0.125,
+						metric_rating: 'needs-improvement',
+						event_category: 'web-vitals',
+						event_label: 'v1-1-CLS',
+						non_interaction: true,
+					},
 				],
 			},
 		]);
-		expect(vitalCalls('LCP', 900, 'good', { ...all, google: false })[0]).toEqual({
+		expect(vitalCalls('LCP', 900, 'good', { ...all, google: false }, 'v1-1-LCP')[0]).toEqual({
 			vendor: 'datalayer',
-			args: [{ event: 'LCP', value: 900, metric_value: 900, metric_rating: 'good', non_interaction: true }],
+			args: [
+				{
+					event: 'LCP',
+					value: 900,
+					metric_id: 'v1-1-LCP',
+					metric_value: 900,
+					metric_rating: 'good',
+					event_category: 'web-vitals',
+					event_label: 'v1-1-LCP',
+					non_interaction: true,
+				},
+			],
 		});
 		expect(funnelEvent('view_item', bare, '/c')).toEqual({ type: 'view_item', path: '/c', items: [] });
 	});

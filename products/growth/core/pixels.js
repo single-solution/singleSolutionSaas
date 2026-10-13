@@ -230,22 +230,28 @@ export const contactCalls = (method, loaded) => {
 };
 
 /**
- * A Web Vital as a Google Analytics 4 event (PLAN 0.8.10 G7): the event is named after the vital, with `value` (whole
- * milliseconds; CLS × 1000), `metric_value` (CLS as measured), `metric_rating` (`good`, `needs-improvement`, `poor`)
- * and `non_interaction`.
+ * A Web Vital as a Google Analytics 4 event (PLAN 0.8.10 G7), labelled as web.dev's `web-vitals` guide and the stores'
+ * reports have it (SG-26): the event is named after the vital, with `value` (whole milliseconds; CLS × 1000),
+ * `metric_id` (one id per vital of a page load, which GA4 reports group by), `metric_value` (CLS as measured),
+ * `metric_rating` (`good`, `needs-improvement`, `poor`), `event_category` `web-vitals`, `event_label` (the metric id
+ * again) and `non_interaction`.
  * @param {string} name LCP, INP, CLS, FCP or TTFB
  * @param {number} value milliseconds (CLS × 1000)
  * @param {'good' | 'needs_improvement' | 'poor'} rating
  * @param {Loaded} loaded
+ * @param {string} id the vital's id in this page load
  * @returns {PixelCall[]}
  */
-export const vitalCalls = (name, value, rating, loaded) =>
+export const vitalCalls = (name, value, rating, loaded, id) =>
 	googleEvent(
 		name,
 		{
 			value: Math.round(value),
+			metric_id: id,
 			metric_value: name === 'CLS' ? Math.round(value) / 1000 : Math.round(value),
 			metric_rating: rating.replace('_', '-'),
+			event_category: 'web-vitals',
+			event_label: id,
 			non_interaction: true,
 		},
 		loaded,

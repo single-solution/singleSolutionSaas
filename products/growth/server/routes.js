@@ -253,7 +253,9 @@ export const createRoutes = (product) => {
 					product.settings.values(ctx.websiteId, 'visitor_analytics'),
 					timeZoneOf(ctx),
 				]);
-				const on = features.filter((key) => COLLECT_FEATURES.includes(key));
+				// events are kept only while Visitor analytics is on (Web Vitals may be on without it, for Google
+				// Analytics alone; SG-27)
+				const on = features.includes('visitor_analytics') ? features.filter((key) => COLLECT_FEATURES.includes(key)) : [];
 				/** @param {string} name */
 				const header = (name) => ctx.headers.get(name);
 				// the host's country (and, with sessions, city) header; on a visitor call from the merchant's server it is

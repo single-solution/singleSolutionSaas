@@ -275,57 +275,123 @@ export const searchOnPage = (win, params) => {
 export const markedNotFound = (doc) =>
 	doc.querySelector(`meta[name="${PAGE_MARKER}"]`)?.getAttribute('content')?.trim().toLowerCase() === 'not_found';
 
+/** CLS: layout shifts less than this apart (ms) are one session window, which lasts at most {@link SHIFT_WINDOW_MS}. */
+const SHIFT_GAP_MS = 1000;
+const SHIFT_WINDOW_MS = 5000;
+/** INP: the longest interactions kept; one of them is passed over per this many interactions (about the 98th percentile). */
+const LONGEST_KEPT = 10;
+const INTERACTIONS_PER_STEP = 50;
+
 /**
- * Measure Web Vitals with the browser's PerformanceObserver and report them together once when the page is first
- * hidden (one batch, RT-2): LCP (last largest paint), CLS (shifts without recent input, × 1000), INP (the longest
- * interaction), FCP and TTFB. They are the loaded document's, so a single-page app files them under the page it was
- * loaded on (SG-4).
+ * Measure Web Vitals with the browser's PerformanceObserver the way web.dev defines them (the `web-vitals` library's
+ * rules, SG-26) and report them together once when the page is first hidden (one batch, RT-2): LCP (the last largest
+ * paint), FCP (the first contentful paint), both only while the page had not been hidden yet, and after a prerendered
+ * page was shown; CLS (the largest session window of layout shifts without recent input: shifts less than 1 s apart,
+ * at most 5 s, × 1000; 0 for a page that painted without shifting); INP (the longest interaction, passing over one of
+ * the 10 longest per 50 interactions: about the 98th percentile; only after an interaction); TTFB. They are the loaded
+ * document's, so a single-page app files them under the page it was loaded on (SG-4).
  * @param {{ window: Window & typeof globalThis, report: (vitals: Array<[name: string, value: number]>) => void }} input
  */
 export const watchVitals = ({ window: win, report }) => {
 	const Observer = win.PerformanceObserver;
 	if (typeof Observer !== 'function') return;
+	const doc = win.document;
 	/** @type {Record<string, number>} */
 	const values = {};
+	/** @type {Array<() => void>} each observer's entries not delivered yet, taken when the page is hidden */
+	const pending = [];
+	// a page loaded in a background tab: its paints are not what the visitor saw
+	let hiddenAt = doc.visibilityState === 'hidden' ? 0 : Number.POSITIVE_INFINITY;
+	/** @type {any} */
+	let navigation = null;
+	try {
+		navigation = win.performance.getEntriesByType('navigation')[0] ?? null;
+	} catch {
+		// no navigation timing
+	}
+	// a prerendered page counts from when it was shown
+	const activationStart = Number(navigation?.activationStart) || 0;
+	/** @param {number} time */
+	const sinceShown = (time) => Math.max(time - activationStart, 0);
+	if (navigation && navigation.responseStart > 0) values.TTFB = sinceShown(navigation.responseStart);
+
 	/** @param {string} type @param {(entries: any[]) => void} take @param {Record<string, unknown>} [extra] */
 	const observe = (type, take, extra = {}) => {
 		try {
-			new Observer((list) => take(list.getEntries())).observe({ type, buffered: true, ...extra });
+			const observer = new Observer((list) => take(list.getEntries()));
+			observer.observe({ type, buffered: true, ...extra });
+			if (typeof observer.takeRecords === 'function') pending.push(() => take(observer.takeRecords()));
+			return true;
 		} catch {
 			// this browser does not measure it
+			return false;
 		}
 	};
 	observe('largest-contentful-paint', (entries) => {
 		const last = entries[entries.length - 1];
-		if (last) values.LCP = last.startTime;
+		if (last && last.startTime < hiddenAt) values.LCP = sinceShown(last.startTime);
 	});
-	observe('layout-shift', (entries) => {
-		for (const entry of entries) if (!entry.hadRecentInput) values.CLS = (values.CLS ?? 0) + entry.value * 1000;
-	});
-	observe(
-		'event',
-		(entries) => {
-			for (const entry of entries)
-				if (entry.interactionId) values.INP = Math.max(values.INP ?? 0, Number(entry.duration) || 0);
-		},
-		{ durationThreshold: 40 },
-	);
 	observe('paint', (entries) => {
 		const first = entries.find((entry) => entry.name === 'first-contentful-paint');
-		if (first) values.FCP = first.startTime;
+		if (first && first.startTime < hiddenAt) values.FCP = sinceShown(first.startTime);
 	});
-	try {
-		const navigation = /** @type {any} */ (win.performance.getEntriesByType('navigation')[0]);
-		if (navigation && navigation.responseStart > 0) values.TTFB = navigation.responseStart;
-	} catch {
-		// no navigation timing
-	}
+
+	let windowValue = 0;
+	/** @type {any[]} the shifts of the current session window */
+	let shifts = [];
+	let largestWindow = 0;
+	const measuresShifts = observe('layout-shift', (entries) => {
+		for (const entry of entries) {
+			if (entry.hadRecentInput) continue;
+			const first = shifts[0];
+			const last = shifts[shifts.length - 1];
+			if (first && entry.startTime - last.startTime < SHIFT_GAP_MS && entry.startTime - first.startTime < SHIFT_WINDOW_MS) {
+				windowValue += entry.value;
+				shifts.push(entry);
+			} else {
+				windowValue = entry.value;
+				shifts = [entry];
+			}
+			largestWindow = Math.max(largestWindow, windowValue);
+		}
+	});
+
+	/** @type {Array<{ id: number, duration: number }>} the longest interactions, longest first */
+	let longest = [];
+	let lowestId = Number.POSITIVE_INFINITY;
+	let highestId = 0;
+	/** @param {any[]} entries */
+	const takeInteractions = (entries) => {
+		for (const entry of entries) {
+			const id = Number(entry.interactionId) || 0;
+			if (id === 0) continue;
+			lowestId = Math.min(lowestId, id);
+			highestId = Math.max(highestId, id);
+			const duration = Number(entry.duration) || 0;
+			const known = longest.find((interaction) => interaction.id === id);
+			if (known) known.duration = Math.max(known.duration, duration);
+			else longest.push({ id, duration });
+			longest = longest.sort((a, b) => b.duration - a.duration).slice(0, LONGEST_KEPT);
+		}
+		if (longest.length === 0) return;
+		// the browser's count of interactions, else estimated from the ids it gave them (they go up by 7)
+		const counted = Number(/** @type {any} */ (win.performance)?.interactionCount) || (highestId - lowestId) / 7 + 1;
+		const pick = longest[Math.min(longest.length - 1, Math.floor(counted / INTERACTIONS_PER_STEP))];
+		if (pick) values.INP = pick.duration;
+	};
+	observe('event', takeInteractions, { durationThreshold: 40 });
+	observe('first-input', takeInteractions);
+
 	let sent = false;
-	const send = () => {
-		if (sent || win.document.visibilityState !== 'hidden') return;
+	/** @param {Event} [event] */
+	const send = (event) => {
+		if (sent || doc.visibilityState !== 'hidden') return;
+		if (event && event.timeStamp > 0) hiddenAt = Math.min(hiddenAt, event.timeStamp);
 		sent = true;
+		for (const take of pending) take();
+		if (measuresShifts && (largestWindow > 0 || values.FCP !== undefined)) values.CLS = largestWindow * 1000;
 		report(Object.entries(values));
 	};
-	win.document.addEventListener('visibilitychange', send);
+	doc.addEventListener('visibilitychange', send);
 	win.addEventListener('pagehide', send);
 };

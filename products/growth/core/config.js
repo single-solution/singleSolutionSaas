@@ -245,7 +245,8 @@ export const widgetSettings = ({ on, values, now, admin = null }) => {
 			visits: on.includes('visitor_analytics'),
 			funnel: on.includes('conversion_funnel'),
 			searches: on.includes('searches_404s'),
-			vitals: on.includes('web_vitals'),
+			// kept in the merchant's analytics only with Visitor analytics; to Google Analytics also without it (SG-27)
+			vitals: on.includes('web_vitals') && on.includes('visitor_analytics'),
 			vitalsToGa4: on.includes('web_vitals') && values.web_vitals?.toGa4 === true,
 			requireConsent: analytics.requireConsent !== false,
 			sessions: on.includes('visitor_analytics') && analytics.detail === 'sessions',

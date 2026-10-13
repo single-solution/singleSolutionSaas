@@ -185,12 +185,13 @@ export const createTags = ({ window: win, tags }) => {
 	/**
 	 * Pass a Web Vital to Google Analytics 4 (G7), loaded by Growth or inside the Tag Manager container.
 	 * @param {import('../core/events.js').VitalName} name @param {number} value milliseconds (CLS × 1000)
+	 * @param {string} id the vital's id in this page load
 	 */
-	const vital = (name, value) => {
+	const vital = (name, value, id) => {
 		const now = loadedNow();
 		// Google Ads alone takes no Web Vitals
 		const google = now.google && loaded.has('ga4');
-		if (google || now.gtm) send(vitalCalls(name, value, ratingOf(name, value), { ...now, google }));
+		if (google || now.gtm) send(vitalCalls(name, value, ratingOf(name, value), { ...now, google }, id));
 	};
 
 	return Object.freeze({ apply, forward, search, contact, vital, loaded: () => [...loaded] });

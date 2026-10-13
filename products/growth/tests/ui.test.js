@@ -497,13 +497,53 @@ describe('store-conversion options with the real page script (PLAN 0.8.10 G1–G
 		take?.({ getEntries: () => [{ startTime: 4200.4 }] });
 		Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
 		document.dispatchEvent(new window.Event('visibilitychange'));
-		expect([...w.dataLayer].filter((entry) => entry[0] === 'event' && entry[1] === 'LCP').map((e) => e[2])).toContainEqual({
+		const [lcp] = [...w.dataLayer].filter((entry) => entry[0] === 'event' && entry[1] === 'LCP').map((e) => e[2]);
+		expect(lcp).toEqual({
 			value: 4200,
+			metric_id: expect.stringMatching(/^v1-\d+-[0-9a-f]{13}-LCP$/),
 			metric_value: 4200,
 			metric_rating: 'poor',
+			event_category: 'web-vitals',
+			event_label: lcp.metric_id,
 			non_interaction: true,
 		});
 		expect(collected()).toContainEqual({ type: 'vital', path: '/', name: 'LCP', value: 4200.4 });
+		Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
+		delete w.PerformanceObserver;
+	});
+
+	it('G7 without Visitor analytics: Web Vitals go to Google Analytics 4 only, nothing is recorded (SG-27)', async () => {
+		vi.useFakeTimers({ toFake: ['setTimeout'] });
+		serve({
+			[`GET ${CONFIG_PATH}`]: () =>
+				answer(
+					200,
+					configOf(['web_vitals', 'google_tags'], {
+						tags: { consentRequired: false },
+						web_vitals: { toGa4: true },
+						google_tags: { ga4Id: 'G-ABCD12' },
+					}),
+				),
+			'POST /v1/collect': () => answer(202),
+		});
+		/** @type {Record<string, any>} */
+		const take = {};
+		w.PerformanceObserver = function Observer(/** @type {any} */ fn) {
+			return { observe: (/** @type {{ type: string }} */ options) => (take[options.type] = fn) };
+		};
+		const page = startWidget({ window, script: script('t') });
+		await vi.advanceTimersByTimeAsync(0);
+		await page.ready;
+		take.paint?.({ getEntries: () => [{ name: 'first-contentful-paint', startTime: 640 }] });
+		Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
+		document.dispatchEvent(new window.Event('visibilitychange'));
+		await vi.advanceTimersByTimeAsync(2000);
+		const sent = [...w.dataLayer].filter((entry) => entry[0] === 'event').map((entry) => [entry[1], entry[2].value]);
+		expect(sent).toEqual([
+			['FCP', 640],
+			['CLS', 0],
+		]);
+		expect(requests.filter((r) => r.path === '/v1/collect')).toEqual([]);
 		Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
 		delete w.PerformanceObserver;
 	});
@@ -889,8 +929,8 @@ describe('page facts', () => {
 		expect(reported).toEqual([
 			['TTFB', 120],
 			['LCP', 1500],
-			['CLS', 50],
 			['INP', 80],
+			['CLS', 50],
 		]);
 		watchVitals({ window: /** @type {any} */ ({}), report: () => {} });
 		const noTiming = {
@@ -902,6 +942,80 @@ describe('page facts', () => {
 			},
 		};
 		watchVitals({ window: noTiming, report: () => {} });
+	});
+
+	it('measures Web Vitals by web.dev’s rules: CLS session windows, INP near the 98th percentile, hidden and prerendered pages (SG-26)', () => {
+		/** @type {Record<string, (list: { getEntries: () => any[] }) => void>} */
+		const observers = {};
+		/** @type {Record<string, any[]>} entries the browser has not delivered yet */
+		const waiting = {};
+		/** @type {Record<string, (event?: any) => void>} */
+		const listeners = {};
+		/** @param {string} visibility @param {number} [interactionCount] @param {any} [navigation] */
+		const page = (visibility, interactionCount, navigation = { responseStart: 300, activationStart: 100 }) =>
+			/** @type {any} */ ({
+				document: {
+					visibilityState: visibility,
+					addEventListener: (/** @type {string} */ name, /** @type {() => void} */ fn) => (listeners[name] = fn),
+				},
+				addEventListener: (/** @type {string} */ name, /** @type {() => void} */ fn) => (listeners[name] = fn),
+				performance: { getEntriesByType: () => [navigation], ...(interactionCount ? { interactionCount } : {}) },
+				PerformanceObserver: function Observer(/** @type {any} */ take) {
+					/** @type {string} */
+					let type = '';
+					return {
+						observe: (/** @type {{ type: string }} */ options) => {
+							type = options.type;
+							observers[type] = take;
+						},
+						takeRecords: () => (waiting[type] ?? []).splice(0),
+					};
+				},
+			});
+		/** @type {Array<[string, number]>} */
+		let reported = [];
+		const shown = page('visible', 120);
+		watchVitals({ window: shown, report: (vitals) => (reported = vitals) });
+		observers.paint?.({ getEntries: () => [{ name: 'first-contentful-paint', startTime: 900 }] });
+		// two bursts of shifts: 0.04 + 0.05 within one window, 0.06 alone later; the largest window counts
+		observers['layout-shift']?.({
+			getEntries: () => [
+				{ value: 0.04, startTime: 1000, hadRecentInput: false },
+				{ value: 0.05, startTime: 1800, hadRecentInput: false },
+				{ value: 0.06, startTime: 9000, hadRecentInput: false },
+				{ value: 0.5, startTime: 9100, hadRecentInput: true },
+			],
+		});
+		// 12 interactions of 100 to 1200 ms (one with two events), 120 in all: two of the longest are passed over
+		observers.event?.({
+			getEntries: () =>
+				Array.from({ length: 12 }, (_, i) => ({ interactionId: 7 * (i + 1), duration: 100 * (i + 1) })).concat([
+					{ interactionId: 7, duration: 150 },
+				]),
+		});
+		observers['first-input']?.({ getEntries: () => [{ interactionId: 0, duration: 5000 }] });
+		// a paint the browser had not delivered when the page was hidden, and one after it
+		waiting['largest-contentful-paint'] = [{ startTime: 2100 }];
+		listeners.visibilitychange?.({ timeStamp: 5000 });
+		expect(reported).toEqual([]);
+		shown.document.visibilityState = 'hidden';
+		listeners.visibilitychange?.({ timeStamp: 5000 });
+		expect(Object.fromEntries(reported)).toEqual({ TTFB: 200, FCP: 800, LCP: 2000, INP: 1000, CLS: 90 });
+
+		// a page that painted without shifting has a CLS of 0; a page loaded in the background reports no paints
+		const background = page('hidden', undefined, { responseStart: 0 });
+		watchVitals({ window: background, report: (vitals) => (reported = vitals) });
+		observers.paint?.({ getEntries: () => [{ name: 'first-contentful-paint', startTime: 400 }] });
+		observers['largest-contentful-paint']?.({ getEntries: () => [{ startTime: 600 }] });
+		observers.event?.({ getEntries: () => [{ interactionId: 21, duration: 64 }] });
+		listeners.pagehide?.({ timeStamp: 0 });
+		expect(Object.fromEntries(reported)).toEqual({ INP: 64 });
+		const painted = page('visible');
+		watchVitals({ window: painted, report: (vitals) => (reported = vitals) });
+		observers.paint?.({ getEntries: () => [{ name: 'first-contentful-paint', startTime: 400 }] });
+		painted.document.visibilityState = 'hidden';
+		listeners.pagehide?.({});
+		expect(Object.fromEntries(reported)).toEqual({ TTFB: 200, FCP: 300, CLS: 0 });
 	});
 
 	it('records Web Vitals through the page script', async () => {
@@ -930,7 +1044,8 @@ describe('page facts', () => {
 		expect(collected()).toContainEqual({ type: 'vital', path: '/', name: 'FCP', value: 700 });
 		// the page view and the page's vitals in one batch (RT-2)
 		expect(requests.filter((r) => r.path === '/v1/collect')).toHaveLength(1);
-		expect(collected().map((event) => event.type)).toEqual(['page_view', 'vital', 'vital']);
+		// FCP, LCP and a CLS of 0 (the page painted without shifting)
+		expect(collected().map((event) => event.type)).toEqual(['page_view', 'vital', 'vital', 'vital']);
 		Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
 		delete w.PerformanceObserver;
 	});

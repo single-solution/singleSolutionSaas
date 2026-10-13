@@ -142,6 +142,14 @@ describe('events and totals', () => {
 			{ type: 'page_view', path: '/only', visit: false },
 		]);
 		expect(await answer.json()).toEqual({ accepted: 1 });
+		// Web Vitals on without Visitor analytics only go to Google Analytics: nothing is kept (SG-27)
+		await env.switchOn(['web_vitals', 'google_tags']);
+		await env.setting('web_vitals', 'toGa4', true);
+		const vitals = await env.collect([{ type: 'vital', path: '/', name: 'LCP', value: 900 }]);
+		expect(await vitals.json()).toEqual({ accepted: 0 });
+		const config = await (await env.call('GET', '/v1/widget/config', { token: env.browser, origin: ORIGIN })).json();
+		expect(config.settings.record).toMatchObject({ visits: false, vitals: false, vitalsToGa4: true });
+		await env.setting('web_vitals', 'toGa4', false);
 		await env.switchOn(ALL);
 		await env.setting('visitor_analytics', 'recordCountry', true);
 	});

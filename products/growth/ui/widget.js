@@ -266,15 +266,17 @@ export const startWidget = ({ window: win, script }) => {
 				},
 			});
 
-		if (record.vitals)
+		if (record.vitals || record.vitalsToGa4)
 			watchVitals({
 				window: win,
-				// the page's vitals go in one batch (RT-2), filed under the page the document was loaded on (SG-4)
+				// the page's vitals go in one batch (RT-2), filed under the page the document was loaded on (SG-4); to
+				// Google Analytics each with its id in this page load (SG-26), also without Visitor analytics (SG-27)
 				report: (vitals) => {
+					const load = `v1-${now()}-${randomId(win).slice(0, 13)}`;
 					for (const [name, value] of vitals) {
-						collector.record(() => ({ type: 'vital', path: landing, name, value }));
+						if (record.vitals) collector.record(() => ({ type: 'vital', path: landing, name, value }));
 						if (record.vitalsToGa4 && Object.hasOwn(VITALS, name))
-							tags.vital(/** @type {import('../core/events.js').VitalName} */ (name), value);
+							tags.vital(/** @type {import('../core/events.js').VitalName} */ (name), value, `${load}-${name}`);
 					}
 					collector.flush();
 				},

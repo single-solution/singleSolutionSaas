@@ -5,7 +5,7 @@
 		"toGa4": {
 			"type": "boolean",
 			"title": "Also send them to Google Analytics 4",
-			"description": "Each Web Vital also goes to Google Analytics 4 as an event of its name (LCP, INP, CLS, FCP, TTFB) with its value and rating, while Google Analytics is loaded (Google tags, after consent).",
+			"description": "Each Web Vital also goes to Google Analytics 4 as an event of its name (LCP, INP, CLS, FCP, TTFB) with its value, rating and id (metric_id, and event_category web-vitals with event_label), while Google Analytics is loaded (Google tags, after consent). Works without Visitor analytics: then nothing is kept in your database.",
 			"default": false
 		}
 	}
