@@ -147,32 +147,45 @@ describe('events (K5)', () => {
 		await client.close();
 	});
 
-	it('count a repeated forward (Notifications already has it) as sent', async () => {
-		/** @type {Record<string, any>} */
-		let stored = {};
-		const collection = {
-			insertOne: async (/** @type {any} */ doc) => {
-				stored = { ...doc };
-			},
-			findOneAndUpdate: async () => (stored.delivery === 'pending' ? { ...stored } : null),
-			updateOne: async (/** @type {any} */ _filter, /** @type {any} */ update) => {
-				stored = { ...stored, ...update.$set };
-			},
-			countDocuments: async () => (stored.delivery === 'pending' ? 1 : 0),
+	it('count a repeated forward (Notifications already has it) as sent, and try one still running again (K-14)', async () => {
+		/** @param {string} code the problem of Notifications' 409 answer */
+		const forward = async (code) => {
+			/** @type {Record<string, any>} */
+			let stored = {};
+			const collection = {
+				insertOne: async (/** @type {any} */ doc) => {
+					stored = { ...doc };
+				},
+				findOneAndUpdate: async () => (stored.delivery === 'pending' && stored.dueAt.getTime() <= 0 ? { ...stored } : null),
+				updateOne: async (/** @type {any} */ _filter, /** @type {any} */ update) => {
+					stored = { ...stored, ...update.$set };
+				},
+				countDocuments: async () => (stored.delivery === 'pending' ? 1 : 0),
+			};
+			/** @type {Array<() => Promise<unknown>>} */
+			const after = [];
+			const events = createEvents({
+				productId: 'notes',
+				enabled: true,
+				data: /** @type {any} */ ({ forWebsite: async () => ({ collection: () => collection }) }),
+				connections: /** @type {any} */ ({
+					callProduct: async () => ({
+						ok: false,
+						reason: 'failed',
+						status: 409,
+						body: { type: `https://notifications.example.dev/problems/${code}` },
+					}),
+				}),
+				now: () => 0,
+				logger: /** @type {any} */ ({ info: () => {} }),
+			});
+			await events.emit({ websiteId: 'web_1', merchantId: null, after: (task) => void after.push(task) }, 'note.created', {});
+			for (const task of after) await task();
+			return stored;
 		};
-		/** @type {Array<() => Promise<unknown>>} */
-		const after = [];
-		const events = createEvents({
-			productId: 'notes',
-			enabled: true,
-			data: /** @type {any} */ ({ forWebsite: async () => ({ collection: () => collection }) }),
-			connections: /** @type {any} */ ({ callProduct: async () => ({ ok: false, reason: 'failed', status: 409 }) }),
-			now: () => 0,
-			logger: /** @type {any} */ ({ info: () => {} }),
-		});
-		await events.emit({ websiteId: 'web_1', merchantId: null, after: (task) => void after.push(task) }, 'note.created', {});
-		for (const task of after) await task();
-		expect(stored).toMatchObject({ delivery: 'sent', attempts: 1 });
+		expect(await forward('duplicate_request')).toMatchObject({ delivery: 'sent', attempts: 1 });
+		// the earlier forward is still running and may yet fail: tried again a minute later
+		expect(await forward('in_progress')).toMatchObject({ delivery: 'pending', attempts: 1, dueAt: new Date(60_000) });
 	});
 
 	it('settings.changed tells the merchant’s server about settings, texts, theme and Format changes (SG-14)', async () => {

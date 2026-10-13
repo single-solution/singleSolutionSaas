@@ -150,9 +150,14 @@ export const createEvents = ({ productId, enabled, data, connections, now, logge
 				body: { id: event.id, type: `${prefix}${event.type}`, at: new Date(event.at).toISOString(), data: event.data },
 				headers: { 'idempotency-key': event.id },
 			});
+			const type = /** @type {{ type?: unknown } | null | undefined} */ (answer.body)?.type;
+			const code = typeof type === 'string' ? type.split('/').pop() : '';
 			/** @type {Partial<EventRecord>} */
 			let set;
-			if (answer.ok || answer.status === 409) set = { delivery: 'sent', attempts: event.attempts + 1 };
+			// a 409 duplicate_request is an earlier forward that got through; a 409 in_progress is one still running, which
+			// may yet fail, so it is tried again like any other failure (K-14)
+			if (answer.ok || (answer.status === 409 && code === 'duplicate_request'))
+				set = { delivery: 'sent', attempts: event.attempts + 1 };
 			else if (answer.reason === 'not_connected') set = { delivery: 'not_connected' };
 			else {
 				const attempts = event.attempts + 1;
