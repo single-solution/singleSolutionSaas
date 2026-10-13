@@ -74,7 +74,7 @@ export const collections = Object.freeze([
 		name: BILLING,
 		tenant: 'merchant',
 		description:
-			'Billing state per merchant (_id = merchantId): settled-through day, grace/stop phase there, cached balance, daily spend and state (e-mails are sent once per state).',
+			'Billing state per merchant (_id = merchantId): settled-through day, grace/stop phase there, the products on websites and suspension there (`held`, so a check reads the history from there on), cached balance, daily spend and state (e-mails are sent once per state).',
 		indexes: [{ keys: { state: 1, merchantId: 1 }, name: 'by_state' }],
 	}),
 ]);

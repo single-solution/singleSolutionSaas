@@ -33,9 +33,9 @@ const isRetry = (error) => error instanceof Error && /** @type {any} */ (error).
  * @param {{ ctx: ModuleContext, repo: CommerceRepo, onChainBroken: (merchantId: string, message: string) => Promise<void> }} deps
  */
 export const createLedger = ({ ctx, repo, onChainBroken }) => {
-	/** @param {string} merchantId */
-	const acquire = async (merchantId) => {
-		const until = Date.now() + LOCK_WAIT_MS;
+	/** @param {string} merchantId @param {number} [waitMs] how long to wait for a lock held elsewhere */
+	const acquire = async (merchantId, waitMs = LOCK_WAIT_MS) => {
+		const until = Date.now() + waitMs;
 		for (;;) {
 			const lock = await ctx.locks.acquire(`commerce.ledger:${merchantId}`, { ttlMs: LOCK_TTL_MS, owner: 'commerce.ledger' });
 			if (lock) return lock;
@@ -113,13 +113,14 @@ export const createLedger = ({ ctx, repo, onChainBroken }) => {
 	 * Append drafts. Drafts whose `entryKey` already exists are skipped (idempotent).
 	 * @param {string} merchantId
 	 * @param {readonly EntryDraft[]} drafts
-	 * @param {{ alongside?: (session: Session) => Promise<void> }} [options] `alongside`: other writes that commit with
-	 *   the entries or not at all (same transaction; it may run more than once, and what it throws aborts the append)
+	 * @param {{ alongside?: (session: Session) => Promise<void>, waitMs?: number }} [options] `alongside`: other writes
+	 *   that commit with the entries or not at all (same transaction; it may run more than once, and what it throws
+	 *   aborts the append); `waitMs`: how long to wait while another append holds the ledger (then 503 `unavailable`)
 	 * @returns {Promise<{ appended: LedgerEntry[], duplicates: string[], balance: number }>}
 	 */
-	const append = async (merchantId, drafts, { alongside } = {}) => {
+	const append = async (merchantId, drafts, { alongside, waitMs = LOCK_WAIT_MS } = {}) => {
 		for (let attempt = 1; ; attempt += 1) {
-			const lock = await acquire(merchantId);
+			const lock = await acquire(merchantId, waitMs);
 			try {
 				// entries and the account move commit together (one transaction under the lock)
 				return await ctx.withTransaction(async (session) => {

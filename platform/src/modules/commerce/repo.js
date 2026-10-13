@@ -54,14 +54,33 @@ export const createCommerceRepo = (ctx) => {
 					.aggregate([{ $match: { productId } }, { $unwind: '$features' }, { $group: { _id: '$features.key' } }])
 					.toArray()
 			).map((row) => String(row._id)),
-		/** @param {readonly string[]} productIds @param {Date} to @returns {Promise<Doc[]>} */
-		priceListsOf: (productIds, to) =>
-			productIds.length === 0
-				? Promise.resolve([])
-				: priceLists
-						.find({ productId: { $in: [...productIds] }, at: { $lte: to } })
-						.sort({ at: 1, _id: 1 })
-						.toArray(),
+		/**
+		 * Price lists of products up to `to`, ascending; with `since`, only the last one of each product before it and
+		 * those from it on.
+		 * @param {readonly string[]} productIds @param {Date} to @param {Date | null} [since] @returns {Promise<Doc[]>}
+		 */
+		priceListsOf: async (productIds, to, since = null) => {
+			if (productIds.length === 0) return [];
+			const ids = [...productIds];
+			const later = priceLists
+				.find({ productId: { $in: ids }, at: { ...(since ? { $gte: since } : {}), $lte: to } })
+				.sort({ at: 1, _id: 1 })
+				.toArray();
+			if (since === null) return later;
+			const [before, from] = await Promise.all([
+				priceLists
+					.aggregate([
+						{ $match: { productId: { $in: ids }, at: { $lt: since } } },
+						{ $sort: { productId: 1, at: -1, _id: -1 } },
+						{ $group: { _id: '$productId', list: { $first: '$$ROOT' } } },
+						{ $replaceWith: '$list' },
+						{ $sort: { at: 1, _id: 1 } },
+					])
+					.toArray(),
+				later,
+			]);
+			return [...before, ...from];
+		},
 		/**
 		 * Append to a merchant's history; a `key` makes it happen once (false when it already did). Inside a transaction
 		 * (`session`) a keyed entry is looked up first, since a duplicate-key error would abort the transaction.
@@ -90,11 +109,14 @@ export const createCommerceRepo = (ctx) => {
 					{ merchantId, kind: { $in: [...kinds] }, ...match },
 					{ sort: { at: -1, _id: -1 }, ...(session ? { session } : {}) },
 				),
-		/** @param {string} merchantId @param {Date} to @returns {Promise<Doc[]>} */
-		historyOf: (merchantId, to) =>
+		/**
+		 * A merchant's history up to `to` (from `since` on when given), ascending.
+		 * @param {string} merchantId @param {Date} to @param {Date | null} [since] @returns {Promise<Doc[]>}
+		 */
+		historyOf: (merchantId, to, since = null) =>
 			history
 				.forMerchant(merchantId)
-				.find({ merchantId, at: { $lte: to } })
+				.find({ merchantId, at: { ...(since ? { $gte: since } : {}), $lte: to } })
 				.sort({ at: 1, _id: 1 })
 				.toArray(),
 

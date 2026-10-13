@@ -85,7 +85,9 @@ body })` (row 3 refusals: unknown key or a key without price or a dependency off
 - **Ledger** (`commerce_ledger`, append-only, hash-chained): `receipt` (+) and `day_charge` (−, one per website ×
   product × UTC day, `day:<websiteId>:<productId>:<day>`). `verifyChain(merchantId)`.
 - **Check** `check(merchantId)` (0.5.7): settles, writes complete days, records grace starts and stops once (and sends
-  `status.changed` for them), caches the state and sends billing e-mails once per state. Views run it:
+  `status.changed` for them), caches the state and sends billing e-mails once per state. It reads from the settled
+  point on only, and never waits more than a second for a busy ledger (it then answers live and writes nothing). Views
+  run it:
   `billingSummary`, `usage`, `receiptsOf`, `dayChargesOf`, `billingSummaries`, `attention`, `allReceipts`, `charges`.
   `addReceipt(…)` (a receipt that ends grace or a stop sends `status.changed`).
 

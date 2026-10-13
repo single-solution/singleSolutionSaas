@@ -14,8 +14,9 @@
  * - A receipt that brings the balance above 0 ends a grace period or a stop at once; one that leaves it ≤ 0 changes
  *   nothing.
  *
- * Events before `from` only rebuild the state (price lists, products, switches, suspension); receipts before `from` are
- * already in the opening `balance`. All amounts are integer millicredits.
+ * Events before `from` only rebuild the state (price lists, products, switches, suspension), on top of a snapshot
+ * taken at `from` when one is given; receipts before `from` are already in the opening `balance`. All amounts are
+ * integer millicredits.
  * @module
  */
 
@@ -36,6 +37,9 @@ export const DAY_MS = 86_400_000;
  * @typedef {'active' | 'low_balance' | 'grace' | 'stopped'} BillingState
  * @typedef {BillingState | 'suspended'} MerchantStatus
  * @typedef {'active' | 'grace' | 'stopped' | 'suspended' | 'removed'} ProductStatus
+ * @typedef {{ suspended: boolean, products: { websiteId: string, productId: string, added: boolean, on: string[] }[] }} HeldState
+ *   the products on websites (in the order first added, removed ones included) and suspension at an instant
+ * @typedef {{ balance: number, phase: Phase } & HeldState} Snapshot
  */
 
 /** No grace period, not stopped. */
@@ -76,12 +80,15 @@ const pairKey = (websiteId, productId) => `${websiteId}\u0000${productId}`;
 
 /**
  * Replay a merchant's money from `from` to `to`.
- * @param {{ from: number, to: number, cut?: number | null, balance: number, phase?: Phase, events: readonly MoneyEvent[],
- *   graceDays: number, graceEnds?: Readonly<Record<string, number>> }} input `cut` (an hour boundary in `[from, to]`)
- *   asks for the state just before it (the snapshot a check stores with its settled days); `graceEnds` maps the start
- *   instant of a grace period already recorded to its end, so a later Settings change never moves it.
+ * @param {{ from: number, to: number, cut?: number | null, balance: number, phase?: Phase, state?: HeldState,
+ *   events: readonly MoneyEvent[], graceDays: number, graceEnds?: Readonly<Record<string, number>> }} input `cut` (an
+ *   hour boundary in `[from, to]`) asks for the state just before it (the snapshot a check stores with its settled
+ *   days); `state`: the products and suspension at `from` from such a snapshot, when the events before `from` are not
+ *   all given (the ones given are applied on top, which changes nothing they already shaped: each sets its own value);
+ *   `graceEnds` maps the start instant of a grace period already recorded to its end, so a later Settings change
+ *   never moves it.
  */
-export const replay = ({ from, to, cut = null, balance, phase = OPEN_PHASE, events, graceDays, graceEnds = {} }) => {
+export const replay = ({ from, to, cut = null, balance, phase = OPEN_PHASE, state, events, graceDays, graceEnds = {} }) => {
 	const sorted = events
 		.map((event, index) => ({ event, index }))
 		.sort((a, b) => a.event.at - b.event.at || a.index - b.index)
@@ -89,8 +96,13 @@ export const replay = ({ from, to, cut = null, balance, phase = OPEN_PHASE, even
 	/** @type {Map<string, Map<string, number>>} */
 	const prices = new Map();
 	/** @type {Map<string, { websiteId: string, productId: string, added: boolean, on: Set<string> }>} */
-	const products = new Map();
-	let suspended = false;
+	const products = new Map(
+		(state?.products ?? []).map((p) => [
+			pairKey(p.websiteId, p.productId),
+			{ websiteId: p.websiteId, productId: p.productId, added: p.added, on: new Set(p.on) },
+		]),
+	);
+	let suspended = state?.suspended ?? false;
 	let money = balance;
 	let { graceStart, graceEnd, stoppedAt } = phase;
 	/** @type {Charge[]} */
@@ -100,7 +112,7 @@ export const replay = ({ from, to, cut = null, balance, phase = OPEN_PHASE, even
 	/** @type {Set<string>} */
 	let charged = new Set();
 	let chargedHour = Number.NaN;
-	/** @type {{ balance: number, phase: Phase } | null} */
+	/** @type {Snapshot | null} */
 	let snapshot = null;
 
 	/** @param {string} productId @param {string} key */
@@ -109,6 +121,18 @@ export const replay = ({ from, to, cut = null, balance, phase = OPEN_PHASE, even
 	const hourlyOf = (p) => (p.added ? [...p.on].reduce((sum, key) => sum + priceOf(p.productId, key), 0) : 0);
 	const dailySpend = () => 24 * [...products.values()].reduce((sum, p) => sum + hourlyOf(p), 0);
 	const phaseNow = () => ({ graceStart, graceEnd, stoppedAt });
+	/** @returns {Snapshot} */
+	const snap = () => ({
+		balance: money,
+		phase: phaseNow(),
+		suspended,
+		products: [...products.values()].map((p) => ({
+			websiteId: p.websiteId,
+			productId: p.productId,
+			added: p.added,
+			on: [...p.on].sort(),
+		})),
+	});
 
 	/** @param {MoneyEvent} event @param {boolean} live */
 	const apply = (event, live) => {
@@ -167,7 +191,7 @@ export const replay = ({ from, to, cut = null, balance, phase = OPEN_PHASE, even
 
 	const end = Math.max(from, to);
 	for (let t = from; ;) {
-		if (cut !== null && snapshot === null && t >= cut) snapshot = { balance: money, phase: phaseNow() };
+		if (cut !== null && snapshot === null && t >= cut) snapshot = snap();
 		while (i < sorted.length && /** @type {MoneyEvent} */ (sorted[i]).at <= t)
 			apply(/** @type {MoneyEvent} */ (sorted[i++]), true);
 		stopIfGraceOver(t);
@@ -200,7 +224,7 @@ export const replay = ({ from, to, cut = null, balance, phase = OPEN_PHASE, even
 		if (next > end) break;
 		t = next;
 	}
-	if (cut !== null && snapshot === null) snapshot = { balance: money, phase: phaseNow() };
+	if (cut !== null && snapshot === null) snapshot = snap();
 
 	return {
 		balance: money,

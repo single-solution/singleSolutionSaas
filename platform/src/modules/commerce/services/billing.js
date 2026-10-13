@@ -10,13 +10,16 @@
  *   and stops once (and tells the merchant's products, `status.changed`), caches the balance and billing state, and
  *   sends a billing e-mail when the merchant enters a state (an atomic compare-and-set on the stored state, so two
  *   checks send one e-mail). The day charges, grace starts and stops and the billing state commit in one transaction.
- *   It runs when a product fetches a status and when a Portal page shows a merchant; nothing is scheduled.
+ *   It reads from the settled point on only: the products and suspension stored there, the history from a day before
+ *   it, the price lists then in force, and the ledger entries from it on beside the account's cached balance. It runs
+ *   when a product fetches a status and when a Portal page shows a merchant; nothing is scheduled. It never waits more
+ *   than a second for a ledger another write holds: it then answers live and writes nothing.
  * - **Receipts** (0.5.8): the only way credits are added; never edited, voided or reversed. A receipt that ends grace
  *   or a stop restarts the merchant's products (`status.changed`).
  * @module
  */
 import { createId } from '@ss/contracts';
-import { problem } from '../../../infra/http.js';
+import { isProblem, problem } from '../../../infra/http.js';
 import { afterResponse, memoize } from '../../../infra/request-scope.js';
 import {
 	OPEN_PHASE,
@@ -42,12 +45,20 @@ import {
 /** @typedef {import('../core/money.js').MoneyEvent} MoneyEvent */
 /** @typedef {import('../core/money.js').Phase} Phase */
 /** @typedef {import('../core/money.js').BillingState} BillingState */
+/** @typedef {import('../core/money.js').HeldState} HeldState */
 /** @typedef {Record<string, any>} Doc */
 /** @typedef {{ type: string, id: string, name?: string | null }} Actor */
 /** @typedef {{ actor: Actor, requestId?: string | null, ip?: string | null }} Caller */
 /** @typedef {import('mongodb').ClientSession} Session */
 
 const SYSTEM_ACTOR = Object.freeze({ type: 'system', id: 'commerce' });
+/**
+ * History read again before the settled point: an entry is stamped when its request starts and written moments later,
+ * so one can land after a check settled past its time; it still applies from there.
+ */
+const REREAD_MS = 86_400_000;
+/** How long a check waits while another write holds the ledger; then it answers live and leaves the writing to it. */
+const CHECK_WAIT_MS = 1000;
 
 /** Billing states that send an e-mail when entered, and their template. */
 const STATE_MAILS = Object.freeze({ low_balance: 'low_balance', grace: 'grace_started', stopped: 'products_stopped' });
@@ -198,13 +209,20 @@ export const createBilling = ({ ctx, repo, deps, ledger, statusChanged }) => {
 	// ------------------------------------------------------------------------------------------------ the check
 
 	/**
-	 * Inputs of the money function for a merchant up to `now`.
-	 * @param {string} merchantId @param {number} now
+	 * Inputs of the money function for a merchant up to `now`: with the state stored at the settled point (`held`),
+	 * only the history from a day before it on and the price lists in force then; else the whole history.
+	 * @param {string} merchantId @param {number} now @param {{ from: number, held: HeldState } | null} settled
 	 */
-	const inputsOf = async (merchantId, now) => {
-		const history = await repo.historyOf(merchantId, new Date(now));
-		const productIds = [...new Set(history.filter((h) => typeof h.productId === 'string').map((h) => String(h.productId)))];
-		const lists = await repo.priceListsOf(productIds, new Date(now));
+	const inputsOf = async (merchantId, now, settled) => {
+		const since = settled ? new Date(settled.from - REREAD_MS) : null;
+		const history = await repo.historyOf(merchantId, new Date(now), since);
+		const productIds = [
+			...new Set([
+				...(settled?.held.products ?? []).map((p) => p.productId),
+				...history.filter((h) => typeof h.productId === 'string').map((h) => String(h.productId)),
+			]),
+		];
+		const lists = await repo.priceListsOf(productIds, new Date(now), since);
 		/** @type {MoneyEvent[]} */
 		const events = lists.map((l) => ({ type: 'prices', at: l.at.getTime(), productId: l.productId, features: l.features }));
 		/** @type {Record<string, number>} */
@@ -219,7 +237,37 @@ export const createBilling = ({ ctx, repo, deps, ledger, statusChanged }) => {
 			else if (h.kind === 'grace_started') graceEnds[String(at)] = h.graceEnd.getTime();
 		}
 		const earliest = history.length > 0 ? /** @type {Doc} */ (history[0]).at.getTime() : null;
-		return { events, graceEnds, earliest, lists };
+		return { events, graceEnds, earliest };
+	};
+
+	/**
+	 * The balance at `from` and the receipts from it on, read from the settled point on only: the account's cached
+	 * balance (every entry up to its `seq`) and the entries after it (a crashed writer's), less the receipts from `from`
+	 * on and the day charges of the days from it on. Those are replayed, whether or not a crashed or overlapping check
+	 * already wrote them, so no day is counted twice.
+	 * @param {string} merchantId @param {number} from
+	 */
+	const openingOf = async (merchantId, from) => {
+		const account = await repo.accountOps(merchantId).findOne({ merchantId, _id: merchantId });
+		const seq = Number(account?.seq ?? 0);
+		const day = dayOf(from);
+		const entries = await repo
+			.ledgerOf(merchantId)
+			.find({
+				merchantId,
+				$or: [
+					{ seq: { $gt: seq } },
+					{ type: 'receipt', at: { $gte: new Date(from) } },
+					{ type: 'day_charge', day: { $gte: day } },
+				],
+			})
+			.sort({ seq: 1 })
+			.toArray();
+		/** @param {Doc} e */
+		const replayed = (e) => (e.type === 'receipt' ? e.at.getTime() >= from : e.day >= day);
+		let opening = Number(account?.balance ?? 0);
+		for (const e of entries) opening += (e.seq > seq ? e.amount : 0) - (replayed(e) ? e.amount : 0);
+		return { opening, receipts: entries.filter((e) => e.type === 'receipt' && replayed(e)) };
 	};
 
 	/**
@@ -233,7 +281,8 @@ export const createBilling = ({ ctx, repo, deps, ledger, statusChanged }) => {
 	 * Write what a check found: its day charges, the grace starts and stops it recorded (once each) and the billing
 	 * state (a compare-and-set on the state the check read) commit together or not at all, so a crash never leaves
 	 * days charged with the settled point behind them. A check that lost the compare-and-set writes nothing: the check
-	 * that won settled the same days.
+	 * that won settled the same days. Nor does a check that finds the ledger held longer than `CHECK_WAIT_MS` by another
+	 * write (it answers live, so a status fetch never waits long; the next check writes what is left).
 	 * @param {string} merchantId
 	 * @param {{ drafts: import('../core/ledger.js').EntryDraft[], marks: Doc[], expect: Doc | null, next: Doc }} input
 	 * @returns {Promise<{ saved: boolean, marked: boolean }>} `marked`: a grace start or stop was recorded now
@@ -249,11 +298,12 @@ export const createBilling = ({ ctx, repo, deps, ledger, statusChanged }) => {
 			if (!(await repo.updateBilling(merchantId, expect, next, session))) throw lost();
 		};
 		try {
-			if (drafts.length > 0) await ledger.append(merchantId, drafts, { alongside });
+			if (drafts.length > 0) await ledger.append(merchantId, drafts, { alongside, waitMs: CHECK_WAIT_MS });
 			else await ctx.withTransaction(alongside);
 			return { saved: true, marked };
 		} catch (error) {
-			if (isLost(error)) return { saved: false, marked: false };
+			if (isLost(error) || (isProblem(error) && /** @type {any} */ (error).code === 'unavailable'))
+				return { saved: false, marked: false };
 			throw error;
 		}
 	};
@@ -261,26 +311,19 @@ export const createBilling = ({ ctx, repo, deps, ledger, statusChanged }) => {
 	/** @param {string} merchantId */
 	const runCheck = async (merchantId) => {
 		const now = ctx.now();
-		const [stored, { events, graceEnds, earliest, lists }] = await Promise.all([
-			repo.billingOf(merchantId),
-			inputsOf(merchantId, now),
+		const stored = await repo.billingOf(merchantId);
+		const settledAt = stored?.settledThrough instanceof Date ? stored.settledThrough.getTime() : null;
+		/** @type {HeldState | null} the products and suspension at the settled point (none in a doc from before it was kept) */
+		const held =
+			settledAt !== null && Array.isArray(stored?.held?.products)
+				? { suspended: stored?.held.suspended === true, products: stored?.held.products }
+				: null;
+		const [{ events, graceEnds, earliest }, settledOpening] = await Promise.all([
+			inputsOf(merchantId, now, settledAt !== null && held ? { from: settledAt, held } : null),
+			settledAt === null ? null : openingOf(merchantId, settledAt),
 		]);
-		const from = stored?.settledThrough ? stored.settledThrough.getTime() : floorDay(earliest ?? now);
-		// the balance at `from`: day charges of the days before it (days from `from` on are replayed, whether or not a
-		// crashed or overlapping check already wrote them) and the receipts before it
-		const [receipts, opening] = await Promise.all([
-			repo
-				.ledgerOf(merchantId)
-				.find({ merchantId, type: 'receipt', at: { $gte: new Date(from) } })
-				.sort({ seq: 1 })
-				.toArray(),
-			ledger.sum(merchantId, {
-				$or: [
-					{ type: 'day_charge', day: { $lt: dayOf(from) } },
-					{ type: 'receipt', at: { $lt: new Date(from) } },
-				],
-			}),
-		]);
+		const from = settledAt ?? floorDay(earliest ?? now);
+		const { opening, receipts } = settledOpening ?? (await openingOf(merchantId, from));
 		// grace and a stop only hold while the balance is ≤ 0: a stored one with credits left was written by a check
 		// that miscounted, and is dropped
 		const kept = phaseOf(stored?.phase);
@@ -292,6 +335,7 @@ export const createBilling = ({ ctx, repo, deps, ledger, statusChanged }) => {
 			cut,
 			balance: opening,
 			phase: dropped ? { ...OPEN_PHASE } : kept,
+			...(held ? { state: held } : {}),
 			events: [
 				...events,
 				...receipts.map((r) => /** @type {MoneyEvent} */ ({ type: 'receipt', at: r.at.getTime(), amount: r.amount })),
@@ -327,7 +371,7 @@ export const createBilling = ({ ctx, repo, deps, ledger, statusChanged }) => {
 		);
 		const lowBalanceDays = rules().lowBalanceDays;
 		const state = billingStateOf({ phase: run.phase, balance: run.balance, dailySpend: run.dailySpend, lowBalanceDays });
-		const snapshot = /** @type {{ balance: number, phase: Phase }} */ (run.snapshot);
+		const snapshot = /** @type {import('../core/money.js').Snapshot} */ (run.snapshot);
 		const { saved, marked } = await settle(merchantId, {
 			drafts,
 			marks,
@@ -335,6 +379,7 @@ export const createBilling = ({ ctx, repo, deps, ledger, statusChanged }) => {
 			next: {
 				settledThrough: new Date(Math.max(cut, from)),
 				phase: storedPhase(snapshot.phase),
+				held: { suspended: snapshot.suspended, products: snapshot.products },
 				state,
 				balance: run.balance,
 				dailySpend: run.dailySpend,
@@ -346,7 +391,7 @@ export const createBilling = ({ ctx, repo, deps, ledger, statusChanged }) => {
 		if (marked || (saved && dropped)) await statusChanged(merchantId);
 		const previous = stored?.state ?? 'active';
 		if (saved && state !== previous && state in STATE_MAILS) await billingMail(merchantId, state, run);
-		return { merchantId, now, cut, run, state, lists };
+		return { merchantId, now, cut, run, state };
 	};
 
 	/**
@@ -490,7 +535,7 @@ export const createBilling = ({ ctx, repo, deps, ledger, statusChanged }) => {
 			rows.push(
 				...usageRows(checked.run.charges.filter((c) => c.hour >= checked.cut && (!websiteId || c.websiteId === websiteId))),
 			);
-		const names = featureNames(checked.lists);
+		const names = featureNames(await repo.priceListsOf([...new Set(rows.map((r) => r.productId))], new Date(checked.now)));
 		const { products, domains } = await labels(rows);
 		/** @type {Map<string, number>} */
 		const perDay = new Map();

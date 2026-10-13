@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import fc from 'fast-check';
 import {
 	DAY_MS,
 	HOUR_MS,
@@ -281,10 +282,45 @@ describe('money function: grace, debt and stop (PLAN 0.5.6)', () => {
 		expect(out.snapshot).toEqual({
 			balance: -5000 - 24 * 1000,
 			phase: { graceStart: D0 - H, graceEnd: D0 + DAY_MS + H, stoppedAt: null },
+			suspended: false,
+			products: [{ websiteId: W1, productId: A, added: true, on: ['codes'] }],
 		});
 		expect(out.phase.stoppedAt).toBe(D0 + DAY_MS + H);
 		const late = run({ from: D0, to: D0 - 1, cut: D0 + H, balance: 7 });
-		expect(late.snapshot).toEqual({ balance: 7, phase: OPEN_PHASE });
+		expect(late.snapshot).toEqual({ balance: 7, phase: OPEN_PHASE, suspended: false, products: [] });
+	});
+
+	it('continues from a snapshot of the products and suspension; events given again before `from` change nothing', () => {
+		const events = [prices(0, { codes: 1000, box: 500 }), added(0), switches(0, ['codes']), added(H, W2)];
+		const full = run({
+			from: D0,
+			to: D0 + 3 * H,
+			cut: D0 + 2 * H,
+			balance: 0,
+			events: [...events, switches(D0 + H, ['codes', 'box'])],
+		});
+		const snapshot = /** @type {NonNullable<typeof full.snapshot>} */ (full.snapshot);
+		expect(snapshot.products).toEqual([
+			{ websiteId: W1, productId: A, added: true, on: ['box', 'codes'] },
+			{ websiteId: W2, productId: A, added: true, on: [] },
+		]);
+		// from the snapshot at the cut, with only the price list and the last hour's events given (re-applied before it)
+		const resumed = run({
+			from: D0 + 2 * H,
+			to: D0 + 3 * H,
+			balance: snapshot.balance,
+			state: snapshot,
+			events: [prices(0, { codes: 1000, box: 500 }), switches(D0 + H, ['codes', 'box'])],
+		});
+		expect([resumed.balance, resumed.dailySpend, resumed.products]).toEqual([full.balance, full.dailySpend, full.products]);
+		const suspended = run({
+			from: D0,
+			to: D0 + H,
+			balance: 0,
+			state: { suspended: true, products: snapshot.products },
+			events,
+		});
+		expect([suspended.suspended, suspended.charges]).toEqual([true, []]);
 	});
 });
 
@@ -354,5 +390,87 @@ describe('usage rows, day charges and texts (PLAN 0.5.7, 0.5.11)', () => {
 		expect(creditsText(-12_345)).toBe('-12.345 credits');
 		expect(creditsText(2500)).toBe('2.5 credits');
 		expect(instantText(D0 + 14 * H + 30 * M)).toBe('2026-10-01 14:30 UTC');
+	});
+});
+
+describe('checks that continue from a snapshot (K-19)', () => {
+	const B = 'notice';
+	/** @type {fc.Arbitrary<import('../../../src/modules/commerce/core/money.js').MoneyEvent>} */
+	const event = fc
+		.tuple(
+			fc.integer({ min: 0, max: 5 * 24 * 60 }).map((minute) => D0 + minute * M),
+			fc.constantFrom(W1, W2),
+			fc.constantFrom(A, B),
+			fc.subarray(['codes', 'box']),
+			fc.integer({ min: 0, max: 8 }),
+			fc.integer({ min: 0, max: 2000 }),
+		)
+		.map(([at, websiteId, productId, on, kind, amount]) => {
+			if (kind === 0) return { type: 'prices', at, productId, features: on.map((key) => ({ key, name: key, price: amount })) };
+			if (kind <= 2) return { type: kind === 1 ? 'added' : 'removed', at, websiteId, productId };
+			if (kind <= 4) return { type: 'switches', at, websiteId, productId, on };
+			if (kind === 5) return { type: 'suspended', at };
+			if (kind === 6) return { type: 'resumed', at };
+			return { type: 'receipt', at, amount: 10 * amount };
+		});
+
+	it('chained checks, each reading a day before its settled point, end where one replay from the start ends', () => {
+		fc.assert(
+			fc.property(
+				fc.array(event, { maxLength: 30 }),
+				fc.uniqueArray(fc.integer({ min: 0, max: 6 * 24 * 60 }), { minLength: 1, maxLength: 6 }),
+				fc.integer({ min: 0, max: 2 }),
+				fc.integer({ min: 0, max: 30_000 }),
+				(events, minutes, graceDays, start) => {
+					const checks = minutes.map((minute) => D0 + minute * M).sort((a, b) => a - b);
+					const to = /** @type {number} */ (checks.at(-1));
+					const all = [{ type: /** @type {const} */ ('receipt'), at: D0, amount: start }, ...events];
+					const full = replay({ from: D0, to, balance: 0, events: all.filter((e) => e.at <= to), graceDays });
+					let from = D0;
+					let balance = 0;
+					let phase = /** @type {import('../../../src/modules/commerce/core/money.js').Phase} */ (OPEN_PHASE);
+					/** @type {import('../../../src/modules/commerce/core/money.js').HeldState | undefined} */
+					let state;
+					/** @type {ReturnType<typeof replay> | null} */
+					let last = null;
+					for (const now of checks) {
+						const lower = from - DAY_MS;
+						const known = all.filter((e) => e.at <= now);
+						// what a check reads: receipts from `from` on; with a snapshot, the history from `lower` on and the
+						// last price list of each product before it
+						const given = known.filter((e, i) => {
+							if (e.type === 'receipt') return e.at >= from;
+							if (!state || e.at >= lower) return true;
+							return (
+								e.type === 'prices' &&
+								!known.some(
+									(o, j) =>
+										j !== i &&
+										o.type === 'prices' &&
+										o.productId === e.productId &&
+										o.at < lower &&
+										(o.at > e.at || (o.at === e.at && j > i)),
+								)
+							);
+						});
+						const cut = floorDay(now);
+						last = replay({ from, to: now, cut, balance, phase, ...(state ? { state } : {}), events: given, graceDays });
+						const snapshot = /** @type {NonNullable<typeof last.snapshot>} */ (last.snapshot);
+						({ balance, phase } = snapshot);
+						state = { suspended: snapshot.suspended, products: snapshot.products };
+						from = cut;
+					}
+					const chained = /** @type {ReturnType<typeof replay>} */ (last);
+					expect([chained.balance, chained.phase, chained.suspended, chained.dailySpend, chained.products]).toEqual([
+						full.balance,
+						full.phase,
+						full.suspended,
+						full.dailySpend,
+						full.products,
+					]);
+				},
+			),
+			{ numRuns: 300 },
+		);
 	});
 });
