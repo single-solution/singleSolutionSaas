@@ -741,6 +741,15 @@ answers 2xx. Grace-started and stopped notices are sent by the check that finds 
 - **API rules**: `/v1` paths; RFC 9457 problems with a stable code; cursor pagination; `Idempotency-Key` on routes that
   create things or move money; ISO-8601 UTC times; money as integer minor units plus a currency; an OpenAPI file
   generated from the routes. Every merchant-data query carries `websiteId` (kit tenant guard).
+- **Every call is described** (owner's model, 2026-10-13: a merchant's own developer builds the shop on our APIs):
+  `schemas/api.json` gives each browser, server and ticket route its summary, query parameters, request headers, JSON
+  body and success answer (a JSON Schema subset, with shared objects); `ss app assets` merges it into `openapi.json`;
+  `ss app validate` refuses a route without an entry (`api.missing`) or an entry without a route; each product's tests
+  check every success answer against it (`apiChecker`), so the descriptions cannot drift; `/docs` renders the API
+  reference from it (`renderApiReference`). Lists page with `{ items, nextCursor, hasMore }`. A repeat of the same
+  request under the same `Idempotency-Key` within 24 hours gets the first answer again (K13).
+- **Every word is editable** (0.4.10): widgets never print a server's English problem detail; they show their own
+  texts by problem code and field, and server-side notes and warnings travel as codes.
 - Browser-token routes serve visitors; server-token and ticket routes serve the merchant's server and admin. Headless
   means building your own UI on that API; there is no headless SDK and there are no React/Vue/Svelte adapters.
 - `manifest.json` declares only: `id`, `name`, `version`, `endpoints` (base, dashboard), `widgetScriptUrl` (or null),
@@ -3112,6 +3121,36 @@ name or a SKU) and `catalog.chatSearch` (`same` default | `basic` | `atlas`).
 Not built from these findings: Google category per category, a product_type template and extra images in feeds (SG-3);
 SEO-title overrides used as written (K-25); grade glossary patterns (SG-20); `identifier_exists` in the Meta CSV
 (SG-22); the kit's `/v1/settings` window (SG-31).
+
+Built after the re-audit, sixth batch (2026-10-14; commits fd345e30, 9b533e68, e7c26b67, 377bce7c, c799edc1, 0062e958,
+2aa4f452, e6a23c96, e6804dfa, 58b6532b; the developer side: every route described in `schemas/api.json`, docs and
+widget texts by code, OT-1–OT-4):
+
+**E92. Paged import finish (always).** `POST /v1/import/finish?after=<next>` handles at most 200 records a call and
+answers flat counts with `more` and `next` (`categoryProblems` when it reaches the categories), so each call fits a free
+host's time limit.
+
+**E93. One live check for deals (always; K-15, PR-4, PR-6, SF-4).** `dealLiveFor` (switched on, dates, use limit,
+weekdays and hours, scope and conditions) is behind cards, product quotes, the cart, the shop and Chat deal lists and
+`?deal=` listings: a deal is never shown when the cart would not give it.
+
+**E94. Loyalty roles at delivery (always).** A shopper whose role the loyalty settings leave out earns nothing; the 0 is
+fixed when the order is placed.
+
+**E95. Guest invoices (always).** The shopper invoice route takes `SS-Sign-In` or `SS-Order-Key`, and an order's
+`invoice` field follows the same check.
+
+**E96. A transfer proof stops the payment window (always).** Once the shopper uploads a proof, the order is no longer
+cancelled for not paying in time; staff confirm or cancel it.
+
+**E97. Payment events (always).** Cash recorded on delivery raises `order.payment_recorded` and `order.paid`; a cancel's
+online refund and a move to a refunded status raise `order.refunded`.
+
+**E98. Deal banners.** `POST /v1/deals/:id/banner/upload` (and the ticket twin) gives a presigned upload under the
+deal's folder; the promotions widget uploads, changes the alt text or removes a banner.
+
+**E99. Product list paging (always).** `GET /v1/shop/products` pages with `nextCursor` and `hasMore` like every list;
+`?next=` is still read.
 
 #### Chat
 
