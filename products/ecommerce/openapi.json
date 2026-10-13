@@ -28207,7 +28207,7 @@
 		"/v1/shop/orders/{id}/proof": {
 			"post": {
 				"summary": "Send the bank-transfer proof",
-				"description": "After uploading it (POST /v1/shop/orders/{id}/proof/upload); staff are told and record the payment. Send the shopper’s Accounts sign-in in SS-Sign-In (their own orders), or a guest order’s key in SS-Order-Key (the orderKey answered once when it was placed). 403 sign_in_required with neither; 404 not_found when the order is not the shopper’s and the key does not open it. A verified phone in the sign-in makes the guest orders of that phone the shopper’s first. 409 nothing_to_pay when the order does not wait for a proof; 422 validation_failed at /key (not this order’s upload, or not uploaded) or /reference; 409 conflict when the order changed meanwhile.",
+				"description": "After uploading it (POST /v1/shop/orders/{id}/proof/upload); staff are told and record the payment. From then on the order no longer ends with the payment window (its payBy is null): it waits for staff to confirm or cancel it. Send the shopper’s Accounts sign-in in SS-Sign-In (their own orders), or a guest order’s key in SS-Order-Key (the orderKey answered once when it was placed). 403 sign_in_required with neither; 404 not_found when the order is not the shopper’s and the key does not open it. A verified phone in the sign-in makes the guest orders of that phone the shopper’s first. 409 nothing_to_pay when the order does not wait for a proof; 422 validation_failed at /key (not this order’s upload, or not uploaded) or /reference; 409 conflict when the order changed meanwhile.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "checkout",
 				"security": [
@@ -44699,7 +44699,7 @@
 									"null"
 								],
 								"format": "date-time",
-								"description": "When an order awaiting payment is cancelled unpaid (null: no time limit)."
+								"description": "When an order awaiting payment is cancelled unpaid (null: no time limit, or a transfer proof was sent and staff decide)."
 							},
 							"proof": {
 								"oneOf": [

@@ -561,6 +561,20 @@ describe('bank transfers recorded by staff (E24)', () => {
 			body: { key: 'ecommerce/proofs/ord_other/x.png' },
 		});
 		expect(elsewhere.status).toBe(422);
+		// with its proof the order waits for staff past the payment window; one without a proof ends with it
+		expect((await orderRecord(id)).holdUntil).toBeNull();
+		const seen = await visit('GET', `/v1/shop/orders/${id}`, { signIn: shopper.token });
+		expect(seen.json.payment.payBy).toBeNull();
+		await shop.setting('checkout', 'paymentWindowMinutes', 60);
+		const unproved = await place(
+			{ lines: [{ productId: item.id }], payment: 'bank_transfer', address: ADDRESS },
+			shopper.token,
+		);
+		expect((await orderRecord(unproved.json.order.id)).holdUntil).not.toBeNull();
+		shop.advance(61 * 60_000);
+		await visit('POST', '/v1/shop/cart/quote', { body: { lines: [{ productId: item.id }] } });
+		expect((await orderRecord(unproved.json.order.id)).role).toBe('cancelled');
+		expect((await orderRecord(id)).role).toBe('awaiting_payment');
 		await shop.setting('checkout', 'bankTransferVia', 'payments');
 	});
 

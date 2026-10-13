@@ -1103,9 +1103,10 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		if (!head?.exists) throw service.invalid('key', 'The proof was not uploaded.');
 		const now = service.now();
 		const store = createOrdersStore(await s.data());
+		// with a proof the order no longer ends with the payment window: it waits for staff to confirm or cancel it
 		const changed = await store.change(
 			order,
-			{ 'payment.proof': { key, reference, at: new Date(now) } },
+			{ 'payment.proof': { key, reference, at: new Date(now) }, holdUntil: null },
 			{
 				push: {
 					history: {
