@@ -5,7 +5,10 @@
  * an optional plain-text `detail` (never message contents, secrets or addresses). When the merchant pasted the
  * website's Accounts server token, every entry is also sent to Accounts right after the request
  * (`POST <accounts>/v1/activity-copies`). Unsent entries stay marked `pending` and are retried right after this
- * product's next request for that website.
+ * product's next request for that website. When Accounts refuses them (its activity copies feature off, the token
+ * refused …), an instance sends none of that website's copies for {@link REFUSED_PAUSE_MS}, each copy waiting is
+ * counted as refused once more, and after {@link COPY_TRIES} refusals it is marked `dropped` (RT-5); this is logged
+ * at most once a day per website and instance.
  *
  * The merchant's server reads the log with `GET /v1/activity?actor=&action=&target=&q=&from=&to=&cursor=` (server token,
  * newest first), with counts (`/count`, `/counts?by=action|actor`).
@@ -24,6 +27,12 @@ import { kitError } from './util.js';
 /** Path of the Accounts route that receives copies. */
 const ACTIVITY_COPY_PATH = '/v1/activity-copies';
 const RETRY_BATCH = 20;
+/** Refusals of Accounts a copy waits through before it is dropped (RT-5). */
+export const COPY_TRIES = 3;
+/** After Accounts refused a copy, an instance sends none of that website's copies for this long. */
+export const REFUSED_PAUSE_MS = 15 * 60_000;
+/** Refused copies of a website are logged at most this often per instance. */
+const REFUSED_LOG_EVERY_MS = 24 * 3_600_000;
 const MAX_LABEL = 200;
 const MAX_DETAIL = 2000;
 const MAX_QUERY = 100;
@@ -38,6 +47,17 @@ export const ACTIVITY_INDEXES = Object.freeze(
 		{ collection: 'activity', keys: { websiteId: 1, copy: 1, at: 1 }, name: 'kit_activity_copies' },
 	]),
 );
+
+/**
+ * True when Accounts answered and refused a copy (a refused token, its feature off, Accounts stopped for the website, a
+ * copy it does not take), not when it could not be reached or asked to wait (408, 429).
+ * @param {import('./connections.js').ProductCall} result
+ */
+export const copyRefused = (result) =>
+	!result.ok &&
+	(result.reason === 'refused' ||
+		(result.reason === 'failed' && result.status !== 408 && result.status !== 429) ||
+		(result.reason === 'unavailable' && result.status === 403));
 
 /** @param {string} text */
 const escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -134,17 +154,24 @@ export const createActivity = ({ productId, data, connections, now, logger }) =>
 	)?.[0];
 	/** Per instance: websites known to have no unsent copies. @type {Set<string>} */
 	const clean = new Set();
+	/** Per instance: websites whose copies Accounts refused, until when none is sent. @type {Map<string, number>} */
+	const pausedUntil = new Map();
+	/** Per instance: when refused copies of a website were last logged. @type {Map<string, number>} */
+	const loggedAt = new Map();
 
 	/** @param {string} websiteId */
 	const hasAccounts = async (websiteId) =>
 		accountsConnection !== undefined && (await connections.value(websiteId, accountsConnection)) !== null;
 
 	/**
-	 * Send unsent copies of a website, oldest first; stops at the first failure.
+	 * Send unsent copies of a website, oldest first; stops at the first failure. A refusal counts once more for every
+	 * copy of the batch (Accounts refuses the website, not one copy), drops those refused {@link COPY_TRIES} times and
+	 * pauses the website's copies on this instance.
 	 * @param {string} websiteId
 	 * @param {string | null} merchantId
 	 */
 	const forward = async (websiteId, merchantId) => {
+		if (now() < (pausedUntil.get(websiteId) ?? 0)) return;
 		const db = await data.forWebsite(websiteId, merchantId ? { merchantId } : {});
 		const log = db.collection('activity');
 		const pending = await log.find({ websiteId, copy: 'pending' }).sort({ at: 1 }).limit(RETRY_BATCH).toArray();
@@ -160,6 +187,24 @@ export const createActivity = ({ productId, data, connections, now, logger }) =>
 				at: entry.at.toISOString(),
 			};
 			const result = await connections.callProduct(websiteId, 'accounts', ACTIVITY_COPY_PATH, { method: 'POST', body: copy });
+			if (copyRefused(result)) {
+				const waiting = pending.slice(pending.indexOf(entry)).map((row) => row._id);
+				await log.updateMany({ websiteId, copy: 'pending', _id: { $in: waiting } }, { $inc: { copyTries: 1 } });
+				const dropped = await log.updateMany(
+					{ websiteId, copy: 'pending', copyTries: { $gte: COPY_TRIES } },
+					{ $set: { copy: 'dropped' } },
+				);
+				pausedUntil.set(websiteId, now() + REFUSED_PAUSE_MS);
+				if (now() - (loggedAt.get(websiteId) ?? -Infinity) >= REFUSED_LOG_EVERY_MS) {
+					loggedAt.set(websiteId, now());
+					logger.warn('activity copies refused by Accounts; each is dropped after 3 refusals', {
+						websiteId,
+						status: result.ok ? 200 : result.status,
+						dropped: dropped.modifiedCount,
+					});
+				}
+				return;
+			}
 			if (!result.ok) {
 				logger.info('activity copy not sent; retried on the next request', { websiteId, reason: result.reason });
 				return;
@@ -219,7 +264,7 @@ export const createActivity = ({ productId, data, connections, now, logger }) =>
 		 * @param {string | null} merchantId
 		 */
 		retry: async (websiteId, merchantId) => {
-			if (clean.has(websiteId)) return;
+			if (clean.has(websiteId) || now() < (pausedUntil.get(websiteId) ?? 0)) return;
 			if (!(await hasAccounts(websiteId))) {
 				clean.add(websiteId);
 				return;

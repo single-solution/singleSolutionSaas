@@ -396,6 +396,64 @@ describe('activity log and data rights', () => {
 		).rejects.toMatchObject({ code: 'invalid_argument' });
 	});
 
+	it('drops copies Accounts refuses after 3 refusals, pausing the website 15 minutes after each (RT-5)', async () => {
+		const ctx = await setup({ connections: CONNECTIONS, routes: routes() });
+		holder.product = ctx.product;
+		const { session, dash, websiteId, portal, accounts, handlers, call, server, settle, connectDatabase, clock, entries } = ctx;
+		const dbName = await connectDatabase();
+		const cookie = await session({ kind: 'merchant' });
+		await dash(cookie, 'PUT', `/v1/dashboard/websites/${websiteId}/connections/accounts`, {
+			value: (await portal.issueToken({ websiteId, productId: 'accounts', kind: 'server' })).token,
+		});
+		let refusing = true;
+		let asked = 0;
+		const original = /** @type {(request: Request) => Promise<Response>} */ (handlers[accounts.url]);
+		handlers[accounts.url] = async (request) => {
+			asked += 1;
+			return refusing
+				? new Response(JSON.stringify({ type: `${accounts.url}/problems/feature_off`, status: 403 }), { status: 403 })
+				: original(request);
+		};
+		const act = async () => {
+			expect((await call('POST', '/v1/actions', { token: server.token })).status).toBe(200);
+			await settle();
+		};
+		await act();
+		await act();
+		await act();
+		expect(asked).toBe(1);
+		const { client, db } = await openDb(dbName);
+		const log = db.collection('ss_notes_activity');
+		const state = async () =>
+			(await log.find({}, { sort: { at: 1, _id: 1 } }).toArray()).map((e) => [e.copy, e.copyTries ?? 0]);
+		expect(await state()).toEqual([
+			['pending', 1],
+			['pending', 0],
+			['pending', 0],
+		]);
+		clock.advance(15 * 60_000);
+		await call('GET', '/v1/activity', { token: server.token });
+		await settle();
+		expect(asked).toBe(2);
+		clock.advance(15 * 60_000);
+		await act();
+		expect(asked).toBe(3);
+		expect(await state()).toEqual([
+			['dropped', 3],
+			['pending', 2],
+			['pending', 2],
+			['pending', 1],
+		]);
+		refusing = false;
+		clock.advance(15 * 60_000);
+		await call('GET', '/v1/activity', { token: server.token });
+		await settle();
+		expect(accounts.copies).toHaveLength(3);
+		expect((await state()).map(([copy]) => copy)).toEqual(['dropped', 'sent', 'sent', 'sent']);
+		expect(entries.filter((e) => e.msg.startsWith('activity copies refused by Accounts'))).toHaveLength(1);
+		await client.close();
+	});
+
 	it('retries unsent copies on the next request of a fresh instance', async () => {
 		const ctx = await setup({ connections: CONNECTIONS, routes: routes() });
 		holder.product = ctx.product;
