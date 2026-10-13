@@ -568,8 +568,16 @@ describe('the send API', () => {
 			websiteId: env.websiteId,
 			data: { orderId: 'ord_1', number: 'A-1001' },
 		});
-		// the kit forwards again after a lost answer: refused as a repeat, which the kit takes as delivered
-		expect((await relay(event, id)).status).toBe(409);
+		// the kit forwards again after a lost answer: the first answer again, and nothing is sent twice (K-14)
+		const repeat = await relay(event, id);
+		expect(repeat.status).toBe(202);
+		expect(repeat.headers.get('idempotent-replayed')).toBe('true');
+		expect(await repeat.json()).toEqual({ queued: 1 });
+		expect(env.providers.callsTo('https://hooks.example.org')).toHaveLength(before + 1);
+		// another event under the same key is refused as a repeat, which the kit takes as delivered
+		const other = await relay({ ...event, data: { orderId: 'ord_2', number: 'A-1002' } }, id);
+		expect(other.status).toBe(409);
+		expect((await other.json()).type).toMatch(/duplicate_request$/);
 		expect(env.providers.callsTo('https://hooks.example.org')).toHaveLength(before + 1);
 		// a time with an offset is kept as the same instant
 		await relay({ id: createId('evt'), type: 'chat.conversation.opened', at: '2026-10-01T15:00+05:00', data: {} });
