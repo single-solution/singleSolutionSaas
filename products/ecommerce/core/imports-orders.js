@@ -46,8 +46,8 @@ import { REVIEW_STATUSES, checkReply, checkReviewInput } from './reviews.js';
 /**
  * What the checks of one import call read of the website (the collections' `prepare`): the order flow, the order
  * number's form (`checkout.numberPrefix`, `numberDigits`), the shop's currency (`catalog.currency`), its phone rules
- * (`checkout.defaultCallingCode`, `trunkPrefix`; business.json's country is not read, so phones come as E.164 or with
- * that setting) and the time of the call.
+ * (as checkout reads phones, K12: `checkout.defaultCallingCode`, else the business.json country's calling code, and
+ * `trunkPrefix`; so national numbers read as the shop's) and the time of the call.
  * @typedef {{ now: number, flow: OrderFlow, numberPrefix: string, numberDigits: number, currency: string,
  *   phoneRules: { defaultCallingCode: string, trunkPrefix: string } }} ImportRules
  */
@@ -294,7 +294,10 @@ const checker = () => {
 		const normal = normalisePhone(raw, rules);
 		if (normal) return normal;
 		if (!strict && PHONE_TEXT.test(raw)) return raw;
-		fail(path, 'A phone number with its country code (+…) is expected, or set checkout.defaultCallingCode first.');
+		fail(
+			path,
+			'A phone number with its country code (+…) is expected, or set checkout.defaultCallingCode (or the business.json country) first.',
+		);
 		return '';
 	};
 
@@ -329,11 +332,12 @@ const answer = (c, value) => (c.errors.length > 0 ? { ok: false, errors: c.error
 
 /**
  * The rules of one import call from what the website has (`prepare`).
- * @param {{ flow: unknown, checkout: Record<string, unknown>, catalog: Record<string, unknown>, now: number }} input
+ * @param {{ flow: unknown, checkout: Record<string, unknown>, catalog: Record<string, unknown>, country: unknown,
+ *   now: number }} input `country`: business.json's
  * @returns {ImportRules}
  */
-export const importRules = ({ flow, checkout, catalog, now }) => {
-	const { defaultCallingCode, trunkPrefix } = phoneRules(checkout, undefined);
+export const importRules = ({ flow, checkout, catalog, country, now }) => {
+	const { defaultCallingCode, trunkPrefix } = phoneRules(checkout, country);
 	return {
 		now,
 		flow: /** @type {OrderFlow} */ (flow),

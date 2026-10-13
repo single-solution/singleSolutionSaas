@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { IMPORT_LIMITS, defineRoute } from '../src/index.js';
-import { openDb, productRoutes, setup } from './helpers.js';
+import { DOMAIN, openDb, productRoutes, setup } from './helpers.js';
 
 /** @type {{ product: any }} */
 const holder = { product: null };
@@ -32,13 +32,25 @@ const IMPORTS = {
 		// a collection found by two fields (Growth's day + part), with something every check of a call needs
 		days: {
 			key: ['day', 'part'],
-			prepare: async (/** @type {any} */ ctx) => ({ tenant: ctx.websiteId, dryRun: ctx.dryRun }),
+			prepare: async (/** @type {any} */ ctx) => ({
+				tenant: ctx.websiteId,
+				dryRun: ctx.dryRun,
+				country: (await ctx.business()).country,
+				// read once per call
+				same: (await ctx.business()) === (await ctx.business()),
+			}),
 			check: (/** @type {Record<string, unknown>} */ record, /** @type {any} */ ctx) =>
 				record.day === '2024-13-01'
 					? { ok: /** @type {const} */ (true), value: { ...record, day: '2024-12-01' } }
 					: {
 							ok: /** @type {const} */ (true),
-							value: { ...record, checkedFor: ctx.prepared.tenant === ctx.websiteId, dryRunSeen: ctx.prepared.dryRun },
+							value: {
+								...record,
+								checkedFor: ctx.prepared.tenant === ctx.websiteId,
+								dryRunSeen: ctx.prepared.dryRun,
+								country: ctx.prepared.country,
+								businessOnce: ctx.prepared.same,
+							},
 						},
 		},
 	},
@@ -256,7 +268,11 @@ describe('import routes (K10)', () => {
 	});
 
 	it('find records by the collection’s own key, which the check must keep', async () => {
-		const { send, dbName, call, server } = await start();
+		const { send, dbName, call, server, handlers, session, dash, websiteId } = await start();
+		// the checks read the website's business.json copy (its country reads national phone numbers)
+		handlers[`https://${DOMAIN}`] = async () =>
+			new Response(JSON.stringify({ version: 1, name: 'Example Shop', country: 'GB' }), { status: 200 });
+		await dash(await session(), 'POST', `/v1/dashboard/websites/${websiteId}/business/refresh`);
 		const { client, db } = await openDb(dbName);
 		const days = db.collection('ss_notes_days');
 		const records = [
@@ -290,6 +306,8 @@ describe('import routes (K10)', () => {
 			visits: 1,
 			checkedFor: true,
 			dryRunSeen: false,
+			country: 'GB',
+			businessOnce: true,
 		});
 		expect((await send('days', ndjson([{ day: '2024-01-01', part: 1, visits: 2 }]))).json).toMatchObject({ updated: 1 });
 		expect(await days.countDocuments({})).toBe(3);

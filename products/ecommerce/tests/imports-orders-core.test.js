@@ -25,6 +25,7 @@ const RULES = importRules({
 	flow: DEFAULT_FLOW,
 	checkout: { numberPrefix: 'S-', numberDigits: 4, defaultCallingCode: '+1' },
 	catalog: { currency: 'USD' },
+	country: 'GB',
 	now: NOW,
 });
 
@@ -82,17 +83,25 @@ describe('import rules', () => {
 			currency: 'USD',
 			phoneRules: { defaultCallingCode: '+1' },
 		});
-		expect(importRules({ flow: DEFAULT_FLOW, checkout: { numberDigits: 12 }, catalog: {}, now: NOW })).toMatchObject({
+		expect(
+			importRules({ flow: DEFAULT_FLOW, checkout: { numberDigits: 12 }, catalog: {}, country: null, now: NOW }),
+		).toMatchObject({
 			numberPrefix: '',
 			numberDigits: 8,
 			currency: 'USD',
 			phoneRules: { defaultCallingCode: '', trunkPrefix: '' },
 		});
-		expect(
-			importRules({ flow: DEFAULT_FLOW, checkout: { numberDigits: 'x' }, catalog: { currency: 'PKR' }, now: NOW }),
-		).toMatchObject({
-			numberDigits: 6,
-			currency: 'PKR',
+		// without the setting, national numbers take the business.json country's calling code (K12)
+		const british = importRules({
+			flow: DEFAULT_FLOW,
+			checkout: { numberDigits: 'x' },
+			catalog: { currency: 'GBP' },
+			country: 'GB',
+			now: NOW,
+		});
+		expect(british).toMatchObject({ numberDigits: 6, currency: 'GBP', phoneRules: { defaultCallingCode: '+44' } });
+		expect(valueOf(checkImportedCustomer({ id: idOf('cus', 9), name: 'Pat', phone: '020 7946 0958' }, british))).toMatchObject({
+			phone: '+442079460958',
 		});
 	});
 });

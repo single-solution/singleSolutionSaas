@@ -373,8 +373,9 @@ const finishCounters = async (data) => {
  */
 export const orderImports = (deps) => {
 	/**
-	 * What every check of a call reads of the website: the order flow, the checkout and catalog settings, the time.
-	 * @param {{ websiteId: string, now: () => number }} ctx
+	 * What every check of a call reads of the website: the order flow, the checkout and catalog settings, the
+	 * business.json country (national phone numbers, K12), the time.
+	 * @param {{ websiteId: string, now: () => number, business: () => Promise<{ country?: string | null }> }} ctx
 	 * @returns {Promise<ImportRules>}
 	 */
 	const prepare = async (ctx) =>
@@ -382,6 +383,7 @@ export const orderImports = (deps) => {
 			flow: await deps.list(ctx.websiteId, 'order_flow'),
 			checkout: await deps.settings(ctx.websiteId, 'checkout'),
 			catalog: await deps.settings(ctx.websiteId, 'catalog'),
+			country: (await ctx.business()).country,
 			now: ctx.now(),
 		});
 

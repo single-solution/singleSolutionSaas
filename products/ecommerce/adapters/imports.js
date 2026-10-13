@@ -11,7 +11,9 @@ import { catalogImports } from './imports-catalog.js';
 import { orderImports } from './imports-orders.js';
 
 /**
- * What the import checks read of the website (built in `product.js` on the kit's product).
+ * What the import checks read of the website (built in `product.js` on the kit's product). The business.json copy
+ * (its `country` gives national phone numbers their calling code, K12) comes with each call's check context
+ * (`ctx.business()`, read once per call).
  * @typedef {object} ImportDeps
  * @property {(websiteId: string, name: string) => Promise<unknown>} list a list setting (`order_flow`, `grades` …)
  * @property {(websiteId: string, feature: string) => Promise<Record<string, unknown>>} settings a feature's settings

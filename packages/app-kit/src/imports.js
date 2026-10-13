@@ -41,6 +41,8 @@ import { isObject, omit } from './util.js';
  * @property {() => number} now
  * @property {boolean} dryRun
  * @property {import('./data.js').WebsiteData} data the website's merchant database (lookups; the kit writes)
+ * @property {() => Promise<import('@ss/contracts').BusinessInfo>} business the website's business.json copy with its
+ *   defaults (read once per call, on first use): its `country` gives national phone numbers their calling code
  * @property {unknown} prepared what the collection's `prepare` gave for this call (undefined without one)
  */
 /**
@@ -120,9 +122,11 @@ const keyValuesOf = (record, fields) => {
 
 /**
  * @param {{ options: ImportOptions | undefined, now: () => number,
- *   record: (ctx: any, entry: import('./activity.js').ActivityEntry, options?: { copy?: boolean }) => Promise<void> }} kit
+ *   record: (ctx: any, entry: import('./activity.js').ActivityEntry, options?: { copy?: boolean }) => Promise<void>,
+ *   business: (websiteId: string) => Promise<import('@ss/contracts').BusinessInfo> }} kit `business`: the kept
+ *   business.json copy of a website, with defaults
  */
-export const createImports = ({ options, now, record }) => {
+export const createImports = ({ options, now, record, business }) => {
 	const collections = options?.collections ?? {};
 	for (const [name, definition] of Object.entries(collections)) {
 		if (!NAME.test(name)) throw new TypeError(`import collection names match ${NAME}: ${name}`);
@@ -197,7 +201,16 @@ export const createImports = ({ options, now, record }) => {
 			return problem('payload_too_large', `One call takes at most ${IMPORT_LIMITS.records} records.`);
 		const data = await dataOf(ctx);
 		const target = data.collection(definition.collection ?? name);
-		const base = { websiteId: ctx.websiteId, merchantId: ctx.merchantId, now, dryRun, data };
+		/** @type {Promise<import('@ss/contracts').BusinessInfo> | null} */
+		let info = null;
+		const base = {
+			websiteId: ctx.websiteId,
+			merchantId: ctx.merchantId,
+			now,
+			dryRun,
+			data,
+			business: () => (info ??= business(ctx.websiteId)),
+		};
 		const checkContext = { ...base, prepared: definition.prepare ? await definition.prepare(base) : undefined };
 		/** @type {Array<{ line: number, id: string | null, errors: ImportError[] }>} */
 		const failed = [];

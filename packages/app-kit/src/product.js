@@ -225,10 +225,24 @@ export const createProduct = (options) => {
 		indexes: [...ACTIVITY_INDEXES, ...(options.events ? EVENT_INDEXES : []), ...(options.data?.indexes ?? [])],
 	});
 	const business = createBusiness({ store, send, now, logger });
+	/**
+	 * The normalised business.json copy of a website (defaults: name = domain, time zone UTC).
+	 * @param {string} websiteId
+	 */
+	const businessOf = async (websiteId) => {
+		const found = await status.lookup(websiteId);
+		if (!found.ok) throw kitError(found.code, `status of ${websiteId} is not available`);
+		return (await business.get(websiteId, found.status.domain)).business;
+	};
 	const activity = createActivity({ productId: manifest.id, data, connections, now, logger });
 	const events = createEvents({ productId: manifest.id, enabled: options.events === true, data, connections, now, logger });
 	const staffAlerts = createStaffAlerts({ productId: manifest.id, settings, connections, data, now, logger });
-	const imports = createImports({ options: options.imports, now, record: activity.record });
+	const imports = createImports({
+		options: options.imports,
+		now,
+		record: activity.record,
+		business: (websiteId) => businessOf(websiteId),
+	});
 	const lists = options.lists ?? {};
 	for (const [name, list] of Object.entries(lists))
 		if (
@@ -274,16 +288,6 @@ export const createProduct = (options) => {
 	/** @type {Kit} */
 	const kit = { ...parts, dashboard: createDashboard(parts) };
 	const kitRoutes = [...createKitRoutes(kit, hooks), ...kit.dashboard.routes, ...createServerApi(kit, lists)];
-
-	/**
-	 * The normalised business.json copy of a website (defaults: name = domain, time zone UTC).
-	 * @param {string} websiteId
-	 */
-	const businessOf = async (websiteId) => {
-		const found = await status.lookup(websiteId);
-		if (!found.ok) throw kitError(found.code, `status of ${websiteId} is not available`);
-		return (await business.get(websiteId, found.status.domain)).business;
-	};
 
 	/**
 	 * A website's Format and business time zone, with `money` and `date` for text the server makes (messages, invoices,
