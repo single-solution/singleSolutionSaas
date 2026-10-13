@@ -5,6 +5,7 @@
  */
 import { createHmac } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { createSealer, messageAadOf, resealWebsite } from '../adapters/crypto.js';
 import { checkSecretValues, hideValues, hiddenNamesOf } from '../core/templates.js';
 import { ADMIN_ORIGIN, HOOK_URL, setup } from './helpers.js';
 
@@ -218,6 +219,34 @@ describe('secrets never reach the delivery log (D11, SE-3)', () => {
 		expect(env.providers.callsTo('https://graph.facebook.com')).toHaveLength(metaCalls);
 		expect(env.providers.callsTo('https://api.twilio.com')).toHaveLength(twilioCalls);
 		expect((await raw(sent.json.id)).sealed).toBeNull();
+		env.providers.reset('https://graph.facebook.com');
+	});
+
+	it('keeps waiting sensitive messages through a change of ENCRYPTION_KEY: the Owner’s Re-seal moves them (RT-14)', async () => {
+		env.providers.respond('https://graph.facebook.com', () => ({ status: 503 }));
+		const sent = await env.send('whatsapp', {
+			template: 'accounts.phone_code',
+			to: { phone: '+923001234569' },
+			values: { code: '667788' },
+		});
+		expect(sent.json.status).toBe('retrying');
+		// on this instance's key: the Owner's Re-seal finds it current
+		const owner = await env.adminSession();
+		expect(await (await env.dashboard(owner, 'POST', '/v1/dashboard/reseal')).json()).toMatchObject({
+			resealed: 0,
+			unreadable: 0,
+			failedWebsites: [],
+		});
+		const data = await env.product.data.forWebsite(env.websiteId);
+		const aad = messageAadOf(env.websiteId, 'whatsapp', '+923001234569');
+		const changing = createSealer('encryption-key-b-0123456789-abcdefghij', 'encryption-key-0123456789-abcdefghij');
+		expect(changing.open((await raw(sent.json.id)).sealed, aad)).toContain('667788');
+		expect(await resealWebsite(changing, data)).toMatchObject({ resealed: 1, unreadable: 0 });
+		expect(await resealWebsite(changing, data)).toMatchObject({ resealed: 0, current: 1 });
+		const moved = await raw(sent.json.id);
+		expect(createSealer('encryption-key-b-0123456789-abcdefghij').open(moved.sealed, aad)).toContain('667788');
+		expect(env.product.sealer.open(moved.sealed, aad)).toBeNull();
+		await (await env.merchantCollection('messages')).deleteOne({ websiteId: env.websiteId, id: sent.json.id });
 		env.providers.reset('https://graph.facebook.com');
 	});
 });

@@ -1,7 +1,9 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { manifest as notesManifest } from '@ss/contracts/testing';
 import { createKeyResolver, verifyToken } from '@ss/protocol';
+import { createSecretBox } from '../../../src/infra/crypto.js';
 import { closeMongoClients } from '../../../src/infra/db.js';
+import { createSystemStore } from '../../../src/infra/system.js';
 import { startMongo } from '../../helpers.js';
 import { PORTAL_URL, bootPortal, codeOf } from '../catalog/boot.js';
 
@@ -191,5 +193,55 @@ describe('tokens per website × product (PLAN 0.4.4)', () => {
 		const regenerated = await owner2.post(`${site}/tokens/notes/regenerate`, { kind: 'server' });
 		expect(typeof regenerated.json.token).toBe('string');
 		expect((await owner2.get(`${site}/tokens`)).json.items[0].serverToken).toEqual({ canShow: true });
+	});
+
+	it('a change of ENCRYPTION_KEY keeps every stored secret: the previous key opens them, Re-seal moves them, then it can go (RT-14)', async () => {
+		const { h, owner } = await setUp('tokens_rekey');
+		await h.connect(notesManifest());
+		const m = await h.merchant('m@shop.test', ['shop.example.com']);
+		const site = `/v1/merchants/${m.merchantId}/websites/${m.websiteIds[0]}`;
+		await owner.post(`${site}/products`, { productId: 'notes' });
+		const token = (await owner.post(`${site}/tokens/notes/reveal`)).json.serverToken;
+		expect(typeof token).toBe('string');
+		const mail = { host: 'smtp.example.com', port: 587, user: 'mailer', password: 's3cret', senderAddress: 'no@example.com' };
+		expect((await owner.put('/v1/admin/settings/mail', { mail })).status).toBe(200);
+		// a two-step secret being set up (sealed too)
+		expect((await owner.post('/v1/me/two-step/start')).status).toBe(200);
+		// Re-seal is the Owner's
+		const support = await h.admin('support');
+		expect(codeOf(await support.client.post('/v1/admin/settings/reseal'))).toEqual([403, 'forbidden']);
+
+		const NEW_KEY = 'new-encryption-key-0123456789abcdef-portal';
+		const changing = await bootPortal({
+			db: mongo.db('tokens_rekey'),
+			env: { ENCRYPTION_KEY: NEW_KEY, ENCRYPTION_KEY_PREVIOUS: 'test-encryption-key-0123456789abcdef-portal' },
+		});
+		cleanups.push(changing.close);
+		const owner2 = await changing.owner();
+		expect((await owner2.post(`${site}/tokens/notes/reveal`)).json.serverToken).toBe(token);
+		expect((await owner2.get('/v1/admin/settings')).json.mail).toMatchObject({ hasPassword: true, passwordUnreadable: false });
+		const first = await owner2.post('/v1/admin/settings/reseal');
+		expect(first.status).toBe(200);
+		expect(first.json).toEqual({
+			keyId: expect.any(String),
+			previousKeyId: expect.any(String),
+			resealed: 3,
+			current: 0,
+			unreadable: 0,
+		});
+		expect((await owner2.post('/v1/admin/settings/reseal')).json).toMatchObject({ resealed: 0, current: 3, unreadable: 0 });
+		expect((await changing.activity('settings.changed')).map((e) => e.target.id)).toContain('encryption_key');
+
+		// the previous key removed: everything opens with the new key alone, nothing with the old one alone
+		const db = mongo.db('tokens_rekey');
+		const stored = /** @type {Record<string, any>} */ (await db.collection('identity_product_tokens').findOne({}));
+		const aad = { websiteId: stored.websiteId, productId: 'notes', jti: stored.server.jti, purpose: 'server_token' };
+		expect(createSecretBox({ encryptionKey: NEW_KEY }).openText(stored.server.sealed, { aad })).toBe(token);
+		const settings = /** @type {Record<string, any>} */ (
+			await db.collection('platform_system').findOne(/** @type {any} */ ({ _id: 'settings' }))
+		);
+		expect(createSystemStore(db, { encryptionKey: NEW_KEY }).passwordReadable(settings.mail.passSealed)).toBe(true);
+		const old = await owner.post(`${site}/tokens/notes/reveal`);
+		expect(codeOf(old)).toEqual([409, 'conflict']);
 	});
 });

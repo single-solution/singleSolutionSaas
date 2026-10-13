@@ -1,6 +1,7 @@
 /**
  * @ss/protocol — signing and verification shared by the Portal and every product: Ed25519 keys and JWKS, browser and
- * server tokens, tickets, launches, client assertions, notices and the connect handshake. See README.md.
+ * server tokens, tickets, launches, client assertions, notices and the connect handshake; and the sealing of stored
+ * secrets. See README.md.
  */
 export { ERROR_CODES, createProtocolError, isProtocolError } from './errors.js';
 export * from './keys.js';
@@ -21,6 +22,7 @@ export {
 	verifyConnectResponse,
 } from './registration.js';
 export { canonicalJson } from './encoding.js';
+export { MIN_ENCRYPTION_KEY_LENGTH, SEAL_FORMAT, createSealer, legacyV1, sealKeyId } from './sealing.js';
 
 /** @typedef {import('./errors.js').ProtocolError} ProtocolError */
 /** @typedef {import('./errors.js').ProtocolErrorCode} ProtocolErrorCode */
@@ -29,3 +31,5 @@ export { canonicalJson } from './encoding.js';
 /** @typedef {import('./notices.js').Notice} Notice */
 /** @typedef {import('./notices.js').NoticeType} NoticeType */
 /** @typedef {import('./notices.js').NoticeHeaders} NoticeHeaders */
+/** @typedef {import('./sealing.js').Sealer} Sealer */
+/** @typedef {import('./sealing.js').LegacyReader} LegacyReader */

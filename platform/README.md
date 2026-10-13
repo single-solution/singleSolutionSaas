@@ -8,13 +8,15 @@ products. Next.js 16, React 19, MongoDB. The modules and their services are desc
 
 ## Environment
 
-Exactly three variables (PLAN 0.11, `.env.example`), validated at start (only names are reported, never values):
+Exactly three variables, plus one optional during a key change (PLAN 0.11, `.env.example`), validated at start (only
+names are reported, never values):
 
-| Variable         | What it is                                                                                                                             |
-| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `MONGODB_URI`    | the Portal's own database (`ss_portal`; never a merchant database; production and preview never share one)                             |
-| `PORTAL_URL`     | the Portal's final address (https in production, no path): e-mail links, token, launch and notice issuer, CSRF origin, products pin it |
-| `ENCRYPTION_KEY` | random, at least 32 characters: seals the stored secrets (mail password, two-step secrets, server tokens)                              |
+| Variable                  | What it is                                                                                                                                       |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `MONGODB_URI`             | the Portal's own database (`ss_portal`; never a merchant database; production and preview never share one)                                       |
+| `PORTAL_URL`              | the Portal's final address (https in production, no path): e-mail links, token, launch and notice issuer, CSRF origin, products pin it           |
+| `ENCRYPTION_KEY`          | random, at least 32 characters: seals the stored secrets (mail password, two-step secrets, server tokens)                                        |
+| `ENCRYPTION_KEY_PREVIOUS` | optional, only while `ENCRYPTION_KEY` is changed: the old key, so stored secrets keep opening; removed after Settings → Encryption key → Re-seal |
 
 Signing keys and the session and idempotency secrets are generated on first start into the Portal's own database.
 Outside production the Portal may reach products on `localhost`, `127.0.0.1` and `::1` over plain http.

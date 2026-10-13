@@ -68,6 +68,7 @@ export const adminApi = Object.freeze({
 	settingsLogo: () => '/v1/admin/settings/branding/logo',
 	settingsSupport: () => '/v1/admin/settings/support',
 	settingsSecurity: () => '/v1/admin/settings/security',
+	settingsReseal: () => '/v1/admin/settings/reseal',
 	settingsBilling: () => '/v1/admin/settings/billing',
 
 	// catalog: connected products (PLAN 0.8.2 Products)

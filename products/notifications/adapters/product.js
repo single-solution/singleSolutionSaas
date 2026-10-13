@@ -27,7 +27,7 @@ import staffPush from '../schemas/staff_push.settings.json' with { type: 'json' 
 import webhooks from '../schemas/webhooks.settings.json' with { type: 'json' };
 import whatsapp from '../schemas/whatsapp.settings.json' with { type: 'json' };
 import { normaliseEmail, normalisePhone } from '../core/channels.js';
-import { createSealer } from './crypto.js';
+import { createSealer, resealWebsite } from './crypto.js';
 import { LISTS, createLists } from './lists.js';
 import { createProviders } from './providers.js';
 import { INDEXES, createStore } from './store.js';
@@ -157,7 +157,8 @@ export const createProductInstance = (options) => {
 	const send = options.outboundSend ?? ((url, init) => safeFetch(url, init, policy));
 	const providers = createProviders({ send, policy, now, ...(createTransport ? { createTransport } : {}) });
 	const webpush = createWebPush({ send, now });
-	const sealer = createSealer(options.config?.encryptionKey || UNCONFIGURED_KEY);
+	const keys = (options.problems ?? []).length === 0 ? options.config : undefined;
+	const sealer = createSealer(keys?.encryptionKey || UNCONFIGURED_KEY, keys?.previousEncryptionKey ?? null);
 
 	/** @param {'email' | 'sms' | 'whatsapp'} name */
 	const provider = (name) => ({
@@ -203,6 +204,8 @@ export const createProductInstance = (options) => {
 		},
 		hooks: {
 			...dataRights(now),
+			// the Owner's Re-seal (RT-14): the sealed words of waiting messages in each website's merchant database
+			resealWebsite: (data) => resealWebsite(sealer, data),
 			// what the widgets need (GET /v1/widget/config): the public push key only, never a secret
 			widgetConfig: async (ctx) => {
 				const keys = await product.connections.value(/** @type {string} */ (ctx.websiteId), 'push_keys');

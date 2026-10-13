@@ -889,6 +889,40 @@ function DefaultsTab() {
 	);
 }
 
+/**
+ * The Owner's Re-seal (PLAN 0.4.8): after `ENCRYPTION_KEY` is changed (the old key set as `ENCRYPTION_KEY_PREVIOUS`),
+ * every stored secret is sealed again with the new key; pressing again is safe.
+ */
+function ResealCard() {
+	const [busy, setBusy] = useState(false);
+	const [result, setResult] = useState(/** @type {import('./api.js').Answer | null} */ (null));
+	const done = result?.ok ? result.data : null;
+	return (
+		<Card title={TEXTS.reseal.title} subtitle={TEXTS.reseal.intro}>
+			<div className="space-y-4">
+				<Button
+					disabled={busy}
+					onClick={async () => {
+						setBusy(true);
+						setResult(await call('POST', '/v1/dashboard/reseal'));
+						setBusy(false);
+					}}>
+					{TEXTS.reseal.button}
+				</Button>
+				{done ? (
+					<Callout tone={done.failedWebsites.length === 0 ? 'success' : 'warning'}>
+						{fill(TEXTS.reseal.result, done)}{' '}
+						{done.failedWebsites.length === 0
+							? TEXTS.reseal.finished
+							: fill(TEXTS.reseal.again, { failed: done.failedWebsites.length })}
+					</Callout>
+				) : null}
+				{result && !result.ok ? <Outcome result={result} /> : null}
+			</div>
+		</Card>
+	);
+}
+
 function PricesTab() {
 	const { answer, reload } = useLoad('/v1/dashboard/prices');
 	const [draft, setDraft] = useState(/** @type {Record<string, string>} */ ({}));
@@ -935,6 +969,7 @@ function PricesTab() {
 							</Button>
 						</Card>
 						<Outcome result={result} />
+						<ResealCard />
 						<RecentChanges items={data.recentChanges} />
 					</div>
 				);

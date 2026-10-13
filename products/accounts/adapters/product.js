@@ -35,7 +35,7 @@ import twoStep from '../schemas/two_step.settings.json' with { type: 'json' };
 import { normaliseEmail } from '../core/identifiers.js';
 import { selfView } from '../core/profile.js';
 import { DEFAULT_ROLE } from '../core/roles.js';
-import { createSealer, importedTwoStep, totpAadOf } from './crypto.js';
+import { createSealer, importedTwoStep, resealWebsite, totpAadOf } from './crypto.js';
 import { createProviders } from './providers.js';
 import { INDEXES, createStore } from './store.js';
 
@@ -174,7 +174,11 @@ export const createProductInstance = (options) => {
 	const send = options.outboundSend ?? ((url, init) => safeFetch(url, init, policy));
 	const providers = createProviders({ send, now });
 	// a misconfigured product answers 503 everywhere; the sealer still needs a key to be built
-	const sealer = createSealer(options.config?.encryptionKey ?? 'unconfigured-accounts-encryption-key-000000');
+	const keys = (options.problems ?? []).length === 0 ? options.config : undefined;
+	const sealer = createSealer(
+		keys?.encryptionKey ?? 'unconfigured-accounts-encryption-key-000000',
+		keys?.previousEncryptionKey ?? null,
+	);
 
 	/** @param {'google' | 'apple' | 'facebook'} name */
 	const provider = (name) => ({ test: (/** @type {unknown} */ value) => providers.test(name, value) });
@@ -218,6 +222,8 @@ export const createProductInstance = (options) => {
 		},
 		hooks: {
 			...ownDataRights(now),
+			// the Owner's Re-seal (RT-14): the signing key, two-step secrets and kept messages of each website
+			resealWebsite: (data) => resealWebsite(sealer, data),
 			// what the widgets need (GET /v1/widget/config): sign-up rules, custom fields and terms, never a secret
 			widgetConfig: async (ctx) => {
 				const websiteId = /** @type {string} */ (ctx.websiteId);

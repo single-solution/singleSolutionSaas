@@ -9,6 +9,8 @@ export { toNextRoute } from './http/next.js';
 export { createLogger, noopLogger } from './logger.js';
 export { createMongoStore } from './stores/mongo.js';
 export { createMemoryStore } from './stores/memory.js';
+export { createSealer } from './sealing.js';
+export { resealEach, sumCounts } from './reseal.js';
 export { formatText } from './text.js';
 export { ACTOR_HEADERS, actorOf, parseActor } from './actor.js';
 export { COUNT_CAP, COUNT_TIMEOUT_MS, MAX_GROUPS, countHandlers } from './counts.js';
@@ -23,6 +25,8 @@ export { DEFAULT_FORMAT, IMPORT_LIMITS, formatDate, formatMoney, zonedDay, zoned
 /** @typedef {import('./data.js').IndexDefinition} IndexDefinition */
 /** @typedef {import('./stores/types.js').Store} Store */
 /** @typedef {import('./logger.js').Logger} Logger */
+/** @typedef {import('./sealing.js').Sealer} Sealer */
+/** @typedef {import('./reseal.js').ResealCounts} ResealCounts */
 /** @typedef {import('./actor.js').ActingUser} ActingUser */
 /** @typedef {import('./actor.js').Actor} Actor */
 /** @typedef {import('./counts.js').CountField} CountField */

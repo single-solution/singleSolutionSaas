@@ -11,6 +11,7 @@
  * - **Removing a website** revokes the tokens of every product it had, for good.
  * @module
  */
+import { resealEach } from '../../infra/crypto.js';
 import { isDuplicateKey } from '../../infra/util.js';
 import { issueToken } from '@ss/protocol';
 import { problem } from '../../infra/http.js';
@@ -113,6 +114,26 @@ export const createProductTokens = (deps, hooks) => {
 	};
 
 	return Object.freeze({
+		/**
+		 * Settings → Encryption key → Re-seal (PLAN 0.4.8; RT-14): every stored server token sealed again with the current
+		 * key (one regenerated meanwhile is left as saved).
+		 * @returns {Promise<import('../../infra/crypto.js').ResealCounts>}
+		 */
+		reseal: async () => {
+			const all = /** @type {import('../../infra/db.js').MutableOps} */ (repo.acrossMerchants());
+			const docs = await all
+				.find({ 'server.sealed': { $type: 'string' } }, { projection: { websiteId: 1, productId: 1, server: 1 } })
+				.toArray();
+			return resealEach(
+				ctx.secretBox,
+				docs.map((doc) => ({
+					sealed: doc.server.sealed,
+					aad: sealAad(doc.websiteId, doc.productId, doc.server.jti),
+					save: (/** @type {string} */ next) =>
+						all.updateOne({ _id: doc._id, 'server.sealed': doc.server.sealed }, { $set: { 'server.sealed': next } }),
+				})),
+			);
+		},
 		/**
 		 * Create the two tokens of a product on a website, or keep the existing ones (a re-add restores them).
 		 * @param {{ merchantId: string, websiteId: string, productId: string }} input

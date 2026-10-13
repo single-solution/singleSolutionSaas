@@ -2,13 +2,15 @@
  * Chat's list settings and the tool signing secret, in the product database (PLAN 0.8.3 Chat data): webhook tools,
  * flows, custom field definitions, proactive page rules and fallback answers (PLAN 0.8.10 C3) are kept per website in the kit's settings collection (so
  * a removed website's lists go with its settings), each checked by its feature's rules and recorded in Recent changes.
- * Lists have no global defaults. The tool signing secret is sealed with `ENCRYPTION_KEY`; it is made on first use.
+ * Lists have no global defaults. The tool signing secret is sealed with `ENCRYPTION_KEY`; it is made on first use and
+ * sealed again with the current key by the Owner's Re-seal (`resealToolSecrets`).
  * @module
  */
 import { checkFallbackAnswers } from '../core/fallback.js';
 import { checkCustomFields, checkPageRules } from '../core/fields.js';
 import { checkFlows } from '../core/flows.js';
 import { checkTools } from '../core/tools.js';
+import { resealEach } from '@ss/app-kit';
 import { randomSecret } from './crypto.js';
 
 /** Each list: the feature it belongs to, its name on screens, and its check. */
@@ -28,6 +30,8 @@ export const LISTS = Object.freeze({
 export const createLists = ({ store, sealer, now }) => {
 	/** @param {string} websiteId @param {string} key */
 	const idOf = (websiteId, key) => `${websiteId}|chat|${key}`;
+	/** @param {string} websiteId */
+	const toolSecretAad = (websiteId) => `chat|tool-secret|${websiteId}`;
 
 	/**
 	 * The saved items of a list (empty when none).
@@ -68,7 +72,7 @@ export const createLists = ({ store, sealer, now }) => {
 		 */
 		toolSecret: async (websiteId, { regenerate = false } = {}) => {
 			const id = idOf(websiteId, 'tool-secret');
-			const aad = `chat|tool-secret|${websiteId}`;
+			const aad = toolSecretAad(websiteId);
 			const opened = regenerate ? null : sealer.open((await store.get('settings', id))?.value, aad);
 			if (opened) return opened;
 			const secret = `whsec_${randomSecret(32)}`;
@@ -81,6 +85,23 @@ export const createLists = ({ store, sealer, now }) => {
 			});
 			return secret;
 		},
+		/**
+		 * The Owner's Re-seal (RT-14): every website's tool signing secret sealed again with the current key.
+		 * @returns {Promise<import('@ss/app-kit').ResealCounts>}
+		 */
+		resealToolSecrets: async () =>
+			resealEach(
+				sealer,
+				(await store.list('settings', { kind: 'chat', key: 'tool-secret' }, { limit: 100_000 })).map((doc) => ({
+					sealed: doc.value,
+					aad: toolSecretAad(doc.websiteId),
+					save: async (/** @type {string} */ next) => {
+						const id = idOf(doc.websiteId, 'tool-secret');
+						if ((await store.get('settings', id))?.value === doc.value)
+							await store.put('settings', id, { ...doc, value: next });
+					},
+				})),
+			),
 	});
 };
 

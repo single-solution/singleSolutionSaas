@@ -2,9 +2,10 @@
  * Connections (PLAN 0.4.3, 0.4.6, 0.4.8): the merchant's own database, storage, provider keys and pasted tokens, per
  * website, in the product database.
  *
- * - Values are encrypted (AES-256-GCM, key derived from `ENCRYPTION_KEY`) and write-only: screens get only
- *   `{ name, label, kind, neededBy, status, message?, last4, testedAt }`. A value that no longer decrypts (the key
- *   changed) shows as `not_connected`.
+ * - Values are encrypted (`sealing.js`: with `ENCRYPTION_KEY`, or `ENCRYPTION_KEY_PREVIOUS` while the key changes)
+ *   and write-only: screens get only `{ name, label, kind, neededBy, status, message?, last4, testedAt }`. A value
+ *   that no longer decrypts (the key changed without the previous one) shows as `not_connected`. `reseal` seals every
+ *   stored value with the current key (the Owner's Re-seal, `reseal.js`).
  * - Each value is tested live when saved and on Test: `database` connects and pings through the guarded lookup,
  *   `storage` signs a HEAD request to the bucket, `token` must verify as a Portal-signed server token of the expected
  *   product for the same website (else it is refused), and the definition's own `test` hook runs last.
@@ -16,6 +17,7 @@
 import { isNetError } from '@ss/net';
 import { problem } from './http/results.js';
 import { createS3Storage } from './adapters/storage.js';
+import { resealEach } from './reseal.js';
 import { isObject, omit } from './util.js';
 
 /** @typedef {import('./stores/types.js').Store} Store */
@@ -46,6 +48,8 @@ const NAME = /^[a-z][a-z0-9_]{0,39}$/;
 const KINDS = Object.freeze(['database', 'storage', 'secret', 'token']);
 const DIRECTORY_TTL_MS = 5 * 60_000;
 const MAX_VALUE_LENGTH = 4096;
+/** The most stored values one Re-seal reads (every website's Connections). */
+const RESEAL_LIMIT = 100_000;
 
 /**
  * Check connection definitions against the manifest; adds the built-in `database` connection when none is declared.
@@ -385,6 +389,24 @@ export const createConnections = ({
 		return { ok: false, reason: response.status >= 500 ? 'unreachable' : 'failed', status: response.status, body: parsed };
 	};
 
+	/**
+	 * Seal every stored value with the current key (RT-14). A value saved meanwhile is left as saved.
+	 * @returns {Promise<import('./reseal.js').ResealCounts>}
+	 */
+	const reseal = async () =>
+		resealEach(
+			sealer,
+			(await store.list('connections', {}, { limit: RESEAL_LIMIT })).map((doc) => ({
+				sealed: doc.sealed,
+				aad: aad(doc.websiteId, doc.name),
+				save: async (/** @type {string} */ next) => {
+					const id = idOf(doc.websiteId, doc.name);
+					if ((await store.get('connections', id))?.sealed === doc.sealed)
+						await store.put('connections', id, { ...doc, sealed: next });
+				},
+			})),
+		);
+
 	return Object.freeze({
 		definitions,
 		list,
@@ -393,6 +415,10 @@ export const createConnections = ({
 		remove,
 		value,
 		callProduct,
+		reseal,
+		/** @returns {Promise<string[]>} the websites whose merchant database is connected */
+		websitesWithDatabase: async () =>
+			(await store.list('connections', { name: 'database' }, { limit: RESEAL_LIMIT })).map((doc) => doc.websiteId),
 		/**
 		 * The S3-compatible storage of a website (presigned uploads), or null when not connected.
 		 * @param {string} websiteId

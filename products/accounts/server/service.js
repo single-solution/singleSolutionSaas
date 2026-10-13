@@ -21,6 +21,8 @@ import { checkAddresses, selfView } from '../core/profile.js';
 import { OPEN_SIGN_UP, deviceIdOf, deviceOf } from '../core/rules.js';
 import { SIGN_IN_HEADER, SIGN_IN_METHODS, SIGN_IN_SECONDS } from '../core/widgets.js';
 import {
+	keyAadOf,
+	outboxAadOf,
 	totpAadOf,
 	dummyPasswordCheck,
 	generateSigningKey,
@@ -86,8 +88,8 @@ const bodyOf = (value) => (typeof value === 'object' && value !== null ? /** @ty
 const unsent = (error) =>
 	['not_sent', 'notifications_not_connected'].includes(String(/** @type {{ code?: unknown } | null} */ (error)?.code));
 
-/** The sealing context of a kept message. @param {string} websiteId @param {string} key */
-const outboxAad = (websiteId, key) => `accounts-outbox|${websiteId}|${key}`;
+/** The sealing context of a kept message. */
+const outboxAad = outboxAadOf;
 
 /**
  * @param {Product} product
@@ -97,8 +99,7 @@ export const createService = (product) => {
 	/** @type {Map<string, { key: Record<string, string>, publicJwk: Record<string, string> }>} */
 	const keyCache = new Map();
 
-	/** @param {string} websiteId @param {string} kid */
-	const keyAad = (websiteId, kid) => `accounts-key|${websiteId}|${kid}`;
+	const keyAad = keyAadOf;
 	const totpAad = totpAadOf;
 
 	/**

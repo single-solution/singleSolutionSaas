@@ -6,7 +6,9 @@
  * messages of their own (CH-21).
  */
 import { describe, expect, it } from 'vitest';
-import { createFileSigner } from '../adapters/crypto.js';
+import { createMemoryStore } from '@ss/app-kit';
+import { createFileSigner, createSealer } from '../adapters/crypto.js';
+import { createLists } from '../adapters/lists.js';
 import { detectLanguage, markerSetsOf, replyMatchesLanguage, translationOf } from '../core/language.js';
 import { splitBubbles } from '../core/markdown.js';
 import { buildSystemPrompt } from '../core/prompt.js';
@@ -140,5 +142,29 @@ describe('attachment links (CH-8)', () => {
 		expect(files.open(42)).toBeNull();
 		expect(createFileSigner('z'.repeat(32)).open(token)).toBeNull();
 		expect(files.open(files.sign(/** @type {any} */ ({ ...file, w: 1 })))).toBeNull();
+		// while ENCRYPTION_KEY changes, links signed with the previous key keep opening (RT-14)
+		const changing = createFileSigner('z'.repeat(32), 'k'.repeat(32));
+		expect(changing.open(token)).toEqual(file);
+		expect(changing.open(changing.sign(file))).toEqual(file);
+		expect(files.open(changing.sign(file))).toBeNull();
+	});
+});
+
+describe('the tool signing secret through a change of ENCRYPTION_KEY (RT-14)', () => {
+	it('opens with the previous key, is re-sealed with the new one, then the old key can go', async () => {
+		const store = createMemoryStore({ now: () => 0 });
+		const A = 'k'.repeat(32);
+		const B = 'b'.repeat(32);
+		const secret = await createLists({ store, sealer: createSealer(A), now: () => 0 }).toolSecret('web_1');
+		const changing = createLists({ store, sealer: createSealer(B, A), now: () => 0 });
+		expect(await changing.toolSecret('web_1')).toBe(secret);
+		expect(await changing.resealToolSecrets()).toEqual({ resealed: 1, current: 0, unreadable: 0 });
+		expect(await changing.resealToolSecrets()).toEqual({ resealed: 0, current: 1, unreadable: 0 });
+		expect(await createLists({ store, sealer: createSealer(B), now: () => 0 }).toolSecret('web_1')).toBe(secret);
+		expect(await createLists({ store, sealer: createSealer('c'.repeat(32)), now: () => 0 }).resealToolSecrets()).toEqual({
+			resealed: 0,
+			current: 0,
+			unreadable: 1,
+		});
 	});
 });

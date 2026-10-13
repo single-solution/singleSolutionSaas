@@ -107,10 +107,17 @@ describe('loadEnv: the database, the Portal address and the encryption key (PLAN
 		expect(loadEnv({ ...(await testEnv()), ...PROD }).outbound.allowHosts).toEqual([]);
 	});
 
-	it('documents exactly the three variables of PLAN 0.11', () => {
+	it('documents exactly the three variables of PLAN 0.11, and the optional previous key', async () => {
 		const names = ENV_VARS.map(([name]) => name);
-		expect(names).toEqual(['MONGODB_URI', 'PORTAL_URL', 'ENCRYPTION_KEY']);
-		expect(ENV_VARS.every(([, required]) => required)).toBe(true);
+		expect(names).toEqual(['MONGODB_URI', 'PORTAL_URL', 'ENCRYPTION_KEY', 'ENCRYPTION_KEY_PREVIOUS']);
+		expect(ENV_VARS.filter(([, required]) => !required).map(([name]) => name)).toEqual(['ENCRYPTION_KEY_PREVIOUS']);
+		const env = await testEnv();
+		expect(loadEnv(env).previousEncryptionKey).toBeNull();
+		const previous = 'previous-encryption-key-0123456789abcdef';
+		expect(loadEnv({ ...env, ENCRYPTION_KEY_PREVIOUS: previous }).previousEncryptionKey).toBe(previous);
+		expect(problemsOf(() => loadEnv({ ...env, ENCRYPTION_KEY_PREVIOUS: 'old-short-key' }))).toEqual([
+			'ENCRYPTION_KEY_PREVIOUS must be at least 32 characters',
+		]);
 	});
 });
 

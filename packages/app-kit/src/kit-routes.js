@@ -31,6 +31,10 @@ import { isObject } from './util.js';
  * @property {(ctx: RequestContext, user: DataRightsUser) => Promise<{ deleted: number, anonymised: number }>} [deleteUser]
  * @property {(ctx: RequestContext) => Promise<Record<string, unknown>>} [widgetConfig] the settings the widgets need
  *   (for example limits), answered as `settings` by the widget config routes; never secrets
+ * @property {() => Promise<import('./reseal.js').ResealCounts>} [resealProduct] the Owner's Re-seal (RT-14): seal the
+ *   product's own secrets in the product database with the current key (`resealEach` counts them)
+ * @property {(data: import('./data.js').WebsiteData) => Promise<import('./reseal.js').ResealCounts>} [resealWebsite]
+ *   the same for one website's merchant database (called for every website whose database is connected)
  */
 
 /** Product database collections that hold per-website data (`website.deleted` removes them). */

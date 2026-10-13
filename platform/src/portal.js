@@ -75,7 +75,11 @@ export const createPortal = ({
 		randomBytes,
 		problems,
 		keys,
-		secretBox: createSecretBox({ encryptionKey: config.encryptionKey, randomBytes }),
+		secretBox: createSecretBox({
+			encryptionKey: config.encryptionKey,
+			previousKey: config.previousEncryptionKey ?? null,
+			randomBytes,
+		}),
 		audit,
 		withTransaction: createTransactionRunner(db.client),
 		mailer: mailer ?? createPlatformMailer({ config, logger: logger.child({ component: 'mailer' }) }),

@@ -23,6 +23,7 @@ import { createKitRoutes } from './kit-routes.js';
 import { noopLogger } from './logger.js';
 import { createRecentChanges } from './recent.js';
 import { createReports } from './reports.js';
+import { createReseal } from './reseal.js';
 import { createSealer } from './sealing.js';
 import { createServerApi } from './server-api.js';
 import { createSettings } from './settings.js';
@@ -90,6 +91,7 @@ import { verifyToken } from '@ss/protocol';
  * @property {import('./activity.js').Activity} activity
  * @property {import('./events.js').Events} events
  * @property {ReturnType<typeof createTickets>} tickets
+ * @property {() => Promise<import('./reseal.js').ResealResult>} reseal the Owner's Re-seal of stored secrets (RT-14)
  * @property {ReturnType<typeof createDashboard>} dashboard
  */
 
@@ -170,10 +172,11 @@ export const createProduct = (options) => {
 		)
 			throw kitError('invalid_config', `shared settings ${key} must name features of the manifest and have a key of its own`);
 	const settings = createSettings({ store, manifest, strings, recent, now, shared });
-	const sealer = createSealer(
-		healthy ? /** @type {string} */ (config?.encryptionKey) : Buffer.from(randomBytes(32)).toString('hex'),
+	const sealer = createSealer({
+		encryptionKey: healthy ? /** @type {string} */ (config?.encryptionKey) : Buffer.from(randomBytes(32)).toString('hex'),
+		previousKey: healthy ? (config?.previousEncryptionKey ?? null) : null,
 		randomBytes,
-	);
+	});
 	/** @type {ReturnType<typeof createData> | null} */
 	let data = null;
 	const connections = createConnections({
@@ -232,6 +235,15 @@ export const createProduct = (options) => {
 	const tickets = createTickets({ store, productId: manifest.id, now, randomBytes });
 	const identity = createIdentity({ connections, send, now });
 	const accounts = createAccountsSignIns({ connections, now });
+	const hooks = options.hooks ?? {};
+	const reseal = createReseal({
+		sealer,
+		parts: [connections.reseal],
+		hooks,
+		websites: connections.websitesWithDatabase,
+		data,
+		logger,
+	});
 
 	const parts = {
 		manifest,
@@ -252,10 +264,11 @@ export const createProduct = (options) => {
 		activity,
 		events,
 		tickets,
+		reseal,
 	};
 	/** @type {Kit} */
 	const kit = { ...parts, dashboard: createDashboard(parts) };
-	const kitRoutes = [...createKitRoutes(kit, options.hooks ?? {}), ...kit.dashboard.routes, ...createServerApi(kit, lists)];
+	const kitRoutes = [...createKitRoutes(kit, hooks), ...kit.dashboard.routes, ...createServerApi(kit, lists)];
 
 	/**
 	 * The normalised business.json copy of a website (defaults: name = domain, time zone UTC).

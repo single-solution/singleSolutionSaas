@@ -26,8 +26,8 @@ import { platformError } from './errors.js';
  * @property {(n: number) => Uint8Array} randomBytes
  * @property {import('@ss/contracts').ProblemFactory} problems
  * @property {import('./crypto.js').PortalKeys} keys Portal signer(s), JWKS, resolver over our own keys
- * @property {import('./crypto.js').Envelope} secretBox seal/open the Portal's stored secrets with `ENCRYPTION_KEY`
- *   (SMTP password, two-step secrets, server tokens; PLAN 0.4.8)
+ * @property {import('./crypto.js').SecretBox} secretBox seal/open the Portal's stored secrets with `ENCRYPTION_KEY`, and
+ *   `ENCRYPTION_KEY_PREVIOUS` while it changes (SMTP password, two-step secrets, server tokens; PLAN 0.4.8)
  * @property {import('./audit.js').Audit} audit
  * @property {import('./db.js').Locks} locks
  * @property {import('./db.js').WithTransaction} withTransaction run `fn(session)` in a retried multi-document

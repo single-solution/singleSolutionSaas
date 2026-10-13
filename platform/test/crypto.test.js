@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { generateSigningKey, issueToken, verifyToken } from '@ss/protocol';
-import { createEnvelope, createPortalKeys, createSecretBox } from '../src/infra/crypto.js';
+import { createCipheriv, hkdfSync, randomBytes } from 'node:crypto';
+import { createPortalKeys, createSecretBox, resealEach, sumCounts } from '../src/infra/crypto.js';
 import { isPlatformError } from '../src/infra/errors.js';
 import { API_CSP, createNonce, pageCsp, staticSecurityHeaders } from '../src/infra/security-headers.js';
 import { MERCHANT, WEBSITE } from './helpers.js';
 
-const kek = (/** @type {string} */ id, /** @type {number} */ fill) => ({ id, key: Buffer.alloc(32, fill) });
 const aad = { merchantId: MERCHANT, productId: 'notes' };
 
 /** @param {() => unknown} fn */
@@ -64,70 +64,108 @@ describe('portal keys', () => {
 	});
 });
 
-describe('envelope encryption', () => {
-	it('seals and opens with AAD binding', () => {
-		const envelope = createEnvelope({ keks: [kek('k2', 2), kek('k1', 1)] });
-		const sealed = envelope.seal('mongodb+srv://u:p@cluster/db', { aad });
-		expect(sealed.startsWith('ssenc1.k2.')).toBe(true);
+/**
+ * A value as the Portal sealed it before the one format: `ssenc1.ek1.<wrapped data key>.<data>`.
+ * @param {string} encryptionKey
+ * @param {string | Buffer} plaintext
+ * @param {Record<string, string>} aadObject
+ * @param {Buffer} [dek] the data key (another length tests a malformed one)
+ */
+const sealedBefore = (encryptionKey, plaintext, aadObject, dek = randomBytes(32)) => {
+	const kekKey = Buffer.from(
+		hkdfSync('sha256', Buffer.from(encryptionKey, 'utf8'), Buffer.alloc(0), 'ss-portal-secrets.v1', 32),
+	);
+	/** @param {Buffer} key @param {Buffer} data @param {string} ad */
+	const seal = (key, data, ad) => {
+		const iv = randomBytes(12);
+		const cipher = createCipheriv('aes-256-gcm', key, iv);
+		cipher.setAAD(Buffer.from(ad, 'utf8'));
+		return Buffer.concat([iv, cipher.update(data), cipher.final(), cipher.getAuthTag()]);
+	};
+	const ad = `ss-data.v1|${JSON.stringify(Object.fromEntries(Object.entries(aadObject).sort()))}`;
+	return [
+		'ssenc1',
+		'ek1',
+		seal(kekKey, dek, 'ss-dek.v1|ek1').toString('base64url'),
+		seal(dek.length === 32 ? dek : randomBytes(32), Buffer.from(plaintext), ad).toString('base64url'),
+	].join('.');
+};
+
+const KEY_A = 'a'.repeat(40);
+const KEY_B = 'b'.repeat(40);
+
+describe('secret box (ENCRYPTION_KEY)', () => {
+	it('seals with a key id and AAD binding; another key cannot open', () => {
+		const box = createSecretBox({ encryptionKey: KEY_A });
+		const sealed = box.seal('mongodb+srv://u:p@cluster/db', { aad });
+		expect(sealed.startsWith(`ss2.${box.keyId}.`)).toBe(true);
 		expect(sealed).not.toContain('cluster');
-		expect(envelope.openText(sealed, { aad })).toBe('mongodb+srv://u:p@cluster/db');
-		expect(envelope.open(sealed, { aad: { productId: 'notes', merchantId: MERCHANT } }).toString()).toBe(
-			'mongodb+srv://u:p@cluster/db',
-		); // key order irrelevant
-		expect(codeOf(() => envelope.open(sealed, { aad: { ...aad, merchantId: 'mer_other' } }))).toBe('decrypt_failed');
-		expect(envelope.seal(new Uint8Array([1, 2, 3]), { aad })).not.toBe(envelope.seal(new Uint8Array([1, 2, 3]), { aad })); // fresh data key + IV
-		expect(envelope.kekIdOf(sealed)).toBe('k2');
+		expect(box.previousKeyId).toBeNull();
+		expect(box.openText(sealed, { aad })).toBe('mongodb+srv://u:p@cluster/db');
+		// key order irrelevant
+		expect(box.openText(sealed, { aad: { productId: 'notes', merchantId: MERCHANT } })).toBe('mongodb+srv://u:p@cluster/db');
+		expect(codeOf(() => box.openText(sealed, { aad: { ...aad, merchantId: 'mer_other' } }))).toBe('decrypt_failed');
+		expect(box.seal('x', { aad })).not.toBe(box.seal('x', { aad })); // fresh IV
+		expect(codeOf(() => createSecretBox({ encryptionKey: KEY_B }).openText(sealed, { aad }))).toBe('decrypt_failed');
+		expect(codeOf(() => box.openText('nope', { aad }))).toBe('decrypt_failed');
+		expect(codeOf(() => box.seal('x', { aad: {} }))).toBe('invalid_argument');
+		expect(codeOf(() => box.seal('x', { aad: { merchantId: '' } }))).toBe('invalid_argument');
+		expect(codeOf(() => box.seal('x', { aad: /** @type {any} */ (null) }))).toBe('invalid_argument');
+		expect(codeOf(() => createSecretBox({ encryptionKey: 'short' }))).toBe('config_invalid');
+		expect(codeOf(() => createSecretBox({ encryptionKey: KEY_A, previousKey: 'short' }))).toBe('config_invalid');
 	});
 
-	it('detects tampering and malformed input', () => {
-		const envelope = createEnvelope({ keks: [kek('k1', 1)] });
-		const sealed = envelope.seal('secret', { aad });
-		const parts = sealed.split('.');
+	it('reads values sealed before the one format, with either key, and detects tampering', () => {
+		const before = sealedBefore(KEY_A, 'credential', aad);
+		expect(createSecretBox({ encryptionKey: KEY_A }).openText(before, { aad })).toBe('credential');
+		expect(createSecretBox({ encryptionKey: KEY_B, previousKey: KEY_A }).openText(before, { aad })).toBe('credential');
+		expect(codeOf(() => createSecretBox({ encryptionKey: KEY_B }).openText(before, { aad }))).toBe('decrypt_failed');
+		const box = createSecretBox({ encryptionKey: KEY_A });
+		const parts = before.split('.');
 		const body = Buffer.from(/** @type {string} */ (parts[3]), 'base64url');
 		body[14] = (Number(body[14]) ^ 1) & 0xff;
 		const tampered = [parts[0], parts[1], parts[2], body.toString('base64url')].join('.');
-		expect(codeOf(() => envelope.open(tampered, { aad }))).toBe('decrypt_failed');
+		expect(codeOf(() => box.openText(tampered, { aad }))).toBe('decrypt_failed');
 		const wrapped = Buffer.from(/** @type {string} */ (parts[2]), 'base64url');
 		wrapped[20] = (Number(wrapped[20]) ^ 1) & 0xff;
-		expect(codeOf(() => envelope.open([parts[0], parts[1], wrapped.toString('base64url'), parts[3]].join('.'), { aad }))).toBe(
-			'decrypt_failed',
+		const badKey = [parts[0], parts[1], wrapped.toString('base64url'), parts[3]].join('.');
+		expect(codeOf(() => box.openText(badKey, { aad }))).toBe('decrypt_failed');
+		expect(codeOf(() => box.openText([parts[0], 'k9', parts[2], parts[3]].join('.'), { aad }))).toBe('decrypt_failed');
+		expect(codeOf(() => box.openText([parts[0], parts[1], parts[2], 'AA'].join('.'), { aad }))).toBe('decrypt_failed');
+		expect(codeOf(() => box.openText(sealedBefore(KEY_A, 'x', aad, randomBytes(16)), { aad }))).toBe('decrypt_failed');
+	});
+
+	it('key change: B with A as previous opens everything, re-seal moves it to B, then A can be removed (RT-14)', async () => {
+		const sealedA = createSecretBox({ encryptionKey: KEY_A }).seal('server-token', { aad });
+		const before = sealedBefore(KEY_A, 'smtp-password', aad);
+		const changing = createSecretBox({ encryptionKey: KEY_B, previousKey: KEY_A });
+		expect(changing.previousKeyId).toBe(createSecretBox({ encryptionKey: KEY_A }).keyId);
+		expect(changing.openText(sealedA, { aad })).toBe('server-token');
+		/** @type {Record<string, string>} */
+		const saved = {};
+		const lost = createSecretBox({ encryptionKey: 'c'.repeat(40) }).seal('x', { aad });
+		const values = { sealedA, before, lost };
+		const counts = await resealEach(
+			changing,
+			Object.entries(values).map(([name, sealed]) => ({
+				sealed,
+				aad,
+				save: async (/** @type {string} */ next) => {
+					saved[name] = next;
+				},
+			})),
 		);
-		expect(codeOf(() => envelope.open('nope', { aad }))).toBe('decrypt_failed');
-		expect(codeOf(() => envelope.open([parts[0], 'k9', parts[2], parts[3]].join('.'), { aad }))).toBe('decrypt_failed');
-		expect(codeOf(() => envelope.open([parts[0], parts[1], parts[2], 'AA'].join('.'), { aad }))).toBe('decrypt_failed');
-		expect(codeOf(() => envelope.seal('x', { aad: {} }))).toBe('invalid_argument');
-		expect(codeOf(() => envelope.seal('x', { aad: { merchantId: '' } }))).toBe('invalid_argument');
-		expect(codeOf(() => envelope.seal('x', { aad: /** @type {any} */ (null) }))).toBe('invalid_argument');
-	});
-
-	it('rotates KEKs: old records open, rewrap moves them to the active KEK', () => {
-		const old = createEnvelope({ keks: [kek('k1', 1)] });
-		const sealed = old.seal('credential', { aad });
-		const rotated = createEnvelope({ keks: [kek('k2', 2), kek('k1', 1)] });
-		expect(rotated.openText(sealed, { aad })).toBe('credential');
-		const moved = rotated.rewrap(sealed);
-		expect(rotated.kekIdOf(moved)).toBe('k2');
-		expect(moved.split('.')[3]).toBe(sealed.split('.')[3]); // ciphertext untouched
-		expect(rotated.rewrap(moved)).toBe(moved);
-		const retired = createEnvelope({ keks: [kek('k2', 2)] });
-		expect(retired.openText(moved, { aad })).toBe('credential');
-		expect(codeOf(() => retired.openText(sealed, { aad }))).toBe('decrypt_failed');
-	});
-
-	it('validates KEKs', () => {
-		expect(() => createEnvelope({ keks: [] })).toThrow();
-		expect(() => createEnvelope({ keks: [{ id: 'k', key: Buffer.alloc(16) }] })).toThrow();
-		expect(() => createEnvelope({ keks: [kek('k', 1), kek('k', 2)] })).toThrow();
-	});
-});
-
-describe('secret box (ENCRYPTION_KEY)', () => {
-	it('seals with a key derived from ENCRYPTION_KEY; another key cannot open', () => {
-		const box = createSecretBox({ encryptionKey: 'a'.repeat(40) });
-		const sealed = box.seal('server-token', { aad });
-		expect(box.openText(sealed, { aad })).toBe('server-token');
-		expect(codeOf(() => createSecretBox({ encryptionKey: 'b'.repeat(40) }).open(sealed, { aad }))).toBe('decrypt_failed');
-		expect(codeOf(() => createSecretBox({ encryptionKey: 'short' }))).toBe('config_invalid');
+		expect(counts).toEqual({ resealed: 2, current: 0, unreadable: 1 });
+		expect(Object.keys(saved)).toEqual(['sealedA', 'before']);
+		const movedA = /** @type {string} */ (saved.sealedA);
+		const movedBefore = /** @type {string} */ (saved.before);
+		const again = await resealEach(changing, [{ sealed: movedA, aad, save: async () => {} }]);
+		expect(again).toEqual({ resealed: 0, current: 1, unreadable: 0 });
+		expect(sumCounts([counts, again])).toEqual({ resealed: 2, current: 1, unreadable: 1 });
+		const after = createSecretBox({ encryptionKey: KEY_B });
+		expect(after.openText(movedA, { aad })).toBe('server-token');
+		expect(after.openText(movedBefore, { aad })).toBe('smtp-password');
+		expect(codeOf(() => createSecretBox({ encryptionKey: KEY_A }).openText(movedA, { aad }))).toBe('decrypt_failed');
 	});
 });
 

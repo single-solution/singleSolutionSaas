@@ -163,9 +163,17 @@ describe('ss app validate', () => {
 		await put(dir, 'vercel.json', JSON.stringify({ crons: [{ path: '/v1/x', schedule: '* * * * *' }] }));
 		const report = await validateProject(dir);
 		expect(messages(report, 'env.example')).toEqual([
-			'must list exactly MONGODB_URI, CONNECT_SECRET, ENCRYPTION_KEY (found: MONGODB_URI, CONNECT_SECRET, ENCRYPTION_KEY, PORTAL_URL)',
+			'must list exactly MONGODB_URI, CONNECT_SECRET, ENCRYPTION_KEY, and may list ENCRYPTION_KEY_PREVIOUS (found: MONGODB_URI, CONNECT_SECRET, ENCRYPTION_KEY, ENCRYPTION_KEY_PREVIOUS, PORTAL_URL)',
 		]);
 		expect(rules(report)).toContain('vercel.crons');
+		// the previous key, set only while ENCRYPTION_KEY changes, may be listed (once)
+		const changing = await project();
+		await edit(changing, '.env.example', (text) => text.replace(/\nENCRYPTION_KEY_PREVIOUS=\n?/, '\n'));
+		expect(rules(await validateProject(changing))).not.toContain('env.example');
+		await edit(changing, '.env.example', (text) => `${text}ENCRYPTION_KEY_PREVIOUS=\n`);
+		expect(rules(await validateProject(changing))).not.toContain('env.example');
+		await edit(changing, '.env.example', (text) => `${text}ENCRYPTION_KEY_PREVIOUS=\n`);
+		expect(rules(await validateProject(changing))).toContain('env.example');
 		const empty = await project();
 		await put(empty, '.env.example', '# nothing\n');
 		await put(empty, 'vercel.json', '{ nope');

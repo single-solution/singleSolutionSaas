@@ -1,7 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { createProduct, defineRoute } from '../src/index.js';
 import { createSealer } from '../src/sealing.js';
-import { BASE, ENCRYPTION_KEY, SECRET, freshDb, manifest, mongoUri, openDb, productRoutes, setup } from './helpers.js';
+import {
+	BASE,
+	ENCRYPTION_KEY,
+	SECRET,
+	createTestLogger,
+	freshDb,
+	manifest,
+	mongoUri,
+	openDb,
+	productRoutes,
+	setup,
+} from './helpers.js';
 
 /** @type {Record<string, import('../src/index.js').ConnectionDefinition>} */
 const CONNECTIONS = {
@@ -37,16 +48,33 @@ const routes = () => [
 	}),
 ];
 
+const KEY_B = 'encryption-key-b-0123456789-abcdefghij';
+
+/**
+ * A dashboard call on another instance of the product (another `ENCRYPTION_KEY`), sharing the store.
+ * @param {(request: Request) => Promise<Response>} handler
+ * @param {string} cookie
+ * @param {string} method
+ * @param {string} path
+ */
+const dashOn = (handler, cookie, method, path) =>
+	handler(new Request(`${BASE}${path}`, { method, headers: { cookie, ...(method === 'GET' ? {} : { origin: BASE }) } }));
+
 describe('sealing', () => {
-	it('opens only with the same key and place', () => {
-		const sealer = createSealer('k'.repeat(32), (n) => new Uint8Array(n).fill(1));
+	it('opens only with the same key and place; values of the first format still open', () => {
+		const sealer = createSealer({ encryptionKey: 'k'.repeat(32), randomBytes: (n) => new Uint8Array(n).fill(1) });
 		const sealed = sealer.seal('secret', 'a');
+		expect(sealed.startsWith(`ss2.${sealer.keyId}.`)).toBe(true);
 		expect(sealer.open(sealed, 'a')).toBe('secret');
 		expect(sealer.open(sealed, 'b')).toBeNull();
-		expect(createSealer('j'.repeat(32), (n) => new Uint8Array(n)).open(sealed, 'a')).toBeNull();
+		expect(createSealer({ encryptionKey: 'j'.repeat(32) }).open(sealed, 'a')).toBeNull();
 		expect(sealer.open('v2.x.y.z', 'a')).toBeNull();
 		expect(sealer.open(42, 'a')).toBeNull();
-		expect(() => createSealer('short', (n) => new Uint8Array(n))).toThrow(/ENCRYPTION_KEY/);
+		expect(() => createSealer({ encryptionKey: 'short' })).toThrow(/ENCRYPTION_KEY/);
+		// `v1.<iv>.<tag>.<data>` sealed by the kit before key ids (fixed IV 01…, key 'k' × 32, aad 'a')
+		const first = 'v1.AQEBAQEBAQEBAQEB.jEJhvO4DGbEeCwZHXDjDqw.aKQZLWWj';
+		expect(sealer.open(first, 'a')).toBe('secret');
+		expect(createSealer({ encryptionKey: KEY_B, previousKey: 'k'.repeat(32) }).open(first, 'a')).toBe('secret');
 	});
 });
 
@@ -120,6 +148,69 @@ describe('connections', () => {
 		const ai = (await response.json()).connections.find((/** @type {{ name: string }} */ c) => c.name === 'ai');
 		expect(ai).toMatchObject({ status: 'not_connected', last4: '' });
 		expect(ENCRYPTION_KEY).not.toBe('another-encryption-key-0123456789abcdef');
+	});
+
+	it('survive a key change: B with A as previous opens them, the Owner re-seals them to B, then A can go (RT-14)', async () => {
+		const { session, dash, websiteId, store, portal, clock, connectDatabase } = await setup({ connections: CONNECTIONS });
+		const { logger } = createTestLogger();
+		const merchant = await session({ kind: 'merchant' });
+		await dash(merchant, 'PUT', `/v1/dashboard/websites/${websiteId}/connections/ai`, { value: 'sk-live-abcdef1234' });
+		await connectDatabase();
+		/** @type {string[]} */
+		const reached = [];
+		/** @param {string} encryptionKey @param {string | null} previousEncryptionKey @param {any} [hooks] */
+		const instance = (encryptionKey, previousEncryptionKey, hooks) =>
+			createProduct({
+				manifest: manifest(),
+				config: { mongodbUri: '', connectSecret: SECRET, encryptionKey, previousEncryptionKey },
+				store,
+				fetch: portal.fetch,
+				now: clock.now,
+				logger,
+				connections: CONNECTIONS,
+				outbound: { allowHosts: ['127.0.0.1', 'localhost'] },
+				...(hooks ? { hooks } : {}),
+			});
+		const changing = instance(KEY_B, ENCRYPTION_KEY, {
+			resealProduct: async () => ({ resealed: 1, current: 0, unreadable: 0 }),
+			resealWebsite: async (/** @type {any} */ data) => {
+				reached.push(data.websiteId);
+				return { resealed: 0, current: 2, unreadable: 1 };
+			},
+		});
+		expect(await changing.connections.value(websiteId, 'ai')).toBe('sk-live-abcdef1234');
+		const owner = await session();
+		const handler = changing.handler([]);
+		expect((await dashOn(handler, await session({ role: 'support' }), 'POST', '/v1/dashboard/reseal')).status).toBe(403);
+		expect((await dashOn(handler, merchant, 'POST', '/v1/dashboard/reseal')).status).toBe(403);
+		const first = await (await dashOn(handler, owner, 'POST', '/v1/dashboard/reseal')).json();
+		expect(first).toEqual({
+			keyId: expect.any(String),
+			previousKeyId: expect.any(String),
+			resealed: 3,
+			current: 2,
+			unreadable: 1,
+			failedWebsites: [],
+		});
+		expect(reached).toEqual([websiteId]);
+		const again = await (await dashOn(handler, owner, 'POST', '/v1/dashboard/reseal')).json();
+		expect(again).toMatchObject({ resealed: 1, current: 4, unreadable: 1 });
+		// the previous key is removed: everything still opens with B alone, nothing with A alone
+		expect(await instance(KEY_B, null).connections.value(websiteId, 'ai')).toBe('sk-live-abcdef1234');
+		expect(await instance(KEY_B, null).connections.value(websiteId, 'database')).toEqual(expect.stringMatching(/^mongodb:/));
+		expect(await instance(ENCRYPTION_KEY, null).connections.value(websiteId, 'ai')).toBeNull();
+		// a website whose merchant database is not reached is named, not hidden
+		const failing = instance(KEY_B, null, {
+			resealWebsite: async () => {
+				throw new Error('unreachable');
+			},
+		});
+		expect(await (await dashOn(failing.handler([]), owner, 'POST', '/v1/dashboard/reseal')).json()).toMatchObject({
+			resealed: 0,
+			current: 2,
+			failedWebsites: [websiteId],
+		});
+		await Promise.all([changing.close(), failing.close()]);
 	});
 
 	it('refuse definitions that do not fit the manifest', () => {

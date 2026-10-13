@@ -6,8 +6,9 @@
  *   (HttpOnly, Secure, SameSite=Lax, host-only) ending at the launch's `sessionExpiresAt`, and redirects to the
  *   dashboard: `<dashboard>?websiteId=<id>`, or `<dashboard>?view=defaults` for an admin launch without a website.
  * - Merchants reach only the websites of their launch; admins any website that has this product (not removed).
- * - Rights: features on/off → Owner or Support; prices and global defaults → Owner; settings, texts, theme, Format and
- *   connections → the merchant (settings of switched-on features only) and Owner or Support.
+ * - Rights: features on/off → Owner or Support; prices, global defaults and Re-seal (stored secrets sealed again with
+ *   the current `ENCRYPTION_KEY`, `reseal.js`) → Owner; settings, texts, theme, Format and connections → the merchant
+ *   (settings of switched-on features only) and Owner or Support.
  * - Writes are refused unless their Origin is the product's own address; dashboard responses are never framed.
  * @module
  */
@@ -529,6 +530,13 @@ export const createDashboard = (kit) => {
 				});
 				return result.ok ? { version: result.version } : result.problem;
 			},
+		}),
+		defineRoute({
+			method: 'POST',
+			path: '/v1/dashboard/reseal',
+			auth: 'dashboard',
+			roles: OWNER,
+			handler: () => kit.reseal(),
 		}),
 	];
 

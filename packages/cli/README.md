@@ -20,9 +20,10 @@ placeholders `{{id}}`, `{{name}}`, `{{global}}` (`SS<Product>`), `{{baseUrl}}` a
 
 - `manifest.json` (0.4.13: id, name, version, endpoints, widgetScriptUrl, docsUrl, features with a settings `$ref` into
   `schemas/`, permissions, widgets), `openapi.json` (generated), `.env.example` with exactly `MONGODB_URI`,
-  `CONNECT_SECRET`, `ENCRYPTION_KEY`, `vercel.json` without crons, `.gitignore` (`.env*` except `.env.example`),
-  `.prettierignore`, `eslint.config.js` / `tsconfig.json` / `vitest.config.js` from `@ss/config`, `next.config.js`
-  (rewrites of `/.well-known/*`, `/sso`, `/widget.js`, `/docs`, `/v1/*` to the API function), `postcss.config.mjs`.
+  `CONNECT_SECRET`, `ENCRYPTION_KEY` (and the optional `ENCRYPTION_KEY_PREVIOUS`), `vercel.json` without crons,
+  `.gitignore` (`.env*` except `.env.example`), `.prettierignore`, `eslint.config.js` / `tsconfig.json` /
+  `vitest.config.js` from `@ss/config`, `next.config.js` (rewrites of `/.well-known/*`, `/sso`, `/widget.js`, `/docs`,
+  `/v1/*` to the API function), `postcss.config.mjs`.
 - `core/` (note checks, widget names), `server/` (routes, the `/docs` page, the generated widget bundle), `adapters/`
   (`product.js`: the kit wiring; `notes-store.js`: the merchant database), `ui/` (the visitor widget `note_form` and the
   admin widget `inbox` on `@ss/app-kit/widget`, mounted only into `data-ss-<id>` elements), `app/` (two functions:
@@ -49,7 +50,7 @@ it, the same for every website. With `data-token` the script fetches the website
 | `routes.dynamic`, `routes.auth`, `routes.feature`, `routes.permission`                      | every `defineRoute` in `server/` has literal method, path and auth; browser, server and ticket routes belong to a manifest feature (or permission)                                                                                                     |
 | `routes.widget-script`, `routes.docs`                                                       | a path `widgetScriptUrl` and a path `docsUrl` are public `GET` routes (auth `none`)                                                                                                                                                                    |
 | `strings.file`, `strings.invalid`, `strings.placeholders`, `strings.unknown-key`            | `strings/en.json` is the only text file, flat texts, well-formed `{placeholders}`, every `t('key')` exists                                                                                                                                             |
-| `env.example`, `vercel.crons`                                                               | exactly the three variables; no crons                                                                                                                                                                                                                  |
+| `env.example`, `vercel.crons`                                                               | exactly the three variables (the optional `ENCRYPTION_KEY_PREVIOUS` allowed); no crons                                                                                                                                                                 |
 | `imports.direction`, `imports.package`, `imports.unresolved`, `imports.outside`, `core.dom` | server → core, adapters; adapters → core; ui → core (+ `@ss/app-kit/widget`); app → server, adapters, core, strings; JSON data from strings/, schemas/, docs/, root for server, adapters and app; nothing leaves the project; core/ has no DOM globals |
 | `package.dependency`, `package.devDependency`, `package.script`, `package.missing`          | `@ss/app-kit`, `@ss/cli`, `@ss/config`, the standard scripts, and every imported package listed                                                                                                                                                        |
 | `server.entries`, `server.tracing`                                                          | at most two server functions (the API route and the dashboard page), no `outputFileTracingIncludes`                                                                                                                                                    |

@@ -6,9 +6,9 @@
  *   one set: the Ed25519 Portal signing key(s) (launches, notices), the token signing key(s) (browser and server
  *   tokens, PLAN 0.4.4), the session secret and the idempotency secret. Lists stay lists (first signs; all are
  *   published), so older tokens keep verifying.
- * - `settings` — recorded by Owners (PLAN 0.8.2 Settings): e-mail sending (its password sealed with `ENCRYPTION_KEY`),
- *   branding, support contact, security and billing rules. `version` increases with every change so other instances
- *   notice and rebuild.
+ * - `settings` — recorded by Owners (PLAN 0.8.2 Settings): e-mail sending (its password sealed with `ENCRYPTION_KEY`,
+ *   `crypto.js`), branding, support contact, security and billing rules. `version` increases with every change so
+ *   other instances notice and rebuild.
  * - `logo` — the Branding logo (PNG, JPEG or WebP, at most 200 kB), served at `/branding/logo`.
  * - `schema` — the fingerprint of the indexes last applied (applied once per deploy).
  *
@@ -17,7 +17,7 @@
  */
 import { randomBytes as nodeRandomBytes } from 'node:crypto';
 import { signingKeyFromSeed } from '@ss/protocol';
-import { createSecretBox } from './crypto.js';
+import { createSecretBox, resealEach } from './crypto.js';
 import { platformError } from './errors.js';
 import { COLLECTIONS } from './schema.js';
 
@@ -122,14 +122,15 @@ const isDuplicateKey = (error) => typeof error === 'object' && error !== null &&
 /**
  * Access to the system state in a control database.
  * @param {import('mongodb').Db} db
- * @param {{ encryptionKey: string, now?: () => number, randomBytes?: (n: number) => Uint8Array }} options
+ * @param {{ encryptionKey: string, previousKey?: string | null, now?: () => number,
+ *   randomBytes?: (n: number) => Uint8Array }} options `previousKey`: `ENCRYPTION_KEY_PREVIOUS` while the key changes
  */
 export const createSystemStore = (
 	db,
-	{ encryptionKey, now = Date.now, randomBytes = (n) => new Uint8Array(nodeRandomBytes(n)) },
+	{ encryptionKey, previousKey = null, now = Date.now, randomBytes = (n) => new Uint8Array(nodeRandomBytes(n)) },
 ) => {
 	const collection = /** @type {import('mongodb').Collection<any>} */ (db.collection(SYSTEM_COLLECTION));
-	const box = createSecretBox({ encryptionKey, randomBytes });
+	const box = createSecretBox({ encryptionKey, previousKey, randomBytes });
 	/**
 	 * The SMTP password, or null when none is stored or it was sealed under another `ENCRYPTION_KEY` (PLAN 0.4.8).
 	 * @param {string | null | undefined} sealed
@@ -271,6 +272,31 @@ export const createSystemStore = (
 	/** @param {string | null | undefined} sealed true when the stored SMTP password opens with this `ENCRYPTION_KEY` */
 	const passwordReadable = (sealed) => openPassword(sealed) !== null;
 
+	/**
+	 * Settings → Encryption key → Re-seal (PLAN 0.4.8; RT-14): the stored SMTP password sealed again with the current
+	 * key (a password changed meanwhile is left as saved).
+	 * @returns {Promise<import('./crypto.js').ResealCounts>}
+	 */
+	const reseal = async () => {
+		const sealed = (await settings())?.mail?.passSealed;
+		return resealEach(
+			box,
+			sealed
+				? [
+						{
+							sealed,
+							aad: MAIL_AAD,
+							save: (/** @type {string} */ next) =>
+								collection.updateOne(
+									{ _id: 'settings', 'mail.passSealed': sealed },
+									{ $set: { 'mail.passSealed': next } },
+								),
+						},
+					]
+				: [],
+		);
+	};
+
 	/** @returns {Promise<string | null>} the schema fingerprint last applied */
 	const appliedSchema = async () => {
 		const doc = await collection.findOne({ _id: 'schema' });
@@ -290,6 +316,7 @@ export const createSystemStore = (
 		setLogo,
 		logo,
 		passwordReadable,
+		reseal,
 		appliedSchema,
 		recordSchema,
 	});

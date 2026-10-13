@@ -158,8 +158,9 @@ export const createProductInstance = (options) => {
 	const policy = createOutboundPolicy({ ...outboundRest, allowHosts: production ? [] : allowHosts });
 	/** @type {import('./ai.js').Send} */
 	const send = options.outboundSend ?? ((url, init) => safeFetch(url, init, policy));
-	const sealer = createSealer(options.config?.encryptionKey ?? UNCONFIGURED_KEY);
-	const files = createFileSigner(options.config?.encryptionKey ?? UNCONFIGURED_KEY);
+	const keys = healthy ? options.config : undefined;
+	const sealer = createSealer(keys?.encryptionKey ?? UNCONFIGURED_KEY, keys?.previousEncryptionKey ?? null);
+	const files = createFileSigner(keys?.encryptionKey ?? UNCONFIGURED_KEY, keys?.previousEncryptionKey ?? null);
 	const ai = createAi({ send });
 	const lists = createLists({ store, sealer, now });
 	/** @type {NonNullable<import('@ss/app-kit').ProductOptions['hooks']>} */
@@ -213,6 +214,8 @@ export const createProductInstance = (options) => {
 			exportUser: (ctx, user) => /** @type {NonNullable<typeof hooks.exportUser>} */ (hooks.exportUser)(ctx, user),
 			deleteUser: (ctx, user) => /** @type {NonNullable<typeof hooks.deleteUser>} */ (hooks.deleteUser)(ctx, user),
 			widgetConfig: (ctx) => /** @type {NonNullable<typeof hooks.widgetConfig>} */ (hooks.widgetConfig)(ctx),
+			// the Owner's Re-seal (RT-14): the tool signing secrets in the product database
+			resealProduct: () => lists.resealToolSecrets(),
 		},
 		data: { indexes: INDEXES },
 		// the settings API's `GET|PUT /v1/lists/:list` for the merchant's server (K1), checked like the dashboard's

@@ -36,6 +36,7 @@ import {
 	withinLimits,
 } from '../core/timing.js';
 import { SIGNATURE_HEADER, urlsFor } from '../core/webhooks.js';
+import { messageAadOf } from '../adapters/crypto.js';
 import { signWebhook } from '../adapters/signatures.js';
 import { createStore } from '../adapters/store.js';
 
@@ -147,7 +148,7 @@ export const createSending = (product) => {
 	};
 
 	/** @param {Site} s @param {Channel} channel @param {string} address */
-	const aadOf = (s, channel, address) => `message|${s.websiteId}|${channel}|${address}`;
+	const aadOf = (s, channel, address) => messageAadOf(s.websiteId, channel, address);
 
 	/**
 	 * What a message keeps of its values and words: them with the hidden values replaced, and the real ones sealed for

@@ -5,6 +5,7 @@
  * @module
  */
 import { MAIL_FROM, SETTINGS_BOUNDS } from '../../infra/config.js';
+import { sumCounts } from '../../infra/crypto.js';
 import { problem } from '../../infra/http.js';
 import { createSmtpMailer } from '../../infra/mailer.js';
 import { LOGO_MAX_BYTES, LOGO_TYPES } from '../../infra/system.js';
@@ -105,6 +106,20 @@ export const createSystemService = (ctx) => {
 
 	return {
 		settings,
+
+		/**
+		 * Settings → Encryption key → Re-seal (PLAN 0.4.8, 0.11; RT-14): after the owner changes `ENCRYPTION_KEY` (the old
+		 * key set as `ENCRYPTION_KEY_PREVIOUS`), every stored secret is sealed again with the current key — the SMTP
+		 * password, server tokens and two-step secrets. Values already on it stay; values neither key opens are counted
+		 * and left alone. Pressing again is safe. Written to Activity.
+		 * @param {{ actor: Actor, requestId: string, ip: string | null }} input
+		 */
+		reseal: async ({ actor, requestId, ip }) => {
+			const counts = sumCounts([await system().reseal(), ...(await ctx.service('identity').resealSecrets())]);
+			const result = { keyId: ctx.secretBox.keyId, previousKeyId: ctx.secretBox.previousKeyId, ...counts };
+			await record(actor, 'encryption_key', { after: { resealed: result }, requestId, ip });
+			return result;
+		},
 
 		/**
 		 * Set or clear e-mail sending (SMTP host, port, user, password, sender name and address). The password is sealed

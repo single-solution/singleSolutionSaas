@@ -23,7 +23,8 @@ export const PASSWORD = 'correct horse battery';
 /**
  * @param {{ db: import('mongodb').Db, clock?: ReturnType<typeof createClock>, settings?: Record<string, any>,
  *   allowHosts?: string[], env?: Record<string, string> }} options `env`: environment overrides (another
- *   `ENCRYPTION_KEY`); a second Portal on the same database signs its Owner in instead of creating one
+ *   `ENCRYPTION_KEY`, an `ENCRYPTION_KEY_PREVIOUS`); a second Portal on the same database signs its Owner in instead of
+ *   creating one
  */
 export const bootPortal = async ({ db, clock = createClock(T0), settings, allowHosts = ['127.0.0.1'], env = {} }) => {
 	const mailer = memoryMailer();
@@ -37,7 +38,11 @@ export const bootPortal = async ({ db, clock = createClock(T0), settings, allowH
 		modules: [systemModule, createCatalogModule({ allowHosts }), createIdentityModule({ mailer }), commerceModule],
 		logger,
 		now: clock.now,
-		system: createSystemStore(db, { encryptionKey: env.ENCRYPTION_KEY ?? ENCRYPTION_KEY, now: clock.now }),
+		system: createSystemStore(db, {
+			encryptionKey: env.ENCRYPTION_KEY ?? ENCRYPTION_KEY,
+			previousKey: env.ENCRYPTION_KEY_PREVIOUS ?? null,
+			now: clock.now,
+		}),
 		background: { mode: 'on', fallback: (task) => void pending.push(Promise.resolve().then(task)) },
 	});
 	await portal.ensureIndexes();

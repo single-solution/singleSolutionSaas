@@ -1,7 +1,7 @@
 # @ss/protocol
 
 Signing and verification shared by the Portal and every product (PLAN.md Part 0: 0.4.3 launches, 0.4.4 tokens, 0.4.5
-tickets, 0.4.12 Product ↔ Portal contract).
+tickets, 0.4.12 Product ↔ Portal contract), and the one format of sealed stored secrets (0.4.8).
 
 - JavaScript ESM, functional (no classes), JSDoc-typed, `tsc --checkJs --strict`.
 - **EdDSA (Ed25519) only**. Every signature carries a `kid`; keys are published as JWKS.
@@ -23,6 +23,7 @@ tickets, 0.4.12 Product ↔ Portal contract).
 | `replay.js`       | `createMemoryReplayStore` (tests only), `consumeWith`                                                                                                                                                                                                                                              |
 | `errors.js`       | `createProtocolError`, `isProtocolError`, `ERROR_CODES`                                                                                                                                                                                                                                            |
 | `encoding.js`     | `canonicalJson`                                                                                                                                                                                                                                                                                    |
+| `sealing.js`      | sealing of stored secrets (`ss2.<keyId>.<iv>.<tag>.<data>`, AES-256-GCM, key id derived from the key): `createSealer` (current and optional previous `ENCRYPTION_KEY`, `reseal`), `legacyV1`, `sealKeyId`, `SEAL_FORMAT`, `MIN_ENCRYPTION_KEY_LENGTH`                                              |
 
 ## What is signed
 

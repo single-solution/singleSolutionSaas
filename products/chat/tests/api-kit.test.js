@@ -170,6 +170,8 @@ describe('dashboard', () => {
 		const stored = JSON.stringify(await sys.product.counters.get('settings', `${sys.websiteId}|chat|tool-secret`));
 		expect(stored).not.toContain(next.json.secret);
 		const merchant = await sys.merchantSession();
+		// the Owner's Re-seal counts it with the database connection (RT-14): both already on the current key
+		expect((await sys.dashboard(owner, 'POST', '/v1/dashboard/reseal')).json).toMatchObject({ resealed: 0, current: 2 });
 		await sys.switchOn(['visitor_chat']);
 		expect((await sys.dashboard(merchant, 'GET', path)).status).toBe(403);
 	});

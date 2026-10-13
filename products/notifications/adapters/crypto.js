@@ -1,47 +1,50 @@
 /**
  * Sealing (PLAN 0.4.8, 0.8.10 D11): the real words of a sensitive message (its codes and links) are kept, only while
- * the message still has attempts to make, encrypted with AES-256-GCM under a key derived (HKDF-SHA256) from
- * `ENCRYPTION_KEY` and bound to the website and the recipient. Lost or changed `ENCRYPTION_KEY`: a waiting sensitive
- * message no longer opens and fails.
+ * the message still has attempts to make, sealed with the kit's sealer (`ss2.<keyId>.…`, AES-256-GCM under a key
+ * derived from `ENCRYPTION_KEY`, label `notifications`) and bound to the website and the recipient. While the owner
+ * changes the key, `ENCRYPTION_KEY_PREVIOUS` still opens them and the Owner's Re-seal (`resealWebsite`) moves them to
+ * the new key. Lost `ENCRYPTION_KEY`: a waiting sensitive message no longer opens and fails.
  * @module
  */
-import { createCipheriv, createDecipheriv, hkdfSync, randomBytes } from 'node:crypto';
+import { createSealer as createKitSealer, resealEach } from '@ss/app-kit';
 
 /**
  * @param {string} encryptionKey `ENCRYPTION_KEY` (at least 32 characters)
+ * @param {string | null} [previousKey] `ENCRYPTION_KEY_PREVIOUS`, set only while the key changes
  */
-export const createSealer = (encryptionKey) => {
-	const key = Buffer.from(
-		hkdfSync('sha256', Buffer.from(encryptionKey, 'utf8'), Buffer.alloc(0), 'ss-notifications.seal.v1', 32),
-	);
-	return Object.freeze({
-		/** @param {string} plaintext @param {string} aad */
-		seal: (plaintext, aad) => {
-			const iv = randomBytes(12);
-			const cipher = createCipheriv('aes-256-gcm', key, iv);
-			cipher.setAAD(Buffer.from(aad, 'utf8'));
-			const data = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
-			return `v1.${iv.toString('base64url')}.${cipher.getAuthTag().toString('base64url')}.${data.toString('base64url')}`;
-		},
-		/**
-		 * @param {unknown} sealed
-		 * @param {string} aad
-		 * @returns {string | null} null when it cannot be opened (another key, tampered)
-		 */
-		open: (sealed, aad) => {
-			if (typeof sealed !== 'string') return null;
-			const [version, iv, tag, data, extra] = sealed.split('.');
-			if (version !== 'v1' || !iv || !tag || data === undefined || extra !== undefined) return null;
-			try {
-				const decipher = createDecipheriv('aes-256-gcm', key, Buffer.from(iv, 'base64url'));
-				decipher.setAAD(Buffer.from(aad, 'utf8'));
-				decipher.setAuthTag(Buffer.from(tag, 'base64url'));
-				return Buffer.concat([decipher.update(Buffer.from(data, 'base64url')), decipher.final()]).toString('utf8');
-			} catch {
-				return null;
-			}
-		},
-	});
-};
+export const createSealer = (encryptionKey, previousKey = null) =>
+	createKitSealer({ encryptionKey, previousKey, label: 'notifications', legacyInfo: 'ss-notifications.seal.v1' });
 
-/** @typedef {ReturnType<typeof createSealer>} Sealer */
+/** @typedef {import('@ss/app-kit').Sealer} Sealer */
+
+/**
+ * What the sealed words of a message are bound to: the website, the channel and the address.
+ * @param {string} websiteId @param {string} channel @param {string} address
+ */
+export const messageAadOf = (websiteId, channel, address) => `message|${websiteId}|${channel}|${address}`;
+
+/**
+ * The Owner's Re-seal (RT-14) of one website's merchant database: the sealed words of every message still waiting,
+ * sealed again with the current key.
+ * @param {Sealer} sealer
+ * @param {import('@ss/app-kit').WebsiteData} data
+ * @returns {Promise<import('@ss/app-kit').ResealCounts>}
+ */
+export const resealWebsite = async (sealer, data) => {
+	const { websiteId } = data;
+	const messages = data.collection('messages');
+	const waiting = { websiteId, sealed: { $type: 'string' } };
+	const projection = { _id: 0, id: 1, channel: 1, address: 1, sealed: 1, updatedAt: 1 };
+	return resealEach(
+		sealer,
+		(await messages.find(waiting, { projection }).toArray()).map((message) => ({
+			sealed: message.sealed,
+			aad: messageAadOf(websiteId, message.channel, message.address),
+			save: (/** @type {string} */ next) =>
+				messages.updateOne(
+					{ websiteId, id: message.id, sealed: message.sealed },
+					{ $set: { sealed: next, updatedAt: message.updatedAt } },
+				),
+		})),
+	);
+};

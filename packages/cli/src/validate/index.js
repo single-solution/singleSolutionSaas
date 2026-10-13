@@ -9,8 +9,8 @@
  *   (`routes.*`);
  * - `strings/en.json`, the only widget-text file: flat keys, text values, well-formed `{placeholders}`, and every
  *   `t('key')` used in the code exists (`strings.*`);
- * - `.env.example` lists exactly `MONGODB_URI`, `CONNECT_SECRET`, `ENCRYPTION_KEY` (`env.example`), and `vercel.json`
- *   declares no crons (`vercel.crons`);
+ * - `.env.example` lists exactly `MONGODB_URI`, `CONNECT_SECRET`, `ENCRYPTION_KEY`, and may list the optional
+ *   `ENCRYPTION_KEY_PREVIOUS` (`env.example`), and `vercel.json` declares no crons (`vercel.crons`);
  * - import direction: server → core | adapters, adapters → core, ui → core, app → server | adapters | core | strings, never
  *   the reverse; core stays pure and DOM-free; no import leaves the product folder (`imports.*`, `core.dom`);
  * - package wiring: the kit and the tooling are dependencies, the standard scripts exist, and every imported package
@@ -60,6 +60,8 @@ const ANATOMY = Object.freeze([
 
 /** The variables a product reads, and the only names its `.env.example` lists (PLAN 0.11). */
 const ENV_NAMES = Object.freeze(['MONGODB_URI', 'CONNECT_SECRET', 'ENCRYPTION_KEY']);
+/** Read too, set only while the owner changes `ENCRYPTION_KEY` (PLAN 0.4.8, 0.11): `.env.example` may list it. */
+const OPTIONAL_ENV_NAMES = Object.freeze(['ENCRYPTION_KEY_PREVIOUS']);
 
 /** Marker for project-root files (e.g. `manifest.json`) as import targets. */
 const ROOT = '.';
@@ -323,7 +325,8 @@ const checkStrings = async (files) => {
 };
 
 /**
- * `.env.example` lists exactly the three variables a product reads (PLAN 0.11).
+ * `.env.example` lists exactly the three variables a product reads, and optionally `ENCRYPTION_KEY_PREVIOUS`
+ * (PLAN 0.11).
  * @param {ProjectFiles} files
  * @returns {Promise<Problem[]>}
  */
@@ -333,14 +336,19 @@ const checkEnvExample = async (files) => {
 		.split('\n')
 		.map((line) => ENV_LINE.exec(line.trim())?.[1])
 		.filter((name) => name !== undefined);
-	const same = names.length === ENV_NAMES.length && ENV_NAMES.every((name) => names.includes(name));
+	const required = names.filter((name) => !OPTIONAL_ENV_NAMES.includes(name));
+	const optional = names.filter((name) => OPTIONAL_ENV_NAMES.includes(name));
+	const same =
+		required.length === ENV_NAMES.length &&
+		ENV_NAMES.every((name) => required.includes(name)) &&
+		new Set(optional).size === optional.length;
 	return same
 		? []
 		: [
 				problemOf({
 					rule: 'env.example',
 					file: '.env.example',
-					message: `must list exactly ${ENV_NAMES.join(', ')} (found: ${names.join(', ') || 'none'})`,
+					message: `must list exactly ${ENV_NAMES.join(', ')}, and may list ${OPTIONAL_ENV_NAMES.join(', ')} (found: ${names.join(', ') || 'none'})`,
 				}),
 			];
 };

@@ -3,8 +3,8 @@
  * Settings (PLAN 0.8.2; Owner only): one page, no tabs — a masonry of cards, each saved on its own: E-mail sending
  * (SMTP host, port, user, password, sender name and address; Send test e-mail to the signed-in admin), Branding (name,
  * accent, logo), Support contact (e-mail, phone, optional WhatsApp), Security (Session length, Require two-step for
- * admins) and Billing rules (grace days, low-balance threshold). Every change is written to Activity and reaches every
- * Portal instance within seconds.
+ * admins), Billing rules (grace days, low-balance threshold) and Encryption key (Re-seal after a key change). Every
+ * change is written to Activity and reaches every Portal instance within seconds.
  * @module
  */
 import { useState } from 'react';
@@ -382,6 +382,33 @@ function BillingRulesCard({ settings, onSaved }) {
 	);
 }
 
+/** Encryption key (PLAN 0.4.8): Re-seal every stored secret with the current `ENCRYPTION_KEY` after a key change. */
+function EncryptionCard() {
+	const [busy, setBusy] = useState(false);
+	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
+	const [counts, setCounts] = useState(/** @type {{ resealed: number, current: number, unreadable: number } | null} */ (null));
+	return (
+		<Card title={ADMIN.settingsSections.encryption.title} subtitle={ADMIN.settingsSections.encryption.help}>
+			<div className="space-y-4">
+				<Button
+					loading={busy}
+					onClick={async () => {
+						setBusy(true);
+						setProblem(null);
+						const result = await adminFetch(adminApi.settingsReseal(), { method: 'POST', body: {} });
+						setBusy(false);
+						if (result.ok) setCounts(result.data);
+						else setProblem(result.problem);
+					}}>
+					{ADMIN.encryption.reseal}
+				</Button>
+				{counts ? <Callout tone="success">{ADMIN.encryption.result(counts)}</Callout> : null}
+				<FormError problem={problem} fields={[]} />
+			</div>
+		</Card>
+	);
+}
+
 /**
  * @param {any} props loader result of `loadSettings`
  */
@@ -397,6 +424,7 @@ export function SettingsView(props) {
 				<SupportCard settings={settings} onSaved={setSettings} />
 				<SecurityCard settings={settings} onSaved={setSettings} />
 				<BillingRulesCard settings={settings} onSaved={setSettings} />
+				<EncryptionCard />
 			</Masonry>
 		</div>
 	);

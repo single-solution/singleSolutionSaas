@@ -22,6 +22,7 @@ import {
 	verifyPassword,
 	verifyTotp,
 } from '../../infra/auth.js';
+import { resealEach, sumCounts } from '../../infra/crypto.js';
 import { problem } from '../../infra/http.js';
 import { linkFor } from './core/links.js';
 import { presentAdmin, presentMerchant, twoStepOf } from './core/present.js';
@@ -179,6 +180,39 @@ export const createAccounts = (deps) => {
 
 	return Object.freeze({
 		setupLink,
+
+		/**
+		 * Settings → Encryption key → Re-seal (PLAN 0.4.8; RT-14): every admin's and merchant's two-step secret (and one
+		 * being set up) sealed again with the current key.
+		 * @returns {Promise<import('../../infra/crypto.js').ResealCounts>}
+		 */
+		resealTwoStep: async () => {
+			/** @type {import('../../infra/crypto.js').ResealCounts[]} */
+			const parts = [];
+			for (const kind of /** @type {const} */ (['admin', 'merchant'])) {
+				const docs = await logins(kind)
+					.find(
+						{ $or: [{ 'totp.secret': { $type: 'string' } }, { 'pendingTotp.secret': { $type: 'string' } }] },
+						{ projection: { totp: 1, pendingTotp: 1 } },
+					)
+					.toArray();
+				const items = docs.flatMap((doc) =>
+					/** @type {const} */ (['totp', 'pendingTotp'])
+						.filter((field) => typeof doc[field]?.secret === 'string')
+						.map((field) => ({
+							sealed: doc[field].secret,
+							aad: totpAad(String(doc._id)),
+							save: (/** @type {string} */ next) =>
+								logins(kind).updateOne(
+									{ _id: doc._id, [`${field}.secret`]: doc[field].secret },
+									{ $set: { [`${field}.secret`]: next } },
+								),
+						})),
+				);
+				parts.push(await resealEach(ctx.secretBox, items));
+			}
+			return sumCounts(parts);
+		},
 
 		// -----------------------------------------------------------------------------------------------------------
 		// Sign-in

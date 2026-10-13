@@ -112,6 +112,14 @@ export const systemRoutes = (service) => [
 		handler: async (ctx) => ok(await service.setSupport({ body: ctx.body, ...who(ctx) })),
 	}),
 	defineRoute({
+		method: 'POST',
+		path: '/v1/admin/settings/reseal',
+		auth: 'admin',
+		permission: P.settingsPortalWrite,
+		rateLimit: { limit: 10, windowMs: 60 * 60_000 },
+		handler: async (ctx) => ok(await service.reseal(who(ctx))),
+	}),
+	defineRoute({
 		method: 'PUT',
 		path: '/v1/admin/settings/security',
 		auth: 'admin',

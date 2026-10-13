@@ -517,7 +517,7 @@ describe('admin console interactions (jsdom)', () => {
 		await press('Filter');
 		cleanup();
 
-		// ---------------------------------------------------------------- Settings: e-mail sending, branding, support, security
+		// ---------------------------------------------------------------- Settings: e-mail sending, branding, support, security, key
 		render(
 			<ToastProvider>
 				<SettingsView {...await admin.loadSettings(ownerBrowser.api)} />
@@ -576,6 +576,10 @@ describe('admin console interactions (jsdom)', () => {
 		});
 		await saveIn('Security');
 		await until(() => ownerBrowser.calls.some((c) => c.path === adminApi.settingsSecurity() && c.status === 200));
+		// Encryption key: Re-seal after a key change (RT-14)
+		await press('Re-seal stored secrets');
+		await until(() => ownerBrowser.calls.some((c) => c.path === adminApi.settingsReseal() && c.status === 200));
+		await until(() => shows('ENCRYPTION_KEY_PREVIOUS can be removed'));
 		cleanup();
 		render(<SettingsView ok={false} problem={{ status: 403, title: 'Forbidden' }} />);
 		expect(shows('Not permitted')).toBe(true);

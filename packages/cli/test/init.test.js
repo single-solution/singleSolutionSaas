@@ -100,6 +100,7 @@ describe('ss app init → validate → own tests (integration)', () => {
 			'MONGODB_URI=',
 			'CONNECT_SECRET=',
 			'ENCRYPTION_KEY=',
+			'ENCRYPTION_KEY_PREVIOUS=',
 		]);
 		expect(await read(dir, '.env.local')).toMatch(/^MONGODB_URI=\nCONNECT_SECRET=[\w-]{43}\nENCRYPTION_KEY=[\w-]{43}\n$/);
 		const ignored = (await read(dir, '.gitignore')).split('\n');

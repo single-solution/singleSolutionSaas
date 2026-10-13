@@ -394,6 +394,10 @@ export const ADMIN = Object.freeze({
 			title: 'Billing rules',
 			help: 'When merchants are warned about their balance and how long products keep working below zero.',
 		}),
+		encryption: Object.freeze({
+			title: 'Encryption key',
+			help: 'After ENCRYPTION_KEY is changed, with the old key set as ENCRYPTION_KEY_PREVIOUS, seal every stored secret again with the new key (server tokens, the mail password, two-step secrets). Pressing again is safe.',
+		}),
 	}),
 	mail: Object.freeze({
 		host: 'SMTP host',
@@ -430,6 +434,12 @@ export const ADMIN = Object.freeze({
 		requireTwoStep: 'Require two-step for admins',
 		requireTwoStepHelp: 'Admins without two-step must set it up right after signing in, before any other page opens.',
 	}),
+	encryption: Object.freeze({
+		reseal: 'Re-seal stored secrets',
+		/** @param {{ resealed: number, current: number, unreadable: number }} counts */
+		result: ({ resealed, current, unreadable }) =>
+			`${resealed} re-sealed, ${current} already on the current key, ${unreadable} could not be opened with either key. Every stored secret that opens now uses the current key: ENCRYPTION_KEY_PREVIOUS can be removed.`,
+	}),
 	billingRules: Object.freeze({
 		graceDays: 'Grace period (days)',
 		graceHelp:
@@ -440,7 +450,7 @@ export const ADMIN = Object.freeze({
 	activityTitle: 'Activity',
 	activityIntro: 'Every entry in the activity log, filterable by merchant, admin and date.',
 	adminsIntro: 'Who can sign in to the admin console, with their role and two-step sign-in.',
-	settingsIntro: 'E-mail sending, billing rules, branding, support contact and security.',
+	settingsIntro: 'E-mail sending, billing rules, branding, support contact, security and the encryption key.',
 	myAccountIntro: 'Your name, sign-in, password, two-step sign-in and activity.',
 	filters: Object.freeze({
 		merchant: 'Merchant id',

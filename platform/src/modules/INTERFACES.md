@@ -94,7 +94,9 @@ body })` (row 3 refusals: unknown key or a key without price or a dependency off
 ## system (`modules/system`)
 
 Settings, the public branding, Activity and the admin Overview (`overview()` → counts, `mailConfigured`, per-product
-numbers `products: [{ productId, name, status, websites, earnedThisMonth, days }]`, recent Activity).
+numbers `products: [{ productId, name, status, websites, earnedThisMonth, days }]`, recent Activity). Settings →
+Encryption key → Re-seal (`reseal`, Owner) seals every stored secret again with the current `ENCRYPTION_KEY`: the
+system store's mail password, and `identity.resealSecrets()` (server tokens, two-step secrets).
 
 ## Product API routes (`/v1/product/*`, `auth: 'product'`)
 

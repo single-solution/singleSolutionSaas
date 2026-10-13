@@ -5,18 +5,25 @@ import { createFakePortal, createMemoryStore } from '../src/testing.js';
 import { BASE, SECRET, createClock, manifest, productRoutes, setup } from './helpers.js';
 
 describe('configFromEnv', () => {
-	it('reads exactly the three variables and names problems without values', () => {
-		const good = configFromEnv({
+	it('reads exactly the three variables (and the optional previous key) and names problems without values', () => {
+		const env = {
 			MONGODB_URI: 'mongodb://db.example.com/notes',
 			CONNECT_SECRET: 'x'.repeat(32),
 			ENCRYPTION_KEY: 'y'.repeat(40),
-		});
+		};
+		const good = configFromEnv(env);
 		expect(good.problems).toEqual([]);
 		expect(good.config).toEqual({
 			mongodbUri: 'mongodb://db.example.com/notes',
 			connectSecret: 'x'.repeat(32),
 			encryptionKey: 'y'.repeat(40),
+			previousEncryptionKey: null,
 		});
+		const changing = configFromEnv({ ...env, ENCRYPTION_KEY_PREVIOUS: 'z'.repeat(32) });
+		expect(changing).toEqual({ config: { ...good.config, previousEncryptionKey: 'z'.repeat(32) }, problems: [] });
+		expect(configFromEnv({ ...env, ENCRYPTION_KEY_PREVIOUS: '' }).config.previousEncryptionKey).toBeNull();
+		const short = configFromEnv({ ...env, ENCRYPTION_KEY_PREVIOUS: 'old-short-key' });
+		expect(short.problems).toEqual(['ENCRYPTION_KEY_PREVIOUS is shorter than 32 characters.']);
 		const bad = configFromEnv({ CONNECT_SECRET: 'short-secret-value' });
 		expect(bad.problems).toHaveLength(3);
 		expect(bad.problems.join(' ')).toMatch(/MONGODB_URI.*CONNECT_SECRET.*ENCRYPTION_KEY/);

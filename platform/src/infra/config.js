@@ -4,8 +4,8 @@
  *
  * Two sources, both plain:
  * - **Environment** (`loadEnv`, PLAN 0.11): the database (`MONGODB_URI`), the Portal's final public address
- *   (`PORTAL_URL`) and the key that encrypts stored secrets (`ENCRYPTION_KEY`). Everything else is a fixed constant
- *   below. The environment comes from `NODE_ENV` (production unless `development` or `test`). Listed in
+ *   (`PORTAL_URL`) and the key that encrypts stored secrets (`ENCRYPTION_KEY`, plus the optional
+ *   `ENCRYPTION_KEY_PREVIOUS` set only while the owner changes it). Everything else is a fixed constant below. The environment comes from `NODE_ENV` (production unless `development` or `test`). Listed in
  *   {@link ENV_VARS}.
  * - **System state** (`infra/system.js`, the control database): the secrets generated on first start (the Portal
  *   signing keys, the token signing keys, the session secret and the idempotency secret) and the settings an Owner
@@ -32,6 +32,8 @@ import { platformError } from './errors.js';
  * @property {boolean} isProduction
  * @property {string} portalUrl `PORTAL_URL`: scheme + host (+ port), no path and no trailing slash
  * @property {string} encryptionKey `ENCRYPTION_KEY` (at least 32 characters; encrypts stored secrets, PLAN 0.4.8)
+ * @property {string | null} previousEncryptionKey `ENCRYPTION_KEY_PREVIOUS`: the old key while the owner changes
+ *   `ENCRYPTION_KEY` (values it sealed keep opening until Settings → Encryption key → Re-seal), else null
  * @property {{ uri: string, dbName: string, maxPoolSize: number }} mongo control-plane database only
  * @property {string} logLevel
  * @property {number} maxBodyBytes default JSON body cap
@@ -69,6 +71,7 @@ import { platformError } from './errors.js';
  * @property {string} portalOrigin same as `portalUrl`
  * @property {boolean} cookieSecure true when `PORTAL_URL` is https
  * @property {string} encryptionKey `ENCRYPTION_KEY`
+ * @property {string | null} previousEncryptionKey `ENCRYPTION_KEY_PREVIOUS` (null when not set)
  * @property {PortalSettings} settings
  * @property {{ uri: string, dbName: string, maxPoolSize: number }} mongo control-plane database only
 
@@ -136,6 +139,11 @@ export const ENV_VARS = Object.freeze([
 		"The Portal's final public address, scheme + host (+ port), no path and no trailing slash. https is required, except for localhost, *.localhost, 127.0.0.1 and [::1] in development and tests.",
 	],
 	['ENCRYPTION_KEY', true, "Random, at least 32 characters. Encrypts the Portal's stored secrets."],
+	[
+		'ENCRYPTION_KEY_PREVIOUS',
+		false,
+		'Set only while ENCRYPTION_KEY is changed: the old key, so stored secrets keep opening until Settings → Encryption key → Re-seal; removed afterwards.',
+	],
 ]);
 
 const LEVELS = new Set(['debug', 'info', 'warn', 'error', 'silent']);
@@ -233,6 +241,9 @@ export const loadEnv = (env = process.env) => {
 	const encryptionKey = read('ENCRYPTION_KEY') ?? '';
 	if (!encryptionKey) problems.push('ENCRYPTION_KEY is required');
 	else if (encryptionKey.length < 32) problems.push('ENCRYPTION_KEY must be at least 32 characters');
+	const previousEncryptionKey = read('ENCRYPTION_KEY_PREVIOUS') ?? null;
+	if (previousEncryptionKey !== null && previousEncryptionKey.length < 32)
+		problems.push('ENCRYPTION_KEY_PREVIOUS must be at least 32 characters');
 
 	// Log level: info in production, debug in development (LOG_LEVEL overrides, undocumented)
 	const logLevel = read('LOG_LEVEL') ?? (portalEnv === 'development' ? 'debug' : 'info');
@@ -245,6 +256,7 @@ export const loadEnv = (env = process.env) => {
 		isProduction: portalEnv === 'production',
 		portalUrl: portalUrl.ok ? portalUrl.value : '',
 		encryptionKey,
+		previousEncryptionKey,
 		mongo: Object.freeze({ uri: mongoUri, dbName, maxPoolSize: MONGO_POOL_SIZE }),
 		logLevel,
 		maxBodyBytes: MAX_BODY_BYTES,

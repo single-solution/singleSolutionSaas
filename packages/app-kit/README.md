@@ -32,6 +32,11 @@ The exact API is in [API.md](./API.md).
   the website's Format and its business.json time zone (`product.format(websiteId)`, the widget config).
 - **Connections** — the merchant's database, storage, provider keys and pasted tokens, encrypted with a key derived
   from `ENCRYPTION_KEY`, write-only, tested live when saved. `callProduct` calls another product with a pasted token.
+- **Sealing and Re-seal** — every stored secret uses the one format of `@ss/protocol` (`ss2.<keyId>.…`; the key id
+  names the key that sealed it). While the owner changes `ENCRYPTION_KEY`, the old key is `ENCRYPTION_KEY_PREVIOUS`
+  and values open with either; the Owner's Re-seal (`POST /v1/dashboard/reseal`) seals Connections and the product's
+  own secrets (`hooks.resealProduct`, `hooks.resealWebsite`) again with the new key. `createSealer` gives a product
+  the same sealer for its own secrets.
 - **Merchant database** — guarded access (`websiteId` on every query, no cross-collection stages, inserts stamped
   with `websiteId` and `merchantId`; Atlas Search only as a first `$search` whose compound filter pins the website) to
   collections `ss_<product id>_<name>`.
@@ -52,8 +57,9 @@ health or status endpoints.
 ## Environment
 
 Exactly three variables (PLAN 0.11): `MONGODB_URI` (the product database), `CONNECT_SECRET` and `ENCRYPTION_KEY` (each
-at least 32 characters). `configFromEnv()` reads them and returns problems that name the variable, never its value; a
-product with problems answers every route with 503.
+at least 32 characters), plus `ENCRYPTION_KEY_PREVIOUS`, set only while the owner changes `ENCRYPTION_KEY` (the old
+key; removed after the Owner's Re-seal). `configFromEnv()` reads them and returns problems that name the variable,
+never its value; a product with problems answers every route with 503.
 
 ## Wiring a product into Next.js
 

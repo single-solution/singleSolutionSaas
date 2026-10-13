@@ -2,9 +2,11 @@
  * Cryptography (node:crypto), the only module that touches key material:
  *
  * - **Sealing** (PLAN 0.4.8): secrets Accounts generates for a website and must read back (its sign-in signing key and
- *   two-step secrets) are kept in the merchant database encrypted with AES-256-GCM under a key derived (HKDF-SHA256)
- *   from `ENCRYPTION_KEY`, bound to the website and purpose. Lost or changed `ENCRYPTION_KEY`: the signing key is made
- *   again (everyone signs in again) and two-step users use a recovery code.
+ *   two-step secrets) are kept in the merchant database sealed with the kit's sealer (`ss2.<keyId>.…`, AES-256-GCM
+ *   under a key derived from `ENCRYPTION_KEY`, label `accounts`), bound to the website and purpose. While the owner
+ *   changes the key, `ENCRYPTION_KEY_PREVIOUS` still opens them and the Owner's Re-seal (`resealWebsite`) moves them to
+ *   the new key. Lost `ENCRYPTION_KEY`: the signing key is made again (everyone signs in again) and two-step users
+ *   sign in with a recovery code and set two-step up again.
  * - **Hashes**: one-time codes, links and refresh tokens are kept as SHA-256 of high-entropy values (or of the code
  *   with its record id); passwords with scrypt (N=16384, r=8, p=1, 16-byte salt). Imported bcrypt and peppered PBKDF2
  *   hashes are checked too and replaced with scrypt after a good check (PLAN 0.8.10 A1).
@@ -12,16 +14,14 @@
  * - **TOTP** (RFC 6238) and recovery codes, ported from the Portal's two-step.
  * @module
  */
+import { createSealer as createKitSealer, resealEach, sumCounts } from '@ss/app-kit';
 import bcrypt from 'bcryptjs';
 import {
-	createCipheriv,
-	createDecipheriv,
 	createHash,
 	createHmac,
 	createPrivateKey,
 	createPublicKey,
 	generateKeyPairSync,
-	hkdfSync,
 	pbkdf2 as pbkdf2Callback,
 	randomBytes as nodeRandomBytes,
 	scrypt as scryptCallback,
@@ -56,40 +56,12 @@ export const safeEqual = (a, b) => {
 
 /**
  * @param {string} encryptionKey `ENCRYPTION_KEY` (at least 32 characters)
+ * @param {string | null} [previousKey] `ENCRYPTION_KEY_PREVIOUS`, set only while the key changes
  */
-export const createSealer = (encryptionKey) => {
-	const key = Buffer.from(hkdfSync('sha256', Buffer.from(encryptionKey, 'utf8'), Buffer.alloc(0), 'ss-accounts.seal.v1', 32));
-	return Object.freeze({
-		/** @param {string} plaintext @param {string} aad */
-		seal: (plaintext, aad) => {
-			const iv = nodeRandomBytes(12);
-			const cipher = createCipheriv('aes-256-gcm', key, iv);
-			cipher.setAAD(Buffer.from(aad, 'utf8'));
-			const data = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
-			return `v1.${iv.toString('base64url')}.${cipher.getAuthTag().toString('base64url')}.${data.toString('base64url')}`;
-		},
-		/**
-		 * @param {unknown} sealed
-		 * @param {string} aad
-		 * @returns {string | null} null when it cannot be opened (another key, tampered)
-		 */
-		open: (sealed, aad) => {
-			if (typeof sealed !== 'string') return null;
-			const [version, iv, tag, data, extra] = sealed.split('.');
-			if (version !== 'v1' || !iv || !tag || data === undefined || extra !== undefined) return null;
-			try {
-				const decipher = createDecipheriv('aes-256-gcm', key, Buffer.from(iv, 'base64url'));
-				decipher.setAAD(Buffer.from(aad, 'utf8'));
-				decipher.setAuthTag(Buffer.from(tag, 'base64url'));
-				return Buffer.concat([decipher.update(Buffer.from(data, 'base64url')), decipher.final()]).toString('utf8');
-			} catch {
-				return null;
-			}
-		},
-	});
-};
+export const createSealer = (encryptionKey, previousKey = null) =>
+	createKitSealer({ encryptionKey, previousKey, label: 'accounts', legacyInfo: 'ss-accounts.seal.v1' });
 
-/** @typedef {ReturnType<typeof createSealer>} Sealer */
+/** @typedef {import('@ss/app-kit').Sealer} Sealer */
 
 // ----------------------------------------------------------------------------------------------------- passwords
 
@@ -308,6 +280,61 @@ export const matchRecoveryCode = (code, items) => {
 
 /** What a user's sealed TOTP secret is bound to. @param {string} websiteId @param {string} userId */
 export const totpAadOf = (websiteId, userId) => `accounts-totp|${websiteId}|${userId}`;
+
+/** What a website's sealed signing key is bound to. @param {string} websiteId @param {string} kid */
+export const keyAadOf = (websiteId, kid) => `accounts-key|${websiteId}|${kid}`;
+
+/** What the sealed values of a kept message are bound to. @param {string} websiteId @param {string} key */
+export const outboxAadOf = (websiteId, key) => `accounts-outbox|${websiteId}|${key}`;
+
+/**
+ * The Owner's Re-seal (PLAN 0.4.8; RT-14) of one website's merchant database: its sign-in signing key, two-step
+ * secrets and kept Forgot-password messages, sealed again with the current key (a user keeps their `updatedAt`). Not
+ * re-sealed: two-step setup steps (10 minutes) and a session's last refresh secret (read only within seconds of a
+ * renewal, sealed again at the next one); both are gone long before the previous key is removed.
+ * @param {Sealer} sealer
+ * @param {import('@ss/app-kit').WebsiteData} data
+ * @returns {Promise<import('@ss/app-kit').ResealCounts>}
+ */
+export const resealWebsite = async (sealer, data) => {
+	const { websiteId } = data;
+	const keys = data.collection('keys');
+	const users = data.collection('users');
+	const outbox = data.collection('outbox');
+	const twoStep = { websiteId, 'twoStep.sealed': { $type: 'string' } };
+	return sumCounts([
+		await resealEach(
+			sealer,
+			(await keys.find({ websiteId }, { projection: { _id: 0, kid: 1, sealed: 1 } }).toArray()).map((key) => ({
+				sealed: key.sealed,
+				aad: keyAadOf(websiteId, key.kid),
+				save: (/** @type {string} */ next) =>
+					keys.updateOne({ websiteId, kid: key.kid, sealed: key.sealed }, { $set: { sealed: next } }),
+			})),
+		),
+		await resealEach(
+			sealer,
+			(await users.find(twoStep, { projection: { _id: 0, id: 1, twoStep: 1, updatedAt: 1 } }).toArray()).map((user) => ({
+				sealed: user.twoStep.sealed,
+				aad: totpAadOf(websiteId, user.id),
+				save: (/** @type {string} */ next) =>
+					users.updateOne(
+						{ websiteId, id: user.id, 'twoStep.sealed': user.twoStep.sealed },
+						{ $set: { 'twoStep.sealed': next, updatedAt: user.updatedAt } },
+					),
+			})),
+		),
+		await resealEach(
+			sealer,
+			(await outbox.find({ websiteId }, { projection: { _id: 0, id: 1, key: 1, sealed: 1 } }).toArray()).map((entry) => ({
+				sealed: entry.sealed,
+				aad: outboxAadOf(websiteId, entry.key),
+				save: (/** @type {string} */ next) =>
+					outbox.updateOne({ websiteId, id: entry.id, sealed: entry.sealed }, { $set: { sealed: next } }),
+			})),
+		),
+	]);
+};
 
 /**
  * Two-step sign-in imported from an older system (A8; the importer, Migration): the plain TOTP secret sealed at once,
