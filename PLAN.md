@@ -580,8 +580,8 @@ status response and notices (0.4.12) and checks it on use (0.8.1).
 - When a feature is off, its widgets render nothing and its routes answer 403 `feature_off`.
 - Until the merchant database is connected, widgets render nothing and the API answers 403 `database_not_connected`
   (0.4.8).
-- If the Portal cannot be reached, a product keeps the last status for up to 24 hours (0.10 offline grace), then refuses
-  with 503, problem code `portal_unreachable`.
+- If the Portal cannot be reached, a product keeps the last status for the offline grace time (0.10; 24 hours until
+  shortened, 0.8.10 decision 11), then refuses with 503, problem code `portal_unreachable`.
 - Invalid, revoked or wrong-product tokens and tickets get 401, problem code `invalid_token`.
 - The status response carries `graceEndsAt`, so a product treats the website as stopped from that time by itself, unless
   a fresher status says otherwise.
@@ -609,11 +609,16 @@ status response and notices (0.4.12) and checks it on use (0.8.1).
      and any secret the product generates for the merchant (for example Chat's tool signing secret).
    - In the Portal: server tokens, the SMTP password and two-step secrets.
    - Signing keys (the Portal's token and launch keys, a product's own key and ticket keys), the session secret and the
-     idempotency secret stay generated and stored in the deployable's own database, not encrypted with `ENCRYPTION_KEY`. Passwords stay
-     hashed; recovery codes stay HMAC-hashed.
+     idempotency secret stay generated and stored in the deployable's own database. Changed by the owner on 2026-10-13
+     (0.8.10 decision 11): the private signing keys are stored encrypted with `ENCRYPTION_KEY` too (K-21). Passwords
+     stay hashed; recovery codes stay HMAC-hashed.
    - `ENCRYPTION_KEY` is never stored in a database, never logged and never sent anywhere.
-   - **If `ENCRYPTION_KEY` is lost or changed**, old values cannot be read. Products show those connections as
-     `Not connected`, and merchants re-enter their keys and re-paste tokens. The Portal shows
+   - **Changing `ENCRYPTION_KEY` safely** (owner, 2026-10-13, 0.8.10 decision 11; RT-14): the deployable also accepts an
+     optional `ENCRYPTION_KEY_PREVIOUS`; each stored value records which key sealed it, either key opens it, and an
+     Owner action re-seals everything with the new key, after which the previous key is removed. Changing keys stays
+     the owner's job.
+   - **If `ENCRYPTION_KEY` is lost**, or changed without the previous key, old values cannot be read. Products show
+     those connections as `Not connected`, and merchants re-enter their keys and re-paste tokens. The Portal shows
      `Cannot be shown: regenerate` for server tokens; old tokens keep working at products until they are regenerated,
      because products verify signatures, not stored values. An Owner re-enters the SMTP password. People with two-step
      sign in with a recovery code, or an Owner turns their two-step off, and they set it up again.
@@ -1621,7 +1626,10 @@ defaults and prices). Features start at price 0.
   site).
 - **Webhooks**: outgoing events to the merchant's own URLs, signed so they can be verified, retried on failure.
 - **Push**: browser push to visitors who allow it, and staff push to the merchant's staff browsers.
-- **Delivery log**: kept **forever** in the merchant's own database; our admins never see it (setup only).
+- **Delivery log**: kept **forever** in the merchant's own database by default; our admins never see it (setup only).
+  Changed by the owner on 2026-10-13 (0.8.10 decision 11): sign-in codes, reset and setup links and other secrets are
+  hidden before an entry is saved (always), and a "keep the log for N days" setting lets a merchant choose a shorter
+  time (default forever).
 - **Hosted pages**: Notifications serves the unsubscribe page and the push-permission widget; the merchant can restyle
   them and edit every word.
 - **Admin widgets** (via tickets, on the merchant's own admin): delivery log, template editor, send a one-off message.
@@ -1775,6 +1783,61 @@ the audit files. In this section a **store** is one of these three websites with
 and tags SB, CT and IM name the stores that need a change. Where this section changes an earlier rule of Part 0, it says
 so and wins.
 
+#### Owner decisions after the re-audit (2026-10-13)
+
+A second, deeper audit checked every store file against this section (the report and its findings, cited below by id
+such as K-1 or CK-1, are kept outside git in `audit/REAUDIT-2026-10-13.md` and `audit/sections/`). The owner answered
+its 12 questions one by one (D1–D12; "owner decision n" elsewhere means Dn). These decisions win over anything below
+that says otherwise.
+
+- **D1.** **Build order.** First the stores' own math as parity tests and the re-audit's 17 blockers, then the importer
+  and a dry run of the first store on a read-only copy of its data; Phase 4b items only as the store being moved needs
+  them, each after the owner's go; widgets and docs for E18–E36 later. **Rule:** the stores work and are running, so the
+  products match them; but where something exists only to copy a store and is wrong in itself (a store bug, a bad rule),
+  it is raised with the owner, not copied.
+- **D2.** **Store order: SB, then CT, then IM.** Before SB moves: SA-1 (new members get their guest orders and points)
+  and SA-2 (no membership takeover) are fixed, and E39, E41 and E43–E47 are built (each 4b item after the owner's go).
+- **D3.** **References are the live code.** Each store's reference is its GitHub `main`, which is what runs live: SB
+  `8f809d8`, CT `d97278a`, IM `aca5a07` (2026-08-27). IM's local `audit-fixes` branch (2026-09-30, never pushed or
+  deployed) is not a reference: its improvements belong in the products as general features. Several IM facts in this
+  section came from that branch and do not hold for live IM, which has no serials or IMEI capture, no claims, no stock
+  or price alerts, no wishlists, no staff two-step sign-in, no order reservation window, no message outbox and no daily
+  health digest, and still ships PayFast and Rapid Gateway card code. Every IM fact below is re-checked against live IM
+  before IM's turn; until then an IM tag means "a product feature IM may use", not "an IM behaviour to keep".
+- **D4.** **Totals: one option per rule** (rounding, COD fee base, first or best deal, stacking a checkout offer with
+  item deals and its threshold base, which deals block points). Defaults keep the products' current math for new
+  merchants; the importer writes every store value explicitly, so a later change of a global default never changes a
+  moved store (RT-15). E23 and E25 done-when tests cover both values, and parity tests replay each store's carts.
+- **D5.** **Switched-off features and store bugs: keep what shoppers see.** CT and SB send shoppers no WhatsApp or order
+  messages and take no card payments today; that stays so until the owner switches it on, and the importer skips their
+  unused rows (AO-3, MS-6, MS-12). Overnight offers are imported switched off (PR-16). Deal hours are shifted so deals
+  run at the same real time, once SB's and CT's server clock is confirmed as UTC (PR-14). Harmless display fixes are
+  accepted and listed in "Fixed, not copied" (CH-28, CH-29, PL-14, CU-26).
+- **D6.** **Old links may break.** No acceptance of old stop tokens, no 301 work for changed addresses and no pause of
+  SB setup links (K-8, K-9, IMP-40, SG-1, SG-7, SG-8, RW-7, RW-8). They are one-time visible effects (Migration).
+- **D7.** **Timers: nothing that matters may be lost.** No timers where nothing is lost: the work happens on the next
+  visit or a person can simply do it again (expiries, CK-18; activity copies, RT-5; the first-edit alert burst, IMP-29),
+  and those are fixed without timers. Where a message would really be lost with no way to send it again (order messages
+  and staff alerts, K-17; messages of bulk moves, OR-27; chat replies and alerts in after-response work, RT-6), it is
+  saved before sending and retried on the next activity, and one small retry timer per product for these alone is
+  allowed if that is not enough. This corrects 0.10's "no background work" only there.
+- **D8.** **Rewiring in two steps per store** (Store-side rewiring): first, inside the store, every database call moves
+  behind a named function with no behaviour change; then those functions switch to product calls one product at a time,
+  and the old logic is deleted. Store repositories change only after the owner's go.
+- **D9.** **No going back.** Once a store runs on the products it stays there; problems are fixed forward. There is no
+  reverse export and no rollback step. The write freeze during the final copy stays, so no order is lost at that moment.
+- **D10.** **Backups only at no cost.** A nightly encrypted dump of the Portal and product databases (store databases
+  only with the owner's go) runs as a GitHub Actions workflow in a separate private repository, never in this public
+  one, within GitHub Free's allowance, with the Actions spending limit at $0 so it can never be charged (the owner
+  confirms that setting). It keeps the last few copies. If GitHub ever charges for it, it is not done.
+- **D11.** **Security rules changed** (SE-3, SE-6, RT-11, K-21, RT-14, ST-18): sign-in codes and links are hidden in the
+  delivery log (always); a "keep the log for N days" setting (default forever, 0.8.5); signing keys are stored encrypted
+  and the 24-hour trust in a saved Portal status is shortened; a previous `ENCRYPTION_KEY` is accepted so a key change
+  does not break stored data (changing keys stays the owner's job).
+- **D12.** **Credits: the stop rule stays.** Before a store moves: its prices are checked, several months of credits are
+  added and the low-balance e-mail is tested; BP-1 and BP-3 (a false "credits ran out" and an early stop) are fixed
+  before any moved store depends on billing.
+
 #### Principles
 
 - **Latest, not legacy** (owner, 2026-10-10). The stores were built the old way; the products keep the current,
@@ -1784,6 +1847,11 @@ so and wins.
 - **The stores are references, not targets** (owner, 2026-10-12). Nothing is built for these three stores alone and
   nothing about them is hardcoded; more stores will come. Each behaviour they show is a general option any merchant
   sets, and the importer only writes the three stores' values (A14–A16, E38–E50, C16–C20 came from their audit).
+  Restated by the owner on 2026-10-13: "the saas should be product specific but global, so I don't want anything just
+  specific to a specific [store]". Each feature belongs to one product and works the same for every merchant; a store
+  differs from another only by the values in its settings, and those values appear only in the importer's per-store
+  table (Migration), never in product code or product defaults. Product sections describe only global options; their
+  "Why" lines merely say which store showed the need.
 - **Options with safe defaults.** Every behaviour a store has that the products lack becomes a general option of the
   product it belongs to, per website, open to every merchant. Its default keeps today's behaviour. A change that is
   plainly better for every website has no switch and is marked **always**; no merchant is live yet, so these break
@@ -1797,12 +1865,15 @@ so and wins.
   other merchants get it, but no store depends on a widget.
 - **"No visible change"** covers URLs (products, categories, orders, landing pages, setup links), formats (money, dates,
   order numbers), statuses (keys, labels, moves), messages (texts, channels, moments, recipients) and sign-in (methods,
-  codes, session length). The only accepted visible effects are the one-time effects of the cut-over (Migration). Store
-  bugs are **fixed, not copied**.
+  codes, session length). The only accepted visible effects are the one-time effects of the cut-over (Migration),
+  which include old links that break (owner decision 6). Store bugs are **fixed, not copied**; a store rule that is
+  wrong in itself is raised with the owner, not copied (owner decision 1).
 - **Products stay independent** (0.4.1, 0.4.6): they talk only through pasted tokens, and every new cross-product call
   below names the token it uses.
-- **No background work** (0.10): the stores' crons (SEO reconcile, order expiry, loyalty expiry, outbox retries) become
-  rules judged on read or work on use. IM's daily health digest is not built (0.1 scope rule).
+- **No background work** (0.10): the stores' crons (live IM and SB: SEO reconcile) become rules judged on read or work
+  on use. The only exception is owner decision 7: a message that would otherwise be lost may be retried by one small
+  timer per product. (Order expiry, loyalty expiry, outbox retries and IM's daily health digest exist only on IM's
+  never-live branch, owner decision 3; no daily digest is built.)
 - **Migration by importers** that run on request (an admin-switched feature plus a CLI), re-runnable, with deterministic
   ids (Migration). The store repositories change only later, with separate owner approval (Store-side rewiring).
 - 0.10 binds everything new: splittable units, `@ss/net` for every address a merchant enters, the tenant guard,
@@ -1832,6 +1903,19 @@ rendering (data from the APIs), CSP and legacy redirects, the store's own consen
 - CT: a debug route (`/api/test-product`) ships; nothing like it is ported.
 - SB: after a guest orders, the success page sends them to a member sign-in they cannot use; a guest sees the order with
   its order key (E21).
+
+Accepted display fixes (owner decision 5; the side-by-side check expects them):
+
+- CT: opening a chat clears its unread count (the store never cleared it, CH-28); the guest's "preview messages left"
+  is the real remainder, not a count of the loaded page (CH-29).
+- CT and SB: the bell and dashboard low-stock counts read fields that do not exist and always show 0; the products count
+  real stock (PL-14, EN-18).
+- SB and CT: shoppers see their "pending" points, which the stores never showed (CU-26).
+
+To raise with the owner before the store that needs it moves (owner decision 1; not decided): CT's price filter and sort
+on the sale price and "In stock" hiding sold-out variants (SF-16); CT staff seeing escalated guest chats (CH-13); the
+caps the products drop (PL-20); page views counted once per page, not per beacon (IMP-16); old orders turning unread
+(IMP-19, AO-16).
 
 #### Kit and platform changes (all products)
 
@@ -2980,8 +3064,12 @@ Orders:
 
 1. Accounts: `roles` (custom copies such as `member`), `fields`, `users` and `requests`; then `copies` (the old activity
    entries, with label and detail, so the store's Activity screen keeps its history).
-2. Settings and lists through K1: Format, then the `checkout`, `cod`, `loyalty`, `returns` and `catalog` settings, and
-   the `order_flow`, `couriers` (`{{tracking}}` becomes `{tracking}`), `delivery_zones` and `grades` lists.
+2. Settings and lists of every product through K1, from the **per-store settings table** (below; re-audit theme 2):
+   Format first, then every setting of every switched-on feature in Accounts, Notifications, Payments, Ecommerce, Chat
+   and Growth, and the lists (`order_flow`, `couriers` with `{{tracking}}` → `{tracking}`, `delivery_zones`, `grades`,
+   staff-alert recipients, templates). Each value is the store's effective live value: its saved row, else its code
+   default, else its env value entered by hand (IMP-3). Every value is written explicitly, so a later change of a
+   global default never changes a moved store (RT-15). The dry run prints the diff against the product defaults.
 3. Ecommerce taxonomy: `categories`, `brands`, `attributes`, `size_charts` and `landings`.
 4. Media: the importer copies files that are not in the merchant's bucket yet (Vercel Blob, Unsplash, Pexels) into it;
    files already there keep their keys.
@@ -2993,11 +3081,46 @@ Orders:
 
 **Ids.** `<prefix>_<the ObjectId's 24 hex digits>` (accepted by `@ss/contracts`' id pattern; new ids keep the 0.10
 form), so references and old links map without a lookup: `usr_`, `prd_`, `var_`, `cat_`, `brd_`, `att_`, `szc_`, `lnd_`,
-`deal_`, `bnd_`, `cus_`, `ord_`, `oln_`, `ret_`, `rev_`, `alr_`, `conv_`, `msg_`. Merges keep the oldest id and record
-the others in the id map: brands with one slug in several categories (one brand with those `categoryIds`); attributes
-with one slug (one attribute with those `categoryIds`); grades with the same slug and label (one grade; a different
-label gets the key `<slug>-<category slug>`); people (one Accounts user per phone or e-mail; the customer's id wins over
-the staff record's). Codes that must be exactly 26 characters use `createId`.
+`deal_`, `bnd_`, `cus_`, `ord_`, `oln_`, `ret_`, `rev_`, `alr_`, `conv_`, `msg_`. Attributes, grades and brands are
+**not** merged by slug (re-audit CA-23, CA-11): they keep one record per category (E45, built before the first store
+that has the same slug in several categories). People: one Ecommerce customer per normalised phone, duplicates merged
+with their order, loyalty, alert and wishlist histories (CU-6); staff and shopper Accounts users stay separate even on
+one phone (ST-16, ST-17, A16). Merged ids are recorded in the id map. Codes that must be exactly 26 characters use
+`createId`. The importer framework gains several source steps per target, merge reducers, one-to-many steps, slug
+lookup tables, a per-collection upsert key and a prune mode (IMP-21, IMP-22).
+
+**Per-store settings table.** One table, here and nowhere else, holds every value a store differs in (owner rule of
+2026-10-13: the products are global; stores differ only by values). Columns: product and feature, setting, product
+default, SB, CT, IM, where the value comes from (saved row, code default with file and line, env by hand, owner
+decision) and the re-audit ids. It is drafted from the re-audit and the stores' live code, SB and CT first (IM at its
+turn, against live `main`), and is checked by the dry run's diff.
+
+**Conversion rules (all stores; re-audit ids in brackets).**
+
+- Money: lines get their own discount and total, and verify checks lines + delivery + fee − discount = total (IMP-10);
+  CT's sale price as below.
+- Payments: an order with no payment entry gets one from the status rule (bank transfer or card: the total, dated at
+  the first `confirmed` entry; COD: cash at `delivered`), noted "Imported"; real entries are kept (IMP-13). Method keys
+  map `bank-transfer` → `bank_transfer` and `card` → `online`, also in deal conditions (IMP-32).
+- Orders: `deliveredAt` from the last `delivered` timeline entry (IMP-9); an order without an idempotency key gets
+  `import:<ObjectId hex>` (IMP-23); line snapshots (brand, category, grade, cost) from the source product (IMP-17).
+- Loyalty: lots are rebuilt from earn, bonus and positive adjust (credits) and redeem, expire and negative adjust
+  (debits); verify compares each balance with the store's and writes one correcting entry where they differ (IMP-5).
+  Item deals import with `allowPoints: true`; checkout offers keep their flag (PR-5).
+- Catalog: products without a variant import as drafts (CA-2); stale attribute keys are cleared as the store's own
+  filter does, and colliding variants are reported (IMP-28); legacy card and visibility values map as the stores read
+  them (IMP-46); custom option values keep their labels (SF-5); size-chart column keys with `-` are accepted (CA-16);
+  URLs get a leading `/` or `https` or are reported (IMP-39); text over a product limit is reported, never cut silently
+  (IMP-31). SB's inactive categories become `hidden` (PL-12). Each store's `SeoSurface` becomes a landing with its
+  effective copy (SG-30).
+- Offers: empty scenarios are dropped (an empty group in the product matches nothing); more than 10 scenarios are
+  refused and reported (IMP-12); limits fit (IMP-11); SB's conditions, values and payment ids map one to one (IMP-18);
+  overnight SB and CT offers import switched off (owner decision 5).
+- Uniqueness: before reading, the importer checks every unique key of the target (CT never built its unique indexes,
+  IMP-26) and stops with a report; duplicate slugs get a suffix and keep the old slug in `previousSlugs`.
+- Storage: keys a product or variant already holds are accepted whatever their folder; only new keys must be under the
+  product's folder (CA-5). Chat attachments are copied under Chat's folder, since Chat reads only its own keys (IMP-7,
+  IMP-42).
 
 **Per store.**
 
@@ -3020,19 +3143,19 @@ the staff record's). Codes that must be exactly 26 characters use `createId`.
   keys are the existing object paths and `catalog.mediaBaseUrl` is the existing public base, so image URLs do not
   change; size ladders and blur images move into `sizes` and `blur` (E6).
 - **Orders.** Numbers are kept. Statuses keep their keys (hyphens allowed, E27) and get roles: `pending-payment`
-  awaiting_payment; `awaiting-confirmation` awaiting_confirmation (SB and CT get one that no order enters, since their
-  COD starts confirmed, E23); `confirmed` open; `packed`; `dispatched` shipped; `delivered`; `cancelled`; `refunded`;
-  `returned`: in SB and CT the role `returned`; in IM two statuses labelled Returned, `returned` (returned_to_origin,
-  with its reason) and `returned-delivered` (role `returned`), chosen by the order's history. Payment state: in IM from
-  its payments log (E26); in SB and CT from the status (bank transfer and card paid from `confirmed`, COD paid at
-  `delivered`). `holdUntil`: IM's reservation end; null in SB and CT (window 0, E24). Lines keep `warrantyDays` and
-  serials (IM also writes a `sold` serial per IMEI). Dispatch videos, tracking notes and expected dates go into `media`
-  and `shipment` (E28).
+  awaiting_payment; `awaiting-confirmation` awaiting_confirmation (SB and CT get one for free non-COD orders, which do
+  enter it, CK-41; their COD starts confirmed, E23); `confirmed` open; `packed`; `dispatched` shipped; `delivered`;
+  `cancelled`; `refunded`; `returned`: in SB and CT the role `returned`; in IM two statuses labelled Returned,
+  `returned` (returned_to_origin, with its reason) and `returned-delivered` (role `returned`), chosen by the order's
+  history. Payment state: in IM from its payments log (E26); in SB and CT from the status (bank transfer and card paid
+  from `confirmed`, COD paid at `delivered`). `holdUntil`: IM's reservation end; null in SB and CT (window 0, E24).
+  Lines keep `warrantyDays` and serials (IM also writes a `sold` serial per IMEI). Dispatch videos, tracking notes and
+  expected dates go into `media` and `shipment` (E28).
 - **Loyalty.** Lots are rebuilt oldest first from the transactions (earn credits; redeem and expire debits), with expiry
   by the website's rule (IM: calendar months).
-- **IM extras.** Reviews stay one per order line (E34); claims keep exchange, reasons, outcomes and `RR-` references
-  (E33); guest stock alerts keep their phones and token hashes, so unsubscribe links already sent keep working (E34);
-  wishlists move into `wishlists`.
+- **IM extras** (written from IM's never-live branch; re-checked against live IM at its turn, owner decision 3: live IM
+  has no claims, stock alerts or wishlists, and old links may break, owner decision 6). Reviews stay one per order line
+  (E34); claims keep exchange, reasons, outcomes and `RR-` references (E33); wishlists move into `wishlists`.
 - **Chat (CT and IM).** Both message shapes are read (embedded and separate, after IM's `migrate-inquiry-messages`);
   conversations keep `conv_<hex>` ids (old `?inquiry=` links map); statuses map (`awaiting-customer` →
   `awaiting_visitor`); pauses keep who and when (C11) and escalations become `waiting`; internal notes become a single
@@ -3042,22 +3165,27 @@ the staff record's). Codes that must be exactly 26 characters use `createId`.
 **Write freeze and cut-over.**
 
 1. Prepare: the Portal website, products and features (with `import`); Connections; pasted tokens; business.json (with
-   `timeZone` and the store's contact); settings and lists through K1.
+   `timeZone` and the store's contact); settings and lists through K1. Credits (owner decision 12): check the prices,
+   add a receipt for several months, check the low-balance threshold and send a test low-balance e-mail. Capacity
+   (RT-1, PL-6): record each store database's size and tier; if old plus new data passes about 60% of the cluster's
+   limit, the owner moves it to a bigger tier first; set a size alert. Backups (owner decision 10) are running.
 2. Rehearse: connect a scratch merchant database, import a copy of the store database, run `ss-import verify`, and
    compare the store's key screens side by side; then connect the real, empty merchant database (changing the database
    never moves old data, 0.4.8).
 3. Pre-import users, taxonomy, media and products (re-runnable).
-4. Freeze: the store shows its maintenance notice and refuses writes; new online payments stop 30 minutes earlier so
-   open ones finish; IM drains its message outbox.
-5. Final pass: users again, then customers, orders, loyalty, deal uses, stock, reviews, claims, alerts, wishlists and
-   chat; `finish`.
+4. Freeze: the store shows its maintenance notice and refuses writes (a freeze switch added to the store in step 1 of
+   its rewiring, PL-5); new online payments stop 30 minutes earlier so open ones finish.
+5. Final pass: every step again, catalog included, with the prune mode so records deleted in the store go too
+   (IMP-22); `finish`. Then create the products' search index, wait until it is ready, compare a sample shop and chat
+   search, and only then switch search to it (IMP-14; at most 3 search indexes on a free cluster, IMP-51).
 6. Verify: counts per collection, order totals per status, stock units, points balances, deal uses and the list of open
    orders.
-7. Point the gateways' notification addresses at Payments (the Rapid Gateway webhook, PayFast returns) and the WhatsApp
-   webhook at Notifications.
+7. Only for a store that uses them: point the gateways' notification addresses at Payments and the WhatsApp webhook at
+   Notifications (SB and CT use neither today, owner decision 5).
 8. Deploy the rewired store and lift the freeze. Downtime: minutes to an hour, by row counts.
-9. After: the old collections stay untouched for rollback (redeploy the old store; orders taken meanwhile are copied
-   back by hand). `import` is switched off once the import is verified.
+9. After: there is no way back (owner decision 9); problems are fixed forward. `import` is switched off once the import
+   is verified. After N days of good running the owner exports the old store collections and then drops them, to free
+   the cluster (RT-1).
 
 **Entered by hand.** Every secret (merchant database, storage, gateway keys, SMTP, WhatsApp and Connectivity.pk keys, AI
 keys, social sign-in keys, `legacy_pepper`), pasted tokens, feature switches, business.json, Meta template approvals,
@@ -3065,7 +3193,9 @@ and the gateway and webhook addresses.
 
 **One-time visible effects.** Everyone signs in once (A13); open carts re-price once,
 because their old offer locks are not carried; images that lived outside the store's bucket get new URLs; IM's raw
-analytics history starts empty (its daily totals are kept).
+analytics history starts empty (its daily totals are kept). Links people or search engines already hold may break
+where an address or token changes: old stop links, setup links sent before the move, glossary and variant URLs that
+change form (owner decision 6; no redirect work). The accepted display fixes are listed under "Fixed, not copied".
 
 **Store facts corrected after the audit** (2026-10-12). IM has no card gateway code (its old gateway orders come in by
 E50; cut-over steps for Payments do not apply to it); IM's chat staff alerts go by e-mail; IM has one `returned` status
@@ -3075,10 +3205,49 @@ page or order-line warranty; CT has no site-wide phone-code cap and asks for a c
 three have 4 digits (`numberDigits: 4`); SB's loyalty is `guests: earn`, `earnAt: placement`; CT's is
 `earnBase: total`; SB and CT keep points on returns (E39 `keep`).
 
-**Not imported.** Sign-in codes; rate-limit, lockout, cron and ops collections; the drained outbox; sessions; cached SEO
-surfaces (landings keep their copy, E15).
+**Store facts corrected after the re-audit** (2026-10-13; these win over earlier lines of this section):
+
+- **CT and SB are not WhatsApp or card stores today.** Every runtime read goes through `resolveIntegrationSettings`,
+  which blanks WhatsApp credentials, template names and gateway keys whatever the database holds (AO-3, MS-6). SB
+  shoppers get no order message at all and SB staff get e-mail only; CT sends no shopper WhatsApp (order, status or
+  agent reply), staff alerts by e-mail only, cannot deliver a sign-in code in production and never shows "Pay online".
+  So K-11 (one template parameter), K-12 (staff alerts by both channels) and K-22 (the PayFast protocol) do not apply to
+  them. The importer writes: SB `checkout.messageChannels []` and no notify statuses; CT `messageChannels ['email']` (CT
+  orders carry no e-mail, so nothing is sent); staff alerts to e-mail recipients only; no `online` in payment methods;
+  no `payfast_pk` or `rapid` feature; CT's `phone_code` paused. Their Meta template and webhook steps are dropped from
+  the cut-over (owner decision 5).
+- **IM's reference is live `main`** (owner decision 3). Live IM keeps PBKDF2-SHA256 passwords of
+  `<AUTH_SECRET>:<password>` with 100,000 rounds (A1 holds), but it still ships PayFast and Rapid Gateway card code, so
+  "IM has no card gateway code" above describes the never-live branch; whether any IM order was paid by card is checked
+  on the read-only copy before IM's turn. Live IM has no serials or IMEI, claims, stock or price alerts, wishlists,
+  staff two-step sign-in, reservation window or outbox; the IM lines below that name them are re-checked then.
+- **IM does not stack offers the way K-4 said**; live IM's offers carry an `isStackable` flag, so IM's deal values are
+  read from live data at IM's turn (PR-1 was found on the branch).
+
+**Not imported.** Sign-in codes; rate-limit, lockout, cron and ops collections; sessions; cached SEO surfaces other
+than the landing copy (SG-30).
 
 #### Store-side rewiring (checklist for later; needs separate owner approval)
+
+**How** (owner decision 8, 2026-10-13): two steps per store, SB first. A drop-in data package with the stores' old
+names cannot work: the stores use 26 raw database models directly at about 250–490 places (RW-4).
+
+1. Inside the store, every database call moves behind a named function, with no change in behaviour, tested against
+   the store as it is. The same step adds the freeze switch (PL-5).
+2. Those functions switch to product calls one product at a time (Accounts first, then Ecommerce, Chat, Growth), each
+   checked side by side with the live store; then the old logic and the store's data package are deleted.
+
+**Before any store work** (product side): publish the real request and response shapes in each product's `openapi.json`
+with contract tests a store can run (RT-10); Accounts accepts the previous refresh token for a short grace period so
+parallel renewals do not sign people out (RW-1); a staff removal that deletes only the Accounts user, never the
+person's data in every product (ST-2).
+
+**Checklist additions** (re-audit): the stores' id checks accept product ids such as `prd_…`, and ObjectId
+constructions go (RW-2); store functions run in the products' region, next to the merchant database (RW-3); the files
+and routes PL-19 lists; the store's in-browser offer engine is replaced by the quote routes, and placement sends the
+quoted total so a lapsed deal answers `price_changed` instead of charging more (CK-24, CK-14); one settings layer that
+keeps the last good copy of each product's settings (RW-16); the store's CSP allows the products' script and API
+origins (SG-28); store-only secrets stay in a store module (RW-15). SB's rewiring waits for E41 and E43–E47 (RW-5).
 
 All three stores:
 
@@ -3151,12 +3320,24 @@ are built in parallel; a phase starts when the one before it is done.
    paging pass e2e against the real Accounts, Notifications and Ecommerce.
    4b. **Merchant options from the store audit** (A14–A16, E38–E50, C16–C20; owner, 2026-10-12): general options any
    merchant sets, found by checking the three stores against Part 0. Done when: each option's default keeps today's
-   behaviour and its unit tests pass, and the importer sets the three stores' values through the settings API.
-5. **Importers and rehearsal** (the `import` features; the `@ss/importer` source mapping and `verify`). Done when: a
-   read-only copy of each store's database imports into a scratch merchant database with no failed records; `verify`
-   matches counts and sums; a side-by-side check of each store's key screens (listing, product page, cart, checkout,
-   order page, account, admin orders, dashboard, chat) shows no visible change beyond the one-time effects; the cut-over
-   steps are written in the importer's README. Rewiring a store follows only with owner approval (0.12 step 14).
+   behaviour and its unit tests pass, and the importer sets the three stores' values through the settings API. Built
+   only as the store being moved needs them, each after the owner's go (owner decision 1): SB needs E39, E41 and
+   E43–E47; CT needs E39 and the changed E46 and E47; IM's needs are settled at its turn.
+   4c. **Parity and blockers** (owner decisions 1 and 4, 2026-10-13; before Phase 5). Parity tests built from the
+   stores' own code: each store's totals functions run beside the product's on the same carts, and real SB and CT carts
+   and orders are replayed from read-only copies of their databases (copying needs the owner's go; IM's at its turn).
+   The E23 and E25 tests are rewritten to cover both values of every totals option. Then the re-audit's 17 blockers
+   are fixed with general options whose defaults keep the products' behaviour (the totals options, the settings table,
+   the alert stop value, one shared phone normaliser, guest-customer routes, phone verification at invite, message
+   labels), then the money-related highs and SE-3 and SA-2. Done when: the parity tests pass for SB's and CT's real
+   carts and orders, every blocker has a test, and CI is green locally (PL-15, PL-17, K-20).
+5. **Importers and rehearsal** (the `import` features; the `@ss/importer` source mapping and `verify`), one store at a
+   time: SB, then CT, then IM (owner decision 2). Done when: a read-only copy of each store's database imports into a
+   scratch merchant database with no failed records; `verify` matches counts and sums, and the parity tests give the
+   same totals for the imported orders; a side-by-side check of each store's key screens (listing, product page, cart,
+   checkout, order page, account, admin orders, dashboard, chat) shows no visible change beyond the one-time effects;
+   the cut-over steps are written in the importer's README. Rewiring a store follows only with owner approval (0.12 step
+   14).
 
 #### Owner answers (2026-10-10)
 
@@ -4260,7 +4441,11 @@ These bind wherever the rest of Part 0 does not change them.
   queue drains or background loops. Work happens inside, or right after (`after()`), the request that caused it, and
   only for what that request touched. Time-based state is judged when read; data that can simply disappear uses TTL
   indexes; work a merchant must start is a dashboard button. "No polling" is about servers; a browser checking its own
-  conversation is allowed. **Connection budget**: one database and one database user per deployable on the one cluster;
+  conversation is allowed. **One exception** (owner, 2026-10-13, 0.8.10 decision 7): nothing that matters may be lost.
+  A message that would be lost with no way to send it again (order messages, staff alerts, chat replies) is saved
+  before sending and retried on the next activity; if that is not enough, one small retry timer per product may resend
+  those saved messages, and nothing else. Work that is only delayed, or that a person can simply repeat, stays
+  timer-free. **Connection budget**: one database and one database user per deployable on the one cluster;
   Mongo clients are created once per instance and cached on `globalThis`, with small fixed pools.
 - **Outbound calls**: every outbound call to an address a merchant or admin entered goes through `@ss/net`, the one SSRF
   guard for the Portal and the products: https only, no userinfo, ports 443 and 8443, public addresses only (every DNS
@@ -4284,23 +4469,26 @@ These bind wherever the rest of Part 0 does not change them.
 - **Tenant guard**: every merchant-data query names one `websiteId` (equality, no `$in`); `$where` and cross-collection
   stages (`$lookup`, `$unionWith`, `$out`, `$merge`, also inside `$facet`) are refused; inserts are stamped with
   `websiteId` and `merchantId`.
-- **Offline grace**: a fixed 24 hours while the Portal cannot be reached (0.4.7).
+- **Offline grace**: a fixed time while the Portal cannot be reached (0.4.7); 24 hours until the owner's 2026-10-13
+  decision (0.8.10 decision 11) shortens it with the fix of K-21; the new value is written here when built.
 
 ## 0.11 Environment variables
 
-| Deployable   | Variable         | What it is                                                                                                                                                                                                                                                                                                                                                                   |
-| ------------ | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Portal       | `MONGODB_URI`    | The Portal's own database (`ss_portal`). Never a merchant database.                                                                                                                                                                                                                                                                                                          |
-| Portal       | `PORTAL_URL`     | The Portal's final public address, scheme + host (+ port if not default), no path and no trailing slash, for example `https://portal.example.com`. Used for e-mail links, as token and launch issuer and as the CSRF origin; products pin it at connect (0.8.1). https is required, except for `localhost`, `*.localhost`, `127.0.0.1` and `[::1]` in development and tests. |
-| Portal       | `ENCRYPTION_KEY` | Random, at least 32 characters. Encrypts the Portal's stored secrets (0.4.8).                                                                                                                                                                                                                                                                                                |
-| Each product | `MONGODB_URI`    | The product database (0.4.8). Never a merchant database.                                                                                                                                                                                                                                                                                                                     |
-| Each product | `CONNECT_SECRET` | Random, at least 32 characters. Typed once into Portal → Products → Add; the Portal never stores it. Changing it locks the old binding out until Reconnect.                                                                                                                                                                                                                  |
-| Each product | `ENCRYPTION_KEY` | Random, at least 32 characters, different for each deployable. Encrypts the product's stored secrets (0.4.8).                                                                                                                                                                                                                                                                |
+| Deployable   | Variable                  | What it is                                                                                                                                                                                                                                                                                                                                                                   |
+| ------------ | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Portal       | `MONGODB_URI`             | The Portal's own database (`ss_portal`). Never a merchant database.                                                                                                                                                                                                                                                                                                          |
+| Portal       | `PORTAL_URL`              | The Portal's final public address, scheme + host (+ port if not default), no path and no trailing slash, for example `https://portal.example.com`. Used for e-mail links, as token and launch issuer and as the CSRF origin; products pin it at connect (0.8.1). https is required, except for `localhost`, `*.localhost`, `127.0.0.1` and `[::1]` in development and tests. |
+| Portal       | `ENCRYPTION_KEY`          | Random, at least 32 characters. Encrypts the Portal's stored secrets (0.4.8).                                                                                                                                                                                                                                                                                                |
+| Each product | `MONGODB_URI`             | The product database (0.4.8). Never a merchant database.                                                                                                                                                                                                                                                                                                                     |
+| Each product | `CONNECT_SECRET`          | Random, at least 32 characters. Typed once into Portal → Products → Add; the Portal never stores it. Changing it locks the old binding out until Reconnect.                                                                                                                                                                                                                  |
+| Each product | `ENCRYPTION_KEY`          | Random, at least 32 characters, different for each deployable. Encrypts the product's stored secrets (0.4.8).                                                                                                                                                                                                                                                                |
+| Any          | `ENCRYPTION_KEY_PREVIOUS` | Optional, set only while changing `ENCRYPTION_KEY`: the old key, so stored values stay readable until they are re-sealed; removed afterwards (0.4.8; owner, 2026-10-13).                                                                                                                                                                                                     |
 
 - Nothing else is read in production. There are no host-specific variables, no
   tuning variables, no product URL variable and no cron secret.
 - A deployable fails at start with a clear error naming the missing or invalid variable (never its value).
-- The deployable's own source reads only the three variables listed, in every environment. Only test and e2e harness
+- The deployable's own source reads only the three variables listed (plus the optional `ENCRYPTION_KEY_PREVIOUS` during
+  a key change), in every environment. Only test and e2e harness
   code (for example a test database URI) may read other variables, and they never appear in `.env.example`.
 - Secrets not in this list (signing keys, session secret, idempotency secret) are generated on first start into the
   deployable's own database.
