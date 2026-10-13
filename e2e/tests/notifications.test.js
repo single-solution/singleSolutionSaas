@@ -192,7 +192,8 @@ describe('Notifications on the real Portal', () => {
 			token: server,
 			body: { template: 'accounts.code', to: { phone: '+923001234567' }, values: { code: '482913' } },
 		});
-		expect(otp).toMatchObject({ status: 201, json: { status: 'sent', text: '482913 is your verification code.' } });
+		// the answer and the log hide the code (N6, SE-3); the provider gets the real one
+		expect(otp).toMatchObject({ status: 201, json: { status: 'sent', text: '****** is your verification code.' } });
 		expect(whatsapp.at(-1)).toEqual({
 			messaging_product: 'whatsapp',
 			to: '923001234567',
