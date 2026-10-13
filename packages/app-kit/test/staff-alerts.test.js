@@ -96,6 +96,10 @@ describe('staff alerts (K6)', () => {
 		});
 		expect(recipientOf('+92 300 1234567')).toEqual({ key: 'p:923001234567', to: { phone: '+923001234567' } });
 		expect(recipientOf('0092 300 1234567')).toEqual({ key: 'p:923001234567', to: { phone: '+923001234567' } });
+		// the shared normaliser: a trunk 0 after the calling code is dropped, so one number has one key
+		expect(recipientOf('+92 (0)300-1234567')).toEqual({ key: 'p:923001234567', to: { phone: '+923001234567' } });
+		expect(recipientOf('+44 020 7946 0018')).toEqual({ key: 'p:442079460018', to: { phone: '+442079460018' } });
+		expect(recipientOf('+999 1234 5678')).toBeNull();
 		// Notifications sends to international numbers only: a local number is left out
 		expect(recipientOf('0300-1234567')).toBeNull();
 		expect(recipientOf('+0300 1234567')).toBeNull();
