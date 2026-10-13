@@ -3514,6 +3514,24 @@ The owner confirms or changes each one.
   webhooks `/v1/inbound/*` (the Developers tab shows their addresses), connect and notices. The server has no resend,
   bulk action, sort or export: retries happen on use by the plan, the log is newest first, and 0.6 has no CSV export.
 
+Built after the re-audit (2026-10-13, owner decisions D7 and D11; commits b122ce5, 62c832c, c507f15, 9ca0608):
+
+- **N6. Hidden values (SE-3).** A message is sensitive when its key starts with `accounts.`, its template is marked
+  `sensitive` (a new template field, default false), or for the values its send names in `secretValues` (up to 50).
+  The log keeps those values as `******` (or `[link hidden]` for a link) in its values, subject, text, parameters and
+  buttons, and every read (send answer, `GET /v1/messages`, the ticket log, the data-rights export) shows only these.
+  The real words are sent; they are kept sealed with `ENCRYPTION_KEY` only while attempts remain, then cleared. A
+  sealed copy that no longer opens fails the message.
+- **N7. Log retention (SE-6).** Shared setting `delivery_log.retentionDays` (0–3650, default 0 = forever). A finished
+  message or webhook event gets `expireAt` and a TTL index removes it; no timer. A change applies to messages finished
+  afterwards, so the importer writes it before importing.
+- **N8. Required messages (MS-4).** `accounts.*` templates are always required, and a send can say `required: true`.
+  Unsubscribe links and STOP replies stop only optional messages; required e-mails carry no unsubscribe headers.
+- **N9. Nothing lost (K-17).** A message is saved before its first attempt. An attempt that fails or breaks off is a
+  failed attempt (answered 201 `retrying`), retried on later uses by the plan, then the fallback channel. Retries still
+  wait for the next request to that website; whether a quiet site needs D7's small retry timer is judged on the first
+  store's trial.
+
 #### Builder choices, Phase 2 (Accounts) (awaiting owner review)
 
 - **Shared settings (kit)**: `createProduct({ sharedSettings })` takes groups of settings several features use, stored
