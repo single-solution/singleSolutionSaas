@@ -3,13 +3,16 @@
  *
  * - **Add** (Owner, Support): only active connected products not yet on the website; the two tokens are created, or
  *   restored on a re-add; the switches start all off. **Remove**: status removed, nothing is charged from the next hour;
- *   it works even when the product cannot be reached. Both tell the product (`status.changed`).
+ *   it works even when the product cannot be reached. Both tell the product (`status.changed`). The product's state
+ *   and its money history are written in one transaction, and repeating an add or remove repairs a history entry that
+ *   was lost before they were.
  * - **Price reports** (row 2): refused whole (422) for a bad shape or price, 409 when the version is not higher;
  *   accepted lists apply at once and are written to Activity as reported by the product.
  * - **Feature reports** (row 3): refused whole for an unknown key, a switched-on feature without a price, a dependency
  *   off, a website × product that never existed (404 `website_not_found`), a version not higher (409), or an
  *   `adminId` that is not a current Owner or Support admin (422 / 403). Accepted for stopped, suspended and removed
- *   products; stamped with the Portal clock and written to Activity with the Portal's own name of the admin.
+ *   products; stamped with the Portal clock (switches and money history in one transaction) and written to Activity
+ *   with the Portal's own name of the admin.
  * - **Status** (row 4): runs the check first, then answers the status response; 404 `website_not_found` for a deleted
  *   website or a website × product that never existed.
  * - **Websites** (row 5): the websites that have the product (removed excluded), with their status.
@@ -107,8 +110,18 @@ export const createProducts = ({ ctx, repo, deps, billing }) => {
 	};
 
 	/**
+	 * Whether the money history has the product on the website now (its last added or removed entry is `added`).
+	 * @param {string} merchantId @param {string} websiteId @param {string} productId
+	 * @param {import('mongodb').ClientSession} [session]
+	 */
+	const addedInHistory = async (merchantId, websiteId, productId, session) =>
+		(await repo.lastHistory(merchantId, ['added', 'removed'], { websiteId, productId }, session))?.kind === 'added';
+
+	/**
 	 * Add a product to a website (Owner, Support): active connected products not yet on the website. A re-add restores
-	 * the same tokens; the switches start all off.
+	 * the same tokens; the switches start all off. The tokens come first; the product's state and its money history
+	 * are then written in one transaction. A product whose state says added but whose history lost the entry (written
+	 * before both were one transaction) is repaired by adding it again.
 	 * @param {{ merchantId: string, websiteId: string, productId: string } & Caller} input
 	 */
 	const add = async ({ merchantId, websiteId, productId, actor, requestId = null, ip = null }) => {
@@ -116,34 +129,40 @@ export const createProducts = ({ ctx, repo, deps, billing }) => {
 		if (!(await deps.productActive(productId).catch(() => false)))
 			throw problem('conflict', 'This product is not offered: it is not connected or it is inactive.');
 		const ops = repo.productsOf(merchantId);
-		const existing = await ops.findOne({ merchantId, _id: productKey(websiteId, productId) });
-		if (existing?.status === 'added') throw problem('conflict', 'This product is already on the website.');
-		const at = new Date(ctx.now());
-		if (existing) {
-			const changed = await ops.updateOne(
-				{ merchantId, _id: existing._id, status: 'removed' },
-				{ $set: { status: 'added', on: [], addedAt: at, removedAt: null } },
-			);
-			if (changed.modifiedCount !== 1) throw problem('conflict', 'This product is already on the website.');
-		} else {
+		const _id = productKey(websiteId, productId);
+		const already = () => problem('conflict', 'This product is already on the website.');
+		const existing = await ops.findOne({ merchantId, _id });
+		if (existing?.status === 'added' && (await addedInHistory(merchantId, websiteId, productId))) throw already();
+		await deps.ensureTokens({ merchantId, websiteId, productId });
+		await ctx.withTransaction(async (session) => {
+			const doc = await ops.findOne({ merchantId, _id }, { session });
+			if (doc?.status === 'added') {
+				if (await addedInHistory(merchantId, websiteId, productId, session)) throw already();
+				// repair: the history follows the state, the switches it reported included
+				await billing.recordProductAdded({ merchantId, websiteId, productId }, session);
+				if (Array.isArray(doc.on) && doc.on.length > 0)
+					await billing.recordSwitches({ merchantId, websiteId, productId, on: doc.on }, session);
+				return;
+			}
+			const at = new Date(ctx.now());
 			try {
-				await ops.insertOne({
-					_id: productKey(websiteId, productId),
-					websiteId,
-					productId,
-					status: 'added',
-					on: [],
-					featuresVersion: 0,
-					addedAt: at,
-					removedAt: null,
-				});
+				if (doc)
+					await ops.updateOne(
+						{ merchantId, _id },
+						{ $set: { status: 'added', on: [], addedAt: at, removedAt: null } },
+						{ session },
+					);
+				else
+					await ops.insertOne(
+						{ _id, websiteId, productId, status: 'added', on: [], featuresVersion: 0, addedAt: at, removedAt: null },
+						{ session },
+					);
 			} catch (error) {
-				if (repo.isDuplicateKey(error)) throw problem('conflict', 'This product is already on the website.');
+				if (repo.isDuplicateKey(error)) throw already();
 				throw error;
 			}
-		}
-		await deps.ensureTokens({ merchantId, websiteId, productId });
-		await billing.recordProductAdded({ merchantId, websiteId, productId });
+			await billing.recordProductAdded({ merchantId, websiteId, productId }, session);
+		});
 		await audit(actor, 'product.added', { merchantId, websiteId, productId }, { requestId, ip });
 		await deps.statusChanged(productId, websiteId);
 		return productOnWebsite(merchantId, websiteId, productId);
@@ -151,19 +170,31 @@ export const createProducts = ({ ctx, repo, deps, billing }) => {
 
 	/**
 	 * Remove a product from a website (typed confirmation in the screen): status removed; its tokens are refused by
-	 * the status and kept for a re-add. Works even when the product cannot be reached.
+	 * the status and kept for a re-add. Works even when the product cannot be reached. The state and the money history
+	 * are written in one transaction; removing a removed product whose history lost the entry (written before both
+	 * were one transaction) writes it, so nothing more is charged.
 	 * @param {{ merchantId: string, websiteId: string, productId: string } & Caller} input
 	 */
 	const remove = async ({ merchantId, websiteId, productId, actor, requestId = null, ip = null }) => {
 		await activeWebsite(merchantId, websiteId);
-		const changed = await repo
-			.productsOf(merchantId)
-			.updateOne(
-				{ merchantId, _id: productKey(websiteId, productId), status: 'added' },
+		const ops = repo.productsOf(merchantId);
+		const _id = productKey(websiteId, productId);
+		const removed = await ctx.withTransaction(async (session) => {
+			const changed = await ops.updateOne(
+				{ merchantId, _id, status: 'added' },
 				{ $set: { status: 'removed', removedAt: new Date(ctx.now()) } },
+				{ session },
 			);
-		if (changed.modifiedCount !== 1) throw problem('not_found', 'This product is not on the website.');
-		await billing.recordProductRemoved({ merchantId, websiteId, productId });
+			if (changed.modifiedCount !== 1) return false;
+			await billing.recordProductRemoved({ merchantId, websiteId, productId }, session);
+			return true;
+		});
+		if (!removed) {
+			const doc = await ops.findOne({ merchantId, _id });
+			if (doc?.status !== 'removed' || !(await addedInHistory(merchantId, websiteId, productId)))
+				throw problem('not_found', 'This product is not on the website.');
+			await billing.recordProductRemoved({ merchantId, websiteId, productId });
+		}
 		await audit(actor, 'product.removed', { merchantId, websiteId, productId }, { requestId, ip });
 		await deps.statusChanged(productId, websiteId);
 		return { websiteId, productId, status: /** @type {const} */ ('removed') };
@@ -270,19 +301,23 @@ export const createProducts = ({ ctx, repo, deps, billing }) => {
 		const admin = await deps.dashboardAdmin(report.adminId);
 		const merchantId = String(doc.merchantId);
 		const keys = [...on].sort();
-		const changed = await repo.productsOf(merchantId).updateOne(
-			{ merchantId, _id: doc._id, featuresVersion: doc.featuresVersion ?? 0 },
-			{
-				$set: {
-					on: keys,
-					featuresVersion: report.version,
-					reportedAt: new Date(ctx.now()),
-					reportedBy: admin.adminId,
+		// the switches and their money history in one transaction
+		await ctx.withTransaction(async (session) => {
+			const changed = await repo.productsOf(merchantId).updateOne(
+				{ merchantId, _id: doc._id, featuresVersion: doc.featuresVersion ?? 0 },
+				{
+					$set: {
+						on: keys,
+						featuresVersion: report.version,
+						reportedAt: new Date(ctx.now()),
+						reportedBy: admin.adminId,
+					},
 				},
-			},
-		);
-		if (changed.modifiedCount !== 1) throw problem('conflict', 'Another feature report was accepted meanwhile.');
-		await billing.recordSwitches({ merchantId, websiteId, productId, on: keys });
+				{ session },
+			);
+			if (changed.modifiedCount !== 1) throw problem('conflict', 'Another feature report was accepted meanwhile.');
+			await billing.recordSwitches({ merchantId, websiteId, productId, on: keys }, session);
+		});
 		await audit(
 			{ type: 'admin', id: admin.adminId, name: admin.name },
 			'product.features_changed',

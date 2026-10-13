@@ -79,7 +79,11 @@ export const createMerchants = (deps, hooks) => {
 					errors: [{ path: '/reason', message: 'is required' }],
 				});
 			const merchant = await load(merchantId);
-			if (merchant.status === status) return presentMerchant(merchant);
+			// already in that status: the products' side is brought in line again (repairs a hook that failed)
+			if (merchant.status === status) {
+				await hooks.onStatus(merchantId, status);
+				return presentMerchant(merchant);
+			}
 			const suspension = status === 'suspended' ? { reason, at: new Date(ctx.now()), by: actor.id } : null;
 			const changed = await repo.merchants.updateOne(
 				{ _id: merchantId, status: merchant.status },

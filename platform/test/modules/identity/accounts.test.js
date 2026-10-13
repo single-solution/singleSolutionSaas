@@ -332,4 +332,20 @@ describe('suspended merchants (PLAN 0.2 Suspend and resume)', () => {
 		await h.signIn('sam@shop.test');
 		expect(h.commerce.calls.at(-1)).toEqual({ merchantId: m.merchantId, status: 'active' });
 	});
+
+	it('a products hook that fails fails the request; repeating the suspend repairs it', async () => {
+		const options = { commerce: { fail: true } };
+		const h = await boot(options);
+		const m = await h.merchant('sam@shop.test');
+		const support = await h.admin('support');
+		const path = `/v1/admin/merchants/${m.merchantId}/suspend`;
+		expect((await support.client.post(path, { reason: 'unpaid invoice' })).status).toBe(500);
+		// identity is suspended already; commerce is asked again on the repeat
+		expect((await m.client.get('/v1/me')).status).toBe(401);
+		options.commerce.fail = false;
+		const calls = h.commerce.calls.length;
+		const repeated = await support.client.post(path, { reason: 'unpaid invoice' });
+		expect([repeated.status, repeated.json.status]).toEqual([200, 'suspended']);
+		expect(h.commerce.calls.slice(calls)).toEqual([{ merchantId: m.merchantId, status: 'suspended' }]);
+	});
 });

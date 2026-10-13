@@ -17,6 +17,7 @@ import { defineModule } from '../../../../src/infra/modules.js';
  * @property {Array<{ productId: string, body: Record<string, unknown> }>} notices
  * @property {Array<{ merchantId: string, websiteId: string, productId: string }>} tokens tokens ensured
  * @property {boolean} failNotices
+ * @property {boolean} [failTokens] ensureTokens throws
  */
 
 /** @returns {World} */
@@ -68,6 +69,7 @@ export const fakeModules = (world) => [
 				return { adminId: admin.adminId, name: admin.name, role: admin.role };
 			},
 			ensureTokens: async (/** @type {{ merchantId: string, websiteId: string, productId: string }} */ input) => {
+				if (world.failTokens) throw new Error('tokens are down');
 				world.tokens.push(input);
 				return { created: true };
 			},

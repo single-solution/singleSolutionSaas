@@ -45,6 +45,7 @@ import {
 /** @typedef {Record<string, any>} Doc */
 /** @typedef {{ type: string, id: string, name?: string | null }} Actor */
 /** @typedef {{ actor: Actor, requestId?: string | null, ip?: string | null }} Caller */
+/** @typedef {import('mongodb').ClientSession} Session */
 
 const SYSTEM_ACTOR = Object.freeze({ type: 'system', id: 'commerce' });
 
@@ -153,37 +154,46 @@ export const createBilling = ({ ctx, repo, deps, ledger, statusChanged }) => {
 	};
 
 	/**
+	 * A product added to or removed from a website; `session`: written in the caller's transaction, with the product's
+	 * own state.
 	 * @param {'added' | 'removed'} kind
-	 * @returns {(input: { merchantId: string, websiteId: string, productId: string }) => Promise<void>}
+	 * @returns {(input: { merchantId: string, websiteId: string, productId: string }, session?: Session) => Promise<void>}
 	 */
 	const productChange =
 		(kind) =>
-		async ({ merchantId, websiteId, productId }) => {
-			await repo.appendHistory(merchantId, { kind, at: new Date(ctx.now()), websiteId, productId });
+		async ({ merchantId, websiteId, productId }, session) => {
+			await repo.appendHistory(merchantId, { kind, at: new Date(ctx.now()), websiteId, productId }, session);
 		};
 
 	/**
-	 * Store the last accepted feature report of a product on a website: the keys of its switched-on features.
+	 * Store the last accepted feature report of a product on a website: the keys of its switched-on features
+	 * (`session`: in the caller's transaction).
 	 * @param {{ merchantId: string, websiteId: string, productId: string, on: readonly string[] }} input
+	 * @param {Session} [session]
 	 */
-	const recordSwitches = async ({ merchantId, websiteId, productId, on }) => {
+	const recordSwitches = async ({ merchantId, websiteId, productId, on }, session) => {
 		if (!Array.isArray(on) || !on.every((key) => KEY.test(key)))
 			throw problem('validation_failed', 'The feature report is invalid.');
-		await repo.appendHistory(merchantId, {
-			kind: 'switches',
-			at: new Date(ctx.now()),
-			websiteId,
-			productId,
-			on: [...new Set(on)].sort(),
-		});
+		await repo.appendHistory(
+			merchantId,
+			{ kind: 'switches', at: new Date(ctx.now()), websiteId, productId, on: [...new Set(on)].sort() },
+			session,
+		);
 	};
 
 	/**
-	 * Merchant suspended or resumed (identity hook): suspended hours are never charged.
+	 * Merchant suspended or resumed (identity hook): suspended hours are never charged, and this history alone decides
+	 * whether the merchant's products are suspended. Repeating it writes nothing when the history already ends in that
+	 * status, so a repeated suspend or resume repairs a lost entry.
 	 * @param {string} merchantId @param {'active' | 'suspended'} status
+	 * @returns {Promise<boolean>} whether an entry was written
 	 */
-	const recordMerchantStatus = (merchantId, status) =>
-		repo.appendHistory(merchantId, { kind: status === 'suspended' ? 'suspended' : 'resumed', at: new Date(ctx.now()) });
+	const recordMerchantStatus = async (merchantId, status) => {
+		const kind = status === 'suspended' ? 'suspended' : 'resumed';
+		const last = await repo.lastHistory(merchantId, ['suspended', 'resumed']);
+		if ((last?.kind ?? 'resumed') === kind) return false;
+		return repo.appendHistory(merchantId, { kind, at: new Date(ctx.now()) });
+	};
 
 	// ------------------------------------------------------------------------------------------------ the check
 
@@ -232,7 +242,7 @@ export const createBilling = ({ ctx, repo, deps, ledger, statusChanged }) => {
 		if (drafts.length === 0 && marks.length === 0)
 			return { saved: await repo.updateBilling(merchantId, expect, next), marked: false };
 		let marked = false;
-		/** @param {import('mongodb').ClientSession} session */
+		/** @param {Session} session */
 		const alongside = async (session) => {
 			marked = false;
 			for (const mark of marks) marked = (await repo.appendHistory(merchantId, mark, session)) || marked;
@@ -361,15 +371,6 @@ export const createBilling = ({ ctx, repo, deps, ledger, statusChanged }) => {
 
 	// ------------------------------------------------------------------------------------------------ views
 
-	/** @param {string} merchantId */
-	const suspendedNow = async (merchantId) => {
-		try {
-			return (await deps.getMerchant(merchantId)).status === 'suspended';
-		} catch {
-			return false;
-		}
-	};
-
 	/**
 	 * Credits charged in the current UTC month, today included.
 	 * @param {Awaited<ReturnType<typeof check>>} checked
@@ -388,15 +389,13 @@ export const createBilling = ({ ctx, repo, deps, ledger, statusChanged }) => {
 	};
 
 	/**
-	 * Check a merchant and work out its status (0.5.5).
+	 * Check a merchant and work out its status (0.5.5). Suspension comes from the money history only, the same one
+	 * that stops the charging, so a product never refuses calls for hours that are still charged (or the reverse).
 	 * @param {string} merchantId
 	 */
 	const statusOf = async (merchantId) => {
 		const checked = await check(merchantId);
-		const status = merchantStatusOf({
-			suspended: checked.run.suspended || (await suspendedNow(merchantId)),
-			billingState: checked.state,
-		});
+		const status = merchantStatusOf({ suspended: checked.run.suspended, billingState: checked.state });
 		return { checked, status };
 	};
 

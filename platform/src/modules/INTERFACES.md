@@ -26,7 +26,8 @@ productId })` creates both tokens on the first add and keeps them afterwards (a 
   `revocationsSince({ productId, since })` → `{ tokenIds, cursor }` (one product's revoked ids, by `revokedAt`).
 - Every person's dashboard sessions end (`catalog.notifyAll({ type: 'sessions.revoked', subject })`) when a merchant is
   suspended or deleted, an admin is removed or changes role, a password is changed or reset, or a person signs out.
-- Merchant status changes call `commerce.onMerchantStatus({ merchantId, status })`.
+- Merchant status changes call `commerce.onMerchantStatus({ merchantId, status })`, also when the status is already
+  the one asked for (a repeat repairs a call that failed); a failure fails the request.
 
 ## catalog (`modules/catalog`)
 
@@ -76,7 +77,8 @@ body })` (row 3 refusals: unknown key or a key without price or a dependency off
   never after `graceEndsAt`). `websitesOfProduct({ productId, cursor })` → `{ items, cursor }` (removed excluded),
   `productWebsitesView(…)` (+ `featuresOn`, `dailyCost`), `productNumbers(productId)` / `allProductNumbers()` →
   `{ productId, websites, earnedThisMonth, days: [{ day, amount }] × 30 }`.
-- `onMerchantStatus({ merchantId, status })`: suspension history + `status.changed` to the merchant's products.
+- `onMerchantStatus({ merchantId, status })`: suspension history (no second entry for a repeat) + `status.changed` to
+  the merchant's products. That history alone decides whether the merchant's products are suspended.
 - **Money histories** (0.5.7 a, Portal time): price lists, product added / removed, switches, suspended / resumed,
   grace started, stopped. **The money function** (`core/money.js`, pure): `replay`, `billingStateOf`,
   `merchantStatusOf`, `productStatusOf`, `isLowBalance`, `daysLeftOf`, `usageRows`, `dayCharges`.

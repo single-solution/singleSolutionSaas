@@ -78,6 +78,18 @@ export const createCommerceRepo = (ctx) => {
 				throw error;
 			}
 		},
+		/**
+		 * A merchant's newest history entry of one of `kinds` (and matching `match`), or null.
+		 * @param {string} merchantId @param {readonly string[]} kinds @param {Doc} [match] @param {Session} [session]
+		 * @returns {Promise<Doc | null>}
+		 */
+		lastHistory: (merchantId, kinds, match = {}, session) =>
+			history
+				.forMerchant(merchantId)
+				.findOne(
+					{ merchantId, kind: { $in: [...kinds] }, ...match },
+					{ sort: { at: -1, _id: -1 }, ...(session ? { session } : {}) },
+				),
 		/** @param {string} merchantId @param {Date} to @returns {Promise<Doc[]>} */
 		historyOf: (merchantId, to) =>
 			history

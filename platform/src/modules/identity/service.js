@@ -63,12 +63,10 @@ export const createIdentityService = (ctx, options = {}) => {
 	const merchants = createMerchants(deps, {
 		setupLink: accounts.setupLink,
 		websitesOf: (merchantId) => websites.activeWebsitesOf(merchantId),
+		// commerce's history alone decides whether the merchant's products are suspended: a failure fails the request,
+		// and repeating the suspend or resume repairs it (the hook is idempotent)
 		onStatus: async (merchantId, status) => {
-			try {
-				await optional('commerce')?.onMerchantStatus({ merchantId, status });
-			} catch (error) {
-				ctx.logger.error('commerce.onMerchantStatus failed', { error, merchantId, status });
-			}
+			await optional('commerce')?.onMerchantStatus({ merchantId, status });
 		},
 	});
 	const tokens = createProductTokens(deps, {

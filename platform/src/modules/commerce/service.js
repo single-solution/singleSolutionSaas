@@ -42,7 +42,8 @@ export const createCommerceService = (ctx) => {
 		merchantWebsitesWithProduct: products.merchantWebsitesWithProduct,
 		/**
 		 * Identity hook: a suspended merchant's products are suspended (never charged) and the products are told;
-		 * resuming tells them too.
+		 * resuming tells them too. Repeating it writes no second entry, so a repeated suspend or resume repairs one that
+		 * failed; the products are told every time.
 		 * @param {{ merchantId: string, status: 'active' | 'suspended' }} input
 		 */
 		onMerchantStatus: async (input) => {

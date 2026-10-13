@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { closeMongoClients } from '../../../src/infra/db.js';
 import { createCommerceService } from '../../../src/modules/commerce/service.js';
 import { T0, createClock, startMongo } from '../../helpers.js';
-import { HOUR, M1, M2, PRODUCT, STAFF, W1, bootCommerce } from './fixtures.js';
+import { HOUR, M1, M2, OWNER_ADMIN, PRODUCT, STAFF, W1, bootCommerce } from './fixtures.js';
 
 // Mongo-backed tests share the machine with other suites: allow for slow replica-set start-up and I/O.
 vi.setConfig({ testTimeout: 120_000, hookTimeout: 180_000 });
@@ -104,6 +104,38 @@ const billingFaults = (ctx, { between, crash = false }) => {
 			};
 		},
 	});
+};
+
+/**
+ * A commerce service whose money-history inserts fail while `failures.left` > 0 (one each).
+ * @param {any} ctx module context
+ */
+const historyFaults = (ctx) => {
+	const failures = { left: 0 };
+	const service = createCommerceService({
+		...ctx,
+		collection: (/** @type {string} */ name) => {
+			const repo = ctx.collection(name);
+			if (name !== 'commerce_history') return repo;
+			return {
+				...repo,
+				forMerchant: (/** @type {string} */ m) => {
+					const ops = repo.forMerchant(m);
+					return {
+						...ops,
+						insertOne: async (/** @type {any[]} */ ...args) => {
+							if (failures.left > 0) {
+								failures.left -= 1;
+								throw new Error('simulated history failure');
+							}
+							return ops.insertOne(...args);
+						},
+					};
+				},
+			};
+		},
+	});
+	return { service, failures };
 };
 
 /** @param {any} faulty @param {string} merchantId @param {number} amount */
@@ -324,5 +356,117 @@ describe('the billing check never counts a day twice (BP-1)', () => {
 		expect(await h.db.collection('commerce_history').countDocuments({ merchantId: M1, kind: 'stopped' })).toBe(0);
 		// the products are told their status changed
 		expect(h.world.notices).toEqual([{ productId: PRODUCT, body: { type: 'status.changed', websiteId: W1 } }]);
+	});
+});
+
+describe("a product's state and its money history never disagree (BP-3)", () => {
+	const PAIR = { merchantId: M1, websiteId: W1, productId: PRODUCT, actor: ADMIN };
+	/** @typedef {Awaited<ReturnType<typeof bootCommerce>>} Harness */
+	/** @param {Harness} h */
+	const productDoc = (h) => h.db.collection('commerce_products').findOne({ _id: /** @type {any} */ (`${W1}:${PRODUCT}`) });
+	/** @param {Harness} h @param {string} kind */
+	const rows = (h, kind) => h.db.collection('commerce_history').countDocuments({ merchantId: M1, kind });
+	/** @param {Harness} h @param {number} version @param {string[]} on */
+	const report = (h, version, on, service = h.service) =>
+		service.acceptFeatures({
+			productId: PRODUCT,
+			websiteId: W1,
+			body: { version, on, adminId: OWNER_ADMIN, adminName: 'Olivia' },
+		});
+
+	/** @param {string} dbName */
+	const boot = async (dbName) => {
+		const clock = createClock(T0);
+		const h = await bootCommerce({ mongo, dbName, clock });
+		await h.credit(M1, 100_000);
+		await h.prices(PRODUCT, 1, { codes: 1000 });
+		return { h, clock, ...historyFaults(h.ctx) };
+	};
+
+	it('add and remove write both or neither, so the same action retried just works', async () => {
+		const { h, service, failures } = await boot('cm_bp3_add_remove');
+		// add: the history fails, or the tokens do → nothing is added; the same add then works (not 409)
+		failures.left = 1;
+		await expect(service.addProduct(PAIR)).rejects.toThrow(/simulated history failure/);
+		expect(await productDoc(h)).toBeNull();
+		h.world.failTokens = true;
+		await expect(service.addProduct(PAIR)).rejects.toThrow(/tokens are down/);
+		h.world.failTokens = false;
+		expect(await productDoc(h)).toBeNull();
+		expect(await service.addProduct(PAIR)).toMatchObject({ productId: PRODUCT, status: 'active' });
+		// the tokens come first (the failed attempt ensured them too; ensuring is idempotent)
+		expect(h.world.tokens.at(-1)).toEqual({ merchantId: M1, websiteId: W1, productId: PRODUCT });
+		// remove: the history fails → the product stays on the website in both; the same remove then works (not 404)
+		failures.left = 1;
+		await expect(service.removeProduct(PAIR)).rejects.toThrow(/simulated history failure/);
+		expect((await productDoc(h))?.status).toBe('added');
+		expect((await h.service.billingSummary(M1)).products).toHaveLength(1);
+		expect(await service.removeProduct(PAIR)).toEqual({ websiteId: W1, productId: PRODUCT, status: 'removed' });
+		expect((await h.service.billingSummary(M1)).products).toEqual([]);
+		await expect(service.removeProduct(PAIR)).rejects.toMatchObject({ code: 'not_found' });
+		expect([await rows(h, 'added'), await rows(h, 'removed')]).toEqual([1, 1]);
+	});
+
+	it('repeating an add or a remove repairs a history entry lost before both were one write', async () => {
+		const { h, clock } = await boot('cm_bp3_repair');
+		const products = h.db.collection('commerce_products');
+		const _id = /** @type {any} */ (`${W1}:${PRODUCT}`);
+		await h.service.addProduct(PAIR);
+		await report(h, 1, ['codes']);
+		// what a Remove whose history insert failed left: removed, while the history still charges it
+		clock.set(T0 + HOUR + 5 * MIN);
+		await products.updateOne({ _id }, { $set: { status: 'removed', removedAt: new Date(clock.now()) } });
+		expect((await h.service.billingSummary(M1)).products).toHaveLength(1);
+		expect(await h.service.removeProduct(PAIR)).toMatchObject({ status: 'removed' });
+		const removed = await h.service.billingSummary(M1);
+		expect(removed).toMatchObject({ products: [], dailySpend: 0 });
+		await expect(h.service.removeProduct(PAIR)).rejects.toMatchObject({ code: 'not_found' });
+		// what an Add whose history insert failed left: added (switches reported since), but not in the history
+		clock.set(T0 + 2 * HOUR + 5 * MIN);
+		await products.updateOne({ _id }, { $set: { status: 'added', on: ['codes'] } });
+		expect((await h.service.billingSummary(M1)).products).toEqual([]);
+		expect(await h.service.addProduct(PAIR)).toMatchObject({ status: 'active', featuresOn: ['codes'], hourlyCost: 1000 });
+		await expect(h.service.addProduct(PAIR)).rejects.toMatchObject({ code: 'conflict' });
+		// 10:00 and 11:00 charged before the repaired remove, 12:00 after the repaired add
+		expect((await h.service.billingSummary(M1)).balance).toBe(100_000 - 3000);
+	});
+
+	it('a feature report writes the switches and their history together', async () => {
+		const { h, service, failures } = await boot('cm_bp3_features');
+		await h.service.addProduct(PAIR);
+		failures.left = 1;
+		await expect(report(h, 1, ['codes'], service)).rejects.toThrow(/simulated history failure/);
+		expect(await productDoc(h)).toMatchObject({ featuresVersion: 0, on: [] });
+		expect(await report(h, 1, ['codes'], service)).toEqual({ version: 1 });
+		expect((await h.service.billingSummary(M1)).products).toMatchObject([{ featuresOn: ['codes'], hourlyCost: 1000 }]);
+	});
+
+	it('suspension follows the money history alone; a repeated suspend or resume repairs a lost entry', async () => {
+		const { h, clock, service, failures } = await boot('cm_bp3_suspension');
+		await h.service.addProduct(PAIR);
+		await report(h, 1, ['codes']);
+		clock.set(T0 + 10 * MIN);
+		h.world.notices.splice(0);
+		/** @param {'active' | 'suspended'} status */
+		const identity = (status) => h.world.merchants.set(M1, { merchantId: M1, name: 'One', status });
+		// the hook failed after identity suspended the merchant: the products keep working and are charged (one truth)
+		identity('suspended');
+		failures.left = 1;
+		await expect(service.onMerchantStatus({ merchantId: M1, status: 'suspended' })).rejects.toThrow(/simulated/);
+		expect(await h.service.billingSummary(M1)).toMatchObject({ status: 'active', balance: 99_000 });
+		// identity calls it again on a repeated suspend: written once, the products told each time
+		await h.service.onMerchantStatus({ merchantId: M1, status: 'suspended' });
+		await h.service.onMerchantStatus({ merchantId: M1, status: 'suspended' });
+		expect(await rows(h, 'suspended')).toBe(1);
+		expect(h.world.notices).toHaveLength(2);
+		// a resume whose entry is lost: still suspended and never charged until the repeat
+		clock.set(T0 + 3 * HOUR);
+		identity('active');
+		failures.left = 1;
+		await expect(service.onMerchantStatus({ merchantId: M1, status: 'active' })).rejects.toThrow(/simulated/);
+		expect(await h.service.billingSummary(M1)).toMatchObject({ status: 'suspended', balance: 99_000 });
+		await h.service.onMerchantStatus({ merchantId: M1, status: 'active' });
+		expect(await h.service.billingSummary(M1)).toMatchObject({ status: 'active', balance: 98_000 });
+		expect(await rows(h, 'resumed')).toBe(1);
 	});
 });
