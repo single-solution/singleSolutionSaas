@@ -6,6 +6,7 @@
  */
 import { COLLECTIONS } from '../core/model.js';
 import { normaliseCode } from '../core/coupons.js';
+import { dealLive } from '../core/deals.js';
 
 /** @typedef {import('@ss/app-kit').WebsiteData} WebsiteData */
 /** @typedef {import('../core/model.js').DealRecord} DealRecord */
@@ -91,6 +92,17 @@ export const loadOffers = async (data, { now, couponCode = '', deals = false, bu
 	]);
 	return { deals: dealList, bundles: bundleList, coupon: /** @type {CouponRecord | null} */ (coupon) };
 };
+
+/**
+ * The deals shoppers may see now (the shop's deal list and deal page, `?deal=` listings, Chat's deals): switched on,
+ * within their dates, under their use limit and inside their weekdays and hours at the business time (`dealLive`, the
+ * check the cart prices with), in id order.
+ * @param {WebsiteData} data
+ * @param {{ now: number, clock: { weekday: number, minutes: number } }} at
+ * @returns {Promise<DealRecord[]>}
+ */
+export const dealsLiveNow = async (data, { now, clock }) =>
+	(await liveOffers(data, 'deals', now)).filter((deal) => dealLive(deal, now, clock));
 
 // -------------------------------------------------------------------------------------------- merchant writes
 

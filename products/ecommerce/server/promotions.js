@@ -12,6 +12,7 @@ import { givePoints, loyaltyAccount, takePoints } from '../adapters/ledger.js';
 import {
 	activeProduct,
 	categoryTrail,
+	dealsLiveNow,
 	deletePerson,
 	loadOffers,
 	pendingPoints,
@@ -219,7 +220,7 @@ export const createPromotions = (product, service) => {
 					);
 					if (!limit.ok) return invalid(limit.field, limit.message);
 					const s = await service.site(ctx);
-					const { deals } = await loadOffers(await s.data(), { now: now(), deals: true });
+					const deals = await dealsLiveNow(await s.data(), { now: now(), clock: await service.pricing(s) });
 					const shown = [...deals].sort(byShowOrder).slice(0, limit.value);
 					return { items: await Promise.all(shown.map((deal) => shopDeal(s, deal))) };
 				},
@@ -233,7 +234,7 @@ export const createPromotions = (product, service) => {
 				handler: async (ctx) => {
 					const ref = String(ctx.params.ref);
 					const s = await service.site(ctx);
-					const { deals } = await loadOffers(await s.data(), { now: now(), deals: true });
+					const deals = await dealsLiveNow(await s.data(), { now: now(), clock: await service.pricing(s) });
 					const found = deals.find((deal) => deal.id === ref || (deal.slug && deal.slug === ref));
 					return found ? shopDeal(s, found) : problem('not_found', 'There is no such deal on now.');
 				},

@@ -552,6 +552,74 @@ describe('E8 listing and filtering', () => {
 		const everything = await api('POST', '/v1/deals', { name: 'All', type: 'percent', value: 5 });
 		expect(names(await get(`/v1/shop/products?deal=${everything.id}`))).toHaveLength(3);
 	});
+
+	it('lists for a deal only the products its cards show it on: live now, its scope and its conditions (SF-4, PR-6)', async () => {
+		for (const deal of (await api('GET', '/v1/deals?limit=100')).items) await api('DELETE', `/v1/deals/${deal.id}`);
+		/**
+		 * The products listed for a deal made alone, and the cards that show it.
+		 * @param {Record<string, unknown>} body
+		 */
+		const both = async (body) => {
+			const deal = await api('POST', '/v1/deals', { name: 'Check', type: 'percent', value: 10, ...body });
+			const listed = names(await get(`/v1/shop/products?deal=${deal.slug || deal.id}`)).sort();
+			const cards = (await get('/v1/shop/products?limit=60')).json.items;
+			const shown = cards
+				.filter((/** @type {any} */ card) => card.deal?.id === deal.id)
+				.map((/** @type {any} */ card) => card.name)
+				.sort();
+			await api('DELETE', `/v1/deals/${deal.id}`);
+			return { listed, shown };
+		};
+		const all = ['Featured gown', 'Printed scarf', 'Shown dress'];
+		const weekday = new Date(shop.now()).getUTCDay();
+		/** @type {Array<[Record<string, unknown>, string[]]>} */
+		const cases = [
+			[{}, all],
+			[{ conditions: { rules: [{ field: 'grades', values: ['b'] }] } }, ['Featured gown', 'Printed scarf']],
+			[{ conditions: { rules: [{ field: 'attribute', attributeId: ids.colour.id, values: ['green'] }] } }, ['Printed scarf']],
+			[{ conditions: { rules: [{ field: 'attribute', attributeId: ids.fabric.id, values: ['Silk'] }] } }, ['Printed scarf']],
+			[{ conditions: { rules: [{ field: 'attribute', attributeId: ids.colour.id, values: ['red'], op: 'not_in' }] } }, all],
+			[{ conditions: { priceRange: { min: 1_000, max: null } } }, ['Printed scarf']],
+			[{ conditions: { priceRange: { min: null, max: 600 } } }, ['Featured gown', 'Shown dress']],
+			[
+				{
+					conditions: {
+						match: 'any',
+						rules: [{ field: 'products', values: [ids.scarf.id] }],
+						groups: [{ match: 'all', rules: [{ field: 'brands', values: [ids.brand.id] }] }],
+					},
+				},
+				['Featured gown', 'Printed scarf'],
+			],
+			[{ conditions: { rules: [{ field: 'categories', values: [ids.dresses.id] }] } }, ['Featured gown', 'Shown dress']],
+			[
+				{
+					scope: { categoryIds: [ids.clothes.id] },
+					conditions: { rules: [{ field: 'grades', values: ['a-plus'], op: 'not_in' }] },
+				},
+				all,
+			],
+			[{ conditions: { groups: [{ match: 'any', rules: [] }], minQuantity: 2, cartTotal: 99_999 } }, all],
+			[{ conditions: { paymentMethods: ['cod'] }, slug: 'cod-days' }, all],
+			// not live now: none, as the cart would not give them
+			[{ active: false }, []],
+			[{ endsAt: new Date(shop.now() - 60_000).toISOString() }, []],
+			[{ days: [(weekday + 1) % 7] }, []],
+			[{ timeFrom: '00:00', timeTo: '00:01' }, []],
+		];
+		for (const [body, expected] of cases) {
+			const { listed, shown } = await both(body);
+			expect(listed, JSON.stringify(body)).toEqual(expected);
+			expect(shown, JSON.stringify(body)).toEqual(expected);
+		}
+		// while Deals is off no deal lists anything
+		const deal = await api('POST', '/v1/deals', { name: 'Off', type: 'percent', value: 10 });
+		await shop.switchOn(ALL.filter((feature) => feature !== 'multi_location' && feature !== 'deals'));
+		expect(names(await server(`/v1/shop/products?deal=${deal.id}`))).toEqual([]);
+		await shop.switchOn(ALL.filter((feature) => feature !== 'multi_location'));
+		expect(names(await get(`/v1/shop/products?deal=${deal.id}`)).sort()).toEqual(all);
+		await api('DELETE', `/v1/deals/${deal.id}`);
+	});
 });
 
 describe('E9 stock display and sold out', () => {

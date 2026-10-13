@@ -212,6 +212,15 @@ export const inWindow = (deal, { weekday, minutes }) => {
 export const dealLive = (deal, now, at) => isLive(deal, now) && inWindow(deal, at);
 
 /**
+ * The UTC weekday and minutes of an instant (the business time when none is given).
+ * @param {number} now epoch ms
+ */
+export const utcClock = (now) => {
+	const at = new Date(now);
+	return { weekday: at.getUTCDay(), minutes: at.getUTCHours() * 60 + at.getUTCMinutes() };
+};
+
+/**
  * Whether a deal is checkout-level: off the cart (`target: 'cart'`) or free delivery (`cartOffer`, D4).
  * @param {Pick<DealRecord, 'type' | 'target'>} deal
  */
@@ -226,6 +235,27 @@ export const checkoutLevel = (deal) => (deal.target ?? 'items') === 'cart' || de
 export const dealCovers = (deal, line, cart) => inScope(line, deal.scope) && conditionsHold(deal.conditions, line, cart);
 
 /**
+ * Whether a deal is live for a line now: the one check behind every shop read that shows a deal (deal lists, `?deal=`
+ * listings, cards, product quotes, Chat) and the cart (K-15, PR-6, SF-4) — switched on, within its dates, under its use
+ * limit, inside its weekdays and hours at the business time (`cart.weekday`, `cart.minutes`), and covering the line by
+ * scope and conditions on the cart's facts.
+ * @param {DealRecord} deal
+ * @param {DealLine} line
+ * @param {DealCart} cart
+ * @param {number} now epoch ms
+ */
+export const dealLiveFor = (deal, line, cart, now) => dealLive(deal, now, cart) && dealCovers(deal, line, cart);
+
+/**
+ * A deal's conditions as a card judges them (E18): the minimum quantity, cart total and payment methods are left to
+ * the cart.
+ * @param {DealRecord} deal
+ * @returns {DealRecord}
+ */
+const cardDeal = (deal) =>
+	deal.conditions ? { ...deal, conditions: { ...deal.conditions, minQuantity: 0, cartTotal: 0, paymentMethods: [] } } : deal;
+
+/**
  * The live deals that cover a product on a card or page (E18): its scope, and the conditions one of its active
  * variants meets on its own (the minimum quantity, cart total and payment methods are judged in the cart), in the
  * shoppers' order.
@@ -237,26 +267,89 @@ export const dealCovers = (deal, line, cart) => inScope(line, deal.scope) && con
  * @returns {DealRecord[]}
  */
 export const productDeals = (product, deals, { categoryIds, now, clock, attributes }) => {
-	const variants = product.variants.filter((variant) => variant.active);
-	const cart = { goods: 0, paymentMethod: null, ...clock };
-	return deals
-		.filter((deal) => {
-			if (!dealLive(deal, now, clock)) return false;
-			const conditions = deal.conditions ? { ...deal.conditions, minQuantity: 0, cartTotal: 0, paymentMethods: [] } : null;
-			return variants.some((variant) => {
-				const line = {
-					productId: product.id,
-					categoryIds,
-					brandId: product.brandId,
-					grade: variant.grade ?? null,
-					attributes: attributes(variant),
-					unitPrice: variant.price,
-					quantity: 1,
-				};
-				return inScope(line, deal.scope) && conditionsHold(conditions, line, cart);
-			});
-		})
-		.sort(byShowOrder);
+	const cart = { goods: 0, paymentMethod: null, weekday: clock.weekday, minutes: clock.minutes };
+	const lines = product.variants
+		.filter((variant) => variant.active)
+		.map((variant) => ({
+			productId: product.id,
+			categoryIds,
+			brandId: product.brandId,
+			grade: variant.grade ?? null,
+			attributes: attributes(variant),
+			unitPrice: variant.price,
+			quantity: 1,
+		}));
+	return deals.filter((deal) => lines.some((line) => dealLiveFor(cardDeal(deal), line, cart, now))).sort(byShowOrder);
+};
+
+/** An attribute id a field path may name. */
+const FIELD_ID = /^[A-Za-z0-9_-]{1,80}$/;
+
+/**
+ * One rule of conditions as a MongoDB expression over a product and one of its variants (`$$v`).
+ * @param {DealConditions['rules'][number]} rule
+ * @param {(categoryId: string) => string[]} withDescendants a category with the categories under it
+ */
+const ruleExpr = (rule, withDescendants) => {
+	const values = rule.values;
+	/** @param {unknown} list an expression giving an array @returns {Record<string, unknown>} */
+	const meets = (list) => ({ $gt: [{ $size: { $setIntersection: [list, values] } }, 0] });
+	const id = rule.attributeId ?? '';
+	const raw = { $ifNull: [`$$v.attributes.${id}`, `$specs.${id}`] };
+	/** @type {unknown} */
+	const hit =
+		rule.field === 'products'
+			? { $in: ['$id', values] }
+			: rule.field === 'categories'
+				? {
+						$gt: [
+							{
+								$size: {
+									$setIntersection: [{ $ifNull: ['$categoryIds', []] }, [...new Set(values.flatMap(withDescendants))]],
+								},
+							},
+							0,
+						],
+					}
+				: rule.field === 'brands'
+					? { $in: [{ $ifNull: ['$brandId', null] }, values] }
+					: rule.field === 'grades'
+						? { $in: [{ $ifNull: ['$$v.grade', null] }, values.filter((value) => value !== '')] }
+						: FIELD_ID.test(id)
+							? meets({ $map: { input: { $cond: [{ $isArray: raw }, raw, [raw]] }, in: { $toString: '$$this' } } })
+							: false;
+	return rule.op === 'not_in' ? { $not: [hit] } : hit;
+};
+
+/**
+ * The products a card shows a deal on, as a MongoDB filter (`?deal=` listings, SF-4): an active variant the deal's
+ * conditions hold for as `productDeals` judges them (the cart-only ones left to the cart). The deal's scope and whether
+ * it is live are the caller's.
+ * @param {DealConditions | null | undefined} conditions
+ * @param {(categoryId: string) => string[]} withDescendants a category with the categories under it (a line's
+ *   categories include their ancestors)
+ * @returns {Record<string, unknown>}
+ */
+export const dealProductsFilter = (conditions, withDescendants) => {
+	/** @param {DealConditions['rules']} rules */
+	const each = (rules) => rules.map((rule) => ruleExpr(rule, withDescendants));
+	const parts = conditions
+		? [
+				...each(conditions.rules),
+				...conditions.groups.map((group) =>
+					group.rules.length === 0 ? true : { [group.match === 'any' ? '$or' : '$and']: each(group.rules) },
+				),
+			]
+		: [];
+	/** @type {unknown[]} */
+	const holds = [{ $eq: ['$$v.active', true] }];
+	if (parts.length > 0) holds.push(conditions?.match === 'any' ? { $or: parts } : { $and: parts });
+	const range = conditions?.priceRange;
+	if (range?.min !== null && range?.min !== undefined) holds.push({ $gte: ['$$v.price', range.min] });
+	if (range?.max !== null && range?.max !== undefined) holds.push({ $lte: ['$$v.price', range.max] });
+	return {
+		$expr: { $anyElementTrue: [{ $map: { input: { $ifNull: ['$variants', []] }, as: 'v', in: { $and: holds } } }] },
+	};
 };
 
 /**
@@ -299,22 +392,23 @@ export const dealLineDiscount = (deal, line, { unit = 1, share = 0, rounding = '
 /**
  * The best live per-unit deal for a line (Chat and product quotes): the largest saving per unit, then the higher
  * priority, then the smaller id (`lineChoice: first`: the first in the shoppers' order). Cart deals and free delivery
- * are left out. With `total_half_up` one unit's saving rounds half up.
+ * are left out. With `total_half_up` one unit's saving rounds half up. Each deal is judged by `dealLiveFor`, its
+ * weekdays and hours included.
  * @param {DealLine} line
  * @param {DealRecord[]} deals
  * @param {number} now
  * @param {{ cart?: DealCart, unit?: number, rules?: DealRules }} [options] `cart`: the business time and cart facts
- *   (default: none and every time of day)
+ *   (default: the line alone, no payment method, the UTC time of `now`)
  * @returns {{ deal: DealRecord, perUnit: number } | null}
  */
 export const bestDeal = (line, deals, now, { cart, unit = 1, rules = DEAL_RULES } = {}) => {
-	const facts = cart ?? { goods: line.unitPrice * (line.quantity ?? 1), paymentMethod: null, weekday: -1, minutes: -1 };
+	const facts = cart ?? { goods: line.unitPrice * (line.quantity ?? 1), paymentMethod: null, ...utcClock(now) };
 	/** @type {{ deal: DealRecord, perUnit: number } | null} */
 	let best = null;
 	const first = rules.lineChoice === 'first';
 	for (const deal of first ? [...deals].sort(byShowOrder) : deals) {
 		if ((deal.target ?? 'items') !== 'items' || deal.type === 'free_delivery') continue;
-		if (!isLive(deal, now) || (cart && !inWindow(deal, cart)) || !dealCovers(deal, line, facts)) continue;
+		if (!dealLiveFor(deal, line, facts, now)) continue;
 		const perUnit =
 			rules.rounding === 'total_half_up'
 				? Math.min(

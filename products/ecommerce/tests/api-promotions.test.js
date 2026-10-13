@@ -137,7 +137,12 @@ describe('deals', () => {
 		});
 		expect((await shop.admin(ticket, 'GET', '/v1/admin/deals?active=true')).json.items).toHaveLength(2);
 
-		// shoppers see the deal outside its hours (Monday 10:00), with the banner's address and no use counts
+		// outside its weekdays and hours (Monday 10:00) shoppers do not see the deal, as the cart would not give it (PR-6)
+		const outside = await shop.visitor('GET', '/v1/shop/deals');
+		expect(outside.json.items.map((/** @type {any} */ item) => item.name)).toEqual(['Free delivery']);
+		expect((await shop.visitor('GET', '/v1/shop/deals/sunday-phones')).status).toBe(404);
+		// inside them: with the banner's address and no use counts
+		await shop.admin(ticket, 'PATCH', `/v1/admin/deals/${made.json.id}`, { days: [1], timeFrom: '09:00', timeTo: '11:00' });
 		const listed = await shop.visitor('GET', '/v1/shop/deals');
 		expect(listed.json.items.map((/** @type {any} */ item) => item.name)).toEqual(['Sunday morning phones', 'Free delivery']);
 		const page = await shop.visitor('GET', '/v1/shop/deals/sunday-phones');
@@ -147,7 +152,8 @@ describe('deals', () => {
 			scope: { everything: false, brandIds: ['brd_acme'] },
 			minQuantity: 0,
 			paymentMethods: [],
-			timeFrom: '22:00',
+			days: [1],
+			timeFrom: '09:00',
 		});
 		expect(page.json.banner.url).toMatch(/^https:\/\//);
 		expect(page.json).not.toHaveProperty('used');

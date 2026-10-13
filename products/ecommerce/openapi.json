@@ -13060,7 +13060,7 @@
 		"/v1/chat/deals": {
 			"get": {
 				"summary": "The live deals for Chat",
-				"description": "In the shoppers’ order, with their display fields.",
+				"description": "The deals on now (switched on, within their dates, under their limit, inside their weekdays and hours, as the cart judges them), in the shoppers’ order, with their display fields.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "deals",
 				"security": [
@@ -26994,7 +26994,7 @@
 		"/v1/shop/deals": {
 			"get": {
 				"summary": "The deals on now, for shoppers",
-				"description": "The deals switched on, within their dates and under their limit, in the shoppers’ order: sort, then the higher priority, then the soonest ending. Their weekdays and hours (days, timeFrom, timeTo) are not applied here: show them. 422 validation_failed at /limit; 403 feature_off while the deals feature is off.",
+				"description": "The deals on now: switched on, within their dates, under their limit and inside their weekdays and hours (days, timeFrom, timeTo, in the business time zone), the same check the cart prices with, so a deal is never listed when the cart would not give it. In the shoppers’ order: sort, then the higher priority, then the soonest ending. 422 validation_failed at /limit; 403 feature_off while the deals feature is off.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "deals",
 				"security": [
@@ -27073,7 +27073,7 @@
 		"/v1/shop/deals/{ref}": {
 			"get": {
 				"summary": "A deal on now, by id or slug (its page)",
-				"description": "404 not_found when no deal on now (switched on, within its dates, under its limit) has this id or slug; 403 feature_off while the deals feature is off.",
+				"description": "404 not_found when no deal on now (switched on, within its dates, under its limit, inside its weekdays and hours) has this id or slug; 403 feature_off while the deals feature is off.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "deals",
 				"security": [
@@ -28730,10 +28730,10 @@
 						"name": "deal",
 						"in": "query",
 						"required": false,
-						"description": "A deal id or slug: only the products it applies to.",
+						"description": "A deal id or slug: only the products whose cards show it — a deal on now (switched on, dates, limit, weekdays and hours) while the deals feature is on, the products of its scope with an active variant its conditions hold for (minimum quantity, cart total and payment methods are left to the cart). Any other deal lists nothing.",
 						"schema": {
 							"type": "string",
-							"description": "A deal id or slug: only the products it applies to."
+							"description": "A deal id or slug: only the products whose cards show it — a deal on now (switched on, dates, limit, weekdays and hours) while the deals feature is on, the products of its scope with an active variant its conditions hold for (minimum quantity, cart total and payment methods are left to the cart). Any other deal lists nothing."
 						}
 					},
 					{

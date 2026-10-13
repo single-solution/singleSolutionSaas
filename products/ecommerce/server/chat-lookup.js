@@ -12,7 +12,7 @@
 import { defineRoute, problem } from '@ss/app-kit';
 import { ownerOrders } from '../adapters/fulfilment-store.js';
 import { loyaltyAccount } from '../adapters/ledger.js';
-import { loadOffers } from '../adapters/promotions-store.js';
+import { dealsLiveNow, loadOffers } from '../adapters/promotions-store.js';
 import { htmlToText } from '../core/catalog-content.js';
 import { stockLeftOf } from '../core/catalog-views.js';
 import { CONTEXT_DEALS, CONTEXT_PRODUCTS, contextText } from '../core/chat-context.js';
@@ -493,14 +493,15 @@ export const createChatLookup = (product, service, media) => {
 	};
 
 	/**
-	 * The live deals as Chat shows them (E37: with their display fields), in the shoppers' order.
+	 * The deals live now as Chat shows them (E37: with their display fields; weekdays and hours as the cart judges them,
+	 * PR-6), in the shoppers' order.
 	 * @param {Site} s @param {WebsiteData} data @param {number} limit
 	 */
 	const dealRows = async (s, data, limit) => {
-		const offers = await loadOffers(data, { now: service.now(), deals: true, bundles: false });
+		const live = await dealsLiveNow(data, { now: service.now(), clock: await service.pricing(s) });
 		const { money, date } = await s.format();
 		return Promise.all(
-			[...offers.deals]
+			[...live]
 				.sort(byShowOrder)
 				.slice(0, limit)
 				.map(async (/** @type {DealRecord} */ deal) =>

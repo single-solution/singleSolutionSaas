@@ -11,7 +11,7 @@
  */
 import { defineRoute, paginate, problem } from '@ss/app-kit';
 import { NO_ID, attributesOf, brandsOf, categoriesOf, categoryGroups, findBySlugHistory } from '../adapters/catalog-store.js';
-import { categoryTrail, loadOffers } from '../adapters/promotions-store.js';
+import { categoryTrail, dealsLiveNow, loadOffers } from '../adapters/promotions-store.js';
 import {
 	afterFilter,
 	cursorKey,
@@ -27,7 +27,7 @@ import {
 import { categoryTree, withDescendants } from '../core/catalog-taxonomy.js';
 import { EMPTY_SEO, youtubeId } from '../core/catalog-content.js';
 import { cardOf, cardPhotos, cardVariantsOf, pageOf } from '../core/catalog-views.js';
-import { productDeals } from '../core/deals.js';
+import { dealProductsFilter, productDeals } from '../core/deals.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import { attributeValues } from '../core/promotions.js';
 import { chartView, resolveSizeChart } from '../core/size-charts.js';
@@ -159,24 +159,31 @@ export const createCatalogShop = (product, service, common) => {
 	const search = createCatalogSearch(product);
 
 	/**
-	 * The products a deal applies to (by id or slug); a deal that does not exist matches nothing.
-	 * @param {WebsiteData} data @param {string} ref @param {CategoryRecord[]} categories
+	 * The products a deal (by id or slug) is live for now, the products whose cards show it (SF-4): only a deal live now
+	 * (switched on, dates, use limit, weekdays and hours, as the cart judges it) while Deals is on, and of its scope only
+	 * the products with an active variant its conditions hold for (`dealProductsFilter`, the cart-only conditions left
+	 * to the cart). Any other deal matches nothing.
+	 * @param {Site} s @param {WebsiteData} data @param {string} ref @param {CategoryRecord[]} categories
 	 */
-	const dealFilter = async (data, ref, categories) => {
-		const deal = await data
-			.collection(COLLECTIONS.deals)
-			.findOne({ websiteId: data.websiteId, $or: [{ id: ref }, { slug: ref }] }, { projection: { _id: 0, scope: 1 } });
+	const dealFilter = async (s, data, ref, categories) => {
+		const deal = s.has('deals')
+			? (await dealsLiveNow(data, { now: service.now(), clock: await service.pricing(s) })).find(
+					(candidate) => candidate.id === ref || (candidate.slug && candidate.slug === ref),
+				)
+			: undefined;
 		if (!deal) return { id: { $in: [] } };
-		return (
-			scopeFilter(
-				{
-					productIds: deal.scope?.productIds ?? [],
-					categoryIds: deal.scope?.categoryIds ?? [],
-					brandIds: deal.scope?.brandIds ?? [],
-				},
-				(id) => withDescendants(id, categories),
-			) ?? {}
+		/** @param {string} id */
+		const below = (id) => withDescendants(id, categories);
+		const scope = scopeFilter(
+			{
+				productIds: deal.scope?.productIds ?? [],
+				categoryIds: deal.scope?.categoryIds ?? [],
+				brandIds: deal.scope?.brandIds ?? [],
+			},
+			below,
 		);
+		const covered = dealProductsFilter(deal.conditions, below);
+		return scope ? { $and: [scope, covered] } : covered;
 	};
 
 	/** GET /v1/shop/products. @param {any} ctx */
@@ -215,7 +222,7 @@ export const createCatalogShop = (product, service, common) => {
 			brandIds,
 			attributes: byAttribute,
 			hidden,
-			deal: query.deal ? await dealFilter(data, query.deal, categories) : null,
+			deal: query.deal ? await dealFilter(s, data, query.deal, categories) : null,
 			match: searchMatch === 'phrase' ? /** @type {const} */ ('phrase') : /** @type {const} */ ('words'),
 		};
 		const sort = /** @type {import('../core/catalog-query.js').Sort} */ (SORTS[query.sort]);

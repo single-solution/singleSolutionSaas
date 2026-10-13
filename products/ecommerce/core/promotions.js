@@ -22,7 +22,17 @@
  */
 import { formBundles } from './bundles.js';
 import { couponBlocked, couponDiscount, couponProblem, normaliseCode } from './coupons.js';
-import { bestDeal, better, byShowOrder, checkoutLevel, DEAL_RULES, dealCovers, dealLineDiscount, dealLive } from './deals.js';
+import {
+	bestDeal,
+	better,
+	byShowOrder,
+	checkoutLevel,
+	DEAL_RULES,
+	dealCovers,
+	dealLineDiscount,
+	dealLive,
+	utcClock,
+} from './deals.js';
 import { allocateUnits, roundHalfUp } from './money.js';
 
 /** @typedef {import('./model.js').DealRecord} DealRecord */
@@ -62,15 +72,6 @@ import { allocateUnits, roundHalfUp } from './money.js';
  * @property {boolean} [pointsBlocked] a deal that allows no points applies (E18 `allowPoints`; with `pointsBlockedBy:
  *   cart_offer` only a checkout-level one counts)
  */
-
-/**
- * The business time of an instant in UTC (when the caller gives none).
- * @param {number} now
- */
-const utcClock = (now) => {
-	const at = new Date(now);
-	return { weekday: at.getUTCDay(), minutes: at.getUTCHours() * 60 + at.getUTCMinutes() };
-};
 
 /**
  * @param {object} input
@@ -429,7 +430,8 @@ export const applyPromotions = ({
  * @param {number} input.now epoch ms
  * @param {string[]} [input.categoryIds] the product's categories with their ancestors (default: the product's own)
  * @param {string} [input.currency] the shop's currency
- * @param {{ weekday: number, minutes: number }} [input.clock] the business time (deal hours)
+ * @param {{ weekday: number, minutes: number }} [input.clock] the business time (deal hours; default: the UTC time of
+ *   `now`)
  * @param {number} [input.unit] whole units (E25)
  * @param {import('./deals.js').DealRules} [input.rules] how deals choose and round (the `deals` settings, D4)
  * @returns {{ productId: string, variantId: string, price: number, priceAfterDeals: number, savings: number, currency: string,

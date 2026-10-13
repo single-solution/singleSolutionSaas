@@ -470,6 +470,18 @@ describe('Chat lookups (E37)', () => {
 				endsText: '',
 			}),
 		]);
+		// a deal outside its hours is not offered, as the cart would not give it (PR-6)
+		const later = await shop.api('POST', '/v1/deals', {
+			name: 'Midnight',
+			type: 'percent',
+			value: 5,
+			timeFrom: '00:00',
+			timeTo: '00:01',
+		});
+		expect(later.status).toBe(201);
+		const now = (await shop.api('GET', '/v1/chat/deals')).json.items;
+		expect(now.map((/** @type {{ id: string }} */ item) => item.id)).toEqual(['deal_phones', 'deal_fixed']);
+		await shop.api('DELETE', `/v1/deals/${later.json.id}`);
 	});
 
 	it('gives fuller orders and the account’s city and area', async () => {

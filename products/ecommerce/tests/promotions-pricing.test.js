@@ -694,6 +694,19 @@ describe('quoteProduct', () => {
 			quoteProduct({ product: cheap, deals: [deal({ type: 'fixed', value: 300 })], now: NOW, rules: exact })?.savings,
 		).toBe(200);
 	});
+
+	it('judges a deal’s weekdays and hours as the cart does, at the UTC time when no clock is given (K-15)', () => {
+		const at = new Date(NOW);
+		const today = at.getUTCDay();
+		const minutes = at.getUTCHours() * 60 + at.getUTCMinutes();
+		const elsewhere = [deal({ days: [(today + 1) % 7] }), deal({ id: 'deal_2', timeFrom: '00:00', timeTo: '00:01' })];
+		expect(quoteProduct({ product, deals: elsewhere, now: NOW })?.savings).toBe(0);
+		expect(quoteProduct({ product, deals: elsewhere, now: NOW, clock: { weekday: (today + 1) % 7, minutes } })).toMatchObject({
+			savings: 150,
+			deals: [{ id: 'deal_1' }],
+		});
+		expect(quoteProduct({ product, deals: elsewhere, now: NOW, clock: { weekday: today, minutes: 0 } })?.savings).toBe(150);
+	});
 });
 
 describe('loyalty rules', () => {
