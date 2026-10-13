@@ -786,8 +786,18 @@ describe('the delivery log and the admin widgets (tickets)', () => {
 			'log.read',
 			'/v1/tickets',
 			'business.json',
+			// the API reference: what each call takes and answers, from schemas/api.json
+			'<a href="#op-post-v1-messages-email"><code>POST /v1/messages/email</code></a> Send an e-mail from a template',
+			'<section class="ss-api-op" id="op-post-v1-messages-email">',
+			'<td><code>to</code></td><td><a href="#schema-EmailRecipient">EmailRecipient</a></td><td>yes</td>',
+			'<h4>Answer 201 (JSON)</h4><p><a href="#schema-Message">Message</a></p>',
+			'<td><code>status</code></td><td>query</td><td><a href="#schema-MessageStatus">MessageStatus</a></td>',
+			'<td><code>reason</code></td><td>string | null</td><td>yes</td>',
+			'id="schema-Template"',
 		])
 			expect(html).toContain(part);
+		// the template routes are listed under every channel's feature
+		expect(html.split('<a href="#op-put-v1-templates">').length - 1).toBeGreaterThanOrEqual(6);
 		expect(GATEWAY_URL).toMatch(/^https:/);
 	});
 });
