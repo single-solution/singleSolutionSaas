@@ -238,6 +238,22 @@ describe('status (PLAN 0.4.12 row 4)', () => {
 		h.world.websites.set(W1, { websiteId: W1, merchantId: M1, domain: 'shop.example.com', status: 'removed' });
 		expect(codeOf(await status(W1))).toEqual([404, 'website_not_found']);
 	});
+
+	it('a website that cannot be read is a 5xx, never website_not_found (BP-4)', async () => {
+		const { h, features, status } = await setUp('cc_status_blip');
+		// a database error while reading the website: the product keeps its status copy (offline grace) on a 5xx
+		h.world.failWebsites = true;
+		expect(codeOf(await status(W1))).toEqual([500, 'internal_error']);
+		expect(codeOf(await features(W1, { version: 1, on: [], adminId: OWNER_ADMIN, adminName: 'O' }))).toEqual([
+			500,
+			'internal_error',
+		]);
+		const pair = { merchantId: M1, websiteId: W2, productId: PRODUCT, actor: ADMIN };
+		await expect(h.service.addProduct(pair)).rejects.toThrow(/connection pool closed/);
+		await expect(h.service.removeProduct({ ...pair, websiteId: W1 })).rejects.toThrow(/connection pool closed/);
+		h.world.failWebsites = false;
+		expect((await status(W1)).json.status).toBe('active');
+	});
 });
 
 describe('websites of a product (row 5) and per-product numbers', () => {

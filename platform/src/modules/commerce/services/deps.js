@@ -4,6 +4,7 @@
  * failure to queue one is logged.
  * @module
  */
+import { isProblem } from '../../../infra/http.js';
 
 /** @typedef {import('../../../infra/modules.js').ModuleContext} ModuleContext */
 
@@ -21,6 +22,19 @@ export const createDeps = (ctx) => {
 		getMerchantRecord: (merchantId) => identity().getMerchantRecord(merchantId),
 		/** @param {string} websiteId */
 		getWebsite: (websiteId) => identity().getWebsite(websiteId),
+		/**
+		 * The website, or null when there is none (`not_found`). Any other failure, such as a database error, is thrown:
+		 * it is a 5xx, never taken for a removed website (a product then keeps its status copy for offline grace).
+		 * @param {string} websiteId
+		 */
+		findWebsite: async (websiteId) => {
+			try {
+				return await identity().getWebsite(websiteId);
+			} catch (error) {
+				if (isProblem(error) && /** @type {any} */ (error).code === 'not_found') return null;
+				throw error;
+			}
+		},
 		/** @param {readonly string[]} websiteIds @returns {Promise<Map<string, { domain: string, merchantId: string, status: string }>>} */
 		websitesByIds: (websiteIds) => identity().websitesByIds(websiteIds),
 		/**

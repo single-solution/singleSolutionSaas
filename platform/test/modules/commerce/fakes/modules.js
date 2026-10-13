@@ -19,6 +19,7 @@ import { defineModule } from '../../../../src/infra/modules.js';
  * @property {boolean} failNotices
  * @property {boolean} [failTokens] ensureTokens throws
  * @property {boolean} [failContacts] billingContacts throws
+ * @property {boolean} [failWebsites] getWebsite throws a database error
  */
 
 /** @returns {World} */
@@ -45,8 +46,10 @@ export const fakeModules = (world) => [
 				world.merchants.get(id) ?? Promise.reject(problem('not_found', 'No such merchant.')),
 			getMerchantRecord: async (/** @type {string} */ id) =>
 				world.merchants.get(id) ?? Promise.reject(problem('not_found', 'No such merchant.')),
-			getWebsite: async (/** @type {string} */ id) =>
-				world.websites.get(id) ?? Promise.reject(problem('not_found', 'No such website.')),
+			getWebsite: async (/** @type {string} */ id) => {
+				if (world.failWebsites) throw new Error('connection pool closed');
+				return world.websites.get(id) ?? Promise.reject(problem('not_found', 'No such website.'));
+			},
 			websitesByIds: async (/** @type {readonly string[]} */ ids) =>
 				new Map(ids.filter((id) => world.websites.has(id)).map((id) => [id, world.websites.get(id)])),
 			merchantNames: async (/** @type {readonly string[]} */ ids) =>

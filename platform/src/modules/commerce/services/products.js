@@ -103,7 +103,7 @@ export const createProducts = ({ ctx, repo, deps, billing }) => {
 	 * @param {string} merchantId @param {string} websiteId
 	 */
 	const activeWebsite = async (merchantId, websiteId) => {
-		const website = await deps.getWebsite(websiteId).catch(() => null);
+		const website = await deps.findWebsite(websiteId);
 		if (!website || website.merchantId !== merchantId || website.status !== 'active')
 			throw problem('not_found', 'No such website.');
 		return website;
@@ -278,7 +278,7 @@ export const createProducts = ({ ctx, repo, deps, billing }) => {
 		const report = checked.value;
 		const doc = await find(websiteId, productId);
 		if (!doc) throw problem('website_not_found', 'This website never had this product.');
-		const website = await deps.getWebsite(websiteId).catch(() => null);
+		const website = await deps.findWebsite(websiteId);
 		if (!website || website.status !== 'active') throw problem('website_not_found', 'This website was removed.');
 		if (report.version <= Number(doc.featuresVersion ?? 0))
 			throw problem('conflict', `Feature report ${report.version} is not higher than ${doc.featuresVersion}.`);
@@ -333,7 +333,7 @@ export const createProducts = ({ ctx, repo, deps, billing }) => {
 	 */
 	const statusFor = async ({ productId, websiteId }) => {
 		const doc = await find(websiteId, productId);
-		const website = doc ? await deps.getWebsite(websiteId).catch(() => null) : null;
+		const website = doc ? await deps.findWebsite(websiteId) : null;
 		if (!doc || !website || website.status !== 'active')
 			throw problem('website_not_found', 'This website does not have this product.');
 		const merchantId = String(doc.merchantId);
