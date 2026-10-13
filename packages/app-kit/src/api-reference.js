@@ -88,7 +88,8 @@ const rulesOf = (schema) => {
 const notesOf = (description, schema) => {
 	const parts = [...(typeof description === 'string' ? [description] : []), ...rulesOf(isObject(schema) ? schema : {})]
 		.map((part) => part.trim().replace(/\.$/, ''))
-		.filter(Boolean);
+		.filter(Boolean)
+		.map((part) => part.charAt(0).toUpperCase() + part.slice(1));
 	return parts.length > 0 ? `${escape(parts.join('. '))}.` : '';
 };
 
