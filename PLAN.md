@@ -2920,6 +2920,37 @@ cart widget does not send `expectedTotal` yet; a free-delivery deal locked on a 
 (the importer checks whether any store has such deals); `deals.lineLock` (only lines added while a deal was live) is not
 built and is raised with the owner (D1).
 
+Built after the re-audit, second batch (2026-10-13; commits b0a06480, b531daa8, 350cd7e1, f5bbd257, 32a33296, 672ee150,
+591d24be):
+
+**E59. Customers by customer id (always; K-6, CU-5).** Customer, loyalty and order-lookup routes take `cus_…` (members
+and guests) or an Accounts user id; a guest's orders, spend and points are theirs by customer id; answers carry `id` and
+`guest`, the CSV `customer_id`; the admin widgets open guests. A guest ordering with a member's phone orders as that
+member (one record; block and cap apply) — raised with the owner (D1), since the phone is not proven.
+
+**E60. Customers without orders (CU-2, CU-4).** Key: `checkout.customerRecords` (`first_order` default | `sign_in`: a
+signed-in shopper's record is made on their first visit). Opening an Accounts user without orders makes their record
+(createdAt from Accounts); `GET /v1/customers?userIds=` (up to 100); customer and loyalty records get `createdAt`.
+
+**E61. Message words (always; K-10).** Message values are words from the merchant's editable texts: `paymentMethod`
+from `checkout.method.*`, `deliveryMethod` from `messages.delivery.*`, `cancelReason` from the staff move note, else
+`messages.cancelReason.*`; claim `kind` and `status` in words plus `reason`. Events keep the codes. (A staff cancel note
+now reaches the shopper as the reason — raised with the owner.)
+
+**E62. Alerts (MS-2, EN-1).** The stop link is sent as `{stopUrl}`, never the reserved `unsubscribeUrl`. Keys:
+`alerts.targetPrice` (false), `alerts.stopUrl` ('' = `/alerts/unsubscribe/{token}`); guests give a phone while
+`alerts.guests` is on; visitor widget `alerts_stop` (stops only on a button press).
+
+**E63. Outbox (always; K-17, D7).** Order and claim messages and staff alerts are sent `required`, saved before sending
+in the merchant database with their own Idempotency-Key, and retried on the next uses (1, 5, 15, 60 minutes, then every
+3 hours) for up to a day; a TTL clears rows of sites never visited again. `ss app validate` is clean (PL-15: crypto
+moved to `adapters/crypto.js`).
+
+Open after E59–E63: points earned on a guest order are not taken back when a claim is refunded (bug); outbox rows keep
+contact details for up to about two days and are not removed by a data-rights delete; the kit's `staffAlerts.send` has
+no `required` or retry for the other products; a failed back-in-stock or price-drop send ends `failed`; E46 is not
+built.
+
 #### Chat
 
 **C1. Longer instructions and store context** (changes 0.8.3).
