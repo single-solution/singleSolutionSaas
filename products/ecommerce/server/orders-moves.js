@@ -511,6 +511,14 @@ export const createMoves = (product, service) => {
 			Object.assign(set, confirmed.set);
 			push.payments = confirmed.entry;
 		}
+		/**
+		 * The payment the move records (on confirm, or cash paid on delivery) and the money it refunds (a cancel or a
+		 * refund move): they raise the same events as payments and refunds staff record (`order.payment_recorded`,
+		 * `order.paid`, `order.refunded`).
+		 * @type {{ method: string, amount: number, reference?: string } | null}
+		 */
+		let recorded = confirmed?.entry ?? null;
+		let refundedNow = 0;
 
 		// stock an order gives back tells the alerts (E34): what its products were before
 		const held = ['cancelled', 'returned_to_origin', 'returned', 'refunded'].includes(target.role)
@@ -571,8 +579,6 @@ export const createMoves = (product, service) => {
 				const cash = CASH_METHODS.includes(order.payment.method);
 				// cash taken at the door counts as paid on delivery, unless staff record it (E23 `paidOnDelivery: false`)
 				const onDelivery = !s.has('cod') || (await s.values('cod')).paidOnDelivery !== false;
-				/** @type {Record<string, unknown> | null} */
-				let cashEntry = null;
 				if (
 					cash &&
 					onDelivery &&
@@ -580,7 +586,7 @@ export const createMoves = (product, service) => {
 					order.payment.state !== 'partially_refunded' &&
 					order.totals.total > order.payment.paid
 				) {
-					cashEntry = {
+					const cashEntry = {
 						id: createId(ID_PREFIX.orderPayment),
 						method: 'cash',
 						amount: order.totals.total - order.payment.paid,
@@ -593,6 +599,7 @@ export const createMoves = (product, service) => {
 					set['payment.state'] = 'paid';
 					set['payment.paid'] = order.totals.total;
 					push.payments = cashEntry;
+					recorded = cashEntry;
 				}
 				// points go to the member, or to the guest's customer record when guests earn (E20); fixed at placement (0 for
 				// a member whose role the loyalty settings leave out) or worked out now, and credited once
@@ -660,6 +667,7 @@ export const createMoves = (product, service) => {
 								$push: { refunds: paymentsRefundEntry(ctx, done, { amount: online, note: 'Order cancelled' }) },
 							},
 						);
+						refundedNow = online;
 						if (done.manual) warnings.push(await returnByHand(s, order, online));
 					} catch (error) {
 						warnings.push({
@@ -703,6 +711,7 @@ export const createMoves = (product, service) => {
 						? await refundOnline(s, ctx, order, online, note, `${order.id}:refund:${order.payment.refunded}`)
 						: null;
 				if (amount > 0) {
+					refundedNow = amount;
 					set['payment.refunded'] = order.payment.paid;
 					set['payment.state'] = 'refunded';
 					push.refunds = {
@@ -734,15 +743,22 @@ export const createMoves = (product, service) => {
 			label: order.number,
 			detail: `${statusLabel(flow, from)} → ${target.label}`,
 		});
-		if (confirmed) {
-			const money = (await s.format()).money(confirmed.entry.amount, order.totals.currency);
+		const { money } = await s.format();
+		if (recorded) {
 			await service.log(ctx, 'order.payment_recorded', order.id, {
 				label: order.number,
-				detail: `${money} by ${confirmed.entry.method}`,
+				detail: `${money(recorded.amount, order.totals.currency)} by ${recorded.method}`,
 			});
-			await service.emit('order.payment_recorded', s, { order: after, entry: confirmed.entry });
+			await service.emit('order.payment_recorded', s, { order: after, entry: recorded });
 			if (after.payment.state === 'paid' && order.payment.state !== 'paid')
-				await service.emit('order.paid', s, { order: after, entry: confirmed.entry });
+				await service.emit('order.paid', s, { order: after, entry: recorded });
+		}
+		if (refundedNow > 0) {
+			await service.log(ctx, 'order.refunded', order.id, {
+				label: order.number,
+				detail: `Refunded ${money(refundedNow, order.totals.currency)}`,
+			});
+			await service.emit('order.refunded', s, { order: after, amount: refundedNow, claimId: null });
 		}
 		if (held && order.stockHeld && !after.stockHeld) await service.emit('products.changed', s, held);
 		await service.emit('order.moved', s, {

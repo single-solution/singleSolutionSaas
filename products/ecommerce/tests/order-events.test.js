@@ -60,6 +60,26 @@ describe('events and staff alerts (E32)', () => {
 		expect(shop.messages().map((m) => m.template)).toContain('ecommerce.staff_cancelled');
 	});
 
+	it('raises the payment events for cash paid on delivery, as for payments staff record', async () => {
+		const order = await placeOrder();
+		for (const to of ['confirmed', 'delivered'])
+			expect((await shop.api('POST', `/v1/orders/${order.id}/move`, { to })).status).toBe(200);
+		await shop.flush();
+		const events = await shop.api('GET', '/v1/events?types=ecommerce.order.payment_recorded,ecommerce.order.paid');
+		const mine = events.json.items.filter((/** @type {any} */ e) => e.data.orderId === order.id);
+		expect(mine.map((/** @type {any} */ e) => e.type).sort()).toEqual([
+			'ecommerce.order.paid',
+			'ecommerce.order.payment_recorded',
+		]);
+		expect(mine.find((/** @type {any} */ e) => e.type === 'ecommerce.order.payment_recorded').data).toMatchObject({
+			method: 'cash',
+			amount: order.totals.total,
+		});
+		expect(mine.find((/** @type {any} */ e) => e.type === 'ecommerce.order.paid').data).toMatchObject({
+			paid: order.totals.total,
+		});
+	});
+
 	it('sends words, not codes: payment and delivery methods and why it was cancelled, from the texts (K-10)', async () => {
 		const before = shop.messages().length;
 		const order = await placeOrder();

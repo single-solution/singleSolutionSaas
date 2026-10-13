@@ -117,10 +117,24 @@ describe('a cancelled order cancels its Payments payment (K-13)', () => {
 		const refused = await moveTo(paid.order.id, 'cancelled');
 		expect(codeOf(refused)).toBe('move_not_allowed');
 		expect((await orderRecord(paid.order.id)).status).toBe('confirmed');
-		// cancelling the paid order now refunds it through Payments
+		// cancelling the paid order now refunds it through Payments, with the event other refunds raise
 		const again = await moveTo(paid.order.id, 'cancelled');
 		expect(again.json).toMatchObject({ status: 'cancelled', payment: { state: 'refunded', refundDue: 0 } });
 		expect(shop.callsTo(`${PAYMENTS}/v1/payments/${paid.paymentId}/refunds`)).toHaveLength(1);
+		const total = (await orderRecord(paid.order.id)).totals.total;
+		/** @param {string} id */
+		const refundEvents = async (id) =>
+			(await shop.api('GET', '/v1/events?types=ecommerce.order.refunded')).json.items
+				.filter((/** @type {any} */ event) => event.data.orderId === id)
+				.map((/** @type {any} */ event) => event.data);
+		expect(await refundEvents(paid.order.id)).toEqual([expect.objectContaining({ amount: total, claimId: null })]);
+		// so does a move to a refunded status
+		const refundedToo = await placeOrder();
+		shop.payPayment(refundedToo.paymentId);
+		await visit('GET', `/v1/shop/orders/${refundedToo.order.id}`, refundedToo.token);
+		expect((await moveTo(refundedToo.order.id, 'delivered')).status).toBe(200);
+		expect((await moveTo(refundedToo.order.id, 'refunded')).json).toMatchObject({ payment: { state: 'refunded' } });
+		expect(await refundEvents(refundedToo.order.id)).toEqual([expect.objectContaining({ amount: total })]);
 	});
 
 	it('when its window ends', async () => {
