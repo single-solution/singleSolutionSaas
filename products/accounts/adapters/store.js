@@ -14,7 +14,7 @@
  * - `copies`: the activity-log copies other products send
  * - `requests`: role requests (PLAN 0.8.10 A5)
  * - `counters`: short counters with a TTL (codes per hour per phone and per website, A7; tries per network and
- *   address, A9)
+ *   address, A9; reset e-mails per address, ST-12)
  * - `outbox`: messages Notifications could not send yet (Forgot password), their values sealed, sent again right
  *   after later requests until they expire (TTL)
  * @module

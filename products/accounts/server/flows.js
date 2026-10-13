@@ -42,8 +42,9 @@ import { parseSecret } from './service.js';
 /** @typedef {import('../core/profile.js').UserRecord} UserRecord */
 /** @typedef {import('../adapters/store.js').SessionRecord} SessionRecord */
 
-/** Fixed windows of the network limit (A9) and of the hourly code caps (A7). */
+/** Fixed windows of the network limit (A9), of the reset e-mails per address (ST-12) and of the hourly code caps (A7). */
 const NETWORK_WINDOW_MS = 15 * 60_000;
+const RESET_WINDOW_MS = 15 * 60_000;
 const HOUR_MS = 3_600_000;
 /** Digits of a sign-in code staff make (A3). */
 export const STAFF_CODE_LENGTH = 6;
@@ -530,7 +531,9 @@ export const createFlows = (product, service) => {
 	 * send gives (ST-3). The reset link is made and sent right after the answer; a link Notifications cannot send now
 	 * is sent again on later requests while it is valid. It goes only to a proven address or to the address the account
 	 * was made with: an address typed but never proven on an account that signs in another way (a phone + password
-	 * member's) gets nothing, as an unknown one, so its owner cannot take that account over.
+	 * member's) gets nothing, as an unknown one, so its owner cannot take that account over. Requests per address are
+	 * limited (`resetLimit` per 15 minutes, ST-12), counted for every address, known or not, so the refusal tells
+	 * nothing either.
 	 * @param {any} ctx
 	 */
 	const forgotPassword = async (ctx) => {
@@ -540,10 +543,12 @@ export const createFlows = (product, service) => {
 		if (!email) throw invalid('email', 'Enter a valid e-mail address.');
 		const returnTo = returnAddress(body.returnTo, s.domain);
 		if (!returnTo) throw invalid('returnTo', 'returnTo must be a page of your website (or a local page while testing).');
+		const { resetMinutes, resetLimit } = await service.settings(s, 'email_password');
+		if (!(await s.store.counters.take(`resets|${sha256(email)}`, RESET_WINDOW_MS, Number(resetLimit))))
+			throw problem('rate_limited', 'Too many reset requests for this address. Try again later.');
 		afterAnswer(ctx, async () => {
 			const user = await s.store.users.byEmail(email);
 			if (!user?.passwordHash || user.blocked || !resetsByEmail(user)) return;
-			const { resetMinutes } = await service.settings(s, 'email_password');
 			const secret = randomSecret(32);
 			const expireAt = new Date(now() + resetMinutes * 60_000);
 			const id = await s.store.codes.add({ kind: 'reset', target: user.id, hash: sha256(secret), expireAt, replace: true });

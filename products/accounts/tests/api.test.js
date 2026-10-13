@@ -217,13 +217,44 @@ describe('email + password', () => {
 		await env.paste('notifications');
 		await later();
 		expect(tries('bo@example.com')).toBe(4);
-		// a link kept past its life is dropped, never sent
+		// a link kept past its life is dropped, never sent (in the next 15 minutes: 3 requests per address)
+		env.advance(15 * 60_000);
 		env.responders.set(email, () => ({ status: 502, body: {} }));
 		await env.visitor('POST', '/v1/password/forgot', { email: 'bo@example.com', returnTo: ORIGIN });
 		env.responders.delete(email);
 		env.advance(61 * 60_000);
 		await later();
 		expect(tries('bo@example.com')).toBe(5);
+	});
+
+	it('Forgot password: 3 requests per address per 15 minutes, counted alike for unknown addresses (ST-12)', async () => {
+		env.advance(15 * 60_000);
+		/** @param {string} address */
+		const forgot = (address) => env.visitor('POST', '/v1/password/forgot', { email: address, returnTo: ORIGIN });
+		/** @param {string} address */
+		const sent = (address) => env.messages().filter((m) => m.to.email === address).length;
+		const before = sent('bo@example.com');
+		for (let i = 0; i < 3; i += 1) {
+			expect((await forgot('bo@example.com')).status).toBe(202);
+			expect((await forgot('ghost@example.com')).status).toBe(202);
+		}
+		expect(sent('bo@example.com')).toBe(before + 3);
+		const known = await forgot('bo@example.com');
+		const unknown = await forgot('ghost@example.com');
+		expect([known.status, code(known)]).toEqual([429, 'rate_limited']);
+		// the same answer for an address without an account (only the request's own id differs)
+		expect({ ...unknown.json, requestId: null }).toEqual({ ...known.json, requestId: null });
+		expect(sent('bo@example.com')).toBe(before + 3);
+		// other addresses are not held back, and the next 15 minutes start again
+		expect((await forgot('ana@example.com')).status).toBe(202);
+		env.advance(15 * 60_000);
+		expect((await forgot('bo@example.com')).status).toBe(202);
+		expect(sent('bo@example.com')).toBe(before + 4);
+		// the merchant may allow more
+		await env.setting('email_password', 'resetLimit', 5);
+		for (let i = 0; i < 4; i += 1) expect((await forgot('bo@example.com')).status).toBe(202);
+		expect(code(await forgot('bo@example.com'))).toBe('rate_limited');
+		await env.setting('email_password', 'resetLimit', 3);
 	});
 });
 
