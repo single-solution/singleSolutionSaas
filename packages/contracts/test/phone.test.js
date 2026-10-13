@@ -37,15 +37,45 @@ describe('phone numbers (one normaliser for every product)', () => {
 		expect(normalisePhone('051 1234567', '+92')).toBe('+92511234567');
 	});
 
-	it('keeps the calling code it finds only when the rest has a national length', () => {
+	it('lets the country’s usual lengths choose between readings', () => {
 		// India: mobiles may start with the code's digits
 		expect(normalisePhone('9123456789', '+91')).toBe('+919123456789');
 		expect(normalisePhone('919123456789', '+91')).toBe('+919123456789');
 		expect(normalisePhone('09123456789', '+91')).toBe('+919123456789');
 		// Pakistan: nine digits starting with 92 are national
 		expect(normalisePhone('921234567', '+92')).toBe('+92921234567');
-		// a country without listed lengths keeps the code it finds
+		// Kazakhstan: a mobile starting with the code's 7
+		expect(normalisePhone('7012345678', '+7')).toBe('+77012345678');
+	});
+
+	it('keeps the digits as typed (no second code) when the lengths cannot decide', () => {
+		// no lengths listed for Germany
 		expect(normalisePhone('4930123456', '+49')).toBe('+4930123456');
+		// no reading has a usual Pakistani length
+		expect(normalisePhone('92300123', '+92')).toBe('+92300123');
+	});
+
+	it('accepts countries without listed lengths and lengths outside them', () => {
+		expect(normalisePhone('01 234 5678', '+43')).toBe('+4312345678');
+		expect(normalisePhone('0803 123 4567', '+234')).toBe('+2348031234567');
+		expect(normalisePhone('01712-345678', '+880')).toBe('+8801712345678');
+		expect(normalisePhone('+254 712 345678')).toBe('+254712345678');
+		expect(normalisePhone('+92 300 123')).toBe('+92300123');
+		expect(normalisePhone('0300123', '+92')).toBe('+92300123');
+		expect(normalisePhone('+92 300 123456789')).toBe('+92300123456789');
+		expect(normalisePhone('+1 415 555 01')).toBe('+141555501');
+		// a number of another country typed without its + reads as national
+		expect(normalisePhone('447700900123', '+92')).toBe('+92447700900123');
+	});
+
+	it('accepts calling codes of no country as they are', () => {
+		expect(normalisePhone('+800 1234 5678')).toBe('+80012345678');
+		expect(normalisePhone('+882 3123 456789')).toBe('+8823123456789');
+		expect(normalisePhone('00870 7712 34567')).toBe('+870771234567');
+		expect(normalisePhone('+883 0123 4567 89')).toBe('+8830123456789');
+		// never a website's default calling code
+		expect(normalisePhone('1234 5678', '+800')).toBeNull();
+		expect(websiteCallingCode('+800', 'PK')).toBe('+92');
 	});
 
 	it('works for other countries', () => {
@@ -100,14 +130,11 @@ describe('phone numbers (one normaliser for every product)', () => {
 			'3+00',
 			'++923001234567',
 			'+92 300 1234567 ext 5',
-			'0300123',
-			'+92 300 123',
-			'+92 300 123456789',
 			'+92 00 300 1234567',
+			'+44 00 20 7946 0018',
 			'+0300 1234567',
 			'+999 1234 5678',
-			'+8823123456789',
-			'+1 415 555 01',
+			'+92 3001',
 			'+92300123456789012',
 			'1'.repeat(41),
 		])
@@ -120,8 +147,6 @@ describe('phone numbers (one normaliser for every product)', () => {
 		expect(normalisePhone('0300 1234567', '+999')).toBeNull();
 		expect(normalisePhone('0300 1234567', site(''))).toBeNull();
 		expect(normalisePhone('12', '+1')).toBeNull();
-		// another country without its +
-		expect(normalisePhone('447700900123', '+92')).toBeNull();
 		// a short total
 		expect(normalisePhone('+290 1234')).toBeNull();
 	});

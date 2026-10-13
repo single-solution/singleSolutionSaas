@@ -98,11 +98,12 @@ Pure and browser-safe, so products' `core/` and widgets (through `@ss/app-kit/wi
 Pure and browser-safe; every product normalises phones with it, so one person has one number everywhere.
 
 - `normalisePhone(input, defaultCallingCode | { defaultCallingCode, trunkPrefix })` → E.164 or null. Spaces, dashes,
-  dots, slashes and brackets are dropped; `+` or `00` name the calling code; after it a trunk `0` (also `(0)`) is
-  dropped, except where national numbers keep their 0 (Italy, San Marino, Côte d'Ivoire, Benin, Gabon, Congo). A number
-  without `+`/`00` needs the default calling code: one that already starts with its digits and has a national length
-  keeps them (`923001234567`), a trunk prefix (`0`; `8` for +7; or `trunkPrefix`) is dropped, otherwise the code is
-  added. The result has 8–15 digits and fits the country's national lengths where they are listed.
+  dots, slashes and brackets are dropped; `+` or `00` name the calling code (any assigned code, +800 and +882 too);
+  after it a trunk `0` (also `(0)`) is dropped, except where national numbers keep their 0 (Italy, San Marino, Côte
+  d'Ivoire, Benin, Gabon, Congo). A number without `+`/`00` needs the default calling code and is read as already
+  international (`923001234567`), national after its trunk prefix (`0`; `8` for +7; or `trunkPrefix`) or national as
+  typed; the country's usual national lengths, where listed, pick the reading, else the digits are kept as typed (no
+  second code). Any reading of 8–15 digits is accepted: the lengths never refuse a number.
 - `websiteCallingCode(setting, country)`: the website's default calling code, its setting else the calling code of its
   business.json `country`; `callingCodeOf(country)`.
 - `PHONE_COUNTRIES` (ISO codes a setting may name) and `phoneInCountries(phone, countries)` (`[]` = any).

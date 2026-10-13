@@ -90,7 +90,7 @@ describe('AI replies', () => {
 		);
 		sys.ai(
 			{ tools: [{ name: 'list_free_slots', arguments: { from: '2026-10-01', to: '2027-01-01' } }] },
-			{ tools: [{ name: 'book_slot', arguments: { slotId: 's1', name: 'Ann', phone: '0300 123' } }] },
+			{ tools: [{ name: 'book_slot', arguments: { slotId: 's1', name: 'Ann', phone: 'call me' } }] },
 			{
 				tools: [
 					{ name: 'book_slot', arguments: { slotId: 's1', name: 'Ann', email: 'ann@example.com', phone: '0300 1234567' } },

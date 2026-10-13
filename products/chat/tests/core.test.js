@@ -244,7 +244,7 @@ describe('conversations, flows and fields', () => {
 			expect(checkFieldValue({ ...field, type: 'phone' }, typed, '+92')).toEqual({ ok: true, value: '+923001234567' });
 		expect(checkFieldValue({ ...field, type: 'phone' }, '+44 (0)20 7946 0018')).toEqual({ ok: true, value: '+442079460018' });
 		expect(checkFieldValue({ ...field, type: 'phone' }, '0300 1234567')).toEqual({ ok: false });
-		expect(checkFieldValue({ ...field, type: 'phone' }, '+92 300 123', '+92')).toEqual({ ok: false });
+		expect(checkFieldValue({ ...field, type: 'phone' }, '+92 3001', '+92')).toEqual({ ok: false });
 		const lead = checkLead(
 			{ fields: { email: 'bad', size: 'XL' } },
 			{

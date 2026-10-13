@@ -1,25 +1,26 @@
 /**
  * Phone numbers (PLAN 0.8.10, always): one normaliser for every product, so a person typing their number in any usual
- * way gets one E.164 number (`+`, the country calling code and the national significant number) and one record. Pure
- * and browser-safe: products' `core/` and widgets use it through `@ss/contracts/phone`.
+ * way gets one E.164 number (`+`, the calling code and the national significant number) and one record. Pure and
+ * browser-safe: products' `core/` and widgets use it through `@ss/contracts/phone`.
  *
  * Rules, for any country:
  *
  * - spaces, dashes, dots, slashes and brackets are dropped; one `+` may lead; `00` leads like `+`;
- * - a number with `+` or `00` names its calling code (an assigned country code; non-geographic codes are refused);
- * - a number without them needs the website's default calling code (a setting, else the business.json country,
- *   `websiteCallingCode`); without one it is refused, as the product never guesses a country. Such a number may be:
- *   1. already international without the `+` (it starts with the calling code's digits and the rest has a national
- *      length): kept, not prefixed again (`923001234567` with +92);
- *   2. national with the trunk prefix (`0`, Russia and Kazakhstan `8`, or the website's own): the prefix is dropped
- *      (`03001234567`);
- *   3. national without it (`3001234567`). The first reading that fits wins; where national numbers keep their 0
- *      (no trunk prefix: Italy …) reading 3 comes before reading 1, as such numbers may start with the code's digits;
- * - right after a calling code a trunk `0` (also written `(0)`) is dropped (`+92 0300 …`, `+44 (0)20 …`), except
+ * - a number with `+` or `00` names its calling code (any assigned code: a country's, or a non-country one such as
+ *   +800 or +882); right after it a trunk `0` (also written `(0)`) is dropped (`+92 0300 …`, `+44 (0)20 …`), except
  *   where national numbers keep their 0 (`+39 06 …`);
- * - the result has 8–15 digits, and the national number fits the country's lengths where they are listed
- *   (`NATIONAL_LENGTHS`, from the ITU-T E.164 national numbering plans) and does not start with 0 unless the country
- *   keeps it. Anything else is refused (null).
+ * - a number without them needs the website's default calling code (a setting, else the business.json country,
+ *   `websiteCallingCode`); without one it is refused, as the product never guesses a country. It may be read as:
+ *   1. already international without the `+` (it starts with the code's digits; a trunk `0` after them is dropped):
+ *      `923001234567` with +92 keeps its digits, no second code;
+ *   2. national with the trunk prefix (`0`, Russia and Kazakhstan `8`, or the website's own), which is dropped:
+ *      `03001234567`;
+ *   3. national as typed: `3001234567`.
+ *   Where the country's national lengths are listed (`NATIONAL_LENGTHS`), the first reading whose length is listed
+ *   wins (reading 3 before 1 where national numbers keep their 0, as such numbers may start with the code's digits);
+ *   otherwise the first possible reading in the order 1, 2, 3, which keeps the digits as typed;
+ * - a reading is possible when the whole number has 8–15 digits and the national number does not start with 0 (unless
+ *   the country keeps it). The lengths only choose between readings: they never refuse a number.
  * @module
  */
 
@@ -49,21 +50,27 @@ const CALLING_CODES = Object.freeze(
 /** The countries a phone setting may name (ISO 3166-1 alpha-2), in alphabetical order. */
 export const PHONE_COUNTRIES = Object.freeze(Object.keys(CALLING_CODES));
 
-/** Every assigned country calling code (they are prefix-free: no code starts another). */
-const CODES = new Set(Object.values(CALLING_CODES));
+/** Every country calling code. */
+const COUNTRY_CODES = new Set(Object.values(CALLING_CODES));
+
+/** Assigned calling codes of no country (freephone, satellite and international networks, premium rate). */
+const GLOBAL_CODES = Object.freeze(['800', '808', '870', '878', '881', '882', '883', '888', '979']);
+
+/** Every assigned calling code (they are prefix-free: no code starts another). */
+const CODES = new Set([...COUNTRY_CODES, ...GLOBAL_CODES]);
 
 /**
- * Calling codes whose national numbers may start with 0 (no trunk prefix): Italy and the Vatican, San Marino, Côte
- * d'Ivoire, Benin, Gabon and the Republic of the Congo.
+ * Calling codes whose numbers may start with 0 (no trunk prefix): Italy and the Vatican, San Marino, Côte d'Ivoire,
+ * Benin, Gabon, the Republic of the Congo, and the codes of no country.
  */
-const KEEPS_ZERO = new Set(['39', '378', '225', '229', '241', '242']);
+const KEEPS_ZERO = new Set(['39', '378', '225', '229', '241', '242', ...GLOBAL_CODES]);
 
 /** Trunk prefixes other than 0. */
 const TRUNKS = Object.freeze(/** @type {Record<string, string>} */ ({ 7: '8' }));
 
 /**
- * Lengths [shortest, longest] of national significant numbers (landlines and mobiles) where the plan is settled; any
- * other country only keeps the E.164 total of 8–15 digits.
+ * Usual lengths [shortest, longest] of national significant numbers (landlines and mobiles) of some countries, used
+ * only to choose between readings of a number typed without `+`; a number outside them is still accepted.
  */
 const NATIONAL_LENGTHS = Object.freeze(
 	Object.fromEntries(
@@ -98,12 +105,12 @@ export const callingCodeOf = (country) => {
 };
 
 /**
- * The digits of an assigned calling code given as `+92` or `92`, or ''.
+ * The digits of a country calling code given as `+92` or `92`, or ''.
  * @param {unknown} value
  */
 const codeDigits = (value) => {
 	const digits = typeof value === 'string' ? value.trim().replace(/^\+/, '') : '';
-	return CODES.has(digits) ? digits : '';
+	return COUNTRY_CODES.has(digits) ? digits : '';
 };
 
 /**
@@ -130,20 +137,28 @@ const leadingCode = (digits) => [1, 2, 3].map((n) => digits.slice(0, n)).find((c
 const afterCode = (code, rest) => (rest.startsWith('0') && !KEEPS_ZERO.has(code) ? rest.slice(1) : rest);
 
 /**
- * The E.164 number, or null when the national number cannot belong to the calling code.
- * @param {string} code @param {string} national
- * @returns {string | null}
+ * Whether a national number can follow the calling code: 8–15 digits in all, and no leading 0 where a 0 is a trunk
+ * prefix.
+ * @param {string} code @param {string | null} national
+ * @returns {national is string}
  */
-const e164 = (code, national) => {
-	const total = code.length + national.length;
+const possible = (code, national) =>
+	national !== null &&
+	code.length + national.length >= 8 &&
+	code.length + national.length <= 15 &&
+	!(national.startsWith('0') && !KEEPS_ZERO.has(code));
+
+/**
+ * Whether a national number has one of the country's usual lengths (false where none are listed).
+ * @param {string} code @param {string} national
+ */
+const usualLength = (code, national) => {
 	const lengths = NATIONAL_LENGTHS[code];
-	const fits = lengths ? national.length >= lengths[0] && national.length <= lengths[1] : true;
-	const leadingZero = national.startsWith('0') && !KEEPS_ZERO.has(code);
-	return total >= 8 && total <= 15 && fits && !leadingZero ? `+${code}${national}` : null;
+	return lengths !== undefined && national.length >= lengths[0] && national.length <= lengths[1];
 };
 
 /**
- * A phone number as E.164, or null when it cannot be one.
+ * A phone number as E.164, or null when it cannot be one (see the rules above).
  * @param {unknown} input as typed
  * @param {string | { defaultCallingCode?: string, trunkPrefix?: string }} [options] the website's default calling code
  *   (`+92`; see `websiteCallingCode`), or that and its trunk prefix (1–2 digits; '' = the country's usual one: 0, 8 for
@@ -158,7 +173,8 @@ export const normalisePhone = (input, options = {}) => {
 	if (raw.startsWith('+') || digits.startsWith('00')) {
 		const international = raw.startsWith('+') ? digits : digits.slice(2);
 		const code = leadingCode(international);
-		return code === '' ? null : e164(code, afterCode(code, international.slice(code.length)));
+		const national = afterCode(code, international.slice(code.length));
+		return code !== '' && possible(code, national) ? `+${code}${national}` : null;
 	}
 	const { defaultCallingCode = '', trunkPrefix = '' } = typeof options === 'string' ? { defaultCallingCode: options } : options;
 	const code = codeDigits(defaultCallingCode);
@@ -166,8 +182,12 @@ export const normalisePhone = (input, options = {}) => {
 	const trunk = TRUNK.test(trunkPrefix) ? trunkPrefix : KEEPS_ZERO.has(code) ? '' : (TRUNKS[code] ?? '0');
 	const international = digits.startsWith(code) ? afterCode(code, digits.slice(code.length)) : null;
 	const trunked = trunk !== '' && digits.startsWith(trunk) ? digits.slice(trunk.length) : null;
-	const readings = KEEPS_ZERO.has(code) ? [trunked, digits, international] : [international, trunked, digits];
-	return readings.map((national) => (national === null ? null : e164(code, national))).find((found) => found !== null) ?? null;
+	const readings = [international, trunked, digits].filter((national) => possible(code, national));
+	const byLength = (KEEPS_ZERO.has(code) ? [trunked, digits, international] : readings).find(
+		(national) => possible(code, national) && usualLength(code, national),
+	);
+	const national = byLength ?? readings[0];
+	return national === undefined ? null : `+${code}${national}`;
 };
 
 /**
