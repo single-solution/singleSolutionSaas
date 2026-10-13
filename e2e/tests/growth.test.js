@@ -83,7 +83,7 @@ describe('Growth on the real Portal', () => {
 		const page = await (await sys.owner()).get('/v1/admin/products/growth');
 		expect(page.json.priceListVersion).toBe(1);
 		expect(page.json.features.map((/** @type {{ key: string }} */ f) => f.key)).toEqual(manifest.features.map((f) => f.key));
-		expect(page.json.features).toHaveLength(13);
+		expect(page.json.features).toHaveLength(manifest.features.length);
 		expect(page.json.features.every((/** @type {{ millicreditsPerHour: number }} */ f) => f.millicreditsPerHour === 0)).toBe(
 			true,
 		);
