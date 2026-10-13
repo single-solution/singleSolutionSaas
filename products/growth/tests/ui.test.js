@@ -13,6 +13,7 @@ import {
 	pageView,
 	randomId,
 	searchOnPage,
+	watchNavigation,
 	watchVitals,
 } from '../ui/collect.js';
 import { storageOf } from '../ui/consent.js';
@@ -92,6 +93,16 @@ const place = (key) => {
 };
 
 const w = /** @type {any} */ (window);
+
+/**
+ * Another document loaded in the tab at an address (the page script of the one before is gone with it).
+ * @param {string} address
+ */
+const loadDocument = (address) => {
+	delete w[WIDGET_GLOBAL];
+	document.body.replaceChildren();
+	window.history.replaceState(null, '', address);
+};
 
 beforeEach(() => {
 	requests = [];
@@ -450,9 +461,8 @@ describe('store-conversion options with the real page script (PLAN 0.8.10 G1–G
 		// the next page shows it again
 		await startWidget({ window, script: script('t') }).ready;
 		expect(inside(hostOf('notice_bar'), '.notice span').textContent).toBe('Sale');
-		document.body.replaceChildren();
 		// the home page hides it
-		window.history.replaceState(null, '', '/');
+		loadDocument('/');
 		await startWidget({ window, script: script('t') }).ready;
 		expect(hostOf('notice_bar')).toBeNull();
 	});
@@ -524,8 +534,7 @@ describe('store-conversion options with the real page script (PLAN 0.8.10 G1–G
 
 		// the next page of the same tab: the same session, its second page, 40 seconds later
 		await vi.advanceTimersByTimeAsync(40_000);
-		document.body.replaceChildren();
-		window.history.replaceState(null, '', '/missing');
+		loadDocument('/missing');
 		Object.defineProperty(document, 'referrer', { value: `${window.location.origin}/shop?x=1`, configurable: true });
 		const second = startWidget({ window, script: script('t') });
 		await vi.advanceTimersByTimeAsync(0);
@@ -553,6 +562,163 @@ describe('store-conversion options with the real page script (PLAN 0.8.10 G1–G
 		const fresh = collected().at(-1);
 		expect(fresh).toMatchObject({ type: 'page_view', visit: true, page: 1 });
 		expect(fresh?.session).not.toBe(view.session);
+	});
+});
+
+describe('single-page apps (SG-4)', () => {
+	it('counts each page the app opens itself, its search and its 404, and files the vitals under the loaded page', async () => {
+		vi.useFakeTimers({ toFake: ['setTimeout', 'Date'], now: NOW });
+		Object.defineProperty(document, 'referrer', { value: 'https://www.google.com/', configurable: true });
+		serve({
+			[`GET ${CONFIG_PATH}`]: () =>
+				answer(
+					200,
+					configOf(['visitor_analytics', 'searches_404s', 'web_vitals', 'meta_pixel'], {
+						tags: { consentRequired: false },
+						meta_pixel: { pixelId: '1234567' },
+						visitor_analytics: { requireConsent: false, detail: 'sessions' },
+					}),
+				),
+			'POST /v1/collect': () => answer(202),
+		});
+		/** @type {Record<string, any>} */
+		const take = {};
+		w.PerformanceObserver = function Observer(/** @type {any} */ fn) {
+			return { observe: (/** @type {{ type: string }} */ options) => (take[options.type] = fn) };
+		};
+		const page = startWidget({ window, script: script('t') });
+		await vi.advanceTimersByTimeAsync(0);
+		await page.ready;
+		take['largest-contentful-paint']?.({ getEntries: () => [{ startTime: 2600 }] });
+
+		await vi.advanceTimersByTimeAsync(5000);
+		window.history.pushState({ n: 1 }, '', '/phones');
+		expect(window.location.pathname).toBe('/phones');
+		// the same page with other filters, and a fragment, are not pages of their own
+		window.history.replaceState({ n: 2 }, '', '/phones?brand=x');
+		window.history.pushState(null, '', '/phones?brand=x#top');
+		window.history.pushState(null, '', '/search?q=Case');
+		window.history.pushState(null, '', '/search?q=Case&page=2');
+		const marker = document.createElement('meta');
+		marker.setAttribute('name', 'ss-growth-page');
+		marker.setAttribute('content', 'not_found');
+		window.history.pushState(null, '', '/old-phone');
+		document.head.append(marker);
+		// a redirect inside the app replaces the path: a page of its own
+		await vi.advanceTimersByTimeAsync(1000);
+		marker.remove();
+		window.history.replaceState(null, '', '/phones/new');
+		await vi.advanceTimersByTimeAsync(1000);
+
+		const pages = collected().filter((event) => event.type === 'page_view');
+		expect(pages.map((event) => [event.path, event.visit, event.page])).toEqual([
+			['/', true, 1],
+			['/phones', false, 2],
+			['/search', false, 3],
+			['/search', false, 4],
+			['/old-phone', false, 5],
+			['/phones/new', false, 6],
+		]);
+		expect(pages[0]?.referrer).toBe('www.google.com');
+		expect(pages[1]).toMatchObject({ gap: 5000 });
+		expect(collected().filter((event) => event.type === 'search')).toEqual([
+			expect.objectContaining({ path: '/search', term: 'Case' }),
+		]);
+		expect(collected().filter((event) => event.type === 'not_found')).toEqual([
+			expect.objectContaining({ path: '/old-phone', referrer: '/search' }),
+		]);
+		expect(w.fbq.queue.filter((/** @type {unknown[]} */ call) => call[1] === 'Search')).toEqual([
+			['track', 'Search', { search_string: 'Case' }],
+		]);
+
+		// back: the page before is counted again
+		window.history.replaceState(null, '', '/phones');
+		window.dispatchEvent(new window.PopStateEvent('popstate'));
+		Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
+		document.dispatchEvent(new window.Event('visibilitychange'));
+		expect(
+			collected()
+				.filter((event) => event.type === 'page_view')
+				.at(-1),
+		).toMatchObject({ path: '/phones', page: 7 });
+		expect(collected().filter((event) => event.type === 'vital')).toEqual([
+			expect.objectContaining({ path: '/', name: 'LCP', value: 2600 }),
+		]);
+		Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
+		Object.defineProperty(document, 'referrer', { value: '', configurable: true });
+		delete w.PerformanceObserver;
+	});
+
+	it('a new visit started inside the app comes from the website itself', async () => {
+		vi.useFakeTimers({ toFake: ['setTimeout', 'Date'], now: NOW });
+		Object.defineProperty(document, 'referrer', { value: 'https://www.google.com/', configurable: true });
+		serve({
+			[`GET ${CONFIG_PATH}`]: () =>
+				answer(200, configOf(['visitor_analytics'], { visitor_analytics: { requireConsent: false } })),
+			'POST /v1/collect': () => answer(202),
+		});
+		const page = startWidget({ window, script: script('t') });
+		await vi.advanceTimersByTimeAsync(0);
+		await page.ready;
+		await vi.advanceTimersByTimeAsync(31 * 60_000);
+		window.history.pushState(null, '', '/later?utm_source=mail');
+		await vi.advanceTimersByTimeAsync(1000);
+		expect(collected().at(-1)).toMatchObject({
+			type: 'page_view',
+			path: '/later',
+			visit: true,
+			referrer: 'localhost',
+			campaign: { source: 'mail', medium: '', name: '' },
+		});
+		Object.defineProperty(document, 'referrer', { value: '', configurable: true });
+	});
+
+	it('the notice bar follows the app’s pages: off the pages it hides on, back after a page it was closed on', async () => {
+		serve({
+			[`GET ${CONFIG_PATH}`]: () =>
+				answer(
+					200,
+					configOf(['notice_bar'], { notice_bar: { text: 'Sale', dismissFor: 'page', hideOnPages: ['/checkout/**'] } }),
+				),
+		});
+		await startWidget({ window, script: script('t') }).ready;
+		const host = hostOf('notice_bar');
+		expect(inside(host, '.notice span').textContent).toBe('Sale');
+		window.history.pushState(null, '', '/checkout/pay');
+		expect(host.shadowRoot?.querySelector('.notice')).toBeNull();
+		window.history.pushState(null, '', '/shop');
+		expect(inside(hostOf('notice_bar'), '.notice span').textContent).toBe('Sale');
+		inside(hostOf('notice_bar'), 'button').click();
+		expect(hostOf('notice_bar')).toBeNull();
+		window.history.pushState(null, '', '/shop/phones');
+		expect(inside(hostOf('notice_bar'), '.notice span').textContent).toBe('Sale');
+	});
+
+	it('only the page script the page has now follows its navigations, and never breaks them', async () => {
+		vi.useFakeTimers({ toFake: ['setTimeout'] });
+		serve({
+			[`GET ${CONFIG_PATH}`]: () =>
+				answer(200, configOf(['visitor_analytics'], { visitor_analytics: { requireConsent: false } })),
+			'POST /v1/collect': () => answer(202),
+		});
+		const first = startWidget({ window, script: script('t') });
+		await vi.advanceTimersByTimeAsync(0);
+		await first.ready;
+		const second = startWidget({ window, script: script('t') });
+		await vi.advanceTimersByTimeAsync(0);
+		await second.ready;
+		await vi.advanceTimersByTimeAsync(1000);
+		window.history.pushState(null, '', '/next');
+		await vi.advanceTimersByTimeAsync(1000);
+		expect(collected().filter((event) => event.path === '/next')).toHaveLength(1);
+		const broken = vi.spyOn(window.Storage.prototype, 'getItem').mockImplementation(() => {
+			throw new Error('blocked');
+		});
+		window.history.pushState(null, '', '/after');
+		expect(window.location.pathname).toBe('/after');
+		broken.mockRestore();
+		await vi.advanceTimersByTimeAsync(1000);
+		expect(collected().filter((event) => event.path === '/after')).toEqual([]);
 	});
 });
 
@@ -654,6 +820,28 @@ describe('page facts', () => {
 		collector.allow(true);
 		collector.flush();
 		expect(bodies.at(-1).events).toHaveLength(25);
+	});
+
+	it('follows navigations with the history the browser has', () => {
+		const location = { href: 'https://shop.example.com/a' };
+		/** @type {Record<string, () => void>} */
+		const listeners = {};
+		const fakeWindow = /** @type {any} */ ({
+			location,
+			history: {
+				pushState: (/** @type {unknown} */ _state, /** @type {string} */ _title, /** @type {string} */ url) =>
+					(location.href = url),
+			},
+			addEventListener: (/** @type {string} */ name, /** @type {() => void} */ fn) => (listeners[name] = fn),
+		});
+		/** @type {string[]} */
+		const changes = [];
+		watchNavigation({ window: fakeWindow, change: (from) => changes.push(from.pathname) });
+		expect(fakeWindow.history.replaceState).toBeUndefined();
+		fakeWindow.history.pushState(null, '', 'https://shop.example.com/b');
+		location.href = 'https://shop.example.com/c';
+		listeners.popstate?.();
+		expect(changes).toEqual(['/a', '/b']);
 	});
 
 	it('measures Web Vitals and reports them once when the page is hidden', () => {

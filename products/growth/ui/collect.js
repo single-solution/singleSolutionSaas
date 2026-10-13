@@ -172,11 +172,12 @@ export const cameFrom = (win) => {
 /**
  * The page view of the current page: whether it starts a visit (none in the last 30 minutes in this tab's session),
  * the referring host and the campaign of a visit's first page; with a session (G3), which page of it this is and how
- * long after the last one it came.
- * @param {{ window: Window, visits: KeyValue, now: () => number, session?: Session | null }} input
+ * long after the last one it came. `inApp`: the page was opened inside the website without loading a document (a
+ * single-page app's navigation, SG-4), so it came from this website, not from the document's referrer.
+ * @param {{ window: Window, visits: KeyValue, now: () => number, session?: Session | null, inApp?: boolean }} input
  * @returns {PageEvent}
  */
-export const pageView = ({ window: win, visits, now, session = null }) => {
+export const pageView = ({ window: win, visits, now, session = null, inApp = false }) => {
 	const last = Number(visits.getItem(VISIT_STORAGE_KEY));
 	const viewed = session?.view() ?? null;
 	const visit = viewed ? viewed.visit : !(last > 0 && now() - last < VISIT_IDLE_MS);
@@ -189,7 +190,7 @@ export const pageView = ({ window: win, visits, now, session = null }) => {
 	/** @type {string | null} */
 	let referrer = null;
 	try {
-		referrer = win.document.referrer ? new URL(win.document.referrer).hostname : null;
+		referrer = inApp ? url.hostname : win.document.referrer ? new URL(win.document.referrer).hostname : null;
 	} catch {
 		referrer = null;
 	}
@@ -210,6 +211,46 @@ export const pageView = ({ window: win, visits, now, session = null }) => {
 				}
 			: {}),
 	};
+};
+
+/**
+ * Follow the page's own navigations (single-page apps, SG-4): `history.pushState` and the back and forward buttons
+ * (`popstate`) when the address (path or query string) changes, and `history.replaceState` when the path does (a
+ * query string replaced on the same path is the same page: its filters, a variant, scroll state). `change` gets the
+ * address the visitor came from; whatever it does, the page's own navigation goes on.
+ * @param {{ window: Window, change: (from: URL) => void }} input
+ */
+export const watchNavigation = ({ window: win, change }) => {
+	let current = new URL(win.location.href);
+	/** @param {boolean} pathOnly */
+	const check = (pathOnly) => {
+		const next = new URL(win.location.href);
+		const from = current;
+		current = next;
+		if (next.pathname !== from.pathname || (!pathOnly && next.search !== from.search)) change(from);
+	};
+	/** @param {boolean} pathOnly */
+	const safely = (pathOnly) => {
+		try {
+			check(pathOnly);
+		} catch {
+			// never in the way of the page's navigation
+		}
+	};
+	const history = /** @type {Record<string, unknown>} */ (/** @type {unknown} */ (win.history));
+	for (const [name, pathOnly] of /** @type {const} */ ([
+		['pushState', false],
+		['replaceState', true],
+	])) {
+		const original = history[name];
+		if (typeof original !== 'function') continue;
+		history[name] = function navigate(/** @type {unknown[]} */ ...args) {
+			const result = original.apply(this, args);
+			safely(pathOnly);
+			return result;
+		};
+	}
+	win.addEventListener('popstate', () => safely(false));
 };
 
 /**
@@ -237,7 +278,8 @@ export const markedNotFound = (doc) =>
 /**
  * Measure Web Vitals with the browser's PerformanceObserver and report them together once when the page is first
  * hidden (one batch, RT-2): LCP (last largest paint), CLS (shifts without recent input, × 1000), INP (the longest
- * interaction), FCP and TTFB.
+ * interaction), FCP and TTFB. They are the loaded document's, so a single-page app files them under the page it was
+ * loaded on (SG-4).
  * @param {{ window: Window & typeof globalThis, report: (vitals: Array<[name: string, value: number]>) => void }} input
  */
 export const watchVitals = ({ window: win, report }) => {

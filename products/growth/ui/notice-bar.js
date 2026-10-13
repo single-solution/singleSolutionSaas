@@ -1,8 +1,8 @@
 /**
  * The notice bar (visitor widget `notice_bar`; PLAN 0.8.9): the merchant's text and optional link, shown while the
- * dates of its settings say so (the server checks them when the page loads), not on the pages it is hidden on. A
- * visitor who closes it does not see the same text again during the visit (sessionStorage), or, with `dismissFor`
- * `page`, until they open another page (PLAN 0.8.10 G6).
+ * dates of its settings say so (the server checks them when the page loads), not on the pages it is hidden on (also
+ * after a single-page app's own navigation, SG-4). A visitor who closes it does not see the same text again during
+ * the visit (sessionStorage), or, with `dismissFor` `page`, until they open another page (PLAN 0.8.10 G6).
  * @module
  */
 import { mountWidget } from '@ss/app-kit/widget';
@@ -13,12 +13,13 @@ import { WIDGET_CSS } from './styles.js';
 export const NOTICE_STORAGE_KEY = 'ss-growth-notice-closed';
 
 /**
- * @param {{ host: HTMLElement, config: import('./widget.js').WidgetConfig, visits: import('./consent.js').KeyValue }} input
- * @returns {boolean} whether it is shown
+ * @param {{ host: HTMLElement, config: import('./widget.js').WidgetConfig, visits: import('./consent.js').KeyValue,
+ *   onClose: () => void }} input `onClose`: the visitor closed it
+ * @returns {(() => void) | null} takes the bar away (its host stays for the next page); null when it is not shown
  */
-export const mountNoticeBar = ({ host, config, visits }) => {
+export const mountNoticeBar = ({ host, config, visits, onClose }) => {
 	const notice = config.settings.notice;
-	if (!notice || (notice.dismissFor === 'visit' && visits.getItem(NOTICE_STORAGE_KEY) === notice.text)) return false;
+	if (!notice || (notice.dismissFor === 'visit' && visits.getItem(NOTICE_STORAGE_KEY) === notice.text)) return null;
 	/** @param {string} key */
 	const t = (key) => config.texts[key] ?? key;
 	const mounted = mountWidget({
@@ -41,11 +42,12 @@ export const mountNoticeBar = ({ host, config, visits }) => {
 					}
 					mounted.unmount();
 					host.remove();
+					onClose();
 				});
 				bar.append(close);
 			}
 			root.append(bar);
 		},
 	});
-	return true;
+	return () => mounted.unmount();
 };

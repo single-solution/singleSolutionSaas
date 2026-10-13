@@ -5,10 +5,12 @@
  * once their category is granted, shows the notice bar, records anonymous analytics (page views, searches, 404s, Web
  * Vitals) and the shop events (`ss:view_item`, `ss:add_to_cart`, `ss:begin_checkout`, `ss:purchase`), which it also
  * passes to the loaded pixels, and site searches and contacts (`ss:search`, `ss:contact`, `SSGrowth.search()`,
- * `SSGrowth.contact()`; PLAN 0.8.10 G2), which also go to the pixels. It listens for these events from the moment it
- * runs and keeps them until the config is there. Without `data-token` (the merchant's admin pages) it only offers `window.SSGrowth.admin({ getTicket })`,
- * which mounts the admin widgets of switched-on features: `analytics_dashboard` and `seo_checklist`. Nothing renders
- * while the product is stopped, its features are off or the merchant database is not connected.
+ * `SSGrowth.contact()`; PLAN 0.8.10 G2), which also go to the pixels. In a single-page app each page the app opens
+ * itself is a page too (its view, search and 404, and the notice bar's hidden pages; SG-4). It listens for these
+ * events from the moment it runs and keeps them until the config is there. Without `data-token` (the merchant's admin
+ * pages) it only offers `window.SSGrowth.admin({ getTicket })`, which mounts the admin widgets of switched-on
+ * features: `analytics_dashboard` and `seo_checklist`. Nothing renders while the product is stopped, its features are
+ * off or the merchant database is not connected.
  * @module
  */
 import { viewerOf } from '@ss/app-kit/widget';
@@ -26,6 +28,7 @@ import {
 	pageView,
 	randomId,
 	searchOnPage,
+	watchNavigation,
 	watchVitals,
 } from './collect.js';
 import { createConsent, mountConsentBanner, storageOf } from './consent.js';
@@ -33,6 +36,9 @@ import { NOTICE_STORAGE_KEY, mountNoticeBar } from './notice-bar.js';
 import { mountSeoChecklist } from './seo-checklist.js';
 import { createTags } from './tags.js';
 import { createTicketSource } from './tickets.js';
+
+/** After a single-page app's navigation, the new page's 404 marker is read this much later (once it is drawn). */
+const NOT_FOUND_DELAY_MS = 1000;
 
 /** The kit's widget config routes (browser token; ticket). */
 export const CONFIG_PATH = '/v1/widget/config';
@@ -112,6 +118,8 @@ export const startWidget = ({ window: win, script }) => {
 		else if (early.length < 50) early.push(task);
 	};
 	const path = () => win.location.pathname;
+	// the page the document was loaded on: its Web Vitals are filed under it (SG-4)
+	const landing = path();
 
 	// shop events: listened for at once, recorded and passed to the pixels once the config is there
 	for (const [name, step] of Object.entries(BROWSER_EVENTS))
@@ -190,32 +198,81 @@ export const startWidget = ({ window: win, script }) => {
 
 		if (on(config, 'consent_banner') && config.settings.consent.banner)
 			banner = mountConsentBanner({ host: hostFor('consent_banner', 'end'), config, consent });
-		const notice = config.settings.notice;
-		if (
-			on(config, 'notice_bar') &&
-			notice &&
-			!notice.hideOnPages.some((pattern) => pathMatches(pattern, path())) &&
-			(notice.dismissFor === 'page' || visits.getItem(NOTICE_STORAGE_KEY) !== notice.text)
-		)
-			mountNoticeBar({ host: hostFor('notice_bar', 'start'), config, visits });
 
-		if (record.visits) collector.record(() => pageView({ window: win, visits, now, session }));
-		// a search results page: recorded, and passed to the pixels loaded now (G2)
-		const found = searchOnPage(win, record.searchParams);
-		if (found) {
-			if (record.searches) collector.record(() => found);
-			tags.search(String(found.term));
-		}
-		/** A 404: with sessions, where its visitor came from (G3). */
-		const notFound = () => ({ type: 'not_found', path: path(), ...(session ? { referrer: cameFrom(win) } : {}) });
-		if (record.searches && markedNotFound(doc)) collector.record(notFound);
+		/** @type {(() => void) | null} takes the notice bar away while it shows */
+		let shown = null;
+		/**
+		 * The notice bar on this page: shown unless it is hidden here or closed for the visit (G6); taken away on a page
+		 * it is hidden on.
+		 */
+		const showNotice = () => {
+			const notice = config.settings.notice;
+			if (!on(config, 'notice_bar') || !notice) return;
+			if (notice.hideOnPages.some((pattern) => pathMatches(pattern, path()))) {
+				shown?.();
+				shown = null;
+			} else if (!shown && (notice.dismissFor === 'page' || visits.getItem(NOTICE_STORAGE_KEY) !== notice.text))
+				shown = mountNoticeBar({
+					host: hostFor('notice_bar', 'start'),
+					config,
+					visits,
+					onClose: () => {
+						shown = null;
+					},
+				});
+		};
+
+		/**
+		 * A 404 (with sessions, where its visitor came from, G3).
+		 * @param {string} at the page's path
+		 * @param {string | null} from a path on this website or another site's host
+		 */
+		const notFound = (at, from) => () => ({ type: 'not_found', path: at, ...(session ? { referrer: from } : {}) });
+		/** @type {string | null} the last page's search, `<path>\n<term>` */
+		let searched = null;
+		/**
+		 * The page the visitor is on: its view, a search on its address (recorded, and passed to the pixels loaded now,
+		 * G2; once while the path and the term stay the same) and, a moment after a single-page app's navigation (once
+		 * the new page is drawn), its 404 marker (SG-4).
+		 * @param {URL | null} from the address the visitor came from inside the website; null when the page was loaded
+		 */
+		const page = (from) => {
+			showNotice();
+			if (record.visits) collector.record(() => pageView({ window: win, visits, now, session, inApp: from !== null }));
+			const found = searchOnPage(win, record.searchParams);
+			const search = found ? `${found.path}\n${String(found.term)}` : null;
+			if (found && search !== searched) {
+				if (record.searches) collector.record(() => found);
+				tags.search(String(found.term));
+			}
+			searched = search;
+			if (!record.searches) return;
+			if (from === null) {
+				if (markedNotFound(doc)) collector.record(notFound(path(), cameFrom(win)));
+				return;
+			}
+			const at = path();
+			win.setTimeout(() => {
+				if (path() === at && markedNotFound(doc)) collector.record(notFound(at, from.pathname));
+			}, NOT_FOUND_DELAY_MS);
+		};
+		page(null);
+		// only the page script whose SSGrowth the page has follows its navigations (one loaded twice counts a page once)
+		if (record.visits || record.searches || config.settings.notice)
+			watchNavigation({
+				window: win,
+				change: (from) => {
+					if (/** @type {any} */ (win)[WIDGET_GLOBAL] === api) page(from);
+				},
+			});
+
 		if (record.vitals)
 			watchVitals({
 				window: win,
-				// the page's vitals go in one batch (RT-2)
+				// the page's vitals go in one batch (RT-2), filed under the page the document was loaded on (SG-4)
 				report: (vitals) => {
 					for (const [name, value] of vitals) {
-						collector.record(() => ({ type: 'vital', path: path(), name, value }));
+						collector.record(() => ({ type: 'vital', path: landing, name, value }));
 						if (record.vitalsToGa4 && Object.hasOwn(VITALS, name))
 							tags.vital(/** @type {import('../core/events.js').VitalName} */ (name), value);
 					}
