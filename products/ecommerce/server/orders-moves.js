@@ -906,8 +906,10 @@ export const createMoves = (product, service) => {
 	};
 
 	/**
-	 * Record a payment staff took (E26): a bank transfer, cash or another way, at most the balance due. With `confirm`, a
-	 * waiting order moves to its confirmed status in the same call.
+	 * Record a payment staff took (E26): a bank transfer, cash or another way, at most the balance due. The order's open
+	 * Payments payment is cancelled first, so the money cannot be taken twice (CK-21, as `paidOnConfirm` does); a payment
+	 * made there meanwhile, or a Payments that cannot be reached, refuses it. With `confirm`, a waiting order moves to its
+	 * confirmed status in the same call.
 	 * @param {Site} s
 	 * @param {any} ctx
 	 * @param {OrderRecord} order
@@ -915,6 +917,10 @@ export const createMoves = (product, service) => {
 	 * @param {OrderFlow} flow
 	 */
 	const recordPayment = async (s, ctx, order, input, flow) => {
+		const step = await payments.beforeCancel(s, order, 'Paid by hand');
+		if (step.paid || step.late) throw problem('conflict', 'Payments says this order was paid meanwhile; reload it.');
+		if (!step.reached)
+			throw problem('payments_unavailable', 'Payments cannot be reached to cancel the order’s payment there. Try again.');
 		const now = product.now();
 		const paid = order.payment.paid + input.amount;
 		const state = paymentStateOf({
@@ -938,7 +944,7 @@ export const createMoves = (product, service) => {
 		const result = await orders.updateOne(
 			{ websiteId: s.websiteId, id: order.id, 'payment.paid': order.payment.paid },
 			{
-				$set: { 'payment.paid': paid, 'payment.state': state, 'payment.checkedAt': new Date(now) },
+				$set: { ...step.set, 'payment.paid': paid, 'payment.state': state, 'payment.checkedAt': new Date(now) },
 				$push: {
 					payments: entry,
 					history: {
@@ -979,15 +985,18 @@ export const createMoves = (product, service) => {
 
 	/**
 	 * Give back what an order holds before it is deleted (E31), as a cancel does: its stock and slots, offer uses and
-	 * redeemed points (once), and its serial numbers. With `payments`, its open Payments payment is cancelled first and
-	 * a payment made meanwhile refuses the delete (K-13).
+	 * redeemed points (once), and its serial numbers. With `payments`, its open Payments payment is cancelled first; a
+	 * payment made meanwhile refuses the delete (K-13), and so does a Payments that cannot be reached (a deleted order
+	 * cannot try the cancel again later).
 	 * @param {Site} s @param {OrderRecord} order @param {{ payments?: boolean }} [options]
 	 */
 	const giveBack = async (s, order, { payments: cancelPayment = false } = {}) => {
 		// delivered, returned and settled orders hold nothing any more (what was sold stays sold)
 		if (!['awaiting_payment', 'awaiting_confirmation', 'open', 'packed', 'shipped'].includes(order.role)) return;
-		if (cancelPayment && (await payments.beforeCancel(s, order, 'Order deleted')).paid)
-			throw problem('conflict', 'This order was paid meanwhile; refund it before deleting it.');
+		const step = cancelPayment ? await payments.beforeCancel(s, order, 'Order deleted') : null;
+		if (step?.paid || step?.late) throw problem('conflict', 'This order was paid meanwhile; refund it before deleting it.');
+		if (step && !step.reached)
+			throw problem('payments_unavailable', 'Payments cannot be reached to cancel the order’s payment there. Try again.');
 		const data = await s.data();
 		if (order.stockHeld || !order.promotions.released)
 			await releaseOrder(data, order, {

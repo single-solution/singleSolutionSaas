@@ -143,7 +143,9 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 
 	/**
 	 * Start the Payments payment of an order (its total, or its COD advance). Null when Payments cannot be reached or
-	 * refuses: the order keeps waiting and the shopper can try again.
+	 * refuses: the order keeps waiting and the shopper can try again. The order takes the payment only while it has no
+	 * other: when another start won meanwhile (two "pay" at once, CK-21) or the order moved, this payment is cancelled at
+	 * Payments and the order is returned as it is now.
 	 * @param {Site} s @param {OrderRecord} order @param {string | null} returnUrl @param {string} idempotencyKey
 	 * @returns {Promise<OrderRecord | null>}
 	 */
@@ -169,13 +171,15 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 				idempotencyKey,
 			});
 			const store = createOrdersStore(await s.data());
-			return (
-				(await store.change(order, {
-					'payment.paymentId': payment.id,
-					'payment.checkoutUrl': payment.checkoutUrl,
-					'payment.checkedAt': null,
-				})) ?? null
+			const started = await store.change(
+				order,
+				{ 'payment.paymentId': payment.id, 'payment.checkoutUrl': payment.checkoutUrl, 'payment.checkedAt': null },
+				{ where: { 'payment.paymentId': order.payment.paymentId ?? null } },
 			);
+			if (started) return started;
+			const current = await store.order(order.id);
+			if (current?.payment.paymentId !== payment.id) await service.payments.cancel(s, payment.id, 'Payment started twice');
+			return current;
 		} catch (error) {
 			s.ctx.log?.warn?.('payment not started', { code: /** @type {any} */ (error)?.code ?? 'error' });
 			return null;

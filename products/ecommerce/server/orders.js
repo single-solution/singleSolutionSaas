@@ -33,6 +33,7 @@ import { COLLECTIONS } from '../core/model.js';
 import { createMedia } from './catalog-media.js';
 import { createCustomers } from './orders-customers.js';
 import { createMoves } from './orders-moves.js';
+import { openAtPayments } from './order-payments.js';
 import { SERVER_LIMITS, VISITOR_LIMITS } from './service.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
@@ -245,8 +246,39 @@ export const createOrders = (product, service, { ordering }) => {
 	};
 
 	/**
+	 * Cancel at Payments every open payment of the website's orders before they all go (K-13, CK-21), so none can be paid
+	 * once its order is gone. Refused, with nothing deleted, while Payments cannot be reached for one of them (a cancel
+	 * is idempotent, so the next try cancels the rest).
+	 * @param {Site} s
+	 */
+	const cancelOpenPayments = async (s) => {
+		const open = /** @type {OrderRecord[]} */ (
+			await (
+				await s.data()
+			)
+				.collection(COLLECTIONS.orders)
+				.find(
+					{ websiteId: s.websiteId, 'payment.paymentId': { $nin: [null, ''] }, 'payment.voidedAt': null },
+					{ projection: { _id: 0 } },
+				)
+				.toArray()
+		).filter(openAtPayments);
+		let unreachable = 0;
+		for (const order of open) {
+			const answer = await service.payments.cancel(s, /** @type {string} */ (order.payment.paymentId), 'Order deleted');
+			if (answer.outcome === 'unreachable') unreachable += 1;
+		}
+		if (unreachable > 0)
+			throw problem(
+				'payments_unavailable',
+				`Payments cannot be reached to cancel the payments of ${unreachable} orders, so no order was deleted. Try again.`,
+			);
+	};
+
+	/**
 	 * POST /v1/data/delete-all `{ scope, confirm }` (server token, E31): every record of a scope goes, after held stock
-	 * is given back; `confirm` repeats the website's domain.
+	 * is given back (and, for orders, their open Payments payments are cancelled); `confirm` repeats the website's
+	 * domain.
 	 * @param {any} ctx
 	 */
 	const deleteAll = async (ctx) => {
@@ -264,6 +296,7 @@ export const createOrders = (product, service, { ordering }) => {
 			deleted[name] = (await data.collection(name).deleteMany({ websiteId: s.websiteId })).deletedCount ?? 0;
 		};
 		if (scope === 'orders') {
+			await cancelOpenPayments(s);
 			const held = await data
 				.collection(COLLECTIONS.orders)
 				.find({ websiteId: s.websiteId, stockHeld: true }, { projection: { _id: 0 } })

@@ -2,11 +2,14 @@
  * Cancelling an order cancels its Payments payment (K-13, Payments P4): the shopper's, the staff's and the window's
  * cancel, an edit and a delete cancel the open payment first; money paid just before keeps the order paid; a Payments
  * that cannot be reached is asked again on use; money paid after the cancel is found on read and on use, shows as a
- * refund due and is refunded the normal way.
+ * refund due and is refunded the normal way; money staff record by hand, "delete all" and two "pay" at once cancel the
+ * open payment too (CK-21).
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { COLLECTIONS } from '../core/model.js';
-import { ORIGIN, PAYMENTS, readyShop } from './helpers.js';
+import { createCheckout } from '../server/checkout.js';
+import { createService } from '../server/service.js';
+import { DOMAIN, ORIGIN, PAYMENTS, readyShop } from './helpers.js';
 
 /** @type {Awaited<ReturnType<typeof readyShop>>} */
 let shop;
@@ -230,5 +233,117 @@ describe('when Payments cannot be reached, and money paid after the cancel (K-13
 		shop.advance(15 * 60_000);
 		await nextUse();
 		expect((await orderRecord(order.id)).payment.paid).toBeGreaterThan(0);
+	});
+});
+
+describe('money staff take, deletes and two "pay" at once (CK-21)', () => {
+	it('cancels the open payment before staff record money by hand, refusing when it was paid or cannot be cancelled', async () => {
+		const { order, paymentId } = await placeOrder({ payment: 'bank_transfer' });
+		const recorded = await shop.api('POST', `/v1/orders/${order.id}/payments`, {
+			method: 'bank_transfer',
+			amount: 400,
+			reference: 'TRX-1',
+		});
+		expect(recorded.status).toBe(201);
+		expect(cancelsOf(paymentId).map((call) => JSON.parse(call.body))).toEqual([{ reason: 'Paid by hand' }]);
+		expect((await orderRecord(order.id)).payment).toMatchObject({ paid: 400, state: 'unpaid', voidedAt: expect.any(Date) });
+		// the rest is recorded without asking Payments again
+		expect((await shop.api('POST', `/v1/orders/${order.id}/payments`, { method: 'cash', amount: 600 })).status).toBe(201);
+		expect(cancelsOf(paymentId)).toHaveLength(1);
+
+		const paid = await placeOrder();
+		shop.payPayment(paid.paymentId);
+		const refused = await shop.api('POST', `/v1/orders/${paid.order.id}/payments`, { method: 'cash', amount: 1000 });
+		expect(codeOf(refused)).toBe('conflict');
+		const record = await orderRecord(paid.order.id);
+		expect(record.payment).toMatchObject({ state: 'paid', paid: 1000 });
+		expect(record.payments.map((/** @type {any} */ entry) => entry.method)).toEqual(['online']);
+
+		const down = await placeOrder();
+		const restore = cancelAnswers({ status: 503, body: {} });
+		const unreachable = await shop.api('POST', `/v1/orders/${down.order.id}/payments`, { method: 'cash', amount: 500 });
+		const notDeleted = await shop.api('DELETE', `/v1/orders/${down.order.id}`);
+		restore();
+		expect(codeOf(unreachable)).toBe('payments_unavailable');
+		expect(codeOf(notDeleted)).toBe('payments_unavailable');
+		expect((await orderRecord(down.order.id)).payment.paid).toBe(0);
+	});
+
+	it('keeps one payment when two "pay" start one at once, cancelling the other at Payments', async () => {
+		// a guest order whose payment could not be started waits for "pay"
+		await shop.setting('checkout', 'guests', 'on');
+		const normal = /** @type {any} */ (shop.responders.get(PAYMENTS));
+		shop.responders.set(PAYMENTS, (call) =>
+			call.method === 'POST' && call.path === '/v1/payments' ? { status: 503, body: {} } : normal(call),
+		);
+		const item = await shop.seedProduct({ price: 1000, stock: 5 });
+		const placed = await shop.call('POST', '/v1/shop/orders', {
+			token: shop.browser,
+			origin: ORIGIN,
+			body: {
+				lines: [{ productId: item.id }],
+				payment: 'online',
+				address: ADDRESS,
+				customer: { name: 'Gina Guest', phone: '+15550007777' },
+			},
+			headers: { 'x-forwarded-for': '10.11.0.1', 'idempotency-key': 'race-1' },
+		});
+		shop.responders.set(PAYMENTS, normal);
+		expect(placed.json.next).toEqual({ kind: 'retry' });
+		const id = placed.json.order.id;
+		const winner = 'pay_other0000000001';
+		// another "pay" takes the order's payment while this one is starting its own
+		const service = createService(shop.product);
+		const { ordering } = createCheckout(shop.product, {
+			...service,
+			payments: {
+				...service.payments,
+				create: async (s, input) => {
+					const made = await service.payments.create(s, input);
+					await (
+						await shop.db()
+					)
+						.collection(COLLECTIONS.orders)
+						.updateOne(
+							{ websiteId: shop.websiteId, id },
+							{ $set: { 'payment.paymentId': winner, 'payment.checkoutUrl': `${PAYMENTS}/pay/w/${winner}` } },
+						);
+					return made;
+				},
+			},
+		});
+		const since = shop.calls.length;
+		const answer = await ordering.pay({
+			websiteId: shop.websiteId,
+			merchantId: null,
+			status: { domain: DOMAIN },
+			headers: new Headers({ 'ss-order-key': placed.json.orderKey }),
+			params: { id },
+			body: {},
+		});
+		expect(answer.next).toEqual({ kind: 'pay', url: `${PAYMENTS}/pay/w/${winner}` });
+		expect((await orderRecord(id)).payment.paymentId).toBe(winner);
+		const calls = shop.calls.slice(since).filter((call) => call.url.startsWith(PAYMENTS));
+		const started = calls.find((call) => call.method === 'POST' && call.path === '/v1/payments');
+		const cancelled = calls.filter((call) => call.path.endsWith('/cancel')).map((call) => call.path);
+		expect(started).toBeDefined();
+		expect(cancelled).toHaveLength(1);
+		expect(cancelled[0]).not.toContain(winner);
+		await shop.setting('checkout', 'guests', 'off');
+	});
+
+	it('cancels every open payment before all orders are deleted, deleting none while Payments cannot be reached', async () => {
+		const first = await placeOrder();
+		const second = await placeOrder({ payment: 'bank_transfer' });
+		const restore = cancelAnswers({ status: 503, body: {} });
+		const refused = await shop.api('POST', '/v1/data/delete-all', { scope: 'orders', confirm: DOMAIN });
+		restore();
+		expect(codeOf(refused)).toBe('payments_unavailable');
+		expect(await orderRecord(first.order.id)).not.toBeNull();
+		const done = await shop.api('POST', '/v1/data/delete-all', { scope: 'orders', confirm: DOMAIN });
+		expect(done.status).toBe(200);
+		for (const { paymentId } of [first, second])
+			expect(cancelsOf(paymentId).map((call) => JSON.parse(call.body))).toContainEqual({ reason: 'Order deleted' });
+		expect(await orderRecord(first.order.id)).toBeNull();
 	});
 });
