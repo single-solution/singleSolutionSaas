@@ -45,6 +45,10 @@ describe('channels', () => {
 		expect(normalisePhone('+92 (300) 123-4567')).toBe('+923001234567');
 		expect(normalisePhone('0092 300 1234567')).toBe('+923001234567');
 		expect(normalisePhone('03001234567')).toBeNull();
+		// the shared normaliser: a trunk 0 after the code is dropped; an unassigned code is refused
+		expect(normalisePhone('+92 0300 1234567')).toBe('+923001234567');
+		expect(normalisePhone('+44 (0)20 7946 0018')).toBe('+442079460018');
+		expect(normalisePhone('+999 1234 5678')).toBeNull();
 		expect(normalisePhone(3)).toBeNull();
 		expect(normaliseLanguage('pt-BR')).toBe('pt-BR');
 		expect(normaliseLanguage('Portuguese')).toBeNull();

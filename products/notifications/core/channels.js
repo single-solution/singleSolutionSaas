@@ -3,6 +3,7 @@
  * address. No I/O: the API, the adapters and the widgets share it.
  * @module
  */
+import { normalisePhone as normaliseAnyPhone } from '@ss/contracts/phone';
 
 /** @typedef {'email' | 'sms' | 'whatsapp' | 'push' | 'staff_push'} Channel */
 
@@ -55,17 +56,13 @@ export const normaliseEmail = (value) => {
 };
 
 /**
- * A phone number in international form (`+` and 8–15 digits; spaces, dashes, dots and brackets are dropped), or null.
- * Numbers without the leading `+` and country code are refused: the code never guesses a country.
+ * A phone number as E.164, or null: the normaliser every product shares (`@ss/contracts/phone`), with no default
+ * calling code, so a number needs its `+` or `00` and calling code (Notifications never guesses a country); a trunk 0
+ * after the code is dropped (`+92 0300 …`, `+44 (0)20 …`).
  * @param {unknown} value
  * @returns {string | null}
  */
-export const normalisePhone = (value) => {
-	if (typeof value !== 'string') return null;
-	const compact = value.trim().replace(/[\s().-]/g, '');
-	const international = compact.startsWith('00') ? `+${compact.slice(2)}` : compact;
-	return /^\+[1-9]\d{7,14}$/.test(international) ? international : null;
-};
+export const normalisePhone = (value) => normaliseAnyPhone(value);
 
 /**
  * A language tag (`en`, `ur`, `pt-BR`), or null.
