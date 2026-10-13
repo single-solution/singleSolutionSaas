@@ -9,6 +9,7 @@
 import { defineRoute } from '@ss/app-kit';
 import { createAdmin } from './admin.js';
 import { renderDocs } from './docs.js';
+import { importRoutes } from './imports.js';
 import { createInbox } from './inbox.js';
 import { createKnowledge } from './knowledge.js';
 import { createReply } from './reply.js';
@@ -561,5 +562,7 @@ export const createRoutes = (product) => {
 			auth: 'dashboard',
 			handler: admin.regenerateSecret,
 		}),
+		// records moved in from another system (ss-import, feature `import`, PLAN 0.8.10 K10)
+		...importRoutes(product),
 	];
 };

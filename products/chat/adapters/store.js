@@ -46,6 +46,8 @@ export const INDEXES = [
 	{ collection: CONVERSATIONS, keys: { websiteId: 1, guestIds: 1 }, name: 'by_guest' },
 	{ collection: CONVERSATIONS, keys: { websiteId: 1, createdAt: 1 }, name: 'by_created' },
 	{ collection: MESSAGES, keys: { websiteId: 1, conversationId: 1, seq: 1 }, name: 'by_seq', unique: true },
+	// a message by its id (imports find and replace messages by id, PLAN 0.8.10 K10)
+	{ collection: MESSAGES, keys: { websiteId: 1, id: 1 }, name: 'by_id', unique: true },
 	{ collection: GUESTS, keys: { websiteId: 1, keyHash: 1 }, name: 'by_key', unique: true },
 	{ collection: GUESTS, keys: { expireAt: 1 }, name: 'ttl', expireAfterSeconds: 0 },
 	{ collection: STAFF, keys: { websiteId: 1, id: 1 }, name: 'by_id', unique: true },

@@ -2,7 +2,7 @@
  * The product on the kit: `createProductInstance(options)` wires `@ss/app-kit` `createProduct` with Chat's manifest
  * (each feature's settings schema from `schemas/` inline), its widget texts, its Connections (storage, the main and
  * backup AI providers, and the Accounts, Notifications and Ecommerce tokens), the merchant database indexes, the
- * data-rights hooks and the widget settings, and adds the AI providers, the list settings and the tool signing secret
+ * data-rights hooks, the widget settings and what the `import` feature takes (`imports.js`), and adds the AI providers, the list settings and the tool signing secret
  * (product database) on the same outbound policy. The Next.js route and the tests pass the rest (config, store, clock,
  * network). Public entry `./product` of this package, so a system test can compose the product with `./routes`.
  * @module
@@ -55,8 +55,10 @@ import typingReceipts from '../schemas/typing_receipts.settings.json' with { typ
 import visitorAlerts from '../schemas/visitor_alerts.settings.json' with { type: 'json' };
 import visitorChat from '../schemas/visitor_chat.settings.json' with { type: 'json' };
 import webhookTools from '../schemas/webhook_tools.settings.json' with { type: 'json' };
+import importSettings from '../schemas/import.settings.json' with { type: 'json' };
 import { createAi } from './ai.js';
 import { createFileSigner, createSealer } from './crypto.js';
+import { createImportOptions } from './imports.js';
 import { LISTS, createLists } from './lists.js';
 import { INDEXES, createStore } from './store.js';
 
@@ -105,6 +107,7 @@ const SETTINGS = {
 	visitor_alerts: visitorAlerts,
 	moderation,
 	reports,
+	import: importSettings,
 };
 
 /** The manifest as the kit and the Portal take it: settings schemas inline. */
@@ -219,6 +222,13 @@ export const createProductInstance = (options) => {
 			resealProduct: () => lists.resealToolSecrets(),
 		},
 		data: { indexes: INDEXES },
+		// staff, guests, conversations and messages moved in from another system with ss-import (feature `import`,
+		// PLAN 0.8.10 K10)
+		imports: createImportOptions({
+			settings: (websiteId, feature) => product.settings.values(websiteId, feature),
+			list: (websiteId, name) => lists.get(websiteId, name),
+			business: (websiteId) => product.business(websiteId),
+		}),
 		// the settings API's `GET|PUT /v1/lists/:list` for the merchant's server (K1), checked like the dashboard's
 		lists: Object.fromEntries(
 			/** @type {import('./lists.js').ListName[]} */ (Object.keys(LISTS)).map((name) => [
