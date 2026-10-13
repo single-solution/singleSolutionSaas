@@ -231,6 +231,10 @@ describe('API descriptions', () => {
 		expect(() => api.assert({ method: 'POST', path: '/v1/payments', status: 201, body: {} })).toThrow(
 			/does not fit schemas\/api.json/,
 		);
+		// a JSON null is an answer when the description allows it
+		const notice = apiChecker({ 'GET /v1/notice': { response: { type: ['object', 'null'] } } }, { kit: false });
+		expect(notice.check({ method: 'GET', path: '/v1/notice', status: 200, body: null })).toEqual([]);
+		expect(notice.check({ method: 'GET', path: '/v1/notice', status: 200, body: {} })).toEqual([]);
 		expect(apiChecker({}, { kit: false }).described('GET', '/v1/activity')).toBeNull();
 		expect(() => apiChecker({ 'GET /v1/a': { status: 1 } })).toThrow(/the API description is invalid:\n\/GET ~1v1~1a\/status/);
 	});

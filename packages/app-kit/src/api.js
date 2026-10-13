@@ -223,6 +223,8 @@ export const apiChecker = (api, { kit = true } = {}) => {
 			if (has) out.push(`${name}: answered a JSON body, but the description has no response`);
 			return out;
 		}
+		// a JSON `null` is an answer when the description allows it (e.g. "no notice right now")
+		if (body === null && validateValue(route.entry.response, null, { schemas }).length === 0) return out;
 		if (!has) return [...out, `${name}: answered no JSON body, but the description has a response`];
 		for (const problem of validateValue(route.entry.response, body, { schemas }))
 			out.push(`${name}: ${problem.path || '(the body)'} ${problem.message}`);
