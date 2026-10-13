@@ -50,6 +50,19 @@ describe('before setup', () => {
 		expect(docs.text).toContain('accounts.phone_code');
 		expect(docs.text).toContain('/oauth/google/callback');
 		expect(docs.text).toContain('feature-email_password');
+		// the API reference: what each call takes and answers, from schemas/api.json
+		for (const part of [
+			'<a href="#op-post-v1-sign-up-password"><code>POST /v1/sign-up/password</code></a> Sign up with an e-mail address and a password',
+			'<section class="ss-api-op" id="op-post-v1-sign-up-password"><h3><code>POST /v1/sign-up/password</code> Sign up with an e-mail address and a password</h3>',
+			'<td><code>email</code></td><td>string (email)</td><td>yes</td><td>Kept in lower case.</td>',
+			'<h4>Answer 200 (JSON)</h4><p><a href="#schema-SignInAnswer">SignInAnswer</a></p>',
+			'<a href="#schema-SignedIn">SignedIn</a> or <a href="#schema-TwoStep">TwoStep</a>',
+			'<td><code>terms.acceptedAt</code></td><td>string (date-time)</td><td>yes</td>',
+			'<td><code>status</code></td><td>query</td><td>&#34;pending&#34; | &#34;invited&#34;',
+			'<a href="#op-post-v1-import-collection"><code>POST /v1/import/{collection}</code></a>',
+			'id="schema-StaffUser"',
+		])
+			expect(docs.text).toContain(part);
 		const config = await env.visitor('GET', '/v1/widget/config');
 		expect(config.json).toMatchObject({
 			features: ['email_password'],
