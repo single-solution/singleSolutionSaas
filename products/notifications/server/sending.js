@@ -11,7 +11,15 @@
 import { createId } from '@ss/contracts';
 import { problem } from '@ss/app-kit';
 import { CHANNEL_CONNECTIONS, CHANNEL_FEATURES, FALLBACK_CHANNELS, addressFor, normaliseEmail } from '../core/channels.js';
-import { DEFAULT_LANGUAGE, hiddenNamesOf, hideValues, isSensitive, pickVersion, renderTemplate } from '../core/templates.js';
+import {
+	DEFAULT_LANGUAGE,
+	hiddenNamesOf,
+	hideValues,
+	isRequired,
+	isSensitive,
+	pickVersion,
+	renderTemplate,
+} from '../core/templates.js';
 import {
 	DRAIN_BATCH,
 	LEASE_MS,
@@ -44,6 +52,7 @@ import { createStore } from '../adapters/store.js';
  * @property {Recipient} to
  * @property {Record<string, string>} values
  * @property {string[]} secretValues the values the sender names as secret: the delivery log hides them
+ * @property {boolean} required the sender marks the message required (sent whatever the recipient unsubscribed from)
  * @property {string | null} language
  * @property {number | null} sendAt
  * @property {'api' | 'staff'} source
@@ -101,8 +110,9 @@ export const createSending = (product) => {
 	});
 
 	/**
-	 * The words of a template on a channel for a recipient, with the unsubscribe link of optional messages: as sent, and
+	 * The words of a template on a channel for a recipient, with the unsubscribe link of optional templates: as sent, and
 	 * as the delivery log keeps them, with every value of a sensitive template and the values named secret hidden.
+	 * Accounts' templates are always required.
 	 * @param {Site} s
 	 * @param {{ key: string, channel: Channel, address: string, values: Record<string, string>, language: string | null,
 	 *   secretValues: string[] }} input
@@ -124,7 +134,7 @@ export const createSending = (product) => {
 		const hidden = hiddenNamesOf(values, { sensitive: isSensitive(version), secretValues });
 		const words = wordsOf(values);
 		return {
-			required: version.required,
+			required: isRequired(version),
 			urgent: version.urgent,
 			words,
 			shown: hidden.length === 0 ? words : wordsOf(hideValues(values, hidden)),
@@ -438,7 +448,8 @@ export const createSending = (product) => {
 
 	/**
 	 * Accept a message: opt-out, send limits, quiet hours and delayed send decide when (or whether) it goes; a message
-	 * due now is attempted at once.
+	 * due now is attempted at once. Opt-out stops only optional messages: a required one (by its template, Accounts'
+	 * templates or the sender) is always sent (PLAN 0.8.5).
 	 * @param {Site} s
 	 * @param {SendInput} input
 	 * @returns {Promise<{ ok: true, message: MessageRecord } | { ok: false, problem: ReturnType<typeof problem> }>}
@@ -495,7 +506,7 @@ export const createSending = (product) => {
 			to: input.to,
 			address,
 			...keep(s, { channel: input.channel, address, values: input.values, ...made }),
-			required: made.required,
+			required: made.required || input.required,
 			urgent: made.urgent,
 			status: 'queued',
 			reason: null,
@@ -507,7 +518,7 @@ export const createSending = (product) => {
 			leaseUntil: null,
 			sentAt: null,
 		};
-		if (!made.required && (await s.store.optouts.has(address)))
+		if (!base.required && (await s.store.optouts.has(address)))
 			return {
 				ok: true,
 				message: await s.store.messages.add({

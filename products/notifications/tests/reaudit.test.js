@@ -1,7 +1,8 @@
 /**
  * Notifications after the re-audit (PLAN 0.8.10, owner decisions D7 and D11): the delivery log never keeps a secret,
- * and is kept for the days the merchant sets.
+ * and is kept for the days the merchant sets; required messages ignore opt-outs (PLAN 0.8.5).
  */
+import { createHmac } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { checkSecretValues, hideValues, hiddenNamesOf } from '../core/templates.js';
 import { ADMIN_ORIGIN, HOOK_URL, setup } from './helpers.js';
@@ -272,5 +273,71 @@ describe('the delivery log is kept for the days the merchant sets (D11, SE-6)', 
 		await env.setting('delivery_log', 'retentionDays', 0);
 		const kept = await env.send('sms', { template: 'note', to: { phone: '+15550003030' }, values: { n: '4' } });
 		expect((await raw(kept.json.id)).expireAt).toBeNull();
+	});
+});
+
+describe('required messages are never stopped by an opt-out (PLAN 0.8.5, MS-4)', () => {
+	/** Opt a phone out with a signed Twilio reply (STOP). @param {string} phone */
+	const stop = async (phone) => {
+		const url = `https://notifications.example.dev/v1/inbound/${env.websiteId}/sms`;
+		const params = new URLSearchParams({ From: phone, Body: 'STOP' });
+		const data = [...params.keys()].sort().reduce((text, name) => `${text}${name}${params.get(name)}`, url);
+		const signature = createHmac('sha1', TWILIO.secret).update(data).digest('base64');
+		const answer = await env.call('POST', `/v1/inbound/${env.websiteId}/sms`, {
+			raw: params.toString(),
+			headers: { 'x-twilio-signature': signature },
+		});
+		expect(answer.status).toBe(200);
+	};
+	/** Save a template as optional, as templates were saved before (straight in the merchant database). @param {string} key @param {string} channel */
+	const asSavedBefore = async (key, channel) =>
+		(await env.merchantCollection('templates')).updateOne(
+			{ websiteId: env.websiteId, key, channel, language: '' },
+			{ $set: { required: false } },
+		);
+
+	it('sends Accounts’ messages after a STOP reply or an unsubscribe, without unsubscribe headers', async () => {
+		await asSavedBefore('accounts.phone_code', 'sms');
+		await stop('+15550004040');
+		const code = await env.send('sms', {
+			template: 'accounts.phone_code',
+			to: { phone: '+15550004040' },
+			values: { code: '909090' },
+		});
+		expect(code.json).toMatchObject({ status: 'sent' });
+		expect(new URLSearchParams(lastBody('https://api.twilio.com')).get('Body')).toBe('Code 909090');
+		await env.template({ key: 'promo_sms', channel: 'sms', text: 'Sale {pct}' });
+		expect(
+			(await env.send('sms', { template: 'promo_sms', to: { phone: '+15550004040' }, values: { pct: '5%' } })).json,
+		).toMatchObject({ status: 'skipped', reason: 'unsubscribed' });
+		// an e-mail of Accounts carries no unsubscribe link or header
+		await asSavedBefore('accounts.email_code', 'email');
+		await env.send('email', {
+			template: 'accounts.email_code',
+			to: { email: 'cy@example.com' },
+			values: { code: '1', link: 'https://shop.example.com/in', minutes: 10, business: 'Shop' },
+		});
+		expect(JSON.parse(lastBody('https://api.resend.com')).headers?.['List-Unsubscribe']).toBeUndefined();
+		const templates = await (
+			await env.dashboard(await env.adminSession(), 'GET', `/v1/dashboard/websites/${env.websiteId}/templates`)
+		).json();
+		expect(templates.items).toContainEqual(
+			expect.objectContaining({ key: 'accounts.phone_code', channel: 'sms', required: true }),
+		);
+	});
+
+	it('sends an optional template to people who unsubscribed when the sender marks the message required', async () => {
+		await stop('+15550004041');
+		const order = await env.send('sms', {
+			template: 'promo_sms',
+			to: { phone: '+15550004041' },
+			values: { pct: '10%' },
+			required: true,
+		});
+		expect(order.json.status).toBe('sent');
+		expect(
+			(await env.send('sms', { template: 'promo_sms', to: { phone: '+15550004041' }, values: { pct: '1%' } })).json.status,
+		).toBe('skipped');
+		expect((await env.send('sms', { template: 'promo_sms', to: { phone: '+15550004041' }, required: 'yes' })).status).toBe(422);
 	});
 });

@@ -59,7 +59,7 @@
 	"templates.subject": "Subject or title",
 	"templates.text": "Message",
 	"templates.help": "Write {name} where a value goes, and {section} around text shown only when name has a value. Optional messages can use {unsubscribeUrl}.",
-	"templates.required": "Required message: always sent, even to people who unsubscribed",
+	"templates.required": "Required message: always sent, even to people who unsubscribed (always for accounts. templates)",
 	"templates.urgent": "Urgent: sent during quiet hours",
 	"templates.sensitive": "Sensitive (codes, links): its values are hidden in the delivery log (always for accounts. templates)",
 	"templates.providerTemplate": "WhatsApp template name at Meta (optional)",

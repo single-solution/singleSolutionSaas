@@ -17,8 +17,9 @@ const TEMPLATE_KEY = /^[a-z][a-z0-9_.-]{0,63}$/;
 const PRODUCT_KEY_PREFIXES = Object.freeze(['accounts.', 'ecommerce.', 'chat.', 'payments.', 'growth.']);
 
 /**
- * Template keys of Accounts' messages (sign-in codes, magic, reset and setup links, account updates): always sensitive,
- * whatever the template says (PLAN 0.8.10 D11).
+ * Template keys of Accounts' messages (sign-in codes, magic, reset and setup links, account updates): always required
+ * (no unsubscribe or STOP reply stops them, PLAN 0.8.5) and always sensitive (PLAN 0.8.10 D11), whatever the template
+ * says.
  */
 const ACCOUNT_KEY_PREFIX = 'accounts.';
 
@@ -56,7 +57,8 @@ const LANGUAGE = /^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8}){0,3}$/;
  * @property {string} language `''` for the default version
  * @property {string} subject e-mail subject or push title (`''` for SMS and WhatsApp)
  * @property {string} text
- * @property {boolean} required required messages (sign-in codes, order and account updates) ignore unsubscribes
+ * @property {boolean} required required messages (sign-in codes, order and account updates) ignore unsubscribes;
+ *   Accounts' templates always are
  * @property {boolean} urgent urgent messages ignore quiet hours
  * @property {string} providerTemplate WhatsApp: the name of an approved Meta template (`''` = plain text)
  * @property {Button[]} [buttons] WhatsApp templates at Meta: the buttons that take a value (PLAN 0.8.10 N1); missing on
@@ -90,6 +92,13 @@ export const isProductKey = (key) => PRODUCT_KEY_PREFIXES.some((prefix) => key.s
  * @param {string} key
  */
 export const isAccountKey = (key) => key.startsWith(ACCOUNT_KEY_PREFIX);
+
+/**
+ * Whether the messages of a template are required (sent to people who unsubscribed): Accounts' always, else when the
+ * merchant marks the template.
+ * @param {Pick<Template, 'key' | 'required'>} template
+ */
+export const isRequired = (template) => template.required === true || isAccountKey(template.key);
 
 /**
  * Whether the messages of a template are sensitive: Accounts' always, else when the merchant marks the template.
@@ -227,7 +236,7 @@ export const checkTemplate = (input) => {
 			language: lang,
 			subject: titled ? subject : '',
 			text,
-			required: body.required === true,
+			required: isRequired({ key: body.key, required: body.required === true }),
 			urgent: body.urgent === true,
 			providerTemplate,
 			buttons: buttons.value,
@@ -365,7 +374,7 @@ export const templateView = (template) => ({
 	language: template.language === DEFAULT_LANGUAGE ? 'default' : template.language,
 	subject: template.subject,
 	text: template.text,
-	required: template.required,
+	required: isRequired(template),
 	urgent: template.urgent,
 	providerTemplate: template.providerTemplate,
 	buttons: template.buttons ?? [],

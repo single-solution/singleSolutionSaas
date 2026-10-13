@@ -113,6 +113,8 @@ export const createRoutes = (product) => {
 		if (!values.ok) return invalid('values', 'values must map up to 50 names to text or numbers (at most 1000 characters).');
 		const secretValues = checkSecretValues(body.secretValues);
 		if (!secretValues.ok) return invalid('secretValues', 'secretValues lists up to 50 value names.');
+		if (body.required !== undefined && typeof body.required !== 'boolean')
+			return invalid('required', 'required is true or false.');
 		if (body.language !== undefined && languageOfSegment(body.language) === null)
 			return invalid('language', 'Use a language code such as en, ur or pt-BR.');
 		const s = await siteOf(ctx);
@@ -134,6 +136,7 @@ export const createRoutes = (product) => {
 			to: to.value,
 			values: values.value,
 			secretValues: secretValues.value,
+			required: body.required === true,
 			language: body.language ?? to.value.language,
 			sendAt,
 			source: 'api',
@@ -548,6 +551,7 @@ export const createRoutes = (product) => {
 						to: { ...to, language: language || null },
 						values: values.value,
 						secretValues: [],
+						required: false,
 						language: language || null,
 						sendAt: null,
 						source: 'staff',
@@ -566,6 +570,7 @@ export const createRoutes = (product) => {
 						to,
 						values: {},
 						secretValues: [],
+						required: false,
 						language: null,
 						sendAt: null,
 						source: 'staff',
