@@ -3001,6 +3001,41 @@ record by hand does not cancel an open Payments payment, and two "pay" calls at 
 not cancel payments; K-23 store rules for the owner (refunded move records the unrecorded part as `other`, RTO keeps
 redeemed points spent, restock on refund after delivery, dispatched→refunded); AO-1 and CU-3 (report and spend basis).
 
+Built after the re-audit, fourth batch (2026-10-13; commits f80a9f07, 1a0f5ad5, 982cd878, bbf90e6d, 6faf925d, 5df2ca02,
+e46a6ce4, e0fc91dc, e1a3c23e, 41c341b4):
+
+**E71. One phone normaliser (always; K12).** Guest checkout, guest alerts, the Payments customer phone and staff alert
+recipients use `normalisePhone`; the default calling code is `checkout.defaultCallingCode`, else the business.json
+country's, and an empty `trunkPrefix` is the country's usual one. The delivery-address phone is kept as E.164 when it
+can be read, else as typed (the courier calls it).
+
+**E72. The shopper's data export (always; SE-1).** Orders as `GET /v1/shop/orders/:id` shows them; customer records
+without blocked, blockedReason, rtoCount, seenBy, note or phoneDigits.
+
+**E73. Reviewer names in JSON-LD (always; EN-2).** The Review author follows `reviews.nameFormat`.
+
+**E74. Outbox privacy and alert retries (always; E63).** A data-rights delete removes the person's outbox rows (sent to
+their addresses or about their orders). An alert that reached no one waits and is tried again on use after 1, 5, 15 and
+60 minutes, then ends `failed`; it is sent per channel, so a channel that got through is never sent twice.
+
+**E75. Manual transfers need the details (always; CK-33).** With `bankTransferVia: manual` and Payments connected, bank
+transfer is `not_ready` until Payments reports `ready` (its `requireDetails` is respected).
+
+**E76. Merchant COD switch (AO-2).** Key: `cod.enabled` (true default | false: no cash on delivery for new orders; staff
+edits of existing COD orders keep it).
+
+**E77. Free prepaid orders (CK-41).** Key: `checkout.freeOrderStart` (`awaiting_confirmation` default |
+`awaiting_payment`: a free online or bank-transfer order starts awaiting payment, already paid, with no Payments payment
+and no time to pay).
+
+**E78. The rest of CK-21 (always).** A payment staff record by hand cancels the open Payments payment first (paid
+meanwhile: 409; Payments unreachable: 503). Deleting one order, or all orders, is refused while Payments cannot be
+reached; delete-all cancels every open payment first. A payment start writes the order only while it has no other
+payment; the losing payment is cancelled.
+
+**E79. Phone countries (SE-5).** Key: `checkout.countries` ([] default = any | ISO codes). Guest order and alert phones
+of other countries are refused (`country_not_allowed`); a member's phone of another country is left out of alerts.
+
 #### Chat
 
 **C1. Longer instructions and store context** (changes 0.8.3).
