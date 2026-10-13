@@ -21,6 +21,7 @@
 import { createId } from '@ss/contracts';
 import { isProblem, problem } from '../../../infra/http.js';
 import { afterResponse, memoize } from '../../../infra/request-scope.js';
+import { sha256Hex } from '../../../infra/util.js';
 import {
 	OPEN_PHASE,
 	billingStateOf,
@@ -604,41 +605,84 @@ export const createBilling = ({ ctx, repo, deps, ledger, statusChanged }) => {
 	/**
 	 * Add credits as a receipt (Owner and Finance). The merchant is checked first, so the receipt pays the debt from
 	 * an up-to-date balance; a receipt that brings it above 0 ends grace or a stop at once.
-	 * @param {{ merchantId: string, amount: number, amountPaid: string, method: string, reference: string | null } & Caller} input
+	 *
+	 * The request's `Idempotency-Key` names the receipt (`entryKey`, unique per merchant), so a repeat of a request the
+	 * Portal saved, even one whose answer was lost, returns the saved receipt and adds nothing (receipts are never
+	 * voided, 0.5.8). Once the receipt is saved, nothing after it (summary, notices, Activity, e-mail) can fail the
+	 * request: a failure there is logged.
+	 * @param {{ merchantId: string, amount: number, amountPaid: string, method: string, reference: string | null,
+	 *   idempotencyKey?: string | null } & Caller} input
 	 */
-	const addReceipt = async ({ merchantId, amount, amountPaid, method, reference, actor, requestId = null, ip = null }) => {
+	const addReceipt = async ({
+		merchantId,
+		amount,
+		amountPaid,
+		method,
+		reference,
+		idempotencyKey = null,
+		actor,
+		requestId = null,
+		ip = null,
+	}) => {
 		const merchant = await deps.getMerchant(merchantId);
 		const before = await check(merchantId);
+		const entryKey = idempotencyKey
+			? `receipt:key:${sha256Hex(`${actor.type}:${actor.id}\n${idempotencyKey}`)}`
+			: `receipt:${createId('rct', { randomBytes: ctx.randomBytes })}`;
 		const { appended } = await ledger.append(merchantId, [
 			{
 				type: 'receipt',
 				amount,
-				entryKey: `receipt:${createId('rct', { randomBytes: ctx.randomBytes })}`,
+				entryKey,
 				reference,
 				actor: { type: actor.type, id: actor.id },
 				details: { amountPaid, method },
 			},
 		]);
-		const entry = /** @type {Doc} */ (appended[0]);
-		const after = await summary(merchantId);
+		const entry = /** @type {Doc} */ (appended[0] ?? (await repo.ledgerOf(merchantId).findOne({ merchantId, entryKey })));
+		const same =
+			entry.amount === amount &&
+			entry.reference === (reference ?? null) &&
+			entry.details?.amountPaid === amountPaid &&
+			entry.details?.method === method;
+		if (!same) throw problem('idempotency_conflict', 'This Idempotency-Key was used for another receipt.');
+		/**
+		 * @template T
+		 * @param {string} step @param {() => Promise<T>} run @returns {Promise<T | null>}
+		 */
+		const afterSaving = async (step, run) => {
+			try {
+				return await run();
+			} catch (error) {
+				ctx.logger.warn('receipt saved; a later step failed', { merchantId, step, error });
+				return null;
+			}
+		};
+		const after = await afterSaving('summary', () => summary(merchantId));
+		// a repeat: the receipt was saved, told and logged by the first request
+		if (appended.length === 0) return { receipt: receiptView(entry, true), summary: after };
 		// credits that end grace or a stop restart the products at once (PLAN 0.5.6)
-		if ((before.state === 'grace' || before.state === 'stopped') && after.status !== 'grace' && after.status !== 'stopped')
-			await statusChanged(merchantId);
-		await ctx.audit.record({
-			actor: /** @type {any} */ (actor),
-			action: 'credits.added',
-			target: { type: 'merchant', id: merchantId, merchantId },
-			after: { credits: amount, method, reference },
-			requestId,
-			ip,
+		if ((before.state === 'grace' || before.state === 'stopped') && after?.status !== 'grace' && after?.status !== 'stopped')
+			await afterSaving('status.changed', () => statusChanged(merchantId));
+		await afterSaving('activity', () =>
+			ctx.audit.record({
+				actor: /** @type {any} */ (actor),
+				action: 'credits.added',
+				target: { type: 'merchant', id: merchantId, merchantId },
+				after: { credits: amount, method, reference },
+				requestId,
+				ip,
+			}),
+		);
+		await afterSaving('mail', async () => {
+			const contacts = await deps.billingContacts(merchantId);
+			if (contacts.merchantEmail && after)
+				await mail({
+					to: contacts.merchantEmail,
+					template: 'credits_added',
+					data: { merchantName: merchant.name, credits: creditsText(amount), balance: creditsText(after.balance) },
+				});
 		});
-		const contacts = await deps.billingContacts(merchantId);
-		if (contacts.merchantEmail)
-			await mail({
-				to: contacts.merchantEmail,
-				template: 'credits_added',
-				data: { merchantName: merchant.name, credits: creditsText(amount), balance: creditsText(after.balance) },
-			});
 		return { receipt: receiptView(entry, true), summary: after };
 	};
 

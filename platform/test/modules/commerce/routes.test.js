@@ -155,4 +155,30 @@ describe('commerce routes and tenant isolation', () => {
 		});
 		expect(STAFF.type).toBe('admin');
 	});
+
+	it('saves a receipt once: a failure after saving still answers 201, and its key never saves it again (BP-2)', async () => {
+		const h = await bootCommerce({ mongo, dbName: 'cm_receipt_once', clock: createClock(T0) });
+		const admin = await h.login({ kind: 'admin', subject: 'adm_owner' });
+		const form = { credits: 5000, amountPaid: 'PKR 5,000', method: 'Bank transfer' };
+		const key = { 'idempotency-key': 'add-credits-dialog-1' };
+		const post = () => h.call('POST', `/v1/admin/merchants/${M1}/receipts`, { headers: { ...admin, ...key }, body: form });
+		// the e-mail contacts cannot be read after the receipt is saved: logged, not a 500 that frees the key
+		h.world.failContacts = true;
+		const added = await post();
+		h.world.failContacts = false;
+		expect([added.status, added.json.summary.balance]).toEqual([201, 5_000_000]);
+		expect(h.logs.find((l) => l.msg === 'receipt saved; a later step failed')?.fields).toMatchObject({ step: 'mail' });
+		expect((await post()).headers.get('idempotent-replayed')).toBe('true');
+		// the same request again once the stored answer is gone (a crash after saving, or the key's time passed)
+		const repeat = { merchantId: M1, amount: 5_000_000, amountPaid: 'PKR 5,000', method: 'Bank transfer', reference: null };
+		const caller = { actor: /** @type {const} */ ({ type: 'admin', id: 'adm_owner' }), idempotencyKey: key['idempotency-key'] };
+		const again = await h.service.addReceipt({ ...repeat, ...caller });
+		expect(again.receipt.receiptId).toBe(added.json.receipt.receiptId);
+		expect(again.summary?.balance).toBe(5_000_000);
+		await expect(h.service.addReceipt({ ...repeat, ...caller, amount: 1000 })).rejects.toMatchObject({
+			code: 'idempotency_conflict',
+		});
+		expect(await h.db.collection('commerce_ledger').countDocuments({ merchantId: M1, type: 'receipt' })).toBe(1);
+		expect(h.mails.filter((m) => m.template === 'credits_added')).toEqual([]);
+	});
 });

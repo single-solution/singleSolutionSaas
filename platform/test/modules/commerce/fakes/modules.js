@@ -18,6 +18,7 @@ import { defineModule } from '../../../../src/infra/modules.js';
  * @property {Array<{ merchantId: string, websiteId: string, productId: string }>} tokens tokens ensured
  * @property {boolean} failNotices
  * @property {boolean} [failTokens] ensureTokens throws
+ * @property {boolean} [failContacts] billingContacts throws
  */
 
 /** @returns {World} */
@@ -57,11 +58,14 @@ export const fakeModules = (world) => [
 							return [id, { name: m.name, deleted: m.status === 'deleted' }];
 						}),
 				),
-			billingContacts: async (/** @type {string} */ merchantId) => ({
-				merchantName: world.merchants.get(merchantId)?.name ?? merchantId,
-				merchantEmail: `owner@${merchantId}.example`,
-				adminEmails: ['finance@portal.example'],
-			}),
+			billingContacts: async (/** @type {string} */ merchantId) => {
+				if (world.failContacts) throw new Error('contacts are down');
+				return {
+					merchantName: world.merchants.get(merchantId)?.name ?? merchantId,
+					merchantEmail: `owner@${merchantId}.example`,
+					adminEmails: ['finance@portal.example'],
+				};
+			},
 			dashboardAdmin: async (/** @type {unknown} */ adminId) => {
 				const admin = world.admins.get(String(adminId));
 				if (!admin || admin.status !== 'active') throw problem('validation_failed', 'adminId is not a current admin.');

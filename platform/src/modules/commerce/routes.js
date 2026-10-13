@@ -152,7 +152,14 @@ export const commerceRoutes = (service, now) => {
 			handler: async (c) => {
 				const checked = checkReceipt(c.body);
 				if (!checked.ok) return invalid(checked.errors, 'The receipt is invalid.');
-				return created(await service.addReceipt({ merchantId: c.params.merchantId ?? '', ...checked.value, ...callerOf(c) }));
+				return created(
+					await service.addReceipt({
+						merchantId: c.params.merchantId ?? '',
+						...checked.value,
+						idempotencyKey: c.idempotencyKey ?? null,
+						...callerOf(c),
+					}),
+				);
 			},
 		}),
 		defineRoute({
