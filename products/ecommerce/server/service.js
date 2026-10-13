@@ -138,8 +138,9 @@ const RETRY_REASONS = Object.freeze(['unreachable', 'unavailable', 'refused']);
 
 /**
  * What a call to Notifications means for a saved message: taken (a 409 `duplicate_request` is an earlier try of the same
- * message that got through), not connected, to try again (no answer, 5xx, the address book down, a refused token, 408
- * or 429), or refused for good (a missing template, values it refuses …).
+ * message that got through), not connected, to try again (no answer, 5xx, the address book down, a refused token, 408,
+ * 429, or 409 `in_progress`: an earlier try of the same message still runs, K-14), or refused for good (a missing
+ * template, values it refuses …).
  * @param {{ ok: boolean, reason?: string, status?: number, body?: unknown }} answer
  * @returns {'sent' | 'not_connected' | 'retry' | 'failed'}
  */
@@ -147,8 +148,15 @@ export const outcomeOf = (answer) => {
 	if (answer.ok) return 'sent';
 	if (answer.reason === 'not_connected') return 'not_connected';
 	const type = /** @type {any} */ (answer.body)?.type;
-	if (answer.status === 409 && typeof type === 'string' && type.endsWith('/duplicate_request')) return 'sent';
-	if (RETRY_REASONS.includes(String(answer.reason)) || answer.status === 408 || answer.status === 429) return 'retry';
+	const code = typeof type === 'string' ? type.split('/').pop() : '';
+	if (answer.status === 409 && code === 'duplicate_request') return 'sent';
+	if (
+		RETRY_REASONS.includes(String(answer.reason)) ||
+		answer.status === 408 ||
+		answer.status === 429 ||
+		(answer.status === 409 && code === 'in_progress')
+	)
+		return 'retry';
 	return 'failed';
 };
 

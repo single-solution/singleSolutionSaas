@@ -12,7 +12,7 @@ import { ACCOUNTS, NOTIFY, ORIGIN, readyShop } from './helpers.js';
 /** @type {Awaited<ReturnType<typeof readyShop>>} */
 let shop;
 let users = 0;
-/** How the fake Notifications answers a send. @type {'ok' | 'down' | 'duplicate' | 'missing'} */
+/** How the fake Notifications answers a send. @type {'ok' | 'down' | 'duplicate' | 'running' | 'missing'} */
 let mode = 'ok';
 
 const ADDRESS = { name: 'Sara Shopper', phone: '+15550001111', line1: '1 Main Street', city: 'Springfield', country: 'US' };
@@ -63,6 +63,7 @@ beforeAll(async () => {
 		if (!call.path.startsWith('/v1/messages/')) return { status: 200, body: {} };
 		if (mode === 'down') return { status: 503, body: { type: 'https://errors.example/unavailable' } };
 		if (mode === 'duplicate') return { status: 409, body: { type: 'https://errors.example/duplicate_request' } };
+		if (mode === 'running') return { status: 409, body: { type: 'https://errors.example/in_progress' } };
 		if (mode === 'missing') return { status: 404, body: { type: 'https://errors.example/template_not_found' } };
 		return { status: 201, body: { id: 'msg_1', status: 'queued' } };
 	});
@@ -145,6 +146,24 @@ describe('required messages (K-17)', () => {
 		const since = shop.calls.length;
 		await useAfter(61_000);
 		expect(sendsSince(since)).toHaveLength(0);
+	});
+
+	it('keeps a message whose earlier try still runs in Notifications (409 in_progress) and sends it later (K-14)', async () => {
+		mode = 'running';
+		const since = shop.calls.length;
+		await placeOrder();
+		const first = sendsSince(since);
+		expect(first).toHaveLength(3);
+		expect(await outbox()).toHaveLength(3);
+		mode = 'ok';
+		const later = shop.calls.length;
+		await useAfter(61_000);
+		expect(
+			sendsSince(later)
+				.map((m) => m.key)
+				.sort(),
+		).toEqual(first.map((m) => m.key).sort());
+		expect(await outbox()).toEqual([]);
 	});
 
 	it('gives a message up a day after it was saved', async () => {
@@ -245,5 +264,8 @@ describe('required messages (K-17)', () => {
 		expect(outcomeOf({ ok: false, reason: 'failed', status: 422 })).toBe('failed');
 		expect(outcomeOf({ ok: false, reason: 'failed', status: 409, body: { type: 'x/conflict' } })).toBe('failed');
 		expect(outcomeOf({ ok: false, reason: 'failed', status: 409, body: { type: 'x/duplicate_request' } })).toBe('sent');
+		// an earlier try of the same message still runs in Notifications (K-14): tried again, never dropped
+		expect(outcomeOf({ ok: false, reason: 'failed', status: 409, body: { type: 'x/in_progress' } })).toBe('retry');
+		expect(outcomeOf({ ok: false, reason: 'failed', status: 409 })).toBe('failed');
 	});
 });
