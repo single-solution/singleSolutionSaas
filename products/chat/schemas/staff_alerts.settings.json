@@ -7,7 +7,7 @@
 			"title": "Inbox address",
 			"default": "",
 			"maxLength": 500,
-			"description": "The page of your admin with the inbox widget, for example https://admin.shop.com/inbox. Alerts link to it with the conversation id."
+			"description": "The page of your admin with the inbox widget, for example https://admin.shop.com/inbox. Alerts link to it with ?conversation=<id>, or with the id where you write {id}, for example https://admin.shop.com/chats?open={id}."
 		},
 		"recipients": {
 			"type": "array",

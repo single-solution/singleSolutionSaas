@@ -299,3 +299,35 @@ describe('handoffs, assignment, sign-in claims and staff alerts (CH-3, CH-5, CH-
 		expect(sys.messages().at(-1).values).toMatchObject({ name: 'Ann', phone: '+923001234567', message: 'Call me' });
 	});
 });
+
+describe('options from the settings draft (CH-13, CH-21, RW-8)', () => {
+	it('the inbox can show signed-in visitors only; alerts link with {id}; tables get messages of their own', async () => {
+		const sys = await start(['visitor_chat', 'guest_chat', 'signed_in_chat', 'ai_replies', 'inbox', 'staff_alerts']);
+		await sys.paste('accounts');
+		await sys.paste('notifications');
+		await sys.setting('inbox', 'guests', 'signed_in');
+		await sys.setting('staff_alerts', 'recipients', ['boss@shop.example.com']);
+		await sys.setting('staff_alerts', 'inboxUrl', 'https://admin.shop.example.com/inquiries?inquiry={id}');
+		await sys.setting('ai_replies', 'bubbles', 5);
+		await sys.setting('ai_replies', 'tableBubble', true);
+		sys.ai({ text: 'Two fans:\n| Fan | Price |\n|---|---|\n| A | Rs 1 |\nWant one?' }, { text: 'Hi Ann.' });
+		const guest = sys.visitor();
+		await guest('POST', '/v1/chat/messages', { text: 'fans?' });
+		expect(texts((await guest('GET', '/v1/chat')).json).slice(1)).toEqual([
+			['ai', 'Two fans:'],
+			['ai', '| Fan | Price |\n|---|---|\n| A | Rs 1 |'],
+			['ai', 'Want one?'],
+		]);
+		const id = (await guest('GET', '/v1/chat')).json.conversation.id;
+		expect(sys.messages()[0].values.link).toBe(`https://admin.shop.example.com/inquiries?inquiry=${id}`);
+		const signIn = await sys.accounts.signIn({ websiteId: sys.websiteId, sub: 'usr_ann', name: 'Ann' });
+		await sys.visitor({ signIn })('POST', '/v1/chat/messages', { text: 'hello' });
+		const list = (await sys.serverCall('GET', '/v1/conversations')).json;
+		expect(list.items.map((/** @type {any} */ c) => c.visitor.kind)).toEqual(['user']);
+		expect((await sys.serverCall('GET', '/v1/conversations?visitor=guest')).json.items).toEqual([]);
+		expect((await sys.serverCall('GET', '/v1/conversations/count')).json.count).toBe(1);
+		expect((await sys.serverCall('GET', '/v1/inbox/unread')).json).toMatchObject({ unread: 1, conversations: 1, open: 1 });
+		await sys.setting('inbox', 'guests', 'all');
+		expect((await sys.serverCall('GET', '/v1/conversations/count')).json.count).toBe(2);
+	});
+});

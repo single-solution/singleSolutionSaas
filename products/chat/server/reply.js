@@ -826,7 +826,9 @@ export const createReply = (product, service) => {
 				own: { email, phone },
 			});
 			if (checked.ok) {
-				const parts = splitBubbles(await linksOf(s, checked.text), reassure ? 1 : Number(settings.bubbles));
+				const parts = splitBubbles(await linksOf(s, checked.text), reassure ? 1 : Number(settings.bubbles), {
+					tables: settings.tableBubble === true,
+				});
 				const posted = await post(parts.length > 0 ? parts : [checked.text]);
 				if (result.escalation) await handOff(s, posted);
 				return settle();

@@ -2,10 +2,12 @@
  * PLAN 0.8.10 Chat, fixes after the re-audit (pure parts): the language lock tells languages of one script apart by
  * their letters and the merchant's marker words, with the merchant's thresholds, quoted phrases and romanised marker
  * lines; replies are checked whole or part by part, and a language may be accepted in Latin letters too (CH-16 to
- * CH-19, CH-38, CH-39). Urdu and Roman Urdu are only examples here: nothing in Chat is about one language.
+ * CH-19, CH-38, CH-39). Urdu and Roman Urdu are only examples here: nothing in Chat is about one language. Tables in
+ * messages of their own (CH-21).
  */
 import { describe, expect, it } from 'vitest';
 import { detectLanguage, markerSetsOf, replyMatchesLanguage, translationOf } from '../core/language.js';
+import { splitBubbles } from '../core/markdown.js';
 import { buildSystemPrompt } from '../core/prompt.js';
 
 const ROMAN = markerSetsOf(['ur-Latn: hai kya ye kitne ka bhai ji haan batao price "stock mein"']);
@@ -99,5 +101,29 @@ describe('the language of a reply (CH-16, CH-18, CH-19)', () => {
 		expect(prompt).toContain(
 			'Answer only in Urdu (ur), whatever language the knowledge is in. Urdu (Latin) (ur-Latn) is fine too.',
 		);
+	});
+});
+
+describe('tables in messages of their own (CH-21)', () => {
+	it('splits around each table within the most messages; off, only on --- lines', () => {
+		const answer = 'Two fans:\n| Fan | Price |\n|---|---|\n| A | 1 |\n| B | 2 |\nWant one?\n---\n|x|\n|---|\nBye';
+		expect(splitBubbles(answer, 5)).toEqual([
+			'Two fans:\n| Fan | Price |\n|---|---|\n| A | 1 |\n| B | 2 |\nWant one?',
+			'|x|\n|---|\nBye',
+		]);
+		expect(splitBubbles(answer, 5, { tables: true })).toEqual([
+			'Two fans:',
+			'| Fan | Price |\n|---|---|\n| A | 1 |\n| B | 2 |',
+			'Want one?',
+			'|x|\n|---|',
+			'Bye',
+		]);
+		expect(splitBubbles(answer, 3, { tables: true })).toEqual([
+			'Two fans:',
+			'| Fan | Price |\n|---|---|\n| A | 1 |\n| B | 2 |',
+			'Want one?\n\n|x|\n|---|\n\nBye',
+		]);
+		expect(splitBubbles('| a | b |\n|---|---|', 5, { tables: true })).toEqual(['| a | b |\n|---|---|']);
+		expect(splitBubbles('a | b, no rule', 5, { tables: true })).toEqual(['a | b, no rule']);
 	});
 });

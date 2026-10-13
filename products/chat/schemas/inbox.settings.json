@@ -6,8 +6,8 @@
 			"type": "string",
 			"title": "Guest chats in the inbox",
 			"default": "all",
-			"enum": ["all", "escalated"],
-			"description": "escalated: guest chats show only once handed to a person."
+			"enum": ["all", "escalated", "signed_in"],
+			"description": "escalated: guest chats show only once handed to a person. signed_in: only signed-in visitors' chats show, in the list, its counts and the unread badge (staff alerts still go out)."
 		},
 		"pauseNeeds": {
 			"type": "string",

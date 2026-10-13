@@ -7,8 +7,8 @@
  * rights as the inbox setting says, C11; resuming hands a waiting chat back to the AI, CH-3), assignment with presence
  * and max chats (the first replier, C11; anyone Accounts allows to reply in the inbox, CH-6), custom field values,
  * the AI summary, transcripts, rating requests, delete, saved replies and the staff list. Older messages page by
- * sequence (C8). Guest chats can stay hidden until handed to a person (C11). A staff reply alerts a visitor who left
- * (C6). Staff actions are written to the activity log with a label (the visitor's name, a title) and
+ * sequence (C8). Guest chats can stay hidden until handed to a person (C11), or always (CH-13). A staff reply alerts a
+ * visitor who left (C6). Staff actions are written to the activity log with a label (the visitor's name, a title) and
  * a short detail, never message contents.
  * @module
  */
@@ -110,14 +110,15 @@ export const createInbox = (product, service, reply) => {
 
 	/**
 	 * The conversations the inbox shows: with the inbox setting `guests` = `escalated`, guest chats only once handed to
-	 * a person (C11).
+	 * a person (C11); with `signed_in`, signed-in visitors' chats only (CH-13).
 	 * @param {Site} s
 	 * @returns {Promise<Record<string, unknown>>}
 	 */
-	const shown = async (s) =>
-		(await s.values('inbox')).guests === 'escalated'
-			? { $or: [{ 'visitor.kind': 'user' }, { handedOffAt: { $ne: null } }] }
-			: {};
+	const shown = async (s) => {
+		const { guests } = await s.values('inbox');
+		if (guests === 'signed_in') return { $or: [{ 'visitor.kind': 'user' }] };
+		return guests === 'escalated' ? { $or: [{ 'visitor.kind': 'user' }, { handedOffAt: { $ne: null } }] } : {};
+	};
 
 	/** @param {any} ctx */
 	const list = async (ctx) => {

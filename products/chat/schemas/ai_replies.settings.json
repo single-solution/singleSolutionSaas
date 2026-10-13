@@ -64,6 +64,12 @@
 			"minimum": 1,
 			"maximum": 5,
 			"description": "The AI may split an answer on lines of three dashes (---) into up to this many messages."
+		},
+		"tableBubble": {
+			"type": "boolean",
+			"title": "Tables in a message of their own",
+			"default": false,
+			"description": "A table in an AI answer becomes a message of its own, the text before and after it too, within the most messages per answer."
 		}
 	}
 }

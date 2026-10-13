@@ -474,13 +474,16 @@ export const createService = (product) => {
 	};
 
 	/**
-	 * The link of an alert: the Inbox address setting with the conversation id.
+	 * The link of an alert: the Inbox address setting with the conversation id, put where `{id}` stands (RW-8), else
+	 * added as `conversation=<id>`.
 	 * @param {Site} s
 	 * @param {string} conversationId
 	 */
 	const inboxLink = async (s, conversationId) => {
-		const { inboxUrl } = await s.values('staff_alerts');
-		return inboxUrl ? `${inboxUrl}${String(inboxUrl).includes('?') ? '&' : '?'}conversation=${conversationId}` : '';
+		const url = String((await s.values('staff_alerts')).inboxUrl ?? '');
+		if (!url) return '';
+		if (url.includes('{id}')) return url.replaceAll('{id}', encodeURIComponent(conversationId));
+		return `${url}${url.includes('?') ? '&' : '?'}conversation=${conversationId}`;
 	};
 
 	/**

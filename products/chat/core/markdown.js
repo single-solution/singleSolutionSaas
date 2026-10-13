@@ -2,7 +2,7 @@
  * Rich answers (PLAN 0.8.10 C2; pure): AI and staff messages carry `format: 'markdown'` with a small subset — bold,
  * italic, lists, tables and links. The server keeps a link only when it is site-relative, on the website's own domain,
  * or allowed by the moderation link policy (while moderation is on); any other link keeps just its label. An AI answer
- * splits on `---` lines into at most `bubbles` messages. The widgets render the parsed blocks as DOM nodes, never as
+ * splits on `---` lines (and around tables, with `tableBubble`) into at most `bubbles` messages. The widgets render the parsed blocks as DOM nodes, never as
  * HTML.
  * @module
  */
@@ -24,19 +24,56 @@ const INLINE =
 	/\[([^\]\n]{1,300})\]\(([^)\s]{1,2048})\)|\*\*([^*\n]+?)\*\*|__([^_\n]+?)__|\*([^*\n]+?)\*|(?<![\p{L}\p{N}])_([^_\n]+?)_(?![\p{L}\p{N}])/gu;
 
 /**
- * Split an AI answer on `---` lines into at most `max` messages; the rest joins the last one. Empty parts are dropped.
+ * Is this line the start of a markdown table (a row, then a rule line)?
+ * @param {string} line
+ * @param {string | undefined} next
+ */
+const tableStarts = (line, next) => line.includes('|') && next !== undefined && TABLE_RULE.test(next) && next.includes('-');
+
+/**
+ * A message split around its markdown tables: the text before, each table and the text after (CH-21).
  * @param {string} text
- * @param {number} max 1–5
  * @returns {string[]}
  */
-export const splitBubbles = (text, max) => {
+const aroundTables = (text) => {
+	const lines = text.split('\n');
+	/** @type {string[][]} */
+	const parts = [[]];
+	for (let i = 0; i < lines.length; i += 1) {
+		const line = /** @type {string} */ (lines[i]);
+		if (!tableStarts(line, lines[i + 1])) {
+			/** @type {string[]} */ (parts.at(-1)).push(line);
+			continue;
+		}
+		const table = [line, String(lines[i + 1])];
+		i += 1;
+		while (i + 1 < lines.length && String(lines[i + 1]).includes('|') && String(lines[i + 1]).trim() !== '') {
+			i += 1;
+			table.push(String(lines[i]));
+		}
+		parts.push(table, []);
+	}
+	return parts.map((part) => part.join('\n').trim()).filter((part) => part !== '');
+};
+
+/**
+ * Split an AI answer on `---` lines into at most `max` messages; the rest joins the last one. Empty parts are dropped.
+ * With `tables` (the AI reply setting `tableBubble`, CH-21) each markdown table and the text around it are messages of
+ * their own too.
+ * @param {string} text
+ * @param {number} max 1–5
+ * @param {{ tables?: boolean }} [options]
+ * @returns {string[]}
+ */
+export const splitBubbles = (text, max, { tables = false } = {}) => {
 	/** @type {string[][]} */
 	const parts = [[]];
 	for (const line of String(text ?? '').split('\n')) {
 		if (SEPARATOR.test(line)) parts.push([]);
 		else /** @type {string[]} */ (parts.at(-1)).push(line);
 	}
-	const texts = parts.map((lines) => lines.join('\n').trim()).filter((part) => part !== '');
+	const split = parts.map((lines) => lines.join('\n').trim()).filter((part) => part !== '');
+	const texts = tables ? split.flatMap(aroundTables) : split;
 	const limit = Math.max(1, Math.min(5, Math.floor(max) || 1));
 	if (texts.length <= limit) return texts;
 	return [...texts.slice(0, limit - 1), texts.slice(limit - 1).join('\n\n')];
@@ -146,7 +183,7 @@ export const parseMarkdown = (text) => {
 			endParagraph();
 			continue;
 		}
-		if (line.includes('|') && next !== undefined && TABLE_RULE.test(next) && next.includes('-')) {
+		if (tableStarts(line, next)) {
 			endParagraph();
 			const head = cellsOf(line);
 			/** @type {Inline[][][]} */
