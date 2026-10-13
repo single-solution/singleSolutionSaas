@@ -13,7 +13,7 @@ The exact API is in [API.md](./API.md).
   issues 15-minute tickets bound to one origin for admin widgets (`POST /v1/tickets`).
 - **Status** — fetches the status of the product on each website when a request needs it (cached until `validUntil`,
   at most 5 minutes, together with the revocation list), obeys it (`product_unavailable` with a reason), turns an
-  ended grace period into stopped, and keeps the last status (and revocation list) for 2 hours while the Portal
+  ended grace period into stopped, and keeps the last status (and revocation list) for 6 hours while the Portal
   cannot be reached (offline grace; 24 hours before K-21).
 - **Notices** — `POST /.well-known/ss-events`: `status.changed` (the status is fetched again right after the answer; a
   `removed` status turns the website's switches off, so a re-add starts with every feature off), `token.revoked`,

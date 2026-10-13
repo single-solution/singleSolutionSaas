@@ -6,7 +6,7 @@
  *   revocation list.
  * - `status.changed` notices mark the copy stale, so the next use refetches it; the copy itself is kept for offline
  *   grace.
- * - While the Portal cannot be reached the last copy is used for up to {@link OFFLINE_GRACE_MS} (2 hours) after its
+ * - While the Portal cannot be reached the last copy is used for up to {@link OFFLINE_GRACE_MS} (6 hours) after its
  *   fetch, then every use is refused with 503 `portal_unreachable` (PLAN 0.4.7, 0.10; shortened from 24 hours by the
  *   owner's decision 11, K-21). Revocations follow the same bound: when the revocation list could not be fetched for
  *   longer than that, every use is refused until it is fetched again. A `token.revoked` notice fetches it at once.
@@ -25,10 +25,11 @@ import { problem } from './http/results.js';
 const STATUS_MAX_AGE_MS = 5 * 60_000;
 /**
  * Offline grace: how long the last status copy (and the last revocation list) is trusted while the Portal cannot be
- * reached. Two hours ride out a short Portal outage or a bad deploy rolled back, while a website stopped, suspended or
- * removed, or a token revoked, during an outage stops working within two hours at most (24 hours before K-21).
+ * reached. Six hours ride out a Portal outage on free hosting (every merchant's shop depends on it) or a bad deploy
+ * rolled back, while a website stopped, suspended or removed, or a token revoked, during an outage stops working within
+ * six hours at most (24 hours before K-21). Notices still apply at once whenever the Portal is up.
  */
-export const OFFLINE_GRACE_MS = 2 * 60 * 60_000;
+export const OFFLINE_GRACE_MS = 6 * 60 * 60_000;
 const REVOCATION_PAGES = 10;
 /** How often an instance reads again when the revocation list was last fetched. */
 const REVOCATIONS_RECHECK_MS = 30_000;

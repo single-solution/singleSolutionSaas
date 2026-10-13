@@ -107,9 +107,9 @@ describe('status on use', () => {
 		expect(statusCalls()).toBe(before);
 	});
 
-	it('keeps the last status 2 hours while the Portal is unreachable, then answers 503 (K-21)', async () => {
+	it('keeps the last status 6 hours while the Portal is unreachable, then answers 503 (K-21)', async () => {
 		const { call, server, portal, clock } = await setup();
-		expect(OFFLINE_GRACE_MS).toBe(2 * 60 * 60_000);
+		expect(OFFLINE_GRACE_MS).toBe(6 * 60 * 60_000);
 		expect((await call('GET', '/v1/server/open', { token: server.token })).status).toBe(200);
 		portal.setReachable(false);
 		clock.advance(OFFLINE_GRACE_MS - 60_000);
