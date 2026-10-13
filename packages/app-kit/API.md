@@ -91,8 +91,11 @@ roles?, handler })`
 - `permission` (ticket): the ticket must carry it.
 - `database` (browser, server, ticket; default true): 403 `database_not_connected` until the `database` connection is
   saved.
-- `idempotent`: a repeated `Idempotency-Key` for the same website and route within 24 hours answers 409
-  `duplicate_request`.
+- `idempotent`: a repeated `Idempotency-Key` for the same website and route within 24 hours gets the first answer
+  again (status, headers and body, plus `Idempotent-Replayed: true`) when it is the same request (method, address,
+  body, ticket user or acting user, `SS-Guest`, `SS-Order-Key`); another request under the key answers 409
+  `duplicate_request`, and a repeat while the first still runs 409 `in_progress` with `Retry-After: 1`. A 5xx answer
+  frees the key; answers larger than 64 kB are not kept (a repeat answers 409 `duplicate_request`).
 - `rateLimit`: `{ limit, windowSeconds, per?: 'website' | 'visitor', bucket? }` or a list of them (code constants);
   routes with the same `bucket` share a counter.
 - `roles` (dashboard): `merchant`, `owner`, `support` (default all).

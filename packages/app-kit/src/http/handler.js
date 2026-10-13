@@ -4,8 +4,8 @@
  *   configuration problems (503) → request id → CORS preflight → route match (404/405) → Portal connection (503 before
  *   connect, except `none` routes) → body with a byte cap (413) → auth → status of the product on the website (403
  *   `product_unavailable`, 503 `portal_unreachable`) → feature (403 `feature_off`) → merchant database (403
- *   `database_not_connected`) → JSON (415/400) → rate limits (429) → `Idempotency-Key` (409) → handler → RFC 9457
- *   problems for every error.
+ *   `database_not_connected`) → JSON (415/400) → rate limits (429) → `Idempotency-Key` (the first answer again, or 409)
+ *   → handler → RFC 9457 problems for every error.
  *
  * Auth: `browser` (browser token from `Authorization: Bearer`; the Origin must be `https://<exact domain>` or local,
  * CORS only for it; without an Origin, the server token: a visitor call from the merchant's server, PLAN 0.8.10 K3),
@@ -83,7 +83,14 @@ export const rememberScheduler = (request, after) => {
 const REQUEST_ID = /^[A-Za-z0-9._:-]{1,128}$/;
 const IDEMPOTENCY_KEY = /^[\x21-\x7e]{1,255}$/;
 const BODY_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+/** How long the answer of an idempotent request is given again for a repeat of its `Idempotency-Key` (K-14). */
 const DUPLICATE_WINDOW_MS = 24 * 60 * 60_000;
+/** A request still running holds its `Idempotency-Key` at most this long (the longest a serverless function runs). */
+const IN_PROGRESS_MS = 5 * 60_000;
+/** Largest answer body kept for a repeat; a repeat of a larger one is answered 409 `duplicate_request`, as before. */
+const REPLAY_MAX_CHARS = 64 * 1024;
+/** Answer headers a repeat does not get again. */
+const NOT_REPLAYED = new Set(['set-cookie']);
 // `ss-sign-in`: a visitor's Accounts sign-in next to the browser token (signed-in visitor routes);
 // `ss-guest`: a Chat guest's device key (Chat's guest visitor routes); `ss-order-key`: a guest order's key (Ecommerce)
 const CORS_HEADERS = 'authorization, content-type, idempotency-key, ss-guest, ss-order-key, ss-sign-in, x-request-id';
@@ -515,13 +522,37 @@ export const createRequestHandler = (kit, routes, options = {}) => {
 				}
 			}
 
+			// a repeated Idempotency-Key (same website, route, address, body and visitor or staff member) gets the first
+			// answer again; another request under the key 409 duplicate_request; one still running 409 in_progress (K-14)
 			/** @type {string | null} */
 			let duplicateKey = null;
+			let fingerprint = '';
+			const claimedAt = now();
 			if (r.idempotent === true && ctx.idempotencyKey) {
 				const principal = ctx.websiteId ?? ctx.session?.subject ?? 'anonymous';
 				duplicateKey = `idem:${sha256Hex(`${principal}\n${r.id}\n${ctx.idempotencyKey}`)}`;
-				if (await store.seen(duplicateKey, now() + DUPLICATE_WINDOW_MS))
+				fingerprint = sha256Hex(
+					[
+						method,
+						`${pathname}${url.search}`,
+						ctx.ticket?.user.id ?? '',
+						ctx.actor?.id ?? '',
+						request.headers.get('ss-guest') ?? '',
+						request.headers.get('ss-order-key') ?? '',
+						ctx.rawBody,
+					].join('\n'),
+				);
+				const running = { fingerprint, state: 'running', expiresAt: claimedAt + IN_PROGRESS_MS };
+				if (!(await store.insert('idempotency', duplicateKey, running))) {
+					const earlier = await store.get('idempotency', duplicateKey);
+					if (earlier !== null && earlier.fingerprint === fingerprint && earlier.answer)
+						return finish({ ...earlier.answer, headers: { ...earlier.answer.headers, 'idempotent-replayed': 'true' } });
+					if (earlier === null || (earlier.fingerprint === fingerprint && earlier.state === 'running')) {
+						extra['retry-after'] = '1';
+						return fail(problem('in_progress', 'A request with this Idempotency-Key is still running. Try again.'));
+					}
 					return fail(problem('duplicate_request', 'A request with this Idempotency-Key was already processed.'));
+				}
 			}
 
 			/** @type {{ status: number, headers: Record<string, string>, body: string | null }} */
@@ -545,7 +576,24 @@ export const createRequestHandler = (kit, routes, options = {}) => {
 					rendered = render(problem('internal_error'), requestId, pathname);
 				}
 			}
-			if (duplicateKey && rendered.status >= 500) await store.forget(duplicateKey).catch(() => {});
+			if (duplicateKey) {
+				// a failure (5xx) frees the key for a retry; any other answer is kept for repeats of the key
+				const id = duplicateKey;
+				const headers = Object.fromEntries(
+					Object.entries(rendered.headers).filter(([name]) => !NOT_REPLAYED.has(name.toLowerCase())),
+				);
+				const kept = (rendered.body ?? '').length <= REPLAY_MAX_CHARS;
+				await (
+					rendered.status >= 500
+						? store.delete('idempotency', id)
+						: store.put('idempotency', id, {
+								fingerprint,
+								state: 'done',
+								...(kept ? { answer: { status: rendered.status, headers, body: rendered.body } } : {}),
+								expiresAt: claimedAt + DUPLICATE_WINDOW_MS,
+							})
+				).catch((error) => log.warn('the answer of an idempotent request was not kept', { error }));
+			}
 			return finish(rendered);
 		} catch (error) {
 			log.error('request failed', { error, ...(route ? { route: route.id } : {}) });

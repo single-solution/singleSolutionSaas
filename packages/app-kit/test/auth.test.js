@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createProduct } from '../src/index.js';
+import { createProduct, created, defineRoute } from '../src/index.js';
 import { OFFLINE_GRACE_MS } from '../src/status.js';
 import { BASE, DOMAIN, ENCRYPTION_KEY, SECRET, manifest, productRoutes, setup } from './helpers.js';
 
@@ -173,7 +173,7 @@ describe('features and the merchant database', () => {
 		expect((await call('POST', '/v1/notes', { token: browser.token, origin: SITE, body: { text: 'hi' } })).status).toBe(200);
 	});
 
-	it('limits rates per website and per visitor and refuses repeated Idempotency-Keys', async () => {
+	it('limits rates per website and per visitor and answers a repeated Idempotency-Key with the first answer', async () => {
 		const { call, browser, switchOn, connectDatabase } = await setup();
 		await switchOn(['notes']);
 		await connectDatabase();
@@ -181,12 +181,134 @@ describe('features and the merchant database', () => {
 			call('POST', '/v1/notes', { token: browser.token, origin: SITE, body: { text: 'x' }, headers });
 		expect((await post({ 'idempotency-key': 'k1' })).status).toBe(200);
 		const repeat = await post({ 'idempotency-key': 'k1' });
-		expect(repeat.status).toBe(409);
-		expect(await repeat.json()).toMatchObject({ type: 'https://notes.example.dev/problems/duplicate_request' });
+		expect([repeat.status, repeat.headers.get('idempotent-replayed')]).toEqual([200, 'true']);
+		expect(repeat.headers.get('access-control-allow-origin')).toBe(SITE);
+		expect(await repeat.json()).toEqual({ saved: true });
 		expect((await post()).status).toBe(200);
 		const limited = await post();
 		expect(limited.status).toBe(429);
 		expect(Number(limited.headers.get('retry-after'))).toBeGreaterThan(0);
+	});
+});
+
+describe('idempotent routes (K-14)', () => {
+	/** Wait (real time) until a condition holds. @param {() => boolean} done */
+	const until = async (done) => {
+		while (!done()) await new Promise((resolve) => setTimeout(resolve, 1));
+	};
+	/** A gate a test opens. */
+	const gate = () => {
+		/** @type {() => void} */
+		let open = () => {};
+		const opened = new Promise((resolve) => {
+			open = () => resolve(undefined);
+		});
+		return { open, opened };
+	};
+
+	it('replay the first answer to a repeat, refuse another request under the key and free it after a failure', async () => {
+		let runs = 0;
+		let failNext = false;
+		let wait = gate();
+		wait.open();
+		const routes = [
+			...productRoutes(),
+			defineRoute({
+				method: 'POST',
+				path: '/v1/orders',
+				auth: 'server',
+				database: false,
+				idempotent: true,
+				handler: async (ctx) => {
+					runs += 1;
+					const { opened } = wait;
+					await opened;
+					if (failNext) {
+						failNext = false;
+						throw new Error('lost');
+					}
+					return created(
+						{ n: runs, text: /** @type {any} */ (ctx.body).text },
+						{ location: `/v1/orders/${runs}`, headers: { 'Set-Cookie': 'x=1' } },
+					);
+				},
+			}),
+			defineRoute({
+				method: 'POST',
+				path: '/v1/big',
+				auth: 'server',
+				database: false,
+				idempotent: true,
+				handler: () => {
+					runs += 1;
+					return { text: 'x'.repeat(70_000) };
+				},
+			}),
+		];
+		const { call, server, clock } = await setup({ routes });
+		const post = (/** @type {string} */ path, /** @type {string} */ key, /** @type {unknown} */ body = { text: 'a' }) =>
+			call('POST', path, { token: server.token, body, headers: { 'idempotency-key': key } });
+
+		const first = await post('/v1/orders', 'k1');
+		expect([first.status, first.headers.get('location'), first.headers.get('set-cookie')]).toEqual([
+			201,
+			'/v1/orders/1',
+			'x=1',
+		]);
+		expect(first.headers.get('idempotent-replayed')).toBeNull();
+		const again = await post('/v1/orders', 'k1');
+		expect([again.status, again.headers.get('location'), again.headers.get('idempotent-replayed')]).toEqual([
+			201,
+			'/v1/orders/1',
+			'true',
+		]);
+		expect(again.headers.get('set-cookie')).toBeNull();
+		expect(await again.json()).toEqual({ n: 1, text: 'a' });
+		expect(runs).toBe(1);
+		// another body, address or actor under the same key is another request
+		const other = await post('/v1/orders', 'k1', { text: 'b' });
+		expect([other.status, (await other.json()).type]).toEqual([409, 'https://notes.example.dev/problems/duplicate_request']);
+		const otherActor = await call('POST', '/v1/orders', {
+			token: server.token,
+			body: { text: 'a' },
+			headers: { 'idempotency-key': 'k1', 'ss-actor-id': 'usr_1', 'ss-actor-name': 'Ana' },
+		});
+		expect(otherActor.status).toBe(409);
+		expect(runs).toBe(1);
+
+		// a repeat while the first still runs: 409 in_progress, then the answer once it finished
+		wait = gate();
+		const running = post('/v1/orders', 'k2');
+		await until(() => runs === 2);
+		const early = await post('/v1/orders', 'k2');
+		expect([early.status, early.headers.get('retry-after')]).toEqual([409, '1']);
+		expect((await early.json()).type).toBe('https://notes.example.dev/problems/in_progress');
+		wait.open();
+		expect((await running).status).toBe(201);
+		expect(await (await post('/v1/orders', 'k2')).json()).toEqual({ n: 2, text: 'a' });
+
+		// a failure frees the key: the retry runs again
+		failNext = true;
+		expect((await post('/v1/orders', 'k3')).status).toBe(500);
+		expect(await (await post('/v1/orders', 'k3')).json()).toEqual({ n: 4, text: 'a' });
+
+		// an answer too large to keep: a repeat is refused as before
+		expect((await post('/v1/big', 'k4')).status).toBe(200);
+		expect((await post('/v1/big', 'k4')).status).toBe(409);
+		expect(runs).toBe(5);
+
+		// a request that never finished (its function stopped) holds the key 5 minutes; answers are kept 24 hours
+		wait = gate();
+		void post('/v1/orders', 'k5');
+		await until(() => runs === 6);
+		expect((await post('/v1/orders', 'k5')).status).toBe(409);
+		clock.advance(5 * 60_000);
+		wait = gate();
+		wait.open();
+		expect((await post('/v1/orders', 'k5')).status).toBe(201);
+		expect(runs).toBe(7);
+		clock.advance(24 * 60 * 60_000);
+		expect(await (await post('/v1/orders', 'k1')).json()).toEqual({ n: 8, text: 'a' });
 	});
 });
 

@@ -98,6 +98,7 @@ import { verifyToken } from '@ss/protocol';
 /** Problem codes the kit answers with besides `@ss/contracts`'. */
 const KIT_PROBLEM_CODES = Object.freeze({
 	duplicate_request: Object.freeze({ status: 409, title: 'Duplicate request' }),
+	in_progress: Object.freeze({ status: 409, title: 'Request in progress' }),
 	invalid_actor: Object.freeze({ status: 400, title: 'Invalid acting user' }),
 	visitor_ip_required: Object.freeze({ status: 400, title: "The visitor's IP address is required" }),
 	count_timeout: Object.freeze({ status: 503, title: 'Counting took too long' }),

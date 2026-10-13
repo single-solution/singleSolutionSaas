@@ -39,6 +39,19 @@ describe.each(kinds)('%s store', (_name, make) => {
 		expect(await store.get('sessions', 's1')).toMatchObject({ subject: 'y' });
 	});
 
+	it('keeps the answers of idempotent requests until they expire (K-14)', async () => {
+		let t = 1000;
+		const store = make(() => t);
+		expect(await store.insert('idempotency', 'idem:1', { fingerprint: 'f', state: 'running', expiresAt: 2000 })).toBe(true);
+		expect(await store.insert('idempotency', 'idem:1', { fingerprint: 'f', state: 'running', expiresAt: 3000 })).toBe(false);
+		await store.put('idempotency', 'idem:1', { fingerprint: 'f', state: 'done', answer: { status: 201 }, expiresAt: 4000 });
+		t = 3000;
+		expect(await store.get('idempotency', 'idem:1')).toMatchObject({ state: 'done', answer: { status: 201 } });
+		t = 4000;
+		expect(await store.get('idempotency', 'idem:1')).toBeNull();
+		expect(await store.insert('idempotency', 'idem:1', { fingerprint: 'g', state: 'running', expiresAt: 9000 })).toBe(true);
+	});
+
 	it('lists newest first by equality filters (arrays match members) and deletes by filter', async () => {
 		const store = make(() => 1000);
 		await store.put('changes', 'c1', { websiteId: 'w1', at: 1 });

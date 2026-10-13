@@ -24,8 +24,10 @@
  *   is off (a list: while all of them are off); ticket routes default to the feature of their `permission`
  * @property {string} [permission] ticket routes: the ticket must carry this permission
  * @property {boolean} [database] browser, server and ticket routes: false skips the 403 `database_not_connected` check
- * @property {boolean} [idempotent] a repeated `Idempotency-Key` (same website, same route, within 24 h) answers 409
- *   `duplicate_request`; requests without the header run normally
+ * @property {boolean} [idempotent] a repeated `Idempotency-Key` (same website, same route, within 24 h) gets the first
+ *   answer again (with `Idempotent-Replayed: true`) when it is the same request (method, address, body, visitor or
+ *   staff member), else 409 `duplicate_request`; 409 `in_progress` (`Retry-After: 1`) while the first is still running;
+ *   a 5xx answer frees the key; requests without the header run normally
  * @property {RateLimit | RateLimit[]} [rateLimit]
  * @property {boolean} [rawBody] do not parse JSON (the handler reads `ctx.rawBody`)
  * @property {number} [maxBodyBytes] default 1 MiB

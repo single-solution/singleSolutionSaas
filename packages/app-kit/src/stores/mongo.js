@@ -23,6 +23,7 @@ const COLLECTIONS = Object.freeze([
 	'business',
 	'widget',
 	'sessions',
+	'idempotency',
 ]);
 const PER_WEBSITE = Object.freeze(['switches', 'settings', 'connections', 'status', 'business', 'widget']);
 
@@ -73,7 +74,7 @@ export const createMongoStore = ({ db, prefix = 'kit_', now = Date.now }) => {
 				col('changes').createIndex({ websiteId: 1, at: -1 }, { name: 'website_at' }),
 				col('sessions').createIndex({ subject: 1 }, { name: 'subject' }),
 				col('sessions').createIndex({ websiteIds: 1 }, { name: 'websites' }),
-				...['sessions', 'replay', 'rate'].map((name) => col(name).createIndex({ expireAt: 1 }, ttl)),
+				...['sessions', 'replay', 'rate', 'idempotency'].map((name) => col(name).createIndex({ expireAt: 1 }, ttl)),
 			]);
 		})().catch((error) => {
 			ready = undefined;

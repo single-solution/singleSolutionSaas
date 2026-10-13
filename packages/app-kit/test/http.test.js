@@ -163,7 +163,9 @@ describe('handler results and the Next.js adapter', () => {
 		expect((await call('GET', '/v1/unknown')).status).toBe(500);
 		expect((await call('POST', '/v1/flaky', { headers: { 'idempotency-key': 'f1' } })).status).toBe(500);
 		expect((await call('POST', '/v1/flaky', { headers: { 'idempotency-key': 'f1' } })).status).toBe(201);
-		expect((await call('POST', '/v1/flaky', { headers: { 'idempotency-key': 'f1' } })).status).toBe(409);
+		// the same request again: the first answer (K-14)
+		const replayed = await call('POST', '/v1/flaky', { headers: { 'idempotency-key': 'f1' } });
+		expect([replayed.status, await replayed.json(), flaky]).toEqual([201, { n: 2 }, 2]);
 		expect((await call('GET', '/v1/no-website')).status).toBe(400);
 		expect((await call('GET', '/v1/items/%E0%A4%A')).status).toBe(404);
 	});
