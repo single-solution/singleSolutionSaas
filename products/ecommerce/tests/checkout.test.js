@@ -222,8 +222,11 @@ describe('placing with cash on delivery', () => {
 				.map((m) => m.template),
 		).toContain('ecommerce.order_placed');
 
+		// the same request again gets the first answer again (K-14): the same order, placed once
 		const repeat = await visit('POST', '/v1/shop/orders', { body, signIn: shopper.token, key });
-		expect(repeat.status).toBe(409);
+		expect(repeat.status).toBe(201);
+		expect(repeat.headers.get('idempotent-replayed')).toBe('true');
+		expect(repeat.json.order.id).toBe(response.json.order.id);
 		expect(await stockOf(item.id)).toBe(2);
 	});
 
