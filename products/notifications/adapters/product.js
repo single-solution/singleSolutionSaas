@@ -1,8 +1,8 @@
 /**
  * The product on the kit: `createProductInstance(options)` wires `@ss/app-kit` `createProduct` with Notifications'
  * manifest (each feature's settings schema from `schemas/` inline), its widget texts, its Connections (providers per
- * channel, push keys, the webhook signing secret and the Accounts token for activity-log copies), the merchant
- * database indexes, the data-rights hooks, the widget settings and the list `webhook_urls` (in the product database,
+ * channel, push keys, the webhook signing secret and the Accounts token for activity-log copies), the delivery log's
+ * shared setting (how long it is kept, PLAN 0.8.10 D11), the merchant database indexes, the data-rights hooks, the widget settings and the list `webhook_urls` (in the product database,
  * whose store it owns), and adds the sealer of sensitive messages, the providers and web push on the same outbound
  * policy. The Next.js route and the tests pass the rest (config, store, clock, network).
  * Public entry `./product` of this package, so a system test can compose the product with `./routes`.
@@ -15,6 +15,7 @@ import manifestFile from '../manifest.json' with { type: 'json' };
 import strings from '../strings/en.json' with { type: 'json' };
 import browserPush from '../schemas/browser_push.settings.json' with { type: 'json' };
 import delayedSend from '../schemas/delayed_send.settings.json' with { type: 'json' };
+import deliveryLog from '../schemas/delivery_log.shared.json' with { type: 'json' };
 import email from '../schemas/email.settings.json' with { type: 'json' };
 import fallback from '../schemas/fallback.settings.json' with { type: 'json' };
 import multiLanguage from '../schemas/multi_language.settings.json' with { type: 'json' };
@@ -46,6 +47,19 @@ const SETTINGS = {
 	delayed_send: delayedSend,
 	multi_language: multiLanguage,
 	send_api: sendApi,
+};
+
+/**
+ * Settings several features use (PLAN 0.8.10 D11): how long the delivery log of every channel and the outgoing webhook
+ * events are kept (`delivery_log.retentionDays`; 0, the default, keeps them forever).
+ * @type {Record<string, { name: string, features: string[], settings: any }>}
+ */
+export const SHARED_SETTINGS = {
+	delivery_log: {
+		name: 'Delivery log',
+		features: ['whatsapp', 'email', 'sms', 'browser_push', 'staff_push', 'webhooks'],
+		settings: deliveryLog,
+	},
 };
 
 /** The manifest as the kit and the Portal take it: settings schemas inline. */
@@ -198,6 +212,7 @@ export const createProductInstance = (options) => {
 			},
 		},
 		data: { indexes: INDEXES },
+		sharedSettings: SHARED_SETTINGS,
 		// the settings API's `GET|PUT /v1/lists/webhook_urls` for the merchant's server (K1, N5), checked like the dashboard's
 		lists: {
 			webhook_urls: {

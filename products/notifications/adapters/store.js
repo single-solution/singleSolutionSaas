@@ -1,7 +1,9 @@
 /**
  * Notifications' records in the merchant database (collections `ss_notifications_<name>`, through the kit's tenant
  * guard: every query carries the website id, inserts are stamped with `websiteId`, `merchantId` and `createdAt`).
- * Nothing here expires: the delivery log is kept forever (PLAN 0.8.5).
+ * The delivery log is kept forever by default (PLAN 0.8.5); with the setting "keep the delivery log for N days" (PLAN
+ * 0.8.10 D11) a finished message or webhook event gets `expireAt`, and the database's expiry index removes it then.
+ * No timer runs.
  *
  * - `templates`: one per key × channel × language
  * - `messages`: the delivery log, one record per message with every attempt
@@ -60,6 +62,8 @@ import { LEASE_MS } from '../core/timing.js';
  * @property {Date} dueAt
  * @property {Date | null} leaseUntil
  * @property {Date | null} sentAt
+ * @property {Date | null} [expireAt] when the database removes it (set once it is sent, failed or skipped, by the
+ *   delivery log's setting); null or missing: kept forever
  * @property {Date} createdAt
  */
 /**
@@ -68,7 +72,7 @@ import { LEASE_MS } from '../core/timing.js';
  */
 /**
  * @typedef {{ id: string, type: string, url: string, body: string, attempts: number, status: 'pending' | 'delivered' | 'failed',
- *   lastError: string | null, dueAt: Date, leaseUntil: Date | null }} WebhookEventRecord
+ *   lastError: string | null, dueAt: Date, leaseUntil: Date | null, expireAt?: Date | null }} WebhookEventRecord
  */
 
 const TEMPLATES = 'templates';
@@ -91,6 +95,8 @@ export const INDEXES = [
 	{ collection: SUBSCRIPTIONS, keys: { websiteId: 1, id: 1 }, name: 'by_id', unique: true },
 	{ collection: SUBSCRIPTIONS, keys: { websiteId: 1, staffId: 1 }, name: 'by_staff' },
 	{ collection: WEBHOOK_EVENTS, keys: { websiteId: 1, status: 1, dueAt: 1 }, name: 'due' },
+	{ collection: MESSAGES, keys: { expireAt: 1 }, name: 'expire', expireAfterSeconds: 0 },
+	{ collection: WEBHOOK_EVENTS, keys: { expireAt: 1 }, name: 'expire', expireAfterSeconds: 0 },
 ];
 
 /** What delivery-log reads return of a message: never the sealed real words. */

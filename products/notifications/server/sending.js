@@ -4,7 +4,8 @@
  * attempted inside the request that sends it; waiting messages and webhook events are sent right after (`after()`)
  * the next requests for the website (`drain`), a few at a time. The delivery log never keeps a secret (PLAN 0.8.10
  * D11): the values of a sensitive message (and those the sender names as secret) are replaced in its saved words, and
- * the real ones are kept sealed only while it has attempts to make.
+ * the real ones are kept sealed only while it has attempts to make. A finished message or webhook event gets the time
+ * the database's expiry index removes it, by the setting "keep the delivery log for N days" (default forever).
  * @module
  */
 import { createId } from '@ss/contracts';
@@ -184,6 +185,17 @@ export const createSending = (product) => {
 		channel === 'email' || channel === 'sms' || channel === 'whatsapp'
 			? retryPlanOf((await product.settings.values(s.websiteId, channel)).retryPlan)
 			: 'short';
+
+	/**
+	 * When a finished message or webhook event (sent, failed or skipped) leaves the delivery log: the setting's days from
+	 * now, else never (null, the default; PLAN 0.8.5 and 0.8.10 D11). A waiting one never expires.
+	 * @param {Site} s
+	 * @returns {Promise<Date | null>}
+	 */
+	const expiryOf = async (s) => {
+		const days = Number((await product.settings.values(s.websiteId, 'delivery_log')).retentionDays);
+		return days > 0 ? new Date(now() + days * 86_400_000) : null;
+	};
 
 	/**
 	 * Queue outgoing webhook events (sent right after the request, signed): Notifications' own events that the Events
@@ -380,6 +392,7 @@ export const createSending = (product) => {
 				sentAt: new Date(now()),
 				leaseUntil: null,
 				sealed: null,
+				expireAt: await expiryOf(s),
 			});
 			await emit(s, 'message.sent', eventData(sent));
 			return sent;
@@ -417,6 +430,7 @@ export const createSending = (product) => {
 			channelAttempts: failed,
 			leaseUntil: null,
 			sealed: null,
+			expireAt: await expiryOf(s),
 		});
 		await emit(s, 'message.failed', eventData(final));
 		return final;
@@ -496,7 +510,13 @@ export const createSending = (product) => {
 		if (!made.required && (await s.store.optouts.has(address)))
 			return {
 				ok: true,
-				message: await s.store.messages.add({ ...base, status: 'skipped', reason: 'unsubscribed', sealed: null }),
+				message: await s.store.messages.add({
+					...base,
+					status: 'skipped',
+					reason: 'unsubscribed',
+					sealed: null,
+					expireAt: await expiryOf(s),
+				}),
 			};
 		if (s.on.includes('send_limits')) {
 			const limits = await product.settings.values(s.websiteId, 'send_limits');
@@ -507,7 +527,13 @@ export const createSending = (product) => {
 			if (!withinLimits(sent, { perHour: Number(limits.perHour), perDay: Number(limits.perDay) }))
 				return {
 					ok: true,
-					message: await s.store.messages.add({ ...base, status: 'skipped', reason: 'limited', sealed: null }),
+					message: await s.store.messages.add({
+						...base,
+						status: 'skipped',
+						reason: 'limited',
+						sealed: null,
+						expireAt: await expiryOf(s),
+					}),
 				};
 		}
 		let dueAt = input.sendAt ?? t;
@@ -550,13 +576,18 @@ export const createSending = (product) => {
 			}
 		}
 		if (error === null)
-			return s.store.events.update(event.id, { status: 'delivered', attempts: event.attempts + 1, lastError: null });
+			return s.store.events.update(event.id, {
+				status: 'delivered',
+				attempts: event.attempts + 1,
+				lastError: null,
+				expireAt: await expiryOf(s),
+			});
 		const attempts = event.attempts + 1;
 		const next = nextAttemptAt(attempts, now(), { max: MAX_WEBHOOK_ATTEMPTS, delays: WEBHOOK_DELAYS_MS });
 		return s.store.events.update(event.id, {
 			attempts,
 			lastError: error,
-			...(next === null ? { status: 'failed' } : { dueAt: new Date(next) }),
+			...(next === null ? { status: 'failed', expireAt: await expiryOf(s) } : { dueAt: new Date(next) }),
 		});
 	};
 
@@ -575,6 +606,7 @@ export const createSending = (product) => {
 					reason: 'unsubscribed',
 					leaseUntil: null,
 					sealed: null,
+					expireAt: await expiryOf(s),
 				});
 			else await attempt(s, message);
 		}

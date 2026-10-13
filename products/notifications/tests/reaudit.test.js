@@ -1,9 +1,10 @@
 /**
- * Notifications after the re-audit (PLAN 0.8.10, owner decisions D7 and D11): the delivery log never keeps a secret.
+ * Notifications after the re-audit (PLAN 0.8.10, owner decisions D7 and D11): the delivery log never keeps a secret,
+ * and is kept for the days the merchant sets.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { checkSecretValues, hideValues, hiddenNamesOf } from '../core/templates.js';
-import { ADMIN_ORIGIN, setup } from './helpers.js';
+import { ADMIN_ORIGIN, HOOK_URL, setup } from './helpers.js';
 
 /** @type {Awaited<ReturnType<typeof setup>>} */
 let env;
@@ -12,6 +13,7 @@ const RESEND = { provider: 'resend', secret: 're_secret_1234', from: 'Shop <shop
 const TWILIO = { provider: 'twilio', accountSid: `AC${'a'.repeat(32)}`, secret: 'twilio-token-9876', from: '+15550001111' };
 const META = { provider: 'meta', phoneNumberId: '1234567890', secret: 'meta-token-5555' };
 const MIN = 60_000;
+const DAY = 86_400_000;
 
 /** @param {string} origin */
 const lastBody = (origin) => env.providers.callsTo(origin).at(-1)?.body ?? '';
@@ -30,7 +32,7 @@ const read = async (id) => (await env.call('GET', `/v1/messages/${id}`, { token:
 
 beforeAll(async () => {
 	env = await setup();
-	await env.switchOn(['email', 'sms', 'whatsapp', 'fallback', 'send_api']);
+	await env.switchOn(['email', 'sms', 'whatsapp', 'fallback', 'send_api', 'webhooks']);
 	await env.connectDatabase();
 	await env.connect('email', RESEND);
 	await env.connect('sms', TWILIO);
@@ -215,5 +217,60 @@ describe('secrets never reach the delivery log (D11, SE-3)', () => {
 		expect(env.providers.callsTo('https://api.twilio.com')).toHaveLength(twilioCalls);
 		expect((await raw(sent.json.id)).sealed).toBeNull();
 		env.providers.reset('https://graph.facebook.com');
+	});
+});
+
+describe('the delivery log is kept for the days the merchant sets (D11, SE-6)', () => {
+	it('keeps it forever by default, and the database has the expiry indexes', async () => {
+		await env.template({ key: 'note', channel: 'sms', text: 'Note {n}', required: true });
+		const sent = await env.send('sms', { template: 'note', to: { phone: '+15550003030' }, values: { n: '1' } });
+		expect(sent.json.status).toBe('sent');
+		expect((await raw(sent.json.id)).expireAt).toBeNull();
+		for (const name of ['messages', 'webhook_events'])
+			expect(await env.merchantIndexes(name)).toContainEqual(
+				expect.objectContaining({ name: 'expire', key: { expireAt: 1 }, expireAfterSeconds: 0 }),
+			);
+	});
+
+	it('removes finished messages and webhook events that many days after they finish; waiting ones stay', async () => {
+		await env.setting('delivery_log', 'retentionDays', 30);
+		const sent = await env.send('sms', { template: 'note', to: { phone: '+15550003030' }, values: { n: '2' } });
+		expect((await raw(sent.json.id)).expireAt).toEqual(new Date(env.now() + 30 * DAY));
+		// a waiting message never expires; it does once it fails
+		env.providers.respond('https://api.twilio.com', () => ({ status: 503 }));
+		const failing = await env.send('sms', { template: 'note', to: { phone: '+15550003031' }, values: { n: '3' } });
+		expect(failing.json.status).toBe('retrying');
+		expect((await raw(failing.json.id)).expireAt).toBeUndefined();
+		env.advance(MIN + 1000);
+		await use();
+		env.advance(5 * MIN + 1000);
+		await use();
+		const failed = await raw(failing.json.id);
+		expect(failed.status).toBe('failed');
+		expect(failed.expireAt).toEqual(new Date(env.now() + 30 * DAY));
+		env.providers.reset('https://api.twilio.com');
+		// an outgoing webhook event, once delivered
+		await env.connect('webhook_secret', 'whsec-0123456789abcdefghijklmnop');
+		const cookie = await env.adminSession();
+		const list = await env.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${env.websiteId}/lists/webhook_urls`, {
+			value: [{ url: HOOK_URL, events: ['payments.payment.paid'] }],
+		});
+		expect(list.status).toBe(200);
+		const relayed = await env.call('POST', '/v1/events', {
+			token: env.server,
+			body: { type: 'payments.payment.paid', data: { paymentId: 'pay_1' } },
+		});
+		expect(relayed.status).toBe(202);
+		const event = await (
+			await env.merchantCollection('webhook_events')
+		).findOne({
+			websiteId: env.websiteId,
+			type: 'payments.payment.paid',
+		});
+		expect(event).toMatchObject({ status: 'delivered', expireAt: new Date(env.now() + 30 * DAY) });
+		// back to forever
+		await env.setting('delivery_log', 'retentionDays', 0);
+		const kept = await env.send('sms', { template: 'note', to: { phone: '+15550003030' }, values: { n: '4' } });
+		expect((await raw(kept.json.id)).expireAt).toBeNull();
 	});
 });

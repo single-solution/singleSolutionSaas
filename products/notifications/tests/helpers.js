@@ -6,6 +6,7 @@
  * @module
  */
 import { createECDH } from 'node:crypto';
+import { MongoClient } from 'mongodb';
 import { createFakePortal, createMemoryStore, createNetwork } from '@ss/app-kit/testing';
 import { createProductInstance, manifest } from '../adapters/product.js';
 import { createRoutes } from '../server/routes.js';
@@ -157,6 +158,8 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 	});
 	/** @type {Array<() => Promise<unknown>>} */
 	const tasks = [];
+	/** The address of the website's merchant database, once connected. */
+	let databaseUri = '';
 	const handler = product.handler(createRoutes(product), { after: (task) => tasks.push(task) });
 	handlers[BASE] = handler;
 	await portal.connect({ handler, baseUrl: BASE, secret: SECRET });
@@ -271,12 +274,27 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 		template,
 		send,
 		ticket,
-		connectDatabase: () => connect('database', merchantDatabase()),
+		connectDatabase: () => {
+			databaseUri = merchantDatabase();
+			return connect('database', databaseUri);
+		},
 		/**
 		 * A collection of the website's merchant database, as Notifications keeps it (every field; the kit's tenant guard).
 		 * @param {string} name `messages`, `webhook_events` …
 		 */
 		merchantCollection: async (name) => (await product.data.forWebsite(websiteId)).collection(name),
+		/**
+		 * The indexes of a collection of the merchant database, as MongoDB lists them.
+		 * @param {string} name `messages`, `webhook_events` …
+		 */
+		merchantIndexes: async (name) => {
+			const client = await MongoClient.connect(databaseUri);
+			try {
+				return await client.db().collection(`ss_notifications_${name}`).indexes();
+			} finally {
+				await client.close();
+			}
+		},
 		/**
 		 * Serve the website's business.json (null: 404) and read it again, as the dashboard's Refresh does.
 		 * @param {unknown} value
