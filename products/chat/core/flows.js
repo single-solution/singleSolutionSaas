@@ -175,9 +175,10 @@ export const waitingView = (step, customFields) => {
  * @param {number} at
  * @param {string} answer
  * @param {readonly CustomField[]} customFields
+ * @param {string} [callingCode] the website's default calling code, for a phone typed without one
  * @returns {{ ok: true, key: string, value: string | number | boolean } | { ok: false }}
  */
-export const answerStep = (flow, at, answer, customFields) => {
+export const answerStep = (flow, at, answer, customFields, callingCode = '') => {
 	const step = flow.steps[at];
 	const key = `${flow.id}:${at + 1}`;
 	if (step?.kind === 'question') return step.buttons.includes(answer) ? { ok: true, key, value: answer } : { ok: false };
@@ -188,6 +189,6 @@ export const answerStep = (flow, at, answer, customFields) => {
 		return field && checked?.ok ? { ok: true, key: field.key, value: checked.value } : { ok: false };
 	}
 	const type = /** @type {CustomField['type']} */ (step.field);
-	const checked = checkFieldValue({ key: step.field, label: step.field, type, options: [] }, answer);
+	const checked = checkFieldValue({ key: step.field, label: step.field, type, options: [] }, answer, callingCode);
 	return checked.ok ? { ok: true, key: step.field === 'text' ? key : step.field, value: checked.value } : { ok: false };
 };

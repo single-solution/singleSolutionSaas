@@ -21,7 +21,7 @@ import {
 	STAFF_TYPES,
 } from '../core/widgets.js';
 import { labelsOf } from './reply.js';
-import { bodyOf, invalid } from './service.js';
+import { bodyOf, invalid, phoneCodeOf } from './service.js';
 
 /** @typedef {import('./service.js').Site} Site */
 /** @typedef {import('./service.js').Visitor} Visitor */
@@ -320,7 +320,11 @@ export const createVisitorApi = (product, service, reply) => {
 			['phone', 'phone'],
 		])) {
 			if (body[field] === undefined || body[field] === '') continue;
-			const checked = checkFieldValue({ key: field, label: field, type, options: [] }, body[field]);
+			const checked = checkFieldValue(
+				{ key: field, label: field, type, options: [] },
+				body[field],
+				type === 'phone' ? await phoneCodeOf(s) : '',
+			);
 			if (checked.ok) set[field] = String(checked.value).slice(0, 200);
 			else errors.push(`${field} is not valid.`);
 		}
@@ -350,6 +354,7 @@ export const createVisitorApi = (product, service, reply) => {
 			customKeys: s.on.includes('custom_fields') ? settings.customLeadFields : [],
 			customFields: s.on.includes('custom_fields') ? await s.list('custom_fields') : [],
 			consentRequired: String(settings.consentText).trim().length > 0,
+			callingCode: await phoneCodeOf(s),
 		});
 		if (!checked.ok) throw invalid(checked.errors);
 		const c = known ? await s.store.conversations.current(known) : null;
@@ -390,7 +395,7 @@ export const createVisitorApi = (product, service, reply) => {
 		const flow = c.flow ? (await s.list('flows')).find((f) => f.id === c.flow?.id) : null;
 		if (!flow || !c.flow) throw problem('conflict', 'No flow is waiting for an answer.');
 		const answer = typeof bodyOf(ctx.body).answer === 'string' ? bodyOf(ctx.body).answer.trim().slice(0, 2000) : '';
-		const checked = answerStep(flow, c.flow.step, answer, await s.list('custom_fields'));
+		const checked = answerStep(flow, c.flow.step, answer, await s.list('custom_fields'), await phoneCodeOf(s));
 		if (!checked.ok) throw invalid([String((await s.texts())['chat.flowInvalid'] ?? 'Not valid.')]);
 		const contactField = ['name', 'email', 'phone'].includes(checked.key);
 		let current = /** @type {ConversationRecord} */ (

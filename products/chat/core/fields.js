@@ -1,9 +1,12 @@
 /**
  * Fields (pure): the merchant's custom fields for conversations and leads (label, key, type text, number, yes/no or a
  * choice list), the standard contact fields (name, e-mail, phone) shared by lead capture, guest contact capture and
- * flows, leads with their optional consent, and proactive page rules.
+ * flows, leads with their optional consent, and proactive page rules. Phones are kept as E.164, read by the normaliser
+ * every product shares (`@ss/contracts/phone`) with the website's default calling code.
  * @module
  */
+import { normalisePhone } from '@ss/contracts/phone';
+
 /** Most custom fields a website has. */
 const MAX_CUSTOM_FIELDS = 30;
 /** Most proactive page rules a website has. */
@@ -11,7 +14,6 @@ const MAX_PAGE_RULES = 20;
 const FIELD_TYPES = Object.freeze(/** @type {const} */ (['text', 'number', 'yes_no', 'choice']));
 const KEY = /^[a-z][a-z0-9_]{0,39}$/;
 const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,}$/u;
-const PHONE = /^\+?[0-9 ()./-]{6,24}$/;
 const RESERVED = Object.freeze(['name', 'email', 'phone', 'message', 'text']);
 
 /** @typedef {{ key: string, label: string, type: 'text' | 'number' | 'yes_no' | 'choice' | 'name' | 'email' | 'phone', options: string[] }} CustomField */
@@ -71,9 +73,10 @@ export const checkCustomFields = (items) => {
  * Check one value of a field (custom or standard).
  * @param {CustomField} field
  * @param {unknown} raw
+ * @param {string} [callingCode] the website's default calling code (`+92`), for phones typed without one
  * @returns {{ ok: true, value: string | number | boolean } | { ok: false }}
  */
-export const checkFieldValue = (field, raw) => {
+export const checkFieldValue = (field, raw, callingCode = '') => {
 	const value = typeof raw === 'string' ? raw.trim() : raw;
 	switch (field.type) {
 		case 'number': {
@@ -87,8 +90,10 @@ export const checkFieldValue = (field, raw) => {
 			return typeof value === 'string' && field.options.includes(value) ? { ok: true, value } : { ok: false };
 		case 'email':
 			return typeof value === 'string' && EMAIL.test(value) ? { ok: true, value: value.toLowerCase() } : { ok: false };
-		case 'phone':
-			return typeof value === 'string' && PHONE.test(value) ? { ok: true, value } : { ok: false };
+		case 'phone': {
+			const phone = normalisePhone(value, callingCode);
+			return phone ? { ok: true, value: phone } : { ok: false };
+		}
 		default:
 			return typeof value === 'string' && value.length > 0 && value.length <= 2000 ? { ok: true, value } : { ok: false };
 	}
@@ -98,7 +103,8 @@ export const checkFieldValue = (field, raw) => {
  * Check a lead: the merchant's chosen fields (at least one contact: e-mail or phone, when asked), custom fields and
  * consent.
  * @param {unknown} body `{ fields: { … }, consent? }`
- * @param {{ fields: string[], customKeys: string[], customFields: readonly CustomField[], consentRequired: boolean }} rules
+ * @param {{ fields: string[], customKeys: string[], customFields: readonly CustomField[], consentRequired: boolean, callingCode?: string }} rules
+ *   `callingCode`: the website's default calling code, for phones typed without one
  * @returns {{ ok: true, value: { name: string | null, email: string | null, phone: string | null, message: string | null, custom: Record<string, string | number | boolean> } }
  *   | { ok: false, errors: string[] }}
  */
@@ -112,7 +118,11 @@ export const checkLead = (body, rules) => {
 		const raw = input[name];
 		if (raw === undefined || raw === null || raw === '') continue;
 		const type = name === 'message' ? 'text' : name === 'name' ? 'text' : name;
-		const checked = checkFieldValue({ key: name, label: name, type: /** @type {any} */ (type), options: [] }, raw);
+		const checked = checkFieldValue(
+			{ key: name, label: name, type: /** @type {any} */ (type), options: [] },
+			raw,
+			rules.callingCode,
+		);
 		if (checked.ok) standard[name] = String(checked.value).slice(0, name === 'message' ? 2000 : 200);
 		else errors.push(`${name} is not valid.`);
 	}

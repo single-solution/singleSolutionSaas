@@ -17,6 +17,7 @@
  */
 import { problem } from '@ss/app-kit';
 import { createId } from '@ss/contracts';
+import { callingCodeOf } from '@ss/contracts/phone';
 import { capReached, windowKeys, alertCrossed } from '../core/caps.js';
 import { customerOrdersPath, shopInfoOf } from '../core/shop.js';
 import { excerptOf, iso, pendingStale, previewOf, staffMessageView, visitorMessageView } from '../core/conversation.js';
@@ -42,7 +43,7 @@ import { createStore } from '../adapters/store.js';
  * @property {any} ctx the request
  * @property {(feature: string) => Promise<Record<string, any>>} values a feature's settings (read once per request)
  * @property {() => Promise<Record<string, string>>} texts the widget texts
- * @property {() => Promise<{ name: string, email?: string, phone?: string, address?: string, timeZone: string }>} business
+ * @property {() => Promise<{ name: string, email?: string, phone?: string, address?: string, country?: string | null, timeZone: string }>} business
  * @property {() => Promise<Look>} format the website's Format and business time zone, with the formatters of text the
  *   server makes (K7)
  * @property {(name: import('../adapters/lists.js').ListName) => Promise<any[]>} list
@@ -77,6 +78,13 @@ export const bodyOf = (value) =>
  */
 export const invalid = (errors) =>
 	problem('validation_failed', errors[0] ?? 'Not valid.', { errors: errors.map((message) => ({ path: '', message })) });
+
+/**
+ * The website's default calling code for phones typed without one: its business.json country's (`+92`), else ''
+ * (such phones are then refused).
+ * @param {Site} s
+ */
+export const phoneCodeOf = async (s) => callingCodeOf((await s.business()).country);
 
 /**
  * @param {Product} product

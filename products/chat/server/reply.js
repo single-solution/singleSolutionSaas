@@ -70,8 +70,10 @@ import { pendingStale } from '../core/conversation.js';
 import { dayKey } from '../core/time.js';
 import { SIGN_IN_HEADER, WAIT_MS } from '../core/widgets.js';
 import { currencyDigits } from '@ss/contracts/format';
+import { normalisePhone } from '@ss/contracts/phone';
 import { jsonOf } from '@ss/net';
 import { signTool } from '../adapters/crypto.js';
+import { phoneCodeOf } from './service.js';
 
 /** @typedef {import('./service.js').Site} Site */
 /** @typedef {import('./service.js').Service} Service */
@@ -520,12 +522,14 @@ export const createReply = (product, service) => {
 				const a = call.arguments;
 				if (typeof a.slotId !== 'string' || typeof a.name !== 'string' || (!a.email && !a.phone && !signedIn?.email))
 					return { ok: false, content: 'Ask for the slot, the name and an e-mail address or phone number.' };
+				const phone = a.phone ? normalisePhone(a.phone, await phoneCodeOf(s)) : null;
+				if (a.phone && !phone) return { ok: false, content: 'Ask for the phone number with its country code.' };
 				return callEndpoint(s, bookingUrl, {
 					action: 'book',
 					slotId: a.slotId,
 					name: a.name,
 					email: typeof a.email === 'string' ? a.email : (signedIn?.email ?? null),
-					phone: typeof a.phone === 'string' ? a.phone : null,
+					phone,
 					conversationId: c.id,
 				});
 			}

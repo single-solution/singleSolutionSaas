@@ -90,14 +90,27 @@ describe('AI replies', () => {
 		);
 		sys.ai(
 			{ tools: [{ name: 'list_free_slots', arguments: { from: '2026-10-01', to: '2027-01-01' } }] },
-			{ tools: [{ name: 'book_slot', arguments: { slotId: 's1', name: 'Ann', email: 'ann@example.com' } }] },
+			{ tools: [{ name: 'book_slot', arguments: { slotId: 's1', name: 'Ann', phone: '0300 123' } }] },
+			{
+				tools: [
+					{ name: 'book_slot', arguments: { slotId: 's1', name: 'Ann', email: 'ann@example.com', phone: '0300 1234567' } },
+				],
+			},
 			{ text: 'Booked for Tuesday.' },
 		);
 		const v = sys.visitor();
 		await v('POST', '/v1/chat/messages', { text: 'Book me a slot' });
 		const bodies = sys.calls.filter((c) => c.url === `${TOOLS}/booking`).map((c) => JSON.parse(c.body));
 		expect(bodies[0]).toEqual({ action: 'list_slots', from: '2026-10-05', to: '2026-10-19', timeZone: 'UTC' });
-		expect(bodies[1]).toMatchObject({ action: 'book', slotId: 's1', name: 'Ann', email: 'ann@example.com' });
+		// a phone that cannot be one is asked for again; one typed nationally goes with the business.json country's code
+		expect(bodies).toHaveLength(2);
+		expect(bodies[1]).toMatchObject({
+			action: 'book',
+			slotId: 's1',
+			name: 'Ann',
+			email: 'ann@example.com',
+			phone: '+923001234567',
+		});
 		sys.ai({ tools: [{ name: 'escalate_to_human', arguments: { reason: 'angry' } }] }, { text: 'Connecting you.' });
 		await v('POST', '/v1/chat/messages', { text: 'This is useless' });
 		const state = await v('GET', '/v1/chat');

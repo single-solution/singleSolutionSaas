@@ -95,7 +95,7 @@ export const setup = async ({ start = Date.parse('2026-10-05T10:00:00Z') } = {})
 	);
 	responders.set(`${ORIGIN}/.well-known/business.json`, () => ({
 		status: 200,
-		body: { version: 1, name: 'Shop', email: 'hello@shop.example.com', timeZone: 'UTC' },
+		body: { version: 1, name: 'Shop', email: 'hello@shop.example.com', country: 'PK', timeZone: 'UTC' },
 	}));
 	responders.set(AI, (call) => {
 		if (call.method === 'GET') return { status: 200, body: { data: [] } };

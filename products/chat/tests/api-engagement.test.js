@@ -113,7 +113,7 @@ describe('flows and leads', () => {
 		const contact = await v('POST', '/v1/chat/contact', { email: 'bo@example.com' });
 		expect(contact.json.guestKey).toMatch(/^g_/);
 		const leads = await sys.serverCall('GET', '/v1/leads');
-		expect(leads.json.items.map((/** @type {any} */ l) => l.email ?? l.phone)).toEqual(['bo@example.com', '+44 20 7946 0000']);
+		expect(leads.json.items.map((/** @type {any} */ l) => l.email ?? l.phone)).toEqual(['bo@example.com', '+442079460000']);
 		expect(leads.json.items[1].custom).toEqual({ size: 'M' });
 	});
 });

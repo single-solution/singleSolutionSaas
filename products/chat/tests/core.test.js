@@ -216,6 +216,9 @@ describe('conversations, flows and fields', () => {
 		expect(advance(flow, 4, { handoff: true })).toEqual({ messages: [], waitAt: null, handoff: false });
 		expect(answerStep(flow, 2, 'Because', [])).toEqual({ ok: true, key: 'f:3', value: 'Because' });
 		expect(answerStep(flow, 3, 'abc', [])).toEqual({ ok: false });
+		// phones are kept as E.164, with the website's calling code for national numbers
+		expect(answerStep(flow, 3, '0300-1234567', [], '+92')).toEqual({ ok: true, key: 'phone', value: '+923001234567' });
+		expect(answerStep(flow, 3, '0300-1234567', [])).toEqual({ ok: false });
 		expect(answerStep(flow, 1, 'x', [])).toEqual({ ok: false });
 		expect(answerStep({ ...flow, steps: [{ kind: 'collect', field: 'custom:gone', text: '?' }] }, 0, 'x', [])).toEqual({
 			ok: false,
@@ -237,6 +240,11 @@ describe('conversations, flows and fields', () => {
 		expect(checkFieldValue({ ...field, type: 'yes_no' }, 'maybe')).toEqual({ ok: false });
 		expect(checkFieldValue({ ...field, type: 'number' }, '')).toEqual({ ok: false });
 		expect(checkFieldValue({ ...field, type: 'text' }, 5)).toEqual({ ok: false });
+		for (const typed of ['923001234567', '+92 0300 1234567', '0092 300 1234567', '0300 1234567'])
+			expect(checkFieldValue({ ...field, type: 'phone' }, typed, '+92')).toEqual({ ok: true, value: '+923001234567' });
+		expect(checkFieldValue({ ...field, type: 'phone' }, '+44 (0)20 7946 0018')).toEqual({ ok: true, value: '+442079460018' });
+		expect(checkFieldValue({ ...field, type: 'phone' }, '0300 1234567')).toEqual({ ok: false });
+		expect(checkFieldValue({ ...field, type: 'phone' }, '+92 300 123', '+92')).toEqual({ ok: false });
 		const lead = checkLead(
 			{ fields: { email: 'bad', size: 'XL' } },
 			{
@@ -255,6 +263,12 @@ describe('conversations, flows and fields', () => {
 		expect(checkLead(null, { fields: [], customKeys: [], customFields: [], consentRequired: false })).toMatchObject({
 			ok: true,
 		});
+		expect(
+			checkLead(
+				{ fields: { phone: '92 300 1234567' } },
+				{ fields: ['phone'], customKeys: [], customFields: [], consentRequired: false, callingCode: '+92' },
+			),
+		).toMatchObject({ ok: true, value: { phone: '+923001234567' } });
 		expect(checkPageRules('x')).toMatchObject({ ok: false });
 		expect(checkPageRules([{ path: '/', delay: -1, message: 'm' }])).toMatchObject({ ok: false });
 	});
