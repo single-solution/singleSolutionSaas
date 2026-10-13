@@ -355,7 +355,7 @@ export const createManage = (product, service, flows) => {
 		const { setupDays, setupPageUrl } = await service.settings(s, 'staff_links');
 		const template = String(setupPageUrl) || `https://${s.domain}/`;
 		const page = returnAddress(template.replaceAll('{code}', 'code'), s.domain);
-		if (!page) throw problem('validation_failed', 'Set the setup page (a page of your website) in Settings first.');
+		if (!page) throw invalid('setupPageUrl', 'Set the setup page (a page of your website) in Settings first.');
 		const secret = randomSecret(32);
 		const expireAt = new Date(now() + Number(setupDays) * 86_400_000);
 		const id = await s.store.codes.add({ kind: 'setup', target: user.id, hash: sha256(secret), expireAt, replace: true });
@@ -509,7 +509,7 @@ export const createManage = (product, service, flows) => {
 		const body = bodyOf(ctx.body);
 		const { invitePageUrl, inviteDays } = await service.settings(s, 'approval');
 		const page = returnAddress(invitePageUrl, s.domain);
-		if (!page) throw problem('validation_failed', 'Set the invite page (a page of your website) in Settings first.');
+		if (!page) throw invalid('invitePageUrl', 'Set the invite page (a page of your website) in Settings first.');
 		const email = body.email === undefined ? null : normaliseEmail(body.email);
 		const phone = body.phone === undefined ? null : await service.phoneOf(s, body.phone);
 		const deliver = body.deliver ?? 'send';

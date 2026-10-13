@@ -138,6 +138,8 @@ describe('email + password', () => {
 		expect(code(await signUp('not-an-address'))).toBe('validation_failed');
 		const short = await signUp('bo@example.com', 'short');
 		expect(code(short)).toBe('weak_password');
+		// the rule it breaks, with its number, so the widgets show the website's own words
+		expect(short.json).toMatchObject({ rule: 'too_short', minLength: 8 });
 		expect(code(await signUp('bo@example.com', 'x'.repeat(300)))).toBe('weak_password');
 		const suffix = sha1Upper('password123456').slice(5);
 		env.responders.set('https://api.pwnedpasswords.com', (call) => {
@@ -147,6 +149,7 @@ describe('email + password', () => {
 		const breached = await signUp('bo@example.com', 'password123456');
 		expect(code(breached)).toBe('weak_password');
 		expect(breached.json.detail).toMatch(/breach/);
+		expect(breached.json.rule).toBe('breached');
 		env.responders.set('https://api.pwnedpasswords.com', () => ({ status: 503 }));
 		expect((await signUp('bo@example.com', 'password123456')).status).toBe(200);
 		env.responders.delete('https://api.pwnedpasswords.com');
@@ -852,7 +855,8 @@ describe('roles, two-step, terms, approval and risk checks', () => {
 		expect(code(await env.admin(t, 'POST', `/v1/admin/users/${nope.id}/decline`))).toBe('not_found');
 		await env.setting('approval', 'mode', 'invite');
 		expect(code(await signUp('closed@example.com'))).toBe('sign_up_closed');
-		expect(code(await env.serverCall('POST', '/v1/users/invite', { email: 'inv@example.com' }))).toBe('validation_failed');
+		const noPage = await env.serverCall('POST', '/v1/users/invite', { email: 'inv@example.com' });
+		expect([code(noPage), noPage.json.errors[0].path]).toEqual(['validation_failed', '/invitePageUrl']);
 		await env.setting('approval', 'invitePageUrl', 'https://shop.example.com/join');
 		const invited = await env.admin(t, 'POST', '/v1/admin/users/invite', {
 			email: 'inv@example.com',

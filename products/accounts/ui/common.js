@@ -1,7 +1,7 @@
 /**
  * Helpers the Accounts widgets share: the widget texts, dates in the website's Format and business time zone, the
- * problem answers of the API turned into widget texts, and labelled fields (custom fields and the terms checkbox
- * included). Text is always set as text, never as HTML.
+ * problem answers of the API turned into widget texts (never the server's English detail), and labelled fields (custom
+ * fields and the terms checkbox included). Text is always set as text, never as HTML.
  * @module
  */
 import { formatDate, formatMoney, formatText, viewerOf } from '@ss/app-kit/widget';
@@ -31,7 +31,7 @@ import { element } from './dom.js';
  */
 
 /** Problem codes with a widget text of their own (`error.<code>`). */
-const OWN_TEXT = new Set([
+export const OWN_TEXT = new Set([
 	'sign_in_failed',
 	'blocked',
 	'pending_approval',
@@ -55,7 +55,45 @@ const OWN_TEXT = new Set([
 	'self_reset_off',
 	'forbidden',
 	'feature_off',
+	'conflict',
+	'not_found',
+	'two_step_required',
+	'product_not_connected',
 ]);
+
+/**
+ * Fields a refused form may name (422 `validation_failed`, the first segment of its first error's path) with a widget
+ * text of their own (`error.field.<field>`); any other field shows `error.validation_failed`.
+ */
+export const FIELD_TEXT = new Set([
+	'name',
+	'email',
+	'phone',
+	'returnTo',
+	'custom',
+	'addresses',
+	'accept',
+	'role',
+	'note',
+	'notes',
+	'setupPageUrl',
+	'invitePageUrl',
+	'key',
+	'description',
+	'permissions',
+	'sessionHours',
+	'rememberDays',
+	'rank',
+	'phoneDigits',
+	'createdAfter',
+	'action',
+	'actor',
+	'from',
+	'to',
+]);
+
+/** The rules a refused new password breaks (422 `weak_password`), each with a widget text (`error.weak_password.<rule>`). */
+export const PASSWORD_RULES = new Set(['too_short', 'too_long', 'letter_and_digit', 'personal', 'breached']);
 
 /**
  * The widget texts of a config: the website's text, else the key.
@@ -104,7 +142,9 @@ export const moneyText = (config, win, amount, currency) =>
 		: null;
 
 /**
- * The widget text for a failed answer.
+ * The widget text for a failed answer (PLAN 0.4.10: every word is the website's, so a problem's English `detail` never
+ * shows): the text of the field a refused form names, of the rule a refused password breaks, or of the problem code,
+ * else a general one.
  * @param {Texts} t
  * @param {Answer} answer
  * @param {Dates} when dates as text (the lock's end)
@@ -112,10 +152,15 @@ export const moneyText = (config, win, amount, currency) =>
 export const errorText = (t, answer, when) => {
 	const data = answer.data ?? {};
 	const code = problemCode(data);
-	if (code === 'weak_password' || code === 'validation_failed') {
-		const detail = code === 'validation_failed' ? (data.errors?.[0]?.message ?? data.detail) : data.detail;
-		return typeof detail === 'string' && detail !== '' ? detail : t('error.generic');
+	if (code === 'validation_failed') {
+		const path = data.errors?.[0]?.path;
+		const field = typeof path === 'string' ? path.split('/')[1] : undefined;
+		return field !== undefined && FIELD_TEXT.has(field) ? t(`error.field.${field}`) : t('error.validation_failed');
 	}
+	if (code === 'weak_password')
+		return PASSWORD_RULES.has(data.rule)
+			? formatText(t(`error.weak_password.${data.rule}`), { min: data.minLength ?? '', max: data.maxLength ?? '' })
+			: t('error.weak_password');
 	if (code === 'sign_in_paused') return t('signIn.paused');
 	if (code === 'locked')
 		return typeof data.lockedUntil === 'string' && when(data.lockedUntil) !== ''

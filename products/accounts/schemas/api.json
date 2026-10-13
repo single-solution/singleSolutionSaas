@@ -1415,7 +1415,7 @@
 	},
 	"POST /v1/sign-up/password": {
 		"summary": "Sign up with an e-mail address and a password",
-		"description": "Makes the account (role customer) and signs it in, or answers status pending while sign-ups wait for approval. The address is not proven by this. 422 validation_failed (for the field), weak_password (reason: too_short, too_long, letter_and_digit, personal or breached); 403 sign_up_closed (invite only), terms_required (with version and url), risk_refused, sign_in_paused or method_refused (the customer role); 409 already_exists.",
+		"description": "Makes the account (role customer) and signs it in, or answers status pending while sign-ups wait for approval. The address is not proven by this. 422 validation_failed (for the field), weak_password (with rule: too_short and minLength, too_long and maxLength, letter_and_digit, personal or breached); 403 sign_up_closed (invite only), terms_required (with version and url), risk_refused, sign_in_paused or method_refused (the customer role); 409 already_exists.",
 		"body": {
 			"type": "object",
 			"required": ["email", "password"],
@@ -1533,7 +1533,7 @@
 	},
 	"POST /v1/sign-up/phone-password": {
 		"summary": "Sign up with a phone number and a password",
-		"description": "Only while the Phone + password signUp setting is on (else 403 sign_up_closed). The number is not proven by this. Makes the account (role customer) and signs it in, or answers status pending while sign-ups wait for approval. 422 validation_failed (for the field), weak_password (reason: too_short, too_long, letter_and_digit, personal or breached); 403 sign_up_closed (invite only), terms_required (with version and url), risk_refused, sign_in_paused or method_refused (the customer role); 409 already_exists.",
+		"description": "Only while the Phone + password signUp setting is on (else 403 sign_up_closed). The number is not proven by this. Makes the account (role customer) and signs it in, or answers status pending while sign-ups wait for approval. 422 validation_failed (for the field), weak_password (with rule: too_short and minLength, too_long and maxLength, letter_and_digit, personal or breached); 403 sign_up_closed (invite only), terms_required (with version and url), risk_refused, sign_in_paused or method_refused (the customer role); 409 already_exists.",
 		"body": {
 			"type": "object",
 			"required": ["phone", "password"],
@@ -1751,7 +1751,7 @@
 	},
 	"POST /v1/sign-in/phone": {
 		"summary": "Sign in (or up) with the phone code",
-		"description": "Proves the number. A number without an account signs up with the sign-up members (a new user without a name gets your newUserName). 422 code_invalid (5 wrong codes use the code up). The right code is used up once the sign-in passed, so a terms or profile step can be retried with it. 403 blocked, pending_approval, sign_in_paused (the detail is your paused text) or method_refused (the user’s role); 403 terms_required (with version and url) until acceptTerms: true. A sign-up: 422 validation_failed (for the field), weak_password (reason: too_short, too_long, letter_and_digit, personal or breached); 403 sign_up_closed (invite only), terms_required (with version and url), risk_refused, sign_in_paused or method_refused (the customer role); 409 already_exists.",
+		"description": "Proves the number. A number without an account signs up with the sign-up members (a new user without a name gets your newUserName). 422 code_invalid (5 wrong codes use the code up). The right code is used up once the sign-in passed, so a terms or profile step can be retried with it. 403 blocked, pending_approval, sign_in_paused (the detail is your paused text) or method_refused (the user’s role); 403 terms_required (with version and url) until acceptTerms: true. A sign-up: 422 validation_failed (for the field), weak_password (with rule: too_short and minLength, too_long and maxLength, letter_and_digit, personal or breached); 403 sign_up_closed (invite only), terms_required (with version and url), risk_refused, sign_in_paused or method_refused (the customer role); 409 already_exists.",
 		"body": {
 			"type": "object",
 			"required": ["phone", "code"],
@@ -1827,7 +1827,7 @@
 	},
 	"POST /v1/sign-in/email": {
 		"summary": "Sign in (or up) with the e-mail code or the magic link",
-		"description": "Send { email, code } or { link }. Proves the address; opens only an account whose address was proven before (an address only typed on another account counts as unknown, and its sign-up answers 409 already_exists). A sign-in code your staff made opens its user but proves nothing. 422 code_invalid. 403 blocked, pending_approval, sign_in_paused (the detail is your paused text) or method_refused (the user’s role); 403 terms_required (with version and url) until acceptTerms: true. A sign-up: 422 validation_failed (for the field), weak_password (reason: too_short, too_long, letter_and_digit, personal or breached); 403 sign_up_closed (invite only), terms_required (with version and url), risk_refused, sign_in_paused or method_refused (the customer role); 409 already_exists.",
+		"description": "Send { email, code } or { link }. Proves the address; opens only an account whose address was proven before (an address only typed on another account counts as unknown, and its sign-up answers 409 already_exists). A sign-in code your staff made opens its user but proves nothing. 422 code_invalid. 403 blocked, pending_approval, sign_in_paused (the detail is your paused text) or method_refused (the user’s role); 403 terms_required (with version and url) until acceptTerms: true. A sign-up: 422 validation_failed (for the field), weak_password (with rule: too_short and minLength, too_long and maxLength, letter_and_digit, personal or breached); 403 sign_up_closed (invite only), terms_required (with version and url), risk_refused, sign_in_paused or method_refused (the customer role); 409 already_exists.",
 		"body": {
 			"type": "object",
 			"properties": {

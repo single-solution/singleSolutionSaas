@@ -11,7 +11,19 @@ import {
 	WIDGET_ATTRIBUTE,
 	WIDGET_GLOBAL,
 } from '../core/widgets.js';
-import { datesOf, errorText, moneyText, problemCode, textsOf, webAddress } from '../ui/common.js';
+import { ADDRESS_FIELDS } from '../core/profile.js';
+import { ROLE_METHODS } from '../core/roles.js';
+import {
+	FIELD_TEXT,
+	OWN_TEXT,
+	PASSWORD_RULES,
+	datesOf,
+	errorText,
+	moneyText,
+	problemCode,
+	textsOf,
+	webAddress,
+} from '../ui/common.js';
 import { RENEW_BEFORE_MS, RETRY_MS, createSession } from '../ui/session.js';
 import { ADMIN_CONFIG_PATH, CONFIG_PATH, startWidget } from '../ui/widget.js';
 
@@ -415,7 +427,7 @@ describe('e-mail and password', () => {
 	it('signs up with the required fields, custom fields and the terms; an approval sign-up waits', async () => {
 		const host = place('sign_in');
 		const outcomes = [
-			problem(422, 'weak_password', { detail: 'Use at least 10 characters.' }),
+			problem(422, 'weak_password', { rule: 'too_short', minLength: 10 }),
 			problem(422, 'validation_failed', { errors: [{ path: '/custom/size', message: 'Size is required.' }] }),
 			problem(422, 'validation_failed', { detail: '' }),
 			problem(409, 'something_new'),
@@ -469,11 +481,12 @@ describe('e-mail and password', () => {
 			acceptTerms: true,
 			remember: false,
 		});
+		// the website's words, never the server's English detail
 		expect(statusIn(root)).toBe('Use at least 10 characters.');
 		await submit(send);
-		expect(statusIn(root)).toBe('Size is required.');
+		expect(statusIn(root)).toBe(strings['error.field.custom']);
 		await submit(send);
-		expect(statusIn(root)).toBe(strings['error.generic']);
+		expect(statusIn(root)).toBe(strings['error.validation_failed']);
 		await submit(send);
 		expect(statusIn(root)).toBe(strings['error.generic']);
 		await submit(send);
@@ -971,7 +984,7 @@ describe('My account', () => {
 		expect(widget.user()?.name).toBe('Ana Lee');
 		fieldIn(profile, strings['fields.name']).value = 'x';
 		await submit(buttonIn(profile, strings['account.save']));
-		expect(statusIn(profile)).toBe('Too long.');
+		expect(statusIn(profile)).toBe(strings['error.field.name']);
 
 		const addresses = part(host, strings['account.addresses']);
 		expect(addresses.querySelector('li')?.firstChild?.textContent).toBe('Home, Ana, 1 Main St, Springfield, North 12345, US');
@@ -1000,7 +1013,7 @@ describe('My account', () => {
 	});
 
 	it('accepts new terms, changes the password, turns two-step on and off', async () => {
-		const passwords = [problem(422, 'weak_password', { detail: 'Too short.' }), answer(204)];
+		const passwords = [problem(422, 'weak_password', { rule: 'personal' }), answer(204)];
 		const { host, server } = await open({
 			'POST /v1/me/terms': () => answer(200, { ...ME, terms: { version: 'v2', acceptedAt: at(0) } }),
 			'PUT /v1/me/password': () => /** @type {Response} */ (passwords.shift()),
@@ -1023,7 +1036,7 @@ describe('My account', () => {
 		fieldIn(password, strings['account.currentPassword']).value = 'old-pass';
 		fieldIn(password, strings['account.newPassword']).value = 'new';
 		await submit(buttonIn(password, strings['account.passwordChange']));
-		expect(statusIn(password)).toBe('Too short.');
+		expect(statusIn(password)).toBe(strings['error.weak_password.personal']);
 		fieldIn(password, strings['account.newPassword']).value = 'new-password-2';
 		await submit(buttonIn(password, strings['account.passwordChange']));
 		expect(server.last('PUT /v1/me/password')?.body).toEqual({ current: 'old-pass', password: 'new-password-2' });
@@ -1255,7 +1268,7 @@ describe('My account', () => {
 		const off = await open({ 'POST /v1/me/two-step/setup': () => problem(409, 'conflict') }, { ...ME, twoStep: false });
 		const again = part(off.host, strings['account.twoStep']);
 		await click(buttonIn(again, strings['account.twoStepTurnOn']));
-		expect(statusIn(again)).toBe(strings['error.generic']);
+		expect(statusIn(again)).toBe(strings['error.conflict']);
 	});
 });
 
@@ -1505,7 +1518,7 @@ describe('admin widgets', () => {
 		await pick(strings['users.approve']);
 		expect(statusIn(detail)).toBe(strings['users.approved']);
 		await pick(strings['users.decline']);
-		expect(statusIn(detail)).toBe(strings['error.generic']);
+		expect(statusIn(detail)).toBe(strings['error.conflict']);
 		await pick(strings['users.signOut']);
 		expect(statusIn(detail)).toBe(strings['users.signedOutUser']);
 		await pick(strings['users.deletionReject']);
@@ -1762,7 +1775,7 @@ describe('admin widgets', () => {
 		expect(dialog().querySelector('.code')?.textContent).toBe('https://shop.example.com/?ss_setup=nia');
 		await click(buttonIn(dialog(), '×'));
 		await rowMenu(0, strings['requests.decline']);
-		expect(statusIn(part)).toBe(strings['error.generic']);
+		expect(statusIn(part)).toBe(strings['error.conflict']);
 		await rowMenu(0, strings['requests.invite']);
 		expect(statusIn(part)).toBe(strings['error.contact_unverified']);
 		await rowMenu(0, strings['requests.invite']);
@@ -1880,7 +1893,7 @@ describe('admin widgets', () => {
 		everything.dispatchEvent(new window.Event('change'));
 		fieldIn(form, strings['roles.sessionHours']).value = '999';
 		await submit(buttonIn(form, strings['roles.save']));
-		expect(statusIn(form)).toBe('Session length is 1 to 720 hours.');
+		expect(statusIn(form)).toBe(strings['error.field.sessionHours']);
 		fieldIn(form, strings['roles.sessionHours']).value = '24';
 		await submit(buttonIn(form, strings['roles.save']));
 		expect(saved.at(-1).permissions).toEqual(['*']);
@@ -2027,7 +2040,8 @@ describe('admin widgets', () => {
 				'GET /v1/admin/activity-copies/counts': () => answer(200, { total: 5, groups: { ecommerce: 4, chat: 1 } }),
 				'GET /v1/admin/activity-copies': ({ url }) => {
 					asked.push(url);
-					if (url.searchParams.get('q') === 'boom') return problem(422, 'validation_failed', { detail: 'from is a day.' });
+					if (url.searchParams.get('q') === 'boom')
+						return problem(422, 'validation_failed', { errors: [{ path: '/from', message: 'from is a day.' }] });
 					if (url.searchParams.get('productId') === 'chat')
 						return answer(200, { items: [], nextCursor: null, hasMore: false });
 					return url.searchParams.get('cursor')
@@ -2062,7 +2076,7 @@ describe('admin widgets', () => {
 		fieldIn(root, strings['activity.from']).value = '2026-10-01';
 		await submit(buttonIn(root, strings['activity.searchButton']));
 		expect(Object.fromEntries(asked.at(-1)?.searchParams ?? [])).toMatchObject({ q: 'boom', from: '2026-10-01', limit: '50' });
-		expect(statusIn(root)).toBe('from is a day.');
+		expect(statusIn(root)).toBe(strings['error.field.from']);
 	});
 
 	it('Roles admin says when the roles cannot be loaded', async () => {
@@ -2190,7 +2204,7 @@ describe('Phase 2 options in the widgets (PLAN 0.8.10)', () => {
 			{
 				'POST /v1/setup-links/accept': ({ body }) =>
 					body.password === 'short'
-						? problem(422, 'weak_password', { detail: 'Use at least 8 characters.' })
+						? problem(422, 'weak_password', { rule: 'too_short', minLength: 8 })
 						: answer(200, signedIn()),
 			},
 			{ features: ['phone_password'], settings: { phonePassword: PHONE_RULES }, page: '/account?ss_setup=cod_1.secret&x=1' },
@@ -2213,7 +2227,7 @@ describe('Phase 2 options in the widgets (PLAN 0.8.10)', () => {
 			{
 				'POST /v1/role-requests': ({ body }) =>
 					body.name === ''
-						? problem(422, 'validation_failed', { detail: 'Write your name.' })
+						? problem(422, 'validation_failed', { errors: [{ path: '/name', message: 'Write your name.' }] })
 						: answer(201, { id: 'rrq_1', status: 'pending' }),
 			},
 			{
@@ -2233,7 +2247,7 @@ describe('Phase 2 options in the widgets (PLAN 0.8.10)', () => {
 		expect(heading(host)).toBe(strings['request.title']);
 		fieldIn(root, strings['request.role']).value = 'wholesale';
 		await submit(buttonIn(root, strings['request.submit']));
-		expect(statusIn(root)).toBe('Write your name.');
+		expect(statusIn(root)).toBe(strings['error.field.name']);
 		fieldIn(root, strings['fields.name']).value = 'Nia';
 		fieldIn(root, strings['fields.phone']).value = '0300 1112222';
 		fieldIn(root, strings['request.note']).value = 'Shop owner';
@@ -2311,14 +2325,40 @@ describe('Phase 2 options in the widgets (PLAN 0.8.10)', () => {
 });
 
 describe('helpers', () => {
+	it('every text a widget names after a code exists, so no text key ever shows (PLAN 0.4.10)', () => {
+		const keys = [
+			// sessions are signed in by a method, a setup link or an invite (My account's devices)
+			...[...ROLE_METHODS, 'setup_link', 'invite'].map((method) => `method.${method}`),
+			...['google', 'apple', 'facebook'].map((provider) => `social.${provider}`),
+			...['active', 'pending', 'invited', 'blocked'].map((status) => `status.${status}`),
+			...['pending', 'invited', 'completed', 'declined', 'expired'].map((status) => `requests.${status}`),
+			...['label', ...ADDRESS_FIELDS].map((field) => `address.${field}`),
+			...[...OWN_TEXT, 'generic', 'locked', 'validation_failed', 'weak_password'].map((code) => `error.${code}`),
+			...[...FIELD_TEXT].map((field) => `error.field.${field}`),
+			...[...PASSWORD_RULES].map((rule) => `error.weak_password.${rule}`),
+		];
+		expect(keys.filter((key) => !Object.hasOwn(strings, key))).toEqual([]);
+	});
+
 	it('read problem codes, addresses and dates defensively', () => {
 		const t = textsOf({ texts: TEXTS });
 		expect(problemCode(null)).toBe('');
 		expect(problemCode({ type: 'https://x/problems/locked' })).toBe('locked');
 		expect(errorText(t, { ok: false, status: 0, data: null }, when)).toBe(strings['error.generic']);
-		expect(errorText(t, { ok: false, status: 400, data: { type: '/problems/weak_password' } }, when)).toBe(
-			strings['error.generic'],
+		// a password refusal without a known rule, and a refused form naming no field with a text of its own
+		expect(errorText(t, { ok: false, status: 422, data: { type: '/problems/weak_password', rule: 'odd' } }, when)).toBe(
+			strings['error.weak_password'],
 		);
+		expect(
+			errorText(t, { ok: false, status: 422, data: { type: '/problems/validation_failed', errors: [{ path: '' }] } }, when),
+		).toBe(strings['error.validation_failed']);
+		expect(
+			errorText(
+				t,
+				{ ok: false, status: 422, data: { type: '/problems/weak_password', rule: 'too_long', maxLength: 128 } },
+				when,
+			),
+		).toBe('Use at most 128 characters.');
 		// a lock without a real end time says to try again later
 		expect(errorText(t, { ok: false, status: 423, data: { type: '/problems/locked', lockedUntil: 'soon' } }, when)).toBe(
 			strings['error.rate_limited'],

@@ -71,6 +71,13 @@ const afterAnswer = (ctx, task) =>
 		}),
 	);
 
+/**
+ * A refused new password (422 `weak_password`): the English detail, and the rule with its number for the widgets
+ * (`reason` is the kit's, for `product_unavailable` only).
+ * @param {string} detail @param {{ rule: string, minLength?: number, maxLength?: number }} extensions
+ */
+const weak = (detail, extensions) => problem('weak_password', detail, { extensions });
+
 /** @param {string} field @param {string} message */
 export const invalid = (field, message) =>
 	problem('validation_failed', message, { errors: [{ path: `/${field}`, message, code: 'invalid' }] });
@@ -233,26 +240,27 @@ export const createFlows = (product, service) => {
 	};
 
 	/**
-	 * A new password: the method's rules, then the breached-password list.
+	 * A new password: the method's rules, then the breached-password list. A refusal is 422 `weak_password` with the
+	 * `rule` it breaks (`too_short` with `minLength`, `too_long` with `maxLength`, `letter_and_digit`, `personal` or
+	 * `breached`), which the widgets turn into the website's own words.
 	 * @param {Site} s @param {unknown} password
 	 * @param {{ method?: string, who?: { name?: string | null, email?: string | null } }} [options] whose password (the
 	 *   personal check)
 	 */
 	const newPassword = async (s, password, { method = 'email_password', who = {} } = {}) => {
 		const rules = await passwordRules(s, method);
-		const reason = passwordProblem(password, {
+		const rule = passwordProblem(password, {
 			minLength: rules.minLength,
 			maxLength: rules.maxLength,
 			letterAndDigit: rules.letterAndDigit,
 			personal: rules.personalCheck ? who : null,
 		});
-		if (reason === 'too_short') throw problem('weak_password', `Use at least ${rules.minLength} characters.`);
-		if (reason === 'too_long') throw problem('weak_password', `Use at most ${rules.maxLength} characters.`);
-		if (reason === 'letter_and_digit') throw problem('weak_password', 'Use at least one letter and one digit.');
-		if (reason === 'personal')
-			throw problem('weak_password', 'Do not use your name, your e-mail address or runs like 1234 or qwer.');
+		if (rule === 'too_short') throw weak(`Use at least ${rules.minLength} characters.`, { rule, minLength: rules.minLength });
+		if (rule === 'too_long') throw weak(`Use at most ${rules.maxLength} characters.`, { rule, maxLength: rules.maxLength });
+		if (rule === 'letter_and_digit') throw weak('Use at least one letter and one digit.', { rule });
+		if (rule === 'personal') throw weak('Do not use your name, your e-mail address or runs like 1234 or qwer.', { rule });
 		if (rules.breachedCheck && (await providers.breached(/** @type {string} */ (password))))
-			throw problem('weak_password', 'This password appeared in a data breach. Choose another one.');
+			throw weak('This password appeared in a data breach. Choose another one.', { rule: 'breached' });
 		return hashPassword(/** @type {string} */ (password));
 	};
 

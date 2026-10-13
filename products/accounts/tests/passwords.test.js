@@ -350,10 +350,15 @@ describe('A9: password and lock options', () => {
 		await env.setting('email_password', 'maxLength', 128);
 		for (const password of ['onlyletters', '1234567890']) {
 			const refused = await tryUp('rules@example.com', password);
-			expect([code(refused), refused.json.detail]).toEqual(['weak_password', 'Use at least one letter and one digit.']);
+			expect([code(refused), refused.json.detail, refused.json.rule]).toEqual([
+				'weak_password',
+				'Use at least one letter and one digit.',
+				'letter_and_digit',
+			]);
 		}
 		const tooLong = await tryUp('rules@example.com', `${'a1'.repeat(64)}x`);
 		expect([code(tooLong), tooLong.json.detail]).toEqual(['weak_password', 'Use at most 128 characters.']);
+		expect(tooLong.json).toMatchObject({ rule: 'too_long', maxLength: 128 });
 		expect((await tryUp('rules@example.com', 'a1'.repeat(64))).json.status).toBe('signed_in');
 		// the same rules for a reset and in My account
 		const signedIn = await signIn('rules@example.com', 'a1'.repeat(64));
@@ -412,8 +417,10 @@ describe('A9: password and lock options', () => {
 		/** @param {string} password */
 		const tryPassword = (password) =>
 			env.visitor('POST', '/v1/sign-up/password', { email: 'farhan.ali@example.com', name: 'Farhan Ali', password });
-		for (const password of ['my farhan password', 'farhan.ali the best', 'long password 1234', 'long qwerty password'])
-			expect(code(await tryPassword(password)), password).toBe('weak_password');
+		for (const password of ['my farhan password', 'farhan.ali the best', 'long password 1234', 'long qwerty password']) {
+			const refused = await tryPassword(password);
+			expect([code(refused), refused.json.rule], password).toEqual(['weak_password', 'personal']);
+		}
 		expect((await tryPassword('correct horse battery')).json.status).toBe('signed_in');
 		await env.setting('email_password', 'personalCheck', false);
 		await env.setting('email_password', 'minLength', 8);

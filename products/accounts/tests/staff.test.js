@@ -290,7 +290,8 @@ describe('A3: staff-issued sign-in codes and setup links', () => {
 		const own = await server('POST', `/v1/users/${people.support.id}/setup-link`);
 		expect(own.json.url).toMatch(/^https:\/\/shop\.example\.com\/account\/setup\/cod_[0-9a-z]+\.[\w-]+$/);
 		await env.setting('staff_links', 'setupPageUrl', 'https://elsewhere.example.org/{code}');
-		expect(code(await server('POST', `/v1/users/${people.support.id}/setup-link`))).toBe('validation_failed');
+		const elsewhere = await server('POST', `/v1/users/${people.support.id}/setup-link`);
+		expect([code(elsewhere), elsewhere.json.errors[0].path]).toEqual(['validation_failed', '/setupPageUrl']);
 		await env.setting('staff_links', 'setupPageUrl', '');
 	});
 
