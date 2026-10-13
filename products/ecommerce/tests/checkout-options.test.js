@@ -404,6 +404,31 @@ describe('payment, delivery and COD options (E22, E23)', () => {
 		await shop.setting('checkout', 'noteCod', '');
 	});
 
+	it('lets staff switch cash on delivery off for new orders while the feature stays on (cod.enabled, AO-2)', async () => {
+		const item = await shop.seedProduct({ price: 1000, stock: 10 });
+		const shopper = await newShopper();
+		const body = { lines: [{ productId: item.id }], delivery: { city: 'Springfield' } };
+		/** @param {any} answer */
+		const methods = (answer) => answer.json.paymentMethods.map((/** @type {any} */ m) => m.method);
+		const before = await place({ ...body, payment: 'cod', address: ADDRESS }, shopper.token);
+		expect(before.status).toBe(201);
+		expect(methods(await quote(body))).toContain('cod');
+		await shop.setting('cod', 'enabled', false);
+		expect(methods(await quote(body))).not.toContain('cod');
+		const refused = await place({ ...body, payment: 'cod', address: ADDRESS }, shopper.token);
+		expect(refused.json.errors[0].path).toBe('/payment');
+		expect((await visit('GET', '/v1/widget/config')).json.settings.checkout).toMatchObject({ cod: null });
+		expect((await visit('GET', '/v1/widget/config')).json.settings.checkout.paymentMethods).not.toContain('cod');
+		// an order placed before keeps cash on delivery when staff edit it
+		const variantId = /** @type {any} */ (item.variants[0]).id;
+		const edited = await shop.api('PATCH', `/v1/orders/${before.json.order.id}`, { lines: [{ variantId, quantity: 2 }] });
+		expect(edited.status).toBe(200);
+		expect(edited.json.payment.method).toBe('cod');
+		await shop.setting('cod', 'enabled', true);
+		expect(methods(await quote(body))).toContain('cod');
+		await shop.api('DELETE', `/v1/orders/${before.json.order.id}`);
+	});
+
 	it('takes the COD fee on the goods after discounts with feeBase goods_after_discounts (D4)', async () => {
 		await shop.setting('cod', 'feePercent', 5);
 		await shop.setting('cod', 'feeBase', 'goods_after_discounts');

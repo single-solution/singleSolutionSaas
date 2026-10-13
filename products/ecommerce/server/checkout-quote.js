@@ -230,6 +230,8 @@ export const createQuoting = (product, service) => {
 			);
 		const customer = options.customer ?? (shopper ? await store.customer(shopper.id) : null);
 		const [checkout, codSettings] = await Promise.all([s.values('checkout'), s.values('cod')]);
+		// staff switch cash on delivery off for new orders themselves (`cod.enabled`, AO-2); an order staff edit keeps it
+		const codOn = s.has('cod') && (codSettings.enabled !== false || edit !== null);
 		const zonesOn = s.has('delivery_zones');
 		const zoneSettings = zonesOn ? await s.values('delivery_zones') : null;
 
@@ -474,7 +476,7 @@ export const createQuoting = (product, service) => {
 				order: Array.isArray(checkout.paymentOrder) ? checkout.paymentOrder : undefined,
 				paymentsConnected,
 				bankManual,
-				cod: { on: s.has('cod'), settings: /** @type {import('../core/cod.js').CodSettings} */ (codSettings) },
+				cod: { on: codOn, settings: /** @type {import('../core/cod.js').CodSettings} */ (codSettings) },
 				pickupPossible,
 				deliveryMethod: delivery.method,
 				digital,
@@ -490,7 +492,7 @@ export const createQuoting = (product, service) => {
 					: option,
 			);
 			const effective = method ?? payments.find((option) => option.available)?.method ?? null;
-			const feePercent = effective === 'cod' && s.has('cod') ? Number(codSettings.feePercent ?? 0) : 0;
+			const feePercent = effective === 'cod' && codOn ? Number(codSettings.feePercent ?? 0) : 0;
 			const { lines: prices, totals } = feePercent > 0 ? priceLines({ ...base, feePercent, feeBase }) : unpriced;
 			return { promotions, delivery, deliveryOptions, deliveryProblem, points, prices, totals, payments, effective };
 		};

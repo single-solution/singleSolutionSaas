@@ -70,7 +70,9 @@ export const createCheckout = (product, service) => {
 					.filter((location) => location.pickup)
 					.map((location) => ({ id: location.id, name: location.name }))
 			: [];
-		const cod = s.has('cod') ? await s.values('cod') : null;
+		const codSettings = s.has('cod') ? await s.values('cod') : null;
+		// cash on delivery is offered while its feature is on and staff have not switched it off (`enabled`, AO-2)
+		const cod = codSettings?.enabled === false ? null : codSettings;
 		/** @type {string[]} */
 		const required = checkout.addressRequired;
 		return {

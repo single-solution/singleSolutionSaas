@@ -2,6 +2,12 @@
 	"type": "object",
 	"additionalProperties": false,
 	"properties": {
+		"enabled": {
+			"type": "boolean",
+			"title": "Offer cash on delivery",
+			"description": "Off: shoppers cannot choose cash on delivery for new orders (orders already placed keep it). Your staff switch it here; the feature stays on.",
+			"default": true
+		},
 		"maxOrderValue": {
 			"type": "integer",
 			"title": "Largest cash-on-delivery order",

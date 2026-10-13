@@ -339,7 +339,7 @@
 			"The cart, checkout and success page (cart widget), My orders (my_orders widget) and the orders admin widget. Shoppers must be signed in with Accounts to order; paste the Accounts token. Order statuses and moves, the order number prefix and order messages are in Settings → Orders and messages; couriers and their tracking links in Settings → Couriers; your delivery, returns, privacy, terms and warranty policies, as text or HTML, in Settings → Policies."
 		],
 		"cod": [
-			"Cash on delivery orders start awaiting confirmation. Set the largest order value, an optional advance paid through Payments, the open-order cap per customer, and use the blocklist and the returned-parcel flag in the customers admin widget."
+			"Cash on delivery orders start awaiting confirmation. Set the largest order value, an optional advance paid through Payments, the open-order cap per customer, and use the blocklist and the returned-parcel flag in the customers admin widget. Your staff stop and restart cash on delivery for new orders with the setting Offer cash on delivery (enabled), without switching the feature."
 		],
 		"delivery_zones": [
 			"Delivery fees by city or area, free delivery over an amount, delivery days and store pickup, in Settings → Delivery. A shopper's address is matched to the first zone that lists its city or area."
