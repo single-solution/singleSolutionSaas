@@ -17,7 +17,7 @@
 import { defineRoute } from '@ss/app-kit';
 import { statusOf } from '../core/flow.js';
 import { statusLabel } from '../core/orders.js';
-import { createOrderMessages } from './order-messages.js';
+import { createOrderMessages, messageWords } from './order-messages.js';
 import { SERVER_LIMITS } from './service.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
@@ -82,7 +82,7 @@ export const createOrderEvents = (product, service) => {
 				name: order.customer.name.slice(0, 200),
 				total: money(order.totals.total, order.totals.currency),
 				status: statusLabel(await flowOf(s), order.status),
-				paymentMethod: order.payment.method,
+				paymentMethod: (await messageWords(s)).payment(order.payment.method),
 				business: String((await s.business()).name ?? ''),
 				...extra,
 			},
@@ -95,13 +95,23 @@ export const createOrderEvents = (product, service) => {
 		await alert(s, 'placed', order);
 	});
 
-	service.on('order.moved', async (s, { order, from, to, by, reason }) => {
+	service.on('order.moved', async (s, { order, from, to, by, reason, note }) => {
 		const flow = await flowOf(s);
 		const role = statusOf(flow, to)?.role;
-		// a cancel says why: staff, the shopper, or the end of its window
+		// a cancel says why: staff, the shopper, or the end of its window (events keep the code; messages and alerts get
+		// words: the note staff typed with the move, else the website's text for it, K-10)
 		const cancelReason =
 			role === 'cancelled' ? (reason === 'expired' ? 'expired' : reason === 'shopper' ? 'shopper' : 'staff') : '';
-		await messages.status(s, order, statusLabel(flow, to), { cancelReason });
+		/** @type {import('./order-messages.js').CancelCode} */
+		const cancelCode =
+			cancelReason === 'expired'
+				? statusOf(flow, from)?.role === 'awaiting_payment'
+					? 'unpaid'
+					: 'unconfirmed'
+				: /** @type {'staff' | 'shopper'} */ (cancelReason || 'staff');
+		const cancelWords =
+			role === 'cancelled' ? (await messageWords(s)).cancel(cancelCode, typeof note === 'string' ? note : '') : '';
+		await messages.status(s, order, statusLabel(flow, to), { cancelReason: cancelWords });
 		await publish(s, 'order.status_changed', {
 			...orderFacts(order),
 			from,
@@ -111,7 +121,7 @@ export const createOrderEvents = (product, service) => {
 		});
 		if (role === 'cancelled') await publish(s, 'order.cancelled', { ...orderFacts(order), reason: cancelReason });
 		if (role === 'cancelled')
-			await alert(s, cancelReason === 'expired' ? 'expired' : 'cancelled', order, { reason: cancelReason });
+			await alert(s, cancelReason === 'expired' ? 'expired' : 'cancelled', order, { reason: cancelWords });
 		else await alert(s, 'status', order, { from: statusLabel(flow, from) });
 	});
 

@@ -231,7 +231,8 @@ describe('claim settings', () => {
 		expect(made.json.reference).toBe(`RR-${made.json.id.slice(-6).toUpperCase()}`);
 		expect(shop.messages().at(-1)).toMatchObject({
 			template: 'ecommerce.return_status',
-			values: { claim: made.json.reference, kind: 'exchange' },
+			// words from the website's texts, and the shopper's reason (K-10)
+			values: { claim: made.json.reference, kind: 'Exchange', status: 'requested', reason: 'Damaged' },
 		});
 		const raised = hooks.slice(before).filter((hook) => hook.name === 'return.requested');
 		expect(raised).toHaveLength(1);

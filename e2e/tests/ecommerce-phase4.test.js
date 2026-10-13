@@ -486,7 +486,8 @@ describe('Ecommerce phase 4 on the real Portal, Accounts, Payments and Notificat
 		const cancelled = await shopper('POST', `/v1/shop/orders/${ids.first.id}/cancel`, { signIn: sara });
 		expect(cancelled.json.order.status).toBe('cancelled');
 		const told = mailsTo(before, 'sara@example.com').find((mail) => mail.subject === 'Order IM-2026-0001: Cancelled');
-		expect(told?.text).toBe('Order IM-2026-0001 is Cancelled (shopper).');
+		// the reason in words from the website's texts, not the code (K-10)
+		expect(told?.text).toBe('Order IM-2026-0001 is Cancelled (Cancelled at your request).');
 		expect(mailsTo(before, TEAM).map((mail) => mail.subject)).toContain('Cancelled: IM-2026-0001');
 
 		const events = await eventsOf('ecommerce.order.placed,ecommerce.order.status_changed,ecommerce.order.cancelled');

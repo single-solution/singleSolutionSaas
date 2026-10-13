@@ -166,7 +166,9 @@ export const createReturns = (product, service) => {
 	};
 
 	/**
-	 * Tell the shopper where their claim is (on the `checkout` setting `messageChannels`).
+	 * Tell the shopper where their claim is (on the `checkout` setting `messageChannels`): the kind and status in words
+	 * (the website's texts `returns.kind.<kind>` and `returns.status.<status>`, as the shopper's claims list shows them;
+	 * K-10) and the reason they gave.
 	 * @param {Site} s
 	 * @param {OrderRecord | null} order
 	 * @param {ReturnRecord} claim
@@ -174,6 +176,7 @@ export const createReturns = (product, service) => {
 	const tell = async (s, order, claim) => {
 		if (!order) return;
 		const { messageChannels } = await s.values('checkout');
+		const texts = await s.texts();
 		await service.notify(
 			s,
 			'ecommerce.return_status',
@@ -181,8 +184,9 @@ export const createReturns = (product, service) => {
 			{
 				number: order.number,
 				claim: referenceOf(claim),
-				kind: claim.kind,
-				status: claim.status,
+				kind: texts[`returns.kind.${claim.kind}`] ?? claim.kind,
+				status: texts[`returns.status.${claim.status}`] ?? claim.status,
+				reason: claim.reason.slice(0, 1000),
 				amount: claim.refundAmount > 0 ? (await s.format()).money(claim.refundAmount, order.totals.currency) : '',
 				name: order.customer.name,
 			},

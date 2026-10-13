@@ -654,7 +654,15 @@ export const createMoves = (product, service) => {
 			detail: `${statusLabel(flow, from)} → ${target.label}`,
 		});
 		if (held && order.stockHeld && !after.stockHeld) await service.emit('products.changed', s, held);
-		await service.emit('order.moved', s, { order: after, from, to: input.to, by: entry.by, ...(reason ? { reason } : {}) });
+		await service.emit('order.moved', s, {
+			order: after,
+			from,
+			to: input.to,
+			by: entry.by,
+			// the note staff typed with the move: a cancel's reason in messages and alerts (K-10)
+			note: entry.note,
+			...(reason ? { reason } : {}),
+		});
 		return { order: after, warnings };
 	};
 

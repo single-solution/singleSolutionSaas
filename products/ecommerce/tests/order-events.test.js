@@ -1,7 +1,7 @@
 /**
  * Messages, events and staff alerts through the API (PLAN 0.8.10 E32): events listed by `GET /v1/events`, staff
  * alerts for the events the setting lists, one template per status, the fuller message values and the reason of a
- * cancel.
+ * cancel; message values in words from the website's texts, with the staff's note as a cancel's reason (K-10).
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ORIGIN, readyShop } from './helpers.js';
@@ -58,6 +58,43 @@ describe('events and staff alerts (E32)', () => {
 		expect(cancelled.data).toMatchObject({ number: order.number, reason: 'staff' });
 		expect(JSON.stringify(events.json)).not.toContain(ADDRESS.line1);
 		expect(shop.messages().map((m) => m.template)).toContain('ecommerce.staff_cancelled');
+	});
+
+	it('sends words, not codes: payment and delivery methods and why it was cancelled, from the texts (K-10)', async () => {
+		const before = shop.messages().length;
+		const order = await placeOrder();
+		const placed = shop
+			.messages()
+			.slice(before)
+			.find((m) => m.template === 'ecommerce.order_placed');
+		expect(placed.values).toMatchObject({ paymentMethod: 'Cash on delivery', deliveryMethod: 'Delivery' });
+		const staffPlaced = shop
+			.messages()
+			.slice(before)
+			.find((m) => m.template === 'ecommerce.staff_placed');
+		expect(staffPlaced.values.paymentMethod).toBe('Cash on delivery');
+
+		// the staff's note is the reason; without one, the website's text for who cancelled
+		const noted = shop.messages().length;
+		await shop.api('POST', `/v1/orders/${order.id}/move`, { to: 'cancelled', note: 'Out of stock at the warehouse' });
+		const told = shop.messages().slice(noted);
+		expect(told.find((m) => m.template === 'ecommerce.order_status')?.values.cancelReason).toBe(
+			'Out of stock at the warehouse',
+		);
+		expect(told.find((m) => m.template === 'ecommerce.staff_cancelled')?.values.reason).toBe('Out of stock at the warehouse');
+
+		const other = await placeOrder();
+		expect(
+			(await shop.api('PUT', '/v1/texts/messages.cancelReason.staff', { value: 'We had to cancel it' })).status,
+		).toBeLessThan(300);
+		const plain = shop.messages().length;
+		await shop.api('POST', `/v1/orders/${other.id}/move`, { to: 'cancelled' });
+		expect(
+			shop
+				.messages()
+				.slice(plain)
+				.find((m) => m.template === 'ecommerce.order_status')?.values.cancelReason,
+		).toBe('We had to cancel it');
 	});
 
 	it('sends one template per status when asked', async () => {
