@@ -299,13 +299,15 @@ export const createRoutes = (product) => {
 	};
 
 	/**
-	 * A website a public page or a provider names: it must exist, be served and have its merchant database.
+	 * A website a public page or a provider names: it must exist, be served and have its merchant database. An old status
+	 * copy is fetched again right after the response (K-19).
+	 * @param {any} ctx
 	 * @param {string} websiteId
 	 * @returns {Promise<{ ok: true, merchantId: string } | { ok: false }>}
 	 */
-	const publicSite = async (websiteId) => {
+	const publicSite = async (ctx, websiteId) => {
 		if (!isId(websiteId, 'web')) return { ok: false };
-		const serving = await product.serving(websiteId);
+		const serving = await product.serving(websiteId, { after: ctx.after });
 		if (!serving.ok || (await product.connections.value(websiteId, 'database')) === null) return { ok: false };
 		return { ok: true, merchantId: serving.status.merchantId };
 	};
@@ -316,7 +318,7 @@ export const createRoutes = (product) => {
 	 */
 	const unsubscribePage = (step) => async (/** @type {any} */ ctx) => {
 		const { websiteId, code } = ctx.params;
-		const found = await publicSite(websiteId);
+		const found = await publicSite(ctx, websiteId);
 		if (!found.ok)
 			return new Response(renderUnsubscribePage({ texts: strings, state: 'unavailable' }), {
 				status: 404,
@@ -697,7 +699,7 @@ export const createRoutes = (product) => {
 			handler: async (ctx) => {
 				const { websiteId, channel } = ctx.params;
 				if (channel !== 'sms' && channel !== 'whatsapp') return problem('not_found', 'No such channel.');
-				const found = await publicSite(websiteId);
+				const found = await publicSite(ctx, websiteId);
 				if (!found.ok || !(await product.featuresOn(websiteId)).includes(channel))
 					return problem('not_found', 'Replies are not received for this website.');
 				const value = await product.connections.value(websiteId, channel);
@@ -737,7 +739,7 @@ export const createRoutes = (product) => {
 			auth: 'none',
 			rateLimit: [{ limit: 60, windowSeconds: 60, per: 'visitor' }],
 			handler: async (ctx) => {
-				const found = await publicSite(ctx.params.websiteId);
+				const found = await publicSite(ctx, ctx.params.websiteId);
 				const value = found.ok ? await product.connections.value(ctx.params.websiteId, 'whatsapp') : null;
 				const token = typeof value === 'object' && value !== null ? value.verifyToken : undefined;
 				if (

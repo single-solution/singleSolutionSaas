@@ -309,7 +309,7 @@ export const createService = (product) => {
 	 */
 	const openFile = async (ctx) => {
 		const file = product.files.open(String(ctx.params.token));
-		const serving = file ? await product.serving(file.w) : null;
+		const serving = file ? await product.serving(file.w, { after: ctx.after }) : null;
 		const on = file && serving?.ok ? await product.featuresOn(file.w) : [];
 		const storage = file && on.includes('attachments') ? await product.connections.storage(file.w) : null;
 		if (!file || !storage || !file.k.startsWith('chat/')) throw problem('not_found', 'No such file.');

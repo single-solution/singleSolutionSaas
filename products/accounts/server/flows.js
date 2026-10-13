@@ -711,7 +711,7 @@ export const createFlows = (product, service) => {
 				headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' },
 			});
 		if (!/^web_[0-9a-z]{10,64}$/.test(websiteId)) return page(400, 'This sign-in link is not valid.');
-		const serving = await product.serving(websiteId);
+		const serving = await product.serving(websiteId, { after: ctx.after });
 		if (!serving.ok || !(await product.featuresOn(websiteId)).includes(provider))
 			return page(404, 'Sign-in is not available right now.');
 		/** @type {import('@ss/app-kit').WebsiteData} */

@@ -128,7 +128,7 @@ export const createReply = (product, service) => {
 
 	/** The website's own domain (links in answers). @param {Site} s */
 	const domainOf = async (s) => {
-		const serving = await product.serving(s.websiteId);
+		const serving = await product.serving(s.websiteId, { after: s.ctx.after });
 		return serving.ok ? String(/** @type {any} */ (serving.status).domain ?? '') : '';
 	};
 

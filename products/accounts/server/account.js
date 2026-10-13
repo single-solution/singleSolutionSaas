@@ -253,7 +253,7 @@ export const createAccount = (product, service, flows) => {
 	const download = async (ctx) => {
 		const { websiteId, token } = ctx.params;
 		const parsed = parseSecret(token);
-		const serving = /^web_[0-9a-z]{10,64}$/.test(websiteId) ? await product.serving(websiteId) : null;
+		const serving = /^web_[0-9a-z]{10,64}$/.test(websiteId) ? await product.serving(websiteId, { after: ctx.after }) : null;
 		if (!parsed || !serving?.ok) return problem('not_found', 'This link is not valid or has expired.');
 		/** @type {import('@ss/app-kit').WebsiteData} */
 		let data;

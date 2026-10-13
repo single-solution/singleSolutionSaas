@@ -135,12 +135,13 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 	};
 
 	/**
+	 * A request, then the work after it (`after: false` leaves that work queued for `flush()`).
 	 * @param {string} method
 	 * @param {string} path
 	 * @param {{ token?: string, origin?: string, body?: unknown, raw?: string, cookie?: string, signIn?: string,
-	 *   headers?: Record<string, string> }} [init]
+	 *   headers?: Record<string, string>, after?: boolean }} [init]
 	 */
-	const call = async (method, path, { token, origin, body, raw, cookie, signIn, headers = {} } = {}) => {
+	const call = async (method, path, { token, origin, body, raw, cookie, signIn, headers = {}, after = true } = {}) => {
 		requests += 1;
 		const response = await handler(
 			new Request(`${BASE}${path}`, {
@@ -161,7 +162,7 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 				...(raw === undefined ? {} : { body: raw }),
 			}),
 		);
-		await flush();
+		if (after) await flush();
 		const text = await response.text();
 		/** @type {any} */
 		let json = null;

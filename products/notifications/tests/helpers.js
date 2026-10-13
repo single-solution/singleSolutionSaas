@@ -179,12 +179,13 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 	const server = (await portal.issueToken({ websiteId, productId: manifest.id, kind: 'server' })).token;
 
 	/**
+	 * A request, then the work after it (`after: false` leaves that work queued for `flush()`).
 	 * @param {string} method
 	 * @param {string} path
 	 * @param {{ token?: string, origin?: string, body?: unknown, raw?: string, type?: string, cookie?: string,
-	 *   headers?: Record<string, string> }} [init]
+	 *   headers?: Record<string, string>, after?: boolean }} [init]
 	 */
-	const call = async (method, path, { token, origin, body, raw, type, cookie, headers = {} } = {}) => {
+	const call = async (method, path, { token, origin, body, raw, type, cookie, headers = {}, after = true } = {}) => {
 		const response = await handler(
 			new Request(`${BASE}${path}`, {
 				method,
@@ -200,7 +201,7 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 				...(raw === undefined ? {} : { body: raw }),
 			}),
 		);
-		while (tasks.length > 0) await /** @type {() => Promise<unknown>} */ (tasks.shift())();
+		while (after && tasks.length > 0) await /** @type {() => Promise<unknown>} */ (tasks.shift())();
 		return response;
 	};
 

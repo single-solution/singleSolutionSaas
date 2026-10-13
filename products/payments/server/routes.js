@@ -119,7 +119,7 @@ export const createRoutes = (product) => {
 	 */
 	const publicSite = async (ctx, websiteId) => {
 		if (!isId(websiteId, 'web')) return null;
-		const serving = await product.serving(websiteId);
+		const serving = await product.serving(websiteId, { after: ctx.after });
 		if (!serving.ok || (await product.connections.value(websiteId, 'database')) === null) return null;
 		// a public page or a notice has no website token, but events (its own and older ones still due) are forwarded
 		// right after it all the same, as after a token request

@@ -1168,3 +1168,20 @@ describe('admin origin', () => {
 		expect(ADMIN_ORIGIN).toBe('https://admin.shop.example.com');
 	});
 });
+
+describe('status copies (K-19)', () => {
+	it('fetches an old status copy again right after the public keys, not while it answers', async () => {
+		const own = await setup();
+		const statusFetches = () => own.portal.calls.filter((c) => c.path.endsWith('/status')).length;
+		const page = () => own.call('GET', `/v1/websites/${own.websiteId}/keys`, { after: false });
+		await page();
+		await own.flush();
+		own.advance(6 * 60_000); // older than its 5 minutes, within the offline grace
+		const before = statusFetches();
+		await page();
+		expect(statusFetches()).toBe(before);
+		await own.flush();
+		expect(statusFetches()).toBe(before + 1);
+		await own.product.close();
+	});
+});

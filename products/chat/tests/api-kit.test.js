@@ -239,3 +239,25 @@ describe('data rights', () => {
 		expect(nobody.body.records).toEqual({ conversations: [], leads: [] });
 	});
 });
+
+describe('status copies (K-19)', () => {
+	it('fetches an old status copy again right after a file link, not while it answers', async () => {
+		const own = await setup();
+		const statusFetches = () => own.portal.calls.filter((c) => c.path.endsWith('/status')).length;
+		const page = () =>
+			own.call(
+				'GET',
+				`/v1/files/${own.product.files.sign({ w: own.websiteId, k: 'chat/a.txt', n: 'a.txt', t: 'text/plain' })}`,
+				{ after: false },
+			);
+		await page();
+		await own.flush();
+		own.advance(6 * 60_000); // older than its 5 minutes, within the offline grace
+		const before = statusFetches();
+		await page();
+		expect(statusFetches()).toBe(before);
+		await own.flush();
+		expect(statusFetches()).toBe(before + 1);
+		await own.product.close();
+	});
+});

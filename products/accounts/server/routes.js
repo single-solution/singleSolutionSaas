@@ -40,7 +40,7 @@ export const createRoutes = (product) => {
 	/** The website's public keys for verifying sign-ins (no token: the merchant's server and products fetch them). @param {any} ctx */
 	const keys = async (ctx) => {
 		const websiteId = String(ctx.params.websiteId);
-		const serving = /^web_[0-9a-z]{10,64}$/.test(websiteId) ? await product.serving(websiteId) : null;
+		const serving = /^web_[0-9a-z]{10,64}$/.test(websiteId) ? await product.serving(websiteId, { after: ctx.after }) : null;
 		if (!serving?.ok) return problem('not_found', 'No such website.');
 		/** @type {import('@ss/app-kit').WebsiteData} */
 		let data;
