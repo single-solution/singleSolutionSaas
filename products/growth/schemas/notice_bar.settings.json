@@ -2,6 +2,12 @@
 	"type": "object",
 	"additionalProperties": false,
 	"properties": {
+		"enabled": {
+			"type": "boolean",
+			"title": "Show the notice bar",
+			"description": "Off: the bar is not shown anywhere and GET /v1/notice answers null; your text, link and dates are kept for next time.",
+			"default": true
+		},
 		"text": {
 			"type": "string",
 			"title": "Notice text",

@@ -231,9 +231,9 @@ export const startWidget = ({ window: win, script }) => {
 		/** @type {string | null} the last page's search, `<path>\n<term>` */
 		let searched = null;
 		/**
-		 * The page the visitor is on: its view, a search on its address (recorded, and passed to the pixels loaded now,
-		 * G2; once while the path and the term stay the same) and, a moment after a single-page app's navigation (once
-		 * the new page is drawn), its 404 marker (SG-4).
+		 * The page the visitor is on: its view, a search on its address (recorded, and passed to the pixels loaded now
+		 * unless the merchant turned that off, G2 and SG-38; once while the path and the term stay the same) and, a
+		 * moment after a single-page app's navigation (once the new page is drawn), its 404 marker (SG-4).
 		 * @param {URL | null} from the address the visitor came from inside the website; null when the page was loaded
 		 */
 		const page = (from) => {
@@ -243,7 +243,7 @@ export const startWidget = ({ window: win, script }) => {
 			const search = found ? `${found.path}\n${String(found.term)}` : null;
 			if (found && search !== searched) {
 				if (record.searches) collector.record(() => found);
-				tags.search(String(found.term));
+				if (config.settings.tags.searchFromUrl) tags.search(String(found.term));
 			}
 			searched = search;
 			if (!record.searches) return;

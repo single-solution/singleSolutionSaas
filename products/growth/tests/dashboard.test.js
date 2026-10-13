@@ -177,6 +177,15 @@ describe('the dashboard (setup only)', () => {
 		expect(text).not.toContain(TEXTS.settings.consentWarning);
 	});
 
+	it('Settings say when the merchant turned the notice bar off (AO-2)', async () => {
+		VALUES.notice_bar = { text: 'Sale', enabled: false };
+		serve(['notice_bar']);
+		const Settings = TABS.settings;
+		const { container } = render(<Settings {...props} />);
+		await settle();
+		expect(container.textContent).toContain(TEXTS.setup.noticeOff);
+	});
+
 	it('Settings say where Web Vitals go while Visitor analytics is off (SG-27)', async () => {
 		VALUES.web_vitals = { toGa4: true };
 		serve(['web_vitals', 'google_tags']);

@@ -192,6 +192,7 @@ export const TEXTS = Object.freeze({
 		no: 'No',
 		noticeShowing: 'Showing',
 		noticeEmpty: 'Not shown: no text',
+		noticeOff: 'Not shown: turned off',
 		noticeBadDates: 'Not shown: a date is not a time',
 		noticeStarts: 'Starts {time}',
 		noticeEnded: 'Ended {time}',

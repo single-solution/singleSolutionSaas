@@ -242,6 +242,13 @@ describe('the widget config', () => {
 		await env.setting('notice_bar', 'endsAt', '2026-10-01T00:00:00Z');
 		expect(await read('', { token: env.server })).toBeNull();
 		await env.setting('notice_bar', 'endsAt', '');
+		// the merchant turns the bar off and on again; the text stays (AO-2)
+		await env.setting('notice_bar', 'enabled', false);
+		expect(await read('', { token: env.server })).toBeNull();
+		const off = (await (await env.call('GET', '/v1/widget/config', { token: env.browser, origin: ORIGIN })).json()).settings;
+		expect(off.notice).toBeNull();
+		await env.setting('notice_bar', 'enabled', true);
+		expect(await read('', { token: env.server })).toEqual(notice);
 		await env.setting('notice_bar', 'hideOnPages', []);
 		await env.setting('notice_bar', 'dismissFor', 'visit');
 	});

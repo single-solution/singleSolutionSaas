@@ -8,6 +8,12 @@
 			"description": "product: each item's product id. variant: its variant id (the product id when it has none), for catalogs that list each variant on its own.",
 			"default": "product",
 			"enum": ["product", "variant"]
+		},
+		"searchFromUrl": {
+			"type": "boolean",
+			"title": "Searches found in the page address go to the pixels",
+			"description": "On: a search results page (an address with one of your search parameters, set in Searches and 404s) also sends a Search event to the pixels. Off: only the searches your code sends (SSGrowth.search or ss:search) go to them; Searches and 404s still records both.",
+			"default": true
 		}
 	}
 }

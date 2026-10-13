@@ -379,6 +379,7 @@ describe('page script settings', () => {
 			consentRequired: true,
 			ga4ViaGtm: false,
 			contentIds: 'product',
+			searchFromUrl: true,
 			meta: '123456789',
 			ga4: 'G-ABCD12',
 			ads: 'AW-123456',
@@ -400,6 +401,8 @@ describe('page script settings', () => {
 		expect(tagsReady(['google_tags'], viaGtm)).toEqual({ ready: 0, total: 1 });
 		expect(tagsOf([], viaGtm).ga4ViaGtm).toBe(false);
 		expect(tagsOf([], { pixels: { contentIds: 'variant' } }).contentIds).toBe('variant');
+		// SG-38: searches found in the page address may stay away from the pixels
+		expect(tagsOf([], { pixels: { searchFromUrl: false } }).searchFromUrl).toBe(false);
 	});
 
 	it('shows the notice bar only between its dates, with a safe link', () => {
@@ -429,6 +432,9 @@ describe('page script settings', () => {
 			dismissible: true,
 		});
 		expect(noticeAnswer({ notice_bar: { text: '' } }, NOW, '/')).toBeNull();
+		// AO-2: turned off by the merchant, its text kept
+		expect(at({ text: 'Hi', enabled: false })).toBeNull();
+		expect(at({ text: 'Hi', enabled: true })).toMatchObject({ text: 'Hi' });
 		expect(pathMatches('/', '/')).toBe(true);
 		expect(pathMatches('/', '/shop')).toBe(false);
 		expect(pathMatches('/shop/*', '/shop/phones?x=1')).toBe(true);

@@ -45,13 +45,14 @@ export const malformedIds = (key, values) => {
 };
 
 /**
- * The notice bar now (G6): showing, waiting for its start, ended, or not shown, and its pages hidden.
+ * The notice bar now (G6): showing, turned off (AO-2), waiting for its start, ended, or not shown, and its pages hidden.
  * @param {Record<string, unknown>} values the `notice_bar` settings
  * @param {number} now
  */
 export const noticeState = (values, now) => {
 	const notice = noticeOf({ notice_bar: values }, now);
 	if (notice) return { tone: /** @type {const} */ ('success'), text: TEXTS.setup.noticeShowing };
+	if (values.enabled === false) return { tone: /** @type {const} */ ('neutral'), text: TEXTS.setup.noticeOff };
 	const text = typeof values.text === 'string' ? values.text.trim() : '';
 	if (text === '') return { tone: /** @type {const} */ ('neutral'), text: TEXTS.setup.noticeEmpty };
 	const startsAt = Date.parse(String(values.startsAt ?? ''));

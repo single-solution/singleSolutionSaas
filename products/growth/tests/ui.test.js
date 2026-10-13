@@ -689,6 +689,38 @@ describe('single-page apps (SG-4)', () => {
 		delete w.PerformanceObserver;
 	});
 
+	it('keeps searches found in the page address away from the pixels when the merchant asks, still recording them (SG-38)', async () => {
+		vi.useFakeTimers({ toFake: ['setTimeout'] });
+		window.history.replaceState(null, '', '/search?q=lamp');
+		serve({
+			[`GET ${CONFIG_PATH}`]: () =>
+				answer(
+					200,
+					configOf(['visitor_analytics', 'searches_404s', 'meta_pixel'], {
+						tags: { consentRequired: false },
+						pixels: { searchFromUrl: false },
+						meta_pixel: { pixelId: '1234567' },
+						visitor_analytics: { requireConsent: false },
+					}),
+				),
+			'POST /v1/collect': () => answer(202),
+		});
+		const page = startWidget({ window, script: script('t') });
+		await vi.advanceTimersByTimeAsync(0);
+		await page.ready;
+		window.history.pushState(null, '', '/search?q=desk');
+		w[WIDGET_GLOBAL].search('chair');
+		await vi.advanceTimersByTimeAsync(1000);
+		expect(
+			collected()
+				.filter((event) => event.type === 'search')
+				.map((event) => event.term),
+		).toEqual(['lamp', 'desk', 'chair']);
+		expect(w.fbq.queue.filter((/** @type {unknown[]} */ call) => call[1] === 'Search')).toEqual([
+			['track', 'Search', { search_string: 'chair' }],
+		]);
+	});
+
 	it('a new visit started inside the app comes from the website itself', async () => {
 		vi.useFakeTimers({ toFake: ['setTimeout', 'Date'], now: NOW });
 		Object.defineProperty(document, 'referrer', { value: 'https://www.google.com/', configurable: true });
