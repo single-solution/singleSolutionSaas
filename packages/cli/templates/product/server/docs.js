@@ -13,6 +13,9 @@ import openapi from '../openapi.json' with { type: 'json' };
 import { WIDGET_ATTRIBUTE, WIDGET_GLOBAL } from '../core/widgets.js';
 import { manifest } from '../adapters/product.js';
 
+/** The API reference, rendered on the first docs request (it is the same for every request). @type {string | null} */
+let reference = null;
+
 /** @param {unknown} value */
 const escape = (value) => String(value).replace(/[&<>"']/g, (ch) => `&#${/** @type {string} */ (ch).charCodeAt(0)};`);
 
@@ -139,7 +142,7 @@ ${block(JSON.stringify(BUSINESS_JSON_TEMPLATE, null, 2))}
 <h2>API reference</h2>
 ${para(guide.api)}
 ${routeTable(rows)}
-${renderApiReference(openapi)}
+${(reference ??= renderApiReference(openapi))}
 </body>
 </html>
 `;

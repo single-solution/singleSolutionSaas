@@ -19,6 +19,10 @@ import { KIT_API, KIT_ROUTES } from './api.js';
 /** @typedef {import('@ss/app-kit/api').ApiDescription} ApiDescription */
 /** @typedef {import('@ss/app-kit/api').ApiEntry} ApiEntry */
 
+/** What a repeated `Idempotency-Key` does. */
+const IDEMPOTENCY_TEXT =
+	'A key of your own per request: the same request again within 24 hours gets the first answer (Idempotent-Replayed: true); another request with it answers 409 duplicate_request.';
+
 /** An error answer (RFC 9457) as the kit renders it. */
 const PROBLEM = Object.freeze({
 	type: 'object',
@@ -176,7 +180,15 @@ export const renderOpenapi = ({ manifest, routes, api = {} }) => {
 				...params.map((param) => ({ name: param, in: 'path', required: true, schema: { type: 'string' } })),
 				...queryParameters(entry?.query),
 				...(scanned.idempotent
-					? [{ name: 'Idempotency-Key', in: 'header', required: false, schema: { type: 'string', maxLength: 255 } }]
+					? [
+							{
+								name: 'Idempotency-Key',
+								in: 'header',
+								required: false,
+								description: IDEMPOTENCY_TEXT,
+								schema: { type: 'string', maxLength: 255 },
+							},
+						]
 					: []),
 				...(route.auth === 'browser' ? [{ $ref: '#/components/parameters/SSVisitorIp' }] : []),
 				...(route.auth === 'server' || route.auth === 'browser'
