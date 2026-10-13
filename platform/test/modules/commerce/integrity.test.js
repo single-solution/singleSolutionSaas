@@ -69,6 +69,43 @@ const faultyService = (ctx, { ledgerInsertsBeforeCrash = Number.POSITIVE_INFINIT
 	});
 };
 
+/**
+ * A commerce service whose billing-state collection misbehaves: `between` runs once right after the first read of a
+ * merchant's billing state (an overlapping check), and `crash` makes every write of it fail.
+ * @param {any} ctx module context
+ * @param {{ between?: () => Promise<unknown>, crash?: boolean }} faults
+ */
+const billingFaults = (ctx, { between, crash = false }) => {
+	let pending = between;
+	return createCommerceService({
+		...ctx,
+		collection: (/** @type {string} */ name) => {
+			const repo = ctx.collection(name);
+			if (name !== 'commerce_billing') return repo;
+			return {
+				...repo,
+				forMerchant: (/** @type {string} */ m) => {
+					const ops = repo.forMerchant(m);
+					const fail = async () => {
+						throw new Error('simulated crash before the billing state');
+					};
+					return {
+						...ops,
+						findOne: async (/** @type {any[]} */ ...args) => {
+							const doc = await ops.findOne(...args);
+							const run = pending;
+							pending = undefined;
+							if (run) await run();
+							return doc;
+						},
+						...(crash ? { insertOne: fail, updateOne: fail } : {}),
+					};
+				},
+			};
+		},
+	});
+};
+
 /** @param {any} faulty @param {string} merchantId @param {number} amount */
 const receiptVia = (faulty, merchantId, amount) =>
 	faulty.addReceipt({ merchantId, amount, amountPaid: 'PKR 1', method: 'cash', reference: null, actor: STAFF });
@@ -189,5 +226,103 @@ describe('ledger integrity', () => {
 		await expect(h.credit(M1, 5000)).rejects.toMatchObject({ code: 'internal_error' });
 		expect(h.logs.some((l) => l.msg === 'ledger chain broken')).toBe(true);
 		expect((await h.service.verifyChain(M1)).ok).toBe(false);
+	});
+});
+
+describe('the billing check never counts a day twice (BP-1)', () => {
+	const DAY2 = Date.parse('2026-10-02T00:05:00Z');
+
+	/** @typedef {Awaited<ReturnType<typeof bootCommerce>>} Harness */
+	/** @param {Harness} h */
+	const dayCharges = (h) =>
+		h.db.collection('commerce_ledger').find({ merchantId: M1, type: 'day_charge' }).sort({ seq: 1 }).toArray();
+	/** @param {Harness} h */
+	const billingDoc = (h) => h.db.collection('commerce_billing').findOne({ _id: /** @type {any} */ (M1) });
+	/** @param {Harness} h */
+	const graceRows = (h) => h.db.collection('commerce_history').countDocuments({ merchantId: M1, kind: 'grace_started' });
+
+	/**
+	 * 20 credits; Codes at 1 credit/h on W1 from 10-01 10:00; the clock at 10-02 00:05: 10-01 is 14 credits and the
+	 * current hour 1, so the real balance is 5 credits (low balance).
+	 * @param {string} dbName
+	 */
+	const twentyCredits = async (dbName) => {
+		const clock = createClock(T0);
+		const h = await bootCommerce({ mongo, dbName, clock });
+		await h.credit(M1, 20_000);
+		await chargeHourly(h);
+		clock.set(DAY2);
+		return h;
+	};
+
+	/** @param {Harness} h @param {{ run: { balance: number }, state: string }} checked */
+	const expectRealBalance = async (h, checked) => {
+		expect([checked.run.balance, checked.state]).toEqual([5000, 'low_balance']);
+		expect((await dayCharges(h)).map((d) => [d.day, d.amount])).toEqual([['2026-10-01', -14_000]]);
+		expect(await billingDoc(h)).toMatchObject({
+			settledThrough: new Date(Date.parse('2026-10-02T00:00:00Z')),
+			state: 'low_balance',
+			balance: 5000,
+			phase: { graceStart: null, graceEnd: null, stoppedAt: null },
+		});
+		expect(await graceRows(h)).toBe(0);
+		expect(h.mails.filter((m) => m.template === 'grace_started')).toEqual([]);
+		expect(await h.service.verifyChain(M1)).toMatchObject({ ok: true, balance: 6000 });
+	};
+
+	it('an overlapping check that reads the ledger after another check settled the day', async () => {
+		const h = await twentyCredits('cm_bp1_overlap');
+		// B reads the billing state; A then runs whole (writes 10-01 and settles) before B reads the ledger
+		const b = billingFaults(h.ctx, { between: () => h.service.check(M1) });
+		const checked = await b.check(M1);
+		// before the fix: -9 credits and a grace period from 10-01 15:00 to 10-04 15:00, with its e-mail
+		await expectRealBalance(h, checked);
+		expect(h.mails.filter((m) => m.template === 'low_balance')).toHaveLength(2);
+	});
+
+	it('a check that crashes after writing the day charges, outside a transaction: the next check repairs it', async () => {
+		const h = await twentyCredits('cm_bp1_crash');
+		const crashed = billingFaults({ ...h.ctx, withTransaction: (/** @type {any} */ fn) => fn(undefined) }, { crash: true });
+		await expect(crashed.check(M1)).rejects.toThrow(/simulated crash/);
+		// the day is written, the settled point is not
+		expect((await dayCharges(h)).map((d) => d.day)).toEqual(['2026-10-01']);
+		expect((await billingDoc(h))?.settledThrough).toEqual(new Date(Date.parse('2026-10-01T00:00:00Z')));
+		await expectRealBalance(h, await h.service.check(M1));
+	});
+
+	it('a check that crashes before the billing state writes nothing: its day charges roll back with it', async () => {
+		const h = await twentyCredits('cm_bp1_atomic');
+		await expect(billingFaults(h.ctx, { crash: true }).check(M1)).rejects.toThrow(/simulated crash/);
+		expect(await dayCharges(h)).toEqual([]);
+		expect(await accountOf(h, M1)).toMatchObject({ seq: 1, balance: 20_000 });
+		await expectRealBalance(h, await h.service.check(M1));
+	});
+
+	it('a stored grace with credits left (written by a miscounting check) is dropped, never ending in a stop', async () => {
+		const h = await twentyCredits('cm_bp1_phase');
+		await h.service.check(M1);
+		await h.service.recordSwitches({ merchantId: M1, websiteId: W1, productId: PRODUCT, on: [] });
+		// what the miscounting check stored: grace from 10-01 15:00 to 10-04 15:00
+		await h.db.collection('commerce_billing').updateOne(
+			{ _id: /** @type {any} */ (M1) },
+			{
+				$set: {
+					state: 'grace',
+					phase: {
+						graceStart: new Date(Date.parse('2026-10-01T15:00:00Z')),
+						graceEnd: new Date(Date.parse('2026-10-04T15:00:00Z')),
+						stoppedAt: null,
+					},
+				},
+			},
+		);
+		h.world.notices.splice(0);
+		h.clock.set(Date.parse('2026-10-04T16:00:00Z'));
+		const summary = await h.service.billingSummary(M1);
+		expect(summary).toMatchObject({ status: 'active', balance: 5000, graceEnd: null, stoppedAt: null });
+		expect(await billingDoc(h)).toMatchObject({ state: 'active', phase: { graceEnd: null, stoppedAt: null } });
+		expect(await h.db.collection('commerce_history').countDocuments({ merchantId: M1, kind: 'stopped' })).toBe(0);
+		// the products are told their status changed
+		expect(h.world.notices).toEqual([{ productId: PRODUCT, body: { type: 'status.changed', websiteId: W1 } }]);
 	});
 });

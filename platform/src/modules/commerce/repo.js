@@ -11,6 +11,7 @@ import { ACCOUNTS, BILLING, HISTORY, LEDGER, PRICE_LISTS, PRODUCTS } from './sch
 /** @typedef {import('../../infra/db.js').MutableOps} MutableOps */
 /** @typedef {import('../../infra/db.js').ReadOps} ReadOps */
 /** @typedef {Record<string, any>} Doc */
+/** @typedef {import('mongodb').ClientSession} Session */
 
 /**
  * @param {ModuleContext} ctx
@@ -62,15 +63,18 @@ export const createCommerceRepo = (ctx) => {
 						.sort({ at: 1, _id: 1 })
 						.toArray(),
 		/**
-		 * Append to a merchant's history; a `key` makes it happen once (false when it already did).
-		 * @param {string} merchantId @param {Doc} doc
+		 * Append to a merchant's history; a `key` makes it happen once (false when it already did). Inside a transaction
+		 * (`session`) a keyed entry is looked up first, since a duplicate-key error would abort the transaction.
+		 * @param {string} merchantId @param {Doc} doc @param {Session} [session]
 		 */
-		appendHistory: async (merchantId, doc) => {
+		appendHistory: async (merchantId, doc, session) => {
+			const ops = history.forMerchant(merchantId);
+			if (session && doc.key && (await ops.findOne({ merchantId, key: doc.key }, { session }))) return false;
 			try {
-				await history.forMerchant(merchantId).insertOne(doc);
+				await ops.insertOne(doc, session ? { session } : {});
 				return true;
 			} catch (error) {
-				if (doc.key && isDuplicateKey(error)) return false;
+				if (doc.key && !session && isDuplicateKey(error)) return false;
 				throw error;
 			}
 		},
@@ -87,21 +91,23 @@ export const createCommerceRepo = (ctx) => {
 		billingOf: (merchantId) => billing.forMerchant(merchantId).findOne({ merchantId, _id: merchantId }),
 		/**
 		 * Conditional update of a merchant's billing state (`expect` fields must still hold); creates it when `expect` is
-		 * null. False when another check got there first.
-		 * @param {string} merchantId @param {Doc | null} expect @param {Doc} set
+		 * null. False when another check got there first; inside a transaction (`session`) that false must end it, since
+		 * a lost create has aborted it.
+		 * @param {string} merchantId @param {Doc | null} expect @param {Doc} set @param {Session} [session]
 		 */
-		updateBilling: async (merchantId, expect, set) => {
+		updateBilling: async (merchantId, expect, set, session) => {
 			const ops = /** @type {MutableOps} */ (billing.forMerchant(merchantId));
+			const opts = session ? { session } : {};
 			if (expect === null) {
 				try {
-					await ops.insertOne({ _id: merchantId, ...set });
+					await ops.insertOne({ _id: merchantId, ...set }, opts);
 					return true;
 				} catch (error) {
 					if (isDuplicateKey(error)) return false;
 					throw error;
 				}
 			}
-			const res = await ops.updateOne({ merchantId, _id: merchantId, ...expect }, { $set: set });
+			const res = await ops.updateOne({ merchantId, _id: merchantId, ...expect }, { $set: set }, opts);
 			return res.matchedCount === 1;
 		},
 		/** @param {readonly string[]} states @param {number} limit @returns {Promise<Doc[]>} */

@@ -4,11 +4,13 @@
  * - **Histories** (0.5.7 a), stamped with Portal time: accepted price lists per product (price reports and connect
  *   answers), feature reports and status changes per merchant (product added or removed, merchant suspended or
  *   resumed, grace started, stopped).
- * - **Check** (0.5.7): replays the time since the merchant was last settled with the pure money function, writes the
- *   day charges of complete UTC days, records grace starts and stops once (and tells the merchant's products,
- *   `status.changed`), caches the balance and billing state, and sends a billing e-mail when the merchant enters a
- *   state (an atomic compare-and-set on the stored state, so two checks send one e-mail). It runs when a product fetches
- *   a status and when a Portal page shows a merchant; nothing is scheduled.
+ * - **Check** (0.5.7): replays the time since the merchant was last settled with the pure money function, from the
+ *   balance at that point (receipts before it and day charges of the days before it, so days a crashed or overlapping
+ *   check already wrote are never counted twice), writes the day charges of complete UTC days, records grace starts
+ *   and stops once (and tells the merchant's products, `status.changed`), caches the balance and billing state, and
+ *   sends a billing e-mail when the merchant enters a state (an atomic compare-and-set on the stored state, so two
+ *   checks send one e-mail). The day charges, grace starts and stops and the billing state commit in one transaction.
+ *   It runs when a product fetches a status and when a Portal page shows a merchant; nothing is scheduled.
  * - **Receipts** (0.5.8): the only way credits are added; never edited, voided or reversed. A receipt that ends grace
  *   or a stop restarts the merchant's products (`status.changed`).
  * @module
@@ -58,6 +60,10 @@ const ms = (value) => (value instanceof Date ? value.getTime() : typeof value ==
 const date = (value) => (value === null ? null : new Date(value));
 /** @param {number | null} value */
 const iso = (value) => (value === null ? null : new Date(value).toISOString());
+/** A check that lost the compare-and-set on the billing state: thrown to abort its writes. */
+const lost = () => Object.assign(new Error('another check settled first'), { code: 'billing/lost' });
+/** @param {unknown} error */
+const isLost = (error) => error instanceof Error && /** @type {any} */ (error).code === 'billing/lost';
 /** @param {Doc | null | undefined} stored @returns {Phase} */
 const phaseOf = (stored) =>
 	stored
@@ -213,6 +219,35 @@ export const createBilling = ({ ctx, repo, deps, ledger, statusChanged }) => {
 	 */
 	const check = (merchantId) => memoize(`check|${merchantId}`, () => runCheck(merchantId));
 
+	/**
+	 * Write what a check found: its day charges, the grace starts and stops it recorded (once each) and the billing
+	 * state (a compare-and-set on the state the check read) commit together or not at all, so a crash never leaves
+	 * days charged with the settled point behind them. A check that lost the compare-and-set writes nothing: the check
+	 * that won settled the same days.
+	 * @param {string} merchantId
+	 * @param {{ drafts: import('../core/ledger.js').EntryDraft[], marks: Doc[], expect: Doc | null, next: Doc }} input
+	 * @returns {Promise<{ saved: boolean, marked: boolean }>} `marked`: a grace start or stop was recorded now
+	 */
+	const settle = async (merchantId, { drafts, marks, expect, next }) => {
+		if (drafts.length === 0 && marks.length === 0)
+			return { saved: await repo.updateBilling(merchantId, expect, next), marked: false };
+		let marked = false;
+		/** @param {import('mongodb').ClientSession} session */
+		const alongside = async (session) => {
+			marked = false;
+			for (const mark of marks) marked = (await repo.appendHistory(merchantId, mark, session)) || marked;
+			if (!(await repo.updateBilling(merchantId, expect, next, session))) throw lost();
+		};
+		try {
+			if (drafts.length > 0) await ledger.append(merchantId, drafts, { alongside });
+			else await ctx.withTransaction(alongside);
+			return { saved: true, marked };
+		} catch (error) {
+			if (isLost(error)) return { saved: false, marked: false };
+			throw error;
+		}
+	};
+
 	/** @param {string} merchantId */
 	const runCheck = async (merchantId) => {
 		const now = ctx.now();
@@ -221,6 +256,8 @@ export const createBilling = ({ ctx, repo, deps, ledger, statusChanged }) => {
 			inputsOf(merchantId, now),
 		]);
 		const from = stored?.settledThrough ? stored.settledThrough.getTime() : floorDay(earliest ?? now);
+		// the balance at `from`: day charges of the days before it (days from `from` on are replayed, whether or not a
+		// crashed or overlapping check already wrote them) and the receipts before it
 		const [receipts, opening] = await Promise.all([
 			repo
 				.ledgerOf(merchantId)
@@ -228,16 +265,23 @@ export const createBilling = ({ ctx, repo, deps, ledger, statusChanged }) => {
 				.sort({ seq: 1 })
 				.toArray(),
 			ledger.sum(merchantId, {
-				$or: [{ type: 'day_charge' }, { type: 'receipt', at: { $lt: new Date(from) } }],
+				$or: [
+					{ type: 'day_charge', day: { $lt: dayOf(from) } },
+					{ type: 'receipt', at: { $lt: new Date(from) } },
+				],
 			}),
 		]);
+		// grace and a stop only hold while the balance is ≤ 0: a stored one with credits left was written by a check
+		// that miscounted, and is dropped
+		const kept = phaseOf(stored?.phase);
+		const dropped = opening > 0 && (kept.graceEnd !== null || kept.stoppedAt !== null);
 		const cut = floorDay(now);
 		const run = replay({
 			from,
 			to: now,
 			cut,
 			balance: opening,
-			phase: phaseOf(stored?.phase),
+			phase: dropped ? { ...OPEN_PHASE } : kept,
 			events: [
 				...events,
 				...receipts.map((r) => /** @type {MoneyEvent} */ ({ type: 'receipt', at: r.at.getTime(), amount: r.amount })),
@@ -257,35 +301,28 @@ export const createBilling = ({ ctx, repo, deps, ledger, statusChanged }) => {
 			actor: SYSTEM_ACTOR,
 			details: { lines: d.lines },
 		}));
-		if (drafts.length > 0) await ledger.append(merchantId, drafts);
-		let changed = false;
-		for (const t of run.transitions) {
-			if (t.type === 'grace_started')
-				changed =
-					(await repo.appendHistory(merchantId, {
-						kind: 'grace_started',
-						at: new Date(t.at),
-						graceEnd: new Date(t.graceEnd),
-						key: `${merchantId}:grace_started:${t.at}`,
-					})) || changed;
-			else if (t.type === 'stopped')
-				changed =
-					(await repo.appendHistory(merchantId, {
-						kind: 'stopped',
-						at: new Date(t.at),
-						key: `${merchantId}:stopped:${t.at}`,
-					})) || changed;
-		}
-		// grace started or products stopped: the check that finds it tells the products (PLAN 0.4.12)
-		if (changed) await statusChanged(merchantId);
-
+		const marks = run.transitions.flatMap((t) =>
+			t.type === 'grace_started'
+				? [
+						{
+							kind: 'grace_started',
+							at: new Date(t.at),
+							graceEnd: new Date(t.graceEnd),
+							key: `${merchantId}:grace_started:${t.at}`,
+						},
+					]
+				: t.type === 'stopped'
+					? [{ kind: 'stopped', at: new Date(t.at), key: `${merchantId}:stopped:${t.at}` }]
+					: [],
+		);
 		const lowBalanceDays = rules().lowBalanceDays;
 		const state = billingStateOf({ phase: run.phase, balance: run.balance, dailySpend: run.dailySpend, lowBalanceDays });
 		const snapshot = /** @type {{ balance: number, phase: Phase }} */ (run.snapshot);
-		const saved = await repo.updateBilling(
-			merchantId,
-			stored ? { settledThrough: stored.settledThrough, state: stored.state } : null,
-			{
+		const { saved, marked } = await settle(merchantId, {
+			drafts,
+			marks,
+			expect: stored ? { settledThrough: stored.settledThrough, state: stored.state } : null,
+			next: {
 				settledThrough: new Date(Math.max(cut, from)),
 				phase: storedPhase(snapshot.phase),
 				state,
@@ -293,7 +330,10 @@ export const createBilling = ({ ctx, repo, deps, ledger, statusChanged }) => {
 				dailySpend: run.dailySpend,
 				checkedAt: new Date(now),
 			},
-		);
+		});
+		// grace started, products stopped or a miscounted stop dropped: the check that records it tells the products
+		// (PLAN 0.4.12)
+		if (marked || (saved && dropped)) await statusChanged(merchantId);
 		const previous = stored?.state ?? 'active';
 		if (saved && state !== previous && state in STATE_MAILS) await billingMail(merchantId, state, run);
 		return { merchantId, now, cut, run, state, lists };

@@ -2,7 +2,7 @@
  * The merchant ledger: append-only, hash-chained, integer millicredits, with a cached balance on the account.
  *
  * Appends run under a per-merchant lease lock (`commerce.ledger:<merchantId>`) and, inside it, in **one database
- * transaction** (`ctx.withTransaction`): the entries (unique `merchantId+seq` and `merchantId+entryKey`) and the account's conditional `$inc` commit together or not at all. The ledger stays the source of
+ * transaction** (`ctx.withTransaction`): the entries (unique `merchantId+seq` and `merchantId+entryKey`) and the account's conditional `$inc` commit together or not at all, with any other writes the caller joins to them (`alongside`: a check's billing state). The ledger stays the source of
  * truth and the account (balance, seq, head hash) a cache: an append still first **rolls forward** any entries
  * beyond the account's `seq` (left by a crash or by a writer outside this path), so the cache can always be repaired from the chain. A repeated check finds its day keys already present;
  * the unique `seq` index keeps the chain linear even if a lease expired.
@@ -113,9 +113,11 @@ export const createLedger = ({ ctx, repo, onChainBroken }) => {
 	 * Append drafts. Drafts whose `entryKey` already exists are skipped (idempotent).
 	 * @param {string} merchantId
 	 * @param {readonly EntryDraft[]} drafts
+	 * @param {{ alongside?: (session: Session) => Promise<void> }} [options] `alongside`: other writes that commit with
+	 *   the entries or not at all (same transaction; it may run more than once, and what it throws aborts the append)
 	 * @returns {Promise<{ appended: LedgerEntry[], duplicates: string[], balance: number }>}
 	 */
-	const append = async (merchantId, drafts) => {
+	const append = async (merchantId, drafts, { alongside } = {}) => {
 		for (let attempt = 1; ; attempt += 1) {
 			const lock = await acquire(merchantId);
 			try {
@@ -145,7 +147,10 @@ export const createLedger = ({ ctx, repo, onChainBroken }) => {
 							fresh.push(draft);
 						}
 					}
-					if (fresh.length === 0) return { appended: [], duplicates, balance: account.balance };
+					if (fresh.length === 0) {
+						if (alongside) await alongside(session);
+						return { appended: [], duplicates, balance: account.balance };
+					}
 					const entries = chainEntries({
 						merchantId,
 						head: { seq: account.seq, hash: account.headHash },
@@ -168,6 +173,7 @@ export const createLedger = ({ ctx, repo, onChainBroken }) => {
 						{ seq: last.seq, headHash: last.hash, balance: account.balance + delta },
 						session,
 					);
+					if (alongside) await alongside(session);
 					return { appended: entries, duplicates, balance: account.balance + delta };
 				});
 			} catch (error) {
