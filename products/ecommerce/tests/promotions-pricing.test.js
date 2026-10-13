@@ -383,6 +383,24 @@ describe('deals', () => {
 			});
 		});
 
+		it('blocks points for any deal without points, or only for such a checkout deal (pointsBlockedBy)', () => {
+			const onlyCart = { ...after, pointsBlockedBy: /** @type {const} */ ('cart_offer') };
+			const noPointsItem = { ...tenOnP1, allowPoints: false };
+			expect(run({ lines: mixed, deals: [noPointsItem], rules: after }).pointsBlocked).toBe(true);
+			expect(run({ lines: mixed, deals: [noPointsItem], rules: onlyCart }).pointsBlocked).toBe(false);
+			const noPointsCart = { ...fiveOver, allowPoints: false };
+			expect(run({ lines: mixed, deals: [tenOnP1, noPointsCart], rules: onlyCart }).pointsBlocked).toBe(true);
+			const noPointsShip = deal({ id: 'deal_ship', type: 'free_delivery', allowPoints: false });
+			expect(
+				run({ lines: mixed, deals: [noPointsShip], rules: { ...DEAL_RULES, pointsBlockedBy: 'cart_offer' } }).pointsBlocked,
+			).toBe(true);
+			// a checkout deal that did not apply blocks nothing
+			expect(
+				run({ lines: mixed, deals: [tenOnP1, noPointsCart], rules: { ...onlyCart, cartOffer: 'one_exclusive' } })
+					.pointsBlocked,
+			).toBe(false);
+		});
+
 		it('rounds item and checkout deals together, once, with total_half_up', () => {
 			const deals = [deal({ id: 'deal_item', value: 7 }), { ...fiveOver, conditions: null }];
 			const kurta = [line({ unitPrice: 499_900 })];

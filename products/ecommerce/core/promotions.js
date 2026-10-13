@@ -59,7 +59,8 @@ import { allocateUnits, roundHalfUp } from './money.js';
  * @property {{ code: string, message: string } | null} couponProblem why the code given does not apply
  * @property {Array<{ id: string, name: string, kind: 'deal' | 'bundle' | 'coupon', amount: number }>} applied for receipts
  *   (deals and bundles by name, the coupon by its code; free delivery has amount 0: checkout knows the fee)
- * @property {boolean} [pointsBlocked] a deal that allows no points applies (E18 `allowPoints`)
+ * @property {boolean} [pointsBlocked] a deal that allows no points applies (E18 `allowPoints`; with `pointsBlockedBy:
+ *   cart_offer` only a checkout-level one counts)
  */
 
 /**
@@ -384,7 +385,9 @@ export const applyPromotions = ({
 		freeDelivery: last?.type === 'free_delivery',
 		couponProblem: null,
 		applied,
-		pointsBlocked: used.some((deal) => deal.allowPoints === false),
+		pointsBlocked: used.some(
+			(deal) => deal.allowPoints === false && (rules.pointsBlockedBy === 'any_deal' || checkoutLevel(deal)),
+		),
 	};
 	if (code === '') return result;
 	const blocked = couponBlocked(coupon, { code, now, customer });

@@ -82,8 +82,11 @@ const COLOUR = /^[#A-Za-z0-9(),.%\s-]{0,40}$/;
  * deal, the first live one in the shoppers' order that applies, on what the item deals left) or `one_exclusive` (the
  * same, only when no item deal applied). `cartThresholdBase` — a checkout-level deal's cart total is judged on the
  * `goods` before offers or on the goods less what the lines' item deals take off (`after_item_deals`).
+ * `pointsBlockedBy` — redeeming points is blocked by any applied deal that allows no points (`any_deal`) or only by
+ * such a checkout-level deal (`cart_offer`).
  * @typedef {{ rounding: 'per_unit_down' | 'total_half_up', lineChoice: 'best' | 'first',
- *   cartOffer: 'per_line_best' | 'one_after_items' | 'one_exclusive', cartThresholdBase: 'goods' | 'after_item_deals' }} DealRules
+ *   cartOffer: 'per_line_best' | 'one_after_items' | 'one_exclusive', cartThresholdBase: 'goods' | 'after_item_deals',
+ *   pointsBlockedBy: 'any_deal' | 'cart_offer' }} DealRules
  */
 
 /** The values of each rule; the first is the default (today's arithmetic, E18 and E25). */
@@ -92,6 +95,7 @@ const RULE_VALUES = Object.freeze({
 	lineChoice: Object.freeze(['best', 'first']),
 	cartOffer: Object.freeze(['per_line_best', 'one_after_items', 'one_exclusive']),
 	cartThresholdBase: Object.freeze(['goods', 'after_item_deals']),
+	pointsBlockedBy: Object.freeze(['any_deal', 'cart_offer']),
 });
 
 /**

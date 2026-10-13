@@ -90,12 +90,14 @@ describe('whole units (E25)', () => {
 			lineChoice: 'best',
 			cartOffer: 'per_line_best',
 			cartThresholdBase: 'goods',
+			pointsBlockedBy: 'any_deal',
 		});
 		const set = {
 			rounding: 'total_half_up',
 			lineChoice: 'first',
 			cartOffer: 'one_exclusive',
 			cartThresholdBase: 'after_item_deals',
+			pointsBlockedBy: 'cart_offer',
 		};
 		expect(dealRulesOf(set)).toEqual(set);
 		expect(dealRulesOf({ rounding: 'sideways', lineChoice: 7 })).toEqual(DEAL_RULES);

@@ -175,6 +175,17 @@ describe('deals (E18)', () => {
 		await shop.api('DELETE', `/v1/deals/${ship.id}`);
 	});
 
+	it('lets only a checkout deal block points with pointsBlockedBy cart_offer (D4)', async () => {
+		const item = await shop.seedProduct({ price: 10_000, stock: 10 });
+		const own = await newDeal({ scope: { productIds: [item.id], categoryIds: [], brandIds: [] }, allowPoints: false });
+		const lines = [{ productId: item.id }];
+		expect((await quote({ lines })).json.promotions.pointsBlocked).toBe(true);
+		await shop.setting('deals', 'pointsBlockedBy', 'cart_offer');
+		expect((await quote({ lines })).json.promotions.pointsBlocked).toBe(false);
+		await shop.setting('deals', 'pointsBlockedBy', 'any_deal');
+		await shop.api('DELETE', `/v1/deals/${own.id}`);
+	});
+
 	it('shows deals on product cards', async () => {
 		const item = await shop.seedProduct({ price: 1000, stock: 5 });
 		const deal = await newDeal({ scope: { productIds: [item.id], categoryIds: [], brandIds: [] }, badgeLabel: 'Hot' });

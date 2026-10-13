@@ -37,6 +37,13 @@
 			"default": "goods",
 			"enum": ["goods", "after_item_deals"]
 		},
+		"pointsBlockedBy": {
+			"type": "string",
+			"title": "Deals without points block redeeming",
+			"description": "any_deal: any deal on the order that allows no points blocks redeeming points. cart_offer: only a checkout deal (off the cart total, or free delivery) that allows no points does; item deals never block.",
+			"default": "any_deal",
+			"enum": ["any_deal", "cart_offer"]
+		},
 		"rounding": {
 			"type": "string",
 			"title": "Rounding of deal discounts",
