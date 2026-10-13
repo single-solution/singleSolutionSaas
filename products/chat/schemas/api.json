@@ -1554,6 +1554,20 @@
 				}
 			}
 		},
+		"headers": {
+			"type": "object",
+			"properties": {
+				"SS-Guest": {
+					"type": "string",
+					"pattern": "^[A-Za-z0-9_-]{16,128}$",
+					"description": "The guest's key: guestKey of an earlier answer (or an imported store's guest cookie value). Another value counts as no key."
+				},
+				"SS-Sign-In": {
+					"type": "string",
+					"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account."
+				}
+			}
+		},
 		"response": {
 			"type": "object",
 			"required": ["conversation", "visitor", "guestLimit", "guestMessagesLeft", "lastSeq", "messages"],
@@ -1636,6 +1650,20 @@
 	"GET /v1/chat/unread": {
 		"summary": "Replies the visitor has not seen",
 		"description": "A cheap check while the chat window is closed. Send the guest's key in SS-Guest (or a visitor's Accounts sign-in in SS-Sign-In).",
+		"headers": {
+			"type": "object",
+			"properties": {
+				"SS-Guest": {
+					"type": "string",
+					"pattern": "^[A-Za-z0-9_-]{16,128}$",
+					"description": "The guest's key: guestKey of an earlier answer (or an imported store's guest cookie value). Another value counts as no key."
+				},
+				"SS-Sign-In": {
+					"type": "string",
+					"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account."
+				}
+			}
+		},
 		"response": {
 			"type": "object",
 			"required": ["unread"],
@@ -1658,6 +1686,20 @@
 					"type": "string",
 					"enum": ["1", "true"],
 					"description": "Wait for the AI reply (up to 20 s)."
+				}
+			}
+		},
+		"headers": {
+			"type": "object",
+			"properties": {
+				"SS-Guest": {
+					"type": "string",
+					"pattern": "^[A-Za-z0-9_-]{16,128}$",
+					"description": "The guest's key: guestKey of an earlier answer (or an imported store's guest cookie value). Another value counts as no key."
+				},
+				"SS-Sign-In": {
+					"type": "string",
+					"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account."
 				}
 			}
 		},
@@ -1718,11 +1760,39 @@
 	"POST /v1/chat/read": {
 		"summary": "The visitor read the replies",
 		"description": "Clears unread and marks the replies seen (staff see Seen with Read receipts on). 404 not_found when the visitor has no chat yet.",
+		"headers": {
+			"type": "object",
+			"properties": {
+				"SS-Guest": {
+					"type": "string",
+					"pattern": "^[A-Za-z0-9_-]{16,128}$",
+					"description": "The guest's key: guestKey of an earlier answer (or an imported store's guest cookie value). Another value counts as no key."
+				},
+				"SS-Sign-In": {
+					"type": "string",
+					"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account. One of the two names the visitor: without both, 404 not_found."
+				}
+			}
+		},
 		"status": 204
 	},
 	"POST /v1/chat/end": {
 		"summary": "The visitor ends the chat",
 		"description": "The conversation becomes resolved (a new message reopens it); with Ratings asking on resolve (or after a staff reply that came), ratingRequested becomes true. 404 not_found when the visitor has no chat yet.",
+		"headers": {
+			"type": "object",
+			"properties": {
+				"SS-Guest": {
+					"type": "string",
+					"pattern": "^[A-Za-z0-9_-]{16,128}$",
+					"description": "The guest's key: guestKey of an earlier answer (or an imported store's guest cookie value). Another value counts as no key."
+				},
+				"SS-Sign-In": {
+					"type": "string",
+					"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account. One of the two names the visitor: without both, 404 not_found."
+				}
+			}
+		},
 		"response": {
 			"$ref": "#/components/schemas/ChatAnswer"
 		}
@@ -1730,6 +1800,20 @@
 	"POST /v1/chat/handoff": {
 		"summary": "The visitor asks for a person",
 		"description": "The chat waits for a person and the AI stops until staff reply or hand it back. The visitor gets the handoff notice (outside office hours: when staff are back), a guest without contact details is asked for them, staff get the Chat needs you alert, and with AI conversation summary on a summary is written. Asking again while it waits changes nothing. 404 not_found when the visitor has no chat yet.",
+		"headers": {
+			"type": "object",
+			"properties": {
+				"SS-Guest": {
+					"type": "string",
+					"pattern": "^[A-Za-z0-9_-]{16,128}$",
+					"description": "The guest's key: guestKey of an earlier answer (or an imported store's guest cookie value). Another value counts as no key."
+				},
+				"SS-Sign-In": {
+					"type": "string",
+					"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account. One of the two names the visitor: without both, 404 not_found."
+				}
+			}
+		},
 		"response": {
 			"$ref": "#/components/schemas/ChatAnswer"
 		}
@@ -1737,6 +1821,20 @@
 	"POST /v1/chat/contact": {
 		"summary": "Save the visitor's contact details",
 		"description": "On the visitor's conversation (made when there is none; a visitor without a key starts a new guest, answered in guestKey), and as a lead with Lead capture on. Phones are kept as E.164 (a number without its country code takes your business.json country's code). 422 validation_failed: a value that is not valid, or neither e-mail nor phone.",
+		"headers": {
+			"type": "object",
+			"properties": {
+				"SS-Guest": {
+					"type": "string",
+					"pattern": "^[A-Za-z0-9_-]{16,128}$",
+					"description": "The guest's key: guestKey of an earlier answer (or an imported store's guest cookie value). Another value counts as no key."
+				},
+				"SS-Sign-In": {
+					"type": "string",
+					"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account."
+				}
+			}
+		},
 		"body": {
 			"type": "object",
 			"properties": {
@@ -1775,6 +1873,20 @@
 	"POST /v1/chat/leads": {
 		"summary": "Leave contact details (lead form)",
 		"description": "Each of name, email and phone the lead fields setting lists is required (message never is); the custom fields are those the setting names (with Custom fields on), checked as their type. With a consent text, consent must be true. The visitor's conversation, when there is one, gets the name, e-mail and phone it lacks. 422 validation_failed with every problem. Send an Idempotency-Key so a retried request makes one lead.",
+		"headers": {
+			"type": "object",
+			"properties": {
+				"SS-Guest": {
+					"type": "string",
+					"pattern": "^[A-Za-z0-9_-]{16,128}$",
+					"description": "The guest's key: guestKey of an earlier answer (or an imported store's guest cookie value). Another value counts as no key."
+				},
+				"SS-Sign-In": {
+					"type": "string",
+					"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account."
+				}
+			}
+		},
 		"body": {
 			"type": "object",
 			"required": ["fields"],
@@ -1836,6 +1948,20 @@
 	"POST /v1/chat/flows/:flowId/start": {
 		"summary": "Start a page flow",
 		"description": "A flow started by a page rule, on a page its path pattern matches (page.url). It starts once per conversation and not while another flow runs (the chat is answered as it is). A visitor without a key starts a new guest, answered in guestKey. 404 not_found: no such flow for this page.",
+		"headers": {
+			"type": "object",
+			"properties": {
+				"SS-Guest": {
+					"type": "string",
+					"pattern": "^[A-Za-z0-9_-]{16,128}$",
+					"description": "The guest's key: guestKey of an earlier answer (or an imported store's guest cookie value). Another value counts as no key."
+				},
+				"SS-Sign-In": {
+					"type": "string",
+					"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account."
+				}
+			}
+		},
 		"body": {
 			"type": "object",
 			"required": ["page"],
@@ -1864,6 +1990,20 @@
 	"POST /v1/chat/flow": {
 		"summary": "Answer the waiting flow step",
 		"description": "One of the question's buttons, or the value the step collects (checked as its field type). The answer is the visitor's message; the flow then goes on. 409 conflict: no flow waits for an answer; 422 validation_failed with your text chat.flowInvalid.",
+		"headers": {
+			"type": "object",
+			"properties": {
+				"SS-Guest": {
+					"type": "string",
+					"pattern": "^[A-Za-z0-9_-]{16,128}$",
+					"description": "The guest's key: guestKey of an earlier answer (or an imported store's guest cookie value). Another value counts as no key."
+				},
+				"SS-Sign-In": {
+					"type": "string",
+					"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account. One of the two names the visitor: without both, 404 not_found."
+				}
+			}
+		},
 		"body": {
 			"type": "object",
 			"required": ["answer"],
@@ -1881,6 +2021,20 @@
 	"POST /v1/chat/rating": {
 		"summary": "Rate the chat",
 		"description": "A new rating replaces the earlier one. 404 not_found when the visitor has no chat yet; 422 validation_failed.",
+		"headers": {
+			"type": "object",
+			"properties": {
+				"SS-Guest": {
+					"type": "string",
+					"pattern": "^[A-Za-z0-9_-]{16,128}$",
+					"description": "The guest's key: guestKey of an earlier answer (or an imported store's guest cookie value). Another value counts as no key."
+				},
+				"SS-Sign-In": {
+					"type": "string",
+					"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account. One of the two names the visitor: without both, 404 not_found."
+				}
+			}
+		},
 		"body": {
 			"type": "object",
 			"required": ["score"],
@@ -1904,6 +2058,20 @@
 	"POST /v1/chat/transcript": {
 		"summary": "E-mail the visitor a copy of the chat",
 		"description": "The template chat.transcript through Notifications (paste its token in Connections) with the most recent 1,000 characters of the chat. 503 notifications_not_connected; 502 not_sent; 422 validation_failed. 404 not_found when the visitor has no chat yet.",
+		"headers": {
+			"type": "object",
+			"properties": {
+				"SS-Guest": {
+					"type": "string",
+					"pattern": "^[A-Za-z0-9_-]{16,128}$",
+					"description": "The guest's key: guestKey of an earlier answer (or an imported store's guest cookie value). Another value counts as no key."
+				},
+				"SS-Sign-In": {
+					"type": "string",
+					"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account. One of the two names the visitor: without both, 404 not_found."
+				}
+			}
+		},
 		"body": {
 			"type": "object",
 			"required": ["email"],
@@ -1929,6 +2097,20 @@
 	"POST /v1/chat/uploads": {
 		"summary": "Upload a visitor file",
 		"description": "With the setting Visitors may attach (everyone, or signed-in visitors only): a presigned PUT into your storage for an allowed type up to the size setting (at most 10 MB). A visitor without a key starts a new guest, answered in guestKey. 403 forbidden; 503 storage_not_connected; 422 validation_failed (type or size).",
+		"headers": {
+			"type": "object",
+			"properties": {
+				"SS-Guest": {
+					"type": "string",
+					"pattern": "^[A-Za-z0-9_-]{16,128}$",
+					"description": "The guest's key: guestKey of an earlier answer (or an imported store's guest cookie value). Another value counts as no key."
+				},
+				"SS-Sign-In": {
+					"type": "string",
+					"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account."
+				}
+			}
+		},
 		"body": {
 			"type": "object",
 			"required": ["name", "type", "size"],

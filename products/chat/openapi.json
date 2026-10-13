@@ -2605,6 +2605,27 @@
 						}
 					},
 					{
+						"name": "SS-Guest",
+						"in": "header",
+						"required": false,
+						"description": "The guest's key: guestKey of an earlier answer (or an imported store's guest cookie value). Another value counts as no key.",
+						"schema": {
+							"type": "string",
+							"pattern": "^[A-Za-z0-9_-]{16,128}$",
+							"description": "The guest's key: guestKey of an earlier answer (or an imported store's guest cookie value). Another value counts as no key."
+						}
+					},
+					{
+						"name": "SS-Sign-In",
+						"in": "header",
+						"required": false,
+						"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account.",
+						"schema": {
+							"type": "string",
+							"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account."
+						}
+					},
+					{
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
 					{
@@ -2762,6 +2783,27 @@
 				],
 				"parameters": [
 					{
+						"name": "SS-Guest",
+						"in": "header",
+						"required": false,
+						"description": "The guest's key: guestKey of an earlier answer (or an imported store's guest cookie value). Another value counts as no key.",
+						"schema": {
+							"type": "string",
+							"pattern": "^[A-Za-z0-9_-]{16,128}$",
+							"description": "The guest's key: guestKey of an earlier answer (or an imported store's guest cookie value). Another value counts as no key."
+						}
+					},
+					{
+						"name": "SS-Sign-In",
+						"in": "header",
+						"required": false,
+						"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account.",
+						"schema": {
+							"type": "string",
+							"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account."
+						}
+					},
+					{
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
 					{
@@ -2857,6 +2899,27 @@
 				],
 				"parameters": [
 					{
+						"name": "SS-Guest",
+						"in": "header",
+						"required": false,
+						"description": "The guest's key: guestKey of an earlier answer (or an imported store's guest cookie value). Another value counts as no key.",
+						"schema": {
+							"type": "string",
+							"pattern": "^[A-Za-z0-9_-]{16,128}$",
+							"description": "The guest's key: guestKey of an earlier answer (or an imported store's guest cookie value). Another value counts as no key."
+						}
+					},
+					{
+						"name": "SS-Sign-In",
+						"in": "header",
+						"required": false,
+						"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account. One of the two names the visitor: without both, 404 not_found.",
+						"schema": {
+							"type": "string",
+							"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account. One of the two names the visitor: without both, 404 not_found."
+						}
+					},
+					{
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
 					{
@@ -2911,6 +2974,27 @@
 					}
 				],
 				"parameters": [
+					{
+						"name": "SS-Guest",
+						"in": "header",
+						"required": false,
+						"description": "The guest's key: guestKey of an earlier answer (or an imported store's guest cookie value). Another value counts as no key.",
+						"schema": {
+							"type": "string",
+							"pattern": "^[A-Za-z0-9_-]{16,128}$",
+							"description": "The guest's key: guestKey of an earlier answer (or an imported store's guest cookie value). Another value counts as no key."
+						}
+					},
+					{
+						"name": "SS-Sign-In",
+						"in": "header",
+						"required": false,
+						"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account. One of the two names the visitor: without both, 404 not_found.",
+						"schema": {
+							"type": "string",
+							"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account. One of the two names the visitor: without both, 404 not_found."
+						}
+					},
 					{
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
@@ -2991,6 +3075,27 @@
 						"required": true,
 						"schema": {
 							"type": "string"
+						}
+					},
+					{
+						"name": "SS-Guest",
+						"in": "header",
+						"required": false,
+						"description": "The guest's key: guestKey of an earlier answer (or an imported store's guest cookie value). Another value counts as no key.",
+						"schema": {
+							"type": "string",
+							"pattern": "^[A-Za-z0-9_-]{16,128}$",
+							"description": "The guest's key: guestKey of an earlier answer (or an imported store's guest cookie value). Another value counts as no key."
+						}
+					},
+					{
+						"name": "SS-Sign-In",
+						"in": "header",
+						"required": false,
+						"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account.",
+						"schema": {
+							"type": "string",
+							"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account."
 						}
 					},
 					{
@@ -3080,6 +3185,27 @@
 				],
 				"parameters": [
 					{
+						"name": "SS-Guest",
+						"in": "header",
+						"required": false,
+						"description": "The guest's key: guestKey of an earlier answer (or an imported store's guest cookie value). Another value counts as no key.",
+						"schema": {
+							"type": "string",
+							"pattern": "^[A-Za-z0-9_-]{16,128}$",
+							"description": "The guest's key: guestKey of an earlier answer (or an imported store's guest cookie value). Another value counts as no key."
+						}
+					},
+					{
+						"name": "SS-Sign-In",
+						"in": "header",
+						"required": false,
+						"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account. One of the two names the visitor: without both, 404 not_found.",
+						"schema": {
+							"type": "string",
+							"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account. One of the two names the visitor: without both, 404 not_found."
+						}
+					},
+					{
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
 					{
@@ -3134,6 +3260,27 @@
 					}
 				],
 				"parameters": [
+					{
+						"name": "SS-Guest",
+						"in": "header",
+						"required": false,
+						"description": "The guest's key: guestKey of an earlier answer (or an imported store's guest cookie value). Another value counts as no key.",
+						"schema": {
+							"type": "string",
+							"pattern": "^[A-Za-z0-9_-]{16,128}$",
+							"description": "The guest's key: guestKey of an earlier answer (or an imported store's guest cookie value). Another value counts as no key."
+						}
+					},
+					{
+						"name": "SS-Sign-In",
+						"in": "header",
+						"required": false,
+						"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account.",
+						"schema": {
+							"type": "string",
+							"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account."
+						}
+					},
 					{
 						"name": "Idempotency-Key",
 						"in": "header",
@@ -3284,6 +3431,27 @@
 						}
 					},
 					{
+						"name": "SS-Guest",
+						"in": "header",
+						"required": false,
+						"description": "The guest's key: guestKey of an earlier answer (or an imported store's guest cookie value). Another value counts as no key.",
+						"schema": {
+							"type": "string",
+							"pattern": "^[A-Za-z0-9_-]{16,128}$",
+							"description": "The guest's key: guestKey of an earlier answer (or an imported store's guest cookie value). Another value counts as no key."
+						}
+					},
+					{
+						"name": "SS-Sign-In",
+						"in": "header",
+						"required": false,
+						"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account.",
+						"schema": {
+							"type": "string",
+							"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account."
+						}
+					},
+					{
 						"name": "Idempotency-Key",
 						"in": "header",
 						"required": false,
@@ -3408,6 +3576,27 @@
 				],
 				"parameters": [
 					{
+						"name": "SS-Guest",
+						"in": "header",
+						"required": false,
+						"description": "The guest's key: guestKey of an earlier answer (or an imported store's guest cookie value). Another value counts as no key.",
+						"schema": {
+							"type": "string",
+							"pattern": "^[A-Za-z0-9_-]{16,128}$",
+							"description": "The guest's key: guestKey of an earlier answer (or an imported store's guest cookie value). Another value counts as no key."
+						}
+					},
+					{
+						"name": "SS-Sign-In",
+						"in": "header",
+						"required": false,
+						"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account. One of the two names the visitor: without both, 404 not_found.",
+						"schema": {
+							"type": "string",
+							"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account. One of the two names the visitor: without both, 404 not_found."
+						}
+					},
+					{
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
 					{
@@ -3488,6 +3677,27 @@
 				],
 				"parameters": [
 					{
+						"name": "SS-Guest",
+						"in": "header",
+						"required": false,
+						"description": "The guest's key: guestKey of an earlier answer (or an imported store's guest cookie value). Another value counts as no key.",
+						"schema": {
+							"type": "string",
+							"pattern": "^[A-Za-z0-9_-]{16,128}$",
+							"description": "The guest's key: guestKey of an earlier answer (or an imported store's guest cookie value). Another value counts as no key."
+						}
+					},
+					{
+						"name": "SS-Sign-In",
+						"in": "header",
+						"required": false,
+						"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account. One of the two names the visitor: without both, 404 not_found.",
+						"schema": {
+							"type": "string",
+							"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account. One of the two names the visitor: without both, 404 not_found."
+						}
+					},
+					{
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
 					{
@@ -3535,6 +3745,27 @@
 					}
 				],
 				"parameters": [
+					{
+						"name": "SS-Guest",
+						"in": "header",
+						"required": false,
+						"description": "The guest's key: guestKey of an earlier answer (or an imported store's guest cookie value). Another value counts as no key.",
+						"schema": {
+							"type": "string",
+							"pattern": "^[A-Za-z0-9_-]{16,128}$",
+							"description": "The guest's key: guestKey of an earlier answer (or an imported store's guest cookie value). Another value counts as no key."
+						}
+					},
+					{
+						"name": "SS-Sign-In",
+						"in": "header",
+						"required": false,
+						"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account. One of the two names the visitor: without both, 404 not_found.",
+						"schema": {
+							"type": "string",
+							"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account. One of the two names the visitor: without both, 404 not_found."
+						}
+					},
 					{
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
@@ -3619,6 +3850,27 @@
 				],
 				"parameters": [
 					{
+						"name": "SS-Guest",
+						"in": "header",
+						"required": false,
+						"description": "The guest's key: guestKey of an earlier answer (or an imported store's guest cookie value). Another value counts as no key.",
+						"schema": {
+							"type": "string",
+							"pattern": "^[A-Za-z0-9_-]{16,128}$",
+							"description": "The guest's key: guestKey of an earlier answer (or an imported store's guest cookie value). Another value counts as no key."
+						}
+					},
+					{
+						"name": "SS-Sign-In",
+						"in": "header",
+						"required": false,
+						"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account.",
+						"schema": {
+							"type": "string",
+							"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account."
+						}
+					},
+					{
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
 					{
@@ -3683,6 +3935,27 @@
 					}
 				],
 				"parameters": [
+					{
+						"name": "SS-Guest",
+						"in": "header",
+						"required": false,
+						"description": "The guest's key: guestKey of an earlier answer (or an imported store's guest cookie value). Another value counts as no key.",
+						"schema": {
+							"type": "string",
+							"pattern": "^[A-Za-z0-9_-]{16,128}$",
+							"description": "The guest's key: guestKey of an earlier answer (or an imported store's guest cookie value). Another value counts as no key."
+						}
+					},
+					{
+						"name": "SS-Sign-In",
+						"in": "header",
+						"required": false,
+						"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account.",
+						"schema": {
+							"type": "string",
+							"description": "The visitor's Accounts sign-in (Signed-in chat on, Accounts token pasted); one that does not verify counts as none. With SS-Guest too, the guest's chats move to the account."
+						}
+					},
 					{
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
