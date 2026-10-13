@@ -156,7 +156,11 @@ describe('website cards (jsdom)', () => {
 			expect(buttons('Open Chatty')).toHaveLength(1);
 			// nothing left to add
 			await press('Add product to shop.example.com');
-			expect(shows('Every active product is already on this website.')).toBe(true);
+			expect(
+				shows(
+					'No product to add: every active product is already on this website. A newly connected product starts inactive; set it active in Products first.',
+				),
+			).toBe(true);
 			await closeDialog();
 
 			// ---------------------------------------------------------------- Remove: typed confirmation of the product name
@@ -396,7 +400,11 @@ describe('website cards (jsdom)', () => {
 		await closeDialog();
 		// Add product with nothing to offer (no list passed)
 		await press('Add product to shop.com');
-		expect(shows('Every active product is already on this website.')).toBe(true);
+		expect(
+			shows(
+				'No product to add: every active product is already on this website. A newly connected product starts inactive; set it active in Products first.',
+			),
+		).toBe(true);
 	});
 
 	it('shows `Cannot be shown: regenerate` and other token failures', async () => {

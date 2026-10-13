@@ -172,7 +172,8 @@ export const WEBSITE = Object.freeze({
 	addProduct: 'Add product',
 	addProductTo: (/** @type {string} */ domain) => `Add product to ${domain}`,
 	addProductHelp: 'Active connected products that are not on this website yet. A product is added with all features off.',
-	noneToAdd: 'Every active product is already on this website.',
+	noneToAdd:
+		'No product to add: every active product is already on this website. A newly connected product starts inactive; set it active in Products first.',
 	add: 'Add',
 	productAdded: (/** @type {string} */ name) => `${name} added.`,
 	productActions: (/** @type {string} */ name) => `Actions for ${name}`,
