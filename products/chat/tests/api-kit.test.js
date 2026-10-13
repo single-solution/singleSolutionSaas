@@ -123,7 +123,17 @@ describe('widgets and docs', () => {
 		for (const id of ['server-settings', 'acting-user', 'server-visitors', 'counts', 'activity', 'format'])
 			expect(docs.text).toContain(`<h2 id="${id}">`);
 		expect(docs.text).toContain('GET /v1/conversations/counts?by=status|waiting|guest|unread');
-		expect(docs.text).toContain('<code>GET /v1/admin/conversations/count</code>');
+		// the API reference: what each call takes and answers, from schemas/api.json; the route tables link to it
+		for (const part of [
+			'<a href="#op-get-v1-admin-conversations-count"><code>GET /v1/admin/conversations/count</code></a>',
+			'<section class="ss-api-op" id="op-post-v1-chat-messages"><h3><code>POST /v1/chat/messages</code> Send a visitor message</h3>',
+			'<td><code>wait</code></td><td>query</td><td>&#34;1&#34; | &#34;true&#34;</td><td>no</td>',
+			'<td><code>replyPending</code></td><td>boolean</td><td>no</td>',
+			'<td><code>status</code></td><td>query</td><td>&#34;open&#34; | &#34;awaiting_visitor&#34; | &#34;resolved&#34;</td>',
+			'<section class="ss-api-op" id="op-post-v1-import-collection"><h3><code>POST /v1/import/{collection}</code> Import records (NDJSON)</h3>',
+			'id="schema-ChatConversation"',
+		])
+			expect(docs.text).toContain(part);
 	});
 });
 

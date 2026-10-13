@@ -1656,7 +1656,7 @@
 				"text": {
 					"type": "string",
 					"maxLength": 4000,
-					"description": "Trimmed, 1–4000 characters; may be '' or left out beside an attachment."
+					"description": "Trimmed; may be '' or left out beside an attachment."
 				},
 				"attachment": {
 					"oneOf": [
@@ -1859,7 +1859,6 @@
 			"properties": {
 				"answer": {
 					"type": "string",
-					"maxLength": 2000,
 					"description": "Trimmed; cut to 2000 characters."
 				}
 			}
@@ -2222,7 +2221,7 @@
 				"text": {
 					"type": "string",
 					"maxLength": 4000,
-					"description": "Trimmed, 1–4000 characters; may be '' or left out beside an attachment."
+					"description": "Trimmed; may be '' or left out beside an attachment."
 				},
 				"attachment": {
 					"oneOf": [
@@ -2930,7 +2929,7 @@
 				"text": {
 					"type": "string",
 					"maxLength": 4000,
-					"description": "Trimmed, 1–4000 characters; may be '' or left out beside an attachment."
+					"description": "Trimmed; may be '' or left out beside an attachment."
 				},
 				"attachment": {
 					"oneOf": [
