@@ -553,7 +553,7 @@ describe('Ecommerce phase 4 on the real Portal, Accounts, Payments and Notificat
 		expect([codeOf(member), member.json.signIn], JSON.stringify(member.json)).toEqual(['sign_in_required', 'member_phone']);
 	});
 
-	it('prices a member’s cart with deal rules, the role price, the COD fee and whole units, kept by a lock (E18, E19, E23, E25)', async () => {
+	it('prices a member’s cart with deal rules, the role price, the COD fee and whole units by both totals rules, kept by a lock (E18, E19, E23, E25, D4)', async () => {
 		await configure({
 			'deals.lockMinutes': 30,
 			'cod.feePercent': 2,
@@ -615,6 +615,23 @@ describe('Ecommerce phase 4 on the real Portal, Accounts, Payments and Notificat
 		const customer = (await quote({ lines: [line], payment: 'cod' }, sara)).json;
 		expect(customer.totals).toMatchObject({ roleDiscount: 0, discount: 749_900 });
 		expect(customer.pointsToEarn).toBe(0);
+
+		// the other totals rules (D4): the deal worked out on the line and rounded once, half up (7,499.85 → 7,500), the
+		// member's 7% of PKR 42,499 (2,975), and the 2% cash handling on the goods after both (PKR 39,524 → 790)
+		await configure({ 'deals.rounding': 'total_half_up', 'cod.feeBase': 'goods_after_discounts' });
+		const other = await quote({ lines: [line], payment: 'cod' }, mona);
+		expect(other.json.totals).toMatchObject({
+			subtotal: PHONE_PRICE,
+			discount: 750_000 + 297_500,
+			roleDiscount: 297_500,
+			delivery: DELIVERY,
+			fee: 79_000,
+			total: 3_952_400 + DELIVERY + 79_000,
+		});
+		expect(other.json.paymentMethods.find((/** @type {any} */ method) => method.method === 'cod')).toMatchObject({
+			fee: 79_000,
+		});
+		await configure({ 'deals.rounding': 'per_unit_down', 'cod.feeBase': 'order_total' });
 
 		// the deal ends; the signed lock keeps its price at placement
 		await write('PATCH', `/v1/deals/${deal.id}`, { active: false });
