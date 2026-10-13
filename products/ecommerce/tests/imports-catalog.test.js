@@ -529,10 +529,13 @@ describe('finish', () => {
 		const first = await api('POST', '/v1/import/finish');
 		expect(first).toMatchObject({
 			finished: true,
-			catalog: {
-				categories: { checked: 5, changed: 1, orphans: [idOf('cat', 20)], cycles: [], tooDeep: [] },
-				products: { checked: 2, changed: 1 },
-			},
+			categoriesChecked: 5,
+			categoriesChanged: 1,
+			categoryProblems: { orphans: [idOf('cat', 20)], cycles: [], tooDeep: [] },
+			productsChecked: 2,
+			productsChanged: 1,
+			next: null,
+			more: false,
 		});
 		expect((await stored('categories', ID.evening))?.path).toEqual([ID.clothes, ID.dresses, gowns]);
 		// no order line or review was moved: the old shop's sold count and rating stay
@@ -544,7 +547,7 @@ describe('finish', () => {
 		});
 		expect(first.productsSoldRatingUpdated).toBe(0);
 		const second = await api('POST', '/v1/import/finish');
-		expect(second.catalog).toMatchObject({ categories: { changed: 0 }, products: { changed: 0 } });
+		expect(second).toMatchObject({ categoriesChanged: 0, productsChanged: 0, more: false });
 		// a re-import keeps a path whose parent is already stored
 		await send('categories', [evening]);
 		expect((await stored('categories', ID.evening))?.path).toEqual([ID.clothes, ID.dresses, gowns]);
@@ -676,7 +679,25 @@ describe('drafts without variants (CA-2)', () => {
 });
 
 describe('large catalogs', () => {
-	it('reads products in batches and leaves a tree beyond the product’s limit alone', async () => {
+	/**
+	 * Every page of a finish, following next while more.
+	 * @returns {Promise<Array<Record<string, any>>>}
+	 */
+	const finishAll = async () => {
+		const pages = [];
+		/** @type {string | null} */
+		let next = null;
+		do {
+			const page = await api('POST', `/v1/import/finish${next === null ? '' : `?after=${encodeURIComponent(next)}`}`);
+			pages.push(page);
+			next = page.more ? page.next : null;
+		} while (next !== null);
+		return pages;
+	};
+	/** @param {Array<Record<string, any>>} pages @param {string} name */
+	const sum = (pages, name) => pages.reduce((total, page) => total + page[name], 0);
+
+	it('finishes in pages of at most 200 records, and a second run changes nothing', async () => {
 		const data = await shop.db();
 		const products = Array.from({ length: 501 }, (_, i) => ({
 			id: idOf('prd', 1000 + i),
@@ -686,6 +707,44 @@ describe('large catalogs', () => {
 			trackStock: true,
 			variants: [],
 		}));
+		const categories = Array.from({ length: 250 }, (_, i) => ({
+			id: idOf('cat', 10_000 + i),
+			slug: `bulk-${i}`,
+			name: 'Bulk',
+			parentId: null,
+			path: [idOf('cat', 1)],
+		}));
+		await data.collection('products').insertMany(products);
+		await data.collection('categories').insertMany(categories);
+		const first = await finishAll();
+		// 255 categories, 503 products' prices, then the orders' steps (503 products' sold and rating): 200 records a page
+		expect(first.map((page) => page.categoriesChecked + page.productsChecked)).toEqual([200, 200, 200, 158, 0, 0, 0]);
+		expect(first.slice(0, -1).every((page) => page.more === true && typeof page.next === 'string')).toBe(true);
+		expect(first.at(-1)).toMatchObject({ more: false, next: null });
+		expect(first[0]?.next).toBe(`categories:${idOf('cat', 10_000 + 194)}`);
+		expect(first[1]?.categoryProblems).toMatchObject({ cycles: [], tooDeep: [] });
+		expect(first[2]?.categoryProblems).toBeUndefined();
+		expect([sum(first, 'categoriesChecked'), sum(first, 'categoriesChanged')]).toEqual([255, 250]);
+		expect([sum(first, 'productsChecked'), sum(first, 'productsChanged')]).toEqual([503, 501]);
+		expect((await stored('categories', idOf('cat', 10_100)))?.path).toEqual([]);
+		const second = await finishAll();
+		expect(second).toHaveLength(7);
+		expect([sum(second, 'categoriesChanged'), sum(second, 'productsChanged')]).toEqual([0, 0]);
+		// a page starts where the last one stopped; another after is refused
+		const page = await shop.api('POST', `/v1/import/finish?after=${encodeURIComponent(String(first[2]?.next))}`);
+		expect(page.json).toMatchObject({ categoriesChecked: 0, productsChecked: 158, more: true });
+		expect(page.json.next).toMatch(/^sold:[0-9a-f]{24}$/);
+		for (const after of ['nothing:1', 'customers:not-an-id', 'counters:1', `products:${'x'.repeat(201)}`]) {
+			const refused = await shop.api('POST', `/v1/import/finish?after=${encodeURIComponent(after)}`);
+			expect(refused.status, after).toBe(422);
+			expect(String(refused.json.type).split('/').pop()).toBe('validation_failed');
+		}
+		await data.collection('products').deleteMany({ websiteId: shop.websiteId, slug: /^bulk-/ });
+		await data.collection('categories').deleteMany({ websiteId: shop.websiteId, slug: /^bulk-/ });
+	});
+
+	it('leaves a tree beyond the product’s limit alone', async () => {
+		const data = await shop.db();
 		const categories = Array.from({ length: 5001 }, (_, i) => ({
 			id: idOf('cat', 10_000 + i),
 			slug: `bulk-${i}`,
@@ -693,15 +752,9 @@ describe('large catalogs', () => {
 			parentId: null,
 			path: [],
 		}));
-		await data.collection('products').insertMany(products);
 		await data.collection('categories').insertMany(categories);
-		const first = await api('POST', '/v1/import/finish');
-		expect(first.catalog).toEqual({
-			categories: { checked: 0, changed: 0, tooMany: true },
-			products: { checked: 503, changed: 501 },
-		});
-		expect((await api('POST', '/v1/import/finish')).catalog.products).toEqual({ checked: 503, changed: 0 });
-		await data.collection('products').deleteMany({ websiteId: shop.websiteId, slug: /^bulk-/ });
+		const [first] = await finishAll();
+		expect(first).toMatchObject({ categoriesChecked: 0, categoriesChanged: 0, categoryProblems: { tooMany: true } });
 		await data.collection('categories').deleteMany({ websiteId: shop.websiteId, slug: /^bulk-/ });
 	});
 });

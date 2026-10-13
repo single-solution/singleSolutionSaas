@@ -398,10 +398,11 @@ describe('importing an example shop into Accounts, Ecommerce, Chat and Growth (K
 				product: 'ecommerce',
 				summary: {
 					finished: true,
-					catalog: {
-						categories: { checked: 2, changed: 1, orphans: [], cycles: [], tooDeep: [] },
-						products: { checked: 2, changed: 0 },
-					},
+					categoriesChecked: 2,
+					categoriesChanged: 1,
+					categoryProblems: { orphans: [], cycles: [], tooDeep: [] },
+					productsChecked: 2,
+					productsChanged: 0,
 					customersUpdated: 2,
 					loyaltyUpdated: 0,
 					productsSoldRatingUpdated: 1,

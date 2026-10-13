@@ -4719,106 +4719,94 @@
 		},
 		"ImportFinish": {
 			"type": "object",
-			"description": "What finish derived (each number counts records it changed).",
+			"description": "What one finish call derived (each number counts records of this call; the importer adds them up over the calls).",
 			"required": [
 				"finished",
-				"catalog",
+				"categoriesChecked",
+				"categoriesChanged",
+				"productsChecked",
+				"productsChanged",
 				"customersUpdated",
 				"loyaltyUpdated",
 				"productsSoldRatingUpdated",
 				"serialsSold",
 				"serialsMissing",
 				"serialsOnOtherOrders",
-				"countersSet"
+				"countersSet",
+				"next",
+				"more"
 			],
 			"additionalProperties": false,
 			"properties": {
 				"finished": {
 					"const": true
 				},
-				"catalog": {
-					"type": "object",
-					"required": ["categories", "products"],
-					"additionalProperties": false,
-					"properties": {
-						"categories": {
-							"description": "Category paths derived from the parents (the first 20 ids of each problem).",
-							"oneOf": [
-								{
-									"type": "object",
-									"required": ["checked", "changed", "orphans", "cycles", "tooDeep"],
-									"additionalProperties": false,
-									"properties": {
-										"checked": {
-											"type": "integer",
-											"minimum": 0
-										},
-										"changed": {
-											"type": "integer",
-											"minimum": 0
-										},
-										"orphans": {
-											"type": "array",
-											"maxItems": 20,
-											"items": {
-												"type": "string"
-											},
-											"description": "Their parent is not there (kept at the top)."
-										},
-										"cycles": {
-											"type": "array",
-											"maxItems": 20,
-											"items": {
-												"type": "string"
-											},
-											"description": "In a loop of parents (kept at the top)."
-										},
-										"tooDeep": {
-											"type": "array",
-											"maxItems": 20,
-											"items": {
-												"type": "string"
-											},
-											"description": "Deeper than 10 levels."
-										}
-									}
-								},
-								{
-									"type": "object",
-									"description": "More than 5,000 categories: nothing derived.",
-									"required": ["checked", "changed", "tooMany"],
-									"additionalProperties": false,
-									"properties": {
-										"checked": {
-											"const": 0
-										},
-										"changed": {
-											"const": 0
-										},
-										"tooMany": {
-											"const": true
-										}
-									}
-								}
-							]
-						},
-						"products": {
+				"categoriesChecked": {
+					"type": "integer",
+					"minimum": 0,
+					"description": "Categories whose path was worked out from the parents."
+				},
+				"categoriesChanged": {
+					"type": "integer",
+					"minimum": 0,
+					"description": "Categories whose path changed."
+				},
+				"categoryProblems": {
+					"description": "The category tree's problems (the first 20 ids of each), on the calls that worked on categories.",
+					"oneOf": [
+						{
 							"type": "object",
-							"description": "Products' price, price range, stock state and grades derived from their variants.",
-							"required": ["checked", "changed"],
+							"required": ["orphans", "cycles", "tooDeep"],
 							"additionalProperties": false,
 							"properties": {
-								"checked": {
-									"type": "integer",
-									"minimum": 0
+								"orphans": {
+									"type": "array",
+									"maxItems": 20,
+									"items": {
+										"type": "string"
+									},
+									"description": "Their parent is not there (kept at the top)."
 								},
-								"changed": {
-									"type": "integer",
-									"minimum": 0
+								"cycles": {
+									"type": "array",
+									"maxItems": 20,
+									"items": {
+										"type": "string"
+									},
+									"description": "In a loop of parents (kept at the top)."
+								},
+								"tooDeep": {
+									"type": "array",
+									"maxItems": 20,
+									"items": {
+										"type": "string"
+									},
+									"description": "Deeper than 10 levels."
+								}
+							}
+						},
+						{
+							"type": "object",
+							"description": "More than 5,000 categories: no path derived.",
+							"required": ["tooMany"],
+							"additionalProperties": false,
+							"properties": {
+								"tooMany": {
+									"const": true
 								}
 							}
 						}
-					}
+					]
+				},
+				"productsChecked": {
+					"type": "integer",
+					"minimum": 0,
+					"description": "Products whose price, price range, stock state and grades were derived from their variants."
+				},
+				"productsChanged": {
+					"type": "integer",
+					"minimum": 0,
+					"description": "Products whose price, price range, stock state or grades changed."
 				},
 				"customersUpdated": {
 					"type": "integer",
@@ -4854,6 +4842,14 @@
 					"type": "integer",
 					"minimum": 0,
 					"description": "Order-number counters moved behind the highest imported number."
+				},
+				"next": {
+					"type": ["string", "null"],
+					"description": "Pass it as after while more is true."
+				},
+				"more": {
+					"type": "boolean",
+					"description": "Work is left: call again with ?after=<next>."
 				}
 			}
 		},
@@ -23895,7 +23891,18 @@
 	},
 	"POST /v1/import/finish": {
 		"summary": "Finish an import: derive what the shop keeps",
-		"description": "Run after the imports (and again whenever more is imported): it derives every category's path from the parents, products' price, price range, stock state and grades, customers' order and RTO counts and last order, loyalty balances and lifetime points, products' sold count (from delivered order lines) and rating (from approved reviews) where their order lines or reviews were imported too (otherwise the imported numbers stay), serials sold through order lines, and the order-number counters. It writes only what differs, so a second run changes nothing.",
+		"description": "Run after the imports (and again whenever more is imported): it derives every category's path from the parents, products' price, price range, stock state and grades, customers' order and RTO counts and last order, loyalty balances and lifetime points, products' sold count (from delivered order lines) and rating (from approved reviews) where their order lines or reviews were imported too (otherwise the imported numbers stay), serials sold through order lines, and the order-number counters. One call works on at most 200 records: while more is true, call again with ?after=<next>. It writes only what differs, so a second run changes nothing. 422 validation_failed for another after.",
+		"query": {
+			"type": "object",
+			"additionalProperties": false,
+			"properties": {
+				"after": {
+					"type": "string",
+					"pattern": "^(categories|products|customers|loyalty|sold|serials|counters):[^\\u0000-\\u001f]{0,200}$",
+					"description": "next of the previous call."
+				}
+			}
+		},
 		"response": {
 			"$ref": "#/components/schemas/ImportFinish"
 		}

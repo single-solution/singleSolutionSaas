@@ -2,10 +2,11 @@
  * The shoppers' and orders' part of the import (PLAN 0.8.10 K10, Migration order step 6): customers, orders with their
  * lines, payments and history, loyalty, reviews, returns, alerts and wishlists, each checked in import mode by
  * `core/imports-orders.js` (nothing sent, no events, alerts or activity copies, no stock, slot or points moved). Its
- * finish (after the catalog's) recomputes what the shop derives from them — customers' order and RTO counts and last
- * order, loyalty balances and lifetime points, products' units sold and rating (where their order lines or reviews were
- * moved too; otherwise the numbers imported stay), serials sold through order lines and the order counters — in batches of at most 1,000 records with aggregations, writing only what differs, so a second
- * run changes nothing. Its sums feed `ss-import verify`.
+ * finish steps (after the catalog's) recompute what the shop derives from them — customers' order and RTO counts and
+ * last order, loyalty balances and lifetime points, products' units sold and rating (where their order lines or reviews
+ * were moved too; otherwise the numbers imported stay), serials sold through order lines and the order counters — a
+ * page of records at a time in `_id` order with aggregations, writing only what differs, so a second run changes
+ * nothing. Its sums feed `ss-import verify`.
  * @module
  */
 import {
@@ -23,6 +24,7 @@ import {
 	rtoKeysOf,
 	serialsSoldTo,
 } from '../core/imports-orders.js';
+import { ObjectId } from 'mongodb';
 import { COLLECTIONS } from '../core/model.js';
 import { ratingSummary } from '../core/reviews.js';
 import { counterId, setOrderCounter } from './ledger.js';
@@ -31,24 +33,25 @@ import { counterId, setOrderCounter } from './ledger.js';
 /** @typedef {import('../core/imports-orders.js').ImportRules} ImportRules */
 /** @typedef {import('../core/imports-orders.js').ImportCheck} ImportCheck */
 
-/** Records read per batch in finish. */
+/** Records read per batch in finish's serial lookups. */
 const BATCH = 1000;
+/** A key in finish's `next`: a record's `_id` (24 hex digits). */
+const OBJECT_KEY = /^[0-9a-f]{24}$/;
 
 /**
- * Walk a website's records batch by batch in `_id` order (bounded memory, one read per batch).
- * @param {(after: Record<string, unknown>) => Promise<any[]>} read the batch after the last `_id` read ({} at first)
- * @param {(batch: any[]) => Promise<void>} each
+ * The filter of one finish page: the records after the `_id` of the previous page's last one.
+ * @param {string | null} after
  */
-const inBatches = async (read, each) => {
-	/** @type {Record<string, unknown>} */
-	let after = {};
-	for (;;) {
-		const batch = await read(after);
-		if (batch.length > 0) await each(batch);
-		if (batch.length < BATCH) return;
-		after = { _id: { $gt: batch[batch.length - 1]._id } };
-	}
-};
+const afterId = (after) => (after === null ? {} : { _id: { $gt: ObjectId.createFromHexString(after) } });
+
+/**
+ * What a page read: how many, and the `_id` of the last (24 hex digits).
+ * @param {Array<Record<string, any>>} batch
+ * @returns {{ read: number, last: string | null }}
+ */
+const pageOf = (batch) => ({ read: batch.length, last: batch.length === 0 ? null : String(batch[batch.length - 1]?._id) });
+
+/** @typedef {{ after: string | null, limit: number }} Page */
 
 /** @param {unknown} at @returns {number | null} */
 const timeOf = (at) => (at instanceof Date ? at.getTime() : null);
@@ -56,10 +59,10 @@ const timeOf = (at) => (at instanceof Date ? at.getTime() : null);
 /**
  * Customers' order count, RTO count (parcels moved to a `returned_to_origin` status for another reason than a
  * customer's return, as the ledger counts them) and last order time, from their orders: a customer's by customer id,
- * and a member's older orders without one by user id.
- * @param {WebsiteData} data @param {string[]} rtoKeys
+ * and a member's older orders without one by user id. A page of customers.
+ * @param {WebsiteData} data @param {string[]} rtoKeys @param {Page} page
  */
-const finishCustomers = async (data, rtoKeys) => {
+const finishCustomers = async (data, rtoKeys, { after, limit }) => {
 	const { websiteId } = data;
 	const orders = data.collection(COLLECTIONS.orders);
 	const customers = data.collection(COLLECTIONS.customers);
@@ -83,246 +86,223 @@ const finishCustomers = async (data, rtoKeys) => {
 					.toArray()
 			).map((row) => [String(row._id), { count: Number(row.count), rto: Number(row.rto), last: row.last ?? null }]),
 		);
+	const batch = await customers
+		.find(
+			{ websiteId, ...afterId(after) },
+			{ projection: { _id: 1, id: 1, userId: 1, orderCount: 1, rtoCount: 1, lastOrderAt: 1 }, sort: { _id: 1 }, limit },
+		)
+		.toArray();
 	let updated = 0;
-	await inBatches(
-		(after) =>
-			customers
-				.find(
-					{ websiteId, ...after },
-					{
-						projection: { _id: 1, id: 1, userId: 1, orderCount: 1, rtoCount: 1, lastOrderAt: 1 },
-						sort: { _id: 1 },
-						limit: BATCH,
-					},
-				)
-				.toArray(),
-		async (batch) => {
-			const ids = batch.map((customer) => customer.id).filter((id) => typeof id === 'string');
-			const users = batch.map((customer) => customer.userId).filter((id) => typeof id === 'string' && id !== '');
-			const byId = await sums({ 'customer.customerId': { $in: ids } }, '$customer.customerId');
-			const byUser =
-				users.length === 0
-					? new Map()
-					: await sums(
-							{ 'customer.userId': { $in: users }, 'customer.customerId': { $in: [null, ''] } },
-							'$customer.userId',
-						);
-			for (const customer of batch) {
-				const next = customerCounts(
-					[byId.get(String(customer.id)), customer.userId ? byUser.get(String(customer.userId)) : undefined].filter(
-						(row) => row !== undefined,
-					),
-				);
-				if (
-					customer.orderCount === next.orderCount &&
-					customer.rtoCount === next.rtoCount &&
-					timeOf(customer.lastOrderAt) === timeOf(next.lastOrderAt)
-				)
-					continue;
-				await customers.updateOne({ websiteId, _id: customer._id }, { $set: next });
-				updated += 1;
-			}
-		},
-	);
-	return updated;
+	if (batch.length > 0) {
+		const ids = batch.map((customer) => customer.id).filter((id) => typeof id === 'string');
+		const users = batch.map((customer) => customer.userId).filter((id) => typeof id === 'string' && id !== '');
+		const byId = await sums({ 'customer.customerId': { $in: ids } }, '$customer.customerId');
+		const byUser =
+			users.length === 0
+				? new Map()
+				: await sums({ 'customer.userId': { $in: users }, 'customer.customerId': { $in: [null, ''] } }, '$customer.userId');
+		for (const customer of batch) {
+			const next = customerCounts(
+				[byId.get(String(customer.id)), customer.userId ? byUser.get(String(customer.userId)) : undefined].filter(
+					(row) => row !== undefined,
+				),
+			);
+			if (
+				customer.orderCount === next.orderCount &&
+				customer.rtoCount === next.rtoCount &&
+				timeOf(customer.lastOrderAt) === timeOf(next.lastOrderAt)
+			)
+				continue;
+			await customers.updateOne({ websiteId, _id: customer._id }, { $set: next });
+			updated += 1;
+		}
+	}
+	return { ...pageOf(batch), counts: { customersUpdated: updated } };
 };
 
 /**
  * Loyalty accounts' balance (the points left in lots not expired now) and lifetime points (their earn entries, never
- * lowered), worked out by the database (`loyaltyDerived` in `core/imports-orders.js` is the same rule).
- * @param {WebsiteData} data @param {number} now
+ * lowered), worked out by the database (`loyaltyDerived` in `core/imports-orders.js` is the same rule). A page of
+ * accounts.
+ * @param {WebsiteData} data @param {number} now @param {Page} page
  */
-const finishLoyalty = async (data, now) => {
+const finishLoyalty = async (data, now, { after, limit }) => {
 	const { websiteId } = data;
 	const accounts = data.collection(COLLECTIONS.loyalty);
 	const at = new Date(now);
 	const unexpired = {
 		$or: [{ $eq: [{ $ifNull: ['$$this.expiresAt', null] }, null] }, { $gt: ['$$this.expiresAt', at] }],
 	};
-	let updated = 0;
-	await inBatches(
-		(after) =>
-			accounts
-				.aggregate([
-					{ $match: { websiteId, ...after } },
-					{ $sort: { _id: 1 } },
-					{ $limit: BATCH },
-					{
-						$project: {
-							balance: 1,
-							lifetimeEarned: 1,
-							left: {
-								$sum: {
-									$map: {
-										input: { $filter: { input: { $ifNull: ['$lots', []] }, cond: unexpired } },
-										in: '$$this.left',
-									},
-								},
-							},
-							earned: {
-								$sum: {
-									$map: {
-										input: {
-											$filter: { input: { $ifNull: ['$history', []] }, cond: { $eq: ['$$this.kind', 'earn'] } },
-										},
-										in: '$$this.points',
-									},
-								},
+	const batch = await accounts
+		.aggregate([
+			{ $match: { websiteId, ...afterId(after) } },
+			{ $sort: { _id: 1 } },
+			{ $limit: limit },
+			{
+				$project: {
+					balance: 1,
+					lifetimeEarned: 1,
+					left: {
+						$sum: {
+							$map: {
+								input: { $filter: { input: { $ifNull: ['$lots', []] }, cond: unexpired } },
+								in: '$$this.left',
 							},
 						},
 					},
-				])
-				.toArray(),
-		async (batch) => {
-			for (const account of batch) {
-				const balance = Number(account.left ?? 0);
-				const lifetimeEarned = Math.max(Number(account.lifetimeEarned ?? 0), Number(account.earned ?? 0));
-				if (account.balance === balance && account.lifetimeEarned === lifetimeEarned) continue;
-				await accounts.updateOne(
-					{ websiteId, _id: account._id },
-					{ $set: { balance, lifetimeEarned }, $inc: { version: 1 } },
-				);
-				updated += 1;
-			}
-		},
-	);
-	return updated;
+					earned: {
+						$sum: {
+							$map: {
+								input: {
+									$filter: { input: { $ifNull: ['$history', []] }, cond: { $eq: ['$$this.kind', 'earn'] } },
+								},
+								in: '$$this.points',
+							},
+						},
+					},
+				},
+			},
+		])
+		.toArray();
+	let updated = 0;
+	for (const account of batch) {
+		const balance = Number(account.left ?? 0);
+		const lifetimeEarned = Math.max(Number(account.lifetimeEarned ?? 0), Number(account.earned ?? 0));
+		if (account.balance === balance && account.lifetimeEarned === lifetimeEarned) continue;
+		await accounts.updateOne({ websiteId, _id: account._id }, { $set: { balance, lifetimeEarned }, $inc: { version: 1 } });
+		updated += 1;
+	}
+	return { ...pageOf(batch), counts: { loyaltyUpdated: updated } };
 };
 
 /**
  * Products' units sold and rating, each derived only from what it can be: `sold` from the order lines (the units of
  * delivered orders, as delivery counts them) when the product has at least one order line, `rating` from the approved
  * reviews when it has at least one review (of any status). A product with no order line or no review keeps the number
- * it was imported with (the old shop's count, whose orders or reviews were not moved).
- * @param {WebsiteData} data
+ * it was imported with (the old shop's count, whose orders or reviews were not moved). A page of products.
+ * @param {WebsiteData} data @param {Page} page
  */
-const finishProducts = async (data) => {
+const finishSold = async (data, { after, limit }) => {
 	const { websiteId } = data;
 	const products = data.collection(COLLECTIONS.products);
+	const batch = await products
+		.find({ websiteId, ...afterId(after) }, { projection: { _id: 1, id: 1, sold: 1, rating: 1 }, sort: { _id: 1 }, limit })
+		.toArray();
 	let updated = 0;
-	await inBatches(
-		(after) =>
-			products
-				.find({ websiteId, ...after }, { projection: { _id: 1, id: 1, sold: 1, rating: 1 }, sort: { _id: 1 }, limit: BATCH })
-				.toArray(),
-		async (batch) => {
-			const ids = batch.map((product) => String(product.id));
-			const delivered = { $ne: [{ $ifNull: ['$deliveredAt', null] }, null] };
-			// a product with order lines, with its delivered units
-			const sold = new Map(
-				(
-					await data
-						.collection(COLLECTIONS.orders)
-						.aggregate([
-							{ $match: { websiteId, 'lines.productId': { $in: ids } } },
-							{ $unwind: '$lines' },
-							{ $match: { 'lines.productId': { $in: ids } } },
-							{ $group: { _id: '$lines.productId', units: { $sum: { $cond: [delivered, '$lines.quantity', 0] } } } },
-						])
-						.toArray()
-				).map((row) => [String(row._id), Number(row.units)]),
-			);
-			// a product with reviews, with its approved ones per star
-			/** @type {Map<string, Array<{ rating: number, count: number }>>} */
-			const stars = new Map();
-			for (const row of await data
-				.collection(COLLECTIONS.reviews)
-				.aggregate([
-					{ $match: { websiteId, productId: { $in: ids } } },
-					{
-						$group: {
-							_id: { productId: '$productId', rating: '$rating' },
-							count: { $sum: { $cond: [{ $eq: ['$status', 'approved'] }, 1, 0] } },
-						},
+	if (batch.length > 0) {
+		const ids = batch.map((product) => String(product.id));
+		const delivered = { $ne: [{ $ifNull: ['$deliveredAt', null] }, null] };
+		// a product with order lines, with its delivered units
+		const sold = new Map(
+			(
+				await data
+					.collection(COLLECTIONS.orders)
+					.aggregate([
+						{ $match: { websiteId, 'lines.productId': { $in: ids } } },
+						{ $unwind: '$lines' },
+						{ $match: { 'lines.productId': { $in: ids } } },
+						{ $group: { _id: '$lines.productId', units: { $sum: { $cond: [delivered, '$lines.quantity', 0] } } } },
+					])
+					.toArray()
+			).map((row) => [String(row._id), Number(row.units)]),
+		);
+		// a product with reviews, with its approved ones per star
+		/** @type {Map<string, Array<{ rating: number, count: number }>>} */
+		const stars = new Map();
+		for (const row of await data
+			.collection(COLLECTIONS.reviews)
+			.aggregate([
+				{ $match: { websiteId, productId: { $in: ids } } },
+				{
+					$group: {
+						_id: { productId: '$productId', rating: '$rating' },
+						count: { $sum: { $cond: [{ $eq: ['$status', 'approved'] }, 1, 0] } },
 					},
-				])
-				.toArray()) {
-				const id = String(row._id.productId);
-				stars.set(id, [...(stars.get(id) ?? []), { rating: Number(row._id.rating), count: Number(row.count) }]);
+				},
+			])
+			.toArray()) {
+			const id = String(row._id.productId);
+			stars.set(id, [...(stars.get(id) ?? []), { rating: Number(row._id.rating), count: Number(row.count) }]);
+		}
+		for (const product of batch) {
+			const id = String(product.id);
+			/** @type {Record<string, unknown>} */
+			const changed = {};
+			const units = sold.get(id);
+			if (units !== undefined && product.sold !== units) changed.sold = units;
+			const reviewed = stars.get(id);
+			if (reviewed) {
+				const { average, count } = ratingSummary(reviewed);
+				if (product.rating?.average !== average || product.rating?.count !== count) changed.rating = { average, count };
 			}
-			for (const product of batch) {
-				const id = String(product.id);
-				/** @type {Record<string, unknown>} */
-				const changed = {};
-				const units = sold.get(id);
-				if (units !== undefined && product.sold !== units) changed.sold = units;
-				const reviewed = stars.get(id);
-				if (reviewed) {
-					const { average, count } = ratingSummary(reviewed);
-					if (product.rating?.average !== average || product.rating?.count !== count) changed.rating = { average, count };
-				}
-				if (Object.keys(changed).length === 0) continue;
-				await products.updateOne({ websiteId, _id: product._id }, { $set: changed });
-				updated += 1;
-			}
-		},
-	);
-	return updated;
+			if (Object.keys(changed).length === 0) continue;
+			await products.updateOne({ websiteId, _id: product._id }, { $set: changed });
+			updated += 1;
+		}
+	}
+	return { ...pageOf(batch), counts: { productsSoldRatingUpdated: updated } };
 };
 
 /**
  * Serials sold through order lines: each serial number a line of a holding order lists (not cancelled, returned or
  * refunded before delivery; not put back by a claim) is `sold` with its order and line. A serial sold to another order
- * is left as it is, and one without a record is only counted (the catalog import writes the serials).
- * @param {WebsiteData} data
+ * is left as it is, and one without a record is only counted (the catalog import writes the serials). A page of the
+ * orders whose lines list serials.
+ * @param {WebsiteData} data @param {Page} page
  */
-const finishSerials = async (data) => {
+const finishSerials = async (data, { after, limit }) => {
 	const { websiteId } = data;
 	const serials = data.collection(COLLECTIONS.serials);
 	const counts = { serialsSold: 0, serialsMissing: 0, serialsOnOtherOrders: 0 };
-	await inBatches(
-		(after) =>
-			data
-				.collection(COLLECTIONS.orders)
-				.find(
-					{ websiteId, 'lines.serials.0': { $exists: true }, ...after },
-					{
-						projection: { _id: 1, id: 1, role: 1, deliveredAt: 1, 'lines.id': 1, 'lines.serials': 1 },
-						sort: { _id: 1 },
-						limit: BATCH,
-					},
-				)
-				.toArray(),
-		async (batch) => {
-			const holding = batch.filter(holdsSerials);
-			if (holding.length === 0) return;
-			const claims = await data
-				.collection(COLLECTIONS.returns)
-				.find(
-					{ websiteId, orderId: { $in: holding.map((order) => order.id) } },
-					{ projection: { _id: 0, orderId: 1, restockedAt: 1, lines: 1 } },
-				)
-				.toArray();
-			const wanted = serialsSoldTo(holding, /** @type {any[]} */ (claims));
-			for (let start = 0; start < wanted.length; start += BATCH) {
-				const chunk = wanted.slice(start, start + BATCH);
-				const found = new Map(
-					(
-						await serials
-							.find(
-								{ websiteId, serial: { $in: chunk.map((want) => want.serial) } },
-								{ projection: { _id: 0, serial: 1, status: 1, orderId: 1, lineId: 1 } },
-							)
-							.toArray()
-					).map((record) => [String(record.serial), record]),
-				);
-				for (const want of chunk) {
-					const record = found.get(want.serial);
-					if (!record) counts.serialsMissing += 1;
-					else if (record.status === 'sold' && record.orderId && record.orderId !== want.orderId)
-						counts.serialsOnOtherOrders += 1;
-					else if (record.status !== 'sold' || record.orderId !== want.orderId || record.lineId !== want.lineId) {
-						await serials.updateOne(
-							{ websiteId, serial: want.serial },
-							{ $set: { status: 'sold', orderId: want.orderId, lineId: want.lineId } },
-						);
-						counts.serialsSold += 1;
-					}
+	const batch = await data
+		.collection(COLLECTIONS.orders)
+		.find(
+			{ websiteId, 'lines.serials.0': { $exists: true }, ...afterId(after) },
+			{
+				projection: { _id: 1, id: 1, role: 1, deliveredAt: 1, 'lines.id': 1, 'lines.serials': 1 },
+				sort: { _id: 1 },
+				limit,
+			},
+		)
+		.toArray();
+	const holding = batch.filter(holdsSerials);
+	if (holding.length > 0) {
+		const claims = await data
+			.collection(COLLECTIONS.returns)
+			.find(
+				{ websiteId, orderId: { $in: holding.map((order) => order.id) } },
+				{ projection: { _id: 0, orderId: 1, restockedAt: 1, lines: 1 } },
+			)
+			.toArray();
+		const wanted = serialsSoldTo(holding, /** @type {any[]} */ (claims));
+		for (let start = 0; start < wanted.length; start += BATCH) {
+			const chunk = wanted.slice(start, start + BATCH);
+			const found = new Map(
+				(
+					await serials
+						.find(
+							{ websiteId, serial: { $in: chunk.map((want) => want.serial) } },
+							{ projection: { _id: 0, serial: 1, status: 1, orderId: 1, lineId: 1 } },
+						)
+						.toArray()
+				).map((record) => [String(record.serial), record]),
+			);
+			for (const want of chunk) {
+				const record = found.get(want.serial);
+				if (!record) counts.serialsMissing += 1;
+				else if (record.status === 'sold' && record.orderId && record.orderId !== want.orderId)
+					counts.serialsOnOtherOrders += 1;
+				else if (record.status !== 'sold' || record.orderId !== want.orderId || record.lineId !== want.lineId) {
+					await serials.updateOne(
+						{ websiteId, serial: want.serial },
+						{ $set: { status: 'sold', orderId: want.orderId, lineId: want.lineId } },
+					);
+					counts.serialsSold += 1;
 				}
 			}
-		},
-	);
-	return counts;
+		}
+	}
+	return { ...pageOf(batch), counts };
 };
 
 /**
@@ -404,17 +384,42 @@ export const orderImports = (deps) => {
 			alerts: collection(COLLECTIONS.alerts, checkImportedAlert),
 			wishlists: collection(COLLECTIONS.wishlists, checkImportedWishlist, ['userId']),
 		},
-		finish: async (ctx) => {
-			const data = /** @type {WebsiteData} */ (await ctx.data());
-			const flow = /** @type {import('../core/model.js').OrderFlow} */ (await deps.list(ctx.websiteId, 'order_flow'));
-			return {
-				customersUpdated: await finishCustomers(data, rtoKeysOf(flow)),
-				loyaltyUpdated: await finishLoyalty(data, deps.now()),
-				productsSoldRatingUpdated: await finishProducts(data),
-				...(await finishSerials(data)),
-				countersSet: await finishCounters(data),
-			};
-		},
+		steps: [
+			{
+				name: 'customers',
+				key: OBJECT_KEY,
+				zero: { customersUpdated: 0 },
+				run: async (ctx, page) => {
+					const flow = /** @type {import('../core/model.js').OrderFlow} */ (await deps.list(ctx.websiteId, 'order_flow'));
+					return finishCustomers(await ctx.data(), rtoKeysOf(flow), page);
+				},
+			},
+			{
+				name: 'loyalty',
+				key: OBJECT_KEY,
+				zero: { loyaltyUpdated: 0 },
+				run: async (ctx, page) => finishLoyalty(await ctx.data(), deps.now(), page),
+			},
+			{
+				name: 'sold',
+				key: OBJECT_KEY,
+				zero: { productsSoldRatingUpdated: 0 },
+				run: async (ctx, page) => finishSold(await ctx.data(), page),
+			},
+			{
+				name: 'serials',
+				key: OBJECT_KEY,
+				zero: { serialsSold: 0, serialsMissing: 0, serialsOnOtherOrders: 0 },
+				run: async (ctx, page) => finishSerials(await ctx.data(), page),
+			},
+			{
+				// one aggregation over the orders' numbers: no records read of the page
+				name: 'counters',
+				key: /^$/,
+				zero: { countersSet: 0 },
+				run: async (ctx) => ({ read: 0, last: null, counts: { countersSet: await finishCounters(await ctx.data()) } }),
+			},
+		],
 		totals: async (ctx) => {
 			const data = /** @type {WebsiteData} */ (await ctx.data());
 			const { websiteId } = data;

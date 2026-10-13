@@ -717,7 +717,7 @@
 				"id": "import-finish",
 				"title": "Finish",
 				"paragraphs": [
-					"After the records, POST /v1/import/finish works out what the shop derives, in batches, writing only what changed, so a second run changes nothing: each category's path (orphans, cycles and too-deep ones are listed), each product's price, highest price, stock state and grades; each customer's order count, returned parcels and last order; loyalty balances and lifetime points; products' sold (units of delivered orders) and rating (approved reviews) where they have order lines or reviews; the serials sold on the order lines that still hold them; and each order-number counter, so the next order gets the number after the highest. It answers what it checked and changed."
+					"After the records, POST /v1/import/finish works out what the shop derives, in batches, writing only what changed, so a second run changes nothing: each category's path (orphans, cycles and too-deep ones are listed), each product's price, highest price, stock state and grades; each customer's order count, returned parcels and last order; loyalty balances and lifetime points; products' sold (units of delivered orders) and rating (approved reviews) where they have order lines or reviews; the serials sold on the order lines that still hold them; and each order-number counter, so the next order gets the number after the highest. One call works on at most 200 records and answers what it checked and changed: while it answers more, call again with ?after=<next> (ss-import send does)."
 				],
 				"routes": [["POST /v1/import/finish", "import"]]
 			}

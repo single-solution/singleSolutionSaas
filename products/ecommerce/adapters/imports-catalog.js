@@ -4,9 +4,9 @@
  * product's own check in import mode (`core/imports-catalog.js`). Each call reads once what its checks need
  * (`prepare`), and refuses slugs, SKUs, variant ids, serial numbers and landing combinations another record already
  * holds, in the database or earlier in the same call, so a dry run shows them too (the unique indexes stay the last
- * guard). Its finish runs before the orders' part: it derives every category's path from the parents (categories come
- * in any order) and the products' price, price range, stock state and grades again, in batches, writing only what
- * changed, so a second run changes nothing. Everything is written straight to the database: no event, message, alert,
+ * guard). Its finish steps run before the orders' part: they derive every category's path from the parents
+ * (categories come in any order) and the products' price, price range, stock state and grades again, a page at a time,
+ * writing only what changed, so a second run changes nothing. Everything is written straight to the database: no event, message, alert,
  * IndexNow call or activity copy. Its sums are what `ss-import verify` compares.
  * @module
  */
@@ -46,10 +46,11 @@ import { loadRules } from './catalog-store.js';
 
 /** The most categories a website has (the product reads at most this many anywhere). */
 const MAX_CATEGORIES = 5000;
-/** Products read per batch by finish. */
-const BATCH = 500;
 /** Ids named in finish's summary. */
 const LISTED = 20;
+/** A key in finish's `next`: a record's id. */
+// eslint-disable-next-line no-control-regex
+const ID_KEY = /^[^\u0000-\u001f]{1,200}$/;
 
 /**
  * @param {import('./imports.js').ImportDeps} deps
@@ -366,10 +367,13 @@ export const catalogImports = (deps) => {
 	// ---------------------------------------------------------------------------------------------------- finish
 
 	/**
-	 * Every category's path from its parents, written where it changed; the tree's problems are named.
-	 * @param {WebsiteData} data
+	 * Categories' paths from their parents, a page of them by id (the tree is read whole, at most 5,000), written where
+	 * they changed; every page that reaches them names the tree's problems.
+	 * @param {any} ctx @param {{ after: string | null, limit: number }} page
+	 * @returns {Promise<import('./imports.js').FinishPage>}
 	 */
-	const finishCategories = async (data) => {
+	const finishCategories = async (ctx, { after, limit }) => {
+		const data = /** @type {WebsiteData} */ (await ctx.data());
 		const collection = data.collection(COLLECTIONS.categories);
 		const rows = /** @type {Array<{ id: string, parentId?: string | null, path?: string[] }>} */ (
 			await collection
@@ -378,85 +382,96 @@ export const catalogImports = (deps) => {
 				.limit(MAX_CATEGORIES + 1)
 				.toArray()
 		);
-		if (rows.length > MAX_CATEGORIES) return { checked: 0, changed: 0, tooMany: true };
+		if (rows.length > MAX_CATEGORIES) return { read: 0, last: null, counts: { categoryProblems: { tooMany: true } } };
 		const { paths, orphans, cycles, tooDeep } = categoryPaths(rows);
+		const page = rows.filter((row) => after === null || row.id > after).slice(0, limit);
 		let changed = 0;
-		for (const row of rows) {
+		for (const row of page) {
 			const path = /** @type {string[]} */ (paths.get(row.id));
 			if (JSON.stringify(path) === JSON.stringify(row.path)) continue;
 			await collection.updateOne({ websiteId: data.websiteId, id: row.id }, { $set: { path } });
 			changed += 1;
 		}
 		return {
-			checked: rows.length,
-			changed,
-			orphans: orphans.slice(0, LISTED),
-			cycles: cycles.slice(0, LISTED),
-			tooDeep: tooDeep.slice(0, LISTED),
+			read: page.length,
+			last: page.at(-1)?.id ?? null,
+			counts: {
+				categoriesChecked: page.length,
+				categoriesChanged: changed,
+				categoryProblems: {
+					orphans: orphans.slice(0, LISTED),
+					cycles: cycles.slice(0, LISTED),
+					tooDeep: tooDeep.slice(0, LISTED),
+				},
+			},
 		};
 	};
 
 	/**
-	 * Every product's price, highest price, in stock, stock state and grades from its variants (as a save derives
-	 * them), read in batches by id, written where they changed.
-	 * @param {WebsiteData} data
+	 * Products' price, highest price, in stock, stock state and grades from their variants (as a save derives them), a
+	 * page of products by id, written where they changed.
+	 * @param {any} ctx @param {{ after: string | null, limit: number }} page
+	 * @returns {Promise<import('./imports.js').FinishPage>}
 	 */
-	const finishProducts = async (data) => {
+	const finishProducts = async (ctx, { after, limit }) => {
+		const data = /** @type {WebsiteData} */ (await ctx.data());
 		const products = data.collection(COLLECTIONS.products);
-		let checked = 0;
-		let changed = 0;
-		let after = '';
-		for (;;) {
-			const batch = /** @type {Array<Record<string, any>>} */ (
-				await products
-					.find(
-						{ websiteId: data.websiteId, id: { $gt: after } },
-						{
-							projection: {
-								_id: 0,
-								id: 1,
-								trackStock: 1,
-								price: 1,
-								priceMax: 1,
-								inStock: 1,
-								stockState: 1,
-								grades: 1,
-								'variants.active': 1,
-								'variants.price': 1,
-								'variants.stock': 1,
-								'variants.soldOut': 1,
-								'variants.grade': 1,
-							},
+		const batch = /** @type {Array<Record<string, any>>} */ (
+			await products
+				.find(
+					{ websiteId: data.websiteId, ...(after === null ? {} : { id: { $gt: after } }) },
+					{
+						projection: {
+							_id: 0,
+							id: 1,
+							trackStock: 1,
+							price: 1,
+							priceMax: 1,
+							inStock: 1,
+							stockState: 1,
+							grades: 1,
+							'variants.active': 1,
+							'variants.price': 1,
+							'variants.stock': 1,
+							'variants.soldOut': 1,
+							'variants.grade': 1,
 						},
-					)
-					.sort({ id: 1 })
-					.limit(BATCH)
-					.toArray()
-			);
-			for (const row of batch) {
-				const next = summarize(row.variants, row.trackStock === true);
-				const same =
-					next.price === row.price &&
-					next.priceMax === row.priceMax &&
-					next.inStock === row.inStock &&
-					next.stockState === row.stockState &&
-					JSON.stringify(next.grades) === JSON.stringify(row.grades);
-				if (same) continue;
-				await products.updateOne({ websiteId: data.websiteId, id: row.id }, { $set: next });
-				changed += 1;
-			}
-			checked += batch.length;
-			if (batch.length < BATCH) break;
-			after = String(batch[batch.length - 1]?.id);
+					},
+				)
+				.sort({ id: 1 })
+				.limit(limit)
+				.toArray()
+		);
+		let changed = 0;
+		for (const row of batch) {
+			const next = summarize(row.variants, row.trackStock === true);
+			const same =
+				next.price === row.price &&
+				next.priceMax === row.priceMax &&
+				next.inStock === row.inStock &&
+				next.stockState === row.stockState &&
+				JSON.stringify(next.grades) === JSON.stringify(row.grades);
+			if (same) continue;
+			await products.updateOne({ websiteId: data.websiteId, id: row.id }, { $set: next });
+			changed += 1;
 		}
-		return { checked, changed };
+		return {
+			read: batch.length,
+			last: batch.length === 0 ? null : String(batch[batch.length - 1]?.id),
+			counts: { productsChecked: batch.length, productsChanged: changed },
+		};
 	};
 
-	/** @param {any} ctx */
-	const finish = async (ctx) => {
-		const data = /** @type {WebsiteData} */ (await ctx.data());
-		return { catalog: { categories: await finishCategories(data), products: await finishProducts(data) } };
-	};
+	/** @type {import('./imports.js').FinishStep[]} */
+	const steps = [
+		{
+			name: 'categories',
+			key: ID_KEY,
+			zero: { categoriesChecked: 0, categoriesChanged: 0 },
+			run: finishCategories,
+		},
+		{ name: 'products', key: ID_KEY, zero: { productsChecked: 0, productsChanged: 0 }, run: finishProducts },
+	];
 
 	// ---------------------------------------------------------------------------------------------------- totals
 
@@ -516,5 +531,5 @@ export const catalogImports = (deps) => {
 		};
 	};
 
-	return { collections, finish, totals };
+	return { collections, steps, totals };
 };
