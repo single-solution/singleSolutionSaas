@@ -4,7 +4,7 @@
  * may move to, moves through the merchant's flow (`server/orders-moves.js`), refunds, the staff note and address edits,
  * the courier's tracking status (read again on view, at most every 30 minutes), invoices and packing slips (also the
  * shopper's own invoice), customers and the blocklist (`server/orders-customers.js`), bulk moves, and the data-rights
- * answers for orders and customer records. Checkout (`server/checkout.js`) places orders and handles waiting ones. The
+ * answers for orders and customer records (an export holds what the shopper sees, never what staff keep, SE-1). Checkout (`server/checkout.js`) places orders and handles waiting ones. The
  * order and customer lists have counts with the same filters (PLAN 0.8.10 K4): orders by `status`, `role` (the role of
  * each status key in the website's order flow), `paymentMethod` and `paymentState`; customers by `blocked`.
  * @module
@@ -21,11 +21,11 @@ import {
 	checkMove,
 	checkPayment,
 	checkRefund,
+	customerOwnView,
 	orderDetail,
 	orderFilters,
 	orderQuery,
 	orderSummary,
-	wire,
 } from '../core/orders.js';
 import { WAITING_ROLES, statusOf } from '../core/flow.js';
 import { COLLECTIONS } from '../core/model.js';
@@ -62,11 +62,11 @@ const flowOf = async (s) => /** @type {any} */ (await s.list('order_flow'));
 /**
  * @param {Product} product
  * @param {Service} service
- * @param {{ ordering?: { editWaiting: import('./checkout-orders.js').Ordering['editWaiting'] } | null }} [parts] checkout's
- *   placing and editing of orders (editing a waiting order, E29)
+ * @param {{ ordering: Pick<import('./checkout-orders.js').Ordering, 'editWaiting' | 'shopperView'> }} parts checkout's
+ *   editing of a waiting order (E29) and what the shopper sees of an order
  * @returns {import('./routes.js').Area}
  */
-export const createOrders = (product, service, { ordering = null } = {}) => {
+export const createOrders = (product, service, { ordering }) => {
 	const moves = createMoves(product, service);
 	const customers = createCustomers(service);
 	const media = createMedia(product);
@@ -329,7 +329,6 @@ export const createOrders = (product, service, { ordering = null } = {}) => {
 		const { serials, shipment, waiting, ...rest } = input.value;
 		// lines, payment and delivery of a waiting order are priced again by checkout (E29)
 		if (waiting) {
-			if (!ordering) throw service.invalid('lines', 'Orders cannot be edited here.');
 			order = await ordering.editWaiting(s, ctx, order, { ...waiting, ...(rest.address ? { address: rest.address } : {}) });
 			delete rest.address;
 			if (rest.staffNote === undefined && !shipment && !serials) return detailOf(s, order);
@@ -478,11 +477,12 @@ export const createOrders = (product, service, { ordering = null } = {}) => {
 	const exportUser = async (s, user) => {
 		const store = await storeOf(s);
 		const [orders, records] = await Promise.all([store.orders.ofPerson(user), store.customers.ofPerson(user)]);
-		/** @param {object} record @param {string[]} keys staff-only fields */
-		const without = (record, keys) => Object.fromEntries(Object.entries(record).filter(([key]) => !keys.includes(key)));
+		const flow = await flowOf(s);
+		// what the shopper sees of their orders (GET /v1/shop/orders/:id) and of their record: never unit costs, staff
+		// notes or names, who opened them, or a block and its reason (SE-1)
 		return {
-			orders: orders.map((order) => wire(without(order, ['staffNote', 'idempotencyKey']))),
-			customers: records.map((record) => wire(without(record, ['note']))),
+			orders: await Promise.all(orders.map((order) => ordering.shopperView(s, order, flow))),
+			customers: records.map(customerOwnView),
 		};
 	};
 

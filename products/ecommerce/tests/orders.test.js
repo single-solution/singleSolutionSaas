@@ -7,6 +7,7 @@
 import { createId } from '@ss/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { placeOrder } from '../adapters/ledger.js';
+import { createCheckout } from '../server/checkout.js';
 import { createOrders } from '../server/orders.js';
 import { createService } from '../server/service.js';
 import { COLLECTIONS } from '../core/model.js';
@@ -592,38 +593,97 @@ describe('bulk moves', () => {
 });
 
 describe('data rights', () => {
-	it('exports the person’s orders without staff notes and anonymises them on delete', async () => {
+	it('exports what the shopper sees of their orders and record, never what staff keep (SE-1), and anonymises on delete', async () => {
 		const userId = 'usr_rights000001';
 		const { order } = await place({ userId, email: 'Rights@Example.com', phone: '+15550002222' });
+		// what staff keep: a unit cost, a staff note, a payment and a move with staff names and notes, who opened the
+		// order and the customer, a block and its reason, returned parcels
+		await data
+			.collection(COLLECTIONS.orders)
+			.updateOne({ websiteId: shop.websiteId, id: order.id }, { $set: { 'lines.$[].cost': 600 } });
 		await shop.api('PATCH', `/v1/orders/${order.id}`, { staffNote: 'Difficult customer' });
-		await shop.api('PATCH', `/v1/customers/${userId}`, { note: 'VIP' });
+		const recorded = await shop.admin(ticket, 'POST', `/v1/admin/orders/${order.id}/payments`, {
+			method: 'cash',
+			amount: 400,
+			note: 'Taken by the rider',
+		});
+		expect(recorded.status).toBe(201);
+		await shop.admin(ticket, 'POST', `/v1/admin/orders/${order.id}/seen`);
+		await shop.api('PATCH', `/v1/customers/${userId}`, { note: 'VIP', blocked: true, blockedReason: 'Refused parcels' });
+		await shop.admin(ticket, 'POST', `/v1/admin/customers/${userId}/seen`);
+		await data.collection(COLLECTIONS.customers).updateOne({ websiteId: shop.websiteId, userId }, { $set: { rtoCount: 2 } });
 		const service = createService(shop.product);
-		const area = createOrders(shop.product, service);
+		const area = createOrders(shop.product, service, { ordering: createCheckout(shop.product, service).ordering });
 		const s = await service.site({
 			websiteId: shop.websiteId,
 			merchantId: null,
 			status: { domain: DOMAIN },
 			headers: new Headers(),
 		});
-		const byEmail = await /** @type {NonNullable<typeof area.exportUser>} */ (area.exportUser)(s, {
-			email: 'rights@example.com',
-		});
+		const exportOf = /** @type {NonNullable<typeof area.exportUser>} */ (area.exportUser);
+		const byEmail = await exportOf(s, { email: 'rights@example.com' });
 		expect(byEmail.orders).toHaveLength(0);
-		const exported = await /** @type {NonNullable<typeof area.exportUser>} */ (area.exportUser)(s, { id: userId });
+		const exported = await exportOf(s, { id: userId });
 		expect(exported.orders).toHaveLength(1);
 		const [first] = /** @type {any[]} */ (exported.orders);
-		expect(first.number).toBe(order.number);
-		expect(first.staffNote).toBeUndefined();
-		expect(first.idempotencyKey).toBeUndefined();
-		expect(typeof first.placedAt).toBe('string');
-		expect(exported.customers).toHaveLength(1);
-		expect(/** @type {any[]} */ (exported.customers)[0].note).toBeUndefined();
-		const byPhone = await /** @type {NonNullable<typeof area.exportUser>} */ (area.exportUser)(s, { phone: '+15550002222' });
-		expect(byPhone.orders).toHaveLength(1);
-		expect(await /** @type {NonNullable<typeof area.exportUser>} */ (area.exportUser)(s, {})).toEqual({
-			orders: [],
-			customers: [],
+		const shopperSees = await shop.call('GET', `/v1/shop/orders/${order.id}`, {
+			token: shop.browser,
+			origin: `https://${DOMAIN}`,
+			headers: { 'ss-sign-in': await shop.signIn({ id: userId, email: 'rights@example.com', phone: '+15550002222' }) },
 		});
+		expect(Object.keys(first).sort()).toEqual(Object.keys(shopperSees.json).sort());
+		expect(first).toMatchObject({ number: order.number, address: { line1: '1 Main Street' } });
+		expect(first.payment.entries).toEqual([{ method: 'cash', amount: 400, reference: '', at: expect.any(String) }]);
+		expect(typeof first.placedAt).toBe('string');
+		expect(exported.customers).toEqual([
+			{
+				id: expect.stringMatching(/^cus_/),
+				userId,
+				guest: false,
+				name: 'Sara Shopper',
+				email: 'Rights@Example.com',
+				phone: '+15550002222',
+				city: expect.any(String),
+				orderCount: expect.any(Number),
+				lastOrderAt: expect.toBeOneOf([null, expect.any(String)]),
+				createdAt: expect.toBeOneOf([null, expect.any(String)]),
+			},
+		]);
+		/** Every key of a value, at any depth. @param {unknown} value @returns {string[]} */
+		const keysOf = (value) =>
+			Array.isArray(value)
+				? value.flatMap(keysOf)
+				: typeof value === 'object' && value !== null
+					? Object.entries(value).flatMap(([key, inner]) => [key, ...keysOf(inner)])
+					: [];
+		const keys = new Set(keysOf(exported));
+		for (const staffOnly of [
+			'cost',
+			'staffNote',
+			'idempotencyKey',
+			'seenBy',
+			'accessKeyHash',
+			'by',
+			'proofKey',
+			'blocked',
+			'blockedReason',
+			'rtoCount',
+			'phoneDigits',
+		])
+			expect(keys.has(staffOnly), staffOnly).toBe(false);
+		const text = JSON.stringify(exported);
+		for (const staffText of [
+			'Difficult customer',
+			'Taken by the rider',
+			'Sam Staff',
+			'usr_staff0000001',
+			'VIP',
+			'Refused parcels',
+		])
+			expect(text, staffText).not.toContain(staffText);
+		const byPhone = await exportOf(s, { phone: '+15550002222' });
+		expect(byPhone.orders).toHaveLength(1);
+		expect(await exportOf(s, {})).toEqual({ orders: [], customers: [] });
 		const done = await /** @type {NonNullable<typeof area.deleteUser>} */ (area.deleteUser)(s, { email: 'Rights@Example.com' });
 		expect(done).toEqual({ deleted: 1, anonymised: 1 });
 		const after = await orderRecord(order.id);

@@ -1116,6 +1116,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		sweep,
 		place,
 		editWaiting,
+		shopperView,
 		list,
 		read,
 		readByNumber,

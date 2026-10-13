@@ -983,3 +983,21 @@ export const customerView = (customer, spent, currency, money) => ({
 	createdAt: customer.createdAt ? wire(customer.createdAt) : null,
 	updatedAt: customer.updatedAt ? wire(customer.updatedAt) : null,
 });
+
+/**
+ * A customer record as the person it is about gets it (data rights, SE-1): who they are and how often they ordered,
+ * never what staff keep about them (the block and its reason, returned parcels, the staff note, who opened it).
+ * @param {Partial<CustomerRecord> & { createdAt?: Date }} customer
+ */
+export const customerOwnView = (customer) => ({
+	id: customer.id ?? '',
+	userId: customer.userId ?? '',
+	guest: !customer.userId,
+	name: customer.name ?? '',
+	email: customer.email ?? '',
+	phone: customer.phone ?? '',
+	city: customer.city ?? '',
+	orderCount: customer.orderCount ?? 0,
+	lastOrderAt: customer.lastOrderAt ? wire(customer.lastOrderAt) : null,
+	createdAt: customer.createdAt ? wire(customer.createdAt) : null,
+});
