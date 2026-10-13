@@ -234,6 +234,7 @@ export const PRODUCTS = Object.freeze({
 	allStatuses: 'All',
 	search: 'Search products',
 	none: 'No products connected yet.',
+	noneFound: 'No products found.',
 	columns: Object.freeze({ status: 'Status' }),
 	openAsAdmin: 'Open as admin',
 	openAsAdminHelp: 'Opens the product dashboard on Defaults, with no website picked.',

@@ -209,7 +209,7 @@ function ProductList({ props, owner, selectedId, autoId = null }) {
 				}>
 				{rows.length === 0 ? (
 					<li>
-						<EmptyState compact icon="box" kind="product" title={PRODUCTS.none} />
+						<EmptyState compact icon="box" kind="product" title={PRODUCTS.noneFound} />
 					</li>
 				) : (
 					rows.map((p) => (
