@@ -191,6 +191,8 @@ export const createReturns = (product, service) => {
 				name: order.customer.name,
 			},
 			Array.isArray(messageChannels) ? messageChannels : ['email'],
+			// about the shopper's own order: required, and tried again when Notifications cannot be reached (K-17)
+			{ required: true },
 		);
 	};
 

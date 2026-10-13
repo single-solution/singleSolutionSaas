@@ -15,7 +15,7 @@ import { COLLECTIONS } from '../core/model.js';
 
 const BASE = 'https://ecommerce.example.dev';
 export const ACCOUNTS = 'https://accounts.example.dev';
-const NOTIFY = 'https://notifications.example.dev';
+export const NOTIFY = 'https://notifications.example.dev';
 export const PAYMENTS = 'https://payments.example.dev';
 export const STORAGE = 'https://bucket.example.org';
 export const COURIER = 'https://courier.example.org';

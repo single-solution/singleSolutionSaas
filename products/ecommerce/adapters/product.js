@@ -54,6 +54,7 @@ import { INDEXES as FULFILMENT_INDEXES } from './fulfilment-store.js';
 import { LEDGER_INDEXES } from './ledger.js';
 import { LISTS, createLists } from './lists.js';
 import { INDEXES as ORDERS_INDEXES } from './orders-store.js';
+import { INDEXES as OUTBOX_INDEXES } from './outbox.js';
 import { INDEXES as PROMOTIONS_INDEXES } from './promotions-store.js';
 import { createSearchState } from './search-state.js';
 import { createSiteSecrets } from './site-secret.js';
@@ -150,6 +151,7 @@ export const INDEXES = [
 	...FULFILMENT_INDEXES,
 	...PROMOTIONS_INDEXES,
 	...EXTRAS_INDEXES,
+	...OUTBOX_INDEXES,
 ];
 
 /**

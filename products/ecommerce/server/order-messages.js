@@ -8,8 +8,10 @@
  * `messages.delivery.<method>`, '' without delivery; K-10), `courier`, `trackingNumber`, `trackingUrl`,
  * `trackingDetails`, `orderUrl` and `reviewUrl` (the `checkout` templates with `{number}`), `cancelReason` (why it was
  * cancelled: the note staff typed with the move, else the text `messages.cancelReason.<staff | shopper | unpaid |
- * unconfirmed>`; '' for other statuses) and `business`. The merchant edits those words in Texts. A failed or
- * unconnected send never fails the order.
+ * unconfirmed>`; '' for other statuses) and `business`. The merchant edits those words in Texts. Order messages are
+ * required (sent whatever the shopper opted out of) and saved before they are sent, so a call to Notifications that
+ * fails is tried again on the website's next uses (K-17, owner decision D7). A failed or unconnected send never fails
+ * the order.
  * @module
  */
 
@@ -86,6 +88,7 @@ export const createOrderMessages = (service) => {
 				cancelReason,
 			},
 			Array.isArray(messageChannels) ? messageChannels : ['email'],
+			{ required: true },
 		);
 	};
 

@@ -8,8 +8,8 @@
  *   `order.payment_recorded`, `order.proof_uploaded`, `order.cancelled`, `order.refunded`, `return.requested`,
  *   `return.status_changed`, `review.submitted`, `catalog.changed` and `stock.low` — ids and small facts only, listed by
  *   `GET /v1/events` and sent to the merchant's webhooks through Notifications;
- * - staff alerts (feature `staff_alerts`, the kit's K6): the events the setting `events` lists, as
- *   `ecommerce.staff_<event>` templates to its recipients.
+ * - staff alerts (feature `staff_alerts`, the kit's K6 rules, `server/staff-alerts.js`): the events the setting `events`
+ *   lists, as `ecommerce.staff_<event>` templates to its recipients, required and saved before they are sent (K-17).
  *
  * A failing message, event or alert never fails what triggered it (hooks never throw).
  * @module
@@ -19,6 +19,7 @@ import { statusOf } from '../core/flow.js';
 import { statusLabel } from '../core/orders.js';
 import { createOrderMessages, messageWords } from './order-messages.js';
 import { SERVER_LIMITS } from './service.js';
+import { createStaffAlerts } from './staff-alerts.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
 /** @typedef {import('./service.js').Service} Service */
@@ -48,6 +49,7 @@ const orderFacts = (order) => ({
  */
 export const createOrderEvents = (product, service) => {
 	const messages = createOrderMessages(service);
+	const staffAlerts = createStaffAlerts(product, service);
 
 	/** @param {Site} s */
 	const flowOf = async (s) =>
@@ -73,7 +75,7 @@ export const createOrderEvents = (product, service) => {
 		const { events } = await s.values('staff_alerts');
 		if (!Array.isArray(events) || !events.includes(event)) return;
 		const { money } = await s.format();
-		await product.staffAlerts.send(s.ctx, {
+		await staffAlerts.send(s, {
 			feature: 'staff_alerts',
 			event,
 			values: {

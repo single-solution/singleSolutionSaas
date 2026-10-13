@@ -34,6 +34,7 @@ export const COLLECTIONS = Object.freeze({
 	staff: 'staff',
 	sizeCharts: 'size_charts',
 	landings: 'landings',
+	outbox: 'outbox',
 });
 
 /** Id prefixes (`createId(prefix)` from `@ss/contracts`). */
@@ -60,6 +61,7 @@ export const ID_PREFIX = Object.freeze({
 	customer: 'cus',
 	orderPayment: 'opy',
 	orderRefund: 'orf',
+	outbox: 'out',
 });
 
 // ------------------------------------------------------------------------------------------------------- catalog

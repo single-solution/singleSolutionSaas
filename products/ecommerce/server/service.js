@@ -9,6 +9,7 @@
  */
 import { actorOf, problem, zonedParts } from '@ss/app-kit';
 import { createOrdersStore } from '../adapters/orders-store.js';
+import { KEEP_MS, createOutbox } from '../adapters/outbox.js';
 import { unitOf } from '../core/money.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
@@ -113,6 +114,41 @@ const claimsOf = (token) => {
 const ON_USE_EVERY_MS = 60_000;
 /** Signed-in shoppers this instance made sure have a customer record (`customerRecords: sign_in`), at most this many. */
 const MAX_KNOWN_SHOPPERS = 10_000;
+/** Waits before a required message is tried again (K-17): its first retry a minute later, then longer. */
+const RETRY_MS = Object.freeze([60_000, 5 * 60_000, 15 * 60_000, 60 * 60_000, 3 * 3_600_000]);
+/** Saved messages tried again per use of a website, at most. */
+const RETRY_BATCH = 20;
+/** Why a call to Notifications is tried again: it did not take the message (unreachable, 5xx, no address, refused token). */
+const RETRY_REASONS = Object.freeze(['unreachable', 'unavailable', 'refused']);
+
+/** @typedef {import('../adapters/outbox.js').OutboxMessage} OutboxMessage */
+/** @typedef {import('../adapters/outbox.js').OutboxEntry} OutboxEntry */
+/** What became of a message. @typedef {'sent' | 'queued' | 'not_connected' | 'failed' | 'skipped'} SendResult */
+
+/**
+ * What a call to Notifications means for a saved message: taken (a 409 `duplicate_request` is an earlier try of the same
+ * message that got through), not connected, to try again (no answer, 5xx, the address book down, a refused token, 408
+ * or 429), or refused for good (a missing template, values it refuses …).
+ * @param {{ ok: boolean, reason?: string, status?: number, body?: unknown }} answer
+ * @returns {'sent' | 'not_connected' | 'retry' | 'failed'}
+ */
+export const outcomeOf = (answer) => {
+	if (answer.ok) return 'sent';
+	if (answer.reason === 'not_connected') return 'not_connected';
+	const type = /** @type {any} */ (answer.body)?.type;
+	if (answer.status === 409 && typeof type === 'string' && type.endsWith('/duplicate_request')) return 'sent';
+	if (RETRY_REASONS.includes(String(answer.reason)) || answer.status === 408 || answer.status === 429) return 'retry';
+	return 'failed';
+};
+
+/**
+ * One result for several messages: not connected, else failed, else waiting for a retry, else sent (skipped: none).
+ * @param {SendResult[]} results
+ * @returns {SendResult}
+ */
+const overall = (results) =>
+	/** @type {SendResult[]} */ (['not_connected', 'failed', 'queued', 'sent']).find((result) => results.includes(result)) ??
+	'skipped';
 
 /**
  * @param {Product} product
@@ -358,40 +394,115 @@ export const createService = (product) => {
 	// ---------------------------------------------------------------------------------------------- notifications
 
 	/**
+	 * One call to Notifications (pasted token). A required message (K-17, owner decision D7) is sent whatever the
+	 * recipient opted out of, with its outbox id as the Idempotency-Key, so a retry of a message that got through is
+	 * not sent twice.
+	 * @param {Site} s @param {OutboxMessage} message @param {string | null} key the outbox id of a required message
+	 */
+	const post = (s, message, key) =>
+		product
+			.callProduct(s.websiteId, 'notifications', `/v1/messages/${message.channel}`, {
+				method: 'POST',
+				body: { template: message.template, to: message.to, values: message.values, ...(key ? { required: true } : {}) },
+				...(key ? { headers: { 'idempotency-key': `ecommerce-${key}` } } : {}),
+			})
+			.catch(() => /** @type {const} */ ({ ok: false, reason: 'unreachable' }));
+
+	/**
+	 * Try a saved message: removed once Notifications took it (or refused it for good), else tried again later, until a
+	 * day after it was saved.
+	 * @param {Site} s @param {import('../adapters/outbox.js').Outbox} outbox @param {OutboxEntry} entry
+	 * @returns {Promise<SendResult>}
+	 */
+	const attempt = async (s, outbox, entry) => {
+		const outcome = outcomeOf(await post(s, entry, entry.id));
+		const at = now();
+		if (outcome === 'retry') {
+			const tries = entry.tries + 1;
+			const next = at + (RETRY_MS[Math.min(tries, RETRY_MS.length) - 1] ?? 0);
+			if (next < new Date(entry.firstAt).getTime() + KEEP_MS) {
+				await outbox.later(entry.id, { tries, nextAt: new Date(next) });
+				return 'queued';
+			}
+		}
+		await outbox.done(entry.id);
+		if (outcome === 'retry' || outcome === 'failed')
+			s.ctx.log?.warn?.('message not sent', { template: entry.template, channel: entry.channel, tries: entry.tries + 1 });
+		return outcome === 'retry' ? 'failed' : outcome;
+	};
+
+	/**
+	 * Send messages that must not be lost (order and claim messages, staff alerts; K-17, D7): each is saved in the
+	 * merchant database first, then sent as required — now, or right after the answer with `later` — and tried again
+	 * on the website's next uses while Notifications does not take it. Never throws once saved.
+	 * @param {Site} s @param {OutboxMessage[]} messages @param {{ later?: boolean }} [options]
+	 * @returns {Promise<SendResult>} `queued` when a message waits for a retry (with `later`: saved)
+	 */
+	const sendRequired = async (s, messages, { later = false } = {}) => {
+		if (messages.length === 0) return 'skipped';
+		const outbox = createOutbox(await s.data());
+		const entries = await outbox.add(messages, now());
+		const send = async () => {
+			/** @type {SendResult[]} */
+			const results = [];
+			for (const entry of entries) results.push(await attempt(s, outbox, entry));
+			return overall(results);
+		};
+		if (later && typeof s.ctx.after === 'function') {
+			s.ctx.after(send);
+			return 'queued';
+		}
+		return send();
+	};
+
+	/**
+	 * Try again the saved messages that are due (work on use; at most {@link RETRY_BATCH} per use).
+	 * @param {Site} s
+	 */
+	const retryMessages = async (s) => {
+		if ((await product.connections.value(s.websiteId, 'database')) === null) return;
+		const outbox = createOutbox(await s.data());
+		for (const entry of await outbox.due(now(), RETRY_BATCH))
+			if (await outbox.hold(entry, now())) await attempt(s, outbox, entry);
+	};
+	onUse.push(retryMessages);
+
+	/**
 	 * Send one template through Notifications (pasted token) on each given channel the recipient has an address for.
-	 * Template keys start with `ecommerce.` (Notifications treats them as this product's events). Never throws.
+	 * Template keys start with `ecommerce.` (Notifications treats them as this product's events). A `required` message
+	 * (order and claim messages) goes through {@link sendRequired}. Never throws.
 	 * @param {Site} s
 	 * @param {string} template e.g. `ecommerce.order_placed`
 	 * @param {{ email?: string, phone?: string }} to
 	 * @param {Record<string, string | number>} values each at most 1,000 characters
 	 * @param {ReadonlyArray<'email' | 'sms' | 'whatsapp'>} channels
-	 * @returns {Promise<'sent' | 'not_connected' | 'failed' | 'skipped'>}
+	 * @param {{ required?: boolean }} [options]
+	 * @returns {Promise<SendResult>}
 	 */
-	const notify = async (s, template, to, values, channels) => {
+	const notify = async (s, template, to, values, channels, { required = false } = {}) => {
 		const business = (await s.business()).name;
-		/** @type {'sent' | 'not_connected' | 'failed' | 'skipped'} */
-		let result = 'skipped';
-		for (const channel of channels) {
+		/** @type {OutboxMessage[]} */
+		const messages = channels.flatMap((channel) => {
 			const address = channel === 'email' ? to.email : to.phone;
-			if (!address) continue;
-			const answer = await product
-				.callProduct(s.websiteId, 'notifications', `/v1/messages/${channel}`, {
-					method: 'POST',
-					body: {
-						template,
-						to: channel === 'email' ? { email: address } : { phone: address },
-						values: { ...values, business },
-					},
-				})
-				.catch(() => /** @type {const} */ ({ ok: false, reason: 'failed' }));
-			if (!answer.ok) {
-				if (answer.reason === 'not_connected') return 'not_connected';
-				result = 'failed';
-				continue;
-			}
-			if (result !== 'failed') result = 'sent';
+			if (!address) return [];
+			return [
+				{
+					channel,
+					template,
+					to: channel === 'email' ? { email: address } : { phone: address },
+					values: { ...values, business },
+				},
+			];
+		});
+		if (required) return sendRequired(s, messages);
+		/** @type {SendResult[]} */
+		const results = [];
+		for (const message of messages) {
+			const outcome = outcomeOf(await post(s, message, null));
+			results.push(outcome === 'retry' ? 'failed' : outcome);
+			if (outcome === 'not_connected') break;
 		}
-		return result;
+		return overall(results);
 	};
 
 	// --------------------------------------------------------------------------------------------------- payments
@@ -516,6 +627,7 @@ export const createService = (product) => {
 		log,
 		invalid,
 		notify,
+		sendRequired,
 		payments,
 		on,
 		emit,
