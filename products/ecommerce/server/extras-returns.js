@@ -44,7 +44,7 @@ import {
 	refundCap,
 	returnableLines,
 } from '../core/returns.js';
-import { earnedLeft, refundSplit, refundable } from '../core/orders.js';
+import { earnedLeft, pointsOwner, refundSplit, refundable } from '../core/orders.js';
 import { createMedia } from './catalog-media.js';
 import { createMoves } from './orders-moves.js';
 import { SERVER_LIMITS, VISITOR_LIMITS, VISITOR_WRITE_LIMITS } from './service.js';
@@ -707,10 +707,12 @@ export const createReturns = (product, service) => {
 						? pointsToReverse(order, claim)
 						: 0;
 			const points = Math.min(wanted, earnedLeft(after));
-			if (points > 0) {
+			// a guest's points are theirs by customer id (E20, K-6)
+			const owner = pointsOwner(order);
+			if (points > 0 && owner) {
 				await takePoints(
 					data,
-					{ userId: order.customer.userId, points, orderId: order.id, kind: 'reverse', note: order.number },
+					{ userId: owner, points, orderId: order.id, kind: 'reverse', note: order.number },
 					{ now: service.now() },
 				);
 				await data

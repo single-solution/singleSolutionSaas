@@ -526,6 +526,46 @@ describe('claim refunds', () => {
 		expect(await balance()).toBe(held - 20);
 	});
 
+	it("take a guest order's points back from the guest's own record (by customer id)", async () => {
+		const lamp = await shop.seedProduct({ name: 'Guest lamp', price: 1000 });
+		const placed = await order({ lines: [{ product: lamp }], pointsEarned: 30 });
+		const customerId = 'cus_guestclaim0001';
+		await data
+			.collection(COLLECTIONS.orders)
+			.updateOne(
+				{ websiteId: data.websiteId, id: placed.id },
+				{ $set: { 'customer.userId': '', 'customer.customerId': customerId } },
+			);
+		const guest = { customerId };
+		await givePoints(
+			data,
+			{ userId: guest, points: 30, orderId: placed.id, kind: 'earn', expiresAt: null },
+			{ now: shop.now() },
+		);
+		// a claim on the guest's order (staff take it by phone; shoppers claim signed in)
+		const id = createId('ret');
+		await data.collection(COLLECTIONS.returns).insertOne({
+			id,
+			orderId: placed.id,
+			orderNumber: placed.number,
+			userId: '',
+			kind: 'return',
+			lines: [{ lineId: placed.lines[0]?.id, quantity: 1, serials: [] }],
+			reason: 'Broken',
+			photos: [],
+			status: 'approved',
+			refundAmount: 0,
+			refundId: null,
+			restockedAt: null,
+			history: [],
+			notes: [],
+		});
+		const done = await shop.api('POST', `/v1/returns/${id}/refund`, { amount: 1000, method: 'cash' });
+		expect(done.status).toBe(200);
+		expect((await loyaltyAccount(data, guest, { now: shop.now() })).balance).toBe(0);
+		expect((await orderOf(placed.id)).promotions.pointsReversed).toBe(30);
+	});
+
 	it('move a fully refunded order to refunded with autoRefundedStatus, its points settled once (OR-3, OR-10, K-23)', async () => {
 		await shop.setting('checkout', 'autoRefundedStatus', true);
 		const desk = await shop.seedProduct({ name: 'Desk', price: 2000 });

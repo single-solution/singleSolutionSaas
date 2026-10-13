@@ -148,6 +148,18 @@ export const refundSplit = (order, amount) => {
 export const earnedLeft = (order) => Math.max(0, order.promotions.pointsEarned - (order.promotions.pointsReversed ?? 0));
 
 /**
+ * Whose loyalty points an order's are: the member's, or the guest's customer record (E20, K-6), else nobody.
+ * @param {Pick<OrderRecord, 'customer'>} order
+ * @returns {{ userId: string } | { customerId: string } | null}
+ */
+export const pointsOwner = (order) =>
+	order.customer.userId
+		? { userId: order.customer.userId }
+		: order.customer.customerId
+			? { customerId: order.customer.customerId }
+			: null;
+
+/**
  * The payment state after refunds.
  * @param {number} paid
  * @param {number} refunded

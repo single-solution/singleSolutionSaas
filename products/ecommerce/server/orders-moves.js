@@ -35,6 +35,7 @@ import {
 	missingSerials,
 	orderMoney,
 	paymentStateOf,
+	pointsOwner,
 	refundSplit,
 	refundable,
 	serialCheckFailure,
@@ -282,18 +283,6 @@ export const createMoves = (product, service) => {
 		});
 
 	/**
-	 * Who an order's points belong to: the member, or the guest's customer record (E20), or nobody.
-	 * @param {OrderRecord} order
-	 * @returns {{ userId: string } | { customerId: string } | null}
-	 */
-	const ownerOf = (order) =>
-		order.customer.userId
-			? { userId: order.customer.userId }
-			: order.customer.customerId
-				? { customerId: order.customer.customerId }
-				: null;
-
-	/**
 	 * A refund entry of the order's log (E26).
 	 * @param {any} ctx
 	 * @param {{ method: 'online' | 'bank_transfer' | 'cash' | 'other', amount: number, reference?: string,
@@ -341,7 +330,7 @@ export const createMoves = (product, service) => {
 	 * @param {Site} s @param {OrderRecord} order @param {number} now
 	 */
 	const returnPoints = async (s, order, now) => {
-		const owner = ownerOf(order);
+		const owner = pointsOwner(order);
 		if (!owner) return;
 		const data = await s.data();
 		const earned = order.promotions.pointsCredited === false ? 0 : earnedLeft(order);
@@ -597,11 +586,7 @@ export const createMoves = (product, service) => {
 				}
 				// points go to the member, or to the guest's customer record when guests earn (E20); fixed at placement or
 				// worked out now, and credited once
-				const owner = order.customer.userId
-					? { userId: order.customer.userId }
-					: order.customer.customerId
-						? { customerId: order.customer.customerId }
-						: null;
+				const owner = pointsOwner(order);
 				const loyalty = s.has('loyalty') && owner && !order.promotions.pointsCredited ? await s.values('loyalty') : null;
 				const earns = loyalty !== null && (order.customer.userId ? true : loyaltyRules(loyalty).guests === 'earn');
 				const points = !earns
