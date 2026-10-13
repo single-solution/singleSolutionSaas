@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { issueToken, verifyToken } from '@ss/protocol';
 import {
 	DEFAULT_SETTINGS,
 	ENV_VARS,
@@ -9,6 +10,7 @@ import {
 	parsePortalUrl,
 	sessionPolicies,
 } from '../src/infra/config.js';
+import { createPortalKeys } from '../src/infra/crypto.js';
 import { isPlatformError } from '../src/infra/errors.js';
 import { createSystemStore, generateSecrets, secretsOf, testSystemState } from '../src/infra/system.js';
 import { ENCRYPTION_KEY, PORTAL_URL, startMongo, testEnv, testSystem } from './helpers.js';
@@ -268,6 +270,96 @@ describe('system store (secrets generated on first start, settings recorded late
 		await store.setLogo(null);
 		expect(await store.logo()).toBeNull();
 		expect((await store.load()).state.settings?.branding).toEqual({ hasLogo: false, logoVersion: 2 });
+	});
+
+	it('keeps the signing keys sealed with ENCRYPTION_KEY, their public keys readable (K-21)', async () => {
+		const db = mongo.db('system_keys_sealed');
+		const store = createSystemStore(db, { encryptionKey: ENCRYPTION_KEY });
+		const { state } = await store.load();
+		const raw = /** @type {any} */ (await db.collection('platform_system').findOne({ _id: /** @type {any} */ ('secrets') }));
+		for (const key of [...raw.signingKeys, ...raw.tokenSigningKeys]) {
+			expect(key).toEqual({
+				kid: expect.any(String),
+				sealed: expect.stringMatching(/^ss2\./),
+				publicJwk: expect.objectContaining({ kid: key.kid, crv: 'Ed25519' }),
+				createdAt: expect.any(String),
+			});
+		}
+		expect(JSON.stringify(raw)).not.toContain(/** @type {string} */ (state.signingKeys[0]?.d));
+		expect(state.signingKeys.map((k) => k.kid)).toEqual(raw.signingKeys.map((/** @type {any} */ k) => k.kid));
+		expect(state.publishedOnly).toEqual({ signing: [], token: [] });
+	});
+
+	it('seals seeds kept in clear before on first use, and signs with the same keys (K-21)', async () => {
+		const db = mongo.db('system_keys_plain');
+		const plain = generateSecrets();
+		await db.collection('platform_system').insertOne(/** @type {any} */ ({ _id: 'secrets', ...plain }));
+		const { state } = await createSystemStore(db, { encryptionKey: ENCRYPTION_KEY }).load();
+		expect(state.signingKeys.map((k) => k.d)).toEqual(secretsOf(plain).signingKeys.map((k) => k.d));
+		expect(state.tokenSigningKeys.map((k) => k.d)).toEqual(secretsOf(plain).tokenSigningKeys.map((k) => k.d));
+		const raw = /** @type {any} */ (await db.collection('platform_system').findOne({ _id: /** @type {any} */ ('secrets') }));
+		expect(JSON.stringify(raw)).not.toContain(/** @type {string} */ (plain.signingKeys[0]?.seed));
+		expect(raw.signingKeys[0].sealed).toMatch(/^ss2\./);
+	});
+
+	it('when no signing key opens (ENCRYPTION_KEY lost) a new one signs and the old ones stay published (K-21)', async () => {
+		const db = mongo.db('system_keys_lost');
+		const first = (await createSystemStore(db, { encryptionKey: ENCRYPTION_KEY }).load()).state;
+		const lostKey = 'lost-encryption-key-0123456789abcdef-x';
+		const stores = [createSystemStore(db, { encryptionKey: lostKey }), createSystemStore(db, { encryptionKey: lostKey })];
+		const [a, b] = await Promise.all(stores.map((store) => store.load()));
+		// concurrent instances agree on one new key per list
+		expect(a?.state.signingKeys.map((k) => k.kid)).toEqual(b?.state.signingKeys.map((k) => k.kid));
+		const lost = /** @type {import('../src/infra/config.js').SystemState} */ (a?.state);
+		expect(lost.signingKeys).toHaveLength(1);
+		expect(lost.signingKeys[0]?.kid).not.toBe(first.signingKeys[0]?.kid);
+		expect(lost.publishedOnly?.signing.map((k) => k.kid)).toEqual([first.signingKeys[0]?.kid]);
+		expect(lost.publishedOnly?.token.map((k) => k.kid)).toEqual([first.tokenSigningKeys[0]?.kid]);
+		const keys = createPortalKeys(lost.signingKeys, lost.tokenSigningKeys, lost.publishedOnly);
+		expect(keys.publishedJwks().keys).toHaveLength(4);
+		// a token the old key signed still verifies; new tokens are signed by the new key
+		const old = createPortalKeys(first.signingKeys, first.tokenSigningKeys);
+		const issued = await issueToken({
+			signer: old.tokenSigner,
+			issuer: PORTAL_URL,
+			websiteId: 'web_1',
+			domain: 'shop.example.com',
+			productId: 'notes',
+			kind: 'server',
+		});
+		const claims = await verifyToken({
+			token: issued.token,
+			keyResolver: keys.tokenKeyResolver,
+			issuer: PORTAL_URL,
+			productId: 'notes',
+		});
+		expect(claims.websiteId).toBe('web_1');
+		expect(keys.tokenSigner.kid).toBe(lost.tokenSigningKeys[0]?.kid);
+		// the right key back: the old keys sign again, the one made meanwhile stays published
+		const back = (await createSystemStore(db, { encryptionKey: ENCRYPTION_KEY }).load()).state;
+		expect(back.signingKeys.map((k) => k.kid)).toEqual([first.signingKeys[0]?.kid]);
+		expect(back.publishedOnly?.signing.map((k) => k.kid)).toEqual([lost.signingKeys[0]?.kid]);
+	});
+
+	it('Re-seal moves the signing keys and the SMTP password to the new ENCRYPTION_KEY (RT-14, K-21)', async () => {
+		const db = mongo.db('system_reseal');
+		const old = createSystemStore(db, { encryptionKey: ENCRYPTION_KEY });
+		const kids = (await old.load()).state.signingKeys.map((k) => k.kid);
+		await old.update({ mail: { host: 'smtp.example.com', port: 587, secure: false, user: 'u', pass: 'pw-1', from: 'a@b.co' } });
+		const newKey = 'new-encryption-key-0123456789abcdef-portal';
+		const changing = createSystemStore(db, { encryptionKey: newKey, previousKey: ENCRYPTION_KEY });
+		expect(await changing.reseal()).toEqual({ resealed: 3, current: 0, unreadable: 0 });
+		expect(await changing.reseal()).toEqual({ resealed: 0, current: 3, unreadable: 0 });
+		const after = createSystemStore(db, { encryptionKey: newKey });
+		const { state } = await after.load();
+		expect(state.signingKeys.map((k) => k.kid)).toEqual(kids);
+		expect(state.publishedOnly).toEqual({ signing: [], token: [] });
+		expect(state.mail?.pass).toBe('pw-1');
+		expect(await createSystemStore(mongo.db('system_reseal_empty'), { encryptionKey: newKey }).reseal()).toEqual({
+			resealed: 0,
+			current: 2,
+			unreadable: 0,
+		});
 	});
 
 	it('builds complete states for tests and tools', () => {

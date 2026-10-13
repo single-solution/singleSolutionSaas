@@ -142,6 +142,8 @@ describe('connections', () => {
 		});
 		expect(await other.connections.value(websiteId, 'ai')).toBeNull();
 		const handler = other.handler([]);
+		// its product key does not open either (K-21): the owner connects it again from the Portal (a new key)
+		await portal.connect({ handler, baseUrl: BASE, secret: SECRET });
 		const response = await handler(
 			new Request(`${BASE}/v1/dashboard/websites/${websiteId}/connections`, { headers: { cookie: String(cookie) } }),
 		);
@@ -184,17 +186,18 @@ describe('connections', () => {
 		expect((await dashOn(handler, await session({ role: 'support' }), 'POST', '/v1/dashboard/reseal')).status).toBe(403);
 		expect((await dashOn(handler, merchant, 'POST', '/v1/dashboard/reseal')).status).toBe(403);
 		const first = await (await dashOn(handler, owner, 'POST', '/v1/dashboard/reseal')).json();
+		// Connections (ai, database) and the product key (K-21), the product's own (1), the website's (2 current, 1 not)
 		expect(first).toEqual({
 			keyId: expect.any(String),
 			previousKeyId: expect.any(String),
-			resealed: 3,
+			resealed: 4,
 			current: 2,
 			unreadable: 1,
 			failedWebsites: [],
 		});
 		expect(reached).toEqual([websiteId]);
 		const again = await (await dashOn(handler, owner, 'POST', '/v1/dashboard/reseal')).json();
-		expect(again).toMatchObject({ resealed: 1, current: 4, unreadable: 1 });
+		expect(again).toMatchObject({ resealed: 1, current: 5, unreadable: 1 });
 		// the previous key is removed: everything still opens with B alone, nothing with A alone
 		expect(await instance(KEY_B, null).connections.value(websiteId, 'ai')).toBe('sk-live-abcdef1234');
 		expect(await instance(KEY_B, null).connections.value(websiteId, 'database')).toEqual(expect.stringMatching(/^mongodb:/));
@@ -207,7 +210,7 @@ describe('connections', () => {
 		});
 		expect(await (await dashOn(failing.handler([]), owner, 'POST', '/v1/dashboard/reseal')).json()).toMatchObject({
 			resealed: 0,
-			current: 2,
+			current: 3,
 			failedWebsites: [websiteId],
 		});
 		await Promise.all([changing.close(), failing.close()]);

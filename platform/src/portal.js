@@ -55,7 +55,7 @@ export const createPortal = ({
 	for (const code of Object.keys(moduleCodes))
 		if (Object.hasOwn(INFRA_PROBLEMS, code)) throw new TypeError(`problem code ${code} is reserved by the infra layer`);
 	const problems = createProblemFactory({ baseUri: config.problemBaseUri, codes: { ...INFRA_PROBLEMS, ...moduleCodes } });
-	const keys = createPortalKeys(config.signingKeys, config.tokenSigningKeys);
+	const keys = createPortalKeys(config.signingKeys, config.tokenSigningKeys, config.publishedOnly);
 	const locks = createLocks(repos.mutable(COLLECTIONS.locks), { now, randomBytes });
 	const sessions = createSessions({
 		repo: repos.mutable(COLLECTIONS.sessions),

@@ -49,6 +49,8 @@ import { platformError } from './errors.js';
  *   when absent)
  * @property {ReadonlyArray<PrivateJwk>} signingKeys first signs; all are published
  * @property {ReadonlyArray<PrivateJwk>} tokenSigningKeys first signs browser and server tokens; all are published
+ * @property {{ signing: ReadonlyArray<import('@ss/protocol').PublicJwk>, token: ReadonlyArray<import('@ss/protocol').PublicJwk> }} [publishedOnly]
+ *   public keys of stored signing keys whose seed no longer opens (`ENCRYPTION_KEY` lost): published, never signing
  * @property {Buffer} sessionSecret
  * @property {Buffer} idempotencySecret
  */
@@ -77,6 +79,8 @@ import { platformError } from './errors.js';
 
  * @property {ReadonlyArray<PrivateJwk>} signingKeys first = active signer; all are published in the JWKS
  * @property {ReadonlyArray<PrivateJwk>} tokenSigningKeys dedicated token signers (first signs; all published)
+ * @property {{ signing: ReadonlyArray<import('@ss/protocol').PublicJwk>, token: ReadonlyArray<import('@ss/protocol').PublicJwk> }} publishedOnly
+ *   public keys published without a signer (stored keys whose seed no longer opens)
  * @property {Buffer} sessionSecret HMAC key for session ids, recovery codes and throttle keys at rest
  * @property {Buffer} idempotencySecret HMAC key of idempotency fingerprints
  * @property {string} problemBaseUri RFC 9457 type base (`<url>/problems/`)
@@ -301,6 +305,10 @@ export const buildConfig = (envConfig, system, { overrides = {} } = {}) => {
 		sessions: sessionPolicies(settings.security.sessionHours),
 		signingKeys: Object.freeze([...system.signingKeys]),
 		tokenSigningKeys: Object.freeze([...system.tokenSigningKeys]),
+		publishedOnly: Object.freeze({
+			signing: Object.freeze([...(system.publishedOnly?.signing ?? [])]),
+			token: Object.freeze([...(system.publishedOnly?.token ?? [])]),
+		}),
 		sessionSecret: system.sessionSecret,
 		idempotencySecret: system.idempotencySecret,
 		problemBaseUri: `${envConfig.portalUrl}/problems/`,

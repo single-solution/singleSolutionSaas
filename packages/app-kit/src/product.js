@@ -148,10 +148,16 @@ export const createProduct = (options) => {
 		},
 	});
 
+	const sealer = createSealer({
+		encryptionKey: healthy ? /** @type {string} */ (config?.encryptionKey) : Buffer.from(randomBytes(32)).toString('hex'),
+		previousKey: healthy ? (config?.previousEncryptionKey ?? null) : null,
+		randomBytes,
+	});
 	const connection = createConnection({
 		store,
 		manifest,
 		connectSecret: config?.connectSecret ?? '',
+		sealer,
 		fetch,
 		now,
 		randomBytes,
@@ -172,11 +178,6 @@ export const createProduct = (options) => {
 		)
 			throw kitError('invalid_config', `shared settings ${key} must name features of the manifest and have a key of its own`);
 	const settings = createSettings({ store, manifest, strings, recent, now, shared });
-	const sealer = createSealer({
-		encryptionKey: healthy ? /** @type {string} */ (config?.encryptionKey) : Buffer.from(randomBytes(32)).toString('hex'),
-		previousKey: healthy ? (config?.previousEncryptionKey ?? null) : null,
-		randomBytes,
-	});
 	/** @type {ReturnType<typeof createData> | null} */
 	let data = null;
 	const connections = createConnections({
@@ -232,13 +233,13 @@ export const createProduct = (options) => {
 			[list.feature].flat().some((key) => !manifest.features.some((/** @type {{ key: string }} */ f) => f.key === key))
 		)
 			throw kitError('invalid_config', `list ${name} must name features of the manifest`);
-	const tickets = createTickets({ store, productId: manifest.id, now, randomBytes });
+	const tickets = createTickets({ store, productId: manifest.id, sealer, now, randomBytes });
 	const identity = createIdentity({ connections, send, now });
 	const accounts = createAccountsSignIns({ connections, now });
 	const hooks = options.hooks ?? {};
 	const reseal = createReseal({
 		sealer,
-		parts: [connections.reseal],
+		parts: [connections.reseal, connection.resealKey, tickets.resealKey],
 		hooks,
 		websites: connections.websitesWithDatabase,
 		data,

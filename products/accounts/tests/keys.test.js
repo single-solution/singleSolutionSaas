@@ -64,13 +64,13 @@ describe('a change of ENCRYPTION_KEY (RT-14)', () => {
 		expect(support.status).toBe(403);
 		const response = await env.dashboard(await env.adminSession(), 'POST', '/v1/dashboard/reseal');
 		expect(response.status).toBe(200);
-		// the database connection is on the harness's key; the website's records were moved to key B above, which this
-		// instance does not have: counted as unreadable and left alone
+		// the database connection and the product key (K-21) are on the harness's key; the website's records were moved
+		// to key B above, which this instance does not have: counted as unreadable and left alone
 		expect(response.json).toEqual({
 			keyId: createSealer(KEY_A).keyId,
 			previousKeyId: null,
 			resealed: 0,
-			current: 1,
+			current: 2,
 			unreadable: 4,
 			failedWebsites: [],
 		});

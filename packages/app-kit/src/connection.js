@@ -2,7 +2,9 @@
  * The product's connection to the Portal (PLAN 0.4.12 row 1, 0.10), kept in the product database:
  *
  * - `state/productKey`: the product's Ed25519 key, generated on the first connect and kept (insert-if-absent, so
- *   concurrent instances agree);
+ *   concurrent instances agree), its private part sealed with `ENCRYPTION_KEY` (PLAN 0.4.8, K-21; a key kept in clear
+ *   before is sealed on its next use). A key that no longer opens (`ENCRYPTION_KEY` lost) leaves the product not
+ *   connected until the owner connects it again from the Portal, which makes a new key;
  * - `state/connection`: `{ portalUrl, jwks, baseUrl, connectedAt }`, written when a Portal proves it holds the
  *   deployer's `CONNECT_SECRET`. The Portal URL and its keys are pinned; `baseUrl` is this product's own address.
  *   Connecting again replaces it: whoever holds the secret is the authority;
@@ -23,6 +25,7 @@ import {
 } from '@ss/protocol';
 import { createPortalClient } from './portal-client.js';
 import { problem } from './http/results.js';
+import { openKey, resealKey, sealKey } from './sealing.js';
 import { kitError } from './util.js';
 
 /** @typedef {import('@ss/contracts').Manifest} Manifest */
@@ -42,6 +45,8 @@ import { kitError } from './util.js';
 const RECHECK_MS = 1000;
 const CONNECTED_RECHECK_MS = 30_000;
 const NONCE_TTL_MS = 15 * 60_000;
+/** What the sealed product key is bound to. */
+const KEY_AAD = 'state|productKey';
 
 /**
  * The price list of a manifest's current features, keeping the prices of `accepted` (new features 0, missing dropped).
@@ -68,10 +73,11 @@ export const featuresDiffer = (a, b) => {
 };
 
 /**
- * @param {{ store: Store, manifest: Manifest, connectSecret: string, fetch: typeof globalThis.fetch, now: () => number,
- *   randomBytes: (length: number) => Uint8Array, nodeEnv: string | undefined, logger: import('./logger.js').Logger }} options
+ * @param {{ store: Store, manifest: Manifest, connectSecret: string, sealer: import('./sealing.js').Sealer,
+ *   fetch: typeof globalThis.fetch, now: () => number, randomBytes: (length: number) => Uint8Array,
+ *   nodeEnv: string | undefined, logger: import('./logger.js').Logger }} options
  */
-export const createConnection = ({ store, manifest, connectSecret, fetch, now, randomBytes, nodeEnv, logger }) => {
+export const createConnection = ({ store, manifest, connectSecret, sealer, fetch, now, randomBytes, nodeEnv, logger }) => {
 	const productId = manifest.id;
 	/** @type {(ActiveConnection & { doc: Record<string, any> }) | null} */
 	let current = null;
@@ -113,8 +119,9 @@ export const createConnection = ({ store, manifest, connectSecret, fetch, now, r
 		checkedAt = at;
 		const doc = await store.get('state', 'connection');
 		if (!doc || (current && doc.connectedAt === current.doc.connectedAt)) return;
-		const key = await store.get('state', 'productKey');
-		if (key) activate(doc, key.privateJwk);
+		const privateJwk = await storedKey();
+		if (privateJwk) activate(doc, privateJwk);
+		else logger.error('the product key does not open: connect this product again from the Portal (ENCRYPTION_KEY)');
 	};
 
 	/** @returns {ActiveConnection} */
@@ -123,15 +130,35 @@ export const createConnection = ({ store, manifest, connectSecret, fetch, now, r
 		return current;
 	};
 
-	/** @returns {Promise<Record<string, any>>} the product's private key (generated on first connect) */
-	const productKey = async () => {
+	/**
+	 * The stored private key, sealed on its first use when it was kept in clear (K-21); null when there is none or it
+	 * does not open.
+	 * @returns {Promise<Record<string, any> | null>}
+	 */
+	const storedKey = async () => {
 		const stored = await store.get('state', 'productKey');
-		if (stored) return stored.privateJwk;
+		if (!stored) return null;
+		if (stored.privateJwk) await store.put('state', 'productKey', sealKey(sealer, stored.privateJwk, KEY_AAD));
+		return openKey(sealer, stored, KEY_AAD);
+	};
+
+	/**
+	 * The product's private key: generated on the first connect, and made again by a connect when the stored one does
+	 * not open (the Portal takes the new public key from the connect answer).
+	 * @returns {Promise<Record<string, any>>}
+	 */
+	const productKey = async () => {
+		const opened = await storedKey();
+		if (opened) return opened;
 		const day = new Date(now()).toISOString().slice(0, 10).replace(/-/g, '');
 		const kid = `${productId}-${day}-${Buffer.from(randomBytes(3)).toString('hex')}`;
 		const { privateJwk } = await generateSigningKey({ kid });
-		await store.insert('state', 'productKey', { privateJwk });
-		return /** @type {Record<string, any>} */ (await store.get('state', 'productKey')).privateJwk;
+		const fresh = sealKey(sealer, privateJwk, KEY_AAD);
+		if (await store.get('state', 'productKey')) {
+			logger.warn('the product key did not open: a new one is made (ENCRYPTION_KEY changed)');
+			await store.put('state', 'productKey', fresh);
+		} else await store.insert('state', 'productKey', fresh);
+		return /** @type {Record<string, any>} */ (await storedKey());
 	};
 
 	/** @returns {Promise<(PriceList & { pending: boolean }) | null>} the last accepted price list */
@@ -194,6 +221,8 @@ export const createConnection = ({ store, manifest, connectSecret, fetch, now, r
 		ready,
 		active,
 		handleConnect,
+		/** The Owner's Re-seal of the product key (RT-14). */
+		resealKey: () => resealKey(store, sealer, 'productKey', KEY_AAD),
 		acceptedPrices,
 		savePrices,
 		/** @returns {boolean} */

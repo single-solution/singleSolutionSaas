@@ -34,9 +34,10 @@ The exact API is in [API.md](./API.md).
   from `ENCRYPTION_KEY`, write-only, tested live when saved. `callProduct` calls another product with a pasted token.
 - **Sealing and Re-seal** — every stored secret uses the one format of `@ss/protocol` (`ss2.<keyId>.…`; the key id
   names the key that sealed it). While the owner changes `ENCRYPTION_KEY`, the old key is `ENCRYPTION_KEY_PREVIOUS`
-  and values open with either; the Owner's Re-seal (`POST /v1/dashboard/reseal`) seals Connections and the product's
-  own secrets (`hooks.resealProduct`, `hooks.resealWebsite`) again with the new key. `createSealer` gives a product
-  the same sealer for its own secrets.
+  and values open with either; the Owner's Re-seal (`POST /v1/dashboard/reseal`) seals Connections, the product key,
+  the ticket key and the product's own secrets (`hooks.resealProduct`, `hooks.resealWebsite`) again with the new key.
+  `createSealer` gives a product the same sealer for its own secrets. The product key and the ticket key are kept
+  sealed (K-21; their public keys readable); keys kept in clear before are sealed on their next use.
 - **Merchant database** — guarded access (`websiteId` on every query, no cross-collection stages, inserts stamped
   with `websiteId` and `merchantId`; Atlas Search only as a first `$search` whose compound filter pins the website) to
   collections `ss_<product id>_<name>`.

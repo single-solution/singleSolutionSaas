@@ -15,10 +15,11 @@ names are reported, never values):
 | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `MONGODB_URI`             | the Portal's own database (`ss_portal`; never a merchant database; production and preview never share one)                                       |
 | `PORTAL_URL`              | the Portal's final address (https in production, no path): e-mail links, token, launch and notice issuer, CSRF origin, products pin it           |
-| `ENCRYPTION_KEY`          | random, at least 32 characters: seals the stored secrets (mail password, two-step secrets, server tokens)                                        |
+| `ENCRYPTION_KEY`          | random, at least 32 characters: seals the stored secrets (mail password, two-step secrets, server tokens, signing keys)                          |
 | `ENCRYPTION_KEY_PREVIOUS` | optional, only while `ENCRYPTION_KEY` is changed: the old key, so stored secrets keep opening; removed after Settings → Encryption key → Re-seal |
 
-Signing keys and the session and idempotency secrets are generated on first start into the Portal's own database.
+Signing keys and the session and idempotency secrets are generated on first start into the Portal's own database; the
+signing keys are kept sealed with `ENCRYPTION_KEY` (their public keys readable).
 Outside production the Portal may reach products on `localhost`, `127.0.0.1` and `::1` over plain http.
 
 ## Deploy

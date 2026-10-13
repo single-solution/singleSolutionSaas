@@ -4,8 +4,11 @@
  *
  * - `secrets` — generated on first start and inserted only if absent (`_id` unique), so concurrent cold starts agree on
  *   one set: the Ed25519 Portal signing key(s) (launches, notices), the token signing key(s) (browser and server
- *   tokens, PLAN 0.4.4), the session secret and the idempotency secret. Lists stay lists (first signs; all are
- *   published), so older tokens keep verifying.
+ *   tokens, PLAN 0.4.4), the session secret and the idempotency secret. Lists stay lists (the first that opens signs;
+ *   all are published), so older tokens keep verifying. Each signing key's seed is sealed with `ENCRYPTION_KEY` and
+ *   its public key kept readable (PLAN 0.4.8, K-21); a seed kept in clear before is sealed on first use. When no key
+ *   of a list opens (`ENCRYPTION_KEY` lost), a new key is added first and the others stay published by their public
+ *   keys: tokens signed before keep verifying.
  * - `settings` — recorded by Owners (PLAN 0.8.2 Settings): e-mail sending (its password sealed with `ENCRYPTION_KEY`,
  *   `crypto.js`), branding, support contact, security and billing rules. `version` increases with every change so
  *   other instances notice and rebuild.
@@ -16,8 +19,8 @@
  * @module
  */
 import { randomBytes as nodeRandomBytes } from 'node:crypto';
-import { signingKeyFromSeed } from '@ss/protocol';
-import { createSecretBox, resealEach } from './crypto.js';
+import { signingKeyFromSeed, toPublicJwk } from '@ss/protocol';
+import { createSecretBox, resealEach, sumCounts } from './crypto.js';
 import { platformError } from './errors.js';
 import { COLLECTIONS } from './schema.js';
 
@@ -25,7 +28,11 @@ import { COLLECTIONS } from './schema.js';
 const SYSTEM_COLLECTION = COLLECTIONS.system;
 
 /** @typedef {import('./config.js').SystemState} SystemState */
-/** @typedef {{ kid: string, seed: string, createdAt: string }} StoredKey */
+/**
+ * A signing key as stored: its seed sealed with `ENCRYPTION_KEY` and its public key (K-21), or, before K-21, its seed
+ * in clear (`seed`, sealed on first use).
+ * @typedef {{ kid: string, sealed?: string, seed?: string, publicJwk?: import('@ss/protocol').PublicJwk, createdAt: string }} StoredKey
+ */
 /**
  * @typedef {object} SecretsDoc
  * @property {'secrets'} _id
@@ -90,17 +97,35 @@ export const generateSecrets = ({ now = Date.now, randomBytes = (n) => new Uint8
 	};
 };
 
+/** What a sealed signing key seed is bound to. @param {string} kid */
+const keyAad = (kid) => ({ purpose: 'signing_key', kid });
+
 /**
- * The secrets part of the system state.
+ * The secrets part of the system state: the signing keys whose seed opens (in clear, or with `open`), and the public
+ * keys of those that do not (published only).
  * @param {Omit<SecretsDoc, '_id'>} doc
+ * @param {(key: StoredKey) => string | null} [open] opens a sealed seed (none: only seeds in clear)
  * @returns {Omit<SystemState, 'mail'>}
  */
-export const secretsOf = (doc) => ({
-	signingKeys: doc.signingKeys.map((key) => signingKeyFromSeed(key.kid, key.seed)),
-	tokenSigningKeys: doc.tokenSigningKeys.map((key) => signingKeyFromSeed(key.kid, key.seed)),
-	sessionSecret: Buffer.from(doc.sessionSecret, 'base64url'),
-	idempotencySecret: Buffer.from(doc.idempotencySecret, 'base64url'),
-});
+export const secretsOf = (doc, open = () => null) => {
+	/** @param {StoredKey[]} list */
+	const split = (list) => {
+		const seeds = list.map((key) => key.seed ?? open(key));
+		return {
+			keys: list.flatMap((key, i) => (seeds[i] ? [signingKeyFromSeed(key.kid, /** @type {string} */ (seeds[i]))] : [])),
+			published: list.flatMap((key, i) => (!seeds[i] && key.publicJwk ? [key.publicJwk] : [])),
+		};
+	};
+	const signing = split(doc.signingKeys);
+	const token = split(doc.tokenSigningKeys);
+	return {
+		signingKeys: signing.keys,
+		tokenSigningKeys: token.keys,
+		publishedOnly: { signing: signing.published, token: token.published },
+		sessionSecret: Buffer.from(doc.sessionSecret, 'base64url'),
+		idempotencySecret: Buffer.from(doc.idempotencySecret, 'base64url'),
+	};
+};
 
 /**
  * A complete system state for tests and tools: fresh secrets plus the given settings.
@@ -144,18 +169,72 @@ export const createSystemStore = (
 		}
 	};
 
-	/** @returns {Promise<SecretsDoc>} the secrets, generated and inserted if absent (concurrent starts agree) */
-	const secrets = async () => {
-		const found = await collection.findOne({ _id: 'secrets' });
-		if (found) return /** @type {SecretsDoc} */ (found);
+	/** @param {StoredKey} key @returns {StoredKey} the key with its seed sealed (K-21) */
+	const sealKey = ({ kid, seed, createdAt }) => ({
+		kid,
+		sealed: box.seal(/** @type {string} */ (seed), { aad: keyAad(kid) }),
+		publicJwk: toPublicJwk(signingKeyFromSeed(kid, /** @type {string} */ (seed))),
+		createdAt,
+	});
+	/** @param {StoredKey} key @returns {string | null} the seed, or null when it does not open */
+	const openSeed = (key) => {
+		if (key.seed) return key.seed;
 		try {
-			await collection.insertOne({ _id: 'secrets', ...generateSecrets({ now, randomBytes }) });
-		} catch (error) {
-			if (!isDuplicateKey(error)) throw error;
+			return box.openText(key.sealed, { aad: keyAad(key.kid) });
+		} catch {
+			return null;
 		}
-		const stored = await collection.findOne({ _id: 'secrets' });
-		if (!stored) throw platformError('internal_error', 'the Portal secrets could not be stored');
-		return /** @type {SecretsDoc} */ (stored);
+	};
+	/** @param {Partial<SecretsDoc>} filter @param {Partial<SecretsDoc>} set */
+	const replaceIf = (filter, set) => collection.updateOne({ _id: 'secrets', ...filter }, { $set: set });
+	/** @returns {Promise<SecretsDoc>} */
+	const stored = async () => {
+		const found = await collection.findOne({ _id: 'secrets' });
+		if (!found) throw platformError('internal_error', 'the Portal secrets could not be stored');
+		return /** @type {SecretsDoc} */ (found);
+	};
+
+	/**
+	 * The secrets, generated and inserted if absent (concurrent starts agree). Seeds kept in clear are sealed (K-21);
+	 * a list none of whose keys opens gets a new key first (another instance may add it: the list is replaced only if
+	 * unchanged).
+	 * @returns {Promise<SecretsDoc>}
+	 */
+	const secrets = async () => {
+		if (!(await collection.findOne({ _id: 'secrets' }))) {
+			const fresh = generateSecrets({ now, randomBytes });
+			try {
+				await collection.insertOne({
+					_id: 'secrets',
+					...fresh,
+					signingKeys: fresh.signingKeys.map(sealKey),
+					tokenSigningKeys: fresh.tokenSigningKeys.map(sealKey),
+				});
+			} catch (error) {
+				if (!isDuplicateKey(error)) throw error;
+			}
+		}
+		let doc = await stored();
+		const lists = /** @type {const} */ (['signingKeys', 'tokenSigningKeys']);
+		if (lists.some((list) => doc[list].some((key) => typeof key.seed === 'string'))) {
+			await replaceIf(
+				{ signingKeys: doc.signingKeys, tokenSigningKeys: doc.tokenSigningKeys },
+				{
+					signingKeys: doc.signingKeys.map((key) => (key.seed ? sealKey(key) : key)),
+					tokenSigningKeys: doc.tokenSigningKeys.map((key) => (key.seed ? sealKey(key) : key)),
+				},
+			);
+			doc = await stored();
+		}
+		for (const list of lists) {
+			if (doc[list].some((key) => openSeed(key) !== null)) continue;
+			const prefix = list === 'signingKeys' ? 'portal' : 'token';
+			const created = new Date(now()).toISOString();
+			const fresh = sealKey({ kid: kidOf(prefix, now, randomBytes), seed: b64url(randomBytes), createdAt: created });
+			await replaceIf({ [list]: doc[list] }, { [list]: [fresh, ...doc[list]] });
+			doc = await stored();
+		}
+		return doc;
 	};
 
 	/** @returns {Promise<SettingsDoc | null>} */
@@ -173,7 +252,7 @@ export const createSystemStore = (
 	 */
 	const load = async () => {
 		const [secretsDoc, settingsDoc] = await Promise.all([secrets(), settings()]);
-		const base = secretsOf(secretsDoc);
+		const base = secretsOf(secretsDoc, openSeed);
 		const mail = settingsDoc?.mail ?? null;
 		return {
 			state: {
@@ -273,13 +352,31 @@ export const createSystemStore = (
 	const passwordReadable = (sealed) => openPassword(sealed) !== null;
 
 	/**
-	 * Settings → Encryption key → Re-seal (PLAN 0.4.8; RT-14): the stored SMTP password sealed again with the current
-	 * key (a password changed meanwhile is left as saved).
+	 * Settings → Encryption key → Re-seal (PLAN 0.4.8; RT-14): the signing keys (K-21) and the stored SMTP password
+	 * sealed again with the current key (what changed meanwhile is left as saved).
 	 * @returns {Promise<import('./crypto.js').ResealCounts>}
 	 */
 	const reseal = async () => {
+		const doc = await secrets();
+		/** @type {Partial<SecretsDoc>} */
+		const moved = {};
+		/** @param {'signingKeys' | 'tokenSigningKeys'} list */
+		const keysOf = (list) =>
+			resealEach(
+				box,
+				doc[list].map((key, i) => ({
+					sealed: key.sealed,
+					aad: keyAad(key.kid),
+					save: async (/** @type {string} */ next) => {
+						moved[list] = (moved[list] ?? doc[list]).map((k, j) => (j === i ? { ...k, sealed: next } : k));
+					},
+				})),
+			);
+		const keys = [await keysOf('signingKeys'), await keysOf('tokenSigningKeys')];
+		if (Object.keys(moved).length > 0)
+			await replaceIf({ signingKeys: doc.signingKeys, tokenSigningKeys: doc.tokenSigningKeys }, moved);
 		const sealed = (await settings())?.mail?.passSealed;
-		return resealEach(
+		const mail = await resealEach(
 			box,
 			sealed
 				? [
@@ -295,6 +392,7 @@ export const createSystemStore = (
 					]
 				: [],
 		);
+		return sumCounts([...keys, mail]);
 	};
 
 	/** @returns {Promise<string | null>} the schema fingerprint last applied */

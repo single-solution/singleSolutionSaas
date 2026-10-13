@@ -1,8 +1,8 @@
 /**
  * Re-seal (PLAN 0.4.8, 0.11; RT-14): after the owner changes `ENCRYPTION_KEY` (the old key set as
  * `ENCRYPTION_KEY_PREVIOUS`), an Owner presses Re-seal on the product dashboard (`POST /v1/dashboard/reseal`). Every
- * stored secret is sealed again with the current key: the Connections of every website and what the product keeps
- * itself, through its hooks: `resealProduct` (its own secrets in the product database) and `resealWebsite` (secrets in
+ * stored secret is sealed again with the current key: the Connections of every website, the product key and the
+ * ticket key (K-21), and what the product keeps itself, through its hooks: `resealProduct` (its own secrets in the product database) and `resealWebsite` (secrets in
  * one website's merchant database, called for every website whose database is connected).
  *
  * Values already on the current key stay as they are; values neither key opens are counted and left alone. Pressing

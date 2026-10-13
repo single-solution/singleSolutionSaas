@@ -225,11 +225,12 @@ describe('tokens per website × product (PLAN 0.4.4)', () => {
 		expect(first.json).toEqual({
 			keyId: expect.any(String),
 			previousKeyId: expect.any(String),
-			resealed: 3,
+			resealed: 5,
 			current: 0,
 			unreadable: 0,
 		});
-		expect((await owner2.post('/v1/admin/settings/reseal')).json).toMatchObject({ resealed: 0, current: 3, unreadable: 0 });
+		// the server token, the mail password, the two-step secret and both signing keys (K-21)
+		expect((await owner2.post('/v1/admin/settings/reseal')).json).toMatchObject({ resealed: 0, current: 5, unreadable: 0 });
 		expect((await changing.activity('settings.changed')).map((e) => e.target.id)).toContain('encryption_key');
 
 		// the previous key removed: everything opens with the new key alone, nothing with the old one alone

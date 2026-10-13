@@ -30,17 +30,19 @@ const KEY = 32;
  * resolver over our own public keys (to verify what the Portal issued, such as launches). Browser and server tokens
  * have a **dedicated** signer with its own resolver: a launch is never accepted as a token, and the other way round.
  * Both key sets are published together (`publishedJwks()`, served at `/.well-known/jwks.json` and pinned by products
- * at connect) with distinct kids.
+ * at connect) with distinct kids. `publishedOnly` keys (stored keys whose seed no longer opens, K-21) are published
+ * and verify, but never sign, so tokens they signed keep working.
  * @param {ReadonlyArray<PrivateJwk>} signingKeys
  * @param {ReadonlyArray<PrivateJwk>} tokenSigningKeys
+ * @param {{ signing?: ReadonlyArray<import('@ss/protocol').PublicJwk>, token?: ReadonlyArray<import('@ss/protocol').PublicJwk> }} [publishedOnly]
  */
-export const createPortalKeys = (signingKeys, tokenSigningKeys) => {
+export const createPortalKeys = (signingKeys, tokenSigningKeys, publishedOnly = {}) => {
 	if (!Array.isArray(signingKeys) || signingKeys.length === 0)
 		throw platformError('config_invalid', 'at least one signing key is required');
 	if (!Array.isArray(tokenSigningKeys) || tokenSigningKeys.length === 0)
 		throw platformError('config_invalid', 'at least one token signing key is required');
-	const portalPublic = signingKeys.map((jwk) => toPublicJwk(jwk));
-	const tokenPublic = tokenSigningKeys.map((jwk) => toPublicJwk(jwk));
+	const portalPublic = [...signingKeys.map((jwk) => toPublicJwk(jwk)), ...(publishedOnly.signing ?? [])];
+	const tokenPublic = [...tokenSigningKeys.map((jwk) => toPublicJwk(jwk)), ...(publishedOnly.token ?? [])];
 	const portalKids = new Set(portalPublic.map((jwk) => jwk.kid));
 	if (tokenPublic.some((jwk) => portalKids.has(jwk.kid)))
 		throw platformError('config_invalid', 'token signing kids must differ from the Portal signing kids');
