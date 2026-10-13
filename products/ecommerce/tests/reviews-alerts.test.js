@@ -359,7 +359,7 @@ describe('alerts', () => {
 		await reprice('108.00');
 		const first = shop.messages().slice(sent);
 		expect(first.map((m) => [m.template, m.to])).toEqual([['ecommerce.price_drop', { phone: '+923001234567' }]]);
-		const link = String(first[0]?.values.unsubscribeUrl);
+		const link = String(first[0]?.values.stopUrl);
 		expect(link).toMatch(new RegExp(`^https://${DOMAIN.replace(/\./g, '\\.')}/alerts/unsubscribe/[A-Za-z0-9]{32}$`));
 		const token = link.split('/').pop() ?? '';
 		const kept = /** @type {any} */ (
@@ -373,7 +373,7 @@ describe('alerts', () => {
 		await reprice('104.00');
 		const second = shop.messages().slice(sent + 1);
 		expect(second.map((m) => [m.template, m.to])).toEqual([['ecommerce.price_drop', { email: 'sara@example.com' }]]);
-		const saraToken = String(second[0]?.values.unsubscribeUrl).split('/').pop();
+		const saraToken = String(second[0]?.values.stopUrl).split('/').pop();
 
 		// unsubscribing removes every alert of that e-mail (Sara's waiting one too); a used or unknown token removes nothing
 		const gone = await visit('POST', `/v1/shop/alerts/unsubscribe/${saraToken}`);
@@ -381,6 +381,11 @@ describe('alerts', () => {
 		expect((await visit('POST', `/v1/shop/alerts/unsubscribe/${saraToken}`)).json).toEqual({ removed: 0 });
 		expect((await visit('POST', '/v1/shop/alerts/unsubscribe/short')).json).toEqual({ removed: 0 });
 		expect((await visit('GET', '/v1/shop/alerts', { signIn: sara })).json.items).toEqual([]);
+		// no alert passes a value Notifications reserves (it refuses the send; MS-2)
+		const alertSends = shop.messages().filter((m) => m.template.startsWith('ecommerce.price_drop'));
+		expect(alertSends.length).toBeGreaterThan(0);
+		for (const message of alertSends) expect(Object.keys(message.values)).not.toContain('unsubscribeUrl');
+
 		// and every alert of that phone
 		await subscribe({ variantId: small?.id, phone: '03001234567' }, undefined);
 		expect((await visit('POST', `/v1/shop/alerts/unsubscribe/${token}`)).json).toEqual({ removed: 2 });

@@ -7,8 +7,9 @@
  * stock an order gives back on a cancel, an ended window or a return to origin) the alerts that became due are marked
  * and sent at once, at most {@link SEND_BATCH} per change; the rest go out on later uses of the website
  * (`service.whenUsed`). Each alert is sent once (`ecommerce.back_in_stock` / `ecommerce.price_drop`), with
- * `{unsubscribeUrl}`: the website's `/alerts/unsubscribe/<token>` page, which calls
- * `POST /v1/shop/alerts/unsubscribe/:token` to remove every alert of that phone or e-mail; only the token's hash is kept.
+ * `{stopUrl}`: the website's `/alerts/unsubscribe/<token>` page, which calls `POST /v1/shop/alerts/unsubscribe/:token`
+ * to remove every alert of that phone or e-mail; only the token's hash is kept. The link is not named `unsubscribeUrl`:
+ * Notifications reserves that name for its own opt-out link and refuses a send that passes it (MS-2).
  * @module
  */
 import { createId } from '@ss/contracts';
@@ -122,7 +123,7 @@ export const createAlerts = (_product, service, cards) => {
 					name: item.name,
 					price: (await s.format()).money(price, s.currency),
 					url: (await cards.card(s, item)).url,
-					unsubscribeUrl: absolute(`/alerts/unsubscribe/${token}`, s.domain),
+					stopUrl: absolute(`/alerts/unsubscribe/${token}`, s.domain),
 				},
 				Array.isArray(channels) ? channels : ['email'],
 			);

@@ -85,10 +85,12 @@ export const setup = async ({ start = Date.parse('2026-10-05T10:00:00Z') } = {})
 			responders.has(`${ACCOUNTS}${new URL(request.url).pathname}`) ? fake(ACCOUNTS)(request) : accounts.handle(request),
 		...Object.fromEntries([NOTIFY, PAYMENTS, STORAGE, COURIER, AI, ORIGIN, GROWTH].map((origin) => [origin, fake(origin)])),
 	};
-	// Notifications queues every message
+	// Notifications queues every message, and refuses its reserved value names as the real one does (MS-2)
 	responders.set(NOTIFY, (call) =>
 		call.path.startsWith('/v1/messages/')
-			? { status: 201, body: { id: `msg_${calls.length}`, status: 'queued' } }
+			? 'unsubscribeUrl' in (JSON.parse(call.body).values ?? {})
+				? { status: 422, body: { type: 'https://errors.example/validation_failed' } }
+				: { status: 201, body: { id: `msg_${calls.length}`, status: 'queued' } }
 			: { status: 200, body: {} },
 	);
 	// Payments: a new payment is pending; verify says no until a test says otherwise (payments.paid)
