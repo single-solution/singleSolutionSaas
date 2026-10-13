@@ -329,10 +329,13 @@ export const createRequestHandler = (kit, routes, options = {}) => {
 			/** @type {(task: () => Promise<unknown>) => void} */
 			const scheduler = SCHEDULERS.get(request) ?? options.after ?? ((task) => void task());
 			if (kit.connection.connected()) afterTasks.unshift(() => kit.reports.syncManifest());
-			const tasks = [...afterTasks, ...portalTasks];
-			if (tasks.length > 0)
+			if (afterTasks.length + portalTasks.length > 0)
 				scheduler(async () => {
-					for (const task of tasks) await task().catch((error) => log.warn('work after the request failed', { error }));
+					/** @param {() => Promise<unknown>} task */
+					const run = (task) => task().catch((error) => log.warn('work after the request failed', { error }));
+					// read as they run: work that after-work adds with `ctx.after` runs too, before the Portal fetches
+					for (const task of afterTasks) await run(task);
+					for (const task of portalTasks) await run(task);
 				});
 			log.info('request', {
 				method,

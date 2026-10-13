@@ -189,6 +189,41 @@ describe('handler results and the Next.js adapter', () => {
 		expect((await raw.GET(new Request(`${BASE}/api/docs`))).status).toBe(404);
 	});
 
+	it('runs work that after-work adds, before the Portal fetch of an old status copy', async () => {
+		/** @type {string[]} */
+		const ran = [];
+		const routes = [
+			...productRoutes(),
+			defineRoute({
+				method: 'GET',
+				path: '/v1/nested',
+				auth: 'server',
+				database: false,
+				handler: (ctx) => {
+					ctx.after(async () => {
+						ran.push('first');
+						ctx.after(async () => {
+							ran.push('added by the first');
+						});
+					});
+					return { ok: true };
+				},
+			}),
+		];
+		const { call, server, settle, clock, portal } = await setup({ routes });
+		const statusCalls = () => portal.calls.filter((c) => c.path.endsWith('/status')).length;
+		await call('GET', '/v1/nested', { token: server.token });
+		await settle();
+		expect(ran).toEqual(['first', 'added by the first']);
+		clock.advance(5 * 60_000);
+		const before = statusCalls();
+		await call('GET', '/v1/nested', { token: server.token });
+		expect(statusCalls()).toBe(before);
+		await settle();
+		expect(ran).toEqual(['first', 'added by the first', 'first', 'added by the first']);
+		expect(statusCalls()).toBe(before + 1);
+	});
+
 	it('runs after-response work detached without a scheduler and fails open when the rate store fails', async () => {
 		const ctx = await setup();
 		const broken = { ...createMemoryStore(), hit: async () => Promise.reject(new Error('down')) };
