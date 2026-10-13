@@ -2,12 +2,17 @@
  * Test harness: Payments on the kit, connected to the kit's fake Portal (`@ss/app-kit/testing`), with one website, its
  * two tokens, dashboard sessions, a merchant database on the run's MongoDB (`TEST_MONGODB_URI`), a fake Notifications
  * (its `POST /v1/events`), a fake S3 bucket and fake gateways: every gateway call is answered in process (no real
- * network call is ever made).
+ * network call is ever made). Every answer `call()` sees is checked against `schemas/api.json` and the kit's own
+ * routes: a test fails when an answer does not fit its description.
  * @module
  */
-import { createFakePortal, createMemoryStore, createNetwork } from '@ss/app-kit/testing';
+import { apiChecker, createFakePortal, createMemoryStore, createNetwork } from '@ss/app-kit/testing';
+import apiJson from '../schemas/api.json' with { type: 'json' };
 import { createProductInstance, manifest } from '../adapters/product.js';
 import { createRoutes } from '../server/routes.js';
+
+/** The API description every answer is checked against. */
+const API = apiChecker(apiJson);
 
 export const BASE = 'https://payments.example.dev';
 export const NOTIFY_BASE = 'https://notifications.example.dev';
@@ -164,6 +169,7 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 		} catch {
 			json = null;
 		}
+		API.assert({ method, path, status: response.status, body: json });
 		return { status: response.status, headers: response.headers, json, text };
 	};
 

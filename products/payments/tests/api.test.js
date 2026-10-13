@@ -645,6 +645,11 @@ describe('bank transfer', () => {
 
 		const proof = await env.api('GET', `/v1/payments/${payment.id}/proof`);
 		expect(proof.json.url).toContain('X-Amz-Signature');
+		const adminProof = await env.call('GET', `/v1/admin/payments/${payment.id}/proof`, {
+			token: await env.ticket(['payments.confirm']),
+			origin: ADMIN_ORIGIN,
+		});
+		expect(adminProof.json.url).toContain('X-Amz-Signature');
 		const tooLong = await env.api('POST', `/v1/payments/${payment.id}/confirm`, { note: 'n'.repeat(501) });
 		expect(tooLong.json.errors[0].path).toBe('/note');
 		expect((await env.api('POST', `/v1/payments/${payment.id}/confirm`, { reference: 7 })).status).toBe(422);
@@ -1007,7 +1012,11 @@ describe('subscriptions', () => {
 			type: 'customer.subscription.updated',
 			data: { object: { id: 'sub_stripe1', status: 'past_due', metadata: {} } },
 		});
-		const cancelled = await env.api('POST', `/v1/subscriptions/${made.json.id}/cancel`, {});
+		// the Subscriptions admin widget cancels it (its ticket twin)
+		const cancelled = await env.call('POST', `/v1/admin/subscriptions/${made.json.id}/cancel`, {
+			token: await env.ticket(),
+			origin: ADMIN_ORIGIN,
+		});
 		expect(cancelled.json.status).toBe('cancelled');
 		expect(env.gateways.callsTo('https://api.stripe.com').at(-1)).toMatchObject({
 			method: 'DELETE',
@@ -1368,6 +1377,21 @@ describe('data rights, statuses and public files', () => {
 		const docs = await page('/docs');
 		expect(docs.text).toContain(`${BASE}/v1/gateways/stripe/&#60;websiteId&#62;`);
 		expect(docs.text).toContain('feature-payment_links');
+		// the API reference: what each call takes and answers, from schemas/api.json
+		for (const part of [
+			'<a href="#op-post-v1-payments"><code>POST /v1/payments</code></a> Create a payment',
+			'<section class="ss-api-op" id="op-post-v1-payments"><h3><code>POST /v1/payments</code> Create a payment</h3>',
+			'<td><code>amount</code></td><td>integer</td><td>yes</td><td>Minor units (cents, paisa …). 1–1000000000000.</td>',
+			'<td><code>customer</code></td><td><a href="#schema-CustomerInput">CustomerInput</a></td>',
+			'<h4>Answer 201 (JSON)</h4><p><a href="#schema-Payment">Payment</a></p>',
+			'<td><code>refunds[].manual</code></td><td>boolean</td><td>yes</td>',
+			'<td><code>gateway</code></td><td><a href="#schema-Gateway">Gateway</a> or null</td>',
+			'<td><code>status</code></td><td>query</td><td>&#34;pending&#34; | &#34;paid&#34;',
+			'<td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>A key of your own per request',
+			'Optional headers: <code>SS-Actor-Id</code>',
+			'id="schema-PaymentsEvent"',
+		])
+			expect(docs.text).toContain(part);
 	});
 
 	it('obeys stopped, suspended and removed (API, tickets, hosted pages, notices), and grace keeps working', async () => {

@@ -1,0 +1,1689 @@
+{
+	"$schemas": {
+		"BankTransfer": {
+			"type": "object",
+			"description": "The bank details payers see ('' when not set).",
+			"required": ["ready", "accountTitle", "bankName", "accountNumber", "iban", "instructions"],
+			"additionalProperties": false,
+			"properties": {
+				"ready": {
+					"type": "boolean",
+					"description": "Payers can pick bank transfer: its account number or IBAN is set (or details are not required)."
+				},
+				"accountTitle": {
+					"type": "string"
+				},
+				"bankName": {
+					"type": "string"
+				},
+				"accountNumber": {
+					"type": "string"
+				},
+				"iban": {
+					"type": "string"
+				},
+				"instructions": {
+					"type": "string"
+				}
+			}
+		},
+		"Customer": {
+			"type": "object",
+			"description": "The payer; every member is optional (empty once the person's data was deleted).",
+			"additionalProperties": false,
+			"properties": {
+				"id": {
+					"type": "string",
+					"maxLength": 128,
+					"description": "The payer's user id (for example in Accounts)."
+				},
+				"name": {
+					"type": "string",
+					"maxLength": 120
+				},
+				"email": {
+					"type": "string",
+					"format": "email",
+					"description": "Lower case."
+				},
+				"phone": {
+					"type": "string",
+					"pattern": "^\\+[1-9]\\d{6,14}$",
+					"description": "International format."
+				}
+			}
+		},
+		"CustomerInput": {
+			"type": "object",
+			"description": "The payer, each member optional.",
+			"properties": {
+				"id": {
+					"type": "string",
+					"maxLength": 128
+				},
+				"name": {
+					"type": "string",
+					"maxLength": 120
+				},
+				"email": {
+					"type": "string",
+					"format": "email",
+					"description": "Kept in lower case; '' for none."
+				},
+				"phone": {
+					"type": "string",
+					"description": "International format (+…); spaces, brackets and dashes are removed. '' for none."
+				}
+			}
+		},
+		"EventPage": {
+			"type": "object",
+			"description": "One page of events, newest first.",
+			"required": ["items", "nextCursor", "hasMore"],
+			"additionalProperties": false,
+			"properties": {
+				"items": {
+					"type": "array",
+					"items": {
+						"$ref": "#/components/schemas/PaymentsEvent"
+					}
+				},
+				"nextCursor": {
+					"type": ["string", "null"],
+					"description": "Pass it as cursor for the next page (null: the last page)."
+				},
+				"hasMore": {
+					"type": "boolean"
+				}
+			}
+		},
+		"Gateway": {
+			"type": "string",
+			"enum": ["stripe", "paypal", "payfast", "payfast_pk", "jazzcash", "easypaisa", "rapid", "bank_transfer", "generic"],
+			"description": "payfast is PayFast South Africa, payfast_pk PayFast Pakistan; generic is your own adapter."
+		},
+		"Link": {
+			"type": "object",
+			"description": "A payment link.",
+			"required": [
+				"id",
+				"title",
+				"description",
+				"amount",
+				"minAmount",
+				"currency",
+				"gateways",
+				"returnUrl",
+				"reference",
+				"active",
+				"paidCount",
+				"url",
+				"createdAt"
+			],
+			"additionalProperties": false,
+			"properties": {
+				"id": {
+					"type": "string",
+					"pattern": "^link_[0-9a-z]{10,64}$"
+				},
+				"title": {
+					"type": "string",
+					"minLength": 1,
+					"maxLength": 120
+				},
+				"description": {
+					"type": "string",
+					"maxLength": 1000
+				},
+				"amount": {
+					"type": ["integer", "null"],
+					"minimum": 1,
+					"maximum": 1000000000000,
+					"description": "Minor units; null: the payer enters it."
+				},
+				"minAmount": {
+					"type": ["integer", "null"],
+					"minimum": 1,
+					"description": "The least a payer may enter (null with a fixed amount)."
+				},
+				"currency": {
+					"type": "string",
+					"pattern": "^[A-Z]{3}$",
+					"description": "ISO 4217 code, for example USD or PKR."
+				},
+				"gateways": {
+					"type": "array",
+					"items": {
+						"$ref": "#/components/schemas/Gateway"
+					},
+					"description": "The gateways it offers (empty: every ready one)."
+				},
+				"returnUrl": {
+					"type": ["string", "null"],
+					"description": "Where payers go afterwards."
+				},
+				"reference": {
+					"type": "string",
+					"maxLength": 120
+				},
+				"active": {
+					"type": "boolean",
+					"description": "false: turned off, its page is gone."
+				},
+				"paidCount": {
+					"type": "integer",
+					"minimum": 0
+				},
+				"url": {
+					"type": "string",
+					"format": "uri",
+					"description": "The link's page: share it."
+				},
+				"createdAt": {
+					"type": "string",
+					"format": "date-time"
+				}
+			}
+		},
+		"LinkPage": {
+			"type": "object",
+			"description": "One page of payment links, newest first.",
+			"required": ["items", "nextCursor", "hasMore"],
+			"additionalProperties": false,
+			"properties": {
+				"items": {
+					"type": "array",
+					"items": {
+						"$ref": "#/components/schemas/Link"
+					}
+				},
+				"nextCursor": {
+					"type": ["string", "null"],
+					"description": "Pass it as cursor for the next page (null: the last page)."
+				},
+				"hasMore": {
+					"type": "boolean"
+				}
+			}
+		},
+		"NewSubscription": {
+			"type": "object",
+			"description": "A new subscription with the gateway's page the payer subscribes on.",
+			"required": [
+				"id",
+				"status",
+				"gateway",
+				"plan",
+				"reference",
+				"customer",
+				"gatewayReference",
+				"history",
+				"createdAt",
+				"updatedAt",
+				"checkoutUrl"
+			],
+			"additionalProperties": false,
+			"properties": {
+				"id": {
+					"type": "string",
+					"pattern": "^sub_[0-9a-z]{10,64}$"
+				},
+				"status": {
+					"type": "string",
+					"enum": ["pending", "active", "past_due", "paused", "cancelled", "expired"],
+					"description": "Mirrored from the gateway."
+				},
+				"gateway": {
+					"type": "string",
+					"enum": ["stripe", "paypal"]
+				},
+				"plan": {
+					"type": "string",
+					"description": "The gateway's plan or price id."
+				},
+				"reference": {
+					"type": "string",
+					"maxLength": 120
+				},
+				"customer": {
+					"$ref": "#/components/schemas/Customer"
+				},
+				"gatewayReference": {
+					"type": ["string", "null"]
+				},
+				"history": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": ["at", "event"],
+						"additionalProperties": false,
+						"properties": {
+							"at": {
+								"type": "string",
+								"format": "date-time"
+							},
+							"event": {
+								"type": "string",
+								"enum": ["created", "failed", "pending", "active", "past_due", "paused", "cancelled", "expired"]
+							},
+							"detail": {
+								"type": "string"
+							},
+							"by": {
+								"type": "string"
+							}
+						}
+					}
+				},
+				"createdAt": {
+					"type": "string",
+					"format": "date-time"
+				},
+				"updatedAt": {
+					"type": "string",
+					"format": "date-time"
+				},
+				"checkoutUrl": {
+					"type": "string",
+					"format": "uri",
+					"description": "Send the payer there to subscribe at the gateway."
+				}
+			}
+		},
+		"Payment": {
+			"type": "object",
+			"description": "A payment (no gateway secrets).",
+			"required": [
+				"id",
+				"status",
+				"refundDue",
+				"amount",
+				"currency",
+				"amountText",
+				"refunded",
+				"gateway",
+				"description",
+				"reference",
+				"customer",
+				"metadata",
+				"source",
+				"linkId",
+				"gatewayReference",
+				"proof",
+				"refunds",
+				"history",
+				"checkoutUrl",
+				"paidAt",
+				"voidedAt",
+				"createdAt",
+				"updatedAt"
+			],
+			"additionalProperties": false,
+			"properties": {
+				"id": {
+					"type": "string",
+					"pattern": "^pay_[0-9a-z]{10,64}$"
+				},
+				"status": {
+					"type": "string",
+					"enum": ["pending", "paid", "failed", "cancelled", "voided", "partially_refunded", "refunded"],
+					"description": "pending: waiting for the payer or the gateway; cancelled: the payer cancelled at the gateway (they may try again); voided: you cancelled it, nobody can pay it."
+				},
+				"refundDue": {
+					"type": "boolean",
+					"description": "Money arrived after you cancelled it: refund it."
+				},
+				"amount": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 1000000000000,
+					"description": "Minor units (cents, paisa …)."
+				},
+				"currency": {
+					"type": "string",
+					"pattern": "^[A-Z]{3}$",
+					"description": "ISO 4217 code, for example USD or PKR."
+				},
+				"amountText": {
+					"type": "string",
+					"pattern": "^[0-9]+(\\.[0-9]+)?$",
+					"description": "The amount as a decimal text, for example 10.50."
+				},
+				"refunded": {
+					"type": "integer",
+					"minimum": 0,
+					"description": "Minor units refunded so far."
+				},
+				"gateway": {
+					"oneOf": [
+						{
+							"$ref": "#/components/schemas/Gateway"
+						},
+						{
+							"type": "null"
+						}
+					],
+					"description": "null until a gateway is picked."
+				},
+				"description": {
+					"type": "string",
+					"maxLength": 200,
+					"description": "What the payer sees."
+				},
+				"reference": {
+					"type": "string",
+					"maxLength": 120,
+					"description": "Your reference, for example the order number."
+				},
+				"customer": {
+					"$ref": "#/components/schemas/Customer"
+				},
+				"metadata": {
+					"type": "object",
+					"maxProperties": 20,
+					"propertyNames": {
+						"pattern": "^[A-Za-z0-9_.-]{1,40}$"
+					},
+					"additionalProperties": {
+						"type": "string",
+						"maxLength": 500
+					},
+					"description": "Your own labels: up to 20 names (letters, digits, _ . -) with texts of at most 500 characters."
+				},
+				"source": {
+					"type": "string",
+					"enum": ["api", "link"]
+				},
+				"linkId": {
+					"type": ["string", "null"],
+					"description": "The payment link it was paid through."
+				},
+				"gatewayReference": {
+					"type": ["string", "null"],
+					"description": "The gateway's session, order or transaction reference."
+				},
+				"proof": {
+					"oneOf": [
+						{
+							"type": "object",
+							"required": ["type", "size", "uploadedAt"],
+							"additionalProperties": false,
+							"properties": {
+								"type": {
+									"type": "string",
+									"description": "image/jpeg, image/png, image/webp or application/pdf."
+								},
+								"size": {
+									"type": "integer",
+									"minimum": 0,
+									"description": "Bytes."
+								},
+								"uploadedAt": {
+									"type": "string",
+									"format": "date-time"
+								}
+							}
+						},
+						{
+							"type": "null"
+						}
+					],
+					"description": "A bank-transfer proof the payer uploaded (GET …/proof gives a link to it)."
+				},
+				"refunds": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": ["id", "amount", "reason", "manual", "by", "createdAt"],
+						"additionalProperties": false,
+						"properties": {
+							"id": {
+								"type": "string",
+								"pattern": "^rfd_[0-9a-z]+_[0-9]+$"
+							},
+							"amount": {
+								"type": "integer",
+								"minimum": 1,
+								"maximum": 1000000000000,
+								"description": "Minor units (cents, paisa …)."
+							},
+							"reason": {
+								"type": "string",
+								"maxLength": 200
+							},
+							"manual": {
+								"type": "boolean",
+								"description": "Recorded only: you return the money yourself (gateways without a refund API)."
+							},
+							"by": {
+								"type": "string"
+							},
+							"createdAt": {
+								"type": "string",
+								"format": "date-time"
+							}
+						}
+					}
+				},
+				"history": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": ["at", "event"],
+						"additionalProperties": false,
+						"properties": {
+							"at": {
+								"type": "string",
+								"format": "date-time"
+							},
+							"event": {
+								"type": "string",
+								"enum": [
+									"created",
+									"started",
+									"retried",
+									"cancelled",
+									"paid",
+									"mismatch",
+									"failed",
+									"voided",
+									"stopped",
+									"not_stopped",
+									"refund_due",
+									"refunded",
+									"proof"
+								]
+							},
+							"detail": {
+								"type": "string"
+							},
+							"by": {
+								"type": "string",
+								"description": "Who did it (a staff member's name, or Server)."
+							},
+							"reference": {
+								"type": "string",
+								"description": "A bank transfer's reference (proof or confirmation)."
+							},
+							"note": {
+								"type": "string",
+								"description": "The merchant's note with a confirmation."
+							}
+						}
+					},
+					"description": "Every step, oldest first."
+				},
+				"checkoutUrl": {
+					"type": "string",
+					"format": "uri",
+					"description": "The payer's page for this payment: send them there."
+				},
+				"paidAt": {
+					"type": ["string", "null"],
+					"format": "date-time"
+				},
+				"voidedAt": {
+					"type": ["string", "null"],
+					"format": "date-time",
+					"description": "When you cancelled it."
+				},
+				"createdAt": {
+					"type": "string",
+					"format": "date-time"
+				},
+				"updatedAt": {
+					"type": "string",
+					"format": "date-time"
+				}
+			}
+		},
+		"PaymentEventData": {
+			"type": "object",
+			"description": "A payment that is larger than an event may be comes without metadata and history: read the payment for them.",
+			"required": ["payment"],
+			"additionalProperties": false,
+			"properties": {
+				"payment": {
+					"$ref": "#/components/schemas/Payment"
+				},
+				"refund": {
+					"type": "object",
+					"description": "payments.payment.refunded only.",
+					"required": ["id", "amount"],
+					"additionalProperties": false,
+					"properties": {
+						"id": {
+							"type": "string"
+						},
+						"amount": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 1000000000000,
+							"description": "Minor units (cents, paisa …)."
+						}
+					}
+				}
+			}
+		},
+		"PaymentPage": {
+			"type": "object",
+			"description": "One page of payments, newest first.",
+			"required": ["items", "nextCursor", "hasMore"],
+			"additionalProperties": false,
+			"properties": {
+				"items": {
+					"type": "array",
+					"items": {
+						"$ref": "#/components/schemas/Payment"
+					}
+				},
+				"nextCursor": {
+					"type": ["string", "null"],
+					"description": "Pass it as cursor for the next page (null: the last page)."
+				},
+				"hasMore": {
+					"type": "boolean"
+				}
+			}
+		},
+		"PaymentsEvent": {
+			"type": "object",
+			"description": "A payment event (kept 30 days).",
+			"required": ["id", "type", "at", "data", "delivery"],
+			"additionalProperties": false,
+			"properties": {
+				"id": {
+					"type": "string",
+					"pattern": "^evt_[0-9a-z]{10,64}$"
+				},
+				"type": {
+					"type": "string",
+					"enum": [
+						"payments.payment.paid",
+						"payments.payment.failed",
+						"payments.payment.refunded",
+						"payments.payment.proof_uploaded",
+						"payments.subscription.updated",
+						"payments.settings.changed"
+					],
+					"description": "payments.payment.*: data is PaymentEventData; payments.subscription.updated: SubscriptionEventData; payments.settings.changed: SettingsEventData."
+				},
+				"at": {
+					"type": "string",
+					"format": "date-time"
+				},
+				"data": {
+					"oneOf": [
+						{
+							"$ref": "#/components/schemas/PaymentEventData"
+						},
+						{
+							"$ref": "#/components/schemas/SubscriptionEventData"
+						},
+						{
+							"$ref": "#/components/schemas/SettingsEventData"
+						}
+					]
+				},
+				"delivery": {
+					"type": "string",
+					"enum": ["pending", "sent", "not_connected", "failed"],
+					"description": "Its forwarding to your webhook URLs through Notifications (not_connected: no Notifications token)."
+				}
+			}
+		},
+		"ProofLink": {
+			"type": "object",
+			"required": ["url", "expiresAt"],
+			"additionalProperties": false,
+			"properties": {
+				"url": {
+					"type": "string",
+					"format": "uri",
+					"description": "Download the proof (5 minutes)."
+				},
+				"expiresAt": {
+					"type": "string",
+					"format": "date-time"
+				}
+			}
+		},
+		"SettingsEventData": {
+			"type": "object",
+			"required": ["what"],
+			"additionalProperties": false,
+			"properties": {
+				"what": {
+					"type": "string",
+					"enum": ["settings", "texts", "theme", "format", "list"]
+				},
+				"key": {
+					"type": "string",
+					"description": "The setting (<feature>.<setting>), text or list."
+				}
+			}
+		},
+		"Subscription": {
+			"type": "object",
+			"description": "A gateway-managed subscription as Payments mirrors it.",
+			"required": [
+				"id",
+				"status",
+				"gateway",
+				"plan",
+				"reference",
+				"customer",
+				"gatewayReference",
+				"history",
+				"createdAt",
+				"updatedAt"
+			],
+			"additionalProperties": false,
+			"properties": {
+				"id": {
+					"type": "string",
+					"pattern": "^sub_[0-9a-z]{10,64}$"
+				},
+				"status": {
+					"type": "string",
+					"enum": ["pending", "active", "past_due", "paused", "cancelled", "expired"],
+					"description": "Mirrored from the gateway."
+				},
+				"gateway": {
+					"type": "string",
+					"enum": ["stripe", "paypal"]
+				},
+				"plan": {
+					"type": "string",
+					"description": "The gateway's plan or price id."
+				},
+				"reference": {
+					"type": "string",
+					"maxLength": 120
+				},
+				"customer": {
+					"$ref": "#/components/schemas/Customer"
+				},
+				"gatewayReference": {
+					"type": ["string", "null"]
+				},
+				"history": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": ["at", "event"],
+						"additionalProperties": false,
+						"properties": {
+							"at": {
+								"type": "string",
+								"format": "date-time"
+							},
+							"event": {
+								"type": "string",
+								"enum": ["created", "failed", "pending", "active", "past_due", "paused", "cancelled", "expired"]
+							},
+							"detail": {
+								"type": "string"
+							},
+							"by": {
+								"type": "string"
+							}
+						}
+					}
+				},
+				"createdAt": {
+					"type": "string",
+					"format": "date-time"
+				},
+				"updatedAt": {
+					"type": "string",
+					"format": "date-time"
+				}
+			}
+		},
+		"SubscriptionEventData": {
+			"type": "object",
+			"required": ["subscription"],
+			"additionalProperties": false,
+			"properties": {
+				"subscription": {
+					"$ref": "#/components/schemas/Subscription"
+				}
+			}
+		},
+		"SubscriptionPage": {
+			"type": "object",
+			"description": "One page of subscriptions, newest first.",
+			"required": ["items", "nextCursor", "hasMore"],
+			"additionalProperties": false,
+			"properties": {
+				"items": {
+					"type": "array",
+					"items": {
+						"$ref": "#/components/schemas/Subscription"
+					}
+				},
+				"nextCursor": {
+					"type": ["string", "null"],
+					"description": "Pass it as cursor for the next page (null: the last page)."
+				},
+				"hasMore": {
+					"type": "boolean"
+				}
+			}
+		}
+	},
+	"POST /v1/payments": {
+		"summary": "Create a payment",
+		"description": "Send the payer to checkoutUrl. Without a gateway the payer picks one on that page. 422 gateway_not_ready when the gateway (or every gateway, without one) is off or not connected for the currency; 422 currency_not_supported. Send an Idempotency-Key so a retried request makes one payment.",
+		"body": {
+			"type": "object",
+			"required": ["amount", "currency"],
+			"properties": {
+				"amount": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 1000000000000,
+					"description": "Minor units (cents, paisa …)."
+				},
+				"currency": {
+					"type": "string",
+					"pattern": "^[A-Z]{3}$",
+					"description": "ISO 4217 code, for example USD or PKR."
+				},
+				"gateway": {
+					"oneOf": [
+						{
+							"$ref": "#/components/schemas/Gateway"
+						},
+						{
+							"type": "null"
+						}
+					],
+					"description": "Leave it out to let the payer pick."
+				},
+				"description": {
+					"type": "string",
+					"maxLength": 200,
+					"description": "What the payer sees (one line)."
+				},
+				"reference": {
+					"type": "string",
+					"maxLength": 120,
+					"description": "Your reference, for example the order number."
+				},
+				"customer": {
+					"$ref": "#/components/schemas/CustomerInput"
+				},
+				"metadata": {
+					"type": "object",
+					"maxProperties": 20,
+					"propertyNames": {
+						"pattern": "^[A-Za-z0-9_.-]{1,40}$"
+					},
+					"additionalProperties": {
+						"type": "string",
+						"maxLength": 500
+					},
+					"description": "Your own labels: up to 20 names (letters, digits, _ . -) with texts of at most 500 characters."
+				},
+				"returnUrl": {
+					"type": "string",
+					"maxLength": 2048,
+					"description": "Where the payer comes back to (with ?ss_payment=<id>); on https://<your domain> (or a local address while testing)."
+				},
+				"cancelUrl": {
+					"type": "string",
+					"maxLength": 2048,
+					"description": "Where the payer goes after cancelling at the gateway."
+				}
+			}
+		},
+		"status": 201,
+		"response": {
+			"$ref": "#/components/schemas/Payment"
+		}
+	},
+	"GET /v1/payments": {
+		"summary": "The payments, newest first",
+		"query": {
+			"type": "object",
+			"properties": {
+				"cursor": {
+					"type": "string",
+					"description": "nextCursor of the previous page."
+				},
+				"limit": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 100,
+					"default": 25
+				},
+				"status": {
+					"type": "string",
+					"enum": ["pending", "paid", "failed", "cancelled", "voided", "partially_refunded", "refunded"],
+					"description": "Only payments with this status (another value filters nothing)."
+				},
+				"q": {
+					"type": "string",
+					"description": "A payment id, a payer e-mail address, a reference, or the start of a reference."
+				}
+			}
+		},
+		"response": {
+			"$ref": "#/components/schemas/PaymentPage"
+		}
+	},
+	"GET /v1/payments/count": {
+		"summary": "Count the payments (the list's filters)",
+		"query": {
+			"type": "object",
+			"properties": {
+				"status": {
+					"type": "string",
+					"enum": ["pending", "paid", "failed", "cancelled", "voided", "partially_refunded", "refunded"],
+					"description": "Only payments with this status (another value filters nothing)."
+				},
+				"q": {
+					"type": "string",
+					"description": "A payment id, a payer e-mail address, a reference, or the start of a reference."
+				}
+			}
+		},
+		"response": {
+			"$ref": "#/components/schemas/Count"
+		}
+	},
+	"GET /v1/payments/counts": {
+		"summary": "Count the payments by status or gateway",
+		"description": "by=state counts by status; by=gateway by gateway (none: no gateway picked yet).",
+		"query": {
+			"type": "object",
+			"required": ["by"],
+			"properties": {
+				"by": {
+					"type": "string",
+					"enum": ["state", "gateway"]
+				},
+				"status": {
+					"type": "string",
+					"enum": ["pending", "paid", "failed", "cancelled", "voided", "partially_refunded", "refunded"],
+					"description": "Only payments with this status (another value filters nothing)."
+				},
+				"q": {
+					"type": "string",
+					"description": "A payment id, a payer e-mail address, a reference, or the start of a reference."
+				}
+			}
+		},
+		"response": {
+			"$ref": "#/components/schemas/Counts"
+		}
+	},
+	"GET /v1/payments/:id": {
+		"summary": "Read a payment",
+		"description": "A pending payment is asked of its gateway again (at most every 30 seconds) when you read it.",
+		"response": {
+			"$ref": "#/components/schemas/Payment"
+		}
+	},
+	"POST /v1/payments/:id/cancel": {
+		"summary": "Cancel a payment nobody should pay any more",
+		"description": "For example when its order was cancelled or expired: the payment becomes voided and its page closes. A paid payment answers 409 already_paid (with the payment): refund it instead. Cancelling it again changes nothing.",
+		"body": {
+			"type": "object",
+			"properties": {
+				"reason": {
+					"type": "string",
+					"maxLength": 200,
+					"description": "One line, kept in the history."
+				}
+			}
+		},
+		"response": {
+			"$ref": "#/components/schemas/Payment"
+		}
+	},
+	"POST /v1/payments/:id/verify": {
+		"summary": "Is the payment confirmed for this exact amount?",
+		"description": "Use it before marking an order paid: verified is true only for a payment confirmed by the gateway (refunded later included) with the same amount and currency, never for one you cancelled.",
+		"body": {
+			"type": "object",
+			"required": ["amount", "currency"],
+			"properties": {
+				"amount": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 1000000000000,
+					"description": "The order's amount in minor units."
+				},
+				"currency": {
+					"type": "string",
+					"pattern": "^[A-Z]{3}$",
+					"description": "ISO 4217 code, for example USD or PKR."
+				}
+			}
+		},
+		"response": {
+			"type": "object",
+			"required": ["verified", "payment"],
+			"additionalProperties": false,
+			"properties": {
+				"verified": {
+					"type": "boolean"
+				},
+				"payment": {
+					"$ref": "#/components/schemas/Payment"
+				}
+			}
+		}
+	},
+	"GET /v1/events": {
+		"summary": "Payment events, newest first",
+		"description": "Also sent to your webhook URLs through Notifications when its token is pasted.",
+		"query": {
+			"type": "object",
+			"properties": {
+				"since": {
+					"type": "string",
+					"format": "date-time",
+					"description": "Only events after this time (ISO 8601)."
+				},
+				"types": {
+					"type": "string",
+					"description": "Full event types separated by commas (at most 20), for example payments.payment.paid."
+				},
+				"cursor": {
+					"type": "string",
+					"description": "nextCursor of the previous page."
+				},
+				"limit": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 100,
+					"default": 25
+				}
+			}
+		},
+		"response": {
+			"$ref": "#/components/schemas/EventPage"
+		}
+	},
+	"GET /v1/events/count": {
+		"summary": "Count the events",
+		"query": {
+			"type": "object",
+			"properties": {
+				"since": {
+					"type": "string",
+					"format": "date-time",
+					"description": "Only events after this time (ISO 8601)."
+				},
+				"types": {
+					"type": "string",
+					"description": "Full event types separated by commas (at most 20), for example payments.payment.paid."
+				}
+			}
+		},
+		"response": {
+			"$ref": "#/components/schemas/Count"
+		}
+	},
+	"GET /v1/events/counts": {
+		"summary": "Count the events by type or delivery",
+		"query": {
+			"type": "object",
+			"required": ["by"],
+			"properties": {
+				"by": {
+					"type": "string",
+					"enum": ["type", "delivery"]
+				},
+				"since": {
+					"type": "string",
+					"format": "date-time",
+					"description": "Only events after this time (ISO 8601)."
+				},
+				"types": {
+					"type": "string",
+					"description": "Full event types separated by commas (at most 20), for example payments.payment.paid."
+				}
+			}
+		},
+		"response": {
+			"$ref": "#/components/schemas/Counts"
+		}
+	},
+	"GET /v1/bank-transfer": {
+		"summary": "The bank details, and whether bank transfer is ready",
+		"response": {
+			"$ref": "#/components/schemas/BankTransfer"
+		}
+	},
+	"POST /v1/payments/:id/confirm": {
+		"summary": "Confirm a bank transfer arrived",
+		"description": "Only a pending bank-transfer payment (409 conflict otherwise). One you cancelled is confirmed too, and is then to be refunded (refundDue).",
+		"body": {
+			"type": "object",
+			"properties": {
+				"reference": {
+					"type": "string",
+					"maxLength": 120,
+					"description": "The transfer's reference."
+				},
+				"note": {
+					"type": "string",
+					"maxLength": 500
+				}
+			}
+		},
+		"response": {
+			"$ref": "#/components/schemas/Payment"
+		}
+	},
+	"GET /v1/payments/:id/proof": {
+		"summary": "A link to the payer's bank-transfer proof (5 minutes)",
+		"description": "404 not_found when the payment has no proof; 503 storage_not_connected without Storage.",
+		"response": {
+			"$ref": "#/components/schemas/ProofLink"
+		}
+	},
+	"POST /v1/payments/:id/refunds": {
+		"summary": "Refund a payment, all or part",
+		"description": "Only a paid payment (409 not_refundable). Stripe, PayPal, PayFast (South Africa) and the generic adapter with a refund address refund at the gateway (502 gateway_failed when it refuses); the others are recorded (manual) and you return the money yourself. Send an Idempotency-Key.",
+		"body": {
+			"type": "object",
+			"properties": {
+				"amount": {
+					"type": "integer",
+					"minimum": 1,
+					"description": "Minor units, at most what is left; leave it out to refund everything left."
+				},
+				"reason": {
+					"type": "string",
+					"description": "Kept with the refund (at most 200 characters are kept)."
+				}
+			}
+		},
+		"status": 201,
+		"response": {
+			"$ref": "#/components/schemas/Payment"
+		}
+	},
+	"POST /v1/links": {
+		"summary": "Create a payment link",
+		"description": "Share its url. A fixed amount, or null to let the payer enter one (at least minAmount).",
+		"body": {
+			"type": "object",
+			"required": ["title", "currency"],
+			"properties": {
+				"title": {
+					"type": "string",
+					"minLength": 1,
+					"maxLength": 120
+				},
+				"description": {
+					"type": "string",
+					"maxLength": 1000
+				},
+				"currency": {
+					"type": "string",
+					"pattern": "^[A-Z]{3}$",
+					"description": "ISO 4217 code, for example USD or PKR."
+				},
+				"amount": {
+					"type": ["integer", "null"],
+					"minimum": 1,
+					"maximum": 1000000000000,
+					"description": "Minor units; null (or none) lets the payer enter it."
+				},
+				"minAmount": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 1000000000000,
+					"default": 1,
+					"description": "With no amount: the least a payer may enter."
+				},
+				"gateways": {
+					"type": "array",
+					"items": {
+						"$ref": "#/components/schemas/Gateway"
+					},
+					"description": "Offer only these (default: every ready one)."
+				},
+				"returnUrl": {
+					"type": "string",
+					"maxLength": 2048,
+					"description": "Where payers go afterwards; on https://<your domain> (or a local address while testing)."
+				},
+				"reference": {
+					"type": "string",
+					"maxLength": 120
+				}
+			}
+		},
+		"status": 201,
+		"response": {
+			"$ref": "#/components/schemas/Link"
+		}
+	},
+	"GET /v1/links": {
+		"summary": "The payment links, newest first",
+		"query": {
+			"type": "object",
+			"properties": {
+				"cursor": {
+					"type": "string",
+					"description": "nextCursor of the previous page."
+				},
+				"limit": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 100,
+					"default": 25
+				}
+			}
+		},
+		"response": {
+			"$ref": "#/components/schemas/LinkPage"
+		}
+	},
+	"GET /v1/links/:id": {
+		"summary": "Read a payment link",
+		"response": {
+			"$ref": "#/components/schemas/Link"
+		}
+	},
+	"PATCH /v1/links/:id": {
+		"summary": "Turn a payment link off or on",
+		"body": {
+			"type": "object",
+			"required": ["active"],
+			"properties": {
+				"active": {
+					"type": "boolean",
+					"description": "false turns the link off (its page is gone); true turns it on again."
+				}
+			}
+		},
+		"response": {
+			"$ref": "#/components/schemas/Link"
+		}
+	},
+	"POST /v1/subscriptions": {
+		"summary": "Start a subscription at Stripe or PayPal",
+		"description": "Create the plan at the gateway first (a recurring Stripe price or a PayPal billing plan); send the payer to checkoutUrl. 422 gateway_not_ready; 502 gateway_failed.",
+		"body": {
+			"type": "object",
+			"required": ["gateway", "plan", "returnUrl"],
+			"properties": {
+				"gateway": {
+					"type": "string",
+					"enum": ["stripe", "paypal"]
+				},
+				"plan": {
+					"type": "string",
+					"pattern": "^[A-Za-z0-9_-]{3,100}$",
+					"description": "The gateway's price or plan id."
+				},
+				"customer": {
+					"$ref": "#/components/schemas/CustomerInput"
+				},
+				"reference": {
+					"type": "string",
+					"maxLength": 120
+				},
+				"returnUrl": {
+					"type": "string",
+					"maxLength": 2048,
+					"description": "Where the payer comes back to (with ?ss_subscription=<id>); on https://<your domain>."
+				},
+				"cancelUrl": {
+					"type": "string",
+					"maxLength": 2048,
+					"description": "On https://<your domain> (or a local address while testing)."
+				}
+			}
+		},
+		"status": 201,
+		"response": {
+			"$ref": "#/components/schemas/NewSubscription"
+		}
+	},
+	"GET /v1/subscriptions": {
+		"summary": "The subscriptions, newest first",
+		"query": {
+			"type": "object",
+			"properties": {
+				"cursor": {
+					"type": "string",
+					"description": "nextCursor of the previous page."
+				},
+				"limit": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 100,
+					"default": 25
+				},
+				"status": {
+					"type": "string",
+					"enum": ["pending", "active", "past_due", "paused", "cancelled", "expired"],
+					"description": "Only subscriptions with this status (another value filters nothing)."
+				}
+			}
+		},
+		"response": {
+			"$ref": "#/components/schemas/SubscriptionPage"
+		}
+	},
+	"GET /v1/subscriptions/:id": {
+		"summary": "Read a subscription",
+		"response": {
+			"$ref": "#/components/schemas/Subscription"
+		}
+	},
+	"POST /v1/subscriptions/:id/cancel": {
+		"summary": "Cancel a subscription at its gateway",
+		"description": "409 conflict when it has already ended; 502 gateway_failed when the gateway refuses.",
+		"response": {
+			"$ref": "#/components/schemas/Subscription"
+		}
+	},
+	"GET /v1/checkout/links/:id": {
+		"summary": "A payment link for the pay button",
+		"description": "404 not_found while the link is off.",
+		"response": {
+			"type": "object",
+			"required": ["id", "title", "description", "amount", "minAmount", "currency", "gateways"],
+			"additionalProperties": false,
+			"properties": {
+				"id": {
+					"type": "string"
+				},
+				"title": {
+					"type": "string"
+				},
+				"description": {
+					"type": "string"
+				},
+				"amount": {
+					"type": ["integer", "null"],
+					"description": "Minor units; null: the payer enters it."
+				},
+				"minAmount": {
+					"type": ["integer", "null"]
+				},
+				"currency": {
+					"type": "string",
+					"pattern": "^[A-Z]{3}$",
+					"description": "ISO 4217 code, for example USD or PKR."
+				},
+				"gateways": {
+					"type": "array",
+					"description": "The gateways the payer may pick now, in order.",
+					"items": {
+						"type": "object",
+						"required": ["id", "name"],
+						"additionalProperties": false,
+						"properties": {
+							"id": {
+								"$ref": "#/components/schemas/Gateway"
+							},
+							"name": {
+								"type": "string",
+								"description": "The name payers see."
+							}
+						}
+					}
+				}
+			}
+		}
+	},
+	"POST /v1/checkout/links/:id": {
+		"summary": "Pay a payment link",
+		"description": "Makes the payment; send the payer to checkoutUrl. A wrong amount, e-mail address or gateway answers 422 validation_failed for that field.",
+		"body": {
+			"type": "object",
+			"required": ["gateway"],
+			"properties": {
+				"amount": {
+					"type": ["string", "number"],
+					"description": "Only when the link has no fixed amount: a decimal in the currency's main unit, for example \"10.50\" (not minor units)."
+				},
+				"gateway": {
+					"$ref": "#/components/schemas/Gateway"
+				},
+				"customer": {
+					"type": "object",
+					"properties": {
+						"name": {
+							"type": "string",
+							"maxLength": 120
+						},
+						"email": {
+							"type": "string",
+							"format": "email"
+						}
+					}
+				}
+			}
+		},
+		"status": 201,
+		"response": {
+			"type": "object",
+			"required": ["paymentId", "checkoutUrl"],
+			"additionalProperties": false,
+			"properties": {
+				"paymentId": {
+					"type": "string",
+					"pattern": "^pay_[0-9a-z]{10,64}$"
+				},
+				"checkoutUrl": {
+					"type": "string",
+					"format": "uri"
+				}
+			}
+		}
+	},
+	"GET /v1/checkout/payments/:id": {
+		"summary": "A payment for the pay button",
+		"response": {
+			"type": "object",
+			"required": ["id", "status", "amount", "currency", "description", "checkoutUrl"],
+			"additionalProperties": false,
+			"properties": {
+				"id": {
+					"type": "string"
+				},
+				"status": {
+					"type": "string",
+					"enum": ["pending", "paid", "failed", "cancelled", "voided", "partially_refunded", "refunded"]
+				},
+				"amount": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 1000000000000,
+					"description": "Minor units (cents, paisa …)."
+				},
+				"currency": {
+					"type": "string",
+					"pattern": "^[A-Z]{3}$",
+					"description": "ISO 4217 code, for example USD or PKR."
+				},
+				"description": {
+					"type": "string"
+				},
+				"checkoutUrl": {
+					"type": "string",
+					"format": "uri"
+				}
+			}
+		}
+	},
+	"GET /v1/admin/payments": {
+		"summary": "The payments, newest first (Payments admin widget)",
+		"query": {
+			"type": "object",
+			"properties": {
+				"cursor": {
+					"type": "string",
+					"description": "nextCursor of the previous page."
+				},
+				"limit": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 100,
+					"default": 25
+				},
+				"status": {
+					"type": "string",
+					"enum": ["pending", "paid", "failed", "cancelled", "voided", "partially_refunded", "refunded"],
+					"description": "Only payments with this status (another value filters nothing)."
+				},
+				"q": {
+					"type": "string",
+					"description": "A payment id, a payer e-mail address, a reference, or the start of a reference."
+				}
+			}
+		},
+		"response": {
+			"$ref": "#/components/schemas/PaymentPage"
+		}
+	},
+	"GET /v1/admin/payments/count": {
+		"summary": "Count the payments (Payments admin widget)",
+		"query": {
+			"type": "object",
+			"properties": {
+				"status": {
+					"type": "string",
+					"enum": ["pending", "paid", "failed", "cancelled", "voided", "partially_refunded", "refunded"],
+					"description": "Only payments with this status (another value filters nothing)."
+				},
+				"q": {
+					"type": "string",
+					"description": "A payment id, a payer e-mail address, a reference, or the start of a reference."
+				}
+			}
+		},
+		"response": {
+			"$ref": "#/components/schemas/Count"
+		}
+	},
+	"GET /v1/admin/payments/counts": {
+		"summary": "Count the payments by status or gateway (Payments admin widget)",
+		"description": "by=state counts by status; by=gateway by gateway (none: no gateway picked yet).",
+		"query": {
+			"type": "object",
+			"required": ["by"],
+			"properties": {
+				"by": {
+					"type": "string",
+					"enum": ["state", "gateway"]
+				},
+				"status": {
+					"type": "string",
+					"enum": ["pending", "paid", "failed", "cancelled", "voided", "partially_refunded", "refunded"],
+					"description": "Only payments with this status (another value filters nothing)."
+				},
+				"q": {
+					"type": "string",
+					"description": "A payment id, a payer e-mail address, a reference, or the start of a reference."
+				}
+			}
+		},
+		"response": {
+			"$ref": "#/components/schemas/Counts"
+		}
+	},
+	"GET /v1/admin/payments/:id": {
+		"summary": "Read a payment (Payments admin widget)",
+		"description": "A pending payment is asked of its gateway again (at most every 30 seconds) when you read it.",
+		"response": {
+			"$ref": "#/components/schemas/Payment"
+		}
+	},
+	"POST /v1/admin/payments/:id/refunds": {
+		"summary": "Refund a payment, all or part (Payments admin widget)",
+		"description": "Only a paid payment (409 not_refundable). Stripe, PayPal, PayFast (South Africa) and the generic adapter with a refund address refund at the gateway (502 gateway_failed when it refuses); the others are recorded (manual) and you return the money yourself. Send an Idempotency-Key.",
+		"body": {
+			"type": "object",
+			"properties": {
+				"amount": {
+					"type": "integer",
+					"minimum": 1,
+					"description": "Minor units, at most what is left; leave it out to refund everything left."
+				},
+				"reason": {
+					"type": "string",
+					"description": "Kept with the refund (at most 200 characters are kept)."
+				}
+			}
+		},
+		"status": 201,
+		"response": {
+			"$ref": "#/components/schemas/Payment"
+		}
+	},
+	"POST /v1/admin/payments/:id/confirm": {
+		"summary": "Confirm a bank transfer arrived (Payments admin widget)",
+		"description": "Only a pending bank-transfer payment (409 conflict otherwise). One you cancelled is confirmed too, and is then to be refunded (refundDue).",
+		"body": {
+			"type": "object",
+			"properties": {
+				"reference": {
+					"type": "string",
+					"maxLength": 120,
+					"description": "The transfer's reference."
+				},
+				"note": {
+					"type": "string",
+					"maxLength": 500
+				}
+			}
+		},
+		"response": {
+			"$ref": "#/components/schemas/Payment"
+		}
+	},
+	"GET /v1/admin/payments/:id/proof": {
+		"summary": "A link to the bank-transfer proof (Payments admin widget)",
+		"description": "404 not_found when the payment has no proof; 503 storage_not_connected without Storage.",
+		"response": {
+			"$ref": "#/components/schemas/ProofLink"
+		}
+	},
+	"GET /v1/admin/links": {
+		"summary": "The payment links, newest first (Payment links admin widget)",
+		"query": {
+			"type": "object",
+			"properties": {
+				"cursor": {
+					"type": "string",
+					"description": "nextCursor of the previous page."
+				},
+				"limit": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 100,
+					"default": 25
+				}
+			}
+		},
+		"response": {
+			"$ref": "#/components/schemas/LinkPage"
+		}
+	},
+	"POST /v1/admin/links": {
+		"summary": "Create a payment link (Payment links admin widget)",
+		"description": "Share its url. A fixed amount, or null to let the payer enter one (at least minAmount).",
+		"body": {
+			"type": "object",
+			"required": ["title", "currency"],
+			"properties": {
+				"title": {
+					"type": "string",
+					"minLength": 1,
+					"maxLength": 120
+				},
+				"description": {
+					"type": "string",
+					"maxLength": 1000
+				},
+				"currency": {
+					"type": "string",
+					"pattern": "^[A-Z]{3}$",
+					"description": "ISO 4217 code, for example USD or PKR."
+				},
+				"amount": {
+					"type": ["integer", "null"],
+					"minimum": 1,
+					"maximum": 1000000000000,
+					"description": "Minor units; null (or none) lets the payer enter it."
+				},
+				"minAmount": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 1000000000000,
+					"default": 1,
+					"description": "With no amount: the least a payer may enter."
+				},
+				"gateways": {
+					"type": "array",
+					"items": {
+						"$ref": "#/components/schemas/Gateway"
+					},
+					"description": "Offer only these (default: every ready one)."
+				},
+				"returnUrl": {
+					"type": "string",
+					"maxLength": 2048,
+					"description": "Where payers go afterwards; on https://<your domain> (or a local address while testing)."
+				},
+				"reference": {
+					"type": "string",
+					"maxLength": 120
+				}
+			}
+		},
+		"status": 201,
+		"response": {
+			"$ref": "#/components/schemas/Link"
+		}
+	},
+	"GET /v1/admin/links/:id": {
+		"summary": "Read a payment link (Payment links admin widget)",
+		"response": {
+			"$ref": "#/components/schemas/Link"
+		}
+	},
+	"PATCH /v1/admin/links/:id": {
+		"summary": "Turn a payment link off or on (Payment links admin widget)",
+		"body": {
+			"type": "object",
+			"required": ["active"],
+			"properties": {
+				"active": {
+					"type": "boolean",
+					"description": "false turns the link off (its page is gone); true turns it on again."
+				}
+			}
+		},
+		"response": {
+			"$ref": "#/components/schemas/Link"
+		}
+	},
+	"GET /v1/admin/subscriptions": {
+		"summary": "The subscriptions, newest first (Subscriptions admin widget)",
+		"query": {
+			"type": "object",
+			"properties": {
+				"cursor": {
+					"type": "string",
+					"description": "nextCursor of the previous page."
+				},
+				"limit": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 100,
+					"default": 25
+				},
+				"status": {
+					"type": "string",
+					"enum": ["pending", "active", "past_due", "paused", "cancelled", "expired"],
+					"description": "Only subscriptions with this status (another value filters nothing)."
+				}
+			}
+		},
+		"response": {
+			"$ref": "#/components/schemas/SubscriptionPage"
+		}
+	},
+	"POST /v1/admin/subscriptions/:id/cancel": {
+		"summary": "Cancel a subscription at its gateway (Subscriptions admin widget)",
+		"description": "409 conflict when it has already ended; 502 gateway_failed when the gateway refuses.",
+		"response": {
+			"$ref": "#/components/schemas/Subscription"
+		}
+	}
+}
