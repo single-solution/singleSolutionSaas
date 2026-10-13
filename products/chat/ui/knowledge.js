@@ -5,7 +5,7 @@
  * @module
  */
 import { formatText, mountWidget } from '@ss/app-kit/widget';
-import { buttonOf, fieldMaker, formPart, invalidText, setHidden, textsOf, webAddress, whenOf } from './common.js';
+import { buttonOf, fieldMaker, formPart, isInvalid, setHidden, textsOf, webAddress, whenOf } from './common.js';
 import { element } from './dom.js';
 import { WIDGET_CSS } from './styles.js';
 import { adminCall } from './tickets.js';
@@ -16,11 +16,24 @@ import { adminCall } from './tickets.js';
 export const mountKnowledge = ({ host, win, api, config }) => {
 	const t = textsOf(config);
 	const when = whenOf(config, win);
-	/** @param {import('./common.js').Answer} answer */
-	const failure = (answer) => {
+	/**
+	 * What to tell staff when a call failed: the widget's own texts, never the server's detail.
+	 * @param {import('./common.js').Answer} answer
+	 * @param {string} [invalid] the text of a refused value (`validation_failed`) for this action
+	 */
+	const failure = (answer, invalid = 'common.error') => {
 		if (answer.status === 0 && !api.tickets.current()) return t('knowledge.signedOut');
 		if (answer.status === 403) return t('knowledge.noAccess');
-		return invalidText(answer) || t('common.error');
+		return isInvalid(answer) ? t(invalid) : t('common.error');
+	};
+	/**
+	 * Why a page could not be fetched, in the widget texts: the status the page answered, else that it cannot be
+	 * reached (the server keeps its own English reason in `error`).
+	 * @param {unknown} error
+	 */
+	const pageProblem = (error) => {
+		const status = /\b([1-5]\d\d)\b/.exec(String(error ?? ''))?.[1];
+		return status ? formatText(t('knowledge.pageStatus'), { status }) : t('knowledge.pageUnreachable');
 	};
 	/** @type {Record<string, string>} */
 	const kinds = { faq: t('knowledge.faq'), article: t('knowledge.article') };
@@ -66,7 +79,7 @@ export const mountKnowledge = ({ host, win, api, config }) => {
 					const answer = editing
 						? await adminCall(api, 'PUT', `/v1/admin/knowledge/entries/${encodeURIComponent(editing.id)}`, body)
 						: await adminCall(api, 'POST', '/v1/admin/knowledge/entries', body);
-					if (!answer.ok) return failure(answer);
+					if (!answer.ok) return failure(answer, 'knowledge.entryInvalid');
 					reset();
 					await load(true);
 					return t('knowledge.saved');
@@ -141,7 +154,7 @@ export const mountKnowledge = ({ host, win, api, config }) => {
 					label: t('knowledge.pageAdd'),
 					submit: async () => {
 						const answer = await adminCall(api, 'POST', '/v1/admin/knowledge/pages', { url: url.input.value.trim() });
-						if (!answer.ok) return failure(answer);
+						if (!answer.ok) return failure(answer, 'knowledge.pageInvalid');
 						/** @type {HTMLFormElement} */ (add).reset();
 						await loadPages();
 						return t('knowledge.pageAdded');
@@ -163,9 +176,7 @@ export const mountKnowledge = ({ host, win, api, config }) => {
 							'span',
 							{ class: 'meta' },
 							[
-								page.status === 'ok'
-									? t('knowledge.pageOk')
-									: formatText(t('knowledge.pageFailed'), { error: page.error ?? '' }),
+								page.status === 'ok' ? t('knowledge.pageOk') : pageProblem(page.error),
 								page.fetchedAt ? formatText(t('knowledge.pageFetched'), { time: when(page.fetchedAt) }) : '',
 							]
 								.filter(Boolean)

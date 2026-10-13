@@ -7,7 +7,7 @@
  */
 import { formatDate, formatText, mountWidget, viewerOf } from '@ss/app-kit/widget';
 import { dayKey } from '../core/time.js';
-import { fieldMaker, invalidText, textsOf } from './common.js';
+import { fieldMaker, isInvalid, textsOf } from './common.js';
 import { element } from './dom.js';
 import { WIDGET_CSS } from './styles.js';
 import { adminCall } from './tickets.js';
@@ -71,7 +71,9 @@ export const mountReports = ({ host, win, api, config, now }) => {
 							? t('reports.signedOut')
 							: answer.status === 403
 								? t('reports.noAccess')
-								: invalidText(answer) || t('common.error');
+								: isInvalid(answer)
+									? t('reports.rangeInvalid')
+									: t('common.error');
 					return;
 				}
 				const data = answer.data;

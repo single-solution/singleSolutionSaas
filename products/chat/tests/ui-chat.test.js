@@ -274,6 +274,10 @@ describe('talking', () => {
 		next = problem(429, 'rate_limited');
 		await type('fast');
 		expect($('.window > .status').textContent).toBe(TEXTS['chat.rateLimited']);
+		// a refused value shows the widget's own text, never the server's English detail
+		next = problem(422, 'validation_failed', { errors: [{ message: 'Write a message (up to 4000 characters).' }] });
+		await type('long');
+		expect($('.window > .status').textContent).toBe(TEXTS['chat.messageInvalid']);
 		next = problem(500, 'boom');
 		await type('x');
 		expect($('.window > .status').textContent).toBe(TEXTS['chat.error']);
@@ -353,7 +357,7 @@ describe('guest limit', () => {
 		expect($('.slot .status').textContent).toBe(TEXTS['chat.consentNeeded']);
 		checkIn(root, 'I agree').checked = true;
 		await submit(form);
-		expect($('.slot .status').textContent).toBe('Bad e-mail');
+		expect($('.slot .status').textContent).toBe(TEXTS['chat.leadInvalid']);
 		expect(server.last('POST /v1/chat/leads')?.body).toEqual({
 			fields: { name: 'Ana', email: 'ana@x', size: 42, gift: true },
 			consent: true,
@@ -460,9 +464,9 @@ describe('flows', () => {
 		expect(email.type).toBe('email');
 		email.value = 'bad@';
 		await submit(email);
-		expect($('.slot .status').textContent).toBe('Not an e-mail');
-		await submit(email);
 		expect($('.slot .status').textContent).toBe(TEXTS['chat.flowInvalid']);
+		await submit(email);
+		expect($('.slot .status').textContent).toBe(TEXTS['chat.error']);
 		email.value = 'a@b.co';
 		await submit(email);
 		await click(buttonIn(root, TEXTS['common.yes']));

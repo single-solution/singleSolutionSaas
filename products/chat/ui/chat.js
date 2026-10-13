@@ -15,7 +15,7 @@ import {
 	buttonOf,
 	fieldMaker,
 	fileProblem,
-	invalidText,
+	isInvalid,
 	problemCode,
 	setHidden,
 	settingsOf,
@@ -162,13 +162,17 @@ export const mountChat = ({ win, host, config, visitor, clock, page, onUnread })
 		if (answer.status === 403 && problemCode(answer.data) === 'product_unavailable') halt();
 		return answer;
 	};
-	/** @param {import('./common.js').Answer} answer */
-	const failure = (answer) => {
+	/**
+	 * What to tell the visitor when a call failed: the widget's own texts, never the server's English detail.
+	 * @param {import('./common.js').Answer} answer
+	 * @param {string} [invalid] the text of a refused value (`validation_failed`) for this action
+	 */
+	const failure = (answer, invalid = 'chat.error') => {
 		const code = problemCode(answer.data);
 		if (code === 'message_rejected') return t('chat.rejected');
 		if (code === 'rate_limited') return t('chat.rateLimited');
 		if (code === 'notifications_not_connected') return t('chat.transcriptUnavailable');
-		return invalidText(answer) || t('chat.error');
+		return isInvalid(answer) ? t(invalid) : t('chat.error');
 	};
 	const here = () => win.location.href;
 	const pageContext = () => {
@@ -308,7 +312,7 @@ export const mountChat = ({ win, host, config, visitor, clock, page, onUnread })
 			const code = problemCode(answer.data);
 			if (code === 'sign_in_required') limit = 'sign_in';
 			else if (code === 'guest_limit_reached') limit = LIMIT_STEPS.includes(answer.data.next) ? answer.data.next : nextStep();
-			else if (code !== 'product_unavailable') say(failure(answer));
+			else if (code !== 'product_unavailable') say(failure(answer, attachment ? 'chat.fileInvalid' : 'chat.messageInvalid'));
 			paint();
 			return false;
 		}
@@ -337,7 +341,7 @@ export const mountChat = ({ win, host, config, visitor, clock, page, onUnread })
 	/** @param {string} answer */
 	const sendFlow = async (answer) => {
 		const sent = await act('/v1/chat/flow', { answer });
-		return sent.ok ? '' : invalidText(sent) || t('chat.flowInvalid');
+		return sent.ok ? '' : failure(sent, 'chat.flowInvalid');
 	};
 	/** @param {import('./common.js').ChatSettings['flows'][number]} flow */
 	const startFlow = async (flow) => {
@@ -362,7 +366,7 @@ export const mountChat = ({ win, host, config, visitor, clock, page, onUnread })
 						customFields: on('custom_fields') ? s.customFields : [],
 						send: async (fields, consent) => {
 							const answer = await call('POST', '/v1/chat/leads', { fields, ...(consent ? { consent } : {}) });
-							if (!answer.ok) return failure(answer);
+							if (!answer.ok) return failure(answer, 'chat.leadInvalid');
 							leadSent = true;
 							paint();
 							return '';
@@ -380,7 +384,7 @@ export const mountChat = ({ win, host, config, visitor, clock, page, onUnread })
 					return '';
 				}
 				const answer = await call('POST', '/v1/chat/contact', contact);
-				if (!answer.ok) return failure(answer);
+				if (!answer.ok) return failure(answer, 'chat.contactInvalid');
 				apply(answer.data.chat);
 				return '';
 			},
@@ -400,7 +404,7 @@ export const mountChat = ({ win, host, config, visitor, clock, page, onUnread })
 			comment: Boolean(s.ratings.comment),
 			send: async (score, comment) => {
 				const answer = await call('POST', '/v1/chat/rating', { score, ...(comment ? { comment } : {}) });
-				if (!answer.ok) return failure(answer);
+				if (!answer.ok) return failure(answer, 'chat.ratingPick');
 				rated = true;
 				say(t('chat.ratingThanks'));
 				apply(answer.data.chat);
@@ -417,7 +421,7 @@ export const mountChat = ({ win, host, config, visitor, clock, page, onUnread })
 			},
 			send: async (email) => {
 				const answer = await call('POST', '/v1/chat/transcript', { email });
-				if (!answer.ok) return failure(answer);
+				if (!answer.ok) return failure(answer, 'chat.emailInvalid');
 				wantsTranscript = false;
 				say(t('chat.transcriptSent'));
 				paint();
@@ -619,7 +623,8 @@ export const mountChat = ({ win, host, config, visitor, clock, page, onUnread })
 			(body) => call('POST', '/v1/chat/uploads', body),
 			chosen,
 		);
-		if ('failed' in uploaded) return say(uploaded.failed ? failure(uploaded.failed) : t('chat.uploadFailed'));
+		if ('failed' in uploaded)
+			return say(uploaded.failed ? failure(uploaded.failed, 'chat.fileInvalid') : t('chat.uploadFailed'));
 		if (await sendMessage(input.value.trim(), uploaded.attachment)) input.value = '';
 	});
 

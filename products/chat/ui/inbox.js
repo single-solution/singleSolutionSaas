@@ -18,7 +18,7 @@ import {
 	fieldMaker,
 	fileProblem,
 	formPart,
-	invalidText,
+	isInvalid,
 	problemCode,
 	setHidden,
 	settingsOf,
@@ -51,12 +51,21 @@ export const mountInbox = ({ host, win, api, config, clock, onUnread }) => {
 		awaiting_visitor: t('inbox.statusAwaiting'),
 		resolved: t('inbox.statusResolved'),
 	};
-	/** @param {import('./common.js').Answer} answer */
-	const failure = (answer) => {
+	/**
+	 * What to tell staff when a call failed: the widget's own texts for each problem, never the server's detail.
+	 * @param {import('./common.js').Answer} answer
+	 * @param {string} [invalid] the text of a refused value (`validation_failed`) for this action
+	 */
+	const failure = (answer, invalid = 'common.error') => {
 		if (answer.status === 0 && !api.tickets.current()) return t('inbox.signedOut');
 		if (answer.status === 403) return t('inbox.noAccess');
-		if (problemCode(answer.data) === 'staff_full') return t('inbox.staffFull');
-		return invalidText(answer) || t('common.error');
+		const code = problemCode(answer.data);
+		if (code === 'staff_full') return t('inbox.staffFull');
+		if (code === 'not_found') return t('inbox.notFound');
+		if (code === 'storage_not_connected') return t('inbox.storageMissing');
+		if (code === 'ai_unavailable') return t('inbox.summaryUnavailable');
+		if (code === 'notifications_not_connected') return t('inbox.transcriptUnavailable');
+		return isInvalid(answer) ? t(invalid) : t('common.error');
 	};
 	const kit = { doc, t, make, api, failure };
 	/** @param {any} visitor */
@@ -218,9 +227,9 @@ export const mountInbox = ({ host, win, api, config, clock, onUnread }) => {
 					/** @type {Record<string, unknown>} */
 					const values = {};
 					for (const field of fields) values[field.definition.key] = field.read();
-					const answer = await patch({ fields: values });
+					const answer = await patch({ fields: values }, 'inbox.fieldsInvalid');
 					if (answer.status === 403) setHidden(fieldsForm, true);
-					return answer.ok ? t('inbox.saved') : failure(answer);
+					return answer.ok ? t('inbox.saved') : failure(answer, 'inbox.fieldsInvalid');
 				},
 			});
 			const context = contextPart({ ...kit, summary: on('ai_summary') });
@@ -250,10 +259,7 @@ export const mountInbox = ({ host, win, api, config, clock, onUnread }) => {
 				submit: async () => {
 					const answer = await adminCall(api, 'POST', `${path()}/transcript`, { email: transcript.input.value.trim() });
 					if (answer.status === 403) setHidden(transcriptForm, true);
-					if (answer.ok) return t('inbox.transcriptSent');
-					return problemCode(answer.data) === 'notifications_not_connected'
-						? t('inbox.transcriptUnavailable')
-						: failure(answer);
+					return answer.ok ? t('inbox.transcriptSent') : failure(answer, 'inbox.emailInvalid');
 				},
 			});
 			const askRating = buttonOf(doc, t('inbox.askRating'), { class: 'secondary' });
@@ -390,13 +396,13 @@ export const mountInbox = ({ host, win, api, config, clock, onUnread }) => {
 				sync();
 				if (fresh && !doc.hidden) await markRead();
 			};
-			/** @param {Record<string, unknown>} body */
-			const patch = async (body) => {
+			/** @param {Record<string, unknown>} body @param {string} [invalid] the text of a refused value */
+			const patch = async (body, invalid) => {
 				const answer = await adminCall(api, 'PATCH', path(), body);
 				if (answer.ok) current = answer.data.conversation;
 				if (answer.status === 403) setHidden(manage, true);
 				sync();
-				detailNote.textContent = answer.ok ? t('inbox.saved') : failure(answer);
+				detailNote.textContent = answer.ok ? t('inbox.saved') : failure(answer, invalid);
 				if (answer.ok) await load(true);
 				return answer;
 			};
@@ -410,7 +416,7 @@ export const mountInbox = ({ host, win, api, config, clock, onUnread }) => {
 					detailNote.textContent = '';
 				} else {
 					if (answer.status === 403) setHidden(kindOf === 'notes' ? addNote : replyForm, true);
-					detailNote.textContent = failure(answer);
+					detailNote.textContent = failure(answer, kindOf === 'notes' ? 'inbox.noteInvalid' : 'inbox.replyInvalid');
 				}
 				return answer;
 			};
@@ -418,7 +424,10 @@ export const mountInbox = ({ host, win, api, config, clock, onUnread }) => {
 			statusPick.input.addEventListener('change', () => void patch({ status: statusPick.input.value }));
 			paused.input.addEventListener('change', () => void patch({ aiPaused: paused.input.checked }));
 			handBack.addEventListener('click', () => void patch({ aiPaused: false }));
-			assign.input.addEventListener('change', () => void patch({ assignedTo: assign.input.value || null }));
+			assign.input.addEventListener(
+				'change',
+				() => void patch({ assignedTo: assign.input.value || null }, 'inbox.assignInvalid'),
+			);
 			replyForm.addEventListener('submit', async (event) => {
 				event.preventDefault();
 				if (reply.value.trim()) await post('messages', { text: reply.value.trim() });
@@ -446,7 +455,7 @@ export const mountInbox = ({ host, win, api, config, clock, onUnread }) => {
 					chosen,
 				);
 				if ('failed' in uploaded) {
-					detailNote.textContent = uploaded.failed ? failure(uploaded.failed) : t('inbox.uploadFailed');
+					detailNote.textContent = uploaded.failed ? failure(uploaded.failed, 'inbox.fileInvalid') : t('inbox.uploadFailed');
 					return;
 				}
 				await post('messages', { text: reply.value.trim(), attachment: uploaded.attachment });

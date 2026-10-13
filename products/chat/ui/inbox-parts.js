@@ -14,7 +14,8 @@ import { adminCall } from './tickets.js';
  * @property {import('./common.js').Texts} t
  * @property {import('./common.js').FieldMaker} make
  * @property {import('./tickets.js').AdminApi} api
- * @property {(answer: import('./common.js').Answer) => string} failure
+ * @property {(answer: import('./common.js').Answer, invalid?: string) => string} failure the widget's text for a failed
+ *   call (`invalid`: the text of a refused value for that action)
  */
 
 /** @typedef {{ id: string, title: string, text: string }} SavedReply */
@@ -42,7 +43,7 @@ export const savedReplies = ({ doc, t, make, api, failure }) => {
 			const answer = editing
 				? await adminCall(api, 'PUT', `/v1/admin/saved-replies/${encodeURIComponent(editing.id)}`, body)
 				: await adminCall(api, 'POST', '/v1/admin/saved-replies', body);
-			if (!answer.ok) return failure(answer);
+			if (!answer.ok) return failure(answer, 'inbox.savedInvalid');
 			editing = null;
 			/** @type {HTMLFormElement} */ (form).reset();
 			await load();
@@ -172,7 +173,7 @@ export const staffPart = ({ doc, t, make, api, failure, queue, onStaff }) => {
 					maxChats: value === '' ? null : Number(value),
 				});
 				if (answer.status === 403) setHidden(save, true);
-				return answer.ok ? t('inbox.saved') : failure(answer);
+				return answer.ok ? t('inbox.saved') : failure(answer, 'inbox.maxChatsInvalid');
 			},
 		});
 		item.append(save);
@@ -191,6 +192,20 @@ export const staffPart = ({ doc, t, make, api, failure, queue, onStaff }) => {
 		setHidden(part, false);
 	};
 	return { part, load, presence };
+};
+
+/**
+ * The visitor's device as staff read it: Chat's own `<kind> · <browser>` with the kind (and an unknown browser) in the
+ * widget texts; any other text (an imported one) as it came.
+ * @param {import('./common.js').Texts} t
+ * @param {string} device
+ */
+export const deviceText = (t, device) => {
+	const [kind = '', browser, ...rest] = device.split(' · ');
+	/** @type {Record<string, string>} */
+	const kinds = { Phone: 'inbox.devicePhone', Tablet: 'inbox.deviceTablet', Computer: 'inbox.deviceComputer' };
+	if (browser === undefined || rest.length > 0 || !Object.hasOwn(kinds, kind)) return device;
+	return `${t(String(kinds[kind]))} · ${browser === 'Browser' ? t('inbox.deviceBrowser') : browser}`;
 };
 
 /**
@@ -224,9 +239,12 @@ export const contextPart = ({ doc, t, api, failure, summary }) => {
 		id = conversation.id;
 		const context = conversation.context ?? {};
 		/** @type {Array<string | Node>} */
-		const lines = [context.name, context.email, context.phone, context.device].filter(
-			(value) => typeof value === 'string' && value !== '',
-		);
+		const lines = [
+			context.name,
+			context.email,
+			context.phone,
+			typeof context.device === 'string' ? deviceText(t, context.device) : '',
+		].filter((value) => typeof value === 'string' && value !== '');
 		const page = context.page;
 		const address = webAddress(page?.url);
 		if (address) {

@@ -5,7 +5,7 @@ import { CHECKS, GUEST_HEADER, GUEST_STORAGE_KEY, PROACTIVE_STORAGE_KEY, SIGN_IN
 import {
 	attachmentNode,
 	fileProblem,
-	invalidText,
+	isInvalid,
 	problemCode,
 	requestJson,
 	settingsOf,
@@ -14,6 +14,7 @@ import {
 	webAddress,
 	whenOf,
 } from '../ui/common.js';
+import { deviceText } from '../ui/inbox-parts.js';
 import { createMemory, isDesktop, pageFlow, startProactive } from '../ui/proactive.js';
 import { createTicketSource } from '../ui/tickets.js';
 import { createChecks, createUnreadChecks } from '../ui/transport.js';
@@ -206,11 +207,19 @@ describe('common', () => {
 	it('reads problems and answers', async () => {
 		expect(problemCode(null)).toBe('');
 		expect(problemCode({ type: 'x/y/z' })).toBe('z');
-		expect(invalidText({ ok: false, status: 422, data: { type: '/validation_failed', errors: [{ message: 'Bad' }] } })).toBe(
-			'Bad',
+		// a refused value is only recognised: the widgets show their own text, never the server's English detail
+		expect(isInvalid({ ok: false, status: 422, data: { type: '/validation_failed', errors: [{ message: 'Bad' }] } })).toBe(
+			true,
 		);
-		expect(invalidText({ ok: false, status: 422, data: { type: '/validation_failed', detail: 'D' } })).toBe('D');
-		expect(invalidText({ ok: false, status: 500, data: null })).toBe('');
+		expect(isInvalid({ ok: false, status: 409, data: { type: '/conflict', detail: 'D' } })).toBe(false);
+		expect(isInvalid({ ok: false, status: 500, data: null })).toBe(false);
+		// the device as staff read it: the kind (and an unknown browser) in the widget texts, other text as it came
+		const texts = textsOf({ texts: { 'inbox.devicePhone': 'Telefon', 'inbox.deviceBrowser': 'Tarayıcı' } });
+		expect(deviceText(texts, 'Phone · Safari')).toBe('Telefon · Safari');
+		expect(deviceText(texts, 'Phone · Browser')).toBe('Telefon · Tarayıcı');
+		expect(deviceText(texts, 'iPhone app')).toBe('iPhone app');
+		expect(deviceText(texts, 'Watch · Safari')).toBe('Watch · Safari');
+		expect(deviceText(texts, 'Phone · Safari · 17')).toBe('Phone · Safari · 17');
 		expect(t('nope')).toBe('nope');
 		vi.spyOn(window, 'fetch').mockRejectedValueOnce(new Error('down')).mockResolvedValueOnce(answer(204));
 		const request = (/** @type {any} */ input, /** @type {any} */ init) => window.fetch(input, init);

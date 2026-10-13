@@ -328,6 +328,13 @@ describe('inbox', () => {
 		fieldIn(root, 'Size').value = '5';
 		await submit(fieldIn(root, 'Size'));
 		expect(server.last('PATCH /v1/admin/conversations/c1')?.body).toEqual({ fields: { size: 5 } });
+		// refused values show the widget's own texts, never the server's English detail
+		patchAnswer = () => problem(422, 'validation_failed', { errors: [{ message: 'Size is not valid.' }] });
+		await submit(fieldIn(root, 'Size'));
+		expect(root.textContent).toContain(TEXTS['inbox.fieldsInvalid']);
+		expect(root.textContent).not.toContain('Size is not valid.');
+		await change(assign, 's1');
+		expect(root.textContent).toContain(TEXTS['inbox.assignInvalid']);
 		patchAnswer = () => problem(403, 'forbidden');
 		await submit(fieldIn(root, 'Size'));
 		expect(/** @type {HTMLElement} */ (root.querySelector('.manage')).hidden).toBe(true);
@@ -387,6 +394,10 @@ describe('inbox', () => {
 		expect(unread).toHaveBeenCalledWith(7, 'inbox');
 
 		// failures
+		replyAnswer = () => problem(422, 'validation_failed', { errors: [{ message: 'Write a reply.' }] });
+		box.value = 'x';
+		await submit(box);
+		expect(root.textContent).toContain(TEXTS['inbox.replyInvalid']);
 		replyAnswer = () => problem(403, 'forbidden');
 		box.value = 'x';
 		await submit(box);
@@ -476,6 +487,7 @@ describe('inbox', () => {
 	it('handles failures, 403s and signing out', async () => {
 		const getTicket = vi.fn().mockResolvedValueOnce(ticket()).mockRejectedValueOnce(new Error('signed out'));
 		let list = () => problem(403, 'forbidden');
+		let summaryAnswer = () => problem(500, 'x');
 		const { hosts, time, server } = await startAdmin({
 			features: ['inbox', 'saved_replies', 'ai_summary', 'context_panel', 'transcripts', 'ratings', 'presence_queue'],
 			settings: { ratings: { askWhen: 'manual' } },
@@ -495,7 +507,7 @@ describe('inbox', () => {
 					}),
 				'GET /v1/admin/conversations/c9': () => problem(404, 'not_found'),
 				'POST /v1/admin/conversations/c1/read': () => answer(204),
-				'POST /v1/admin/conversations/c1/summary': () => problem(500, 'x'),
+				'POST /v1/admin/conversations/c1/summary': () => summaryAnswer(),
 				'POST /v1/admin/conversations/c1/transcript': () => problem(503, 'notifications_not_connected'),
 				'POST /v1/admin/conversations/c1/rating-request': () => problem(403, 'forbidden'),
 			},
@@ -513,12 +525,15 @@ describe('inbox', () => {
 			});
 		await submit(fieldIn(root, TEXTS['inbox.search']));
 		await click(buttonIn(root, 'Ana'));
-		expect(root.textContent).toContain(TEXTS['common.error']);
+		expect(root.textContent).toContain(TEXTS['inbox.notFound']);
 		await click(buttonIn(root, '55'));
 		expect(textsIn(root, '.facts li')).toEqual(['Rating: 2']);
 		expect(textsIn(root, '.log .who')).toEqual(['']);
 		await click(buttonIn(root, TEXTS['inbox.summarise']));
 		expect(root.textContent).toContain(TEXTS['common.error']);
+		summaryAnswer = () => problem(503, 'ai_unavailable');
+		await click(buttonIn(root, TEXTS['inbox.summarise']));
+		expect(root.textContent).toContain(TEXTS['inbox.summaryUnavailable']);
 		await submit(fieldIn(root, TEXTS['inbox.transcriptEmail']));
 		expect(root.textContent).toContain(TEXTS['inbox.transcriptUnavailable']);
 		await click(buttonIn(root, TEXTS['inbox.askRating']));
@@ -538,9 +553,11 @@ describe('knowledge editor', () => {
 		let save = () => answer(201, { entry: {} });
 		const pages = [
 			{ id: 'p1', url: 'https://shop.test/about', title: 'About', status: 'ok', error: null, fetchedAt: AT },
-			{ id: 'p2', url: 'bad url', title: '', status: 'failed', error: 'Timeout', fetchedAt: null },
+			{ id: 'p2', url: 'bad url', title: '', status: 'failed', error: 'The page cannot be reached.', fetchedAt: null },
+			{ id: 'p3', url: 'https://shop.test/gone', title: '', status: 'failed', error: 'The page answered 404.', fetchedAt: AT },
 		];
 		let fetchAgain = () => problem(500, 'x');
+		let addPage = () => answer(201, { page: {} });
 		const { server, hosts } = await startAdmin({
 			features: ['knowledge_editor', 'knowledge_pages'],
 			routes: {
@@ -556,7 +573,7 @@ describe('knowledge editor', () => {
 				'PUT /v1/admin/knowledge/entries/e1': () => answer(200, { entry: {} }),
 				'DELETE /v1/admin/knowledge/entries/e1': () => answer(204),
 				'GET /v1/admin/knowledge/pages': () => answer(200, { items: pages }),
-				'POST /v1/admin/knowledge/pages': () => answer(201, { page: {} }),
+				'POST /v1/admin/knowledge/pages': () => addPage(),
 				'POST /v1/admin/knowledge/pages/p1/fetch': () => fetchAgain(),
 				'DELETE /v1/admin/knowledge/pages/p2': () => answer(204),
 			},
@@ -573,9 +590,11 @@ describe('knowledge editor', () => {
 		await change(fieldIn(root, TEXTS['knowledge.kind']), 'article');
 		fieldIn(root, TEXTS['knowledge.entryTitle']).value = 'Shipping';
 		fieldIn(root, TEXTS['knowledge.entryText']).value = 'Two days';
+		// a refused value shows the widget's own text, never the server's English detail
 		save = () => problem(422, 'validation_failed', { errors: [{ message: 'Too long' }] });
 		await submit(fieldIn(root, TEXTS['knowledge.entryTitle']));
-		expect(root.textContent).toContain('Too long');
+		expect(root.textContent).toContain(TEXTS['knowledge.entryInvalid']);
+		expect(root.textContent).not.toContain('Too long');
 		save = () => answer(201, { entry: {} });
 		await submit(fieldIn(root, TEXTS['knowledge.entryTitle']));
 		expect(server.last('POST /v1/admin/knowledge/entries')?.body).toEqual({
@@ -611,7 +630,9 @@ describe('knowledge editor', () => {
 		// pages
 		const pageList = /** @type {HTMLElement} */ ([...root.querySelectorAll('section.part')].at(-1));
 		expect(pageList.querySelector('a')?.getAttribute('href')).toBe('https://shop.test/about');
-		expect(pageList.textContent).toContain('Could not be fetched: Timeout');
+		expect(pageList.textContent).toContain(TEXTS['knowledge.pageUnreachable']);
+		expect(pageList.textContent).toContain(TEXTS['knowledge.pageStatus'].replace('{status}', '404'));
+		expect(pageList.textContent).not.toContain('The page');
 		const fetchButtons = [...pageList.querySelectorAll('button')].filter((b) => b.textContent === TEXTS['knowledge.pageFetch']);
 		await click(/** @type {HTMLElement} */ (fetchButtons[0]));
 		expect(pageList.textContent).toContain(TEXTS['common.error']);
@@ -632,6 +653,10 @@ describe('knowledge editor', () => {
 		);
 		expect(server.all('DELETE /v1/admin/knowledge/pages/p2')).toHaveLength(1);
 		fieldIn(root, TEXTS['knowledge.pageUrl']).value = 'https://shop.test/faq';
+		addPage = () => problem(422, 'validation_failed', { errors: [{ message: 'Enter an https address.' }] });
+		await submit(fieldIn(root, TEXTS['knowledge.pageUrl']));
+		expect(pageList.textContent).toContain(TEXTS['knowledge.pageInvalid']);
+		addPage = () => answer(201, { page: {} });
 		await submit(fieldIn(root, TEXTS['knowledge.pageUrl']));
 		expect(server.last('POST /v1/admin/knowledge/pages')?.body).toEqual({ url: 'https://shop.test/faq' });
 		expect(pageList.textContent).toContain(TEXTS['knowledge.pageAdded']);
@@ -710,7 +735,8 @@ describe('reports', () => {
 		expect(textsIn(root, 'dd')[4]).toBe(TEXTS['reports.none']);
 		report = () => problem(422, 'validation_failed', { detail: 'Range too long' });
 		await submit(fieldIn(root, TEXTS['reports.from']));
-		expect(root.textContent).toContain('Range too long');
+		expect(root.textContent).toContain(TEXTS['reports.rangeInvalid']);
+		expect(root.textContent).not.toContain('Range too long');
 		expect(textsIn(root, 'dd')).toEqual([]);
 		report = () => problem(500, 'x');
 		await submit(fieldIn(root, TEXTS['reports.from']));

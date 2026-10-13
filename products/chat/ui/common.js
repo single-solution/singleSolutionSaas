@@ -1,7 +1,7 @@
 /**
  * Helpers the Chat widgets share: the widget config and its settings with defaults, widget texts, JSON calls that
- * answer `{ ok, status, data }`, problem codes, labelled fields, small forms and attachments. Text is always set as
- * text, never as HTML.
+ * answer `{ ok, status, data }`, problem codes (shown as the widget's own texts, never the server's English detail),
+ * labelled fields, small forms and attachments. Text is always set as text, never as HTML.
  * @module
  */
 import { formatDate, viewerOf } from '@ss/app-kit/widget';
@@ -101,14 +101,11 @@ export const problemCode = (data) => {
 };
 
 /**
- * The first message of a `validation_failed` problem, or ''.
+ * Whether the server refused what was sent (`validation_failed`). Widgets then show their own text for that action:
+ * never the server's English detail, so every word stays editable (PLAN 0.4.10).
  * @param {Answer} answer
  */
-export const invalidText = (answer) => {
-	const data = answer.data ?? {};
-	const text = data.errors?.[0]?.message ?? data.detail;
-	return problemCode(data) === 'validation_failed' && typeof text === 'string' ? text : '';
-};
+export const isInvalid = (answer) => problemCode(answer.data) === 'validation_failed';
 
 /**
  * A JSON call; never throws.
