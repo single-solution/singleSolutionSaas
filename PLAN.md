@@ -794,7 +794,7 @@ Merchants see **credits only**, never money. Only the Portal's clock counts for 
 
 ### 0.5.5 Statuses and their order
 
-- **Merchant status**, first match wins: **suspended** (an admin suspended them) › **stopped** (a grace period ended
+- **Merchant status**, first match wins: **suspended** (an admin suspended them, as recorded in the money history, the same record that stops charging) › **stopped** (a grace period ended
   with the balance ≤ 0 and no receipt has since brought it above 0) › **in grace** (a grace period is running) › **low
   balance** › **active**. When daily spend is 0, the merchant is never low balance; a running grace period keeps running
   and a stop stays until the balance is above 0. **Setup pending** (password not set yet) is a separate badge, not a
@@ -829,7 +829,11 @@ Merchants see **credits only**, never money. Only the Portal's clock counts for 
 - **Checks run only on use** (0.8.1): when a product fetches a status, and when a Portal page shows a merchant. Each
   check replays the time since the merchant was last settled, in order and hour by hour across all their websites. It
   charges each hour, finds the exact moment the balance reached ≤ 0 and the exact grace end, and charges nothing after
-  that end, even if the check happens days later.
+  that end, even if the check happens days later. It reads the histories from a day before that point and the ledger
+  from that point on, never a merchant's whole history (K-19). Its day charges, grace and stop records and the billing
+  state are saved in one transaction, and a check that loses the race to another saves nothing, so a day is never
+  charged twice (BP-1, 2026-10-13). A check that finds the ledger busy for more than a second answers live and writes
+  nothing; the next check writes.
 - Lists, totals, merchant pages and status responses all use the same pure money function, so their numbers always
   match.
 - Any view may compute any merchant's balance, charges and status live with the pure function without writing anything.
@@ -851,7 +855,10 @@ Merchants see **credits only**, never money. Only the Portal's clock counts for 
   totalled or converted); **payment method** (free text, required, up to 60 characters); **reference** (free text,
   optional, up to 120 characters).
 - A confirm step repeats the merchant, the credits, the amount paid and the new balance before saving. The form carries
-  a one-time key, so a double submit saves once.
+  a one-time key that also names the receipt, so a double submit or a repeat after an error saves once. Once the receipt
+  is saved, the request succeeds even if the e-mail or the Activity entry fails (that failure is logged) (BP-2).
+- Adding or removing a product, feature reports, suspend and resume save the state and its money history together; a
+  repeated add, remove, suspend or resume whose history entry was lost writes the missing entry (BP-3).
 - Receipts are never edited, voided, refunded or reversed, so a mistaken receipt stays. There are no negative receipts,
   adjustments, refunds, trial credits, spend caps, bundles or discounts, and no minimum balance to add a product.
   Credits are never deducted or corrected by hand.
