@@ -26,6 +26,31 @@ const EMAIL = /^[^\s@]{1,64}@[^\s@]+\.[^\s@]+$/;
 const EVENT = /^[a-z][a-z0-9_]{0,40}$/;
 const PERMISSION = /^[a-z][a-z0-9_.]{0,63}$/;
 
+/** The values every staff alert carries (`server/order-events.js` fills them; the docs list them). */
+export const STAFF_ALERT_VALUES = Object.freeze(
+	/** @type {const} */ (['id', 'number', 'name', 'total', 'status', 'paymentMethod', 'business']),
+);
+/**
+ * The events of the `staff_alerts` setting `events` (template `ecommerce.staff_<event>`), each with the values it adds
+ * to {@link STAFF_ALERT_VALUES}.
+ */
+export const STAFF_ALERT_EVENTS = Object.freeze({
+	placed: Object.freeze([]),
+	status: Object.freeze(/** @type {const} */ (['from'])),
+	paid: Object.freeze([]),
+	proof_uploaded: Object.freeze(/** @type {const} */ (['reference'])),
+	cancelled: Object.freeze(/** @type {const} */ (['reason'])),
+	expired: Object.freeze(/** @type {const} */ (['reason'])),
+	return_requested: Object.freeze(/** @type {const} */ (['claimId', 'reference'])),
+});
+/** The value the link to the order in the merchant's admin goes as (the setting `adminUrl` filled in), when it is set. */
+export const STAFF_ALERT_LINK = 'link';
+
+/**
+ * The values a staff alert may carry: a value not listed above fails the type check of the code that sends it.
+ * @typedef {{ [key in typeof STAFF_ALERT_VALUES[number] | typeof STAFF_ALERT_EVENTS[keyof typeof STAFF_ALERT_EVENTS][number]]?: string | number }} StaffAlertValues
+ */
+
 /**
  * An address as a recipient: `{ email }` or `{ phone }` with its dedupe key, or null. Phones are E.164 through the
  * normaliser every product shares (`@ss/contracts/phone`, K12), with their `+` or `00` and calling code, as the kit's
@@ -78,7 +103,7 @@ export const createStaffAlerts = (product, service) => {
 	/**
 	 * Alert the staff of an event, as the feature's settings say. Never throws once the alerts are saved.
 	 * @param {Site} s
-	 * @param {{ feature: string, event: string, values: Record<string, string | number> }} alert
+	 * @param {{ feature: string, event: string, values: StaffAlertValues }} alert
 	 * @returns {Promise<number>} the messages saved
 	 */
 	const send = async (s, { feature, event, values }) => {
@@ -100,7 +125,7 @@ export const createStaffAlerts = (product, service) => {
 			channel: 'email' in recipient ? 'email' : own.phoneChannel === 'sms' ? 'sms' : 'whatsapp',
 			template: `ecommerce.staff_${event}`,
 			to: recipient,
-			values: { ...values, ...(link === '' ? {} : { link }) },
+			values: { ...values, ...(link === '' ? {} : { [STAFF_ALERT_LINK]: link }) },
 		}));
 		await service.sendRequired(s, messages, { later: true });
 		return messages.length;

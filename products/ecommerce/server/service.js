@@ -126,6 +126,8 @@ const RETRY_MS = Object.freeze([60_000, 5 * 60_000, 15 * 60_000, 60 * 60_000, 3 
 const RETRY_BATCH = 20;
 /** Why a call to Notifications is tried again: it did not take the message (unreachable, 5xx, no address, refused token). */
 const RETRY_REASONS = Object.freeze(['unreachable', 'unavailable', 'refused']);
+/** The value {@link createService}'s `notify` adds to every message it sends: the business name (the docs list it). */
+export const BUSINESS_VALUE = 'business';
 
 /**
  * A Payments payment as Ecommerce reads it: `refundDue` when it was paid after the shop cancelled it (K-13).
@@ -509,7 +511,7 @@ export const createService = (product) => {
 					channel,
 					template,
 					to: channel === 'email' ? { email: address } : { phone: address },
-					values: { ...values, business },
+					values: { ...values, [BUSINESS_VALUE]: business },
 				},
 			];
 		});

@@ -1,24 +1,34 @@
-import { KIT_GUIDE } from '@ss/app-kit';
+import { readFile } from 'node:fs/promises';
+import { KIT_GUIDE, apiAnchor } from '@ss/app-kit';
 import { createMemoryStore } from '@ss/app-kit/testing';
-import { describe, expect, it } from 'vitest';
+import { createId } from '@ss/contracts';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import manifest from '../manifest.json' with { type: 'json' };
 import guide from '../docs/guide.json' with { type: 'json' };
 import openapi from '../openapi.json' with { type: 'json' };
 import { createProductInstance } from '../adapters/product.js';
-import { escape, featuresOf, operations, renderDocs } from '../server/docs.js';
+import staffAlertSettings from '../schemas/staff_alerts.settings.json' with { type: 'json' };
+import { escape, featuresOf, operationOf, operations, renderDocs } from '../server/docs.js';
+import { ORDER_MESSAGE_VALUES, ORDER_TEMPLATES } from '../server/order-messages.js';
 import { createRoutes } from '../server/routes.js';
+import { BUSINESS_VALUE } from '../server/service.js';
+import { STAFF_ALERT_EVENTS, STAFF_ALERT_LINK, STAFF_ALERT_VALUES } from '../server/staff-alerts.js';
 import { DEFAULT_FLOW } from '../core/flow.js';
 import { GROWTH_EVENTS } from '../core/growth-events.js';
 import { SEARCH_INDEX_DEFINITION } from '../core/search.js';
 import { SITE_ROUTES, WIDGET_ATTRIBUTES, createSnippets, proxyRoute, sitemapRoute } from '../core/snippets.js';
 import { ADD_TO_CART_EVENT, WIDGET_GLOBAL } from '../core/widgets.js';
+import { STATUS_ROLES } from '../core/model.js';
+import { ALL, ORIGIN, readyShop } from './helpers.js';
 
 const BASE = 'https://shop-api.example.com';
+/** @typedef {Array<{ id: string, title: string, paragraphs: Array<string | { code: string }>, routes: Array<[string, string]> }>} Sections */
 /** The guide's Catalog and SEO sections, with their routes as `[route, feature]`. */
-const SECTIONS =
-	/** @type {Array<{ id: string, title: string, paragraphs: Array<string | { code: string }>, routes: Array<[string, string]> }>} */ (
-		guide.catalogSeo.sections
-	);
+const SECTIONS = /** @type {Sections} */ (guide.catalogSeo.sections);
+/** Every guide group's sections: Catalog and SEO; Checkout, orders and promotions; Import. */
+const ALL_SECTIONS = /** @type {Sections} */ ([...guide.catalogSeo.sections, ...guide.orders.sections, ...guide.import.sections]);
+/** The documented operations, as the API reference lists them. */
+const KNOWN = operations(openapi.paths);
 const permissions = manifest.permissions.map((permission) => permission.key);
 
 describe('createSnippets', () => {
@@ -156,7 +166,11 @@ describe('renderDocs', () => {
 		for (const widget of manifest.widgets) expect(html).toContain(escape(`data-ss-ecommerce="${widget.key}"`));
 		for (const key of permissions) expect(html).toContain(`<code>${key}</code>`);
 		for (const key of Object.keys(guide.templates)) expect(html).toContain(`<code>${key}</code>`);
+		for (const key of Object.values(ORDER_TEMPLATES)) expect(html).toContain(`<code>${key}</code>`);
+		expect(html).toContain(`<code>${ORDER_TEMPLATES.status}.&#60;status key&#62;</code>`);
+		for (const event of Object.keys(STAFF_ALERT_EVENTS)) expect(html).toContain(`<code>ecommerce.staff_${event}</code>`);
 		for (const status of DEFAULT_FLOW.statuses) expect(html).toContain(`<code>${status.key}</code>`);
+		for (const role of STATUS_ROLES) expect(html).toContain(`<code>${role}</code>: `);
 		expect(html).toContain('<code>data-product</code>');
 		expect(html).toContain('<code>data-limit</code>');
 		expect(html).toContain('/v1/chat/me/orders');
@@ -175,18 +189,24 @@ describe('renderDocs', () => {
 		expect(html).toContain(escape(guide.siteRoutes.llmsFull));
 	});
 
-	it('documents every catalog and SEO addition (E1–E17) with its routes and their features', () => {
+	it('documents every addition (catalog and SEO, checkout, orders and promotions, import) with its routes and their features', () => {
 		expect(html).toContain('<h2 id="catalog-seo">Catalog and SEO</h2>');
-		expect(html).toContain(escape(guide.catalogSeo.intro));
+		expect(html).toContain('<h2 id="orders-guide">Checkout, orders and promotions</h2>');
+		expect(html).toContain('<h2 id="import">Import</h2>');
+		for (const intro of [guide.catalogSeo.intro, guide.orders.intro, guide.import.intro]) expect(html).toContain(escape(intro));
 		const names = new Map(manifest.features.map((feature) => [feature.key, feature.name]));
-		for (const section of SECTIONS) {
+		const ids = ALL_SECTIONS.map((section) => section.id);
+		expect(new Set(ids).size).toBe(ids.length);
+		for (const section of ALL_SECTIONS) {
 			const body = /** @type {string} */ (new RegExp(`<section id="${section.id}">.*?</section>`, 's').exec(html)?.[0]);
 			expect(body, section.id).toContain(`<h3>${escape(section.title)}</h3>`);
 			for (const part of section.paragraphs) if (typeof part === 'string') expect(body).toContain(escape(part));
 			for (const [route, feature] of section.routes) {
 				expect(names.has(feature), `${route}: ${feature}`).toBe(true);
+				const found = /** @type {readonly [string, string]} */ (operationOf(route, KNOWN));
+				expect(found, route).not.toBeNull();
 				expect(body).toContain(
-					`<code>${escape(route)}</code> (${escape(names.get(feature) ?? '')}, <code>${feature}</code>)`,
+					`<a href="#${apiAnchor(...found)}"><code>${escape(route)}</code></a> (${escape(names.get(feature) ?? '')}, <code>${feature}</code>)`,
 				);
 			}
 		}
@@ -228,7 +248,7 @@ describe('renderDocs', () => {
 			const got = path.split('/');
 			return want.length === got.length && want.every((part, at) => part.startsWith(':') || part === got[at]);
 		};
-		for (const section of SECTIONS)
+		for (const section of ALL_SECTIONS)
 			for (const [route, feature] of section.routes) {
 				const [method, target] = route.split(' ');
 				const path = String(target).split('?')[0] ?? '';
@@ -272,7 +292,7 @@ describe('renderDocs', () => {
 			'/v1/odd': { get: {} },
 		};
 		const page = renderDocs({ base: BASE, paths });
-		expect(page).toContain('<code>GET /v1/shop/products</code> List &#60;products&#62;');
+		expect(page).toContain('<a href="#op-get-v1-shop-products"><code>GET /v1/shop/products</code></a> List &#60;products&#62;');
 		expect(page).toContain('ticket (customers.manage)');
 		expect(page).toContain('checkout or reviews');
 		expect(page).toContain('<td>always</td>');
@@ -281,6 +301,32 @@ describe('renderDocs', () => {
 		expect(catalog).not.toContain('/v1/tickets');
 		const reviews = /** @type {string} */ (/<section id="feature-reviews">.*?<\/section>/s.exec(page)?.[0]);
 		expect(reviews).toContain('/v1/admin/customers');
+	});
+
+	it('renders the API reference, and every route the page links to is in it', () => {
+		const at = html.indexOf('<h2 id="api">API reference</h2>');
+		expect(at).toBeGreaterThan(0);
+		const apiPart = html.slice(at);
+		for (const [method, path] of KNOWN)
+			expect(apiPart, `${method} ${path}`).toContain(`<section class="ss-api-op" id="${apiAnchor(method, path)}">`);
+		expect(apiPart).toContain(
+			'<section class="ss-api-op" id="op-post-v1-orders-id-move"><h3><code>POST /v1/orders/{id}/move</code>',
+		);
+		expect(apiPart).toContain('<a href="#op-post-v1-shop-orders"><code>POST /v1/shop/orders</code></a>');
+		const targets = new Set([...html.matchAll(/ id="(op-[^"]+)"/g)].map((match) => match[1]));
+		const links = [...html.matchAll(/ href="#(op-[^"]+)"/g)].map((match) => /** @type {string} */ (match[1]));
+		expect(links.length).toBeGreaterThan(KNOWN.length);
+		for (const link of links) expect(targets.has(link), link).toBe(true);
+		expect(renderDocs({ base: BASE })).toBe(html);
+	});
+
+	it('finds the operation a guide route names, the one with the most fixed parts first', () => {
+		expect(operationOf('GET /v1/orders/packing-slips?ids=a,b', KNOWN)).toEqual(['GET', '/v1/orders/packing-slips']);
+		expect(operationOf('GET /v1/orders/:id', KNOWN)).toEqual(['GET', '/v1/orders/{id}']);
+		expect(operationOf('POST /v1/orders/counter', KNOWN)).toEqual(['POST', '/v1/orders/counter']);
+		expect(operationOf('GET /v1/reports/sales?by=grade&format=csv', KNOWN)).toEqual(['GET', '/v1/reports/sales']);
+		expect(operationOf('PATCH /v1/nothing/:id', KNOWN)).toBeNull();
+		expect(operationOf('GET', KNOWN)).toBeNull();
 	});
 
 	it('escapes every value', () => {
@@ -296,5 +342,198 @@ describe('renderDocs', () => {
 		expect(featuresOf({})).toEqual([]);
 		expect(featuresOf({ 'x-ss-feature': 'seo' })).toEqual(['seo']);
 		expect(featuresOf({ 'x-ss-feature': ['seo', 'feeds'] })).toEqual(['seo', 'feeds']);
+	});
+});
+
+describe('the messages, staff alerts and events the code sends', () => {
+	const html = renderDocs({ base: BASE });
+	/** The part of the page from one heading to the next. @param {string} from @param {string} to */
+	const part = (from, to) => html.slice(html.indexOf(from), html.indexOf(to));
+	const messagesPart = part('<h2 id="messages">', '<h2 id="staff-alerts">');
+	const staffPart = part('<h2 id="staff-alerts">', '<h2 id="events">');
+	const eventsPart = part('<h2 id="events">', '<h2 id="couriers">');
+	/** The list item that documents a key. @param {string} section @param {string} key */
+	const itemOf = (section, key) => {
+		const at = section.indexOf(`<li><code>${escape(key)}</code>`);
+		return at < 0 ? '' : section.slice(at, section.indexOf('</li>', at));
+	};
+	/** Whether a section lists a value with its help. @param {string} section @param {string} key */
+	const listed = (section, key) => section.includes(`<li><code>{${escape(key)}}</code>: `);
+
+	it('lists every value of the code’s constants, with what it holds, and the staff events of the setting', () => {
+		const messageHelp = /** @type {Record<string, string>} */ (guide.messageValues);
+		const staffHelp = /** @type {Record<string, string>} */ (guide.staffValues);
+		for (const key of [...ORDER_MESSAGE_VALUES, BUSINESS_VALUE]) {
+			expect(messageHelp[key], key).toBeTruthy();
+			expect(listed(messagesPart, key), key).toBe(true);
+		}
+		expect(Object.keys(messageHelp).sort()).toEqual([...ORDER_MESSAGE_VALUES, BUSINESS_VALUE].sort());
+		const staffKeys = [...STAFF_ALERT_VALUES, ...Object.values(STAFF_ALERT_EVENTS).flat(), STAFF_ALERT_LINK];
+		for (const key of staffKeys) {
+			expect(staffHelp[key], key).toBeTruthy();
+			expect(listed(staffPart, key), key).toBe(true);
+		}
+		expect(Object.keys(staffHelp).sort()).toEqual([...new Set(staffKeys)].sort());
+		expect(Object.keys(STAFF_ALERT_EVENTS)).toEqual(staffAlertSettings.properties.events.items.enum);
+		expect(Object.keys(guide.staffEvents)).toEqual(Object.keys(STAFF_ALERT_EVENTS));
+		for (const [event, extra] of Object.entries(STAFF_ALERT_EVENTS))
+			for (const key of extra) expect(itemOf(staffPart, `ecommerce.staff_${event}`)).toContain(`<code>{${key}}</code>`);
+		for (const [template, values] of Object.entries(guide.templates))
+			for (const key of [...values, BUSINESS_VALUE]) expect(itemOf(messagesPart, template)).toContain(`<code>{${key}}</code>`);
+		for (const role of STATUS_ROLES) expect(Object.keys(guide.roles)).toContain(role);
+	});
+
+	it('lists the event types the code publishes, and the kit’s settings change', async () => {
+		const source = await readFile(new URL('../server/order-events.js', import.meta.url), 'utf8');
+		const published = [...source.matchAll(/publish\(s, '([a-z_.]+)'/g)].map((match) => match[1]);
+		expect(published.length).toBeGreaterThan(10);
+		expect(Object.keys(guide.eventTypes).sort()).toEqual([...new Set([...published, 'settings.changed'])].sort());
+		for (const type of Object.keys(guide.eventTypes)) expect(eventsPart).toContain(`<li><code>ecommerce.${type}</code>: `);
+	});
+
+	describe('through the API', () => {
+		/** @type {Awaited<ReturnType<typeof readyShop>>} */
+		let shop;
+		let visits = 0;
+		const ADDRESS = { name: 'Sara Shopper', phone: '+15550001111', line1: '1 Main Street', city: 'Springfield', country: 'US' };
+
+		/**
+		 * A visitor call from its own address (the visitor rate limits stay out of the way).
+		 * @param {string} method @param {string} path @param {{ body?: unknown, signIn?: string }} [init]
+		 */
+		const visit = (method, path, { body, signIn } = {}) => {
+			visits += 1;
+			return shop.call(method, path, {
+				token: shop.browser,
+				origin: ORIGIN,
+				...(body === undefined ? {} : { body }),
+				headers: {
+					'x-forwarded-for': `10.77.${Math.floor(visits / 250)}.${visits % 250}`,
+					'idempotency-key': createId('key'),
+					...(signIn ? { 'ss-sign-in': signIn } : {}),
+				},
+			});
+		};
+
+		beforeAll(async () => {
+			// stock without locations, so a restock is one number
+			shop = await readyShop({ features: ALL.filter((key) => key !== 'multi_location') });
+			await shop.setting('staff_alerts', 'recipients', ['team@shop.example.com']);
+			await shop.setting('staff_alerts', 'events', Object.keys(STAFF_ALERT_EVENTS));
+			await shop.setting('staff_alerts', 'adminUrl', 'https://admin.shop.example.com/orders/{id}');
+			await shop.setting('checkout', 'orderUrl', `${ORIGIN}/orders/{number}`);
+		});
+		afterAll(async () => shop.product.close());
+
+		it('sends only values the docs list, for every template it sends', async () => {
+			const sara = await shop.signIn();
+			const item = await shop.seedProduct({ price: 1000, stock: 50 });
+			/** @param {string} payment */
+			const place = async (payment) => {
+				const placed = await visit('POST', '/v1/shop/orders', {
+					signIn: sara,
+					body: { lines: [{ productId: item.id }], payment, address: ADDRESS },
+				});
+				expect(placed.status, JSON.stringify(placed.json)).toBe(201);
+				return placed.json.order;
+			};
+			/** @param {string} id @param {Record<string, unknown>} body */
+			const move = async (id, body) => expect((await shop.api('POST', `/v1/orders/${id}/move`, body)).status).toBe(200);
+
+			// placed, status, one template per status, paid on delivery, a claim
+			const cod = await place('cod');
+			await move(cod.id, { to: 'confirmed' });
+			await shop.setting('checkout', 'statusTemplates', 'per_status');
+			await move(cod.id, { to: 'delivered' });
+			await shop.setting('checkout', 'statusTemplates', 'one');
+			const claim = await visit('POST', '/v1/shop/returns', {
+				signIn: sara,
+				body: { orderId: cod.id, kind: 'return', lines: [{ lineId: cod.lines[0].id, quantity: 1 }], reason: 'Too small' },
+			});
+			expect(claim.status).toBe(201);
+			// a payment staff record, which confirms the order
+			const recorded = await place('cod');
+			const paid = await shop.api('POST', `/v1/orders/${recorded.id}/payments`, {
+				method: 'cash',
+				amount: recorded.totals.total,
+				confirm: true,
+			});
+			expect(paid.status).toBe(201);
+			// a cancel with the staff's note
+			await move((await place('cod')).id, { to: 'cancelled', note: 'Out of stock' });
+			// a transfer proof
+			await shop.setting('checkout', 'bankTransferVia', 'manual');
+			const transfer = await place('bank_transfer');
+			const upload = await visit('POST', `/v1/shop/orders/${transfer.id}/proof/upload`, {
+				signIn: sara,
+				body: { type: 'image/png', size: 1000 },
+			});
+			expect(upload.status).toBe(201);
+			const proof = await visit('POST', `/v1/shop/orders/${transfer.id}/proof`, {
+				signIn: sara,
+				body: { key: upload.json.key, reference: 'TRX-1' },
+			});
+			expect(proof.status).toBe(200);
+			await shop.setting('checkout', 'bankTransferVia', 'payments');
+			// a back-in-stock alert
+			const out = await shop.seedProduct({ price: 2000, stock: 0 });
+			expect(
+				(await visit('POST', '/v1/shop/alerts', { signIn: sara, body: { kind: 'back_in_stock', productId: out.id } })).status,
+			).toBe(201);
+			const restock = await shop.api('POST', `/v1/products/${out.id}/stock`, {
+				changes: [{ variantId: /** @type {any} */ (out.variants[0]).id, set: 3 }],
+			});
+			expect(restock.status, JSON.stringify(restock.json)).toBe(200);
+			// an order its time to confirm cancels
+			await place('cod');
+			shop.advance(25 * 3_600_000);
+			await visit('POST', '/v1/shop/cart/quote', { body: { lines: [{ productId: item.id }] } });
+
+			const sent = shop.messages();
+			const templates = new Set(sent.map((message) => message.template));
+			for (const template of [
+				ORDER_TEMPLATES.placed,
+				ORDER_TEMPLATES.status,
+				`${ORDER_TEMPLATES.status}.delivered`,
+				'ecommerce.return_status',
+				'ecommerce.back_in_stock',
+				...Object.keys(STAFF_ALERT_EVENTS).map((event) => `ecommerce.staff_${event}`),
+			])
+				expect(templates, template).toContain(template);
+
+			for (const message of sent) {
+				const keys = Object.keys(message.values);
+				if (message.template.startsWith('ecommerce.order_')) {
+					expect(keys.sort(), message.template).toEqual([...ORDER_MESSAGE_VALUES, BUSINESS_VALUE].sort());
+					for (const key of keys) expect(listed(messagesPart, key), `${message.template} {${key}}`).toBe(true);
+				} else if (message.template.startsWith('ecommerce.staff_')) {
+					const event = /** @type {keyof typeof STAFF_ALERT_EVENTS} */ (message.template.slice('ecommerce.staff_'.length));
+					const own = /** @type {ReadonlyArray<string>} */ (STAFF_ALERT_EVENTS[event]);
+					expect(keys.sort(), message.template).toEqual([...STAFF_ALERT_VALUES, ...own, STAFF_ALERT_LINK].sort());
+					for (const key of keys) {
+						expect(listed(staffPart, key), `${message.template} {${key}}`).toBe(true);
+						if (own.includes(key))
+							expect(itemOf(staffPart, message.template), `${message.template} {${key}}`).toContain(
+								`<code>{${key}}</code>`,
+							);
+					}
+				} else
+					for (const key of keys)
+						expect(itemOf(messagesPart, message.template), `${message.template} {${key}}`).toContain(
+							`<code>{${key}}</code>`,
+						);
+			}
+
+			// the events: each type and data field is in the docs
+			const events = await shop.api('GET', '/v1/events?limit=100');
+			expect(events.status).toBe(200);
+			const types = /** @type {Record<string, string>} */ (guide.eventTypes);
+			for (const event of events.json.items) {
+				const type = String(event.type).slice('ecommerce.'.length);
+				expect(types[type], type).toBeTruthy();
+				for (const key of Object.keys(event.data))
+					expect(`${guide.events} ${types[type]}`, `${type} ${key}`).toMatch(new RegExp(`\\b${key}\\b`));
+			}
+		});
 	});
 });

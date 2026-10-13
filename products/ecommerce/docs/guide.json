@@ -1,6 +1,6 @@
 {
 	"title": "Ecommerce docs",
-	"intro": "Ecommerce is the whole shop of your own website: catalog, variants and stock, cart and checkout, orders with your own statuses, delivery, couriers, taxes, promotions, loyalty, returns, reviews, wishlist, alerts, reports, catalog SEO and feeds. Every product, order and customer record is kept in your own database, and media in your own storage (Connections). Shoppers sign in with Accounts, payments go through Payments and messages through Notifications, each with its server token pasted into Connections. Your website's tokens are in the Portal: open the website, then Install and tokens. The browser token is public and goes into your pages; the server token is secret and stays on your server.",
+	"intro": "Ecommerce is the whole shop of your own website: catalog, variants and stock, cart and checkout, orders with your own statuses, delivery, couriers, taxes, promotions, loyalty, returns, reviews, wishlist, alerts, reports, catalog SEO and feeds. Every product, order and customer record is kept in your own database, and media in your own storage (Connections). Shoppers order as guests or signed in with Accounts, payments go through Payments and messages through Notifications, each with its server token pasted into Connections. Your website's tokens are in the Portal: open the website, then Install and tokens. The browser token is public and goes into your pages; the server token is secret and stays on your server.",
 	"localhost": "Testing on your own computer: the browser token also works on pages served from localhost, *.localhost, 127.0.0.1 or [::1], on any port, over http or https. These pages use your website's real database, storage, Payments, Notifications and courier keys, so orders placed there are real orders, payments are real payments and messages reach real people. There is no test mode: use your payment gateway's own test keys in Payments if it has them, and delete test orders afterwards.",
 	"install": "Add the script to every page of your shop, then place each widget where it belongs. A widget renders nothing while its feature is off, the product is stopped or your database is not connected. Every word the widgets show can be changed in Settings → Texts, and their look in Settings → Theme.",
 	"attributes": "Data attributes of the visitor widgets:",
@@ -20,54 +20,24 @@
 	"jsApi": "window.SSEcommerce is ready once the script has loaded. identify(signIn) passes the shopper's Accounts sign-in to the widgets (identify(null) on sign-out). addToCart({ productId, variantId?, quantity? }) adds to the cart; cart.count() and cart.onChange(listener) feed your own header's cart badge. The cart lives in the shopper's browser and is priced by the server on every quote and again when the order is placed.",
 	"addToCart": "Other scripts on the page add to the cart with a cancelable window event. Chat's product cards use it: when an Ecommerce widget handled the event it calls preventDefault() and opens the cart; otherwise the product's page opens instead.",
 	"growthEvents": "For Growth (analytics and pixels), the shopper widgets dispatch window events, not cancelable, that Growth's page script listens for; no Growth token is needed. ss:view_item when the product page shows a product, ss:add_to_cart whenever a line is added to the cart (product page, wishlist, addToCart() and the add-to-cart event), ss:begin_checkout the first time the shopper presses Place order, and ss:purchase once the order is placed. The detail is { currency, value, items } (ss:purchase adds orderId and orderNumber, and its value is the order total); each item is { id, variantId, name, price, quantity }, with money in minor units.",
-	"signIn": "Shoppers browse, fill their cart and see prices as guests. Placing an order, writing a review, keeping a wishlist, setting alerts and claiming a return need an Accounts sign-in: paste your website's Accounts server token into Connections, put the Accounts widgets on your site and pass the sign-in to SSEcommerce.identify(signIn). Ecommerce verifies each sign-in with your Accounts keys and keeps only shop records (orders, loyalty, blocklist) linked to the Accounts user id.",
-	"payments": "Payment methods are set in Settings → Checkout and payment. Cash on delivery and pay at pickup orders start awaiting confirmation. Online payments and bank transfers go through Payments: paste your website's Payments server token into Connections. The order starts awaiting payment, the shopper pays on Payments' page (bank transfer: your bank details and the proof upload live in Payments, where you confirm receipt), and Ecommerce marks the order paid only after Payments says it was paid for the order's exact amount and currency. A cash on delivery advance is a Payments payment for the advance. A waiting payment is checked again when the order is read (at most every 30 seconds) and before a waiting order is cancelled at the end of its payment window. When an order is cancelled (by you, the shopper or the end of its window), edited, deleted (one or all) or paid by hand (a payment your staff record) before it is paid, its Payments payment is cancelled too, so it can no longer be paid; if the shopper paid just before, the order stays and is marked paid. A delete or a payment by hand waits while Payments cannot be reached, so try again. Money that still reaches Payments after a cancel is recorded on the cancelled order, which shows a refund due; refund it from the order. Refunds of orders paid online are made through Payments; when Payments can only record a refund (bank transfers, some gateways), the order says so and you return the money yourself.",
-	"success": "After paying, Payments sends the shopper back to the page with the cart widget, with ss_order=<order id> in the address; the cart widget then shows the order's result (paid, waiting or failed). Never treat the return itself as a payment: only the order's status counts.",
-	"orderFlow": "Orders move through your own statuses (Settings → Orders and messages). You name the statuses, add your own and choose the allowed moves; each status has a role, and the rules of the roles hold whatever the flow, so stock, offer uses, loyalty points and money stay right. Orders start in the one awaiting payment or awaiting confirmation status and nothing moves into those; cancelled and refunded are final. The default flow:",
+	"signIn": "Shoppers browse, fill their cart and see prices without signing in. Placing an order follows the checkout setting guests: off (the default) needs an Accounts sign-in; on lets anyone order with a name and phone; unless_password asks a phone that belongs to an Accounts user with a password to sign in (403 sign_in_required with signIn: member_phone, checked with your Accounts token). A guest sends customer { name, phone, email? } with the order: the phone with its country code (the checkout settings defaultCallingCode and trunkPrefix complete local numbers) and, with the setting countries, of one of those countries (422 country_not_allowed). A guest order's answer carries orderKey once: 32 characters that Ecommerce keeps only as a hash. Keep it in the shopper's browser and send it in the SS-Order-Key header to read the order (GET /v1/shop/orders/<id> or /by-number/<number>), pay, cancel, send a transfer proof, download its files and, with reviews per order_line, review its items; a wrong key reads like a missing order (404). A guest who orders with a phone that a member's record has orders as that member (their blocklist, open-order cap and orders list). The orders list, invoices, return claims, the wishlist, loyalty and reviews per product need a sign-in, and alerts too unless the alerts setting guests is on. To sign shoppers in, paste your website's Accounts server token into Connections, put the Accounts widgets on your site and pass the sign-in to SSEcommerce.identify(signIn). Ecommerce verifies each sign-in with your Accounts keys and keeps only shop records (orders, loyalty, blocklist) linked to the Accounts user id. When a signed-in shopper whose phone Accounts verified orders or opens their orders, the guest orders, loyalty points and alerts of that phone move to them.",
+	"payments": "Payment methods are set in Settings → Checkout and payment (online, bank transfer and pay at pickup) and with Cash on delivery, its own feature; the cart lists them in the order of the checkout setting paymentOrder, preselects the first available and shows your note for each (noteCod, noteOnline, noteBankTransfer, notePickup). Cash on delivery and pay at pickup orders start awaiting confirmation (with the cod setting startStatus open, cash on delivery orders without an advance are confirmed at once). Online payments go through Payments: paste your website's Payments server token into Connections. The order starts awaiting payment, the shopper pays on Payments' page, and Ecommerce marks the order paid only after Payments says it was paid for the order's exact amount and currency. Bank transfers go through Payments' bank page too; with the checkout setting bankTransferVia manual the order waits with no Payments payment, shows your bank details, takes the shopper's proof and your staff record the payment (see Bank transfers and transfer proofs). While Payments is connected, bank transfer is offered only once its bank details are saved there (or its Require bank details is off). A cash on delivery advance is a Payments payment for the advance, or with the cod setting advanceVia manual a transfer your staff record. An order waiting for its payment is cancelled when the checkout setting paymentWindowMinutes ends, and one waiting for confirmation when confirmationHours ends (0 = never for either); this is checked when your shop is used, never in the background, and a transfer proof does not stop it. A waiting payment is checked again when the order is read (at most every 30 seconds) and before a waiting order is cancelled at the end of its window. When an order is cancelled (by you, the shopper or the end of its window), edited, deleted (one or all) or paid by hand (a payment your staff record) before it is paid, its Payments payment is cancelled too, so it can no longer be paid; if the shopper paid just before, the order stays and is marked paid. A delete or a payment by hand waits while Payments cannot be reached, so try again. Money that still reaches Payments after a cancel is recorded on the cancelled order, which shows a refund due; refund it from the order. Refunds of orders paid online are made through Payments; when Payments can only record a refund (bank transfers, some gateways), the order says so and you return the money yourself. Send the total the shopper saw as expectedTotal with the order: a different total answers 409 price_changed with the new quote.",
+	"success": "After paying, Payments sends the shopper back to the address your page sent with the order as returnUrl (on your site), with ss_order=<order id> added; the cart widget sends its own page and then shows the order's result (paid, waiting or failed). Without returnUrl the checkout settings successUrl and cancelUrl are used (with {number} and {id}), else your home page with ss_order. Never treat the return itself as a payment: only the order's status counts.",
+	"orderFlow": "Orders move through your own statuses (Settings → Orders and messages, or PUT /v1/lists/order_flow). You name the statuses (keys of 2–40 lower-case letters, digits, _ or -), add your own (up to 30) and choose the allowed moves; each status has a role, and the rules of the roles hold whatever the flow, so stock, offer uses, loyalty points and money stay right. A flow has exactly one awaiting_payment and one awaiting_confirmation status and at least one open, delivered and cancelled status. The default flow, with the moves out of each status:",
 	"roles": {
-		"awaiting_payment": "Paid online, by bank transfer or with a cash on delivery advance: waits for Payments to confirm; cancelled when the payment window ends.",
-		"awaiting_confirmation": "Cash on delivery and pay at pickup, and free online or bank-transfer orders (with the checkout setting freeOrderStart: awaiting_payment they start awaiting payment instead, with no time to pay): waits for your staff to confirm.",
-		"open": "Confirmed and being prepared.",
-		"packed": "Packed; serial numbers are captured here with Grades and serials.",
-		"shipped": "Handed to the courier, with the tracking number and link.",
-		"delivered": "Delivered: loyalty points are earned, reviews open and return windows start.",
-		"cancelled": "Final, only before shipping: stock, booked slots, offer uses and redeemed points go back exactly once.",
-		"returned_to_origin": "The parcel came back: stock goes back and the customer is flagged for cash on delivery.",
-		"refunded": "Final: the money was returned (through Payments when paid online)."
+		"awaiting_payment": "Paid online, by bank transfer or with a cash on delivery advance: waits for the payment (confirmed by Payments, or recorded by your staff); cancelled when the time to pay ends.",
+		"awaiting_confirmation": "Cash on delivery and pay at pickup, and free online or bank-transfer orders (with the checkout setting freeOrderStart awaiting_payment they start awaiting payment instead, already paid, with no time to pay): waits for your staff to confirm; cancelled when the time to confirm ends.",
+		"open": "Confirmed and being prepared. With the checkout setting paidOnConfirm, a staff move of a waiting order of a listed payment method into an open, packed or shipped status records its balance as paid.",
+		"packed": "Packed: serial numbers are captured here with Grades and serials, and the dispatch video with the checkout setting packingVideo.",
+		"shipped": "Handed to the courier: the move takes the courier and the tracking number (required unless the checkout setting trackingRequired is off), or books the shipment with Courier APIs.",
+		"delivered": "Delivered: loyalty points are credited, reviews open, return windows start, and cash on delivery and pay at pickup orders are marked paid (unless the cod setting paidOnDelivery is off).",
+		"cancelled": "Final: stock, booked slots, offer uses and redeemed points go back exactly once; money paid through Payments is refunded, and money your staff recorded shows as a refund due.",
+		"returned_to_origin": "The parcel came back. The move takes reason rto (the default; it counts towards the customer's returned-parcel flag, the cod setting rtoThreshold) or customer_return (not counted). Stock goes back unless the checkout setting returnRestock is no; offer uses and points stay spent.",
+		"returned": "A customer's return after delivery: stock goes back as returnRestock says, earned points are taken back and redeemed points given back.",
+		"refunded": "Final: the money was returned (the share paid through Payments through Payments, the rest recorded). Moving here needs orders.refund on a ticket. Before delivery it acts as a cancel and needs something paid (else 409 nothing_paid). With the checkout setting autoRefundedStatus, an order whose refunds reach what was paid moves here by itself."
 	},
-	"messages": "Messages to shoppers and alerts go through Notifications: paste your website's Notifications server token into Connections and edit each template in Notifications (e-mail, SMS or WhatsApp, as you set them up there). Order messages are optional: choose the channels and the statuses that send a message in Settings → Orders and messages. A failed or unconnected send never stops an order. Order and claim messages and staff alerts are sent as required (a shopper's opt-out does not stop them) and kept in your database until Notifications takes them: when it cannot be reached they are tried again on your shop's next visits, for up to a day, never twice. In the order and return templates name is the shopper's name; in the alert templates it is the product's name, with its price and page address, and stopUrl the link that stops that shopper's alerts (do not use {unsubscribeUrl} there: Notifications fills it with its own opt-out from every optional message). Values are words, not codes, from your Texts: paymentMethod is the checkout's name of the method (checkout.method.*), deliveryMethod messages.delivery.* (empty without delivery), cancelReason the note your staff typed with the cancel, else messages.cancelReason.staff, shopper, unpaid or unconfirmed, and a claim's kind and status returns.kind.* and returns.status.*. Every template also gets business. Template keys and their values:",
+	"messages": "Messages to shoppers go through Notifications: paste your website's Notifications server token into Connections and edit each template in Notifications (e-mail, SMS or WhatsApp, as you set them up there). Order messages are optional: choose the channels (messageChannels) and the status keys that send a message (notifyStatuses) in Settings → Orders and messages. A failed or unconnected send never stops an order. Order and claim messages and staff alerts are sent as required (a shopper's opt-out does not stop them) and saved in your database first: when Notifications does not take one, it is tried again on your shop's next uses (1, 5, 15 and 60 minutes later, then every 3 hours) for up to a day, and a message that got through is never sent twice. The order templates:",
 	"templates": {
-		"ecommerce.order_placed": [
-			"number",
-			"name",
-			"firstName",
-			"status",
-			"total",
-			"paymentMethod",
-			"deliveryMethod",
-			"courier",
-			"trackingNumber",
-			"trackingUrl",
-			"trackingDetails",
-			"orderUrl",
-			"reviewUrl"
-		],
-		"ecommerce.order_status": [
-			"number",
-			"name",
-			"firstName",
-			"status",
-			"total",
-			"paymentMethod",
-			"deliveryMethod",
-			"courier",
-			"trackingNumber",
-			"trackingUrl",
-			"trackingDetails",
-			"orderUrl",
-			"reviewUrl",
-			"cancelReason"
-		],
 		"ecommerce.return_status": ["number", "claim", "kind", "status", "reason", "amount", "name"],
 		"ecommerce.back_in_stock": ["name", "price", "url", "stopUrl"],
 		"ecommerce.price_drop": ["name", "price", "url", "stopUrl"]
@@ -102,9 +72,9 @@
 	"dataRights": "Data rights run through Accounts: when a user asks for their data or to be deleted, Accounts calls each product. Ecommerce finds the person's records by Accounts user id, e-mail or phone; an export lists their orders and customer record as the shopper sees them (never unit costs, staff notes or names, or a block and its reason), returns, reviews, wishlist, alerts and loyalty history, and a deletion erases them (with the order messages and staff alerts about them still waiting to be sent) or, where you must keep an order for your accounts, removes the personal details from it. Staff actions in the admin widgets are copied to the Accounts activity log.",
 	"admin": "Admin widgets run in your own admin with a ticket. Include the script without data-token, place the widgets and register your ticket function. The widget calls it at start and 1 minute before the ticket expires; your server checks the user's sign-in and role every time and asks only for the permissions that user has.",
 	"tickets": "Your server asks for a ticket with the server token (never send the server token to a browser). The origin is the address of your admin page: any https origin, or a local one while testing. Tickets last 15 minutes and carry only the permissions of switched-on features. Permissions:",
-	"kit": "In Ecommerce: the lists are order_flow, couriers, delivery_zones, tax_rules, grades and booking_hours (GET and PUT /v1/lists/<list> with { value }, checked like the dashboard's editors). Counts: orders (/v1/orders/count and /counts?by=status|role|paymentMethod|paymentState; role groups the status keys by their role in your order flow), products (by=status|brand|stockState|featured|grade), customers (by=blocked), reviews and returns (by=status), each with the same filters as its list and an /v1/admin/ twin for the admin widgets. An order move or refund and a return claim step made with SS-Actor headers show that staff member's name in the order's or the claim's history, every change shows it in the activity log (with the order number, product name or code as its label), and a refund through Payments names them there too. Every visitor route under /v1/shop/ takes the server token with SS-Sign-In and SS-Visitor-IP. Totals and prices in messages, invoices, packing slips, llms.txt and the Chat lookups (priceText, totalText) follow your Format; order numbers take the year in your business time zone, and report days are days in that time zone.",
+	"kit": "In Ecommerce: the lists are order_flow, couriers, delivery_zones, tax_rules, grades, booking_hours and role_prices (GET and PUT /v1/lists/<list> with { value }, checked like the dashboard's editors). Counts: orders (/v1/orders/count and /counts?by=status|role|paymentMethod|paymentState; role groups the status keys by their role in your order flow), products (by=status|brand|stockState|featured|grade), customers (by=blocked), reviews and returns (by=status), each with the same filters as its list and an /v1/admin/ twin for the admin widgets. An order move or refund and a return claim step made with SS-Actor headers show that staff member's name in the order's or the claim's history, every change shows it in the activity log (with the order number, product name or code as its label), and a refund through Payments names them there too. Every visitor route under /v1/shop/ takes the server token with SS-Sign-In and SS-Visitor-IP. Totals and prices in messages, invoices, packing slips, llms.txt and the Chat lookups (priceText, totalText) follow your Format; order numbers take the year in your business time zone, and report days are days in that time zone.",
 	"business": "Every product reads your business basics (name, contact, address) from https://<your domain>/.well-known/business.json. Only name is required; without the file the name is your domain. Shop-only details (payment methods, delivery, policies) are Ecommerce settings.",
-	"api": "Every route answers JSON (feeds, sitemap and llms.txt answer their own formats); errors are RFC 9457 problems with a stable code. Amounts are integer minor units of your shop currency. Times are ISO 8601 in UTC. Lists are paged with cursor and limit. Routes that create things or move money take an Idempotency-Key header. Routes of a feature that is off answer 403 feature_off.",
+	"api": "Every route answers JSON (feeds, sitemaps, llms.txt, CSV files and the HTML invoices, packing slips and pick lists answer their own formats); errors are RFC 9457 problems with a stable code. Amounts are integer minor units of your shop currency. Times are ISO 8601 in UTC. Lists are paged with cursor and limit. Routes that create things or move money take an Idempotency-Key header (placing an order needs one). Routes of a feature that is off answer 403 feature_off. Each route below links to its full description: its parameters, the fields it takes and the fields it answers.",
 	"catalogSeo": {
 		"intro": "What the catalog and its SEO can do beyond the basics, each with the feature it needs. Routes are named with the server token; every staff route also has its /v1/admin/ twin for the admin widgets (ticket with catalog.edit), and the catalog admin widget edits every field below.",
 		"sections": [
@@ -337,10 +307,10 @@
 			"Sell services in simple slots: each product has a duration, your weekly booking hours are set in Settings → Catalog, and a slot is never booked twice."
 		],
 		"checkout": [
-			"The cart, checkout and success page (cart widget), My orders (my_orders widget) and the orders admin widget. Shoppers must be signed in with Accounts to order; paste the Accounts token. Order statuses and moves, the order number prefix and order messages are in Settings → Orders and messages; couriers and their tracking links in Settings → Couriers; your delivery, returns, privacy, terms and warranty policies, as text or HTML, in Settings → Policies."
+			"The cart, checkout and success page (cart widget), My orders (my_orders widget) and the orders admin widget. Shoppers order signed in with Accounts (paste the Accounts token) or, with the checkout setting guests, as guests with an order key. Order statuses and moves, the order number prefix and order messages are in Settings → Orders and messages; couriers and their tracking links in Settings → Couriers; your delivery, returns, privacy, terms and warranty policies, as text or HTML, in Settings → Policies. See Checkout, orders and promotions for payments recorded by hand, more moves, packing, edits, numbers and deletes."
 		],
 		"cod": [
-			"Cash on delivery orders start awaiting confirmation. Set the largest order value, an optional advance paid through Payments, the open-order cap per customer, and use the blocklist and the returned-parcel flag in the customers admin widget. Your staff stop and restart cash on delivery for new orders with the setting Offer cash on delivery (enabled), without switching the feature."
+			"Cash on delivery orders start awaiting confirmation, or confirmed at once with the setting startStatus open. Set the largest order value, an optional advance (through Payments or recorded by your staff), a cash handling fee, whether delivery marks the order paid, and the returned-parcel flag, and use the blocklist in the customers admin widget. Your staff stop and restart cash on delivery for new orders with the setting Offer cash on delivery (enabled), without switching the feature (see Cash on delivery options)."
 		],
 		"delivery_zones": [
 			"Delivery fees by city or area, free delivery over an amount, delivery days and store pickup, in Settings → Delivery. A shopper's address is matched to the first zone that lists its city or area."
@@ -350,35 +320,41 @@
 		],
 		"taxes": ["Tax rules in Settings → Taxes: a percentage per category or region, and whether your prices include tax."],
 		"coupons": [
-			"Codes for a percentage or fixed amount off, with use limits, dates and conditions, made in the promotions admin widget."
+			"Codes for a percentage or fixed amount off, with use limits, dates and conditions, made one by one or many at once (POST /v1/coupons/batch) in the promotions admin widget."
 		],
 		"deals": [
-			"Automatic offers on products, categories or brands, with dates and use limits; shown on product pages and in the cart."
+			"Automatic offers on products, categories or brands, with conditions, days and hours, dates and use limits; shown on product cards, deal pages and in the cart (see Deal rules, deal pages and cart locks)."
 		],
 		"loyalty": [
-			"Shoppers earn points on delivered orders and redeem them at checkout. Set the earn and redeem rates and the expiry in Settings → Loyalty; staff adjust points in the promotions admin widget."
+			"Shoppers earn points, credited when the order is delivered, and redeem them at checkout. Set the earn and redeem rates, who takes part (roles and guests), what points are earned on and when they are worked out, and the expiry in Settings → Loyalty; staff adjust points in the promotions admin widget (see Loyalty options)."
 		],
 		"bundles": ["Bundles and buy X get Y offers, applied in the cart."],
-		"reviews": ["Ratings and reviews from shoppers whose order was delivered, moderated in the customers admin widget."],
-		"wishlist": ["Signed-in shoppers save products to their wishlist (wishlist widget, and the heart on product pages)."],
+		"reviews": [
+			"Ratings and reviews from shoppers whose order was delivered, per product or per item bought (guests too, with the order key), moderated in the customers admin widget (see Reviews per item, alerts and wishlists)."
+		],
+		"wishlist": [
+			"Signed-in shoppers save products to their wishlist (wishlist widget, and the heart on product pages); POST /v1/shop/wishlist/merge adds a list your page kept for a guest."
+		],
 		"alerts": [
-			"Back-in-stock and price-drop alerts by e-mail, SMS or WhatsApp through Notifications (templates ecommerce.back_in_stock and ecommerce.price_drop). Paste the Notifications token. With guests on, the product page asks a guest for a phone (with the checkout setting countries, only a phone of those countries, as for guest orders; a member's phone of another country gets no alerts); with targetPrice on, a price-drop alert may name its price. Each message's {stopUrl} opens your stop page (/alerts/unsubscribe/<token>, or the stopUrl setting with {token}): place the alerts_stop widget there. A message that reaches no one (Notifications down or refusing it) is tried again on later uses of your website, 1, 5, 15 and 60 minutes later, then marked failed; a channel that got through is never sent twice."
+			"Back-in-stock and price-drop alerts per product or variant, by e-mail, SMS or WhatsApp through Notifications (templates ecommerce.back_in_stock and ecommerce.price_drop). Paste the Notifications token. With guests on, the product page asks a guest for a phone (with the checkout setting countries, only a phone of those countries, as for guest orders; a member's phone of another country gets no alerts); with targetPrice on, a price-drop alert may name its price. Each message's {stopUrl} opens your stop page (/alerts/unsubscribe/<token>, or the stopUrl setting with {token}): place the alerts_stop widget there. A message that reaches no one (Notifications down or refusing it) is tried again on later uses of your website, 1, 5, 15 and 60 minutes later, then marked failed; a channel that got through is never sent twice."
 		],
 		"compare": [
 			"Shoppers add products to compare and see them side by side (compare widget). The list lives in the shopper's browser."
 		],
 		"returns": [
-			"Return and warranty claims from My orders, within the windows of each item and grade, with photos (kept in your storage). Staff approve, refund (through Payments when the order was paid online) and restock exactly once."
+			"Return, exchange and warranty claims from My orders (signed in), within the windows of each item and grade, with photos (kept in your storage) and your reasons. Staff approve, receive, refund (through Payments when the order was paid online), replace, repair, restock exactly once and keep notes (see Return, exchange and warranty claims)."
 		],
 		"invoices": [
-			"Invoices and packing slips with the serial numbers on each line, from the orders admin widget and My orders."
+			"Invoices and packing slips with the grade, serial numbers and warranty on each line, batch packing slips and pick lists, from the orders admin widget and My orders."
 		],
-		"csv": ["Import and export products and stock, and export orders, as CSV in the customers admin widget."],
+		"csv": [
+			"Import and export products and stock (with an update mode for prices and stock), and export orders and customers, as CSV in the customers admin widget."
+		],
 		"bulk_actions": [
-			"Change prices, stock, status or category for many products at once, and move many orders at once, in the admin widgets."
+			"Change prices, stock, status or category for many products at once, and move many orders at once, in the admin widgets; POST /v1/data/delete-all deletes all orders, customers or the catalog."
 		],
 		"reports": [
-			"Sales by product, category, brand and city, stock age, return rate and margin, in the customers admin widget."
+			"A summary with daily figures, sales by product, category, brand, city, grade and payment method, sell-through, oldest stock, stock age, return rate and margin, each also as CSV, in the customers admin widget."
 		],
 		"seo": [
 			"Meta tags, robots and structured data (ProductGroup, ItemList, FAQPage) for products, categories and every listing, the sitemap and its files, default description and image, and IndexNow through Growth, served by your own site from the API (see Your site serves and Catalog and SEO)."
@@ -397,6 +373,354 @@
 		],
 		"landing_pages": [
 			"Category, brand and grade landing pages with their own copy, indexed only while enough of their products are in stock, and attribute and grade glossary pages, all in the sitemaps (see Catalog and SEO)."
+		],
+		"role_pricing": [
+			"Signed-in shoppers whose Accounts role is in the role_prices list (Settings → Role prices) get its percent off the goods, shown as its own line (see Role prices). Paste the Accounts token."
+		],
+		"events": [
+			"Your server reads the shop's events with GET /v1/events and gets them at its webhook URLs through Notifications (see Events and webhooks)."
+		],
+		"staff_alerts": [
+			"E-mail, WhatsApp or SMS your staff about the order and claim events you choose, through Notifications (see Staff alerts)."
+		],
+		"import": ["For a migration only: see Import."]
+	},
+	"orderRoles": "A move works only when your flow lists it and the roles allow it (else 409 move_not_allowed). Into awaiting_payment only from open or packed: the order waits for its payment again (with the checkout setting rewaitWindow restart, the default, it gets a new time to pay; with none it waits until staff move it). Nothing moves into awaiting_confirmation. open and packed come from waiting, open or packed statuses (packed back to open frees the serial numbers captured when packing); shipped from open, packed or shipped; delivered from waiting, open, packed or shipped; cancelled from waiting, open, packed or shipped (a shipped parcel is recalled and everything is given back); returned_to_origin only from shipped; returned only from delivered; refunded from waiting, open, packed, delivered, returned_to_origin or returned. cancelled and refunded are final; returned_to_origin and returned only move to refunded. The default flow has none of the extra moves (back to waiting, packed back to open, the recall, refunded before delivery) and no returned status: add the ones you use. The roles:",
+	"orderTemplates": {
+		"placed": "sent when an order is placed, with the name of its first status.",
+		"status": "sent when an order moves into a status listed in notifyStatuses (a cancel at the end of its window too), with the checkout setting statusTemplates one (the default).",
+		"perStatus": "with statusTemplates per_status, the status message uses one template per status key instead (for example ecommerce.order_status.confirmed and ecommerce.order_status.dispatched in the default flow): make one in Notifications for each status you list."
+	},
+	"orderValuesIntro": "Every order message gets these values, in words from your Texts (Settings → Texts), never codes; a value that does not apply is empty:",
+	"messageValues": {
+		"number": "the order number.",
+		"name": "the shopper's name on the order.",
+		"firstName": "the first word of that name.",
+		"status": "the name of the order's status (in the placed message, of its first status).",
+		"total": "the order total, written by your Format.",
+		"paymentMethod": "the payment method (texts checkout.method.cod, online, bank_transfer and pickup).",
+		"deliveryMethod": "messages.delivery.delivery or messages.delivery.pickup; empty for an order without delivery.",
+		"courier": "the courier's name once the order has a shipment.",
+		"trackingNumber": "the tracking number.",
+		"trackingUrl": "the courier's tracking link.",
+		"trackingDetails": "the courier, tracking number, tracking link and tracking note that are set, joined by ·.",
+		"orderUrl": "the checkout setting orderUrl with {number} filled in.",
+		"reviewUrl": "the checkout setting reviewUrl with {number} filled in.",
+		"cancelReason": "for a cancel: the note your staff typed with it, else messages.cancelReason.staff, shopper, unpaid (not paid in time) or unconfirmed (not confirmed in time).",
+		"business": "your business name (business.json)."
+	},
+	"otherTemplates": "The claim and alert templates and their values. ecommerce.return_status is sent, as required, on the checkout setting messageChannels when a claim is made and at each staff step (approve, reject, receive, refund, replace, repair, close): name is the shopper's name, claim the claim's reference, kind and status are words (texts returns.kind.* and returns.status.*), reason the shopper's reason and amount the refunded amount by your Format (empty before a refund). ecommerce.back_in_stock and ecommerce.price_drop are optional messages on the alerts setting channels: name is the product's name, price its price, url its page address and stopUrl the link that stops that shopper's alerts (do not use {unsubscribeUrl} there: Notifications fills it with its own opt-out from every optional message).",
+	"staffAlerts": "With Staff alerts on (it needs the Notifications token), Ecommerce tells your staff about the events the staff_alerts setting events lists (placed, cancelled, proof_uploaded and return_requested by default), as required messages saved and tried again like order messages. They go to the setting recipients (up to 20 e-mail addresses and international phone numbers starting with + or 00; phones get WhatsApp, or SMS with phoneChannel sms) and, with staffPermission set to an Ecommerce permission (orders.read, orders.manage, orders.refund or returns.manage) and the Accounts token pasted, to every unblocked Accounts user whose role has it (their e-mail, else their phone; read again after 5 minutes). Each address gets one message. The templates, by event:",
+	"staffEvents": {
+		"placed": "a new order.",
+		"status": "an order moved into another status (other than a cancel).",
+		"paid": "an order became paid: Payments confirmed its payment (or its cash on delivery advance), your staff recorded payments that reach its total, or the checkout setting paidOnConfirm recorded its balance (not when delivery marks a cash order paid).",
+		"proof_uploaded": "a shopper sent the proof of a bank transfer.",
+		"cancelled": "your staff or the shopper cancelled an order.",
+		"expired": "an order was cancelled because its time to pay or to confirm ended.",
+		"return_requested": "a shopper made a return, exchange or warranty claim."
+	},
+	"staffValuesIntro": "Their values (each event's own ones are named above), in words like the order messages':",
+	"staffValues": {
+		"id": "the order id (ord_…).",
+		"number": "the order number.",
+		"name": "the shopper's name.",
+		"total": "the order total, written by your Format.",
+		"status": "the name of the order's status now.",
+		"paymentMethod": "the payment method (texts checkout.method.*).",
+		"business": "your business name.",
+		"from": "the name of the status it came from.",
+		"reference": "the reference the shopper gave with the transfer proof, or the claim's reference.",
+		"reason": "why it was cancelled, as cancelReason in the order messages.",
+		"claimId": "the claim id (ret_…).",
+		"link": "the staff_alerts setting adminUrl with these values filled in (for example https://admin.shop.com/orders/{id}); not sent while the setting is empty."
+	},
+	"events": "With Events on (it needs Catalog), Ecommerce records what happens in your shop for your own server: each event is { id, type, at, data, delivery }, with ids and small facts only (amounts in minor units, statuses and methods as codes; never addresses or contact details), kept 30 days. GET /v1/events?since=<ISO-8601 time>&types=<full types, comma-separated, at most 20>&cursor=&limit= lists them newest first (server token); GET /v1/events/count and /v1/events/counts?by=type|delivery count them. With the Notifications token pasted into Connections, each event is sent right after it happens to your webhook URLs by Notifications (turn on its Outgoing webhooks feature, set the URLs and the signing secret there): a POST of JSON { id, type, createdAt, websiteId, data } with the header SS-Signature (see the Notifications docs to check it). A failed send is tried again on later requests (after 1, 5 and 30 minutes and 2 hours); delivery is pending, sent, not_connected or failed. Imports record no events. Every order event's data has orderId, number, status (the status key), total, currency, paymentMethod and deliveryMethod; the types:",
+	"eventTypes": {
+		"order.placed": "an order was placed.",
+		"order.status_changed": "{ …, from, to, reason, by }: the order moved from one status key to another; reason is rto or customer_return for a parcel coming back, shopper or expired for those cancels, else null; by is who moved it (the staff member's name, Server for a server-token call without SS-Actor headers, system, shopper or guest).",
+		"order.paid": "{ …, paid }: the order became paid, as for the paid staff alert (not when delivery marks a cash order paid); paid is the amount paid so far.",
+		"order.payment_recorded": "{ …, method, amount, reference }: your staff recorded a payment (also through paidOnConfirm), or Payments took money outside the usual confirmation, for example after a cancel (method bank_transfer, cash, other or online). The usual Payments confirmation raises only order.paid, and the cash recorded on delivery neither.",
+		"order.proof_uploaded": "{ …, reference }: the shopper sent the proof of a bank transfer.",
+		"order.cancelled": "{ …, reason }: the order was cancelled; reason is staff, shopper or expired (its time to pay or to confirm ended).",
+		"order.refunded": "{ …, amount, claimId }: a refund was made with POST /v1/orders/<id>/refunds or a claim's refund (claimId, else null). The refund a cancel or a move into a refunded status makes raises only order.status_changed.",
+		"return.requested": "{ claimId, reference, kind, orderId, number }: a shopper made a claim (kind return, exchange or warranty).",
+		"return.status_changed": "{ claimId, orderId, from, to }: a claim moved (requested, approved, rejected, received, refunded, replaced, repaired or closed).",
+		"review.submitted": "{ reviewId, productId, rating, status }: a shopper wrote a review (status pending or approved, as the reviews setting moderation says).",
+		"catalog.changed": "{ kind, id, slug }: a product (kind product) was made or changed by a catalog write, or stock came back to it from an order (a cancel, a refund before delivery, a returned parcel or a claim's restock).",
+		"stock.low": "{ productId, variantId, stock }: after such a change, an active variant of a product that tracks stock is at or under the catalog setting lowStock.",
+		"settings.changed": "{ what, key }: a setting (key <feature>.<setting>), text, list (key the list), the theme or the Format was saved through the API or the dashboard. This one is recorded whether Events is on or not."
+	},
+	"orders": {
+		"intro": "What checkout, orders and promotions can do beyond the basics, each with the feature it needs. Routes are named with the server token; most staff routes also have their /v1/admin/ twins for the admin widgets (a ticket with the permission named; not the order counter, delete-all and the lists), and the orders, promotions and customers admin widgets use them.",
+		"sections": [
+			{
+				"id": "guest-checkout",
+				"title": "Guest checkout and order keys",
+				"paragraphs": [
+					"With the checkout setting guests on or unless_password, POST /v1/shop/orders takes customer { name, phone, email? } without a sign-in (see Guests, order keys and the Accounts sign-in) and answers { order, next, orderKey }. The key is shown once; the same request sent again with its Idempotency-Key within a day answers the same, key included. Send it as SS-Order-Key with GET /v1/shop/orders/<id>, GET /v1/shop/orders/by-number/<number>, POST …/cancel, …/pay, …/proof/upload, …/proof and the downloads. GET /v1/shop/orders/by-number/<number> serves an order page by its number (the owner's sign-in or the key) with the same answer as by id.",
+					"A guest is one customer record per phone (a customer id cus_… with guest true), listed and opened in the customers admin widget like a member. The blocklist and the open-order cap (the checkout setting openOrderCap: orders waiting for payment or confirmation) apply per phone, and a phone that a member's record has makes the order the member's."
+				],
+				"routes": [
+					["POST /v1/shop/orders", "checkout"],
+					["GET /v1/shop/orders/by-number/:number", "checkout"],
+					["GET /v1/shop/orders/:id", "checkout"],
+					["POST /v1/shop/orders/:id/cancel", "checkout"]
+				]
+			},
+			{
+				"id": "checkout-options",
+				"title": "Payment, delivery and cart options",
+				"paragraphs": [
+					"Checkout settings: paymentOrder (the order of the payment methods; the first available is preselected), a note per method (noteCod, noteOnline, noteBankTransfer, notePickup), addressRequired (the address fields required besides name and phone; leave out city for one free-text address), maxLines (50) and maxQuantity (99) per cart, and successUrl and cancelUrl (with {number} and {id}). Delivery settings: defaultFee and defaultFreeOver where no zone matches, defaultMethod (delivery or pickup, preselected when pickup is possible), one pickup point without Multi-location stock (pickupEnabled, pickupName, pickupAddress, pickupHours), and the notes deliveryNote, prepNote and pickupReadyNote.",
+					"Quotes answer paymentMethods (each with available, and a reason when it is not), bankDetails, notes, deliveryOptions and the pickup point; orders answer their notes, the pickup point, and bankDetails while they wait for a transfer. POST /v1/shop/orders takes expectedTotal, the total the shopper saw: a different total answers 409 price_changed with the new quote, so an offer that ended between the cart and the order never charges more. With wholeUnits on in your Format every amount Ecommerce works out is whole: the points value rounds down, percentage fees, role discounts and tax round half up, and deal discounts as the deals setting rounding says."
+				],
+				"routes": [
+					["POST /v1/shop/cart/quote", "checkout"],
+					["POST /v1/shop/orders", "checkout"]
+				]
+			},
+			{
+				"id": "cod-options",
+				"title": "Cash on delivery options",
+				"paragraphs": [
+					"The cod settings: enabled (your staff stop and restart cash on delivery for new orders without switching the feature), maxOrderValue, an advance (advanceAmount, else advancePercent; paid through Payments, or with advanceVia manual by a transfer your staff record), startStatus (awaiting_confirmation, or open: orders without an advance are confirmed at once, with no time to confirm), atPickup (pay cash when collecting), feePercent with feeBase (order_total, or goods_after_discounts: the goods after deals and the role discount), added as totals.fee and printed as Cash handling, paidOnDelivery (delivering a cash on delivery or pay at pickup order records its balance as a cash payment; off: your staff record the cash) and the returned-parcel flag (rtoThreshold; with rtoRequireAdvance flagged customers must pay an advance).",
+					"When cash on delivery is not allowed for an order, placing it answers 422 cod_not_allowed with codReason: needs_delivery, digital_items, over_max (above maxOrderValue, with the fee) or advance_unavailable."
+				],
+				"routes": [
+					["POST /v1/shop/cart/quote", "checkout"],
+					["POST /v1/shop/orders", "checkout"],
+					["POST /v1/orders/:id/payments", "checkout"]
+				]
+			},
+			{
+				"id": "bank-transfers",
+				"title": "Bank transfers and transfer proofs",
+				"paragraphs": [
+					"With the checkout setting bankTransferVia manual, a bank-transfer order (and a cash on delivery advance with the cod setting advanceVia manual) starts awaiting payment with no Payments payment and keeps its time to pay (paymentWindowMinutes; sending a proof does not stop it). Its answers show your bank details from Payments (bankDetails, read again after 5 minutes); without Payments connected there are none, so put your account in noteBankTransfer.",
+					"The shopper sends the proof in two steps: POST /v1/shop/orders/<id>/proof/upload { type, size } (JPEG, PNG, WebP or PDF, up to 10 MB) answers { upload, key, expiresAt }, a presigned PUT to your storage valid 15 minutes; then POST /v1/shop/orders/<id>/proof { key, reference? } attaches it (it may be sent again: the last one counts) and raises order.proof_uploaded and the proof_uploaded staff alert. An order that does not wait for a manual transfer answers 409 nothing_to_pay. Your staff then record the payment (see The payments log)."
+				],
+				"routes": [
+					["POST /v1/shop/orders/:id/proof/upload", "checkout"],
+					["POST /v1/shop/orders/:id/proof", "checkout"],
+					["POST /v1/orders/:id/payments", "checkout"]
+				]
+			},
+			{
+				"id": "payments-log",
+				"title": "The payments log, recorded payments and refunds",
+				"paragraphs": [
+					"Every order keeps payments [{ id, method, amount, reference, proofKey, note, by, at }] and refunds [{ id, method, amount, reference, claimId, note, by, at }]; payment.paid, refunded and state (unpaid, pending, paid, partially_refunded or refunded; a part payment stays unpaid) come from them, and Payments' confirmations are online entries. Staff answers add payment.balanceDue (0 on closed orders), refundable and refundDue (money left on a cancelled order); shopper answers show paid, balanceDue and each entry's method, amount, reference and time, never staff names or notes.",
+					"POST /v1/orders/<id>/payments { method: bank_transfer | cash | other, amount, reference?, note?, confirm? } (orders.manage) records money your staff received, at most the balance due; it is refused on closed orders. It cancels the order's open Payments payment first (409 when the shopper paid there meanwhile, 503 while Payments cannot be reached), and confirm also moves a waiting order to its first open status. With the checkout setting paidOnConfirm (any of cod, online, bank_transfer and pickup), a staff move of a waiting order of a listed method into an open, packed or shipped status records its balance for you.",
+					"POST /v1/orders/<id>/refunds { amount, reason, method?, reference?, claimId? } (orders.refund) refunds up to what was paid less refunds. Without method (or with online) the share paid through Payments goes back through Payments first and the rest is recorded as other; bank_transfer, cash or other only record it. When Payments can only record a refund, the answer's warnings tell you to return the money by hand. With the checkout setting autoRefundedStatus, an order whose refunds reach what was paid moves to its refunded status."
+				],
+				"routes": [
+					["GET /v1/orders/:id", "checkout"],
+					["POST /v1/orders/:id/payments", "checkout"],
+					["POST /v1/orders/:id/refunds", "checkout"]
+				]
+			},
+			{
+				"id": "order-moves",
+				"title": "More moves, reasons and waiting again",
+				"paragraphs": [
+					"POST /v1/orders/<id>/move { to, note?, reason?, shipment?, serials?, video? } moves an order when your flow lists the move and the roles allow it (see Order statuses and roles); add the moves you need to the order_flow list. Entering a returned_to_origin status takes reason rto (the default: counted for the customer's flag) or customer_return (not counted); both return roles put stock back as the checkout setting returnRestock says. A move into a refunded status needs orders.refund on a ticket and refunds what is left; before delivery it needs something paid (409 nothing_paid) and acts as a cancel. The note typed with a cancel is the cancelReason of the shopper's message.",
+					"Shoppers cancel their own order with POST /v1/shop/orders/<id>/cancel in the roles the checkout setting shopperCancel lists (awaiting_payment and awaiting_confirmation by default; it may add open, then only while nothing was paid)."
+				],
+				"routes": [
+					["POST /v1/orders/:id/move", "checkout"],
+					["PUT /v1/lists/order_flow", "checkout"],
+					["POST /v1/shop/orders/:id/cancel", "checkout"]
+				]
+			},
+			{
+				"id": "shipping-packing",
+				"title": "Shipping, tracking notes and the dispatch video",
+				"paragraphs": [
+					"Moving into a shipped status takes shipment { courier, trackingNumber, trackingNote?, estimatedDeliveryAt? } (the tracking number is required unless the checkout setting trackingRequired is off) or, with Courier APIs, { book: true, courier? }. PATCH /v1/orders/<id> with shipment changes it at any time. The courier (a key or a name from Settings → Couriers) is kept by name; shopper answers build its tracking link from today's courier list and show the tracking note and the expected date.",
+					"With the checkout setting packingVideo optional or required, entering a packed status takes video: an upload key in your storage, a YouTube id or address (kept as its youtube-nocookie embed address) or an https address; required refuses packing without one (422 at /video). Shopper answers and Chat's order lookups show it as the dispatch video. POST /v1/orders/bulk-move { to, note?, ids or items: [{ id, shipment?, serials?, video? }] } moves up to 200 orders and answers each one's result."
+				],
+				"routes": [
+					["POST /v1/orders/:id/move", "checkout"],
+					["PATCH /v1/orders/:id", "checkout"],
+					["POST /v1/orders/bulk-move", "bulk_actions"]
+				]
+			},
+			{
+				"id": "order-edits",
+				"title": "Editing a waiting order",
+				"paragraphs": [
+					"While an order waits for payment or confirmation, has nothing paid and holds only physical items, PATCH /v1/orders/<id> also takes lines [{ variantId, quantity, unitPrice? }] (1–50), paymentMethod and delivery { method, city, area, country, locationId }. The order is priced again with the deals and coupon it was placed with (even when they have ended since), its role price and the points it used; its stock holds are swapped in one step (409 out_of_stock when there is not enough), and a Payments payment started for the old total is cancelled, so the shopper pays the new one. The other PATCH fields work in more statuses: staffNote, address (while waiting, open or packed), shipment and serials."
+				],
+				"routes": [["PATCH /v1/orders/:id", "checkout"]]
+			},
+			{
+				"id": "order-numbers",
+				"title": "Order numbers and the counter",
+				"paragraphs": [
+					"Order numbers are <numberPrefix><year>-<number>: the year in your business time zone and the number with at least numberDigits digits (6; 4–8), for example IM-2026-0043 with 4. A year's counter that does not exist yet starts after the highest number already used with that prefix. POST /v1/orders/counter { year, next } (server token only) sets the next number of a year for today's prefix; a number already used answers 422."
+				],
+				"routes": [["POST /v1/orders/counter", "checkout"]]
+			},
+			{
+				"id": "customers-seen",
+				"title": "Customers, seen markers and deletes",
+				"paragraphs": [
+					"GET /v1/customers takes q (a name, an e-mail, an id, or 4 or more digits of a phone), blocked, segment (guest: no Accounts user; active: at least one order; loyalty: points earned or left), createdAfter, unseen=1 and userIds; GET /v1/customers/counts?by=blocked or segment (segment counts members and guests). GET /v1/orders takes status (several, comma-separated), role, paymentState, paymentMethod (several), deliveryMethod, city, customer (cus_… or an Accounts user id), from and to (when placed), createdAfter, unseen=1 and q (number, name, e-mail, city or phone digits).",
+					"POST /v1/orders/<id>/seen and POST /v1/customers/<id>/seen mark a record as seen by the acting user (the ticket's user, or SS-Actor-Id with the server token); unseen=1 lists what that user has not opened.",
+					"DELETE /v1/orders/<id> (orders.delete) gives back what a cancel would while the order is waiting, open, packed or shipped and cancels its open Payments payment first (409 when it was paid meanwhile, 503 while Payments cannot be reached); money paid is not refunded, and the activity log keeps the order's number and total. POST /v1/data/delete-all { scope: catalog | orders | customers, confirm: '<your domain>' } (server token only, Bulk actions) deletes a whole scope: orders with their booked slots, coupon uses and claims (after cancelling every open Payments payment and giving held stock back), customers with their loyalty accounts, or the catalog (products, categories, brands, attributes, serials, size charts and landing pages)."
+				],
+				"routes": [
+					["GET /v1/customers?segment=guest", "checkout"],
+					["GET /v1/customers/counts?by=segment", "checkout"],
+					["GET /v1/orders?unseen=1", "checkout"],
+					["POST /v1/orders/:id/seen", "checkout"],
+					["POST /v1/customers/:id/seen", "checkout"],
+					["DELETE /v1/orders/:id", "checkout"],
+					["POST /v1/data/delete-all", "bulk_actions"]
+				]
+			},
+			{
+				"id": "deals",
+				"title": "Deal rules, deal pages and cart locks",
+				"paragraphs": [
+					"A deal has a slug (unique, else 409 slug_taken), display fields (badgeLabel, discountLabel, color, banner, content, seo and sort), a type (percent, fixed or free_delivery) with its value on the items or the cart (target), and conditions: match all or any over rules { field: products, categories, brands, grades or attribute (with attributeId), op: in or not_in, values } and one level of groups, plus priceRange { min, max } on the variant price, minQuantity per line, cartTotal and paymentMethods. days (0 = Sunday … 6) and timeFrom and timeTo (HH:MM in your business time zone; a timeTo before timeFrom runs past midnight) limit when it applies; allowPoints false stops redeeming points, as the deals setting pointsBlockedBy says.",
+					"Product cards carry dealCount and their first deal's badge (deal). GET /v1/shop/deals lists the live deals in show order (sort, then priority) and GET /v1/shop/deals/<id or slug> answers one, for a deal page; its products come from GET /v1/shop/products?deal=<id or slug>, which lists the deal's scope. Quotes take paymentMethod and are priced for it.",
+					"With the deals setting lockMinutes (0 = off), each quote line with an item deal carries a signed lock: send it back as the cart line's lock and the price is kept for that long, also when the order is placed, even if the deal ends or changes (not when it is deleted or used up). With shopperChoice, quote lines list eligibleDeals and a cart line may name its dealId. The deals settings rounding, lineChoice, cartOffer, cartThresholdBase and pointsBlockedBy choose how deals round and combine."
+				],
+				"routes": [
+					["POST /v1/deals", "deals"],
+					["GET /v1/shop/deals", "deals"],
+					["GET /v1/shop/deals/:ref", "deals"],
+					["GET /v1/shop/products?deal=<id or slug>", "catalog"],
+					["POST /v1/shop/cart/quote", "checkout"]
+				]
+			},
+			{
+				"id": "role-pricing",
+				"title": "Role prices",
+				"paragraphs": [
+					"With Role pricing on (it needs the Accounts token), the list role_prices [{ role, percent (0–90), label }] (Settings → Role prices, or PUT /v1/lists/role_prices; up to 20) gives a signed-in shopper whose Accounts role is listed that percent off the goods after deals, bundles and coupons, before points, delivery, tax and the cash handling fee. Quotes and orders show it as totals.roleDiscount (also counted in discount) with the role's label and percent, and invoices as its own line with your label. Guests never get it."
+				],
+				"routes": [
+					["PUT /v1/lists/role_prices", "role_pricing"],
+					["POST /v1/shop/cart/quote", "checkout"]
+				]
+			},
+			{
+				"id": "loyalty-options",
+				"title": "Loyalty options",
+				"paragraphs": [
+					"The loyalty settings: roles (the Accounts roles that take part; empty = every signed-in shopper), guests (earn: guests earn on their phone and redeem once they sign in), earnBase (goods, or total with delivery and fees), earnAt (delivery: worked out when delivered; placement: fixed when placed), capBase, redeemMode (maximum: one switch redeems the most allowed), expiryUnit (days, or calendar months in your business time zone) and expiryRule (current: a change of the expiry applies to past points too). Points are credited when the order is delivered, and taken back when it is returned or refunded.",
+					"Quotes answer pointsToEarn. GET /v1/shop/loyalty?limit=&offset= answers balance, value, lifetimeEarned, pending (points of orders not delivered yet), history (newest first, with hasMore) and expiringSoon (points ending within 30 days). Staff read and adjust an account at /v1/loyalty/accounts/<customer id or Accounts user id>."
+				],
+				"routes": [
+					["GET /v1/shop/loyalty", "loyalty"],
+					["GET /v1/loyalty/accounts/:id", "loyalty"],
+					["POST /v1/loyalty/accounts/:id/adjust", "loyalty"]
+				]
+			},
+			{
+				"id": "claims",
+				"title": "Return, exchange and warranty claims",
+				"paragraphs": [
+					"Signed-in shoppers claim from a delivered order of theirs: GET /v1/shop/orders/<id>/returnable shows each line's windows, photos go to your storage with POST /v1/shop/returns/photos { type, size } (JPEG, PNG or WebP), and POST /v1/shop/returns { orderId, kind, lines: [{ lineId, quantity }], reason, photos? } makes the claim. kind is one of the returns setting kinds (return and warranty; add exchange, which uses the return window); with the setting reasons the reason must be one of them, else it is free text. The reference is referencePrefix (R-) and 6 characters, kept on the claim.",
+					"Statuses: requested, approved, rejected, received, refunded, replaced, repaired and closed (rejected, replaced, repaired and closed are final). Staff approve, reject (with a note), receive { lines: [{ lineId, restock }] } (lines marked true go back to stock at once, false never), restock, refund { amount, method?, reference?, note? }, replace (exchange and warranty claims), repair (warranty claims), close, and add notes { text } that only staff see. A claim's refund is an order refund, at most what the claimed lines were paid (with the delivery fee under refundDelivery) and what is left on the order; points come back as pointsBack says (proportional, or full_refund_only). The shopper gets ecommerce.return_status at each step; a new claim raises return.requested and the return_requested staff alert."
+				],
+				"routes": [
+					["GET /v1/shop/orders/:id/returnable", "returns"],
+					["POST /v1/shop/returns", "returns"],
+					["POST /v1/returns/:id/receive", "returns"],
+					["POST /v1/returns/:id/refund", "returns"],
+					["POST /v1/returns/:id/replace", "returns"],
+					["POST /v1/returns/:id/repair", "returns"],
+					["POST /v1/returns/:id/notes", "returns"]
+				]
+			},
+			{
+				"id": "reviews-alerts",
+				"title": "Reviews per item, alerts and wishlists",
+				"paragraphs": [
+					"With the reviews setting per order_line, a review is per item bought: POST /v1/shop/reviews { orderId, lineId, rating, title?, body? } from the order's owner, or a guest with its SS-Order-Key, once the order is delivered (one per line, else 409 already_reviewed). With per product (the default) a signed-in shopper with a delivered order of the product sends { productId, rating, title?, body? }. Answers carry verified and the variant name; nameFormat first_initial shows names as Ayesha K. (also in the structured data), and pageSize sets the page. Staff approve, reject, set back to pending (POST /v1/reviews/<id>/pending), reply and delete, and /v1/reviews/counts?by=status counts them.",
+					"Alerts are per product or variant: POST /v1/shop/alerts { kind: back_in_stock | price_drop, productId, variantId?, targetPrice? }. A price-drop alert may name a price below today's (the product page asks for it with the alerts setting targetPrice); with the setting guests a guest gives phone instead of signing in. Each alert message's {stopUrl} opens your stop page, which calls POST /v1/shop/alerts/unsubscribe/<token>: it removes every alert of that e-mail or phone and answers { removed } (0 for an unknown token). Alerts are also sent when stock comes back from an order (a cancel, a refund before delivery, a returned parcel or a claim's restock). POST /v1/shop/wishlist/merge { productIds } adds a list your page kept for a guest to the signed-in shopper's wishlist (up to 200)."
+				],
+				"routes": [
+					["POST /v1/shop/reviews", "reviews"],
+					["POST /v1/reviews/:id/pending", "reviews"],
+					["POST /v1/shop/alerts", "alerts"],
+					["POST /v1/shop/alerts/unsubscribe/:token", "alerts"],
+					["POST /v1/shop/wishlist/merge", "wishlist"]
+				]
+			},
+			{
+				"id": "documents",
+				"title": "Invoices, batch packing slips and pick lists",
+				"paragraphs": [
+					"Invoices show each line's grade, serial numbers and warranty days, the offer discount, member discount, points, delivery, cash handling fee and tax apart, the payment and refund entries, and Cash due on delivery for unpaid cash on delivery orders, in the words of the invoices settings. GET /v1/orders/packing-slips?ids=<up to 50, comma-separated> gives one printable HTML page with a slip per order (with the cash to collect and empty serial slots), and GET /v1/orders/pick-list?ids=<up to 100> the units to pick per variant with their order numbers; an unknown id refuses the whole request (404). Shoppers get their invoice from GET /v1/shop/orders/<id>/invoice, signed in; with the invoices setting shopperFrom confirmed, only once the order is confirmed."
+				],
+				"routes": [
+					["GET /v1/orders/:id/invoice", "invoices"],
+					["GET /v1/orders/packing-slips", "invoices"],
+					["GET /v1/orders/pick-list", "invoices"],
+					["GET /v1/shop/orders/:id/invoice", "invoices"]
+				]
+			},
+			{
+				"id": "reports-csv",
+				"title": "Reports and CSV",
+				"paragraphs": [
+					"Reports take from and to (YYYY-MM-DD in your business time zone, or ISO times; the last 30 days by default, at most 366) and count the orders placed then, not cancelled, in your currency. GET /v1/reports/summary?statuses=&series=day answers { orders, total, goods, delivery, fees, discount, refunded, units, days: [{ day, orders, total }] } (statuses: the status keys that count, instead of every status but cancelled). /v1/reports/sales?by= takes product, category, brand, city, grade or payment_method; /v1/reports/sell-through gives per product the units sold over sold plus stock left; /v1/reports/oldest-stock each active variant with stock, by its last sale. Every report takes format=csv (a file download).",
+					"GET /v1/csv/orders?per=order gives one row per order instead of per line, with the order list's filters (at most 10,000 orders); GET /v1/csv/customers lists customers (at most 20,000). The product export ends with sold_out and updated_at: POST /v1/csv/products?mode=update { csv, dryRun } with such a file changes only price, stock and sold_out (empty cells keep the value) and refuses rows whose updated_at is older than the product's (export it again). Every CSV import is a dry run unless dryRun is false; the csv setting delimiter sets the separator."
+				],
+				"routes": [
+					["GET /v1/reports/summary", "reports"],
+					["GET /v1/reports/sales?by=grade", "reports"],
+					["GET /v1/reports/sell-through", "reports"],
+					["GET /v1/reports/oldest-stock", "reports"],
+					["GET /v1/csv/orders?per=order", "csv"],
+					["GET /v1/csv/customers", "csv"],
+					["POST /v1/csv/products?mode=update", "csv"]
+				]
+			}
+		]
+	},
+	"import": {
+		"intro": "Moving a shop in from another system: with the Import feature on (our admins switch it on for a migration and off after it), your server sends the records with ss-import or your own script. Only the server token works. An import sends no message, event, alert or IndexNow call, and holds no stock, slot, offer use or points.",
+		"sections": [
+			{
+				"id": "import-routes",
+				"title": "Import routes",
+				"paragraphs": [
+					"POST /v1/import/<collection> takes NDJSON (Content-Type application/x-ndjson, one record per line, at most 1,000 records or 4 MB per call; ?dryRun=1 checks everything, uniqueness too, without writing) in Ecommerce's own stored shapes: given ids (<prefix>_ and 10–64 lower-case letters or digits, for example prd_ and the old 24-hex id), times as ISO-8601 text, money in minor units and storage keys for media (copy the files into your bucket first). Each record is found by its key (id; customerId for loyalty, userId for wishlists) and replaced whole when it is there already, so a second run gives the source again.",
+					"Unknown fields, websiteId and merchantId, values the shop works out itself (a category's path; a product's price, priceMax, inStock, stockState and grades) and text over a limit are refused by path (never cut), as are catalog references to records not imported yet and slugs, SKUs, serial numbers or order numbers another record holds. The answer is { inserted, updated, failed, dryRun }, failed listing each refused line { line, id, errors: [{ path, message }] }.",
+					"POST /v1/import/<collection>/prune { keep: [keys], after?, through? } removes the records an import wrote whose keys are not kept (records made in Ecommerce stay), at most 1,000 per call (more: true: call again). GET /v1/import/status answers { collections, imported, totals }: the counts and sums ss-import verify compares."
+				],
+				"routes": [
+					["POST /v1/import/:collection", "import"],
+					["POST /v1/import/:collection/prune", "import"],
+					["GET /v1/import/status", "import"]
+				]
+			},
+			{
+				"id": "import-order",
+				"title": "What to send, in order",
+				"paragraphs": [
+					"The catalog first: size_charts (szc_), categories (cat_), brands (brd_), attributes (att_), landings (lnd_), products (prd_, variants var_), serials (ser_), deals (deal_) and bundles (bnd_); then customers (cus_), orders (ord_), loyalty, reviews (rev_), returns (ret_), alerts (alr_) and wishlists. A catalog record may name only records of the collections before it (a category's parent may come later). Coupons are not imported.",
+					"Taken as given: ids, numbers, createdAt, publishedAt, used, sold, rating, previousSlugs, stock and past times. An order keeps its number (<numberPrefix><year>-<digits>), status (a key of your order flow, with that status's role) and history, its payments and refunds (paid and refunded must be their sums, so an order paid through a gateway you no longer use comes in with an other entry that names it in reference or note), stockHeld and pointsCredited, and its totals must add up as checkout adds them. A guest customer has a name and an E.164 phone (one guest per phone); a loyalty account gives its lots and history (its balance is worked out). Imported alerts are never due."
+				],
+				"routes": [
+					["POST /v1/import/products?dryRun=1", "import"],
+					["POST /v1/import/orders", "import"]
+				]
+			},
+			{
+				"id": "import-finish",
+				"title": "Finish",
+				"paragraphs": [
+					"After the records, POST /v1/import/finish works out what the shop derives, in batches, writing only what changed, so a second run changes nothing: each category's path (orphans, cycles and too-deep ones are listed), each product's price, highest price, stock state and grades; each customer's order count, returned parcels and last order; loyalty balances and lifetime points; products' sold (units of delivered orders) and rating (approved reviews) where they have order lines or reviews; the serials sold on the order lines that still hold them; and each order-number counter, so the next order gets the number after the highest. It answers what it checked and changed."
+				],
+				"routes": [["POST /v1/import/finish", "import"]]
+			}
 		]
 	}
 }

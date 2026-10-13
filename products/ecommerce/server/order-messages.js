@@ -19,8 +19,33 @@
 /** @typedef {import('./service.js').Site} Site */
 /** @typedef {import('../core/model.js').OrderRecord} OrderRecord */
 
-/** Template keys. */
-const ORDER_TEMPLATES = Object.freeze({ placed: 'ecommerce.order_placed', status: 'ecommerce.order_status' });
+/** Template keys (`status` with `.<status key>` added under `statusTemplates: per_status`; the docs list them). */
+export const ORDER_TEMPLATES = Object.freeze({ placed: 'ecommerce.order_placed', status: 'ecommerce.order_status' });
+
+/**
+ * The values every order message carries, in the order the docs list them (`business` is added by `service.notify`,
+ * {@link import('./service.js').BUSINESS_VALUE}). `send` below fills exactly these, so the docs cannot drift.
+ */
+export const ORDER_MESSAGE_VALUES = Object.freeze(
+	/** @type {const} */ ([
+		'number',
+		'name',
+		'firstName',
+		'status',
+		'total',
+		'paymentMethod',
+		'deliveryMethod',
+		'courier',
+		'trackingNumber',
+		'trackingUrl',
+		'trackingDetails',
+		'orderUrl',
+		'reviewUrl',
+		'cancelReason',
+	]),
+);
+
+/** @typedef {typeof ORDER_MESSAGE_VALUES[number]} OrderMessageValue */
 
 /** Why an order was cancelled (`messages.cancelReason.<code>`). @typedef {'staff' | 'shopper' | 'unpaid' | 'unconfirmed'} CancelCode */
 
@@ -67,26 +92,28 @@ export const createOrderMessages = (service) => {
 					.filter((part) => typeof part === 'string' && part !== '')
 					.join(' · ')
 			: '';
+		/** Exactly {@link ORDER_MESSAGE_VALUES} (a missing or extra one fails the type check). @type {Record<OrderMessageValue, string>} */
+		const values = {
+			number: order.number,
+			name: order.customer.name,
+			firstName: order.customer.name.trim().split(/\s+/)[0] ?? '',
+			status: statusLabel,
+			total: (await s.format()).money(order.totals.total, order.totals.currency),
+			paymentMethod: words.payment(order.payment.method),
+			deliveryMethod: words.delivery(order.delivery.method),
+			courier: shipment?.courier ?? '',
+			trackingNumber: shipment?.trackingNumber ?? '',
+			trackingUrl: shipment?.trackingUrl ?? '',
+			trackingDetails,
+			orderUrl: linkOf(orderUrl, order),
+			reviewUrl: linkOf(reviewUrl, order),
+			cancelReason,
+		};
 		return service.notify(
 			s,
 			template,
 			{ email: order.customer.email, phone: order.customer.phone },
-			{
-				number: order.number,
-				name: order.customer.name,
-				firstName: order.customer.name.trim().split(/\s+/)[0] ?? '',
-				status: statusLabel,
-				total: (await s.format()).money(order.totals.total, order.totals.currency),
-				paymentMethod: words.payment(order.payment.method),
-				deliveryMethod: words.delivery(order.delivery.method),
-				courier: shipment?.courier ?? '',
-				trackingNumber: shipment?.trackingNumber ?? '',
-				trackingUrl: shipment?.trackingUrl ?? '',
-				trackingDetails,
-				orderUrl: linkOf(orderUrl, order),
-				reviewUrl: linkOf(reviewUrl, order),
-				cancelReason,
-			},
+			values,
 			Array.isArray(messageChannels) ? messageChannels : ['email'],
 			{ required: true },
 		);
