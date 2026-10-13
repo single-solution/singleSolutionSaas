@@ -65,6 +65,20 @@ describe('A7: phone-code options', () => {
 		await env.setting('phone_code', 'countries', []);
 	});
 
+	it('a code lasts the website’s codeMinutes, and the message says so', async () => {
+		await env.setting('phone_code', 'codeMinutes', 5);
+		env.advance(3_600_000);
+		const asked = await askCode('+923001230007');
+		expect(Date.parse(asked.json.expiresAt) - env.now()).toBe(5 * 60_000);
+		const sent = env.messages().at(-1);
+		expect(sent.values.minutes).toBe(5);
+		env.advance(5 * 60_000 + 1000);
+		expect(code(await env.visitor('POST', '/v1/sign-in/phone', { phone: '+923001230007', code: sent.values.code }))).toBe(
+			'code_invalid',
+		);
+		await env.setting('phone_code', 'codeMinutes', 10);
+	});
+
 	it('names new phone-code users with the website’s template', async () => {
 		await env.setting('phone_code', 'newUserName', 'Customer {last4}');
 		env.advance(3_600_000);
