@@ -9,14 +9,17 @@ import {
 	checkIn,
 	click,
 	fieldIn,
+	invalid,
 	mountWith,
 	panelOf,
 	problem,
 	resetPage,
+	SERVER_ENGLISH,
 	shows,
 	statuses,
 	submit,
 	textOf,
+	TEXTS,
 	tick,
 	type,
 } from './ui-admin-helpers.js';
@@ -270,7 +273,7 @@ describe('orders admin: the list', () => {
 								{ id: 'ord_2', ok: false, code: 'move_not_allowed', detail: 'Not from packed.' },
 							],
 						})
-					: problem(403, 'no');
+					: problem(403, 'forbidden');
 			},
 			'GET /v1/admin/csv/orders': () => new Response('number\r\nSO2026-1\r\n', { status: 200 }),
 		});
@@ -293,7 +296,7 @@ describe('orders admin: the list', () => {
 		expect(moves[0]).toEqual({ ids: ['ord_1'], to: 'packed', note: 'batch' });
 		expect(hasDialog(root)).toBe(false);
 		expect(statuses(panel)).toContain('Moved 1 of 2 orders.');
-		expect(textOf(panel)).toContain('ord_2: Not from packed.');
+		expect(textOf(panel)).toContain(`ord_2: ${TEXTS['problem.move_not_allowed']}`);
 		// select all shown, then a refusal stays in the dialog
 		await click(buttonIn(panel, 'Load more'));
 		await tick(checkIn(panel, 'Select all shown'), true);
@@ -312,7 +315,7 @@ describe('orders admin: the list', () => {
 		expect(paramsOf(server, 'GET /v1/admin/csv/orders')).toEqual({ status: 'confirmed', from: '2026-10-01T00:00:00.000Z' });
 		expect(saved).toEqual([{ name: 'orders.csv', text: 'number\r\nSO2026-1\r\n' }]);
 		expect(statuses(panel)).toContain('orders.csv is ready.');
-		server.routes['GET /v1/admin/csv/orders'] = () => problem(403, 'no');
+		server.routes['GET /v1/admin/csv/orders'] = () => problem(403, 'forbidden');
 		await pickMenu(panel, 'Export these orders (CSV)');
 		expect(statuses(panel)).toContain('You are not allowed to do this.');
 	});
@@ -320,8 +323,8 @@ describe('orders admin: the list', () => {
 	it('uses roles without flow settings, hides failed counts and shows an empty list', async () => {
 		const { root, server } = await start(
 			{
-				'GET /v1/admin/orders/count': () => problem(503, 'Counting took longer than 3 seconds.'),
-				'GET /v1/admin/orders/counts': () => problem(503, 'Counting took longer than 3 seconds.'),
+				'GET /v1/admin/orders/count': () => problem(503, 'count_timeout'),
+				'GET /v1/admin/orders/counts': () => problem(503, 'count_timeout'),
 			},
 			['checkout', 'bulk_actions'],
 			{},
@@ -346,9 +349,31 @@ describe('orders admin: the list', () => {
 		await click(chipOf(panel, ''));
 		expect(statuses(panel)).toContain('No orders match.');
 		expect(textOf(detailOf(panel))).toContain('No orders to show.');
-		server.routes['GET /v1/admin/orders'] = () => problem(500, 'Down.');
+		server.routes['GET /v1/admin/orders'] = () => problem(500, 'internal_error');
 		await click(chipOf(panel, 'open'));
-		expect(statuses(panel)).toContain('Down.');
+		expect(statuses(panel)).toContain(TEXTS['admin.failed']);
+	});
+
+	it('shows the website’s words for a refusal, never the server’s English (PLAN 0.4.10)', async () => {
+		const { root, server } = await start();
+		const panel = panelOf(root, 'orders');
+		/** @type {Array<[() => Response, string | undefined]>} */
+		const cases = [
+			[() => problem(401, 'invalid_token'), TEXTS['admin.signedOut']],
+			[() => problem(403, 'feature_off'), TEXTS['problem.feature_off']],
+			[() => problem(403, 'forbidden'), TEXTS['admin.notAllowed']],
+			[() => problem(429, 'rate_limited'), TEXTS['problem.rate_limited']],
+			// the deepest named part of the path with a text: the conditions, not their group or match
+			[() => invalid('/conditions/groups/0/match'), TEXTS['problem.field.conditions']],
+			[() => problem(422, 'validation_failed'), TEXTS['problem.validation_failed']],
+			[() => problem(500, 'teapot'), TEXTS['admin.failed']],
+		];
+		for (const [reply, text] of cases) {
+			server.routes['GET /v1/admin/orders'] = reply;
+			await submit(fieldIn(panel, 'Search'));
+			expect(statuses(panel)).toContain(text);
+			expect(textOf(root)).not.toContain(SERVER_ENGLISH);
+		}
 	});
 
 	it('shows money and dates by the Format and picks days in the business time zone', async () => {
@@ -483,10 +508,10 @@ describe('orders admin: one order', () => {
 		expect(textOf(dialog)).toContain('Order SO2026-1 will be cancelled');
 		expect(/** @type {HTMLButtonElement} */ (dialog.querySelector('button[type="submit"]')).disabled).toBe(true);
 		expect((await confirmDialog(root, 'SO2026-1')).disabled).toBe(false);
-		reply = () => problem(409, 'The order changed meanwhile; reload it and try again.');
+		reply = () => problem(409, 'conflict');
 		await submitDialog(root);
 		expect(moves[6]).toMatchObject({ to: 'cancelled', serials: {}, shipment: null });
-		expect(dialogStatus(root)).toBe('The order changed meanwhile; reload it and try again.');
+		expect(dialogStatus(root)).toBe(TEXTS['problem.conflict']);
 	});
 
 	it('checks typed serial numbers as IMEIs and saves them later', async () => {
@@ -505,7 +530,7 @@ describe('orders admin: one order', () => {
 				'PATCH /v1/admin/orders/ord_1': (/** @type {any} */ call) => {
 					patches.push(call.body);
 					return patches.length === 1
-						? problem(422, 'Phone: give 2 serial number(s), one per unit.')
+						? invalid('/serials/l1')
 						: answer(200, detail({ lines: [{ ...typed.lines[0], serials: call.body.serials.oln_1 }], nextStatuses: [] }));
 				},
 			},
@@ -528,7 +553,7 @@ describe('orders admin: one order', () => {
 		expect(dialogStatus(root)).toBe('490154203237519 is not an IMEI: 15 digits ending in its check digit.');
 		type(dialog.querySelector('input[aria-label="Serial number 2 of Phone"]'), '356938035643809');
 		await submitDialog(root);
-		expect(dialogStatus(root)).toBe('Phone: give 2 serial number(s), one per unit.');
+		expect(dialogStatus(root)).toBe(TEXTS['problem.field.serials']);
 		await submitDialog(root);
 		expect(patches[1]).toEqual({ serials: { oln_1: ['490154203237518', '356938035643809'] } });
 		expect(statuses(pane)).toContain('Serial numbers saved.');
@@ -544,15 +569,15 @@ describe('orders admin: one order', () => {
 	it('edits the note and address, refunds and opens documents', async () => {
 		window.URL.createObjectURL = vi.fn(() => 'blob:doc');
 		window.URL.revokeObjectURL = vi.fn();
-		let refund = () => problem(422, 'Give a reason of at most 500 characters.');
+		let refund = () => invalid('/reason');
 		const { root, server, opened, host } = await start({
 			'PATCH /v1/admin/orders/ord_1': (/** @type {any} */ call) =>
 				call.body.address?.city === ''
-					? problem(422, 'This field is required.')
+					? invalid('/address/phone')
 					: answer(200, detail({ staffNote: call.body.staffNote ?? 'VIP' })),
 			'POST /v1/admin/orders/ord_1/refunds': () => refund(),
 			'GET /v1/admin/orders/ord_1/invoice': () => new Response('<h1>Invoice</h1>', { status: 200 }),
-			'GET /v1/admin/orders/ord_1/packing-slip': () => problem(403, 'no'),
+			'GET /v1/admin/orders/ord_1/packing-slip': () => problem(403, 'forbidden'),
 		});
 		const pane = detailOf(panelOf(root, 'orders'));
 		await pickMenu(pane, 'Edit staff note');
@@ -565,14 +590,14 @@ describe('orders admin: one order', () => {
 		await pickMenu(pane, 'Edit delivery address');
 		type(fieldIn(dialogOf(root), 'City'), '');
 		await submitDialog(root);
-		expect(dialogStatus(root)).toBe('This field is required.');
+		expect(dialogStatus(root)).toBe(TEXTS['problem.field.address']);
 		type(fieldIn(dialogOf(root), 'City'), 'Karachi');
 		await submitDialog(root);
 		expect(server.last('PATCH /v1/admin/orders/ord_1')?.body.address).toMatchObject({ city: 'Karachi', line1: 'Street 1' });
-		server.routes['PATCH /v1/admin/orders/ord_1'] = () => problem(500, 'Down.');
+		server.routes['PATCH /v1/admin/orders/ord_1'] = () => problem(500, 'internal_error');
 		await pickMenu(pane, 'Edit staff note');
 		await submitDialog(root);
-		expect(dialogStatus(root)).toBe('Down.');
+		expect(dialogStatus(root)).toBe(TEXTS['admin.failed']);
 		await click(buttonIn(dialogOf(root), 'Cancel'));
 		// documents
 		await pickMenu(pane, 'Invoice');
@@ -589,7 +614,7 @@ describe('orders admin: one order', () => {
 		type(fieldIn(dialogOf(root), 'Amount (PKR)'), '10');
 		type(fieldIn(dialogOf(root), 'Reason'), 'damaged');
 		await submitDialog(root);
-		expect(dialogStatus(root)).toBe('Give a reason of at most 500 characters.');
+		expect(dialogStatus(root)).toBe(TEXTS['problem.field.reason']);
 		refund = () =>
 			answer(201, {
 				order: detail({ payment: { method: 'online', state: 'refunded', paid: 250000, refunded: 250000, refundable: 0 } }),
@@ -628,7 +653,7 @@ describe('orders admin: one order', () => {
 							promotions: undefined,
 						}),
 					),
-				'GET /v1/admin/orders/ord_2': () => problem(404, 'There is no such order.'),
+				'GET /v1/admin/orders/ord_2': () => problem(404, 'not_found'),
 			},
 			['checkout'],
 			{},
@@ -643,7 +668,7 @@ describe('orders admin: one order', () => {
 		expect(menuEntries(pane)).toEqual(['Edit staff note']);
 		await click(buttonIn(panel, 'Load more'));
 		await openRow(panel, 'ord_2');
-		expect(statuses(pane)).toContain('There is no such order.');
+		expect(statuses(pane)).toContain(TEXTS['problem.not_found']);
 		server.routes['GET /v1/admin/orders/ord_1'] = () =>
 			answer(
 				200,
@@ -658,6 +683,38 @@ describe('orders admin: one order', () => {
 		expect(textOf(pane)).not.toContain('Delivery address');
 		await click(buttonIn(pane, 'Move to Packed'));
 		expect(dialogOf(root).querySelector('input[aria-label^="Serial number"]')).toBeNull();
+	});
+
+	it('shows the history in the website’s words for who and what the server wrote itself (PLAN 0.4.10)', async () => {
+		/** @param {string} from @param {string} to @param {Record<string, unknown>} entry */
+		const moved = (from, to, entry) => ({ at: AT, from, to, fromLabel: from, toLabel: to, ...entry });
+		const history = [
+			{
+				at: AT,
+				from: null,
+				to: 'awaiting_confirmation',
+				fromLabel: '',
+				toLabel: 'Awaiting confirmation',
+				by: 'guest',
+				note: '',
+			},
+			moved('Awaiting confirmation', 'Cancelled', { by: 'system', note: SERVER_ENGLISH, reason: 'expired' }),
+			moved('Confirmed', 'Cancelled', { by: 'shopper', note: SERVER_ENGLISH, reason: 'shopper' }),
+			moved('Confirmed', 'Confirmed', { by: 'Sam', note: SERVER_ENGLISH, kind: 'edited' }),
+			// a staff member's own words stay as typed
+			moved('Shipped', 'Returned to origin', { by: 'Sam', note: 'Refused at the door', reason: 'rto' }),
+		];
+		const { root } = await start({ 'GET /v1/admin/orders/ord_1': () => answer(200, detail({ history })) });
+		const text = textOf(detailOf(panelOf(root, 'orders')));
+		for (const part of [
+			`Awaiting confirmation · ${TEXTS['ordersAdmin.by.guest']}`,
+			`Awaiting confirmation → Cancelled · ${TEXTS['ordersAdmin.by.system']} · ${TEXTS['ordersAdmin.historyNote.expired']}`,
+			`Confirmed → Cancelled · ${TEXTS['ordersAdmin.by.shopper']} · ${TEXTS['ordersAdmin.historyNote.shopper']}`,
+			`Confirmed → Confirmed · Sam · ${TEXTS['ordersAdmin.historyNote.edited']}`,
+			'Shipped → Returned to origin · Sam · Refused at the door',
+		])
+			expect(text).toContain(part);
+		expect(text).not.toContain(SERVER_ENGLISH);
 	});
 
 	it('takes a typed courier key when the settings list none', async () => {
@@ -754,7 +811,7 @@ describe('orders admin: returns', () => {
 			'GET /v1/admin/returns/count': () => answer(200, { count: 100000, capped: true }),
 			'GET /v1/admin/returns/counts': () => answer(200, { total: 2, groups: { requested: 2 } }),
 			'GET /v1/admin/returns/ret_1': () => answer(200, claim()),
-			'GET /v1/admin/returns/ret_2': () => problem(404, 'No such claim.'),
+			'GET /v1/admin/returns/ret_2': () => problem(404, 'not_found'),
 			...routes,
 		});
 		await click(/** @type {HTMLElement} */ (mounted.root.querySelector('[data-section="returns"]')));
@@ -785,7 +842,7 @@ describe('orders admin: returns', () => {
 		await click(/** @type {HTMLElement} */ (panel.querySelector('button[aria-label="Show all claims"]')));
 		expect(paramsOf(server, 'GET /v1/admin/returns').userId).toBeUndefined();
 		await openRow(panel, 'ret_2');
-		expect(statuses(pane)).toContain('No such claim.');
+		expect(statuses(pane)).toContain(TEXTS['problem.not_found']);
 	});
 
 	it('moves, refunds and restocks a claim, and rejects it with its reference', async () => {
@@ -796,7 +853,7 @@ describe('orders admin: returns', () => {
 				posts.push(call.body);
 				return answer(200, claim({ status: 'approved', actions: ['reject', 'receive', 'refund', 'close', 'restock'] }));
 			},
-			'POST /v1/admin/returns/ret_1/reject': () => problem(422, 'Add a note for the shopper.'),
+			'POST /v1/admin/returns/ret_1/reject': () => invalid('/note'),
 			'POST /v1/admin/returns/ret_1/receive': () =>
 				answer(200, claim({ status: 'received', actions: ['reject', 'refund', 'close', 'restock'], userId: '' })),
 			'POST /v1/admin/returns/ret_1/refund': (/** @type {any} */ call) => {
@@ -830,7 +887,7 @@ describe('orders admin: returns', () => {
 		expect(textOf(dialogOf(root))).toContain('A rejected claim cannot be moved again.');
 		await confirmDialog(root, 'R-ABC123');
 		await submitDialog(root);
-		expect(dialogStatus(root)).toBe('Add a note for the shopper.');
+		expect(dialogStatus(root)).toBe(TEXTS['problem.field.note']);
 		await click(buttonIn(dialogOf(root), 'Cancel'));
 		// approve
 		await click(buttonIn(pane, 'Approve'));
@@ -875,17 +932,66 @@ describe('orders admin: returns', () => {
 		expect(pane.querySelector('.detail-head .actions > button')).toBeNull();
 	});
 
+	it('marks a warranty claim replaced or repaired, and shows its history in the website’s words (E33)', async () => {
+		/** @type {any[]} */
+		const posts = [];
+		const received = claim({
+			kind: 'warranty',
+			status: 'received',
+			actions: ['reject', 'replace', 'repair', 'refund', 'close', 'restock'],
+			history: [
+				{ at: AT, status: 'requested', by: 'shopper', note: '' },
+				{ at: AT, status: 'received', by: 'Sam', note: 'restocked' },
+			],
+		});
+		const exchange = claim({ id: 'ret_2', reference: 'R-2', kind: 'exchange', status: 'replaced' });
+		const { root, panel } = await startReturns({
+			'GET /v1/admin/returns': () => answer(200, { items: [received, exchange], nextCursor: null, hasMore: false }),
+			'GET /v1/admin/returns/ret_1': () => answer(200, received),
+			'POST /v1/admin/returns/ret_1/replace': (/** @type {any} */ call) => {
+				posts.push(call.body);
+				return answer(200, claim({ kind: 'warranty', status: 'replaced', actions: ['restock'] }));
+			},
+		});
+		expect(textOf(rowOf(panel, 'ret_2'))).toContain('Exchange · Replaced');
+		const pane = detailOf(panel);
+		expect(textOf(pane)).toContain(`Requested · ${TEXTS['ordersAdmin.by.shopper']}`);
+		expect(textOf(pane)).toContain(`Received · Sam · ${TEXTS['ordersAdmin.historyNote.restocked']}`);
+		expect(textOf(pane)).not.toContain('· restocked');
+		// replace and repair first (they end the claim), the rest in the More menu
+		expect(shows(pane, 'Mark replaced')).toBe(true);
+		expect(shows(pane, 'Mark repaired')).toBe(true);
+		expect(menuEntries(pane)).toEqual([
+			'Refund',
+			'Put back in stock',
+			'Close',
+			'Claims of this order',
+			'Claims of this customer',
+			'Reject',
+		]);
+		await click(buttonIn(pane, 'Mark repaired'));
+		expect(dialogOf(root).querySelector('h3')?.textContent).toBe('Mark repaired');
+		await click(buttonIn(dialogOf(root), 'Cancel'));
+		await click(buttonIn(pane, 'Mark replaced'));
+		type(fieldIn(dialogOf(root), 'Note for the shopper (optional)'), 'A new unit is on its way');
+		await submitDialog(root);
+		expect(posts).toEqual([{ note: 'A new unit is on its way' }]);
+		expect(statuses(pane)).toContain('Marked replaced.');
+		expect(pane.querySelector('.detail-head .badge')?.textContent).toBe('Replaced');
+		expect(textOf(rowOf(panel, 'ret_1'))).toContain('Warranty · Replaced');
+	});
+
 	it('refuses claim actions the ticket does not allow', async () => {
 		const { root, panel } = await startReturns({
 			'GET /v1/admin/returns/ret_1': () =>
 				answer(200, claim({ status: 'approved', actions: ['refund', 'restock', 'close'], refundable: 0 })),
-			'POST /v1/admin/returns/ret_1/restock': () => problem(409, 'This claim was already restocked.'),
-			'POST /v1/admin/returns/ret_1/refund': () => problem(403, 'no'),
+			'POST /v1/admin/returns/ret_1/restock': () => problem(409, 'conflict'),
+			'POST /v1/admin/returns/ret_1/refund': () => problem(403, 'forbidden'),
 		});
 		const pane = detailOf(panel);
 		expect(shows(pane, 'Refund')).toBe(false);
 		await click(buttonIn(pane, 'Put back in stock'));
 		await submitDialog(root);
-		expect(dialogStatus(root)).toBe('This claim was already restocked.');
+		expect(dialogStatus(root)).toBe(TEXTS['problem.conflict']);
 	});
 });

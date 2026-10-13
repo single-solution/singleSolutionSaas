@@ -11,11 +11,13 @@ import {
 	choose,
 	click,
 	fieldIn,
+	invalid,
 	panelOf,
 	problem,
 	resetPage,
 	statuses,
 	textOf,
+	TEXTS,
 	tick,
 	type,
 } from './ui-admin-helpers.js';
@@ -33,7 +35,7 @@ const file = (name, type) => new window.File(['x'], name, { type });
 const UPLOADS = {
 	'POST /v1/admin/catalog/uploads': (/** @type {any} */ call) =>
 		call.body.type === 'image/gif'
-			? problem(422, 'Images are JPEG, PNG, WebP or AVIF; product videos MP4 or WebM.')
+			? invalid('/type')
 			: answer(200, {
 					key: `ecommerce/products/prd_1/n.${call.body.type.split('/')[1]}`,
 					upload: { method: 'PUT', url: 'https://bucket.example/up', headers: { 'content-type': call.body.type } },
@@ -57,7 +59,7 @@ describe('catalog admin: product files', () => {
 			'DELETE /v1/admin/products/prd_1/media': (/** @type {any} */ call) =>
 				call.url.searchParams.get('key')?.endsWith('b.jpg')
 					? answer(200, { media: [product().media[0]] })
-					: problem(404, 'The product has no such image.'),
+					: problem(404, 'not_found'),
 			'POST /v1/admin/products/prd_1/media': (/** @type {any} */ call) => {
 				attached.push(call.body);
 				return answer(200, {
@@ -75,7 +77,7 @@ describe('catalog admin: product files', () => {
 		type(fieldIn(dialog, 'Text of image 1'), 'rear');
 		await click(buttonIn(dialog, 'Remove', 1));
 		await click(buttonIn(dialog, 'Confirm remove'));
-		expect(statuses(dialog)).toContain('The product has no such image.');
+		expect(statuses(dialog)).toContain(TEXTS['problem.not_found']);
 		await click(buttonIn(dialog, 'Remove'));
 		await click(buttonIn(dialog, 'Confirm remove'));
 		expect(dialog.querySelectorAll('.thumbs figure')).toHaveLength(1);
@@ -87,7 +89,7 @@ describe('catalog admin: product files', () => {
 		expect(server.last('PUT /up')?.headers['content-type']).toBe('image/png');
 		expect(dialog.querySelectorAll('.thumbs figure')).toHaveLength(3);
 		await choose(picker, [file('c.gif', 'image/gif')]);
-		expect(statuses(dialog)).toContain('Images are JPEG, PNG, WebP or AVIF; product videos MP4 or WebM.');
+		expect(statuses(dialog)).toContain(TEXTS['problem.field.type']);
 		server.routes['PUT /up'] = () => answer(403);
 		await choose(picker, [file('c.png', 'image/png')]);
 		expect(statuses(dialog)).toContain('The file could not be uploaded. Please try again.');
@@ -97,12 +99,12 @@ describe('catalog admin: product files', () => {
 		await choose(picker, [file('c.png', 'image/png')]);
 		expect(statuses(dialog)).toContain('The file could not be uploaded. Please try again.');
 		server.routes['PUT /up'] = () => answer(200);
-		server.routes['POST /v1/admin/products/prd_1/media'] = () => problem(422, 'The file has not been uploaded.');
+		server.routes['POST /v1/admin/products/prd_1/media'] = () => invalid('/key');
 		await choose(picker, [file('c.png', 'image/png')]);
-		expect(statuses(dialog)).toContain('The file has not been uploaded.');
-		server.routes['PUT /v1/admin/products/prd_1/media'] = () => problem(422, 'List every image of the product once.');
+		expect(statuses(dialog)).toContain(TEXTS['problem.validation_failed']);
+		server.routes['PUT /v1/admin/products/prd_1/media'] = () => invalid('/items/0/alt');
 		await submitDialog(root);
-		expect(statuses(dialog)).toContain('List every image of the product once.');
+		expect(statuses(dialog)).toContain(TEXTS['problem.field.alt']);
 		server.routes['PUT /v1/admin/products/prd_1/media'] = (/** @type {any} */ call) => {
 			puts.push(call.body);
 			return answer(200, { media: call.body.items });
@@ -135,8 +137,7 @@ describe('catalog admin: product files', () => {
 			...UPLOADS,
 			'PATCH /v1/admin/products/prd_1': (/** @type {any} */ call) => {
 				patches.push(call.body);
-				if (call.body.video?.kind === 'url' && !call.body.video.url.startsWith('https://'))
-					return problem(422, 'A video is { kind: "file", key } … or null.');
+				if (call.body.video?.kind === 'url' && !call.body.video.url.startsWith('https://')) return invalid('/video/key');
 				return answer(
 					200,
 					product({
@@ -176,13 +177,13 @@ describe('catalog admin: product files', () => {
 		});
 		await submitDialog(root);
 		expect(statuses(dialog)).toContain('The file could not be uploaded. Please try again.');
-		server.routes['POST /v1/admin/catalog/uploads'] = () => problem(422, 'A video has at most 10 bytes.');
+		server.routes['POST /v1/admin/catalog/uploads'] = () => invalid('/size');
 		await submitDialog(root);
-		expect(statuses(dialog)).toContain('A video has at most 10 bytes.');
+		expect(statuses(dialog)).toContain(TEXTS['problem.validation_failed']);
 		await change(fieldIn(dialog, 'Video'), 'url');
 		type(fieldIn(dialog, 'Video address'), 'http://x');
 		await submitDialog(root);
-		expect(statuses(dialog)).toContain('A video is { kind: "file", key } … or null.');
+		expect(statuses(dialog)).toContain(TEXTS['problem.field.video']);
 		type(fieldIn(dialog, 'Video address'), 'https://cdn.example/v.mp4');
 		await submitDialog(root);
 		expect(patches.at(-1)).toEqual({ video: { kind: 'url', url: 'https://cdn.example/v.mp4' } });
@@ -216,9 +217,9 @@ describe('catalog admin: product files', () => {
 		await choose(fieldIn(dialog, 'Upload photos for the product'), [file('n.png', 'image/png')]);
 		expect(statuses(dialog)).toContain('Uploaded and ticked.');
 		expect(checkIn(dialog, 'Photo 3').checked).toBe(true);
-		server.routes['POST /v1/admin/catalog/uploads'] = () => problem(503, 'Connect your storage first (Connections).');
+		server.routes['POST /v1/admin/catalog/uploads'] = () => problem(503, 'storage_not_connected');
 		await choose(fieldIn(dialog, 'Upload photos for the product'), [file('m.png', 'image/png')]);
-		expect(statuses(dialog)).toContain('Connect your storage first (Connections).');
+		expect(statuses(dialog)).toContain(TEXTS['problem.storage_not_connected']);
 		await submitDialog(root);
 		expect(buttonIn(editor, 'Photos (2)')).toBeTruthy();
 		// the uploaded photo is offered to the other variants too
@@ -270,9 +271,9 @@ describe('catalog admin: product files', () => {
 		expect(textOf(detail)).toContain('Downloads allowed (0 = no limit)3');
 		await click(buttonIn(detail, 'Add licence keys'));
 		type(fieldIn(dialogOf(root), 'Licence keys (one per line)'), 'K1\n\nK2\n');
-		keys = () => problem(422, 'keys is a list of licence keys.');
+		keys = () => invalid('/keys');
 		await submitDialog(root);
-		expect(statuses(dialogOf(root))).toContain('keys is a list of licence keys.');
+		expect(statuses(dialogOf(root))).toContain(TEXTS['problem.field.keys']);
 		keys = () => answer(200, { added: 2, available: 5 });
 		await submitDialog(root);
 		expect(server.last('POST /v1/admin/products/prd_1/licences')?.body).toEqual({ keys: ['K1', 'K2'] });
@@ -291,10 +292,9 @@ describe('catalog admin: product files', () => {
 		server.routes['PUT /file'] = () => answer(500);
 		await choose(picker, [new window.File(['abc'], 'a.txt', { type: 'text/plain' })]);
 		expect(statuses(detail)).toContain('The file could not be uploaded. Please try again.');
-		server.routes['POST /v1/admin/products/prd_1/files'] = () =>
-			problem(503, 'Connect storage in the product dashboard first.');
+		server.routes['POST /v1/admin/products/prd_1/files'] = () => problem(503, 'storage_not_connected');
 		await choose(picker, [new window.File(['abc'], 'a.txt', { type: 'text/plain' })]);
-		expect(statuses(detail)).toContain('Connect storage in the product dashboard first.');
+		expect(statuses(detail)).toContain(TEXTS['problem.storage_not_connected']);
 	});
 
 	it('formats the rich description with the toolbar and previews it safely', async () => {

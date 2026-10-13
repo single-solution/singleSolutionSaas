@@ -172,7 +172,11 @@ const ordersTab = (kit, panel) => {
 					...results
 						.filter((result) => !result.ok)
 						.map((result) =>
-							kit.text('li', { class: 'error' }, t('ordersAdmin.bulkFailed', { order: result.id, reason: result.detail })),
+							kit.text(
+								'li',
+								{ class: 'error' },
+								t('ordersAdmin.bulkFailed', { order: result.id, reason: kit.refusal(result.code) }),
+							),
 						),
 				);
 				return null;

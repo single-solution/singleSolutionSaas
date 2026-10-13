@@ -3,21 +3,24 @@
  * Returns and warranty, 0.6): a list-and-detail screen — the count of matching claims as a badge, status chips with
  * their counts, the kind, and the claims of one order or one customer (set from a claim's More menu, removable) —
  * beside one claim: its figures, lines, the shopper's photos (short presigned links) and history, with the actions its
- * status allows as dialogs: approve, mark received, refund (through Payments when paid online, else recorded), restock
- * (exactly once) and close as buttons or in the More menu, and reject last, in danger text behind its typed
- * confirmation (it needs a note for the shopper).
+ * status and kind allow as dialogs: approve, mark received, mark replaced (exchange and warranty) or repaired (warranty;
+ * E33), refund (through Payments when paid online, else recorded), restock (exactly once) and close as buttons or in
+ * the More menu, and reject last, in danger text behind its typed confirmation (it needs a note for the shopper).
  * @module
  */
 import { CLAIM_KINDS, CLAIM_STATUSES } from '../core/returns.js';
 import { query } from './admin-kit.js';
 import { card, chipFilter, detailHead, listScreen, scopeChip } from './admin-lists.js';
-import { CLAIM_TONES } from './admin-order.js';
+import { CLAIM_TONES, historyBy } from './admin-order.js';
 
 /** @typedef {import('./admin-kit.js').Kit} Kit */
 /** @typedef {import('./admin-lists.js').Detail} Detail */
 
-/** The actions that move a claim forward, in the order they are offered. */
-const FORWARD = Object.freeze(['approve', 'receive', 'refund', 'restock', 'close']);
+/** The actions that move a claim forward, in the order they are offered (the claim's `actions` say which apply). */
+const FORWARD = Object.freeze(['approve', 'receive', 'replace', 'repair', 'refund', 'restock', 'close']);
+
+/** History notes the server writes as a code (`ordersAdmin.historyNote.<note>`); other notes are the staff's own. */
+const CLAIM_NOTES = Object.freeze(['restocked']);
 
 /**
  * The returns section.
@@ -216,7 +219,12 @@ const renderClaim = (kit, claim, detail, list, message) => {
 								kit.text(
 									'li',
 									{},
-									[kit.when(entry.at), t(`ordersAdmin.claim.${entry.status}`), entry.by, entry.note]
+									[
+										kit.when(entry.at),
+										t(`ordersAdmin.claim.${entry.status}`),
+										historyBy(kit, entry),
+										CLAIM_NOTES.includes(entry.note) ? t(`ordersAdmin.historyNote.${entry.note}`) : entry.note,
+									]
 										.filter(Boolean)
 										.join(' · '),
 								),
@@ -230,7 +238,8 @@ const renderClaim = (kit, claim, detail, list, message) => {
 };
 
 /**
- * Approve, mark received, close or reject (with a note for the shopper; a reject needs it and asks for the reference).
+ * Approve, mark received, replaced or repaired, close or reject (with a note for the shopper; a reject needs it and asks
+ * for the reference).
  * @param {Kit} kit @param {any} claim @param {string} action @param {(claim: any, text: string) => void} done
  */
 const moveDialog = (kit, claim, action, done) => {

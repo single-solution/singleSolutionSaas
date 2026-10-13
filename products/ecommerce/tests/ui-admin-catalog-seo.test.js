@@ -24,6 +24,7 @@ import {
 	checkIn,
 	click,
 	fieldIn,
+	invalid,
 	openTab,
 	problem,
 	resetPage,
@@ -31,6 +32,7 @@ import {
 	statuses,
 	submit,
 	textOf,
+	TEXTS,
 	tick,
 	type,
 } from './ui-admin-helpers.js';
@@ -50,8 +52,7 @@ describe('catalog admin: size charts', () => {
 		const { root, server } = await start(ALL, {
 			'PATCH /v1/admin/size-charts/szc_1': (/** @type {any} */ call) => answer(200, { ...CHARTS[0], ...call.body }),
 			'POST /v1/admin/size-charts': (/** @type {any} */ call) => answer(201, { id: 'szc_9', ...call.body, uses: undefined }),
-			'DELETE /v1/admin/size-charts/szc_1': () =>
-				problem(409, 'Products, brands or categories use this size chart: change them first.'),
+			'DELETE /v1/admin/size-charts/szc_1': () => problem(409, 'conflict'),
 		});
 		const panel = await openTab(root, 'charts');
 		expect(rowsOf(panel)).toEqual(['Shirts', 'Shoes']);
@@ -116,13 +117,13 @@ describe('catalog admin: size charts', () => {
 		await menu(detailOf(panel), 'Delete');
 		expect(textOf(dialogOf(root))).toContain('A size chart that products, brands or categories use cannot be deleted.');
 		await confirmDialog(root, 'Shirts');
-		expect(statuses(dialogOf(root))).toContain('Products, brands or categories use this size chart: change them first.');
+		expect(statuses(dialogOf(root))).toContain(TEXTS['problem.conflict']);
 		server.routes['DELETE /v1/admin/size-charts/szc_1'] = () => answer(204);
 		server.routes['GET /v1/admin/size-charts'] = () => answer(200, { items: [CHARTS[1]] });
 		await submitDialog(root);
 		expect(rowsOf(panel)).toEqual(['Shoes']);
 		resetPage();
-		const denied = await start(['catalog', 'size_charts'], { 'GET /v1/admin/size-charts': () => problem(403, 'no') });
+		const denied = await start(['catalog', 'size_charts'], { 'GET /v1/admin/size-charts': () => problem(403, 'forbidden') });
 		expect(statuses(await openTab(denied.root, 'charts'))).toContain('You are not allowed to do this.');
 		resetPage();
 		const empty = await start(['catalog', 'size_charts'], { 'GET /v1/admin/size-charts': () => answer(200, { items: [] }) });
@@ -186,9 +187,7 @@ describe('catalog admin: landing pages', () => {
 			'PATCH /v1/admin/landings/lnd_1': (/** @type {any} */ call) => answer(200, { ...LANDINGS[0], ...call.body }),
 			'POST /v1/admin/landings': (/** @type {any} */ call) => {
 				posts.push(call.body);
-				return posts.length === 1
-					? problem(409, 'A landing page for this category, brand and grade already exists.')
-					: answer(201, { ...LANDINGS[1], id: 'lnd_3', ...call.body });
+				return posts.length === 1 ? problem(409, 'conflict') : answer(201, { ...LANDINGS[1], id: 'lnd_3', ...call.body });
 			},
 		});
 		const panel = await openTab(root, 'landings');
@@ -251,19 +250,19 @@ describe('catalog admin: landing pages', () => {
 		expect(statuses(fresh)).toContain('Pick a category, a brand or a grade.');
 		await change(fieldIn(fresh, 'Brand'), 'brd_2');
 		await submitDialog(root);
-		expect(statuses(fresh)).toContain('A landing page for this category, brand and grade already exists.');
+		expect(statuses(fresh)).toContain(TEXTS['problem.conflict']);
 		await submitDialog(root);
 		expect(posts[1]).toMatchObject({ categoryId: null, brandId: 'brd_2', grade: null, indexable: 'auto' });
 		expect(hasDialog(root)).toBe(false);
 	});
 
 	it('suggests copy with AI, applies it and deletes landing pages', async () => {
-		let ai = () => problem(503, 'Connect your AI provider first (Connections).');
+		let ai = () => problem(503, 'ai_not_connected');
 		const { root, server } = await start(ALL, {
 			'GET /v1/admin/landings': () => answer(200, { items: LANDINGS }),
 			'POST /v1/admin/landings/lnd_1/ai-copy': () => ai(),
 			'PATCH /v1/admin/landings/lnd_1': (/** @type {any} */ call) =>
-				call.body.h1 === 'Fail' ? problem(422, 'This text has at most 200 characters.') : answer(200, LANDINGS[0]),
+				call.body.h1 === 'Fail' ? invalid('/h1') : answer(200, LANDINGS[0]),
 			'DELETE /v1/admin/landings/lnd_1': () => answer(204),
 		});
 		const panel = await openTab(root, 'landings');
@@ -271,7 +270,7 @@ describe('catalog admin: landing pages', () => {
 		const dialog = dialogOf(root);
 		await tick(checkIn(dialog, 'Introduction'), false);
 		await click(buttonIn(dialog, 'Suggest'));
-		expect(statuses(dialog)).toContain('Connect your AI provider first (Connections).');
+		expect(statuses(dialog)).toContain(TEXTS['problem.ai_not_connected']);
 		expect(server.last('POST /v1/admin/landings/lnd_1/ai-copy')?.body).toEqual({
 			fields: ['h1', 'title', 'description', 'faqs'],
 		});
@@ -284,7 +283,7 @@ describe('catalog admin: landing pages', () => {
 		await click(buttonIn(dialog, 'Suggest'));
 		await tick(checkIn(dialog, 'Apply: Meta description'), false);
 		await submitDialog(root);
-		expect(statuses(dialog)).toContain('This text has at most 200 characters.');
+		expect(statuses(dialog)).toContain(TEXTS['problem.validation_failed']);
 		type(fieldIn(dialog, 'Heading'), 'Acme phones');
 		await submitDialog(root);
 		expect(server.last('PATCH /v1/admin/landings/lnd_1')?.body).toEqual({
@@ -298,7 +297,7 @@ describe('catalog admin: landing pages', () => {
 		expect(hasDialog(root)).toBe(false);
 		// without AI copy there is no suggestion entry, and failures show
 		resetPage();
-		const plain = await start(['catalog', 'landing_pages'], { 'GET /v1/admin/landings': () => problem(403, 'no') }, {});
+		const plain = await start(['catalog', 'landing_pages'], { 'GET /v1/admin/landings': () => problem(403, 'forbidden') }, {});
 		const denied = await openTab(plain.root, 'landings');
 		expect(statuses(denied)).toContain('You are not allowed to do this.');
 		expect(() => fieldIn(denied, 'Grade')).toThrow();
@@ -347,9 +346,9 @@ describe('catalog admin: serial numbers', () => {
 				items = items.map((item) => (item.id === 'ser_1' ? { ...item, status: call.body.status } : item));
 				return answer(200, { ...SERIAL, status: call.body.status });
 			},
-			'PATCH /v1/admin/serials/ser_5': () => problem(409, 'This unit was sold: it changes through its order or return.'),
-			'DELETE /v1/admin/serials/ser_1': () => problem(409, 'This unit was sold: it cannot be deleted.'),
-			'GET /v1/admin/products/prd_x': () => problem(404, 'There is no such product.'),
+			'PATCH /v1/admin/serials/ser_5': () => problem(409, 'conflict'),
+			'DELETE /v1/admin/serials/ser_1': () => problem(409, 'conflict'),
+			'GET /v1/admin/products/prd_x': () => problem(404, 'not_found'),
 		});
 		const panel = await openTab(root, 'serials');
 		expect(rowsOf(panel)).toEqual(['IMEI1', 'IMEI4', 'IMEI5']);
@@ -366,11 +365,11 @@ describe('catalog admin: serial numbers', () => {
 		await pick(panel, 'IMEI5');
 		expect(detail()).toContain('Productprd_x');
 		await click(buttonIn(detailOf(panel), 'Back in stock'));
-		expect(statuses(detailOf(panel))).toContain('This unit was sold: it changes through its order or return.');
+		expect(statuses(detailOf(panel))).toContain(TEXTS['problem.conflict']);
 		await pick(panel, 'IMEI1');
 		await menu(detailOf(panel), 'Delete');
 		await confirmDialog(root, 'IMEI1');
-		expect(statuses(dialogOf(root))).toContain('This unit was sold: it cannot be deleted.');
+		expect(statuses(dialogOf(root))).toContain(TEXTS['problem.conflict']);
 		server.routes['DELETE /v1/admin/serials/ser_1'] = () => answer(204);
 		await submitDialog(root);
 		expect(hasDialog(root)).toBe(false);
@@ -387,17 +386,17 @@ describe('catalog admin: serial numbers', () => {
 		server.routes['GET /v1/admin/serials'] = () => answer(200, { items: [], nextCursor: null, hasMore: false });
 		await change(fieldIn(panel, 'Status'), 'sold');
 		expect(statuses(panel)).toContain('No serial numbers match.');
-		server.routes['GET /v1/admin/serials'] = () => problem(403, 'no');
+		server.routes['GET /v1/admin/serials'] = () => problem(403, 'forbidden');
 		await change(fieldIn(panel, 'Status'), '');
 		expect(statuses(panel)).toContain('You are not allowed to do this.');
 	});
 
 	it('adds serial numbers for a product variant', async () => {
-		let added = () => problem(409, 'These serial numbers are already recorded: A1.');
+		let added = () => problem(409, 'conflict');
 		const { root, server } = await start(ALL, {
 			'GET /v1/admin/serials': () => answer(200, { items: [SERIAL], nextCursor: null, hasMore: false }),
 			'POST /v1/admin/serials': () => added(),
-			'GET /v1/admin/products/prd_x': () => problem(404, 'There is no such product.'),
+			'GET /v1/admin/products/prd_x': () => problem(404, 'not_found'),
 		});
 		const panel = await openTab(root, 'serials');
 		await click(buttonIn(panel, 'Add serial numbers'));
@@ -412,7 +411,7 @@ describe('catalog admin: serial numbers', () => {
 		await change(fieldIn(dialog, 'Location'), 'loc_1');
 		type(fieldIn(dialog, 'Serial numbers (one per line)'), 'A1\nA2, A3');
 		await submitDialog(root);
-		expect(statuses(dialog)).toContain('These serial numbers are already recorded: A1.');
+		expect(statuses(dialog)).toContain(TEXTS['problem.conflict']);
 		expect(server.last('POST /v1/admin/serials')?.body).toEqual({
 			productId: 'prd_1',
 			variantId: 'var_1',
@@ -433,7 +432,7 @@ describe('catalog admin: serial numbers', () => {
 		await change(fieldIn(again, 'Product'), 'prd_x');
 		expect(statuses(again)).toContain('This product is no longer there.');
 		await change(fieldIn(again, 'Product'), '');
-		server.routes['GET /v1/admin/products'] = () => problem(403, 'no');
+		server.routes['GET /v1/admin/products'] = () => problem(403, 'forbidden');
 		await click(buttonIn(again, 'Find'));
 		expect(statuses(again)).toContain('You are not allowed to do this.');
 		expect(product().id).toBe('prd_1');

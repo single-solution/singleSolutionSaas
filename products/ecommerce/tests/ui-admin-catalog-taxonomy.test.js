@@ -24,12 +24,14 @@ import {
 	choose,
 	click,
 	fieldIn,
+	invalid,
 	openTab,
 	problem,
 	resetPage,
 	shows,
 	statuses,
 	textOf,
+	TEXTS,
 	tick,
 	type,
 } from './ui-admin-helpers.js';
@@ -97,11 +99,11 @@ describe('catalog admin: categories', () => {
 		expect(textOf(detailOf(panel))).toContain('Serial number per unitAs its parent category');
 		// a list that cannot be read
 		resetPage();
-		const uncounted = await start(['catalog'], { 'GET /v1/admin/products/counts': () => problem(403, 'no') });
+		const uncounted = await start(['catalog'], { 'GET /v1/admin/products/counts': () => problem(403, 'forbidden') });
 		const plain = await openTab(uncounted.root, 'categories');
 		expect(textOf(plain.querySelector('li.item .figure') ?? plain)).toBe('0 products');
 		resetPage();
-		const denied = await start(['catalog'], { 'GET /v1/admin/categories': () => problem(403, 'no') });
+		const denied = await start(['catalog'], { 'GET /v1/admin/categories': () => problem(403, 'forbidden') });
 		expect(statuses(await openTab(denied.root, 'categories'))).toContain('You are not allowed to do this.');
 		resetPage();
 		const empty = await start(['catalog'], { 'GET /v1/admin/categories': () => answer(200, { items: [] }) });
@@ -118,14 +120,14 @@ describe('catalog admin: categories', () => {
 				bodies.push(call.body);
 				return call.body.name
 					? answer(201, { ...CATEGORIES[0], id: 'cat_n', name: call.body.name, parentId: call.body.parentId })
-					: problem(422, 'Give the category a name.');
+					: invalid('/name');
 			},
 			'PATCH /v1/admin/categories/cat_b': (/** @type {any} */ call) => answer(200, { ...CATEGORIES[0], ...call.body }),
 		});
 		const panel = await openTab(root, 'categories');
 		await click(buttonIn(panel, 'New category'));
 		await submitDialog(root);
-		expect(statuses(dialogOf(root))).toContain('Give the category a name.');
+		expect(statuses(dialogOf(root))).toContain(TEXTS['problem.field.name']);
 		const dialog = dialogOf(root);
 		type(fieldIn(dialog, 'Name'), 'Cables');
 		await change(fieldIn(dialog, 'Inside'), 'cat_b');
@@ -193,7 +195,7 @@ describe('catalog admin: categories', () => {
 
 	it('uploads and removes a category image and deletes categories', async () => {
 		const { root, server } = await start(['catalog'], {
-			'DELETE /v1/admin/categories/cat_a': () => problem(409, 'Products are in this category: move them first.'),
+			'DELETE /v1/admin/categories/cat_a': () => problem(409, 'conflict'),
 			'DELETE /v1/admin/categories/cat_c': () => answer(204),
 			'POST /v1/admin/catalog/uploads': () =>
 				answer(200, { key: 'ecommerce/categories/cat_a/x.png', upload: { url: 'https://bucket.example/cat' } }),
@@ -224,11 +226,11 @@ describe('catalog admin: categories', () => {
 		expect(detail().querySelector('.thumbs img')).toBeNull();
 		resetPage();
 		const again = await start(['catalog'], {
-			'DELETE /v1/admin/categories/cat_a/image': () => problem(403, 'no'),
-			'PUT /v1/admin/categories/cat_a/image': () => problem(422, 'The file is not an image of an allowed type and size.'),
+			'DELETE /v1/admin/categories/cat_a/image': () => problem(403, 'forbidden'),
+			'PUT /v1/admin/categories/cat_a/image': () => invalid('/key'),
 			'POST /v1/admin/catalog/uploads': () => answer(200, { key: 'k', upload: { url: 'https://bucket.example/cat' } }),
 			'PUT /cat': () => answer(200),
-			'DELETE /v1/admin/categories/cat_a': () => problem(409, 'Products are in this category: move them first.'),
+			'DELETE /v1/admin/categories/cat_a': () => problem(409, 'conflict'),
 			'DELETE /v1/admin/categories/cat_c': () => answer(204),
 		});
 		const list = await openTab(again.root, 'categories');
@@ -236,17 +238,17 @@ describe('catalog admin: categories', () => {
 		expect(statuses(detailOf(list))).toContain('You are not allowed to do this.');
 		expect(buttonIn(detailOf(list), 'Remove image').disabled).toBe(true);
 		await choose(fieldIn(detailOf(list), 'Upload an image'), [new window.File(['x'], 'x.png', { type: 'image/png' })]);
-		expect(statuses(detailOf(list))).toContain('The file is not an image of an allowed type and size.');
+		expect(statuses(detailOf(list))).toContain(TEXTS['problem.validation_failed']);
 		again.server.routes['PUT /cat'] = () => answer(500);
 		await choose(fieldIn(detailOf(list), 'Upload an image'), [new window.File(['x'], 'x.png', { type: 'image/png' })]);
 		expect(statuses(detailOf(list))).toContain('The file could not be uploaded. Please try again.');
-		again.server.routes['POST /v1/admin/catalog/uploads'] = () => problem(503, 'Connect your storage first (Connections).');
+		again.server.routes['POST /v1/admin/catalog/uploads'] = () => problem(503, 'storage_not_connected');
 		await choose(fieldIn(detailOf(list), 'Upload an image'), [new window.File(['x'], 'x.png', { type: 'image/png' })]);
-		expect(statuses(detailOf(list))).toContain('Connect your storage first (Connections).');
+		expect(statuses(detailOf(list))).toContain(TEXTS['problem.storage_not_connected']);
 		// delete: refused, then done
 		await menu(detailOf(list), 'Delete');
 		await confirmDialog(again.root, 'Audio');
-		expect(statuses(dialogOf(again.root))).toContain('Products are in this category: move them first.');
+		expect(statuses(dialogOf(again.root))).toContain(TEXTS['problem.conflict']);
 		/** @type {HTMLElement} */ (
 			[...dialogOf(again.root).querySelectorAll('button')].find((node) => node.textContent === 'Cancel')
 		).click();
@@ -320,8 +322,8 @@ describe('catalog admin: brands and locations', () => {
 		expect(plain.server.last('POST /v1/admin/brands')?.body.sizeChartId).toBeUndefined();
 		resetPage();
 		const denied = await start(['catalog'], {
-			'GET /v1/admin/brands': () => problem(403, 'no'),
-			'GET /v1/admin/products/counts': () => problem(403, 'no'),
+			'GET /v1/admin/brands': () => problem(403, 'forbidden'),
+			'GET /v1/admin/products/counts': () => problem(403, 'forbidden'),
 		});
 		expect(statuses(await openTab(denied.root, 'brands'))).toContain('You are not allowed to do this.');
 		resetPage();
@@ -333,7 +335,7 @@ describe('catalog admin: brands and locations', () => {
 		const { root, server } = await start(ALL, {
 			'POST /v1/admin/locations': (/** @type {any} */ call) => answer(201, { id: 'loc_9', ...call.body }),
 			'PATCH /v1/admin/locations/loc_2': (/** @type {any} */ call) => answer(200, { id: 'loc_2', ...call.body }),
-			'DELETE /v1/admin/locations/loc_1': () => problem(409, 'This location still holds stock: move it first.'),
+			'DELETE /v1/admin/locations/loc_1': () => problem(409, 'conflict'),
 		});
 		const panel = await openTab(root, 'locations');
 		expect(rowsOf(panel)).toEqual(['Shop', 'Store room']);
@@ -358,9 +360,9 @@ describe('catalog admin: brands and locations', () => {
 		await menu(detailOf(panel), 'Delete');
 		expect(textOf(dialogOf(root))).toContain('A location that still holds stock cannot be deleted.');
 		await confirmDialog(root, 'Shop');
-		expect(statuses(dialogOf(root))).toContain('This location still holds stock: move it first.');
+		expect(statuses(dialogOf(root))).toContain(TEXTS['problem.conflict']);
 		resetPage();
-		const denied = await start(['catalog', 'multi_location'], { 'GET /v1/admin/locations': () => problem(403, 'no') });
+		const denied = await start(['catalog', 'multi_location'], { 'GET /v1/admin/locations': () => problem(403, 'forbidden') });
 		expect(statuses(await openTab(denied.root, 'locations'))).toContain('You are not allowed to do this.');
 		resetPage();
 		const empty = await start(['catalog', 'multi_location'], { 'GET /v1/admin/locations': () => answer(200, { items: [] }) });
@@ -403,7 +405,7 @@ describe('catalog admin: attributes', () => {
 		search(panel, 'screen');
 		expect(textOf(detailOf(panel))).toContain('Always');
 		resetPage();
-		const denied = await start(['catalog'], { 'GET /v1/admin/attributes': () => problem(403, 'no') });
+		const denied = await start(['catalog'], { 'GET /v1/admin/attributes': () => problem(403, 'forbidden') });
 		expect(statuses(await openTab(denied.root, 'attributes'))).toContain('You are not allowed to do this.');
 		resetPage();
 		const empty = await start(['catalog'], { 'GET /v1/admin/attributes': () => answer(200, { items: [] }) });
@@ -414,9 +416,7 @@ describe('catalog admin: attributes', () => {
 		const { root, server } = await start(ALL, {
 			'POST /v1/admin/attributes': (/** @type {any} */ call) => answer(201, { id: 'att_9', ...call.body }),
 			'PATCH /v1/admin/attributes/att_5': (/** @type {any} */ call) =>
-				call.body.multiple
-					? problem(409, 'Products have values of this attribute.')
-					: answer(200, { ...ATTRIBUTES[4], ...call.body }),
+				call.body.multiple ? problem(409, 'conflict') : answer(200, { ...ATTRIBUTES[4], ...call.body }),
 		});
 		const panel = await openTab(root, 'attributes');
 		await pick(panel, 'Storage');
@@ -435,7 +435,7 @@ describe('catalog admin: attributes', () => {
 		type(fieldIn(dialog, 'Glossary text'), 'More bytes.');
 		await tick(checkIn(dialog, 'Takes several values'), true);
 		await submitDialog(root);
-		expect(statuses(dialog)).toContain('Products have values of this attribute.');
+		expect(statuses(dialog)).toContain(TEXTS['problem.conflict']);
 		await tick(checkIn(dialog, 'Takes several values'), false);
 		await submitDialog(root);
 		expect(server.last('PATCH /v1/admin/attributes/att_5')?.body).toEqual({

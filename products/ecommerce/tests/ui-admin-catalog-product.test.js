@@ -20,12 +20,14 @@ import {
 	checkIn,
 	click,
 	fieldIn,
+	invalid,
 	panelOf,
 	problem,
 	resetPage,
 	shows,
 	statuses,
 	textOf,
+	TEXTS,
 	tick,
 	type,
 } from './ui-admin-helpers.js';
@@ -98,9 +100,7 @@ describe('catalog admin: a product', () => {
 				),
 			'PATCH /v1/admin/products/prd_1': (/** @type {any} */ call) => {
 				patches.push(call.body);
-				return patches.length === 1
-					? problem(422, 'Another product already uses this slug.')
-					: answer(200, product({ name: 'Phone 2' }));
+				return patches.length === 1 ? invalid('/slug') : answer(200, product({ name: 'Phone 2' }));
 			},
 		});
 		const panel = panelOf(root, 'products');
@@ -165,7 +165,7 @@ describe('catalog admin: a product', () => {
 		await tick(checkIn(editor, 'Hide the size guide'), true);
 		await tick(checkIn(editor, 'Featured product'), false);
 		await click(buttonIn(editor, 'Save'));
-		expect(statuses(editor)).toContain('Another product already uses this slug.');
+		expect(statuses(editor)).toContain(TEXTS['problem.field.slug']);
 		const body = patches[0];
 		expect(body.specs).toEqual({ att_1: 6.1, att_3: false, att_4: 'X1', att_7: ['x', 'y'] });
 		expect(body.kind).toBe('booking');
@@ -300,9 +300,9 @@ describe('catalog admin: a product', () => {
 		await change(labelled(dialog, 'How to change Red'), 'set');
 		await change(labelled(dialog, 'Location of Red'), 'loc_2');
 		await tick(labelled(dialog, 'Blue is sold out'), false);
-		reply = () => problem(409, 'Stock cannot go below 0.');
+		reply = () => problem(409, 'conflict');
 		await submitDialog(root);
-		expect(statuses(dialog)).toContain('Stock cannot go below 0.');
+		expect(statuses(dialog)).toContain(TEXTS['problem.conflict']);
 		reply = () => answer(200, product({ name: 'Restocked' }));
 		await submitDialog(root);
 		expect(server.last('POST /v1/admin/products/prd_1/stock')?.body).toEqual({
@@ -331,19 +331,17 @@ describe('catalog admin: a product', () => {
 	});
 
 	it('suggests copy with AI and applies the ticked suggestions', async () => {
-		let ai = () => problem(503, 'Connect your AI provider first (Connections).');
+		let ai = () => problem(503, 'ai_not_connected');
 		const { root, server } = await start(ALL, {
 			'POST /v1/admin/products/prd_1/ai-copy': () => ai(),
 			'PATCH /v1/admin/products/prd_1': (/** @type {any} */ call) =>
-				call.body.summary === 'Fail'
-					? problem(422, 'A summary has at most 500 characters.')
-					: answer(200, product({ summary: 'AI summary' })),
+				call.body.summary === 'Fail' ? invalid('/summary') : answer(200, product({ summary: 'AI summary' })),
 		});
 		await menu(detailOf(panelOf(root, 'products')), 'Write with AI');
 		const dialog = dialogOf(root);
 		await tick(checkIn(dialog, 'Questions and answers'), false);
 		await click(buttonIn(dialog, 'Suggest'));
-		expect(statuses(dialog)).toContain('Connect your AI provider first (Connections).');
+		expect(statuses(dialog)).toContain(TEXTS['problem.ai_not_connected']);
 		expect(server.last('POST /v1/admin/products/prd_1/ai-copy')?.body).toEqual({
 			fields: ['summary', 'description', 'seoTitle', 'seoDescription'],
 		});
@@ -366,7 +364,7 @@ describe('catalog admin: a product', () => {
 		type(fieldIn(dialog, 'Page title'), 'Better title');
 		type(fieldIn(dialog, 'Summary'), 'Fail');
 		await submitDialog(root);
-		expect(statuses(dialog)).toContain('A summary has at most 500 characters.');
+		expect(statuses(dialog)).toContain(TEXTS['problem.field.summary']);
 		type(fieldIn(dialog, 'Summary'), 'AI summary');
 		await submitDialog(root);
 		expect(server.last('PATCH /v1/admin/products/prd_1')?.body).toEqual({
@@ -385,12 +383,10 @@ describe('catalog admin: a product', () => {
 	});
 
 	it('generates variants from the detail and from the editor (saving first)', async () => {
-		let patch = () => problem(422, 'Another product already uses this slug.');
+		let patch = () => problem(409, 'conflict');
 		const { root, server } = await start(ALL, {
 			'POST /v1/admin/products/prd_1/variants/generate': (/** @type {any} */ call) =>
-				call.body.price === 100
-					? problem(409, 'A product has at most 250 variants.')
-					: answer(200, { added: 2, product: product() }),
+				call.body.price === 100 ? problem(409, 'conflict') : answer(200, { added: 2, product: product() }),
 			'PATCH /v1/admin/products/prd_1': () => patch(),
 		});
 		const panel = panelOf(root, 'products');
@@ -403,7 +399,7 @@ describe('catalog admin: a product', () => {
 		expect(statuses(dialog)).toContain('Check the amounts and numbers you typed.');
 		type(fieldIn(dialog, "Price of new variants (empty = the product's lowest)"), '1');
 		await submitDialog(root);
-		expect(statuses(dialog)).toContain('A product has at most 250 variants.');
+		expect(statuses(dialog)).toContain(TEXTS['problem.conflict']);
 		type(fieldIn(dialog, "Price of new variants (empty = the product's lowest)"), '');
 		await submitDialog(root);
 		expect(server.last('POST /v1/admin/products/prd_1/variants/generate')?.body).toEqual({ price: null });
@@ -414,7 +410,7 @@ describe('catalog admin: a product', () => {
 		dialog = dialogOf(root);
 		expect(textOf(dialog)).toContain('The product is saved first');
 		await submitDialog(root);
-		expect(statuses(dialog)).toContain('Another product already uses this slug.');
+		expect(statuses(dialog)).toContain(TEXTS['problem.conflict']);
 		type(labelled(detailOf(panel), 'Price of Red'), 'x');
 		await submitDialog(root);
 		expect(statuses(dialog)).toContain('Check the amounts and numbers you typed.');
@@ -435,7 +431,7 @@ describe('catalog admin: a product', () => {
 	});
 
 	it('deletes a product behind a typed confirmation', async () => {
-		let reply = () => problem(409, 'This product is in orders: archive it instead.');
+		let reply = () => problem(409, 'conflict');
 		const { root, server } = await start(ALL, { 'DELETE /v1/admin/products/prd_1': () => reply() });
 		const panel = panelOf(root, 'products');
 		await menu(detailOf(panel), 'Delete');
@@ -444,7 +440,7 @@ describe('catalog admin: a product', () => {
 		const submit = /** @type {HTMLButtonElement} */ (dialog.querySelector('button[type="submit"]'));
 		expect(submit.disabled).toBe(true);
 		await confirmDialog(root, 'Phone');
-		expect(statuses(dialog)).toContain('This product is in orders: archive it instead.');
+		expect(statuses(dialog)).toContain(TEXTS['problem.conflict']);
 		reply = () => answer(204);
 		const lists = server.all('GET /v1/admin/products').length;
 		await submitDialog(root);
@@ -597,10 +593,10 @@ describe('catalog admin: other product shapes', () => {
 		await submitDialog(root);
 		expect(statuses(dialog)).toContain('Check the amounts and numbers you typed.');
 		type(fieldIn(dialog, 'Stock of each new variant'), '');
-		generated = () => problem(409, 'A product has at most 250 variants.');
+		generated = () => problem(409, 'conflict');
 		await submitDialog(root);
 		expect(server.last('POST /v1/admin/products/prd_1/variants/generate')?.body).toEqual({ price: null, stock: 0 });
-		expect(statuses(dialog)).toContain('A product has at most 250 variants.');
+		expect(statuses(dialog)).toContain(TEXTS['problem.conflict']);
 		/** @type {HTMLElement} */ ([...dialog.querySelectorAll('button')].find((node) => node.textContent === 'Cancel')).click();
 		// options of a product with variant attributes still make rows
 		await click(buttonIn(detailOf(panel), 'Add an option'));

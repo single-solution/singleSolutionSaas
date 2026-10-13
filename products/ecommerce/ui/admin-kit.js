@@ -2,14 +2,16 @@
  * What the admin widgets share (PLAN 0.4.5, 0.4.10): the widget shell with its `Signed out` line, widget texts with
  * `{placeholders}`, money in the shop currency (decimals in inputs, minor units on the wire; shown by the website's
  * Format, PLAN 0.8.10 K7), dates and times by the Format and the business time zone, the business days of date
- * pickers (K8), calls with the ticket (JSON, and plain text for CSV files and printable documents), problem texts (a
- * 403 means the ticket's permissions do not allow it), and small builders: labelled fields, tables, sections, paged
- * lists, id pickers, two-step buttons and uploads to presigned addresses. Text is always set as text, never as HTML.
+ * pickers (K8), calls with the ticket (JSON, and plain text for CSV files and printable documents), problem texts (the
+ * website's words for the field or code of a refusal, never the server's English; a 403 without its own text means the
+ * ticket's permissions do not allow it), and small builders: labelled fields, tables, sections, paged lists, id
+ * pickers, two-step buttons and uploads to presigned addresses. Text is always set as text, never as HTML.
  * @module
  */
 import { DEFAULT_FORMAT, formatDate, formatMoney, mountWidget, viewerOf } from '@ss/app-kit/widget';
 import { dayBounds } from '../core/calendar.js';
 import { fromDecimal, toDecimal } from '../core/money.js';
+import { codeOf, problemKey } from './admin-problems.js';
 import { ADMIN_CSS } from './admin-styles.js';
 import { element } from './dom.js';
 import { WIDGET_CSS } from './styles.js';
@@ -191,14 +193,21 @@ const createKit = ({ root, config, api, win, save, open }) => {
 	};
 
 	/**
-	 * What went wrong, for people: signed out, unreachable, not allowed by the ticket, or the server's problem.
+	 * The website's words for a refusal: for the field a refused form names, else for the problem code, else the
+	 * general text (never the server's English detail, PLAN 0.4.10).
+	 * @param {string} code @param {unknown} [errors] @param {string} [general] the general text's key
+	 */
+	const refusal = (code, errors, general = 'admin.failed') => t(problemKey(config.texts, code, errors) ?? general);
+
+	/**
+	 * What went wrong, for people: signed out, unreachable, the website's words for the problem, else not allowed by
+	 * the ticket (403), signed out (401) or a general text.
 	 * @param {{ status: number, data: any }} answer
 	 */
 	const reason = (answer) => {
 		if (answer.status === 0) return api.tickets.current() ? t('admin.unreachable') : t('admin.signedOut');
-		if (answer.status === 403) return t('admin.notAllowed');
-		const text = answer.data?.detail ?? answer.data?.errors?.[0]?.message;
-		return typeof text === 'string' && text ? text : t('admin.failed');
+		const general = answer.status === 401 ? 'admin.signedOut' : answer.status === 403 ? 'admin.notAllowed' : 'admin.failed';
+		return refusal(codeOf(answer), answer.data?.errors, general);
 	};
 
 	/**
@@ -731,6 +740,7 @@ const createKit = ({ root, config, api, win, save, open }) => {
 		amount,
 		call,
 		fetchText,
+		refusal,
 		reason,
 		upload,
 		openHtml,

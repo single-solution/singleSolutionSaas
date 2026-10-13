@@ -4,8 +4,9 @@
  * typed serial numbers (E11), Refund, Edit delivery address (before shipping), Edit staff note, Invoice and Packing
  * slip (opened in a new tab), and a cancelling status last, in danger text behind its typed confirmation. Then the
  * figures in a grid, the lines with their warranty and serial numbers (E12), and cards: customer (blocked, returned
- * parcels), delivery address, shipment, notes, the order's return claims and history. Forms open in dialogs (the
- * packing step asks one serial number per unit; shipping asks a courier and tracking number, or books the courier API).
+ * parcels), delivery address, shipment, notes, the order's return claims and history (the website's words for who and
+ * what the server wrote itself, PLAN 0.4.10). Forms open in dialogs (the packing step asks one serial number per unit;
+ * shipping asks a courier and tracking number, or books the courier API).
  * @module
  */
 import { EDITABLE_ROLES } from '../core/orders.js';
@@ -32,6 +33,7 @@ export const ROLE_TONES = Object.freeze({
 	cancelled: 'danger',
 	returned_to_origin: 'danger',
 	refunded: 'neutral',
+	returned: 'neutral',
 });
 
 /** The tone of a claim's status. @type {Record<string, Tone>} */
@@ -40,9 +42,33 @@ export const CLAIM_TONES = Object.freeze({
 	approved: 'neutral',
 	received: 'neutral',
 	refunded: 'success',
+	replaced: 'success',
+	repaired: 'success',
 	closed: 'success',
 	rejected: 'danger',
 });
+
+/** Who made a history entry when it was not a member of the staff (`ordersAdmin.by.<by>`; staff are named). */
+export const HISTORY_ACTORS = Object.freeze(['system', 'shopper', 'guest']);
+
+/**
+ * Who made a history entry (of an order or a claim): the website's words for the shop itself, a shopper and a guest,
+ * else the staff member's name.
+ * @param {Kit} kit @param {{ by?: string }} entry
+ */
+export const historyBy = (kit, entry) =>
+	HISTORY_ACTORS.includes(String(entry.by)) ? kit.t(`ordersAdmin.by.${entry.by}`) : (entry.by ?? '');
+
+/**
+ * The note of an order's history entry: the website's words for the entries whose note the server writes itself (a
+ * shopper's cancel, an order that ended unpaid or unconfirmed, an edit; `ordersAdmin.historyNote.<reason or kind>`),
+ * else the note as staff typed it.
+ * @param {Kit} kit @param {{ note?: string, reason?: string, kind?: string }} entry
+ */
+const historyNote = (kit, entry) => {
+	const own = entry.kind === 'edited' ? 'edited' : entry.reason === 'shopper' || entry.reason === 'expired' ? entry.reason : '';
+	return own ? kit.t(`ordersAdmin.historyNote.${own}`) : (entry.note ?? '');
+};
 
 /**
  * An order detail as a list row (the list's fields).
@@ -248,8 +274,8 @@ const renderOrder = (kit, order, detail, message) => {
 						[
 							kit.when(entry.at),
 							entry.fromLabel ? `${entry.fromLabel} → ${entry.toLabel}` : entry.toLabel,
-							entry.by,
-							entry.note,
+							historyBy(kit, entry),
+							historyNote(kit, entry),
 						]
 							.filter(Boolean)
 							.join(' · '),

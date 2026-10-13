@@ -8,6 +8,7 @@ import {
 	choose,
 	click,
 	fieldIn,
+	invalid,
 	mountWith,
 	openTab,
 	panelOf,
@@ -17,6 +18,7 @@ import {
 	statuses,
 	submit,
 	textOf,
+	TEXTS,
 	type,
 } from './ui-admin-helpers.js';
 import {
@@ -84,7 +86,7 @@ const start = (routes = {}, features = ['checkout', 'reviews', 'reports', 'csv',
 						{ id: 'ord_1', number: 'SO-1', statusLabel: 'Delivered', total: 1000, currency: 'PKR', placedAt: AT },
 					],
 				}),
-			'GET /v1/admin/customers/u2': () => problem(404, 'There is no such customer.'),
+			'GET /v1/admin/customers/u2': () => problem(404, 'not_found'),
 			'GET /v1/admin/returns': () =>
 				answer(200, {
 					items: [{ id: 'ret_1', reference: 'R-1', orderNumber: 'SO-1', kind: 'warranty', status: 'requested' }],
@@ -120,11 +122,11 @@ describe('customers admin: customers', () => {
 			q: 'ana',
 			by: 'blocked',
 		});
-		server.routes['GET /v1/admin/customers/counts'] = () => problem(403, 'no');
+		server.routes['GET /v1/admin/customers/counts'] = () => problem(403, 'forbidden');
 		await click(chipOf(panel, 'false'));
 		expect(chipCount(panel, 'true')).toBe('');
 		await openRow(panel, 'u2');
-		expect(statuses(detailOf(panel))).toContain('There is no such customer.');
+		expect(statuses(detailOf(panel))).toContain(TEXTS['problem.not_found']);
 	});
 
 	it('shows a customer and blocks, unblocks, notes and resets them', async () => {
@@ -133,8 +135,8 @@ describe('customers admin: customers', () => {
 		const { root, server } = await start({
 			'PATCH /v1/admin/customers/u1': (/** @type {any} */ call) => {
 				patches.push(call.body);
-				if (call.body.blocked === true && !call.body.blockedReason) return problem(422, 'Give the reason for blocking.');
-				if (call.body.blocked === false && patches.length === 3) return problem(500, 'Down.');
+				if (call.body.blocked === true && !call.body.blockedReason) return invalid('/blockedReason');
+				if (call.body.blocked === false && patches.length === 3) return problem(500, 'internal_error');
 				const blocked = call.body.blocked ?? false;
 				return answer(200, {
 					...customer({
@@ -168,7 +170,7 @@ describe('customers admin: customers', () => {
 		await click(buttonIn(pane, 'Block'));
 		expect(textOf(dialogOf(root))).toContain('A blocked customer cannot order');
 		await submitDialog(root);
-		expect(dialogStatus(root)).toBe('Give the reason for blocking.');
+		expect(dialogStatus(root)).toBe(TEXTS['problem.field.blockedReason']);
 		type(fieldIn(dialogOf(root), 'Reason for blocking'), 'Fraud');
 		await submitDialog(root);
 		expect(hasDialog(root)).toBe(false);
@@ -178,7 +180,7 @@ describe('customers admin: customers', () => {
 		expect(rowOf(panel, 'u1').querySelector('.dot.danger')).not.toBeNull();
 		// unblock (a failure shows in the detail)
 		await click(buttonIn(pane, 'Unblock'));
-		expect(statuses(pane)).toContain('Down.');
+		expect(statuses(pane)).toContain(TEXTS['admin.failed']);
 		await click(buttonIn(pane, 'Unblock'));
 		expect(statuses(pane)).toContain('Unblocked.');
 		// note
@@ -272,10 +274,10 @@ describe('customers admin: reviews', () => {
 			'GET /v1/admin/reviews/count': () => answer(200, { count: 2, capped: false }),
 			'GET /v1/admin/reviews/counts': () => answer(200, { total: 2, groups: { pending: 1, approved: 1 } }),
 			'POST /v1/admin/reviews/rev_1/approve': () => answer(200, { ...review, status: 'approved' }),
-			'POST /v1/admin/reviews/rev_1/reject': () => problem(403, 'no'),
+			'POST /v1/admin/reviews/rev_1/reject': () => problem(403, 'forbidden'),
 			'POST /v1/admin/reviews/rev_1/reply': (/** @type {any} */ call) =>
 				call.body.reply.length > 5
-					? problem(422, 'The reply is at most 2000 characters.')
+					? invalid('/reply')
 					: answer(200, { ...review, status: 'approved', reply: call.body.reply }),
 			'DELETE /v1/admin/reviews/rev_1': () => {
 				reviews = reviews.filter((item) => item.id !== 'rev_1');
@@ -309,7 +311,7 @@ describe('customers admin: reviews', () => {
 		await pickMenu(pane, 'Reply');
 		type(fieldIn(dialogOf(root), 'Reply (shown under the review)'), 'Thanks!');
 		await submitDialog(root);
-		expect(dialogStatus(root)).toBe('The reply is at most 2000 characters.');
+		expect(dialogStatus(root)).toBe(TEXTS['problem.field.reply']);
 		type(fieldIn(dialogOf(root), 'Reply (shown under the review)'), 'Ta');
 		await submitDialog(root);
 		expect(textOf(pane)).toContain('Ta');
@@ -400,7 +402,7 @@ describe('customers admin: reports and CSV', () => {
 						{ productId: 'prd_2', name: 'Case', sold: 0, claimed: 1, rate: null },
 					],
 				}),
-			'GET /v1/admin/reports/margin': () => problem(403, 'no'),
+			'GET /v1/admin/reports/margin': () => problem(403, 'forbidden'),
 		});
 		const panel = await openTab(root, 'reports');
 		await change(fieldIn(panel, 'From'), '2026-09-01');
@@ -468,7 +470,7 @@ describe('customers admin: reports and CSV', () => {
 			});
 		const { root, server, saved } = await start({
 			'GET /v1/admin/csv/products': () => new Response('﻿name\r\nPhone\r\n', { status: 200 }),
-			'GET /v1/admin/csv/orders': () => problem(422, 'More than 10000 orders: choose shorter dates.'),
+			'GET /v1/admin/csv/orders': () => invalid('/from'),
 			'POST /v1/admin/csv/products': (/** @type {any} */ call) => {
 				imports.push(call.body);
 				return call.body.dryRun ? check() : answer(200, { dryRun: false, rows: 2, created: 1, updated: 1, errors: [] });
@@ -486,7 +488,7 @@ describe('customers admin: reports and CSV', () => {
 			from: '2026-09-01T00:00:00.000Z',
 			status: 'delivered',
 		});
-		expect(statuses(panel)).toContain('More than 10000 orders: choose shorter dates.');
+		expect(statuses(panel)).toContain(TEXTS['problem.validation_failed']);
 		// import
 		await click(buttonIn(panel, 'Check the file'));
 		expect(statuses(panel)).toContain('Pick a CSV file first.');
@@ -504,11 +506,11 @@ describe('customers admin: reports and CSV', () => {
 		expect(statuses(panel)).toContain('Imported: 1 new and 1 changed products.');
 		expect(shows(panel, 'Import')).toBe(false);
 		await click(buttonIn(panel, 'Check the file'));
-		server.routes['POST /v1/admin/csv/products'] = () => problem(422, '1 problems in the file: nothing was imported.');
+		server.routes['POST /v1/admin/csv/products'] = () => invalid('/csv/2/price');
 		await click(buttonIn(panel, 'Import'));
-		expect(statuses(panel)).toContain('1 problems in the file: nothing was imported.');
+		expect(statuses(panel)).toContain(TEXTS['problem.field.price']);
 		await click(buttonIn(panel, 'Check the file'));
-		expect(statuses(panel)).toContain('1 problems in the file: nothing was imported.');
+		expect(statuses(panel)).toContain(TEXTS['problem.field.price']);
 		await choose(fieldIn(panel, 'CSV file'), [file]);
 		expect(shows(panel, 'Import')).toBe(false);
 		server.routes['GET /v1/admin/csv/products'] = () => {

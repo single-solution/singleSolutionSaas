@@ -9,6 +9,7 @@ import {
 	checkIn,
 	click,
 	fieldIn,
+	invalid,
 	mountWith,
 	panelOf,
 	problem,
@@ -16,6 +17,7 @@ import {
 	statuses,
 	submit,
 	textOf,
+	TEXTS,
 	tick,
 	type,
 } from './ui-admin-helpers.js';
@@ -106,7 +108,7 @@ describe('catalog admin: the product list', () => {
 	});
 
 	it('shows not allowed, unreachable, empty and failed answers', async () => {
-		const denied = await start(['catalog'], { 'GET /v1/admin/products': () => problem(403, 'no') });
+		const denied = await start(['catalog'], { 'GET /v1/admin/products': () => problem(403, 'forbidden') });
 		expect(statuses(denied.root)).toContain('You are not allowed to do this.');
 		const sections = /** @type {HTMLElement} */ (denied.root.querySelector('nav.sections'));
 		expect([...sections.querySelectorAll('[data-section]')].map((node) => node.getAttribute('data-section'))).toEqual([
@@ -135,8 +137,8 @@ describe('catalog admin: the product list', () => {
 		const empty = await start(['catalog'], {
 			'GET /v1/admin/products': () => answer(200, { items: [], nextCursor: null, hasMore: false }),
 			'GET /v1/admin/products/count': () => answer(200, { count: 10000, capped: true }),
-			'GET /v1/admin/products/counts': () => problem(403, 'no'),
-			'GET /v1/admin/categories': () => problem(403, 'no'),
+			'GET /v1/admin/products/counts': () => problem(403, 'forbidden'),
+			'GET /v1/admin/categories': () => problem(403, 'forbidden'),
 		});
 		const panel = panelOf(empty.root, 'products');
 		expect(statuses(panel)).toContain('No products match.');
@@ -146,7 +148,7 @@ describe('catalog admin: the product list', () => {
 		const plain = await start(['catalog'], {
 			'GET /v1/admin/products': () => answer(500, { errors: [{ message: 'Bad thing.' }] }),
 		});
-		expect(statuses(plain.root)).toContain('Bad thing.');
+		expect(statuses(plain.root)).toContain(TEXTS['admin.failed']);
 		resetPage();
 		const nothing = await start(['catalog'], {
 			'GET /v1/admin/products': () => answer(500, null),
@@ -158,15 +160,15 @@ describe('catalog admin: the product list', () => {
 		const later = await start(['catalog'], {
 			'GET /v1/admin/products': (/** @type {any} */ call) =>
 				call.url.searchParams.get('cursor')
-					? problem(500, 'Later failed.')
+					? problem(500, 'internal_error')
 					: answer(200, { items: [ROW, { ...ROW, id: 'prd_3', name: 'Gone' }], nextCursor: 'c2', hasMore: true }),
-			'GET /v1/admin/products/prd_3': () => problem(404, 'There is no such product.'),
+			'GET /v1/admin/products/prd_3': () => problem(404, 'not_found'),
 		});
 		const list = panelOf(later.root, 'products');
 		await click(buttonIn(list, 'Load more'));
-		expect(statuses(list)).toContain('Later failed.');
+		expect(statuses(list)).toContain(TEXTS['admin.failed']);
 		await pick(list, 'Gone');
-		expect(statuses(detailOf(list))).toContain('There is no such product.');
+		expect(statuses(detailOf(list))).toContain(TEXTS['problem.not_found']);
 	});
 
 	it('changes the selected products in bulk', async () => {
@@ -231,9 +233,9 @@ describe('catalog admin: the product list', () => {
 		dialog = dialogOf(root);
 		await change(fieldIn(dialog, 'Change'), 'add_category');
 		await change(fieldIn(dialog, 'Category'), 'cat_c');
-		reply = () => problem(422, 'Pick an existing category.');
+		reply = () => invalid('/categoryId');
 		await submitDialog(root);
-		expect(statuses(dialog)).toContain('Pick an existing category.');
+		expect(statuses(dialog)).toContain(TEXTS['problem.field.categoryId']);
 		expect(sent).toEqual([
 			{ ids: ['prd_1'], action: 'status', status: 'archived' },
 			{ ids: ['prd_1'], action: 'price', price: { mode: 'percent', value: -10 } },
@@ -252,7 +254,7 @@ describe('catalog admin: the product list', () => {
 			'POST /v1/admin/products/variants/generate': (/** @type {any} */ call) => {
 				sent.push(call.body);
 				return call.body.price === 100
-					? problem(422, 'Give 1 to 100 product ids.')
+					? invalid('/ids')
 					: answer(200, {
 							results: [
 								{ id: 'prd_1', added: 3 },
@@ -274,7 +276,7 @@ describe('catalog admin: the product list', () => {
 		expect(statuses(dialog)).toContain('Check the amounts and numbers you typed.');
 		type(fieldIn(dialog, "Price of new variants (empty = the product's lowest)"), '1');
 		await submitDialog(root);
-		expect(statuses(dialog)).toContain('Give 1 to 100 product ids.');
+		expect(statuses(dialog)).toContain(TEXTS['problem.field.ids']);
 		type(fieldIn(dialog, "Price of new variants (empty = the product's lowest)"), '');
 		type(fieldIn(dialog, 'Stock of each new variant'), '2');
 		await submitDialog(root);
@@ -289,7 +291,7 @@ describe('catalog admin: the product list', () => {
 			['catalog', 'bulk_actions'],
 			{
 				'GET /v1/admin/brands': () => answer(200, { items: [] }),
-				'GET /v1/admin/products/counts': () => problem(403, 'no'),
+				'GET /v1/admin/products/counts': () => problem(403, 'forbidden'),
 				'POST /v1/admin/products/bulk': (/** @type {any} */ call) => {
 					sent.push(call.body);
 					return answer(200, { matched: 1, changed: 0, missing: [] });

@@ -9,6 +9,7 @@ import {
 	checkIn,
 	click,
 	fieldIn,
+	invalid,
 	mountWith,
 	openTab,
 	panelOf,
@@ -18,6 +19,7 @@ import {
 	statuses,
 	submit,
 	textOf,
+	TEXTS,
 	tick,
 	type,
 } from './ui-admin-helpers.js';
@@ -188,9 +190,9 @@ describe('promotions admin: coupons', () => {
 		await openRow(panel, 'cpn_2');
 		expect(textOf(detailOf(panel))).toContain('Everything in the shop.');
 		expect(shows(detailOf(panel), 'Turn on')).toBe(true);
-		server.routes['GET /v1/admin/coupons/cpn_3'] = () => problem(404, 'No such coupon.');
+		server.routes['GET /v1/admin/coupons/cpn_3'] = () => problem(404, 'not_found');
 		await openRow(panel, 'cpn_3');
-		expect(statuses(detailOf(panel))).toContain('No such coupon.');
+		expect(statuses(detailOf(panel))).toContain(TEXTS['problem.not_found']);
 	});
 
 	it('edits, turns off, duplicates, creates and deletes coupons', async () => {
@@ -202,7 +204,7 @@ describe('promotions admin: coupons', () => {
 			'GET /v1/admin/coupons/cpn_9': () => answer(200, listed.at(-1)),
 			'PATCH /v1/admin/coupons/cpn_1': (/** @type {any} */ call) => {
 				bodies.push(call.body);
-				return bodies.length === 1 ? problem(422, 'code is 3 to 40 characters.') : answer(200, { ...COUPON, ...call.body });
+				return bodies.length === 1 ? invalid('/code') : answer(200, { ...COUPON, ...call.body });
 			},
 			'POST /v1/admin/coupons': (/** @type {any} */ call) => {
 				bodies.push(call.body);
@@ -239,7 +241,7 @@ describe('promotions admin: coupons', () => {
 		type(fieldIn(dialog, 'Uses per customer (empty = no limit)'), '');
 		type(fieldIn(dialog, 'Ends'), '2026-12-31T23:00');
 		await submitDialog(root);
-		expect(dialogStatus(root)).toBe('code is 3 to 40 characters.');
+		expect(dialogStatus(root)).toBe(TEXTS['problem.field.code']);
 		await submitDialog(root);
 		expect(hasDialog(root)).toBe(false);
 		expect(bodies[1]).toMatchObject({
@@ -262,7 +264,7 @@ describe('promotions admin: coupons', () => {
 		expect(bodies[2]).toEqual({ active: false });
 		expect(statuses(pane)).toContain('Turned off.');
 		expect(textOf(rowOf(panel, 'cpn_1'))).toContain('Off');
-		server.routes['PATCH /v1/admin/coupons/cpn_1'] = () => problem(403, 'no');
+		server.routes['PATCH /v1/admin/coupons/cpn_1'] = () => problem(403, 'forbidden');
 		await click(buttonIn(pane, 'Turn on'));
 		expect(statuses(pane)).toContain('You are not allowed to do this.');
 		// duplicate: a new coupon with the same fields and no code
@@ -309,9 +311,9 @@ describe('promotions admin: coupons', () => {
 		expect(textOf(dialog)).toContain('Delete SAVE10');
 		expect((await confirmDialog(root, 'SAVE1')).disabled).toBe(true);
 		await confirmDialog(root, 'SAVE10');
-		server.routes['DELETE /v1/admin/coupons/cpn_1'] = () => problem(404, 'No such coupon.');
+		server.routes['DELETE /v1/admin/coupons/cpn_1'] = () => problem(404, 'not_found');
 		await submitDialog(root);
-		expect(dialogStatus(root)).toBe('No such coupon.');
+		expect(dialogStatus(root)).toBe(TEXTS['problem.not_found']);
 		server.routes['DELETE /v1/admin/coupons/cpn_1'] = () => answer(204);
 		server.routes['GET /v1/admin/coupons'] = () => answer(200, { items: COUPONS.slice(1), nextCursor: null, hasMore: false });
 		await submitDialog(root);
@@ -320,7 +322,7 @@ describe('promotions admin: coupons', () => {
 	});
 
 	it('generates a batch of codes and downloads them', async () => {
-		let reply = () => problem(422, 'prefix is up to 30 characters.');
+		let reply = () => invalid('/prefix');
 		const { root, server, saved } = await start({ 'POST /v1/admin/coupons/batch': () => reply() }, ['coupons']);
 		expect(root.querySelector('nav.sections')?.hasAttribute('hidden')).toBe(true);
 		const panel = panelOf(root, 'coupons');
@@ -335,7 +337,7 @@ describe('promotions admin: coupons', () => {
 		expect(dialogStatus(root)).toBe('Check the amounts and numbers you typed.');
 		type(fieldIn(dialog, 'Largest discount (PKR, optional)'), '');
 		await submitDialog(root);
-		expect(dialogStatus(root)).toBe('prefix is up to 30 characters.');
+		expect(dialogStatus(root)).toBe(TEXTS['problem.field.prefix']);
 		reply = () => answer(201, { created: 2, codes: ['VIPAAAA1111', 'VIPBBBB2222'] });
 		await submitDialog(root);
 		expect(server.last('POST /v1/admin/coupons/batch')?.body).toMatchObject({
@@ -357,9 +359,9 @@ describe('promotions admin: coupons', () => {
 		const bodies = [];
 		const { root } = await start(
 			{
-				'GET /v1/admin/products': () => problem(403, 'no'),
-				'GET /v1/admin/categories': () => problem(403, 'no'),
-				'GET /v1/admin/brands': () => problem(403, 'no'),
+				'GET /v1/admin/products': () => problem(403, 'forbidden'),
+				'GET /v1/admin/categories': () => problem(403, 'forbidden'),
+				'GET /v1/admin/brands': () => problem(403, 'forbidden'),
 				'POST /v1/admin/deals': (/** @type {any} */ call) => {
 					bodies.push(call.body);
 					return answer(201, { ...DEAL, ...call.body, id: 'deal_9' });
@@ -435,7 +437,7 @@ describe('promotions admin: deals and bundles', () => {
 			},
 			'PATCH /v1/admin/bundles/bnd_2': (/** @type {any} */ call) => {
 				bodies.push(call.body);
-				return bodies.length === 2 ? problem(422, 'buy is a whole number from 1 to 100.') : answer(200, BUNDLES[1]);
+				return bodies.length === 2 ? invalid('/buy') : answer(200, BUNDLES[1]);
 			},
 			'POST /v1/admin/bundles': (/** @type {any} */ call) => {
 				bodies.push(call.body);
@@ -484,7 +486,7 @@ describe('promotions admin: deals and bundles', () => {
 		type(fieldIn(dialog, 'Percent off what they get (100 = free)'), '');
 		await submitDialog(root);
 		expect(bodies[1]).toMatchObject({ type: 'buy_x_get_y', buy: 2, get: 1, value: 100 });
-		expect(dialogStatus(root)).toBe('buy is a whole number from 1 to 100.');
+		expect(dialogStatus(root)).toBe(TEXTS['problem.validation_failed']);
 		type(fieldIn(dialog, 'Percent off what they get (100 = free)'), '50');
 		await submitDialog(root);
 		expect(bodies[2].value).toBe(50);
@@ -511,7 +513,7 @@ describe('promotions admin: deals and bundles', () => {
 		const bodies = [];
 		const { root } = await start(
 			{
-				'GET /v1/admin/products': () => problem(403, 'no'),
+				'GET /v1/admin/products': () => problem(403, 'forbidden'),
 				'POST /v1/admin/bundles': (/** @type {any} */ call) => {
 					bodies.push(call.body);
 					return answer(201, { ...BUNDLE, ...call.body, id: 'bnd_9' });
@@ -570,7 +572,7 @@ describe('promotions admin: loyalty', () => {
 		const { root, server } = await start(
 			{
 				'GET /v1/admin/loyalty/accounts/u%201': () => answer(200, account),
-				'GET /v1/admin/loyalty/accounts/nobody': () => problem(403, 'no'),
+				'GET /v1/admin/loyalty/accounts/nobody': () => problem(403, 'forbidden'),
 				'POST /v1/admin/loyalty/accounts/u%201/adjust': () => adjust(),
 			},
 			['loyalty'],
@@ -596,11 +598,11 @@ describe('promotions admin: loyalty', () => {
 		expect(server.last('POST /v1/admin/loyalty/accounts/u%201/adjust')?.body).toEqual({ points: 10, note: 'Gift' });
 		expect(statuses(panel)).toContain('Points changed.');
 		expect(textOf(panel)).toContain('130 points');
-		adjust = () => problem(422, 'The balance is 130 points; at most that many can be taken.');
+		adjust = () => invalid('/points');
 		await click(buttonIn(panel, 'Change points'));
 		type(fieldIn(dialogOf(root), 'Points'), '-500');
 		await submitDialog(root);
-		expect(dialogStatus(root)).toBe('The balance is 130 points; at most that many can be taken.');
+		expect(dialogStatus(root)).toBe(TEXTS['problem.field.points']);
 	});
 
 	it('adjusts a guest’s points by their customer id (K-6)', async () => {

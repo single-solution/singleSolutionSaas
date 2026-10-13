@@ -8,7 +8,10 @@ import { vi } from 'vitest';
 import strings from '../strings/en.json' with { type: 'json' };
 
 export const BASE = 'https://shop-product.example.dev';
-const TEXTS = /** @type {Record<string, string>} */ (strings);
+/** The widget texts (strings/en.json). */
+export const TEXTS = /** @type {Record<string, string>} */ (strings);
+/** What a refusal's `detail` says: the server's English, which the admin widgets never show (PLAN 0.4.10). */
+export const SERVER_ENGLISH = 'English words from the server.';
 
 /** Let pending promises settle. */
 export const flush = async () => {
@@ -17,8 +20,18 @@ export const flush = async () => {
 
 /** @param {number} status @param {unknown} [body] */
 export const answer = (status, body = {}) => new Response(status === 204 ? null : JSON.stringify(body), { status });
-/** @param {number} status @param {string} detail @param {Record<string, unknown>} [extra] */
-export const problem = (status, detail, extra = {}) => answer(status, { type: `${BASE}/problems/x`, status, detail, ...extra });
+/**
+ * A refusal as the server sends it: its problem code, and English words in `detail` that must never show.
+ * @param {number} status @param {string} code @param {Record<string, unknown>} [extra]
+ */
+export const problem = (status, code, extra = {}) =>
+	answer(status, { type: `${BASE}/problems/${code}`, status, detail: SERVER_ENGLISH, ...extra });
+/**
+ * A refused form: a 422 naming the field at `path` (e.g. `/variants/0/price`).
+ * @param {string} path
+ */
+export const invalid = (path) =>
+	problem(422, 'validation_failed', { errors: [{ path, message: SERVER_ENGLISH, code: 'invalid' }] });
 
 /** @typedef {{ method: string, path: string, url: URL, body: any, headers: Record<string, string> }} Call */
 /** @typedef {(call: Call) => Response | Promise<Response>} Route */

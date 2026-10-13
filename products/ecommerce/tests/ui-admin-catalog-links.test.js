@@ -52,7 +52,7 @@ describe('catalog admin: fresh details and links between sections', () => {
 		};
 		const { root, server } = await start(ALL, {
 			'GET /v1/admin/categories/cat_a': () => answer(200, { ...CATEGORIES[1], name: 'Audio gear' }),
-			'GET /v1/admin/categories/cat_b': () => problem(403, 'no'),
+			'GET /v1/admin/categories/cat_b': () => problem(403, 'forbidden'),
 			'GET /v1/admin/brands/brd_1': () => answer(200, { ...BRANDS[0], description: 'Fresh makers' }),
 			'GET /v1/admin/size-charts/szc_1': () => answer(200, { ...CHARTS[0], uses: { products: 9, brands: 0, categories: 0 } }),
 			'GET /v1/admin/landings': () => answer(200, { items: [landing] }),
