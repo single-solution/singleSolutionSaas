@@ -27,10 +27,10 @@
 		"newGuestsPerNetwork": {
 			"type": "integer",
 			"title": "New guests per network (IP) per 15 minutes",
-			"default": 5,
+			"default": 0,
 			"minimum": 0,
 			"maximum": 1000,
-			"description": "A device that sends no guest key starts a new guest; more new guests than this from one network address in 15 minutes are refused for a while (too many requests). 0 = no limit."
+			"description": "A device that sends no guest key starts a new guest; more new guests than this from one network address in 15 minutes are refused for a while (too many requests). 0 = no limit (many shoppers can share one mobile network address)."
 		}
 	}
 }

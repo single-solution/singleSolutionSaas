@@ -177,9 +177,12 @@ describe('shared networks and guests without their key (CH-14, CH-15)', () => {
 		expect(texts((await ann('GET', '/v1/chat')).json).at(-1)).toEqual(['ai', 'Hello Ann.']);
 	});
 
-	it('at most 5 new guests per network address in 15 minutes; 0 lifts the limit', async () => {
+	it('no limit by default; with 5, at most 5 new guests per network address in 15 minutes; 0 lifts it', async () => {
 		const sys = await start(['visitor_chat', 'guest_chat']);
 		const network = '198.51.100.8';
+		for (let i = 0; i < 6; i += 1)
+			expect((await sys.visitor({ network: '198.51.100.7' })('POST', '/v1/chat/messages', { text: 'hi' })).status).toBe(201);
+		await sys.setting('guest_chat', 'newGuestsPerNetwork', 5);
 		const send = () => sys.visitor({ network })('POST', '/v1/chat/messages', { text: 'hi' });
 		const kept = sys.visitor({ network });
 		expect((await kept('POST', '/v1/chat/messages', { text: 'hi' })).status).toBe(201);
