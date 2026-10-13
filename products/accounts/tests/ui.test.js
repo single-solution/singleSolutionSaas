@@ -1581,6 +1581,7 @@ describe('admin widgets', () => {
 			lastSignInAt: null,
 		};
 		let created = false;
+		let unproven = 0;
 		/** @type {Array<Record<string, any>>} */
 		let requests = [
 			{
@@ -1655,7 +1656,13 @@ describe('admin widgets', () => {
 						setupLink: { url: 'https://shop.example.com/?ss_setup=nia', expiresAt: at(0) },
 					});
 				},
-				'POST /v1/admin/role-requests/rrq_3/invite': () => answer(200, { request: {}, user: {}, setupLink: null }),
+				'POST /v1/admin/role-requests/rrq_3/invite': () => {
+					unproven += 1;
+					// someone signed up first with Cy's number and never proved it (SA-2)
+					return unproven === 1
+						? problem(409, 'contact_unverified')
+						: answer(200, { request: {}, user: {}, setupLink: null });
+				},
 				'POST /v1/admin/role-requests/rrq_3/decline': () => problem(409, 'conflict'),
 				'POST /v1/admin/role-requests/rrq_2/reopen': () => answer(200, {}),
 			},
@@ -1737,6 +1744,8 @@ describe('admin widgets', () => {
 		await click(buttonIn(dialog(), '×'));
 		await rowMenu(0, strings['requests.decline']);
 		expect(statusIn(part)).toBe(strings['error.generic']);
+		await rowMenu(0, strings['requests.invite']);
+		expect(statusIn(part)).toBe(strings['error.contact_unverified']);
 		await rowMenu(0, strings['requests.invite']);
 		expect(statusIn(part)).toBe('Cy already has a password: the role is given.');
 		await click(/** @type {HTMLButtonElement} */ (part.querySelectorAll('.chip')[3]));
@@ -2111,14 +2120,14 @@ describe('Phase 2 options in the widgets (PLAN 0.8.10)', () => {
 		expect(heading(host)).toBe(strings['signIn.title']);
 	});
 
-	it('Forgot password opens the shop’s page when self-reset is off; Remember me hidden when roles always remember', async () => {
+	it('Forgot password opens the shop’s page when self-reset is off; no sign-up while it is off; Remember me hidden when roles always remember', async () => {
 		const host = place('sign_in');
 		await start(
 			{},
 			{
 				features: ['phone_password'],
 				settings: {
-					phonePassword: { ...PHONE_RULES, selfReset: 'off', forgotUrl: 'https://wa.me/923001234567' },
+					phonePassword: { ...PHONE_RULES, signUp: false, selfReset: 'off', forgotUrl: 'https://wa.me/923001234567' },
 					remember: 'always',
 				},
 			},
@@ -2126,6 +2135,7 @@ describe('Phase 2 options in the widgets (PLAN 0.8.10)', () => {
 		const root = shadow(host);
 		expect(root.querySelector('a.link')?.getAttribute('href')).toBe('https://wa.me/923001234567');
 		expect(hasButton(root, strings['signIn.forgot'])).toBe(false);
+		expect(hasButton(root, strings['signIn.toSignUp'])).toBe(false);
 		expect(checkIn(root, strings['signIn.remember']).closest('label')?.hidden).toBe(true);
 	});
 

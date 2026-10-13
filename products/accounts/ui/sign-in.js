@@ -313,11 +313,16 @@ export const mountSignIn = ({ host, win, config, session, link = null }) => {
 				area.replaceChildren(...nodes);
 			};
 
-			/** Phone + password (A2): sign in (a code from staff works as the password, A3) or sign up. @param {HTMLElement} area @param {HTMLElement} note */
+			/**
+			 * Phone + password (A2): sign in (a code from staff works as the password, A3) or sign up, while its own sign-up
+			 * is on (SA-2).
+			 * @param {HTMLElement} area @param {HTMLElement} note
+			 */
 			const phonePasswordForm = (area, note) => {
 				const form = element(doc, 'form');
-				const creating = signUp && signUpOpen;
 				const rules = settings.phonePassword;
+				const open = signUpOpen && rules?.signUp !== false;
+				const creating = signUp && open;
 				const phone = make.field('input', t('fields.phone'), {
 					type: 'tel',
 					autocomplete: 'tel',
@@ -398,7 +403,7 @@ export const mountSignIn = ({ host, win, config, session, link = null }) => {
 					);
 				});
 				const nodes = [form];
-				if (signUpOpen) {
+				if (open) {
 					const toggle = button(t(creating ? 'signUp.toSignIn' : 'signIn.toSignUp'), { class: 'link' });
 					toggle.addEventListener('click', () => {
 						signUp = !creating;

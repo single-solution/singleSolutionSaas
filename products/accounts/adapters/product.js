@@ -97,6 +97,7 @@ const PROBLEM_CODES = Object.freeze({
 	terms_required: Object.freeze({ status: 403, title: 'Terms not accepted' }),
 	risk_refused: Object.freeze({ status: 403, title: 'Refused by the risk checks' }),
 	already_exists: Object.freeze({ status: 409, title: 'Already exists' }),
+	contact_unverified: Object.freeze({ status: 409, title: 'Phone number or e-mail address not proven' }),
 	weak_password: Object.freeze({ status: 422, title: 'Password refused' }),
 	code_invalid: Object.freeze({ status: 422, title: 'Code not valid' }),
 	too_soon: Object.freeze({ status: 429, title: 'Too soon' }),
@@ -239,6 +240,7 @@ export const createProductInstance = (options) => {
 					passwordMinLength: password.minLength,
 					phonePassword: phonePassword
 						? {
+								signUp: phonePassword.signUp,
 								minLength: phonePassword.minLength,
 								letterAndDigit: phonePassword.letterAndDigit,
 								selfReset: phonePassword.selfReset,

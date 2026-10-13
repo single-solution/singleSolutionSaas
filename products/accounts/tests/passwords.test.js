@@ -170,6 +170,17 @@ describe('A2: phone + password', () => {
 		expect((await phoneSignIn({ phone: '+923001110001', password: 'new1pass' })).json.status).toBe('signed_in');
 	});
 
+	it('with sign-up off, only the shop gives passwords: sign-up is closed, sign-in still works', async () => {
+		expect((await env.visitor('GET', '/v1/widget/config')).json.settings.phonePassword.signUp).toBe(true);
+		await env.setting('phone_password', 'signUp', false);
+		expect(
+			code(await env.visitor('POST', '/v1/sign-up/phone-password', { phone: '+923001110002', password: 'a1b2c3d4' })),
+		).toBe('sign_up_closed');
+		expect((await env.visitor('GET', '/v1/widget/config')).json.settings.phonePassword.signUp).toBe(false);
+		expect((await phoneSignIn({ phone: '+923001110001', password: 'new1pass' })).json.status).toBe('signed_in');
+		await env.setting('phone_password', 'signUp', true);
+	});
+
 	it('Forgot password sends a code through Notifications; the code sets a new password and signs devices out', async () => {
 		const before = env.messages().length;
 		expect((await env.visitor('POST', '/v1/password/phone/forgot', { phone: '+923009999999' })).status).toBe(202);

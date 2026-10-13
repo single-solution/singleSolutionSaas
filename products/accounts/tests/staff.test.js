@@ -360,6 +360,48 @@ describe('A5: role requests', () => {
 		expect(code(await server('POST', '/v1/role-requests/rrq_00000000000000000000000000/decline'))).toBe('not_found');
 		expect((await env.admin(ticket, 'POST', `/v1/admin/role-requests/${dee.json.id}/decline`)).status).toBe(401);
 	});
+
+	it('an invite gives nothing to a user who never proved the number; staff check first; an untouched user is invited again', async () => {
+		/** @param {string} name @param {string} phone */
+		const ask = async (name, phone) =>
+			(await env.visitor('POST', '/v1/role-requests', { role: 'member', name, phone, note: 'Hi' })).json.id;
+		// someone signs up first with Rae's number and a password: the number is not proven
+		const squatter = await env.visitor('POST', '/v1/sign-up/phone-password', {
+			phone: '+923005550300',
+			password: 'taken pass 1',
+			name: 'Not Rae',
+		});
+		const rae = await ask('Rae', '0300 5550300');
+		const refused = await server('POST', `/v1/role-requests/${rae}/invite`);
+		expect(refused.status).toBe(409);
+		expect(code(refused)).toBe('contact_unverified');
+		expect((await server('GET', `/v1/users/${squatter.json.user.id}`)).json.role).toBe('customer');
+		expect((await server('GET', '/v1/role-requests?status=pending')).json.items.map((/** @type {any} */ r) => r.id)).toContain(
+			rae,
+		);
+		// the account was not Rae's: staff remove it, and Rae is invited with a setup link
+		await server('DELETE', `/v1/users/${squatter.json.user.id}`, { reason: 'Not the number owner' });
+		const invited = await server('POST', `/v1/role-requests/${rae}/invite`);
+		expect(invited.json).toMatchObject({ request: { status: 'invited' }, user: { role: 'member', phoneVerified: false } });
+		// an untouched user (the link was never used) is invited again once the link ran out
+		env.advance(8 * 86_400_000);
+		await server('POST', `/v1/role-requests/${rae}/reopen`);
+		const again = await server('POST', `/v1/role-requests/${rae}/invite`);
+		expect(again.json).toMatchObject({ request: { status: 'invited' }, user: { id: invited.json.user.id } });
+		expect(again.json.setupLink.url).toMatch(/ss_setup=cod_/);
+
+		// the account is Sol's own: staff confirm the number on the user, and the role is given at once
+		const sol = await env.visitor('POST', '/v1/sign-up/phone-password', {
+			phone: '+923005550301',
+			password: 'sols pass 12',
+			name: 'Sol',
+		});
+		const solRequest = await ask('Sol', '+923005550301');
+		expect(code(await server('POST', `/v1/role-requests/${solRequest}/invite`))).toBe('contact_unverified');
+		await server('PATCH', `/v1/users/${sol.json.user.id}`, { phone: '+923005550301' });
+		const given = await server('POST', `/v1/role-requests/${solRequest}/invite`);
+		expect(given.json).toMatchObject({ request: { status: 'completed' }, setupLink: null, user: { role: 'member' } });
+	});
 });
 
 describe('the admin widgets’ reads', () => {

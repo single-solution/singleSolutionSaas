@@ -93,6 +93,7 @@
 	"error.terms_required": "Please accept the terms to continue.",
 	"error.risk_refused": "An account cannot be created with these details.",
 	"error.already_exists": "An account with these details already exists. Sign in instead.",
+	"error.contact_unverified": "Someone signed up with this phone number or e-mail address without proving it. Check with the person first.",
 	"error.code_invalid": "This code or link is not valid or has expired.",
 	"error.too_soon": "Please wait a moment before asking for another code.",
 	"error.notifications_not_connected": "Codes cannot be sent right now.",

@@ -39,6 +39,7 @@ const OWN_TEXT = new Set([
 	'terms_required',
 	'risk_refused',
 	'already_exists',
+	'contact_unverified',
 	'code_invalid',
 	'too_soon',
 	'notifications_not_connected',

@@ -402,9 +402,15 @@ export const createFlows = (product, service) => {
 
 	// ----------------------------------------------------------------------------------------- phone + password
 
-	/** Sign up with a phone number and a password (A2; the number is not verified). @param {any} ctx */
+	/**
+	 * Sign up with a phone number and a password (A2; the number is not verified), while the website lets visitors
+	 * sign up this way (SA-2: off, only staff give passwords).
+	 * @param {any} ctx
+	 */
 	const phonePasswordSignUp = async (ctx) => {
 		const s = await service.site(ctx);
+		const { signUp } = await service.settings(s, 'phone_password');
+		if (signUp === false) throw problem('sign_up_closed', 'Sign-up with a phone number and a password is closed.');
 		const body = bodyOf(ctx.body);
 		const phone = await service.phoneOf(s, body.phone);
 		if (!phone) throw invalid('phone', 'Enter the phone number with its country code.');

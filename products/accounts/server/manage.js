@@ -672,9 +672,18 @@ export const createManage = (product, service, flows) => {
 	};
 
 	/**
+	 * Whether nobody could ever sign in to a user: no password, no social sign-in and never signed in (for example a
+	 * user an earlier invite made, whose setup link was not used).
+	 * @param {import('../core/profile.js').UserRecord} user
+	 */
+	const untouched = (user) => !user.passwordHash && !user.lastSignInAt && Object.keys(user.providers ?? {}).length === 0;
+
+	/**
 	 * Invite the person of a pending request (A5): their user is created, or the user with that phone or e-mail gets
 	 * the role; the answer holds a setup link (A3) unless the user already has a password (then the request is
-	 * completed at once).
+	 * completed at once). A user who never proved the request's phone or e-mail gets nothing (409
+	 * `contact_unverified`): someone may have signed up first with another person's number (SA-2); only an untouched
+	 * user is invited again.
 	 * @param {any} ctx
 	 */
 	const inviteRequest = async (ctx) => {
@@ -682,9 +691,14 @@ export const createManage = (product, service, flows) => {
 		const request = await requestOr404(s, ctx.params.id);
 		if (request.status !== 'pending') throw problem('conflict', 'Only a pending request can be invited.');
 		if (!(await s.store.roles.get(request.role))) throw problem('conflict', 'The role of this request no longer exists.');
-		const existing =
-			(request.phone ? await s.store.users.byPhone(request.phone) : null) ??
-			(request.email ? await s.store.users.byEmail(request.email) : null);
+		const byPhone = request.phone ? await s.store.users.byPhone(request.phone) : null;
+		const existing = byPhone ?? (request.email ? await s.store.users.byEmail(request.email) : null);
+		if (existing && !(byPhone ? existing.phoneVerified : existing.emailVerified) && !untouched(existing))
+			throw problem(
+				'contact_unverified',
+				'Someone signed up with this phone number or e-mail address without proving it. Check with the person: ' +
+					'confirm it on their user if the account is theirs, or remove that account; then invite again.',
+			);
 		/** @type {import('../core/profile.js').UserRecord} */
 		let user;
 		if (existing) {
