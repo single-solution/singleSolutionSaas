@@ -16,6 +16,7 @@ import { gradeCondition, gradesByKey } from '../core/grades.js';
 import { absolute } from '../core/links.js';
 import { buildLlmsFull, buildLlmsTxt, MAX_LLMS_CATEGORIES, treeOrder } from '../core/llms.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
+import { shownName } from '../core/reviews.js';
 import {
 	SITEMAP_FOOT,
 	SITEMAP_HEAD,
@@ -203,6 +204,8 @@ export const createSeo = (product, service) => {
 			variantImages.set(variant.id, variant.media?.[0] ? await media.mediaUrl(s, variant.media[0].key) : null);
 		}
 		const returns = s.has('returns') ? Number((await s.values('returns')).returnDays ?? 0) : null;
+		// reviewers are named as the reviews widget shows them (`nameFormat`), never by more (EN-2)
+		const nameFormat = s.has('reviews') ? (await s.values('reviews')).nameFormat : 'full';
 		const reviews = s.has('reviews')
 			? await data
 					.collection(COLLECTIONS.reviews)
@@ -229,7 +232,7 @@ export const createSeo = (product, service) => {
 			shipping: await shippingOf(s),
 			returns: returns === null ? null : { days: returns, country: String(business.country ?? '') },
 			reviews: reviews.map((row) => ({
-				name: String(row.name ?? ''),
+				name: shownName(String(row.name ?? ''), nameFormat),
 				rating: Number(row.rating),
 				title: String(row.title ?? ''),
 				body: String(row.body ?? ''),

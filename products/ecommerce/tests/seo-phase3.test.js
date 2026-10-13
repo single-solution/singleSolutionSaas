@@ -109,6 +109,19 @@ describe('E10 grades and E16 structured data', () => {
 			},
 		]);
 		expect(node(answer.jsonLd, 'FAQPage').mainEntity[0]).toMatchObject({ name: 'Charger included?' });
+		// a reviewer is named as the reviews widget shows them, never by their full name (EN-2)
+		await data
+			.collection('reviews')
+			.updateOne({ websiteId: shop.websiteId, id: 'rev_1' }, { $set: { name: 'Ayesha Khan Malik' } });
+		const full = node((await api('GET', `/v1/seo/products/${ids.phone.slug}`)).jsonLd, 'ProductGroup');
+		expect(full.review[0].author).toEqual({ '@type': 'Person', name: 'Ayesha Khan Malik' });
+		await shop.setting('reviews', 'nameFormat', 'first_initial');
+		const short = node((await api('GET', `/v1/seo/products/${ids.phone.slug}`)).jsonLd, 'ProductGroup');
+		expect(short.review[0].author).toEqual({ '@type': 'Person', name: 'Ayesha M.' });
+		expect(JSON.stringify(short)).not.toContain('Khan');
+		const shown = await shop.visitor('GET', `/v1/shop/products/${ids.phone.id}/reviews`);
+		expect(shown.json.items[0].name).toBe('Ayesha M.');
+		await shop.setting('reviews', 'nameFormat', 'full');
 		await shop.setting('returns', 'returnDays', 0);
 		const none = node((await api('GET', `/v1/seo/products/${ids.phone.slug}`)).jsonLd, 'ProductGroup');
 		expect(none.hasVariant[0].offers.hasMerchantReturnPolicy.returnPolicyCategory).toBe(
