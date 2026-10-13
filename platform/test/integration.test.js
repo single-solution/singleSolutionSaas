@@ -10,7 +10,8 @@ import { createBackground } from '../src/infra/background.js';
 import { afterResponse } from '../src/infra/request-scope.js';
 import { toNextRoute } from '../src/infra/http.js';
 import { getPortal, resetPortal } from '../src/runtime.js';
-import { closeMongoClients } from '../src/infra/db.js';
+import { MongoClient } from 'mongodb';
+import { closeMongoClients, getMongoClient, isDatabaseUnavailable } from '../src/infra/db.js';
 import { createSystemStore } from '../src/infra/system.js';
 import {
 	ENCRYPTION_KEY,
@@ -784,7 +785,20 @@ describe('runtime', () => {
 		const invalid = await system('/v1/catalog/products'); // config invalid
 		expect(invalid.status).toBe(503);
 		expect((await invalid.json()).status).toBe('misconfigured');
+		// a control database that cannot be reached: 503, never 500 (its client, made here first, waits 0.2 s, not 5 s)
 		resetPortal();
+		const down = 'mongodb://127.0.0.1:1/ss_portal_down';
+		getMongoClient({
+			uri: down,
+			createClient: (uri, options) => new MongoClient(uri, { ...options, serverSelectionTimeoutMS: 200 }),
+		});
+		const failure = await getPortal({ env: await testEnv({ MONGODB_URI: down }) }).catch((error) => error);
+		expect(isDatabaseUnavailable(failure)).toBe(true);
+		const unreachable = await system('/v1/catalog/products');
+		expect([unreachable.status, unreachable.headers.get('retry-after')]).toEqual([503, '5']);
+		expect((await unreachable.json()).status).toBe('database_unavailable');
+		resetPortal();
+		await closeMongoClients();
 	}, 60_000);
 });
 

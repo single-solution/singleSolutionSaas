@@ -9,7 +9,7 @@
  * clock, network). Public entry `./product` of this package, so a system test can compose the product with `./routes`.
  * @module
  */
-import { createMemoryStore, createMongoStore, createProduct } from '@ss/app-kit';
+import { PRODUCT_DATABASE_OPTIONS, createMemoryStore, createMongoStore, createProduct } from '@ss/app-kit';
 import { createOutboundPolicy, safeFetch } from '@ss/net';
 import { MongoClient } from 'mongodb';
 import manifestFile from '../manifest.json' with { type: 'json' };
@@ -174,11 +174,12 @@ export const createProductInstance = (options) => {
 	const production = (options.nodeEnv ?? process.env.NODE_ENV) === 'production';
 	const healthy = (options.problems ?? []).length === 0;
 	const uri = options.config?.mongodbUri ?? UNCONFIGURED;
-	// Ecommerce keeps its list settings in the product database too, so it owns the store
+	// Ecommerce keeps its list settings in the product database too, so it owns the store; its client has the kit's
+	// pool and deadlines, so a database that cannot be reached answers 503 database_unavailable (K-16)
 	const store =
 		options.store ??
 		(healthy && uri
-			? createMongoStore({ db: new MongoClient(uri, { maxPoolSize: 5, minPoolSize: 0, maxIdleTimeMS: 60_000 }).db(), now })
+			? createMongoStore({ db: new MongoClient(uri, { ...PRODUCT_DATABASE_OPTIONS }).db(), now })
 			: createMemoryStore({ now }));
 	const { allowHosts = [], ...outboundRest } = options.outbound ?? {};
 	// the same policy the kit uses for addresses merchants enter

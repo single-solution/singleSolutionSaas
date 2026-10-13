@@ -9,7 +9,7 @@
  * @module
  */
 import { MongoClient } from 'mongodb';
-import { createMemoryStore, createMongoStore, createProduct } from '@ss/app-kit';
+import { PRODUCT_DATABASE_OPTIONS, createMemoryStore, createMongoStore, createProduct } from '@ss/app-kit';
 import { createOutboundPolicy, safeFetch } from '@ss/net';
 import manifestFile from '../manifest.json' with { type: 'json' };
 import strings from '../strings/en.json' with { type: 'json' };
@@ -143,11 +143,12 @@ export const createProductInstance = (options) => {
 	const now = options.now ?? Date.now;
 	const production = (options.nodeEnv ?? process.env.NODE_ENV) === 'production';
 	const uri = (options.problems ?? []).length === 0 ? options.config?.mongodbUri : undefined;
-	// Notifications keeps its list setting (webhook URLs) in the product database too, so it owns the store
+	// Notifications keeps its list setting (webhook URLs) in the product database too, so it owns the store; its client
+	// has the kit's pool and deadlines, so a database that cannot be reached answers 503 database_unavailable (K-16)
 	const store =
 		options.store ??
 		(uri
-			? createMongoStore({ db: new MongoClient(uri, { maxPoolSize: 5, minPoolSize: 0, maxIdleTimeMS: 60_000 }).db(), now })
+			? createMongoStore({ db: new MongoClient(uri, { ...PRODUCT_DATABASE_OPTIONS }).db(), now })
 			: createMemoryStore({ now }));
 	const lists = createLists({ store, now });
 	const { allowHosts = [], ...outboundRest } = options.outbound ?? {};

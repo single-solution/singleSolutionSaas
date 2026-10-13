@@ -7,7 +7,8 @@
  *   request id → route match (404 / 405, OPTIONS) → body read with a byte cap (413) → authentication
  *   (`admin` | `merchant` session cookie, `product` client assertion, `public`) → CSRF for
  *   cookie-authenticated mutations (403) → RBAC permission (403) → rate limit (429 + `RateLimit-*`) → JSON body
- *   (415 / 400) → `Idempotency-Key` on POST (428 / 409 / replay) → handler → RFC 9457 problems for every error.
+ *   (415 / 400) → `Idempotency-Key` on POST (428 / 409 / replay) → handler → RFC 9457 problems for every error (a
+ *   database that cannot be reached or did not answer in time: 503 `database_unavailable` with `Retry-After: 5`).
  *
  * Every request runs in a request scope (`request-scope.js`): work deferred with `ctx.defer` or `afterResponse()`
  * runs right after the response, and only then (no timers, PLAN 0.10).
@@ -19,6 +20,7 @@
  */
 import { createId } from '@ss/contracts';
 import { checkCsrf } from './auth.js';
+import { isDatabaseUnavailable } from './db.js';
 import { runInRequestScope } from './request-scope.js';
 import { hmacHex, isObject, sha256Hex } from './util.js';
 
@@ -46,10 +48,13 @@ const IDEMPOTENCY_TTL_MS = 24 * 60 * 60_000;
  * `idempotency_replay_no_body` (409): the request was already completed under this `Idempotency-Key` on a route
  * whose response is never stored (`idempotent: 'no-store'`, e.g. responses carrying secrets). The original status
  * is named in `detail`; retry with a new key to perform the operation again.
+ *
+ * `database_unavailable` (503): the control database cannot be reached or did not answer in time; `Retry-After: 5`.
  */
 export const INFRA_PROBLEMS = Object.freeze({
 	idempotency_replay_no_body: Object.freeze({ status: 409, title: 'Idempotent replay without a stored response' }),
 	two_step_required: Object.freeze({ status: 403, title: 'Two-step sign-in must be set up first' }),
+	database_unavailable: Object.freeze({ status: 503, title: 'Database unavailable' }),
 });
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -113,6 +118,12 @@ export const problem = (code, detail, { errors, headers = {}, status } = {}) => 
 	...(errors === undefined ? {} : { errors }),
 	headers,
 });
+
+/** The answer to a request the control database could not serve (K-16). */
+const DATABASE_UNAVAILABLE = () =>
+	problem('database_unavailable', 'The database cannot be reached right now. Try again shortly.', {
+		headers: { 'retry-after': '5' },
+	});
 
 /** @param {unknown} value */
 const brandOf = (value) =>
@@ -738,7 +749,10 @@ export const createApiHandler = ({
 				else rendered = render(out === undefined ? noContent() : ok(out), requestId, pathname);
 			} catch (error) {
 				if (isProblem(error)) rendered = render(error, requestId, pathname);
-				else {
+				else if (isDatabaseUnavailable(error)) {
+					log.warn('database unavailable', { error, route: route.id });
+					rendered = render(DATABASE_UNAVAILABLE(), requestId, pathname);
+				} else {
 					log.error('route handler failed', { error, route: route.id });
 					rendered = render(problem('internal_error'), requestId, pathname);
 				}
@@ -751,6 +765,10 @@ export const createApiHandler = ({
 			}
 			return finish(rendered);
 		} catch (error) {
+			if (isDatabaseUnavailable(error)) {
+				log.warn('database unavailable', { error });
+				return fail(DATABASE_UNAVAILABLE());
+			}
 			log.error('request failed', { error });
 			return fail(problem('internal_error'));
 		}

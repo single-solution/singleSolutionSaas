@@ -580,6 +580,39 @@ describe('request pipeline', () => {
 		expect(res.json.type).toBe('https://errors.test/internal_error');
 	});
 
+	it('answers 503 database_unavailable while the database cannot be reached or does not answer in time (K-16)', async () => {
+		const unreachable = () =>
+			Object.assign(new Error('Server selection timed out after 5000 ms'), { name: 'MongoServerSelectionError' });
+		let runs = 0;
+		const { call, entries } = build(
+			[
+				{ method: 'POST', path: '/v1/x', auth: 'public', idempotent: true, handler: () => ({}) },
+				{
+					method: 'GET',
+					path: '/v1/slow',
+					auth: 'public',
+					handler: () => {
+						runs += 1;
+						throw Object.assign(new Error('operation exceeded time limit'), { code: 50 });
+					},
+				},
+			],
+			{
+				idempotency: { begin: () => Promise.reject(unreachable()), complete: async () => {}, release: async () => {} },
+			},
+		);
+		const before = await call('POST', '/v1/x', { headers: { 'idempotency-key': 'k' } });
+		expect([before.status, before.headers.get('retry-after'), before.json.type]).toEqual([
+			503,
+			'5',
+			'https://errors.test/database_unavailable',
+		]);
+		const inside = await call('GET', '/v1/slow');
+		expect([inside.status, inside.headers.get('retry-after'), runs]).toEqual([503, '5', 1]);
+		expect(entries.filter((e) => e.level === 'error')).toEqual([]);
+		expect(entries.filter((e) => e.msg === 'database unavailable')).toHaveLength(2);
+	});
+
 	it('exposes query, params and the client IP only when proxy headers are trusted', async () => {
 		const routes = [
 			{

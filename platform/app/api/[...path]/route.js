@@ -1,6 +1,7 @@
 // The Portal's only route handler. next.config.js rewrites /v1/*, /branding/logo and /.well-known/jwks.json here
 // (public paths unchanged); the module router serves /v1 and /branding.
 import { after } from 'next/server.js';
+import { isDatabaseUnavailable } from '../../../src/infra/db.js';
 import { isPlatformError } from '../../../src/infra/errors.js';
 import { toNextRoute } from '../../../src/infra/http.js';
 import { getPortal } from '../../../src/runtime.js';
@@ -13,10 +14,16 @@ const SYSTEM = /** @type {Record<string, (portal: import('../../../src/portal.js
 });
 
 /**
- * An invalid configuration answers every route 503 with the problems (variable names, never values).
+ * An invalid configuration answers every route 503 with the problems (variable names, never values); a control
+ * database that cannot be reached while the Portal is built answers 503 `database_unavailable` (K-16).
  * @param {unknown} error
  */
-const misconfigured = (error) => {
+const notReady = (error) => {
+	if (isDatabaseUnavailable(error))
+		return new Response(JSON.stringify({ status: 'database_unavailable' }), {
+			status: 503,
+			headers: { 'content-type': 'application/json', 'cache-control': 'no-store', 'retry-after': '5' },
+		});
 	if (!isPlatformError(error, 'config_invalid')) throw error;
 	const problems = /** @type {{ problems?: string[] } | undefined} */ (error.details)?.problems ?? [error.message];
 	return new Response(JSON.stringify({ status: 'misconfigured', problems }), {
@@ -28,7 +35,7 @@ const misconfigured = (error) => {
 export const { GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS } = toNextRoute(
 	async (request) => {
 		const portal = await getPortal().catch((error) => error);
-		if (portal instanceof Error) return misconfigured(portal);
+		if (portal instanceof Error) return notReady(portal);
 		const path = new URL(request.url).pathname.replace(/^\/api(?=\/)/, '');
 		const system = Object.hasOwn(SYSTEM, path) ? SYSTEM[path] : undefined;
 		if (system && (request.method === 'GET' || request.method === 'HEAD')) return system(portal);

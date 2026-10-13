@@ -3,6 +3,8 @@
  *
  * - `getMongoClient` — one pooled `MongoClient` per URI, cached on `globalThis` so warm serverless invocations
  *   reuse it. The driver connects lazily on the first operation, so importing or building never needs a database.
+ *   Every call has deadlines ({@link DATABASE_DEADLINES}); a database that cannot be reached or does not answer in time
+ *   fails fast with an error {@link isDatabaseUnavailable} recognises, which requests answer 503 `database_unavailable`.
  * - `defineCollection` / `createRegistry` — every module declares its collections (indexes, TTL, `appendOnly`,
  *   `tenant: 'merchant'`). Names are global and owned: a module's collections are named `<module>_<name>`.
  * - `ensureIndexes` — creates every declared index idempotently (and reports undeclared ones; never drops).
@@ -71,6 +73,38 @@ const CROSS_STAGES = new Set([
 // Client
 
 /**
+ * Deadlines of every database call, for serverless functions (the same as the products' kit, K-16): finding a server
+ * that answers (a database that cannot be reached) and opening a connection 5 s; waiting for a free pooled connection
+ * 10 s; each send or receive on a connection 10 s (one operation that hangs).
+ */
+export const DATABASE_DEADLINES = Object.freeze({
+	serverSelectionTimeoutMS: 5_000,
+	connectTimeoutMS: 5_000,
+	waitQueueTimeoutMS: 10_000,
+	socketTimeoutMS: 10_000,
+});
+
+/** Driver errors of a database that cannot be reached, or that did not answer within a deadline. */
+const UNAVAILABLE_ERRORS = new Set([
+	'MongoServerSelectionError',
+	'MongoNetworkError',
+	'MongoNetworkTimeoutError',
+	'MongoWaitQueueTimeoutError',
+	'MongoOperationTimeoutError',
+	'MongoPoolClearedError',
+	'MongoTopologyClosedError',
+]);
+
+/**
+ * True when an error means the database cannot be reached or did not answer in time (a driver network error or
+ * deadline, or an operation over its `maxTimeMS`).
+ * @param {unknown} error
+ * @returns {boolean}
+ */
+export const isDatabaseUnavailable = (error) =>
+	isObject(error) && (UNAVAILABLE_ERRORS.has(String(error.name)) || error.code === 50);
+
+/**
  * Pooled client per URI, cached on `globalThis` (serverless-safe). No connection is made until first use.
  * @param {{ uri: string, maxPoolSize?: number, appName?: string, createClient?: (uri: string, options: import('mongodb').MongoClientOptions) => MongoClient }} options
  * @returns {MongoClient}
@@ -83,7 +117,7 @@ export const getMongoClient = ({ uri, maxPoolSize = 5, appName = 'ss-portal', cr
 	let client = cache.get(key);
 	if (!client) {
 		/** @type {import('mongodb').MongoClientOptions} */
-		const options = { maxPoolSize, minPoolSize: 0, maxIdleTimeMS: 60_000, serverSelectionTimeoutMS: 5_000, appName };
+		const options = { maxPoolSize, minPoolSize: 0, maxIdleTimeMS: 60_000, ...DATABASE_DEADLINES, appName };
 		client = createClient ? createClient(uri, options) : new MongoClient(uri, options);
 		cache.set(key, client);
 	}

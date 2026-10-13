@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
+	DATABASE_DEADLINES,
 	closeMongoClients,
 	createLocks,
 	createRegistry,
@@ -11,6 +12,7 @@ import {
 	guardPipeline,
 	guardUpdate,
 	indexSpecs,
+	isDatabaseUnavailable,
 } from '../src/infra/db.js';
 import { isPlatformError } from '../src/infra/errors.js';
 import { COLLECTIONS, INFRA_COLLECTIONS } from '../src/infra/schema.js';
@@ -305,6 +307,34 @@ describe('getMongoClient', () => {
 		const real = getMongoClient({ uri: mongo.uri });
 		expect((await real.db('admin').command({ ping: 1 })).ok).toBe(1);
 		await closeMongoClients();
+	});
+
+	it('gives every database call deadlines and recognises a database that cannot be reached (K-16)', async () => {
+		expect(DATABASE_DEADLINES).toEqual({
+			serverSelectionTimeoutMS: 5_000,
+			connectTimeoutMS: 5_000,
+			waitQueueTimeoutMS: 10_000,
+			socketTimeoutMS: 10_000,
+		});
+		/** @type {any[]} */
+		const seen = [];
+		getMongoClient({
+			uri: 'mongodb://a/x',
+			createClient: (uri, options) => {
+				seen.push(options);
+				return /** @type {any} */ ({ close: async () => {} });
+			},
+		});
+		expect(seen).toEqual([
+			{ maxPoolSize: 5, minPoolSize: 0, maxIdleTimeMS: 60_000, ...DATABASE_DEADLINES, appName: 'ss-portal' },
+		]);
+		await closeMongoClients();
+		for (const name of ['MongoServerSelectionError', 'MongoNetworkTimeoutError', 'MongoWaitQueueTimeoutError'])
+			expect(isDatabaseUnavailable(Object.assign(new Error('x'), { name }))).toBe(true);
+		expect(isDatabaseUnavailable(Object.assign(new Error('x'), { code: 50 }))).toBe(true);
+		expect(isDatabaseUnavailable(Object.assign(new Error('dup'), { code: 11000 }))).toBe(false);
+		expect(isDatabaseUnavailable(new Error('db down'))).toBe(false);
+		expect(isDatabaseUnavailable(null)).toBe(false);
 	});
 });
 
