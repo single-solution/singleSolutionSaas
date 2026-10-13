@@ -179,6 +179,37 @@ describe('A4: staff and customer management', () => {
 		const entry = (await server('GET', '/v1/activity?action=user.deleted')).json.items[0];
 		expect(entry).toMatchObject({ label: 'Gus Gone', detail: 'Reason: Asked by phone' });
 	});
+
+	it('removes someone from Accounts only: no other product erases anything, so their data stays', async () => {
+		/** Data-rights deletes Accounts asked other products for since a call. @param {number} from */
+		const erasures = (from) => env.calls.slice(from).filter((c) => c.url.endsWith('/v1/data-rights/delete')).length;
+		const lee = await create({
+			name: 'Lee Leaving',
+			email: 'lee@example.com',
+			role: 'support_staff',
+			password: 'lee pass 123',
+		});
+		const signedIn = await env.visitor('POST', '/v1/sign-in/password', { email: 'lee@example.com', password: 'lee pass 123' });
+		expect(code(await server('DELETE', `/v1/users/${lee.id}?scope=everything`))).toBe('validation_failed');
+		const before = env.calls.length;
+		const removed = await server('DELETE', `/v1/users/${lee.id}?scope=accounts`, { reason: 'Left the team' });
+		expect(removed.json).toEqual({ deleted: true, pending: [] });
+		expect(erasures(before)).toBe(0);
+		expect(code(await server('GET', `/v1/users/${lee.id}`))).toBe('not_found');
+		expect(code(await env.visitor('POST', '/v1/session/refresh', { refreshToken: signedIn.json.refreshToken }))).toBe(
+			'signed_out',
+		);
+		const entry = (await server('GET', '/v1/activity?action=user.removed')).json.items[0];
+		expect(entry).toMatchObject({
+			label: 'Lee Leaving',
+			detail: 'Reason: Left the team; From Accounts only: other products keep their data',
+		});
+		// the default still erases everywhere
+		const gone = await create({ name: 'Gil Gone', email: 'gil@example.com' });
+		const from = env.calls.length;
+		await server('DELETE', `/v1/users/${gone.id}?scope=all`);
+		expect(erasures(from)).toBe(1);
+	});
 });
 
 describe('A3: staff-issued sign-in codes and setup links', () => {

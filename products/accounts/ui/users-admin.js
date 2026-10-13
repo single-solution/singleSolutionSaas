@@ -596,16 +596,22 @@ export const mountUsersAdmin = ({ host, api, config }) => {
 				);
 			};
 
-			/** Delete a user behind a typed confirmation (their name). @param {User} user @param {(message: string) => Promise<void>} done */
+			/**
+			 * Delete a user behind a typed confirmation (their name); "Accounts only" keeps their data in the other products
+			 * (removing someone from the team, ST-2).
+			 * @param {User} user @param {(message: string) => Promise<void>} done
+			 */
 			const deleteDialog = (user, done) => {
 				const confirmWord = nameOf(user);
 				const reason = make.field('input', t('users.deleteReason'), { maxlength: '300' });
 				const typed = make.field('input', t('users.typeToConfirm'), { autocomplete: 'off', required: '' });
-				for (const made of [reason, typed]) made.wrap.classList.add('wide');
+				const keep = make.check(t('users.deleteKeep'));
+				for (const made of [reason, typed, keep]) made.wrap.classList.add('wide');
 				formDialog(
 					formatText(t('users.deleteTitle'), { name: confirmWord }),
 					[
 						element(doc, 'p', { class: 'wide' }, formatText(t('users.deleteHelp'), { confirm: confirmWord })),
+						keep.wrap,
 						reason.wrap,
 						typed.wrap,
 					],
@@ -615,7 +621,8 @@ export const mountUsersAdmin = ({ host, api, config }) => {
 							dialogNote.replaceChildren(formatText(t('users.deleteHelp'), { confirm: confirmWord }));
 							return null;
 						}
-						const answer = await call('DELETE', `/v1/admin/users/${encodeURIComponent(user.id)}`, {
+						const scope = keep.input.checked ? '?scope=accounts' : '';
+						const answer = await call('DELETE', `/v1/admin/users/${encodeURIComponent(user.id)}${scope}`, {
 							reason: reason.input.value.trim(),
 						});
 						if (answer.ok) {

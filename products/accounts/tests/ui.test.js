@@ -1559,8 +1559,11 @@ describe('admin widgets', () => {
 		await submit(buttonIn(dialog(), strings['users.deleteSubmit']));
 		expect(server.last('DELETE /v1/admin/users/usr_1')).toBeUndefined();
 		fieldIn(dialog(), strings['users.typeToConfirm']).value = 'Ana';
+		// removed from Accounts only: the other products keep the person's data
+		checkIn(dialog(), strings['users.deleteKeep']).checked = true;
 		await submit(buttonIn(dialog(), strings['users.deleteSubmit']));
 		expect(server.last('DELETE /v1/admin/users/usr_1')?.body).toEqual({ reason: 'Asked by phone' });
+		expect(server.last('DELETE /v1/admin/users/usr_1')?.url.searchParams.get('scope')).toBe('accounts');
 
 		// another user: unblock and a setup link to hand over; Back on narrow widgets
 		await click(/** @type {HTMLButtonElement} */ (/** @type {unknown} */ (root.querySelectorAll('li.row-item')[0])));

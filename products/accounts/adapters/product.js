@@ -116,8 +116,8 @@ const PROBLEM_CODES = Object.freeze({
 
 /**
  * Data rights of Accounts itself (PLAN 0.4.11): the user matched on id, e-mail or phone. Export gives the profile and
- * the devices (never the password, two-step secrets or the merchant's notes); delete erases the user, their sessions
- * and their codes.
+ * the devices (never the password, two-step secrets or the merchant's notes); delete erases the user, their sessions,
+ * their codes and the messages kept for them.
  * @param {() => number} now
  * @returns {Pick<NonNullable<import('@ss/app-kit').ProductOptions['hooks']>, 'exportUser' | 'deleteUser'>}
  */
@@ -151,6 +151,7 @@ const ownDataRights = (now) => ({
 		for (const u of found) {
 			deleted += await store.sessions.removeAll(u.id);
 			for (const target of [u.id, u.email, u.phone]) if (target) deleted += await store.codes.removeTarget(target);
+			deleted += await store.outbox.removeTo(u);
 			if (await store.users.remove(u.id)) deleted += 1;
 		}
 		return { deleted, anonymised: 0 };

@@ -657,6 +657,14 @@ export const createStore = (data, { now }) => {
 			remove: async (key) => {
 				await outbox.deleteMany({ websiteId, key });
 			},
+			/**
+			 * Drop kept messages to a person (their user is removed); returns how many.
+			 * @param {{ email: string | null, phone: string | null }} who
+			 */
+			removeTo: async ({ email, phone }) => {
+				const or = [...(email ? [{ 'to.email': email }] : []), ...(phone ? [{ 'to.phone': phone }] : [])];
+				return or.length === 0 ? 0 : (await outbox.deleteMany({ websiteId, $or: or })).deletedCount;
+			},
 		}),
 
 		copies: Object.freeze({

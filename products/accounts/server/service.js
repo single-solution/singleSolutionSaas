@@ -550,6 +550,17 @@ export const createService = (product) => {
 	};
 
 	/**
+	 * Remove a user from Accounts only: their sessions, codes, kept messages and the user; no other product is asked.
+	 * @param {Site} s @param {UserRecord} user
+	 */
+	const removeHere = async (s, user) => {
+		await s.store.sessions.removeAll(user.id);
+		for (const target of [user.id, user.email, user.phone]) if (target) await s.store.codes.removeTarget(target);
+		await s.store.outbox.removeTo(user);
+		await s.store.users.remove(user.id);
+	};
+
+	/**
 	 * Erase a user here and in every connected product (PLAN 0.8.6): products that do not confirm are asked again
 	 * right after later requests for this website.
 	 * @param {Site} s @param {UserRecord} user @param {import('@ss/app-kit').Actor} actor
@@ -558,9 +569,7 @@ export const createService = (product) => {
 	 */
 	const erase = async (s, user, actor, ctx, why) => {
 		const pending = await fanOutDelete(s, user, await connectedProducts(s.websiteId));
-		await s.store.sessions.removeAll(user.id);
-		for (const target of [user.id, user.email, user.phone]) if (target) await s.store.codes.removeTarget(target);
-		await s.store.users.remove(user.id);
+		await removeHere(s, user);
 		if (pending.length > 0) await s.store.deletions.add({ userId: user.id, email: user.email, phone: user.phone, pending });
 		if (ctx)
 			await product.activity.record(
@@ -651,6 +660,7 @@ export const createService = (product) => {
 		anyMethod,
 		notify,
 		deliver,
+		removeHere,
 		erase,
 		exportFor,
 		connectedProducts,

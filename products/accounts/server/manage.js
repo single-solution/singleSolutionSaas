@@ -286,12 +286,28 @@ export const createManage = (product, service, flows) => {
 		return new Response(JSON.stringify(staffView(user)), { status: 201, headers: { 'content-type': 'application/json' } });
 	};
 
-	/** Erase a user at once, as an approved deletion request does (A4): `{ reason }`. @param {any} ctx */
+	/**
+	 * Delete a user (A4): `{ reason }`. `?scope=all` (default) erases them at once, as an approved deletion request does
+	 * (every connected product deletes or anonymises their data); `?scope=accounts` removes them from Accounts only
+	 * (the user, their sessions and codes) and every other product keeps its data, so removing someone from the team
+	 * never erases their orders or conversations (ST-2).
+	 * @param {any} ctx
+	 */
 	const deleteUser = async (ctx) => {
 		const s = await service.site(ctx);
+		const scope = ctx.query.scope ?? 'all';
+		if (scope !== 'all' && scope !== 'accounts') throw invalid('scope', 'scope is all or accounts.');
 		const user = await userOr404(s, ctx.params.id);
 		await guard(ctx, s, user, { remove: true });
 		const reason = typeof bodyOf(ctx.body).reason === 'string' ? bodyOf(ctx.body).reason.trim().slice(0, 300) : '';
+		if (scope === 'accounts') {
+			await service.removeHere(s, user);
+			await log(ctx, 'user.removed', user.id, {
+				label: labelOf(user.name),
+				detail: detailOf([reason && `Reason: ${reason}`, 'From Accounts only: other products keep their data']),
+			});
+			return { deleted: true, pending: [] };
+		}
 		const { pending } = await service.erase(s, user, actor(ctx), ctx, reason ? `Reason: ${reason}` : 'Deleted by staff');
 		return { deleted: true, pending };
 	};
