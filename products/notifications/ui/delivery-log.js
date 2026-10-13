@@ -2,13 +2,15 @@
  * The admin widget `delivery_log` (permission `log.read`): the merchant's staff read the delivery log in their own
  * admin, newest first, filtered by status, channel and recipient, page by page, with the number of messages per status
  * (the log's counts, PLAN 0.8.10 K4). Each message opens to its words and every attempt. Times follow the website's
- * Format and business time zone from the widget config (PLAN 0.8.10 K7).
+ * Format and business time zone from the widget config (PLAN 0.8.10 K7). A skip's reason shows in the website's words;
+ * a failure shows the provider's own error.
  * @module
  */
 import { formatDate, formatText, mountWidget, viewerOf } from '@ss/app-kit/widget';
 import { CHANNELS } from '../core/channels.js';
 import { STATUSES } from '../core/log.js';
 import { element } from './dom.js';
+import { logReason } from './problems.js';
 import { WIDGET_CSS } from './styles.js';
 import { adminCall } from './tickets.js';
 
@@ -99,7 +101,7 @@ export const mountDeliveryLog = ({ host, api, config }) => {
 				row(t('log.source'), t(`log.source.${message.source}`));
 				row(t('log.due'), message.sentAt ? '' : when(message.dueAt));
 				row(t('log.sentAt'), message.sentAt ? when(message.sentAt) : '');
-				row(t('log.reason'), message.reason ?? '');
+				row(t('log.reason'), logReason(config.texts, message));
 				row(
 					t('log.attemptList'),
 					message.attempts
@@ -158,7 +160,7 @@ export const mountDeliveryLog = ({ host, api, config }) => {
 								t(`status.${message.status}`),
 								formatText(t('log.attempts'), { count: message.attempts.length }),
 								when(message.createdAt),
-								message.reason ?? '',
+								logReason(config.texts, message),
 							]
 								.filter((part) => part !== '')
 								.join(' · '),

@@ -1,11 +1,13 @@
 /**
  * The admin widget `send_message` (permission `messages.send`): a member of the merchant's staff sends a one-off
  * message by e-mail, SMS or WhatsApp to one person. It is a required, urgent message (it ignores unsubscribes and quiet
- * hours, never send limits) and is kept in the delivery log like every other.
+ * hours, never send limits) and is kept in the delivery log like every other. A refused call or a message that was not
+ * sent shows the website's words for why, never the server's English.
  * @module
  */
 import { formatText, mountWidget } from '@ss/app-kit/widget';
 import { element } from './dom.js';
+import { notSentText, problemText } from './problems.js';
 import { WIDGET_CSS } from './styles.js';
 import { adminCall } from './tickets.js';
 
@@ -76,9 +78,7 @@ export const mountSendMessage = ({ host, api, config }) => {
 				});
 				button.removeAttribute('disabled');
 				if (!answer.ok) {
-					note.textContent = answer.data?.detail
-						? formatText(t('send.notSent'), { reason: answer.data.detail })
-						: t('send.failed');
+					note.textContent = formatText(t('send.notSent'), { reason: problemText(config.texts, answer) });
 					return;
 				}
 				const message = answer.data;
@@ -87,7 +87,7 @@ export const mountSendMessage = ({ host, api, config }) => {
 					/** @type {HTMLFormElement} */ (form).reset();
 					showSubject();
 				} else if (message.status === 'queued' || message.status === 'retrying') note.textContent = t('send.later');
-				else note.textContent = formatText(t('send.notSent'), { reason: message.reason ?? message.status });
+				else note.textContent = formatText(t('send.notSent'), { reason: notSentText(config.texts, message) });
 			});
 			return undefined;
 		},

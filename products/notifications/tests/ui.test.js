@@ -3,6 +3,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import strings from '../strings/en.json' with { type: 'json' };
 import { SUBSCRIBED_EVENT, SUBSCRIBER_STORAGE_KEY, WIDGET_ATTRIBUTE, WIDGET_GLOBAL } from '../core/widgets.js';
+import { BUTTON_TYPES } from '../core/templates.js';
+import { CHANNELS } from '../core/channels.js';
+import { STATUSES } from '../core/log.js';
+import { codeOf, logReason, notSentText, problemText } from '../ui/problems.js';
 import { REFRESH_BEFORE_MS, adminCall, createTicketSource } from '../ui/tickets.js';
 import { ADMIN_CONFIG_PATH, CONFIG_PATH, startWidget } from '../ui/widget.js';
 
@@ -41,6 +45,17 @@ const flush = async () => {
 
 /** @param {number} status @param {unknown} [body] */
 const answer = (status, body = {}) => new Response(status === 204 ? null : JSON.stringify(body), { status });
+
+/**
+ * A problem answer as the server sends it (its English detail must never show).
+ * @param {number} status @param {string} code @param {string} [field] the field a validation names
+ */
+const refusal = (status, code, field) =>
+	answer(status, {
+		type: `https://notifications.example.dev/problems/${code}`,
+		detail: 'English words from the server.',
+		...(field ? { errors: [{ path: `/${field}/0`, message: 'English words from the server.', code: 'invalid' }] } : {}),
+	});
 
 /**
  * `window.fetch` answering by method and path.
@@ -392,13 +407,13 @@ describe('admin widgets', () => {
 			'PUT /v1/admin/templates': (init) => {
 				const body = JSON.parse(String(init?.body));
 				saved.push(body);
-				return body.text === '' ? answer(422, { detail: 'Write the message.' }) : answer(200, body);
+				return body.text === '' ? refusal(422, 'validation_failed', 'text') : answer(200, body);
 			},
 			'DELETE /v1/admin/templates/welcome/sms/ur': () => {
 				items = [];
 				return answer(204);
 			},
-			'DELETE /v1/admin/templates/x/email/default': () => answer(404, { detail: 'No such template.' }),
+			'DELETE /v1/admin/templates/x/email/default': () => refusal(404, 'not_found'),
 		});
 		const pick = /** @type {HTMLButtonElement} */ (inside(host, 'li button'));
 		expect(pick.textContent).toBe('welcome · E-mail · Default');
@@ -424,7 +439,7 @@ describe('admin widgets', () => {
 		text.value = '';
 		form.dispatchEvent(new window.Event('submit', { cancelable: true }));
 		await flush();
-		expect(statusOf(host)).toBe('This could not be saved: Write the message.');
+		expect(statusOf(host)).toBe(`This could not be saved: ${strings['problem.field.text']}`);
 		button(host, strings['templates.delete']).click();
 		await flush();
 		expect(statusOf(host)).toBe(strings['templates.deleted']);
@@ -432,7 +447,7 @@ describe('admin widgets', () => {
 		key.value = 'x';
 		button(host, strings['templates.delete']).click();
 		await flush();
-		expect(statusOf(host)).toBe('This could not be saved: No such template.');
+		expect(statusOf(host)).toBe(`This could not be deleted: ${strings['problem.not_found']}`);
 		button(host, strings['templates.new']).click();
 		expect(key.value).toBe('');
 	});
@@ -522,9 +537,7 @@ describe('admin widgets', () => {
 			'GET /v1/admin/templates': () => answer(200, { items }),
 			'POST /v1/admin/messages': (init) => {
 				sends.push(JSON.parse(String(init?.body)));
-				return sends.length === 1
-					? answer(201, { status: 'sent' })
-					: answer(422, { detail: 'There is no email template x.' });
+				return sends.length === 1 ? answer(201, { status: 'sent' }) : refusal(422, 'template_not_found');
 			},
 		});
 		/** @type {HTMLButtonElement} */ (inside(host, 'li button')).click();
@@ -566,7 +579,7 @@ describe('admin widgets', () => {
 		expect(statusOf(host)).toBe('Test: Sent');
 		button(host, strings['templates.testSend']).click();
 		await flush();
-		expect(statusOf(host)).toBe('The test was not sent: There is no email template x.');
+		expect(statusOf(host)).toBe(`The test was not sent: ${strings['problem.template_not_found']}`);
 		// push templates have no test send; a WhatsApp template at Meta previews its buttons
 		const channel = /** @type {HTMLSelectElement} */ (host.shadowRoot?.querySelectorAll('select')[0]);
 		channel.value = 'push';
@@ -591,7 +604,7 @@ describe('admin widgets', () => {
 	it('the template editor says when the list cannot be loaded', async () => {
 		const host = place('template_editor');
 		await startAdmin({ 'GET /v1/admin/templates': () => answer(500) });
-		expect(statusOf(host)).toBe('This could not be saved: ');
+		expect(statusOf(host)).toBe(`The templates could not be loaded: ${strings['problem.failed']}`);
 	});
 
 	it('send a message: picks channels of switched-on features and reports the outcome', async () => {
@@ -602,13 +615,18 @@ describe('admin widgets', () => {
 			answer(201, { status: 'sent' }),
 			answer(201, { status: 'queued' }),
 			answer(201, { status: 'skipped', reason: 'limited' }),
-			answer(422, { detail: 'Enter an e-mail address.' }),
+			answer(201, { status: 'failed', reason: 'The provider answered HTTP 401.' }),
+			refusal(422, 'validation_failed', 'to'),
+			refusal(429, 'rate_limited'),
 			answer(500, {}),
+			new Error('offline'),
 		];
 		await startAdmin({
 			'POST /v1/admin/messages': (init) => {
 				bodies.push(JSON.parse(String(init?.body)));
-				return /** @type {Response} */ (outcomes.shift());
+				const next = outcomes.shift();
+				if (next instanceof Error) throw next;
+				return /** @type {Response} */ (next);
 			},
 		});
 		const channel = /** @type {HTMLSelectElement} */ (inside(host, 'select'));
@@ -631,9 +649,13 @@ describe('admin widgets', () => {
 		expect(subject.hidden).toBe(true);
 		expect(await submit()).toBe(strings['send.later']);
 		expect(bodies[1]).not.toHaveProperty('subject');
-		expect(await submit()).toBe('The message was not sent: limited');
-		expect(await submit()).toBe('The message was not sent: Enter an e-mail address.');
-		expect(await submit()).toBe(strings['send.failed']);
+		// why it was not sent, in the website's words: never the server's English
+		expect(await submit()).toBe(`The message was not sent: ${strings['reason.limited']}`);
+		expect(await submit()).toBe(`The message was not sent: ${strings['reason.failed']}`);
+		expect(await submit()).toBe(`The message was not sent: ${strings['problem.field.to']}`);
+		expect(await submit()).toBe(`The message was not sent: ${strings['problem.rate_limited']}`);
+		expect(await submit()).toBe(`The message was not sent: ${strings['problem.failed']}`);
+		expect(await submit()).toBe(`The message was not sent: ${strings['problem.offline']}`);
 	});
 
 	it('staff push subscribes the ticket’s user', async () => {
@@ -703,6 +725,7 @@ describe('tickets', () => {
 	it('a widget shows Signed out when the page cannot give a new ticket', async () => {
 		vi.useFakeTimers();
 		const host = place('delivery_log');
+		const editor = place('template_editor');
 		serve({
 			[`GET ${ADMIN_CONFIG_PATH}`]: () => answer(200, configOf(['send_api'])),
 			'GET /v1/admin/messages': () => answer(200, { items: [], nextCursor: null, hasMore: false }),
@@ -720,6 +743,9 @@ describe('tickets', () => {
 		expect(statusOf(host)).toBe(strings['log.empty']);
 		await vi.advanceTimersByTimeAsync(2 * 60_000);
 		expect(statusOf(host)).toBe(strings['log.signedOut']);
+		/** @type {HTMLFormElement} */ (inside(editor, 'form')).dispatchEvent(new window.Event('submit', { cancelable: true }));
+		await vi.advanceTimersByTimeAsync(0);
+		expect(statusOf(editor)).toBe(strings['templates.signedOut']);
 		const fetch = vi.fn().mockRejectedValue(new Error('offline'));
 		const source = createTicketSource({
 			first: { ticket: 'x', expiresAt: new Date().toISOString() },
@@ -729,5 +755,59 @@ describe('tickets', () => {
 			now: () => 0,
 		});
 		expect(await adminCall({ base: BASE, tickets: source, fetch }, 'GET', '/x')).toEqual({ ok: false, status: 0, data: null });
+	});
+});
+
+describe('admin widget texts (PLAN 0.4.10)', () => {
+	it('every text a widget names after a code exists, so no text key ever shows', () => {
+		const keys = [
+			...CHANNELS.map((channel) => `channel.${channel}`),
+			...STATUSES.map((status) => `status.${status}`),
+			...BUTTON_TYPES.map((type) => `templates.buttonType.${type}`),
+			...['api', 'staff'].map((source) => `log.source.${source}`),
+			...['sent', 'failed'].map((outcome) => `log.outcome.${outcome}`),
+			...['unsubscribed', 'limited', 'failed'].map((reason) => `reason.${reason}`),
+			// the fields the admin routes refuse (PUT /v1/admin/templates, POST /v1/admin/messages)
+			...['key', 'channel', 'language', 'subject', 'text', 'providerTemplate', 'buttons', 'to', 'template', 'values'].map(
+				(field) => `problem.field.${field}`,
+			),
+			...['offline', 'invalid_token', 'forbidden', 'not_found', 'template_not_found', 'validation_failed', 'failed'].map(
+				(code) => `problem.${code}`,
+			),
+		];
+		expect(keys.filter((key) => !Object.hasOwn(strings, key))).toEqual([]);
+	});
+
+	it('a refusal shows the text for its field, else for its code, else a general one; never the server’s detail', () => {
+		/** @param {string} code @param {unknown} [errors] */
+		const refused = (code, errors) => ({
+			status: 422,
+			data: { type: `https://x.example/problems/${code}`, detail: 'English', errors },
+		});
+		expect(problemText(strings, { status: 0, data: null })).toBe(strings['problem.offline']);
+		expect(problemText(strings, refused('validation_failed', [{ path: '/buttons/0/index' }]))).toBe(
+			strings['problem.field.buttons'],
+		);
+		expect(problemText(strings, refused('validation_failed', [{ path: '/unknown' }]))).toBe(
+			strings['problem.validation_failed'],
+		);
+		expect(problemText(strings, refused('validation_failed'))).toBe(strings['problem.validation_failed']);
+		expect(problemText(strings, refused('template_not_found'))).toBe(strings['problem.template_not_found']);
+		expect(problemText(strings, refused('teapot'))).toBe(strings['problem.failed']);
+		expect(problemText(strings, { status: 500, data: null })).toBe(strings['problem.failed']);
+		expect(problemText({}, { status: 500, data: {} })).toBe('');
+		expect(codeOf({ status: 403, data: { type: 'https://x.example/problems/forbidden' } })).toBe('forbidden');
+	});
+
+	it('a message that was not sent says why in the website’s words; the log keeps a provider’s error as it came', () => {
+		expect(notSentText(strings, { status: 'skipped', reason: 'unsubscribed' })).toBe(strings['reason.unsubscribed']);
+		expect(notSentText(strings, { status: 'failed', reason: 'The provider answered HTTP 401.' })).toBe(
+			strings['reason.failed'],
+		);
+		expect(notSentText({}, { status: 'failed' })).toBe('');
+		expect(logReason(strings, { reason: 'limited' })).toBe(strings['reason.limited']);
+		expect(logReason(strings, { reason: 'The provider answered HTTP 401.' })).toBe('The provider answered HTTP 401.');
+		expect(logReason(strings, { reason: null })).toBe('');
+		expect(logReason({}, { reason: 'unsubscribed' })).toBe('unsubscribed');
 	});
 });

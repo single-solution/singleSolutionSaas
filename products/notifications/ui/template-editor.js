@@ -4,13 +4,14 @@
  * sensitive template keeps none of its values in the delivery log (PLAN 0.8.10 D11). A WhatsApp template at Meta lists
  * the buttons that take a value (PLAN 0.8.10 N1). A live preview fills the words with
  * samples typed for each value, and a member of staff who may send messages sends the saved template to themselves as
- * a test with those samples.
+ * a test with those samples. A refused call shows the website's text for its problem, never the server's English.
  * @module
  */
 import { formatText, mountWidget } from '@ss/app-kit/widget';
 import { CHANNELS } from '../core/channels.js';
 import { fillText, valueNamesOf } from '../core/templates.js';
 import { element } from './dom.js';
+import { problemText } from './problems.js';
 import { WIDGET_CSS } from './styles.js';
 import { adminCall } from './tickets.js';
 
@@ -29,6 +30,13 @@ const MAX_BUTTONS = 10;
 export const mountTemplateEditor = ({ host, api, config }) => {
 	/** @param {string} key */
 	const t = (key) => config.texts[key] ?? key;
+	/**
+	 * What a refused call says: signed out, else the text with the problem's words.
+	 * @param {string} key the text with `{reason}`
+	 * @param {{ status: number, data: any }} answer
+	 */
+	const refused = (key, answer) =>
+		api.tickets.current() ? formatText(t(key), { reason: problemText(config.texts, answer) }) : t('templates.signedOut');
 	return mountWidget({
 		host,
 		theme: config.theme,
@@ -245,9 +253,7 @@ export const mountTemplateEditor = ({ host, api, config }) => {
 				const answer = await adminCall(api, 'GET', '/v1/admin/templates');
 				if (!answer.ok) {
 					list.replaceChildren();
-					note.textContent = api.tickets.current()
-						? formatText(t('templates.failed'), { reason: '' })
-						: t('templates.signedOut');
+					note.textContent = refused('templates.loadFailed', answer);
 					return;
 				}
 				/** @type {TemplateView[]} */
@@ -290,9 +296,7 @@ export const mountTemplateEditor = ({ host, api, config }) => {
 							}))
 						: [],
 				});
-				note.textContent = answer.ok
-					? t('templates.saved')
-					: formatText(t('templates.failed'), { reason: answer.data?.detail ?? '' });
+				note.textContent = answer.ok ? t('templates.saved') : refused('templates.failed', answer);
 				if (answer.ok) await load();
 			});
 			remove.addEventListener('click', async () => {
@@ -300,9 +304,7 @@ export const mountTemplateEditor = ({ host, api, config }) => {
 					.map(encodeURIComponent)
 					.join('/');
 				const answer = await adminCall(api, 'DELETE', `/v1/admin/templates/${path}`);
-				note.textContent = answer.ok
-					? t('templates.deleted')
-					: formatText(t('templates.failed'), { reason: answer.data?.detail ?? '' });
+				note.textContent = answer.ok ? t('templates.deleted') : refused('templates.deleteFailed', answer);
 				if (answer.ok) {
 					fill({});
 					await load();
@@ -319,7 +321,7 @@ export const mountTemplateEditor = ({ host, api, config }) => {
 				});
 				note.textContent = answer.ok
 					? formatText(t('templates.testDone'), { status: t(`status.${answer.data.status}`) })
-					: formatText(t('templates.testFailed'), { reason: answer.data?.detail ?? '' });
+					: refused('templates.testFailed', answer);
 			});
 			fill({});
 			void load();
