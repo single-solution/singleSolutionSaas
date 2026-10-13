@@ -132,9 +132,10 @@ describe('deals', () => {
 		const ticket = await shop.ticket(['deals.edit']);
 		const changed = await shop.admin(ticket, 'PATCH', `/v1/admin/deals/${made.json.id}`, { conditions: null, banner: null });
 		expect(changed.json).toMatchObject({ conditions: null, banner: null, slug: 'sunday-phones' });
-		await shop.admin(ticket, 'PATCH', `/v1/admin/deals/${made.json.id}`, {
-			banner: { key: 'ecommerce/deals/sunday.webp', alt: 'A phone' },
+		const rebanner = await shop.admin(ticket, 'PATCH', `/v1/admin/deals/${made.json.id}`, {
+			banner: { key: `ecommerce/deals/${made.json.id}/sunday.webp`, alt: 'A phone' },
 		});
+		expect(rebanner.status).toBe(200);
 		expect((await shop.admin(ticket, 'GET', '/v1/admin/deals?active=true')).json.items).toHaveLength(2);
 
 		// outside its weekdays and hours (Monday 10:00) shoppers do not see the deal, as the cart would not give it (PR-6)
@@ -178,6 +179,28 @@ describe('deals', () => {
 			banner: { key: fromWidget.json.key, alt: 'Big sale', type: 'image/png', size: 10 },
 		});
 		expect(set.json.banner).toEqual({ key: fromWidget.json.key, alt: 'Big sale', type: 'image/png', size: 10 });
+		// an edit takes a new key only from this deal's folder; the key it holds stays valid
+		const other = (await shop.api('POST', '/v1/deals', { name: 'Other', type: 'percent', value: 5 })).json;
+		/** @param {string} key @param {boolean} [admin] */
+		const edited = async (key, admin = false) => {
+			const body = { banner: { key, alt: 'Big sale' } };
+			const answer = admin
+				? await shop.admin(ticket, 'PATCH', `/v1/admin/deals/${deal.id}`, body)
+				: await shop.api('PATCH', `/v1/deals/${deal.id}`, body);
+			return [answer.status, answer.json.errors?.[0]?.path ?? answer.json.banner?.key];
+		};
+		for (const admin of [false, true]) {
+			expect(await edited(`ecommerce/deals/${other.id}/abc.png`, admin)).toEqual([422, '/banner']);
+			expect(await edited('ecommerce/deals/abc.png', admin)).toEqual([422, '/banner']);
+			expect(await edited(`ecommerce/deals/${deal.id}/`, admin)).toEqual([422, '/banner']);
+			expect(await edited(`ecommerce/deals/${deal.id}/../${other.id}/abc.png`, admin)).toEqual([422, '/banner']);
+			expect(await edited(fromWidget.json.key, admin)).toEqual([200, fromWidget.json.key]);
+		}
+		const wrong = await shop.api('PATCH', `/v1/deals/${deal.id}`, { banner: { key: 'ecommerce/deals/abc.png' } });
+		expect(wrong.json.errors[0].message).toMatch(/uploaded for this deal/);
+		expect(await edited(asked.json.key)).toEqual([200, asked.json.key]);
+		expect((await shop.api('PATCH', `/v1/deals/${deal.id}`, { name: 'Banner sale' })).json.banner.key).toBe(asked.json.key);
+		await shop.api('DELETE', `/v1/deals/${other.id}`);
 		/** @param {Record<string, unknown>} body @param {string} [id] */
 		const refused = async (body, id = deal.id) => {
 			const answer = await shop.api('POST', `/v1/deals/${id}/banner/upload`, body);

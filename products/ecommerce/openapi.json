@@ -35880,7 +35880,7 @@
 							"object",
 							"null"
 						],
-						"description": "A photo uploaded for deals (key under ecommerce/deals/, as POST /v1/deals/:id/banner/upload gives it), or null. When editing, the key the deal already holds stays valid.",
+						"description": "A photo uploaded for this deal (key under its own folder ecommerce/deals/<id>/, as POST /v1/deals/:id/banner/upload gives it), or null. The key the deal already holds stays valid whatever its folder; any other key is refused (422 validation_failed at /banner).",
 						"required": [
 							"key"
 						],

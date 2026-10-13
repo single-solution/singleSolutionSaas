@@ -5,7 +5,8 @@
  * `coupons.edit`, `deals.edit` or `bundles.edit`), sharing one handler. Scopes must name existing products,
  * categories and brands; coupon codes are unique per website. Use counters (`used`) are shown, never written here.
  * A deal's banner is uploaded first with a presigned upload under the deal's folder (`ecommerce/deals/<id>/`, as the
- * catalog's photos), then set with an edit. Every write goes to the activity log.
+ * catalog's photos), then set with an edit, which takes a new key only from that folder. Every write goes to the
+ * activity log.
  * @module
  */
 import { randomBytes } from 'node:crypto';
@@ -154,8 +155,12 @@ export const createOfferRoutes = (product, service) => {
 		const id = String(ctx.params.id);
 		const found = await getOffer(data, kind, id);
 		if (!found) return problem('not_found', `No such ${KINDS[kind].name}.`);
-		// the banner a deal already holds stays valid whatever its folder (an imported one, CA-5)
-		const checked = KINDS[kind].check({ ...found, ...ctx.body }, { held: found.banner?.key ?? null });
+		// a new banner comes from the deal's own folder (its banner upload); the one it already holds stays valid
+		// whatever its folder (an imported one, CA-5)
+		const checked = KINDS[kind].check(
+			{ ...found, ...ctx.body },
+			{ held: found.banner?.key ?? null, folder: `ecommerce/deals/${found.id}/` },
+		);
 		if (!checked.ok) return invalid(checked.field, checked.message);
 		await checkRefs(data, checked.value);
 		if (!(await slugFree(data, kind, checked.value, id))) return problem('slug_taken', 'Another deal uses this slug.');

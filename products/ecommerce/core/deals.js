@@ -14,8 +14,9 @@
  * A line takes one deal: the largest saving, then the higher priority, then the smaller id — or the deal the shopper
  * picked among its eligible ones (`shopperChoice`); the `deals` settings choose the first deal instead, put one
  * checkout-level deal after the item deals and round once per order (`DealRules`, D4). Discounts round down to whole
- * units with Format's `wholeUnits` (E25). Also the checks of a deal the merchant writes (a banner key it already holds
- * stays valid whatever its folder, CA-5) and the views of a deal. No I/O.
+ * units with Format's `wholeUnits` (E25). Also the checks of a deal the merchant writes (an edit takes a new banner
+ * only from the deal's own folder; a banner key it already holds stays valid whatever its folder, CA-5) and the views
+ * of a deal. No I/O.
  * @module
  */
 import { exactPercentOf, percentOf, roundDown, roundHalfUp } from './money.js';
@@ -560,14 +561,19 @@ export const checkConditions = (value) => {
 };
 
 /**
- * Which banner keys a deal may hold besides new uploads under `ecommerce/deals/`: the key it already holds whatever
- * its folder (CA-5), or any key without `..` when the deal is moved in by an import (Migration "Storage").
- * @typedef {{ held?: string | null, importing?: boolean }} BannerKeys
+ * Which banner keys a deal may hold besides new uploads: `folder` is where those must be (an edit: the deal's own
+ * folder `ecommerce/deals/<id>/`, as its banner upload gives; else anywhere under `ecommerce/deals/`); the key it
+ * already holds stays valid whatever its folder (CA-5), and an import moves in any key without `..` (Migration
+ * "Storage").
+ * @typedef {{ held?: string | null, folder?: string | null, importing?: boolean }} BannerKeys
  */
 
 /** Banner keys of any folder: at most 500 characters, no control characters. */
 // eslint-disable-next-line no-control-regex
 const ANY_KEY = /^[^\u0000-\u001f\u007f]{1,500}$/;
+
+/** New uploads for deals: under `ecommerce/deals/`, plain path characters only. */
+const UPLOAD_KEY = /^ecommerce\/deals\/[A-Za-z0-9_./-]{1,300}$/;
 
 /**
  * A banner photo: an upload key with its alternative text, or null.
@@ -575,22 +581,20 @@ const ANY_KEY = /^[^\u0000-\u001f\u007f]{1,500}$/;
  * @param {BannerKeys} [keys]
  * @returns {Checked}
  */
-const checkBanner = (value, { held = null, importing = false } = {}) => {
+const checkBanner = (value, { held = null, folder = null, importing = false } = {}) => {
 	if (value === undefined || value === null) return { ok: true, value: null };
-	const kept = isObject(value) && typeof value.key === 'string' && (importing || value.key === held);
-	if (
-		!isObject(value) ||
-		typeof value.key !== 'string' ||
-		!(kept ? ANY_KEY : /^ecommerce\/deals\/[A-Za-z0-9_./-]{1,300}$/).test(value.key)
-	)
-		return fail('banner', 'banner is { key, alt } of a photo uploaded for deals, or null.');
-	if (value.key.includes('..')) return fail('banner', 'banner is { key, alt } of a photo uploaded for deals, or null.');
+	const refused = fail('banner', `banner is { key, alt } of a photo uploaded for ${folder ? 'this deal' : 'deals'}, or null.`);
+	if (!isObject(value) || typeof value.key !== 'string') return refused;
+	const key = value.key;
+	const kept = importing || key === held;
+	const fresh = UPLOAD_KEY.test(key) && (!folder || (key.startsWith(folder) && key.length > folder.length));
+	if (!(kept ? ANY_KEY.test(key) : fresh) || key.includes('..')) return refused;
 	const alt = checkText(value.alt, 'banner/alt', { min: 0, max: 200, fallback: '' });
 	if (!alt.ok) return alt;
 	return {
 		ok: true,
 		value: {
-			key: value.key,
+			key,
 			type: typeof value.type === 'string' ? value.type.slice(0, 60) : '',
 			size: Number.isSafeInteger(value.size) ? value.size : 0,
 			alt: alt.value,

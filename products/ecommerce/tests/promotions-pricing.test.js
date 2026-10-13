@@ -888,6 +888,29 @@ describe('merchant input', () => {
 		});
 	});
 
+	it('checks a deal’s banner key: an edit takes a new one only from the deal’s own folder', () => {
+		/** @param {unknown} banner @param {import('../core/deals.js').BannerKeys} [keys] */
+		const banner = (banner, keys) => {
+			const checked = checkDealInput({ name: 'x', type: 'percent', value: 5, banner }, keys);
+			return checked.ok ? checked.value.banner.key : checked.field;
+		};
+		const edit = { held: 'offers/old.webp', folder: 'ecommerce/deals/deal_1/' };
+		expect(banner({ key: 'ecommerce/deals/deal_1/a.png' }, edit)).toBe('ecommerce/deals/deal_1/a.png');
+		expect(banner({ key: 'offers/old.webp' }, edit)).toBe('offers/old.webp');
+		expect(banner({ key: 'ecommerce/deals/deal_2/a.png' }, edit)).toBe('banner');
+		expect(banner({ key: 'ecommerce/deals/a.png' }, edit)).toBe('banner');
+		expect(banner({ key: 'ecommerce/deals/deal_1/' }, edit)).toBe('banner');
+		expect(banner({ key: 'ecommerce/deals/deal_1/../deal_2/a.png' }, edit)).toBe('banner');
+		expect(banner({ key: 'ecommerce/deals/a.png' })).toBe('ecommerce/deals/a.png');
+		expect(banner({ key: 'offers/a.png' }, { importing: true })).toBe('offers/a.png');
+		expect(banner('ecommerce/deals/a.png')).toBe('banner');
+		expect(banner({ key: 7 })).toBe('banner');
+		expect(banner({ key: 'ecommerce/deals/a.png', alt: 'x'.repeat(201) })).toBe('banner/alt');
+		expect(checkDealInput({ name: 'x', type: 'percent', value: 5, banner: { key: 'a' } }, edit)).toMatchObject({
+			message: 'banner is { key, alt } of a photo uploaded for this deal, or null.',
+		});
+	});
+
 	it('checks bundles', () => {
 		expect(
 			checkBundleInput({

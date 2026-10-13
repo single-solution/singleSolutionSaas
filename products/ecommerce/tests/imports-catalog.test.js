@@ -654,13 +654,16 @@ describe('storage keys (CA-5)', () => {
 		const deleted = shop.callsTo(STORAGE).filter((call) => call.method === 'DELETE');
 		expect(deleted.filter((call) => /uploads/.test(call.url))).toEqual([]);
 
-		// a deal keeps its imported banner on edits; a new one is uploaded for deals
+		// a deal keeps its imported banner on edits; a new one is uploaded to the deal's own folder
 		expect((await shop.api('PATCH', `/v1/deals/${ID.deal}`, { name: 'Summer sale' })).status).toBe(200);
 		const banner = await shop.api('PATCH', `/v1/deals/${ID.deal}`, { banner: { key: 'offers/autumn.webp', alt: '' } });
 		expect(banner.status).toBe(422);
-		expect(
-			(await shop.api('PATCH', `/v1/deals/${ID.deal}`, { banner: { key: 'ecommerce/deals/autumn.webp', alt: '' } })).status,
-		).toBe(200);
+		const shared = await shop.api('PATCH', `/v1/deals/${ID.deal}`, { banner: { key: 'ecommerce/deals/autumn.webp', alt: '' } });
+		expect(shared.status).toBe(422);
+		const own = await shop.api('PATCH', `/v1/deals/${ID.deal}`, {
+			banner: { key: `ecommerce/deals/${ID.deal}/autumn.webp`, alt: '' },
+		});
+		expect(own.status).toBe(200);
 	});
 });
 
