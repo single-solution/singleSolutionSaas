@@ -28,6 +28,7 @@ import {
 import { zonedDayStart } from '@ss/contracts/format';
 import { createStore } from '../adapters/store.js';
 import { renderDocs } from './docs.js';
+import { importRoutes } from './imports.js';
 import { WIDGET_SCRIPT } from './widget-script.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
@@ -437,5 +438,8 @@ export const createRoutes = (product) => {
 					headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=300' },
 				}),
 		}),
+
+		// days of daily totals moved in from another system (ss-import, feature `import`, PLAN 0.8.10 K10)
+		...importRoutes(product),
 	];
 };

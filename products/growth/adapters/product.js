@@ -2,8 +2,9 @@
  * The product on the kit: `createProductInstance(options)` wires `@ss/app-kit` `createProduct` with Growth's manifest
  * (each feature's settings schema from `schemas/` inline), its widget texts, its Connections (the merchant database,
  * which the kit always adds, and the Accounts token for activity-log copies), the merchant database indexes (the raw
- * events' expiry index included) and the page script's settings, and adds the web calls (SEO checklist, IndexNow) on
- * the same outbound policy. The Next.js route and the tests pass the rest (config, store, clock, network).
+ * events' expiry index included), the page script's settings and what the `import` feature takes, and adds the web
+ * calls (SEO checklist, IndexNow) on the same outbound policy. The Next.js route and the tests pass the rest (config,
+ * store, clock, network).
  * Public entry `./product` of this package, so a system test can compose the product with `./routes`.
  * @module
  */
@@ -24,9 +25,11 @@ import seoChecklist from '../schemas/seo_checklist.settings.json' with { type: '
 import tiktokPixel from '../schemas/tiktok_pixel.settings.json' with { type: 'json' };
 import visitorAnalytics from '../schemas/visitor_analytics.settings.json' with { type: 'json' };
 import webVitals from '../schemas/web_vitals.settings.json' with { type: 'json' };
+import importSettings from '../schemas/import.settings.json' with { type: 'json' };
 import tagsShared from '../schemas/tags.shared.json' with { type: 'json' };
 import pixelsShared from '../schemas/pixels.shared.json' with { type: 'json' };
 import { widgetSettings } from '../core/config.js';
+import { createImportOptions } from './imports.js';
 import { INDEXES } from './store.js';
 import { createWeb } from './web.js';
 
@@ -45,6 +48,7 @@ const SETTINGS = {
 	indexnow,
 	seo_checklist: seoChecklist,
 	notice_bar: noticeBar,
+	import: importSettings,
 };
 
 /**
@@ -129,6 +133,8 @@ export const createProductInstance = (options) => {
 			},
 		},
 		data: { indexes: INDEXES, ...(options.data?.createClient ? { createClient: options.data.createClient } : {}) },
+		// days of daily totals moved in from another system with ss-import (feature `import`, PLAN 0.8.10 K10)
+		imports: createImportOptions(),
 		sharedSettings: SHARED_SETTINGS,
 	});
 	return Object.freeze({ ...product, web, now, valuesOf });

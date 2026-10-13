@@ -43,7 +43,7 @@ export const MAX_BATCH = 25;
 const MAX_ITEMS = 50;
 
 /** Device classes the page script reports (from the screen width). */
-const DEVICES = Object.freeze(['mobile', 'tablet', 'desktop']);
+export const DEVICES = Object.freeze(['mobile', 'tablet', 'desktop']);
 
 /** The Web Vitals the page script measures, with the good and poor thresholds of web.dev (ms; CLS × 1000). */
 export const VITALS = Object.freeze({

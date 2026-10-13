@@ -10,6 +10,25 @@ GA4 inside Tag Manager, search and contact pixel events with product or variant 
 the AI crawler block and Yandex verification, the IndexNow key file path, the notice bar's close and hidden pages with
 `GET /v1/notice`, and Web Vitals to GA4.
 
+## Import
+
+The `import` feature (price 0; our admins switch it on for a migration and off after it) takes daily totals rebuilt
+from another system's analytics, from `ss-import` with the server token only (PLAN.md 0.8.10 K10, G8). Nothing is sent
+and no raw events are made.
+
+- `POST /v1/import/totals?dryRun=1` takes NDJSON (at most 1,000 records or 4 MB per call), one day per record:
+  `{ "day": "YYYY-MM-DD", "part": 0, "totals": { "<metric>": { "<key>": { "c": <count>, "s": <sum> } } } }`, the day in
+  the business time zone and the keys as readable text (Growth escapes them). Each metric must be one Growth counts
+  (`visits` and `page_views` with the key `""`, `page`, `source`, `device`, `country`, `funnel`, `revenue`, `search`,
+  `vital` and the rest), with keys of the form Growth writes, a whole count of 0 or more and a finite sum (only
+  `revenue`, `duration`, `vital_value` and `vital_page` keep sums). Unknown fields are refused by name.
+- A day is one document of the daily totals, found by `day` and `part`: a re-imported day replaces it, so totals Growth
+  recorded live for that day before the import are replaced too. The older `daily` rows are never written.
+- `POST /v1/import/totals/prune` with `{ "keep": [{ "day", "part" }, …] }` removes imported days the source no longer
+  has (days counted live are never removed); `POST /v1/import/finish` has nothing to derive; `GET /v1/import/status`
+  answers the counts and the sums `ss-import verify` compares (`days`, `visits`, `page_views`). The analytics report
+  reads imported days like any other.
+
 ## Environment
 
 Exactly three variables (`.env.example`; nothing else is read):
