@@ -68,6 +68,38 @@
 const DEFAULT_GROUP = 'General';
 
 /** String formats that hold long text (shown as a text area, full width). */
+/** Short words written in capitals (or with their own casing) when a choice's value is shown as a label. */
+const WORD_CASE = Object.freeze({
+	ai: 'AI',
+	api: 'API',
+	cod: 'COD',
+	csv: 'CSV',
+	html: 'HTML',
+	id: 'ID',
+	ip: 'IP',
+	pdf: 'PDF',
+	seo: 'SEO',
+	sku: 'SKU',
+	sms: 'SMS',
+	url: 'URL',
+	utc: 'UTC',
+	whatsapp: 'WhatsApp',
+});
+
+/**
+ * A readable label for a choice's value (`per_unit_down` → "Per unit down", `sms` → "SMS"); the stored value stays as
+ * it is. Values that are not plain words (numbers, mixed case) are shown as they are.
+ * @param {unknown} value
+ * @returns {string}
+ */
+export const choiceLabel = (value) => {
+	const text = String(value);
+	if (!/^[a-z][a-z0-9]*(?:[_-][a-z0-9]+)*$/.test(text)) return text;
+	const words = text.split(/[_-]/).map((word) => WORD_CASE[/** @type {keyof typeof WORD_CASE} */ (word)] ?? word);
+	const [first = '', ...rest] = words;
+	return [first === first.toLowerCase() ? first.charAt(0).toUpperCase() + first.slice(1) : first, ...rest].join(' ');
+};
+
 export const LONG_TEXT_FORMATS = Object.freeze(['textarea', 'multiline', 'markdown', 'html']);
 
 /** Widgets that take the whole row of the field grid. */

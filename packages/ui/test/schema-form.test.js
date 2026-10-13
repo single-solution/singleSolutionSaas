@@ -5,6 +5,7 @@ import { SchemaForm } from '../src/SchemaForm.js';
 import {
 	boundsOf,
 	changedNames,
+	choiceLabel,
 	fieldsOf,
 	groupFields,
 	isWide,
@@ -232,9 +233,9 @@ describe('SchemaForm', () => {
 		click(/** @type {HTMLElement} */ (stacking));
 		expect(onChange).toHaveBeenLastCalledWith('allowStacking', true);
 		expect(stacking?.getAttribute('aria-checked')).toBe('true');
-		click(byLabel(container, 'pos'));
+		click(byLabel(container, 'Pos'));
 		expect(onChange).toHaveBeenLastCalledWith('channels', ['web', 'pos']);
-		click(byLabel(container, 'web'));
+		click(byLabel(container, 'Web'));
 		expect(onChange).toHaveBeenLastCalledWith('channels', ['pos']);
 		type(byLabel(container, 'Code prefix'), 'WIN');
 		expect(onChange).toHaveBeenLastCalledWith('prefix', 'WIN');
@@ -256,7 +257,7 @@ describe('SchemaForm', () => {
 		expect(container.textContent).toContain('Enter valid JSON.');
 		click(byLabel(container, 'Debug'));
 		expect(onChange).toHaveBeenLastCalledWith('debug', true);
-		click(byLabel(container, 'warning'));
+		click(byLabel(container, 'Warning'));
 		expect(onChange).toHaveBeenLastCalledWith('tone', 'warning');
 		type(byLabel(container, 'Theme'), 'c');
 		expect(onChange).toHaveBeenLastCalledWith('theme', 'c');
@@ -307,3 +308,15 @@ describe('SchemaForm', () => {
  * @param {string} text
  */
 const allByText = (root, text) => [...root.querySelectorAll('button')].filter((b) => b.textContent === text);
+
+describe('choiceLabel', () => {
+	it('shows a choice value as readable words, keeping known short words in capitals', () => {
+		expect(choiceLabel('per_unit_down')).toBe('Per unit down');
+		expect(choiceLabel('sms')).toBe('SMS');
+		expect(choiceLabel('whatsapp')).toBe('WhatsApp');
+		expect(choiceLabel('cod_fee')).toBe('COD fee');
+		expect(choiceLabel('one-exclusive')).toBe('One exclusive');
+		expect(choiceLabel('Mixed Case')).toBe('Mixed Case');
+		expect(choiceLabel(30)).toBe('30');
+	});
+});

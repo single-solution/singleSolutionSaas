@@ -14,7 +14,7 @@ import { Button } from './Button.js';
 import { Checkbox, CheckboxGroup, FieldGrid, Input, LABEL_CLASS, RadioGroup, Select, Switch, TextArea } from './fields.js';
 import { cx } from './cx.js';
 import { Icon } from './icons.js';
-import { fieldsOf, groupFields, validateValue, widgetOf } from './schema.js';
+import { choiceLabel, fieldsOf, groupFields, validateValue, widgetOf } from './schema.js';
 
 /** @typedef {import('./schema.js').SettingsSchema} SettingsSchema */
 /** @typedef {import('./schema.js').SettingNode} SettingNode */
@@ -98,7 +98,7 @@ function NodeControl({
 	if (node.type === 'string') {
 		const text = typeof value === 'string' ? value : '';
 		if (node.enum && (widget === 'radio' || widget === 'select')) {
-			const options = node.enum.map((v) => ({ value: String(v), label: String(v) }));
+			const options = node.enum.map((v) => ({ value: String(v), label: choiceLabel(v) }));
 			if (widget === 'radio')
 				return (
 					<RadioGroup
@@ -159,7 +159,7 @@ function NodeControl({
 			return (
 				<CheckboxGroup
 					legend={label}
-					options={items.enum.map((v) => ({ value: String(v), label: String(v) }))}
+					options={items.enum.map((v) => ({ value: String(v), label: choiceLabel(v) }))}
 					value={list.map(String)}
 					onChange={(next) => onChange(items.type === 'integer' || items.type === 'number' ? next.map(Number) : next)}
 					help={help}
