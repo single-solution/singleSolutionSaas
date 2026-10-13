@@ -403,10 +403,10 @@ describe('deals', () => {
 
 		it('rounds item and checkout deals together, once, with total_half_up', () => {
 			const deals = [deal({ id: 'deal_item', value: 7 }), { ...fiveOver, conditions: null }];
-			const kurta = [line({ unitPrice: 499_900 })];
+			const shirt = [line({ unitPrice: 499_900 })];
 			// 349.93 + 5% of 4,649.07 (232.45) = 582.38: 582 rounded once; per unit down 349 + 232 = 581
-			expect(run({ lines: kurta, deals, rules: after, unit: 100 }).lines[0]?.dealDiscount).toBe(58_100);
-			const exact = run({ lines: kurta, deals, rules: { ...after, rounding: 'total_half_up' }, unit: 100 });
+			expect(run({ lines: shirt, deals, rules: after, unit: 100 }).lines[0]?.dealDiscount).toBe(58_100);
+			const exact = run({ lines: shirt, deals, rules: { ...after, rounding: 'total_half_up' }, unit: 100 });
 			expect(exact.lines[0]).toMatchObject({ dealDiscount: 58_200, perUnit: 35_000 });
 			expect(exact.applied.map((entry) => entry.amount)).toEqual([35_000, 23_200]);
 		});
