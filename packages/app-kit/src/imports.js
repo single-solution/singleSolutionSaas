@@ -464,8 +464,7 @@ export const createImports = ({ options, now, record, business }) => {
 
 	return Object.freeze({
 		names: Object.keys(collections),
-		// `upsert.prune`: the old name of `prune`, kept until every product's prune route calls `imports.prune`
-		upsert: Object.assign(upsert, { prune }),
+		upsert,
 		prune,
 		finish,
 		status,

@@ -235,8 +235,8 @@ describe('import routes (K10)', () => {
 		});
 		await client.close();
 		expect(Object.keys(product.imports).sort()).toEqual(['finish', 'prune', 'status', 'upsert']);
-		// the old name of prune still answers until every product's route calls imports.prune
-		expect(product.imports.upsert.prune).toBe(product.imports.prune);
+		// prune has one name: the old upsert.prune alias is gone (every product's route calls imports.prune)
+		expect(/** @type {Record<string, unknown>} */ (/** @type {unknown} */ (product.imports.upsert)).prune).toBeUndefined();
 		const plain = await setup();
 		const status = await plain.product.imports.status({
 			data: async () => ({ collection: () => null, ensureIndexes: async () => ({ created: [] }) }),
