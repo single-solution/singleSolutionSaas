@@ -2191,6 +2191,28 @@ password; no hand-over route is added.
   a user with the role Owner can be demoted, blocked or deleted only by another Owner (with A4's last-Owner guard).
 - Data: none new.
 
+Built after the re-audit (2026-10-13; commits dbbfaac, b671fee, 20d76e6, e52441e, 3011def, ea26b50, d61f426):
+
+- **A2 +** Key: `phone_password.signUp` (true; off: only staff give passwords, through Add user, setup links and
+  invites; sign-up answers `sign_up_closed` and the widget hides it). Why: open sign-up let anyone take a member's
+  number before the member did (SA-2). **Always:** both Forgot password routes answer 202 at once, the same for every
+  address; a reset message that cannot be sent now is kept encrypted (`ss_accounts_outbox`) and sent again on later
+  requests while it is valid, no timer (ST-3).
+- **A3 + always:** using a setup link marks the user's phone verified and signs out their other devices, so other
+  products move their guest orders and points to the account (SA-1).
+- **A4 +** API: `DELETE /v1/users/:id?scope=all|accounts` (default `all`, as before); `accounts` removes the person from
+  Accounts only (user, sessions, codes, kept messages) with no data-rights erase in other products. A store's "remove
+  from team" maps to `scope=accounts`, or, for staff who are also customers, to a role change to the customer role
+  plus sign-out (ST-2).
+- **A5 + always:** an invite gives nothing to an existing user who never proved the request's phone or e-mail (409
+  `contact_unverified`); staff confirm the contact on the user (A4) or remove that account. A user nobody ever signed in
+  to is invited again as before (SA-2). This also applies to e-mail requests.
+- **A7:** `phone_code.codeMinutes` already exists (10; 1–30) (SA-6).
+- **A9 + always:** wrong two-step and recovery codes count toward the lock like wrong passwords; two-step is refused
+  while locked; a wrong first code while setting two-step up is not counted (ST-1).
+- **A12 + always:** a refresh token presented again within 30 seconds of its renewal gets the same new pair (parallel
+  renewals from the merchant's server); later reuse still ends the session (RW-1).
+
 #### Notifications
 
 **N1. WhatsApp template buttons.** A WhatsApp template with a provider template name may list `buttons`
