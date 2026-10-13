@@ -13,7 +13,7 @@ import {
 	drawCode,
 	normaliseCode,
 } from '../core/coupons.js';
-import { bestDeal, byShowOrder, checkDealInput, dealUnitDiscount, dealView, publicDeal } from '../core/deals.js';
+import { bestDeal, byShowOrder, checkDealInput, DEAL_RULES, dealUnitDiscount, dealView, publicDeal } from '../core/deals.js';
 import {
 	expiringSoon,
 	expiryFor,
@@ -197,6 +197,51 @@ describe('deals', () => {
 		});
 		expect(result.lines.every((item) => item.dealDiscount === 0 && item.dealId === null)).toBe(true);
 		expect(result.applied).toEqual([]);
+	});
+
+	it('rounds the deals once per order, half up, with rounding total_half_up (D4)', () => {
+		const exact = { ...DEAL_RULES, rounding: /** @type {const} */ ('total_half_up') };
+		const seven = deal({ value: 7 });
+		// 7% off 4,999.00 in whole units: 349.93 rounds down per unit to 349, once half up to 350
+		expect(run({ lines: [line({ unitPrice: 499_900 })], deals: [seven], unit: 100 }).lines[0]?.dealDiscount).toBe(34_900);
+		expect(run({ lines: [line({ unitPrice: 499_900 })], deals: [seven], unit: 100, rules: exact }).lines[0]).toMatchObject({
+			dealDiscount: 35_000,
+			perUnit: 35_000,
+		});
+		// three units: 1,047 against 1,050 (the percent of the whole line)
+		const three = line({ unitPrice: 499_900, quantity: 3 });
+		expect(run({ lines: [three], deals: [seven], unit: 100 }).lines[0]?.dealDiscount).toBe(104_700);
+		expect(run({ lines: [three], deals: [seven], unit: 100, rules: exact }).lines[0]?.dealDiscount).toBe(105_000);
+		// two lines of 349.65: rounded together to 699, spread in whole units
+		const pair = [line({ unitPrice: 499_500 }), line({ productId: 'p2', unitPrice: 499_500 })];
+		const twice = run({ lines: pair, deals: [seven], unit: 100, rules: exact });
+		expect(twice.lines.map((item) => item.dealDiscount)).toEqual([35_000, 34_900]);
+		expect(twice.applied).toEqual([{ id: 'deal_1', name: 'Deal', kind: 'deal', amount: 69_900 }]);
+		// a fixed cart deal of 1,000.50 is spread exactly, then rounded once: 1,001 (per_unit_down drops the 0.50)
+		const fixed = deal({ target: 'cart', type: 'fixed', value: 100_050 });
+		const spread = [line({ unitPrice: 300_000 }), line({ productId: 'p2', unitPrice: 100_000 })];
+		expect(run({ lines: spread, deals: [fixed], unit: 100 }).lines.map((item) => item.dealDiscount)).toEqual([75_000, 25_000]);
+		expect(run({ lines: spread, deals: [fixed], unit: 100, rules: exact }).lines.map((item) => item.dealDiscount)).toEqual([
+			75_100, 25_000,
+		]);
+		// a lock keeps its own amount and stays out of the rounding
+		const locked = run({
+			lines: [
+				line({ unitPrice: 499_900, lock: { dealId: 'deal_1', perUnit: 40_050 } }),
+				line({ productId: 'p2', unitPrice: 499_900 }),
+			],
+			deals: [seven],
+			unit: 100,
+			rules: exact,
+		});
+		expect(locked.lines.map((item) => [item.dealDiscount, item.locked])).toEqual([
+			[40_050, true],
+			[35_000, false],
+		]);
+		// a fixed deal never takes more than the price
+		expect(run({ lines: [line()], deals: [deal({ type: 'fixed', value: 5000 })], rules: exact }).lines[0]?.dealDiscount).toBe(
+			1000,
+		);
 	});
 
 	it('adds up one deal used on several lines', () => {
@@ -445,6 +490,21 @@ describe('quoteProduct', () => {
 		expect(quoteProduct({ product, deals: parent, now: NOW })?.savings).toBe(0);
 		expect(quoteProduct({ product, deals: parent, now: NOW, categoryIds: ['c1', 'c0'] })?.savings).toBe(150);
 		expect(quoteProduct({ product: { ...product, variants: [] }, deals: [], now: NOW })).toBeNull();
+	});
+
+	it('rounds one unit as the cart does (D4)', () => {
+		const phone = /** @type {any} */ ({ ...product, variants: [{ id: 'v1', price: 499_900, active: true }] });
+		const deals = [deal({ value: 7 })];
+		expect(quoteProduct({ product: phone, deals, now: NOW, unit: 100 })?.savings).toBe(34_900);
+		const exact = { ...DEAL_RULES, rounding: /** @type {const} */ ('total_half_up') };
+		expect(quoteProduct({ product: phone, deals, now: NOW, unit: 100, rules: exact })).toMatchObject({
+			savings: 35_000,
+			priceAfterDeals: 464_900,
+		});
+		const cheap = /** @type {any} */ ({ ...product, variants: [{ id: 'v1', price: 200, active: true }] });
+		expect(
+			quoteProduct({ product: cheap, deals: [deal({ type: 'fixed', value: 300 })], now: NOW, rules: exact })?.savings,
+		).toBe(200);
 	});
 });
 

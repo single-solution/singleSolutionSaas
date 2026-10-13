@@ -340,4 +340,25 @@ describe('whole-unit amounts (E25)', () => {
 		await shop.setting('cod', 'feePercent', 0);
 		await shop.api('PUT', '/v1/format', { wholeUnits: false });
 	});
+
+	it('rounds the deals once, half up, with rounding total_half_up: cart, order and product quote (D4)', async () => {
+		await shop.api('PUT', '/v1/format', { wholeUnits: true });
+		const item = await shop.seedProduct({ price: 499_900, stock: 10 });
+		const deal = await newDeal({ scope: { productIds: [item.id], categoryIds: [], brandIds: [] }, value: 7 });
+		// 7% off 4,999.00 is 349.93: per_unit_down gives 349, total_half_up 350
+		expect((await quote({ lines: [{ productId: item.id }] })).json.totals.discount).toBe(34_900);
+		expect((await visit('GET', `/v1/shop/products/${item.id}/quote`)).json.savings).toBe(34_900);
+		await shop.setting('deals', 'rounding', 'total_half_up');
+		expect((await quote({ lines: [{ productId: item.id, quantity: 3 }] })).json.totals.discount).toBe(105_000);
+		expect((await visit('GET', `/v1/shop/products/${item.id}/quote`)).json).toMatchObject({
+			savings: 35_000,
+			priceAfterDeals: 464_900,
+		});
+		const shopper = await newShopper();
+		const placed = await place({ lines: [{ productId: item.id }], payment: 'cod', address: ADDRESS }, shopper.token);
+		expect(placed.json.order.totals).toMatchObject({ discount: 35_000, delivery: 300, total: 465_200 });
+		await shop.setting('deals', 'rounding', 'per_unit_down');
+		await shop.api('DELETE', `/v1/deals/${deal.id}`);
+		await shop.api('PUT', '/v1/format', { wholeUnits: false });
+	});
 });

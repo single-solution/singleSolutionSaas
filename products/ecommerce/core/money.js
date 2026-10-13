@@ -90,11 +90,18 @@ export const fromDecimal = (text, currency) => {
 export const isPrice = (value) => Number.isSafeInteger(value) && Number(value) >= 0 && Number(value) <= MAX_AMOUNT;
 
 /**
+ * `percent` % of an amount, not rounded (deals rounded once per order, `deals.rounding: total_half_up`).
+ * @param {number} amount minor units
+ * @param {number} percent 0–100, may have decimals
+ */
+export const exactPercentOf = (amount, percent) => (amount * Math.min(100, Math.max(0, percent))) / 100;
+
+/**
  * `percent` % of an amount, rounded half up to whole minor units (`percent` may have decimals, 0–100).
  * @param {number} amount minor units
  * @param {number} percent
  */
-export const percentOf = (amount, percent) => Math.round((amount * Math.min(100, Math.max(0, percent))) / 100);
+export const percentOf = (amount, percent) => Math.round(exactPercentOf(amount, percent));
 
 /**
  * Split `total` minor units over parts in proportion to `weights` (largest remainder; the parts add up to `total`).

@@ -16,7 +16,7 @@ import {
 	pendingPoints,
 	personRecords,
 } from '../adapters/promotions-store.js';
-import { byShowOrder, publicDeal } from '../core/deals.js';
+import { byShowOrder, dealRulesOf, publicDeal } from '../core/deals.js';
 import { COLLECTIONS } from '../core/model.js';
 import { expiringSoon, expiryFor, historyView, loyaltyRules, pointsValue, SHOPPER_HISTORY } from '../core/loyalty.js';
 import { quoteProduct } from '../core/promotions.js';
@@ -234,12 +234,25 @@ export const createPromotions = (product, service) => {
 					const found = await activeProduct(data, String(ctx.params.id));
 					if (!found) return problem('not_found', 'No such product.');
 					const at = now();
-					const [categoryIds, { deals }] = await Promise.all([
+					const [categoryIds, { deals }, { unit, weekday, minutes }, settings] = await Promise.all([
 						categoryTrail(data, found.categoryIds),
 						loadOffers(data, { now: at, deals: true }),
+						service.pricing(s),
+						s.values('deals'),
 					]);
 					const variantId = typeof ctx.query.variantId === 'string' ? ctx.query.variantId : null;
-					const quote = quoteProduct({ product: found, variantId, deals, now: at, categoryIds, currency: s.currency });
+					// priced as the cart prices one unit: whole units, deal hours and the deal rules (E25, E18, D4)
+					const quote = quoteProduct({
+						product: found,
+						variantId,
+						deals,
+						now: at,
+						categoryIds,
+						currency: s.currency,
+						clock: { weekday, minutes },
+						unit,
+						rules: dealRulesOf(settings),
+					});
 					return quote ?? problem('not_found', 'No such variant.');
 				},
 			}),

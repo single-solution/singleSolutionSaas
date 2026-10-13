@@ -2,12 +2,12 @@
  * Pricing a cart against the website's catalog and settings (`core/checkout.js` does the arithmetic): the products
  * and variants, category ancestors, grade names, licence keys and booked slots it needs, the offers (`loadOffers` and
  * `applyPromotions`, while `deals`, `bundles` and `coupons` are on: conditions, hours in the business time zone, the
- * payment method, the shopper's picked deal and signed deal locks, E18), the role price of a signed-in shopper
- * (`role_pricing`, E19), loyalty points (while `loyalty` is on and the shopper takes part, E20), delivery zones, pickup
- * locations or the one pickup point (`delivery_zones`, E22), tax rules (`taxes`), the payment methods in the merchant's
- * order with their fees (COD cash handling, E23) and bank details (Payments P1, cached 5 minutes, E24). Every amount
- * rounds to whole units with Format's `wholeUnits` (E25). Used by the quote route and again, on the server, when an
- * order is placed. Also the bookable slots of a product (`bookings`).
+ * payment method, the shopper's picked deal and signed deal locks, E18; how they round, D4), the role price of a
+ * signed-in shopper (`role_pricing`, E19), loyalty points (while `loyalty` is on and the shopper takes part, E20),
+ * delivery zones, pickup locations or the one pickup point (`delivery_zones`, E22), tax rules (`taxes`), the payment
+ * methods in the merchant's order with their fees (COD cash handling, E23) and bank details (Payments P1, cached 5
+ * minutes, E24). Every amount rounds to whole units with Format's `wholeUnits` (E25). Used by the quote route and
+ * again, on the server, when an order is placed. Also the bookable slots of a product (`bookings`).
  * @module
  */
 import { loyaltyAccount } from '../adapters/ledger.js';
@@ -16,6 +16,7 @@ import { loadOffers } from '../adapters/promotions-store.js';
 import { MAX_SLOT_DAYS, slotAt, slotsBetween } from '../core/bookings.js';
 import { merchandiseOf, paymentOptions, priceLines, resolveLines, roleDiscountOf } from '../core/checkout.js';
 import { matchZone, zoneFee } from '../core/delivery.js';
+import { dealRulesOf } from '../core/deals.js';
 import { readLock, signLock } from '../core/locks.js';
 import { loyaltyRules, maxRedeemable, pointsToEarn, pointsToRedeem, pointsValue, takesPart } from '../core/loyalty.js';
 import { roundDown } from '../core/money.js';
@@ -235,6 +236,7 @@ export const createQuoting = (product, service) => {
 		const offers = await loadOffers(data, { now, couponCode, deals: s.has('deals'), bundles: s.has('bundles') });
 		const dealSettings = s.has('deals') ? await s.values('deals') : { lockMinutes: 0, shopperChoice: false };
 		const lockMinutes = Number(dealSettings.lockMinutes ?? 0);
+		const dealRules = dealRulesOf(dealSettings);
 		const secret = s.has('deals') && lockMinutes > 0 ? await product.secrets.get(s.websiteId) : null;
 		/** @type {Map<string, { dealId: string, perUnit: number, text: string }>} */
 		const locked = new Map();
@@ -309,6 +311,7 @@ export const createQuoting = (product, service) => {
 						cart: { paymentMethod: method, weekday: clock.weekday, minutes: clock.minutes },
 						unit,
 						shopperChoice: dealSettings.shopperChoice === true,
+						rules: dealRules,
 					})
 				: null;
 

@@ -15,6 +15,13 @@
 			"title": "Shoppers pick the deal",
 			"description": "When several deals fit a cart line, the shopper picks one; otherwise the best saving applies.",
 			"default": false
+		},
+		"rounding": {
+			"type": "string",
+			"title": "Rounding of deal discounts",
+			"description": "per_unit_down: each deal is rounded down on each unit (on each line for checkout deals). total_half_up: each deal is worked out on the line or cart amount and the order's deal discounts are rounded once, half up (with whole units, 7% off 4,999 is 350, not 349).",
+			"default": "per_unit_down",
+			"enum": ["per_unit_down", "total_half_up"]
 		}
 	}
 }

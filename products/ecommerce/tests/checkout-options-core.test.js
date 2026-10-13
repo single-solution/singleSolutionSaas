@@ -5,7 +5,15 @@
 import { describe, expect, it } from 'vitest';
 import { codAdvance, codFee } from '../core/cod.js';
 import { paymentOptions, priceLines, roleDiscountOf } from '../core/checkout.js';
-import { conditionsHold, dealLineDiscount, dealUnitDiscount, inWindow, NO_CONDITIONS } from '../core/deals.js';
+import {
+	conditionsHold,
+	DEAL_RULES,
+	dealLineDiscount,
+	dealRulesOf,
+	dealUnitDiscount,
+	inWindow,
+	NO_CONDITIONS,
+} from '../core/deals.js';
 import {
 	checkGuest,
 	keyOpens,
@@ -74,6 +82,21 @@ describe('whole units (E25)', () => {
 		expect(roleDiscountOf(10_050, 10, 100)).toBe(1000);
 		expect(roleDiscountOf(0, 10)).toBe(0);
 		expect(codAdvance(10_050, { advanceAmount: 0, advancePercent: 10 }, 100)).toBe(1100);
+	});
+
+	it('reads the deal rules and works deals out exactly with total_half_up (D4)', () => {
+		expect(DEAL_RULES).toEqual({ rounding: 'per_unit_down' });
+		expect(dealRulesOf({ rounding: 'total_half_up' })).toEqual({ rounding: 'total_half_up' });
+		expect(dealRulesOf({ rounding: 'sideways' })).toEqual(DEAL_RULES);
+		const exact = { rounding: /** @type {const} */ ('total_half_up') };
+		expect(dealLineDiscount(deal({ value: 7 }), { unitPrice: 499_900, quantity: 1 }, { unit: 100 })).toBe(34_900);
+		expect(dealLineDiscount(deal({ value: 7 }), { unitPrice: 499_900, quantity: 1 }, exact)).toBe(34_993);
+		expect(dealLineDiscount(deal({ type: 'fixed', value: 1500 }), { unitPrice: 1000, quantity: 2 }, exact)).toBe(2000);
+		expect(dealLineDiscount(deal({ target: 'cart', value: 7 }), { unitPrice: 499_900, quantity: 3 }, exact)).toBe(104_979);
+		const share = { ...exact, share: 333.5 };
+		expect(dealLineDiscount(deal({ target: 'cart', type: 'fixed', value: 500 }), { unitPrice: 1000, quantity: 1 }, share)).toBe(
+			333.5,
+		);
 	});
 });
 

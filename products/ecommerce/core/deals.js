@@ -12,10 +12,11 @@
  *
  * A line takes one deal: the largest saving, then the higher priority, then the smaller id — or the deal the shopper
  * picked among its eligible ones (`shopperChoice`). Discounts round down to whole units with Format's `wholeUnits`
- * (E25). Also the checks of a deal the merchant writes and the views of a deal. No I/O.
+ * (E25), or are rounded once per order, half up (`rounding`, D4). Also the checks of a deal the merchant writes and
+ * the views of a deal. No I/O.
  * @module
  */
-import { percentOf, roundDown } from './money.js';
+import { exactPercentOf, percentOf, roundDown, roundHalfUp } from './money.js';
 import {
 	checkAmount,
 	checkBoolean,
@@ -69,6 +70,36 @@ const COLOUR = /^[#A-Za-z0-9(),.%\s-]{0,40}$/;
  * What deals see of the cart: the goods before offers, the payment method and the business time.
  * @typedef {{ goods: number, paymentMethod: string | null, weekday: number, minutes: number }} DealCart
  */
+
+/**
+ * How deals round (the `deals` settings, D4): `rounding` — `per_unit_down` rounds each deal down per unit (item deals)
+ * or per line (cart deals); `total_half_up` works each deal out on the line or cart amount and rounds the order's
+ * deal discounts once, half up.
+ * @typedef {{ rounding: 'per_unit_down' | 'total_half_up' }} DealRules
+ */
+
+/** The values of each rule; the first is the default (today's arithmetic, E25). */
+const RULE_VALUES = Object.freeze({
+	rounding: Object.freeze(['per_unit_down', 'total_half_up']),
+});
+
+/**
+ * The rules of the `deals` settings; a missing or unknown value is the default.
+ * @param {Record<string, unknown>} settings
+ * @returns {DealRules}
+ */
+export const dealRulesOf = (settings) =>
+	/** @type {DealRules} */ (
+		Object.fromEntries(
+			Object.entries(RULE_VALUES).map(([key, values]) => [
+				key,
+				values.includes(String(settings[key])) ? settings[key] : values[0],
+			]),
+		)
+	);
+
+/** The default rules. */
+export const DEAL_RULES = Object.freeze(dealRulesOf({}));
 
 /** No conditions. @type {DealConditions} */
 export const NO_CONDITIONS = Object.freeze({
@@ -220,37 +251,57 @@ export const dealUnitDiscount = (deal, unitPrice, unit = 1) => {
 
 /**
  * What a deal would take off a whole line: per unit for item deals; a percent of the line, or the line's share of the
- * fixed amount (`share`), for cart deals. Rounded down to whole units.
+ * fixed amount (`share`), for cart deals. Rounded down to whole units (`per_unit_down`), or exact (`total_half_up`:
+ * the caller rounds the order's deal discounts once).
  * @param {DealRecord} deal
  * @param {{ unitPrice: number, quantity: number }} line
- * @param {{ unit?: number, share?: number }} [options] `share`: this line's part of a cart deal's fixed amount
+ * @param {{ unit?: number, share?: number, rounding?: DealRules['rounding'] }} [options] `share`: this line's part of a
+ *   cart deal's fixed amount
  */
-export const dealLineDiscount = (deal, line, { unit = 1, share = 0 } = {}) => {
+export const dealLineDiscount = (deal, line, { unit = 1, share = 0, rounding = 'per_unit_down' } = {}) => {
 	if (deal.type === 'free_delivery') return 0;
 	const amount = line.unitPrice * line.quantity;
-	if ((deal.target ?? 'items') === 'cart')
-		return Math.max(0, Math.min(amount, roundDown(deal.type === 'percent' ? percentOf(amount, deal.value) : share, unit)));
+	const exact = rounding === 'total_half_up';
+	if ((deal.target ?? 'items') === 'cart') {
+		const off = deal.type === 'percent' ? (exact ? exactPercentOf(amount, deal.value) : percentOf(amount, deal.value)) : share;
+		return Math.max(0, Math.min(amount, exact ? off : roundDown(off, unit)));
+	}
+	if (exact)
+		return Math.max(
+			0,
+			deal.type === 'percent' ? exactPercentOf(amount, deal.value) : Math.min(line.unitPrice, deal.value) * line.quantity,
+		);
 	return dealUnitDiscount(deal, line.unitPrice, unit) * line.quantity;
 };
 
 /**
  * The best live per-unit deal for a line (Chat and product quotes): the largest saving per unit, then the higher
- * priority, then the smaller id. Cart deals and free delivery are left out.
+ * priority, then the smaller id. Cart deals and free delivery are left out. With `total_half_up` one unit's saving
+ * rounds half up.
  * @param {DealLine} line
  * @param {DealRecord[]} deals
  * @param {number} now
- * @param {{ cart?: DealCart, unit?: number }} [options] `cart`: the business time and cart facts (default: none and
- *   every time of day)
+ * @param {{ cart?: DealCart, unit?: number, rules?: DealRules }} [options] `cart`: the business time and cart facts
+ *   (default: none and every time of day)
  * @returns {{ deal: DealRecord, perUnit: number } | null}
  */
-export const bestDeal = (line, deals, now, { cart, unit = 1 } = {}) => {
+export const bestDeal = (line, deals, now, { cart, unit = 1, rules = DEAL_RULES } = {}) => {
 	const facts = cart ?? { goods: line.unitPrice * (line.quantity ?? 1), paymentMethod: null, weekday: -1, minutes: -1 };
 	/** @type {{ deal: DealRecord, perUnit: number } | null} */
 	let best = null;
 	for (const deal of deals) {
 		if ((deal.target ?? 'items') !== 'items' || deal.type === 'free_delivery') continue;
 		if (!isLive(deal, now) || (cart && !inWindow(deal, cart)) || !dealCovers(deal, line, facts)) continue;
-		const perUnit = dealUnitDiscount(deal, line.unitPrice, unit);
+		const perUnit =
+			rules.rounding === 'total_half_up'
+				? Math.min(
+						line.unitPrice,
+						roundHalfUp(
+							dealLineDiscount(deal, { unitPrice: line.unitPrice, quantity: 1 }, { rounding: rules.rounding }),
+							unit,
+						),
+					)
+				: dealUnitDiscount(deal, line.unitPrice, unit);
 		if (perUnit <= 0) continue;
 		if (better({ deal, saving: perUnit }, best ? { deal: best.deal, saving: best.perUnit } : null)) best = { deal, perUnit };
 	}

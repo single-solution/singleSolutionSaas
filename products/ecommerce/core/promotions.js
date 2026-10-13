@@ -12,14 +12,15 @@
  *    more than those deals (`core/bundles.js`);
  * 3. the coupon, on what is left of the lines in its scope (`core/coupons.js`); its minimum subtotal is measured after
  *    deals and bundles.
- * Every amount is integer minor units, rounded down to whole units with Format's `wholeUnits` (E25); no line ever goes
- * below 0. No I/O.
+ * Every amount is integer minor units, rounded down to whole units with Format's `wholeUnits` (E25); with the `deals`
+ * setting `rounding: total_half_up` the deals are worked out exactly and their total is rounded once, half up, then
+ * spread back over the lines (D4); no line ever goes below 0. No I/O.
  * @module
  */
 import { formBundles } from './bundles.js';
 import { couponBlocked, couponDiscount, couponProblem, normaliseCode } from './coupons.js';
-import { bestDeal, better, dealCovers, dealLineDiscount, dealLive } from './deals.js';
-import { allocateUnits } from './money.js';
+import { bestDeal, better, DEAL_RULES, dealCovers, dealLineDiscount, dealLive } from './deals.js';
+import { allocateUnits, roundHalfUp } from './money.js';
 
 /** @typedef {import('./model.js').DealRecord} DealRecord */
 
@@ -79,6 +80,7 @@ const utcClock = (now) => {
  *   business time (weekday 0 = Sunday, minutes since midnight; default: UTC)
  * @param {number} [input.unit] whole units (E25)
  * @param {boolean} [input.shopperChoice] lines may name one of their eligible deals (E18)
+ * @param {import('./deals.js').DealRules} [input.rules] how deals round (the `deals` settings, D4)
  * @returns {PromotionsResult}
  */
 export const applyPromotions = ({
@@ -92,6 +94,7 @@ export const applyPromotions = ({
 	cart = {},
 	unit = 1,
 	shopperChoice = false,
+	rules = DEAL_RULES,
 }) => {
 	const clock = { ...utcClock(now), ...(cart.weekday === undefined ? {} : { weekday: cart.weekday }) };
 	if (cart.minutes !== undefined) clock.minutes = cart.minutes;
@@ -102,6 +105,8 @@ export const applyPromotions = ({
 	};
 	const live = deals.filter((deal) => dealLive(deal, now, clock));
 	const priceable = lines.map((line) => line.quantity > 0 && line.unitPrice > 0);
+	const { rounding } = rules;
+	const exact = rounding === 'total_half_up';
 	// which lines each live deal covers (cart deals spread their fixed amount over them)
 	/** @type {Map<string, number[]>} */
 	const covered = new Map();
@@ -113,14 +118,14 @@ export const applyPromotions = ({
 	/** @param {DealRecord} deal @param {number} index */
 	const estimate = (deal, index) => {
 		const line = /** @type {PricingLine} */ (lines[index]);
-		if ((deal.target ?? 'items') !== 'cart' || deal.type !== 'fixed') return dealLineDiscount(deal, line, { unit });
+		if ((deal.target ?? 'items') !== 'cart' || deal.type !== 'fixed') return dealLineDiscount(deal, line, { unit, rounding });
 		const indexes = covered.get(deal.id) ?? [];
 		const total = indexes.reduce(
 			(sum, i) => sum + /** @type {PricingLine} */ (lines[i]).unitPrice * /** @type {PricingLine} */ (lines[i]).quantity,
 			0,
 		);
 		const share = total > 0 ? (deal.value * line.unitPrice * line.quantity) / total : 0;
-		return dealLineDiscount(deal, line, { unit, share });
+		return dealLineDiscount(deal, line, { unit, share, rounding });
 	};
 
 	// 1. each line's deal
@@ -176,7 +181,7 @@ export const applyPromotions = ({
 		if (!pick.deal || units === 0) return 0;
 		if (pick.locked) return Math.min(line.unitPrice, /** @type {{ perUnit: number }} */ (line.lock).perUnit) * units;
 		if ((pick.deal.target ?? 'items') === 'cart' && pick.deal.type === 'fixed') return -1;
-		return dealLineDiscount(pick.deal, { unitPrice: line.unitPrice, quantity: units }, { unit });
+		return dealLineDiscount(pick.deal, { unitPrice: line.unitPrice, quantity: units }, { unit, rounding });
 	});
 	for (const deal of live) {
 		if ((deal.target ?? 'items') !== 'cart' || deal.type !== 'fixed') continue;
@@ -194,9 +199,29 @@ export const applyPromotions = ({
 			deal.value,
 			amounts.reduce((sum, amount) => sum + amount, 0),
 		);
-		const parts = allocateUnits(total - (unit > 1 ? total % unit : 0), amounts, unit);
+		const parts = exact
+			? amounts.map((amount) => (total * amount) / amounts.reduce((sum, value) => sum + value, 0))
+			: allocateUnits(total - (unit > 1 ? total % unit : 0), amounts, unit);
 		takers.forEach((index, i) => {
 			dealDiscounts[index] = Math.min(amounts[i] ?? 0, parts[i] ?? 0);
+		});
+	}
+	// `total_half_up`: the exact deal discounts (not those locks keep) are rounded once, half up, and spread back
+	if (exact) {
+		const open = lines.map((_, index) => (chosen[index]?.locked ? 0 : Math.max(0, dealDiscounts[index] ?? 0)));
+		const parts = allocateUnits(
+			roundHalfUp(
+				open.reduce((sum, amount) => sum + amount, 0),
+				unit,
+			),
+			open,
+			unit,
+		);
+		lines.forEach((line, index) => {
+			if (open[index] === 0) return;
+			const room =
+				line.unitPrice * line.quantity - /** @type {{ bundleDiscount: number }} */ (formed.lines[index]).bundleDiscount;
+			dealDiscounts[index] = Math.min(room, parts[index] ?? 0);
 		});
 	}
 	const priced = lines.map((line, index) => {
@@ -309,10 +334,21 @@ export const applyPromotions = ({
  * @param {string} [input.currency] the shop's currency
  * @param {{ weekday: number, minutes: number }} [input.clock] the business time (deal hours)
  * @param {number} [input.unit] whole units (E25)
+ * @param {import('./deals.js').DealRules} [input.rules] how deals round (the `deals` settings, D4)
  * @returns {{ productId: string, variantId: string, price: number, priceAfterDeals: number, savings: number, currency: string,
  *   deals: Array<{ id: string, name: string }> } | null} null when the product has no such active variant
  */
-export const quoteProduct = ({ product, variantId = null, deals, now, categoryIds, currency = '', clock, unit = 1 }) => {
+export const quoteProduct = ({
+	product,
+	variantId = null,
+	deals,
+	now,
+	categoryIds,
+	currency = '',
+	clock,
+	unit = 1,
+	rules = DEAL_RULES,
+}) => {
 	const active = product.variants.filter((variant) => variant.active);
 	const variant = variantId
 		? active.find((item) => item.id === variantId)
@@ -334,7 +370,7 @@ export const quoteProduct = ({ product, variantId = null, deals, now, categoryId
 		},
 		deals,
 		now,
-		{ unit, ...(clock ? { cart: { goods: variant.price, paymentMethod: null, ...clock } } : {}) },
+		{ unit, rules, ...(clock ? { cart: { goods: variant.price, paymentMethod: null, ...clock } } : {}) },
 	);
 	const savings = found?.perUnit ?? 0;
 	return {
