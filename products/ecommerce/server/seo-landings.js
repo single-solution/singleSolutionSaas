@@ -248,7 +248,8 @@ export const createLandings = (product, service, media) => {
 					throw clash(error);
 				});
 			await service.log(ctx, 'landing.created', record.id, { label: record.h1 || record.title || record.id });
-			return created(await viewOf(s, data, names, record));
+			// read back, so the answer has its times like every other read
+			return created(await viewOf(s, data, names, await landingOf(data, record.id)));
 		},
 		/** @param {any} ctx */
 		update: async (ctx) => {
@@ -267,7 +268,7 @@ export const createLandings = (product, service, media) => {
 			await service.log(ctx, 'landing.updated', existing.id, {
 				label: checked.value.h1 || checked.value.title || existing.id,
 			});
-			return viewOf(s, data, names, { id: existing.id, ...checked.value });
+			return viewOf(s, data, names, await landingOf(data, existing.id));
 		},
 		/** @param {any} ctx */
 		remove: async (ctx) => {
@@ -501,7 +502,7 @@ export const createLandings = (product, service, media) => {
 		return {
 			name: attribute.name,
 			slug,
-			unit: attribute.unit,
+			unit: attribute.unit ?? '',
 			values,
 			...(await glossaryHead(s, {
 				name: attribute.name,

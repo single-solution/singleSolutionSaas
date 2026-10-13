@@ -102,6 +102,17 @@ const LISTING_FIELDS = Object.freeze({
 });
 
 /**
+ * The seo setting `defaultImage` as an absolute address (a path is on the website), or null without one: the social
+ * image of a page without its own.
+ * @param {Record<string, unknown>} settings the `seo` settings
+ * @param {string} domain
+ */
+const defaultImageOf = (settings, domain) => {
+	const address = siteAddress(settings.defaultImage);
+	return address ? absolute(address, domain) : null;
+};
+
+/**
  * @param {Product} product
  * @param {Service} service
  * @returns {import('./routes.js').Area}
@@ -267,7 +278,7 @@ export const createSeo = (product, service) => {
 			}),
 			description,
 			canonical: item.seo?.canonicalUrl ? absolute(item.seo.canonicalUrl, s.domain) : url,
-			image: ogImage ? absolute(ogImage, s.domain) : (images[0] ?? (siteAddress(settings.defaultImage) || null)),
+			image: ogImage ? absolute(ogImage, s.domain) : (images[0] ?? defaultImageOf(settings, s.domain)),
 			robots: robotsOf(item.seo),
 			focusKeyword: item.seo?.focusKeyword ?? '',
 			jsonLd: scriptJson(jsonLd),
@@ -332,7 +343,7 @@ export const createSeo = (product, service) => {
 			}),
 			description,
 			canonical,
-			image: ogImage ? absolute(ogImage, s.domain) : (image ?? (siteAddress(settings.defaultImage) || null)),
+			image: ogImage ? absolute(ogImage, s.domain) : (image ?? defaultImageOf(settings, s.domain)),
 			robots: comingSoon ? 'noindex, follow' : robotsOf(category.seo),
 			status: comingSoon ? 'coming_soon' : 'active',
 			jsonLd: scriptJson(jsonLd),
