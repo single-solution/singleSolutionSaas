@@ -395,6 +395,46 @@ describe('phone code and e-mail code', () => {
 		expect(code(await env.visitor('POST', '/v1/sign-in/email', { email: 'bad', code: '1' }))).toBe('validation_failed');
 	});
 
+	it('an e-mail address typed but never proven is no way in: the e-mail code and the magic link treat it as unknown', async () => {
+		env.advance(31_000);
+		await env.visitor('POST', '/v1/sign-in/phone/code', { phone: '+923009990001' });
+		const pam = await env.visitor('POST', '/v1/sign-in/phone', {
+			phone: '+923009990001',
+			code: lastMessage().values.code,
+			name: 'Pam',
+			email: 'pam@example.com',
+		});
+		expect(pam.json.user).toMatchObject({ phone: '+923009990001', email: 'pam@example.com', emailVerified: false });
+		// whoever reads that address asks for a code: the same answer as for an unknown address
+		env.advance(31_000);
+		const asked = await env.visitor('POST', '/v1/sign-in/email/code', {
+			email: 'pam@example.com',
+			returnTo: 'http://localhost:3000/login',
+		});
+		expect(asked.status).toBe(202);
+		const sent = lastMessage();
+		// the right code or link signs up, as for an unknown address, and the sign-up finds the address taken: Pam's
+		// account is never opened
+		const byCode = await env.visitor('POST', '/v1/sign-in/email', {
+			email: 'pam@example.com',
+			code: sent.values.code,
+			name: 'Eve',
+		});
+		expect(code(byCode)).toBe('already_exists');
+		const link = String(sent.values.link).split('#ss_accounts_link=')[1];
+		expect(code(await env.visitor('POST', '/v1/sign-in/email', { link }))).toBe('already_exists');
+		const me = await env.visitor('GET', '/v1/me', undefined, pam.json.signIn);
+		expect(me.json).toMatchObject({ phone: '+923009990001', email: 'pam@example.com', emailVerified: false });
+		// an e-mail + password sign-up does not prove its address either: its owner signs in with the password
+		await signUp('una@example.com');
+		env.advance(31_000);
+		await env.visitor('POST', '/v1/sign-in/email/code', { email: 'una@example.com' });
+		expect(
+			code(await env.visitor('POST', '/v1/sign-in/email', { email: 'una@example.com', code: lastMessage().values.code })),
+		).toBe('already_exists');
+		expect((await signIn('una@example.com')).json.user).toMatchObject({ email: 'una@example.com', emailVerified: false });
+	});
+
 	it('answers notifications_not_connected without the Notifications token', async () => {
 		await env.dashboard(
 			await env.adminSession(),
@@ -556,6 +596,14 @@ describe('Google, Apple and Facebook', () => {
 			code: String(back2.headers.get('location')).split('#ss_accounts_code=')[1],
 		});
 		expect(done2.json.user).toMatchObject({ email: 'ana@example.com', providers: ['facebook'] });
+		// an account that holds the address without ever proving it is not linked: the sign-up finds the address taken
+		const { url: taken } = await start('facebook');
+		env.responders.set('https://graph.facebook.com/v21.0/me', () => ({
+			status: 200,
+			body: { id: 'fb-3', name: 'Eve', email: 'pam@example.com' },
+		}));
+		const refused = await env.call('GET', `/oauth/facebook/callback?state=${taken?.searchParams.get('state')}&code=fb`);
+		expect(refused.headers.get('location')).toBe(`${ORIGIN}/account#ss_accounts_error=already_exists`);
 		env.responders.set('https://graph.facebook.com/v21.0/oauth/access_token', () => ({ status: 400, body: {} }));
 		const { url: u3 } = await start('facebook');
 		const back3 = await env.call('GET', `/oauth/facebook/callback?state=${u3?.searchParams.get('state')}&code=fb`);

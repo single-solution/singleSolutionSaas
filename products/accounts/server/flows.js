@@ -346,7 +346,8 @@ export const createFlows = (product, service) => {
 	 * the right one is used up by `codeSignIn` once the sign-in passed its checks, so a terms or profile step can be
 	 * retried with the same code.
 	 * @param {Site} s @param {'phone' | 'email' | 'phone_reset'} kind @param {string} target @param {unknown} typed
-	 * @returns {Promise<string>} the code record's id
+	 * @returns {Promise<{ id: string, staff: boolean }>} the code record's id; `staff`: it is a sign-in code staff made
+	 *   for the address's user (A3), which says who the user is but does not prove the address
 	 */
 	const checkCode = async (s, kind, target, typed) => {
 		const sent = await s.store.codes.latest(kind, target);
@@ -356,7 +357,8 @@ export const createFlows = (product, service) => {
 		const staff = user && s.on.includes('staff_links') ? await s.store.codes.latest('staff_code', user.id) : null;
 		for (const record of [sent, staff]) {
 			const code = record ? normaliseCode(typed, Number(record.data.length)) : null;
-			if (record && code !== null && safeEqual(record.hash, sha256(`${record.id}:${code}`))) return record.id;
+			if (record && code !== null && safeEqual(record.hash, sha256(`${record.id}:${code}`)))
+				return { id: record.id, staff: record === staff };
 		}
 		for (const record of [sent, staff])
 			if (record && (await s.store.codes.attempt(record.id)) >= CODE_ATTEMPTS) await s.store.codes.consume(record.id);
@@ -364,10 +366,23 @@ export const createFlows = (product, service) => {
 	};
 
 	/**
-	 * Sign in (or up) the owner of a proven address, then use up the code or link.
-	 * @param {Site} s @param {any} ctx @param {'phone' | 'email'} kind @param {string} target @param {string} recordId
+	 * The account an e-mail code, a magic link or a social sign-in (which prove the address) may open: only one whose
+	 * address was proven before. An address typed but never proven (at a phone sign-up, a role request, an e-mail +
+	 * password sign-up) is no way in: it counts as unknown, so the sign-up that follows finds it taken.
+	 * @param {Site} s @param {string} email
 	 */
-	const codeSignIn = async (s, ctx, kind, target, recordId) => {
+	const provenHolderOf = async (s, email) => {
+		const holder = await s.store.users.byEmail(email);
+		return holder?.emailVerified ? holder : null;
+	};
+
+	/**
+	 * Sign in (or up) the owner of a proven address, then use up the code or link. A sign-in code staff made (A3) opens
+	 * the account it was made for, but proves no e-mail address.
+	 * @param {Site} s @param {any} ctx @param {'phone' | 'email'} kind @param {string} target
+	 * @param {{ id: string, staff: boolean }} record the code or link used
+	 */
+	const codeSignIn = async (s, ctx, kind, target, { id: recordId, staff }) => {
 		const body = bodyOf(ctx.body);
 		const how = {
 			method: kind === 'phone' ? 'phone_code' : 'email_code',
@@ -375,13 +390,19 @@ export const createFlows = (product, service) => {
 			acceptTerms: body.acceptTerms,
 		};
 		const verified = kind === 'phone' ? 'phoneVerified' : 'emailVerified';
-		const existing = kind === 'phone' ? await s.store.users.byPhone(target) : await s.store.users.byEmail(target);
+		const existing =
+			kind === 'phone'
+				? await s.store.users.byPhone(target)
+				: staff
+					? await s.store.users.byEmail(target)
+					: await provenHolderOf(s, target);
 		/** @type {Record<string, unknown>} */
 		let answer;
 		if (existing) {
-			const user = existing[verified]
-				? existing
-				: ((await s.store.users.update(existing.id, { [verified]: true })) ?? existing);
+			const user =
+				existing[verified] || (staff && kind === 'email')
+					? existing
+					: ((await s.store.users.update(existing.id, { [verified]: true })) ?? existing);
 			answer = await service.finish(s, user, how);
 		} else {
 			const profile = await signUpProfile(s, body, kind === 'phone' ? { phone: target } : { email: target });
@@ -484,7 +505,7 @@ export const createFlows = (product, service) => {
 		const phone = await service.phoneOf(s, body.phone);
 		const user = phone ? await s.store.users.byPhone(phone) : null;
 		if (!phone || !user) throw problem('code_invalid', 'The code is not valid or has expired.');
-		const recordId = await checkCode(s, 'phone_reset', phone, body.code);
+		const { id: recordId } = await checkCode(s, 'phone_reset', phone, body.code);
 		const passwordHash = await newPassword(s, body.password, { method: 'phone_password', who: user });
 		if (!(await s.store.codes.consume(recordId))) throw problem('code_invalid', 'The code is not valid or has expired.');
 		await s.store.users.update(user.id, {
@@ -592,7 +613,8 @@ export const createFlows = (product, service) => {
 		if (body.returnTo !== undefined && !returnTo)
 			throw invalid('returnTo', 'returnTo must be a page of your website (or a local page while testing).');
 		const { codeLength, codeMinutes } = await service.settings(s, 'email_code');
-		await service.allowCode(s, await s.store.users.byEmail(email), 'email_code');
+		// an address typed on an account but never proven counts as unknown here too: that account's role never shows
+		await service.allowCode(s, await provenHolderOf(s, email), 'email_code');
 		const sent = await sendCode(
 			s,
 			'email',
@@ -611,7 +633,7 @@ export const createFlows = (product, service) => {
 		if (body.link !== undefined) {
 			const record = await service.takeSecret(s, body.link, 'email', { field: 'linkHash', keep: true });
 			if (!record) throw problem('code_invalid', 'This link is not valid or has expired.');
-			return codeSignIn(s, ctx, 'email', record.target, record.id);
+			return codeSignIn(s, ctx, 'email', record.target, { id: record.id, staff: false });
 		}
 		const email = normaliseEmail(body.email);
 		if (!email) throw invalid('email', 'Enter a valid e-mail address.');
@@ -707,8 +729,8 @@ export const createFlows = (product, service) => {
 		}
 		if (!identity) return back(`${LINK_PARAMS.error}=provider_failed`);
 		const email = identity.email ? normaliseEmail(identity.email) : null;
-		let user =
-			(await s.store.users.byProvider(provider, identity.subject)) ?? (email ? await s.store.users.byEmail(email) : null);
+		// the provider proved the address: it links only an account whose address was proven before
+		let user = (await s.store.users.byProvider(provider, identity.subject)) ?? (email ? await provenHolderOf(s, email) : null);
 		try {
 			if (user) {
 				user =

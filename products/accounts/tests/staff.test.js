@@ -248,6 +248,26 @@ describe('A3: staff-issued sign-in codes and setup links', () => {
 		expect(viaEmailCode.json.status).toBe('signed_in');
 	});
 
+	it('a sign-in code from staff opens its user in the e-mail code screen, but proves no address', async () => {
+		const up = await env.visitor('POST', '/v1/sign-up/phone-password', {
+			phone: '0300 5550390',
+			password: 'own pass 12',
+			name: 'Pat',
+			email: 'pat@example.com',
+		});
+		expect(up.json.user).toMatchObject({ email: 'pat@example.com', emailVerified: false });
+		const issued = await server('POST', `/v1/users/${up.json.user.id}/sign-in-code`);
+		const signedIn = await env.visitor('POST', '/v1/sign-in/email', { email: 'pat@example.com', code: issued.json.code });
+		expect(signedIn.json).toMatchObject({ status: 'signed_in', user: { id: up.json.user.id, emailVerified: false } });
+		// so a code sent to the address still opens nothing
+		await env.visitor('POST', '/v1/sign-in/email/code', { email: 'pat@example.com' });
+		const sent = env.messages().at(-1);
+		expect(sent).toMatchObject({ template: 'accounts.email_code', to: { email: 'pat@example.com' } });
+		expect(
+			code(await env.visitor('POST', '/v1/sign-in/email', { email: 'pat@example.com', code: sent.values.code, name: 'E' })),
+		).toBe('already_exists');
+	});
+
 	it('a setup link sets a password (also without an e-mail address) and signs in; a new link cancels the old', async () => {
 		const first = await server('POST', `/v1/users/${people.support.id}/setup-link`);
 		expect(first.json.url).toMatch(/^https:\/\/shop\.example\.com\/\?ss_setup=cod_/);
