@@ -93,6 +93,20 @@ Pure and browser-safe, so products' `core/` and widgets (through `@ss/app-kit/wi
 - `zonedParts(at, timeZone)`, `zonedDay(at, timeZone)` (`YYYY-MM-DD`) and `zonedDayStart(day, timeZone)` (epoch ms):
   every calendar rule in the business.json time zone, UTC when missing.
 
+## Phone numbers (`@ss/contracts/phone`)
+
+Pure and browser-safe; every product normalises phones with it, so one person has one number everywhere.
+
+- `normalisePhone(input, defaultCallingCode | { defaultCallingCode, trunkPrefix })` → E.164 or null. Spaces, dashes,
+  dots, slashes and brackets are dropped; `+` or `00` name the calling code; after it a trunk `0` (also `(0)`) is
+  dropped, except where national numbers keep their 0 (Italy, San Marino, Côte d'Ivoire, Benin, Gabon, Congo). A number
+  without `+`/`00` needs the default calling code: one that already starts with its digits and has a national length
+  keeps them (`923001234567`), a trunk prefix (`0`; `8` for +7; or `trunkPrefix`) is dropped, otherwise the code is
+  added. The result has 8–15 digits and fits the country's national lengths where they are listed.
+- `websiteCallingCode(setting, country)`: the website's default calling code, its setting else the calling code of its
+  business.json `country`; `callingCodeOf(country)`.
+- `PHONE_COUNTRIES` (ISO codes a setting may name) and `phoneInCountries(phone, countries)` (`[]` = any).
+
 ## Problems (RFC 9457)
 
 ```js

@@ -1,6 +1,7 @@
 /**
  * @ss/contracts — versioned schemas and validators binding the Portal and every product: the manifest and settings
- * schemas, the Product ↔ Portal wire shapes, business.json, cross-product shapes, ids and RFC 9457 problems.
+ * schemas, the Product ↔ Portal wire shapes, business.json, cross-product shapes, ids, RFC 9457 problems and phone
+ * numbers.
  * Additive changes only within v1; breaking changes ship as v2 schema ids.
  * @module
  */
@@ -39,6 +40,7 @@ export {
 	zonedDayStart,
 	zonedParts,
 } from './format.js';
+export { PHONE_COUNTRIES, callingCodeOf, normalisePhone, phoneInCountries, websiteCallingCode } from './phone.js';
 export { PROBLEM_CODES, problem, createProblemFactory } from './errors.js';
 export {
 	ID_PREFIXES,

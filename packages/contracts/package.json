@@ -1,12 +1,13 @@
 {
 	"name": "@ss/contracts",
 	"version": "0.1.0",
-	"description": "Versioned schemas and validators binding the Portal and every product: manifest and settings schemas, Product-Portal wire shapes, business.json, cross-product shapes, ids, RFC 9457 problems, and the Format and time-zone helpers (`./format`, browser-safe).",
+	"description": "Versioned schemas and validators binding the Portal and every product: manifest and settings schemas, Product-Portal wire shapes, business.json, cross-product shapes, ids, RFC 9457 problems, and the Format and time-zone helpers (`./format`, browser-safe) and the phone-number normaliser (`./phone`, browser-safe).",
 	"type": "module",
 	"license": "UNLICENSED",
 	"exports": {
 		".": "./src/index.js",
 		"./format": "./src/format.js",
+		"./phone": "./src/phone.js",
 		"./testing": "./src/testing.js",
 		"./package.json": "./package.json"
 	},
@@ -27,6 +28,10 @@
 			"./format": {
 				"types": "./types/src/format.d.ts",
 				"default": "./src/format.js"
+			},
+			"./phone": {
+				"types": "./types/src/phone.d.ts",
+				"default": "./src/phone.js"
 			},
 			"./testing": {
 				"types": "./types/src/testing.d.ts",
