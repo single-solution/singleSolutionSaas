@@ -302,11 +302,24 @@ export const mountMyAccount = ({ host, win, config, session }) => {
 				section.append(area, note);
 				let enabled = user.twoStep === true;
 
+				/** Recovery codes, shown once. @param {unknown} answered */
+				const showCodes = (answered) => {
+					const list = element(doc, 'ul', { class: 'codes' });
+					const codes = Array.isArray(answered) ? answered : [];
+					list.append(...codes.map((each) => element(doc, 'li', { class: 'code' }, String(each))));
+					const done = button(t('recovery.done'));
+					done.addEventListener('click', paint);
+					area.replaceChildren(element(doc, 'h4', {}, t('recovery.title')), para(t('recovery.help')), list, done);
+				};
+
 				const paint = () => {
 					if (enabled) {
 						const code = codeField();
+						// a recovery code also gets new recovery codes
+						code.input.setAttribute('maxlength', '20');
 						const off = button(t('account.twoStepTurnOff'), { class: 'secondary' });
-						area.replaceChildren(para(t('account.twoStepIsOn')), code.wrap, off);
+						const renew = button(t('account.recoveryRenew'), { class: 'secondary' });
+						area.replaceChildren(para(t('account.twoStepIsOn')), code.wrap, off, renew);
 						off.addEventListener('click', () =>
 							run(off, async () => {
 								const answer = await session.me('POST', '/v1/me/two-step/disable', { code: code.input.value.trim() });
@@ -315,6 +328,18 @@ export const mountMyAccount = ({ host, win, config, session }) => {
 									paint();
 								}
 								note.textContent = answer.ok ? t('account.twoStepTurnedOff') : errorText(t, answer, when);
+							}),
+						);
+						renew.addEventListener('click', () =>
+							run(renew, async () => {
+								const value = code.input.value.trim();
+								const answer = await session.me(
+									'POST',
+									'/v1/me/two-step/recovery-codes',
+									/^\d{6}$/.test(value) ? { code: value } : { recoveryCode: value },
+								);
+								note.textContent = answer.ok ? t('account.recoveryRenewed') : errorText(t, answer, when);
+								if (answer.ok) showCodes(answer.data?.recoveryCodes);
 							}),
 						);
 						return;
@@ -356,13 +381,7 @@ export const mountMyAccount = ({ host, win, config, session }) => {
 							}
 							enabled = true;
 							note.textContent = t('account.twoStepTurnedOn');
-							const list = element(doc, 'ul', { class: 'codes' });
-							/** @type {unknown[]} */
-							const codes = Array.isArray(answer.data?.recoveryCodes) ? answer.data.recoveryCodes : [];
-							list.append(...codes.map((each) => element(doc, 'li', { class: 'code' }, String(each))));
-							const done = button(t('recovery.done'));
-							done.addEventListener('click', paint);
-							area.replaceChildren(element(doc, 'h4', {}, t('recovery.title')), para(t('recovery.help')), list, done);
+							showCodes(answer.data?.recoveryCodes);
 						}),
 					);
 				};

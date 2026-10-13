@@ -203,12 +203,14 @@ const LOCAL_HOSTS = /^(?:localhost|[a-z0-9-]+\.localhost|127\.0\.0\.1|\[::1\])$/
 
 /**
  * Whether links and sign-in redirects may return to `url`: a page of the website's exact domain over https (default
- * port), or a local page for testing (PLAN 0.8.1). Returns the URL without its fragment, or null.
+ * port), of one of the merchant's other hosts listed for it (K-27: reset links to an admin on its own host), or a local
+ * page for testing (PLAN 0.8.1). Returns the URL without its fragment, or null.
  * @param {unknown} url
  * @param {string} domain
+ * @param {ReadonlyArray<unknown>} [hosts] the merchant's other host names
  * @returns {string | null}
  */
-export const returnAddress = (url, domain) => {
+export const returnAddress = (url, domain, hosts = []) => {
 	if (typeof url !== 'string' || url.length > 2048) return null;
 	/** @type {URL} */
 	let parsed;
@@ -219,7 +221,8 @@ export const returnAddress = (url, domain) => {
 	}
 	if (parsed.username || parsed.password) return null;
 	const local = LOCAL_HOSTS.test(parsed.hostname) && (parsed.protocol === 'http:' || parsed.protocol === 'https:');
-	const own = parsed.protocol === 'https:' && parsed.hostname === domain && parsed.port === '';
+	const listed = (/** @type {unknown} */ host) => String(host).toLowerCase().replace(/\.$/, '') === parsed.hostname;
+	const own = parsed.protocol === 'https:' && parsed.port === '' && (parsed.hostname === domain || hosts.some(listed));
 	if (!local && !own) return null;
 	parsed.hash = '';
 	return parsed.toString();

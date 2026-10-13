@@ -366,15 +366,16 @@ export const createStore = (data, { now }) => {
 			get: async (id) => as(await sessions.findOne({ websiteId, id }, NO_ID)),
 			/**
 			 * Rotate the refresh token if it is still `expected` (of renewals racing, only the first rotates); the old hash is
-			 * kept with the time, and the new secret sealed, for the grace period.
+			 * kept with the time, and the new secret sealed, for the grace period. A rolling session (K-27) gets its new end.
 			 * @param {string} id @param {string} expected @param {string} next @param {string} sealed the new secret, sealed
+			 * @param {Date | null} [expiresAt] the session's new end (null: it keeps its end)
 			 */
-			rotate: async (id, expected, next, sealed) =>
+			rotate: async (id, expected, next, sealed, expiresAt = null) =>
 				(
 					await sessions.updateOne(
 						{ websiteId, id, refreshHash: expected, revokedAt: null },
 						{
-							$set: { refreshHash: next, sealedRefresh: sealed, lastUsedAt: at() },
+							$set: { refreshHash: next, sealedRefresh: sealed, lastUsedAt: at(), ...(expiresAt ? { expiresAt } : {}) },
 							$push: {
 								previousHashes: { $each: [expected], $slice: -20 },
 								rotated: { $each: [{ hash: expected, at: at() }], $slice: -5 },

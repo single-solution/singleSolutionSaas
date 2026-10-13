@@ -363,6 +363,15 @@ export const createRoutes = (product) => {
 			rateLimit: SENSITIVE_LIMITS,
 			handler: account.twoStepDisable,
 		}),
+		// new recovery codes (K-27): a code from the app or a recovery code proves the second step again
+		defineRoute({
+			method: 'POST',
+			path: '/v1/me/two-step/recovery-codes',
+			auth: 'browser',
+			feature: 'two_step',
+			rateLimit: SENSITIVE_LIMITS,
+			handler: account.newRecoveryCodes,
+		}),
 		defineRoute({
 			method: 'POST',
 			path: '/v1/me/terms',

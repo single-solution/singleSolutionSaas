@@ -1008,6 +1008,8 @@ describe('My account', () => {
 			'POST /v1/me/two-step/enable': ({ body }) =>
 				body.code === '000000' ? problem(400, 'code_invalid') : answer(200, { recoveryCodes: ['r-1', 'r-2'] }),
 			'POST /v1/me/two-step/disable': () => answer(204),
+			'POST /v1/me/two-step/recovery-codes': ({ body }) =>
+				body.code === '000000' ? problem(400, 'code_invalid') : answer(200, { recoveryCodes: ['n-1', 'n-2'] }),
 		});
 		const terms = part(host, strings['account.termsTitle']);
 		await click(buttonIn(terms, strings['account.termsAccept']));
@@ -1039,6 +1041,16 @@ describe('My account', () => {
 		await click(buttonIn(twoStep, strings['account.twoStepConfirm']));
 		expect(server.last('POST /v1/me/two-step/enable')?.body).toEqual({ challenge: 'su1', code: '123456' });
 		expect([...twoStep.querySelectorAll('li')].map((li) => li.textContent)).toEqual(['r-1', 'r-2']);
+		await click(buttonIn(twoStep, strings['recovery.done']));
+		// new recovery codes, with a code from the app or a recovery code
+		fieldIn(twoStep, strings['twoStep.code']).value = '000000';
+		await click(buttonIn(twoStep, strings['account.recoveryRenew']));
+		expect(statusIn(twoStep)).toBe(strings['error.code_invalid']);
+		fieldIn(twoStep, strings['twoStep.code']).value = ' abcde-fghjk ';
+		await click(buttonIn(twoStep, strings['account.recoveryRenew']));
+		expect(server.last('POST /v1/me/two-step/recovery-codes')?.body).toEqual({ recoveryCode: 'abcde-fghjk' });
+		expect(statusIn(twoStep)).toBe(strings['account.recoveryRenewed']);
+		expect([...twoStep.querySelectorAll('li')].map((li) => li.textContent)).toEqual(['n-1', 'n-2']);
 		await click(buttonIn(twoStep, strings['recovery.done']));
 		fieldIn(twoStep, strings['twoStep.code']).value = '654321';
 		await click(buttonIn(twoStep, strings['account.twoStepTurnOff']));
@@ -1207,6 +1219,7 @@ describe('My account', () => {
 				'PUT /v1/me/password': () => answer(204),
 				'POST /v1/me/two-step/setup': () => problem(409, 'conflict'),
 				'POST /v1/me/two-step/disable': () => problem(400, 'code_invalid'),
+				'POST /v1/me/two-step/recovery-codes': () => answer(200, {}),
 				'POST /v1/me/delete': () => problem(500, 'internal'),
 				'POST /v1/me/sign-out-everywhere': () => answer(500, {}),
 				'POST /v1/me/terms': () => answer(204),
@@ -1222,6 +1235,9 @@ describe('My account', () => {
 		const twoStep = part(host, strings['account.twoStep']);
 		await click(buttonIn(twoStep, strings['account.twoStepTurnOff']));
 		expect(statusIn(twoStep)).toBe(strings['error.code_invalid']);
+		// an answer without codes shows an empty list
+		await click(buttonIn(twoStep, strings['account.recoveryRenew']));
+		expect(twoStep.querySelectorAll('li')).toHaveLength(0);
 		const privacy = part(host, strings['account.privacy']);
 		await click(buttonIn(privacy, strings['account.delete']));
 		await click(buttonIn(privacy, strings['account.deleteYes']));
@@ -1845,6 +1861,7 @@ describe('admin widgets', () => {
 			twoStep: 'required',
 			sessionHours: 48,
 			rememberDays: 7,
+			sessionRolling: false,
 			rank: 600,
 			remember: 'ask',
 			signIn: 'on',
@@ -1978,12 +1995,15 @@ describe('admin widgets', () => {
 		fieldIn(form, strings['roles.remember']).value = 'always';
 		checkIn(form, strings['method.email_password']).checked = true;
 		checkIn(form, strings['roles.logSignIns']).checked = true;
+		expect(checkIn(form, strings['roles.sessionRolling']).checked).toBe(false);
+		checkIn(form, strings['roles.sessionRolling']).checked = true;
 		await submit(buttonIn(form, strings['roles.save']));
 		expect(saved[0]).toMatchObject({
 			rank: 450,
 			remember: 'always',
 			methods: ['email_password'],
 			logSignIns: true,
+			sessionRolling: true,
 			signIn: 'on',
 		});
 	});

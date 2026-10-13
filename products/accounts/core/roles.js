@@ -8,7 +8,9 @@
  *   from each pasted product's `GET /v1/permissions`) or `site` for the merchant's own names. Owner carries every
  *   permission, written `*`.
  * - A role also sets two-step (optional or required) and session lengths: the session length in hours and "remember
- *   me" in days (0: no remember me). Defaults: 1 day and 30 days.
+ *   me" in days (0: no remember me). Defaults: 1 day and 30 days. With `sessionRolling` (K-27) a session's end moves
+ *   at each renewal to that length from then, so a session in use does not end; without it (the default) the end is
+ *   fixed at sign-in.
  * - Per-role sign-in options (PLAN 0.8.10 A6, A10): `remember` (`ask`, `ask_ticked`, or `always`: no box, always
  *   remembered), `methods` (the sign-in methods its users may use; [] = all), `signIn` (`on`, or `paused`: its users,
  *   and new sign-ups while it is the default role, are refused) and `logSignIns` (sign-ins and failures go to the
@@ -54,6 +56,7 @@ export const DEFAULT_ROLE = 'customer';
  * @property {'optional' | 'required'} twoStep
  * @property {number} sessionHours
  * @property {number} rememberDays
+ * @property {boolean} sessionRolling each renewal moves the session's end to its length from then (K-27)
  * @property {number} rank a smaller number ranks higher (A4)
  * @property {'ask' | 'ask_ticked' | 'always'} remember (A6)
  * @property {string[]} methods the sign-in methods its users may use; [] = all (A6)
@@ -74,6 +77,7 @@ const ready = (key, name, rank, description, permissions) => ({
 	twoStep: 'optional',
 	sessionHours: 24,
 	rememberDays: 30,
+	sessionRolling: false,
 	rank,
 	remember: 'ask',
 	methods: [],
@@ -83,7 +87,7 @@ const ready = (key, name, rank, description, permissions) => ({
 });
 
 /**
- * A stored role with the fields added later filled in (roles saved before A4 and A6).
+ * A stored role with the fields added later filled in (roles saved before A4, A6 and K-27).
  * @param {Partial<Role> & Pick<Role, 'key'>} role
  * @returns {Role}
  */
@@ -93,6 +97,7 @@ export const roleWithDefaults = (role) => {
 		twoStep: 'optional',
 		sessionHours: 24,
 		rememberDays: 30,
+		sessionRolling: false,
 		remember: 'ask',
 		methods: [],
 		signIn: 'on',
@@ -208,6 +213,7 @@ export const checkRole = (key, input) => {
 			twoStep,
 			sessionHours: Number(sessionHours),
 			rememberDays: Number(rememberDays),
+			sessionRolling: body.sessionRolling === true,
 			rank: Number(rank),
 			remember: /** @type {Role['remember']} */ (remember),
 			methods: /** @type {string[]} */ (methods),
@@ -245,7 +251,8 @@ export const signInRefusal = (role, method) => {
 export const remembered = (role, asked) => role.remember === 'always' || asked;
 
 /**
- * When a new session ends: the role's session length, or its remember-me days when the user asked to be remembered.
+ * When a session ends, from now: the role's session length, or its remember-me days when the user asked to be
+ * remembered (at sign-in, and at each renewal while the role's sessions roll).
  * @param {{ now: number, remember: boolean, role: Pick<Role, 'sessionHours' | 'rememberDays'> }} input
  */
 export const sessionEnd = ({ now, remember, role }) =>

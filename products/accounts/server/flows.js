@@ -8,7 +8,7 @@ import { problem } from '@ss/app-kit';
 import { createId } from '@ss/contracts';
 import { normaliseEmail } from '../core/identifiers.js';
 import { checkCustomValues, checkName, identityOfMethod, resetsByEmail, selfView } from '../core/profile.js';
-import { DEFAULT_ROLE } from '../core/roles.js';
+import { DEFAULT_ROLE, sessionEnd } from '../core/roles.js';
 import {
 	CODE_ATTEMPTS,
 	CODE_COOLDOWN_SECONDS,
@@ -220,6 +220,16 @@ export const createFlows = (product, service) => {
 			networkLimit: Number(email.networkLimit),
 			personalCheck: email.personalCheck === true,
 		};
+	};
+
+	/**
+	 * A wrong two-step or recovery code, counted toward the user's lock like a wrong password (ST-1), with the lock
+	 * settings of the method the user signs in with.
+	 * @param {Site} s @param {UserRecord} user @param {string} method
+	 */
+	const countFailure = async (s, user, method) => {
+		const failures = await s.store.users.failedLogin(user.id);
+		await s.store.users.update(user.id, { ...lockAfter({ ...(await passwordRules(s, method)), failures, now: now() }) });
 	};
 
 	/**
@@ -541,9 +551,14 @@ export const createFlows = (product, service) => {
 		const body = bodyOf(ctx.body);
 		const email = normaliseEmail(body.email);
 		if (!email) throw invalid('email', 'Enter a valid e-mail address.');
-		const returnTo = returnAddress(body.returnTo, s.domain);
-		if (!returnTo) throw invalid('returnTo', 'returnTo must be a page of your website (or a local page while testing).');
-		const { resetMinutes, resetLimit } = await service.settings(s, 'email_password');
+		const { resetMinutes, resetLimit, resetHosts } = await service.settings(s, 'email_password');
+		// a page of the website, or of a host of the merchant's listed for reset links (an admin on its own host, K-27)
+		const returnTo = returnAddress(body.returnTo, s.domain, /** @type {unknown[]} */ (resetHosts));
+		if (!returnTo)
+			throw invalid(
+				'returnTo',
+				'returnTo must be a page of your website or of a host listed for reset links (or a local page while testing).',
+			);
 		if (!(await s.store.counters.take(`resets|${sha256(email)}`, RESET_WINDOW_MS, Number(resetLimit))))
 			throw problem('rate_limited', 'Too many reset requests for this address. Try again later.');
 		afterAnswer(ctx, async () => {
@@ -827,12 +842,7 @@ export const createFlows = (product, service) => {
 		/** @param {{ counted: boolean }} [options] `counted`: a guess at the user's secret (not while setting it up) */
 		const wrong = async ({ counted } = { counted: true }) => {
 			if ((await s.store.codes.attempt(record.id)) >= CODE_ATTEMPTS) await s.store.codes.consume(record.id);
-			if (counted) {
-				const failures = await s.store.users.failedLogin(user.id);
-				await s.store.users.update(user.id, {
-					...lockAfter({ ...(await passwordRules(s, how.method)), failures, now: now() }),
-				});
-			}
+			if (counted) await countFailure(s, user, how.method);
 			await service.logSignIn(s, user, 'user.sign_in_failed', 'Wrong two-step code');
 			return problem('code_invalid', 'The code is not valid.');
 		};
@@ -895,22 +905,25 @@ export const createFlows = (product, service) => {
 	};
 
 	/**
-	 * Rotate the session's current refresh token; when another renewal with the same token rotated it a moment ago,
-	 * the pair that renewal got.
-	 * @param {Site} s @param {SessionRecord} session @param {string} hash
+	 * Rotate the session's current refresh token (a rolling session gets its new end); when another renewal with the
+	 * same token rotated it a moment ago, the pair that renewal got.
+	 * @param {Site} s @param {SessionRecord} session @param {string} hash @param {Date | null} until a rolling session's
+	 *   new end
 	 * @returns {Promise<{ session: SessionRecord | null, secret: string | null }>}
 	 */
-	const rotateOrJoin = async (s, session, hash) => {
+	const rotateOrJoin = async (s, session, hash, until) => {
 		const next = randomSecret(32);
-		if (await s.store.sessions.rotate(session.id, hash, sha256(next), product.sealer.seal(next, refreshAad(s, session.id))))
-			return { session, secret: next };
+		const sealed = product.sealer.seal(next, refreshAad(s, session.id));
+		if (await s.store.sessions.rotate(session.id, hash, sha256(next), sealed, until))
+			return { session: until ? { ...session, expiresAt: until } : session, secret: next };
 		const again = await s.store.sessions.get(session.id);
 		return { session: again, secret: live(again) ? currentSecret(s, again, hash) : null };
 	};
 
 	/**
 	 * Renew: a new sign-in and a new refresh token. The token renewed less than 30 seconds ago gets the same new pair
-	 * (parallel renewals, a retry; RW-1); an older one came back because it was copied, so the session ends.
+	 * (parallel renewals, a retry; RW-1); an older one came back because it was copied, so the session ends. While the
+	 * user's role rolls its sessions (K-27), the session's end moves to the role's length from now.
 	 * @param {any} ctx
 	 */
 	const refresh = async (ctx) => {
@@ -931,7 +944,9 @@ export const createFlows = (product, service) => {
 			await s.store.sessions.revoke(found.userId, found.id);
 			throw out();
 		}
-		const { session, secret } = current ? await rotateOrJoin(s, found, hash) : { session: found, secret: lately };
+		const role = s.on.includes('roles') ? await service.roleOf(s, user) : null;
+		const until = role?.sessionRolling ? new Date(sessionEnd({ now: now(), remember: found.remember, role })) : null;
+		const { session, secret } = current ? await rotateOrJoin(s, found, hash, until) : { session: found, secret: lately };
 		if (!session || !secret) throw out();
 		return {
 			status: 'signed_in',
@@ -1037,6 +1052,7 @@ export const createFlows = (product, service) => {
 		signOut,
 		acceptInvite,
 		newPassword,
+		countFailure,
 		blankUser,
 		createUser,
 	});

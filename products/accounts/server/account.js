@@ -10,6 +10,7 @@ import { CODE_ATTEMPTS } from '../core/rules.js';
 import {
 	generateRecoveryCodes,
 	generateTotpSecret,
+	matchRecoveryCode,
 	randomSecret,
 	safeEqual,
 	sha256,
@@ -190,6 +191,44 @@ export const createAccount = (product, service, flows) => {
 		return undefined;
 	};
 
+	/**
+	 * New recovery codes (K-27): the old ones stop working and the new ones are shown once. The user proves the second
+	 * step again with a code from the authenticator app or one of their recovery codes (someone who lost the phone gets
+	 * new codes with one of the old). Wrong codes count toward the lock as at sign-in, and the route is refused while
+	 * the lock lasts.
+	 * @param {any} ctx
+	 */
+	const newRecoveryCodes = async (ctx) => {
+		const { s, user, session } = await service.signedIn(ctx);
+		const state = user.twoStep;
+		if (!state?.enabledAt) throw problem('conflict', 'Two-step sign-in is off.');
+		if (user.lockedUntil && user.lockedUntil.getTime() > now())
+			throw problem('locked', 'Too many wrong tries. Try again later.', {
+				extensions: { lockedUntil: user.lockedUntil.toISOString() },
+			});
+		const body = bodyOf(ctx.body);
+		/** @type {number | null | undefined} the authenticator step now used up; undefined: the code is wrong */
+		let step;
+		if (typeof body.recoveryCode === 'string')
+			step = matchRecoveryCode(body.recoveryCode, state.recovery) >= 0 ? state.lastStep : undefined;
+		else {
+			const secret = sealer.open(state.sealed, service.totpAad(s.websiteId, user.id));
+			const checked = secret ? verifyTotp(secret, body.code, { now: now(), lastStep: state.lastStep }) : null;
+			step = checked?.ok ? checked.step : undefined;
+		}
+		if (step === undefined) {
+			await flows.countFailure(s, user, session.method);
+			throw problem('code_invalid', 'The code is not valid.');
+		}
+		const { codes, hashes } = generateRecoveryCodes();
+		await s.store.users.update(user.id, {
+			'twoStep.recovery': hashes.map((hash) => ({ hash, format: 'v1' })),
+			'twoStep.lastStep': step,
+		});
+		await service.logSignIn(s, user, 'user.recovery_codes_replaced', `${codes.length} new recovery codes`);
+		return { recoveryCodes: codes };
+	};
+
 	/** Accept the current terms version. @param {any} ctx */
 	const acceptTerms = async (ctx) => {
 		const { s, user } = await service.signedIn(ctx);
@@ -276,6 +315,7 @@ export const createAccount = (product, service, flows) => {
 		twoStepSetup,
 		twoStepEnable,
 		twoStepDisable,
+		newRecoveryCodes,
 		acceptTerms,
 		exportData,
 		download,

@@ -25,6 +25,7 @@ const OWN_SOURCE = 'site';
  * @property {'optional' | 'required'} twoStep
  * @property {number} sessionHours
  * @property {number} rememberDays
+ * @property {boolean} [sessionRolling]
  * @property {number} [rank]
  * @property {'ask' | 'ask_ticked' | 'always'} [remember]
  * @property {string[]} [methods]
@@ -108,6 +109,7 @@ export const mountRolesAdmin = ({ host, api, config }) => {
 				step: '1',
 				required: '',
 			});
+			const sessionRolling = make.check(t('roles.sessionRolling'));
 			const rank = make.field('input', t('roles.rank'), { type: 'number', min: '101', max: '899', step: '1' });
 			const remember = make.field('select', t('roles.remember'));
 			remember.input.append(
@@ -146,6 +148,7 @@ export const mountRolesAdmin = ({ host, api, config }) => {
 				description.wrap,
 				...(twoStepOn ? [twoStepField.wrap] : []),
 				lengths,
+				sessionRolling.wrap,
 				signInRow,
 				methodSet,
 				logSignIns.wrap,
@@ -236,6 +239,7 @@ export const mountRolesAdmin = ({ host, api, config }) => {
 				twoStepField.input.value = twoStep;
 				sessionHours.input.value = String(role?.sessionHours ?? 24);
 				rememberDays.input.value = String(role?.rememberDays ?? 30);
+				sessionRolling.input.checked = role?.sessionRolling === true;
 				// a ready-made role keeps its rank; a copy or a new role is placed among the merchant's own
 				rank.input.value = String(role && !copy && role.ready ? role.rank : Math.min(899, Math.max(101, role?.rank ?? 600)));
 				if (role?.ready && !copy) rank.input.setAttribute('disabled', '');
@@ -351,6 +355,7 @@ export const mountRolesAdmin = ({ host, api, config }) => {
 					twoStep,
 					sessionHours: Number(sessionHours.input.value),
 					rememberDays: Number(rememberDays.input.value),
+					sessionRolling: sessionRolling.input.checked,
 					...(rank.input.hasAttribute('disabled') ? {} : { rank: Number(rank.input.value) }),
 					remember: remember.input.value,
 					signIn: signIn.input.value,

@@ -2366,6 +2366,52 @@
 				}
 			}
 		},
+		"/v1/me/two-step/recovery-codes": {
+			"post": {
+				"x-ss-auth": "browser",
+				"x-ss-feature": "two_step",
+				"security": [
+					{
+						"browserToken": []
+					},
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/SSVisitorIp"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"responses": {
+					"2XX": {
+						"description": "Success (JSON)"
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/v1/me/two-step/setup": {
 			"post": {
 				"x-ss-auth": "browser",

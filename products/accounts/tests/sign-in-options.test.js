@@ -356,3 +356,133 @@ describe('A12: sign-in from the merchant’s server', () => {
 		expect((await fromServer('/v1/sign-in/phone/code', { phone: '+923001239990' })).status).toBe(202);
 	});
 });
+
+describe('K-27: rolling sessions, new recovery codes and reset links to another host', () => {
+	/** @param {string} refreshToken */
+	const renew = (refreshToken) => env.visitor('POST', '/v1/session/refresh', { refreshToken });
+
+	it('a role’s sessions roll: each renewal moves the end to the role’s length from then; off by default', async () => {
+		await env.switchOn(ALL.filter((key) => !['terms', 'approval', 'risk_checks'].includes(key)));
+		const customer = (await env.serverCall('GET', '/v1/roles')).json.items.find((/** @type {any} */ r) => r.key === 'customer');
+		expect(customer.sessionRolling).toBe(false);
+		await signUp('roll@example.com');
+		const first = await signIn('roll@example.com');
+		const end = Date.parse(first.json.sessionExpiresAt);
+		expect(end - env.now()).toBe(24 * 3_600_000);
+		// by default the end is fixed at sign-in
+		env.advance(3_600_000);
+		const fixed = await renew(first.json.refreshToken);
+		expect(Date.parse(fixed.json.sessionExpiresAt)).toBe(end);
+		const saved = await env.serverCall('PUT', '/v1/roles/customer', { ...customer, sessionRolling: true });
+		expect(saved.json.sessionRolling).toBe(true);
+		// a session in use lives on past its first end
+		let token = fixed.json.refreshToken;
+		for (let hour = 0; hour < 30; hour += 1) {
+			env.advance(3_600_000);
+			const rolled = await renew(token);
+			expect(Date.parse(rolled.json.sessionExpiresAt) - env.now()).toBe(24 * 3_600_000);
+			token = rolled.json.refreshToken;
+		}
+		expect(env.now()).toBeGreaterThan(end);
+		// a renewal again within the grace gets the same pair and the same end
+		const once = await renew(token);
+		env.advance(10_000);
+		const twice = await renew(token);
+		expect([twice.json.refreshToken, twice.json.sessionExpiresAt]).toEqual([
+			once.json.refreshToken,
+			once.json.sessionExpiresAt,
+		]);
+		expect((await env.visitor('GET', '/v1/me', undefined, twice.json.signIn)).json.email).toBe('roll@example.com');
+		// a remembered session rolls by the remember-me days; an idle one still ends
+		const remembered = await signIn('roll@example.com', undefined, { remember: true });
+		env.advance(10 * 86_400_000);
+		const later = await renew(remembered.json.refreshToken);
+		expect(Date.parse(later.json.sessionExpiresAt) - env.now()).toBe(30 * 86_400_000);
+		env.advance(31 * 86_400_000);
+		expect(code(await renew(later.json.refreshToken))).toBe('signed_out');
+		await env.serverCall('PUT', '/v1/roles/customer', { ...customer, sessionRolling: false });
+	});
+
+	it('new recovery codes: a code from the app or a recovery code proves the step; the old codes stop working', async () => {
+		const user = (
+			await env.serverCall('POST', '/v1/users', {
+				name: 'Rae Renew',
+				email: 'rae@example.com',
+				role: 'support_staff',
+				password: 'correct horse battery',
+			})
+		).json;
+		/** @param {Record<string, unknown>} body @param {string} signInToken */
+		const replace = (body, signInToken) => env.visitor('POST', '/v1/me/two-step/recovery-codes', body, signInToken);
+		// without two-step there is nothing to replace
+		const plain = (await signIn('rae@example.com')).json.signIn;
+		expect(code(await replace({ code: '123456' }, plain))).toBe('conflict');
+		const secret = 'MFRGGZDFMZTWQ2LK';
+		await (
+			await env.store()
+		).users.update(user.id, {
+			twoStep: env.product.twoStepFromImport(env.websiteId, user.id, { secret, recoveryHashes: [] }),
+		});
+		const first = await signIn('rae@example.com');
+		const me = (
+			await env.visitor('POST', '/v1/sign-in/two-step', { challenge: first.json.challenge, code: totpCode(secret, env.now()) })
+		).json.signIn;
+		// the code the sign-in used is spent
+		expect(code(await replace({ code: totpCode(secret, env.now()) }, me))).toBe('code_invalid');
+		env.advance(60_000);
+		const fresh = await replace({ code: totpCode(secret, env.now()) }, me);
+		expect(fresh.json.recoveryCodes).toHaveLength(10);
+		expect((await userOf(user.id)).recoveryCodesLeft).toBe(10);
+		// with one of them (the phone is lost): new ones again, and the earlier ones stop working
+		const again = await replace({ recoveryCode: fresh.json.recoveryCodes[3] }, me);
+		expect(again.json.recoveryCodes).toHaveLength(10);
+		const second = await signIn('rae@example.com');
+		const old = await env.visitor('POST', '/v1/sign-in/two-step', {
+			challenge: second.json.challenge,
+			recoveryCode: fresh.json.recoveryCodes[0],
+		});
+		expect(code(old)).toBe('code_invalid');
+		const withNew = await env.visitor('POST', '/v1/sign-in/two-step', {
+			challenge: second.json.challenge,
+			recoveryCode: again.json.recoveryCodes[0],
+		});
+		expect(withNew.json.status).toBe('signed_in');
+		const logged = await activity('action=user.recovery_codes_replaced');
+		expect(logged[0]).toMatchObject({ actor: { name: 'Rae Renew', role: 'support_staff' }, label: 'Rae Renew' });
+		expect(logged[0].detail).toMatch(/^IP: [\d.]+; 10 new recovery codes$/);
+		// wrong codes count toward the lock; the route is refused while it lasts
+		for (let i = 0; i < 5; i += 1) expect(code(await replace({ recoveryCode: 'ZZZZZ-ZZZZZ' }, me))).toBe('code_invalid');
+		env.advance(60_000);
+		const locked = await replace({ code: totpCode(secret, env.now()) }, me);
+		expect(code(locked)).toBe('locked');
+		expect(code(await signIn('rae@example.com'))).toBe('locked');
+	});
+
+	it('Forgot password links may open another host of the merchant’s listed in Settings (an admin on its own host)', async () => {
+		const page = 'https://admin.shop.example.com/login/reset';
+		/** @param {string} returnTo */
+		const forgot = (returnTo) => env.visitor('POST', '/v1/password/forgot', { email: 'sid@example.com', returnTo });
+		expect(code(await forgot(page))).toBe('validation_failed');
+		await env.setting('email_password', 'resetHosts', ['Admin.Shop.Example.com']);
+		expect((await forgot(page)).status).toBe(202);
+		expect(String(env.messages().at(-1).values.link)).toMatch(
+			/^https:\/\/admin\.shop\.example\.com\/login\/reset#ss_accounts_reset=/,
+		);
+		// over https on the default port, and only the hosts listed
+		for (const url of [
+			'http://admin.shop.example.com/x',
+			'https://admin.shop.example.com:8443/x',
+			'https://other.shop.example.com/x',
+		])
+			expect(code(await forgot(url))).toBe('validation_failed');
+		const refused = await env.dashboard(
+			await env.adminSession(),
+			'PUT',
+			`/v1/dashboard/websites/${env.websiteId}/settings/email_password.resetHosts`,
+			{ value: ['not a host!'] },
+		);
+		expect(refused.status).toBe(422);
+		await env.setting('email_password', 'resetHosts', []);
+		expect(code(await forgot(page))).toBe('validation_failed');
+	});
+});
