@@ -51,7 +51,7 @@
 		"dismissFor": {
 			"type": "string",
 			"title": "A closed bar stays closed",
-			"description": "visit: for the rest of the visit. page: until the visitor opens another page.",
+			"description": "Visit: for the rest of the visit. Page: until the visitor opens another page.",
 			"default": "visit",
 			"enum": ["visit", "page"]
 		},

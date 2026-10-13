@@ -5,7 +5,7 @@
 		"detail": {
 			"type": "string",
 			"title": "Detail",
-			"description": "anonymous: visits, pages, sources, devices and countries. sessions: each visit in a browser tab also gets a random session id (kept in that tab's sessionStorage, never a cross-site id), its browser and system family and its city, for sessions, bounce, duration, journeys, live visitors, Web Vitals per page and 404 referrers. Sessions are still anonymous: no IP address, user agent or cookie is kept.",
+			"description": "Anonymous: visits, pages, sources, devices and countries. Sessions: each visit in a browser tab also gets a random session id (kept in that tab's session storage, never a cross-site id), its browser and system family and its city, for sessions, bounce, duration, journeys, live visitors, Web Vitals per page and 404 referrers. Sessions are still anonymous: no IP address, user agent or cookie is kept.",
 			"default": "anonymous",
 			"enum": ["anonymous", "sessions"]
 		},
@@ -26,7 +26,7 @@
 		"recordCountry": {
 			"type": "boolean",
 			"title": "Record the visitor's country (and city)",
-			"description": "From your host's country header, and with the sessions detail its city header; no IP address is ever kept.",
+			"description": "From your host's country header (and its city header with Detail set to Sessions); no IP address is ever kept.",
 			"default": true
 		}
 	}

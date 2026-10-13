@@ -5,7 +5,7 @@
 		"contentIds": {
 			"type": "string",
 			"title": "Item ids sent to the pixels",
-			"description": "product: each item's product id. variant: its variant id (the product id when it has none), for catalogs that list each variant on its own.",
+			"description": "Product: each item's product id. Variant: its variant id (the product id when it has none), for catalogs that list each variant on its own.",
 			"default": "product",
 			"enum": ["product", "variant"]
 		},
