@@ -359,6 +359,13 @@ beforeAll(async () => {
 	await shop.seedProduct({ id: idOf('prd', 3), slug: 'spare', price: 500, stock: 1 });
 	variants.product = String(product.variants[0]?.id);
 	variants.other = String(other.variants[0]?.id);
+	// the old shop's counts, as the catalog import gave them: finish keeps what it cannot derive
+	for (const [id, sold, rating] of /** @type {const} */ ([
+		[PRODUCT, 99, { average: 5, count: 10 }],
+		[OTHER, 50, { average: 3.5, count: 4 }],
+		[idOf('prd', 3), 7, { average: 4.5, count: 2 }],
+	]))
+		await data.collection(COLLECTIONS.products).updateOne({ websiteId: shop.websiteId, id }, { $set: { sold, rating } });
 	await data.collection(COLLECTIONS.serials).insertMany(
 		['SN-0001', 'SN-0002'].map((serial, index) => ({
 			id: idOf('ser', index + 1),
@@ -536,8 +543,12 @@ describe('import of shoppers and orders (K10)', () => {
 		});
 		expect(people.find((c) => c.id === CUS_GUEST)).toMatchObject({ orderCount: 2, rtoCount: 1 });
 		const products = await all(COLLECTIONS.products);
+		// order lines and reviews moved: both derived (the pending review counts as a review, not in the rating)
 		expect(products.find((p) => p.id === PRODUCT)).toMatchObject({ sold: 1, rating: { average: 4, count: 1 } });
-		expect(products.find((p) => p.id === OTHER)).toMatchObject({ sold: 3, rating: { average: 0, count: 0 } });
+		// order lines but no review: units derived, the given rating kept
+		expect(products.find((p) => p.id === OTHER)).toMatchObject({ sold: 3, rating: { average: 3.5, count: 4 } });
+		// neither: the given numbers kept
+		expect(products.find((p) => p.id === idOf('prd', 3))).toMatchObject({ sold: 7, rating: { average: 4.5, count: 2 } });
 		expect((await all(COLLECTIONS.serials)).map((s) => [s.serial, s.status, s.orderId, s.lineId])).toEqual([
 			['SN-0001', 'sold', DELIVERED, idOf('oln', 1)],
 			['SN-0002', 'in_stock', null, null],

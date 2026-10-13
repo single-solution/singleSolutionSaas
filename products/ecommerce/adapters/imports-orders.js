@@ -3,8 +3,8 @@
  * lines, payments and history, loyalty, reviews, returns, alerts and wishlists, each checked in import mode by
  * `core/imports-orders.js` (nothing sent, no events, alerts or activity copies, no stock, slot or points moved). Its
  * finish (after the catalog's) recomputes what the shop derives from them — customers' order and RTO counts and last
- * order, loyalty balances and lifetime points, products' units sold and rating, serials sold through order lines and
- * the order counters — in batches of at most 1,000 records with aggregations, writing only what differs, so a second
+ * order, loyalty balances and lifetime points, products' units sold and rating (where their order lines or reviews were
+ * moved too; otherwise the numbers imported stay), serials sold through order lines and the order counters — in batches of at most 1,000 records with aggregations, writing only what differs, so a second
  * run changes nothing. Its sums feed `ss-import verify`.
  * @module
  */
@@ -196,7 +196,10 @@ const finishLoyalty = async (data, now) => {
 };
 
 /**
- * Products' units sold (the units of delivered orders, as delivery counts them) and rating (approved reviews).
+ * Products' units sold and rating, each derived only from what it can be: `sold` from the order lines (the units of
+ * delivered orders, as delivery counts them) when the product has at least one order line, `rating` from the approved
+ * reviews when it has at least one review (of any status). A product with no order line or no review keeps the number
+ * it was imported with (the old shop's count, whose orders or reviews were not moved).
  * @param {WebsiteData} data
  */
 const finishProducts = async (data) => {
@@ -210,36 +213,52 @@ const finishProducts = async (data) => {
 				.toArray(),
 		async (batch) => {
 			const ids = batch.map((product) => String(product.id));
+			const delivered = { $ne: [{ $ifNull: ['$deliveredAt', null] }, null] };
+			// a product with order lines, with its delivered units
 			const sold = new Map(
 				(
 					await data
 						.collection(COLLECTIONS.orders)
 						.aggregate([
-							{ $match: { websiteId, deliveredAt: { $ne: null }, 'lines.productId': { $in: ids } } },
+							{ $match: { websiteId, 'lines.productId': { $in: ids } } },
 							{ $unwind: '$lines' },
 							{ $match: { 'lines.productId': { $in: ids } } },
-							{ $group: { _id: '$lines.productId', units: { $sum: '$lines.quantity' } } },
+							{ $group: { _id: '$lines.productId', units: { $sum: { $cond: [delivered, '$lines.quantity', 0] } } } },
 						])
 						.toArray()
 				).map((row) => [String(row._id), Number(row.units)]),
 			);
+			// a product with reviews, with its approved ones per star
 			/** @type {Map<string, Array<{ rating: number, count: number }>>} */
 			const stars = new Map();
 			for (const row of await data
 				.collection(COLLECTIONS.reviews)
 				.aggregate([
-					{ $match: { websiteId, status: 'approved', productId: { $in: ids } } },
-					{ $group: { _id: { productId: '$productId', rating: '$rating' }, count: { $sum: 1 } } },
+					{ $match: { websiteId, productId: { $in: ids } } },
+					{
+						$group: {
+							_id: { productId: '$productId', rating: '$rating' },
+							count: { $sum: { $cond: [{ $eq: ['$status', 'approved'] }, 1, 0] } },
+						},
+					},
 				])
 				.toArray()) {
 				const id = String(row._id.productId);
 				stars.set(id, [...(stars.get(id) ?? []), { rating: Number(row._id.rating), count: Number(row.count) }]);
 			}
 			for (const product of batch) {
-				const units = sold.get(String(product.id)) ?? 0;
-				const { average, count } = ratingSummary(stars.get(String(product.id)) ?? []);
-				if (product.sold === units && product.rating?.average === average && product.rating?.count === count) continue;
-				await products.updateOne({ websiteId, _id: product._id }, { $set: { sold: units, rating: { average, count } } });
+				const id = String(product.id);
+				/** @type {Record<string, unknown>} */
+				const changed = {};
+				const units = sold.get(id);
+				if (units !== undefined && product.sold !== units) changed.sold = units;
+				const reviewed = stars.get(id);
+				if (reviewed) {
+					const { average, count } = ratingSummary(reviewed);
+					if (product.rating?.average !== average || product.rating?.count !== count) changed.rating = { average, count };
+				}
+				if (Object.keys(changed).length === 0) continue;
+				await products.updateOne({ websiteId, _id: product._id }, { $set: changed });
 				updated += 1;
 			}
 		},

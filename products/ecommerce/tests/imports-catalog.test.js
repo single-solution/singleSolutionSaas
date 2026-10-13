@@ -535,7 +535,14 @@ describe('finish', () => {
 			},
 		});
 		expect((await stored('categories', ID.evening))?.path).toEqual([ID.clothes, ID.dresses, gowns]);
-		expect(await stored('products', ID.dress)).toMatchObject({ price: 4000, stockState: 'partial' });
+		// no order line or review was moved: the old shop's sold count and rating stay
+		expect(await stored('products', ID.dress)).toMatchObject({
+			price: 4000,
+			stockState: 'partial',
+			sold: 12,
+			rating: { average: 4.5, count: 2 },
+		});
+		expect(first.productsSoldRatingUpdated).toBe(0);
 		const second = await api('POST', '/v1/import/finish');
 		expect(second.catalog).toMatchObject({ categories: { changed: 0 }, products: { changed: 0 } });
 		// a re-import keeps a path whose parent is already stored
