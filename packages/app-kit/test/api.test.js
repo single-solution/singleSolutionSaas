@@ -291,6 +291,7 @@ describe('the API reference', () => {
 										kind: { enum: ['a', null] },
 										fixed: { const: 1 },
 										either: { anyOf: [{ type: 'string' }, { $ref: '#/components/schemas/Payment' }] },
+										proof: { oneOf: [{ type: 'object', properties: { size: { type: 'integer' } } }, { type: 'null' }] },
 										any: {},
 										raw: 'x',
 									},
@@ -325,22 +326,24 @@ describe('the API reference', () => {
 			'<strong>Auth:</strong> server token (your server only). <strong>Feature:</strong> <code>payment_api</code>.',
 		);
 		expect(html).toContain(
-			'<td><code>limit</code></td><td>query</td><td>integer</td><td>no</td><td>Page size. 1–100. default 25</td>',
+			'<td><code>limit</code></td><td>query</td><td>integer</td><td>no</td><td>Page size. 1–100. default 25.</td>',
 		);
 		expect(html).toContain('Optional headers: <code>SS-Actor-Id</code>.');
 		expect(html).toContain('<h4>Answer 200 (JSON)</h4><p><a href="#schema-Payment">Payment</a></p>');
 		expect(html).toContain('browser token from the website');
 		expect(html).toContain('<code>a</code> or <code>b</code>');
 		expect(html).toContain(
-			'<td><code>customer.email</code></td><td>string (email)</td><td>no</td><td>at most 320 characters</td>',
+			'<td><code>customer.email</code></td><td>string (email)</td><td>no</td><td>at most 320 characters.</td>',
 		);
-		expect(html).toContain('<td><code>lines[].sku</code></td><td>string</td><td>no</td><td>at least 1 characters</td>');
+		expect(html).toContain('<td><code>lines[].sku</code></td><td>string</td><td>no</td><td>at least 1 characters.</td>');
 		expect(html).toContain('<td><code>metadata</code></td><td>map of string</td>');
-		expect(html).toContain('<td><code>tags</code></td><td>array</td><td>no</td><td>at most 3 items. at most 2 members</td>');
+		expect(html).toContain('<td><code>tags</code></td><td>array</td><td>no</td><td>at most 3 items. at most 2 members.</td>');
 		expect(html).toContain('<td><code>kind</code></td><td>&#34;a&#34; | null</td>');
 		expect(html).toContain('<td><code>fixed</code></td><td>1</td>');
 		expect(html).toContain('<td><code>either</code></td><td>string or <a href="#schema-Payment">Payment</a></td>');
 		expect(html).toContain('<td><code>any</code></td><td>any</td>');
+		expect(html).toContain('<td><code>proof</code></td><td>object or null</td>');
+		expect(html).toContain('<td><code>proof.size</code></td><td>integer</td><td>no</td>');
 		expect(html).toContain('<td><code>raw</code></td><td>any</td>');
 		expect(html).toContain('<h4>Answer 201 (JSON)</h4><p>array of string</p>');
 		expect(html).toContain(

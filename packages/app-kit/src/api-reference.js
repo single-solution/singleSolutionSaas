@@ -81,6 +81,18 @@ const rulesOf = (schema) => {
 };
 
 /**
+ * The notes of a field or parameter as HTML: its description, then its rules (`Minor units. 1–100.`).
+ * @param {unknown} description
+ * @param {unknown} schema
+ */
+const notesOf = (description, schema) => {
+	const parts = [...(typeof description === 'string' ? [description] : []), ...rulesOf(isObject(schema) ? schema : {})]
+		.map((part) => part.trim().replace(/\.$/, ''))
+		.filter(Boolean);
+	return parts.length > 0 ? `${escape(parts.join('. '))}.` : '';
+};
+
+/**
  * The object schema a node describes inline (to list its fields), or null.
  * @param {unknown} schema
  * @returns {Node | null}
@@ -99,14 +111,15 @@ const fieldRows = (schema, prefix = '', depth = 0) => {
 	return Object.entries(/** @type {Node} */ (schema.properties)).flatMap(([name, child]) => {
 		const field = `${prefix}${name}`;
 		const node = isObject(child) ? child : {};
-		const notes = [...(typeof node.description === 'string' ? [node.description] : []), ...rulesOf(node)].map(escape);
-		const row = `<tr><td><code>${escape(field)}</code></td><td>${typeOf(node)}</td><td>${required.has(name) ? 'yes' : 'no'}</td><td>${notes.join('. ')}</td></tr>`;
+		const row = `<tr><td><code>${escape(field)}</code></td><td>${typeOf(node)}</td><td>${required.has(name) ? 'yes' : 'no'}</td><td>${notesOf(node.description, node)}</td></tr>`;
 		if (depth >= 4) return [row];
-		const nested = inlineObject(node);
+		// an object written inline (also as a branch of oneOf/anyOf, for example `object or null`) lists its fields
+		const branches = [node, ...[node.oneOf ?? node.anyOf ?? []].flat()];
+		const nested = branches.map(inlineObject).filter((object) => object !== null);
 		const items = inlineObject(node.items);
 		return [
 			row,
-			...(nested ? fieldRows(nested, `${field}.`, depth + 1) : []),
+			...nested.flatMap((object) => fieldRows(object, `${field}.`, depth + 1)),
 			...(items ? fieldRows(items, `${field}[].`, depth + 1) : []),
 		];
 	});
@@ -162,12 +175,7 @@ const operationHtml = (method, path, operation, openapi) => {
 			? `<table><thead><tr><th>Parameter</th><th>In</th><th>Type</th><th>Required</th><th>Notes</th></tr></thead><tbody>${own
 					.map(
 						(parameter) =>
-							`<tr><td><code>${escape(parameter.name)}</code></td><td>${escape(parameter.in)}</td><td>${typeOf(parameter.schema)}</td><td>${parameter.required ? 'yes' : 'no'}</td><td>${[
-								...(typeof parameter.description === 'string' ? [parameter.description] : []),
-								...rulesOf(isObject(parameter.schema) ? parameter.schema : {}),
-							]
-								.map(escape)
-								.join('. ')}</td></tr>`,
+							`<tr><td><code>${escape(parameter.name)}</code></td><td>${escape(parameter.in)}</td><td>${typeOf(parameter.schema)}</td><td>${parameter.required ? 'yes' : 'no'}</td><td>${notesOf(parameter.description, parameter.schema)}</td></tr>`,
 					)
 					.join('')}</tbody></table>`
 			: '',
