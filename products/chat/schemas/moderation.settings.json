@@ -42,7 +42,7 @@
 				"maxLength": 253,
 				"format": "hostname"
 			},
-			"description": "With the allow-list link policy."
+			"description": "With Links in AI answers set to Allow list."
 		},
 		"leakPhrases": {
 			"type": "array",

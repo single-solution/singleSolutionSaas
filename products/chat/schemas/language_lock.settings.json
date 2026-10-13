@@ -55,14 +55,14 @@
 			"type": "boolean",
 			"title": "Strict check",
 			"default": false,
-			"description": "With the whole-answer check: a reply must also match the visitor’s language by its share of marker words."
+			"description": "With the Whole check: a reply must also match the visitor’s language by its share of marker words."
 		},
 		"checkMode": {
 			"type": "string",
 			"title": "How replies are checked",
 			"default": "whole",
 			"enum": ["whole", "presence"],
-			"description": "whole: the whole answer must be in the visitor's language. presence: each part of the answer needs one marker word of the language (or a letter of its script); a language without marker words fails with as many marker words of another language as pick it, or with letters of another script."
+			"description": "Whole: the whole answer must be in the visitor's language. Presence: each part of the answer needs one marker word of the language (or a letter of its script); a language without marker words fails with as many marker words of another language as pick it, or with letters of another script."
 		},
 		"acceptLatinFor": {
 			"type": "array",

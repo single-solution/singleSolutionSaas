@@ -7,14 +7,14 @@
 			"title": "Guest chats in the inbox",
 			"default": "all",
 			"enum": ["all", "escalated", "signed_in"],
-			"description": "escalated: guest chats show only once handed to a person. signed_in: only signed-in visitors' chats show, in the list, its counts and the unread badge (staff alerts still go out)."
+			"description": "Escalated: guest chats show only once handed to a person. Signed in: only signed-in visitors' chats show, in the list, its counts and the unread badge (staff alerts still go out)."
 		},
 		"pauseNeeds": {
 			"type": "string",
 			"title": "Pausing the AI needs",
 			"default": "manage",
 			"enum": ["manage", "reply"],
-			"description": "The ticket permission inbox.manage, or inbox.reply."
+			"description": "Manage: the ticket permission inbox.manage. Reply: inbox.reply."
 		}
 	}
 }

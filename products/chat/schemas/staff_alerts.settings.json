@@ -24,7 +24,7 @@
 			"title": "New message alerts",
 			"default": "first_unanswered",
 			"enum": ["first_unanswered", "every_message"],
-			"description": "first_unanswered: once until staff reply or open the chat. every_message: on every visitor message."
+			"description": "First unanswered: once until staff reply or open the chat. Every message: on every visitor message."
 		},
 		"staffPermission": {
 			"type": "string",

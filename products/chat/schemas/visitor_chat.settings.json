@@ -35,7 +35,7 @@
 			"title": "Launcher style",
 			"default": "round",
 			"enum": ["round", "label"],
-			"description": "A round button, or a button with the launcher text.",
+			"description": "Round: a round button. Label: a button with the launcher text.",
 			"x-ui": {
 				"group": "Launcher"
 			}

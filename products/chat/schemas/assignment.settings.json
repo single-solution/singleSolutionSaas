@@ -7,7 +7,7 @@
 			"title": "Assign automatically",
 			"default": "off",
 			"enum": ["off", "first_replier"],
-			"description": "first_replier: an unassigned chat goes to the first member of staff who replies."
+			"description": "First replier: an unassigned chat goes to the first member of staff who replies."
 		}
 	}
 }

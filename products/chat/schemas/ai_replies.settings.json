@@ -27,7 +27,7 @@
 			"title": "When the AI cannot answer",
 			"default": "message_and_handoff",
 			"enum": ["message", "handoff", "message_and_handoff"],
-			"description": "After the backup provider (when on): send the unavailable message, hand the chat to a person, or both."
+			"description": "After the backup provider (when on). Message: send the unavailable message. Handoff: hand the chat to a person. Message and handoff: both."
 		},
 		"dontKnow": {
 			"type": "string",

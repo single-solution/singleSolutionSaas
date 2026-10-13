@@ -14,7 +14,7 @@
 			"title": "Ask for a rating",
 			"default": "on_resolve",
 			"enum": ["on_resolve", "after_staff", "manual"],
-			"description": "When the chat is resolved, only when a person took part, or only when staff ask."
+			"description": "On resolve: when the chat is resolved. After staff: only when a person took part. Manual: only when staff ask."
 		},
 		"askComment": {
 			"type": "boolean",
