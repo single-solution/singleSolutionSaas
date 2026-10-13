@@ -753,6 +753,8 @@
 		},
 		"/v1/admin/bundles": {
 			"get": {
+				"summary": "The bundles, newest first (Promotions admin widget)",
+				"description": "400 bad_request for a limit outside 1–100 or a broken cursor.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "bundles",
 				"x-ss-permission": "bundles.edit",
@@ -761,10 +763,63 @@
 						"ticket": []
 					}
 				],
-				"parameters": [],
+				"parameters": [
+					{
+						"name": "cursor",
+						"in": "query",
+						"required": false,
+						"description": "nextCursor of the previous page.",
+						"schema": {
+							"type": "string",
+							"description": "nextCursor of the previous page."
+						}
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 100,
+							"default": 25
+						}
+					},
+					{
+						"name": "active",
+						"in": "query",
+						"required": false,
+						"description": "Only bundles switched on (true) or off (false); another value filters nothing.",
+						"schema": {
+							"type": "string",
+							"enum": [
+								"true",
+								"false"
+							],
+							"description": "Only bundles switched on (true) or off (false); another value filters nothing."
+						}
+					},
+					{
+						"name": "q",
+						"in": "query",
+						"required": false,
+						"description": "The start of a name (any case; trimmed, at most 60 characters).",
+						"schema": {
+							"type": "string",
+							"description": "The start of a name (any case; trimmed, at most 60 characters)."
+						}
+					}
+				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/BundlePage"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -779,6 +834,8 @@
 				}
 			},
 			"post": {
+				"summary": "Create a bundle (Promotions admin widget)",
+				"description": "bundle: each complete set of items in the cart costs price (or value percent off), the most expensive units first; buy_x_get_y: for every buy units of scope, get units of getScope are value percent off, the cheapest first. A unit a bundle discounts takes no deal, so a set forms only when it saves more than those deals. Fields the type does not use are stored empty (items [], price null, buy and get 0, empty scopes). 422 validation_failed names the field (/type, /items/0/productId, /price, /value, /buy …); product, category or brand ids that do not exist (in items, scope or getScope) answer 422 at /scope/productIds, /scope/categoryIds or /scope/brandIds (code unknown). Send an Idempotency-Key so a retried request makes one bundle.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "bundles",
 				"x-ss-permission": "bundles.edit",
@@ -799,9 +856,26 @@
 						}
 					}
 				],
+				"requestBody": {
+					"required": false,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/BundleInput"
+							}
+						}
+					}
+				},
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"201": {
+						"description": "Created",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Bundle"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -818,6 +892,8 @@
 		},
 		"/v1/admin/bundles/{id}": {
 			"delete": {
+				"summary": "Delete a bundle (Promotions admin widget)",
+				"description": "404 not_found.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "bundles",
 				"x-ss-permission": "bundles.edit",
@@ -837,8 +913,8 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"204": {
+						"description": "No content"
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -853,6 +929,8 @@
 				}
 			},
 			"get": {
+				"summary": "Read a bundle (Promotions admin widget)",
+				"description": "404 not_found.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "bundles",
 				"x-ss-permission": "bundles.edit",
@@ -872,8 +950,15 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Bundle"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -888,6 +973,8 @@
 				}
 			},
 			"patch": {
+				"summary": "Change a bundle (switch it on or off with active) (Promotions admin widget)",
+				"description": "Send only the members to change: they are merged into the stored bundle and the whole is checked as on create (the same 422 errors); used is never written. A body that is not an object answers 422 validation_failed at /. 404 not_found.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "bundles",
 				"x-ss-permission": "bundles.edit",
@@ -906,9 +993,26 @@
 						}
 					}
 				],
+				"requestBody": {
+					"required": false,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/BundleChanges"
+							}
+						}
+					}
+				},
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Bundle"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -1197,6 +1301,8 @@
 		},
 		"/v1/admin/coupons": {
 			"get": {
+				"summary": "The coupons, newest first (Promotions admin widget)",
+				"description": "400 bad_request for a limit outside 1–100 or a broken cursor.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "coupons",
 				"x-ss-permission": "coupons.edit",
@@ -1205,10 +1311,63 @@
 						"ticket": []
 					}
 				],
-				"parameters": [],
+				"parameters": [
+					{
+						"name": "cursor",
+						"in": "query",
+						"required": false,
+						"description": "nextCursor of the previous page.",
+						"schema": {
+							"type": "string",
+							"description": "nextCursor of the previous page."
+						}
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 100,
+							"default": 25
+						}
+					},
+					{
+						"name": "active",
+						"in": "query",
+						"required": false,
+						"description": "Only coupons switched on (true) or off (false); another value filters nothing.",
+						"schema": {
+							"type": "string",
+							"enum": [
+								"true",
+								"false"
+							],
+							"description": "Only coupons switched on (true) or off (false); another value filters nothing."
+						}
+					},
+					{
+						"name": "q",
+						"in": "query",
+						"required": false,
+						"description": "The start of a code (any case; trimmed, at most 60 characters).",
+						"schema": {
+							"type": "string",
+							"description": "The start of a code (any case; trimmed, at most 60 characters)."
+						}
+					}
+				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/CouponPage"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -1223,6 +1382,8 @@
 				}
 			},
 			"post": {
+				"summary": "Create a coupon (Promotions admin widget)",
+				"description": "The discount comes off what the lines in its scope cost after deals and bundles (fixed amounts spread by their value), and only while minSubtotal is met; free_delivery waives the delivery fee. 422 validation_failed names the field (/code, /type, /value, /endsAt …); scope ids that do not exist answer 422 at /scope/productIds, /scope/categoryIds or /scope/brandIds (code unknown). 409 coupon_code_taken when another coupon has the code. Send an Idempotency-Key so a retried request makes one coupon.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "coupons",
 				"x-ss-permission": "coupons.edit",
@@ -1243,9 +1404,26 @@
 						}
 					}
 				],
+				"requestBody": {
+					"required": false,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/CouponInput"
+							}
+						}
+					}
+				},
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"201": {
+						"description": "Created",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Coupon"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -1262,6 +1440,8 @@
 		},
 		"/v1/admin/coupons/batch": {
 			"post": {
+				"summary": "Create a batch of coupons with random codes (Promotions admin widget)",
+				"description": "Makes count coupons, each with the fields of coupon and a code of prefix and 8 random characters. A code that exists already is skipped, so created may be less than count. 422 validation_failed at /prefix, /count or /coupon/<field> (as when creating a coupon); scope ids that do not exist answer 422 at /scope/… (code unknown). Send an Idempotency-Key so a retried request makes one batch.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "coupons",
 				"x-ss-permission": "coupons.edit",
@@ -1282,9 +1462,26 @@
 						}
 					}
 				],
+				"requestBody": {
+					"required": false,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/CouponBatchInput"
+							}
+						}
+					}
+				},
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"201": {
+						"description": "Created",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/CouponBatch"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -1301,6 +1498,8 @@
 		},
 		"/v1/admin/coupons/{id}": {
 			"delete": {
+				"summary": "Delete a coupon (Promotions admin widget)",
+				"description": "404 not_found.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "coupons",
 				"x-ss-permission": "coupons.edit",
@@ -1320,8 +1519,8 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"204": {
+						"description": "No content"
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -1336,6 +1535,8 @@
 				}
 			},
 			"get": {
+				"summary": "Read a coupon (Promotions admin widget)",
+				"description": "404 not_found.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "coupons",
 				"x-ss-permission": "coupons.edit",
@@ -1355,8 +1556,15 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Coupon"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -1371,6 +1579,8 @@
 				}
 			},
 			"patch": {
+				"summary": "Change a coupon (switch it on or off with active) (Promotions admin widget)",
+				"description": "Send only the members to change: they are merged into the stored coupon and the whole is checked as on create (the same 422 errors); used is never written. A body that is not an object answers 422 validation_failed at /. 404 not_found. 409 coupon_code_taken when another coupon has the code.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "coupons",
 				"x-ss-permission": "coupons.edit",
@@ -1389,9 +1599,26 @@
 						}
 					}
 				],
+				"requestBody": {
+					"required": false,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/CouponChanges"
+							}
+						}
+					}
+				},
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Coupon"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -1711,6 +1938,8 @@
 		},
 		"/v1/admin/deals": {
 			"get": {
+				"summary": "The deals, newest first (Promotions admin widget)",
+				"description": "400 bad_request for a limit outside 1–100 or a broken cursor.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "deals",
 				"x-ss-permission": "deals.edit",
@@ -1719,10 +1948,63 @@
 						"ticket": []
 					}
 				],
-				"parameters": [],
+				"parameters": [
+					{
+						"name": "cursor",
+						"in": "query",
+						"required": false,
+						"description": "nextCursor of the previous page.",
+						"schema": {
+							"type": "string",
+							"description": "nextCursor of the previous page."
+						}
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 100,
+							"default": 25
+						}
+					},
+					{
+						"name": "active",
+						"in": "query",
+						"required": false,
+						"description": "Only deals switched on (true) or off (false); another value filters nothing.",
+						"schema": {
+							"type": "string",
+							"enum": [
+								"true",
+								"false"
+							],
+							"description": "Only deals switched on (true) or off (false); another value filters nothing."
+						}
+					},
+					{
+						"name": "q",
+						"in": "query",
+						"required": false,
+						"description": "The start of a name (any case; trimmed, at most 60 characters).",
+						"schema": {
+							"type": "string",
+							"description": "The start of a name (any case; trimmed, at most 60 characters)."
+						}
+					}
+				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/DealPage"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -1737,6 +2019,8 @@
 				}
 			},
 			"post": {
+				"summary": "Create a deal (Promotions admin widget)",
+				"description": "A deal applies by itself to the cart lines its scope and conditions cover, while switched on, between startsAt and endsAt, on its days and hours (business time zone) and under its limit. A line takes one deal: the largest saving, then the higher priority, then the smaller id; the deals settings change that (lineChoice first, cartOffer for checkout-level deals, cartThresholdBase, rounding, pointsBlockedBy), with shopperChoice the shopper picks among a line’s deals, and with lockMinutes a cart keeps the deal price it was quoted. A unit a bundle discounts takes no deal. 422 validation_failed names the field (/name, /value, /conditions/…, /timeTo, /banner …); scope ids that do not exist answer 422 at /scope/… (code unknown). 409 slug_taken when another deal has the slug. Send an Idempotency-Key so a retried request makes one deal.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "deals",
 				"x-ss-permission": "deals.edit",
@@ -1757,9 +2041,26 @@
 						}
 					}
 				],
+				"requestBody": {
+					"required": false,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/DealInput"
+							}
+						}
+					}
+				},
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"201": {
+						"description": "Created",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Deal"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -1776,6 +2077,8 @@
 		},
 		"/v1/admin/deals/{id}": {
 			"delete": {
+				"summary": "Delete a deal (Promotions admin widget)",
+				"description": "404 not_found.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "deals",
 				"x-ss-permission": "deals.edit",
@@ -1795,8 +2098,8 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"204": {
+						"description": "No content"
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -1811,6 +2114,8 @@
 				}
 			},
 			"get": {
+				"summary": "Read a deal (Promotions admin widget)",
+				"description": "404 not_found.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "deals",
 				"x-ss-permission": "deals.edit",
@@ -1830,8 +2135,15 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Deal"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -1846,6 +2158,8 @@
 				}
 			},
 			"patch": {
+				"summary": "Change a deal (switch it on or off with active) (Promotions admin widget)",
+				"description": "Send only the members to change: they are merged into the stored deal and the whole is checked as on create (the same 422 errors); used is never written. A body that is not an object answers 422 validation_failed at /. 404 not_found. 409 slug_taken when another deal has the slug.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "deals",
 				"x-ss-permission": "deals.edit",
@@ -1864,9 +2178,26 @@
 						}
 					}
 				],
+				"requestBody": {
+					"required": false,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/DealChanges"
+							}
+						}
+					}
+				},
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Deal"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -2229,6 +2560,8 @@
 		},
 		"/v1/admin/loyalty/accounts/{userId}": {
 			"get": {
+				"summary": "A shopper’s loyalty points (Promotions admin widget)",
+				"description": "userId is a customer id (cus_…: the member’s account when the customer has an Accounts user, else the guest’s) or an Accounts user id. 404 not_found for an unknown customer id (or an id longer than 128 characters); an Accounts user without points answers an empty account. Points past their expiry are written off when read.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "loyalty",
 				"x-ss-permission": "loyalty.manage",
@@ -2248,8 +2581,15 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/LoyaltyAccount"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -2266,6 +2606,8 @@
 		},
 		"/v1/admin/loyalty/accounts/{userId}/adjust": {
 			"post": {
+				"summary": "Add or take a shopper’s points (Promotions admin widget)",
+				"description": "userId is a customer id (cus_…: the member’s account when the customer has an Accounts user, else the guest’s) or an Accounts user id. 404 not_found for an unknown customer id (or an id longer than 128 characters); an Accounts user without points answers an empty account. Positive points add a lot that expires by the loyalty settings (expiryDays, expiryUnit); negative points take that many (422 validation_failed at /points, code too_many, when the balance is lower). 422 at /points for 0 or a fraction, at /note for more than 200 characters; 409 points_changed when the account kept changing meanwhile (try again). Answers the account after the change. Send an Idempotency-Key so a retried request adjusts once.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "loyalty",
 				"x-ss-permission": "loyalty.manage",
@@ -2294,9 +2636,43 @@
 						}
 					}
 				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"points"
+								],
+								"properties": {
+									"points": {
+										"type": "integer",
+										"minimum": -1000000000,
+										"maximum": 1000000000,
+										"description": "Points to add (positive) or take (negative); not 0."
+									},
+									"note": {
+										"type": "string",
+										"maxLength": 200,
+										"default": "",
+										"description": "Kept in the history (spaces around it dropped)."
+									}
+								}
+							}
+						}
+					}
+				},
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/LoyaltyAccount"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -5169,6 +5545,8 @@
 		},
 		"/v1/bundles": {
 			"get": {
+				"summary": "The bundles, newest first",
+				"description": "400 bad_request for a limit outside 1–100 or a broken cursor.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "bundles",
 				"security": [
@@ -5177,6 +5555,51 @@
 					}
 				],
 				"parameters": [
+					{
+						"name": "cursor",
+						"in": "query",
+						"required": false,
+						"description": "nextCursor of the previous page.",
+						"schema": {
+							"type": "string",
+							"description": "nextCursor of the previous page."
+						}
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 100,
+							"default": 25
+						}
+					},
+					{
+						"name": "active",
+						"in": "query",
+						"required": false,
+						"description": "Only bundles switched on (true) or off (false); another value filters nothing.",
+						"schema": {
+							"type": "string",
+							"enum": [
+								"true",
+								"false"
+							],
+							"description": "Only bundles switched on (true) or off (false); another value filters nothing."
+						}
+					},
+					{
+						"name": "q",
+						"in": "query",
+						"required": false,
+						"description": "The start of a name (any case; trimmed, at most 60 characters).",
+						"schema": {
+							"type": "string",
+							"description": "The start of a name (any case; trimmed, at most 60 characters)."
+						}
+					},
 					{
 						"$ref": "#/components/parameters/SSActorId"
 					},
@@ -5191,8 +5614,15 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/BundlePage"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -5207,6 +5637,8 @@
 				}
 			},
 			"post": {
+				"summary": "Create a bundle",
+				"description": "bundle: each complete set of items in the cart costs price (or value percent off), the most expensive units first; buy_x_get_y: for every buy units of scope, get units of getScope are value percent off, the cheapest first. A unit a bundle discounts takes no deal, so a set forms only when it saves more than those deals. Fields the type does not use are stored empty (items [], price null, buy and get 0, empty scopes). 422 validation_failed names the field (/type, /items/0/productId, /price, /value, /buy …); product, category or brand ids that do not exist (in items, scope or getScope) answer 422 at /scope/productIds, /scope/categoryIds or /scope/brandIds (code unknown). Send an Idempotency-Key so a retried request makes one bundle.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "bundles",
 				"security": [
@@ -5238,9 +5670,26 @@
 						"$ref": "#/components/parameters/SSActorEmail"
 					}
 				],
+				"requestBody": {
+					"required": false,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/BundleInput"
+							}
+						}
+					}
+				},
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"201": {
+						"description": "Created",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Bundle"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -5257,6 +5706,8 @@
 		},
 		"/v1/bundles/{id}": {
 			"delete": {
+				"summary": "Delete a bundle",
+				"description": "404 not_found.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "bundles",
 				"security": [
@@ -5287,8 +5738,8 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"204": {
+						"description": "No content"
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -5303,6 +5754,8 @@
 				}
 			},
 			"get": {
+				"summary": "Read a bundle",
+				"description": "404 not_found.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "bundles",
 				"security": [
@@ -5333,8 +5786,15 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Bundle"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -5349,6 +5809,8 @@
 				}
 			},
 			"patch": {
+				"summary": "Change a bundle (switch it on or off with active)",
+				"description": "Send only the members to change: they are merged into the stored bundle and the whole is checked as on create (the same 422 errors); used is never written. A body that is not an object answers 422 validation_failed at /. 404 not_found.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "bundles",
 				"security": [
@@ -5378,9 +5840,26 @@
 						"$ref": "#/components/parameters/SSActorEmail"
 					}
 				],
+				"requestBody": {
+					"required": false,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/BundleChanges"
+							}
+						}
+					}
+				},
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Bundle"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -6372,6 +6851,8 @@
 		},
 		"/v1/coupons": {
 			"get": {
+				"summary": "The coupons, newest first",
+				"description": "400 bad_request for a limit outside 1–100 or a broken cursor.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "coupons",
 				"security": [
@@ -6380,6 +6861,51 @@
 					}
 				],
 				"parameters": [
+					{
+						"name": "cursor",
+						"in": "query",
+						"required": false,
+						"description": "nextCursor of the previous page.",
+						"schema": {
+							"type": "string",
+							"description": "nextCursor of the previous page."
+						}
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 100,
+							"default": 25
+						}
+					},
+					{
+						"name": "active",
+						"in": "query",
+						"required": false,
+						"description": "Only coupons switched on (true) or off (false); another value filters nothing.",
+						"schema": {
+							"type": "string",
+							"enum": [
+								"true",
+								"false"
+							],
+							"description": "Only coupons switched on (true) or off (false); another value filters nothing."
+						}
+					},
+					{
+						"name": "q",
+						"in": "query",
+						"required": false,
+						"description": "The start of a code (any case; trimmed, at most 60 characters).",
+						"schema": {
+							"type": "string",
+							"description": "The start of a code (any case; trimmed, at most 60 characters)."
+						}
+					},
 					{
 						"$ref": "#/components/parameters/SSActorId"
 					},
@@ -6394,8 +6920,15 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/CouponPage"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -6410,6 +6943,8 @@
 				}
 			},
 			"post": {
+				"summary": "Create a coupon",
+				"description": "The discount comes off what the lines in its scope cost after deals and bundles (fixed amounts spread by their value), and only while minSubtotal is met; free_delivery waives the delivery fee. 422 validation_failed names the field (/code, /type, /value, /endsAt …); scope ids that do not exist answer 422 at /scope/productIds, /scope/categoryIds or /scope/brandIds (code unknown). 409 coupon_code_taken when another coupon has the code. Send an Idempotency-Key so a retried request makes one coupon.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "coupons",
 				"security": [
@@ -6441,9 +6976,26 @@
 						"$ref": "#/components/parameters/SSActorEmail"
 					}
 				],
+				"requestBody": {
+					"required": false,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/CouponInput"
+							}
+						}
+					}
+				},
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"201": {
+						"description": "Created",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Coupon"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -6460,6 +7012,8 @@
 		},
 		"/v1/coupons/batch": {
 			"post": {
+				"summary": "Create a batch of coupons with random codes",
+				"description": "Makes count coupons, each with the fields of coupon and a code of prefix and 8 random characters. A code that exists already is skipped, so created may be less than count. 422 validation_failed at /prefix, /count or /coupon/<field> (as when creating a coupon); scope ids that do not exist answer 422 at /scope/… (code unknown). Send an Idempotency-Key so a retried request makes one batch.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "coupons",
 				"security": [
@@ -6491,9 +7045,26 @@
 						"$ref": "#/components/parameters/SSActorEmail"
 					}
 				],
+				"requestBody": {
+					"required": false,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/CouponBatchInput"
+							}
+						}
+					}
+				},
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"201": {
+						"description": "Created",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/CouponBatch"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -6510,6 +7081,8 @@
 		},
 		"/v1/coupons/{id}": {
 			"delete": {
+				"summary": "Delete a coupon",
+				"description": "404 not_found.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "coupons",
 				"security": [
@@ -6540,8 +7113,8 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"204": {
+						"description": "No content"
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -6556,6 +7129,8 @@
 				}
 			},
 			"get": {
+				"summary": "Read a coupon",
+				"description": "404 not_found.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "coupons",
 				"security": [
@@ -6586,8 +7161,15 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Coupon"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -6602,6 +7184,8 @@
 				}
 			},
 			"patch": {
+				"summary": "Change a coupon (switch it on or off with active)",
+				"description": "Send only the members to change: they are merged into the stored coupon and the whole is checked as on create (the same 422 errors); used is never written. A body that is not an object answers 422 validation_failed at /. 404 not_found. 409 coupon_code_taken when another coupon has the code.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "coupons",
 				"security": [
@@ -6631,9 +7215,26 @@
 						"$ref": "#/components/parameters/SSActorEmail"
 					}
 				],
+				"requestBody": {
+					"required": false,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/CouponChanges"
+							}
+						}
+					}
+				},
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Coupon"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -7355,6 +7956,8 @@
 		},
 		"/v1/deals": {
 			"get": {
+				"summary": "The deals, newest first",
+				"description": "400 bad_request for a limit outside 1–100 or a broken cursor.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "deals",
 				"security": [
@@ -7363,6 +7966,51 @@
 					}
 				],
 				"parameters": [
+					{
+						"name": "cursor",
+						"in": "query",
+						"required": false,
+						"description": "nextCursor of the previous page.",
+						"schema": {
+							"type": "string",
+							"description": "nextCursor of the previous page."
+						}
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 100,
+							"default": 25
+						}
+					},
+					{
+						"name": "active",
+						"in": "query",
+						"required": false,
+						"description": "Only deals switched on (true) or off (false); another value filters nothing.",
+						"schema": {
+							"type": "string",
+							"enum": [
+								"true",
+								"false"
+							],
+							"description": "Only deals switched on (true) or off (false); another value filters nothing."
+						}
+					},
+					{
+						"name": "q",
+						"in": "query",
+						"required": false,
+						"description": "The start of a name (any case; trimmed, at most 60 characters).",
+						"schema": {
+							"type": "string",
+							"description": "The start of a name (any case; trimmed, at most 60 characters)."
+						}
+					},
 					{
 						"$ref": "#/components/parameters/SSActorId"
 					},
@@ -7377,8 +8025,15 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/DealPage"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -7393,6 +8048,8 @@
 				}
 			},
 			"post": {
+				"summary": "Create a deal",
+				"description": "A deal applies by itself to the cart lines its scope and conditions cover, while switched on, between startsAt and endsAt, on its days and hours (business time zone) and under its limit. A line takes one deal: the largest saving, then the higher priority, then the smaller id; the deals settings change that (lineChoice first, cartOffer for checkout-level deals, cartThresholdBase, rounding, pointsBlockedBy), with shopperChoice the shopper picks among a line’s deals, and with lockMinutes a cart keeps the deal price it was quoted. A unit a bundle discounts takes no deal. 422 validation_failed names the field (/name, /value, /conditions/…, /timeTo, /banner …); scope ids that do not exist answer 422 at /scope/… (code unknown). 409 slug_taken when another deal has the slug. Send an Idempotency-Key so a retried request makes one deal.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "deals",
 				"security": [
@@ -7424,9 +8081,26 @@
 						"$ref": "#/components/parameters/SSActorEmail"
 					}
 				],
+				"requestBody": {
+					"required": false,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/DealInput"
+							}
+						}
+					}
+				},
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"201": {
+						"description": "Created",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Deal"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -7443,6 +8117,8 @@
 		},
 		"/v1/deals/{id}": {
 			"delete": {
+				"summary": "Delete a deal",
+				"description": "404 not_found.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "deals",
 				"security": [
@@ -7473,8 +8149,8 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"204": {
+						"description": "No content"
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -7489,6 +8165,8 @@
 				}
 			},
 			"get": {
+				"summary": "Read a deal",
+				"description": "404 not_found.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "deals",
 				"security": [
@@ -7519,8 +8197,15 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Deal"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -7535,6 +8220,8 @@
 				}
 			},
 			"patch": {
+				"summary": "Change a deal (switch it on or off with active)",
+				"description": "Send only the members to change: they are merged into the stored deal and the whole is checked as on create (the same 422 errors); used is never written. A body that is not an object answers 422 validation_failed at /. 404 not_found. 409 slug_taken when another deal has the slug.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "deals",
 				"security": [
@@ -7564,9 +8251,26 @@
 						"$ref": "#/components/parameters/SSActorEmail"
 					}
 				],
+				"requestBody": {
+					"required": false,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/DealChanges"
+							}
+						}
+					}
+				},
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Deal"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -8872,6 +9576,8 @@
 		},
 		"/v1/loyalty/accounts/{userId}": {
 			"get": {
+				"summary": "A shopper’s loyalty points",
+				"description": "userId is a customer id (cus_…: the member’s account when the customer has an Accounts user, else the guest’s) or an Accounts user id. 404 not_found for an unknown customer id (or an id longer than 128 characters); an Accounts user without points answers an empty account. Points past their expiry are written off when read.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "loyalty",
 				"security": [
@@ -8902,8 +9608,15 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/LoyaltyAccount"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -8920,6 +9633,8 @@
 		},
 		"/v1/loyalty/accounts/{userId}/adjust": {
 			"post": {
+				"summary": "Add or take a shopper’s points",
+				"description": "userId is a customer id (cus_…: the member’s account when the customer has an Accounts user, else the guest’s) or an Accounts user id. 404 not_found for an unknown customer id (or an id longer than 128 characters); an Accounts user without points answers an empty account. Positive points add a lot that expires by the loyalty settings (expiryDays, expiryUnit); negative points take that many (422 validation_failed at /points, code too_many, when the balance is lower). 422 at /points for 0 or a fraction, at /note for more than 200 characters; 409 points_changed when the account kept changing meanwhile (try again). Answers the account after the change. Send an Idempotency-Key so a retried request adjusts once.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "loyalty",
 				"security": [
@@ -8959,9 +9674,43 @@
 						"$ref": "#/components/parameters/SSActorEmail"
 					}
 				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"points"
+								],
+								"properties": {
+									"points": {
+										"type": "integer",
+										"minimum": -1000000000,
+										"maximum": 1000000000,
+										"description": "Points to add (positive) or take (negative); not 0."
+									},
+									"note": {
+										"type": "string",
+										"maxLength": 200,
+										"default": "",
+										"description": "Kept in the history (spaces around it dropped)."
+									}
+								}
+							}
+						}
+					}
+				},
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/LoyaltyAccount"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -13012,6 +13761,8 @@
 		},
 		"/v1/shop/deals": {
 			"get": {
+				"summary": "The deals on now, for shoppers",
+				"description": "The deals switched on, within their dates and under their limit, in the shoppers’ order: sort, then the higher priority, then the soonest ending. Their weekdays and hours (days, timeFrom, timeTo) are not applied here: show them. 422 validation_failed at /limit; 403 feature_off while the deals feature is off.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "deals",
 				"security": [
@@ -13023,6 +13774,17 @@
 					}
 				],
 				"parameters": [
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 50,
+							"default": 10
+						}
+					},
 					{
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
@@ -13040,8 +13802,28 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"items"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"items": {
+											"type": "array",
+											"maxItems": 50,
+											"items": {
+												"$ref": "#/components/schemas/ShopDeal"
+											}
+										}
+									}
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -13058,6 +13840,8 @@
 		},
 		"/v1/shop/deals/{ref}": {
 			"get": {
+				"summary": "A deal on now, by id or slug (its page)",
+				"description": "404 not_found when no deal on now (switched on, within its dates, under its limit) has this id or slug; 403 feature_off while the deals feature is off.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "deals",
 				"security": [
@@ -13094,8 +13878,15 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ShopDeal"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -13112,6 +13903,8 @@
 		},
 		"/v1/shop/loyalty": {
 			"get": {
+				"summary": "The signed-in shopper’s points",
+				"description": "403 sign_in_required without a valid SS-Sign-In. With the loyalty setting expiryRule current, earned points expire by today’s expiry setting. 422 validation_failed at /limit or /offset; 403 feature_off while the loyalty feature is off.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "loyalty",
 				"security": [
@@ -13123,6 +13916,42 @@
 					}
 				],
 				"parameters": [
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"description": "History entries.",
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 50,
+							"default": 50,
+							"description": "History entries."
+						}
+					},
+					{
+						"name": "offset",
+						"in": "query",
+						"required": false,
+						"description": "History entries to skip.",
+						"schema": {
+							"type": "integer",
+							"minimum": 0,
+							"maximum": 10000,
+							"default": 0,
+							"description": "History entries to skip."
+						}
+					},
+					{
+						"name": "SS-Sign-In",
+						"in": "header",
+						"required": true,
+						"description": "The shopper's Accounts sign-in (as the Accounts widgets give it).",
+						"schema": {
+							"type": "string",
+							"description": "The shopper's Accounts sign-in (as the Accounts widgets give it)."
+						}
+					},
 					{
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
@@ -13140,8 +13969,15 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ShopLoyalty"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -13862,6 +14698,8 @@
 		},
 		"/v1/shop/products/{id}/quote": {
 			"get": {
+				"summary": "What one unit of a product costs after deals",
+				"description": "The variant asked for, or the lowest-priced active one, with the best live item deal on one unit as the cart prices it: the largest saving, or the first in the shoppers’ order with the deals setting lineChoice first; within its days and hours (business time zone); rounded to whole units by Format and the deals setting rounding. Not included: deals off the cart total (target cart), free delivery, deals whose conditions need more than one unit, a cart total above the price or a payment method, bundles, coupons, points and role prices (the cart quote has them all). 404 not_found for a product that is not active or a variant that is not an active one of it; 403 feature_off while the deals feature is off.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "deals",
 				"security": [
@@ -13882,6 +14720,16 @@
 						}
 					},
 					{
+						"name": "variantId",
+						"in": "query",
+						"required": false,
+						"description": "A variant of the product (default: its lowest-priced active one).",
+						"schema": {
+							"type": "string",
+							"description": "A variant of the product (default: its lowest-priced active one)."
+						}
+					},
+					{
 						"$ref": "#/components/parameters/SSVisitorIp"
 					},
 					{
@@ -13898,8 +14746,15 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ProductQuote"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -15285,6 +16140,395 @@
 					}
 				}
 			},
+			"Bundle": {
+				"type": "object",
+				"description": "A bundle or buy X get Y.",
+				"required": [
+					"id",
+					"name",
+					"type",
+					"items",
+					"price",
+					"buy",
+					"get",
+					"scope",
+					"getScope",
+					"value",
+					"startsAt",
+					"endsAt",
+					"limit",
+					"used",
+					"active",
+					"createdAt",
+					"updatedAt"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"id": {
+						"type": "string",
+						"pattern": "^bnd_"
+					},
+					"name": {
+						"type": "string",
+						"minLength": 1,
+						"maxLength": 120
+					},
+					"type": {
+						"type": "string",
+						"enum": [
+							"bundle",
+							"buy_x_get_y"
+						],
+						"description": "bundle: these products together for a price or a percent off; buy_x_get_y: buy some, get some off."
+					},
+					"items": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/BundleItem"
+						},
+						"description": "bundle: the products of a set ([] for buy_x_get_y)."
+					},
+					"price": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 1,
+						"description": "bundle: what a set costs, minor units (never more than its value); null: value percent off instead."
+					},
+					"buy": {
+						"type": "integer",
+						"minimum": 0,
+						"maximum": 100,
+						"description": "buy_x_get_y: units of scope bought (0 for bundle)."
+					},
+					"get": {
+						"type": "integer",
+						"minimum": 0,
+						"maximum": 100,
+						"description": "buy_x_get_y: units of getScope discounted (0 for bundle)."
+					},
+					"scope": {
+						"$ref": "#/components/schemas/PromotionScope",
+						"description": "buy_x_get_y: what is bought (empty for bundle)."
+					},
+					"getScope": {
+						"$ref": "#/components/schemas/PromotionScope",
+						"description": "buy_x_get_y: what is discounted (empty for bundle)."
+					},
+					"value": {
+						"type": "number",
+						"minimum": 0,
+						"maximum": 100,
+						"description": "The percent off: of a set without a price (0 with a price), or of each discounted unit (100 = free)."
+					},
+					"startsAt": {
+						"type": [
+							"string",
+							"null"
+						],
+						"format": "date-time",
+						"description": "From when it applies (inclusive); null: from now on."
+					},
+					"endsAt": {
+						"type": [
+							"string",
+							"null"
+						],
+						"format": "date-time",
+						"description": "Until when it applies (exclusive); null: no end."
+					},
+					"limit": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 1,
+						"description": "Most uses in all (orders placed with it); null: no limit."
+					},
+					"used": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "Uses so far: counted when an order is placed with it, given back when that order is cancelled. Never written by these routes."
+					},
+					"active": {
+						"type": "boolean",
+						"description": "false: switched off (it never applies)."
+					},
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"updatedAt": {
+						"type": "string",
+						"format": "date-time"
+					}
+				}
+			},
+			"BundleChanges": {
+				"type": "object",
+				"description": "The bundle’s members to change (each optional).",
+				"properties": {
+					"name": {
+						"type": "string",
+						"minLength": 1,
+						"maxLength": 120
+					},
+					"type": {
+						"type": "string",
+						"enum": [
+							"bundle",
+							"buy_x_get_y"
+						]
+					},
+					"items": {
+						"type": "array",
+						"minItems": 1,
+						"maxItems": 20,
+						"description": "bundle (required): each product once with its quantity. Errors at /items/<n>/…; unknown products at /scope/productIds.",
+						"items": {
+							"type": "object",
+							"required": [
+								"productId"
+							],
+							"properties": {
+								"productId": {
+									"type": "string",
+									"minLength": 1,
+									"maxLength": 64
+								},
+								"quantity": {
+									"type": "integer",
+									"minimum": 1,
+									"maximum": 100,
+									"default": 1
+								}
+							}
+						}
+					},
+					"price": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 1,
+						"maximum": 1000000000000,
+						"description": "bundle: what a set costs, minor units; null or left out: value percent off."
+					},
+					"value": {
+						"type": "number",
+						"description": "The percent off, above 0 and at most 100: bundle without a price (required then); buy_x_get_y: off each discounted unit (default 100 = free)."
+					},
+					"buy": {
+						"type": "integer",
+						"minimum": 1,
+						"maximum": 100,
+						"description": "buy_x_get_y (required)."
+					},
+					"get": {
+						"type": "integer",
+						"minimum": 1,
+						"maximum": 100,
+						"description": "buy_x_get_y (required)."
+					},
+					"getScope": {
+						"$ref": "#/components/schemas/PromotionScopeInput",
+						"description": "buy_x_get_y: the discounted units’ products (null: any)."
+					},
+					"scope": {
+						"$ref": "#/components/schemas/PromotionScopeInput",
+						"description": "buy_x_get_y: the bought units’ products (null: any). Ignored for bundle."
+					},
+					"startsAt": {
+						"type": [
+							"string",
+							"null"
+						],
+						"format": "date-time",
+						"description": "ISO 8601, or null (from now on). Inclusive."
+					},
+					"endsAt": {
+						"type": [
+							"string",
+							"null"
+						],
+						"format": "date-time",
+						"description": "ISO 8601, or null (no end); after startsAt (422 at /endsAt). Exclusive."
+					},
+					"limit": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 1,
+						"maximum": 1000000000,
+						"default": null,
+						"description": "Most uses in all; null: no limit."
+					},
+					"active": {
+						"type": "boolean",
+						"default": true,
+						"description": "false switches it off."
+					}
+				}
+			},
+			"BundleInput": {
+				"type": "object",
+				"description": "A bundle to create.",
+				"required": [
+					"name",
+					"type"
+				],
+				"properties": {
+					"name": {
+						"type": "string",
+						"minLength": 1,
+						"maxLength": 120
+					},
+					"type": {
+						"type": "string",
+						"enum": [
+							"bundle",
+							"buy_x_get_y"
+						]
+					},
+					"items": {
+						"type": "array",
+						"minItems": 1,
+						"maxItems": 20,
+						"description": "bundle (required): each product once with its quantity. Errors at /items/<n>/…; unknown products at /scope/productIds.",
+						"items": {
+							"type": "object",
+							"required": [
+								"productId"
+							],
+							"properties": {
+								"productId": {
+									"type": "string",
+									"minLength": 1,
+									"maxLength": 64
+								},
+								"quantity": {
+									"type": "integer",
+									"minimum": 1,
+									"maximum": 100,
+									"default": 1
+								}
+							}
+						}
+					},
+					"price": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 1,
+						"maximum": 1000000000000,
+						"description": "bundle: what a set costs, minor units; null or left out: value percent off."
+					},
+					"value": {
+						"type": "number",
+						"description": "The percent off, above 0 and at most 100: bundle without a price (required then); buy_x_get_y: off each discounted unit (default 100 = free)."
+					},
+					"buy": {
+						"type": "integer",
+						"minimum": 1,
+						"maximum": 100,
+						"description": "buy_x_get_y (required)."
+					},
+					"get": {
+						"type": "integer",
+						"minimum": 1,
+						"maximum": 100,
+						"description": "buy_x_get_y (required)."
+					},
+					"getScope": {
+						"$ref": "#/components/schemas/PromotionScopeInput",
+						"description": "buy_x_get_y: the discounted units’ products (null: any)."
+					},
+					"scope": {
+						"$ref": "#/components/schemas/PromotionScopeInput",
+						"description": "buy_x_get_y: the bought units’ products (null: any). Ignored for bundle."
+					},
+					"startsAt": {
+						"type": [
+							"string",
+							"null"
+						],
+						"format": "date-time",
+						"description": "ISO 8601, or null (from now on). Inclusive."
+					},
+					"endsAt": {
+						"type": [
+							"string",
+							"null"
+						],
+						"format": "date-time",
+						"description": "ISO 8601, or null (no end); after startsAt (422 at /endsAt). Exclusive."
+					},
+					"limit": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 1,
+						"maximum": 1000000000,
+						"default": null,
+						"description": "Most uses in all; null: no limit."
+					},
+					"active": {
+						"type": "boolean",
+						"default": true,
+						"description": "false switches it off."
+					}
+				}
+			},
+			"BundleItem": {
+				"type": "object",
+				"required": [
+					"productId",
+					"quantity"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"productId": {
+						"type": "string"
+					},
+					"quantity": {
+						"type": "integer",
+						"minimum": 1,
+						"maximum": 100
+					}
+				}
+			},
+			"BundlePage": {
+				"type": "object",
+				"description": "One page of bundles, newest first.",
+				"required": [
+					"items",
+					"nextCursor",
+					"hasMore"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"items": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/Bundle"
+						}
+					},
+					"nextCursor": {
+						"type": [
+							"string",
+							"null"
+						],
+						"description": "Pass it as cursor for the next page (null: the last page)."
+					},
+					"hasMore": {
+						"type": "boolean"
+					}
+				}
+			},
 			"Connection": {
 				"type": "object",
 				"description": "A connection as screens see it: secrets never come back.",
@@ -15397,6 +16641,1451 @@
 					}
 				}
 			},
+			"Coupon": {
+				"type": "object",
+				"description": "A coupon: a code a shopper enters at checkout. It takes off what the lines in its scope cost after deals and bundles.",
+				"required": [
+					"id",
+					"code",
+					"type",
+					"value",
+					"maxDiscount",
+					"minSubtotal",
+					"scope",
+					"startsAt",
+					"endsAt",
+					"limit",
+					"used",
+					"perCustomer",
+					"firstOrderOnly",
+					"active",
+					"createdAt",
+					"updatedAt"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"id": {
+						"type": "string",
+						"pattern": "^cpn_"
+					},
+					"code": {
+						"type": "string",
+						"pattern": "^[A-Z0-9_-]{3,40}$",
+						"description": "Upper case, unique per website; shoppers type it in any case."
+					},
+					"type": {
+						"type": "string",
+						"enum": [
+							"percent",
+							"fixed",
+							"free_delivery"
+						],
+						"description": "percent: value percent off; fixed: value off (minor units); free_delivery: no delivery fee."
+					},
+					"value": {
+						"type": "number",
+						"minimum": 0,
+						"description": "percent: the percent (above 0, at most 100, decimals allowed); fixed: minor units; free_delivery: 0."
+					},
+					"maxDiscount": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 1,
+						"description": "The most a percent coupon takes off, minor units (null: no cap; always null for other types)."
+					},
+					"minSubtotal": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "The least the cart’s goods must come to after deals and bundles, minor units (0: none)."
+					},
+					"scope": {
+						"$ref": "#/components/schemas/PromotionScope"
+					},
+					"startsAt": {
+						"type": [
+							"string",
+							"null"
+						],
+						"format": "date-time",
+						"description": "From when it applies (inclusive); null: from now on."
+					},
+					"endsAt": {
+						"type": [
+							"string",
+							"null"
+						],
+						"format": "date-time",
+						"description": "Until when it applies (exclusive); null: no end."
+					},
+					"limit": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 1,
+						"description": "Most uses in all (orders placed with it); null: no limit."
+					},
+					"used": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "Uses so far: counted when an order is placed with it, given back when that order is cancelled. Never written by these routes."
+					},
+					"perCustomer": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 1,
+						"description": "Most uses per customer (null: no limit)."
+					},
+					"firstOrderOnly": {
+						"type": "boolean",
+						"description": "Only for a shopper with no orders yet."
+					},
+					"active": {
+						"type": "boolean",
+						"description": "false: switched off (it never applies)."
+					},
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"updatedAt": {
+						"type": "string",
+						"format": "date-time"
+					}
+				}
+			},
+			"CouponBatch": {
+				"type": "object",
+				"description": "The coupons a batch made.",
+				"required": [
+					"created",
+					"codes"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"created": {
+						"type": "integer",
+						"minimum": 0,
+						"maximum": 500,
+						"description": "Coupons made."
+					},
+					"codes": {
+						"type": "array",
+						"maxItems": 500,
+						"items": {
+							"type": "string",
+							"pattern": "^[A-Z0-9_-]{8,38}$"
+						},
+						"description": "Their codes: the prefix and 8 random characters (A–Z and 2–9, without I, O, 0 and 1)."
+					}
+				}
+			},
+			"CouponBatchInput": {
+				"type": "object",
+				"description": "A batch of coupons with random codes.",
+				"required": [
+					"count",
+					"coupon"
+				],
+				"properties": {
+					"prefix": {
+						"type": "string",
+						"maxLength": 30,
+						"default": "",
+						"description": "Up to 30 letters, digits, - and _ before the random part (kept in upper case)."
+					},
+					"count": {
+						"type": "integer",
+						"minimum": 1,
+						"maximum": 500,
+						"description": "How many coupons to make."
+					},
+					"coupon": {
+						"type": "object",
+						"description": "The fields every coupon of the batch gets (as when creating one, without code).",
+						"required": [
+							"type"
+						],
+						"properties": {
+							"type": {
+								"type": "string",
+								"enum": [
+									"percent",
+									"fixed",
+									"free_delivery"
+								]
+							},
+							"value": {
+								"type": "number",
+								"description": "percent: the percent, above 0 and at most 100 (decimals allowed); fixed: minor units from 1 to 1000000000000; left out for free_delivery (stored as 0)."
+							},
+							"maxDiscount": {
+								"type": [
+									"integer",
+									"null"
+								],
+								"minimum": 1,
+								"maximum": 1000000000000,
+								"default": null,
+								"description": "percent only: the most it takes off, minor units (null: no cap). Ignored for other types."
+							},
+							"minSubtotal": {
+								"type": "integer",
+								"minimum": 0,
+								"maximum": 1000000000000,
+								"default": 0,
+								"description": "The least the cart’s goods must come to after deals and bundles, minor units."
+							},
+							"scope": {
+								"$ref": "#/components/schemas/PromotionScopeInput"
+							},
+							"startsAt": {
+								"type": [
+									"string",
+									"null"
+								],
+								"format": "date-time",
+								"description": "ISO 8601, or null (from now on). Inclusive."
+							},
+							"endsAt": {
+								"type": [
+									"string",
+									"null"
+								],
+								"format": "date-time",
+								"description": "ISO 8601, or null (no end); after startsAt (422 at /endsAt). Exclusive."
+							},
+							"limit": {
+								"type": [
+									"integer",
+									"null"
+								],
+								"minimum": 1,
+								"maximum": 1000000000,
+								"default": null,
+								"description": "Most uses in all; null: no limit."
+							},
+							"active": {
+								"type": "boolean",
+								"default": true,
+								"description": "false switches it off."
+							},
+							"perCustomer": {
+								"type": [
+									"integer",
+									"null"
+								],
+								"minimum": 1,
+								"maximum": 1000000000,
+								"default": null,
+								"description": "Most uses per customer."
+							},
+							"firstOrderOnly": {
+								"type": "boolean",
+								"default": false,
+								"description": "Only for a shopper with no orders yet."
+							}
+						}
+					}
+				}
+			},
+			"CouponChanges": {
+				"type": "object",
+				"description": "The coupon’s members to change (each optional).",
+				"properties": {
+					"code": {
+						"type": "string",
+						"description": "3 to 40 letters, digits, - and _ (spaces around it are dropped; kept in upper case). Unique: 409 coupon_code_taken."
+					},
+					"type": {
+						"type": "string",
+						"enum": [
+							"percent",
+							"fixed",
+							"free_delivery"
+						]
+					},
+					"value": {
+						"type": "number",
+						"description": "percent: the percent, above 0 and at most 100 (decimals allowed); fixed: minor units from 1 to 1000000000000; left out for free_delivery (stored as 0)."
+					},
+					"maxDiscount": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 1,
+						"maximum": 1000000000000,
+						"default": null,
+						"description": "percent only: the most it takes off, minor units (null: no cap). Ignored for other types."
+					},
+					"minSubtotal": {
+						"type": "integer",
+						"minimum": 0,
+						"maximum": 1000000000000,
+						"default": 0,
+						"description": "The least the cart’s goods must come to after deals and bundles, minor units."
+					},
+					"scope": {
+						"$ref": "#/components/schemas/PromotionScopeInput"
+					},
+					"startsAt": {
+						"type": [
+							"string",
+							"null"
+						],
+						"format": "date-time",
+						"description": "ISO 8601, or null (from now on). Inclusive."
+					},
+					"endsAt": {
+						"type": [
+							"string",
+							"null"
+						],
+						"format": "date-time",
+						"description": "ISO 8601, or null (no end); after startsAt (422 at /endsAt). Exclusive."
+					},
+					"limit": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 1,
+						"maximum": 1000000000,
+						"default": null,
+						"description": "Most uses in all; null: no limit."
+					},
+					"active": {
+						"type": "boolean",
+						"default": true,
+						"description": "false switches it off."
+					},
+					"perCustomer": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 1,
+						"maximum": 1000000000,
+						"default": null,
+						"description": "Most uses per customer."
+					},
+					"firstOrderOnly": {
+						"type": "boolean",
+						"default": false,
+						"description": "Only for a shopper with no orders yet."
+					}
+				}
+			},
+			"CouponInput": {
+				"type": "object",
+				"description": "A coupon to create.",
+				"required": [
+					"code",
+					"type"
+				],
+				"properties": {
+					"code": {
+						"type": "string",
+						"description": "3 to 40 letters, digits, - and _ (spaces around it are dropped; kept in upper case). Unique: 409 coupon_code_taken."
+					},
+					"type": {
+						"type": "string",
+						"enum": [
+							"percent",
+							"fixed",
+							"free_delivery"
+						]
+					},
+					"value": {
+						"type": "number",
+						"description": "percent: the percent, above 0 and at most 100 (decimals allowed); fixed: minor units from 1 to 1000000000000; left out for free_delivery (stored as 0)."
+					},
+					"maxDiscount": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 1,
+						"maximum": 1000000000000,
+						"default": null,
+						"description": "percent only: the most it takes off, minor units (null: no cap). Ignored for other types."
+					},
+					"minSubtotal": {
+						"type": "integer",
+						"minimum": 0,
+						"maximum": 1000000000000,
+						"default": 0,
+						"description": "The least the cart’s goods must come to after deals and bundles, minor units."
+					},
+					"scope": {
+						"$ref": "#/components/schemas/PromotionScopeInput"
+					},
+					"startsAt": {
+						"type": [
+							"string",
+							"null"
+						],
+						"format": "date-time",
+						"description": "ISO 8601, or null (from now on). Inclusive."
+					},
+					"endsAt": {
+						"type": [
+							"string",
+							"null"
+						],
+						"format": "date-time",
+						"description": "ISO 8601, or null (no end); after startsAt (422 at /endsAt). Exclusive."
+					},
+					"limit": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 1,
+						"maximum": 1000000000,
+						"default": null,
+						"description": "Most uses in all; null: no limit."
+					},
+					"active": {
+						"type": "boolean",
+						"default": true,
+						"description": "false switches it off."
+					},
+					"perCustomer": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 1,
+						"maximum": 1000000000,
+						"default": null,
+						"description": "Most uses per customer."
+					},
+					"firstOrderOnly": {
+						"type": "boolean",
+						"default": false,
+						"description": "Only for a shopper with no orders yet."
+					}
+				}
+			},
+			"CouponPage": {
+				"type": "object",
+				"description": "One page of coupons, newest first.",
+				"required": [
+					"items",
+					"nextCursor",
+					"hasMore"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"items": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/Coupon"
+						}
+					},
+					"nextCursor": {
+						"type": [
+							"string",
+							"null"
+						],
+						"description": "Pass it as cursor for the next page (null: the last page)."
+					},
+					"hasMore": {
+						"type": "boolean"
+					}
+				}
+			},
+			"Deal": {
+				"type": "object",
+				"description": "An automatic deal (no code), as staff see it.",
+				"required": [
+					"id",
+					"name",
+					"description",
+					"type",
+					"target",
+					"value",
+					"scope",
+					"conditions",
+					"days",
+					"timeFrom",
+					"timeTo",
+					"allowPoints",
+					"slug",
+					"badgeLabel",
+					"discountLabel",
+					"color",
+					"banner",
+					"content",
+					"seo",
+					"sort",
+					"startsAt",
+					"endsAt",
+					"limit",
+					"used",
+					"priority",
+					"active",
+					"createdAt",
+					"updatedAt"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"id": {
+						"type": "string",
+						"pattern": "^deal_"
+					},
+					"name": {
+						"type": "string",
+						"minLength": 1,
+						"maxLength": 120
+					},
+					"description": {
+						"type": "string",
+						"maxLength": 500
+					},
+					"type": {
+						"type": "string",
+						"enum": [
+							"percent",
+							"fixed",
+							"free_delivery"
+						],
+						"description": "percent or fixed off, or free_delivery (no delivery fee while it covers a line of the cart)."
+					},
+					"target": {
+						"type": "string",
+						"enum": [
+							"items",
+							"cart"
+						],
+						"description": "items: off each unit of the lines it covers; cart: off those lines together (a percent of their amount, or one fixed amount spread over them). Always items for free_delivery."
+					},
+					"value": {
+						"type": "number",
+						"minimum": 0,
+						"description": "percent: the percent (above 0, at most 100, decimals allowed); fixed: minor units; free_delivery: 0."
+					},
+					"scope": {
+						"$ref": "#/components/schemas/PromotionScope"
+					},
+					"conditions": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/DealConditions"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"description": "null: none."
+					},
+					"days": {
+						"type": "array",
+						"items": {
+							"type": "integer",
+							"minimum": 0,
+							"maximum": 6
+						},
+						"description": "Weekdays it applies on, 0 = Sunday ([]: every day), in the business time zone."
+					},
+					"timeFrom": {
+						"type": "string",
+						"pattern": "^(([01][0-9]|2[0-3]):[0-5][0-9])?$",
+						"description": "HH:MM it starts each day ('': midnight), business time zone."
+					},
+					"timeTo": {
+						"type": "string",
+						"pattern": "^(([01][0-9]|2[0-3]):[0-5][0-9])?$",
+						"description": "HH:MM it stops each day ('': midnight); before timeFrom it runs past midnight."
+					},
+					"allowPoints": {
+						"type": "boolean",
+						"description": "false: points cannot be redeemed on an order it applies to (the deals setting pointsBlockedBy)."
+					},
+					"slug": {
+						"type": "string",
+						"maxLength": 80,
+						"pattern": "^([a-z0-9]+(-[a-z0-9]+)*)?$",
+						"description": "The deal page’s address part, unique per website ('': none); shoppers open a deal by id or slug."
+					},
+					"badgeLabel": {
+						"type": "string",
+						"maxLength": 40,
+						"description": "A short label for product cards ('': none)."
+					},
+					"discountLabel": {
+						"type": "string",
+						"maxLength": 80,
+						"description": "How the saving reads, for example \"10% off\" ('': none)."
+					},
+					"color": {
+						"type": "string",
+						"maxLength": 40,
+						"description": "A CSS colour ('': none)."
+					},
+					"banner": {
+						"oneOf": [
+							{
+								"type": "object",
+								"description": "The banner photo.",
+								"required": [
+									"key",
+									"type",
+									"size",
+									"alt"
+								],
+								"additionalProperties": false,
+								"properties": {
+									"key": {
+										"type": "string",
+										"description": "The storage key."
+									},
+									"type": {
+										"type": "string",
+										"description": "Content type ('' when not given)."
+									},
+									"size": {
+										"type": "integer",
+										"minimum": 0,
+										"description": "Bytes (0 when not given)."
+									},
+									"alt": {
+										"type": "string",
+										"maxLength": 200
+									}
+								}
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
+					"content": {
+						"type": "string",
+						"maxLength": 5000,
+						"description": "The deal page’s text."
+					},
+					"seo": {
+						"$ref": "#/components/schemas/DealSeo"
+					},
+					"sort": {
+						"type": "integer",
+						"minimum": -100000,
+						"maximum": 100000,
+						"description": "Shoppers’ order: lower first (then the higher priority, then the soonest ending)."
+					},
+					"startsAt": {
+						"type": [
+							"string",
+							"null"
+						],
+						"format": "date-time",
+						"description": "From when it applies (inclusive); null: from now on."
+					},
+					"endsAt": {
+						"type": [
+							"string",
+							"null"
+						],
+						"format": "date-time",
+						"description": "Until when it applies (exclusive); null: no end."
+					},
+					"limit": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 1,
+						"description": "Most uses in all (orders placed with it); null: no limit."
+					},
+					"used": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "Uses so far: counted when an order is placed with it, given back when that order is cancelled. Never written by these routes."
+					},
+					"priority": {
+						"type": "integer",
+						"minimum": -1000,
+						"maximum": 1000,
+						"description": "Between deals saving the same, the higher priority wins."
+					},
+					"active": {
+						"type": "boolean",
+						"description": "false: switched off (it never applies)."
+					},
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"updatedAt": {
+						"type": "string",
+						"format": "date-time"
+					}
+				}
+			},
+			"DealChanges": {
+				"type": "object",
+				"description": "The deal’s members to change (each optional).",
+				"properties": {
+					"name": {
+						"type": "string",
+						"minLength": 1,
+						"maxLength": 120,
+						"description": "Spaces around it are dropped."
+					},
+					"description": {
+						"type": "string",
+						"maxLength": 500,
+						"default": ""
+					},
+					"type": {
+						"type": "string",
+						"enum": [
+							"percent",
+							"fixed",
+							"free_delivery"
+						]
+					},
+					"target": {
+						"type": "string",
+						"enum": [
+							"items",
+							"cart"
+						],
+						"default": "items",
+						"description": "Ignored for free_delivery."
+					},
+					"value": {
+						"type": "number",
+						"description": "percent: the percent, above 0 and at most 100 (decimals allowed); fixed: minor units from 1 to 1000000000000; left out for free_delivery."
+					},
+					"priority": {
+						"type": "integer",
+						"minimum": -1000,
+						"maximum": 1000,
+						"default": 0
+					},
+					"conditions": {
+						"$ref": "#/components/schemas/DealConditionsInput"
+					},
+					"allowPoints": {
+						"type": "boolean",
+						"default": true,
+						"description": "false: no points redeemed on an order it applies to."
+					},
+					"days": {
+						"type": "array",
+						"maxItems": 7,
+						"items": {
+							"type": "integer",
+							"minimum": 0,
+							"maximum": 6
+						},
+						"default": [],
+						"description": "Weekdays, 0 = Sunday ([]: every day)."
+					},
+					"timeFrom": {
+						"type": "string",
+						"pattern": "^(([01][0-9]|2[0-3]):[0-5][0-9])?$",
+						"default": "",
+						"description": "HH:MM (24 hours) or ''."
+					},
+					"timeTo": {
+						"type": "string",
+						"pattern": "^(([01][0-9]|2[0-3]):[0-5][0-9])?$",
+						"default": "",
+						"description": "HH:MM or ''; not the same as timeFrom."
+					},
+					"slug": {
+						"type": "string",
+						"maxLength": 80,
+						"pattern": "^([a-z0-9]+(-[a-z0-9]+)*)?$",
+						"default": "",
+						"description": "Lowercase letters, digits and hyphens, or ''. Unique: 409 slug_taken."
+					},
+					"badgeLabel": {
+						"type": "string",
+						"maxLength": 40,
+						"default": ""
+					},
+					"discountLabel": {
+						"type": "string",
+						"maxLength": 80,
+						"default": ""
+					},
+					"color": {
+						"type": "string",
+						"maxLength": 40,
+						"default": "",
+						"description": "A CSS colour (a name, #rgb, #rrggbb, rgb(…) …)."
+					},
+					"content": {
+						"type": "string",
+						"maxLength": 5000,
+						"default": ""
+					},
+					"sort": {
+						"type": "integer",
+						"minimum": -100000,
+						"maximum": 100000,
+						"default": 0
+					},
+					"banner": {
+						"type": [
+							"object",
+							"null"
+						],
+						"description": "A photo uploaded for deals (key under ecommerce/deals/), or null. When editing, the key the deal already holds stays valid.",
+						"required": [
+							"key"
+						],
+						"properties": {
+							"key": {
+								"type": "string",
+								"maxLength": 500
+							},
+							"alt": {
+								"type": "string",
+								"maxLength": 200,
+								"default": ""
+							},
+							"type": {
+								"type": "string",
+								"description": "Content type (first 60 characters kept)."
+							},
+							"size": {
+								"type": "integer",
+								"description": "Bytes."
+							}
+						}
+					},
+					"seo": {
+						"type": "object",
+						"properties": {
+							"title": {
+								"type": "string",
+								"maxLength": 120,
+								"default": ""
+							},
+							"description": {
+								"type": "string",
+								"maxLength": 320,
+								"default": ""
+							}
+						}
+					},
+					"scope": {
+						"$ref": "#/components/schemas/PromotionScopeInput"
+					},
+					"startsAt": {
+						"type": [
+							"string",
+							"null"
+						],
+						"format": "date-time",
+						"description": "ISO 8601, or null (from now on). Inclusive."
+					},
+					"endsAt": {
+						"type": [
+							"string",
+							"null"
+						],
+						"format": "date-time",
+						"description": "ISO 8601, or null (no end); after startsAt (422 at /endsAt). Exclusive."
+					},
+					"limit": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 1,
+						"maximum": 1000000000,
+						"default": null,
+						"description": "Most uses in all; null: no limit."
+					},
+					"active": {
+						"type": "boolean",
+						"default": true,
+						"description": "false switches it off."
+					}
+				}
+			},
+			"DealConditions": {
+				"type": "object",
+				"description": "Which lines a deal covers besides its scope: rules and groups joined by match, and always all of the price range, minimum quantity, cart total and payment methods.",
+				"required": [
+					"match",
+					"rules",
+					"groups",
+					"priceRange",
+					"minQuantity",
+					"cartTotal",
+					"paymentMethods"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"match": {
+						"type": "string",
+						"enum": [
+							"all",
+							"any"
+						],
+						"description": "How rules and groups join."
+					},
+					"rules": {
+						"type": "array",
+						"maxItems": 20,
+						"items": {
+							"$ref": "#/components/schemas/DealRule"
+						}
+					},
+					"groups": {
+						"type": "array",
+						"maxItems": 10,
+						"items": {
+							"type": "object",
+							"required": [
+								"match",
+								"rules"
+							],
+							"additionalProperties": false,
+							"properties": {
+								"match": {
+									"type": "string",
+									"enum": [
+										"all",
+										"any"
+									]
+								},
+								"rules": {
+									"type": "array",
+									"maxItems": 20,
+									"items": {
+										"$ref": "#/components/schemas/DealRule"
+									}
+								}
+							}
+						}
+					},
+					"priceRange": {
+						"type": [
+							"object",
+							"null"
+						],
+						"description": "The variant’s unit price, minor units (null: any).",
+						"required": [
+							"min",
+							"max"
+						],
+						"additionalProperties": false,
+						"properties": {
+							"min": {
+								"type": [
+									"integer",
+									"null"
+								],
+								"minimum": 0
+							},
+							"max": {
+								"type": [
+									"integer",
+									"null"
+								],
+								"minimum": 0
+							}
+						}
+					},
+					"minQuantity": {
+						"type": "integer",
+						"minimum": 0,
+						"maximum": 99,
+						"description": "Least units of the line (0: none)."
+					},
+					"cartTotal": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "Least the cart’s goods come to, minor units (0: none)."
+					},
+					"paymentMethods": {
+						"type": "array",
+						"items": {
+							"type": "string",
+							"enum": [
+								"cod",
+								"online",
+								"bank_transfer",
+								"pickup"
+							]
+						},
+						"description": "Only when the order is paid one of these ways ([]: any)."
+					}
+				}
+			},
+			"DealConditionsInput": {
+				"type": [
+					"object",
+					"null"
+				],
+				"description": "Conditions besides the scope (null: none). Errors are at /conditions/….",
+				"properties": {
+					"match": {
+						"type": "string",
+						"enum": [
+							"all",
+							"any"
+						],
+						"default": "all"
+					},
+					"rules": {
+						"type": "array",
+						"maxItems": 20,
+						"items": {
+							"type": "object",
+							"required": [
+								"field",
+								"values"
+							],
+							"properties": {
+								"field": {
+									"type": "string",
+									"enum": [
+										"products",
+										"categories",
+										"brands",
+										"grades",
+										"attribute"
+									]
+								},
+								"op": {
+									"type": "string",
+									"enum": [
+										"in",
+										"not_in"
+									],
+									"default": "in"
+								},
+								"values": {
+									"type": "array",
+									"minItems": 1,
+									"maxItems": 200,
+									"items": {
+										"type": "string",
+										"minLength": 1,
+										"maxLength": 120
+									},
+									"description": "Product, category or brand ids, grades or attribute values (texts)."
+								},
+								"attributeId": {
+									"type": "string",
+									"pattern": "^[A-Za-z0-9_-]{1,64}$",
+									"description": "Required with field attribute."
+								}
+							}
+						}
+					},
+					"groups": {
+						"type": "array",
+						"maxItems": 10,
+						"items": {
+							"type": "object",
+							"properties": {
+								"match": {
+									"type": "string",
+									"enum": [
+										"all",
+										"any"
+									],
+									"default": "all"
+								},
+								"rules": {
+									"type": "array",
+									"maxItems": 20,
+									"items": {
+										"type": "object",
+										"required": [
+											"field",
+											"values"
+										],
+										"properties": {
+											"field": {
+												"type": "string",
+												"enum": [
+													"products",
+													"categories",
+													"brands",
+													"grades",
+													"attribute"
+												]
+											},
+											"op": {
+												"type": "string",
+												"enum": [
+													"in",
+													"not_in"
+												],
+												"default": "in"
+											},
+											"values": {
+												"type": "array",
+												"minItems": 1,
+												"maxItems": 200,
+												"items": {
+													"type": "string",
+													"minLength": 1,
+													"maxLength": 120
+												},
+												"description": "Product, category or brand ids, grades or attribute values (texts)."
+											},
+											"attributeId": {
+												"type": "string",
+												"pattern": "^[A-Za-z0-9_-]{1,64}$",
+												"description": "Required with field attribute."
+											}
+										}
+									}
+								}
+							}
+						}
+					},
+					"priceRange": {
+						"type": [
+							"object",
+							"null"
+						],
+						"description": "The variant’s unit price, minor units; max at least min.",
+						"properties": {
+							"min": {
+								"type": [
+									"integer",
+									"null"
+								],
+								"minimum": 0,
+								"maximum": 1000000000000
+							},
+							"max": {
+								"type": [
+									"integer",
+									"null"
+								],
+								"minimum": 0,
+								"maximum": 1000000000000
+							}
+						}
+					},
+					"minQuantity": {
+						"type": "integer",
+						"minimum": 0,
+						"maximum": 99,
+						"default": 0
+					},
+					"cartTotal": {
+						"type": "integer",
+						"minimum": 0,
+						"maximum": 1000000000000,
+						"default": 0,
+						"description": "Minor units."
+					},
+					"paymentMethods": {
+						"type": "array",
+						"items": {
+							"type": "string",
+							"enum": [
+								"cod",
+								"online",
+								"bank_transfer",
+								"pickup"
+							]
+						},
+						"default": []
+					}
+				}
+			},
+			"DealInput": {
+				"type": "object",
+				"description": "A deal to create.",
+				"required": [
+					"name",
+					"type"
+				],
+				"properties": {
+					"name": {
+						"type": "string",
+						"minLength": 1,
+						"maxLength": 120,
+						"description": "Spaces around it are dropped."
+					},
+					"description": {
+						"type": "string",
+						"maxLength": 500,
+						"default": ""
+					},
+					"type": {
+						"type": "string",
+						"enum": [
+							"percent",
+							"fixed",
+							"free_delivery"
+						]
+					},
+					"target": {
+						"type": "string",
+						"enum": [
+							"items",
+							"cart"
+						],
+						"default": "items",
+						"description": "Ignored for free_delivery."
+					},
+					"value": {
+						"type": "number",
+						"description": "percent: the percent, above 0 and at most 100 (decimals allowed); fixed: minor units from 1 to 1000000000000; left out for free_delivery."
+					},
+					"priority": {
+						"type": "integer",
+						"minimum": -1000,
+						"maximum": 1000,
+						"default": 0
+					},
+					"conditions": {
+						"$ref": "#/components/schemas/DealConditionsInput"
+					},
+					"allowPoints": {
+						"type": "boolean",
+						"default": true,
+						"description": "false: no points redeemed on an order it applies to."
+					},
+					"days": {
+						"type": "array",
+						"maxItems": 7,
+						"items": {
+							"type": "integer",
+							"minimum": 0,
+							"maximum": 6
+						},
+						"default": [],
+						"description": "Weekdays, 0 = Sunday ([]: every day)."
+					},
+					"timeFrom": {
+						"type": "string",
+						"pattern": "^(([01][0-9]|2[0-3]):[0-5][0-9])?$",
+						"default": "",
+						"description": "HH:MM (24 hours) or ''."
+					},
+					"timeTo": {
+						"type": "string",
+						"pattern": "^(([01][0-9]|2[0-3]):[0-5][0-9])?$",
+						"default": "",
+						"description": "HH:MM or ''; not the same as timeFrom."
+					},
+					"slug": {
+						"type": "string",
+						"maxLength": 80,
+						"pattern": "^([a-z0-9]+(-[a-z0-9]+)*)?$",
+						"default": "",
+						"description": "Lowercase letters, digits and hyphens, or ''. Unique: 409 slug_taken."
+					},
+					"badgeLabel": {
+						"type": "string",
+						"maxLength": 40,
+						"default": ""
+					},
+					"discountLabel": {
+						"type": "string",
+						"maxLength": 80,
+						"default": ""
+					},
+					"color": {
+						"type": "string",
+						"maxLength": 40,
+						"default": "",
+						"description": "A CSS colour (a name, #rgb, #rrggbb, rgb(…) …)."
+					},
+					"content": {
+						"type": "string",
+						"maxLength": 5000,
+						"default": ""
+					},
+					"sort": {
+						"type": "integer",
+						"minimum": -100000,
+						"maximum": 100000,
+						"default": 0
+					},
+					"banner": {
+						"type": [
+							"object",
+							"null"
+						],
+						"description": "A photo uploaded for deals (key under ecommerce/deals/), or null. When editing, the key the deal already holds stays valid.",
+						"required": [
+							"key"
+						],
+						"properties": {
+							"key": {
+								"type": "string",
+								"maxLength": 500
+							},
+							"alt": {
+								"type": "string",
+								"maxLength": 200,
+								"default": ""
+							},
+							"type": {
+								"type": "string",
+								"description": "Content type (first 60 characters kept)."
+							},
+							"size": {
+								"type": "integer",
+								"description": "Bytes."
+							}
+						}
+					},
+					"seo": {
+						"type": "object",
+						"properties": {
+							"title": {
+								"type": "string",
+								"maxLength": 120,
+								"default": ""
+							},
+							"description": {
+								"type": "string",
+								"maxLength": 320,
+								"default": ""
+							}
+						}
+					},
+					"scope": {
+						"$ref": "#/components/schemas/PromotionScopeInput"
+					},
+					"startsAt": {
+						"type": [
+							"string",
+							"null"
+						],
+						"format": "date-time",
+						"description": "ISO 8601, or null (from now on). Inclusive."
+					},
+					"endsAt": {
+						"type": [
+							"string",
+							"null"
+						],
+						"format": "date-time",
+						"description": "ISO 8601, or null (no end); after startsAt (422 at /endsAt). Exclusive."
+					},
+					"limit": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 1,
+						"maximum": 1000000000,
+						"default": null,
+						"description": "Most uses in all; null: no limit."
+					},
+					"active": {
+						"type": "boolean",
+						"default": true,
+						"description": "false switches it off."
+					}
+				}
+			},
+			"DealPage": {
+				"type": "object",
+				"description": "One page of deals, newest first.",
+				"required": [
+					"items",
+					"nextCursor",
+					"hasMore"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"items": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/Deal"
+						}
+					},
+					"nextCursor": {
+						"type": [
+							"string",
+							"null"
+						],
+						"description": "Pass it as cursor for the next page (null: the last page)."
+					},
+					"hasMore": {
+						"type": "boolean"
+					}
+				}
+			},
+			"DealRule": {
+				"type": "object",
+				"description": "A rule: the line’s product, categories (with their parents), brand, grade or an attribute’s values are (in) or are not (not_in) among values.",
+				"required": [
+					"field",
+					"op",
+					"values"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"field": {
+						"type": "string",
+						"enum": [
+							"products",
+							"categories",
+							"brands",
+							"grades",
+							"attribute"
+						]
+					},
+					"op": {
+						"type": "string",
+						"enum": [
+							"in",
+							"not_in"
+						]
+					},
+					"values": {
+						"type": "array",
+						"minItems": 1,
+						"maxItems": 200,
+						"items": {
+							"type": "string",
+							"minLength": 1,
+							"maxLength": 120
+						}
+					},
+					"attributeId": {
+						"type": "string",
+						"description": "The attribute (field attribute only)."
+					}
+				}
+			},
+			"DealSeo": {
+				"type": "object",
+				"required": [
+					"title",
+					"description"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"title": {
+						"type": "string",
+						"maxLength": 120
+					},
+					"description": {
+						"type": "string",
+						"maxLength": 320
+					}
+				}
+			},
 			"Format": {
 				"type": "object",
 				"required": [
@@ -15477,6 +18166,179 @@
 					}
 				}
 			},
+			"LoyaltyAccount": {
+				"type": "object",
+				"description": "A shopper’s loyalty account.",
+				"required": [
+					"userId",
+					"customerId",
+					"balance",
+					"value",
+					"currency",
+					"lots",
+					"history",
+					"expiringSoon"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"userId": {
+						"type": [
+							"string",
+							"null"
+						],
+						"description": "The Accounts user (null: a guest’s account)."
+					},
+					"customerId": {
+						"type": [
+							"string",
+							"null"
+						],
+						"description": "The customer (cus_…) when known."
+					},
+					"balance": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "Points."
+					},
+					"value": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "What the balance is worth at checkout, minor units."
+					},
+					"currency": {
+						"type": "string",
+						"minLength": 1,
+						"maxLength": 3,
+						"description": "The shop's currency (the catalog setting currency, an ISO 4217 code such as USD or PKR)."
+					},
+					"lots": {
+						"type": "array",
+						"description": "The points as earned, each with what is left and its expiry (spent lots beyond the newest 50 are dropped).",
+						"items": {
+							"$ref": "#/components/schemas/LoyaltyLot"
+						}
+					},
+					"history": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/LoyaltyHistoryEntry"
+						},
+						"description": "Newest first (the newest 200 kept)."
+					},
+					"expiringSoon": {
+						"type": "array",
+						"description": "Points that expire within 30 days, by expiry, soonest first.",
+						"items": {
+							"type": "object",
+							"required": [
+								"points",
+								"expiresAt"
+							],
+							"additionalProperties": false,
+							"properties": {
+								"points": {
+									"type": "integer",
+									"minimum": 1
+								},
+								"expiresAt": {
+									"type": "string",
+									"format": "date-time"
+								}
+							}
+						}
+					}
+				}
+			},
+			"LoyaltyHistoryEntry": {
+				"type": "object",
+				"description": "A change of a points balance.",
+				"required": [
+					"at",
+					"kind",
+					"points",
+					"orderId",
+					"note"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"at": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"kind": {
+						"type": "string",
+						"enum": [
+							"earn",
+							"redeem",
+							"refund",
+							"expire",
+							"adjust",
+							"reverse"
+						],
+						"description": "earn: from a delivered order; redeem: spent on an order; refund: given back (an order cancelled); expire: written off; adjust: staff; reverse: taken back (an order returned)."
+					},
+					"points": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "How many (the kind says whether added or taken)."
+					},
+					"orderId": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"note": {
+						"type": "string"
+					}
+				}
+			},
+			"LoyaltyLot": {
+				"type": "object",
+				"required": [
+					"id",
+					"points",
+					"left",
+					"earnedAt",
+					"expiresAt",
+					"orderId"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"points": {
+						"type": "integer",
+						"minimum": 1,
+						"description": "Points earned."
+					},
+					"left": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "Points not yet spent or expired."
+					},
+					"earnedAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"expiresAt": {
+						"type": [
+							"string",
+							"null"
+						],
+						"format": "date-time",
+						"description": "null: never."
+					},
+					"orderId": {
+						"type": [
+							"string",
+							"null"
+						],
+						"description": "The order that earned it (null: staff or a give-back)."
+					}
+				}
+			},
 			"Problem": {
 				"type": "object",
 				"description": "An error (RFC 9457, application/problem+json). The last segment of type is a stable code, for example validation_failed.",
@@ -15538,6 +18400,454 @@
 								},
 								"code": {
 									"type": "string"
+								}
+							}
+						}
+					}
+				}
+			},
+			"ProductQuote": {
+				"type": "object",
+				"description": "What one unit of a product costs after deals.",
+				"required": [
+					"productId",
+					"variantId",
+					"price",
+					"priceAfterDeals",
+					"savings",
+					"currency",
+					"deals"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"productId": {
+						"type": "string"
+					},
+					"variantId": {
+						"type": "string",
+						"description": "The variant priced."
+					},
+					"price": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "Its price, minor units."
+					},
+					"priceAfterDeals": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "One unit after the best item deal, minor units."
+					},
+					"savings": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "price − priceAfterDeals."
+					},
+					"currency": {
+						"type": "string",
+						"minLength": 1,
+						"maxLength": 3,
+						"description": "The shop's currency (the catalog setting currency, an ISO 4217 code such as USD or PKR)."
+					},
+					"deals": {
+						"type": "array",
+						"maxItems": 1,
+						"items": {
+							"type": "object",
+							"required": [
+								"id",
+								"name"
+							],
+							"additionalProperties": false,
+							"properties": {
+								"id": {
+									"type": "string"
+								},
+								"name": {
+									"type": "string"
+								}
+							}
+						},
+						"description": "The deal applied ([]: none)."
+					}
+				}
+			},
+			"PromotionScope": {
+				"type": "object",
+				"description": "Which products an offer covers: the listed products, categories and brands (any of them); all three empty: every product.",
+				"required": [
+					"productIds",
+					"categoryIds",
+					"brandIds"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"productIds": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"categoryIds": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						},
+						"description": "A category also covers the products of its subcategories."
+					},
+					"brandIds": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					}
+				}
+			},
+			"PromotionScopeInput": {
+				"type": [
+					"object",
+					"null"
+				],
+				"description": "Which products the offer covers: any listed product, category (with its subcategories) or brand; null, left out or all lists empty: every product. Ids that do not exist answer 422 validation_failed at /scope/productIds, /scope/categoryIds or /scope/brandIds (code unknown).",
+				"properties": {
+					"productIds": {
+						"type": "array",
+						"maxItems": 200,
+						"items": {
+							"type": "string",
+							"minLength": 1,
+							"maxLength": 64
+						},
+						"description": "Product ids (each must exist)."
+					},
+					"categoryIds": {
+						"type": "array",
+						"maxItems": 200,
+						"items": {
+							"type": "string",
+							"minLength": 1,
+							"maxLength": 64
+						},
+						"description": "Category ids (each must exist)."
+					},
+					"brandIds": {
+						"type": "array",
+						"maxItems": 200,
+						"items": {
+							"type": "string",
+							"minLength": 1,
+							"maxLength": 64
+						},
+						"description": "Brand ids (each must exist)."
+					}
+				}
+			},
+			"ShopDeal": {
+				"type": "object",
+				"description": "A live deal as shoppers see it (no use counts, priority or rule details).",
+				"required": [
+					"id",
+					"name",
+					"description",
+					"type",
+					"target",
+					"value",
+					"slug",
+					"badgeLabel",
+					"discountLabel",
+					"color",
+					"banner",
+					"content",
+					"seo",
+					"sort",
+					"minQuantity",
+					"cartTotal",
+					"paymentMethods",
+					"days",
+					"timeFrom",
+					"timeTo",
+					"allowPoints",
+					"startsAt",
+					"endsAt",
+					"scope"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"name": {
+						"type": "string"
+					},
+					"description": {
+						"type": "string"
+					},
+					"type": {
+						"type": "string",
+						"enum": [
+							"percent",
+							"fixed",
+							"free_delivery"
+						],
+						"description": "percent or fixed off, or free_delivery (no delivery fee while it covers a line of the cart)."
+					},
+					"target": {
+						"type": "string",
+						"enum": [
+							"items",
+							"cart"
+						],
+						"description": "items: off each unit of the lines it covers; cart: off those lines together (a percent of their amount, or one fixed amount spread over them). Always items for free_delivery."
+					},
+					"value": {
+						"type": "number",
+						"minimum": 0,
+						"description": "percent: the percent (above 0, at most 100, decimals allowed); fixed: minor units; free_delivery: 0."
+					},
+					"slug": {
+						"type": "string",
+						"maxLength": 80,
+						"pattern": "^([a-z0-9]+(-[a-z0-9]+)*)?$",
+						"description": "The deal page’s address part, unique per website ('': none); shoppers open a deal by id or slug."
+					},
+					"badgeLabel": {
+						"type": "string",
+						"maxLength": 40,
+						"description": "A short label for product cards ('': none)."
+					},
+					"discountLabel": {
+						"type": "string",
+						"maxLength": 80,
+						"description": "How the saving reads, for example \"10% off\" ('': none)."
+					},
+					"color": {
+						"type": "string",
+						"maxLength": 40,
+						"description": "A CSS colour ('': none)."
+					},
+					"banner": {
+						"oneOf": [
+							{
+								"type": "object",
+								"required": [
+									"url",
+									"alt"
+								],
+								"additionalProperties": false,
+								"properties": {
+									"url": {
+										"type": [
+											"string",
+											"null"
+										],
+										"description": "The photo’s address (null when storage is not connected)."
+									},
+									"alt": {
+										"type": "string"
+									}
+								}
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
+					"content": {
+						"type": "string",
+						"description": "The deal page’s text."
+					},
+					"seo": {
+						"$ref": "#/components/schemas/DealSeo"
+					},
+					"sort": {
+						"type": "integer"
+					},
+					"minQuantity": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "Least units of a line (0: none)."
+					},
+					"cartTotal": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "Least the cart’s goods come to, minor units (0: none)."
+					},
+					"paymentMethods": {
+						"type": "array",
+						"items": {
+							"type": "string",
+							"enum": [
+								"cod",
+								"online",
+								"bank_transfer",
+								"pickup"
+							]
+						},
+						"description": "Only with these payment methods ([]: any)."
+					},
+					"days": {
+						"type": "array",
+						"items": {
+							"type": "integer",
+							"minimum": 0,
+							"maximum": 6
+						},
+						"description": "Weekdays it applies on, 0 = Sunday ([]: every day), in the business time zone."
+					},
+					"timeFrom": {
+						"type": "string",
+						"pattern": "^(([01][0-9]|2[0-3]):[0-5][0-9])?$",
+						"description": "HH:MM it starts each day ('': midnight), business time zone."
+					},
+					"timeTo": {
+						"type": "string",
+						"pattern": "^(([01][0-9]|2[0-3]):[0-5][0-9])?$",
+						"description": "HH:MM it stops each day ('': midnight); before timeFrom it runs past midnight."
+					},
+					"allowPoints": {
+						"type": "boolean",
+						"description": "false: points cannot be redeemed on an order it applies to."
+					},
+					"startsAt": {
+						"type": [
+							"string",
+							"null"
+						],
+						"format": "date-time",
+						"description": "From when it applies (inclusive); null: from now on."
+					},
+					"endsAt": {
+						"type": [
+							"string",
+							"null"
+						],
+						"format": "date-time",
+						"description": "Until when it applies (exclusive); null: no end."
+					},
+					"scope": {
+						"type": "object",
+						"required": [
+							"everything",
+							"productIds",
+							"categoryIds",
+							"brandIds"
+						],
+						"additionalProperties": false,
+						"properties": {
+							"everything": {
+								"type": "boolean",
+								"description": "It covers every product (the lists are empty)."
+							},
+							"productIds": {
+								"type": "array",
+								"items": {
+									"type": "string"
+								}
+							},
+							"categoryIds": {
+								"type": "array",
+								"items": {
+									"type": "string"
+								}
+							},
+							"brandIds": {
+								"type": "array",
+								"items": {
+									"type": "string"
+								}
+							}
+						}
+					}
+				}
+			},
+			"ShopLoyalty": {
+				"type": "object",
+				"description": "The signed-in shopper’s points.",
+				"required": [
+					"balance",
+					"value",
+					"currency",
+					"pointValue",
+					"minRedeem",
+					"maxPercent",
+					"lifetimeEarned",
+					"pending",
+					"history",
+					"hasMore",
+					"expiringSoon"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"balance": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "Points."
+					},
+					"value": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "What the balance is worth at checkout, minor units."
+					},
+					"currency": {
+						"type": "string",
+						"minLength": 1,
+						"maxLength": 3,
+						"description": "The shop's currency (the catalog setting currency, an ISO 4217 code such as USD or PKR)."
+					},
+					"pointValue": {
+						"type": "integer",
+						"minimum": 1,
+						"description": "What one point is worth, minor units."
+					},
+					"minRedeem": {
+						"type": "integer",
+						"minimum": 1,
+						"description": "Fewest points redeemed at once."
+					},
+					"maxPercent": {
+						"type": "number",
+						"minimum": 0,
+						"maximum": 100,
+						"description": "Most of an order paid with points."
+					},
+					"lifetimeEarned": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "Points ever earned."
+					},
+					"pending": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "Points the shopper’s orders not yet delivered will earn."
+					},
+					"history": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/LoyaltyHistoryEntry"
+						},
+						"description": "Newest first, from offset."
+					},
+					"hasMore": {
+						"type": "boolean",
+						"description": "More history after this part."
+					},
+					"expiringSoon": {
+						"type": "array",
+						"description": "Points that expire within 30 days, by expiry, soonest first.",
+						"items": {
+							"type": "object",
+							"required": [
+								"points",
+								"expiresAt"
+							],
+							"additionalProperties": false,
+							"properties": {
+								"points": {
+									"type": "integer",
+									"minimum": 1
+								},
+								"expiresAt": {
+									"type": "string",
+									"format": "date-time"
 								}
 							}
 						}

@@ -5,10 +5,13 @@
  * Notifications, Payments, an S3 bucket, a courier API, an AI provider and the website itself (business.json). Every
  * call to them is recorded and answered in process (no real network call is ever made). `seedProduct` writes catalog
  * records straight into the merchant database in the shape of `core/model.js`, so each part can be tested on its own.
+ * Every answer `call()` sees is checked against `schemas/api.json` and the kit's own routes: a test fails when an
+ * answer does not fit its description (feeds, sitemaps, llms.txt and CSV files are text: only their status is checked).
  * @module
  */
 import { createId } from '@ss/contracts';
-import { createAccountsDouble, createFakePortal, createMemoryStore, createNetwork } from '@ss/app-kit/testing';
+import { apiChecker, createAccountsDouble, createFakePortal, createMemoryStore, createNetwork } from '@ss/app-kit/testing';
+import apiJson from '../schemas/api.json' with { type: 'json' };
 import { createProductInstance, manifest } from '../adapters/product.js';
 import { createRoutes } from '../server/routes.js';
 import { COLLECTIONS } from '../core/model.js';
@@ -26,6 +29,9 @@ export const ORIGIN = `https://${DOMAIN}`;
 const ADMIN_ORIGIN = 'https://admin.shop.example.com';
 const SECRET = 'connect-secret-0123456789-abcdefghij';
 const ENCRYPTION_KEY = 'encryption-key-0123456789-abcdefghij';
+
+/** The API description every answer is checked against. */
+const API = apiChecker(apiJson);
 
 /** Every feature. */
 export const ALL = manifest.features.map((feature) => feature.key);
@@ -218,6 +224,13 @@ export const setup = async ({ start = Date.parse('2026-10-05T10:00:00Z') } = {})
 		} catch {
 			json = null;
 		}
+		// a text answer (CSV, XML, plain text) has no JSON body to check: its status is checked, unless its route also
+		// answers JSON (the reports with format=csv), whose description is of the JSON answer
+		const isText = text !== '' && !/json/.test(response.headers.get('content-type') ?? '');
+		const described = API.described(method, path);
+		const entry = described ? /** @type {Record<string, { response?: unknown }>} */ (apiJson)[described] : undefined;
+		if (!isText || entry?.response === undefined)
+			API.assert({ method, path, status: response.status, body: isText ? null : json });
 		return { status: response.status, headers: response.headers, json, text };
 	};
 
