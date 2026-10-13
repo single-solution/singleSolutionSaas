@@ -6,6 +6,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { createProduct } from '../src/index.js';
+import { createMemoryStore, productKeyOf } from '../src/testing.js';
 import { createSealer, openKey } from '../src/sealing.js';
 import { BASE, ENCRYPTION_KEY, SECRET, manifest, productRoutes, setup } from './helpers.js';
 
@@ -45,6 +46,9 @@ describe('signing keys sealed (K-21)', () => {
 	it('keeps the product key and the ticket key sealed, their public keys readable', async () => {
 		const ctx = await setup();
 		expect((await ticketOf(ctx)).status).toBe(200);
+		const productKey = await productKeyOf({ store: ctx.store, encryptionKey: ENCRYPTION_KEY });
+		expect(productKey?.kid).toBe((await ctx.store.get('state', 'productKey')).publicJwk.kid);
+		expect(await productKeyOf({ store: createMemoryStore(), encryptionKey: ENCRYPTION_KEY })).toBeNull();
 		for (const id of IDS) {
 			const doc = await ctx.store.get('state', id);
 			expect(doc).toEqual({ sealed: expect.stringMatching(/^ss2\./), publicJwk: expect.objectContaining({ crv: 'Ed25519' }) });

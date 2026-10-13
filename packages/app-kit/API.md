@@ -149,13 +149,14 @@ The host gets `data-ss-mode="light" | "dark"` (`auto` follows the device).
 
 ## `@ss/app-kit/testing`
 
-| Export                                        | What it is                                                                              |
-| --------------------------------------------- | --------------------------------------------------------------------------------------- |
-| `createFakePortal({ url?, now?, pageSize? })` | the Portal side of PLAN 0.4.12 (async)                                                  |
-| `createAccountsDouble({ url? })`              | receives activity copies; serves keys and users with a permission; calls data rights    |
-| `createNotificationsDouble({ url? })`         | takes events (`POST /v1/events`) and messages (`POST /v1/messages/<channel>`)           |
-| `createNetwork(handlers)`                     | `{ fetch, send }` routing to in-process handlers by origin (`send` fits `outboundSend`) |
-| `createMemoryStore({ now? })`                 | the memory store                                                                        |
+| Export                                        | What it is                                                                                           |
+| --------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `createFakePortal({ url?, now?, pageSize? })` | the Portal side of PLAN 0.4.12 (async)                                                               |
+| `createAccountsDouble({ url? })`              | receives activity copies; serves keys and users with a permission; calls data rights                 |
+| `createNotificationsDouble({ url? })`         | takes events (`POST /v1/events`) and messages (`POST /v1/messages/<channel>`)                        |
+| `createNetwork(handlers)`                     | `{ fetch, send }` routing to in-process handlers by origin (`send` fits `outboundSend`)              |
+| `productKeyOf({ store, encryptionKey })`      | the product's own private key from its store (kept sealed, K-21), for tests that sign as the product |
+| `createMemoryStore({ now? })`                 | the memory store                                                                                     |
 
 Fake Portal members: `url`, `jwks`, `handle(request)`, `fetch`, `setReachable(bool)`, `connect({ handler, baseUrl,
 secret, priceListVersion? })`, `addProduct({ productId, baseUrl })`, `addWebsite({ domain, websiteId?, merchantId?,

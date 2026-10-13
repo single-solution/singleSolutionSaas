@@ -9,6 +9,8 @@
  * - `createNotificationsDouble()`: Notifications as products see it: it takes events (`POST /v1/events`) and messages
  *   (`POST /v1/messages/<channel>`) and keeps them;
  * - `createNetwork(handlers)`: routes `fetch` and outbound calls (`outboundSend`) to in-process handlers by origin;
+ * - `productKeyOf({ store, encryptionKey })`: the product's own private key from its store (kept sealed, K-21), for
+ *   tests that sign as the product;
  * - `createMemoryStore()`.
  * @module
  */
@@ -29,9 +31,22 @@ import {
 	verifyAssertion,
 	verifyConnectResponse,
 } from '@ss/protocol';
+import { PRODUCT_KEY_AAD } from './connection.js';
+import { createSealer, openKey } from './sealing.js';
 import { createMemoryStore } from './stores/memory.js';
 
 export { createMemoryStore };
+
+/**
+ * The product's own private key as its product database keeps it (sealed with `ENCRYPTION_KEY`, K-21), for tests that
+ * sign as the product; null before the first connect.
+ * @param {{ store: import('./stores/types.js').Store, encryptionKey: string }} input
+ * @returns {Promise<Record<string, any> | null>}
+ */
+export const productKeyOf = async ({ store, encryptionKey }) => {
+	const doc = await store.get('state', 'productKey');
+	return doc ? openKey(createSealer({ encryptionKey }), doc, PRODUCT_KEY_AAD) : null;
+};
 
 /** @typedef {(request: Request) => Promise<Response>} Handler */
 /**

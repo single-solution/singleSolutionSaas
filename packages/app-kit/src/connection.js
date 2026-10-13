@@ -46,7 +46,8 @@ const RECHECK_MS = 1000;
 const CONNECTED_RECHECK_MS = 30_000;
 const NONCE_TTL_MS = 15 * 60_000;
 /** What the sealed product key is bound to. */
-const KEY_AAD = 'state|productKey';
+export const PRODUCT_KEY_AAD = 'state|productKey';
+const KEY_AAD = PRODUCT_KEY_AAD;
 
 /**
  * The price list of a manifest's current features, keeping the prices of `accepted` (new features 0, missing dropped).

@@ -14,7 +14,7 @@
 import { randomBytes } from 'node:crypto';
 import { MongoClient } from 'mongodb';
 import { createMongoStore, createProduct } from '@ss/app-kit';
-import { createNetwork } from '@ss/app-kit/testing';
+import { createNetwork, productKeyOf } from '@ss/app-kit/testing';
 import {
 	closeMongoClients,
 	commerceModule,
@@ -278,9 +278,9 @@ export const startSystem = async ({ graceDays = 1, unit = NOTES, extras = [] } =
 	 * @param {string} method @param {string} path @param {unknown} [body]
 	 */
 	const productApi = async (method, path, body) => {
-		const key = /** @type {{ privateJwk: any }} */ (await productStore.get('state', 'productKey'));
+		const key = await productKeyOf({ store: productStore, encryptionKey: PRODUCT_KEY });
 		const bearer = await signAssertion({
-			signer: createSigner(key.privateJwk),
+			signer: createSigner(/** @type {any} */ (key)),
 			productId: productManifest.id,
 			audience: PORTAL_URL,
 			now: clock.now,
