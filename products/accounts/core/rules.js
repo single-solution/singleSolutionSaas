@@ -41,7 +41,7 @@ export const normaliseCode = (input, length) => {
 
 // ----------------------------------------------------------------------------------------------------- passwords
 
-/** Longest password accepted (code constant). */
+/** Longest password accepted (the `maxLength` settings may lower it, down to 128; ST-26). */
 const PASSWORD_MAX = 256;
 /** Personal words shorter than this are not refused (PLAN 0.8.10 A9). */
 const MIN_PERSONAL_WORD = 4;
@@ -73,16 +73,17 @@ const personalWords = ({ name, email }) =>
 		.filter((word) => [...word].length >= MIN_PERSONAL_WORD);
 
 /**
- * Why a new password is refused, or null: `too_short`, `too_long`, `letter_and_digit` (A2: a letter and a digit are
- * required) or `personal` (A9: it holds the name, the e-mail's local part, or a run of 4 keyboard or number steps). The
- * breached-password check runs in adapters.
+ * Why a new password is refused, or null: `too_short`, `too_long` (beyond `maxLength`, at most 256), `letter_and_digit`
+ * (A2, ST-26: a letter and a digit are required) or `personal` (A9: it holds the name, the e-mail's local part, or a
+ * run of 4 keyboard or number steps). The breached-password check runs in adapters.
  * @param {unknown} password
- * @param {{ minLength: number, letterAndDigit?: boolean, personal?: { name?: string | null, email?: string | null } | null }} rules
+ * @param {{ minLength: number, maxLength?: number, letterAndDigit?: boolean,
+ *   personal?: { name?: string | null, email?: string | null } | null }} rules
  * @returns {'too_short' | 'too_long' | 'letter_and_digit' | 'personal' | null}
  */
-export const passwordProblem = (password, { minLength, letterAndDigit = false, personal = null }) => {
+export const passwordProblem = (password, { minLength, maxLength = PASSWORD_MAX, letterAndDigit = false, personal = null }) => {
 	if (typeof password !== 'string' || [...password].length < minLength) return 'too_short';
-	if (password.length > PASSWORD_MAX) return 'too_long';
+	if (password.length > Math.min(maxLength, PASSWORD_MAX)) return 'too_long';
 	if (letterAndDigit && !(/\p{L}/u.test(password) && /\p{N}/u.test(password))) return 'letter_and_digit';
 	if (personal) {
 		const lower = password.toLowerCase();

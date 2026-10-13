@@ -200,8 +200,9 @@ export const createFlows = (product, service) => {
 	const afterSignUp = async (s, user, how) => (user.status === 'pending' ? { status: 'pending' } : service.finish(s, user, how));
 
 	/**
-	 * The password rules of a method (A2, A9): Phone + password has its own length, letter-and-digit, breached-password
-	 * and lock settings; the lock mode, the network limit and the personal check are Email + password's, for both.
+	 * The password rules of a method (A2, A9, ST-26): each of Email + password and Phone + password has its own lengths,
+	 * letter-and-digit, breached-password and lock settings; the lock mode, the network limit and the personal check
+	 * are Email + password's, for both.
 	 * @param {Site} s @param {string} method
 	 */
 	const passwordRules = async (s, method) => {
@@ -209,6 +210,7 @@ export const createFlows = (product, service) => {
 		const own = method === 'phone_password' ? await service.settings(s, 'phone_password') : email;
 		return {
 			minLength: Number(own.minLength),
+			maxLength: Number(own.maxLength),
 			letterAndDigit: own.letterAndDigit === true,
 			breachedCheck: own.breachedCheck === true,
 			maxAttempts: Number(own.maxAttempts),
@@ -229,11 +231,12 @@ export const createFlows = (product, service) => {
 		const rules = await passwordRules(s, method);
 		const reason = passwordProblem(password, {
 			minLength: rules.minLength,
+			maxLength: rules.maxLength,
 			letterAndDigit: rules.letterAndDigit,
 			personal: rules.personalCheck ? who : null,
 		});
 		if (reason === 'too_short') throw problem('weak_password', `Use at least ${rules.minLength} characters.`);
-		if (reason === 'too_long') throw problem('weak_password', 'The password is too long.');
+		if (reason === 'too_long') throw problem('weak_password', `Use at most ${rules.maxLength} characters.`);
 		if (reason === 'letter_and_digit') throw problem('weak_password', 'Use at least one letter and one digit.');
 		if (reason === 'personal')
 			throw problem('weak_password', 'Do not use your name, your e-mail address or runs like 1234 or qwer.');

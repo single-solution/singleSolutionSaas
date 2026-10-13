@@ -161,6 +161,10 @@ describe('roles and rules', () => {
 		expect(normaliseCode('1'.repeat(40), 6)).toBeNull();
 		expect(passwordProblem(undefined, { minLength: 8 })).toBe('too_short');
 		expect(passwordProblem('long enough', { minLength: 8 })).toBeNull();
+		expect(passwordProblem('a1'.repeat(65), { minLength: 8 })).toBeNull();
+		expect(passwordProblem('a1'.repeat(65), { minLength: 8, maxLength: 128 })).toBe('too_long');
+		expect(passwordProblem('a'.repeat(257), { minLength: 8, maxLength: 300 })).toBe('too_long');
+		expect(passwordProblem('12345678', { minLength: 8, letterAndDigit: true })).toBe('letter_and_digit');
 		expect(emailRefused('a@mailinator.com', { blockDisposable: false, blockedDomains: ['', '.example.org'] })).toBe(false);
 		expect(emailRefused('a@x.example.org', { blockDisposable: false, blockedDomains: ['.example.org'] })).toBe(true);
 		expect(returnAddress('https://shop.example.com:8443/', 'shop.example.com')).toBeNull();

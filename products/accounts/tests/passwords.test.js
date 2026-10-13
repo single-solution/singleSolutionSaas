@@ -339,6 +339,52 @@ describe('A9: password and lock options', () => {
 		await env.setting('email_password', 'lockMode', 'fixed');
 	});
 
+	it('letter and digit and a maximum length, for e-mail + password and phone + password (ST-26)', async () => {
+		/** @param {string} email @param {string} password */
+		const tryUp = (email, password) => env.visitor('POST', '/v1/sign-up/password', { email, password });
+		// by default: letters only and up to 256 characters, as before
+		expect((await tryUp('letters@example.com', 'onlyletters')).json.status).toBe('signed_in');
+		expect((await tryUp('long@example.com', 'a1'.repeat(128))).json.status).toBe('signed_in');
+		expect((await tryUp('longer@example.com', `${'a1'.repeat(128)}x`)).json.detail).toBe('Use at most 256 characters.');
+		await env.setting('email_password', 'letterAndDigit', true);
+		await env.setting('email_password', 'maxLength', 128);
+		for (const password of ['onlyletters', '1234567890']) {
+			const refused = await tryUp('rules@example.com', password);
+			expect([code(refused), refused.json.detail]).toEqual(['weak_password', 'Use at least one letter and one digit.']);
+		}
+		const tooLong = await tryUp('rules@example.com', `${'a1'.repeat(64)}x`);
+		expect([code(tooLong), tooLong.json.detail]).toEqual(['weak_password', 'Use at most 128 characters.']);
+		expect((await tryUp('rules@example.com', 'a1'.repeat(64))).json.status).toBe('signed_in');
+		// the same rules for a reset and in My account
+		const signedIn = await signIn('rules@example.com', 'a1'.repeat(64));
+		expect(
+			code(
+				await env.visitor('PUT', '/v1/me/password', { current: 'a1'.repeat(64), password: 'nodigits' }, signedIn.json.signIn),
+			),
+		).toBe('weak_password');
+		// the maximum is 128 to 256 characters
+		const cookie = await env.adminSession();
+		for (const value of [127, 257]) {
+			const refused = await env.dashboard(
+				cookie,
+				'PUT',
+				`/v1/dashboard/websites/${env.websiteId}/settings/email_password.maxLength`,
+				{ value },
+			);
+			expect(refused.status).toBe(422);
+		}
+		// Phone + password keeps its own maximum
+		await env.setting('phone_password', 'maxLength', 128);
+		const phoneLong = await env.visitor('POST', '/v1/sign-up/phone-password', {
+			phone: '+923001119999',
+			password: `${'a1'.repeat(64)}x`,
+		});
+		expect(phoneLong.json.detail).toBe('Use at most 128 characters.');
+		await env.setting('phone_password', 'maxLength', 256);
+		await env.setting('email_password', 'maxLength', 256);
+		await env.setting('email_password', 'letterAndDigit', false);
+	});
+
 	it('a network limit per address, minimum lengths up to 128 and the personal check', async () => {
 		await env.setting('email_password', 'networkLimit', 3);
 		env.setNetwork('198.51.100.7');
