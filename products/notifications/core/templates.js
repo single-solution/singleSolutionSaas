@@ -16,6 +16,12 @@ const TEMPLATE_KEY = /^[a-z][a-z0-9_.-]{0,63}$/;
  */
 const PRODUCT_KEY_PREFIXES = Object.freeze(['accounts.', 'ecommerce.', 'chat.', 'payments.', 'growth.']);
 
+/**
+ * Template keys of Accounts' messages (sign-in codes, magic, reset and setup links, account updates): always sensitive,
+ * whatever the template says (PLAN 0.8.10 D11).
+ */
+const ACCOUNT_KEY_PREFIX = 'accounts.';
+
 /** The language of a template every recipient falls back to (written as `default` in paths). */
 export const DEFAULT_LANGUAGE = '';
 
@@ -25,6 +31,15 @@ const TEXT_LIMITS = Object.freeze({ email: 100_000, sms: 1600, whatsapp: 4096, p
 const SUBJECT_LIMIT = 200;
 /** Placeholders Notifications fills itself. */
 const BUILT_IN_VALUES = Object.freeze(['unsubscribeUrl']);
+
+/** A value's name. */
+const VALUE_NAME = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
+/** Most values of a send. */
+const MAX_VALUES = 50;
+/** What the delivery log keeps instead of a hidden value that is not empty: a link, else any other value. */
+export const HIDDEN = Object.freeze({ link: '[link hidden]', value: '******' });
+/** A value that is a link: an address with a scheme, or a path. */
+const LINK = /:\/\/|^\//;
 
 const PLACEHOLDER = /\{([A-Za-z][A-Za-z0-9_]{0,63})\}/g;
 /** An optional section's opening `{?name}` or closing `{/name}` tag. */
@@ -46,6 +61,8 @@ const LANGUAGE = /^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8}){0,3}$/;
  * @property {string} providerTemplate WhatsApp: the name of an approved Meta template (`''` = plain text)
  * @property {Button[]} [buttons] WhatsApp templates at Meta: the buttons that take a value (PLAN 0.8.10 N1); missing on
  *   templates saved before them
+ * @property {boolean} [sensitive] sensitive messages (codes, links) keep none of their values in the delivery log (PLAN
+ *   0.8.10 D11); missing on templates saved before it
  */
 /**
  * A button of a WhatsApp template at Meta that takes a value: a URL button's variable part, or the code a copy-code
@@ -67,6 +84,18 @@ const BUTTON_VALUE_LIMIT = 2000;
  * @param {string} key
  */
 export const isProductKey = (key) => PRODUCT_KEY_PREFIXES.some((prefix) => key.startsWith(prefix));
+
+/**
+ * Whether a template key belongs to Accounts' messages.
+ * @param {string} key
+ */
+export const isAccountKey = (key) => key.startsWith(ACCOUNT_KEY_PREFIX);
+
+/**
+ * Whether the messages of a template are sensitive: Accounts' always, else when the merchant marks the template.
+ * @param {Pick<Template, 'key' | 'sensitive'>} template
+ */
+export const isSensitive = (template) => template.sensitive === true || isAccountKey(template.key);
 
 /**
  * The language of a path segment (`default` → `''`), or null.
@@ -202,6 +231,7 @@ export const checkTemplate = (input) => {
 			urgent: body.urgent === true,
 			providerTemplate,
 			buttons: buttons.value,
+			sensitive: isSensitive({ key: body.key, sensitive: body.sensitive === true }),
 		},
 	};
 };
@@ -242,17 +272,54 @@ export const checkValues = (input) => {
 	if (input === undefined || input === null) return { ok: true, value: {} };
 	if (typeof input !== 'object' || Array.isArray(input)) return { ok: false };
 	const entries = Object.entries(/** @type {Record<string, unknown>} */ (input));
-	if (entries.length > 50) return { ok: false };
+	if (entries.length > MAX_VALUES) return { ok: false };
 	/** @type {Record<string, string>} */
 	const value = {};
 	for (const [name, raw] of entries) {
-		if (!/^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(name) || BUILT_IN_VALUES.includes(name)) return { ok: false };
+		if (!VALUE_NAME.test(name) || BUILT_IN_VALUES.includes(name)) return { ok: false };
 		if (typeof raw === 'number' && Number.isFinite(raw)) value[name] = String(raw);
 		else if (typeof raw === 'string' && raw.length <= 1000) value[name] = raw;
 		else return { ok: false };
 	}
 	return { ok: true, value };
 };
+
+/**
+ * Check the names of a send's secret values (`secretValues`): up to 50 value names, kept once each.
+ * @param {unknown} input
+ * @returns {{ ok: true, value: string[] } | { ok: false }}
+ */
+export const checkSecretValues = (input) => {
+	if (input === undefined || input === null) return { ok: true, value: [] };
+	if (!Array.isArray(input) || input.length > MAX_VALUES) return { ok: false };
+	if (!input.every((name) => typeof name === 'string' && VALUE_NAME.test(name))) return { ok: false };
+	return { ok: true, value: [...new Set(/** @type {string[]} */ (input))] };
+};
+
+/**
+ * The values of a message the delivery log hides (PLAN 0.8.10 D11): every value of a sensitive message, else the
+ * values the sender names as secret.
+ * @param {Readonly<Record<string, string>>} values
+ * @param {{ sensitive: boolean, secretValues: ReadonlyArray<string> }} input
+ * @returns {string[]}
+ */
+export const hiddenNamesOf = (values, { sensitive, secretValues }) =>
+	Object.keys(values).filter((name) => sensitive || secretValues.includes(name));
+
+/**
+ * The values as the delivery log keeps them: each hidden value that is not empty becomes `[link hidden]` (a link) or
+ * `******`, so words filled with them show the same optional sections without the secrets.
+ * @param {Readonly<Record<string, string>>} values
+ * @param {ReadonlyArray<string>} names the hidden values
+ * @returns {Record<string, string>}
+ */
+export const hideValues = (values, names) =>
+	Object.fromEntries(
+		Object.entries(values).map(([name, value]) => [
+			name,
+			!names.includes(name) || value.trim() === '' ? value : LINK.test(value.trim()) ? HIDDEN.link : HIDDEN.value,
+		]),
+	);
 
 /**
  * The version of a template to use: the recipient's language (exact, then its base language) while multi-language
@@ -302,5 +369,6 @@ export const templateView = (template) => ({
 	urgent: template.urgent,
 	providerTemplate: template.providerTemplate,
 	buttons: template.buttons ?? [],
+	sensitive: isSensitive(template),
 	...(template.updatedAt ? { updatedAt: new Date(template.updatedAt).toISOString() } : {}),
 });

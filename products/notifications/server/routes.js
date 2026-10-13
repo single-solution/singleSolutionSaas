@@ -14,7 +14,14 @@ import { CHANNELS, CHANNEL_FEATURES, checkRecipient, normaliseEmail, normalisePh
 import { isOptOut, repliesOf } from '../core/inbound.js';
 import { logFilters } from '../core/log.js';
 import { verifyMeta, verifyTwilio } from '../adapters/signatures.js';
-import { checkTemplate, checkValues, isProductKey, languageOfSegment, templateView } from '../core/templates.js';
+import {
+	checkSecretValues,
+	checkTemplate,
+	checkValues,
+	isProductKey,
+	languageOfSegment,
+	templateView,
+} from '../core/templates.js';
 import { checkSendAt } from '../core/timing.js';
 import { checkForwardedEvent } from '../core/webhooks.js';
 import { LISTS } from '../adapters/lists.js';
@@ -68,6 +75,7 @@ const templateDetail = (template) =>
 		template.urgent ? 'urgent' : 'not urgent',
 		...(template.providerTemplate ? [`WhatsApp template ${template.providerTemplate}`] : []),
 		...(template.buttons?.length ? [`${template.buttons.length} button${template.buttons.length === 1 ? '' : 's'}`] : []),
+		...(template.sensitive ? ['values hidden in the delivery log'] : []),
 	].join(', ');
 
 /**
@@ -103,6 +111,8 @@ export const createRoutes = (product) => {
 		if (!to.ok) return invalid(to.field, 'The recipient is not valid.');
 		const values = checkValues(body.values);
 		if (!values.ok) return invalid('values', 'values must map up to 50 names to text or numbers (at most 1000 characters).');
+		const secretValues = checkSecretValues(body.secretValues);
+		if (!secretValues.ok) return invalid('secretValues', 'secretValues lists up to 50 value names.');
 		if (body.language !== undefined && languageOfSegment(body.language) === null)
 			return invalid('language', 'Use a language code such as en, ur or pt-BR.');
 		const s = await siteOf(ctx);
@@ -123,6 +133,7 @@ export const createRoutes = (product) => {
 			content: null,
 			to: to.value,
 			values: values.value,
+			secretValues: secretValues.value,
 			language: body.language ?? to.value.language,
 			sendAt,
 			source: 'api',
@@ -536,6 +547,7 @@ export const createRoutes = (product) => {
 						content: null,
 						to: { ...to, language: language || null },
 						values: values.value,
+						secretValues: [],
 						language: language || null,
 						sendAt: null,
 						source: 'staff',
@@ -553,6 +565,7 @@ export const createRoutes = (product) => {
 						content: { subject: channel === 'email' ? subject : '', text },
 						to,
 						values: {},
+						secretValues: [],
 						language: null,
 						sendAt: null,
 						source: 'staff',

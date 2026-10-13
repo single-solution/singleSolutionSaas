@@ -1,7 +1,8 @@
 /**
  * The admin widget `template_editor` (permission `templates.edit`): the merchant's staff write the templates per
  * template key, channel and language in their own admin. Picking a template from the list loads it into the form. A
- * WhatsApp template at Meta lists the buttons that take a value (PLAN 0.8.10 N1). A live preview fills the words with
+ * sensitive template keeps none of its values in the delivery log (PLAN 0.8.10 D11). A WhatsApp template at Meta lists
+ * the buttons that take a value (PLAN 0.8.10 N1). A live preview fills the words with
  * samples typed for each value, and a member of staff who may send messages sends the saved template to themselves as
  * a test with those samples.
  * @module
@@ -16,7 +17,7 @@ import { adminCall } from './tickets.js';
 /** @typedef {{ index: number, type: string, value: string }} ButtonView */
 /**
  * @typedef {{ key: string, channel: string, language: string, subject: string, text: string, required: boolean,
- *   urgent: boolean, providerTemplate: string, buttons?: ButtonView[] }} TemplateView
+ *   urgent: boolean, sensitive?: boolean, providerTemplate: string, buttons?: ButtonView[] }} TemplateView
  */
 
 /** Most buttons a template at Meta has. */
@@ -61,6 +62,7 @@ export const mountTemplateEditor = ({ host, api, config }) => {
 			const text = field('textarea', t('templates.text'), { rows: '5' });
 			const required = check(t('templates.required'));
 			const urgent = check(t('templates.urgent'));
+			const sensitive = check(t('templates.sensitive'));
 			const providerTemplate = field('input', t('templates.providerTemplate'), { maxlength: '512' });
 			const rows = element(doc, 'div');
 			const addButton = element(doc, 'button', { type: 'button', class: 'secondary' }, t('templates.addButton'));
@@ -206,6 +208,7 @@ export const mountTemplateEditor = ({ host, api, config }) => {
 				element(doc, 'p', { class: 'meta' }, formatText(t('templates.help'), { section: '{?name}…{/name}' })),
 				required.wrap,
 				urgent.wrap,
+				sensitive.wrap,
 				providerTemplate.label,
 				providerTemplate.input,
 				buttonsBox,
@@ -227,6 +230,7 @@ export const mountTemplateEditor = ({ host, api, config }) => {
 				text.input.value = view.text ?? '';
 				required.input.checked = view.required === true;
 				urgent.input.checked = view.urgent === true;
+				sensitive.input.checked = view.sensitive === true;
 				providerTemplate.input.value = view.providerTemplate ?? '';
 				rows.replaceChildren();
 				buttonFields = [];
@@ -276,6 +280,7 @@ export const mountTemplateEditor = ({ host, api, config }) => {
 					text: text.input.value,
 					required: required.input.checked,
 					urgent: urgent.input.checked,
+					sensitive: sensitive.input.checked,
 					providerTemplate: providerTemplate.input.value.trim(),
 					buttons: atMeta()
 						? buttonFields.map((entry) => ({

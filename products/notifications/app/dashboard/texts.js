@@ -87,6 +87,7 @@ export const TEXTS = Object.freeze({
 			text: 'Message',
 			required: 'Required message: always sent, even to people who unsubscribed',
 			urgent: 'Urgent: sent during quiet hours',
+			sensitive: 'Sensitive (codes, links): its values are hidden in the delivery log (always for accounts. templates)',
 			providerTemplate: 'WhatsApp template name at Meta (optional)',
 			buttons: 'Buttons',
 			buttonsHelp:
@@ -121,6 +122,7 @@ export const TEXTS = Object.freeze({
 			default: 'Default',
 			required_badge: 'Required',
 			urgent_badge: 'Urgent',
+			sensitive_badge: 'Sensitive',
 			needsDatabase: 'Templates live in your database: connect it in Connections first.',
 		}),
 		webhooks: Object.freeze({

@@ -105,7 +105,14 @@ describe('templates', () => {
 				urgent: false,
 				providerTemplate: '',
 				buttons: [],
+				sensitive: false,
 			},
+		});
+		expect(checkTemplate({ key: 'accounts.code', channel: 'sms', text: 'Code {code}' })).toMatchObject({
+			value: { sensitive: true },
+		});
+		expect(checkTemplate({ key: 'login', channel: 'sms', text: 'Open {link}', sensitive: true })).toMatchObject({
+			value: { sensitive: true },
 		});
 		expect(
 			checkTemplate({ key: 'a', channel: 'whatsapp', language: 'ur', text: 'x', providerTemplate: 'sale_1' }),

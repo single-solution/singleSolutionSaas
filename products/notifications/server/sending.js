@@ -2,13 +2,15 @@
  * Sending (PLAN 0.8.5): accepting a message, attempting it, retries on the next uses, the fallback channel, opt-out,
  * quiet hours, send limits, delayed send and outgoing webhooks. There is no background work: a message due now is
  * attempted inside the request that sends it; waiting messages and webhook events are sent right after (`after()`)
- * the next requests for the website (`drain`), a few at a time.
+ * the next requests for the website (`drain`), a few at a time. The delivery log never keeps a secret (PLAN 0.8.10
+ * D11): the values of a sensitive message (and those the sender names as secret) are replaced in its saved words, and
+ * the real ones are kept sealed only while it has attempts to make.
  * @module
  */
 import { createId } from '@ss/contracts';
 import { problem } from '@ss/app-kit';
 import { CHANNEL_CONNECTIONS, CHANNEL_FEATURES, FALLBACK_CHANNELS, addressFor, normaliseEmail } from '../core/channels.js';
-import { DEFAULT_LANGUAGE, pickVersion, renderTemplate } from '../core/templates.js';
+import { DEFAULT_LANGUAGE, hiddenNamesOf, hideValues, isSensitive, pickVersion, renderTemplate } from '../core/templates.js';
 import {
 	DRAIN_BATCH,
 	LEASE_MS,
@@ -40,6 +42,7 @@ import { createStore } from '../adapters/store.js';
  * @property {{ subject: string, text: string } | null} content a one-off message's words
  * @property {Recipient} to
  * @property {Record<string, string>} values
+ * @property {string[]} secretValues the values the sender names as secret: the delivery log hides them
  * @property {string | null} language
  * @property {number | null} sendAt
  * @property {'api' | 'staff'} source
@@ -47,6 +50,10 @@ import { createStore } from '../adapters/store.js';
 
 /** Rendered words of a message on one channel. */
 /** @typedef {Pick<MessageRecord, 'subject' | 'text' | 'parameters' | 'providerTemplate' | 'language'> & { buttons: import('../core/templates.js').Button[] }} Words */
+/**
+ * The words of a message as sent (`words`) and as the delivery log keeps them (`shown`: the `hidden` values replaced).
+ * @typedef {{ words: Words, shown: Words, hidden: string[] }} Made
+ */
 
 /**
  * A message as the API and the delivery log answer it.
@@ -93,24 +100,77 @@ export const createSending = (product) => {
 	});
 
 	/**
-	 * The words of a template on a channel for a recipient, with the unsubscribe link of optional messages.
+	 * The words of a template on a channel for a recipient, with the unsubscribe link of optional messages: as sent, and
+	 * as the delivery log keeps them, with every value of a sensitive template and the values named secret hidden.
 	 * @param {Site} s
-	 * @param {{ key: string, channel: Channel, address: string, values: Record<string, string>, language: string | null }} input
-	 * @returns {Promise<{ required: boolean, urgent: boolean, words: Words } | null>} null when there is no template
+	 * @param {{ key: string, channel: Channel, address: string, values: Record<string, string>, language: string | null,
+	 *   secretValues: string[] }} input
+	 * @returns {Promise<({ required: boolean, urgent: boolean } & Made) | null>} null when there is no template
 	 */
-	const fromTemplate = async (s, { key, channel, address, values, language }) => {
+	const fromTemplate = async (s, { key, channel, address, values, language, secretValues }) => {
 		const version = pickVersion(await s.store.templates.versions(key, channel), language, s.on.includes('multi_language'));
 		if (!version) return null;
 		/** @type {Record<string, string>} */
-		const all = { ...values };
-		if (!version.required)
-			all.unsubscribeUrl = `${s.base}/unsubscribe/${s.websiteId}/${await s.store.recipients.codeOf(address)}`;
-		const rendered = renderTemplate(version, all);
+		const builtIn = version.required
+			? {}
+			: { unsubscribeUrl: `${s.base}/unsubscribe/${s.websiteId}/${await s.store.recipients.codeOf(address)}` };
+		/** @param {Record<string, string>} filled @returns {Words} */
+		const wordsOf = (filled) => ({
+			...renderTemplate(version, { ...filled, ...builtIn }),
+			providerTemplate: version.providerTemplate,
+			language: version.language,
+		});
+		const hidden = hiddenNamesOf(values, { sensitive: isSensitive(version), secretValues });
+		const words = wordsOf(values);
 		return {
 			required: version.required,
 			urgent: version.urgent,
-			words: { ...rendered, providerTemplate: version.providerTemplate, language: version.language },
+			words,
+			shown: hidden.length === 0 ? words : wordsOf(hideValues(values, hidden)),
+			hidden,
 		};
+	};
+
+	/** @param {Site} s @param {Channel} channel @param {string} address */
+	const aadOf = (s, channel, address) => `message|${s.websiteId}|${channel}|${address}`;
+
+	/**
+	 * What a message keeps of its values and words: them with the hidden values replaced, and the real ones sealed for
+	 * its attempts (to the website and the recipient), else null.
+	 * @param {Site} s
+	 * @param {{ channel: Channel, address: string, values: Record<string, string> } & Made} input
+	 * @returns {Words & Pick<MessageRecord, 'values' | 'hidden' | 'sealed'>}
+	 */
+	const keep = (s, { channel, address, values, words, shown, hidden }) => ({
+		...shown,
+		values: hideValues(values, hidden),
+		hidden,
+		sealed:
+			hidden.length === 0
+				? null
+				: product.sealer.seal(
+						JSON.stringify({
+							values,
+							subject: words.subject,
+							text: words.text,
+							parameters: words.parameters,
+							buttons: words.buttons,
+						}),
+						aadOf(s, channel, address),
+					),
+	});
+
+	/**
+	 * A message as it is sent: with its real values and words when it hides some, or null when they cannot be opened
+	 * (the encryption key changed).
+	 * @param {Site} s
+	 * @param {MessageRecord} message
+	 * @returns {MessageRecord | null}
+	 */
+	const reveal = (s, message) => {
+		if (!message.hidden?.length) return message;
+		const opened = product.sealer.open(message.sealed, aadOf(s, message.channel, message.address));
+		return opened === null ? null : { ...message, ...JSON.parse(opened) };
 	};
 
 	/**
@@ -246,10 +306,11 @@ export const createSending = (product) => {
 
 	/**
 	 * Where a failed message goes next: the fallback channel of its channel (settings), when that feature is on, the
-	 * recipient has an address there, a template exists for it and they did not unsubscribe there.
+	 * recipient has an address there, a template exists for it and they did not unsubscribe there. The answer is what
+	 * the message keeps there (its values still hidden).
 	 * @param {Site} s
-	 * @param {MessageRecord} message
-	 * @returns {Promise<(Words & { channel: Channel, address: string }) | null>}
+	 * @param {MessageRecord} message with its real values and words
+	 * @returns {Promise<(ReturnType<typeof keep> & { channel: Channel, address: string }) | null>}
 	 */
 	const fallbackOf = async (s, message) => {
 		if (message.fellBack || !s.on.includes('fallback') || !FALLBACK_CHANNELS.includes(/** @type {any} */ (message.channel)))
@@ -261,15 +322,19 @@ export const createSending = (product) => {
 		if (!message.required && (await s.store.optouts.has(address))) return null;
 		if (message.template === null) {
 			if (target === 'email' && message.subject === '') return null;
-			return {
-				channel: target,
-				address,
+			/** @type {Words} */
+			const words = {
 				subject: target === 'email' ? message.subject : '',
 				text: message.text,
 				parameters: [],
 				providerTemplate: '',
 				buttons: [],
 				language: DEFAULT_LANGUAGE,
+			};
+			return {
+				channel: target,
+				address,
+				...keep(s, { channel: target, address, values: message.values, words, shown: words, hidden: [] }),
 			};
 		}
 		const made = await fromTemplate(s, {
@@ -278,19 +343,25 @@ export const createSending = (product) => {
 			address,
 			values: message.values,
 			language: message.to.language,
+			secretValues: message.hidden ?? [],
 		});
-		return made ? { channel: target, address, ...made.words } : null;
+		return made
+			? { channel: target, address, ...keep(s, { channel: target, address, values: message.values, ...made }) }
+			: null;
 	};
 
 	/**
 	 * Attempt a message now and save the outcome: sent; retrying later; on to the fallback channel; or failed. Every
-	 * attempt is added to the delivery log.
+	 * attempt is added to the delivery log; a sent or failed message keeps no sealed words.
 	 * @param {Site} s
 	 * @param {MessageRecord} message
 	 * @returns {Promise<MessageRecord>}
 	 */
 	const attempt = async (s, message) => {
-		const result = await deliver(s, message);
+		const real = reveal(s, message);
+		const result = real
+			? await deliver(s, real)
+			: { ok: false, provider: 'none', error: 'Its hidden values cannot be read: the encryption key changed.' };
 		const attempts = [
 			...message.attempts,
 			{
@@ -308,6 +379,7 @@ export const createSending = (product) => {
 				attempts,
 				sentAt: new Date(now()),
 				leaseUntil: null,
+				sealed: null,
 			});
 			await emit(s, 'message.sent', eventData(sent));
 			return sent;
@@ -323,7 +395,7 @@ export const createSending = (product) => {
 				dueAt: new Date(next),
 				leaseUntil: null,
 			});
-		const fallback = await fallbackOf(s, message);
+		const fallback = real ? await fallbackOf(s, real) : null;
 		if (fallback) {
 			const moved = await s.store.messages.update(message.id, {
 				...fallback,
@@ -344,6 +416,7 @@ export const createSending = (product) => {
 			attempts,
 			channelAttempts: failed,
 			leaseUntil: null,
+			sealed: null,
 		});
 		await emit(s, 'message.failed', eventData(final));
 		return final;
@@ -365,7 +438,7 @@ export const createSending = (product) => {
 					errors: [{ path: '/to', message: `Give the recipient's address for ${input.channel}.`, code: 'no_address' }],
 				}),
 			};
-		/** @type {{ required: boolean, urgent: boolean, words: Words }} */
+		/** @type {{ required: boolean, urgent: boolean } & Made} */
 		let made;
 		if (input.template !== null) {
 			const found = await fromTemplate(s, {
@@ -374,6 +447,7 @@ export const createSending = (product) => {
 				address,
 				values: input.values,
 				language: input.language,
+				secretValues: input.secretValues,
 			});
 			if (!found)
 				return {
@@ -387,18 +461,16 @@ export const createSending = (product) => {
 		} else {
 			const content = /** @type {{ subject: string, text: string }} */ (input.content);
 			// a one-off message from the merchant's staff is written for this person now: required and urgent
-			made = {
-				required: true,
-				urgent: true,
-				words: {
-					subject: content.subject,
-					text: content.text,
-					parameters: [],
-					providerTemplate: '',
-					buttons: [],
-					language: DEFAULT_LANGUAGE,
-				},
+			/** @type {Words} */
+			const words = {
+				subject: content.subject,
+				text: content.text,
+				parameters: [],
+				providerTemplate: '',
+				buttons: [],
+				language: DEFAULT_LANGUAGE,
 			};
+			made = { required: true, urgent: true, words, shown: words, hidden: [] };
 		}
 		const t = now();
 		/** @type {Omit<MessageRecord, 'id' | 'createdAt'>} */
@@ -408,8 +480,7 @@ export const createSending = (product) => {
 			channel: input.channel,
 			to: input.to,
 			address,
-			values: input.values,
-			...made.words,
+			...keep(s, { channel: input.channel, address, values: input.values, ...made }),
 			required: made.required,
 			urgent: made.urgent,
 			status: 'queued',
@@ -423,7 +494,10 @@ export const createSending = (product) => {
 			sentAt: null,
 		};
 		if (!made.required && (await s.store.optouts.has(address)))
-			return { ok: true, message: await s.store.messages.add({ ...base, status: 'skipped', reason: 'unsubscribed' }) };
+			return {
+				ok: true,
+				message: await s.store.messages.add({ ...base, status: 'skipped', reason: 'unsubscribed', sealed: null }),
+			};
 		if (s.on.includes('send_limits')) {
 			const limits = await product.settings.values(s.websiteId, 'send_limits');
 			const sent = {
@@ -431,7 +505,10 @@ export const createSending = (product) => {
 				lastDay: await s.store.messages.sentSince(address, t - 86_400_000),
 			};
 			if (!withinLimits(sent, { perHour: Number(limits.perHour), perDay: Number(limits.perDay) }))
-				return { ok: true, message: await s.store.messages.add({ ...base, status: 'skipped', reason: 'limited' }) };
+				return {
+					ok: true,
+					message: await s.store.messages.add({ ...base, status: 'skipped', reason: 'limited', sealed: null }),
+				};
 		}
 		let dueAt = input.sendAt ?? t;
 		if (!made.urgent && s.on.includes('quiet_hours')) {
@@ -493,7 +570,12 @@ export const createSending = (product) => {
 			const message = await s.store.messages.claimDue();
 			if (!message) break;
 			if (!message.required && (await s.store.optouts.has(message.address)))
-				await s.store.messages.update(message.id, { status: 'skipped', reason: 'unsubscribed', leaseUntil: null });
+				await s.store.messages.update(message.id, {
+					status: 'skipped',
+					reason: 'unsubscribed',
+					leaseUntil: null,
+					sealed: null,
+				});
 			else await attempt(s, message);
 		}
 		for (let i = 0; i < DRAIN_BATCH; i += 1) {

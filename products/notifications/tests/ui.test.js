@@ -383,6 +383,7 @@ describe('admin widgets', () => {
 				text: 'Hello',
 				required: false,
 				urgent: true,
+				sensitive: true,
 				providerTemplate: '',
 			},
 		];
@@ -403,21 +404,22 @@ describe('admin widgets', () => {
 		expect(pick.textContent).toBe('welcome · E-mail · Default');
 		pick.click();
 		const fields = /** @type {any[]} */ ([...(host.shadowRoot?.querySelectorAll('input, select, textarea') ?? [])]);
-		const [key, channel, language, subject, text, required, urgent] = fields;
-		expect([key.value, channel.value, subject.value, text.value, urgent.checked, required.checked]).toEqual([
+		const [key, channel, language, subject, text, required, urgent, sensitive] = fields;
+		expect([key.value, channel.value, subject.value, text.value, urgent.checked, required.checked, sensitive.checked]).toEqual([
 			'welcome',
 			'email',
 			'Hi',
 			'Hello',
 			true,
 			false,
+			true,
 		]);
 		channel.value = 'sms';
 		language.value = 'ur';
 		const form = /** @type {HTMLFormElement} */ (inside(host, 'form'));
 		form.dispatchEvent(new window.Event('submit', { cancelable: true }));
 		await flush();
-		expect(saved[0]).toMatchObject({ key: 'welcome', channel: 'sms', language: 'ur', urgent: true });
+		expect(saved[0]).toMatchObject({ key: 'welcome', channel: 'sms', language: 'ur', urgent: true, sensitive: true });
 		expect(statusOf(host)).toBe(strings['templates.saved']);
 		text.value = '';
 		form.dispatchEvent(new window.Event('submit', { cancelable: true }));

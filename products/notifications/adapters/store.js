@@ -36,7 +36,7 @@ import { LEASE_MS } from '../core/timing.js';
  * @property {Channel} channel the channel now (after a fallback, the fallback channel)
  * @property {Recipient} to
  * @property {string} address the address on `channel`
- * @property {Record<string, string>} values
+ * @property {Record<string, string>} values the values as the delivery log keeps them (hidden ones replaced)
  * @property {string} language the template version used (`''` = default)
  * @property {string} subject
  * @property {string} text
@@ -44,6 +44,10 @@ import { LEASE_MS } from '../core/timing.js';
  * @property {string} providerTemplate
  * @property {import('../core/templates.js').Button[]} [buttons] a WhatsApp template's buttons, values filled (PLAN 0.8.10
  *   N1); missing on messages accepted before them
+ * @property {string[]} [hidden] the values the delivery log hides (PLAN 0.8.10 D11): `values`, the subject, text,
+ *   parameters and buttons show them replaced; missing on messages accepted before it
+ * @property {string | null} [sealed] the real values and words of a message with hidden values, sealed, while it still
+ *   has attempts to make; null once it is sent, failed or skipped. Never in a delivery-log read
  * @property {boolean} required
  * @property {boolean} urgent
  * @property {import('../core/log.js').MessageStatus} status
@@ -89,6 +93,9 @@ export const INDEXES = [
 	{ collection: WEBHOOK_EVENTS, keys: { websiteId: 1, status: 1, dueAt: 1 }, name: 'due' },
 ];
 
+/** What delivery-log reads return of a message: never the sealed real words. */
+const LOG_PROJECTION = { _id: 0, sealed: 0 };
+
 const MAX_TEMPLATES = 1000;
 const TEMPLATE_PROJECTION = {
 	_id: 0,
@@ -101,6 +108,7 @@ const TEMPLATE_PROJECTION = {
 	urgent: 1,
 	providerTemplate: 1,
 	buttons: 1,
+	sensitive: 1,
 	updatedAt: 1,
 };
 
@@ -175,7 +183,7 @@ export const createStore = (data, { now }) => {
 				return as(await messages.findOne({ websiteId, id }, { projection: { _id: 0 } }));
 			},
 			/** @param {string} id @returns {Promise<MessageRecord | null>} */
-			get: async (id) => as(await messages.findOne({ websiteId, id }, { projection: { _id: 0 } })),
+			get: async (id) => as(await messages.findOne({ websiteId, id }, { projection: LOG_PROJECTION })),
 			/**
 			 * Save a message's new state.
 			 * @param {string} id @param {Partial<MessageRecord>} patch
@@ -221,7 +229,9 @@ export const createStore = (data, { now }) => {
 				const filter = logFilter(filters);
 				if (typeof time === 'string' && typeof id === 'string')
 					filter.$or = [{ createdAt: { $lt: new Date(time) } }, { createdAt: new Date(time), id: { $lt: id } }];
-				return as(await messages.find(filter, { projection: { _id: 0 }, sort: { createdAt: -1, id: -1 }, limit }).toArray());
+				return as(
+					await messages.find(filter, { projection: LOG_PROJECTION, sort: { createdAt: -1, id: -1 }, limit }).toArray(),
+				);
 			},
 			/**
 			 * What the delivery log's counts count: the collection and exactly the list's filter (PLAN 0.8.10 K4).
@@ -235,7 +245,9 @@ export const createStore = (data, { now }) => {
 				for (const address of addresses)
 					out.push(
 						...as(
-							await messages.find({ websiteId, address }, { projection: { _id: 0 }, sort: { createdAt: -1 } }).toArray(),
+							await messages
+								.find({ websiteId, address }, { projection: LOG_PROJECTION, sort: { createdAt: -1 } })
+								.toArray(),
 						),
 					);
 				return out;

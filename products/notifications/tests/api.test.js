@@ -192,7 +192,9 @@ describe('the send API', () => {
 			to: { phone: '+15550002222' },
 			values: { code: 123456 },
 		});
-		expect(product.json).toMatchObject({ status: 'sent', text: 'Code 123456' });
+		// the provider gets the code; the delivery log keeps it hidden (PLAN 0.8.10 D11)
+		expect(product.json).toMatchObject({ status: 'sent', text: 'Code ******' });
+		expect(new URLSearchParams(env.providers.callsTo('https://api.twilio.com').at(-1)?.body).get('Body')).toBe('Code 123456');
 		await env.switchOn(ALL);
 		// a server token never works from a browser
 		const browser = await env.call('POST', '/v1/messages/sms', {

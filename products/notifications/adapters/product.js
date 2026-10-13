@@ -3,7 +3,8 @@
  * manifest (each feature's settings schema from `schemas/` inline), its widget texts, its Connections (providers per
  * channel, push keys, the webhook signing secret and the Accounts token for activity-log copies), the merchant
  * database indexes, the data-rights hooks, the widget settings and the list `webhook_urls` (in the product database,
- * whose store it owns), and adds the providers and web push on the same outbound policy. The Next.js route and the tests pass the rest (config, store, clock, network).
+ * whose store it owns), and adds the sealer of sensitive messages, the providers and web push on the same outbound
+ * policy. The Next.js route and the tests pass the rest (config, store, clock, network).
  * Public entry `./product` of this package, so a system test can compose the product with `./routes`.
  * @module
  */
@@ -25,6 +26,7 @@ import staffPush from '../schemas/staff_push.settings.json' with { type: 'json' 
 import webhooks from '../schemas/webhooks.settings.json' with { type: 'json' };
 import whatsapp from '../schemas/whatsapp.settings.json' with { type: 'json' };
 import { normaliseEmail, normalisePhone } from '../core/channels.js';
+import { createSealer } from './crypto.js';
 import { LISTS, createLists } from './lists.js';
 import { createProviders } from './providers.js';
 import { INDEXES, createStore } from './store.js';
@@ -56,6 +58,9 @@ export const manifest = /** @type {import('@ss/contracts').Manifest} */ (
 
 export { strings };
 
+/** The fallback key a misconfigured product builds its sealer with (it answers 503 everywhere anyway). */
+const UNCONFIGURED_KEY = 'unconfigured-notifications-encryption-key-000';
+
 /** Notifications' own problem codes. */
 const PROBLEM_CODES = Object.freeze({
 	template_not_found: Object.freeze({ status: 422, title: 'Template not found' }),
@@ -70,7 +75,8 @@ const addressesOf = (user) =>
 
 /**
  * Data rights (PLAN 0.4.11): a person's messages, unsubscribes and unsubscribe codes are found by their e-mail address
- * and phone number; delete removes them.
+ * and phone number; delete removes them. Messages are exported as the delivery log keeps them: the values of sensitive
+ * messages hidden (PLAN 0.8.10 D11).
  * @param {() => number} now
  * @returns {NonNullable<import('@ss/app-kit').ProductOptions['hooks']>}
  */
@@ -137,6 +143,7 @@ export const createProductInstance = (options) => {
 	const send = options.outboundSend ?? ((url, init) => safeFetch(url, init, policy));
 	const providers = createProviders({ send, policy, now, ...(createTransport ? { createTransport } : {}) });
 	const webpush = createWebPush({ send, now });
+	const sealer = createSealer(options.config?.encryptionKey || UNCONFIGURED_KEY);
 
 	/** @param {'email' | 'sms' | 'whatsapp'} name */
 	const provider = (name) => ({
@@ -201,7 +208,7 @@ export const createProductInstance = (options) => {
 			},
 		},
 	});
-	return Object.freeze({ ...product, providers, webpush, lists, now, send });
+	return Object.freeze({ ...product, providers, webpush, lists, sealer, now, send });
 };
 
 /** @typedef {ReturnType<typeof createProductInstance>} Product */

@@ -273,6 +273,11 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 		ticket,
 		connectDatabase: () => connect('database', merchantDatabase()),
 		/**
+		 * A collection of the website's merchant database, as Notifications keeps it (every field; the kit's tenant guard).
+		 * @param {string} name `messages`, `webhook_events` …
+		 */
+		merchantCollection: async (name) => (await product.data.forWebsite(websiteId)).collection(name),
+		/**
 		 * Serve the website's business.json (null: 404) and read it again, as the dashboard's Refresh does.
 		 * @param {unknown} value
 		 */

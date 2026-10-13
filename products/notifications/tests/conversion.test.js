@@ -55,7 +55,8 @@ describe('WhatsApp template buttons (N1)', () => {
 			to: { phone: '+923001234567' },
 			values: { code: '482913' },
 		});
-		expect(sent).toMatchObject({ status: 201, json: { status: 'sent', text: '482913 is your verification code.' } });
+		// the delivery log keeps the code hidden; Meta gets it (PLAN 0.8.10 D11)
+		expect(sent).toMatchObject({ status: 201, json: { status: 'sent', text: '****** is your verification code.' } });
 		expect(lastMeta()).toEqual({
 			messaging_product: 'whatsapp',
 			to: '923001234567',

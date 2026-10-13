@@ -32,7 +32,7 @@ import { TEXTS } from './texts.js';
 /** @typedef {{ index: number, type: string, value: string }} TemplateButton */
 /**
  * @typedef {{ key: string, channel: string, language: string, subject: string, text: string, required: boolean,
- *   urgent: boolean, providerTemplate: string, buttons: TemplateButton[] }} Template
+ *   urgent: boolean, sensitive: boolean, providerTemplate: string, buttons: TemplateButton[] }} Template
  */
 
 const CHANNELS = /** @type {const} */ (['email', 'sms', 'whatsapp', 'push', 'staff_push']);
@@ -45,6 +45,7 @@ const EMPTY = {
 	text: '',
 	required: false,
 	urgent: false,
+	sensitive: false,
 	providerTemplate: '',
 	buttons: [],
 };
@@ -262,6 +263,7 @@ export function TemplatesSection({ websiteId }) {
 											<Badge>{item.language === 'default' ? T.default : item.language}</Badge>
 											{item.required ? <Badge>{T.required_badge}</Badge> : null}
 											{item.urgent ? <Badge>{T.urgent_badge}</Badge> : null}
+											{item.sensitive ? <Badge>{T.sensitive_badge}</Badge> : null}
 											{item.providerTemplate ? <Badge>{fill(T.atMeta, { name: item.providerTemplate })}</Badge> : null}
 											{item.buttons?.length ? (
 												<Badge>{fill(T.buttonsCount, { count: item.buttons.length })}</Badge>
@@ -369,6 +371,12 @@ export function TemplatesSection({ websiteId }) {
 							label={T.urgent}
 							checked={draft.urgent}
 							onChange={(event) => edit({ urgent: event.target.checked })}
+						/>
+						<Checkbox
+							wide
+							label={T.sensitive}
+							checked={draft.sensitive}
+							onChange={(event) => edit({ sensitive: event.target.checked })}
 						/>
 						<TemplatePreview template={draft} />
 						{problem ? <Callout tone="danger">{describeProblem(problem)}</Callout> : null}
