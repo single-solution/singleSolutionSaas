@@ -10,6 +10,7 @@ import { defineRoute, problem } from '@ss/app-kit';
 import { createAccount } from './account.js';
 import { renderDocs } from './docs.js';
 import { createFlows } from './flows.js';
+import { createImports } from './imports.js';
 import { createManage } from './manage.js';
 import { createService } from './service.js';
 import { WIDGET_SCRIPT } from './widget-script.js';
@@ -808,6 +809,9 @@ export const createRoutes = (product) => {
 			auth: 'dashboard',
 			handler: manage.deleteField,
 		}),
+
+		// --------------------------------------------------- import (records moved in with ss-import, PLAN 0.8.10 K10)
+		...createImports(product),
 
 		// public docs: no sign-in, no tokens
 		defineRoute({

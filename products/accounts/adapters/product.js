@@ -2,8 +2,9 @@
  * The product on the kit: `createProductInstance(options)` wires `@ss/app-kit` `createProduct` with Accounts'
  * manifest (each feature's settings schema from `schemas/` inline), its widget texts, its Connections (the
  * Notifications token for codes, invites and resets; Google, Apple and Facebook keys; the other products' tokens for
- * data rights, permissions and the Orders tab), the merchant database indexes, the data-rights hooks and the widget
- * settings, and adds the sealer, the outside services and the website signing keys on the same outbound policy.
+ * data rights, permissions and the Orders tab), the merchant database indexes, the data-rights hooks, the widget
+ * settings and the `import` feature's collections (`imports.js`, PLAN 0.8.10 K10), and adds the sealer, the outside
+ * services and the website signing keys on the same outbound policy.
  * Public entry `./product` of this package, so a system test can compose the product with `./routes`.
  * @module
  */
@@ -21,6 +22,7 @@ import emailCode from '../schemas/email_code.settings.json' with { type: 'json' 
 import emailPassword from '../schemas/email_password.settings.json' with { type: 'json' };
 import facebook from '../schemas/facebook.settings.json' with { type: 'json' };
 import google from '../schemas/google.settings.json' with { type: 'json' };
+import importSettings from '../schemas/import.settings.json' with { type: 'json' };
 import ordersTab from '../schemas/orders_tab.settings.json' with { type: 'json' };
 import phoneCode from '../schemas/phone_code.settings.json' with { type: 'json' };
 import phonePassword from '../schemas/phone_password.settings.json' with { type: 'json' };
@@ -36,6 +38,7 @@ import { normaliseEmail } from '../core/identifiers.js';
 import { selfView } from '../core/profile.js';
 import { DEFAULT_ROLE } from '../core/roles.js';
 import { createSealer, importedTwoStep, resealWebsite, totpAadOf } from './crypto.js';
+import { createImportOptions } from './imports.js';
 import { createProviders } from './providers.js';
 import { INDEXES, createStore } from './store.js';
 
@@ -59,6 +62,7 @@ const SETTINGS = {
 	orders_tab: ordersTab,
 	staff_links: staffLinks,
 	role_requests: roleRequests,
+	import: importSettings,
 };
 
 /** Every sign-in method (feature). */
@@ -185,6 +189,14 @@ export const createProductInstance = (options) => {
 	/** @param {string} productId @param {string} label @param {string[]} neededBy */
 	const token = (productId, label, neededBy) => ({ label, kind: /** @type {const} */ ('token'), productId, neededBy });
 
+	/**
+	 * Two-step sign-in as the importer writes it for a user (PLAN 0.8.10 A8): the plain TOTP secret sealed at once and
+	 * the old system's recovery-code hashes (`sha256("recovery:" + code)`), each working once.
+	 * @param {string} websiteId @param {string} userId @param {{ secret: string, recoveryHashes: string[] }} input
+	 */
+	const twoStepFromImport = (websiteId, userId, { secret, recoveryHashes }) =>
+		importedTwoStep(sealer, { secret, recoveryHashes, aad: totpAadOf(websiteId, userId), now: now() });
+
 	const product = createProduct({
 		...options,
 		manifest,
@@ -276,14 +288,13 @@ export const createProductInstance = (options) => {
 		},
 		data: { indexes: INDEXES },
 		sharedSettings: SHARED_SETTINGS,
+		// records moved in from another system with ss-import (feature `import`, PLAN 0.8.10 K10)
+		imports: createImportOptions({
+			settings: (websiteId, feature) => product.settings.values(websiteId, feature),
+			business: (websiteId) => product.business(websiteId),
+			twoStepFromImport,
+		}),
 	});
-	/**
-	 * Two-step sign-in as the importer writes it for a user (PLAN 0.8.10 A8): the plain TOTP secret sealed at once and
-	 * the old system's recovery-code hashes (`sha256("recovery:" + code)`), each working once.
-	 * @param {string} websiteId @param {string} userId @param {{ secret: string, recoveryHashes: string[] }} input
-	 */
-	const twoStepFromImport = (websiteId, userId, { secret, recoveryHashes }) =>
-		importedTwoStep(sealer, { secret, recoveryHashes, aad: totpAadOf(websiteId, userId), now: now() });
 	return Object.freeze({ ...product, providers, sealer, now, send, twoStepFromImport });
 };
 

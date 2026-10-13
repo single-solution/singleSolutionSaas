@@ -28,6 +28,9 @@
 		],
 		"role_requests": [
 			"Visitors ask with POST /v1/role-requests { role, name, phone | email, note } (no account; the roles you list in Settings). Your server and the Users widget read GET /v1/role-requests?status=pending|invited|completed|declined|expired (with counts), and POST /v1/role-requests/:id/invite (creates the user, or gives the role to the user with that phone or e-mail, and answers a setup link unless they already have a password; a user who never proved that phone or e-mail gets nothing and the invite answers 409 contact_unverified until you check with the person, confirm it on their user or remove that account), /decline and /reopen. A request is completed when the password is set or the role given; expired when its setup link ran out. Users carry roleSince (Member since)."
+		],
+		"import": [
+			"Moving in from another system (ss-import, server token): POST /v1/import/roles, /fields, /users, /requests and /copies take NDJSON of Accounts' own record shapes with their ids (?dryRun=1 checks without writing and reports every refused line); /v1/import/:collection/prune removes what the source no longer has; POST /v1/import/finish and GET /v1/import/status (counts and sums). Import roles first: a user's role must exist. Users keep their password hashes (bcrypt, pbkdf2$ with the pepper connection) and their two-step secrets, sealed at once; an e-mail address or phone number another user holds is refused. Nothing is sent. Switch the feature off once the import is verified."
 		]
 	}
 }

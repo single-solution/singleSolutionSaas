@@ -170,6 +170,15 @@
 			"settings": {
 				"$ref": "schemas/role_requests.settings.json"
 			}
+		},
+		{
+			"key": "import",
+			"name": "Import",
+			"description": "Roles, custom fields, users (with their old password hashes), role requests and activity history moved in from another system with ss-import (server token only; no messages, events or alerts). Our admins switch it on for a migration and off after it.",
+			"dependsOn": [],
+			"settings": {
+				"$ref": "schemas/import.settings.json"
+			}
 		}
 	],
 	"permissions": [

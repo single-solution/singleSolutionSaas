@@ -114,6 +114,22 @@ export const verifyPassword = async (password, stored, { pepper = null } = {}) =
 	return dummyPasswordCheck();
 };
 
+/** Accounts' own hash: `scrypt$<16-byte salt>$<32-byte hash>`, base64url. */
+const SCRYPT_HASH = /^scrypt\$[A-Za-z0-9_-]{22}\$[A-Za-z0-9_-]{43}$/;
+
+/**
+ * Whether `verifyPassword` reads a stored hash (the import check, PLAN 0.8.10 A1): Accounts' own scrypt, bcrypt, or
+ * PBKDF2 with 1 to 2,000,000 iterations and a 16- to 64-byte hash. Any other format could never sign in.
+ * @param {string} stored
+ */
+export const isPasswordHash = (stored) => {
+	if (SCRYPT_HASH.test(stored) || BCRYPT.test(stored)) return true;
+	const legacy = PBKDF2.exec(stored);
+	const iterations = Number(legacy?.[1]);
+	const length = legacy ? Buffer.from(String(legacy[3]), 'base64').length : 0;
+	return iterations >= 1 && iterations <= MAX_PBKDF2_ITERATIONS && length >= 16 && length <= 64;
+};
+
 /** Whether a stored hash is not Accounts' own (it is replaced with scrypt after the next good check). @param {string} stored */
 export const isLegacyHash = (stored) => !stored.startsWith('scrypt$');
 
