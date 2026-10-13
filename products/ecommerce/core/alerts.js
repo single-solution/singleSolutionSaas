@@ -15,6 +15,24 @@ const ALERT_KINDS = Object.freeze(/** @type {AlertRecord['kind'][]} */ (['back_i
 export const MAX_ALERTS = 100;
 /** Alerts sent per catalog change or per use, at most (the rest are sent on later uses). */
 export const SEND_BATCH = 100;
+/**
+ * An alert whose message reached no one (Notifications could not be reached or refused it) is tried again on a later
+ * use this long after each try, then given up (`failed`).
+ */
+const RETRY_MS = Object.freeze([60_000, 5 * 60_000, 15 * 60_000, 60 * 60_000]);
+/** Tries of an alert's message, at most. */
+export const ALERT_TRIES = RETRY_MS.length + 1;
+
+/**
+ * When an alert whose message reached no one is tried again, or null when it is given up.
+ * @param {number} tries the tries so far (1 after the first)
+ * @param {number} now
+ */
+export const alertRetryAt = (tries, now) => {
+	const wait = RETRY_MS[tries - 1];
+	return wait === undefined ? null : new Date(now + wait);
+};
+
 /** The stop page of an alert's link while the `alerts` setting `stopUrl` names none (E34). */
 export const STOP_PATH = '/alerts/unsubscribe/{token}';
 

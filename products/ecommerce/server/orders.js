@@ -12,6 +12,7 @@
 import { countHandlers, created, defineRoute, paginate, problem } from '@ss/app-kit';
 import { createFulfilmentStore, markSeenBy } from '../adapters/fulfilment-store.js';
 import { setOrderCounter } from '../adapters/ledger.js';
+import { createOutbox } from '../adapters/outbox.js';
 import { courierNamed, trackingLink } from '../core/couriers.js';
 import { invoiceHtml, invoiceTexts, packingSlipHtml } from '../core/invoice.js';
 import {
@@ -491,8 +492,20 @@ export const createOrders = (product, service, { ordering }) => {
 	 */
 	const deleteUser = async (s, user) => {
 		const store = await storeOf(s);
+		// the messages still waiting in the outbox to the person or about their orders go first (E63)
+		const [orders, records] = await Promise.all([store.orders.ofPerson(user), store.customers.ofPerson(user)]);
+		const people = [...orders.map((order) => order.customer), ...records, user];
+		/** @param {Array<string | undefined>} values */
+		const known = (values) => [
+			...new Set(values.filter(/** @returns {value is string} */ (value) => typeof value === 'string' && value !== '')),
+		];
+		const forgotten = await createOutbox(await s.data()).forget({
+			emails: known(people.flatMap((person) => [person.email, person.email?.trim().toLowerCase()])),
+			phones: known(people.map((person) => person.phone)),
+			numbers: known(orders.map((order) => order.number)),
+		});
 		const anonymised = await store.orders.anonymise(user);
-		const deleted = await store.customers.remove(user);
+		const deleted = (await store.customers.remove(user)) + forgotten;
 		return { deleted, anonymised };
 	};
 

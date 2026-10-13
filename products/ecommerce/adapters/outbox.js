@@ -2,7 +2,8 @@
  * The message outbox in the merchant database (K-17, owner decision D7: nothing that matters may be lost): order and
  * claim messages and staff alerts are saved here before each is sent through Notifications, removed once Notifications
  * took it (or refused it for good), and tried again on the website's next uses while the call failed. A message not
- * sent within {@link KEEP_MS} is given up; `expireAt` lets the database remove a row the website never used again.
+ * sent within {@link KEEP_MS} is given up; `expireAt` lets the database remove a row the website never used again. A
+ * data-rights deletion removes a person's rows at once (E63).
  * @module
  */
 import { createId } from '@ss/contracts';
@@ -87,6 +88,20 @@ export const createOutbox = (data) => {
 		/** A message sent, or given up. @param {string} id */
 		done: async (id) => {
 			await rows.deleteOne({ websiteId, id });
+		},
+		/**
+		 * Remove a person's messages (data rights): those to their e-mail addresses or phones, and those about their orders
+		 * (order messages and staff alerts carry the order's `number`).
+		 * @param {{ emails: string[], phones: string[], numbers: string[] }} person
+		 * @returns {Promise<number>} the messages removed
+		 */
+		forget: async ({ emails, phones, numbers }) => {
+			const or = [
+				...(emails.length > 0 ? [{ 'to.email': { $in: emails } }] : []),
+				...(phones.length > 0 ? [{ 'to.phone': { $in: phones } }] : []),
+				...(numbers.length > 0 ? [{ 'values.number': { $in: numbers } }] : []),
+			];
+			return or.length === 0 ? 0 : (await rows.deleteMany({ websiteId, $or: or })).deletedCount;
 		},
 	});
 };

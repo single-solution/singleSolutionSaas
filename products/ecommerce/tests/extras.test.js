@@ -7,6 +7,8 @@ import { createId } from '@ss/contracts';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { givePoints, loyaltyAccount, placeOrder } from '../adapters/ledger.js';
 import { INDEXES } from '../adapters/product.js';
+import { createAlerts } from '../server/extras-alerts.js';
+import { createCards } from '../server/extras-cards.js';
 import { createExtras } from '../server/extras.js';
 import { createService } from '../server/service.js';
 import { COLLECTIONS } from '../core/model.js';
@@ -562,7 +564,8 @@ describe('wishlist, alerts and compare', () => {
 		expect(shop.messages().length).toBe(sent + 2);
 		expect((await shop.visitor('GET', '/v1/shop/alerts', { signIn: sara })).json.items[0].status).toBe('sent');
 
-		// due alerts left over are sent on a later use; one no longer due waits again; a failed send is marked
+		// due alerts left over are sent on a later use; one no longer due waits again; a send that reached no one waits
+		// for a later try (E63)
 		const again = await subscribe(sara, { kind: 'price_drop', productId: inStock.id });
 		const third = await subscribe(omar, { kind: 'price_drop', productId: out.id });
 		const alerts = data.collection(COLLECTIONS.alerts);
@@ -575,14 +578,119 @@ describe('wishlist, alerts and compare', () => {
 		for (const task of later.splice(0)) await task();
 		shop.responders.delete(`https://notifications.example.dev/v1/messages/email`);
 		const states = await alerts.find({ websiteId: data.websiteId, id: { $in: [again.json.id, third.json.id] } }).toArray();
-		expect(Object.fromEntries(states.map((a) => [a.id, [a.status, a.dueAt]]))).toEqual({
-			[again.json.id]: ['waiting', null],
-			[third.json.id]: ['failed', null],
+		expect(Object.fromEntries(states.map((a) => [a.id, [a.status, a.dueAt, a.tries]]))).toEqual({
+			[again.json.id]: ['waiting', null, undefined],
+			[third.json.id]: ['waiting', new Date(shop.now() + 60_000), 1],
 		});
+		await alerts.deleteOne({ websiteId: data.websiteId, id: third.json.id });
 
 		// a restock tells the alerts too (through the shop's own hooks)
 		expect((await shop.visitor('DELETE', `/v1/shop/alerts/${again.json.id}`, { signIn: sara })).status).toBe(204);
 		expect((await shop.visitor('DELETE', `/v1/shop/alerts/${again.json.id}`, { signIn: sara })).status).toBe(404);
+	});
+
+	it('tries an alert no message reached again on later uses, a few times, and never sends a channel twice (E63)', async () => {
+		await shop.setting('alerts', 'channels', ['email', 'sms']);
+		const item = await shop.seedProduct({ name: 'Lamp', price: 5000, stock: 0 });
+		const subscribe = (/** @type {string} */ who) =>
+			shop.visitor('POST', '/v1/shop/alerts', { signIn: who, body: { kind: 'back_in_stock', productId: item.id } });
+		const saraAlert = (await subscribe(sara)).json.id;
+		const omarAlert = (await subscribe(omar)).json.id;
+		// the clock moves by hours here: the merchant database is opened again after each move
+		const alerts = async () => (await shop.db()).collection(COLLECTIONS.alerts);
+		/** @param {string} id */
+		const stateOf = async (id) => {
+			const found = /** @type {any} */ (await (await alerts()).findOne({ websiteId: shop.websiteId, id }));
+			return [found.status, found.tries ?? 0];
+		};
+		/** The alert messages sent through Notifications since a count of calls. @param {number} since */
+		const alertSends = (since) =>
+			shop.calls
+				.slice(since)
+				.filter((call) => call.url.includes('/v1/messages/') && JSON.parse(call.body).template === 'ecommerce.back_in_stock')
+				.map((call) => ({ channel: call.url.split('/').pop(), to: JSON.parse(call.body).to }));
+		/** A later use of the website (its work on use runs right after it). @param {number} ms */
+		const useAfter = async (ms) => {
+			shop.advance(ms);
+			await shop.visitor('GET', '/v1/shop/products');
+		};
+		// e-mail is down: Sara (e-mail and phone) gets her SMS, and her alert is sent; Omar (e-mail only) got nothing
+		shop.responders.set('https://notifications.example.dev/v1/messages/email', () => ({ status: 503, body: {} }));
+		const since = shop.calls.length;
+		// back in stock, then any catalog write of the product tells the alerts
+		await data
+			.collection(COLLECTIONS.products)
+			.updateOne({ websiteId: data.websiteId, id: item.id }, { $set: { 'variants.0.stock': 4, inStock: true } });
+		expect((await shop.api('PATCH', `/v1/products/${item.id}`, { name: 'Desk lamp' })).status).toBe(200);
+		expect(alertSends(since).filter((send) => send.channel === 'sms')).toEqual([
+			{ channel: 'sms', to: { phone: '+15550001111' } },
+		]);
+		expect(await stateOf(saraAlert)).toEqual(['sent', 0]);
+		expect(await stateOf(omarAlert)).toEqual(['waiting', 1]);
+		// a use before the try is due sends nothing; once due Omar's is tried again (still down), then again later
+		const early = shop.calls.length;
+		await useAfter(30_000);
+		expect(alertSends(early)).toEqual([]);
+		for (const [wait, tries] of /** @type {Array<[number, number]>} */ ([
+			[61_000, 2],
+			[5 * 60_000 + 1000, 3],
+			[15 * 60_000 + 1000, 4],
+		])) {
+			const before = shop.calls.length;
+			await useAfter(wait);
+			expect(alertSends(before)).toEqual([{ channel: 'email', to: { email: 'omar@example.com' } }]);
+			expect(await stateOf(omarAlert)).toEqual(['waiting', tries]);
+		}
+		// the fifth try is the last: it ends failed, and Sara's SMS was never sent again
+		const last = shop.calls.length;
+		await useAfter(60 * 60_000 + 1000);
+		expect(alertSends(last)).toEqual([{ channel: 'email', to: { email: 'omar@example.com' } }]);
+		expect(await stateOf(omarAlert)).toEqual(['failed', 5]);
+		expect(alertSends(since).filter((send) => send.channel === 'sms')).toHaveLength(1);
+		shop.responders.delete('https://notifications.example.dev/v1/messages/email');
+
+		// the shopper sets the same alert again while its send is under way and reaches no one: the new one waits instead
+		await shop.setting('alerts', 'channels', ['email']);
+		const out = await shop.seedProduct({ name: 'Shade', price: 900, stock: 2 });
+		const first = createId('alr');
+		const fields = { kind: 'back_in_stock', productId: out.id, variantId: null, userId: OMAR, phone: '' };
+		const rows = await alerts();
+		await rows.insertOne({
+			id: first,
+			...fields,
+			email: 'omar@example.com',
+			price: null,
+			status: 'waiting',
+			dueAt: new Date(shop.now()),
+			createdAt: new Date(shop.now()),
+		});
+		const service = createService(shop.product);
+		const sending = createAlerts(
+			shop.product,
+			{
+				...service,
+				notify: async () => {
+					await rows.insertOne({
+						id: createId('alr'),
+						...fields,
+						email: 'omar@example.com',
+						price: null,
+						status: 'waiting',
+						dueAt: null,
+						createdAt: new Date(shop.now()),
+					});
+					return 'failed';
+				},
+			},
+			createCards(shop.product),
+		);
+		const site = await service.site({ websiteId: shop.websiteId, status: { domain: DOMAIN }, headers: new Headers() });
+		await sending.sendDue(site);
+		expect(await stateOf(first)).toEqual(['failed', 1]);
+		expect(await rows.countDocuments({ websiteId: shop.websiteId, productId: out.id, status: 'waiting' })).toBe(1);
+		// later tests use a fresh ticket and database (the clock moved by hours)
+		ticket = await shop.ticket();
+		data = await shop.db();
 	});
 
 	it('compares products on their comparable attributes', async () => {

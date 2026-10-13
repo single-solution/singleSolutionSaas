@@ -2,15 +2,17 @@
  * Back-in-stock and price-drop alerts (feature `alerts`, PLAN 0.8.8: via Notifications). A signed-in shopper sets an
  * alert on a product (or one variant); the contact is the e-mail and phone of their sign-in, and a price-drop alert
  * stores the price at that moment, with an optional target price (E34). While the `guests` setting allows, a guest
- * sets one with a phone, read as checkout reads it (E21, K12), and the alert keeps the guest's customer id so it moves to
- * them at sign-in. When the catalog changes (`products.changed`: catalog writes, an import, a return's restock, and
+ * sets one with a phone, read as checkout reads it (E21, K12), and the alert keeps the guest's customer id so it moves
+ * to them at sign-in. When the catalog changes (`products.changed`: catalog writes, an import, a return's restock, and
  * stock an order gives back on a cancel, an ended window or a return to origin) the alerts that became due are marked
  * and sent at once, at most {@link SEND_BATCH} per change; the rest go out on later uses of the website
- * (`service.whenUsed`). Each alert is sent once (`ecommerce.back_in_stock` / `ecommerce.price_drop`), with
- * `{stopUrl}`: the website's stop page (the `alerts` setting `stopUrl`, else `/alerts/unsubscribe/<token>`) holding the
- * `alerts_stop` widget, which calls `POST /v1/shop/alerts/unsubscribe/:token` to remove every alert of that phone or
- * e-mail (EN-1); only the token's hash is kept. The link is not named `unsubscribeUrl`: Notifications reserves that name
- * for its own opt-out link and refuses a send that passes it (MS-2).
+ * (`service.whenUsed`). Each alert is sent once (`ecommerce.back_in_stock` / `ecommerce.price_drop`) on each of the
+ * `channels` it has an address for; when its message reached no one (Notifications could not be reached or refused
+ * it) it waits again and is tried on a later use, 1, 5, 15 and 60 minutes after each try, then ends `failed` (E63).
+ * Each message has `{stopUrl}`: the website's stop page (the `alerts` setting `stopUrl`, else
+ * `/alerts/unsubscribe/<token>`) holding the `alerts_stop` widget, which calls `POST /v1/shop/alerts/unsubscribe/:token`
+ * to remove every alert of that phone or e-mail (EN-1); only the token's hash is kept. The link is not named
+ * `unsubscribeUrl`: Notifications reserves that name for its own opt-out link and refuses a send that passes it (MS-2).
  * @module
  */
 import { createId } from '@ss/contracts';
@@ -22,6 +24,7 @@ import { createOrdersStore } from '../adapters/orders-store.js';
 import {
 	MAX_ALERTS,
 	SEND_BATCH,
+	alertRetryAt,
 	checkAlertInput,
 	checkTargetPrice,
 	dueConditions,
@@ -90,7 +93,8 @@ export const createAlerts = (_product, service, cards) => {
 		new Map((await cards.activeProducts(s, [...new Set(ids)])).map((item) => [item.id, item]));
 
 	/**
-	 * Send the alerts that are due (oldest first, at most {@link SEND_BATCH}); an alert no longer due waits again.
+	 * Send the alerts that are due (oldest first, at most {@link SEND_BATCH}); an alert no longer due waits again, and
+	 * one whose message reached no one is tried again later (`alertRetryAt`, five tries in all).
 	 * @param {Site} s
 	 */
 	const sendDue = async (s) => {
@@ -98,7 +102,7 @@ export const createAlerts = (_product, service, cards) => {
 		const due = /** @type {StoredAlert[]} */ (
 			await alerts(data)
 				.find(
-					{ websiteId: data.websiteId, status: 'waiting', dueAt: { $ne: null } },
+					{ websiteId: data.websiteId, status: 'waiting', dueAt: { $ne: null, $lte: new Date(service.now()) } },
 					{ ...NO_ID, sort: { dueAt: 1 }, limit: SEND_BATCH },
 				)
 				.toArray()
@@ -121,25 +125,48 @@ export const createAlerts = (_product, service, cards) => {
 			// each alert is sent once, even when two requests send at the same time; its unsubscribe token is kept as a hash
 			const token = newOrderKey();
 			const taken = await alerts(data).updateOne(
-				{ websiteId: data.websiteId, id: alert.id, status: 'waiting', dueAt: { $ne: null } },
+				{ websiteId: data.websiteId, id: alert.id, status: 'waiting', dueAt: alert.dueAt },
 				{ $set: { status: 'sent', dueAt: null, tokenHash: orderKeyHash(token) } },
 			);
 			if (taken.modifiedCount !== 1) continue;
 			const price = priceOf(item, alert.variantId) ?? item.price;
-			const result = await service.notify(
-				s,
-				alert.kind === 'back_in_stock' ? 'ecommerce.back_in_stock' : 'ecommerce.price_drop',
-				{ email: alert.email, phone: alert.phone },
-				{
-					name: item.name,
-					price: (await s.format()).money(price, s.currency),
-					url: (await cards.card(s, item)).url,
-					stopUrl: stopLink(stopUrl, token, s.domain),
-				},
-				Array.isArray(channels) ? channels : ['email'],
-			);
-			if (result !== 'sent')
-				await alerts(data).updateOne({ websiteId: data.websiteId, id: alert.id }, { $set: { status: 'failed' } });
+			const values = {
+				name: item.name,
+				price: (await s.format()).money(price, s.currency),
+				url: (await cards.card(s, item)).url,
+				stopUrl: stopLink(stopUrl, token, s.domain),
+			};
+			// one send per channel, so a channel that got through is never sent again when another is tried later (E63)
+			/** @type {string[]} */
+			const results = [];
+			for (const channel of Array.isArray(channels) ? channels : ['email']) {
+				const result = await service.notify(
+					s,
+					alert.kind === 'back_in_stock' ? 'ecommerce.back_in_stock' : 'ecommerce.price_drop',
+					{ email: alert.email, phone: alert.phone },
+					values,
+					[channel],
+				);
+				results.push(result);
+				if (result === 'not_connected') break;
+			}
+			if (results.includes('sent')) continue;
+			const tries = (alert.tries ?? 0) + 1;
+			// nothing to send it to ends it at once; else it waits for a later try, until the last
+			const next = results.every((result) => result === 'skipped') ? null : alertRetryAt(tries, service.now());
+			const filter = { websiteId: data.websiteId, id: alert.id, status: 'sent' };
+			try {
+				await alerts(data).updateOne(
+					filter,
+					next
+						? { $set: { status: 'waiting', dueAt: next, tries }, $unset: { tokenHash: '' } }
+						: { $set: { status: 'failed', tries } },
+				);
+			} catch (error) {
+				// the shopper set the same alert again meanwhile: that one waits instead
+				if (!isDuplicate(error)) throw error;
+				await alerts(data).updateOne(filter, { $set: { status: 'failed', tries } });
+			}
 		}
 	};
 

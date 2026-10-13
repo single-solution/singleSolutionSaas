@@ -208,6 +208,33 @@ describe('required messages (K-17)', () => {
 		await shop.setting('staff_alerts', 'phoneChannel', 'whatsapp');
 	});
 
+	it('removes a person’s waiting messages and the staff alerts about their orders on a data-rights deletion (E63)', async () => {
+		mode = 'down';
+		await placeOrder();
+		const mine = `usr_outbox${String(users).padStart(6, '0')}`;
+		const item = await shop.seedProduct({ price: 1000, stock: 10 });
+		const other = await shop.signIn({ id: 'usr_outboxother1', name: 'Omar', email: 'omar@example.com', phone: '+15550009999' });
+		const kept = await shop.call('POST', '/v1/shop/orders', {
+			token: shop.browser,
+			origin: ORIGIN,
+			body: { lines: [{ productId: item.id }], payment: 'cod', address: ADDRESS },
+			headers: { 'x-forwarded-for': '10.6.1.1', 'ss-sign-in': other, 'idempotency-key': 'out-other' },
+		});
+		expect(kept.status).toBe(201);
+		expect(await outbox()).toHaveLength(6);
+		const removed = await shop.api('POST', '/v1/data-rights/delete', { user: { id: mine } });
+		expect(removed.status).toBe(200);
+		const left = await outbox();
+		expect(left).toHaveLength(3);
+		expect(left.every((row) => row.values.number === kept.json.order.number)).toBe(true);
+		expect(left.filter((row) => row.template === 'ecommerce.order_placed').map((row) => row.to)).toEqual([
+			{ email: 'omar@example.com' },
+		]);
+		mode = 'ok';
+		await useAfter(61_000);
+		expect(await outbox()).toEqual([]);
+	});
+
 	it('tells a retry from a refusal', () => {
 		expect(outcomeOf({ ok: true })).toBe('sent');
 		expect(outcomeOf({ ok: false, reason: 'not_connected' })).toBe('not_connected');

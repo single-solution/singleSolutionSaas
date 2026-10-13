@@ -491,6 +491,6 @@ export const STATUS_ROLES = Object.freeze([
 /**
  * @typedef {{ id: string, kind: 'back_in_stock' | 'price_drop', productId: string, variantId: string | null, userId: string,
  *   email: string, phone: string, price: number | null, status: 'waiting' | 'sent' | 'failed', customerId?: string | null,
- *   targetPrice?: number | null, tokenHash?: string }} AlertRecord
+ *   targetPrice?: number | null, tokenHash?: string, tries?: number }} AlertRecord `tries`: sends that reached no one
  */
 /** A member of the merchant's staff seen in a ticket (PLAN 0.4.5). @typedef {{ id: string, name: string, email: string, lastSeenAt: Date }} StaffRecord */
