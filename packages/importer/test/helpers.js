@@ -23,12 +23,13 @@ export const freshDb = async () => {
 
 /**
  * A product as `ss-import` sees it (PLAN 0.8.10 K1, K10), in memory: NDJSON upserts by key with a check (non-empty
- * `text` of at most 40 characters, for `notes`), dry runs, prune by key ranges (at most `pruneBatch` a call), finish,
- * status with verification totals, a count route, and the settings API (settings, Format and lists; the first write
- * answers 429 when `busyOnce`).
+ * `text` of at most 40 characters, for `notes`), dry runs, prune by key ranges (at most `pruneBatch` a call), finish
+ * (in `finishPages` calls, each after the `next` of the one before, as Chat pages it), status with verification
+ * totals, a count route, and the settings API (settings, Format and lists; the first write answers 429 when
+ * `busyOnce`). Every import call is noted in `calls`, finish with the `after` it got as its body.
  * @param {{ token?: string, failOn?: string, keys?: Record<string, string[]>, totals?: Record<string, number>,
- *   pruneBatch?: number, busyOnce?: boolean }} [options] `failOn`: answer 500 to this collection; `keys`: the key fields
- *   of collections not found by `id`
+ *   pruneBatch?: number, busyOnce?: boolean, finishPages?: number }} [options] `failOn`: answer 500 to this collection;
+ *   `keys`: the key fields of collections not found by `id`
  */
 export const fakeProduct = ({
 	token = 'server-token',
@@ -37,6 +38,7 @@ export const fakeProduct = ({
 	totals = {},
 	pruneBatch = 1000,
 	busyOnce = false,
+	finishPages = 1,
 } = {}) => {
 	/** @type {Map<string, Map<string, Record<string, unknown>>>} */
 	const stored = new Map();
@@ -126,7 +128,11 @@ export const fakeProduct = ({
 		if (request.method === 'GET' && count) return json(200, { count: stored.get(String(count[1]))?.size ?? 0, capped: false });
 		if (request.method === 'POST' && url.pathname === '/v1/import/finish') {
 			finished += 1;
-			return json(200, { finished: true, notes: stored.get('notes')?.size ?? 0 });
+			const after = url.searchParams.get('after');
+			calls.push({ method: 'POST', path: url.pathname, dryRun: false, records: 0, body: after });
+			const page = after === null ? 1 : Number(after.split('-')[1]) + 1;
+			if (page < finishPages) return json(200, { finished: true, notes: 1, next: `page-${page}`, more: true });
+			return json(200, { finished: true, notes: finishPages === 1 ? (stored.get('notes')?.size ?? 0) : 1, more: false });
 		}
 		const prune = /^\/v1\/import\/([a-z_]+)\/prune$/.exec(url.pathname);
 		if (request.method === 'POST' && prune) {

@@ -383,6 +383,42 @@ describe('send: settings, prune and the final pass', () => {
 		]);
 	});
 
+	it('finishes each product right after its last file, again with ?after=<next> while it answers more', async () => {
+		const { dir, product, products, sleep } = await sendSetup({ finishPages: 3 });
+		const real = await send({ dir, products, fetch: product.fetch, sleep });
+		// the numbers of every page add up; the paging's own more and next are left out
+		expect(real.finished).toEqual(
+			['accounts', 'chat', 'ecommerce'].map((name) => ({ product: name, summary: { finished: true, notes: 3 } })),
+		);
+		const finish = ['finish', 'finish page-1', 'finish page-2'];
+		expect(
+			product.calls.map((call) => (call.path === '/v1/import/finish' ? `finish ${call.body ?? ''}`.trim() : call.path)),
+		).toEqual([
+			// the settings first (Migration step 2)
+			'/v1/settings/checkout.channels',
+			'/v1/import/users',
+			...finish,
+			'/v1/import/brands',
+			'/v1/import/products',
+			'/v1/import/conversations',
+			'/v1/import/messages',
+			...finish,
+			'/v1/import/loyalty',
+			...finish,
+		]);
+		// a finish that says more without moving on stops the run
+		for (const answer of [{ more: true }, { more: true, next: 'same' }]) {
+			/** @type {typeof globalThis.fetch} */
+			const stuck = async (input, init) =>
+				new URL(new Request(input, init).url).pathname === '/v1/import/finish'
+					? Response.json(answer)
+					: product.fetch(input, init);
+			await expect(send({ dir, products, fetch: stuck, sleep })).rejects.toThrow(
+				'POST /v1/import/finish of accounts answered more without moving on.',
+			);
+		}
+	});
+
 	it('verifies the sums the steps added up with the product’s', async () => {
 		const { dir, product, products, sleep } = await sendSetup({ totals: { people: 1, 'loyalty.points': 70 } });
 		await send({ dir, products, fetch: product.fetch, sleep });

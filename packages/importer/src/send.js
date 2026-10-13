@@ -5,15 +5,17 @@
  * dry run), NDJSON cut into calls of at most 1,000 records and 4 MB. A failed record is reported with its file line;
  * nothing stops on it. With `prune` (the final pass, IMP-22), each target then sends the keys of every record it holds
  * — sorted, at most 1,000 a call, each call a range of keys — to `POST <product>/v1/import/<collection>/prune`, so the
- * records an import wrote earlier and the store deleted since go too (a dry run says which). After a real run,
- * `POST <product>/v1/import/finish` recomputes each product's derived values. Re-runs are safe: the products find
+ * records an import wrote earlier and the store deleted since go too (a dry run says which). In a real run, each
+ * product's `POST <product>/v1/import/finish` (its derived values) follows its last file, so the products finish in
+ * import order (Accounts, then Ecommerce's catalog and orders, Chat, Growth); a finish that works in batches answers
+ * `more` with `next` and is called again with `?after=<next>` until it is done. Re-runs are safe: the products find
  * records by their keys. `only` sends some targets (`<product>.<collection>`; pre-imports before the freeze).
  * @module
  */
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { IMPORT_LIMITS } from '@ss/contracts';
-import { callProduct, targetOf } from './http.js';
+import { callProduct, importError, targetOf } from './http.js';
 import { compareKeyTexts, keyPayloadOf, keyTextOf, keyValuesOf } from './keys.js';
 import { MANIFEST_FILE } from './read.js';
 import { chunk, linesOf } from './ndjson.js';
@@ -42,6 +44,8 @@ import { applySettings, mergePlans } from './settings.js';
 
 /** Most removed keys a report lists per target. */
 const LISTED_KEYS = 1000;
+/** Most finish calls of one product (a batched finish of 100 conversations a call: a million conversations). */
+const FINISH_CALLS = 10_000;
 
 /**
  * Read the folder's manifest.
@@ -84,6 +88,38 @@ export const pruneCalls = (target, lines) => {
 };
 
 /**
+ * A product's finish, called again with `?after=<next>` while it answers `more` (Chat finishes a batch of
+ * conversations a call). The summary adds up the numbers of every answer; other values are the last answer's (the
+ * paging's own `more` and `next` left out).
+ * @param {typeof globalThis.fetch} fetch
+ * @param {ProductTarget} target
+ * @param {string} product the product id (for errors)
+ * @returns {Promise<Record<string, unknown>>}
+ */
+export const finishProduct = async (fetch, target, product) => {
+	/** @type {Record<string, unknown>} */
+	const summary = {};
+	/** @type {string | null} */
+	let after = null;
+	for (let calls = 1; ; calls += 1) {
+		const route = `/v1/import/finish${after === null ? '' : `?after=${encodeURIComponent(after)}`}`;
+		/** @type {Record<string, unknown>} */
+		const answer = (await callProduct(fetch, target, 'POST', route)) ?? {};
+		for (const [name, value] of Object.entries(answer)) {
+			if (name === 'more' || name === 'next') continue;
+			const sum = summary[name];
+			summary[name] = typeof value === 'number' && typeof sum === 'number' ? sum + value : value;
+		}
+		if (answer.more !== true) return summary;
+		/** @type {string | null} */
+		const next = typeof answer.next === 'string' && answer.next !== '' ? answer.next : null;
+		if (next === null || next === after || calls >= FINISH_CALLS)
+			throw importError(`POST /v1/import/finish of ${product} answered more without moving on.`, { product, answer });
+		after = next;
+	}
+};
+
+/**
  * Send the folder's settings and files to the products.
  * @param {{ dir: string, products: Record<string, ProductTarget>, dryRun?: boolean, prune?: boolean,
  *   only?: ReadonlyArray<string>, settings?: import('./mapping.js').SettingsPlan, fetch?: typeof globalThis.fetch,
@@ -111,7 +147,11 @@ export const send = async ({
 	const settingsReport = await applySettings({ plan, products, dryRun, fetch, sleep });
 	/** @type {SendStep[]} */
 	const steps = [];
-	for (const target of targets) {
+	/** @type {SendReport['finished']} */
+	const finished = [];
+	/** @type {Map<string, number>} each product's last target */
+	const last = new Map(targets.map((target, index) => [target.product, index]));
+	for (const [index, target] of targets.entries()) {
 		const product = targetOf(products, target.product);
 		const lines = linesOf(await readFile(path.join(dir, target.file), 'utf8'));
 		const calls = chunk(lines);
@@ -158,15 +198,10 @@ export const send = async ({
 			report.pruned = pruned;
 		}
 		steps.push(report);
+		// the product's derived values once its last file is in (not on a dry run)
+		if (!dryRun && last.get(target.product) === index)
+			finished.push({ product: target.product, summary: await finishProduct(fetch, product, target.product) });
 	}
-	/** @type {SendReport['finished']} */
-	const finished = [];
-	if (!dryRun)
-		for (const name of chosen)
-			finished.push({
-				product: name,
-				summary: (await callProduct(fetch, targetOf(products, name), 'POST', '/v1/import/finish')) ?? {},
-			});
 	return {
 		dryRun,
 		ok: steps.every((step) => step.failed.length === 0) && settingsReport.refused.length === 0,

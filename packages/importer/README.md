@@ -12,14 +12,16 @@ deployed**, that moves a store's records into the products:
    `--settings <file>`) through each product's settings API (K1: `PUT /v1/format`, `/v1/settings/<feature>.<key>`,
    `/v1/lists/<list>`; every value explicitly, RT-15; a 429 waits and tries again), then posts the files to each
    product's import routes with the website's server token (`POST /v1/import/<collection>`, `?dryRun=1` first), cut
-   into calls of at most 1,000 records and 4 MB (`@ss/contracts` `IMPORT_LIMITS`), then `POST /v1/import/finish`
-   (derived values) after a real run. A dry run writes nothing and lists every refused record (file and line), every
-   refused setting and the settings that would change (from what, and where the current value comes from). With
-   `--prune` (the final pass, IMP-22) each target also sends the keys of all its records, sorted and cut into ranges of
-   at most 1,000, to `POST /v1/import/<collection>/prune`: records an earlier import wrote that the store has deleted
-   since are removed (only records an import wrote, never the merchant's own). `--only <product>.<collection>` sends
-   some targets (pre-imports before the freeze). Re-runs are safe: the products find records by their keys and replace
-   them.
+   into calls of at most 1,000 records and 4 MB (`@ss/contracts` `IMPORT_LIMITS`). In a real run each product's
+   `POST /v1/import/finish` (derived values) follows its last file, so the products finish in import order (Accounts,
+   then Ecommerce's catalog and orders, Chat, Growth); a finish that works in batches (Chat: 100 conversations a call)
+   answers `more` with `next`, and `send` calls it again with `?after=<next>` until it is done. A dry run writes
+   nothing and lists every refused record (file and line), every refused setting and the settings that would change
+   (from what, and where the current value comes from). With `--prune` (the final pass, IMP-22) each target also sends
+   the keys of all its records, sorted and cut into ranges of at most 1,000, to `POST /v1/import/<collection>/prune`:
+   records an earlier import wrote that the store has deleted since are removed (only records an import wrote, never
+   the merchant's own). `--only <product>.<collection>` sends some targets (pre-imports before the freeze). Re-runs are
+   safe: the products find records by their keys and replace them.
 3. `ss-import verify` compares the records read with `GET /v1/import/status` (records an import wrote), the mapping's
    count routes (K4), and the sums the steps added up (order totals per status, stock units, points balances …) with
    the product's verification totals.
