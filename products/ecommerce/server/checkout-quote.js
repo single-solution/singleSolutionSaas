@@ -483,7 +483,9 @@ export const createQuoting = (product, service) => {
 				rtoCount: customer?.rtoCount ?? 0,
 				unit,
 			}).map((option) =>
-				option.method === 'bank_transfer' && !bankManual && bank !== null && !bank.ready
+				// bank transfer waits for Payments' bank details (or its `requireDetails` off), also when staff record the
+				// transfers (CK-33); a Payments that does not answer leaves it offered
+				option.method === 'bank_transfer' && bank !== null && !bank.ready
 					? { ...option, available: false, reason: 'not_ready' }
 					: option,
 			);

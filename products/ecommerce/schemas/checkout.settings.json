@@ -223,7 +223,7 @@
 		"bankTransferVia": {
 			"type": "string",
 			"title": "Bank transfers",
-			"description": "payments: through Payments' bank page. manual: the order waits for the shopper's proof and staff record the payment.",
+			"description": "payments: through Payments' bank page. manual: the order waits for the shopper's proof and staff record the payment. Either way, while Payments is connected, bank transfer is offered only once its bank details are saved there (or its Require bank details is off).",
 			"default": "payments",
 			"enum": ["payments", "manual"]
 		},

@@ -553,7 +553,8 @@ export const merchandiseOf = (lines, promotions) => {
  * The payment methods a cart may use, in the merchant's order (`paymentOrder`, E22): COD while `cod` is on, delivered
  * (or picked up with `atPickup`, E23) and without digital items (its largest value, advance and RTO rules); online
  * when offered and Payments is connected; bank transfer when offered and Payments is connected or transfers are
- * recorded by staff (`bankTransferVia: manual`, E24); pay at pickup when offered and the order is picked up. Digital
+ * recorded by staff (`bankTransferVia: manual`, E24; the caller marks it `not_ready` while Payments has no bank details
+ * it requires, CK-33); pay at pickup when offered and the order is picked up. Digital
  * items are paid before they are given, so they need online payment or a bank transfer.
  * @param {object} input
  * @param {ReadonlyArray<string>} input.offered the `checkout` setting `paymentMethods`

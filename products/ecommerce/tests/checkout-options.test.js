@@ -508,6 +508,31 @@ describe('bank transfers recorded by staff (E24)', () => {
 		expect(elsewhere.status).toBe(422);
 		await shop.setting('checkout', 'bankTransferVia', 'payments');
 	});
+
+	it('offers it only while Payments has the bank details, or does not require them (CK-33)', async () => {
+		await shop.setting('checkout', 'bankTransferVia', 'manual');
+		const item = await shop.seedProduct({ price: 1000, stock: 10 });
+		const body = { lines: [{ productId: item.id }], delivery: { city: 'Springfield' } };
+		const none = { accountTitle: '', bankName: '', accountNumber: '', iban: '', instructions: '' };
+		/** The bank transfer option while Payments answers these bank details. @param {Record<string, unknown>} details */
+		const bankWith = async (details) => {
+			shop.responders.set(`${PAYMENTS}/v1/bank-transfer`, () => ({ status: 200, body: details }));
+			// the details are read again once the copy kept for 5 minutes is old
+			shop.advance(5 * 60_000 + 1000);
+			return (await quote(body)).json.paymentMethods.find((/** @type {any} */ m) => m.method === 'bank_transfer');
+		};
+		expect(await bankWith({ ready: false, ...none })).toMatchObject({ available: false, reason: 'not_ready' });
+		const shopper = await newShopper();
+		const refused = await place({ ...body, payment: 'bank_transfer', address: ADDRESS }, shopper.token);
+		expect(refused.status).toBe(422);
+		expect(await bankWith({ ready: true, ...none, accountNumber: '0123456789' })).toMatchObject({ available: true });
+		// Payments' requireDetails off: ready with only the instructions
+		expect(await bankWith({ ready: true, ...none, instructions: 'Ask us for our account.' })).toMatchObject({
+			available: true,
+		});
+		shop.responders.delete(`${PAYMENTS}/v1/bank-transfer`);
+		await shop.setting('checkout', 'bankTransferVia', 'payments');
+	});
 });
 
 describe('loyalty options (E20)', () => {
