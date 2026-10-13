@@ -20,7 +20,7 @@
  * widget installed.
  *
  * Right after the response (Next.js `after`, through `toNextRoute`): a pending price report, a stale business.json,
- * unsent activity copies and events, the staff named in a ticket or by the actor headers, the widget last-seen time,
+ * unsent activity copies, events and staff alerts, the staff named in a ticket or by the actor headers, the widget last-seen time,
  * the route's own work, and last a status copy older than 5 minutes and the revocation list, fetched again (K-19).
  * @module
  */
@@ -291,6 +291,10 @@ export const createRequestHandler = (kit, routes, options = {}) => {
 			},
 			async () => {
 				if (r.database !== false) await kit.events.drain(websiteId, ctx.merchantId);
+			},
+			async () => {
+				// staff alerts Notifications did not take (K-17, D7)
+				if (r.database !== false) await kit.staffAlerts.retry(websiteId, ctx.merchantId);
 			},
 		];
 		for (const task of tasks) await task().catch((error) => logger.warn('work after the request failed', { websiteId, error }));

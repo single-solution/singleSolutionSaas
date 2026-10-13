@@ -9,18 +9,78 @@
  * - An e-mail address gets e-mail; an international phone number gets WhatsApp, or SMS with the feature's
  *   `phoneChannel` setting.
  * - Templates `<product>.staff_<event>` (required, not urgent); one message per address per event, sent right after the
- *   request; the link is built from the feature's `adminUrl` template (`{placeholders}` filled from the values) and
- *   sent as the value `link`.
+ *   request with `required: true` and its own `Idempotency-Key`; the link is built from the feature's `adminUrl`
+ *   template (`{placeholders}` filled from the values) and sent as the value `link`.
+ * - Nothing that matters is lost (K-17, owner decision D7): a message Notifications did not take (no answer, 5xx, a
+ *   refused token, 408, 409 `in_progress` or 429) is saved in the merchant database (`ss_<product>_staff_alerts`) and
+ *   tried again with the same key on the website's next uses ({@link RETRY_MS}, then every 3 hours), for at most a day;
+ *   a TTL index removes rows a website never used again. Nothing runs in the background.
  * @module
  */
+import { createId } from '@ss/contracts';
 import { normalisePhone } from '@ss/contracts/phone';
 import { formatText } from './text.js';
 
 /** @typedef {{ email?: string | null, phone?: string | null }} Assignee */
-/** @typedef {{ websiteId: string, after: (task: () => Promise<unknown>) => void }} AlertContext */
+/**
+ * @typedef {{ websiteId: string, merchantId?: string | null, after: (task: () => Promise<unknown>) => void }} AlertContext
+ */
+/**
+ * One message of an alert: `id` names it to Notifications (its `Idempotency-Key`) on every try.
+ * @typedef {{ id: string, channel: 'email' | 'sms' | 'whatsapp', template: string,
+ *   to: { email: string } | { phone: string }, values: Record<string, string | number> }} AlertMessage
+ */
+/**
+ * A saved message: `tries` so far, `nextAt` when it may be tried again (a try in progress holds it), `firstAt` when it
+ * was first sent.
+ * @typedef {AlertMessage & { tries: number, nextAt: Date, firstAt: Date, expireAt: Date }} SavedAlert
+ */
 
 /** Most recipients a `recipients` setting holds. */
 export const MAX_RECIPIENTS = 20;
+/** Waits before a message Notifications did not take is tried again (as Ecommerce's outbox, E63): 1, 5, 15, 60 minutes, then every 3 hours. */
+export const RETRY_MS = Object.freeze([60_000, 5 * 60_000, 15 * 60_000, 60 * 60_000, 3 * 3_600_000]);
+/** A message is tried for at most a day after its first try (Notifications keeps an Idempotency-Key that long). */
+export const ALERT_KEEP_MS = 24 * 3_600_000;
+/** A try holds a saved message this long, so two instances never send it at once. */
+const LEASE_MS = 5 * 60_000;
+/** Saved messages tried again per use of a website, at most. */
+const RETRY_BATCH = 20;
+/** An instance looks for saved messages of a website at most this often. */
+const LOOK_EVERY_MS = 60_000;
+/** Why a call to Notifications is tried again: it did not take the message. */
+const RETRY_REASONS = Object.freeze(['unreachable', 'unavailable', 'refused']);
+const COLLECTION = 'staff_alerts';
+
+/** Merchant database indexes of saved messages (created when the first one is saved). */
+export const STAFF_ALERT_INDEXES = Object.freeze(
+	/** @type {import('./data.js').IndexDefinition[]} */ ([
+		{ collection: COLLECTION, keys: { websiteId: 1, nextAt: 1 }, name: 'kit_staff_alerts_due' },
+		{ collection: COLLECTION, keys: { expireAt: 1 }, name: 'kit_staff_alerts_expiry', expireAfterSeconds: 0 },
+	]),
+);
+
+/**
+ * What an answer of Notifications means for a message: taken (a 409 `duplicate_request` is an earlier try that got
+ * through), not connected (no token), to try again, or refused for good (a missing template, values it refuses …).
+ * @param {import('./connections.js').ProductCall} answer
+ * @returns {'sent' | 'not_connected' | 'retry' | 'failed'}
+ */
+export const alertOutcome = (answer) => {
+	if (answer.ok) return 'sent';
+	if (answer.reason === 'not_connected') return 'not_connected';
+	const type = /** @type {{ type?: unknown } | null | undefined} */ (answer.body)?.type;
+	const code = typeof type === 'string' ? type.split('/').pop() : '';
+	if (answer.status === 409 && code === 'duplicate_request') return 'sent';
+	if (
+		RETRY_REASONS.includes(String(answer.reason)) ||
+		answer.status === 408 ||
+		answer.status === 429 ||
+		(answer.status === 409 && code === 'in_progress')
+	)
+		return 'retry';
+	return 'failed';
+};
 /** Accounts users with a permission are asked again after this long. */
 const STAFF_CACHE_MS = 5 * 60_000;
 /** Most Accounts users read per permission. */
@@ -46,11 +106,32 @@ export const recipientOf = (value) => {
 
 /**
  * @param {{ productId: string, settings: import('./settings.js').Settings,
- *   connections: import('./connections.js').Connections, now: () => number, logger: import('./logger.js').Logger }} options
+ *   connections: import('./connections.js').Connections, data: import('./data.js').Data, now: () => number,
+ *   logger: import('./logger.js').Logger }} options
  */
-export const createStaffAlerts = ({ productId, settings, connections, now, logger }) => {
+export const createStaffAlerts = ({ productId, settings, connections, data, now, logger }) => {
 	/** @type {Map<string, { at: number, addresses: string[] }>} */
 	const staffCache = new Map();
+	/** Per instance: when the saved messages of a website were last looked for. @type {Map<string, number>} */
+	const lookedAt = new Map();
+
+	/**
+	 * Send one message through Notifications (pasted token), required, with its own Idempotency-Key.
+	 * @param {string} websiteId
+	 * @param {AlertMessage} message
+	 */
+	const post = (websiteId, message) =>
+		connections
+			.callProduct(websiteId, 'notifications', `/v1/messages/${message.channel}`, {
+				method: 'POST',
+				body: { template: message.template, to: message.to, values: message.values, required: true },
+				headers: { 'idempotency-key': `${productId}-${message.id}` },
+			})
+			.catch(() => /** @type {const} */ ({ ok: false, reason: 'unreachable' }));
+
+	/** @param {string} websiteId @param {string | null | undefined} merchantId */
+	const savedOf = async (websiteId, merchantId) =>
+		(await data.forWebsite(websiteId, merchantId ? { merchantId } : {})).collection(COLLECTION);
 
 	/**
 	 * The e-mail addresses and phones of unblocked Accounts users whose role grants a permission (cached 5 minutes).
@@ -124,20 +205,99 @@ export const createStaffAlerts = ({ productId, settings, connections, now, logge
 		const adminUrl = typeof own.adminUrl === 'string' ? own.adminUrl : '';
 		const link = adminUrl === '' ? '' : formatText(adminUrl, values);
 		const channelOfPhone = own.phoneChannel === 'sms' ? 'sms' : 'whatsapp';
+		/** @type {AlertMessage[]} */
+		const messages = to.map((recipient) => ({
+			id: createId('sal'),
+			channel: 'email' in recipient ? 'email' : channelOfPhone,
+			template,
+			to: recipient,
+			values: { ...values, ...(link === '' ? {} : { link }) },
+		}));
 		ctx.after(async () => {
-			for (const recipient of to) {
-				const channel = 'email' in recipient ? 'email' : channelOfPhone;
-				const answer = await connections.callProduct(ctx.websiteId, 'notifications', `/v1/messages/${channel}`, {
-					method: 'POST',
-					body: { template, to: recipient, values: { ...values, ...(link === '' ? {} : { link }) } },
-				});
-				if (!answer.ok) logger.info('staff alert not sent', { websiteId: ctx.websiteId, template, reason: answer.reason });
+			/** @type {AlertMessage[]} */
+			const missed = [];
+			for (const message of messages) {
+				const answer = await post(ctx.websiteId, message);
+				const outcome = alertOutcome(answer);
+				if (outcome === 'retry') missed.push(message);
+				else if (outcome !== 'sent')
+					logger.info('staff alert not sent', {
+						websiteId: ctx.websiteId,
+						template,
+						reason: answer.ok ? outcome : answer.reason,
+					});
+			}
+			if (missed.length === 0) return;
+			const at = now();
+			try {
+				const db = await data.forWebsite(ctx.websiteId, ctx.merchantId ? { merchantId: ctx.merchantId } : {});
+				await db.ensureIndexes([...STAFF_ALERT_INDEXES]);
+				await db.collection(COLLECTION).insertMany(
+					missed.map((message) => ({
+						...message,
+						tries: 1,
+						nextAt: new Date(at + /** @type {number} */ (RETRY_MS[0])),
+						firstAt: new Date(at),
+						expireAt: new Date(at + ALERT_KEEP_MS),
+					})),
+				);
+				lookedAt.delete(ctx.websiteId);
+				logger.info('staff alert not taken; tried again on a later use', { websiteId: ctx.websiteId, template });
+			} catch (error) {
+				logger.warn('staff alert not sent and not saved', { websiteId: ctx.websiteId, template, error });
 			}
 		});
 		return to.length;
 	};
 
-	return Object.freeze({ send, recipients: recipientsOf });
+	/**
+	 * Right after a request for the website: try again the saved messages that are due (at most {@link RETRY_BATCH};
+	 * an instance looks at most every minute). A message Notifications still does not take waits longer, and is given
+	 * up a day after its first try.
+	 * @param {string} websiteId
+	 * @param {string | null} merchantId
+	 */
+	const retry = async (websiteId, merchantId) => {
+		const t = now();
+		if (t - (lookedAt.get(websiteId) ?? -Infinity) < LOOK_EVERY_MS) return;
+		lookedAt.set(websiteId, t);
+		const rows = await savedOf(websiteId, merchantId);
+		const due = /** @type {SavedAlert[]} */ (
+			await rows
+				.find(
+					{ websiteId, nextAt: { $lte: new Date(t) } },
+					{ projection: { _id: 0 }, sort: { nextAt: 1 }, limit: RETRY_BATCH },
+				)
+				.toArray()
+		);
+		for (const row of due) {
+			const held = await rows.updateOne(
+				{ websiteId, id: row.id, nextAt: row.nextAt },
+				{ $set: { nextAt: new Date(now() + LEASE_MS) } },
+			);
+			if (held.modifiedCount !== 1) continue;
+			const answer = await post(websiteId, row);
+			const outcome = alertOutcome(answer);
+			if (outcome === 'retry') {
+				const tries = row.tries + 1;
+				const next = now() + /** @type {number} */ (RETRY_MS[Math.min(tries, RETRY_MS.length) - 1]);
+				if (next < new Date(row.firstAt).getTime() + ALERT_KEEP_MS) {
+					await rows.updateOne({ websiteId, id: row.id }, { $set: { tries, nextAt: new Date(next) } });
+					continue;
+				}
+			}
+			await rows.deleteOne({ websiteId, id: row.id });
+			if (outcome !== 'sent')
+				logger.warn('staff alert given up', {
+					websiteId,
+					template: row.template,
+					tries: row.tries + 1,
+					reason: answer.ok ? outcome : answer.reason,
+				});
+		}
+	};
+
+	return Object.freeze({ send, retry, recipients: recipientsOf });
 };
 
 /** @typedef {ReturnType<typeof createStaffAlerts>} StaffAlerts */

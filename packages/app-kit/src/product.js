@@ -90,6 +90,7 @@ import { verifyToken } from '@ss/protocol';
  * @property {import('./business.js').Business} business
  * @property {import('./activity.js').Activity} activity
  * @property {import('./events.js').Events} events
+ * @property {import('./staff-alerts.js').StaffAlerts} staffAlerts
  * @property {ReturnType<typeof createTickets>} tickets
  * @property {() => Promise<import('./reseal.js').ResealResult>} reseal the Owner's Re-seal of stored secrets (RT-14)
  * @property {ReturnType<typeof createDashboard>} dashboard
@@ -226,7 +227,7 @@ export const createProduct = (options) => {
 	const business = createBusiness({ store, send, now, logger });
 	const activity = createActivity({ productId: manifest.id, data, connections, now, logger });
 	const events = createEvents({ productId: manifest.id, enabled: options.events === true, data, connections, now, logger });
-	const staffAlerts = createStaffAlerts({ productId: manifest.id, settings, connections, now, logger });
+	const staffAlerts = createStaffAlerts({ productId: manifest.id, settings, connections, data, now, logger });
 	const imports = createImports({ options: options.imports, now, record: activity.record });
 	const lists = options.lists ?? {};
 	for (const [name, list] of Object.entries(lists))
@@ -266,6 +267,7 @@ export const createProduct = (options) => {
 		business,
 		activity,
 		events,
+		staffAlerts,
 		tickets,
 		reseal,
 	};

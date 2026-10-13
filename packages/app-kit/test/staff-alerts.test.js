@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { defineRoute } from '../src/index.js';
-import { MAX_RECIPIENTS, recipientOf } from '../src/staff-alerts.js';
-import { manifest, productRoutes, setup } from './helpers.js';
+import { ALERT_KEEP_MS, MAX_RECIPIENTS, RETRY_MS, alertOutcome, recipientOf } from '../src/staff-alerts.js';
+import { manifest, openDb, productRoutes, setup } from './helpers.js';
 
 /** The sample product with a staff-alerts feature (its settings as K6 names them). */
 const alertsManifest = () => {
@@ -35,6 +35,7 @@ const holder = { product: null };
 
 const routes = () => [
 	...productRoutes(),
+	defineRoute({ method: 'GET', path: '/v1/server/ping', auth: 'server', handler: () => ({ pong: true }) }),
 	defineRoute({
 		method: 'POST',
 		path: '/v1/server/alert',
@@ -134,6 +135,7 @@ describe('staff alerts (K6)', () => {
 			template: 'notes.staff_note_created',
 			to: { email: 'ops@shop.example.com' },
 			values: { noteId: 'not_42', preview: 'Hello', link: 'https://admin.shop.example.com/notes/not_42' },
+			required: true,
 		});
 		expect(accounts.userReads).toEqual(['notes:notes.read']);
 		// cached for 5 minutes; then asked again
@@ -150,6 +152,84 @@ describe('staff alerts (K6)', () => {
 		await alert();
 		expect(accounts.userReads).toHaveLength(2);
 		expect(await alert({ event: 'Bad-Event' })).toBe(0);
+	});
+
+	it('save what Notifications did not take and try it again with the same key on later uses, for a day (K-17)', async () => {
+		const { set, alert, notifications, handlers, connectDatabase, call, server, settle, clock, entries } = await start();
+		const dbName = await connectDatabase();
+		await set('recipients', ['ops@shop.example.com', '+92 300 1234567']);
+		/** @type {Array<string | null>} */
+		const keys = [];
+		const original = /** @type {(request: Request) => Promise<Response>} */ (handlers[notifications.url]);
+		handlers[notifications.url] = async (request) => {
+			keys.push(request.headers.get('idempotency-key'));
+			return original(request);
+		};
+		const use = async () => {
+			await call('GET', '/v1/server/ping', { token: server.token });
+			await settle();
+		};
+		const { client, db } = await openDb(dbName);
+		const saved = db.collection('ss_notes_staff_alerts');
+		try {
+			notifications.setFailing(true);
+			expect(await alert()).toBe(2);
+			expect(await saved.countDocuments({})).toBe(2);
+			expect((await saved.indexes()).map((i) => i.name)).toContain('kit_staff_alerts_expiry');
+			expect(keys).toHaveLength(2);
+			expect(new Set(keys).size).toBe(2);
+			// not due yet; then the first retry a minute later, with the same keys
+			notifications.setFailing(false);
+			await use();
+			expect(notifications.messages).toHaveLength(0);
+			clock.advance(RETRY_MS[0] ?? 0);
+			await use();
+			expect(notifications.messages.map((m) => [m.channel, m.body.required])).toEqual([
+				['email', true],
+				['whatsapp', true],
+			]);
+			expect(keys.slice(2)).toEqual(keys.slice(0, 2));
+			expect(keys[0]).toMatch(/^notes-sal_[0-9a-z]{26}$/);
+			expect(await saved.countDocuments({})).toBe(0);
+
+			// still not taken: 1, 5, 15, 60 minutes, then every 3 hours, given up a day after the first try
+			notifications.messages.length = 0;
+			notifications.setFailing(true);
+			await alert();
+			const tries = async () => (await saved.find({}).toArray()).map((row) => row.tries);
+			for (const wait of [RETRY_MS[0], RETRY_MS[1], RETRY_MS[2], RETRY_MS[3]]) {
+				clock.advance(wait ?? 0);
+				await use();
+			}
+			expect(await tries()).toEqual([5, 5]);
+			const tried = keys.length;
+			// an instance looks at most once a minute
+			clock.advance((RETRY_MS[4] ?? 0) - 61_000);
+			await use();
+			expect(keys).toHaveLength(tried);
+			clock.advance(61_000);
+			await use();
+			expect(keys).toHaveLength(tried + 2);
+			clock.advance(ALERT_KEEP_MS);
+			await use();
+			expect(await saved.countDocuments({})).toBe(0);
+			expect(entries.filter((e) => e.msg === 'staff alert given up')).toHaveLength(2);
+			expect(notifications.messages).toHaveLength(0);
+		} finally {
+			await client.close();
+		}
+	});
+
+	it('read the answers of Notifications: taken, not connected, again or refused', () => {
+		expect(alertOutcome({ ok: true, status: 202, body: {} })).toBe('sent');
+		expect(alertOutcome({ ok: false, reason: 'not_connected' })).toBe('not_connected');
+		expect(alertOutcome({ ok: false, reason: 'failed', status: 409, body: { type: 'x/duplicate_request' } })).toBe('sent');
+		expect(alertOutcome({ ok: false, reason: 'failed', status: 409, body: { type: 'x/in_progress' } })).toBe('retry');
+		for (const reason of /** @type {const} */ (['unreachable', 'unavailable', 'refused']))
+			expect(alertOutcome({ ok: false, reason })).toBe('retry');
+		expect(alertOutcome({ ok: false, reason: 'failed', status: 429 })).toBe('retry');
+		expect(alertOutcome({ ok: false, reason: 'failed', status: 408, body: null })).toBe('retry');
+		expect(alertOutcome({ ok: false, reason: 'failed', status: 422, body: { type: 'x/template_not_found' } })).toBe('failed');
 	});
 
 	it('keep working without Accounts and log what Notifications refuses', async () => {
