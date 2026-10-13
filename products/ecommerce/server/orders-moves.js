@@ -33,6 +33,7 @@ import {
 	earnedLeft,
 	isSerialized,
 	missingSerials,
+	orderMoney,
 	paymentStateOf,
 	refundSplit,
 	refundable,
@@ -392,6 +393,48 @@ export const createMoves = (product, service) => {
 	};
 
 	/**
+	 * The payment a move out of waiting records when the order's method counts as paid then (`paidOnConfirm`, OR-7):
+	 * the balance due, as a payment of the order's method (cash for cash on delivery and pay at pickup), after its open
+	 * Payments payment is cancelled (K-13); null when the move records none.
+	 * @param {Site} s @param {any} ctx @param {OrderRecord} order @param {import('../core/model.js').StatusRole} to
+	 * @param {Record<string, any>} checkout
+	 */
+	const paidOnConfirm = async (s, ctx, order, to, checkout) => {
+		const methods = Array.isArray(checkout.paidOnConfirm) ? checkout.paidOnConfirm : [];
+		const { due } = orderMoney(order);
+		if (!WAITING.includes(order.role) || !['open', 'packed', 'shipped'].includes(to) || !methods.includes(order.payment.method))
+			return null;
+		if (due <= 0) return null;
+		const step = await payments.beforeCancel(s, order, 'Paid by hand');
+		if (step.paid || step.late) throw problem('move_not_allowed', 'Payments says this order was paid meanwhile; reload it.');
+		if (!step.reached)
+			throw problem('payments_unavailable', 'Payments cannot be reached to cancel the order’s payment there. Try again.');
+		const paid = order.payment.paid + due;
+		const entry = {
+			id: createId(ID_PREFIX.orderPayment),
+			method:
+				order.payment.method === 'bank_transfer'
+					? 'bank_transfer'
+					: CASH_METHODS.includes(order.payment.method)
+						? 'cash'
+						: 'other',
+			amount: due,
+			reference: order.payment.proof?.reference ?? '',
+			proofKey: order.payment.proof?.key ?? null,
+			note: 'Paid on confirmation',
+			by: service.actor(ctx),
+			at: new Date(product.now()),
+		};
+		const state = paymentStateOf({
+			total: order.totals.total,
+			paid,
+			refunded: order.payment.refunded,
+			state: order.payment.state,
+		});
+		return { entry, set: { ...step.set, 'payment.paid': paid, 'payment.state': state } };
+	};
+
+	/**
 	 * Move an order. Throws a problem when the move is not allowed, the input is wrong or the order changed meanwhile.
 	 * @param {Site} s
 	 * @param {any} ctx
@@ -462,6 +505,14 @@ export const createMoves = (product, service) => {
 			await releaseSerials(s, order.id, session);
 			return true;
 		};
+
+		// a waiting order staff move on counts as paid when its method is listed (`paidOnConfirm`, OR-7): the balance is
+		// recorded as a payment of that method, once its open Payments payment is cancelled (K-13)
+		const confirmed = await paidOnConfirm(s, ctx, order, target.role, checkout);
+		if (confirmed) {
+			Object.assign(set, confirmed.set);
+			push.payments = confirmed.entry;
+		}
 
 		// stock an order gives back tells the alerts (E34): what its products were before
 		const held = ['cancelled', 'returned_to_origin', 'returned', 'refunded'].includes(target.role)
@@ -686,6 +737,16 @@ export const createMoves = (product, service) => {
 			label: order.number,
 			detail: `${statusLabel(flow, from)} → ${target.label}`,
 		});
+		if (confirmed) {
+			const money = (await s.format()).money(confirmed.entry.amount, order.totals.currency);
+			await service.log(ctx, 'order.payment_recorded', order.id, {
+				label: order.number,
+				detail: `${money} by ${confirmed.entry.method}`,
+			});
+			await service.emit('order.payment_recorded', s, { order: after, entry: confirmed.entry });
+			if (after.payment.state === 'paid' && order.payment.state !== 'paid')
+				await service.emit('order.paid', s, { order: after, entry: confirmed.entry });
+		}
 		if (held && order.stockHeld && !after.stockHeld) await service.emit('products.changed', s, held);
 		await service.emit('order.moved', s, {
 			order: after,

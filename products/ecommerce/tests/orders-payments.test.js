@@ -226,6 +226,38 @@ describe('the payments log (E26)', () => {
 	});
 });
 
+describe('paid when staff confirm (OR-7)', () => {
+	it('records nothing by default, and the balance of a listed method when staff move the order out of waiting', async () => {
+		const plain = await placeOrder({ payment: 'bank_transfer' });
+		expect((await moveTo(plain.order.id, 'confirmed')).json.payment).toMatchObject({ paid: 0 });
+
+		await shop.setting('checkout', 'paidOnConfirm', ['bank_transfer']);
+		await shop.setting('checkout', 'bankTransferVia', 'manual');
+		const manual = await placeOrder({ payment: 'bank_transfer' });
+		const confirmed = await moveTo(manual.order.id, 'confirmed');
+		expect(confirmed.json).toMatchObject({ status: 'confirmed', payment: { state: 'paid', paid: manual.order.totals.total } });
+		expect(confirmed.json.payments).toEqual([
+			expect.objectContaining({ method: 'bank_transfer', amount: manual.order.totals.total, note: 'Paid on confirmation' }),
+		]);
+		// cash on delivery is not listed: confirming it records nothing
+		expect((await moveTo((await placeOrder()).order.id, 'confirmed')).json.payment).toMatchObject({ paid: 0 });
+
+		// through Payments: its payment there is cancelled first, so it can no longer be paid twice
+		await shop.setting('checkout', 'bankTransferVia', 'payments');
+		const viaPayments = await placeOrder({ payment: 'bank_transfer' });
+		const { paymentId } = (await orderRecord(viaPayments.order.id)).payment;
+		const moved = await moveTo(viaPayments.order.id, 'confirmed');
+		expect(moved.json.payment).toMatchObject({ state: 'paid', voidedAt: expect.any(String) });
+		expect(shop.callsTo(`${PAYMENTS}/v1/payments/${paymentId}/cancel`)).toHaveLength(1);
+		// paid at Payments meanwhile: the move is refused and the order is confirmed by Payments' payment
+		const paidThere = await placeOrder({ payment: 'bank_transfer' });
+		shop.payPayment((await orderRecord(paidThere.order.id)).payment.paymentId);
+		expect(codeOf(await moveTo(paidThere.order.id, 'confirmed'))).toBe('move_not_allowed');
+		expect((await orderRecord(paidThere.order.id)).payments).toEqual([expect.objectContaining({ method: 'online' })]);
+		await shop.setting('checkout', 'paidOnConfirm', []);
+	});
+});
+
 describe('more moves (E27)', () => {
 	it('sends an open order back to wait for payment, with a new window', async () => {
 		await shop.setting('checkout', 'paymentWindowMinutes', 60);

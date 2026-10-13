@@ -249,6 +249,16 @@
 				"enum": ["awaiting_payment", "awaiting_confirmation", "open"]
 			}
 		},
+		"paidOnConfirm": {
+			"type": "array",
+			"title": "Paid when staff confirm",
+			"description": "Payment methods whose orders count as paid when staff move them out of waiting (for example a bank transfer checked by hand): the balance is recorded as a payment of that method, and an open Payments payment is cancelled. Empty = staff record payments themselves.",
+			"default": [],
+			"items": {
+				"type": "string",
+				"enum": ["cod", "online", "bank_transfer", "pickup"]
+			}
+		},
 		"trackingRequired": {
 			"type": "boolean",
 			"title": "Dispatch needs a tracking number",
