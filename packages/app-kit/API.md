@@ -109,8 +109,9 @@ list, right after the response (one fetch per website at a time on an instance, 
 with no copy it may use waits for the Portal, at most 5 s (`WAITED_FETCH_MS`), and so does the next use after a
 `status.changed` notice. Dashboards wait for a copy older than 5 minutes (they show the status and today's charges).
 A merchant or product database that cannot be reached, or does not answer within its deadlines (`DATABASE_DEADLINES`:
-server selection, connection and pool wait 5 s, each send or receive 10 s), answers 503 `database_unavailable` with
-`Retry-After: 5`, never 500.
+server selection and connection 5 s, a free pooled connection 10 s, each send or receive 10 s; pools of 5 per
+database and instance), answers 503 `database_unavailable` with `Retry-After: 5`, never 500. A cold instance creates
+the product's merchant-database indexes once per database, two collections at a time.
 
 `ctx` (handler argument): `request`, `requestId`, `method`, `path`, `params`, `query`, `searchParams`, `headers`,
 `idempotencyKey`, `body`, `rawBody`, `origin`, `websiteId`, `merchantId`, `status`, `token`, `ticket`, `actor` (K2),

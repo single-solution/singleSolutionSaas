@@ -12,7 +12,7 @@
  *   may start with `$search` instead of `$match`, only when its `compound.filter` holds an `equals` on `websiteId` with
  *   this website (PLAN 0.8.10 K11).
  * - `ensureIndexes` is idempotent per pool and requires `websiteId` first in every index (TTL indexes excepted); the
- *   product's indexes are created on a database's first use per instance, every collection at once, and concurrent
+ *   product's indexes are created on a database's first use per instance, two collections at a time, and concurrent
  *   requests wait for the same creation.
  * - Every database call has deadlines ({@link DATABASE_DEADLINES}): a database that cannot be reached or does not answer
  *   in time fails fast with an error {@link isDatabaseUnavailable} recognises, which requests answer 503
@@ -23,18 +23,25 @@ import { guardedLookup, isSafeMongoUri } from '@ss/net';
 import { MongoClient } from 'mongodb';
 import { collectionPrefix, isKitError, isObject, kitError, sha256Hex } from './util.js';
 
-/** Connections per merchant database per instance (serverless instances multiply it; clusters may be free tiers). */
-const CLIENT_DB_POOL_SIZE = 3;
+/**
+ * Connections per merchant database per instance, opened only when needed and closed after 60 s unused. One instance
+ * serves several requests at once and a request may run queries in parallel; 5 (plus the driver's 2 monitoring
+ * connections per server) keeps 6 products × 3 busy instances at about 130 connections, far inside Atlas M0's 500.
+ */
+const CLIENT_DB_POOL_SIZE = 5;
+/** Index creations a database runs at once on a cold instance (fewer than the pool's connections). */
+const INDEX_BUILDS_AT_ONCE = 2;
 
 /**
  * Deadlines of every database call, for serverless functions (K-16): finding a server that answers (an unreachable
- * database), opening a connection, waiting for a free pooled connection, and each send or receive on a connection
- * (one operation that hangs). Code constants, the same for merchant and product databases.
+ * database) and opening a connection 5 s; waiting for a free pooled connection 10 s (pools of 5 only queue that long
+ * when the operations ahead are slow); each send or receive on a connection 10 s (one operation that hangs). Code
+ * constants, the same for merchant and product databases.
  */
 export const DATABASE_DEADLINES = Object.freeze({
 	serverSelectionTimeoutMS: 5_000,
 	connectTimeoutMS: 5_000,
-	waitQueueTimeoutMS: 5_000,
+	waitQueueTimeoutMS: 10_000,
 	socketTimeoutMS: 10_000,
 });
 
@@ -494,18 +501,23 @@ export const createData = ({
 		const ensureIndexes = async (defs) => {
 			/** @type {string[]} */
 			const created = [];
-			// every collection at once: a cold instance does not wait for one index creation after another (K-16)
-			await Promise.all(
-				[...planIndexes(defs)].map(async ([name, specs]) => {
+			// several collections at once (a cold instance does not wait for one after another, K-16), but fewer than the
+			// pool's connections, so other work of the request never queues behind index builds
+			const plan = [...planIndexes(defs)];
+			let next = 0;
+			const build = async () => {
+				for (let item = plan[next++]; item; item = plan[next++]) {
+					const [name, specs] = item;
 					const todo = specs.filter((spec) => !indexed.has(`${scopeKey}|${name}|${spec.name}`));
-					if (todo.length === 0) return;
+					if (todo.length === 0) continue;
 					await db.collection(`${prefix}${name}`).createIndexes(todo);
 					for (const spec of todo) {
 						indexed.add(`${scopeKey}|${name}|${spec.name}`);
 						created.push(`${prefix}${name}.${spec.name}`);
 					}
-				}),
-			);
+				}
+			};
+			await Promise.all(Array.from({ length: Math.min(INDEX_BUILDS_AT_ONCE, plan.length) }, build));
 			return { created: created.sort() };
 		};
 

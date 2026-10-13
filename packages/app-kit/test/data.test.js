@@ -226,7 +226,7 @@ describe('merchant database (MongoDB)', () => {
 		expect((await (await fresh.forWebsite(WEBSITE)).ensureIndexes(defs)).created).toHaveLength(2);
 	});
 
-	it('creates the product indexes once per database and instance, every collection at once (K-16)', async () => {
+	it('creates the product indexes once per database and instance, two collections at a time (K-16)', async () => {
 		/** @type {import('../src/index.js').IndexDefinition[]} */
 		const defs = [
 			{ collection: 'coupons', keys: { websiteId: 1, code: 1 } },
@@ -253,7 +253,8 @@ describe('merchant database (MongoDB)', () => {
 			await Promise.all([data.forWebsite(WEBSITE), data.forWebsite(WEBSITE_2), data.forWebsite(WEBSITE)]);
 			await data.forWebsite(WEBSITE);
 			expect(spy).toHaveBeenCalledTimes(3);
-			expect(most).toBe(3);
+			// two at a time: never every pooled connection
+			expect(most).toBe(2);
 			expect((await db.collection('ss_coupon_box_orders').indexes()).map((i) => i.name)).toContain('websiteId_1_at_-1');
 			// a failed creation is tried again by the next request
 			spy.mockClear();
@@ -271,7 +272,7 @@ describe('merchant database (MongoDB)', () => {
 		expect(DATABASE_DEADLINES).toEqual({
 			serverSelectionTimeoutMS: 5_000,
 			connectTimeoutMS: 5_000,
-			waitQueueTimeoutMS: 5_000,
+			waitQueueTimeoutMS: 10_000,
 			socketTimeoutMS: 10_000,
 		});
 		expect(PRODUCT_DATABASE_OPTIONS).toMatchObject({ maxPoolSize: 5, ...DATABASE_DEADLINES });
@@ -284,7 +285,7 @@ describe('merchant database (MongoDB)', () => {
 			},
 		});
 		await data.forWebsite(WEBSITE);
-		expect(seen[0]).toMatchObject({ maxPoolSize: 3, ...DATABASE_DEADLINES });
+		expect(seen[0]).toMatchObject({ maxPoolSize: 5, ...DATABASE_DEADLINES });
 		await data.closeAll();
 		for (const name of ['MongoServerSelectionError', 'MongoNetworkTimeoutError', 'MongoWaitQueueTimeoutError'])
 			expect(isDatabaseUnavailable(Object.assign(new Error('x'), { name }))).toBe(true);
@@ -327,7 +328,7 @@ describe('merchant database (MongoDB)', () => {
 		});
 		await data.forWebsite(WEBSITE);
 		await data.forWebsite(WEBSITE_2);
-		expect(created).toEqual([3]);
+		expect(created).toEqual([5]);
 		advance(61_000);
 		await data.forWebsite(WEBSITE);
 		await new Promise((resolve) => setImmediate(resolve));
