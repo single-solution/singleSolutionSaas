@@ -3,7 +3,8 @@
  * query carries the website id; inserts are stamped with `websiteId`, `merchantId`, `createdAt` and `updatedAt`).
  *
  * - `users`: the one user list of the website (shoppers and the merchant's staff), unique e-mail and phone
- * - `sessions`: signed-in devices with their rotating refresh token (hash only)
+ * - `sessions`: signed-in devices with their rotating refresh token (hash only; the current secret sealed for the
+ *   30-second grace of parallel renewals, dropped when the session is signed out), removed 7 days after their end (TTL)
  * - `codes`: one-time codes and links (sign-in codes, magic links, resets, invites, two-step steps, social hand-overs,
  *   data exports), kept as hashes and removed by a TTL index once expired
  * - `oauth`: social sign-ins in progress (state, PKCE verifier, nonce), TTL
@@ -113,6 +114,8 @@ const COUNTERS = 'counters';
 const OUTBOX = 'outbox';
 
 const present = { $type: 'string' };
+/** An ended session (signed out, or past its end) is removed this long after its end (RT-11). */
+const SESSION_KEPT_SECONDS = 7 * 24 * 3600;
 
 /** Merchant database indexes (created on a website's first use). @type {import('@ss/app-kit').IndexDefinition[]} */
 export const INDEXES = [
@@ -138,6 +141,7 @@ export const INDEXES = [
 	{ collection: USERS, keys: { websiteId: 1, phoneDigits: 1 }, name: 'by_phone_digits' },
 	{ collection: SESSIONS, keys: { websiteId: 1, id: 1 }, name: 'by_id', unique: true },
 	{ collection: SESSIONS, keys: { websiteId: 1, userId: 1 }, name: 'by_user' },
+	{ collection: SESSIONS, keys: { expiresAt: 1 }, name: 'expire', expireAfterSeconds: SESSION_KEPT_SECONDS },
 	{ collection: CODES, keys: { websiteId: 1, id: 1 }, name: 'by_id', unique: true },
 	{ collection: CODES, keys: { websiteId: 1, kind: 1, target: 1 }, name: 'by_target' },
 	{ collection: CODES, keys: { expireAt: 1 }, name: 'expire', expireAfterSeconds: 0 },
@@ -283,6 +287,9 @@ export const createStore = (data, { now }) => {
 					...('phone' in set ? { phoneDigits: phoneDigitsOf(/** @type {string | null} */ (set.phone)) } : {}),
 					...('role' in set ? { roleSince: at() } : {}),
 				};
+				// nothing to change (for example two-step turned off twice): the user as stored
+				if (Object.keys(full).length === 0 && Object.keys(more).length === 0)
+					return as(await users.findOne({ websiteId, id }, NO_ID));
 				try {
 					return as(
 						await users.findOneAndUpdate(
@@ -392,13 +399,22 @@ export const createStore = (data, { now }) => {
 						.limit(MAX_LIST)
 						.toArray(),
 				),
-			/** @param {string} userId @param {string} id */
+			/** End a session; its sealed refresh secret goes at once (RT-11). @param {string} userId @param {string} id */
 			revoke: async (userId, id) =>
-				(await sessions.updateOne({ websiteId, userId, id, revokedAt: null }, { $set: { revokedAt: at() } }))
-					.modifiedCount === 1,
+				(
+					await sessions.updateOne(
+						{ websiteId, userId, id, revokedAt: null },
+						{ $set: { revokedAt: at(), sealedRefresh: null } },
+					)
+				).modifiedCount === 1,
 			/** @param {string} userId */
 			revokeAll: async (userId) =>
-				(await sessions.updateMany({ websiteId, userId, revokedAt: null }, { $set: { revokedAt: at() } })).modifiedCount,
+				(
+					await sessions.updateMany(
+						{ websiteId, userId, revokedAt: null },
+						{ $set: { revokedAt: at(), sealedRefresh: null } },
+					)
+				).modifiedCount,
 			/** @param {string} userId */
 			removeAll: async (userId) => (await sessions.deleteMany({ websiteId, userId })).deletedCount,
 		}),

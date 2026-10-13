@@ -120,10 +120,16 @@ export const createAccount = (product, service, flows) => {
 		return undefined;
 	};
 
-	/** Two-step setup: a new secret, kept in a 10-minute step until a code confirms it. @param {any} ctx */
+	/**
+	 * Two-step setup: a new secret, kept in a 10-minute step until a code confirms it. Two-step that is on counts as not
+	 * set up when its secret no longer opens (`ENCRYPTION_KEY` lost, ST-18): the user, signed in with a recovery code,
+	 * sets it up again.
+	 * @param {any} ctx
+	 */
 	const twoStepSetup = async (ctx) => {
 		const { s, user } = await service.signedIn(ctx);
-		if (user.twoStep?.enabledAt) throw problem('conflict', 'Two-step sign-in is already on.');
+		if (user.twoStep?.enabledAt && sealer.open(user.twoStep.sealed, service.totpAad(s.websiteId, user.id)) !== null)
+			throw problem('conflict', 'Two-step sign-in is already on.');
 		const secret = generateTotpSecret();
 		const challenge = randomSecret(32);
 		const id = await s.store.codes.add({

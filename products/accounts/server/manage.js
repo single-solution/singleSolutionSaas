@@ -449,6 +449,19 @@ export const createManage = (product, service, flows) => {
 				detail: plural(/** @type {unknown[]} */ (set.addresses).length, 'address', 'addresses'),
 			});
 		}
+		if (body.twoStep !== undefined) {
+			// staff turn a user's two-step off (ST-18: its secret may no longer open); the user sets it up again
+			if (body.twoStep !== false) throw invalid('twoStep', 'Send twoStep: false to turn two-step sign-in off.');
+			const actorId = ctx.ticket ? String(ctx.ticket.user.id) : (ctx.actor?.id ?? null);
+			if (actorId === user.id) throw problem('forbidden', 'Turn your own two-step sign-in off from your account.');
+			if (user.twoStep?.enabledAt) {
+				set.twoStep = null;
+				changes.push({
+					action: 'user.two_step_off',
+					detail: 'Two-step sign-in turned off: set up again at the next sign-in',
+				});
+			}
+		}
 		if (body.password !== undefined) {
 			const next = { ...user, ...set };
 			const method = service.passwordMethodOf(s, /** @type {any} */ (next)) ?? 'email_password';
