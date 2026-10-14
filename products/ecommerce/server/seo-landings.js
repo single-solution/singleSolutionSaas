@@ -716,7 +716,7 @@ export const createLandings = (product, service, media) => {
 			slug,
 			unit: attribute.unit ?? '',
 			values,
-			categoryId: attribute.categoryId ?? null,
+			categoryId: attribute.categoryId,
 			category: page ? { id: page.id, slug: page.slug, name: page.name } : null,
 			...(await glossaryHead(s, {
 				name: attribute.name,

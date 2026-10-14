@@ -377,8 +377,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 		/** @param {any} ctx */
 		list: async (ctx) => {
 			const { data } = await common.open(ctx);
-			// one saved before E45 is for every category
-			return { items: (await attributesOf(data)).map((row) => ({ categoryId: null, ...withoutStamps(row) })) };
+			return { items: (await attributesOf(data)).map((row) => withoutStamps(row)) };
 		},
 		/** @param {any} ctx */
 		create: async (ctx) => {
@@ -429,7 +428,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 				);
 			const slug = await slugFor(data, COLLECTIONS.attributes, checked.value, existing.id, existing.id, existing.slug, {
 				scope: { categoryId: checked.value.categoryId },
-				moved: checked.value.categoryId !== (existing.categoryId ?? null),
+				moved: checked.value.categoryId !== existing.categoryId,
 			});
 			await data
 				.collection(COLLECTIONS.attributes)
