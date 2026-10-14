@@ -8383,7 +8383,7 @@
 						"items": {
 							"type": ["string", "number"]
 						},
-						"description": "One value of the attribute (text, number or yes/no), or several different ones when the attribute takes several."
+						"description": "One value of the field (text, number, yes/no or a date YYYY-MM-DD), or several different ones when the field takes several."
 					},
 					"description": "Product attribute id → value."
 				},
@@ -15061,7 +15061,7 @@
 						"items": {
 							"type": ["string", "number"]
 						},
-						"description": "One value of the attribute (text, number or yes/no), or several different ones when the attribute takes several."
+						"description": "One value of the field (text, number, yes/no or a date YYYY-MM-DD), or several different ones when the field takes several."
 					},
 					"description": "Product attribute id → value; null or empty removes it. At most 100."
 				},
@@ -15557,7 +15557,7 @@
 						"items": {
 							"type": ["string", "number"]
 						},
-						"description": "One value of the attribute (text, number or yes/no), or several different ones when the attribute takes several."
+						"description": "One value of the field (text, number, yes/no or a date YYYY-MM-DD), or several different ones when the field takes several."
 					},
 					"description": "Product attribute id → value; null or empty removes it. At most 100."
 				},
@@ -16066,7 +16066,7 @@
 						"items": {
 							"type": ["string", "number"]
 						},
-						"description": "One value of the attribute (text, number or yes/no), or several different ones when the attribute takes several."
+						"description": "One value of the field (text, number, yes/no or a date YYYY-MM-DD), or several different ones when the field takes several."
 					},
 					"description": "Product attribute id → value; null or empty removes it. At most 100."
 				},
@@ -16560,7 +16560,7 @@
 						"items": {
 							"type": ["string", "number"]
 						},
-						"description": "One value of the attribute (text, number or yes/no), or several different ones when the attribute takes several."
+						"description": "One value of the field (text, number, yes/no or a date YYYY-MM-DD), or several different ones when the field takes several."
 					},
 					"description": "Product attribute id → value; null or empty removes it. At most 100."
 				},

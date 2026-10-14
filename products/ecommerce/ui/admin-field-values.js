@@ -16,7 +16,7 @@ import { specControl } from './admin-product-editor.js';
  * A value as staff read it.
  * @param {Kit} kit @param {any} field @param {unknown} value
  */
-export const fieldValueText = (kit, field, value) =>
+const fieldValueText = (kit, field, value) =>
 	(Array.isArray(value) ? value : [value])
 		.map((entry) =>
 			field.type === 'yes_no'
