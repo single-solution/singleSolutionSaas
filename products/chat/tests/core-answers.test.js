@@ -7,7 +7,6 @@
 import { describe, expect, it } from 'vitest';
 import { runAssistant } from '../core/assistant.js';
 import {
-	COMPARE_WORDS,
 	FALLBACK_LIMITS,
 	budgetOf,
 	checkFallbackAnswers,
@@ -217,9 +216,10 @@ describe('the comparison answer (C18)', () => {
 	});
 
 	it('names both sides, nearest words first, and searches with fewer words each time', () => {
-		expect(comparedNames('Which is better for reading: Lamp Max vs Lamp Mini today', ['versus', 'vs'])).toEqual({
-			left: ['for', 'reading', 'Lamp', 'Max'].slice(-COMPARE_WORDS),
-			right: ['Lamp', 'Mini', 'today'],
+		// at most 4 words on each side, nearest the keyword
+		expect(comparedNames('Which is better for reading: Lamp Max vs Lamp Mini right now', ['versus', 'vs'])).toEqual({
+			left: ['better', 'for', 'reading', 'Lamp', 'Max'].slice(-4),
+			right: ['Lamp', 'Mini', 'right', 'now'],
 		});
 		expect(comparedNames('no keyword here', ['vs'])).toBeNull();
 		expect(compareSearches(['is', 'Lamp', 'Max'], 'left')).toEqual(['is Lamp Max', 'Lamp Max', 'Max']);

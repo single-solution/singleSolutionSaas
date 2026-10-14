@@ -25,7 +25,7 @@ export const PLACEHOLDERS = Object.freeze({
 /** The list's limits, the same in Settings and in the server's check. */
 export const FALLBACK_LIMITS = Object.freeze({ answers: 50, keywords: 30, keywordLength: 100, text: 2000 });
 /** Words on each side of the keyword a comparison searches the catalog with, at most (C18). */
-export const COMPARE_WORDS = 4;
+const COMPARE_WORDS = 4;
 /** Options and specs a comparison shows, at most (C18). */
 const COMPARE_ROWS = 20;
 const LANGUAGE = /^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})?$/;
