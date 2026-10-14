@@ -69,8 +69,22 @@ const SENTENCE_END = /[.!?。！？]["'”’)\]]*$/u;
 /** Where a sentence ends inside text written without spaces. */
 const SENTENCE_MARK = /[.!?。！？]/u;
 
-/** Punctuation at either end of a word. */
-const WORD_EDGES = /^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu;
+/** A letter or digit: what is left of a word once the punctuation at its ends goes. */
+const WORD_CHAR = /[\p{L}\p{N}]/u;
+
+/**
+ * A word without the punctuation at either end (a scan from both ends, never a pattern that slows down on a long run
+ * of punctuation).
+ * @param {string} word
+ */
+const trimEdges = (word) => {
+	const chars = [...word];
+	let start = 0;
+	while (start < chars.length && !WORD_CHAR.test(/** @type {string} */ (chars[start]))) start += 1;
+	let end = chars.length;
+	while (end > start && !WORD_CHAR.test(/** @type {string} */ (chars[end - 1]))) end -= 1;
+	return chars.slice(start, end).join('');
+};
 
 /**
  * The words before and after a phrase within its sentence (a line break, or a word ending in `.`, `!` or `?`, ends
@@ -85,7 +99,7 @@ export const aroundPhrase = (text, phrase) => {
 	const wordsOf = (part) =>
 		part
 			.split(/\s+/)
-			.map((word) => word.replace(WORD_EDGES, ''))
+			.map(trimEdges)
 			.filter((word) => word !== '');
 	const needle = wordsOf(phrase).map(normalise);
 	if (needle.length === 0) return null;
@@ -103,8 +117,8 @@ export const aroundPhrase = (text, phrase) => {
 			if (before.length > 0 && after.length > 0) return { before, after };
 			continue;
 		}
-		const raw = line.split(/\s+/).filter((word) => word.replace(WORD_EDGES, '') !== '');
-		const words = raw.map((word) => word.replace(WORD_EDGES, ''));
+		const raw = line.split(/\s+/).filter((word) => trimEdges(word) !== '');
+		const words = raw.map(trimEdges);
 		const keys = words.map(normalise);
 		const ends = raw.map((word) => SENTENCE_END.test(word));
 		for (let i = 1; i + needle.length < words.length; i += 1) {

@@ -215,6 +215,17 @@ describe('the comparison answer (C18)', () => {
 		expect(aroundPhrase('和落地灯', '和')).toBeNull();
 	});
 
+	it('reads a long message full of punctuation quickly, whatever the keywords', () => {
+		// a word of 4,000 characters that is mostly punctuation used to take seconds with 30 keywords
+		const message = `a${'!'.repeat(3990)}a vs`;
+		const keywords = ['vs', ...Array.from({ length: 29 }, (_, i) => `word${i}`)];
+		const started = performance.now();
+		expect(comparedNames(message, keywords)).toBeNull();
+		expect(performance.now() - started).toBeLessThan(200);
+		// punctuation at either end of a word still goes
+		expect(aroundPhrase('«Lamp Max» vs ¡Lamp Mini!', 'vs')).toEqual({ before: ['Lamp', 'Max'], after: ['Lamp', 'Mini'] });
+	});
+
 	it('names both sides, nearest words first, and searches with fewer words each time', () => {
 		// at most 4 words on each side, nearest the keyword
 		expect(comparedNames('Which is better for reading: Lamp Max vs Lamp Mini right now', ['versus', 'vs'])).toEqual({
