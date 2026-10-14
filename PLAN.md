@@ -1927,6 +1927,13 @@ every feature and behavior the existing stores' shoppers and staff rely on exist
 each store onboards as a normal merchant with no visible change; parity is checked per store
 (`audit/parity-<store>.md`) and gaps are closed with global features before its switch-over.
 
+**Owner answers, 2026-10-14 ~14:00.** (1) IM's checkout page promises WhatsApp updates that IM never sent: after the
+move IM's shoppers **get WhatsApp order updates** (IM's mapping switches them on; templates needed). (2) Time: "keep
+UTC and local conversion as saas default and no need to make it complex" — the SaaS computes dates in **UTC by default**
+(day boundaries, reports, order-number years, deal hours) unless a merchant sets a business time zone, and **shows
+times to people in their own local time**; no extra per-store options; the store mappings set no business time zone
+(the stores used UTC), so their numbers stay the same.
+
 **Ecommerce dynamic model — approved by the owner 2026-10-14 (all 10 decisions as recommended).** The design is
 `audit/design/ecommerce-dynamic-model.md` (binding; this paragraph is its summary). Merchants make **item types** (kind
 physical / digital / service, plus the parts it uses: variants, grades, unit numbers, measurement table, measured
