@@ -12,9 +12,16 @@
  * - **Share links**: a random 256-bit key, stored only as its SHA-256; it lasts 1–30 days (7 by default) and can be
  *   revoked. The address carries the key in its fragment (`/shared-setup#key=`), so it never reaches servers or logs;
  *   the page sends it in a POST body. A link may leave out the settings' values and the install details.
+ * - **Business profile and advisor**: the merchant or an Owner or Support admin saves a short business profile of the
+ *   website (`catalog_setup_profiles`); every sheet then carries it and, per product, the features it recommends and
+ *   the features that are on although it rules them out (`core/advisor.js`, from the `recommendFor` tags each
+ *   product's part names). **Switch on** (Owner or Support) asks the product to switch a feature on, with the
+ *   features it needs (`POST /v1/blueprint/features`, a signed Portal call); the product reports the change to the
+ *   Portal as its Features page does, which accepts it only for a current Owner or Support admin and writes
+ *   `product.features_changed`. The sheet is then gathered again.
  * - **Activity**: `website.setup_opened` and `website.setup_downloaded` (the admin or merchant who did it),
- *   `website.setup_shared`, `website.setup_share_revoked`, and `website.setup_share_opened` at most once an hour per
- *   link (the system, on behalf of whoever holds the link).
+ *   `website.setup_profile_saved`, `website.setup_shared`, `website.setup_share_revoked`, and
+ *   `website.setup_share_opened` at most once an hour per link (the system, on behalf of whoever holds the link).
  * @module
  */
 import { createId, validateProductBlueprint } from '@ss/contracts';
@@ -23,17 +30,21 @@ import { signPortalCall } from '@ss/protocol';
 import { isProblem, problem } from '../../infra/http.js';
 import { sha256Hex } from '../../infra/util.js';
 import { assembleSheet, productEntry, reasonOfStatus, sharedCopy } from './core/setup.js';
-import { PRODUCTS, SETUP_LINKS } from './schema.js';
+import { PRODUCTS, SETUP_LINKS, SETUP_PROFILES } from './schema.js';
 
 /** @typedef {import('../../infra/modules.js').ModuleContext} ModuleContext */
 /** @typedef {import('../../infra/rbac.js').Actor} Actor */
 /** @typedef {import('@ss/contracts').Blueprint} Blueprint */
+/** @typedef {import('@ss/contracts').BusinessProfile} BusinessProfile */
+/** @typedef {import('./core/setup.js').GatheredProduct} GatheredProduct */
 /** @typedef {{ actor: Actor, requestId?: string | null, ip?: string | null }} Audited */
 
 /** How long a gathered sheet is kept per website (in this instance's memory). */
 export const SHEET_CACHE_MS = 60_000;
 /** How long each product has to answer. */
 const PRODUCT_ANSWER_MS = 5_000;
+/** How long a product has to switch a feature on (it reports to the Portal first). */
+const SWITCH_ANSWER_MS = 10_000;
 /** Sheets kept at most (the oldest goes first). */
 const SHEET_CACHE_LIMIT = 200;
 const ANSWER_MAX_BYTES = 512 * 1024;
@@ -55,10 +66,13 @@ const base64url = (bytes) => Buffer.from(bytes).toString('base64url');
 export const createSetup = ({ ctx, policy, fetch }) => {
 	const products = /** @type {import('../../infra/db.js').MutableOps} */ (ctx.collection(PRODUCTS));
 	const links = /** @type {import('../../infra/db.js').TenantRepository} */ (ctx.collection(SETUP_LINKS));
+	const profiles = /** @type {import('../../infra/db.js').TenantRepository} */ (ctx.collection(SETUP_PROFILES));
 	/** @param {string} merchantId */
 	const linksOf = (merchantId) => /** @type {import('../../infra/db.js').MutableOps} */ (links.forMerchant(merchantId));
+	/** @param {string} merchantId */
+	const profilesOf = (merchantId) => /** @type {import('../../infra/db.js').MutableOps} */ (profiles.forMerchant(merchantId));
 	const identity = () => ctx.service('identity');
-	/** @type {Map<string, { until: number, sheet: Blueprint }>} */
+	/** Gathered products per website (the profile and the advice are added at each read). @type {Map<string, { until: number, at: number, products: GatheredProduct[] }>} */
 	const cache = new Map();
 
 	/**
@@ -152,27 +166,104 @@ export const createSetup = ({ ctx, policy, fetch }) => {
 	};
 
 	/**
-	 * The sheet of a website: kept for a minute, gathered again when older or when `fresh`.
-	 * @param {{ merchantId: string, websiteId: string, domain: string, fresh?: boolean }} input
-	 * @returns {Promise<Blueprint>}
+	 * The products of a website as gathered: kept for a minute, gathered again when older or when `fresh`.
+	 * @param {{ merchantId: string, websiteId: string, fresh?: boolean }} input
+	 * @returns {Promise<{ at: number, products: GatheredProduct[] }>}
 	 */
-	const gathered = async ({ merchantId, websiteId, domain, fresh = false }) => {
+	const gathered = async ({ merchantId, websiteId, fresh = false }) => {
 		const kept = cache.get(websiteId);
-		if (!fresh && kept && kept.until > ctx.now()) return kept.sheet;
+		if (!fresh && kept && kept.until > ctx.now()) return kept;
 		const entries = /** @type {Array<{ productId: string, name: string, browserToken: string }>} */ (
 			await identity().installOf({ merchantId, websiteId })
 		);
 		const answers = await Promise.all(entries.map((entry) => ask(entry.productId, websiteId)));
-		const sheet = assembleSheet({
-			websiteId,
-			domain,
+		const fresher = {
+			until: ctx.now() + SHEET_CACHE_MS,
+			at: ctx.now(),
 			products: entries.map((entry, index) => productEntry(entry, /** @type {any} */ (answers[index]))),
-			now: ctx.now(),
-		});
+		};
 		cache.delete(websiteId);
-		cache.set(websiteId, { until: ctx.now() + SHEET_CACHE_MS, sheet });
+		cache.set(websiteId, fresher);
 		while (cache.size > SHEET_CACHE_LIMIT) cache.delete(/** @type {string} */ (cache.keys().next().value));
-		return sheet;
+		return fresher;
+	};
+
+	/**
+	 * The business profile of a website, or null.
+	 * @param {string} merchantId
+	 * @param {string} websiteId
+	 * @returns {Promise<BusinessProfile | null>}
+	 */
+	const profileOf = async (merchantId, websiteId) =>
+		(await profilesOf(merchantId).findOne({ merchantId, _id: websiteId }))?.profile ?? null;
+
+	/**
+	 * The sheet of a website: its products as gathered, with its business profile and the advice for it.
+	 * @param {{ merchantId: string, websiteId: string, domain: string, fresh?: boolean }} input
+	 * @returns {Promise<Blueprint>}
+	 */
+	const sheetOf = async ({ merchantId, websiteId, domain, fresh = false }) => {
+		const [{ at, products }, profile] = await Promise.all([
+			gathered({ merchantId, websiteId, fresh }),
+			profileOf(merchantId, websiteId),
+		]);
+		return assembleSheet({ websiteId, domain, products, profile, now: at });
+	};
+
+	/**
+	 * Ask a product to switch features on for an admin (a signed Portal call).
+	 * @param {{ productId: string, websiteId: string, features: string[], actor: Actor }} input
+	 * @returns {Promise<{ added: string[] }>}
+	 */
+	const askToSwitchOn = async ({ productId, websiteId, features, actor }) => {
+		const product = await products.findOne({ _id: productId });
+		if (!product) throw problem('not_found', 'No such product.');
+		const url = new URL(`${String(product.baseUrl).replace(/\/+$/, '')}/v1/blueprint/features`);
+		url.searchParams.set('websiteId', websiteId);
+		const body = JSON.stringify({ features, admin: { id: actor.id, name: actor.name ?? actor.id, role: actor.role } });
+		/** @type {import('@ss/net').SafeResponse} */
+		let res;
+		try {
+			const headers = await signPortalCall({
+				signer: ctx.keys.signer,
+				audience: productId,
+				method: 'POST',
+				target: `${url.pathname}${url.search}`,
+				body,
+				timestamp: Math.floor(ctx.now() / 1000),
+				randomBytes: ctx.randomBytes,
+			});
+			res = await fetch(
+				url.toString(),
+				{
+					method: 'POST',
+					headers: { accept: 'application/json', 'content-type': 'application/json', ...headers },
+					body,
+					timeoutMs: SWITCH_ANSWER_MS,
+					maxBytes: ANSWER_MAX_BYTES,
+					redirect: 'error',
+				},
+				policy,
+			);
+		} catch (error) {
+			if (!isNetError(error)) throw error;
+			ctx.logger.warn('setup sheet: a product did not answer a switch', { productId, reason: error.code });
+			throw problem('upstream_error', 'The product did not answer. Nothing was changed; try again in a moment.');
+		}
+		/** @type {Record<string, any>} */
+		let answer = {};
+		try {
+			const json = JSON.parse(textOf(res));
+			if (json && typeof json === 'object') answer = json;
+		} catch {
+			answer = {};
+		}
+		if (res.status === 200 && Array.isArray(answer.added)) return { added: answer.added.map(String) };
+		const said = typeof answer.detail === 'string' && answer.detail.trim() !== '' ? answer.detail.trim().slice(0, 300) : null;
+		ctx.logger.warn('setup sheet: a product refused a switch', { productId, status: res.status });
+		if (res.status === 422 || res.status === 409)
+			throw problem('catalog_switch_refused', said ?? 'The product refused the change. Nothing was changed.');
+		throw problem('upstream_error', said ?? 'The product could not switch the feature on. Nothing was changed.');
 	};
 
 	/** @param {Record<string, any>} doc */
@@ -200,7 +291,7 @@ export const createSetup = ({ ctx, policy, fetch }) => {
 		 */
 		sheet: async ({ merchantId, websiteId, fresh = false, download = false, actor, requestId = null, ip = null }) => {
 			const website = await websiteOf(merchantId, websiteId);
-			const sheet = await gathered({ merchantId, websiteId, domain: website.domain, fresh });
+			const sheet = await sheetOf({ merchantId, websiteId, domain: website.domain, fresh });
 			await audit(
 				download ? 'website.setup_downloaded' : 'website.setup_opened',
 				actor,
@@ -208,6 +299,35 @@ export const createSetup = ({ ctx, policy, fetch }) => {
 				{ requestId, ip },
 			);
 			return { sheet, domain: website.domain };
+		},
+
+		/**
+		 * Save the website's business profile (`core/advisor.js` `parseProfile`; null removes it), Activity
+		 * `website.setup_profile_saved`; answers the sheet with the advice for it (the products as gathered).
+		 * @param {{ merchantId: string, websiteId: string, profile: BusinessProfile | null } & Audited} input
+		 * @returns {Promise<Blueprint>}
+		 */
+		saveProfile: async ({ merchantId, websiteId, profile, actor, requestId = null, ip = null }) => {
+			const website = await websiteOf(merchantId, websiteId);
+			if (profile === null) await profilesOf(merchantId).deleteOne({ merchantId, _id: websiteId });
+			else await profilesOf(merchantId).updateOne({ merchantId, _id: websiteId }, { $set: { profile } }, { upsert: true });
+			await audit('website.setup_profile_saved', actor, { merchantId, websiteId }, { after: { profile }, requestId, ip });
+			return sheetOf({ merchantId, websiteId, domain: website.domain });
+		},
+
+		/**
+		 * The advisor's Switch on (Owner or Support): the product switches the feature on with every feature it needs,
+		 * for this admin, and reports it to the Portal like its Features page; then the sheet is gathered again.
+		 * @param {{ merchantId: string, websiteId: string, productId: string, feature: string } & Audited} input
+		 * @returns {Promise<{ added: string[], sheet: Blueprint }>}
+		 */
+		switchOn: async ({ merchantId, websiteId, productId, feature, actor }) => {
+			const website = await websiteOf(merchantId, websiteId);
+			const entries = /** @type {Array<{ productId: string }>} */ (await identity().installOf({ merchantId, websiteId }));
+			if (!entries.some((entry) => entry.productId === productId))
+				throw problem('not_found', 'This product is not on the website.');
+			const { added } = await askToSwitchOn({ productId, websiteId, features: [feature], actor });
+			return { added, sheet: await sheetOf({ merchantId, websiteId, domain: website.domain, fresh: true }) };
 		},
 
 		/**
@@ -295,7 +415,7 @@ export const createSetup = ({ ctx, policy, fetch }) => {
 			const website = await websiteOf(merchantId, websiteId).catch((/** @type {unknown} */ error) => {
 				throw isProblem(error) ? problem('not_found', NOT_SHARED) : error;
 			});
-			const sheet = await gathered({ merchantId, websiteId, domain: website.domain });
+			const sheet = await sheetOf({ merchantId, websiteId, domain: website.domain });
 			const lastOpened = doc.openedAt ? new Date(doc.openedAt).getTime() : -Infinity;
 			await linksOf(merchantId).updateOne(
 				{ merchantId, _id: doc._id },

@@ -356,7 +356,179 @@ export const SETUP = Object.freeze({
 	sharedMissing: 'This share link does not work',
 	sharedMissingHelp: 'It may have expired or been revoked. Ask the person who shared it for a new link.',
 	sharedLoading: 'Loading the shared Setup',
+	// the advisor
+	recommendations: 'Recommendations',
+	recommendationsIntro: 'What the business profile calls for, product by product.',
+	recommendedOff: 'Recommended, not on',
+	recommendedOffAsk: 'To switch these on, ask your account manager.',
+	notRecommended: 'On, not recommended',
+	notRecommendedHelp:
+		'These features are on although the business profile does not call for them. Check whether they are still needed: features are switched off in the product’s dashboard (Features).',
+	allRecommendedOn: 'Every feature the business profile calls for is on.',
+	recommendedOn: (/** @type {number} */ n) =>
+		n === 0 ? 'No feature the profile calls for is on yet.' : `${n} recommended ${n === 1 ? 'feature is' : 'features are'} on.`,
+	noAdvice: 'Fill out the business profile to see which features this website should use.',
+	switchOn: 'Switch on',
+	switchOnLabel: (/** @type {string} */ feature, /** @type {string} */ product) => `Switch on ${feature} in ${product}`,
+	alsoSwitches: (/** @type {string} */ list) => `Also switches on ${list}, which it needs.`,
+	switchedOn: (/** @type {string} */ list) => `Switched on: ${list}.`,
+	billedNote: 'Features are billed by the hour while they are on.',
 });
+
+/**
+ * The business profile of a website (the Setup sheet's advisor, `@ss/contracts/profile`): its questions and options, and
+ * what each tag says, joined into why a feature is recommended or not.
+ */
+export const PROFILE = Object.freeze({
+	title: 'Business profile',
+	intro: 'A few answers about the business behind this website. The Setup sheet then recommends the features that fit it, and points out features that are on but may not be needed.',
+	empty: 'Not filled out yet. Answer a few questions to get recommendations for this website.',
+	edit: 'Edit profile',
+	fillOut: 'Fill out the profile',
+	save: 'Save profile',
+	saved: 'Business profile saved. The recommendations are updated.',
+	notAnswered: 'Not answered',
+	questions: Object.freeze({
+		sells: 'What does this website sell?',
+		pays: 'How do shoppers pay?',
+		delivers: 'How do orders reach shoppers?',
+		signIn: 'How do shoppers sign in?',
+		chat: 'Who answers visitors in chat?',
+		messages: 'How do you message customers?',
+		marketing: 'How do you market the website?',
+		offers: 'What do you offer shoppers?',
+		moving: 'Are you moving from another website or system?',
+		countries: 'Countries you sell in',
+		languages: 'Languages of the website',
+	}),
+	options: Object.freeze({
+		sells: Object.freeze({
+			physical: 'Physical goods',
+			digital: 'Digital goods (downloads, license keys)',
+			services: 'Services or bookings',
+			subscriptions: 'Subscriptions',
+			none: 'Nothing (information only)',
+		}),
+		pays: Object.freeze({
+			online: 'Online (cards, wallets)',
+			link: 'Payment link or invoice',
+			cod: 'Cash on delivery',
+			bank_transfer: 'Bank transfer',
+			pickup: 'At pickup',
+		}),
+		delivers: Object.freeze({
+			courier: 'By courier',
+			zones: 'Own delivery, fees by area',
+			pickup: 'Pickup',
+			none: 'Nothing to deliver',
+		}),
+		signIn: Object.freeze({
+			email: 'Email',
+			phone: 'Phone number',
+			social: 'Google, Apple or Facebook',
+			none: 'They do not sign in',
+		}),
+		chat: Object.freeze({ people: 'Your staff', ai: 'An AI assistant', none: 'No chat' }),
+		messages: Object.freeze({
+			email: 'Email',
+			sms: 'SMS',
+			whatsapp: 'WhatsApp',
+			push: 'Browser push',
+			none: 'We do not message them',
+		}),
+		marketing: Object.freeze({
+			google: 'Google Ads and Analytics',
+			meta: 'Facebook and Instagram ads',
+			tiktok: 'TikTok ads',
+			analytics: 'Own visitor analytics',
+			seo: 'Search engines (SEO)',
+			none: 'None',
+		}),
+		offers: Object.freeze({
+			loyalty: 'Loyalty points',
+			discounts: 'Coupons and sales',
+			reviews: 'Reviews',
+			member_prices: 'Member or wholesale prices',
+			none: 'None of these',
+		}),
+	}),
+	yes: 'Yes',
+	no: 'No',
+	noneAlone: (/** @type {string} */ none) => `“${none}” cannot be chosen with other answers.`,
+	countriesHelp: 'Two-letter country codes, separated by commas, for example US, CA, GB.',
+	countriesInvalid: (/** @type {string} */ codes) => `Not a country code: ${codes}.`,
+	languagesHelp: 'Language codes, separated by commas, for example en, fr, es.',
+	languagesInvalid: (/** @type {string} */ codes) => `Not a language code: ${codes}.`,
+	/** What a tag says, as part of a sentence (`@ss/contracts/profile` tags; codes are kept as written). */
+	tag: (/** @type {string} */ tag) => {
+		const [question = '', option = ''] = tag.split('.');
+		if (question === 'countries')
+			return option === 'many' ? 'you sell in more than one country' : `your countries include ${option.toUpperCase()}`;
+		if (question === 'languages')
+			return option === 'many' ? 'your website has more than one language' : `your languages include ${option}`;
+		return PROFILE_TAGS[tag] ?? tag;
+	},
+	/** Why a feature is recommended: what the profile says, joined. */
+	why: (/** @type {string[]} */ tags) => sentence(tags.map((tag) => PROFILE.tag(tag)).join(' and ')),
+	/** Why a feature that is on may not be needed. */
+	whyNot: (/** @type {string[]} */ tags) => `Not in the business profile: ${tags.map((tag) => PROFILE.tag(tag)).join(' or ')}.`,
+});
+
+/** A text starting with a capital and ending with a period. @param {string} text */
+const sentence = (text) => `${text.charAt(0).toUpperCase()}${text.slice(1)}.`;
+
+/** What each tag of a choice or yes-or-no question says. */
+const PROFILE_TAGS = Object.freeze(
+	/** @type {Record<string, string>} */ ({
+		'sells.physical': 'you sell physical goods',
+		'sells.digital': 'you sell digital goods',
+		'sells.services': 'you sell services or bookings',
+		'sells.subscriptions': 'you sell subscriptions',
+		'sells.none': 'you sell nothing online',
+		'sells.*': 'you sell online',
+		'pays.online': 'shoppers pay online',
+		'pays.link': 'you send payment links or invoices',
+		'pays.cod': 'shoppers pay cash on delivery',
+		'pays.bank_transfer': 'shoppers pay by bank transfer',
+		'pays.pickup': 'shoppers pay at pickup',
+		'pays.*': 'you take payments',
+		'delivers.courier': 'orders go out by courier',
+		'delivers.zones': 'you deliver orders yourself with fees by area',
+		'delivers.pickup': 'shoppers pick up their orders',
+		'delivers.none': 'you have nothing to deliver',
+		'delivers.*': 'you deliver orders',
+		'signIn.email': 'shoppers sign in with their email',
+		'signIn.phone': 'shoppers sign in with their phone number',
+		'signIn.social': 'shoppers sign in with Google, Apple or Facebook',
+		'signIn.none': 'shoppers do not sign in',
+		'signIn.*': 'shoppers sign in',
+		'chat.people': 'your staff answer visitors in chat',
+		'chat.ai': 'an AI assistant answers visitors in chat',
+		'chat.none': 'you have no chat',
+		'chat.*': 'visitors chat with you',
+		'messages.email': 'you message customers by email',
+		'messages.sms': 'you message customers by SMS',
+		'messages.whatsapp': 'you message customers on WhatsApp',
+		'messages.push': 'you send browser push notifications',
+		'messages.none': 'you do not message customers',
+		'messages.*': 'you message customers',
+		'marketing.google': 'you advertise on Google',
+		'marketing.meta': 'you advertise on Facebook and Instagram',
+		'marketing.tiktok': 'you advertise on TikTok',
+		'marketing.analytics': 'you want your own visitor analytics',
+		'marketing.seo': 'you want to be found in search engines',
+		'marketing.none': 'you do no marketing',
+		'marketing.*': 'you market the website',
+		'offers.loyalty': 'you reward repeat shoppers with points',
+		'offers.discounts': 'you offer coupons and sales',
+		'offers.reviews': 'shoppers review what they bought',
+		'offers.member_prices': 'members or wholesale buyers get their own prices',
+		'offers.none': 'you offer no extras',
+		'offers.*': 'you offer shoppers extras',
+		'moving.yes': 'you are moving from another website or system',
+		'moving.no': 'you are not moving from another system',
+	}),
+);
 
 /** Connected products (PLAN 0.8.2 Products). */
 export const PRODUCTS = Object.freeze({
@@ -766,6 +938,7 @@ export const MORE = Object.freeze({
 		'website.setup_shared': 'Setup share link created',
 		'website.setup_share_revoked': 'Setup share link revoked',
 		'website.setup_share_opened': 'Shared Setup opened',
+		'website.setup_profile_saved': 'Business profile saved',
 	}),
 	noActivity: 'No activity yet.',
 	count: (/** @type {number} */ n, /** @type {boolean} */ more = false) => (more ? `${n}+` : String(n)),

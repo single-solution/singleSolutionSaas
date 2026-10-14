@@ -1,31 +1,40 @@
 'use client';
 /**
  * The Setup sheet of a website (owner request 2026-10-14; `ss.blueprint/1`), in both consoles and on its read-only
- * shared page: the website's facts, then one panel per product — what is left to do, its features with their settings
- * and lists, connections (state only), widgets, the install snippet and browser token, staff permissions, events and
- * docs. **Download JSON** and **Copy JSON** give the sheet itself; in the consoles **Refresh** gathers it again and
- * **Share links** makes, lists and revokes read-only links (the link is shown once). Every word comes from
- * `texts/console.js`; the Portal checks every right again.
+ * shared page: the website's facts, its **business profile** and the advisor's **recommendations** (features the
+ * profile calls for that are not on, with why — the admin switches one on with **Switch on**, the features it needs
+ * included — and features that are on although the profile does not call for them), then one panel per product —
+ * what is left to do, its features with their settings and lists, connections (state only), widgets, the install
+ * snippet and browser token, staff permissions, events, what the website builds and docs. **Download JSON** and
+ * **Copy JSON** give the sheet itself; in the consoles **Refresh** gathers it again, **Edit profile** saves the
+ * business profile, and **Share links** makes, lists and revokes read-only links (the link is shown once). Every word
+ * comes from `texts/console.js`; the Portal checks every right again.
  * @module
  */
 import { useEffect, useState } from 'react';
+import { PROFILE_CHOICES, PROFILE_NONE } from '@ss/contracts/profile';
 import {
 	Badge,
 	Button,
 	ButtonLink,
 	Callout,
 	Card,
+	CheckboxGroup,
+	ChoicePicker,
 	CodeBlock,
 	Dialog,
 	EmptyState,
 	ErrorState,
+	FieldGrid,
 	FormError,
 	Icon,
 	IconBadge,
 	Input,
+	KeyValueList,
 	LocalTime,
 	Masonry,
 	PageHeader,
+	RadioGroup,
 	Section,
 	Skeleton,
 	StatusBadge,
@@ -36,7 +45,8 @@ import {
 	describeProblem,
 	useToast,
 } from '@ss/ui';
-import { SETUP } from '../../texts/console.js';
+import { COUNTRY_CODES, COUNTRY_NAMES } from '../../modules/identity/core/countries.js';
+import { PROFILE, SETUP } from '../../texts/console.js';
 import { apiFetch, takeFragmentToken } from '../client.js';
 import { Link } from '../link.js';
 import { api } from '../paths.js';
@@ -45,6 +55,7 @@ import { api } from '../paths.js';
 /** @typedef {Blueprint['products'][number]} SheetProduct */
 /** @typedef {Extract<SheetProduct, { reachable: true }>} ReachableProduct */
 /** @typedef {import('@ss/contracts').BlueprintSetting} BlueprintSetting */
+/** @typedef {import('@ss/contracts/profile').BusinessProfile} BusinessProfile */
 /** @typedef {import('./common.js').Fetcher} Fetcher */
 /** @typedef {import('@ss/ui/problems').Problem} Problem */
 /**
@@ -61,6 +72,69 @@ import { api } from '../paths.js';
  * @typedef {{ sheet: Blueprint, links: ShareLink[], merchantId: string, websiteId: string,
  *   back: { href: string, label: string } }} SetupPageProps
  */
+/**
+ * What the consoles can do on the sheet: edit the business profile, and (admins) switch a recommended feature on.
+ * @typedef {{ editProfile: () => void, switchOn: ((product: ReachableProduct, feature: string) => void) | null,
+ *   switching: string | null }} SheetActions
+ */
+
+/** Choice questions in the order people see them. */
+const CHOICES = /** @type {Array<keyof typeof PROFILE_CHOICES>} */ (Object.keys(PROFILE_CHOICES));
+/** Countries to pick from, by name. */
+const COUNTRY_OPTIONS = COUNTRY_CODES.map((code) => ({ value: code, label: COUNTRY_NAMES[code] ?? code })).sort((a, b) =>
+	a.label.localeCompare(b.label),
+);
+const LANGUAGE = /^[a-z]{2,3}$/;
+
+/**
+ * A business profile in words: each answered question with its answer, in the order people see them.
+ * @param {BusinessProfile} profile
+ * @returns {Array<{ question: string, answer: string }>}
+ */
+export const profileLines = (profile) => [
+	...CHOICES.filter((question) => (profile[question] ?? []).length > 0).map((question) => ({
+		question: PROFILE.questions[question],
+		answer: (profile[question] ?? [])
+			.map((option) => /** @type {Record<string, string>} */ (PROFILE.options[question])[option] ?? option)
+			.join(', '),
+	})),
+	...(typeof profile.moving === 'boolean'
+		? [{ question: PROFILE.questions.moving, answer: profile.moving ? PROFILE.yes : PROFILE.no }]
+		: []),
+	...((profile.countries ?? []).length > 0
+		? [
+				{
+					question: PROFILE.questions.countries,
+					answer: (profile.countries ?? []).map((code) => COUNTRY_NAMES[code] ?? code).join(', '),
+				},
+			]
+		: []),
+	...((profile.languages ?? []).length > 0
+		? [{ question: PROFILE.questions.languages, answer: (profile.languages ?? []).join(', ') }]
+		: []),
+];
+
+/**
+ * The features a feature needs that are off (all the way down), by title.
+ * @param {ReachableProduct} product
+ * @param {string} key
+ * @returns {string[]}
+ */
+export const neededOff = (product, key) => {
+	const byKey = new Map(product.features.map((feature) => [feature.key, feature]));
+	/** @type {Set<string>} */
+	const seen = new Set();
+	/** @param {string} at */
+	const walk = (at) => {
+		for (const dependency of byKey.get(at)?.dependsOn ?? [])
+			if (!seen.has(dependency)) {
+				seen.add(dependency);
+				walk(dependency);
+			}
+	};
+	walk(key);
+	return product.features.filter((feature) => seen.has(feature.key) && !feature.on).map((feature) => feature.title);
+};
 
 /**
  * A setting's value in words: yes or no, a list joined, an empty text or list as None.
@@ -322,10 +396,213 @@ function ProductPanel({ product, valuesShown }) {
 }
 
 /**
- * The website's facts and every product's panel.
- * @param {{ sheet: Blueprint }} props
+ * The business profile: its answers in words, or a call to fill it out.
+ * @param {{ profile: BusinessProfile | null, actions: SheetActions | null }} props
  */
-export function SheetBody({ sheet }) {
+function ProfileCard({ profile, actions }) {
+	return (
+		<Card
+			title={PROFILE.title}
+			subtitle={PROFILE.intro}
+			actions={
+				actions ? (
+					<Button variant="secondary" size="sm" onClick={actions.editProfile}>
+						{profile ? PROFILE.edit : PROFILE.fillOut}
+					</Button>
+				) : null
+			}>
+			{profile ? (
+				<KeyValueList items={profileLines(profile).map((line) => ({ label: line.question, value: line.answer }))} />
+			) : (
+				<p className="text-sm text-muted">{PROFILE.empty}</p>
+			)}
+		</Card>
+	);
+}
+
+/**
+ * The advisor: features the profile calls for that are off (with Switch on for admins), and features that are on
+ * although it does not call for them.
+ * @param {{ sheet: Blueprint, actions: SheetActions | null }} props
+ */
+function Recommendations({ sheet, actions }) {
+	const products = sheet.products.filter(/** @returns {p is ReachableProduct} */ (p) => p.reachable);
+	/** @param {ReachableProduct} product @param {string} key */
+	const titleOf = (product, key) => product.features.find((feature) => feature.key === key)?.title ?? key;
+	const off = products.flatMap((product) =>
+		product.recommended.filter((entry) => !entry.on).map((entry) => ({ product, entry })),
+	);
+	const unneeded = products.flatMap((product) => product.notRecommended.map((entry) => ({ product, entry })));
+	const onCount = products.reduce((n, product) => n + product.recommended.filter((entry) => entry.on).length, 0);
+	return (
+		<Card title={SETUP.recommendations} subtitle={SETUP.recommendationsIntro}>
+			{sheet.website.profile === null ? (
+				<p className="text-sm text-muted">{SETUP.noAdvice}</p>
+			) : (
+				<div className="space-y-5">
+					<p className="text-sm text-fg">{off.length === 0 ? SETUP.allRecommendedOn : SETUP.recommendedOn(onCount)}</p>
+					{off.length > 0 ? (
+						<Part title={SETUP.recommendedOff}>
+							<ul className="space-y-2">
+								{off.map(({ product, entry }) => {
+									const title = titleOf(product, entry.feature);
+									const needed = neededOff(product, entry.feature);
+									const id = `${product.productId}:${entry.feature}`;
+									return (
+										<li
+											key={id}
+											className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-xl bg-surface-2/60 px-4 py-3">
+											<span className="min-w-0 space-y-0.5">
+												<span className="flex flex-wrap items-center gap-2 text-sm font-semibold text-fg">
+													{title}
+													<Badge>{product.name}</Badge>
+												</span>
+												<span className="block text-xs text-muted">{entry.why}</span>
+												{needed.length > 0 ? (
+													<span className="block text-xs text-muted">{SETUP.alsoSwitches(needed.join(', '))}</span>
+												) : null}
+											</span>
+											{actions?.switchOn ? (
+												<Button
+													size="sm"
+													aria-label={SETUP.switchOnLabel(title, product.name)}
+													loading={actions.switching === id}
+													disabled={actions.switching !== null && actions.switching !== id}
+													onClick={() => actions.switchOn?.(product, entry.feature)}>
+													{SETUP.switchOn}
+												</Button>
+											) : null}
+										</li>
+									);
+								})}
+							</ul>
+							{actions ? (
+								<p className="text-xs text-muted">{actions.switchOn ? SETUP.billedNote : SETUP.recommendedOffAsk}</p>
+							) : null}
+						</Part>
+					) : null}
+					{unneeded.length > 0 ? (
+						<Part title={SETUP.notRecommended}>
+							<p className="text-xs text-muted">{SETUP.notRecommendedHelp}</p>
+							<ul className="space-y-1.5">
+								{unneeded.map(({ product, entry }) => (
+									<li key={`${product.productId}:${entry.feature}`} className="text-sm text-fg">
+										<span className="font-semibold">{titleOf(product, entry.feature)}</span>{' '}
+										<span className="text-xs text-muted">
+											({product.name}) · {entry.why}
+										</span>
+									</li>
+								))}
+							</ul>
+						</Part>
+					) : null}
+				</div>
+			)}
+		</Card>
+	);
+}
+
+/**
+ * Edit the business profile: every question optional; `none` stands alone.
+ * @param {{ manage: Manage, profile: BusinessProfile | null, onClose: () => void, onSaved: (sheet: Blueprint) => void }} props
+ */
+function ProfileDialog({ manage, profile, onClose, onSaved }) {
+	const [answers, setAnswers] = useState(/** @type {BusinessProfile} */ ({ ...(profile ?? {}) }));
+	const [languages, setLanguages] = useState((profile?.languages ?? []).join(', '));
+	const [errors, setErrors] = useState(/** @type {Record<string, string>} */ ({}));
+	const [busy, setBusy] = useState(false);
+	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
+	/** @param {keyof typeof PROFILE_CHOICES} question @param {string[]} next */
+	const choose = (question, next) => {
+		// picking none clears the rest; picking another answer clears none
+		const added = next.find((option) => !(answers[question] ?? []).includes(option));
+		const kept = added === PROFILE_NONE ? [PROFILE_NONE] : next.filter((option) => option !== PROFILE_NONE || !added);
+		setAnswers({ ...answers, [question]: kept });
+	};
+	const save = async () => {
+		const codes = languages
+			.split(',')
+			.map((code) => code.trim().toLowerCase())
+			.filter((code) => code !== '');
+		const wrong = codes.filter((code) => !LANGUAGE.test(code));
+		if (wrong.length > 0) {
+			setErrors({ languages: PROFILE.languagesInvalid(wrong.join(', ')) });
+			return;
+		}
+		setErrors({});
+		setBusy(true);
+		setProblem(null);
+		const result = await manage.fetcher(api.setupProfile(manage.merchantId, manage.websiteId), {
+			method: 'PUT',
+			body: { ...answers, languages: [...new Set(codes)] },
+		});
+		setBusy(false);
+		if (!result.ok) {
+			setProblem(result.problem);
+			return;
+		}
+		onSaved(result.data);
+	};
+	return (
+		<Dialog open onClose={onClose} title={PROFILE.title} description={PROFILE.intro} size="lg">
+			<div className="space-y-5">
+				<FieldGrid>
+					{CHOICES.map((question) => (
+						<CheckboxGroup
+							key={question}
+							legend={PROFILE.questions[question]}
+							options={PROFILE_CHOICES[question].map((option) => ({
+								value: option,
+								label: /** @type {Record<string, string>} */ (PROFILE.options[question])[option] ?? option,
+							}))}
+							value={answers[question] ?? []}
+							onChange={(next) => choose(question, next)}
+						/>
+					))}
+					<RadioGroup
+						legend={PROFILE.questions.moving}
+						inline
+						options={[
+							{ value: 'yes', label: PROFILE.yes },
+							{ value: 'no', label: PROFILE.no },
+							{ value: '', label: PROFILE.notAnswered },
+						]}
+						value={answers.moving === undefined ? '' : answers.moving ? 'yes' : 'no'}
+						onChange={(value) => {
+							const { moving: _moving, ...rest } = answers;
+							setAnswers(value === '' ? rest : { ...rest, moving: value === 'yes' });
+						}}
+					/>
+					<ChoicePicker
+						legend={PROFILE.questions.countries}
+						options={COUNTRY_OPTIONS}
+						value={answers.countries ?? []}
+						onChange={(next) => setAnswers({ ...answers, countries: next })}
+						emptyText={PROFILE.notAnswered}
+					/>
+					<Input
+						label={PROFILE.questions.languages}
+						help={PROFILE.languagesHelp}
+						value={languages}
+						onChange={(event) => setLanguages(event.currentTarget.value)}
+						error={errors.languages}
+						wide
+					/>
+				</FieldGrid>
+				<FormError problem={problem} />
+				<Button loading={busy} onClick={() => void save()}>
+					{PROFILE.save}
+				</Button>
+			</div>
+		</Dialog>
+	);
+}
+
+/**
+ * The website's facts, its business profile and the recommendations, and every product's panel.
+ * @param {{ sheet: Blueprint, actions?: SheetActions | null }} props `actions`: in the consoles
+ */
+export function SheetBody({ sheet, actions = null }) {
 	const { website, access } = sheet;
 	return (
 		<div className="space-y-6">
@@ -365,6 +642,8 @@ export function SheetBody({ sheet }) {
 					</div>
 				</dl>
 			</Card>
+			<ProfileCard profile={website.profile} actions={actions} />
+			<Recommendations sheet={sheet} actions={actions} />
 			<Section title={SETUP.products}>
 				{sheet.products.length === 0 ? (
 					<EmptyState compact icon="box" kind="product" title={SETUP.noProducts} />
@@ -539,22 +818,49 @@ function ShareLinks({ manage, initial }) {
 }
 
 /**
- * The Setup page of a website in the merchant console.
+ * The Setup page of a website in the merchant console (no Switch on: features are switched by Owner or Support).
  * @param {SetupPageProps} props
  */
 export function MerchantSetupView({ merchantId, websiteId, ...props }) {
-	return <SetupView {...props} manage={{ fetcher: apiFetch, merchantId, websiteId }} />;
+	return <SetupView {...props} manage={{ fetcher: apiFetch, merchantId, websiteId }} canSwitch={false} />;
 }
 
 /**
  * The Setup page of a website in a console (each console passes its API client).
- * @param {{ sheet: Blueprint, links: ShareLink[], manage: Manage, back: { href: string, label: string } }} props
+ * @param {{ sheet: Blueprint, links: ShareLink[], manage: Manage, back: { href: string, label: string },
+ *   canSwitch: boolean }} props `canSwitch`: the admin console (Owner and Support) switches recommended features on
  */
-export function SetupView({ sheet: initial, links, manage, back }) {
+export function SetupView({ sheet: initial, links, manage, back, canSwitch }) {
 	const toast = useToast();
 	const [sheet, setSheet] = useState(initial);
 	const [refreshing, setRefreshing] = useState(false);
+	const [editing, setEditing] = useState(false);
+	const [switching, setSwitching] = useState(/** @type {string | null} */ (null));
 	useEffect(() => setSheet(initial), [initial]);
+	/** @param {ReachableProduct} product @param {string} feature */
+	const switchOn = async (product, feature) => {
+		setSwitching(`${product.productId}:${feature}`);
+		const result = await manage.fetcher(api.setupFeatures(manage.merchantId, manage.websiteId), {
+			method: 'POST',
+			body: { productId: product.productId, feature },
+		});
+		setSwitching(null);
+		if (!result.ok) {
+			toast.show({ tone: 'danger', title: describeProblem(result.problem) });
+			return;
+		}
+		setSheet(result.data.sheet);
+		const titles = /** @type {string[]} */ (result.data.added).map(
+			(key) => product.features.find((f) => f.key === key)?.title ?? key,
+		);
+		toast.show({ title: SETUP.switchedOn(titles.join(', ')) });
+	};
+	/** @type {SheetActions} */
+	const actions = {
+		editProfile: () => setEditing(true),
+		switchOn: canSwitch ? (product, feature) => void switchOn(product, feature) : null,
+		switching,
+	};
 	const refresh = async () => {
 		setRefreshing(true);
 		const result = await manage.fetcher(api.setup(manage.merchantId, manage.websiteId, { fresh: true }));
@@ -600,8 +906,20 @@ export function SetupView({ sheet: initial, links, manage, back }) {
 					</>
 				}
 			/>
-			<SheetBody sheet={sheet} />
+			<SheetBody sheet={sheet} actions={actions} />
 			<ShareLinks manage={manage} initial={links} />
+			{editing ? (
+				<ProfileDialog
+					manage={manage}
+					profile={sheet.website.profile}
+					onClose={() => setEditing(false)}
+					onSaved={(saved) => {
+						setSheet(saved);
+						setEditing(false);
+						toast.show({ title: PROFILE.saved });
+					}}
+				/>
+			) : null}
 		</div>
 	);
 }

@@ -25,6 +25,7 @@ export const createCatalogModule = (options = {}) =>
 		problems: {
 			catalog_target_refused: { status: 422, title: 'Outbound target refused' },
 			catalog_launch_refused: { status: 422, title: 'Launch refused' },
+			catalog_switch_refused: { status: 422, title: 'Switch on refused' },
 		},
 		service: (ctx) => createCatalogService(ctx, options),
 		routes: (ctx) => catalogRoutes(/** @type {CatalogService} */ (ctx.service('catalog')), () => ctx.service('commerce')),

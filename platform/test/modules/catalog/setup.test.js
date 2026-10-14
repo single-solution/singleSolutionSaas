@@ -3,7 +3,8 @@ import { validateBlueprint } from '@ss/contracts';
 import { manifest as notesManifest } from '@ss/contracts/testing';
 import { closeMongoClients } from '../../../src/testing.js';
 import { SHARE_LINKS_MAX, SHEET_CACHE_MS } from '../../../src/modules/catalog/setup.js';
-import { parseShareLink, sharedCopy } from '../../../src/modules/catalog/core/setup.js';
+import { parseShareLink, parseSwitchOn, sharedCopy } from '../../../src/modules/catalog/core/setup.js';
+import { adviceOf, parseProfile } from '../../../src/modules/catalog/core/advisor.js';
 import { startMongo } from '../../helpers.js';
 import { PASSWORD, bootPortal, codeOf } from './boot.js';
 
@@ -155,6 +156,160 @@ describe('Setup sheet', () => {
 		const empty = await m.client.get(`/v1/merchants/${m.merchantId}/websites/${w2}/setup`);
 		expect(empty.json.products).toEqual([]);
 		expect(empty.json.website.business.found).toBe(false);
+	});
+});
+
+describe('business profile and advisor', () => {
+	it('keeps a tidy business profile per website and adds the advice for it to every sheet, shared copies too', async () => {
+		const { h, owner, notes, m, base } = await setUp('setup_profile');
+		expect((await m.client.get(`${base}/setup`)).json.website.profile).toBeNull();
+		const saved = await m.client.put(`${base}/setup/profile`, {
+			chat: ['people'],
+			sells: ['digital', 'physical'],
+			delivers: [],
+			countries: ['US', 'CA'],
+		});
+		expect(saved.status).toBe(200);
+		expect(validateBlueprint(saved.json).ok).toBe(true);
+		// unanswered questions are left out; options in the order people see them
+		expect(saved.json.website.profile).toEqual({ sells: ['physical', 'digital'], chat: ['people'], countries: ['US', 'CA'] });
+		const part = saved.json.products.find((/** @type {any} */ p) => p.productId === 'notes');
+		expect(part.recommended).toEqual([
+			{ feature: 'notes', on: true, because: ['chat.people'], why: 'Your staff answer visitors in chat.' },
+		]);
+		expect(part.notRecommended).toEqual([]);
+		// the products were not asked again for it
+		expect(notes.blueprintCalls).toHaveLength(1);
+		const [entry] = await h.activity('website.setup_profile_saved');
+		expect(entry?.actor.type).toBe('merchant');
+		expect(entry?.after).toEqual({ profile: saved.json.website.profile });
+
+		// the admin changes it: notes is on although the profile now rules it out
+		const ruled = await owner.put(`${base}/setup/profile`, { chat: ['none'], messages: ['sms'], signIn: ['email'] });
+		expect(ruled.json.products.find((/** @type {any} */ p) => p.productId === 'notes')).toMatchObject({
+			recommended: [],
+			notRecommended: [
+				{
+					feature: 'notes',
+					missing: ['chat.people', 'messages.email'],
+					why: 'Not in the business profile: your staff answer visitors in chat or you message customers by email.',
+				},
+			],
+		});
+		// a share link copies the profile and the advice
+		const link = await m.client.post(`${base}/setup/links`, { values: false });
+		const key = String(link.json.url).split('#key=')[1];
+		const copy = (await h.api.call('POST', '/v1/setup/shared', { body: { key } })).json;
+		expect(copy.website.profile).toEqual({ signIn: ['email'], chat: ['none'], messages: ['sms'] });
+		expect(copy.products[1].notRecommended).toHaveLength(1);
+		// clearing every answer removes it
+		expect((await m.client.put(`${base}/setup/profile`, {})).json.website.profile).toBeNull();
+		expect(await h.db.collection('catalog_setup_profiles').countDocuments()).toBe(0);
+	});
+
+	it('refuses answers it does not know, none with other answers, and other merchants', async () => {
+		const { h, m, base } = await setUp('setup_profile_rules');
+		for (const [body, path] of /** @type {Array<[unknown, string]>} */ ([
+			[{ pays: ['gold'] }, '/pays/0'],
+			[{ sells: ['physical', 'none'] }, '/sells'],
+			[{ countries: ['us'] }, '/countries/0'],
+			[{ moving: 'yes' }, '/moving'],
+			[{ budget: 'high' }, '/budget'],
+		])) {
+			const res = await m.client.put(`${base}/setup/profile`, body);
+			expect(codeOf(res)).toEqual([422, 'validation_failed']);
+			expect(res.json.errors[0].path).toBe(path);
+		}
+		const other = await h.merchant('other@shop.test', []);
+		expect(codeOf(await other.client.put(`${base}/setup/profile`, { chat: ['ai'] }))).toEqual([403, 'forbidden']);
+		const finance = await h.admin('finance');
+		expect(codeOf(await finance.client.put(`${base}/setup/profile`, { chat: ['ai'] }))).toEqual([403, 'forbidden']);
+	});
+
+	it('switches a feature on for Owner and Support through the product, then gathers the sheet again', async () => {
+		const { h, owner, notes, m, w1, base } = await setUp('setup_switch');
+		const done = await owner.post(`${base}/setup/features`, { productId: 'notes', feature: 'inbox' });
+		expect(done.status).toBe(200);
+		expect(done.json.added).toEqual(['inbox']);
+		expect(validateBlueprint(done.json.sheet).ok).toBe(true);
+		expect(notes.switchCalls).toEqual([
+			{
+				websiteId: w1,
+				body: { features: ['inbox'], admin: { id: expect.any(String), name: expect.any(String), role: 'owner' } },
+			},
+		]);
+		expect(notes.blueprintCalls).toEqual([w1]);
+		const support = await h.admin('support');
+		expect((await support.client.post(`${base}/setup/features`, { productId: 'notes', feature: 'notes' })).status).toBe(200);
+		expect(notes.switchCalls[1]?.body.admin.role).toBe('support');
+
+		// the merchant and Finance cannot; a product not on the website, a malformed body
+		expect((await m.client.post(`${base}/setup/features`, { productId: 'notes', feature: 'inbox' })).status).toBe(401);
+		const finance = await h.admin('finance');
+		expect(codeOf(await finance.client.post(`${base}/setup/features`, { productId: 'notes', feature: 'inbox' }))).toEqual([
+			403,
+			'forbidden',
+		]);
+		expect(codeOf(await owner.post(`${base}/setup/features`, { productId: 'payments', feature: 'stripe' }))).toEqual([
+			404,
+			'not_found',
+		]);
+		const bad = await owner.post(`${base}/setup/features`, { productId: 'Notes', feature: 'in box', extra: 1 });
+		expect(codeOf(bad)).toEqual([422, 'validation_failed']);
+		expect(bad.json.errors.map((/** @type {any} */ e) => e.path)).toEqual(['/extra', '/productId', '/feature']);
+		expect(parseSwitchOn('x')).toEqual({ ok: false, errors: [{ path: '', message: 'body must be a JSON object' }] });
+
+		// the product refuses (its words), fails or cannot be reached: nothing changes
+		notes.tamper.switchOn = 'refuse';
+		const refused = await owner.post(`${base}/setup/features`, { productId: 'notes', feature: 'inbox' });
+		expect(codeOf(refused)).toEqual([422, 'catalog_switch_refused']);
+		expect(refused.json.detail).toBe('The Portal refused the change (forbidden). Nothing was changed.');
+		notes.tamper.switchOn = 'status_500';
+		expect(codeOf(await owner.post(`${base}/setup/features`, { productId: 'notes', feature: 'inbox' }))).toEqual([
+			502,
+			'upstream_error',
+		]);
+		await notes.close();
+		const down = await owner.post(`${base}/setup/features`, { productId: 'notes', feature: 'inbox' });
+		expect(codeOf(down)).toEqual([502, 'upstream_error']);
+		expect(down.json.detail).toBe('The product did not answer. Nothing was changed; try again in a moment.');
+	});
+
+	it('parses a profile and words the advice', () => {
+		expect(parseProfile({ offers: [], moving: false })).toEqual({ ok: true, value: { moving: false } });
+		expect(parseProfile({})).toEqual({ ok: true, value: null });
+		expect(parseProfile([])).toMatchObject({ ok: false });
+		const features = [
+			{ key: 'cod', on: false, recommendFor: ['pays.cod+countries.many', 'languages.many'] },
+			{ key: 'gateway', on: true, recommendFor: ['pays.online+countries.za'] },
+			{ key: 'import', on: true, recommendFor: ['moving.yes'] },
+		];
+		expect(adviceOf(features, null)).toEqual({ recommended: [], notRecommended: [] });
+		expect(adviceOf(features, { pays: ['cod'], countries: ['US', 'GB'], languages: ['en'], moving: false })).toEqual({
+			recommended: [
+				{
+					feature: 'cod',
+					on: false,
+					because: ['pays.cod', 'countries.many'],
+					why: 'Shoppers pay cash on delivery and you sell in more than one country.',
+				},
+			],
+			notRecommended: [
+				{ feature: 'gateway', missing: ['pays.online'], why: 'Not in the business profile: shoppers pay online.' },
+				{
+					feature: 'import',
+					missing: ['moving.yes'],
+					why: 'Not in the business profile: you are moving from another website or system.',
+				},
+			],
+		});
+		expect(
+			adviceOf([{ key: 'gateway', on: false, recommendFor: ['pays.online+countries.za+languages.af'] }], {
+				pays: ['online'],
+				countries: ['ZA'],
+				languages: ['af'],
+			}).recommended[0]?.why,
+		).toBe('Shoppers pay online and your countries include ZA and your languages include af.');
 	});
 });
 

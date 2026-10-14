@@ -1,7 +1,8 @@
 /**
  * Collections of the `catalog` module (PLAN 0.4.12, 0.8.2 Products): connected products, the launches the Portal
- * issued, notices a product has not taken yet, and the share links of websites' Setup sheets. Control-plane facts
- * only: product addresses, public manifests, public keys, launch ids and hashes of share-link keys (never a sheet).
+ * issued, notices a product has not taken yet, and the share links and business profiles of websites' Setup sheets.
+ * Control-plane facts only: product addresses, public manifests, public keys, launch ids, hashes of share-link keys
+ * and the few answers of a business profile (never a sheet).
  * @module
  */
 import { defineCollection } from '../../infra/db.js';
@@ -10,6 +11,7 @@ export const PRODUCTS = 'catalog_products';
 export const LAUNCHES = 'catalog_launches';
 export const NOTICES = 'catalog_notices';
 export const SETUP_LINKS = 'catalog_setup_links';
+export const SETUP_PROFILES = 'catalog_setup_profiles';
 
 export const collections = Object.freeze([
 	defineCollection({
@@ -41,5 +43,13 @@ export const collections = Object.freeze([
 		tenant: 'merchant',
 		indexes: [{ keys: { merchantId: 1, websiteId: 1, createdAt: -1, _id: -1 } }, { keys: { keyHash: 1 }, unique: true }],
 		ttl: { field: 'expiresAt', afterSeconds: 0 },
+	}),
+	defineCollection({
+		module: 'catalog',
+		name: SETUP_PROFILES,
+		description:
+			"The business profile of a website's Setup sheet (`_id` = websiteId): the answers its advisor recommends features from (`@ss/contracts` business profile: what it sells, how shoppers pay, delivery, sign-in, chat, messages, marketing, offers, moving, countries and languages). Removed when every answer is cleared.",
+		tenant: 'merchant',
+		indexes: [{ keys: { merchantId: 1, _id: 1 } }],
 	}),
 ]);

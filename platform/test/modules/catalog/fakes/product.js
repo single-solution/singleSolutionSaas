@@ -7,6 +7,8 @@
  * - `POST /.well-known/ss-events`: notices, verified with `verifyNotice` against the pinned Portal keys and recorded.
  * - `GET /v1/blueprint?websiteId=`: its part of a Setup sheet, a Portal call verified with `verifyPortalCall` (the
  *   `@ss/contracts/testing` product blueprint under its own id and name, unless a test sets another).
+ * - `POST /v1/blueprint/features?websiteId=`: the advisor's Switch on, a Portal call with a body: recorded, and
+ *   answered `{ version, on, added }` with the asked features added (or as a test tampers it).
  *
  * Behavior can be tampered with per test (the connect answer, the notice status, the blueprint answer).
  * @module
@@ -37,6 +39,7 @@ const PRODUCT_SECRET = 'fake-product-connect-secret-0123456789abcdef';
  * @property {number} [pricesVersion] answer this price-list version
  * @property {'hang' | 'status_500' | 'refuse' | 'invalid' | 'other_id'} [blueprint] never answer, answer 500 or 403, a
  *   body that is no blueprint, or another product's blueprint
+ * @property {'hang' | 'status_500' | 'refuse'} [switchOn] never answer, answer 500, or refuse with a 422 problem
  */
 
 /**
@@ -60,6 +63,8 @@ export const startFakeProduct = async ({ manifest, portalUrl, now = Date.now, ki
 	const replayStore = createMemoryReplayStore({ now });
 	/** The websites the Portal asked for blueprints, in order. @type {string[]} */
 	const blueprintCalls = [];
+	/** The Switch on calls, in order. @type {Array<{ websiteId: string, body: any }>} */
+	const switchCalls = [];
 	/** @type {(websiteId: string) => Record<string, any>} */
 	let blueprintOf = () => ({ ...productBlueprint(), productId: current.id, name: current.name });
 
@@ -122,6 +127,34 @@ export const startFakeProduct = async ({ manifest, portalUrl, now = Date.now, ki
 					return answer(401, { code: 'invalid_notice' });
 				}
 			}
+			if (req.method === 'POST' && (req.url ?? '').startsWith('/v1/blueprint/features')) {
+				if (tamper.switchOn === 'hang') return;
+				if (tamper.switchOn === 'status_500') return answer(500, {});
+				try {
+					if (!portalKeys) throw new Error('not connected');
+					await verifyPortalCall({
+						headers: /** @type {any} */ (req.headers),
+						audience: current.id,
+						method: 'POST',
+						target: String(req.url),
+						rawBody: body,
+						keyResolver: portalKeys,
+						replayStore,
+						now,
+					});
+				} catch {
+					return answer(401, { code: 'unauthorized' });
+				}
+				const websiteId = new URL(String(req.url), 'http://local').searchParams.get('websiteId') ?? '';
+				const asked = JSON.parse(body);
+				switchCalls.push({ websiteId, body: asked });
+				if (tamper.switchOn === 'refuse')
+					return answer(422, {
+						code: 'validation_failed',
+						detail: 'The Portal refused the change (forbidden). Nothing was changed.',
+					});
+				return answer(200, { version: 2, on: asked.features, added: asked.features });
+			}
 			if (req.method === 'GET' && (req.url ?? '').startsWith('/v1/blueprint')) {
 				if (tamper.blueprint === 'hang') return;
 				if (tamper.blueprint === 'status_500') return answer(500, {});
@@ -166,6 +199,8 @@ export const startFakeProduct = async ({ manifest, portalUrl, now = Date.now, ki
 		assertion: () => signAssertion({ signer: createSigner(key.privateJwk), productId: current.id, audience: portalUrl, now }),
 		/** The websites the Portal asked for blueprints, in order. */
 		blueprintCalls,
+		/** The Switch on calls, in order. */
+		switchCalls,
 		/** Answer another blueprint. @param {(websiteId: string) => Record<string, any>} make */
 		setBlueprint: (make) => {
 			blueprintOf = make;

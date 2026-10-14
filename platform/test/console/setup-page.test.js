@@ -3,19 +3,33 @@
  * The Setup page in the browser (jsdom) against a live in-process Portal with fake products (owner request
  * 2026-10-14): the merchant's sheet (the website's facts, a product's panel, a product that did not answer), Refresh,
  * Copy and Download JSON, share links (create once-shown, list, revoke), the admin's page, the Setup button on website
- * cards, and the public shared page (key from the address fragment; without values; a link that does not work).
+ * cards, the public shared page (key from the address fragment; without values; a link that does not work), and the
+ * advisor: the business profile filled out by the merchant, recommendations with why, Switch on for the admin.
  */
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { ToastProvider } from '@ss/ui';
-import { act, cleanup, render, type } from '@ss/ui/testing';
+import { productBlueprint } from '@ss/contracts/testing';
+import { act, byLabel, cleanup, render, type } from '@ss/ui/testing';
 import { closeMongoClients } from '../../src/testing.js';
 import * as admin from '../../src/console/admin/loaders.js';
 import { MerchantsView } from '../../src/console/admin/views/merchants.js';
 import { AdminSetupView } from '../../src/console/admin/views/setup.js';
 import * as loaders from '../../src/console/loaders.js';
-import { MerchantSetupView, SharedSetupView, valueText } from '../../src/console/views/setup.js';
+import { MerchantSetupView, SharedSetupView, neededOff, profileLines, valueText } from '../../src/console/views/setup.js';
 import { startMongo } from '../helpers.js';
-import { browserOf, buttons, createWorld, dialog, press, pressDialog, quiet, settle, shows, until } from './merchant-harness.js';
+import {
+	browserOf,
+	buttons,
+	clickEl,
+	createWorld,
+	dialog,
+	press,
+	pressDialog,
+	quiet,
+	settle,
+	shows,
+	until,
+} from './merchant-harness.js';
 
 vi.mock('next/navigation.js', async (importOriginal) => {
 	const { testRouter } = await import('./router.js');
@@ -47,12 +61,12 @@ const world = async (name) => {
 	const { b, merchantId } = await w.signup('owner@shop.test', 'Shop & Co');
 	const site = await w.addWebsite(merchantId, 'shop.example.com');
 	const websiteId = String(site.websiteId);
-	await w.connect();
+	const notes = await w.connect();
 	const chatty = await w.connect({ id: 'chatty', name: 'Chatty', widgets: false });
 	chatty.tamper.blueprint = 'status_500';
 	await w.addProduct(merchantId, websiteId, 'notes');
 	await w.addProduct(merchantId, websiteId, 'chatty');
-	return { w, b, merchantId, websiteId };
+	return { w, b, merchantId, websiteId, notes };
 };
 
 describe('Setup page (jsdom)', () => {
@@ -217,6 +231,129 @@ describe('Setup page (jsdom)', () => {
 			restore();
 			await w.close();
 		}
+	});
+
+	it('lets the merchant fill out the business profile and shows the recommendations; the admin switches one on', async () => {
+		const restore = quiet();
+		const { w, b, merchantId, websiteId, notes } = await world('setup_page_advisor');
+		// the Notes inbox (off) suits a website whose staff answer the chat
+		notes.setBlueprint(() => {
+			const part = productBlueprint();
+			/** @type {any} */ (part.features[1]).recommendFor = ['chat.people'];
+			return part;
+		});
+		try {
+			b.use();
+			const setup = await loaders.loadSetup(b.api, merchantId, websiteId);
+			if (!setup.ok) throw new Error('setup');
+			withToasts(
+				<MerchantSetupView
+					sheet={setup.sheet}
+					links={setup.links}
+					merchantId={merchantId}
+					websiteId={websiteId}
+					back={{ href: `/websites/${websiteId}`, label: 'Back to the website' }}
+				/>,
+			);
+			expect(shows('Not filled out yet.')).toBe(true);
+			expect(shows('Fill out the business profile to see which features this website should use.')).toBe(true);
+			await press('Fill out the profile');
+			const pick = async (/** @type {string} */ label) => clickEl(byLabel(dialog(), label));
+			await pick('Your staff');
+			await pick('SMS');
+			await pick('Physical goods');
+			await pick('Nothing (information only)');
+			// none stands alone: picking it cleared Physical goods
+			expect(/** @type {HTMLInputElement} */ (byLabel(dialog(), 'Physical goods')).checked).toBe(false);
+			await pick('Physical goods');
+			expect(/** @type {HTMLInputElement} */ (byLabel(dialog(), 'Nothing (information only)')).checked).toBe(false);
+			await pick('No');
+			await type(byLabel(dialog(), 'Languages of the website'), 'en, english');
+			await pressDialog('Save profile');
+			expect(dialog().textContent).toContain('Not a language code: english.');
+			await type(byLabel(dialog(), 'Languages of the website'), 'en, FR');
+			await pressDialog('Save profile');
+			const saved = await b.waitCall(
+				'PUT',
+				`/v1/merchants/${merchantId}/websites/${websiteId}/setup/profile`,
+				(s) => s === 200,
+			);
+			expect(saved.body.website.profile).toEqual({
+				sells: ['physical'],
+				chat: ['people'],
+				messages: ['sms'],
+				moving: false,
+				languages: ['en', 'fr'],
+			});
+			await until(() => shows('Business profile saved. The recommendations are updated.'));
+			expect(shows('Who answers visitors in chat?Your staff')).toBe(true);
+			expect(shows('Languages of the websiteen, fr')).toBe(true);
+			// Notes is on and recommended; its inbox is recommended and off: the merchant asks for it
+			expect(shows('1 recommended feature is on.')).toBe(true);
+			expect(shows('Recommended, not on')).toBe(true);
+			expect(shows('Your staff answer visitors in chat.')).toBe(true);
+			expect(shows('To switch these on, ask your account manager.')).toBe(true);
+			expect(buttons('Switch on')).toEqual([]);
+
+			// no chat and SMS only: Notes is on but the profile no longer calls for it
+			await press('Edit profile');
+			await pick('No chat');
+			await pressDialog('Save profile');
+			await until(() => shows('On, not recommended'));
+			expect(shows('Not in the business profile: your staff answer visitors in chat or you message customers by email.')).toBe(
+				true,
+			);
+			cleanup();
+
+			// the admin switches the inbox on with one click
+			await b.api.request('PUT', `/v1/merchants/${merchantId}/websites/${websiteId}/setup/profile`, { chat: ['people'] });
+			const { ownerBrowser } = w;
+			ownerBrowser.use();
+			const adminSetup = await loaders.loadSetup(ownerBrowser.api, merchantId, websiteId);
+			if (!adminSetup.ok) throw new Error('setup');
+			withToasts(
+				<AdminSetupView
+					sheet={adminSetup.sheet}
+					links={adminSetup.links}
+					merchantId={merchantId}
+					websiteId={websiteId}
+					back={{ href: '/admin', label: 'Back to the website' }}
+				/>,
+			);
+			expect(shows('Features are billed by the hour while they are on.')).toBe(true);
+			await press('Switch on Notes inbox in Notes');
+			const switched = await ownerBrowser.waitCall(
+				'POST',
+				`/v1/merchants/${merchantId}/websites/${websiteId}/setup/features`,
+				(s) => s === 200,
+			);
+			expect(switched.body.added).toEqual(['inbox']);
+			await until(() => shows('Switched on: Notes inbox.'));
+			expect(notes.switchCalls.map((call) => call.body.features)).toEqual([['inbox']]);
+			// the product refuses: said in a toast
+			notes.tamper.switchOn = 'refuse';
+			await press('Switch on Notes inbox in Notes');
+			await until(() => shows('The Portal refused the change (forbidden). Nothing was changed.'));
+			await settle();
+		} finally {
+			restore();
+			await w.close();
+		}
+	});
+
+	it('words a business profile and finds the features a feature needs that are off', () => {
+		expect(
+			profileLines({ chat: ['ai', 'people'], moving: true, countries: ['US', 'ZZ'], languages: ['en'], pays: [] }),
+		).toEqual([
+			{ question: 'Who answers visitors in chat?', answer: 'An AI assistant, Your staff' },
+			{ question: 'Are you moving from another website or system?', answer: 'Yes' },
+			{ question: 'Countries you sell in', answer: 'United States, ZZ' },
+			{ question: 'Languages of the website', answer: 'en' },
+		]);
+		const part = /** @type {any} */ ({ ...productBlueprint(), reachable: true, serverToken: { issued: true } });
+		part.features.push({ ...part.features[1], key: 'tags', title: 'Tags', dependsOn: ['inbox'] });
+		expect(neededOff(part, 'tags')).toEqual(['Notes inbox']);
+		expect(neededOff(part, 'notes')).toEqual([]);
 	});
 
 	it('words setting values', () => {

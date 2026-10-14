@@ -66,6 +66,10 @@ export const api = Object.freeze({
 		`/v1/merchants/${e(m)}/websites/${e(w)}/setup${query({ fresh: q.fresh ? '1' : null, download: q.download ? '1' : null })}`,
 	/** share links of the Setup sheet; `POST { days?, values?, install? }` → `{ link, url }` */
 	setupLinks: (/** @type {string} */ m, /** @type {string} */ w) => `/v1/merchants/${e(m)}/websites/${e(w)}/setup/links`,
+	/** the website's business profile: `PUT` the answers → the sheet with the advice for them */
+	setupProfile: (/** @type {string} */ m, /** @type {string} */ w) => `/v1/merchants/${e(m)}/websites/${e(w)}/setup/profile`,
+	/** the advisor's Switch on (Owner, Support): `POST { productId, feature }` → `{ added, sheet }` */
+	setupFeatures: (/** @type {string} */ m, /** @type {string} */ w) => `/v1/merchants/${e(m)}/websites/${e(w)}/setup/features`,
 	/** `DELETE` revokes a share link */
 	setupLink: (/** @type {string} */ m, /** @type {string} */ w, /** @type {string} */ l) =>
 		`/v1/merchants/${e(m)}/websites/${e(w)}/setup/links/${e(l)}`,

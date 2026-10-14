@@ -1,15 +1,23 @@
 /**
  * The website Setup sheet (`ss.blueprint/1`; design `audit/design/website-blueprint.md`), pure parts: the sheet from
- * the website's facts and each product's answer, the copy a share link shows, and the input of a new share link.
+ * the website's facts, its business profile and each product's answer (with the advisor's view, `advisor.js`), the
+ * copy a share link shows, and the input of a new share link.
  * @module
  */
-import { BLUEPRINT_SCHEMA } from '@ss/contracts';
+import { BLUEPRINT_SCHEMA, PATTERNS } from '@ss/contracts';
+import { adviceOf } from './advisor.js';
 import { scriptTag } from './install.js';
 
 /** @typedef {import('@ss/contracts').Blueprint} Blueprint */
 /** @typedef {import('@ss/contracts').ProductBlueprint} ProductBlueprint */
+/** @typedef {import('@ss/contracts').BusinessProfile} BusinessProfile */
 /** @typedef {Blueprint['products'][number]} SheetProduct */
+/** @typedef {Extract<SheetProduct, { reachable: true }>} ReachableProduct */
 /** @typedef {'timeout' | 'unreachable' | 'refused' | 'invalid'} Unreachable */
+/**
+ * A product as gathered: its sheet entry without the advisor's view, which depends on the profile at the time.
+ * @typedef {Omit<ReachableProduct, 'recommended' | 'notRecommended'> | Extract<SheetProduct, { reachable: false }>} GatheredProduct
+ */
 /**
  * A product on the website as the Portal knows it (Install and tokens).
  * @typedef {{ productId: string, name: string, browserToken: string }} InstallEntry
@@ -28,7 +36,7 @@ const SERVER_TOKENS_NOTE =
  * A product's entry: its answer with the Portal's install facts, or why it is missing.
  * @param {InstallEntry} entry
  * @param {{ ok: true, blueprint: ProductBlueprint } | { ok: false, reason: Unreachable }} answer
- * @returns {SheetProduct}
+ * @returns {GatheredProduct}
  */
 export const productEntry = (entry, answer) => {
 	if (!answer.ok) return { productId: entry.productId, name: entry.name, reachable: false, reason: answer.reason };
@@ -46,11 +54,13 @@ export const productEntry = (entry, answer) => {
 };
 
 /**
- * The sheet of a website.
- * @param {{ websiteId: string, domain: string, products: SheetProduct[], now: number }} input
+ * The sheet of a website: its facts, its business profile, and each product gathered with the advisor's view for
+ * that profile.
+ * @param {{ websiteId: string, domain: string, products: GatheredProduct[], profile: BusinessProfile | null,
+ *   now: number }} input `now`: when the products were gathered
  * @returns {Blueprint}
  */
-export const assembleSheet = ({ websiteId, domain, products, now }) => {
+export const assembleSheet = ({ websiteId, domain, products, profile, now }) => {
 	const found = products.find((p) => p.reachable && p.business.found);
 	const business = found?.reachable
 		? { found: true, name: found.business.name, country: found.business.country, timeZone: found.business.timeZone }
@@ -58,9 +68,9 @@ export const assembleSheet = ({ websiteId, domain, products, now }) => {
 	return {
 		schema: BLUEPRINT_SCHEMA,
 		generatedAt: new Date(now).toISOString(),
-		website: { id: websiteId, domain, business },
+		website: { id: websiteId, domain, business, profile },
 		access: { allowedOrigins: [`https://${domain}`], testingOrigins: [...TESTING_HOSTS], serverTokens: SERVER_TOKENS_NOTE },
-		products,
+		products: products.map((product) => (product.reachable ? { ...product, ...adviceOf(product.features, profile) } : product)),
 	};
 };
 
@@ -126,4 +136,27 @@ export const reasonOfStatus = (status) => {
 	if (status === 200) return null;
 	if (status >= 500) return 'unreachable';
 	return 'refused';
+};
+
+/**
+ * The body of Switch on: `{ productId, feature }` (a product id and a feature key, `@ss/contracts` patterns).
+ * @param {unknown} body
+ * @returns {{ ok: true, value: { productId: string, feature: string } } |
+ *   { ok: false, errors: Array<{ path: string, message: string }> }}
+ */
+export const parseSwitchOn = (body) => {
+	const input =
+		typeof body === 'object' && body !== null && !Array.isArray(body) ? /** @type {Record<string, unknown>} */ (body) : null;
+	if (input === null) return { ok: false, errors: [{ path: '', message: 'body must be a JSON object' }] };
+	/** @type {Array<{ path: string, message: string }>} */
+	const errors = Object.keys(input)
+		.filter((key) => !['productId', 'feature'].includes(key))
+		.map((key) => ({ path: `/${key}`, message: 'unknown property' }));
+	const { productId, feature } = input;
+	if (typeof productId !== 'string' || !new RegExp(PATTERNS.productId).test(productId))
+		errors.push({ path: '/productId', message: 'must be a product id' });
+	if (typeof feature !== 'string' || !new RegExp(PATTERNS.featureKey).test(feature))
+		errors.push({ path: '/feature', message: 'must be a feature key' });
+	if (errors.length > 0) return { ok: false, errors };
+	return { ok: true, value: { productId: /** @type {string} */ (productId), feature: /** @type {string} */ (feature) } };
 };

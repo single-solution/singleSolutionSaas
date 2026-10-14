@@ -5,8 +5,9 @@
  *           POST /v1/admin/products (Add product) · POST /v1/admin/products/:productId/reconnect ·
  *           POST /v1/admin/products/:productId/status · POST /v1/admin/products/:productId/launch (Open as admin)
  * Merchant: POST /v1/merchants/:merchantId/websites/:websiteId/products/:productId/launch
- * Setup:    GET /v1/merchants/:merchantId/websites/:websiteId/setup[?fresh=1|download=1] ·
+ * Setup:    GET /v1/merchants/:merchantId/websites/:websiteId/setup[?fresh=1|download=1] · PUT …/setup/profile ·
  *           GET|POST …/setup/links · DELETE …/setup/links/:linkId (merchant: own; Owner, Support) ·
+ *           POST …/setup/features { productId, feature } (Owner, Support) ·
  *           POST /v1/setup/shared { key } (public, rate-limited, noindex)
  * Product:  POST /v1/product/launch/consume · GET /v1/product/directory/:productId · GET /v1/product/websites
  * @module
@@ -14,7 +15,8 @@
 import { defineRoute, ok, created, problem } from '../../infra/http.js';
 import { PERMISSIONS as P } from '../../infra/rbac.js';
 import { parseAdminLaunch, parseConnect, parseConsume, parseStatus } from './core/input.js';
-import { parseShareLink } from './core/setup.js';
+import { parseProfile } from './core/advisor.js';
+import { parseShareLink, parseSwitchOn } from './core/setup.js';
 
 /** @typedef {import('./service.js').CatalogService} CatalogService */
 /** @typedef {import('../../infra/http.js').RequestContext} RequestContext */
@@ -195,6 +197,26 @@ export const catalogRoutes = (service, commerce) => [
 			});
 			return ok(sheet, download ? { headers: { 'content-disposition': `attachment; filename="setup-${domain}.json"` } } : {});
 		},
+	}),
+	defineRoute({
+		method: 'PUT',
+		path: '/v1/merchants/:merchantId/websites/:websiteId/setup/profile',
+		auth: ['merchant', 'admin'],
+		permission: P.tokensManage,
+		maxBodyBytes: 8 * 1024,
+		rateLimit: { limit: 30, windowMs: 60_000 },
+		handler: async (c) =>
+			ok(await service.setup.saveProfile({ ...websiteOf(c), profile: valid(parseProfile(c.body ?? {})), ...audited(c) })),
+	}),
+	// the advisor's Switch on: features on/off is Owner or Support (the product checks the admin again)
+	defineRoute({
+		method: 'POST',
+		path: '/v1/merchants/:merchantId/websites/:websiteId/setup/features',
+		auth: 'admin',
+		permission: P.dashboardsOpen,
+		maxBodyBytes: 1024,
+		rateLimit: { limit: 30, windowMs: 60_000 },
+		handler: async (c) => ok(await service.setup.switchOn({ ...websiteOf(c), ...valid(parseSwitchOn(c.body)), ...audited(c) })),
 	}),
 	defineRoute({
 		method: 'GET',

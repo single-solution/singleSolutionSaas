@@ -56,14 +56,24 @@ download?, actor })` → `{ sheet, domain }`: every product on the website asked
   each); a product that times out, answers 5xx or 4xx, or answers no product blueprint (`@ss/contracts`
   `validateProductBlueprint`) is `{ reachable: false, reason: timeout | unreachable | refused | invalid }`; the Portal
   adds the domain, `https://<domain>` as the allowed origin, the testing hosts, each product's browser token and
-  script tag and `serverToken: { issued: true }` (never a server token). Kept in the instance's memory 60 s per
-  website (`fresh` gathers again); Activity `website.setup_opened` or `website.setup_downloaded`. Share links
-  (`catalog_setup_links`, only the SHA-256 of a 256-bit key; 1–30 days, default 7; at most 50 in use per website):
-  `setup.createLink({ merchantId, websiteId, days, values, install, actor })` → `{ link, url }` (the key only in
-  the URL fragment, `/shared-setup#key=`; Activity `website.setup_shared`), `setup.listLinks(…)` (not expired, revoked
-  too), `setup.revokeLink(…)` (Activity `website.setup_share_revoked`), `setup.shared({ key })` → the copy without
-  values and/or install details as the link says, with `share` (404 for a key never made, expired or revoked;
-  Activity `website.setup_share_opened` at most once an hour per link, by the system).
+  script tag and `serverToken: { issued: true }` (never a server token). The products as gathered are kept in the
+  instance's memory 60 s per website (`fresh` gathers again); Activity `website.setup_opened` or
+  `website.setup_downloaded`. Every sheet carries the website's business profile (`website.profile`,
+  `catalog_setup_profiles`, or null) and, per reachable product, the advisor's view (`core/advisor.js` over
+  `@ss/contracts` `adviseFeatures`): `recommended` `[{ feature, on, because, why }]` and `notRecommended`
+  `[{ feature, missing, why }]`. `setup.saveProfile({ merchantId, websiteId, profile | null, actor })` → the sheet
+  (null removes it; Activity `website.setup_profile_saved`). `setup.switchOn({ merchantId, websiteId, productId,
+feature, actor })` (Owner, Support) → `{ added, sheet }`: the product (on the website, else 404) is asked to switch
+  the feature on with what it needs (`POST <baseUrl>/v1/blueprint/features?websiteId=` `{ features, admin: { id,
+name, role } }`, signed, 10 s); it reports the switch like its Features page (`acceptFeatures`, Activity
+  `product.features_changed`); a refusal is 422 `catalog_switch_refused` with the product's words, no answer or a
+  failure 502 `upstream_error`; then the sheet is gathered again. Share links (`catalog_setup_links`, only the
+  SHA-256 of a 256-bit key; 1–30 days, default 7; at most 50 in use per website): `setup.createLink({ merchantId,
+websiteId, days, values, install, actor })` → `{ link, url }` (the key only in the URL fragment,
+  `/shared-setup#key=`; Activity `website.setup_shared`), `setup.listLinks(…)` (not expired, revoked too),
+  `setup.revokeLink(…)` (Activity `website.setup_share_revoked`), `setup.shared({ key })` → the copy without values
+  and/or install details as the link says, with `share` (404 for a key never made, expired or revoked; Activity
+  `website.setup_share_opened` at most once an hour per link, by the system).
 - Notices: `notify(productId, { type, websiteId?, subject? })`, `notifyAll(body)`; each is queued in `catalog_notices`
   (an identical waiting one is not queued twice) and sent right after the request (at once outside one), signed with
   `signNotice` by `ctx.keys.signer`, to `<baseUrl>/.well-known/ss-events`. 2xx drops it; anything else keeps it for
