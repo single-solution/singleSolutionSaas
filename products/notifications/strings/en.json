@@ -103,6 +103,7 @@
 	"send.signedOut": "Signed out",
 	"reason.unsubscribed": "this person unsubscribed from optional messages",
 	"reason.limited": "this person already got as many messages as the send limits allow",
+	"reason.switched_off": "this message is switched off on this channel in Notifications",
 	"reason.failed": "every attempt failed (the delivery log shows each one)",
 	"problem.offline": "Notifications could not be reached. Check the connection and try again.",
 	"problem.unauthorized": "The sign-in has expired. Reload the page.",

@@ -298,6 +298,8 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 	return {
 		portal,
 		product,
+		/** The in-process network's origins: a test may add one (for example another product). */
+		handlers,
 		/** The product database store (the kit's collections). */
 		store,
 		providers,

@@ -6,6 +6,7 @@
  * No timer runs.
  *
  * - `templates`: one per key × channel × language
+ * - `off_messages`: the product messages the merchant switched off, one per key × channel (parity P1)
  * - `messages`: the delivery log, one record per message with every attempt
  * - `optouts`: unsubscribed addresses
  * - `recipients`: the unsubscribe code of each address that got an optional message
@@ -50,6 +51,8 @@ import { LEASE_MS } from '../core/timing.js';
  *   parameters and buttons show them replaced
  * @property {string | null} [sealed] the real values and words of a message with hidden values, sealed, while it still
  *   has attempts to make; null once it is sent, failed or skipped. Never in a delivery-log read
+ * @property {Partial<Record<Channel, Template>> | null} [defaults] a product's message: the defaults its send carried,
+ *   kept while it may still move to its fallback channel (parity P1); null once it is sent, failed, skipped or moved
  * @property {boolean} required
  * @property {boolean} urgent
  * @property {import('../core/log.js').MessageStatus} status
@@ -76,6 +79,7 @@ import { LEASE_MS } from '../core/timing.js';
  */
 
 const TEMPLATES = 'templates';
+const OFF_MESSAGES = 'off_messages';
 const MESSAGES = 'messages';
 const OPTOUTS = 'optouts';
 const RECIPIENTS = 'recipients';
@@ -85,6 +89,7 @@ const WEBHOOK_EVENTS = 'webhook_events';
 /** Merchant database indexes (created on a website's first use). @type {import('@ss/app-kit').IndexDefinition[]} */
 export const INDEXES = [
 	{ collection: TEMPLATES, keys: { websiteId: 1, key: 1, channel: 1, language: 1 }, name: 'template', unique: true },
+	{ collection: OFF_MESSAGES, keys: { websiteId: 1, key: 1, channel: 1 }, name: 'by_message', unique: true },
 	{ collection: MESSAGES, keys: { websiteId: 1, id: 1 }, name: 'by_id', unique: true },
 	{ collection: MESSAGES, keys: { websiteId: 1, createdAt: -1, id: -1 }, name: 'newest' },
 	{ collection: MESSAGES, keys: { websiteId: 1, status: 1, dueAt: 1 }, name: 'due' },
@@ -99,8 +104,8 @@ export const INDEXES = [
 	{ collection: WEBHOOK_EVENTS, keys: { expireAt: 1 }, name: 'expire', expireAfterSeconds: 0 },
 ];
 
-/** What delivery-log reads return of a message: never the sealed real words. */
-const LOG_PROJECTION = { _id: 0, sealed: 0 };
+/** What delivery-log reads return of a message: never the sealed real words, nor the product's defaults it keeps. */
+const LOG_PROJECTION = { _id: 0, sealed: 0, defaults: 0 };
 
 const MAX_TEMPLATES = 1000;
 const TEMPLATE_PROJECTION = {
@@ -126,6 +131,7 @@ export const createStore = (data, { now }) => {
 	const websiteId = data.websiteId;
 	const at = () => new Date(now());
 	const templates = data.collection(TEMPLATES);
+	const offMessages = data.collection(OFF_MESSAGES);
 	const messages = data.collection(MESSAGES);
 	const optouts = data.collection(OPTOUTS);
 	const recipients = data.collection(RECIPIENTS);
@@ -188,6 +194,37 @@ export const createStore = (data, { now }) => {
 			/** @param {string} key @param {Channel} channel @param {string} language @returns {Promise<boolean>} */
 			remove: async (key, channel, language) =>
 				(await templates.deleteOne({ websiteId, key, channel, language })).deletedCount === 1,
+		}),
+
+		/** Product messages switched off per channel (parity P1): such a message is skipped, never sent. */
+		off: Object.freeze({
+			/** @param {string} key @param {Channel} channel @returns {Promise<boolean>} */
+			has: async (key, channel) => (await offMessages.countDocuments({ websiteId, key, channel }, { limit: 1 })) > 0,
+			/** @returns {Promise<Array<{ key: string, channel: Channel }>>} */
+			list: async () =>
+				as(
+					await offMessages
+						.find(
+							{ websiteId },
+							{ projection: { _id: 0, key: 1, channel: 1 }, sort: { key: 1, channel: 1 }, limit: MAX_TEMPLATES },
+						)
+						.toArray(),
+				),
+			/**
+			 * Switch a message off (`true`) or on again on a channel.
+			 * @param {string} key @param {Channel} channel @param {boolean} off
+			 * @returns {Promise<boolean>} whether it changed
+			 */
+			set: async (key, channel, off) =>
+				off
+					? (
+							await offMessages.updateOne(
+								{ websiteId, key, channel },
+								{ $setOnInsert: { createdAt: at() } },
+								{ upsert: true },
+							)
+						).upsertedCount === 1
+					: (await offMessages.deleteOne({ websiteId, key, channel })).deletedCount === 1,
 		}),
 
 		messages: Object.freeze({

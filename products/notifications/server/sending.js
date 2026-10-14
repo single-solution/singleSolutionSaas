@@ -8,6 +8,13 @@
  * D11): the values of a sensitive message (and those the sender names as secret) are replaced in its saved words, and
  * the real ones are kept sealed only while it has attempts to make. A finished message or webhook event gets the time
  * the database's expiry index removes it, by the setting "keep the delivery log for N days" (default forever).
+ *
+ * Default templates (parity P1): a product's send carries the default words of its message per channel (`defaults`);
+ * they are used while the website has no template of its own for the channel, and kept on a waiting message for its
+ * fallback channel. WhatsApp never has a default (it sends only templates approved at Meta): a product's message
+ * without the merchant's WhatsApp template is recorded as failed, "not set up", and goes to the fallback channel when
+ * one is set — never dropped without a trace. A product's message the merchant switched off on a channel is skipped
+ * (reason `switched_off`).
  * @module
  */
 import { createId } from '@ss/contracts';
@@ -15,9 +22,11 @@ import { problem } from '@ss/app-kit';
 import { CHANNEL_CONNECTIONS, CHANNEL_FEATURES, FALLBACK_CHANNELS, addressFor, normaliseEmail } from '../core/channels.js';
 import {
 	DEFAULT_LANGUAGE,
+	canSwitchOff,
 	hiddenNamesOf,
 	hideValues,
 	isAccountKey,
+	isProductKey,
 	isRequired,
 	isSensitive,
 	isUrgent,
@@ -61,7 +70,10 @@ import { createStore } from '../adapters/store.js';
  * @property {string | null} language
  * @property {number | null} sendAt
  * @property {'api' | 'staff'} source
+ * @property {Partial<Record<Channel, Template>>} defaults a product's message: the default words its send carries per
+ *   channel (parity P1), `{}` for none
  */
+/** @typedef {import('../core/templates.js').Template} Template */
 
 /** Rendered words of a message on one channel. */
 /** @typedef {Pick<MessageRecord, 'subject' | 'text' | 'parameters' | 'providerTemplate' | 'language'> & { buttons: import('../core/templates.js').Button[] }} Words */
@@ -69,6 +81,23 @@ import { createStore } from '../adapters/store.js';
  * The words of a message as sent (`words`) and as the delivery log keeps them (`shown`: the `hidden` values replaced).
  * @typedef {{ words: Words, shown: Words, hidden: string[] }} Made
  */
+
+/** Why a product's message on WhatsApp is not sent: the merchant has no WhatsApp template for it (parity P1). */
+export const notSetUpReason = (/** @type {string} */ key) =>
+	`Not set up: WhatsApp sends only templates approved at Meta. Add the WhatsApp template ${key} with its Meta template name in Notifications.`;
+
+/** The skip reason of a product's message the merchant switched off on its channel (parity P1). */
+export const SWITCHED_OFF = 'switched_off';
+
+/** The words of a message that has none (switched off, or WhatsApp not set up). @type {Readonly<Words>} */
+const NO_WORDS = Object.freeze({
+	subject: '',
+	text: '',
+	parameters: [],
+	providerTemplate: '',
+	buttons: [],
+	language: DEFAULT_LANGUAGE,
+});
 
 /**
  * A message as the API and the delivery log answer it.
@@ -117,14 +146,18 @@ export const createSending = (product) => {
 	/**
 	 * The words of a template on a channel for a recipient, with the unsubscribe link of optional templates: as sent, and
 	 * as the delivery log keeps them, with every value of a sensitive template and the values named secret hidden.
-	 * Accounts' templates are always required and urgent.
+	 * The website's own template comes first (the recipient's language, else its default version), else the product's
+	 * default words on that channel (parity P1). Accounts' templates are always required and urgent.
 	 * @param {Site} s
 	 * @param {{ key: string, channel: Channel, address: string, values: Record<string, string>, language: string | null,
-	 *   secretValues: string[] }} input
+	 *   secretValues: string[], defaults: Partial<Record<Channel, Template>> }} input
 	 * @returns {Promise<({ required: boolean, urgent: boolean } & Made) | null>} null when there is no template
 	 */
-	const fromTemplate = async (s, { key, channel, address, values, language, secretValues }) => {
-		const version = pickVersion(await s.store.templates.versions(key, channel), language, s.on.includes('multi_language'));
+	const fromTemplate = async (s, { key, channel, address, values, language, secretValues, defaults }) => {
+		const version =
+			pickVersion(await s.store.templates.versions(key, channel), language, s.on.includes('multi_language')) ??
+			defaults[channel] ??
+			null;
 		if (!version) return null;
 		/** @type {Record<string, string>} */
 		const builtIn = version.required
@@ -347,6 +380,8 @@ export const createSending = (product) => {
 		const address = addressFor(target, message.to);
 		if (!address) return null;
 		if (!message.required && (await s.store.optouts.has(address))) return null;
+		if (message.template !== null && canSwitchOff(message.template) && (await s.store.off.has(message.template, target)))
+			return null;
 		if (message.template === null) {
 			if (target === 'email' && message.subject === '') return null;
 			/** @type {Words} */
@@ -371,6 +406,7 @@ export const createSending = (product) => {
 			values: message.values,
 			language: message.to.language,
 			secretValues: message.hidden,
+			defaults: message.defaults ?? {},
 		});
 		return made
 			? { channel: target, address, ...keep(s, { channel: target, address, values: message.values, ...made }) }
@@ -379,22 +415,26 @@ export const createSending = (product) => {
 
 	/**
 	 * Attempt a message now and save the outcome: sent; retrying later; on to the fallback channel; or failed. Every
-	 * attempt is added to the delivery log; a sent or failed message keeps no sealed words. An attempt that throws
-	 * (a read of the connection, the settings or the subscriptions failing) is a failed attempt that may be retried.
+	 * attempt is added to the delivery log; a sent or failed message keeps no sealed words nor defaults. An attempt that
+	 * throws (a read of the connection, the settings or the subscriptions failing) is a failed attempt that may be
+	 * retried. `failure` records a failed attempt without trying (WhatsApp not set up), so the fallback still applies.
 	 * @param {Site} s
 	 * @param {MessageRecord} message
+	 * @param {{ ok: false, provider: string, error: string } | null} [failure]
 	 * @returns {Promise<MessageRecord>}
 	 */
-	const attempt = async (s, message) => {
+	const attempt = async (s, message, failure = null) => {
 		const real = reveal(s, message);
-		const result = real
-			? await deliver(s, real).catch(() => ({
-					ok: false,
-					provider: 'none',
-					error: 'It could not be sent now (a database or provider was briefly unreachable).',
-					retryable: true,
-				}))
-			: { ok: false, provider: 'none', error: 'Its hidden values cannot be read: the encryption key changed.' };
+		const result = failure
+			? failure
+			: real
+				? await deliver(s, real).catch(() => ({
+						ok: false,
+						provider: 'none',
+						error: 'It could not be sent now (a database or provider was briefly unreachable).',
+						retryable: true,
+					}))
+				: { ok: false, provider: 'none', error: 'Its hidden values cannot be read: the encryption key changed.' };
 		const attempts = [
 			...message.attempts,
 			{
@@ -413,13 +453,15 @@ export const createSending = (product) => {
 				sentAt: new Date(now()),
 				leaseUntil: null,
 				sealed: null,
+				defaults: null,
 				expireAt: await expiryOf(s),
 			});
 			await emit(s, 'message.sent', eventData(sent));
 			return sent;
 		}
 		const failed = message.channelAttempts + 1;
-		const next = result.retryable ? nextAttemptAt(failed, now(), RETRY_PLANS[message.retryPlan]) : null;
+		const next =
+			'retryable' in result && result.retryable ? nextAttemptAt(failed, now(), RETRY_PLANS[message.retryPlan]) : null;
 		if (next !== null)
 			return s.store.messages.update(message.id, {
 				status: 'retrying',
@@ -437,6 +479,7 @@ export const createSending = (product) => {
 				channelAttempts: 0,
 				retryPlan: await planOf(s, fallback.channel),
 				fellBack: true,
+				defaults: null,
 				status: 'queued',
 				reason: null,
 				dueAt: new Date(now()),
@@ -451,6 +494,7 @@ export const createSending = (product) => {
 			channelAttempts: failed,
 			leaseUntil: null,
 			sealed: null,
+			defaults: null,
 			expireAt: await expiryOf(s),
 		});
 		await emit(s, 'message.failed', eventData(final));
@@ -461,7 +505,9 @@ export const createSending = (product) => {
 	 * Accept a message: opt-out, send limits, quiet hours and delayed send decide when (or whether) it goes; a message
 	 * due now is attempted at once. Opt-out stops only optional messages: a required one (by its template, Accounts'
 	 * templates or the sender) is always sent (PLAN 0.8.5). Quiet hours hold only messages that are not urgent, and
-	 * neither they nor a delayed send ever hold Accounts' messages.
+	 * neither they nor a delayed send ever hold Accounts' messages. A product's message switched off on the channel is
+	 * skipped; one on WhatsApp without the merchant's template fails at once as not set up, then goes to the fallback
+	 * channel when one is set (parity P1).
 	 * @param {Site} s
 	 * @param {SendInput} input
 	 * @returns {Promise<{ ok: true, message: MessageRecord } | { ok: false, problem: ReturnType<typeof problem> }>}
@@ -477,7 +523,38 @@ export const createSending = (product) => {
 			};
 		/** @type {{ required: boolean, urgent: boolean } & Made} */
 		let made;
+		/** Set when a product's message has no WhatsApp template of the merchant's: it fails at once (parity P1). */
+		let notSetUp = false;
+		const declared = Object.values(input.defaults);
 		if (input.template !== null) {
+			if (canSwitchOff(input.template) && (await s.store.off.has(input.template, input.channel)))
+				return {
+					ok: true,
+					message: await s.store.messages.add({
+						template: input.template,
+						source: input.source,
+						channel: input.channel,
+						to: input.to,
+						address,
+						...NO_WORDS,
+						values: {},
+						hidden: [],
+						sealed: null,
+						defaults: null,
+						required: input.required || declared.some((words) => words.required),
+						urgent: false,
+						status: 'skipped',
+						reason: SWITCHED_OFF,
+						attempts: [],
+						channelAttempts: 0,
+						retryPlan: 'short',
+						fellBack: false,
+						dueAt: new Date(now()),
+						leaseUntil: null,
+						sentAt: null,
+						expireAt: await expiryOf(s),
+					}),
+				};
 			const found = await fromTemplate(s, {
 				key: input.template,
 				channel: input.channel,
@@ -485,8 +562,21 @@ export const createSending = (product) => {
 				values: input.values,
 				language: input.language,
 				secretValues: input.secretValues,
+				defaults: input.defaults,
 			});
-			if (!found)
+			if (found) made = found;
+			else if (input.channel === 'whatsapp' && isProductKey(input.template)) {
+				// WhatsApp never has a default: recorded as not set up (and its fallback tried), never dropped silently
+				notSetUp = true;
+				const sensitive = isAccountKey(input.template) || declared.some((words) => words.sensitive);
+				made = {
+					required: isAccountKey(input.template) || declared.some((words) => words.required),
+					urgent: true,
+					words: { ...NO_WORDS },
+					shown: { ...NO_WORDS },
+					hidden: hiddenNamesOf(input.values, { sensitive, secretValues: input.secretValues }),
+				};
+			} else
 				return {
 					ok: false,
 					problem: problem(
@@ -494,7 +584,6 @@ export const createSending = (product) => {
 						`There is no ${input.channel} template ${input.template}. Add it in the templates.`,
 					),
 				};
-			made = found;
 		} else {
 			const content = /** @type {{ subject: string, text: string }} */ (input.content);
 			// a one-off message from the merchant's staff is written for this person now: required and urgent
@@ -518,6 +607,7 @@ export const createSending = (product) => {
 			to: input.to,
 			address,
 			...keep(s, { channel: input.channel, address, values: input.values, ...made }),
+			defaults: declared.length > 0 ? input.defaults : null,
 			required: made.required || input.required,
 			urgent: made.urgent,
 			status: 'queued',
@@ -538,6 +628,7 @@ export const createSending = (product) => {
 					status: 'skipped',
 					reason: 'unsubscribed',
 					sealed: null,
+					defaults: null,
 					expireAt: await expiryOf(s),
 				}),
 			};
@@ -555,9 +646,21 @@ export const createSending = (product) => {
 						status: 'skipped',
 						reason: 'limited',
 						sealed: null,
+						defaults: null,
 						expireAt: await expiryOf(s),
 					}),
 				};
+		}
+		if (notSetUp) {
+			const message = await s.store.messages.add({ ...base, leaseUntil: new Date(t + LEASE_MS) });
+			return {
+				ok: true,
+				message: await attempt(s, message, {
+					ok: false,
+					provider: 'none',
+					error: notSetUpReason(/** @type {string} */ (input.template)),
+				}),
+			};
 		}
 		// Accounts' messages (sign-in codes and links) go at once: a delayed send never holds them either
 		let dueAt = input.template !== null && isAccountKey(input.template) ? t : (input.sendAt ?? t);
@@ -630,6 +733,7 @@ export const createSending = (product) => {
 					reason: 'unsubscribed',
 					leaseUntil: null,
 					sealed: null,
+					defaults: null,
 					expireAt: await expiryOf(s),
 				});
 			else await attempt(s, message);

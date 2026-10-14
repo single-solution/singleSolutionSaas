@@ -6,8 +6,11 @@
  * @module
  */
 
-/** Reasons a message is skipped (`reason.<reason>`); any other reason is a provider's error. */
-const SKIP_REASONS = Object.freeze(['unsubscribed', 'limited']);
+/**
+ * Reasons a message is skipped (`reason.<reason>`; `switched_off`: the merchant switched the product's message off on
+ * its channel); any other reason is a provider's error.
+ */
+const SKIP_REASONS = Object.freeze(['unsubscribed', 'limited', 'switched_off']);
 
 /**
  * The problem code of an answer that is not ok: the last segment of its problem type, `offline` when nothing
@@ -36,8 +39,8 @@ export const problemText = (texts, answer) => {
 };
 
 /**
- * Why a message was not sent, in the website's words: an unsubscribe or a send limit for a skipped one, else every
- * attempt failed (the delivery log shows each attempt's error).
+ * Why a message was not sent, in the website's words: an unsubscribe, a send limit or a switched-off message for a
+ * skipped one, else every attempt failed (the delivery log shows each attempt's error).
  * @param {Readonly<Record<string, string>>} texts the widget texts
  * @param {{ status: string, reason?: string | null }} message
  * @returns {string}

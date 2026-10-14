@@ -83,7 +83,7 @@
 				},
 				"reason": {
 					"type": ["string", "null"],
-					"description": "skipped: unsubscribed or limited (over a send limit); retrying and failed: the last error, in English; else null."
+					"description": "skipped: unsubscribed, limited (over a send limit) or switched_off (the product's message is switched off on this channel); retrying and failed: the last error, in English (a product's message on WhatsApp without your WhatsApp template fails as \"Not set up: …\"); else null."
 				},
 				"subject": {
 					"type": "string",
@@ -147,6 +147,53 @@
 				"maxLength": 1000
 			},
 			"description": "The template's {placeholders}: up to 50 names (a letter, then letters, digits and _; not unsubscribeUrl, which Notifications fills) with texts of at most 1000 characters or numbers."
+		},
+		"DefaultWords": {
+			"type": "object",
+			"required": ["text"],
+			"properties": {
+				"subject": {
+					"type": "string",
+					"maxLength": 200,
+					"description": "Email subject or push title (required there; not on SMS)."
+				},
+				"text": {
+					"type": "string",
+					"minLength": 1,
+					"description": "The default text, with {placeholders} and {?name}…{/name} sections like any template."
+				},
+				"required": {
+					"type": "boolean",
+					"default": false
+				},
+				"urgent": {
+					"type": "boolean",
+					"default": false
+				},
+				"sensitive": {
+					"type": "boolean",
+					"default": false
+				}
+			}
+		},
+		"Defaults": {
+			"type": "object",
+			"description": "A product's message only (keys accounts., chat., ecommerce., payments., growth.): its default words per channel, as the product declares them (parity P1; the kit adds them). They are used while your website has no template of its own for the channel (its language version, else its default version), and kept for the fallback channel. Checked as a template you save. WhatsApp never has a default: it sends only templates approved at Meta.",
+			"properties": {
+				"email": {
+					"$ref": "#/components/schemas/DefaultWords"
+				},
+				"sms": {
+					"$ref": "#/components/schemas/DefaultWords"
+				},
+				"push": {
+					"$ref": "#/components/schemas/DefaultWords"
+				},
+				"staff_push": {
+					"$ref": "#/components/schemas/DefaultWords"
+				}
+			},
+			"additionalProperties": false
 		},
 		"EmailRecipient": {
 			"type": "object",
@@ -449,7 +496,7 @@
 	},
 	"POST /v1/messages/email": {
 		"summary": "Send an email from a template",
-		"description": "The answer is the message as the delivery log keeps it. It is saved before its first attempt and sent at once unless a delayed send or quiet hours hold it; an attempt that fails or breaks off answers retrying and is tried again on later uses of your website, then on the fallback channel. Someone who unsubscribed gets only required messages (else skipped, reason unsubscribed); send limits skip with reason limited. 422 template_not_found when the key has no email template; 422 validation_failed for a field; 403 feature_off for your own keys without Merchant send API (send_api), or sendAt without Delayed send. Send an Idempotency-Key so a retried request sends once.",
+		"description": "The answer is the message as the delivery log keeps it. It is saved before its first attempt and sent at once unless a delayed send or quiet hours hold it; an attempt that fails or breaks off answers retrying and is tried again on later uses of your website, then on the fallback channel. Someone who unsubscribed gets only required messages (else skipped, reason unsubscribed); send limits skip with reason limited. A product's message (accounts., chat. …) carries its defaults, used while your website has no template of its own for the channel; one you switched off on the channel is skipped (reason switched_off). 422 template_not_found when the key has no email template and no default; 422 validation_failed for a field; 403 feature_off for your own keys without Merchant send API (send_api), or sendAt without Delayed send. Send an Idempotency-Key so a retried request sends once.",
 		"body": {
 			"type": "object",
 			"required": ["template", "to"],
@@ -487,6 +534,9 @@
 					"type": "string",
 					"format": "date-time",
 					"description": "Delayed send: at most the setting's days ahead (30 by default); a past time sends now. accounts. templates always go at once."
+				},
+				"defaults": {
+					"$ref": "#/components/schemas/Defaults"
 				}
 			}
 		},
@@ -497,7 +547,7 @@
 	},
 	"POST /v1/messages/sms": {
 		"summary": "Send an SMS from a template",
-		"description": "The answer is the message as the delivery log keeps it. It is saved before its first attempt and sent at once unless a delayed send or quiet hours hold it; an attempt that fails or breaks off answers retrying and is tried again on later uses of your website, then on the fallback channel. Someone who unsubscribed (by link or STOP reply) gets only required messages (else skipped, reason unsubscribed); send limits skip with reason limited. 422 template_not_found when the key has no SMS template; 422 validation_failed for a field; 403 feature_off for your own keys without Merchant send API (send_api), or sendAt without Delayed send. Send an Idempotency-Key so a retried request sends once.",
+		"description": "The answer is the message as the delivery log keeps it. It is saved before its first attempt and sent at once unless a delayed send or quiet hours hold it; an attempt that fails or breaks off answers retrying and is tried again on later uses of your website, then on the fallback channel. Someone who unsubscribed (by link or STOP reply) gets only required messages (else skipped, reason unsubscribed); send limits skip with reason limited. A product's message (accounts., chat. …) carries its defaults, used while your website has no template of its own for the channel; one you switched off on the channel is skipped (reason switched_off). 422 template_not_found when the key has no SMS template and no default; 422 validation_failed for a field; 403 feature_off for your own keys without Merchant send API (send_api), or sendAt without Delayed send. Send an Idempotency-Key so a retried request sends once.",
 		"body": {
 			"type": "object",
 			"required": ["template", "to"],
@@ -535,6 +585,9 @@
 					"type": "string",
 					"format": "date-time",
 					"description": "Delayed send: at most the setting's days ahead (30 by default); a past time sends now. accounts. templates always go at once."
+				},
+				"defaults": {
+					"$ref": "#/components/schemas/Defaults"
 				}
 			}
 		},
@@ -545,7 +598,7 @@
 	},
 	"POST /v1/messages/whatsapp": {
 		"summary": "Send a WhatsApp message from a template",
-		"description": "The answer is the message as the delivery log keeps it. It is saved before its first attempt and sent at once unless a delayed send or quiet hours hold it; an attempt that fails or breaks off answers retrying and is tried again on later uses of your website, then on the fallback channel. Someone who unsubscribed (by link or STOP reply) gets only required messages (else skipped, reason unsubscribed); send limits skip with reason limited. A template with a providerTemplate is sent as that template at Meta, its values as body parameters in the order the text uses them. 422 template_not_found when the key has no WhatsApp template; 422 validation_failed for a field; 403 feature_off for your own keys without Merchant send API (send_api), or sendAt without Delayed send. Send an Idempotency-Key so a retried request sends once.",
+		"description": "The answer is the message as the delivery log keeps it. It is saved before its first attempt and sent at once unless a delayed send or quiet hours hold it; an attempt that fails or breaks off answers retrying and is tried again on later uses of your website, then on the fallback channel. Someone who unsubscribed (by link or STOP reply) gets only required messages (else skipped, reason unsubscribed); send limits skip with reason limited. A template with a providerTemplate is sent as that template at Meta, its values as body parameters in the order the text uses them. A product's message (accounts., chat. …) carries its defaults, used while your website has no template of its own for the channel; one you switched off on the channel is skipped (reason switched_off). WhatsApp has no defaults: a product's message without your WhatsApp template is answered failed (\"Not set up: …\", in the delivery log) and goes to the fallback channel when one is set. 422 template_not_found when your own key has no WhatsApp template; 422 validation_failed for a field; 403 feature_off for your own keys without Merchant send API (send_api), or sendAt without Delayed send. Send an Idempotency-Key so a retried request sends once.",
 		"body": {
 			"type": "object",
 			"required": ["template", "to"],
@@ -583,6 +636,9 @@
 					"type": "string",
 					"format": "date-time",
 					"description": "Delayed send: at most the setting's days ahead (30 by default); a past time sends now. accounts. templates always go at once."
+				},
+				"defaults": {
+					"$ref": "#/components/schemas/Defaults"
 				}
 			}
 		},
@@ -593,7 +649,7 @@
 	},
 	"POST /v1/messages/push": {
 		"summary": "Send a browser push to a visitor from a template",
-		"description": "The template's subject is the title and its text the body; a url value (https://… or a path) opens on a click. The answer is the message as the delivery log keeps it: failed when no browser is subscribed for the subscriber id. An attempt that fails or breaks off answers retrying and is tried again on later uses of your website. 422 template_not_found when the key has no push template; 422 validation_failed for a field; 403 feature_off for your own keys without Merchant send API (send_api), or sendAt without Delayed send. Send an Idempotency-Key so a retried request sends once.",
+		"description": "The template's subject is the title and its text the body; a url value (https://… or a path) opens on a click. The answer is the message as the delivery log keeps it: failed when no browser is subscribed for the subscriber id. An attempt that fails or breaks off answers retrying and is tried again on later uses of your website. A product's message (accounts., chat. …) carries its defaults, used while your website has no template of its own for the channel; one you switched off on the channel is skipped (reason switched_off). 422 template_not_found when the key has no push template and no default; 422 validation_failed for a field; 403 feature_off for your own keys without Merchant send API (send_api), or sendAt without Delayed send. Send an Idempotency-Key so a retried request sends once.",
 		"body": {
 			"type": "object",
 			"required": ["template", "to"],
@@ -631,6 +687,9 @@
 					"type": "string",
 					"format": "date-time",
 					"description": "Delayed send: at most the setting's days ahead (30 by default); a past time sends now."
+				},
+				"defaults": {
+					"$ref": "#/components/schemas/Defaults"
 				}
 			}
 		},
@@ -641,7 +700,7 @@
 	},
 	"POST /v1/messages/staff-push": {
 		"summary": "Send a browser push to a member of your staff from a template",
-		"description": "Goes to every browser where they turned staff notifications on. The template's subject is the title and its text the body; a url value (https://… or a path) opens on a click. The answer is the message as the delivery log keeps it: failed when none of their browsers is subscribed. An attempt that fails or breaks off answers retrying and is tried again on later uses of your website. 422 template_not_found when the key has no staff_push template; 422 validation_failed for a field; 403 feature_off for your own keys without Merchant send API (send_api), or sendAt without Delayed send. Send an Idempotency-Key so a retried request sends once.",
+		"description": "Goes to every browser where they turned staff notifications on. The template's subject is the title and its text the body; a url value (https://… or a path) opens on a click. The answer is the message as the delivery log keeps it: failed when none of their browsers is subscribed. An attempt that fails or breaks off answers retrying and is tried again on later uses of your website. A product's message (accounts., chat. …) carries its defaults, used while your website has no template of its own for the channel; one you switched off on the channel is skipped (reason switched_off). 422 template_not_found when the key has no staff_push template and no default; 422 validation_failed for a field; 403 feature_off for your own keys without Merchant send API (send_api), or sendAt without Delayed send. Send an Idempotency-Key so a retried request sends once.",
 		"body": {
 			"type": "object",
 			"required": ["template", "to"],
@@ -679,6 +738,9 @@
 					"type": "string",
 					"format": "date-time",
 					"description": "Delayed send: at most the setting's days ahead (30 by default); a past time sends now."
+				},
+				"defaults": {
+					"$ref": "#/components/schemas/Defaults"
 				}
 			}
 		},

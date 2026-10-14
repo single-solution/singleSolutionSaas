@@ -766,7 +766,7 @@ describe('admin widget texts (PLAN 0.4.10)', () => {
 			...BUTTON_TYPES.map((type) => `templates.buttonType.${type}`),
 			...['api', 'staff'].map((source) => `log.source.${source}`),
 			...['sent', 'failed'].map((outcome) => `log.outcome.${outcome}`),
-			...['unsubscribed', 'limited', 'failed'].map((reason) => `reason.${reason}`),
+			...['unsubscribed', 'limited', 'switched_off', 'failed'].map((reason) => `reason.${reason}`),
 			// the fields the admin routes refuse (PUT /v1/admin/templates, POST /v1/admin/messages)
 			...['key', 'channel', 'language', 'subject', 'text', 'providerTemplate', 'buttons', 'to', 'template', 'values'].map(
 				(field) => `problem.field.${field}`,
@@ -806,6 +806,9 @@ describe('admin widget texts (PLAN 0.4.10)', () => {
 		);
 		expect(notSentText({}, { status: 'failed' })).toBe('');
 		expect(logReason(strings, { reason: 'limited' })).toBe(strings['reason.limited']);
+		// a product's message the merchant switched off on its channel (parity P1)
+		expect(notSentText(strings, { status: 'skipped', reason: 'switched_off' })).toBe(strings['reason.switched_off']);
+		expect(logReason(strings, { reason: 'switched_off' })).toBe(strings['reason.switched_off']);
 		expect(logReason(strings, { reason: 'The provider answered HTTP 401.' })).toBe('The provider answered HTTP 401.');
 		expect(logReason(strings, { reason: null })).toBe('');
 		expect(logReason({}, { reason: 'unsubscribed' })).toBe('unsubscribed');

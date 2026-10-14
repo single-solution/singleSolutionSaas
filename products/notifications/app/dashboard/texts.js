@@ -74,7 +74,7 @@ export const TEXTS = Object.freeze({
 	settings: Object.freeze({
 		templatesTitle: 'Templates',
 		templatesHelp:
-			'One per template key, channel and language. Write {name} where a value goes, and {?name}…{/name} around text shown only when name has a value; optional messages can use {unsubscribeUrl}. Keys of other products start with their id (accounts., ecommerce., chat., payments., growth.).',
+			'Every message your products send is listed with its channel: it goes out with the product’s default words until you edit it. One template per key, channel and language. Write {name} where a value goes, and {?name}…{/name} around text shown only when name has a value; optional messages can use {unsubscribeUrl}. Keys of other products start with their id (accounts., ecommerce., chat., payments., growth.).',
 		featuresTitle: 'Feature settings',
 		featuresHelp: 'How each feature behaves on this website.',
 		looksTitle: 'Words and look',
@@ -100,7 +100,7 @@ export const TEXTS = Object.freeze({
 			removeButton: 'Remove button',
 			buttonsCount: '{count} buttons',
 			atMeta: 'Meta: {name}',
-			search: 'Search template keys',
+			search: 'Search messages and template keys',
 			allChannels: 'All channels ({count})',
 			channelCount: '{channel} ({count})',
 			noMatch: 'No template matches.',
@@ -108,7 +108,32 @@ export const TEXTS = Object.freeze({
 			duplicate: 'Duplicate',
 			deleteTitle: 'Delete this template?',
 			deleteText:
-				'The {channel} template {key} ({language}) is deleted. Messages that use it are refused until it is added again.',
+				'The {channel} template {key} ({language}) is deleted. Messages that use it are refused until it is added again (a product’s message on WhatsApp is not set up again).',
+			reset: 'Reset to default',
+			resetTitle: 'Reset this message to the default?',
+			resetText:
+				'Your {channel} words for {key} are deleted, and the product’s default words are sent again. Versions in other languages stay.',
+			switchOff: 'Switch off on this channel',
+			switchOn: 'Switch on again',
+			setUp: 'Set up',
+			notSetUpHelp: 'WhatsApp needs a template approved at Meta: add its name here.',
+			states: Object.freeze({
+				default: 'Default words',
+				edited: 'Edited',
+				off: 'Switched off',
+				not_set_up: 'Not set up',
+			}),
+			products: Object.freeze({
+				accounts: 'Accounts',
+				chat: 'Chat',
+				ecommerce: 'Ecommerce',
+				payments: 'Payments',
+				growth: 'Growth',
+			}),
+			unavailable:
+				'The messages of {products} cannot be listed right now. Their sends still use their default words; open this page again later.',
+			fixed: 'Template {key} by {channel}, in the default language.',
+			valuesHelp: 'Values it can use: {values}.',
 			preview: 'Preview',
 			previewHelp: 'Type a sample for each value: the preview shows the words as a recipient gets them.',
 			previewNoValues: 'This template uses no values.',

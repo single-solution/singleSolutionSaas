@@ -2,39 +2,42 @@
  * Templates (PLAN 0.8.5): one per template key × channel × language. Products and the send API name a template key
  * and the values; the merchant writes the words. A template's text fills `{placeholders}` from the values as plain
  * text, and shows an optional section `{?name}…{/name}` only when the value `name` is not empty (PLAN 0.8.10 N2).
+ * The rules of the words are `@ss/contracts/templates`, which products' default templates follow too (parity P1): a
+ * send of a product's message carries its defaults, used while the website has no template of its own for the channel.
  * No I/O: the API, the dashboard and the widgets share it.
  * @module
  */
+import {
+	BUILT_IN_VALUES,
+	TEMPLATE_KEY,
+	VALUE_NAME,
+	isTitled,
+	placeholdersOf,
+	sectionProblem,
+	valueNamesOf,
+	wordsProblem,
+} from '@ss/contracts/templates';
 import { CHANNELS } from './channels.js';
 
-/** Template keys: lower case, digits, `_`, `.` and `-`, starting with a letter. */
-const TEMPLATE_KEY = /^[a-z][a-z0-9_.-]{0,63}$/;
+export { placeholdersOf, sectionProblem, valueNamesOf };
 
 /**
  * Template keys of the other products' own events start with that product's id and a dot. They work without the
  * Merchant send API feature; every other key is the merchant's own and needs it (PLAN 0.8.4 builder choice).
  */
-const PRODUCT_KEY_PREFIXES = Object.freeze(['accounts.', 'ecommerce.', 'chat.', 'payments.', 'growth.']);
+export const PRODUCT_IDS = Object.freeze(['accounts', 'ecommerce', 'chat', 'payments', 'growth']);
+const PRODUCT_KEY_PREFIXES = Object.freeze(PRODUCT_IDS.map((id) => `${id}.`));
 
 /**
  * Template keys of Accounts' messages (sign-in codes, magic, reset and setup links, account updates): always required
  * (no unsubscribe or STOP reply stops them, PLAN 0.8.5), always urgent (neither quiet hours nor a delayed send hold
- * them) and always sensitive (PLAN 0.8.10 D11), whatever the template says.
+ * them) and always sensitive (PLAN 0.8.10 D11), whatever the template says. They are never switched off either.
  */
 const ACCOUNT_KEY_PREFIX = 'accounts.';
 
 /** The language of a template every recipient falls back to (written as `default` in paths). */
 export const DEFAULT_LANGUAGE = '';
 
-/** Longest texts per channel (characters). */
-const TEXT_LIMITS = Object.freeze({ email: 100_000, sms: 1600, whatsapp: 4096, push: 500, staff_push: 500 });
-/** Longest subject (email) or title (push). */
-const SUBJECT_LIMIT = 200;
-/** Placeholders Notifications fills itself. */
-const BUILT_IN_VALUES = Object.freeze(['unsubscribeUrl']);
-
-/** A value's name. */
-const VALUE_NAME = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
 /** Most values of a send. */
 const MAX_VALUES = 50;
 /** What the delivery log keeps instead of a hidden value that is not empty: a link, else any other value. */
@@ -43,8 +46,6 @@ export const HIDDEN = Object.freeze({ link: '[link hidden]', value: '******' });
 const LINK = /:\/\/|^\//;
 
 const PLACEHOLDER = /\{([A-Za-z][A-Za-z0-9_]{0,63})\}/g;
-/** An optional section's opening `{?name}` or closing `{/name}` tag. */
-const SECTION_TAG = /\{([?/])([A-Za-z][A-Za-z0-9_]{0,63})\}/g;
 /** A whole optional section (sections of one name never nest, so the first closing tag of its name ends it). */
 const SECTION = /\{\?([A-Za-z][A-Za-z0-9_]{0,63})\}([\s\S]*?)\{\/\1\}/g;
 const LANGUAGE = /^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8}){0,3}$/;
@@ -87,10 +88,24 @@ const BUTTON_VALUE_LIMIT = 2000;
 export const isProductKey = (key) => PRODUCT_KEY_PREFIXES.some((prefix) => key.startsWith(prefix));
 
 /**
+ * The product a template key belongs to, or null for the merchant's own keys.
+ * @param {string} key
+ * @returns {string | null}
+ */
+export const productOfKey = (key) => PRODUCT_IDS.find((id) => key.startsWith(`${id}.`)) ?? null;
+
+/**
  * Whether a template key belongs to Accounts' messages.
  * @param {string} key
  */
 export const isAccountKey = (key) => key.startsWith(ACCOUNT_KEY_PREFIX);
+
+/**
+ * Whether the merchant may switch a product's message off on a channel (parity P1): every one but Accounts' (sign-in
+ * codes and links are always sent; the merchant switches the sign-in method off in Accounts instead).
+ * @param {string} key
+ */
+export const canSwitchOff = (key) => isProductKey(key) && !isAccountKey(key);
 
 /**
  * Whether the messages of a template are required (sent to people who unsubscribed): Accounts' always, else when the
@@ -119,47 +134,6 @@ export const isSensitive = (template) => template.sensitive === true || isAccoun
  */
 export const languageOfSegment = (segment) =>
 	segment === 'default' ? DEFAULT_LANGUAGE : typeof segment === 'string' && LANGUAGE.test(segment) ? segment : null;
-
-/**
- * The placeholders a text uses, in order of first use.
- * @param {string} text
- * @returns {string[]}
- */
-export const placeholdersOf = (text) => [
-	...new Set([...text.matchAll(PLACEHOLDER)].map((match) => /** @type {string} */ (match[1]))),
-];
-
-/**
- * Every value name a text uses, in order of first use: its placeholders and the names of its optional sections (the
- * template editors ask for a sample of each to preview the words).
- * @param {string} text
- * @returns {string[]}
- */
-export const valueNamesOf = (text) => [
-	...new Set([...text.matchAll(/\{\??([A-Za-z][A-Za-z0-9_]{0,63})\}/g)].map((match) => /** @type {string} */ (match[1]))),
-];
-
-/**
- * What is wrong with the optional sections of a text, or null: every `{?name}` is closed by a later `{/name}`,
- * sections nest without crossing, and a section never sits inside one of the same name.
- * @param {string} text
- * @returns {string | null}
- */
-export const sectionProblem = (text) => {
-	/** @type {string[]} */
-	const open = [];
-	for (const [, kind, name] of text.matchAll(SECTION_TAG)) {
-		if (kind === '?') {
-			if (open.includes(/** @type {string} */ (name))) return `{?${name}} is already open: close it with {/${name}} first.`;
-			open.push(/** @type {string} */ (name));
-		} else if (open.at(-1) === name) open.pop();
-		else
-			return open.includes(/** @type {string} */ (name))
-				? `Close {?${open.at(-1)}} before {/${name}}.`
-				: `{/${name}} closes no {?${name}}.`;
-	}
-	return open.length > 0 ? `Close {?${open.at(-1)}} with {/${open.at(-1)}}.` : null;
-};
 
 /**
  * Check the buttons of a template: only a WhatsApp template with a template name at Meta has them; each names its
@@ -217,18 +191,10 @@ export const checkTemplate = (input) => {
 	const lang = languageOfSegment(language === '' ? 'default' : language);
 	if (lang === null) return fail('language', 'Use a language code such as en, fr or pt-BR.');
 	const text = typeof body.text === 'string' ? body.text.trim() : '';
-	if (text.length === 0) return fail('text', 'Write the message.');
-	if (text.length > TEXT_LIMITS[channel])
-		return fail('text', `The message can have at most ${TEXT_LIMITS[channel]} characters.`);
 	const subject = typeof body.subject === 'string' ? body.subject.trim() : '';
-	const titled = channel === 'email' || channel === 'push' || channel === 'staff_push';
-	if (titled && subject.length === 0) return fail('subject', channel === 'email' ? 'Write the subject.' : 'Write the title.');
-	if (subject.length > SUBJECT_LIMIT || /[\r\n]/.test(subject))
-		return fail('subject', `Use one line of at most ${SUBJECT_LIMIT} characters.`);
-	const textSections = sectionProblem(text);
-	if (textSections) return fail('text', textSections);
-	const subjectSections = titled ? sectionProblem(subject) : null;
-	if (subjectSections) return fail('subject', subjectSections);
+	const titled = isTitled(channel);
+	const words = wordsProblem(channel, { subject, text });
+	if (words) return fail(words.field, words.message);
 	const providerTemplate = typeof body.providerTemplate === 'string' ? body.providerTemplate.trim() : '';
 	if (providerTemplate !== '' && (channel !== 'whatsapp' || !/^[a-z0-9_]{1,512}$/.test(providerTemplate)))
 		return fail('providerTemplate', 'Only WhatsApp templates have a provider template name (lower case, digits and _).');
@@ -249,6 +215,43 @@ export const checkTemplate = (input) => {
 			sensitive: isSensitive({ key: body.key, sensitive: body.sensitive === true }),
 		},
 	};
+};
+
+/**
+ * Check the defaults a product's send carries (parity P1): for each channel but WhatsApp, the default words of the
+ * product's message `{ subject?, text, required?, urgent?, sensitive? }`, checked as a template the merchant saves.
+ * Only products' own keys have defaults; WhatsApp never has one (it sends only templates approved at Meta).
+ * @param {unknown} input
+ * @param {string} key the send's template key
+ * @returns {{ ok: true, value: Partial<Record<Channel, Template>> } | { ok: false, field: string, message: string }}
+ */
+export const checkDefaults = (input, key) => {
+	/** @param {string} field @param {string} message */
+	const fail = (field, message) => /** @type {const} */ ({ ok: false, field, message });
+	if (input === undefined || input === null) return { ok: true, value: {} };
+	if (typeof input !== 'object' || Array.isArray(input))
+		return fail('defaults', 'defaults maps channels to the default words { subject?, text }.');
+	if (!isProductKey(key)) return fail('defaults', 'Only the messages of products have defaults.');
+	/** @type {Partial<Record<Channel, Template>>} */
+	const value = {};
+	for (const [channel, given] of Object.entries(/** @type {Record<string, unknown>} */ (input))) {
+		if (channel === 'whatsapp')
+			return fail('defaults/whatsapp', 'WhatsApp has no default: it sends only templates approved at Meta.');
+		if (!CHANNELS.includes(/** @type {Channel} */ (channel))) return fail(`defaults/${channel}`, 'This is not a channel.');
+		const words = typeof given === 'object' && given !== null ? /** @type {Record<string, unknown>} */ (given) : {};
+		const checked = checkTemplate({
+			key,
+			channel,
+			subject: words.subject,
+			text: words.text,
+			required: words.required,
+			urgent: words.urgent,
+			sensitive: words.sensitive,
+		});
+		if (!checked.ok) return fail(`defaults/${channel}/${checked.field}`, checked.message);
+		value[/** @type {Channel} */ (channel)] = checked.value;
+	}
+	return { ok: true, value };
 };
 
 /**
@@ -387,3 +390,87 @@ export const templateView = (template) => ({
 	sensitive: isSensitive(template),
 	...(template.updatedAt ? { updatedAt: new Date(template.updatedAt).toISOString() } : {}),
 });
+
+/**
+ * A message a product declares (its `GET /v1/message-defaults`), with the product's id: `channels` holds the default
+ * words of each channel it is sent on (`null` for WhatsApp, which has no default).
+ * @typedef {{ productId: string, key: string, name: string, description?: string, values: string[], required?: boolean,
+ *   urgent?: boolean, sensitive?: boolean,
+ *   channels: Partial<Record<Channel, { subject?: string, text: string } | null>> }} ProductMessage
+ */
+/**
+ * A row of the dashboard's template list (parity P1). A product's message has a row per channel it is sent on, in the
+ * state `default` (the product's words are sent), `edited` (the merchant's default version is), `not_set_up`
+ * (WhatsApp without the merchant's version: nothing is sent there) or `off` (switched off); `template` is the
+ * merchant's default version, `defaults` the product's words as a template (null on WhatsApp). Every other saved
+ * template (the merchant's own keys, other languages) is a `saved` row.
+ * @typedef {{ key: string, channel: Channel, language: string, state: 'default' | 'edited' | 'not_set_up' | 'off' | 'saved',
+ *   message: ProductMessage | null, template: (Template & { updatedAt?: string }) | null, defaults: Template | null,
+ *   switchable: boolean }} TemplateRow
+ */
+
+/**
+ * The rows of the dashboard's template list: each product message × channel first (by key, then in the order of
+ * `CHANNELS`), then every saved template no product row shows, by key, channel and language.
+ * @param {{ messages: ProductMessage[], templates: Array<Template & { updatedAt?: string }>,
+ *   off: Array<{ key: string, channel: string }> }} input `templates` as the API answers them (`language: 'default'`)
+ * @returns {TemplateRow[]}
+ */
+export const templateRows = ({ messages, templates, off }) => {
+	/** @param {string} key @param {string} channel @param {string} language */
+	const id = (key, channel, language) => `${key}|${channel}|${language}`;
+	const saved = new Map(templates.map((template) => [id(template.key, template.channel, template.language), template]));
+	const switchedOff = new Set(off.map((entry) => `${entry.key}|${entry.channel}`));
+	/** @type {Set<string>} */
+	const shown = new Set();
+	/** @type {TemplateRow[]} */
+	const rows = [];
+	for (const message of [...messages].sort((a, b) => a.key.localeCompare(b.key)))
+		for (const channel of CHANNELS) {
+			if (!Object.hasOwn(message.channels, channel)) continue;
+			const words = message.channels[channel] ?? null;
+			const template = saved.get(id(message.key, channel, 'default')) ?? null;
+			shown.add(id(message.key, channel, 'default'));
+			const checked = words
+				? checkTemplate({
+						key: message.key,
+						channel,
+						subject: words.subject,
+						text: words.text,
+						required: message.required,
+						urgent: message.urgent,
+						sensitive: message.sensitive,
+					})
+				: null;
+			const defaults = checked?.ok ? checked.value : null;
+			rows.push({
+				key: message.key,
+				channel,
+				language: 'default',
+				state: switchedOff.has(`${message.key}|${channel}`)
+					? 'off'
+					: template
+						? 'edited'
+						: defaults
+							? 'default'
+							: 'not_set_up',
+				message,
+				template,
+				defaults,
+				switchable: canSwitchOff(message.key),
+			});
+		}
+	for (const template of templates)
+		if (!shown.has(id(template.key, template.channel, template.language)))
+			rows.push({
+				key: template.key,
+				channel: template.channel,
+				language: template.language,
+				state: 'saved',
+				message: null,
+				template,
+				defaults: null,
+				switchable: false,
+			});
+	return rows;
+};

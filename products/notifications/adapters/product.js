@@ -4,7 +4,7 @@
  * channel, push keys, the webhook signing secret and the Accounts token for activity-log copies), the delivery log's
  * shared setting (how long it is kept, PLAN 0.8.10 D11), the merchant database indexes, the data-rights hooks, the widget settings and the list `webhook_urls` (in the product database,
  * whose store it owns), and adds the sealer of sensitive messages, the providers and web push on the same outbound
- * policy. The Next.js route and the tests pass the rest (config, store, clock, network).
+ * policy, and the products' message defaults its dashboard lists (parity P1). The Next.js route and the tests pass the rest (config, store, clock, network).
  * Public entry `./product` of this package, so a system test can compose the product with `./routes`.
  * @module
  */
@@ -28,6 +28,7 @@ import webhooks from '../schemas/webhooks.settings.json' with { type: 'json' };
 import whatsapp from '../schemas/whatsapp.settings.json' with { type: 'json' };
 import { normaliseEmail, normalisePhone } from '../core/channels.js';
 import { createSealer, resealWebsite } from './crypto.js';
+import { createDefaults } from './defaults.js';
 import { LISTS, createLists } from './lists.js';
 import { createProviders } from './providers.js';
 import { INDEXES, createStore } from './store.js';
@@ -227,7 +228,14 @@ export const createProductInstance = (options) => {
 			},
 		},
 	});
-	return Object.freeze({ ...product, providers, webpush, lists, sealer, now, send });
+	// the products' messages with their defaults (dashboard only; a send carries its own defaults)
+	const defaults = createDefaults({
+		addressOf: (productId) => product.addressOf(productId),
+		send,
+		now,
+		...(options.logger ? { logger: options.logger } : {}),
+	});
+	return Object.freeze({ ...product, providers, webpush, lists, sealer, now, send, defaults });
 };
 
 /** @typedef {ReturnType<typeof createProductInstance>} Product */

@@ -15,6 +15,8 @@ import { isOptOut, repliesOf } from '../core/inbound.js';
 import { logFilters } from '../core/log.js';
 import { verifyMeta, verifyTwilio } from '../adapters/signatures.js';
 import {
+	canSwitchOff,
+	checkDefaults,
 	checkSecretValues,
 	checkTemplate,
 	checkValues,
@@ -117,6 +119,9 @@ export const createRoutes = (product) => {
 			return invalid('required', 'required is true or false.');
 		if (body.language !== undefined && languageOfSegment(body.language) === null)
 			return invalid('language', 'Use a language code such as en, fr or pt-BR.');
+		// a product's message carries its default words (parity P1), checked as a template the merchant saves
+		const defaults = checkDefaults(body.defaults, body.template);
+		if (!defaults.ok) return invalid(defaults.field, defaults.message);
 		const s = await siteOf(ctx);
 		if (!isProductKey(body.template) && !s.on.includes('send_api'))
 			return problem('feature_off', 'Your own template keys need the Merchant send API feature (send_api).');
@@ -140,6 +145,7 @@ export const createRoutes = (product) => {
 			language: body.language ?? to.value.language,
 			sendAt,
 			source: 'api',
+			defaults: defaults.value,
 		});
 		if (!result.ok) return result.problem;
 		return created(messageView(result.message));
@@ -262,6 +268,36 @@ export const createRoutes = (product) => {
 			},
 		};
 	};
+	/**
+	 * Switch a product's message off on a channel, or on again (dashboard; parity P1): a switched-off message is skipped,
+	 * never sent. Accounts' messages are always sent. A Recent change by the session when it changed.
+	 * @param {any} ctx
+	 */
+	const switchMessage = async (ctx) => {
+		const { key, channel } = ctx.params;
+		if (!CHANNELS.includes(channel) || !/^[a-z][a-z0-9_.-]{0,63}$/.test(key)) return problem('not_found', 'No such message.');
+		if (!canSwitchOff(key))
+			return invalid(
+				'key',
+				isProductKey(key)
+					? 'Sign-in messages are always sent: switch the sign-in method off in Accounts instead.'
+					: 'Only the messages of products can be switched off: delete your own template instead.',
+			);
+		const body = typeof ctx.body === 'object' && ctx.body !== null ? ctx.body : {};
+		if (typeof body.off !== 'boolean') return invalid('off', 'off is true or false.');
+		const store = createStore(await ctx.data(), { now });
+		if (await store.off.set(key, channel, body.off)) {
+			const { session } = ctx;
+			await product.recentChanges.record({
+				websiteId: ctx.websiteId,
+				who: { kind: session.kind, id: session.subject, name: session.name, ...(session.role ? { role: session.role } : {}) },
+				what: 'templates',
+				detail: `Message ${key} (${channel}): ${body.off ? 'switched off' : 'switched on'}`,
+			});
+		}
+		return { key, channel, off: body.off };
+	};
+
 	const dashboardTemplates = templateHandlers('dashboard');
 	const widgetTemplates = templateHandlers('widget');
 	const serverTemplates = templateHandlers('server');
@@ -557,6 +593,7 @@ export const createRoutes = (product) => {
 						language: language || null,
 						sendAt: null,
 						source: 'staff',
+						defaults: {},
 					});
 				} else {
 					const text = typeof body.text === 'string' ? body.text.trim() : '';
@@ -576,6 +613,7 @@ export const createRoutes = (product) => {
 						language: null,
 						sendAt: null,
 						source: 'staff',
+						defaults: {},
 					});
 				}
 				if (!result.ok) return result.problem;
@@ -653,6 +691,24 @@ export const createRoutes = (product) => {
 			path: '/v1/dashboard/websites/:websiteId/templates/:key/:channel/:language',
 			auth: 'dashboard',
 			handler: dashboardTemplates.remove,
+		}),
+
+		// ------------------------------------------- dashboard: the products' messages and their defaults (parity P1)
+		defineRoute({
+			method: 'GET',
+			path: '/v1/dashboard/websites/:websiteId/messages',
+			auth: 'dashboard',
+			handler: async (ctx) => {
+				const store = createStore(await ctx.data(), { now });
+				const [{ messages, unavailable }, off] = await Promise.all([product.defaults.all(), store.off.list()]);
+				return { items: messages, off, unavailable };
+			},
+		}),
+		defineRoute({
+			method: 'PUT',
+			path: '/v1/dashboard/websites/:websiteId/messages/:key/:channel',
+			auth: 'dashboard',
+			handler: switchMessage,
 		}),
 
 		// ---------------------------------------------------------------- dashboard: lists (webhook URLs, PLAN 0.8.10 N5)

@@ -110,6 +110,8 @@ ${block(sendSnippet)}
 ${block(sendCurl)}
 <h2>Templates and template keys</h2>
 ${para(guide.templates)}
+<h2>Default templates of products</h2>
+${para(guide.defaults)}
 <h2>Retries and fallback</h2>
 ${para(guide.retries)}
 <h2>Quiet hours, send limits and delayed send</h2>
