@@ -182,7 +182,7 @@ export const TEXTS = Object.freeze({
 			ses: 'Amazon SES',
 			twilio: 'Twilio',
 			meta: 'Meta WhatsApp Cloud API',
-			http: 'Any gateway over HTTP (Connectivity.pk, local gateways)',
+			http: 'Any SMS or WhatsApp gateway with an HTTP API',
 		}),
 		fields: Object.freeze({
 			host: 'SMTP host',

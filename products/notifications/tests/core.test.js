@@ -42,17 +42,18 @@ describe('channels', () => {
 		expect(normaliseEmail(' Ana@Example.COM ')).toBe('ana@example.com');
 		expect(normaliseEmail('nope')).toBeNull();
 		expect(normaliseEmail(5)).toBeNull();
-		expect(normalisePhone('+92 (300) 123-4567')).toBe('+923001234567');
-		expect(normalisePhone('0092 300 1234567')).toBe('+923001234567');
-		expect(normalisePhone('03001234567')).toBeNull();
-		// the shared normaliser: a trunk 0 after the code is dropped; an unassigned code is refused
-		expect(normalisePhone('+92 0300 1234567')).toBe('+923001234567');
+		expect(normalisePhone('+1 (202) 555-0143')).toBe('+12025550143');
+		expect(normalisePhone('0044 7700 900123')).toBe('+447700900123');
+		expect(normalisePhone('07700900123')).toBeNull();
+		// the shared normaliser: a trunk 0 after the code is dropped, in any country; an unassigned code is refused
 		expect(normalisePhone('+44 (0)20 7946 0018')).toBe('+442079460018');
+		expect(normalisePhone('+33 (0)6 12 34 56 78')).toBe('+33612345678');
+		expect(normalisePhone('+92 0300 1234567')).toBe('+923001234567');
 		expect(normalisePhone('+999 1234 5678')).toBeNull();
 		expect(normalisePhone(3)).toBeNull();
 		expect(normaliseLanguage('pt-BR')).toBe('pt-BR');
 		expect(normaliseLanguage('Portuguese')).toBeNull();
-		expect(normaliseTimeZone('Asia/Karachi')).toBe('Asia/Karachi');
+		expect(normaliseTimeZone('America/Sao_Paulo')).toBe('America/Sao_Paulo');
 		expect(normaliseTimeZone('Mars/Base')).toBeNull();
 		expect(normaliseTimeZone('')).toBeNull();
 	});
@@ -119,10 +120,10 @@ describe('templates', () => {
 			value: { sensitive: true },
 		});
 		expect(
-			checkTemplate({ key: 'a', channel: 'whatsapp', language: 'ur', text: 'x', providerTemplate: 'sale_1' }),
+			checkTemplate({ key: 'a', channel: 'whatsapp', language: 'es', text: 'x', providerTemplate: 'sale_1' }),
 		).toMatchObject({
 			ok: true,
-			value: { language: 'ur', providerTemplate: 'sale_1' },
+			value: { language: 'es', providerTemplate: 'sale_1' },
 		});
 	});
 
@@ -133,12 +134,14 @@ describe('templates', () => {
 		expect(isProductKey('order_ready')).toBe(false);
 		expect(languageOfSegment('default')).toBe('');
 		expect(languageOfSegment('x!')).toBeNull();
-		const versions = [{ language: '' }, { language: 'ur' }, { language: 'pt-BR' }];
+		const versions = [{ language: '' }, { language: 'fr' }, { language: 'pt-BR' }, { language: 'ar' }, { language: 'ur' }];
+		expect(pickVersion(versions, 'fr-CA', true)).toEqual({ language: 'fr' });
+		expect(pickVersion(versions, 'ar-EG', true)).toEqual({ language: 'ar' });
 		expect(pickVersion(versions, 'ur-PK', true)).toEqual({ language: 'ur' });
 		expect(pickVersion(versions, 'pt-BR', true)).toEqual({ language: 'pt-BR' });
 		expect(pickVersion(versions, 'de', true)).toEqual({ language: '' });
-		expect(pickVersion(versions, 'ur', false)).toEqual({ language: '' });
-		expect(pickVersion([{ language: 'ur' }], null, true)).toBeNull();
+		expect(pickVersion(versions, 'fr', false)).toEqual({ language: '' });
+		expect(pickVersion([{ language: 'fr' }], null, true)).toBeNull();
 		const template = {
 			key: 'k',
 			channel: /** @type {const} */ ('whatsapp'),
@@ -161,7 +164,7 @@ describe('templates', () => {
 			language: 'default',
 			updatedAt: '1970-01-01T00:00:00.000Z',
 		});
-		expect(templateView({ ...template, language: 'ur' })).not.toHaveProperty('updatedAt');
+		expect(templateView({ ...template, language: 'es' })).not.toHaveProperty('updatedAt');
 	});
 
 	it('checks the buttons of a WhatsApp template at Meta and fills their values (PLAN 0.8.10 N1)', () => {
@@ -236,13 +239,13 @@ describe('templates', () => {
 
 	it('shows an optional section only when its value is not empty (PLAN 0.8.10 N2)', () => {
 		const text = 'Order {order} is {status}.{?tracking} Track it: {tracking}{?courier} ({courier}){/courier}.{/tracking}';
-		expect(fillText(text, { order: 'IM-1', status: 'shipped', tracking: 'TRK9', courier: 'TCS' })).toBe(
-			'Order IM-1 is shipped. Track it: TRK9 (TCS).',
+		expect(fillText(text, { order: 'SH-1', status: 'shipped', tracking: 'TRK9', courier: 'UPS' })).toBe(
+			'Order SH-1 is shipped. Track it: TRK9 (UPS).',
 		);
-		expect(fillText(text, { order: 'IM-1', status: 'shipped', tracking: 'TRK9' })).toBe(
-			'Order IM-1 is shipped. Track it: TRK9.',
+		expect(fillText(text, { order: 'SH-1', status: 'shipped', tracking: 'TRK9' })).toBe(
+			'Order SH-1 is shipped. Track it: TRK9.',
 		);
-		expect(fillText(text, { order: 'IM-1', status: 'shipped', tracking: '  ', courier: 'TCS' })).toBe('Order IM-1 is shipped.');
+		expect(fillText(text, { order: 'SH-1', status: 'shipped', tracking: '  ', courier: 'UPS' })).toBe('Order SH-1 is shipped.');
 		expect(fillText('{?a}A{/a}-{?a}again{/a}', { a: 'x' })).toBe('A-again');
 		expect(valueNamesOf('{?tracking}Track {tracking} with {courier}{/tracking} {order} {1x}')).toEqual([
 			'tracking',
@@ -272,13 +275,13 @@ describe('templates', () => {
 		});
 		expect(checked.ok).toBe(true);
 		if (!checked.ok) return;
-		expect(renderTemplate(checked.value, { order: 'IM-2', reason: 'Out of stock' })).toMatchObject({
-			subject: 'Order IM-2 cancelled: Out of stock',
-			text: 'Your order IM-2 was cancelled. Reason: Out of stock',
+		expect(renderTemplate(checked.value, { order: 'SH-2', reason: 'Out of stock' })).toMatchObject({
+			subject: 'Order SH-2 cancelled: Out of stock',
+			text: 'Your order SH-2 was cancelled. Reason: Out of stock',
 		});
-		expect(renderTemplate(checked.value, { order: 'IM-2' })).toMatchObject({
-			subject: 'Order IM-2 cancelled',
-			text: 'Your order IM-2 was cancelled.',
+		expect(renderTemplate(checked.value, { order: 'SH-2' })).toMatchObject({
+			subject: 'Order SH-2 cancelled',
+			text: 'Your order SH-2 was cancelled.',
 		});
 	});
 
@@ -320,9 +323,9 @@ describe('timing', () => {
 		expect(isQuietHour(7, { startHour: 1, endHour: 6 })).toBe(false);
 		expect(isQuietHour(3, { startHour: 5, endHour: 5 })).toBe(false);
 		const at = Date.parse('2026-10-01T18:30:00Z');
-		expect(localTime(at, 'Asia/Karachi')).toEqual({ hour: 23, minute: 30 });
-		expect(new Date(quietUntil(at, { startHour: 21, endHour: 8 }, 'Asia/Karachi')).toISOString()).toBe(
-			'2026-10-02T03:00:00.000Z',
+		expect(localTime(at, 'Asia/Tokyo')).toEqual({ hour: 3, minute: 30 });
+		expect(new Date(quietUntil(at, { startHour: 21, endHour: 8 }, 'Asia/Tokyo')).toISOString()).toBe(
+			'2026-10-01T23:00:00.000Z',
 		);
 		expect(quietUntil(at, { startHour: 21, endHour: 8 }, 'UTC')).toBe(at);
 	});

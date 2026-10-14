@@ -9,7 +9,7 @@
  * - `sms`: `twilio` `{ accountSid, secret, from }` · `http` (below)
  * - `whatsapp`: `meta` `{ phoneNumberId, secret, appSecret?, verifyToken? }` · `twilio` `{ accountSid, secret, from }` ·
  *   `http` (below)
- * - `http` (any gateway, e.g. Connectivity.pk or a local SMS gateway): `{ url, contentType: json | form, headers?
+ * - `http` (any SMS or WhatsApp gateway with an HTTP API that takes a POST): `{ url, contentType: json | form, headers?
  *   (JSON object text), body (template), secret? }`. In `headers` and `body`, `{to}` (international number),
  *   `{toDigits}` (digits only), `{text}` and `{secret}` are filled, encoded for the content type.
  * @module

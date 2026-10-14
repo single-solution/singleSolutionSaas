@@ -1,12 +1,12 @@
 /**
  * The public docs at `/docs` (PLAN 0.4.10, 0.8.5): the send API and template keys, retries and fallback, timing,
- * languages, providers (with the gateway example for Connectivity.pk), unsubscribe keywords, browser and staff push
- * (with the service worker), the webhook signature check and other products' events, the delivery log and its counts,
- * per-feature routes and widgets, the widget snippets, the ticket server snippet (Node.js fetch and cURL), the kit's
- * routes for your server (settings, acting user, visitor calls, counts, activity, Format; PLAN 0.8.10), the
+ * languages, providers (with a worked example for a gateway with an HTTP API), unsubscribe keywords, browser and staff
+ * push (with the service worker), the webhook signature check and other products' events, the delivery log and its
+ * counts, per-feature routes and widgets, the widget snippets, the ticket server snippet (Node.js fetch and cURL), the
+ * kit's routes for your server (settings, acting user, visitor calls, counts, activity, Format; PLAN 0.8.10), the
  * business.json template, the localhost note and the API reference from `openapi.json`: every call with its auth,
- * feature, parameters, request fields and answer fields (`renderApiReference`, from `schemas/api.json` and the kit's own
- * descriptions). Plain HTML; every value is escaped.
+ * feature, parameters, request fields and answer fields (`renderApiReference`, from `schemas/api.json` and the kit's
+ * own descriptions). Plain HTML; every value is escaped.
  * @module
  */
 import { KIT_GUIDE, apiAnchor, renderApiReference } from '@ss/app-kit';

@@ -297,7 +297,7 @@ describe('admin widgets', () => {
 			template: 'accounts.code',
 			source: 'api',
 			channel: 'whatsapp',
-			to: '+923001234567',
+			to: '+447700900123',
 			status: 'sent',
 			reason: null,
 			subject: '',
@@ -333,13 +333,13 @@ describe('admin widgets', () => {
 		expect(inside(host, '.count').textContent).toBe('1 messages');
 		expect(counted.at(-1)?.searchParams.has('status')).toBe(false);
 		const to = /** @type {HTMLInputElement} */ (inside(host, 'input[type="search"]'));
-		to.value = ' +923001234567 ';
+		to.value = ' +447700900123 ';
 		to.dispatchEvent(new window.Event('change'));
 		await flush();
-		expect(listed.at(-1)?.searchParams.get('to')).toBe('+923001234567');
-		expect(counted.at(-1)?.searchParams.get('to')).toBe('+923001234567');
+		expect(listed.at(-1)?.searchParams.get('to')).toBe('+447700900123');
+		expect(counted.at(-1)?.searchParams.get('to')).toBe('+447700900123');
 		const details = inside(host, 'details');
-		expect(details.querySelector('summary').textContent).toContain('+923001234567 · accounts.code');
+		expect(details.querySelector('summary').textContent).toContain('+447700900123 · accounts.code');
 		const shown = [...details.querySelectorAll('dt')].map((dt, i) => [
 			dt.textContent,
 			details.querySelectorAll('dd')[i].textContent,
@@ -375,14 +375,14 @@ describe('admin widgets', () => {
 				answer(200, {
 					...configOf(ADMIN_FEATURES),
 					format: { locale: 'en-GB', currencyDisplay: 'code', currencySymbol: '', wholeUnits: false, times: 'business' },
-					timeZone: 'Asia/Karachi',
+					timeZone: 'Asia/Tokyo',
 				}),
 			'GET /v1/admin/messages': () => answer(200, { items: [message], nextCursor: null, hasMore: false }),
 		});
 		const widget = startWidget({ window, script: script(null) });
 		await widget.admin({ getTicket: async () => TICKET });
 		await flush();
-		expect(inside(host, '.meta').textContent).toBe('E-mail · Sent · 1 attempts · 1 Oct 2026, 15:00');
+		expect(inside(host, '.meta').textContent).toBe('E-mail · Sent · 1 attempts · 1 Oct 2026, 19:00');
 	});
 
 	it('the template editor lists, loads, saves and deletes templates', async () => {
@@ -548,7 +548,7 @@ describe('admin widgets', () => {
 		expect(preview()).toBe(`Order {order}Order {order} is {status}. ${strings['templates.sampleUnsubscribe']}`);
 		const [order, status, reason] = samples();
 		for (const [input, value] of /** @type {const} */ ([
-			[order, 'IM-2026-0044'],
+			[order, 'SH-2026-0044'],
 			[status, 'cancelled'],
 			[reason, 'Out of stock'],
 		])) {
@@ -556,13 +556,13 @@ describe('admin widgets', () => {
 			input?.dispatchEvent(new window.Event('input'));
 		}
 		expect(preview()).toBe(
-			`Order IM-2026-0044Order IM-2026-0044 is cancelled. Reason: Out of stock ${strings['templates.sampleUnsubscribe']}`,
+			`Order SH-2026-0044Order SH-2026-0044 is cancelled. Reason: Out of stock ${strings['templates.sampleUnsubscribe']}`,
 		);
 		// the samples stay while the words change
 		const text = /** @type {HTMLTextAreaElement} */ (inside(host, 'textarea'));
 		text.value = 'Order {order}: {status}';
 		text.dispatchEvent(new window.Event('input'));
-		expect(samples().map((input) => input.value)).toEqual(['IM-2026-0044', 'cancelled']);
+		expect(samples().map((input) => input.value)).toEqual(['SH-2026-0044', 'cancelled']);
 		const to = /** @type {HTMLInputElement} */ (
 			[...(host.shadowRoot?.querySelectorAll('input') ?? [])].find((input) => input.getAttribute('autocomplete') === 'off')
 		);
@@ -574,7 +574,7 @@ describe('admin widgets', () => {
 			to: 'me@shop.example.com',
 			template: 'ecommerce.order_status',
 			language: 'default',
-			values: { order: 'IM-2026-0044', status: 'cancelled' },
+			values: { order: 'SH-2026-0044', status: 'cancelled' },
 		});
 		expect(statusOf(host)).toBe('Test: Sent');
 		button(host, strings['templates.testSend']).click();
@@ -596,7 +596,7 @@ describe('admin widgets', () => {
 		const value = /** @type {HTMLInputElement} */ (inside(host, '.buttons .row input[maxlength="2000"]'));
 		value.value = 'orders/{order}';
 		value.dispatchEvent(new window.Event('input', { bubbles: true }));
-		expect(preview()).toContain('Button 0 (Copy code): orders/IM-2026-0044');
+		expect(preview()).toContain('Button 0 (Copy code): orders/SH-2026-0044');
 		button(host, strings['templates.removeButton']).click();
 		expect(preview()).not.toContain('Button 0');
 	});

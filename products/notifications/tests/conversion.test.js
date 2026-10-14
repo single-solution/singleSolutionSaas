@@ -52,14 +52,14 @@ describe('WhatsApp template buttons (N1)', () => {
 		);
 		const sent = await env.send('whatsapp', {
 			template: 'accounts.code',
-			to: { phone: '+923001234567' },
+			to: { phone: '+447700900123' },
 			values: { code: '482913' },
 		});
 		// the delivery log keeps the code hidden; Meta gets it (PLAN 0.8.10 D11)
 		expect(sent).toMatchObject({ status: 201, json: { status: 'sent', text: '****** is your verification code.' } });
 		expect(lastMeta()).toEqual({
 			messaging_product: 'whatsapp',
-			to: '923001234567',
+			to: '447700900123',
 			type: 'template',
 			template: {
 				name: 'authentication',
@@ -84,8 +84,8 @@ describe('the long retry plan (N3)', () => {
 		env.providers.respond('https://graph.facebook.com', () => ({ status: 503 }));
 		const sent = await env.send('whatsapp', {
 			template: 'ecommerce.order_shipped',
-			to: { phone: '+923001112222' },
-			values: { order: 'IM-2026-0043' },
+			to: { phone: '+12025550143' },
+			values: { order: 'SH-2026-0043' },
 		});
 		expect(sent.json).toMatchObject({ status: 'retrying', attempts: [{ outcome: 'failed' }] });
 		// changing the setting later does not change the plan of a message already sent
@@ -118,15 +118,15 @@ describe('the long retry plan (N3)', () => {
 		// a later message is sent as usual
 		const short = await env.send('whatsapp', {
 			template: 'ecommerce.order_shipped',
-			to: { phone: '+923001112222' },
-			values: { order: 'IM-2026-0044' },
+			to: { phone: '+12025550143' },
+			values: { order: 'SH-2026-0044' },
 		});
 		expect(short.json.status).toBe('sent');
 	});
 });
 
 describe('templates for the merchant’s server (N4)', () => {
-	const ACTOR = { 'ss-actor-id': 'usr_7', 'ss-actor-name': encodeURIComponent('Ayesha Khan'), 'ss-actor-role': 'Manager' };
+	const ACTOR = { 'ss-actor-id': 'usr_7', 'ss-actor-name': encodeURIComponent('Alex Morgan'), 'ss-actor-role': 'Manager' };
 	/** @param {string} method @param {string} path @param {unknown} [body] @param {Record<string, string>} [headers] */
 	const server = async (method, path, body, headers) => {
 		const response = await env.call(method, path, { token: env.server, body, ...(headers ? { headers } : {}) });
@@ -161,7 +161,7 @@ describe('templates for the merchant’s server (N4)', () => {
 		});
 		expect(await recent()).toContainEqual(
 			expect.objectContaining({
-				who: { kind: 'user', id: 'usr_7', name: 'Ayesha Khan', role: 'Manager' },
+				who: { kind: 'user', id: 'usr_7', name: 'Alex Morgan', role: 'Manager' },
 				what: 'templates',
 				detail: 'Template ecommerce.order_cancelled (sms, default): saved',
 			}),
@@ -221,7 +221,7 @@ describe('webhook URLs per event (N5)', () => {
 		await env.connect('webhook_secret', SECRET);
 		const saved = await env.call('PUT', '/v1/lists/webhook_urls', {
 			token: env.server,
-			headers: { 'ss-actor-id': 'usr_7', 'ss-actor-name': 'Ayesha' },
+			headers: { 'ss-actor-id': 'usr_7', 'ss-actor-name': 'Sam Lee' },
 			body: {
 				value: [
 					{ url: `${HOOKS}/orders`, events: ['ecommerce.order.placed', 'payments.payment.paid'] },
@@ -235,7 +235,7 @@ describe('webhook URLs per event (N5)', () => {
 			await env.dashboard(await env.adminSession(), 'GET', `/v1/dashboard/websites/${env.websiteId}/overview`)
 		).json();
 		expect(overview.recentChanges).toContainEqual(
-			expect.objectContaining({ who: { kind: 'user', id: 'usr_7', name: 'Ayesha' }, detail: 'Webhook URLs: changed' }),
+			expect.objectContaining({ who: { kind: 'user', id: 'usr_7', name: 'Sam Lee' }, detail: 'Webhook URLs: changed' }),
 		);
 		const from = env.providers.callsTo(HOOKS).length;
 		/** @param {string} type */
@@ -245,9 +245,9 @@ describe('webhook URLs per event (N5)', () => {
 		expect(await relay('chat.conversation.opened')).toBe(1);
 		// Notifications' own events too: a failed message goes to /failures and /all, a sent one to /all
 		env.providers.respond('https://graph.facebook.com', () => ({ status: 400, body: '{"error":{"message":"bad"}}' }));
-		await env.send('whatsapp', { template: 'accounts.code', to: { phone: '+923009998888' }, values: { code: '1' } });
+		await env.send('whatsapp', { template: 'accounts.code', to: { phone: '+33612345678' }, values: { code: '1' } });
 		env.providers.reset('https://graph.facebook.com');
-		await env.send('whatsapp', { template: 'accounts.code', to: { phone: '+923009998888' }, values: { code: '2' } });
+		await env.send('whatsapp', { template: 'accounts.code', to: { phone: '+33612345678' }, values: { code: '2' } });
 		expect(delivered(from).sort()).toEqual(
 			[
 				'/orders payments.payment.paid',
@@ -292,7 +292,7 @@ describe('a test send of a saved template from the template editor (tickets)', (
 		};
 		const sent = await post({
 			channel: 'whatsapp',
-			to: '+92 300 1234567',
+			to: '+44 7700 900123',
 			template: 'accounts.code',
 			language: 'default',
 			values: { code: '111222' },
@@ -310,9 +310,9 @@ describe('a test send of a saved template from the template editor (tickets)', (
 			detail: 'Template accounts.code by WhatsApp: sent',
 		});
 		for (const [body, path] of /** @type {const} */ ([
-			[{ channel: 'whatsapp', to: '+923001234567', template: 'Bad Key' }, '/template'],
-			[{ channel: 'whatsapp', to: '+923001234567', template: 'accounts.code', values: { 'a b': 1 } }, '/values'],
-			[{ channel: 'whatsapp', to: '+923001234567', template: 'accounts.code', language: 'Klingon!' }, '/language'],
+			[{ channel: 'whatsapp', to: '+447700900123', template: 'Bad Key' }, '/template'],
+			[{ channel: 'whatsapp', to: '+447700900123', template: 'accounts.code', values: { 'a b': 1 } }, '/values'],
+			[{ channel: 'whatsapp', to: '+447700900123', template: 'accounts.code', language: 'Klingon!' }, '/language'],
 		])) {
 			const refused = await post(body);
 			expect(refused.status).toBe(422);

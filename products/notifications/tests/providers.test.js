@@ -160,24 +160,26 @@ describe('e-mail providers', () => {
 });
 
 describe('SMS and WhatsApp providers', () => {
-	it('send through a generic HTTP gateway (Connectivity.pk form, or JSON with headers)', async () => {
+	it('send through any gateway with an HTTP API (a form with its own field names, or JSON with headers)', async () => {
 		const { send, calls } = fakeSend(() => ({ status: 200, body: '{"sent":"true","id":"g1"}' }));
 		const providers = createProviders({ send, policy, now: () => NOW });
-		const connectivity = {
+		// the guide's imaginary gateway, with a form, the key in the body and fixed fields of its own
+		const form = {
 			provider: 'http',
-			url: 'https://connectivity.pk/api/messages/chat',
+			url: 'https://gateway.example.com/v1/messages',
 			contentType: 'form',
-			body: 'instance_id=9&token={secret}&to={toDigits}&body={text}&priority=0',
-			secret: 'tok&en',
+			body: 'account=9&key={secret}&to={toDigits}&message={text}&priority=0',
+			secret: 'k&ey',
 		};
-		const sms = { ...MESSAGE, to: '+923001234567', text: 'Your code: 12 & more' };
-		expect(await providers.sendMessage('whatsapp', connectivity, sms)).toEqual({ ok: true, id: 'g1', provider: 'http' });
+		const sms = { ...MESSAGE, to: '+447700900123', text: 'Your code: 12 & more' };
+		expect(await providers.sendMessage('whatsapp', form, sms)).toEqual({ ok: true, id: 'g1', provider: 'http' });
+		expect(calls[0]?.url).toBe('https://gateway.example.com/v1/messages');
 		expect(calls[0]?.init.headers['content-type']).toBe('application/x-www-form-urlencoded');
 		expect(Object.fromEntries(new URLSearchParams(calls[0]?.init.body))).toEqual({
-			instance_id: '9',
-			token: 'tok&en',
-			to: '923001234567',
-			body: 'Your code: 12 & more',
+			account: '9',
+			key: 'k&ey',
+			to: '447700900123',
+			message: 'Your code: 12 & more',
 			priority: '0',
 		});
 		const json = {
@@ -188,10 +190,25 @@ describe('SMS and WhatsApp providers', () => {
 			secret: 's3',
 		};
 		await providers.sendMessage('sms', json, { ...sms, text: 'Say "hi"' });
-		expect(JSON.parse(calls[1]?.init.body)).toEqual({ to: '+923001234567', message: 'Say "hi"' });
+		expect(JSON.parse(calls[1]?.init.body)).toEqual({ to: '+447700900123', message: 'Say "hi"' });
 		expect(calls[1]?.init.headers.authorization).toBe('Key s3');
 		await providers.sendMessage('sms', { provider: 'http', url: 'https://sms.example.com/send', body: '{"t":"{text}"}' }, sms);
 		expect(calls[2]?.init.headers['content-type']).toBe('application/json');
+		// the guide's JSON example: a bearer key in a header
+		await providers.sendMessage(
+			'sms',
+			{
+				provider: 'http',
+				url: 'https://gateway.example.com/v1/messages',
+				contentType: 'json',
+				headers: '{"Authorization": "Bearer {secret}"}',
+				body: '{"to": "{to}", "text": "{text}"}',
+				secret: 'gw_key_1',
+			},
+			{ ...sms, text: 'Line 1\nLine 2' },
+		);
+		expect(calls[3]?.init.headers.authorization).toBe('Bearer gw_key_1');
+		expect(JSON.parse(calls[3]?.init.body)).toEqual({ to: '+447700900123', text: 'Line 1\nLine 2' });
 		expect(await providers.test('sms', json)).toEqual({ ok: true });
 		expect(await providers.test('sms', { ...json, url: 'https://10.0.0.1/x' })).toMatchObject({ ok: false });
 	});
@@ -216,9 +233,9 @@ describe('SMS and WhatsApp providers', () => {
 		await providers.sendMessage(
 			'whatsapp',
 			{ provider: 'meta', phoneNumberId: '123456', secret: 'm' },
-			{ ...MESSAGE, to: '+15550002222', providerTemplate: 'hello', language: 'ur' },
+			{ ...MESSAGE, to: '+15550002222', providerTemplate: 'hello', language: 'es' },
 		);
-		expect(JSON.parse(calls[3]?.init.body).template).toEqual({ name: 'hello', language: { code: 'ur' } });
+		expect(JSON.parse(calls[3]?.init.body).template).toEqual({ name: 'hello', language: { code: 'es' } });
 		// buttons that take a value (PLAN 0.8.10 N1): a copy-code button as Meta's authentication templates take it
 		await providers.sendMessage(
 			'whatsapp',
@@ -230,14 +247,14 @@ describe('SMS and WhatsApp providers', () => {
 				parameters: ['482913'],
 				buttons: [
 					{ index: 0, type: 'copy_code', value: '482913' },
-					{ index: 1, type: 'url', value: 'orders/IM-1' },
+					{ index: 1, type: 'url', value: 'orders/SH-1' },
 				],
 			},
 		);
 		expect(JSON.parse(calls[4]?.init.body).template.components).toEqual([
 			{ type: 'body', parameters: [{ type: 'text', text: '482913' }] },
 			{ type: 'button', sub_type: 'url', index: '0', parameters: [{ type: 'text', text: '482913' }] },
-			{ type: 'button', sub_type: 'url', index: '1', parameters: [{ type: 'text', text: 'orders/IM-1' }] },
+			{ type: 'button', sub_type: 'url', index: '1', parameters: [{ type: 'text', text: 'orders/SH-1' }] },
 		]);
 		expect(await providers.sendMessage('sms', { provider: 'meta' }, MESSAGE)).toMatchObject({
 			ok: false,

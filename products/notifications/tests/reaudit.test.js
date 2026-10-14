@@ -129,7 +129,7 @@ describe('secrets never reach the delivery log (D11, SE-3)', () => {
 		env.providers.respond('https://graph.facebook.com', () => ({ status: 503 }));
 		const sent = await env.send('whatsapp', {
 			template: 'accounts.phone_code',
-			to: { phone: '+923001234567' },
+			to: { phone: '+447700900123' },
 			values: { code: '771122' },
 		});
 		expect(sent.json).toMatchObject({ status: 'retrying', text: '****** is your code.' });
@@ -201,7 +201,7 @@ describe('secrets never reach the delivery log (D11, SE-3)', () => {
 		env.providers.respond('https://graph.facebook.com', () => ({ status: 503 }));
 		const sent = await env.send('whatsapp', {
 			template: 'accounts.phone_code',
-			to: { phone: '+923001234568' },
+			to: { phone: '+447700900124' },
 			values: { code: '334455' },
 		});
 		expect(sent.json.status).toBe('retrying');
@@ -226,7 +226,7 @@ describe('secrets never reach the delivery log (D11, SE-3)', () => {
 		env.providers.respond('https://graph.facebook.com', () => ({ status: 503 }));
 		const sent = await env.send('whatsapp', {
 			template: 'accounts.phone_code',
-			to: { phone: '+923001234569' },
+			to: { phone: '+447700900125' },
 			values: { code: '667788' },
 		});
 		expect(sent.json.status).toBe('retrying');
@@ -238,7 +238,7 @@ describe('secrets never reach the delivery log (D11, SE-3)', () => {
 			failedWebsites: [],
 		});
 		const data = await env.product.data.forWebsite(env.websiteId);
-		const aad = messageAadOf(env.websiteId, 'whatsapp', '+923001234569');
+		const aad = messageAadOf(env.websiteId, 'whatsapp', '+447700900125');
 		const changing = createSealer('encryption-key-b-0123456789-abcdefghij', 'encryption-key-0123456789-abcdefghij');
 		expect(changing.open((await raw(sent.json.id)).sealed, aad)).toContain('667788');
 		expect(await resealWebsite(changing, data)).toMatchObject({ resealed: 1, unreadable: 0 });

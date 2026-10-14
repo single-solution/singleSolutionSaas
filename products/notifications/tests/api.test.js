@@ -131,9 +131,9 @@ describe('templates', () => {
 		await env.template({
 			key: 'welcome',
 			channel: 'email',
-			language: 'ur',
-			subject: 'Salam {name}',
-			text: 'Khush amdeed {name}',
+			language: 'fr',
+			subject: 'Bonjour {name}',
+			text: 'Bienvenue {name}',
 		});
 		await env.template({ key: 'welcome', channel: 'sms', text: 'Welcome {name}' });
 		await env.template({ key: 'accounts.code', channel: 'sms', text: 'Code {code}', required: true, urgent: true });
@@ -145,7 +145,7 @@ describe('templates', () => {
 		await env.template({ key: 'gone', channel: 'sms', text: 'Bye' });
 		const list = await (await env.dashboard(cookie, 'GET', path)).json();
 		expect(list.items).toHaveLength(10);
-		expect(list.items).toContainEqual(expect.objectContaining({ key: 'welcome', channel: 'email', language: 'ur' }));
+		expect(list.items).toContainEqual(expect.objectContaining({ key: 'welcome', channel: 'email', language: 'fr' }));
 		expect((await env.dashboard(cookie, 'DELETE', `${path}/gone/sms/default`)).status).toBe(204);
 		expect((await env.dashboard(cookie, 'DELETE', `${path}/gone/sms/default`)).status).toBe(404);
 		expect((await env.dashboard(cookie, 'DELETE', `${path}/gone/fax/default`)).status).toBe(404);
@@ -234,20 +234,20 @@ describe('the send API', () => {
 	});
 
 	it('picks the recipient’s language only while multi-language templates are on', async () => {
-		const ur = await env.send('email', {
+		const fr = await env.send('email', {
 			template: 'welcome',
-			to: { email: 'u@example.com', language: 'ur-PK' },
-			values: { name: 'Ali' },
+			to: { email: 'u@example.com', language: 'fr-CA' },
+			values: { name: 'Camille' },
 		});
-		expect(ur.json.subject).toBe('Salam Ali');
+		expect(fr.json.subject).toBe('Bonjour Camille');
 		await env.switchOn(ALL.filter((key) => key !== 'multi_language'));
 		const plain = await env.send('email', {
 			template: 'welcome',
 			to: { email: 'u@example.com' },
-			language: 'ur',
-			values: { name: 'Ali' },
+			language: 'fr',
+			values: { name: 'Camille' },
 		});
-		expect(plain.json.subject).toBe('Hi Ali');
+		expect(plain.json.subject).toBe('Hi Camille');
 		await env.switchOn(ALL);
 	});
 
@@ -385,16 +385,16 @@ describe('the send API', () => {
 	});
 
 	it('holds non-urgent messages during quiet hours until the recipient’s morning', async () => {
-		// 2026-10-01T23:00 in Asia/Karachi (UTC+5) is 18:00 UTC
-		env.advance(Date.parse('2026-10-02T18:00:00Z') - env.now());
-		const held = await env.send('sms', { template: 'welcome', to: { phone: '+15550008888', timeZone: 'Asia/Karachi' } });
-		expect(held.json).toMatchObject({ status: 'queued', dueAt: '2026-10-03T03:00:00.000Z', attempts: [] });
+		// 2026-10-02T23:00 in Asia/Tokyo (UTC+9) is 14:00 UTC
+		env.advance(Date.parse('2026-10-02T14:00:00Z') - env.now());
+		const held = await env.send('sms', { template: 'welcome', to: { phone: '+15550008888', timeZone: 'Asia/Tokyo' } });
+		expect(held.json).toMatchObject({ status: 'queued', dueAt: '2026-10-02T23:00:00.000Z', attempts: [] });
 		const urgent = await env.send('sms', {
 			template: 'accounts.code',
-			to: { phone: '+15550008888', timeZone: 'Asia/Karachi' },
+			to: { phone: '+15550008888', timeZone: 'Asia/Tokyo' },
 		});
 		expect(urgent.json.status).toBe('sent');
-		env.advance(Date.parse('2026-10-03T03:00:30Z') - env.now());
+		env.advance(Date.parse('2026-10-02T23:00:30Z') - env.now());
 		await env.call('GET', '/v1/messages?limit=1', { token: env.server });
 		expect((await (await env.call('GET', `/v1/messages/${held.json.id}`, { token: env.server })).json()).status).toBe('sent');
 		// equal hours: no quiet hours
@@ -402,12 +402,12 @@ describe('the send API', () => {
 	});
 
 	it('holds them by the business.json time zone when the recipient names none', async () => {
-		await env.businessJson({ name: 'Shop', timeZone: 'Asia/Karachi' });
+		await env.businessJson({ name: 'Shop', timeZone: 'Asia/Singapore' });
 		await env.setting('quiet_hours', 'endHour', 8);
-		// 17:30 UTC is 22:30 in Karachi: quiet there, not in UTC
+		// 17:30 UTC is 01:30 in Singapore: quiet there, not in UTC
 		env.advance(Date.parse('2026-10-03T17:30:00Z') - env.now());
 		const held = await env.send('sms', { template: 'welcome', to: { phone: '+15550008899' } });
-		expect(held.json).toMatchObject({ status: 'queued', dueAt: '2026-10-04T03:00:00.000Z' });
+		expect(held.json).toMatchObject({ status: 'queued', dueAt: '2026-10-04T00:00:00.000Z' });
 		// the recipient's own time zone still wins
 		const own = await env.send('sms', { template: 'welcome', to: { phone: '+15550008898', timeZone: 'UTC' } });
 		expect(own.json.status).toBe('sent');
@@ -804,7 +804,7 @@ describe('the delivery log and the admin widgets (tickets)', () => {
 			'SS_SERVER_TOKEN',
 			'curl -X POST',
 			'SS-Signature',
-			'Connectivity.pk',
+			'gateway.example.com',
 			'/ss-notifications-sw.js',
 			'data-ss-notifications',
 			'log.read',
@@ -882,7 +882,7 @@ describe('the merchant’s server and the widget config (PLAN 0.8.10)', () => {
 	});
 
 	it('gives the widgets the Format and the business time zone', async () => {
-		await env.businessJson({ name: 'Shop', timeZone: 'Asia/Karachi' });
+		await env.businessJson({ name: 'Shop', timeZone: 'Europe/Paris' });
 		const cookie = await env.adminSession();
 		const saved = await env.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${env.websiteId}/format`, {
 			locale: 'en-GB',
@@ -891,9 +891,9 @@ describe('the merchant’s server and the widget config (PLAN 0.8.10)', () => {
 		expect(saved.status).toBe(200);
 		const ticket = await env.ticket(['log.read']);
 		const admin = await (await env.call('GET', '/v1/widget/admin/config', { token: ticket, origin: ADMIN_ORIGIN })).json();
-		expect(admin).toMatchObject({ format: { locale: 'en-GB', times: 'business' }, timeZone: 'Asia/Karachi' });
+		expect(admin).toMatchObject({ format: { locale: 'en-GB', times: 'business' }, timeZone: 'Europe/Paris' });
 		const visitor = await (await env.call('GET', '/v1/widget/config', { token: env.browser, origin: ORIGIN })).json();
-		expect(visitor).toMatchObject({ format: { locale: 'en-GB', times: 'business' }, timeZone: 'Asia/Karachi' });
+		expect(visitor).toMatchObject({ format: { locale: 'en-GB', times: 'business' }, timeZone: 'Europe/Paris' });
 		await env.businessJson({ name: 'shop.example.com', timeZone: 'UTC' });
 	});
 

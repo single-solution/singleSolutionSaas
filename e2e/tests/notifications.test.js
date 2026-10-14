@@ -159,7 +159,7 @@ describe('Notifications on the real Portal', () => {
 		});
 		expect(connected.json).toMatchObject({ status: 'connected' });
 		const { server } = await sys.tokens(m.merchantId, websiteId);
-		const actor = { 'ss-actor-id': 'usr_1', 'ss-actor-name': encodeURIComponent('Ayesha Khan') };
+		const actor = { 'ss-actor-id': 'usr_1', 'ss-actor-name': encodeURIComponent('Alex Morgan') };
 		// the merchant's server writes both templates (PLAN 0.8.10 N4)
 		const code = await sys.call('PUT', '/v1/templates', {
 			token: server,
@@ -190,13 +190,13 @@ describe('Notifications on the real Portal', () => {
 
 		const otp = await sys.call('POST', '/v1/messages/whatsapp', {
 			token: server,
-			body: { template: 'accounts.code', to: { phone: '+923001234567' }, values: { code: '482913' } },
+			body: { template: 'accounts.code', to: { phone: '+447700900123' }, values: { code: '482913' } },
 		});
 		// the answer and the log hide the code (N6, SE-3); the provider gets the real one
 		expect(otp).toMatchObject({ status: 201, json: { status: 'sent', text: '****** is your verification code.' } });
 		expect(whatsapp.at(-1)).toEqual({
 			messaging_product: 'whatsapp',
-			to: '923001234567',
+			to: '447700900123',
 			type: 'template',
 			template: {
 				name: 'authentication',
@@ -214,17 +214,17 @@ describe('Notifications on the real Portal', () => {
 				token: server,
 				body: { template: 'ecommerce.order_status', to: { email: 'buyer@example.com' }, values },
 			});
-		const shipped = await order({ order: 'IM-2026-0043', status: 'shipped', courier: 'TCS', tracking: 'TRK9' });
+		const shipped = await order({ order: 'SH-2026-0043', status: 'shipped', courier: 'UPS', tracking: 'TRK9' });
 		expect(shipped.json).toMatchObject({
 			status: 'sent',
-			subject: 'Order IM-2026-0043: shipped',
-			text: 'Your order IM-2026-0043 is shipped. Track it with TCS: TRK9.',
+			subject: 'Order SH-2026-0043: shipped',
+			text: 'Your order SH-2026-0043 is shipped. Track it with UPS: TRK9.',
 		});
-		const cancelled = await order({ order: 'IM-2026-0044', status: 'cancelled', reason: 'Out of stock' });
-		expect(cancelled.json.text).toBe('Your order IM-2026-0044 is cancelled. Reason: Out of stock.');
-		const confirmed = await order({ order: 'IM-2026-0045', status: 'confirmed', tracking: '' });
-		expect(confirmed.json.text).toBe('Your order IM-2026-0045 is confirmed.');
+		const cancelled = await order({ order: 'SH-2026-0044', status: 'cancelled', reason: 'Out of stock' });
+		expect(cancelled.json.text).toBe('Your order SH-2026-0044 is cancelled. Reason: Out of stock.');
+		const confirmed = await order({ order: 'SH-2026-0045', status: 'confirmed', tracking: '' });
+		expect(confirmed.json.text).toBe('Your order SH-2026-0045 is confirmed.');
 		// the e-mail provider got exactly those words
-		expect(sent.at(-1)?.body).toMatchObject({ to: ['buyer@example.com'], text: 'Your order IM-2026-0045 is confirmed.' });
+		expect(sent.at(-1)?.body).toMatchObject({ to: ['buyer@example.com'], text: 'Your order SH-2026-0045 is confirmed.' });
 	});
 });

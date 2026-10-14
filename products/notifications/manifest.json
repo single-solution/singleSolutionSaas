@@ -12,7 +12,7 @@
 		{
 			"key": "whatsapp",
 			"name": "WhatsApp",
-			"description": "Sends WhatsApp messages through the merchant's own provider: Meta WhatsApp Cloud API, Twilio, Connectivity.pk or any gateway over HTTP.",
+			"description": "Sends WhatsApp messages through the merchant's own provider: Meta WhatsApp Cloud API, Twilio, or any WhatsApp gateway with an HTTP API.",
 			"dependsOn": [],
 			"settings": {
 				"$ref": "schemas/whatsapp.settings.json"
@@ -30,7 +30,7 @@
 		{
 			"key": "sms",
 			"name": "SMS",
-			"description": "Sends SMS through the merchant's own provider: Twilio, or a local gateway or any API over HTTP.",
+			"description": "Sends SMS through the merchant's own provider: Twilio, or any SMS gateway with an HTTP API.",
 			"dependsOn": [],
 			"settings": {
 				"$ref": "schemas/sms.settings.json"
