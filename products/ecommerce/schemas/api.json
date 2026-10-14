@@ -2694,16 +2694,28 @@
 		},
 		"CheckoutBankDetails": {
 			"type": "object",
-			"description": "The bank details from Payments (read at most every 5 minutes; empty texts when not set).",
-			"required": ["ready", "accountTitle", "bankName", "accountNumber", "iban", "instructions"],
+			"description": "The bank details exactly as Payments answers them (GET /v1/bank-transfer, read at most every 5 minutes), each '' when not set: show only the ones given.",
+			"required": [
+				"ready",
+				"accountHolder",
+				"bankName",
+				"accountNumber",
+				"routingNumber",
+				"sortCode",
+				"branchCode",
+				"iban",
+				"bic",
+				"instructions"
+			],
 			"additionalProperties": false,
 			"properties": {
 				"ready": {
 					"type": "boolean",
-					"description": "Bank transfer can be offered (its details are set, or Payments does not require them)."
+					"description": "Bank transfer can be offered: the account holder and the account number or IBAN are set (or Payments does not require details)."
 				},
-				"accountTitle": {
-					"type": "string"
+				"accountHolder": {
+					"type": "string",
+					"description": "The name on the bank account."
 				},
 				"bankName": {
 					"type": "string"

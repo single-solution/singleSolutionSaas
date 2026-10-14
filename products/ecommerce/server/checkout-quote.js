@@ -59,10 +59,26 @@ const BANK_DETAILS_MS = 5 * 60_000;
  */
 
 /**
- * The bank details a bank transfer shows (Payments P1).
- * @typedef {{ ready: boolean, accountTitle: string, bankName: string, accountNumber: string, iban: string,
- *   instructions: string }} BankDetails
+ * The bank details a bank transfer shows, exactly as Payments answers them (P1, `GET /v1/bank-transfer`): each '' when
+ * not set, so a page shows only the ones given.
+ * @typedef {{ ready: boolean, accountHolder: string, bankName: string, accountNumber: string, routingNumber: string,
+ *   sortCode: string, branchCode: string, iban: string, bic: string, instructions: string }} BankDetails
  */
+
+/** The texts of the bank details, in Payments' order. */
+const BANK_FIELDS = Object.freeze(
+	/** @type {const} */ ([
+		'accountHolder',
+		'bankName',
+		'accountNumber',
+		'routingNumber',
+		'sortCode',
+		'branchCode',
+		'iban',
+		'bic',
+		'instructions',
+	]),
+);
 
 /**
  * A priced cart.
@@ -141,16 +157,12 @@ export const createQuoting = (product, service) => {
 		let value = null;
 		if (answer.ok && answer.status === 200 && typeof answer.body === 'object' && answer.body !== null) {
 			const body = /** @type {Record<string, unknown>} */ (answer.body);
-			value = {
+			value = /** @type {BankDetails} */ ({
 				ready: body.ready === true,
-				accountTitle: text(body.accountTitle),
-				bankName: text(body.bankName),
-				accountNumber: text(body.accountNumber),
-				iban: text(body.iban),
-				instructions: text(body.instructions),
-			};
+				...Object.fromEntries(BANK_FIELDS.map((field) => [field, text(body[field])])),
+			});
 		} else if (answer.ok)
-			value = { ready: false, accountTitle: '', bankName: '', accountNumber: '', iban: '', instructions: '' };
+			value = /** @type {BankDetails} */ ({ ready: false, ...Object.fromEntries(BANK_FIELDS.map((field) => [field, ''])) });
 		bankCache.set(s.websiteId, { at: now, value });
 		return value;
 	};

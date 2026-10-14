@@ -39,11 +39,11 @@ const ACCOUNTS = 'https://accounts-phase4.test';
 const PAYMENTS = 'https://payments-phase4.test';
 const NOTIFY = 'https://notifications-phase4.test';
 const BUCKET = 'https://bucket.phase4.test';
-const DOMAIN = 'mobiles.example.com';
+const DOMAIN = 'shop.example.com';
 const ORIGIN = `https://${DOMAIN}`;
 const PASSWORD = 'a long shopper password';
-const TEAM = 'orders@mobiles.example.com';
-const MANAGER = 'manager@mobiles.example.com';
+const TEAM = 'orders@shop.example.com';
+const MANAGER = 'manager@shop.example.com';
 const ADDRESS = { name: 'Sara Shopper', phone: '+923001112233', line1: '1 Mall Road', city: 'Lahore', country: 'PK' };
 const LAHORE = { city: 'Lahore' };
 /** Prices in paisa (PKR minor units): whole rupees, as the merchant enters them. */
@@ -115,7 +115,7 @@ const bucket = async (request) => {
  */
 const storeSite = async (request) =>
 	new URL(request.url).pathname === '/.well-known/business.json'
-		? Response.json({ version: 1, name: 'IM Mobiles', email: 'hello@mobiles.example.com', timeZone: 'Asia/Karachi' })
+		? Response.json({ version: 1, name: 'Example Shop', email: 'hello@shop.example.com', timeZone: 'Asia/Karachi' })
 		: new Response('not found', { status: 404 });
 
 /** @type {import('./helpers.js').System} */
@@ -288,7 +288,7 @@ beforeAll(async () => {
 	});
 	await sys.connect();
 	for (const base of [ACCOUNTS, PAYMENTS, NOTIFY]) await sys.connect({ base });
-	const m = await sys.merchant('mobiles@phase4.test', [DOMAIN]);
+	const m = await sys.merchant('owner@shop.test', [DOMAIN]);
 	websiteId = m.websiteIds[0] ?? '';
 	for (const id of ['ecommerce', 'accounts', 'payments', 'notifications']) {
 		await sys.addProduct(m.merchantId, websiteId, id);
@@ -322,8 +322,8 @@ beforeAll(async () => {
 	await dashboardOf(PAYMENTS, 'payments', '/features', { on: ['payment_api', 'bank_transfer'] });
 	await sys.connectDatabase(await sys.adminSession(owner, websiteId, 'payments'), websiteId, PAYMENTS);
 	await configureOn(PAYMENTS, 'payments', {
-		'bank_transfer.accountTitle': 'IM Mobiles',
-		'bank_transfer.bankName': 'Meezan Bank',
+		'bank_transfer.accountHolder': 'Example Shop Ltd',
+		'bank_transfer.bankName': 'Example Bank',
 		'bank_transfer.accountNumber': '0101-2345678',
 		'bank_transfer.iban': 'PK36MEZN0000001123456702',
 		'bank_transfer.instructions': 'Write your order number as the reference.',
@@ -333,7 +333,7 @@ beforeAll(async () => {
 	await dashboardOf(NOTIFY, 'notifications', '/features', { on: ['email'] });
 	await sys.connectDatabase(await sys.adminSession(owner, websiteId, 'notifications'), websiteId, NOTIFY);
 	await dashboardOf(NOTIFY, 'notifications', '/connections/email', {
-		value: { provider: 'resend', secret: 're_live_key_0044', from: 'IM Mobiles <shop@mobiles.example.com>' },
+		value: { provider: 'resend', secret: 're_live_key_0044', from: 'Example Shop <shop@shop.example.com>' },
 	});
 	for (const [key, subject, text] of [
 		['ecommerce.order_placed', 'Order {number} placed', 'Hi {firstName}, order {number} for {total} is placed: {orderUrl}'],
@@ -701,12 +701,17 @@ describe('Ecommerce phase 4 on the real Portal, Accounts, Payments and Notificat
 	it('takes a bank transfer through the real Payments: bank details, its page, and paid once Payments confirms (E24)', async () => {
 		const sara = await signIn('03001112233');
 		const priced = await quote({ lines: [caseLine()], payment: 'bank_transfer' }, sara);
+		// exactly Payments' answer: every field, '' for those the merchant did not set
 		expect(priced.json.bankDetails).toEqual({
 			ready: true,
-			accountTitle: 'IM Mobiles',
-			bankName: 'Meezan Bank',
+			accountHolder: 'Example Shop Ltd',
+			bankName: 'Example Bank',
 			accountNumber: '0101-2345678',
+			routingNumber: '',
+			sortCode: '',
+			branchCode: '',
 			iban: 'PK36MEZN0000001123456702',
+			bic: '',
 			instructions: 'Write your order number as the reference.',
 		});
 		// the cart widget sends its return address (Payments sends the shopper back there)
@@ -714,7 +719,7 @@ describe('Ecommerce phase 4 on the real Portal, Accounts, Payments and Notificat
 		expect(placed.status, JSON.stringify(placed.json)).toBe(201);
 		const { order, next } = placed.json;
 		expect(order).toMatchObject({ status: 'pending_payment', payment: { state: 'pending', via: 'payments' } });
-		expect(order.bankDetails).toMatchObject({ bankName: 'Meezan Bank' });
+		expect(order.bankDetails).toMatchObject({ bankName: 'Example Bank' });
 		expect(next.kind).toBe('pay');
 		expect(new URL(next.url).origin).toBe(PAYMENTS);
 		const { paymentId } = (await orderOf(order.id)).payment;

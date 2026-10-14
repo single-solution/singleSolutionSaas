@@ -582,7 +582,17 @@ describe('bank transfers recorded by staff (E24)', () => {
 		await shop.setting('checkout', 'bankTransferVia', 'manual');
 		const item = await shop.seedProduct({ price: 1000, stock: 10 });
 		const body = { lines: [{ productId: item.id }], delivery: { city: 'Springfield' } };
-		const none = { accountTitle: '', bankName: '', accountNumber: '', iban: '', instructions: '' };
+		const none = {
+			accountHolder: '',
+			bankName: '',
+			accountNumber: '',
+			routingNumber: '',
+			sortCode: '',
+			branchCode: '',
+			iban: '',
+			bic: '',
+			instructions: '',
+		};
 		/** The bank transfer option while Payments answers these bank details. @param {Record<string, unknown>} details */
 		const bankWith = async (details) => {
 			shop.responders.set(`${PAYMENTS}/v1/bank-transfer`, () => ({ status: 200, body: details }));
@@ -598,6 +608,29 @@ describe('bank transfers recorded by staff (E24)', () => {
 		// Payments' requireDetails off: ready with only the instructions
 		expect(await bankWith({ ready: true, ...none, instructions: 'Ask us for our account.' })).toMatchObject({
 			available: true,
+		});
+		// the quote shows the details exactly as Payments answers them, whatever the country's fields
+		const full = {
+			ready: true,
+			accountHolder: 'Example Shop Ltd',
+			bankName: 'Example Bank',
+			accountNumber: '0123456789',
+			routingNumber: '021000021',
+			sortCode: '12-34-56',
+			branchCode: '001',
+			iban: 'GB33BUKB20201555555555',
+			bic: 'BUKBGB22',
+			instructions: 'Use the order number as the reference.',
+		};
+		await bankWith({ ...full, accountTitle: 'an old field' });
+		expect((await quote(body)).json.bankDetails).toEqual(full);
+		// a field Payments leaves out reads as ''
+		await bankWith({ ready: true, accountHolder: 'Example Shop Ltd', iban: full.iban });
+		expect((await quote(body)).json.bankDetails).toEqual({
+			...none,
+			ready: true,
+			accountHolder: 'Example Shop Ltd',
+			iban: full.iban,
 		});
 		shop.responders.delete(`${PAYMENTS}/v1/bank-transfer`);
 		await shop.setting('checkout', 'bankTransferVia', 'payments');
