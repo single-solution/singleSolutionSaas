@@ -9,9 +9,10 @@ environment variables.
 on its own database, wired through one in-process fetch router; one clock drives both.
 
 `fixtures/notes` is the test product exactly as `ss app init --id notes --name Notes --base-url https://notes.test`
-writes it, plus a test-only `import` feature (its routes, settings, record check, guide text and API description). It
-is used by the contract tests (connect, tokens, reports, statuses, tickets, dashboard launches, notices, websites and
-data rights). It is not a workspace package: its `package.json` is the generated one, and this workspace checks it.
+writes it, plus a test-only `import` feature (its routes, settings, record check, guide and build texts, its
+`recommendFor` tag and API description). It is used by the contract tests (connect, tokens, reports, statuses,
+tickets, dashboard launches, notices, websites and data rights). It is not a workspace package: its `package.json` is
+the generated one, and this workspace checks it.
 `pnpm check` here formats and lints it, type-checks its `core/`, `server/`, `adapters/`, `ui/` and `tests/`, runs its
 own tests with the system tests, and runs `ss app validate` on it (which includes `ss app assets --check`). Its
 dashboard (`app/`) is linted but not type-checked here (React, Next.js and `@ss/ui` are not dependencies of this

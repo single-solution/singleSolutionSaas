@@ -1,5 +1,6 @@
 /**
- * The public docs at `/docs` (PLAN 0.4.10): per-feature guides with their routes and widgets, the widget snippets,
+ * The public docs at `/docs` (PLAN 0.4.10): per-feature guides with their routes, widgets and what the website builds,
+ * the widget snippets,
  * the ticket server snippet (Node.js fetch and cURL), the kit's routes for your server (settings, acting user, visitor
  * calls, counts, activity, Format; PLAN 0.8.10), the business.json template, the localhost note and the API reference
  * from `openapi.json` (every call with what it takes and answers, `renderApiReference`). Plain HTML; every value is
@@ -52,6 +53,7 @@ const routeTable = (rows) =>
  */
 export const renderDocs = ({ base }) => {
 	const features = /** @type {Record<string, string[]>} */ (/** @type {unknown} */ (guide.features));
+	const build = /** @type {Record<string, string>} */ (guide.build);
 	/** @param {'visitor' | 'admin'} kind */
 	const places = (kind) =>
 		manifest.widgets
@@ -103,6 +105,7 @@ export const renderDocs = ({ base }) => {
 			`<section id="feature-${escape(feature.key)}"><h3>${escape(feature.name)}</h3>`,
 			para(feature.description),
 			...(features[feature.key] ?? []).map(para),
+			...(build[feature.key] ? [`<p><strong>What your website builds.</strong> ${escape(build[feature.key])}</p>`] : []),
 			`<ul>${widgets.map((widget) => `<li>${escape(widget.kind)} widget <code>${escape(`${WIDGET_ATTRIBUTE}="${widget.key}"`)}</code></li>`).join('')}</ul>`,
 			routeTable(rows.filter(([, , operation]) => operation['x-ss-feature'] === feature.key)),
 			'</section>',
