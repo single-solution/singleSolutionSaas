@@ -99,7 +99,7 @@ describe('events and totals', () => {
 		expect(answer.status).toBe(202);
 		expect(await answer.json()).toEqual({ accepted: 8 });
 		const db = await env.merchantDb();
-		const events = await db.collection('ss_growth_events').find({}).toArray();
+		const events = await db.collection('ss_growth_analytics_events').find({}).toArray();
 		expect(events).toHaveLength(8);
 		const first = events.find((event) => event.type === 'page_view' && event.data.visit);
 		expect(first).toMatchObject({
@@ -109,7 +109,7 @@ describe('events and totals', () => {
 		});
 		expect(JSON.stringify(events)).not.toContain('secret');
 		expect(first?.expiresAt.toISOString()).toBe('2027-11-01T10:00:00.000Z');
-		const indexes = await db.collection('ss_growth_events').indexes();
+		const indexes = await db.collection('ss_growth_analytics_events').indexes();
 		expect(indexes.find((index) => index.name === 'expiry')).toMatchObject({ key: { expiresAt: 1 }, expireAfterSeconds: 0 });
 		// one document for the day holds every total
 		expect(await db.collection('ss_growth_totals').countDocuments()).toBe(1);
@@ -133,7 +133,7 @@ describe('events and totals', () => {
 		await env.setting('visitor_analytics', 'recordCountry', false);
 		await env.collect([{ type: 'page_view', path: '/later', visit: true }], { 'cf-ipcountry': 'DE' });
 		const db = await env.merchantDb();
-		const later = await db.collection('ss_growth_events').findOne({ path: '/later' });
+		const later = await db.collection('ss_growth_analytics_events').findOne({ path: '/later' });
 		expect(later?.expiresAt.toISOString()).toBe('2026-11-01T10:00:00.000Z');
 		expect(later?.data.country).toBe('(unknown)');
 		await env.switchOn(['visitor_analytics']);

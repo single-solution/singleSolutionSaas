@@ -28,7 +28,11 @@ import { createId } from '@ss/contracts';
 /** Steps of a journey shown in the report (the event log has them all). */
 const JOURNEY_STEPS = 30;
 
-const EVENTS = 'events';
+/**
+ * The raw analytics events (`ss_growth_analytics_events`): not `events`, the collection the kit keeps for the events a
+ * product publishes (`ss_<product>_events`), so Growth can publish events of its own without the two mixing.
+ */
+const EVENTS = 'analytics_events';
 const TOTALS = 'totals';
 
 /** MongoDB's codes for an update that would grow a document past 16 MB. */

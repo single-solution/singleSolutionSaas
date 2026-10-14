@@ -43,7 +43,7 @@ describe('database operations per page view (RT-2)', () => {
 				HERE,
 			),
 		);
-		expect(ops.names).toEqual(['insert ss_growth_events', 'update ss_growth_totals']);
+		expect(ops.names).toEqual(['insert ss_growth_analytics_events', 'update ss_growth_totals']);
 		expect(ops.total).toBe(2);
 	});
 
@@ -109,7 +109,7 @@ describe('the day’s totals (RT-2)', () => {
 		const ops = await env.operationsDuring(() =>
 			env.collect([{ type: 'page_view', path: `/${'long-path-'.repeat(20)}`, visit: true }]),
 		);
-		expect(ops.names).toEqual(['insert ss_growth_events', 'update ss_growth_totals', 'update ss_growth_totals']);
+		expect(ops.names).toEqual(['insert ss_growth_analytics_events', 'update ss_growth_totals', 'update ss_growth_totals']);
 		expect(await db.collection('ss_growth_totals').countDocuments({ day: '2026-10-03' })).toBe(2);
 		const report = await (await env.call('GET', '/v1/analytics?from=2026-10-03&to=2026-10-03', { token: env.server })).json();
 		expect(report.totals).toEqual({ visits: 3, pageViews: 6 });

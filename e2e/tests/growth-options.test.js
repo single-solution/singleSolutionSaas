@@ -237,10 +237,10 @@ describe('Growth options with the real page script (PLAN 0.8.10 G1–G7)', () =>
 				non_interaction: true,
 			}),
 		);
-		await until(async () => (await merchantDb.collection('ss_growth_events').countDocuments({ type: 'vital' })) > 0);
+		await until(async () => (await merchantDb.collection('ss_growth_analytics_events').countDocuments({ type: 'vital' })) > 0);
 
 		// G3: every event carries the session, the browser and system family and the city
-		const events = await merchantDb.collection('ss_growth_events').find({}).toArray();
+		const events = await merchantDb.collection('ss_growth_analytics_events').find({}).toArray();
 		expect(events.length).toBeGreaterThanOrEqual(6);
 		expect(events.every((event) => event.session === session && event.browser === 'chrome' && event.os === 'android')).toBe(
 			true,

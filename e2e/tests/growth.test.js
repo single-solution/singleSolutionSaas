@@ -127,7 +127,7 @@ describe('Growth on the real Portal', () => {
 		expect(dialog.hasAttribute('hidden')).toBe(false);
 		win.dispatchEvent(new win.Event('pagehide'));
 		expect(paths).toEqual(['GET /v1/widget/config']);
-		expect(await merchantDb.collection('ss_growth_events').countDocuments()).toBe(0);
+		expect(await merchantDb.collection('ss_growth_analytics_events').countDocuments()).toBe(0);
 
 		const accept = [...banner.shadowRoot.querySelectorAll('button')].find(
 			(b) => b.textContent === strings['consent.acceptAll'],
@@ -149,7 +149,7 @@ describe('Growth on the real Portal', () => {
 		expect(answers.filter((answer) => answer.startsWith('/v1/collect')).every((a) => a.startsWith('/v1/collect 202'))).toBe(
 			true,
 		);
-		const events = await merchantDb.collection('ss_growth_events').find({}).sort({ type: 1 }).toArray();
+		const events = await merchantDb.collection('ss_growth_analytics_events').find({}).sort({ type: 1 }).toArray();
 		expect(events.map((e) => e.type).sort()).toEqual(['add_to_cart', 'page_view', 'purchase', 'search', 'view_item']);
 		expect(events.every((e) => e.websiteId === websiteId && e.expiresAt instanceof Date)).toBe(true);
 		const [day] = await merchantDb.collection('ss_growth_totals').find({}).toArray();

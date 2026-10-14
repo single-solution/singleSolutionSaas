@@ -26,7 +26,7 @@ describe('detailed analytics (G3)', () => {
 	it('keeps nothing about sessions while the detail is anonymous', async () => {
 		await env.collect([{ type: 'page_view', path: '/', visit: true, session: A, browser: 'chrome', os: 'android' }], HERE);
 		const db = await env.merchantDb();
-		const event = await db.collection('ss_growth_events').findOne({});
+		const event = await db.collection('ss_growth_analytics_events').findOne({});
 		expect(event).not.toHaveProperty('session');
 		expect(event).not.toHaveProperty('city');
 		const report = await (await env.call('GET', '/v1/analytics', { token: env.server })).json();
@@ -73,13 +73,13 @@ describe('detailed analytics (G3)', () => {
 			{ 'x-vercel-ip-country': 'AE', 'x-vercel-ip-city': 'Dubai' },
 		);
 		const db = await env.merchantDb();
-		expect(await db.collection('ss_growth_events').findOne({ session: B })).toMatchObject({
+		expect(await db.collection('ss_growth_analytics_events').findOne({ session: B })).toMatchObject({
 			browser: 'safari',
 			os: 'ios',
 			city: 'Dubai',
 			data: { visit: true, page: 1, source: 'www.google.com', country: 'AE' },
 		});
-		const indexes = await db.collection('ss_growth_events').indexes();
+		const indexes = await db.collection('ss_growth_analytics_events').indexes();
 		expect(indexes.find((index) => index.name === 'by_session')).toMatchObject({
 			partialFilterExpression: { session: { $exists: true } },
 		});
