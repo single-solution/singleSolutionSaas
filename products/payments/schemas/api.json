@@ -684,11 +684,11 @@
 			"properties": {
 				"what": {
 					"type": "string",
-					"enum": ["settings", "texts", "theme", "format", "list"]
+					"enum": ["settings", "texts", "theme", "format"]
 				},
 				"key": {
 					"type": "string",
-					"description": "The setting (<feature>.<setting>), text or list."
+					"description": "The setting (<feature>.<setting>) or text."
 				}
 			}
 		},

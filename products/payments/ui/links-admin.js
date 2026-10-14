@@ -6,10 +6,10 @@
  * id and, last, Turn off (or Turn on) in its More menu. Amounts and times follow the website's Format and time zone.
  * @module
  */
-import { mountWidget } from '@ss/app-kit/widget';
+import { formatText, mountWidget } from '@ss/app-kit/widget';
 import { GATEWAYS, GATEWAY_FEATURES } from '../core/gateways.js';
 import { fromDecimal } from '../core/money.js';
-import { badge, dot, field, fieldGrid, fill, moreMenu, openDialog, splitView } from './admin-kit.js';
+import { badge, dot, field, fieldGrid, moreMenu, openDialog, splitView } from './admin-kit.js';
 import { element } from './dom.js';
 import { formattersOf } from './format.js';
 import { WIDGET_CSS } from './styles.js';
@@ -27,7 +27,7 @@ export const mountLinksAdmin = ({ host, api, config, open, copy = () => {} }) =>
 	/** @param {any} link */
 	const amountOf = (link) =>
 		link.amount === null
-			? fill(t('links.anyAmount'), { min: money(link.minAmount ?? 1, link.currency) })
+			? formatText(t('links.anyAmount'), { min: money(link.minAmount ?? 1, link.currency) })
 			: money(link.amount, link.currency);
 	return mountWidget({
 		host,
@@ -66,7 +66,7 @@ export const mountLinksAdmin = ({ host, api, config, open, copy = () => {} }) =>
 				});
 				const switchTo = async (/** @type {boolean} */ active) => {
 					const answer = await adminCall(api, 'PATCH', `/v1/admin/links/${link.id}`, { active });
-					if (!answer.ok) return fill(t('links.switchFailed'), { reason: answer.data?.detail ?? '' });
+					if (!answer.ok) return formatText(t('links.switchFailed'), { reason: answer.data?.detail ?? '' });
 					put(answer.data);
 					details(answer.data);
 					view.detail.querySelector('[role="status"]')?.replaceChildren(t(active ? 'links.turnedOn' : 'links.turnedOff'));
@@ -83,7 +83,7 @@ export const mountLinksAdmin = ({ host, api, config, open, copy = () => {} }) =>
 								onSelect: () =>
 									openDialog(root, {
 										title: t('links.turnOff'),
-										body: [element(doc, 'p', {}, fill(t('links.turnOffIntro'), { title: link.title }))],
+										body: [element(doc, 'p', {}, formatText(t('links.turnOffIntro'), { title: link.title }))],
 										submitLabel: t('links.turnOff'),
 										cancelLabel: t('links.close'),
 										danger: true,
@@ -115,7 +115,7 @@ export const mountLinksAdmin = ({ host, api, config, open, copy = () => {} }) =>
 						[
 							t('links.field.gateways'),
 							link.gateways.length > 0
-								? link.gateways.map((/** @type {string} */ id) => fill(t(`gateway.${id}`), { name: id })).join(', ')
+								? link.gateways.map((/** @type {string} */ id) => formatText(t(`gateway.${id}`), { name: id })).join(', ')
 								: t('links.allGateways'),
 						],
 						[t('links.field.reference'), link.reference],
@@ -146,7 +146,7 @@ export const mountLinksAdmin = ({ host, api, config, open, copy = () => {} }) =>
 						{ class: 'meta' },
 						[
 							t(link.active ? 'links.active' : 'links.off'),
-							fill(t('links.paidCount'), { count: String(link.paidCount ?? 0) }),
+							formatText(t('links.paidCount'), { count: String(link.paidCount ?? 0) }),
 							date(link.createdAt),
 						].join(' · '),
 					),
@@ -188,7 +188,7 @@ export const mountLinksAdmin = ({ host, api, config, open, copy = () => {} }) =>
 						element(doc, 'input', { type: 'checkbox', name: 'gateway', value: id })
 					);
 					const label = element(doc, 'label', { class: 'check' });
-					label.append(box, fill(t(`gateway.${id}`), { name: id }));
+					label.append(box, formatText(t(`gateway.${id}`), { name: id }));
 					gateways.append(label);
 				}
 				const grid = element(doc, 'div', { class: 'grid' });
@@ -230,7 +230,7 @@ export const mountLinksAdmin = ({ host, api, config, open, copy = () => {} }) =>
 							...(returnUrl.value.trim() ? { returnUrl: returnUrl.value.trim() } : {}),
 							reference: reference.value.trim(),
 						});
-						if (!answer.ok) return fill(t('links.createFailed'), { reason: answer.data?.detail ?? '' });
+						if (!answer.ok) return formatText(t('links.createFailed'), { reason: answer.data?.detail ?? '' });
 						const item = put(answer.data);
 						if (item) list.prepend(item);
 						status.textContent = '';

@@ -924,7 +924,7 @@ describe('the hosted bank page and /pay.js', () => {
 				bic: '',
 				instructions: 'We send our details by email.',
 			},
-			proof: { action: 'https://payments.example.dev/pay/web_1/pay_1/proof', maxBytes: 1000 },
+			proof: { action: 'https://payments.example.dev/pay/web_1/pay_1/proof' },
 			uploaded: false,
 		});
 		document.body.innerHTML = new window.DOMParser().parseFromString(html, 'text/html').body.innerHTML;

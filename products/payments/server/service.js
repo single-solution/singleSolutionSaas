@@ -46,7 +46,7 @@ const RECHECK_MS = 30_000;
 export const SERVER_ACTOR = Object.freeze({ kind: 'server', id: 'server', name: 'Server' });
 
 /** The name recorded for an actor (`by` in histories and refunds). @param {Actor} actor */
-export const nameOf = (actor) => actor.name ?? actor.id;
+const nameOf = (actor) => actor.name ?? actor.id;
 
 /**
  * @param {Product} product
@@ -108,16 +108,11 @@ export const createService = (product) => {
 		const ready = new Set();
 		/** @type {string[]} */
 		let own = [];
-		for (const gateway of /** @type {const} */ ([
-			'stripe',
-			'paypal',
-			'payfast',
-			'payfast_pk',
-			'jazzcash',
-			'easypaisa',
-			'rapid',
-			'generic',
-		])) {
+		// every gateway with keys (bank transfer has none: its details are settings)
+		const keyed = /** @type {Array<Exclude<Gateway, 'bank_transfer'>>} */ (
+			Object.keys(GATEWAY_CONNECTIONS).filter((gateway) => gateway !== 'bank_transfer')
+		);
+		for (const gateway of keyed) {
 			if (!s.on.includes(GATEWAY_FEATURES[gateway])) continue;
 			const keys = await keysOf(s, gateway);
 			if (keys) ready.add(gateway);
@@ -144,6 +139,18 @@ export const createService = (product) => {
 	};
 
 	/**
+	 * Refuse a return or cancel address that is not on the website (422 at its field).
+	 * @param {Site} s @param {{ returnUrl: string | null, cancelUrl: string | null }} input
+	 */
+	const checkReturns = (s, input) => {
+		for (const field of /** @type {const} */ (['returnUrl', 'cancelUrl']))
+			if (!allowedReturn(s, input[field]))
+				throw problem('validation_failed', `${field} must be on https://${s.domain} (or a local address while testing).`, {
+					errors: [{ path: `/${field}`, message: 'not on the website', code: 'origin' }],
+				});
+	};
+
+	/**
 	 * Record an event on the kit (`payments.<type>`: listed by the API, sent through Notifications right after the
 	 * request, retried on later ones).
 	 * @param {Site} s @param {import('../core/payments.js').EVENT_TYPES[number]} type @param {Record<string, unknown>} data
@@ -160,11 +167,7 @@ export const createService = (product) => {
 	 * @param {{ source: 'api' | 'link', linkId?: string | null }} from
 	 */
 	const createPayment = async (s, input, { source, linkId = null }) => {
-		for (const field of /** @type {const} */ (['returnUrl', 'cancelUrl']))
-			if (!allowedReturn(s, input[field]))
-				throw problem('validation_failed', `${field} must be on https://${s.domain} (or a local address while testing).`, {
-					errors: [{ path: `/${field}`, message: 'not on the website', code: 'origin' }],
-				});
+		checkReturns(s, input);
 		if (input.gateway !== null) {
 			if (!takesCurrency(input.gateway, input.currency))
 				throw problem('currency_not_supported', `${input.gateway} does not take ${input.currency}.`);
@@ -179,14 +182,13 @@ export const createService = (product) => {
 	 * Send the payer on to the gateway: a redirect or a form (kept, so reopening the page goes to the same checkout),
 	 * or, for a bank transfer, nothing (its page shows the bank details).
 	 * @param {Site} s @param {PaymentRecord} payment @param {Gateway} gateway
-	 * @returns {Promise<{ ok: true, payment: PaymentRecord } | { ok: false, message: string }>}
+	 * @returns {Promise<{ ok: true, payment: PaymentRecord } | { ok: false }>}
 	 */
 	const start = async (s, payment, gateway) => {
 		if (payment.gateway === gateway && (payment.checkout || gateway === 'bank_transfer')) return { ok: true, payment };
 		// once a gateway has a checkout, the payer goes on there until it fails or the payer cancels
-		if (payment.status === 'pending' && payment.checkout && payment.gateway !== gateway)
-			return { ok: false, message: 'not_pending' };
-		if (!(await available(s, payment.currency)).includes(gateway)) return { ok: false, message: 'gateway_not_ready' };
+		if (payment.status === 'pending' && payment.checkout && payment.gateway !== gateway) return { ok: false };
+		if (!(await available(s, payment.currency)).includes(gateway)) return { ok: false };
 		if (gateway === 'bank_transfer') {
 			const changed = await s.store.payments.change(
 				payment.id,
@@ -194,14 +196,14 @@ export const createService = (product) => {
 				{ gateway, status: 'pending', checkout: null, gatewayRef: null },
 				{ event: 'started', detail: gateway },
 			);
-			return changed ? { ok: true, payment: changed } : { ok: false, message: 'not_pending' };
+			return changed ? { ok: true, payment: changed } : { ok: false };
 		}
 		const keys = /** @type {Record<string, any>} */ (await keysOf(s, gateway));
 		const started = await gateways[gateway].start(
 			{ payment: { ...payment, websiteId: s.websiteId }, keys, urls: urlsOf(s, gateway, payment.id) },
 			ctx,
 		);
-		if (started.kind === 'error') return { ok: false, message: started.message };
+		if (started.kind === 'error') return { ok: false };
 		const checkout =
 			started.kind === 'redirect'
 				? { kind: started.kind, url: started.url }
@@ -212,7 +214,7 @@ export const createService = (product) => {
 			{ gateway, status: 'pending', gatewayRef: started.ref, checkout: /** @type {any} */ (checkout) },
 			{ event: 'started', detail: gateway },
 		);
-		return changed ? { ok: true, payment: changed } : { ok: false, message: 'not_pending' };
+		return changed ? { ok: true, payment: changed } : { ok: false };
 	};
 
 	/**
@@ -298,10 +300,10 @@ export const createService = (product) => {
 			(news.subscriptionId ? await s.store.subscriptions.get(news.subscriptionId) : null) ??
 			(news.ref ? await s.store.subscriptions.byRef(news.ref) : null);
 		if (!found || found.gateway !== gateway) return null;
-		const status = mirrorStatus(gateway, news.status) ?? (news.status === 'active' ? 'active' : null);
+		const status = mirrorStatus(gateway, news.status);
 		/** @type {Partial<SubscriptionRecord>} */
 		const set = {};
-		if (news.ref && news.ref !== found.gatewayRef && !news.ref.startsWith('cs_')) set.gatewayRef = news.ref;
+		if (news.ref && news.ref !== found.gatewayRef) set.gatewayRef = news.ref;
 		if (status && status !== found.status) set.status = status;
 		if (Object.keys(set).length === 0) return found;
 		const updated = await s.store.subscriptions.update(
@@ -462,9 +464,9 @@ export const createService = (product) => {
 	 * transfer that arrives after the merchant canceled the payment is confirmed too, and is then to be refunded
 	 * (`refundDue`, K-13).
 	 * @param {Site} s @param {PaymentRecord} payment @param {Actor} by
-	 * @param {{ reference: string, note: string }} [input]
+	 * @param {{ reference: string, note: string }} input
 	 */
-	const confirmTransfer = async (s, payment, by, { reference, note } = { reference: '', note: '' }) => {
+	const confirmTransfer = async (s, payment, by, { reference, note }) => {
 		if (payment.gateway !== 'bank_transfer' || (payment.status !== 'pending' && payment.status !== 'voided'))
 			throw problem('conflict', 'Only a pending bank transfer can be confirmed.');
 		const paid = await s.store.payments.change(
@@ -490,11 +492,7 @@ export const createService = (product) => {
 	 *   returnUrl: string, cancelUrl: string | null }} input checked by `checkSubscriptionInput`
 	 */
 	const subscribe = async (s, input) => {
-		for (const field of /** @type {const} */ (['returnUrl', 'cancelUrl']))
-			if (!allowedReturn(s, input[field]))
-				throw problem('validation_failed', `${field} must be on https://${s.domain} (or a local address while testing).`, {
-					errors: [{ path: `/${field}`, message: 'not on the website', code: 'origin' }],
-				});
+		checkReturns(s, input);
 		const keys = s.on.includes(input.gateway) ? await keysOf(s, input.gateway) : null;
 		if (!keys) throw problem('gateway_not_ready', `${input.gateway} is off or not connected for this website.`);
 		const subscription = await s.store.subscriptions.add(input);
@@ -543,7 +541,6 @@ export const createService = (product) => {
 		view,
 		payUrl,
 		linkUrl,
-		urlsOf,
 		keysOf,
 		available,
 		allowedReturn,

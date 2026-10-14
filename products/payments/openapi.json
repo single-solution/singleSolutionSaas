@@ -6133,13 +6133,12 @@
 							"settings",
 							"texts",
 							"theme",
-							"format",
-							"list"
+							"format"
 						]
 					},
 					"key": {
 						"type": "string",
-						"description": "The setting (<feature>.<setting>), text or list."
+						"description": "The setting (<feature>.<setting>) or text."
 					}
 				}
 			},

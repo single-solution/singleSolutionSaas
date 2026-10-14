@@ -7,20 +7,13 @@
  * id).
  * @module
  */
-import { mountWidget } from '@ss/app-kit/widget';
+import { formatText, mountWidget } from '@ss/app-kit/widget';
 import { element } from './dom.js';
 import { formattersOf } from './format.js';
 import { WIDGET_CSS } from './styles.js';
 
 /** @typedef {import('./widget.js').WidgetConfig} WidgetConfig */
 /** @typedef {(path: string, init?: { method?: string, body?: unknown }) => Promise<{ ok: boolean, status: number, data: any }>} VisitorCall */
-
-/**
- * Fill `{name}` placeholders.
- * @param {string} text @param {Record<string, string>} values
- */
-const fill = (text, values) =>
-	text.replace(/\{(\w+)\}/g, (match, key) => (Object.hasOwn(values, key) ? String(values[key]) : match));
 
 /**
  * @param {{ host: HTMLElement, config: WidgetConfig, call: VisitorCall, go: (url: string) => void }} input `go`: send
@@ -60,7 +53,7 @@ export const mountPayButton = async ({ host, config, call, go }) => {
 				else if (data.status === 'voided')
 					box.append(element(doc, 'p', { class: 'amount' }, `${amount} · ${t('button.voided')}`));
 				else {
-					box.append(element(doc, 'button', { type: 'submit' }, fill(t('button.pay'), { amount })));
+					box.append(element(doc, 'button', { type: 'submit' }, formatText(t('button.pay'), { amount })));
 					box.addEventListener('submit', (event) => {
 						event.preventDefault();
 						go(data.checkoutUrl);
@@ -74,13 +67,20 @@ export const mountPayButton = async ({ host, config, call, go }) => {
 			/** @type {HTMLInputElement | null} */
 			let amountInput = null;
 			if (data.amount === null) {
-				box.append(element(doc, 'label', { for: 'ss-pay-amount' }, fill(t('link.amount'), { currency: data.currency })));
+				box.append(
+					element(doc, 'label', { for: 'ss-pay-amount' }, formatText(t('link.amount'), { currency: data.currency })),
+				);
 				amountInput = /** @type {HTMLInputElement} */ (
 					element(doc, 'input', { id: 'ss-pay-amount', inputmode: 'decimal', required: '' })
 				);
 				box.append(
 					amountInput,
-					element(doc, 'span', { class: 'meta' }, fill(t('link.amountHelp'), { min: money(data.minAmount, data.currency) })),
+					element(
+						doc,
+						'span',
+						{ class: 'meta' },
+						formatText(t('link.amountHelp'), { min: money(data.minAmount, data.currency) }),
+					),
 				);
 			} else box.append(element(doc, 'p', { class: 'amount' }, money(data.amount, data.currency)));
 			const name = /** @type {HTMLInputElement} */ (
@@ -127,7 +127,7 @@ export const mountPayButton = async ({ host, config, call, go }) => {
 				const field = made.data?.errors?.[0]?.path;
 				status.textContent =
 					field === '/amount'
-						? fill(t('link.invalidAmount'), { min: money(data.minAmount ?? 1, data.currency) })
+						? formatText(t('link.invalidAmount'), { min: money(data.minAmount ?? 1, data.currency) })
 						: field === '/email'
 							? t('link.invalidEmail')
 							: field === '/gateway'

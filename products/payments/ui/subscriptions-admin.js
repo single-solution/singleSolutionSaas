@@ -5,9 +5,9 @@
  * it at the gateway after a confirmation (`subscriptions.cancel`). Times follow the website's Format and time zone.
  * @module
  */
-import { mountWidget } from '@ss/app-kit/widget';
+import { formatText, mountWidget } from '@ss/app-kit/widget';
 import { SUBSCRIPTION_STATUSES } from '../core/payments.js';
-import { badge, dot, fieldGrid, fill, listSection, moreMenu, openDialog, splitView } from './admin-kit.js';
+import { badge, dot, fieldGrid, listSection, moreMenu, openDialog, splitView } from './admin-kit.js';
 import { element } from './dom.js';
 import { formattersOf } from './format.js';
 import { WIDGET_CSS } from './styles.js';
@@ -67,13 +67,13 @@ export const mountSubscriptionsAdmin = ({ host, api, config, copy = () => {} }) 
 						onSelect: () =>
 							openDialog(root, {
 								title: t('subs.cancel'),
-								body: [element(doc, 'p', {}, fill(t('subs.cancelIntro'), { plan: subscription.plan }))],
+								body: [element(doc, 'p', {}, formatText(t('subs.cancelIntro'), { plan: subscription.plan }))],
 								submitLabel: t('subs.cancel'),
 								cancelLabel: t('subs.keep'),
 								danger: true,
 								onSubmit: async () => {
 									const answer = await adminCall(api, 'POST', `/v1/admin/subscriptions/${subscription.id}/cancel`);
-									if (!answer.ok) return fill(t('subs.cancelFailed'), { reason: answer.data?.detail ?? '' });
+									if (!answer.ok) return formatText(t('subs.cancelFailed'), { reason: answer.data?.detail ?? '' });
 									shown.set(answer.data.id, answer.data);
 									const item = list.querySelector(`li[data-id="${answer.data.id}"]`);
 									if (item) row(answer.data, /** @type {HTMLElement} */ (item));

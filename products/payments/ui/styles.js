@@ -24,7 +24,6 @@ ul { list-style: none; margin: 0; padding: 0; }
 li { padding: 8px 0; border-top: 1px solid var(--ss-color-border, #e5e7eb); overflow-wrap: anywhere; }
 .meta { display: block; font-size: 0.8em; opacity: 0.7; }
 .amount { font-size: 1.3em; font-weight: 600; margin: 4px 0 8px; }
-.details { margin-top: 8px; padding: 8px; border-radius: var(--ss-radius, 8px); background: rgba(127, 127, 127, 0.08); }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; } .actions button { margin-top: 8px; }
 :host { container-type: inline-size; }
 .head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }

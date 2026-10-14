@@ -1,7 +1,7 @@
 /**
  * The product's API function: every kit route (`/.well-known/ss-connect`, `/.well-known/ss-events`, `/sso`,
- * `/openapi.json`, `/v1/tickets`, `/v1/data-rights/*`, `/v1/dashboard/*`) and every product route (`/widget.js`, `/docs`, `/v1/*`),
- * reached through the rewrites in next.config.js. The kit strips the `/api` prefix and finishes its work after the
+ * `/openapi.json`, `/v1/tickets`, `/v1/data-rights/*`, `/v1/dashboard/*`) and every product route (`/widget.js`, `/docs`,
+ * `/pay.js`, `/pay/*`, `/l/*`, `/return/*`, `/v1/*`), reached through the rewrites in next.config.js. The kit strips the `/api` prefix and finishes its work after the
  * response with Next.js `after`.
  */
 import { after } from 'next/server.js';

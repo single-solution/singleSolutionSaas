@@ -1,11 +1,9 @@
 {
 	"page.title": "Payment",
-	"page.amount": "Amount",
 	"page.choose": "Choose how to pay",
 	"page.continue": "Continue to {gateway}",
 	"page.continueHelp": "You will finish paying on the payment page of {gateway}.",
 	"page.paid": "Payment received. Thank you!",
-	"page.pending": "We are waiting for the confirmation of your payment. You can close this page.",
 	"page.failed": "The payment did not go through.",
 	"page.cancelled": "The payment was canceled.",
 	"page.refunded": "This payment was refunded.",

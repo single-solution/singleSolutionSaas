@@ -10,6 +10,7 @@
 import { formatMoney, formatText } from '@ss/app-kit';
 import { themeCss } from '@ss/app-kit/widget';
 import { BANK_DETAILS } from '../core/gateways.js';
+import { PROOF_TYPES } from '../core/widgets.js';
 
 /** Security headers of the hosted pages (forms may post to the gateways' own https pages). */
 export const PAGE_HEADERS = Object.freeze({
@@ -247,7 +248,7 @@ ${fields.map(([name, value]) => `<input type="hidden" name="${escape(name)}" val
  * Bank-transfer details, with the proof upload when the merchant allows it and storage is connected.
  * @param {PageLook & { business: string, amount: number, currency: string, reference: string,
  *   bank: import('../core/gateways.js').BankTransfer,
- *   proof: { action: string, maxBytes: number } | null, uploaded: boolean }} input
+ *   proof: { action: string } | null, uploaded: boolean }} input
  */
 export const renderBankPage = ({
 	texts,
@@ -274,7 +275,7 @@ export const renderBankPage = ({
 		proof && !uploaded
 			? `<form method="post" action="${escape(proof.action)}" data-proof data-uploading="${escape(t('bank.uploading'))}" data-done="${escape(t('bank.uploaded'))}" data-failed="${escape(t('bank.uploadFailed'))}">
 <label for="proof">${escape(t('bank.proof'))}</label>
-<input id="proof" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" required>
+<input id="proof" type="file" accept="${Object.keys(PROOF_TYPES).join(',')}" required>
 <label for="proof-reference">${escape(t('bank.proofReference'))}</label>
 <input id="proof-reference" name="reference" maxlength="120" autocomplete="off">
 <button type="submit">${escape(t('bank.upload'))}</button>
@@ -303,7 +304,7 @@ ${upload}`,
 
 /**
  * The result page (or a page that says the payment cannot be shown).
- * @param {PageLook & { state: 'paid' | 'pending' | 'failed' | 'cancelled' | 'voided' | 'refundDue' | 'refunded' | 'unavailable' | 'notFound' | 'error' | 'noGateway',
+ * @param {PageLook & { state: 'paid' | 'failed' | 'cancelled' | 'voided' | 'refundDue' | 'refunded' | 'unavailable' | 'notFound' | 'error',
  *   business?: string, amount?: number, currency?: string, backUrl?: string | null, retry?: string | null }} input
  */
 export const renderResultPage = ({

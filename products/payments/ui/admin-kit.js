@@ -1,21 +1,14 @@
 /**
  * What the admin widgets share (PLAN 0.6, 0.8.7): the list-and-detail layout (the list beside the selected item where
  * the widget is wide; on a narrow one the list, then the item alone with Back), dialogs for secondary forms, the More
- * menu (⋯) with a destructive action last in danger text, field grids, status dots and badges, and texts with
- * `{placeholders}`. Text is always set as text, never as HTML.
+ * menu (⋯) with a destructive action last in danger text, field grids, status dots and badges. Text is always set as
+ * text, never as HTML.
  * @module
  */
 import { element } from './dom.js';
 
 /** @typedef {'success' | 'warning' | 'danger' | 'neutral'} Tone */
 /** @typedef {{ label: string, onSelect: () => void, danger?: boolean }} MenuItem */
-
-/**
- * A text with its `{placeholders}` filled.
- * @param {string} text @param {Record<string, string>} values
- */
-export const fill = (text, values) =>
-	text.replace(/\{(\w+)\}/g, (match, key) => (Object.hasOwn(values, key) ? String(values[key]) : match));
 
 /**
  * A status badge (green, amber and red only for status, PLAN 0.6).

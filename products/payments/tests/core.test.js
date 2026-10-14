@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BANK_DETAILS, GATEWAYS, bankTransfer, gatewaysFor, isGateway, takesCurrency } from '../core/gateways.js';
-import { MAX_AMOUNT, exponentOf, formatMoney, fromDecimal, isAmount, isCurrency, toDecimal } from '../core/money.js';
+import { MAX_AMOUNT, formatMoney, fromDecimal, isAmount, isCurrency, toDecimal } from '../core/money.js';
 import {
 	EVENT_DATA_LIMIT,
 	checkCustomer,
@@ -32,9 +32,6 @@ describe('money', () => {
 		expect(isAmount(MAX_AMOUNT + 1)).toBe(false);
 	});
 	it('turns minor units into decimals and back, by the currency exponent', () => {
-		expect(exponentOf('JPY')).toBe(0);
-		expect(exponentOf('KWD')).toBe(3);
-		expect(exponentOf('USD')).toBe(2);
 		expect(toDecimal(1050, 'EUR')).toBe('10.50');
 		expect(toDecimal(5, 'USD')).toBe('0.05');
 		expect(toDecimal(500, 'JPY')).toBe('500');

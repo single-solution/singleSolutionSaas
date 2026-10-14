@@ -385,7 +385,7 @@ export const createRoutes = (product) => {
 	 * @param {Site} s
 	 * @param {import('../adapters/store.js').LinkRecord} link
 	 * @param {{ amount: unknown, gateway: unknown, name: unknown, email: unknown }} input
-	 * @returns {Promise<{ ok: true, payment: import('../adapters/store.js').PaymentRecord } | { ok: false, field: string, key: string, values?: Record<string, string> }>}
+	 * @returns {Promise<{ ok: true, payment: import('../adapters/store.js').PaymentRecord } | { ok: false, field: string, key: string }>}
 	 */
 	const payLink = async (s, link, input) => {
 		const amount = link.amount ?? fromDecimal(input.amount, link.currency);
@@ -466,9 +466,7 @@ export const createRoutes = (product) => {
 					currency: payment.currency,
 					reference: payment.reference || payment.id,
 					bank: bankTransfer(bank),
-					proof: storage
-						? { action: `/pay/${websiteId}/${payment.id}/proof`, maxBytes: Number(bank.proofMaxMb) * 1_048_576 }
-						: null,
+					proof: storage ? { action: `/pay/${websiteId}/${payment.id}/proof` } : null,
 					uploaded: payment.proof !== null,
 				}),
 			);

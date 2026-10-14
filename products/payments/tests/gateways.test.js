@@ -11,6 +11,7 @@ import { webhookSignature, wholeUnits } from '../adapters/gateways/rapid.js';
 import { checkoutSignature } from '../adapters/gateways/generic.js';
 import { call, failure } from '../adapters/gateways/types.js';
 import { formFields, phpUrlencode, signTimestamped, verifyTimestamped } from '../adapters/util.js';
+import guide from '../docs/guide.json' with { type: 'json' };
 import { createFakeGateways } from './helpers.js';
 
 const NOW = Date.parse('2026-10-01T10:00:00Z');
@@ -1154,6 +1155,14 @@ describe('generic adapter', () => {
 			news: [{ kind: 'payment', paymentId: PAYMENT.id, ref: null, outcome: 'failed', capture: null }],
 		});
 		expect(await generic.notice?.(post({ paymentId: PAYMENT.id, status: 'maybe' }), keys, ctx)).toEqual({ ok: false });
+		// every status the docs name for this notice is taken (the docs once said canceled, which was refused)
+		const named = /status: ([a-z_ |]+),/.exec(guide.generic)?.[1]?.split(' | ') ?? [];
+		expect(named).toEqual(['paid', 'failed', 'cancelled']);
+		for (const status of named)
+			expect(await generic.notice?.(post({ paymentId: PAYMENT.id, status }), keys, ctx)).toMatchObject({
+				ok: true,
+				news: [{ outcome: status }],
+			});
 		expect(
 			await generic.notice?.(incoming({ 'ss-signature': signTimestamped('x', keys.secret, NOW) }, 'x'), keys, ctx),
 		).toEqual({ ok: false });

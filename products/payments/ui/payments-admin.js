@@ -10,10 +10,10 @@
  * amounts with their currency codes.
  * @module
  */
-import { mountWidget } from '@ss/app-kit/widget';
+import { formatText, mountWidget } from '@ss/app-kit/widget';
 import { fromDecimal, toDecimal } from '../core/money.js';
 import { PAYMENT_STATUSES, paymentsCsv } from '../core/payments.js';
-import { badge, dot, field, fieldGrid, fill, listSection, moreMenu, openDialog, splitView } from './admin-kit.js';
+import { badge, dot, field, fieldGrid, listSection, moreMenu, openDialog, splitView } from './admin-kit.js';
 import { element } from './dom.js';
 import { formattersOf } from './format.js';
 import { WIDGET_CSS } from './styles.js';
@@ -44,7 +44,7 @@ export const mountPaymentsAdmin = ({ host, api, config, save, open, copy = () =>
 	const can = (/** @type {string} */ feature) => config.features.includes(feature);
 	const { money, date } = formattersOf(config, host);
 	/** @param {string | null} gateway */
-	const gatewayName = (gateway) => (gateway ? fill(t(`gateway.${gateway}`), { name: gateway }) : '');
+	const gatewayName = (gateway) => (gateway ? formatText(t(`gateway.${gateway}`), { name: gateway }) : '');
 	return mountWidget({
 		host,
 		theme: config.theme,
@@ -102,7 +102,7 @@ export const mountPaymentsAdmin = ({ host, api, config, save, open, copy = () =>
 			/** @param {{ ok: boolean, status: number }} answer */
 			const failed = (answer) => (answer.status === 0 && !api.tickets.current() ? t('admin.signedOut') : t('admin.failed'));
 			/** @param {any} answer @param {string} key */
-			const reasonOf = (answer, key) => fill(t(key), { reason: answer.data?.detail ?? '' });
+			const reasonOf = (answer, key) => formatText(t(key), { reason: answer.data?.detail ?? '' });
 
 			/** The counts of the payments the search matches: per status (in the filter), per gateway and in all. */
 			const loadCounts = async () => {
@@ -157,7 +157,7 @@ export const mountPaymentsAdmin = ({ host, api, config, save, open, copy = () =>
 						openDialog(root, {
 							title: t('admin.refund'),
 							body: [
-								field(doc, fill(t('admin.refundAmount'), { currency: payment.currency }), amount),
+								field(doc, formatText(t('admin.refundAmount'), { currency: payment.currency }), amount),
 								field(doc, t('admin.refundReason'), reason),
 							],
 							submitLabel: t('admin.refund'),
@@ -194,7 +194,12 @@ export const mountPaymentsAdmin = ({ host, api, config, save, open, copy = () =>
 						openDialog(root, {
 							title: t('admin.confirm'),
 							body: [
-								element(doc, 'p', {}, fill(t('admin.confirmIntro'), { amount: money(payment.amount, payment.currency) })),
+								element(
+									doc,
+									'p',
+									{},
+									formatText(t('admin.confirmIntro'), { amount: money(payment.amount, payment.currency) }),
+								),
 								field(doc, t('admin.confirmReference'), reference),
 								field(doc, t('admin.confirmNote'), remark),
 							],
@@ -320,7 +325,9 @@ export const mountPaymentsAdmin = ({ host, api, config, save, open, copy = () =>
 						date(payment.createdAt),
 						gatewayName(payment.gateway),
 						payment.customer?.email ?? '',
-						payment.refunded > 0 ? fill(t('admin.refunded'), { amount: money(payment.refunded, payment.currency) }) : '',
+						payment.refunded > 0
+							? formatText(t('admin.refunded'), { amount: money(payment.refunded, payment.currency) })
+							: '',
 					]
 						.filter(Boolean)
 						.join(' · '),
