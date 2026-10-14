@@ -96,7 +96,7 @@ export const pruneCalls = (target, lines) => {
  * @param {string} product the product id (for errors)
  * @returns {Promise<Record<string, unknown>>}
  */
-export const finishProduct = async (fetch, target, product) => {
+const finishProduct = async (fetch, target, product) => {
 	/** @type {Record<string, unknown>} */
 	const summary = {};
 	/** @type {string | null} */

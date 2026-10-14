@@ -10,26 +10,26 @@ import { ObjectId } from 'mongodb';
 import { defineMapping } from '../mapping.js';
 
 export { SHOP_GUEST_COOKIE, SHOP_IDS, SHOP_MAPPING, SHOP_PASSWORDS, seedShop, shopHex, shopSource } from './shop.js';
-export { SB_IDS, SB_PASSWORDS, sbHex, sbSource, seedSistersBoutique } from './sisters-boutique.js';
+export { SB_IDS, sbHex, sbSource } from './sisters-boutique.js';
 
 /** The source documents (ids as hex; `seed` stores them as ObjectIds). */
 export const FEEDBACK = Object.freeze([
 	{
 		_id: '64b0c0ffee00000000000001',
-		message: 'Love the new pedestal fans',
-		email: 'Ayesha@Example.com',
+		message: 'Love the new autumn range',
+		email: 'Chloe@Example.com',
 		createdAt: '2024-01-05T10:00:00Z',
 	},
 	{
 		_id: '64b0c0ffee00000000000002',
-		message: 'When is the 56 inch model back?',
+		message: 'When is the large size back?',
 		email: null,
 		createdAt: '2024-02-01T09:30:00Z',
 	},
 	{
 		_id: '64b0c0ffee00000000000003',
-		message: 'Love the new pedestal fans',
-		email: 'ayesha@example.com',
+		message: 'Love the new autumn range',
+		email: 'chloe@example.com',
 		createdAt: '2024-01-05T10:05:00Z',
 	},
 	{
@@ -43,7 +43,7 @@ export const FEEDBACK = Object.freeze([
 	{
 		_id: '64b0c0ffee00000000000006',
 		message: 'Delivery was quick, thank you',
-		email: 'bilal@example.com',
+		email: 'sam@example.com',
 		createdAt: '2024-04-10T15:45:00Z',
 	},
 ]);

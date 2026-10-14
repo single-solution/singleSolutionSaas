@@ -141,20 +141,20 @@ describe('ss-import read', () => {
 		expect(records).toEqual([
 			{
 				id: 'note_64b0c0ffee00000000000001',
-				text: 'Love the new pedestal fans',
-				email: 'ayesha@example.com',
+				text: 'Love the new autumn range',
+				email: 'chloe@example.com',
 				createdAt: '2024-01-05T10:00:00.000Z',
 			},
 			{
 				id: 'note_64b0c0ffee00000000000002',
-				text: 'When is the 56 inch model back?',
+				text: 'When is the large size back?',
 				email: null,
 				createdAt: '2024-02-01T09:30:00.000Z',
 			},
 			{
 				id: 'note_64b0c0ffee00000000000006',
 				text: 'Delivery was quick, thank you',
-				email: 'bilal@example.com',
+				email: 'sam@example.com',
 				createdAt: '2024-04-10T15:45:00.000Z',
 			},
 		]);

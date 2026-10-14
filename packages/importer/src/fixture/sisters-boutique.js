@@ -19,8 +19,7 @@ const oid = (n) => new ObjectId(sbHex(n));
 /** @param {string} text */
 const at = (text) => new Date(text);
 
-/** The sample's passwords (the source keeps only their bcrypt hashes, cost 4). */
-export const SB_PASSWORDS = Object.freeze({ member: 'example member password 1', staff: 'example staff password 1' });
+/** bcrypt hashes (cost 4) of example passwords, as the source keeps them. */
 const HASHES = Object.freeze({
 	member: '$2b$04$0MXEpvFPBgESrCk00BnA5epvMzrSafxwjsI3i0pBvCjOct8gdes02',
 	staff: '$2b$04$N4fK5GDb3sHXXaufZnJQEeJRWBNSpBSIyg4VCLlc5CRKERmKm0QXi',
@@ -1130,11 +1129,3 @@ export const sbSource = () => ({
 		{ _id: oid(83), customerId: oid(19), balance: 5, lifetimeEarned: 5, pendingFromShipping: 0, transactions: [] },
 	],
 });
-
-/**
- * Store the sample in a (test) database.
- * @param {import('mongodb').Db} db
- */
-export const seedSistersBoutique = async (db) => {
-	for (const [name, docs] of Object.entries(sbSource())) await db.collection(name).insertMany(docs);
-};

@@ -33,10 +33,10 @@ const hex = (n) => oid(n).toHexString();
 
 /** A store-like source: staff and customers who share a phone, one brand in two categories, embedded messages. */
 const SOURCE = {
-	staff: [{ _id: oid(1), phone: '03001111111', name: 'Ali at the desk', hash: '$2b$10$staff' }],
+	staff: [{ _id: oid(1), phone: '07700900111', name: 'Ali at the desk', hash: '$2b$10$staff' }],
 	customers: [
-		{ _id: oid(2), phone: '+923001111111', name: 'Ali' },
-		{ _id: oid(3), phone: '+923002222222', name: 'Sara' },
+		{ _id: oid(2), phone: '+447700900111', name: 'Ali' },
+		{ _id: oid(3), phone: '+447700900222', name: 'Sara' },
 	],
 	brands: [
 		{ _id: oid(4), slug: 'acme', categories: ['phones'] },
@@ -181,8 +181,8 @@ describe('the import framework (IMP-21)', () => {
 		]);
 		// the staff member and the customer on one phone are one user with the customer's id
 		expect(await recordsOf(dir, '01-accounts.users.ndjson')).toEqual([
-			{ id: `usr_${hex(2)}`, name: 'Ali', phone: '+923001111111', passwordHash: '$2b$10$staff', role: 'staff' },
-			{ id: `usr_${hex(3)}`, name: 'Sara', phone: '+923002222222' },
+			{ id: `usr_${hex(2)}`, name: 'Ali', phone: '+447700900111', passwordHash: '$2b$10$staff', role: 'staff' },
+			{ id: `usr_${hex(3)}`, name: 'Sara', phone: '+447700900222' },
 		]);
 		expect(await recordsOf(dir, '02-ecommerce.brands.ndjson')).toEqual([
 			{ id: `brd_${hex(4)}`, slug: 'acme', categories: ['phones', 'tablets'] },
@@ -288,7 +288,7 @@ describe('send: settings, prune and the final pass', () => {
 		const { dir, product, products, slept, sleep } = await sendSetup({ busyOnce: true });
 		const table = {
 			ecommerce: {
-				format: { currency: 'PKR', locale: 'en' },
+				format: { currency: 'EUR', locale: 'en' },
 				settings: { 'checkout.guests': true, 'alerts.channels': ['whatsapp'], 'checkout.nope': 1, nodot: 1 },
 				lists: { couriers: [{ key: 'post' }], missing: [] },
 			},
@@ -298,7 +298,7 @@ describe('send: settings, prune and the final pass', () => {
 		expect(dry.ok).toBe(false);
 		expect(dry.settings).toEqual({
 			changes: [
-				{ product: 'ecommerce', kind: 'format', key: 'currency', from: 'USD', to: 'PKR', source: 'default' },
+				{ product: 'ecommerce', kind: 'format', key: 'currency', from: 'USD', to: 'EUR', source: 'default' },
 				// read from the store, over its product default: written explicitly (RT-15)
 				{
 					product: 'ecommerce',
@@ -328,7 +328,7 @@ describe('send: settings, prune and the final pass', () => {
 			sleep,
 		});
 		expect(slept).toEqual([2000]);
-		expect(product.format).toMatchObject({ currency: 'PKR' });
+		expect(product.format).toMatchObject({ currency: 'EUR' });
 		expect(product.lists.couriers).toEqual([{ key: 'post' }]);
 		expect(product.features.checkout?.values.channels).toEqual({ value: ['whatsapp'], source: 'website' });
 		expect(real.settings.refused).toEqual([

@@ -101,13 +101,6 @@ export const FEATURES = Object.freeze({
  */
 export const PENDING = Object.freeze({
 	'ecommerce loyalty.returnPoints': 'E39',
-	'ecommerce landing_pages.auto': 'E43',
-	'ecommerce landing_pages.autoMinProducts': 'E43',
-	'ecommerce landing_pages.autoMinInStockVariants': 'E43',
-	'ecommerce landing_pages.autoCopy': 'E43',
-	'ecommerce landing_pages.autoTitle': 'E43',
-	'ecommerce landing_pages.autoDescription': 'E43',
-	'ecommerce seo.autoSeo': 'E43',
 });
 
 /**
@@ -440,10 +433,15 @@ export const settingsPlan = (values) => {
 		payments: {
 			format,
 			settings: {
-				'bank_transfer.accountTitle': store.bankAccountTitle,
+				// SB's account title is the account holder's name; it keeps no routing number, sort code, branch code or BIC
+				'bank_transfer.accountHolder': store.bankAccountTitle,
 				'bank_transfer.bankName': store.bankName,
 				'bank_transfer.accountNumber': store.bankAccountNumber,
+				'bank_transfer.routingNumber': '',
+				'bank_transfer.sortCode': '',
+				'bank_transfer.branchCode': '',
 				'bank_transfer.iban': store.bankIban,
+				'bank_transfer.bic': '',
 				// SB offers a transfer only with an account number or IBAN (`packages/shared/src/storeSettings.ts`:142-144)
 				'bank_transfer.requireDetails': true,
 				'bank_transfer.instructions': '',

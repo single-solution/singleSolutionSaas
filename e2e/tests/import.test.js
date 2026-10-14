@@ -143,7 +143,7 @@ describe('importing a store into a product (K10, ss-import)', () => {
 			'note_64b0c0ffee00000000000002',
 			'note_64b0c0ffee00000000000001',
 		]);
-		expect(list.json.items[2]).toMatchObject({ email: 'ayesha@example.com', createdAt: '2024-01-05T10:00:00.000Z' });
+		expect(list.json.items[2]).toMatchObject({ email: 'chloe@example.com', createdAt: '2024-01-05T10:00:00.000Z' });
 		expect(await verify({ dir, products, fetch })).toEqual({
 			ok: true,
 			steps: [{ product: 'notes', collection: 'notes', expected: 3, imported: 3, stored: 3, counted: 3, match: true }],

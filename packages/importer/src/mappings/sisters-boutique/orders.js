@@ -40,7 +40,7 @@ import { TABLES as PEOPLE } from './people.js';
 /** @typedef {{ at: string, kind: string, points: number, orderId: string | null, note: string }} PointsEntry */
 
 /** Lookup table: an order's id by its number (loyalty transactions name orders by number). */
-export const ORDER_NUMBERS = 'order-numbers';
+const ORDER_NUMBERS = 'order-numbers';
 
 /**
  * SB's statuses with their roles (`packages/db/src/models/Order.ts`:3; labels `packages/shared/src/notifications/

@@ -91,7 +91,7 @@ run checks everything.
 owner go of 2026-10-14) reads SB's MongoDB as its Mongoose models keep it (`packages/db/src/models` at 8f809d8) into
 Accounts and Ecommerce, and SB's settings for Accounts, Ecommerce, Notifications, Payments and Growth. SB has no chat,
 reviews, returns, stock alerts, wishlists or analytics collection, so nothing goes to Chat or Growth records.
-`@ss/importer/fixture` holds SB-shaped sample records with fake values (`sbSource`, `seedSistersBoutique`) covering every
+`@ss/importer/fixture` holds SB-shaped sample records with fake values (`sbSource`) covering every
 kind and the edge cases below; the tests read them through the mapping, send and verify them, and run every record,
 setting and list through the products' own import checks, settings schemas and list checks (read from this repository).
 
@@ -155,7 +155,7 @@ threshold, the totals rules (`total_half_up`, `first`, `one_after_items`, `after
 `goods_after_discounts`), loyalty (1 point = Rs 1, earned on the total at placement, guests too, `returnPoints: keep`),
 staff alerts, SEO, the Google feed, landing pages, the payments' bank details and Growth's tags, robots and notice bar;
 lists `order_flow`, `role_prices` (the member discount), `couriers` and `delivery_zones` (empty). `PENDING` lists the
-settings written before their PLAN item is built (E39, E43): until then the products refuse them as "No such setting".
+settings written before their PLAN item is built (E39): until then the products refuse them as "No such setting".
 
 **Entered by hand** (the per-store table, `send --settings <file>`): the feature switches (`FEATURES`, and `import`);
 business.json (name, contact, `timeZone: Asia/Karachi`, country PK); every secret; and, when SB has no saved row for them
