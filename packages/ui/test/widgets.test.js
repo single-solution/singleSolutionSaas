@@ -8,10 +8,7 @@ import {
 	Badge,
 	FieldGrid,
 	IconBadge,
-	THEME_SCRIPT,
-	THEME_STORAGE_KEY,
 	ThemeScript,
-	ThemeToggle,
 	BarChart,
 	Button,
 	ButtonLink,
@@ -52,6 +49,8 @@ import {
 	fieldErrors,
 	useToast,
 } from '../src/index.js';
+import { THEME_SCRIPT, THEME_STORAGE_KEY } from '../src/theme-script.js';
+import { ThemeToggle } from '../src/theme.js';
 import { act, allByRole, byLabel, byText, cleanup, click, keydown, render, type } from '../src/testing.js';
 
 afterEach(() => {
@@ -754,7 +753,7 @@ describe('AppShell', () => {
 							{ href: '/websites', label: 'Websites', icon: 'globe', current: true },
 							{ href: '/team', label: 'Team' },
 							{ href: '/usage', label: 'Usage', icon: 'wallet', kind: 'credit' },
-							{ href: '/home', label: 'Home', icon: 'grid' },
+							{ href: '/home', label: 'Home', icon: 'home' },
 						],
 					},
 				]}
