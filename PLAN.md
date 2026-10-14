@@ -3263,6 +3263,11 @@ deal's folder; the promotions widget uploads, changes the alt text or removes a 
   or site-relative; other links follow the moderation link policy); the widget renders them; an AI answer splits on
   `---` lines into at most `bubbles` messages.
 - Data: `messages.format`.
+- Built (rendering, 2026-10-14, 922eabd6): until then the widgets showed these answers as plain text (raw `**`, dashes,
+  pipes). Now the chat and inbox widgets render AI and staff answers (bold, italic, inline code and code blocks, lists,
+  tables, links) from DOM nodes only (no HTML from a message, no images or styles), links only through `safeHref`, new
+  tab, `rel="noopener noreferrer nofollow"`; the visitor's own text, bot messages and notes stay plain; tables and
+  code scroll inside the bubble; no regular-expression lookbehind (Safari before 16.4). Widget +1.5 KB gzipped.
 
 **C3. Fallback answers.**
 
