@@ -13,6 +13,7 @@
  */
 import { formatText, mountWidget } from '@ss/app-kit/widget';
 import { customInputs, datesOf, errorText, fieldMaker, setHidden, textsOf } from './common.js';
+import { ADDRESS_LIMITS } from '../core/widgets.js';
 import { element } from './dom.js';
 import { card, chips, copyable, dot, moreMenu, openDialog } from './parts.js';
 import { WIDGET_CSS } from './styles.js';
@@ -22,19 +23,6 @@ import { adminCall } from './tickets.js';
 const USER_CHIPS = /** @type {const} */ (['', 'active', 'pending', 'invited', 'blocked', 'deletion']);
 /** The status chips of role requests. */
 const REQUEST_CHIPS = /** @type {const} */ (['', 'pending', 'invited', 'expired', 'completed', 'declined']);
-/** Address fields as the edit dialog shows them. */
-const ADDRESS_FIELDS = /** @type {const} */ ([
-	'label',
-	'name',
-	'line1',
-	'line2',
-	'area',
-	'city',
-	'region',
-	'postalCode',
-	'country',
-	'phone',
-]);
 
 /** @typedef {import('./common.js').Answer} Answer */
 /** @typedef {Record<string, any>} User */
@@ -519,8 +507,8 @@ export const mountUsersAdmin = ({ host, api, config }) => {
 					fieldset.append(element(doc, 'legend', {}, t('users.addresses')));
 					/** @type {Record<string, HTMLInputElement>} */
 					const inputs = {};
-					for (const key of ADDRESS_FIELDS) {
-						const made = make.field('input', t(`address.${key === 'label' ? 'label' : key}`), { maxlength: '200' });
+					for (const [key, max] of Object.entries(ADDRESS_LIMITS)) {
+						const made = make.field('input', t(`address.${key}`), { maxlength: String(max) });
 						made.input.value = address[key] ?? '';
 						inputs[key] = made.input;
 						fieldset.append(made.wrap);

@@ -43,6 +43,7 @@ import twoStep from '../schemas/two_step.settings.json' with { type: 'json' };
 import { normaliseEmail } from '../core/identifiers.js';
 import { selfView } from '../core/profile.js';
 import { DEFAULT_ROLE } from '../core/roles.js';
+import { SIGN_IN_METHODS } from '../core/widgets.js';
 import { createSealer, importedTwoStep, resealWebsite, totpAadOf } from './crypto.js';
 import { createImportOptions } from './imports.js';
 import { createProviders } from './providers.js';
@@ -72,16 +73,15 @@ const SETTINGS = {
 };
 
 /** Every sign-in method (feature). */
-const SIGN_IN_FEATURES = ['phone_code', 'phone_password', 'email_password', 'email_code', 'google', 'apple', 'facebook'];
 
 /**
  * Settings several features use (PLAN 0.8.10 A2, A11): the phone format of Phone code and Phone + password, and the
  * Profile settings of every sign-in method.
  * @type {Record<string, { name: string, features: string[], settings: any }>}
  */
-export const SHARED_SETTINGS = {
+const SHARED_SETTINGS = {
 	phone: { name: 'Phone numbers', features: ['phone_code', 'phone_password'], settings: phoneShared },
-	profile: { name: 'Profile', features: SIGN_IN_FEATURES, settings: profileShared },
+	profile: { name: 'Profile', features: [...SIGN_IN_METHODS], settings: profileShared },
 };
 
 /** The manifest as the kit and the Portal take it: settings schemas inline. */
@@ -184,7 +184,7 @@ const SIGN_UP_TEXTS = Object.freeze({
  */
 const setupPart = ({ on, signUp }) => {
 	const names = new Map(manifest.features.map((feature) => [feature.key, feature.name]));
-	const methods = SIGN_IN_FEATURES.filter((key) => on.includes(key)).map((key) => names.get(key));
+	const methods = SIGN_IN_METHODS.filter((key) => on.includes(key)).map((key) => names.get(key));
 	return {
 		summaries: [
 			{

@@ -23,6 +23,7 @@
  *   any product (those need the server token or a ticket).
  * @module
  */
+import { SIGN_IN_METHODS } from './widgets.js';
 
 export const ROLE_KEY = /^[a-z][a-z0-9_]{1,39}$/;
 const PERMISSION = /^(?:[a-z][a-z0-9-]{1,30}:[a-z][a-z0-9_.]{0,63}|\*)$/;
@@ -42,9 +43,7 @@ export const OWNER_ROLE = 'owner';
 /** "Remember me" per role (A6; `never`, A14). */
 const REMEMBER_OPTIONS = Object.freeze(/** @type {const} */ (['ask', 'ask_ticked', 'always', 'never']));
 /** The sign-in methods a role may be limited to (A6): the sign-in features. */
-export const ROLE_METHODS = Object.freeze(
-	/** @type {const} */ (['phone_code', 'phone_password', 'email_password', 'email_code', 'google', 'apple', 'facebook']),
-);
+export const ROLE_METHODS = SIGN_IN_METHODS;
 /** The role of every new sign-up and of users whose role was deleted. */
 export const DEFAULT_ROLE = 'customer';
 

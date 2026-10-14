@@ -11,7 +11,7 @@ import {
 	WIDGET_ATTRIBUTE,
 	WIDGET_GLOBAL,
 } from '../core/widgets.js';
-import { ADDRESS_FIELDS } from '../core/profile.js';
+import { ADDRESS_LIMITS } from '../core/widgets.js';
 import { ROLE_METHODS } from '../core/roles.js';
 import {
 	FIELD_TEXT,
@@ -1536,6 +1536,10 @@ describe('admin widgets', () => {
 		fieldIn(dialog(), strings['users.newPassword']).value = 'a new password';
 		await click(buttonIn(dialog(), strings['account.addressAdd']));
 		const fieldsets = dialog().querySelectorAll('fieldset');
+		// each part takes at most what the API takes (it used to allow 200 everywhere, so a long postal code was refused)
+		expect(fieldIn(/** @type {HTMLElement} */ (fieldsets[1]), strings['address.postalCode']).maxLength).toBe(20);
+		expect(fieldIn(/** @type {HTMLElement} */ (fieldsets[1]), strings['address.country']).maxLength).toBe(2);
+		expect(fieldIn(/** @type {HTMLElement} */ (fieldsets[1]), strings['address.label']).maxLength).toBe(40);
 		fieldIn(/** @type {HTMLElement} */ (fieldsets[1]), strings['address.line1']).value = '2 Park Rd';
 		fieldIn(/** @type {HTMLElement} */ (fieldsets[1]), strings['address.city']).value = 'London';
 		await submit(buttonIn(dialog(), strings['users.save']));
@@ -2548,7 +2552,7 @@ describe('helpers', () => {
 			...['pending', 'invited', 'completed', 'declined', 'expired'].map((status) => `requests.${status}`),
 			...['expired', 'used', 'canceled', 'invalid'].map((status) => `setup.${status}`),
 			...Object.values(REQUEST_OUTCOMES),
-			...['label', ...ADDRESS_FIELDS].map((field) => `address.${field}`),
+			...Object.keys(ADDRESS_LIMITS).map((field) => `address.${field}`),
 			...[...OWN_TEXT, 'generic', 'locked', 'validation_failed', 'weak_password'].map((code) => `error.${code}`),
 			...[...FIELD_TEXT].map((field) => `error.field.${field}`),
 			...[...PASSWORD_RULES].map((rule) => `error.weak_password.${rule}`),

@@ -17,8 +17,8 @@ const MAX_ID = 256;
 const MAX_ACTIONS = 20;
 const MAX_QUERY = 100;
 /** Longest label and detail of an entry (the activity-copy shape). */
-export const MAX_LABEL = 200;
-export const MAX_DETAIL = 2000;
+const MAX_LABEL = 200;
+const MAX_DETAIL = 2000;
 
 /** @param {string} text */
 const escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

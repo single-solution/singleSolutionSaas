@@ -44,10 +44,8 @@ export const TEXTS = Object.freeze({
 		setupHelp: 'Only what the switched-on features need.',
 		changes: 'Recent changes',
 		changesHelp: 'Every change made in this dashboard.',
-		featuresOn: 'Features on',
 		noFeatures: 'No features on',
 		today: "Today's cost",
-		checklist: 'Setup checklist',
 		widget: 'Widget installed',
 		widgetSeen: 'Last seen {time}',
 		widgetMissing: 'Not seen on your website in the last 7 days',
@@ -76,7 +74,8 @@ export const TEXTS = Object.freeze({
 		featuresTitle: 'Feature settings',
 		featuresHelp: 'How each feature behaves on this website.',
 		looksTitle: 'Words and look',
-		looksHelp: 'Every word of the sign-in, My account and admin widgets, their theme, and how money and dates look.',
+		looksHelp:
+			'Every word of the sign-in, My account, role request and admin widgets, their theme, and how money and dates look.',
 		field: Object.freeze({
 			key: 'Key (lower-case letters, digits or _)',
 			label: 'Label',
@@ -157,7 +156,6 @@ export const TEXTS = Object.freeze({
 		not_connected: 'Not connected',
 		test_failed: 'Test failed',
 		value: 'New value',
-		replace: 'Replace',
 		test: 'Test',
 		remove: 'Remove',
 		none: 'No connections.',
@@ -169,7 +167,7 @@ export const TEXTS = Object.freeze({
 		keysUrl: 'Public keys address',
 		widgets: 'Widget snippets',
 		widgetsHelp:
-			'The sign-in and My account widgets on your website, calls for a signed-in user, and the Users and Roles admin widgets in your own admin.',
+			'The sign-in, My account and role request widgets on your website, calls for a signed-in user, and the Users, Roles and Activity admin widgets in your own admin.',
 		ticket: 'Ticket snippet',
 		ticketHelp: 'Your server asks for a ticket for the admin widgets after checking its user and role.',
 		returns: 'Social sign-in return addresses',

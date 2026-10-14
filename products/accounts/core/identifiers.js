@@ -1,11 +1,7 @@
 /**
- * Email addresses and phone numbers (pure):
- *
- * - an email address has one canonical form per mailbox: trimmed and lower-cased; provider tricks (dots, `+tags`) are
- *   not rewritten, because they are not universal;
- * - a phone number is stored as E.164, normalized by the one normalizer every product shares (`normalisePhone` of
- *   `@ss/contracts/phone`) with the website's default calling code (`phone.defaultCallingCode`, else the business.json
- *   country's) and trunk prefix (`phone.trunkPrefix`, else the country's usual one).
+ * Email addresses (pure): one canonical form per mailbox, trimmed and lower-cased; provider tricks (dots, `+tags`) are
+ * not rewritten, because they are not universal. Phone numbers use the normalizer every product shares
+ * (`normalisePhone` of `@ss/contracts/phone`).
  * @module
  */
 

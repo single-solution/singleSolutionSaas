@@ -18,14 +18,11 @@ import {
 	verifyTotp,
 } from '../adapters/crypto.js';
 import { invalid } from './flows.js';
-import { parseSecret } from './service.js';
+import { bodyOf, parseSecret } from './service.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
 /** @typedef {import('./service.js').Service} Service */
 /** @typedef {import('./flows.js').Flows} Flows */
-
-/** @param {unknown} value */
-const bodyOf = (value) => (typeof value === 'object' && value !== null ? /** @type {Record<string, any>} */ (value) : {});
 
 /**
  * @param {Product} product

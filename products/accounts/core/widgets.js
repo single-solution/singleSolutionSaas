@@ -14,6 +14,20 @@ export const SIGN_IN_METHODS = Object.freeze(
 	/** @type {const} */ (['phone_code', 'phone_password', 'email_password', 'email_code', 'google', 'apple', 'facebook']),
 );
 
+/** The address fields in the order of the forms, with the longest value the API takes for each (PLAN 0.8.10 A11). */
+export const ADDRESS_LIMITS = Object.freeze({
+	label: 40,
+	name: 120,
+	line1: 200,
+	line2: 200,
+	area: 100,
+	city: 100,
+	region: 100,
+	postalCode: 20,
+	country: 2,
+	phone: 40,
+});
+
 /** Social sign-in providers (each its own feature and connection). */
 export const PROVIDERS = Object.freeze(/** @type {const} */ (['google', 'apple', 'facebook']));
 

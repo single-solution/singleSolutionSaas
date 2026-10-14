@@ -4,13 +4,10 @@
  * sees in My account, and what the merchant's server and staff see.
  * @module
  */
+import { ADDRESS_LIMITS } from './widgets.js';
 
 /** Most addresses a user can keep (the Profile setting `maxAddresses` may lower it, PLAN 0.8.10 A11). */
 export const MAX_ADDRESSES = 10;
-/** The address fields; `addressRequired` names the ones that must be filled (A11). */
-export const ADDRESS_FIELDS = Object.freeze(
-	/** @type {const} */ (['name', 'line1', 'line2', 'area', 'city', 'region', 'postalCode', 'country', 'phone']),
-);
 export const MAX_CUSTOM_FIELDS = 50;
 const FIELD_TYPES = Object.freeze(/** @type {const} */ (['text', 'number', 'date', 'choice']));
 const FIELD_KEY = /^[a-z][a-z0-9_]{0,39}$/;
@@ -150,21 +147,10 @@ export const checkAddresses = (
 	const out = [];
 	for (const [index, raw] of input.entries()) {
 		const a = typeof raw === 'object' && raw !== null ? /** @type {Record<string, unknown>} */ (raw) : {};
-		const fields = {
-			label: text(a.label, 40),
-			name: text(a.name, 120),
-			line1: text(a.line1, 200),
-			line2: text(a.line2, 200),
-			area: text(a.area, 100),
-			city: text(a.city, 100),
-			region: text(a.region, 100),
-			postalCode: text(a.postalCode, 20),
-			country: text(a.country, 2),
-			phone: text(a.phone, 40),
-		};
+		const fields = Object.fromEntries(Object.entries(ADDRESS_LIMITS).map(([key, most]) => [key, text(a[key], most)]));
 		const bad = Object.entries(fields).find(([, v]) => v === null);
 		if (bad) return { ok: false, field: `addresses/${index}/${bad[0]}`, message: 'This value is too long.' };
-		const f = /** @type {Record<keyof typeof fields, string>} */ (fields);
+		const f = /** @type {Record<keyof typeof ADDRESS_LIMITS, string>} */ (fields);
 		const missing = required.find((name) => name in f && f[/** @type {keyof typeof f} */ (name)] === '');
 		if (missing) return { ok: false, field: `addresses/${index}/${missing}`, message: 'Fill out this part of the address.' };
 		const country = f.country.toUpperCase();

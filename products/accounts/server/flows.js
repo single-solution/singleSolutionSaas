@@ -35,7 +35,7 @@ import {
 	sha256,
 	verifyTotp,
 } from '../adapters/crypto.js';
-import { parseSecret } from './service.js';
+import { bodyOf, parseSecret } from './service.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
 /** @typedef {import('./service.js').Service} Service */
@@ -54,9 +54,6 @@ export const STAFF_CODE_LENGTH = 6;
  * the merchant's server renews from parallel requests, or retries a renew (RW-1; code constant).
  */
 const REFRESH_GRACE_MS = 30_000;
-
-/** @param {unknown} value */
-const bodyOf = (value) => (typeof value === 'object' && value !== null ? /** @type {Record<string, any>} */ (value) : {});
 
 /** Refusals of a code (cooldown, caps) that a Forgot password request never shows (ST-3). */
 const QUIET_REFUSALS = Object.freeze(['code_cooldown', 'code_limit']);

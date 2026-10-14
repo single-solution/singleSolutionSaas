@@ -15,6 +15,7 @@ import { normalisePhone } from '@ss/contracts/phone';
 import { normaliseEmail } from './identifiers.js';
 import { MAX_ADDRESSES, checkAddresses, checkCustomValues, checkFieldDefinition, checkName } from './profile.js';
 import { DEFAULT_ROLE, READY_ROLES, checkRole } from './roles.js';
+import { PROVIDERS } from './widgets.js';
 
 /** @typedef {{ path: string, message: string }} ImportError */
 /**
@@ -36,7 +37,7 @@ import { DEFAULT_ROLE, READY_ROLES, checkRole } from './roles.js';
  */
 
 /** What each collection takes (top-level fields). */
-export const IMPORT_FIELDS = Object.freeze({
+const IMPORT_FIELDS = Object.freeze({
 	roles: Object.freeze([
 		'key',
 		'name',
@@ -119,7 +120,6 @@ const MAX_BLOCKED_REASON = 300;
 const MAX_NOTE = 1000;
 const MAX_TERMS_VERSION = 40;
 const MAX_SUBJECT = 255;
-const PROVIDERS = Object.freeze(['google', 'apple', 'facebook']);
 const IDENTITIES = Object.freeze(/** @type {const} */ (['email', 'phone', 'provider']));
 const USER_STATUSES = Object.freeze(['active', 'pending', 'invited']);
 /** Stored request statuses (`expired` is judged on read from `setupExpiresAt`). */
@@ -156,7 +156,7 @@ export const timeOf = (value) => {
  * @param {string} [at] the pointer of the object in the record
  * @returns {ImportError[]}
  */
-export const unknownFields = (record, allowed, what, at = '') =>
+const unknownFields = (record, allowed, what, at = '') =>
 	Object.keys(record)
 		.filter((name) => !allowed.includes(name))
 		.map((name) => ({ path: `${at}${pointer(name)}`, message: `${name} is not a field of ${what}.` }));

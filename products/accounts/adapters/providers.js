@@ -299,5 +299,3 @@ export const createProviders = ({ send, now }) => {
 		},
 	});
 };
-
-/** @typedef {ReturnType<typeof createProviders>} Providers */

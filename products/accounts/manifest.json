@@ -175,7 +175,7 @@
 		{
 			"key": "role_requests",
 			"name": "Role requests",
-			"description": "Visitors ask for a role (for example membership) with their name and number; staff invite them with a setup link or decline.",
+			"description": "Visitors ask for a role (for example membership) with their name and phone number or email address; staff invite them with a setup link or decline.",
 			"dependsOn": ["roles"],
 			"recommendFor": ["offers.member_prices"],
 			"settings": {

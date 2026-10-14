@@ -4,7 +4,7 @@
  * merchant's server, the public keys address and the social sign-in return addresses. Plain text; no I/O.
  * @module
  */
-import { SIGN_IN_HEADER, WIDGET_ATTRIBUTE, WIDGET_GLOBAL } from './widgets.js';
+import { PROVIDERS, SIGN_IN_HEADER, WIDGET_ATTRIBUTE, WIDGET_GLOBAL } from './widgets.js';
 
 /**
  * @param {{ base: string, widgets: ReadonlyArray<{ key: string, kind: string }>, permissions: string[], websiteId?: string }} input
@@ -93,6 +93,6 @@ export const createSnippets = ({ base, widgets, permissions, websiteId = '<websi
 		'  },',
 		'});',
 	].join('\n');
-	const returnAddresses = ['google', 'apple', 'facebook'].map((provider) => `${base}/oauth/${provider}/callback`).join('\n');
+	const returnAddresses = PROVIDERS.map((provider) => `${base}/oauth/${provider}/callback`).join('\n');
 	return { visitor, admin, ticketNode, ticketCurl, verify, verifyJose, keysUrl, signedInCall, returnAddresses };
 };

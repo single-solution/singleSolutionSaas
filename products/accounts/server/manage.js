@@ -29,13 +29,12 @@ import { randomBytes, randomSecret, sha256 } from '../adapters/crypto.js';
 import { manifest } from '../adapters/product.js';
 import { createStore } from '../adapters/store.js';
 import { STAFF_CODE_LENGTH, invalid } from './flows.js';
+import { bodyOf } from './service.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
 /** @typedef {import('./service.js').Service} Service */
 /** @typedef {import('./flows.js').Flows} Flows */
 
-/** @param {unknown} value */
-const bodyOf = (value) => (typeof value === 'object' && value !== null ? /** @type {Record<string, any>} */ (value) : {});
 const PERMISSIONS_TTL_MS = 5 * 60_000;
 /** The users list's statuses (`blocked`: blocked users, whatever their status). */
 const USER_STATUSES = Object.freeze(['active', 'pending', 'invited', 'blocked']);
@@ -71,7 +70,7 @@ const requestView = (row, now) => ({
 });
 
 /** Who acts without a ticket or acting-user headers: the merchant's server (PLAN 0.8.10 K2). */
-export const SERVER_ACTOR = Object.freeze({ kind: 'server', id: 'server', name: 'Server' });
+const SERVER_ACTOR = Object.freeze({ kind: 'server', id: 'server', name: 'Server' });
 
 /** A code record id. */
 const createCodeId = () => createId('cod');

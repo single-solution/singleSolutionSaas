@@ -6,22 +6,9 @@
  */
 import { formatText, mountWidget } from '@ss/app-kit/widget';
 import { customInputs, datesOf, errorText, fieldMaker, moneyText, setHidden, termsBox, textsOf, webAddress } from './common.js';
+import { ADDRESS_LIMITS } from '../core/widgets.js';
 import { element } from './dom.js';
 import { WIDGET_CSS } from './styles.js';
-
-/** The address fields, in the order of the form. */
-const ADDRESS_FIELDS = /** @type {const} */ ([
-	['label', 40],
-	['name', 120],
-	['line1', 200],
-	['line2', 200],
-	['area', 100],
-	['city', 100],
-	['region', 100],
-	['postalCode', 20],
-	['country', 2],
-	['phone', 40],
-]);
 
 /**
  * @typedef {object} MyAccountInput
@@ -196,7 +183,7 @@ export const mountMyAccount = ({ host, win, config, session }) => {
 				/** @param {Record<string, any> | null} address null: a new one */
 				const edit = (address) => {
 					const form = element(doc, 'form');
-					const fields = ADDRESS_FIELDS.map(([key, max]) => {
+					const fields = Object.entries(ADDRESS_LIMITS).map(([key, max]) => {
 						const made = make.field('input', t(`address.${key}`), {
 							maxlength: String(max),
 							...(rules.addressRequired.includes(key) ? { required: '' } : {}),

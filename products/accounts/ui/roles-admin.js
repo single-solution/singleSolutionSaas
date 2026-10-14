@@ -7,6 +7,7 @@
  */
 import { formatText, mountWidget } from '@ss/app-kit/widget';
 import { datesOf, errorText, fieldMaker, setHidden, textsOf } from './common.js';
+import { SIGN_IN_METHODS } from '../core/widgets.js';
 import { element } from './dom.js';
 import { WIDGET_CSS } from './styles.js';
 import { adminCall } from './tickets.js';
@@ -34,16 +35,6 @@ const OWN_SOURCE = 'site';
  * @property {boolean} ready a ready-made role (cannot be deleted)
  */
 
-/** The sign-in methods a role can be limited to (PLAN 0.8.10 A6). */
-const METHODS = /** @type {const} */ ([
-	'phone_code',
-	'phone_password',
-	'email_password',
-	'email_code',
-	'google',
-	'apple',
-	'facebook',
-]);
 /** @typedef {{ source: string, permissions: Array<{ key: string, name: string }> }} PermissionGroup */
 
 /**
@@ -128,7 +119,7 @@ export const mountRolesAdmin = ({ host, api, config }) => {
 			methodSet.append(element(doc, 'legend', {}, t('roles.methods')));
 			/** @type {Map<string, HTMLInputElement>} */
 			const methodBoxes = new Map();
-			for (const method of METHODS.filter((key) => config.features.includes(key))) {
+			for (const method of SIGN_IN_METHODS.filter((key) => config.features.includes(key))) {
 				const made = make.check(t(`method.${method}`));
 				methodBoxes.set(method, made.input);
 				methodSet.append(made.wrap);

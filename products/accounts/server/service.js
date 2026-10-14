@@ -82,7 +82,7 @@ export const parseSecret = (value) => {
 };
 
 /** @param {unknown} value */
-const bodyOf = (value) => (typeof value === 'object' && value !== null ? /** @type {Record<string, any>} */ (value) : {});
+export const bodyOf = (value) => (typeof value === 'object' && value !== null ? /** @type {Record<string, any>} */ (value) : {});
 
 /** Whether an error is a message Notifications did not send (refused, failed, or not connected). @param {unknown} error */
 const unsent = (error) =>
