@@ -48,19 +48,25 @@ export const PAGE_KINDS = Object.freeze(/** @type {const} */ (['product', 'categ
 /** A phone's screen: the chat window goes full screen there (when set), and the idle nudge may stay away (C14). */
 export const PHONE_MEDIA = '(max-width: 480px)';
 
-/** Back-off checking (PLAN 0.8.3 Live updates): code constants, the same for every website. */
+/**
+ * Back-off checking (PLAN 0.8.3 Live updates): code constants; the two intervals are the defaults of the Visitor chat
+ * settings `pollFocusedSeconds` and `pollBackgroundSeconds` (C19), which each website may change.
+ */
 export const CHECKS = Object.freeze({
-	/** window open and tab visible */
+	/** window open and tab visible (the default of `pollFocusedSeconds`) */
 	activeMs: 10_000,
-	/** after 5 minutes without activity */
+	/** after 5 minutes without activity, checks come this many times less often */
 	idleAfterMs: 5 * 60_000,
-	idleMs: 20_000,
+	idleFactor: 2,
 	/** checks stop after 15 minutes without activity */
 	stopAfterMs: 15 * 60_000,
 	/** while an AI reply is pending after a send */
 	replyMs: 3_000,
 	replyWindowMs: 45_000,
-	/** window closed: unread on load, on focus (at most once a minute) and every 5 minutes while visible */
+	/**
+	 * window closed: unread on load, on focus (at most once a minute) and every 5 minutes while visible (the default of
+	 * `pollBackgroundSeconds`)
+	 */
 	closedFocusMinMs: 60_000,
 	closedEveryMs: 5 * 60_000,
 });

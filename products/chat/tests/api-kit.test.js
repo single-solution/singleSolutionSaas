@@ -3,6 +3,8 @@
  * signing secret, data rights, the AI connection test, the public docs and widget script.
  */
 import { afterAll, describe, expect, it } from 'vitest';
+import { CHECKS } from '../core/widgets.js';
+import visitorChat from '../schemas/visitor_chat.settings.json' with { type: 'json' };
 import { ADMIN_ORIGIN, AI, AI_KEY, BASE, ORIGIN, STORAGE_KEY, ready, setup } from './helpers.js';
 
 /** @type {Array<Awaited<ReturnType<typeof ready>>>} */
@@ -87,6 +89,25 @@ describe('widgets and docs', () => {
 		await sys.setting('proactive_idle', 'messageProduct', 'Still deciding on {product}?');
 		await sys.setting('proactive_idle', 'oncePer', 'product');
 		await sys.setting('proactive_idle', 'hideOnMobile', true);
+		await sys.setting('visitor_chat', 'pollFocusedSeconds', 5);
+		// how often the widget checks stays within its bounds (C19)
+		const cookie = await sys.adminSession();
+		for (const [name, value] of /** @type {Array<[string, number]>} */ ([
+			['pollFocusedSeconds', 2],
+			['pollFocusedSeconds', 61],
+			['pollBackgroundSeconds', 9],
+			['pollBackgroundSeconds', 301],
+		])) {
+			const refused = await sys.dashboard(
+				cookie,
+				'PUT',
+				`/v1/dashboard/websites/${sys.websiteId}/settings/visitor_chat.${name}`,
+				{
+					value,
+				},
+			);
+			expect(refused.status).toBe(422);
+		}
 		await sys.list('page_rules', [{ path: '/products/**', delay: 10, message: 'Need help choosing?' }]);
 		await sys.list('flows', [
 			{ id: 'w', name: 'W', start: { kind: 'page', path: '/', delay: 0 }, steps: [{ kind: 'end' }] },
@@ -113,8 +134,15 @@ describe('widgets and docs', () => {
 			attachments: { visitors: 'off', maxBytes: 5 * 1024 * 1024, storage: true },
 			ratings: { scale: 5, askWhen: 'on_resolve', comment: true },
 			queuePosition: true,
+			// how often the widget checks: the website's own, else the code's (C19)
+			checks: { focusedSeconds: 5, backgroundSeconds: CHECKS.closedEveryMs / 1000 },
 		});
 		expect(JSON.stringify(config.json)).not.toContain('secretAccessKey');
+	});
+
+	it('the check settings default to the code’s intervals (C19)', () => {
+		expect(visitorChat.properties.pollFocusedSeconds.default * 1000).toBe(CHECKS.activeMs);
+		expect(visitorChat.properties.pollBackgroundSeconds.default * 1000).toBe(CHECKS.closedEveryMs);
 	});
 
 	it('serves the widget script and the public docs', async () => {

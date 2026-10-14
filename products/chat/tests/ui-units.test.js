@@ -42,7 +42,7 @@ describe('createChecks', () => {
 		expect(time.pending()).toEqual([CHECKS.activeMs]);
 		await time.advance(CHECKS.idleAfterMs);
 		expect(check).toHaveBeenCalledTimes(30);
-		expect(time.pending()).toEqual([CHECKS.idleMs]);
+		expect(time.pending()).toEqual([CHECKS.activeMs * CHECKS.idleFactor]);
 		await time.advance(CHECKS.stopAfterMs - CHECKS.idleAfterMs);
 		expect(time.pending()).toEqual([]);
 		const count = check.mock.calls.length;
@@ -95,6 +95,21 @@ describe('createChecks', () => {
 		checks.stop();
 	});
 
+	it('checks as often as the website set, half as often after 5 idle minutes (C19)', async () => {
+		const time = clock();
+		const check = vi.fn(async () => {});
+		const checks = createChecks({ win: window, ...time, check, activeMs: 30_000 });
+		checks.start();
+		expect(time.pending()).toEqual([30_000]);
+		await time.advance(CHECKS.idleAfterMs);
+		expect(check).toHaveBeenCalledTimes(10);
+		expect(time.pending()).toEqual([60_000]);
+		// a reply on its way is still checked every 3 s
+		checks.expectReply();
+		expect(time.pending()).toEqual([CHECKS.replyMs]);
+		checks.stop();
+	});
+
 	it('skips a check while one is running', async () => {
 		const time = clock();
 		/** @type {() => void} */
@@ -135,6 +150,29 @@ describe('createUnreadChecks', () => {
 		expect(time.pending()).toEqual([CHECKS.closedEveryMs]);
 		unread.stop();
 		expect(time.pending()).toEqual([]);
+	});
+
+	it('checks as often as the website set; on focus at most that often (C19)', async () => {
+		const time = clock();
+		const check = vi.fn(async () => {});
+		const unread = createUnreadChecks({ win: window, ...time, check, everyMs: 20_000 });
+		unread.start();
+		expect(time.pending()).toEqual([20_000]);
+		await time.advance(60_000);
+		expect(check).toHaveBeenCalledTimes(4);
+		await time.advance(5_000);
+		window.dispatchEvent(new window.Event('focus'));
+		expect(check).toHaveBeenCalledTimes(4);
+		await time.advance(15_000);
+		expect(check).toHaveBeenCalledTimes(5);
+		await time.advance(19_000);
+		window.dispatchEvent(new window.Event('focus'));
+		expect(check).toHaveBeenCalledTimes(5);
+		setHiddenTab(true);
+		await time.advance(30_000);
+		setHiddenTab(false);
+		expect(check).toHaveBeenCalledTimes(6);
+		unread.stop();
 	});
 
 	it('only plans when started without an immediate check', () => {

@@ -5,6 +5,7 @@
  * @module
  */
 import { formatDate, normaliseFormat, viewerOf } from '@ss/app-kit/widget';
+import { CHECKS } from '../core/widgets.js';
 import { element } from './dom.js';
 
 /** @typedef {{ ok: boolean, status: number, data: any }} Answer status 0 when signed out or unreachable */
@@ -38,6 +39,8 @@ import { element } from './dom.js';
  *   `staffMaxBytes`), as the server checks it
  * @property {{ scale: number, askWhen: string, comment: boolean }} ratings
  * @property {boolean} queuePosition
+ * @property {{ focusedSeconds: number, backgroundSeconds: number }} checks how often the widget checks for new messages
+ *   while the chat window is open, and for unread replies while it is closed (C19)
  */
 
 /**
@@ -80,6 +83,7 @@ const DEFAULTS = {
 	attachments: { visitors: 'off', types: [], maxBytes: 0, staffTypes: [], staffMaxBytes: 0, storage: false },
 	ratings: { scale: 5, askWhen: 'on_resolve', comment: false },
 	queuePosition: false,
+	checks: { focusedSeconds: CHECKS.activeMs / 1000, backgroundSeconds: CHECKS.closedEveryMs / 1000 },
 };
 
 /**

@@ -251,6 +251,28 @@ describe('talking', () => {
 		await api.close();
 	});
 
+	it('checks as often as the website set: while open and while closed (C19)', async () => {
+		keepGuest();
+		const { $, server, time } = await start({
+			settings: { checks: { focusedSeconds: 4, backgroundSeconds: 30 } },
+			routes: {
+				'GET /v1/chat/unread': () => answer(200, { unread: 0 }),
+				'GET /v1/chat': () => answer(200, { ...view(), messages: [msg(1, 'visitor', 'Hi')] }),
+				'POST /v1/chat/read': () => answer(204),
+			},
+		});
+		// closed: on load, then every 30 s
+		expect(server.all('GET /v1/chat/unread')).toHaveLength(1);
+		await time.advance(60_000);
+		expect(server.all('GET /v1/chat/unread')).toHaveLength(3);
+		// open: every 4 s
+		await click($('.launcher'));
+		const opened = server.all('GET /v1/chat').length;
+		await time.advance(12_000);
+		expect(server.all('GET /v1/chat').length - opened).toBe(3);
+		expect(server.all('GET /v1/chat/unread')).toHaveLength(3);
+	});
+
 	it('does not mark read while the tab is hidden', async () => {
 		keepGuest();
 		const { server, api } = await start({

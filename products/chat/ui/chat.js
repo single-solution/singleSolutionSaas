@@ -293,8 +293,14 @@ export const mountChat = ({ win, host, config, visitor, clock, page, onUnread })
 		setUnread(0);
 		await call('POST', '/v1/chat/read');
 	};
-	const checks = createChecks({ win, ...clock, check: async () => void (await poll()) });
-	const closedChecks = createUnreadChecks({ win, ...clock, check: loadUnread });
+	// how often, as the website set it (C19)
+	const checks = createChecks({
+		win,
+		...clock,
+		activeMs: s.checks.focusedSeconds * 1000,
+		check: async () => void (await poll()),
+	});
+	const closedChecks = createUnreadChecks({ win, ...clock, everyMs: s.checks.backgroundSeconds * 1000, check: loadUnread });
 
 	/** @param {string} text */
 	const say = (text) => {
