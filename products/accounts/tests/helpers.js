@@ -14,7 +14,7 @@ import { createProductInstance, manifest } from '../adapters/product.js';
 import { createStore } from '../adapters/store.js';
 import { createRoutes } from '../server/routes.js';
 
-const BASE = 'https://accounts.example.dev';
+export const BASE = 'https://accounts.example.dev';
 const DOMAIN = 'shop.example.com';
 export const ORIGIN = `https://${DOMAIN}`;
 export const ADMIN_ORIGIN = 'https://admin.shop.example.com';

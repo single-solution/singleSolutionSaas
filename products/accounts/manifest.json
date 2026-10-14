@@ -14,6 +14,7 @@
 			"name": "Phone code",
 			"description": "Sign-up and sign-in with a one-time code sent by SMS or WhatsApp through the merchant's Notifications (pasted Notifications token).",
 			"dependsOn": [],
+			"recommendFor": ["signIn.phone"],
 			"settings": {
 				"$ref": "schemas/phone_code.settings.json"
 			}
@@ -23,6 +24,7 @@
 			"name": "Phone + password",
 			"description": "Sign-up and sign-in with a phone number and a password, with password rules, login limits and Forgot password (a code by SMS or WhatsApp, or your own page).",
 			"dependsOn": [],
+			"recommendFor": ["signIn.phone"],
 			"settings": {
 				"$ref": "schemas/phone_password.settings.json"
 			}
@@ -32,6 +34,7 @@
 			"name": "Email + password",
 			"description": "Sign-up and sign-in with an email address and a password, with password rules, login limits and Forgot password (reset links through Notifications).",
 			"dependsOn": [],
+			"recommendFor": ["signIn.email"],
 			"settings": {
 				"$ref": "schemas/email_password.settings.json"
 			}
@@ -41,6 +44,7 @@
 			"name": "Email code / magic link",
 			"description": "Sign-in with a one-time code or a single-use link sent by email through the merchant's Notifications.",
 			"dependsOn": [],
+			"recommendFor": ["signIn.email"],
 			"settings": {
 				"$ref": "schemas/email_code.settings.json"
 			}
@@ -50,6 +54,7 @@
 			"name": "Google",
 			"description": "Sign-in with Google, using the merchant's own Google OAuth client.",
 			"dependsOn": [],
+			"recommendFor": ["signIn.social"],
 			"settings": {
 				"$ref": "schemas/google.settings.json"
 			}
@@ -59,6 +64,7 @@
 			"name": "Apple",
 			"description": "Sign in with Apple, using the merchant's own Apple Services ID and key.",
 			"dependsOn": [],
+			"recommendFor": ["signIn.social"],
 			"settings": {
 				"$ref": "schemas/apple.settings.json"
 			}
@@ -68,6 +74,7 @@
 			"name": "Facebook",
 			"description": "Sign-in with Facebook, using the merchant's own Facebook app.",
 			"dependsOn": [],
+			"recommendFor": ["signIn.social"],
 			"settings": {
 				"$ref": "schemas/facebook.settings.json"
 			}
@@ -77,6 +84,7 @@
 			"name": "Roles and permissions",
 			"description": "One user list with roles: the ready-made roles and the merchant's own, the permissions products supply plus the merchant's own names, session lengths per role, and the Users and Roles admin widgets.",
 			"dependsOn": [],
+			"recommendFor": ["signIn.*", "offers.member_prices"],
 			"settings": {
 				"$ref": "schemas/roles.settings.json"
 			}
@@ -131,6 +139,7 @@
 			"name": "Data rights",
 			"description": "Download my data at once; Delete my account after the merchant approves (or after N days), erased in every connected product through pasted tokens.",
 			"dependsOn": [],
+			"recommendFor": ["signIn.*"],
 			"settings": {
 				"$ref": "schemas/data_rights.settings.json"
 			}
@@ -149,6 +158,7 @@
 			"name": "Orders tab",
 			"description": "My account shows the user's orders from Ecommerce (pasted Ecommerce token).",
 			"dependsOn": [],
+			"recommendFor": ["signIn.*+sells.*"],
 			"settings": {
 				"$ref": "schemas/orders_tab.settings.json"
 			}
@@ -167,6 +177,7 @@
 			"name": "Role requests",
 			"description": "Visitors ask for a role (for example membership) with their name and number; staff invite them with a setup link or decline.",
 			"dependsOn": ["roles"],
+			"recommendFor": ["offers.member_prices"],
 			"settings": {
 				"$ref": "schemas/role_requests.settings.json"
 			}
@@ -176,6 +187,7 @@
 			"name": "Import",
 			"description": "Roles, custom fields, users (with their old password hashes), role requests and activity history moved in from another system with ss-import (server token only; no messages, events or alerts). Our admins switch it on for a migration and off after it.",
 			"dependsOn": [],
+			"recommendFor": ["moving.yes"],
 			"settings": {
 				"$ref": "schemas/import.settings.json"
 			}

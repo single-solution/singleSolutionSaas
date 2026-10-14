@@ -1,7 +1,7 @@
 /**
  * Next.js config. The product has two functions: the API route `app/api/[...path]/route.js`, which serves every kit
- * and product route through these rewrites (`/.well-known/*`, `/sso`, `/widget.js`, `/docs`, `/oauth/*`, `/v1/*`), and the
- * dashboard page.
+ * and product route through these rewrites (`/.well-known/*`, `/sso`, `/widget.js`, `/docs`, `/openapi.json`,
+ * `/oauth/*`, `/v1/*`), and the dashboard page.
  */
 import { existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -24,10 +24,12 @@ const config = {
 	// the UI library ships untranspiled JSX in .js files
 	transpilePackages: ['@ss/ui'],
 	async rewrites() {
-		return ['/.well-known/:path*', '/sso', '/widget.js', '/docs', '/oauth/:path*', '/v1/:path*'].map((source) => ({
-			source,
-			destination: `/api${source}`,
-		}));
+		return ['/.well-known/:path*', '/sso', '/widget.js', '/docs', '/openapi.json', '/oauth/:path*', '/v1/:path*'].map(
+			(source) => ({
+				source,
+				destination: `/api${source}`,
+			}),
+		);
 	},
 };
 

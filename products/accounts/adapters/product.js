@@ -3,16 +3,20 @@
  * manifest (each feature's settings schema from `schemas/` inline), its widget texts, its Connections (the
  * Notifications token for codes, invites and resets; Google, Apple and Facebook keys; the other products' tokens for
  * data rights, permissions and the Orders tab), the merchant database indexes, the data-rights hooks, the widget
- * settings, the `import` feature's collections (`imports.js`, PLAN 0.8.10 K10) and the messages it sends through
- * Notifications with their US-English default words (`schemas/messages.json`, parity P1), and adds the sealer, the
- * outside services and the website signing keys on the same outbound policy.
+ * settings, the `import` feature's collections (`imports.js`, PLAN 0.8.10 K10), the messages it sends through
+ * Notifications with their US-English default words (`schemas/messages.json`, parity P1) and its part of the website
+ * Setup sheet (the OpenAPI document, the guide's "What your website builds" per feature, and the sign-in methods that
+ * are on and who can sign up), and adds the sealer, the outside services and the website signing keys on the same
+ * outbound policy.
  * Public entry `./product` of this package, so a system test can compose the product with `./routes`.
  * @module
  */
 import { createProduct } from '@ss/app-kit';
 import { normalisePhone } from '@ss/contracts/phone';
 import { createOutboundPolicy, safeFetch } from '@ss/net';
+import guide from '../docs/guide.json' with { type: 'json' };
 import manifestFile from '../manifest.json' with { type: 'json' };
+import openapi from '../openapi.json' with { type: 'json' };
 import strings from '../strings/en.json' with { type: 'json' };
 import activityCopies from '../schemas/activity_copies.settings.json' with { type: 'json' };
 import apple from '../schemas/apple.settings.json' with { type: 'json' };
@@ -165,7 +169,36 @@ const ownDataRights = (now) => ({
 	},
 });
 
-/** @typedef {Omit<import('@ss/app-kit').ProductOptions, 'manifest' | 'strings' | 'hooks' | 'connections' | 'data' | 'problemCodes'>} InstanceOptions */
+/** Who can sign up in each mode of Approval / invite sign-up (its `mode` setting), as the Setup sheet says it. */
+const SIGN_UP_TEXTS = Object.freeze({
+	open: 'Anyone can sign up.',
+	invite: 'Only people you invite can sign up.',
+	approval: 'Sign-ups wait for your approval.',
+});
+
+/**
+ * Accounts' own part of the website Setup sheet: the sign-in methods that are on and, while Approval / invite sign-up
+ * is on, who can sign up. Never a secret.
+ * @param {{ on: string[], signUp: keyof typeof SIGN_UP_TEXTS | null }} website `signUp`: the sign-up mode, null while
+ *   Approval / invite sign-up is off
+ */
+const setupPart = ({ on, signUp }) => {
+	const names = new Map(manifest.features.map((feature) => [feature.key, feature.name]));
+	const methods = SIGN_IN_FEATURES.filter((key) => on.includes(key)).map((key) => names.get(key));
+	return {
+		summaries: [
+			{
+				title: 'Sign-in methods',
+				text: methods.length > 0 ? `${methods.join(', ')}.` : 'None is on yet, so nobody can sign in.',
+			},
+			...(signUp === null ? [] : [{ title: 'Sign-up', text: SIGN_UP_TEXTS[signUp] }]),
+		],
+	};
+};
+
+/**
+ * @typedef {Omit<import('@ss/app-kit').ProductOptions, 'manifest' | 'strings' | 'hooks' | 'connections' | 'data' | 'problemCodes' | 'openapi' | 'build'>} InstanceOptions
+ */
 
 /**
  * The product (kit routes, status, settings, connections, merchant database …) plus its sealer and outside services.
@@ -291,8 +324,17 @@ export const createProductInstance = (options) => {
 						: null,
 				};
 			},
+			// its part of the website Setup sheet: the sign-in methods that are on and who can sign up
+			blueprint: async ({ websiteId, on }) =>
+				setupPart({
+					on,
+					signUp: on.includes('approval') ? (await product.settings.values(websiteId, 'approval')).mode : null,
+				}),
 		},
 		data: { indexes: INDEXES },
+		// the website Setup sheet: the API document and what the merchant's website builds per feature
+		openapi,
+		build: guide.build,
 		sharedSettings: SHARED_SETTINGS,
 		// records moved in from another system with ss-import (feature `import`, PLAN 0.8.10 K10)
 		imports: createImportOptions({

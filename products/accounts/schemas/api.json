@@ -1956,7 +1956,7 @@
 		}
 	},
 	"POST /v1/sign-in/apple/start": {
-		"summary": "Start a Apple sign-in",
+		"summary": "Start an Apple sign-in",
 		"description": "Open url in the browser. Apple sends the person back to Accounts, which returns them to returnTo with #ss_accounts_code=<code> (or #ss_accounts_error=<code>); exchange the code with POST /v1/sign-in/exchange within 5 minutes. 502 provider_failed while the Apple keys are not connected; 422 validation_failed for returnTo.",
 		"body": {
 			"type": "object",
