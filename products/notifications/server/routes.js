@@ -59,7 +59,7 @@ const TEMPLATE_WRITE_LIMITS = [
 const MESSAGE_COUNT_FIELDS = Object.freeze({ status: 'status', channel: 'channel', template: 'template', source: 'source' });
 
 /** Channel names in activity details. */
-const CHANNEL_NAMES = Object.freeze({ email: 'e-mail', sms: 'SMS', whatsapp: 'WhatsApp' });
+const CHANNEL_NAMES = Object.freeze({ email: 'email', sms: 'SMS', whatsapp: 'WhatsApp' });
 
 /** @param {string} field @param {string} message @param {string} [code] */
 const invalid = (field, message, code = 'invalid') =>
@@ -523,14 +523,14 @@ export const createRoutes = (product) => {
 			rateLimit: SEND_LIMITS,
 			handler: async (ctx) => {
 				const body = ctx.body ?? {};
-				if (!['email', 'sms', 'whatsapp'].includes(body.channel)) return invalid('channel', 'Pick e-mail, SMS or WhatsApp.');
+				if (!['email', 'sms', 'whatsapp'].includes(body.channel)) return invalid('channel', 'Pick email, SMS or WhatsApp.');
 				const channel = /** @type {'email' | 'sms' | 'whatsapp'} */ (body.channel);
 				const email = channel === 'email' ? normaliseEmail(body.to) : null;
 				const phone = channel === 'email' ? null : normalisePhone(body.to);
 				if (!email && !phone)
 					return invalid(
 						'to',
-						channel === 'email' ? 'Enter an e-mail address.' : 'Enter a phone number with its country code.',
+						channel === 'email' ? 'Enter an email address.' : 'Enter a phone number with its country code.',
 					);
 				const to = { email, phone, subscriberId: null, staffId: null, language: null, timeZone: null };
 				// a saved template with sample values (the template editor's test send), else the words typed now

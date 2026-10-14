@@ -46,7 +46,7 @@ export const mountTemplateEditor = ({ host, api, config }) => {
 			const doc = /** @type {Document} */ (root.ownerDocument);
 			let n = 0;
 			/**
-			 * A labelled field.
+			 * A labeled field.
 			 * @param {string} tag @param {string} label @param {Record<string, string>} [attributes]
 			 */
 			const field = (tag, label, attributes = {}) => {

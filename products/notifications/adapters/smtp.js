@@ -1,5 +1,5 @@
 /**
- * SMTP e-mail adapter (PLAN 0.8.5): sends e-mail through the merchant's own SMTP server
+ * SMTP email adapter (PLAN 0.8.5): sends email through the merchant's own SMTP server
  * with nodemailer, using the merchant's `email` connection.
  *
  * - **Value**: `{ baseUrl: 'smtps://host:465' | 'smtp://host:587', username, apiKey (the password), from? }`. The
@@ -104,7 +104,7 @@ const isMailbox = (value) => {
 };
 
 /**
- * Normalised connection settings of an SMTP descriptor.
+ * Normalized connection settings of an SMTP descriptor.
  * @param {Record<string, unknown>} descriptor
  * @param {import('@ss/net').OutboundPolicy} policy
  * @returns {{ host: string, port: number, secure: boolean, allowlisted: boolean, ip: boolean, username: string,
@@ -178,7 +178,7 @@ const mailOf = (message, defaultFrom) => {
 	if (!isObject(message)) throw kitError('invalid_argument', 'message must be an object');
 	const to = Array.isArray(message.to) ? message.to : [message.to];
 	if (to.length === 0 || to.length > MAX_RECIPIENTS || !to.every(isAddress))
-		throw kitError('invalid_argument', `message.to must be 1..${MAX_RECIPIENTS} e-mail addresses`);
+		throw kitError('invalid_argument', `message.to must be 1..${MAX_RECIPIENTS} email addresses`);
 	const { subject, text, html, replyTo, headers } = message;
 	if (typeof subject !== 'string' || subject.length === 0 || subject.length > 998 || /[\r\n]/.test(subject))
 		throw kitError('invalid_argument', 'message.subject must be 1..998 characters on one line');
@@ -191,9 +191,9 @@ const mailOf = (message, defaultFrom) => {
 			throw kitError('invalid_argument', `message.${name} must be a string up to 1 MiB`);
 	}
 	const from = message.from ?? defaultFrom;
-	if (!isMailbox(from)) throw kitError('invalid_argument', 'message.from must be an e-mail address');
+	if (!isMailbox(from)) throw kitError('invalid_argument', 'message.from must be an email address');
 	if (replyTo !== undefined && !isMailbox(replyTo))
-		throw kitError('invalid_argument', 'message.replyTo must be an e-mail address');
+		throw kitError('invalid_argument', 'message.replyTo must be an email address');
 	/** @type {Record<string, string>} */
 	const extra = {};
 	if (headers !== undefined) {
@@ -298,7 +298,7 @@ export const createSmtpMessaging = ({ descriptor, policy, createTransport = node
 		kind: 'messaging',
 		provider: 'smtp',
 		/**
-		 * Send one e-mail.
+		 * Send one email.
 		 * @param {SmtpMessage} message
 		 * @returns {Promise<{ id: string | null, accepted: string[], rejected: string[] }>}
 		 */

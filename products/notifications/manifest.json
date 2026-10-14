@@ -21,7 +21,7 @@
 		{
 			"key": "email",
 			"name": "Email",
-			"description": "Sends e-mail through the merchant's own provider: SMTP, Resend, SendGrid, Mailgun or Amazon SES.",
+			"description": "Sends email through the merchant's own provider: SMTP, Resend, SendGrid, Mailgun or Amazon SES.",
 			"dependsOn": [],
 			"settings": {
 				"$ref": "schemas/email.settings.json"

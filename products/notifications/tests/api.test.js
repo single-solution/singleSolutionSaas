@@ -68,7 +68,7 @@ const decryptPush = (body, browser) => {
 	return JSON.parse(plain.subarray(0, plain.length - 1).toString('utf8'));
 };
 
-/** The path of the unsubscribe link in the last e-mail's List-Unsubscribe header. */
+/** The path of the unsubscribe link in the last email's List-Unsubscribe header. */
 const unsubscribeLink = () => {
 	const body = JSON.parse(env.providers.callsTo('https://api.resend.com').at(-1)?.body ?? '{}');
 	return /\/unsubscribe\/[^>]+/.exec(body.headers?.['List-Unsubscribe'] ?? '')?.[0] ?? '';
@@ -157,7 +157,7 @@ describe('templates', () => {
 });
 
 describe('the send API', () => {
-	it('sends a template by e-mail with the values, the unsubscribe link and headers', async () => {
+	it('sends a template by email with the values, the unsubscribe link and headers', async () => {
 		const sent = await env.send(
 			'email',
 			{ template: 'welcome', to: { email: 'Ana@Example.com' }, values: { name: 'Ana' } },
@@ -285,7 +285,7 @@ describe('the send API', () => {
 		env.providers.reset('https://graph.facebook.com');
 	});
 
-	it('honours unsubscribes for optional messages only, through the hosted page', async () => {
+	it('honors unsubscribes for optional messages only, through the hosted page', async () => {
 		await env.send('email', { template: 'promo', to: { email: 'opt@example.com' }, values: { pct: '10' } });
 		const link = unsubscribeLink();
 		expect(link).not.toBe('');
@@ -784,7 +784,7 @@ describe('the delivery log and the admin widgets (tickets)', () => {
 		expect(sent).toMatchObject({
 			actor: { kind: 'staff', id: 'u_1', name: 'Sam Staff' },
 			label: sent.target,
-			detail: 'One-off e-mail message: sent',
+			detail: 'One-off email message: sent',
 		});
 		expect(sent.target).toMatch(/^msg_/);
 		// never an address or the words
@@ -811,7 +811,7 @@ describe('the delivery log and the admin widgets (tickets)', () => {
 			'/v1/tickets',
 			'business.json',
 			// the API reference: what each call takes and answers, from schemas/api.json
-			'<a href="#op-post-v1-messages-email"><code>POST /v1/messages/email</code></a> Send an e-mail from a template',
+			'<a href="#op-post-v1-messages-email"><code>POST /v1/messages/email</code></a> Send an email from a template',
 			'<section class="ss-api-op" id="op-post-v1-messages-email">',
 			'<td><code>to</code></td><td><a href="#schema-EmailRecipient">EmailRecipient</a></td><td>yes</td>',
 			'<h4>Answer 201 (JSON)</h4><p><a href="#schema-Message">Message</a></p>',

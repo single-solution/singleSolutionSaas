@@ -1,6 +1,6 @@
 /**
  * The admin widget `send_message` (permission `messages.send`): a member of the merchant's staff sends a one-off
- * message by e-mail, SMS or WhatsApp to one person. It is a required, urgent message (it ignores unsubscribes and quiet
+ * message by email, SMS or WhatsApp to one person. It is a required, urgent message (it ignores unsubscribes and quiet
  * hours, never send limits) and is kept in the delivery log like every other. A refused call or a message that was not
  * sent shows the website's words for why, never the server's English.
  * @module

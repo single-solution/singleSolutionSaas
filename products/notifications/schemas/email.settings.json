@@ -5,7 +5,7 @@
 		"replyTo": {
 			"type": "string",
 			"title": "Reply-to address",
-			"description": "Replies to e-mails go here. Empty: to the sender address.",
+			"description": "Replies to emails go here. Empty: to the sender address.",
 			"default": "",
 			"maxLength": 254
 		},

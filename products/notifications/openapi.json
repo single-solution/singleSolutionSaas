@@ -427,10 +427,10 @@
 						"name": "to",
 						"in": "query",
 						"required": false,
-						"description": "Only messages to this address: an e-mail address or a phone number (matched normalised), else a subscriber or staff id.",
+						"description": "Only messages to this address: an email address or a phone number (matched normalized), else a subscriber or staff id.",
 						"schema": {
 							"type": "string",
-							"description": "Only messages to this address: an e-mail address or a phone number (matched normalised), else a subscriber or staff id."
+							"description": "Only messages to this address: an email address or a phone number (matched normalized), else a subscriber or staff id."
 						}
 					}
 				],
@@ -501,11 +501,11 @@
 									},
 									"to": {
 										"type": "string",
-										"description": "An e-mail address for email; a phone number with its calling code for sms and whatsapp."
+										"description": "An email address for email; a phone number with its calling code for sms and whatsapp."
 									},
 									"subject": {
 										"type": "string",
-										"description": "A one-off e-mail: required, one line of at most 200 characters (trimmed)."
+										"description": "A one-off email: required, one line of at most 200 characters (trimmed)."
 									},
 									"text": {
 										"type": "string",
@@ -588,10 +588,10 @@
 						"name": "to",
 						"in": "query",
 						"required": false,
-						"description": "Only messages to this address: an e-mail address or a phone number (matched normalised), else a subscriber or staff id.",
+						"description": "Only messages to this address: an email address or a phone number (matched normalized), else a subscriber or staff id.",
 						"schema": {
 							"type": "string",
-							"description": "Only messages to this address: an e-mail address or a phone number (matched normalised), else a subscriber or staff id."
+							"description": "Only messages to this address: an email address or a phone number (matched normalized), else a subscriber or staff id."
 						}
 					}
 				],
@@ -670,10 +670,10 @@
 						"name": "to",
 						"in": "query",
 						"required": false,
-						"description": "Only messages to this address: an e-mail address or a phone number (matched normalised), else a subscriber or staff id.",
+						"description": "Only messages to this address: an email address or a phone number (matched normalized), else a subscriber or staff id.",
 						"schema": {
 							"type": "string",
-							"description": "Only messages to this address: an e-mail address or a phone number (matched normalised), else a subscriber or staff id."
+							"description": "Only messages to this address: an email address or a phone number (matched normalized), else a subscriber or staff id."
 						}
 					}
 				],
@@ -1864,10 +1864,10 @@
 						"name": "to",
 						"in": "query",
 						"required": false,
-						"description": "Only messages to this address: an e-mail address or a phone number (matched normalised), else a subscriber or staff id.",
+						"description": "Only messages to this address: an email address or a phone number (matched normalized), else a subscriber or staff id.",
 						"schema": {
 							"type": "string",
-							"description": "Only messages to this address: an e-mail address or a phone number (matched normalised), else a subscriber or staff id."
+							"description": "Only messages to this address: an email address or a phone number (matched normalized), else a subscriber or staff id."
 						}
 					},
 					{
@@ -1942,10 +1942,10 @@
 						"name": "to",
 						"in": "query",
 						"required": false,
-						"description": "Only messages to this address: an e-mail address or a phone number (matched normalised), else a subscriber or staff id.",
+						"description": "Only messages to this address: an email address or a phone number (matched normalized), else a subscriber or staff id.",
 						"schema": {
 							"type": "string",
-							"description": "Only messages to this address: an e-mail address or a phone number (matched normalised), else a subscriber or staff id."
+							"description": "Only messages to this address: an email address or a phone number (matched normalized), else a subscriber or staff id."
 						}
 					},
 					{
@@ -2035,10 +2035,10 @@
 						"name": "to",
 						"in": "query",
 						"required": false,
-						"description": "Only messages to this address: an e-mail address or a phone number (matched normalised), else a subscriber or staff id.",
+						"description": "Only messages to this address: an email address or a phone number (matched normalized), else a subscriber or staff id.",
 						"schema": {
 							"type": "string",
-							"description": "Only messages to this address: an e-mail address or a phone number (matched normalised), else a subscriber or staff id."
+							"description": "Only messages to this address: an email address or a phone number (matched normalized), else a subscriber or staff id."
 						}
 					},
 					{
@@ -2080,8 +2080,8 @@
 		},
 		"/v1/messages/email": {
 			"post": {
-				"summary": "Send an e-mail from a template",
-				"description": "The answer is the message as the delivery log keeps it. It is saved before its first attempt and sent at once unless a delayed send or quiet hours hold it; an attempt that fails or breaks off answers retrying and is tried again on later uses of your website, then on the fallback channel. Someone who unsubscribed gets only required messages (else skipped, reason unsubscribed); send limits skip with reason limited. 422 template_not_found when the key has no e-mail template; 422 validation_failed for a field; 403 feature_off for your own keys without Merchant send API (send_api), or sendAt without Delayed send. Send an Idempotency-Key so a retried request sends once.",
+				"summary": "Send an email from a template",
+				"description": "The answer is the message as the delivery log keeps it. It is saved before its first attempt and sent at once unless a delayed send or quiet hours hold it; an attempt that fails or breaks off answers retrying and is tried again on later uses of your website, then on the fallback channel. Someone who unsubscribed gets only required messages (else skipped, reason unsubscribed); send limits skip with reason limited. 422 template_not_found when the key has no email template; 422 validation_failed for a field; 403 feature_off for your own keys without Merchant send API (send_api), or sendAt without Delayed send. Send an Idempotency-Key so a retried request sends once.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "email",
 				"security": [
@@ -4136,7 +4136,7 @@
 					"email": {
 						"type": "string",
 						"maxLength": 254,
-						"description": "An e-mail address (kept in lower case)."
+						"description": "An email address (kept in lower case)."
 					},
 					"phone": {
 						"type": "string",
@@ -4279,7 +4279,7 @@
 					},
 					"to": {
 						"type": "string",
-						"description": "The address on channel: an e-mail address (lower case), a phone number (+ and digits), a browser push subscriber id or a staff user id."
+						"description": "The address on channel: an email address (lower case), a phone number (+ and digits), a browser push subscriber id or a staff user id."
 					},
 					"status": {
 						"$ref": "#/components/schemas/MessageStatus"
@@ -4293,7 +4293,7 @@
 					},
 					"subject": {
 						"type": "string",
-						"description": "The e-mail subject or push title ('' for SMS and WhatsApp), hidden values replaced."
+						"description": "The email subject or push title ('' for SMS and WhatsApp), hidden values replaced."
 					},
 					"text": {
 						"type": "string",
@@ -4365,7 +4365,7 @@
 			},
 			"PhoneRecipient": {
 				"type": "object",
-				"description": "The recipient: phone is required; email is used by the fallback channel (e-mail). Each member given must be valid (422 validation_failed at to/<member>).",
+				"description": "The recipient: phone is required; email is used by the fallback channel (email). Each member given must be valid (422 validation_failed at to/<member>).",
 				"required": [
 					"phone"
 				],
@@ -4377,7 +4377,7 @@
 					"email": {
 						"type": "string",
 						"maxLength": 254,
-						"description": "An e-mail address (kept in lower case)."
+						"description": "An email address (kept in lower case)."
 					},
 					"language": {
 						"type": "string",
@@ -4586,7 +4586,7 @@
 					"subject": {
 						"type": "string",
 						"maxLength": 200,
-						"description": "The e-mail subject or push title ('' for SMS and WhatsApp)."
+						"description": "The email subject or push title ('' for SMS and WhatsApp)."
 					},
 					"text": {
 						"type": "string",
@@ -4655,7 +4655,7 @@
 					},
 					"text": {
 						"type": "string",
-						"description": "Trimmed, not empty; at most 100,000 characters for e-mail, 1600 for SMS, 4096 for WhatsApp and 500 for push. Every {?name} is closed by a later {/name}."
+						"description": "Trimmed, not empty; at most 100,000 characters for email, 1600 for SMS, 4096 for WhatsApp and 500 for push. Every {?name} is closed by a later {/name}."
 					},
 					"required": {
 						"type": "boolean",

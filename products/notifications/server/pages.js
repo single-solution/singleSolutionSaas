@@ -1,7 +1,7 @@
 /**
  * The hosted unsubscribe page (PLAN 0.8.5): served by Notifications at `/unsubscribe/<websiteId>/<code>`, with the
  * website's widget texts (every word editable in Settings → Texts), theme and custom CSS. Opening the link only asks;
- * the button (a form POST, also used by e-mail clients' one-click unsubscribe) unsubscribes. Plain HTML; every value
+ * the button (a form POST, also used by email clients' one-click unsubscribe) unsubscribes. Plain HTML; every value
  * is escaped and the page runs no script.
  * @module
  */

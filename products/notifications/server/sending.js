@@ -190,7 +190,7 @@ export const createSending = (product) => {
 	};
 
 	/**
-	 * The retry plan of a channel's setting `retryPlan` (e-mail, SMS and WhatsApp; push channels retry on the short
+	 * The retry plan of a channel's setting `retryPlan` (email, SMS and WhatsApp; push channels retry on the short
 	 * plan). A message keeps the plan it was accepted with (PLAN 0.8.10 N3).
 	 * @param {Site} s
 	 * @param {Channel} channel

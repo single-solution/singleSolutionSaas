@@ -1,6 +1,6 @@
 # Notifications
 
-Sends WhatsApp, e-mail, SMS, browser push, staff push and outgoing webhooks for every product and for the merchant's
+Sends WhatsApp, email, SMS, browser push, staff push and outgoing webhooks for every product and for the merchant's
 own server, through the merchant's own provider keys (PLAN.md 0.8.5). Feature keys are in `manifest.json`, the public
 docs at `/docs`.
 

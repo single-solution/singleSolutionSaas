@@ -28,7 +28,7 @@ export const CHANNEL_CONNECTIONS = Object.freeze({
 	staff_push: 'push_keys',
 });
 
-/** Channels a fallback may lead to (and come from): messages with a text body to an e-mail address or a phone. */
+/** Channels a fallback may lead to (and come from): messages with a text body to an email address or a phone. */
 export const FALLBACK_CHANNELS = Object.freeze(/** @type {Array<'email' | 'sms' | 'whatsapp'>} */ (['email', 'sms', 'whatsapp']));
 
 /** The member of `to` each channel needs. */
@@ -45,7 +45,7 @@ const ID = /^[A-Za-z0-9_-]{1,64}$/;
 const LANGUAGE = /^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8}){0,3}$/;
 
 /**
- * An e-mail address in its stored form (lower case), or null.
+ * An email address in its stored form (lower case), or null.
  * @param {unknown} value
  * @returns {string | null}
  */
@@ -56,7 +56,7 @@ export const normaliseEmail = (value) => {
 };
 
 /**
- * A phone number as E.164, or null: the normaliser every product shares (`@ss/contracts/phone`), with no default
+ * A phone number as E.164, or null: the normalizer every product shares (`@ss/contracts/phone`), with no default
  * calling code, so a number needs its `+` or `00` and calling code (Notifications never guesses a country); a trunk 0
  * after the code is dropped (`+49 030 …`, `+44 (0)20 …`).
  * @param {unknown} value
@@ -79,7 +79,7 @@ export const normaliseLanguage = (value) => (typeof value === 'string' && LANGUA
 export const normaliseTimeZone = (value) => {
 	if (typeof value !== 'string' || value.length === 0 || value.length > 64) return null;
 	try {
-		new Intl.DateTimeFormat('en', { timeZone: value });
+		new Intl.DateTimeFormat('en-US', { timeZone: value });
 		return value;
 	} catch {
 		return null;

@@ -81,14 +81,14 @@ const PROBLEM_CODES = Object.freeze({
 });
 
 /**
- * The addresses a data-rights request names (e-mail and phone, normalised).
+ * The addresses a data-rights request names (email and phone, normalized).
  * @param {{ email?: string, phone?: string }} user
  */
 const addressesOf = (user) =>
 	/** @type {string[]} */ ([normaliseEmail(user.email), normalisePhone(user.phone)].filter((address) => address !== null));
 
 /**
- * Data rights (PLAN 0.4.11): a person's messages, unsubscribes and unsubscribe codes are found by their e-mail address
+ * Data rights (PLAN 0.4.11): a person's messages, unsubscribes and unsubscribe codes are found by their email address
  * and phone number; delete removes them. Messages are exported as the delivery log keeps them: the values of sensitive
  * messages hidden (PLAN 0.8.10 D11).
  * @param {() => number} now
@@ -173,7 +173,7 @@ export const createProductInstance = (options) => {
 		strings,
 		problemCodes: PROBLEM_CODES,
 		connections: {
-			email: { label: 'E-mail provider', kind: 'secret', neededBy: ['email'], secretField: 'secret', ...provider('email') },
+			email: { label: 'Email provider', kind: 'secret', neededBy: ['email'], secretField: 'secret', ...provider('email') },
 			sms: { label: 'SMS provider', kind: 'secret', neededBy: ['sms'], secretField: 'secret', ...provider('sms') },
 			whatsapp: {
 				label: 'WhatsApp provider',

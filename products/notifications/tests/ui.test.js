@@ -382,7 +382,7 @@ describe('admin widgets', () => {
 		const widget = startWidget({ window, script: script(null) });
 		await widget.admin({ getTicket: async () => TICKET });
 		await flush();
-		expect(inside(host, '.meta').textContent).toBe('E-mail · Sent · 1 attempts · 1 Oct 2026, 19:00');
+		expect(inside(host, '.meta').textContent).toBe('Email · Sent · 1 attempts · 1 Oct 2026, 19:00');
 	});
 
 	it('the template editor lists, loads, saves and deletes templates', async () => {
@@ -416,7 +416,7 @@ describe('admin widgets', () => {
 			'DELETE /v1/admin/templates/x/email/default': () => refusal(404, 'not_found'),
 		});
 		const pick = /** @type {HTMLButtonElement} */ (inside(host, 'li button'));
-		expect(pick.textContent).toBe('welcome · E-mail · Default');
+		expect(pick.textContent).toBe('welcome · Email · Default');
 		pick.click();
 		const fields = /** @type {any[]} */ ([...(host.shadowRoot?.querySelectorAll('input, select, textarea') ?? [])]);
 		const [key, channel, language, subject, text, required, urgent, sensitive] = fields;
@@ -549,20 +549,20 @@ describe('admin widgets', () => {
 		const [order, status, reason] = samples();
 		for (const [input, value] of /** @type {const} */ ([
 			[order, 'SH-2026-0044'],
-			[status, 'cancelled'],
+			[status, 'canceled'],
 			[reason, 'Out of stock'],
 		])) {
 			/** @type {HTMLInputElement} */ (input).value = value;
 			input?.dispatchEvent(new window.Event('input'));
 		}
 		expect(preview()).toBe(
-			`Order SH-2026-0044Order SH-2026-0044 is cancelled. Reason: Out of stock ${strings['templates.sampleUnsubscribe']}`,
+			`Order SH-2026-0044Order SH-2026-0044 is canceled. Reason: Out of stock ${strings['templates.sampleUnsubscribe']}`,
 		);
 		// the samples stay while the words change
 		const text = /** @type {HTMLTextAreaElement} */ (inside(host, 'textarea'));
 		text.value = 'Order {order}: {status}';
 		text.dispatchEvent(new window.Event('input'));
-		expect(samples().map((input) => input.value)).toEqual(['SH-2026-0044', 'cancelled']);
+		expect(samples().map((input) => input.value)).toEqual(['SH-2026-0044', 'canceled']);
 		const to = /** @type {HTMLInputElement} */ (
 			[...(host.shadowRoot?.querySelectorAll('input') ?? [])].find((input) => input.getAttribute('autocomplete') === 'off')
 		);
@@ -574,7 +574,7 @@ describe('admin widgets', () => {
 			to: 'me@shop.example.com',
 			template: 'ecommerce.order_status',
 			language: 'default',
-			values: { order: 'SH-2026-0044', status: 'cancelled' },
+			values: { order: 'SH-2026-0044', status: 'canceled' },
 		});
 		expect(statusOf(host)).toBe('Test: Sent');
 		button(host, strings['templates.testSend']).click();

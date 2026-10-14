@@ -26,15 +26,15 @@ import { isObject } from './util.js';
 /**
  * One message for a provider.
  * @typedef {object} ProviderMessage
- * @property {string} to e-mail address or international phone number
- * @property {string} subject e-mail only
+ * @property {string} to email address or international phone number
+ * @property {string} subject email only
  * @property {string} text
  * @property {string[]} parameters WhatsApp provider templates: body parameters
  * @property {string} providerTemplate WhatsApp: approved Meta template name (`''` = plain text)
  * @property {import('../core/templates.js').Button[]} [buttons] WhatsApp templates at Meta: the buttons' values
  * @property {string} language the template's language (`''` = default)
- * @property {string} [replyTo] e-mail
- * @property {Record<string, string>} [headers] e-mail headers (List-Unsubscribe)
+ * @property {string} [replyTo] email
+ * @property {Record<string, string>} [headers] email headers (List-Unsubscribe)
  */
 
 /** Graph API version for WhatsApp Cloud API calls. */
@@ -74,8 +74,8 @@ export const providerViolation = (name, value) => {
 		return `Pick a provider: ${PROVIDERS[name].join(', ')}.`;
 	const provider = /** @type {keyof typeof REQUIRED} */ (value.provider);
 	const missing = REQUIRED[provider].filter((field) => typeof value[field] !== 'string' || value[field].trim() === '');
-	if (missing.length > 0) return `Fill in: ${missing.join(', ')}.`;
-	if (name === 'email' && !MAILBOX.test(String(value.from))) return 'from must be an e-mail address or Name <address>.';
+	if (missing.length > 0) return `Fill out: ${missing.join(', ')}.`;
+	if (name === 'email' && !MAILBOX.test(String(value.from))) return 'from must be an email address or Name <address>.';
 	if (provider === 'mailgun' && value.region !== undefined && value.region !== 'us' && value.region !== 'eu')
 		return 'region must be us or eu.';
 	if (provider === 'ses' && !/^[a-z]{2}(-[a-z]+)+-\d$/.test(String(value.region))) return 'region must be an AWS region.';
@@ -156,7 +156,7 @@ export const createProviders = ({ send, policy, now, createTransport }) => {
 	const form = (fields) => new URLSearchParams(fields).toString();
 
 	/**
-	 * Send an e-mail.
+	 * Send an email.
 	 * @param {ProviderValue} v
 	 * @param {ProviderMessage} m
 	 * @returns {Promise<SendOutcome>}

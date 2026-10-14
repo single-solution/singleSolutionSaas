@@ -33,7 +33,7 @@ describe('provider values', () => {
 	it('names what is missing or wrong', () => {
 		expect(providerViolation('email', null)).toMatch(/^Pick a provider/);
 		expect(providerViolation('sms', { provider: 'resend' })).toMatch(/^Pick a provider/);
-		expect(providerViolation('email', { provider: 'resend', secret: 'k' })).toBe('Fill in: from.');
+		expect(providerViolation('email', { provider: 'resend', secret: 'k' })).toBe('Fill out: from.');
 		expect(providerViolation('email', { provider: 'resend', secret: 'k', from: 'nope' })).toMatch(/^from must/);
 		expect(providerViolation('email', { provider: 'mailgun', secret: 'k', from: FROM, domain: 'd', region: 'asia' })).toBe(
 			'region must be us or eu.',
@@ -56,7 +56,7 @@ describe('provider values', () => {
 	});
 });
 
-describe('e-mail providers', () => {
+describe('email providers', () => {
 	it('send through SendGrid, Mailgun and Amazon SES with the merchant’s keys', async () => {
 		const { send, calls } = fakeSend();
 		const providers = createProviders({ send, policy, now: () => NOW });

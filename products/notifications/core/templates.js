@@ -28,7 +28,7 @@ export const DEFAULT_LANGUAGE = '';
 
 /** Longest texts per channel (characters). */
 const TEXT_LIMITS = Object.freeze({ email: 100_000, sms: 1600, whatsapp: 4096, push: 500, staff_push: 500 });
-/** Longest subject (e-mail) or title (push). */
+/** Longest subject (email) or title (push). */
 const SUBJECT_LIMIT = 200;
 /** Placeholders Notifications fills itself. */
 const BUILT_IN_VALUES = Object.freeze(['unsubscribeUrl']);
@@ -55,7 +55,7 @@ const LANGUAGE = /^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8}){0,3}$/;
  * @property {string} key
  * @property {Channel} channel
  * @property {string} language `''` for the default version
- * @property {string} subject e-mail subject or push title (`''` for SMS and WhatsApp)
+ * @property {string} subject email subject or push title (`''` for SMS and WhatsApp)
  * @property {string} text
  * @property {boolean} required required messages (sign-in codes, order and account updates) ignore unsubscribes;
  *   Accounts' templates always are

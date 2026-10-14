@@ -16,7 +16,7 @@
 		},
 		"email": {
 			"type": "string",
-			"title": "When e-mail fails",
+			"title": "When email fails",
 			"default": "none",
 			"enum": ["none", "sms", "whatsapp"]
 		}

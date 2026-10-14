@@ -52,7 +52,7 @@ export const pushKeysOf = (value) => {
 	if (!isObject(value)) return { ok: false, message: 'Enter the public key, the private key and the contact.' };
 	const { publicKey, privateKey, subject } = value;
 	if (typeof subject !== 'string' || !/^(mailto:\S+@\S+|https:\/\/\S+)$/.test(subject))
-		return { ok: false, message: 'The contact must be mailto:<e-mail> or an https address.' };
+		return { ok: false, message: 'The contact must be mailto:<email> or an https address.' };
 	if (typeof publicKey !== 'string' || typeof privateKey !== 'string')
 		return { ok: false, message: 'Enter the public key and the private key (base64url).' };
 	const point = bytesOf(publicKey);

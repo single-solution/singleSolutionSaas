@@ -9,7 +9,7 @@ import { zonedParts } from '@ss/contracts/format';
 
 /** @typedef {'short' | 'long'} RetryPlan */
 /**
- * Retry plans of e-mail, SMS and WhatsApp (PLAN 0.8.10 N3): the attempts on one channel before the message fails there
+ * Retry plans of email, SMS and WhatsApp (PLAN 0.8.10 N3): the attempts on one channel before the message fails there
  * (then the fallback channel, if any) and the waits before attempts 2, 3, …, each judged on the next use after it.
  * Short: now, then 1 and 5 minutes later. Long: now, then 5 and 15 minutes and 1, 3 and 6 hours later.
  */

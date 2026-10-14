@@ -340,7 +340,7 @@ describe('required messages are never stopped by an opt-out (PLAN 0.8.5, MS-4)',
 		expect(
 			(await env.send('sms', { template: 'promo_sms', to: { phone: '+15550004040' }, values: { pct: '5%' } })).json,
 		).toMatchObject({ status: 'skipped', reason: 'unsubscribed' });
-		// an e-mail of Accounts carries no unsubscribe link or header
+		// an email of Accounts carries no unsubscribe link or header
 		await storeAsOptional('accounts.email_code', 'email');
 		await env.send('email', {
 			template: 'accounts.email_code',
@@ -435,7 +435,7 @@ describe('Accounts’ messages are never held by quiet hours or a delayed send (
 		const asked = await env.send('sms', { template: 'accounts.phone_code', to, values: { code: '515151' }, sendAt });
 		expect(asked.json).toMatchObject({ status: 'sent' });
 		expect((await env.send('sms', { template: 'promo_sms', to, values: { pct: '6%' }, sendAt })).json.status).toBe('queued');
-		// the template shows as urgent wherever it is read, and stays urgent when saved unticked
+		// the template shows as urgent wherever it is read, and stays urgent when saved unchecked
 		const templates = await (
 			await env.dashboard(await env.adminSession(), 'GET', `/v1/dashboard/websites/${env.websiteId}/templates`)
 		).json();

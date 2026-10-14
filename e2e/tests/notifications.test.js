@@ -1,6 +1,6 @@
 /**
  * PLAN 0.12 step 6: Notifications against the REAL Portal — connect (manifest and price list), price and feature
- * reports, a send through the send API with the server token the Portal issued (the e-mail provider is a fake in this
+ * reports, a send through the send API with the server token the Portal issued (the email provider is a fake in this
  * process: no real network call), the delivery log through a ticket, and the hourly charge for the switched-on
  * features. PLAN 0.8.10 phase 2: a WhatsApp template with a copy-code button and a per-status template with optional
  * sections, written by the merchant's server, are sent.
@@ -15,7 +15,7 @@ const ADMIN_ORIGIN = 'https://admin.notify.example.com';
 
 /** @type {Array<{ url: string, authorization: string | null, body: any }>} */
 const sent = [];
-/** The merchant's e-mail provider (Resend), faked in process. @param {Request} request */
+/** The merchant's email provider (Resend), faked in process. @param {Request} request */
 const resend = async (request) => {
 	const body = request.method === 'POST' ? await request.json() : null;
 	sent.push({ url: request.url, authorization: request.headers.get('authorization'), body });
@@ -220,11 +220,11 @@ describe('Notifications on the real Portal', () => {
 			subject: 'Order SH-2026-0043: shipped',
 			text: 'Your order SH-2026-0043 is shipped. Track it with UPS: TRK9.',
 		});
-		const cancelled = await order({ order: 'SH-2026-0044', status: 'cancelled', reason: 'Out of stock' });
-		expect(cancelled.json.text).toBe('Your order SH-2026-0044 is cancelled. Reason: Out of stock.');
+		const cancelled = await order({ order: 'SH-2026-0044', status: 'canceled', reason: 'Out of stock' });
+		expect(cancelled.json.text).toBe('Your order SH-2026-0044 is canceled. Reason: Out of stock.');
 		const confirmed = await order({ order: 'SH-2026-0045', status: 'confirmed', tracking: '' });
 		expect(confirmed.json.text).toBe('Your order SH-2026-0045 is confirmed.');
-		// the e-mail provider got exactly those words
+		// the email provider got exactly those words
 		expect(sent.at(-1)?.body).toMatchObject({ to: ['buyer@example.com'], text: 'Your order SH-2026-0045 is confirmed.' });
 	});
 });

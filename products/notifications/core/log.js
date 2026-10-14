@@ -14,12 +14,12 @@ export const STATUSES = Object.freeze(/** @type {MessageStatus[]} */ (['queued',
  * @typedef {object} LogFilters
  * @property {MessageStatus} [status]
  * @property {import('./channels.js').Channel} [channel]
- * @property {string} [address] the recipient's address on the message's channel (e-mail and phones normalised)
+ * @property {string} [address] the recipient's address on the message's channel (email and phones normalized)
  */
 
 /**
  * The filters of a delivery-log request (`?status=&channel=&to=`). An unknown status or channel is ignored, as is an
- * empty `to`; any other `to` is matched as normalised (an e-mail address or a phone), else as written.
+ * empty `to`; any other `to` is matched as normalized (an email address or a phone), else as written.
  * @param {Record<string, unknown>} query
  * @returns {LogFilters}
  */

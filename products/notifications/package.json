@@ -1,7 +1,7 @@
 {
 	"name": "@ss/product-notifications",
 	"version": "0.1.0",
-	"description": "Notifications: WhatsApp, e-mail, SMS, browser and staff push and webhooks for any product and the merchant's own server, through the merchant's own provider keys (PLAN 0.8.5).",
+	"description": "Notifications: WhatsApp, email, SMS, browser and staff push and webhooks for any product and the merchant's own server, through the merchant's own provider keys (PLAN 0.8.5).",
 	"type": "module",
 	"private": true,
 	"license": "UNLICENSED",

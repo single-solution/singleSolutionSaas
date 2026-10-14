@@ -38,14 +38,14 @@ import { checkForwardedEvent, checkWebhookUrls, eventTime, urlsFor } from '../co
 import { keyBytes } from '../core/widgets.js';
 
 describe('channels', () => {
-	it('normalises addresses without guessing a country', () => {
+	it('normalizes addresses without guessing a country', () => {
 		expect(normaliseEmail(' Ana@Example.COM ')).toBe('ana@example.com');
 		expect(normaliseEmail('nope')).toBeNull();
 		expect(normaliseEmail(5)).toBeNull();
 		expect(normalisePhone('+1 (202) 555-0143')).toBe('+12025550143');
 		expect(normalisePhone('0044 7700 900123')).toBe('+447700900123');
 		expect(normalisePhone('07700900123')).toBeNull();
-		// the shared normaliser: a trunk 0 after the code is dropped, in any country; an unassigned code is refused
+		// the shared normalizer: a trunk 0 after the code is dropped, in any country; an unassigned code is refused
 		expect(normalisePhone('+44 (0)20 7946 0018')).toBe('+442079460018');
 		expect(normalisePhone('+33 (0)6 12 34 56 78')).toBe('+33612345678');
 		expect(normalisePhone('+92 0300 1234567')).toBe('+923001234567');
@@ -270,18 +270,18 @@ describe('templates', () => {
 		const checked = checkTemplate({
 			key: 'ecommerce.order_cancelled',
 			channel: 'email',
-			subject: 'Order {order} cancelled{?reason}: {reason}{/reason}',
-			text: 'Your order {order} was cancelled.{?reason} Reason: {reason}{/reason}',
+			subject: 'Order {order} canceled{?reason}: {reason}{/reason}',
+			text: 'Your order {order} was canceled.{?reason} Reason: {reason}{/reason}',
 		});
 		expect(checked.ok).toBe(true);
 		if (!checked.ok) return;
 		expect(renderTemplate(checked.value, { order: 'SH-2', reason: 'Out of stock' })).toMatchObject({
-			subject: 'Order SH-2 cancelled: Out of stock',
-			text: 'Your order SH-2 was cancelled. Reason: Out of stock',
+			subject: 'Order SH-2 canceled: Out of stock',
+			text: 'Your order SH-2 was canceled. Reason: Out of stock',
 		});
 		expect(renderTemplate(checked.value, { order: 'SH-2' })).toMatchObject({
-			subject: 'Order SH-2 cancelled',
-			text: 'Your order SH-2 was cancelled.',
+			subject: 'Order SH-2 canceled',
+			text: 'Your order SH-2 was canceled.',
 		});
 	});
 
@@ -351,7 +351,7 @@ describe('timing', () => {
 });
 
 describe('the delivery log’s filters', () => {
-	it('keep known statuses and channels and normalise the recipient', () => {
+	it('keep known statuses and channels and normalize the recipient', () => {
 		expect(STATUSES).toEqual(['queued', 'retrying', 'sent', 'failed', 'skipped']);
 		expect(logFilters({})).toEqual({});
 		expect(logFilters({ status: 'sent', channel: 'sms', to: '+44 7700 900123' })).toEqual({

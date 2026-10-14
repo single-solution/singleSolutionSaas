@@ -150,7 +150,7 @@ describe('templates for the merchant’s server (N4)', () => {
 			{
 				key: 'ecommerce.order_cancelled',
 				channel: 'sms',
-				text: 'Order {order} was cancelled.{?reason} Reason: {reason}{/reason}',
+				text: 'Order {order} was canceled.{?reason} Reason: {reason}{/reason}',
 				required: true,
 			},
 			ACTOR,
