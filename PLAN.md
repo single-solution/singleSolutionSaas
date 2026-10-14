@@ -1899,6 +1899,22 @@ E45, E46, E47 are built now, with the re-audit's amendments (PL-3, CU-10, CU-14,
 go (2026-10-14):** the owner created the SB merchant; the work happens on a branch of the SB repository, never pushed or
 deployed without the owner; SB's live data may be read (never written), through an address the owner gives.
 
+**Owner decisions, 2026-10-14 (later the same morning; binding).** (a) **Global, and dynamic by the merchant:**
+"anything" named or shaped for one shop type, store or country goes (e.g. the IMEI check); what a shop needs beyond
+true primary fields is an element the merchant switches on or a field the merchant creates (like menus and
+categories today): "a product can be digital/physical, a physical can be grade or a simple product based on merchant
+allowed product element". The three stores are references "so we don't hallucinate", never the target. Built after a
+written design the owner approves (`audit/design/ecommerce-dynamic-model.md`): product kinds and elements,
+merchant-defined fields with formats (a serial number with digits, 15, Luhn is one merchant's choice), addresses with
+region and postcode, delivery zones and tax by region, guest checkout by phone / e-mail / either, size-chart units
+beyond in/cm, landing pages by any attribute, Chat visitor-alert channels in the merchant's order, selling by length
+or weight. (b) **Order flow:** order steps and the moves between them are configurable per merchant and must be done
+"correctly in the saas ... these products are very sensitive" (not a one-store E40). (c) **Brands:** one brand list;
+a brand can be in many categories ("like nike sells shoes and caps"). (d) **Old secret formats:** removed only after
+the owner presses Re-seal in the Portal and each product and the answers show nothing old is left. (e) **Remove all
+legacy and leftovers** ("I can't bear a single mistake, this is a professional platform"): the list is
+`audit/global-audit-2026-10-14.md`.
+
 #### Principles
 
 - **Latest, not legacy** (owner, 2026-10-10). The stores were built the old way; the products keep the current,
