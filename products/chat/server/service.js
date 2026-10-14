@@ -17,7 +17,7 @@
  * - AI token counts per day and month window, the caps and the monthly cost alert.
  * @module
  */
-import { problem } from '@ss/app-kit';
+import { formatText, problem } from '@ss/app-kit';
 import { createId } from '@ss/contracts';
 import { callingCodeOf } from '@ss/contracts/phone';
 import { capReached, windowKeys, alertCrossed } from '../core/caps.js';
@@ -402,7 +402,7 @@ export const createService = (product) => {
 	 */
 	const closedText = async (s, hours) => {
 		const time = hours.backAtMs === null ? '—' : (await s.format()).date(hours.backAtMs, 'datetime');
-		return (await s.texts())['chat.officeClosed']?.replace('{time}', time) ?? '';
+		return formatText((await s.texts())['chat.officeClosed'] ?? '', { time });
 	};
 
 	/**
@@ -781,7 +781,6 @@ export const createService = (product) => {
 		staffMessages,
 		officeHours,
 		closedText,
-		notify,
 		staffAlert,
 		visitorAlert,
 		sendTranscript,

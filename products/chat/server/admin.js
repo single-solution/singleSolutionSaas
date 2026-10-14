@@ -192,7 +192,6 @@ export const createAdmin = (product, service) => {
 		const ratings = await values('ratings');
 		const ai = await values('ai_replies');
 		const idle = await values('proactive_idle');
-		const receipts = await values('typing_receipts');
 		const flows = on.includes('leads_flows') ? await product.lists.get(websiteId, 'flows') : [];
 		return {
 			look: {
@@ -204,7 +203,6 @@ export const createAdmin = (product, service) => {
 				fullScreenOnMobile: look.fullScreenOnMobile,
 				hideOnPages: look.hideOnPages,
 				showTimes: look.showTimes,
-				showPaused: look.showPaused,
 			},
 			// the limit that applies now: none while the Customer role's sign-in is paused, with the setting (C17)
 			guests: {
@@ -216,7 +214,6 @@ export const createAdmin = (product, service) => {
 			// "never disclose" hides the AI label (C1)
 			ai: { showLabel: ai.showAiLabel === true && ai.neverDisclose !== true },
 			handoff: { showButton: (await values('handoff')).showButton },
-			receipts: { typing: receipts.showTyping, seen: receipts.showSeen },
 			proactive: {
 				idleMinutes: idle.idleMinutes,
 				dismissDays: look.proactiveDismissDays,
@@ -240,11 +237,6 @@ export const createAdmin = (product, service) => {
 				staffTypes: uploadRules(attachments, 'staff').types,
 				staffMaxBytes: uploadRules(attachments, 'staff').max,
 				storage: on.includes('attachments') && (await product.connections.storage(websiteId)) !== null,
-			},
-			inbox: {
-				notes: (await values('internal_notes')).mode,
-				pauseNeeds: (await values('inbox')).pauseNeeds,
-				guests: (await values('inbox')).guests,
 			},
 			ratings: { scale: Number(ratings.scale), askWhen: ratings.askWhen, comment: ratings.askComment },
 			queuePosition: (await values('presence_queue')).queuePosition,

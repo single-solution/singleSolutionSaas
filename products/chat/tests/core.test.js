@@ -95,16 +95,12 @@ describe('AI wire formats', () => {
 		const deps = {
 			call: async () => ok('Hi'),
 			execute: async () => ({ content: '' }),
-			remainingTokens: () => 10,
 			spend: () => undefined,
 			expired: () => false,
 		};
 		expect(
 			(await runAssistant({ messages: MESSAGES, tools: [], maxRounds: 0 }, { ...deps, expired: () => true })).failure,
 		).toBe('timeout');
-		expect(
-			(await runAssistant({ messages: MESSAGES, tools: [], maxRounds: 0 }, { ...deps, remainingTokens: () => 0 })).failure,
-		).toBe('budget');
 		expect(
 			(
 				await runAssistant(

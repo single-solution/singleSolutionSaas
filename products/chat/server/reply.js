@@ -54,7 +54,6 @@ import {
 	TOOL_TIMEOUT_MS,
 	builtinSchemas,
 	checkArguments,
-	isHttpsUrl,
 	slotRange,
 	toolOutput,
 	webhookSchema,
@@ -72,6 +71,7 @@ import {
 	shopSchemas,
 } from '../core/shop.js';
 import { pendingStale } from '../core/conversation.js';
+import { isHttpsUrl } from '../core/text.js';
 import { dayKey } from '../core/time.js';
 import { SIGN_IN_HEADER, WAIT_MS } from '../core/widgets.js';
 import { currencyDigits } from '@ss/contracts/format';
@@ -865,7 +865,6 @@ export const createReply = (product, service) => {
 				{
 					call: (request) => complete(s, connections, request),
 					execute: tools ? tools.execute : async () => ({ ok: false, content: 'No such tool.' }),
-					remainingTokens: () => Number.POSITIVE_INFINITY,
 					spend: (usage) => service.spend(s, usage.input + usage.output),
 					expired: () => {
 						onCall?.();

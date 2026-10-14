@@ -400,7 +400,6 @@ describe('never disclose, strict language and the own contact (C1, C14, C15)', (
 				value: { text: answers.shift() ?? '', toolCalls: [], usage: { input: 1, output: 1 }, finish: 'stop' },
 			}),
 			execute: async () => ({ content: '' }),
-			remainingTokens: () => 100,
 			spend: () => undefined,
 			expired: () => false,
 		});

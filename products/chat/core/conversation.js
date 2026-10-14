@@ -9,6 +9,10 @@ import { truncate } from './text.js';
 import { MAX_MESSAGE_LENGTH, PAGE_KINDS } from './widgets.js';
 
 export const STATUSES = Object.freeze(/** @type {const} */ (['open', 'awaiting_visitor', 'resolved']));
+/** Staff presence values. */
+export const PRESENCES = Object.freeze(['online', 'away', 'offline']);
+/** An Accounts user id, a staff id or a pause's actor id (as the inbox and the `SS-Actor-*` headers take them). */
+export const USER_ID = /^[A-Za-z0-9_.:@-]{1,64}$/;
 /** @typedef {(typeof STATUSES)[number]} Status */
 /** @typedef {'visitor' | 'ai' | 'staff' | 'system'} Author */
 

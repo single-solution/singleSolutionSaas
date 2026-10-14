@@ -144,7 +144,7 @@ const SEPARATOR = /^[ \t]*-{3,}[ \t]*$/m;
  * Primary subtag (`pt-BR` → `pt`).
  * @param {string} tag
  */
-const primary = (tag) => String(tag).toLowerCase().split('-')[0] ?? '';
+export const primary = (tag) => String(tag).toLowerCase().split('-')[0] ?? '';
 
 /** ISO 15924 script subtags (`sr-Latn`, `zh-Hant`) → the script names used here. */
 const SCRIPT_SUBTAGS = Object.freeze({

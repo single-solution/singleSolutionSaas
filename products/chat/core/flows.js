@@ -15,7 +15,7 @@ const MAX_FLOWS = 20;
 /** Most steps of one flow. */
 const MAX_STEPS = 20;
 const FLOW_ID = /^[a-z0-9_-]{1,40}$/;
-const STANDARD_FIELDS = Object.freeze(['name', 'email', 'phone', 'text']);
+export const STANDARD_FIELDS = Object.freeze(/** @type {const} */ (['name', 'email', 'phone', 'text']));
 
 /**
  * @typedef {{ kind: 'message', text: string } | { kind: 'question', text: string, buttons: string[] }
@@ -51,7 +51,7 @@ const checkStep = (raw, at, errors) => {
 	}
 	if (step.kind === 'collect') {
 		const field = typeof step.field === 'string' ? step.field : '';
-		if (!STANDARD_FIELDS.includes(field) && !/^custom:[a-z][a-z0-9_]{0,39}$/.test(field))
+		if (!STANDARD_FIELDS.includes(/** @type {any} */ (field)) && !/^custom:[a-z][a-z0-9_]{0,39}$/.test(field))
 			return (errors.push(`${at}: collect name, email, phone, text or a custom field.`), null);
 		return { kind: 'collect', field, text: words };
 	}

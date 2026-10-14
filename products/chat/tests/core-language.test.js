@@ -1,5 +1,5 @@
 /**
- * PLAN 0.8.10 Chat, fixes after the re-audit (pure parts): the language lock tells languages of one script apart by
+ * The language lock and message parts (PLAN 0.8.10, pure parts): the language lock tells languages of one script apart by
  * their letters and the merchant's marker words, with the merchant's thresholds, quoted phrases and romanized marker
  * lines; replies are checked whole or part by part, and a language may be accepted in Latin letters too (CH-16 to
  * CH-19, CH-38, CH-39). The languages here (Urdu, Arabic, Persian, Hindi, Russian, Ukrainian, Bulgarian, Spanish,

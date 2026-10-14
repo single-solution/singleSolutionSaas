@@ -63,6 +63,8 @@ p { overflow-wrap: anywhere; }
   box-sizing: border-box; } .msg > p { white-space: pre-wrap; }
 .msg.visitor { align-items: flex-end; } .msg.visitor > p { background: var(--accent); color: var(--on-accent); }
 .msg.system > p { background: transparent; font-size: 0.85em; opacity: 0.8; }
+.day { text-align: center; font-size: 0.8em; opacity: 0.7; padding: 8px 0 4px; } .older { text-align: center; }
+.msg > time { margin-top: 2px; }
 .msg.note > p, .msg.note > .rich { border: 1px dashed var(--line); background: transparent; }
 .rich { min-width: 0; overflow-wrap: anywhere; } .rich > * { margin: 0; } .rich > * + * { margin-top: 8px; }
 .rich ul { list-style: disc; padding-left: 20px; } .rich ol { list-style: decimal; padding-left: 24px; }

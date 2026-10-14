@@ -14,7 +14,7 @@
  * @module
  */
 import { actorOf as kitActorOf, countHandlers, created, noContent, paginate, problem } from '@ss/app-kit';
-import { STATUSES, messageText, statusAfter } from '../core/conversation.js';
+import { PRESENCES, STATUSES, USER_ID, messageText, statusAfter } from '../core/conversation.js';
 import { checkFieldValue } from '../core/fields.js';
 import { checkUpload, pagingOf, presign } from './visitor.js';
 import { PRESENCE_MS, bodyOf, invalid } from './service.js';
@@ -23,7 +23,6 @@ import { PRESENCE_MS, bodyOf, invalid } from './service.js';
 /** @typedef {import('./service.js').Actor} Actor */
 /** @typedef {import('../core/conversation.js').ConversationRecord} ConversationRecord */
 
-const PRESENCES = Object.freeze(['online', 'away', 'offline']);
 const MAX_SAVED_REPLIES = 200;
 /** The longest single note (C11) and pause reason. */
 const NOTE_MAX = 4000;
@@ -33,8 +32,6 @@ const DELETE_BATCH = 100;
 const DELETE_BUDGET_MS = 8_000;
 /** Attachments deleted from the website's storage at once. */
 const STORAGE_DELETES_AT_ONCE = 8;
-/** An Accounts user id in a list filter. */
-const USER_ID = /^[A-Za-z0-9_.:@-]{1,64}$/;
 /** What an assignee from Accounts must be allowed (CH-6), and how many pages of 100 users are read to find them. */
 const ASSIGNEE_PERMISSION = 'chat:inbox.reply';
 const ASSIGNEE_PAGES = 5;

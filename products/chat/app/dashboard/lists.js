@@ -23,6 +23,9 @@ import {
 	describeProblem,
 } from '@ss/ui';
 import { FALLBACK_INTENTS, FALLBACK_LIMITS, PLACEHOLDERS, fallbackProblems, placeholdersOf } from '../../core/fallback.js';
+import { FIELD_TYPES } from '../../core/fields.js';
+import { STANDARD_FIELDS } from '../../core/flows.js';
+import { PARAMETER_TYPES } from '../../core/tools.js';
 import { call, fill, useLoad } from './api.js';
 import { Loaded } from './parts.js';
 import { TEXTS } from './texts.js';
@@ -187,7 +190,6 @@ function ListEditor({ websiteId, list, title, help, itemLabel, max, blank, clean
 /** @typedef {{ websiteId: string, off?: boolean }} EditorProps */
 
 const T = L.tools;
-const PARAMETER_TYPES = /** @type {const} */ (['string', 'number', 'boolean']);
 
 /** @param {EditorProps} props */
 export function ToolsEditor({ websiteId, off }) {
@@ -334,7 +336,6 @@ export function PageRulesEditor({ websiteId, off }) {
 }
 
 const C = L.customFields;
-const FIELD_TYPES = /** @type {const} */ (['text', 'number', 'yes_no', 'choice']);
 
 /** @param {EditorProps} props */
 export function CustomFieldsEditor({ websiteId, off }) {
@@ -388,7 +389,6 @@ export function CustomFieldsEditor({ websiteId, off }) {
 
 const F = L.flows;
 const STEP_KINDS = /** @type {const} */ (['message', 'question', 'collect', 'handoff', 'end']);
-const BASE_FIELDS = /** @type {const} */ (['name', 'email', 'phone', 'text']);
 
 /**
  * A fresh step of `kind`, keeping the text of the step it replaces.
@@ -421,7 +421,7 @@ export function FlowsEditor({ websiteId, off, customFields }) {
 	/** @type {Array<{ key: string, label: string }>} */
 	const extra = custom.answer?.ok ? custom.answer.data.items : [];
 	const fieldOptions = [
-		...BASE_FIELDS.map((value) => ({ value, label: F.fields[value] })),
+		...STANDARD_FIELDS.map((value) => ({ value, label: F.fields[value] })),
 		...extra.map((field) => ({ value: `custom:${field.key}`, label: fill(F.custom, { label: field.label }) })),
 	];
 	return (

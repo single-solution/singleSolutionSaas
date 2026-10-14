@@ -6,7 +6,7 @@ attachments, ratings, transcripts, staff alerts, moderation, reports and Ecommer
 `manifest.json`, the public docs at `/docs`.
 
 Besides Chat's own routes, the merchant's server gets the kit's routes (PLAN.md 0.8.10): the settings API with Chat's
-lists (`GET|PUT /v1/lists/tools|flows|custom_fields|page_rules`), the `SS-Actor-*` headers (replies, changes and
+lists (`GET|PUT /v1/lists/tools|flows|custom_fields|page_rules|fallback_answers`), the `SS-Actor-*` headers (replies, changes and
 knowledge edits then carry that member of staff instead of `Team`), visitor routes with the server token and
 `SS-Visitor-IP`, conversation counts (`GET /v1/conversations/count` and `/counts?by=status|waiting|guest|unread`, ticket
 twins under `/v1/admin/`), the activity log (`GET /v1/activity`) and the Format (`GET|PUT /v1/format`).

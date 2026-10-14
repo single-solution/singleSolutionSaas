@@ -11,7 +11,7 @@ import { normalisePhone } from '@ss/contracts/phone';
 const MAX_CUSTOM_FIELDS = 30;
 /** Most proactive page rules a website has. */
 const MAX_PAGE_RULES = 20;
-const FIELD_TYPES = Object.freeze(/** @type {const} */ (['text', 'number', 'yes_no', 'choice']));
+export const FIELD_TYPES = Object.freeze(/** @type {const} */ (['text', 'number', 'yes_no', 'choice']));
 const KEY = /^[a-z][a-z0-9_]{0,39}$/;
 const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,}$/u;
 const RESERVED = Object.freeze(['name', 'email', 'phone', 'message', 'text']);

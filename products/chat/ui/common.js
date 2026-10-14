@@ -23,10 +23,12 @@ import { element } from './dom.js';
  * The settings Chat adds to the widget config (`hooks.widgetConfig`); each part matters only while its feature is on.
  * @typedef {object} ChatSettings
  * @property {{ botName: string, avatarUrl: string, launcherPosition: string, launcherStyle: string, windowStyle: string,
- *   fullScreenOnMobile: boolean, hideOnPages: string[] }} look
+ *   fullScreenOnMobile: boolean, hideOnPages: string[], showTimes: boolean }} look `showTimes`: each message's time and
+ *   a divider for each day (C8)
  * @property {{ messageLimit: number, rememberDays: number, contactCapture: string }} guests
  * @property {string} signInUrl
  * @property {{ showLabel: boolean }} ai
+ * @property {{ showButton: boolean }} handoff whether the window offers Talk to a person (C4)
  * @property {{ idleMinutes: number, dismissDays: number, pageRules: Array<{ path: string, delay: number, message: string }>,
  *   messages: Record<'product' | 'category' | 'deals' | 'cart', string>, oncePer: 'session' | 'product',
  *   hideOnMobile: boolean }} proactive the idle nudge's own text per page kind ('' = the general text), whether it
@@ -65,10 +67,12 @@ const DEFAULTS = {
 		windowStyle: 'floating',
 		fullScreenOnMobile: true,
 		hideOnPages: [],
+		showTimes: false,
 	},
 	guests: { messageLimit: 0, rememberDays: 90, contactCapture: 'never' },
 	signInUrl: '',
 	ai: { showLabel: true },
+	handoff: { showButton: true },
 	proactive: {
 		idleMinutes: 7,
 		dismissDays: 7,

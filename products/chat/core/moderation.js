@@ -13,6 +13,7 @@
  * Without the Moderation feature, AI answers still go through the credential check (never switchable).
  * @module
  */
+import { MARKDOWN_LINK } from './markdown.js';
 import { normalise } from './text.js';
 
 /** @typedef {'card' | 'iban' | 'email' | 'phone' | 'ip'} PiiKind */
@@ -185,7 +186,6 @@ export const linkAllowed = (target, policy) => {
 	return hostIn(host, hosts);
 };
 
-const MARKDOWN_LINK = /\[([^\]\n]{1,300})\]\(([^)\s]{1,2048})\)/g;
 const BARE_URL = /\bhttps?:\/\/[^\s<>"')\]]+/gi;
 
 /**

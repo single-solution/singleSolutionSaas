@@ -9,6 +9,14 @@ const UNSPACED =
 	/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Thai}\p{Script=Lao}\p{Script=Khmer}\p{Script=Myanmar}]/u;
 
 /**
+ * True for an https address of at most 500 characters.
+ * @param {unknown} value
+ * @returns {value is string}
+ */
+export const isHttpsUrl = (value) =>
+	typeof value === 'string' && value.length <= 500 && /^https:\/\/[^\s/?#]+(?:[/?#]\S*)?$/.test(value);
+
+/**
  * Lower-case, Unicode NFKC, combining marks removed (`é` → `e`), whitespace collapsed.
  * @param {unknown} text
  * @returns {string}

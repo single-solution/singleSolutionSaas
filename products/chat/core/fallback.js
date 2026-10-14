@@ -8,6 +8,7 @@
  * products found, or Ecommerce cannot answer) is skipped.
  * @module
  */
+import { primary } from './language.js';
 import { aroundPhrase, containsPhrase, normalise, tokenize } from './text.js';
 
 /** What an answer is for (C3); the merchant picks one per answer. */
@@ -124,9 +125,6 @@ export const checkFallbackAnswers = (raw) => {
 		value: raw.map((item) => /** @type {FallbackAnswer} */ (keptOf(/** @type {Record<string, unknown>} */ (item)))),
 	};
 };
-
-/** @param {string} tag */
-const primary = (tag) => tag.toLowerCase().split('-')[0] ?? '';
 
 /**
  * The entries that may answer a message, in list order: the language is any or the visitor's (language lock on), and

@@ -1,5 +1,5 @@
 /**
- * PLAN 0.8.10 Chat, fixes after the re-audit (CH-*): `?wait=1` lets a slow answer finish after the response and a
+ * Replies, guests and handoffs (PLAN 0.8.10, CH-*): `?wait=1` lets a slow answer finish after the response and a
  * reply that went stale starts again (CH-1, RT-6); the language lock's new options (CH-16 to CH-19, CH-38); shared
  * networks and new guests (CH-14, CH-15); handoffs, assignment, sign-in claims and staff alerts (CH-3, CH-5, CH-6, CH-7,
  * CH-9); options from the settings draft (CH-13, CH-21, RW-8); attachment links that never expire (CH-8).

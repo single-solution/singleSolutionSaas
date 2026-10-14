@@ -7,6 +7,7 @@
  * @module
  */
 import { SHOP_TOOL_NAMES } from './shop.js';
+import { isHttpsUrl } from './text.js';
 
 /** Built-in tool names. */
 export const BUILTIN = Object.freeze({
@@ -35,7 +36,7 @@ const MAX_TOOL_PARAMETERS = 10;
 
 const TOOL_NAME = /^[a-z][a-z0-9_]{1,40}$/;
 const PARAMETER_NAME = /^[a-zA-Z][a-zA-Z0-9_]{0,40}$/;
-const PARAMETER_TYPES = Object.freeze(['string', 'number', 'boolean']);
+export const PARAMETER_TYPES = Object.freeze(/** @type {const} */ (['string', 'number', 'boolean']));
 
 /**
  * @typedef {object} ToolParameter
@@ -59,10 +60,6 @@ const isObject = (value) => typeof value === 'object' && value !== null && !Arra
 
 /** @param {unknown} value @param {number} max */
 const text = (value, max) => (typeof value === 'string' && value.trim().length > 0 && value.length <= max ? value.trim() : null);
-
-/** @param {unknown} value */
-export const isHttpsUrl = (value) =>
-	typeof value === 'string' && value.length <= 500 && /^https:\/\/[^\s/?#]+(?:[/?#]\S*)?$/.test(value);
 
 /**
  * Check the list of webhook tools a merchant saves (Settings → Tools).
@@ -97,7 +94,7 @@ export const checkTools = (items) => {
 				typeof parameter.name === 'string' &&
 				PARAMETER_NAME.test(parameter.name) &&
 				!seen.has(parameter.name) &&
-				PARAMETER_TYPES.includes(/** @type {string} */ (parameter.type));
+				PARAMETER_TYPES.includes(/** @type {any} */ (parameter.type));
 			if (!ok) {
 				errors.push(`${at}: each parameter has a unique name and a type (string, number or boolean).`);
 				continue;

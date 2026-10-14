@@ -14,7 +14,7 @@
  */
 import { isId } from '@ss/contracts';
 import { normalisePhone } from '@ss/contracts/phone';
-import { STATUSES, messageText, previewOf } from './conversation.js';
+import { PRESENCES, STATUSES, USER_ID, messageText, previewOf } from './conversation.js';
 import { checkFieldValue } from './fields.js';
 import { plainOf } from './markdown.js';
 import { MAX_MESSAGE_LENGTH, MAX_STAFF_ATTACHMENT_BYTES, PAGE_KINDS, STAFF_TYPES } from './widgets.js';
@@ -49,7 +49,7 @@ const IMPORT_TEXT_LIMITS = Object.freeze({
 });
 
 /** Fields of each record (the stored shape; derived fields are `finish`'s, the tenant the import's). */
-export const IMPORT_FIELDS = Object.freeze({
+const IMPORT_FIELDS = Object.freeze({
 	staff: Object.freeze(['id', 'name', 'email', 'presence', 'maxChats', 'createdAt']),
 	guests: Object.freeze(['keyHash', 'id', 'expireAt', 'createdAt']),
 	conversations: Object.freeze([
@@ -96,11 +96,8 @@ export const IMPORT_FIELDS = Object.freeze({
 
 const TENANT = Object.freeze(['websiteId', 'merchantId']);
 const AUTHORS = Object.freeze(/** @type {const} */ (['visitor', 'ai', 'staff', 'system']));
-const PRESENCES = Object.freeze(['online', 'away', 'offline']);
 /** A guest key's hash: SHA-256, 64 lower-case hex digits. */
 const KEY_HASH = /^[0-9a-f]{64}$/;
-/** An Accounts user id, a staff id or a pause's actor id (as the inbox and the `SS-Actor-*` headers take them). */
-const USER_ID = /^[A-Za-z0-9_.:@-]{1,64}$/;
 /** An ISO 8601 time with its zone. */
 const ISO_TIME = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,3})?)?(?:Z|[+-](\d{2}):(\d{2}))$/;
 const DAY_MS = 86_400_000;

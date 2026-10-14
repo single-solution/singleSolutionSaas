@@ -1,8 +1,8 @@
 /**
  * The answer loop (pure orchestration; every effect is injected): the model may request tools, which run and feed their
  * results back, for at most `maxRounds` rounds; the last round offers no tools so the model must answer in text. One
- * shared deadline covers every call; the token budget is checked before each call and charged after it (provider usage,
- * else an estimate). An answer in the wrong language is retried once with an explicit instruction and dropped if it is
+ * shared deadline covers every call, and each call's tokens are charged after it (provider usage, else an estimate;
+ * the caps are checked before the answer starts). An answer in the wrong language is retried once with an explicit instruction and dropped if it is
  * still wrong; so is an answer any other check refuses (an answer that says it is a bot while "never disclose" is on,
  * PLAN 0.8.10 C1).
  * @module
@@ -17,7 +17,6 @@ import { estimateTokens } from './providers.js';
  * @typedef {object} AssistantDeps
  * @property {(request: { messages: ChatMessage[], tools: ToolSchema[] }) => Promise<{ ok: true, value: ChatResult } | { ok: false, code: string }>} call
  * @property {(call: ToolCall) => Promise<{ content: string, escalate?: { reason: string } | null, ok?: boolean }>} execute
- * @property {() => number} remainingTokens tokens still allowed (conversation and month)
  * @property {(usage: { input: number, output: number }) => Promise<void> | void} spend
  * @property {() => boolean} expired the shared deadline passed
  */
@@ -34,10 +33,7 @@ import { estimateTokens } from './providers.js';
 /**
  * @typedef {object} AssistantResult
  * @property {string} text '' when no usable answer
- * @property {string | null} failure provider_error | timeout | budget | empty | language | a check's failure | null
- * @property {{ input: number, output: number }} usage
- * @property {number} calls provider calls made
- * @property {Array<{ name: string, ok: boolean }>} tools tools run
+ * @property {string | null} failure provider_error | timeout | empty | language | a check's failure | null
  * @property {{ reason: string } | null} escalation
  * @property {boolean} retried language retry used
  */
@@ -52,27 +48,18 @@ export const runAssistant = async (
 	deps,
 ) => {
 	const conversation = [...messages];
-	const usage = { input: 0, output: 0 };
-	/** @type {Array<{ name: string, ok: boolean }>} */
-	const ran = [];
 	/** @type {{ reason: string } | null} */
 	let escalation = null;
-	let calls = 0;
 	/** @param {string | null} failure @param {string} [text] @param {boolean} [retried] @returns {AssistantResult} */
-	const done = (failure, text = '', retried = false) => ({ text, failure, usage, calls, tools: ran, escalation, retried });
+	const done = (failure, text = '', retried = false) => ({ text, failure, escalation, retried });
 
 	/** @param {ToolSchema[]} offered */
 	const ask = async (offered) => {
 		if (deps.expired()) return /** @type {const} */ ({ ok: false, code: 'timeout' });
-		if (deps.remainingTokens() <= 0) return /** @type {const} */ ({ ok: false, code: 'budget' });
-		calls += 1;
 		const result = await deps.call({ messages: conversation, tools: offered });
 		if (!result.ok) return result;
 		const reported = result.value.usage;
-		const spent = reported.input + reported.output > 0 ? reported : estimateTokens(conversation, result.value.text);
-		usage.input += spent.input;
-		usage.output += spent.output;
-		await deps.spend(spent);
+		await deps.spend(reported.input + reported.output > 0 ? reported : estimateTokens(conversation, result.value.text));
 		return result;
 	};
 
@@ -85,14 +72,13 @@ export const runAssistant = async (
 		const outputs = await Promise.all(requested.map((call) => deps.execute(call)));
 		requested.forEach((call, index) => {
 			const output = /** @type {{ content: string, escalate?: { reason: string } | null, ok?: boolean }} */ (outputs[index]);
-			ran.push({ name: call.name, ok: output.ok !== false });
 			if (output.escalate && !escalation) escalation = output.escalate;
 			conversation.push({ role: 'tool', toolCallId: call.id, toolName: call.name, content: output.content });
 		});
 		round += 1;
 		result = await ask(round < maxRounds ? tools : []);
 	}
-	if (!result.ok) return done(result.code === 'timeout' || result.code === 'budget' ? result.code : 'provider_error');
+	if (!result.ok) return done(result.code === 'timeout' ? 'timeout' : 'provider_error');
 	const text = result.value.text.trim();
 	if (!text) return done('empty');
 	const all = [...(languageOk ? [{ ok: languageOk, retry: retryInstruction, failure: 'language' }] : []), ...checks];

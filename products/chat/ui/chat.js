@@ -2,7 +2,8 @@
  * The visitor chat (PLAN 0.8.3): the launcher with its unread badge, the chat window (floating or side panel, full
  * screen on phones when set) with the welcome text, messages (AI and staff answers formatted, the visitor's own text
  * plain; AI label, staff names, human-like typing pace, typing and Seen with typing receipts, product cards with Add to
- * cart), the composer with attachments, flows, contact and lead forms, the guest limit, handoff, queue position, office
+ * cart; earlier messages on request, and times with a divider for each day when the website shows them), the composer
+ * with attachments, flows, contact and lead forms, the guest limit, handoff, the paused notice, queue position, office
  * hours, ratings, transcripts and End chat, plus the proactive messages. Live updates come from the back-off checks of
  * `transport.js`.
  * @module
@@ -41,7 +42,11 @@ import { createChecks, createUnreadChecks } from './transport.js';
  * @property {'text' | 'markdown'} [format] AI and staff answers are markdown, shown formatted (`rich.js`)
  * @property {{ name: string, type: string, size: number, url: string }} [attachment]
  * @property {import('../core/shop.js').ProductCard[]} [cards] product cards under an AI answer
+ * @property {string} createdAt
  */
+
+/** Earlier messages one Show earlier messages loads (the API's most for a page, C8). */
+const EARLIER_PAGE = 50;
 
 /** What the guest limit leads to. */
 const LIMIT_STEPS = Object.freeze(['sign_in', 'lead', 'none']);
@@ -85,6 +90,8 @@ export const mountChat = ({ win, host, config, visitor, clock, page, onUnread })
 	/** @type {Record<string, string> | null} contact given before the first message */
 	let pendingContact = null;
 	let lastSeq = 0;
+	// the API said older messages than the first shown exist (C8)
+	let earlier = false;
 	let needRead = false;
 	let typingPace = false;
 	let readDelay = 0;
@@ -129,7 +136,10 @@ export const mountChat = ({ win, host, config, visitor, clock, page, onUnread })
 	head.append(closer);
 	const log = element(doc, 'ul', { class: 'log', role: 'log', 'aria-live': 'polite' });
 	const welcome = element(doc, 'li', { class: 'msg ai welcome' });
-	log.append(welcome);
+	const older = element(doc, 'li', { class: 'older', hidden: '' });
+	const olderButton = buttonOf(doc, t('chat.earlier'), { class: 'link small' });
+	older.append(olderButton);
+	log.append(older, welcome);
 	const typing = element(doc, 'p', { class: 'typing', hidden: '' }, t('chat.typing'));
 	const notices = element(doc, 'div', { class: 'notices' });
 	const slot = element(doc, 'div', { class: 'slot' });
@@ -211,13 +221,28 @@ export const mountChat = ({ win, host, config, visitor, clock, page, onUnread })
 		if (message.attachment) item.append(attachmentNode(doc, message.attachment));
 		if (message.cards && message.cards.length > 0 && on('product_cards'))
 			item.append(cardsPart({ doc, win, t, config, cards: message.cards }));
+		if (s.look.showTimes && when(message.createdAt, 'time') !== '')
+			item.append(element(doc, 'time', { class: 'meta', datetime: message.createdAt }, when(message.createdAt, 'time')));
 		return item;
+	};
+	/** A divider before the first message of each day, when the website shows times (C8). */
+	const markDays = () => {
+		if (!s.look.showTimes) return;
+		for (const each of log.querySelectorAll('.day')) each.remove();
+		let day = '';
+		for (const { message, node } of [...shown.values()].sort((a, b) => a.message.seq - b.message.seq)) {
+			const text = when(message.createdAt, 'date');
+			if (text === '' || text === day) continue;
+			day = text;
+			log.insertBefore(element(doc, 'li', { class: 'day', role: 'separator' }, text), node);
+		}
 	};
 	/** @param {Message} message */
 	const show = (message) => {
 		const node = messageNode(message);
 		shown.set(message.id, { message, node });
 		log.append(node);
+		markDays();
 		node.scrollIntoView?.({ block: 'end' });
 		if (message.author !== 'visitor') needRead = true;
 		if (message.author === 'ai' || message.author === 'staff') checks.settle();
@@ -266,8 +291,28 @@ export const mountChat = ({ win, host, config, visitor, clock, page, onUnread })
 	};
 	/** @param {any} data a Chat view with `messages` @param {boolean} paced */
 	const receive = (data, paced) => {
+		if ('earlier' in data) earlier = data.earlier === true;
 		enqueue(Array.isArray(data.messages) ? data.messages : [], paced);
 		apply(data);
+	};
+	/** The page of messages before the first one shown (C8), above it. */
+	const showEarlier = async () => {
+		const first = [...shown.values()].sort((a, b) => a.message.seq - b.message.seq)[0];
+		if (!first) return;
+		const answer = await call('GET', `/v1/chat?before=${first.message.seq}&limit=${EARLIER_PAGE}`);
+		if (!answer.ok) {
+			note.textContent = failure(answer);
+			return;
+		}
+		for (const message of Array.isArray(answer.data.messages) ? answer.data.messages : []) {
+			if (shown.has(message.id)) continue;
+			const node = messageNode(message);
+			shown.set(message.id, { message, node });
+			log.insertBefore(node, first.node);
+		}
+		earlier = answer.data.earlier === true;
+		markDays();
+		paint();
 	};
 	/** @returns {Promise<Message[]>} the new messages */
 	const poll = async () => {
@@ -483,6 +528,8 @@ export const mountChat = ({ win, host, config, visitor, clock, page, onUnread })
 			);
 		if (on('presence_queue') && s.queuePosition && typeof c?.queuePosition === 'number')
 			lines.push(formatText(t('chat.queuePosition'), { position: c.queuePosition }));
+		// staff paused the AI and the website tells the visitor (the API sets paused only then, C9)
+		if (c?.paused === true) lines.push(t('chat.paused'));
 		notices.replaceChildren(...lines.map((line) => element(doc, 'p', { class: 'notice' }, line)));
 
 		const [key, build] = partOf();
@@ -491,7 +538,8 @@ export const mountChat = ({ win, host, config, visitor, clock, page, onUnread })
 			slot.replaceChildren(...(build ? [build()] : []));
 		}
 		const live = Boolean(c) && c.status !== 'resolved' && !stopped;
-		setHidden(talk, !(on('handoff') && live && !c.waiting));
+		setHidden(talk, !(on('handoff') && s.handoff.showButton && live && !c.waiting));
+		setHidden(older, !earlier);
 		setHidden(copy, !(on('transcripts') && c && !stopped));
 		setHidden(end, !live);
 		setHidden(composer, stopped || Boolean(limit) || (needsContact() && !c));
@@ -589,6 +637,7 @@ export const mountChat = ({ win, host, config, visitor, clock, page, onUnread })
 		memory.dismiss(s.proactive.dismissDays);
 		hideNudge();
 	});
+	olderButton.addEventListener('click', () => void showEarlier());
 	talk.addEventListener('click', async () => {
 		const answer = await act('/v1/chat/handoff');
 		if (!answer.ok) say(failure(answer));

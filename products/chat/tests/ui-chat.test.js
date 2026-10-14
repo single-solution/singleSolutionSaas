@@ -601,6 +601,63 @@ describe('conversation tools', () => {
 		expect($('.window > .status').textContent).toBe(TEXTS['chat.rateLimited']);
 	});
 
+	it('offers Talk to a person only with the setting, and shows the paused notice when the API says so (C4, C9)', async () => {
+		keepGuest();
+		const { $, root } = await start({
+			features: ['visitor_chat', 'guest_chat', 'handoff'],
+			settings: { handoff: { showButton: false } },
+			routes: { 'GET /v1/chat': () => answer(200, { ...view({ conversation: conv({ paused: true }) }), messages: [] }) },
+		});
+		await click($('.launcher'));
+		expect(shows(root, TEXTS['chat.talkToPerson'])).toBe(false);
+		expect(textsIn(root, '.notices p')).toEqual([TEXTS['chat.paused']]);
+	});
+
+	it('shows times with a divider for each day, and earlier messages on request (C8)', async () => {
+		keepGuest();
+		const day1 = '2026-09-30T08:15:00Z';
+		const day2 = '2026-10-01T09:30:00Z';
+		const { $, root, server } = await start({
+			features: ['visitor_chat', 'guest_chat'],
+			settings: { look: { showTimes: true } },
+			look: { format: { locale: 'en-US', times: 'business' }, timeZone: 'UTC' },
+			routes: {
+				'GET /v1/chat': (call) =>
+					call.url.searchParams.get('before') === '3'
+						? answer(200, {
+								...view(),
+								messages: [msg(1, 'visitor', 'Hello?', { createdAt: day1 }), msg(2, 'ai', 'Hi!', { createdAt: day1 })],
+								earlier: false,
+							})
+						: answer(200, { ...view(), messages: [msg(3, 'visitor', 'Still there?', { createdAt: day2 })], earlier: true }),
+			},
+		});
+		await click($('.launcher'));
+		expect(textsIn(root, '.day')).toEqual(['Oct 1, 2026']);
+		expect(textsIn(root, '.msg time')).toEqual(['9:30 AM']);
+		await click(buttonIn(root, TEXTS['chat.earlier']));
+		expect(server.last('GET /v1/chat')?.url.search).toBe('?before=3&limit=50');
+		expect(textsIn(root, '.log > li:not(.older):not(.welcome)').map((text) => text.replace(/\s+/g, ' '))).toEqual([
+			'Sep 30, 2026',
+			expect.stringContaining('Hello?'),
+			expect.stringContaining('Hi!'),
+			'Oct 1, 2026',
+			expect.stringContaining('Still there?'),
+		]);
+		expect(shows(root, TEXTS['chat.earlier'])).toBe(false);
+	});
+
+	it('shows no times or dividers by default', async () => {
+		keepGuest();
+		const { $, root } = await start({
+			routes: { 'GET /v1/chat': () => answer(200, { ...view(), messages: [msg(1, 'visitor', 'Hello?')], earlier: false }) },
+		});
+		await click($('.launcher'));
+		expect(textsIn(root, '.day')).toEqual([]);
+		expect(textsIn(root, '.msg time')).toEqual([]);
+		expect(shows(root, TEXTS['chat.earlier'])).toBe(false);
+	});
+
 	it('asks for a thumbs rating when resolved', async () => {
 		keepGuest();
 		const { $, root, server } = await start({

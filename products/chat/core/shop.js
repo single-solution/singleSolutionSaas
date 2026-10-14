@@ -17,6 +17,7 @@
  * @module
  */
 import { formatDate, formatMoney, normaliseFormat } from '@ss/contracts/format';
+import { isHttpsUrl } from './text.js';
 
 /** The shop tool names. */
 const SHOP_TOOLS = Object.freeze({
@@ -183,10 +184,6 @@ const isMinor = (value) => Number.isSafeInteger(value) && Number(value) >= 0;
 
 /** @param {unknown} value @returns {value is string} */
 const isCurrency = (value) => typeof value === 'string' && /^[A-Z]{3}$/.test(value);
-
-/** @param {unknown} value */
-const isHttpsUrl = (value) =>
-	typeof value === 'string' && value.length <= 500 && /^https:\/\/[^\s/?#]+(?:[/?#]\S*)?$/.test(value);
 
 /** An http(s) page address, else null. @param {unknown} value */
 const pageUrl = (value) =>

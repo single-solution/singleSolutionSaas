@@ -583,8 +583,6 @@ export const createStore = (data, { now }) => {
 				);
 			},
 			countEntries: () => entries.countDocuments({ websiteId: w }),
-			/** @param {string} id @returns {Promise<EntryRecord | null>} */
-			entry: async (id) => /** @type {any} */ (await entries.findOne({ websiteId: w, id }, HIDDEN)),
 			/** @param {{ kind: 'faq' | 'article', title: string, text: string }} entry @returns {Promise<EntryRecord>} */
 			createEntry: async (entry) => {
 				const doc = { id: createId('kb'), ...entry };

@@ -160,7 +160,7 @@ export const TEXTS = Object.freeze({
 			name: 'Name (lower-case letters, digits or _)',
 			description: 'What it does (the AI reads this)',
 			url: 'Address (https)',
-			includeVisitor: 'Send the visitor (name, email) with each call',
+			includeVisitor: 'Send the signed-in visitor (id, email) with each call',
 			parameters: 'Parameters',
 			addParameter: 'Add parameter',
 			parameter: 'Parameter name',

@@ -8,7 +8,7 @@
 import { created, noContent, paginate, problem } from '@ss/app-kit';
 import { textOf } from '@ss/net';
 import { MAX_ENTRIES, MAX_PAGES, checkEntry, entryChunks, htmlToText, pageChunks } from '../core/knowledge.js';
-import { isHttpsUrl } from '../core/tools.js';
+import { isHttpsUrl } from '../core/text.js';
 import { actorOf } from './inbox.js';
 import { bodyOf, invalid } from './service.js';
 

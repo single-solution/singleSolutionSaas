@@ -65,7 +65,7 @@ import { createAi } from './ai.js';
 import { createFileSigner, createSealer } from './crypto.js';
 import { createImportOptions } from './imports.js';
 import { LISTS, createLists } from './lists.js';
-import { INDEXES, createStore } from './store.js';
+import { INDEXES } from './store.js';
 
 /** Settings schema of each feature (manifest.json points at them with `$ref`). @type {Record<string, unknown>} */
 const SETTINGS = {
@@ -242,7 +242,7 @@ const setupPart = async (lists, { websiteId, on }) => {
 
 /**
  * The product (kit routes, status, settings, connections, merchant database …) plus its AI providers, list settings,
- * product-database counters and outbound `send`. Data-rights and widget-config hooks are attached by api/routes.js
+ * product-database counters and outbound `send`. Data-rights and widget-config hooks are attached by server/routes.js
  * through `attach`.
  * @param {InstanceOptions} options at least `config` and `problems` from `configFromEnv()`
  */
@@ -359,12 +359,7 @@ export const createProductInstance = (options) => {
 		counters: store,
 		send,
 		now,
-		/**
-		 * The merchant database store of a request's website.
-		 * @param {{ data: () => Promise<import('@ss/app-kit').WebsiteData> }} ctx
-		 */
-		storeOf: async (ctx) => createStore(await ctx.data(), { now }),
-		/** Attach the data-rights and widget-config hooks (api/routes.js). @param {NonNullable<import('@ss/app-kit').ProductOptions['hooks']>} attached */
+		/** Attach the data-rights and widget-config hooks (server/routes.js). @param {NonNullable<import('@ss/app-kit').ProductOptions['hooks']>} attached */
 		attach: (attached) => Object.assign(hooks, attached),
 	});
 };

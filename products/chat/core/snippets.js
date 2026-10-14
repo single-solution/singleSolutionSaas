@@ -8,13 +8,13 @@ import { TOOL_SIGNATURE_HEADER } from './tools.js';
 import { WIDGET_ATTRIBUTE, WIDGET_GLOBAL } from './widgets.js';
 
 /**
- * @param {{ base: string, widgets: ReadonlyArray<{ key: string, kind: string }>, permissions: string[], browserToken?: string }} input
- *   `base`: Chat's address
+ * @param {{ base: string, widgets: ReadonlyArray<{ key: string, kind: string }>, permissions: string[] }} input `base`:
+ *   Chat's address
  */
-export const createSnippets = ({ base, widgets, permissions, browserToken = 'YOUR_BROWSER_TOKEN' }) => {
+export const createSnippets = ({ base, widgets, permissions }) => {
 	const admins = widgets.filter((widget) => widget.kind === 'admin').map((w) => `<div ${WIDGET_ATTRIBUTE}="${w.key}"></div>`);
 	const visitor = [
-		`<script src="${base}/widget.js" data-token="${browserToken}" async></script>`,
+		`<script src="${base}/widget.js" data-token="YOUR_BROWSER_TOKEN" async></script>`,
 		'<script>',
 		'  // after the script loaded (window.SSChat exists):',
 		'  // a visitor signed in with Accounts chats as themselves (call identify(null) on sign-out)',

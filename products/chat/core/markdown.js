@@ -20,7 +20,7 @@ const SEPARATOR = /^[ \t]*-{3,}[ \t]*$/;
 const LIST_ITEM = /^[ \t]*(?:([-*+])|(\d{1,3})[.)])[ \t]+(.*)$/;
 const TABLE_RULE = /^[ \t]*\|?[ \t]*:?-{3,}:?[ \t]*(?:\|[ \t]*:?-{3,}:?[ \t]*)*\|?[ \t]*$/;
 const FENCE = /^[ \t]*```/;
-const MARKDOWN_LINK = /\[([^\]\n]{1,300})\]\(([^)\s]{1,2048})\)/g;
+export const MARKDOWN_LINK = /\[([^\]\n]{1,300})\]\(([^)\s]{1,2048})\)/g;
 const INLINE =
 	/\[([^\]\n]{1,300})\]\(([^)\s]{1,2048})\)|\*\*([^*\n]+?)\*\*|__([^_\n]+?)__|\*([^*\n]+?)\*|_([^_\n]+?)_(?![\p{L}\p{N}])|`([^`\n]+)`/gu;
 /** A letter or digit right before a `_` (snake_case, no mark). A test, not a lookbehind: the widget bundle runs this. */

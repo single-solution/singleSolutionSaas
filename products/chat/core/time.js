@@ -92,18 +92,20 @@ export const isOpenAt = (windows, ms, timeZone) => {
 	});
 };
 
+/** How far ahead the next opening is looked for (a week of windows, and a day more). */
+const HORIZON_DAYS = 8;
+
 /**
- * The first open minute at or after `ms` (within `horizonDays`), or null when the windows never open.
+ * The first open minute at or after `ms` (within {@link HORIZON_DAYS} days), or null when the windows never open.
  * @param {readonly HoursWindow[] | null | undefined} windows
  * @param {number} ms
  * @param {string} timeZone
- * @param {{ horizonDays?: number }} [options]
  * @returns {number | null}
  */
-export const nextOpenAt = (windows, ms, timeZone, { horizonDays = 8 } = {}) => {
+export const nextOpenAt = (windows, ms, timeZone) => {
 	if (isOpenAt(windows, ms, timeZone)) return ms;
 	// minute steps: windows are minute-aligned, so a one-minute window is never skipped (≈ 11 520 checks for 8 days)
-	for (let t = Math.ceil(ms / MINUTE_MS) * MINUTE_MS; t <= ms + horizonDays * DAY_MS; t += MINUTE_MS) {
+	for (let t = Math.ceil(ms / MINUTE_MS) * MINUTE_MS; t <= ms + HORIZON_DAYS * DAY_MS; t += MINUTE_MS) {
 		if (isOpenAt(windows, t, timeZone)) return t;
 	}
 	return null;
