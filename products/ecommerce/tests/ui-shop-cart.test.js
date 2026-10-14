@@ -553,6 +553,87 @@ describe('checkout', () => {
 		expect($(host, '.box h2').closest('[hidden]')).not.toBeNull();
 	});
 
+	it('asks the order fields the quote names, checks them as the server does and sends them', async () => {
+		const rules = { min: null, max: null, decimals: 0, dates: 'any', multiple: false, maxValues: 1, choices: [], unit: '' };
+		const fields = [
+			{ ...rules, id: 'att_gift', name: 'Gift message', type: 'text', format: null, required: true },
+			{
+				...rules,
+				id: 'att_vat',
+				name: 'VAT number',
+				type: 'text',
+				required: false,
+				format: {
+					chars: 'letters_digits',
+					minLength: 4,
+					maxLength: 14,
+					startsWith: [],
+					mask: '',
+					checkDigit: 'none',
+					ignoreSpaces: true,
+					upperCase: true,
+				},
+			},
+			{ ...rules, id: 'att_wrap', name: 'Gift wrap', type: 'yes_no', format: null, required: false },
+			{
+				...rules,
+				id: 'att_size',
+				name: 'Box',
+				type: 'choice',
+				format: null,
+				required: false,
+				choices: [
+					{ value: 's', label: 'Small' },
+					{ value: 'l', label: 'Large' },
+				],
+			},
+			{ ...rules, id: 'att_count', name: 'Cards', type: 'number', format: null, required: false, min: 1, max: 5 },
+			{ ...rules, id: 'att_day', name: 'Deliver on', type: 'date', format: null, required: false },
+		];
+		const { fake, host } = await setup({
+			signIn: 's1',
+			quote: () =>
+				ok(
+					quoteOf({
+						deliveryOptions: [PICKUP],
+						delivery: PICKUP,
+						paymentMethods: [{ method: 'pickup', available: true, reason: null, advance: 0 }],
+						fields,
+					}),
+				),
+			routes: { 'POST /v1/shop/orders': () => ok({ order: ORDER, next: { kind: 'done' } }, 201) },
+		});
+		const control = (/** @type {string} */ label) =>
+			/** @type {any} */ ($(host, `#${[...$$(host, 'label')].find((node) => node.textContent?.startsWith(label))?.htmlFor}`));
+		// a required field first, then a value off its format
+		await click(buttonOf(host, text('checkout.place')));
+		expect(textOf(host)).toContain(text('checkout.fieldNeeded', { field: 'Gift message' }));
+		expect(fake.last('POST /v1/shop/orders')).toBeUndefined();
+		setValue(control('Gift message'), ' For Sam ');
+		setValue(control('VAT number'), 'AB-1');
+		await click(buttonOf(host, text('checkout.place')));
+		expect(textOf(host)).toContain(
+			`${text('fields.notFormat', { value: 'AB-1', field: 'VAT number' })} ${text('fields.problem.chars')}`,
+		);
+		setValue(control('VAT number'), 'gb 1234');
+		setValue(control('Cards'), '9');
+		await click(buttonOf(host, text('checkout.place')));
+		expect(textOf(host)).toContain(text('checkout.fieldWrong', { field: 'Cards' }));
+		setValue(control('Cards'), '2');
+		setValue(control('Gift wrap'), 'true');
+		setValue(control('Box'), 'l');
+		setValue(control('Deliver on'), '2026-12-24');
+		await click(buttonOf(host, text('checkout.place')));
+		expect(fake.last('POST /v1/shop/orders')?.body.fields).toEqual({
+			att_gift: 'For Sam',
+			att_vat: 'GB1234',
+			att_wrap: true,
+			att_size: 'l',
+			att_count: 2,
+			att_day: '2026-12-24',
+		});
+	});
+
 	it('starts the payment again when Payments could not be reached', async () => {
 		let pay = fail(503, 'payments_unavailable');
 		const waiting = {

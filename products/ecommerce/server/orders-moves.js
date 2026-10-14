@@ -21,8 +21,8 @@
  *   are taken back.
  *
  * What a move needs is checked before anything is called: the shipment (its tracking number as the move's `tracking`
- * says), the serial numbers (every one before the package goes out when the move `needs` units) and the dispatch video
- * (the move's `video`); then the open Payments payment is canceled (K-13), a shipment booked and a refund made, as the
+ * says), the serial numbers (every one before the package goes out when the move `needs` units), the dispatch video
+ * (the move's `video`) and the order fields required by the stage it moves into (`requiredAt`); then the open Payments payment is canceled (K-13), a shipment booked and a refund made, as the
  * move needs. A staff refund (`refund`) goes through the order's refund lock (`server/transitions.js` `lockedRefund`).
  *
  * Every move is written to the order's history with the name of the staff member who made it (a ticket's user, or the
@@ -32,9 +32,9 @@
  * @module
  */
 import { problem } from '@ss/app-kit';
-import { unitFieldsOf } from '../adapters/catalog-store.js';
+import { fieldsOn, unitFieldsOf } from '../adapters/catalog-store.js';
 import { heldStockBefore } from '../adapters/ledger.js';
-import { checkUnit, sharedKeys } from '../core/fields.js';
+import { checkUnit, missingOrderFields, sharedKeys } from '../core/fields.js';
 import { courierNamed, courierOf, trackingLink } from '../core/couriers.js';
 import { BEFORE_DELIVERY_ROLES, WAITING_ROLES as WAITING, canMove, confirmedStatus, triggersOfFlow } from '../core/flow.js';
 import { createId } from '@ss/contracts';
@@ -343,6 +343,15 @@ export const createMoves = (product, service) => {
 				throw service.invalid('shopperNote', 'This move needs a note for the shopper.');
 			if (input.restock !== undefined && rules.options.restock !== 'ask')
 				throw service.invalid('restock', 'This move does not ask whether the items go back in stock.');
+			// the order fields required by this stage (requiredAt packed, shipped or delivered) are given first
+			if (['packed', 'shipped', 'delivered'].includes(target.role)) {
+				const missing = missingOrderFields(order.fields ?? {}, await fieldsOn(await s.data(), 'order'), target.role);
+				if (missing.length > 0)
+					throw service.invalid(
+						`fields/${missing[0]?.id}`,
+						`Give ${missing.map((field) => field.name).join(', ')} before this move.`,
+					);
+			}
 		}
 		const chosen = choicesOf({
 			move: rules,

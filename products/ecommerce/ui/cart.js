@@ -3,7 +3,7 @@
  * shopper's browser and is priced by the server (`POST /v1/shop/cart/quote`) whenever it changes (a short pause first,
  * so quick changes make one quote): lines linking to their variant's page, with their problems (a sold-out item says
  * so and cannot be ordered), quantities, the coupon, loyalty points, the delivery method (delivery to an address, or
- * pickup), the address, the payment methods the quote allows, a note, the shop's policies (filled and only the ones it
+ * pickup), the address, the payment methods the quote allows, the order fields the shop asks (`ui/shop-fields.js`), a note, the shop's policies (filled and only the ones it
  * wrote, from the widget config; HTML rebuilt from the allowed tags when the policies are HTML, PLAN 0.8.10 E3) and the
  * totals. Placing the order needs the shopper's sign-in; the Idempotency-Key is kept while the same attempt
  * is retried after a lost answer or while the first press still runs (409 `in_progress`, after the runtime's own retries). Then the shopper pays on Payments' page (`next.kind === 'pay'`), sees the success
@@ -34,6 +34,7 @@ import {
 	textsOf,
 } from './shop-common.js';
 import { addressForm, renderSuccess, returnUrlOf } from './shop-checkout.js';
+import { checkoutFieldsForm } from './shop-fields.js';
 
 /** The pause after a change before the cart is priced again (ms). */
 const QUOTE_DELAY = 300;
@@ -93,9 +94,13 @@ export const mountCart = async ({ host, config, shop, win }) => {
 			const placeStatus = h(doc, 'p', { class: 'status', role: 'status' });
 			const address = addressForm({ doc, t, settings, onPlace: () => requote() });
 			const note = /** @type {HTMLTextAreaElement} */ (h(doc, 'textarea', { maxlength: '1000', rows: '3' }));
-			note.addEventListener('input', () => {
-				attemptKey = null;
-			});
+			// the order fields the shop asks the shopper (the quote's fields)
+			const fields = checkoutFieldsForm({ doc, t });
+			for (const control of [note, fields.node])
+				for (const event of ['input', 'change'])
+					control.addEventListener(event, () => {
+						attemptKey = null;
+					});
 			// the policies come filled, and only the ones the shop wrote (E3): HTML rebuilt from the allowed tags, or paragraphs
 			const policies = POLICIES.flatMap((key) => {
 				const text = settings.checkout.policies[key];
@@ -113,6 +118,7 @@ export const mountCart = async ({ host, config, shop, win }) => {
 				deliveryBox,
 				address.node,
 				paymentBox,
+				fields.node,
 				field(doc, 'ss-cart-note', t('checkout.note'), note),
 				policies.length > 0
 					? h(
@@ -555,6 +561,7 @@ export const mountCart = async ({ host, config, shop, win }) => {
 					renderPoints();
 					renderDelivery();
 					renderPayment();
+					fields.render(quote?.fields);
 					renderTotals();
 					renderPlace();
 				});
@@ -588,6 +595,12 @@ export const mountCart = async ({ host, config, shop, win }) => {
 					address.focus(missing);
 					return;
 				}
+				const given = fields.values();
+				if (!given.ok) {
+					sayPlace(given.message);
+					/** @type {HTMLElement | null} */ (given.node.querySelector('input, select'))?.focus();
+					return;
+				}
 				attemptKey ??= shop.newKey();
 				placing = true;
 				renderPlace();
@@ -598,6 +611,7 @@ export const mountCart = async ({ host, config, shop, win }) => {
 						...cartBody(),
 						payment,
 						note: note.value.trim(),
+						...(Object.keys(given.value).length > 0 ? { fields: given.value } : {}),
 						...(isDelivery ? { address: address.values() } : {}),
 						returnUrl: returnUrlOf(shop),
 					},
@@ -619,7 +633,9 @@ export const mountCart = async ({ host, config, shop, win }) => {
 				sayPlace(
 					code === 'validation_failed' && typeof path === 'string' && path.startsWith('/address')
 						? t('checkout.problem.address')
-						: problemText(config, 'checkout.problem.', code, 'checkout.problem.failed'),
+						: code === 'validation_failed' && typeof path === 'string' && path.startsWith('/fields')
+							? t('checkout.problem.fields')
+							: problemText(config, 'checkout.problem.', code, 'checkout.problem.failed'),
 				);
 				renderPlace();
 				if (REQUOTE.includes(code)) void priceNow();

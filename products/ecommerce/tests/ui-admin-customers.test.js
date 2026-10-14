@@ -239,6 +239,49 @@ describe('customers admin: customers', () => {
 		expect(textOf(pane)).toContain('Calls at night');
 	});
 
+	it('shows the customer fields and edits them', async () => {
+		const rules = { choices: [], unit: '', min: null, max: null, decimals: 0, dates: 'any', multiple: false, maxValues: 1 };
+		const customerFields = [
+			{
+				...rules,
+				id: 'att_tax',
+				name: 'Tax ID',
+				type: 'text',
+				format: null,
+				required: false,
+				requiredAt: null,
+				shopper: false,
+				active: true,
+			},
+			{
+				...rules,
+				id: 'att_vip',
+				name: 'Trade account',
+				type: 'yes_no',
+				format: null,
+				required: false,
+				requiredAt: null,
+				shopper: false,
+				active: true,
+			},
+		];
+		const kept = customer({ id: 'cus_g1', userId: '', guest: true, name: 'Gail', customerFields, fields: { att_tax: 'TX-1' } });
+		const { root, server } = await start({
+			'GET /v1/admin/customers': () => answer(200, { items: [kept], nextCursor: null, hasMore: false }),
+			'GET /v1/admin/customers/cus_g1': () => answer(200, { ...kept, recentOrders: [] }),
+			'PATCH /v1/admin/customers/cus_g1': (/** @type {any} */ call) =>
+				answer(200, { ...kept, fields: { att_tax: 'TX-1', att_vip: call.body.fields.att_vip }, recentOrders: [] }),
+		});
+		const pane = detailOf(panelOf(root, 'customers'));
+		expect(textOf(pane)).toContain('Tax IDTX-1');
+		expect(textOf(pane)).toContain(`Trade account${TEXTS['catalogAdmin.notSet']}`);
+		await pickMenu(pane, 'Edit fields');
+		await change(fieldIn(dialogOf(root), 'Trade account'), 'true');
+		await submitDialog(root);
+		expect(server.last('PATCH /v1/admin/customers/cus_g1')?.body).toEqual({ fields: { att_tax: 'TX-1', att_vip: true } });
+		expect(textOf(pane)).toContain('Trade accountYes');
+	});
+
 	it('shows an empty list', async () => {
 		const { root } = await start({
 			'GET /v1/admin/customers': () => answer(200, { items: [], nextCursor: null, hasMore: false }),

@@ -11,6 +11,7 @@
  * (`bookings`).
  * @module
  */
+import { attributesOf } from '../adapters/catalog-store.js';
 import { readLock, signLock } from '../adapters/crypto.js';
 import { loyaltyAccount } from '../adapters/ledger.js';
 import { createOrdersStore } from '../adapters/orders-store.js';
@@ -19,6 +20,7 @@ import { MAX_SLOT_DAYS, slotAt, slotsBetween } from '../core/bookings.js';
 import { feeBaseOf, merchandiseOf, paymentOptions, priceLines, resolveLines, roleDiscountOf } from '../core/checkout.js';
 import { matchZone, zoneFee } from '../core/delivery.js';
 import { dealRulesOf } from '../core/deals.js';
+import { checkoutFields } from '../core/fields.js';
 import { lineageOf } from '../core/catalog-taxonomy.js';
 import { gradesFor } from '../core/grades.js';
 import { loyaltyRules, maxRedeemable, pointsToEarn, pointsToRedeem, pointsValue, takesPart } from '../core/loyalty.js';
@@ -106,6 +108,7 @@ const BANK_FIELDS = Object.freeze(
  * @property {Map<string, string>} locks each line's signed deal lock by its key (E18 `lockMinutes`)
  * @property {BankDetails | null} bankDetails while bank transfer is offered (E24)
  * @property {Record<string, string>} notes the texts per payment method and for delivery and pickup (E22)
+ * @property {ReturnType<typeof checkoutFields>} fields the order fields the checkout asks the shopper (dynamic model §2)
  */
 
 /**
@@ -537,14 +540,8 @@ export const createQuoting = (product, service) => {
 		// each line links to its variant's page, by the URL templates (E13)
 		/** @type {Map<string, string>} */
 		const urls = new Map();
-		const attributes = new Map(
-			(
-				await data
-					.collection(COLLECTIONS.attributes)
-					.find({ websiteId: data.websiteId }, { projection: { _id: 0, id: 1, slug: 1 } })
-					.toArray()
-			).map((row) => [String(row.id), { slug: row.slug ? String(row.slug) : undefined }]),
-		);
+		const fields = await attributesOf(data);
+		const attributes = new Map(fields.map((row) => [String(row.id), { slug: row.slug ? String(row.slug) : undefined }]));
 		for (const line of priced) {
 			const item = products.get(line.productId);
 			const variant = item?.variants.find((v) => v.id === line.variantId);
@@ -607,6 +604,8 @@ export const createQuoting = (product, service) => {
 			locations,
 			bankDetails: offered.includes('bank_transfer') ? bank : null,
 			notes: notesOf(checkout, zoneSettings),
+			// the order fields the checkout asks the shopper (dynamic model §2)
+			fields: checkoutFields(fields),
 			ready: lines.length > 0 && lines.every((line) => line.priced && line.problems.length === 0) && deliveryProblem === null,
 		};
 	};
@@ -683,6 +682,7 @@ export const createQuoting = (product, service) => {
 		paymentMethod: q.paymentMethod,
 		bankDetails: q.bankDetails,
 		notes: q.notes,
+		fields: q.fields,
 		points: q.points,
 		pointsToEarn: q.pointsToEarn,
 		totals: q.totals,

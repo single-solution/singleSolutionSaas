@@ -19,7 +19,7 @@ export const CHECK_DIGITS = Object.freeze(/** @type {const} */ (['none', 'luhn']
 export const FORMAT_REFUSALS = Object.freeze(/** @type {const} */ (['chars', 'length', 'starts', 'mask', 'check_digit']));
 
 /** Longest value of a text field, and the format limits. */
-export const FORMAT_LIMITS = Object.freeze({ length: 200, mask: 64, starts: 10, start: 20 });
+const FORMAT_LIMITS = Object.freeze({ length: 200, mask: 64, starts: 10, start: 20 });
 
 /**
  * A text field's format: the characters allowed, the length, the starts a value may have (none = any), a mask (`A` a
@@ -78,7 +78,7 @@ const fitsMask = (char, place) => {
  * other numbers use it.
  * @param {string} digits
  */
-export const luhnValid = (digits) => {
+const luhnValid = (digits) => {
 	if (digits.length < 2) return false;
 	let sum = 0;
 	for (let index = 0; index < digits.length; index += 1) {
@@ -98,7 +98,7 @@ export const luhnValid = (digits) => {
  * A value as its format keeps it: spaces dropped and letters upper-cased when the format says so.
  * @param {string} value @param {Pick<Format, 'ignoreSpaces' | 'upperCase'>} format
  */
-export const formatted = (value, format) => {
+const formatted = (value, format) => {
 	let out = value.trim();
 	if (format.ignoreSpaces) {
 		let kept = '';
@@ -378,20 +378,10 @@ export const checkShow = (given, on, before) => {
  * @param {{ show: FieldShow }} field
  * @param {keyof FieldShow} place
  */
-export const showsAt = (field, place) => {
+const showsAt = (field, place) => {
 	const value = field.show[place];
 	return value !== false && value !== 'none';
 };
-
-/**
- * Whether shoppers see a field's values anywhere (the product page, cards, filters, compare, feeds, structured data,
- * their own orders or Chat). Values of a field they never see stay in staff answers.
- * @param {{ show: FieldShow }} field
- */
-export const shownToShoppers = (field) =>
-	/** @type {Array<keyof FieldShow>} */ (['page', 'card', 'filter', 'compare', 'feeds', 'jsonLd', 'shopper', 'chat']).some(
-		(place) => showsAt(field, place),
-	);
 
 // eslint-disable-next-line no-control-regex
 const CONTROLS = /[\u0000-\u001F\u007F]/g;
@@ -416,7 +406,7 @@ const DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
  * A calendar day `YYYY-MM-DD`, or null.
  * @param {unknown} value
  */
-export const dayOf = (value) => {
+const dayOf = (value) => {
 	if (typeof value !== 'string') return null;
 	const match = DATE.exec(value);
 	if (!match) return null;
@@ -573,7 +563,7 @@ export const isPlainSerial = (value) => PLAIN_SERIAL.test(value);
  * The keys of a unit (its serial and every value by field), each once.
  * @param {string} serial @param {Record<string, string[]>} values
  */
-export const unitKeys = (serial, values) => [
+const unitKeys = (serial, values) => [
 	...new Set([`serial:${serial}`, ...Object.entries(values).flatMap(([id, list]) => list.map((value) => `${id}:${value}`))]),
 ];
 
@@ -656,3 +646,107 @@ export const unitsShown = (serials, values, fields, place) => ({
 			return list.length > 0 ? [{ name: field.name, values: list }] : [];
 		}),
 });
+
+// ------------------------------------------------------------------------------------------- orders, customers
+
+/**
+ * Check values given for some fields (an order's or a customer's): each key one of the fields, each value checked
+ * ({@link checkValue}); null or '' clears a value.
+ * @param {unknown} raw `{ <fieldId>: value or [values] or null }`
+ * @param {ReadonlyArray<ValueRules & { id: string }>} fields the fields that may be given
+ * @param {{ today?: string, path?: string }} [options] `path`: where refusals point (default `fields`)
+ * @returns {{ ok: true, value: Record<string, FieldValue>, cleared: string[] } | { ok: false, path: string, message: string }}
+ */
+export const checkFieldValues = (raw, fields, { today, path = 'fields' } = {}) => {
+	if (!isObject(raw)) return { ok: false, path, message: 'Give the values by field id.' };
+	/** @type {Record<string, FieldValue>} */
+	const value = {};
+	/** @type {string[]} */
+	const cleared = [];
+	for (const [id, given] of Object.entries(raw)) {
+		const field = fields.find((entry) => entry.id === id);
+		if (!field) return { ok: false, path: `${path}/${id}`, message: 'There is no such field here.' };
+		if (given === null || given === '' || (Array.isArray(given) && given.length === 0)) {
+			cleared.push(id);
+			continue;
+		}
+		const checked = checkValue(field, given, today ? { today } : {});
+		if (!checked.ok) return { ok: false, path: `${path}/${id}`, message: valueProblem(field, checked) };
+		value[id] = checked.value;
+	}
+	return { ok: true, value, cleared };
+};
+
+/**
+ * The order stages a required order field may be needed by, in the order an order reaches them.
+ * @type {Readonly<Record<string, number>>}
+ */
+const STAGE_RANK = Object.freeze({ packed: 1, shipped: 2, delivered: 3 });
+
+/**
+ * The required order fields an order still lacks for a staff move into a stage: those required by that stage or one
+ * before it (fields checkout needs are the shopper's, asked when the order is placed).
+ * @param {Record<string, FieldValue>} values the order's fields
+ * @param {ReadonlyArray<{ id: string, name: string, active: boolean, required: boolean, requiredAt: string | null }>} fields
+ *   the order fields
+ * @param {string} stage the role of the status the order moves into
+ */
+export const missingOrderFields = (values, fields, stage) => {
+	const rank = STAGE_RANK[stage] ?? 0;
+	return fields.filter(
+		(field) =>
+			field.active &&
+			field.required &&
+			field.requiredAt !== null &&
+			rank >= (STAGE_RANK[field.requiredAt] ?? Infinity) &&
+			values[field.id] === undefined,
+	);
+};
+
+/**
+ * The values of fields a place shows (an order's or a customer's): each field shown there with a value, in the fields'
+ * order, as people read it (`label`: a choice's label, a number with its unit, yes/no and dates as given).
+ * @param {Record<string, FieldValue>} values
+ * @param {ReadonlyArray<{ id: string, name: string, sort: number, show: FieldShow, type: FieldType, unit: string,
+ *   choices: Array<{ value: string, label: string }> }>} fields
+ * @param {keyof FieldShow | null} place null: every field (staff)
+ * @returns {Array<{ id: string, name: string, value: FieldValue, label: string }>}
+ */
+export const fieldValuesShown = (values, fields, place) =>
+	[...fields]
+		.filter((field) => values[field.id] !== undefined && (place === null || showsAt(field, place)))
+		.sort((a, b) => a.sort - b.sort || a.name.localeCompare(b.name))
+		.map((field) => {
+			const value = /** @type {FieldValue} */ (values[field.id]);
+			const one = (/** @type {string | number | boolean} */ entry) =>
+				field.type === 'choice'
+					? (field.choices.find((choice) => choice.value === entry)?.label ?? String(entry))
+					: field.type === 'number' && field.unit
+						? `${String(entry)} ${field.unit}`
+						: String(entry);
+			return { id: field.id, name: field.name, value, label: Array.isArray(value) ? value.map(one).join(', ') : one(value) };
+		});
+
+/**
+ * What a checkout asks of the shopper: the order fields shown to shoppers (active), with what their values take.
+ * @param {ReadonlyArray<import('./model.js').AttributeRecord>} fields
+ */
+export const checkoutFields = (fields) =>
+	fields
+		.filter((field) => field.on === 'order' && field.active && field.show.shopper)
+		.sort((a, b) => a.sort - b.sort || a.name.localeCompare(b.name))
+		.map((field) => ({
+			id: field.id,
+			name: field.name,
+			type: field.type,
+			choices: field.choices,
+			unit: field.unit,
+			min: field.min,
+			max: field.max,
+			decimals: field.decimals,
+			dates: field.dates,
+			multiple: field.multiple,
+			maxValues: field.maxValues,
+			format: field.format,
+			required: field.required && field.requiredAt === 'checkout',
+		}));

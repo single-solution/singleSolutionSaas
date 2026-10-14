@@ -3208,7 +3208,7 @@
 			},
 			"patch": {
 				"summary": "Block or unblock a customer, change their staff note or reset their returned packages (Customers admin widget)",
-				"description": "A blocked shopper cannot order. A member’s record is made when missing. 422 validation_failed (a block without its reason, a reason over 500 characters, a note over 5,000, resetRto other than true, or nothing to change at /blocked); 404 not_found.",
+				"description": "A blocked shopper cannot order. A member’s record is made when missing. 422 validation_failed (a block without its reason, a reason over 500 characters, a note over 5,000, resetRto other than true, or nothing to change at /blocked); 404 not_found. fields sets customer field values (active fields on customers; null clears one; 422 at /fields/<id>).",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "checkout",
 				"x-ss-permission": "customers.manage",
@@ -3251,6 +3251,31 @@
 										"type": "boolean",
 										"const": true,
 										"description": "Set rtoCount back to 0."
+									},
+									"fields": {
+										"type": "object",
+										"additionalProperties": {
+											"anyOf": [
+												{
+													"type": [
+														"string",
+														"number",
+														"boolean",
+														"array"
+													],
+													"items": {
+														"type": [
+															"string",
+															"number"
+														]
+													}
+												},
+												{
+													"type": "null"
+												}
+											]
+										},
+										"description": "The customer fields' values staff keep (active fields on customers); null clears one. 422 at /fields/<id> for a value its field refuses."
 									}
 								}
 							}
@@ -5464,7 +5489,7 @@
 			},
 			"patch": {
 				"summary": "Change an order's staff note, address, shipment or serial numbers, or a waiting order's lines (Orders admin widget)",
-				"description": "The address changes only before shipping (422 at /address); serials need Grades and serials with typed serial numbers. lines, paymentMethod and delivery change an order that still waits (awaiting payment or confirmation, nothing paid, physical lines only): it is priced again with the offers it was placed with, its stock holds are swapped, and a Payments payment started for the old total is canceled (409 conflict when it was paid meanwhile; 503 payments_unavailable). 409 conflict when the order changed meanwhile; 422 validation_failed (pointer to the member); 404 not_found.",
+				"description": "The address changes only before shipping (422 at /address); serials need Grades and serials with typed serial numbers. lines, paymentMethod and delivery change an order that still waits (awaiting payment or confirmation, nothing paid, physical lines only): it is priced again with the offers it was placed with, its stock holds are swapped, and a Payments payment started for the old total is canceled (409 conflict when it was paid meanwhile; 503 payments_unavailable). 409 conflict when the order changed meanwhile; 422 validation_failed (pointer to the member); 404 not_found. fields sets order field values (active fields on orders; null clears one; 422 at /fields/<id>).",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "checkout",
 				"x-ss-permission": "orders.manage",
@@ -5708,6 +5733,31 @@
 										],
 										"maxLength": 2000,
 										"description": "A new dispatch video replacing the one taken when packing (an upload key, a YouTube id or address, or an https address); only while the order is packed or shipped (422 validation_failed otherwise)."
+									},
+									"fields": {
+										"type": "object",
+										"additionalProperties": {
+											"anyOf": [
+												{
+													"type": [
+														"string",
+														"number",
+														"boolean",
+														"array"
+													],
+													"items": {
+														"type": [
+															"string",
+															"number"
+														]
+													}
+												},
+												{
+													"type": "null"
+												}
+											]
+										},
+										"description": "The order fields' values staff give (active fields on orders); null clears one. 422 at /fields/<id> for a value its field refuses."
 									}
 								}
 							}
@@ -5780,7 +5830,7 @@
 		"/v1/admin/orders/{id}/move": {
 			"post": {
 				"summary": "Move an order to another status of the flow (Orders admin widget)",
-				"description": "What entering a status does depends on its role and the move's options (lists/order_flow, nextStatuses on the order): packed takes serial numbers (grades_serials; registered ones from stock, typed ones may follow) and the dispatch video as the move's video option says; shipped needs a shipment (its tracking number unless the move's tracking is optional; typed serial numbers when the move needs units); delivered makes cash on delivery and pickup paid (cod.paidOnDelivery), counts units sold and credits loyalty points; cancelled gives stock, slots, offer uses and points back, cancels the open Payments payment and refunds what Payments took right after when the move's refund is auto (when Payments cannot be reached the refund stays pending in effects and is tried again; a warning says so); returned_to_origin and returned put stock back as the move's restock says (ask: send restock); refunded refunds what is left (before dispatch it acts as a cancel; with nothing paid it cancels with no money unless the move's unpaid is refuse: 409 nothing_paid); a dispatched order is never canceled or refunded as a cancel: it comes back as returned_to_origin first (money paid can be refunded meanwhile with POST /v1/orders/:id/refunds); after delivery a cancel or a refund puts the items back in stock only as the move's restock says and takes earned points back unless its points is keep. A waiting order whose method is listed in the move's paidOnConfirm is recorded as paid when moved on. 409 move_not_allowed when the flow does not list the move for staff (or the shopper paid meanwhile); 409 flow_changed when the order's role is no longer the flow's role of its status; 409 conflict when the order changed meanwhile or a refund runs at Payments for it; 422 validation_failed for a missing shipment, tracking number, serial numbers, video, note, shopperNote or restock; 503 payments_unavailable when Payments cannot be reached for a cancel; 404 not_found. A widget ticket needs the move's permission (into a refunded status orders.refund; 403 forbidden). The move is written to the history with the staff member's name (a ticket's user, or the SS-Actor-* headers of a server call, else Server), the activity log, the shopper's message and the events. Each move is one transaction: the order, its facts and everything it gives back or takes are written together, so of two moves at once one wins and the other gets 409 conflict. A move refused after it called out leaves nothing behind: a Payments payment it canceled is dropped from the order (the shopper's next pay starts a new one), and a courier booking is kept as the order's shipment and used when the move is made again (never booked twice). Send an Idempotency-Key so a retried request is done once.",
+				"description": "What entering a status does depends on its role and the move's options (lists/order_flow, nextStatuses on the order): packed takes serial numbers (grades_serials; registered ones from stock, typed ones may follow) and the dispatch video as the move's video option says; shipped needs a shipment (its tracking number unless the move's tracking is optional; typed serial numbers when the move needs units); delivered makes cash on delivery and pickup paid (cod.paidOnDelivery), counts units sold and credits loyalty points; cancelled gives stock, slots, offer uses and points back, cancels the open Payments payment and refunds what Payments took right after when the move's refund is auto (when Payments cannot be reached the refund stays pending in effects and is tried again; a warning says so); returned_to_origin and returned put stock back as the move's restock says (ask: send restock); refunded refunds what is left (before dispatch it acts as a cancel; with nothing paid it cancels with no money unless the move's unpaid is refuse: 409 nothing_paid); a dispatched order is never canceled or refunded as a cancel: it comes back as returned_to_origin first (money paid can be refunded meanwhile with POST /v1/orders/:id/refunds); after delivery a cancel or a refund puts the items back in stock only as the move's restock says and takes earned points back unless its points is keep. A waiting order whose method is listed in the move's paidOnConfirm is recorded as paid when moved on. 409 move_not_allowed when the flow does not list the move for staff (or the shopper paid meanwhile); 409 flow_changed when the order's role is no longer the flow's role of its status; 409 conflict when the order changed meanwhile or a refund runs at Payments for it; 422 validation_failed for a missing shipment, tracking number, serial numbers, video, note, shopperNote or restock; 503 payments_unavailable when Payments cannot be reached for a cancel; 404 not_found. A widget ticket needs the move's permission (into a refunded status orders.refund; 403 forbidden). The move is written to the history with the staff member's name (a ticket's user, or the SS-Actor-* headers of a server call, else Server), the activity log, the shopper's message and the events. Each move is one transaction: the order, its facts and everything it gives back or takes are written together, so of two moves at once one wins and the other gets 409 conflict. A move refused after it called out leaves nothing behind: a Payments payment it canceled is dropped from the order (the shopper's next pay starts a new one), and a courier booking is kept as the order's shipment and used when the move is made again (never booked twice). Send an Idempotency-Key so a retried request is done once. A move into a packed, shipped or delivered status needs the order fields required by that stage (requiredAt) first: 422 validation_failed at /fields/<id>.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "checkout",
 				"x-ss-permission": "orders.manage",
@@ -16045,7 +16095,7 @@
 			},
 			"patch": {
 				"summary": "Block or unblock a customer, change their staff note or reset their returned packages",
-				"description": "A blocked shopper cannot order. A member’s record is made when missing. 422 validation_failed (a block without its reason, a reason over 500 characters, a note over 5,000, resetRto other than true, or nothing to change at /blocked); 404 not_found.",
+				"description": "A blocked shopper cannot order. A member’s record is made when missing. 422 validation_failed (a block without its reason, a reason over 500 characters, a note over 5,000, resetRto other than true, or nothing to change at /blocked); 404 not_found. fields sets customer field values (active fields on customers; null clears one; 422 at /fields/<id>).",
 				"x-ss-auth": "server",
 				"x-ss-feature": "checkout",
 				"security": [
@@ -16099,6 +16149,31 @@
 										"type": "boolean",
 										"const": true,
 										"description": "Set rtoCount back to 0."
+									},
+									"fields": {
+										"type": "object",
+										"additionalProperties": {
+											"anyOf": [
+												{
+													"type": [
+														"string",
+														"number",
+														"boolean",
+														"array"
+													],
+													"items": {
+														"type": [
+															"string",
+															"number"
+														]
+													}
+												},
+												{
+													"type": "null"
+												}
+											]
+										},
+										"description": "The customer fields' values staff keep (active fields on customers); null clears one. 422 at /fields/<id> for a value its field refuses."
 									}
 								}
 							}
@@ -20252,7 +20327,7 @@
 			},
 			"patch": {
 				"summary": "Change an order's staff note, address, shipment or serial numbers, or a waiting order's lines",
-				"description": "The address changes only before shipping (422 at /address); serials need Grades and serials with typed serial numbers. lines, paymentMethod and delivery change an order that still waits (awaiting payment or confirmation, nothing paid, physical lines only): it is priced again with the offers it was placed with, its stock holds are swapped, and a Payments payment started for the old total is canceled (409 conflict when it was paid meanwhile; 503 payments_unavailable). 409 conflict when the order changed meanwhile; 422 validation_failed (pointer to the member); 404 not_found.",
+				"description": "The address changes only before shipping (422 at /address); serials need Grades and serials with typed serial numbers. lines, paymentMethod and delivery change an order that still waits (awaiting payment or confirmation, nothing paid, physical lines only): it is priced again with the offers it was placed with, its stock holds are swapped, and a Payments payment started for the old total is canceled (409 conflict when it was paid meanwhile; 503 payments_unavailable). 409 conflict when the order changed meanwhile; 422 validation_failed (pointer to the member); 404 not_found. fields sets order field values (active fields on orders; null clears one; 422 at /fields/<id>).",
 				"x-ss-auth": "server",
 				"x-ss-feature": "checkout",
 				"security": [
@@ -20507,6 +20582,31 @@
 										],
 										"maxLength": 2000,
 										"description": "A new dispatch video replacing the one taken when packing (an upload key, a YouTube id or address, or an https address); only while the order is packed or shipped (422 validation_failed otherwise)."
+									},
+									"fields": {
+										"type": "object",
+										"additionalProperties": {
+											"anyOf": [
+												{
+													"type": [
+														"string",
+														"number",
+														"boolean",
+														"array"
+													],
+													"items": {
+														"type": [
+															"string",
+															"number"
+														]
+													}
+												},
+												{
+													"type": "null"
+												}
+											]
+										},
+										"description": "The order fields' values staff give (active fields on orders); null clears one. 422 at /fields/<id> for a value its field refuses."
 									}
 								}
 							}
@@ -20590,7 +20690,7 @@
 		"/v1/orders/{id}/move": {
 			"post": {
 				"summary": "Move an order to another status of the flow",
-				"description": "What entering a status does depends on its role and the move's options (lists/order_flow, nextStatuses on the order): packed takes serial numbers (grades_serials; registered ones from stock, typed ones may follow) and the dispatch video as the move's video option says; shipped needs a shipment (its tracking number unless the move's tracking is optional; typed serial numbers when the move needs units); delivered makes cash on delivery and pickup paid (cod.paidOnDelivery), counts units sold and credits loyalty points; cancelled gives stock, slots, offer uses and points back, cancels the open Payments payment and refunds what Payments took right after when the move's refund is auto (when Payments cannot be reached the refund stays pending in effects and is tried again; a warning says so); returned_to_origin and returned put stock back as the move's restock says (ask: send restock); refunded refunds what is left (before dispatch it acts as a cancel; with nothing paid it cancels with no money unless the move's unpaid is refuse: 409 nothing_paid); a dispatched order is never canceled or refunded as a cancel: it comes back as returned_to_origin first (money paid can be refunded meanwhile with POST /v1/orders/:id/refunds); after delivery a cancel or a refund puts the items back in stock only as the move's restock says and takes earned points back unless its points is keep. A waiting order whose method is listed in the move's paidOnConfirm is recorded as paid when moved on. 409 move_not_allowed when the flow does not list the move for staff (or the shopper paid meanwhile); 409 flow_changed when the order's role is no longer the flow's role of its status; 409 conflict when the order changed meanwhile or a refund runs at Payments for it; 422 validation_failed for a missing shipment, tracking number, serial numbers, video, note, shopperNote or restock; 503 payments_unavailable when Payments cannot be reached for a cancel; 404 not_found. A widget ticket needs the move's permission (into a refunded status orders.refund; 403 forbidden). The move is written to the history with the staff member's name (a ticket's user, or the SS-Actor-* headers of a server call, else Server), the activity log, the shopper's message and the events. Each move is one transaction: the order, its facts and everything it gives back or takes are written together, so of two moves at once one wins and the other gets 409 conflict. A move refused after it called out leaves nothing behind: a Payments payment it canceled is dropped from the order (the shopper's next pay starts a new one), and a courier booking is kept as the order's shipment and used when the move is made again (never booked twice). Send an Idempotency-Key so a retried request is done once.",
+				"description": "What entering a status does depends on its role and the move's options (lists/order_flow, nextStatuses on the order): packed takes serial numbers (grades_serials; registered ones from stock, typed ones may follow) and the dispatch video as the move's video option says; shipped needs a shipment (its tracking number unless the move's tracking is optional; typed serial numbers when the move needs units); delivered makes cash on delivery and pickup paid (cod.paidOnDelivery), counts units sold and credits loyalty points; cancelled gives stock, slots, offer uses and points back, cancels the open Payments payment and refunds what Payments took right after when the move's refund is auto (when Payments cannot be reached the refund stays pending in effects and is tried again; a warning says so); returned_to_origin and returned put stock back as the move's restock says (ask: send restock); refunded refunds what is left (before dispatch it acts as a cancel; with nothing paid it cancels with no money unless the move's unpaid is refuse: 409 nothing_paid); a dispatched order is never canceled or refunded as a cancel: it comes back as returned_to_origin first (money paid can be refunded meanwhile with POST /v1/orders/:id/refunds); after delivery a cancel or a refund puts the items back in stock only as the move's restock says and takes earned points back unless its points is keep. A waiting order whose method is listed in the move's paidOnConfirm is recorded as paid when moved on. 409 move_not_allowed when the flow does not list the move for staff (or the shopper paid meanwhile); 409 flow_changed when the order's role is no longer the flow's role of its status; 409 conflict when the order changed meanwhile or a refund runs at Payments for it; 422 validation_failed for a missing shipment, tracking number, serial numbers, video, note, shopperNote or restock; 503 payments_unavailable when Payments cannot be reached for a cancel; 404 not_found. A widget ticket needs the move's permission (into a refunded status orders.refund; 403 forbidden). The move is written to the history with the staff member's name (a ticket's user, or the SS-Actor-* headers of a server call, else Server), the activity log, the shopper's message and the events. Each move is one transaction: the order, its facts and everything it gives back or takes are written together, so of two moves at once one wins and the other gets 409 conflict. A move refused after it called out leaves nothing behind: a Payments payment it canceled is dropped from the order (the shopper's next pay starts a new one), and a courier booking is kept as the order's shipment and used when the move is made again (never booked twice). Send an Idempotency-Key so a retried request is done once. A move into a packed, shipped or delivered status needs the order fields required by that stage (requiredAt) first: 422 validation_failed at /fields/<id>.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "checkout",
 				"security": [
@@ -28917,7 +29017,7 @@
 			},
 			"post": {
 				"summary": "Place an order",
-				"description": "Send an Idempotency-Key (428 idempotency_key_required without one) so a retried request places one order: the same key with the same body answers the first answer again (Idempotent-Replayed: true), with another body 409 duplicate_request. The shopper is the Accounts user of the sign-in sent in SS-Sign-In (verified here; a wrong or expired one counts as none). Without a sign-in a guest orders with customer { name, phone } while checkout.guests is on or unless_password (off: 403 sign_in_required; unless_password and the phone belongs to an Accounts user with a password: 403 sign_in_required with signIn: member_phone); a phone a member already has makes the order that member’s. The cart is priced again here. How the order starts (order.role / order.payment.state / next.kind): online, bank_transfer and cash on delivery with an advance, through Payments: awaiting_payment / pending / pay (retry when Payments could not be reached); bank transfers or COD advances staff record (checkout.bankTransferVia or cod.advanceVia manual): awaiting_payment / unpaid / proof; cod: awaiting_confirmation (open with cod.startStatus open) / unpaid / done; pickup (pay at pickup): awaiting_confirmation / unpaid / done; a free order (total 0): paid, awaiting_confirmation (online or bank_transfer with checkout.freeOrderStart awaiting_payment: awaiting_payment without a time limit). Unpaid orders awaiting payment are canceled after checkout.paymentWindowMinutes, unconfirmed ones after checkout.confirmationHours (0 = never), giving back what they held. A guest gets orderKey once. 422 validation_failed (the cart’s fields, /payment, /address/<field>, /customer/<field>, /returnUrl, /note, /expectedTotal, /delivery/locationId, /lines/<n> for a line that cannot be ordered); 422 cod_not_allowed (codReason over_max or advance_unavailable); 403 customer_blocked; 409 too_many_open_orders (checkout.openOrderCap); 409 price_changed when expectedTotal differs (quote: the new CartQuote); 409 out_of_stock (lines), slot_taken, offer_unavailable or points_changed.",
+				"description": "Send an Idempotency-Key (428 idempotency_key_required without one) so a retried request places one order: the same key with the same body answers the first answer again (Idempotent-Replayed: true), with another body 409 duplicate_request. The shopper is the Accounts user of the sign-in sent in SS-Sign-In (verified here; a wrong or expired one counts as none). Without a sign-in a guest orders with customer { name, phone } while checkout.guests is on or unless_password (off: 403 sign_in_required; unless_password and the phone belongs to an Accounts user with a password: 403 sign_in_required with signIn: member_phone); a phone a member already has makes the order that member’s. The cart is priced again here. How the order starts (order.role / order.payment.state / next.kind): online, bank_transfer and cash on delivery with an advance, through Payments: awaiting_payment / pending / pay (retry when Payments could not be reached); bank transfers or COD advances staff record (checkout.bankTransferVia or cod.advanceVia manual): awaiting_payment / unpaid / proof; cod: awaiting_confirmation (open with cod.startStatus open) / unpaid / done; pickup (pay at pickup): awaiting_confirmation / unpaid / done; a free order (total 0): paid, awaiting_confirmation (online or bank_transfer with checkout.freeOrderStart awaiting_payment: awaiting_payment without a time limit). Unpaid orders awaiting payment are canceled after checkout.paymentWindowMinutes, unconfirmed ones after checkout.confirmationHours (0 = never), giving back what they held. A guest gets orderKey once. 422 validation_failed (the cart’s fields, /payment, /address/<field>, /customer/<field>, /returnUrl, /note, /expectedTotal, /delivery/locationId, /lines/<n> for a line that cannot be ordered); 422 cod_not_allowed (codReason over_max or advance_unavailable); 403 customer_blocked; 409 too_many_open_orders (checkout.openOrderCap); 409 price_changed when expectedTotal differs (quote: the new CartQuote); 409 out_of_stock (lines), slot_taken, offer_unavailable or points_changed. fields gives the order fields the quote names (422 at /fields/<id> for a value its field refuses or a required one missing).",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "checkout",
 				"security": [
@@ -29193,6 +29293,24 @@
 										"minimum": 0,
 										"maximum": 1000000000000,
 										"description": "The total the shopper was shown (minor units): another total answers 409 price_changed."
+									},
+									"fields": {
+										"type": "object",
+										"additionalProperties": {
+											"type": [
+												"string",
+												"number",
+												"boolean",
+												"array"
+											],
+											"items": {
+												"type": [
+													"string",
+													"number"
+												]
+											}
+										},
+										"description": "The order fields the quote names (fields on orders shown to shoppers), by field id: each checked like the field's values; a required one (requiredAt checkout) must be given. 422 validation_failed at /fields/<id>."
 									}
 								}
 							}
@@ -34001,7 +34119,8 @@
 					"points",
 					"pointsToEarn",
 					"totals",
-					"ready"
+					"ready",
+					"fields"
 				],
 				"additionalProperties": false,
 				"properties": {
@@ -34269,6 +34388,13 @@
 					"ready": {
 						"type": "boolean",
 						"description": "Nothing stops placing it (every line priced without problems, delivery chosen)."
+					},
+					"fields": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/FieldDefinition"
+						},
+						"description": "The order fields the checkout asks the shopper (fields on orders shown to shoppers, in their order); required ones (requiredAt checkout) must be given in POST /v1/shop/orders fields."
 					}
 				}
 			},
@@ -37233,7 +37359,9 @@
 					"ordersPlaced",
 					"createdAt",
 					"updatedAt",
-					"recentOrders"
+					"recentOrders",
+					"fields",
+					"customerFields"
 				],
 				"additionalProperties": false,
 				"properties": {
@@ -37315,6 +37443,16 @@
 						},
 						"maxItems": 10,
 						"description": "Their latest 10 orders, newest first."
+					},
+					"fields": {
+						"$ref": "#/components/schemas/FieldValues"
+					},
+					"customerFields": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/FieldDefinition"
+						},
+						"description": "The shop's customer fields staff keep (active ones, and those this customer has a value of)."
 					}
 				}
 			},
@@ -38604,6 +38742,112 @@
 					}
 				}
 			},
+			"FieldDefinition": {
+				"type": "object",
+				"description": "A field as a form fills it: what its values take.",
+				"required": [
+					"id",
+					"name",
+					"type",
+					"choices",
+					"unit",
+					"min",
+					"max",
+					"decimals",
+					"dates",
+					"multiple",
+					"maxValues",
+					"format"
+				],
+				"additionalProperties": true,
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"name": {
+						"type": "string"
+					},
+					"type": {
+						"type": "string",
+						"enum": [
+							"text",
+							"number",
+							"choice",
+							"yes_no",
+							"date"
+						]
+					},
+					"choices": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/AttributeChoice"
+						}
+					},
+					"unit": {
+						"type": "string"
+					},
+					"min": {
+						"type": [
+							"number",
+							"null"
+						]
+					},
+					"max": {
+						"type": [
+							"number",
+							"null"
+						]
+					},
+					"decimals": {
+						"type": "integer",
+						"minimum": 0,
+						"maximum": 3
+					},
+					"dates": {
+						"type": "string",
+						"enum": [
+							"any",
+							"past",
+							"future"
+						]
+					},
+					"multiple": {
+						"type": "boolean"
+					},
+					"maxValues": {
+						"type": "integer",
+						"minimum": 1,
+						"maximum": 20
+					},
+					"format": {
+						"$ref": "#/components/schemas/FieldFormat"
+					},
+					"required": {
+						"type": "boolean",
+						"description": "Checkout: the shopper must give it. Staff: needed by requiredAt."
+					},
+					"requiredAt": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"checkout",
+							"packed",
+							"shipped",
+							"delivered",
+							null
+						]
+					},
+					"shopper": {
+						"type": "boolean",
+						"description": "Shoppers see its value."
+					},
+					"active": {
+						"type": "boolean"
+					}
+				}
+			},
 			"FieldFormat": {
 				"type": [
 					"object",
@@ -38759,6 +39003,24 @@
 						"description": "Chat's product answers tell it."
 					}
 				}
+			},
+			"FieldValues": {
+				"type": "object",
+				"additionalProperties": {
+					"type": [
+						"string",
+						"number",
+						"boolean",
+						"array"
+					],
+					"items": {
+						"type": [
+							"string",
+							"number"
+						]
+					}
+				},
+				"description": "Field id → its value (text, number, yes/no or a YYYY-MM-DD date), or several values when the field takes several."
 			},
 			"Format": {
 				"type": "object",
@@ -40044,7 +40306,9 @@
 					"createdAt",
 					"updatedAt",
 					"customerFlags",
-					"nextStatuses"
+					"nextStatuses",
+					"fields",
+					"orderFields"
 				],
 				"additionalProperties": false,
 				"properties": {
@@ -40229,6 +40493,16 @@
 							"$ref": "#/components/schemas/OrderNextStatus"
 						},
 						"description": "The statuses the order may move to now (the flow’s moves and role rules)."
+					},
+					"fields": {
+						"$ref": "#/components/schemas/FieldValues"
+					},
+					"orderFields": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/FieldDefinition"
+						},
+						"description": "The shop's order fields staff fill (active ones, and those this order has a value of)."
 					}
 				}
 			},
@@ -41752,6 +42026,8 @@
 					"createdAt",
 					"updatedAt",
 					"customerFlags",
+					"fields",
+					"orderFields",
 					"nextStatuses",
 					"warnings",
 					"warningCodes"
@@ -41953,6 +42229,16 @@
 							"$ref": "#/components/schemas/OrderWarning"
 						},
 						"description": "The warnings' codes and values, in the same order as warnings."
+					},
+					"fields": {
+						"$ref": "#/components/schemas/FieldValues"
+					},
+					"orderFields": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/FieldDefinition"
+						},
+						"description": "The shop's order fields staff fill (active ones, and those this order has a value of)."
 					}
 				}
 			},
@@ -47180,7 +47466,8 @@
 					"dispatchVideo",
 					"note",
 					"canCancel",
-					"invoice"
+					"invoice",
+					"fields"
 				],
 				"additionalProperties": false,
 				"properties": {
@@ -47659,6 +47946,26 @@
 					"invoice": {
 						"type": "boolean",
 						"description": "Its invoice can be read now, with the same sign-in or order key (GET /v1/shop/orders/{id}/invoice: the invoices feature, and its setting shopperFrom)."
+					},
+					"fields": {
+						"type": "array",
+						"description": "The order fields shown to the shopper with their values, as they read them; staff-only fields never show.",
+						"items": {
+							"type": "object",
+							"required": [
+								"name",
+								"value"
+							],
+							"additionalProperties": false,
+							"properties": {
+								"name": {
+									"type": "string"
+								},
+								"value": {
+									"type": "string"
+								}
+							}
+						}
 					}
 				}
 			},

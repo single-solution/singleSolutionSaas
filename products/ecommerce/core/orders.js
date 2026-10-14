@@ -721,6 +721,11 @@ export const checkEdit = (body, order) => {
 			return refuse('staffNote', `The staff note has at most ${MAX_STAFF_NOTE} characters.`);
 		value.staffNote = input.staffNote.trim();
 	}
+	if (input.fields !== undefined) {
+		if (typeof input.fields !== 'object' || input.fields === null || Array.isArray(input.fields))
+			return refuse('fields', 'Give the field values by field id.');
+		value.fields = objectOf(input.fields);
+	}
 	if (input.address !== undefined) {
 		if (!order.address && !value.waiting) return refuse('address', 'This order has no delivery address.');
 		if (!EDITABLE_ROLES.includes(order.role)) return refuse('address', 'The address cannot change once the order is shipped.');
@@ -759,8 +764,9 @@ const VIDEO_ROLES = Object.freeze(/** @type {StatusRole[]} */ (['packed', 'shipp
  * time (E28), serial numbers and the dispatch video once packed.
  * @typedef {{ staffNote?: string, address?: NonNullable<OrderRecord['address']>, serials?: Record<string, UnitInput[]>,
  *   shipment?: { courier: string, trackingNumber: string, trackingNote: string, estimatedDeliveryAt: Date | null },
- *   waiting?: WaitingEdit, video?: OrderMedia }} OrderEdit `waiting`: lines, payment and delivery changed while the
- *   order waits (E29); `video`: the dispatch video that replaces the one taken when packing
+ *   waiting?: WaitingEdit, video?: OrderMedia, fields?: Record<string, unknown> }} OrderEdit `waiting`: lines, payment
+ *   and delivery changed while the order waits (E29); `video`: the dispatch video that replaces the one taken when
+ *   packing; `fields`: order field values by field id (null clears one), checked against the fields by the caller
  */
 
 /**
@@ -829,13 +835,15 @@ const waitingEditOf = (input) => {
 };
 
 /**
- * Check a change to a customer record.
+ * Check a change to a customer record: the block and its reason, the staff note, resetting returned packages, and
+ * customer field values (checked against the fields by the caller).
  * @param {unknown} body
- * @returns {{ ok: true, value: { blocked?: boolean, blockedReason?: string, note?: string, resetRto?: boolean } } | Refusal}
+ * @returns {{ ok: true, value: { blocked?: boolean, blockedReason?: string, note?: string, resetRto?: boolean,
+ *   fields?: Record<string, unknown> } } | Refusal}
  */
 export const checkCustomerEdit = (body) => {
 	const input = objectOf(body);
-	/** @type {{ blocked?: boolean, blockedReason?: string, note?: string, resetRto?: boolean }} */
+	/** @type {{ blocked?: boolean, blockedReason?: string, note?: string, resetRto?: boolean, fields?: Record<string, unknown> }} */
 	const value = {};
 	if (input.blocked !== undefined) {
 		if (typeof input.blocked !== 'boolean') return refuse('blocked', 'true or false.');
@@ -853,6 +861,12 @@ export const checkCustomerEdit = (body) => {
 	if (input.resetRto !== undefined) {
 		if (input.resetRto !== true) return refuse('resetRto', 'Send true to reset the count.');
 		value.resetRto = true;
+	}
+	// customer field values (null clears one), checked against the fields by the caller
+	if (input.fields !== undefined) {
+		if (typeof input.fields !== 'object' || input.fields === null || Array.isArray(input.fields))
+			return refuse('fields', 'Give the field values by field id.');
+		value.fields = objectOf(input.fields);
 	}
 	if (Object.keys(value).length === 0) return refuse('blocked', 'Nothing to change.');
 	return { ok: true, value };
@@ -1034,10 +1048,11 @@ const LEFT_OUT = Object.freeze(['accessKeyHash', 'idempotencyKey', 'phoneDigits'
  * @param {OrderFlow} flow
  * @param {{ customer: Partial<CustomerRecord> | null, images: Map<string, string | null>, money: Money,
  *   serialized?: Set<string> | null, units?: { fields: ReadonlyMap<string, ReadonlyArray<import('./model.js').AttributeRecord>>,
- *   values: ReadonlyMap<string, Record<string, string[]>> } }} extras `images`: line id → address; `serialized`: the
- *   order's serialized products; `units`: the unit fields of each product, and the values of the order's units by serial
+ *   values: ReadonlyMap<string, Record<string, string[]>> }, orderFields?: ReadonlyArray<import('./model.js').AttributeRecord> }} extras
+ *   `images`: line id → address; `serialized`: the order's serialized products; `units`: the unit fields of each
+ *   product, and the values of the order's units by serial; `orderFields`: the shop's order fields
  */
-export const orderDetail = (order, flow, { customer, images, money, serialized = null, units }) => {
+export const orderDetail = (order, flow, { customer, images, money, serialized = null, units, orderFields = [] }) => {
 	const plain = Object.fromEntries(Object.entries(wire(order)).filter(([key]) => !LEFT_OUT.includes(key)));
 	// what is due, can be refunded and must be refunded, counted the one way
 	const sums = orderMoney(order);
@@ -1047,6 +1062,11 @@ export const orderDetail = (order, flow, { customer, images, money, serialized =
 		// Payments a transition asked for
 		facts: factsOf(order),
 		effects: plain.effects ?? [],
+		// its order field values by field id (staff see every one), and the fields staff fill (dynamic model §2)
+		fields: order.fields ?? {},
+		orderFields: orderFields
+			.filter((field) => field.active || order.fields?.[field.id] !== undefined)
+			.map((field) => fieldDefinition(field)),
 		statusLabel: statusLabel(flow, order.status),
 		totalText: money(order.totals.total, order.totals.currency),
 		lines: plain.lines.map((/** @type {any} */ line) => ({
@@ -1085,6 +1105,30 @@ export const orderDetail = (order, flow, { customer, images, money, serialized =
 		}),
 	};
 };
+
+/**
+ * A field as the staff widgets fill it: what its values take, whether it is required (an order field: when), and
+ * whether shoppers see it.
+ * @param {import('./model.js').AttributeRecord} field
+ */
+export const fieldDefinition = (field) => ({
+	id: field.id,
+	name: field.name,
+	type: field.type,
+	choices: field.choices,
+	unit: field.unit,
+	min: field.min,
+	max: field.max,
+	decimals: field.decimals,
+	dates: field.dates,
+	multiple: field.multiple,
+	maxValues: field.maxValues,
+	format: field.format,
+	required: field.required,
+	requiredAt: field.requiredAt,
+	shopper: field.show.shopper,
+	active: field.active,
+});
 
 /**
  * Whether a customer reference is a customer id (`cus_…`, members and guests alike; K-6) rather than an Accounts user id.

@@ -143,7 +143,7 @@ describe('my orders', () => {
 		expect(buttonOf(host, text('orders.more')).hidden).toBe(true);
 	});
 
-	it('shows each line’s serial numbers and warranty', async () => {
+	it('shows each line’s serial numbers, the unit fields shown to shoppers, the order fields and warranty', async () => {
 		const fake = makeShop({
 			signIn: 's1',
 			features: ['checkout'],
@@ -151,8 +151,14 @@ describe('my orders', () => {
 				'GET /v1/shop/orders': () => ok({ items: [row('ord_1', 'SO-1')], nextCursor: null }),
 				'GET /v1/shop/orders/ord_1': () => {
 					const order = /** @type {any} */ (detail());
+					order.fields = [{ name: 'Gift message', value: 'For Sam' }];
 					order.lines = [
-						{ ...order.lines[0], serials: ['356938035643809', '490154203237518'], warrantyDays: 365 },
+						{
+							...order.lines[0],
+							serials: ['356938035643809', '490154203237518'],
+							unitValues: [{ name: 'Model code', values: ['A1', 'A2'] }],
+							warrantyDays: 365,
+						},
 						{ ...order.lines[1], serials: [], warrantyDays: 0 },
 						{ ...order.lines[1], id: 'oln_3', name: 'Case', warrantyDays: 90 },
 					];
@@ -165,6 +171,8 @@ describe('my orders', () => {
 		const lines = $$(host, `ul[aria-label="${text('orders.lines')}"] > li`);
 		expect(lines[0].textContent).toContain(text('orders.serials', { serials: '356938035643809, 490154203237518' }));
 		expect(lines[0].textContent).toContain(text('shop.warrantyDays', { days: 365 }));
+		expect(lines[0].textContent).toContain(text('orders.unitValues', { name: 'Model code', values: 'A1, A2' }));
+		expect(textOf(host)).toContain(text('orders.fieldValue', { name: 'Gift message', value: 'For Sam' }));
 		expect(lines[1].textContent).not.toContain(text('orders.serials', { serials: '' }));
 		expect(lines[1].textContent).not.toContain(text('shop.warrantyDays', { days: 0 }));
 		expect(lines[2].textContent).toContain(text('shop.warrantyMonths', { months: 3 }));

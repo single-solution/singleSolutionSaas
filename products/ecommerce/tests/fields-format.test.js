@@ -3,7 +3,7 @@
  * made from merchant input), Luhn and GS1 check digits, and the format rules a merchant saves.
  */
 import { describe, expect, it } from 'vitest';
-import { checkFormat, checkFormatRule, formatted, gtinOf, luhnValid } from '../core/fields.js';
+import { checkFormat, checkFormatRule, gtinOf } from '../core/fields.js';
 
 /** @typedef {import('../core/fields.js').Format} Format */
 
@@ -20,10 +20,14 @@ const format = (parts) => {
 
 describe('check digits', () => {
 	it('checks Luhn numbers', () => {
-		for (const valid of ['79927398713', '490154203237518', '356938035643809', '4111111111111111', '18'])
-			expect(luhnValid(valid), valid).toBe(true);
-		for (const wrong of ['79927398710', '490154203237519', '1', '', '4111-1111', 'ABCDEFG'])
-			expect(luhnValid(wrong), wrong).toBe(false);
+		const luhn = format({ chars: 'digits', checkDigit: 'luhn' });
+		const valid = (/** @type {string} */ value) => checkFormat(value, luhn).ok;
+		for (const number of ['79927398713', '490154203237518', '356938035643809', '4111111111111111', '18'])
+			expect(valid(number), number).toBe(true);
+		for (const number of ['79927398710', '490154203237519', '1'])
+			expect(checkFormat(number, luhn), number).toEqual({ ok: false, code: 'check_digit' });
+		// with any characters a Luhn number is still only digits
+		expect(checkFormat('4111-1111', { ...luhn, chars: 'any' })).toEqual({ ok: false, code: 'check_digit' });
 	});
 
 	it('checks GTINs: 8, 12, 13 or 14 digits with the GS1 check digit', () => {
@@ -122,7 +126,7 @@ describe('formats', () => {
 		expect(checkFormat('a b', format({ chars: 'letters_digits' }))).toEqual({ ok: false, code: 'chars' });
 		// a length counts characters, not code units
 		expect(checkFormat('😀😀', format({ maxLength: 2 }))).toEqual({ ok: true, value: '😀😀' });
-		expect(formatted('  a b  ', { ignoreSpaces: false, upperCase: true })).toBe('A B');
+		expect(checkFormat('  a b  ', format({ upperCase: true }))).toEqual({ ok: true, value: 'A B' });
 	});
 
 	it('checks very long values in linear time, whatever the format', () => {

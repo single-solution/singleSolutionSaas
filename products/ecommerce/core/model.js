@@ -419,6 +419,8 @@ export const STATUS_ROLES = Object.freeze([
  * @property {Date | null} holdUntil an unconfirmed order is canceled after this time (on use)
  * @property {string} idempotencyKey the checkout's Idempotency-Key, unique per customer
  * @property {string} note the shopper's note
+ * @property {Record<string, import('./fields.js').FieldValue>} [fields] the values of the shop's order fields by field
+ *   id (dynamic model §2): the shopper's at checkout, staff's by edit; none when it has no values
  * @property {string} staffNote
  * @property {Date} placedAt
  * @property {Date | null} deliveredAt
@@ -445,7 +447,9 @@ export const STATUS_ROLES = Object.freeze([
  * unique by normalized phone): a guest has no user id (`userId: null`, `guest: true`).
  * @typedef {{ id: string, userId: string | null, guest: boolean, name: string, email: string, phone: string,
  *   phoneDigits: string, city: string, blocked: boolean, blockedReason: string, rtoCount: number, orderCount: number,
- *   note: string, seenBy: string[], lastOrderAt?: Date | null }} CustomerRecord
+ *   note: string, seenBy: string[], lastOrderAt?: Date | null,
+ *   fields?: Record<string, import('./fields.js').FieldValue> }} CustomerRecord `fields`: the values of the shop's
+ *   customer fields by field id, kept by staff (dynamic model §2); none when it has no values
  */
 
 // ---------------------------------------------------------------------------------------------------- promotions

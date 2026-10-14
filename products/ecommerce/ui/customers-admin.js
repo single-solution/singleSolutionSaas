@@ -8,6 +8,7 @@
  * @module
  */
 import { mountAdmin, query } from './admin-kit.js';
+import { fieldsCard, fieldsDialog } from './admin-field-values.js';
 import { card, chipFilter, detailHead, listScreen } from './admin-lists.js';
 import { CLAIM_TONES } from './admin-order.js';
 import { csvTab, reportsTab } from './admin-reports.js';
@@ -189,24 +190,28 @@ const renderCustomer = (kit, customer, detail, message) => {
 		});
 	/** @type {any[]} */
 	const recent = customer.recentOrders ?? [];
-	const cards = kit.masonry([
-		card(kit, t('customersAdmin.staffNote'), [
-			kit.text('p', { class: customer.note ? '' : 'muted' }, customer.note || t('customersAdmin.noNote')),
-		]),
-		card(kit, t('customersAdmin.recentOrders'), [
-			recent.length === 0
-				? kit.text('p', { class: 'muted' }, t('customersAdmin.noOrders'))
-				: kit.table(
-						[t('customersAdmin.orderNumber'), t('admin.status'), t('customersAdmin.total'), t('customersAdmin.placed')],
-						recent.map((order) => [
-							order.number,
-							order.statusLabel,
-							kit.money(order.total, order.currency),
-							kit.when(order.placedAt),
-						]),
-					),
-		]),
-	]);
+	const cards = kit.masonry(
+		[
+			card(kit, t('customersAdmin.staffNote'), [
+				kit.text('p', { class: customer.note ? '' : 'muted' }, customer.note || t('customersAdmin.noNote')),
+			]),
+			// the customer fields staff keep (dynamic model §2)
+			fieldsCard(kit, customer.customerFields ?? [], customer.fields ?? {}),
+			card(kit, t('customersAdmin.recentOrders'), [
+				recent.length === 0
+					? kit.text('p', { class: 'muted' }, t('customersAdmin.noOrders'))
+					: kit.table(
+							[t('customersAdmin.orderNumber'), t('admin.status'), t('customersAdmin.total'), t('customersAdmin.placed')],
+							recent.map((order) => [
+								order.number,
+								order.statusLabel,
+								kit.money(order.total, order.currency),
+								kit.when(order.placedAt),
+							]),
+						),
+			]),
+		].filter((entry) => entry !== null),
+	);
 	kit.put(detail.pane, [
 		detail.back,
 		detailHead(
@@ -217,7 +222,20 @@ const renderCustomer = (kit, customer, detail, message) => {
 					? kit.button(t('customersAdmin.unblock'), unblock, { primary: true })
 					: kit.button(t('customersAdmin.block'), block),
 				kit.button(t('customersAdmin.editNote'), editNote),
-				kit.moreMenu([customer.rtoCount > 0 ? { label: t('customersAdmin.resetRto'), onSelect: resetRto } : null]),
+				kit.moreMenu([
+					customer.rtoCount > 0 ? { label: t('customersAdmin.resetRto'), onSelect: resetRto } : null,
+					(customer.customerFields ?? []).some((/** @type {any} */ field) => field.active)
+						? {
+								label: t('admin.editFields'),
+								onSelect: () =>
+									fieldsDialog(kit, {
+										fields: customer.customerFields,
+										values: customer.fields ?? {},
+										save: (body) => change(body, t('admin.saved')),
+									}),
+							}
+						: null,
+				]),
 			],
 		),
 		note,

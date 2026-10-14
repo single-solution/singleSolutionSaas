@@ -464,6 +464,10 @@ export const mountMyOrders = async ({ host, config, shop, win }) => {
 								)
 							: null,
 						order.note ? h(doc, 'p', { class: 'meta' }, t('orders.note', { note: order.note })) : null,
+						// the order fields the shop shows its shoppers
+						...(Array.isArray(order.fields) ? order.fields : []).map((/** @type {any} */ entry) =>
+							h(doc, 'p', { class: 'meta' }, t('orders.fieldValue', { name: entry.name, value: entry.value })),
+						),
 						h(
 							doc,
 							'section',

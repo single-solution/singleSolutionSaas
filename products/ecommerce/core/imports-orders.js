@@ -308,12 +308,63 @@ const checker = () => {
 	};
 
 	/**
+	 * Field values moved in with an order or a customer (dynamic model §2): `{ <fieldId>: value or [values] }`, each a
+	 * text, number or yes/no, several at most 20; none when not given.
+	 * @param {unknown} value @param {string} path
+	 * @returns {Record<string, import('./fields.js').FieldValue> | null}
+	 */
+	const fieldValues = (value, path) => {
+		if (value === undefined) return null;
+		const one = (/** @type {unknown} */ entry) =>
+			(typeof entry === 'string' && entry.length > 0 && entry.length <= 200) ||
+			(typeof entry === 'number' && Number.isFinite(entry)) ||
+			typeof entry === 'boolean';
+		const ok =
+			typeof value === 'object' &&
+			value !== null &&
+			!Array.isArray(value) &&
+			Object.entries(value).every(
+				([id, entry]) =>
+					isId(id, ID_PREFIX.attribute) &&
+					(one(entry) ||
+						(Array.isArray(entry) &&
+							entry.length > 0 &&
+							entry.length <= 20 &&
+							entry.every((item) => one(item) && typeof item !== 'boolean'))),
+			);
+		if (!ok) {
+			fail(path, 'Field values are given by field id: a text, number or yes/no, or a list of up to 20.');
+			return null;
+		}
+		return Object.keys(value).length > 0 ? /** @type {Record<string, import('./fields.js').FieldValue>} */ (value) : null;
+	};
+
+	/**
 	 * A refusal of one of the product's own checks (`field` without the leading slash), under `base`.
 	 * @param {{ ok: false, field: string, message: string }} refusal @param {string} [base]
 	 */
 	const refused = (refusal, base = '') => fail(`${base}/${refusal.field}`, refusal.message);
 
-	return { errors, fail, fields, text, id, user, list, ids, whole, wholeOrNull, flag, oneOf, time, email, phone, seen, refused };
+	return {
+		errors,
+		fail,
+		fields,
+		text,
+		id,
+		user,
+		list,
+		ids,
+		whole,
+		wholeOrNull,
+		flag,
+		oneOf,
+		time,
+		email,
+		phone,
+		seen,
+		fieldValues,
+		refused,
+	};
 };
 
 /** @typedef {ReturnType<typeof checker>} Checker */
@@ -347,7 +398,7 @@ export const importRules = ({ flow, checkout, catalog, country, now }) => {
 /** Fields of a customer (`CustomerRecord`); the counts, `lastOrderAt` and `phoneDigits` are derived and ignored. */
 const CUSTOMER_FIELDS = fieldList(
 	'id userId guest name email phone phoneDigits city blocked blockedReason note seenBy orderCount rtoCount ' +
-		'lastOrderAt createdAt updatedAt',
+		'lastOrderAt fields createdAt updatedAt',
 );
 
 /**
@@ -377,6 +428,7 @@ export const checkImportedCustomer = (record, rules) => {
 	});
 	if (!flags.ok) c.refused(flags);
 	const createdAt = c.time(record.createdAt, '/createdAt', rules.now, { nullable: true });
+	const fields = c.fieldValues(record.fields, '/fields');
 	return answer(c, {
 		id,
 		userId: guest ? null : userId,
@@ -393,6 +445,7 @@ export const checkImportedCustomer = (record, rules) => {
 		orderCount: 0,
 		rtoCount: 0,
 		lastOrderAt: null,
+		...(fields ? { fields } : {}),
 		...(createdAt ? { createdAt } : {}),
 	});
 };
@@ -403,7 +456,7 @@ export const checkImportedCustomer = (record, rules) => {
 const ORDER_FIELDS = fieldList(
 	'id number customer address delivery lines totals promotions payment payments refunds status role history ' +
 		'shipment media seenBy phoneDigits accessKeyHash stockHeld returnRestocked claimRestockedAt holdUntil ' +
-		'idempotencyKey note staffNote placedAt deliveredAt createdAt updatedAt',
+		'idempotencyKey note fields staffNote placedAt deliveredAt createdAt updatedAt',
 );
 const ORDER_CUSTOMER_FIELDS = fieldList('userId customerId name email phone');
 const DELIVERY_FIELDS = fieldList('method zone fee locationId');
@@ -965,6 +1018,10 @@ export const checkImportedOrder = (record, rules) => {
 		holdUntil,
 		idempotencyKey,
 		note: c.text(record.note, '/note', MAX_NOTE),
+		...(() => {
+			const fields = c.fieldValues(record.fields, '/fields');
+			return fields ? { fields } : {};
+		})(),
 		staffNote: c.text(record.staffNote, '/staffNote', MAX_STAFF_NOTE),
 		placedAt,
 		deliveredAt,

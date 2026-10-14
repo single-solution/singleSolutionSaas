@@ -179,30 +179,51 @@ export const unitsOfOrders = async (data, orderIds) => {
 };
 
 /**
- * Every unit field, to name and show unit values (fields switched off too: their values stay readable).
- * @param {WebsiteData} data
+ * Every field whose values live on units, orders or customers, in their order, to check, name and show their values
+ * (fields switched off too: their values stay readable).
+ * @param {WebsiteData} data @param {'unit' | 'order' | 'customer'} on
  * @returns {Promise<AttributeRecord[]>}
  */
-export const unitFieldsAll = async (data) =>
+export const fieldsOn = async (data, on) =>
 	/** @type {AttributeRecord[]} */ (
 		/** @type {unknown} */ (
-			await data.collection(COLLECTIONS.attributes).find({ websiteId: data.websiteId, on: 'unit' }, NO_ID).toArray()
+			await data
+				.collection(COLLECTIONS.attributes)
+				.find({ websiteId: data.websiteId, on }, NO_ID)
+				.sort({ sort: 1, name: 1, id: 1 })
+				.toArray()
 		)
 	);
 
 /**
- * The merchant fields printed documents read (`core/invoice.js` `DocumentFields`): the unit fields and the values of
- * the orders' units.
- * @param {WebsiteData} data @param {ReadonlyArray<{ id: string, lines: ReadonlyArray<{ serials: string[] }> }>} orders
+ * The merchant fields printed documents read (`core/invoice.js` `DocumentFields`): the unit, order and customer fields,
+ * the values of the orders' units, and the field values of the orders' customers.
+ * @param {WebsiteData} data
+ * @param {ReadonlyArray<{ id: string, lines: ReadonlyArray<{ serials: string[] }>, customer: { customerId?: string } }>} orders
  * @returns {Promise<import('../core/invoice.js').DocumentFields>}
  */
 export const documentFieldsOf = async (data, orders) => {
 	const withUnits = orders.filter((order) => order.lines.some((line) => line.serials.length > 0)).map((order) => order.id);
-	const [list, units] = await Promise.all([
-		withUnits.length > 0 ? unitFieldsAll(data) : Promise.resolve([]),
+	const customerIds = [...new Set(orders.flatMap((order) => (order.customer.customerId ? [order.customer.customerId] : [])))];
+	const [list, units, customers] = await Promise.all([
+		data
+			.collection(COLLECTIONS.attributes)
+			.find({ websiteId: data.websiteId, on: { $in: ['unit', 'order', 'customer'] } }, NO_ID)
+			.sort({ sort: 1, name: 1, id: 1 })
+			.toArray(),
 		unitsOfOrders(data, withUnits),
+		customerIds.length > 0
+			? data
+					.collection(COLLECTIONS.customers)
+					.find({ websiteId: data.websiteId, id: { $in: customerIds } }, { projection: { _id: 0, id: 1, fields: 1 } })
+					.toArray()
+			: Promise.resolve([]),
 	]);
-	return { list, units };
+	return {
+		list: /** @type {AttributeRecord[]} */ (/** @type {unknown} */ (list)),
+		units,
+		customers: new Map(customers.map((row) => [String(row.id), row.fields ?? {}])),
+	};
 };
 
 /**

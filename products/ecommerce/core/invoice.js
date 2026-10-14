@@ -10,19 +10,40 @@
  * @module
  */
 import { formatDate, formatMoney } from '@ss/contracts/format';
-import { unitsShown } from './fields.js';
+import { fieldValuesShown, unitsShown } from './fields.js';
 import { WAITING_ROLES } from './flow.js';
 import { orderMoney } from './orders.js';
 
 /** @typedef {import('./model.js').OrderRecord} OrderRecord */
 /** @typedef {{ name: string, email: string | null, phone: string | null, address: string | null }} BusinessLike */
 /**
- * The merchant fields a document may print (PLAN 0.8.10 dynamic model §2): the unit fields, and the values of the
- * printed orders' units (order id → serial → values by unit field). A field prints where its `show` says
- * (`invoice`, `packingSlip`); the others never print.
+ * The merchant fields a document may print (PLAN 0.8.10 dynamic model §2): the unit, order and customer fields, the
+ * values of the printed orders' units (order id → serial → values by unit field) and of their customers (customer id
+ * → values). A field prints where its `show` says (`invoice`, `packingSlip`); the others never print.
  * @typedef {{ list: ReadonlyArray<import('./model.js').AttributeRecord>,
- *   units: ReadonlyMap<string, ReadonlyMap<string, Record<string, string[]>>> }} DocumentFields
+ *   units: ReadonlyMap<string, ReadonlyMap<string, Record<string, string[]>>>,
+ *   customers: ReadonlyMap<string, Record<string, import('./fields.js').FieldValue>> }} DocumentFields
  */
+
+/**
+ * The order's and its customer's field values a document prints (each field shown on it), as `Name: value` lines.
+ * @param {OrderRecord} order @param {DocumentContext} context @param {'invoice' | 'packingSlip'} place
+ */
+const fieldLines = (order, context, place) =>
+	[
+		...fieldValuesShown(
+			order.fields ?? {},
+			context.fields.list.filter((field) => field.on === 'order'),
+			place,
+		),
+		...fieldValuesShown(
+			context.fields.customers.get(order.customer.customerId ?? '') ?? {},
+			context.fields.list.filter((field) => field.on === 'customer'),
+			place,
+		),
+	]
+		.map((entry) => `<p class="small">${esc(`${entry.name}: ${entry.label}`)}</p>`)
+		.join('');
 /**
  * What a document is printed with: the business, the texts, the website's Format and business time zone, and the
  * merchant fields.
@@ -330,7 +351,7 @@ export const invoiceHtml = (order, context, { shopper = false } = {}) => {
 		: order.delivery.method === 'pickup'
 			? `<div><h2>${esc(t.labelShipTo)}</h2><p>${esc(t.labelPickup)}</p></div>`
 			: '<div></div>';
-	const body = `<header><div><h1>${esc(t.title)}</h1><p>${esc(t.labelNumber)} <strong class="mono">${esc(order.number)}</strong></p><p>${esc(t.labelDate)} ${esc(placedOn(order, context))}</p></div>${businessBlock(business)}</header><div class="grid"><div><h2>${esc(t.labelBilledTo)}</h2>${billed}</div>${shipTo}</div><table><thead><tr><th>${esc(t.labelItem)}</th><th class="num">${esc(t.labelQuantity)}</th><th class="num">${esc(t.labelUnitPrice)}</th><th class="num">${esc(t.labelAmount)}</th></tr></thead><tbody>${rows}</tbody></table><table class="totals"><tbody>${totalsRows}</tbody></table><p>${esc(t.labelPayment)}: ${esc(method)} · ${esc(state)}</p>${entries}${t.footer ? `<div class="footer small">${esc(t.footer)}</div>` : ''}`;
+	const body = `<header><div><h1>${esc(t.title)}</h1><p>${esc(t.labelNumber)} <strong class="mono">${esc(order.number)}</strong></p><p>${esc(t.labelDate)} ${esc(placedOn(order, context))}</p></div>${businessBlock(business)}</header><div class="grid"><div><h2>${esc(t.labelBilledTo)}</h2>${billed}${fieldLines(order, context, 'invoice')}</div>${shipTo}</div><table><thead><tr><th>${esc(t.labelItem)}</th><th class="num">${esc(t.labelQuantity)}</th><th class="num">${esc(t.labelUnitPrice)}</th><th class="num">${esc(t.labelAmount)}</th></tr></thead><tbody>${rows}</tbody></table><table class="totals"><tbody>${totalsRows}</tbody></table><p>${esc(t.labelPayment)}: ${esc(method)} · ${esc(state)}</p>${entries}${t.footer ? `<div class="footer small">${esc(t.footer)}</div>` : ''}`;
 	return page(`${t.title} ${order.number}`, body);
 };
 
@@ -364,7 +385,7 @@ const slipBody = (order, context, batch) => {
 	const collect =
 		cash > 0 ? `<p class="due">${esc(t.labelCashDue)}: ${esc(formatMoney(cash, order.totals.currency, format))}</p>` : '';
 	const note = order.note ? `<p class="small">${esc(t.labelNote)}: ${esc(order.note)}</p>` : '';
-	return `<header><div><h1>${esc(t.packingSlipTitle)}</h1><p><strong class="mono">${esc(order.number)}</strong></p><p>${esc(t.labelDate)} ${esc(placedOn(order, context))}</p></div>${businessBlock(business)}</header><div class="grid"><div><h2>${esc(t.labelShipTo)}</h2>${shipTo}</div><div class="end">${shipment}</div></div>${collect}<table><thead><tr><th>${esc(t.labelItem)}</th><th class="num">${esc(t.labelQuantity)}</th></tr></thead><tbody>${rows}</tbody></table>${note}${t.footer ? `<div class="footer small">${esc(t.footer)}</div>` : ''}`;
+	return `<header><div><h1>${esc(t.packingSlipTitle)}</h1><p><strong class="mono">${esc(order.number)}</strong></p><p>${esc(t.labelDate)} ${esc(placedOn(order, context))}</p></div>${businessBlock(business)}</header><div class="grid"><div><h2>${esc(t.labelShipTo)}</h2>${shipTo}${fieldLines(order, context, 'packingSlip')}</div><div class="end">${shipment}</div></div>${collect}<table><thead><tr><th>${esc(t.labelItem)}</th><th class="num">${esc(t.labelQuantity)}</th></tr></thead><tbody>${rows}</tbody></table>${note}${t.footer ? `<div class="footer small">${esc(t.footer)}</div>` : ''}`;
 };
 
 /**

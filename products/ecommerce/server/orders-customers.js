@@ -8,12 +8,15 @@
  * @module
  */
 import { countHandlers, paginate, problem } from '@ss/app-kit';
+import { fieldsOn } from '../adapters/catalog-store.js';
 import { createFulfilmentStore, customerFilter, markSeenBy } from '../adapters/fulfilment-store.js';
 import { createOrdersStore } from '../adapters/orders-store.js';
+import { checkFieldValues } from '../core/fields.js';
 import { COLLECTIONS } from '../core/model.js';
 import {
 	MAX_SEARCH,
 	checkCustomerEdit,
+	fieldDefinition,
 	customerOwner,
 	customerView,
 	isCustomerId,
@@ -166,9 +169,15 @@ export const createCustomers = (service) => {
 		const spent = (await store.orders.spent([shown])).get(spentKey(shown)) ?? { total: 0, count: 0 };
 		const flow = /** @type {import('../core/model.js').OrderFlow} */ (/** @type {unknown} */ (await s.list('order_flow')));
 		const { money } = await s.format();
+		const values = record?.fields ?? {};
 		return {
 			...customerView(shown, spent, s.currency, money),
 			recentOrders: recent.map((order) => orderSummary(order, flow, money)),
+			// its customer field values (staff see every one), and the fields staff fill (dynamic model §2)
+			fields: values,
+			customerFields: (await fieldsOn(await s.data(), 'customer'))
+				.filter((field) => field.active || values[field.id] !== undefined)
+				.map(fieldDefinition),
 		};
 	};
 
@@ -182,7 +191,16 @@ export const createCustomers = (service) => {
 		if (!checked.ok) throw service.invalid(checked.field, checked.message);
 		const s = await service.site(ctx);
 		const { store, record, details, userId } = await find(s, ref);
-		const { blocked, blockedReason, note, resetRto } = checked.value;
+		const { blocked, blockedReason, note, resetRto, fields } = checked.value;
+		/** @type {Record<string, unknown> | null} the customer field values after the edit (null: not changed) */
+		let nextFields = null;
+		if (fields) {
+			const known = (await fieldsOn(await s.data(), 'customer')).filter((field) => field.active);
+			const given = checkFieldValues(fields, known);
+			if (!given.ok) throw service.invalid(given.path, given.message);
+			nextFields = { ...(record?.fields ?? {}), ...given.value };
+			for (const id of given.cleared) delete nextFields[id];
+		}
 		await store.customers.update(
 			// a guest's record by its id; a member's by user id (made when missing)
 			userId ? { userId } : { id: /** @type {string} */ (record?.id) },
@@ -190,6 +208,7 @@ export const createCustomers = (service) => {
 				...(blocked === undefined ? {} : { blocked, blockedReason }),
 				...(note === undefined ? {} : { note }),
 				...(resetRto ? { rtoCount: 0 } : {}),
+				...(nextFields ? { fields: nextFields } : {}),
 			},
 			record ? { name: record.name, email: record.email, phone: record.phone } : details,
 			new Date(service.now()),
@@ -204,6 +223,7 @@ export const createCustomers = (service) => {
 			...(action === 'customer.blocked' ? ['blocked'] : action === 'customer.unblocked' ? ['unblocked'] : []),
 			...(note === undefined ? [] : ['note changed']),
 			...(resetRto ? ['returned packages reset'] : []),
+			...(fields ? ['fields changed'] : []),
 		];
 		await service.log(ctx, action, ref, {
 			label: (record?.name || details.name || ref).slice(0, 200),

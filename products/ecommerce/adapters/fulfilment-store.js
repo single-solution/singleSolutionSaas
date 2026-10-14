@@ -257,9 +257,13 @@ export const createFulfilmentStore = (data) => {
 			anonymise: async (person) => {
 				const or = personOr(person, { id: 'customer.userId', email: 'customer.email', phone: 'customer.phone' });
 				if (or.length === 0) return 0;
+				// the order fields go too: what the shopper gave at checkout may name them (a gift message, a tax number)
 				const result = await orders.updateMany(
 					{ websiteId, $or: or },
-					{ $set: { 'customer.name': '', 'customer.email': '', 'customer.phone': '', address: null, note: '' } },
+					{
+						$set: { 'customer.name': '', 'customer.email': '', 'customer.phone': '', address: null, note: '' },
+						$unset: { fields: '' },
+					},
 				);
 				return result.modifiedCount;
 			},

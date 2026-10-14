@@ -315,7 +315,7 @@ describe('document parts (E35)', () => {
 		texts: invoiceTexts({}),
 		format: DEFAULT_FORMAT,
 		timeZone: 'UTC',
-		fields: { list: [], units: new Map() },
+		fields: { list: [], units: new Map(), customers: new Map() },
 	};
 
 	it('collects cash only on unpaid cash-on-delivery orders', () => {

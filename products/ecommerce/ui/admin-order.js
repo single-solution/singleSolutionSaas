@@ -12,6 +12,7 @@
  */
 import { EDITABLE_ROLES } from '../core/orders.js';
 import { query } from './admin-kit.js';
+import { fieldsCard, fieldsDialog } from './admin-field-values.js';
 import { card, detailHead } from './admin-lists.js';
 import { serialForm, serialLines, shipForm, typedSerials, warrantyOf } from './admin-order-forms.js';
 
@@ -201,6 +202,23 @@ const renderOrder = (kit, order, detail, message) => {
 				? { label: t('ordersAdmin.replaceVideo'), onSelect: () => videoDialog(kit, order, done) }
 				: null,
 			{ label: t('ordersAdmin.editNote'), onSelect: () => noteDialog(kit, order, done) },
+			// the order fields staff fill (dynamic model §2)
+			(order.orderFields ?? []).some((/** @type {any} */ field) => field.active)
+				? {
+						label: t('admin.editFields'),
+						onSelect: () =>
+							fieldsDialog(kit, {
+								fields: order.orderFields,
+								values: order.fields ?? {},
+								save: async (body) => {
+									const answer = await kit.call('PATCH', `/v1/admin/orders/${order.id}`, body);
+									if (!answer.ok) return kit.reason(answer);
+									done(answer.data, t('admin.saved'));
+									return null;
+								},
+							}),
+					}
+				: null,
 			has('invoices') ? { label: t('ordersAdmin.invoice'), onSelect: document('invoice', t('ordersAdmin.invoice')) } : null,
 			has('invoices')
 				? { label: t('ordersAdmin.packingSlip'), onSelect: document('packing-slip', t('ordersAdmin.packingSlip')) }
@@ -336,7 +354,8 @@ const renderOrder = (kit, order, detail, message) => {
 				),
 		),
 	]);
-	const cards = kit.masonry([customer, address, shipment, notes, history].filter(Boolean));
+	const fields = fieldsCard(kit, order.orderFields ?? [], order.fields ?? {});
+	const cards = kit.masonry([customer, address, shipment, notes, fields, history].filter(Boolean));
 
 	kit.put(detail.pane, [
 		detail.back,

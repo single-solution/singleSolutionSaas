@@ -28,14 +28,14 @@ import { created, paginate, problem } from '@ss/app-kit';
 import { createId } from '@ss/contracts';
 import { normalisePhone } from '@ss/contracts/phone';
 import { originAllowed } from '@ss/protocol';
-import { unitFieldsAll, unitsOfOrders } from '../adapters/catalog-store.js';
+import { fieldsOn, unitsOfOrders } from '../adapters/catalog-store.js';
 import { keyOpens, newOrderKey, orderKeyHash } from '../adapters/crypto.js';
 import { heldStockBefore, placeOrder, swapOrderStock } from '../adapters/ledger.js';
 import { createOrdersStore } from '../adapters/orders-store.js';
 import { STOCK_PROBLEMS, checkAddress, checkCart, checkOrderExtras } from '../core/checkout.js';
 import { shipmentLink } from '../core/couriers.js';
 import { PLACED_FACTS, factsGuard, isFacts } from '../core/facts.js';
-import { unitsShown } from '../core/fields.js';
+import { checkFieldValues, fieldValuesShown, unitsShown } from '../core/fields.js';
 import {
 	WAITING_ROLES,
 	shopperCancelOf,
@@ -363,13 +363,15 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 			order.role === 'awaiting_payment' && order.payment.state === 'pending' && order.payment.paymentId !== null;
 		// the units' numbers the shopper may see: plain serial numbers and the unit fields shown to shoppers
 		const units = order.lines.some((line) => (line.serials ?? []).length > 0);
-		const [checkout, zones, couriers, invoices, unitValues, unitFields] = await Promise.all([
+		const filled = Object.keys(order.fields ?? {}).length > 0;
+		const [checkout, zones, couriers, invoices, unitValues, unitFields, orderFields] = await Promise.all([
 			s.values('checkout'),
 			s.has('delivery_zones') ? s.values('delivery_zones') : Promise.resolve(null),
 			s.has('checkout') ? s.list('couriers') : Promise.resolve([]),
 			s.has('invoices') ? s.values('invoices') : Promise.resolve(null),
 			units ? s.data().then((data) => unitsOfOrders(data, [order.id])) : Promise.resolve(new Map()),
-			units ? s.data().then(unitFieldsAll) : Promise.resolve([]),
+			units ? s.data().then((data) => fieldsOn(data, 'unit')) : Promise.resolve([]),
+			filled ? s.data().then((data) => fieldsOn(data, 'order')) : Promise.resolve([]),
 		]);
 		// paid, refunded and due counted the one way (a refund never makes a debt, CK-5)
 		const sums = orderMoney(order);
@@ -383,6 +385,11 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 			statusLabel: shopperLabel(flow, order.status),
 			// the line the merchant wrote under this status for the order's payment method ('' = none)
 			statusText: shopperTextOf(flow, order.status, order.payment.method),
+			// the order fields shown to the shopper, as they read them (staff-only ones never show)
+			fields: fieldValuesShown(order.fields ?? {}, orderFields, 'shopper').map((entry) => ({
+				name: entry.name,
+				value: entry.label,
+			})),
 			role: order.role,
 			placedAt: iso(order.placedAt),
 			guest: !order.customer.userId,
@@ -864,6 +871,11 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 			customer: known,
 		});
 		refuseLines(q);
+		// the order fields the shopper gives (those shown to shoppers), each in its format, the ones checkout needs given
+		const given = checkFieldValues(ctx.body?.fields ?? {}, q.fields);
+		if (!given.ok) throw service.invalid(given.path, given.message);
+		const lacking = q.fields.find((field) => field.required && given.value[field.id] === undefined);
+		if (lacking) throw service.invalid(`fields/${lacking.id}`, `Give ${lacking.name}.`);
 		if (q.delivery.method === 'delivery' && !address?.ok)
 			throw service.invalid(
 				address?.ok === false ? address.field : 'address',
@@ -986,6 +998,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 			holdUntil: holdMs > 0 ? new Date(now + holdMs) : null,
 			idempotencyKey: String(ctx.idempotencyKey),
 			note,
+			...(Object.keys(given.value).length > 0 ? { fields: given.value } : {}),
 			staffNote: '',
 			seenBy: [],
 			phoneDigits: phoneDigitsOf(buyer.phone),

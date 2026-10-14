@@ -14,10 +14,8 @@ import {
 	unitsShown,
 	checkValue,
 	crowdedUnits,
-	dayOf,
 	fieldApplies,
 	showDefaults,
-	shownToShoppers,
 	unitFieldsFor,
 	valueProblem,
 } from '../core/fields.js';
@@ -117,11 +115,6 @@ describe('field definitions', () => {
 		// the places given change, the rest stay
 		const before = { ...showDefaults('product'), filter: true };
 		expect(checkShow({ compare: true }, 'product', before)).toMatchObject({ ok: true, value: { filter: true, compare: true } });
-		expect(shownToShoppers({ show: showDefaults('order') })).toBe(false);
-		expect(shownToShoppers({ show: { ...showDefaults('order'), invoice: true } })).toBe(false);
-		expect(shownToShoppers({ show: { ...showDefaults('order'), shopper: true } })).toBe(true);
-		expect(shownToShoppers({ show: { ...showDefaults('product'), page: false, chat: false, feeds: 'color' } })).toBe(true);
-		expect(shownToShoppers({ show: { ...showDefaults('product'), page: false, chat: false } })).toBe(false);
 		// a changed place of the field keeps its values
 		const order = field({ name: 'Ref', on: 'order', show: { invoice: true } });
 		const changed = checkAttribute({ show: { shopper: true } }, /** @type {any} */ ({ id: 'att_1', ...order }));
@@ -171,8 +164,8 @@ describe('values', () => {
 		expect(checkValue(made, '2026-02-30')).toMatchObject({ ok: false, code: 'type' });
 		expect(valueProblem(made, { code: 'date' })).toBe('Made is today or earlier.');
 		expect(valueProblem({ ...made, dates: 'future' }, { code: 'date' })).toBe('Made is today or later.');
-		expect(dayOf('2026-1-5')).toBeNull();
-		expect(dayOf(20260105)).toBeNull();
+		expect(checkValue(made, '2026-1-5')).toMatchObject({ ok: false, code: 'type' });
+		expect(checkValue(made, 20260105)).toEqual({ ok: false, code: 'type' });
 		const yes = rules({ type: 'yes_no' });
 		expect(checkValue(yes, false)).toEqual({ ok: true, value: false });
 		expect(checkValue(yes, 'false')).toMatchObject({ ok: false, code: 'type' });

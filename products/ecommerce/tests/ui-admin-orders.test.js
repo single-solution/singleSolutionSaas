@@ -721,6 +721,85 @@ describe('orders admin: one order', () => {
 		expect(dialogStatus(root)).toBe('Type or change the serial numbers of at least one item first.');
 	});
 
+	it('shows the order fields and edits them, checked as the server does', async () => {
+		const rules = { choices: [], unit: '', min: null, max: null, decimals: 0, dates: 'any', multiple: false, maxValues: 1 };
+		const orderFields = [
+			{
+				...rules,
+				id: 'att_gift',
+				name: 'Gift message',
+				type: 'text',
+				format: null,
+				required: true,
+				requiredAt: 'checkout',
+				shopper: true,
+				active: true,
+			},
+			{
+				...rules,
+				id: 'att_box',
+				name: 'Box size',
+				type: 'choice',
+				choices: [
+					{ value: 's', label: 'Small' },
+					{ value: 'm', label: 'Medium' },
+				],
+				format: null,
+				required: true,
+				requiredAt: 'packed',
+				shopper: false,
+				active: true,
+			},
+			{
+				...rules,
+				id: 'att_ref',
+				name: 'PO number',
+				type: 'text',
+				format: {
+					chars: 'digits',
+					minLength: 4,
+					maxLength: 8,
+					startsWith: [],
+					mask: '',
+					checkDigit: 'none',
+					ignoreSpaces: false,
+					upperCase: false,
+				},
+				required: false,
+				requiredAt: null,
+				shopper: false,
+				active: true,
+			},
+		];
+		const filled = detail({ orderFields, fields: { att_gift: 'Hi Sam', att_ref: '1234' } });
+		const { root, server } = await start({
+			'GET /v1/admin/orders/ord_1': () => answer(200, filled),
+			'PATCH /v1/admin/orders/ord_1': (/** @type {any} */ call) =>
+				answer(200, detail({ orderFields, fields: { att_gift: 'Hi Sam', att_box: call.body.fields.att_box } })),
+		});
+		const pane = detailOf(panelOf(root, 'orders'));
+		const shown = textOf(pane);
+		expect(shown).toContain('Gift message · shown to the shopperHi Sam');
+		expect(shown).toContain('Box size' + TEXTS['catalogAdmin.notSet']);
+		expect(shown).toContain('PO number1234');
+		await pickMenu(pane, 'Edit fields');
+		const dialog = dialogOf(root);
+		expect(fieldIn(dialog, 'Gift message (required)').value).toBe('Hi Sam');
+		type(fieldIn(dialog, 'PO number'), '12A4');
+		await submitDialog(root);
+		expect(dialogStatus(root)).toBe(
+			'12A4 does not match the format of PO number. It has characters the format does not allow.',
+		);
+		type(fieldIn(dialog, 'PO number'), '');
+		await change(fieldIn(dialog, 'Box size (required)'), 'm');
+		await submitDialog(root);
+		// an emptied value is cleared
+		expect(server.last('PATCH /v1/admin/orders/ord_1')?.body).toEqual({
+			fields: { att_gift: 'Hi Sam', att_box: 'm', att_ref: null },
+		});
+		expect(textOf(pane)).toContain('Box sizeMedium');
+	});
+
 	it('edits the note and address, refunds and opens documents', async () => {
 		window.URL.createObjectURL = vi.fn(() => 'blob:doc');
 		window.URL.revokeObjectURL = vi.fn();

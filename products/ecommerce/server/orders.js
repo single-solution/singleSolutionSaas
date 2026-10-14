@@ -11,12 +11,13 @@
  * @module
  */
 import { countHandlers, created, defineRoute, paginate, problem } from '@ss/app-kit';
-import { documentFieldsOf, unitFieldsOf, unitsOfOrders } from '../adapters/catalog-store.js';
+import { documentFieldsOf, fieldsOn, unitFieldsOf, unitsOfOrders } from '../adapters/catalog-store.js';
 import { createFulfilmentStore, markSeenBy } from '../adapters/fulfilment-store.js';
 import { setOrderCounter } from '../adapters/ledger.js';
 import { createOrdersStore } from '../adapters/orders-store.js';
 import { createOutbox } from '../adapters/outbox.js';
 import { courierNamed, trackingLink } from '../core/couriers.js';
+import { checkFieldValues } from '../core/fields.js';
 import { invoiceHtml, invoiceTexts, packingSlipHtml, shopperInvoiceReady } from '../core/invoice.js';
 import {
 	TRACK_EVERY_MS,
@@ -139,15 +140,18 @@ export const createOrders = (product, service, { ordering }) => {
 		const serialized = s.has('grades_serials') ? await moves.serializedOf(s, order) : null;
 		// the unit fields each serialized line's units take, and its units' values (staff see every value)
 		const data = await s.data();
-		const [unitFields, unitValues] = serialized
-			? await Promise.all([unitFieldsOf(data, [...serialized]), unitsOfOrders(data, [order.id])])
-			: [new Map(), new Map()];
+		const [unitFields, unitValues, orderFields] = await Promise.all([
+			serialized ? unitFieldsOf(data, [...serialized]) : new Map(),
+			serialized ? unitsOfOrders(data, [order.id]) : new Map(),
+			fieldsOn(data, 'order'),
+		]);
 		return orderDetail(order, flow, {
 			customer,
 			images,
 			money,
 			serialized,
 			units: { fields: unitFields, values: unitValues.get(order.id) ?? new Map() },
+			orderFields,
 		});
 	};
 
@@ -454,19 +458,29 @@ export const createOrders = (product, service, { ordering }) => {
 		const input = checkEdit(ctx.body, order);
 		if (!input.ok) throw service.invalid(input.field, input.message);
 		// serial numbers typed at packing or later (E11)
-		const { serials, shipment, waiting, video, ...rest } = input.value;
+		const { serials, shipment, waiting, video, fields, ...rest } = input.value;
 		// lines, payment and delivery of a waiting order are priced again by checkout (E29)
 		if (waiting) {
 			order = await ordering.editWaiting(s, ctx, order, { ...waiting, ...(rest.address ? { address: rest.address } : {}) });
 			delete rest.address;
-			if (rest.staffNote === undefined && !shipment && !serials && !video) return detailOf(s, order);
+			if (rest.staffNote === undefined && !shipment && !serials && !video && !fields) return detailOf(s, order);
 		}
 		if (serials) {
 			order = await moves.typeSerials(s, ctx, order, serials);
-			if (rest.staffNote === undefined && rest.address === undefined && !shipment && !video) return detailOf(s, order);
+			if (rest.staffNote === undefined && rest.address === undefined && !shipment && !video && !fields)
+				return detailOf(s, order);
 		}
 		/** @type {Record<string, unknown>} */
 		const set = { ...rest };
+		// the order fields' values staff give (each in its field's rules; null clears one), kept with the others
+		if (fields) {
+			const known = (await fieldsOn(await s.data(), 'order')).filter((field) => field.active);
+			const checked = checkFieldValues(fields, known);
+			if (!checked.ok) throw service.invalid(checked.path, checked.message);
+			const next = { ...(order.fields ?? {}), ...checked.value };
+			for (const id of checked.cleared) delete next[id];
+			set.fields = next;
+		}
 		// the shipment's details may change at any time; the courier is kept by name (E28)
 		if (shipment) {
 			const couriers = await s.list('couriers');
@@ -520,6 +534,7 @@ export const createOrders = (product, service, { ordering }) => {
 					...(shipment ? ['Shipment changed'] : []),
 					...(video ? ['Dispatch video replaced'] : []),
 					...(rest.staffNote === undefined ? [] : ['Staff note changed']),
+					...(fields ? ['Fields changed'] : []),
 				].join(', '),
 			},
 		);
