@@ -275,7 +275,7 @@ export function WebsiteCard({ website, cards: initial, can, fetcher, launch, add
 			</header>
 			<div className="space-y-4">
 				{cards.length === 0 ? (
-					<p className="rounded-2xl bg-surface-2/60 px-4 py-3 text-sm text-muted">
+					<p className="rounded-xl bg-surface-2/60 px-4 py-3 text-sm text-muted">
 						{can.manage ? WEBSITE.noProducts : WEBSITE.noProductsMerchant}
 					</p>
 				) : (
@@ -285,7 +285,7 @@ export function WebsiteCard({ website, cards: initial, can, fetcher, launch, add
 						{cards.map((card) => (
 							<li
 								key={card.productId}
-								className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-2xl bg-surface-2/60 px-4 py-3">
+								className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-xl bg-surface-2/60 px-4 py-3">
 								<span className="flex min-w-0 items-center gap-3">
 									<IconBadge icon="box" kind="product" size="sm" />
 									<span className="min-w-0 space-y-1">
@@ -439,7 +439,7 @@ function AddProductDialog({ merchantId, website, fetcher, products, onClose, onA
 			{products.length === 0 ? (
 				<p className="text-sm text-muted">{WEBSITE.noneToAdd}</p>
 			) : (
-				<ul className="divide-y divide-line-soft rounded-2xl bg-surface-2/60">
+				<ul className="divide-y divide-line-soft rounded-xl bg-surface-2/60">
 					{products.map((p) => (
 						<li key={p.productId} className="flex items-center justify-between gap-3 px-4 py-3">
 							<span className="flex min-w-0 items-center gap-3">
@@ -597,7 +597,7 @@ export function InstallBlock({ entry, domain, merchantId, websiteId, fetcher }) 
 	};
 
 	return (
-		<section aria-label={entry.name} className="space-y-4 rounded-2xl bg-surface-2/60 p-4 sm:p-5">
+		<section aria-label={entry.name} className="space-y-4 rounded-xl bg-surface-2/60 p-4 sm:p-5">
 			<div className="flex flex-wrap items-center justify-between gap-2">
 				<h3 className="flex items-center gap-2 text-sm font-bold text-fg">
 					<IconBadge icon="box" kind="product" size="sm" />
@@ -625,13 +625,13 @@ export function InstallBlock({ entry, domain, merchantId, websiteId, fetcher }) 
 				<p className="text-xs text-muted">{WEBSITE.browserTokenHelp(domain)}</p>
 			</div>
 			<div className="space-y-2">
-				<p className="text-xs font-semibold uppercase tracking-wider text-muted">{WEBSITE.serverToken}</p>
+				<p className="text-[13px] font-medium text-fg">{WEBSITE.serverToken}</p>
 				{cannot ? (
 					<Callout tone="warning">{WEBSITE.cannotShow}</Callout>
 				) : shown && value ? (
 					<CodeBlock code={value} label={WEBSITE.serverToken} />
 				) : (
-					<p className="rounded-2xl bg-surface p-3.5 font-mono text-xs text-muted">
+					<p className="rounded-xl bg-surface p-3.5 font-mono text-xs text-muted">
 						<span aria-hidden="true">••••••••••••••••••••</span>
 						<span className="sr-only">{WEBSITE.hidden}</span>
 					</p>

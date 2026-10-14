@@ -43,7 +43,7 @@ const ON_CANVAS = '[--ss-skeleton:var(--ss-surface-3)]';
  */
 function CardSkeleton({ lines = 3, className }) {
 	return (
-		<div className={cx('space-y-3 rounded-card bg-surface p-6', className)}>
+		<div className={cx('space-y-3 rounded-card border border-line-soft bg-surface p-5', className)}>
 			<SkeletonBlock className="h-5 w-40" />
 			{Array.from({ length: lines }, (_, i) => (
 				<SkeletonBlock key={i} className={cx('h-4', i === lines - 1 ? 'w-2/3' : 'w-full')} />
@@ -55,7 +55,7 @@ function CardSkeleton({ lines = 3, className }) {
 /** A list pane's placeholder: the title, the search box and rows. */
 function ListSkeleton() {
 	return (
-		<div className="space-y-3 rounded-card bg-surface p-3 sm:p-4">
+		<div className="space-y-3 rounded-card border border-line-soft bg-surface p-3 sm:p-4">
 			<SkeletonBlock className="mx-1 mt-1 h-7 w-32" />
 			<SkeletonBlock className="mx-1 h-10 rounded-xl" />
 			<div className="space-y-2 pt-1">
@@ -92,7 +92,7 @@ function DetailSkeleton() {
 /** A page's placeholder: the title, three tiles and a section. */
 function PageSkeleton() {
 	return (
-		<div className="space-y-8">
+		<div className="space-y-6">
 			<SkeletonBlock className={cx('h-8 w-48', ON_CANVAS)} />
 			<div className="@container">
 				<div className={STAT_GRID}>

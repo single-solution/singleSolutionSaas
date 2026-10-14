@@ -4,8 +4,11 @@
  * `data-theme="dark"` on <html>, set before paint by `ThemeScript` from the `ThemeToggle` choice); utilities read them
  * through `@theme inline`, so components never need `dark:`. Text/background pairs keep a contrast ratio of at least
  * 4.5:1 (WCAG AA) in both themes; `line-strong` (form controls) keeps 3:1 against surfaces, `line` stays visible.
- * Visual style (PLAN 0.6): soft rounded surfaces with no borders or shadows (`line-soft` only separates rows) and the
- * solid indigo `hero` card with its bar colours.
+ * Visual style (PLAN 0.6, owner 2026-10-14): panels float on the canvas with space around them (never glued to the
+ * window edges), flat at rest with a hairline `line-soft` edge; lift and shadow appear only on hover, or for things that
+ * sit above the page (menus, dialogs, toasts). Two typefaces (owner's pick, look "A. Workbench"): Figtree for text and
+ * Bricolage Grotesque for page titles and key figures (`font-display`), loaded by each app's layout; warm neutrals,
+ * kept light; a short type scale; the solid indigo `hero` card with its bar colours.
  *
  * Colour rule (PLAN 0.6, owner decision 2026-10-09: one accent): indigo is the only accent — primary buttons, links,
  * the active item, icon tiles and badges (`primary-soft` tint); surfaces are neutral; green, amber and red mean status
@@ -46,11 +49,18 @@
 	--color-hero-bar: var(--ss-hero-bar);
 	--color-hero-track: var(--ss-hero-track);
 	--color-overlay: var(--ss-overlay);
-	--font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+	/* text and headings/figures: each app's layout loads the faces (`--ss-font-text`, `--ss-font-display`) */
+	--font-sans: var(--ss-font-text, ui-sans-serif), ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+	--font-display: var(--ss-font-display, var(--ss-font-text, ui-sans-serif)), ui-sans-serif, system-ui, sans-serif;
 	--font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
-	--radius-card: 1.125rem;
-	--radius-control: 0.75rem;
+	--radius-card: 0.875rem;
+	--radius-control: 0.625rem;
+	/* flat at rest (owner, 2026-10-14: elevation by default is not premium); lift and glow only on hover */
 	--shadow-card: none;
+	--shadow-hover: 0 12px 28px -16px rgb(15 23 42 / 0.28), 0 2px 6px -2px rgb(15 23 42 / 0.06);
+	--shadow-glow-primary: 0 6px 18px -8px color-mix(in srgb, var(--ss-primary) 75%, transparent);
+	--shadow-glow-danger: 0 6px 18px -8px color-mix(in srgb, var(--ss-danger) 75%, transparent);
+	--shadow-knob: 0 1px 2px rgb(15 23 42 / 0.25);
 	--shadow-overlay: 0 24px 48px -12px rgb(15 23 42 / 0.35);
 	--shadow-pop: 0 12px 32px -12px rgb(15 23 42 / 0.28), 0 0 0 1px var(--ss-line-soft);
 	/* motion (see "Motion" below): `ease-ss`, `ease-ss-move`, `duration-(--ss-motion)` and the `animate-ss-*` utilities */
@@ -214,7 +224,7 @@
 
 /* interactive elements: colours, opacity and transforms change together, quickly */
 @utility ss-motion {
-	transition-property: color, background-color, border-color, opacity, transform, translate, scale;
+	transition-property: color, background-color, border-color, box-shadow, opacity, transform, translate, scale;
 	transition-duration: var(--ss-motion-fast);
 	transition-timing-function: var(--ss-ease);
 }
@@ -226,14 +236,16 @@
 	}
 }
 
-/* a clickable card lifts a little on hover */
+/* a clickable card is flat at rest and lifts a little, with a soft shadow, on hover */
 @utility ss-lift {
-	transition-property: color, background-color, opacity, transform, translate, scale;
+	transition-property: color, background-color, border-color, box-shadow, opacity, transform, translate, scale;
 	transition-duration: var(--ss-motion);
 	transition-timing-function: var(--ss-ease);
 	@media (hover: hover) {
 		&:hover {
 			translate: 0 -2px;
+			border-color: var(--ss-line);
+			box-shadow: var(--shadow-hover);
 		}
 	}
 	&:active {
@@ -352,13 +364,13 @@
 
 :root {
 	color-scheme: light;
-	--ss-canvas: #f3f4f9;
+	--ss-canvas: #f7f6f4;
 	--ss-surface: #ffffff;
-	--ss-surface-2: #eef1f7;
-	--ss-line: #cbd5e1;
-	--ss-line-strong: #7c8ba1;
-	--ss-fg: #0f172a;
-	--ss-muted: #475569;
+	--ss-surface-2: #f3f1ee;
+	--ss-line: #dbd6cf;
+	--ss-line-strong: #8a837a;
+	--ss-fg: #1d1b26;
+	--ss-muted: #625d6b;
 	--ss-primary: #4f46e5;
 	--ss-primary-hover: #4338ca;
 	--ss-on-primary: #ffffff;
@@ -378,9 +390,9 @@
 	--ss-info-soft: #eef2ff;
 	--ss-on-info-soft: #3730a3;
 	--ss-focus: #4f46e5;
-	--ss-overlay: rgb(15 23 42 / 0.45);
-	--ss-line-soft: #eceef4;
-	--ss-surface-3: #e4e8f1;
+	--ss-overlay: rgb(29 27 38 / 0.45);
+	--ss-line-soft: #ece9e4;
+	--ss-surface-3: #e9e6e1;
 	--ss-hero: #4f46e5;
 	--ss-on-hero: #ffffff;
 	--ss-on-hero-muted: #e0e7ff;
@@ -391,13 +403,13 @@
 @media (prefers-color-scheme: dark) {
 	:root:not([data-theme='light']) {
 		color-scheme: dark;
-		--ss-canvas: #0a0f1c;
-		--ss-surface: #121a2b;
-		--ss-surface-2: #1b2438;
-		--ss-line: #334155;
-		--ss-line-strong: #64748b;
-		--ss-fg: #f1f5f9;
-		--ss-muted: #a7b4c7;
+		--ss-canvas: #121114;
+		--ss-surface: #1b191f;
+		--ss-surface-2: #23212a;
+		--ss-line: #3a3641;
+		--ss-line-strong: #6f6879;
+		--ss-fg: #f1edf3;
+		--ss-muted: #aca4b4;
 		--ss-primary: #818cf8;
 		--ss-primary-hover: #a5b4fc;
 		--ss-on-primary: #0b1120;
@@ -417,9 +429,9 @@
 		--ss-info-soft: #1e1b4b;
 		--ss-on-info-soft: #c7d2fe;
 		--ss-focus: #a5b4fc;
-		--ss-overlay: rgb(2 6 23 / 0.7);
-		--ss-line-soft: #1e2638;
-		--ss-surface-3: #27324a;
+		--ss-overlay: rgb(8 7 10 / 0.7);
+		--ss-line-soft: #26232b;
+		--ss-surface-3: #2c2933;
 		--ss-hero: #4338ca;
 		--ss-on-hero: #ffffff;
 		--ss-on-hero-muted: #e0e7ff;
@@ -430,13 +442,13 @@
 
 :root[data-theme='dark'] {
 	color-scheme: dark;
-	--ss-canvas: #0a0f1c;
-	--ss-surface: #121a2b;
-	--ss-surface-2: #1b2438;
-	--ss-line: #334155;
-	--ss-line-strong: #64748b;
-	--ss-fg: #f1f5f9;
-	--ss-muted: #a7b4c7;
+	--ss-canvas: #121114;
+	--ss-surface: #1b191f;
+	--ss-surface-2: #23212a;
+	--ss-line: #3a3641;
+	--ss-line-strong: #6f6879;
+	--ss-fg: #f1edf3;
+	--ss-muted: #aca4b4;
 	--ss-primary: #818cf8;
 	--ss-primary-hover: #a5b4fc;
 	--ss-on-primary: #0b1120;
@@ -456,9 +468,9 @@
 	--ss-info-soft: #1e1b4b;
 	--ss-on-info-soft: #c7d2fe;
 	--ss-focus: #a5b4fc;
-	--ss-overlay: rgb(2 6 23 / 0.7);
-	--ss-line-soft: #1e2638;
-	--ss-surface-3: #27324a;
+	--ss-overlay: rgb(8 7 10 / 0.7);
+	--ss-line-soft: #26232b;
+	--ss-surface-3: #2c2933;
 	--ss-hero: #4338ca;
 	--ss-on-hero: #ffffff;
 	--ss-on-hero-muted: #e0e7ff;

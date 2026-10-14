@@ -160,7 +160,7 @@ export function AddCreditsDialog({ merchant, balance, onClose, onAdded }) {
  */
 export function MerchantCredits({ billing, receipts, dayCharges }) {
 	return (
-		<div className="space-y-8">
+		<div className="space-y-6">
 			{billing ? <BillingStats summary={billing} /> : null}
 			<Card title={BILLING.receiptsTitle} subtitle={BILLING.receiptsIntro} padded={false}>
 				<ReceiptsTable receipts={receipts} />
@@ -312,7 +312,7 @@ export function FinanceView(props) {
 			: [];
 	const range = charges?.from && charges?.to ? MORE.rangeLine(charges.from, charges.to) : undefined;
 	return (
-		<div className="space-y-8">
+		<div className="space-y-6">
 			<PageHeader
 				title={BILLING.billingTitle}
 				subtitle={BILLING.billingIntro}
@@ -413,7 +413,7 @@ export function FinanceView(props) {
 				title={S.charges.title}
 				description={S.charges.help}
 				actions={
-					<nav className="flex flex-wrap gap-1 rounded-2xl bg-surface p-1" aria-label={S.charges.title}>
+					<nav className="flex flex-wrap gap-1 rounded-xl bg-surface p-1" aria-label={S.charges.title}>
 						{
 							/** @type {const} */ (['day', 'merchant', 'product']).map((by) => (
 								<Link

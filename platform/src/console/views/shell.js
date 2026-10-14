@@ -8,7 +8,7 @@
  */
 import { usePathname, useRouter } from 'next/navigation.js';
 import { useEffect, useState, useTransition } from 'react';
-import { AppShell, Button, Icon, ToastProvider, formatCredits, useNavigationProgress } from '@ss/ui';
+import { AppShell, Button, Icon, Select, ToastProvider, formatCredits, useNavigationProgress } from '@ss/ui';
 import { MERCHANT } from '../../texts/console.js';
 import { apiFetch } from '../client.js';
 import { Link, NavLink } from '../link.js';
@@ -75,8 +75,6 @@ export function ConsoleShell({ me, merchantId, websites, billing: frameBilling, 
 		await apiFetch(api.signOut(), { method: 'POST', redirectOn401: false });
 		window.location.assign(routes.login());
 	};
-	const selectClass =
-		'min-h-9 w-full min-w-0 max-w-[11rem] truncate rounded-xl bg-surface-2 px-3 py-1.5 text-sm font-semibold text-fg hover:bg-surface-3 focus-visible:outline-2 focus-visible:outline-focus sm:max-w-[14rem]';
 
 	return (
 		<BillingContext.Provider value={setBilling}>
@@ -91,30 +89,26 @@ export function ConsoleShell({ me, merchantId, websites, billing: frameBilling, 
 							<>
 								<span
 									title={merchant?.name ?? merchantId}
-									className="hidden min-w-0 truncate px-1 text-sm font-bold text-fg sm:block">
+									className="hidden min-w-0 truncate px-1 text-sm font-semibold text-fg sm:block">
 									{merchant?.name ?? merchantId}
 								</span>
 								{websites.length > 0 ? (
-									<label className="flex min-w-32 items-center gap-2">
-										<span className="sr-only">{MERCHANT.website}</span>
-										<select
-											className={selectClass}
-											value={currentWebsiteId}
-											disabled={switching}
-											onChange={(e) => {
-												const next = e.currentTarget.value
-													? routes.website(e.currentTarget.value)
-													: routes.websites();
-												startSwitch(() => router.push(next));
-											}}>
-											<option value="">{MERCHANT.allWebsites}</option>
-											{websites.map((w) => (
-												<option key={w.websiteId} value={w.websiteId}>
-													{w.domain}
-												</option>
-											))}
-										</select>
-									</label>
+									<Select
+										label={MERCHANT.website}
+										hideLabel
+										fieldClassName="w-full min-w-32 max-w-[11rem] sm:max-w-[14rem]"
+										className="truncate font-medium"
+										value={currentWebsiteId}
+										disabled={switching}
+										options={[
+											{ value: '', label: MERCHANT.allWebsites },
+											...websites.map((w) => ({ value: w.websiteId, label: w.domain })),
+										]}
+										onChange={(e) => {
+											const next = e.currentTarget.value ? routes.website(e.currentTarget.value) : routes.websites();
+											startSwitch(() => router.push(next));
+										}}
+									/>
 								) : null}
 							</>
 						}
@@ -123,7 +117,7 @@ export function ConsoleShell({ me, merchantId, websites, billing: frameBilling, 
 								{billing && typeof billing.balance === 'number' ? (
 									<Link
 										href={routes.credits()}
-										className="hidden items-center gap-1.5 rounded-xl bg-primary-soft px-3 py-1.5 text-sm font-semibold text-on-primary-soft hover:bg-surface-2 sm:inline-flex"
+										className="ss-motion hidden h-9 items-center gap-1.5 rounded-control bg-primary-soft px-3 text-sm font-semibold text-on-primary-soft hover:bg-surface-3 sm:inline-flex"
 										title={MERCHANT.balanceLink}>
 										<Icon name="wallet" size={14} />
 										<span className="tabular-nums">{formatCredits(billing.balance)}</span>
@@ -136,7 +130,7 @@ export function ConsoleShell({ me, merchantId, websites, billing: frameBilling, 
 							</>
 						}
 						sidebarFooter={
-							<div className="rounded-2xl bg-surface-2 p-3 text-xs">
+							<div className="rounded-xl bg-surface-2 p-3 text-xs">
 								<p className="truncate font-semibold text-fg">{merchant?.email}</p>
 							</div>
 						}>

@@ -15,25 +15,29 @@ export const FormBusyContext = createContext(false);
 /** @typedef {'primary' | 'secondary' | 'ghost' | 'danger' | 'soft'} ButtonVariant */
 /** @typedef {'sm' | 'md' | 'lg'} ButtonSize */
 
+// flat at rest; a filled button gets a soft glow of its own colour only on hover (PLAN 0.6: no elevation by default).
+// A disabled button turns neutral instead of a faded accent; a busy one (spinner) keeps its colour.
 const BASE =
-	'inline-flex shrink-0 items-center justify-center gap-2 rounded-xl font-semibold ss-motion ss-press select-none ' +
-	'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus disabled:cursor-not-allowed disabled:opacity-60 ' +
-	'aria-disabled:cursor-not-allowed aria-disabled:opacity-60';
+	'inline-flex shrink-0 items-center justify-center gap-2 rounded-control font-semibold tracking-[-0.005em] ss-motion ss-press select-none ' +
+	'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus disabled:cursor-not-allowed ' +
+	'aria-disabled:cursor-not-allowed aria-disabled:opacity-60 ' +
+	'[&:disabled:not([aria-busy])]:border-transparent [&:disabled:not([aria-busy])]:bg-surface-2 [&:disabled:not([aria-busy])]:text-muted [&:disabled:not([aria-busy])]:shadow-none ' +
+	'[&[aria-busy]]:cursor-progress';
 
 /** @type {Record<ButtonVariant, string>} */
 const VARIANTS = {
-	primary: 'bg-primary text-on-primary hover:bg-primary-hover',
-	secondary: 'bg-surface-2 text-fg hover:bg-surface-3',
+	primary: 'bg-primary text-on-primary hover:bg-primary-hover hover:shadow-glow-primary',
+	secondary: 'border border-line bg-surface text-fg hover:border-line-strong hover:bg-surface-2',
 	ghost: 'text-fg hover:bg-surface-2',
-	danger: 'bg-danger text-on-danger hover:bg-danger-hover',
-	soft: 'bg-primary-soft text-on-primary-soft hover:bg-surface-2',
+	danger: 'bg-danger text-on-danger hover:bg-danger-hover hover:shadow-glow-danger',
+	soft: 'bg-primary-soft text-on-primary-soft hover:bg-surface-3',
 };
 
 /** @type {Record<ButtonSize, string>} */
 const SIZES = {
-	sm: 'min-h-8 px-3 py-1.5 text-xs',
-	md: 'min-h-10 px-4 py-2 text-sm',
-	lg: 'min-h-11 px-5 py-2.5 text-sm',
+	sm: 'min-h-8 px-3 py-1 text-[13px]',
+	md: 'min-h-9 px-4 py-1.5 text-sm',
+	lg: 'min-h-11 px-5 py-2 text-[15px]',
 };
 
 /**

@@ -70,7 +70,7 @@ function ButtonsEditor({ buttons, onChange }) {
 				<p className="text-sm text-muted">{T.buttonsHelp}</p>
 			</div>
 			{buttons.map((button, at) => (
-				<div key={at} className="space-y-3 rounded-2xl bg-surface-2 p-4">
+				<div key={at} className="space-y-3 rounded-xl bg-surface-2 p-4">
 					<FieldGrid>
 						<Input
 							label={T.buttonIndex}
@@ -130,7 +130,7 @@ function TemplatePreview({ template }) {
 		unsubscribeUrl: T.sampleUnsubscribe,
 	};
 	return (
-		<div className="space-y-3 rounded-2xl bg-surface-2 p-4">
+		<div className="space-y-3 rounded-xl bg-surface-2 p-4">
 			<div>
 				<p className="text-sm font-semibold text-fg">{T.preview}</p>
 				<p className="text-sm text-muted">{names.length > 0 ? T.previewHelp : T.previewNoValues}</p>

@@ -42,7 +42,8 @@
  * @property {unknown[]} [enum]
  * @property {string} [format]
  * @property {SettingItem} [items]
- * @property {{ widget?: string, group?: string, order?: number, help?: string, placeholder?: string }} [x-ui]
+ * @property {{ widget?: string, group?: string, order?: number, help?: string, placeholder?: string, labels?: 'country' }} [x-ui]
+ *   `labels: 'country'` shows ISO country codes by their names
  */
 
 /**

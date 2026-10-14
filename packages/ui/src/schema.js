@@ -34,7 +34,7 @@
  * @property {boolean} [uniqueItems]
  * @property {Record<string, SettingNode>} [properties]
  * @property {string[]} [required]
- * @property {{ widget?: string, group?: string, order?: number, help?: string, placeholder?: string, hidden?: boolean, advanced?: boolean, wide?: boolean }} [x-ui]
+ * @property {{ widget?: string, group?: string, order?: number, help?: string, placeholder?: string, hidden?: boolean, advanced?: boolean, wide?: boolean, labels?: 'country' }} [x-ui]
  */
 
 /**
@@ -107,6 +107,35 @@ export const choiceLabel = (value) => {
 	return [first === first.toLowerCase() ? first.charAt(0).toUpperCase() + first.slice(1) : first, ...rest].join(' ');
 };
 
+/** English country names from the runtime's own data (no list to keep up to date). */
+const REGION_NAMES = typeof Intl.DisplayNames === 'function' ? new Intl.DisplayNames(['en'], { type: 'region' }) : null;
+
+/**
+ * The English name of an ISO 3166-1 alpha-2 country code (`PK` → "Pakistan"); the code itself when unknown.
+ * @param {string} code
+ * @returns {string}
+ */
+export const countryName = (code) => {
+	try {
+		const name = REGION_NAMES?.of(code);
+		return name && name !== code ? name : code;
+	} catch {
+		return code;
+	}
+};
+
+/**
+ * The readable label of a choice, by the field's `x-ui.labels` hint: `country` names ISO country codes, anything else
+ * goes through {@link choiceLabel}.
+ * @param {unknown} value
+ * @param {string | undefined} labels
+ * @returns {string}
+ */
+export const optionLabel = (value, labels) => (labels === 'country' ? countryName(String(value)) : choiceLabel(value));
+
+/** A list of choices longer than this is a searchable picker, not a group of checkboxes. */
+export const PICKER_FROM = 12;
+
 export const LONG_TEXT_FORMATS = Object.freeze(['textarea', 'multiline', 'markdown', 'html']);
 
 /** Widgets that take the whole row of the field grid. */
@@ -132,7 +161,7 @@ export const widgetOf = (node) => {
 		return asked === 'slider' ? 'number' : asked;
 	if (type === 'boolean') return 'switch';
 	if (type === 'integer' || type === 'number') return 'number';
-	if (type === 'array') return node.items?.enum ? 'checkboxes' : 'tags';
+	if (type === 'array') return node.items?.enum && node.items.enum.length <= PICKER_FROM ? 'checkboxes' : 'tags';
 	if (type === 'object') return 'fieldset';
 	if (node.enum) return node.enum.length <= 4 ? 'radio' : 'select';
 	if (node.format === 'email') return 'email';

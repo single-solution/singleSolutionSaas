@@ -91,31 +91,30 @@ function ToastCard({ toast, onDismiss, onGone }) {
 		if (!presence.mounted) onGone(toast.id);
 	}, [presence.mounted, onGone, toast.id]);
 	if (!presence.mounted) return null;
-	const tone =
-		toast.tone === 'danger'
-			? 'bg-danger-soft text-on-danger-soft'
-			: toast.tone === 'info'
-				? 'bg-info-soft text-on-info-soft'
-				: 'bg-success-soft text-on-success-soft';
+	// a toast sits above the page (its shadow is allowed); the tone colours its icon only
+	const tone = toast.tone === 'danger' ? 'text-danger' : toast.tone === 'info' ? 'text-primary' : 'text-success';
 	return (
 		<div
 			ref={presence.ref}
 			data-state={presence.closing ? 'closed' : 'open'}
 			className={cx(
-				'pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-2xl px-4 py-3 text-sm shadow-overlay',
+				'pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-xl border border-line-soft bg-surface px-4 py-3 text-sm text-fg shadow-overlay',
 				'animate-ss-toast data-[state=closed]:pointer-events-none data-[state=closed]:animate-ss-toast-out',
-				tone,
 			)}>
-			<Icon name={toast.tone === 'danger' ? 'alert' : toast.tone === 'info' ? 'info' : 'check'} size={16} className="mt-0.5" />
+			<Icon
+				name={toast.tone === 'danger' ? 'alert' : toast.tone === 'info' ? 'info' : 'check'}
+				size={16}
+				className={cx('mt-0.5 shrink-0', tone)}
+			/>
 			<div className="min-w-0 flex-1">
 				<p className="font-semibold">{toast.title}</p>
-				{toast.description ? <p className="mt-0.5 break-words">{toast.description}</p> : null}
+				{toast.description ? <p className="mt-0.5 break-words text-muted">{toast.description}</p> : null}
 			</div>
 			<button
 				type="button"
 				onClick={() => onDismiss(toast.id)}
 				aria-label="Dismiss notification"
-				className="ss-motion ss-press rounded p-0.5 opacity-80 hover:opacity-100 focus-visible:outline-2 focus-visible:outline-focus">
+				className="ss-motion ss-press rounded p-0.5 text-muted hover:text-fg focus-visible:outline-2 focus-visible:outline-focus">
 				<Icon name="close" size={14} />
 			</button>
 		</div>

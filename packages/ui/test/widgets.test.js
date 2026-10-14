@@ -244,7 +244,7 @@ describe('display', () => {
 		expect(container.querySelector('[data-tone]')).toBeNull();
 		const tile = /** @type {HTMLElement} */ (byText(container, 'Websites').closest('.rounded-card'));
 		expect(tile.className).toContain('bg-surface');
-		expect(tile.querySelector('.bg-primary-soft.size-10')).not.toBeNull();
+		expect(tile.querySelector('.bg-primary-soft.size-6')).not.toBeNull();
 		expect(container.querySelector('.bg-primary-soft.size-8')).not.toBeNull();
 		expect(byText(container, 'Owner').className).toContain('bg-primary-soft');
 		expect(byText(container, 'No websites').closest('.rounded-card')?.querySelector('.bg-primary-soft')).not.toBeNull();
@@ -531,16 +531,16 @@ describe('widths follow the container', () => {
 		expect(grid.className).toBe(STAT_GRID);
 		expect(STAT_GRID).toContain('@md:grid-cols-2');
 		expect(STAT_GRID).toContain('@2xl:[&:has(>:nth-child(3):last-child)]:grid-cols-3');
-		const values = [...grid.querySelectorAll('.font-extrabold')].map((el) => el.className);
+		const values = [...grid.querySelectorAll('.tabular-nums.font-display')].map((el) => el.className);
 		expect(values[0]).toContain('whitespace-nowrap');
-		expect(values[0]).toContain('@[12rem]:text-3xl');
+		expect(values[0]).toContain('@[14rem]:text-[28px]');
 		expect(values[1]).toContain('whitespace-nowrap');
 		expect(values[1]).toContain('text-lg');
 		expect(values[2]).toContain('text-balance');
 		for (const value of values) expect(value).not.toContain('truncate');
-		// the icon sits above the label in a narrow tile and beside it from 16rem
+		// a small icon sits beside the label at every width
 		expect(grid.firstElementChild?.className).toContain('@container');
-		expect(grid.querySelector('.\\@3xs\\:flex-row')).not.toBeNull();
+		expect(grid.querySelector('.size-6 + span')?.textContent).toBe('Short');
 		expect(render(<StatGrid />).container.querySelector('[role="group"]')).toBeNull();
 	});
 

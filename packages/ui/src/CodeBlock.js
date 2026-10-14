@@ -53,8 +53,8 @@ export function CodeBlock({ code, label, secret = false, wrap = true, className,
 	};
 	return (
 		<div className={cx('space-y-2', className)}>
-			{label ? <p className="text-xs font-semibold uppercase tracking-wider text-muted">{label}</p> : null}
-			<div className="flex items-start gap-2 rounded-2xl bg-surface-2 p-3.5">
+			{label ? <p className="text-[13px] font-medium text-fg">{label}</p> : null}
+			<div className="flex items-start gap-2 rounded-xl bg-surface-2 p-3.5">
 				<pre
 					className={cx(
 						'min-w-0 flex-1 font-mono text-xs leading-relaxed text-fg',

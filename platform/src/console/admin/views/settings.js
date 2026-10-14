@@ -234,7 +234,7 @@ function BrandingCard({ settings, onSaved }) {
 							const file = e.currentTarget.files?.[0];
 							if (file) void upload(file);
 						}}
-						className="block w-full text-sm text-muted file:mr-3 file:cursor-pointer file:rounded-xl file:border-0 file:bg-surface-2 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-fg hover:file:bg-surface-3"
+						className="block w-full text-sm text-muted file:mr-3 file:cursor-pointer file:rounded-control file:border file:border-solid file:border-line file:bg-surface file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-fg hover:file:bg-surface-2"
 					/>
 					{logoError ? <Callout tone="danger">{logoError}</Callout> : null}
 					{settings.branding?.hasLogo ? (
@@ -416,7 +416,7 @@ export function SettingsView(props) {
 	const [settings, setSettings] = useState(props.ok ? props.settings : null);
 	if (!props.ok || !settings) return <AdminProblem problem={props.problem} />;
 	return (
-		<div className="space-y-8">
+		<div className="space-y-6">
 			<PageHeader title={ADMIN.settingsTitle} subtitle={ADMIN.settingsIntro} />
 			<Masonry columns={2}>
 				<MailCard settings={settings} onSaved={setSettings} />

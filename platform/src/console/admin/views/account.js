@@ -61,7 +61,7 @@ export function MyAccountView(props) {
 	if (!props.ok || !data) return <AdminProblem problem={props.problem} />;
 	const admin = data.admin;
 	return (
-		<div className="space-y-8">
+		<div className="space-y-6">
 			<PageHeader title={ADMIN.myAccountTitle} subtitle={ADMIN.myAccountIntro} />
 			<Masonry columns={2}>
 				<NameCard admin={admin} onSaved={() => void reload()} />

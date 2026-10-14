@@ -121,28 +121,30 @@ export function ShareBars({ data, label, format = String, className, emptyText =
  */
 export function HeroCard({ label, value, icon = 'wallet', details = [], chart, children, className }) {
 	return (
-		<section aria-label={label} className={cx('@container min-w-0 rounded-card bg-hero p-6 text-on-hero sm:p-8', className)}>
-			<div className="grid min-w-0 gap-6 @[44rem]:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] @[44rem]:gap-10">
-				<div className="flex min-w-0 flex-col gap-5">
-					<div className="flex items-center gap-3">
+		<section
+			aria-label={label}
+			className={cx('@container min-w-0 rounded-card bg-hero px-5 py-5 text-on-hero sm:px-6', className)}>
+			<div className="grid min-w-0 gap-5 @[44rem]:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] @[44rem]:gap-8">
+				<div className="flex min-w-0 flex-col gap-4">
+					<div className="flex items-center gap-2">
 						<span
 							aria-hidden="true"
-							className="inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-hero-track">
-							<Icon name={icon} size={18} />
+							className="inline-flex size-7 shrink-0 items-center justify-center rounded-lg bg-hero-track">
+							<Icon name={icon} size={14} />
 						</span>
 						<span className="text-sm font-semibold text-on-hero-muted">{label}</span>
 					</div>
 					<div
 						key={typeof value === 'string' || typeof value === 'number' ? String(value) : undefined}
-						className="animate-ss-fade text-3xl font-extrabold tracking-tight text-balance tabular-nums @md:text-4xl @xl:text-5xl">
+						className="animate-ss-fade font-display text-3xl font-extrabold tracking-[-0.02em] text-balance tabular-nums @xl:text-4xl">
 						{value}
 					</div>
 					{details.length > 0 ? (
-						<dl className="grid grid-cols-1 gap-4 @xs:grid-cols-2">
+						<dl className="grid grid-cols-1 gap-3 @xs:grid-cols-2">
 							{details.map((d, i) => (
-								<div key={i} className="min-w-0 rounded-2xl bg-hero-track px-4 py-3">
-									<dt className="text-xs font-semibold text-pretty text-on-hero">{d.label}</dt>
-									<dd className="mt-1 text-base font-bold break-words tabular-nums">{d.value}</dd>
+								<div key={i} className="min-w-0 rounded-xl bg-hero-track px-3.5 py-2.5">
+									<dt className="text-xs font-medium text-pretty text-on-hero">{d.label}</dt>
+									<dd className="mt-0.5 text-base font-semibold break-words tabular-nums">{d.value}</dd>
 								</div>
 							))}
 						</dl>

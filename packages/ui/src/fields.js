@@ -8,13 +8,14 @@
  * control with `wide`) span the whole row, and anything that is not a control (buttons, callouts, groups) does too.
  * @module
  */
-import { useId } from 'react';
+import { useId, useState } from 'react';
 import { cx } from './cx.js';
 import { Icon } from './icons.js';
 
 /** @typedef {import('react').ReactNode} ReactNode */
 
-export const LABEL_CLASS = 'block text-xs font-semibold uppercase tracking-wider text-muted';
+/** A field's label: sentence case, medium weight (one look for labels and legends everywhere). */
+export const LABEL_CLASS = 'block text-[13px] font-medium leading-5 text-fg';
 
 /**
  * Classes of a responsive field grid: 1 / 2 / 3 columns by the width of the nearest `@container`, packed densely
@@ -22,7 +23,7 @@ export const LABEL_CLASS = 'block text-xs font-semibold uppercase tracking-wider
  * too, so a card with one short setting does not leave it orphaned in a corner.
  */
 export const FIELD_GRID =
-	'grid grid-flow-row-dense grid-cols-1 items-start gap-x-5 gap-y-4 @md:grid-cols-2 @3xl:grid-cols-3 ' +
+	'grid grid-flow-row-dense grid-cols-1 items-start gap-x-6 gap-y-5 @md:grid-cols-2 @3xl:grid-cols-3 ' +
 	'[&>:not([data-cell])]:col-span-full [&>[data-wide]]:col-span-full ' +
 	'[&:not(:has(>[data-cell]~[data-cell]))>[data-cell]]:col-span-full [&>a]:justify-self-start [&>button]:justify-self-start';
 
@@ -43,20 +44,28 @@ export function FieldGrid({ children, className }) {
 		</div>
 	);
 }
+// flat at rest; focus shows the accent edge with a soft halo (no outline jump)
 const CONTROL =
-	'w-full rounded-xl border bg-surface px-3.5 py-2 text-sm text-fg placeholder:text-muted/80 ss-motion ' +
-	'focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-focus ' +
-	'disabled:cursor-not-allowed disabled:bg-surface-2 [&:read-only:not(select)]:bg-surface-2';
+	'w-full rounded-control border bg-surface px-3 py-2 text-sm text-fg placeholder:text-muted/70 ss-motion ' +
+	'focus:outline-none focus-visible:border-primary focus-visible:ring-[3px] focus-visible:ring-primary/20 ' +
+	'disabled:cursor-not-allowed disabled:bg-surface-2 disabled:text-muted [&:read-only:not(select)]:bg-surface-2';
+
+/** One height for single-line controls, the same as a medium button, so they line up in a row. */
+const LINE = 'h-9 py-0';
 
 /** A colour input: the whole control is the swatch. */
 const COLOR =
-	'h-10 cursor-pointer p-1 [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:rounded-lg ' +
+	'cursor-pointer p-1 [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:rounded-lg ' +
 	'[&::-webkit-color-swatch]:border-0 [&::-moz-color-swatch]:rounded-lg [&::-moz-color-swatch]:border-0';
 
 /**
  * @param {boolean} invalid
  */
-const controlClass = (invalid) => cx(CONTROL, invalid ? 'border-danger' : 'border-line hover:border-line-strong');
+const controlClass = (invalid) =>
+	cx(
+		CONTROL,
+		invalid ? 'border-danger focus-visible:border-danger focus-visible:ring-danger/20' : 'border-line hover:border-line-strong',
+	);
 
 /**
  * Ids for a field's parts.
@@ -83,7 +92,7 @@ function FieldMessages({ ids, help, error }) {
 	return (
 		<>
 			{help ? (
-				<p id={ids.help} className="text-xs text-muted">
+				<p id={ids.help} className="text-xs leading-relaxed text-muted">
 					{help}
 				</p>
 			) : null}
@@ -110,7 +119,7 @@ function FieldMessages({ ids, help, error }) {
 function Field({ id, label, hideLabel = false, required = false, help, error, aside, className, wide, children }) {
 	const ids = useFieldIds(id);
 	return (
-		<div {...cell(wide)} className={cx('min-w-0 space-y-1.5', className)}>
+		<div {...cell(wide)} className={cx('min-w-0 space-y-2', className)}>
 			<div className={cx('flex items-center justify-between gap-2', hideLabel && 'sr-only')}>
 				<label htmlFor={ids.id} className={cx(LABEL_CLASS, 'min-w-0 break-words')}>
 					{label}
@@ -158,7 +167,13 @@ export function Input({ label, hideLabel, help, error, aside, suffix, fieldClass
 						required={required}
 						aria-invalid={error ? true : undefined}
 						aria-describedby={ids.describedBy}
-						className={cx(controlClass(Boolean(error)), suffix ? 'pr-16' : null, rest.type === 'color' && COLOR, className)}
+						className={cx(
+							controlClass(Boolean(error)),
+							LINE,
+							suffix ? 'pr-16' : null,
+							rest.type === 'color' && COLOR,
+							className,
+						)}
 						{...rest}
 					/>
 					{suffix ? (
@@ -255,7 +270,7 @@ export function Select({
 						required={required}
 						aria-invalid={error ? true : undefined}
 						aria-describedby={ids.describedBy}
-						className={cx(controlClass(Boolean(error)), 'appearance-none pr-9', className)}
+						className={cx(controlClass(Boolean(error)), LINE, 'cursor-pointer appearance-none pr-9', className)}
 						{...rest}>
 						{placeholder ? (
 							<option value="" disabled>
@@ -277,6 +292,35 @@ export function Select({
 	);
 }
 
+// Checkboxes and radios are drawn by the kit, so they look the same in every browser and theme: a hairline box at
+// rest, the accent fill (a tick, or a ring for a radio) when chosen, the accent edge on hover.
+const BOX =
+	'size-[18px] shrink-0 cursor-pointer appearance-none border border-line-strong bg-surface ss-motion hover:border-primary ' +
+	'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus disabled:cursor-not-allowed disabled:opacity-50';
+const RADIO = cx(BOX, 'rounded-full checked:border-[5px] checked:border-primary');
+
+/**
+ * A bare kit-drawn checkbox (no label of its own: give it `aria-label`, or use {@link Checkbox}); the real input stays
+ * for keyboards, forms and screen readers. For row selection in lists and tables.
+ * @param {Omit<import('react').InputHTMLAttributes<HTMLInputElement>, 'type'>} props
+ */
+export function CheckboxInput({ className, ...rest }) {
+	return (
+		<span className={cx('relative inline-flex shrink-0', className)}>
+			<input
+				type="checkbox"
+				className={cx(BOX, 'peer rounded-[5px] checked:border-primary checked:bg-primary checked:hover:bg-primary-hover')}
+				{...rest}
+			/>
+			<span
+				aria-hidden="true"
+				className="pointer-events-none absolute inset-0 flex items-center justify-center text-on-primary opacity-0 ss-motion peer-checked:opacity-100">
+				<Icon name="check" size={12} />
+			</span>
+		</span>
+	);
+}
+
 /**
  * Checkbox with a label on the right.
  * @param {Omit<import('react').InputHTMLAttributes<HTMLInputElement>, 'type'> & { label: ReactNode, help?: ReactNode,
@@ -287,19 +331,18 @@ export function Checkbox({ label, help, error, id, className, wide, ...rest }) {
 	return (
 		<div {...cell(wide)} className={cx('min-w-0 space-y-1', className)}>
 			<div className="flex items-start gap-2.5">
-				<input
+				<CheckboxInput
 					id={ids.id}
-					type="checkbox"
 					aria-invalid={error ? true : undefined}
 					aria-describedby={describedBy({ help, error }, ids)}
-					className="mt-0.5 size-4 shrink-0 cursor-pointer rounded border-line-strong accent-primary disabled:cursor-not-allowed"
+					className="mt-px"
 					{...rest}
 				/>
-				<label htmlFor={ids.id} className="cursor-pointer text-sm font-medium text-fg">
+				<label htmlFor={ids.id} className="cursor-pointer text-sm leading-5 font-medium text-fg">
 					{label}
 				</label>
 			</div>
-			<div className="pl-6.5">
+			<div className="pl-7">
 				<FieldMessages ids={ids} help={help} error={error} />
 			</div>
 		</div>
@@ -331,13 +374,13 @@ export function Switch({
 }) {
 	const ids = useFieldIds(id);
 	const inactive = disabled || locked;
-	const track = size === 'sm' ? 'h-5 w-9' : 'h-6 w-11';
-	const knob = size === 'sm' ? 'size-4' : 'size-5';
-	const shift = size === 'sm' ? 'translate-x-4' : 'translate-x-5';
+	const track = size === 'sm' ? 'h-4 w-7' : 'h-5 w-9';
+	const knob = size === 'sm' ? 'size-3' : 'size-4';
+	const shift = size === 'sm' ? 'translate-x-3' : 'translate-x-4';
 	return (
 		<div {...cell(wide)} className={cx('flex min-w-0 items-start justify-between gap-4', className)}>
 			<div className={cx('min-w-0 space-y-0.5', hideLabel && 'sr-only')}>
-				<label htmlFor={ids.id} className="flex items-center gap-1.5 text-sm font-semibold text-fg">
+				<label htmlFor={ids.id} className="flex items-center gap-1.5 text-sm leading-5 font-medium text-fg">
 					{label}
 					{locked ? <Icon name="lock" size={13} title={lockedLabel} /> : null}
 				</label>
@@ -358,12 +401,12 @@ export function Switch({
 						'ss-motion ss-press relative inline-flex shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent',
 						'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus disabled:cursor-not-allowed disabled:opacity-60',
 						track,
-						checked ? 'bg-primary' : 'bg-line-strong',
+						checked ? 'bg-primary hover:bg-primary-hover' : 'bg-line-strong hover:bg-muted',
 					)}>
 					<span
 						aria-hidden="true"
 						className={cx(
-							'inline-block rounded-full bg-surface shadow transition-transform duration-(--ss-motion) ease-ss',
+							'inline-block rounded-full bg-surface shadow-knob transition-transform duration-(--ss-motion) ease-ss',
 							knob,
 							checked ? shift : 'translate-x-0',
 						)}
@@ -401,12 +444,12 @@ export function RadioGroup({
 			className={cx('min-w-0 space-y-2', className)}
 			aria-describedby={describedBy({ help, error }, ids)}
 			disabled={disabled}>
-			<legend className={cx(LABEL_CLASS, 'mb-1.5')}>{legend}</legend>
-			<div className={cx(inline ? 'flex flex-wrap gap-x-5 gap-y-2' : 'space-y-2')}>
+			<legend className={cx(LABEL_CLASS, 'mb-2')}>{legend}</legend>
+			<div className={cx(inline ? 'flex flex-wrap gap-x-6 gap-y-2.5' : 'space-y-2.5')}>
 				{options.map((o) => {
 					const optionId = `${ids.id}-${o.value}`;
 					return (
-						<div key={o.value} className="flex items-center gap-2">
+						<div key={o.value} className="flex items-center gap-2.5">
 							<input
 								id={optionId}
 								type="radio"
@@ -415,9 +458,9 @@ export function RadioGroup({
 								checked={value === o.value}
 								disabled={o.disabled}
 								onChange={() => onChange(o.value)}
-								className="size-4 cursor-pointer accent-primary"
+								className={RADIO}
 							/>
-							<label htmlFor={optionId} className="cursor-pointer text-sm text-fg">
+							<label htmlFor={optionId} className="cursor-pointer text-sm leading-5 text-fg">
 								{o.label}
 							</label>
 						</div>
@@ -444,16 +487,15 @@ export function CheckboxGroup({ legend, options, value, onChange, help, error, d
 			className={cx('min-w-0 space-y-2', className)}
 			aria-describedby={describedBy({ help, error }, ids)}
 			disabled={disabled}>
-			<legend className={cx(LABEL_CLASS, 'mb-1.5')}>{legend}</legend>
-			<div className="flex flex-wrap gap-x-5 gap-y-2">
+			<legend className={cx(LABEL_CLASS, 'mb-2')}>{legend}</legend>
+			<div className="flex flex-wrap gap-x-6 gap-y-2.5">
 				{options.map((o) => {
 					const optionId = `${ids.id}-${o.value}`;
 					const on = selected.has(o.value);
 					return (
-						<div key={o.value} className="flex items-center gap-2">
-							<input
+						<div key={o.value} className="flex items-center gap-2.5">
+							<CheckboxInput
 								id={optionId}
-								type="checkbox"
 								checked={on}
 								disabled={o.disabled || (!on && max !== undefined && selected.size >= max)}
 								onChange={() =>
@@ -463,14 +505,124 @@ export function CheckboxGroup({ legend, options, value, onChange, help, error, d
 											: options.map((x) => x.value).filter((v) => v === o.value || selected.has(v)),
 									)
 								}
-								className="size-4 cursor-pointer accent-primary"
 							/>
-							<label htmlFor={optionId} className="cursor-pointer text-sm text-fg">
+							<label htmlFor={optionId} className="cursor-pointer text-sm leading-5 text-fg">
 								{o.label}
 							</label>
 						</div>
 					);
 				})}
+			</div>
+			<FieldMessages ids={ids} help={help} error={error} />
+		</fieldset>
+	);
+}
+
+/**
+ * A long list of choices (countries, languages …) for a list value: the chosen ones as chips that remove themselves,
+ * a search box, and a scrolling list of checkboxes filtered by it (by label or value; the value shows beside a label
+ * that differs). A new choice is added at the end, so the list keeps the order it was picked in.
+ * @param {{ legend: ReactNode, options: Option[], value: readonly string[], onChange: (value: string[]) => void,
+ *   help?: ReactNode, error?: ReactNode, disabled?: boolean, max?: number, emptyText?: ReactNode,
+ *   searchLabel?: string, noMatchText?: ReactNode, removeLabel?: string, className?: string, wide?: boolean }} props
+ *   `wide` defaults to true
+ */
+export function ChoicePicker({
+	legend,
+	options,
+	value,
+	onChange,
+	help,
+	error,
+	disabled = false,
+	max,
+	emptyText = 'None chosen',
+	searchLabel = 'Search',
+	noMatchText = 'No match.',
+	removeLabel = 'Remove',
+	className,
+	wide = true,
+}) {
+	const ids = useFieldIds(undefined);
+	const [query, setQuery] = useState('');
+	const selected = new Set(value);
+	const labelOf = new Map(options.map((o) => [o.value, o.label]));
+	const needle = query.trim().toLowerCase();
+	const shown = needle
+		? options.filter(
+				(o) =>
+					o.value.toLowerCase().includes(needle) || (typeof o.label === 'string' && o.label.toLowerCase().includes(needle)),
+			)
+		: options;
+	/** @param {string} choice */
+	const toggle = (choice) => onChange(selected.has(choice) ? value.filter((v) => v !== choice) : [...value, choice]);
+	return (
+		<fieldset
+			{...cell(wide)}
+			className={cx('min-w-0 space-y-2.5', className)}
+			aria-describedby={describedBy({ help, error }, ids)}
+			disabled={disabled}>
+			<legend className={cx(LABEL_CLASS, 'mb-2')}>
+				{legend}
+				{value.length > 0 ? <span className="ml-1.5 font-normal text-muted">{value.length}</span> : null}
+			</legend>
+			<div className="flex min-h-7 flex-wrap items-center gap-1.5">
+				{value.length === 0 ? (
+					<span className="text-sm text-muted">{emptyText}</span>
+				) : (
+					value.map((choice) => {
+						const label = labelOf.get(choice) ?? choice;
+						return (
+							<span
+								key={choice}
+								className="inline-flex animate-ss-fade items-center gap-1 rounded-full bg-primary-soft py-0.5 pr-1 pl-2.5 text-xs leading-5 font-medium text-on-primary-soft">
+								{label}
+								<button
+									type="button"
+									onClick={() => toggle(choice)}
+									aria-label={`${removeLabel} ${typeof label === 'string' ? label : choice}`}
+									className="ss-motion rounded-full p-0.5 hover:bg-surface focus-visible:outline-2 focus-visible:outline-focus">
+									<Icon name="close" size={12} />
+								</button>
+							</span>
+						);
+					})
+				)}
+			</div>
+			<div className="ss-motion overflow-hidden rounded-control border border-line bg-surface focus-within:border-primary focus-within:ring-[3px] focus-within:ring-primary/20">
+				<input
+					type="search"
+					aria-label={searchLabel}
+					placeholder={searchLabel}
+					value={query}
+					onChange={(e) => setQuery(e.currentTarget.value)}
+					className="h-9 w-full border-b border-line-soft bg-transparent px-3 text-sm text-fg placeholder:text-muted/70 focus:outline-none"
+				/>
+				<div className="max-h-56 overflow-y-auto p-1">
+					{shown.length === 0 ? (
+						<p className="px-2 py-3 text-sm text-muted">{noMatchText}</p>
+					) : (
+						shown.map((o) => {
+							const optionId = `${ids.id}-${o.value}`;
+							const on = selected.has(o.value);
+							return (
+								<label
+									key={o.value}
+									htmlFor={optionId}
+									className="ss-motion flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm text-fg hover:bg-surface-2">
+									<CheckboxInput
+										id={optionId}
+										checked={on}
+										disabled={o.disabled || (!on && max !== undefined && selected.size >= max)}
+										onChange={() => toggle(o.value)}
+									/>
+									<span className="min-w-0 flex-1 truncate">{o.label}</span>
+									{o.label !== o.value ? <span className="text-xs text-muted tabular-nums">{o.value}</span> : null}
+								</label>
+							);
+						})
+					)}
+				</div>
 			</div>
 			<FieldMessages ids={ids} help={help} error={error} />
 		</fieldset>

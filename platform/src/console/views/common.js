@@ -117,12 +117,12 @@ export function ListDetail({ label, section, list, detail, empty, back, auto = f
 	return (
 		<ScreenContext.Provider value={screen}>
 			<div className="grid items-start gap-6 xl:grid-cols-[20rem_minmax(0,1fr)] 2xl:grid-cols-[22rem_minmax(0,1fr)] 2xl:gap-8">
-				<aside aria-label={label} className={cx('min-w-0 xl:sticky xl:top-24', chosen ? 'hidden lg:block' : 'block')}>
+				<aside aria-label={label} className={cx('min-w-0 xl:sticky xl:top-8', chosen ? 'hidden lg:block' : 'block')}>
 					{list}
 				</aside>
-				<div className={cx('min-w-0 space-y-8', chosen || !shown ? 'block' : 'hidden lg:block')}>
+				<div className={cx('min-w-0 space-y-6', chosen || !shown ? 'block' : 'hidden lg:block')}>
 					{chosen ? <BackLink href={back.href} label={back.label} /> : null}
-					<PageTransition className="space-y-8">{shown ? detail : empty}</PageTransition>
+					<PageTransition className="space-y-6">{shown ? detail : empty}</PageTransition>
 				</div>
 			</div>
 		</ScreenContext.Provider>
@@ -147,9 +147,13 @@ export function ListPane({ title, count, action, tools, children, footer }) {
 	}, [section]);
 	const fades = section !== null && going === null && listWasPlaceholder(section);
 	return (
-		<div className={cx('@container space-y-3 rounded-card bg-surface p-3 sm:p-4', fades && 'animate-ss-fade')}>
+		<div
+			className={cx(
+				'@container space-y-3 rounded-card border border-line-soft bg-surface p-3 sm:p-4',
+				fades && 'animate-ss-fade',
+			)}>
 			<div className="flex flex-wrap items-center justify-between gap-2 px-1 pt-1">
-				<h1 className="text-xl font-extrabold tracking-tight text-fg">
+				<h1 className="text-lg font-bold tracking-tight text-fg">
 					{title}
 					{count === undefined ? null : <span className="ml-2 text-sm font-semibold text-muted">{count}</span>}
 				</h1>

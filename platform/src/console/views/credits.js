@@ -52,7 +52,7 @@ function RangeForm({ range, websites, websiteId }) {
 export function CreditsView(props) {
 	if (!props.ok) return <PageProblem problem={props.problem} />;
 	return (
-		<div className="space-y-8">
+		<div className="space-y-6">
 			<FrameBilling billing={props.billing} />
 			<PageHeader title={BILLING.usageTitle} subtitle={BILLING.usageIntro} />
 			<BillingStats summary={props.billing} />

@@ -34,7 +34,7 @@ export function BrandMark({ branding, tagline }) {
 			)}
 			<div className="min-w-0">
 				<p className="truncate text-sm font-extrabold tracking-tight text-fg">{branding.name}</p>
-				{tagline ? <p className="text-[11px] font-bold uppercase tracking-wider text-muted">{tagline}</p> : null}
+				{tagline ? <p className="text-xs text-muted">{tagline}</p> : null}
 			</div>
 		</div>
 	);

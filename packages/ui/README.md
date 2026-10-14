@@ -83,7 +83,9 @@ move. With `prefers-reduced-motion` nothing moves.
 settings schema as a control chosen by its type and `x-ui.widget`, grouped by `x-ui.group`, ordered by `x-ui.order`, with
 `x-ui.advanced` settings behind a disclosure and `x-ui.hidden` ones left out. Fields sit in the field grid; long text (a
 `textarea` widget or a `format` of `textarea`, `multiline`, `markdown` or `html`), JSON, lists, fieldsets and fields with
-`x-ui.wide` span the row. Bounds (`minimum`/`maximum`, `maxLength`,
+`x-ui.wide` span the row. A list of more than 12 choices (or `x-ui.widget: 'tags'`) is a searchable picker
+(`ChoicePicker`: chosen ones as chips, a search box, a scrolling list); `x-ui.labels: 'country'` shows ISO country codes
+by their names. Bounds (`minimum`/`maximum`, `maxLength`,
 `maxItems`) are shown on the inputs and checked by `validateValues(schema, values)`; the product's own field errors are
 passed in `errors`. Settings marked in `overridden` get a Reset link that calls `onReset(name)`.
 

@@ -197,7 +197,7 @@ export function BillingBanner({ summary, contact }) {
 export function UsageView({ usage, showWebsite = true, chartTitle = BILLING.usageChart }) {
 	const rows = /** @type {any[]} */ (usage?.rows ?? []);
 	return (
-		<div className="space-y-8">
+		<div className="space-y-6">
 			<Card
 				title={chartTitle}
 				subtitle={BILLING.usageChartIntro(`${usage?.from ?? ''} – ${usage?.to ?? ''}`, formatCredits(usage?.total ?? 0))}>

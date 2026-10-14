@@ -46,7 +46,7 @@ const ACCENT = 'bg-primary-soft text-primary';
 
 /**
  * Rounded icon badge in the accent tint.
- * @param {{ icon: import('./icons.js').IconName, kind?: Kind, size?: 'sm' | 'md', className?: string }} props
+ * @param {{ icon: import('./icons.js').IconName, kind?: Kind, size?: 'xs' | 'sm' | 'md', className?: string }} props
  */
 export function IconBadge({ icon, size = 'md', className }) {
 	return (
@@ -55,16 +55,17 @@ export function IconBadge({ icon, size = 'md', className }) {
 			className={cx(
 				'inline-flex shrink-0 items-center justify-center',
 				ACCENT,
-				size === 'sm' ? 'size-8 rounded-lg' : 'size-10 rounded-xl',
+				size === 'xs' ? 'size-6 rounded-md' : size === 'sm' ? 'size-8 rounded-lg' : 'size-10 rounded-xl',
 				className,
 			)}>
-			<Icon name={icon} size={size === 'sm' ? 15 : 18} />
+			<Icon name={icon} size={size === 'xs' ? 13 : size === 'sm' ? 15 : 18} />
 		</span>
 	);
 }
 
 /**
- * Surface card: a soft rounded section (no border, no shadow) with a heading and a lighter one-line description.
+ * Surface card: a flat rounded section with a hairline edge (no shadow, PLAN 0.6) with a heading and a lighter
+ * one-line description.
  * @param {{ title?: ReactNode, subtitle?: ReactNode, actions?: ReactNode, children?: ReactNode, className?: string,
  *   bodyClassName?: string, as?: 'section' | 'div' | 'article', id?: string, padded?: boolean }} props
  */
@@ -74,22 +75,22 @@ export function Card({ title, subtitle, actions, children, className, bodyClassN
 	return (
 		<Tag
 			id={id}
-			className={cx('min-w-0 rounded-card bg-surface', className)}
+			className={cx('min-w-0 rounded-card border border-line-soft bg-surface', className)}
 			{...(title && typeof title === 'string' && as === 'section' ? { 'aria-label': title } : {})}>
 			{title || actions ? (
-				<header className="flex flex-wrap items-start justify-between gap-3 px-6 pt-5 sm:px-7 sm:pt-6">
+				<header className="flex flex-wrap items-start justify-between gap-3 px-5 pt-5 sm:px-6">
 					<div className="min-w-0">
-						{title ? <h2 className="text-base font-bold tracking-tight text-fg">{title}</h2> : null}
-						{subtitle ? <p className="mt-1 text-sm text-muted">{subtitle}</p> : null}
+						{title ? <h2 className="text-[15px] font-semibold tracking-tight text-fg">{title}</h2> : null}
+						{subtitle ? <p className="mt-0.5 text-sm text-muted">{subtitle}</p> : null}
 					</div>
 					{actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
 				</header>
 			) : null}
 			<div
 				className={cx(
-					padded && 'p-6 sm:p-7',
-					padded && hasHeader && 'pt-4 sm:pt-5',
-					!padded && hasHeader && 'pt-3',
+					padded && 'p-5 sm:p-6',
+					padded && hasHeader && 'pt-4 sm:pt-4',
+					!padded && hasHeader && 'pt-4',
 					bodyClassName,
 				)}>
 				{children}
@@ -109,15 +110,15 @@ export function Card({ title, subtitle, actions, children, className, bodyClassN
 export function PageHeader({ title, subtitle, actions, breadcrumbs, badge, level = 1 }) {
 	const Heading = level === 2 ? 'h2' : 'h1';
 	return (
-		<div className="space-y-3 pb-1">
+		<div className="space-y-2">
 			{breadcrumbs}
 			<div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
 				<div className="min-w-0 flex-auto">
-					<Heading className="flex flex-wrap items-center gap-2 text-2xl font-extrabold tracking-tight text-fg">
+					<Heading className="flex flex-wrap items-center gap-2 font-display text-[26px] leading-tight font-extrabold tracking-[-0.02em] text-balance text-fg">
 						<span className="min-w-0 break-words">{title}</span>
 						{badge}
 					</Heading>
-					{subtitle ? <p className="mt-1.5 text-sm text-muted">{subtitle}</p> : null}
+					{subtitle ? <p className="mt-1 text-sm text-muted">{subtitle}</p> : null}
 				</div>
 				{actions ? <div className="flex max-w-full flex-wrap items-center gap-2">{actions}</div> : null}
 			</div>
@@ -155,7 +156,7 @@ export function Badge({ tone = 'neutral', kind, children, dot = false, className
 		<span
 			title={title}
 			className={cx(
-				'inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border px-2 py-0.5 text-xs font-semibold',
+				'inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2 py-0.5 text-xs leading-4 font-medium',
 				TONES[look],
 				className,
 			)}>
@@ -215,8 +216,10 @@ export function Callout({ tone = 'info', title, children, actions, className, li
 	const { box, icon } = CALLOUTS[tone];
 	const role = !live ? undefined : tone === 'danger' || tone === 'warning' ? 'alert' : 'status';
 	return (
-		<div role={role} className={cx('flex animate-ss-enter gap-3 rounded-2xl border px-5 py-4 text-sm', box, className)}>
-			<span className="mt-0.5 shrink-0">
+		<div
+			role={role}
+			className={cx('flex animate-ss-enter gap-3 rounded-xl border px-4 py-3.5 text-sm leading-relaxed', box, className)}>
+			<span className="mt-[3px] shrink-0">
 				<Icon name={icon} size={16} />
 			</span>
 			<div className="min-w-0 flex-1 space-y-1">
@@ -238,11 +241,12 @@ export function EmptyState({ title, description, action, icon = 'box', kind, cla
 	return (
 		<div
 			className={cx(
-				'flex flex-col items-center justify-center rounded-card bg-surface-2/60 text-center',
+				// a dashed frame on the page; inside a card (which already frames it) no second frame
+				'flex flex-col items-center justify-center rounded-card border border-dashed border-line text-center in-[.rounded-card]:border-0',
 				compact ? 'gap-2 px-4 py-6' : 'gap-3 px-6 py-12',
 				className,
 			)}>
-			<span className={cx('flex size-10 items-center justify-center rounded-xl', kind ? ACCENT : 'bg-surface-3 text-muted')}>
+			<span className={cx('flex size-10 items-center justify-center rounded-xl', kind ? ACCENT : 'bg-surface-2 text-muted')}>
 				<Icon name={icon} size={18} />
 			</span>
 			<div className="max-w-md space-y-1">
@@ -262,7 +266,10 @@ export function ErrorState({ title = 'This could not be loaded', message, action
 	return (
 		<div
 			role="alert"
-			className={cx('flex flex-col items-center gap-3 rounded-card bg-surface px-6 py-10 text-center', className)}>
+			className={cx(
+				'flex flex-col items-center gap-3 rounded-card border border-line-soft bg-surface px-6 py-10 text-center',
+				className,
+			)}>
 			<span className="flex size-10 items-center justify-center rounded-xl bg-danger-soft text-on-danger-soft">
 				<Icon name="alert" size={18} />
 			</span>
@@ -307,16 +314,16 @@ export function SkeletonBlock({ className }) {
 const valueSize = (value) =>
 	typeof value === 'string' || typeof value === 'number'
 		? String(value).length > 13
-			? 'whitespace-nowrap text-lg @[11.5rem]:text-xl @[14rem]:text-2xl @[17.5rem]:text-3xl'
-			: 'whitespace-nowrap text-2xl @[12rem]:text-3xl'
-		: 'text-balance text-2xl @[16rem]:text-3xl';
+			? 'whitespace-nowrap text-lg @[11.5rem]:text-xl @[16rem]:text-2xl'
+			: 'whitespace-nowrap text-2xl @[14rem]:text-[28px]'
+		: 'text-balance text-xl @[16rem]:text-2xl';
 
 /**
  * Key figure: a summary tile on a neutral surface. With a `kind` its icon sits in the accent-tinted badge, without one
  * in a neutral badge (PLAN 0.6 colour rule); `tone` colours the hint by status. A new value fades in.
  *
- * The tile follows its own width (a size container), not the screen's: from 16rem the icon sits beside the label,
- * below that above it; the label wraps on whole words; a figure stays on one line and is never cut, its type a step
+ * The tile follows its own width (a size container), not the screen's: a small icon sits beside the label, which
+ * wraps on whole words; a figure stays on one line and is never cut, its type a step
  * or two smaller where the tile is too narrow for it at full size (see `valueSize`). Put tiles in a
  * {@link StatGrid}, which keeps each one wide enough for its value.
  * @param {{ label: ReactNode, value: ReactNode, hint?: ReactNode, tone?: Tone, icon?: import('./icons.js').IconName,
@@ -332,25 +339,28 @@ export function Stat({ label, value, hint, tone = 'neutral', icon, kind, classNa
 					? 'text-success'
 					: 'text-muted';
 	return (
-		<div className={cx('@container min-w-0 rounded-card bg-surface p-5 sm:p-6', className)}>
-			<div className="space-y-3">
-				<div className="flex flex-col items-start gap-3 @3xs:flex-row @3xs:items-center">
+		<div className={cx('@container min-w-0 rounded-card border border-line-soft bg-surface px-5 py-4', className)}>
+			<div className="space-y-2">
+				<div className="flex items-center gap-2">
 					{icon ? (
 						kind ? (
-							<IconBadge icon={icon} kind={kind} />
+							<IconBadge icon={icon} kind={kind} size="xs" />
 						) : (
 							<span
 								aria-hidden="true"
-								className="inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-surface-3 text-muted">
-								<Icon name={icon} size={18} />
+								className="inline-flex size-6 shrink-0 items-center justify-center rounded-md bg-surface-3 text-muted">
+								<Icon name={icon} size={13} />
 							</span>
 						)
 					) : null}
-					<span className="min-w-0 text-sm font-semibold text-pretty text-muted">{label}</span>
+					<span className="min-w-0 text-[13px] font-medium text-pretty text-muted">{label}</span>
 				</div>
 				<div
 					key={typeof value === 'string' || typeof value === 'number' ? String(value) : undefined}
-					className={cx('animate-ss-fade font-extrabold tracking-tight text-fg tabular-nums', valueSize(value))}>
+					className={cx(
+						'animate-ss-fade font-display font-extrabold tracking-[-0.02em] text-fg tabular-nums',
+						valueSize(value),
+					)}>
 					{value}
 				</div>
 				{hint ? <div className={cx('text-xs font-medium text-pretty', hintTone)}>{hint}</div> : null}
@@ -365,7 +375,7 @@ export function Stat({ label, value, hint, tone = 'neutral', icon, kind, classNa
  * four from 56rem. More tiles stay in two columns.
  */
 export const STAT_GRID =
-	'grid grid-cols-1 gap-5 @md:grid-cols-2 @md:[&>:last-child:nth-child(odd)]:col-span-full ' +
+	'grid grid-cols-1 gap-4 @md:grid-cols-2 @md:[&>:last-child:nth-child(odd)]:col-span-full ' +
 	'@2xl:[&:has(>:nth-child(3):last-child)]:grid-cols-3 @2xl:[&:has(>:nth-child(3):last-child)>*]:col-span-1! ' +
 	'@4xl:[&:has(>:nth-child(4):last-child)]:grid-cols-4';
 
@@ -389,10 +399,10 @@ export function StatGrid({ children, className, label }) {
  */
 export function Section({ title, description, actions, children, id, className }) {
 	return (
-		<section className={cx('min-w-0 space-y-4', className)} {...(id ? { 'aria-labelledby': id } : {})}>
+		<section className={cx('min-w-0 space-y-3', className)} {...(id ? { 'aria-labelledby': id } : {})}>
 			<div className="flex flex-wrap items-end justify-between gap-3">
 				<div className="min-w-0">
-					<h2 id={id} className="text-lg font-bold tracking-tight text-fg">
+					<h2 id={id} className="text-base font-semibold tracking-tight text-fg">
 						{title}
 					</h2>
 					{description ? <p className="mt-1 text-sm text-muted">{description}</p> : null}
@@ -568,7 +578,7 @@ export function KeyValueList({ items, className, columns = 2 }) {
 				)}>
 				{items.map((item, i) => (
 					<div key={i} className="min-w-0 space-y-0.5">
-						<dt className="text-xs font-semibold uppercase tracking-wider text-muted">{item.label}</dt>
+						<dt className="text-xs font-medium text-muted">{item.label}</dt>
 						<dd className="break-words text-sm text-fg">{item.value}</dd>
 					</div>
 				))}

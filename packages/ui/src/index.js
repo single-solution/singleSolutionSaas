@@ -17,7 +17,19 @@ export {
 	PageTransition,
 	SwapTransition,
 } from './motion.js';
-export { Input, TextArea, Select, Checkbox, Switch, RadioGroup, CheckboxGroup, FieldGrid, FIELD_GRID } from './fields.js';
+export {
+	Input,
+	TextArea,
+	Select,
+	Checkbox,
+	CheckboxInput,
+	Switch,
+	RadioGroup,
+	CheckboxGroup,
+	ChoicePicker,
+	FieldGrid,
+	FIELD_GRID,
+} from './fields.js';
 export { Form, FormError, FormActions, useFormState } from './Form.js';
 export {
 	Card,

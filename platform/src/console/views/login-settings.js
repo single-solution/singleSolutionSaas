@@ -23,6 +23,7 @@ import {
 	describeProblem,
 	fieldErrors,
 	formatDateTime,
+	humanize,
 	useToast,
 } from '@ss/ui';
 import { LOGIN, MORE, TWO_STEP } from '../../texts/console.js';
@@ -438,6 +439,12 @@ export function PasswordPanel({ twoStepOn }) {
 	);
 }
 
+/**
+ * Who did an entry: the actor's name, else its kind (`system` → `System`).
+ * @param {any} entry
+ */
+const actorName = (entry) => entry.actor?.name ?? (entry.actor?.type ? humanize(entry.actor.type) : '—');
+
 /** @param {string} action e.g. `merchant.suspended` → `Merchant suspended` */
 const actionLabel = (action) => {
 	const text = String(action ?? '').replace(/[._]/g, ' ');
@@ -473,6 +480,50 @@ function Changes({ entry }) {
 				))}
 			</ul>
 		</details>
+	);
+}
+
+/**
+ * Initials of a name for a small avatar (`Bilal Ahmed` → `BA`, `shop.example` → `SH`).
+ * @param {string} name
+ */
+export const initialsOf = (name) => {
+	const words = String(name ?? '')
+		.trim()
+		.split(/[\s._@-]+/)
+		.filter(Boolean);
+	const letters = words.length > 1 ? `${words[0]?.[0] ?? ''}${words[1]?.[0] ?? ''}` : (words[0] ?? '').slice(0, 2);
+	return letters.toUpperCase() || '·';
+};
+
+/**
+ * The latest activity as a timeline (who, what, for which merchant, when): the Overview's short view of the log.
+ * @param {{ items: any[], empty: string }} props
+ */
+export function ActivityTimeline({ items, empty }) {
+	if (items.length === 0) return <EmptyState compact icon="activity" kind="activity" title={empty} />;
+	return (
+		<ol className="space-y-4">
+			{items.map((e) => {
+				const who = actorName(e);
+				return (
+					<li key={e.activityId} className="flex gap-3">
+						<span
+							aria-hidden="true"
+							className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary-soft text-[11px] font-bold text-on-primary-soft">
+							{initialsOf(who)}
+						</span>
+						<div className="min-w-0 text-sm">
+							<p className="text-fg">
+								<span className="font-semibold">{who}</span> · {actionLabel(e.action)}
+								{e.merchantName ? <span className="text-muted"> · {e.merchantName}</span> : null}
+							</p>
+							<p className="text-xs text-muted">{formatDateTime(e.at)}</p>
+						</div>
+					</li>
+				);
+			})}
+		</ol>
 	);
 }
 
@@ -517,7 +568,7 @@ export function ActivityTable({
 					header: 'Who',
 					rowHeader: true,
 					render: (e) => {
-						const name = e.actor?.name ?? e.actor?.type ?? '—';
+						const name = actorName(e);
 						if (!filterHref || !e.actor?.id) return name;
 						return e.actor.type === 'admin'
 							? filterLink(name, filterHref({ adminId: e.actor.id }))

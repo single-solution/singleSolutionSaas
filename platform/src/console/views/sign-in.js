@@ -59,7 +59,9 @@ function AuthFrame({ branding, title, subtitle, children, footer }) {
 		<main className="flex min-h-screen items-center justify-center bg-canvas px-4 py-10">
 			<div className="w-full max-w-md space-y-6">
 				<BrandMark branding={branding} />
-				<section aria-labelledby="auth-title" className="space-y-6 rounded-card bg-surface p-6 sm:p-9">
+				<section
+					aria-labelledby="auth-title"
+					className="space-y-6 rounded-card border border-line-soft bg-surface p-6 sm:p-8">
 					<div className="space-y-1">
 						<h1 id="auth-title" className="text-2xl font-extrabold tracking-tight text-fg">
 							{title}

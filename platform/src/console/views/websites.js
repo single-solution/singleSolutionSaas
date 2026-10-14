@@ -82,7 +82,7 @@ export function OverviewView(props) {
 	const billing = props.billing;
 	const productCount = rows.reduce((n, r) => n + r.cards.length, 0);
 	return (
-		<div className="space-y-8">
+		<div className="space-y-6">
 			<FrameBilling billing={billing} />
 			<PageHeader title={MERCHANT.overviewTitle} subtitle={MERCHANT.overviewIntro} />
 			{billing ? (

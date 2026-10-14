@@ -157,7 +157,7 @@ export function AccountView(props) {
 	if (!props.ok || !data) return <PageProblem problem={props.problem} />;
 	const merchant = data.merchant;
 	return (
-		<div className="space-y-8">
+		<div className="space-y-6">
 			<FrameBilling billing={props.billing} />
 			<PageHeader title={MERCHANT.accountTitle} subtitle={MERCHANT.accountIntro} />
 			<Masonry columns={2}>

@@ -74,12 +74,12 @@ export function Table({
 	const toggle = (key) =>
 		setSort((s) => (s?.key === key ? { key, direction: s.direction === 'asc' ? 'desc' : 'asc' } : { key, direction: 'asc' }));
 	// cells are a little tighter in a narrow card (the table's own width, not the screen's)
-	const pad = dense ? 'px-3 py-2' : 'px-4 py-3.5 @4xl:px-5';
+	const pad = dense ? 'px-3 py-2' : 'px-4 py-3 @4xl:px-5';
 	/** @param {'left' | 'right' | 'center' | undefined} align */
 	const alignClass = (align) => (align === 'right' ? 'text-right' : align === 'center' ? 'text-center' : 'text-left');
 	return (
 		<div className={cx('@container space-y-3', className)}>
-			<div className="overflow-x-auto rounded-card bg-surface">
+			<div className="overflow-x-auto rounded-card border border-line-soft bg-surface">
 				<table className={cx('w-full border-collapse text-sm', sorted.length > 0 && 'min-w-[32rem]')}>
 					<caption className={cx(captionHidden ? 'sr-only' : 'px-5 pb-1 pt-4 text-left text-sm font-semibold text-fg')}>
 						{caption}
@@ -103,14 +103,14 @@ export function Table({
 										className={cx(
 											pad,
 											alignClass(column.align),
-											'whitespace-nowrap text-xs font-semibold uppercase tracking-wider text-muted',
+											'whitespace-nowrap text-xs font-medium text-muted',
 											column.className,
 										)}>
 										{column.sortable ? (
 											<button
 												type="button"
 												onClick={() => toggle(column.key)}
-												className="inline-flex items-center gap-1 rounded uppercase hover:text-fg focus-visible:outline-2 focus-visible:outline-focus">
+												className="inline-flex items-center gap-1 rounded hover:text-fg focus-visible:outline-2 focus-visible:outline-focus">
 												{column.header}
 												<Icon
 													name={active ? (sort.direction === 'asc' ? 'arrowUp' : 'arrowDown') : 'sort'}
@@ -155,7 +155,7 @@ export function Table({
 											column.className,
 										);
 										return column.rowHeader ? (
-											<th key={column.key} scope="row" className={cx(classes, 'font-semibold')}>
+											<th key={column.key} scope="row" className={cx(classes, 'font-medium')}>
 												{content}
 											</th>
 										) : (

@@ -1,6 +1,11 @@
+import { Bricolage_Grotesque, Figtree } from 'next/font/google';
 import { headers } from 'next/headers.js';
 import { ThemeScript } from '@ss/ui';
 import './globals.css';
+
+/** The interface typefaces (served with the app, no outside request): text and headings/figures (`@ss/ui` theme). */
+const text = Figtree({ subsets: ['latin'], variable: '--ss-font-text', display: 'swap' });
+const display = Bricolage_Grotesque({ subsets: ['latin'], variable: '--ss-font-display', display: 'swap' });
 
 export const metadata = {
 	title: { default: 'Single Solution', template: '%s · Single Solution' },
@@ -18,7 +23,7 @@ export const viewport = { width: 'device-width', initialScale: 1, colorScheme: '
 export default async function RootLayout({ children }) {
 	const nonce = (await headers()).get('x-nonce');
 	return (
-		<html lang="en" suppressHydrationWarning>
+		<html lang="en" className={`${text.variable} ${display.variable}`} suppressHydrationWarning>
 			<head>
 				<ThemeScript nonce={nonce} />
 			</head>

@@ -199,25 +199,35 @@ export const loadMerchantsScreen = async (api, filter, admin) => {
 	return detail ? { ...merchants, detail, auto: true } : merchants;
 };
 
+/** How many merchants the Overview lists. */
+const OVERVIEW_MERCHANTS = 5;
+
 /**
  * Admin Overview: the numbers, the merchants that need attention (checked now) and the credits added this month.
  * @param {ConsoleApi} api
  */
 export const loadOverview = async (api) => {
 	const monthStart = `${new Date().toISOString().slice(0, 7)}-01`;
-	const [overview, attention, receipts] = await Promise.all([
+	const [overview, attention, receipts, merchants] = await Promise.all([
 		api.get(paths.overview()),
 		api.get(paths.attention()),
 		api.get(paths.allReceipts({ from: monthStart })),
+		api.get(paths.merchants({ limit: OVERVIEW_MERCHANTS })),
 	]);
 	const failed = firstFailure(overview);
 	if (failed) return failed;
+	// the first merchants with their balance (empty when the admin may not list them)
+	const firstMerchants = merchants.ok ? itemsOf(merchants).slice(0, OVERVIEW_MERCHANTS) : [];
+	const billing =
+		firstMerchants.length > 0 ? await api.get(paths.billingMerchants(firstMerchants.map((m) => String(m.merchantId)))) : null;
 	return {
 		ok: /** @type {const} */ (true),
 		overview: /** @type {any} */ (overview.ok ? overview.data : null),
 		attention: itemsOf(attention),
 		// credits added this month (UTC): the receipts since the 1st (null when they could not be read)
 		creditsAdded: receipts.ok ? itemsOf(receipts).reduce((n, r) => n + (Number(r.credits) || 0), 0) : null,
+		merchants: firstMerchants,
+		billing: Object.fromEntries((billing?.ok ? itemsOf(billing) : []).map((b) => [b.merchantId, b])),
 	};
 };
 

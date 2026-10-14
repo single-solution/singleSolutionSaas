@@ -1,7 +1,9 @@
 'use client';
 /**
  * SchemaForm renders a feature's settings form from its settings schema with the `x-ui` hints: `widget`, `group`
- * (fieldsets), `order`, `help`, `placeholder`, `advanced` (behind a disclosure), `hidden` and `wide`. Each group lays
+ * (fieldsets), `order`, `help`, `placeholder` (for a list of choices: the text shown while none is chosen),
+ * `advanced` (behind a disclosure), `hidden`, `wide` and `labels` (`country`: ISO country codes shown by name). A list
+ * of more than 12 choices (or `widget: 'tags'`) is a searchable picker; a shorter one a group of checkboxes. Each group lays
  * its fields out in the responsive field grid (PLAN 0.6): short controls side by side, long text, JSON, lists and
  * `wide` fields across the whole row.
  *
@@ -11,10 +13,21 @@
  */
 import { useId, useState } from 'react';
 import { Button } from './Button.js';
-import { Checkbox, CheckboxGroup, FieldGrid, Input, LABEL_CLASS, RadioGroup, Select, Switch, TextArea } from './fields.js';
+import {
+	Checkbox,
+	CheckboxGroup,
+	ChoicePicker,
+	FieldGrid,
+	Input,
+	LABEL_CLASS,
+	RadioGroup,
+	Select,
+	Switch,
+	TextArea,
+} from './fields.js';
 import { cx } from './cx.js';
 import { Icon } from './icons.js';
-import { choiceLabel, fieldsOf, groupFields, validateValue, widgetOf } from './schema.js';
+import { fieldsOf, groupFields, optionLabel, validateValue, widgetOf } from './schema.js';
 
 /** @typedef {import('./schema.js').SettingsSchema} SettingsSchema */
 /** @typedef {import('./schema.js').SettingNode} SettingNode */
@@ -98,7 +111,7 @@ function NodeControl({
 	if (node.type === 'string') {
 		const text = typeof value === 'string' ? value : '';
 		if (node.enum && (widget === 'radio' || widget === 'select')) {
-			const options = node.enum.map((v) => ({ value: String(v), label: choiceLabel(v) }));
+			const options = node.enum.map((v) => ({ value: String(v), label: optionLabel(v, node['x-ui']?.labels) }));
 			if (widget === 'radio')
 				return (
 					<RadioGroup
@@ -156,17 +169,27 @@ function NodeControl({
 		const list = Array.isArray(value) ? value : [];
 		const items = node.items;
 		if (items?.enum) {
-			return (
-				<CheckboxGroup
-					legend={label}
-					options={items.enum.map((v) => ({ value: String(v), label: choiceLabel(v) }))}
-					value={list.map(String)}
-					onChange={(next) => onChange(items.type === 'integer' || items.type === 'number' ? next.map(Number) : next)}
-					help={help}
-					error={error}
-					disabled={disabled}
-					{...(maxItems === undefined ? {} : { max: maxItems })}
+			const labels = node['x-ui']?.labels;
+			const options = items.enum.map((v) => ({ value: String(v), label: optionLabel(v, labels) }));
+			const shared = {
+				legend: label,
+				value: list.map(String),
+				/** @param {string[]} next */
+				onChange: (next) => onChange(items.type === 'integer' || items.type === 'number' ? next.map(Number) : next),
+				help,
+				error,
+				disabled,
+				...(maxItems === undefined ? {} : { max: maxItems }),
+			};
+			// a long list is searchable; named choices (countries) are listed by name
+			return widget === 'tags' ? (
+				<ChoicePicker
+					{...shared}
+					options={labels ? [...options].sort((a, b) => a.label.localeCompare(b.label)) : options}
+					{...(ph ? { emptyText: ph } : {})}
 				/>
+			) : (
+				<CheckboxGroup {...shared} options={options} />
 			);
 		}
 		if (items && (items.type === 'string' || items.type === 'integer' || items.type === 'number')) {
@@ -192,10 +215,10 @@ function NodeControl({
 		const record =
 			value && typeof value === 'object' && !Array.isArray(value) ? /** @type {Record<string, unknown>} */ (value) : {};
 		return (
-			<fieldset className="space-y-3 rounded-2xl bg-surface-2/60 p-4" disabled={disabled}>
+			<fieldset className="space-y-4 rounded-xl border border-line-soft p-4" disabled={disabled}>
 				<legend className={cx(LABEL_CLASS, 'px-1')}>
 					{label}
-					{aside ? <span className="ml-2 normal-case tracking-normal">{aside}</span> : null}
+					{aside ? <span className="ml-2 font-normal text-muted">{aside}</span> : null}
 				</legend>
 				{help ? <p className="text-xs text-muted">{help}</p> : null}
 				{Object.entries(node.properties).map(([key, child]) => (

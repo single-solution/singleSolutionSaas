@@ -44,7 +44,7 @@ export function ActivityView(props) {
 			}),
 		);
 	return (
-		<div className="space-y-8">
+		<div className="space-y-6">
 			<PageHeader title={ADMIN.activityTitle} subtitle={ADMIN.activityIntro} />
 			<Card>
 				<Form onSubmit={apply} busy={nav.pending} aria-label={ADMIN.filters.apply}>

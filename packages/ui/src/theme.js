@@ -52,7 +52,7 @@ export function ThemeToggle({ className }) {
 	const [choice, setChoice] = useState(/** @type {ThemeChoice} */ ('system'));
 	useEffect(() => setChoice(readThemeChoice()), []);
 	return (
-		<div role="group" aria-label="Theme" className={cx('inline-flex rounded-xl bg-surface-2 p-0.5', className)}>
+		<div role="group" aria-label="Theme" className={cx('inline-flex rounded-[10px] bg-surface-2 p-0.5', className)}>
 			{CHOICES.map((item) => (
 				<button
 					key={item.value}
@@ -65,7 +65,7 @@ export function ThemeToggle({ className }) {
 					}}
 					className={cx(
 						'ss-motion ss-press rounded-lg p-1.5 focus-visible:outline-2 focus-visible:outline-focus',
-						choice === item.value ? 'bg-surface-2 text-fg' : 'text-muted hover:text-fg',
+						choice === item.value ? 'bg-surface text-fg ring-1 ring-line-soft' : 'text-muted hover:text-fg',
 					)}>
 					<Icon name={item.icon} size={14} />
 					<span className="sr-only">{item.label}</span>

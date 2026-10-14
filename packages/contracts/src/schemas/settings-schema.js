@@ -90,6 +90,8 @@ export const settingsMetaSchema = deepFreeze({
 						order: { type: 'integer' },
 						help: { type: 'string', maxLength: 2000 },
 						placeholder: { type: 'string', maxLength: 200 },
+						// `country`: the choices are ISO 3166-1 alpha-2 codes, shown by their country names
+						labels: { type: 'string', enum: ['country'] },
 					},
 				},
 			},

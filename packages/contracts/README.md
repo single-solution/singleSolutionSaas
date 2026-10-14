@@ -39,7 +39,7 @@ A feature's settings are `{ type: 'object', properties: { <setting>: <node> }, a
 setting has `type` (`string`, `integer`, `number`, `boolean`, `array`), `title` and `default`, and may add
 `description`, `minimum` / `maximum` (the hard maximums of limits), `maxLength`, `enum`, `format`, `items` (lists, item
 `type` plus `minimum`, `maximum`, `maxLength`, `enum`, `format`) and `x-ui` (`widget`, `group`, `order`, `help`,
-`placeholder`). Keywords must fit the type, lists need `items`, defaults and enum values must be valid.
+`placeholder`, `labels`: `country` shows ISO country codes by name). Keywords must fit the type, lists need `items`, defaults and enum values must be valid.
 
 - `checkSettingsSchema(schema)` → problems (empty when valid).
 - `validateSettingValue(schema, key, value)` → result for one value; unknown keys are refused.

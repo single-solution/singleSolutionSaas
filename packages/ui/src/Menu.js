@@ -103,7 +103,7 @@ export function ActionMenu({ label, items, icon = 'more', size = 'sm', className
 					aria-label={label}
 					data-state={presence.closing ? 'closed' : 'open'}
 					className={cx(
-						'absolute right-0 z-40 mt-1.5 w-64 max-w-[calc(100vw-2rem)] origin-top-right space-y-0.5 rounded-2xl bg-surface p-1.5 shadow-pop',
+						'absolute right-0 z-40 mt-1.5 w-64 max-w-[calc(100vw-2rem)] origin-top-right space-y-0.5 rounded-xl bg-surface p-1.5 shadow-pop',
 						'animate-ss-pop data-[state=closed]:pointer-events-none data-[state=closed]:animate-ss-pop-out',
 					)}>
 					{items.map((item, index) => (
@@ -118,7 +118,7 @@ export function ActionMenu({ label, items, icon = 'more', size = 'sm', className
 									item.onSelect();
 								}}
 								className={cx(
-									'ss-motion ss-press block w-full rounded-xl px-3 py-2 text-left text-sm font-semibold hover:bg-surface-2 focus:bg-surface-2',
+									'ss-motion ss-press block w-full rounded-lg px-3 py-2 text-left text-sm font-medium hover:bg-surface-2 focus:bg-surface-2',
 									'focus-visible:outline-2 focus-visible:outline-focus disabled:cursor-not-allowed disabled:opacity-50',
 									'disabled:hover:bg-transparent',
 									item.danger ? 'text-danger' : 'text-fg',

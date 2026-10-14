@@ -49,7 +49,7 @@
 		"countries": {
 			"type": "array",
 			"title": "Countries allowed",
-			"description": "Only numbers with these countries' calling codes get codes (ISO codes, for example PK). Empty: any country.",
+			"description": "Only numbers with these countries' calling codes get codes. None chosen: any country.",
 			"default": [],
 			"items": {
 				"type": "string",
@@ -300,7 +300,9 @@
 				]
 			},
 			"x-ui": {
-				"widget": "tags"
+				"widget": "tags",
+				"labels": "country",
+				"placeholder": "Any country"
 			}
 		},
 		"newUserName": {

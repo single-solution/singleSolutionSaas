@@ -1,4 +1,7 @@
 {
 	"extends": "@ss/config/tsconfig.base.json",
+	"compilerOptions": {
+		"paths": { "next/font/google": ["./node_modules/next/font/google/index.d.ts"] }
+	},
 	"include": ["core/**/*.js", "server/**/*.js", "adapters/**/*.js", "ui/**/*.js", "app/**/*.js", "tests/**/*.js"]
 }

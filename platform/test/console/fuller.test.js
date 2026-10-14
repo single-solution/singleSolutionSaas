@@ -146,8 +146,20 @@ describe('fuller Portal screens (jsdom)', () => {
 			if (!overview.ok) throw new Error('overview');
 			expect(overview.attention.map((m) => m.merchantId)).toEqual([merchantId]);
 			expect(overview.creditsAdded).toBe(1_000_000);
+			expect(overview.merchants.map((m) => m.name)).toContain('Shop & Co');
+			expect(typeof overview.billing[merchantId]?.balance).toBe('number');
 			withToasts(<OverviewView {...overview} admin={owner} />);
-			for (const text of ['Needs attention', 'Products on websites', 'Credits added this month (UTC)', 'View all'])
+			// look "Workbench": the greeting, what needs the admin (with what happens if it waits), the setup checklist,
+			// the month's numbers, the first merchants with their balance and the activity timeline
+			for (const text of [
+				'Welcome back',
+				'Needs you',
+				'Credits are running low',
+				'Getting the platform ready',
+				'Credits added this month (UTC)',
+				'Shop & Co',
+				'View all',
+			])
 				expect(shows(text)).toBe(true);
 			await menu('Notes actions');
 			await clickEl(menuItem('View product'));

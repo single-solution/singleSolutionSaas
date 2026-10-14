@@ -16,6 +16,7 @@ import {
 	Button,
 	Callout,
 	Card,
+	CheckboxInput,
 	CodeBlock,
 	ConfirmDialog,
 	Dialog,
@@ -299,7 +300,7 @@ function MerchantList({ props, admin, selectedId, autoId = null }) {
 							</Button>
 						) : null}
 						{canBulk && selected.size > 0 ? (
-							<div className="flex flex-wrap items-center gap-2 rounded-2xl bg-primary-soft p-3 text-sm text-on-primary-soft">
+							<div className="flex flex-wrap items-center gap-2 rounded-xl bg-primary-soft p-3 text-sm text-on-primary-soft">
 								<span className="font-semibold">{ADMIN.bulk.selected(selected.size)}</span>
 								{canSuspend ? (
 									<>
@@ -339,12 +340,10 @@ function MerchantList({ props, admin, selectedId, autoId = null }) {
 								meta={balanceOf(m)}
 								leading={
 									canBulk ? (
-										<input
-											type="checkbox"
+										<CheckboxInput
 											aria-label={ADMIN.selectMerchant(m.name)}
 											checked={selected.has(m.merchantId)}
 											onChange={() => toggle(m.merchantId)}
-											className="size-4 cursor-pointer accent-primary"
 										/>
 									) : undefined
 								}

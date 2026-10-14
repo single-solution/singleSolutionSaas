@@ -47,7 +47,7 @@ export function WebhookUrlsCard({ websiteId, off }) {
 			<div className="space-y-4">
 				{rows.length === 0 ? <p className="text-sm text-muted">{W.none}</p> : null}
 				{rows.map((row, at) => (
-					<div key={at} className="space-y-3 rounded-2xl bg-surface-2 p-4">
+					<div key={at} className="space-y-3 rounded-xl bg-surface-2 p-4">
 						<Input
 							label={fill(W.url, { n: at + 1 })}
 							type="url"

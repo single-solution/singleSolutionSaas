@@ -1,12 +1,12 @@
 'use client';
 /**
- * Console frame: a soft sidebar island (brand, sections of links, each link with an icon tile — the accent tint with a
- * `kind`, solid for the current page) and a top bar island (switchers on the left, account actions and the System /
- * Light / Dark theme switch on the right) that stays on top of the page as it scrolls. The switchers keep at least
- * 10rem on one line with the menu button; where that and the actions do not fit, the actions move to a second row.
- * The frame uses the available width (16 px side padding on phones, 24–32 px from `md`, at most 1680 px wide); pages
- * decide their own reading widths, and the components inside them follow the width they get (container queries), not
- * the screen's. Below 1024 px (`lg`, PLAN 0.6 Phones and tablets) the sidebar becomes an off-canvas panel opened by
+ * Console frame (owner 2026-10-14: floating, never glued to the window edges): a sidebar panel (brand, sections of
+ * links, each link with an icon tile — the accent tint with a `kind`, solid for the current page) and a top bar panel
+ * (switchers on the left, account actions and the System / Light / Dark theme switch on the right) that stays on top of
+ * the page as it scrolls, both with space around them. The switchers keep at least 10rem on one line with the menu
+ * button; where that and the actions do not fit, the actions move to a second row. The top bar and the page share one
+ * width (at most 1200 px, centred beside the sidebar) and one rhythm (24 px between blocks); the components inside
+ * follow the width they get (container queries), not the screen's. Below 1024 px (`lg`, PLAN 0.6 Phones and tablets) the sidebar becomes an off-canvas panel opened by
  * the menu button.
  * Includes a skip link to the main content. Router links are rendered with `linkAs` (e.g. Next's `Link`).
  *
@@ -67,20 +67,18 @@ function Nav({ sections, linkAs, onNavigate }) {
 		setPlaced(true);
 	}, [active, sections]);
 	return (
-		<nav ref={root} aria-label="Main" className="relative isolate space-y-5">
+		<nav ref={root} aria-label="Main" className="relative isolate space-y-6">
 			<span
 				ref={marker}
 				aria-hidden="true"
 				className={cx(
-					'pointer-events-none absolute inset-x-0 top-0 -z-10 rounded-[12px] bg-primary-soft opacity-0',
+					'pointer-events-none absolute inset-x-0 top-0 -z-10 rounded-[10px] bg-primary-soft opacity-0',
 					placed && 'transition-[transform,opacity] duration-(--ss-motion-slow) ease-ss-move',
 				)}
 			/>
 			{sections.map((section, i) => (
 				<div key={section.label ?? i} className="space-y-1">
-					{section.label ? (
-						<p className="px-3 pb-1 text-[11px] font-bold uppercase tracking-wider text-muted">{section.label}</p>
-					) : null}
+					{section.label ? <p className="px-2.5 pb-1 text-xs font-medium text-muted">{section.label}</p> : null}
 					<ul className="space-y-0.5">
 						{section.items.map((item) => {
 							const on = item.href === active;
@@ -94,17 +92,17 @@ function Nav({ sections, linkAs, onNavigate }) {
 										}}
 										aria-current={item.current ? 'page' : undefined}
 										className={cx(
-											'ss-motion ss-press flex items-center gap-3 rounded-[12px] px-2.5 py-2 text-sm font-semibold',
+											'ss-motion ss-press flex items-center gap-2.5 rounded-[10px] px-2 py-1.5 text-sm',
 											'focus-visible:outline-2 focus-visible:outline-focus',
 											on
-												? cx('text-on-primary-soft', placed ? 'bg-transparent' : 'bg-primary-soft')
-												: 'text-fg hover:bg-surface-2',
+												? cx('font-semibold text-on-primary-soft', placed ? 'bg-transparent' : 'bg-primary-soft')
+												: 'font-medium text-fg/80 hover:bg-surface-2 hover:text-fg',
 										)}>
 										{item.icon ? (
 											<span
 												aria-hidden="true"
 												className={cx(
-													'ss-motion flex size-[26px] shrink-0 items-center justify-center rounded-[9px]',
+													'ss-motion flex size-7 shrink-0 items-center justify-center rounded-lg',
 													on
 														? 'bg-primary text-on-primary'
 														: item.kind
@@ -128,17 +126,20 @@ function Nav({ sections, linkAs, onNavigate }) {
 }
 
 /**
- * @param {{ name: ReactNode, tagline?: ReactNode }} props
+ * The product's mark and name; `compact` (the phone top bar) shows the name only.
+ * @param {{ name: ReactNode, tagline?: ReactNode, compact?: boolean }} props
  */
-function Brand({ name, tagline }) {
+function Brand({ name, tagline, compact = false }) {
 	return (
-		<div className="flex items-center gap-3 px-2">
-			<span className="flex size-9 items-center justify-center rounded-xl bg-primary text-on-primary">
-				<Icon name="zap" size={18} />
+		<div className={cx('flex min-w-0 items-center gap-2.5', !compact && 'px-1.5')}>
+			<span className="flex size-8 shrink-0 items-center justify-center rounded-[10px] bg-primary text-on-primary">
+				<Icon name="zap" size={16} />
 			</span>
 			<span className="min-w-0">
-				<span className="block truncate text-sm font-extrabold leading-tight tracking-tight text-fg">{name}</span>
-				{tagline ? <span className="block text-[11px] font-bold uppercase tracking-wider text-muted">{tagline}</span> : null}
+				<span className="block truncate font-display text-base font-extrabold leading-tight tracking-[-0.01em] text-fg">
+					{name}
+				</span>
+				{tagline && !compact ? <span className="block truncate text-xs text-muted">{tagline}</span> : null}
 			</span>
 		</div>
 	);
@@ -183,9 +184,9 @@ export function AppShell({
 					className="sr-only z-[70] rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-on-primary focus:not-sr-only focus:fixed focus:left-4 focus:top-4">
 					Skip to content
 				</a>
-				<div className="mx-auto flex w-full max-w-[1680px] gap-5 px-4 py-3 sm:py-4 md:px-6 lg:gap-6 lg:px-8">
-					<aside className="sticky top-4 hidden h-[calc(100vh-2rem)] w-64 shrink-0 flex-col justify-between overflow-y-auto rounded-card bg-surface p-4 [view-transition-name:ss-sidebar] lg:flex">
-						<div className="space-y-6">
+				<div className="flex w-full gap-4 p-3 sm:p-4 lg:gap-6 lg:p-6">
+					<aside className="sticky top-6 hidden h-[calc(100vh-3rem)] w-60 shrink-0 flex-col justify-between overflow-y-auto rounded-card border border-line-soft bg-surface p-3 [view-transition-name:ss-sidebar] lg:flex">
+						<div className="space-y-7">
 							<Brand {...brand} />
 							<Nav sections={sections} {...(linkAs ? { linkAs } : {})} />
 						</div>
@@ -195,7 +196,7 @@ export function AppShell({
 						<div
 							ref={drawer.ref}
 							data-state={drawer.closing ? 'closed' : 'open'}
-							className="group fixed inset-0 z-50 animate-ss-fade bg-overlay data-[state=closed]:pointer-events-none data-[state=closed]:animate-ss-fade-out lg:hidden"
+							className="group fixed inset-0 z-50 animate-ss-fade bg-overlay p-3 data-[state=closed]:pointer-events-none data-[state=closed]:animate-ss-fade-out lg:hidden"
 							onMouseDown={(event) => {
 								if (event.target === event.currentTarget) setOpen(false);
 							}}>
@@ -204,8 +205,8 @@ export function AppShell({
 								role="dialog"
 								aria-modal="true"
 								aria-label="Navigation"
-								className="flex h-full w-72 max-w-[85vw] animate-ss-drawer flex-col justify-between overflow-y-auto bg-surface p-4 group-data-[state=closed]:animate-ss-drawer-out">
-								<div className="space-y-6">
+								className="flex h-full w-72 max-w-[85vw] animate-ss-drawer flex-col justify-between overflow-y-auto rounded-card bg-surface p-3 shadow-overlay group-data-[state=closed]:animate-ss-drawer-out">
+								<div className="space-y-7">
 									<div className="flex items-center justify-between">
 										<Brand {...brand} />
 										<button
@@ -222,9 +223,9 @@ export function AppShell({
 							</div>
 						</div>
 					) : null}
-					<div className="flex min-w-0 flex-1 flex-col gap-6">
-						<div className="sticky top-0 z-30 -mt-3 bg-canvas pt-3 [view-transition-name:ss-topbar] sm:-mt-4 sm:pt-4">
-							<header className="flex flex-wrap items-center justify-between gap-3 rounded-card bg-surface px-3 py-2.5 sm:px-4">
+					<div className="flex min-w-0 flex-1 flex-col">
+						<div className="sticky top-0 z-30 -mt-3 bg-canvas pt-3 [view-transition-name:ss-topbar] sm:-mt-4 sm:pt-4 lg:-mt-6 lg:pt-6">
+							<header className="mx-auto flex w-full max-w-[1200px] flex-wrap items-center justify-between gap-3 rounded-card border border-line-soft bg-surface px-2 py-2 sm:px-3">
 								<div className={cx('flex min-w-0 items-center gap-2', topbar ? 'flex-[1_1_10rem]' : 'flex-1')}>
 									<button
 										type="button"
@@ -234,6 +235,11 @@ export function AppShell({
 										className="ss-motion ss-press shrink-0 rounded-lg p-2 text-fg hover:bg-surface-2 lg:hidden">
 										<Icon name="menu" size={18} />
 									</button>
+									{!topbar ? (
+										<span className="lg:hidden">
+											<Brand {...brand} compact />
+										</span>
+									) : null}
 									{topbar ? <div className="flex min-w-0 flex-1 items-center gap-2">{topbar}</div> : null}
 								</div>
 								{actions || themeToggle ? (
@@ -244,10 +250,12 @@ export function AppShell({
 								) : null}
 							</header>
 						</div>
-						{banner}
-						<main id={mainId} tabIndex={-1} className="min-w-0 space-y-8 pb-16 focus:outline-none">
-							{children}
-						</main>
+						<div className="mx-auto flex w-full max-w-[1200px] flex-col gap-6 pb-16 pt-6">
+							{banner}
+							<main id={mainId} tabIndex={-1} className="min-w-0 space-y-6 focus:outline-none">
+								{children}
+							</main>
+						</div>
 					</div>
 				</div>
 			</div>
