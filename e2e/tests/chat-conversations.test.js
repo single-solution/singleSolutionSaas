@@ -2,7 +2,9 @@
  * Chat's conversations end to end (PLAN 0.8.10 C1–C8): Chat's store context, rich and fallback answers, handoff options,
  * alerts, imported guest keys and paging pass against the REAL Portal, Accounts, Notifications and Ecommerce, all in
  * this process. Chat's AI replies add Ecommerce's live `GET /v1/chat/context` (E37) for the product the visitor is
- * viewing, with the verified sign-in forwarded and cached 60 s (C1, with the 32,000-character instructions); AI answers
+ * viewing, with the verified sign-in forwarded and cached 60 s (C1, with the 32,000-character instructions); the shop
+ * tools and product cards name the price the product page shows: after the live deal, with the "was" price and the
+ * deal (C13, Ecommerce's shown price); AI answers
  * are markdown split into bubbles with off-site links dropped, and staff replies are markdown too (C2); when the AI
  * fails, the merchant's fallback answer is filled with the deals table from the real Ecommerce, else the on-failure
  * message (C3); the AI answers the message that asks for a person first, with no notice and no button, then stays quiet
@@ -60,7 +62,10 @@ const mails = [];
 const whatsapp = [];
 /** Requests the merchant's AI provider (OpenAI) received. @type {any[]} */
 const prompts = [];
-/** What the AI answers next (text, else 'Happy to help.'). @type {string[]} */
+/**
+ * What the AI answers next: a text or tool calls (else 'Happy to help.').
+ * @type {Array<string | { tools: Array<{ name: string, arguments: Record<string, unknown> }> }>}
+ */
 const aiAnswers = [];
 /** While true, the AI provider answers 500 to every completion. */
 let aiDown = false;
@@ -80,8 +85,21 @@ const openai = async (request) => {
 	if (request.method === 'GET') return Response.json({ data: [] });
 	prompts.push(await request.json());
 	if (aiDown) return Response.json({ error: { message: 'down' } }, { status: 500 });
+	const next = aiAnswers.shift() ?? 'Happy to help.';
+	const message =
+		typeof next === 'string'
+			? { role: 'assistant', content: next }
+			: {
+					role: 'assistant',
+					content: null,
+					tool_calls: next.tools.map((tool, index) => ({
+						id: `call_${index}`,
+						type: 'function',
+						function: { name: tool.name, arguments: JSON.stringify(tool.arguments) },
+					})),
+				};
 	return Response.json({
-		choices: [{ message: { role: 'assistant', content: aiAnswers.shift() ?? 'Happy to help.' }, finish_reason: 'stop' }],
+		choices: [{ message, finish_reason: typeof next === 'string' ? 'stop' : 'tool_calls' }],
 		usage: { prompt_tokens: 50, completion_tokens: 10 },
 	});
 };
@@ -216,8 +234,10 @@ describe('Chat conversations on the real Portal, Accounts, Notifications and Eco
 				'guest_chat',
 				'handoff',
 				'inbox',
+				'product_cards',
 				'shop_context',
 				'shop_deals',
+				'shop_search',
 				'signed_in_chat',
 				'staff_alerts',
 				'visitor_alerts',
@@ -359,6 +379,49 @@ describe('Chat conversations on the real Portal, Accounts, Notifications and Eco
 		expect(prompt).toContain('## Signed-in visitor');
 		expect(prompt).toContain('first name Rea');
 		expect(prompt).toContain('city Paris');
+	});
+
+	it('C13: the shop tools and cards name the price the product page shows: after the deal, with the “was” price', async () => {
+		// the lamp lists at 12,500.00 and Lamp week takes 10% off: the product page shows 11,250.00 with 12,500.00 struck through
+		aiAnswers.push(
+			{
+				tools: [
+					{ name: 'search_catalog', arguments: { query: 'Lamp Max' } },
+					{ name: 'get_product_details', arguments: { productId } },
+					{ name: 'quote_product_savings', arguments: { productId } },
+				],
+			},
+			'Lamp Max is USD 11,250.00 this week (was USD 12,500.00).',
+		);
+		const guest = device();
+		const page = { url: PAGE_URL, kind: 'product', productId, productName: 'Lamp Max' };
+		expect((await guest('POST', '/v1/chat/messages', { text: 'How much is Lamp Max?', page })).status).toBe(201);
+		const request = prompts.at(-1);
+		expect(request.messages[0].content).toContain('Lamp Max: USD 11,250.00 (was USD 12,500.00)');
+		const [search, details, quote] = request.messages
+			.filter((/** @type {any} */ m) => m.role === 'tool')
+			.map((/** @type {any} */ m) => JSON.parse(m.content));
+		const shown = {
+			price: 'USD 11,250.00',
+			wasPrice: 'USD 12,500.00',
+			deal: { name: 'Lamp week', savings: 'USD 1,250.00' },
+		};
+		expect(search.products).toEqual([expect.objectContaining({ id: productId, name: 'Lamp Max', ...shown })]);
+		expect(details).toMatchObject({ ...shown, variants: [expect.objectContaining(shown)] });
+		// the quote: the lamp's own price before the deal (it has no "was" price of its own) and after it
+		expect(quote).toMatchObject({
+			price: 'USD 12,500.00',
+			priceAfterDeals: 'USD 11,250.00',
+			savings: 'USD 1,250.00',
+			deals: ['Lamp week'],
+		});
+		expect(quote.wasPrice).toBeUndefined();
+		// the card under the answer: the shown price with the list price to strike through
+		const answer = (await guest('GET', '/v1/chat')).json.messages.at(-1);
+		expect(answer).toMatchObject({ author: 'ai', text: 'Lamp Max is USD 11,250.00 this week (was USD 12,500.00).' });
+		expect(answer.cards).toEqual([
+			expect.objectContaining({ productId, name: 'Lamp Max', price: 1_125_000, compareAtPrice: 1_250_000, inStock: true }),
+		]);
 	});
 
 	it('C2: AI answers are markdown split into bubbles, with links only on the website; staff replies are markdown', async () => {
