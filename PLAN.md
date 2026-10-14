@@ -2333,12 +2333,25 @@ takes the server token with `SS-Visitor-IP` and answers the refresh token in the
 **A13. Session hand-over: not built** (owner, 2026-10-10). Everyone signs in once after the cut-over, with the same
 password; no hand-over route is added.
 
+- Built (parity, 2026-10-14, 2e5d5634, bc057335, ffbca3dc): a repeat request answers 201 with `outcome`
+  (`requested`, `already_requested`, `already_invited`, `invite_expired`, `already_member`) and changes nothing (no
+  409, no overwrite); staff give an invited or expired request a new link (the old one stops) or decline it (the link
+  is canceled and the invite undone: a never-signed-in user it created is removed, else the earlier role returns);
+  `role_requests.giveRoleAt` `invite` (default) | `completion`; `POST /v1/setup-links/lookup { code }` (POST so the code
+  never sits in request logs; 6/min per visitor) answers `valid` with the display name, the phone's last 4 digits and
+  the end date, else `expired`, `used`, `canceled` or `invalid` (unknown codes are always `invalid`); a City (or any
+  profile field) is a custom field. Follow-up (privacy): detailed outcomes only when the website chooses to reveal them
+  (default: the same answer for everyone).
+
 **A14. Remember options per role, with "never".** (owner, 2026-10-12)
 
 - Why: every store's admin ends staff sign-in when the browser closes.
 - Key: A6 `remember` gains `never` (no box; the sign-in ends with the browser session, within the role's longest
   session).
 - Data: none.
+- Built (2026-10-14, d33b0915): a role with `remember: never` shows no "Remember me" box; the session cookie ends with
+  the browser, and the server ends it at the latest after the role's longest session (its session length or its
+  remember-me days); default stays `ask`.
 
 **A15. Address labels.** (owner, 2026-10-12)
 
