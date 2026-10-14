@@ -41,9 +41,10 @@ refused by name; text over a limit is refused, never cut); times are ISO-8601 wi
   roles imported. A ready-made role key may be imported with the merchant's changes; it keeps its rank.
 - Users: `email` and `phone` are normalised (national numbers with the website's phone format), `phoneDigits` and
   `identity` are derived; `passwordHash` is kept as given in a format sign-in checks (bcrypt, `pbkdf2$…` with the
-  `legacy_pepper` connection, or `scrypt$…`), any other is refused; `twoStep: { secret, recoveryHashes }` (plain base32
+  `imported_password_pepper` connection, or `scrypt$…`), any other is refused; `twoStep: { secret, recoveryHashes }` (plain base32
   secret and SHA-256 hex of `recovery:<code>`) is sealed at once. An e-mail address or phone number another user holds
-  is refused (one user per phone number: a member of staff and a shopper cannot share one).
+  is refused (one user per phone number: a member of staff and a shopper cannot share one). `roleSince` defaults to
+  `createdAt`; a user or request without `createdAt` keeps the stored one, else gets the time of the import.
 - Requests keep their status (`expired` is read from `setupExpiresAt`); setup links are not imported (an older link
   cannot open here): staff give a new one from the user (`staff_links`).
 - `finish` derives nothing and answers `{ usersWithUnknownRole, requestsWithUnknownUser }`. `status.totals`:

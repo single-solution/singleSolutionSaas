@@ -82,9 +82,9 @@ const PBKDF2 = /^pbkdf2\$(\d{1,7})\$([A-Za-z0-9+/]+={0,2})\$([A-Za-z0-9+/]+={0,2
 const MAX_PBKDF2_ITERATIONS = 2_000_000;
 
 /**
- * Check a password against a stored hash: Accounts' own `scrypt$…`, or a hash imported from an older system (A1):
+ * Check a password against a stored hash: Accounts' own `scrypt$…`, or a hash imported from another system (A1):
  * bcrypt, or PBKDF2-HMAC-SHA256 of `<pepper>:<password>` (no Unicode normalisation on that path; needs the
- * `legacy_pepper` connection). A hash that cannot be checked takes as long as the dummy check and fails.
+ * `imported_password_pepper` connection). A hash that cannot be checked takes as long as the dummy check and fails.
  * @param {string} password
  * @param {string} stored
  * @param {{ pepper?: string | null }} [options]
@@ -96,14 +96,14 @@ export const verifyPassword = async (password, stored, { pepper = null } = {}) =
 		return safeEqual(candidate.toString('base64url'), hash);
 	}
 	if (BCRYPT.test(stored)) return bcrypt.compare(password, stored);
-	const legacy = PBKDF2.exec(stored);
-	const iterations = Number(legacy?.[1]);
-	if (legacy && pepper && iterations >= 1 && iterations <= MAX_PBKDF2_ITERATIONS) {
-		const expected = Buffer.from(String(legacy[3]), 'base64');
+	const peppered = PBKDF2.exec(stored);
+	const iterations = Number(peppered?.[1]);
+	if (peppered && pepper && iterations >= 1 && iterations <= MAX_PBKDF2_ITERATIONS) {
+		const expected = Buffer.from(String(peppered[3]), 'base64');
 		if (expected.length >= 16 && expected.length <= 64) {
 			const candidate = await pbkdf2(
 				`${pepper}:${password}`,
-				Buffer.from(String(legacy[2]), 'base64'),
+				Buffer.from(String(peppered[2]), 'base64'),
 				iterations,
 				expected.length,
 				'sha256',
@@ -124,14 +124,14 @@ const SCRYPT_HASH = /^scrypt\$[A-Za-z0-9_-]{22}\$[A-Za-z0-9_-]{43}$/;
  */
 export const isPasswordHash = (stored) => {
 	if (SCRYPT_HASH.test(stored) || BCRYPT.test(stored)) return true;
-	const legacy = PBKDF2.exec(stored);
-	const iterations = Number(legacy?.[1]);
-	const length = legacy ? Buffer.from(String(legacy[3]), 'base64').length : 0;
+	const peppered = PBKDF2.exec(stored);
+	const iterations = Number(peppered?.[1]);
+	const length = peppered ? Buffer.from(String(peppered[3]), 'base64').length : 0;
 	return iterations >= 1 && iterations <= MAX_PBKDF2_ITERATIONS && length >= 16 && length <= 64;
 };
 
 /** Whether a stored hash is not Accounts' own (it is replaced with scrypt after the next good check). @param {string} stored */
-export const isLegacyHash = (stored) => !stored.startsWith('scrypt$');
+export const isImportedHash = (stored) => !stored.startsWith('scrypt$');
 
 /** A password check that takes as long as a real one (unknown users). */
 export const dummyPasswordCheck = async () => {
@@ -266,11 +266,11 @@ export const generateRecoveryCodes = () => {
 };
 
 /**
- * The hash of a recovery code imported from an older system (PLAN 0.8.10 A8): SHA-256 hex of `recovery:` and the code
+ * The hash of a recovery code imported from another system (PLAN 0.8.10 A8): SHA-256 hex of `recovery:` and the code
  * without spaces or dashes, in capitals.
  * @param {string} code
  */
-const legacyRecoveryHash = (code) => sha256(`recovery:${code.replace(/[\s-]/g, '').toUpperCase()}`);
+const importedRecoveryHash = (code) => sha256(`recovery:${code.replace(/[\s-]/g, '').toUpperCase()}`);
 
 /**
  * A stored recovery code: its hash and format (`v1`, Accounts' own; `sha256_prefixed`, imported, A8).
@@ -284,7 +284,7 @@ const legacyRecoveryHash = (code) => sha256(`recovery:${code.replace(/[\s-]/g, '
  */
 export const matchRecoveryCode = (code, items) => {
 	if (typeof code !== 'string' || code.length > 32) return -1;
-	const hashes = { v1: recoveryHash(code), sha256_prefixed: legacyRecoveryHash(code) };
+	const hashes = { v1: recoveryHash(code), sha256_prefixed: importedRecoveryHash(code) };
 	let found = -1;
 	items.forEach(({ hash, format }, index) => {
 		if (found === -1 && format in hashes && safeEqual(hash, hashes[format])) found = index;
@@ -351,8 +351,8 @@ export const resealWebsite = async (sealer, data) => {
 };
 
 /**
- * Two-step sign-in imported from an older system (A8; the importer, Migration): the plain TOTP secret sealed at once,
- * and the older system's recovery-code hashes, each working once.
+ * Two-step sign-in imported from another system (A8; the importer, Migration): the plain TOTP secret sealed at once,
+ * and the source system's recovery-code hashes, each working once.
  * @param {Sealer} sealer
  * @param {{ secret: string, recoveryHashes: ReadonlyArray<string>, aad: string, now: number }} input
  */

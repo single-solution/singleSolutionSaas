@@ -1,5 +1,5 @@
 /**
- * Passwords from older systems and the password options (PLAN 0.8.10 A1, A2, A9).
+ * Passwords from other systems and the password options (PLAN 0.8.10 A1, A2, A9).
  */
 import { pbkdf2Sync, randomBytes } from 'node:crypto';
 import bcrypt from 'bcryptjs';
@@ -23,7 +23,7 @@ const importHash = async (id, passwordHash) => {
 	await (await env.store()).users.update(id, { passwordHash });
 };
 
-/** A peppered PBKDF2 hash as the older system stored it. @param {string} password @param {string} pepper */
+/** A peppered PBKDF2 hash as the source system stored it. @param {string} password @param {string} pepper */
 const pbkdf2Hash = (password, pepper, iterations = 1000) => {
 	const salt = randomBytes(16);
 	const hash = pbkdf2Sync(`${pepper}:${password}`, salt, iterations, 32, 'sha256');
@@ -43,7 +43,7 @@ afterAll(async () => {
 	await env.product.close();
 });
 
-describe('A1: legacy password hashes', () => {
+describe('A1: password hashes imported from another system', () => {
 	it('bcrypt ($2a$, $2b$, $2y$) signs in and is re-hashed with scrypt', async () => {
 		for (const [index, prefix] of ['$2a$', '$2b$', '$2y$'].entries()) {
 			const email = `bcrypt${index}@example.com`;
@@ -65,12 +65,12 @@ describe('A1: legacy password hashes', () => {
 		const id = up.json.user.id;
 		// no Unicode normalisation on this path: the composed é is not the decomposed one
 		const password = 'café secret 12';
-		const hash = pbkdf2Hash(password, 'store-auth-secret');
+		const hash = pbkdf2Hash(password, 'source-pepper');
 		await importHash(id, hash);
 		expect(code(await signIn('pbkdf2@example.com', password))).toBe('sign_in_failed');
-		await env.connect('legacy_pepper', 'store-auth-secret');
+		await env.connect('imported_password_pepper', 'source-pepper');
 		const listed = await env.dashboard(await env.adminSession(), 'GET', `/v1/dashboard/websites/${env.websiteId}/connections`);
-		expect(listed.text).not.toContain('store-auth-secret');
+		expect(listed.text).not.toContain('source-pepper');
 		expect(code(await signIn('pbkdf2@example.com', 'café secret 12'))).toBe('sign_in_failed');
 		expect(await storedHash(id)).toBe(hash);
 		expect((await signIn('pbkdf2@example.com', password)).json.status).toBe('signed_in');
@@ -83,7 +83,7 @@ describe('A1: legacy password hashes', () => {
 		const id = up.json.user.id;
 		for (const hash of [
 			'md5$abc',
-			pbkdf2Hash('pw', 'store-auth-secret').replace(/^pbkdf2\$1000/, 'pbkdf2$9000000'),
+			pbkdf2Hash('pw', 'source-pepper').replace(/^pbkdf2\$1000/, 'pbkdf2$9000000'),
 			'pbkdf2$1000$AAAA$AAAA',
 		]) {
 			await importHash(id, hash);
@@ -91,13 +91,13 @@ describe('A1: legacy password hashes', () => {
 		}
 	});
 
-	it('the current password of My account accepts a legacy hash too', async () => {
+	it('the current password of My account accepts an imported hash too', async () => {
 		const up = await env.visitor('POST', '/v1/sign-up/password', { email: 'change@example.com', password: 'first password 1' });
-		await importHash(up.json.user.id, bcrypt.hashSync('legacy current 1', 4));
+		await importHash(up.json.user.id, bcrypt.hashSync('imported current 1', 4));
 		const changed = await env.visitor(
 			'PUT',
 			'/v1/me/password',
-			{ current: 'legacy current 1', password: 'brand new password 2' },
+			{ current: 'imported current 1', password: 'brand new password 2' },
 			up.json.signIn,
 		);
 		expect(changed.status).toBe(204);

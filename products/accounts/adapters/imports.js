@@ -1,11 +1,13 @@
 /**
  * The `import` feature (PLAN 0.8.10 K10, Migration step 1): what the kit's import routes take into Accounts, in this
- * order: `roles` and `fields` (found by `key`), `users` (`usr_…`), `requests` (`rrq_…`, A5) and `copies` (the older
+ * order: `roles` and `fields` (found by `key`), `users` (`usr_…`), `requests` (`rrq_…`, A5) and `copies` (the source
  * system's activity entries). Each record goes through `core/imports.js` with what the checks read once per call (the
  * role keys, the custom fields, the website's phone format); e-mail addresses and phone numbers another user holds are
  * refused in the dry run too; a two-step secret is sealed at once (A8) and the phone's last digits derived as the
- * store does. `finish` derives nothing (every derived value is set per record) and reports what points nowhere; the
- * sums are what `ss-import verify` compares. Nothing is sent: no message, event, alert or activity copy, no timer.
+ * store does. A user or role request without a `createdAt` from the source keeps the stored one, else gets the
+ * import's time; a user's `roleSince` is the source's, else its `createdAt`. `finish` derives nothing (every derived
+ * value is set per record) and reports what points nowhere; the sums are what `ss-import verify` compares. Nothing is
+ * sent: no message, event, alert or activity copy, no timer.
  * @module
  */
 import { websiteCallingCode } from '@ss/contracts/phone';
@@ -132,6 +134,19 @@ const takenContacts = async (ctx, user, taken) => {
 };
 
 /**
+ * When an imported user or role request was made, when the source does not say: the stored record's time (a re-run
+ * keeps it), else the import's, so every record has one (lists sort by it and show it).
+ * @param {CheckContext} ctx @param {'users' | 'requests'} collection @param {string} id
+ * @returns {Promise<Date>}
+ */
+const createdAtOf = async (ctx, collection, id) => {
+	const stored = await ctx.data
+		.collection(collection)
+		.findOne({ websiteId: ctx.websiteId, id }, { projection: { _id: 0, createdAt: 1 } });
+	return stored?.createdAt instanceof Date ? stored.createdAt : new Date(ctx.now());
+};
+
+/**
  * The kit's `imports` option.
  * @param {ImportDeps} deps
  * @returns {import('@ss/app-kit').ImportOptions}
@@ -163,10 +178,13 @@ export const createImportOptions = (deps) => ({
 				const errors = await takenContacts(ctx, user, taken);
 				if (errors.length > 0) return { ok: false, errors };
 				for (const value of [user.email, user.phone]) if (value) taken.set(value, user.id);
+				const createdAt = user.createdAt ?? (await createdAtOf(ctx, 'users', user.id));
 				return {
 					ok: true,
 					value: {
 						...user,
+						createdAt,
+						roleSince: user.roleSince ?? createdAt,
 						phoneDigits: phoneDigitsOf(user.phone),
 						// the plain secret came only over this server-token call; only its sealed form is kept
 						twoStep: twoStep ? deps.twoStepFromImport(ctx.websiteId, user.id, twoStep) : null,
@@ -176,19 +194,23 @@ export const createImportOptions = (deps) => ({
 		},
 		requests: {
 			prepare: async (ctx) => ({ roles: await roleKeysOf(ctx), phoneFormat: await phoneFormatOf(deps, ctx.websiteId) }),
-			check: (record, ctx) =>
-				checkImportedRequest(
+			check: async (record, ctx) => {
+				const checked = checkImportedRequest(
 					record,
 					/** @type {Pick<import('../core/imports.js').UserRules, 'roles' | 'phoneFormat'>} */ (ctx.prepared),
-				),
+				);
+				if (!checked.ok) return checked;
+				const createdAt = checked.value.createdAt ?? (await createdAtOf(ctx, 'requests', checked.value.id));
+				return { ok: true, value: { ...checked.value, createdAt } };
+			},
 		},
 		copies: { check: (record, ctx) => checkImportedCopy(record, ctx.websiteId) },
 	},
 
 	/**
-	 * Accounts derives nothing at the end (the phone's last digits, `roleSince` and the identity are set per record):
-	 * it reports users whose role no longer exists (they act as Customer until it is imported again) and requests whose
-	 * user is gone, for example after a prune.
+	 * Accounts derives nothing at the end (the phone's last digits, `createdAt`, `roleSince` and the identity are set per
+	 * record): it reports users whose role no longer exists (they act as Customer until it is imported again) and
+	 * requests whose user is gone, for example after a prune.
 	 * @param {any} ctx
 	 */
 	finish: async (ctx) => {

@@ -44,16 +44,16 @@ const send = (collection, records, { dryRun = false } = {}) =>
 const pathsOf = (answer, line) =>
 	answer.failed.find((/** @type {any} */ item) => item.line === line)?.errors.map((/** @type {any} */ e) => e.path) ?? [];
 
-/** A user id from a 24-digit hex id of the older system. @param {string} tail */
+/** A user id from a 24-digit hex id of the source system. @param {string} tail */
 const usr = (tail) => `usr_65f00000000000000000${tail}`;
 
-/** A peppered PBKDF2 hash as the older system stored it. @param {string} password @param {string} pepper */
+/** A peppered PBKDF2 hash as the source system stored it. @param {string} password @param {string} pepper */
 const pbkdf2Hash = (password, pepper) => {
 	const salt = randomBytes(16);
 	return `pbkdf2$1000$${salt.toString('base64')}$${pbkdf2Sync(`${pepper}:${password}`, salt, 1000, 32, 'sha256').toString('base64')}`;
 };
 
-/** The older system's recovery-code hash. @param {string} recoveryCode */
+/** The source system's recovery-code hash. @param {string} recoveryCode */
 const recoveryHash = (recoveryCode) => createHash('sha256').update(`recovery:${recoveryCode}`).digest('hex');
 
 const SECRET = 'JBSWY3DPEHPK3PXP';
@@ -312,9 +312,9 @@ describe('import routes', () => {
 		expect(member.json.status).toBe('signed_in');
 		/** @param {string} password */
 		const owner = (password) => env.visitor('POST', '/v1/sign-in/password', { email: 'omar@example.com', password });
-		// PBKDF2 needs the older system's pepper
+		// PBKDF2 needs the source system's pepper
 		expect(code(await owner('owner secret 1'))).toBe('sign_in_failed');
-		await env.connect('legacy_pepper', 'old-pepper');
+		await env.connect('imported_password_pepper', 'old-pepper');
 		const first = await owner('owner secret 1');
 		expect(first.json.status).toBe('two_step');
 		const done = await env.visitor('POST', '/v1/sign-in/two-step', {
@@ -381,6 +381,34 @@ describe('import routes', () => {
 			'A website has at most 50 custom fields.',
 			'A website has at most 50 custom fields.',
 		]);
+	});
+
+	it('a user or role request without createdAt gets the import time, kept on a re-run; roleSince follows it (A5)', async () => {
+		const id = usr('0f01');
+		const request = { id: 'rrq_65f0000000000000000000f1', role: 'customer', name: 'Alex Morgan', email: 'alex@example.com' };
+		const first = new Date(env.now()).toISOString();
+		expect((await send('users', [{ id, name: 'Alex Morgan', email: 'alex@example.com' }])).json).toMatchObject({
+			inserted: 1,
+			failed: [],
+		});
+		expect((await send('requests', [request])).json).toMatchObject({ inserted: 1, failed: [] });
+		const user = async () => (await env.serverCall('GET', `/v1/users/${id}`)).json;
+		const listed = async () =>
+			(await env.serverCall('GET', '/v1/role-requests')).json.items.find((/** @type {any} */ item) => item.id === request.id);
+		expect(await user()).toMatchObject({ createdAt: first, roleSince: first });
+		expect(await listed()).toMatchObject({ createdAt: first });
+		const stored = await (await env.store()).users.get(id);
+		expect(stored?.roleSince).toEqual(new Date(first));
+
+		// a re-run a day later without the times keeps them; a given createdAt is the role's start too
+		env.advance(24 * 3600 * 1000);
+		expect((await send('users', [{ id, name: 'Alex M.', email: 'alex@example.com' }])).json).toMatchObject({ updated: 1 });
+		expect((await send('requests', [request])).json).toMatchObject({ updated: 1 });
+		expect(await user()).toMatchObject({ name: 'Alex M.', createdAt: first, roleSince: first });
+		expect(await listed()).toMatchObject({ createdAt: first });
+		const given = { id, name: 'Alex M.', email: 'alex@example.com', createdAt: '2023-05-01T00:00:00Z' };
+		expect((await send('users', [given])).json).toMatchObject({ updated: 1 });
+		expect(await user()).toMatchObject({ createdAt: '2023-05-01T00:00:00.000Z', roleSince: '2023-05-01T00:00:00.000Z' });
 	});
 });
 

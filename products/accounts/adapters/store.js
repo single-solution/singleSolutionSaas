@@ -263,7 +263,7 @@ export const createStore = (data, { now }) => {
 			},
 			/**
 			 * Create a user; null when the e-mail or phone is taken.
-			 * @param {Omit<UserRecord, 'id' | 'createdAt'>} user
+			 * @param {Omit<UserRecord, 'id' | 'createdAt' | 'roleSince'>} user (`roleSince` is now)
 			 * @returns {Promise<UserRecord | null>}
 			 */
 			create: async (user) => {

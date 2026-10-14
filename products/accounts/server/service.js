@@ -28,7 +28,7 @@ import {
 	generateSigningKey,
 	generateTotpSecret,
 	hashPassword,
-	isLegacyHash,
+	isImportedHash,
 	randomSecret,
 	safeEqual,
 	sha256,
@@ -416,16 +416,18 @@ export const createService = (product) => {
 
 	/**
 	 * Check a user's password (PLAN 0.8.10 A1): Accounts' own scrypt hash, or an imported bcrypt or peppered PBKDF2
-	 * hash (the pepper from the `legacy_pepper` connection), which is replaced with scrypt after a good check. A user
-	 * without a password takes as long as a real check.
+	 * hash (the pepper from the `imported_password_pepper` connection), which is replaced with scrypt after a good
+	 * check. A user without a password takes as long as a real check.
 	 * @param {Site} s @param {UserRecord} user @param {string} password
 	 */
 	const checkPassword = async (s, user, password) => {
 		const stored = user.passwordHash;
 		if (!stored) return dummyPasswordCheck();
-		const pepper = stored.startsWith('pbkdf2$') ? await product.connections.value(s.websiteId, 'legacy_pepper') : null;
+		const pepper = stored.startsWith('pbkdf2$')
+			? await product.connections.value(s.websiteId, 'imported_password_pepper')
+			: null;
 		const ok = await verifyPassword(password, stored, { pepper: typeof pepper === 'string' ? pepper : null });
-		if (ok && isLegacyHash(stored)) await s.store.users.update(user.id, { passwordHash: await hashPassword(password) });
+		if (ok && isImportedHash(stored)) await s.store.users.update(user.id, { passwordHash: await hashPassword(password) });
 		return ok;
 	};
 

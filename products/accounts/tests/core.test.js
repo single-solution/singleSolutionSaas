@@ -95,15 +95,22 @@ describe('profile', () => {
 			blocked: { at: new Date(0), reason: 'r' },
 			status: 'active',
 			role: 'customer',
-			providers: undefined,
+			providers: {},
 			passwordHash: null,
 			twoStep: null,
 			terms: { version: '1', acceptedAt: new Date(0) },
 			deletion: { requestedAt: new Date(0), dueAt: null },
 			lastSignInAt: null,
+			roleSince: new Date(1000),
 			createdAt: new Date(0),
 		});
-		expect(selfView(user)).toMatchObject({ providers: [], deletion: { dueAt: null }, terms: { version: '1' } });
+		expect(selfView(user)).toMatchObject({
+			providers: [],
+			deletion: { dueAt: null },
+			terms: { version: '1' },
+			roleSince: '1970-01-01T00:00:01.000Z',
+			createdAt: '1970-01-01T00:00:00.000Z',
+		});
 		expect(staffView(user)).toMatchObject({ notes: 'n', blocked: { reason: 'r' }, lastSignInAt: null });
 	});
 });

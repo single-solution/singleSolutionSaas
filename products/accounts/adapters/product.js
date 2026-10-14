@@ -191,7 +191,7 @@ export const createProductInstance = (options) => {
 
 	/**
 	 * Two-step sign-in as the importer writes it for a user (PLAN 0.8.10 A8): the plain TOTP secret sealed at once and
-	 * the old system's recovery-code hashes (`sha256("recovery:" + code)`), each working once.
+	 * the source system's recovery-code hashes (`sha256("recovery:" + code)`), each working once.
 	 * @param {string} websiteId @param {string} userId @param {{ secret: string, recoveryHashes: string[] }} input
 	 */
 	const twoStepFromImport = (websiteId, userId, { secret, recoveryHashes }) =>
@@ -229,8 +229,9 @@ export const createProductInstance = (options) => {
 			chat: token('chat', 'Chat token (permissions, data rights)', []),
 			payments: token('payments', 'Payments token (permissions, data rights)', []),
 			growth: token('growth', 'Growth token (permissions, data rights)', []),
-			// the pepper of imported `pbkdf2$` password hashes (PLAN 0.8.10 A1): write-only, needed by no feature
-			legacy_pepper: { label: 'Pepper of imported passwords', kind: 'secret', neededBy: [] },
+			// the pepper of `pbkdf2$` password hashes imported from another system (PLAN 0.8.10 A1): write-only, needed by
+			// no feature
+			imported_password_pepper: { label: 'Pepper of imported passwords', kind: 'secret', neededBy: [] },
 		},
 		hooks: {
 			...ownDataRights(now),

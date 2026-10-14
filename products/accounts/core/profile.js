@@ -239,7 +239,8 @@ export const resetsByEmail = (user) => user.emailVerified || identityOf(user) ==
  * @property {Date | null} lockedUntil
  * @property {number} [lockLevel] how far a growing lock has grown (A9)
  * @property {string | null} [phoneDigits] the last 10 digits of the phone (A4)
- * @property {Date} [roleSince] when the role was last set (A5: "Member since")
+ * @property {Date} roleSince when the role was last set (A5: "Member since"; an import gives the source's, else
+ *   `createdAt`)
  * @property {{ version: string, acceptedAt: Date } | null} terms
  * @property {{ requestedAt: Date, dueAt: Date | null } | null} deletion
  * @property {string | null} deviceHash
@@ -261,14 +262,14 @@ export const selfView = (user) => ({
 	addresses: user.addresses,
 	custom: user.custom,
 	role: user.role,
-	providers: Object.keys(user.providers ?? {}).sort(),
+	providers: Object.keys(user.providers).sort(),
 	hasPassword: Boolean(user.passwordHash),
 	twoStep: Boolean(user.twoStep?.enabledAt),
 	terms: user.terms ? { version: user.terms.version, acceptedAt: user.terms.acceptedAt.toISOString() } : null,
 	deletion: user.deletion
 		? { requestedAt: user.deletion.requestedAt.toISOString(), dueAt: user.deletion.dueAt?.toISOString() ?? null }
 		: null,
-	roleSince: (user.roleSince ?? user.createdAt).toISOString(),
+	roleSince: user.roleSince.toISOString(),
 	createdAt: user.createdAt.toISOString(),
 });
 

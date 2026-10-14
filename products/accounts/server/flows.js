@@ -82,7 +82,7 @@ const weak = (detail, extensions) => problem('weak_password', detail, { extensio
 export const invalid = (field, message) =>
 	problem('validation_failed', message, { errors: [{ path: `/${field}`, message, code: 'invalid' }] });
 
-/** A new user's empty profile. @returns {Omit<UserRecord, 'id' | 'createdAt'>} */
+/** A new user's empty profile (the store sets `roleSince`). @returns {Omit<UserRecord, 'id' | 'createdAt' | 'roleSince'>} */
 const blankUser = () => ({
 	email: null,
 	emailVerified: false,

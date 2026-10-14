@@ -149,7 +149,7 @@ describe('Accounts Phase 2 on the real Portal', () => {
 		const pbkdf2 = `pbkdf2$100000$${salt.toString('base64')}$${pbkdf2Sync('store-secret:old im password', salt, 100_000, 32, 'sha256').toString('base64')}`;
 		await col.updateOne({ websiteId, id: im.json.id }, { $set: { passwordHash: pbkdf2 } });
 		const cookie = await sys.adminSession(await sys.owner(), websiteId);
-		const pepper = await sys.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${websiteId}/connections/legacy_pepper`, {
+		const pepper = await sys.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${websiteId}/connections/imported_password_pepper`, {
 			value: 'store-secret',
 		});
 		expect(pepper.json).toMatchObject({ status: 'connected' });

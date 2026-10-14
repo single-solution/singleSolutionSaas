@@ -716,7 +716,7 @@ export const createManage = (product, service, flows) => {
 	 * user an earlier invite made, whose setup link was not used).
 	 * @param {import('../core/profile.js').UserRecord} user
 	 */
-	const untouched = (user) => !user.passwordHash && !user.lastSignInAt && Object.keys(user.providers ?? {}).length === 0;
+	const untouched = (user) => !user.passwordHash && !user.lastSignInAt && Object.keys(user.providers).length === 0;
 
 	/**
 	 * Invite the person of a pending request (A5): their user is created, or the user with that phone or e-mail gets

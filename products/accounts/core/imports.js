@@ -1,7 +1,7 @@
 /**
  * Import mode of Accounts' records (PLAN 0.8.10 K10, Migration; A1, A5, A8), pure: the checks of the `import` feature
  * for each record ss-import sends, built on the product's own checks (roles, custom fields, names, addresses, custom
- * values, activity copies) with what an import needs on top: given ids and past times, legacy password hashes and
+ * values, activity copies) with what an import needs on top: given ids and past times, password hashes from another system and
  * history (blocked users, accepted terms, requests already invited, completed or declined).
  *
  * - Strict: a field a collection does not take is refused by name, so a mapping mistake shows in the dry run; the
@@ -111,7 +111,7 @@ const ADDRESS_KEYS = Object.freeze([
 const TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}:\d{2})$/;
 /** A TOTP secret in base32 (80 to 640 bits). */
 const TOTP_SECRET = /^[A-Z2-7]{16,128}$/;
-/** An older system's recovery-code hash: SHA-256 hex (A8). */
+/** The source system's recovery-code hash: SHA-256 hex (A8). */
 const RECOVERY_HASH = /^[0-9a-fA-F]{64}$/;
 const MAX_RECOVERY_HASHES = 20;
 const MAX_NOTES = 5000;
@@ -312,9 +312,11 @@ export const checkImportedField = (record) => {
 
 /**
  * A user as the import check gives it: the stored user record, but two-step still as the importer sent it (the
- * adapter seals the secret at once, A8) and without the phone's last digits (the store derives them).
- * @typedef {Omit<import('./profile.js').UserRecord, 'twoStep' | 'createdAt' | 'phoneDigits'> & { createdAt?: Date,
- *   twoStep: { secret: string, recoveryHashes: string[] } | null }} ImportedUser
+ * adapter seals the secret at once, A8), without the phone's last digits (the store derives them) and with
+ * `createdAt` and `roleSince` only when the source gives them (`roleSince` defaults to `createdAt`; the adapter sets
+ * both when the source gives neither).
+ * @typedef {Omit<import('./profile.js').UserRecord, 'twoStep' | 'createdAt' | 'roleSince' | 'phoneDigits'> & {
+ *   createdAt?: Date, roleSince?: Date, twoStep: { secret: string, recoveryHashes: string[] } | null }} ImportedUser
  */
 
 /**
@@ -367,7 +369,7 @@ const providersOf = (input, errors) => {
 };
 
 /**
- * Two-step sign-in from the older system (A8): `{ secret, recoveryHashes }`, the plain TOTP secret (base32) and the
+ * Two-step sign-in from the source system (A8): `{ secret, recoveryHashes }`, the plain TOTP secret (base32) and the
  * SHA-256 hashes of its recovery codes.
  * @param {unknown} input @param {ImportError[]} errors
  * @returns {{ secret: string, recoveryHashes: string[] } | null}
@@ -506,7 +508,7 @@ export const checkImportedUser = (record, rules) => {
 
 /**
  * A role request (`requests`, id `rrq_…`, A5) with its history. Setup links are not imported: Accounts' links carry
- * their record id, so an older system's link cannot open here; staff give a new one (A3).
+ * their record id, so the source system's link cannot open here; staff give a new one (A3).
  * @param {Record<string, unknown>} record
  * @param {Pick<UserRules, 'roles' | 'phoneFormat'>} rules
  * @returns {ImportChecked<ImportedRequest>}
@@ -571,7 +573,7 @@ export const checkImportedRequest = (record, rules) => {
 // ---------------------------------------------------------------------------------------------- activity copies
 
 /**
- * An activity entry of the older system (`copies`, its id as given): the activity-copy shape other products send
+ * An activity entry of the source system (`copies`, its id as given): the activity-copy shape other products send
  * (K9), so the Activity screen keeps its history.
  * @param {Record<string, unknown>} record
  * @param {string} websiteId the website the call is for

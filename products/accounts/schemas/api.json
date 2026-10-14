@@ -3980,7 +3980,7 @@
 	},
 	"POST /v1/import/:collection": {
 		"summary": "Import records (NDJSON)",
-		"description": "collection: roles and fields (found by key), users (usr_…), requests (rrq_…) or copies, in that order (a user’s role must exist); 404 not_found for another. Send application/x-ndjson, one record of Accounts’ own shape per line, at most 1,000 records or 4 MB (413 payload_too_large; 415 unsupported_media_type). Each record replaces the stored one with its key; an unknown field (websiteId too) refuses the record by name. Users keep their password hashes (bcrypt, pbkdf2$… with the pepper connection, scrypt$…) and two-step secrets (sealed at once); an e-mail address or phone number another user holds is refused. Nothing is sent.",
+		"description": "collection: roles and fields (found by key), users (usr_…), requests (rrq_…) or copies, in that order (a user’s role must exist); 404 not_found for another. Send application/x-ndjson, one record of Accounts’ own shape per line, at most 1,000 records or 4 MB (413 payload_too_large; 415 unsupported_media_type). Each record replaces the stored one with its key; an unknown field (websiteId too) refuses the record by name. A user's roleSince defaults to its createdAt; a user or request without createdAt keeps the one stored, else gets the time of the import. Users keep their password hashes (bcrypt, pbkdf2$… with the imported_password_pepper connection, scrypt$…) and two-step secrets (sealed at once); an e-mail address or phone number another user holds is refused. Nothing is sent.",
 		"query": {
 			"type": "object",
 			"properties": {

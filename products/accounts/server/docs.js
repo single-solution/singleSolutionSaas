@@ -128,7 +128,7 @@ ${para(guide.staff)}
 <h2>Sign-in from your server</h2>
 ${para(guide.serverSignIn)}
 <h2>Passwords and two-step from another system</h2>
-${para(guide.legacy)}
+${para(guide.imported)}
 <h2>Features</h2>
 ${featureSections.join('\n')}
 <h2>Install the widgets</h2>
