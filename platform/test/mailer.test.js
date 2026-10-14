@@ -72,7 +72,7 @@ describe('mail templates (PLAN 0.5.10)', () => {
 			expect(mail.html).not.toMatch(/<img|<link|<script|src=|url\(/i);
 			expect(mail.html).not.toContain('<b>&</b>');
 			expect(mail.text).toContain('Acme Portal');
-			expect(mail.text).toContain('Support: e-mail help@acme.test, phone +1 212 555 0123.');
+			expect(mail.text).toContain('Support: email help@acme.test, phone +1 212 555 0123.');
 			expect(mail.html).toContain('help@acme.test');
 		}
 		for (const linked of ['merchant_setup', 'admin_invite', 'password_reset', 'email_change_confirm']) {
@@ -80,7 +80,7 @@ describe('mail templates (PLAN 0.5.10)', () => {
 			expect(mail.text).toContain(LINK);
 			expect(mail.html).toContain(escapeHtml(LINK));
 		}
-		// e-mails without a link have no button
+		// emails without a link have no button
 		for (const plain of ['email_change_notice', 'two_step_off', 'test_email']) {
 			const mail = renderMail(/** @type {any} */ (plain), {}, CONTEXT);
 			expect(mail.html).not.toContain('<a href');
@@ -256,7 +256,7 @@ describe('platform mailer', () => {
 		});
 		await brandedMailer.send({ to: 'x@example.com', template: 'two_step_off', data: {} });
 		expect(branded[0].subject).toBe('Two-step sign-in was turned off on your Acme account');
-		expect(branded[0].text).toContain('Support: e-mail help@acme.test.');
+		expect(branded[0].text).toContain('Support: email help@acme.test.');
 		expect(createLogMailer(logger).available).toBe(true);
 		expect(createUnavailableMailer().available).toBe(false);
 	});

@@ -276,7 +276,7 @@ describe('Portal end to end', () => {
 		).toEqual({ count: 2 });
 		expect(
 			(await call('POST', path, { headers: { ...headers, 'idempotency-key': 'item-3' }, body: { name: 'c' } })).status,
-		).toBe(429); // limit 5: every authorised attempt counts (428, replay and 409 included)
+		).toBe(429); // limit 5: every authorized attempt counts (428, replay and 409 included)
 
 		expect(
 			(
@@ -580,7 +580,7 @@ describe('login throttle (Mongo)', () => {
 });
 
 describe('Settings (stored in the database, never in the environment; Owner only)', () => {
-	it('sets e-mail sending (password sealed, never returned), branding, support contact and security, written to Activity', async () => {
+	it('sets email sending (password sealed, never returned), branding, support contact and security, written to Activity', async () => {
 		const db = mongo.db('it_settings');
 		const system = createSystemStore(db, { encryptionKey: ENCRYPTION_KEY });
 		const { portal, call } = await boot({ dbName: 'it_settings', db, system });
@@ -628,7 +628,7 @@ describe('Settings (stored in the database, never in the environment; Owner only
 			JSON.stringify(await db.collection('platform_system').findOne({ _id: /** @type {any} */ ('settings') })),
 		).not.toContain('s3cret');
 		expect((await call('PUT', '/v1/admin/settings/mail', { headers: as(owner), body: { mail: null } })).json.mail).toBeNull();
-		// Send test e-mail needs e-mail sending first
+		// Send test email needs email sending first
 		expect((await call('POST', '/v1/admin/settings/mail/test', { headers: as(owner) })).status).toBe(409);
 
 		const branding = await call('PUT', '/v1/admin/settings/branding', {

@@ -7,7 +7,7 @@ their manifest `id` (`productId`). Times on the wire are ISO-8601 UTC; money is 
 
 ## identity (`modules/identity`)
 
-Admins, merchants (one login each, e-mails unique across both through `identity_logins`), sessions, websites and the
+Admins, merchants (one login each, emails unique across both through `identity_logins`), sessions, websites and the
 tokens of products on websites (PLAN 0.2, 0.4.4). Implements the `sessionActor` port.
 
 - `getMerchant(merchantId)`, `getMerchantRecord(merchantId)` (deleted ones too), `merchantNames(ids)`,
@@ -85,7 +85,7 @@ body })` (row 3 refusals: unknown key or a key without price or a dependency off
 - **Ledger** (`commerce_ledger`, append-only, hash-chained): `receipt` (+) and `day_charge` (−, one per website ×
   product × UTC day, `day:<websiteId>:<productId>:<day>`). `verifyChain(merchantId)`.
 - **Check** `check(merchantId)` (0.5.7): settles, writes complete days, records grace starts and stops once (and sends
-  `status.changed` for them), caches the state and sends billing e-mails once per state. It reads from the settled
+  `status.changed` for them), caches the state and sends billing emails once per state. It reads from the settled
   point on only, and never waits more than a second for a busy ledger (it then answers live and writes nothing). Views
   run it:
   `billingSummary`, `usage`, `receiptsOf`, `dayChargesOf`, `billingSummaries`, `attention`, `allReceipts`, `charges`.

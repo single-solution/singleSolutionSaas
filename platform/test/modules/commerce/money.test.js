@@ -389,7 +389,7 @@ describe('usage rows, day charges and texts (PLAN 0.5.7, 0.5.11)', () => {
 		expect(creditsText(1000)).toBe('1 credit');
 		expect(creditsText(-12_345)).toBe('-12.345 credits');
 		expect(creditsText(2500)).toBe('2.5 credits');
-		expect(instantText(D0 + 14 * H + 30 * M)).toBe('2026-10-01 14:30 UTC');
+		expect(instantText(D0 + 14 * H + 30 * M)).toBe('Oct 1, 2026, 2:30 PM UTC');
 	});
 });
 

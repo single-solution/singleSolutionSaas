@@ -5,7 +5,7 @@
  * - **Admins** have exactly one role: `owner`, `support` or `finance`. Their rights cover every merchant and website.
  * - **Merchants** have no roles: a merchant acts on its own records only (`merchantId` of the resource must be its
  *   own), with the merchant column of the table.
- * - `product` actors (client assertions) have no rights here: their routes authorise by protocol, so `can` is false
+ * - `product` actors (client assertions) have no rights here: their routes authorize by protocol, so `can` is false
  *   for them unless the actor carries explicit `permissions`.
  * - Rows the products enforce on their own servers (switching features, settings, widget texts, theme, connections,
  *   global defaults and prices) have no Portal permission. The Portal's part of them is
@@ -71,9 +71,9 @@ export const PERMISSIONS = Object.freeze({
 	creditsAdd: 'credits.add',
 	/** See receipts and charges (Support: view; merchant: own, without amount paid) */
 	billingRead: 'billing.read',
-	/** Admins: invite, resend (or copy) invite, correct invite e-mail, change role, remove */
+	/** Admins: invite, resend (or copy) invite, correct invite email, change role, remove */
 	adminsManage: 'admins.manage',
-	/** Settings (e-mail, billing rules, branding, support contact, security) */
+	/** Settings (email, billing rules, branding, support contact, security) */
 	settingsPortalWrite: 'portal_settings.write',
 });
 

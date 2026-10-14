@@ -1,5 +1,5 @@
 /**
- * Commerce test fixtures: ids, price lists, and a Portal harness on MongoMemoryReplSet with fake neighbour modules.
+ * Commerce test fixtures: ids, price lists, and a Portal harness on MongoMemoryReplSet with fake neighbor modules.
  */
 import { createSigner, createJwks, generateSigningKey, signAssertion } from '@ss/protocol';
 import { createPortal } from '../../../src/portal.js';

@@ -79,7 +79,7 @@ export function HeaderActions({ label, children, more = [] }) {
 	);
 }
 
-/** Status dot colours (PLAN 0.6: colour is used for status only). */
+/** Status dot colors (PLAN 0.6: color is used for status only). */
 const DOTS = Object.freeze({ success: 'bg-success', warning: 'bg-warning', danger: 'bg-danger', neutral: 'bg-line-strong' });
 
 /** @typedef {'success' | 'warning' | 'danger' | 'neutral'} Dot */
@@ -197,7 +197,7 @@ const pathOf = (href) => href.split(/[?#]/)[0] ?? href;
 
 /**
  * One row of a list pane: a link with the name, an optional second line, a status dot and a right-hand figure; the
- * selected row is marked. The name wraps to two lines — on whole words, a domain or e-mail between its parts — before
+ * selected row is marked. The name wraps to two lines — on whole words, a domain or email between its parts — before
  * it is cut (the full name on hover). In a pane narrower than 24rem the figure moves under the name, beside the second
  * line (or under it, where both do not fit), so the name and the second line get the whole width. `current="wide"`
  * marks the row opened by default, only where its detail shows with the list (1024 px and up). `leading` sits before

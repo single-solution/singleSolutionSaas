@@ -1,8 +1,8 @@
 'use client';
 /**
- * Settings (PLAN 0.8.2; Owner only): one page, no tabs — a masonry of cards, each saved on its own: E-mail sending
- * (SMTP host, port, user, password, sender name and address; Send test e-mail to the signed-in admin), Branding (name,
- * accent, logo), Support contact (e-mail, phone, optional WhatsApp), Security (Session length, Require two-step for
+ * Settings (PLAN 0.8.2; Owner only): one page, no tabs — a masonry of cards, each saved on its own: Email sending
+ * (SMTP host, port, user, password, sender name and address; Send test email to the signed-in admin), Branding (name,
+ * accent, logo), Support contact (email, phone, optional WhatsApp), Security (Session length, Require two-step for
  * admins), Billing rules (grace days, low-balance threshold) and Encryption key (Re-seal after a key change). Every
  * change is written to Activity and reaches every Portal instance within seconds.
  * @module

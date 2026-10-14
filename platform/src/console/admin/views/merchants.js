@@ -1,6 +1,6 @@
 'use client';
 /**
- * Admin Merchants (PLAN 0.8.2, 0.6): one list-and-detail screen. The list (search by business name, owner e-mail or
+ * Admin Merchants (PLAN 0.8.2, 0.6): one list-and-detail screen. The list (search by business name, owner email or
  * domain; status filter; paged at 50; per row the name, a status dot and the balance; bulk Suspend / Resume with one
  * reason and Resend setup link) sits beside the selected merchant — on wide screens the first one until another is
  * picked. The merchant: a header (name, status, balance; Add credits and Edit merchant as buttons, and Suspend /
@@ -54,7 +54,7 @@ import { AddCreditsDialog, MerchantCredits } from './finance.js';
 
 /** @typedef {import('@ss/ui').Problem} Problem */
 
-/** Status dot of a merchant in the list (PLAN 0.6 status colours). */
+/** Status dot of a merchant in the list (PLAN 0.6 status colors). */
 const STATUS_DOTS = /** @type {Record<string, 'success' | 'warning' | 'danger'>} */ ({
 	active: 'success',
 	low_balance: 'warning',
@@ -75,7 +75,7 @@ const statusOf = (merchant, billing) => (merchant.status === 'suspended' ? 'susp
 const statusLabel = (status) => ADMIN.status[/** @type {'active'} */ (status)] ?? status;
 
 /**
- * Status badge of a merchant, plus Setup pending (a separate grey badge, PLAN 0.6).
+ * Status badge of a merchant, plus Setup pending (a separate gray badge, PLAN 0.6).
  * @param {{ merchant: any, billing?: any }} props
  */
 function MerchantStatus({ merchant, billing = null }) {
@@ -105,7 +105,7 @@ function CopyLinkDialog({ link, onClose }) {
 }
 
 /**
- * Add merchant: the merchant fields; saving e-mails the setup link (or offers to copy it).
+ * Add merchant: the merchant fields; saving emails the setup link (or offers to copy it).
  * @param {{ open: boolean, onClose: () => void, onCreated: (merchant: any) => void }} props
  */
 export function AddMerchantDialog({ open, onClose, onCreated }) {

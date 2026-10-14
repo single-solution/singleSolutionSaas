@@ -3,7 +3,7 @@
  * everywhere, and `createLogger` writes JSON lines to an injected sink (stdout by default).
  *
  * Redaction (applied to every field, recursively):
- * - keys whose normalised name (lower case, `_`/`-` removed) contains `secret`, `token`, `password`, `passwd`,
+ * - keys whose normalized name (lower case, `_`/`-` removed) contains `secret`, `token`, `password`, `passwd`,
  *   `passphrase`, `authorization`, `cookie`, `apikey`, `privatekey`, `privatejwk`, `signingkey`, `credential`,
  *   `connectionstring`, `kek`, `pepper`, `sealed`, or that end in `uri`, or equal `d` (JWK private member);
  * - string values that look like signed tokens (compact JWS: `eyJ….….…` — browser and server tokens, launches), or URLs

@@ -6,7 +6,7 @@
  *   and continues its price list from the Portal's `priceListVersion` when that is higher.
  * - `POST /.well-known/ss-events`: notices, verified with `verifyNotice` against the pinned Portal keys and recorded.
  *
- * Behaviour can be tampered with per test (the connect answer, the notice status).
+ * Behavior can be tampered with per test (the connect answer, the notice status).
  * @module
  */
 import { createServer } from 'node:http';

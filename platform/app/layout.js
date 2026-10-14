@@ -23,7 +23,7 @@ export const viewport = { width: 'device-width', initialScale: 1, colorScheme: '
 export default async function RootLayout({ children }) {
 	const nonce = (await headers()).get('x-nonce');
 	return (
-		<html lang="en" className={`${text.variable} ${display.variable}`} suppressHydrationWarning>
+		<html lang="en-US" className={`${text.variable} ${display.variable}`} suppressHydrationWarning>
 			<head>
 				<ThemeScript nonce={nonce} />
 			</head>

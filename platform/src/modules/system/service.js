@@ -1,6 +1,6 @@
 /**
  * Public service of the `system` module (other modules reach it with `ctx.service('system')`): Settings (PLAN 0.8.2:
- * e-mail sending, branding, support contact, security), the public branding, Activity (PLAN 0.5.12) and the admin
+ * email sending, branding, support contact, security), the public branding, Activity (PLAN 0.5.12) and the admin
  * Overview. Every Settings change is written to Activity.
  * @module
  */
@@ -122,7 +122,7 @@ export const createSystemService = (ctx) => {
 		},
 
 		/**
-		 * Set or clear e-mail sending (SMTP host, port, user, password, sender name and address). The password is sealed
+		 * Set or clear email sending (SMTP host, port, user, password, sender name and address). The password is sealed
 		 * with `ENCRYPTION_KEY`; omit it to keep the stored one.
 		 * @param {{ mail: unknown, actor: Actor, requestId: string, ip: string | null }} input
 		 */
@@ -150,14 +150,14 @@ export const createSystemService = (ctx) => {
 			if (typeof pass === 'string' && pass.length > 1024) errors.push({ path: '/password', message: 'is too long' });
 			const address = typeof input.senderAddress === 'string' ? input.senderAddress.trim() : '';
 			if (!EMAIL.test(address) || address.length > 254)
-				errors.push({ path: '/senderAddress', message: 'must be an e-mail address' });
+				errors.push({ path: '/senderAddress', message: 'must be an email address' });
 			const name = optionalLine(input.senderName, 100);
 			if (!name.ok || (name.value ?? '').includes('<'))
 				errors.push({ path: '/senderName', message: 'must be 1..100 characters' });
 			const from = name.ok && name.value ? `${name.value} <${address}>` : address;
 			if (errors.length === 0 && !MAIL_FROM.test(from))
-				errors.push({ path: '/senderAddress', message: 'must be an e-mail address' });
-			refuse(errors, 'The e-mail settings are invalid.');
+				errors.push({ path: '/senderAddress', message: 'must be an email address' });
+			refuse(errors, 'The email settings are invalid.');
 			await system().update({ mail: { host, port, secure, user, ...(pass === undefined ? {} : { pass }), from } });
 			await record(actor, 'mail', {
 				after: { host, port, secure, password: pass === undefined ? 'kept' : pass ? 'set' : 'removed' },
@@ -168,12 +168,12 @@ export const createSystemService = (ctx) => {
 		},
 
 		/**
-		 * Send test e-mail: to the signed-in admin, with the stored settings (not waiting for other instances to notice).
+		 * Send test email: to the signed-in admin, with the stored settings (not waiting for other instances to notice).
 		 * @param {{ actor: Actor, requestId: string, ip: string | null }} input
 		 */
 		sendTestMail: async ({ actor, requestId, ip }) => {
 			const { state } = await system().load();
-			if (!state.mail) throw problem('conflict', 'Set e-mail sending up first.');
+			if (!state.mail) throw problem('conflict', 'Set email sending up first.');
 			const admin = await ctx.service('identity').getAdmin(actor.id);
 			const mailer = createSmtpMailer({
 				smtp: {
@@ -208,7 +208,7 @@ export const createSystemService = (ctx) => {
 			const name = optionalLine(input.name, 60);
 			if (!name.ok || !name.value) errors.push({ path: '/name', message: 'must be 1..60 characters' });
 			const accent = typeof input.accent === 'string' ? input.accent.trim().toLowerCase() : '';
-			if (!ACCENT.test(accent)) errors.push({ path: '/accent', message: 'must be a colour such as #4f46e5' });
+			if (!ACCENT.test(accent)) errors.push({ path: '/accent', message: 'must be a color such as #4f46e5' });
 			refuse(errors, 'The branding is invalid.');
 			await system().update({ branding: { name: /** @type {string} */ (name.ok ? name.value : ''), accent } });
 			await record(actor, 'branding', { after: { name: name.ok ? name.value : null, accent }, requestId, ip });
@@ -243,7 +243,7 @@ export const createSystemService = (ctx) => {
 		},
 
 		/**
-		 * Support contact: e-mail, phone and optional WhatsApp.
+		 * Support contact: email, phone and optional WhatsApp.
 		 * @param {{ body: unknown, actor: Actor, requestId: string, ip: string | null }} input
 		 */
 		setSupport: async ({ body, actor, requestId, ip }) => {
@@ -252,7 +252,7 @@ export const createSystemService = (ctx) => {
 			const errors = [];
 			const email = optionalLine(input.email, 254);
 			if (!email.ok || (email.value && !EMAIL.test(email.value)))
-				errors.push({ path: '/email', message: 'must be an e-mail address' });
+				errors.push({ path: '/email', message: 'must be an email address' });
 			const phone = optionalLine(input.phone, 40);
 			if (!phone.ok || (phone.value && !PHONE.test(phone.value)))
 				errors.push({ path: '/phone', message: 'must be a phone number with country code' });
@@ -319,7 +319,7 @@ export const createSystemService = (ctx) => {
 			return settings();
 		},
 
-		/** What sign-in pages, consoles and e-mails show: the Branding and the support contact. */
+		/** What sign-in pages, consoles and emails show: the Branding and the support contact. */
 		publicBranding: async () => {
 			const { branding, support } = ctx.config.settings;
 			return {
@@ -346,7 +346,7 @@ export const createSystemService = (ctx) => {
 		},
 
 		/**
-		 * Admin Overview: counts, the e-mail warning (PLAN 0.5.10), recent activity and the per-product numbers (PLAN
+		 * Admin Overview: counts, the email warning (PLAN 0.5.10), recent activity and the per-product numbers (PLAN
 		 * 0.8.2: for each connected product, the websites using it and the credits it earned this month, with the last
 		 * 30 UTC days).
 		 */

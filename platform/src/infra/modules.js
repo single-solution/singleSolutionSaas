@@ -32,7 +32,7 @@ import { platformError } from './errors.js';
  * @property {import('./db.js').Locks} locks
  * @property {import('./db.js').WithTransaction} withTransaction run `fn(session)` in a retried multi-document
  *   transaction; pass `{ session }` to every repository call inside it
- * @property {import('./mailer.js').Mailer} mailer platform mailer (setup links, invites, resets, e-mail changes, two-step notices)
+ * @property {import('./mailer.js').Mailer} mailer platform mailer (setup links, invites, resets, email changes, two-step notices)
  * @property {import('./auth.js').Sessions} sessions
  * @property {import('./auth.js').LoginThrottle} loginThrottle
  * @property {import('@ss/protocol').ReplayStore} replayStore

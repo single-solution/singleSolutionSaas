@@ -1,8 +1,8 @@
 /**
  * Test harness for the identity module: one MongoMemoryReplSet per test file, a Portal per test with identity and the
- * fake neighbours, small HTTP clients that keep their session cookies, and helpers that create logins the way PLAN 0.2
+ * fake neighbors, small HTTP clients that keep their session cookies, and helpers that create logins the way PLAN 0.2
  * says: the first admin from the sign-in page, other admins by invite, merchants by an admin (setup link).
- * Work after responses (e-mails) runs before each call returns.
+ * Work after responses (emails) runs before each call returns.
  */
 import { totpCode } from '../../../src/infra/auth.js';
 import { closeMongoClients } from '../../../src/testing.js';
@@ -33,7 +33,7 @@ export const teardownMongo = async () => {
  * @param {{ commerce?: { fail?: boolean }, identity?: Record<string, unknown>, env?: Record<string, string>,
  *   settings?: Record<string, any>, withCommerce?: boolean, withCatalog?: boolean, mail?: boolean }} [options]
  *   `mail: false` builds the Portal
- *   without e-mail sending (e-mails are skipped)
+ *   without email sending (emails are skipped)
  */
 export const boot = async (options = {}) => {
 	if (!mongo) throw new Error('setupMongo first');

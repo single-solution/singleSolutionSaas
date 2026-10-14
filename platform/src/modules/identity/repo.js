@@ -62,7 +62,7 @@ export const createRepo = (ctx) => {
 		domains,
 		websites: scoped(websites),
 		/**
-		 * Claim a login e-mail for an admin or a merchant (PLAN 0.2: unique across the whole Portal). Throws 409
+		 * Claim a login email for an admin or a merchant (PLAN 0.2: unique across the whole Portal). Throws 409
 		 * `email_taken` when another login holds it.
 		 * @param {string} email
 		 * @param {'admin' | 'merchant'} kind
@@ -72,18 +72,18 @@ export const createRepo = (ctx) => {
 			try {
 				await logins.insertOne({ _id: email, kind, subject });
 			} catch (error) {
-				if (isDuplicateKey(error)) throw problem('email_taken', 'This e-mail is already used by another login.');
+				if (isDuplicateKey(error)) throw problem('email_taken', 'This email is already used by another login.');
 				throw error;
 			}
 		},
 		/**
-		 * Release a login e-mail (only the holder's claim is removed).
+		 * Release a login email (only the holder's claim is removed).
 		 * @param {string} email
 		 * @param {string} subject
 		 */
 		releaseLogin: (email, subject) => logins.deleteOne({ _id: email, subject }),
 		/**
-		 * The login holding an e-mail, or null.
+		 * The login holding an email, or null.
 		 * @param {string} email
 		 * @returns {Promise<{ kind: 'admin' | 'merchant', subject: string } | null>}
 		 */
@@ -271,9 +271,9 @@ export const checkSecondFactor = async (ctx, collection, account, input) => {
 };
 
 /**
- * Send an e-mail right after the response of the current request (`after()`, PLAN 0.10), or at once outside a request.
- * Without SMTP settings the e-mail is skipped (PLAN 0.5.10). Failures are logged, never thrown. Returns whether the
- * e-mail was handed to the mailer.
+ * Send an email right after the response of the current request (`after()`, PLAN 0.10), or at once outside a request.
+ * Without SMTP settings the email is skipped (PLAN 0.5.10). Failures are logged, never thrown. Returns whether the
+ * email was handed to the mailer.
  * @param {Deps} deps
  * @param {import('../../infra/mailer.js').MailMessage} message
  * @returns {Promise<boolean>}

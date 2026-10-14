@@ -8,7 +8,7 @@ beforeAll(setupMongo, 120_000);
 afterAll(teardownMongo, 60_000);
 
 describe('identity service wiring', () => {
-	it('defaults: the platform mailer (logging outside production; in production without SMTP e-mails are skipped)', async () => {
+	it('defaults: the platform mailer (logging outside production; in production without SMTP emails are skipped)', async () => {
 		const dev = await boot({ identity: { mailer: undefined } });
 		const o = await dev.owner();
 		const created = await o.client.post('/v1/admin/merchants', { name: 'D', ownerName: 'D', email: 'dev@example.com' });
@@ -22,7 +22,7 @@ describe('identity service wiring', () => {
 		const p = await prod.owner();
 		const skipped = await p.client.post('/v1/admin/merchants', { name: 'P', ownerName: 'P', email: 'p@example.com' });
 		expect([skipped.status, skipped.json.setup.mailed]).toEqual([201, false]);
-		// the Overview warns while e-mail sending is not set up
+		// the Overview warns while email sending is not set up
 		expect((await p.client.get('/v1/admin/overview')).json).toMatchObject({
 			mailConfigured: false,
 			merchants: 1,

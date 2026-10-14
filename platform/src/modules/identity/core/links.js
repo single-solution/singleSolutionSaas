@@ -1,5 +1,5 @@
 /**
- * Console links sent by e-mail or copied by an admin. The token travels in the URL **fragment** so it never reaches
+ * Console links sent by email or copied by an admin. The token travels in the URL **fragment** so it never reaches
  * server logs, proxies or `Referer` headers; the console page reads it and posts it to the API.
  * @module
  */

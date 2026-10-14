@@ -44,7 +44,7 @@ export const createDeps = (ctx) => {
 		 */
 		merchantNames: (ids) => identity().merchantNames(ids),
 		/**
-		 * Recipients of a merchant's billing e-mails.
+		 * Recipients of a merchant's billing emails.
 		 * @param {string} merchantId
 		 * @returns {Promise<{ merchantName: string, merchantEmail: string | null, adminEmails: string[] }>}
 		 */

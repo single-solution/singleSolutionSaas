@@ -45,7 +45,7 @@ export const closeMongoClients = async () => {
 // A small driver of the Portal HTTP API: requests go straight to `portal.handle(request)` the way a browser on
 // `PORTAL_URL` would send them (same Origin, JSON bodies, an `Idempotency-Key` on every POST), and each signed-in
 // client keeps its own session cookie. `settle()` (optional) is awaited after every call, so work that runs right after
-// a response (notices, e-mails) is done before the caller looks.
+// a response (notices, emails) is done before the caller looks.
 
 /**
  * @typedef {object} CallInit

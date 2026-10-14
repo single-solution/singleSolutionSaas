@@ -3,7 +3,7 @@
  * throttled passes, no polling).
  *
  * - **Deferred tasks**: whatever the request deferred (`ctx.defer(task)`, or `afterResponse(task)` from
- *   `request-scope.js` deep in a module: the notices and e-mails it caused). Tasks deferred while these run are run
+ *   `request-scope.js` deep in a module: the notices and emails it caused). Tasks deferred while these run are run
  *   too.
  * - **Product calls**: when a product called the Portal (`product` auth), `onProductCall(productId)` follows the
  *   request (the product's failed notices are retried, oldest first).

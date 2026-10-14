@@ -56,7 +56,7 @@ export const dialog = () => {
 };
 
 /**
- * Buttons labelled `label` (text, or aria-label) inside `root`.
+ * Buttons labeled `label` (text, or aria-label) inside `root`.
  * @param {string} label
  * @param {ParentNode} [root]
  */
@@ -201,7 +201,7 @@ export const createWorld = async ({ db }) => {
 	/** @type {Array<{ to: string, template: string, data: Record<string, any> }>} */
 	const mail = [];
 	const mailer = { available: true, send: async (/** @type {any} */ m) => void mail.push(m) };
-	// work right after responses runs at once (e-mails and notices follow the request that caused them)
+	// work right after responses runs at once (emails and notices follow the request that caused them)
 	const portal = createPortal({
 		config: await testConfig(),
 		db,

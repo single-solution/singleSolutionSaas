@@ -1,7 +1,7 @@
 'use client';
 /**
  * The signed-in person's own login (PLAN 0.2 Changing a login, Two-step sign-in), shared by the merchant Account page
- * and the admin My account page: sign-in e-mail (confirmed from the new address), password, two-step (set up with a
+ * and the admin My account page: sign-in email (confirmed from the new address), password, two-step (set up with a
  * QR code, 10 recovery codes shown once, turn off, new codes) and the person's own activity.
  * @module
  */
@@ -298,7 +298,7 @@ export function TwoStepPanel({ twoStep, onChange }) {
 }
 
 /**
- * Change the sign-in e-mail (current password, plus a code while two-step is on).
+ * Change the sign-in email (current password, plus a code while two-step is on).
  * @param {{ email: string, twoStepOn: boolean }} props
  */
 export function EmailPanel({ email, twoStepOn }) {

@@ -32,7 +32,7 @@ const fakeRepo = () => {
 };
 
 describe('audit', () => {
-	it('records normalised, redacted entries', async () => {
+	it('records normalized, redacted entries', async () => {
 		const { repo, docs } = fakeRepo();
 		const audit = createAudit({ repo, now: () => 0 });
 		const id = await audit.record({
@@ -140,7 +140,7 @@ describe('audit (MongoDB)', () => {
 		await mongo.stop();
 	});
 
-	it('appends JSON-normalised entries through the append-only repository', async () => {
+	it('appends JSON-normalized entries through the append-only repository', async () => {
 		const db = mongo.db('audit');
 		const registry = createRegistry(INFRA_COLLECTIONS);
 		await ensureIndexes(db, registry);
@@ -158,7 +158,7 @@ describe('audit (MongoDB)', () => {
 			),
 		);
 		expect(await audit.list({ merchantId: MERCHANT })).toHaveLength(3);
-		// stored values are JSON-normalised (dates as ISO, undefined members dropped)
+		// stored values are JSON-normalized (dates as ISO, undefined members dropped)
 		const one = await db.collection(COLLECTIONS.audit).findOne({ 'target.id': 't_1' });
 		expect(one?.after).toEqual({ i: 1, nested: { at: '1970-01-01T00:00:00.000Z' } });
 	});

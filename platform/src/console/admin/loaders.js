@@ -112,7 +112,7 @@ export const loadAdminSession = async (api) => {
 };
 
 /**
- * Merchants page: search by business name, owner e-mail or website domain (prefixes), filter by status (or Setup
+ * Merchants page: search by business name, owner email or website domain (prefixes), filter by status (or Setup
  * pending), paged at 50.
  * @param {ConsoleApi} api
  * @param {{ status?: string, q?: string, cursor?: string }} [filter]
@@ -336,7 +336,7 @@ export const loadActivity = async (api, filter = {}, admin = null) => {
 };
 
 /**
- * Settings (Owner): e-mail sending, branding, support contact, security.
+ * Settings (Owner): email sending, branding, support contact, security.
  * @param {ConsoleApi} api
  */
 export const loadSettings = async (api) => {

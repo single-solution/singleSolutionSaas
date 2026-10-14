@@ -1,11 +1,11 @@
 'use client';
 /**
  * Credits and billing pieces shared by the merchant and admin consoles (PLAN 0.5, 0.6): status badges with their
- * colours, days left, the billing banners, the usage chart and table, and the receipts table. Days, months and charts
- * are UTC and labelled so; single timestamps show in the viewer's local time.
+ * colors, days left, the billing banners, the usage chart and table, and the receipts table. Days, months and charts
+ * are UTC and labeled so; single timestamps show in the viewer's local time.
  * @module
  */
-import { useEffect, useState } from 'react';
+import { useSyncExternalStore } from 'react';
 import { Badge, BarChart, Callout, Card, EmptyState, Stat, StatGrid, Table, formatCredits, formatDateTime } from '@ss/ui';
 import { BILLING } from '../../texts/console.js';
 
@@ -15,16 +15,27 @@ import { BILLING } from '../../texts/console.js';
 /** @type {Record<string, Tone>} */
 const MERCHANT_TONES = { active: 'success', low_balance: 'warning', grace: 'warning', stopped: 'danger', suspended: 'danger' };
 
+/** The viewer's time zone never changes while a page is open: nothing to subscribe to. */
+const noSubscription = () => () => {};
+/** The browser's IANA time zone. */
+const viewerZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
+/** No viewer on the server (and in the first render in the browser): UTC, so both render the same text. */
+const noViewerZone = () => undefined;
+
 /**
- * An instant in the viewer's local time (UTC until the browser formats it).
+ * An instant in the viewer's local time, in the one date style of the consoles (`Oct 4, 2026, 2:30 PM EDT`): UTC
+ * (`Oct 4, 2026, 2:30 PM UTC`) on the server and in the first render, then the same style in the browser's time zone.
  * @param {{ value: string | null | undefined }} props
  */
 export function LocalTime({ value }) {
-	const [text, setText] = useState(value ? formatDateTime(value) : '—');
-	useEffect(() => {
-		if (value) setText(new Date(value).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }));
-	}, [value]);
-	return value ? <time dateTime={value}>{text}</time> : <>—</>;
+	const timeZone = useSyncExternalStore(noSubscription, viewerZone, noViewerZone);
+	return value ? (
+		<time dateTime={value} title={formatDateTime(value)}>
+			{formatDateTime(value, { timeZone })}
+		</time>
+	) : (
+		<>—</>
+	);
 }
 
 /**
@@ -40,7 +51,7 @@ export function MerchantStatusBadge({ status }) {
 }
 
 /**
- * Colour of a product-on-website status (PLAN 0.6): Active green, In grace amber, Stopped and Suspended red, and grey
+ * Color of a product-on-website status (PLAN 0.6): Active green, In grace amber, Stopped and Suspended red, and gray
  * `No features on` for an active product with no features on.
  * @param {{ status: string, featuresOn?: readonly string[] }} card
  * @returns {Tone}

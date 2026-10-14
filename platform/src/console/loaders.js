@@ -168,7 +168,7 @@ export const loadCredits = async (api, merchantId, filter = {}) => {
 };
 
 /**
- * Account: business details, sign-in e-mail, two-step and own activity; the billing summary (checked) for the frame.
+ * Account: business details, sign-in email, two-step and own activity; the billing summary (checked) for the frame.
  * @param {ConsoleApi} api
  * @param {string} merchantId
  */

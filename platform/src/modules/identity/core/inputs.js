@@ -45,13 +45,13 @@ const bad = (message) => ({ ok: false, message });
 // Fields
 
 /**
- * Lower-cased, trimmed e-mail address (≤ 254 chars, one `@`, a dot in the domain).
+ * Lower-cased, trimmed email address (≤ 254 chars, one `@`, a dot in the domain).
  * @type {Field<string>}
  */
 export const email = (value) => {
-	if (typeof value !== 'string') return bad('must be an e-mail address');
+	if (typeof value !== 'string') return bad('must be an email address');
 	const v = value.trim().toLowerCase();
-	if (v.length === 0 || v.length > 254 || !EMAIL.test(v)) return bad('must be an e-mail address');
+	if (v.length === 0 || v.length > 254 || !EMAIL.test(v)) return bad('must be an email address');
 	return okv(v);
 };
 
@@ -134,7 +134,7 @@ export const optionalText = (max) => (value) =>
 export const nullable = (field) => (value) => (value === null ? okv(null) : field(value));
 
 /**
- * A website domain, normalised with `@ss/contracts` `normaliseDomain` (public hosts only).
+ * A website domain, normalized with `@ss/contracts` `normaliseDomain` (public hosts only).
  * @param {{ isPublicSuffix?: (domain: string) => boolean }} [options]
  * @returns {Field<string>}
  */

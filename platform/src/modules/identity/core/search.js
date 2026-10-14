@@ -1,7 +1,7 @@
 /**
- * Merchant search keys (pure). `nameKey` is the normalised merchant name stored next to `name` so a case- and
- * accent-insensitive **prefix** search is an anchored, index-backed range scan (`{ nameKey: 1 }`); e-mail search
- * uses the lower-cased, uniquely indexed user e-mail the same way.
+ * Merchant search keys (pure). `nameKey` is the normalized merchant name stored next to `name` so a case- and
+ * accent-insensitive **prefix** search is an anchored, index-backed range scan (`{ nameKey: 1 }`); email search
+ * uses the lower-cased, uniquely indexed user email the same way.
  * @module
  */
 

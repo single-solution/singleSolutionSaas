@@ -58,7 +58,7 @@ const ssr = (element) => {
 /** @param {string} html */
 const text = (html) =>
 	html
-		.replace(/<wbr\/?>/g, '') // soft line breaks inside a domain or e-mail
+		.replace(/<wbr\/?>/g, '') // soft line breaks inside a domain or email
 		.replace(/<[^>]+>/g, ' ')
 		.replace(/&#x27;/g, "'")
 		.replace(/&amp;/g, '&')
@@ -126,7 +126,7 @@ describe('admin console smoke', () => {
 			// ------------------------------------------------------------------ Overview: per-product numbers
 			const overview = await admin.loadOverview(ownerBrowser.api);
 			const overviewHtml = text(ssr(<OverviewView {...overview} admin={owner} />));
-			expect(overviewHtml).toContain('E-mail sending is not set up');
+			expect(overviewHtml).toContain('Email sending is not set up');
 			expect(overviewHtml).toContain('Notes');
 			expect(overviewHtml).toContain('1 website');
 			expect(overviewHtml).toContain('earned this month (UTC)');
@@ -266,7 +266,7 @@ describe('admin console smoke', () => {
 			const invitedRaw = ssr(<AdminsView {...admins} selectedId={invited?.adminId} />);
 			const invitedHtml = text(invitedRaw);
 			for (const word of ['Invited', 'Resend invite', 'Copy invite link']) expect(invitedHtml).toContain(word);
-			// Correct invite e-mail, Change role and Remove sit in the More menu
+			// Correct invite email, Change role and Remove sit in the More menu
 			expect(invitedRaw).toContain('aria-label="More actions for help@ss.test"');
 			expect(invitedHtml).not.toContain('Change role');
 			const meHtml = text(ssr(<AdminsView {...admins} selectedId={owner.adminId} />));
@@ -277,7 +277,7 @@ describe('admin console smoke', () => {
 			);
 			// Settings: one page, every section a card with its own Save (no tabs)
 			const settingsRaw = ssr(<SettingsView {...await admin.loadSettings(ownerBrowser.api)} />);
-			for (const title of ['E-mail sending', 'Branding', 'Support contact', 'Security', 'Billing rules'])
+			for (const title of ['Email sending', 'Branding', 'Support contact', 'Security', 'Billing rules'])
 				expect(settingsRaw).toContain(`aria-label="${title}"`);
 			expect(text(settingsRaw)).toContain('SMTP host');
 			expect(text(settingsRaw)).toContain('Grace period (days)');

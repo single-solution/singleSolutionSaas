@@ -13,7 +13,7 @@ const codeOf = (res) =>
 		.pop();
 
 describe('merchants (PLAN 0.2 Merchants, 0.5.9)', () => {
-	it('admins create merchants with the fields of PLAN 0.2; the login e-mail is unique across the Portal', async () => {
+	it('admins create merchants with the fields of PLAN 0.2; the login email is unique across the Portal', async () => {
 		const h = await boot();
 		const o = await h.owner();
 		const created = await o.client.post('/v1/admin/merchants', {
@@ -64,7 +64,7 @@ describe('merchants (PLAN 0.2 Merchants, 0.5.9)', () => {
 		expect(JSON.stringify(entry)).not.toMatch(/sam@shop\.test|Sam Seller|Rivoli|42 68 53 00/);
 	});
 
-	it('without e-mail sending the setup link is skipped and can be copied (shown once, logged)', async () => {
+	it('without email sending the setup link is skipped and can be copied (shown once, logged)', async () => {
 		const h = await boot({ mail: false });
 		const o = await h.owner();
 		const created = await o.client.post('/v1/admin/merchants', { name: 'Shop', ownerName: 'Sam', email: 'sam@shop.test' });
@@ -76,7 +76,7 @@ describe('merchants (PLAN 0.2 Merchants, 0.5.9)', () => {
 		expect((await h.client().post('/v1/auth/set-password', { token, password: PASSWORD })).json.console).toBe('merchant');
 	});
 
-	it('Details: admins edit the fields, the login e-mail only until the password is set', async () => {
+	it('Details: admins edit the fields, the login email only until the password is set', async () => {
 		const h = await boot();
 		const o = await h.owner();
 		const created = await o.client.post('/v1/admin/merchants', { name: 'Shop', ownerName: 'Sam', email: 'sam@shop.test' });
@@ -85,7 +85,7 @@ describe('merchants (PLAN 0.2 Merchants, 0.5.9)', () => {
 		expect(fixed.json).toMatchObject({ email: 'samuel@shop.test', name: 'Shop Ltd' });
 		expect(await h.db.collection(C.logins).findOne({ _id: /** @type {any} */ ('sam@shop.test') })).toBeNull();
 		const token = h.mailer.token('sam@shop.test', 'merchant_setup');
-		// correcting the e-mail cancelled the first link
+		// correcting the email canceled the first link
 		expect((await h.client().post('/v1/auth/set-password', { token, password: PASSWORD })).status).toBe(400);
 		await o.client.post(`/v1/admin/merchants/${id}/setup-link`, {});
 		await h
@@ -104,7 +104,7 @@ describe('merchants (PLAN 0.2 Merchants, 0.5.9)', () => {
 		expect((await finance.client.patch(`/v1/admin/merchants/${id}`, { name: 'X' })).status).toBe(403);
 	});
 
-	it('lists merchants: search by name, owner e-mail or a website domain; filter by status; paged', async () => {
+	it('lists merchants: search by name, owner email or a website domain; filter by status; paged', async () => {
 		const h = await boot();
 		const a = await h.merchantWithWebsite('alpha@one.test', 'shop.alpha.test');
 		const o = (await h.owner()).client;
@@ -177,7 +177,7 @@ describe('merchants (PLAN 0.2 Merchants, 0.5.9)', () => {
 		expect(suspendedEntry.actor).toEqual({ type: 'admin', id: null, name: 'Single Solution' });
 	});
 
-	it('delete (Owner, typed name, no websites): login and personal details erased, e-mail free, records kept', async () => {
+	it('delete (Owner, typed name, no websites): login and personal details erased, email free, records kept', async () => {
 		const h = await boot();
 		const m = await h.merchantWithWebsite('sam@shop.test');
 		const support = await h.admin('support');
@@ -202,7 +202,7 @@ describe('merchants (PLAN 0.2 Merchants, 0.5.9)', () => {
 		const byMerchant = activity.json.items.find((/** @type {any} */ e) => e.actor.type === 'merchant');
 		expect(byMerchant.actor.name).toBe('Deleted merchant');
 		expect(JSON.stringify(activity.json)).not.toContain('sam@shop.test');
-		// the e-mail is free for a new login
+		// the email is free for a new login
 		expect((await m.admin.post('/v1/admin/merchants', { name: 'New', ownerName: 'N', email: 'sam@shop.test' })).status).toBe(
 			201,
 		);

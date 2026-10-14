@@ -1,6 +1,6 @@
 'use client';
 /**
- * My account (PLAN 0.8.2; every admin, from the user menu): name, sign-in e-mail, password, two-step (on/off,
+ * My account (PLAN 0.8.2; every admin, from the user menu): name, sign-in email, password, two-step (on/off,
  * recovery codes) and the admin's own activity.
  * @module
  */

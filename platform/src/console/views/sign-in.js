@@ -2,7 +2,7 @@
 /**
  * The public account pages (PLAN 0.8.2 Sign-in): the one sign-in page for admins and merchants (with the two-step
  * step, Create admin while no admin exists and the suspended message), Forgot password, the reset link, the setup
- * link (merchant setup and admin invite) and the new-e-mail confirmation. Tokens from links arrive in the URL fragment
+ * link (merchant setup and admin invite) and the new-email confirmation. Tokens from links arrive in the URL fragment
  * and are posted to the API, never logged. After signing in, the Portal opens the console of the login.
  * @module
  */
@@ -31,7 +31,7 @@ export const homeOf = (console, next) => {
 };
 
 /**
- * The support contact as one line (`e-mail, phone`), or the fallback word.
+ * The support contact as one line (`email, phone`), or the fallback word.
  * @param {Branding['support'] | null | undefined} support
  */
 export const contactLine = (support) =>
@@ -50,7 +50,7 @@ const passwordProblem = (password) =>
 const emailProblem = (email) => (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) ? null : AUTH.emailInvalid);
 
 /**
- * Centred card of the public pages, with the Branding.
+ * Centered card of the public pages, with the Branding.
  * @param {{ branding: Branding, title: string, subtitle?: import('react').ReactNode, children: import('react').ReactNode,
  *   footer?: import('react').ReactNode }} props
  */
@@ -146,7 +146,7 @@ function TwoStepStep({ challenge, onDone, onRestart, onProblem }) {
 }
 
 /**
- * Create admin (only while no admin exists): name, e-mail and password; the first admin is an Owner.
+ * Create admin (only while no admin exists): name, email and password; the first admin is an Owner.
  * @param {{ branding: Branding }} props
  */
 function CreateAdmin({ branding }) {

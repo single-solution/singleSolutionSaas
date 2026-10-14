@@ -162,7 +162,7 @@ describe('commerce routes and tenant isolation', () => {
 		const form = { credits: 5000, amountPaid: 'USD 50', method: 'Bank transfer' };
 		const key = { 'idempotency-key': 'add-credits-dialog-1' };
 		const post = () => h.call('POST', `/v1/admin/merchants/${M1}/receipts`, { headers: { ...admin, ...key }, body: form });
-		// the e-mail contacts cannot be read after the receipt is saved: logged, not a 500 that frees the key
+		// the email contacts cannot be read after the receipt is saved: logged, not a 500 that frees the key
 		h.world.failContacts = true;
 		const added = await post();
 		h.world.failContacts = false;

@@ -13,7 +13,7 @@ const codeOf = (res) =>
 		.pop();
 
 describe('websites (PLAN 0.2 Websites, 0.5.9)', () => {
-	it('Owner and Support add exact, normalised domains; merchants and Finance only view', async () => {
+	it('Owner and Support add exact, normalized domains; merchants and Finance only view', async () => {
 		const h = await boot();
 		const m = await h.merchant('o@example.com');
 		const support = await h.admin('support');

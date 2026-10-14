@@ -2,7 +2,7 @@
  * Test harness of the Portal: the real modules (system, catalog, identity, commerce) on the shared
  * MongoMemoryReplSet, driven through the HTTP API with `@ss/platform/testing`'s `createPortalClient`, fake products on
  * local HTTP servers (`fakes/product.js`), and helpers that create people and websites the way PLAN 0.2 says. Work after
- * responses (notices, e-mails) runs before each call returns.
+ * responses (notices, emails) runs before each call returns.
  * @module
  */
 import { createKeyResolver, verifyLaunch } from '@ss/protocol';

@@ -4,7 +4,7 @@
  *
  * Every entry records who (`actor`), what (`action`, `target`), the change (`before`/`after`, redacted with the
  * logger rules so credentials never land in the log), and where from (`requestId`, `ip`). `merchantId` is
- * denormalised so merchant consoles can list their own history.
+ * denormalized so merchant consoles can list their own history.
  * @module
  */
 import { createId } from '@ss/contracts';
@@ -47,7 +47,7 @@ const normaliseActor = (actor) => {
 };
 
 /**
- * JSON-normalised value (what MongoDB stores and returns unchanged): `undefined` members dropped, Dates as ISO.
+ * JSON-normalized value (what MongoDB stores and returns unchanged): `undefined` members dropped, Dates as ISO.
  * @param {unknown} value
  */
 const jsonValue = (value) => {

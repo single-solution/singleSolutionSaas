@@ -1,13 +1,13 @@
 /**
  * Logins (PLAN 0.2): the one sign-in page for admins and merchants, two-step sign-in with recovery codes, the first
- * admin, setup links, Forgot password, changing a login (e-mail, password, two-step) and the signed-in person's own
+ * admin, setup links, Forgot password, changing a login (email, password, two-step) and the signed-in person's own
  * account. Mechanisms (scrypt, TOTP, sessions, throttling) are the infra's.
  *
- * - One e-mail is one login, of exactly one admin or one merchant (`identity_logins`), so the sign-in page knows which
+ * - One email is one login, of exactly one admin or one merchant (`identity_logins`), so the sign-in page knows which
  *   console to open.
  * - Setup links work only while the login has no password; a suspended merchant's links never sign them in.
- * - Changing the e-mail or password, or turning two-step off, needs the current password plus a two-step or recovery
- *   code while two-step is on. A new e-mail takes effect only once confirmed from the new address; the old address
+ * - Changing the email or password, or turning two-step off, needs the current password plus a two-step or recovery
+ *   code while two-step is on. A new email takes effect only once confirmed from the new address; the old address
  *   gets a notice. A password change ends every other session of the login.
  * - Anti-enumeration: Forgot password answers the same whether the login exists; sign-in failures are one generic
  *   401; unknown logins burn a dummy scrypt verification.
@@ -35,7 +35,7 @@ import { checkSecondFactor, failAttempt, insertUnique, openTotpSecret, sendLater
 /** @typedef {'admin' | 'merchant'} Kind */
 /** @typedef {{ code?: string, recoveryCode?: string }} SecondFactor */
 
-const BAD_LOGIN = 'The e-mail or password is incorrect.';
+const BAD_LOGIN = 'The email or password is incorrect.';
 const BAD_CODE = 'The code is incorrect.';
 const LINK_INVALID = 'This link is invalid or has expired.';
 
@@ -218,7 +218,7 @@ export const createAccounts = (deps) => {
 		// Sign-in
 
 		/**
-		 * The one sign-in page: the login of the e-mail decides the console. With two-step on, a short-lived challenge
+		 * The one sign-in page: the login of the email decides the console. With two-step on, a short-lived challenge
 		 * is returned instead of a session.
 		 * @param {{ email: string, password: string }} input
 		 * @param {Meta} meta
@@ -404,7 +404,7 @@ export const createAccounts = (deps) => {
 		},
 
 		/**
-		 * Confirm a new login e-mail from the link sent to it. Refused when the address became another login meanwhile.
+		 * Confirm a new login email from the link sent to it. Refused when the address became another login meanwhile.
 		 * @param {{ token: string }} input
 		 * @param {Meta} meta
 		 */
@@ -454,7 +454,7 @@ export const createAccounts = (deps) => {
 		},
 
 		/**
-		 * Ask to change the login e-mail: a confirmation link goes to the new address and a notice to the old one.
+		 * Ask to change the login email: a confirmation link goes to the new address and a notice to the old one.
 		 * @param {Kind} kind
 		 * @param {SecondFactor & { id: string, email: string, password: string }} input
 		 * @param {Meta} meta
@@ -462,8 +462,8 @@ export const createAccounts = (deps) => {
 		requestEmailChange: async (kind, { id, email, password, code, recoveryCode }, meta) => {
 			const doc = await loadLogin(kind, id);
 			await proveLogin(kind, doc, password, { ...(code ? { code } : {}), ...(recoveryCode ? { recoveryCode } : {}) }, meta);
-			if (email === doc.email) throw problem('conflict', 'This is already your sign-in e-mail.');
-			if (await repo.loginOf(email)) throw problem('email_taken', 'This e-mail is already used by another login.');
+			if (email === doc.email) throw problem('conflict', 'This is already your sign-in email.');
+			if (await repo.loginOf(email)) throw problem('email_taken', 'This email is already used by another login.');
 			const subject = `${kind}:${doc._id}`;
 			await repo.dropTokens('email_change', subject);
 			const token = await repo.issueToken('email_change', { subject, data: { email, from: doc.email } });
@@ -582,7 +582,7 @@ export const createAccounts = (deps) => {
 
 		/**
 		 * An Owner turns off someone else's two-step (lost authenticator and recovery codes): never their own. The
-		 * person is e-mailed and their recovery codes are deleted.
+		 * person is emailed and their recovery codes are deleted.
 		 * @param {Kind} kind
 		 * @param {{ id: string, actor: import('../../infra/rbac.js').Actor, meta?: Meta }} input
 		 */

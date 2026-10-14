@@ -55,7 +55,7 @@ describe('the one sign-in page (PLAN 0.2, 0.8.2)', () => {
 		expect((await c.post('/v1/auth/sign-in', { email: 'sam@shop.test', password: PASSWORD })).status).toBe(200);
 	});
 
-	it('Create admin works once, atomically, while no admin exists; it makes an Owner with name, e-mail and password', async () => {
+	it('Create admin works once, atomically, while no admin exists; it makes an Owner with name, email and password', async () => {
 		const h = await boot();
 		expect((await h.call('GET', '/v1/auth/first-admin')).json).toEqual({ available: true });
 		const body = (/** @type {string} */ email) => ({ name: 'Ada', email, password: PASSWORD });
@@ -246,7 +246,7 @@ describe('links (PLAN 0.2 Logins)', () => {
 });
 
 describe('changing a login (PLAN 0.2)', () => {
-	it('a new e-mail takes effect only once confirmed from the new address; the old address gets a notice', async () => {
+	it('a new email takes effect only once confirmed from the new address; the old address gets a notice', async () => {
 		const h = await boot();
 		const m = await h.merchant('sam@shop.test');
 		expect((await m.client.post('/v1/me/email', { email: 'sam2@shop.test', password: 'wrong password!!' })).status).toBe(401);
@@ -270,7 +270,7 @@ describe('changing a login (PLAN 0.2)', () => {
 		expect(await h.activity('login.email_changed')).toHaveLength(1);
 	});
 
-	it('refuses an e-mail used by another login, at the request and at the confirmation', async () => {
+	it('refuses an email used by another login, at the request and at the confirmation', async () => {
 		const h = await boot();
 		const a = await h.merchant('a@shop.test');
 		await h.merchant('b@shop.test');

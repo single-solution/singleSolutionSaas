@@ -1,9 +1,9 @@
 /**
- * Admins (PLAN 0.8.2 Admins; Owner only): invite (e-mail + role; the invitee sets their name and password through a
- * 24-hour setup link), resend or copy the invite, correct the invite e-mail, change role, remove. There is always at
+ * Admins (PLAN 0.8.2 Admins; Owner only): invite (email + role; the invitee sets their name and password through a
+ * 24-hour setup link), resend or copy the invite, correct the invite email, change role, remove. There is always at
  * least one Owner: the last Owner cannot be removed or demoted, and no one removes themselves. A role change or removal
  * takes effect at once and ends all that admin's sessions. Activity entries keep a removed admin's name; removing an
- * admin erases the login, so the e-mail is free again (PLAN 0.8.4 builder choice).
+ * admin erases the login, so the email is free again (PLAN 0.8.4 builder choice).
  * @module
  */
 import { problem } from '../../infra/http.js';
@@ -69,7 +69,7 @@ export const createAdmins = (deps, hooks) => {
 		get: async (adminId) => presentAdmin(await load(adminId)),
 
 		/**
-		 * Invite an admin: the e-mail is claimed at once (unique across the Portal) and a setup link goes out (or is
+		 * Invite an admin: the email is claimed at once (unique across the Portal) and a setup link goes out (or is
 		 * copied when `copy`).
 		 * @param {{ email: string, role: Role, copy?: boolean, actor: Actor, meta?: Meta }} input
 		 */
@@ -89,7 +89,7 @@ export const createAdmins = (deps, hooks) => {
 			};
 			await repo.claimLogin(email, 'admin', doc._id);
 			try {
-				await insertUnique(() => repo.admins.insertOne(doc), 'email_taken', 'This e-mail is already used by another login.');
+				await insertUnique(() => repo.admins.insertOne(doc), 'email_taken', 'This email is already used by another login.');
 			} catch (error) {
 				await repo.releaseLogin(email, doc._id);
 				throw error;
@@ -110,7 +110,7 @@ export const createAdmins = (deps, hooks) => {
 		},
 
 		/**
-		 * Correct the invite e-mail (only until the invite is accepted) or change the role. A role change ends all the
+		 * Correct the invite email (only until the invite is accepted) or change the role. A role change ends all the
 		 * admin's sessions at once.
 		 * @param {{ adminId: string, email?: string, role?: Role, actor: Actor, meta?: Meta }} input
 		 */
@@ -120,7 +120,7 @@ export const createAdmins = (deps, hooks) => {
 			const set = {};
 			if (email !== undefined && email !== admin.email) {
 				if (admin.status !== 'invited' || admin.passwordHash)
-					throw problem('conflict', 'The e-mail can be corrected only until the invite is accepted.');
+					throw problem('conflict', 'The email can be corrected only until the invite is accepted.');
 				await repo.claimLogin(email, 'admin', adminId);
 				set.email = email;
 			}
@@ -154,7 +154,7 @@ export const createAdmins = (deps, hooks) => {
 		},
 
 		/**
-		 * Remove an admin: the login is erased (e-mail free again), every session ends; Activity keeps the name.
+		 * Remove an admin: the login is erased (email free again), every session ends; Activity keeps the name.
 		 * @param {{ adminId: string, actor: Actor, meta?: Meta }} input
 		 */
 		remove: async ({ adminId, actor, meta = {} }) => {

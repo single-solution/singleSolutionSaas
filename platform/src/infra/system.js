@@ -9,7 +9,7 @@
  *   its public key kept readable (PLAN 0.4.8, K-21); a seed kept in clear before is sealed on first use. When no key
  *   of a list opens (`ENCRYPTION_KEY` lost), a new key is added first and the others stay published by their public
  *   keys: tokens signed before keep verifying.
- * - `settings` — recorded by Owners (PLAN 0.8.2 Settings): e-mail sending (its password sealed with `ENCRYPTION_KEY`,
+ * - `settings` — recorded by Owners (PLAN 0.8.2 Settings): email sending (its password sealed with `ENCRYPTION_KEY`,
  *   `crypto.js`), branding, support contact, security and billing rules. `version` increases with every change so
  *   other instances notice and rebuild.
  * - `logo` — the Branding logo (PNG, JPEG or WebP, at most 200 kB), served at `/branding/logo`.

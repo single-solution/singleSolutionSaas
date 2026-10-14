@@ -274,7 +274,7 @@ describe('admin console interactions (jsdom)', () => {
 		expect(shows('child')).toBe(true);
 		cleanup();
 		render(<OverviewView {...await admin.loadOverview(ownerBrowser.api)} admin={me} />);
-		expect(shows('E-mail sending is not set up') && shows('Set up e-mail sending')).toBe(true);
+		expect(shows('Email sending is not set up') && shows('Set up email sending')).toBe(true);
 		cleanup();
 
 		// ---------------------------------------------------------------- merchants: search, bulk, Add merchant
@@ -284,7 +284,7 @@ describe('admin console interactions (jsdom)', () => {
 			</ToastProvider>,
 		);
 		expect(shows('Else Ltd') && shows('Shop & Co')).toBe(true);
-		fill('Search name, e-mail or domain', 'else');
+		fill('Search name, email or domain', 'else');
 		await press('Filter');
 		cleanup();
 		render(
@@ -317,7 +317,7 @@ describe('admin console interactions (jsdom)', () => {
 		await press('Add merchant');
 		fillDialog('Business name', 'Ops Made Ltd');
 		fillDialog('Owner name', 'Olga');
-		fillDialog('Owner e-mail (login)', 'ops-owner@made.test');
+		fillDialog('Owner email (login)', 'ops-owner@made.test');
 		fillDialog('Phone', '+44 7700 900111');
 		await act(async () => {
 			type(byLabel(/** @type {HTMLElement} */ (document.querySelector('[role="dialog"]')), 'Country'), 'GB');
@@ -398,10 +398,10 @@ describe('admin console interactions (jsdom)', () => {
 		);
 		await until(() => document.getElementById(`website-${madeSite}`)?.textContent?.includes('made.example.com'));
 		expect(document.querySelector(`button[aria-label="Add product to made.example.com"]`)).not.toBeNull();
-		// Edit merchant: the fields in a dialog, the login e-mail until the password is set
+		// Edit merchant: the fields in a dialog, the login email until the password is set
 		await press('Edit merchant');
 		fillDialog('Address', 'Industrial area');
-		fillDialog('Owner e-mail (login)', 'olga@made.test');
+		fillDialog('Owner email (login)', 'olga@made.test');
 		await act(async () => {
 			/** @type {HTMLButtonElement} */ (
 				[...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent === 'Save')
@@ -517,7 +517,7 @@ describe('admin console interactions (jsdom)', () => {
 		await press('Filter');
 		cleanup();
 
-		// ---------------------------------------------------------------- Settings: e-mail sending, branding, support, security, key
+		// ---------------------------------------------------------------- Settings: email sending, branding, support, security, key
 		render(
 			<ToastProvider>
 				<SettingsView {...await admin.loadSettings(ownerBrowser.api)} />
@@ -534,12 +534,12 @@ describe('admin console interactions (jsdom)', () => {
 		});
 		// one page: every section is a card with its own Save
 		expect(document.querySelector('[role="tablist"]')).toBeNull();
-		await saveIn('E-mail sending');
+		await saveIn('Email sending');
 		await until(() => ownerBrowser.calls.some((c) => c.path === adminApi.settingsMail() && c.status === 200));
-		await until(() => shows('Send test e-mail'));
-		await press('Send test e-mail');
+		await until(() => shows('Send test email'));
+		await press('Send test email');
 		await until(() => ownerBrowser.calls.some((c) => c.path === adminApi.settingsMailTest()));
-		await press('Turn e-mail sending off');
+		await press('Turn email sending off');
 		await until(() => ownerBrowser.calls.filter((c) => c.path === adminApi.settingsMail() && c.status === 200).length >= 2);
 		fill('Name', 'Acme Portal');
 		await saveIn('Branding');
@@ -563,7 +563,7 @@ describe('admin console interactions (jsdom)', () => {
 		await until(() => shows('Remove logo'));
 		await press('Remove logo');
 		await until(() => ownerBrowser.calls.some((c) => c.method === 'DELETE' && c.path === adminApi.settingsLogo()));
-		fill('E-mail', 'help@acme.test');
+		fill('Email', 'help@acme.test');
 		fill('Phone', '+1 415 555 0134');
 		await saveIn('Support contact');
 		await until(() => ownerBrowser.calls.some((c) => c.path === adminApi.settingsSupport() && c.status === 200));
@@ -594,7 +594,7 @@ describe('admin console interactions (jsdom)', () => {
 			</ToastProvider>,
 		);
 		await press('Invite');
-		fillDialog('E-mail', 'help@ss.test');
+		fillDialog('Email', 'help@ss.test');
 		await act(async () => {
 			type(byLabel(/** @type {HTMLElement} */ (document.querySelector('[role="dialog"]')), 'Role'), 'support');
 		});
@@ -623,11 +623,11 @@ describe('admin console interactions (jsdom)', () => {
 			/** @type {HTMLButtonElement} */ (document.querySelector('[role="dialog"] button[aria-label="Close"]'))?.click();
 		});
 		await press('Resend invite');
-		await choose('Correct invite e-mail');
-		fillDialog('E-mail', 'helpdesk@ss.test');
+		await choose('Correct invite email');
+		fillDialog('Email', 'helpdesk@ss.test');
 		await act(async () => {
 			/** @type {HTMLButtonElement} */ (
-				[...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent === 'Correct invite e-mail')
+				[...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent === 'Correct invite email')
 			).click();
 		});
 		await until(() => shows('helpdesk@ss.test'));

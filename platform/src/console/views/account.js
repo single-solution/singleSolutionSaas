@@ -1,7 +1,7 @@
 'use client';
 /**
  * The merchant Account page (PLAN 0.8.2 Merchant): business details (business name, owner name, phone, address,
- * country), the sign-in e-mail (confirmed by e-mail), the password, two-step sign-in (on/off, recovery codes) and the
+ * country), the sign-in email (confirmed by email), the password, two-step sign-in (on/off, recovery codes) and the
  * merchant's own activity.
  * @module
  */

@@ -14,7 +14,7 @@
  * runs right after the response, and only then (no timers, PLAN 0.10).
  *
  * The result helpers (`ok`, `created`, `problem`, `paginate`, …) mirror `@ss/app-kit`'s so products and the Portal
- * share one wire behaviour (problem documents, cursor pages `{ items, nextCursor, hasMore }` + `Link`, idempotent
+ * share one wire behavior (problem documents, cursor pages `{ items, nextCursor, hasMore }` + `Link`, idempotent
  * replays with `Idempotent-Replayed: true`).
  * @module
  */
@@ -787,7 +787,7 @@ export const createApiHandler = ({
  * Next.js App Router adapter: `export const { GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS } = toNextRoute(handler)`.
  * The handler strips its own `basePath` (`/api`), so routes are declared as `/v1/...` whether they are reached at
  * `/api/v1/...` or through the `/v1/:path*` rewrite. Pass Next's `after` (`import { after } from 'next/server.js'`)
- * so deferred work (the request's notices and e-mails) runs after the response on serverless hosts.
+ * so deferred work (the request's notices and emails) runs after the response on serverless hosts.
  * @param {(request: Request) => Promise<Response>} handler
  * @param {{ after?: AfterScheduler }} [options]
  * @returns {Readonly<Record<'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS', (request: Request) => Promise<Response>>>}

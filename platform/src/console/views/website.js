@@ -90,7 +90,7 @@ export const dailyCostOf = (cards) => cards.reduce((sum, card) => sum + (card.da
 
 /**
  * Status dot of a website in a list: the worst status of its products (stopped or suspended red, in grace amber,
- * active green), grey without products or with no features on.
+ * active green), gray without products or with no features on.
  * @param {readonly ProductCard[]} cards
  * @returns {'success' | 'warning' | 'danger' | 'neutral'}
  */

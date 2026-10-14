@@ -11,7 +11,14 @@ import * as loaders from '../../src/console/loaders.js';
 import { routes } from '../../src/console/paths.js';
 import { AccountView } from '../../src/console/views/account.js';
 import { CreditsView } from '../../src/console/views/credits.js';
-import { BillingBanner, DaysLeft, ProductStatusBadge, productStatusLabel, productTone } from '../../src/console/views/billing.js';
+import {
+	BillingBanner,
+	DaysLeft,
+	LocalTime,
+	ProductStatusBadge,
+	productStatusLabel,
+	productTone,
+} from '../../src/console/views/billing.js';
 import { ConsoleShell, merchantSections } from '../../src/console/views/shell.js';
 import { contactLine, homeOf } from '../../src/console/views/sign-in.js';
 import { OverviewView, WebsitesView } from '../../src/console/views/websites.js';
@@ -54,7 +61,7 @@ const ssr = (element) => {
 /** @param {string} html */
 const text = (html) =>
 	html
-		.replace(/<wbr\/?>/g, '') // soft line breaks inside a domain or e-mail
+		.replace(/<wbr\/?>/g, '') // soft line breaks inside a domain or email
 		.replace(/<[^>]+>/g, ' ')
 		.replace(/&#x27;/g, "'")
 		.replace(/&amp;/g, '&')
@@ -196,7 +203,7 @@ describe('merchant console smoke', () => {
 			['Usage and credits', false],
 			['Account', false],
 		]);
-		// status labels and colours (PLAN 0.6)
+		// status labels and colors (PLAN 0.6)
 		expect(productTone({ status: 'active', featuresOn: [] })).toBe('neutral');
 		expect(productTone({ status: 'active', featuresOn: ['a'] })).toBe('success');
 		expect(productTone({ status: 'grace', featuresOn: ['a'] })).toBe('warning');
@@ -235,5 +242,12 @@ describe('merchant console smoke', () => {
 		expect(text(ssr(<DaysLeft summary={{ stoppedAt: '2026-10-04T11:00:00.000Z' }} />))).toContain('Stopped since');
 		expect(text(ssr(<DaysLeft summary={{ daysLeft: null }} />))).toContain('—');
 		expect(text(ssr(<DaysLeft summary={{ daysLeft: 1 }} />))).toContain('1 day');
+		// one date style (en-US): the server renders UTC; the browser then shows the viewer's own zone in the same style
+		expect(text(ssr(<LocalTime value="2026-10-04T14:30:00.000Z" />)).trim()).toBe('Oct 4, 2026, 2:30 PM UTC');
+		expect(ssr(<LocalTime value="2026-10-04T14:30:00.000Z" />)).toContain('dateTime="2026-10-04T14:30:00.000Z"');
+		expect(text(ssr(<LocalTime value={null} />)).trim()).toBe('—');
+		expect(
+			text(ssr(<BillingBanner summary={{ status: 'grace', graceEnd: '2026-10-04T11:00:00.000Z' }} contact="help@x" />)),
+		).toContain('Oct 4, 2026, 11:00 AM UTC');
 	});
 });

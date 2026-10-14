@@ -1,6 +1,6 @@
 /**
  * Collections of the `identity` module (PLAN 0.2, 0.4.4): admins, merchants (one record = business details + one
- * login), the login e-mails (unique across admins and merchants), one-time links, websites, domain claims, the two
+ * login), the login emails (unique across admins and merchants), one-time links, websites, domain claims, the two
  * tokens of each product on a website and the revoked token ids. Passwords are scrypt hashes, two-step secrets and
  * server tokens are sealed with `ENCRYPTION_KEY`, one-time links and recovery codes are HMACs; browser tokens are
  * public and stored in full.
@@ -24,7 +24,7 @@ export const collections = Object.freeze([
 		module: 'identity',
 		name: C.admins,
 		description:
-			'Admins: name, login e-mail, one role (owner | support | finance), status invited | active, optional two-step. The first admin carries `firstAdmin: true` (unique), so only one can be created that way. `_id` = adminId.',
+			'Admins: name, login email, one role (owner | support | finance), status invited | active, optional two-step. The first admin carries `firstAdmin: true` (unique), so only one can be created that way. `_id` = adminId.',
 		indexes: [
 			{ keys: { email: 1 }, unique: true },
 			{ keys: { firstAdmin: 1 }, name: 'first_admin', unique: true, partialFilterExpression: { firstAdmin: true } },
@@ -35,20 +35,20 @@ export const collections = Object.freeze([
 		module: 'identity',
 		name: C.merchants,
 		description:
-			'Merchants: business details plus exactly one login (owner e-mail, password, optional two-step); status active | suspended | deleted; `nameKey` for prefix search. `_id` = merchantId.',
+			'Merchants: business details plus exactly one login (owner email, password, optional two-step); status active | suspended | deleted; `nameKey` for prefix search. `_id` = merchantId.',
 		indexes: [{ keys: { status: 1, _id: 1 } }, { keys: { nameKey: 1, _id: 1 } }, { keys: { email: 1 } }],
 	}),
 	defineCollection({
 		module: 'identity',
 		name: C.logins,
 		description:
-			'Login e-mails, unique across admins and merchants (`_id` = the lower-cased e-mail): `{ kind: admin | merchant, subject }`. Claimed before a login is created or changed, released when it is erased.',
+			'Login emails, unique across admins and merchants (`_id` = the lower-cased email): `{ kind: admin | merchant, subject }`. Claimed before a login is created or changed, released when it is erased.',
 	}),
 	defineCollection({
 		module: 'identity',
 		name: C.tokens,
 		description:
-			'Single-use tokens (setup links, password resets, e-mail changes, two-step sign-in steps); `_id` = HMAC of the token.',
+			'Single-use tokens (setup links, password resets, email changes, two-step sign-in steps); `_id` = HMAC of the token.',
 		timestamps: false,
 		ttl: { field: 'expireAt', afterSeconds: 0 },
 		indexes: [{ keys: { purpose: 1, subject: 1 } }],
@@ -67,7 +67,7 @@ export const collections = Object.freeze([
 	defineCollection({
 		module: 'identity',
 		name: C.domains,
-		description: 'Domain claims of active websites (`_id` = normalised domain); released at once when the website is removed.',
+		description: 'Domain claims of active websites (`_id` = normalized domain); released at once when the website is removed.',
 	}),
 	defineCollection({
 		module: 'identity',

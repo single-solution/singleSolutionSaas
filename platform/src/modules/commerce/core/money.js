@@ -19,6 +19,7 @@
  * integer millicredits.
  * @module
  */
+import { formatDate } from '@ss/contracts/format';
 
 export const HOUR_MS = 3_600_000;
 export const DAY_MS = 86_400_000;
@@ -63,17 +64,17 @@ export const dayOf = (ms) => new Date(ms).toISOString().slice(0, 10);
 const CREDITS = new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 3 });
 
 /**
- * Credits as shown in e-mails (0.5.1): up to 3 decimals, trailing zeros dropped, a minus sign when negative.
+ * Credits as shown in emails (0.5.1): up to 3 decimals, trailing zeros dropped, a minus sign when negative.
  * @param {number} millicredits
  */
 export const creditsText = (millicredits) =>
 	`${CREDITS.format(millicredits / 1000)} ${Math.abs(millicredits) === 1000 ? 'credit' : 'credits'}`;
 
 /**
- * An instant as shown in e-mails: `2026-10-08 14:30 UTC`.
+ * An instant as shown in emails, in the consoles' one date style (US English, UTC): `Oct 8, 2026, 2:30 PM UTC`.
  * @param {number} ms
  */
-export const instantText = (ms) => `${new Date(ms).toISOString().slice(0, 16).replace('T', ' ')} UTC`;
+export const instantText = (ms) => `${formatDate(ms, { locale: 'en-US' }, { timeZone: 'UTC' })} UTC`;
 
 /** @param {string} websiteId @param {string} productId */
 const pairKey = (websiteId, productId) => `${websiteId}\u0000${productId}`;

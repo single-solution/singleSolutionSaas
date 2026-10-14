@@ -4,7 +4,7 @@
  * - `getMongoClient` — one pooled `MongoClient` per URI, cached on `globalThis` so warm serverless invocations
  *   reuse it; importing never needs a database. `connectMongoClient` connects it before use (the Portal before it is
  *   built), and again after a failed connect. Every call has deadlines ({@link DATABASE_DEADLINES}); a database that
- *   cannot be reached or does not answer in time fails fast with an error {@link isDatabaseUnavailable} recognises,
+ *   cannot be reached or does not answer in time fails fast with an error {@link isDatabaseUnavailable} recognizes,
  *   which requests answer 503 `database_unavailable`.
  * - `defineCollection` / `createRegistry` — every module declares its collections (indexes, TTL, `appendOnly`,
  *   `tenant: 'merchant'`). Names are global and owned: a module's collections are named `<module>_<name>`.

@@ -1,5 +1,5 @@
 /**
- * Websites (PLAN 0.2 Websites, 0.5.9): one exact domain each (normalised with `@ss/contracts` `normaliseDomain`:
+ * Websites (PLAN 0.2 Websites, 0.5.9): one exact domain each (normalized with `@ss/contracts` `normaliseDomain`:
  * lowercase, punycode, no scheme, path, port or trailing dot; IP addresses, localhost, single-label names and wildcards
  * refused), added and removed only by Owner and Support. A domain belongs to at most one website platform-wide: it is
  * claimed in `identity_domains` (`_id` = domain, so concurrent claims race on the unique `_id`). A website can be

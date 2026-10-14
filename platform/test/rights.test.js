@@ -240,7 +240,7 @@ describe('rights: people, merchants, websites, tokens, admins and Settings', () 
 			anonymous: (as) => as.anonymous.get(`${as.site}/tokens`),
 		},
 		{
-			name: 'Admins: invite, resend (or copy) invite, correct invite e-mail, change role, remove',
+			name: 'Admins: invite, resend (or copy) invite, correct invite email, change role, remove',
 			columns: {
 				owner: async (as) => expect((await as.owner.get('/v1/admin/admins')).status).toBe(200),
 				support: async (as) => expect((await as.support.post('/v1/admin/admins', {})).status).toBe(403),
@@ -250,7 +250,7 @@ describe('rights: people, merchants, websites, tokens, admins and Settings', () 
 			anonymous: (as) => as.anonymous.get('/v1/admin/admins'),
 		},
 		{
-			name: 'Settings (e-mail, billing rules, branding, support contact, security)',
+			name: 'Settings (email, billing rules, branding, support contact, security)',
 			columns: {
 				owner: async (as) => expect((await as.owner.get('/v1/admin/settings')).status).toBe(200),
 				support: async (as) => expect((await as.support.send('PUT', '/v1/admin/settings/branding', {})).status).toBe(403),

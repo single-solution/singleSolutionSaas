@@ -3,7 +3,7 @@
  * Merchant Console in the browser (jsdom) — the public account pages, Account, Overview, Websites and the frame: the
  * views are rendered client-side against a live in-process Portal (`fetch` routed to `portal.handle` with a cookie jar)
  * and driven through their forms and dialogs: the one sign-in page (with two-step, Create admin and the suspended
- * message), Forgot password, reset and setup links, the e-mail confirmation, Account (details, sign-in e-mail,
+ * message), Forgot password, reset and setup links, the email confirmation, Account (details, sign-in email,
  * password, two-step with a QR code and recovery codes), the welcome, Overview with Open (the merchant launch route),
  * the websites list, the frame and the client helpers.
  */
@@ -15,6 +15,7 @@ import { closeMongoClients } from '../../src/testing.js';
 import * as loaders from '../../src/console/loaders.js';
 import { apiFetch, signInAgain, takeFragmentToken, useResource } from '../../src/console/client.js';
 import { AccountView } from '../../src/console/views/account.js';
+import { LocalTime } from '../../src/console/views/billing.js';
 import { QrCode } from '../../src/console/views/login-settings.js';
 import {
 	ConfirmEmailView,
@@ -93,9 +94,9 @@ describe('merchant console interactions (jsdom): sign-in, Account, Overview, web
 			render(<SignInView branding={BRANDING} firstAdmin />);
 			expect(shows('No admin exists yet.')).toBe(true);
 			await press('Create admin');
-			expect(shows('Enter your name.') && shows('Enter an e-mail address.')).toBe(true);
+			expect(shows('Enter your name.') && shows('Enter an email address.')).toBe(true);
 			fill('Your name', 'Ada');
-			fill('E-mail', 'ada@portal.test');
+			fill('Email', 'ada@portal.test');
 			fill('Password', 'short');
 			await press('Create admin');
 			expect(shows('Use at least 12 characters.')).toBe(true);
@@ -115,23 +116,23 @@ describe('merchant console interactions (jsdom): sign-in, Account, Overview, web
 		render(<SignInView branding={BRANDING} firstAdmin={false} next="/credits" notice="expired" />);
 		expect(shows('Your session ended. Sign in again.')).toBe(true);
 		await press('Sign in');
-		expect(shows('Enter an e-mail address.') && shows('Enter your password.')).toBe(true);
-		fill('E-mail', 'owner@shop.test');
+		expect(shows('Enter an email address.') && shows('Enter your password.')).toBe(true);
+		fill('Email', 'owner@shop.test');
 		fill('Password', 'wrong password!!');
 		await press('Sign in');
 		await a.waitCall('POST', '/v1/auth/sign-in', (st) => st === 401);
-		expect(shows('The e-mail or password is incorrect.')).toBe(true);
+		expect(shows('The email or password is incorrect.')).toBe(true);
 		fill('Password', PASSWORD);
 		await press('Sign in');
 		await a.waitCall('POST', '/v1/auth/sign-in', (st) => st === 200);
 		cleanup();
 		for (const notice of /** @type {const} */ (['reset', 'email'])) {
 			render(<SignInView branding={BRANDING} firstAdmin={false} notice={notice} />);
-			expect(shows(notice === 'reset' ? 'Your password was changed.' : 'Your new sign-in e-mail is confirmed.')).toBe(true);
+			expect(shows(notice === 'reset' ? 'Your password was changed.' : 'Your new sign-in email is confirmed.')).toBe(true);
 			cleanup();
 		}
 
-		// ---------------------------------------------------------------- Account: details, e-mail, password, two-step
+		// ---------------------------------------------------------------- Account: details, email, password, two-step
 		withToasts(<AccountView {...await loaders.loadAccount(a.api, merchantId)} />);
 		expect(shows('Business details') && shows('Your activity')).toBe(true);
 		fill('Phone', '+1 212 555 0187');
@@ -140,14 +141,14 @@ describe('merchant console interactions (jsdom): sign-in, Account, Overview, web
 		await press('Save');
 		await a.waitCall('PATCH', '/v1/me', (st) => st === 200);
 		await until(() => shows('Business details saved.'));
-		// the sign-in e-mail: a wrong password, then the confirmation link
-		fill('New e-mail', 'owner2@shop.test');
+		// the sign-in email: a wrong password, then the confirmation link
+		fill('New email', 'owner2@shop.test');
 		fill('Current password', 'wrong password!!');
-		await press('Change e-mail');
+		await press('Change email');
 		await a.waitCall('POST', '/v1/me/email', (st) => st === 401);
 		const passwordFields = /** @type {HTMLInputElement[]} */ ([...document.querySelectorAll('input[type="password"]')]);
 		type(/** @type {HTMLInputElement} */ (passwordFields[0]), PASSWORD);
-		await press('Change e-mail');
+		await press('Change email');
 		await until(() => shows('We sent a confirmation link to owner2@shop.test.'));
 		// the password: too short, then changed
 		type(/** @type {HTMLInputElement} */ (passwordFields[1]), PASSWORD);
@@ -207,7 +208,7 @@ describe('merchant console interactions (jsdom): sign-in, Account, Overview, web
 		const c = browserOf(portal);
 		c.use();
 		render(<SignInView branding={BRANDING} firstAdmin={false} />);
-		fill('E-mail', 'owner@shop.test');
+		fill('Email', 'owner@shop.test');
 		fill('Password', 'a brand new passphrase');
 		await press('Sign in');
 		await until(() => shows('Two-step sign-in'));
@@ -231,23 +232,23 @@ describe('merchant console interactions (jsdom): sign-in, Account, Overview, web
 		const d = browserOf(portal);
 		d.use();
 		render(<SignInView branding={BRANDING} firstAdmin={false} />);
-		fill('E-mail', 'owner@shop.test');
+		fill('Email', 'owner@shop.test');
 		fill('Password', 'a brand new passphrase');
 		await press('Sign in');
 		await until(() => shows('Your account is suspended. Contact help@ss.test, +44 20 7946 0123.'));
 		cleanup();
 		await world.ownerBrowser.api.post(`/v1/admin/merchants/${merchantId}/resume`, {});
 
-		// ---------------------------------------------------------------- Forgot password, reset and setup links, e-mail confirmation
+		// ---------------------------------------------------------------- Forgot password, reset and setup links, email confirmation
 		const f = browserOf(portal);
 		f.use();
 		render(<ForgotPasswordView branding={BRANDING} />);
-		fill('E-mail', 'not an e-mail');
+		fill('Email', 'not an email');
 		await press('Send the link');
-		expect(shows('Enter an e-mail address.')).toBe(true);
-		fill('E-mail', 'owner@shop.test');
+		expect(shows('Enter an email address.')).toBe(true);
+		fill('Email', 'owner@shop.test');
 		await press('Send the link');
-		await until(() => shows('If this e-mail has a login, a link is on its way.'));
+		await until(() => shows('If this email has a login, a link is on its way.'));
 		cleanup();
 		setToken('');
 		render(<ResetPasswordView branding={BRANDING} />);
@@ -436,5 +437,19 @@ describe('merchant console interactions (jsdom): sign-in, Account, Overview, web
 		await settle(2);
 		await world.close();
 		restore();
+	});
+
+	it("shows a single time in the viewer's own time zone, in the same date style as the server's UTC", async () => {
+		const viewer = { ...new Intl.DateTimeFormat().resolvedOptions(), timeZone: 'America/New_York' };
+		const spy = vi.spyOn(Intl.DateTimeFormat.prototype, 'resolvedOptions').mockReturnValue(viewer);
+		try {
+			const { container } = render(<LocalTime value="2026-10-04T14:30:00.000Z" />);
+			const time = container.querySelector('time');
+			expect(time?.textContent).toBe('Oct 4, 2026, 10:30 AM EDT');
+			expect(time?.getAttribute('title')).toBe('Oct 4, 2026, 2:30 PM UTC');
+			expect(time?.getAttribute('datetime')).toBe('2026-10-04T14:30:00.000Z');
+		} finally {
+			spy.mockRestore();
+		}
 	});
 });

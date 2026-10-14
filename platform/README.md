@@ -14,7 +14,7 @@ Exactly three variables, plus one optional during a key change and an optional l
 | Variable                  | What it is                                                                                                                                       |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `MONGODB_URI`             | the Portal's own database (`ss_portal`; never a merchant database; production and preview never share one)                                       |
-| `PORTAL_URL`              | the Portal's final address (https in production, no path): e-mail links, token, launch and notice issuer, CSRF origin, products pin it           |
+| `PORTAL_URL`              | the Portal's final address (https in production, no path): email links, token, launch and notice issuer, CSRF origin, products pin it            |
 | `ENCRYPTION_KEY`          | random, at least 32 characters: seals the stored secrets (mail password, two-step secrets, server tokens, signing keys)                          |
 | `ENCRYPTION_KEY_PREVIOUS` | optional, only while `ENCRYPTION_KEY` is changed: the old key, so stored secrets keep opening; removed after Settings → Encryption key → Re-seal |
 | `LOG_LEVEL`               | optional: `debug`, `info`, `warn`, `error` or `silent` (default `info`; `debug` in development)                                                  |
@@ -27,7 +27,7 @@ Outside production the Portal may reach products on `localhost`, `127.0.0.1` and
 
 1. Create a Vercel project (or any Node 22 host running Next.js) with the root directory `platform` and set the three
    variables for Production only.
-2. Deploy, open `<PORTAL_URL>/login` at once and create the first admin (name, e-mail, password): you become the Owner.
+2. Deploy, open `<PORTAL_URL>/login` at once and create the first admin (name, email, password): you become the Owner.
 3. Connect each product in Products → **Add product**. Changing `PORTAL_URL` later means reconnecting every product.
 
 Indexes are applied on the first request after a deploy; there is nothing to schedule or run by hand.

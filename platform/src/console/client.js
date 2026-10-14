@@ -108,7 +108,7 @@ export const useResource = (path, initial, { problem: initialProblem = null } = 
 };
 
 /**
- * Value of `#token=…` in the URL fragment (e-mail links carry tokens there so they never reach servers or logs);
+ * Value of `#token=…` in the URL fragment (email links carry tokens there so they never reach servers or logs);
  * removes the fragment from the address bar once read.
  * @returns {string | null}
  */

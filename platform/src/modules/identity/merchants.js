@@ -1,6 +1,6 @@
 /**
  * Merchants (PLAN 0.2 Merchants, 0.5.9, 0.8.2): one record holding the business details and exactly one login. Only
- * an admin creates one; the merchant gets a setup link. Admins edit the details (the login e-mail only until the
+ * an admin creates one; the merchant gets a setup link. Admins edit the details (the login email only until the
  * password is set); the merchant edits its own in Account. Suspend blocks sign-in and launches and ends sessions;
  * resume restores. Delete (only without websites) erases the login and personal details and keeps the records under
  * the business name. Every change is written to Activity, without personal details (so nothing needs blanking when a
@@ -115,8 +115,8 @@ export const createMerchants = (deps, hooks) => {
 		get: async (merchantId) => presentMerchant(await load(merchantId)),
 
 		/**
-		 * Create a merchant (Owner, Support): the login e-mail is claimed (unique across the Portal) and a 72-hour setup
-		 * link is e-mailed when e-mail sending is set (else the admin copies it).
+		 * Create a merchant (Owner, Support): the login email is claimed (unique across the Portal) and a 72-hour setup
+		 * link is emailed when email sending is set (else the admin copies it).
 		 * @param {MerchantFields & { actor: Actor, meta?: Meta }} input
 		 */
 		create: async ({ name, ownerName, email, phone, address, country, actor, meta = {} }) => {
@@ -152,7 +152,7 @@ export const createMerchants = (deps, hooks) => {
 		},
 
 		/**
-		 * Edit the merchant fields. Admins may change the login e-mail only until the password is set; the merchant
+		 * Edit the merchant fields. Admins may change the login email only until the password is set; the merchant
 		 * changes it in Account with a confirmation (accounts).
 		 * @param {Partial<MerchantFields> & { merchantId: string, actor: Actor, meta?: Meta }} input
 		 */
@@ -163,7 +163,7 @@ export const createMerchants = (deps, hooks) => {
 			for (const [key, value] of Object.entries(fields)) if (value !== undefined && value !== merchant[key]) set[key] = value;
 			if (set.email !== undefined) {
 				if (merchant.passwordHash || actor.type !== 'admin')
-					throw problem('conflict', 'The login e-mail can be corrected only until the password is set.');
+					throw problem('conflict', 'The login email can be corrected only until the password is set.');
 				await repo.claimLogin(/** @type {string} */ (set.email), 'merchant', merchantId);
 			}
 			if (set.name !== undefined) set.nameKey = nameKey(set.name);
@@ -223,7 +223,7 @@ export const createMerchants = (deps, hooks) => {
 
 		/**
 		 * Merchants page (by id), deleted ones excluded, optionally filtered by status and searched by `q`: a case- and
-		 * accent-insensitive prefix of the business name, or of the owner e-mail (`@`), or of a website domain (PLAN 0.6:
+		 * accent-insensitive prefix of the business name, or of the owner email (`@`), or of a website domain (PLAN 0.6:
 		 * the Merchants search is how an admin finds a website). `setupPending` keeps the merchants whose password is not
 		 * set yet (Setup pending; the ones Resend setup link applies to).
 		 * @param {{ after: string | null, limit: number, status?: string, q?: string, setupPending?: boolean }} input
@@ -260,7 +260,7 @@ export const createMerchants = (deps, hooks) => {
 
 		/**
 		 * Delete a merchant (Owner; typed confirmation with the business name): only without websites (removed ones do
-		 * not count). The login and personal details are erased, every session ends, the e-mail is free; credits are
+		 * not count). The login and personal details are erased, every session ends, the email is free; credits are
 		 * forfeited. Receipts, day charges and Activity stay under the business name, marked Deleted.
 		 * @param {{ merchantId: string, confirm: string, actor: Actor, meta?: Meta }} input
 		 */

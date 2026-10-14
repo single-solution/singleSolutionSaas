@@ -8,8 +8,8 @@
  *   balance at that point (receipts before it and day charges of the days before it, so days a crashed or overlapping
  *   check already wrote are never counted twice), writes the day charges of complete UTC days, records grace starts
  *   and stops once (and tells the merchant's products, `status.changed`), caches the balance and billing state, and
- *   sends a billing e-mail when the merchant enters a state (an atomic compare-and-set on the stored state, so two
- *   checks send one e-mail). The day charges, grace starts and stops and the billing state commit in one transaction.
+ *   sends a billing email when the merchant enters a state (an atomic compare-and-set on the stored state, so two
+ *   checks send one email). The day charges, grace starts and stops and the billing state commit in one transaction.
  *   It reads from the settled point on only: the products and suspension stored there, the history from a day before
  *   it, the price lists then in force, and the ledger entries from it on beside the account's cached balance. It runs
  *   when a product fetches a status and when a Portal page shows a merchant; nothing is scheduled. It never waits more
@@ -61,7 +61,7 @@ const REREAD_MS = 86_400_000;
 /** How long a check waits while another write holds the ledger; then it answers live and leaves the writing to it. */
 const CHECK_WAIT_MS = 1000;
 
-/** Billing states that send an e-mail when entered, and their template. */
+/** Billing states that send an email when entered, and their template. */
 const STATE_MAILS = Object.freeze({ low_balance: 'low_balance', grace: 'grace_started', stopped: 'products_stopped' });
 /** Merchants shown per admin list (lists are paged at 50, PLAN 0.6). */
 const PAGE = 50;
@@ -108,7 +108,7 @@ export const createBilling = ({ ctx, repo, deps, ledger, statusChanged }) => {
 	const rules = () => ctx.config.settings.billing;
 
 	/**
-	 * Send a Portal e-mail right after the response; skipped without SMTP settings (PLAN 0.5.10).
+	 * Send a Portal email right after the response; skipped without SMTP settings (PLAN 0.5.10).
 	 * @param {{ to: string, template: string, data: Record<string, string> }} message
 	 */
 	const mail = async (message) => {
@@ -396,7 +396,7 @@ export const createBilling = ({ ctx, repo, deps, ledger, statusChanged }) => {
 	};
 
 	/**
-	 * The e-mail of a billing state entered (to the merchant and every Owner and Finance admin).
+	 * The email of a billing state entered (to the merchant and every Owner and Finance admin).
 	 * @param {string} merchantId @param {BillingState} state @param {ReturnType<typeof replay>} run
 	 */
 	const billingMail = async (merchantId, state, run) => {
@@ -608,7 +608,7 @@ export const createBilling = ({ ctx, repo, deps, ledger, statusChanged }) => {
 	 *
 	 * The request's `Idempotency-Key` names the receipt (`entryKey`, unique per merchant), so a repeat of a request the
 	 * Portal saved, even one whose answer was lost, returns the saved receipt and adds nothing (receipts are never
-	 * voided, 0.5.8). Once the receipt is saved, nothing after it (summary, notices, Activity, e-mail) can fail the
+	 * voided, 0.5.8). Once the receipt is saved, nothing after it (summary, notices, Activity, email) can fail the
 	 * request: a failure there is logged.
 	 * @param {{ merchantId: string, amount: number, amountPaid: string, method: string, reference: string | null,
 	 *   idempotencyKey?: string | null } & Caller} input

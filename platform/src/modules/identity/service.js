@@ -4,7 +4,7 @@
  * implements the infra port `sessionActor` (the live role, status and two-step requirement; removed admins and
  * suspended or deleted merchants → null).
  *
- * Neighbours are reached lazily through `ctx.service`: `commerce` (products on a website, merchant status changes) and
+ * Neighbors are reached lazily through `ctx.service`: `commerce` (products on a website, merchant status changes) and
  * `catalog` (notices to products).
  * @module
  */
@@ -22,7 +22,7 @@ import { createWebsites } from './websites.js';
 
 /**
  * @typedef {object} IdentityOptions
- * @property {import('../../infra/mailer.js').Mailer} [mailer] e-mail port (default: the platform mailer `ctx.mailer`)
+ * @property {import('../../infra/mailer.js').Mailer} [mailer] email port (default: the platform mailer `ctx.mailer`)
  * @property {(domain: string) => boolean} [isPublicSuffix] refuse public suffixes as website domains
  */
 
@@ -122,7 +122,7 @@ export const createIdentityService = (ctx, options = {}) => {
 		},
 		merchantNames: merchants.namesOf,
 		/**
-		 * Who gets a merchant's billing e-mails (PLAN 0.5.10): the merchant's login e-mail and every active Owner and
+		 * Who gets a merchant's billing emails (PLAN 0.5.10): the merchant's login email and every active Owner and
 		 * Finance admin.
 		 * @param {string} merchantId
 		 */

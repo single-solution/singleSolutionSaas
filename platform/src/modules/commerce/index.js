@@ -6,7 +6,7 @@
  *
  * Nothing is scheduled (PLAN 0.10): a check runs when a product fetches a status and when a Portal page shows a merchant.
  * It charges the hours since the merchant was last settled, writes the day charges of complete UTC days, works out
- * low balance, grace and stop, tells the products when grace starts or they stop, and sends any due billing e-mail.
+ * low balance, grace and stop, tells the products when grace starts or they stop, and sends any due billing email.
  * @module
  */
 import { defineModule } from '../../infra/modules.js';

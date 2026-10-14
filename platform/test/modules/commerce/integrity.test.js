@@ -176,7 +176,7 @@ describe('ledger integrity', () => {
 		]);
 	});
 
-	it('concurrent checks write each day charge once and send one e-mail per state', async () => {
+	it('concurrent checks write each day charge once and send one email per state', async () => {
 		const clock = createClock(T0);
 		const h = await bootCommerce({ mongo, dbName: 'cm_checks', clock });
 		await h.credit(M1, 30_000);
@@ -307,7 +307,7 @@ describe('the billing check never counts a day twice (BP-1)', () => {
 		// B reads the billing state; A then runs whole (writes 10-01 and settles) before B reads the ledger
 		const b = billingFaults(h.ctx, { between: () => h.service.check(M1) });
 		const checked = await b.check(M1);
-		// before the fix: -9 credits and a grace period from 10-01 15:00 to 10-04 15:00, with its e-mail
+		// before the fix: -9 credits and a grace period from 10-01 15:00 to 10-04 15:00, with its email
 		await expectRealBalance(h, checked);
 		expect(h.mails.filter((m) => m.template === 'low_balance')).toHaveLength(2);
 	});

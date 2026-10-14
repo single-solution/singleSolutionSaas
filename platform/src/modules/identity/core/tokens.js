@@ -1,5 +1,5 @@
 /**
- * One-time tokens (setup links, password resets, e-mail changes, two-step sign-in steps): 256-bit random, base64url,
+ * One-time tokens (setup links, password resets, email changes, two-step sign-in steps): 256-bit random, base64url,
  * shown once; only `HMAC-SHA-256(secret, "ss-identity-token.v1|<purpose>|<token>")` is stored, so a database leak
  * reveals no usable token and a token minted for one purpose never matches another. Deterministic given the
  * injected randomness (no I/O).

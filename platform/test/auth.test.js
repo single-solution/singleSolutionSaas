@@ -121,7 +121,7 @@ describe('TOTP (RFC 6238)', () => {
 });
 
 describe('cookies', () => {
-	it('serialises HttpOnly SameSite=Lax cookies with the __Host- prefix when secure', () => {
+	it('serializes HttpOnly SameSite=Lax cookies with the __Host- prefix when secure', () => {
 		expect(sessionCookieName('admin', true)).toBe('__Host-ss_admin');
 		expect(sessionCookieName('merchant', false)).toBe('ss_merchant');
 		expect(serializeCookie('__Host-ss_staff', 'abc', { secure: true, maxAgeSeconds: 60.7 })).toBe(

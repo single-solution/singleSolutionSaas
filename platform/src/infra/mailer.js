@@ -1,15 +1,15 @@
 /**
- * The platform mailer (`ctx.mailer`): the e-mails the Portal itself sends (PLAN 0.5.10) — merchant setup links, admin
- * invites, password resets, login e-mail changes, two-step turned off by an Owner and the test e-mail. The SMTP
- * account is the one an Owner sets in Settings → E-mail sending.
+ * The platform mailer (`ctx.mailer`): the emails the Portal itself sends (PLAN 0.5.10) — merchant setup links, admin
+ * invites, password resets, login email changes, two-step turned off by an Owner and the test email. The SMTP
+ * account is the one an Owner sets in Settings → Email sending.
  *
  * - SMTP via nodemailer: one pooled transport per Portal instance (created on first send), 10 s connection,
  *   greeting and socket timeouts, TLS ≥ 1.2 with certificate verification; in production a `smtp://` URL must
  *   upgrade with STARTTLS (`requireTLS`), so mail never leaves in clear text. File and URL access are disabled.
  * - Texts live in `src/texts/mail.js`: plain text plus simple inline-styled HTML with no external assets; every
- *   variable is HTML-escaped and links must be absolute http(s) URLs. Every e-mail carries the Branding name and the
+ *   variable is HTML-escaped and links must be absolute http(s) URLs. Every email carries the Branding name and the
  *   support contact.
- * - Without SMTP settings e-mails are skipped (`available: false`; setup links can still be copied) and admin Overview
+ * - Without SMTP settings emails are skipped (`available: false`; setup links can still be copied) and admin Overview
  *   shows a warning. Development and test log instead (the link is logged — never in production).
  * @module
  */
@@ -28,7 +28,7 @@ import { MAIL_TEXTS, supportLine } from '../texts/mail.js';
  * @property {Record<string, string | null | undefined>} data template variables (`link`, `merchantName`, …)
  *
  * @typedef {object} Mailer
- * @property {boolean} available false when nothing can be sent (the e-mail is skipped)
+ * @property {boolean} available false when nothing can be sent (the email is skipped)
  * @property {(message: MailMessage) => Promise<void>} send
  * @property {() => Promise<void>} [close] close pooled connections
  *
@@ -179,7 +179,7 @@ export const createSmtpMailer = ({ smtp, from, isProduction, logger, createTrans
 			} catch (error) {
 				// never log the data (links carry live tokens)
 				logger.warn('mail delivery failed', { template, error });
-				throw problem('unavailable', 'E-mail could not be sent.', { headers: { 'retry-after': '60' } });
+				throw problem('unavailable', 'Email could not be sent.', { headers: { 'retry-after': '60' } });
 			}
 		},
 		close: async () => {
@@ -206,7 +206,7 @@ export const createLogMailer = (logger, context) =>
 	});
 
 /**
- * No mail transport (production without SMTP settings): callers skip e-mails (`available: false`); a send anyway
+ * No mail transport (production without SMTP settings): callers skip emails (`available: false`); a send anyway
  * fails with 503.
  * @returns {Mailer}
  */
@@ -214,7 +214,7 @@ export const createUnavailableMailer = () =>
 	Object.freeze({
 		available: false,
 		send: async () => {
-			throw problem('unavailable', 'E-mail delivery is not configured.', { headers: { 'retry-after': '3600' } });
+			throw problem('unavailable', 'Email delivery is not configured.', { headers: { 'retry-after': '3600' } });
 		},
 	});
 

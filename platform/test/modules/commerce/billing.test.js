@@ -77,7 +77,7 @@ describe('credits and billing (PLAN 0.5)', () => {
 			balance: '68 credits',
 			daysLeft: '2 days',
 		});
-		// a second check writes nothing new and sends no second e-mail
+		// a second check writes nothing new and sends no second email
 		await h.service.check(M1);
 		const days = await h.db.collection('commerce_ledger').find({ merchantId: M1, type: 'day_charge' }).toArray();
 		expect(days).toMatchObject([
@@ -139,7 +139,7 @@ describe('credits and billing (PLAN 0.5)', () => {
 		expect(grace).toMatchObject({ status: 'grace', balance: 0, graceEnd: '2026-10-04T11:00:00.000Z', daysLeft: 0 });
 		expect(grace.products[0]?.status).toBe('grace');
 		const graceMail = h.mails.find((m) => m.template === 'grace_started');
-		expect(graceMail?.data.stopAt).toBe('2026-10-04 11:00 UTC');
+		expect(graceMail?.data.stopAt).toBe('Oct 4, 2026, 11:00 AM UTC');
 		// a Settings change applies only to grace periods that start later
 		h.ctx.config.settings.billing.graceDays = 1;
 		clock.set(T0 + 3 * DAY + 2 * HOUR); // 12:00, three days later

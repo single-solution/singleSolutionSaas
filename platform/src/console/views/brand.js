@@ -1,12 +1,12 @@
 'use client';
 /**
- * The Branding on screens (PLAN 0.8.2 Branding): the logo (or a mark) with the name, and the accent colour when an
+ * The Branding on screens (PLAN 0.8.2 Branding): the logo (or a mark) with the name, and the accent color when an
  * Owner changed it from the default indigo.
  * @module
  */
 import { Icon } from '@ss/ui';
 
-/** The default accent (the theme's own primary colour). */
+/** The default accent (the theme's own primary color). */
 const DEFAULT_ACCENT = '#4f46e5';
 
 /**

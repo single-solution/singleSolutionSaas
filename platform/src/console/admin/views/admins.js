@@ -1,10 +1,10 @@
 'use client';
 /**
  * Admins (PLAN 0.8.2; Owner only): one list-and-detail screen. The list (count; search; role filter; per row the name,
- * e-mail, a status dot — invited grey — and the role) with **Invite** (e-mail + role) sits beside the selected admin — on
+ * email, a status dot — invited gray — and the role) with **Invite** (email + role) sits beside the selected admin — on
  * wide screens the first one until another is picked: its details (status, role, two-step with recovery codes left,
  * last sign-in, added), what its role can do and its recent activity, with the actions Resend invite or
- * Copy invite link and Correct invite e-mail (until accepted), Change role, Turn off two-step and Remove, as dialogs —
+ * Copy invite link and Correct invite email (until accepted), Change role, Turn off two-step and Remove, as dialogs —
  * the first two as buttons, the rest in the header's More menu with Remove last. The last Owner cannot be removed or
  * demoted and no one removes themselves (the API refuses; the screen explains).
  * @module
@@ -304,7 +304,7 @@ export function AdminsView(props) {
 			<Dialog open={dialog?.kind === 'invite'} onClose={() => setDialog(null)} title={ADMIN.inviteTitle}>
 				<Form onSubmit={() => invite(false)} busy={busy} aria-label={ADMIN.inviteTitle}>
 					<Input
-						label="E-mail"
+						label="Email"
 						type="email"
 						value={email}
 						onChange={(e) => setEmail(e.currentTarget.value)}
@@ -346,7 +346,7 @@ export function AdminsView(props) {
 				title={`${dialog?.admin?.name ?? dialog?.admin?.email ?? ''}`}
 				error={problem ? describeProblem(problem) : null}>
 				{dialog?.kind === 'email' ? (
-					<Input label="E-mail" type="email" value={email} onChange={(e) => setEmail(e.currentTarget.value)} required />
+					<Input label="Email" type="email" value={email} onChange={(e) => setEmail(e.currentTarget.value)} required />
 				) : dialog?.kind === 'role' ? (
 					<div className="space-y-3">
 						<p className="text-sm text-muted">{ADMIN.roleChangeHelp}</p>

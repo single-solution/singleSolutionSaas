@@ -1,14 +1,14 @@
 /**
- * HTTP routes of the `identity` module — thin adapters: parse (core/inputs), authorise (PLAN 0.2 rights table, see
+ * HTTP routes of the `identity` module — thin adapters: parse (core/inputs), authorize (PLAN 0.2 rights table, see
  * `infra/rbac.js`), call the service.
  *
  * - `/v1/auth/*` (public, rate-limited): the one sign-in page (+ two-step step), Create admin, Forgot password,
- *   setup links, reset links, e-mail confirmation; sign-out.
- * - `/v1/me/*` (admin or merchant session): the signed-in person, their details, e-mail, password and two-step.
+ *   setup links, reset links, email confirmation; sign-out.
+ * - `/v1/me/*` (admin or merchant session): the signed-in person, their details, email, password and two-step.
  * - `/v1/merchants/:merchantId/*` (merchant session for its own records, or admin): websites and the tokens of the
  *   products on them (Install and tokens).
  * - `/v1/admin/*` (admin): merchants (create, search, edit, suspend, resume, setup links, two-step off, delete,
- *   bulk actions) and admins (invite, resend or copy, correct e-mail, change role, two-step off, remove).
+ *   bulk actions) and admins (invite, resend or copy, correct email, change role, two-step off, remove).
  * - `GET /v1/product/revocations?since=` (client assertion, PLAN 0.4.12 row 6).
  *
  * Responses that carry secrets (setup links, two-step secrets and recovery codes, server tokens) opt out of
@@ -86,7 +86,7 @@ export const identityRoutes = (ctx, service) => {
 	const kindOf = (c) => /** @type {'admin' | 'merchant'} */ (c.authMode === 'admin' ? 'admin' : 'merchant');
 
 	/**
-	 * Load the website (tenant-scoped), then authorise against it.
+	 * Load the website (tenant-scoped), then authorize against it.
 	 * @param {RequestContext} c
 	 * @param {string} permission
 	 */

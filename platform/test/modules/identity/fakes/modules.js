@@ -1,5 +1,5 @@
 /**
- * Fake neighbour modules implementing only the INTERFACES.md functions identity depends on: `commerce`
+ * Fake neighbor modules implementing only the INTERFACES.md functions identity depends on: `commerce`
  * (`onMerchantStatus`, the products on a website) and `catalog` (notices, product names and the `productKeys` port for
  * product routes), plus a `whoami` route that reports how a request authenticated.
  */

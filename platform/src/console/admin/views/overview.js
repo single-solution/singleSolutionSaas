@@ -1,7 +1,7 @@
 'use client';
 /**
  * Admin Overview (PLAN 0.8.2; look "Workbench", owner 2026-10-14): a greeting with one sentence of what matters now;
- * "Needs you" — each item says what happens if it waits and carries its button (e-mail sending not set up, no product
+ * "Needs you" — each item says what happens if it waits and carries its button (email sending not set up, no product
  * connected or active, merchants low on credits, in grace or stopped, with Add credits); the setup checklist while
  * the platform is new; the month's numbers; credits spent per UTC day; the first merchants with their balance; the
  * per-product numbers (websites using it, credits earned this month, 30-day chart, a More menu to view it or open it
@@ -64,7 +64,7 @@ const totalDays = (products) => {
 };
 
 /**
- * One step of the setup checklist: a tick when done, a dashed ring while to do (with its link).
+ * One step of the setup checklist: a check mark when done, a dashed ring while to do (with its link).
  * @param {{ done: boolean, label: string, href?: string | null, onClick?: (() => void) | null }} props
  */
 function ReadyStep({ done, label, href, onClick }) {

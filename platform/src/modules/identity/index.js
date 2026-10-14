@@ -15,7 +15,7 @@ import { createIdentityService } from './service.js';
 
 const IDENTITY_PROBLEMS = Object.freeze({
 	domain_taken: Object.freeze({ status: 409, title: 'Domain already belongs to a website' }),
-	email_taken: Object.freeze({ status: 409, title: 'E-mail already used by another login' }),
+	email_taken: Object.freeze({ status: 409, title: 'Email already used by another login' }),
 	last_owner: Object.freeze({ status: 409, title: 'There must always be at least one Owner' }),
 	merchant_suspended: Object.freeze({ status: 403, title: 'Merchant suspended' }),
 	products_on_website: Object.freeze({ status: 409, title: 'Remove its products first' }),

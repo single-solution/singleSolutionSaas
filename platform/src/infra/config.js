@@ -9,7 +9,7 @@
  *   constant below. The environment comes from `NODE_ENV` (production unless `development` or `test`).
  * - **System state** (`infra/system.js`, the control database): the secrets generated on first start (the Portal
  *   signing keys, the token signing keys, the session secret and the idempotency secret) and the settings an Owner
- *   records (e-mail sending, branding, support contact, security, billing rules).
+ *   records (email sending, branding, support contact, security, billing rules).
  * The Portal's address is `PORTAL_URL` and nothing else: never the request's Host or forwarded headers (PLAN 0.8.1).
  * `buildConfig(env, system)` joins them into the {@link PortalConfig} every module reads.
  * @module
@@ -87,7 +87,7 @@ import { platformError } from './errors.js';
  * @property {number} maxBodyBytes default JSON body cap
  * @property {{ admin: SessionPolicy, merchant: SessionPolicy }} sessions from Settings → Security → Session length
  * @property {{ allowHosts: ReadonlyArray<string> }} outbound
- * @property {{ smtp: SmtpConfig | null, from: string | null }} mail platform mailer (verify e-mail, resets, invites)
+ * @property {{ smtp: SmtpConfig | null, from: string | null }} mail platform mailer (verify email, resets, invites)
  */
 
 /**
