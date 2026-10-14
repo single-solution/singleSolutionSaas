@@ -173,8 +173,9 @@ export const createAdmin = (product, service) => {
 				values: { conversationId: conversations.map((c) => c.id) },
 			},
 		);
+		const removed = await deleteConversations(product, s, conversations);
 		const deleted =
-			alerts + (await deleteConversations(product, s, conversations)) + (await store.leads.remove(leads.map((l) => l.id)));
+			alerts + removed.conversations + removed.messages + removed.guests + (await store.leads.remove(leads.map((l) => l.id)));
 		return { deleted, anonymised: 0 };
 	};
 

@@ -6,7 +6,8 @@
  * (a timeline, or one note per conversation, C11), status, AI pause (with who, when and why; by reply or manage
  * rights as the inbox setting says, C11; resuming hands a waiting chat back to the AI, CH-3), assignment with presence
  * and max chats (the first replier, C11; anyone Accounts allows to reply in the inbox, CH-6), custom field values,
- * the AI summary, transcripts, rating requests, delete, saved replies and the staff list. Older messages page by
+ * the AI summary, transcripts, rating requests, delete (one, or every conversation, C20), saved replies and the staff
+ * list. Older messages page by
  * sequence (C8). Guest chats can stay hidden until handed to a person (C11), or always (CH-13). A staff reply alerts a
  * visitor who left (C6). Staff actions are written to the activity log with a label (the visitor's name, a title) and
  * a short detail, never message contents.
@@ -27,6 +28,11 @@ const MAX_SAVED_REPLIES = 200;
 /** The longest single note (C11) and pause reason. */
 const NOTE_MAX = 4000;
 const REASON_MAX = 200;
+/** Conversations deleted at a time by delete-all, and how long one call goes on before it answers `more` (C20). */
+const DELETE_BATCH = 100;
+const DELETE_BUDGET_MS = 8_000;
+/** Attachments deleted from the website's storage at once. */
+const STORAGE_DELETES_AT_ONCE = 8;
 /** An Accounts user id in a list filter. */
 const USER_ID = /^[A-Za-z0-9_.:@-]{1,64}$/;
 /** What an assignee from Accounts must be allowed (CH-6), and how many pages of 100 users are read to find them. */
@@ -46,6 +52,9 @@ export const actorOf = (ctx) => {
 	const actor = kitActorOf(ctx, TEAM);
 	return { ...actor, name: actor.name ?? TEAM.name };
 };
+
+/** A count with its noun (`1 file`, `2 files`). @param {number} count @param {string} noun */
+const counted = (count, noun) => `${count} ${noun}${count === 1 ? '' : 's'}`;
 
 /**
  * The activity label of a conversation: the visitor's name, never their message.
@@ -423,6 +432,40 @@ export const createInbox = (product, service, reply) => {
 		return noContent();
 	};
 
+	/**
+	 * `POST /v1/data/delete-all { scope: 'conversations', confirm }` (server token, C20): every conversation with what
+	 * belongs to it (messages, attachments, guest records and staff alerts still to be sent about it), a batch at a time;
+	 * after 8 seconds the answer says `more` and the next call goes on. `confirm` repeats the website's domain. Each call
+	 * writes one activity entry with its counts.
+	 * @param {any} ctx
+	 */
+	const removeAll = async (ctx) => {
+		const body = bodyOf(ctx.body);
+		/** @param {string} path @param {string} message */
+		const refuse = (path, message) => problem('validation_failed', message, { errors: [{ path, message }] });
+		if (body.scope !== 'conversations') throw refuse('/scope', 'scope is conversations.');
+		const domain = String(ctx.status?.domain ?? '');
+		if (body.confirm !== domain) throw refuse('/confirm', `Type the website's domain (${domain}) to confirm.`);
+		const s = await service.site(ctx);
+		const started = product.now();
+		const deleted = { conversations: 0, messages: 0, guests: 0, files: 0, alerts: 0 };
+		let more = true;
+		while (more && product.now() - started < DELETE_BUDGET_MS) {
+			const batch = await s.store.conversations.some(DELETE_BATCH);
+			const done = await deleteConversations(product, s, batch);
+			for (const key of /** @type {const} */ (['conversations', 'messages', 'guests', 'files'])) deleted[key] += done[key];
+			deleted.alerts += await product.staffAlerts.forget(s.ctx, {
+				values: { conversationId: batch.map((c) => c.id) },
+			});
+			more = batch.length === DELETE_BATCH;
+		}
+		await service.log(s, actorOf(ctx), 'data.deleted_all', 'conversations', {
+			label: 'conversations',
+			detail: `${counted(deleted.conversations, 'conversation')}, ${counted(deleted.messages, 'message')}, ${counted(deleted.files, 'file')}${more ? ' (more to delete)' : ''}`,
+		});
+		return { scope: 'conversations', deleted, more };
+	};
+
 	/** @param {any} ctx */
 	const summary = async (ctx) => {
 		const { s, c } = await found(ctx);
@@ -595,6 +638,7 @@ export const createInbox = (product, service, reply) => {
 		setAi,
 		update,
 		remove,
+		removeAll,
 		summary,
 		transcript,
 		askRating,
@@ -653,17 +697,30 @@ const pauseDetail = (paused, c) =>
 	paused ? 'AI paused' : c.waiting ? 'AI resumed (handed back from waiting for a person)' : 'AI resumed';
 
 /**
- * Delete conversations with their messages, attachments and guest records (the API and data rights).
+ * Delete conversations with their messages, attachments (from the website's storage, a few at a time; one storage
+ * cannot delete now is left there) and guest records (the API, delete-all and data rights); answers how many of each
+ * went.
  * @param {import('../adapters/product.js').Product} product
  * @param {Site} s
  * @param {ConversationRecord[]} conversations
  */
 export const deleteConversations = async (product, s, conversations) => {
 	const ids = conversations.map((c) => c.id);
-	const messages = await s.store.messages.ofConversations(ids);
-	const storage = await product.connections.storage(s.websiteId);
+	const keys = ids.length === 0 ? [] : await s.store.messages.attachmentKeys(ids);
+	const storage = keys.length === 0 ? null : await product.connections.storage(s.websiteId);
+	let files = 0;
 	if (storage)
-		for (const m of messages) if (m.attachment) await storage.deleteObject({ key: m.attachment.key }).catch(() => null);
+		for (let at = 0; at < keys.length; at += STORAGE_DELETES_AT_ONCE) {
+			const done = await Promise.all(
+				keys.slice(at, at + STORAGE_DELETES_AT_ONCE).map((key) =>
+					storage.deleteObject({ key }).then(
+						() => 1,
+						() => 0,
+					),
+				),
+			);
+			files += done.reduce((sum, one) => sum + one, 0);
+		}
 	const guests = conversations.flatMap((c) => [...c.guestIds, ...(c.visitor.kind === 'guest' ? [c.visitor.id] : [])]);
-	return (await s.store.conversations.remove(ids)) + (await s.store.guests.remove(guests));
+	return { ...(await s.store.conversations.remove(ids)), guests: await s.store.guests.remove(guests), files };
 };

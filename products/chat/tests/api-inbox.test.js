@@ -1,8 +1,8 @@
 /**
  * The inbox through tickets and the server API: filters and search, unread, replies, notes, status, AI pause,
  * assignment with presence and max chats, custom fields, the context panel, the AI summary, transcripts, rating
- * requests, saved replies, the staff list, attachments, deletion and the activity log copied to Accounts; knowledge and
- * reports.
+ * requests, saved replies, the staff list, attachments, deletion (one conversation, or every one, C20) and the activity
+ * log copied to Accounts; knowledge and reports.
  */
 import { afterAll, describe, expect, it } from 'vitest';
 import { AI_KEY, ORIGIN, STORAGE_KEY, ready } from './helpers.js';
@@ -241,6 +241,104 @@ describe('inbox', () => {
 		expect(sys.calls.some((c) => c.method === 'DELETE' && c.url.includes('/chat/guest-'))).toBe(true);
 		expect((await sys.serverCall('GET', `/v1/conversations/${id}`)).status).toBe(404);
 		expect((await v('GET', '/v1/chat')).json.conversation).toBeNull();
+	});
+});
+
+describe('delete every conversation (C20)', () => {
+	it('deletes every conversation and what belongs to it, with the server token and the domain typed', async () => {
+		const sys = await start(['visitor_chat', 'guest_chat', 'inbox', 'attachments', 'staff_alerts', 'leads_flows']);
+		await sys.connect('storage', STORAGE_KEY);
+		await sys.paste('notifications');
+		await sys.setting('attachments', 'visitorUploads', 'everyone');
+		await sys.setting('staff_alerts', 'recipients', ['boss@shop.example.com']);
+		// Notifications does not take the staff alerts: they are saved to be tried again
+		sys.responders.set('https://notifications.example.dev', () => ({ status: 503, body: {} }));
+		const ann = sys.visitor();
+		const upload = await ann('POST', '/v1/chat/uploads', { name: 'a.jpg', type: 'image/jpeg', size: 10 });
+		await ann('POST', '/v1/chat/messages', { text: 'photo', attachment: upload.json.attachment });
+		await ann('POST', '/v1/chat/leads', { fields: { name: 'Ann', email: 'ann@example.com' } });
+		await sys.visitor()('POST', '/v1/chat/messages', { text: 'second' });
+		const body = { scope: 'conversations', confirm: 'shop.example.com' };
+		// the server token only; the domain typed; no other scope
+		const browser = await sys.call('POST', '/v1/data/delete-all', { token: sys.browser, origin: ORIGIN, body });
+		expect(browser.status).toBe(401);
+		const ticket = await sys.call('POST', '/v1/data/delete-all', {
+			token: await sys.ticket(),
+			origin: 'https://admin.shop.example.com',
+			body,
+		});
+		expect(ticket.status).toBe(401);
+		const typo = await sys.serverCall('POST', '/v1/data/delete-all', { ...body, confirm: 'shop.example.org' });
+		expect(typo.status).toBe(422);
+		expect(typo.json.errors).toEqual([
+			{ path: '/confirm', message: "Type the website's domain (shop.example.com) to confirm." },
+		]);
+		const scope = await sys.serverCall('POST', '/v1/data/delete-all', { ...body, scope: 'leads' });
+		expect(scope.json.errors[0].path).toBe('/scope');
+		expect((await sys.serverCall('GET', '/v1/conversations')).json.items).toHaveLength(2);
+		const done = await sys.serverCall('POST', '/v1/data/delete-all', body);
+		expect(done.status).toBe(200);
+		expect(done.json).toEqual({
+			scope: 'conversations',
+			deleted: { conversations: 2, messages: 2, guests: 2, files: 1, alerts: 2 },
+			more: false,
+		});
+		expect(sys.calls.filter((c) => c.method === 'DELETE' && c.url.includes(upload.json.attachment.key))).toHaveLength(1);
+		expect((await sys.serverCall('GET', '/v1/conversations')).json.items).toEqual([]);
+		// the guest's device key is gone with its chats; leads are records of their own and stay
+		expect((await ann('GET', '/v1/chat')).json).toMatchObject({ conversation: null, visitor: { kind: 'none' } });
+		expect((await sys.serverCall('GET', '/v1/leads')).json.items).toHaveLength(1);
+		const data = await sys.product.data.forWebsite(sys.websiteId);
+		expect(await data.collection('staff_alerts').countDocuments({ websiteId: sys.websiteId })).toBe(0);
+		const [entry] = (await sys.serverCall('GET', '/v1/activity?action=data.deleted_all')).json.items;
+		expect(entry).toMatchObject({
+			action: 'data.deleted_all',
+			target: 'conversations',
+			detail: '2 conversations, 2 messages, 1 file',
+		});
+		// nothing left: nothing to delete
+		expect((await sys.serverCall('POST', '/v1/data/delete-all', body)).json).toEqual({
+			scope: 'conversations',
+			deleted: { conversations: 0, messages: 0, guests: 0, files: 0, alerts: 0 },
+			more: false,
+		});
+	});
+
+	it('answers more when there is more than one call deletes, and the next call goes on', async () => {
+		const sys = await start(['visitor_chat', 'guest_chat', 'attachments']);
+		await sys.connect('storage', STORAGE_KEY);
+		const data = await sys.product.data.forWebsite(sys.websiteId);
+		const at = new Date(sys.now());
+		await data.collection('conversations').insertMany(
+			Array.from({ length: 150 }, (_, i) => ({
+				id: `conv_old${String(i).padStart(4, '0')}`,
+				visitor: { kind: 'guest', id: `guest_old${i}` },
+				guestIds: [],
+				lastMessageAt: at,
+			})),
+		);
+		await data.collection('messages').insertOne({
+			id: 'msg_old0',
+			conversationId: 'conv_old0000',
+			seq: 1,
+			author: 'visitor',
+			text: '',
+			internal: false,
+			attachment: { key: 'chat/guest-old0/a.jpg', name: 'a.jpg', type: 'image/jpeg', size: 10 },
+		});
+		// a slow storage: the first batch takes longer than one call goes on
+		sys.responders.set(STORAGE_KEY.endpoint, (call) => {
+			if (call.method === 'DELETE') sys.advance(9_000);
+			return { status: 204 };
+		});
+		const body = { scope: 'conversations', confirm: 'shop.example.com' };
+		const first = await sys.serverCall('POST', '/v1/data/delete-all', body);
+		expect(first.json).toMatchObject({ deleted: { conversations: 100, messages: 1, files: 1 }, more: true });
+		const next = await sys.serverCall('POST', '/v1/data/delete-all', body);
+		expect(next.json).toMatchObject({ deleted: { conversations: 50, messages: 0, files: 0 }, more: false });
+		expect(await data.collection('conversations').countDocuments({ websiteId: sys.websiteId })).toBe(0);
+		const [entry] = (await sys.serverCall('GET', '/v1/activity?action=data.deleted_all&limit=2')).json.items;
+		expect(entry.detail).toBe('50 conversations, 0 messages, 0 files');
 	});
 });
 

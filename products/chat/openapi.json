@@ -5852,6 +5852,133 @@
 				}
 			}
 		},
+		"/v1/data/delete-all": {
+			"post": {
+				"summary": "Delete every conversation",
+				"description": "For going live without your test chats: every conversation with its messages, attachments (from your storage), the guest records behind it and staff alerts still waiting to be sent about it. Leads stay (they are records of their own). 100 conversations at a time: after 8 seconds the answer says more, and the next call goes on where it stopped. confirm repeats the website's domain (422 validation_failed at /confirm, at /scope for another scope). Server token only; each call writes one activity entry (data.deleted_all) with its counts.",
+				"x-ss-auth": "server",
+				"x-ss-feature": "visitor_chat",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"scope",
+									"confirm"
+								],
+								"properties": {
+									"scope": {
+										"type": "string",
+										"enum": [
+											"conversations"
+										]
+									},
+									"confirm": {
+										"type": "string",
+										"description": "The website's domain, for example shop.example.com."
+									}
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"scope",
+										"deleted",
+										"more"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"scope": {
+											"const": "conversations"
+										},
+										"deleted": {
+											"type": "object",
+											"required": [
+												"conversations",
+												"messages",
+												"guests",
+												"files",
+												"alerts"
+											],
+											"additionalProperties": false,
+											"properties": {
+												"conversations": {
+													"type": "integer",
+													"minimum": 0
+												},
+												"messages": {
+													"type": "integer",
+													"minimum": 0
+												},
+												"guests": {
+													"type": "integer",
+													"minimum": 0,
+													"description": "Guest records (device keys)."
+												},
+												"files": {
+													"type": "integer",
+													"minimum": 0,
+													"description": "Attachments deleted from your storage (one storage cannot delete now is left there)."
+												},
+												"alerts": {
+													"type": "integer",
+													"minimum": 0,
+													"description": "Staff alerts that were still waiting to be sent."
+												}
+											},
+											"description": "What this call deleted."
+										},
+										"more": {
+											"type": "boolean",
+											"description": "Conversations are left: call again."
+										}
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/v1/features": {
 			"get": {
 				"summary": "Features with on/off and hourly price",

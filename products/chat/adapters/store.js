@@ -368,12 +368,21 @@ export const createStore = (data, { now }) => {
 				/** @type {any[]} */ (
 					await conversations.find({ websiteId: w, createdAt: { $gte: from, $lt: to } }, HIDDEN).toArray()
 				),
-			/** Delete conversations and their messages. @param {string[]} ids */
+			/**
+			 * Some of the website's conversations, in no set order (delete-all takes them a batch at a time, C20).
+			 * @param {number} limit
+			 * @returns {Promise<ConversationRecord[]>}
+			 */
+			some: async (limit) => /** @type {any} */ (await conversations.find({ websiteId: w }, { ...HIDDEN, limit }).toArray()),
+			/**
+			 * Delete conversations and their messages; answers how many of each went.
+			 * @param {string[]} ids
+			 */
 			remove: async (ids) => {
-				if (ids.length === 0) return 0;
+				if (ids.length === 0) return { conversations: 0, messages: 0 };
 				const removed = (await conversations.deleteMany({ websiteId: w, id: { $in: ids } })).deletedCount;
 				const gone = (await messages.deleteMany({ websiteId: w, conversationId: { $in: ids } })).deletedCount;
-				return removed + gone;
+				return { conversations: removed, messages: gone };
 			},
 		}),
 
@@ -411,6 +420,22 @@ export const createStore = (data, { now }) => {
 					{ websiteId: w, conversationId, seq: { $lt: seq }, ...(internal ? {} : { internal: false }) },
 					{ limit: 1 },
 				)) > 0,
+			/**
+			 * The storage keys of the attachments in conversations.
+			 * @param {string[]} conversationIds
+			 * @returns {Promise<string[]>}
+			 */
+			attachmentKeys: async (conversationIds) =>
+				(
+					await messages
+						.find(
+							{ websiteId: w, conversationId: { $in: conversationIds }, attachment: { $ne: null } },
+							{ projection: { _id: 0, 'attachment.key': 1 } },
+						)
+						.toArray()
+				)
+					.map((m) => m.attachment?.key)
+					.filter((key) => typeof key === 'string'),
 			/** @param {string[]} conversationIds @returns {Promise<MessageRecord[]>} */
 			ofConversations: async (conversationIds) =>
 				/** @type {any} */ (

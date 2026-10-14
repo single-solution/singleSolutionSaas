@@ -3359,6 +3359,69 @@
 			}
 		}
 	},
+	"POST /v1/data/delete-all": {
+		"summary": "Delete every conversation",
+		"description": "For going live without your test chats: every conversation with its messages, attachments (from your storage), the guest records behind it and staff alerts still waiting to be sent about it. Leads stay (they are records of their own). 100 conversations at a time: after 8 seconds the answer says more, and the next call goes on where it stopped. confirm repeats the website's domain (422 validation_failed at /confirm, at /scope for another scope). Server token only; each call writes one activity entry (data.deleted_all) with its counts.",
+		"body": {
+			"type": "object",
+			"required": ["scope", "confirm"],
+			"properties": {
+				"scope": {
+					"type": "string",
+					"enum": ["conversations"]
+				},
+				"confirm": {
+					"type": "string",
+					"description": "The website's domain, for example shop.example.com."
+				}
+			}
+		},
+		"response": {
+			"type": "object",
+			"required": ["scope", "deleted", "more"],
+			"additionalProperties": false,
+			"properties": {
+				"scope": {
+					"const": "conversations"
+				},
+				"deleted": {
+					"type": "object",
+					"required": ["conversations", "messages", "guests", "files", "alerts"],
+					"additionalProperties": false,
+					"properties": {
+						"conversations": {
+							"type": "integer",
+							"minimum": 0
+						},
+						"messages": {
+							"type": "integer",
+							"minimum": 0
+						},
+						"guests": {
+							"type": "integer",
+							"minimum": 0,
+							"description": "Guest records (device keys)."
+						},
+						"files": {
+							"type": "integer",
+							"minimum": 0,
+							"description": "Attachments deleted from your storage (one storage cannot delete now is left there)."
+						},
+						"alerts": {
+							"type": "integer",
+							"minimum": 0,
+							"description": "Staff alerts that were still waiting to be sent."
+						}
+					},
+					"description": "What this call deleted."
+				},
+				"more": {
+					"type": "boolean",
+					"description": "Conversations are left: call again."
+				}
+			}
+		}
+	},
 	"GET /v1/staff": {
 		"summary": "The staff list",
 		"description": "By name, with presence, open chats and limits (Staff presence and max chats).",

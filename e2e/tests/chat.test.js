@@ -3,8 +3,8 @@
  * (manifest and price list), price and feature reports, a guest message answered by a faked AI provider through the
  * browser token the Portal issued, a signed-in visitor trusted through the pasted Accounts token, an inbox reply through
  * a ticket, a `Chat needs you` staff alert delivered through the pasted Notifications token (the email provider is a
- * fake in this process), the guest limit lifted while Accounts pauses the Customer role's sign-in (C17), and the hourly
- * charge.
+ * fake in this process), the guest limit lifted while Accounts pauses the Customer role's sign-in (C17), every
+ * conversation deleted before going live (C20), and the hourly charge.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -371,6 +371,21 @@ describe('Chat on the real Portal', () => {
 		const third = await visitor('POST', '/v1/chat/messages', { body: { text: 'Thanks!' }, headers });
 		expect(third.status).toBe(403);
 		expect(third.json.type).toMatch(/guest_limit_reached$/);
+	});
+
+	it('the merchant’s server deletes every conversation before going live, the domain typed (C20)', async () => {
+		const body = { scope: 'conversations', confirm: DOMAIN };
+		const typo = await sys.call('POST', '/v1/data/delete-all', {
+			token: chatTokens.server,
+			body: { ...body, confirm: 'talk.example.org' },
+		});
+		expect(typo.status).toBe(422);
+		const before = (await sys.call('GET', '/v1/conversations/count', { token: chatTokens.server })).json.count;
+		expect(before).toBeGreaterThan(0);
+		const done = await sys.call('POST', '/v1/data/delete-all', { token: chatTokens.server, body });
+		expect(done.json).toMatchObject({ scope: 'conversations', deleted: { conversations: before }, more: false });
+		expect((await sys.call('GET', '/v1/conversations/count', { token: chatTokens.server })).json.count).toBe(0);
+		expect((await visitor('GET', '/v1/chat', { headers: signedIn })).json.conversation).toBeNull();
 	});
 
 	it('the Portal charges the switched-on features every clock hour', async () => {
