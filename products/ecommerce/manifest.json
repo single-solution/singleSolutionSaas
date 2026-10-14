@@ -14,6 +14,7 @@
 			"name": "Catalog",
 			"description": "Products, categories with SEO text, brands, attributes, media in the merchant's own storage, search, listings and filters, the product page and the catalog admin widget.",
 			"dependsOn": [],
+			"recommendFor": ["sells.physical", "sells.digital", "sells.services"],
 			"settings": {
 				"$ref": "schemas/catalog.settings.json"
 			}
@@ -23,6 +24,7 @@
 			"name": "Variants",
 			"description": "Options such as size or color, each variant with its own price, stock and SKU.",
 			"dependsOn": ["catalog"],
+			"recommendFor": ["sells.physical"],
 			"settings": {
 				"$ref": "schemas/variants.settings.json"
 			}
@@ -59,6 +61,7 @@
 			"name": "Digital goods",
 			"description": "Downloads and license keys, given to the shopper once the order is paid.",
 			"dependsOn": ["checkout"],
+			"recommendFor": ["sells.digital"],
 			"settings": {
 				"$ref": "schemas/digital_goods.settings.json"
 			}
@@ -68,6 +71,7 @@
 			"name": "Bookings",
 			"description": "Services booked in simple slots: a duration, weekly hours and no double booking.",
 			"dependsOn": ["checkout"],
+			"recommendFor": ["sells.services"],
 			"settings": {
 				"$ref": "schemas/bookings.settings.json"
 			}
@@ -77,6 +81,7 @@
 			"name": "Cart and checkout",
 			"description": "The cart, checkout, orders with merchant-defined statuses, couriers with tracking links, customer records and the success page.",
 			"dependsOn": ["catalog"],
+			"recommendFor": ["sells.physical", "sells.digital", "sells.services"],
 			"settings": {
 				"$ref": "schemas/checkout.settings.json"
 			}
@@ -86,6 +91,7 @@
 			"name": "Cash on delivery",
 			"description": "Cash on delivery with a confirmation step, a largest order value, an optional advance, a blocklist and return-to-origin flags.",
 			"dependsOn": ["checkout"],
+			"recommendFor": ["pays.cod"],
 			"settings": {
 				"$ref": "schemas/cod.settings.json"
 			}
@@ -95,6 +101,7 @@
 			"name": "Delivery zones",
 			"description": "Delivery fees by city or area, free delivery over an amount, and store pickup.",
 			"dependsOn": ["checkout"],
+			"recommendFor": ["delivers.*", "pays.pickup"],
 			"settings": {
 				"$ref": "schemas/delivery_zones.settings.json"
 			}
@@ -104,6 +111,7 @@
 			"name": "Courier APIs",
 			"description": "Book shipments with a courier's API using the merchant's own keys and read the latest tracking status.",
 			"dependsOn": ["checkout"],
+			"recommendFor": ["delivers.courier"],
 			"settings": {
 				"$ref": "schemas/courier_apis.settings.json"
 			}
@@ -113,6 +121,7 @@
 			"name": "Taxes",
 			"description": "Simple tax rules: a percentage per category or region, prices shown with or without tax.",
 			"dependsOn": ["checkout"],
+			"recommendFor": ["sells.physical", "sells.digital", "sells.services"],
 			"settings": {
 				"$ref": "schemas/taxes.settings.json"
 			}
@@ -122,6 +131,7 @@
 			"name": "Coupons",
 			"description": "Codes for a percentage or fixed amount off, with limits, dates and conditions.",
 			"dependsOn": ["checkout"],
+			"recommendFor": ["offers.discounts"],
 			"settings": {
 				"$ref": "schemas/coupons.settings.json"
 			}
@@ -131,6 +141,7 @@
 			"name": "Deals",
 			"description": "Automatic offers on products, categories or brands, with dates and use limits.",
 			"dependsOn": ["catalog"],
+			"recommendFor": ["offers.discounts"],
 			"settings": {
 				"$ref": "schemas/deals.settings.json"
 			}
@@ -140,6 +151,7 @@
 			"name": "Loyalty",
 			"description": "Points earned on delivered orders and redeemed at checkout, with expiry and a history.",
 			"dependsOn": ["checkout"],
+			"recommendFor": ["offers.loyalty"],
 			"settings": {
 				"$ref": "schemas/loyalty.settings.json"
 			}
@@ -149,6 +161,7 @@
 			"name": "Role pricing",
 			"description": "Signed-in shoppers with a listed Accounts role get a percent off the goods after offers, shown as its own line on quotes, orders and invoices.",
 			"dependsOn": ["checkout"],
+			"recommendFor": ["offers.member_prices"],
 			"settings": {
 				"$ref": "schemas/role_pricing.settings.json"
 			}
@@ -158,6 +171,7 @@
 			"name": "Bundles",
 			"description": "Bundles and buy X get Y offers applied in the cart.",
 			"dependsOn": ["checkout"],
+			"recommendFor": ["offers.discounts"],
 			"settings": {
 				"$ref": "schemas/bundles.settings.json"
 			}
@@ -167,6 +181,7 @@
 			"name": "Reviews",
 			"description": "Ratings and reviews from shoppers whose order was delivered, with moderation.",
 			"dependsOn": ["checkout"],
+			"recommendFor": ["offers.reviews"],
 			"settings": {
 				"$ref": "schemas/reviews.settings.json"
 			}
@@ -176,6 +191,7 @@
 			"name": "Wishlist",
 			"description": "Shoppers save products to their wishlist.",
 			"dependsOn": ["catalog"],
+			"recommendFor": ["sells.physical+signIn.*", "sells.digital+signIn.*"],
 			"settings": {
 				"$ref": "schemas/wishlist.settings.json"
 			}
@@ -185,6 +201,7 @@
 			"name": "Alerts",
 			"description": "Back-in-stock and price-drop alerts sent through Notifications.",
 			"dependsOn": ["catalog"],
+			"recommendFor": ["sells.physical+messages.*"],
 			"settings": {
 				"$ref": "schemas/alerts.settings.json"
 			}
@@ -203,6 +220,7 @@
 			"name": "Returns",
 			"description": "Return and warranty claims with time windows per item and grade, photos, approval, refunds and restocking exactly once.",
 			"dependsOn": ["checkout"],
+			"recommendFor": ["sells.physical"],
 			"settings": {
 				"$ref": "schemas/returns.settings.json"
 			}
@@ -212,6 +230,7 @@
 			"name": "Invoices",
 			"description": "Invoices and packing slips, with the serial numbers on each line.",
 			"dependsOn": ["checkout"],
+			"recommendFor": ["sells.physical", "sells.digital", "sells.services"],
 			"settings": {
 				"$ref": "schemas/invoices.settings.json"
 			}
@@ -257,6 +276,7 @@
 			"name": "Staff alerts",
 			"description": "Email or WhatsApp your staff about new orders, status changes, payments, transfer proofs, cancels, expiries and return claims, through Notifications.",
 			"dependsOn": ["checkout"],
+			"recommendFor": ["sells.physical+messages.*", "sells.digital+messages.*", "sells.services+messages.*"],
 			"settings": {
 				"$ref": "schemas/staff_alerts.settings.json"
 			}
@@ -266,6 +286,7 @@
 			"name": "SEO",
 			"description": "Meta tags and structured data for products and categories, and sitemaps.",
 			"dependsOn": ["catalog"],
+			"recommendFor": ["marketing.seo", "sells.physical", "sells.digital", "sells.services"],
 			"settings": {
 				"$ref": "schemas/seo.settings.json"
 			}
@@ -275,6 +296,7 @@
 			"name": "Landing pages",
 			"description": "Category, brand and grade landing pages with their own copy, indexed while enough products are in stock, and glossary pages of attributes and grades.",
 			"dependsOn": ["seo"],
+			"recommendFor": ["marketing.seo"],
 			"settings": {
 				"$ref": "schemas/landing_pages.settings.json"
 			}
@@ -284,6 +306,7 @@
 			"name": "Feeds",
 			"description": "Product feeds for shopping and social catalogs.",
 			"dependsOn": ["catalog"],
+			"recommendFor": ["marketing.google+sells.physical", "marketing.meta+sells.physical"],
 			"settings": {
 				"$ref": "schemas/feeds.settings.json"
 			}
@@ -302,6 +325,7 @@
 			"name": "llms.txt",
 			"description": "An llms.txt of the catalog for AI assistants.",
 			"dependsOn": ["catalog"],
+			"recommendFor": ["marketing.seo"],
 			"settings": {
 				"$ref": "schemas/llms_txt.settings.json"
 			}
@@ -311,6 +335,7 @@
 			"name": "Import",
 			"description": "Catalog, customers, orders, promotions, loyalty and shopper records moved in from another system with ss-import (server token only; no messages, events or alerts). Our admins switch it on for a migration and off after it.",
 			"dependsOn": [],
+			"recommendFor": ["moving.yes"],
 			"settings": {
 				"$ref": "schemas/import.settings.json"
 			}

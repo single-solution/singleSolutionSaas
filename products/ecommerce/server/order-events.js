@@ -5,12 +5,12 @@
  * - the shopper's messages (`server/order-messages.js`): placed, and each status of the flow that sends one (its
  *   `notify`; one template, or one per status with `statusTemplates: per_status`); an order its window cancels says so
  *   (`expired`);
- * - events (feature `events`, the kit's K5): `order.placed`, `order.status_changed`, `order.paid`,
- *   `order.payment_recorded`, `order.proof_uploaded`, `order.cancelled`, `order.refunded`, `return.requested`,
- *   `return.status_changed`, `review.submitted`, `catalog.changed`, `stock.low` and `stock.out` — ids and small facts
- *   only, listed by `GET /v1/events` and sent to the merchant's webhooks through Notifications; the stock events follow
- *   E44's levels: a variant that counts for stock (`countsForStock`) whose units an order or a catalog write drops into
- *   1 to the catalog setting `lowStock` (`stock.low`) or to 0 (`stock.out`);
+ * - events (feature `events`, the kit's K5; `EVENT_TYPES` in `core/events.js`): `order.placed`, `order.status_changed`,
+ *   `order.paid`, `order.payment_recorded`, `order.proof_uploaded`, `order.cancelled`, `order.refunded`,
+ *   `return.requested`, `return.status_changed`, `review.submitted`, `catalog.changed`, `stock.low` and `stock.out` —
+ *   ids and small facts only, listed by `GET /v1/events` and sent to the merchant's webhooks through Notifications;
+ *   the stock events follow E44's levels: a variant that counts for stock (`countsForStock`) whose units an order or a
+ *   catalog write drops into 1 to the catalog setting `lowStock` (`stock.low`) or to 0 (`stock.out`);
  * - staff alerts (feature `staff_alerts`, the kit's K6 rules, `server/staff-alerts.js`): the events the setting `events`
  *   lists, as `ecommerce.staff_<event>` templates to its recipients, required and saved before they are sent (K-17);
  *   with the setting `includePhone`, each carries the shopper's phone (`phone`).
@@ -62,7 +62,7 @@ export const createOrderEvents = (product, service) => {
 
 	/**
 	 * Record an event while Events is on.
-	 * @param {Site} s @param {string} type @param {Record<string, unknown>} data
+	 * @param {Site} s @param {import('../core/events.js').EventType} type @param {Record<string, unknown>} data
 	 */
 	const publish = async (s, type, data) => {
 		if (!s.has('events')) return;
@@ -190,13 +190,6 @@ export const createOrderEvents = (product, service) => {
 	/** The catalog setting `lowStock` (E44). @param {Site} s */
 	const lowStockOf = async (s) => Number((await s.values('catalog')).lowStock ?? 0);
 
-	/**
-	 * Publish a stock event (E44), as `stockEventOf` names it.
-	 * @param {Site} s @param {'stock.low' | 'stock.out'} type
-	 * @param {{ productId: string, variantId: string, stock: number }} data
-	 */
-	const publishStock = (s, type, data) => (type === 'stock.out' ? publish(s, 'stock.out', data) : publish(s, 'stock.low', data));
-
 	// catalog writes: the product changed, and a variant counting for stock the write left with fewer units may be low
 	// or out (its units before come with the write; stock given back has none, and only rises)
 	service.on('products.changed', async (s, { productIds, before }) => {
@@ -227,7 +220,7 @@ export const createOrderEvents = (product, service) => {
 			for (const variant of row.variants) {
 				const was = units.get(variant.id);
 				const type = was === undefined || !countsForStock(row, variant) ? null : stockEventOf(was, variant.stock, level);
-				if (type) await publishStock(s, type, { productId: row.id, variantId: variant.id, stock: variant.stock });
+				if (type) await publish(s, type, { productId: row.id, variantId: variant.id, stock: variant.stock });
 			}
 		}
 	});
@@ -239,7 +232,7 @@ export const createOrderEvents = (product, service) => {
 		const level = await lowStockOf(s);
 		for (const line of /** @type {import('../adapters/ledger.js').TakenStock[]} */ (lines)) {
 			const type = stockEventOf(line.left + line.quantity, line.left, level);
-			if (type) await publishStock(s, type, { productId: line.productId, variantId: line.variantId, stock: line.left });
+			if (type) await publish(s, type, { productId: line.productId, variantId: line.variantId, stock: line.left });
 		}
 	});
 

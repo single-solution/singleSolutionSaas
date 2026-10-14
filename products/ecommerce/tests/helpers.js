@@ -22,7 +22,7 @@ import { COLLECTIONS } from '../core/model.js';
 /** @typedef {import('../core/model.js').VariantRecord} VariantRecord */
 /** What a test may leave out of a variant. @typedef {'attributes' | 'media' | 'soldOut' | 'warrantyDays'} VariantExtras */
 
-const BASE = 'https://ecommerce.example.dev';
+export const BASE = 'https://ecommerce.example.dev';
 export const ACCOUNTS = 'https://accounts.example.dev';
 export const NOTIFY = 'https://notifications.example.dev';
 export const PAYMENTS = 'https://payments.example.dev';
@@ -93,10 +93,15 @@ export const storedAttribute = (given) => ({ ...storedFields(checkAttribute({ na
 
 /**
  * A connected product with one website.
- * @param {{ start?: number, business?: Record<string, unknown> }} [options] `business`: more fields of the website's
- *   business.json (its country …)
+ * @param {{ start?: number, business?: Record<string, unknown>,
+ *   store?: (store: import('@ss/app-kit').Store) => import('@ss/app-kit').Store }} [options] `business`: more fields of
+ *   the website's business.json (its country …); `store` wraps the product database (a test can make a read fail)
  */
-export const setup = async ({ start = Date.parse('2026-10-05T10:00:00Z'), business = {} } = {}) => {
+export const setup = async ({
+	start = Date.parse('2026-10-05T10:00:00Z'),
+	business = {},
+	store = (/** @type {import('@ss/app-kit').Store} */ given) => given,
+} = {}) => {
 	let t = start;
 	const now = () => t;
 	const portal = await createFakePortal({ now });
@@ -213,7 +218,7 @@ export const setup = async ({ start = Date.parse('2026-10-05T10:00:00Z'), busine
 	const network = createNetwork(handlers);
 	const product = createProductInstance({
 		config: { mongodbUri: '', connectSecret: SECRET, encryptionKey: ENCRYPTION_KEY },
-		store: createMemoryStore({ now }),
+		store: store(createMemoryStore({ now })),
 		fetch: portal.fetch,
 		now,
 		nodeEnv: 'test',

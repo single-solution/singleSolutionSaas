@@ -4,16 +4,20 @@
  * Accounts, Payments, Notifications and Growth tokens, courier keys and the AI key), the merchant database indexes of every
  * part, the data-rights and widget-config hooks (filled in by `server/routes.js`), the Owner's Re-seal of the deal-lock
  * secrets (sealed with `ENCRYPTION_KEY`, RT-14), the messages it sends through Notifications with their US-English
- * default words (`schemas/messages.json`, parity P1), and adds the list settings (product
- * database; also served to the merchant's server by the kit's `GET|PUT /v1/lists/:list`, PLAN 0.8.10 K1), the courier
- * APIs and the AI provider on the same outbound policy. The Next.js route and the tests pass the rest (config, store,
+ * default words (`schemas/messages.json`, parity P1) and its part of the website Setup sheet (the OpenAPI document, the
+ * guide's "What your website builds" per feature, its event types, its lists in its own words and the pages, routes
+ * and SEO tags of the merchant's website: `core/setup-sheet.js`), and adds the list settings (product database; also
+ * served to the merchant's server by the kit's `GET|PUT /v1/lists/:list`, PLAN 0.8.10 K1), the courier APIs and the AI
+ * provider on the same outbound policy. The Next.js route and the tests pass the rest (config, store,
  * clock, network). Public entry `./product` of this package, so a system test can compose the product with `./routes`.
  * @module
  */
 import { PRODUCT_DATABASE_OPTIONS, createMemoryStore, createMongoStore, createProduct } from '@ss/app-kit';
 import { createOutboundPolicy, safeFetch } from '@ss/net';
 import { MongoClient } from 'mongodb';
+import guide from '../docs/guide.json' with { type: 'json' };
 import manifestFile from '../manifest.json' with { type: 'json' };
+import openapi from '../openapi.json' with { type: 'json' };
 import strings from '../strings/en.json' with { type: 'json' };
 import catalogSettings from '../schemas/catalog.settings.json' with { type: 'json' };
 import variantsSettings from '../schemas/variants.settings.json' with { type: 'json' };
@@ -51,6 +55,8 @@ import llmsTxtSettings from '../schemas/llms_txt.settings.json' with { type: 'js
 import importSettings from '../schemas/import.settings.json' with { type: 'json' };
 import messages from '../schemas/messages.json' with { type: 'json' };
 import { flowChangeProblems } from '../core/flow.js';
+import { EVENT_TYPES } from '../core/events.js';
+import { LIST_WORDS, setupSummaries } from '../core/setup-sheet.js';
 import { createAi } from './ai.js';
 import { INDEXES as CATALOG_INDEXES } from './catalog-store.js';
 import { createCouriers } from './couriers.js';
@@ -163,7 +169,9 @@ export const INDEXES = [
 ];
 
 /**
- * @typedef {Omit<import('@ss/app-kit').ProductOptions, 'manifest' | 'strings' | 'hooks' | 'connections' | 'data' | 'problemCodes'>} InstanceOptions
+ * What the Next.js route and the tests pass: every option but those the adapter sets itself.
+ * @typedef {Omit<import('@ss/app-kit').ProductOptions, 'manifest' | 'strings' | 'hooks' | 'connections' | 'data'
+ *   | 'problemCodes' | 'messages' | 'imports' | 'events' | 'lists' | 'openapi' | 'build'>} InstanceOptions
  */
 
 /** Used only while the deployable is misconfigured (it then answers 503 everywhere). */
@@ -215,6 +223,42 @@ export const createProductInstance = (options) => {
 	const secrets = createSiteSecrets({ store, sealer, now });
 	/** @type {NonNullable<import('@ss/app-kit').ProductOptions['hooks']>} */
 	const hooks = {};
+
+	/**
+	 * Ecommerce's own part of the website Setup sheet: its event types while Events is on, the lists of the features that
+	 * are on in its own words (a list that cannot be read is left out, so the kit shows its own count) and its summaries
+	 * of the merchant's pages, what they serve from their own domain and their SEO tags. Never an address of a list or a
+	 * secret.
+	 * @param {{ websiteId: string, on: string[] }} website
+	 */
+	const setupPart = async ({ websiteId, on }) => {
+		const names = /** @type {Array<keyof typeof LISTS>} */ (Object.keys(LISTS)).filter((name) =>
+			on.includes(LISTS[name].feature),
+		);
+		const worded = await Promise.all(
+			names.map(async (name) => {
+				try {
+					return /** @type {[string, string]} */ ([name, LIST_WORDS[name](await lists.get(websiteId, name))]);
+				} catch {
+					return null;
+				}
+			}),
+		);
+		/** @param {string} feature */
+		const valuesOf = (feature) => (on.includes(feature) ? product.settings.values(websiteId, feature) : null);
+		const [catalog, seo, landing, alerts, llms] = await Promise.all([
+			valuesOf('catalog'),
+			valuesOf('seo'),
+			valuesOf('landing_pages'),
+			valuesOf('alerts'),
+			valuesOf('llms_txt'),
+		]);
+		return {
+			events: on.includes('events') ? EVENT_TYPES.map((type) => `${manifest.id}.${type}`) : [],
+			lists: Object.fromEntries(worded.filter((entry) => entry !== null)),
+			summaries: setupSummaries({ on, catalog, seo, landing, alerts, llms }),
+		};
+	};
 
 	const product = createProduct({
 		...options,
@@ -277,8 +321,13 @@ export const createProductInstance = (options) => {
 			widgetConfig: (ctx) => /** @type {NonNullable<typeof hooks.widgetConfig>} */ (hooks.widgetConfig)(ctx),
 			// the Owner's Re-seal (RT-14): the deal-lock secrets in the product database
 			resealProduct: () => secrets.reseal(),
+			// its part of the website Setup sheet in its own words (events, lists, pages, routes, SEO tags); never secrets
+			blueprint: (website) => setupPart(website),
 		},
 		data: { indexes: INDEXES },
+		// the website Setup sheet: the API document and what the merchant's website builds per feature
+		openapi,
+		build: guide.build,
 		// records moved in from another system with ss-import (feature `import`, PLAN 0.8.10 K10)
 		imports: createImportOptions({
 			list: (websiteId, name) => lists.get(websiteId, /** @type {any} */ (name)),

@@ -8,12 +8,12 @@
  * pages, policies), Catalog and SEO (PLAN 0.8.10 E1–E17) and Checkout, orders and promotions (E18–E36, E51–E79), each
  * addition with its routes and their features (and the Atlas Search index definition), the events of `GET /v1/events`,
  * staff alerts with their values (`server/staff-alerts.js`), the import, the Chat lookups, the Accounts Orders lookup,
- * data rights, per-feature guides with their routes and widgets, the admin widgets and the ticket snippet (Node.js and
- * cURL), the kit's routes for your server (settings and lists, the acting user, visitor calls, counts, activity,
- * Format; PLAN 0.8.10), the business.json template, the localhost note and the API reference from `openapi.json`: every
- * call with its auth, feature, parameters, request fields and answer fields (`renderApiReference`, from
- * `schemas/api.json` and the kit's own descriptions), which every route the page names links to. Plain HTML; every
- * value is escaped.
+ * data rights, per-feature guides with their routes, widgets and what the website builds (the guide's `build`, also
+ * in the website's Setup sheet), the admin widgets and the ticket snippet (Node.js and cURL), the kit's routes for
+ * your server (settings and lists, the acting user, visitor calls, counts, activity, Format; PLAN 0.8.10), the
+ * business.json template, the localhost note and the API reference from `openapi.json`: every call with its auth,
+ * feature, parameters, request fields and answer fields (`renderApiReference`, from `schemas/api.json` and the kit's
+ * own descriptions), which every route the page names links to. Plain HTML; every value is escaped.
  * @module
  */
 import { KIT_GUIDE, apiAnchor, renderApiReference } from '@ss/app-kit';
@@ -117,6 +117,7 @@ export const operationOf = (route, rows) => {
  */
 export const renderDocs = ({ base, paths = openapi.paths }) => {
 	const features = /** @type {Record<string, string[]>} */ (guide.features);
+	const build = /** @type {Record<string, string>} */ (guide.build);
 	const widgetHelp = /** @type {Record<string, string>} */ (guide.widgets);
 	const roles = /** @type {Record<string, string>} */ (guide.roles);
 	const siteHelp = /** @type {Record<string, string>} */ (guide.siteRoutes);
@@ -146,6 +147,7 @@ export const renderDocs = ({ base, paths = openapi.paths }) => {
 			para(feature.description),
 			...(features[feature.key] ?? []).map(para),
 			needs.length > 0 ? para(`Needs: ${needs.join(', ')}.`) : '',
+			build[feature.key] ? `<p><strong>What your website builds.</strong> ${escape(build[feature.key])}</p>` : '',
 			list(
 				widgets.map(
 					(widget) => `${escape(widget.kind)} widget <code>${escape(`${WIDGET_ATTRIBUTE}="${widget.key}"`)}</code>`,

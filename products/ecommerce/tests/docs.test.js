@@ -18,6 +18,8 @@ import { GROWTH_EVENTS } from '../core/growth-events.js';
 import { SEARCH_INDEX_DEFINITION } from '../core/search.js';
 import { SITE_ROUTES, WIDGET_ATTRIBUTES, createSnippets, mediaRoute, proxyRoute, sitemapRoute } from '../core/snippets.js';
 import { ADD_TO_CART_EVENT, WIDGET_GLOBAL } from '../core/widgets.js';
+import { stockEventOf } from '../core/catalog-query.js';
+import { EVENT_TYPES } from '../core/events.js';
 import { STATUS_ROLES } from '../core/model.js';
 import { ALL, ORIGIN, readyShop } from './helpers.js';
 
@@ -395,8 +397,10 @@ describe('the messages, staff alerts and events the code sends', () => {
 	it('lists the event types the code publishes, and the kit’s settings change', async () => {
 		const source = await readFile(new URL('../server/order-events.js', import.meta.url), 'utf8');
 		const published = [...source.matchAll(/publish\(s, '([a-z_.]+)'/g)].map((match) => match[1]);
-		expect(published.length).toBeGreaterThan(10);
-		expect(Object.keys(guide.eventTypes).sort()).toEqual([...new Set([...published, 'settings.changed'])].sort());
+		// the stock events are the ones stockEventOf names
+		const stock = [stockEventOf(5, 0, 3), stockEventOf(5, 2, 3)];
+		expect([...new Set([...published, ...stock])].sort()).toEqual([...EVENT_TYPES].sort());
+		expect(Object.keys(guide.eventTypes)).toEqual([...EVENT_TYPES, 'settings.changed']);
 		for (const type of Object.keys(guide.eventTypes)) expect(eventsPart).toContain(`<li><code>ecommerce.${type}</code>: `);
 	});
 

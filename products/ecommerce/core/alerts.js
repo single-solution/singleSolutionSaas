@@ -37,17 +37,20 @@ export const alertRetryAt = (tries, now) => {
 const STOP_PATH = '/alerts/unsubscribe/{token}';
 
 /**
- * An alert message's stop link (`{stopUrl}`, EN-1): the `alerts` setting `stopUrl` (a path or https address with
- * `{token}`) on the website, else {@link STOP_PATH}; the page holds the `alerts_stop` widget.
+ * The stop page of alert messages, with `{token}`: the `alerts` setting `stopUrl` (a path or https address with
+ * `{token}`), else {@link STOP_PATH}; the page holds the `alerts_stop` widget.
+ * @param {unknown} template the `stopUrl` setting
+ * @returns {string}
+ */
+export const stopPage = (template) => (typeof template === 'string' && template.includes('{token}') ? template : STOP_PATH);
+
+/**
+ * An alert message's stop link (`{stopUrl}`, EN-1): the stop page ({@link stopPage}) for this token on the website.
  * @param {unknown} template the `stopUrl` setting
  * @param {string} token
  * @param {string} domain
  */
-export const stopLink = (template, token, domain) =>
-	absolute(
-		(typeof template === 'string' && template.includes('{token}') ? template : STOP_PATH).replaceAll('{token}', token),
-		domain,
-	);
+export const stopLink = (template, token, domain) => absolute(stopPage(template).replaceAll('{token}', token), domain);
 
 /**
  * Check a shopper's alert.
