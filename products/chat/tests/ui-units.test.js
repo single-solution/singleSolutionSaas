@@ -236,8 +236,8 @@ describe('common', () => {
 		expect(when(null)).toBe('');
 		expect(when('2026-10-01T10:00:00Z')).not.toBe('');
 		// the website's Format: its locale, and the business time zone when times are `business`
-		const business = whenOf({ format: { locale: 'en-GB', times: 'business' }, timeZone: 'Asia/Karachi' }, window);
-		expect(business('2026-10-01T10:00:00Z')).toBe('1 Oct 2026, 15:00');
+		const business = whenOf({ format: { locale: 'en-GB', times: 'business' }, timeZone: 'America/New_York' }, window);
+		expect(business('2026-10-01T10:00:00Z')).toBe('1 Oct 2026, 06:00');
 		expect(business('2026-10-01T10:00:00Z', 'date')).toBe('1 Oct 2026');
 		expect(fileProblem({ type: 'image/svg+xml', size: 1 }, ['image/png'], 10)).toBe('type');
 		expect(fileProblem({ type: 'image/png', size: 11 }, ['image/png'], 10)).toBe('size');
@@ -314,7 +314,7 @@ describe('tickets', () => {
 
 describe('proactive', () => {
 	/** @param {string[]} features @param {Record<string, any>} [settings] @param {string} [path] */
-	const setup = (features, settings = {}, path = '/products/phone') => {
+	const setup = (features, settings = {}, path = '/products/lamp') => {
 		const time = clock();
 		const offer = vi.fn(() => true);
 		const startFlow = vi.fn();
@@ -343,9 +343,9 @@ describe('proactive', () => {
 		offer.mockReturnValueOnce(false);
 		await time.advance(60_000);
 		expect(offer).toHaveBeenCalledWith('idle', TEXTS['chat.idle']);
-		setProduct('Phone X');
+		setProduct('Canvas tote');
 		await time.advance(120_000);
-		expect(offer).toHaveBeenLastCalledWith('idle', 'Questions about Phone X? We are happy to help.');
+		expect(offer).toHaveBeenLastCalledWith('idle', 'Questions about Canvas tote? We are happy to help.');
 		stop();
 	});
 

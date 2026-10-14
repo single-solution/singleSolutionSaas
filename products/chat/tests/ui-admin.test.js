@@ -98,7 +98,7 @@ const full = (over = {}) => ({
 		name: 'Ana',
 		email: 'ana@x.co',
 		phone: '',
-		page: { url: 'https://shop.test/p', title: 'Phone', kind: 'product', productId: 'p1', productName: 'Phone X' },
+		page: { url: 'https://shop.test/p', title: 'Lamps', kind: 'product', productId: 'p1', productName: 'Desk lamp' },
 		device: 'Mobile',
 		conversations: 3,
 	},
@@ -140,14 +140,14 @@ describe('inbox', () => {
 	it('shows times in the website’s Format and business time zone (K7)', async () => {
 		const { hosts } = await startAdmin({
 			features: ['inbox'],
-			look: { format: { locale: 'en-GB', times: 'business' }, timeZone: 'Asia/Karachi' },
+			look: { format: { locale: 'en-GB', times: 'business' }, timeZone: 'Europe/Paris' },
 			routes: {
 				'GET /v1/admin/staff': () => answer(200, { items: [] }),
 				'GET /v1/admin/conversations': () => answer(200, { items: [item()], nextCursor: null, hasMore: false, unread: 2 }),
 			},
 		});
-		// 10:00 UTC is 15:00 in Karachi
-		expect(shadow(hosts.inbox).textContent).toContain('1 Oct 2026, 15:00');
+		// 10:00 UTC is 12:00 in Paris
+		expect(shadow(hosts.inbox).textContent).toContain('1 Oct 2026, 12:00');
 	});
 
 	it('lists, filters, opens and works a conversation', async () => {
@@ -296,8 +296,8 @@ describe('inbox', () => {
 			'Ana',
 			'ana@x.co',
 			'Mobile',
-			'Phone',
-			'Product: Phone X',
+			'Lamps',
+			'Product: Desk lamp',
 			'3 conversations',
 			'Rating: 4 · ok',
 		]);
@@ -870,15 +870,15 @@ describe('context panel shop info', () => {
 	it('shows the signed-in visitor’s last orders with status and total, and loyalty points', async () => {
 		const root = await open({
 			orders: [
-				{ number: 'A-1001', status: 'On its way', total: 'PKR 1,250.00', createdAt: null },
-				{ number: 'A-1000', status: 'Delivered', total: 'PKR 99.00', createdAt: AT },
+				{ number: 'SH-1001', status: 'On its way', total: '$45.00', createdAt: null },
+				{ number: 'SH-1000', status: 'Delivered', total: '$99.00', createdAt: AT },
 			],
 			loyaltyPoints: 120,
 		});
 		expect(root.querySelector('.shop')?.hasAttribute('hidden')).toBe(false);
 		expect(textsIn(root, '.shop li')).toEqual([
-			'A-1001 · On its way · PKR 1,250.00',
-			'A-1000 · Delivered · PKR 99.00',
+			'SH-1001 · On its way · $45.00',
+			'SH-1000 · Delivered · $99.00',
 			'Loyalty points: 120',
 		]);
 		expect(root.textContent).toContain(TEXTS['inbox.orders']);

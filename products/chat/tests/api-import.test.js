@@ -25,8 +25,8 @@ const sha256 = (text) => createHash('sha256').update(text).digest('hex');
 const COOKIE = 'old-guest-cookie-0001';
 const STAFF = {
 	id: idOf('usr', 1),
-	name: 'Ayesha Staff',
-	email: 'Ayesha@Shop.example.com',
+	name: 'Alex Morgan',
+	email: 'Alex@Shop.example.com',
 	presence: 'away',
 	maxChats: 5,
 	createdAt: '2023-01-02T03:04:05Z',
@@ -37,7 +37,7 @@ const CONVERSATION = {
 	id: CONV,
 	visitor: { kind: 'guest', id: GUEST.id },
 	name: 'Sam Visitor',
-	phone: '0300 1234567',
+	phone: '07700 900123',
 	status: 'awaiting_visitor',
 	waiting: true,
 	waitingSince: '2024-03-01T10:05:00Z',
@@ -313,8 +313,8 @@ describe('import (K10): a run, a re-run and finish', () => {
 		await importAll(sys);
 		expect(await sys.stored('staff', { id: STAFF.id })).toEqual({
 			id: STAFF.id,
-			name: 'Ayesha Staff',
-			email: 'ayesha@shop.example.com',
+			name: 'Alex Morgan',
+			email: 'alex@shop.example.com',
 			presence: 'away',
 			maxChats: 5,
 			createdAt: new Date(STAFF.createdAt),
@@ -325,7 +325,7 @@ describe('import (K10): a run, a re-run and finish', () => {
 		expect(guest?.expireAt).toEqual(new Date(sys.now() + 90 * 86_400_000));
 		const before = await sys.stored('conversations', { id: CONV });
 		expect(before).toMatchObject({
-			phone: '+923001234567',
+			phone: '+447700900123',
 			status: 'awaiting_visitor',
 			aiPausedBy: { kind: 'user', id: STAFF.id, name: STAFF.name },
 			fields: { order_ref: 'A-100' },
@@ -388,7 +388,7 @@ describe('import (K10): a run, a re-run and finish', () => {
 		expect((await visitor('GET', '/v1/chat')).json.messages.at(-1)).toMatchObject({ seq: 6, text: 'Any news?' });
 		// staff see the conversation with its assignment and the internal note
 		const inbox = await sys.serverCall('GET', `/v1/conversations/${CONV}`);
-		expect(inbox.json.conversation).toMatchObject({ assignedTo: { id: STAFF.id, name: 'Ayesha Staff' }, waiting: true });
+		expect(inbox.json.conversation).toMatchObject({ assignedTo: { id: STAFF.id, name: 'Alex Morgan' }, waiting: true });
 		expect(inbox.json.messages.map((/** @type {any} */ m) => m.internal)).toEqual([false, false, false, false, true, false]);
 		// nothing was sent
 		expect(sys.messages()).toEqual([]);

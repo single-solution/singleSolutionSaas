@@ -258,8 +258,8 @@ describe('data rights', () => {
 		// Notifications does not take them: they are saved to be tried again
 		sys.responders.set('https://notifications.example.dev', () => ({ status: 503, body: {} }));
 		const ann = sys.visitor();
-		await ann('POST', '/v1/chat/contact', { name: 'Ann', phone: '+923001234567' });
-		await ann('POST', '/v1/chat/messages', { text: 'Is the fan in stock?' });
+		await ann('POST', '/v1/chat/contact', { name: 'Ann', phone: '+447700900123' });
+		await ann('POST', '/v1/chat/messages', { text: 'Is the lamp in stock?' });
 		await sys.visitor()('POST', '/v1/chat/messages', { text: 'someone else' });
 		const saved = async () =>
 			(
@@ -271,14 +271,14 @@ describe('data rights', () => {
 					.toArray()
 			).map((row) => [row.values.name, row.values.message]);
 		expect(await saved()).toEqual([
-			['Ann', 'Is the fan in stock?'],
+			['Ann', 'Is the lamp in stock?'],
 			['', 'someone else'],
 		]);
 		const deleted = await sys.accounts.deleteUser({
 			handler: sys.product.handler([]),
 			baseUrl: BASE,
 			token: sys.server,
-			user: { phone: '+923001234567' },
+			user: { phone: '+447700900123' },
 		});
 		// the conversation with what belongs to it, and the alert about it
 		expect(deleted.body).toEqual({ deleted: 4, anonymised: 0 });

@@ -29,14 +29,14 @@ describe('handoff options (C4)', () => {
 		await sys.setting('handoff', 'notice', '');
 		await sys.setting('handoff', 'showButton', false);
 		await sys.setting('handoff', 'reassureAfterMinutes', 3);
-		sys.ai({ text: 'Our fans come with a year of warranty.' });
+		sys.ai({ text: 'Our lamps come with a year of warranty.' });
 		const v = sys.visitor();
 		const sent = await v('POST', '/v1/chat/messages', { text: 'warranty? I want to talk to someone' });
 		expect(sent.json.chat.conversation.waiting).toBe(false);
 		let state = await v('GET', '/v1/chat');
 		expect(authors(state.json)).toEqual([
 			['visitor', 'warranty? I want to talk to someone'],
-			['ai', 'Our fans come with a year of warranty.'],
+			['ai', 'Our lamps come with a year of warranty.'],
 			['system', 'Please leave your name and how we can reach you, and we will reply.'],
 		]);
 		expect(state.json.conversation.waiting).toBe(true);
@@ -77,7 +77,7 @@ describe('staff alerts and reply alerts (C5, C6)', () => {
 		await sys.paste('accounts');
 		sys.accounts.setUsers([
 			{ id: 'usr_a', email: 'agent@shop.example.com', permissions: ['chat:inbox.reply'] },
-			{ id: 'usr_b', phone: '+923001112233', permissions: ['chat:inbox.reply'] },
+			{ id: 'usr_b', phone: '+12025550143', permissions: ['chat:inbox.reply'] },
 			{ id: 'usr_c', email: 'blocked@shop.example.com', blocked: true, permissions: ['*'] },
 		]);
 		await sys.setting('staff_alerts', 'recipients', ['boss@shop.example.com', '+44 20 7946 0958']);
@@ -93,7 +93,7 @@ describe('staff alerts and reply alerts (C5, C6)', () => {
 			['email', { email: 'boss@shop.example.com' }],
 			['whatsapp', { phone: '+442079460958' }],
 			['email', { email: 'agent@shop.example.com' }],
-			['whatsapp', { phone: '+923001112233' }],
+			['whatsapp', { phone: '+12025550143' }],
 		]);
 		await sys.setting('staff_alerts', 'phoneChannel', 'sms');
 		await sys.setting('staff_alerts', 'frequency', 'first_unanswered');
@@ -114,9 +114,9 @@ describe('staff alerts and reply alerts (C5, C6)', () => {
 		const v = sys.visitor();
 		const sent = await v('POST', '/v1/chat/messages', {
 			text: 'call me',
-			page: { url: 'https://shop.example.com/fans/a', kind: 'product' },
+			page: { url: 'https://shop.example.com/lamps/a', kind: 'product' },
 		});
-		await v('POST', '/v1/chat/contact', { name: 'Ann', phone: '+923001234567' });
+		await v('POST', '/v1/chat/contact', { name: 'Ann', phone: '+447700900123' });
 		const ticket = await sys.ticket();
 		const path = `/v1/admin/conversations/${sent.json.chat.conversation.id}/messages`;
 		// still here: no alert
@@ -129,12 +129,12 @@ describe('staff alerts and reply alerts (C5, C6)', () => {
 			expect.objectContaining({
 				channel: 'whatsapp',
 				template: 'chat.staff_reply',
-				to: { phone: '+923001234567' },
+				to: { phone: '+447700900123' },
 				values: expect.objectContaining({
 					name: 'Ann',
 					staff: 'Sam Staff',
 					preview: 'We have two colours.',
-					link: 'https://shop.example.com/fans/a',
+					link: 'https://shop.example.com/lamps/a',
 				}),
 			}),
 		]);
@@ -229,7 +229,7 @@ describe('guests and sign-ins (C7)', () => {
 			websiteId: sys.websiteId,
 			sub: 'usr_ann',
 			name: 'Ann',
-			phone: '+92 300 1234567',
+			phone: '+44 7700 900123',
 		});
 		sys.advance(1000);
 		await sys.visitor({ signIn })('POST', '/v1/chat/messages', { text: 'user 1' });
@@ -248,7 +248,7 @@ describe('guests and sign-ins (C7)', () => {
 		const phoneGuest = sys.visitor();
 		sys.advance(1000);
 		await phoneGuest('POST', '/v1/chat/messages', { text: 'from my phone' });
-		await phoneGuest('POST', '/v1/chat/contact', { phone: '0300-1234567' });
+		await phoneGuest('POST', '/v1/chat/contact', { phone: '07700-900123' });
 		const user = sys.visitor({ signIn });
 		expect((await user('GET', '/v1/chat')).json.messages).toHaveLength(3);
 		await sys.setting('signed_in_chat', 'claimByPhone', true);

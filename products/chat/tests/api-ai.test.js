@@ -93,7 +93,7 @@ describe('AI replies', () => {
 			{ tools: [{ name: 'book_slot', arguments: { slotId: 's1', name: 'Ann', phone: 'call me' } }] },
 			{
 				tools: [
-					{ name: 'book_slot', arguments: { slotId: 's1', name: 'Ann', email: 'ann@example.com', phone: '0300 1234567' } },
+					{ name: 'book_slot', arguments: { slotId: 's1', name: 'Ann', email: 'ann@example.com', phone: '07700 900123' } },
 				],
 			},
 			{ text: 'Booked for Tuesday.' },
@@ -109,7 +109,7 @@ describe('AI replies', () => {
 			slotId: 's1',
 			name: 'Ann',
 			email: 'ann@example.com',
-			phone: '+923001234567',
+			phone: '+447700900123',
 		});
 		sys.ai({ tools: [{ name: 'escalate_to_human', arguments: { reason: 'angry' } }] }, { text: 'Connecting you.' });
 		await v('POST', '/v1/chat/messages', { text: 'This is useless' });

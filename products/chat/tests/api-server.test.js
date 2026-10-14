@@ -19,12 +19,12 @@ const start = async (on) => {
 	return sys;
 };
 
-/** The headers of a server call acting for Ayşe of the merchant's staff. */
-const AYSE = Object.freeze({
-	'ss-actor-id': 'usr_ayse',
-	'ss-actor-name': encodeURIComponent('Ayşe Khan'),
+/** The headers of a server call acting for Zoë of the merchant's staff. */
+const ZOE = Object.freeze({
+	'ss-actor-id': 'usr_zoe',
+	'ss-actor-name': encodeURIComponent('Zoë Laurent'),
 	'ss-actor-role': 'Support',
-	'ss-actor-email': 'ayse@shop.example.com',
+	'ss-actor-email': 'zoe@shop.example.com',
 });
 
 /**
@@ -50,7 +50,7 @@ describe('list settings from the merchant’s server (K1)', () => {
 		const bad = await server(sys, 'PUT', '/v1/lists/tools', { body: { value: [{ ...tool, url: 'http://x.example.com' }] } });
 		expect(bad.status).toBe(422);
 		expect(bad.json.errors.length).toBeGreaterThan(0);
-		const saved = await server(sys, 'PUT', '/v1/lists/tools', { body: { value: [tool] }, headers: AYSE });
+		const saved = await server(sys, 'PUT', '/v1/lists/tools', { body: { value: [tool] }, headers: ZOE });
 		expect(saved.status).toBe(200);
 		expect(saved.json.value).toMatchObject([{ name: 'stock_check' }]);
 		// the dashboard's own list route answers the same list
@@ -67,7 +67,7 @@ describe('list settings from the merchant’s server (K1)', () => {
 		const changes = await sys.product.recentChanges.list(sys.websiteId);
 		expect(changes).toEqual(
 			expect.arrayContaining([
-				expect.objectContaining({ who: expect.objectContaining({ name: 'Ayşe Khan' }), detail: 'Webhook tools: changed' }),
+				expect.objectContaining({ who: expect.objectContaining({ name: 'Zoë Laurent' }), detail: 'Webhook tools: changed' }),
 				expect.objectContaining({ who: expect.objectContaining({ name: 'Server' }), detail: 'Page rules: changed' }),
 			]),
 		);
@@ -89,52 +89,52 @@ describe('the acting member of staff (K2)', () => {
 		const sent = await v('POST', '/v1/chat/messages', { text: 'Hello' });
 		const id = sent.json.chat.conversation.id;
 		const named = await server(sys, 'POST', `/v1/conversations/${id}/messages`, {
-			body: { text: 'Hi, Ayşe here.' },
-			headers: AYSE,
+			body: { text: 'Hi, Zoë here.' },
+			headers: ZOE,
 		});
 		expect(named.status).toBe(201);
-		expect(named.json.message).toMatchObject({ author: 'staff', name: 'Ayşe Khan', staffId: 'usr_ayse' });
+		expect(named.json.message).toMatchObject({ author: 'staff', name: 'Zoë Laurent', staffId: 'usr_zoe' });
 		const team = await server(sys, 'POST', `/v1/conversations/${id}/messages`, { body: { text: 'The team again.' } });
 		expect(team.json.message).toMatchObject({ name: 'Team', staffId: 'server' });
 		// the conversation's messages, for staff and for the visitor
 		const messages = (await server(sys, 'GET', `/v1/conversations/${id}`)).json.messages;
 		expect(messages.filter((/** @type {any} */ m) => m.author === 'staff').map((/** @type {any} */ m) => m.name)).toEqual([
-			'Ayşe Khan',
+			'Zoë Laurent',
 			'Team',
 		]);
 		expect((await v('GET', '/v1/chat')).json.messages.map((/** @type {any} */ m) => m.name)).toEqual([
 			null,
-			'Ayşe Khan',
+			'Zoë Laurent',
 			'Team',
 		]);
 		// the activity log, with the role and the visitor's label (never the message)
 		const activity = (await server(sys, 'GET', '/v1/activity?action=conversation.replied')).json.items;
 		expect(activity.map((/** @type {any} */ e) => [e.actor, e.label, e.detail])).toEqual([
 			[{ kind: 'server', id: 'server', name: 'Team' }, 'Guest', 'Reply'],
-			[{ kind: 'user', id: 'usr_ayse', name: 'Ayşe Khan', role: 'Support' }, 'Guest', 'Reply'],
+			[{ kind: 'user', id: 'usr_zoe', name: 'Zoë Laurent', role: 'Support' }, 'Guest', 'Reply'],
 		]);
-		expect(JSON.stringify(activity)).not.toContain('Ayşe here');
+		expect(JSON.stringify(activity)).not.toContain('Zoë here');
 
-		// the staff list: Ayşe joined; listing as her checks her in, and assigned=me means her
+		// the staff list: Zoë joined; listing as her checks her in, and assigned=me means her
 		const ticket = await sys.ticket(['inbox.read', 'inbox.manage']);
 		const staff = async () =>
-			(await sys.admin(ticket, 'GET', '/v1/admin/staff')).json.items.find((/** @type {any} */ m) => m.id === 'usr_ayse');
-		expect(await staff()).toMatchObject({ name: 'Ayşe Khan', email: 'ayse@shop.example.com', presence: 'offline' });
-		expect((await server(sys, 'GET', '/v1/conversations', { headers: AYSE })).json.items).toHaveLength(1);
+			(await sys.admin(ticket, 'GET', '/v1/admin/staff')).json.items.find((/** @type {any} */ m) => m.id === 'usr_zoe');
+		expect(await staff()).toMatchObject({ name: 'Zoë Laurent', email: 'zoe@shop.example.com', presence: 'offline' });
+		expect((await server(sys, 'GET', '/v1/conversations', { headers: ZOE })).json.items).toHaveLength(1);
 		expect(await staff()).toMatchObject({ presence: 'online' });
 		const assigned = await server(sys, 'PATCH', `/v1/conversations/${id}`, {
-			body: { assignedTo: 'usr_ayse' },
-			headers: AYSE,
+			body: { assignedTo: 'usr_zoe' },
+			headers: ZOE,
 		});
-		expect(assigned.json.conversation.assignedTo).toEqual({ id: 'usr_ayse', name: 'Ayşe Khan' });
-		expect((await server(sys, 'GET', '/v1/conversations?assigned=me', { headers: AYSE })).json.items).toHaveLength(1);
-		expect((await server(sys, 'GET', '/v1/conversations/count?assigned=me', { headers: AYSE })).json).toEqual({
+		expect(assigned.json.conversation.assignedTo).toEqual({ id: 'usr_zoe', name: 'Zoë Laurent' });
+		expect((await server(sys, 'GET', '/v1/conversations?assigned=me', { headers: ZOE })).json.items).toHaveLength(1);
+		expect((await server(sys, 'GET', '/v1/conversations/count?assigned=me', { headers: ZOE })).json).toEqual({
 			count: 1,
 			capped: false,
 		});
 		expect((await server(sys, 'GET', '/v1/conversations?assigned=me')).json.items).toHaveLength(0);
-		const moves = (await server(sys, 'GET', '/v1/activity?actor=usr_ayse&action=conversation.assigned')).json.items;
-		expect(moves.map((/** @type {any} */ e) => e.detail)).toEqual(['Assigned to Ayşe Khan']);
+		const moves = (await server(sys, 'GET', '/v1/activity?actor=usr_zoe&action=conversation.assigned')).json.items;
+		expect(moves.map((/** @type {any} */ e) => e.detail)).toEqual(['Assigned to Zoë Laurent']);
 
 		// a ticket's note keeps the ticket's user; malformed actor headers are refused
 		const note = await sys.admin(ticket, 'POST', `/v1/admin/conversations/${id}/notes`, { text: 'VIP' });
@@ -255,7 +255,7 @@ describe('activity labels (K9)', () => {
 		await server(sys, 'PATCH', `/v1/conversations/${id}`, { body: { status: 'resolved', aiPaused: true } });
 		const entry = await server(sys, 'POST', '/v1/knowledge/entries', {
 			body: { kind: 'faq', title: 'Returns', text: 'Within 14 days.' },
-			headers: AYSE,
+			headers: ZOE,
 		});
 		await server(sys, 'DELETE', `/v1/knowledge/entries/${entry.json.entry.id}`);
 		sys.responders.set(`${ORIGIN}/about`, () => ({ status: 200, type: 'text/html', body: '<title>About us</title><p>Hi</p>' }));
@@ -285,24 +285,24 @@ describe('Format and business time zone (K7, K8)', () => {
 		await sys.paste('notifications');
 		sys.responders.set(`${ORIGIN}/.well-known/business.json`, () => ({
 			status: 200,
-			body: { version: 1, name: 'Shop', timeZone: 'Asia/Karachi' },
+			body: { version: 1, name: 'Shop', timeZone: 'Asia/Tokyo' },
 		}));
 		const cookie = await sys.adminSession();
 		await sys.dashboard(cookie, 'POST', `/v1/dashboard/websites/${sys.websiteId}/business/refresh`);
-		const saved = await server(sys, 'PUT', '/v1/format', { body: { locale: 'en-GB' }, headers: AYSE });
+		const saved = await server(sys, 'PUT', '/v1/format', { body: { locale: 'en-GB' }, headers: ZOE });
 		expect(saved.json.format).toMatchObject({ locale: 'en-GB', times: 'viewer' });
 		const config = await sys.call('GET', '/v1/widget/config', { token: sys.browser, origin: ORIGIN });
-		expect(config.json).toMatchObject({ format: { locale: 'en-GB' }, timeZone: 'Asia/Karachi' });
+		expect(config.json).toMatchObject({ format: { locale: 'en-GB' }, timeZone: 'Asia/Tokyo' });
 		const ticket = await sys.ticket(['inbox.read']);
 		const admin = await sys.admin(ticket, 'GET', '/v1/widget/admin/config');
-		expect(admin.json).toMatchObject({ format: { locale: 'en-GB' }, timeZone: 'Asia/Karachi' });
+		expect(admin.json).toMatchObject({ format: { locale: 'en-GB' }, timeZone: 'Asia/Tokyo' });
 
-		// office hours in Karachi: 09:00–10:00 on weekdays; it is Monday 15:00 there
+		// office hours in Tokyo: 09:00–10:00 on weekdays; it is Monday 19:00 there
 		await sys.setting('handoff', 'officeHours', ['mon-fri 09:00-10:00']);
 		const v = sys.visitor();
 		await v('POST', '/v1/chat/messages', { text: 'hi' });
 		const asked = await v('POST', '/v1/chat/handoff');
-		expect(asked.json.chat.conversation.officeHours).toEqual({ open: false, backAt: '2026-10-06T04:00:00.000Z' });
+		expect(asked.json.chat.conversation.officeHours).toEqual({ open: false, backAt: '2026-10-06T00:00:00.000Z' });
 		const state = await v('GET', '/v1/chat');
 		expect(state.json.messages[1].text).toBe('Our team is away right now. They are back 6 Oct 2026, 09:00.');
 		// the transcript's date: the business day the chat started, in the Format

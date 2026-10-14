@@ -16,7 +16,7 @@ import {
 	timeOf,
 } from '../core/imports.js';
 
-const RULES = { callingCode: '+92', staffIds: new Set(['usr_000000000000000000000001']), customFields: [] };
+const RULES = { callingCode: '+44', staffIds: new Set(['usr_000000000000000000000001']), customFields: [] };
 const CONVERSATION = {
 	id: 'conv_000000000000000000000001',
 	visitor: { kind: 'user', id: 'usr_000000000000000000000009' },

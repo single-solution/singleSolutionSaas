@@ -2,8 +2,9 @@
  * PLAN 0.8.10 Chat, fixes after the re-audit (pure parts): the language lock tells languages of one script apart by
  * their letters and the merchant's marker words, with the merchant's thresholds, quoted phrases and romanised marker
  * lines; replies are checked whole or part by part, and a language may be accepted in Latin letters too (CH-16 to
- * CH-19, CH-38, CH-39). Urdu and Roman Urdu are only examples here: nothing in Chat is about one language. Tables in
- * messages of their own (CH-21).
+ * CH-19, CH-38, CH-39). The languages here (Urdu, Arabic, Persian, Hindi, Russian, Ukrainian, Bulgarian, Spanish,
+ * Tagalog and romanised forms) are only examples: nothing in Chat is about one language. Tables in messages of their
+ * own (CH-21).
  */
 import { describe, expect, it } from 'vitest';
 import { createMemoryStore } from '@ss/app-kit';
@@ -18,9 +19,10 @@ const ROMAN = markerSetsOf(['ur-Latn: hai kya ye kitne ka bhai ji haan batao pri
 describe('the language of a message (CH-16, CH-17, CH-38, CH-39)', () => {
 	it('tells languages of one script apart by their letters and marker words', () => {
 		const any = { fallback: 'en' };
-		expect(detectLanguage('یہ پنکھا کتنے کا ہے؟', any)).toMatchObject({ language: 'ur', script: 'Arabic' });
-		expect(detectLanguage('كم سعر هذه المروحة؟', any).language).toBe('ar');
-		expect(detectLanguage('این گوشی چند است', any).language).toBe('fa');
+		expect(detectLanguage('یہ لیمپ کتنے کا ہے؟', any)).toMatchObject({ language: 'ur', script: 'Arabic' });
+		expect(detectLanguage('كم سعر هذا المصباح؟', any).language).toBe('ar');
+		expect(detectLanguage('این چراغ چند است', any).language).toBe('fa');
+		expect(detectLanguage('यह लैंप कितने का है?', any)).toMatchObject({ language: 'hi', script: 'Devanagari' });
 		expect(detectLanguage('سلام', any).language).toBe('ar');
 		expect(detectLanguage('سلام', { fallback: 'ur' }).language).toBe('ur');
 		expect(detectLanguage('كم السعر', { fallback: 'en', allowed: ['en', 'ur'] }).language).toBe('ur');
@@ -35,20 +37,22 @@ describe('the language of a message (CH-16, CH-17, CH-38, CH-39)', () => {
 	it('takes the merchant’s thresholds for Latin-script languages; quoted words count together', () => {
 		const today = { fallback: 'en', markers: ROMAN };
 		expect(detectLanguage('stock hai?', today).language).toBe('ur-Latn');
-		expect(detectLanguage('is this fan available hai', today).language).toBe('en');
+		expect(detectLanguage('is this lamp available hai', today).language).toBe('en');
 		const shared = { ...today, markerShare: 0.15, minWordsForShare: 4 };
 		expect(detectLanguage('stock hai?', shared).language).toBe('en');
-		expect(detectLanguage('is this fan available hai', shared).language).toBe('ur-Latn');
+		expect(detectLanguage('is this lamp available hai', shared).language).toBe('ur-Latn');
 		expect(detectLanguage('price batao', shared).language).toBe('ur-Latn');
 		expect(detectLanguage('bhai price', { ...today, minMarkers: 3, markerShare: 0.9 }).language).toBe('en');
 		expect(detectLanguage('in stock?', shared).language).toBe('en');
 		expect(detectLanguage('is it in stock mein?', shared).language).toBe('ur-Latn');
-		expect(detectLanguage('Is this fan in stock?', { ...today, allowed: ['ur', 'en'] }).language).toBe('en');
+		expect(detectLanguage('Is this lamp in stock?', { ...today, allowed: ['ur', 'en'] }).language).toBe('en');
 	});
 
 	it('reads marker lines: romanised words under a non-Latin language, phrases, bad lines', () => {
 		expect(markerSetsOf(['ur: hai kya, mein'])).toEqual([{ language: 'ur-Latn', words: ['hai', 'kya', 'mein'], phrases: [] }]);
 		expect(markerSetsOf(['ur: ہے "کیا"'])).toEqual([{ language: 'ur', words: ['ہے', 'کیا'], phrases: [] }]);
+		expect(markerSetsOf(['hi: hai kya'])).toEqual([{ language: 'hi-Latn', words: ['hai', 'kya'], phrases: [] }]);
+		expect(markerSetsOf(['es: sí hay'])).toEqual([{ language: 'es', words: ['sí', 'hay'], phrases: [] }]);
 		expect(markerSetsOf(['tl: po "salamat po" ""', 'no tag here'])).toEqual([
 			{ language: 'tl', words: ['po'], phrases: ['salamat po'] },
 		]);
@@ -57,29 +61,32 @@ describe('the language of a message (CH-16, CH-17, CH-38, CH-39)', () => {
 
 describe('the language of a reply (CH-16, CH-18, CH-19)', () => {
 	it('accepts a language in its own script or in Latin letters when asked', () => {
-		const roman = 'Ji haan, ye Rs 12,500 ka hai.';
-		expect(replyMatchesLanguage('یہ 12,500 روپے کا ہے', 'ur')).toBe(true);
+		const roman = 'Ji haan, ye $45 ka hai.';
+		expect(replyMatchesLanguage('یہ 45 ڈالر کا ہے', 'ur')).toBe(true);
 		expect(replyMatchesLanguage(roman, 'ur', { markers: ROMAN })).toBe(false);
 		expect(replyMatchesLanguage(roman, 'ur', { markers: ROMAN, latinFor: ['ur'] })).toBe(true);
-		expect(replyMatchesLanguage('یہ 12,500 روپے کا ہے', 'ur-Latn', { markers: ROMAN, latinFor: ['ur'] })).toBe(true);
-		expect(replyMatchesLanguage('یہ 12,500 روپے کا ہے', 'ur-Latn', { markers: ROMAN })).toBe(false);
+		expect(replyMatchesLanguage('یہ 45 ڈالر کا ہے', 'ur-Latn', { markers: ROMAN, latinFor: ['ur'] })).toBe(true);
+		expect(replyMatchesLanguage('یہ 45 ڈالر کا ہے', 'ur-Latn', { markers: ROMAN })).toBe(false);
+		expect(replyMatchesLanguage('यह $45 का है', 'hi')).toBe(true);
+		expect(replyMatchesLanguage('Yeh $45 ka hai', 'hi', { latinFor: ['hi'] })).toBe(true);
+		expect(replyMatchesLanguage('Yeh $45 ka hai', 'hi')).toBe(false);
 		expect(replyMatchesLanguage('Hola amigo', 'es', { latinFor: ['es'] })).toBe(true);
 	});
 
 	it('checks each part by presence: one marker word, or no other language', () => {
 		const presence = { markers: ROMAN, mode: /** @type {const} */ ('presence') };
 		expect(replyMatchesLanguage('Yes, it is in stock.', 'ur-Latn', presence)).toBe(false);
-		expect(replyMatchesLanguage('Ji haan, the fan is in stock.', 'ur-Latn', presence)).toBe(true);
+		expect(replyMatchesLanguage('Ji haan, the lamp is in stock.', 'ur-Latn', presence)).toBe(true);
 		expect(replyMatchesLanguage('Yes, it is in stock.', 'ur', { ...presence, latinFor: ['ur'] })).toBe(false);
 		expect(replyMatchesLanguage('Ji, ye stock mein hai.', 'ur', { ...presence, latinFor: ['ur'] })).toBe(true);
 		expect(replyMatchesLanguage('Ji haan, ye hai.\n---\nThe warranty is one year.', 'ur-Latn', presence)).toBe(false);
-		expect(replyMatchesLanguage('Ji haan, ye hai.\n---\n| Fan | Rs 12,500 |\n|---|---|', 'ur-Latn', presence)).toBe(true);
-		expect(replyMatchesLanguage('Yes, the fan is in stock.', 'en', presence)).toBe(true);
-		expect(replyMatchesLanguage('Ji haan, the fan is in stock.', 'en', presence)).toBe(false);
-		expect(replyMatchesLanguage('Ji, the fan is in stock.', 'en', presence)).toBe(true);
-		expect(replyMatchesLanguage('The fan یہ is in stock.', 'en', presence)).toBe(false);
+		expect(replyMatchesLanguage('Ji haan, ye hai.\n---\n| Lamp | $45 |\n|---|---|', 'ur-Latn', presence)).toBe(true);
+		expect(replyMatchesLanguage('Yes, the lamp is in stock.', 'en', presence)).toBe(true);
+		expect(replyMatchesLanguage('Ji haan, the lamp is in stock.', 'en', presence)).toBe(false);
+		expect(replyMatchesLanguage('Ji, the lamp is in stock.', 'en', presence)).toBe(true);
+		expect(replyMatchesLanguage('The lamp یہ is in stock.', 'en', presence)).toBe(false);
 		expect(replyMatchesLanguage('یہ ہے', 'ur', presence)).toBe(true);
-		expect(replyMatchesLanguage('12,500 ✓', 'ur', presence)).toBe(true);
+		expect(replyMatchesLanguage('45 ✓', 'ur', presence)).toBe(true);
 		expect(replyMatchesLanguage('\n---\n', 'en', presence)).toBe(false);
 	});
 
@@ -109,21 +116,21 @@ describe('the language of a reply (CH-16, CH-18, CH-19)', () => {
 
 describe('tables in messages of their own (CH-21)', () => {
 	it('splits around each table within the most messages; off, only on --- lines', () => {
-		const answer = 'Two fans:\n| Fan | Price |\n|---|---|\n| A | 1 |\n| B | 2 |\nWant one?\n---\n|x|\n|---|\nBye';
+		const answer = 'Two lamps:\n| Lamp | Price |\n|---|---|\n| A | 1 |\n| B | 2 |\nWant one?\n---\n|x|\n|---|\nBye';
 		expect(splitBubbles(answer, 5)).toEqual([
-			'Two fans:\n| Fan | Price |\n|---|---|\n| A | 1 |\n| B | 2 |\nWant one?',
+			'Two lamps:\n| Lamp | Price |\n|---|---|\n| A | 1 |\n| B | 2 |\nWant one?',
 			'|x|\n|---|\nBye',
 		]);
 		expect(splitBubbles(answer, 5, { tables: true })).toEqual([
-			'Two fans:',
-			'| Fan | Price |\n|---|---|\n| A | 1 |\n| B | 2 |',
+			'Two lamps:',
+			'| Lamp | Price |\n|---|---|\n| A | 1 |\n| B | 2 |',
 			'Want one?',
 			'|x|\n|---|',
 			'Bye',
 		]);
 		expect(splitBubbles(answer, 3, { tables: true })).toEqual([
-			'Two fans:',
-			'| Fan | Price |\n|---|---|\n| A | 1 |\n| B | 2 |',
+			'Two lamps:',
+			'| Lamp | Price |\n|---|---|\n| A | 1 |\n| B | 2 |',
 			'Want one?\n\n|x|\n|---|\n\nBye',
 		]);
 		expect(splitBubbles('| a | b |\n|---|---|', 5, { tables: true })).toEqual(['| a | b |\n|---|---|']);

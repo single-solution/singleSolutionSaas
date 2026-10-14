@@ -75,11 +75,11 @@ const start = async ({
 	settings = {},
 	routes = {},
 	token = 'bt',
-	path = '/products/phone',
+	path = '/products/lamp',
 	look = {},
 } = {}) => {
 	window.history.replaceState(null, '', path);
-	document.title = 'Phone page';
+	document.title = 'Lamp page';
 	const time = clock();
 	const server = serve({ 'GET /v1/widget/config': () => answer(200, configOf(features, settings, look)), ...routes });
 	const api = startWidget({ window, script: script(token), ...time });
@@ -176,7 +176,7 @@ describe('talking', () => {
 				'POST /v1/chat/read': () => answer(204),
 			},
 		});
-		api.setPage({ kind: 'product', productId: 'p1', productName: 'Phone X' });
+		api.setPage({ kind: 'product', productId: 'p1', productName: 'Desk lamp' });
 		expect($('.welcome').textContent).toBe(TEXTS['chat.welcomeSignedIn']);
 		await api.open();
 		await type('   ');
@@ -185,11 +185,11 @@ describe('talking', () => {
 		expect(server.last('POST /v1/chat/messages')?.body).toEqual({
 			text: 'Hello',
 			page: {
-				url: 'http://localhost:3000/products/phone',
-				title: 'Phone page',
+				url: 'http://localhost:3000/products/lamp',
+				title: 'Lamp page',
 				kind: 'product',
 				productId: 'p1',
-				productName: 'Phone X',
+				productName: 'Desk lamp',
 			},
 		});
 		expect(JSON.parse(String(window.localStorage.getItem(GUEST_STORAGE_KEY))).key).toBe('g-new');
@@ -317,7 +317,7 @@ describe('guest limit', () => {
 		const url = new URL(link.href);
 		expect(url.pathname).toBe('/sign-in');
 		expect(url.searchParams.get('from')).toBe('chat');
-		expect(url.searchParams.get('returnTo')).toBe('http://localhost:3000/products/phone');
+		expect(url.searchParams.get('returnTo')).toBe('http://localhost:3000/products/lamp');
 		expect($('.composer').hidden).toBe(true);
 	});
 
@@ -455,7 +455,7 @@ describe('flows', () => {
 			},
 		});
 		await click($('.launcher'));
-		expect(server.last('POST /v1/chat/flows/f1/start')?.body.page.url).toBe('http://localhost:3000/products/phone');
+		expect(server.last('POST /v1/chat/flows/f1/start')?.body.page.url).toBe('http://localhost:3000/products/lamp');
 		await time.advance(1_000);
 		expect(textsIn(root, '.msg.ai:not(.welcome) p')).toEqual(['Which one?']);
 		await click(buttonIn(root, 'Phones'));
@@ -780,28 +780,28 @@ describe('product cards', () => {
 		{
 			productId: 'prd_1',
 			variantId: 'var_1',
-			name: 'Phone X',
+			name: 'Desk lamp',
 			price: 125000,
-			currency: 'PKR',
+			currency: 'EUR',
 			image: 'https://cdn.example.com/x.jpg',
-			url: 'https://shop.example.com/products/phone-x',
+			url: 'https://shop.example.com/products/desk-lamp',
 			inStock: true,
 		},
 		{
 			productId: 'prd_2',
 			variantId: null,
-			name: 'Case',
+			name: 'Canvas tote',
 			price: 1500,
-			currency: 'PKR',
+			currency: 'EUR',
 			image: null,
 			url: null,
 			inStock: true,
 		},
-		{ productId: 'prd_3', variantId: null, name: 'Old', price: 100, currency: 'PKR', image: null, url: null, inStock: false },
+		{ productId: 'prd_3', variantId: null, name: 'Old', price: 100, currency: 'EUR', image: null, url: null, inStock: false },
 	];
 	const ROUTES = {
 		'GET /v1/chat': () =>
-			answer(200, { ...view(), messages: [msg(1, 'visitor', 'Phones?'), msg(2, 'ai', 'Here you go.', { cards: CARDS })] }),
+			answer(200, { ...view(), messages: [msg(1, 'visitor', 'Lamps?'), msg(2, 'ai', 'Here you go.', { cards: CARDS })] }),
 		'POST /v1/chat/read': () => answer(204),
 	};
 
@@ -818,8 +818,8 @@ describe('product cards', () => {
 		expect(root.querySelector('.cards')?.getAttribute('aria-label')).toBe(TEXTS['chat.products']);
 		expect(cards[0]?.querySelector('img')?.getAttribute('src')).toBe(CARDS[0]?.image);
 		expect(cards[0]?.querySelector('a.name')?.getAttribute('href')).toBe(CARDS[0]?.url);
-		expect(textsIn(root, '.card .price')).toEqual(['PKR 1,250.00', 'PKR 15.00', 'PKR 1.00']);
-		expect(textsIn(root, '.card .name')).toEqual(['Phone X', 'Case', 'Old']);
+		expect(textsIn(root, '.card .price')).toEqual(['EUR 1,250.00', 'EUR 15.00', 'EUR 1.00']);
+		expect(textsIn(root, '.card .name')).toEqual(['Desk lamp', 'Canvas tote', 'Old']);
 		expect(cards[2]?.textContent).toContain(TEXTS['chat.outOfStock']);
 		expect(cards[2]?.querySelector('.add')).toBeNull();
 		/** @type {any[]} */
@@ -869,24 +869,24 @@ describe('product cards', () => {
 
 	it('shows prices and times in the website’s Format and business time zone (K7)', async () => {
 		keepGuest();
-		const closed = conv({ waiting: true, officeHours: { open: false, backAt: '2026-10-02T04:00:00Z' } });
+		const closed = conv({ waiting: true, officeHours: { open: false, backAt: '2026-10-02T07:00:00Z' } });
 		const { root, api } = await start({
 			features: ['visitor_chat', 'guest_chat', 'ai_replies', 'product_cards', 'handoff'],
 			look: {
-				format: { locale: 'en-GB', currencyDisplay: 'custom', currencySymbol: 'Rs', wholeUnits: true, times: 'business' },
-				timeZone: 'Asia/Karachi',
+				format: { locale: 'en-GB', currencyDisplay: 'custom', currencySymbol: '€', wholeUnits: true, times: 'business' },
+				timeZone: 'Europe/Paris',
 			},
 			routes: {
 				...ROUTES,
 				'GET /v1/chat': () =>
 					answer(200, {
 						...view({ conversation: closed }),
-						messages: [msg(1, 'visitor', 'Phones?'), msg(2, 'ai', 'Here you go.', { cards: CARDS })],
+						messages: [msg(1, 'visitor', 'Lamps?'), msg(2, 'ai', 'Here you go.', { cards: CARDS })],
 					}),
 			},
 		});
 		await api.open();
-		expect(textsIn(root, '.card .price')).toEqual(['Rs 1,250', 'Rs 15', 'Rs 1']);
+		expect(textsIn(root, '.card .price')).toEqual(['€ 1,250', '€ 15', '€ 1']);
 		expect(textsIn(root, '.notices p')[0]).toBe('Our team is away right now. They are back 2 Oct 2026, 09:00.');
 	});
 
@@ -902,13 +902,13 @@ describe('product cards', () => {
 describe('formatted answers (C2)', () => {
 	const VISITOR = '**Is it** <b>in</b> [stock](https://shop.example.com)?\n- yes';
 	const ANSWER = [
-		'**Phone X** is in stock:',
-		'- 128 GB',
-		'- 256 GB',
+		'**Desk lamp** is in stock:',
+		'- Black',
+		'- White',
 		'',
-		'| Size | Price |',
+		'| Colour | Price |',
 		'| --- | --- |',
-		'| 128 GB | `PKR 10` |',
+		'| Black | `EUR 10` |',
 		'',
 		'[See it](https://shop.example.com/p/x) or [this](javascript:alert%281%29) <img src=x onerror=alert(1)>',
 	].join('\n');
@@ -933,11 +933,11 @@ describe('formatted answers (C2)', () => {
 		});
 		await api.open();
 		const ai = /** @type {HTMLElement} */ (root.querySelector('.msg.ai:not(.welcome) > .rich'));
-		expect(ai.querySelector('p strong')?.textContent).toBe('Phone X');
-		expect(textsIn(ai, 'ul li')).toEqual(['128 GB', '256 GB']);
-		expect(textsIn(ai, '.table th')).toEqual(['Size', 'Price']);
-		expect(textsIn(ai, '.table td')).toEqual(['128 GB', 'PKR 10']);
-		expect(ai.querySelector('td code')?.textContent).toBe('PKR 10');
+		expect(ai.querySelector('p strong')?.textContent).toBe('Desk lamp');
+		expect(textsIn(ai, 'ul li')).toEqual(['Black', 'White']);
+		expect(textsIn(ai, '.table th')).toEqual(['Colour', 'Price']);
+		expect(textsIn(ai, '.table td')).toEqual(['Black', 'EUR 10']);
+		expect(ai.querySelector('td code')?.textContent).toBe('EUR 10');
 		const links = [...ai.querySelectorAll('a')];
 		expect(links.map((link) => [link.textContent, link.getAttribute('href'), link.target, link.rel])).toEqual([
 			['See it', 'https://shop.example.com/p/x', '_blank', 'noopener noreferrer nofollow'],

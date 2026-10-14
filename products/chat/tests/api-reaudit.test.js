@@ -123,37 +123,37 @@ describe('the AI reply in the same request, and replies that went stale (CH-1, R
 describe('the language lock (CH-2, CH-16 to CH-19, CH-38)', () => {
 	it('answers a message in another script in that language or in Latin letters; the default language stays', async () => {
 		const sys = await start(['visitor_chat', 'guest_chat', 'ai_replies', 'language_lock']);
-		await sys.setting('language_lock', 'allowedLanguages', ['ur', 'en']);
+		await sys.setting('language_lock', 'allowedLanguages', ['hi', 'en']);
 		await sys.setting('language_lock', 'defaultLanguage', 'en');
-		await sys.setting('language_lock', 'acceptLatinFor', ['ur']);
-		await sys.setting('language_lock', 'markerWords', ['ur: hai kya ye kitne ka bhai ji haan']);
-		sys.ai({ text: 'Ji, ye Rs 12,500 ka hai.' });
+		await sys.setting('language_lock', 'acceptLatinFor', ['hi']);
+		await sys.setting('language_lock', 'markerWords', ['hi: hai kya ye kitne ka bhai ji haan']);
+		sys.ai({ text: 'Ji, ye $45 ka hai.' });
 		const v = sys.visitor();
-		await v('POST', '/v1/chat/messages', { text: 'یہ پنکھا کتنے کا ہے؟' });
+		await v('POST', '/v1/chat/messages', { text: 'यह लैंप कितने का है?' });
 		expect(sys.aiCalls()).toHaveLength(1);
 		expect(sys.aiCalls()[0].messages[0].content).toContain(
-			'Answer only in Urdu (ur), whatever language the knowledge is in. Urdu (Latin) (ur-Latn) is fine too.',
+			'Answer only in Hindi (hi), whatever language the knowledge is in. Hindi (Latin) (hi-Latn) is fine too.',
 		);
-		expect(texts((await v('GET', '/v1/chat')).json).at(-1)).toEqual(['ai', 'Ji, ye Rs 12,500 ka hai.']);
+		expect(texts((await v('GET', '/v1/chat')).json).at(-1)).toEqual(['ai', 'Ji, ye $45 ka hai.']);
 		sys.ai({ text: 'Yes, it is in stock.' });
-		await v('POST', '/v1/chat/messages', { text: 'Is this fan in stock?' });
+		await v('POST', '/v1/chat/messages', { text: 'Is this lamp in stock?' });
 		expect(sys.aiCalls().at(-1).messages[0].content).toContain('Answer only in English (en)');
 	});
 
 	it('a reply still in the wrong language gets the unavailable message in the visitor’s language, no handoff', async () => {
 		const sys = await start(['visitor_chat', 'guest_chat', 'ai_replies', 'language_lock', 'inbox', 'handoff']);
-		await sys.setting('language_lock', 'markerWords', ['ur-Latn: hai kya ye kitne ka bhai']);
+		await sys.setting('language_lock', 'markerWords', ['tl: po ba ito magkano opo salamat']);
 		await sys.setting('language_lock', 'checkMode', 'presence');
-		await sys.setting('language_lock', 'unavailableTexts', ['ur-Latn: Maazrat, abhi jawab nahi de sakta.']);
-		sys.ai({ text: 'It costs Rs 12,500.' }, { text: 'The price is Rs 12,500.' });
+		await sys.setting('language_lock', 'unavailableTexts', ['tl: Paumanhin po, hindi ako makasagot ngayon.']);
+		sys.ai({ text: 'It costs $45.' }, { text: 'The price is $45.' });
 		const v = sys.visitor();
-		await v('POST', '/v1/chat/messages', { text: 'bhai ye kitne ka hai' });
+		await v('POST', '/v1/chat/messages', { text: 'magkano po ito' });
 		let state = (await v('GET', '/v1/chat')).json;
-		expect(texts(state).at(-1)).toEqual(['system', 'Maazrat, abhi jawab nahi de sakta.']);
+		expect(texts(state).at(-1)).toEqual(['system', 'Paumanhin po, hindi ako makasagot ngayon.']);
 		expect(state.conversation.waiting).toBe(false);
 		// two failures in a row (the handoff setting) still hand off
-		sys.ai({ text: 'It costs Rs 12,500.' }, { text: 'Rs 12,500, in stock.' });
-		await v('POST', '/v1/chat/messages', { text: 'kya ye hai bhai' });
+		sys.ai({ text: 'It costs $45.' }, { text: '$45, in stock.' });
+		await v('POST', '/v1/chat/messages', { text: 'meron po ba ito' });
 		state = (await v('GET', '/v1/chat')).json;
 		expect(state.conversation.waiting).toBe(true);
 	});
@@ -265,10 +265,10 @@ describe('handoffs, assignment, sign-in claims and staff alerts (CH-3, CH-5, CH-
 		// moved: the account has no conversation yet
 		const guest = sys.visitor();
 		await guest('POST', '/v1/chat/messages', { text: 'hello' });
-		const bob = await sys.accounts.signIn({ websiteId: sys.websiteId, sub: 'usr_bob', name: 'Bob', phone: '+923001234567' });
+		const bob = await sys.accounts.signIn({ websiteId: sys.websiteId, sub: 'usr_bob', name: 'Bob', phone: '+447700900123' });
 		const moved = (await sys.visitor({ guestKey: guest.state.guestKey, signIn: bob })('GET', '/v1/chat')).json;
 		const view = (await sys.serverCall('GET', `/v1/conversations/${moved.conversation.id}`)).json.conversation;
-		expect(view.visitor).toMatchObject({ kind: 'user', id: 'usr_bob', name: 'Bob', phone: '+923001234567' });
+		expect(view.visitor).toMatchObject({ kind: 'user', id: 'usr_bob', name: 'Bob', phone: '+447700900123' });
 		// merged: the account's own conversation was resolved; the guest's newer question reopens it
 		const ann = await sys.accounts.signIn({ websiteId: sys.websiteId, sub: 'usr_ann', name: 'Ann' });
 		await sys.visitor({ signIn: ann })('POST', '/v1/chat/messages', { text: 'old question' });
@@ -288,19 +288,19 @@ describe('handoffs, assignment, sign-in claims and staff alerts (CH-3, CH-5, CH-
 		await sys.paste('notifications');
 		await sys.setting('staff_alerts', 'recipients', ['boss@shop.example.com']);
 		const v = sys.visitor();
-		await v('POST', '/v1/chat/contact', { name: 'Ann', phone: '+923001234567' });
-		const long = `Is the white fan in stock?\n\n\n\nI need two of them, delivered to my shop by Friday. ${'Please call me. '.repeat(30)}`;
+		await v('POST', '/v1/chat/contact', { name: 'Ann', phone: '+447700900123' });
+		const long = `Is the white lamp in stock?\n\n\n\nI need two of them, delivered to my shop by Friday. ${'Please call me. '.repeat(30)}`;
 		await v('POST', '/v1/chat/messages', { text: long });
 		const [alert] = sys.messages();
 		expect(alert.values.name).toBe('Ann');
 		expect(alert.values.phone).toBeUndefined();
 		expect(alert.values.preview).toHaveLength(140);
 		expect(alert.values.message).toHaveLength(500);
-		expect(alert.values.message.startsWith('Is the white fan in stock?\n\nI need two of them')).toBe(true);
+		expect(alert.values.message.startsWith('Is the white lamp in stock?\n\nI need two of them')).toBe(true);
 		await sys.setting('staff_alerts', 'includePhone', true);
 		await sys.setting('staff_alerts', 'frequency', 'every_message');
 		await v('POST', '/v1/chat/messages', { text: 'Call me' });
-		expect(sys.messages().at(-1).values).toMatchObject({ name: 'Ann', phone: '+923001234567', message: 'Call me' });
+		expect(sys.messages().at(-1).values).toMatchObject({ name: 'Ann', phone: '+447700900123', message: 'Call me' });
 	});
 });
 
@@ -314,12 +314,12 @@ describe('options from the settings draft (CH-13, CH-21, RW-8)', () => {
 		await sys.setting('staff_alerts', 'inboxUrl', 'https://admin.shop.example.com/inquiries?inquiry={id}');
 		await sys.setting('ai_replies', 'bubbles', 5);
 		await sys.setting('ai_replies', 'tableBubble', true);
-		sys.ai({ text: 'Two fans:\n| Fan | Price |\n|---|---|\n| A | Rs 1 |\nWant one?' }, { text: 'Hi Ann.' });
+		sys.ai({ text: 'Two lamps:\n| Lamp | Price |\n|---|---|\n| A | $1 |\nWant one?' }, { text: 'Hi Ann.' });
 		const guest = sys.visitor();
-		await guest('POST', '/v1/chat/messages', { text: 'fans?' });
+		await guest('POST', '/v1/chat/messages', { text: 'lamps?' });
 		expect(texts((await guest('GET', '/v1/chat')).json).slice(1)).toEqual([
-			['ai', 'Two fans:'],
-			['ai', '| Fan | Price |\n|---|---|\n| A | Rs 1 |'],
+			['ai', 'Two lamps:'],
+			['ai', '| Lamp | Price |\n|---|---|\n| A | $1 |'],
 			['ai', 'Want one?'],
 		]);
 		const id = (await guest('GET', '/v1/chat')).json.conversation.id;
@@ -342,12 +342,12 @@ describe('attachment links (CH-8)', () => {
 		await sys.connect('storage', STORAGE_KEY);
 		await sys.setting('attachments', 'visitorUploads', 'everyone');
 		const v = sys.visitor();
-		const image = await v('POST', '/v1/chat/uploads', { name: 'fan.png', type: 'image/png', size: 100 });
+		const image = await v('POST', '/v1/chat/uploads', { name: 'lamp.png', type: 'image/png', size: 100 });
 		await v('POST', '/v1/chat/messages', { attachment: image.json.attachment });
 		const pdf = await v('POST', '/v1/chat/uploads', { name: 'warranty.pdf', type: 'application/pdf', size: 100 });
 		await v('POST', '/v1/chat/messages', { attachment: pdf.json.attachment });
 		const [png, doc] = (await v('GET', '/v1/chat')).json.messages.map((/** @type {any} */ m) => m.attachment);
-		expect(png).toMatchObject({ name: 'fan.png', inline: true });
+		expect(png).toMatchObject({ name: 'lamp.png', inline: true });
 		expect(doc).toMatchObject({ name: 'warranty.pdf', inline: false });
 		// an hour later the links of the loaded messages still open
 		sys.advance(60 * 60_000);
