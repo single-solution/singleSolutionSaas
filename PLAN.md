@@ -1915,6 +1915,24 @@ the owner presses Re-seal in the Portal and each product and the answers show no
 legacy and leftovers** ("I can't bear a single mistake, this is a professional platform"): the list is
 `audit/global-audit-2026-10-14.md`.
 
+**Ecommerce dynamic model — approved by the owner 2026-10-14 (all 10 decisions as recommended).** The design is
+`audit/design/ecommerce-dynamic-model.md` (binding; this paragraph is its summary). Merchants make **item types** (kind
+physical / digital / service, plus the parts it uses: variants, grades, unit numbers, measurement table, measured
+selling, parcel, downloads, licence keys, slots, warranty); a category gives a default type; built-in types reproduce
+today. **Fields** widen attributes (product, variant, unit, order, customer; text, number, choice, yes/no, date; format
+checks without any merchant-built regular expression: characters, length, starts with, mask, check digit none/Luhn);
+up to 3 unit-number fields per type, one may hold 2 values; IMEI is one shop's field. **Order steps:** one flow per
+shop; statuses tie to the 10 fixed stages; per-move options (refund after delivery puts items back: **not by
+default**, merchant may choose ask or always); E40's extra moves allowed only when listed; the ten checkout settings
+that describe moves move into the flow; claims keep their small workflow; one transition engine for every path, one
+transaction per move, pending external effects retried on use, a flow-save guard (a step's key and stage cannot change
+while orders are in it). **Guests:** phone, e-mail or either (phone wins under either), "phone needed" yes/no.
+**Measured selling:** new feature `measured_sales` (off, price 0), quantities in thousandths of the selling unit, unit
+fixed once there is stock, not in bundles. Region and postcode in addresses, zones and tax; measurement tables with any
+unit; landing pages by any attribute. Build order: phase 1 the order engine with no behaviour change (golden replay and
+property tests first), then flow options, fields and unit numbers (IMEI code removed), item types, addresses/guests,
+tables and landing facets, measured quantities.
+
 #### Principles
 
 - **Latest, not legacy** (owner, 2026-10-10). The stores were built the old way; the products keep the current,
