@@ -20,7 +20,7 @@ export default defineConfig({
 				'packages/*/src/**',
 				'packages/config/{eslint,vitest,mongo-setup}.js',
 				'platform/src/**',
-				'products/*/{core,ui,api,adapters}/**',
+				'products/*/{core,ui,server,adapters}/**',
 			],
 			thresholds: { ...THRESHOLDS },
 		},
