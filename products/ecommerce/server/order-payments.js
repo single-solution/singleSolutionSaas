@@ -19,6 +19,8 @@ import { createOrdersStore } from '../adapters/orders-store.js';
 import { confirmedStatus, statusOf } from '../core/flow.js';
 import { ID_PREFIX } from '../core/model.js';
 import { paymentStateOf, serverNote } from '../core/orders.js';
+import { planTransition } from '../core/transitions.js';
+import { createTransitions, rulesOf } from './transitions.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
 /** @typedef {import('./service.js').Service} Service */
@@ -82,12 +84,14 @@ const watched = (order) =>
  * @param {Service} service
  */
 export const createOrderPayments = (product, service) => {
+	const transitions = createTransitions(product, service);
 	/** @param {Site} s @returns {Promise<OrderFlow>} */
 	const flowOf = async (s) => /** @type {OrderFlow} */ (/** @type {unknown} */ (await s.list('order_flow')));
 
 	/**
 	 * Mark an order paid (Payments confirmed it: an `online` entry of its payments log, E26) and move it to the flow's
-	 * confirmed status.
+	 * confirmed status, through the order engine (a transition guarded by the payment still pending). The flow may have
+	 * no move from waiting to an open status: the order is then paid but stays where it is.
 	 * @param {Site} s @param {OrderRecord} order
 	 * @returns {Promise<OrderRecord>}
 	 */
@@ -105,9 +109,6 @@ export const createOrderPayments = (product, service) => {
 			'payment.checkedAt': new Date(now),
 			holdUntil: null,
 		};
-		// the flow may have no move from waiting to an open status: the order is then paid but stays where it is
-		const next = statusOf(flow, to ?? '');
-		if (next) Object.assign(set, { status: next.key, role: next.role });
 		const entry = {
 			id: createId(ID_PREFIX.orderPayment),
 			method: 'online',
@@ -118,26 +119,52 @@ export const createOrderPayments = (product, service) => {
 			by: PAYMENTS_ACTOR,
 			at: new Date(now),
 		};
-		const moved = await store.change(order, set, {
-			where: { 'payment.state': 'pending' },
-			push: {
-				payments: entry,
-				...(next
-					? {
-							history: {
-								at: new Date(now),
-								from: order.status,
-								to: next.key,
-								by: 'system',
-								...serverNote('payment_confirmed', 'Payment confirmed'),
-							},
-						}
-					: {}),
-			},
-		});
-		if (!moved) return (await store.order(order.id)) ?? order;
+		const planned = to
+			? planTransition({
+					order,
+					flow,
+					to,
+					input: {
+						who: 'system',
+						actor: PAYMENTS_ACTOR,
+						by: 'system',
+						...serverNote('payment_confirmed', 'Payment confirmed'),
+						paid: { set, entry },
+						where: { 'payment.state': 'pending' },
+						checkUpdatedAt: false,
+					},
+					rules: await rulesOf(s, 'system'),
+					now,
+				})
+			: null;
+		if (!planned?.ok) {
+			// paid, staying where it is
+			const paid = await store.change(order, set, { where: { 'payment.state': 'pending' }, push: { payments: entry } });
+			if (!paid) return (await store.order(order.id)) ?? order;
+			await service.emit('order.paid', s, { order: paid, entry });
+			return (await store.order(order.id)) ?? paid;
+		}
+		const { plan } = planned;
+		/** @type {OrderRecord} */
+		let moved;
+		try {
+			moved = await transitions.apply(s, order, plan);
+		} catch (error) {
+			if (/** @type {any} */ (error)?.code === 'conflict') return (await store.order(order.id)) ?? order;
+			throw error;
+		}
 		await service.emit('order.paid', s, { order: moved, entry });
-		if (next) await service.emit('order.moved', s, { order: moved, from: order.status, to: next.key, by: 'system' });
+		await product.activity.record(
+			{ websiteId: s.websiteId, merchantId: s.merchantId, after: s.ctx.after },
+			{
+				actor: PAYMENTS_ACTOR,
+				action: 'order.moved',
+				target: order.id,
+				label: order.number,
+				detail: `${statusOf(flow, order.status)?.label ?? order.status} → ${statusOf(flow, to ?? '')?.label ?? to}`,
+			},
+		);
+		await service.emit('order.moved', s, { order: moved, ...plan.event });
 		return (await store.order(order.id)) ?? moved;
 	};
 

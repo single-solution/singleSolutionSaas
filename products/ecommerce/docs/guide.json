@@ -538,6 +538,21 @@
 				]
 			},
 			{
+				"id": "order-engine",
+				"title": "Changing the flow while orders are in it, and refunds that wait for Payments",
+				"paragraphs": [
+					"Every way an order changes its status (staff and bulk moves, the shopper's cancel, the end of a waiting window, Payments' confirmation, a recorded payment that confirms, refunds that cover the payments) is one transaction: the order, its facts and everything it gives back or takes are written together, so of two changes at once one wins and the other gets 409 conflict. An order's facts (GET /v1/orders/<id>: stock held, sold, back or none; offers counted or released; redeemed points spent or given back; earned points none, credited or reversed; serial numbers captured or none) say what it holds whatever its status is called, and nothing is given back or taken twice.",
+					"Saving the order flow (Settings, or PUT /v1/lists/order_flow) is refused with 422 validation_failed (code status_in_use, naming the status and how many orders it has) when it would remove or re-key a status that has orders, or give it another role; names and moves change freely. Move its orders to another status of the same role first with POST /v1/orders/restatus { from, to }: nothing is given back or taken and no message is sent; each order's history notes it. A move of an order whose status's role was changed anyway is refused with 409 flow_changed.",
+					"The refund through Payments of a staff cancel or of a move into a refunded status runs right after the move. When Payments cannot be reached, the move is still made, the warning says so, and the refund waits in the order's effects (pending, shown as Refund waiting for Payments): it is sent again with the same Idempotency-Key when the order is opened and on use, until done; one Payments refuses is failed and refunded from the order. A refund staff make from the order first settles a waiting one (409 conflict while it runs at Payments, 503 payments_unavailable while Payments cannot tell whether it went through), so the money never goes back twice."
+				],
+				"routes": [
+					["GET /v1/orders/:id", "checkout"],
+					["PUT /v1/lists/order_flow", "checkout"],
+					["POST /v1/orders/restatus", "checkout"],
+					["POST /v1/orders/:id/refunds", "checkout"]
+				]
+			},
+			{
 				"id": "shipping-packing",
 				"title": "Shipping, tracking notes and the dispatch video",
 				"paragraphs": [

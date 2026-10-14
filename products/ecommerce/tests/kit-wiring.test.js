@@ -447,6 +447,9 @@ describe('K4: counts equal to their lists', () => {
 		expect((await shop.admin(ticket, 'GET', '/v1/admin/orders/counts?q=CNT-&by=role')).json.groups.open).toBe(2);
 		const manager = await shop.ticket(['orders.manage']);
 		expect((await shop.admin(manager, 'GET', '/v1/admin/orders/count')).status).toBe(403);
+		// a status with orders cannot leave the flow: its orders move to another open status first
+		expect((await shop.api('PUT', '/v1/lists/order_flow', { value: DEFAULT_FLOW })).status).toBe(422);
+		expect((await shop.api('POST', '/v1/orders/restatus', { from: 'quality_check', to: 'confirmed' })).json.moved).toBe(1);
 		expect((await shop.api('PUT', '/v1/lists/order_flow', { value: DEFAULT_FLOW })).status).toBe(200);
 	});
 

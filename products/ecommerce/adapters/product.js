@@ -48,6 +48,7 @@ import feedsSettings from '../schemas/feeds.settings.json' with { type: 'json' }
 import aiCopySettings from '../schemas/ai_copy.settings.json' with { type: 'json' };
 import llmsTxtSettings from '../schemas/llms_txt.settings.json' with { type: 'json' };
 import importSettings from '../schemas/import.settings.json' with { type: 'json' };
+import { flowChangeProblems } from '../core/flow.js';
 import { createAi } from './ai.js';
 import { INDEXES as CATALOG_INDEXES, upgradeDatabase } from './catalog-store.js';
 import { createCouriers } from './couriers.js';
@@ -56,7 +57,7 @@ import { INDEXES as FULFILMENT_INDEXES } from './fulfilment-store.js';
 import { createImportOptions } from './imports.js';
 import { LEDGER_INDEXES } from './ledger.js';
 import { LISTS, createLists } from './lists.js';
-import { INDEXES as ORDERS_INDEXES } from './orders-store.js';
+import { INDEXES as ORDERS_INDEXES, createOrdersStore } from './orders-store.js';
 import { INDEXES as OUTBOX_INDEXES } from './outbox.js';
 import { INDEXES as PROMOTIONS_INDEXES } from './promotions-store.js';
 import { createSearchState } from './search-state.js';
@@ -131,6 +132,7 @@ const PROBLEM_CODES = Object.freeze({
 	coupon_not_applicable: Object.freeze({ status: 422, title: 'Coupon does not apply to this cart' }),
 	slot_taken: Object.freeze({ status: 409, title: 'Slot no longer free' }),
 	move_not_allowed: Object.freeze({ status: 409, title: 'Status move not allowed' }),
+	flow_changed: Object.freeze({ status: 409, title: 'The order flow changed' }),
 	too_many_open_orders: Object.freeze({ status: 409, title: 'Too many open orders' }),
 	nothing_to_pay: Object.freeze({ status: 409, title: 'Nothing to pay' }),
 	nothing_paid: Object.freeze({ status: 409, title: 'Nothing was paid' }),
@@ -220,7 +222,20 @@ export const createProductInstance = (options) => {
 	const send = options.outboundSend ?? ((url, init) => safeFetch(url, init, policy));
 	const couriers = createCouriers({ send });
 	const ai = createAi({ send });
-	const lists = createLists({ store, now });
+	/** The kit's product, once made (the order flow's guard reads the merchant database through it). @type {ReturnType<typeof createProduct> | null} */
+	let kitProduct = null;
+	const lists = createLists({
+		store,
+		now,
+		guards: {
+			// a status that has orders keeps its key and kind of step (the order engine's facts follow them)
+			order_flow: async (websiteId, saved, next) => {
+				if (!kitProduct || (await kitProduct.connections.value(websiteId, 'database')) === null) return [];
+				const counts = await createOrdersStore(await kitProduct.data.forWebsite(websiteId)).statusCounts();
+				return flowChangeProblems(saved, next, counts);
+			},
+		},
+	});
 	const searchState = createSearchState({ store, now });
 	const keys = healthy ? options.config : undefined;
 	const sealer = createSealer(keys?.encryptionKey || UNCONFIGURED_KEY, keys?.previousEncryptionKey ?? null);
@@ -310,6 +325,7 @@ export const createProductInstance = (options) => {
 			]),
 		),
 	});
+	kitProduct = product;
 	return Object.freeze({
 		...product,
 		lists,

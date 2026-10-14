@@ -136,8 +136,10 @@ const RETRY_REASONS = Object.freeze(['unreachable', 'unavailable', 'refused']);
 export const BUSINESS_VALUE = 'business';
 
 /**
- * A Payments payment as Ecommerce reads it: `refundDue` when it was paid after the shop cancelled it (K-13).
- * @typedef {{ status: string, amount: number, currency: string, refundDue: boolean }} PaymentFacts
+ * A Payments payment as Ecommerce reads it: `refundDue` when it was paid after the shop cancelled it (K-13); what was
+ * refunded of it, and each refund (an order's refund whose answer never came is found there).
+ * @typedef {{ status: string, amount: number, currency: string, refundDue: boolean, refunded: number, gateway: string,
+ *   refunds: Array<{ id: string, amount: number, manual: boolean }> }} PaymentFacts
  */
 
 /** @typedef {import('../adapters/outbox.js').OutboxMessage} OutboxMessage */
@@ -535,30 +537,33 @@ export const createService = (product) => {
 	// --------------------------------------------------------------------------------------------------- payments
 
 	/**
-	 * One call to Payments with the pasted token; a refused or unreachable call is 503 `payments_unavailable`.
+	 * One call to Payments with the pasted token; a refused or unreachable call is 503 `payments_unavailable`. With
+	 * `refusals`, an answer that says Payments did not do it (a 4xx other than 408, 409 and 429: it is not done, and the
+	 * same call is refused again) is 502 `payments_refused` with Payments' words: a refund (an order's refund through
+	 * Payments is tried again only while it may have been done).
 	 * @param {Site} s
 	 * @param {string} method
 	 * @param {string} path
 	 * @param {unknown} [body]
 	 * @param {Record<string, string>} [headers]
+	 * @param {{ refusals?: boolean }} [options]
 	 * @returns {Promise<any>} the answer's body
 	 */
-	const callPayments = async (s, method, path, body, headers) => {
+	const callPayments = async (s, method, path, body, headers, { refusals = false } = {}) => {
 		const answer = await product.callProduct(s.websiteId, 'payments', path, {
 			method,
 			...(body === undefined ? {} : { body }),
 			...(headers ? { headers } : {}),
 		});
-		if (!answer.ok)
-			throw problem(
-				'payments_unavailable',
-				answer.reason === 'not_connected' ? 'Payments not connected.' : 'Payments cannot be reached right now.',
-			);
-		if (answer.status >= 400) {
+		if (answer.ok) return answer.body;
+		if (refusals && answer.reason === 'failed' && ![408, 409, 429].includes(Number(answer.status))) {
 			const detail = typeof answer.body === 'object' && answer.body !== null ? /** @type {any} */ (answer.body).detail : '';
 			throw problem('payments_refused', typeof detail === 'string' && detail ? detail : 'Payments refused the request.');
 		}
-		return answer.body;
+		throw problem(
+			'payments_unavailable',
+			answer.reason === 'not_connected' ? 'Payments not connected.' : 'Payments cannot be reached right now.',
+		);
 	};
 
 	/**
@@ -571,6 +576,13 @@ export const createService = (product) => {
 		amount: Number(body.amount ?? 0),
 		currency: String(body.currency ?? ''),
 		refundDue: body.refundDue === true,
+		refunded: Number(body.refunded ?? 0),
+		gateway: String(body.gateway ?? ''),
+		refunds: (Array.isArray(body.refunds) ? body.refunds : []).map((/** @type {any} */ refund) => ({
+			id: String(refund?.id ?? ''),
+			amount: Number(refund?.amount ?? 0),
+			manual: refund?.manual === true,
+		})),
 	});
 
 	const payments = Object.freeze({
@@ -632,7 +644,9 @@ export const createService = (product) => {
 			return { outcome: 'unreachable' };
 		},
 		/**
-		 * Refund (all or part) of a payment through Payments, naming the member of the staff who asked (K2).
+		 * Refund (all or part) of a payment through Payments, naming the member of the staff who asked (K2): 502
+		 * `payments_refused` when Payments says no (not done), 503 `payments_unavailable` when it cannot be reached (it may
+		 * have been done: the same Idempotency-Key gets its answer).
 		 * @param {Site} s @param {string} paymentId
 		 * @param {{ amount: number, reason: string, idempotencyKey: string,
 		 *   by: { kind: string, id: string, name?: string, role?: string } }} refund
@@ -646,6 +660,7 @@ export const createService = (product) => {
 				`/v1/payments/${encodeURIComponent(paymentId)}/refunds`,
 				{ amount, reason },
 				{ 'idempotency-key': idempotencyKey, ...actorHeaders(by) },
+				{ refusals: true },
 			);
 			const refunds = Array.isArray(body.refunds) ? body.refunds : [];
 			const last = refunds[refunds.length - 1] ?? {};

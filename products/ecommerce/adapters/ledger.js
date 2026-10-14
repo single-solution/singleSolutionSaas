@@ -1,8 +1,10 @@
 /**
- * The shop's ledger: every write that moves stock, offer uses, loyalty points or booked slots (PLAN 0.8.8). Placing
- * an order does all of them and inserts the order in **one database transaction** in the merchant database, with no
- * network call between the parts: either everything happens or nothing does. Giving them back (cancel, payment window
- * ended, return to origin, a return claim's restock) is guarded so it happens exactly once.
+ * The shop's ledger: every write that moves stock, offer uses, loyalty points, booked slots or serial numbers (PLAN
+ * 0.8.8). Placing an order does all of them and inserts the order in **one database transaction** in the merchant
+ * database, with no network call between the parts: either everything happens or nothing does. A transition of an
+ * order (`applyTransition`: the order engine's plan, `core/transitions.js`) writes the order and every ledger effect of
+ * it in one transaction too, guarded by the order's facts, so giving back (cancel, payment window ended, return to
+ * origin, a delete) happens exactly once; a return claim's restock is guarded per line.
  *
  * Every function takes the website's guarded merchant database (`WebsiteData`, from `ctx.data()`) and, where it can
  * run inside a transaction, the driver session.
@@ -727,61 +729,6 @@ export const placeOrder = async (data, placement, { now, timeZone = 'UTC' }) => 
 };
 
 /**
- * Give back what an order holds (cancel before shipping, payment or confirmation window ended): its stock and slots
- * (once, `stockHeld`), and its offer uses and redeemed points (once, `promotions.released`). Runs in one transaction
- * with the status change the caller makes through `update` (which receives the session).
- * @param {WebsiteData} data
- * @param {OrderRecord} order as read before
- * @param {{ now: number, update: (session: Session) => Promise<boolean> }} options `update` returns false when the
- *   order changed meanwhile: then nothing is given back
- * @returns {Promise<boolean>} whether the order was changed
- */
-export const releaseOrder = async (data, order, { now, update }) =>
-	data.transaction(async (session) => {
-		const orders = data.collection(COLLECTIONS.orders);
-		const claimed = await orders.updateOne(
-			{ websiteId: data.websiteId, id: order.id, updatedAt: order.updatedAt },
-			{ $set: { stockHeld: false, 'promotions.released': true } },
-			{ session },
-		);
-		if (claimed.modifiedCount !== 1) return false;
-		if (!(await update(session))) throw new Error('order changed');
-		if (order.stockHeld) {
-			await releaseStock(
-				data,
-				order.lines
-					.filter((line) => line.kind === 'physical')
-					.map((line) => ({
-						productId: line.productId,
-						variantId: line.variantId,
-						quantity: line.quantity,
-						locationId: line.locationId,
-					})),
-				session,
-			);
-			await releaseSlots(data, order.id, session);
-		}
-		if (!order.promotions.released) {
-			const { couponId, dealIds, bundleIds, pointsRedeemed } = order.promotions;
-			await releaseOffers(data, { couponId, dealIds, bundleIds, orderId: order.id }, session);
-			if (pointsRedeemed > 0)
-				await givePoints(
-					data,
-					{
-						userId: order.customer.userId,
-						points: pointsRedeemed,
-						orderId: order.id,
-						kind: 'refund',
-						expiresAt: null,
-						note: order.number,
-					},
-					{ now, session },
-				);
-		}
-		return true;
-	});
-
-/**
  * Swap the stock an edited order holds (E29), in one transaction: its old physical lines go back, the new ones are
  * held, and `update` writes the order (claimed by its `updatedAt`). Nothing changes when the new stock is short or the
  * order changed meanwhile. `taken`: the variants the edit leaves with fewer units than before, by how many.
@@ -848,57 +795,6 @@ const restockedByClaims = async (data, orderId, session) => {
 };
 
 /**
- * Put a parcel's stock back after a return to origin (RTO) or a customer return (E27), once (`stockHeld`), with the
- * status change in `update`. Offer uses stay counted and points stay spent (the shopper used them); an RTO raises the
- * customer's RTO count (`countRto`); `restock: false` keeps the stock out (`returnRestock: no`). Units a return claim
- * already put back are not put back again, and a claim restocked later puts none back (`returnRestocked`, OR-10).
- * @param {WebsiteData} data
- * @param {OrderRecord} order
- * @param {{ update: (session: Session) => Promise<boolean>, restock?: boolean, countRto?: boolean }} options
- * @returns {Promise<boolean>}
- */
-export const returnToOrigin = async (data, order, { update, restock = true, countRto = true }) =>
-	data.transaction(async (session) => {
-		const restocks = order.stockHeld && restock;
-		const claimed = await data
-			.collection(COLLECTIONS.orders)
-			.updateOne(
-				{ websiteId: data.websiteId, id: order.id, updatedAt: order.updatedAt },
-				{ $set: { stockHeld: false, ...(restocks ? { returnRestocked: true } : {}) } },
-				{ session },
-			);
-		if (claimed.modifiedCount !== 1) return false;
-		if (!(await update(session))) throw new Error('order changed');
-		if (restocks) {
-			const back = await restockedByClaims(data, order.id, session);
-			await releaseStock(
-				data,
-				order.lines
-					.filter((line) => line.kind === 'physical')
-					.map((line) => ({
-						productId: line.productId,
-						variantId: line.variantId,
-						quantity: Math.max(0, line.quantity - (back.get(line.id) ?? 0)),
-						locationId: line.locationId,
-					})),
-				session,
-			);
-		}
-		if (countRto) await countReturnedParcel(data, order, session);
-		return true;
-	});
-
-/**
- * Count a parcel that came back on its customer's record (K-6).
- * @param {WebsiteData} data @param {OrderRecord} order @param {Session} [session]
- */
-const countReturnedParcel = async (data, order, session) => {
-	await data
-		.collection(COLLECTIONS.customers)
-		.updateOne({ websiteId: data.websiteId, id: order.customer.customerId }, { $inc: { rtoCount: 1 } }, { session });
-};
-
-/**
  * Restock some lines of a return claim, each exactly once (the line's `restockedAt`), and mark their serials back in
  * stock (E33: restock per line). When no line is left to restock (each restocked, or kept out by staff with
  * `restock: false`), the claim's `restockedAt` is set too. An imported claim restocked as a whole is left alone. When
@@ -960,6 +856,198 @@ export const restockClaimLines = async (data, { claimId, orderId, lines, now }) 
 				{ session },
 			);
 		return done;
+	});
+
+// ---------------------------------------------------------------------------------------------- serial numbers
+
+/**
+ * A serial number the shop refuses (thrown inside a transaction, which it aborts): the field and the message.
+ * @param {string} lineId @param {string} message
+ */
+const unitRefused = (lineId, message) => Object.assign(new Error('serial'), { refusal: { field: `serials/${lineId}`, message } });
+
+/**
+ * The refusal a serial number write threw, or null.
+ * @param {unknown} error
+ * @returns {{ field: string, message: string } | null}
+ */
+export const unitRefusalOf = (error) =>
+	typeof error === 'object' && error !== null && typeof (/** @type {any} */ (error).refusal?.field) === 'string'
+		? /** @type {any} */ (error).refusal
+		: null;
+
+/**
+ * Capture the serial numbers of a packing plan (E11): registered ones move from stock to the order; typed ones are
+ * recorded as sold to it (a registered unit typed by staff is taken from stock; one recorded for another unit is
+ * refused). Numbers a line no longer lists go back in stock (typed ones are forgotten).
+ * @param {WebsiteData} data
+ * @param {{ orderId: string, mode: 'registered' | 'typed', plan: Array<{ lineId: string, productId: string,
+ *   variantId: string, serials: string[], before: string[] }> }} capture
+ * @param {Session} session
+ */
+const captureUnits = async (data, { orderId, mode, plan }, session) => {
+	const serials = data.collection(COLLECTIONS.serials);
+	for (const line of plan) {
+		const removed = line.before.filter((serial) => !line.serials.includes(serial));
+		if (removed.length > 0) {
+			const mine = { websiteId: data.websiteId, orderId, lineId: line.lineId, serial: { $in: removed }, status: 'sold' };
+			await serials.deleteMany({ ...mine, typed: true }, { session });
+			await serials.updateMany(mine, { $set: { status: 'in_stock', orderId: null, lineId: null } }, { session });
+		}
+		for (const serial of line.serials) {
+			if (line.before.includes(serial)) continue;
+			const taken = await serials.updateOne(
+				{ websiteId: data.websiteId, variantId: line.variantId, serial, status: 'in_stock' },
+				{ $set: { status: 'sold', orderId, lineId: line.lineId } },
+				{ session },
+			);
+			if (taken.modifiedCount === 1) continue;
+			if (mode === 'registered') throw unitRefused(line.lineId, `Serial number ${serial} is not in stock for this item.`);
+			const known = await serials.findOne(
+				{ websiteId: data.websiteId, serial },
+				{ session, projection: { _id: 0, orderId: 1 } },
+			);
+			if (known) throw unitRefused(line.lineId, `Serial number ${serial} is already recorded for another unit.`);
+			await serials.insertOne(
+				{
+					id: createId(ID_PREFIX.serial),
+					productId: line.productId,
+					variantId: line.variantId,
+					serial,
+					status: 'sold',
+					orderId,
+					lineId: line.lineId,
+					locationId: null,
+					typed: true,
+				},
+				{ session },
+			);
+		}
+	}
+};
+
+/**
+ * Serial numbers of an order back in stock (cancel, return, back from packed, delete); numbers typed for it (E11) were
+ * never in stock, so their records go.
+ * @param {WebsiteData} data @param {string} orderId @param {Session} session
+ */
+const releaseUnits = async (data, orderId, session) => {
+	const serials = data.collection(COLLECTIONS.serials);
+	await serials.deleteMany({ websiteId: data.websiteId, orderId, status: 'sold', typed: true }, { session });
+	await serials.updateMany(
+		{ websiteId: data.websiteId, orderId, status: 'sold' },
+		{ $set: { status: 'in_stock', orderId: null, lineId: null } },
+		{ session },
+	);
+};
+
+// ------------------------------------------------------------------------------------------------- transitions
+
+/** A loyalty account changed while a transition wrote it (thrown inside the transaction: try the transition again). */
+const pointsChanged = () => Object.assign(new Error('points changed'), { pointsChanged: true });
+
+/**
+ * Whether a transition failed because a loyalty account changed meanwhile (try it again).
+ * @param {unknown} error
+ */
+export const isPointsChanged = (error) =>
+	typeof error === 'object' && error !== null && /** @type {any} */ (error).pointsChanged === true;
+
+/**
+ * One ledger effect of a transition, in its transaction.
+ * @param {WebsiteData} data @param {string} orderId
+ * @param {import('../core/transitions.js').LedgerEffect} effect
+ * @param {{ now: number, session: Session }} options
+ */
+const applyEffect = async (data, orderId, effect, { now, session }) => {
+	const { websiteId } = data;
+	switch (effect.kind) {
+		case 'release_stock':
+			await releaseStock(data, effect.lines, session);
+			return;
+		case 'release_slots':
+			await releaseSlots(data, orderId, session);
+			return;
+		case 'release_offers':
+			await releaseOffers(data, { ...effect, orderId }, session);
+			return;
+		case 'give_points': {
+			const given = await givePoints(
+				data,
+				{
+					userId: effect.owner,
+					points: effect.points,
+					orderId,
+					kind: effect.reason,
+					expiresAt: effect.expiresAt,
+					note: effect.note,
+				},
+				{ now, session },
+			);
+			if (!given) throw pointsChanged();
+			return;
+		}
+		case 'take_points': {
+			const taken = await takePoints(
+				data,
+				{ userId: effect.owner, points: effect.points, orderId, kind: 'reverse', note: effect.note },
+				{ now, session },
+			);
+			if (!taken.ok) throw pointsChanged();
+			return;
+		}
+		case 'restock_return': {
+			// units a return claim already put back are not put back again (OR-10)
+			const back = await restockedByClaims(data, orderId, session);
+			await releaseStock(
+				data,
+				effect.lines.map((line) => ({ ...line, quantity: Math.max(0, line.quantity - (back.get(line.lineId) ?? 0)) })),
+				session,
+			);
+			return;
+		}
+		case 'count_sold':
+			for (const line of effect.lines)
+				await data
+					.collection(COLLECTIONS.products)
+					.updateOne({ websiteId, id: line.productId }, { $inc: { sold: line.quantity } }, { session });
+			return;
+		case 'count_rto':
+			// a parcel that came back counts on its customer's record (K-6)
+			await data
+				.collection(COLLECTIONS.customers)
+				.updateOne({ websiteId, id: effect.customerId }, { $inc: { rtoCount: 1 } }, { session });
+			return;
+		case 'release_units':
+			await releaseUnits(data, orderId, session);
+			return;
+		case 'capture_units':
+			await captureUnits(data, { orderId, mode: effect.mode, plan: effect.plan }, session);
+			return;
+		default:
+			throw new Error(`unknown ledger effect ${/** @type {any} */ (effect).kind}`);
+	}
+};
+
+/**
+ * Apply a transition of an order in one transaction: the order's write, only while it still matches `guard` (its
+ * status, `updatedAt` and facts as read: compare-and-set), then each ledger effect of the plan. Nothing is written
+ * when the order changed meanwhile; a refused serial number or a loyalty account that changed meanwhile aborts it
+ * all (`unitRefusalOf`, `isPointsChanged`).
+ * @param {WebsiteData} data
+ * @param {{ orderId: string, guard: Record<string, unknown>, update: Record<string, unknown>,
+ *   effects: ReadonlyArray<import('../core/transitions.js').LedgerEffect> }} transition
+ * @param {{ now: number }} clock
+ * @returns {Promise<boolean>} false when the order changed meanwhile
+ */
+export const applyTransition = (data, { orderId, guard, update, effects }, { now }) =>
+	data.transaction(async (session) => {
+		const written = await data
+			.collection(COLLECTIONS.orders)
+			.updateOne({ ...guard, websiteId: data.websiteId, id: orderId }, update, { session });
+		if (written.modifiedCount !== 1) return false;
+		for (const effect of effects) await applyEffect(data, orderId, effect, { now, session });
+		return true;
 	});
 
 /**

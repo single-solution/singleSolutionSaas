@@ -84,6 +84,15 @@ const codedText = (kit, prefix, { code, values = {} }, money) =>
 	);
 
 /**
+ * What the refunds through Payments a transition asked for add up to in a state (`effects`).
+ * @param {any} order @param {'pending' | 'failed'} state
+ */
+const effectsSum = (order, state) =>
+	(Array.isArray(order.effects) ? order.effects : [])
+		.filter((/** @type {any} */ effect) => effect.kind === 'refund' && effect.state === state)
+		.reduce((/** @type {number} */ sum, /** @type {any} */ effect) => sum + Number(effect.amount ?? 0), 0);
+
+/**
  * The warnings of an answer (a move, a refund) in the website's words (`ordersAdmin.warning.<code>`); from a server
  * without their codes, as it wrote them.
  * @param {Kit} kit @param {{ warnings?: string[], warningCodes?: Coded[] }} data @param {(minor: number) => string} money
@@ -213,6 +222,9 @@ const renderOrder = (kit, order, detail, message) => {
 		[t('ordersAdmin.refundableAmount'), refundable > 0 ? money(refundable) : ''],
 		// money a cancelled order still holds (paid after its cancel, or recorded by staff): to be refunded (K-13)
 		[t('ordersAdmin.refundDue'), order.payment.refundDue > 0 ? money(order.payment.refundDue) : ''],
+		// a refund its cancel asked of Payments: tried again while pending; failed ones staff refund from the order
+		[t('ordersAdmin.refundPending'), effectsSum(order, 'pending') > 0 ? money(effectsSum(order, 'pending')) : ''],
+		[t('ordersAdmin.refundFailed'), effectsSum(order, 'failed') > 0 ? money(effectsSum(order, 'failed')) : ''],
 		[t('ordersAdmin.subtotal'), money(order.totals.subtotal)],
 		[t('ordersAdmin.discount'), order.totals.discount > 0 ? money(order.totals.discount) : ''],
 		[t('ordersAdmin.deliveryFee'), money(order.totals.delivery)],

@@ -16,6 +16,7 @@ import { isId } from '@ss/contracts';
 import { normalisePhone } from '@ss/contracts/phone';
 import { ALERT_TRIES, checkAlertInput } from './alerts.js';
 import { LIMITS } from './catalog.js';
+import { derivedFacts } from './facts.js';
 import { statusOf } from './flow.js';
 import { phoneDigitsOf, phoneRules } from './guests.js';
 import { ID_PREFIX } from './model.js';
@@ -935,7 +936,7 @@ export const checkImportedOrder = (record, rules) => {
 	const createdAt = c.time(record.createdAt, '/createdAt', now, { nullable: true }) ?? placedAt;
 	const claimRestockedAt = c.time(record.claimRestockedAt, '/claimRestockedAt', now, { nullable: true });
 
-	return answer(c, {
+	const order = {
 		id,
 		number,
 		customer,
@@ -965,7 +966,9 @@ export const checkImportedOrder = (record, rules) => {
 		placedAt,
 		deliveredAt,
 		...(createdAt ? { createdAt } : {}),
-	});
+	};
+	// what it holds or gave back, from its stage and flags (the order engine's facts; an import runs no effects)
+	return answer(c, { ...order, facts: derivedFacts(order) });
 };
 
 // ------------------------------------------------------------------------------------------------------- loyalty

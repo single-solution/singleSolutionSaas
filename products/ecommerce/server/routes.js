@@ -158,10 +158,14 @@ export const createRoutes = (product) => {
 					throw problem('feature_off', 'This feature is off.');
 				const body = typeof ctx.body === 'object' && ctx.body !== null ? ctx.body : {};
 				const saved = await product.lists.save(websiteId, name, /** @type {any} */ (body).value);
-				if (!saved.ok)
-					throw problem('validation_failed', saved.errors.join(' '), {
-						errors: saved.errors.map((message) => ({ path: '/value', message, code: 'invalid' })),
-					});
+				if (!saved.ok) {
+					const errors = saved.errors.map((error) =>
+						typeof error === 'string'
+							? { path: '/value', message: error, code: 'invalid' }
+							: { path: error.path, message: error.message, code: error.code ?? 'invalid' },
+					);
+					throw problem('validation_failed', errors.map((error) => error.message).join(' '), { errors });
+				}
 				await product.recentChanges.record({
 					websiteId,
 					who: who(ctx),

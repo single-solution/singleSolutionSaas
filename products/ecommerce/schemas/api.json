@@ -5695,6 +5695,8 @@
 				"history",
 				"shipment",
 				"stockHeld",
+				"facts",
+				"effects",
 				"holdUntil",
 				"note",
 				"staffNote",
@@ -5820,6 +5822,16 @@
 				"stockHeld": {
 					"type": "boolean",
 					"description": "The order holds its stock (and booked slots); false after a cancel or a return."
+				},
+				"facts": {
+					"$ref": "#/components/schemas/OrderFacts"
+				},
+				"effects": {
+					"type": "array",
+					"items": {
+						"$ref": "#/components/schemas/OrderEffect"
+					},
+					"description": "Refunds through Payments a transition asked for, with their state (pending ones are tried again)."
 				},
 				"returnRestocked": {
 					"type": "boolean",
@@ -5995,6 +6007,72 @@
 				"locationId": {
 					"type": ["string", "null"],
 					"description": "The pickup location (multi_location)."
+				}
+			}
+		},
+		"OrderEffect": {
+			"type": "object",
+			"description": "Work outside the database a transition asked for: a refund through Payments (a staff cancel refunds what Payments took). It runs right after the transition with its id as the Idempotency-Key; when Payments cannot be reached it stays pending and is tried again when the order is opened and on use (at most every minute, for three days).",
+			"required": ["id", "kind", "amount", "state", "reason", "note", "by", "at", "tries", "triedAt"],
+			"additionalProperties": false,
+			"properties": {
+				"id": {
+					"type": "string",
+					"description": "Its id, also the Idempotency-Key sent to Payments (<order id>:cancel)."
+				},
+				"kind": {
+					"type": "string",
+					"enum": ["refund"]
+				},
+				"amount": {
+					"type": "integer",
+					"minimum": 1,
+					"description": "Minor units."
+				},
+				"state": {
+					"type": "string",
+					"enum": ["pending", "done", "failed", "skipped"],
+					"description": "pending: not done yet (tried again); done: refunded and recorded in refunds; failed: Payments refused it, or could not take it for three days (refund it from the order); skipped: the money was refunded meanwhile, so it was not sent."
+				},
+				"reason": {
+					"type": "string",
+					"description": "The reason Payments is given."
+				},
+				"note": {
+					"type": "string",
+					"description": "The note of the refund entry it records."
+				},
+				"by": {
+					"$ref": "#/components/schemas/Actor"
+				},
+				"at": {
+					"type": "string",
+					"format": "date-time"
+				},
+				"tries": {
+					"type": "integer",
+					"minimum": 0
+				},
+				"triedAt": {
+					"type": ["string", "null"],
+					"format": "date-time"
+				},
+				"runningAt": {
+					"type": ["string", "null"],
+					"format": "date-time",
+					"description": "When the try running at Payments now started (null when none runs); meanwhile a refund staff record on the order waits (409 conflict)."
+				},
+				"doneAt": {
+					"type": ["string", "null"],
+					"format": "date-time"
+				},
+				"refundId": {
+					"type": ["string", "null"],
+					"description": "Payments' refund."
+				},
+				"detail": {
+					"type": "string",
+					"description": "Why it is pending, failed or skipped."
 				}
 			}
 		},
@@ -6556,6 +6634,39 @@
 				}
 			}
 		},
+		"OrderFacts": {
+			"type": "object",
+			"description": "What the order holds or gave back, whatever its status is called (the order engine's facts; every transition writes them, guarded by them, so nothing is given back or taken twice). Orders written before them show them derived from their flags.",
+			"required": ["stock", "offers", "redeemed", "earned", "units"],
+			"additionalProperties": false,
+			"properties": {
+				"stock": {
+					"type": "string",
+					"enum": ["held", "sold", "back", "none"],
+					"description": "held: its stock and booked slots are held; sold: delivered; back: given back (cancel, refund before delivery, a return put back in stock); none: a parcel that came back was kept out of stock (returnRestock no)."
+				},
+				"offers": {
+					"type": "string",
+					"enum": ["counted", "released"],
+					"description": "Its coupon, deal and bundle uses: counted, or released by a cancel."
+				},
+				"redeemed": {
+					"type": "string",
+					"enum": ["spent", "given_back"],
+					"description": "The loyalty points it redeemed: spent, or given back (a cancel, a return, a refund)."
+				},
+				"earned": {
+					"type": "string",
+					"enum": ["none", "credited", "reversed"],
+					"description": "The loyalty points it earns: none yet, credited (delivered), or reversed by a return or a refund after delivery."
+				},
+				"units": {
+					"type": "string",
+					"enum": ["none", "captured"],
+					"description": "Serial numbers captured for it (packing, typed), or none."
+				}
+			}
+		},
 		"OrderHistoryEntry": {
 			"type": "object",
 			"description": "One entry of the order's history, oldest first.",
@@ -6614,9 +6725,10 @@
 						"refunds_cover_payments",
 						"payment_recorded",
 						"payment_recorded_reference",
-						"confirmed_on_payment"
+						"confirmed_on_payment",
+						"restatus"
 					],
-					"description": "An entry the server wrote itself, for your own words: shopper (the shopper cancelled), not_paid_in_time and not_confirmed_in_time (a waiting order ended), payment_confirmed (Payments confirmed the payment), payments_took and paid_after_cancel (amount: Payments took money outside that, after the cancel for the second), proof_sent, edited, serials_typed, refunded and refunded_recorded (amount, reason), claim_refunded and claim_refunded_recorded (amount, reference: a claim refunded without a note; _recorded: partly recorded), refunds_cover_payments (the move to the refunded status that follows), payment_recorded (amount) and payment_recorded_reference (amount, reference) for a payment staff recorded, confirmed_on_payment (the move to the confirmed status that follows). Missing on entries staff wrote and on older entries."
+					"description": "An entry the server wrote itself, for your own words: shopper (the shopper cancelled), not_paid_in_time and not_confirmed_in_time (a waiting order ended), payment_confirmed (Payments confirmed the payment), payments_took and paid_after_cancel (amount: Payments took money outside that, after the cancel for the second), proof_sent, edited, serials_typed, refunded and refunded_recorded (amount, reason), claim_refunded and claim_refunded_recorded (amount, reference: a claim refunded without a note; _recorded: partly recorded), refunds_cover_payments (the move to the refunded status that follows), payment_recorded (amount) and payment_recorded_reference (amount, reference) for a payment staff recorded, confirmed_on_payment (the move to the confirmed status that follows), restatus (staff moved the orders of a status to another status of the same kind, POST /v1/orders/restatus). Missing on entries staff wrote and on older entries."
 				},
 				"values": {
 					"$ref": "#/components/schemas/OrderNoteValues"
@@ -6853,6 +6965,8 @@
 				"history",
 				"shipment",
 				"stockHeld",
+				"facts",
+				"effects",
 				"holdUntil",
 				"note",
 				"staffNote",
@@ -6980,6 +7094,16 @@
 				"stockHeld": {
 					"type": "boolean",
 					"description": "The order holds its stock (and booked slots); false after a cancel or a return."
+				},
+				"facts": {
+					"$ref": "#/components/schemas/OrderFacts"
+				},
+				"effects": {
+					"type": "array",
+					"items": {
+						"$ref": "#/components/schemas/OrderEffect"
+					},
+					"description": "Refunds through Payments a transition asked for, with their state (pending ones are tried again)."
 				},
 				"returnRestocked": {
 					"type": "boolean",
@@ -7731,8 +7855,8 @@
 			"properties": {
 				"code": {
 					"type": "string",
-					"enum": ["refund_by_hand", "cancel_refund_failed"],
-					"description": "refund_by_hand: Payments only recorded a refund of amount, so the shop gives it back by hand; cancel_refund_failed: the order was cancelled but refunding amount through Payments failed."
+					"enum": ["refund_by_hand", "cancel_refund_failed", "refund_failed"],
+					"description": "refund_by_hand: Payments only recorded a refund of amount, so the shop gives it back by hand; cancel_refund_failed: the order was canceled but refunding amount through Payments failed; refund_failed: the order moved to a refunded status but refunding amount through Payments failed. When Payments could not be reached, the refund stays pending in the order's effects and is tried again until it is done or staff refund it from the order."
 				},
 				"values": {
 					"$ref": "#/components/schemas/OrderNoteValues"
@@ -20330,7 +20454,7 @@
 	},
 	"POST /v1/orders/:id/move": {
 		"summary": "Move an order to another status of the flow",
-		"description": "What entering a status does depends on its role: packed takes serial numbers (grades_serials; registered ones from stock, typed ones may follow) and the dispatch video as the checkout setting packingVideo says; shipped needs a shipment (and typed serial numbers); delivered makes cash on delivery and pickup paid (cod.paidOnDelivery), counts units sold and credits loyalty points; cancelled gives stock, slots, offer uses and points back, cancels the open Payments payment and refunds what Payments took; returned_to_origin and returned put stock back as returnRestock says; refunded refunds what is left (before delivery only when something was paid: 409 nothing_paid). A waiting order whose method is listed in paidOnConfirm is recorded as paid when moved on. 409 move_not_allowed when the flow does not allow the move or the shopper paid meanwhile; 409 conflict when the order changed meanwhile; 422 validation_failed for a missing shipment, tracking number, serial numbers or video; 503 payments_unavailable when Payments cannot be reached for a cancel; 404 not_found. Moving to a refunded status through the widget needs the orders.refund permission (403 forbidden). The move is written to the history with the staff member's name (a ticket's user, or the SS-Actor-* headers of a server call, else Server), the activity log, the shopper's message and the events. Send an Idempotency-Key so a retried request is done once.",
+		"description": "What entering a status does depends on its role: packed takes serial numbers (grades_serials; registered ones from stock, typed ones may follow) and the dispatch video as the checkout setting packingVideo says; shipped needs a shipment (and typed serial numbers); delivered makes cash on delivery and pickup paid (cod.paidOnDelivery), counts units sold and credits loyalty points; cancelled gives stock, slots, offer uses and points back, cancels the open Payments payment and refunds what Payments took right after (when Payments cannot be reached the refund stays pending in effects and is tried again; a warning says so); returned_to_origin and returned put stock back as returnRestock says; refunded refunds what is left (before delivery only when something was paid: 409 nothing_paid). A waiting order whose method is listed in paidOnConfirm is recorded as paid when moved on. 409 move_not_allowed when the flow does not allow the move or the shopper paid meanwhile; 409 flow_changed when the order's role is no longer the flow's role of its status; 409 conflict when the order changed meanwhile; 422 validation_failed for a missing shipment, tracking number, serial numbers or video; 503 payments_unavailable when Payments cannot be reached for a cancel; 404 not_found. Moving to a refunded status through the widget needs the orders.refund permission (403 forbidden). The move is written to the history with the staff member's name (a ticket's user, or the SS-Actor-* headers of a server call, else Server), the activity log, the shopper's message and the events. Each move is one transaction: the order, its facts and everything it gives back or takes are written together, so of two moves at once one wins and the other gets 409 conflict. Send an Idempotency-Key so a retried request is done once.",
 		"body": {
 			"type": "object",
 			"required": ["to"],
@@ -20426,7 +20550,7 @@
 	},
 	"POST /v1/admin/orders/:id/move": {
 		"summary": "Move an order to another status of the flow (Orders admin widget)",
-		"description": "What entering a status does depends on its role: packed takes serial numbers (grades_serials; registered ones from stock, typed ones may follow) and the dispatch video as the checkout setting packingVideo says; shipped needs a shipment (and typed serial numbers); delivered makes cash on delivery and pickup paid (cod.paidOnDelivery), counts units sold and credits loyalty points; cancelled gives stock, slots, offer uses and points back, cancels the open Payments payment and refunds what Payments took; returned_to_origin and returned put stock back as returnRestock says; refunded refunds what is left (before delivery only when something was paid: 409 nothing_paid). A waiting order whose method is listed in paidOnConfirm is recorded as paid when moved on. 409 move_not_allowed when the flow does not allow the move or the shopper paid meanwhile; 409 conflict when the order changed meanwhile; 422 validation_failed for a missing shipment, tracking number, serial numbers or video; 503 payments_unavailable when Payments cannot be reached for a cancel; 404 not_found. Moving to a refunded status through the widget needs the orders.refund permission (403 forbidden). The move is written to the history with the staff member's name (a ticket's user, or the SS-Actor-* headers of a server call, else Server), the activity log, the shopper's message and the events. Send an Idempotency-Key so a retried request is done once.",
+		"description": "What entering a status does depends on its role: packed takes serial numbers (grades_serials; registered ones from stock, typed ones may follow) and the dispatch video as the checkout setting packingVideo says; shipped needs a shipment (and typed serial numbers); delivered makes cash on delivery and pickup paid (cod.paidOnDelivery), counts units sold and credits loyalty points; cancelled gives stock, slots, offer uses and points back, cancels the open Payments payment and refunds what Payments took right after (when Payments cannot be reached the refund stays pending in effects and is tried again; a warning says so); returned_to_origin and returned put stock back as returnRestock says; refunded refunds what is left (before delivery only when something was paid: 409 nothing_paid). A waiting order whose method is listed in paidOnConfirm is recorded as paid when moved on. 409 move_not_allowed when the flow does not allow the move or the shopper paid meanwhile; 409 flow_changed when the order's role is no longer the flow's role of its status; 409 conflict when the order changed meanwhile; 422 validation_failed for a missing shipment, tracking number, serial numbers or video; 503 payments_unavailable when Payments cannot be reached for a cancel; 404 not_found. Moving to a refunded status through the widget needs the orders.refund permission (403 forbidden). The move is written to the history with the staff member's name (a ticket's user, or the SS-Actor-* headers of a server call, else Server), the activity log, the shopper's message and the events. Each move is one transaction: the order, its facts and everything it gives back or takes are written together, so of two moves at once one wins and the other gets 409 conflict. Send an Idempotency-Key so a retried request is done once.",
 		"body": {
 			"type": "object",
 			"required": ["to"],
@@ -20616,7 +20740,7 @@
 	},
 	"POST /v1/orders/:id/refunds": {
 		"summary": "Refund part of what was paid, without a move",
-		"description": "Through Payments first for what Payments took (or only online, or only recorded by method), the rest recorded as given back; with the checkout setting autoRefundedStatus, an order whose refunds reach what was paid moves to its refunded status. 422 validation_failed (amount above what is refundable, a missing reason, an unknown method or claimId); 409 conflict when the order changed meanwhile; 502 payments_refused or 503 payments_unavailable from Payments; 404 not_found. The widget needs the orders.refund permission. Send an Idempotency-Key so a retried request is done once.",
+		"description": "Through Payments first for what Payments took (or only online, or only recorded by method), the rest recorded as given back; with the checkout setting autoRefundedStatus, an order whose refunds reach what was paid moves to its refunded status. 422 validation_failed (amount above what is refundable, a missing reason, an unknown method or claimId); 409 conflict when the order changed meanwhile, or while a refund its cancel asked of Payments runs (try again in a moment); a refund its cancel left pending is not sent any more once staff refund (its effect is skipped); 502 payments_refused or 503 payments_unavailable from Payments; 404 not_found. The widget needs the orders.refund permission. Send an Idempotency-Key so a retried request is done once.",
 		"body": {
 			"type": "object",
 			"required": ["amount", "reason"],
@@ -20654,7 +20778,7 @@
 	},
 	"POST /v1/admin/orders/:id/refunds": {
 		"summary": "Refund part of what was paid, without a move (Orders admin widget)",
-		"description": "Through Payments first for what Payments took (or only online, or only recorded by method), the rest recorded as given back; with the checkout setting autoRefundedStatus, an order whose refunds reach what was paid moves to its refunded status. 422 validation_failed (amount above what is refundable, a missing reason, an unknown method or claimId); 409 conflict when the order changed meanwhile; 502 payments_refused or 503 payments_unavailable from Payments; 404 not_found. The widget needs the orders.refund permission. Send an Idempotency-Key so a retried request is done once.",
+		"description": "Through Payments first for what Payments took (or only online, or only recorded by method), the rest recorded as given back; with the checkout setting autoRefundedStatus, an order whose refunds reach what was paid moves to its refunded status. 422 validation_failed (amount above what is refundable, a missing reason, an unknown method or claimId); 409 conflict when the order changed meanwhile, or while a refund its cancel asked of Payments runs (try again in a moment); a refund its cancel left pending is not sent any more once staff refund (its effect is skipped); 502 payments_refused or 503 payments_unavailable from Payments; 404 not_found. The widget needs the orders.refund permission. Send an Idempotency-Key so a retried request is done once.",
 		"body": {
 			"type": "object",
 			"required": ["amount", "reason"],
@@ -21084,6 +21208,114 @@
 				"next": {
 					"type": "integer",
 					"minimum": 1
+				}
+			}
+		}
+	},
+	"POST /v1/orders/restatus": {
+		"summary": "Move the orders of a status to another status of the same kind",
+		"description": "Moves every order in the status from to the status to, when both are the same kind of step (role): nothing is given back or taken, no message is sent; each order's history gets an entry (code restatus) and the activity log one line. Use it before removing or re-keying a status that has orders (saving the order flow refuses that). 422 validation_failed when to is not a status of the flow, is from, or is another kind of step than from (or than the orders in from).",
+		"body": {
+			"type": "object",
+			"required": ["from", "to"],
+			"properties": {
+				"from": {
+					"type": "string",
+					"pattern": "^[a-z][a-z0-9_-]{1,39}$",
+					"description": "The status key the orders are in (a status of the flow, or one the flow no longer has)."
+				},
+				"to": {
+					"type": "string",
+					"pattern": "^[a-z][a-z0-9_-]{1,39}$",
+					"description": "A status of the flow of the same kind (role) as from."
+				}
+			}
+		},
+		"response": {
+			"type": "object",
+			"required": ["from", "to", "role", "moved"],
+			"additionalProperties": false,
+			"properties": {
+				"from": {
+					"type": "string"
+				},
+				"to": {
+					"type": "string"
+				},
+				"role": {
+					"type": "string",
+					"enum": [
+						"awaiting_payment",
+						"awaiting_confirmation",
+						"open",
+						"packed",
+						"shipped",
+						"delivered",
+						"cancelled",
+						"returned_to_origin",
+						"refunded",
+						"returned"
+					],
+					"description": "The kind of step both statuses are."
+				},
+				"moved": {
+					"type": "integer",
+					"minimum": 0,
+					"description": "How many orders moved."
+				}
+			}
+		}
+	},
+	"POST /v1/admin/orders/restatus": {
+		"summary": "Move the orders of a status to another status of the same kind (Orders admin widget)",
+		"description": "Moves every order in the status from to the status to, when both are the same kind of step (role): nothing is given back or taken, no message is sent; each order's history gets an entry (code restatus) and the activity log one line. Use it before removing or re-keying a status that has orders (saving the order flow refuses that). 422 validation_failed when to is not a status of the flow, is from, or is another kind of step than from (or than the orders in from). Needs the orders.manage permission.",
+		"body": {
+			"type": "object",
+			"required": ["from", "to"],
+			"properties": {
+				"from": {
+					"type": "string",
+					"pattern": "^[a-z][a-z0-9_-]{1,39}$",
+					"description": "The status key the orders are in (a status of the flow, or one the flow no longer has)."
+				},
+				"to": {
+					"type": "string",
+					"pattern": "^[a-z][a-z0-9_-]{1,39}$",
+					"description": "A status of the flow of the same kind (role) as from."
+				}
+			}
+		},
+		"response": {
+			"type": "object",
+			"required": ["from", "to", "role", "moved"],
+			"additionalProperties": false,
+			"properties": {
+				"from": {
+					"type": "string"
+				},
+				"to": {
+					"type": "string"
+				},
+				"role": {
+					"type": "string",
+					"enum": [
+						"awaiting_payment",
+						"awaiting_confirmation",
+						"open",
+						"packed",
+						"shipped",
+						"delivered",
+						"cancelled",
+						"returned_to_origin",
+						"refunded",
+						"returned"
+					],
+					"description": "The kind of step both statuses are."
+				},
+				"moved": {
+					"type": "integer",
+					"minimum": 0,
+					"description": "How many orders moved."
 				}
 			}
 		}

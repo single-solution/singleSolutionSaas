@@ -1,23 +1,25 @@
 /**
  * The ledger (PLAN 0.8.8): placing an order holds stock, counts offer uses, spends points and books slots in one
- * transaction; giving them back happens exactly once. Runs on the MongoDB replica set (real transactions).
+ * transaction; giving them back (a transition the order engine plans, applied with `applyTransition`) happens exactly
+ * once. Runs on the MongoDB replica set (real transactions).
  */
 import { createId } from '@ss/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
+	applyTransition,
 	givePoints,
 	holdStock,
 	loyaltyAccount,
 	mergeStockLines,
 	placeOrder,
-	releaseOrder,
 	restockClaimLines,
-	returnToOrigin,
 	spendPoints,
 	swapOrderStock,
 	takePoints,
 } from '../adapters/ledger.js';
+import { DEFAULT_FLOW } from '../core/flow.js';
 import { COLLECTIONS } from '../core/model.js';
+import { planTransition } from '../core/transitions.js';
 import { balanceOf, compactLots, expireLots, spendFromLots, takeFromLots } from '../core/points.js';
 import { setup } from './helpers.js';
 
@@ -100,6 +102,28 @@ const orderOf = (lines, promotions = {}, key = createId('key')) => ({
 	placedAt: new Date(shop.now()),
 	deliveredAt: null,
 });
+
+/**
+ * Apply the transition the order engine plans for an order as read (a staff move of the default flow), once per call.
+ * @param {any} order as read @param {string} to
+ */
+const transition = async (order, to) => {
+	const planned = planTransition({
+		order,
+		flow: DEFAULT_FLOW,
+		to,
+		input: { who: 'staff', actor: { kind: 'server', id: 'server', name: 'Server' }, by: 'Server', note: '' },
+		rules: { restock: true, rewaitMinutes: 0, refundOnCancel: false, paidOnDelivery: true, loyalty: null, timeZone: 'UTC' },
+		now: shop.now(),
+	});
+	if (!planned.ok) throw new Error(planned.message);
+	const { plan } = planned;
+	return applyTransition(
+		data,
+		{ orderId: order.id, guard: plan.guard, update: { $set: plan.set, $push: plan.push }, effects: plan.ledger },
+		{ now: shop.now() },
+	);
+};
 
 /** @param {string} id */
 const stockOf = async (id) => {
@@ -195,21 +219,11 @@ describe('placing an order', () => {
 		});
 
 		// cancel: everything given back, once
-		const cancel = async (/** @type {any} */ session) => {
-			const result = await data
-				.collection(COLLECTIONS.orders)
-				.updateOne(
-					{ websiteId: data.websiteId, id: placed.order.id },
-					{ $set: { status: 'cancelled', role: 'cancelled' } },
-					{ session },
-				);
-			return result.modifiedCount === 1;
-		};
 		const stored = /** @type {any} */ (
 			await data.collection(COLLECTIONS.orders).findOne({ websiteId: data.websiteId, id: placed.order.id })
 		);
-		expect(await releaseOrder(data, stored, { now: shop.now(), update: cancel })).toBe(true);
-		expect(await releaseOrder(data, stored, { now: shop.now(), update: cancel })).toBe(false);
+		expect(await transition(stored, 'cancelled')).toBe(true);
+		expect(await transition(stored, 'cancelled')).toBe(false);
 		expect((await stockOf(product.id)).stock).toBe(3);
 		expect(
 			/** @type {any} */ (await data.collection(COLLECTIONS.coupons).findOne({ websiteId: data.websiteId, id: couponId }))
@@ -240,20 +254,8 @@ describe('placing an order', () => {
 		const second = await place();
 		expect(first.ok && second.ok).toBe(true);
 		// the first is canceled: its use goes back, the second's stays (uses 2 of the customer: numbers 1 and 2 → 2)
-		const stored = /** @type {any} */ (
-			await data.collection(COLLECTIONS.orders).findOne({ websiteId: data.websiteId, id: first.order.id })
-		);
-		const cancel = async (/** @type {any} */ session) =>
-			(
-				await data
-					.collection(COLLECTIONS.orders)
-					.updateOne(
-						{ websiteId: data.websiteId, id: stored.id },
-						{ $set: { status: 'cancelled', role: 'cancelled' } },
-						{ session },
-					)
-			).modifiedCount === 1;
-		expect(await releaseOrder(data, stored, { now: shop.now(), update: cancel })).toBe(true);
+		const stored = await data.collection(COLLECTIONS.orders).findOne({ websiteId: data.websiteId, id: first.order.id });
+		expect(await transition(stored, 'cancelled')).toBe(true);
 		// a third order with the same coupon is placed (it used to take number 2 again and be refused)
 		const third = await place();
 		expect(third).toMatchObject({ ok: true });
@@ -378,17 +380,15 @@ describe('placing an order', () => {
 			{ now: shop.now() },
 		);
 		if (!placed.ok) throw new Error('not placed');
+		// the parcel was dispatched, then comes back
+		await data
+			.collection(COLLECTIONS.orders)
+			.updateOne({ websiteId: data.websiteId, id: placed.order.id }, { $set: { status: 'dispatched', role: 'shipped' } });
 		const stored = /** @type {any} */ (
 			await data.collection(COLLECTIONS.orders).findOne({ websiteId: data.websiteId, id: placed.order.id })
 		);
-		const move = async (/** @type {any} */ session) =>
-			(
-				await data
-					.collection(COLLECTIONS.orders)
-					.updateOne({ websiteId: data.websiteId, id: stored.id }, { $set: { status: 'returned' } }, { session })
-			).modifiedCount === 1;
-		expect(await returnToOrigin(data, stored, { update: move })).toBe(true);
-		expect(await returnToOrigin(data, stored, { update: move })).toBe(false);
+		expect(await transition(stored, 'returned')).toBe(true);
+		expect(await transition(stored, 'returned')).toBe(false);
 		expect((await stockOf(product.id)).stock).toBe(2);
 		const customer = /** @type {any} */ (
 			await data.collection(COLLECTIONS.customers).findOne({ websiteId: data.websiteId, id: CUSTOMER_ID })

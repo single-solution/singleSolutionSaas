@@ -42,6 +42,15 @@ export const INDEXES = [
 		partialFilterExpression: { guest: true },
 	},
 	{ collection: COLLECTIONS.orders, keys: { websiteId: 1, 'payment.paymentId': 1 }, name: 'by_payment' },
+	// orders per status and role (the order flow's save guard counts them from the index alone, one $group; restatus)
+	// and refunds a transition left pending (tried again on use)
+	{ collection: COLLECTIONS.orders, keys: { websiteId: 1, status: 1, role: 1 }, name: 'by_status_role' },
+	{
+		collection: COLLECTIONS.orders,
+		keys: { websiteId: 1, 'effects.state': 1 },
+		name: 'by_pending_effect',
+		partialFilterExpression: { 'effects.state': 'pending' },
+	},
 	// cancels Payments could not take yet, and cancelled orders watched for money paid after (K-13)
 	{
 		collection: COLLECTIONS.orders,
@@ -253,6 +262,29 @@ export const createOrdersStore = (data) => {
 						role: { $in: [...roles] },
 					})
 				: Promise.resolve(0),
+		/**
+		 * How many orders each status has, with their role (the order flow's save guard).
+		 * @returns {Promise<Array<{ status: string, role: string, count: number }>>}
+		 */
+		statusCounts: async () =>
+			(
+				await orders
+					.aggregate(
+						[{ $match: { websiteId } }, { $group: { _id: { status: '$status', role: '$role' }, count: { $sum: 1 } } }],
+						// counted from the index alone (no order is read)
+						{ hint: 'by_status_role' },
+					)
+					.toArray()
+			).map((row) => ({ status: String(row._id?.status ?? ''), role: String(row._id?.role ?? ''), count: Number(row.count) })),
+		/**
+		 * Move every order of a status and role to another status of that role, with a history entry each
+		 * (`POST /v1/orders/restatus`).
+		 * @param {{ from: string, to: string, role: string, entry: Record<string, unknown> }} move
+		 * @returns {Promise<number>} how many moved
+		 */
+		restatus: async ({ from, to, role, entry }) =>
+			(await orders.updateMany({ websiteId, status: from, role }, { $set: { status: to }, $push: { history: entry } }))
+				.modifiedCount,
 		/** An order by its number (E21 order pages). @param {string} number @returns {Promise<OrderRecord | null>} */
 		byNumber: async (number) => /** @type {OrderRecord | null} */ (await orders.findOne({ websiteId, number }, NO_ID)),
 		/**

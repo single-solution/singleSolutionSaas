@@ -3,7 +3,8 @@
  * token) do with orders after placement — the order list and search, one order with its history and the statuses it
  * may move to, moves through the merchant's flow (`server/orders-moves.js`), refunds, the staff note and address edits,
  * the courier's tracking status (read again on view, at most every 30 minutes), invoices and packing slips (also the
- * shopper's own invoice), customers and the blocklist (`server/orders-customers.js`), bulk moves, and the data-rights
+ * shopper's own invoice), customers and the blocklist (`server/orders-customers.js`), bulk moves, moving every order of
+ * a status to another status of the same kind (restatus, so the flow can drop or re-key it), and the data-rights
  * answers for orders and customer records (an export holds what the shopper sees, never what staff keep, SE-1). Checkout (`server/checkout.js`) places orders and handles waiting ones. The
  * order and customer lists have counts with the same filters (PLAN 0.8.10 K4): orders by `status`, `role` (the role of
  * each status key in the website's order flow), `paymentMethod` and `paymentState`; customers by `blocked`.
@@ -12,11 +13,13 @@
 import { countHandlers, created, defineRoute, paginate, problem } from '@ss/app-kit';
 import { createFulfilmentStore, markSeenBy } from '../adapters/fulfilment-store.js';
 import { setOrderCounter } from '../adapters/ledger.js';
+import { createOrdersStore } from '../adapters/orders-store.js';
 import { createOutbox } from '../adapters/outbox.js';
 import { courierNamed, trackingLink } from '../core/couriers.js';
 import { invoiceHtml, invoiceTexts, packingSlipHtml, shopperInvoiceReady } from '../core/invoice.js';
 import {
 	TRACK_EVERY_MS,
+	byActor,
 	checkBulkMove,
 	checkEdit,
 	checkMove,
@@ -27,9 +30,10 @@ import {
 	orderFilters,
 	orderQuery,
 	orderSummary,
+	serverNote,
 	warningsOf,
 } from '../core/orders.js';
-import { statusOf } from '../core/flow.js';
+import { checkRestatus, statusOf } from '../core/flow.js';
 import { COLLECTIONS } from '../core/model.js';
 import { createMedia } from './catalog-media.js';
 import { createCustomers } from './orders-customers.js';
@@ -191,7 +195,9 @@ export const createOrders = (product, service, { ordering }) => {
 	 */
 	const readOrder = async (ctx) => {
 		const s = await service.site(ctx);
-		const order = (await moves.recheck(s, await orderOf(s, ctx))).order;
+		const rechecked = (await moves.recheck(s, await orderOf(s, ctx))).order;
+		// a refund its cancel left pending at Payments is tried again (at most every minute)
+		const order = await moves.settle(s, rechecked);
 		return detailOf(s, await refreshTracking(s, order));
 	};
 
@@ -234,7 +240,9 @@ export const createOrders = (product, service, { ordering }) => {
 		const order = await orderOf(s, ctx);
 		const data = await s.data();
 		const orders = data.collection(COLLECTIONS.orders);
-		await moves.giveBack(s, order, { payments: true });
+		// what it holds goes back first, once; an order that changed meanwhile is not deleted
+		if (!(await moves.giveBack(s, order, { payments: true })))
+			throw problem('conflict', 'The order changed meanwhile; reload it and try again.');
 		await orders.deleteOne({ websiteId: s.websiteId, id: order.id });
 		const { money } = await s.format();
 		await service.log(ctx, 'order.deleted', order.id, {
@@ -340,6 +348,43 @@ export const createOrders = (product, service, { ordering }) => {
 		if (!done.ok) throw service.invalid('next', `Order number ${done.used} of ${year} is already used; give a higher one.`);
 		await service.log(ctx, 'orders.counter_set', `${prefix}${year}`, { label: `${prefix}${year}`, detail: `Next ${next}` });
 		return { prefix, year, next: done.next };
+	};
+
+	/**
+	 * POST /v1/orders/restatus `{ from, to }`: every order of a status moves to another status of the same kind of step
+	 * (role), so a status with orders can be removed or re-keyed from the flow afterwards (the flow's save guard). Nothing
+	 * is given back or taken (the orders' facts stay) and no message is sent; each order's history gets an entry and the
+	 * activity log one line.
+	 * @param {any} ctx
+	 */
+	const restatus = async (ctx) => {
+		const body = typeof ctx.body === 'object' && ctx.body !== null ? ctx.body : {};
+		const from = typeof body.from === 'string' ? body.from : '';
+		const to = typeof body.to === 'string' ? body.to : '';
+		const s = await service.site(ctx);
+		const flow = await flowOf(s);
+		const checked = checkRestatus(flow, from, to);
+		if (!checked.ok) throw service.invalid(checked.field, checked.message);
+		const actor = service.actor(ctx);
+		const fromLabel = statusOf(flow, from)?.label ?? from;
+		const toLabel = statusOf(flow, to)?.label ?? to;
+		const moved = await createOrdersStore(await s.data()).restatus({
+			from,
+			to,
+			role: checked.role,
+			entry: {
+				at: new Date(product.now()),
+				from,
+				to,
+				...byActor(actor),
+				...serverNote('restatus', `Moved from ${fromLabel} to ${toLabel} with the other orders of that status`),
+			},
+		});
+		await service.log(ctx, 'orders.restatus', from, {
+			label: `${moved} orders`,
+			detail: `${fromLabel} → ${toLabel}`,
+		});
+		return { from, to, role: checked.role, moved };
 	};
 
 	/** POST /v1/orders/:id/payments: a payment staff took (E26). @param {any} ctx */
@@ -695,6 +740,25 @@ export const createOrders = (product, service, { ordering }) => {
 				feature: 'checkout',
 				rateLimit: serverLimits,
 				handler: setCounter,
+			}),
+			defineRoute({
+				method: 'POST',
+				path: '/v1/orders/restatus',
+				auth: 'server',
+				feature: 'checkout',
+				idempotent: true,
+				rateLimit: serverLimits,
+				handler: restatus,
+			}),
+			defineRoute({
+				method: 'POST',
+				path: '/v1/admin/orders/restatus',
+				auth: 'ticket',
+				feature: 'checkout',
+				permission: 'orders.manage',
+				idempotent: true,
+				rateLimit: serverLimits,
+				handler: restatus,
 			}),
 			defineRoute({
 				method: 'POST',

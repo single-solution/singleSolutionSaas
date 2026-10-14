@@ -4,7 +4,8 @@
  * tax rules, condition grades, booking hours and role prices (E19). They are kept per website in the kit's settings collection (so a
  * removed website's lists go with its settings), each checked by its feature's rules, edited in the dashboard
  * (Settings, `/v1/dashboard/websites/:websiteId/lists/:list`) and recorded in Recent changes. Lists have no global
- * defaults; an unsaved list reads as its code default.
+ * defaults; an unsaved list reads as its code default. A list may also be checked against the merchant's data before
+ * it is saved (`guards`: the order flow keeps the key and kind of every status that has orders).
  * @module
  */
 import { checkBookingHours } from '../core/bookings.js';
@@ -16,8 +17,10 @@ import { checkRolePrices } from '../core/role-pricing.js';
 import { checkTaxRules } from '../core/taxes.js';
 
 /**
- * @typedef {{ ok: true, value: any } | { ok: false, errors: string[] }} ListCheck
+ * @typedef {{ ok: true, value: any } | { ok: false, errors: Array<string | { path: string, message: string, code?: string }> }} ListCheck
  * @typedef {{ feature: string, title: string, check: (value: unknown) => ListCheck, fallback: () => any }} ListDefinition
+ * @typedef {(websiteId: string, saved: any, next: any) => Promise<Array<{ path: string, message: string, code?: string }>>} ListGuard
+ *   what saving a list would break in the merchant's data (the order flow: statuses that have orders)
  */
 
 /** Each list: the feature it belongs to, its name on screens, its check and its value before it is saved. */
@@ -40,9 +43,11 @@ export const LISTS = Object.freeze({
 export const isListName = (name) => typeof name === 'string' && Object.hasOwn(LISTS, name);
 
 /**
- * @param {{ store: import('@ss/app-kit').Store, now: () => number }} options
+ * @param {{ store: import('@ss/app-kit').Store, now: () => number, guards?: Partial<Record<ListName, ListGuard>> }} options
+ *   `guards`: checks of a list against the merchant's data before it is saved (both the dashboard and the settings API
+ *   save through here)
  */
-export const createLists = ({ store, now }) => {
+export const createLists = ({ store, now, guards = {} }) => {
 	/** @param {string} websiteId @param {string} key */
 	const idOf = (websiteId, key) => `${websiteId}|ecommerce|${key}`;
 
@@ -67,6 +72,13 @@ export const createLists = ({ store, now }) => {
 		save: async (websiteId, name, value) => {
 			const checked = LISTS[name].check(value);
 			if (!checked.ok) return checked;
+			const guard = guards[name];
+			if (guard) {
+				const doc = await store.get('settings', idOf(websiteId, `list.${name}`));
+				const saved = doc && doc.value !== undefined ? doc.value : LISTS[name].fallback();
+				const problems = await guard(websiteId, saved, checked.value);
+				if (problems.length > 0) return { ok: false, errors: problems };
+			}
 			await store.put('settings', idOf(websiteId, `list.${name}`), {
 				websiteId,
 				kind: 'ecommerce',

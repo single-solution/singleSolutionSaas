@@ -5,6 +5,7 @@
  * amounts stay minor units, with a text (`totalText` …) made by the website's Format (PLAN 0.8.10 K7). No I/O.
  * @module
  */
+import { factsOf } from './facts.js';
 import { CLOSED_ROLES, nextStatuses, statusOf } from './flow.js';
 import { ID_PREFIX, STATUS_ROLES } from './model.js';
 import { isAmount } from './money.js';
@@ -48,7 +49,8 @@ export const TRACK_EVERY_MS = 30 * 60_000;
  * `claim_refunded_recorded` (`amount`, the claim's `reference`; a claim refunded without a note): a refund, partly
  * recorded for the `_recorded` ones; `refunds_cover_payments`: the move to the refunded status that follows;
  * `payment_recorded` (`amount`) and `payment_recorded_reference` (`amount`, `reference`): staff recorded a payment;
- * `confirmed_on_payment`: the move to the confirmed status that follows.
+ * `confirmed_on_payment`: the move to the confirmed status that follows; `restatus`: staff moved every order of a
+ * status to another status of the same kind (`POST /v1/orders/restatus`).
  */
 export const HISTORY_NOTES = Object.freeze(
 	/** @type {const} */ ([
@@ -69,6 +71,7 @@ export const HISTORY_NOTES = Object.freeze(
 		'payment_recorded',
 		'payment_recorded_reference',
 		'confirmed_on_payment',
+		'restatus',
 	]),
 );
 /** @typedef {typeof HISTORY_NOTES[number]} HistoryNote */
@@ -76,9 +79,11 @@ export const HISTORY_NOTES = Object.freeze(
 /**
  * What staff are warned of after a move, a refund or a recorded payment (the widgets' words `ordersAdmin.warning.<code>`):
  * `refund_by_hand` (`amount`): Payments only recorded a refund, so the shop gives the money back by hand (OR-8);
- * `cancel_refund_failed` (`amount`): the order was cancelled but its refund through Payments failed.
+ * `cancel_refund_failed` (`amount`): the order was cancelled but its refund through Payments failed; `refund_failed`
+ * (`amount`): the order moved to a refunded status but refunding through Payments failed (tried again while Payments
+ * cannot be reached).
  */
-export const MOVE_WARNINGS = Object.freeze(/** @type {const} */ (['refund_by_hand', 'cancel_refund_failed']));
+export const MOVE_WARNINGS = Object.freeze(/** @type {const} */ (['refund_by_hand', 'cancel_refund_failed', 'refund_failed']));
 
 /**
  * The values of a code the server writes: `amount` in minor units of the order's currency, the text of a `reason` and a
@@ -1008,6 +1013,10 @@ export const orderDetail = (order, flow, { customer, images, money, serialized =
 	const sums = orderMoney(order);
 	return {
 		...plain,
+		// what it holds or gave back (written by its transitions, else derived from its flags) and the refunds through
+		// Payments a transition asked for
+		facts: factsOf(order),
+		effects: plain.effects ?? [],
 		statusLabel: statusLabel(flow, order.status),
 		totalText: money(order.totals.total, order.totals.currency),
 		lines: plain.lines.map((/** @type {any} */ line) => ({

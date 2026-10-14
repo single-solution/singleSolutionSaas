@@ -481,6 +481,8 @@ describe('moving orders', () => {
 			expect(out.status).toBe(200);
 			expect(out.json.shipment.trackingNumber).toBe('K1');
 		} finally {
+			// a status with orders cannot leave the flow: its orders move to another shipped status first
+			await shop.api('POST', '/v1/orders/restatus', { from: 'out_for_delivery', to: 'dispatched' });
 			await shop.list('order_flow', flow);
 		}
 	});

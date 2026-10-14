@@ -27,10 +27,11 @@ import { createId } from '@ss/contracts';
 import { normalisePhone } from '@ss/contracts/phone';
 import { originAllowed } from '@ss/protocol';
 import { keyOpens, newOrderKey, orderKeyHash } from '../adapters/crypto.js';
-import { heldStockBefore, placeOrder, releaseOrder, swapOrderStock } from '../adapters/ledger.js';
+import { heldStockBefore, placeOrder, swapOrderStock } from '../adapters/ledger.js';
 import { createOrdersStore } from '../adapters/orders-store.js';
 import { STOCK_PROBLEMS, checkAddress, checkCart, checkOrderExtras } from '../core/checkout.js';
 import { shipmentLink } from '../core/couriers.js';
+import { PLACED_FACTS } from '../core/facts.js';
 import { WAITING_ROLES, cancelledStatus, statusOf, statusWithRole } from '../core/flow.js';
 import { shopperInvoiceReady } from '../core/invoice.js';
 import { checkGuest, phoneDigitsOf } from '../core/guests.js';
@@ -39,9 +40,11 @@ import { lineageOf } from '../core/catalog-taxonomy.js';
 import { gradesFor } from '../core/grades.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import { byActor, orderMoney, serverNote } from '../core/orders.js';
+import { checkTransition, planTransition } from '../core/transitions.js';
 import { createMedia } from './catalog-media.js';
 import { createGuests, phoneRulesOf } from './guests.js';
 import { RECHECK_MS, createOrderPayments, expectedOf } from './order-payments.js';
+import { createTransitions, rulesOf } from './transitions.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
 /** @typedef {import('./service.js').Service} Service */
@@ -57,6 +60,8 @@ import { RECHECK_MS, createOrderPayments, expectedOf } from './order-payments.js
 
 /** The header a guest sends their order's key in (the kit's CORS allows it). */
 const ORDER_KEY_HEADER = 'ss-order-key';
+/** Who ends a waiting order whose window passed (the activity log). */
+const SYSTEM_ACTOR = Object.freeze({ kind: 'system', id: 'checkout', name: 'System' });
 /** Transfer proofs: what may be uploaded, and how big (E24). */
 const PROOF_TYPES = Object.freeze({ 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'application/pdf': 'pdf' });
 const PROOF_MAX_BYTES = 10 * 1_048_576;
@@ -91,6 +96,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 	const media = createMedia(product);
 	const guests = createGuests(product);
 	const payments = createOrderPayments(product, service);
+	const transitions = createTransitions(product, service);
 
 	/** @param {Site} s @returns {Promise<OrderFlow>} */
 	const flowOf = async (s) => /** @type {OrderFlow} */ (/** @type {unknown} */ (await s.list('order_flow')));
@@ -194,50 +200,62 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 	// ------------------------------------------------------------------------------------------------- cancelling
 
 	/**
-	 * Cancel a waiting order, giving back its stock, slots, offer uses and points (exactly once). Its open Payments
-	 * payment is cancelled first (K-13): when it was paid meanwhile the order is paid instead and is returned as it is now
-	 * (not cancelled).
+	 * Cancel a waiting order, giving back its stock, slots, offer uses and points (exactly once), through the order
+	 * engine: to the flow's cancelled status, without a listed move (the role rules hold), refunding nothing (money paid
+	 * shows as due to refund). Its open Payments payment is cancelled first (K-13): when it was paid meanwhile the order
+	 * is paid instead and is returned as it is now (not cancelled).
 	 * @param {Site} s @param {OrderRecord} order as just read
 	 * @param {{ by: string, note: string, code: import('../core/orders.js').HistoryNote,
 	 *   reason: 'staff' | 'shopper' | 'expired' }} who `note` also tells Payments why its payment is cancelled
-	 * @returns {Promise<OrderRecord | null>} null when it moved meanwhile or the flow has no cancelled status
+	 * @returns {Promise<OrderRecord | null>} null when it moved meanwhile, or the flow changed under it
 	 */
 	const cancel = async (s, order, { by, note, code, reason }) => {
 		const flow = await flowOf(s);
 		const to = cancelledStatus(flow, order.status) ?? '';
-		const role = statusOf(flow, to)?.role;
-		if (!role) return null;
+		if (!checkTransition({ order, flow, to, listed: false }).ok) return null;
 		const step = await payments.beforeCancel(s, order, note);
 		if (step.paid) return step.paid;
 		const data = await s.data();
 		const now = service.now();
+		const who = by === 'system' ? 'system' : 'shopper';
+		const actor =
+			who === 'system'
+				? SYSTEM_ACTOR
+				: by === 'guest'
+					? { kind: 'guest', id: order.customer.customerId || 'guest', name: 'Guest' }
+					: { kind: 'shopper', id: order.customer.userId || 'shopper', name: 'Shopper' };
+		const planned = planTransition({
+			order,
+			flow,
+			to,
+			input: { who, actor, by, note, code, cancelReason: reason, listed: false, payments: step.set },
+			rules: await rulesOf(s, who),
+			now,
+		});
+		if (!planned.ok) return null;
 		// stock coming back tells the alerts (E34)
 		const held = await heldStockBefore(data, order);
-		let done = false;
 		try {
-			done = await releaseOrder(data, order, {
-				now,
-				update: async (session) => {
-					const result = await data.collection(COLLECTIONS.orders).updateOne(
-						{ websiteId: data.websiteId, id: order.id, status: order.status },
-						{
-							$set: { status: to, role, holdUntil: null, ...step.set },
-							$push: { history: { at: new Date(now), from: order.status, to, by, ...serverNote(code, note), reason } },
-						},
-						{ session },
-					);
-					return result.modifiedCount === 1;
-				},
-			});
+			await transitions.apply(s, order, planned.plan);
 		} catch (error) {
-			if (/** @type {any} */ (error)?.message !== 'order changed') throw error;
+			if (/** @type {any} */ (error)?.code === 'conflict') return null;
+			throw error;
 		}
-		if (!done) return null;
 		if (held) await service.emit('products.changed', s, held);
 		const store = createOrdersStore(data);
 		await payments.afterCancel(s, /** @type {OrderRecord} */ (await store.order(order.id)), step);
 		const after = /** @type {OrderRecord} */ (await store.order(order.id));
-		await service.emit('order.moved', s, { order: after, from: order.status, to, by, reason });
+		await product.activity.record(
+			{ websiteId: s.websiteId, merchantId: s.merchantId, after: s.ctx.after },
+			{
+				actor,
+				action: 'order.moved',
+				target: order.id,
+				label: order.number,
+				detail: `${labelOf(flow, order.status)} → ${labelOf(flow, to)}`,
+			},
+		);
+		await service.emit('order.moved', s, { order: after, ...planned.plan.event });
 		return after;
 	};
 
@@ -276,6 +294,8 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		for (const order of await store.toRecheck(now, RECHECK_MS)) await payments.recheck(s, order);
 		for (const order of await store.expired(WAITING_ROLES, now)) await expire(s, order);
 		await payments.sweep(s);
+		// refunds of cancelled orders Payments could not take yet (the order engine's pending effects)
+		await transitions.sweep(s);
 	};
 
 	// --------------------------------------------------------------------------------------------------- views
@@ -900,6 +920,8 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 			shipment: null,
 			media: [],
 			stockHeld: true,
+			// what the order holds (the order engine's facts): its stock, offer uses and spent points
+			facts: { ...PLACED_FACTS },
 			holdUntil: holdMs > 0 ? new Date(now + holdMs) : null,
 			idempotencyKey: String(ctx.idempotencyKey),
 			note,

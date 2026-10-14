@@ -433,7 +433,11 @@ describe('a returned unit goes back in stock once (OR-10)', () => {
 		});
 		expect(received.json.lines[0].restockedAt).toEqual(expect.any(String));
 		expect(await stockOf(phone.id)).toBe(5);
-		await shop.list('order_flow', DEFAULT_FLOW);
+		// the default moves again; the customer-returned status keeps its orders, so it stays in the flow
+		await shop.list('order_flow', {
+			statuses: [...DEFAULT_FLOW.statuses, { key: 'customer-returned', label: 'Returned', role: 'returned' }],
+			moves: DEFAULT_FLOW.moves,
+		});
 	});
 });
 
