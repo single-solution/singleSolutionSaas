@@ -9,7 +9,7 @@
  */
 import { createProtocolError, isProtocolError } from './errors.js';
 import { defaultRandomBytes, randomId } from './encoding.js';
-import { checkTimeClaims, isObject, nowSeconds, signCompact, verifyCompact } from './jws.js';
+import { checkTimeClaims, isObject, isText, nowSeconds, signCompact, verifyCompact } from './jws.js';
 import { canonicalOrigin, isProductId, ticketOriginAllowed } from './tokens.js';
 
 /** @import { KeyResolver, Signer } from './keys.js' */
@@ -32,13 +32,6 @@ const MAX_PERMISSIONS = 100;
  * @typedef {{ iss: string, aud: string, sub: string, websiteId: string, user: TicketUser, origin: string,
  *   permissions: string[], tid: string, iat: number, nbf: number, exp: number, jti: string }} TicketClaims
  */
-
-/**
- * @param {unknown} value
- * @param {number} max
- * @returns {value is string}
- */
-const isText = (value, max) => typeof value === 'string' && value.length > 0 && value.length <= max;
 
 /**
  * Return why a ticket user is invalid, or `null`.

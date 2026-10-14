@@ -59,7 +59,7 @@ const hasUnsafeChars = (value) => {
 export const isProductId = (value) => typeof value === 'string' && PRODUCT_ID_PATTERN.test(value);
 
 /**
- * Normalise a website domain to lower-case ASCII (punycode) without a trailing dot. Throws `invalid_argument` on
+ * Normalize a website domain to lower-case ASCII (punycode) without a trailing dot. Throws `invalid_argument` on
  * anything that is not a plain public host name: scheme, port, path, userinfo, wildcard, whitespace, IP literals,
  * `localhost` / `*.localhost` and single-label names.
  * @param {unknown} domain

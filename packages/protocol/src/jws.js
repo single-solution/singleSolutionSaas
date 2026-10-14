@@ -21,6 +21,13 @@ const FORBIDDEN_HEADERS = ['jwk', 'jku', 'x5u', 'x5c', 'x5t', 'x5t#S256', 'crit'
 export const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /**
+ * A non-empty string of at most `max` characters.
+ * @param {unknown} value @param {number} [max]
+ * @returns {value is string}
+ */
+export const isText = (value, max = 256) => typeof value === 'string' && value.length > 0 && value.length <= max;
+
+/**
  * @param {string} segment
  * @returns {Record<string, unknown>}
  */

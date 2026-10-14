@@ -42,7 +42,7 @@ const SIGNATURE = /^[0-9a-f]{64}$/;
 const TIMESTAMP = /^\d{1,12}$/;
 
 /**
- * Canonicalise a URL for pinning comparisons (lower-case scheme/host, default port dropped, no trailing slash, no
+ * Canonicalize a URL for pinning comparisons (lower-case scheme/host, default port dropped, no trailing slash, no
  * query/fragment/userinfo allowed).
  * @param {unknown} value
  * @returns {string}

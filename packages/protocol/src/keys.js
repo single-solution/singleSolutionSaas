@@ -7,6 +7,7 @@
 import { createPrivateKey } from 'node:crypto';
 import { calculateJwkThumbprint, exportJWK, generateKeyPair, importJWK } from 'jose';
 import { createProtocolError } from './errors.js';
+import { isObject } from './jws.js';
 
 /**
  * Public Ed25519 JWK as published in a JWKS. `nbf`/`exp` (seconds since epoch) are optional protocol extensions
@@ -31,12 +32,6 @@ import { createProtocolError } from './errors.js';
 
 const KID_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/;
 const X_PATTERN = /^[A-Za-z0-9_-]{43}$/;
-
-/**
- * @param {unknown} value
- * @returns {value is Record<string, unknown>}
- */
-const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /**
  * @param {unknown} value

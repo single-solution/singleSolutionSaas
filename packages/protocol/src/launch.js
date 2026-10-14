@@ -15,7 +15,7 @@
  */
 import { createProtocolError } from './errors.js';
 import { defaultRandomBytes, randomId } from './encoding.js';
-import { checkTimeClaims, isObject, nowSeconds, requireString, signCompact, verifyCompact } from './jws.js';
+import { checkTimeClaims, isObject, isText, nowSeconds, requireString, signCompact, verifyCompact } from './jws.js';
 
 /** @import { KeyResolver, Signer } from './keys.js' */
 
@@ -48,13 +48,6 @@ const ACCENT = /^#[0-9a-fA-F]{6}$/;
  *   kind: LaunchKind, sessionExpiresAt: string, branding: LaunchBranding, support: LaunchSupport,
  *   merchant?: LaunchMerchant, admin?: LaunchAdmin }} LaunchClaims
  */
-
-/**
- * @param {unknown} value
- * @param {number} [max]
- * @returns {value is string}
- */
-const isText = (value, max = 256) => typeof value === 'string' && value.length > 0 && value.length <= max;
 
 /**
  * @param {unknown} value

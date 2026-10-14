@@ -3,27 +3,7 @@
  * machine-readable. Messages never contain token material, keys or secrets, so they are safe to log.
  */
 
-/**
- * @typedef {'invalid_argument'
- *   | 'malformed'
- *   | 'unsupported_alg'
- *   | 'wrong_type'
- *   | 'signature'
- *   | 'unknown_kid'
- *   | 'revoked_key'
- *   | 'key_not_active'
- *   | 'key_retired'
- *   | 'jwks_unavailable'
- *   | 'expired'
- *   | 'not_yet_valid'
- *   | 'lifetime_too_long'
- *   | 'audience'
- *   | 'issuer'
- *   | 'subject'
- *   | 'replay'
- *   | 'invalid_launch'
- *   | 'invalid_token'} ProtocolErrorCode
- */
+/** @typedef {typeof ERROR_CODES[number]} ProtocolErrorCode */
 
 /**
  * @typedef {Error & { name: 'ProtocolError', code: ProtocolErrorCode, details?: Record<string, unknown> }} ProtocolError
