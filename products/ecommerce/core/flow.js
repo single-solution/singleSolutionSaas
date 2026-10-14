@@ -141,6 +141,74 @@ export const checkOrderFlow = (value) => {
 };
 
 /**
+ * What saving a flow would do to orders already in a status (the flow-save guard, PLAN 0.8.10 dynamic model §3.3): a
+ * status of the saved flow that has orders keeps its key and its kind of step (role) — removing or re-keying it, or
+ * changing its role, is refused (its orders' facts follow their role); names and moves may change. The kind of step
+ * its orders are in is always accepted: a status that comes back (orders left from before), or one whose role was
+ * changed before this guard existed, takes its orders' role, which puts it right.
+ * @param {OrderFlow} saved the flow saved now
+ * @param {OrderFlow} next the flow to save (checked)
+ * @param {ReadonlyArray<{ status: string, role: string, count: number }>} counts orders per status and role
+ * @returns {Array<{ path: string, message: string, code: 'status_in_use' }>}
+ */
+export const flowChangeProblems = (saved, next, counts) => {
+	/** @type {Map<string, Array<{ role: string, count: number }>>} */
+	const byStatus = new Map();
+	for (const { status, role, count } of counts)
+		if (count > 0) byStatus.set(status, [...(byStatus.get(status) ?? []), { role, count }]);
+	/** @type {Array<{ path: string, message: string, code: 'status_in_use' }>} */
+	const problems = [];
+	for (const [status, groups] of byStatus) {
+		const count = groups.reduce((sum, group) => sum + group.count, 0);
+		const orders = count === 1 ? '1 order' : `${count} orders`;
+		const before = statusOf(saved, status);
+		const index = next.statuses.findIndex((entry) => entry.key === status);
+		const name = `${before?.label ?? status} (${status})`;
+		const restatus = 'Move its orders to another status of the same kind first (POST /v1/orders/restatus).';
+		if (index < 0) {
+			if (before)
+				problems.push({
+					path: '/value/statuses',
+					code: 'status_in_use',
+					message: `The status ${name} has ${orders} in it, so it cannot be removed or get another key. ${restatus}`,
+				});
+			continue;
+		}
+		const role = /** @type {OrderFlow['statuses'][number]} */ (next.statuses[index]).role;
+		// unchanged, or the kind of step all its orders are in
+		if (role === before?.role || groups.every((group) => group.role === role)) continue;
+		const kept = before?.role ?? /** @type {{ role: string }} */ (groups[0]).role;
+		problems.push({
+			path: `/value/statuses/${index}/role`,
+			code: 'status_in_use',
+			message: `The status ${name} has ${orders} in it, so its kind of step stays ${kept} (not ${role}). ${restatus}`,
+		});
+	}
+	return problems;
+};
+
+/**
+ * Check moving every order of one status to another of the same kind of step (`POST /v1/orders/restatus`): `to` a
+ * status of the flow other than `from`, and `from` (when the flow still has it) of the same role.
+ * @param {OrderFlow} flow @param {string} from @param {string} to
+ * @returns {{ ok: true, role: StatusRole } | { ok: false, field: 'from' | 'to', message: string }}
+ */
+export const checkRestatus = (flow, from, to) => {
+	if (!KEY.test(from)) return { ok: false, field: 'from', message: 'Name the status the orders are in.' };
+	const target = statusOf(flow, to);
+	if (!target) return { ok: false, field: 'to', message: 'Name a status of the order flow.' };
+	if (to === from) return { ok: false, field: 'to', message: 'Name another status than from.' };
+	const source = statusOf(flow, from);
+	if (source && source.role !== target.role)
+		return {
+			ok: false,
+			field: 'to',
+			message: `${source.label} is a ${source.role} step and ${target.label} a ${target.role} step: orders move only between statuses of the same kind.`,
+		};
+	return { ok: true, role: target.role };
+};
+
+/**
  * The status definition of a key, or null.
  * @param {OrderFlow} flow @param {string} key
  */
@@ -164,6 +232,13 @@ export const canMove = (flow, from, to) => {
 	if (!fromRole || !toRole || from === to) return false;
 	return (ALLOWED_FROM[toRole] ?? []).includes(fromRole) && flow.moves.some((move) => move.from === from && move.to === to);
 };
+
+/**
+ * Whether the role rules let an order of one role become another (whatever moves the flow lists): the outer net of
+ * every transition, also of those that need no listed move (a window that ends, a shopper's cancel).
+ * @param {StatusRole} from @param {StatusRole} to
+ */
+export const rolesAllow = (from, to) => (ALLOWED_FROM[to] ?? []).includes(from);
 
 /**
  * The statuses an order may move to next.

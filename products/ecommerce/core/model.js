@@ -349,6 +349,10 @@ export const STATUS_ROLES = Object.freeze([
  * @property {string} [phoneDigits] the last 10 digits of the customer's phone (E31)
  * @property {string | null} [accessKeyHash] the hash of a guest order's key (E21)
  * @property {boolean} stockHeld stock (and booked slots) are held by this order; false after cancel or RTO
+ * @property {import('./facts.js').OrderFacts} [facts] what the order holds or gave back (the order engine's facts, PLAN
+ *   0.8.10 dynamic model §3.2): written by every transition; an order written before them has them derived from its flags
+ * @property {import('./transitions.js').OrderEffect[]} [effects] work outside the database a transition asked for (a
+ *   refund through Payments): pending until done, tried again on use
  * @property {boolean} [returnRestocked] its return (RTO or a customer's return) put its units back in stock: a claim
  *   restocked later puts none back (OR-10)
  * @property {Date} [claimRestockedAt] when a return claim of it last put units back in stock (OR-10)
