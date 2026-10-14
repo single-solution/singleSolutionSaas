@@ -485,6 +485,8 @@ describe('the Sisters Boutique mapping', () => {
 			'phone_password.forgotUrl': expect.stringMatching(/^https:\/\/wa\.me\/923000000099\?text=Salam!%20I%20forgot/),
 			'staff_links.setupPageUrl': 'https://shop.example.com/account/setup/{code}',
 			'role_requests.requestableRoles': ['member'],
+			// SB says "already a member" to a repeat ask: Accounts' detailed answers (its default is private)
+			'role_requests.revealStatus': true,
 		});
 		expect(settings.growth?.settings).toMatchObject({
 			'notice_bar.enabled': true,

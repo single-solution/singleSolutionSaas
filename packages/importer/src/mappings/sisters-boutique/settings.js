@@ -218,6 +218,10 @@ export const settingsPlan = (values) => {
 				...(site ? { 'staff_links.setupPageUrl': `${site}/account/setup/{code}` } : {}),
 				'role_requests.requestableRoles': [MEMBER_ROLE],
 				'role_requests.requireNote': false,
+				// SB tells a repeat ask that the number already belongs to a member, "already-member"
+				// (`apps/web/src/app/api/membership/requests/route.ts`:95-99, `account/_components/RequestMembership.tsx`:56-57):
+				// Accounts' detailed answers keep that (its default answers every ask the same)
+				'role_requests.revealStatus': true,
 				// no sign-up at all (`apps/web/src/lib/auth.ts`:5-15): staff invite
 				'approval.mode': 'invite',
 				'approval.requiredFields': [],
