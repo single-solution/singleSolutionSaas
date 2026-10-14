@@ -1,8 +1,9 @@
 /**
  * Promotions pricing (PLAN 0.8.8; PLAN 0.8.10 E18): which deals, bundles and coupon apply to a cart and how much each
  * takes off each line. Checkout calls `applyPromotions` when it prices a cart and again when it places the order (the
- * ledger then counts the uses in the order transaction); the Chat lookups and the product page quote one product with
- * `quoteProduct`. The order:
+ * ledger then counts the uses in the order transaction); cards, the product page, structured data, feeds and the
+ * quotes of one product (Chat, `/v1/shop/products/:id/quote`) all take one unit's shown price from `shownPrice` (SEO
+ * audit G4). The order:
  * 1. deals: each line takes one deal — the best saving among the live deals covering it (scope, conditions, weekdays
  *    and hours in the business time zone) or, with `lineChoice: first`, the first of them in the shoppers' order that
  *    saves something; the deal the shopper picked among them (`shopperChoice`); or the deal its signed lock keeps
@@ -31,6 +32,7 @@ import {
 	dealCovers,
 	dealLineDiscount,
 	dealLive,
+	holdsAllDay,
 	utcClock,
 } from './deals.js';
 import { allocateUnits, roundHalfUp } from './money.js';
@@ -419,8 +421,76 @@ export const applyPromotions = ({
 };
 
 /**
- * What one product costs after deals: its lowest active variant (or the variant asked for), with the best live deal.
- * Used by the product page quote and the Chat lookups.
+ * What shoppers are shown for one unit of a variant (SEO audit G4).
+ * @typedef {object} ShownPrice
+ * @property {number} price the price after the best live item deal on one unit
+ * @property {number | null} was the struck-through price, when higher than `price`: the "was" price
+ *   (`compareAtPrice`), and with a deal at least the variant's own price
+ * @property {number} savings what the deal takes off one unit (0 = none)
+ * @property {{ id: string, name: string } | null} deal the deal in the price
+ * @property {{ from: Date | null, until: Date | null } | null} sale the deal's dates, for a deal that holds all day on
+ *   every day (one limited to weekdays or hours has none: the price is the sale price only while it runs)
+ */
+
+/**
+ * The shown price without deals: the price, and the "was" price when higher.
+ * @param {Pick<import('./model.js').VariantRecord, 'price' | 'compareAtPrice'>} variant
+ * @returns {ShownPrice}
+ */
+export const listShown = (variant) => ({
+	price: variant.price,
+	was: variant.compareAtPrice !== null && variant.compareAtPrice > variant.price ? variant.compareAtPrice : null,
+	savings: 0,
+	deal: null,
+	sale: null,
+});
+
+/**
+ * The price shoppers are shown for one unit of a variant (SEO audit G4): the one function cards, the product page,
+ * structured data, feeds and the quotes take, so they all name the same price. The variant's price less the best live
+ * item deal on one unit as the cart prices it (`bestDeal` with the unit alone, at the business time: a deal that needs
+ * more than one unit, a cart total above the price or a payment method is an offer of the cart, not the price; cart
+ * deals and free delivery neither); the struck-through price; the deal and its dates.
+ * @param {object} input
+ * @param {import('./model.js').ProductRecord} input.product
+ * @param {import('./model.js').VariantRecord} input.variant
+ * @param {DealRecord[]} input.deals live deals (switched off: [])
+ * @param {number} input.now epoch ms
+ * @param {string[]} input.categoryIds the product's categories with their ancestors
+ * @param {{ weekday: number, minutes: number }} input.clock the business time (deal hours)
+ * @param {number} [input.unit] whole units (E25)
+ * @param {import('./deals.js').DealRules} [input.rules] how deals choose and round (the `deals` settings, D4)
+ * @returns {ShownPrice}
+ */
+export const shownPrice = ({ product, variant, deals, now, categoryIds, clock, unit = 1, rules = DEAL_RULES }) => {
+	const found = bestDeal(
+		{
+			productId: product.id,
+			categoryIds,
+			brandId: product.brandId,
+			grade: variant.grade ?? null,
+			attributes: attributeValues(product, variant),
+			unitPrice: variant.price,
+			quantity: 1,
+		},
+		deals,
+		now,
+		{ unit, rules, cart: { goods: variant.price, paymentMethod: null, ...clock } },
+	);
+	if (!found) return listShown(variant);
+	const price = variant.price - found.perUnit;
+	return {
+		price,
+		was: Math.max(variant.price, variant.compareAtPrice ?? 0),
+		savings: found.perUnit,
+		deal: { id: found.deal.id, name: found.deal.name },
+		sale: holdsAllDay(found.deal) ? { from: found.deal.startsAt ?? null, until: found.deal.endsAt ?? null } : null,
+	};
+};
+
+/**
+ * What one product costs after deals: its lowest active variant (or the variant asked for), at its shown price
+ * ({@link shownPrice}). Used by the product quote and the Chat lookups.
  * @param {object} input
  * @param {import('./model.js').ProductRecord} input.product
  * @param {string | null} [input.variantId] a variant of the product ('' or null: the lowest-priced active one)
@@ -455,29 +525,24 @@ export const quoteProduct = ({
 				undefined,
 			);
 	if (!variant) return null;
-	const found = bestDeal(
-		{
-			productId: product.id,
-			categoryIds: categoryIds ?? product.categoryIds,
-			brandId: product.brandId,
-			grade: variant.grade ?? null,
-			attributes: attributeValues(product, variant),
-			unitPrice: variant.price,
-			quantity: 1,
-		},
+	const shown = shownPrice({
+		product,
+		variant,
 		deals,
 		now,
-		{ unit, rules, ...(clock ? { cart: { goods: variant.price, paymentMethod: null, ...clock } } : {}) },
-	);
-	const savings = found?.perUnit ?? 0;
+		categoryIds: categoryIds ?? product.categoryIds,
+		clock: clock ?? utcClock(now),
+		unit,
+		rules,
+	});
 	return {
 		productId: product.id,
 		variantId: variant.id,
 		price: variant.price,
-		priceAfterDeals: variant.price - savings,
-		savings,
+		priceAfterDeals: shown.price,
+		savings: shown.savings,
 		currency,
-		deals: found ? [{ id: found.deal.id, name: found.deal.name }] : [],
+		deals: shown.deal ? [shown.deal] : [],
 	};
 };
 

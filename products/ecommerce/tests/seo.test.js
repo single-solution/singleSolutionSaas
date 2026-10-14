@@ -5,6 +5,7 @@
 import { createId } from '@ss/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { csvCell, feedMoney, feedRows, googleItem, metaLine } from '../core/feeds.js';
+import { listShown } from '../core/promotions.js';
 import { buildLlmsTxt, markdownText, MAX_LLMS_CHARS, treeOrder } from '../core/llms.js';
 import { COLLECTIONS } from '../core/model.js';
 import {
@@ -143,6 +144,8 @@ describe('core/feeds and core/llms', () => {
 			/** @type {'refurbished' | 'new'} */ (conditionOf(product, v, 'refurbished')),
 		skuAs: /** @type {const} */ ('mpn'),
 		includeOutOfStock: true,
+		shown: listShown,
+		now: Date.parse('2026-10-05T10:00:00Z'),
 	};
 
 	it('makes one row per active variant', () => {
@@ -220,11 +223,12 @@ describe('core/feeds and core/llms', () => {
 		expect(item).not.toContain('<g:gtin>');
 		const out = googleItem(/** @type {any} */ ({ ...row, inStock: false }));
 		expect(out).toContain('out_of_stock');
+		// Meta gets the regular price and the sale price in their own columns (G4)
 		expect(metaLine(/** @type {any} */ (row))).toBe(
-			'var_a,Phone - Red,Summary,in stock,refurbished,9.00 USD,https://shop.example/p,https://cdn.example/i.jpg,Brand,prd_1,,\r\n',
+			'var_a,Phone - Red,Summary,in stock,refurbished,12.00 USD,9.00 USD,,https://shop.example/p,https://cdn.example/i.jpg,Brand,prd_1,,\r\n',
 		);
 		expect(metaLine(/** @type {any} */ ({ ...row, inStock: false, condition: '', salePrice: '' }))).toContain(
-			'out of stock,new,12.00 USD',
+			'out of stock,new,12.00 USD,,',
 		);
 		expect(csvCell('a,"b"\nc')).toBe('"a,""b""\nc"');
 	});
@@ -481,7 +485,7 @@ describe('SEO, feeds, llms.txt and policies routes', () => {
 		expect(csv.headers.get('content-type')).toContain('text/csv');
 		const lines = csv.text.trim().split('\r\n');
 		expect(lines[0]).toBe(
-			'id,title,description,availability,condition,price,link,image_link,brand,item_group_id,google_product_category,custom_label_0',
+			'id,title,description,availability,condition,price,sale_price,sale_price_effective_date,link,image_link,brand,item_group_id,google_product_category,custom_label_0',
 		);
 		expect(lines).toHaveLength(3);
 		expect(lines[2]).toContain('out of stock');

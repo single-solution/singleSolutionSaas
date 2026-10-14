@@ -29,8 +29,10 @@ import { button, h, paragraphs, safeHref } from './shop-common.js';
 /**
  * A variant as the product page reads it.
  * @typedef {{ id: string, name: string, options: Record<string, string>, price: number, compareAtPrice: number | null,
- *   inStock: boolean, soldOut?: boolean, stockLeft?: number | null, grade: PageGrade | null, warrantyDays?: number | null,
+ *   deal?: { id: string, name: string, savings: number } | null, inStock: boolean, soldOut?: boolean,
+ *   stockLeft?: number | null, grade: PageGrade | null, warrantyDays?: number | null,
  *   attributes?: Array<{ id: string, slug: string, name: string, value: unknown, label: string }>, media?: PageMedia[] }} PageVariant
+ *   `price`: the price shown (after automatic deals); `deal`: the deal in it and what it takes off one unit
  */
 
 /**

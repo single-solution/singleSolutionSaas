@@ -683,7 +683,7 @@ describe('wishlist, alerts and compare', () => {
 					return 'failed';
 				},
 			},
-			createCards(shop.product),
+			createCards(shop.product, service),
 		);
 		const site = await service.site({ websiteId: shop.websiteId, status: { domain: DOMAIN }, headers: new Headers() });
 		await sending.sendDue(site);

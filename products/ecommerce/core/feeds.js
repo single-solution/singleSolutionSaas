@@ -36,8 +36,10 @@ const DESCRIPTION_LENGTH = 5000;
  * @property {string} description
  * @property {string} link
  * @property {string} image
- * @property {string} price `10.50 USD` (the "was" price when on sale)
- * @property {string} salePrice the price on sale, else ''
+ * @property {string} price `10.50 USD`: the regular price (the struck-through one when on sale)
+ * @property {string} salePrice the shown price when on sale (a deal, or a "was" price), else '' (G4)
+ * @property {string} saleDates the sale's ISO 8601 interval (`start/end`) for a deal that holds all day and has an
+ *   end, else ''
  * @property {boolean} inStock
  * @property {Condition | ''} condition
  * @property {string} brand
@@ -61,6 +63,9 @@ const DESCRIPTION_LENGTH = 5000;
  * @property {string} currency
  * @property {(variant: import('./model.js').VariantRecord) => Condition | ''} condition the condition of a variant (its
  *   grade's, else the setting for graded items; E10)
+ * @property {(variant: import('./model.js').VariantRecord) => import('./promotions.js').ShownPrice} shown a variant's
+ *   shown price (`shownPrice` with the deals that hold all day, G4)
+ * @property {number} now the feed's read time (the start of a sale that names none)
  * @property {'none' | 'mpn' | 'gtin'} skuAs
  * @property {boolean} includeOutOfStock
  * @property {string} [googleCategory]
@@ -111,10 +116,13 @@ export const feedRows = (product, context) => {
 		.trim()
 		.slice(0, DESCRIPTION_LENGTH);
 	return variants
+		.filter((variant) => context.shown(variant).price > 0)
 		.filter((variant) => context.includeOutOfStock || variantInStock(product, variant))
 		.map((variant) => {
 			const label = variantLabel(variant);
-			const onSale = typeof variant.compareAtPrice === 'number' && variant.compareAtPrice > variant.price;
+			const shown = context.shown(variant);
+			const until = shown.was !== null && shown.sale?.until ? new Date(shown.sale.until) : null;
+			const from = shown.sale?.from ? new Date(shown.sale.from) : new Date(context.now);
 			const sku = variant.sku ?? '';
 			const gtin = context.skuAs === 'gtin' ? sku : '';
 			const mpn = context.skuAs === 'mpn' ? sku : '';
@@ -131,8 +139,9 @@ export const feedRows = (product, context) => {
 				description,
 				link: context.variantLink?.(variant) ?? context.link,
 				image: context.variantImage?.(variant) || context.image,
-				price: money(onSale ? /** @type {number} */ (variant.compareAtPrice) : variant.price),
-				salePrice: onSale ? money(variant.price) : '',
+				price: money(shown.was ?? shown.price),
+				salePrice: shown.was === null ? '' : money(shown.price),
+				saleDates: until ? `${from.toISOString()}/${until.toISOString()}` : '',
 				inStock: variantInStock(product, variant),
 				condition: context.condition(variant),
 				brand: context.brand,
@@ -141,7 +150,7 @@ export const feedRows = (product, context) => {
 				productType: context.productType,
 				googleCategory: context.googleCategory ?? '',
 				customLabel0: context.gradeLabel?.(variant) ?? '',
-				shipping: context.shipping ? money(shippingFee(context.shipping, variant.price)) : '',
+				shipping: context.shipping ? money(shippingFee(context.shipping, shown.price)) : '',
 				shippingCountry: context.shipping?.country ?? '',
 				identifierExists: context.identifierExists === 'no' && !gtin && !mpn ? 'no' : '',
 			};
@@ -175,6 +184,7 @@ export const googleItem = (row) => {
 		['g:availability', row.inStock ? 'in_stock' : 'out_of_stock'],
 		['g:price', row.price],
 		['g:sale_price', row.salePrice],
+		['g:sale_price_effective_date', row.saleDates],
 		['g:condition', row.condition],
 		['g:brand', row.brand],
 		['g:gtin', row.gtin],
@@ -203,6 +213,8 @@ const META_COLUMNS = Object.freeze([
 	'availability',
 	'condition',
 	'price',
+	'sale_price',
+	'sale_price_effective_date',
 	'link',
 	'image_link',
 	'brand',
@@ -221,8 +233,7 @@ export const csvCell = (value) => (/[",\r\n]/.test(value) ? `"${value.replace(/"
 export const META_HEADER = `${META_COLUMNS.join(',')}\r\n`;
 
 /**
- * One line of a Meta catalog CSV. Meta takes the sale price in its own column only with a separate `sale_price`;
- * this feed sends the price the shopper pays.
+ * One line of a Meta catalog CSV: the regular price, and the shown price and its dates when on sale (G4).
  * @param {FeedRow} row
  */
 export const metaLine = (row) =>
@@ -232,7 +243,9 @@ export const metaLine = (row) =>
 		row.description,
 		row.inStock ? 'in stock' : 'out of stock',
 		row.condition || 'new',
-		row.salePrice || row.price,
+		row.price,
+		row.salePrice,
+		row.saleDates,
 		row.link,
 		row.image,
 		row.brand,

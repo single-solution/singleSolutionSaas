@@ -309,6 +309,8 @@ export const feedGroupId = (product, many) => product.feedGroupId || (many ? pro
  * @property {string} seller the business name
  * @property {Array<{ name: string, url: string }>} trail home and categories, without the product
  * @property {(variant: VariantRecord) => string} variantName a variant's name (the `seo` setting `variantTitle`, G6)
+ * @property {(variant: VariantRecord) => import('./promotions.js').ShownPrice} shown a variant's shown price
+ *   (`shownPrice`, G4)
  * @property {(variant: VariantRecord) => string} [variantUrl] a variant's page (E13)
  * @property {(variant: VariantRecord) => string | null} [variantImage] a variant's first photo (E6); without one the
  *   variant shows the product's photos
@@ -338,12 +340,36 @@ export const shippingFee = ({ fee, freeOver = 0 }, price) => (freeOver > 0 && pr
 const daysValue = ({ min, max }) => ({ '@type': 'QuantitativeValue', minValue: min, maxValue: max, unitCode: 'DAY' });
 
 /**
+ * The price of an offer (G4): the shown price; the struck-through price beside it (`StrikethroughPrice`, never on the
+ * active price); and for a sale that holds all day with an end, when it started (`validFrom`) and its last day
+ * (`priceValidUntil`, the day before an end at midnight; Google may drop a listing whose date is past).
+ * @param {import('./promotions.js').ShownPrice} shown
+ * @param {string} currency
+ */
+const offerPrice = (shown, currency) => ({
+	price: toDecimal(shown.price, currency),
+	priceCurrency: currency,
+	priceSpecification:
+		shown.was === null
+			? null
+			: {
+					'@type': 'UnitPriceSpecification',
+					priceType: `${SCHEMA}/StrikethroughPrice`,
+					price: toDecimal(shown.was, currency),
+					priceCurrency: currency,
+				},
+	validFrom: shown.sale?.until && shown.sale.from ? new Date(shown.sale.from).toISOString() : null,
+	priceValidUntil: shown.sale?.until ? new Date(new Date(shown.sale.until).getTime() - 1).toISOString().slice(0, 10) : null,
+});
+
+/**
  * The offer details of one variant (E16, SG-2, G5): shipping at the offer's price, only for physical goods and only when
  * complete (a destination country and the delivery days); the item's return policy, only with a country.
  * @param {ProductPage} page
  * @param {VariantRecord} variant
+ * @param {number} price the price shown
  */
-const offerExtras = ({ product, currency, shipping, returns }, variant) => {
+const offerExtras = ({ product, currency, shipping, returns }, variant, price) => {
 	const days = returns?.country ? returns.days(variant) : null;
 	return {
 		shippingDetails:
@@ -352,7 +378,7 @@ const offerExtras = ({ product, currency, shipping, returns }, variant) => {
 						'@type': 'OfferShippingDetails',
 						shippingRate: {
 							'@type': 'MonetaryAmount',
-							value: toDecimal(shippingFee(shipping, variant.price), currency),
+							value: toDecimal(shippingFee(shipping, price), currency),
 							currency,
 						},
 						shippingDestination: { '@type': 'DefinedRegion', addressCountry: shipping.country },
@@ -451,21 +477,21 @@ export const productFacts = (product, { money, grades, specs, priceOf = (variant
  */
 export const productJsonLd = (page) => {
 	const { product, url, images, description, brand, currency, seller, trail } = page;
-	const variants = offeredVariants(product);
+	// a variant a deal makes free is not offered either (a price above 0, G4)
+	const variants = offeredVariants(product).filter((variant) => page.shown(variant).price > 0);
 	/** @param {VariantRecord} variant */
 	const offerOf = (variant) =>
 		compact({
 			'@type': 'Offer',
 			url: page.variantUrl?.(variant) ?? url,
-			price: toDecimal(variant.price, currency),
-			priceCurrency: currency,
+			...offerPrice(page.shown(variant), currency),
 			availability: `${SCHEMA}/${variantInStock(product, variant) ? 'InStock' : 'OutOfStock'}`,
 			itemCondition: (() => {
 				const condition = page.condition(variant);
 				return condition ? CONDITION_URL[condition] : '';
 			})(),
 			seller: seller ? { '@type': 'Organization', name: seller } : null,
-			...offerExtras(page, variant),
+			...offerExtras(page, variant, page.shown(variant).price),
 		});
 	const rating =
 		product.rating.count > 0

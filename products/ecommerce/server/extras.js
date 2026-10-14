@@ -25,7 +25,7 @@ import { MAX_WISHLIST, createShopperLists } from './extras-shopper.js';
  * @returns {import('./routes.js').Area}
  */
 export const createExtras = (product, service) => {
-	const cards = createCards(product);
+	const cards = createCards(product, service);
 	const returns = createReturns(product, service);
 	const reviews = createReviews(product, service);
 	const alerts = createAlerts(product, service, cards);

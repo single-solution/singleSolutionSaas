@@ -4603,7 +4603,7 @@
 				},
 				"price": {
 					"type": "integer",
-					"description": "The lowest price of its active variants. Minor units."
+					"description": "The lowest price shown of its active variants (after automatic deals on one unit, as the grid's cards). Minor units."
 				},
 				"priceText": {
 					"type": "string",
@@ -4611,7 +4611,7 @@
 				},
 				"compareAtPrice": {
 					"type": ["integer", "null"],
-					"description": "The \"was\" price of the variant with the lowest price, minor units (null: none)."
+					"description": "That variant's struck-through price, minor units (null: none)."
 				},
 				"currency": {
 					"type": "string",
@@ -4642,7 +4642,7 @@
 				},
 				"priceMax": {
 					"type": "integer",
-					"description": "The highest price of its active variants. Minor units."
+					"description": "The highest price shown of its active variants. Minor units."
 				},
 				"featured": {
 					"type": "boolean"
@@ -10443,7 +10443,7 @@
 				},
 				"jsonLd": {
 					"type": "string",
-					"description": "The JSON-LD as text safe to put in a script tag: a ProductGroup of the variants offered (active, priced above 0; one: a Product; none: no product node), each with its photo (else the product's), its SKU (else its feed item id), offer, condition, return policy (the product's, its grade's or the returns setting's days, with the business.json country only) and shipping details (physical goods, with a country and delivery days only), reviews, a BreadcrumbList and, with the seo setting faqMarkup on, a FAQPage."
+					"description": "The JSON-LD as text safe to put in a script tag: a ProductGroup of the variants offered (active, priced above 0; one: a Product; none: no product node), each with its photo (else the product's), its SKU (else its feed item id), offer (the price shown after the best item deal on one unit, the higher price as a StrikethroughPrice, and for a deal that holds all day with an end validFrom and priceValidUntil), condition, return policy (the product's, its grade's or the returns setting's days, with the business.json country only) and shipping details (physical goods, with a country and delivery days only), reviews, a BreadcrumbList and, with the seo setting faqMarkup on, a FAQPage."
 				}
 			}
 		},
@@ -12115,17 +12115,17 @@
 				"price": {
 					"type": "integer",
 					"minimum": 0,
-					"description": "The lowest active variant price."
+					"description": "The lowest price shown of its active variants (after automatic deals on one unit, as cards, structured data and feeds give it)."
 				},
 				"priceMax": {
 					"type": "integer",
 					"minimum": 0,
-					"description": "The highest active variant price."
+					"description": "The highest price shown of its active variants."
 				},
 				"compareAtPrice": {
 					"type": ["integer", "null"],
 					"minimum": 0,
-					"description": "The cheapest variant’s \"was\" price when higher."
+					"description": "That variant's struck-through price, when higher."
 				},
 				"currency": {
 					"type": "string",
@@ -12424,12 +12424,12 @@
 				"price": {
 					"type": "integer",
 					"minimum": 0,
-					"description": "The lowest active variant price."
+					"description": "The lowest price shown of its active variants (after automatic deals on one unit, as the product page and structured data show it)."
 				},
 				"compareAtPrice": {
 					"type": ["integer", "null"],
 					"minimum": 0,
-					"description": "The cheapest variant’s \"was\" price when higher."
+					"description": "That variant's struck-through price, when higher."
 				},
 				"currency": {
 					"type": "string",
@@ -12498,7 +12498,7 @@
 				"priceMax": {
 					"type": "integer",
 					"minimum": 0,
-					"description": "The highest active variant price."
+					"description": "The highest price shown of its active variants."
 				},
 				"featured": {
 					"type": "boolean"
@@ -12559,12 +12559,12 @@
 							"price": {
 								"type": "integer",
 								"minimum": 0,
-								"description": "Minor units (cents, pence …)."
+								"description": "The price shown (after automatic deals on one unit)."
 							},
 							"compareAtPrice": {
 								"type": ["integer", "null"],
 								"minimum": 0,
-								"description": "The \"was\" price when higher than the price."
+								"description": "The struck-through price, when higher than the price."
 							},
 							"inStock": {
 								"type": "boolean"
@@ -12930,6 +12930,7 @@
 				"attributes",
 				"price",
 				"compareAtPrice",
+				"deal",
 				"inStock",
 				"soldOut",
 				"stockLeft",
@@ -12989,12 +12990,38 @@
 				"price": {
 					"type": "integer",
 					"minimum": 0,
-					"description": "Minor units (cents, pence …)."
+					"description": "The price shown: after the best automatic deal on one unit, as the cart prices it (the same price as cards, structured data and feeds). Minor units (cents, pence …)."
 				},
 				"compareAtPrice": {
 					"type": ["integer", "null"],
 					"minimum": 0,
-					"description": "The \"was\" price when higher than the price."
+					"description": "The struck-through price, when higher than the price: the \"was\" price, and with a deal at least the variant's own price."
+				},
+				"deal": {
+					"oneOf": [
+						{
+							"type": "null"
+						},
+						{
+							"type": "object",
+							"required": ["id", "name", "savings"],
+							"additionalProperties": false,
+							"properties": {
+								"id": {
+									"type": "string"
+								},
+								"name": {
+									"type": "string"
+								},
+								"savings": {
+									"type": "integer",
+									"minimum": 1,
+									"description": "What it takes off one unit, minor units."
+								}
+							}
+						}
+					],
+					"description": "The automatic deal in the price (null: none). A deal that needs more than one unit, a cart total above the price or a payment method is not in the price; the cart applies it."
 				},
 				"inStock": {
 					"type": "boolean"
@@ -22539,7 +22566,7 @@
 	},
 	"GET /v1/shop/products/:id/quote": {
 		"summary": "What one unit of a product costs after deals",
-		"description": "The variant asked for, or the lowest-priced active one, with the best live item deal on one unit as the cart prices it: the largest saving, or the first in the shoppers’ order with the deals setting lineChoice first; within its days and hours (business time zone); rounded to whole units by Format and the deals setting rounding. Not included: deals off the cart total (target cart), free delivery, deals whose conditions need more than one unit, a cart total above the price or a payment method, bundles, coupons, points and role prices (the cart quote has them all). 404 not_found for a product that is not active or a variant that is not an active one of it; 403 feature_off while the deals feature is off.",
+		"description": "The variant asked for, or the lowest-priced active one, with the best live item deal on one unit as the cart prices it (the same shown price as the product page, cards, structured data and feeds): the largest saving, or the first in the shoppers’ order with the deals setting lineChoice first; within its days and hours (business time zone); rounded to whole units by Format and the deals setting rounding. Not included: deals off the cart total (target cart), free delivery, deals whose conditions need more than one unit, a cart total above the price or a payment method, bundles, coupons, points and role prices (the cart quote has them all). 404 not_found for a product that is not active or a variant that is not an active one of it; 403 feature_off while the deals feature is off.",
 		"query": {
 			"type": "object",
 			"properties": {
@@ -24531,11 +24558,11 @@
 	},
 	"GET /v1/feeds/products.xml": {
 		"summary": "The Google Merchant Center feed",
-		"description": "Answers application/xml, not JSON: an RSS 2.0 feed with the g: namespace, one item per active variant priced above 0 of every active product shoppers may see (at most 100,000), with g:id, item_group_id, title, description, link, image_link, availability, price, sale_price, condition, brand, gtin, mpn, identifier_exists, product_type, google_product_category, custom_label_0 and shipping (empty fields left out). Shaped by the feeds settings: items (with_images or all), includeOutOfStock, itemTitle, itemDescription, skuAs, identifierExists, gradedCondition, googleCategory and gradeLabel; shipping from Delivery zones. g:id is the variant id, or the feedId an import kept from the earlier shop's feed; item_group_id is the product's imported feedGroupId on every item, else the product id on products with several variants. The cost is never in it."
+		"description": "Answers application/xml, not JSON: an RSS 2.0 feed with the g: namespace, one item per active variant priced above 0 of every active product shoppers may see (at most 100,000), with g:id, item_group_id, title, description, link, image_link, availability, price, sale_price, sale_price_effective_date, condition, brand, gtin, mpn, identifier_exists, product_type, google_product_category, custom_label_0 and shipping (empty fields left out). Shaped by the feeds settings: items (with_images or all), includeOutOfStock, itemTitle, itemDescription, skuAs, identifierExists, gradedCondition, googleCategory and gradeLabel; shipping from Delivery zones. g:id is the variant id, or the feedId an import kept from the earlier shop's feed; item_group_id is the product's imported feedGroupId on every item, else the product id on products with several variants. The cost is never in it. Prices (G4): price is the regular price; on sale (a \"was\" price above the price, or an automatic deal on one unit that holds all day), sale_price is the price shown, and sale_price_effective_date (start/end, ISO 8601) is sent while the deal has an end."
 	},
 	"GET /v1/feeds/products.csv": {
 		"summary": "The Meta (Facebook) catalog feed",
-		"description": "Answers text/csv, not JSON: a header line, then one line per active variant priced above 0 of every active product shoppers may see (at most 100,000), with the columns id, title, description, availability, condition, price (the price the shopper pays), link, image_link, brand, item_group_id, google_product_category and custom_label_0 (RFC 4180, CRLF line ends). The same feeds settings as products.xml."
+		"description": "Answers text/csv, not JSON: a header line, then one line per active variant priced above 0 of every active product shoppers may see (at most 100,000), with the columns id, title, description, availability, condition, price (the regular price), sale_price and sale_price_effective_date (on sale, as in products.xml), link, image_link, brand, item_group_id, google_product_category and custom_label_0 (RFC 4180, CRLF line ends). The same feeds settings as products.xml."
 	},
 	"GET /v1/llms.txt": {
 		"summary": "llms.txt of the catalog",

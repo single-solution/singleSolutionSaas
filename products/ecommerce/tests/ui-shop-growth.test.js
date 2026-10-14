@@ -80,14 +80,15 @@ describe('product page', () => {
 		const fake = makeShop({
 			features: ['catalog', 'checkout', 'deals'],
 			routes: {
-				'GET /v1/shop/products/phone': () => ok(PRODUCT),
-				'GET /v1/shop/products/prd_1/quote': (call) =>
+				// the page answer gives each variant's price after deals (G4)
+				'GET /v1/shop/products/phone': () =>
 					ok({
-						price: call.query.variantId === 'var_2' ? 120000 : 100000,
-						priceAfterDeals: call.query.variantId === 'var_2' ? 110000 : 100000,
-						savings: call.query.variantId === 'var_2' ? 10000 : 0,
-						currency: 'USD',
-						deals: [],
+						...PRODUCT,
+						variants: PRODUCT.variants.map((/** @type {any} */ v) =>
+							v.id === 'var_2'
+								? { ...v, price: 110000, compareAtPrice: 120000, deal: { id: 'dl_1', name: 'Sale', savings: 10000 } }
+								: v,
+						),
 					}),
 			},
 		});

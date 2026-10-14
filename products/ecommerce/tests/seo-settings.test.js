@@ -7,6 +7,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createId } from '@ss/contracts';
 import { feedRows, googleItem, metaLine } from '../core/feeds.js';
+import { listShown } from '../core/promotions.js';
 import { feedGroupId, fillTemplate, fillTitle, pageName, patternText, shippingFee } from '../core/seo.js';
 import { createRoutes } from '../server/routes.js';
 import { ALL, ORIGIN, readyShop } from './helpers.js';
@@ -80,6 +81,8 @@ describe('patterns, shipping and feed rows', () => {
 		skuAs: /** @type {const} */ ('none'),
 		includeOutOfStock: true,
 		shipping: { fee: 250, freeOver: 5000, country: 'GB' },
+		shown: listShown,
+		now: Date.parse('2026-10-05T10:00:00Z'),
 	};
 
 	it('keeps the earlier rows by default, leaves out free variants and ships from the free amount', () => {

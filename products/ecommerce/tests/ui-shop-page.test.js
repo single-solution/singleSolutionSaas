@@ -175,47 +175,30 @@ describe('product page', () => {
 		expect(textOf(host)).not.toContain(text('page.noVariant'));
 	});
 
-	it('shows the price after deals with the saving', async () => {
-		const fake = makeShop({
-			features: ['catalog', 'deals'],
-			routes: {
-				'GET /v1/shop/products/phone': () => ok(product()),
-				'GET /v1/shop/products/prd_1/quote': (call) =>
-					call.query.variantId === 'var_b1'
-						? ok({
-								productId: 'prd_1',
-								variantId: 'var_b1',
-								price: 105000,
-								priceAfterDeals: 95000,
-								savings: 10000,
-								currency: 'EUR',
-								deals: [{ id: 'dl_1', name: 'Autumn sale' }],
-							})
-						: call.query.variantId === 'var_b2'
-							? ok({
-									productId: 'prd_1',
-									variantId: 'var_b2',
-									price: 120000,
-									priceAfterDeals: 120000,
-									savings: 0,
-									currency: 'EUR',
-									deals: [],
-								})
-							: fail(500, 'internal_error'),
-			},
-		});
+	it('shows the price after deals with the saving, as the page answer gives it (G4)', async () => {
+		const base = product();
+		const page = {
+			...base,
+			variants: base.variants.map((v) =>
+				v.id === 'var_b1'
+					? { ...v, price: 95000, compareAtPrice: 105000, deal: { id: 'dl_1', name: 'Autumn sale', savings: 10000 } }
+					: { ...v, deal: null },
+			),
+		};
+		const fake = makeShop({ features: ['catalog', 'deals'], routes: { 'GET /v1/shop/products/phone': () => ok(page) } });
 		const host = await mountPage(fake);
 		expect(textOf(host)).toContain('EUR 950.00');
+		expect(textOf(host)).toContain('EUR 1,050.00');
 		expect(textOf(host)).toContain(text('page.save', { amount: 'EUR 100.00' }));
 		expect(textOf(host)).toContain('Autumn sale');
-		expect(textOf(host)).not.toContain(text('page.addToCart'));
 		await setValue($(host, '#ss-page-option-1'), '256 GB');
 		expect(textOf(host)).not.toContain(text('page.save', { amount: 'EUR 100.00' }));
-		await setValue($(host, '#ss-page-option-1'), '128 GB');
-		expect(fake.all('GET /v1/shop/products/prd_1/quote')).toHaveLength(2);
+		expect(textOf(host)).not.toContain('Autumn sale');
 		await setValue($(host, '#ss-page-option-0'), 'Red');
 		expect(textOf(host)).toContain('EUR 1,000.00');
 		expect(textOf(host)).toContain('EUR 1,100.00');
+		// one read: the page answer has every variant's price
+		expect(fake.all('GET /v1/shop/products/phone')).toHaveLength(1);
 	});
 
 	it('says when the product is missing or cannot be read', async () => {

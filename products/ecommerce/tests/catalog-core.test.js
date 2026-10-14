@@ -42,7 +42,8 @@ import {
 	placeCategory,
 } from '../core/catalog-taxonomy.js';
 import { EMPTY_CONTENT, EMPTY_SEO } from '../core/catalog-content.js';
-import { cardOf, compareAtOf, pageOf, specsOf } from '../core/catalog-views.js';
+import { cardOf, pageOf, shownRange, specsOf } from '../core/catalog-views.js';
+import { listShown } from '../core/promotions.js';
 import { formatCell, parseCsv, recordsOf, toCsv, unescapeFormula } from '../core/csv.js';
 import { checkGrades, gradesByKey } from '../core/grades.js';
 
@@ -597,13 +598,14 @@ describe('views', () => {
 	it('builds cards and pages without stock counts', () => {
 		const product = { ...record({ seo: { title: 'T', description: 'D' }, specs: { att_n: 3 } }), specs: { att_n: 3, gone: 1 } };
 		const grades = gradesByKey([{ key: 'a', label: 'A', description: '' }, { nothing: true }]);
-		expect(compareAtOf({ ...product, variants: [] })).toBeNull();
+		expect(shownRange({ ...product, variants: [] }, listShown)).toMatchObject({ compareAtPrice: null });
 		const card = cardOf(product, {
 			currency: 'EUR',
 			image: null,
 			url: 'u',
 			brand: null,
 			grades,
+			shown: listShown,
 		});
 		expect(card.rating).toEqual(product.rating);
 		const page = pageOf(product, {
@@ -614,6 +616,7 @@ describe('views', () => {
 			breadcrumb: [],
 			attributes: rules().attributes,
 			grades,
+			shown: listShown,
 		});
 		expect(page.seo).toEqual({ title: 'T', description: 'D' });
 		expect(page.rating).toEqual(product.rating);

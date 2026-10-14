@@ -211,6 +211,13 @@ export const utcClock = (now) => {
 };
 
 /**
+ * Whether a deal holds all day on every day of its dates (no weekdays or hours of its own): its price can be given with
+ * its dates to search engines and shopping catalogs (G4).
+ * @param {Pick<DealRecord, 'days' | 'timeFrom' | 'timeTo'>} deal
+ */
+export const holdsAllDay = (deal) => deal.days.length === 0 && !deal.timeFrom && !deal.timeTo;
+
+/**
  * Whether a deal is checkout-level: off the cart (`target: 'cart'`) or free delivery (`cartOffer`, D4).
  * @param {Pick<DealRecord, 'type' | 'target'>} deal
  */

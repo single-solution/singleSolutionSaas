@@ -6,6 +6,7 @@
  * then the setting) and only with a country, and FAQ markup only while the merchant asks for it.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { listShown } from '../core/promotions.js';
 import { feedGroupId, feedItemId, productJsonLd } from '../core/seo.js';
 import { readyShop } from './helpers.js';
 
@@ -76,6 +77,7 @@ const page = (item, input = {}) => ({
 	seller: 'Shop',
 	trail: [{ name: 'Shop', url: 'https://shop.example.com/' }],
 	variantName: (variant) => `${item.name} - ${Object.values(variant.options).join(' / ')}`,
+	shown: listShown,
 	shipping: null,
 	returns: null,
 	reviews: [],

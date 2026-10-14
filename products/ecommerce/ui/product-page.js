@@ -7,7 +7,8 @@
  *
  * Gallery (each photo's detail and thumb sizes, width and height, and its blur placeholder while loading; a variant's
  * own photos replace the product's while it is picked), name, Featured, brand, the price range, the price after
- * automatic deals (with the "was" price and the saving, while `deals` is on), the variant picker (option axes, or the
+ * automatic deals as the page answer gives it (the same as cards, structured data and the cart: with the "was" price,
+ * the saving and the deal), the variant picker (option axes, or the
  * variants' attributes, and the condition when variants differ only by grade; a pick that has no exact variant moves
  * to the nearest one), the grade's details, the stock ("Only N left", "N in stock", Sold out: shown and not added to
  * the cart), the warranty of the variant, the Size guide, the quantity and Add to cart, the time picker of a booking
@@ -137,13 +138,6 @@ export const mountProductPage = async ({ host, config, shop, win }) => {
 				let slot = null;
 				let quantity = 1;
 				let added = false;
-				/** @type {Map<string, any>} */
-				const quotes = new Map();
-				/** @param {PageVariant} of the price shown for a variant (after automatic deals, once quoted) */
-				const shownPrice = (of) => {
-					const quote = quotes.get(of.id);
-					return quote?.savings > 0 ? quote.priceAfterDeals : of.price;
-				};
 				/** @param {string} name @param {PageVariant | null} of @param {number} count */
 				const tell = (name, of, count) =>
 					announce(
@@ -154,7 +148,7 @@ export const mountProductPage = async ({ host, config, shop, win }) => {
 								productId: item.id,
 								variantId: of?.id ?? null,
 								name: item.name,
-								price: of ? shownPrice(of) : item.price,
+								price: of ? of.price : item.price,
 								quantity: count,
 							}),
 						]),
@@ -274,38 +268,20 @@ export const mountProductPage = async ({ host, config, shop, win }) => {
 					layer,
 				);
 
-				const renderPrice = async () => {
+				const renderPrice = () => {
 					const current = variant();
 					if (!current) {
 						priceBox.replaceChildren(h(doc, 'p', { class: 'muted' }, t('page.noVariant')));
 						return;
 					}
-					const plain = () =>
-						priceBox.replaceChildren(
-							priceNode(doc, t, formats, { price: current.price, was: current.compareAtPrice, currency, big: true }),
-						);
-					if (!shop.has('deals')) return plain();
-					let quote = quotes.get(current.id);
-					if (!quote) {
-						const answer = await shop.call(
-							`/v1/shop/products/${encodeURIComponent(item.id)}/quote?variantId=${encodeURIComponent(current.id)}`,
-						);
-						if (!answer.ok) return plain();
-						quote = answer.data;
-						quotes.set(current.id, quote);
-					}
-					if (variant()?.id !== current.id) return;
-					if (!(quote.savings > 0)) return plain();
-					const was = Math.max(quote.price, current.compareAtPrice ?? 0);
 					priceBox.replaceChildren(
-						priceNode(doc, t, formats, {
-							price: quote.priceAfterDeals,
-							was,
-							currency: currencyOf(settings, quote.currency, currency),
-							big: true,
-						}),
-						h(doc, 'p', { class: 'save' }, t('page.save', { amount: money(quote.savings, currency) })),
-						...quote.deals.map((/** @type {{ name: string }} */ deal) => h(doc, 'span', { class: 'badge' }, deal.name)),
+						priceNode(doc, t, formats, { price: current.price, was: current.compareAtPrice, currency, big: true }),
+						...(current.deal
+							? [
+									h(doc, 'p', { class: 'save' }, t('page.save', { amount: money(current.deal.savings, currency) })),
+									h(doc, 'span', { class: 'badge' }, current.deal.name),
+								]
+							: []),
 					);
 				};
 
@@ -581,7 +557,7 @@ export const mountProductPage = async ({ host, config, shop, win }) => {
 						renderFacts();
 						renderAdd();
 					});
-					void renderPrice();
+					renderPrice();
 					void renderExtras();
 				};
 

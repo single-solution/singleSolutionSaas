@@ -828,7 +828,8 @@ describe('the README examples', () => {
 			expect({ id: record.id, ...answer.json }).toEqual({ id: record.id, inserted: 1, updated: 0, failed: [], dryRun: false });
 		}
 		const page = await fresh.visitor('GET', '/v1/shop/products/ceramic-mug');
-		expect(page.json).toMatchObject({ id: records[5].id, price: 1200 });
+		// shown after the README's Summer deal (10% off), the 1,200 struck through (G4)
+		expect(page.json).toMatchObject({ id: records[5].id, price: 1080, compareAtPrice: 1200 });
 		await fresh.product.close();
 	});
 

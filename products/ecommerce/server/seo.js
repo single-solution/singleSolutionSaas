@@ -11,6 +11,7 @@
 import { defineRoute, problem } from '@ss/app-kit';
 import { attributesOf, findBySlugHistory } from '../adapters/catalog-store.js';
 import { mediaSignatureOk } from '../adapters/crypto.js';
+import { categoryTrail } from '../adapters/promotions-store.js';
 import { htmlToText, siteAddress } from '../core/catalog-content.js';
 import { lineageOf } from '../core/catalog-taxonomy.js';
 import { specsOf } from '../core/catalog-views.js';
@@ -48,6 +49,7 @@ import { hiddenFor, visible, visibleMatch } from './catalog-visibility.js';
 import { createChatLookup } from './chat-lookup.js';
 import { createAutoSeo } from './seo-auto.js';
 import { createLandings } from './seo-landings.js';
+import { createShownPrices } from './shown-prices.js';
 import { policiesOf } from './policies.js';
 import { SEO_LIMITS, VISITOR_LIMITS } from './service.js';
 import { allCategories, brandNames, lineage, storeNameOf, streamed, trailOf } from './seo-reads.js';
@@ -93,7 +95,7 @@ const POLICY_TITLES = Object.freeze({
 	warranty: 'Warranty',
 });
 
-/** What the feeds and sitemaps read of a product. */
+/** What the feeds read of a product (the imported group id and the specs deal conditions name too). */
 const LISTING_FIELDS = Object.freeze({
 	_id: 0,
 	id: 1,
@@ -105,6 +107,8 @@ const LISTING_FIELDS = Object.freeze({
 	'seo.description': 1,
 	categoryIds: 1,
 	brandId: 1,
+	specs: 1,
+	feedGroupId: 1,
 	media: 1,
 	variants: 1,
 	trackStock: 1,
@@ -132,6 +136,7 @@ const defaultImageOf = (settings, domain) => {
  */
 export const createSeo = (product, service) => {
 	const media = createMedia(product);
+	const shownPrices = createShownPrices(service);
 	const landings = createLandings(product, service, media);
 	// SEO copy written when staff save a product or an attribute (E43)
 	createAutoSeo(product, service, landings);
@@ -268,6 +273,8 @@ export const createSeo = (product, service) => {
 		);
 		const brand = item.brandId ? ((await brandNames(data, [item.brandId])).get(item.brandId) ?? null) : null;
 		const conditions = await conditionsOf(s, settings.gradedCondition);
+		// the price shoppers are shown, after automatic deals (G4), as the card, the product page and the cart show it
+		const shown = (await shownPrices(s, data)).of(item, await categoryTrail(data, item.categoryIds));
 		// the merchant's patterns (SG-5, G6), with the product's facts as they are now: the page's part of the title, the
 		// description when the product has none of its own nor a written summary, and the variants' names
 		const names = {
@@ -279,6 +286,7 @@ export const createSeo = (product, service) => {
 				money: (amount) => money(amount, s.currency),
 				grades: conditions.gradesOf(item),
 				specs: specsOf(item, new Map(attributes.map((attribute) => [attribute.id, attribute]))),
+				priceOf: (variant) => shown(variant).price,
 			}),
 		};
 		const description = metaDescription(
@@ -327,6 +335,7 @@ export const createSeo = (product, service) => {
 					options: variantLabel(variant),
 					grade: conditions.gradeOf(item, variant)?.label ?? '',
 				}),
+			shown,
 			variantUrl: (variant) => variantUrls.get(variant.id) ?? url,
 			variantImage: (variant) => variantImages.get(variant.id) ?? null,
 			shipping: await shippingOf(s),
@@ -615,6 +624,9 @@ export const createSeo = (product, service) => {
 			byId,
 		);
 		const shipping = await shippingOf(s);
+		// prices after the deals that hold all day (feeds are read at the catalogs' own pace; G4)
+		const prices = await shownPrices(s, data, { allDay: true });
+		const now = service.now();
 		const bySlug = new Map(attributes.map((row) => [String(row.id), { slug: row.slug ? String(row.slug) : undefined }]));
 		const withImages = settings.items !== 'all';
 		const rows = data
@@ -656,6 +668,8 @@ export const createSeo = (product, service) => {
 					: '',
 				currency: s.currency,
 				condition: (variant) => conditions.of(item, variant),
+				shown: prices.of(item, lineageOf(item.categoryIds, byId)),
+				now,
 				skuAs: settings.skuAs,
 				includeOutOfStock: settings.includeOutOfStock !== false,
 				googleCategory: String(settings.googleCategory ?? ''),

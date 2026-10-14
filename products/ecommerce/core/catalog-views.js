@@ -13,20 +13,27 @@ import { gradeView } from './grades.js';
 /** @typedef {import('./model.js').AttributeRecord} AttributeRecord */
 /** @typedef {import('./grades.js').Grade} Grade */
 
+/** @typedef {import('./promotions.js').ShownPrice} ShownPrice */
+/** @typedef {(variant: VariantRecord) => ShownPrice} Shown a variant's shown price (`shownPrice`, G4) */
+
 /**
- * The "was" price shown next to a price: the cheapest active variant's, when higher than its price.
+ * A product's prices as shoppers are shown them (G4): the lowest shown price of its active variants with that variant's
+ * struck-through price, and the highest shown price.
  * @param {ProductRecord} product
- * @returns {number | null}
+ * @param {Shown} shown
+ * @returns {{ price: number, compareAtPrice: number | null, priceMax: number }}
  */
-export const compareAtOf = (product) => {
-	const active = product.variants.filter((variant) => variant.active);
-	const cheapest = active.reduce(
-		(best, variant) => (best === null || variant.price < best.price ? variant : best),
-		/** @type {VariantRecord | null} */ (null),
+export const shownRange = (product, shown) => {
+	const prices = product.variants.filter((variant) => variant.active).map(shown);
+	const low = prices.reduce(
+		(best, next) => (best === null || next.price < best.price ? next : best),
+		/** @type {ShownPrice | null} */ (null),
 	);
-	return cheapest && cheapest.compareAtPrice !== null && cheapest.compareAtPrice > cheapest.price
-		? cheapest.compareAtPrice
-		: null;
+	return {
+		price: low ? low.price : product.price,
+		compareAtPrice: low ? low.was : null,
+		priceMax: prices.length > 0 ? Math.max(...prices.map((found) => found.price)) : product.priceMax,
+	};
 };
 
 /**
@@ -44,8 +51,8 @@ const gradeLabels = (product, grades) => {
  * @property {string} id
  * @property {string} slug
  * @property {string} name
- * @property {number} price
- * @property {number | null} compareAtPrice
+ * @property {number} price the lowest price shown (after automatic deals, G4)
+ * @property {number | null} compareAtPrice that variant's struck-through price
  * @property {string} currency
  * @property {string | null} image
  * @property {string} url
@@ -54,7 +61,7 @@ const gradeLabels = (product, grades) => {
  * @property {{ id: string, name: string, slug?: string } | null} brand
  * @property {string[]} grades
  * @property {number} variantCount
- * @property {number} priceMax the highest active variant price (E8)
+ * @property {number} priceMax the highest price shown of its active variants (E8)
  * @property {boolean} featured (E2)
  * @property {Array<{ url: string | null, alt: string }>} cardImages the first photo of up to 4 variants that look
  *   different (E6)
@@ -68,20 +75,21 @@ const gradeLabels = (product, grades) => {
  * @property {string} id
  * @property {Record<string, string>} options
  * @property {Array<{ slug: string, name: string, label: string }>} attributes
- * @property {number} price
- * @property {number | null} compareAtPrice the "was" price when higher than the price
+ * @property {number} price the price shown (after automatic deals, G4)
+ * @property {number | null} compareAtPrice the struck-through price, when higher than the price
  * @property {boolean} inStock
  * @property {string | null} grade the grade's key
  * @property {string} url the variant's page (E13)
  */
 
 /**
- * The active variants of a product as cards carry them (SF-6).
+ * The active variants of a product as cards carry them (SF-6), at their shown prices (G4).
  * @param {ProductRecord} product
- * @param {{ attributes: ReadonlyMap<string, AttributeRecord>, variantUrls: ReadonlyMap<string, string>, url: string }} context
+ * @param {{ attributes: ReadonlyMap<string, AttributeRecord>, variantUrls: ReadonlyMap<string, string>, url: string,
+ *   shown: Shown }} context
  * @returns {CardVariant[]}
  */
-export const cardVariantsOf = (product, { attributes, variantUrls, url }) =>
+export const cardVariantsOf = (product, { attributes, variantUrls, url, shown }) =>
 	product.variants
 		.filter((variant) => variant.active)
 		.map((variant) => ({
@@ -91,9 +99,7 @@ export const cardVariantsOf = (product, { attributes, variantUrls, url }) =>
 				const attribute = attributes.get(id);
 				return attribute ? [{ slug: attribute.slug, name: attribute.name, label: valueLabel(attribute, value) }] : [];
 			}),
-			price: variant.price,
-			compareAtPrice:
-				variant.compareAtPrice !== null && variant.compareAtPrice > variant.price ? variant.compareAtPrice : null,
+			...(({ price, was }) => ({ price, compareAtPrice: was }))(shown(variant)),
 			inStock: variantInStock(variant, product.trackStock),
 			grade: variant.grade ?? null,
 			url: variantUrls.get(variant.id) ?? url,
@@ -131,18 +137,17 @@ export const stockLeftOf = (variant, trackStock, { showStock, lowStockShown }) =
 };
 
 /**
- * A product card (grid, search results, wishlist, compare, Chat).
+ * A product card (grid and search results), at its shown prices (G4).
  * @param {ProductRecord} product
  * @param {{ currency: string, image: string | null, url: string, brand: { id: string, name: string, slug?: string } | null,
- *   grades: ReadonlyMap<string, Grade>, cardImages?: Array<{ url: string | null, alt: string }> }} context
+ *   grades: ReadonlyMap<string, Grade>, cardImages?: Array<{ url: string | null, alt: string }>, shown: Shown }} context
  * @returns {Card}
  */
-export const cardOf = (product, { currency, image, url, brand, grades, cardImages = [] }) => ({
+export const cardOf = (product, { currency, image, url, brand, grades, cardImages = [], shown }) => ({
 	id: product.id,
 	slug: product.slug,
 	name: product.name,
-	price: product.price,
-	compareAtPrice: compareAtOf(product),
+	...shownRange(product, shown),
 	currency,
 	image,
 	url,
@@ -151,7 +156,6 @@ export const cardOf = (product, { currency, image, url, brand, grades, cardImage
 	brand,
 	grades: gradeLabels(product, grades),
 	variantCount: product.variants.filter((variant) => variant.active).length,
-	priceMax: summarize(product.variants, product.trackStock).priceMax,
 	featured: product.featured,
 	cardImages,
 });
@@ -199,14 +203,16 @@ export const specsOf = (product, attributes) =>
  * @param {number | null} [context.warrantyDays] the `returns` setting (E12)
  * @param {ReturnType<typeof import('./size-charts.js').chartView> | null} [context.sizeChart] (E5)
  * @param {Record<string, unknown> | null} [context.video] (E4)
+ * @param {Shown} context.shown each variant's shown price (G4)
  */
 export const pageOf = (product, context) => {
-	const { currency, url, media, brand, breadcrumb, attributes, grades } = context;
+	const { currency, url, media, brand, breadcrumb, attributes, grades, shown } = context;
 	const stock = context.stock ?? { showStock: 'none', lowStockShown: 0 };
 	const variants = product.variants
 		.filter((variant) => variant.active)
 		.map((variant) => {
 			const grade = variant.grade ? (grades.get(variant.grade) ?? null) : null;
+			const price = shown(variant);
 			return {
 				id: variant.id,
 				name: variantName(product.options, variant.options),
@@ -218,9 +224,10 @@ export const pageOf = (product, context) => {
 						? [{ id, slug: attribute.slug, name: attribute.name, value, label: valueLabel(attribute, value) }]
 						: [];
 				}),
-				price: variant.price,
-				compareAtPrice:
-					variant.compareAtPrice !== null && variant.compareAtPrice > variant.price ? variant.compareAtPrice : null,
+				price: price.price,
+				compareAtPrice: price.was,
+				// the deal in the price, with what it takes off one unit (G4)
+				deal: price.deal ? { ...price.deal, savings: price.savings } : null,
 				inStock: variantInStock(variant, product.trackStock),
 				soldOut: variant.soldOut,
 				stockLeft: stockLeftOf(variant, product.trackStock, stock),
@@ -238,9 +245,7 @@ export const pageOf = (product, context) => {
 		summary: product.summary,
 		description: product.description,
 		descriptionHtml: product.descriptionHtml,
-		price: product.price,
-		priceMax: summarize(product.variants, product.trackStock).priceMax,
-		compareAtPrice: compareAtOf(product),
+		...shownRange(product, shown),
 		currency,
 		inStock: product.inStock,
 		featured: product.featured,

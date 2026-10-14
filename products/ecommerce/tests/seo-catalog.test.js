@@ -395,6 +395,8 @@ describe('E17 feed options', () => {
 		expect(format.status).toBe(200);
 		const google = (await shop.api('GET', '/v1/feeds/products.xml')).text;
 		expect(google).toContain('<g:id>0123456789abcdef01234567_76543210fedcba9876543210</g:id>');
+		// the imported group id reaches the feed (it was not read with the feed's fields)
+		expect(google).toContain('<g:item_group_id>0123456789abcdef01234567</g:item_group_id>');
 		expect(google).toContain('<g:google_product_category>267</g:google_product_category>');
 		expect(google).toContain('<g:custom_label_0>Mint</g:custom_label_0>');
 		expect(google).toContain('<g:price>123 USD</g:price>');

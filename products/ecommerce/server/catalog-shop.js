@@ -11,7 +11,7 @@
  */
 import { defineRoute, paginate, problem } from '@ss/app-kit';
 import { NO_ID, attributesOf, brandsOf, categoriesOf, categoryGroups, findBySlugHistory } from '../adapters/catalog-store.js';
-import { categoryTrail, dealsLiveNow, loadOffers } from '../adapters/promotions-store.js';
+import { categoryTrail, dealsLiveNow } from '../adapters/promotions-store.js';
 import {
 	afterFilter,
 	cursorKey,
@@ -31,6 +31,7 @@ import { dealProductsFilter, productDeals } from '../core/deals.js';
 import { gradesFor } from '../core/grades.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import { attributeValues } from '../core/promotions.js';
+import { createShownPrices } from './shown-prices.js';
 import { chartView, resolveSizeChart } from '../core/size-charts.js';
 import { SHOP_LIMITS, refuse } from './catalog-common.js';
 import { createCatalogSearch } from './catalog-search.js';
@@ -52,51 +53,55 @@ const MAX_PAGE = 60;
 const TOTAL_CAP = 10_000;
 
 /**
- * Product cards for any part that shows products (wishlist, compare, alerts, Chat lookups, feeds).
+ * Product cards for the grid and search results, at their shown prices (G4: the price after automatic deals, as the
+ * cart prices one unit, the product page and structured data show it).
  * @param {CatalogCommon} common
  * @param {Service} service
  */
 const createCards = (common, service) => {
+	const shownPrices = createShownPrices(service);
+
 	/**
-	 * The live deals that cover each product (E18: cards carry `dealCount` and the first deal's badge); none while
-	 * Deals is off.
+	 * Each product's live deals (E18: cards carry `dealCount` and the first deal's badge; none while Deals is off) and
+	 * its variants' shown prices (G4).
 	 * @param {Site} s @param {WebsiteData} data @param {ProductRecord[]} products
-	 * @returns {Promise<Map<string, import('../core/model.js').DealRecord[]>>}
+	 * @returns {Promise<Map<string, { deals: import('../core/model.js').DealRecord[], shown: import('../core/catalog-views.js').Shown }>>}
 	 */
-	const dealsOf = async (s, data, products) => {
-		/** @type {Map<string, import('../core/model.js').DealRecord[]>} */
+	const offersOf = async (s, data, products) => {
+		/** @type {Map<string, { deals: import('../core/model.js').DealRecord[], shown: import('../core/catalog-views.js').Shown }>} */
 		const out = new Map();
-		if (!s.has('deals')) return out;
+		const { deals, clock, of } = await shownPrices(s, data);
 		const now = service.now();
-		const { deals } = await loadOffers(data, { now, deals: true });
-		if (deals.length === 0) return out;
-		const clock = await service.pricing(s);
 		for (const item of products) {
-			const categoryIds = await categoryTrail(data, item.categoryIds);
-			out.set(
-				item.id,
-				productDeals(item, deals, {
-					categoryIds,
-					now,
-					clock,
-					attributes: (variant) => attributeValues(item, variant),
-				}),
-			);
+			const categoryIds = deals.length > 0 ? await categoryTrail(data, item.categoryIds) : item.categoryIds;
+			out.set(item.id, {
+				deals:
+					clock && deals.length > 0
+						? productDeals(item, deals, {
+								categoryIds,
+								now,
+								clock,
+								attributes: (variant) => attributeValues(item, variant),
+							})
+						: [],
+				shown: of(item, categoryIds),
+			});
 		}
 		return out;
 	};
 
 	/**
-	 * The active variants of a card, with their pages (SF-6).
+	 * The active variants of a card, with their pages and shown prices (SF-6, G4).
 	 * @param {Site} s @param {ProductRecord} item @param {string} url
 	 * @param {ReadonlyMap<string, import('../core/model.js').AttributeRecord>} attributes
+	 * @param {import('../core/catalog-views.js').Shown} shown
 	 */
-	const variantsOf = async (s, item, url, attributes) => {
+	const variantsOf = async (s, item, url, attributes, shown) => {
 		/** @type {Map<string, string>} */
 		const variantUrls = new Map();
 		for (const variant of item.variants.filter((v) => v.active))
 			variantUrls.set(variant.id, await common.media.variantUrl(s, item, variant, attributes));
-		return cardVariantsOf(item, { attributes, variantUrls, url });
+		return cardVariantsOf(item, { attributes, variantUrls, url, shown });
 	};
 
 	/**
@@ -111,13 +116,16 @@ const createCards = (common, service) => {
 		const gradeList = await common.gradeListOf(s);
 		const categories =
 			gradeList.length > 0 ? new Map((await categoriesOf(data)).map((category) => [category.id, category])) : new Map();
-		const deals = await dealsOf(s, data, products);
+		const offers = await offersOf(s, data, products);
 		const attributes = variants ? new Map((await attributesOf(data)).map((attribute) => [attribute.id, attribute])) : null;
 		return Promise.all(
 			products.map(async (item) => {
 				const brand = item.brandId ? brands.get(item.brandId) : undefined;
 				const main = item.media?.[0];
-				const covering = deals.get(item.id) ?? [];
+				const { deals: covering, shown } =
+					/** @type {{ deals: import('../core/model.js').DealRecord[], shown: import('../core/catalog-views.js').Shown }} */ (
+						offers.get(item.id)
+					);
 				const first = covering[0];
 				const url = await common.media.productUrl(s, item);
 				return {
@@ -134,8 +142,9 @@ const createCards = (common, service) => {
 								alt: file.alt || item.name,
 							})),
 						),
+						shown,
 					}),
-					...(attributes ? { variants: await variantsOf(s, item, url, attributes) } : {}),
+					...(attributes ? { variants: await variantsOf(s, item, url, attributes, shown) } : {}),
 					dealCount: covering.length,
 					deal: first
 						? {
@@ -160,6 +169,7 @@ const createCards = (common, service) => {
  */
 export const createCatalogShop = (product, service, common) => {
 	const cards = createCards(common, service);
+	const shownPrices = createShownPrices(service);
 	const search = createCatalogSearch(product);
 
 	/**
@@ -404,7 +414,10 @@ export const createCatalogShop = (product, service, common) => {
 		const byAttribute = new Map(attributes.map((attribute) => [attribute.id, attribute]));
 		const active = item.variants.filter((variant) => variant.active);
 		const url = await common.media.productUrl(s, item);
+		// the variants at their shown prices, as cards, structured data and the cart show them (G4)
+		const shown = (await shownPrices(s, data)).of(item, await categoryTrail(data, item.categoryIds));
 		return pageOf(item, {
+			shown,
 			currency: s.currency,
 			url,
 			media: await Promise.all(item.media.map((file) => common.mediaView(s, file, item.name))),
