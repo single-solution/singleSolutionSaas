@@ -636,7 +636,7 @@
 				},
 				"cities": {
 					"type": ["array", "null"],
-					"description": "Sessions detail only: sessions by city (for example Lahore, PK), most first.",
+					"description": "Sessions detail only: sessions by city (for example Lyon, FR), most first.",
 					"maxItems": 100,
 					"items": {
 						"$ref": "#/components/schemas/TopRow"

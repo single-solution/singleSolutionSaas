@@ -33,7 +33,7 @@ const TAG_FIELDS = {
  * @param {string} key
  * @param {Record<string, unknown>} values
  */
-export const malformedIds = (key, values) => {
+const malformedIds = (key, values) => {
 	const fields = TAG_FIELDS[key];
 	if (!fields) return [];
 	const tags = /** @type {Record<string, unknown>} */ (tagsOf([key], { [key]: values }));
@@ -49,7 +49,7 @@ export const malformedIds = (key, values) => {
  * @param {Record<string, unknown>} values the `notice_bar` settings
  * @param {number} now
  */
-export const noticeState = (values, now) => {
+const noticeState = (values, now) => {
 	const notice = noticeOf({ notice_bar: values }, now);
 	if (notice) return { tone: /** @type {const} */ ('success'), text: TEXTS.setup.noticeShowing };
 	if (values.enabled === false) return { tone: /** @type {const} */ ('neutral'), text: TEXTS.setup.noticeOff };

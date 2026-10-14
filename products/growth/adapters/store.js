@@ -10,8 +10,6 @@
  *   A batch of events costs one insert of its raw events and one `$inc` upsert of the day's document (RT-2: Atlas's
  *   free tier allows about 100 operations a second for the whole cluster). A day whose document would grow past
  *   MongoDB's 16 MB goes on in a next `part`; the parts of a day are read as one.
- * - `daily`: the daily totals of earlier versions (one document per day, metric and key), still read with the others
- *   and never written.
  *
  * With the `sessions` detail (PLAN 0.8.10 G3) raw events also keep `session`, `browser`, `os` and `city`; live visitors
  * and journeys are read from them when asked (nothing is kept per session besides the events).
@@ -32,8 +30,6 @@ const JOURNEY_STEPS = 30;
 
 const EVENTS = 'events';
 const TOTALS = 'totals';
-/** The daily totals of earlier versions, read only. */
-const DAILY = 'daily';
 
 /** MongoDB's codes for an update that would grow a document past 16 MB. */
 const TOO_LARGE = Object.freeze([17419, 10334]);
@@ -89,31 +85,12 @@ const incrementsOf = (totals) => {
 };
 
 /**
- * Totals of metric × key from several sources added up, most counted first, at most {@link MAX_ROWS}.
- * @param {Array<{ metric: string, key: string, count: number, sum: number }>} rows
- */
-const addedUp = (rows) => {
-	/** @type {Map<string, { metric: string, key: string, count: number, sum: number }>} */
-	const added = new Map();
-	for (const row of rows) {
-		const id = `${row.metric}\n${row.key}`;
-		const found = added.get(id);
-		if (found) {
-			found.count += row.count;
-			found.sum += row.sum;
-		} else added.set(id, { ...row });
-	}
-	return [...added.values()].sort((a, b) => b.count - a.count).slice(0, MAX_ROWS);
-};
-
-/**
  * @param {WebsiteData} data the guarded merchant database of one website
  * @param {{ merchantId: string }} context
  */
 export const createStore = (data, { merchantId }) => {
 	const events = data.collection(EVENTS);
 	const totals = data.collection(TOTALS);
-	const daily = data.collection(DAILY);
 	const websiteId = data.websiteId;
 
 	/**
@@ -170,14 +147,14 @@ export const createStore = (data, { merchantId }) => {
 		},
 
 		/**
-		 * The totals of a range of days: per metric × key, and visits and page views per day (the days' documents and
-		 * the rows of earlier versions added up).
+		 * The totals of a range of days: per metric × key (most counted first, at most {@link MAX_ROWS}), and visits and
+		 * page views per day (the parts of a day added up).
 		 * @param {string} from
 		 * @param {string} to
 		 */
 		totals: async (from, to) => {
 			const range = { websiteId, day: { $gte: from, $lte: to } };
-			const [grouped, legacy, documents, legacyDays] = await Promise.all([
+			const [grouped, documents] = await Promise.all([
 				totals
 					.aggregate([
 						{ $match: range },
@@ -196,24 +173,8 @@ export const createStore = (data, { merchantId }) => {
 						{ $limit: MAX_ROWS },
 					])
 					.toArray(),
-				daily
-					.aggregate([
-						{ $match: range },
-						{ $group: { _id: { metric: '$metric', key: '$key' }, count: { $sum: '$count' }, sum: { $sum: '$sum' } } },
-						{ $sort: { count: -1 } },
-						{ $limit: MAX_ROWS },
-					])
-					.toArray(),
 				totals.find(range, { projection: { _id: 0, day: 1, 'totals.visits': 1, 'totals.page_views': 1 } }).toArray(),
-				daily.find({ ...range, metric: { $in: [...DAY_METRICS] } }, NO_ID).toArray(),
 			]);
-			/** @param {any} row @param {(key: string) => string} key */
-			const rowOf = (row, key) => ({
-				metric: String(row._id.metric),
-				key: key(String(row._id.key)),
-				count: Number(row.count),
-				sum: Number(row.sum),
-			});
 			/** @type {Map<string, Record<string, number>>} visits and page views of each day */
 			const perDay = new Map();
 			/** @param {string} day @param {string} metric @param {number} count */
@@ -225,9 +186,13 @@ export const createStore = (data, { merchantId }) => {
 			for (const doc of documents)
 				for (const metric of DAY_METRICS)
 					addDay(String(doc.day), metric, Number(doc.totals?.[metric]?.[fieldOf('')]?.c ?? 0));
-			for (const row of legacyDays) addDay(String(row.day), String(row.metric), Number(row.count));
 			return {
-				totals: addedUp([...grouped.map((row) => rowOf(row, keyOf)), ...legacy.map((row) => rowOf(row, String))]),
+				totals: grouped.map((row) => ({
+					metric: String(row._id.metric),
+					key: keyOf(String(row._id.key)),
+					count: Number(row.count),
+					sum: Number(row.sum),
+				})),
 				days: [...perDay].flatMap(([day, counts]) =>
 					Object.entries(counts)
 						.filter(([, count]) => count > 0)

@@ -67,16 +67,6 @@ const isDay = (day) => DAY.test(day) && !Number.isNaN(zonedDayStart(day, 'UTC'))
  */
 export const dayStart = (day, timeZone) => zonedDayStart(day, timeZone);
 
-/**
- * The days a report covers when none are asked for: the last 30 days up to today in the business time zone.
- * @param {number} now
- * @param {string | null | undefined} timeZone the business.json time zone (UTC when missing or unknown)
- */
-export const lastDays = (now, timeZone) => {
-	const to = zonedDay(now, timeZone);
-	return { from: shiftDay(to, -(DEFAULT_DAYS - 1)), to };
-};
-
 /** The range presets of the analytics dashboard. */
 export const PRESETS = Object.freeze(['today', '7d', '30d', '90d', 'month', 'lastMonth', '12m']);
 

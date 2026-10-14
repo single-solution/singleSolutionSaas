@@ -2,9 +2,9 @@
  * The `import` feature (PLAN 0.8.10 K10, Migration step 8, G8): what the kit's import routes take into Growth — one
  * collection, `totals`, the days of daily totals rebuilt from another system's analytics, found by `day` and `part`
  * and written as the day's document in `ss_growth_totals` (keys escaped as {@link fieldOf} writes them). A re-imported
- * day replaces the day's first document, so totals Growth recorded live for that day before are replaced too; the
- * earlier versions' `daily` rows are never written. `finish` has nothing to derive; the sums are what `ss-import
- * verify` compares. Nothing is sent and no raw events are made.
+ * day replaces the day's first document, so totals Growth recorded live for that day before are replaced too.
+ * `finish` has nothing to derive; the sums are what `ss-import verify` compares. Nothing is sent and no raw events are
+ * made.
  * @module
  */
 import { checkDay } from '../core/imports.js';

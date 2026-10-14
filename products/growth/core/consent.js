@@ -59,7 +59,7 @@ export const consentMode = (choice) => {
 };
 
 /** Everything granted: the choice tags follow while they need no consent and the visitor has not chosen (G1). */
-export const ALL_GRANTED = Object.freeze({ analytics: true, marketing: true });
+const ALL_GRANTED = Object.freeze({ analytics: true, marketing: true });
 
 /**
  * The choice the tags follow (PLAN 0.8.10 G1): the visitor's own; without one, nothing while tags wait for consent,

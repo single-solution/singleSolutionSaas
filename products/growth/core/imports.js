@@ -45,7 +45,7 @@ const oneOf = (values) => (/** @type {string} */ key) => values.includes(key);
  * check) and whether they keep a sum.
  * @type {Readonly<Record<string, { keys: string, key: (key: string) => boolean, sum: boolean }>>}
  */
-export const METRICS = Object.freeze({
+const METRICS = Object.freeze({
 	visits: { keys: 'only the empty key ""', key: isEmpty, sum: false },
 	page_views: { keys: 'only the empty key ""', key: isEmpty, sum: false },
 	sessions: { keys: 'only the empty key ""', key: isEmpty, sum: false },

@@ -23,7 +23,7 @@ and no raw events are made.
   `vital` and the rest), with keys of the form Growth writes, a whole count of 0 or more and a finite sum (only
   `revenue`, `duration`, `vital_value` and `vital_page` keep sums). Unknown fields are refused by name.
 - A day is one document of the daily totals, found by `day` and `part`: a re-imported day replaces it, so totals Growth
-  recorded live for that day before the import are replaced too. The older `daily` rows are never written.
+  recorded live for that day before the import are replaced too.
 - `POST /v1/import/totals/prune` with `{ "keep": [{ "day", "part" }, …] }` removes imported days the source no longer
   has (days counted live are never removed); `POST /v1/import/finish` has nothing to derive; `GET /v1/import/status`
   answers the counts and the sums `ss-import verify` compares (`days`, `visits`, `page_views`). The analytics report

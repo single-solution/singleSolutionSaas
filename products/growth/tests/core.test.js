@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PRESETS, buildReport, dayStart, daysOf, lastDays, presetRange, rangeOf, topOf } from '../core/analytics.js';
+import { PRESETS, buildReport, dayStart, daysOf, presetRange, rangeOf, topOf } from '../core/analytics.js';
 import {
 	adminSettings,
 	hiddenPagesOf,
@@ -253,7 +253,6 @@ describe('analytics report', () => {
 		expect(dayOf(lateEvening, 'Not/AZone')).toBe('2026-10-08');
 		expect(rangeOf({}, lateEvening, 'Asia/Karachi')).toEqual({ ok: true, from: '2026-09-10', to: '2026-10-09' });
 		expect(rangeOf({}, Date.parse('2026-10-08T03:00:00Z'), 'America/Los_Angeles')).toMatchObject({ to: '2026-10-07' });
-		expect(lastDays(lateEvening, 'Asia/Karachi')).toEqual({ from: '2026-09-10', to: '2026-10-09' });
 		expect(new Date(dayStart('2026-10-09', 'Asia/Karachi')).toISOString()).toBe('2026-10-08T19:00:00.000Z');
 		expect(dayStart('2026-13-01', 'UTC')).toBeNaN();
 	});

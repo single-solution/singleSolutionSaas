@@ -1,7 +1,7 @@
 /**
  * Merchant database operations per page view (RT-2): MongoDB Atlas's free tier allows about 100 operations a second
  * for the whole cluster, so each batch the page script sends costs one insert of its raw events and one update of the
- * day's totals, whatever it holds; reading the analytics answers the same report as before.
+ * day's totals, whatever it holds; the analytics report reads a day's parts as one.
  */
 import { BSON } from 'mongodb';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -126,26 +126,5 @@ describe('the day’s totals (RT-2)', () => {
 		const answer = await env.collect([{ type: 'page_view', path: '/', visit: false }]);
 		expect(answer.status).toBe(500);
 		expect(await db.collection('ss_growth_totals').countDocuments({ day: '2026-10-04' })).toBe(1);
-	});
-
-	it('still reads the daily totals of earlier versions, added to the day’s documents', async () => {
-		const db = await env.merchantDb();
-		const row = { websiteId: env.websiteId, day: '2026-10-02', sum: 0 };
-		await db.collection('ss_growth_daily').insertMany([
-			{ ...row, metric: 'page_views', key: '', count: 4 },
-			{ ...row, metric: 'visits', key: '', count: 3 },
-			{ ...row, metric: 'page', key: '/p/case.v2.html', count: 4 },
-			{ ...row, metric: 'vital_value', key: 'LCP', count: 1, sum: 2000 },
-			{ ...row, day: '2026-09-30', metric: 'page_views', key: '', count: 7 },
-		]);
-		const report = await (await env.call('GET', '/v1/analytics?from=2026-09-30&to=2026-10-02', { token: env.server })).json();
-		expect(report.days).toEqual([
-			{ day: '2026-09-30', visits: 0, pageViews: 7 },
-			{ day: '2026-10-01', visits: 1, pageViews: 2 },
-			{ day: '2026-10-02', visits: 3, pageViews: 5 },
-		]);
-		expect(report.pages[0]).toEqual({ key: '/p/case.v2.html', count: 5 });
-		// the earlier LCP of 300 ms and the kept one of 2000 ms
-		expect(report.vitals[0]).toMatchObject({ name: 'LCP', count: 2, average: 1150 });
 	});
 });
