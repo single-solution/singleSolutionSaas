@@ -30,8 +30,8 @@
 			"type": "string",
 			"title": "Also alert Accounts staff who can",
 			"default": "",
-			"enum": ["", "inbox.reply"],
-			"description": "inbox.reply: every unblocked Accounts user whose role may reply in the inbox (needs the Accounts token). Empty = only the list above."
+			"enum": ["", "inbox.reply", "all_staff"],
+			"description": "inbox.reply: every unblocked Accounts user whose role may reply in the inbox; all_staff: every unblocked Accounts user whose role may see the inbox (inbox.read). Both need the Accounts token. Empty = only the list above."
 		},
 		"phoneChannel": {
 			"type": "string",

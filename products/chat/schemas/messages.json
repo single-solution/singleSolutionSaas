@@ -1,0 +1,85 @@
+{
+	"messages": [
+		{
+			"key": "chat.staff_cost_alert",
+			"name": "AI usage alert",
+			"description": "Tells the staff once a month when the assistant's AI tokens pass the alert share of the monthly cap.",
+			"values": ["used", "cap", "percent", "business"],
+			"required": true,
+			"channels": {
+				"email": {
+					"subject": "The chat assistant used {percent}% of its AI tokens",
+					"text": "The chat assistant of {business} has used {used} of this month's {cap} AI tokens, more than the {percent}% set for this alert. When the cap is reached, AI replies stop until the month ends."
+				},
+				"sms": {
+					"text": "{business} chat: {used} of this month's {cap} AI tokens used (over {percent}%)."
+				},
+				"whatsapp": null
+			}
+		},
+		{
+			"key": "chat.staff_needs_you",
+			"name": "Chat needs you",
+			"description": "Tells the staff when a visitor asks for a person (handoff).",
+			"values": ["visitor", "name", "phone", "preview", "message", "link", "conversationId", "business"],
+			"required": true,
+			"channels": {
+				"email": {
+					"subject": "Chat needs you: {visitor}",
+					"text": "{visitor} asked for a person on {business}.{?message}\n\n{message}{/message}{?phone}\n\nPhone: {phone}{/phone}{?link}\n\nOpen the conversation: {link}{/link}"
+				},
+				"sms": {
+					"text": "{visitor} needs a person on the {business} chat: {preview}{?link} {link}{/link}"
+				},
+				"whatsapp": null
+			}
+		},
+		{
+			"key": "chat.staff_new_message",
+			"name": "New chat message",
+			"description": "Tells the staff about a visitor's message: the first unanswered one, or every one (the staff alert setting).",
+			"values": ["visitor", "name", "phone", "preview", "message", "link", "conversationId", "business"],
+			"required": true,
+			"channels": {
+				"email": {
+					"subject": "New chat message from {visitor}",
+					"text": "{visitor} wrote on {business}:{?message}\n\n{message}{/message}{?phone}\n\nPhone: {phone}{/phone}{?link}\n\nOpen the conversation: {link}{/link}"
+				},
+				"sms": {
+					"text": "New chat from {visitor}: {preview}{?link} {link}{/link}"
+				},
+				"whatsapp": null
+			}
+		},
+		{
+			"key": "chat.staff_reply",
+			"name": "Reply alert to the visitor",
+			"description": "Tells a visitor who left the chat that the staff replied.",
+			"values": ["name", "staff", "preview", "link", "business"],
+			"channels": {
+				"email": {
+					"subject": "{staff} replied to your chat with {business}",
+					"text": "Hello{?name} {name}{/name},\n\n{staff} replied: {preview}{?link}\n\nContinue the chat: {link}{/link}\n\nTo stop these emails: {unsubscribeUrl}"
+				},
+				"sms": {
+					"text": "{staff} replied to your chat with {business}: {preview}{?link} {link}{/link}"
+				},
+				"whatsapp": null
+			}
+		},
+		{
+			"key": "chat.transcript",
+			"name": "Chat transcript",
+			"description": "The transcript a visitor asks for, by email.",
+			"values": ["transcript", "date", "business"],
+			"required": true,
+			"urgent": true,
+			"channels": {
+				"email": {
+					"subject": "Your chat with {business}",
+					"text": "Here is your chat with {business} from {date}:\n\n{transcript}"
+				}
+			}
+		}
+	]
+}

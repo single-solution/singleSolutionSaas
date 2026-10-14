@@ -56,6 +56,7 @@ import visitorAlerts from '../schemas/visitor_alerts.settings.json' with { type:
 import visitorChat from '../schemas/visitor_chat.settings.json' with { type: 'json' };
 import webhookTools from '../schemas/webhook_tools.settings.json' with { type: 'json' };
 import importSettings from '../schemas/import.settings.json' with { type: 'json' };
+import messages from '../schemas/messages.json' with { type: 'json' };
 import { createAi } from './ai.js';
 import { createFileSigner, createSealer } from './crypto.js';
 import { createImportOptions } from './imports.js';
@@ -176,6 +177,9 @@ export const createProductInstance = (options) => {
 		manifest,
 		strings,
 		problemCodes: PROBLEM_CODES,
+		// staff alerts, transcripts and reply alerts with their default words: every send to Notifications carries them
+		// (parity P1)
+		messages,
 		connections: {
 			storage: { label: 'Storage (S3-compatible)', kind: 'storage', neededBy: ['attachments'] },
 			ai: { label: 'AI provider', kind: 'secret', neededBy: ['ai_replies'], secretField: 'apiKey', test: ai.test },

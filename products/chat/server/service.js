@@ -76,6 +76,12 @@ const NEW_GUESTS_WINDOW_MS = 15 * 60_000;
 /** Longest transcript value Notifications accepts (characters). */
 const TRANSCRIPT_MAX = 1000;
 
+/**
+ * The permission the staff alert setting `staffPermission: all_staff` stands for: every staff member who may see the
+ * inbox (parity P1).
+ */
+export const ALL_STAFF_PERMISSION = 'inbox.read';
+
 /** @param {unknown} value */
 export const bodyOf = (value) =>
 	typeof value === 'object' && value !== null && !Array.isArray(value) ? /** @type {any} */ (value) : {};
@@ -579,6 +585,7 @@ export const createService = (product) => {
 				business: (await s.business()).name,
 			},
 			assignee: assigned?.email ? { email: assigned.email } : null,
+			allStaff: ALL_STAFF_PERMISSION,
 		});
 	};
 
@@ -692,6 +699,7 @@ export const createService = (product) => {
 				percent: Number(alertPercent),
 				business: (await s.business()).name,
 			},
+			allStaff: ALL_STAFF_PERMISSION,
 		});
 	};
 
