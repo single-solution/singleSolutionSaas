@@ -60,6 +60,14 @@ const VISITOR_WRITE = [...VISITOR_WRITE_LIMITS];
 /** Tries of taking a claim's points back while the order or its loyalty account changes meanwhile. */
 const POINTS_TRIES = 5;
 
+/**
+ * The values of the claim message `ecommerce.return_status` (`business` is added by `service.notify`); `tell` below
+ * fills exactly these, and `schemas/messages.json` declares them.
+ */
+export const RETURN_MESSAGE_VALUES = Object.freeze(
+	/** @type {const} */ (['number', 'claim', 'kind', 'status', 'reason', 'amount', 'name']),
+);
+
 /** @typedef {import('../adapters/product.js').Product} Product */
 /** @typedef {import('./service.js').Service} Service */
 /** @typedef {import('./service.js').Site} Site */
@@ -194,19 +202,21 @@ export const createReturns = (product, service) => {
 		if (!order) return;
 		const { messageChannels } = await s.values('checkout');
 		const texts = await s.texts();
+		/** Exactly {@link RETURN_MESSAGE_VALUES}. @type {Record<typeof RETURN_MESSAGE_VALUES[number], string>} */
+		const values = {
+			number: order.number,
+			claim: referenceOf(claim),
+			kind: texts[`returns.kind.${claim.kind}`] ?? claim.kind,
+			status: texts[`returns.status.${claim.status}`] ?? claim.status,
+			reason: claim.reason.slice(0, 1000),
+			amount: claim.refundAmount > 0 ? (await s.format()).money(claim.refundAmount, order.totals.currency) : '',
+			name: order.customer.name,
+		};
 		await service.notify(
 			s,
 			'ecommerce.return_status',
 			{ email: order.customer.email, phone: order.customer.phone },
-			{
-				number: order.number,
-				claim: referenceOf(claim),
-				kind: texts[`returns.kind.${claim.kind}`] ?? claim.kind,
-				status: texts[`returns.status.${claim.status}`] ?? claim.status,
-				reason: claim.reason.slice(0, 1000),
-				amount: claim.refundAmount > 0 ? (await s.format()).money(claim.refundAmount, order.totals.currency) : '',
-				name: order.customer.name,
-			},
+			values,
 			Array.isArray(messageChannels) ? messageChannels : ['email'],
 			// about the shopper's own order: required, and tried again when Notifications cannot be reached (K-17)
 			{ required: true },

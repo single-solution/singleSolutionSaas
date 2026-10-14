@@ -57,6 +57,12 @@ const NO_ID = { projection: { _id: 0 } };
 const LISTED = 100;
 
 /**
+ * The values of `ecommerce.back_in_stock` and `ecommerce.price_drop` (`business` is added by `service.notify`);
+ * `sendDue` fills exactly these, and `schemas/messages.json` declares them.
+ */
+export const STOCK_ALERT_VALUES = Object.freeze(/** @type {const} */ (['name', 'price', 'url', 'stopUrl']));
+
+/**
  * @param {Product} _product
  * @param {Service} service
  * @param {Cards} cards
@@ -131,6 +137,7 @@ export const createAlerts = (_product, service, cards) => {
 			);
 			if (taken.modifiedCount !== 1) continue;
 			const price = priceOf(item, alert.variantId) ?? item.price;
+			/** Exactly {@link STOCK_ALERT_VALUES}. @type {Record<typeof STOCK_ALERT_VALUES[number], string>} */
 			const values = {
 				name: item.name,
 				price: (await s.format()).money(price, s.currency),

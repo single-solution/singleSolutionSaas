@@ -27,7 +27,7 @@ import { ADD_TO_CART_EVENT, WIDGET_ATTRIBUTE } from '../core/widgets.js';
 import { manifest } from '../adapters/product.js';
 import { ORDER_MESSAGE_VALUES, ORDER_TEMPLATES } from './order-messages.js';
 import { BUSINESS_VALUE } from './service.js';
-import { STAFF_ALERT_EVENTS, STAFF_ALERT_LINK, STAFF_ALERT_VALUES } from './staff-alerts.js';
+import { STAFF_ALERT_EVENTS, STAFF_ALERT_LINK, STAFF_ALERT_PHONE, STAFF_ALERT_VALUES } from './staff-alerts.js';
 
 /** The API reference, rendered on the first docs request (it is the same for every request). @type {string | null} */
 let reference = null;
@@ -288,7 +288,7 @@ ${otherTemplates}
 ${para(guide.staffAlerts)}
 ${staffEvents}
 ${para(guide.staffValuesIntro)}
-${valueList([...STAFF_ALERT_VALUES, ...new Set(Object.values(STAFF_ALERT_EVENTS).flat()), STAFF_ALERT_LINK], staffHelp)}
+${valueList([...STAFF_ALERT_VALUES, ...new Set(Object.values(STAFF_ALERT_EVENTS).flat()), STAFF_ALERT_LINK, STAFF_ALERT_PHONE], staffHelp)}
 <h2 id="events">Events and webhooks</h2>
 ${para(guide.events)}
 ${eventTypes}

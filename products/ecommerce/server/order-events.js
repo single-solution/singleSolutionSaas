@@ -12,7 +12,8 @@
  *   E44's levels: a variant that counts for stock (`countsForStock`) whose units an order or a catalog write drops into
  *   1 to the catalog setting `lowStock` (`stock.low`) or to 0 (`stock.out`);
  * - staff alerts (feature `staff_alerts`, the kit's K6 rules, `server/staff-alerts.js`): the events the setting `events`
- *   lists, as `ecommerce.staff_<event>` templates to its recipients, required and saved before they are sent (K-17).
+ *   lists, as `ecommerce.staff_<event>` templates to its recipients, required and saved before they are sent (K-17);
+ *   with the setting `includePhone`, each carries the shopper's phone (`phone`).
  *
  * A failing message, event or alert never fails what triggered it (hooks never throw).
  * @module
@@ -23,7 +24,7 @@ import { notifiesOf, shopperLabelOf, statusOf } from '../core/flow.js';
 import { statusLabel } from '../core/orders.js';
 import { createOrderMessages, messageWords } from './order-messages.js';
 import { SERVER_LIMITS } from './service.js';
-import { createStaffAlerts } from './staff-alerts.js';
+import { STAFF_ALERT_PHONE, createStaffAlerts } from './staff-alerts.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
 /** @typedef {import('./service.js').Service} Service */
@@ -76,7 +77,7 @@ export const createOrderEvents = (product, service) => {
 	 */
 	const alert = async (s, event, order, extra = {}) => {
 		if (!s.has('staff_alerts')) return;
-		const { events } = await s.values('staff_alerts');
+		const { events, includePhone } = await s.values('staff_alerts');
 		if (!Array.isArray(events) || !events.includes(event)) return;
 		const { money } = await s.format();
 		await staffAlerts.send(s, {
@@ -90,6 +91,7 @@ export const createOrderEvents = (product, service) => {
 				status: statusLabel(await flowOf(s), order.status),
 				paymentMethod: (await messageWords(s)).payment(order.payment.method),
 				business: String((await s.business()).name ?? ''),
+				...(includePhone === true ? { [STAFF_ALERT_PHONE]: order.customer.phone ?? '' } : {}),
 				...extra,
 			},
 		});

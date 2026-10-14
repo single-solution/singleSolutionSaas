@@ -25,8 +25,8 @@
 			"type": "string",
 			"title": "Also alert Accounts staff who can",
 			"default": "",
-			"enum": ["", "orders.read", "orders.manage", "orders.refund", "returns.manage"],
-			"description": "Every unblocked Accounts user whose role has this Ecommerce permission (needs the Accounts token). Empty = only the list above."
+			"enum": ["", "orders.read", "orders.manage", "orders.refund", "returns.manage", "all_staff"],
+			"description": "Every unblocked Accounts user whose role has this Ecommerce permission; all_staff: every one who works with the alert's subject (orders.read for orders, returns.manage for claims). Both need the Accounts token. Empty = only the list above."
 		},
 		"phoneChannel": {
 			"type": "string",
@@ -40,6 +40,12 @@
 			"default": "",
 			"maxLength": 500,
 			"description": "With {number} and {id}, for example https://admin.shop.com/orders/{id}. Alerts link to it."
+		},
+		"includePhone": {
+			"type": "boolean",
+			"title": "Alerts carry the shopper's phone",
+			"default": false,
+			"description": "Adds the value {phone} (the phone on the order) to every staff alert."
 		}
 	}
 }

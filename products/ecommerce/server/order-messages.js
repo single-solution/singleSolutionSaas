@@ -1,8 +1,10 @@
 /**
  * Messages to the shopper about their order (PLAN 0.8.8: messages go through Notifications): the order placed, and a
  * move into a status of the order flow that sends one (its `notify`), on the channels of `messageChannels`. Template
- * keys (edited in Notifications): `ecommerce.order_placed` and `ecommerce.order_status` — or, with `statusTemplates:
- * per_status`, `ecommerce.order_status.<status key>` (PLAN 0.8.10 E32) — with the values `number`, `name`,
+ * keys (edited in Notifications; default words in `schemas/messages.json`, parity P1): `ecommerce.order_placed` and
+ * `ecommerce.order_status` — or, with `statusTemplates: per_status`, `ecommerce.order_status.<status key>` (PLAN 0.8.10
+ * E32), sent with `ecommerce.order_status` as its fallback template: the website's template for the status, else its
+ * template for the general message, else the general message's default words — with the values `number`, `name`,
  * `firstName`, `status` (the status's name for the shopper), `total` (by the website's Format, K7), `paymentMethod` and
  * `deliveryMethod` (words, not codes: the website's texts `checkout.method.<method>` and
  * `messages.delivery.<method>`, '' without delivery; K-10), `courier`, `trackingNumber`, `trackingUrl`,
@@ -83,10 +85,11 @@ const linkOf = (template, order) =>
 export const createOrderMessages = (service) => {
 	/**
 	 * @param {Site} s @param {string} template @param {OrderRecord} order @param {string} statusLabel
-	 * @param {{ cancelReason?: string, shopperNote?: string }} [extra] `cancelReason`: the words, from
-	 *   {@link messageWords}; `shopperNote`: the note staff wrote for the shopper with the move
+	 * @param {{ cancelReason?: string, shopperNote?: string, fallbackTemplate?: string }} [extra] `cancelReason`: the
+	 *   words, from {@link messageWords}; `shopperNote`: the note staff wrote for the shopper with the move;
+	 *   `fallbackTemplate`: the key used when the website has no template for `template`
 	 */
-	const send = async (s, template, order, statusLabel, { cancelReason = '', shopperNote = '' } = {}) => {
+	const send = async (s, template, order, statusLabel, { cancelReason = '', shopperNote = '', fallbackTemplate } = {}) => {
 		const { messageChannels, orderUrl, reviewUrl } = await s.values('checkout');
 		const words = await messageWords(s);
 		const shipment = order.shipment;
@@ -119,7 +122,7 @@ export const createOrderMessages = (service) => {
 			{ email: order.customer.email, phone: order.customer.phone },
 			values,
 			Array.isArray(messageChannels) ? messageChannels : ['email'],
-			{ required: true },
+			{ required: true, ...(fallbackTemplate ? { fallbackTemplate } : {}) },
 		);
 	};
 
@@ -131,15 +134,18 @@ export const createOrderMessages = (service) => {
 		placed: (s, order, statusLabel) => send(s, ORDER_TEMPLATES.placed, order, statusLabel),
 		/**
 		 * The order moved into a status; sent only when the flow says the status sends one (`notify`), with one template per
-		 * status when `statusTemplates` says so (E32).
+		 * status when `statusTemplates` says so (E32), falling back to the general one.
 		 * @param {Site} s @param {OrderRecord} order the order after the move @param {string} statusLabel the shopper's name
 		 * @param {{ cancelReason?: string, shopperNote?: string, notify: boolean }} extra `notify`: the flow's `notify`
 		 */
 		status: async (s, order, statusLabel, extra) => {
 			const { statusTemplates } = await s.values('checkout');
 			if (!extra.notify) return 'skipped';
-			const template = statusTemplates === 'per_status' ? `${ORDER_TEMPLATES.status}.${order.status}` : ORDER_TEMPLATES.status;
-			return send(s, template, order, statusLabel, extra);
+			if (statusTemplates !== 'per_status') return send(s, ORDER_TEMPLATES.status, order, statusLabel, extra);
+			return send(s, `${ORDER_TEMPLATES.status}.${order.status}`, order, statusLabel, {
+				...extra,
+				fallbackTemplate: ORDER_TEMPLATES.status,
+			});
 		},
 	});
 };

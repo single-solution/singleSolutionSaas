@@ -432,7 +432,13 @@ export const createService = (product) => {
 		product
 			.callProduct(s.websiteId, 'notifications', `/v1/messages/${message.channel}`, {
 				method: 'POST',
-				body: { template: message.template, to: message.to, values: message.values, ...(key ? { required: true } : {}) },
+				body: {
+					template: message.template,
+					...(message.fallbackTemplate ? { fallbackTemplate: message.fallbackTemplate } : {}),
+					to: message.to,
+					values: message.values,
+					...(key ? { required: true } : {}),
+				},
 				...(key ? { headers: { 'idempotency-key': `ecommerce-${key}` } } : {}),
 			})
 			.catch(() => /** @type {const} */ ({ ok: false, reason: 'unreachable' }));
@@ -499,16 +505,18 @@ export const createService = (product) => {
 	/**
 	 * Send one template through Notifications (pasted token) on each given channel the recipient has an address for.
 	 * Template keys start with `ecommerce.` (Notifications treats them as this product's events). A `required` message
-	 * (order and claim messages) goes through {@link sendRequired}. Never throws.
+	 * (order and claim messages) goes through {@link sendRequired}. A `fallbackTemplate` is the key Notifications uses
+	 * when the website has no template of its own for `template` (before the defaults of the declared message). Never
+	 * throws.
 	 * @param {Site} s
 	 * @param {string} template e.g. `ecommerce.order_placed`
 	 * @param {{ email?: string, phone?: string }} to
 	 * @param {Record<string, string | number>} values each at most 1,000 characters
 	 * @param {ReadonlyArray<'email' | 'sms' | 'whatsapp'>} channels
-	 * @param {{ required?: boolean }} [options]
+	 * @param {{ required?: boolean, fallbackTemplate?: string }} [options]
 	 * @returns {Promise<SendResult>}
 	 */
-	const notify = async (s, template, to, values, channels, { required = false } = {}) => {
+	const notify = async (s, template, to, values, channels, { required = false, fallbackTemplate } = {}) => {
 		const business = (await s.business()).name;
 		/** @type {OutboxMessage[]} */
 		const messages = channels.flatMap((channel) => {
@@ -518,6 +526,7 @@ export const createService = (product) => {
 				{
 					channel,
 					template,
+					...(fallbackTemplate ? { fallbackTemplate } : {}),
 					to: channel === 'email' ? { email: address } : { phone: address },
 					values: { ...values, [BUSINESS_VALUE]: business },
 				},

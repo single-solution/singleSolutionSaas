@@ -1,0 +1,252 @@
+{
+	"messages": [
+		{
+			"key": "ecommerce.order_placed",
+			"name": "Order placed",
+			"description": "Tells the shopper their order was placed, on the checkout setting messageChannels.",
+			"values": [
+				"number",
+				"name",
+				"firstName",
+				"status",
+				"total",
+				"paymentMethod",
+				"deliveryMethod",
+				"courier",
+				"trackingNumber",
+				"trackingUrl",
+				"trackingDetails",
+				"orderUrl",
+				"reviewUrl",
+				"cancelReason",
+				"shopperNote",
+				"business"
+			],
+			"required": true,
+			"channels": {
+				"email": {
+					"subject": "We received your order {number}",
+					"text": "Hello {firstName},\n\nThank you for your order with {business}. Your order number is {number}.\n\nTotal: {total}\nPayment: {paymentMethod}{?deliveryMethod}\nDelivery: {deliveryMethod}{/deliveryMethod}\nStatus: {status}{?orderUrl}\n\nSee your order: {orderUrl}{/orderUrl}"
+				},
+				"sms": {
+					"text": "{business}: we received your order {number} ({total}).{?orderUrl} {orderUrl}{/orderUrl}"
+				},
+				"whatsapp": null
+			}
+		},
+		{
+			"key": "ecommerce.order_status",
+			"name": "Order status",
+			"description": "Tells the shopper their order moved into a status whose notify is on. With the checkout setting statusTemplates per_status, ecommerce.order_status.<status key> is sent instead: your template for that status, else your template for this message, else these words.",
+			"values": [
+				"number",
+				"name",
+				"firstName",
+				"status",
+				"total",
+				"paymentMethod",
+				"deliveryMethod",
+				"courier",
+				"trackingNumber",
+				"trackingUrl",
+				"trackingDetails",
+				"orderUrl",
+				"reviewUrl",
+				"cancelReason",
+				"shopperNote",
+				"business"
+			],
+			"required": true,
+			"channels": {
+				"email": {
+					"subject": "Your order {number} is now {status}",
+					"text": "Hello {firstName},\n\nYour order {number} is now {status}.{?shopperNote}\n\n{shopperNote}{/shopperNote}{?cancelReason}\n\nReason: {cancelReason}{/cancelReason}{?trackingDetails}\n\nTracking: {trackingDetails}{/trackingDetails}{?orderUrl}\n\nSee your order: {orderUrl}{/orderUrl}\n\n{business}"
+				},
+				"sms": {
+					"text": "Your order {number} with {business} is now {status}.{?trackingUrl} Track it: {trackingUrl}{/trackingUrl}"
+				},
+				"whatsapp": null
+			}
+		},
+		{
+			"key": "ecommerce.return_status",
+			"name": "Claim status",
+			"description": "Tells the shopper where their return, exchange or warranty claim is: when it is made and at each staff step.",
+			"values": ["number", "claim", "kind", "status", "reason", "amount", "name", "business"],
+			"required": true,
+			"channels": {
+				"email": {
+					"subject": "Your claim {claim} is now {status}",
+					"text": "Hello {name},\n\nYour claim {claim} ({kind}) for order {number} is now {status}.{?amount}\n\nRefunded: {amount}{/amount}\n\n{business}"
+				},
+				"sms": {
+					"text": "{business}: your claim {claim} for order {number} is now {status}.{?amount} Refunded: {amount}.{/amount}"
+				},
+				"whatsapp": null
+			}
+		},
+		{
+			"key": "ecommerce.back_in_stock",
+			"name": "Back in stock",
+			"description": "Tells a shopper who set an alert that a product is back in stock, on the alerts setting channels.",
+			"values": ["name", "price", "url", "stopUrl", "business"],
+			"channels": {
+				"email": {
+					"subject": "{name} is back in stock",
+					"text": "Good news: {name} is back in stock at {business} for {price}.\n\nSee it: {url}\n\nTo stop these alerts: {stopUrl}"
+				},
+				"sms": {
+					"text": "{business}: {name} is back in stock. {url} Stop alerts: {stopUrl}"
+				},
+				"whatsapp": null
+			}
+		},
+		{
+			"key": "ecommerce.price_drop",
+			"name": "Price drop",
+			"description": "Tells a shopper who set an alert that a product's price dropped, on the alerts setting channels.",
+			"values": ["name", "price", "url", "stopUrl", "business"],
+			"channels": {
+				"email": {
+					"subject": "Price drop: {name} is now {price}",
+					"text": "Good news: the price of {name} at {business} dropped to {price}.\n\nSee it: {url}\n\nTo stop these alerts: {stopUrl}"
+				},
+				"sms": {
+					"text": "{business}: {name} is now {price}. {url} Stop alerts: {stopUrl}"
+				},
+				"whatsapp": null
+			}
+		},
+		{
+			"key": "ecommerce.staff_placed",
+			"name": "New order",
+			"description": "Tells the staff about a new order (staff alert event placed).",
+			"values": ["id", "number", "name", "total", "status", "paymentMethod", "business", "link", "phone"],
+			"required": true,
+			"channels": {
+				"email": {
+					"subject": "New order {number}: {total}",
+					"text": "{name} placed order {number} on {business}.\n\nTotal: {total}\nPayment: {paymentMethod}\nStatus: {status}{?phone}\nPhone: {phone}{/phone}{?link}\n\nOpen the order: {link}{/link}"
+				},
+				"sms": {
+					"text": "New order {number} from {name}: {total} ({paymentMethod}).{?link} {link}{/link}"
+				},
+				"whatsapp": null
+			}
+		},
+		{
+			"key": "ecommerce.staff_status",
+			"name": "Order moved",
+			"description": "Tells the staff an order moved into another status, other than a cancel (staff alert event status).",
+			"values": ["id", "number", "name", "total", "status", "paymentMethod", "business", "from", "link", "phone"],
+			"required": true,
+			"channels": {
+				"email": {
+					"subject": "Order {number} is now {status}",
+					"text": "Order {number} from {name} moved from {from} to {status}.\n\nTotal: {total}\nPayment: {paymentMethod}{?phone}\nPhone: {phone}{/phone}{?link}\n\nOpen the order: {link}{/link}"
+				},
+				"sms": {
+					"text": "Order {number} moved from {from} to {status}.{?link} {link}{/link}"
+				},
+				"whatsapp": null
+			}
+		},
+		{
+			"key": "ecommerce.staff_paid",
+			"name": "Order paid",
+			"description": "Tells the staff an order became paid (staff alert event paid).",
+			"values": ["id", "number", "name", "total", "status", "paymentMethod", "business", "link", "phone"],
+			"required": true,
+			"channels": {
+				"email": {
+					"subject": "Order {number} is paid",
+					"text": "Order {number} from {name} is paid: {total} ({paymentMethod}).\n\nStatus: {status}{?phone}\nPhone: {phone}{/phone}{?link}\n\nOpen the order: {link}{/link}"
+				},
+				"sms": {
+					"text": "Order {number} is paid: {total} ({paymentMethod}).{?link} {link}{/link}"
+				},
+				"whatsapp": null
+			}
+		},
+		{
+			"key": "ecommerce.staff_proof_uploaded",
+			"name": "Transfer proof sent",
+			"description": "Tells the staff a shopper sent the proof of a bank transfer (staff alert event proof_uploaded).",
+			"values": ["id", "number", "name", "total", "status", "paymentMethod", "business", "reference", "link", "phone"],
+			"required": true,
+			"channels": {
+				"email": {
+					"subject": "Transfer proof for order {number}",
+					"text": "{name} sent the bank transfer proof for order {number} ({total}).{?reference}\n\nReference: {reference}{/reference}{?phone}\nPhone: {phone}{/phone}{?link}\n\nCheck the payment: {link}{/link}"
+				},
+				"sms": {
+					"text": "Transfer proof for order {number} ({total}).{?reference} Reference: {reference}.{/reference}{?link} {link}{/link}"
+				},
+				"whatsapp": null
+			}
+		},
+		{
+			"key": "ecommerce.staff_cancelled",
+			"name": "Order canceled",
+			"description": "Tells the staff that they or the shopper canceled an order (staff alert event cancelled).",
+			"values": ["id", "number", "name", "total", "status", "paymentMethod", "business", "reason", "link", "phone"],
+			"required": true,
+			"channels": {
+				"email": {
+					"subject": "Order {number} was canceled",
+					"text": "Order {number} from {name} ({total}) was canceled.{?reason}\n\nReason: {reason}{/reason}{?phone}\nPhone: {phone}{/phone}{?link}\n\nOpen the order: {link}{/link}"
+				},
+				"sms": {
+					"text": "Order {number} ({total}) was canceled.{?reason} {reason}{/reason}{?link} {link}{/link}"
+				},
+				"whatsapp": null
+			}
+		},
+		{
+			"key": "ecommerce.staff_expired",
+			"name": "Order canceled: time ran out",
+			"description": "Tells the staff an order was canceled because its time to pay or to be confirmed ended (staff alert event expired).",
+			"values": ["id", "number", "name", "total", "status", "paymentMethod", "business", "reason", "link", "phone"],
+			"required": true,
+			"channels": {
+				"email": {
+					"subject": "Order {number} was canceled: time ran out",
+					"text": "Order {number} from {name} ({total}) was canceled because its time to pay or to be confirmed ended.{?reason}\n\nReason: {reason}{/reason}{?phone}\nPhone: {phone}{/phone}{?link}\n\nOpen the order: {link}{/link}"
+				},
+				"sms": {
+					"text": "Order {number} ({total}) was canceled{?reason}: {reason}{/reason}.{?link} {link}{/link}"
+				},
+				"whatsapp": null
+			}
+		},
+		{
+			"key": "ecommerce.staff_return_requested",
+			"name": "New claim",
+			"description": "Tells the staff a shopper made a return, exchange or warranty claim (staff alert event return_requested).",
+			"values": [
+				"id",
+				"number",
+				"name",
+				"total",
+				"status",
+				"paymentMethod",
+				"business",
+				"claimId",
+				"reference",
+				"link",
+				"phone"
+			],
+			"required": true,
+			"channels": {
+				"email": {
+					"subject": "New claim {reference} for order {number}",
+					"text": "{name} made a claim ({reference}) for order {number}.{?phone}\nPhone: {phone}{/phone}{?link}\n\nOpen the order: {link}{/link}"
+				},
+				"sms": {
+					"text": "New claim {reference} for order {number} from {name}.{?link} {link}{/link}"
+				},
+				"whatsapp": null
+			}
+		}
+	]
+}

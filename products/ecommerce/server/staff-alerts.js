@@ -4,8 +4,10 @@
  * Notifications cannot be reached). Recipients and the link follow the kit's staff-alert rules: the feature's
  * `recipients` setting (e-mail addresses, and international phone numbers that get WhatsApp, or SMS with
  * `phoneChannel: sms`; at most 20), plus every unblocked Accounts user whose role grants `staffPermission` (asked
- * through the pasted Accounts token, kept 5 minutes on this instance); the template is `ecommerce.staff_<event>`, and
- * `adminUrl` filled from the values is sent as `link`.
+ * through the pasted Accounts token, kept 5 minutes on this instance) — `all_staff` stands for the permission of each
+ * alert's own work ({@link ALL_STAFF_PERMISSIONS}: `orders.read` for orders, `returns.manage` for claims); the
+ * template is `ecommerce.staff_<event>` (default words in `schemas/messages.json`, parity P1), and `adminUrl` filled
+ * from the values is sent as `link`. With `includePhone` on, an alert also carries the shopper's phone as `phone`.
  * @module
  */
 import { formatText } from '@ss/app-kit';
@@ -45,10 +47,30 @@ export const STAFF_ALERT_EVENTS = Object.freeze({
 });
 /** The value the link to the order in the merchant's admin goes as (the setting `adminUrl` filled in), when it is set. */
 export const STAFF_ALERT_LINK = 'link';
+/** The value the shopper's phone on the order goes as, with the setting `includePhone` on. */
+export const STAFF_ALERT_PHONE = 'phone';
+
+/** The `staffPermission` value that alerts every staff member who works with the alert's subject. */
+export const ALL_STAFF = 'all_staff';
+/**
+ * The permission `staffPermission: all_staff` stands for, per event: every staff member who may see orders, and for a
+ * claim every one who handles claims.
+ */
+export const ALL_STAFF_PERMISSIONS = Object.freeze(
+	/** @type {Record<keyof typeof STAFF_ALERT_EVENTS, string>} */ ({
+		placed: 'orders.read',
+		status: 'orders.read',
+		paid: 'orders.read',
+		proof_uploaded: 'orders.read',
+		cancelled: 'orders.read',
+		expired: 'orders.read',
+		return_requested: 'returns.manage',
+	}),
+);
 
 /**
  * The values a staff alert may carry: a value not listed above fails the type check of the code that sends it.
- * @typedef {{ [key in typeof STAFF_ALERT_VALUES[number] | typeof STAFF_ALERT_EVENTS[keyof typeof STAFF_ALERT_EVENTS][number]]?: string | number }} StaffAlertValues
+ * @typedef {{ [key in typeof STAFF_ALERT_VALUES[number] | typeof STAFF_ALERT_EVENTS[keyof typeof STAFF_ALERT_EVENTS][number] | typeof STAFF_ALERT_PHONE]?: string | number }} StaffAlertValues
  */
 
 /**
@@ -110,7 +132,9 @@ export const createStaffAlerts = (product, service) => {
 		if (!EVENT.test(event)) return 0;
 		const own = await s.values(feature);
 		const listed = Array.isArray(own.recipients) ? own.recipients.slice(0, MAX_RECIPIENTS) : [];
-		const permission = typeof own.staffPermission === 'string' ? own.staffPermission : '';
+		const chosen = typeof own.staffPermission === 'string' ? own.staffPermission : '';
+		const byEvent = /** @type {Readonly<Record<string, string>>} */ (ALL_STAFF_PERMISSIONS);
+		const permission = chosen === ALL_STAFF ? (byEvent[event] ?? ALL_STAFF_PERMISSIONS.placed) : chosen;
 		const staff = permission !== '' && PERMISSION.test(permission) ? await staffWith(s, `ecommerce:${permission}`) : [];
 		/** @type {Map<string, { email: string } | { phone: string }>} */
 		const to = new Map();

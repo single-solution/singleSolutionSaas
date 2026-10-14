@@ -12,7 +12,7 @@ import { escape, featuresOf, operationOf, operations, renderDocs } from '../serv
 import { ORDER_MESSAGE_VALUES, ORDER_TEMPLATES } from '../server/order-messages.js';
 import { createRoutes } from '../server/routes.js';
 import { BUSINESS_VALUE } from '../server/service.js';
-import { STAFF_ALERT_EVENTS, STAFF_ALERT_LINK, STAFF_ALERT_VALUES } from '../server/staff-alerts.js';
+import { STAFF_ALERT_EVENTS, STAFF_ALERT_LINK, STAFF_ALERT_PHONE, STAFF_ALERT_VALUES } from '../server/staff-alerts.js';
 import { DEFAULT_FLOW } from '../core/flow.js';
 import { GROWTH_EVENTS } from '../core/growth-events.js';
 import { SEARCH_INDEX_DEFINITION } from '../core/search.js';
@@ -368,7 +368,7 @@ describe('the messages, staff alerts and events the code sends', () => {
 			expect(listed(messagesPart, key), key).toBe(true);
 		}
 		expect(Object.keys(messageHelp).sort()).toEqual([...ORDER_MESSAGE_VALUES, BUSINESS_VALUE].sort());
-		const staffKeys = [...STAFF_ALERT_VALUES, ...Object.values(STAFF_ALERT_EVENTS).flat(), STAFF_ALERT_LINK];
+		const staffKeys = [...STAFF_ALERT_VALUES, ...Object.values(STAFF_ALERT_EVENTS).flat(), STAFF_ALERT_LINK, STAFF_ALERT_PHONE];
 		for (const key of staffKeys) {
 			expect(staffHelp[key], key).toBeTruthy();
 			expect(listed(staffPart, key), key).toBe(true);

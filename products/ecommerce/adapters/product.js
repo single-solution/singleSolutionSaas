@@ -3,7 +3,8 @@
  * manifest (each feature's settings schema from `schemas/` inline), its widget texts, its Connections (storage, the
  * Accounts, Payments, Notifications and Growth tokens, courier keys and the AI key), the merchant database indexes of every
  * part, the data-rights and widget-config hooks (filled in by `server/routes.js`), the Owner's Re-seal of the deal-lock
- * secrets (sealed with `ENCRYPTION_KEY`, RT-14), and adds the list settings (product
+ * secrets (sealed with `ENCRYPTION_KEY`, RT-14), the messages it sends through Notifications with their US-English
+ * default words (`schemas/messages.json`, parity P1), and adds the list settings (product
  * database; also served to the merchant's server by the kit's `GET|PUT /v1/lists/:list`, PLAN 0.8.10 K1), the courier
  * APIs and the AI provider on the same outbound policy. The Next.js route and the tests pass the rest (config, store,
  * clock, network). Public entry `./product` of this package, so a system test can compose the product with `./routes`.
@@ -48,6 +49,7 @@ import feedsSettings from '../schemas/feeds.settings.json' with { type: 'json' }
 import aiCopySettings from '../schemas/ai_copy.settings.json' with { type: 'json' };
 import llmsTxtSettings from '../schemas/llms_txt.settings.json' with { type: 'json' };
 import importSettings from '../schemas/import.settings.json' with { type: 'json' };
+import messages from '../schemas/messages.json' with { type: 'json' };
 import { flowChangeProblems } from '../core/flow.js';
 import { createAi } from './ai.js';
 import { INDEXES as CATALOG_INDEXES, upgradeDatabase } from './catalog-store.js';
@@ -249,6 +251,9 @@ export const createProductInstance = (options) => {
 		manifest,
 		strings,
 		problemCodes: PROBLEM_CODES,
+		// order, claim and stock messages and staff alerts with their default words: every send to Notifications carries
+		// them (parity P1)
+		messages,
 		connections: {
 			storage: {
 				label: 'Storage for product images, downloads and return photos (S3-compatible)',

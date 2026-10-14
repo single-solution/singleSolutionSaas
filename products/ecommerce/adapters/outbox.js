@@ -12,9 +12,10 @@ import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 /** @typedef {import('@ss/app-kit').WebsiteData} WebsiteData */
 
 /**
- * One message to send.
- * @typedef {{ channel: 'email' | 'sms' | 'whatsapp', template: string, to: { email: string } | { phone: string },
- *   values: Record<string, string | number> }} OutboxMessage
+ * One message to send; `fallbackTemplate`: the key Notifications uses when the website has no template of its own for
+ * `template` (a per-status order message falls back to the general one).
+ * @typedef {{ channel: 'email' | 'sms' | 'whatsapp', template: string, fallbackTemplate?: string,
+ *   to: { email: string } | { phone: string }, values: Record<string, string | number> }} OutboxMessage
  */
 
 /**
