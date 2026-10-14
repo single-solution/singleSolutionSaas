@@ -1,9 +1,11 @@
 /**
  * Landing pages (PLAN 0.8.10 E15): a category, brand and grade combination (at least one of them) with its own heading,
  * title, description, introduction and FAQs, indexed by search engines as `indexable` says (`auto`: while at least
- * `landingMinProducts` of its products are in stock, judged on read). Its address is the `landing_pages` setting
- * `landingUrl` with `{categoryUrl}`, `{category}`, `{brand}` and `{grade}`; query pairs with an empty value are left
- * out. No I/O.
+ * `landingMinProducts` of its products and `autoMinInStockVariants` of their variants are in stock, judged on read;
+ * SG-10). Automatic landing pages (E43, the `landing_pages` setting `auto`): every category and brand (and grade)
+ * combination with at least `autoMinProducts` products and `autoMinInStockVariants` variants in stock is a landing
+ * page without a stored record (a stored one wins). Its address is the `landing_pages` setting `landingUrl` with
+ * `{categoryUrl}`, `{category}`, `{brand}` and `{grade}`; query pairs with an empty value are left out. No I/O.
  * @module
  */
 import { cleanText, isObject } from './catalog.js';
@@ -74,14 +76,128 @@ export const checkLanding = (body, existing) => {
 };
 
 /**
- * Whether search engines index a landing page: `yes`, `no`, or with `auto` while at least `minimum` of its products are
- * in stock.
- * @param {Pick<LandingRecord, 'indexable'>} landing
- * @param {number} inStock its products in stock
- * @param {number} minimum the `landingMinProducts` setting
+ * What a combination has in stock: products (each once), variants, and the lowest price of those variants (null
+ * without any).
+ * @typedef {{ products: number, variants: number, minPrice: number | null }} ComboStock
  */
-export const isIndexable = (landing, inStock, minimum) =>
-	landing.indexable === 'yes' || (landing.indexable === 'auto' && inStock >= minimum);
+
+/** @typedef {{ categoryId: string | null, brandId: string | null, grade: string | null }} Combination */
+
+/** Nothing in stock. @type {Readonly<ComboStock>} */
+export const NO_STOCK = Object.freeze({ products: 0, variants: 0, minPrice: null });
+
+/**
+ * Whether search engines index a landing page: `yes`, `no`, or with `auto` while at least `minProducts` of its
+ * products and `minVariants` of their variants are in stock (SG-10).
+ * @param {Pick<LandingRecord, 'indexable'>} landing
+ * @param {Pick<ComboStock, 'products' | 'variants'>} stock
+ * @param {{ minProducts: number, minVariants: number }} minimum the `landingMinProducts` (stored pages) or
+ *   `autoMinProducts` (automatic ones) and `autoMinInStockVariants` settings
+ */
+export const isIndexable = (landing, stock, { minProducts, minVariants }) =>
+	landing.indexable === 'yes' ||
+	(landing.indexable === 'auto' && stock.products >= minProducts && stock.variants >= minVariants);
+
+/** The `landing_pages` setting `auto` (E43). */
+export const AUTO_MODES = Object.freeze(/** @type {const} */ (['off', 'category_brand', 'category_brand_grade']));
+
+/**
+ * Whether a combination is one the `auto` setting makes automatic landing pages of (E43): a category and a brand, and
+ * with `category_brand_grade` also a grade.
+ * @param {unknown} mode the `landing_pages` setting `auto`
+ * @param {Combination} combination
+ */
+export const isAutomatic = (mode, { categoryId, brandId, grade }) =>
+	(mode === 'category_brand' || mode === 'category_brand_grade') &&
+	Boolean(categoryId) &&
+	Boolean(brandId) &&
+	(grade === null || mode === 'category_brand_grade');
+
+/**
+ * A combination's key in a {@link comboStock} table.
+ * @param {Combination} combination
+ */
+export const comboKey = ({ categoryId, brandId, grade }) => `${categoryId ?? ''}|${brandId ?? ''}|${grade ?? ''}`;
+
+/**
+ * The stock of every category (with those above it), brand and grade combination at once (E43, SG-10), from rows of
+ * the in-stock variants grouped by product and grade (`{ _id: { p, g }, c: categoryIds, b: brandId, n, min }`): a
+ * product counts once in each combination, its variants of the grade (or all, without one) are added up.
+ * @param {ReadonlyArray<any>} rows
+ * @param {(categoryId: string) => string[]} above the ids of the categories above one
+ * @returns {Map<string, ComboStock>}
+ */
+export const comboStock = (rows, above) => {
+	/** @type {Map<string, { products: Set<string>, variants: number, minPrice: number | null }>} */
+	const table = new Map();
+	for (const row of rows) {
+		/** @type {string[]} */
+		const own = Array.isArray(row.c) ? row.c.map(String) : [];
+		const categories = [null, ...new Set(own.flatMap((id) => [id, ...above(id)]))];
+		const brands = row.b ? [null, String(row.b)] : [null];
+		const grades = row._id?.g ? [null, String(row._id.g)] : [null];
+		for (const categoryId of categories)
+			for (const brandId of brands)
+				for (const grade of grades) {
+					if (categoryId === null && brandId === null && grade === null) continue;
+					const key = comboKey({ categoryId, brandId, grade });
+					const entry = table.get(key) ?? { products: new Set(), variants: 0, minPrice: null };
+					entry.products.add(String(row._id?.p));
+					entry.variants += Number(row.n);
+					const min = typeof row.min === 'number' ? row.min : null;
+					if (min !== null && (entry.minPrice === null || min < entry.minPrice)) entry.minPrice = min;
+					table.set(key, entry);
+				}
+	}
+	return new Map(
+		[...table.entries()].map(([key, entry]) => [
+			key,
+			{ products: entry.products.size, variants: entry.variants, minPrice: entry.minPrice },
+		]),
+	);
+};
+
+/**
+ * The stages after a match of in-stock products that give {@link comboStock} its rows (and, with `grade`, only that
+ * grade's variants): their sellable variants grouped by product and grade.
+ * @param {string | null} [grade]
+ */
+export const stockStages = (grade = null) => [
+	{ $unwind: '$variants' },
+	{
+		$match: {
+			'variants.active': true,
+			'variants.soldOut': { $ne: true },
+			$or: [{ trackStock: false }, { 'variants.stock': { $gt: 0 } }],
+			...(grade ? { 'variants.grade': grade } : {}),
+		},
+	},
+	{
+		$group: {
+			_id: { p: '$id', g: '$variants.grade' },
+			c: { $first: '$categoryIds' },
+			b: { $first: '$brandId' },
+			n: { $sum: 1 },
+			min: { $min: '$variants.price' },
+		},
+	},
+];
+
+/**
+ * The stock of one combination from rows of {@link stockStages} (its products already matched).
+ * @param {ReadonlyArray<any>} rows
+ * @returns {ComboStock}
+ */
+export const stockOf = (rows) => {
+	const products = new Set(rows.map((row) => String(row._id?.p)));
+	/** @type {number[]} */
+	const prices = rows.map((row) => row.min).filter((min) => typeof min === 'number');
+	return {
+		products: products.size,
+		variants: rows.reduce((sum, row) => sum + Number(row.n), 0),
+		minPrice: prices.length > 0 ? Math.min(...prices) : null,
+	};
+};
 
 /**
  * A landing page's address on the merchant's website.

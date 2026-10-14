@@ -1,6 +1,9 @@
 /**
  * Landing pages, listing SEO and glossary pages (PLAN 0.8.10 E15). Landing pages (feature `landing_pages`) are a
- * category, brand and grade combination with its own copy, for the merchant's server (`/v1/landings…`, server token)
+ * category, brand and grade combination with its own copy; with the setting `auto` (E43) every category and brand
+ * (and grade) combination with enough products and variants in stock is an automatic landing page without a record,
+ * its copy from the patterns `autoTitle` and `autoDescription` (a stored landing page wins), in the listing reads and
+ * the sitemaps (judged on read: one aggregation per read, never stored); for the merchant's server (`/v1/landings…`, server token)
  * and the catalog admin widget (`/v1/admin/landings…`, ticket with `catalog.edit`), with AI copy suggestions (with
  * `ai_copy`). `GET /v1/seo/listing` answers the heading, title, description, introduction, FAQs, canonical address,
  * JSON-LD and robots of any listing the site renders: `index` only for a category (and its pages, unless the `seo`
@@ -19,12 +22,24 @@ import { checkLandingAiRequest, landingPrompt, readSuggestions } from '../core/c
 import { siteAddress } from '../core/catalog-content.js';
 import { listOf, shopFilter } from '../core/catalog-query.js';
 import { withDescendants } from '../core/catalog-taxonomy.js';
-import { checkLanding, isIndexable, landingFor, landingLink } from '../core/landings.js';
+import {
+	NO_STOCK,
+	checkLanding,
+	comboKey,
+	comboStock,
+	isAutomatic,
+	isIndexable,
+	landingFor,
+	landingLink,
+	stockOf,
+	stockStages,
+} from '../core/landings.js';
 import { absolute } from '../core/links.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import {
 	categoryJsonLd,
 	faqJsonLd,
+	fillTemplate,
 	fillTitle,
 	metaDescription,
 	pageName,
@@ -61,6 +76,10 @@ const PATTERN_VALUES = 5;
 const MAX_LANDINGS = 2000;
 /** Products in a listing's ItemList. */
 const LIST_ITEMS = 20;
+/** Most combinations of a saved product looked at for an AI-written automatic landing page (E43). */
+const MAX_AUTO_TRIES = 5;
+/** Most rows of the stock of every combination (E43): products in stock, by grade. */
+const MAX_STOCK_ROWS = 50_000;
 /** Listing parameters that are not filters (they keep a category or landing page indexable). */
 const NOT_FILTERS = new Set(['category', 'brand', 'grade', 'page', 'limit', 'cursor']);
 
@@ -149,19 +168,100 @@ export const createLandings = (product, service, media) => {
 	};
 
 	/**
-	 * A landing page with its address, products in stock and whether it is indexed now.
-	 * @param {Site} s @param {WebsiteData} data @param {Awaited<ReturnType<typeof namesOf>>} names @param {LandingRecord} landing
+	 * What a combination has in stock (shoppers may see): its products, their sellable variants (of the grade) and the
+	 * lowest price, in one aggregation (E43, SG-10).
+	 * @param {Site} s @param {WebsiteData} data @param {Awaited<ReturnType<typeof namesOf>>} names
+	 * @param {{ categoryId: string | null, brandId: string | null, grade: string | null }} combination
 	 */
-	const viewOf = async (s, data, names, landing) => {
-		const inStock = await data
-			.collection(COLLECTIONS.products)
-			.countDocuments(await filterOf(s, names, landing, true), { limit: 1000 });
-		const { landingMinProducts } = await s.values('landing_pages');
+	const stockOfCombo = async (s, data, names, combination) =>
+		stockOf(
+			await data
+				.collection(COLLECTIONS.products)
+				.aggregate([{ $match: await filterOf(s, names, combination, true) }, ...stockStages(combination.grade)], {
+					maxTimeMS: 5000,
+				})
+				.toArray(),
+		);
+
+	/**
+	 * The stock of every combination at once (E43): one aggregation over the products in stock.
+	 * @param {Site} s @param {WebsiteData} data @param {Awaited<ReturnType<typeof namesOf>>} names
+	 */
+	const stockTable = async (s, data, names) =>
+		comboStock(
+			await data
+				.collection(COLLECTIONS.products)
+				.aggregate(
+					[
+						{ $match: await filterOf(s, names, { categoryId: null, brandId: null, grade: null }, true) },
+						...stockStages(),
+						{ $limit: MAX_STOCK_ROWS },
+					],
+					{ maxTimeMS: 10_000 },
+				)
+				.toArray(),
+			(id) => names.byCategory.get(id)?.path ?? [],
+		);
+
+	/**
+	 * The `landing_pages` settings that decide indexing (SG-10, E43): stored pages set to Automatic need
+	 * `landingMinProducts` products in stock, automatic ones `autoMinProducts`; while `auto` is on, both also need
+	 * `autoMinInStockVariants` variants in stock (off, stored pages are judged as before).
+	 * @param {Site} s
+	 */
+	const rulesOf = async (s) => {
+		const settings = await s.values('landing_pages');
+		const mode = String(settings.auto ?? 'off');
+		const minVariants = Number(settings.autoMinInStockVariants ?? 3);
+		return {
+			settings,
+			mode,
+			stored: { minProducts: Number(settings.landingMinProducts ?? 3), minVariants: mode === 'off' ? 0 : minVariants },
+			auto: { minProducts: Number(settings.autoMinProducts ?? 2), minVariants },
+		};
+	};
+
+	/**
+	 * A landing page with its address, products and variants in stock and whether it is indexed now.
+	 * @param {Site} s @param {WebsiteData} data @param {Awaited<ReturnType<typeof namesOf>>} names @param {LandingRecord} landing
+	 * @param {import('../core/landings.js').ComboStock} [known] its stock when already read
+	 */
+	const viewOf = async (s, data, names, landing, known) => {
+		const stock = known ?? (await stockOfCombo(s, data, names, landing));
+		const { stored, auto, mode } = await rulesOf(s);
+		// a page stored for a combination that is automatic is never indexed less than without it (E43)
+		const minimum = isAutomatic(mode, landing)
+			? { ...stored, minProducts: Math.min(stored.minProducts, auto.minProducts) }
+			: stored;
 		return {
 			...landing,
 			url: await urlOf(s, names, landing),
-			inStock,
-			indexed: isIndexable(landing, inStock, Number(landingMinProducts)),
+			inStock: stock.products,
+			inStockVariants: stock.variants,
+			indexed: isIndexable(landing, stock, minimum),
+		};
+	};
+
+	/**
+	 * The copy of an automatic landing page (E43): the `autoTitle` and `autoDescription` patterns with the names of its
+	 * category, brand and grade, what is in stock and its lowest price.
+	 * @param {Site} s
+	 * @param {{ category: string, brand: string, grade: string, storeName: string }} names
+	 * @param {import('../core/landings.js').ComboStock} stock
+	 */
+	const autoCopyOf = async (s, names, stock) => {
+		const [{ settings }, { money }] = await Promise.all([rulesOf(s), s.format()]);
+		const values = {
+			...names,
+			products: String(stock.products),
+			variants: String(stock.variants),
+			price: stock.minPrice === null ? '' : money(stock.minPrice, s.currency),
+		};
+		return {
+			name:
+				fillTemplate(String(settings.autoTitle ?? '{category} {brand} {grade}'), values) ||
+				[names.category, names.brand, names.grade].filter(Boolean).join(' '),
+			description: patternText(settings.autoDescription, values),
 		};
 	};
 
@@ -233,7 +333,13 @@ export const createLandings = (product, service, media) => {
 							.some((text) => String(text).toLowerCase().includes(q)),
 					)
 				: rows;
-			return { items: await Promise.all(shown.map((row) => viewOf(s, data, names, row))) };
+			// several pages: the stock of every combination in one aggregation (E43)
+			const table = shown.length > 1 ? await stockTable(s, data, names) : null;
+			return {
+				items: await Promise.all(
+					shown.map((row) => viewOf(s, data, names, row, table ? (table.get(comboKey(row)) ?? NO_STOCK) : undefined)),
+				),
+			};
 		},
 		/** @param {any} ctx */
 		read: async (ctx) => {
@@ -378,6 +484,26 @@ export const createLandings = (product, service, media) => {
 					)
 				: null;
 		const view = landing ? await viewOf(s, data, names, landing) : null;
+		const storeName = storeNameOf(settings, business);
+		// no stored page: an automatic one while the combination has enough in stock (E43)
+		const rules = await rulesOf(s);
+		const shown = category === null || !hidden.categoryIds.includes(category.id);
+		const autoStock =
+			!landing && exact && shown && s.has('landing_pages') && isAutomatic(rules.mode, combination)
+				? await stockOfCombo(s, data, names, combination)
+				: null;
+		const automatic =
+			autoStock && isIndexable({ indexable: 'auto' }, autoStock, rules.auto)
+				? {
+						url: await urlOf(s, names, combination),
+						stock: autoStock,
+						copy: await autoCopyOf(
+							s,
+							{ category: category?.name ?? '', brand: brand?.name ?? '', grade: grade?.label ?? '', storeName },
+							autoStock,
+						),
+					}
+				: null;
 		const categoryIndexable =
 			category !== null &&
 			!hidden.categoryIds.includes(category.id) &&
@@ -385,15 +511,25 @@ export const createLandings = (product, service, media) => {
 			brand === null &&
 			grade === null &&
 			exact;
-		const indexed = categoryIndexable || (view?.indexed === true && exact);
-		const pageUrl = view ? view.url : category ? await media.categoryUrl(s, category) : `https://${s.domain}/`;
-		const canonicalBase = category?.seo?.canonicalUrl && !view ? absolute(category.seo.canonicalUrl, s.domain) : pageUrl;
+		const indexed = categoryIndexable || (view?.indexed === true && exact) || automatic !== null;
+		const pageUrl = view
+			? view.url
+			: automatic
+				? automatic.url
+				: category
+					? await media.categoryUrl(s, category)
+					: `https://${s.domain}/`;
+		const canonicalBase =
+			category?.seo?.canonicalUrl && !view && !automatic ? absolute(category.seo.canonicalUrl, s.domain) : pageUrl;
 		// pages after the first: indexed with their own address, or not indexed with the first page as canonical (SG-21)
 		const pagedOut = page > 1 && settings.pagedListings === 'noindex';
 		const canonical =
 			page > 1 && !pagedOut ? `${canonicalBase}${canonicalBase.includes('?') ? '&' : '?'}page=${page}` : canonicalBase;
-		const h1 = landing?.h1 || [category?.name, brand?.name, grade?.label].filter(Boolean).join(' ') || business.name;
-		const storeName = storeNameOf(settings, business);
+		const h1 =
+			landing?.h1 ||
+			automatic?.copy.name ||
+			[category?.name, brand?.name, grade?.label].filter(Boolean).join(' ') ||
+			business.name;
 		// a category's own page takes the merchant's category patterns (SG-5, SG-21)
 		const own = category && !brand && !grade && !landing ? category : null;
 		const parent = own ? names.byCategory.get(own.path.at(-1) ?? '') : undefined;
@@ -401,6 +537,7 @@ export const createLandings = (product, service, media) => {
 		const title = fillTitle(String(settings.titleTemplate), {
 			name:
 				landing?.title ||
+				automatic?.copy.name ||
 				(category && !brand && !grade ? category.seo?.title : '') ||
 				(own ? pageName(settings.categoryTitle, patternNames) : '') ||
 				h1,
@@ -408,6 +545,7 @@ export const createLandings = (product, service, media) => {
 		});
 		const description = metaDescription(
 			landing?.description,
+			automatic?.copy.description,
 			category?.seo?.description,
 			own ? patternText(settings.categoryDescription, patternNames) : '',
 			category?.content?.summary,
@@ -432,7 +570,7 @@ export const createLandings = (product, service, media) => {
 			description,
 			url: canonical,
 			image: image ? absolute(image, s.domain) : null,
-			trail: await trailOf(s, data, media, category, view !== null, business.name),
+			trail: await trailOf(s, data, media, category, view !== null || automatic !== null, business.name),
 			items: await Promise.all(
 				items.map(async (row) => ({ name: String(row.name), url: await media.productUrl(s, /** @type {any} */ (row)) })),
 			),
@@ -446,7 +584,25 @@ export const createLandings = (product, service, media) => {
 			faqs,
 			canonical,
 			robots: indexed && !pagedOut ? robotsOf(category?.seo) : 'noindex, follow',
-			landing: view ? { id: view.id, url: view.url, indexed: view.indexed, inStock: view.inStock } : null,
+			landing: view
+				? {
+						id: view.id,
+						url: view.url,
+						indexed: view.indexed,
+						inStock: view.inStock,
+						inStockVariants: view.inStockVariants,
+						automatic: false,
+					}
+				: automatic
+					? {
+							id: null,
+							url: automatic.url,
+							indexed: true,
+							inStock: automatic.stock.products,
+							inStockVariants: automatic.stock.variants,
+							automatic: true,
+						}
+					: null,
 			jsonLd: scriptJson(jsonLd),
 		};
 	};
@@ -684,15 +840,110 @@ export const createLandings = (product, service, media) => {
 				.limit(MAX_LANDINGS)
 				.toArray()
 		);
+		// the stock of every combination, read once for the stored and the automatic pages (E43)
+		const [table, rules, hidden] = await Promise.all([stockTable(s, data, names), rulesOf(s), hiddenFor(s)]);
 		/** @type {Array<{ loc: string, lastmod: Date | null }>} */
 		const out = [];
 		for (const row of rows) {
 			if (row.indexable === 'no') continue;
-			const view = await viewOf(s, data, names, row);
+			const view = await viewOf(s, data, names, row, table.get(comboKey(row)) ?? NO_STOCK);
 			if (view.indexed) out.push({ loc: view.url, lastmod: row.updatedAt ?? null });
 		}
+		const stored = new Set(rows.map(comboKey));
+		if (rules.mode !== 'off')
+			for (const [key, stock] of table) {
+				if (stored.has(key)) continue;
+				const [categoryId = '', brandId = '', grade = ''] = key.split('|');
+				const combination = { categoryId: categoryId || null, brandId: brandId || null, grade: grade || null };
+				if (!isAutomatic(rules.mode, combination) || !isIndexable({ indexable: 'auto' }, stock, rules.auto)) continue;
+				if (hidden.unlisted.has(categoryId) || hidden.categoryIds.includes(categoryId)) continue;
+				out.push({ loc: await urlOf(s, names, combination), lastmod: null });
+			}
 		for (const loc of await glossaryPages(s, data, names)) out.push({ loc, lastmod: null });
 		return out;
+	};
+
+	/**
+	 * With `auto` on and `autoCopy` at `ai` (E43): when staff save a product, write the AI copy of one of its automatic
+	 * landing pages that has no record yet (its categories with its brand, and with `category_brand_grade` its grades),
+	 * kept as a landing page set to Automatic that staff can edit. One per save, after at most a few stock reads; nothing
+	 * without AI copy on and the merchant's own AI key, or when the provider gives nothing usable (the formula stays).
+	 * @param {Site} s @param {ProductRecord} item
+	 * @returns {Promise<string | null>} the new landing page's id
+	 */
+	const writeAutoLanding = async (s, item) => {
+		if (!s.has('landing_pages') || !s.has('ai_copy') || !item.brandId || item.status !== 'active') return null;
+		const rules = await rulesOf(s);
+		if (rules.mode === 'off' || rules.settings.autoCopy !== 'ai') return null;
+		const connection = await product.connections.value(s.websiteId, 'ai');
+		if (!connection) return null;
+		const data = await s.data();
+		const grades =
+			rules.mode === 'category_brand_grade'
+				? [...new Set(item.variants.filter((v) => v.active && v.grade).map((v) => /** @type {string} */ (v.grade)))]
+				: [];
+		const combinations = item.categoryIds
+			.flatMap((categoryId) =>
+				[null, ...grades].map((grade) => ({ categoryId, brandId: /** @type {string} */ (item.brandId), grade })),
+			)
+			.slice(0, MAX_AUTO_TRIES);
+		const stored = new Set(
+			(
+				await data
+					.collection(COLLECTIONS.landings)
+					.find(
+						{ websiteId: data.websiteId, $or: combinations },
+						{ projection: { _id: 0, categoryId: 1, brandId: 1, grade: 1 } },
+					)
+					.toArray()
+			).map((row) => comboKey(/** @type {any} */ (row))),
+		);
+		const hidden = await hiddenFor(s);
+		const names = await namesOf(s, data);
+		for (const combination of combinations) {
+			if (stored.has(comboKey(combination)) || hidden.categoryIds.includes(combination.categoryId)) continue;
+			if (!isIndexable({ indexable: 'auto' }, await stockOfCombo(s, data, names, combination), rules.auto)) continue;
+			if ((await data.collection(COLLECTIONS.landings).countDocuments({ websiteId: data.websiteId })) >= MAX_LANDINGS)
+				return null;
+			const settings = await s.values('ai_copy');
+			const { system, prompt, limits } = landingPrompt(
+				{
+					category: names.byCategory.get(combination.categoryId)?.name ?? null,
+					brand: names.byBrand.get(combination.brandId)?.name ?? null,
+					grade: combination.grade
+						? (names.gradesIn(combination.categoryId).get(combination.grade)?.label ?? combination.grade)
+						: null,
+					products: [item.name],
+				},
+				{
+					fields: ['h1', 'title', 'description', 'intro', 'faqs'],
+					tone: String(settings.tone ?? ''),
+					language: String(settings.language ?? ''),
+				},
+			);
+			const answer = await product.ai.write(connection, { system, prompt, maxTokens: 1500 });
+			const suggestions = answer.ok ? readSuggestions(answer.text, Object.keys(limits), limits) : null;
+			if (!suggestions) return null;
+			const checked = checkLanding({ ...combination, ...suggestions, indexable: 'auto' }, null);
+			if (!checked.ok) return null;
+			/** @type {LandingRecord} */
+			const record = { id: createId(ID_PREFIX.landing), ...checked.value };
+			const written = await data
+				.collection(COLLECTIONS.landings)
+				.insertOne({ ...record })
+				.then(() => true)
+				.catch((error) => {
+					if (isDuplicate(error)) return false;
+					throw error;
+				});
+			if (!written) return null;
+			await service.log(s.ctx, 'landing.created', record.id, {
+				label: record.h1 || record.title || record.id,
+				detail: 'Automatic landing page written with AI copy',
+			});
+			return record.id;
+		}
+		return null;
 	};
 
 	const routes = [
@@ -842,5 +1093,5 @@ export const createLandings = (product, service, media) => {
 		}),
 	];
 
-	return { routes, sitemapPages };
+	return { routes, sitemapPages, writeAutoLanding };
 };

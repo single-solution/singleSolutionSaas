@@ -5,7 +5,7 @@
 		"landingMinProducts": {
 			"type": "integer",
 			"title": "Products in stock to index",
-			"description": "A landing page set to Automatic is indexed by search engines while at least this many of its products are in stock.",
+			"description": "A landing page set to Automatic is indexed by search engines while at least this many of its products are in stock (and, while Automatic landing pages is on, at least In-stock variants to index of their variants).",
 			"default": 3,
 			"minimum": 1,
 			"maximum": 1000
@@ -16,6 +16,53 @@
 			"description": "Where a landing page is on your website: {categoryUrl} (its category's page), {category}, {brand} and {grade}, for example {categoryUrl}?brand={brand}&grade={grade}. Empty values are left out.",
 			"default": "{categoryUrl}?brand={brand}&grade={grade}",
 			"maxLength": 300
+		},
+		"auto": {
+			"type": "string",
+			"title": "Automatic landing pages",
+			"description": "Off: only the landing pages you create. Category brand: every category and brand with enough products and variants in stock is a landing page without creating it (indexed and in the sitemap; one you create wins). Category brand grade: also every category, brand and grade.",
+			"default": "off",
+			"enum": ["off", "category_brand", "category_brand_grade"]
+		},
+		"autoMinProducts": {
+			"type": "integer",
+			"title": "Products in stock for an automatic page",
+			"description": "An automatic landing page exists while at least this many of its products are in stock. A landing page you create for such a category and brand (and grade), set to Automatic, is indexed from the lower of this and Products in stock to index.",
+			"default": 2,
+			"minimum": 1,
+			"maximum": 1000
+		},
+		"autoMinInStockVariants": {
+			"type": "integer",
+			"title": "In-stock variants to index",
+			"description": "An automatic landing page is indexed only while at least this many variants of its products are in stock; while Automatic landing pages is on, so is a landing page you create set to Automatic.",
+			"default": 3,
+			"minimum": 1,
+			"maximum": 100000
+		},
+		"autoCopy": {
+			"type": "string",
+			"title": "Copy of automatic pages",
+			"description": "Formula: the automatic page title and description patterns below, from the category, brand and grade names and what is in stock. AI: when staff save a product, Ecommerce writes one of its automatic pages with your AI provider (AI copy on and its key in Connections) and keeps it as a landing page you can edit; until then, and when the provider does not answer, the formula.",
+			"default": "formula",
+			"enum": ["formula", "ai"]
+		},
+		"autoTitle": {
+			"type": "string",
+			"title": "Automatic page title",
+			"description": "An automatic landing page's heading and part of the page title: {category}, {brand} and {grade} (their names), {products} and {variants} (in stock), {price} (the lowest price in stock) and {storeName}, for example {brand} {category}.",
+			"default": "{category} {brand} {grade}",
+			"maxLength": 160
+		},
+		"autoDescription": {
+			"type": "string",
+			"title": "Automatic page description",
+			"description": "An automatic landing page's description, with the same placeholders, for example Shop {brand} {category} at {storeName}: {products} designs in stock from {price}. Empty: the category's or brand's description, as other listings.",
+			"default": "",
+			"maxLength": 500,
+			"x-ui": {
+				"widget": "textarea"
+			}
 		},
 		"attributeUrl": {
 			"type": "string",

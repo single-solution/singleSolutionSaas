@@ -101,6 +101,13 @@
 			"title": "Send changes to IndexNow",
 			"description": "When a product or category is saved, its address is sent to search engines through Growth's IndexNow (paste the Growth token in Connections).",
 			"default": false
+		},
+		"autoSeo": {
+			"type": "string",
+			"title": "SEO copy when saving",
+			"description": "On save: when staff save a product or an attribute whose SEO title, description or questions are empty, Ecommerce writes them: with your AI provider when AI copy is on and its key is in Connections, else (or when it does not answer) from the record's own data (the product and attribute title and description patterns; no questions). Off: nothing is written.",
+			"default": "off",
+			"enum": ["off", "on_save"]
 		}
 	}
 }

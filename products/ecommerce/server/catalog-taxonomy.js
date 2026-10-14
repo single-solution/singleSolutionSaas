@@ -402,7 +402,13 @@ export const createCatalogTaxonomy = (product, service, common) => {
 					throw slugClash(error);
 				});
 			await service.log(ctx, 'attribute.created', record.id, { label: record.name });
-			return created(record);
+			// SEO copy written on save (E43) is answered too
+			let saved = record;
+			await service.emit('attribute.saved', s, {
+				attribute: saved,
+				replace: (/** @type {AttributeRecord} */ next) => (saved = next),
+			});
+			return created(saved);
 		},
 		/** @param {any} ctx */
 		update: async (ctx) => {
@@ -432,7 +438,12 @@ export const createCatalogTaxonomy = (product, service, common) => {
 					throw slugClash(error);
 				});
 			await service.log(ctx, 'attribute.updated', existing.id, { label: checked.value.name });
-			return { id: existing.id, ...checked.value, slug };
+			let saved = /** @type {AttributeRecord} */ ({ id: existing.id, ...checked.value, slug });
+			await service.emit('attribute.saved', s, {
+				attribute: saved,
+				replace: (/** @type {AttributeRecord} */ next) => (saved = next),
+			});
+			return saved;
 		},
 		/** @param {any} ctx */
 		remove: async (ctx) => {

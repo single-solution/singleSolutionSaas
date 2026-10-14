@@ -182,3 +182,44 @@ export const landingPrompt = (facts, { fields, tone, language }) => {
 		.join('\n');
 	return { system, prompt, limits: LANDING_FIELDS };
 };
+
+/** What a glossary page's copy may hold (E43), with their longest lengths (FAQs: how many). */
+export const GLOSSARY_FIELDS = Object.freeze({ title: 70, description: 160, faqs: 8 });
+
+/** @typedef {keyof typeof GLOSSARY_FIELDS} GlossaryField */
+
+/** What each glossary field is, for the prompt. */
+const GLOSSARY_NOTES = Object.freeze({
+	title: '"title": a page title for search engines (at most 60 characters)',
+	description: '"description": a meta description for search engines (at most 155 characters)',
+	faqs: '"faqs": 3 to 6 questions shoppers ask about this term with short factual answers, as [{ "question", "answer" }]',
+});
+
+/**
+ * The prompt for an attribute's glossary page copy (E43): the term, its unit, its category and some of its values.
+ * @param {{ name: string, unit: string, category: string | null, values: string[] }} facts
+ * @param {{ fields: GlossaryField[], tone: string, language: string }} request
+ */
+export const glossaryPrompt = (facts, { fields, tone, language }) => {
+	const system = [
+		'You write copy for a glossary page of an online shop that explains a product attribute.',
+		'Use only the facts given; never invent specifications, prices, offers or guarantees.',
+		`Write in ${language || 'the language of the facts'}.`,
+		tone ? `Tone: ${tone}.` : '',
+		'Answer with one JSON object and nothing else.',
+	]
+		.filter(Boolean)
+		.join(' ');
+	const prompt = [
+		'Term facts:',
+		`Name: ${facts.name}`,
+		facts.unit ? `Unit: ${facts.unit}` : '',
+		facts.category ? `Category: ${facts.category}` : '',
+		facts.values.length > 0 ? `Some values: ${facts.values.slice(0, 20).join(', ')}` : '',
+		'',
+		`Write these fields: ${fields.map((field) => GLOSSARY_NOTES[field]).join('; ')}.`,
+	]
+		.filter((line, index, all) => line !== '' || all[index - 1] !== '')
+		.join('\n');
+	return { system, prompt, limits: GLOSSARY_FIELDS };
+};

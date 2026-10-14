@@ -371,10 +371,13 @@ describe('landing pages, search, grades, policies and llms-full', () => {
 			ok: true,
 			value: { categoryId: 'cat_1', brandId: null, grade: 'a', indexable: 'auto', intro: 'Line 1\nLine 2' },
 		});
-		expect(isIndexable({ indexable: 'auto' }, 3, 3)).toBe(true);
-		expect(isIndexable({ indexable: 'auto' }, 2, 3)).toBe(false);
-		expect(isIndexable({ indexable: 'yes' }, 0, 3)).toBe(true);
-		expect(isIndexable({ indexable: 'no' }, 9, 3)).toBe(false);
+		const minimum = { minProducts: 3, minVariants: 3 };
+		expect(isIndexable({ indexable: 'auto' }, { products: 3, variants: 3 }, minimum)).toBe(true);
+		expect(isIndexable({ indexable: 'auto' }, { products: 2, variants: 9 }, minimum)).toBe(false);
+		// enough products, too few variants in stock (SG-10)
+		expect(isIndexable({ indexable: 'auto' }, { products: 2, variants: 2 }, { minProducts: 2, minVariants: 3 })).toBe(false);
+		expect(isIndexable({ indexable: 'yes' }, { products: 0, variants: 0 }, minimum)).toBe(true);
+		expect(isIndexable({ indexable: 'no' }, { products: 9, variants: 9 }, minimum)).toBe(false);
 		expect(
 			landingLink('', { categoryUrl: 'https://s.example/phones', category: 'phones', brand: 'a b', grade: '' }, 's.example'),
 		).toBe('https://s.example/phones?brand=a%20b');

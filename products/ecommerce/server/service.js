@@ -107,8 +107,11 @@ const claimsOf = (token) => {
 
 /**
  * @typedef {'products.changed' | 'order.placed' | 'order.moved' | 'order.paid' | 'order.proof_uploaded'
- *   | 'order.payment_recorded' | 'order.refunded' | 'return.requested' | 'return.status_changed' | 'review.submitted'} HookName
+ *   | 'order.payment_recorded' | 'order.refunded' | 'return.requested' | 'return.status_changed' | 'review.submitted'
+ *   | 'product.saved' | 'attribute.saved'} HookName
  *   `products.changed`: `{ productIds, before: Map<id, { price, inStock }> }` after catalog writes (alerts);
+ *   `product.saved`: `{ product, replace }` and `attribute.saved`: `{ attribute, replace }` after staff create or change
+ *   one (E43: a handler may write its SEO copy and `replace` the record the route answers);
  *   `order.placed`: `{ order, statusLabel? }`; `order.moved`: `{ order, from, to, by?, reason?, note? }` (the order
  *   after the move; `note`: what staff typed with it); `order.paid`: `{ order, entry }` (`entry` null when placed already paid); `order.proof_uploaded`:
  *   `{ order, reference }`; `order.payment_recorded`: `{ order, entry }` (E26); `order.refunded`: `{ order, amount, claimId }`;

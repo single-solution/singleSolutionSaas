@@ -307,7 +307,9 @@ export const createCatalogProducts = (product, service, common) => {
 		}
 		await service.log(ctx, 'product.created', id, { label: record.name, detail: `Status: ${record.status}` });
 		await common.changed(s, [], [id]);
-		const saved = /** @type {ProductRecord} */ (await findProduct(data, id));
+		// SEO copy written on save (E43) is answered too
+		let saved = /** @type {ProductRecord} */ (await findProduct(data, id));
+		await service.emit('product.saved', s, { product: saved, replace: (/** @type {ProductRecord} */ next) => (saved = next) });
 		await announce(s, saved);
 		return created(await staffView(s, saved));
 	};
@@ -379,8 +381,11 @@ export const createCatalogProducts = (product, service, common) => {
 			...(done.before.status === done.product.status ? {} : { detail: `${done.before.status} → ${done.product.status}` }),
 		});
 		await common.changed(s, [done.before]);
-		await announce(s, done.product);
-		return staffView(s, done.product);
+		// SEO copy written on save (E43) is answered too
+		let saved = done.product;
+		await service.emit('product.saved', s, { product: saved, replace: (/** @type {ProductRecord} */ next) => (saved = next) });
+		await announce(s, saved);
+		return staffView(s, saved);
 	};
 
 	/** @param {any} ctx */

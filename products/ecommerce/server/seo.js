@@ -36,6 +36,7 @@ import {
 import { createMedia } from './catalog-media.js';
 import { hiddenFor, visible, visibleMatch } from './catalog-visibility.js';
 import { createChatLookup } from './chat-lookup.js';
+import { createAutoSeo } from './seo-auto.js';
 import { createLandings } from './seo-landings.js';
 import { policiesOf } from './policies.js';
 import { SEO_LIMITS, VISITOR_LIMITS } from './service.js';
@@ -120,6 +121,8 @@ const defaultImageOf = (settings, domain) => {
 export const createSeo = (product, service) => {
 	const media = createMedia(product);
 	const landings = createLandings(product, service, media);
+	// SEO copy written when staff save a product or an attribute (E43)
+	createAutoSeo(product, service, landings);
 
 	/**
 	 * The condition of a variant for structured data and feeds (E10), from the product's grades (its category's

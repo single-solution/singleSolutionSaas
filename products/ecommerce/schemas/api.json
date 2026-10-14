@@ -5108,6 +5108,7 @@
 				"updatedAt",
 				"url",
 				"inStock",
+				"inStockVariants",
 				"indexed"
 			],
 			"additionalProperties": false,
@@ -5161,7 +5162,7 @@
 				"indexable": {
 					"type": "string",
 					"enum": ["auto", "yes", "no"],
-					"description": "auto: indexed while at least landingMinProducts of its products are in stock."
+					"description": "auto: indexed while at least landingMinProducts of its products are in stock (and, while the setting auto is on, autoMinInStockVariants of their variants; SG-10)."
 				},
 				"createdAt": {
 					"type": "string",
@@ -5179,8 +5180,12 @@
 				"inStock": {
 					"type": "integer",
 					"minimum": 0,
-					"maximum": 1000,
-					"description": "Its products shoppers may see that are in stock (counted up to 1,000)."
+					"description": "Its products shoppers may see that are in stock."
+				},
+				"inStockVariants": {
+					"type": "integer",
+					"minimum": 0,
+					"description": "Their sellable variants in stock (of its grade, when it names one)."
 				},
 				"indexed": {
 					"type": "boolean",
@@ -5235,7 +5240,8 @@
 				"indexable": {
 					"type": "string",
 					"enum": ["auto", "yes", "no"],
-					"default": "auto"
+					"default": "auto",
+					"description": "auto (default): indexed while at least landingMinProducts of its products are in stock (and, while the setting auto is on, autoMinInStockVariants of their variants)."
 				}
 			}
 		},
@@ -10105,7 +10111,7 @@
 			"properties": {
 				"h1": {
 					"type": "string",
-					"description": "The landing page's heading, else the category, brand and grade names, else the business name."
+					"description": "The landing page's heading (an automatic one's: the setting autoTitle), else the category, brand and grade names, else the business name."
 				},
 				"title": {
 					"type": "string"
@@ -10133,13 +10139,14 @@
 				},
 				"landing": {
 					"type": ["object", "null"],
-					"description": "The landing page whose combination matches exactly (null: none).",
-					"required": ["id", "url", "indexed", "inStock"],
+					"description": "The landing page whose combination matches exactly: a stored one, else an automatic one (E43, the landing_pages setting auto) while the combination has at least autoMinProducts products and autoMinInStockVariants variants in stock; null: none.",
+					"required": ["id", "url", "indexed", "inStock", "inStockVariants", "automatic"],
 					"additionalProperties": false,
 					"properties": {
 						"id": {
-							"type": "string",
-							"pattern": "^lnd_[0-9a-z]{10,64}$"
+							"type": ["string", "null"],
+							"pattern": "^lnd_[0-9a-z]{10,64}$",
+							"description": "null for an automatic page (no record)."
 						},
 						"url": {
 							"type": "string",
@@ -10150,8 +10157,15 @@
 						},
 						"inStock": {
 							"type": "integer",
-							"minimum": 0,
-							"maximum": 1000
+							"minimum": 0
+						},
+						"inStockVariants": {
+							"type": "integer",
+							"minimum": 0
+						},
+						"automatic": {
+							"type": "boolean",
+							"description": "An automatic landing page (E43): its heading and title from the setting autoTitle, its description from autoDescription."
 						}
 					}
 				},
@@ -13994,7 +14008,7 @@
 	},
 	"POST /v1/products": {
 		"summary": "Create a product",
-		"description": "Give the variants, or the single variant's price (sku, stock …) at the top level. Photos are added afterwards (POST /v1/catalog/uploads, then POST /v1/products/:id/media). 422 validation_failed lists every field problem (for example a kind whose feature is off, an unknown category, brand, attribute, grade or location, several variants without Variants); 409 conflict when the slug or a SKU is used by another product. Send an Idempotency-Key so a retried request makes one product.",
+		"description": "Give the variants, or the single variant's price (sku, stock …) at the top level. Photos are added afterwards (POST /v1/catalog/uploads, then POST /v1/products/:id/media). 422 validation_failed lists every field problem (for example a kind whose feature is off, an unknown category, brand, attribute, grade or location, several variants without Variants); 409 conflict when the slug or a SKU is used by another product. Send an Idempotency-Key so a retried request makes one product. With the seo setting autoSeo on_save, its empty SEO title, description and FAQs are written when it is saved (E43): with your AI provider when AI copy is on and its key is in Connections, else the productTitle and productDescription patterns (no FAQs); the answer has them. With the landing_pages settings auto on and autoCopy ai, saving it also writes one of its automatic landing pages with AI copy, kept as a landing page set to auto.",
 		"body": {
 			"type": "object",
 			"required": ["name"],
@@ -14463,7 +14477,7 @@
 	},
 	"POST /v1/admin/products": {
 		"summary": "Create a product (Catalog admin widget)",
-		"description": "Give the variants, or the single variant's price (sku, stock …) at the top level. Photos are added afterwards (POST /v1/catalog/uploads, then POST /v1/products/:id/media). 422 validation_failed lists every field problem (for example a kind whose feature is off, an unknown category, brand, attribute, grade or location, several variants without Variants); 409 conflict when the slug or a SKU is used by another product. Send an Idempotency-Key so a retried request makes one product.",
+		"description": "Give the variants, or the single variant's price (sku, stock …) at the top level. Photos are added afterwards (POST /v1/catalog/uploads, then POST /v1/products/:id/media). 422 validation_failed lists every field problem (for example a kind whose feature is off, an unknown category, brand, attribute, grade or location, several variants without Variants); 409 conflict when the slug or a SKU is used by another product. Send an Idempotency-Key so a retried request makes one product. With the seo setting autoSeo on_save, its empty SEO title, description and FAQs are written when it is saved (E43): with your AI provider when AI copy is on and its key is in Connections, else the productTitle and productDescription patterns (no FAQs); the answer has them. With the landing_pages settings auto on and autoCopy ai, saving it also writes one of its automatic landing pages with AI copy, kept as a landing page set to auto.",
 		"body": {
 			"type": "object",
 			"required": ["name"],
@@ -14946,7 +14960,7 @@
 	},
 	"PATCH /v1/products/:id": {
 		"summary": "Change a product (by id or slug)",
-		"description": "Only the members given change. variants replaces the list: existing variants by id keep their stock (change stock with POST /v1/products/:id/stock), variants left out are removed. New variant photos and a new video file are checked in your storage (422 when not uploaded or not of an allowed type and size; 503 storage_not_connected). A changed slug keeps finding the product. 422 validation_failed; 404 not_found; 409 conflict when the slug or a SKU is used by another product.",
+		"description": "Only the members given change. variants replaces the list: existing variants by id keep their stock (change stock with POST /v1/products/:id/stock), variants left out are removed. New variant photos and a new video file are checked in your storage (422 when not uploaded or not of an allowed type and size; 503 storage_not_connected). A changed slug keeps finding the product. 422 validation_failed; 404 not_found; 409 conflict when the slug or a SKU is used by another product. With the seo setting autoSeo on_save, its empty SEO title, description and FAQs are written when it is saved (E43): with your AI provider when AI copy is on and its key is in Connections, else the productTitle and productDescription patterns (no FAQs); the answer has them. With the landing_pages settings auto on and autoCopy ai, saving it also writes one of its automatic landing pages with AI copy, kept as a landing page set to auto.",
 		"body": {
 			"type": "object",
 			"properties": {
@@ -15413,7 +15427,7 @@
 	},
 	"PATCH /v1/admin/products/:id": {
 		"summary": "Change a product (by id or slug) (Catalog admin widget)",
-		"description": "Only the members given change. variants replaces the list: existing variants by id keep their stock (change stock with POST /v1/products/:id/stock), variants left out are removed. New variant photos and a new video file are checked in your storage (422 when not uploaded or not of an allowed type and size; 503 storage_not_connected). A changed slug keeps finding the product. 422 validation_failed; 404 not_found; 409 conflict when the slug or a SKU is used by another product.",
+		"description": "Only the members given change. variants replaces the list: existing variants by id keep their stock (change stock with POST /v1/products/:id/stock), variants left out are removed. New variant photos and a new video file are checked in your storage (422 when not uploaded or not of an allowed type and size; 503 storage_not_connected). A changed slug keeps finding the product. 422 validation_failed; 404 not_found; 409 conflict when the slug or a SKU is used by another product. With the seo setting autoSeo on_save, its empty SEO title, description and FAQs are written when it is saved (E43): with your AI provider when AI copy is on and its key is in Connections, else the productTitle and productDescription patterns (no FAQs); the answer has them. With the landing_pages settings auto on and autoCopy ai, saving it also writes one of its automatic landing pages with AI copy, kept as a landing page set to auto.",
 		"body": {
 			"type": "object",
 			"properties": {
@@ -17357,7 +17371,7 @@
 	},
 	"POST /v1/attributes": {
 		"summary": "Create an attribute",
-		"description": "422 validation_failed lists every field problem (e.g. /choices: a choice attribute without choices, /multiple, /on, /categoryId, /categoryIds, /visibility/ids: brands that do not exist or grades not in the grades list, /visibility/attributeId); 409 conflict when another attribute for the same category (or for every category) has the slug. Send an Idempotency-Key so a retried request makes one attribute.",
+		"description": "422 validation_failed lists every field problem (e.g. /choices: a choice attribute without choices, /multiple, /on, /categoryId, /categoryIds, /visibility/ids: brands that do not exist or grades not in the grades list, /visibility/attributeId); 409 conflict when another attribute for the same category (or for every category) has the slug. Send an Idempotency-Key so a retried request makes one attribute. With the seo setting autoSeo on_save and Landing pages on, its empty glossary title, description and FAQs are written when it is saved (E43): with your AI provider when AI copy is on and its key is in Connections, else the landing_pages patterns attributeTitle and attributeDescription (no FAQs); the answer has them.",
 		"body": {
 			"type": "object",
 			"description": "Unknown members are ignored.",
@@ -17538,7 +17552,7 @@
 	},
 	"POST /v1/admin/attributes": {
 		"summary": "Create an attribute (Catalog admin widget)",
-		"description": "422 validation_failed lists every field problem (e.g. /choices: a choice attribute without choices, /multiple, /on, /categoryId, /categoryIds, /visibility/ids: brands that do not exist or grades not in the grades list, /visibility/attributeId); 409 conflict when another attribute for the same category (or for every category) has the slug. Send an Idempotency-Key so a retried request makes one attribute.",
+		"description": "422 validation_failed lists every field problem (e.g. /choices: a choice attribute without choices, /multiple, /on, /categoryId, /categoryIds, /visibility/ids: brands that do not exist or grades not in the grades list, /visibility/attributeId); 409 conflict when another attribute for the same category (or for every category) has the slug. Send an Idempotency-Key so a retried request makes one attribute. With the seo setting autoSeo on_save and Landing pages on, its empty glossary title, description and FAQs are written when it is saved (E43): with your AI provider when AI copy is on and its key is in Connections, else the landing_pages patterns attributeTitle and attributeDescription (no FAQs); the answer has them.",
 		"body": {
 			"type": "object",
 			"description": "Unknown members are ignored.",
@@ -17719,7 +17733,7 @@
 	},
 	"PATCH /v1/attributes/:id": {
 		"summary": "Change an attribute",
-		"description": "Only the members sent change. 409 conflict when products have values of it and the change is to its type, its place (on) or from several values to one; 404 not_found; 422 validation_failed lists every field problem (e.g. /choices: a choice attribute without choices, /multiple, /on, /categoryId, /categoryIds, /visibility/ids: brands that do not exist or grades not in the grades list, /visibility/attributeId); 409 conflict when another attribute for the same category (or for every category) has the slug.",
+		"description": "Only the members sent change. 409 conflict when products have values of it and the change is to its type, its place (on) or from several values to one; 404 not_found; 422 validation_failed lists every field problem (e.g. /choices: a choice attribute without choices, /multiple, /on, /categoryId, /categoryIds, /visibility/ids: brands that do not exist or grades not in the grades list, /visibility/attributeId); 409 conflict when another attribute for the same category (or for every category) has the slug. With the seo setting autoSeo on_save and Landing pages on, its empty glossary title, description and FAQs are written when it is saved (E43): with your AI provider when AI copy is on and its key is in Connections, else the landing_pages patterns attributeTitle and attributeDescription (no FAQs); the answer has them.",
 		"body": {
 			"$ref": "#/components/schemas/AttributeInput"
 		},
@@ -17729,7 +17743,7 @@
 	},
 	"PATCH /v1/admin/attributes/:id": {
 		"summary": "Change an attribute (Catalog admin widget)",
-		"description": "Only the members sent change. 409 conflict when products have values of it and the change is to its type, its place (on) or from several values to one; 404 not_found; 422 validation_failed lists every field problem (e.g. /choices: a choice attribute without choices, /multiple, /on, /categoryId, /categoryIds, /visibility/ids: brands that do not exist or grades not in the grades list, /visibility/attributeId); 409 conflict when another attribute for the same category (or for every category) has the slug.",
+		"description": "Only the members sent change. 409 conflict when products have values of it and the change is to its type, its place (on) or from several values to one; 404 not_found; 422 validation_failed lists every field problem (e.g. /choices: a choice attribute without choices, /multiple, /on, /categoryId, /categoryIds, /visibility/ids: brands that do not exist or grades not in the grades list, /visibility/attributeId); 409 conflict when another attribute for the same category (or for every category) has the slug. With the seo setting autoSeo on_save and Landing pages on, its empty glossary title, description and FAQs are written when it is saved (E43): with your AI provider when AI copy is on and its key is in Connections, else the landing_pages patterns attributeTitle and attributeDescription (no FAQs); the answer has them.",
 		"body": {
 			"$ref": "#/components/schemas/AttributeInput"
 		},
@@ -23725,7 +23739,7 @@
 	},
 	"GET /v1/landings": {
 		"summary": "The landing pages",
-		"description": "Every matching landing page by id (at most 2,000; not paged), each with its address, its products in stock and whether search engines index it now.",
+		"description": "Every matching landing page by id (at most 2,000; not paged), each with its address, its products and their variants in stock and whether search engines index it now (judged on every read). Automatic landing pages (the setting auto) have no record and are not listed.",
 		"query": {
 			"type": "object",
 			"properties": {
@@ -23817,7 +23831,7 @@
 	},
 	"GET /v1/admin/landings": {
 		"summary": "The landing pages (Catalog admin widget)",
-		"description": "Every matching landing page by id (at most 2,000; not paged), each with its address, its products in stock and whether search engines index it now.",
+		"description": "Every matching landing page by id (at most 2,000; not paged), each with its address, its products and their variants in stock and whether search engines index it now (judged on every read). Automatic landing pages (the setting auto) have no record and are not listed.",
 		"query": {
 			"type": "object",
 			"properties": {
@@ -23909,7 +23923,7 @@
 	},
 	"GET /v1/seo/listing": {
 		"summary": "The head of a listing page",
-		"description": "Pass your listing page's query as it is. robots is index (the category's own noindex and nofollow aside) only for a category without other filters (and its pages) and for a landing page that is indexed now and matches the filters exactly; any other filter, a hidden brand or a category coming soon gives noindex, follow. With the seo setting pagedListings noindex, pages 2, 3 … are noindex, follow with the first page as canonical (index: each page its own canonical, ?page=n). Title and description follow the landing page, the category's SEO fields or the seo settings' patterns, titleTemplate and defaultDescription. An earlier category slug answers moved; 404 not_found for an unknown or hidden category.",
+		"description": "Pass your listing page's query as it is. robots is index (the category's own noindex and nofollow aside) only for a category without other filters (and its pages) and for a landing page that is indexed now and matches the filters exactly (a stored one, or with the landing_pages setting auto an automatic one: a category and a brand, and with category_brand_grade also a grade, while at least autoMinProducts of its products and autoMinInStockVariants of their variants are in stock; E43); any other filter, a hidden brand or a category coming soon gives noindex, follow. With the seo setting pagedListings noindex, pages 2, 3 … are noindex, follow with the first page as canonical (index: each page its own canonical, ?page=n). Title and description follow the landing page, the category's SEO fields or the seo settings' patterns, titleTemplate and defaultDescription. An earlier category slug answers moved; 404 not_found for an unknown or hidden category.",
 		"query": {
 			"type": "object",
 			"properties": {
@@ -23987,7 +24001,7 @@
 	},
 	"GET /v1/seo/sitemap.xml": {
 		"summary": "The sitemap",
-		"description": "Answers application/xml, not JSON: a urlset (with the image extension) of the categories shoppers see, the indexable landing and glossary pages (Landing pages) and the active products shoppers may see with up to 10 images each, leaving out pages marked noindex, with lastmod. Above the seo setting sitemapSize addresses (10,000 by default) it is a sitemapindex instead, whose files are the seo setting sitemapUrl with ?file=categories, ?file=landings, ?file=products-1 … (serve each from GET /v1/seo/sitemaps/:file)."
+		"description": "Answers application/xml, not JSON: a urlset (with the image extension) of the categories shoppers see, the indexable landing pages (stored ones, and with the landing_pages setting auto the automatic ones) and glossary pages (Landing pages) and the active products shoppers may see with up to 10 images each, leaving out pages marked noindex, with lastmod. Above the seo setting sitemapSize addresses (10,000 by default) it is a sitemapindex instead, whose files are the seo setting sitemapUrl with ?file=categories, ?file=landings, ?file=products-1 … (serve each from GET /v1/seo/sitemaps/:file)."
 	},
 	"GET /v1/seo/sitemaps/:file": {
 		"summary": "One file of the sitemap index",
