@@ -407,6 +407,8 @@ describe('helpers', () => {
 		});
 		expect(summarizeList({ name: 'x' })).toEqual({ summary: 'Set', count: null });
 		expect(summarizeList(null)).toEqual({ summary: 'Set', count: null });
+		const wide = Object.fromEntries(Array.from({ length: 40 }, (_, i) => [`member_number_${i}`, [1]]));
+		expect(summarizeList(wide).summary).toHaveLength(300);
 	});
 
 	it('hides every string holding a secret, deep, and leaves the rest alone', () => {

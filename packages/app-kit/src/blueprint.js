@@ -41,6 +41,8 @@ export const SECRET_MIN_LENGTH = 8;
 export const HIDDEN = '[hidden]';
 const EVENT = /^[a-z][a-z0-9-]{1,30}(?:\.[a-z][a-z0-9_]{0,30}){1,4}$/;
 const MAX_SUMMARIES = 20;
+/** Longest list summary (the contract's limit). */
+const SUMMARY_MAX = 300;
 const SERVING = Object.freeze(['active', 'grace']);
 
 /**
@@ -80,7 +82,7 @@ export const summarizeList = (value) => {
 				.filter(([, member]) => Array.isArray(member))
 				.map(([key, member]) => `${key}: ${/** @type {unknown[]} */ (member).length}`)
 		: [];
-	return { summary: parts.length > 0 ? parts.join(', ') : 'Set', count: null };
+	return { summary: parts.length > 0 ? parts.join(', ').slice(0, SUMMARY_MAX) : 'Set', count: null };
 };
 
 /** @param {unknown} value @param {number} max */
@@ -103,7 +105,7 @@ export const checkAdditions = (answer, productId) => {
 	const keptEvents = events.filter((type) => typeof type === 'string' && EVENT.test(type) && type.startsWith(`${productId}.`));
 	if (keptEvents.length !== events.length || (given.events !== undefined && !Array.isArray(given.events)))
 		dropped.push('events');
-	const keptLists = Object.fromEntries(Object.entries(lists).filter(([, text]) => isText(text, 300)));
+	const keptLists = Object.fromEntries(Object.entries(lists).filter(([, text]) => isText(text, SUMMARY_MAX)));
 	if (Object.keys(keptLists).length !== Object.keys(lists).length || (given.lists !== undefined && !isObject(given.lists)))
 		dropped.push('lists');
 	const keptSummaries = summaries
