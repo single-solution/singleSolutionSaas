@@ -2524,7 +2524,12 @@ Notifications' `fallbackTemplate` (the website's template for the status, else i
 Order numbers follow `checkout.numberPattern` (default one running number; yearly is a choice); the default payment
 order starts with online. Imported feed ids (`feedId`, `feedGroupId`) replace the feeds' `legacy` mode. The kit makes a
 product's declared indexes the truth (`upgradeDatabase` removed). Read-time defaults are gone, the guest segment uses
-the stored `guest: true`, a video is `{ id }` only, and an order-number prefix is URL-safe (bug fixed).
+the stored `guest: true`, a video is `{ id }` only, and an order-number prefix is URL-safe (bug fixed). **Ecommerce US English and
+neutral test data (2026-10-14; 13a182eb, 91ef8e0e, 45a0eb2b, 9e304ce1, 65400ea4):** every word people read in US
+English (identifiers wait for US-2); test data neutral (USD/EUR/GBP, +1/+44 example numbers, London/Paris/Tokyo, neutral
+names and shops); test files named by feature (catalog-storefront, seo-catalog, orders-printing, orders-lists-deletes,
+e2e ecommerce-catalogs and ecommerce-orders; Chat's chat-conversations); CSV byte order mark asserted; an imported
+order's history may carry `shopperNote`.
 
 **N1. WhatsApp template buttons.** A WhatsApp template with a provider template name may list `buttons`
 (`[{ index, type: 'url' | 'copy_code', value }]`, values with placeholders such as `{code}`), which the Meta adapter
