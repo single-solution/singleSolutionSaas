@@ -220,8 +220,15 @@ describe('Setup page (jsdom)', () => {
 			expect(revokeObjectURL).toHaveBeenCalledWith('blob:setup');
 			cleanup();
 
-			// no key, and a revoked link
+			// a reload of the same tab opens it again (the key never returns to the address bar)
 			window.history.replaceState(null, '', '/shared-setup');
+			render(<SharedSetupView brand="Single Solution" />);
+			await until(() => shows('Setup of shop.example.com'));
+			expect(window.location.hash).toBe('');
+			cleanup();
+
+			// no key in this tab, and a revoked link (forgotten by the tab)
+			window.sessionStorage.clear();
 			render(<SharedSetupView brand="Single Solution" />);
 			await until(() => shows('This share link does not work'));
 			cleanup();
@@ -230,6 +237,7 @@ describe('Setup page (jsdom)', () => {
 			render(<SharedSetupView brand="Single Solution" />);
 			await until(() => shows('It may have expired or been revoked.'));
 			await settle();
+			expect(window.sessionStorage.getItem('ss-shared-setup-key')).toBeNull();
 		} finally {
 			restore();
 			await w.close();

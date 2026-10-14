@@ -959,9 +959,34 @@ export function SharedSetupView({ brand }) {
 	);
 }
 
+/** Where the shared page keeps its key for this tab only, so a reload still opens the copy. */
+const SHARED_KEY_STORE = 'ss-shared-setup-key';
+
+/**
+ * The share key: from the address fragment (then removed from the address bar), else the one this tab kept; a link
+ * that no longer works forgets it. Storage the browser refuses only loses the reload.
+ * @returns {{ key: string | null, forget: () => void }}
+ */
+const sharedKey = () => {
+	const fromAddress = takeFragmentToken('key');
+	const forget = () => {
+		try {
+			window.sessionStorage.removeItem(SHARED_KEY_STORE);
+		} catch {
+			// nothing kept
+		}
+	};
+	try {
+		if (fromAddress) window.sessionStorage.setItem(SHARED_KEY_STORE, fromAddress);
+		return { key: fromAddress ?? window.sessionStorage.getItem(SHARED_KEY_STORE), forget };
+	} catch {
+		return { key: fromAddress, forget };
+	}
+};
+
 /**
  * The shared sheet: the key comes from the address fragment (`#key=`), never a URL the server sees, and is sent in a
- * POST body.
+ * POST body; the tab keeps it so a reload still opens the copy.
  * @param {{ brand: string }} props
  */
 function SharedSetup({ brand }) {
@@ -972,14 +997,15 @@ function SharedSetup({ brand }) {
 		}),
 	);
 	useEffect(() => {
-		const key = takeFragmentToken('key');
+		const { key, forget } = sharedKey();
 		if (!key) {
 			setState({ phase: 'missing', problem: null });
 			return;
 		}
-		void apiFetch(api.sharedSetup(), { method: 'POST', body: { key }, redirectOn401: false }).then((result) =>
-			setState(result.ok ? { phase: 'ready', sheet: result.data } : { phase: 'missing', problem: result.problem }),
-		);
+		void apiFetch(api.sharedSetup(), { method: 'POST', body: { key }, redirectOn401: false }).then((result) => {
+			if (!result.ok && result.problem?.status === 404) forget();
+			setState(result.ok ? { phase: 'ready', sheet: result.data } : { phase: 'missing', problem: result.problem });
+		});
 	}, []);
 	return (
 		<main className="mx-auto max-w-6xl space-y-8 px-4 py-8 sm:px-6 sm:py-12">
