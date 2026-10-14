@@ -4,6 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_FLOW } from '../core/flow.js';
+import { MAX_NOTE } from '../core/orders.js';
 import {
 	checkImportedAlert,
 	checkImportedCustomer,
@@ -323,6 +324,37 @@ describe('orders', () => {
 			payments: [],
 		});
 		expect(valueOf(checkImportedOrder(free, RULES)).payment).toMatchObject({ state: 'paid', paid: 0 });
+	});
+
+	it('keep the note for the shopper of a history entry, as a move keeps it: trimmed, bounded, only when there is one', () => {
+		/** @param {unknown} shopperNote */
+		const noted = (shopperNote) =>
+			checkImportedOrder(
+				order({
+					history: [
+						{ at: '2026-03-01T00:00:00Z', from: null, to: 'awaiting_confirmation', by: 'shopper', note: '' },
+						{
+							at: '2026-03-04T00:00:00Z',
+							from: 'awaiting_confirmation',
+							to: 'delivered',
+							by: 'Staff',
+							note: 'Left with the neighbor',
+							shopperNote,
+						},
+					],
+				}),
+				RULES,
+			);
+		const history = valueOf(noted('  Your package is with your neighbor at number 3.  ')).history;
+		expect(history[1]).toMatchObject({
+			note: 'Left with the neighbor',
+			shopperNote: 'Your package is with your neighbor at number 3.',
+		});
+		expect(history[0]).not.toHaveProperty('shopperNote');
+		for (const none of ['', '   ', null, undefined]) expect(valueOf(noted(none)).history[1]).not.toHaveProperty('shopperNote');
+		expect(pathsOf(noted('x'.repeat(MAX_NOTE)))).toEqual([]);
+		expect(pathsOf(noted('x'.repeat(MAX_NOTE + 1)))).toEqual(['/history/1/shopperNote']);
+		expect(pathsOf(noted(42))).toEqual(['/history/1/shopperNote']);
 	});
 
 	it('take a number in the website’s form only: running or yearly, with at least its digits', () => {

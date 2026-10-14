@@ -177,7 +177,7 @@ const orders = () => [
 			step('2026-03-01T09:00:00Z', null, 'awaiting_confirmation', { by: 'shopper' }),
 			step('2026-03-01T10:00:00Z', 'awaiting_confirmation', 'confirmed'),
 			step('2026-03-02T10:00:00Z', 'confirmed', 'packed'),
-			step('2026-03-02T12:00:00Z', 'packed', 'dispatched'),
+			step('2026-03-02T12:00:00Z', 'packed', 'dispatched', { shopperNote: ' On its way with Swift Post. ' }),
 			step('2026-03-04T12:00:00Z', 'dispatched', 'delivered'),
 		],
 		payments: [{ id: idOf('opy', 1), method: 'cash', amount: 2550, note: 'Imported', at: '2026-03-04T12:00:00Z' }],
@@ -628,6 +628,18 @@ describe('import of shoppers and orders (K10)', () => {
 			customerFlags: { orderCount: 2 },
 			nextStatuses: [{ key: 'refunded' }],
 		});
+		// the note the earlier shop showed the shopper stays in their timeline (trimmed); the staff note stays internal
+		expect(read.json.history[3]).toMatchObject({ to: 'dispatched', shopperNote: 'On its way with Swift Post.' });
+		const member = await shop.signIn({ id: MEMBER, email: 'sara@example.com', phone: '+15550001111' });
+		const mine = await shop.visitor('GET', `/v1/shop/orders/${DELIVERED}`, { signIn: member });
+		expect(mine.status).toBe(200);
+		expect(mine.json.history.map((/** @type {any} */ entry) => [entry.status, entry.note])).toEqual([
+			['awaiting_confirmation', ''],
+			['confirmed', ''],
+			['packed', ''],
+			['dispatched', 'On its way with Swift Post.'],
+			['delivered', ''],
+		]);
 		const moved = await shop.api('POST', `/v1/orders/${CONFIRMED}/move`, { to: 'packed' });
 		expect(moved.status).toBe(200);
 		expect(moved.json).toMatchObject({ status: 'packed', role: 'packed', warnings: [] });

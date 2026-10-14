@@ -423,7 +423,7 @@ const PAYMENT_FIELDS = fieldList(
 const PAYMENT_ENTRY_FIELDS = fieldList('id method amount reference proofKey note by at');
 const REFUND_ENTRY_FIELDS = fieldList('id method amount reference claimId note by at refundId manual');
 const BY_FIELDS = fieldList('kind id name role email');
-const HISTORY_FIELDS = fieldList('at from to by note reason kind');
+const HISTORY_FIELDS = fieldList('at from to by note shopperNote reason kind');
 const SHIPMENT_FIELDS = fieldList('courier trackingNumber trackingUrl booked status checkedAt trackingNote estimatedDeliveryAt');
 const MEDIA_FIELDS = fieldList('kind key url at by');
 
@@ -783,12 +783,19 @@ const historyOf = (c, value, { flow, now }, status) => {
 	const out = entries.map((raw, index) => {
 		const path = `/history/${index}`;
 		const input = c.fields(raw, path, HISTORY_FIELDS, 'a history entry') ?? {};
-		return {
+		const entry = {
 			at: c.time(input.at, `${path}/at`, now),
 			from: missing(input.from) ? null : statusKey(input.from, `${path}/from`),
 			to: statusKey(input.to, `${path}/to`),
 			by: c.text(input.by, `${path}/by`, MAX_PERSON),
 			note: c.text(input.note, `${path}/note`, MAX_NOTE),
+		};
+		// the note the shopper reads in their timeline, kept as a move keeps it: trimmed, bounded like the staff note,
+		// and only when there is one
+		const shopperNote = c.text(input.shopperNote, `${path}/shopperNote`, MAX_NOTE);
+		return {
+			...entry,
+			...(shopperNote ? { shopperNote } : {}),
 			...(missing(input.reason) ? {} : { reason: c.oneOf(input.reason, MOVE_REASONS, `${path}/reason`) }),
 			...(missing(input.kind) ? {} : { kind: c.oneOf(input.kind, ENTRY_KINDS, `${path}/kind`) }),
 		};
