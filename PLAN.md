@@ -3666,6 +3666,17 @@ while the Portal is down), and Notifications no longer names products in code: a
 their defaults and directory name and can be switched off; without the directory, product messages still go and the
 list asks to try again. The Accounts rule stays (N6/N8/N10).
 
+**Chat C16–C20 built (2026-10-15; e8c6a6ab, 17ceeb6d, 35872b3c, 1e300955, 5621d8f5, 3ba0c0c6):**
+`visitor_alerts.frequency` once | every_reply; `guest_chat.noLimitWithoutSignIn` (Accounts `GET /v1/roles`, the
+Customer role's `signIn`, kept 60 s; one limit in send, chat view and widget config); `visitor_chat.pollFocusedSeconds`
+(3–60, default 10) and `pollBackgroundSeconds` (10–300, default 300) used by the chat widget (the inbox keeps code
+constants; this replaces "poll intervals are code constants" for the widget); fallback intent `compare` with
+`{comparison}` (keywords split the message, catalog search with fewer words, a side-by-side table from E37 details in
+widget texts; refused without keywords); `POST /v1/data/delete-all` scope `conversations` (server token, domain typed,
+100 per batch with `more` after 8 s, audited `data.deleted_all`, leads kept). Bug fixed: a deleted conversation's
+pending staff alerts go with it (all three delete paths); deleting conversations reads only attachment keys and deletes
+8 files at a time.
+
 **Chat shows the shop's price (2026-10-15; b03df855, e2e 277e5bb2):** product cards show the price on the product page
 with the "was" price crossed out (screen readers hear the widget text `chat.wasPrice`); the AI's search, top and details
 answers give each product and variant `price`, `wasPrice` and `deal` (name and saving), the quote adds the variant's own
