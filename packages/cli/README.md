@@ -101,8 +101,8 @@ browser-token, server-token and ticket route:
 Schemas use a small JSON Schema subset (`@ss/app-kit/api`): `type` (one, or a list such as `["string", "null"]`),
 `properties`, `required`, `additionalProperties`, `items`, `minItems`, `maxItems`, `maxProperties`, `propertyNames`,
 `enum`, `const`, `minimum`, `maximum`, `minLength`, `maxLength`, `pattern`, `format` (`date-time`, `date`, `uri` and
-`email` are checked), `oneOf`, `anyOf`, `$ref`, and the notes `title`, `description`, `default`, `examples`,
-`deprecated`. The kit's shared schemas may be referenced too: `Count` and `Counts` (the `/count` and `/counts` routes),
+`email` are checked), `oneOf`, `anyOf`, `$ref`, and the notes `title`, `description`, `default` and `examples`. The
+kit's shared schemas may be referenced too: `Count` and `Counts` (the `/count` and `/counts` routes),
 `Connection`, `ActivityEntry`, `Actor`, `Text`, `Theme`, `Format`, `ValueSource`. The kit describes its own routes
 (tickets, data rights, permissions, features, settings, texts, theme, Format, lists, connections, activity) in
 `@ss/app-kit`'s `src/kit-api.json`; a product does not describe them again.

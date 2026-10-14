@@ -18,7 +18,7 @@ import { problemOf } from './manifest.js';
 /** Project-relative path of the API description. */
 export const API_FILE = 'schemas/api.json';
 /** Auth modes of the routes `openapi.json` documents, and so `schemas/api.json` describes. */
-export const DOCUMENTED_AUTH = Object.freeze(['browser', 'server', 'ticket']);
+const DOCUMENTED_AUTH = Object.freeze(['browser', 'server', 'ticket']);
 
 /** The API routes the kit serves for every product (server token, no feature), as its own description names them. */
 export const KIT_ROUTES = Object.freeze(
