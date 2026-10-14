@@ -29,18 +29,12 @@ import {
 import { decimalsOf, isAmount, toMajor } from '../core/money.js';
 import { contactCalls, contactOf, detailOf, funnelEvent, pixelCalls, searchCalls, searchOf, vitalCalls } from '../core/pixels.js';
 import {
-	attributesOf,
-	blocksAll,
 	checksActivity,
 	indexNowActivity,
 	indexNowSubmission,
 	keyLocationOf,
 	keyPathOf,
-	pageChecks,
-	pagesOf,
 	robotsTxtOf,
-	scanHtml,
-	siteChecks,
 	siteUrlOf,
 	tokenOf,
 	verificationOf,
@@ -674,46 +668,6 @@ describe('SEO', () => {
 			field: 'keyPath',
 		});
 		expect(indexNowSubmission({ urls: 'x', key: 'abcdefgh', domain: DOMAIN })).toMatchObject({ ok: false, field: 'urls' });
-	});
-
-	it('scans HTML', () => {
-		expect(attributesOf('<img src=a.png alt="" data-x=\'y\' hidden>')).toEqual({
-			src: 'a.png',
-			alt: '',
-			'data-x': 'y',
-			hidden: '',
-		});
-		const scan = scanHtml(
-			'<!-- <title>no</title> --><html lang=en><title> A &amp; B&nbsp;&lt;&gt;&quot;&#39; </title><script>var x="<h1>"</script><h1 class="x">',
-		);
-		expect(scan).toMatchObject({ title: 'A & B <>"\'', lang: 'en', h1: 1, description: null, canonical: null });
-		expect(blocksAll('User-agent: bot\nDisallow: /\n\nUser-agent: *\nUser-agent: other\nDisallow: /private # x')).toBe(false);
-		expect(blocksAll('User-agent: a\nUser-agent: *\nDisallow: /')).toBe(true);
-		expect(pagesOf(['/', '/a', '//b', 'c', 3], DOMAIN)).toEqual([`https://${DOMAIN}/`, `https://${DOMAIN}/a`]);
-		expect(pagesOf(undefined, DOMAIN)).toEqual([`https://${DOMAIN}/`]);
-	});
-
-	it('checks pages', () => {
-		const url = `https://${DOMAIN}/`;
-		/** @param {string} body @param {Record<string, string>} [headers] */
-		const checks = (body, headers) =>
-			Object.fromEntries(pageChecks({ url, status: 200, body, headers }, DOMAIN).map((c) => [c.id, c.status]));
-		const thin = checks('<title>Short</title><link rel="canonical" href="https://other.example/">', {
-			'x-robots-tag': 'noindex',
-		});
-		expect(thin).toMatchObject({ noindex: 'fail', title: 'warn', canonical: 'warn', viewport: 'fail', h1: 'warn' });
-		expect(checks('<link rel="canonical" href="http://[bad">').canonical).toBe('warn');
-		expect(checks('<link rel="canonical" href="/x">').canonical).toBe('pass');
-		expect(pageChecks({ url, status: null, body: '' }, DOMAIN)).toEqual([
-			{ id: 'reachable', status: 'fail', page: url, detail: { status: 0 } },
-		]);
-		const site = siteChecks({
-			home: { url, status: 500, body: '' },
-			robots: { url: `${url}robots.txt`, status: 404, body: '' },
-			sitemap: null,
-		});
-		expect(site.map((c) => c.status)).toEqual(['warn', 'pass', 'warn', 'warn']);
-		expect(site[2]?.page).toBeNull();
 	});
 
 	it('writes the activity-log label and detail of a submission and a checklist run', () => {

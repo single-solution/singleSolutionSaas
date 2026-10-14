@@ -2,7 +2,7 @@
  * The product on the kit: `createProductInstance(options)` wires `@ss/app-kit` `createProduct` with Growth's manifest
  * (each feature's settings schema from `schemas/` inline), its widget texts, its Connections (the merchant database,
  * which the kit always adds, and the Accounts token for activity-log copies), the merchant database indexes (the raw
- * events' expiry index included), the page script's settings, what the `import` feature takes and its part of the
+ * events' expiry index, the redirect rules and the SEO checklist's kept report included), the page script's settings, what the `import` feature takes and its part of the
  * website Setup sheet (the OpenAPI document, the guide's "What your website builds" per feature, the tags that are on
  * with how they wait for consent, and the number of redirect rules), and adds the web calls (SEO checklist, IndexNow)
  * on the same outbound policy. The Next.js route and the tests pass the rest (config, store, clock, network).
@@ -35,6 +35,7 @@ import pixelsShared from '../schemas/pixels.shared.json' with { type: 'json' };
 import { widgetSettings } from '../core/config.js';
 import { createImportOptions } from './imports.js';
 import { REDIRECT_INDEXES, createRedirectStore } from './redirects.js';
+import { SEO_REPORT_INDEXES } from './seo-reports.js';
 import { INDEXES } from './store.js';
 import { createWeb } from './web.js';
 
@@ -191,7 +192,7 @@ export const createProductInstance = (options) => {
 			blueprint: setupPart,
 		},
 		data: {
-			indexes: [...INDEXES, ...REDIRECT_INDEXES],
+			indexes: [...INDEXES, ...REDIRECT_INDEXES, ...SEO_REPORT_INDEXES],
 			...(options.data?.createClient ? { createClient: options.data.createClient } : {}),
 		},
 		// days of daily totals moved in from another system with ss-import (feature `import`, PLAN 0.8.10 K10)

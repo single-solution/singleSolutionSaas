@@ -5,7 +5,7 @@ import strings from '../strings/en.json' with { type: 'json' };
 import { PRESETS } from '../core/analytics.js';
 import { widgetSettings } from '../core/config.js';
 import { BROWSERS, DEVICES, EVENT_FEATURES, SYSTEMS, VITALS, ratingOf } from '../core/events.js';
-import { pageChecks, siteChecks } from '../core/seo.js';
+import { CHECKS, PAGE_KINDS } from '../core/seo-checks.js';
 import {
 	CONSENT_STORAGE_KEY,
 	FUNNEL_STEPS,
@@ -1427,9 +1427,11 @@ describe('admin widgets', () => {
 					return answer(200, { ...REPORT, timeZone: 'Asia/Tokyo' });
 				},
 				...EVENTS,
+				'GET /v1/admin/seo/report': () => answer(200, null),
 				'POST /v1/admin/seo/checks': () =>
 					answer(200, {
 						checkedAt: '2026-10-08T12:00:00.000Z',
+						cached: false,
 						summary: { pass: 0, warn: 0, fail: 0 },
 						checks: [],
 						pages: [],
@@ -1437,6 +1439,8 @@ describe('admin widgets', () => {
 			},
 			look,
 		);
+		// no check kept: the widget checked the site when it opened
+		expect(inside(checklist, '[role="status"]').textContent).toBe('Checked 8 Oct 2026, 21:00');
 		expect(asked[0]?.searchParams.get('from')).toBe('2026-09-10');
 		expect(asked[0]?.searchParams.get('to')).toBe('2026-10-09');
 		const text = dashboard.shadowRoot?.textContent ?? '';
@@ -1483,7 +1487,7 @@ describe('admin widgets', () => {
 		expect(inside(host, '[role="status"]').textContent).toBe(strings['analytics.failed']);
 	});
 
-	it('the SEO checklist: tiles, filter chips, page cards with their More menu, other pages, and IndexNow', async () => {
+	it('the SEO checklist: the kept check, tiles, filter chips, page cards with their More menu, other pages, and IndexNow', async () => {
 		const host = place('seo_checklist');
 		/** @type {any[]} */
 		const submitted = [];
@@ -1495,8 +1499,31 @@ describe('admin widgets', () => {
 		/** What a refused submission answers (a failure of ours at first). */
 		let refusal = () => answer(500, {});
 		const page = 'https://shop.example.com/';
-		const shop = 'https://shop.example.com/shop';
+		const shop = 'https://shop.example.com/products/blue-lamp';
 		w.open = (/** @type {string} */ url) => opened.push(url);
+		/** @param {boolean} cached */
+		const report = (cached) => ({
+			checkedAt: new Date(Date.now() - 60_000).toISOString(),
+			cached,
+			summary: { pass: 2, warn: 1, fail: 1 },
+			pages: [
+				{ url: page, kind: 'home', sampled: false },
+				{ url: shop, kind: 'product', sampled: true },
+			],
+			checks: [
+				{ id: 'title', status: 'pass', page, title: 'Page title', reason: 'The title has 30 characters.', fix: '' },
+				{ id: 'verification', status: 'pass', page, title: 'Search engine verification', reason: '', fix: '' },
+				{ id: 'description', status: 'warn', page: shop, title: 'Meta description', reason: 'None.', fix: 'Write one.' },
+				{
+					id: 'robots_blocks',
+					status: 'fail',
+					page: 'https://shop.example.com/robots.txt',
+					title: 'robots.txt lets Google read your pages',
+					reason: 'Blocked: /products/blue-lamp (Disallow: /products).',
+					fix: 'Remove it.',
+				},
+			],
+		});
 		serve({
 			[`GET ${ADMIN_CONFIG_PATH}`]: () =>
 				answer(200, {
@@ -1511,25 +1538,10 @@ describe('admin widgets', () => {
 						},
 					},
 				}),
+			'GET /v1/admin/seo/report': () => answer(200, report(true)),
 			'POST /v1/admin/seo/checks': (init) => {
 				checked.push(JSON.parse(init.body));
-				return answer(200, {
-					checkedAt: '2026-10-08T12:00:00.000Z',
-					summary: { pass: 2, warn: 1, fail: 1 },
-					pages: [page, shop],
-					checks: [
-						{ id: 'title', status: 'pass', page, title: 'Page title', fix: '' },
-						{ id: 'verification', status: 'pass', page, title: 'Search engine verification', fix: '' },
-						{ id: 'description', status: 'warn', page: shop, title: 'Meta description', fix: 'Write one.' },
-						{
-							id: 'robots_blocks',
-							status: 'fail',
-							page: null,
-							title: 'robots.txt lets search engines in',
-							fix: 'Remove it.',
-						},
-					],
-				});
+				return answer(200, report(checked.length === 1));
 			},
 			'POST /v1/admin/indexnow': (init) => {
 				submitted.push(JSON.parse(init.body));
@@ -1542,23 +1554,35 @@ describe('admin widgets', () => {
 		});
 		await flush();
 		const text = () => host.shadowRoot?.textContent ?? '';
-		expect(text()).toContain('Checks 2 pages: /, /shop');
-		expect(text()).toContain(strings['seo.notRun']);
+		expect(text()).toContain('Checks 2 pages (/, /shop) and sample pages from your sitemap');
 		expect(text()).toContain('Your site must serve your key at https://shop.example.com/indexnow-key.txt.');
+		// it opens on the kept check (a minute old: not checked again)
+		expect(checked).toEqual([]);
+		expect(inside(host, '[role="status"]').textContent).toMatch(/^Checked /);
+		expect([...(host.shadowRoot?.querySelectorAll('.tile .value') ?? [])].map((v) => v.textContent)).toEqual(['1', '1', '2']);
+		const cards = () => [...(host.shadowRoot?.querySelectorAll('.masonry .card h4') ?? [])].map((h) => h.textContent);
+		expect(cards()).toEqual(['Whole site', '/', '/products/blue-lamp']);
+		expect([...(host.shadowRoot?.querySelectorAll('.masonry .card .kind') ?? [])].map((k) => k.textContent)).toEqual([
+			strings['seo.kind.home'],
+			`${strings['seo.kind.product']} · ${strings['seo.sampled']}`,
+		]);
+		const site = /** @type {HTMLElement} */ (host.shadowRoot?.querySelector('.masonry .card'));
+		expect(site.textContent).toContain('Fix');
+		expect(site.textContent).toContain('Blocked: /products/blue-lamp (Disallow: /products).');
+		expect(site.textContent).toContain('Remove it.');
+		expect(site.textContent).toContain('Search engine verification');
+		expect([...site.querySelectorAll('.reason')]).toHaveLength(1);
+		// a full run asked again soon answers the kept check
 		button(host, strings['seo.run']).click();
 		await flush();
 		expect(checked[0]).toEqual({});
-		expect([...(host.shadowRoot?.querySelectorAll('.tile .value') ?? [])].map((v) => v.textContent)).toEqual(['1', '1', '2']);
-		const cards = () => [...(host.shadowRoot?.querySelectorAll('.masonry .card h4') ?? [])].map((h) => h.textContent);
-		expect(cards()).toEqual(['Whole site', '/', '/shop']);
-		const site = /** @type {HTMLElement} */ (host.shadowRoot?.querySelector('.masonry .card'));
-		expect(site.textContent).toContain('Fix');
-		expect(site.textContent).toContain('Remove it.');
-		expect(site.textContent).toContain('Search engine verification');
+		expect(inside(host, '[role="status"]').textContent).toMatch(
+			/^Checked .*, less than 5 minutes ago: these are those results\.$/,
+		);
 		press(host, 'Improve');
-		expect(cards()).toEqual(['/shop']);
+		expect(cards()).toEqual(['/products/blue-lamp']);
 		press(host, 'All');
-		// a page's More menu: open it, check it again, submit it
+		// a page's More menu: open it, test it in the Rich Results Test, check it again, submit it
 		const shopCard = /** @type {HTMLElement} */ ([...(host.shadowRoot?.querySelectorAll('.masonry .card') ?? [])][2]);
 		/** @param {string} words */
 		const menuItem = (words) =>
@@ -1567,7 +1591,8 @@ describe('admin widgets', () => {
 			);
 		/** @type {HTMLButtonElement} */ (shopCard.querySelector('.more > button')).click();
 		menuItem(strings['seo.openPage']).click();
-		expect(opened).toEqual([shop]);
+		menuItem(strings['seo.richResults']).click();
+		expect(opened).toEqual([shop, `https://search.google.com/test/rich-results?url=${encodeURIComponent(shop)}`]);
 		menuItem(strings['seo.submitPage']).click();
 		expect(dialog(host).querySelector('textarea').value).toBe(shop);
 		dialog(host).dispatchEvent(new window.Event('submit', { cancelable: true }));
@@ -1576,7 +1601,8 @@ describe('admin widgets', () => {
 		expect(text()).toContain('Submitted 2 addresses.');
 		menuItem(strings['seo.checkAgain']).click();
 		await flush();
-		expect(checked.at(-1)).toEqual({ paths: ['/shop'] });
+		expect(checked.at(-1)).toEqual({ paths: ['/products/blue-lamp'] });
+		expect(inside(host, '[role="status"]').textContent).not.toContain('less than 5 minutes ago');
 		// other pages from the header's More menu
 		press(host, '⋯');
 		press(host, strings['seo.otherPages']);
@@ -1618,6 +1644,69 @@ describe('admin widgets', () => {
 		expect(await refuseWith(403, { code: 'forbidden' })).toBe(`Not submitted: ${strings['problem.forbidden']}`);
 		press(host, strings['seo.cancel']);
 		delete w.open;
+	});
+
+	it('the SEO checklist checks the site by itself when the kept check is a day old, and leads to the redirects', async () => {
+		const host = place('seo_checklist');
+		const redirects = place('redirects');
+		const scrolled = vi.fn();
+		redirects.scrollIntoView = scrolled;
+		/** @type {any[]} */
+		const checked = [];
+		const page = 'https://shop.example.com/';
+		serve({
+			[`GET ${ADMIN_CONFIG_PATH}`]: () => answer(200, configOf(['seo_checklist', 'redirects'])),
+			'GET /v1/admin/seo/report': () =>
+				answer(200, {
+					checkedAt: new Date(Date.now() - 25 * 3600_000).toISOString(),
+					cached: true,
+					summary: { pass: 1, warn: 0, fail: 0 },
+					pages: [{ url: page, kind: 'home', sampled: false }],
+					checks: [{ id: 'title', status: 'pass', page, title: 'Page title', reason: '', fix: '' }],
+				}),
+			'POST /v1/admin/seo/checks': (init) => {
+				checked.push(JSON.parse(init.body));
+				return answer(200, {
+					checkedAt: new Date().toISOString(),
+					cached: false,
+					summary: { pass: 0, warn: 1, fail: 0 },
+					pages: [{ url: page, kind: 'home', sampled: false }],
+					checks: [
+						{
+							id: 'redirect_suggestions',
+							status: 'warn',
+							page: null,
+							title: 'Missing pages have a redirect',
+							reason: '2 addresses have no redirect rule.',
+							fix: 'Open Redirects.',
+						},
+					],
+				});
+			},
+		});
+		await startWidget({ window, script: script(null) }).admin({
+			getTicket: async () => ({ ticket: 't', expiresAt: new Date(Date.now() + 15 * 60_000).toISOString() }),
+		});
+		await flush();
+		expect(checked).toEqual([{}]);
+		expect(host.shadowRoot?.textContent).toContain('2 addresses have no redirect rule.');
+		button(host, strings['seo.openRedirects']).click();
+		expect(scrolled).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' });
+	});
+
+	it('the SEO checklist says when the kept check cannot be read', async () => {
+		const host = place('seo_checklist');
+		serve({
+			[`GET ${ADMIN_CONFIG_PATH}`]: () => answer(200, configOf(['seo_checklist'])),
+			'GET /v1/admin/seo/report': () => answer(403, { type: 'https://growth.example.dev/problems/forbidden' }),
+		});
+		await startWidget({ window, script: script(null) }).admin({
+			getTicket: async () => ({ ticket: 't', expiresAt: new Date(Date.now() + 15 * 60_000).toISOString() }),
+		});
+		await flush();
+		expect(inside(host, '[role="status"]').textContent).toBe(strings['problem.forbidden']);
+		expect(host.shadowRoot?.textContent).toContain(strings['seo.notRun']);
+		expect(requests.filter((r) => r.path === '/v1/admin/seo/checks')).toEqual([]);
 	});
 
 	it('IndexNow alone, before a key is set or with a broken key path', async () => {
@@ -1699,14 +1788,11 @@ describe('admin widgets', () => {
 
 describe('widget texts (OT-3)', () => {
 	it('every text a widget or the server names from a code value is in strings/en.json', () => {
-		const read = { url: 'https://shop.example.com/', status: 200, body: '' };
-		const checks = [
-			...siteChecks({ home: read, robots: read, sitemap: read }),
-			...pageChecks(read, 'shop.example.com'),
-			...pageChecks({ ...read, status: 404 }, 'shop.example.com'),
-		];
-		const ids = [...new Set(checks.map((check) => check.id))];
-		expect(ids).toHaveLength(15);
+		const checkTexts = Object.entries(CHECKS).flatMap(([id, findings]) => [
+			`seo.check.${id}.title`,
+			`seo.check.${id}.fix`,
+			...findings.map((finding) => `seo.check.${id}.${finding}`),
+		]);
 		const keys = [
 			...['necessary', 'analytics', 'marketing'].flatMap((category) => [`consent.${category}`, `consent.${category}Help`]),
 			...PRESETS.map((preset) => `analytics.range.${preset}`),
@@ -1718,7 +1804,8 @@ describe('widget texts (OT-3)', () => {
 			...SYSTEMS.map((os) => `os.${os}`),
 			...Object.keys(EVENT_FEATURES).map((type) => `event.${type}`),
 			...['pass', 'warn', 'fail'].flatMap((status) => [`seo.count.${status}`, `seo.status.${status}`]),
-			...ids.flatMap((id) => [`seo.check.${id}.title`, `seo.check.${id}.fix`]),
+			...checkTexts,
+			...PAGE_KINDS.map((kind) => `seo.kind.${kind}`),
 			// refused calls: the widgets' own texts, never the server's English detail (OT-4)
 			...Object.values(ANALYTICS_PROBLEMS),
 			...Object.values(SEO_PROBLEMS),
@@ -1727,5 +1814,7 @@ describe('widget texts (OT-3)', () => {
 			'indexnow.refused.other',
 		];
 		expect(keys.filter((key) => !Object.hasOwn(strings, key))).toEqual([]);
+		// and no check text is left over from a check or finding that is gone
+		expect(Object.keys(strings).filter((key) => key.startsWith('seo.check.') && !checkTexts.includes(key))).toEqual([]);
 	});
 });

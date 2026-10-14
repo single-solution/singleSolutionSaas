@@ -10,6 +10,24 @@ GA4 inside Tag Manager, search and contact pixel events with product or variant 
 the AI crawler block and Yandex verification, the IndexNow key file path, the notice bar's close and hidden pages with
 `GET /v1/notice`, and Web Vitals to GA4.
 
+## SEO checklist
+
+The `seo_checklist` feature is the live website's SEO health report (SEO audit §3.2 B), run when staff ask (the
+`seo_checklist` admin widget with `seo.check`, or `POST /v1/seo/checks` with the server token), never on a timer.
+
+- One run reads robots.txt, the sitemap it names (else `/sitemap.xml`; of an index, its first 3 files), the home page
+  and the checklist's pages (or the paths asked for), an address the site does not have and the old paths of up to 3
+  redirect rules; a full run (no paths) adds sample pages from the sitemap (a product, a category, a landing or listing
+  page, a glossary page), told apart by their structured data. With Web Vitals or Searches and 404s on it also reads the
+  daily totals (28 days of vitals, 90 days of 404s). Reads (`adapters/web.js`, through `@ss/net`) never follow a
+  redirect, run 4 at a time, each at most 8 s and 2 MB (a sitemap file 16 MB), the whole run at most 25 s.
+- Each check (`core/seo-checks.js`; reading HTML, JSON-LD, robots.txt rules and sitemaps in `core/seo-scan.js`) is
+  pass, warn or fail with a finding code; the answer adds the title, reason and fix from the widget texts
+  (`seo.check.<id>.title`, `.<finding>`, `.fix`) and the page's Google Rich Results Test link.
+- The last full run is kept in `ss_growth_seo_reports` (one document per website): `GET /v1/seo/report` answers it, the
+  widget opens on it (and runs again when it is a day old), and a full run within 5 minutes answers it (`cached: true`)
+  without reading the site. 10 runs an hour per website.
+
 ## Redirects
 
 The `redirects` feature keeps up to 5,000 rules per website in the merchant database (`ss_growth_redirects`, one per

@@ -112,8 +112,8 @@ export const operationsOf = (commands) => {
 };
 
 /**
- * The merchant's site and IndexNow, faked: `pages[path]` answers, everything else 404; IndexNow answers 200 unless
- * told otherwise.
+ * The merchant's site and IndexNow, faked: `pages[path]` answers (the path with its query string first, then without),
+ * everything else 404; IndexNow answers 200 unless told otherwise.
  */
 const createFakeWeb = () => {
 	/** @type {Record<string, Page>} */
@@ -138,7 +138,8 @@ const createFakeWeb = () => {
 			[ORIGIN]: async (request) => {
 				calls.push({ url: request.url, method: request.method, body: '' });
 				if (siteDown) throw new Error('down');
-				const page = pages[new URL(request.url).pathname];
+				const url = new URL(request.url);
+				const page = pages[`${url.pathname}${url.search}`] ?? pages[url.pathname];
 				return page
 					? new Response(page.body ?? '', { status: page.status, headers: page.headers ?? {} })
 					: new Response('not here', { status: 404 });

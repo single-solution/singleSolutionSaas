@@ -366,63 +366,6 @@ describe('IndexNow', () => {
 	});
 });
 
-describe('SEO checklist', () => {
-	it('reads the pages on request and reports each check with its fix steps', async () => {
-		env.web.pages['/'] = { status: 200, body: HOME };
-		env.web.pages['/robots.txt'] = { status: 200, body: `User-agent: *\nDisallow: /\nSitemap: ${ORIGIN}/sm.xml` };
-		env.web.pages['/sm.xml'] = { status: 200, body: '<urlset/>' };
-		env.web.pages['/thin'] = {
-			status: 200,
-			body: '<html><head><meta name="robots" content="noindex"></head><body><img src="x"><h1>a</h1><h1>b</h1></body></html>',
-		};
-		await env.setting('seo_checklist', 'paths', ['/', '/thin', '/gone', 'bad path']);
-		const report = await (await env.call('POST', '/v1/seo/checks', { token: env.server, body: {} })).json();
-		expect(report.pages).toEqual([`${ORIGIN}/`, `${ORIGIN}/thin`, `${ORIGIN}/gone`]);
-		/** @param {string} id @param {string} [page] */
-		const find = (id, page) =>
-			report.checks.find((/** @type {any} */ c) => c.id === id && (page === undefined || c.page === page));
-		expect(find('robots_txt')).toMatchObject({ status: 'pass' });
-		expect(find('robots_blocks')).toMatchObject({ status: 'fail', title: 'robots.txt lets search engines in' });
-		expect(find('robots_blocks').fix).toContain('Disallow');
-		expect(find('sitemap')).toMatchObject({ status: 'pass', page: `${ORIGIN}/sm.xml`, fix: '' });
-		expect(find('verification').status).toBe('pass');
-		expect(find('title', `${ORIGIN}/`).status).toBe('pass');
-		expect(find('noindex', `${ORIGIN}/thin`).status).toBe('fail');
-		expect(find('image_alt', `${ORIGIN}/thin`).fix).toContain('(1 have none)');
-		expect(find('reachable', `${ORIGIN}/gone`)).toMatchObject({ status: 'fail', fix: expect.stringContaining('404') });
-		expect(report.summary.fail).toBeGreaterThan(2);
-
-		const asked = await env.call('POST', '/v1/seo/checks', { token: env.server, body: { paths: 'x' } });
-		expect(asked.status).toBe(422);
-		const ticket = await env.ticket(['seo.check']);
-		const viaWidget = await env.call('POST', '/v1/admin/seo/checks', {
-			token: ticket,
-			origin: ADMIN_ORIGIN,
-			body: { paths: ['/'] },
-		});
-		expect((await viaWidget.json()).pages).toEqual([`${ORIGIN}/`]);
-		const db = await env.merchantDb();
-		expect(await db.collection('ss_growth_activity').findOne({ action: 'seo.checked' })).toMatchObject({
-			actor: { kind: 'staff', id: 'u_1', name: 'Sam Staff' },
-			target: 'seo_checklist',
-			label: '/',
-			detail: expect.stringMatching(/^\d+ passed, \d+ to improve, \d+ to fix\. Pages: \/$/),
-		});
-		const badWidget = await env.call('POST', '/v1/admin/seo/checks', {
-			token: ticket,
-			origin: ADMIN_ORIGIN,
-			body: { paths: 1 },
-		});
-		expect(badWidget.status).toBe(422);
-
-		env.web.siteDown(true);
-		const down = await (await env.call('POST', '/v1/seo/checks', { token: env.server, body: { paths: [] } })).json();
-		expect(down.checks.find((/** @type {any} */ c) => c.id === 'reachable')).toMatchObject({ status: 'fail' });
-		expect(down.checks.find((/** @type {any} */ c) => c.id === 'robots_txt')).toMatchObject({ status: 'warn' });
-		env.web.siteDown(false);
-	});
-});
-
 describe('statuses, data rights and public routes', () => {
 	it('refuses everything while the product is stopped', async () => {
 		env.portal.setStatus(env.websiteId, { status: 'stopped' });

@@ -1,24 +1,29 @@
 /**
- * The SEO checklist (admin widget `seo_checklist`; PLAN 0.8.9, 0.8.10 G5, 0.6). With the SEO checklist on (ticket
- * `seo.check`): Check my pages runs the checks on the pages of its settings (they are named under the title), and the
- * More menu checks other pages (a dialog). A run shows the passed, to-improve and to-fix counts as tiles, filter chips
- * with counts, and a masonry of cards (the whole site, then each page) whose checks carry their fix steps; each page's
- * More menu opens it, checks it again or submits it to IndexNow. With IndexNow on (ticket `indexnow.submit`) a card
- * names the key file address (G5) and submits pages in a dialog. Every word is a widget text; the time of a run
- * follows the website's Format and time zone (PLAN 0.8.10 K7).
+ * The SEO checklist (admin widget `seo_checklist`; PLAN 0.8.9, 0.8.10 G5, 0.6; SEO audit §3.2 B). With the SEO
+ * checklist on (ticket `seo.check`) it opens on the last full check of the site (kept by Growth) and checks the site by
+ * itself when there is none or it is more than a day old; Check my pages checks the pages of its settings and sample
+ * pages from the sitemap (a run within 5 minutes of the last one answers that one), and the More menu checks other
+ * pages (a dialog). A run shows the passed, to-improve and to-fix counts as tiles, filter chips with counts, and a
+ * masonry of cards (the whole site, then each page with its kind) whose checks carry the reason and their fix steps;
+ * each page's More menu opens it, tests it in Google's Rich Results Test, checks it again or submits it to IndexNow,
+ * and the 404 log's check opens the redirects widget when it is on the page. With IndexNow on (ticket
+ * `indexnow.submit`) a card names the key file address (G5) and submits pages in a dialog. Every word is a widget
+ * text; the time of a run follows the website's Format and time zone (PLAN 0.8.10 K7).
  * @module
  */
 import { formatDate, mountWidget } from '@ss/app-kit/widget';
+import { SITE_CHECKS, richResultsTestOf } from '../core/seo-checks.js';
+import { WIDGET_ATTRIBUTE } from '../core/widgets.js';
 import { PROBLEM_TEXTS, chipGroup, fill, moreMenu, openDialog, problemKey } from './admin-kit.js';
 import { adminCall } from './tickets.js';
 import { element } from './dom.js';
 import { WIDGET_CSS } from './styles.js';
 
-/** Checks of the whole site, whatever page they read. */
-const SITE_CHECKS = Object.freeze(['robots_txt', 'robots_blocks', 'sitemap', 'verification']);
-
 /** Order of the statuses in a card: what to fix first. */
 const ORDER = Object.freeze({ fail: 0, warn: 1, pass: 2 });
+
+/** The kept check is run again by itself when the widget opens after this long. */
+export const STALE_MS = 86_400_000;
 
 /** The widget texts of the checklist's refused runs. */
 export const SEO_PROBLEMS = Object.freeze({
@@ -53,7 +58,15 @@ const indexNowProblems = (answer) => {
 		: INDEXNOW_PROBLEMS;
 };
 
-/** @typedef {{ id: string, status: 'pass' | 'warn' | 'fail', page: string | null, title: string, fix: string }} Check */
+/**
+ * @typedef {{ id: string, status: 'pass' | 'warn' | 'fail', page: string | null, title: string, reason: string,
+ *   fix: string }} Check
+ */
+/** @typedef {{ url: string, kind: string, sampled: boolean }} Page */
+/**
+ * @typedef {{ checkedAt: string, cached: boolean, summary: { pass: number, warn: number, fail: number },
+ *   checks: Check[], pages: Page[] }} Report
+ */
 
 /**
  * The path of a page address (`https://shop.example.com/a` → `/a`).
@@ -69,10 +82,10 @@ const pathOf = (url) => {
 
 /**
  * @param {{ host: HTMLElement, api: import('./tickets.js').AdminApi, config: import('./widget.js').WidgetConfig,
- *   viewer: import('./widget.js').Viewer, open?: (url: string) => void }} input `viewer`: the browser's language and
- *   time zone; `open`: open a page in a new tab
+ *   viewer: import('./widget.js').Viewer, open?: (url: string) => void, now?: () => number }} input `viewer`: the
+ *   browser's language and time zone; `open`: open a page in a new tab
  */
-export const mountSeoChecklist = ({ host, api, config, viewer, open = () => {} }) => {
+export const mountSeoChecklist = ({ host, api, config, viewer, open = () => {}, now = Date.now }) => {
 	/** @param {string} key @param {Record<string, string | number>} [values] */
 	const t = (key, values) => fill(config.texts[key] ?? key, values ?? {});
 	const on = (/** @type {string} */ feature) => config.features.includes(feature);
@@ -153,8 +166,11 @@ export const mountSeoChecklist = ({ host, api, config, viewer, open = () => {} }
 				const box = h('section', { class: 'box' });
 				box.append(head, lead, status, results);
 
+				/** @param {string} at */
+				const timeOf = (at) => formatDate(at, config.format, { timeZone: config.timeZone, style: 'datetime', viewer });
+
 				/**
-				 * Run the checks: the settings' pages, or the paths asked for.
+				 * Run the checks: the settings' pages and sample pages, or the paths asked for.
 				 * @param {string[]} [paths]
 				 * @returns {Promise<string | null>} an error text, or null
 				 */
@@ -167,18 +183,35 @@ export const mountSeoChecklist = ({ host, api, config, viewer, open = () => {} }
 						status.textContent = failure(answer, SEO_PROBLEMS, 'seo.failed');
 						return status.textContent;
 					}
-					status.textContent = t('seo.checkedAt', {
-						time: formatDate(answer.data.checkedAt, config.format, {
-							timeZone: config.timeZone,
-							style: 'datetime',
-							viewer,
-						}),
-					});
-					draw(answer.data);
+					const report = /** @type {Report} */ (answer.data);
+					status.textContent = t(report.cached ? 'seo.recent' : 'seo.checkedAt', { time: timeOf(report.checkedAt) });
+					draw(report);
 					return null;
 				};
 
-				/** @param {{ summary: { pass: number, warn: number, fail: number }, checks: Check[], pages: string[] }} report */
+				/** The last full check when the widget opens; a new one when there is none or it is a day old. */
+				const start = async () => {
+					const answer = await adminCall(api, 'GET', '/v1/admin/seo/report');
+					if (!answer.ok) {
+						status.textContent = failure(answer, SEO_PROBLEMS, 'seo.failed');
+						return;
+					}
+					const kept = /** @type {Report | null} */ (answer.data);
+					if (kept) {
+						status.textContent = t('seo.checkedAt', { time: timeOf(kept.checkedAt) });
+						draw(kept);
+					}
+					if (!kept || now() - Date.parse(kept.checkedAt) > STALE_MS) await check();
+				};
+
+				/**
+				 * The redirects widget on this page while Redirects is on (the 404 log's check scrolls to it).
+				 * @returns {Element | null}
+				 */
+				const redirectsWidget = () =>
+					on('redirects') ? host.ownerDocument.querySelector(`[${WIDGET_ATTRIBUTE}="redirects"]`) : null;
+
+				/** @param {Report} report */
 				const draw = (report) => {
 					const tiles = h('div', { class: 'tiles' });
 					for (const [status, tone, badge] of /** @type {const} */ ([
@@ -194,12 +227,14 @@ export const mountSeoChecklist = ({ host, api, config, viewer, open = () => {} }
 						);
 						tiles.append(tile);
 					}
+					/** @type {Map<string, Page>} */
+					const known = new Map(report.pages.map((page) => [page.url, page]));
 					/** @type {Map<string, Check[]>} each card's checks: the whole site (''), then each page */
 					const groups = new Map([['', []]]);
-					for (const url of report.pages ?? []) groups.set(url, []);
+					for (const url of known.keys()) groups.set(url, []);
 					for (const item of report.checks) {
-						const key = !SITE_CHECKS.includes(item.id) && item.page && groups.has(item.page) ? item.page : '';
-						groups.get(key)?.push(item);
+						const site = /** @type {ReadonlyArray<string>} */ (SITE_CHECKS).includes(item.id);
+						groups.get(!site && item.page && groups.has(item.page) ? item.page : '')?.push(item);
 					}
 					const cards = h('div', { class: 'masonry' });
 					/** @param {string} filter */
@@ -212,11 +247,23 @@ export const mountSeoChecklist = ({ host, api, config, viewer, open = () => {} }
 							if (shown.length === 0) continue;
 							const card = h('div', { class: 'card' });
 							const top = h('div', { class: 'card-head' });
-							top.append(h('h4', {}, url === '' ? t('seo.site') : pathOf(url)));
+							const name = h('div');
+							name.append(h('h4', {}, url === '' ? t('seo.site') : pathOf(url)));
+							const page = known.get(url);
+							if (page)
+								name.append(
+									h(
+										'span',
+										{ class: 'kind' },
+										page.sampled ? `${t(`seo.kind.${page.kind}`)} · ${t('seo.sampled')}` : t(`seo.kind.${page.kind}`),
+									),
+								);
+							top.append(name);
 							if (url !== '')
 								top.append(
 									moreMenu(doc, t('seo.pageMenu', { page: pathOf(url) }), [
 										{ label: t('seo.openPage'), onSelect: () => open(url) },
+										{ label: t('seo.richResults'), onSelect: () => open(richResultsTestOf(url)) },
 										{ label: t('seo.checkAgain'), onSelect: () => void check([pathOf(url)]) },
 										...(on('indexnow') ? [{ label: t('seo.submitPage'), onSelect: () => submitDialog([url]) }] : []),
 									]),
@@ -230,9 +277,16 @@ export const mountSeoChecklist = ({ host, api, config, viewer, open = () => {} }
 									h('strong', {}, item.title),
 								);
 								row.append(line);
+								if (item.reason) row.append(h('p', { class: 'reason' }, item.reason));
 								if (item.fix) {
 									const fix = h('p', { class: 'fix' });
 									fix.append(h('strong', {}, `${t('seo.fix')}: `), item.fix);
+									const target = item.id === 'redirect_suggestions' ? redirectsWidget() : null;
+									if (target) {
+										const go = h('button', { type: 'button', class: 'secondary' }, t('seo.openRedirects'));
+										go.addEventListener('click', () => target.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+										fix.append(go);
+									}
 									row.append(fix);
 								}
 								list.append(row);
@@ -281,6 +335,7 @@ export const mountSeoChecklist = ({ host, api, config, viewer, open = () => {} }
 
 				run.addEventListener('click', () => void check());
 				parts.push(box);
+				void start();
 			}
 
 			if (on('indexnow')) {

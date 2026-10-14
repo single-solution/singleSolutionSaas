@@ -114,10 +114,20 @@ export const createSnippets = ({ base, widgets, permissions }) => {
 		'}).then((response) => response.json());',
 	].join('\n');
 	const seo = [
+		'# a full run: the pages of the checklist settings and sample pages from your sitemap (kept as the last report)',
+		`curl -X POST '${base}/v1/seo/checks' \\`,
+		'  -H "Authorization: Bearer $SS_SERVER_TOKEN" \\',
+		"  -H 'Content-Type: application/json' -d '{}'",
+		'',
+		'# the last full run, without reading your site',
+		`curl '${base}/v1/seo/report' \\`,
+		'  -H "Authorization: Bearer $SS_SERVER_TOKEN"',
+		'',
+		'# some pages only (and the home page)',
 		`curl -X POST '${base}/v1/seo/checks' \\`,
 		'  -H "Authorization: Bearer $SS_SERVER_TOKEN" \\',
 		"  -H 'Content-Type: application/json' \\",
-		`  -d '${JSON.stringify({ paths: ['/', '/shop'] })}'`,
+		`  -d '${JSON.stringify({ paths: ['/shop', '/about'] })}'`,
 	].join('\n');
 	const analytics = [
 		`curl '${base}/v1/analytics?from=2026-10-01&to=2026-10-31&top=25' \\`,

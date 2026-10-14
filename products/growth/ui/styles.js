@@ -80,7 +80,10 @@ ul { list-style: none; margin: 0; padding: 0; }
 :host([data-ss-mode='dark']) .pill.pass { color: #86efac; }
 :host([data-ss-mode='dark']) .pill.warn { color: #fcd34d; }
 :host([data-ss-mode='dark']) .pill.fail { color: #fca5a5; }
-.fix { margin-top: 6px; font-size: 0.9em; }
+.reason { margin: 4px 0 0; font-size: 0.9em; opacity: 0.85; overflow-wrap: anywhere; }
+.fix { margin-top: 6px; font-size: 0.9em; overflow-wrap: anywhere; }
+.fix button { margin-left: 8px; }
+.card-head .kind { display: block; font-size: 0.8em; opacity: 0.7; margin-top: 2px; }
 
 /* PLAN 0.6 admin widgets: container sizing, masonry, chips, the More menu, dialogs and motion */
 .box { container-type: inline-size; }

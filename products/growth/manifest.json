@@ -121,7 +121,7 @@
 		{
 			"key": "seo_checklist",
 			"name": "SEO checklist",
-			"description": "Checks the merchant's pages on request and shows what to fix, with steps.",
+			"description": "Checks the merchant's live site on request (their pages and sample pages from the sitemap: status codes, robots.txt, canonical links, structured data, the server's HTML, speed and Web Vitals, missing pages and redirects) and shows what to fix, with steps.",
 			"dependsOn": [],
 			"recommendFor": ["marketing.seo"],
 			"settings": {

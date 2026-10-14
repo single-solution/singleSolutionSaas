@@ -8,28 +8,17 @@
  * Public entry `./routes` of this package: `product.handler(createRoutes(product))`.
  * @module
  */
-import { actorOf, countHandlers, defineRoute, formatText, ok, paginate, problem } from '@ss/app-kit';
+import { actorOf, countHandlers, defineRoute, ok, paginate, problem } from '@ss/app-kit';
 import { JOURNEYS, LIVE_MS, buildReport, rangeOf, topOf } from '../core/analytics.js';
 import { noticeAnswer } from '../core/config.js';
 import { COLLECT_FEATURES, EVENT_FEATURES, checkBatch, cityOf, countryOf, dayOf, expiryOf, mergeTotals } from '../core/events.js';
-import {
-	checksActivity,
-	indexNowActivity,
-	indexNowSubmission,
-	pageChecks,
-	pagesOf,
-	reportOf,
-	robotsTxtOf,
-	siteChecks,
-	siteUrlOf,
-	sitemapsIn,
-	verificationOf,
-} from '../core/seo.js';
+import { indexNowActivity, indexNowSubmission, robotsTxtOf, verificationOf } from '../core/seo.js';
 import { zonedDayStart } from '@ss/contracts/format';
 import { createStore } from '../adapters/store.js';
 import { renderDocs } from './docs.js';
 import { importRoutes } from './imports.js';
 import { redirectRoutes } from './redirects.js';
+import { seoCheckRoutes } from './seo-checks.js';
 import { WIDGET_SCRIPT } from './widget-script.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
@@ -44,7 +33,7 @@ const NOTICE_LIMITS = [
 	{ limit: 3000, windowSeconds: 60, per: /** @type {const} */ ('website') },
 	{ limit: 60, windowSeconds: 60, per: /** @type {const} */ ('visitor') },
 ];
-/** Rate limits of the on-request work that reads other sites (SEO checklist, IndexNow). */
+/** Rate limits of an IndexNow submission (on request; the SEO checklist has its own). */
 const WEB_LIMITS = [{ limit: 10, windowSeconds: 3600, per: /** @type {const} */ ('website') }];
 
 /** Who acts when no member of the merchant's staff is named (PLAN 0.8.10 K2). */
@@ -146,47 +135,6 @@ export const createRoutes = (product) => {
 		source: async (ctx) => (await storeOf(ctx)).eventSource(eventQuery(ctx)),
 		by: { type: 'type' },
 	});
-
-	/**
-	 * Run the SEO checklist: read the website's robots.txt, its sitemap and its pages (the paths asked for, else the
-	 * `seo_checklist` settings), then check them. Every check carries its title and fix steps (the website's widget
-	 * texts).
-	 * @param {any} ctx
-	 */
-	const seoChecks = async (ctx) => {
-		const domain = String(ctx.status.domain);
-		const asked = ctx.body?.paths;
-		if (asked !== undefined && (!Array.isArray(asked) || asked.length > 20))
-			return {
-				ok: /** @type {const} */ (false),
-				problem: invalid('paths', 'paths is a list of at most 20 paths on your website.'),
-			};
-		const { paths } = await product.settings.values(ctx.websiteId, 'seo_checklist');
-		const pages = pagesOf(asked ?? paths, domain);
-		const robots = await web.read(`https://${domain}/robots.txt`);
-		const listed = robots.status === 200 ? sitemapsIn(robots.body).map((url) => siteUrlOf(url, domain)) : [];
-		const sitemapUrl = listed.find((url) => url !== null) ?? `https://${domain}/sitemap.xml`;
-		const [sitemap, ...read] = await Promise.all([
-			web.read(sitemapUrl, { statusOnly: true }),
-			...pages.map((url) => web.read(url)),
-		]);
-		const home = /** @type {import('../core/seo.js').Fetched} */ (read[0]);
-		const checks = [...siteChecks({ home, robots, sitemap }), ...read.flatMap((page) => pageChecks(page, domain))];
-		const texts = await product.settings.texts(ctx.websiteId);
-		const report = reportOf(checks, now());
-		return {
-			ok: /** @type {const} */ (true),
-			report: {
-				...report,
-				pages,
-				checks: report.checks.map((check) => ({
-					...check,
-					title: texts[`seo.check.${check.id}.title`] ?? check.id,
-					fix: check.status === 'pass' ? '' : formatText(texts[`seo.check.${check.id}.fix`] ?? '', check.detail),
-				})),
-			},
-		};
-	};
 
 	/**
 	 * Submit URLs of the website to IndexNow with the merchant's key.
@@ -400,37 +348,6 @@ export const createRoutes = (product) => {
 			},
 		}),
 
-		// ----------------------------------------------------------------------------------- SEO checklist
-		defineRoute({
-			method: 'POST',
-			path: '/v1/seo/checks',
-			auth: 'server',
-			feature: 'seo_checklist',
-			database: false,
-			rateLimit: WEB_LIMITS,
-			handler: async (ctx) => {
-				const checked = await seoChecks(ctx);
-				return checked.ok ? checked.report : checked.problem;
-			},
-		}),
-		defineRoute({
-			method: 'POST',
-			path: '/v1/admin/seo/checks',
-			auth: 'ticket',
-			permission: 'seo.check',
-			rateLimit: WEB_LIMITS,
-			handler: async (ctx) => {
-				const checked = await seoChecks(ctx);
-				if (!checked.ok) return checked.problem;
-				await logAction(ctx, {
-					action: 'seo.checked',
-					target: 'seo_checklist',
-					...checksActivity(checked.report.pages, checked.report.summary),
-				});
-				return checked.report;
-			},
-		}),
-
 		// public docs: no sign-in, no tokens
 		defineRoute({
 			method: 'GET',
@@ -441,6 +358,9 @@ export const createRoutes = (product) => {
 					headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=300' },
 				}),
 		}),
+
+		// the SEO checklist: the live website's SEO health report, run when staff ask (SEO audit §3.2 B)
+		...seoCheckRoutes(product, { log: logAction }),
 
 		// redirect rules: read by the website's server, managed by staff (feature `redirects`, SEO audit G9)
 		...redirectRoutes(product, { log: logAction }),

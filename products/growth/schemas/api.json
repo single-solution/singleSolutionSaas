@@ -872,17 +872,23 @@
 		},
 		"SeoCheck": {
 			"type": "object",
-			"description": "One check, with its title and fix steps from your widget texts (Settings → Texts).",
-			"required": ["id", "status", "page", "detail", "title", "fix"],
+			"description": "One check, with its title, the reason (what was found) and the fix steps from your widget texts (Settings → Texts: seo.check.<id>.title, seo.check.<id>.<finding> and seo.check.<id>.fix).",
+			"required": ["id", "status", "finding", "page", "detail", "title", "reason", "fix", "test"],
 			"additionalProperties": false,
 			"properties": {
 				"id": {
 					"type": "string",
 					"enum": [
 						"robots_txt",
+						"robots_sitemap",
 						"robots_blocks",
 						"sitemap",
+						"sitemap_urls",
+						"soft_404",
+						"redirects_live",
+						"redirect_suggestions",
 						"verification",
+						"web_vitals_site",
 						"reachable",
 						"noindex",
 						"title",
@@ -893,28 +899,46 @@
 						"viewport",
 						"social",
 						"image_alt",
-						"structured_data"
+						"image_size",
+						"structured_data",
+						"site_data",
+						"product_data",
+						"price_match",
+						"server_html",
+						"breadcrumbs",
+						"response_time",
+						"caching",
+						"web_vitals"
 					],
-					"description": "robots_txt, robots_blocks, sitemap and verification check the whole site; the others each page."
+					"description": "robots_txt to web_vitals_site check the whole site; the others each page (site_data on the home page; product_data, price_match and server_html on product pages; breadcrumbs on product, category and listing pages; web_vitals with the sessions detail)."
 				},
 				"status": {
 					"type": "string",
 					"enum": ["pass", "warn", "fail"],
 					"description": "warn: to improve; fail: to fix."
 				},
+				"finding": {
+					"type": "string",
+					"description": "What was found, a stable code per check (ok when it passed; for example missing, several, not_self, blocked, soft, not_shown). The docs list them."
+				},
 				"page": {
 					"type": ["string", "null"],
-					"description": "The address checked (robots.txt, the sitemap or the page)."
+					"description": "The address read (robots.txt, the sitemap, the address that does not exist, or the page); null for checks of several addresses."
 				},
 				"detail": {
 					"type": "object",
-					"description": "The figures the fix steps name.",
+					"description": "The figures the texts name.",
 					"additionalProperties": false,
 					"properties": {
 						"status": {
 							"type": "integer",
 							"minimum": 0,
-							"description": "reachable, robots_txt, sitemap: the HTTP status it answered (0: no answer)."
+							"description": "reachable, robots_txt, sitemap, sitemap_urls, soft_404, redirects_live: the HTTP status it answered (0: no answer)."
+						},
+						"ms": {
+							"type": "integer",
+							"minimum": 0,
+							"description": "reachable, response_time: how long the page took to answer our read, in milliseconds."
 						},
 						"length": {
 							"type": "integer",
@@ -924,28 +948,126 @@
 						"count": {
 							"type": "integer",
 							"minimum": 0,
-							"description": "h1, image_alt, structured_data, verification: how many."
+							"description": "How many: h1 headings, images without alt text or size, JSON-LD blocks (structured_data: the broken ones when invalid), canonical links (several), verification tags, Sitemap lines, addresses (robots_blocks, sitemap, sitemap_urls, redirect_suggestions), redirect rules (redirects_live)."
+						},
+						"location": {
+							"type": "string",
+							"description": "A redirect's Location header (reachable, robots_txt, soft_404)."
+						},
+						"path": {
+							"type": "string",
+							"description": "The first address concerned, as a path: blocked (robots_blocks), not answering 200 (sitemap_urls, sitemap's file_missing), a rule not applied (redirects_live), the most visited missing address (redirect_suggestions)."
+						},
+						"url": {
+							"type": "string",
+							"description": "canonical: the canonical link as written; sitemap_urls: an address of another site."
+						},
+						"rule": {
+							"type": "string",
+							"description": "robots_blocks: the rule that blocks it, as written (Disallow: /cart)."
+						},
+						"missing": {
+							"type": "string",
+							"description": "product_data, site_data: what the structured data lacks, comma-separated."
+						},
+						"price": {
+							"type": "string",
+							"description": "price_match: the price of the structured data (1250.00)."
+						},
+						"currency": {
+							"type": "string",
+							"description": "price_match: its currency."
+						},
+						"name": {
+							"type": "string",
+							"description": "server_html: the product's name."
+						},
+						"hits": {
+							"type": "integer",
+							"minimum": 0,
+							"description": "redirect_suggestions: visits to the most visited missing address."
+						},
+						"expected": {
+							"type": "integer",
+							"minimum": 0,
+							"description": "redirects_live: the code the rule answers."
+						},
+						"pattern": {
+							"type": "string",
+							"description": "web_vitals: the pages it is measured on (/products/*: every page at that level)."
+						},
+						"samples": {
+							"type": "integer",
+							"minimum": 0,
+							"description": "web_vitals, web_vitals_site: how many measurements it is judged on."
+						},
+						"vital": {
+							"type": "string",
+							"description": "web_vitals, web_vitals_site: the vital to work on (LCP, INP or CLS)."
+						},
+						"value": {
+							"type": "string",
+							"description": "web_vitals: that vital's average (2.6 s, 250 ms, 0.12)."
+						},
+						"good": {
+							"type": "integer",
+							"minimum": 0,
+							"description": "web_vitals_site: the share of the visits measured with a good value of that vital, in percent."
 						}
 					}
 				},
 				"title": {
 					"type": "string"
 				},
+				"reason": {
+					"type": "string",
+					"description": "What was found, in words."
+				},
 				"fix": {
 					"type": "string",
 					"description": "The steps to fix it ('' when it passed)."
+				},
+				"test": {
+					"type": ["string", "null"],
+					"format": "uri",
+					"description": "Google's Rich Results Test of the page (checks of a page; null for the site's)."
+				}
+			}
+		},
+		"SeoPage": {
+			"type": "object",
+			"description": "A page the run read.",
+			"required": ["url", "kind", "sampled"],
+			"additionalProperties": false,
+			"properties": {
+				"url": {
+					"type": "string",
+					"format": "uri"
+				},
+				"kind": {
+					"type": "string",
+					"enum": ["home", "product", "category", "listing", "glossary", "page"],
+					"description": "From its address (home) and its structured data: Product or ProductGroup (product), DefinedTerm (glossary), CollectionPage or ItemList (category; with a query string, listing: a landing or listing page), else page."
+				},
+				"sampled": {
+					"type": "boolean",
+					"description": "true: picked from your sitemap; false: the home page, a page of the checklist's settings or a path you sent."
 				}
 			}
 		},
 		"SeoReport": {
 			"type": "object",
-			"description": "The SEO checklist of the pages read just now.",
-			"required": ["checkedAt", "summary", "checks", "pages"],
+			"description": "The SEO checklist: the whole site's checks, then each page's.",
+			"required": ["checkedAt", "cached", "summary", "checks", "pages"],
 			"additionalProperties": false,
 			"properties": {
 				"checkedAt": {
 					"type": "string",
 					"format": "date-time"
+				},
+				"cached": {
+					"type": "boolean",
+					"description": "true: the kept report of an earlier full run (GET …/report, or a full run asked within 5 minutes of it); nothing was read now."
 				},
 				"summary": {
 					"type": "object",
@@ -968,19 +1090,18 @@
 				},
 				"checks": {
 					"type": "array",
-					"description": "The site's four checks, then each page's.",
+					"description": "The site's checks, then each page's (a check that cannot be judged is left out: robots.txt that does not answer, no Web Vitals measured).",
 					"items": {
 						"$ref": "#/components/schemas/SeoCheck"
 					}
 				},
 				"pages": {
 					"type": "array",
-					"description": "The pages read, the home page first.",
+					"description": "The pages read: the home page, the checklist's pages (or the paths you sent), then the sample pages from your sitemap (a full run).",
 					"minItems": 1,
-					"maxItems": 20,
+					"maxItems": 24,
 					"items": {
-						"type": "string",
-						"format": "uri"
+						"$ref": "#/components/schemas/SeoPage"
 					}
 				}
 			}
@@ -1795,14 +1916,14 @@
 	},
 	"POST /v1/seo/checks": {
 		"summary": "Run the SEO checklist now",
-		"description": "Reads your robots.txt, the first sitemap it names (else /sitemap.xml) and the pages, then checks them. 422 validation_failed when paths is not a list of at most 20. 10 calls an hour per website.",
+		"description": "Reads your site now and checks it: robots.txt, the sitemap it names (else /sitemap.xml; for an index, its first 3 files), the pages, an address that does not exist (it must answer 404 or 410) and the old paths of up to 3 of your redirect rules; with Web Vitals and Searches and 404s on, also your visitors' Web Vitals of the last 28 days and the 404 log of the last 90 days. A full run (no paths) adds sample pages from the sitemap (a product, a category, a landing or listing page and a glossary page, when your site has them) and is kept: asked again within 5 minutes, it answers the kept report (cached: true) without reading your site. Reads are made a few at a time, each at most 8 seconds and 2 MB (a sitemap file 16 MB), the whole run at most 25 seconds; redirects are not followed. Needs the database (the report is kept there). 422 validation_failed when paths is not a list of at most 20. 10 calls an hour per website.",
 		"body": {
 			"type": "object",
 			"properties": {
 				"paths": {
 					"type": "array",
 					"maxItems": 20,
-					"description": "The pages to check (paths from /; others are left out); the home page is always checked. Default: the checklist's settings.",
+					"description": "The pages to check (paths from /; others are left out); the home page is always checked. Without paths, a full run: the checklist's pages and sample pages from your sitemap, kept as the last report.",
 					"items": {
 						"type": "string"
 					}
@@ -1813,16 +1934,30 @@
 			"$ref": "#/components/schemas/SeoReport"
 		}
 	},
+	"GET /v1/seo/report": {
+		"summary": "The last full SEO checklist run",
+		"description": "Answers the report of the last full run (cached: true; the texts are your widget texts now), or null when the checklist never ran in full. Reads nothing from your site.",
+		"response": {
+			"oneOf": [
+				{
+					"$ref": "#/components/schemas/SeoReport"
+				},
+				{
+					"type": "null"
+				}
+			]
+		}
+	},
 	"POST /v1/admin/seo/checks": {
 		"summary": "Run the SEO checklist now (SEO checklist widget)",
-		"description": "As POST /v1/seo/checks; each run is written to the activity log.",
+		"description": "As POST /v1/seo/checks; each run that read the site is written to the activity log.",
 		"body": {
 			"type": "object",
 			"properties": {
 				"paths": {
 					"type": "array",
 					"maxItems": 20,
-					"description": "The pages to check (paths from /; others are left out); the home page is always checked. Default: the checklist's settings.",
+					"description": "The pages to check (paths from /; others are left out); the home page is always checked. Without paths, a full run: the checklist's pages and sample pages from your sitemap, kept as the last report.",
 					"items": {
 						"type": "string"
 					}
@@ -1831,6 +1966,20 @@
 		},
 		"response": {
 			"$ref": "#/components/schemas/SeoReport"
+		}
+	},
+	"GET /v1/admin/seo/report": {
+		"summary": "The last full SEO checklist run (SEO checklist widget)",
+		"description": "As GET /v1/seo/report.",
+		"response": {
+			"oneOf": [
+				{
+					"$ref": "#/components/schemas/SeoReport"
+				},
+				{
+					"type": "null"
+				}
+			]
 		}
 	},
 	"GET /v1/redirects/match": {
