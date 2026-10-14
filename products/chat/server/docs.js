@@ -3,11 +3,11 @@
  * webhook tools and their signature check, the booking endpoint's two requests, handoff, flows, the Notifications
  * templates, attachments and the bucket's CORS rule, data rights and the activity log, the shop tools with the
  * Ecommerce routes they call, product cards and their add-to-cart event, the context panel's shop info, per-feature
- * routes and widgets, the widget snippets, the ticket server snippet (Node.js fetch and cURL), the kit's routes for
- * your server (settings and Chat's lists, acting user, visitor calls, counts, activity, Format; PLAN 0.8.10), the
- * import feature, the business.json template, the localhost note and the API reference from `openapi.json`: every call
- * with its auth, feature, parameters, request fields and answer fields (`renderApiReference`, from `schemas/api.json`
- * and the kit's own descriptions). Plain HTML; every value is escaped.
+ * routes, widgets and what the website builds (the guide's `build`), the widget snippets, the ticket server snippet
+ * (Node.js fetch and cURL), the kit's routes for your server (settings and Chat's lists, acting user, visitor calls,
+ * counts, activity, Format; PLAN 0.8.10), the import feature, the business.json template, the localhost note and the
+ * API reference from `openapi.json`: every call with its auth, feature, parameters, request fields and answer fields
+ * (`renderApiReference`, from `schemas/api.json` and the kit's own descriptions). Plain HTML; every value is escaped.
  * @module
  */
 import { KIT_GUIDE, apiAnchor, renderApiReference } from '@ss/app-kit';
@@ -60,6 +60,8 @@ const routeTable = (rows) =>
  * @returns {string}
  */
 export const renderDocs = ({ base }) => {
+	const features = /** @type {Record<string, string[]>} */ (/** @type {unknown} */ (guide.features));
+	const build = /** @type {Record<string, string>} */ (guide.build);
 	const snippets = createSnippets({
 		base,
 		widgets: manifest.widgets,
@@ -71,6 +73,8 @@ export const renderDocs = ({ base }) => {
 		return [
 			`<section id="feature-${escape(feature.key)}"><h3>${escape(feature.name)}</h3>`,
 			para(feature.description),
+			...(features[feature.key] ?? []).map(para),
+			...(build[feature.key] ? [`<p><strong>What your website builds.</strong> ${escape(build[feature.key])}</p>`] : []),
 			widgets.length > 0
 				? `<ul>${widgets.map((widget) => `<li>${escape(widget.kind)} widget <code>${escape(`${WIDGET_ATTRIBUTE}="${widget.key}"`)}</code></li>`).join('')}</ul>`
 				: '',

@@ -54,9 +54,10 @@ const merchantDatabase = () => {
 
 /**
  * A connected product with one website.
- * @param {{ start?: number }} [options]
+ * @param {{ start?: number, store?: (store: import('@ss/app-kit').Store) => import('@ss/app-kit').Store }} [options]
+ *   `store` wraps the product database (a test can make a read fail)
  */
-export const setup = async ({ start = Date.parse('2026-10-05T10:00:00Z') } = {}) => {
+export const setup = async ({ start = Date.parse('2026-10-05T10:00:00Z'), store = (given) => given } = {}) => {
 	let t = start;
 	const now = () => t;
 	const portal = await createFakePortal({ now });
@@ -130,7 +131,7 @@ export const setup = async ({ start = Date.parse('2026-10-05T10:00:00Z') } = {})
 	const network = createNetwork(handlers);
 	const product = createProductInstance({
 		config: { mongodbUri: '', connectSecret: SECRET, encryptionKey: ENCRYPTION_KEY },
-		store: createMemoryStore({ now }),
+		store: store(createMemoryStore({ now })),
 		fetch: portal.fetch,
 		now,
 		nodeEnv: 'test',

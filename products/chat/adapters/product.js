@@ -2,15 +2,19 @@
  * The product on the kit: `createProductInstance(options)` wires `@ss/app-kit` `createProduct` with Chat's manifest
  * (each feature's settings schema from `schemas/` inline), its widget texts, its Connections (storage, the main and
  * backup AI providers, and the Accounts, Notifications and Ecommerce tokens), the merchant database indexes, the
- * data-rights hooks, the widget settings and what the `import` feature takes (`imports.js`), and adds the AI providers, the list settings and the tool signing secret
- * (product database) on the same outbound policy. The Next.js route and the tests pass the rest (config, store, clock,
- * network). Public entry `./product` of this package, so a system test can compose the product with `./routes`.
+ * data-rights hooks, the widget settings, what the `import` feature takes (`imports.js`) and its part of the website
+ * Setup sheet (the OpenAPI document, the guide's "What your website builds" per feature, its lists in its own words and
+ * who answers visitors), and adds the AI providers, the list settings and the tool signing secret (product database) on
+ * the same outbound policy. The Next.js route and the tests pass the rest (config, store, clock, network).
+ * Public entry `./product` of this package, so a system test can compose the product with `./routes`.
  * @module
  */
 import { PRODUCT_DATABASE_OPTIONS, createMemoryStore, createMongoStore, createProduct } from '@ss/app-kit';
 import { createOutboundPolicy, safeFetch } from '@ss/net';
 import { MongoClient } from 'mongodb';
+import guide from '../docs/guide.json' with { type: 'json' };
 import manifestFile from '../manifest.json' with { type: 'json' };
+import openapi from '../openapi.json' with { type: 'json' };
 import strings from '../strings/en.json' with { type: 'json' };
 import aiBackup from '../schemas/ai_backup.settings.json' with { type: 'json' };
 import aiCaps from '../schemas/ai_caps.settings.json' with { type: 'json' };
@@ -136,9 +140,104 @@ const PROBLEM_CODES = Object.freeze({
 /** The fallback key a misconfigured product builds its sealer with (it answers 503 everywhere anyway). */
 const UNCONFIGURED_KEY = 'unconfigured-chat-encryption-key-0000000000';
 
+/** Longest list summary on the Setup sheet (the kit's limit). */
+const LIST_SUMMARY_MAX = 300;
+
+/** @param {number} count @param {string} one @param {string} many */
+const counted = (count, one, many) => `${count} ${count === 1 ? one : many}`;
+
 /**
- * @typedef {Omit<import('@ss/app-kit').ProductOptions, 'manifest' | 'strings' | 'hooks' | 'connections' | 'data' | 'problemCodes'>
- *   & { hooks?: { exportUser: NonNullable<import('@ss/app-kit').ProductOptions['hooks']>['exportUser'], deleteUser: NonNullable<import('@ss/app-kit').ProductOptions['hooks']>['deleteUser'], widgetConfig: NonNullable<import('@ss/app-kit').ProductOptions['hooks']>['widgetConfig'] } }} InstanceOptions
+ * A list counted and named (`2 tools: check_stock, track_order.`): as many names as fit in a list summary, the rest
+ * counted (`and 3 more`).
+ * @param {string} one
+ * @param {string} many
+ * @param {any[]} items
+ * @param {(item: any) => string} nameOf
+ */
+const namedList = (one, many, items, nameOf) => {
+	if (items.length === 0) return `No ${many} yet.`;
+	const names = items.map(nameOf);
+	/** @param {number} shown */
+	const text = (shown) =>
+		`${counted(names.length, one, many)}: ${names.slice(0, shown).join(', ')}${shown < names.length ? ` and ${names.length - shown} more` : ''}.`;
+	let shown = names.length;
+	while (shown > 1 && text(shown).length > LIST_SUMMARY_MAX) shown -= 1;
+	return text(shown);
+};
+
+/** @param {string} one @param {string} many @param {unknown[]} items */
+const countedList = (one, many, items) => (items.length === 0 ? `No ${many} yet.` : `${counted(items.length, one, many)}.`);
+
+/**
+ * Flows by how they start (`3 flows: 2 start on a page, 1 on a keyword.`).
+ * @param {import('../core/flows.js').Flow[]} flows
+ */
+const flowsText = (flows) => {
+	if (flows.length === 0) return 'No flows yet.';
+	const starts = /** @type {const} */ (['page', 'keyword'])
+		.map((kind) => ({ kind, count: flows.filter((flow) => flow.start.kind === kind).length }))
+		.filter(({ count }) => count > 0)
+		.map(({ kind, count }, index) => `${index === 0 ? counted(count, 'starts', 'start') : count} on a ${kind}`);
+	return `${counted(flows.length, 'flow', 'flows')}: ${starts.join(', ')}.`;
+};
+
+/**
+ * Each list in Chat's own words: tools by name (never their addresses), custom fields by label, flows by how they
+ * start, page rules and fallback answers counted.
+ * @type {Record<import('./lists.js').ListName, (items: any[]) => string>}
+ */
+const LIST_WORDS = {
+	tools: (tools) => namedList('tool', 'tools', tools, (tool) => tool.name),
+	flows: flowsText,
+	custom_fields: (fields) => namedList('field', 'fields', fields, (field) => field.label),
+	page_rules: (rules) => countedList('page rule', 'page rules', rules),
+	fallback_answers: (answers) => countedList('answer', 'answers', answers),
+};
+
+/**
+ * Who answers visitors, from the features that are on (handoff needs the inbox).
+ * @param {string[]} on
+ */
+const whoAnswers = (on) => {
+	if (on.includes('ai_replies'))
+		return on.includes('handoff')
+			? 'The AI answers first and hands a conversation to your staff when needed.'
+			: on.includes('inbox')
+				? 'The AI answers every visitor; your staff can also answer in the inbox.'
+				: 'The AI answers every visitor.';
+	return on.includes('inbox') ? 'Your staff answer in the inbox.' : 'Nobody answers yet: switch on AI replies or the inbox.';
+};
+
+/**
+ * Chat's own part of the website Setup sheet: the lists of the features that are on in its own words (a list that
+ * cannot be read is left out, so the kit shows its own count) and who answers visitors. Nothing from Connections;
+ * Chat publishes no events.
+ * @param {import('./lists.js').Lists} lists
+ * @param {{ websiteId: string, on: string[] }} website
+ */
+const setupPart = async (lists, { websiteId, on }) => {
+	const names = /** @type {import('./lists.js').ListName[]} */ (Object.keys(LISTS)).filter((name) =>
+		on.includes(LISTS[name].feature),
+	);
+	const worded = await Promise.all(
+		names.map(async (name) => {
+			try {
+				return /** @type {[string, string]} */ ([name, LIST_WORDS[name](await lists.get(websiteId, name))]);
+			} catch {
+				return null;
+			}
+		}),
+	);
+	return {
+		lists: Object.fromEntries(worded.filter((entry) => entry !== null)),
+		summaries: [{ title: 'Who answers', text: whoAnswers(on) }],
+	};
+};
+
+/**
+ * What the Next.js route and the tests pass: every option but those the adapter sets itself.
+ * @typedef {Omit<import('@ss/app-kit').ProductOptions, 'manifest' | 'strings' | 'hooks' | 'connections' | 'data'
+ *   | 'problemCodes' | 'messages' | 'imports' | 'lists' | 'openapi' | 'build'>} InstanceOptions
  */
 
 /**
@@ -224,8 +323,13 @@ export const createProductInstance = (options) => {
 			widgetConfig: (ctx) => /** @type {NonNullable<typeof hooks.widgetConfig>} */ (hooks.widgetConfig)(ctx),
 			// the Owner's Re-seal (RT-14): the tool signing secrets in the product database
 			resealProduct: () => lists.resealToolSecrets(),
+			// its part of the website Setup sheet in its own words (lists, who answers); never secrets
+			blueprint: (website) => setupPart(lists, website),
 		},
 		data: { indexes: INDEXES },
+		// the website Setup sheet: the API document and what the merchant's website builds per feature
+		openapi,
+		build: guide.build,
 		// staff, guests, conversations and messages moved in from another system with ss-import (feature `import`,
 		// PLAN 0.8.10 K10)
 		imports: createImportOptions({

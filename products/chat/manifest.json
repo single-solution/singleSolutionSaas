@@ -14,6 +14,7 @@
 			"name": "Visitor chat",
 			"description": "The ready chat widget and the visitor API for your own chat screens, with window.SSChat.",
 			"dependsOn": [],
+			"recommendFor": ["chat.*"],
 			"settings": {
 				"$ref": "schemas/visitor_chat.settings.json"
 			}
@@ -23,6 +24,7 @@
 			"name": "Guest chat",
 			"description": "Visitors chat without signing in, up to the guest message limit, remembered on their device.",
 			"dependsOn": ["visitor_chat"],
+			"recommendFor": ["chat.*"],
 			"settings": {
 				"$ref": "schemas/guest_chat.settings.json"
 			}
@@ -32,6 +34,7 @@
 			"name": "Signed-in chat",
 			"description": "Visitors signed in with Accounts chat as themselves; a guest chat moves to the account on sign-in.",
 			"dependsOn": ["visitor_chat"],
+			"recommendFor": ["chat.*+signIn.*"],
 			"settings": {
 				"$ref": "schemas/signed_in_chat.settings.json"
 			}
@@ -41,6 +44,7 @@
 			"name": "AI replies",
 			"description": "The AI answers visitors with your own AI provider key (OpenAI, Anthropic, Google Gemini or any OpenAI-compatible service).",
 			"dependsOn": ["visitor_chat"],
+			"recommendFor": ["chat.ai"],
 			"settings": {
 				"$ref": "schemas/ai_replies.settings.json"
 			}
@@ -59,6 +63,7 @@
 			"name": "AI instructions",
 			"description": "Your own instructions for the AI (up to 32,000 characters), on top of the built-in neutral ones.",
 			"dependsOn": ["ai_replies"],
+			"recommendFor": ["chat.ai"],
 			"settings": {
 				"$ref": "schemas/ai_instructions.settings.json"
 			}
@@ -77,6 +82,7 @@
 			"name": "AI token caps",
 			"description": "Daily and monthly caps on the AI tokens a website uses; at a cap the AI stops until the window resets.",
 			"dependsOn": ["ai_replies"],
+			"recommendFor": ["chat.ai"],
 			"settings": {
 				"$ref": "schemas/ai_caps.settings.json"
 			}
@@ -95,6 +101,7 @@
 			"name": "Language lock",
 			"description": "The AI answers in the visitor’s language, from the languages you allow.",
 			"dependsOn": ["ai_replies"],
+			"recommendFor": ["chat.ai+languages.many"],
 			"settings": {
 				"$ref": "schemas/language_lock.settings.json"
 			}
@@ -104,6 +111,7 @@
 			"name": "Knowledge base",
 			"description": "FAQ entries and articles the AI answers from.",
 			"dependsOn": ["ai_replies"],
+			"recommendFor": ["chat.ai"],
 			"settings": {
 				"$ref": "schemas/knowledge_base.settings.json"
 			}
@@ -140,6 +148,7 @@
 			"name": "Book-a-slot tool",
 			"description": "The AI offers free time slots and books one through your own booking endpoint.",
 			"dependsOn": ["ai_replies"],
+			"recommendFor": ["chat.ai+sells.services"],
 			"settings": {
 				"$ref": "schemas/book_slot.settings.json"
 			}
@@ -149,6 +158,7 @@
 			"name": "Shop tools: product search and details",
 			"description": "The AI searches your Ecommerce catalog and reads a product's details, with the pasted Ecommerce token.",
 			"dependsOn": ["ai_replies"],
+			"recommendFor": ["chat.ai+sells.physical", "chat.ai+sells.digital"],
 			"settings": {
 				"$ref": "schemas/shop_search.settings.json"
 			}
@@ -158,6 +168,7 @@
 			"name": "Shop tools: deals and savings quotes",
 			"description": "The AI lists your active deals and quotes a product's price after them, with the pasted Ecommerce token.",
 			"dependsOn": ["ai_replies"],
+			"recommendFor": ["chat.ai+offers.discounts"],
 			"settings": {
 				"$ref": "schemas/shop_deals.settings.json"
 			}
@@ -176,6 +187,7 @@
 			"name": "Shop tools: my orders and account",
 			"description": "The AI tells a signed-in visitor about their own last orders, loyalty points and name, with the pasted Ecommerce token.",
 			"dependsOn": ["ai_replies", "signed_in_chat"],
+			"recommendFor": ["chat.ai+signIn.*+sells.physical", "chat.ai+signIn.*+sells.digital"],
 			"settings": {
 				"$ref": "schemas/shop_my_orders.settings.json"
 			}
@@ -185,6 +197,7 @@
 			"name": "Track-shipment tool",
 			"description": "The AI gives a signed-in visitor the courier, tracking number, tracking link and latest status of their own orders.",
 			"dependsOn": ["ai_replies", "signed_in_chat"],
+			"recommendFor": ["chat.ai+signIn.*+delivers.courier"],
 			"settings": {
 				"$ref": "schemas/track_shipment.settings.json"
 			}
@@ -203,6 +216,7 @@
 			"name": "Store context",
 			"description": "Each AI reply also gets your store’s policies, newest products, deals and the product the visitor is viewing, with the pasted Ecommerce token.",
 			"dependsOn": ["ai_replies"],
+			"recommendFor": ["chat.ai+sells.physical", "chat.ai+sells.digital"],
 			"settings": {
 				"$ref": "schemas/shop_context.settings.json"
 			}
@@ -239,6 +253,7 @@
 			"name": "Lead capture and flows",
 			"description": "Collects contact details as leads, and runs short scripted flows started by a page or a keyword.",
 			"dependsOn": ["visitor_chat"],
+			"recommendFor": ["chat.*+sells.services"],
 			"settings": {
 				"$ref": "schemas/leads_flows.settings.json"
 			}
@@ -293,6 +308,7 @@
 			"name": "Inbox",
 			"description": "The inbox widget where your staff read and answer conversations.",
 			"dependsOn": ["visitor_chat"],
+			"recommendFor": ["chat.people"],
 			"settings": {
 				"$ref": "schemas/inbox.settings.json"
 			}
@@ -302,6 +318,7 @@
 			"name": "Human handoff",
 			"description": "Hands a conversation to a person: the AI stops and your staff take over, with office hours.",
 			"dependsOn": ["inbox"],
+			"recommendFor": ["chat.people+chat.ai"],
 			"settings": {
 				"$ref": "schemas/handoff.settings.json"
 			}
@@ -338,6 +355,7 @@
 			"name": "Saved replies",
 			"description": "Replies your staff save and reuse.",
 			"dependsOn": ["inbox"],
+			"recommendFor": ["chat.people"],
 			"settings": {
 				"$ref": "schemas/saved_replies.settings.json"
 			}
@@ -365,6 +383,7 @@
 			"name": "Staff alerts",
 			"description": "Alerts your staff by email, WhatsApp or SMS about new messages and handoffs, through Notifications.",
 			"dependsOn": ["inbox"],
+			"recommendFor": ["chat.people"],
 			"settings": {
 				"$ref": "schemas/staff_alerts.settings.json"
 			}
@@ -374,6 +393,7 @@
 			"name": "Reply alerts to visitors",
 			"description": "A visitor who left the chat gets a WhatsApp, an SMS or an email when your staff reply, through Notifications.",
 			"dependsOn": ["inbox"],
+			"recommendFor": ["chat.people+messages.*"],
 			"settings": {
 				"$ref": "schemas/visitor_alerts.settings.json"
 			}
@@ -383,6 +403,7 @@
 			"name": "Moderation",
 			"description": "Hides personal data, filters leaks from AI answers, applies a link policy and your blocked terms.",
 			"dependsOn": [],
+			"recommendFor": ["chat.ai"],
 			"settings": {
 				"$ref": "schemas/moderation.settings.json"
 			}
@@ -401,6 +422,7 @@
 			"name": "Import",
 			"description": "Staff, guests and conversations with their messages moved in from another system with ss-import (server token only; no messages, events or alerts). Our admins switch it on for a migration and off after it.",
 			"dependsOn": [],
+			"recommendFor": ["moving.yes"],
 			"settings": {
 				"$ref": "schemas/import.settings.json"
 			}
