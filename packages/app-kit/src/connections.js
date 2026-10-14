@@ -51,6 +51,8 @@ import { isObject, omit } from './util.js';
 const NAME = /^[a-z][a-z0-9_]{0,39}$/;
 const KINDS = Object.freeze(['database', 'storage', 'secret', 'token']);
 const DIRECTORY_TTL_MS = 5 * 60_000;
+/** After the Portal could not list the products, it is asked again only after this long. */
+const DIRECTORY_RETRY_MS = 60_000;
 const MAX_VALUE_LENGTH = 4096;
 /** The most stored values one Re-seal reads (every website's Connections). */
 const RESEAL_LIMIT = 100_000;
@@ -137,6 +139,8 @@ export const createConnections = ({
 	const addresses = new Map();
 	/** @type {{ items: ReadonlyArray<Readonly<DirectoryEntry>>, until: number } | null} */
 	let listed = null;
+	/** The Portal's last failure to list the products, kept {@link DIRECTORY_RETRY_MS}. @type {{ error: unknown, until: number } | null} */
+	let unlisted = null;
 	/** @param {string} websiteId @param {string} name */
 	const idOf = (websiteId, name) => `${websiteId}|${name}`;
 	/** @param {string} websiteId @param {string} name */
@@ -342,16 +346,23 @@ export const createConnections = ({
 	/**
 	 * Every connected product with its name and address, by id (the Portal's directory list, cached up to 5 minutes; its
 	 * addresses also answer `addressOf`). While the Portal cannot answer, the last good copy; throws when there is none.
+	 * After a failure the Portal is asked again only after a minute, so callers (a send) never each wait for it.
 	 * @returns {Promise<ReadonlyArray<Readonly<DirectoryEntry>>>}
 	 */
 	const products = async () => {
 		if (listed && listed.until > now()) return listed.items;
+		if (unlisted && unlisted.until > now()) {
+			if (!listed) throw unlisted.error;
+			return listed.items;
+		}
 		try {
 			const { items } = await directoryList();
 			const until = now() + DIRECTORY_TTL_MS;
 			for (const item of items) addresses.set(item.productId, { baseUrl: item.baseUrl, until });
 			listed = { items: Object.freeze(items.map((item) => Object.freeze({ ...item }))), until };
+			unlisted = null;
 		} catch (error) {
+			unlisted = { error, until: now() + DIRECTORY_RETRY_MS };
 			if (!listed) throw error;
 			logger.warn('product directory not read: the last copy is used', { error });
 		}

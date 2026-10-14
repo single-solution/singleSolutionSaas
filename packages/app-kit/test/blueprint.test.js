@@ -160,6 +160,25 @@ describe('GET /v1/blueprint (Portal call)', () => {
 		expect(again.features[0].lists).toEqual([]);
 	});
 
+	it('stays a valid answer when a connection holds a word the answer also uses as a name (a bucket called like the product)', async () => {
+		const s = await setup({ connections: SECRET_CONNECTIONS });
+		await s.switchOn(['notes', 'inbox']);
+		const cookie = await s.session();
+		const value = { apiKey: 'sk_live_0123456789abcdef', account: 'maxNotes' };
+		const url = `/v1/dashboard/websites/${s.websiteId}`;
+		expect((await s.dash(cookie, 'PUT', `${url}/connections/provider`, { value })).status).toBe(200);
+		expect((await s.dash(cookie, 'PUT', `${url}/settings/notes.greeting`, { value: 'Ask maxNotes' })).status).toBe(204);
+		const { status, body } = await blueprintOf(s);
+		expect(status).toBe(200);
+		expect(validateProductBlueprint(body).ok).toBe(true);
+		expect(body.features[0].settings).toEqual([
+			{ key: 'maxNotes', title: 'Notes per visitor per day', value: 5, default: true },
+			// a value holding a saved string is still hidden
+			{ key: 'greeting', title: 'Greeting', value: HIDDEN, default: false },
+		]);
+		expect(JSON.stringify(body)).not.toContain('sk_live_0123456789abcdef');
+	});
+
 	it('shows the widget ready and installed once the database is connected and a visitor widget was seen; business.json found', async () => {
 		const s = await setup();
 		await s.switchOn(['notes']);

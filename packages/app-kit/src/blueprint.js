@@ -20,9 +20,12 @@
  *   features on for an Owner or Support admin the Portal names, with the features they need, through the same feature
  *   report as the dashboard's Features page (the Portal checks the admin again when it accepts the report).
  *
- * No secret can leave: besides never reading connection values into the answer, every string of the finished answer
- * that holds a value saved in the website's Connections (8 characters or more) is replaced by `[hidden]`, so even a
- * setting or a hook text that repeats a key shows nothing of it.
+ * No secret can leave: besides never reading connection values into the answer, every string the merchant or the hook
+ * wrote (setting values, list summaries, the hook's summaries and events, the business name) that holds a value saved
+ * in the website's Connections (8 characters or more) is replaced by `[hidden]` (an event is left out), so even a
+ * setting or a hook text that repeats a key shows nothing of it. The names and addresses the product itself gives
+ * (keys, ids, links) are left as they are, so a connection part that is no secret, such as a bucket named like the
+ * product, cannot break the answer.
  * @module
  */
 import { WIDGET_SEEN_MS } from './dashboard.js';
@@ -181,15 +184,16 @@ export const createBlueprint = ({ kit, lists, hooks, events, openapi, build: bui
 	const absolute = (value) => new URL(value, `${kit.connection.active().baseUrl.replace(/\/+$/, '')}/`).toString();
 
 	/**
-	 * Settings of a section with their values.
+	 * Settings of a section with their values (a value holding a secret hidden).
 	 * @param {import('@ss/contracts').ManifestFeature['settings']} schema
 	 * @param {Record<string, { value: unknown, source: string }>} values
+	 * @param {ReadonlyArray<string>} secrets
 	 */
-	const settingsOf = (schema, values) =>
+	const settingsOf = (schema, values, secrets) =>
 		Object.entries(schema.properties).map(([key, node]) => ({
 			key,
 			title: node.title,
-			value: values[key]?.value,
+			value: hideSecrets(values[key]?.value, secrets),
 			default: values[key]?.source !== 'website',
 		}));
 
@@ -201,7 +205,7 @@ export const createBlueprint = ({ kit, lists, hooks, events, openapi, build: bui
 	 */
 	const build = async (ctx, status) => {
 		const websiteId = status.websiteId;
-		const [{ on }, values, connections, seen, business] = await Promise.all([
+		const [{ on }, values, connections, seen, business, saved] = await Promise.all([
 			kit.reports.switches(websiteId),
 			kit.settings.settingsOfFeatures(
 				websiteId,
@@ -210,7 +214,11 @@ export const createBlueprint = ({ kit, lists, hooks, events, openapi, build: bui
 			kit.connections.list(websiteId),
 			store.get('widget', websiteId),
 			kit.business.get(websiteId, status.domain),
+			Promise.all(Object.keys(kit.connections.definitions).map((name) => kit.connections.value(websiteId, name))),
 		]);
+		const secrets = saved.flatMap(secretsIn);
+		/** @template T @param {T} value @returns {T} */
+		const hide = (value) => /** @type {T} */ (hideSecrets(value, secrets));
 		if (business.stale) ctx.after(() => kit.business.refresh(websiteId, status.domain));
 		/** @type {unknown} */
 		let answer;
@@ -240,7 +248,7 @@ export const createBlueprint = ({ kit, lists, hooks, events, openapi, build: bui
 				.filter(([, list]) => [list.feature].flat().find((key) => on.includes(key)) === feature)
 				.map(([name, list]) => {
 					const counted = /** @type {{ summary: string, count: number | null }} */ (summaries.get(name));
-					return { name, title: list.title, summary: additions.lists[name] ?? counted.summary, count: counted.count };
+					return { name, title: list.title, summary: hide(additions.lists[name] ?? counted.summary), count: counted.count };
 				});
 		const effective = effectiveStatus(status, now());
 		const database = connections.find((c) => c.name === 'database');
@@ -262,7 +270,7 @@ export const createBlueprint = ({ kit, lists, hooks, events, openapi, build: bui
 			business: {
 				found: business.found,
 				fetchedAt: business.fetchedAt,
-				name: business.found ? business.business.name : null,
+				name: business.found ? hide(business.business.name) : null,
 				country: business.found ? business.business.country : null,
 				timeZone: business.found ? business.business.timeZone : null,
 			},
@@ -280,7 +288,7 @@ export const createBlueprint = ({ kit, lists, hooks, events, openapi, build: bui
 					on: isOn,
 					dependsOn: [...feature.dependsOn],
 					recommendFor: [...(feature.recommendFor ?? [])],
-					settings: isOn ? settingsOf(feature.settings, values[feature.key] ?? {}) : [],
+					settings: isOn ? settingsOf(feature.settings, values[feature.key] ?? {}, secrets) : [],
 					lists: isOn ? listsOfFeature(feature.key) : [],
 				};
 			}),
@@ -288,7 +296,7 @@ export const createBlueprint = ({ kit, lists, hooks, events, openapi, build: bui
 				key: section.key,
 				title: section.name,
 				features: [...section.features],
-				settings: settingsOf(section.settings, values[section.key] ?? {}),
+				settings: settingsOf(section.settings, values[section.key] ?? {}, secrets),
 			})),
 			connections: connections.map((c) => ({
 				key: c.name,
@@ -317,7 +325,12 @@ export const createBlueprint = ({ kit, lists, hooks, events, openapi, build: bui
 				feature: p.feature,
 				on: on.includes(p.feature),
 			})),
-			events: [...new Set([...(events ? [`${manifest.id}.settings.changed`] : []), ...additions.events])],
+			events: [
+				...new Set([
+					...(events ? [`${manifest.id}.settings.changed`] : []),
+					...additions.events.filter((type) => hide(type) === type),
+				]),
+			],
 			checklist: [
 				{ key: 'features', done: on.length > 0, text: `Switch on the ${manifest.name} features this website uses.` },
 				...neededConnections.map((c) => ({
@@ -336,7 +349,7 @@ export const createBlueprint = ({ kit, lists, hooks, events, openapi, build: bui
 					: []),
 				{ key: 'business', done: business.found, text: `Publish your business basics at ${businessUrl}.` },
 			],
-			summaries: additions.summaries,
+			summaries: hide(additions.summaries),
 			build: manifest.features
 				.filter((feature) => on.includes(feature.key) && buildTexts[feature.key] !== undefined)
 				.map((feature) => ({
@@ -345,10 +358,7 @@ export const createBlueprint = ({ kit, lists, hooks, events, openapi, build: bui
 					docs: `${absolute(manifest.docsUrl)}#feature-${feature.key}`,
 				})),
 		};
-		const secrets = (
-			await Promise.all(Object.keys(kit.connections.definitions).map((name) => kit.connections.value(websiteId, name)))
-		).flatMap(secretsIn);
-		return /** @type {ProductBlueprint} */ (hideSecrets(blueprint, secrets));
+		return blueprint;
 	};
 
 	/**
