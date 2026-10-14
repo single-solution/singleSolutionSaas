@@ -1,5 +1,9 @@
+import { validateProductBlueprint } from '@ss/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { ADMIN_ORIGIN, ORIGIN, setup } from './helpers.js';
+import guide from '../docs/guide.json' with { type: 'json' };
+import openapi from '../openapi.json' with { type: 'json' };
+import { manifest } from '../adapters/product.js';
+import { ADMIN_ORIGIN, BASE, ORIGIN, setup } from './helpers.js';
 
 /** @type {Awaited<ReturnType<typeof setup>>} */
 let env;
@@ -128,6 +132,7 @@ describe('notes routes', () => {
 		])
 			expect(html).toContain(part);
 		expect(html).toContain('/widget.js&#34; data-token');
+		expect(html).toContain('<p><strong>What your website builds.</strong> Add the widget script');
 	});
 
 	it('export and delete a visitor’s notes (data rights)', async () => {
@@ -140,5 +145,25 @@ describe('notes routes', () => {
 		expect(await deleted.json()).toEqual({ deleted: 1, anonymised: 0 });
 		const nothing = await env.call('POST', '/v1/data-rights/delete', { token: env.server, body: { user: { id: 'u_9' } } });
 		expect(await nothing.json()).toEqual({ deleted: 0, anonymised: 0 });
+	});
+});
+
+describe('the website Setup sheet', () => {
+	it('answers this product’s part: tags, the OpenAPI document, a summary and what the website builds', async () => {
+		const response = await env.portal.callAsPortal(manifest.id, 'GET', `/v1/blueprint?websiteId=${env.websiteId}`);
+		const part = await response.json();
+		expect(validateProductBlueprint(part).ok).toBe(true);
+		expect(part.docs).toEqual({ guide: `${BASE}/docs`, openapi: `${BASE}/openapi.json` });
+		expect(part.features[0]).toMatchObject({ key: 'notes', on: true, recommendFor: ['chat.people'] });
+		expect(part.summaries).toEqual([{ title: 'Notes', text: 'Visitors leave notes of up to 500 characters.' }]);
+		expect(part.build).toEqual([{ feature: 'notes', what: guide.build.notes, docs: `${BASE}/docs#feature-notes` }]);
+		expect(await (await env.call('GET', '/openapi.json')).json()).toEqual(openapi);
+	});
+
+	it('says nothing of a feature that is off', async () => {
+		await env.switchOn([]);
+		const part = await (await env.portal.callAsPortal(manifest.id, 'GET', `/v1/blueprint?websiteId=${env.websiteId}`)).json();
+		expect(part.summaries).toEqual([]);
+		expect(part.build).toEqual([]);
 	});
 });

@@ -12,5 +12,8 @@
 			"Visitors leave a short note with an optional email address. The longest note is a setting (Settings in the product dashboard).",
 			"Your staff read the notes in your admin with the inbox widget (permission notes.read), and your server can read them with GET /v1/notes and the server token."
 		]
+	},
+	"build": {
+		"notes": "Add the widget script with your browser token to your pages and place <div data-ss-{{id}}=\"note_form\"></div> where visitors leave notes. For your staff, place the inbox widget in your admin with a ticket from your server (permission notes.read), or read the notes from your server with GET /v1/notes and the server token."
 	}
 }

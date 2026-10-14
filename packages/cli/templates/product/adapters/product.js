@@ -1,12 +1,16 @@
 /**
  * The product on the kit: `createProductInstance(options)` wires `@ss/app-kit` `createProduct` with this product's
  * manifest (each feature's settings schema from `schemas/` inline), its English widget texts, the merchant database
- * indexes, the data-rights hooks and the widget settings the kit's widget config routes answer. The Next.js route and the tests pass the rest (config, store, clock, network).
+ * indexes, the data-rights hooks, the widget settings the kit's widget config routes answer and its part of the
+ * website Setup sheet (the OpenAPI document, the guide's "What your website builds" per feature and a short summary in
+ * its own words). The Next.js route and the tests pass the rest (config, store, clock, network).
  * Public entry `./product` of this package, so a system test can compose the product with `./routes`.
  * @module
  */
 import { createProduct } from '@ss/app-kit';
+import guide from '../docs/guide.json' with { type: 'json' };
 import manifestFile from '../manifest.json' with { type: 'json' };
+import openapi from '../openapi.json' with { type: 'json' };
 import notesSettings from '../schemas/notes.settings.json' with { type: 'json' };
 import strings from '../strings/en.json' with { type: 'json' };
 import { noteView } from '../core/notes.js';
@@ -39,7 +43,7 @@ const dataRights = {
 };
 
 /**
- * @typedef {Omit<import('@ss/app-kit').ProductOptions, 'manifest' | 'strings' | 'hooks' | 'connections' | 'data'>} InstanceOptions
+ * @typedef {Omit<import('@ss/app-kit').ProductOptions, 'manifest' | 'strings' | 'hooks' | 'connections' | 'data' | 'openapi' | 'build'>} InstanceOptions
  */
 
 /**
@@ -57,8 +61,23 @@ export const createProductInstance = (options) => {
 			widgetConfig: async (ctx) => ({
 				maxLength: (await product.settings.values(/** @type {string} */ (ctx.websiteId), 'notes')).maxLength,
 			}),
+			// what this product adds to the website's Setup sheet in its own words (event types, list summaries,
+			// summaries); never secrets
+			blueprint: async ({ websiteId, on }) => ({
+				summaries: on.includes('notes')
+					? [
+							{
+								title: 'Notes',
+								text: `Visitors leave notes of up to ${(await product.settings.values(websiteId, 'notes')).maxLength} characters.`,
+							},
+						]
+					: [],
+			}),
 		},
 		data: { indexes: NOTE_INDEXES },
+		// the website Setup sheet: the API document and what the merchant's website builds per feature
+		openapi,
+		build: guide.build,
 	});
 	return product;
 };

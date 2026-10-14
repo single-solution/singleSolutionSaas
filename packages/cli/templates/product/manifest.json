@@ -11,6 +11,7 @@
 			"name": "Notes",
 			"description": "Visitors leave short notes; the merchant's staff read them in their own admin.",
 			"dependsOn": [],
+			"recommendFor": ["chat.people"],
 			"settings": { "$ref": "schemas/notes.settings.json" }
 		}
 	],
