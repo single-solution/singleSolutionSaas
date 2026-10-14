@@ -58,8 +58,22 @@ export const ibanValid = (raw) => {
 	return remainder === 1;
 };
 
-/** A phone's last 9 digits, so national and international forms of one number match. @param {string} value */
-const phoneTail = (value) => value.replace(/\D/g, '').slice(-9);
+/** The digits of a phone without the leading zeros of `00` or a trunk `0`. @param {string} value */
+const phoneDigits = (value) => value.replace(/\D/g, '').replace(/^0+/, '');
+
+/** The fewest digits that name one number (a national number without its country code). */
+const MIN_PHONE_DIGITS = 7;
+
+/**
+ * Whether two phones (`phoneDigits`) are one number in national or international form: the shorter, of at least 7
+ * digits, ends the longer (`020 7946 0123` is `+44 20 7946 0123`, `6123 4567` is `+65 6123 4567`), in any country.
+ * @param {string} a
+ * @param {string} b
+ */
+const samePhone = (a, b) => {
+	const [shorter, longer] = a.length <= b.length ? [a, b] : [b, a];
+	return shorter.length >= MIN_PHONE_DIGITS && longer.endsWith(shorter);
+};
 
 /**
  * The website's own contact, kept by redaction (C15).
@@ -76,7 +90,7 @@ const phoneTail = (value) => value.replace(/\D/g, '').slice(-9);
  */
 export const redact = (text, kinds, labels, own = {}) => {
 	const ownEmail = typeof own.email === 'string' ? own.email.trim().toLowerCase() : '';
-	const ownPhone = typeof own.phone === 'string' && phoneTail(own.phone).length === 9 ? phoneTail(own.phone) : '';
+	const ownPhone = typeof own.phone === 'string' ? phoneDigits(own.phone) : '';
 	let out = String(text ?? '');
 	/** @type {Record<string, number>} */
 	const found = {};
@@ -94,7 +108,7 @@ export const redact = (text, kinds, labels, own = {}) => {
 	if (want.has('phone'))
 		out = out.replace(PHONE_CANDIDATE, (match) => {
 			const digits = match.replace(/\D/g, '');
-			if (ownPhone !== '' && phoneTail(digits) === ownPhone) return match;
+			if (samePhone(phoneDigits(digits), ownPhone)) return match;
 			return digits.length >= 8 && digits.length <= 15 && !/^\d{4}[-/.]\d{2}[-/.]\d{2}$/.test(match.trim())
 				? hit('phone')
 				: match;

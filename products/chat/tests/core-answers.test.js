@@ -184,6 +184,17 @@ describe('never disclose, strict language and the own contact (C1, C14, C15)', (
 		expect(redact('hello@shop.example.com 020 7946 0123 a@b.co +1 415 555 0100', ['email', 'phone'], {}, own).text).toBe(
 			'hello@shop.example.com 020 7946 0123 [email] [phone]',
 		);
+		// the website's own phone in its national or international form, in any country (national numbers of 7 to 10+
+		// digits); a number of another country with the same last digits is not it
+		for (const [phone, typed] of [
+			['+1 415 555 0100', '(415) 555-0100'],
+			['+65 6123 4567', '6123 4567'],
+			['+33 1 42 68 53 00', '01 42 68 53 00'],
+			['+92 300 1234567', '0300-1234567'],
+			['+44 7700 900123', '0044 7700 900123'],
+		])
+			expect(redact(`call ${typed}`, ['phone'], {}, { phone }).text).toBe(`call ${typed}`);
+		expect(redact('call +44 20 6123 4567', ['phone'], {}, { phone: '+65 6123 4567' }).text).toBe('call [phone]');
 		expect(redact('07700 900123', ['phone'], {}, { phone: '12' }).text).toBe('[phone]');
 		expect(
 			applyLinkPolicy('[a](https://shop.example.com) [b](https://x.example)', {
