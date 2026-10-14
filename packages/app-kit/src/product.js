@@ -241,6 +241,7 @@ export const createProduct = (options) => {
 			}
 		},
 		directory: (id) => connection.active().client.directory(id),
+		directoryList: () => connection.active().client.directoryList(),
 		now,
 		logger,
 		attach: messages.attach,
@@ -411,6 +412,11 @@ export const createProduct = (options) => {
 		callProduct: connections.callProduct,
 		/** Another product's address (the Portal's directory, cached 5 minutes); throws when it cannot be found. */
 		addressOf: connections.addressOf,
+		/**
+		 * Every connected product with its name and address, by id (the Portal's directory list, cached 5 minutes; the
+		 * last good copy while the Portal cannot answer; throws when it was never read).
+		 */
+		products: connections.products,
 		/** The messages the product sends through Notifications, with their default words (parity P1). */
 		messages: Object.freeze({ declaration: messages.declaration, defaultsFor: messages.defaultsFor }),
 		data: Object.freeze({ forWebsite: data.forWebsite }),

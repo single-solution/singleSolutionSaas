@@ -6,7 +6,13 @@
  * Portal's problem code).
  * @module
  */
-import { validateDirectory, validateRevocations, validateStatusResponse, validateWebsitesPage } from '@ss/contracts';
+import {
+	validateDirectory,
+	validateDirectoryList,
+	validateRevocations,
+	validateStatusResponse,
+	validateWebsitesPage,
+} from '@ss/contracts';
 import { signAssertion } from '@ss/protocol';
 import { isObject, kitError } from './util.js';
 
@@ -145,6 +151,8 @@ export const createPortalClient = ({ portalUrl, productId, signer, fetch = globa
 		/** @param {string} id @returns {Promise<{ baseUrl: string }>} */
 		directory: async (id) =>
 			checked(validateDirectory(await call('GET', `/v1/product/directory/${encodeURIComponent(id)}`)), 'directory'),
+		/** Every connected product with its name and address, by id. @returns {Promise<import('@ss/contracts').DirectoryList>} */
+		directoryList: async () => checked(validateDirectoryList(await call('GET', '/v1/product/directory')), 'directory'),
 		/** @param {string} jti @returns {Promise<{ consumed: boolean }>} */
 		consumeLaunch: async (jti) => {
 			const json = await call('POST', '/v1/product/launch/consume', { body: { jti } });

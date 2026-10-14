@@ -235,6 +235,12 @@ export const createFakePortal = async ({ url = 'https://portal.test', now = Date
 			const since = Number(searchParams.get('since') ?? '0');
 			return json(200, { tokenIds: revoked.slice(since), cursor: revoked.length > 0 ? String(revoked.length) : null });
 		}
+		if (method === 'GET' && pathname === '/v1/product/directory')
+			return json(200, {
+				items: [...products.values()]
+					.map(({ productId, baseUrl, manifest }) => ({ productId, name: String(manifest.name), baseUrl }))
+					.sort((a, b) => (a.productId < b.productId ? -1 : 1)),
+			});
 		if (method === 'GET' && parts[2] === 'directory' && parts[3] !== undefined) {
 			const other = products.get(parts[3]);
 			return other ? json(200, { baseUrl: other.baseUrl }) : fail(url, 'not_found', 404);
@@ -305,13 +311,16 @@ export const createFakePortal = async ({ url = 'https://portal.test', now = Date
 			});
 			return { productId: answer.productId, manifest: answer.manifest, prices };
 		},
-		/** Make another product known to the directory. @param {{ productId: string, baseUrl: string }} input */
-		addProduct: ({ productId, baseUrl }) => {
+		/**
+		 * Make another product known to the directory (its name defaults to its id).
+		 * @param {{ productId: string, baseUrl: string, name?: string }} input
+		 */
+		addProduct: ({ productId, baseUrl, name = productId }) => {
 			products.set(productId, {
 				productId,
 				baseUrl,
 				publicJwk: null,
-				manifest: null,
+				manifest: { name },
 				prices: { version: 0, features: [] },
 				handler: null,
 			});

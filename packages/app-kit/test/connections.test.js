@@ -335,6 +335,41 @@ describe('pasted tokens', () => {
 		});
 	});
 
+	it('list every connected product through the Portal directory: kept 5 minutes, the last copy while it is down', async () => {
+		const { product, portal, clock, accounts, notifications, entries } = await setup();
+		const first = await product.products();
+		expect(first).toEqual([
+			{ productId: 'accounts', name: 'accounts', baseUrl: accounts.url },
+			{ productId: 'notes', name: 'Notes', baseUrl: BASE },
+			{ productId: 'notifications', name: 'notifications', baseUrl: notifications.url },
+		]);
+		// a product connected later (one this product never heard of) is listed once the copy is 5 minutes old
+		portal.addProduct({ productId: 'bookings', name: 'Bookings', baseUrl: 'https://bookings.example.dev' });
+		expect(await product.products()).toBe(first);
+		clock.advance(5 * 60_000);
+		expect((await product.products()).map((entry) => entry.productId)).toEqual([
+			'accounts',
+			'bookings',
+			'notes',
+			'notifications',
+		]);
+		// its addresses answer addressOf without another directory call
+		const calls = portal.calls.length;
+		expect(await product.addressOf('bookings')).toBe('https://bookings.example.dev');
+		expect(portal.calls.length).toBe(calls);
+		// the Portal cannot answer: the last copy, with a warning
+		portal.setReachable(false);
+		clock.advance(5 * 60_000);
+		expect((await product.products()).map((entry) => entry.productId)).toContain('bookings');
+		expect(entries).toContainEqual(
+			expect.objectContaining({ level: 'warn', msg: 'product directory not read: the last copy is used' }),
+		);
+		// never read: it throws
+		const fresh = await setup();
+		fresh.portal.setReachable(false);
+		await expect(fresh.product.products()).rejects.toMatchObject({ code: 'portal_unreachable' });
+	});
+
 	it('mark the connection broken when the directory does not know the product', async () => {
 		const { session, dash, websiteId, portal, product } = await setup({
 			connections: {

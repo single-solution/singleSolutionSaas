@@ -12,7 +12,9 @@
  * - Every change writes Recent changes.
  * - `callProduct` calls another product with a pasted token, at the address the Portal's directory gives (cached up to
  *   5 minutes), through `@ss/net`; a send to Notifications carries the defaults of the product's message (`attach`,
- *   `messages.js`). `addressOf` gives another product's address (the same cache).
+ *   `messages.js`). `addressOf` gives another product's address (the same cache); `products` every connected
+ *   product and its address (the Portal's directory list, cached up to 5 minutes; its last good copy while the Portal
+ *   cannot answer), so a product can serve the others without naming them in its code.
  * @module
  */
 import { isNetError } from '@ss/net';
@@ -40,6 +42,7 @@ import { isObject, omit } from './util.js';
  *   message?: string, last4: string, testedAt: string | null }} ConnectionView
  */
 /** @typedef {(url: string, init?: import('@ss/net').SafeFetchInit) => Promise<import('@ss/net').SafeResponse>} OutboundSend */
+/** @typedef {{ productId: string, name: string, baseUrl: string }} DirectoryEntry a connected product, its name and address */
 /**
  * @typedef {{ ok: true, status: number, body: unknown }
  *   | { ok: false, reason: 'not_connected' | 'refused' | 'unavailable' | 'unreachable' | 'failed', status?: number, body?: unknown }} ProductCall
@@ -109,6 +112,7 @@ const valueViolation = (kind, value) => {
  *   policy: import('@ss/net').OutboundPolicy, testDatabase: (uri: string) => Promise<{ ok: boolean, message?: string }>,
  *   verifyServerToken: (token: string, productId: string) => Promise<{ websiteId: string } | null>,
  *   directory: (productId: string) => Promise<{ baseUrl: string }>,
+ *   directoryList: () => Promise<{ items: DirectoryEntry[] }>,
  *   now: () => number, logger: import('./logger.js').Logger,
  *   attach?: import('./messages.js').Messages['attach'],
  * }} options
@@ -124,12 +128,15 @@ export const createConnections = ({
 	testDatabase,
 	verifyServerToken,
 	directory,
+	directoryList,
 	now,
 	logger,
 	attach = (_productId, _path, init) => init,
 }) => {
 	/** @type {Map<string, { baseUrl: string, until: number }>} */
 	const addresses = new Map();
+	/** @type {{ items: ReadonlyArray<Readonly<DirectoryEntry>>, until: number } | null} */
+	let listed = null;
 	/** @param {string} websiteId @param {string} name */
 	const idOf = (websiteId, name) => `${websiteId}|${name}`;
 	/** @param {string} websiteId @param {string} name */
@@ -333,6 +340,25 @@ export const createConnections = ({
 	};
 
 	/**
+	 * Every connected product with its name and address, by id (the Portal's directory list, cached up to 5 minutes; its
+	 * addresses also answer `addressOf`). While the Portal cannot answer, the last good copy; throws when there is none.
+	 * @returns {Promise<ReadonlyArray<Readonly<DirectoryEntry>>>}
+	 */
+	const products = async () => {
+		if (listed && listed.until > now()) return listed.items;
+		try {
+			const { items } = await directoryList();
+			const until = now() + DIRECTORY_TTL_MS;
+			for (const item of items) addresses.set(item.productId, { baseUrl: item.baseUrl, until });
+			listed = { items: Object.freeze(items.map((item) => Object.freeze({ ...item }))), until };
+		} catch (error) {
+			if (!listed) throw error;
+			logger.warn('product directory not read: the last copy is used', { error });
+		}
+		return listed.items;
+	};
+
+	/**
 	 * Call another product with the server token pasted for it, exactly as the merchant's own server would. A send to
 	 * Notifications carries the defaults of the product's message (parity P1).
 	 * @param {string} websiteId
@@ -425,6 +451,7 @@ export const createConnections = ({
 		value,
 		callProduct,
 		addressOf,
+		products,
 		reseal,
 		/** @returns {Promise<string[]>} the websites whose merchant database is connected */
 		websitesWithDatabase: async () =>
