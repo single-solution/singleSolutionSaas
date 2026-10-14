@@ -3634,6 +3634,12 @@ the assignee's phone (CH-12); chats merge into the account's latest chat where t
 the inbox widget still lists only staff Chat has seen (CH-6); image sizes and blur for attachments are a missing
 feature (CH-8, owner's call).
 
+**Chat C3/C14 completed (2026-10-15; 175570b0, 397d5bd1):** the widget's idle nudge uses `proactive_idle`'s text per
+page kind from `setPage` (`{product}`; empty = the general text), `oncePer` session | product, and `hideOnMobile` (the
+phone width shared with full screen); Settings → Assistant edits `fallback_answers` (intent, language from Language
+lock, keywords, text with placeholders), checked with the server's shared rules, and warns about placeholders whose
+shop tool is off. Bug fixed: a wrong-typed language or keyword list is refused (it used to match every message).
+
 #### Growth
 
 **Redirects built (2026-10-14; c6d3463f, e2e 3d1ff141; SEO audit G9, Growth part).** Feature `redirects`: rules `{ from,
