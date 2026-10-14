@@ -44,7 +44,6 @@ import { PRODUCT_UNAVAILABLE_REASONS } from './constants.js';
 /** Stable problem codes shared by the Portal and every product. Additive only within v1. */
 export const PROBLEM_CODES = Object.freeze({
 	bad_request: Object.freeze({ status: 400, title: 'Bad request' }),
-	unsupported_version: Object.freeze({ status: 400, title: 'Unsupported contract version' }),
 	unauthorized: Object.freeze({ status: 401, title: 'Authentication required' }),
 	invalid_credentials: Object.freeze({ status: 401, title: 'Invalid or expired credentials' }),
 	invalid_token: Object.freeze({ status: 401, title: 'Invalid token' }),
@@ -58,7 +57,6 @@ export const PROBLEM_CODES = Object.freeze({
 	conflict: Object.freeze({ status: 409, title: 'Conflict' }),
 	idempotency_conflict: Object.freeze({ status: 409, title: 'Idempotency key reused with a different request' }),
 	gone: Object.freeze({ status: 410, title: 'Gone' }),
-	precondition_failed: Object.freeze({ status: 412, title: 'Precondition failed' }),
 	payload_too_large: Object.freeze({ status: 413, title: 'Payload too large' }),
 	unsupported_media_type: Object.freeze({ status: 415, title: 'Unsupported media type' }),
 	validation_failed: Object.freeze({ status: 422, title: 'Validation failed' }),
