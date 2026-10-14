@@ -26,7 +26,8 @@ import {
 	offerProductIds,
 } from '../core/imports-catalog.js';
 import { COLLECTIONS } from '../core/model.js';
-import { loadRules } from './catalog-store.js';
+import { checkUnit } from '../core/fields.js';
+import { loadRules, unitFieldsOf } from './catalog-store.js';
 
 /** @typedef {import('@ss/app-kit').WebsiteData} WebsiteData */
 /** @typedef {import('@ss/app-kit').ImportCollection} ImportCollection */
@@ -42,6 +43,7 @@ import { loadRules } from './catalog-store.js';
  * @property {ImportContext} context
  * @property {Map<string, string>} taken unique values this call's records hold → the record holding each
  * @property {Map<string, Set<string> | null>} variants a product's variant ids (null: no such product), read once
+ * @property {Map<string, import('../core/model.js').AttributeRecord[]>} unitFields a product's unit fields, read once
  */
 
 /** The most categories a website has (the product reads at most this many anywhere). */
@@ -122,6 +124,7 @@ export const catalogImports = (deps) => {
 				},
 				taken: new Map(),
 				variants: new Map(),
+				unitFields: new Map(),
 			};
 		};
 
@@ -261,11 +264,14 @@ export const catalogImports = (deps) => {
 	};
 
 	/**
-	 * Refuse a serial number another unit holds, and a variant that is not imported.
+	 * Check a unit against its product: the variant must be imported; the unit's values against the unit fields of the
+	 * product's categories (formats, required fields; without unit fields a plain serial number), as when units are
+	 * added to stock; a serial given beside the values must be the one they name; and none of its numbers may be another
+	 * unit's (in this import or in the shop). The unit is then kept as the shop keeps it (its serial, values and keys).
 	 * @param {Record<string, any>} value @param {WebsiteData} data @param {Prepared} prepared
 	 * @returns {Promise<FieldError[]>}
 	 */
-	const serialClashes = async (value, data, prepared) => {
+	const unitClashes = async (value, data, prepared) => {
 		/** @type {FieldError[]} */
 		const errors = [];
 		if (!prepared.variants.has(value.productId)) {
@@ -281,11 +287,26 @@ export const catalogImports = (deps) => {
 		if (!variantIds) errors.push({ path: '/productId', message: `There is no product ${value.productId}.` });
 		else if (!variantIds.has(value.variantId))
 			errors.push({ path: '/variantId', message: `The product has no variant ${value.variantId}.` });
-		const other =
-			heldInCall(prepared, `serials.serial:${value.serial}`, value.id) ??
-			(await heldInDatabase(data, COLLECTIONS.serials, { serial: value.serial }, value.id));
-		if (other) errors.push({ path: '/serial', message: `Another unit (${other}) already has this serial number.` });
-		return errors;
+		if (errors.length > 0) return errors;
+		if (!prepared.unitFields.has(value.productId))
+			prepared.unitFields.set(value.productId, (await unitFieldsOf(data, [value.productId])).get(value.productId) ?? []);
+		const fields = prepared.unitFields.get(value.productId) ?? [];
+		const unit = checkUnit(value.values === undefined ? value.serial : { values: value.values }, fields);
+		if (!unit.ok) return [{ path: unit.path || '/serial', message: unit.message }];
+		if (value.serial !== undefined && value.serial !== unit.value.serial)
+			return [{ path: '/serial', message: `The unit's serial is ${unit.value.serial}, the first value of its unit fields.` }];
+		for (const key of unit.value.keys) {
+			const other =
+				heldInCall(prepared, `serials.key:${key}`, value.id) ??
+				(await heldInDatabase(data, COLLECTIONS.serials, { keys: key }, value.id));
+			if (other)
+				return [
+					{ path: '/serial', message: `Another unit (${other}) already has the number ${key.replace(/^[^:]+:/, '')}.` },
+				];
+		}
+		// kept as the shop keeps a unit
+		Object.assign(value, unit.value);
+		return [];
 	};
 
 	/**
@@ -361,7 +382,7 @@ export const catalogImports = (deps) => {
 			collection: COLLECTIONS.serials,
 			prepare: plain,
 			check: checkImportedSerial,
-			unique: serialClashes,
+			unique: unitClashes,
 		}),
 		deals: imported({
 			collection: COLLECTIONS.deals,

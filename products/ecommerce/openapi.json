@@ -4707,13 +4707,45 @@
 													"additionalProperties": {
 														"type": "array",
 														"items": {
-															"type": "string",
-															"minLength": 1,
-															"maxLength": 64
+															"anyOf": [
+																{
+																	"type": "string",
+																	"minLength": 1,
+																	"maxLength": 200
+																},
+																{
+																	"type": "object",
+																	"required": [
+																		"values"
+																	],
+																	"properties": {
+																		"values": {
+																			"type": "object",
+																			"additionalProperties": {
+																				"anyOf": [
+																					{
+																						"type": "string"
+																					},
+																					{
+																						"type": "array",
+																						"minItems": 1,
+																						"maxItems": 2,
+																						"items": {
+																							"type": "string"
+																						}
+																					}
+																				]
+																			},
+																			"description": "Unit field id → its value, or two values with a field that takes two."
+																		}
+																	}
+																}
+															],
+															"description": "A unit: its serial number (a text alone is the first unit field's value), or { values } by unit field."
 														},
 														"maxItems": 1000
 													},
-													"description": "Order line id → its serial numbers, one per unit (1–64 characters each, none twice). With serialCheck imei each is 15 digits passing Luhn."
+													"description": "Order line id → its units, one per unit, none sharing a number. Units in stock (serialMode registered) are picked by their serial numbers; typed units (serialMode typed) are checked against the unit fields of the line's product (each value in its field's format, every required field given; without unit fields a plain serial number)."
 												},
 												"video": {
 													"type": [
@@ -5551,13 +5583,45 @@
 										"additionalProperties": {
 											"type": "array",
 											"items": {
-												"type": "string",
-												"minLength": 1,
-												"maxLength": 64
+												"anyOf": [
+													{
+														"type": "string",
+														"minLength": 1,
+														"maxLength": 200
+													},
+													{
+														"type": "object",
+														"required": [
+															"values"
+														],
+														"properties": {
+															"values": {
+																"type": "object",
+																"additionalProperties": {
+																	"anyOf": [
+																		{
+																			"type": "string"
+																		},
+																		{
+																			"type": "array",
+																			"minItems": 1,
+																			"maxItems": 2,
+																			"items": {
+																				"type": "string"
+																			}
+																		}
+																	]
+																},
+																"description": "Unit field id → its value, or two values with a field that takes two."
+															}
+														}
+													}
+												],
+												"description": "A unit: its serial number (a text alone is the first unit field's value), or { values } by unit field."
 											},
 											"maxItems": 1000
 										},
-										"description": "Order line id → its serial numbers, one per unit (1–64 characters each, none twice). With serialCheck imei each is 15 digits passing Luhn. Typed serial numbers (serialMode typed) of a packed, shipped or delivered order."
+										"description": "Order line id → its units, one per unit, none sharing a number. Units in stock (serialMode registered) are picked by their serial numbers; typed units (serialMode typed) are checked against the unit fields of the line's product (each value in its field's format, every required field given; without unit fields a plain serial number). Typed units of a packed, shipped or delivered order; 422 at /serials/<lineId>/<n>/values/<fieldId> names a value its field refuses."
 									},
 									"lines": {
 										"type": "array",
@@ -5777,13 +5841,45 @@
 										"additionalProperties": {
 											"type": "array",
 											"items": {
-												"type": "string",
-												"minLength": 1,
-												"maxLength": 64
+												"anyOf": [
+													{
+														"type": "string",
+														"minLength": 1,
+														"maxLength": 200
+													},
+													{
+														"type": "object",
+														"required": [
+															"values"
+														],
+														"properties": {
+															"values": {
+																"type": "object",
+																"additionalProperties": {
+																	"anyOf": [
+																		{
+																			"type": "string"
+																		},
+																		{
+																			"type": "array",
+																			"minItems": 1,
+																			"maxItems": 2,
+																			"items": {
+																				"type": "string"
+																			}
+																		}
+																	]
+																},
+																"description": "Unit field id → its value, or two values with a field that takes two."
+															}
+														}
+													}
+												],
+												"description": "A unit: its serial number (a text alone is the first unit field's value), or { values } by unit field."
 											},
 											"maxItems": 1000
 										},
-										"description": "Order line id → its serial numbers, one per unit (1–64 characters each, none twice). With serialCheck imei each is 15 digits passing Luhn."
+										"description": "Order line id → its units, one per unit, none sharing a number. Units in stock (serialMode registered) are picked by their serial numbers; typed units (serialMode typed) are checked against the unit fields of the line's product (each value in its field's format, every required field given; without unit fields a plain serial number)."
 									},
 									"shipment": {
 										"anyOf": [
@@ -11134,7 +11230,7 @@
 			},
 			"post": {
 				"summary": "Record serial numbers of a variant in stock (Catalog admin widget)",
-				"description": "Needs Grades and serials (403 feature_off otherwise). 422 validation_failed: /serials (1 to 500 different numbers; /serials/<n> for a bad one), /variantId (no such product variant), /locationId (no such location, or Multi-location stock is off); 409 conflict naming the numbers already recorded. Send an Idempotency-Key so a retried request records them once.",
+				"description": "Needs Grades and serials (403 feature_off otherwise). 422 validation_failed: /serials (1 to 500 units, or a number given for two of them), /serials/<n> or /serials/<n>/values/<fieldId> (a unit its fields refuse, every one listed), /variantId (no such product variant), /locationId (no such location, or Multi-location stock is off); 409 conflict naming the units already holding one of the numbers. Send an Idempotency-Key so a retried request records them once.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "grades_serials",
 				"x-ss-permission": "catalog.edit",
@@ -11179,11 +11275,43 @@
 										"minItems": 1,
 										"maxItems": 500,
 										"items": {
-											"type": "string",
-											"pattern": "^[\\p{L}\\p{N}][\\p{L}\\p{N} ._/:#-]{0,63}$",
-											"description": "Trimmed: 1 to 64 letters, digits, spaces and . _ / : # -"
+											"anyOf": [
+												{
+													"type": "string",
+													"minLength": 1,
+													"maxLength": 200
+												},
+												{
+													"type": "object",
+													"required": [
+														"values"
+													],
+													"properties": {
+														"values": {
+															"type": "object",
+															"additionalProperties": {
+																"anyOf": [
+																	{
+																		"type": "string"
+																	},
+																	{
+																		"type": "array",
+																		"minItems": 1,
+																		"maxItems": 2,
+																		"items": {
+																			"type": "string"
+																		}
+																	}
+																]
+															},
+															"description": "Unit field id → its value, or two values with a field that takes two."
+														}
+													}
+												}
+											],
+											"description": "A unit: its serial number (a text alone is the first unit field's value), or { values } by unit field."
 										},
-										"description": "Different numbers, none recorded yet."
+										"description": "1 to 500 units: each its serial number, or with unit fields (Catalog admin → Fields, on units) { values } by unit field, checked against the fields of the product's categories (formats, required fields; without unit fields a plain serial number: 1 to 64 letters, digits, spaces and . _ / : # -). No number may name two units."
 									},
 									"locationId": {
 										"type": [
@@ -19191,13 +19319,45 @@
 													"additionalProperties": {
 														"type": "array",
 														"items": {
-															"type": "string",
-															"minLength": 1,
-															"maxLength": 64
+															"anyOf": [
+																{
+																	"type": "string",
+																	"minLength": 1,
+																	"maxLength": 200
+																},
+																{
+																	"type": "object",
+																	"required": [
+																		"values"
+																	],
+																	"properties": {
+																		"values": {
+																			"type": "object",
+																			"additionalProperties": {
+																				"anyOf": [
+																					{
+																						"type": "string"
+																					},
+																					{
+																						"type": "array",
+																						"minItems": 1,
+																						"maxItems": 2,
+																						"items": {
+																							"type": "string"
+																						}
+																					}
+																				]
+																			},
+																			"description": "Unit field id → its value, or two values with a field that takes two."
+																		}
+																	}
+																}
+															],
+															"description": "A unit: its serial number (a text alone is the first unit field's value), or { values } by unit field."
 														},
 														"maxItems": 1000
 													},
-													"description": "Order line id → its serial numbers, one per unit (1–64 characters each, none twice). With serialCheck imei each is 15 digits passing Luhn."
+													"description": "Order line id → its units, one per unit, none sharing a number. Units in stock (serialMode registered) are picked by their serial numbers; typed units (serialMode typed) are checked against the unit fields of the line's product (each value in its field's format, every required field given; without unit fields a plain serial number)."
 												},
 												"video": {
 													"type": [
@@ -20222,13 +20382,45 @@
 										"additionalProperties": {
 											"type": "array",
 											"items": {
-												"type": "string",
-												"minLength": 1,
-												"maxLength": 64
+												"anyOf": [
+													{
+														"type": "string",
+														"minLength": 1,
+														"maxLength": 200
+													},
+													{
+														"type": "object",
+														"required": [
+															"values"
+														],
+														"properties": {
+															"values": {
+																"type": "object",
+																"additionalProperties": {
+																	"anyOf": [
+																		{
+																			"type": "string"
+																		},
+																		{
+																			"type": "array",
+																			"minItems": 1,
+																			"maxItems": 2,
+																			"items": {
+																				"type": "string"
+																			}
+																		}
+																	]
+																},
+																"description": "Unit field id → its value, or two values with a field that takes two."
+															}
+														}
+													}
+												],
+												"description": "A unit: its serial number (a text alone is the first unit field's value), or { values } by unit field."
 											},
 											"maxItems": 1000
 										},
-										"description": "Order line id → its serial numbers, one per unit (1–64 characters each, none twice). With serialCheck imei each is 15 digits passing Luhn. Typed serial numbers (serialMode typed) of a packed, shipped or delivered order."
+										"description": "Order line id → its units, one per unit, none sharing a number. Units in stock (serialMode registered) are picked by their serial numbers; typed units (serialMode typed) are checked against the unit fields of the line's product (each value in its field's format, every required field given; without unit fields a plain serial number). Typed units of a packed, shipped or delivered order; 422 at /serials/<lineId>/<n>/values/<fieldId> names a value its field refuses."
 									},
 									"lines": {
 										"type": "array",
@@ -20470,13 +20662,45 @@
 										"additionalProperties": {
 											"type": "array",
 											"items": {
-												"type": "string",
-												"minLength": 1,
-												"maxLength": 64
+												"anyOf": [
+													{
+														"type": "string",
+														"minLength": 1,
+														"maxLength": 200
+													},
+													{
+														"type": "object",
+														"required": [
+															"values"
+														],
+														"properties": {
+															"values": {
+																"type": "object",
+																"additionalProperties": {
+																	"anyOf": [
+																		{
+																			"type": "string"
+																		},
+																		{
+																			"type": "array",
+																			"minItems": 1,
+																			"maxItems": 2,
+																			"items": {
+																				"type": "string"
+																			}
+																		}
+																	]
+																},
+																"description": "Unit field id → its value, or two values with a field that takes two."
+															}
+														}
+													}
+												],
+												"description": "A unit: its serial number (a text alone is the first unit field's value), or { values } by unit field."
 											},
 											"maxItems": 1000
 										},
-										"description": "Order line id → its serial numbers, one per unit (1–64 characters each, none twice). With serialCheck imei each is 15 digits passing Luhn."
+										"description": "Order line id → its units, one per unit, none sharing a number. Units in stock (serialMode registered) are picked by their serial numbers; typed units (serialMode typed) are checked against the unit fields of the line's product (each value in its field's format, every required field given; without unit fields a plain serial number)."
 									},
 									"shipment": {
 										"anyOf": [
@@ -27096,7 +27320,7 @@
 			},
 			"post": {
 				"summary": "Record serial numbers of a variant in stock",
-				"description": "Needs Grades and serials (403 feature_off otherwise). 422 validation_failed: /serials (1 to 500 different numbers; /serials/<n> for a bad one), /variantId (no such product variant), /locationId (no such location, or Multi-location stock is off); 409 conflict naming the numbers already recorded. Send an Idempotency-Key so a retried request records them once.",
+				"description": "Needs Grades and serials (403 feature_off otherwise). 422 validation_failed: /serials (1 to 500 units, or a number given for two of them), /serials/<n> or /serials/<n>/values/<fieldId> (a unit its fields refuse, every one listed), /variantId (no such product variant), /locationId (no such location, or Multi-location stock is off); 409 conflict naming the units already holding one of the numbers. Send an Idempotency-Key so a retried request records them once.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "grades_serials",
 				"security": [
@@ -27152,11 +27376,43 @@
 										"minItems": 1,
 										"maxItems": 500,
 										"items": {
-											"type": "string",
-											"pattern": "^[\\p{L}\\p{N}][\\p{L}\\p{N} ._/:#-]{0,63}$",
-											"description": "Trimmed: 1 to 64 letters, digits, spaces and . _ / : # -"
+											"anyOf": [
+												{
+													"type": "string",
+													"minLength": 1,
+													"maxLength": 200
+												},
+												{
+													"type": "object",
+													"required": [
+														"values"
+													],
+													"properties": {
+														"values": {
+															"type": "object",
+															"additionalProperties": {
+																"anyOf": [
+																	{
+																		"type": "string"
+																	},
+																	{
+																		"type": "array",
+																		"minItems": 1,
+																		"maxItems": 2,
+																		"items": {
+																			"type": "string"
+																		}
+																	}
+																]
+															},
+															"description": "Unit field id → its value, or two values with a field that takes two."
+														}
+													}
+												}
+											],
+											"description": "A unit: its serial number (a text alone is the first unit field's value), or { values } by unit field."
 										},
-										"description": "Different numbers, none recorded yet."
+										"description": "1 to 500 units: each its serial number, or with unit fields (Catalog admin → Fields, on units) { values } by unit field, checked against the fields of the product's categories (formats, required fields; without unit fields a plain serial number: 1 to 64 letters, digits, spaces and . _ / : # -). No number may name two units."
 									},
 									"locationId": {
 										"type": [
@@ -41304,7 +41560,7 @@
 							"type": "string",
 							"maxLength": 64
 						},
-						"description": "Serial numbers captured for its units (grades_serials)."
+						"description": "The serial numbers naming its units, one per unit, once captured (packed, or typed at packing or later)."
 					},
 					"booking": {
 						"oneOf": [
@@ -41366,6 +41622,66 @@
 					"serialized": {
 						"type": "boolean",
 						"description": "Whether the line takes serial numbers; only while Grades and serials is on."
+					},
+					"unitFields": {
+						"type": "array",
+						"description": "The unit fields its units take (by the product's categories), in their order; only on lines that take serial numbers.",
+						"items": {
+							"type": "object",
+							"required": [
+								"id",
+								"name",
+								"required",
+								"maxValues",
+								"format"
+							],
+							"additionalProperties": false,
+							"properties": {
+								"id": {
+									"type": "string"
+								},
+								"name": {
+									"type": "string"
+								},
+								"required": {
+									"type": "boolean"
+								},
+								"maxValues": {
+									"type": "integer",
+									"minimum": 1,
+									"maximum": 2
+								},
+								"format": {
+									"$ref": "#/components/schemas/FieldFormat"
+								}
+							}
+						}
+					},
+					"units": {
+						"type": "array",
+						"description": "Its units, by serial, with their values by unit field (staff see every value); only on lines that take serial numbers.",
+						"items": {
+							"type": "object",
+							"required": [
+								"serial",
+								"values"
+							],
+							"additionalProperties": false,
+							"properties": {
+								"serial": {
+									"type": "string"
+								},
+								"values": {
+									"type": "object",
+									"additionalProperties": {
+										"type": "array",
+										"items": {
+											"type": "string"
+										}
+									}
+								}
+							}
+						}
 					}
 				}
 			},
@@ -45741,12 +46057,14 @@
 			},
 			"Serial": {
 				"type": "object",
-				"description": "One unit of a product variant with its serial number (such as an IMEI).",
+				"description": "One unit (a numbered item) of a product variant: its serial number and, with unit fields, its values.",
 				"required": [
 					"id",
 					"productId",
 					"variantId",
 					"serial",
+					"values",
+					"keys",
 					"status",
 					"orderId",
 					"lineId",
@@ -45767,8 +46085,27 @@
 					"serial": {
 						"type": "string",
 						"minLength": 1,
-						"maxLength": 64,
-						"description": "Unique in the website. Recorded here: letters, digits, spaces and . _ / : # -; typed when packing: any text."
+						"maxLength": 200,
+						"description": "Names the unit: its plain serial number (a product without unit fields: 1 to 64 letters, digits, spaces and . _ / : # -), else the first value of its first unit field that has one."
+					},
+					"values": {
+						"type": "object",
+						"additionalProperties": {
+							"type": "array",
+							"minItems": 1,
+							"maxItems": 2,
+							"items": {
+								"type": "string"
+							}
+						},
+						"description": "Unit field id → its values (one, or two with a field that takes two), as the field's format keeps them; {} for a plain serial number."
+					},
+					"keys": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						},
+						"description": "serial:<serial> and <fieldId>:<value> for each value: unique across the shop's units, so no number names two units."
 					},
 					"status": {
 						"type": "string",
@@ -47383,6 +47720,7 @@
 					"variantName",
 					"gradeLabel",
 					"serials",
+					"unitValues",
 					"warrantyDays",
 					"image",
 					"unitPrice",
@@ -47429,7 +47767,30 @@
 						"items": {
 							"type": "string"
 						},
-						"description": "Serial numbers (e.g. IMEI) captured when packed."
+						"description": "The plain serial numbers of its units (units without unit field values)."
+					},
+					"unitValues": {
+						"type": "array",
+						"description": "Per unit field shown to shoppers (show.shopper), the values of its units; unit fields not shown to shoppers never show here.",
+						"items": {
+							"type": "object",
+							"required": [
+								"name",
+								"values"
+							],
+							"additionalProperties": false,
+							"properties": {
+								"name": {
+									"type": "string"
+								},
+								"values": {
+									"type": "array",
+									"items": {
+										"type": "string"
+									}
+								}
+							}
+						}
 					},
 					"warrantyDays": {
 						"type": [

@@ -100,8 +100,8 @@ export const createRoutes = (product) => {
 					active: grade.active,
 					categoryIds: grade.categoryIds,
 				}));
-				const { serialMode, serialCheck } = await s.values('grades_serials');
-				settings.catalog = { .../** @type {object} */ (settings.catalog ?? {}), grades, serialMode, serialCheck };
+				const { serialMode } = await s.values('grades_serials');
+				settings.catalog = { .../** @type {object} */ (settings.catalog ?? {}), grades, serialMode };
 			}
 			return settings;
 		},

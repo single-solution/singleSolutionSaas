@@ -7,6 +7,7 @@
  * @module
  */
 import { defineRoute, problem } from '@ss/app-kit';
+import { documentFieldsOf } from '../adapters/catalog-store.js';
 import { invoiceTexts, packingSlipsHtml, pickListHtml } from '../core/invoice.js';
 import { COLLECTIONS } from '../core/model.js';
 import { isSerialized } from '../core/orders.js';
@@ -98,17 +99,23 @@ export const createOrderDocuments = (_product, service) => {
 	};
 
 	/**
-	 * What a document is printed with.
-	 * @param {Site} s
+	 * What the orders' documents are printed with.
+	 * @param {Site} s @param {OrderRecord[]} orders
 	 * @returns {Promise<import('../core/invoice.js').DocumentContext>}
 	 */
-	const contextOf = async (s) => {
-		const [business, settings, { format, timeZone }] = await Promise.all([s.business(), s.values('invoices'), s.format()]);
+	const contextOf = async (s, orders) => {
+		const [business, settings, { format, timeZone }, fields] = await Promise.all([
+			s.business(),
+			s.values('invoices'),
+			s.format(),
+			s.data().then((data) => documentFieldsOf(data, orders)),
+		]);
 		return {
 			business: /** @type {import('../core/invoice.js').BusinessLike} */ (business),
 			texts: invoiceTexts(settings),
 			format,
 			timeZone,
+			fields,
 		};
 	};
 
@@ -116,7 +123,7 @@ export const createOrderDocuments = (_product, service) => {
 	const packingSlips = async (ctx) => {
 		const s = await service.site(ctx);
 		const orders = await ordersOf(s, ctx, MAX_SLIPS);
-		const [context, serialized] = await Promise.all([contextOf(s), serializedOf(s, orders)]);
+		const [context, serialized] = await Promise.all([contextOf(s, orders), serializedOf(s, orders)]);
 		return new Response(packingSlipsHtml(orders, context, serialized), { headers: DOCUMENT_HEADERS });
 	};
 
@@ -124,7 +131,7 @@ export const createOrderDocuments = (_product, service) => {
 	const pickList = async (ctx) => {
 		const s = await service.site(ctx);
 		const orders = await ordersOf(s, ctx, MAX_PICK);
-		return new Response(pickListHtml(orders, await contextOf(s)), { headers: DOCUMENT_HEADERS });
+		return new Response(pickListHtml(orders, await contextOf(s, orders)), { headers: DOCUMENT_HEADERS });
 	};
 
 	return {

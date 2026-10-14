@@ -12,7 +12,7 @@ import { createCards } from '../server/extras-cards.js';
 import { createExtras } from '../server/extras.js';
 import { createService } from '../server/service.js';
 import { COLLECTIONS } from '../core/model.js';
-import { DOMAIN, PAYMENTS, STORAGE, readyShop, storedAttribute } from './helpers.js';
+import { DOMAIN, PAYMENTS, readyShop, STORAGE, storedAttribute, storedUnit } from './helpers.js';
 
 /** @type {Awaited<ReturnType<typeof readyShop>>} */
 let shop;
@@ -192,7 +192,9 @@ describe('returns and warranty claims', () => {
 		for (const serial of ['SN-1', 'SN-2'])
 			await data
 				.collection(COLLECTIONS.serials)
-				.insertOne({ id: createId('ser'), productId: phone.id, serial, status: 'sold', orderId: placed.id, lineId: 'x' });
+				.insertOne(
+					storedUnit({ id: createId('ser'), productId: phone.id, serial, status: 'sold', orderId: placed.id, lineId: 'x' }),
+				);
 		await givePoints(
 			data,
 			{ userId: SARA, points: 20, orderId: placed.id, kind: 'earn', expiresAt: null },

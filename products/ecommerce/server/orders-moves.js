@@ -32,7 +32,9 @@
  * @module
  */
 import { problem } from '@ss/app-kit';
+import { unitFieldsOf } from '../adapters/catalog-store.js';
 import { heldStockBefore } from '../adapters/ledger.js';
+import { checkUnit, sharedKeys } from '../core/fields.js';
 import { courierNamed, courierOf, trackingLink } from '../core/couriers.js';
 import { BEFORE_DELIVERY_ROLES, WAITING_ROLES as WAITING, canMove, confirmedStatus, triggersOfFlow } from '../core/flow.js';
 import { createId } from '@ss/contracts';
@@ -57,7 +59,6 @@ import {
 	orderMoney,
 	paymentStateOf,
 	refundSplit,
-	serialCheckFailure,
 	serialPlan,
 	serverNote,
 	stateAfterRefund,
@@ -98,15 +99,56 @@ export const createMoves = (product, service) => {
 	};
 
 	/**
-	 * The website's serial capture (E11): `registered` (picked from stock when packing) or `typed`, and the check.
+	 * The website's unit capture (E11): `registered` (picked from stock when packing) or `typed`.
 	 * @param {Site} s
 	 */
 	const serialRules = async (s) => {
 		const values = await s.values('grades_serials');
-		return {
-			mode: /** @type {'registered' | 'typed'} */ (values.serialMode === 'typed' ? 'typed' : 'registered'),
-			check: String(values.serialCheck ?? 'none'),
-		};
+		return { mode: /** @type {'registered' | 'typed'} */ (values.serialMode === 'typed' ? 'typed' : 'registered') };
+	};
+
+	/**
+	 * The units staff give per line, checked: registered units are picked by their serial numbers; typed ones are
+	 * checked against the unit fields of the line's product (each value in its field's format, the required ones given,
+	 * a text alone the first field's value; without unit fields a plain serial number), and no number may name two units
+	 * (in this request: its own keys; others are refused when they are captured).
+	 * @param {Site} s @param {OrderRecord} order
+	 * @param {Record<string, import('../core/orders.js').UnitInput[]>} sent
+	 * @param {'registered' | 'typed'} mode
+	 * @returns {Promise<{ serials: Record<string, string[]>, units: Map<string, import('../core/fields.js').UnitRecordValues[]> }>}
+	 */
+	const unitsSent = async (s, order, sent, mode) => {
+		/** @type {Record<string, string[]>} */
+		const serials = {};
+		/** @type {Map<string, import('../core/fields.js').UnitRecordValues[]>} */
+		const units = new Map();
+		const lines = new Map(order.lines.map((line) => [line.id, line]));
+		const fields =
+			mode === 'typed' && Object.keys(sent).length > 0
+				? await unitFieldsOf(await s.data(), [...new Set(order.lines.map((line) => line.productId))])
+				: new Map();
+		for (const [lineId, list] of Object.entries(sent)) {
+			const productId = lines.get(lineId)?.productId ?? '';
+			/** @type {import('../core/fields.js').UnitRecordValues[]} */
+			const checked = [];
+			for (const [index, entry] of list.entries()) {
+				if (mode === 'registered') {
+					if (typeof entry !== 'string')
+						throw service.invalid(`serials/${lineId}/${index}`, 'Units in stock are picked by their serial numbers.');
+					checked.push({ serial: entry, values: {}, keys: [`serial:${entry}`] });
+					continue;
+				}
+				const unit = checkUnit(entry, fields.get(productId) ?? []);
+				if (!unit.ok) throw service.invalid(`serials/${lineId}/${index}${unit.path}`, unit.message);
+				checked.push(unit.value);
+			}
+			serials[lineId] = checked.map((unit) => unit.serial);
+			units.set(lineId, checked);
+		}
+		const twice = sharedKeys([...units.values()].flat());
+		if (twice.length > 0)
+			throw service.invalid('serials', `${String(twice[0]).replace(/^[^:]+:/, '')} is given for two units.`);
+		return { serials, units };
 	};
 
 	/**
@@ -255,12 +297,16 @@ export const createMoves = (product, service) => {
 	 */
 	const packingPlan = async (s, order, input) => {
 		if (!s.has('grades_serials')) return { plan: [], mode: /** @type {'registered' | 'typed'} */ ('registered') };
-		const { mode, check } = await serialRules(s);
-		const refused = serialCheckFailure(input.serials, check);
-		if (refused) throw service.invalid(refused.field, refused.message);
-		const plan = serialPlan(order, await serializedOf(s, order), input.serials, { mode });
+		const { mode } = await serialRules(s);
+		const { serials, units } = await unitsSent(s, order, input.serials, mode);
+		const plan = serialPlan(order, await serializedOf(s, order), serials, { mode });
 		if (!plan.ok) throw service.invalid(plan.field, plan.message);
-		return { plan: plan.value.filter((line) => line.serials.length > 0 || line.before.length > 0), mode };
+		return {
+			plan: plan.value
+				.filter((line) => line.serials.length > 0 || line.before.length > 0)
+				.map((line) => ({ ...line, ...(units.has(line.lineId) ? { units: units.get(line.lineId) } : {}) })),
+			mode,
+		};
 	};
 
 	/**
@@ -483,28 +529,30 @@ export const createMoves = (product, service) => {
 	};
 
 	/**
-	 * Type serial numbers of a packed, shipped or delivered order (typed serials, E11): one per unit of each line sent.
-	 * @param {Site} s @param {any} ctx @param {OrderRecord} order @param {Record<string, string[]>} sent
+	 * Type the units of a packed, shipped or delivered order (typed serials, E11): one per unit of each line sent, with
+	 * the values of its product's unit fields.
+	 * @param {Site} s @param {any} ctx @param {OrderRecord} order
+	 * @param {Record<string, import('../core/orders.js').UnitInput[]>} sent
 	 * @returns {Promise<OrderRecord>}
 	 */
 	const typeSerials = async (s, ctx, order, sent) => {
 		if (!s.has('grades_serials')) throw service.invalid('serials', 'Switch on Grades and serials first.');
-		const { mode, check } = await serialRules(s);
+		const { mode } = await serialRules(s);
 		if (mode !== 'typed') throw service.invalid('serials', 'Serial numbers are picked from stock when the order is packed.');
 		if (!['packed', 'shipped', 'delivered'].includes(order.role))
 			throw service.invalid('serials', 'Serial numbers are typed once the order is packed.');
-		const refused = serialCheckFailure(sent, check);
-		if (refused) throw service.invalid(refused.field, refused.message);
-		const plan = serialPlan(order, await serializedOf(s, order), sent, { mode, only: true });
-		if (!plan.ok) throw service.invalid(plan.field, plan.message);
-		const byLine = new Map(plan.value.map((line) => [line.lineId, line.serials]));
+		const { serials, units } = await unitsSent(s, order, sent, mode);
+		const checked = serialPlan(order, await serializedOf(s, order), serials, { mode, only: true });
+		if (!checked.ok) throw service.invalid(checked.field, checked.message);
+		const plan = checked.value.map((line) => ({ ...line, units: units.get(line.lineId) ?? [] }));
+		const byLine = new Map(plan.map((line) => [line.lineId, line.serials]));
 		// captured through the order engine: the lines, their facts and the numbers in one transaction
 		const after = await transitions.apply(
 			s,
 			order,
 			planUnits({
 				order,
-				units: { plan: plan.value, mode },
+				units: { plan, mode },
 				history: {
 					at: new Date(product.now()),
 					from: order.status,

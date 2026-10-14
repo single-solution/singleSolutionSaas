@@ -1,11 +1,14 @@
 /**
- * Serial numbers in the catalog admin widget (feature `grades_serials`, PLAN 0.8.8 Grades and serials; E11) as a
- * list-and-detail screen: search (by the start of the serial) and filter by status, Load more, a detail per serial
- * (its product and variant, location and order), Mark faulty / Back in stock, Delete (not for sold units), and Add
- * serial numbers for a product variant (one per line, at a location with multi-location stock). A product's detail
- * opens the section filtered to that product (a removable chip, and a variant select).
+ * Units (serial numbers) in the catalog admin widget (feature `grades_serials`, PLAN 0.8.8 Grades and serials; E11;
+ * dynamic model §2) as a list-and-detail screen: search (by the start of the serial) and filter by status, Load more, a
+ * detail per unit (its values by unit field, product and variant, location and order), Mark faulty / Back in stock,
+ * Delete (not for sold units), and Add units for a product variant: one unit per line — its serial number, or with unit
+ * fields its values in the fields' order separated by commas or tabs (as pasted from a spreadsheet), each checked
+ * against its field's format before sending — at a location with multi-location stock. A product's detail opens the
+ * section filtered to that product (a removable chip, and a variant select).
  * @module
  */
+import { checkFormat, unitFieldsFor } from '../core/fields.js';
 import { entriesOf, query } from './admin-kit.js';
 import { createScreen, deleteEntry, detailHead, fieldsOf } from './admin-screen.js';
 import { variantLabel } from './admin-taxonomy.js';
@@ -14,8 +17,8 @@ import { variantLabel } from './admin-taxonomy.js';
 /** @typedef {import('./admin-kit.js').Tone} Tone */
 /** @typedef {import('./admin-taxonomy.js').Lookups} Lookups */
 /**
- * @typedef {{ id: string, productId: string, variantId: string, serial: string, status: 'in_stock' | 'sold' | 'faulty',
- *   orderId: string | null, locationId?: string | null }} Serial
+ * @typedef {{ id: string, productId: string, variantId: string, serial: string, values?: Record<string, string[]>,
+ *   status: 'in_stock' | 'sold' | 'faulty', orderId: string | null, locationId?: string | null }} Serial
  */
 
 /** @typedef {{ id: string, name: string, variants: any[] }} SerialProduct the product the list is filtered to */
@@ -169,6 +172,10 @@ export const serialsTab = (kit, panel, lookups, links) => {
 			}),
 			note,
 			kit.fieldGrid([
+				// its numbers by unit field
+				...Object.entries(serial.values ?? {}).map(
+					([id, values]) => /** @type {[string, string]} */ ([lookups.nameOf('attributes', id), values.join(' / ')]),
+				),
 				[t('catalogAdmin.product'), productName],
 				[t('catalogAdmin.variant'), variantName],
 				[t('catalogAdmin.location'), serial.locationId ? lookups.nameOf('locations', serial.locationId) : ''],
@@ -177,7 +184,53 @@ export const serialsTab = (kit, panel, lookups, links) => {
 		];
 	};
 
-	/** Add serial numbers: find the product, pick the variant (and location), one serial per line. */
+	/**
+	 * The unit fields of a product's units (by its categories and those above them) and the slots a line fills: each
+	 * field once, or twice for a field that takes two values.
+	 * @param {any} found the product
+	 */
+	const slotsOf = (found) => {
+		const paths = new Map(lookups.state.categories.map((category) => [category.id, category.path ?? []]));
+		const lineage = (found?.categoryIds ?? []).flatMap((/** @type {string} */ id) => [id, ...(paths.get(id) ?? [])]);
+		const fields = unitFieldsFor(/** @type {any[]} */ (lookups.state.attributes), lineage);
+		return fields.flatMap((field) =>
+			Array.from({ length: field.maxValues > 1 ? field.maxValues : 1 }, (_, value) => ({ field, value })),
+		);
+	};
+
+	/**
+	 * The units of the lines typed: a serial number per line, or with unit fields one unit per line, its values in the
+	 * slots' order separated by commas or tabs; a value its field's format refuses names its line.
+	 * @param {string} text @param {Array<{ field: any, value: number }>} slots
+	 * @returns {{ ok: true, units: Array<string | { values: Record<string, string[]> }> } | { ok: false, error: string }}
+	 */
+	const unitsOf = (text, slots) => {
+		if (slots.length === 0) return { ok: true, units: entriesOf(text, true) };
+		/** @type {Array<{ values: Record<string, string[]> }>} */
+		const units = [];
+		const lines = text.split(/\r?\n/).map((line) => line.trim());
+		for (const [index, line] of lines.entries()) {
+			if (!line) continue;
+			/** @type {Record<string, string[]>} */
+			const values = {};
+			const cells = line.split(/[,\t]/).map((cell) => cell.trim());
+			for (const [slot, cell] of cells.entries()) {
+				const place = slots[slot];
+				if (!place || !cell) continue;
+				const checked = place.field.format ? checkFormat(cell, place.field.format) : null;
+				if (checked && !checked.ok)
+					return {
+						ok: false,
+						error: `${t('catalogAdmin.unitLine', { line: index + 1 })} ${t('fields.notFormat', { value: cell, field: place.field.name })} ${t(`fields.problem.${checked.code}`)}`,
+					};
+				values[place.field.id] = [...(values[place.field.id] ?? []), checked ? checked.value : cell];
+			}
+			units.push({ values });
+		}
+		return { ok: true, units };
+	};
+
+	/** Add units: find the product, pick the variant (and location), one unit per line. */
 	const add = () => {
 		const note = kit.status();
 		const find = kit.input('', { type: 'search' });
@@ -188,6 +241,9 @@ export const serialsTab = (kit, panel, lookups, links) => {
 			...lookups.state.locations.map((item) => ({ value: item.id, label: item.name })),
 		]);
 		const serials = kit.area('', { rows: '5' });
+		const serialsLabel = kit.text('span', {}, t('catalogAdmin.serialsOnePerLine'));
+		/** @type {Array<{ field: any, value: number }>} the slots of a line, by the picked product's unit fields */
+		let slots = [];
 		const filtered = filter.get();
 		if (filtered) product.append(kit.text('option', { value: filtered.id }, filtered.name));
 		const lookup = kit.button(t('admin.find'), async () => {
@@ -204,6 +260,18 @@ export const serialsTab = (kit, panel, lookups, links) => {
 			if (!product.value) return;
 			const found = await productOf(product.value);
 			if (!found) return kit.say(note, t('catalogAdmin.productGone'), true);
+			slots = slotsOf(found);
+			serialsLabel.replaceChildren(
+				slots.length === 0
+					? t('catalogAdmin.serialsOnePerLine')
+					: t('catalogAdmin.unitsOnePerLine', {
+							columns: slots
+								.map(({ field, value }) =>
+									value === 0 ? field.name : t('ordersAdmin.secondValue', { field: field.name }),
+								)
+								.join(', '),
+						}),
+			);
 			pickVariant.append(
 				...(found.variants ?? []).map((/** @type {any} */ entry) =>
 					kit.text('option', { value: entry.id }, variantLabel(kit, entry)),
@@ -228,14 +296,17 @@ export const serialsTab = (kit, panel, lookups, links) => {
 					kit.has('multi_location') ? kit.field(t('catalogAdmin.location'), location) : null,
 				]),
 				kit.field(t('catalogAdmin.serialsOnePerLine'), serials),
+				h('p', { class: 'muted' }, [serialsLabel]),
 			],
 			submitLabel: t('catalogAdmin.addSerials'),
 			onSubmit: async () => {
 				if (!product.value || !pickVariant.value) return t('catalogAdmin.pickVariantFirst');
+				const typed = unitsOf(serials.value, slots);
+				if (!typed.ok) return typed.error;
 				const answer = await kit.call('POST', '/v1/admin/serials', {
 					productId: product.value,
 					variantId: pickVariant.value,
-					serials: entriesOf(serials.value, true),
+					serials: typed.units,
 					...(location.value ? { locationId: location.value } : {}),
 				});
 				if (!answer.ok) return kit.reason(answer);

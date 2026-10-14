@@ -32,10 +32,10 @@ import {
 	RECORDED_METHODS,
 	checkCustomerEdit,
 	paymentStateOf,
-	serialsOf,
 	shipmentFields,
 	videoOf,
 } from './orders.js';
+import { PLAIN_SERIAL_RULE, isPlainSerial } from './fields.js';
 import { balanceOf, expireLots } from './points.js';
 import { CLAIM_KINDS, CLAIM_STATUSES, REFUND_METHODS, checkClaimInput, checkNote, plainText } from './returns.js';
 import { REVIEW_STATUSES, checkReply, checkReviewInput } from './reviews.js';
@@ -897,13 +897,20 @@ export const checkImportedOrder = (record, rules) => {
 		.list(record.lines, '/lines', MAX_LINES)
 		.map((raw, index) => lineOf(c, raw, `/lines/${index}`, taxIncluded, now));
 	if (new Set(checked.map((line) => line.id)).size !== checked.length) c.fail('/lines', 'Each line has its own id.');
-	// serial numbers as staff type them: 1–64 characters, none twice in the order
-	const serials = serialsOf(Object.fromEntries(checked.map((line) => [line.id, line.serials])));
-	if (!serials.ok) {
-		const index = checked.findIndex((line) => serials.field === `serials/${line.id}`);
-		c.fail(index >= 0 ? `/lines/${index}/serials` : '/lines', serials.message);
-	}
-	const lines = checked.map((line) => ({ ...line, serials: serials.ok ? (serials.value[line.id] ?? []) : [] }));
+	// the serial numbers naming the line's units (trimmed): a unit's number, none twice in the order
+	/** @type {Set<string>} */
+	const seen = new Set();
+	const lines = checked.map((line, index) => {
+		const serials = (Array.isArray(line.serials) ? line.serials : []).map((serial) =>
+			typeof serial === 'string' ? serial.trim() : serial,
+		);
+		for (const serial of serials) {
+			if (typeof serial !== 'string' || !isPlainSerial(serial)) c.fail(`/lines/${index}/serials`, PLAIN_SERIAL_RULE);
+			else if (seen.has(serial)) c.fail(`/lines/${index}/serials`, 'A serial number is listed twice.');
+			seen.add(String(serial));
+		}
+		return { ...line, serials: serials.map(String) };
+	});
 	const totals = totalsOf(c, totalsInput, lines, { fee: delivery.fee, taxIncluded }, rules);
 	const promotions = promotionsOf(c, record.promotions, totals.discount);
 	const payments = paymentEntriesOf(c, record.payments, now);

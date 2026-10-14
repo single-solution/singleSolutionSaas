@@ -245,6 +245,15 @@ export const mountMyOrders = async ({ host, config, shop, win }) => {
 						Array.isArray(line.serials) && line.serials.length > 0
 							? h(doc, 'span', { class: 'meta' }, t('orders.serials', { serials: line.serials.join(', ') }))
 							: null,
+						// the units' numbers the merchant shows shoppers, by unit field
+						...(Array.isArray(line.unitValues) ? line.unitValues : []).map((/** @type {any} */ entry) =>
+							h(
+								doc,
+								'span',
+								{ class: 'meta' },
+								t('orders.unitValues', { name: entry.name, values: entry.values.join(', ') }),
+							),
+						),
 						warranty ? h(doc, 'span', { class: 'meta' }, warranty) : null,
 						h(
 							doc,

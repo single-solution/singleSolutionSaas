@@ -20,9 +20,10 @@ import {
 	isDuplicate,
 	locationsOf,
 	slugTaken,
+	unitFieldsOf,
 } from '../adapters/catalog-store.js';
 import { cleanText, isObject } from '../core/catalog.js';
-import { FIELD_LIMITS, crowdedUnits } from '../core/fields.js';
+import { FIELD_LIMITS, checkUnit, crowdedUnits, sharedKeys } from '../core/fields.js';
 import {
 	checkAttribute,
 	checkBrand,
@@ -47,8 +48,6 @@ import { bodyOf, refuse, STAFF_LIMITS } from './catalog-common.js';
 /** @typedef {import('../core/model.js').SerialRecord} SerialRecord */
 /** @typedef {import('@ss/app-kit').WebsiteData} WebsiteData */
 
-/** Serial numbers: printable, 1 to 64 characters. */
-const SERIAL = /^[\p{L}\p{N}][\p{L}\p{N} ._/:#-]{0,63}$/u;
 /** Most serials added at once. */
 const MAX_SERIALS = 500;
 
@@ -567,19 +566,18 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			const link = page.link(body.nextCursor);
 			return ok(body, { headers: link ? { link } : {} });
 		},
-		/** POST `{ productId, variantId, serials: [...], locationId? }`. @param {any} ctx */
+		/**
+		 * POST `{ productId, variantId, serials: [unit, …], locationId? }`: each unit its serial number, or, with unit
+		 * fields, `{ values: { <fieldId>: value or [values] } }` (a text alone is the first unit field's value), checked
+		 * against the unit fields of the product's categories (formats, required fields); no number may name two units.
+		 * @param {any} ctx
+		 */
 		add: async (ctx) => {
 			const body = bodyOf(ctx);
-			const list = Array.isArray(body.serials)
-				? body.serials.map((serial) => (typeof serial === 'string' ? serial.trim() : ''))
-				: [];
+			/** @type {unknown[]} */
+			const list = Array.isArray(body.serials) ? body.serials : [];
 			if (list.length === 0 || list.length > MAX_SERIALS)
-				throw refuse([{ path: '/serials', message: `Give 1 to ${MAX_SERIALS} serial numbers.` }]);
-			const bad = list.findIndex((serial) => !SERIAL.test(serial));
-			if (bad !== -1)
-				throw refuse([{ path: `/serials/${bad}`, message: 'A serial number is 1 to 64 letters, digits and . _ / : # -' }]);
-			if (new Set(list).size !== list.length)
-				throw refuse([{ path: '/serials', message: 'A serial number is listed twice.' }]);
+				throw refuse([{ path: '/serials', message: `Give 1 to ${MAX_SERIALS} units.` }]);
 			const { s, data } = await common.open(ctx);
 			const found = await data
 				.collection(COLLECTIONS.products)
@@ -595,16 +593,31 @@ export const createCatalogTaxonomy = (product, service, common) => {
 					!(await data.collection(COLLECTIONS.locations).findOne({ websiteId: data.websiteId, id: locationId })))
 			)
 				throw refuse([{ path: '/locationId', message: 'There is no such location.' }]);
+			const fields = (await unitFieldsOf(data, [String(found.id)])).get(String(found.id)) ?? [];
+			/** @type {import('../core/catalog.js').FieldError[]} */
+			const errors = [];
+			const units = list.flatMap((entry, index) => {
+				const unit = checkUnit(typeof entry === 'string' ? entry.trim() : entry, fields);
+				if (unit.ok) return [unit.value];
+				errors.push({ path: `/serials/${index}${unit.path}`, message: unit.message });
+				return [];
+			});
+			if (errors.length > 0) throw refuse(errors);
+			const twice = sharedKeys(units);
+			if (twice.length > 0)
+				throw refuse([{ path: '/serials', message: `${String(twice[0]).replace(/^[^:]+:/, '')} is given for two units.` }]);
 			const taken = await data
 				.collection(COLLECTIONS.serials)
-				.distinct('serial', { websiteId: data.websiteId, serial: { $in: list } });
-			if (taken.length > 0) throw problem('conflict', `These serial numbers are already recorded: ${taken.join(', ')}.`);
+				.distinct('serial', { websiteId: data.websiteId, keys: { $in: units.flatMap((unit) => unit.keys) } });
+			if (taken.length > 0) throw problem('conflict', `These units are already recorded: ${taken.join(', ')}.`);
 			/** @type {SerialRecord[]} */
-			const records = list.map((serial) => ({
+			const records = units.map((unit) => ({
 				id: createId(ID_PREFIX.serial),
 				productId: String(body.productId),
 				variantId: String(body.variantId),
-				serial,
+				serial: unit.serial,
+				values: unit.values,
+				keys: unit.keys,
 				status: 'in_stock',
 				orderId: null,
 				lineId: null,
@@ -614,7 +627,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 				.collection(COLLECTIONS.serials)
 				.insertMany(records.map((record) => ({ ...record })))
 				.catch((error) => {
-					throw isDuplicate(error) ? problem('conflict', 'A serial number is already recorded.') : error;
+					throw isDuplicate(error) ? problem('conflict', 'A number of these units is already recorded.') : error;
 				});
 			await service.log(ctx, 'serials.added', String(body.variantId), {
 				label: String(found.name),

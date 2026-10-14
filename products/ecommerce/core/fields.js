@@ -548,3 +548,111 @@ export const crowdedUnits = (fields, categories) => {
 	}
 	return null;
 };
+
+// ------------------------------------------------------------------------------------------------------- units
+
+/** A plain serial number (a unit of a product without unit fields): 1 to 64 letters, digits, spaces and . _ / : # - */
+const PLAIN_SERIAL = /^[\p{L}\p{N}][\p{L}\p{N} ._/:#-]{0,63}$/u;
+/** The words of a plain serial number's rule. */
+export const PLAIN_SERIAL_RULE = 'A serial number is 1 to 64 letters, digits, spaces and . _ / : # -';
+
+/**
+ * Whether a text is a plain serial number.
+ * @param {string} value
+ */
+export const isPlainSerial = (value) => PLAIN_SERIAL.test(value);
+
+/**
+ * One unit as the shop keeps it: its serial (the plain serial number, else the first value of its first unit field
+ * that has one; order lines, packing and searches name the unit by it), its values by unit field, and its keys
+ * (`serial:<serial>` and `<fieldId>:<value>` for each value) the shop keeps unique, so no number names two units.
+ * @typedef {{ serial: string, values: Record<string, string[]>, keys: string[] }} UnitRecordValues
+ */
+
+/**
+ * The keys of a unit (its serial and every value by field), each once.
+ * @param {string} serial @param {Record<string, string[]>} values
+ */
+export const unitKeys = (serial, values) => [
+	...new Set([`serial:${serial}`, ...Object.entries(values).flatMap(([id, list]) => list.map((value) => `${id}:${value}`))]),
+];
+
+/**
+ * Check one unit against the unit fields of its product ({@link unitFieldsFor}). Without unit fields, a unit is a plain
+ * serial number. With them, its values: a field's one value, or up to two with a field that takes two (two numbers of
+ * one unit, such as a dual-SIM phone's), each in the field's format (kept as the format keeps it), every required field
+ * given; a text alone is the first field's value. A unit is named by the first value of its first field that has one.
+ * @param {unknown} input a serial number (or the first field's value), or `{ values: { <fieldId>: value or [values] } }`
+ * @param {ReadonlyArray<ValueRules & { id: string, required: boolean }>} fields
+ * @returns {{ ok: true, value: UnitRecordValues } | { ok: false, path: string, message: string, code?: ValueRefusal }}
+ */
+export const checkUnit = (input, fields) => {
+	if (fields.length === 0) {
+		const serial = typeof input === 'string' ? input.trim() : null;
+		if (serial === null || !isPlainSerial(serial)) return { ok: false, path: '', message: PLAIN_SERIAL_RULE };
+		return { ok: true, value: { serial, values: {}, keys: unitKeys(serial, {}) } };
+	}
+	const first = /** @type {ValueRules & { id: string, required: boolean }} */ (fields[0]);
+	if (typeof input !== 'string' && !(isObject(input) && isObject(input.values)))
+		return { ok: false, path: '', message: 'Give the unit as its number, or as { values } by unit field.' };
+	/** @type {Record<string, unknown>} */
+	const given = typeof input === 'string' ? { [first.id]: input } : /** @type {any} */ (input).values;
+	/** @type {Record<string, string[]>} */
+	const values = {};
+	for (const id of Object.keys(given))
+		if (!fields.some((field) => field.id === id))
+			return { ok: false, path: `/values/${id}`, message: 'This is not a unit field of this product.' };
+	for (const field of fields) {
+		const raw = given[field.id];
+		if (raw === undefined || raw === null || raw === '' || (Array.isArray(raw) && raw.length === 0)) {
+			if (field.required)
+				return { ok: false, path: `/values/${field.id}`, message: `Give ${field.name}: every unit needs it.` };
+			continue;
+		}
+		const checked = checkValue(field, raw);
+		if (!checked.ok)
+			return { ok: false, path: `/values/${field.id}`, message: valueProblem(field, checked), code: checked.code };
+		values[field.id] = (Array.isArray(checked.value) ? checked.value : [checked.value]).map(String);
+	}
+	const named = fields.find((field) => values[field.id] !== undefined);
+	if (!named) return { ok: false, path: '/values', message: 'Give at least one number of the unit.' };
+	const serial = /** @type {string} */ ((values[named.id] ?? [])[0]);
+	return { ok: true, value: { serial, values, keys: unitKeys(serial, values) } };
+};
+
+/**
+ * The keys two or more of these units share (a number given twice in one request), else [].
+ * @param {ReadonlyArray<{ keys: string[] }>} units
+ */
+export const sharedKeys = (units) => {
+	const seen = new Set();
+	/** @type {string[]} */
+	const twice = [];
+	for (const unit of units)
+		for (const key of unit.keys) {
+			if (seen.has(key) && !twice.includes(key)) twice.push(key);
+			seen.add(key);
+		}
+	return twice;
+};
+
+/**
+ * What a place shows of an order line's units: the serial numbers of units without unit field values (plain serial
+ * numbers), and per unit field shown there (`show.shopper`, `show.invoice` or `show.packingSlip`) its values, in the
+ * fields' order. A unit named by a field that does not show there shows none of its numbers.
+ * @param {ReadonlyArray<string>} serials the line's units, by serial
+ * @param {ReadonlyMap<string, Record<string, string[]>>} values each unit's values by serial (none: a plain serial)
+ * @param {ReadonlyArray<{ id: string, name: string, sort: number, show: FieldShow }>} fields the unit fields
+ * @param {'shopper' | 'invoice' | 'packingSlip'} place
+ * @returns {{ serials: string[], values: Array<{ name: string, values: string[] }> }}
+ */
+export const unitsShown = (serials, values, fields, place) => ({
+	serials: serials.filter((serial) => Object.keys(values.get(serial) ?? {}).length === 0),
+	values: [...fields]
+		.filter((field) => showsAt(field, place))
+		.sort((a, b) => a.sort - b.sort || a.name.localeCompare(b.name))
+		.flatMap((field) => {
+			const list = serials.flatMap((serial) => values.get(serial)?.[field.id] ?? []);
+			return list.length > 0 ? [{ name: field.name, values: list }] : [];
+		}),
+});

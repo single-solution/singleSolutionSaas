@@ -310,7 +310,13 @@ describe('the pick list (E35)', () => {
 
 describe('document parts (E35)', () => {
 	const business = { name: 'B', email: null, phone: null, address: null };
-	const context = { business, texts: invoiceTexts({}), format: DEFAULT_FORMAT, timeZone: 'UTC' };
+	const context = {
+		business,
+		texts: invoiceTexts({}),
+		format: DEFAULT_FORMAT,
+		timeZone: 'UTC',
+		fields: { list: [], units: new Map() },
+	};
 
 	it('collects cash only on unpaid cash-on-delivery orders', () => {
 		expect(cashToCollect(orderOf())).toBe(80750);

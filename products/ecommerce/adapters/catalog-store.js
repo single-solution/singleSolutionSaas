@@ -1,12 +1,13 @@
 /**
  * The catalog part's queries in the merchant database (PLAN 0.8.8 Catalog): the indexes (unique slugs per website;
- * an attribute's slug is unique per category it is for, E45; unique serial numbers, listing orders), loading what a product check needs, finding products by id or slug, free
+ * an attribute's slug is unique per category it is for, E45; unique unit numbers, listing orders), loading what a product check needs, finding products by id or slug, free
  * slugs, SKUs in use, and rewriting a product's fields in a transaction (a concurrent stock hold by an order makes it
  * retry, so a product edit never undoes one). `price` and `inStock` are recomputed by the ledger's `refreshProducts`.
  * @module
  */
 import { createId } from '@ss/contracts';
 import { freeSlug, slugify } from '../core/catalog.js';
+import { unitFieldsFor } from '../core/fields.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import { refreshProducts } from './ledger.js';
 
@@ -83,7 +84,9 @@ export const INDEXES = [
 	},
 	{ collection: COLLECTIONS.locations, keys: { websiteId: 1, id: 1 }, name: 'by_id', unique: true },
 	{ collection: COLLECTIONS.serials, keys: { websiteId: 1, id: 1 }, name: 'by_id', unique: true },
-	{ collection: COLLECTIONS.serials, keys: { websiteId: 1, serial: 1 }, name: 'by_serial', unique: true },
+	// every number of a unit names it alone: its serial and each value by unit field (dynamic model §2)
+	{ collection: COLLECTIONS.serials, keys: { websiteId: 1, keys: 1 }, name: 'by_key', unique: true },
+	{ collection: COLLECTIONS.serials, keys: { websiteId: 1, serial: 1 }, name: 'by_serial' },
 	{ collection: COLLECTIONS.serials, keys: { websiteId: 1, productId: 1, variantId: 1, status: 1 }, name: 'by_variant' },
 ];
 
@@ -118,6 +121,89 @@ export const brandsOf = (data) => allOf(data, COLLECTIONS.brands);
 export const attributesOf = (data) => allOf(data, COLLECTIONS.attributes);
 /** @param {WebsiteData} data @returns {Promise<LocationRecord[]>} */
 export const locationsOf = (data) => allOf(data, COLLECTIONS.locations);
+
+/**
+ * The unit fields each product's units take ({@link unitFieldsFor}: the active unit fields of its categories and those
+ * above them, in their order), for the products given; [] for a product without (its units are plain serial numbers).
+ * @param {WebsiteData} data @param {string[]} productIds
+ * @returns {Promise<Map<string, AttributeRecord[]>>}
+ */
+export const unitFieldsOf = async (data, productIds) => {
+	/** @type {AttributeRecord[]} */
+	const fields = /** @type {any[]} */ (
+		await data.collection(COLLECTIONS.attributes).find({ websiteId: data.websiteId, on: 'unit', active: true }, NO_ID).toArray()
+	);
+	if (fields.length === 0) return new Map(productIds.map((id) => [id, []]));
+	const [products, categories] = await Promise.all([
+		data
+			.collection(COLLECTIONS.products)
+			.find({ websiteId: data.websiteId, id: { $in: productIds } }, { projection: { _id: 0, id: 1, categoryIds: 1 } })
+			.toArray(),
+		data
+			.collection(COLLECTIONS.categories)
+			.find({ websiteId: data.websiteId }, { projection: { _id: 0, id: 1, path: 1 } })
+			.limit(5000)
+			.toArray(),
+	]);
+	const paths = new Map(categories.map((category) => [String(category.id), (category.path ?? []).map(String)]));
+	const byProduct = new Map(products.map((row) => [String(row.id), /** @type {string[]} */ (row.categoryIds ?? [])]));
+	return new Map(
+		productIds.map((id) => [
+			id,
+			unitFieldsFor(
+				fields,
+				(byProduct.get(id) ?? []).flatMap((category) => [category, ...(paths.get(category) ?? [])]),
+			),
+		]),
+	);
+};
+
+/**
+ * The units sold to orders, with their values: order id → serial → values by unit field (a plain serial has none).
+ * @param {WebsiteData} data @param {string[]} orderIds
+ * @returns {Promise<Map<string, Map<string, Record<string, string[]>>>>}
+ */
+export const unitsOfOrders = async (data, orderIds) => {
+	/** @type {Map<string, Map<string, Record<string, string[]>>>} */
+	const out = new Map(orderIds.map((id) => [id, new Map()]));
+	if (orderIds.length === 0) return out;
+	const rows = await data
+		.collection(COLLECTIONS.serials)
+		.find(
+			{ websiteId: data.websiteId, orderId: { $in: orderIds } },
+			{ projection: { _id: 0, orderId: 1, serial: 1, values: 1 } },
+		)
+		.toArray();
+	for (const row of rows) out.get(String(row.orderId))?.set(String(row.serial), row.values ?? {});
+	return out;
+};
+
+/**
+ * Every unit field, to name and show unit values (fields switched off too: their values stay readable).
+ * @param {WebsiteData} data
+ * @returns {Promise<AttributeRecord[]>}
+ */
+export const unitFieldsAll = async (data) =>
+	/** @type {AttributeRecord[]} */ (
+		/** @type {unknown} */ (
+			await data.collection(COLLECTIONS.attributes).find({ websiteId: data.websiteId, on: 'unit' }, NO_ID).toArray()
+		)
+	);
+
+/**
+ * The merchant fields printed documents read (`core/invoice.js` `DocumentFields`): the unit fields and the values of
+ * the orders' units.
+ * @param {WebsiteData} data @param {ReadonlyArray<{ id: string, lines: ReadonlyArray<{ serials: string[] }> }>} orders
+ * @returns {Promise<import('../core/invoice.js').DocumentFields>}
+ */
+export const documentFieldsOf = async (data, orders) => {
+	const withUnits = orders.filter((order) => order.lines.some((line) => line.serials.length > 0)).map((order) => order.id);
+	const [list, units] = await Promise.all([
+		withUnits.length > 0 ? unitFieldsAll(data) : Promise.resolve([]),
+		unitsOfOrders(data, withUnits),
+	]);
+	return { list, units };
+};
 
 /**
  * What a product check needs.

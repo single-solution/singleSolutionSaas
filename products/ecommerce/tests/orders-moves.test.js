@@ -8,7 +8,7 @@ import { createMoves } from '../server/orders-moves.js';
 import { createService } from '../server/service.js';
 import { DEFAULT_FLOW } from '../core/flow.js';
 import { COLLECTIONS } from '../core/model.js';
-import { ALL, DOMAIN, readyShop } from './helpers.js';
+import { ALL, DOMAIN, readyShop, storedUnit } from './helpers.js';
 
 /** @type {Awaited<ReturnType<typeof readyShop>>} */
 let shop;
@@ -141,16 +141,15 @@ describe('changed meanwhile', () => {
 		}
 		const serialized = await stale({}, true);
 		const line = /** @type {import('../core/model.js').OrderLineRecord} */ (serialized.lines[0]);
-		await (await shop.db()).collection(COLLECTIONS.serials).insertOne({
-			id: createId('ser'),
-			productId: line.productId,
-			variantId: line.variantId,
-			serial: 'S-1',
-			status: 'in_stock',
-			orderId: null,
-			lineId: null,
-			locationId: null,
-		});
+		await (await shop.db()).collection(COLLECTIONS.serials).insertOne(
+			storedUnit({
+				id: createId('ser'),
+				productId: line.productId,
+				variantId: line.variantId,
+				serial: 'S-1',
+				status: 'in_stock',
+			}),
+		);
 		await expect(
 			moves.move(s, ctx(), serialized, { ...input('packed'), serials: { [line.id]: ['S-1'] } }, DEFAULT_FLOW),
 		).rejects.toMatchObject({ code: 'conflict' });

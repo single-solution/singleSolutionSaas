@@ -11,6 +11,7 @@
  * @module
  */
 import { countHandlers, created, defineRoute, paginate, problem } from '@ss/app-kit';
+import { documentFieldsOf, unitFieldsOf, unitsOfOrders } from '../adapters/catalog-store.js';
 import { createFulfilmentStore, markSeenBy } from '../adapters/fulfilment-store.js';
 import { setOrderCounter } from '../adapters/ledger.js';
 import { createOrdersStore } from '../adapters/orders-store.js';
@@ -136,7 +137,18 @@ export const createOrders = (product, service, { ordering }) => {
 		const images = new Map();
 		for (const line of order.lines) images.set(line.id, await media.mediaUrl(s, line.image));
 		const serialized = s.has('grades_serials') ? await moves.serializedOf(s, order) : null;
-		return orderDetail(order, flow, { customer, images, money, serialized });
+		// the unit fields each serialized line's units take, and its units' values (staff see every value)
+		const data = await s.data();
+		const [unitFields, unitValues] = serialized
+			? await Promise.all([unitFieldsOf(data, [...serialized]), unitsOfOrders(data, [order.id])])
+			: [new Map(), new Map()];
+		return orderDetail(order, flow, {
+			customer,
+			images,
+			money,
+			serialized,
+			units: { fields: unitFields, values: unitValues.get(order.id) ?? new Map() },
+		});
 	};
 
 	// ------------------------------------------------------------------------------------------------- handlers
@@ -520,12 +532,18 @@ export const createOrders = (product, service, { ordering }) => {
 	 * @param {import('../core/invoice.js').InvoiceOptions} [options] the shopper's copy has no staff names (E35)
 	 */
 	const document = async (s, order, kind, options) => {
-		const [business, settings, { format, timeZone }] = await Promise.all([s.business(), s.values('invoices'), s.format()]);
+		const [business, settings, { format, timeZone }, fields] = await Promise.all([
+			s.business(),
+			s.values('invoices'),
+			s.format(),
+			s.data().then((data) => documentFieldsOf(data, [order])),
+		]);
 		const context = {
 			business: /** @type {import('../core/invoice.js').BusinessLike} */ (business),
 			texts: invoiceTexts(settings),
 			format,
 			timeZone,
+			fields,
 		};
 		const html = kind === 'invoice' ? invoiceHtml(order, context, options) : packingSlipHtml(order, context);
 		return new Response(html, { headers: DOCUMENT_HEADERS });

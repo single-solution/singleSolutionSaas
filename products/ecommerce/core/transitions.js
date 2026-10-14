@@ -108,7 +108,12 @@ import { CASH_METHODS, earnedLeft, pointsOwner, refundSplit, refundable, stateAf
  * @property {Record<string, unknown>} [payments] what canceling the open Payments payment writes (K-13)
  */
 
-/** @typedef {Array<{ lineId: string, productId: string, variantId: string, serials: string[], before: string[] }>} UnitsPlan */
+/**
+ * The units a capture gives each line: their serials, the ones it had, and (typed units) each unit's values and keys in
+ * the serials' order.
+ * @typedef {Array<{ lineId: string, productId: string, variantId: string, serials: string[], before: string[],
+ *   units?: import('./fields.js').UnitRecordValues[] }>} UnitsPlan
+ */
 
 /**
  * A write of the ledger, in the transaction.

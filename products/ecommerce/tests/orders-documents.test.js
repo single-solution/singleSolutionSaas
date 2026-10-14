@@ -221,7 +221,7 @@ describe('printable documents', () => {
 describe('document parts', () => {
 	it('prints pickup orders, paid and refunded states, and falls back to the default texts', () => {
 		const business = { name: 'B & Co', email: null, phone: null, address: '1 Road' };
-		const context = { format: DEFAULT_FORMAT, timeZone: 'Asia/Tokyo' };
+		const context = { format: DEFAULT_FORMAT, timeZone: 'Asia/Tokyo', fields: { list: [], units: new Map() } };
 		const order = orderOf({
 			address: null,
 			delivery: { method: 'pickup', zone: '', fee: 0, locationId: null },

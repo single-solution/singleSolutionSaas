@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { columnKey } from '../ui/admin-charts.js';
 import {
 	ALL,
+	ATTRIBUTES,
 	CHARTS,
 	ROW,
 	confirmDialog,
@@ -436,5 +437,56 @@ describe('catalog admin: serial numbers', () => {
 		await click(buttonIn(again, 'Find'));
 		expect(statuses(again)).toContain('You are not allowed to do this.');
 		expect(product().id).toBe('prd_1');
+	});
+
+	it('adds units with their unit fields’ values, each checked in its field’s format, and shows them', async () => {
+		// the IMEI is one merchant's unit field: two per dual-SIM phone, 15 digits with a Luhn check digit
+		const imei = {
+			id: 'att_imei',
+			name: 'IMEI',
+			on: 'unit',
+			active: true,
+			sort: 0,
+			categoryId: null,
+			categoryIds: [],
+			multiple: true,
+			maxValues: 2,
+			format: {
+				chars: 'digits',
+				minLength: 15,
+				maxLength: 15,
+				startsWith: [],
+				mask: '',
+				checkDigit: 'luhn',
+				ignoreSpaces: true,
+				upperCase: false,
+			},
+		};
+		const unit = { ...SERIAL, serial: '490154203237518', values: { att_imei: ['490154203237518', '357805023984942'] } };
+		const { root, server } = await start(ALL, {
+			'GET /v1/admin/attributes': () => answer(200, { items: [...ATTRIBUTES, imei] }),
+			'GET /v1/admin/serials': () => answer(200, { items: [unit], nextCursor: null, hasMore: false }),
+			'POST /v1/admin/serials': () => answer(201, { items: [{ id: 'ser_2' }, { id: 'ser_3' }] }),
+		});
+		const panel = await openTab(root, 'serials');
+		// a unit's detail names its values by field
+		await pick(panel, '490154203237518');
+		expect(textOf(detailOf(panel))).toContain('IMEI490154203237518 / 357805023984942');
+		await click(buttonIn(panel, 'Add serial numbers'));
+		const dialog = dialogOf(root);
+		await click(buttonIn(dialog, 'Find'));
+		await change(fieldIn(dialog, 'Product'), 'prd_1');
+		expect(textOf(dialog)).toContain('One unit per line, its values separated by commas or tabs: IMEI, IMEI (second).');
+		type(fieldIn(dialog, 'Serial numbers (one per line)'), '490154203237518, 357805023984942\n4901 5420 3237 519');
+		await submitDialog(root);
+		expect(statuses(dialog)).toContain(
+			'Line 2: 4901 5420 3237 519 does not match the format of IMEI. Its check digit is wrong.',
+		);
+		type(fieldIn(dialog, 'Serial numbers (one per line)'), '490154203237518\t357805023984942\n\n356938035643809');
+		await submitDialog(root);
+		expect(server.last('POST /v1/admin/serials')?.body.serials).toEqual([
+			{ values: { att_imei: ['490154203237518', '357805023984942'] } },
+			{ values: { att_imei: ['356938035643809'] } },
+		]);
 	});
 });

@@ -197,9 +197,11 @@
 			},
 			{
 				"id": "serials",
-				"title": "Serial numbers and the IMEI check",
+				"title": "Units and their numbers (serial numbers)",
 				"paragraphs": [
-					"The grades_serials setting serialMode is registered (serial numbers are added to stock first and picked when an order is packed) or typed (typed when an order is packed or later with PATCH /v1/orders/<id> { serials: { <lineId>: ['…'] } }, one per unit, and required before the order moves to a shipped status). serialCheck imei requires 15 digits that pass the IMEI (Luhn) check digit. A category's requiresSerial says whether its products need serial numbers; a product with serialized null follows its categories. Order lines, invoices and the shopper's orders show the serial numbers."
+					"Units are numbered items: a unit's serial number names it (order lines, packing, searches). The grades_serials setting serialMode is registered (units are added to stock first with POST /v1/serials { productId, variantId, serials: [unit, …] } and picked by their serial numbers when an order is packed) or typed (typed when an order is packed or later with PATCH /v1/orders/<id> { serials: { <lineId>: [unit, …] } }, one per unit, and needed before the order moves to a shipped status when the move needs units). A category's requiresSerial says whether its products take units; a product with serialized null follows its categories.",
+					"What a unit's numbers look like is your choice: make unit fields (Fields, on units; at most 3 apply to one category, one of them with two values), each with its format, required or not, and where it shows (to the shopper, on invoices, on packing slips; none: staff only). A unit is then { values: { <fieldId>: value or [two values] } } (a text alone is the first field's value), named by the first value of its first field; without unit fields a unit is a plain serial number (1 to 64 letters, digits, spaces and . _ / : # -). The formats are checked wherever units come in: added to stock, typed at packing or later, and imported. No number may name two units: every value of every unit is unique (a unit's keys). Staff answers give each line's unit fields and its units with every value; the shopper's order shows plain serial numbers and the values of fields shown to shoppers (unitValues); invoices and packing slips print the fields shown on them.",
+					"Example — a phone shop's IMEI: a unit field \"IMEI\" on units, text, several values up to 2 (dual SIM), required, format { chars: digits, minLength: 15, maxLength: 15, checkDigit: luhn, ignoreSpaces: true }, shown to the shopper and on invoices and packing slips, for the phones' categories; with serialMode typed, staff type each phone's one or two IMEIs at packing, and a mistyped digit is refused at once."
 				],
 				"routes": [
 					["PATCH /v1/orders/:id", "checkout"],
@@ -302,7 +304,7 @@
 			"Keep stock per location (warehouses, shops). Orders take stock from the first location that has it, in the order you set."
 		],
 		"grades_serials": [
-			"Define condition grades in Settings → Grades and serials: per grade its categories, return and warranty days, color, condition video, content, condition and glossary page. Serial numbers (such as IMEI) are registered in stock and picked when an order is packed, or typed at packing or later and checked as IMEI if you choose; they appear on invoices, packing slips and the shopper's orders (see Catalog and SEO)."
+			"Define condition grades in Settings → Grades and serials: per grade its categories, return and warranty days, color, condition video, content, condition and glossary page. Units (serial numbers) are registered in stock and picked when an order is packed, or typed at packing or later; their numbers follow the unit fields you make (Fields, on units: formats, two values for a dual-SIM phone's IMEIs), and show to shoppers and on invoices and packing slips as each field says (see Catalog and SEO)."
 		],
 		"digital_goods": [
 			"Attach files or license keys to a product. The shopper gets the download link or key once the order is paid. Files are kept in your storage."

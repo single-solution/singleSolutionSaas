@@ -12,7 +12,7 @@ import { createCheckout } from '../server/checkout.js';
 import { createOrders } from '../server/orders.js';
 import { createService } from '../server/service.js';
 import { COLLECTIONS } from '../core/model.js';
-import { ALL_PERMISSIONS, DOMAIN, PAYMENTS, readyShop } from './helpers.js';
+import { ALL_PERMISSIONS, DOMAIN, PAYMENTS, readyShop, storedUnit } from './helpers.js';
 
 /** @type {Awaited<ReturnType<typeof readyShop>>} */
 let shop;
@@ -279,16 +279,9 @@ describe('moving orders', () => {
 		const { order, product, variant } = await place({ serialized: true, quantity: 2, method: 'online', paid: true });
 		const serials = data.collection(COLLECTIONS.serials);
 		for (const serial of ['SN-1', 'SN-2', 'SN-3'])
-			await serials.insertOne({
-				id: createId('ser'),
-				productId: product.id,
-				variantId: variant.id,
-				serial,
-				status: 'in_stock',
-				orderId: null,
-				lineId: null,
-				locationId: null,
-			});
+			await serials.insertOne(
+				storedUnit({ id: createId('ser'), productId: product.id, variantId: variant.id, serial, status: 'in_stock' }),
+			);
 		await serials.insertOne({
 			id: createId('ser'),
 			productId: product.id,

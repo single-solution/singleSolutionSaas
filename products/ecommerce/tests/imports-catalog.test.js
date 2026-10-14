@@ -500,11 +500,12 @@ describe('import', () => {
 			{ dryRun: true },
 		);
 		expect(serial.failed.map((/** @type {any} */ row) => row.errors[0].message)).toEqual([
-			`Another unit (${ID.unit}) already has this serial number.`,
+			`Another unit (${ID.unit}) already has the number SN 0001.`,
 			`The product has no variant ${idOf('var', 99)}.`,
 			`There is no product ${idOf('prd', 99)}.`,
 		]);
-		expect(serial.failed[2].errors[1].message).toBe(`Another unit (${idOf('ser', 4)}) already has this serial number.`);
+		// a unit of no product is not checked further (its unit fields are not known)
+		expect(serial.failed[2].errors).toHaveLength(1);
 		const landing = await send('landings', [{ ...RECORDS.landings[0], id: idOf('lnd', 2) }], { dryRun: true });
 		expect(landing.failed[0].errors[0].path).toBe('/categoryId');
 		const deal = await send(

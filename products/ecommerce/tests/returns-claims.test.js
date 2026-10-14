@@ -21,7 +21,7 @@ import {
 	holdsUnits,
 	refundCap,
 } from '../core/returns.js';
-import { PAYMENTS, readyShop } from './helpers.js';
+import { PAYMENTS, readyShop, storedUnit } from './helpers.js';
 
 /** Every hook the shop's service emits, in order. */
 const hooks = vi.hoisted(() => /** @type {Array<{ name: string, payload: any }>} */ ([]));
@@ -308,14 +308,16 @@ describe('restock per line', () => {
 				{ product: cover, quantity: 2 },
 			],
 		});
-		await data.collection(COLLECTIONS.serials).insertOne({
-			id: createId('ser'),
-			productId: phone.id,
-			serial: 'SN-B1',
-			status: 'sold',
-			orderId: placed.id,
-			lineId: 'x',
-		});
+		await data.collection(COLLECTIONS.serials).insertOne(
+			storedUnit({
+				id: createId('ser'),
+				productId: phone.id,
+				serial: 'SN-B1',
+				status: 'sold',
+				orderId: placed.id,
+				lineId: 'x',
+			}),
+		);
 		const [phoneLine, coverLine] = /** @type {[string, string]} */ (placed.lines.map((line) => line.id));
 		const made = await claim(placed, {});
 		const id = made.json.id;

@@ -616,16 +616,37 @@ describe('orders admin: one order', () => {
 		expect(moves[0]).toMatchObject({ to: 'packed', video: 'https://youtu.be/dQw4w9WgXcQ' });
 	});
 
-	it('checks typed serial numbers as IMEIs and saves them later', async () => {
+	it('checks typed units against their unit fields as they are typed, and saves them later', async () => {
 		/** @type {any[]} */
 		const patches = [];
+		// the IMEI is one merchant's unit field: 15 digits with a Luhn check digit, two per dual-SIM phone
+		const imei = {
+			id: 'att_imei',
+			name: 'IMEI',
+			required: true,
+			maxValues: 2,
+			format: {
+				chars: 'digits',
+				minLength: 15,
+				maxLength: 15,
+				startsWith: [],
+				mask: '',
+				checkDigit: 'luhn',
+				ignoreSpaces: true,
+				upperCase: false,
+			},
+		};
 		const typed = detail({
 			lines: [
-				{ ...detail().lines[0], serials: [], serialized: true, warrantyDays: null },
+				{ ...detail().lines[0], serials: [], serialized: true, warrantyDays: null, unitFields: [imei], units: [] },
 				{ ...detail().lines[0], id: 'oln_3', name: 'Case', quantity: 1, serials: ['C1'], serialized: false },
 			],
 			nextStatuses: [{ key: 'packed', label: 'Packed', role: 'packed' }],
 		});
+		const units = [
+			{ serial: '490154203237518', values: { att_imei: ['490154203237518', '357805023984942'] } },
+			{ serial: '356938035643809', values: { att_imei: ['356938035643809'] } },
+		];
 		const { root } = await start(
 			{
 				'GET /v1/admin/orders/ord_1': () => answer(200, typed),
@@ -633,11 +654,17 @@ describe('orders admin: one order', () => {
 					patches.push(call.body);
 					return patches.length === 1
 						? invalid('/serials/l1')
-						: answer(200, detail({ lines: [{ ...typed.lines[0], serials: call.body.serials.oln_1 }], nextStatuses: [] }));
+						: answer(
+								200,
+								detail({
+									lines: [{ ...typed.lines[0], serials: units.map((unit) => unit.serial), units }],
+									nextStatuses: [],
+								}),
+							);
 				},
 			},
 			FEATURES,
-			{ ...SETTINGS, catalog: { serialMode: 'typed', serialCheck: 'imei' } },
+			{ ...SETTINGS, catalog: { serialMode: 'typed' } },
 		);
 		const pane = detailOf(panelOf(root, 'orders'));
 		expect(textOf(pane)).toContain('Missing');
@@ -649,21 +676,47 @@ describe('orders admin: one order', () => {
 		expect(dialog.querySelector('input[aria-label="Serial number 1 of Case"]')).toBeNull();
 		await submitDialog(root);
 		expect(dialogStatus(root)).toBe('Type or change the serial numbers of at least one item first.');
-		type(dialog.querySelector('input[aria-label="Serial number 1 of Phone"]'), '490154203237518');
-		type(dialog.querySelector('input[aria-label="Serial number 2 of Phone"]'), '490154203237519');
+		/** @param {number} unit @param {number} value */
+		const input = (unit, value) =>
+			/** @type {HTMLInputElement} */ (dialog.querySelector(`input[aria-label="IMEI ${value} of unit ${unit} of Phone"]`));
+		expect(input(1, 2).getAttribute('placeholder')).toBe('IMEI (second)');
+		expect(input(1, 1).getAttribute('inputmode')).toBe('numeric');
+		type(input(1, 1), '4901 5420 3237 518');
+		type(input(1, 2), '357805023984942');
+		type(input(2, 1), '490154203237519');
+		// checked as typed, with the website's words
+		input(2, 1).dispatchEvent(new window.Event('input'));
+		const wrong = '490154203237519 does not match the format of IMEI. Its check digit is wrong.';
+		expect(textOf(dialog)).toContain(wrong);
+		expect(input(2, 1).hasAttribute('aria-invalid')).toBe(true);
 		await submitDialog(root);
-		expect(dialogStatus(root)).toBe('490154203237519 is not an IMEI: 15 digits ending in its check digit.');
-		type(dialog.querySelector('input[aria-label="Serial number 2 of Phone"]'), '356938035643809');
+		expect(dialogStatus(root)).toBe(wrong);
+		// the second unit without its required IMEI
+		type(input(2, 1), '');
+		type(input(2, 2), '');
+		await submitDialog(root);
+		expect(dialogStatus(root)).toBe('Phone: give one serial number per unit, or leave them all empty.');
+		type(input(2, 1), '356938035643809');
+		input(2, 1).dispatchEvent(new window.Event('input'));
+		expect(textOf(dialog)).not.toContain(wrong);
 		await submitDialog(root);
 		expect(dialogStatus(root)).toBe(TEXTS['problem.field.serials']);
 		await submitDialog(root);
-		expect(patches[1]).toEqual({ serials: { oln_1: ['490154203237518', '356938035643809'] } });
+		expect(patches[1]).toEqual({
+			serials: {
+				oln_1: [
+					{ values: { att_imei: ['4901 5420 3237 518', '357805023984942'] } },
+					{ values: { att_imei: ['356938035643809'] } },
+				],
+			},
+		});
 		expect(statuses(pane)).toContain('Serial numbers saved.');
+		expect(textOf(pane)).toContain('IMEI: 490154203237518 / 357805023984942; IMEI: 356938035643809');
 		expect(shows(pane, 'Type serial numbers')).toBe(false);
 		expect(menuEntries(pane)).toContain('Type serial numbers');
-		// typing again with nothing changed is refused
+		// typing again with nothing changed is refused; the units' values fill the inputs
 		await pickMenu(pane, 'Type serial numbers');
-		expect(dialogOf(root).querySelector('input[placeholder="Unit 2"]')).not.toBeNull();
+		expect(input(1, 2).value).toBe('357805023984942');
 		await submitDialog(root);
 		expect(dialogStatus(root)).toBe('Type or change the serial numbers of at least one item first.');
 	});

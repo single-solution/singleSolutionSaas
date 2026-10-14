@@ -874,17 +874,17 @@ export const unitRefusalOf = (error) =>
 		: null;
 
 /**
- * Capture the serial numbers of a packing plan (E11): registered ones move from stock to the order; typed ones are
- * recorded as sold to it (a registered unit typed by staff is taken from stock; one recorded for another unit is
- * refused). Numbers a line no longer lists go back in stock (typed ones are forgotten).
+ * Capture the units of a packing plan (E11): registered ones move from stock to the order; typed ones are recorded as
+ * sold to it with their values (a registered unit typed by staff is taken from stock; a unit sharing any number with
+ * another unit is refused). Units a line no longer lists go back in stock (typed ones are forgotten).
  * @param {WebsiteData} data
- * @param {{ orderId: string, mode: 'registered' | 'typed', plan: Array<{ lineId: string, productId: string,
- *   variantId: string, serials: string[], before: string[] }> }} capture
+ * @param {{ orderId: string, mode: 'registered' | 'typed', plan: import('../core/transitions.js').UnitsPlan }} capture
  * @param {Session} session
  */
 const captureUnits = async (data, { orderId, mode, plan }, session) => {
 	const serials = data.collection(COLLECTIONS.serials);
 	for (const line of plan) {
+		const typedUnits = new Map((line.units ?? []).map((unit) => [unit.serial, unit]));
 		const removed = line.before.filter((serial) => !line.serials.includes(serial));
 		if (removed.length > 0) {
 			const mine = { websiteId: data.websiteId, orderId, lineId: line.lineId, serial: { $in: removed }, status: 'sold' };
@@ -900,25 +900,36 @@ const captureUnits = async (data, { orderId, mode, plan }, session) => {
 			);
 			if (taken.modifiedCount === 1) continue;
 			if (mode === 'registered') throw unitRefused(line.lineId, `Serial number ${serial} is not in stock for this item.`);
+			const unit = typedUnits.get(serial) ?? { serial, values: {}, keys: [`serial:${serial}`] };
 			const known = await serials.findOne(
-				{ websiteId: data.websiteId, serial },
-				{ session, projection: { _id: 0, orderId: 1 } },
+				{ websiteId: data.websiteId, keys: { $in: unit.keys } },
+				{ session, projection: { _id: 0, serial: 1 } },
 			);
-			if (known) throw unitRefused(line.lineId, `Serial number ${serial} is already recorded for another unit.`);
-			await serials.insertOne(
-				{
-					id: createId(ID_PREFIX.serial),
-					productId: line.productId,
-					variantId: line.variantId,
-					serial,
-					status: 'sold',
-					orderId,
-					lineId: line.lineId,
-					locationId: null,
-					typed: true,
-				},
-				{ session },
-			);
+			if (known)
+				throw unitRefused(line.lineId, `A number of unit ${serial} is already recorded for unit ${String(known.serial)}.`);
+			await serials
+				.insertOne(
+					{
+						id: createId(ID_PREFIX.serial),
+						productId: line.productId,
+						variantId: line.variantId,
+						serial,
+						values: unit.values,
+						keys: unit.keys,
+						status: 'sold',
+						orderId,
+						lineId: line.lineId,
+						locationId: null,
+						typed: true,
+					},
+					{ session },
+				)
+				.catch((/** @type {unknown} */ error) => {
+					// another unit took one of its numbers meanwhile (the unique keys)
+					throw isDuplicate(error)
+						? unitRefused(line.lineId, `A number of unit ${serial} is already recorded for another unit.`)
+						: error;
+				});
 		}
 	}
 };

@@ -31,11 +31,11 @@ export const EDITABLE_ROLES = Object.freeze(
 );
 /** Bulk moves take at most this many orders. */
 const MAX_BULK = 200;
-/** Longest note, staff note, search text and serial number. */
+/** Longest note, staff note, search text and unit number as typed. */
 export const MAX_NOTE = 1000;
 export const MAX_STAFF_NOTE = 5000;
 export const MAX_SEARCH = 120;
-const MAX_SERIAL = 64;
+const MAX_UNIT_TEXT = 200;
 /** A booked shipment's status is asked again at most this often (on read). */
 export const TRACK_EVERY_MS = 30 * 60_000;
 
@@ -411,7 +411,7 @@ export const orderQuery = (filters, { seenBy = '' } = {}) => {
  * @typedef {{ courier: string, trackingNumber: string, trackingNote?: string, estimatedDeliveryAt?: Date | null } |
  *   { book: true, courier?: string }} ShipmentInput `trackingNumber` may be '' when the website does not require it (E28)
  * @typedef {{ kind: 'dispatch_video', key: string } | { kind: 'dispatch_video', url: string }} OrderMedia
- * @typedef {{ to: string, note: string, serials: Record<string, string[]>, shipment: ShipmentInput | null,
+ * @typedef {{ to: string, note: string, serials: Record<string, UnitInput[]>, shipment: ShipmentInput | null,
  *   updatedAt: string | null, reason?: 'rto' | 'customer_return', video?: OrderMedia, code?: HistoryNote,
  *   shopperNote?: string, restock?: boolean }} MoveInput
  *   `reason`: why a package came back (E27); `video`: the dispatch video taken when packing (E28); `code`: the code of a
@@ -657,59 +657,39 @@ export const ADDRESS_FIELDS = Object.freeze({
 });
 
 /**
- * Serial numbers sent per order line (moves and edits): trimmed (inner spaces kept), 1–64 characters, none twice.
+ * A unit staff give for an order line: its serial number (registered units are picked by it), or, typed with unit
+ * fields, its values by unit field (`core/fields.js` `checkUnit` checks them against the line's product).
+ * @typedef {string | { values: Record<string, unknown> }} UnitInput
+ */
+
+/**
+ * The units sent per order line (moves and edits): per line a list of serial numbers (trimmed, inner spaces kept) or
+ * `{ values }` objects; what each unit must be is checked against its product's unit fields.
  * @param {unknown} raw
- * @returns {{ ok: true, value: Record<string, string[]> } | Refusal}
+ * @returns {{ ok: true, value: Record<string, UnitInput[]> } | Refusal}
  */
 export const serialsOf = (raw) => {
-	/** @type {Record<string, string[]>} */
+	/** @type {Record<string, UnitInput[]>} */
 	const serials = {};
 	if (raw === undefined || raw === null) return { ok: true, value: serials };
 	if (typeof raw !== 'object' || Array.isArray(raw)) return refuse('serials', 'Serials are listed per order line.');
 	for (const [lineId, list] of Object.entries(objectOf(raw))) {
-		if (!Array.isArray(list) || list.length > 1000) return refuse(`serials/${lineId}`, 'A list of serial numbers is expected.');
-		const clean = list.map((serial) => (typeof serial === 'string' ? serial.trim() : ''));
-		if (clean.some((serial) => serial === '' || serial.length > MAX_SERIAL || hasControl(serial)))
-			return refuse(`serials/${lineId}`, `Serial numbers have 1–${MAX_SERIAL} characters.`);
-		if (new Set(clean).size !== clean.length) return refuse(`serials/${lineId}`, 'A serial number is listed twice.');
-		serials[lineId] = clean;
-	}
-	const all = Object.values(serials).flat();
-	if (new Set(all).size !== all.length) return refuse('serials', 'A serial number is listed on two lines.');
-	return { ok: true, value: serials };
-};
-
-/**
- * Whether a value is an IMEI: 15 digits whose last is the Luhn check digit (E11).
- * @param {string} value
- */
-export const isImei = (value) => {
-	if (!/^\d{15}$/.test(value)) return false;
-	let sum = 0;
-	for (let index = 0; index < 15; index += 1) {
-		let digit = Number(value[14 - index]);
-		if (index % 2 === 1) {
-			digit *= 2;
-			if (digit > 9) digit -= 9;
+		if (!Array.isArray(list) || list.length > 1000) return refuse(`serials/${lineId}`, 'A list of units is expected.');
+		/** @type {UnitInput[]} */
+		const units = [];
+		for (const entry of list) {
+			if (typeof entry === 'string' && entry.trim() && entry.length <= MAX_UNIT_TEXT) units.push(entry.trim());
+			else if (
+				objectOf(entry).values !== undefined &&
+				typeof objectOf(entry).values === 'object' &&
+				objectOf(entry).values !== null
+			)
+				units.push({ values: objectOf(objectOf(entry).values) });
+			else return refuse(`serials/${lineId}`, 'A unit is its serial number, or { values } by unit field.');
 		}
-		sum += digit;
+		serials[lineId] = units;
 	}
-	return sum % 10 === 0;
-};
-
-/**
- * Refuse serial numbers that fail the website's check (`serialCheck`: `imei` needs 15 digits passing Luhn).
- * @param {Record<string, string[]>} serials
- * @param {string} check
- * @returns {Refusal | null}
- */
-export const serialCheckFailure = (serials, check) => {
-	if (check !== 'imei') return null;
-	for (const [lineId, list] of Object.entries(serials)) {
-		const bad = list.find((serial) => !isImei(serial));
-		if (bad !== undefined) return refuse(`serials/${lineId}`, `${bad} is not an IMEI: 15 digits ending in its check digit.`);
-	}
-	return null;
+	return { ok: true, value: serials };
 };
 
 /**
@@ -777,7 +757,7 @@ const VIDEO_ROLES = Object.freeze(/** @type {StatusRole[]} */ (['packed', 'shipp
 /**
  * What staff change on an order (`PATCH /v1/orders/:id`): the staff note, the address, the shipment's details at any
  * time (E28), serial numbers and the dispatch video once packed.
- * @typedef {{ staffNote?: string, address?: NonNullable<OrderRecord['address']>, serials?: Record<string, string[]>,
+ * @typedef {{ staffNote?: string, address?: NonNullable<OrderRecord['address']>, serials?: Record<string, UnitInput[]>,
  *   shipment?: { courier: string, trackingNumber: string, trackingNote: string, estimatedDeliveryAt: Date | null },
  *   waiting?: WaitingEdit, video?: OrderMedia }} OrderEdit `waiting`: lines, payment and delivery changed while the
  *   order waits (E29); `video`: the dispatch video that replaces the one taken when packing
@@ -880,7 +860,7 @@ export const checkCustomerEdit = (body) => {
 
 /**
  * One order of a bulk move with what it takes (E28): its shipment, serial numbers and dispatch video.
- * @typedef {{ id: string, shipment: ShipmentInput | null, serials: Record<string, string[]>, video?: OrderMedia }} BulkItem
+ * @typedef {{ id: string, shipment: ShipmentInput | null, serials: Record<string, UnitInput[]>, video?: OrderMedia }} BulkItem
  */
 
 /**
@@ -1053,9 +1033,11 @@ const LEFT_OUT = Object.freeze(['accessKeyHash', 'idempotencyKey', 'phoneDigits'
  * @param {OrderRecord} order
  * @param {OrderFlow} flow
  * @param {{ customer: Partial<CustomerRecord> | null, images: Map<string, string | null>, money: Money,
- *   serialized?: Set<string> | null }} extras `images`: line id → address; `serialized`: the order's serialized products
+ *   serialized?: Set<string> | null, units?: { fields: ReadonlyMap<string, ReadonlyArray<import('./model.js').AttributeRecord>>,
+ *   values: ReadonlyMap<string, Record<string, string[]>> } }} extras `images`: line id → address; `serialized`: the
+ *   order's serialized products; `units`: the unit fields of each product, and the values of the order's units by serial
  */
-export const orderDetail = (order, flow, { customer, images, money, serialized = null }) => {
+export const orderDetail = (order, flow, { customer, images, money, serialized = null, units }) => {
 	const plain = Object.fromEntries(Object.entries(wire(order)).filter(([key]) => !LEFT_OUT.includes(key)));
 	// what is due, can be refunded and must be refunded, counted the one way
 	const sums = orderMoney(order);
@@ -1070,8 +1052,24 @@ export const orderDetail = (order, flow, { customer, images, money, serialized =
 		lines: plain.lines.map((/** @type {any} */ line) => ({
 			...line,
 			imageUrl: images.get(line.id) ?? null,
-			// which lines take serial numbers (E11), while Grades and serials is on
+			// which lines take serial numbers (E11), while Grades and serials is on; the unit fields their units take, and
+			// each unit's values (dynamic model §2)
 			...(serialized ? { serialized: line.kind === 'physical' && serialized.has(line.productId) } : {}),
+			...(serialized && line.kind === 'physical' && serialized.has(line.productId)
+				? {
+						unitFields: (units?.fields.get(line.productId) ?? []).map((field) => ({
+							id: field.id,
+							name: field.name,
+							required: field.required,
+							maxValues: field.maxValues,
+							format: field.format,
+						})),
+						units: (line.serials ?? []).map((/** @type {string} */ serial) => ({
+							serial,
+							values: units?.values.get(serial) ?? {},
+						})),
+					}
+				: {}),
 		})),
 		payment: { ...plain.payment, refundable: sums.refundable, balanceDue: sums.due, refundDue: sums.refundDue },
 		history: plain.history.map((/** @type {any} */ entry) => ({

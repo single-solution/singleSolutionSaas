@@ -99,7 +99,7 @@ export const TEXTS = Object.freeze({
 			variants: Object.freeze({ title: 'Variants and stock', help: 'Options, variants and stock per location.' }),
 			grades: Object.freeze({
 				title: 'Grades and serials',
-				help: 'Condition grades with their categories, return and warranty days and content, and how serial numbers (IMEI) are captured and checked.',
+				help: 'Condition grades with their categories, standard condition, return and warranty days and content, and how units (serial numbers) are captured. Unit numbers follow the unit fields of Catalog admin → Fields.',
 			}),
 			checkout: Object.freeze({ title: 'Checkout and payment', help: 'The cart, checkout and the payment methods.' }),
 			cod: Object.freeze({

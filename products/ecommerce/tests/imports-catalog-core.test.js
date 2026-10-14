@@ -415,7 +415,15 @@ describe('serials and offers', () => {
 					contextOf(),
 				),
 			),
-		).toEqual(['/productId', '/variantId', '/serial', '/lineId', '/orderId', '/locationId', '/typed']);
+		).toEqual(['/productId', '/variantId', '/lineId', '/orderId', '/locationId', '/typed']);
+		// the number is the unit's serial, or its values by unit field (checked against the product's fields on import)
+		expect(paths(checkImportedSerial({ ...serial, serial: 5 }, contextOf()))).toEqual(['/serial', '/serial']);
+		expect(paths(checkImportedSerial({ ...serial, serial: undefined }, contextOf()))).toEqual(['/serial']);
+		expect(paths(checkImportedSerial({ ...serial, values: 'x' }, contextOf()))).toEqual(['/serial']);
+		expect(checkImportedSerial({ ...serial, serial: undefined, values: { att_1: ['a'] } }, contextOf())).toMatchObject({
+			ok: true,
+			value: { values: { att_1: ['a'] } },
+		});
 		expect(
 			paths(
 				checkImportedSerial(

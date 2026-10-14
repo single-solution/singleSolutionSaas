@@ -255,7 +255,7 @@ const renderOrder = (kit, order, detail, message) => {
 			money(item.total),
 			warrantyOf(kit, item),
 			item.serials.length > 0
-				? item.serials.join(', ')
+				? unitsText(item)
 				: typedSerials(kit) && item.serialized === true
 					? kit.badge(t('ordersAdmin.serialsMissing'), 'warning')
 					: '',
@@ -479,6 +479,20 @@ const videoDialog = (kit, order, done) => {
 		},
 	});
 };
+
+/**
+ * A line's units for staff: each unit's values by unit field (`<field>: <value> / <value>`), else its serial number.
+ * @param {any} item
+ */
+const unitsText = (item) =>
+	(item.units ?? item.serials.map((/** @type {string} */ serial) => ({ serial, values: {} })))
+		.map((/** @type {any} */ unit) => {
+			const parts = (item.unitFields ?? []).flatMap((/** @type {any} */ field) =>
+				unit.values?.[field.id]?.length > 0 ? [`${field.name}: ${unit.values[field.id].join(' / ')}`] : [],
+			);
+			return parts.length > 0 ? parts.join(', ') : unit.serial;
+		})
+		.join('; ');
 
 /**
  * Type the serial numbers of serialized lines at packing or later (typed serials, E11).

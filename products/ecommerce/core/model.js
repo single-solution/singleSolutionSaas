@@ -240,10 +240,13 @@ export const ID_PREFIX = Object.freeze({
  */
 /** @typedef {{ id: string, name: string, pickup: boolean, sort: number }} LocationRecord */
 /**
- * One unit with a serial number (IMEI …). `in_stock` units are sellable; packing an order marks them `sold` with the
- * order; a return puts them back `in_stock` (or `faulty`).
- * @typedef {{ id: string, productId: string, variantId: string, serial: string, status: 'in_stock' | 'sold' | 'faulty',
- *   orderId: string | null, lineId: string | null, locationId: string | null }} SerialRecord
+ * One unit (a numbered item, PLAN 0.8.10 dynamic model §2). `in_stock` units are sellable; packing an order marks them
+ * `sold` with the order; a return puts them back `in_stock` (or `faulty`). `serial` names the unit (its plain serial
+ * number, else the first value of its first unit field), `values` holds its unit fields' values (one, or two with a
+ * field that takes two), and `keys` (`serial:<serial>` and `<fieldId>:<value>`) are unique across the shop's units.
+ * @typedef {{ id: string, productId: string, variantId: string, serial: string, values: Record<string, string[]>,
+ *   keys: string[], status: 'in_stock' | 'sold' | 'faulty', orderId: string | null, lineId: string | null,
+ *   locationId: string | null, typed?: boolean }} SerialRecord `typed`: typed at packing or later, never in stock
  */
 
 // -------------------------------------------------------------------------------------------------------- orders

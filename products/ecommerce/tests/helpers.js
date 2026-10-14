@@ -86,6 +86,20 @@ export const storedCategory = (given) => ({
 export const storedBrand = (given) => ({ ...storedFields(checkBrand({ name: given.name }, null)), logo: null, ...given });
 
 /**
+ * A unit as every write stores it (its values by unit field and its unique keys; a plain serial number has none), with
+ * the given fields on top, for tests that put units straight into the database.
+ * @param {{ id: string, serial: string } & Record<string, unknown>} given
+ */
+export const storedUnit = (given) => ({
+	values: {},
+	keys: [`serial:${given.serial}`],
+	orderId: null,
+	lineId: null,
+	locationId: null,
+	...given,
+});
+
+/**
  * An attribute as every write stores it (the fields of `checkAttribute`), with the given fields on top.
  * @param {{ id: string, name: string, slug: string } & Record<string, unknown>} given
  */

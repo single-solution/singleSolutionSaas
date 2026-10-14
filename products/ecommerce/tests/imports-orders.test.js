@@ -7,7 +7,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { COLLECTIONS } from '../core/model.js';
-import { ACCOUNTS, GROWTH, NOTIFY, ORIGIN, PAYMENTS, readyShop } from './helpers.js';
+import { ACCOUNTS, GROWTH, NOTIFY, ORIGIN, PAYMENTS, readyShop, storedUnit } from './helpers.js';
 
 /** @type {Awaited<ReturnType<typeof readyShop>>} */
 let shop;
@@ -369,28 +369,28 @@ beforeAll(async () => {
 	]))
 		await data.collection(COLLECTIONS.products).updateOne({ websiteId: shop.websiteId, id }, { $set: { sold, rating } });
 	await data.collection(COLLECTIONS.serials).insertMany(
-		['SN-0001', 'SN-0002'].map((serial, index) => ({
-			id: idOf('ser', index + 1),
-			productId: PRODUCT,
-			variantId: variants.product,
-			serial,
-			status: 'in_stock',
-			orderId: null,
-			lineId: null,
-			locationId: null,
-		})),
+		['SN-0001', 'SN-0002'].map((serial, index) =>
+			storedUnit({
+				id: idOf('ser', index + 1),
+				productId: PRODUCT,
+				variantId: variants.product,
+				serial,
+				status: 'in_stock',
+			}),
+		),
 	);
 	// a unit the old shop sold through another order
-	await data.collection(COLLECTIONS.serials).insertOne({
-		id: idOf('ser', 3),
-		productId: OTHER,
-		variantId: variants.other,
-		serial: 'SN-0003',
-		status: 'sold',
-		orderId: idOf('ord', 99),
-		lineId: idOf('oln', 99),
-		locationId: null,
-	});
+	await data.collection(COLLECTIONS.serials).insertOne(
+		storedUnit({
+			id: idOf('ser', 3),
+			productId: OTHER,
+			variantId: variants.other,
+			serial: 'SN-0003',
+			status: 'sold',
+			orderId: idOf('ord', 99),
+			lineId: idOf('oln', 99),
+		}),
+	);
 });
 afterAll(async () => shop.product.close());
 

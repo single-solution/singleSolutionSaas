@@ -9,6 +9,9 @@ import { checkAttribute } from '../core/catalog-taxonomy.js';
 import {
 	FIELD_LIMITS,
 	checkShow,
+	checkUnit,
+	sharedKeys,
+	unitsShown,
 	checkValue,
 	crowdedUnits,
 	dayOf,
@@ -268,6 +271,92 @@ describe('unit fields per category', () => {
 			crowdedUnits([unit('a', { multiple: true }), unit('b', { multiple: true, categoryIds: ['cat_used'] })], categories),
 		).toBe('cat_used');
 		expect(FIELD_LIMITS.unitFields).toBe(3);
+	});
+});
+
+describe('units', () => {
+	const imei = {
+		id: 'att_imei',
+		name: 'IMEI',
+		type: /** @type {const} */ ('text'),
+		choices: [],
+		multiple: true,
+		maxValues: 2,
+		min: null,
+		max: null,
+		decimals: 0,
+		dates: /** @type {const} */ ('any'),
+		required: true,
+		format: {
+			chars: /** @type {const} */ ('digits'),
+			minLength: 15,
+			maxLength: 15,
+			startsWith: [],
+			mask: '',
+			checkDigit: /** @type {const} */ ('luhn'),
+			ignoreSpaces: true,
+			upperCase: false,
+		},
+	};
+	const tag = { ...imei, id: 'att_tag', name: 'Tag', multiple: false, maxValues: 1, required: false, format: null };
+
+	it('names a unit by its plain serial number, or by the first value of its fields', () => {
+		expect(checkUnit(' SN-1 ', [])).toEqual({ ok: true, value: { serial: 'SN-1', values: {}, keys: ['serial:SN-1'] } });
+		expect(checkUnit('', []).ok).toBe(false);
+		expect(checkUnit('x'.repeat(65), []).ok).toBe(false);
+		expect(checkUnit({ values: {} }, [])).toMatchObject({ ok: false });
+		// a text alone is the first field's value; two IMEIs of a dual-SIM phone; the serial is the first one
+		expect(checkUnit('4901 5420 3237 518', [imei, tag])).toEqual({
+			ok: true,
+			value: {
+				serial: '490154203237518',
+				values: { att_imei: ['490154203237518'] },
+				keys: ['serial:490154203237518', 'att_imei:490154203237518'],
+			},
+		});
+		expect(
+			checkUnit({ values: { att_imei: ['490154203237518', '356938035643809'], att_tag: 'B1' } }, [imei, tag]),
+		).toMatchObject({
+			ok: true,
+			value: { serial: '490154203237518', values: { att_imei: ['490154203237518', '356938035643809'], att_tag: ['B1'] } },
+		});
+		// three IMEIs, a wrong check digit, a required field missing, a field it does not have
+		expect(
+			checkUnit({ values: { att_imei: ['490154203237518', '356938035643809', '357805023984942'] } }, [imei]),
+		).toMatchObject({
+			ok: false,
+			path: '/values/att_imei',
+			code: 'values',
+		});
+		expect(checkUnit('490154203237519', [imei])).toMatchObject({ ok: false, path: '/values/att_imei', code: 'check_digit' });
+		expect(checkUnit({ values: { att_tag: 'B1' } }, [imei, tag])).toEqual({
+			ok: false,
+			path: '/values/att_imei',
+			message: 'Give IMEI: every unit needs it.',
+		});
+		expect(checkUnit({ values: { att_other: 'x' } }, [tag])).toMatchObject({ ok: false, path: '/values/att_other' });
+		expect(checkUnit({ values: {} }, [tag])).toMatchObject({ ok: false, path: '/values' });
+		expect(checkUnit(5, [tag])).toMatchObject({ ok: false, path: '' });
+	});
+
+	it('finds numbers given twice, and shows each place only its fields', () => {
+		expect(sharedKeys([{ keys: ['serial:a', 'f:a'] }, { keys: ['serial:b', 'f:a'] }, { keys: ['f:a'] }])).toEqual(['f:a']);
+		expect(sharedKeys([{ keys: ['serial:a'] }, { keys: ['serial:b'] }])).toEqual([]);
+		const values = new Map(
+			/** @type {Array<[string, Record<string, string[]>]>} */ ([
+				['490154203237518', { att_imei: ['490154203237518', '356938035643809'], att_tag: ['B1'] }],
+				['SN-1', {}],
+			]),
+		);
+		const fields = [
+			{ id: 'att_tag', name: 'Tag', sort: 0, show: { ...showDefaults('unit') } },
+			{ id: 'att_imei', name: 'IMEI', sort: 1, show: { ...showDefaults('unit'), shopper: true } },
+		];
+		expect(unitsShown(['490154203237518', 'SN-1', 'GONE'], values, fields, 'shopper')).toEqual({
+			serials: ['SN-1', 'GONE'],
+			values: [{ name: 'IMEI', values: ['490154203237518', '356938035643809'] }],
+		});
+		expect(unitsShown(['490154203237518'], values, fields, 'invoice')).toEqual({ serials: [], values: [] });
 	});
 });
 

@@ -28,12 +28,14 @@ import { created, paginate, problem } from '@ss/app-kit';
 import { createId } from '@ss/contracts';
 import { normalisePhone } from '@ss/contracts/phone';
 import { originAllowed } from '@ss/protocol';
+import { unitFieldsAll, unitsOfOrders } from '../adapters/catalog-store.js';
 import { keyOpens, newOrderKey, orderKeyHash } from '../adapters/crypto.js';
 import { heldStockBefore, placeOrder, swapOrderStock } from '../adapters/ledger.js';
 import { createOrdersStore } from '../adapters/orders-store.js';
 import { STOCK_PROBLEMS, checkAddress, checkCart, checkOrderExtras } from '../core/checkout.js';
 import { shipmentLink } from '../core/couriers.js';
 import { PLACED_FACTS, factsGuard, isFacts } from '../core/facts.js';
+import { unitsShown } from '../core/fields.js';
 import {
 	WAITING_ROLES,
 	shopperCancelOf,
@@ -359,11 +361,15 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 				: null;
 		const waitingPayment =
 			order.role === 'awaiting_payment' && order.payment.state === 'pending' && order.payment.paymentId !== null;
-		const [checkout, zones, couriers, invoices] = await Promise.all([
+		// the units' numbers the shopper may see: plain serial numbers and the unit fields shown to shoppers
+		const units = order.lines.some((line) => (line.serials ?? []).length > 0);
+		const [checkout, zones, couriers, invoices, unitValues, unitFields] = await Promise.all([
 			s.values('checkout'),
 			s.has('delivery_zones') ? s.values('delivery_zones') : Promise.resolve(null),
 			s.has('checkout') ? s.list('couriers') : Promise.resolve([]),
 			s.has('invoices') ? s.values('invoices') : Promise.resolve(null),
+			units ? s.data().then((data) => unitsOfOrders(data, [order.id])) : Promise.resolve(new Map()),
+			units ? s.data().then(unitFieldsAll) : Promise.resolve([]),
 		]);
 		// paid, refunded and due counted the one way (a refund never makes a debt, CK-5)
 		const sums = orderMoney(order);
@@ -383,6 +389,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 			lines: await Promise.all(
 				order.lines.map(async (line) => {
 					const extra = downloads.get(line.id);
+					const shown = unitsShown(line.serials ?? [], unitValues.get(order.id) ?? new Map(), unitFields, 'shopper');
 					return {
 						id: line.id,
 						productId: line.productId,
@@ -391,7 +398,8 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 						name: line.name,
 						variantName: line.variantName,
 						gradeLabel: line.gradeLabel,
-						serials: line.serials ?? [],
+						serials: shown.serials,
+						unitValues: shown.values,
 						warrantyDays: line.warrantyDays ?? null,
 						image: await media.mediaUrl(s, line.image),
 						unitPrice: line.unitPrice,

@@ -180,6 +180,7 @@ const IMPORT_FIELDS = Object.freeze({
 		'productId',
 		'variantId',
 		'serial',
+		'values',
 		'status',
 		'orderId',
 		'lineId',
@@ -248,8 +249,6 @@ const DERIVED = Object.freeze(
 const SKEW_MS = 5 * 60_000;
 /** Most files of a digital product. */
 const MAX_FILES = 20;
-/** Serial numbers: printable, 1 to 64 characters (as the serial routes take them). */
-const SERIAL = /^[\p{L}\p{N}][\p{L}\p{N} ._/:#-]{0,63}$/u;
 /** Serial statuses. */
 const SERIAL_STATUSES = Object.freeze(['in_stock', 'sold', 'faulty']);
 /** A date as JSON gives it: ISO-8601, the date first. */
@@ -745,8 +744,11 @@ export const checkImportedProduct = (record, context) => {
 };
 
 /**
- * A serial number of a variant (E11). A unit in stock or faulty belongs to no order (as a return leaves it); a sold one
- * names its order. Whether the variant exists is checked by the caller.
+ * A unit of a variant (E11, dynamic model §2): its serial number, or with unit fields its values (`{ <fieldId>: value or
+ * [values] }`; a serial alone is the first unit field's value). A unit in stock or faulty belongs to no order (as a
+ * return leaves it); a sold one names its order. Whether the variant exists, the values against the product's unit
+ * fields and the numbers no other unit has are checked by the caller, which keeps the unit as the shop does (its serial,
+ * values and keys).
  * @param {Record<string, unknown>} record
  * @param {ImportContext} context
  * @returns {ImportChecked}
@@ -756,8 +758,10 @@ export const checkImportedSerial = (record, context) => {
 	const id = idOf(record, ID_PREFIX.serial, errors);
 	if (!isId(record.productId, ID_PREFIX.product)) errors.push({ path: '/productId', message: 'Give the product id.' });
 	if (!isId(record.variantId, ID_PREFIX.variant)) errors.push({ path: '/variantId', message: 'Give the variant id.' });
-	if (typeof record.serial !== 'string' || !SERIAL.test(record.serial))
-		errors.push({ path: '/serial', message: 'A serial number is 1 to 64 letters, digits and . _ / : # -' });
+	if (record.values === undefined ? typeof record.serial !== 'string' : !isObject(record.values))
+		errors.push({ path: '/serial', message: 'Give the unit its serial number, or its values by unit field.' });
+	if (record.serial !== undefined && typeof record.serial !== 'string')
+		errors.push({ path: '/serial', message: 'A serial number is text.' });
 	const status = String(record.status);
 	if (!SERIAL_STATUSES.includes(status))
 		errors.push({ path: '/status', message: `The status is one of ${SERIAL_STATUSES.join(', ')}.` });
@@ -778,7 +782,8 @@ export const checkImportedSerial = (record, context) => {
 		id,
 		productId: record.productId,
 		variantId: record.variantId,
-		serial: record.serial,
+		...(record.serial === undefined ? {} : { serial: record.serial }),
+		...(record.values === undefined ? {} : { values: record.values }),
 		status,
 		orderId: sold ? orderId : null,
 		lineId: sold ? lineId : null,

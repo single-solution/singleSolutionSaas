@@ -10,15 +10,24 @@
  * @module
  */
 import { formatDate, formatMoney } from '@ss/contracts/format';
+import { unitsShown } from './fields.js';
 import { WAITING_ROLES } from './flow.js';
 import { orderMoney } from './orders.js';
 
 /** @typedef {import('./model.js').OrderRecord} OrderRecord */
 /** @typedef {{ name: string, email: string | null, phone: string | null, address: string | null }} BusinessLike */
 /**
- * What a document is printed with: the business, the texts, and the website's Format and business time zone.
+ * The merchant fields a document may print (PLAN 0.8.10 dynamic model §2): the unit fields, and the values of the
+ * printed orders' units (order id → serial → values by unit field). A field prints where its `show` says
+ * (`invoice`, `packingSlip`); the others never print.
+ * @typedef {{ list: ReadonlyArray<import('./model.js').AttributeRecord>,
+ *   units: ReadonlyMap<string, ReadonlyMap<string, Record<string, string[]>>> }} DocumentFields
+ */
+/**
+ * What a document is printed with: the business, the texts, the website's Format and business time zone, and the
+ * merchant fields.
  * @typedef {{ business: BusinessLike, texts: InvoiceTexts, format: import('@ss/contracts/format').Format,
- *   timeZone: string }} DocumentContext
+ *   timeZone: string, fields: DocumentFields }} DocumentContext
  */
 
 /**
@@ -169,11 +178,15 @@ const addressLines = (address) =>
 		.join('');
 
 /**
- * What each line says under its name: the variant, SKU, grade, warranty and serial numbers.
+ * What each line says under its name: the variant, SKU, grade, warranty, and its units' numbers the document prints
+ * (plain serial numbers, and each unit field shown on it with its values).
+ * @param {OrderRecord} order
  * @param {OrderRecord['lines'][number]} line
- * @param {InvoiceTexts} t
+ * @param {DocumentContext} context
+ * @param {'invoice' | 'packingSlip'} place
  */
-const lineDetail = (line, t) => {
+const lineDetail = (order, line, context, place) => {
+	const t = context.texts;
 	const parts = [
 		line.variantName,
 		line.sku ? `${t.labelSku} ${line.sku}` : '',
@@ -184,9 +197,18 @@ const lineDetail = (line, t) => {
 			: '',
 	].filter(Boolean);
 	const detail = parts.length > 0 ? `<p class="small">${esc(parts.join(' · '))}</p>` : '';
+	const units = unitsShown(
+		line.serials,
+		context.fields.units.get(order.id) ?? new Map(),
+		context.fields.list.filter((field) => field.on === 'unit'),
+		place,
+	);
 	const serials =
-		line.serials.length > 0 ? `<p class="small mono">${esc(`${t.labelSerials}: ${line.serials.join(', ')}`)}</p>` : '';
-	return `${detail}${serials}`;
+		units.serials.length > 0 ? `<p class="small mono">${esc(`${t.labelSerials}: ${units.serials.join(', ')}`)}</p>` : '';
+	const values = units.values
+		.map((entry) => `<p class="small mono">${esc(`${entry.name}: ${entry.values.join(', ')}`)}</p>`)
+		.join('');
+	return `${detail}${serials}${values}`;
 };
 
 /** @type {Record<string, keyof InvoiceTexts>} */
@@ -262,7 +284,7 @@ export const invoiceHtml = (order, context, { shopper = false } = {}) => {
 	const rows = order.lines
 		.map(
 			(line) =>
-				`<tr><td><strong>${esc(line.name)}</strong>${lineDetail(line, t)}</td><td class="num">${line.quantity}</td><td class="num">${money(line.unitPrice)}</td><td class="num">${money(line.unitPrice * line.quantity)}</td></tr>`,
+				`<tr><td><strong>${esc(line.name)}</strong>${lineDetail(order, line, context, 'invoice')}</td><td class="num">${line.quantity}</td><td class="num">${money(line.unitPrice)}</td><td class="num">${money(line.unitPrice * line.quantity)}</td></tr>`,
 		)
 		.join('');
 	const { subtotal, discount, delivery, tax, total, taxIncluded } = order.totals;
@@ -329,7 +351,7 @@ const slipBody = (order, context, batch) => {
 		.filter((line) => line.kind === 'physical')
 		.map(
 			(line) =>
-				`<tr><td><strong>${esc(line.name)}</strong>${lineDetail(line, t)}${slots(line)}</td><td class="num">${line.quantity}</td></tr>`,
+				`<tr><td><strong>${esc(line.name)}</strong>${lineDetail(order, line, context, 'packingSlip')}${slots(line)}</td><td class="num">${line.quantity}</td></tr>`,
 		)
 		.join('');
 	const shipTo = order.address
