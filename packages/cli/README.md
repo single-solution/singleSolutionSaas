@@ -19,18 +19,20 @@ Exit codes: `0` ok, `1` failed validation or command error, `2` usage error. `--
 placeholders `{{id}}`, `{{name}}`, `{{global}}` (`SS<Product>`), `{{baseUrl}}` and `{{sdkVersion}}`:
 
 - `manifest.json` (0.4.13: id, name, version, endpoints, widgetScriptUrl, docsUrl, features with a settings `$ref` into
-  `schemas/`, permissions, widgets), `openapi.json` (generated), `.env.example` with exactly `MONGODB_URI`,
+  `schemas/` and an example `recommendFor` for the Setup sheet's advisor, permissions, widgets), `openapi.json`
+  (generated), `.env.example` with exactly `MONGODB_URI`,
   `CONNECT_SECRET`, `ENCRYPTION_KEY` (and the optional `ENCRYPTION_KEY_PREVIOUS`), `vercel.json` without crons,
   `.gitignore` (`.env*` except `.env.example`), `.prettierignore`, `eslint.config.js` / `tsconfig.json` /
   `vitest.config.js` from `@ss/config`, `next.config.js` (rewrites of `/.well-known/*`, `/sso`, `/widget.js`, `/docs`,
   `/v1/*` to the API function), `postcss.config.mjs`.
 - `core/` (note checks, widget names), `server/` (routes, the `/docs` page, the generated widget bundle), `adapters/`
-  (`product.js`: the kit wiring; `notes-store.js`: the merchant database), `ui/` (the visitor widget `note_form` and the
+  (`product.js`: the kit wiring, with its part of the website Setup sheet: the `openapi` and `build` options and a
+  `blueprint` hook; `notes-store.js`: the merchant database), `ui/` (the visitor widget `note_form` and the
   admin widget `inbox` on `@ss/app-kit/widget`, mounted only into `data-ss-<id>` elements), `app/` (two functions:
   `app/api/[...path]/route.js` and the dashboard page `app/dashboard/page.js` on `@ss/ui`, texts in
   `app/dashboard/texts.js`), `strings/en.json`, `schemas/` (the settings schema and `api.json`, below), `tests/` (Vitest
   on the kit's fake Portal and a test MongoDB, coverage 90/90/85; every answer is checked against `schemas/api.json`),
-  `docs/guide.json`.
+  `docs/guide.json` (with `build`: what the merchant's website builds per feature).
 - `package.json`: private, UNLICENSED, `@ss/*` at `workspace:^` (or `--sdk-version`), scripts `check`, `test`, `lint`,
   `typecheck`, `format`, `format:check`, `dev`, `build`, `start`, `validate`, and two entries for system tests:
   `./product` (`createProductInstance(options)`, plus `manifest` and `strings`) and `./routes` (`createRoutes(product)`):
