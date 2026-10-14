@@ -6,8 +6,6 @@
 	"license": "UNLICENSED",
 	"exports": {
 		".": "./src/index.js",
-		"./schema": "./src/schema.js",
-		"./format": "./src/format.js",
 		"./problems": "./src/problems.js",
 		"./theme.css": "./src/theme.css",
 		"./testing": "./src/testing.js",
@@ -29,14 +27,6 @@
 			".": {
 				"types": "./types/src/index.d.ts",
 				"default": "./src/index.js"
-			},
-			"./schema": {
-				"types": "./types/src/schema.d.ts",
-				"default": "./src/schema.js"
-			},
-			"./format": {
-				"types": "./types/src/format.d.ts",
-				"default": "./src/format.js"
 			},
 			"./problems": {
 				"types": "./types/src/problems.d.ts",

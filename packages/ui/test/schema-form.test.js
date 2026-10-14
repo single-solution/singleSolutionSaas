@@ -44,35 +44,43 @@ const hinted = () =>
 				title: 'Message',
 				default: 'Hello',
 				maxLength: 140,
-				'x-ui': { widget: 'textarea', group: 'Content', order: 2, help: 'Shown in the bar' },
+				description: 'Shown in the bar',
+				'x-ui': { widget: 'textarea', group: 'Content' },
 			},
 			tone: {
 				type: 'string',
 				title: 'Tone',
 				default: 'info',
 				enum: ['info', 'warning'],
-				'x-ui': { group: 'Content', order: 1 },
+				'x-ui': { group: 'Content' },
 			},
+			replyTo: { type: 'string', title: 'Reply-to', default: '', format: 'email', 'x-ui': { group: 'Content' } },
 			theme: { type: 'string', title: 'Theme', default: 'a', enum: ['a', 'b', 'c', 'd', 'e'], 'x-ui': { group: 'Look' } },
-			color: { type: 'string', title: 'Colour', default: '#112233', 'x-ui': { widget: 'color', group: 'Look' } },
-			debug: { type: 'boolean', title: 'Debug', default: false, 'x-ui': { advanced: true, widget: 'checkbox' } },
-			secretFlag: { type: 'boolean', title: 'Hidden', default: false, 'x-ui': { hidden: true } },
+			link: {
+				type: 'string',
+				title: 'Link',
+				default: '',
+				format: 'uri',
+				'x-ui': { group: 'Look', placeholder: 'https://shop.example.com' },
+			},
+			debug: { type: 'boolean', title: 'Debug', default: false },
 			tags: { type: 'array', title: 'Tags', default: [], items: { type: 'string' }, 'x-ui': { group: 'Look' } },
-			flags: { type: 'array', title: 'Flags', default: [], items: { type: 'boolean' }, 'x-ui': { advanced: true } },
+			flags: { type: 'array', title: 'Flags', default: [], items: { type: 'boolean' } },
 		},
 	});
 
 describe('schema helpers', () => {
-	it('orders and groups fields by x-ui, dropping hidden ones', () => {
+	it("keeps the schema's order and groups fields by x-ui.group (General without one)", () => {
 		const fields = fieldsOf(hinted());
-		expect(fields.map((f) => f.name)).toEqual(['tone', 'message', 'theme', 'color', 'debug', 'tags', 'flags']);
-		const { groups, advanced } = groupFields(fields);
-		expect(groups.map((g) => [g.name, g.fields.map((f) => f.name)])).toEqual([
-			['Content', ['tone', 'message']],
-			['Look', ['theme', 'color', 'tags']],
+		expect(fields.map((f) => f.name)).toEqual(['message', 'tone', 'replyTo', 'theme', 'link', 'debug', 'tags', 'flags']);
+		expect(groupFields(fields).map((g) => [g.name, g.fields.map((f) => f.name)])).toEqual([
+			['Content', ['message', 'tone', 'replyTo']],
+			['Look', ['theme', 'link', 'tags']],
+			['General', ['debug', 'flags']],
 		]);
-		expect(advanced.map((f) => f.name)).toEqual(['debug', 'flags']);
 		expect(fields.find((f) => f.name === 'message')?.help).toBe('Shown in the bar');
+		expect(fields.find((f) => f.name === 'tone')?.help).toBeNull();
+		expect(fields.find((f) => f.name === 'link')?.placeholder).toBe('https://shop.example.com');
 		expect(fieldsOf(null)).toEqual([]);
 	});
 
@@ -86,8 +94,12 @@ describe('schema helpers', () => {
 		expect(widgetOf(node({ type: 'string', format: 'uri' }))).toBe('url');
 		expect(widgetOf(node({ type: 'string', format: 'date' }))).toBe('text');
 		expect(widgetOf(node({ type: 'array', items: { type: 'string' } }))).toBe('tags');
-		expect(widgetOf(node({ type: 'integer', 'x-ui': { widget: 'slider' } }))).toBe('number');
+		expect(widgetOf(node({ type: 'string', 'x-ui': { widget: 'textarea' } }))).toBe('textarea');
+		expect(widgetOf(node({ type: 'array', items: { type: 'string', enum: ['a'] }, 'x-ui': { widget: 'tags' } }))).toBe('tags');
+		// a widget that does not fit the type, or that the kit does not have, is ignored
 		expect(widgetOf(node({ type: 'boolean', 'x-ui': { widget: 'textarea' } }))).toBe('switch');
+		expect(widgetOf(node({ type: 'integer', 'x-ui': { widget: 'slider' } }))).toBe('number');
+		expect(widgetOf(node({ type: 'string', 'x-ui': { widget: 'color' } }))).toBe('text');
 		// grid layout: long text and lists span the row; `x-ui.wide` decides when given
 		expect(isWide(node({ type: 'string' }), 'text')).toBe(false);
 		expect(isWide(node({ type: 'string', 'x-ui': { widget: 'textarea' } }), 'textarea')).toBe(true);
@@ -127,7 +139,7 @@ const defaults = (schema) =>
 	Object.fromEntries(Object.entries(schema.properties).map(([k, n]) => [k, /** @type {any} */ (n).default]));
 
 describe('SchemaForm', () => {
-	it('renders every widget with labels, groups and the advanced disclosure', () => {
+	it('renders every widget with labels and groups', () => {
 		const schema = hinted();
 		const { container } = render(<Harness schema={schema} initial={defaults(schema)} idPrefix="t" />);
 		expect([...container.querySelectorAll('legend')].map((l) => l.textContent)).toEqual(
@@ -136,17 +148,14 @@ describe('SchemaForm', () => {
 		expect(byLabel(container, 'Message').tagName).toBe('TEXTAREA');
 		expect(byLabel(container, 'Message').getAttribute('aria-describedby')).toContain('t-message-help');
 		expect(byLabel(container, 'Theme').tagName).toBe('SELECT');
-		expect(byLabel(container, 'Colour').getAttribute('type')).toBe('color');
+		expect(byLabel(container, 'Link').getAttribute('type')).toBe('url');
+		expect(byLabel(container, 'Reply-to').getAttribute('type')).toBe('email');
+		expect(byLabel(container, 'Message').getAttribute('type')).toBeNull();
+		expect(byLabel(container, 'Link').getAttribute('placeholder')).toBe('https://shop.example.com');
 		expect(container.querySelectorAll('input[type="radio"]').length).toBe(2);
-		expect(container.textContent).not.toContain('Hidden');
-		// advanced fields are behind a disclosure
-		expect(container.textContent).not.toContain('Debug');
-		const toggle = byText(container, 'Advanced settings (2)', 'button');
-		expect(toggle.getAttribute('aria-expanded')).toBe('false');
-		click(toggle);
-		expect(toggle.getAttribute('aria-expanded')).toBe('true');
-		expect(byLabel(container, 'Debug').getAttribute('type')).toBe('checkbox');
+		expect(byLabel(container, 'Debug').getAttribute('role')).toBe('switch');
 		expect(byLabel(container, 'Flags').tagName).toBe('TEXTAREA');
+		expect(container.textContent).not.toContain('Advanced');
 		// fields sit in a grid: short ones are cells, long ones span the row
 		const cellOf = (/** @type {string} */ name) => container.querySelector(`[data-field="${name}"]`);
 		expect(cellOf('tone')?.hasAttribute('data-cell')).toBe(true);
@@ -214,7 +223,6 @@ describe('SchemaForm', () => {
 		const { container } = render(<Harness schema={schema} initial={defaults(schema)} onChange={onChange} />);
 		type(byLabel(container, 'Tags'), 'a\n\nb\n');
 		expect(onChange).toHaveBeenLastCalledWith('tags', ['a', 'b']);
-		click(byText(container, 'Advanced settings (2)', 'button'));
 		const flags = byLabel(container, 'Flags');
 		type(flags, '[true, false]');
 		expect(onChange).toHaveBeenLastCalledWith('flags', [true, false]);

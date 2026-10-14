@@ -1,12 +1,12 @@
 /**
  * Pure helpers behind {@link SchemaForm}: read a feature's settings schema (the `@ss/contracts` settings subset: an object
  * schema whose top-level properties are the settings, each a string, integer, number, boolean or list) with its `x-ui`
- * hints, and turn it into ordered, grouped field descriptors. The product checks every value when it is saved; its
- * field errors are passed to the form.
+ * hints, and turn it into grouped field descriptors in the schema's order. The product checks every value when it is
+ * saved; its field errors are passed to the form.
  *
- * `x-ui`: `widget` (switch|checkbox|number|text|textarea|select|radio|checkboxes|tags|color|url|email|password),
- * `group`, `order`, `help`, `placeholder`, `labels`, `hidden`, `advanced`, `wide` (span the whole row of the field grid;
- * a `textarea` widget and lists are wide anyway).
+ * `x-ui`: `widget` (switch|number|text|textarea|select|radio|url|email|checkboxes|tags; one that does not fit the type
+ * is ignored), `group`, `placeholder`, `labels`, `wide` (span the whole row of the field grid; a `textarea` widget and
+ * lists are wide anyway). A setting's `description` is its help text.
  * @module
  */
 
@@ -34,7 +34,7 @@
  * @property {unknown[]} [enum]
  * @property {string} [format]
  * @property {SettingItem} [items] every list setting has them
- * @property {{ widget?: string, group?: string, order?: number, help?: string, placeholder?: string, hidden?: boolean, advanced?: boolean, wide?: boolean, labels?: 'country' }} [x-ui]
+ * @property {{ widget?: string, group?: string, placeholder?: string, wide?: boolean, labels?: 'country' }} [x-ui]
  */
 
 /**
@@ -48,10 +48,8 @@
  * @property {string} title
  * @property {string} widget
  * @property {string} group
- * @property {number} order
- * @property {string | null} help
+ * @property {string | null} help the setting's description
  * @property {string | null} placeholder
- * @property {boolean} advanced
  * @property {boolean} wide spans the whole row of the field grid
  */
 
@@ -136,14 +134,14 @@ const WIDE_WIDGETS = Object.freeze(['textarea', 'tags', 'checkboxes']);
 export const widgetOf = (node) => {
 	const asked = node['x-ui']?.widget;
 	const fits = {
-		boolean: ['switch', 'checkbox'],
-		integer: ['number', 'slider'],
-		number: ['number', 'slider'],
-		string: ['text', 'textarea', 'select', 'radio', 'color', 'url', 'email', 'password'],
+		boolean: ['switch'],
+		integer: ['number'],
+		number: ['number'],
+		string: ['text', 'textarea', 'select', 'radio', 'url', 'email'],
 		array: ['checkboxes', 'tags'],
 	};
 	const type = node.type;
-	if (asked && fits[type].includes(asked)) return asked === 'slider' ? 'number' : asked;
+	if (asked && fits[type].includes(asked)) return asked;
 	if (type === 'boolean') return 'switch';
 	if (type === 'integer' || type === 'number') return 'number';
 	if (type === 'array') return node.items?.enum && node.items.enum.length <= PICKER_FROM ? 'checkboxes' : 'tags';
@@ -166,47 +164,37 @@ export const isWide = (node, widget) => {
 };
 
 /**
- * Ordered field descriptors of a schema's top-level properties (hidden ones dropped).
+ * Field descriptors of a schema's top-level properties, in the schema's order.
  * @param {SettingsSchema | null | undefined} schema
  * @returns {FieldDescriptor[]}
  */
-export const fieldsOf = (schema) => {
-	const properties = schema?.properties ?? {};
-	return Object.entries(properties)
-		.filter(([, node]) => node['x-ui']?.hidden !== true)
-		.map(([name, node], index) => ({
+export const fieldsOf = (schema) =>
+	Object.entries(schema?.properties ?? {}).map(([name, node]) => {
+		const widget = widgetOf(node);
+		return {
 			name,
 			node,
 			title: node.title,
-			widget: widgetOf(node),
-			wide: isWide(node, widgetOf(node)),
+			widget,
+			wide: isWide(node, widget),
 			group: node['x-ui']?.group ?? DEFAULT_GROUP,
-			order: node['x-ui']?.order ?? 1000 + index,
-			help: node['x-ui']?.help ?? node.description ?? null,
+			help: node.description ?? null,
 			placeholder: node['x-ui']?.placeholder ?? null,
-			advanced: node['x-ui']?.advanced === true,
-		}))
-		.sort((a, b) => a.order - b.order || a.title.localeCompare(b.title));
-};
+		};
+	});
 
 /**
- * Fields grouped by `x-ui.group` (first appearance order), with `advanced` fields in their own list.
+ * Fields grouped by `x-ui.group`, the groups in the order they first appear.
  * @param {FieldDescriptor[]} fields
- * @returns {{ groups: Array<{ name: string, fields: FieldDescriptor[] }>, advanced: FieldDescriptor[] }}
+ * @returns {Array<{ name: string, fields: FieldDescriptor[] }>}
  */
 export const groupFields = (fields) => {
 	/** @type {Map<string, FieldDescriptor[]>} */
 	const groups = new Map();
-	/** @type {FieldDescriptor[]} */
-	const advanced = [];
 	for (const field of fields) {
-		if (field.advanced) {
-			advanced.push(field);
-			continue;
-		}
 		const list = groups.get(field.group) ?? [];
 		list.push(field);
 		groups.set(field.group, list);
 	}
-	return { groups: [...groups].map(([name, list]) => ({ name, fields: list })), advanced };
+	return [...groups].map(([name, list]) => ({ name, fields: list }));
 };

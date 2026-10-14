@@ -8,8 +8,6 @@ Tailwind scans `node_modules/@ss/ui/src` (`@source` in the app's CSS).
 | Entry              | What it is                                                                                                                 |
 | ------------------ | -------------------------------------------------------------------------------------------------------------------------- |
 | `@ss/ui`           | every component, `cx`, and the schema, format and problem helpers                                                          |
-| `@ss/ui/schema`    | settings-schema helpers behind `SchemaForm` (no React): fields, groups, widgets, choice labels                             |
-| `@ss/ui/format`    | credit (from millicredits) and date formatting, `humanize` for codes                                                       |
 | `@ss/ui/problems`  | RFC 9457 problem → user message and field-error helpers                                                                    |
 | `@ss/ui/theme.css` | the design tokens                                                                                                          |
 | `@ss/ui/testing`   | DOM test helpers on `react-dom/client` + jsdom (`render`, `cleanup`, `click`, `type`, `byLabel`, …) for other units' tests |
@@ -80,10 +78,9 @@ move. With `prefers-reduced-motion` nothing moves.
 ## SchemaForm
 
 `<SchemaForm schema values onChange errors? overridden? onReset? disabled? />` renders each setting of a settings schema
-(what `@ss/contracts` allows: string, integer, number, boolean and list settings) as a control chosen by its type and
-`x-ui.widget`, grouped by `x-ui.group`, ordered by `x-ui.order`, with `x-ui.advanced` settings behind a disclosure and
-`x-ui.hidden` ones left out. Fields sit in the field grid; long text (a `textarea` widget), lists and fields with
-`x-ui.wide` span the row. A list of more than 12 choices (or `x-ui.widget: 'tags'`) is a searchable picker
+(what `@ss/contracts` allows: string, integer, number, boolean and list settings), in the schema's order, as a control
+chosen by its type, its `format` (`email`, `uri`) and `x-ui.widget`, grouped by `x-ui.group`, with its `description` as
+help. Fields sit in the field grid; long text (a `textarea` widget), lists and fields with `x-ui.wide` span the row. A list of more than 12 choices (or `x-ui.widget: 'tags'`) is a searchable picker
 (`ChoicePicker`: chosen ones as chips, a search box, a scrolling list); `x-ui.labels: 'country'` shows ISO country codes
 by their names. A list without choices is typed one item per line (a list of on/off values as JSON). Bounds
 (`minimum`/`maximum`, `maxLength`) are shown on the inputs (number limits, the character counter of a text area). The
