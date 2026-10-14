@@ -443,13 +443,14 @@ describe('importing an example shop into Accounts, Ecommerce, Chat and Growth (K
 	});
 
 	it('reads back through the products’ own routes', async () => {
-		// a product page: the derived price, the category trail, the size chart; sold and rating counted from the moved
-		// order lines and review
+		// a product page: the derived price (2,500, shown after the moved 10% deal, its "was" price 3,000 struck
+		// through), the category trail, the size chart; sold and rating counted from the moved order lines and review
 		const tee = await server('ecommerce', 'GET', '/v1/shop/products/cotton-tee');
 		expect(tee.status, JSON.stringify(tee.json)).toBe(200);
 		expect(tee.json).toMatchObject({
 			name: 'Cotton tee',
-			price: 2500,
+			price: 2250,
+			compareAtPrice: 3000,
 			rating: { average: 5, count: 1 },
 			brand: { slug: 'northwind' },
 			breadcrumb: [{ slug: 'clothing' }, { slug: 'tops' }],

@@ -345,7 +345,10 @@ describe('Ecommerce catalogs on the real Portal', () => {
 			'https://schema.org/InStock',
 			'https://schema.org/OutOfStock',
 		]);
-		expect(nodeOf(dress.jsonLd, 'FAQPage').mainEntity[0].name).toBe('Lined?');
+		// the questions are the page's to show; FAQ markup only with the seo setting faqMarkup (Google shows no FAQ results)
+		expect(nodeOf(dress.jsonLd, 'FAQPage')).toBeUndefined();
+		const shown = (await serverCall(APPAREL, 'GET', '/v1/shop/products/embroidered-dress')).json;
+		expect(shown.faqs[0].question).toBe('Lined?');
 		const phone = (await serverCall(DEVICES, 'GET', '/v1/seo/products/pixel-8-pro')).json;
 		expect(nodeOf(phone.jsonLd, 'ProductGroup').hasVariant.map((/** @type {any} */ v) => v.offers.itemCondition)).toEqual([
 			'https://schema.org/RefurbishedCondition',
