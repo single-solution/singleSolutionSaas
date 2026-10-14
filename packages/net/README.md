@@ -133,8 +133,8 @@ failure calls back with a `NetError` (`network`, `reason: 'dns_failed'`, `detail
 
 This returns `{ ok: true, value: ParsedMongoUri, tls, allowlisted }` or
 `{ ok: false, code: 'bad_url' | 'ssrf_blocked' | 'unsafe_option' | 'tls_required', reason }`. It accepts only
-`mongodb://` and `mongodb+srv://`. Every host must pass `checkHost`, and only safe URI options are allowed
-(`SAFE_MONGO_OPTIONS`). That refuses local file reads (`tlsCAFile`, …), TLS weakening, proxies and ambient cloud
+`mongodb://` and `mongodb+srv://`. Every host must pass `checkHost`, and only a list of safe URI options is
+allowed. That refuses local file reads (`tlsCAFile`, …), TLS weakening, proxies and ambient cloud
 credentials, and only SCRAM is accepted as an auth mechanism. TLS is required unless every host is allowlisted. Also
 connect with `{ lookup: guardedLookup(policy) }`, so that SRV answers and discovered replica-set members are vetted
 too. Credential rules (user/password required, database name) stay with the caller.

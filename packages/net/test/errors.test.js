@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { NET_ERROR_CODES, isNetError, netError } from '../src/index.js';
+import { isNetError, netError } from '../src/index.js';
+import { NET_ERROR_CODES } from '../src/errors.js';
 
 describe('errors', () => {
 	it('creates and recognizes typed errors', () => {

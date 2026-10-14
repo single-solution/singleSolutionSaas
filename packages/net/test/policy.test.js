@@ -1,13 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import {
-	DEFAULT_MAX_BYTES,
-	checkHost,
-	checkUrl,
-	createOutboundPolicy,
-	isAllowlisted,
-	normaliseHost,
-	sameOrigin,
-} from '../src/index.js';
+import { checkHost, checkUrl, createOutboundPolicy, isAllowlisted } from '../src/index.js';
+import { DEFAULT_MAX_BYTES, normaliseHost, sameOrigin } from '../src/policy.js';
 
 const policy = createOutboundPolicy();
 const dev = createOutboundPolicy({ allowHosts: ['LocalHost', '[::1]', '10.0.0.5', 'minio.internal.'] });

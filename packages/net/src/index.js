@@ -2,23 +2,17 @@
  * @ss/net — safe outbound networking shared by the Portal and products: SSRF policy and address classification,
  * DNS-pinned guarded lookups, a guarded fetch, MongoDB URI safety and AWS SigV4 signing. See README.md.
  */
-export { NET_ERROR_CODES, isNetError, netError } from './errors.js';
-export {
-	IPV4_RANGES,
-	IPV6_RANGES,
-	classifyAddress,
-	formatIPv4,
-	formatIPv6,
-	parseIPv4,
-	parseIPv6,
-	parseLooseIPv4,
-} from './address.js';
-export * from './policy.js';
+export { isNetError, netError } from './errors.js';
+export { classifyAddress } from './address.js';
+export { checkHost, checkUrl, createOutboundPolicy, isAllowlisted } from './policy.js';
 export { guardedLookup, resolveVetted } from './lookup.js';
 export { jsonOf, safeFetch, textOf } from './fetch.js';
 export { isSafeMongoUri, parseMongoUri } from './mongo.js';
-export { amzDates, objectUrl, presignV4, signV4, uriEncode } from './sigv4.js';
+export { objectUrl, presignV4, signV4, uriEncode } from './sigv4.js';
 
+/** @typedef {import('./policy.js').OutboundPolicy} OutboundPolicy */
+/** @typedef {import('./policy.js').OutboundPolicyOptions} OutboundPolicyOptions */
+/** @typedef {import('./policy.js').Resolver} Resolver */
 /** @typedef {import('./errors.js').NetError} NetError */
 /** @typedef {import('./errors.js').NetErrorCode} NetErrorCode */
 /** @typedef {import('./address.js').AddressClass} AddressClass */
