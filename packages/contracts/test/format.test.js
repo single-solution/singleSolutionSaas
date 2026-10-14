@@ -31,12 +31,12 @@ describe('Format values (K7)', () => {
 	it('checks each field', () => {
 		expect(formatViolation('locale', '')).toBeNull();
 		expect(formatViolation('locale', 'en-GB')).toBeNull();
-		expect(formatViolation('locale', 'ur-PK')).toBeNull();
+		expect(formatViolation('locale', 'fr-CA')).toBeNull();
 		expect(formatViolation('locale', 'not a locale')).toMatch(/language tag/);
 		expect(formatViolation('locale', 7)).toMatch(/language tag/);
 		expect(formatViolation('currencyDisplay', 'symbol')).toBeNull();
 		expect(formatViolation('currencyDisplay', 'name')).toMatch(/code, symbol or custom/);
-		expect(formatViolation('currencySymbol', 'Rs.')).toBeNull();
+		expect(formatViolation('currencySymbol', 'Fr.')).toBeNull();
 		expect(formatViolation('currencySymbol', 'TooLongSym')).toMatch(/8 characters/);
 		expect(formatViolation('currencySymbol', 'a\u0007')).toMatch(/8 characters/);
 		expect(formatViolation('wholeUnits', true)).toBeNull();
@@ -55,7 +55,7 @@ describe('Format values (K7)', () => {
 
 describe('formatMoney (K7)', () => {
 	it('shows the code by default, with the ISO 4217 minor units', () => {
-		expect(formatMoney(1_250_000, 'PKR')).toBe('PKR 12,500.00');
+		expect(formatMoney(1_250_000, 'GBP')).toBe('GBP 12,500.00');
 		expect(formatMoney(12_500, 'JPY')).toBe('JPY 12,500');
 		expect(formatMoney(1_234_567, 'KWD')).toBe('KWD 1,234.567');
 		expect(currencyDigits('USD')).toBe(2);
@@ -64,10 +64,10 @@ describe('formatMoney (K7)', () => {
 	});
 
 	it("shows the locale's symbol, a custom symbol and whole units", () => {
-		expect(formatMoney(1_250_000, 'PKR', { currencyDisplay: 'symbol' })).toBe('Rs 12,500.00');
-		expect(formatMoney(1_250_000, 'PKR', { currencyDisplay: 'symbol', wholeUnits: true })).toBe('Rs 12,500');
-		expect(formatMoney(1_250_050, 'PKR', { currencyDisplay: 'custom', currencySymbol: 'Rs.', wholeUnits: true })).toBe(
-			'Rs. 12,501',
+		expect(formatMoney(1_250_000, 'GBP', { currencyDisplay: 'symbol' })).toBe('£12,500.00');
+		expect(formatMoney(1_250_000, 'GBP', { currencyDisplay: 'symbol', wholeUnits: true })).toBe('£12,500');
+		expect(formatMoney(1_250_050, 'CHF', { currencyDisplay: 'custom', currencySymbol: 'Fr.', wholeUnits: true })).toBe(
+			'Fr. 12,501',
 		);
 		// a custom display without a symbol keeps the code
 		expect(formatMoney(100, 'USD', { currencyDisplay: 'custom' })).toBe('USD 1.00');
@@ -92,17 +92,17 @@ describe('formatDate (K7, K8)', () => {
 	const at = '2026-03-12T19:30:00Z';
 
 	it("uses the business time zone for text the server makes, whatever the Format's times", () => {
-		expect(formatDate(at, { locale: 'en-GB' }, { timeZone: 'Asia/Karachi', style: 'date' })).toBe('13 Mar 2026');
-		expect(formatDate(at, { locale: 'en-GB' }, { timeZone: 'Asia/Karachi' })).toBe('13 Mar 2026, 00:30');
-		expect(formatDate(at, { locale: 'en-GB' }, { timeZone: 'Asia/Karachi', style: 'time' })).toBe('00:30');
+		expect(formatDate(at, { locale: 'en-GB' }, { timeZone: 'Asia/Tokyo', style: 'date' })).toBe('13 Mar 2026');
+		expect(formatDate(at, { locale: 'en-GB' }, { timeZone: 'Asia/Tokyo' })).toBe('13 Mar 2026, 04:30');
+		expect(formatDate(at, { locale: 'en-GB' }, { timeZone: 'Asia/Tokyo', style: 'time' })).toBe('04:30');
 		expect(formatDate(at, { locale: 'en-GB' })).toBe('12 Mar 2026, 19:30');
 		expect(formatDate(at, { locale: 'en-GB' }, { timeZone: 'Not/AZone' })).toBe('12 Mar 2026, 19:30');
 	});
 
 	it('follows the viewer in widgets unless the Format says business times', () => {
 		const viewer = { locale: 'en-GB', timeZone: 'America/New_York' };
-		expect(formatDate(at, {}, { timeZone: 'Asia/Karachi', viewer, style: 'time' })).toBe('15:30');
-		expect(formatDate(at, { times: 'business' }, { timeZone: 'Asia/Karachi', viewer, style: 'time' })).toBe('00:30');
+		expect(formatDate(at, {}, { timeZone: 'Asia/Tokyo', viewer, style: 'time' })).toBe('15:30');
+		expect(formatDate(at, { times: 'business' }, { timeZone: 'Asia/Tokyo', viewer, style: 'time' })).toBe('04:30');
 		expect(typeof formatDate(Date.parse(at), {}, { viewer: { locale: 'en' } })).toBe('string');
 	});
 
@@ -118,11 +118,11 @@ describe('formatDate (K7, K8)', () => {
 
 describe('calendar rules in the business time zone (K8)', () => {
 	it('gives the wall clock of an instant', () => {
-		expect(zonedParts('2026-12-31T20:00:00Z', 'Asia/Karachi')).toEqual({
+		expect(zonedParts('2026-12-31T20:00:00Z', 'Asia/Tokyo')).toEqual({
 			year: 2027,
 			month: 1,
 			day: 1,
-			hour: 1,
+			hour: 5,
 			minute: 0,
 			second: 0,
 			weekday: 5,
@@ -133,9 +133,9 @@ describe('calendar rules in the business time zone (K8)', () => {
 	});
 
 	it('gives days and the start of a day', () => {
-		expect(zonedDay('2026-10-09T21:00:00Z', 'Asia/Karachi')).toBe('2026-10-10');
+		expect(zonedDay('2026-10-09T21:00:00Z', 'Asia/Tokyo')).toBe('2026-10-10');
 		expect(zonedDay('2026-10-09T21:00:00Z', 'UTC')).toBe('2026-10-09');
-		expect(new Date(zonedDayStart('2026-10-10', 'Asia/Karachi')).toISOString()).toBe('2026-10-09T19:00:00.000Z');
+		expect(new Date(zonedDayStart('2026-10-10', 'Asia/Tokyo')).toISOString()).toBe('2026-10-09T15:00:00.000Z');
 		expect(new Date(zonedDayStart('2026-10-10', undefined)).toISOString()).toBe('2026-10-10T00:00:00.000Z');
 		// a day that starts on a daylight-saving change (New York, 2026-03-08)
 		expect(new Date(zonedDayStart('2026-03-08', 'America/New_York')).toISOString()).toBe('2026-03-08T05:00:00.000Z');
@@ -155,10 +155,10 @@ describe('cross-product shapes of the store conversion', () => {
 		const copy = {
 			websiteId: WEBSITE,
 			productId: 'ecommerce',
-			actor: { kind: 'user', id: 'usr_1', name: 'Ayesha K.', role: 'Support staff' },
+			actor: { kind: 'user', id: 'usr_1', name: 'Alex M.', role: 'Support staff' },
 			action: 'order.status_changed',
 			target: 'ord_0123456789abcdefghjkmnpq',
-			label: 'IM-2026-0043',
+			label: 'SH-2026-0043',
 			detail: 'confirmed → packed',
 			at: '2026-10-10T10:00:00Z',
 		};

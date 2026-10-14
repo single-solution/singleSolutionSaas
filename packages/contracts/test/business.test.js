@@ -74,7 +74,7 @@ describe('validateBusinessJson', () => {
 	});
 
 	it('knows IANA time zones', () => {
-		expect(isTimeZone('Asia/Karachi')).toBe(true);
+		expect(isTimeZone('Europe/Paris')).toBe(true);
 		expect(isTimeZone('Nowhere/Town')).toBe(false);
 		expect(isTimeZone(5)).toBe(false);
 	});
@@ -83,7 +83,7 @@ describe('validateBusinessJson', () => {
 describe('validateDataRightsRequest', () => {
 	it('needs at least one way to identify the user', () => {
 		expect(validateDataRightsRequest({ user: { id: 'u_1' } }).ok).toBe(true);
-		expect(validateDataRightsRequest({ user: { email: 'a@example.com', phone: '+92 300 1234567' } }).ok).toBe(true);
+		expect(validateDataRightsRequest({ user: { email: 'a@example.com', phone: '+44 7700 900123' } }).ok).toBe(true);
 		expectProblem(validateDataRightsRequest({ user: {} }), '/user', 'minProperties');
 		expectProblem(validateDataRightsRequest({}), '/user', 'required');
 		expectProblem(validateDataRightsRequest({ user: { email: 'nope' } }), '/user/email', 'format');

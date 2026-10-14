@@ -4,8 +4,9 @@
  *
  * A settings schema is `{ type: 'object', properties: { <setting>: <node> }, additionalProperties?: false }`. Every
  * setting node has `type`, `title` and `default`, and may add `description`, `minimum` / `maximum` (the hard maximums
- * of limits), `maxLength`, `enum`, `format`, `items` (lists) and `x-ui` (form hints). List items have `type` and may
- * add `minimum`, `maximum`, `maxLength`, `enum` and `format`. Nothing else is allowed.
+ * of limits), `maxLength`, `enum`, `format` (`email`, `uri` or `hostname`), `items` (lists) and `x-ui` (form hints:
+ * `widget`, `group`, `placeholder`, `labels`, `wide`). List items have `type` and may add `minimum`, `maximum`,
+ * `maxLength`, `enum` and `format`. Nothing else is allowed.
  * @module
  */
 import { deepFreeze } from '../util.js';
@@ -19,9 +20,7 @@ const SETTING_TYPES = Object.freeze(/** @type {const} */ (['string', 'integer', 
 const SETTING_ITEM_TYPES = Object.freeze(/** @type {const} */ (['string', 'integer', 'number', 'boolean']));
 
 /** `format` values a string setting may use. */
-const SETTING_FORMATS = Object.freeze(
-	/** @type {const} */ (['email', 'uri', 'uri-reference', 'date-time', 'date', 'time', 'duration', 'hostname', 'uuid', 'regex']),
-);
+const SETTING_FORMATS = Object.freeze(/** @type {const} */ (['email', 'uri', 'hostname']));
 
 /** Annotation keywords added to the subset (registered with Ajv). */
 export const SETTING_EXTENSION_KEYWORDS = Object.freeze(/** @type {const} */ (['x-ui']));
@@ -87,15 +86,9 @@ export const settingsMetaSchema = deepFreeze({
 					properties: {
 						widget: { type: 'string', pattern: '^[a-z][a-z0-9-]{0,39}$' },
 						group: { type: 'string', minLength: 1, maxLength: 80 },
-						order: { type: 'integer' },
-						help: { type: 'string', maxLength: 2000 },
 						placeholder: { type: 'string', maxLength: 200 },
 						// `country`: the choices are ISO 3166-1 alpha-2 codes, shown by their country names
 						labels: { type: 'string', enum: ['country'] },
-						// behind the form's "advanced" disclosure
-						advanced: { type: 'boolean' },
-						// left out of the form (it keeps its default and can still be set through the settings API)
-						hidden: { type: 'boolean' },
 						// spans the whole row of the form's field grid (`false` keeps a list or long text in one cell)
 						wide: { type: 'boolean' },
 					},

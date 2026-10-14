@@ -22,7 +22,7 @@ const schema = () => ({
 			default: 100,
 			minimum: 0,
 			maximum: 1000,
-			'x-ui': { widget: 'number', group: 'Limits', order: 1, help: 'Hard maximum 1000.', placeholder: '100' },
+			'x-ui': { widget: 'number', group: 'Limits', placeholder: '100' },
 		},
 		ratio: { type: 'number', title: 'Ratio', default: 0.5, minimum: 0, maximum: 1 },
 		greeting: { type: 'string', title: 'Greeting', default: 'Hi', maxLength: 20 },
@@ -46,16 +46,36 @@ describe('checkSettingsSchema', () => {
 		expect(SETTING_KEYWORDS).toContain('x-ui');
 	});
 
-	it('accepts the form hints advanced, hidden and wide', () => {
-		const advanced = schema();
-		advanced.properties.ratio['x-ui'] = { advanced: true };
-		expect(checkSettingsSchema(advanced)).toEqual([]);
-		const hidden = schema();
-		hidden.properties.ratio['x-ui'] = { hidden: true };
-		expect(checkSettingsSchema(hidden)).toEqual([]);
-		const wide = schema();
-		wide.properties.pages['x-ui'] = { wide: false };
-		expect(checkSettingsSchema(wide)).toEqual([]);
+	it('accepts the form hints labels and wide, and the formats email, uri and hostname', () => {
+		const labels = schema();
+		labels.properties.markets = {
+			type: 'array',
+			title: 'Markets',
+			default: ['GB'],
+			items: { type: 'string', enum: ['GB', 'US', 'FR'] },
+			'x-ui': { labels: 'country' },
+		};
+		expect(checkSettingsSchema(labels)).toEqual([]);
+		for (const wide of [true, false]) {
+			const value = schema();
+			value.properties.pages['x-ui'] = { wide };
+			expect(checkSettingsSchema(value)).toEqual([]);
+		}
+		for (const [format, example] of [
+			['email', 'help@example.com'],
+			['uri', 'https://shop.example.com/help'],
+			['hostname', 'admin.shop.example.com'],
+		]) {
+			const value = schema();
+			value.properties.address = { type: 'string', title: 'Address', default: example, format };
+			value.properties.addresses = {
+				type: 'array',
+				title: 'Addresses',
+				default: [example],
+				items: { type: 'string', format },
+			};
+			expect(checkSettingsSchema(value)).toEqual([]);
+		}
 	});
 
 	/** @type {Array<[string, (s: any) => unknown, string, string]>} */
@@ -78,18 +98,15 @@ describe('checkSettingsSchema', () => {
 			'/properties/ratio/x-ui/tooltip',
 			'additionalProperties',
 		],
-		[
-			'advanced that is not true or false',
-			(s) => (s.properties.ratio['x-ui'] = { advanced: 'yes' }),
-			'/properties/ratio/x-ui/advanced',
-			'type',
-		],
-		[
-			'hidden that is not true or false',
-			(s) => (s.properties.ratio['x-ui'] = { hidden: 1 }),
-			'/properties/ratio/x-ui/hidden',
-			'type',
-		],
+		...['order', 'help', 'advanced', 'hidden'].map(
+			(hint) =>
+				/** @type {[string, (s: any) => unknown, string, string]} */ ([
+					`the x-ui member ${hint}`,
+					(s) => (s.properties.ratio['x-ui'] = { [hint]: true }),
+					`/properties/ratio/x-ui/${hint}`,
+					'additionalProperties',
+				]),
+		),
 		[
 			'wide that is not true or false',
 			(s) => (s.properties.pages['x-ui'] = { wide: 'row' }),
@@ -97,6 +114,8 @@ describe('checkSettingsSchema', () => {
 			'type',
 		],
 		['an unknown format', (s) => (s.properties.greeting.format = 'ipv4'), '/properties/greeting/format', 'enum'],
+		['a date-time format', (s) => (s.properties.greeting.format = 'date-time'), '/properties/greeting/format', 'enum'],
+		['an item format', (s) => (s.properties.pages.items.format = 'uuid'), '/properties/pages/items/format', 'enum'],
 		['nested lists', (s) => (s.properties.pages.items.type = 'array'), '/properties/pages/items/type', 'enum'],
 		['an item title', (s) => (s.properties.pages.items.title = 'x'), '/properties/pages/items/title', 'additionalProperties'],
 	];
