@@ -1,8 +1,9 @@
 /**
  * Accounts' sign-in methods, staff and roles on the REAL Portal (PLAN 0.8.10): imported bcrypt and PBKDF2 hashes sign
- * in and are re-hashed; phone + password, staff sign-in codes and setup links, role requests, the guards, paused roles
- * and the remember options work through the widget (Accounts' real `widget.js` code in a browser window, jsdom) and
- * through the merchant's server (server token, `SS-Visitor-IP`, `SS-Actor-*`); an old recovery code works once.
+ * in and are re-hashed; phone + password, staff sign-in codes and setup links, role requests (repeat asks, a new link,
+ * a decline, the role given at completion, the setup-link lookup), the guards, paused roles and the remember options
+ * (`never` too) work through the widget (Accounts' real `widget.js` code in a browser window, jsdom) and through the
+ * merchant's server (server token, `SS-Visitor-IP`, `SS-Actor-*`); an old recovery code works once.
  */
 import { createHash, pbkdf2Sync, randomBytes } from 'node:crypto';
 import bcrypt from 'bcryptjs';
@@ -231,12 +232,18 @@ describe('Accounts sign-in methods, staff and roles on the real Portal', () => {
 	});
 
 	it('a role request from the widget is invited by staff and completed with the setup link', async () => {
-		const { win, root } = await openPage('role_request');
-		field(root, strings['fields.name']).value = 'Harper';
-		field(root, strings['fields.phone']).value = '07700 900887';
-		await submit(win, button(root, strings['request.submit']));
-		await until(() => (root.textContent ?? '').includes(strings['request.sent']));
-		expect(root.textContent).toContain(strings['request.sent']);
+		/** Ask from the widget; the text it shows after. @param {string} expected */
+		const ask = async (expected) => {
+			const { win, root } = await openPage('role_request');
+			field(root, strings['fields.name']).value = 'Harper';
+			field(root, strings['fields.phone']).value = '07700 900887';
+			await submit(win, button(root, strings['request.submit']));
+			await until(() => (root.textContent ?? '').includes(expected));
+			expect(root.textContent).toContain(expected);
+		};
+		await ask(strings['request.sent']);
+		// asked again: nothing new, the widget says it waits
+		await ask(strings['request.alreadyRequested']);
 		const pending = await server.call('GET', '/v1/role-requests?status=pending');
 		expect(pending.json.items).toMatchObject([{ name: 'Harper', phone: '+447700900887', role: 'member' }]);
 		const ticket = await sys.call('POST', '/v1/tickets', {
@@ -252,13 +259,71 @@ describe('Accounts sign-in methods, staff and roles on the real Portal', () => {
 			origin: ADMIN_ORIGIN,
 		});
 		expect(invited.json.request.status).toBe('invited');
+		await ask(strings['request.alreadyInvited']);
 		const url = new URL(invited.json.setupLink.url);
 		const page = await openPage('sign_in', `${url.pathname}${url.search}`);
+		// the setup page greets by name with the number's last 4 digits (the lookup)
+		await until(() => (page.root.textContent ?? '').includes('Hi Harper!'));
+		expect(page.root.textContent).toContain('For the phone number ending in 0887.');
 		field(page.root, strings['fields.password']).value = 'harper pass 12';
 		await submit(page.win, button(page.root, strings['setup.submit']));
 		await until(() => page.widget.user() !== null);
 		expect(page.widget.user()?.role).toBe('member');
 		expect((await server.call('GET', '/v1/role-requests/count?status=completed')).json.count).toBe(1);
+		// the merchant's own setup page asks from its server: the link is used now
+		const linkCode = String(url.searchParams.get('ss_setup'));
+		const used = await server.call('POST', '/v1/setup-links/lookup', { code: linkCode }, VISITOR);
+		expect(used.json).toEqual({ status: 'used' });
+		const usedPage = await openPage('sign_in', `${url.pathname}${url.search}`);
+		await until(() => (usedPage.root.textContent ?? '').includes(strings['setup.used']));
+		expect(usedPage.root.querySelector('form')).toBeNull();
+		await ask(strings['request.alreadyMember']);
+	});
+
+	it('staff give an invited request a new link or decline it; the role given at completion (settings API)', async () => {
+		const saved = await server.call('PUT', '/v1/settings/role_requests.giveRoleAt', { value: 'completion' });
+		expect(saved.status).toBe(200);
+		const ticket = await sys.call('POST', '/v1/tickets', {
+			token: tokens.server,
+			body: {
+				user: { id: 'staff_2', name: 'Sam', email: 'sam@members.example.com' },
+				permissions: ['users.manage'],
+				origin: ADMIN_ORIGIN,
+			},
+		});
+		/** @param {string} method @param {string} path */
+		const asStaff = (method, path) => sys.call(method, path, { token: ticket.json.ticket, origin: ADMIN_ORIGIN });
+		/** @param {string} name @param {string} phone */
+		const askFromServer = async (name, phone) =>
+			(await server.call('POST', '/v1/role-requests', { role: 'member', name, phone }, VISITOR)).json;
+		/** @param {string} linkCode */
+		const lookup = async (linkCode) => (await server.call('POST', '/v1/setup-links/lookup', { code: linkCode }, VISITOR)).json;
+		/** @param {{ json: any }} answer */
+		const codeOfLink = (answer) => String(new URL(answer.json.setupLink.url).searchParams.get('ss_setup'));
+
+		const ivy = await askFromServer('Ivy Stone', '07700 900888');
+		expect(ivy.outcome).toBe('requested');
+		const first = await asStaff('POST', `/v1/admin/role-requests/${ivy.id}/invite`);
+		expect(first.json.user.role).toBe('customer');
+		const renewed = await asStaff('POST', `/v1/admin/role-requests/${ivy.id}/setup-link`);
+		expect(renewed.json.request).toMatchObject({ status: 'invited', invitedBy: { kind: 'staff', name: 'Sam' } });
+		expect(await lookup(codeOfLink(first))).toEqual({ status: 'canceled' });
+		expect(await lookup(codeOfLink(renewed))).toMatchObject({ status: 'valid', name: 'Ivy Stone', phoneLast4: '0888' });
+		const accepted = await server.call(
+			'POST',
+			'/v1/setup-links/accept',
+			{ code: codeOfLink(renewed), password: 'ivy pass 1234' },
+			VISITOR,
+		);
+		expect(accepted.json.user.role).toBe('member');
+
+		const ned = await askFromServer('Ned Cole', '07700 900889');
+		const nedInvite = await asStaff('POST', `/v1/admin/role-requests/${ned.id}/invite`);
+		const declined = await asStaff('POST', `/v1/admin/role-requests/${ned.id}/decline`);
+		expect(declined.json).toMatchObject({ status: 'declined', userId: null });
+		expect(codeOf(await server.call('GET', `/v1/users/${nedInvite.json.user.id}`))).toBe('not_found');
+		expect(await lookup(codeOfLink(nedInvite))).toEqual({ status: 'invalid' });
+		expect((await server.call('PUT', '/v1/settings/role_requests.giveRoleAt', { value: 'invite' })).status).toBe(200);
 	});
 
 	it('the guards refuse through the server and a ticket', async () => {
@@ -333,6 +398,20 @@ describe('Accounts sign-in methods, staff and roles on the real Portal', () => {
 				)
 			).json.status,
 		).toBe('signed_in');
+		// never: no box, never remembered; the server ends it at the latest after the longer length (30 days here)
+		await server.call('PUT', '/v1/roles/customer', { ...customer, remember: 'never' });
+		const never = await openPage('sign_in');
+		const hidden = [...never.root.querySelectorAll('label.check')].find((l) => l.textContent === strings['signIn.remember']);
+		expect(/** @type {HTMLElement} */ (hidden).hidden).toBe(true);
+		expect(/** @type {HTMLInputElement} */ (/** @type {HTMLElement} */ (hidden).querySelector('input')).checked).toBe(false);
+		const forgotten = await server.call(
+			'POST',
+			'/v1/sign-in/phone-password',
+			{ phone: '07700900321', password: 'nora pass 1', remember: true },
+			VISITOR,
+		);
+		expect(forgotten.json.remember).toBe(false);
+		expect(Date.parse(forgotten.json.sessionExpiresAt) - sys.clock.now()).toBeGreaterThan(29 * 24 * 3_600_000);
 		await server.call('PUT', '/v1/roles/customer', { ...customer, signIn: 'on', remember: 'ask' });
 	});
 
