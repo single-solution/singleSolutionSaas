@@ -5,7 +5,7 @@
  * @module
  */
 import { CONTENT_LIMITS } from '../../core/catalog-content.js';
-import { MAX_GRADES } from '../../core/grades.js';
+import { CONDITIONS, MAX_GRADES } from '../../core/grades.js';
 
 /** What a grade may hold, for the editor's counters and Add buttons. */
 export const GRADE_LIMITS = Object.freeze({
@@ -31,8 +31,8 @@ export const GRADE_LIMITS = Object.freeze({
 /** Grade keys as the server takes them. */
 export const GRADE_KEY = /^[a-z][a-z0-9_-]{0,39}$/;
 
-/** The conditions a grade may name ('' = the SEO and feeds setting for graded items). */
-export const GRADE_CONDITIONS = Object.freeze(/** @type {const} */ (['', 'new', 'refurbished', 'used']));
+/** The standard conditions a grade maps to (structured data and feeds). */
+export const GRADE_CONDITIONS = CONDITIONS;
 
 /**
  * @typedef {object} GradeDraft a grade as edited: days as typed, empty strings for nothing
@@ -47,7 +47,7 @@ export const GRADE_CONDITIONS = Object.freeze(/** @type {const} */ (['', 'new', 
  * @property {string} video
  * @property {{ summary: string, bullets: Array<{ text: string, icon: string }> }} content
  * @property {boolean} active
- * @property {'' | 'new' | 'refurbished' | 'used'} condition
+ * @property {'new' | 'refurbished' | 'used'} condition
  * @property {{ title: string, description: string, body: string, faqs: Array<{ question: string, answer: string }> }} seo
  */
 
@@ -122,7 +122,7 @@ export const videoOf = (text) => {
 /** @param {number | null} value */
 const daysText = (value) => (value === null ? '' : String(value));
 
-/** @returns {GradeDraft} a new grade (offered, no condition of its own) */
+/** @returns {GradeDraft} a new grade (offered, used) */
 export const blankGrade = () => ({
 	key: '',
 	label: '',
@@ -135,7 +135,7 @@ export const blankGrade = () => ({
 	video: '',
 	content: { summary: '', bullets: [] },
 	active: true,
-	condition: '',
+	condition: 'used',
 	seo: { title: '', description: '', body: '', faqs: [] },
 });
 
@@ -145,7 +145,7 @@ export const blankGrade = () => ({
  */
 
 /**
- * A saved grade as the editor shows it: days as text, no category and no condition of its own as ''.
+ * A saved grade as the editor shows it: days as text, no category as ''.
  * @param {SavedGrade} grade
  * @returns {GradeDraft}
  */
@@ -164,7 +164,7 @@ export const loadGrade = (grade) => ({
 		bullets: grade.content.bullets.map((bullet) => ({ text: bullet.text, icon: bullet.icon })),
 	},
 	active: grade.active,
-	condition: grade.condition ?? '',
+	condition: grade.condition,
 	seo: {
 		title: grade.seo.title,
 		description: grade.seo.description,
@@ -175,7 +175,7 @@ export const loadGrade = (grade) => ({
 
 /**
  * A grade as saved: the key made from the name when empty, texts trimmed, empty bullets and questions dropped, days as
- * numbers (null = the Returns setting) and no condition as null.
+ * numbers (null = the Returns setting).
  * @param {GradeDraft} draft
  */
 export const cleanGrade = (draft) => ({
@@ -195,7 +195,7 @@ export const cleanGrade = (draft) => ({
 			.filter((bullet) => bullet.text !== ''),
 	},
 	active: draft.active,
-	condition: draft.condition === '' ? null : draft.condition,
+	condition: draft.condition,
 	seo: {
 		title: draft.seo.title.trim(),
 		description: draft.seo.description.trim(),

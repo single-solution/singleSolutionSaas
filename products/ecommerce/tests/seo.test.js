@@ -5,12 +5,12 @@
 import { createId } from '@ss/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { csvCell, feedMoney, feedRows, googleItem, metaLine } from '../core/feeds.js';
+import { gradeCondition } from '../core/grades.js';
 import { listShown } from '../core/promotions.js';
 import { buildLlmsTxt, markdownText, MAX_LLMS_CHARS, treeOrder } from '../core/llms.js';
 import { COLLECTIONS } from '../core/model.js';
 import {
 	clip,
-	conditionOf,
 	escapeXml,
 	feedItemId,
 	fillTitle,
@@ -76,12 +76,6 @@ describe('core/seo', () => {
 		expect(metaDescription(undefined, null)).toBe('');
 	});
 
-	it('gives conditions only to physical goods', () => {
-		expect(conditionOf({ kind: 'physical' }, { grade: 'a' }, 'refurbished')).toBe('refurbished');
-		expect(conditionOf({ kind: 'physical' }, { grade: null }, 'used')).toBe('new');
-		expect(conditionOf({ kind: 'digital' }, { grade: 'a' }, 'used')).toBe('');
-	});
-
 	it('writes sitemap entries, indexes and page addresses', () => {
 		expect(sitemapEntry({ loc: 'https://a.example/p?x=1&y=2', lastmod: new Date('2026-01-02T03:04:05Z') })).toBe(
 			'<url><loc>https://a.example/p?x=1&amp;y=2</loc><lastmod>2026-01-02T03:04:05.000Z</lastmod></url>\n',
@@ -141,7 +135,7 @@ describe('core/feeds and core/llms', () => {
 		productType: 'Phones > Android',
 		currency: 'USD',
 		condition: (/** @type {VariantRecord} */ v) =>
-			/** @type {'refurbished' | 'new'} */ (conditionOf(product, v, 'refurbished')),
+			gradeCondition(product, v, new Map([['a', /** @type {any} */ ({ condition: 'refurbished' })]])),
 		skuAs: /** @type {const} */ ('mpn'),
 		includeOutOfStock: true,
 		shown: listShown,
@@ -371,7 +365,7 @@ describe('SEO, feeds, llms.txt and policies routes', () => {
 	afterAll(async () => shop.product.close());
 
 	it('answers a product page: title, description, canonical, image and JSON-LD', async () => {
-		await shop.setting('seo', 'gradedCondition', 'refurbished');
+		await shop.list('grades', [{ key: 'b', label: 'Grade B', condition: 'refurbished' }]);
 		const byId = await shop.api('GET', `/v1/seo/products/${phone.id}`);
 		expect(byId.status).toBe(200);
 		const bySlug = await shop.api('GET', '/v1/seo/products/acme-phone');
@@ -478,7 +472,8 @@ describe('SEO, feeds, llms.txt and policies routes', () => {
 		expect(google.text).toContain('<title>Acme &lt;/script&gt; Phone - Red</title>');
 		expect(google.text).toContain('<g:product_type>Phones &gt; Android</g:product_type>');
 		expect(google.text).toContain('<g:sale_price>250.00 USD</g:sale_price>');
-		expect(google.text).toContain('<g:condition>used</g:condition>');
+		// the grade's own condition, the same in structured data and feeds
+		expect(google.text).toContain('<g:condition>refurbished</g:condition>');
 		expect(google.text).toContain('<g:brand>Acme</g:brand>');
 		expect(google.text).not.toContain('Ebook');
 		const csv = await shop.api('GET', '/v1/feeds/products.csv');

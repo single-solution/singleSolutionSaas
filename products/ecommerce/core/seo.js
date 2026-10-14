@@ -221,19 +221,6 @@ export const writtenSummary = (summary) => (summary.trim().length >= WRITTEN_SUM
 export const variantInStock = (product, variant) => !variant.soldOut && (!product.trackStock || variant.stock > 0);
 
 /**
- * The condition of a variant: physical goods with a grade take the merchant's setting, other physical goods are new;
- * digital goods and bookings have none ('').
- * @param {Pick<ProductRecord, 'kind'>} product
- * @param {Pick<VariantRecord, 'grade'>} variant
- * @param {Condition} graded
- * @returns {Condition | ''}
- */
-export const conditionOf = (product, variant, graded) => {
-	if (product.kind !== 'physical') return '';
-	return variant.grade ? graded : 'new';
-};
-
-/**
  * The variants shown and sold.
  * @param {Pick<ProductRecord, 'variants'>} product
  */

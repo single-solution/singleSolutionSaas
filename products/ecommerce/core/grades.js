@@ -20,8 +20,8 @@ const MAX_DESCRIPTION = 1200;
 const KEY = /^[a-z][a-z0-9_-]{0,39}$/;
 /** A CSS color as the website writes it (a name, `#rgb`, `#rrggbb`, `rgb(…)` …). */
 const COLOUR = /^[#A-Za-z0-9(),.%\s-]{0,40}$/;
-/** Grade conditions (schema.org item conditions). */
-const CONDITIONS = Object.freeze(/** @type {const} */ (['new', 'refurbished', 'used']));
+/** Grade conditions (schema.org item conditions), the standard condition every grade maps to (owner, 2026-10-14). */
+export const CONDITIONS = Object.freeze(/** @type {const} */ (['new', 'refurbished', 'used']));
 
 // eslint-disable-next-line no-control-regex
 const CONTROL = /[\u0000-\u001F\u007F]/;
@@ -41,7 +41,8 @@ const CONTROL = /[\u0000-\u001F\u007F]/;
  * @property {string} video a storage key or a YouTube id ('' = none)
  * @property {import('./catalog-content.js').Content} content
  * @property {boolean} active false: not offered for new variants, kept on old ones
- * @property {Condition | null} condition null = the SEO and feeds setting for graded items
+ * @property {Condition} condition the standard condition structured data and feeds give its items (`used` when not
+ *   given)
  * @property {{ title: string, description: string, body: string, faqs: import('./catalog-content.js').Faq[] }} seo
  *   the glossary page (E15)
  * @property {string | null} [videoUrl] the condition video's address, filled in for shoppers (not stored)
@@ -107,9 +108,8 @@ export const checkGrades = (value) => {
 		const content = entry.content === undefined ? { ...EMPTY_CONTENT } : checkContent(entry.content, 'content', found);
 		const active = entry.active === undefined ? true : entry.active;
 		if (typeof active !== 'boolean') errors.push(`Grade ${n}: active is true or false.`);
-		const condition = entry.condition ?? null;
-		if (condition !== null && !CONDITIONS.includes(condition))
-			errors.push(`Grade ${n}: the condition is new, refurbished or used.`);
+		const condition = entry.condition === undefined ? 'used' : entry.condition;
+		if (!CONDITIONS.includes(condition)) errors.push(`Grade ${n}: the condition is new, refurbished or used.`);
 		const rawSeo = entry.seo ?? {};
 		const seo = {
 			title: rawSeo.title === undefined ? '' : shortText(rawSeo.title, 200),
@@ -137,7 +137,7 @@ export const checkGrades = (value) => {
 			video: video ?? '',
 			content: content ?? { ...EMPTY_CONTENT },
 			active: active !== false,
-			condition: /** @type {Condition | null} */ (condition),
+			condition: /** @type {Condition} */ (condition),
 			seo: /** @type {NonNullable<Grade['seo']>} */ (seo),
 		});
 	});
@@ -197,18 +197,17 @@ export const gradesFor = (list, categoryIds) => {
 };
 
 /**
- * The condition of a variant for structured data and feeds (E10): its grade's condition, else the merchant's setting
- * for graded items; physical goods without a grade are new; digital goods and bookings have none ('').
+ * The condition of a variant for structured data and feeds (E10): its grade's standard condition (a grade no longer
+ * in the list counts as used); physical goods without a grade are new; digital goods and bookings have none ('').
  * @param {{ kind: string }} product
  * @param {{ grade: string | null }} variant
  * @param {ReadonlyMap<string, Grade>} grades
- * @param {Condition} graded the setting for graded items
  * @returns {Condition | ''}
  */
-export const gradeCondition = (product, variant, grades, graded) => {
+export const gradeCondition = (product, variant, grades) => {
 	if (product.kind !== 'physical') return '';
 	if (!variant.grade) return 'new';
-	return grades.get(variant.grade)?.condition ?? graded;
+	return grades.get(variant.grade)?.condition ?? 'used';
 };
 
 /**

@@ -10341,9 +10341,9 @@
 					"description": "A CSS color ('' = none)."
 				},
 				"condition": {
-					"type": ["string", "null"],
-					"enum": ["new", "refurbished", "used", null],
-					"description": "Its item condition (null: the seo setting gradedCondition)."
+					"type": "string",
+					"enum": ["new", "refurbished", "used"],
+					"description": "Its standard condition, which structured data and feeds give its items (used when not given)."
 				},
 				"content": {
 					"type": "object",

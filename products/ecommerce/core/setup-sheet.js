@@ -84,7 +84,7 @@ const gradeWords = (grades) => {
 	const first = new Map();
 	for (const grade of grades) if (!first.has(grade.key) || grade.categoryId === null) first.set(grade.key, grade);
 	const names = [...first.values()].map((grade) => {
-		const notes = [grade.condition ?? '', grade.active ? '' : 'not offered'].filter(Boolean);
+		const notes = [grade.condition, grade.active ? '' : 'not offered'].filter(Boolean);
 		return `${nameOf(grade.label)}${notes.length > 0 ? ` (${notes.join(', ')})` : ''}`;
 	});
 	return names.length === 0 ? 'No grades yet.' : listed(counted(names.length, 'grade', 'grades'), names);

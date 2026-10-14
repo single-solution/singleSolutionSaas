@@ -757,8 +757,15 @@ describe('grades', () => {
 			{ key: 'A' },
 			{ key: 'a', label: 'A', description: 5, returnDays: -1, warrantyDays: 1.5 },
 			{ key: 'a', label: 'x'.repeat(61) },
+			{ key: 'b', label: 'B', condition: null },
+			{ key: 'c', label: 'C', condition: 'worn' },
 		]);
-		expect(bad.ok ? 0 : bad.errors.length).toBe(8);
+		expect(bad.ok ? 0 : bad.errors.length).toBe(10);
+		// every grade keeps a standard condition: used when not given
+		expect(bad.ok ? [] : bad.errors.slice(-2)).toEqual([
+			'Grade 5: the condition is new, refurbished or used.',
+			'Grade 6: the condition is new, refurbished or used.',
+		]);
 		expect(checkGrades([{ key: ' new ', label: ' New ', description: ' Box ', returnDays: 7 }])).toEqual({
 			ok: true,
 			value: [
@@ -774,7 +781,7 @@ describe('grades', () => {
 					video: '',
 					content: { summary: '', bullets: [] },
 					active: true,
-					condition: null,
+					condition: 'used',
 					seo: { title: '', description: '', body: '', faqs: [] },
 				},
 			],

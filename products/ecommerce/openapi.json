@@ -44560,17 +44560,13 @@
 						"description": "A CSS color ('' = none)."
 					},
 					"condition": {
-						"type": [
-							"string",
-							"null"
-						],
+						"type": "string",
 						"enum": [
 							"new",
 							"refurbished",
-							"used",
-							null
+							"used"
 						],
-						"description": "Its item condition (null: the seo setting gradedCondition)."
+						"description": "Its standard condition, which structured data and feeds give its items (used when not given)."
 					},
 					"content": {
 						"type": "object",

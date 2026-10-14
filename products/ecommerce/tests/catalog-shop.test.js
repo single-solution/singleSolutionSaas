@@ -24,7 +24,7 @@ const names = (answer) => answer.json.items.map((/** @type {any} */ item) => ite
 beforeAll(async () => {
 	shop = await readyShop({ features: ALL.filter((feature) => feature !== 'multi_location') });
 	await shop.list('grades', [
-		{ key: 'new', label: 'New', description: 'Sealed box' },
+		{ key: 'new', label: 'New', description: 'Sealed box', condition: 'new' },
 		{ key: 'used', label: 'Used', description: 'Light marks' },
 	]);
 	await shop.setting('catalog', 'mediaBaseUrl', 'https://cdn.shop.example.com/');
@@ -218,7 +218,7 @@ describe('the product page', () => {
 				soldOut: false,
 				stockLeft: null,
 				media: [],
-				grade: { key: 'new', label: 'New', description: 'Sealed box', color: '', condition: null },
+				grade: { key: 'new', label: 'New', description: 'Sealed box', color: '', condition: 'new' },
 			},
 			{
 				id: ids.pixel.variants[1].id,

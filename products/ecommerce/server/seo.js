@@ -144,10 +144,10 @@ export const createSeo = (product, service) => {
 	/**
 	 * The condition of a variant for structured data and feeds (E10), from the product's grades (the entries of its
 	 * category or the nearest one above it first, E45).
-	 * @param {Site} s @param {'used' | 'refurbished' | 'new'} graded
+	 * @param {Site} s
 	 * @param {ReadonlyMap<string, CategoryRecord>} [known] every category by id, when the caller has read them
 	 */
-	const conditionsOf = async (s, graded, known) => {
+	const conditionsOf = async (s, known) => {
 		const list = s.has('grades_serials') ? await s.list('grades') : [];
 		const categories =
 			known ?? (list.length > 0 ? new Map((await allCategories(await s.data())).map((c) => [c.id, c])) : new Map());
@@ -166,7 +166,7 @@ export const createSeo = (product, service) => {
 			/** @param {Pick<ProductRecord, 'categoryIds'>} item @param {VariantRecord} variant */
 			gradeOf: (item, variant) => (variant.grade ? gradesOf(item).get(variant.grade) : undefined),
 			/** @param {Pick<ProductRecord, 'kind' | 'categoryIds'>} item @param {VariantRecord} variant */
-			of: (item, variant) => gradeCondition(item, variant, gradesOf(item), graded),
+			of: (item, variant) => gradeCondition(item, variant, gradesOf(item)),
 		};
 	};
 
@@ -272,7 +272,7 @@ export const createSeo = (product, service) => {
 				.toArray()
 		);
 		const brand = item.brandId ? ((await brandNames(data, [item.brandId])).get(item.brandId) ?? null) : null;
-		const conditions = await conditionsOf(s, settings.gradedCondition);
+		const conditions = await conditionsOf(s);
 		// the price shoppers are shown, after automatic deals (G4), as the card, the product page and the cart show it
 		const shown = (await shownPrices(s, data)).of(item, await categoryTrail(data, item.categoryIds));
 		// the merchant's patterns (SG-5, G6), with the product's facts as they are now: the page's part of the title, the
@@ -605,12 +605,11 @@ export const createSeo = (product, service) => {
 	 */
 	const feedBatches = async function* (s) {
 		const data = await s.data();
-		const [settings, categories, brands, hidden, seo, format, attributes] = await Promise.all([
+		const [settings, categories, brands, hidden, format, attributes] = await Promise.all([
 			s.values('feeds'),
 			allCategories(data),
 			brandNames(data),
 			hiddenFor(s),
-			s.has('seo') ? s.values('seo') : Promise.resolve({}),
 			s.format(),
 			data
 				.collection(COLLECTIONS.attributes)
@@ -618,11 +617,7 @@ export const createSeo = (product, service) => {
 				.toArray(),
 		]);
 		const byId = new Map(categories.map((category) => [category.id, category]));
-		const conditions = await conditionsOf(
-			s,
-			settings.gradedCondition ?? /** @type {any} */ (seo).gradedCondition ?? 'used',
-			byId,
-		);
+		const conditions = await conditionsOf(s, byId);
 		const shipping = await shippingOf(s);
 		// prices after the deals that hold all day (feeds are read at the catalogs' own pace; G4)
 		const prices = await shownPrices(s, data, { allDay: true });

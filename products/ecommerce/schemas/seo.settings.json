@@ -57,13 +57,6 @@
 			"default": "{name} - {options}",
 			"maxLength": 160
 		},
-		"gradedCondition": {
-			"type": "string",
-			"title": "Condition of graded items",
-			"description": "The condition search engines are told for graded items whose grade names no condition. Items without a grade are new.",
-			"default": "used",
-			"enum": ["used", "refurbished", "new"]
-		},
 		"pagedListings": {
 			"type": "string",
 			"title": "Listing pages after the first",

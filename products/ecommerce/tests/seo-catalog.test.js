@@ -34,7 +34,6 @@ beforeAll(async () => {
 		{ key: 'fair', label: 'Fair', description: 'Marks', categoryIds: [] },
 		{ key: 'old', label: 'Old', active: false },
 	]);
-	await shop.setting('seo', 'gradedCondition', 'used');
 	ids.phones = await api('POST', '/v1/categories', { name: 'Phones', faqs: [{ question: 'Unlocked?', answer: 'Yes.' }] });
 	ids.acme = await api('POST', '/v1/brands', { name: 'Acme', seo: { description: 'Acme phones.' } });
 	ids.battery = await api('POST', '/v1/attributes', { name: 'Battery', seo: { description: 'How long it lasts.' } });

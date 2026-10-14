@@ -43,13 +43,6 @@
 			"default": "auto",
 			"enum": ["auto", "no"]
 		},
-		"gradedCondition": {
-			"type": "string",
-			"title": "Condition of graded items",
-			"description": "The condition sent for graded items whose grade names no condition. Items without a grade are new.",
-			"default": "used",
-			"enum": ["used", "refurbished", "new"]
-		},
 		"googleCategory": {
 			"type": "string",
 			"title": "Google product category",

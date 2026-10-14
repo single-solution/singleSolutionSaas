@@ -332,7 +332,6 @@ export const TEXTS = Object.freeze({
 			keyTaken: 'Another grade has this key.',
 			condition: 'Condition for search engines and feeds',
 			conditions: Object.freeze({
-				'': 'As the SEO and feeds setting',
 				new: 'New',
 				refurbished: 'Refurbished',
 				used: 'Used',

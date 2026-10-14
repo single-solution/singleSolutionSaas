@@ -413,17 +413,19 @@ describe('landing pages, search, grades, policies and llms-full', () => {
 			{ key: 'a', label: 'A', condition: 'refurbished' },
 			{ key: 'b', label: 'B' },
 		]);
-		expect(gradeCondition({ kind: 'physical' }, { grade: 'a' }, grades, 'used')).toBe('refurbished');
-		expect(gradeCondition({ kind: 'physical' }, { grade: 'b' }, grades, 'used')).toBe('used');
-		expect(gradeCondition({ kind: 'physical' }, { grade: null }, grades, 'used')).toBe('new');
-		expect(gradeCondition({ kind: 'digital' }, { grade: 'a' }, grades, 'used')).toBe('');
+		expect(gradeCondition({ kind: 'physical' }, { grade: 'a' }, grades)).toBe('refurbished');
+		expect(gradeCondition({ kind: 'physical' }, { grade: 'b' }, grades)).toBe('used');
+		// a grade no longer in the list counts as used; items without a grade are new
+		expect(gradeCondition({ kind: 'physical' }, { grade: 'gone' }, grades)).toBe('used');
+		expect(gradeCondition({ kind: 'physical' }, { grade: null }, grades)).toBe('new');
+		expect(gradeCondition({ kind: 'digital' }, { grade: 'a' }, grades)).toBe('');
 		// a grade as the list stores it (every field written by checkGrades)
 		const stored = checkGrades([{ key: 'b', label: 'B', warrantyDays: 5 }]);
 		if (!stored.ok) throw new Error(stored.errors.join(' '));
 		expect(gradeView(/** @type {import('../core/grades.js').Grade} */ (stored.value[0]))).toMatchObject({
 			color: '',
 			video: '',
-			condition: null,
+			condition: 'used',
 			warrantyDays: 5,
 		});
 		expect(

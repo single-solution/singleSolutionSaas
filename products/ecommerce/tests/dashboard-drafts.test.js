@@ -88,13 +88,13 @@ describe('grade drafts (E10)', () => {
 		expect(saved).toEqual(FULL);
 		const checked = checkGrades([saved]);
 		expect(checked).toEqual({ ok: true, value: [FULL] });
-		// no category, no days and no condition of its own show as empty fields
-		const plain = loadGrade({ ...FULL, categoryId: null, returnDays: null, warrantyDays: null, condition: null });
-		expect(plain).toMatchObject({ categoryId: '', returnDays: '', warrantyDays: '', condition: '' });
-		expect(cleanGrade(plain)).toEqual({ ...FULL, categoryId: null, returnDays: null, warrantyDays: null, condition: null });
+		// no category and no days of its own show as empty fields
+		const plain = loadGrade({ ...FULL, categoryId: null, returnDays: null, warrantyDays: null, condition: 'new' });
+		expect(plain).toMatchObject({ categoryId: '', returnDays: '', warrantyDays: '', condition: 'new' });
+		expect(cleanGrade(plain)).toEqual({ ...FULL, categoryId: null, returnDays: null, warrantyDays: null, condition: 'new' });
 	});
 
-	it('saves a new grade the server takes: key from the name, empty rows dropped, no condition as null', () => {
+	it('saves a new grade the server takes: key from the name, empty rows dropped, used by default', () => {
 		const draft = {
 			...blankGrade(),
 			label: ' Grade B+ ',
@@ -127,7 +127,7 @@ describe('grade drafts (E10)', () => {
 			categoryIds: ['cat_a'],
 			video: 'dQw4w9WgXcQ',
 			content: { summary: 'ok', bullets: [{ text: 'Tested', icon: 'check' }] },
-			condition: null,
+			condition: 'used',
 			active: true,
 			seo: { faqs: [{ question: 'Q', answer: 'A' }] },
 		});
@@ -147,7 +147,7 @@ describe('grade drafts (E10)', () => {
 	it('names the limits the server checks', () => {
 		expect(GRADE_LIMITS.grades).toBe(MAX_GRADES);
 		expect(GRADE_LIMITS.description).toBe(1200);
-		expect(GRADE_CONDITIONS).toEqual(['', 'new', 'refurbished', 'used']);
+		expect(GRADE_CONDITIONS).toEqual(['new', 'refurbished', 'used']);
 	});
 });
 
