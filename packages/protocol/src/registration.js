@@ -80,13 +80,6 @@ const requireSecret = (secret) => {
 };
 
 /**
- * A fresh random connect secret (43 base64url characters, 256 bits).
- * @param {(length: number) => Uint8Array} [randomBytes]
- * @returns {string}
- */
-export const generateConnectSecret = (randomBytes = defaultRandomBytes) => Buffer.from(randomBytes(32)).toString('base64url');
-
-/**
  * @param {string} label
  * @param {string} secret
  * @param {string} timestamp

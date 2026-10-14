@@ -7,7 +7,6 @@ import {
 	createConnectRequest,
 	createConnectResponse,
 	createJwks,
-	generateConnectSecret,
 	isConnectSecret,
 	verifyConnectRequest,
 	verifyConnectResponse,
@@ -33,9 +32,9 @@ beforeAll(async () => {
 });
 
 describe('connect secret', () => {
-	it('generates 256-bit secrets and refuses short ones', () => {
-		const secret = generateConnectSecret();
-		expect(isConnectSecret(secret)).toBe(true);
+	it('refuses short secrets', () => {
+		expect(isConnectSecret('a'.repeat(32))).toBe(true);
+		expect(isConnectSecret('a'.repeat(31))).toBe(false);
 		expect(isConnectSecret('short')).toBe(false);
 		expectThrowCode(
 			() =>

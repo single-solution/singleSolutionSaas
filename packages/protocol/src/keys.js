@@ -93,8 +93,8 @@ const ED25519_PKCS8_PREFIX = Buffer.from('302e020100300506032b657004220420', 'he
 const SEED_TEXT = /^[A-Za-z0-9+/_-]{43}=?$/;
 
 /**
- * Private Ed25519 JWK from its 32-byte seed (the RFC 8032 private key; the JWK `d`). This is the form keys take in
- * environment variables, so no JSON is ever needed there.
+ * Private Ed25519 JWK from its 32-byte seed (the RFC 8032 private key; the JWK `d`): the form in which the Portal keeps
+ * its signing keys (sealed, with their `kid`).
  * @param {string} kid
  * @param {Uint8Array | string} seed 32 bytes, or their base64url (base64 accepted)
  * @returns {PrivateJwk}
@@ -111,43 +111,6 @@ export const signingKeyFromSeed = (kid, seed) => {
 		format: 'jwk',
 	});
 	return { ...toPublicJwk({ ...jwk, kid }), d: /** @type {string} */ (jwk.d) };
-};
-
-/**
- * Parse a key list `kid:seed[,kid:seed…]` (seed = base64url of 32 bytes). Order is kept (the first signs); kids must
- * be unique. Throws `invalid_argument` on any malformed entry.
- * @param {string} text
- * @returns {PrivateJwk[]}
- */
-export const parseSigningKeys = (text) => {
-	const entries = String(text)
-		.split(',')
-		.map((entry) => entry.trim())
-		.filter(Boolean);
-	if (entries.length === 0) throw createProtocolError('invalid_argument', 'no signing key given');
-	/** @type {PrivateJwk[]} */
-	const keys = [];
-	for (const entry of entries) {
-		const colon = entry.lastIndexOf(':');
-		if (colon <= 0) throw createProtocolError('invalid_argument', 'signing key must be kid:seed');
-		const key = signingKeyFromSeed(entry.slice(0, colon), entry.slice(colon + 1));
-		if (keys.some((k) => k.kid === key.kid || k.x === key.x))
-			throw createProtocolError('invalid_argument', 'signing keys must have unique kids and keys');
-		keys.push(key);
-	}
-	return keys;
-};
-
-/**
- * The environment form of a private key: `kid:seed` (inverse of {@link signingKeyFromSeed}).
- * @param {{ kid?: unknown, d?: unknown }} privateJwk
- * @returns {string}
- */
-export const formatSigningKey = (privateJwk) => {
-	const { kid } = toPublicJwk(privateJwk);
-	if (typeof privateJwk.d !== 'string' || !SEED_TEXT.test(privateJwk.d))
-		throw createProtocolError('invalid_argument', 'JWK d is invalid');
-	return `${kid}:${privateJwk.d}`;
 };
 
 /**
@@ -172,19 +135,6 @@ export const importPrivateKey = async (jwk) => {
 	return /** @type {CryptoKey} */ (
 		await importJWK({ kty: pub.kty, crv: pub.crv, x: pub.x, d }, 'EdDSA', { extractable: false })
 	);
-};
-
-/**
- * Export a WebCrypto Ed25519 public key (or the public half of a private JWK) as a normalised public JWK.
- * @param {CryptoKey | PrivateJwk | PublicJwk} key
- * @param {{ kid?: string }} [options] required when `key` is a CryptoKey unless the thumbprint should be used
- * @returns {Promise<PublicJwk>}
- */
-export const exportPublicJwk = async (key, { kid } = {}) => {
-	if (!(key instanceof CryptoKey)) return toPublicJwk(kid ? { ...key, kid } : key);
-	if (key.type !== 'public') throw createProtocolError('invalid_argument', 'expected a public CryptoKey');
-	const jwk = /** @type {{ kty: string, crv: string, x: string }} */ (await exportJWK(key));
-	return toPublicJwk({ ...jwk, kid: kid ?? (await thumbprint(jwk)) });
 };
 
 /**

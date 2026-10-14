@@ -16,7 +16,6 @@ export {
 	canonicalUrl,
 	createConnectRequest,
 	createConnectResponse,
-	generateConnectSecret,
 	isConnectSecret,
 	verifyConnectRequest,
 	verifyConnectResponse,

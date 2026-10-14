@@ -5,13 +5,10 @@ import {
 	createProtocolError,
 	createSigner,
 	ERROR_CODES,
-	exportPublicJwk,
-	formatSigningKey,
 	generateSigningKey,
 	importPrivateKey,
 	importPublicKey,
 	isProtocolError,
-	parseSigningKeys,
 	signingKeyFromSeed,
 	thumbprint,
 	toPublicJwk,
@@ -39,16 +36,6 @@ describe('keys', () => {
 		expect(await crypto.subtle.verify('Ed25519', key, /** @type {BufferSource} */ (sig), data)).toBe(true);
 		const priv = await importPrivateKey(privateJwk);
 		expect(priv.extractable).toBe(false);
-	});
-
-	it('exports public JWKs from CryptoKeys and JWKs', async () => {
-		const { privateJwk, publicJwk } = await makeKey('k1');
-		expect(await exportPublicJwk(privateJwk)).toEqual(publicJwk);
-		expect(await exportPublicJwk(publicJwk, { kid: 'renamed' })).toMatchObject({ kid: 'renamed', x: publicJwk.x });
-		const key = await importPublicKey(publicJwk);
-		expect(await exportPublicJwk(key, { kid: 'k1' })).toEqual(publicJwk);
-		expect((await exportPublicJwk(key)).kid).toBe(await thumbprint(publicJwk));
-		await expectCode(exportPublicJwk(await importPrivateKey(privateJwk)), 'invalid_argument');
 	});
 
 	it('validates JWKs strictly', async () => {
@@ -85,35 +72,23 @@ describe('keys', () => {
 	});
 });
 
-describe('keys from seeds (environment form)', () => {
-	it('rebuilds the private JWK from its seed and round-trips kid:seed', async () => {
+describe('keys from seeds (the form the Portal keeps them in)', () => {
+	it('rebuilds the private JWK from its seed', async () => {
 		const { privateJwk } = await generateSigningKey({ kid: 'k-1' });
 		expect(signingKeyFromSeed('k-1', privateJwk.d)).toEqual(privateJwk);
 		expect(signingKeyFromSeed('k-1', Buffer.from(privateJwk.d, 'base64url'))).toEqual(privateJwk);
 		expect(signingKeyFromSeed('k-1', Buffer.from(privateJwk.d, 'base64url').toString('base64'))).toEqual(privateJwk);
-		const text = formatSigningKey(privateJwk);
-		expect(text).toBe(`k-1:${privateJwk.d}`);
-		expect(parseSigningKeys(text)).toEqual([privateJwk]);
 		const signer = createSigner(signingKeyFromSeed('k-1', privateJwk.d));
 		expect(signer.kid).toBe('k-1');
 	});
 
-	it('parses ordered lists and rejects malformed or duplicate entries', async () => {
-		const a = await generateSigningKey({ kid: 'a' });
-		const b = await generateSigningKey({ kid: 'ns:b' });
-		const list = parseSigningKeys(` ${formatSigningKey(a.privateJwk)} , ${formatSigningKey(b.privateJwk)} `);
-		expect(list.map((k) => k.kid)).toEqual(['a', 'ns:b']);
-		for (const bad of [
-			'',
-			'nokid',
-			`:${a.privateJwk.d}`,
-			'a:short',
-			`a:${a.privateJwk.d},a:${b.privateJwk.d}`,
-			`bad kid:${a.privateJwk.d}`,
-		])
-			expectThrowCode(() => parseSigningKeys(bad), 'invalid_argument');
+	it('refuses a seed that is not 32 bytes and a kid that is not valid', async () => {
+		const { privateJwk } = await generateSigningKey({ kid: 'a' });
 		expectThrowCode(() => signingKeyFromSeed('k', new Uint8Array(31)), 'invalid_argument');
-		expectThrowCode(() => formatSigningKey({ ...a.privateJwk, d: 'x' }), 'invalid_argument');
+		expectThrowCode(() => signingKeyFromSeed('k', 'short'), 'invalid_argument');
+		expectThrowCode(() => signingKeyFromSeed('k', `${privateJwk.d}x`), 'invalid_argument');
+		expectThrowCode(() => signingKeyFromSeed('', privateJwk.d), 'invalid_argument');
+		expectThrowCode(() => signingKeyFromSeed('bad kid', privateJwk.d), 'invalid_argument');
 	});
 });
 

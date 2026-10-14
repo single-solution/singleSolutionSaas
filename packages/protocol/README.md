@@ -11,19 +11,21 @@ tickets, 0.4.12 Product ↔ Portal contract), and the one format of sealed store
   secrets, so they are safe to log.
 - No URLs, issuers or audiences are hard-coded: they are all parameters.
 
-| Module            | Exports                                                                                                                                                                                                                                                                                            |
-| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `keys.js`         | `generateSigningKey`, `signingKeyFromSeed`, `parseSigningKeys`, `formatSigningKey`, `createSigner`, `importPublicKey`, `importPrivateKey`, `exportPublicJwk`, `toPublicJwk`, `createJwks`, `createKeyResolver`, `thumbprint`                                                                       |
-| `tokens.js`       | `issueToken`, `verifyToken`, `TOKEN_TYP`, `TOKEN_KINDS`, `normalizeDomain`, `canonicalOrigin`, `isLocalOrigin`, `originAllowed`, `ticketOriginAllowed`, `isProductId`, `PRODUCT_ID_PATTERN`                                                                                                        |
-| `tickets.js`      | `issueTicket`, `verifyTicket`, `TICKET_TYP`, `TICKET_TTL_SECONDS`, `PERMISSION_KEY_PATTERN`                                                                                                                                                                                                        |
-| `launch.js`       | `issueLaunch`, `verifyLaunch`, `launchViolation`, `LAUNCH_KINDS`, `LAUNCH_ADMIN_ROLES`, `LAUNCH_TYP`, `DEFAULT_LAUNCH_TTL_SECONDS`, `MAX_LAUNCH_TTL_SECONDS`                                                                                                                                       |
-| `assertion.js`    | `signAssertion`, `verifyAssertion`, `ASSERTION_TYP`, `MAX_ASSERTION_LIFETIME_SECONDS`                                                                                                                                                                                                              |
-| `notices.js`      | `signNotice`, `verifyNotice`, `NOTICE_PATH`, `NOTICE_TYPES`, `NOTICE_HEADERS`, `NOTICE_TOLERANCE_SECONDS`                                                                                                                                                                                          |
-| `registration.js` | connect handshake: `createConnectRequest` / `verifyConnectResponse` (Portal), `verifyConnectRequest` / `createConnectResponse` (product), `generateConnectSecret`, `isConnectSecret`, `canonicalUrl`, `CONNECT_PATH`, `CONNECT_*_HEADER`, `CONNECT_TOLERANCE_SECONDS`, `MIN_CONNECT_SECRET_LENGTH` |
-| `replay.js`       | `createMemoryReplayStore` (tests only), `consumeWith`                                                                                                                                                                                                                                              |
-| `errors.js`       | `createProtocolError`, `isProtocolError`, `ERROR_CODES`                                                                                                                                                                                                                                            |
-| `encoding.js`     | `canonicalJson`                                                                                                                                                                                                                                                                                    |
-| `sealing.js`      | sealing of stored secrets (`ss2.<keyId>.<iv>.<tag>.<data>`, AES-256-GCM, key id derived from the key): `createSealer` (current and optional previous `ENCRYPTION_KEY`, `reseal`), `legacyV1`, `sealKeyId`, `SEAL_FORMAT`, `MIN_ENCRYPTION_KEY_LENGTH`                                              |
+What `@ss/protocol` exports, by module:
+
+| Module            | Exports                                                                                                                                                                                                                                               |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `keys.js`         | `generateSigningKey`, `signingKeyFromSeed`, `createSigner`, `importPublicKey`, `importPrivateKey`, `toPublicJwk`, `createJwks`, `createKeyResolver`, `thumbprint`                                                                                     |
+| `tokens.js`       | `issueToken`, `verifyToken`, `TOKEN_KINDS`, `normalizeDomain`, `canonicalOrigin`, `isLocalOrigin`, `originAllowed`, `ticketOriginAllowed`, `isProductId`                                                                                              |
+| `tickets.js`      | `issueTicket`, `verifyTicket`, `TICKET_TTL_SECONDS`                                                                                                                                                                                                   |
+| `launch.js`       | `issueLaunch`, `verifyLaunch`, `launchViolation`                                                                                                                                                                                                      |
+| `assertion.js`    | `signAssertion`, `verifyAssertion`                                                                                                                                                                                                                    |
+| `notices.js`      | `signNotice`, `verifyNotice`, `NOTICE_PATH`, `NOTICE_TYPES`                                                                                                                                                                                           |
+| `registration.js` | connect handshake: `createConnectRequest` / `verifyConnectResponse` (Portal), `verifyConnectRequest` / `createConnectResponse` (product), `isConnectSecret`, `canonicalUrl`, `CONNECT_PATH`                                                           |
+| `replay.js`       | `createMemoryReplayStore` (tests only), `consumeWith`                                                                                                                                                                                                 |
+| `errors.js`       | `createProtocolError`, `isProtocolError`, `ERROR_CODES`                                                                                                                                                                                               |
+| `encoding.js`     | `canonicalJson`                                                                                                                                                                                                                                       |
+| `sealing.js`      | sealing of stored secrets (`ss2.<keyId>.<iv>.<tag>.<data>`, AES-256-GCM, key id derived from the key): `createSealer` (current and optional previous `ENCRYPTION_KEY`, `reseal`), `legacyV1`, `sealKeyId`, `SEAL_FORMAT`, `MIN_ENCRYPTION_KEY_LENGTH` |
 
 ## What is signed
 
@@ -109,7 +111,8 @@ replay store, then the body: `status.changed`, `token.revoked` and `website.dele
   `maxStaleMs` when a refetch fails, and refuses revoked kids at once.
 - JWK members may carry `nbf`/`exp` (seconds) for rotation overlap windows: publish the new key ahead of time, keep the
   old one until the overlap ends; each is refused outside its window.
-- `signingKeyFromSeed` / `parseSigningKeys` read keys in their environment form `kid:seed[,kid:seed…]`.
+- `signingKeyFromSeed(kid, seed)` rebuilds a private key from its 32-byte seed, the form in which the Portal keeps its
+  signing keys (sealed).
 
 ## Replay stores
 
