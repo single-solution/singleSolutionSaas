@@ -330,7 +330,7 @@ describe('catalog admin: a product', () => {
 		});
 	});
 
-	it('suggests copy with AI and applies the ticked suggestions', async () => {
+	it('suggests copy with AI and applies the checked suggestions', async () => {
 		let ai = () => problem(503, 'ai_not_connected');
 		const { root, server } = await start(ALL, {
 			'POST /v1/admin/products/prd_1/ai-copy': () => ai(),
