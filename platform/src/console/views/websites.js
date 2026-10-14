@@ -33,10 +33,10 @@ import { AUTH, BILLING, MERCHANT, MORE, WEBSITE } from '../../texts/console.js';
 import { apiFetch } from '../client.js';
 import { Link } from '../link.js';
 import { api, routes } from '../paths.js';
-import { BalanceHero, LocalTime, ProductStatusBadge, ReceiptsTable, creditDayBars, formatChartCredits } from './billing.js';
+import { DaysLeft, LocalTime, ProductStatusBadge, ReceiptsTable, creditDayBars, formatChartCredits } from './billing.js';
 import { FrameBilling } from './frame-billing.js';
-import { ListDetail, ListPane, ListRow, ListSearch, PageProblem, openDashboard } from './common.js';
-import { ActivityTable } from './login-settings.js';
+import { ListDetail, ListPane, ListRow, ListSearch, NeedItem, NothingNeeded, PageProblem, openDashboard } from './common.js';
+import { ActivityTimeline } from './login-settings.js';
 import { contactLine } from './sign-in.js';
 import { WebsiteCard, dailyCostOf, websiteDot } from './website.js';
 
@@ -63,8 +63,11 @@ function Welcome({ branding }) {
 }
 
 /**
- * The merchant's Overview.
- * @param {any} props loader result of `loadOverview` plus `branding`
+ * The merchant's Overview (look "Workbench", owner 2026-10-14): a greeting with one sentence of what matters now;
+ * "Needs you" (a product with no feature on, with Open; a website with no product yet) beside the 30-day spend chart;
+ * the money numbers (balance, days left, daily spend, spent this month); the websites with their products and Open
+ * buttons; the latest activity as a timeline beside the latest receipts. Low credits show in the frame's banner.
+ * @param {any} props loader result of `loadOverview` plus `branding` and the signed-in `me`
  */
 export function OverviewView(props) {
 	const toast = useToast();
@@ -81,25 +84,80 @@ export function OverviewView(props) {
 	};
 	const billing = props.billing;
 	const productCount = rows.reduce((n, r) => n + r.cards.length, 0);
+	/** @param {any} website @param {ProductCard} card */
+	const openButton = (website, card) => (
+		<Button
+			size="sm"
+			variant="secondary"
+			loading={opening === `${website.websiteId}:${card.productId}`}
+			aria-label={`${WEBSITE.openLabel(card.name)} · ${website.domain}`}
+			onClick={() => void open(website, card)}
+			icon={<Icon name="external" size={14} />}>
+			{WEBSITE.open}
+		</Button>
+	);
+
+	/** @type {Array<{ key: string, tone: 'warning' | 'danger', title: string, effect: string, action?: import('react').ReactNode }>} */
+	const needs = [];
+	for (const { website, cards } of rows) {
+		if (cards.length === 0)
+			needs.push({
+				key: `empty-${website.websiteId}`,
+				tone: 'warning',
+				title: MERCHANT.needs.noProducts.title(website.domain),
+				effect: MERCHANT.needs.noProducts.effect,
+			});
+		for (const card of cards)
+			if (card.status === 'active' && (card.featuresOn ?? []).length === 0)
+				needs.push({
+					key: `features-${website.websiteId}-${card.productId}`,
+					tone: 'warning',
+					title: MERCHANT.needs.noFeatures.title(card.name, website.domain),
+					effect: MERCHANT.needs.noFeatures.effect,
+					action: openButton(website, card),
+				});
+	}
+	const name = props.me?.merchant?.ownerName || props.me?.merchant?.name || '';
+
 	return (
 		<div className="space-y-6">
 			<FrameBilling billing={billing} />
-			<PageHeader title={MERCHANT.overviewTitle} subtitle={MERCHANT.overviewIntro} />
-			{billing ? (
-				<BalanceHero
-					summary={billing}
-					days={props.usage?.days}
-					label={MERCHANT.balanceLink}
-					chartLabel={MERCHANT.spendChart}
-				/>
+			<PageHeader
+				title={MERCHANT.welcome(name)}
+				subtitle={MERCHANT.summary({ websites: rows.length, products: productCount, needs: needs.length })}
+			/>
+			{rows.length === 0 ? (
+				<Welcome branding={props.branding} />
 			) : (
-				<Card title={MERCHANT.spendChart} subtitle={props.usage ? formatCredits(props.usage.total ?? 0) : undefined}>
-					<BarChart label={MERCHANT.spendChart} data={creditDayBars(props.usage?.days)} format={formatChartCredits} />
-				</Card>
+				<div className="@container">
+					<div className="grid gap-6 @4xl:grid-cols-2">
+						<Card title={MERCHANT.needs.title} subtitle={needs.length > 0 ? MERCHANT.needs.intro : undefined}>
+							{needs.length === 0 ? (
+								<NothingNeeded>{MERCHANT.needs.none}</NothingNeeded>
+							) : (
+								<ul className="@container space-y-2.5">
+									{needs.map(({ key, ...need }) => (
+										<NeedItem key={key} {...need} />
+									))}
+								</ul>
+							)}
+						</Card>
+						<Card title={MERCHANT.spendChart} subtitle={props.usage ? formatCredits(props.usage.total ?? 0) : undefined}>
+							<BarChart
+								label={MERCHANT.spendChart}
+								data={creditDayBars(props.usage?.days)}
+								format={formatChartCredits}
+								height={132}
+							/>
+						</Card>
+					</div>
+				</div>
 			)}
 			<StatGrid>
 				{billing ? (
 					<>
+						<Stat label={BILLING.balance} value={formatCredits(billing.balance)} icon="wallet" kind="credit" />
+						<Stat label={BILLING.daysLeft} value={<DaysLeft summary={billing} />} icon="clock" kind="credit" />
 						<Stat label={BILLING.dailySpend} value={formatCredits(billing.dailySpend)} icon="trendingUp" kind="credit" />
 						<Stat
 							label={BILLING.spentThisMonth}
@@ -108,15 +166,16 @@ export function OverviewView(props) {
 							kind="credit"
 						/>
 					</>
-				) : null}
-				<Stat label={MERCHANT.tiles.websites} value={rows.length} icon="globe" kind="website" />
-				<Stat label={MERCHANT.tiles.products} value={productCount} icon="box" kind="product" />
-			</StatGrid>
-			<Section id="overview-websites" title={MERCHANT.websitesTitle} description={MERCHANT.websitesIntro}>
-				{rows.length === 0 ? (
-					<Welcome branding={props.branding} />
 				) : (
-					<Masonry as="ul" label={MERCHANT.websitesTitle}>
+					<>
+						<Stat label={MERCHANT.tiles.websites} value={rows.length} icon="globe" kind="website" />
+						<Stat label={MERCHANT.tiles.products} value={productCount} icon="box" kind="product" />
+					</>
+				)}
+			</StatGrid>
+			{rows.length > 0 ? (
+				<Section id="overview-websites" title={MERCHANT.websitesTitle} description={MERCHANT.websitesIntro}>
+					<Masonry as="ul" label={MERCHANT.websitesTitle} wideAlone>
 						{rows.map(({ website, cards }) => (
 							<li key={website.websiteId}>
 								<Card
@@ -142,15 +201,7 @@ export function OverviewView(props) {
 														<span className="truncate text-sm font-semibold text-fg">{card.name}</span>
 														<ProductStatusBadge status={card.status} featuresOn={card.featuresOn} />
 													</span>
-													<Button
-														size="sm"
-														variant="secondary"
-														loading={opening === `${website.websiteId}:${card.productId}`}
-														aria-label={`${WEBSITE.openLabel(card.name)} · ${website.domain}`}
-														onClick={() => void open(website, card)}
-														icon={<Icon name="external" size={14} />}>
-														{WEBSITE.open}
-													</Button>
+													{openButton(website, card)}
 												</li>
 											))}
 										</ul>
@@ -159,10 +210,10 @@ export function OverviewView(props) {
 							</li>
 						))}
 					</Masonry>
-				)}
-			</Section>
+				</Section>
+			) : null}
 			<div className="@container">
-				<div className="grid items-start gap-5 @5xl:grid-cols-2">
+				<div className="grid gap-6 @4xl:grid-cols-2">
 					<Card
 						title={MORE.recentActivity}
 						subtitle={MORE.recentActivityIntro}
@@ -171,7 +222,7 @@ export function OverviewView(props) {
 								{MORE.viewAll}
 							</ButtonLink>
 						}>
-						<ActivityTable items={props.activity ?? []} empty="No activity yet." />
+						<ActivityTimeline items={props.activity ?? []} empty={MORE.noActivity} showMerchant={false} />
 					</Card>
 					<Card
 						title={MORE.latestReceipts}

@@ -133,7 +133,6 @@ export const MERCHANT_FIELDS = Object.freeze({
 /** Merchant console (PLAN 0.8.2 Merchant). */
 export const MERCHANT = Object.freeze({
 	menu: Object.freeze({ overview: 'Overview', websites: 'Websites', usage: 'Usage and credits', account: 'Account' }),
-	overviewTitle: 'Overview',
 	websitesTitle: 'Websites',
 	spendChart: 'Spend per UTC day (last 30 days)',
 	accountTitle: 'Account',
@@ -143,11 +142,28 @@ export const MERCHANT = Object.freeze({
 	website: 'Website',
 	allWebsites: 'All websites',
 	balanceLink: 'Credit balance',
-	overviewIntro: 'Your credits, spend and websites at a glance.',
 	websitesIntro: 'Each website with its products. Open a product to manage it.',
 	accountIntro: 'Your business details, sign-in and security.',
 	detailsIntro: 'Business name, owner, phone, address and country.',
 	tiles: Object.freeze({ websites: 'Websites', products: 'Products on websites' }),
+	/** The Overview greeting (look "Workbench", owner 2026-10-14) and the one sentence of what matters now. */
+	welcome: (/** @type {string} */ name) => (name ? `Welcome back, ${name}` : 'Welcome back'),
+	summary: (/** @type {{ websites: number, products: number, needs: number }} */ n) =>
+		`${n.websites} ${n.websites === 1 ? 'website' : 'websites'} with ${n.products} ${n.products === 1 ? 'product' : 'products'}. ` +
+		(n.needs === 0 ? 'Nothing needs you right now.' : n.needs === 1 ? 'One thing needs you.' : `${n.needs} things need you.`),
+	needs: Object.freeze({
+		title: 'Needs you',
+		intro: 'Each item says what happens if it waits.',
+		none: 'Nothing needs you right now.',
+		noFeatures: Object.freeze({
+			title: (/** @type {string} */ product, /** @type {string} */ domain) => `${product} on ${domain} has no features on`,
+			effect: 'It costs nothing, and does nothing for your shoppers, until you switch on a feature in its dashboard.',
+		}),
+		noProducts: Object.freeze({
+			title: (/** @type {string} */ domain) => `${domain} has no products yet`,
+			effect: 'Your admin adds products to a website; then you open and set them up here.',
+		}),
+	}),
 });
 
 /** The websites list and the website page (PLAN 0.6 Website page, 0.8.2, 0.4.4, 0.5.9), in both consoles. */
@@ -501,7 +517,6 @@ export const ADMIN = Object.freeze({
 		to: 'To (UTC day)',
 		apply: 'Filter',
 	}),
-	noActivity: 'No activity yet.',
 	myAccountTitle: 'My account',
 	nameTitle: 'Name',
 });
@@ -602,6 +617,25 @@ export const BILLING = Object.freeze({
 
 /** The fuller screens (2026-10-10): details, quick actions, filters and recent activity drawn from the Portal API. */
 export const MORE = Object.freeze({
+	/** Readable names of activity entries whose code does not read well on its own (others are shown from the code). */
+	actions: Object.freeze({
+		'login.signed_in': 'Signed in',
+		'login.sign_in_failed': 'Sign-in failed',
+		'login.password_set': 'Password set',
+		'login.password_changed': 'Password changed',
+		'login.password_reset': 'Password reset',
+		'login.reset_link_issued': 'Password reset link sent',
+		'login.email_change_requested': 'E-mail change requested',
+		'login.email_changed': 'E-mail changed',
+		'two_step.turned_on': 'Two-step sign-in turned on',
+		'two_step.turned_off': 'Two-step sign-in turned off',
+		'two_step.turn_off': 'Two-step sign-in turned off',
+		'two_step.turned_off_by_owner': 'Two-step sign-in turned off by the owner',
+		'two_step.recovery_code_used': 'Recovery code used',
+		'two_step.recovery_codes_replaced': 'Recovery codes replaced',
+		'token.revealed': 'Server token shown',
+	}),
+	noActivity: 'No activity yet.',
 	count: (/** @type {number} */ n, /** @type {boolean} */ more = false) => (more ? `${n}+` : String(n)),
 	viewAll: 'View all',
 	openInActivity: 'Open in Activity',

@@ -445,8 +445,10 @@ export function PasswordPanel({ twoStepOn }) {
  */
 const actorName = (entry) => entry.actor?.name ?? (entry.actor?.type ? humanize(entry.actor.type) : '—');
 
-/** @param {string} action e.g. `merchant.suspended` → `Merchant suspended` */
+/** @param {string} action e.g. `merchant.suspended` → `Merchant suspended`, `login.signed_in` → `Signed in` */
 const actionLabel = (action) => {
+	const named = /** @type {Record<string, string>} */ (MORE.actions)[String(action)];
+	if (named) return named;
 	const text = String(action ?? '').replace(/[._]/g, ' ');
 	return text.charAt(0).toUpperCase() + text.slice(1);
 };
@@ -498,9 +500,10 @@ export const initialsOf = (name) => {
 
 /**
  * The latest activity as a timeline (who, what, for which merchant, when): the Overview's short view of the log.
- * @param {{ items: any[], empty: string }} props
+ * `showMerchant` (admin views) names the merchant of each entry; the merchant console leaves it out.
+ * @param {{ items: any[], empty: string, showMerchant?: boolean }} props
  */
-export function ActivityTimeline({ items, empty }) {
+export function ActivityTimeline({ items, empty, showMerchant = true }) {
 	if (items.length === 0) return <EmptyState compact icon="activity" kind="activity" title={empty} />;
 	return (
 		<ol className="space-y-4">
@@ -516,7 +519,7 @@ export function ActivityTimeline({ items, empty }) {
 						<div className="min-w-0 text-sm">
 							<p className="text-fg">
 								<span className="font-semibold">{who}</span> · {actionLabel(e.action)}
-								{e.merchantName ? <span className="text-muted"> · {e.merchantName}</span> : null}
+								{showMerchant && e.merchantName ? <span className="text-muted"> · {e.merchantName}</span> : null}
 							</p>
 							<p className="text-xs text-muted">{formatDateTime(e.at)}</p>
 						</div>
@@ -657,7 +660,7 @@ export function OwnActivity({ path, initial = { items: [], nextCursor: null } })
 			{pages.problem ? <Callout tone="danger">{describeProblem(pages.problem)}</Callout> : null}
 			<ActivityTable
 				items={pages.items}
-				empty="No activity yet."
+				empty={MORE.noActivity}
 				hasMore={pages.cursor !== null}
 				loadingMore={pages.loading}
 				onLoadMore={() => void pages.more()}

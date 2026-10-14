@@ -32,7 +32,7 @@ import { ADMIN, BILLING, MORE, PRODUCTS } from '../../../texts/console.js';
 import { Link } from '../../link.js';
 import { useNavigation } from '../../navigation.js';
 import { DaysLeft, MerchantStatusBadge } from '../../views/billing.js';
-import { openDashboard } from '../../views/common.js';
+import { NeedItem, NothingNeeded, openDashboard } from '../../views/common.js';
 import { ActivityTimeline, initialsOf } from '../../views/login-settings.js';
 import { adminFetch } from '../client.js';
 import { adminApi, adminRoutes } from '../paths.js';
@@ -62,31 +62,6 @@ const totalDays = (products) => {
 	for (const p of products) for (const d of p.days ?? []) sums.set(d.day, (sums.get(d.day) ?? 0) + d.amount);
 	return [...sums.keys()].sort().map((day) => ({ day, amount: sums.get(day) ?? 0 }));
 };
-
-/**
- * One "Needs you" item: what is wrong, what happens if it waits, and its button.
- * @param {{ tone: 'warning' | 'danger', title: import('react').ReactNode, effect: string,
- *   action?: import('react').ReactNode }} props
- */
-function NeedItem({ tone, title, effect, action }) {
-	return (
-		<li
-			className={cx(
-				'flex flex-wrap items-center gap-x-4 gap-y-3 rounded-xl px-4 py-3.5 @lg:flex-nowrap',
-				tone === 'danger' ? 'bg-danger-soft' : 'bg-warning-soft',
-			)}>
-			<span
-				aria-hidden="true"
-				className={cx('size-2.5 shrink-0 rounded-full', tone === 'danger' ? 'bg-danger' : 'bg-warning')}
-			/>
-			<div className="min-w-0 flex-1">
-				<p className="text-sm font-semibold text-fg">{title}</p>
-				<p className="mt-0.5 text-[13px] leading-relaxed text-muted">{effect}</p>
-			</div>
-			{action ? <div className="shrink-0">{action}</div> : null}
-		</li>
-	);
-}
 
 /**
  * One step of the setup checklist: a tick when done, a dashed ring while to do (with its link).
@@ -234,12 +209,7 @@ export function OverviewView(props) {
 				<div className={cx('grid gap-6', settingUp && '@4xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]')}>
 					<Card id="overview-needs" title={ADMIN.needs.title} subtitle={needs.length > 0 ? ADMIN.needs.intro : undefined}>
 						{needs.length === 0 ? (
-							<p className="flex items-center gap-2 text-sm text-muted">
-								<span className="flex size-5 items-center justify-center rounded-full bg-success-soft text-on-success-soft">
-									<Icon name="check" size={12} />
-								</span>
-								{ADMIN.needs.none}
-							</p>
+							<NothingNeeded>{ADMIN.needs.none}</NothingNeeded>
 						) : (
 							<div className="@container space-y-3">
 								<ul className="space-y-2.5">
@@ -417,7 +387,7 @@ export function OverviewView(props) {
 						{MORE.viewAll}
 					</ButtonLink>
 				}>
-				<ActivityTimeline items={o.recentActivity ?? []} empty={ADMIN.noActivity} />
+				<ActivityTimeline items={o.recentActivity ?? []} empty={MORE.noActivity} />
 			</Card>
 			<AddMerchantDialog
 				open={adding}

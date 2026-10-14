@@ -6,19 +6,7 @@
  * @module
  */
 import { useEffect, useState } from 'react';
-import {
-	Badge,
-	BarChart,
-	Callout,
-	Card,
-	EmptyState,
-	HeroCard,
-	Stat,
-	StatGrid,
-	Table,
-	formatCredits,
-	formatDateTime,
-} from '@ss/ui';
+import { Badge, BarChart, Callout, Card, EmptyState, Stat, StatGrid, Table, formatCredits, formatDateTime } from '@ss/ui';
 import { BILLING } from '../../texts/console.js';
 
 /** @typedef {'active' | 'low_balance' | 'grace' | 'stopped' | 'suspended'} MerchantStatus */
@@ -133,29 +121,6 @@ export const creditDayBars = (days) => (days ?? []).map((d) => ({ label: d.day.s
 
 /** @param {number} v credits */
 export const formatChartCredits = (v) => formatCredits(Math.round(v * 1000));
-
-/**
- * The merchant's hero card (PLAN 0.6): the credit balance and days left, with the 30-day spend chart inside.
- * @param {{ summary: any, days: ReadonlyArray<{ day: string, amount: number }> | undefined, label: string,
- *   chartLabel: string }} props
- */
-export function BalanceHero({ summary, days, label, chartLabel }) {
-	return (
-		<HeroCard
-			label={label}
-			value={formatCredits(summary.balance)}
-			icon="wallet"
-			details={[
-				{ label: BILLING.daysLeft, value: <DaysLeft summary={summary} /> },
-				{ label: BILLING.dailySpend, value: formatCredits(summary.dailySpend) },
-			]}
-			chart={{ label: chartLabel, data: creditDayBars(days), format: formatChartCredits }}>
-			<div>
-				<MerchantStatusBadge status={summary.status} />
-			</div>
-		</HeroCard>
-	);
-}
 
 /**
  * The billing banner of the merchant console (low balance, grace, stopped), with the support contact; it cannot be

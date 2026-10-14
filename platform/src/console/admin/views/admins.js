@@ -76,7 +76,7 @@ function AdminActivity({ adminId }) {
 			{result && !result.ok ? <Callout tone="danger">{describeProblem(result.problem)}</Callout> : null}
 			<ActivityTable
 				items={result?.ok ? (result.data?.items ?? []) : []}
-				empty={ADMIN.noActivity}
+				empty={MORE.noActivity}
 				showMerchant
 				filterHref={(q) => adminRoutes.activity(q)}
 			/>

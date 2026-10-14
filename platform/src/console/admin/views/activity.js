@@ -104,7 +104,7 @@ export function ActivityView(props) {
 			{list.problem ? <Callout tone="danger">{describeProblem(list.problem)}</Callout> : null}
 			<ActivityTable
 				items={list.items}
-				empty={ADMIN.noActivity}
+				empty={MORE.noActivity}
 				showMerchant
 				details
 				filterHref={(q) => adminRoutes.activity({ ...f, ...q })}

@@ -79,7 +79,8 @@ export function Table({
 	const alignClass = (align) => (align === 'right' ? 'text-right' : align === 'center' ? 'text-center' : 'text-left');
 	return (
 		<div className={cx('@container space-y-3', className)}>
-			<div className="overflow-x-auto rounded-card border border-line-soft bg-surface">
+			{/* framed on the page; inside a card (which frames it already) no second frame */}
+			<div className="overflow-x-auto rounded-card border border-line-soft bg-surface in-[.rounded-card]:rounded-none in-[.rounded-card]:border-0">
 				<table className={cx('w-full border-collapse text-sm', sorted.length > 0 && 'min-w-[32rem]')}>
 					<caption className={cx(captionHidden ? 'sr-only' : 'px-5 pb-1 pt-4 text-left text-sm font-semibold text-fg')}>
 						{caption}

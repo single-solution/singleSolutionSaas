@@ -642,7 +642,7 @@ function MerchantDetail({ detail, admin, back }) {
 				{activity.problem ? <Callout tone="danger">{describeProblem(activity.problem)}</Callout> : null}
 				<ActivityTable
 					items={activity.items}
-					empty={ADMIN.noActivity}
+					empty={MORE.noActivity}
 					details
 					filterHref={(q) => adminRoutes.activity(q)}
 					hasMore={activity.cursor !== null}
