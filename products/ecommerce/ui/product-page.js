@@ -8,15 +8,15 @@
  * Gallery (each photo's detail and thumb sizes, width and height, and its blur placeholder while loading; a variant's
  * own photos replace the product's while it is picked), name, Featured, brand, the price range, the price after
  * automatic deals as the page answer gives it (the same as cards, structured data and the cart: with the "was" price,
- * the saving and the deal), the variant picker (option axes, or the
- * variants' attributes, and the condition when variants differ only by grade; a pick that has no exact variant moves
- * to the nearest one), the grade's details, the stock ("Only N left", "N in stock", Sold out: shown and not added to
+ * the saving and the deal), the variant picker (option axes, or the variants' attributes, and the condition when
+ * variants differ only by grade; it opens at the variant the page's address names — the catalog setting variantQuery,
+ * E13 — else the first in stock; a pick that has no exact variant moves to the nearest one), the grade's details, the stock ("Only N left", "N in stock", Sold out: shown and not added to
  * the cart), the warranty of the variant, the Size guide, the quantity and Add to cart, the time picker of a booking
  * product, the note of a digital item, back-in-stock and price-drop alerts (`alerts`: signed in, an alert already set
  * shows with Stop; a guest gives a phone while the `alerts` setting `guests` allows; a price-drop alert names an
  * optional price while `targetPrice` allows, EN-1), the wishlist and compare toggles, the specs, the rich description
  * (rebuilt from the allowed tags) or the plain one, the video, the FAQs and the reviews block (`reviews`).
- * Growth's events (PLAN 0.8.9): `ss:view_item` once when the product is shown (its first in-stock variant; a variant
+ * Growth's events (PLAN 0.8.9): `ss:view_item` once when the product is shown (the variant it opens at; a variant
  * change does not fire it again) and `ss:add_to_cart` on each Add to cart, at the price shown.
  * @module
  */
@@ -56,6 +56,7 @@ import {
 	pickVariant,
 	sizeGuide,
 	stockText,
+	variantAt,
 	videoBlock,
 } from './shop-page-parts.js';
 import { renderReviews } from './shop-reviews.js';
@@ -126,7 +127,8 @@ export const mountProductPage = async ({ host, config, shop, win }) => {
 				/** @type {PageVariant[]} */
 				const variants = Array.isArray(item.variants) ? item.variants : [];
 				const axes = axesOf({ options: Array.isArray(item.options) ? item.options : [], variants });
-				const first = variants.find((v) => buyable(v)) ?? variants[0] ?? null;
+				// the variant the page's address names (a link from a feed, a search result or a share), else the first in stock
+				const first = variantAt(variants, shop.location()) ?? variants.find((v) => buyable(v)) ?? variants[0] ?? null;
 				/** @type {Record<string, string>} */
 				const chosen = {};
 				/** @param {PageVariant} of */

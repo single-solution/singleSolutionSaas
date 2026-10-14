@@ -31,8 +31,10 @@ import { button, h, paragraphs, safeHref } from './shop-common.js';
  * @typedef {{ id: string, name: string, options: Record<string, string>, price: number, compareAtPrice: number | null,
  *   deal?: { id: string, name: string, savings: number } | null, inStock: boolean, soldOut?: boolean,
  *   stockLeft?: number | null, grade: PageGrade | null, warrantyDays?: number | null,
- *   attributes?: Array<{ id: string, slug: string, name: string, value: unknown, label: string }>, media?: PageMedia[] }} PageVariant
- *   `price`: the price shown (after automatic deals); `deal`: the deal in it and what it takes off one unit
+ *   attributes?: Array<{ id: string, slug: string, name: string, value: unknown, label: string }>, media?: PageMedia[],
+ *   url?: string }} PageVariant
+ *   `price`: the price shown (after automatic deals); `deal`: the deal in it and what it takes off one unit; `url`: its
+ *   own address (the product's, plus the catalog setting variantQuery when set)
  */
 
 /**
@@ -104,6 +106,26 @@ export const axesOf = (item) => {
  */
 export const pickVariant = (axes, variants, chosen) =>
 	variants.find((variant) => axes.every((axis) => axis.of(variant) === (chosen[axis.key] ?? ''))) ?? null;
+
+/**
+ * The variant whose own address the page was opened at (the catalog setting variantQuery, E13: links, sitemaps, feeds
+ * and structured data name each variant by it): every query value of its address is in the page's, other values
+ * (such as campaign tags) aside; the one naming the most wins. Null when the page names none.
+ * @param {PageVariant[]} variants
+ * @param {URL} page the page's address
+ * @returns {PageVariant | null}
+ */
+export const variantAt = (variants, page) => {
+	/** @type {{ variant: PageVariant, named: number } | null} */
+	let best = null;
+	for (const variant of variants) {
+		if (typeof variant.url !== 'string') continue;
+		const pairs = [...new URL(variant.url, page).searchParams];
+		const named = pairs.length > 0 && pairs.every(([key, value]) => page.searchParams.getAll(key).includes(value));
+		if (named && (!best || pairs.length > best.named)) best = { variant, named: pairs.length };
+	}
+	return best?.variant ?? null;
+};
 
 /** @param {PageVariant} variant whether it can be added to the cart */
 export const buyable = (variant) => variant.inStock && variant.soldOut !== true;

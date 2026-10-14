@@ -175,6 +175,42 @@ describe('product page', () => {
 		expect(textOf(host)).not.toContain(text('page.noVariant'));
 	});
 
+	it('opens the variant whose own address the page was opened at (variantQuery, E13)', async () => {
+		const base = product();
+		/** @param {string} query */
+		const at = (query) => `https://shop.example.com/products/phone${query}`;
+		const page = {
+			...base,
+			variants: base.variants.map((v) => ({
+				...v,
+				url: at(v.id === 'var_b2' ? '?color=blue&storage=256-gb' : v.id === 'var_b1' ? '?color=blue' : '?color=red'),
+			})),
+		};
+		const routes = { 'GET /v1/shop/products/phone': () => ok(page) };
+		// a link from a feed or a search result names Blue / 256 GB: that variant shows, not the first one in stock
+		const linked = makeShop({
+			features: ['catalog', 'checkout'],
+			routes,
+			url: at('?storage=256-gb&color=blue&utm_source=feed'),
+		});
+		const host = await mountPage(linked);
+		expect($(host, '#ss-page-option-0').value).toBe('Blue');
+		expect($(host, '#ss-page-option-1').value).toBe('256 GB');
+		expect(textOf(host)).toContain('EUR 1,200.00');
+		await click(buttonOf(host, text('page.addToCart')));
+		expect(linked.cart.state().lines).toEqual([{ productId: 'prd_1', variantId: 'var_b2', quantity: 1 }]);
+		// the address naming the most of a variant wins; an out-of-stock variant is still the one shown
+		resetPage();
+		const red = await mountPage(makeShop({ features: ['catalog'], routes, url: at('?color=red') }));
+		expect($(red, '#ss-page-option-0').value).toBe('Red');
+		expect(textOf(red)).toContain(text('page.outOfStock'));
+		// an address naming no variant opens the first one in stock
+		resetPage();
+		const plain = await mountPage(makeShop({ features: ['catalog'], routes, url: at('?color=green') }));
+		expect($(plain, '#ss-page-option-0').value).toBe('Blue');
+		expect($(plain, '#ss-page-option-1').value).toBe('128 GB');
+	});
+
 	it('shows the price after deals with the saving, as the page answer gives it (G4)', async () => {
 		const base = product();
 		const page = {
