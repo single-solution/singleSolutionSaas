@@ -45200,12 +45200,12 @@
 									"min": {
 										"type": "integer",
 										"minimum": 0,
-										"description": "Minor units (cents, paisa …)."
+										"description": "Minor units (cents, pence …)."
 									},
 									"max": {
 										"type": "integer",
 										"minimum": 0,
-										"description": "Minor units (cents, paisa …)."
+										"description": "Minor units (cents, pence …)."
 									}
 								}
 							}
@@ -47066,7 +47066,7 @@
 								"price": {
 									"type": "integer",
 									"minimum": 0,
-									"description": "Minor units (cents, paisa …)."
+									"description": "Minor units (cents, pence …)."
 								},
 								"compareAtPrice": {
 									"type": [
@@ -47578,7 +47578,7 @@
 					"price": {
 						"type": "integer",
 						"minimum": 0,
-						"description": "Minor units (cents, paisa …)."
+						"description": "Minor units (cents, pence …)."
 					},
 					"compareAtPrice": {
 						"type": [
@@ -48389,7 +48389,7 @@
 					"price": {
 						"type": "integer",
 						"minimum": 0,
-						"description": "Minor units (cents, paisa …)."
+						"description": "Minor units (cents, pence …)."
 					},
 					"compareAtPrice": {
 						"type": [
