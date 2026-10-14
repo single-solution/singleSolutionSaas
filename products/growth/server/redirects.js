@@ -29,6 +29,7 @@ import {
 	sameRule,
 	suggestionsOf,
 } from '../core/redirects.js';
+import { shiftDay } from '../core/analytics.js';
 import { dayOf } from '../core/events.js';
 import { createRedirectStore } from '../adapters/redirects.js';
 import { createStore } from '../adapters/store.js';
@@ -53,7 +54,6 @@ const KEPT = Object.freeze({ websites: 200, rules: 20_000 });
 const IMPORT_BYTES = 4 * 1024 * 1024 + 64 * 1024;
 /** Suggestions read the 404 log of this many days by default (at most a year). */
 const SUGGESTION_DAYS = 90;
-const DAY_MS = 86_400_000;
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
 const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -314,7 +314,7 @@ export const redirectRoutes = (product, { log }) => {
 			ctx.data(),
 		]);
 		const to = dayOf(now(), business.timeZone ?? 'UTC');
-		const from = new Date(Date.parse(`${to}T00:00:00Z`) - (days - 1) * DAY_MS).toISOString().slice(0, 10);
+		const from = shiftDay(to, 1 - days);
 		const merchantId = String(ctx.merchantId);
 		const [totals, rules] = await Promise.all([
 			createStore(data, { merchantId }).metricTotals(from, to, ['not_found', 'page']),

@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { PRESETS, buildReport, dayStart, daysOf, presetRange, rangeOf, topOf } from '../core/analytics.js';
+import { pathMatches } from '../core/paths.js';
 import {
 	adminSettings,
 	hiddenPagesOf,
 	linkOf,
 	noticeAnswer,
 	noticeOf,
-	pathMatches,
 	searchParamsOf,
 	tagsOf,
 	tagsReady,
@@ -26,7 +26,7 @@ import {
 	ratingOf,
 	textOf,
 } from '../core/events.js';
-import { decimalsOf, isAmount, toMajor } from '../core/money.js';
+import { isAmount, toMajor } from '../core/money.js';
 import { contactCalls, contactOf, detailOf, funnelEvent, pixelCalls, searchCalls, searchOf, vitalCalls } from '../core/pixels.js';
 import {
 	checksActivity,
@@ -473,12 +473,10 @@ describe('page script settings', () => {
 		expect(admin).toEqual({
 			seoPages: ['/', '/shop'],
 			indexNow: { keySet: true, keyLocation: `https://${DOMAIN}/abcdefgh.txt` },
-			detail: 'sessions',
 			retentionMonths: 6,
 		});
 		expect(adminSettings(['indexnow'], { indexnow: { keyPath: 'x' } }, DOMAIN)).toMatchObject({
 			indexNow: { keySet: false, keyLocation: null },
-			detail: 'anonymous',
 			retentionMonths: 13,
 		});
 		expect(adminSettings(['indexnow'], { indexnow: { keyPath: '/k.txt' } }, DOMAIN).indexNow?.keyLocation).toBe(
@@ -510,7 +508,7 @@ describe('consent', () => {
 			analytics_storage: 'denied',
 		});
 		expect(consentMode(choice).analytics_storage).toBe('granted');
-		expect(granted(null, 'necessary')).toBe(true);
+		expect(granted(null, 'analytics')).toBe(false);
 		expect(granted(choice, 'marketing')).toBe(false);
 		// G1: without a choice, tags that need no consent follow "everything granted"
 		expect(tagChoice(null, true)).toBeNull();
@@ -521,9 +519,9 @@ describe('consent', () => {
 
 describe('pixels and money', () => {
 	it('converts minor units', () => {
-		expect(decimalsOf('JPY')).toBe(0);
-		expect(decimalsOf('KWD')).toBe(3);
 		expect(toMajor(1250, 'USD')).toBe(12.5);
+		expect(toMajor(1250, 'JPY')).toBe(1250);
+		expect(toMajor(1250, 'KWD')).toBe(1.25);
 		expect(isAmount(1.5)).toBe(false);
 	});
 

@@ -70,8 +70,8 @@ const ALL_GRANTED = Object.freeze({ analytics: true, marketing: true });
 export const tagChoice = (choice, consentRequired) => choice ?? (consentRequired ? null : ALL_GRANTED);
 
 /**
- * Whether a category is granted (`necessary` always is).
+ * Whether a category that waits for consent is granted (necessary is never asked: it always is).
  * @param {{ analytics: boolean, marketing: boolean } | null} choice
- * @param {'necessary' | 'analytics' | 'marketing'} category
+ * @param {'analytics' | 'marketing'} category
  */
-export const granted = (choice, category) => category === 'necessary' || choice?.[category] === true;
+export const granted = (choice, category) => choice?.[category] === true;

@@ -16,7 +16,7 @@
 import { viewerOf } from '@ss/app-kit/widget';
 import { granted } from '../core/consent.js';
 import { VITALS } from '../core/events.js';
-import { pathMatches } from '../core/config.js';
+import { pathMatches } from '../core/paths.js';
 import { contactOf, detailOf, funnelEvent, searchOf } from '../core/pixels.js';
 import { BROWSER_EVENTS, SITE_EVENTS, WIDGET_ATTRIBUTE, WIDGET_FEATURES, WIDGET_GLOBAL } from '../core/widgets.js';
 import { mountAnalyticsDashboard } from './analytics-dashboard.js';

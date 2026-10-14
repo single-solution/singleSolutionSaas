@@ -51,13 +51,14 @@ const DAY = /^\d{4}-\d{2}-\d{2}$/;
  * @param {string} day
  * @param {number} count
  */
-const shiftDay = (day, count) => new Date(Date.parse(`${day}T00:00:00Z`) + count * DAY_MS).toISOString().slice(0, 10);
+export const shiftDay = (day, count) => new Date(Date.parse(`${day}T00:00:00Z`) + count * DAY_MS).toISOString().slice(0, 10);
 
 /**
  * True for a real calendar day `YYYY-MM-DD` (not 2026-02-30).
- * @param {string} day
+ * @param {unknown} day
+ * @returns {day is string}
  */
-const isDay = (day) => DAY.test(day) && !Number.isNaN(zonedDayStart(day, 'UTC'));
+export const isDay = (day) => typeof day === 'string' && DAY.test(day) && !Number.isNaN(zonedDayStart(day, 'UTC'));
 
 /**
  * The instant a day starts in the business time zone (epoch ms), for showing the day with the website's Format.

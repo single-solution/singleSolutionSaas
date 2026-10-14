@@ -10,10 +10,10 @@
  * the widget says which zone; money and times follow the website's Format (PLAN 0.8.10 K7, K8).
  * @module
  */
-import { formatDate, formatMoney, mountWidget } from '@ss/app-kit/widget';
+import { formatDate, formatMoney, formatText, mountWidget } from '@ss/app-kit/widget';
 import { PRESETS, dayStart, presetRange } from '../core/analytics.js';
-import { DIRECT, UNKNOWN } from '../core/events.js';
-import { PROBLEM_TEXTS, chipGroup, fieldGrid, fill, moreMenu, openDialog, rankList, problemKey } from './admin-kit.js';
+import { DIRECT, EVENT_FEATURES, UNKNOWN } from '../core/events.js';
+import { PROBLEM_TEXTS, chipGroup, fieldGrid, moreMenu, openDialog, rankList, problemKey } from './admin-kit.js';
 import { adminCall } from './tickets.js';
 import { element } from './dom.js';
 import { WIDGET_CSS } from './styles.js';
@@ -27,16 +27,7 @@ const SHOWN = 6;
 /** Events of the log per page. */
 const LOG_PAGE = 25;
 /** The event types, in the order of the log's chips. */
-const EVENT_TYPES = Object.freeze([
-	'page_view',
-	'view_item',
-	'add_to_cart',
-	'begin_checkout',
-	'purchase',
-	'search',
-	'not_found',
-	'vital',
-]);
+const EVENT_TYPES = Object.freeze(Object.keys(EVENT_FEATURES));
 /** The widget texts of refused calls (a range the report does not take: its days out of order or too many). */
 export const ANALYTICS_PROBLEMS = Object.freeze({ ...PROBLEM_TEXTS, 'validation_failed:from': 'analytics.problem.range' });
 
@@ -46,7 +37,7 @@ export const ANALYTICS_PROBLEMS = Object.freeze({ ...PROBLEM_TEXTS, 'validation_
  */
 export const mountAnalyticsDashboard = ({ host, api, config, viewer, now }) => {
 	/** @param {string} key @param {Record<string, string | number>} [values] */
-	const t = (key, values) => fill(config.texts[key] ?? key, values ?? {});
+	const t = (key, values) => formatText(config.texts[key] ?? key, values);
 	/**
 	 * A day of the report in the website's Format: always the business day, whatever the viewer's own zone.
 	 * @param {string} day @param {string} timeZone

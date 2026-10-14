@@ -1716,7 +1716,7 @@ describe('admin widgets', () => {
 			...configOf(['indexnow']),
 			settings: {
 				...configOf(['indexnow']).settings,
-				admin: { seoPages: ['/'], indexNow, detail: 'anonymous', retentionMonths: 13 },
+				admin: { seoPages: ['/'], indexNow, retentionMonths: 13 },
 			},
 		});
 		serve({ [`GET ${ADMIN_CONFIG_PATH}`]: () => answer(200, configWith({ keySet: false, keyLocation: null })) });

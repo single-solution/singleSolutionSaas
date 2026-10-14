@@ -8,8 +8,8 @@
  * server's English (OT-4); times follow the website's Format and time zone (PLAN 0.8.10 K7).
  * @module
  */
-import { formatDate, mountWidget } from '@ss/app-kit/widget';
-import { PROBLEM_TEXTS, chipGroup, fill, moreMenu, openDialog, problemKey } from './admin-kit.js';
+import { formatDate, formatText, mountWidget } from '@ss/app-kit/widget';
+import { PROBLEM_TEXTS, chipGroup, moreMenu, openDialog, problemKey } from './admin-kit.js';
 import { adminCall } from './tickets.js';
 import { element } from './dom.js';
 import { WIDGET_CSS } from './styles.js';
@@ -48,7 +48,7 @@ export const REDIRECT_PROBLEMS = Object.freeze({
  */
 export const mountRedirects = ({ host, api, config, viewer, download }) => {
 	/** @param {string} key @param {Record<string, string | number>} [values] */
-	const t = (key, values) => fill(config.texts[key] ?? key, values ?? {});
+	const t = (key, values) => formatText(config.texts[key] ?? key, values);
 	return mountWidget({
 		host,
 		theme: config.theme,

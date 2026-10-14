@@ -46,7 +46,7 @@ export const createSnippets = ({ base, widgets, permissions }) => {
 		'// Ecommerce’s widgets send these by themselves; your own code may send them too.',
 		'// Money is in minor units (cents, pence …) with an ISO 4217 currency.',
 		"window.dispatchEvent(new CustomEvent('ss:view_item', { detail: {",
-		"  currency: 'USD', value: 1250, items: [{ id: 'sku-1', name: 'Phone case', price: 1250, quantity: 1 }] } }));",
+		"  currency: 'USD', value: 1250, items: [{ id: 'sku-1', name: 'Desk lamp', price: 1250, quantity: 1 }] } }));",
 		"window.dispatchEvent(new CustomEvent('ss:add_to_cart', { detail: {",
 		"  currency: 'USD', value: 2500, items: [{ id: 'sku-1', price: 1250, quantity: 2 }] } }));",
 		"window.dispatchEvent(new CustomEvent('ss:begin_checkout', { detail: {",
@@ -105,7 +105,7 @@ export const createSnippets = ({ base, widgets, permissions }) => {
 		`curl -X POST '${base}/v1/indexnow' \\`,
 		'  -H "Authorization: Bearer $SS_SERVER_TOKEN" \\',
 		"  -H 'Content-Type: application/json' \\",
-		`  -d '${JSON.stringify({ urls: ['https://shop.example.com/products/new-phone'] })}'`,
+		`  -d '${JSON.stringify({ urls: ['https://shop.example.com/products/desk-lamp'] })}'`,
 	].join('\n');
 	const notice = [
 		'// your own notice bar: the notice while it shows, else null ({ text, linkText, linkUrl, dismissible })',

@@ -17,6 +17,7 @@
  * @module
  */
 import { defineRoute, formatText, ok, problem } from '@ss/app-kit';
+import { shiftDay } from '../core/analytics.js';
 import { dayOf } from '../core/events.js';
 import { locationOf, suggestionsOf } from '../core/redirects.js';
 import {
@@ -63,20 +64,12 @@ const MAX_RULE_PROBES = 3;
 /** Days of Web Vitals (as Google's own field data) and of the 404 log a run reads. */
 const VITAL_DAYS = 28;
 const NOT_FOUND_DAYS = 90;
-const DAY_MS = 86_400_000;
 /** Rate limit of a run (it reads the merchant's site; a code constant protecting both). */
 const RUN_LIMITS = [{ limit: 10, windowSeconds: 3600, per: /** @type {const} */ ('website') }];
 
-/** @param {string} field @param {string} message */
-const invalid = (field, message) =>
+/** A 422 at one field. @param {string} field @param {string} message */
+export const invalid = (field, message) =>
 	problem('validation_failed', message, { errors: [{ path: `/${field}`, message, code: 'invalid' }] });
-
-/**
- * The first day of a range of `days` days that ends today (days of the business time zone).
- * @param {string} today
- * @param {number} days
- */
-const firstDay = (today, days) => new Date(Date.parse(`${today}T00:00:00Z`) - (days - 1) * DAY_MS).toISOString().slice(0, 10);
 
 /**
  * @param {Product} product
@@ -124,8 +117,8 @@ export const seoCheckRoutes = (product, { log }) => {
 		const today = dayOf(now(), (await product.business(ctx.websiteId)).timeZone ?? 'UTC');
 		const store = createStore(await ctx.data(), { merchantId: String(ctx.merchantId) });
 		const [vitals, missing] = await Promise.all([
-			vitalsKept ? store.metricTotals(firstDay(today, VITAL_DAYS), today, ['vital', 'vital_page']) : null,
-			notFound ? store.metricTotals(firstDay(today, NOT_FOUND_DAYS), today, ['not_found', 'page']) : null,
+			vitalsKept ? store.metricTotals(shiftDay(today, 1 - VITAL_DAYS), today, ['vital', 'vital_page']) : null,
+			notFound ? store.metricTotals(shiftDay(today, 1 - NOT_FOUND_DAYS), today, ['not_found', 'page']) : null,
 		]);
 		return { vitals, notFound: missing };
 	};

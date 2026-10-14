@@ -9,7 +9,7 @@
  * @module
  */
 import { actorOf, countHandlers, defineRoute, ok, paginate, problem } from '@ss/app-kit';
-import { JOURNEYS, LIVE_MS, buildReport, rangeOf, topOf } from '../core/analytics.js';
+import { JOURNEYS, LIVE_MS, buildReport, rangeOf, shiftDay, topOf } from '../core/analytics.js';
 import { noticeAnswer } from '../core/config.js';
 import { COLLECT_FEATURES, EVENT_FEATURES, checkBatch, cityOf, countryOf, dayOf, expiryOf, mergeTotals } from '../core/events.js';
 import { indexNowActivity, indexNowSubmission, robotsTxtOf, verificationOf } from '../core/seo.js';
@@ -18,7 +18,7 @@ import { createStore } from '../adapters/store.js';
 import { renderDocs } from './docs.js';
 import { importRoutes } from './imports.js';
 import { redirectRoutes } from './redirects.js';
-import { seoCheckRoutes } from './seo-checks.js';
+import { invalid, seoCheckRoutes } from './seo-checks.js';
 import { WIDGET_SCRIPT } from './widget-script.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
@@ -38,16 +38,6 @@ const WEB_LIMITS = [{ limit: 10, windowSeconds: 3600, per: /** @type {const} */ 
 
 /** Who acts when no member of the merchant's staff is named (PLAN 0.8.10 K2). */
 const SERVER = Object.freeze({ kind: 'server', id: 'server', name: 'Server' });
-
-/**
- * The day after a day (`YYYY-MM-DD`).
- * @param {string} day
- */
-const dayAfter = (day) => new Date(Date.parse(`${day}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
-
-/** @param {string} field @param {string} message */
-const invalid = (field, message) =>
-	problem('validation_failed', message, { errors: [{ path: `/${field}`, message, code: 'invalid' }] });
 
 /**
  * @param {Product} product
@@ -87,7 +77,7 @@ export const createRoutes = (product) => {
 				? store.journeys(
 						new Date(zonedDayStart(range.from, timeZone)),
 						// up to the start of the day after `to` in the business time zone
-						new Date(zonedDayStart(dayAfter(range.to), timeZone)),
+						new Date(zonedDayStart(shiftDay(range.to, 1), timeZone)),
 						JOURNEYS,
 					)
 				: null,

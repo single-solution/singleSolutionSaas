@@ -6,7 +6,8 @@
  * merchant's own scripts are public in any page that loads them).
  * @module
  */
-import { keyPathOf } from './seo.js';
+import { pathMatches } from './paths.js';
+import { isIndexNowKey, keyLocationOf } from './seo.js';
 
 /** The shape of each tag id. */
 const TAG_IDS = Object.freeze({
@@ -76,28 +77,6 @@ const timeOf = (value) => (value === '' ? undefined : Date.parse(value));
 
 /** Most `hideOnPages` patterns read (settings schemas have no list limit). */
 const MAX_HIDDEN_PAGES = 50;
-
-/**
- * Whether a page's path matches a path pattern: an exact path, `*` one segment, `**` any number of segments (the query
- * string and fragment are ignored; `/` is the home page).
- * @param {string} pattern
- * @param {string} path
- */
-export const pathMatches = (pattern, path) => {
-	const split = (/** @type {string} */ value) =>
-		(value.split(/[?#]/)[0] ?? '').split('/').filter((segment) => segment.length > 0);
-	const p = split(pattern.trim());
-	const s = split(path);
-	/** @param {number} i @param {number} j @returns {boolean} */
-	const match = (i, j) => {
-		if (i === p.length) return j === s.length;
-		const part = p[i];
-		if (part === '**') return match(i + 1, j) || (j < s.length && match(i, j + 1));
-		if (j === s.length) return false;
-		return (part === '*' || part === s[j]) && match(i + 1, j + 1);
-	};
-	return pattern.trim().startsWith('/') && match(0, 0);
-};
 
 /**
  * The `hideOnPages` patterns of the notice bar (G6): path patterns only, at most {@link MAX_HIDDEN_PAGES}.
@@ -206,7 +185,7 @@ export const tagsReady = (on, values) => {
 
 /**
  * What the admin widgets also show (never to visitors): the pages the SEO checklist checks by default (paths; the home
- * page first), where the merchant's site serves the IndexNow key, the analytics detail and how long raw events are kept.
+ * page first), where the merchant's site serves the IndexNow key and how long raw events are kept.
  * @param {ReadonlyArray<string>} on
  * @param {FeatureValues} values
  * @param {string} domain
@@ -216,18 +195,15 @@ export const adminSettings = (on, values, domain) => {
 	const listed = (Array.isArray(paths) ? paths : []).filter(
 		(path) => typeof path === 'string' && path.startsWith('/') && !path.startsWith('//') && !/\s/.test(path),
 	);
-	const indexnow = values.indexnow ?? {};
 	const key = text(values, 'indexnow', 'key');
-	const keyPath = keyPathOf(indexnow.keyPath);
 	return {
 		seoPages: [...new Set(['/', ...listed.map(String)])].slice(0, 20),
 		indexNow: on.includes('indexnow')
 			? {
-					keySet: /^[A-Za-z0-9-]{8,128}$/.test(key),
-					keyLocation: keyPath === null ? null : `https://${domain}${keyPath === '' ? `/${key || '<key>'}.txt` : keyPath}`,
+					keySet: isIndexNowKey(key),
+					keyLocation: keyLocationOf({ key: key || '<key>', keyPath: values.indexnow?.keyPath }, domain),
 				}
 			: null,
-		detail: values.visitor_analytics?.detail === 'sessions' ? 'sessions' : 'anonymous',
 		retentionMonths: Number(values.visitor_analytics?.retentionMonths) || 13,
 	};
 };

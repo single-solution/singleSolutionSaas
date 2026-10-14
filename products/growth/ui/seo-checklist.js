@@ -11,10 +11,10 @@
  * text; the time of a run follows the website's Format and time zone (PLAN 0.8.10 K7).
  * @module
  */
-import { formatDate, mountWidget } from '@ss/app-kit/widget';
+import { formatDate, formatText, mountWidget } from '@ss/app-kit/widget';
 import { SITE_CHECKS, richResultsTestOf } from '../core/seo-checks.js';
 import { WIDGET_ATTRIBUTE } from '../core/widgets.js';
-import { PROBLEM_TEXTS, chipGroup, fill, moreMenu, openDialog, problemKey } from './admin-kit.js';
+import { PROBLEM_TEXTS, chipGroup, moreMenu, openDialog, problemKey } from './admin-kit.js';
 import { adminCall } from './tickets.js';
 import { element } from './dom.js';
 import { WIDGET_CSS } from './styles.js';
@@ -87,7 +87,7 @@ const pathOf = (url) => {
  */
 export const mountSeoChecklist = ({ host, api, config, viewer, open = () => {}, now = Date.now }) => {
 	/** @param {string} key @param {Record<string, string | number>} [values] */
-	const t = (key, values) => fill(config.texts[key] ?? key, values ?? {});
+	const t = (key, values) => formatText(config.texts[key] ?? key, values);
 	const on = (/** @type {string} */ feature) => config.features.includes(feature);
 	const admin = config.settings.admin;
 	return mountWidget({

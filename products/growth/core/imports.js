@@ -6,6 +6,7 @@
  * unknown fields are refused by name. The adapter escapes the keys as the day's document stores them.
  * @module
  */
+import { isDay } from './analytics.js';
 import { BROWSERS, DEVICES, DIRECT, SYSTEMS, VITALS, pathOf } from './events.js';
 import { isCurrency } from './money.js';
 import { FUNNEL_STEPS } from './widgets.js';
@@ -15,7 +16,6 @@ import { FUNNEL_STEPS } from './widgets.js';
 
 /** The longest key of free text (a source, country, city or search term). */
 const MAX_TEXT_KEY = 300;
-const DAY = /^(\d{4})-(\d{2})-(\d{2})$/;
 const RATINGS = Object.freeze(['good', 'needs_improvement', 'poor']);
 const VITAL_NAMES = Object.freeze(Object.keys(VITALS));
 
@@ -73,19 +73,6 @@ const METRICS = Object.freeze({
 	vital_page: { keys: '<path>\\n<vital>', key: pathAnd(oneOf(VITAL_NAMES)), sum: true },
 	not_found_from: { keys: '<path>\\n<where from>', key: pathAnd(isText), sum: false },
 });
-
-/**
- * True for a real calendar day `YYYY-MM-DD` (not 2026-02-30).
- * @param {unknown} value
- * @returns {value is string}
- */
-export const isDay = (value) => {
-	const match = typeof value === 'string' ? DAY.exec(value) : null;
-	if (!match) return false;
-	const [y, m, d] = match.slice(1).map(Number);
-	const date = new Date(Date.UTC(Number(y), Number(m) - 1, Number(d)));
-	return date.getUTCFullYear() === y && date.getUTCMonth() === Number(m) - 1 && date.getUTCDate() === d;
-};
 
 /**
  * A JSON pointer segment (`/` and `~` escaped), for the path of an error.

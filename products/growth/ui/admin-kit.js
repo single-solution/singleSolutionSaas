@@ -1,19 +1,12 @@
 /**
- * What the admin widgets share (PLAN 0.6): texts with `{placeholders}`, filter chips with counts, the More menu (⋯) of
- * a header or a card, dialogs for secondary forms and long lists (full-screen sheets on phones), and ranked lists with
- * share bars, and the texts of refused calls. Text is always set as text, never as HTML.
+ * What the admin widgets share (PLAN 0.6): filter chips with counts, the More menu (⋯) of a header or a card, dialogs
+ * for secondary forms and long lists (full-screen sheets on phones), ranked lists with share bars, and the texts of
+ * refused calls. Text is always set as text, never as HTML.
  * @module
  */
 import { element } from './dom.js';
 
 /** @typedef {{ label: string, onSelect: () => void, danger?: boolean }} MenuItem */
-
-/**
- * A text with its `{placeholders}` filled.
- * @param {string} text @param {Record<string, string | number>} values
- */
-export const fill = (text, values) =>
-	text.replace(/\{(\w+)\}/g, (match, key) => (Object.hasOwn(values, key) ? String(values[key]) : match));
 
 /** The widget texts of the problem codes any admin widget may get. */
 export const PROBLEM_TEXTS = Object.freeze({

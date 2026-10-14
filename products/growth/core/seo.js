@@ -109,7 +109,7 @@ export const robotsTxtOf = (values, domain) => {
 };
 
 /** @param {unknown} value */
-const isIndexNowKey = (value) => typeof value === 'string' && /^[A-Za-z0-9-]{8,128}$/.test(value);
+export const isIndexNowKey = (value) => typeof value === 'string' && /^[A-Za-z0-9-]{8,128}$/.test(value);
 
 /**
  * A key file path the merchant set (PLAN 0.8.10 G5): a path on the website (`/indexnow-key.txt`), at most 300

@@ -5,7 +5,7 @@ after consent, a consent banner with Google Consent Mode v2, anonymous first-par
 database, the shop funnel, searches, 404s, Web Vitals, robots.txt and verification tags, IndexNow, an SEO checklist,
 redirects and a notice bar. Feature keys are in `manifest.json`, the public docs at `/docs`.
 
-The store-conversion options (PLAN.md 0.8.10 G1–G7) are settings with safe defaults: tags without a consent step and
+More options (PLAN.md 0.8.10 G1–G7) are settings with safe defaults: tags without a consent step and
 GA4 inside Tag Manager, search and contact pixel events with product or variant ids, detailed analytics with sessions,
 the AI crawler block and Yandex verification, the IndexNow key file path, the notice bar's close and hidden pages with
 `GET /v1/notice`, and Web Vitals to GA4.

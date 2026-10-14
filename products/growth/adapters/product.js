@@ -185,7 +185,7 @@ export const createProductInstance = (options) => {
 			widgetConfig: async (ctx) => {
 				const websiteId = /** @type {string} */ (ctx.websiteId);
 				const on = await product.featuresOn(websiteId);
-				// the admin widgets (ticket) also get the checklist's pages, the IndexNow key file and the analytics detail
+				// the admin widgets (ticket) also get the checklist's pages, the IndexNow key file and the raw events' keep time
 				const admin = ctx.ticket ? { domain: String(ctx.status?.domain ?? '') } : null;
 				return widgetSettings({ on, values: await valuesOf(websiteId, on), now: now(), admin });
 			},

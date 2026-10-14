@@ -30,17 +30,17 @@ export const MATCHES = Object.freeze(/** @type {const} */ (['exact', 'prefix']))
 /** The answers a rule gives. */
 export const CODES = Object.freeze(/** @type {const} */ ([301, 308, 410]));
 /** Longest `from`, in characters (after normalization). */
-export const MAX_FROM = 1000;
+const MAX_FROM = 1000;
 /** Longest `to`, in characters (after normalization). */
-export const MAX_TO = 2048;
+const MAX_TO = 2048;
 /** Longest note. */
-export const MAX_NOTE = 200;
+const MAX_NOTE = 200;
 /** Longest query string of an address asked about. */
 const MAX_QUERY = 2048;
 /** Hops followed when a set is checked for loops and chains. */
 const MAX_HOPS = 5;
 /** The columns of the CSV file, in order. */
-export const CSV_COLUMNS = Object.freeze(['from', 'match', 'to', 'code', 'note']);
+const CSV_COLUMNS = Object.freeze(['from', 'match', 'to', 'code', 'note']);
 /** Header names read as each column (any letter case): ours, then the names other platforms' exports use. */
 const COLUMN_NAMES = Object.freeze({
 	from: ['from', 'redirect from', 'source'],

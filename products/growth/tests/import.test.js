@@ -6,7 +6,8 @@
  * existing report reads the imported days.
  */
 import { afterAll, describe, expect, it } from 'vitest';
-import { checkDay, isDay } from '../core/imports.js';
+import { isDay } from '../core/analytics.js';
+import { checkDay } from '../core/imports.js';
 import { createRoutes } from '../server/routes.js';
 import { ALL, BASE, checkAnswer, dailyRows, setup } from './helpers.js';
 
