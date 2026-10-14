@@ -96,7 +96,7 @@ function OverviewTab({ websiteId }) {
 				const features = settings.answer?.ok ? settings.answer.data.features : [];
 				const bookingUrl = features.find((feature) => feature.key === 'book_slot')?.values.bookingUrl?.value;
 				return (
-					<div className="space-y-8">
+					<div className="space-y-6">
 						<StatusBanner status={data.status} />
 						<Section title={TEXTS.overview.numbers} description={TEXTS.overview.numbersHelp}>
 							<StatGrid>
@@ -435,7 +435,7 @@ function DevelopersTab({ websiteId, portal }) {
 	return (
 		<Loaded answer={answer}>
 			{(data) => (
-				<div className="space-y-8">
+				<div className="space-y-6">
 					<Card title={TEXTS.tabs.developers}>
 						<p className="text-sm">{D.intro}</p>
 						<ul className="mt-3 flex flex-wrap gap-2 text-sm">

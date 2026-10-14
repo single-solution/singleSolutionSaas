@@ -152,7 +152,7 @@ export function SettingsTab({ websiteId: id }) {
 					...(others.length > 0 ? [{ id: /** @type {SectionId} */ ('other'), features: others.map((f) => f.key) }] : []),
 				];
 				return (
-					<div className="space-y-8">
+					<div className="space-y-6">
 						{shown.map((section) => (
 							<Section
 								key={section.id}

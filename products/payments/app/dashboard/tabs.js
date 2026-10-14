@@ -188,7 +188,7 @@ function OverviewTab({ websiteId }) {
 				const needed = data.checklist.connections;
 				const ready = needed.filter((item) => item.status === 'connected').length;
 				return (
-					<div className="space-y-8">
+					<div className="space-y-6">
 						<StatusBanner status={data.status} />
 						<Section title={TEXTS.overview.numbers} description={TEXTS.overview.numbersHelp}>
 							<StatGrid>
@@ -660,7 +660,7 @@ function SettingsTab({ websiteId }) {
 	const theme = useLoad(`${base}/theme`);
 	const format = useLoad(`${base}/format`);
 	return (
-		<div className="space-y-8">
+		<div className="space-y-6">
 			<Section title={TEXTS.settings.featuresTitle} description={TEXTS.settings.featuresHelp}>
 				<Masonry wideAlone>
 					<Loaded answer={settings.answer}>
@@ -826,7 +826,7 @@ function DevelopersTab({ websiteId, portal }) {
 	return (
 		<Loaded answer={answer}>
 			{(data) => (
-				<div className="space-y-8">
+				<div className="space-y-6">
 					<Card title={TEXTS.tabs.developers}>
 						<p className="text-sm">{TEXTS.developers.intro}</p>
 						<p className="mt-2 text-sm">{fill(TEXTS.developers.websiteId, { id: String(websiteId) })}</p>
