@@ -6112,7 +6112,7 @@
 			},
 			"post": {
 				"summary": "Ask for a role (no account needed)",
-				"description": "Only the roles listed in Role requests → requestableRoles. 422 validation_failed for role, name, phone, email or note (requireNote). A repeat ask changes nothing and answers what is already there, for your own words: outcome already_member (the user holding this phone number, else this email address, proven, has the role), already_requested (a request of this role with this phone number, else email address, waits for your staff), already_invited (your staff invited it and its setup link still works) or invite_expired (its setup link ran out: your staff give a new one). A new request answers outcome requested with its id. The answer is 201 either way.",
+				"description": "Only the roles listed in Role requests → requestableRoles. 422 validation_failed for role, name, phone, email or note (requireNote). A repeat ask changes nothing. With Role requests → revealStatus off (the default, private) every ask answers the same { outcome: requested }, with the same work and so about the same time, whether the request is new, already there or the person is already a member: nobody who types a phone number or email address learns anything about it. With revealStatus on, a repeat ask answers what is already there, for your own words: outcome already_member (the user holding this phone number, else this email address, proven, has the role), already_requested (a request of this role with this phone number, else email address, waits for your staff), already_invited (your staff invited it and its setup link still works) or invite_expired (its setup link ran out: your staff give a new one), and a new request answers outcome requested with its id. The answer is 201 either way.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "role_requests",
 				"security": [
@@ -6183,7 +6183,7 @@
 							"application/json": {
 								"schema": {
 									"type": "object",
-									"description": "What happened: a new request waiting for your staff, or what a repeat ask found.",
+									"description": "revealStatus off: always { outcome: requested }, nothing else. On: a new request waiting for your staff, or what a repeat ask found.",
 									"required": [
 										"outcome"
 									],
@@ -6202,11 +6202,11 @@
 										"id": {
 											"type": "string",
 											"pattern": "^rrq_[0-9a-z]{10,64}$",
-											"description": "requested only."
+											"description": "A new request with revealStatus on only."
 										},
 										"status": {
 											"const": "pending",
-											"description": "requested only."
+											"description": "A new request with revealStatus on only."
 										}
 									}
 								}

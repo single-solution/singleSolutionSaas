@@ -241,11 +241,21 @@ describe('Accounts sign-in methods, staff and roles on the real Portal', () => {
 			await until(() => (root.textContent ?? '').includes(expected));
 			expect(root.textContent).toContain(expected);
 		};
-		await ask(strings['request.sent']);
-		// asked again: nothing new, the widget says it waits
-		await ask(strings['request.alreadyRequested']);
+		// private by default: a new ask and a repeat read the same, and the server answers the same
+		await ask(strings['request.received']);
+		await ask(strings['request.received']);
+		const same = await server.call(
+			'POST',
+			'/v1/role-requests',
+			{ role: 'member', name: 'Harper', phone: '07700900887' },
+			VISITOR,
+		);
+		expect([same.status, same.json]).toEqual([201, { outcome: 'requested' }]);
 		const pending = await server.call('GET', '/v1/role-requests?status=pending');
 		expect(pending.json.items).toMatchObject([{ name: 'Harper', phone: '+447700900887', role: 'member' }]);
+		// revealStatus on (settings API): asked again, the widget says it waits
+		expect((await server.call('PUT', '/v1/settings/role_requests.revealStatus', { value: true })).status).toBe(200);
+		await ask(strings['request.alreadyRequested']);
 		const ticket = await sys.call('POST', '/v1/tickets', {
 			token: tokens.server,
 			body: {
@@ -278,11 +288,15 @@ describe('Accounts sign-in methods, staff and roles on the real Portal', () => {
 		await until(() => (usedPage.root.textContent ?? '').includes(strings['setup.used']));
 		expect(usedPage.root.querySelector('form')).toBeNull();
 		await ask(strings['request.alreadyMember']);
+		expect((await server.call('PUT', '/v1/settings/role_requests.revealStatus', { value: false })).status).toBe(200);
+		await ask(strings['request.received']);
 	});
 
 	it('staff give an invited request a new link or decline it; the role given at completion (settings API)', async () => {
 		const saved = await server.call('PUT', '/v1/settings/role_requests.giveRoleAt', { value: 'completion' });
 		expect(saved.status).toBe(200);
+		// the answers below carry the new request's id: revealStatus on
+		expect((await server.call('PUT', '/v1/settings/role_requests.revealStatus', { value: true })).status).toBe(200);
 		const ticket = await sys.call('POST', '/v1/tickets', {
 			token: tokens.server,
 			body: {
@@ -324,6 +338,7 @@ describe('Accounts sign-in methods, staff and roles on the real Portal', () => {
 		expect(codeOf(await server.call('GET', `/v1/users/${nedInvite.json.user.id}`))).toBe('not_found');
 		expect(await lookup(codeOfLink(nedInvite))).toEqual({ status: 'invalid' });
 		expect((await server.call('PUT', '/v1/settings/role_requests.giveRoleAt', { value: 'invite' })).status).toBe(200);
+		expect((await server.call('PUT', '/v1/settings/role_requests.revealStatus', { value: false })).status).toBe(200);
 	});
 
 	it('the guards refuse through the server and a ticket', async () => {

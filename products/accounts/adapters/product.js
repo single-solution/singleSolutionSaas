@@ -286,6 +286,7 @@ export const createProductInstance = (options) => {
 									.filter((role) => /** @type {string[]} */ (requests.requestableRoles).includes(role.key))
 									.map((role) => ({ key: role.key, name: role.name })),
 								requireNote: requests.requireNote,
+								revealStatus: requests.revealStatus,
 							}
 						: null,
 				};

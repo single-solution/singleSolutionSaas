@@ -24,7 +24,7 @@ import {
 	textsOf,
 	webAddress,
 } from '../ui/common.js';
-import { REQUEST_OUTCOMES } from '../ui/role-request.js';
+import { PRIVATE_OUTCOME, REQUEST_OUTCOMES } from '../ui/role-request.js';
 import { RENEW_BEFORE_MS, RETRY_MS, createSession } from '../ui/session.js';
 import { ADMIN_CONFIG_PATH, CONFIG_PATH, startWidget } from '../ui/widget.js';
 
@@ -2375,7 +2375,7 @@ describe('Phase 2 options in the widgets (PLAN 0.8.10)', () => {
 				'POST /v1/role-requests': ({ body }) =>
 					body.name === ''
 						? problem(422, 'validation_failed', { errors: [{ path: '/name', message: 'Write your name.' }] })
-						: answer(201, { outcome: 'requested', id: 'rrq_1', status: 'pending' }),
+						: answer(201, { outcome: 'requested' }),
 			},
 			{
 				features: ['role_requests'],
@@ -2405,17 +2405,44 @@ describe('Phase 2 options in the widgets (PLAN 0.8.10)', () => {
 			phone: '07700 900222',
 			note: 'Shop owner',
 		});
-		expect(root.textContent).toContain(strings['request.sent']);
+		// private by default: the one text that fits a new request, a repeat and a member alike
+		expect(root.textContent).toContain(strings[PRIVATE_OUTCOME]);
 	});
 
-	it('the role request widget words what a repeat ask found (P4)', async () => {
+	it('the role request widget shows one text for every ask while revealStatus is off', async () => {
+		for (const outcome of Object.keys(REQUEST_OUTCOMES)) {
+			const host = place('role_request');
+			await start(
+				{ 'POST /v1/role-requests': () => answer(201, { outcome }) },
+				{
+					features: ['role_requests'],
+					settings: {
+						roleRequests: { roles: [{ key: 'member', name: 'Member' }], requireNote: false, revealStatus: false },
+					},
+				},
+			);
+			const root = shadow(host);
+			fieldIn(root, strings['fields.name']).value = 'Nia';
+			fieldIn(root, strings['fields.phone']).value = '07700 900222';
+			await submit(buttonIn(root, strings['request.submit']));
+			expect(root.textContent).toContain(strings[PRIVATE_OUTCOME]);
+			// never the words of what a repeat found
+			for (const key of Object.values(REQUEST_OUTCOMES).filter((each) => each !== 'request.sent'))
+				expect(root.textContent).not.toContain(strings[key]);
+			host.remove();
+			vi.restoreAllMocks();
+		}
+		expect(PRIVATE_OUTCOME).toBe('request.received');
+	});
+
+	it('the role request widget words what a repeat ask found with revealStatus on (P4)', async () => {
 		for (const [outcome, key] of Object.entries(REQUEST_OUTCOMES)) {
 			const host = place('role_request');
 			await start(
 				{ 'POST /v1/role-requests': () => answer(201, { outcome }) },
 				{
 					features: ['role_requests'],
-					settings: { roleRequests: { roles: [{ key: 'member', name: 'Member' }], requireNote: false } },
+					settings: { roleRequests: { roles: [{ key: 'member', name: 'Member' }], requireNote: false, revealStatus: true } },
 				},
 			);
 			const root = shadow(host);
@@ -2439,7 +2466,7 @@ describe('Phase 2 options in the widgets (PLAN 0.8.10)', () => {
 			{ 'POST /v1/role-requests': () => answer(201, { outcome: 'constructor' }) },
 			{
 				features: ['role_requests'],
-				settings: { roleRequests: { roles: [{ key: 'member', name: 'Member' }], requireNote: false } },
+				settings: { roleRequests: { roles: [{ key: 'member', name: 'Member' }], requireNote: false, revealStatus: true } },
 			},
 		);
 		fieldIn(shadow(host), strings['fields.name']).value = 'Nia';

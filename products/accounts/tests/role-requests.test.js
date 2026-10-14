@@ -1,11 +1,15 @@
 /**
  * Role requests and setup links for stores that onboard with their membership flow (P4 of audit/parity-plan.md; PLAN
- * 0.8.10 A3, A5): a repeat ask answers what is already there and changes nothing; staff give an invited request a new
+ * 0.8.10 A3, A5): by default (revealStatus off) every ask answers the same, in the same work, so nobody learns whether
+ * a phone number or email address belongs to a member or has a request or invite; with revealStatus on a repeat ask
+ * answers what is already there; a repeat changes nothing either way; staff give an invited request a new
  * link or decline it (the link stops working and what the invite did is undone); `giveRoleAt` gives the role when the
  * setup link is completed instead of at the invite (default unchanged); and the setup-link lookup a setup page reads
  * before the password, which tells only the holder of the whole code anything.
  */
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { Collection } from 'mongodb';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import roleRequestSettings from '../schemas/role_requests.settings.json' with { type: 'json' };
 import { ALL, setup } from './helpers.js';
 
 /** @type {Awaited<ReturnType<typeof setup>>} */
@@ -54,6 +58,8 @@ beforeAll(async () => {
 	await server('PUT', '/v1/roles/member', { name: 'Member', permissions: ['site:discount'] });
 	await server('PUT', '/v1/roles/wholesale', { name: 'Wholesale', permissions: [] });
 	await env.setting('role_requests', 'requestableRoles', ['member', 'wholesale']);
+	// these tests read the new request's id and what a repeat ask found; the private default is tested at the end
+	await env.setting('role_requests', 'revealStatus', true);
 });
 afterAll(async () => {
 	await env.product.close();
@@ -387,5 +393,123 @@ describe('the setup-link lookup', () => {
 		);
 		expect(code(await lookup(linkCode))).toBe('feature_off');
 		await env.switchOn(ALL.filter((key) => !['terms', 'approval', 'two_step', 'risk_checks'].includes(key)));
+	});
+});
+
+describe('revealStatus off (the private default): an ask tells nobody what is there', () => {
+	/** The database calls of each kind while `run` goes (MongoDB driver calls, whatever the collection). */
+	const READS = ['find', 'findOne', 'countDocuments', 'aggregate'];
+	const WRITES = [
+		'insertOne',
+		'insertMany',
+		'findOneAndUpdate',
+		'updateOne',
+		'updateMany',
+		'replaceOne',
+		'deleteOne',
+		'deleteMany',
+		'bulkWrite',
+	];
+	/** @param {() => Promise<unknown>} run */
+	const workOf = async (run) => {
+		const spies = [...READS, ...WRITES].map((name) => [name, vi.spyOn(Collection.prototype, /** @type {any} */ (name))]);
+		await run();
+		/** @param {string[]} names */
+		const count = (names) =>
+			spies
+				.filter(([name]) => names.includes(/** @type {string} */ (name)))
+				.reduce((sum, [, spy]) => sum + /** @type {any} */ (spy).mock.calls.length, 0);
+		const work = { reads: count(READS), writes: count(WRITES) };
+		vi.restoreAllMocks();
+		return work;
+	};
+	/** @param {string} phone */
+	const requestsOf = async (phone) =>
+		(await server('GET', '/v1/role-requests?limit=100')).json.items.filter((/** @type {any} */ r) => r.phone === phone);
+
+	beforeAll(async () => {
+		await env.setting('role_requests', 'revealStatus', false);
+	});
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it('is the default', () => {
+		expect(roleRequestSettings.properties.revealStatus).toMatchObject({ type: 'boolean', default: false });
+	});
+
+	it('every state answers the same 201 { outcome: requested } with the same work; nothing changes for what is there', async () => {
+		/** @type {Array<{ state: string, status: number, type: string | null, text: string, work: { reads: number, writes: number } }>} */
+		const seen = [];
+		/** @param {string} state @param {Record<string, unknown>} body */
+		const askAs = async (state, body) => {
+			/** @type {any} */
+			let answer;
+			const work = await workOf(async () => {
+				answer = await ask(body);
+			});
+			seen.push({ state, status: answer.status, type: answer.headers.get('content-type'), text: answer.text, work });
+			return answer;
+		};
+		// warm up (indexes, settings) so each measured ask does only its own work
+		await ask({ name: 'Warm Up', phone: '07700 900600' });
+
+		// new: a request is made, and the answer has no id
+		await askAs('new', { name: 'Ava Reed', phone: '07700 900601', note: 'First' });
+		const [made] = await requestsOf('+447700900601');
+		expect(made).toMatchObject({ name: 'Ava Reed', note: 'First', status: 'pending' });
+		// already asked: the same answer, no second request, nothing overwritten
+		await askAs('pending', { name: 'Someone Else', phone: '+447700900601', note: 'Overwrite' });
+		expect(await requestsOf('+447700900601')).toEqual([made]);
+		// invited: the same answer; the request and its link stay as they are
+		const invited = await server('POST', `/v1/role-requests/${made.id}/invite`);
+		await askAs('invited', { name: 'Ava Reed', phone: '07700900601' });
+		expect(await requestsOf('+447700900601')).toEqual([expect.objectContaining({ id: made.id, status: 'invited' })]);
+		expect((await lookup(codeOf(invited.json.setupLink.url))).json.status).toBe('valid');
+		// the setup link ran out: the same answer (after a warm-up, as the time moved on: work on a timer is not the ask's)
+		env.advance(8 * DAY);
+		await ask({ name: 'Warm Up', phone: '07700 900600' });
+		await askAs('expired', { name: 'Ava Reed', phone: '07700900601' });
+		expect(await requestsOf('+447700900601')).toEqual([expect.objectContaining({ id: made.id, status: 'expired' })]);
+		// a member (the proven number holds the role): the same answer, no request made
+		const renewed = await server('POST', `/v1/role-requests/${made.id}/setup-link`);
+		expect((await accept(codeOf(renewed.json.setupLink.url), 'ava pass 1234')).json.user.role).toBe('member');
+		await askAs('member', { name: 'Ava Reed', phone: '07700900601' });
+		expect(await requestsOf('+447700900601')).toEqual([expect.objectContaining({ id: made.id, status: 'completed' })]);
+
+		expect(seen.map(({ state }) => state)).toEqual(['new', 'pending', 'invited', 'expired', 'member']);
+		for (const each of seen)
+			expect({ ...each, state: 'any' }).toEqual({
+				state: 'any',
+				status: 201,
+				type: 'application/json',
+				text: JSON.stringify({ outcome: 'requested' }),
+				work: seen[0]?.work,
+			});
+		expect(seen[0]?.work.writes).toBe(1);
+
+		// by email: a member and a waiting request answer as a new ask does
+		await server('POST', '/v1/users', { name: 'Dot Lane', email: 'dot@example.com', role: 'member' });
+		const byEmail = [
+			await askAs('email new', { name: 'Eve Moss', email: 'eve@example.com' }),
+			await askAs('email pending', { name: 'Eve Moss', email: 'EVE@example.com' }),
+			await askAs('email member', { name: 'Dot Lane', email: 'dot@example.com' }),
+		];
+		for (const answer of byEmail) expect([answer.status, answer.text]).toEqual([201, JSON.stringify({ outcome: 'requested' })]);
+		expect(seen.slice(5).map(({ work }) => work)).toEqual([seen[0]?.work, seen[0]?.work, seen[0]?.work]);
+		const emails = (await server('GET', '/v1/role-requests?limit=100')).json.items.map((/** @type {any} */ r) => r.email);
+		expect(emails.filter((/** @type {string} */ email) => email === 'eve@example.com')).toHaveLength(1);
+		expect(emails).not.toContain('dot@example.com');
+	});
+
+	it('the widget config says so; switched on, the detailed outcomes come back', async () => {
+		expect((await env.visitor('GET', '/v1/widget/config')).json.settings.roleRequests.revealStatus).toBe(false);
+		await env.setting('role_requests', 'revealStatus', true);
+		expect((await env.visitor('GET', '/v1/widget/config')).json.settings.roleRequests.revealStatus).toBe(true);
+		expect((await ask({ name: 'Ava Reed', phone: '07700900601' })).json).toEqual({ outcome: 'already_member' });
+		const fresh = await ask({ name: 'Fin Cole', phone: '07700 900602' });
+		expect(fresh.json).toEqual({ outcome: 'requested', id: expect.stringMatching(/^rrq_/), status: 'pending' });
+		expect((await ask({ name: 'Fin Cole', phone: '07700 900602' })).json).toEqual({ outcome: 'already_requested' });
+		await env.setting('role_requests', 'revealStatus', false);
 	});
 });

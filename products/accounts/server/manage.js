@@ -43,6 +43,12 @@ const USER_STATUSES = Object.freeze(['active', 'pending', 'invited', 'blocked'])
 const PERMISSION_FILTER = /^[a-z][a-z0-9-]{1,30}:[a-z][a-z0-9_.]{0,63}$/;
 /** Role requests' statuses (`expired`: invited, and the setup link has expired; judged on read, A5). */
 const REQUEST_STATUSES = Object.freeze(['pending', 'invited', 'completed', 'declined', 'expired']);
+/** What a repeat ask found, by the status of the open request of that role and contact (A5, revealStatus on). */
+const REPEAT_OUTCOMES = /** @type {Record<string, string>} */ (
+	Object.freeze({ pending: 'already_requested', invited: 'already_invited', expired: 'invite_expired' })
+);
+/** The window of the counter a private repeat ask writes in place of a new request (removed by TTL after it). */
+const REPEATS_WINDOW_MS = 3_600_000;
 
 /**
  * A role request as the API answers it, its status judged now (`expired` once an invite's setup link has run out).
@@ -654,17 +660,20 @@ export const createManage = (product, service, flows) => {
 	};
 
 	/**
-	 * A visitor asks for a role (A5): `{ role, name, phone | email, note }`, no account needed. The answer's `outcome` says
-	 * what happened, for the website's own words: `requested` (a new request, with its id), or for a repeat ask, which
-	 * changes nothing: `already_member` (the user holding this proven phone number, else email address, has the role),
-	 * `already_requested` (a request of the same role and phone number, else email address, waits for staff),
-	 * `already_invited` (staff invited it and its setup link still works) or `invite_expired` (its setup link ran out).
+	 * A visitor asks for a role (A5): `{ role, name, phone | email, note }`, no account needed. A repeat ask changes
+	 * nothing. With Role requests → revealStatus off (the private default) every ask answers `{ outcome: 'requested' }`,
+	 * a new request or not, so nobody who types a phone number or email address learns whether it belongs to a member or
+	 * has a request or invite. With it on, the `outcome` says what happened, for the website's own words: `requested` (a
+	 * new request, with its id), or for a repeat ask: `already_member` (the user holding this proven phone number, else
+	 * email address, has the role), `already_requested` (a request of the same role and phone number, else email
+	 * address, waits for staff), `already_invited` (staff invited it and its setup link still works) or `invite_expired`
+	 * (its setup link ran out).
 	 * @param {any} ctx
 	 */
 	const requestRole = async (ctx) => {
 		const s = await service.site(ctx);
 		const body = bodyOf(ctx.body);
-		const { requestableRoles, requireNote } = await service.settings(s, 'role_requests');
+		const { requestableRoles, requireNote, revealStatus } = await service.settings(s, 'role_requests');
 		if (typeof body.role !== 'string' || !(/** @type {string[]} */ (requestableRoles).includes(body.role)))
 			throw invalid('role', 'This role cannot be asked for.');
 		const name = checkName(body.name);
@@ -678,22 +687,30 @@ export const createManage = (product, service, flows) => {
 		const note = typeof body.note === 'string' ? body.note.trim() : '';
 		if (note.length > 1000) throw invalid('note', 'The note is at most 1000 characters.');
 		if (requireNote && !note) throw invalid('note', 'Write a note.');
-		/** @param {string} outcome */
-		const repeat = (outcome) =>
-			new Response(JSON.stringify({ outcome }), { status: 201, headers: { 'content-type': 'application/json' } });
+		/** @param {Record<string, unknown>} answer */
+		const created = (answer) =>
+			new Response(JSON.stringify(answer), { status: 201, headers: { 'content-type': 'application/json' } });
+		// The same database work whatever the person's state, so with revealStatus off the time of the answer tells as
+		// little as its words: both user lookups and the open-request lookup always, then one write and one read (the new
+		// request, or in its place a short counter and a read that change nothing).
+		const [byPhone, byEmail, [open]] = await Promise.all([
+			phone ? s.store.users.byPhone(phone) : null,
+			email ? s.store.users.byEmail(email) : null,
+			s.store.requests.list({
+				after: null,
+				limit: 1,
+				filter: { role: body.role, status: { $in: ['pending', 'invited'] }, ...(phone ? { phone } : { email }) },
+			}),
+		]);
 		// the person already has the role: the user an invite would give it to (phone first), with that contact proven
-		const byPhone = phone ? await s.store.users.byPhone(phone) : null;
-		const holder = byPhone ?? (email ? await s.store.users.byEmail(email) : null);
-		if (holder && holder.role === body.role && (byPhone ? holder.phoneVerified : holder.emailVerified))
-			return repeat('already_member');
-		const [open] = await s.store.requests.list({
-			after: null,
-			limit: 1,
-			filter: { role: body.role, status: { $in: ['pending', 'invited'] }, ...(phone ? { phone } : { email }) },
-		});
-		if (open) {
-			const status = requestView(open, now()).status;
-			return repeat(status === 'pending' ? 'already_requested' : status === 'invited' ? 'already_invited' : 'invite_expired');
+		const holder = byPhone ?? byEmail;
+		const member = holder && holder.role === body.role && (byPhone ? holder.phoneVerified : holder.emailVerified);
+		const found = member ? 'already_member' : open ? REPEAT_OUTCOMES[requestView(open, now()).status] : null;
+		if (found) {
+			if (revealStatus) return created({ outcome: found });
+			await s.store.counters.take('role_requests|repeats', REPEATS_WINDOW_MS, Number.MAX_SAFE_INTEGER);
+			await s.store.requests.get(open?.id ?? '');
+			return created({ outcome: 'requested' });
 		}
 		const request = await s.store.requests.create({
 			role: body.role,
@@ -708,10 +725,7 @@ export const createManage = (product, service, flows) => {
 			setupExpiresAt: null,
 			completedAt: null,
 		});
-		return new Response(JSON.stringify({ outcome: 'requested', id: request.id, status: request.status }), {
-			status: 201,
-			headers: { 'content-type': 'application/json' },
-		});
+		return created(revealStatus ? { outcome: 'requested', id: request.id, status: request.status } : { outcome: 'requested' });
 	};
 
 	/** `?status=&role=&cursor=&limit=`, newest first. @param {any} ctx */

@@ -336,6 +336,9 @@ describe('A5: role requests', () => {
 		);
 		await env.setting('role_requests', 'requestableRoles', ['member']);
 		await env.setting('role_requests', 'requireNote', true);
+		// private by default (every ask answers the same, role-requests.test.js); these tests read ids and outcomes
+		expect((await env.visitor('GET', '/v1/widget/config')).json.settings.roleRequests.revealStatus).toBe(false);
+		await env.setting('role_requests', 'revealStatus', true);
 		expect(code(await env.visitor('POST', '/v1/role-requests', { role: 'member', name: 'Nia', phone: '+447700900100' }))).toBe(
 			'validation_failed',
 		);
@@ -359,7 +362,7 @@ describe('A5: role requests', () => {
 		});
 		expect([again.status, again.json]).toEqual([201, { outcome: 'already_requested' }]);
 		const config = (await env.visitor('GET', '/v1/widget/config')).json.settings.roleRequests;
-		expect(config).toEqual({ roles: [{ key: 'member', name: 'Member' }], requireNote: true });
+		expect(config).toEqual({ roles: [{ key: 'member', name: 'Member' }], requireNote: true, revealStatus: true });
 
 		const ticket = await env.ticket();
 		const listed = await env.admin(ticket, 'GET', '/v1/admin/role-requests?status=pending');

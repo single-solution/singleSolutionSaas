@@ -93,6 +93,7 @@
 	"request.note": "Note",
 	"request.submit": "Send the request",
 	"request.sent": "Thank you! The shop will contact you soon.",
+	"request.received": "Thank you! The shop will contact you soon. If you have already joined, sign in instead; if you were invited, use the setup link the shop sent you.",
 	"request.alreadyRequested": "You have already asked. The shop will contact you soon.",
 	"request.alreadyInvited": "You are already invited: use the setup link the shop sent you.",
 	"request.inviteExpired": "Your setup link has expired. Contact the shop for a new one.",
