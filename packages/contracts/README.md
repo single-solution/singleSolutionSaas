@@ -80,6 +80,27 @@ knows (returned in canonical form). `BUSINESS_JSON_TEMPLATE` is the example ever
 - `validateActivityCopy`: `{ websiteId, productId, actor: { kind, id, name?, role? }, action, target, label?, detail?, at }`
   (`label` at most 200 characters, `detail` at most 2,000 plain-text characters; PLAN 0.8.10 K9).
 - `IMPORT_LIMITS`: one call of a product's import route takes NDJSON of at most 1,000 records and 4 MB (K10).
+- `validateMessageDefaults`: a product's message defaults (its `schemas/messages.json`; the kit serves them at
+  `GET /v1/message-defaults` with `productId`): `{ productId?, messages }`, at most 200 messages, each
+  `{ key, name, description?, values, required?, urgent?, sensitive?, channels }`. `channels` names every channel the
+  message is sent on with its US-English default words: `email`, `push` and `staff_push` `{ subject, text }`, `sms`
+  `{ text }`, and `whatsapp: null` (WhatsApp sends only templates the merchant had approved at Meta, so it has no
+  default). Keys are declared once and start with the product's id; the words follow the template rules below as
+  written (no spaces at their ends) and use only the message's `values`, plus `{unsubscribeUrl}` in a message that is
+  not required.
+
+## Message templates (`@ss/contracts/templates`)
+
+Pure and browser-safe; Notifications checks every template with it, and `validateMessageDefaults` checks products'
+defaults with the same rules.
+
+- `TEMPLATE_CHANNELS` (`email`, `sms`, `whatsapp`, `push`, `staff_push`), `TEMPLATE_KEY`, `VALUE_NAME`, `TEXT_LIMITS`
+  (email 100,000, SMS 1,600, WhatsApp 4,096, push 500 characters), `SUBJECT_LIMIT` (200), `BUILT_IN_VALUES`
+  (`unsubscribeUrl`), `isTitled(channel)`.
+- `placeholdersOf(text)` and `valueNamesOf(text)` (placeholders and optional-section names, in order of first use),
+  `sectionProblem(text)` (`{?name}…{/name}` closed, not crossing, not inside one of the same name) and
+  `wordsProblem(channel, { subject, text })` (the text written and within the channel's limit, a subject on email and
+  push, one line of at most 200 characters, sections well formed), each null when fine.
 
 ## Format and time zone (`@ss/contracts/format`, PLAN 0.8.10 K7, K8)
 

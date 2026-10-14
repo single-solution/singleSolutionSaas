@@ -27,5 +27,6 @@ export const SCHEMA_IDS = Object.freeze({
 	notice: schemaId('notice'),
 	dataRightsRequest: schemaId('data-rights-request'),
 	activityCopy: schemaId('activity-copy'),
+	messageDefaults: schemaId('message-defaults'),
 	problem: schemaId('problem'),
 });

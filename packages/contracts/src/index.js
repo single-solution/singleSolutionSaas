@@ -1,7 +1,7 @@
 /**
  * @ss/contracts — versioned schemas and validators binding the Portal and every product: the manifest and settings
- * schemas, the Product ↔ Portal wire shapes, business.json, cross-product shapes, ids, RFC 9457 problems and phone
- * numbers.
+ * schemas, the Product ↔ Portal wire shapes, business.json, cross-product shapes (with the message defaults products
+ * declare), ids, RFC 9457 problems, phone numbers and the template rules (`./templates`).
  * Additive changes only within v1; breaking changes ship as v2 schema ids.
  * @module
  */
@@ -25,8 +25,9 @@ export {
 	validateNotice,
 	validateDataRightsRequest,
 	validateActivityCopy,
+	validateMessageDefaults,
 } from './validate.js';
-export { RULES, checkManifest, checkSettingsRules, findCycles, manifestPriceList } from './semantics.js';
+export { RULES, checkManifest, checkMessageDefaults, checkSettingsRules, findCycles, manifestPriceList } from './semantics.js';
 export { BUSINESS_JSON_TEMPLATE, isTimeZone, validateBusinessJson } from './business.js';
 export {
 	DEFAULT_FORMAT,
@@ -73,6 +74,8 @@ export { ID_ALPHABET, idPattern, encodeBase32, createId, isId, normaliseDomain, 
 /** @typedef {import('./types.js').DataRightsExport} DataRightsExport */
 /** @typedef {import('./types.js').DataRightsDelete} DataRightsDelete */
 /** @typedef {import('./types.js').ActivityCopy} ActivityCopy */
+/** @typedef {import('./types.js').MessageDefaults} MessageDefaults */
+/** @typedef {import('./types.js').DeclaredMessage} DeclaredMessage */
 /** @typedef {import('./constants.js').ProductStatus} ProductStatus */
 /** @typedef {import('./constants.js').MerchantStatus} MerchantStatus */
 /** @typedef {import('./constants.js').AdminRole} AdminRole */

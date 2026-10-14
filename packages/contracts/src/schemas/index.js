@@ -14,7 +14,7 @@ import {
 	statusResponseSchema,
 	websitesPageSchema,
 } from './product-api.js';
-import { activityCopySchema, dataRightsRequestSchema } from './cross-product.js';
+import { activityCopySchema, dataRightsRequestSchema, messageDefaultsSchema } from './cross-product.js';
 import { problemSchema } from './problem.js';
 import { deepFreeze } from '../util.js';
 
@@ -40,5 +40,6 @@ export const ALL_SCHEMAS = deepFreeze([
 	noticeSchema,
 	dataRightsRequestSchema,
 	activityCopySchema,
+	messageDefaultsSchema,
 	problemSchema,
 ]);

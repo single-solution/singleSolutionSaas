@@ -14,6 +14,7 @@ import {
 	checkActivityCopy,
 	checkDirectory,
 	checkManifest,
+	checkMessageDefaults,
 	checkPriceReport,
 	checkSettingsRules,
 	checkStatusResponse,
@@ -104,6 +105,7 @@ const result = (value, problems) =>
  * @property {(value: unknown) => ValidationResult<import('./types.js').Notice>} validateNotice
  * @property {(value: unknown) => ValidationResult<import('./types.js').DataRightsRequest>} validateDataRightsRequest
  * @property {(value: unknown) => ValidationResult<import('./types.js').ActivityCopy>} validateActivityCopy
+ * @property {(value: unknown) => ValidationResult<import('./types.js').MessageDefaults>} validateMessageDefaults
  */
 
 /**
@@ -270,6 +272,7 @@ export const createValidator = ({ schemas = [] } = {}) => {
 		validateNotice: /** @type {Validator['validateNotice']} */ (validator(SCHEMA_IDS.notice)),
 		validateDataRightsRequest: /** @type {Validator['validateDataRightsRequest']} */ (validator(SCHEMA_IDS.dataRightsRequest)),
 		validateActivityCopy: validator(SCHEMA_IDS.activityCopy, checkActivityCopy),
+		validateMessageDefaults: validator(SCHEMA_IDS.messageDefaults, checkMessageDefaults),
 	});
 };
 
@@ -318,3 +321,5 @@ export const validateNotice = (value) => getDefaultValidator().validateNotice(va
 export const validateDataRightsRequest = (value) => getDefaultValidator().validateDataRightsRequest(value);
 /** @param {unknown} value */
 export const validateActivityCopy = (value) => getDefaultValidator().validateActivityCopy(value);
+/** @param {unknown} value */
+export const validateMessageDefaults = (value) => getDefaultValidator().validateMessageDefaults(value);

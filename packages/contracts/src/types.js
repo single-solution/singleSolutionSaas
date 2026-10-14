@@ -144,4 +144,21 @@
  * @property {string} at ISO-8601 UTC
  */
 
+/**
+ * One message a product sends through Notifications, with its default words (parity P1).
+ * @typedef {object} DeclaredMessage
+ * @property {string} key the template key, `<productId>.<name>`
+ * @property {string} name what the message is, for the merchant (at most 80 characters)
+ * @property {string} [description] when it is sent (at most 500 characters)
+ * @property {string[]} values the values every send carries (the placeholders its words may use)
+ * @property {boolean} [required] sent to people who unsubscribed too (default false)
+ * @property {boolean} [urgent] not held by quiet hours (default false)
+ * @property {boolean} [sensitive] its values are hidden in the delivery log (default false)
+ * @property {{ email?: { subject: string, text: string }, sms?: { text: string }, whatsapp?: null,
+ *   push?: { subject: string, text: string }, staff_push?: { subject: string, text: string } }} channels every channel
+ *   it is sent on, with its default words; `whatsapp: null`: sent on WhatsApp too, which has no default (a template
+ *   approved at Meta)
+ */
+/** @typedef {{ productId?: string, messages: DeclaredMessage[] }} MessageDefaults */
+
 export {};

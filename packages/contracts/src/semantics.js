@@ -4,6 +4,7 @@
  * already passed its JSON Schema.
  * @module
  */
+import { BUILT_IN_VALUES, valueNamesOf, wordsProblem } from './templates.js';
 import { isPathOrServiceUrl, isPlainObject, isServiceUrl, isUtcTimestamp, pointer } from './util.js';
 
 /** @typedef {import('./types.js').ValidationProblem} ValidationProblem */
@@ -29,6 +30,9 @@ export const RULES = Object.freeze({
 	settingDefault: 'settingDefault',
 	settingEnum: 'settingEnum',
 	settingsSchema: 'settingsSchema',
+	keyPrefix: 'keyPrefix',
+	templateWords: 'templateWords',
+	unknownValue: 'unknownValue',
 });
 
 /**
@@ -200,6 +204,59 @@ export const checkDirectory = (directory) =>
  */
 export const checkActivityCopy = (copy) =>
 	isUtcTimestamp(copy.at) ? [] : [at(['at'], RULES.timestamp, 'is not a real UTC time')];
+
+/**
+ * A product's message defaults (parity P1): keys once each and, with `productId`, starting with `<productId>.`; the
+ * default words of each channel pass the template rules of `@ss/contracts/templates` as written (no spaces at their
+ * ends), and use only the message's declared values — plus `{unsubscribeUrl}` in a message that is not required
+ * (Notifications fills it in optional messages only). A value is never named after a built-in one.
+ * @param {import('./types.js').MessageDefaults} declaration
+ * @returns {ValidationProblem[]}
+ */
+export const checkMessageDefaults = (declaration) => {
+	/** @type {ValidationProblem[]} */
+	const out = [];
+	/** @type {Set<string>} */
+	const keys = new Set();
+	for (const [index, message] of declaration.messages.entries()) {
+		const path = ['messages', index];
+		if (keys.has(message.key)) out.push(at([...path, 'key'], RULES.duplicateKey, `'${message.key}' is declared twice`));
+		keys.add(message.key);
+		if (declaration.productId !== undefined && !message.key.startsWith(`${declaration.productId}.`))
+			out.push(at([...path, 'key'], RULES.keyPrefix, `must start with '${declaration.productId}.'`));
+		for (const [valueIndex, name] of message.values.entries())
+			if (BUILT_IN_VALUES.includes(name))
+				out.push(at([...path, 'values', valueIndex], RULES.unknownValue, `'${name}' is filled by Notifications`));
+		const known = new Set([...message.values, ...(message.required === true ? [] : BUILT_IN_VALUES)]);
+		for (const [channel, words] of Object.entries(message.channels)) {
+			if (words === null) continue;
+			const subject = 'subject' in words ? words.subject : '';
+			for (const [field, text] of /** @type {const} */ ([
+				['subject', subject],
+				['text', words.text],
+			]))
+				if (text !== text.trim())
+					out.push(at([...path, 'channels', channel, field], RULES.templateWords, 'has spaces or line breaks at its ends'));
+			const wrong = wordsProblem(/** @type {import('./templates.js').TemplateChannel} */ (channel), {
+				subject,
+				text: words.text,
+			});
+			if (wrong) out.push(at([...path, 'channels', channel, wrong.field], RULES.templateWords, wrong.message));
+			for (const name of valueNamesOf(`${subject}\n${words.text}`))
+				if (!known.has(name))
+					out.push(
+						at(
+							[...path, 'channels', channel],
+							RULES.unknownValue,
+							BUILT_IN_VALUES.includes(name)
+								? `{${name}} is filled only in messages that are not required`
+								: `{${name}} is not one of the message's values`,
+						),
+					);
+		}
+	}
+	return out;
+};
 
 /** Keywords that only fit some setting types. */
 const TYPE_KEYWORDS = Object.freeze({
