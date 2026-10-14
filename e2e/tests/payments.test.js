@@ -268,16 +268,16 @@ describe('Payments on the real Portal', () => {
 			headers: {
 				'idempotency-key': 'refund-inv-42-2',
 				'ss-actor-id': 'usr_finance_1',
-				'ss-actor-name': 'Hina%20Malik',
+				'ss-actor-name': 'Sam%20Lee',
 				'ss-actor-role': 'Finance',
 			},
 		});
-		expect(refund.json.refunds.at(-1)).toMatchObject({ amount: 1000, by: 'Hina Malik' });
+		expect(refund.json.refunds.at(-1)).toMatchObject({ amount: 1000, by: 'Sam Lee' });
 		const activity = await sys.call('GET', `/v1/activity?target=${paymentId}&action=payment.refunded`, {
 			token: payTokens.server,
 		});
 		expect(activity.json.items[0]).toMatchObject({
-			actor: { kind: 'user', id: 'usr_finance_1', name: 'Hina Malik', role: 'Finance' },
+			actor: { kind: 'user', id: 'usr_finance_1', name: 'Sam Lee', role: 'Finance' },
 			label: 'inv-42',
 		});
 	});

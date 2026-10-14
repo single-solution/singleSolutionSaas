@@ -24,8 +24,8 @@ import { callbackUrls, createSnippets } from '../core/snippets.js';
 
 describe('money', () => {
 	it('checks amounts and currencies', () => {
-		expect(isCurrency('PKR')).toBe(true);
-		expect(isCurrency('pkr')).toBe(false);
+		expect(isCurrency('EUR')).toBe(true);
+		expect(isCurrency('eur')).toBe(false);
 		expect(isAmount(1)).toBe(true);
 		expect(isAmount(0)).toBe(false);
 		expect(isAmount(1.5)).toBe(false);
@@ -35,21 +35,21 @@ describe('money', () => {
 		expect(exponentOf('JPY')).toBe(0);
 		expect(exponentOf('KWD')).toBe(3);
 		expect(exponentOf('USD')).toBe(2);
-		expect(toDecimal(1050, 'PKR')).toBe('10.50');
+		expect(toDecimal(1050, 'EUR')).toBe('10.50');
 		expect(toDecimal(5, 'USD')).toBe('0.05');
 		expect(toDecimal(500, 'JPY')).toBe('500');
 		expect(toDecimal(1234, 'KWD')).toBe('1.234');
-		expect(fromDecimal('10.5', 'PKR')).toBe(1050);
-		expect(fromDecimal('10.500', 'PKR')).toBe(1050);
+		expect(fromDecimal('10.5', 'EUR')).toBe(1050);
+		expect(fromDecimal('10.500', 'EUR')).toBe(1050);
 		expect(fromDecimal(10, 'USD')).toBe(1000);
 		expect(fromDecimal('500', 'JPY')).toBe(500);
-		expect(fromDecimal('10.505', 'PKR')).toBeNull();
-		expect(fromDecimal('abc', 'PKR')).toBeNull();
-		expect(fromDecimal('0', 'PKR')).toBeNull();
-		expect(fromDecimal(undefined, 'PKR')).toBeNull();
+		expect(fromDecimal('10.505', 'EUR')).toBeNull();
+		expect(fromDecimal('abc', 'EUR')).toBeNull();
+		expect(fromDecimal('0', 'EUR')).toBeNull();
+		expect(fromDecimal(undefined, 'EUR')).toBeNull();
 	});
 	it('formats for people without assuming a locale', () => {
-		expect(formatMoney(125000, 'PKR')).toBe('PKR 1,250.00');
+		expect(formatMoney(125000, 'EUR')).toBe('EUR 1,250.00');
 		expect(formatMoney(1234567, 'JPY')).toBe('JPY 1,234,567');
 	});
 });
@@ -101,16 +101,16 @@ describe('payments', () => {
 		expect(cleanText(5, 10)).toBeNull();
 		expect(cleanText('x'.repeat(11), 10)).toBeNull();
 		expect(cleanText(undefined, 10)).toBe('');
-		expect(checkCustomer({ name: 'Ana', email: 'Ana@Example.com', phone: '+92 300 1234567', id: 'u1' })).toEqual({
+		expect(checkCustomer({ name: 'Ana', email: 'Ana@Example.com', phone: '+44 7700 900123', id: 'u1' })).toEqual({
 			ok: true,
-			value: { id: 'u1', name: 'Ana', email: 'ana@example.com', phone: '+923001234567' },
+			value: { id: 'u1', name: 'Ana', email: 'ana@example.com', phone: '+447700900123' },
 		});
 		expect(checkCustomer(null)).toEqual({ ok: true, value: {} });
 		expect(checkCustomer('x')).toMatchObject({ ok: false, field: 'customer' });
 		expect(checkCustomer({ id: 'x'.repeat(200) })).toMatchObject({ ok: false, field: 'customer/id' });
 		expect(checkCustomer({ name: 'x'.repeat(200) })).toMatchObject({ ok: false, field: 'customer/name' });
 		expect(checkCustomer({ email: 'nope' })).toMatchObject({ ok: false, field: 'customer/email' });
-		expect(checkCustomer({ phone: '0300' })).toMatchObject({ ok: false, field: 'customer/phone' });
+		expect(checkCustomer({ phone: '0123' })).toMatchObject({ ok: false, field: 'customer/phone' });
 	});
 	it('checks metadata', () => {
 		expect(checkMetadata({ order: '1' })).toEqual({ ok: true, value: { order: '1' } });
@@ -122,18 +122,18 @@ describe('payments', () => {
 		});
 	});
 	it('checks a new payment', () => {
-		const ok = checkPaymentInput({ amount: 1000, currency: 'PKR', description: 'Order', returnUrl: 'https://x' });
+		const ok = checkPaymentInput({ amount: 1000, currency: 'EUR', description: 'Order', returnUrl: 'https://x' });
 		expect(ok).toMatchObject({ ok: true, value: { amount: 1000, gateway: null, cancelUrl: null } });
-		expect(checkPaymentInput({ amount: 0, currency: 'PKR' })).toMatchObject({ ok: false, field: 'amount' });
-		expect(checkPaymentInput({ amount: 1, currency: 'rs' })).toMatchObject({ ok: false, field: 'currency' });
-		expect(checkPaymentInput({ amount: 1, currency: 'PKR', gateway: 'cash' })).toMatchObject({ ok: false, field: 'gateway' });
-		expect(checkPaymentInput({ amount: 1, currency: 'PKR', description: 'x'.repeat(201) })).toMatchObject({
+		expect(checkPaymentInput({ amount: 0, currency: 'EUR' })).toMatchObject({ ok: false, field: 'amount' });
+		expect(checkPaymentInput({ amount: 1, currency: 'usd' })).toMatchObject({ ok: false, field: 'currency' });
+		expect(checkPaymentInput({ amount: 1, currency: 'EUR', gateway: 'cash' })).toMatchObject({ ok: false, field: 'gateway' });
+		expect(checkPaymentInput({ amount: 1, currency: 'EUR', description: 'x'.repeat(201) })).toMatchObject({
 			field: 'description',
 		});
-		expect(checkPaymentInput({ amount: 1, currency: 'PKR', reference: 'x'.repeat(121) })).toMatchObject({ field: 'reference' });
-		expect(checkPaymentInput({ amount: 1, currency: 'PKR', customer: 'x' })).toMatchObject({ field: 'customer' });
-		expect(checkPaymentInput({ amount: 1, currency: 'PKR', metadata: 'x' })).toMatchObject({ field: 'metadata' });
-		expect(checkPaymentInput({ amount: 1, currency: 'PKR', cancelUrl: 5 })).toMatchObject({ field: 'cancelUrl' });
+		expect(checkPaymentInput({ amount: 1, currency: 'EUR', reference: 'x'.repeat(121) })).toMatchObject({ field: 'reference' });
+		expect(checkPaymentInput({ amount: 1, currency: 'EUR', customer: 'x' })).toMatchObject({ field: 'customer' });
+		expect(checkPaymentInput({ amount: 1, currency: 'EUR', metadata: 'x' })).toMatchObject({ field: 'metadata' });
+		expect(checkPaymentInput({ amount: 1, currency: 'EUR', cancelUrl: 5 })).toMatchObject({ field: 'cancelUrl' });
 		expect(checkPaymentInput(null)).toMatchObject({ ok: false });
 	});
 	it('checks a new link', () => {
@@ -180,15 +180,15 @@ describe('payments', () => {
 		expect(statusAfterRefund({ amount: 1000, refunded: 400 }, 600)).toBe('refunded');
 	});
 	it('confirms a payment only for its exact amount and currency', () => {
-		const payment = { status: 'paid', amount: 1000, currency: 'PKR' };
-		expect(isConfirmedFor(payment, { amount: 1000, currency: 'PKR' })).toBe(true);
-		expect(isConfirmedFor({ ...payment, status: 'refunded' }, { amount: 1000, currency: 'PKR' })).toBe(true);
-		expect(isConfirmedFor(payment, { amount: 999, currency: 'PKR' })).toBe(false);
+		const payment = { status: 'paid', amount: 1000, currency: 'EUR' };
+		expect(isConfirmedFor(payment, { amount: 1000, currency: 'EUR' })).toBe(true);
+		expect(isConfirmedFor({ ...payment, status: 'refunded' }, { amount: 1000, currency: 'EUR' })).toBe(true);
+		expect(isConfirmedFor(payment, { amount: 999, currency: 'EUR' })).toBe(false);
 		expect(isConfirmedFor(payment, { amount: 1000, currency: 'USD' })).toBe(false);
-		expect(isConfirmedFor({ ...payment, status: 'pending' }, { amount: 1000, currency: 'PKR' })).toBe(false);
+		expect(isConfirmedFor({ ...payment, status: 'pending' }, { amount: 1000, currency: 'EUR' })).toBe(false);
 		// money that arrived after the merchant cancelled the payment never confirms an order (K-13)
 		const late = { ...payment, voidedAt: new Date('2026-10-01T10:00:00Z') };
-		expect(isConfirmedFor(late, { amount: 1000, currency: 'PKR' })).toBe(false);
+		expect(isConfirmedFor(late, { amount: 1000, currency: 'EUR' })).toBe(false);
 		expect(isRefundDue(late)).toBe(true);
 		expect(isRefundDue({ ...late, status: 'partially_refunded' })).toBe(true);
 		expect(isRefundDue({ ...late, status: 'refunded' })).toBe(false);
@@ -201,7 +201,7 @@ describe('payments', () => {
 			id: 'pay_1',
 			status: 'paid',
 			amount: 1000,
-			currency: 'PKR',
+			currency: 'EUR',
 			refunded: 0,
 			gateway: 'stripe',
 			description: '=SUM(A1)',
@@ -256,7 +256,7 @@ describe('payments', () => {
 			email: 'E-mail',
 			description: 'Description',
 		});
-		expect(csv.split('\r\n')[1]).toBe(`pay_1,${at.toISOString()},paid,PKR 10.00,0.00,stripe,"o-1, ""x""",a@b.co,'=SUM(A1)`);
+		expect(csv.split('\r\n')[1]).toBe(`pay_1,${at.toISOString()},paid,EUR 10.00,0.00,stripe,"o-1, ""x""",a@b.co,'=SUM(A1)`);
 		expect(paymentsCsv([{ ...view, gateway: null, customer: {} }], /** @type {any} */ ({})).split('\r\n')[1]).toContain(',,');
 	});
 });
@@ -264,7 +264,7 @@ describe('payments', () => {
 describe('payment events', () => {
 	it('carry the payment as the API answers it, without metadata and history when that is too large', () => {
 		const at = new Date('2026-10-01T10:00:00Z');
-		const base = { id: 'pay_1', status: 'paid', amount: 100, currency: 'PKR', refunded: 0, createdAt: at, updatedAt: at };
+		const base = { id: 'pay_1', status: 'paid', amount: 100, currency: 'EUR', refunded: 0, createdAt: at, updatedAt: at };
 		const small = paymentView({ ...base, metadata: { order: '7' }, history: [{ at, event: 'paid' }] }, 'https://p/pay/1');
 		expect(paymentEventData(small, { refund: { id: 'rfd_1', amount: 5 } })).toEqual({
 			payment: small,

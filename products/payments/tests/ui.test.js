@@ -27,10 +27,10 @@ const configOf = (features, { format = {}, timeZone = 'UTC' } = {}) => ({
 	features,
 });
 
-/** A Format like the stores': "Rs 12,500" and "1 Oct 2026, 15:00" in the business time zone. */
-const STORE_LOOK = {
-	format: { locale: 'en-GB', currencyDisplay: 'custom', currencySymbol: 'Rs', wholeUnits: true, times: 'business' },
-	timeZone: 'Asia/Karachi',
+/** A custom Format: "US$ 12,500" and "1 Oct 2026, 19:00" in the business time zone (Tokyo, UTC+9). */
+const CUSTOM_LOOK = {
+	format: { locale: 'en-GB', currencyDisplay: 'custom', currencySymbol: 'US$', wholeUnits: true, times: 'business' },
+	timeZone: 'Asia/Tokyo',
 };
 
 /** @param {string} key @param {Record<string, string>} [data] */
@@ -100,7 +100,7 @@ const PAYMENT = {
 	id: 'pay_1',
 	status: 'paid',
 	amount: 250000,
-	currency: 'PKR',
+	currency: 'USD',
 	refunded: 0,
 	gateway: 'bank_transfer',
 	description: 'Order 1',
@@ -191,7 +191,7 @@ describe('pay button', () => {
 				return {
 					ok: true,
 					status: 200,
-					data: { title: 'Invoice', description: '', amount: 1500, currency: 'PKR', gateways: [] },
+					data: { title: 'Invoice', description: '', amount: 1500, currency: 'USD', gateways: [] },
 				};
 			if (path === '/v1/checkout/payments/pay_2')
 				return {
@@ -206,7 +206,7 @@ describe('pay button', () => {
 		const config = configOf(['payment_links', 'payment_api']);
 		const fixed = place('pay_button', { link: 'link_2' });
 		await mountPayButton({ host: fixed, config, call, go });
-		expect(fixed.shadowRoot?.textContent).toContain('PKR 15.00');
+		expect(fixed.shadowRoot?.textContent).toContain('USD 15.00');
 		expect(statusText(fixed)).toBe(strings['page.noGateway']);
 		inside(fixed, 'form').dispatchEvent(new window.Event('submit'));
 		await flush();
@@ -261,35 +261,35 @@ describe('pay button', () => {
 	it('shows amounts in the website’s Format from the widget config', async () => {
 		const host = place('pay_button', { link: 'link_6' });
 		serve({
-			[`GET ${CONFIG_PATH}`]: () => answer(200, configOf(['payment_links'], STORE_LOOK)),
+			[`GET ${CONFIG_PATH}`]: () => answer(200, configOf(['payment_links'], CUSTOM_LOOK)),
 			'GET /v1/checkout/links/link_6': () =>
 				answer(200, {
 					title: 'Invoice',
 					description: '',
 					amount: null,
 					minAmount: 50000,
-					currency: 'PKR',
-					gateways: [{ id: 'jazzcash', name: 'JazzCash' }],
+					currency: 'USD',
+					gateways: [{ id: 'stripe', name: 'Card (Stripe)' }],
 				}),
 			'POST /v1/checkout/links/link_6': () => answer(422, { errors: [{ path: '/amount' }] }),
 		});
 		await startWidget({ window, script: script('browser-token') }).ready;
-		expect(host.shadowRoot?.textContent).toContain('At least Rs 500');
+		expect(host.shadowRoot?.textContent).toContain('At least US$ 500');
 		inside(host, 'form').dispatchEvent(new window.Event('submit'));
 		await flush();
-		expect(statusText(host)).toBe('Enter an amount of at least Rs 500.');
+		expect(statusText(host)).toBe('Enter an amount of at least US$ 500.');
 		const fixed = place('pay_button', { payment: 'pay_6' });
 		await mountPayButton({
 			host: fixed,
-			config: configOf(['payment_api'], STORE_LOOK),
+			config: configOf(['payment_api'], CUSTOM_LOOK),
 			call: async () => ({
 				ok: true,
 				status: 200,
-				data: { status: 'paid', amount: 1250050, currency: 'PKR', description: '' },
+				data: { status: 'paid', amount: 1250050, currency: 'USD', description: '' },
 			}),
 			go: vi.fn(),
 		});
-		expect(inside(fixed, '.amount').textContent).toBe('Rs 12,501 · Paid');
+		expect(inside(fixed, '.amount').textContent).toBe('US$ 12,501 · Paid');
 	});
 });
 
@@ -350,7 +350,7 @@ describe('Payments admin widget', () => {
 		await flush();
 		expect(rows(host)).toHaveLength(1);
 		expect(rows(host)[0]?.textContent).toContain('o-1');
-		expect(rows(host)[0]?.textContent).toContain('PKR 2,500.00');
+		expect(rows(host)[0]?.textContent).toContain('USD 2,500.00');
 		expect(rows(host)[0]?.getAttribute('aria-current')).toBe('true');
 		expect(inside(host, 'h2 .badge').textContent).toBe('2');
 		const options = [...inside(host, 'select').options].map((option) => option.textContent);
@@ -360,7 +360,7 @@ describe('Payments admin widget', () => {
 		expect(inside(host, 'p.meta').textContent).toBe('Bank transfer 1 · generic 1');
 		button(host, strings['admin.more']).click();
 		await flush();
-		expect(host.shadowRoot?.textContent).toContain('Refunded PKR 1.00');
+		expect(host.shadowRoot?.textContent).toContain('Refunded USD 1.00');
 		inside(host, 'input').value = 'ana@example.com';
 		inside(host, 'select').value = 'paid';
 		inside(host, 'form').dispatchEvent(new window.Event('submit'));
@@ -387,19 +387,19 @@ describe('Payments admin widget', () => {
 			'GET /v1/admin/payments/pay_1': () => answer(200, PAYMENT),
 		});
 		const save = vi.fn();
-		mountPaymentsAdmin({ host, api: client, config: configOf(['payment_api'], STORE_LOOK), save, open: vi.fn() });
+		mountPaymentsAdmin({ host, api: client, config: configOf(['payment_api'], CUSTOM_LOOK), save, open: vi.fn() });
 		await flush();
 		const text = rows(host)[0]?.textContent ?? '';
-		expect(text).toContain('Rs 2,500');
-		expect(text).toContain('1 Oct 2026, 15:00');
-		expect(text).toContain('Refunded Rs 500');
-		expect(inside(host, '.detail-pane .sub li').textContent).toBe('1 Oct 2026, 15:00 · created');
+		expect(text).toContain('US$ 2,500');
+		expect(text).toContain('1 Oct 2026, 19:00');
+		expect(text).toContain('Refunded US$ 500');
+		expect(inside(host, '.detail-pane .sub li').textContent).toBe('1 Oct 2026, 19:00 · created');
 		expect(inside(host, 'p.meta').hasAttribute('hidden')).toBe(true);
 		button(host, strings['admin.export']).click();
 		await flush();
 		const [, csv] = save.mock.calls[0] ?? [];
 		expect(csv.split('\r\n')[1]).toBe(
-			'pay_1,2026-10-01T10:00:00.000Z,paid,"PKR 2,500.00",500.00,bank_transfer,o-1,ana@example.com,Order 1',
+			'pay_1,2026-10-01T10:00:00.000Z,paid,"USD 2,500.00",500.00,bank_transfer,o-1,ana@example.com,Order 1',
 		);
 	});
 
@@ -411,7 +411,7 @@ describe('Payments admin widget', () => {
 			status: 'pending',
 			reference: '',
 			description: '',
-			customer: { name: 'Ana', email: 'ana@example.com', phone: '+923001234567', id: 'usr_1' },
+			customer: { name: 'Ana', email: 'ana@example.com', phone: '+447700900123', id: 'usr_1' },
 			metadata: { order: '1042' },
 			source: 'api',
 			checkoutUrl: 'https://payments.example.dev/pay/web_1/pay_5',
@@ -464,7 +464,7 @@ describe('Payments admin widget', () => {
 		rows(host)[1]?.click();
 		await flush();
 		expect(inside(host, '.split').getAttribute('data-view')).toBe('detail');
-		for (const text of ['Ana', '+923001234567', 'usr_1', 'order', '1042', 'image/png · 2 kB', strings['admin.source.api']])
+		for (const text of ['Ana', '+447700900123', 'usr_1', 'order', '1042', 'image/png · 2 kB', strings['admin.source.api']])
 			expect(detailText(host)).toContain(text);
 		menuItem(host, strings['admin.proof'])?.click();
 		await flush();
@@ -488,7 +488,7 @@ describe('Payments admin widget', () => {
 		expect(inside(host, '[role="menu"]').hasAttribute('hidden')).toBe(true);
 		// the transfer's reference and a note go with the confirmation (PLAN 0.8.10 P3)
 		button(host, strings['admin.confirm']).click();
-		expect(dialog(host)?.textContent).toContain('PKR 2,500.00');
+		expect(dialog(host)?.textContent).toContain('USD 2,500.00');
 		inside(host, '.dialog input[name="reference"]').value = ' TRX-1 ';
 		inside(host, '.dialog textarea[name="note"]').value = 'In the bank app';
 		await submitDialog(host);
@@ -668,10 +668,10 @@ describe('Subscriptions admin widget', () => {
 			{ ...sub, id: 'sub_9', gateway: 'paypal', plan: 'P-1', reference: 'r', createdAt: '2026-10-01T20:30:00.000Z' },
 		];
 		const client = adminApi({ 'GET /v1/admin/subscriptions': () => answer(200, { items, nextCursor: null, hasMore: false }) });
-		mountSubscriptionsAdmin({ host, api: client, config: configOf(['subscriptions'], STORE_LOOK) });
+		mountSubscriptionsAdmin({ host, api: client, config: configOf(['subscriptions'], CUSTOM_LOOK) });
 		await flush();
-		// 20:30 UTC is the next day in Karachi (UTC+5)
-		expect(inside(host, '.meta').textContent).toContain('2 Oct 2026, 01:30');
+		// 20:30 UTC is the next day in Tokyo (UTC+9)
+		expect(inside(host, '.meta').textContent).toContain('2 Oct 2026, 05:30');
 	});
 
 	it('says when there are none, when they cannot load and when signed out', async () => {
@@ -698,7 +698,7 @@ describe('Payment links admin widget', () => {
 		description: 'Design work',
 		amount: 250000,
 		minAmount: null,
-		currency: 'PKR',
+		currency: 'USD',
 		gateways: ['bank_transfer'],
 		returnUrl: 'https://shop.example.com/thanks',
 		reference: 'inv-42',
@@ -740,7 +740,7 @@ describe('Payment links admin widget', () => {
 		await flush();
 		expect(rows(host)[0]?.textContent).toContain('Invoice 42');
 		expect(rows(host)[0]?.textContent).toContain('2 paid');
-		for (const text of [LINK.url, 'PKR 2,500.00', 'Bank transfer', 'inv-42', 'Design work', LINK.returnUrl, 'link_1'])
+		for (const text of [LINK.url, 'USD 2,500.00', 'Bank transfer', 'inv-42', 'Design work', LINK.returnUrl, 'link_1'])
 			expect(detailText(host)).toContain(text);
 		button(host, strings['links.copy']).click();
 		expect(copy).toHaveBeenCalledWith(LINK.url);
@@ -769,7 +769,7 @@ describe('Payment links admin widget', () => {
 		expect(rows(host)).toHaveLength(2);
 		rows(host)[1]?.click();
 		expect(inside(host, '.split').getAttribute('data-view')).toBe('detail');
-		expect(detailText(host)).toContain('Payer enters it (at least PKR 5.00)');
+		expect(detailText(host)).toContain('Payer enters it (at least USD 5.00)');
 		expect(detailText(host)).toContain(strings['links.allGateways']);
 		rows(host)[0]?.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter' }));
 		expect(detailText(host)).toContain('Invoice 42');
@@ -798,7 +798,7 @@ describe('Payment links admin widget', () => {
 		const boxes = [...form.querySelectorAll('input[type="checkbox"]')].map((box) => /** @type {HTMLInputElement} */ (box));
 		expect(boxes.map((box) => box.value)).toEqual(['stripe', 'bank_transfer']);
 		set('title', ' Donations ');
-		set('currency', 'pkr');
+		set('currency', 'usd');
 		set('minAmount', 'abc');
 		await submitDialog(host);
 		expect(form.querySelector('[role="status"]')?.textContent).toBe(strings['links.invalidAmount']);
@@ -816,7 +816,7 @@ describe('Payment links admin widget', () => {
 		expect(bodies.at(-1)).toEqual({
 			title: 'Donations',
 			description: '',
-			currency: 'PKR',
+			currency: 'USD',
 			amount: null,
 			minAmount: 10000,
 			gateways: ['bank_transfer'],
@@ -910,7 +910,7 @@ describe('the hosted bank page and /pay.js', () => {
 			texts: strings,
 			business: 'Shop',
 			amount: 250000,
-			currency: 'PKR',
+			currency: 'USD',
 			reference: 'INV-9',
 			bank: {
 				ready: true,

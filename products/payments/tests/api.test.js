@@ -43,7 +43,7 @@ const page = (path) => env.call('GET', path);
 
 /** @param {Record<string, unknown>} body @param {Record<string, string>} [headers] */
 const createPayment = async (body, headers) => {
-	const res = await env.api('POST', '/v1/payments', { amount: 250000, currency: 'PKR', returnUrl: RETURN, ...body }, headers);
+	const res = await env.api('POST', '/v1/payments', { amount: 250000, currency: 'USD', returnUrl: RETURN, ...body }, headers);
 	if (res.status !== 201) throw new Error(`payment ${res.status} ${res.text}`);
 	return res.json;
 };
@@ -58,7 +58,7 @@ const stripeHook = (event) => {
 };
 
 /** @param {string} id @param {number} amount @param {string} [currency] */
-const stripePaid = (id, amount, currency = 'pkr') =>
+const stripePaid = (id, amount, currency = 'usd') =>
 	stripeHook({
 		type: 'checkout.session.completed',
 		data: {
@@ -102,14 +102,14 @@ afterAll(async () => {
 
 describe('before setup', () => {
 	it('refuses while the feature is off and until the merchant database is connected', async () => {
-		const off = await env.api('POST', '/v1/payments', { amount: 100, currency: 'PKR' });
+		const off = await env.api('POST', '/v1/payments', { amount: 100, currency: 'USD' });
 		expect(off.status).toBe(403);
 		expect(off.json.type).toMatch(/feature_off$/);
 		await env.switchOn(ALL);
-		const noDb = await env.api('POST', '/v1/payments', { amount: 100, currency: 'PKR' });
+		const noDb = await env.api('POST', '/v1/payments', { amount: 100, currency: 'USD' });
 		expect(noDb.json.type).toMatch(/database_not_connected$/);
 		await env.connectDatabase();
-		const noGateway = await env.api('POST', '/v1/payments', { amount: 100, currency: 'PKR' });
+		const noGateway = await env.api('POST', '/v1/payments', { amount: 100, currency: 'USD' });
 		expect(noGateway.status).toBe(422);
 		expect(noGateway.json.type).toMatch(/gateway_not_ready$/);
 	});
@@ -139,12 +139,12 @@ describe('the payment API and Stripe', () => {
 	it('checks a new payment against the website and the gateways', async () => {
 		const elsewhere = await env.api('POST', '/v1/payments', {
 			amount: 100,
-			currency: 'PKR',
+			currency: 'USD',
 			returnUrl: 'https://evil.example.net/x',
 		});
 		expect(elsewhere.status).toBe(422);
 		expect(elsewhere.json.errors[0].path).toBe('/returnUrl');
-		const local = await env.api('POST', '/v1/payments', { amount: 100, currency: 'PKR', returnUrl: 'http://localhost:3000/x' });
+		const local = await env.api('POST', '/v1/payments', { amount: 100, currency: 'USD', returnUrl: 'http://localhost:3000/x' });
 		expect(local.status).toBe(201);
 		const wrong = await env.api('POST', '/v1/payments', { amount: 100, currency: 'USD', gateway: 'jazzcash' });
 		expect(wrong.json.type).toMatch(/currency_not_supported$/);
@@ -155,7 +155,7 @@ describe('the payment API and Stripe', () => {
 			cancelUrl: 'x',
 		});
 		expect(notReady.status).toBe(422);
-		const bad = await env.api('POST', '/v1/payments', { amount: 1.5, currency: 'PKR' });
+		const bad = await env.api('POST', '/v1/payments', { amount: 1.5, currency: 'USD' });
 		expect(bad.json.errors[0].path).toBe('/amount');
 		const none = await env.api('POST', '/v1/payments', { amount: 100, currency: 'ZZZ', gateway: 'paypal' });
 		expect(none.json.type).toMatch(/currency_not_supported$/);
@@ -172,16 +172,15 @@ describe('the payment API and Stripe', () => {
 			amountText: '2500.00',
 			checkoutUrl: `${BASE}/pay/${env.websiteId}/${payment.id}`,
 		});
-		const again = await env.api('POST', '/v1/payments', { amount: 250000, currency: 'PKR' }, { 'idempotency-key': 'o-1042' });
+		const again = await env.api('POST', '/v1/payments', { amount: 250000, currency: 'USD' }, { 'idempotency-key': 'o-1042' });
 		expect(again.status).toBe(409);
 
 		const choice = await page(`/pay/${env.websiteId}/${payment.id}`);
 		expect(choice.status).toBe(200);
 		expect(choice.headers.get('content-security-policy')).toContain("frame-ancestors 'none'");
-		for (const name of ['Card (Stripe)', 'JazzCash', 'Easypaisa', 'Bank transfer', 'PayNow'])
-			expect(choice.text).toContain(name);
-		expect(choice.text).not.toContain('PayPal');
-		expect(choice.text).not.toContain('PayFast');
+		// only the gateways that take the payment's currency (USD)
+		for (const name of ['Card (Stripe)', 'PayPal', 'Bank transfer', 'PayNow']) expect(choice.text).toContain(name);
+		for (const name of ['JazzCash', 'Easypaisa', 'PayFast']) expect(choice.text).not.toContain(name);
 
 		const picked = await env.call('POST', `/pay/${env.websiteId}/${payment.id}`, { form: { gateway: 'stripe' } });
 		expect(picked.status).toBe(303);
@@ -189,7 +188,7 @@ describe('the payment API and Stripe', () => {
 		expect(go.status).toBe(303);
 		expect(go.headers.get('location')).toBe(`https://checkout.stripe.com/c/${payment.id}`);
 		// another gateway cannot take over a started checkout
-		await env.call('POST', `/pay/${env.websiteId}/${payment.id}`, { form: { gateway: 'jazzcash' } });
+		await env.call('POST', `/pay/${env.websiteId}/${payment.id}`, { form: { gateway: 'paypal' } });
 		expect((await env.api('GET', `/v1/payments/${payment.id}`)).json.gateway).toBe('stripe');
 
 		const forged = await env.call('POST', `/v1/gateways/stripe/${env.websiteId}`, {
@@ -223,9 +222,9 @@ describe('the payment API and Stripe', () => {
 
 	it('verifies a payment only for its exact amount and currency', async () => {
 		const [first] = (await env.api('GET', '/v1/payments?status=paid')).json.items;
-		const ok = await env.api('POST', `/v1/payments/${first.id}/verify`, { amount: 250000, currency: 'PKR' });
+		const ok = await env.api('POST', `/v1/payments/${first.id}/verify`, { amount: 250000, currency: 'USD' });
 		expect(ok.json).toMatchObject({ verified: true, payment: { id: first.id } });
-		const wrong = await env.api('POST', `/v1/payments/${first.id}/verify`, { amount: 250001, currency: 'PKR' });
+		const wrong = await env.api('POST', `/v1/payments/${first.id}/verify`, { amount: 250001, currency: 'USD' });
 		expect(wrong.json.verified).toBe(false);
 		expect((await env.api('POST', '/v1/payments/pay_nope/verify', {})).status).toBe(404);
 		expect((await env.api('GET', `/v1/payments/${first.id.replace('pay_', 'pay_0')}`)).status).toBe(404);
@@ -263,7 +262,7 @@ describe('the payment API and Stripe', () => {
 							client_reference_id: payment.id,
 							payment_status: 'paid',
 							amount_total: 250000,
-							currency: 'pkr',
+							currency: 'usd',
 							payment_intent: 'pi_r',
 						},
 					}
@@ -378,7 +377,7 @@ describe('the payment API and Stripe', () => {
 
 describe('the other gateways', () => {
 	it('JazzCash: signed form, signed answer on the return address', async () => {
-		const payment = await createPayment({ gateway: 'jazzcash', reference: 'inv 7' });
+		const payment = await createPayment({ gateway: 'jazzcash', currency: 'PKR', reference: 'inv 7' });
 		const form = await page(`/pay/${env.websiteId}/${payment.id}`);
 		expect(form.text).toContain('payments.jazzcash.com.pk');
 		expect(form.text).toContain('/pay.js');
@@ -400,7 +399,7 @@ describe('the other gateways', () => {
 	});
 
 	it('Easypaisa: token step, then Payments asks Easypay', async () => {
-		const payment = await createPayment({ gateway: 'easypaisa', returnUrl: undefined });
+		const payment = await createPayment({ gateway: 'easypaisa', currency: 'PKR', returnUrl: undefined });
 		const form = await page(`/pay/${env.websiteId}/${payment.id}`);
 		expect(form.text).toContain('easypay.easypaisa.com.pk/easypay/Index.jsf');
 		const step = await page(`/return/easypaisa/${env.websiteId}/${payment.id}?auth_token=abc`);
@@ -481,7 +480,7 @@ describe('the other gateways', () => {
 			c.path === '/Ecommerce/api/Transaction/GetAccessToken' ? { status: 200, body: { ACCESS_TOKEN: 'tok' } } : undefined,
 		);
 		expect(await env.connect('payfast_pk', PAYFAST_PK)).toMatchObject({ status: 'connected', last4: '0123' });
-		const payment = await createPayment({ gateway: 'payfast_pk' });
+		const payment = await createPayment({ gateway: 'payfast_pk', currency: 'PKR' });
 		const form = await page(`/pay/${env.websiteId}/${payment.id}`);
 		expect(form.text).toContain('https://ipg1.apps.net.pk/Ecommerce/api/Transaction/PostTransaction');
 		expect(form.text).toContain(`${BASE}/v1/gateways/payfast_pk/${env.websiteId}`);
@@ -513,11 +512,11 @@ describe('the other gateways', () => {
 		const unsigned = await env.call('GET', `/v1/gateways/payfast_pk/${env.websiteId}?basket_id=${payment.id}&err_code=000`);
 		expect(unsigned.status).toBe(401);
 		// a payment confirmed by the notice alone, and a failed one sent back to the pay page
-		const second = await createPayment({ gateway: 'payfast_pk' });
+		const second = await createPayment({ gateway: 'payfast_pk', currency: 'PKR' });
 		await page(`/pay/${env.websiteId}/${second.id}`);
 		await env.call('GET', `/v1/gateways/payfast_pk/${env.websiteId}?${signed(second.id, '000')}`);
 		expect((await env.api('GET', `/v1/payments/${second.id}`)).json.status).toBe('paid');
-		const third = await createPayment({ gateway: 'payfast_pk' });
+		const third = await createPayment({ gateway: 'payfast_pk', currency: 'PKR' });
 		await page(`/pay/${env.websiteId}/${third.id}`);
 		const failed = await page(`/return/payfast_pk/${env.websiteId}/${third.id}?${signed(third.id, '002')}`);
 		expect(failed.headers.get('location')).toBe(`/pay/${env.websiteId}/${third.id}`);
@@ -533,7 +532,7 @@ describe('the other gateways', () => {
 			return { status: 201, body: { id: `rp_${sent.metadata.ss_payment}`, checkout_url: 'https://checkout.rapid.test/x' } };
 		});
 		expect(await env.connect('rapid', RAPID)).toMatchObject({ status: 'connected', last4: '0123' });
-		const payment = await createPayment({ gateway: 'rapid' });
+		const payment = await createPayment({ gateway: 'rapid', currency: 'PKR' });
 		const go = await page(`/pay/${env.websiteId}/${payment.id}`);
 		expect(go.headers.get('location')).toBe('https://checkout.rapid.test/x');
 		// back from Rapid: still pending until the webhook
@@ -556,14 +555,14 @@ describe('the other gateways', () => {
 			gatewayReference: `rp_${payment.id}`,
 		});
 		// a webhook for another amount is recorded and pays nothing
-		const other = await createPayment({ gateway: 'rapid' });
+		const other = await createPayment({ gateway: 'rapid', currency: 'PKR' });
 		await page(`/pay/${env.websiteId}/${other.id}`);
 		await hook({ id: `rp_${other.id}`, status: 'paid', amount: 25, metadata: { ss_payment: other.id } });
 		const unpaid = (await env.api('GET', `/v1/payments/${other.id}`)).json;
 		expect(unpaid.status).toBe('pending');
 		expect(unpaid.history.at(-1)).toMatchObject({ event: 'mismatch', detail: 'rapid confirmed 2500 PKR' });
-		// paisa cannot be paid at Rapid
-		const fraction = await createPayment({ gateway: 'rapid', amount: 250050 });
+		// Rapid takes whole units only: 2,500.50 cannot be paid there
+		const fraction = await createPayment({ gateway: 'rapid', currency: 'PKR', amount: 250050 });
 		expect((await page(`/pay/${env.websiteId}/${fraction.id}`)).status).toBe(502);
 		const refund = await env.api('POST', `/v1/payments/${payment.id}/refunds`, {});
 		expect(refund.json).toMatchObject({ status: 'refunded', refunds: [{ manual: true, amount: 250000 }] });
@@ -707,7 +706,7 @@ describe('bank transfer', () => {
 		expect((await read()).json).toMatchObject({ ready: true, accountNumber: '', iban: IBAN });
 		await env.api('DELETE', '/v1/settings/bank_transfer.iban');
 		expect((await read()).json.ready).toBe(false);
-		const refused = await env.api('POST', '/v1/payments', { amount: 100, currency: 'PKR', gateway: 'bank_transfer' });
+		const refused = await env.api('POST', '/v1/payments', { amount: 100, currency: 'USD', gateway: 'bank_transfer' });
 		expect(refused.json.type).toMatch(/gateway_not_ready$/);
 		await env.api('PUT', '/v1/settings/bank_transfer.accountNumber', { value: '0123-456789' });
 		expect((await read()).json).toMatchObject({ ready: true, accountNumber: '0123-456789' });
@@ -860,7 +859,7 @@ describe('a payment the merchant cancels (K-13)', () => {
 		expect(told).toHaveLength(paidBefore + 1);
 		expect(told.at(-1).data.payment).toMatchObject({ id: payment.id, status: 'paid', refundDue: true });
 		// it never verifies an order
-		const verify = await env.api('POST', `/v1/payments/${payment.id}/verify`, { amount: 250000, currency: 'PKR' });
+		const verify = await env.api('POST', `/v1/payments/${payment.id}/verify`, { amount: 250000, currency: 'USD' });
 		expect(verify.json).toMatchObject({ verified: false, payment: { refundDue: true } });
 		expect((await page(`/pay/${env.websiteId}/${payment.id}`)).text).toContain('so it is to be refunded');
 		// a paid payment is not cancelled: it is refunded, which clears the mark
@@ -931,15 +930,15 @@ describe('payment links and the pay button routes', () => {
 	/** @type {any} */
 	let open;
 	it('creates links and serves their hosted page', async () => {
-		const bad = await env.api('POST', '/v1/links', { title: 'X', currency: 'PKR', returnUrl: 'https://evil.example.net' });
+		const bad = await env.api('POST', '/v1/links', { title: 'X', currency: 'EUR', returnUrl: 'https://evil.example.net' });
 		expect(bad.status).toBe(422);
-		expect((await env.api('POST', '/v1/links', { currency: 'PKR' })).status).toBe(422);
+		expect((await env.api('POST', '/v1/links', { currency: 'EUR' })).status).toBe(422);
 		fixed = (
 			await env.api('POST', '/v1/links', {
 				title: 'Invoice 12',
-				currency: 'PKR',
+				currency: 'EUR',
 				amount: 150000,
-				gateways: ['jazzcash', 'bank_transfer'],
+				gateways: ['paypal', 'bank_transfer'],
 				reference: 'inv-12',
 			})
 		).json;
@@ -955,8 +954,8 @@ describe('payment links and the pay button routes', () => {
 			})
 		).json;
 		const html = await page(`/l/${env.websiteId}/${fixed.id}`);
-		expect(html.text).toContain('PKR 1,500.00');
-		expect(html.text).toContain('JazzCash');
+		expect(html.text).toContain('EUR 1,500.00');
+		expect(html.text).toContain('PayPal');
 		expect(html.text).not.toContain('Card (Stripe)');
 		expect((await page(`/l/${env.websiteId}/${open.id}`)).text).toContain('At least USD 5.00');
 		expect((await env.api('GET', '/v1/links')).json.items).toHaveLength(2);
@@ -1007,7 +1006,7 @@ describe('payment links and the pay button routes', () => {
 			title: 'Invoice 12',
 			amount: 150000,
 			gateways: [
-				{ id: 'jazzcash', name: 'JazzCash (Pakistan)' },
+				{ id: 'paypal', name: 'PayPal' },
 				{ id: 'bank_transfer', name: 'Bank transfer' },
 			],
 		});
@@ -1183,10 +1182,10 @@ describe('payment links with a ticket', () => {
 		const ticket = await env.ticket(['links.read', 'links.manage']);
 		/** @param {unknown} [body] */
 		const as = (body) => ({ token: ticket, origin: ADMIN_ORIGIN, ...(body === undefined ? {} : { body }) });
-		const made = await env.call('POST', '/v1/admin/links', as({ title: 'Deposit', currency: 'PKR', amount: 500000 }));
+		const made = await env.call('POST', '/v1/admin/links', as({ title: 'Deposit', currency: 'USD', amount: 500000 }));
 		expect(made.status).toBe(201);
 		expect(made.json.url).toBe(`${BASE}/l/${env.websiteId}/${made.json.id}`);
-		expect((await env.call('POST', '/v1/admin/links', as({ currency: 'PKR' }))).status).toBe(422);
+		expect((await env.call('POST', '/v1/admin/links', as({ currency: 'USD' }))).status).toBe(422);
 		const listed = await env.call('GET', '/v1/admin/links?limit=100', as());
 		expect(listed.json.items.map((/** @type {any} */ link) => link.id)).toContain(made.json.id);
 		expect((await env.call('GET', `/v1/admin/links/${made.json.id}`, as())).json.title).toBe('Deposit');
@@ -1224,7 +1223,7 @@ describe('kit features (PLAN 0.8.10)', () => {
 			cursor = res.json.nextCursor;
 		}
 	};
-	const ACTOR = { 'ss-actor-id': 'staff_7', 'ss-actor-name': encodeURIComponent('Zoë Khan'), 'ss-actor-role': 'Manager' };
+	const ACTOR = { 'ss-actor-id': 'staff_7', 'ss-actor-name': encodeURIComponent('Zoë Martin'), 'ss-actor-role': 'Manager' };
 
 	it('counts payments with the list’s own filters (K4), also with a ticket', async () => {
 		const all = await listAll('/v1/payments');
@@ -1276,9 +1275,9 @@ describe('kit features (PLAN 0.8.10)', () => {
 	it('records the acting user of a server-token call (K2) in histories, refunds and the activity log (K9)', async () => {
 		const transfer = await createPayment({ gateway: 'bank_transfer', reference: 'INV-77' });
 		const confirmed = await env.api('POST', `/v1/payments/${transfer.id}/confirm`, {}, ACTOR);
-		expect(confirmed.json.history.at(-1)).toMatchObject({ event: 'paid', by: 'Zoë Khan' });
+		expect(confirmed.json.history.at(-1)).toMatchObject({ event: 'paid', by: 'Zoë Martin' });
 		const refund = await env.api('POST', `/v1/payments/${transfer.id}/refunds`, { amount: 50000 }, ACTOR);
-		expect(refund.json.refunds.at(-1)).toMatchObject({ by: 'Zoë Khan', amount: 50000, manual: true });
+		expect(refund.json.refunds.at(-1)).toMatchObject({ by: 'Zoë Martin', amount: 50000, manual: true });
 		const sub = await env.api('POST', '/v1/subscriptions', {
 			gateway: 'stripe',
 			plan: 'price_2',
@@ -1292,7 +1291,7 @@ describe('kit features (PLAN 0.8.10)', () => {
 			},
 		});
 		const cancelled = await env.api('POST', `/v1/subscriptions/${sub.json.id}/cancel`, {}, ACTOR);
-		expect(cancelled.json.history.at(-1)).toMatchObject({ event: 'cancelled', by: 'Zoë Khan' });
+		expect(cancelled.json.history.at(-1)).toMatchObject({ event: 'cancelled', by: 'Zoë Martin' });
 
 		const log = (await env.api('GET', '/v1/activity?actor=staff_7')).json.items;
 		expect(log.map((/** @type {any} */ e) => e.action).sort()).toEqual([
@@ -1300,16 +1299,16 @@ describe('kit features (PLAN 0.8.10)', () => {
 			'payment.transfer_confirmed',
 			'subscription.cancelled',
 		]);
-		for (const entry of log) expect(entry.actor).toEqual({ kind: 'user', id: 'staff_7', name: 'Zoë Khan', role: 'Manager' });
+		for (const entry of log) expect(entry.actor).toEqual({ kind: 'user', id: 'staff_7', name: 'Zoë Martin', role: 'Manager' });
 		const byAction = Object.fromEntries(log.map((/** @type {any} */ e) => [e.action, e]));
 		expect(byAction['payment.transfer_confirmed']).toMatchObject({
 			target: transfer.id,
 			label: 'INV-77',
-			detail: 'Bank transfer of PKR 2,500.00 confirmed',
+			detail: 'Bank transfer of USD 2,500.00 confirmed',
 		});
 		expect(byAction['payment.refunded']).toMatchObject({
 			label: 'INV-77',
-			detail: 'Refunded PKR 500.00 (recorded; returned outside the gateway)',
+			detail: 'Refunded USD 500.00 (recorded; returned outside the gateway)',
 		});
 		expect(byAction['subscription.cancelled']).toMatchObject({
 			target: sub.json.id,
@@ -1331,7 +1330,7 @@ describe('kit features (PLAN 0.8.10)', () => {
 		const link = (
 			await env.api('POST', '/v1/links', {
 				title: 'Server visit',
-				currency: 'PKR',
+				currency: 'USD',
 				amount: 70000,
 				gateways: ['bank_transfer'],
 			})
@@ -1365,27 +1364,27 @@ describe('kit features (PLAN 0.8.10)', () => {
 	});
 
 	it('formats money with the website’s Format on hosted pages, in activity details and in the widget config (K7)', async () => {
-		const saved = await env.api('PUT', '/v1/format', { currencyDisplay: 'custom', currencySymbol: 'Rs', wholeUnits: true });
+		const saved = await env.api('PUT', '/v1/format', { currencyDisplay: 'custom', currencySymbol: 'US$', wholeUnits: true });
 		expect(saved.status).toBe(200);
 		const config = await env.call('GET', '/v1/widget/config', { token: env.browser, origin: ORIGIN });
-		expect(config.json).toMatchObject({ format: { currencySymbol: 'Rs', wholeUnits: true }, timeZone: 'UTC' });
+		expect(config.json).toMatchObject({ format: { currencySymbol: 'US$', wholeUnits: true }, timeZone: 'UTC' });
 		const payment = await createPayment({});
 		const choice = await page(`/pay/${env.websiteId}/${payment.id}`);
-		expect(choice.text).toContain('Rs 2,500');
-		expect(choice.text).not.toContain('PKR 2,500.00');
-		const link = (await env.api('POST', '/v1/links', { title: 'Tip', currency: 'PKR', amount: null, minAmount: 50000 })).json;
-		expect((await page(`/l/${env.websiteId}/${link.id}`)).text).toContain('At least Rs 500');
+		expect(choice.text).toContain('US$ 2,500');
+		expect(choice.text).not.toContain('USD 2,500.00');
+		const link = (await env.api('POST', '/v1/links', { title: 'Tip', currency: 'USD', amount: null, minAmount: 50000 })).json;
+		expect((await page(`/l/${env.websiteId}/${link.id}`)).text).toContain('At least US$ 500');
 		const low = await env.call('POST', `/l/${env.websiteId}/${link.id}`, { form: { amount: '1', gateway: 'bank_transfer' } });
-		expect(low.text).toContain('Enter an amount of at least Rs 500.');
+		expect(low.text).toContain('Enter an amount of at least US$ 500.');
 		const transfer = await createPayment({ gateway: 'bank_transfer' });
-		expect((await page(`/pay/${env.websiteId}/${transfer.id}`)).text).toContain('Rs 2,500');
+		expect((await page(`/pay/${env.websiteId}/${transfer.id}`)).text).toContain('US$ 2,500');
 		await env.api('POST', `/v1/payments/${transfer.id}/confirm`, {});
 		const entry = (await env.api('GET', `/v1/activity?target=${transfer.id}`)).json.items[0];
-		expect(entry.detail).toBe('Bank transfer of Rs 2,500 confirmed');
+		expect(entry.detail).toBe('Bank transfer of US$ 2,500 confirmed');
 		// API JSON keeps minor units and ISO times
 		expect((await env.api('GET', `/v1/payments/${transfer.id}`)).json).toMatchObject({ amount: 250000, amountText: '2500.00' });
 		await env.api('PUT', '/v1/format', { currencyDisplay: null, currencySymbol: null, wholeUnits: null });
-		expect((await page(`/pay/${env.websiteId}/${payment.id}`)).text).toContain('PKR 2,500.00');
+		expect((await page(`/pay/${env.websiteId}/${payment.id}`)).text).toContain('USD 2,500.00');
 	});
 
 	it('serves a store’s payment setup to its server: features, bank settings and gateway keys (K1)', async () => {
@@ -1436,7 +1435,7 @@ describe('data rights, statuses and public files', () => {
 		const exported = await env.api('POST', '/v1/data-rights/export', { user: { email: 'sub@example.com' } });
 		expect(exported.json.records.subscriptions).toHaveLength(1);
 		const ana = await env.api('POST', '/v1/data-rights/export', {
-			user: { email: 'ana@example.com', id: 'u_none', phone: '+923001234567' },
+			user: { email: 'ana@example.com', id: 'u_none', phone: '+447700900123' },
 		});
 		expect(ana.json.records.payments.length).toBeGreaterThan(0);
 		expect(ana.json.records.payments[0]).not.toHaveProperty('metadata');

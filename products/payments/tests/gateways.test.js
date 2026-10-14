@@ -28,13 +28,15 @@ const PAYMENT = {
 	id: 'pay_abcdefghijklmnopqrstuvwxyz',
 	websiteId: 'web_1',
 	amount: 250000,
-	currency: 'PKR',
+	currency: 'USD',
 	description: 'Order 1042',
 	reference: 'order-1042',
-	customer: { email: 'ana@example.com', name: 'Ana Khan', phone: '+923001234567' },
+	customer: { email: 'ana@example.com', name: 'Ana Lopez', phone: '+447700900123' },
 	gatewayRef: null,
 	captureRef: null,
 };
+/** The same payment for the Pakistani gateways (PKR, a Pakistani mobile number). */
+const PK_PAYMENT = { ...PAYMENT, currency: 'PKR', customer: { ...PAYMENT.customer, phone: '+923001234567' } };
 const URLS = { return: 'https://pay.test/return', cancel: 'https://pay.test/cancel', notify: 'https://pay.test/notify' };
 /** @param {Record<string, string>} [headers] @param {string} [rawBody] @param {Record<string, string>} [query] */
 const incoming = (headers = {}, rawBody = '', query = {}) => ({ rawBody, headers: new Headers(headers), query });
@@ -98,7 +100,7 @@ describe('Stripe', () => {
 		expect(sent?.headers['idempotency-key']).toBe(`ss-${PAYMENT.id}`);
 		const form = new URLSearchParams(sent?.body);
 		expect(form.get('line_items[0][price_data][unit_amount]')).toBe('250000');
-		expect(form.get('line_items[0][price_data][currency]')).toBe('pkr');
+		expect(form.get('line_items[0][price_data][currency]')).toBe('usd');
 		expect(form.get('client_reference_id')).toBe(PAYMENT.id);
 		expect(form.get('customer_email')).toBe('ana@example.com');
 		fake.respond('https://api.stripe.com', () => ({ status: 400, body: { error: { message: 'Bad currency' } } }));
@@ -117,7 +119,7 @@ describe('Stripe', () => {
 			client_reference_id: PAYMENT.id,
 			payment_status: 'paid',
 			amount_total: 250000,
-			currency: 'pkr',
+			currency: 'usd',
 			payment_intent: 'pi_1',
 		};
 		expect(await stripe.notice?.(signed({ type: 'checkout.session.completed', data: { object: session } }), keys, ctx)).toEqual(
@@ -130,7 +132,7 @@ describe('Stripe', () => {
 						ref: 'cs_1',
 						outcome: 'paid',
 						amount: 250000,
-						currency: 'PKR',
+						currency: 'USD',
 						capture: 'pi_1',
 					},
 				],
@@ -221,7 +223,7 @@ describe('Stripe', () => {
 							payment_status: 'unpaid',
 							status: 'expired',
 							amount_total: 250000,
-							currency: 'pkr',
+							currency: 'usd',
 						},
 					}
 				: { status: 404 },
@@ -505,7 +507,7 @@ describe('PayFast', () => {
 			amount: '2500.00',
 			m_payment_id: PAYMENT.id,
 			name_first: 'Ana',
-			name_last: 'Khan',
+			name_last: 'Lopez',
 			notify_url: URLS.notify,
 		});
 		const text = started.fields
@@ -641,12 +643,12 @@ describe('PayFast (Pakistan)', () => {
 		expect(payfastAmount(250000, 'PKR')).toBe('2500');
 		expect(payfastAmount(250050, 'PKR')).toBe('2500.50');
 		tokens();
-		const started = await payfastPk.start({ payment: PAYMENT, keys, urls: URLS }, ctx);
+		const started = await payfastPk.start({ payment: PK_PAYMENT, keys, urls: URLS }, ctx);
 		if (started.kind !== 'form') throw new Error('form expected');
 		expect(started.action).toBe(`${UAT}/Ecommerce/api/Transaction/PostTransaction`);
-		expect(started.ref).toBe(PAYMENT.id);
+		expect(started.ref).toBe(PK_PAYMENT.id);
 		expect(Object.fromEntries(new URLSearchParams(fake.calls.at(-1)?.body))).toMatchObject({
-			BASKET_ID: PAYMENT.id,
+			BASKET_ID: PK_PAYMENT.id,
 			TXNAMT: '2500',
 			CURRENCY_CODE: 'PKR',
 		});
@@ -655,7 +657,7 @@ describe('PayFast (Pakistan)', () => {
 			MERCHANT_ID: '102',
 			MERCHANT_NAME: 'Shop Ltd',
 			TOKEN: 'tok-1',
-			BASKET_ID: PAYMENT.id,
+			BASKET_ID: PK_PAYMENT.id,
 			TXNAMT: '2500',
 			ORDER_DATE: '2026-10-01 15:00:00',
 			SUCCESS_URL: URLS.return,
@@ -663,14 +665,14 @@ describe('PayFast (Pakistan)', () => {
 			CHECKOUT_URL: URLS.notify,
 			CUSTOMER_EMAIL_ADDRESS: 'ana@example.com',
 			CUSTOMER_MOBILE_NO: '03001234567',
-			SIGNATURE: createHash('md5').update(`102:Shop Ltd:2500:${PAYMENT.id}`).digest('hex'),
+			SIGNATURE: createHash('md5').update(`102:Shop Ltd:2500:${PK_PAYMENT.id}`).digest('hex'),
 			VERSION: 'MERCHANTCART-0.1',
 			TXNDESC: 'Order 1042',
 			PROCCODE: '00',
 			TRAN_TYPE: 'ECOMM_PURCHASE',
 		});
 		const bare = await payfastPk.start(
-			{ payment: { ...PAYMENT, customer: {}, description: '', reference: '' }, keys, urls: URLS },
+			{ payment: { ...PK_PAYMENT, customer: {}, description: '', reference: '' }, keys, urls: URLS },
 			ctx,
 		);
 		const fields = bare.kind === 'form' ? Object.fromEntries(bare.fields) : {};
@@ -678,28 +680,28 @@ describe('PayFast (Pakistan)', () => {
 		expect(fields.CUSTOMER_EMAIL_ADDRESS).toBeUndefined();
 		expect(fields.CUSTOMER_MOBILE_NO).toBeUndefined();
 		fake.respond(UAT, () => ({ status: 401 }));
-		expect(await payfastPk.start({ payment: PAYMENT, keys, urls: URLS }, ctx)).toEqual({
+		expect(await payfastPk.start({ payment: PK_PAYMENT, keys, urls: URLS }, ctx)).toEqual({
 			kind: 'error',
 			message: 'PayFast (Pakistan) refused the keys.',
 		});
 		fake.respond('https://ipg1.apps.net.pk', () => ({ status: 200, body: { ACCESS_TOKEN: 'live' } }));
-		const live = await payfastPk.start({ payment: PAYMENT, keys: { ...keys, sandbox: false }, urls: URLS }, ctx);
+		const live = await payfastPk.start({ payment: PK_PAYMENT, keys: { ...keys, sandbox: false }, urls: URLS }, ctx);
 		expect(live.kind === 'form' && live.action).toBe('https://ipg1.apps.net.pk/Ecommerce/api/Transaction/PostTransaction');
 	});
 	it('trusts a return only with a valid hash for the payment’s basket', async () => {
 		const paid = answer({
-			basket_id: PAYMENT.id,
+			basket_id: PK_PAYMENT.id,
 			err_code: '000',
 			err_msg: 'Success',
 			transaction_id: 'T-9',
 			transaction_amount: '2500.00',
 			transaction_currency: 'PKR',
 		});
-		expect(await payfastPk.returned?.(incoming({}, '', paid), PAYMENT, keys, ctx)).toEqual({
+		expect(await payfastPk.returned?.(incoming({}, '', paid), PK_PAYMENT, keys, ctx)).toEqual({
 			news: {
 				kind: 'payment',
-				paymentId: PAYMENT.id,
-				ref: PAYMENT.id,
+				paymentId: PK_PAYMENT.id,
+				ref: PK_PAYMENT.id,
 				outcome: 'paid',
 				amount: 250000,
 				currency: 'PKR',
@@ -708,19 +710,26 @@ describe('PayFast (Pakistan)', () => {
 		});
 		// mixed-case names, the numeric currency code and a hash in capitals
 		const upper = { ...paid, validation_hash: paid.validation_hash.toUpperCase(), transaction_currency: '586' };
-		expect(await payfastPk.returned?.(incoming({}, new URLSearchParams(upper).toString()), PAYMENT, keys, ctx)).toMatchObject({
+		expect(
+			await payfastPk.returned?.(incoming({}, new URLSearchParams(upper).toString()), PK_PAYMENT, keys, ctx),
+		).toMatchObject({
 			news: { outcome: 'paid', currency: 'PKR' },
 		});
 		expect(
-			await payfastPk.returned?.(incoming({}, '', answer({ basket_id: PAYMENT.id, err_code: '00' })), PAYMENT, keys, ctx),
+			await payfastPk.returned?.(
+				incoming({}, '', answer({ basket_id: PK_PAYMENT.id, err_code: '00' })),
+				PK_PAYMENT,
+				keys,
+				ctx,
+			),
 		).toMatchObject({ news: { outcome: 'paid', capture: null } });
 		for (const [code, outcome] of /** @type {Array<[string, string]>} */ ([
 			['001', 'pending'],
 			['002', 'failed'],
 		])) {
 			const news = await payfastPk.returned?.(
-				incoming({}, '', answer({ basket_id: PAYMENT.id, err_code: code })),
-				PAYMENT,
+				incoming({}, '', answer({ basket_id: PK_PAYMENT.id, err_code: code })),
+				PK_PAYMENT,
 				keys,
 				ctx,
 			);
@@ -728,25 +737,32 @@ describe('PayFast (Pakistan)', () => {
 			expect(news?.news?.amount).toBeUndefined();
 		}
 		const other = answer({ basket_id: 'pay_0000000000other', err_code: '000' });
-		expect(await payfastPk.returned?.(incoming({}, '', other), PAYMENT, keys, ctx)).toEqual({ news: null });
+		expect(await payfastPk.returned?.(incoming({}, '', other), PK_PAYMENT, keys, ctx)).toEqual({ news: null });
 		expect(
-			await payfastPk.returned?.(incoming({}, '', { ...paid, err_code: '000', validation_hash: 'abc' }), PAYMENT, keys, ctx),
+			await payfastPk.returned?.(
+				incoming({}, '', { ...paid, err_code: '000', validation_hash: 'abc' }),
+				PK_PAYMENT,
+				keys,
+				ctx,
+			),
 		).toEqual({ news: null });
-		expect(await payfastPk.returned?.(incoming({}, '', { ...paid, err_code: '00' }), PAYMENT, keys, ctx)).toEqual({
+		expect(await payfastPk.returned?.(incoming({}, '', { ...paid, err_code: '00' }), PK_PAYMENT, keys, ctx)).toEqual({
 			news: null,
 		});
-		expect(await payfastPk.returned?.(incoming({}, '', { basket_id: PAYMENT.id }), PAYMENT, keys, ctx)).toEqual({ news: null });
-		expect(await payfastPk.returned?.(incoming(), PAYMENT, keys, ctx)).toEqual({ news: null });
+		expect(await payfastPk.returned?.(incoming({}, '', { basket_id: PK_PAYMENT.id }), PK_PAYMENT, keys, ctx)).toEqual({
+			news: null,
+		});
+		expect(await payfastPk.returned?.(incoming(), PK_PAYMENT, keys, ctx)).toEqual({ news: null });
 	});
 	it('reads signed notices on its CHECKOUT_URL and records refunds by hand', async () => {
-		const fields = answer({ basket_id: PAYMENT.id, err_code: '000', transaction_amount: '2500', transaction_id: 'T-9' });
+		const fields = answer({ basket_id: PK_PAYMENT.id, err_code: '000', transaction_amount: '2500', transaction_id: 'T-9' });
 		expect(await payfastPk.notice?.(incoming({}, '', fields), keys, ctx)).toEqual({
 			ok: true,
 			news: [
 				{
 					kind: 'payment',
-					paymentId: PAYMENT.id,
-					ref: PAYMENT.id,
+					paymentId: PK_PAYMENT.id,
+					ref: PK_PAYMENT.id,
 					outcome: 'paid',
 					amount: 250000,
 					currency: 'PKR',
@@ -764,7 +780,7 @@ describe('PayFast (Pakistan)', () => {
 		});
 		expect(await payfastPk.notice?.(incoming({}, '', { ...fields, validation_hash: 'x' }), keys, ctx)).toEqual({ ok: false });
 		expect(await payfastPk.notice?.(incoming(), keys, ctx)).toEqual({ ok: false });
-		expect(await payfastPk.refund({ payment: PAYMENT, amount: 1, reason: '', refundId: 'r' }, keys, ctx)).toEqual({
+		expect(await payfastPk.refund({ payment: PK_PAYMENT, amount: 1, reason: '', refundId: 'r' }, keys, ctx)).toEqual({
 			ok: true,
 			manual: true,
 		});
@@ -783,8 +799,8 @@ describe('JazzCash', () => {
 	});
 	it('signs the request form and records refunds by hand', async () => {
 		expect(pakistanTime(NOW)).toBe('20261001150000');
-		expect(shortRef(PAYMENT.id, 'T')).toBe('Tabcdefghijklmnopqrs');
-		const started = await jazzcash.start({ payment: PAYMENT, keys, urls: URLS }, ctx);
+		expect(shortRef(PK_PAYMENT.id, 'T')).toBe('Tabcdefghijklmnopqrs');
+		const started = await jazzcash.start({ payment: PK_PAYMENT, keys, urls: URLS }, ctx);
 		if (started.kind !== 'form') throw new Error('form expected');
 		const fields = Object.fromEntries(started.fields);
 		expect(fields).toMatchObject({
@@ -805,20 +821,20 @@ describe('JazzCash', () => {
 		);
 		expect(started.action).toContain('sandbox.jazzcash.com.pk');
 		const live = await jazzcash.start(
-			{ payment: { ...PAYMENT, reference: '', description: '' }, keys: { ...keys, sandbox: false }, urls: URLS },
+			{ payment: { ...PK_PAYMENT, reference: '', description: '' }, keys: { ...keys, sandbox: false }, urls: URLS },
 			ctx,
 		);
 		expect(live.kind === 'form' && Object.fromEntries(live.fields)).toMatchObject({
 			pp_BillReference: 'payment',
 			pp_Description: 'Payment',
 		});
-		expect(await jazzcash.refund({ payment: PAYMENT, amount: 1, reason: '', refundId: 'r' }, keys, ctx)).toEqual({
+		expect(await jazzcash.refund({ payment: PK_PAYMENT, amount: 1, reason: '', refundId: 'r' }, keys, ctx)).toEqual({
 			ok: true,
 			manual: true,
 		});
 	});
 	it('trusts a return only with a valid hash, the payment’s reference and its code', async () => {
-		const payment = { ...PAYMENT, gatewayRef: 'Tabcdefghijklmnopqrs' };
+		const payment = { ...PK_PAYMENT, gatewayRef: 'Tabcdefghijklmnopqrs' };
 		/** @param {Record<string, string>} fields */
 		const post = (fields) =>
 			incoming({}, new URLSearchParams({ ...fields, pp_SecureHash: secureHash(fields, keys.integritySalt) }).toString());
@@ -881,7 +897,7 @@ describe('Easypaisa', () => {
 		expect(await easypaisa.test({}, ctx)).toMatchObject({ ok: false });
 	});
 	it('encrypts the sorted request and hands the token on to the confirm page', async () => {
-		const started = await easypaisa.start({ payment: PAYMENT, keys, urls: URLS }, ctx);
+		const started = await easypaisa.start({ payment: PK_PAYMENT, keys, urls: URLS }, ctx);
 		if (started.kind !== 'form') throw new Error('form expected');
 		const fields = Object.fromEntries(started.fields);
 		expect(fields).toMatchObject({
@@ -898,12 +914,12 @@ describe('Easypaisa', () => {
 		expect(plain.startsWith('amount=2500.00&autoRedirect=1&emailAddr=ana@example.com&expiryDate=')).toBe(true);
 		expect(hashedRequest({ b: '1', a: '2' }, keys.hashKey)).toBe(hashedRequest({ a: '2', b: '1' }, keys.hashKey));
 		const bare = await easypaisa.start(
-			{ payment: { ...PAYMENT, customer: { phone: '+15551234567' } }, keys: { ...keys, sandbox: false }, urls: URLS },
+			{ payment: { ...PK_PAYMENT, customer: { phone: '+15551234567' } }, keys: { ...keys, sandbox: false }, urls: URLS },
 			ctx,
 		);
 		expect(bare.kind === 'form' && bare.action).toBe('https://easypay.easypaisa.com.pk/easypay/Index.jsf');
 		expect(bare.kind === 'form' && Object.fromEntries(bare.fields).mobileNum).toBeUndefined();
-		const payment = { ...PAYMENT, gatewayRef: 'Eabcdefghijklmnopqrs' };
+		const payment = { ...PK_PAYMENT, gatewayRef: 'Eabcdefghijklmnopqrs' };
 		const next = await easypaisa.returned?.(
 			{ ...incoming({}, '', { auth_token: 'tok' }), self: 'https://pay.test/r' },
 			payment,
@@ -936,8 +952,8 @@ describe('Easypaisa', () => {
 		});
 	});
 	it('asks Easypay whether it was paid', async () => {
-		const payment = { ...PAYMENT, gatewayRef: 'Eabcdefghijklmnopqrs' };
-		expect(await easypaisa.status?.(PAYMENT, keys, ctx)).toBeNull();
+		const payment = { ...PK_PAYMENT, gatewayRef: 'Eabcdefghijklmnopqrs' };
+		expect(await easypaisa.status?.(PK_PAYMENT, keys, ctx)).toBeNull();
 		fake.respond('https://easypaystg.easypaisa.com.pk', () => ({
 			status: 200,
 			body: { responseCode: '0000', transactionStatus: 'PAID', transactionAmount: '2500.0', transactionId: 'X1' },
@@ -992,7 +1008,7 @@ describe('Rapid Gateway', () => {
 		expect(wholeUnits(250050, 'PKR')).toBeNull();
 		expect(wholeUnits(7, 'JPY')).toBe(7);
 		fake.respond(SANDBOX, () => ({ status: 201, body: { id: 'rp_1', checkout_url: 'https://checkout.rapidgateway.pk/rp_1' } }));
-		expect(await rapid.start({ payment: PAYMENT, keys, urls: URLS }, ctx)).toEqual({
+		expect(await rapid.start({ payment: PK_PAYMENT, keys, urls: URLS }, ctx)).toEqual({
 			kind: 'redirect',
 			url: 'https://checkout.rapidgateway.pk/rp_1',
 			ref: 'rp_1',
@@ -1000,47 +1016,47 @@ describe('Rapid Gateway', () => {
 		const sent = fake.calls.at(-1);
 		expect(sent?.path).toBe('/v1/payments');
 		expect(sent?.headers.authorization).toBe(`Bearer ${keys.secretKey}`);
-		expect(sent?.headers['idempotency-key']).toBe(`ss-${PAYMENT.id}`);
+		expect(sent?.headers['idempotency-key']).toBe(`ss-${PK_PAYMENT.id}`);
 		expect(JSON.parse(sent?.body ?? '{}')).toEqual({
 			amount: 2500,
 			currency: 'PKR',
 			methods: ['card', 'easypaisa', 'jazzcash', 'raast'],
 			customer: { phone: '+923001234567' },
-			metadata: { ss_payment: PAYMENT.id, ss_website: PAYMENT.websiteId },
+			metadata: { ss_payment: PK_PAYMENT.id, ss_website: PK_PAYMENT.websiteId },
 			return_url: URLS.return,
 			webhook_url: URLS.notify,
 		});
-		await rapid.start({ payment: { ...PAYMENT, customer: {} }, keys, urls: URLS }, ctx);
+		await rapid.start({ payment: { ...PK_PAYMENT, customer: {} }, keys, urls: URLS }, ctx);
 		expect(JSON.parse(fake.calls.at(-1)?.body ?? '{}').customer).toEqual({});
-		expect(await rapid.start({ payment: { ...PAYMENT, amount: 250050 }, keys, urls: URLS }, ctx)).toEqual({
+		expect(await rapid.start({ payment: { ...PK_PAYMENT, amount: 250050 }, keys, urls: URLS }, ctx)).toEqual({
 			kind: 'error',
 			message: 'Rapid Gateway takes whole amounts only.',
 		});
 		fake.respond(SANDBOX, () => ({ status: 422, body: { message: 'Amount too low' } }));
-		expect(await rapid.start({ payment: PAYMENT, keys, urls: URLS }, ctx)).toEqual({
+		expect(await rapid.start({ payment: PK_PAYMENT, keys, urls: URLS }, ctx)).toEqual({
 			kind: 'error',
 			message: 'Amount too low',
 		});
 		fake.respond(SANDBOX, () => ({ status: 200, body: { id: 'rp_2', checkout_url: 'http://insecure.example/x' } }));
-		expect(await rapid.start({ payment: PAYMENT, keys, urls: URLS }, ctx)).toEqual({
+		expect(await rapid.start({ payment: PK_PAYMENT, keys, urls: URLS }, ctx)).toEqual({
 			kind: 'error',
 			message: 'Rapid Gateway answered HTTP 200.',
 		});
 		fake.respond('https://api.rapidgateway.pk', () => ({ status: 401 }));
-		expect(await rapid.start({ payment: PAYMENT, keys: { ...keys, sandbox: false }, urls: URLS }, ctx)).toEqual({
+		expect(await rapid.start({ payment: PK_PAYMENT, keys: { ...keys, sandbox: false }, urls: URLS }, ctx)).toEqual({
 			kind: 'error',
 			message: 'Rapid Gateway refused the keys.',
 		});
 		expect(fake.calls.at(-1)?.url).toBe('https://api.rapidgateway.pk/v1/payments');
 	});
 	it('trusts only webhooks signed with the webhook secret', async () => {
-		const body = { id: 'rp_1', status: 'succeeded', amount: 2500, currency: 'PKR', metadata: { ss_payment: PAYMENT.id } };
+		const body = { id: 'rp_1', status: 'succeeded', amount: 2500, currency: 'PKR', metadata: { ss_payment: PK_PAYMENT.id } };
 		expect(await rapid.notice?.(hook(body), keys, ctx)).toEqual({
 			ok: true,
 			news: [
 				{
 					kind: 'payment',
-					paymentId: PAYMENT.id,
+					paymentId: PK_PAYMENT.id,
 					ref: 'rp_1',
 					outcome: 'paid',
 					amount: 250000,
@@ -1073,7 +1089,7 @@ describe('Rapid Gateway', () => {
 			ok: false,
 		});
 		expect(await rapid.notice?.(hook([1]), keys, ctx)).toEqual({ ok: false });
-		expect(await rapid.refund({ payment: PAYMENT, amount: 1, reason: '', refundId: 'r' }, keys, ctx)).toEqual({
+		expect(await rapid.refund({ payment: PK_PAYMENT, amount: 1, reason: '', refundId: 'r' }, keys, ctx)).toEqual({
 			ok: true,
 			manual: true,
 		});
@@ -1115,7 +1131,7 @@ describe('generic adapter', () => {
 		};
 		expect(
 			await generic.notice?.(
-				post({ paymentId: PAYMENT.id, status: 'paid', amount: 250000, currency: 'PKR', reference: 'G1' }),
+				post({ paymentId: PAYMENT.id, status: 'paid', amount: 250000, currency: 'USD', reference: 'G1' }),
 				keys,
 				ctx,
 			),
@@ -1128,7 +1144,7 @@ describe('generic adapter', () => {
 					ref: 'G1',
 					outcome: 'paid',
 					amount: 250000,
-					currency: 'PKR',
+					currency: 'USD',
 					capture: 'G1',
 				},
 			],
