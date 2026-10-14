@@ -2,8 +2,9 @@
 
 Tests that need two or more deployables: each product against the **real** Portal, in process, on one
 MongoMemoryReplSet. They use only public entry points (`@ss/platform/testing`, `@ss/app-kit`, `@ss/app-kit/testing`,
-`@ss/protocol` and each product's `./product` and `./routes`). This workspace is private, never deployed and has no
-environment variables.
+`@ss/protocol`, `@ss/contracts`, `@ss/importer` and `@ss/importer/fixture`, each product's `./product` and `./routes`,
+and the widget entries `@ss/product-accounts/widget` and `@ss/product-growth/page-script`). This workspace is private,
+never deployed and has no environment variables.
 
 `tests/helpers.js` (`startSystem({ unit })`) starts the Portal with its real modules and a product on the real kit, each
 on its own database, wired through one in-process fetch router; one clock drives both.
@@ -24,8 +25,9 @@ against the Portal and the products it works with.
 
 The migration kit (PLAN 0.8.10, Phase 1) has its own tests: `settings-api` (a settings round trip per product through
 the server token, with an acting user), `server-calls` (visitor calls from the merchant's server in their own rate
-window, counts equal to list lengths) and `import` (an `ss-import` dry run of the importer's fixture into Notes, whose
-test-only `import` feature mounts the kit's import routes); the product tests add a staff name on an order move and on
+window, counts equal to list lengths) and `import` (`ss-import` of the importer's small fixture into Notes, whose
+test-only `import` feature mounts the kit's import routes, and of the example shop into Accounts, Ecommerce, Chat and
+Growth: dry run, real run, verify, the products' own reads, a re-run that changes nothing, and a prune); the product tests add a staff name on an order move and on
 a chat reply, counts of the main lists and kit events forwarded by Notifications. Feature tests go further for some
 products, for example `accounts-sign-in` (imported password hashes, phone and password, staff sign-in codes, role
 requests and guards) and `growth-options` (every Growth option of 0.8.10 set through the settings API, then the real

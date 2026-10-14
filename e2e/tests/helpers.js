@@ -465,10 +465,7 @@ export const startSystem = async ({ graceDays = 1, unit = NOTES, extras = [] } =
 	return {
 		clock,
 		api,
-		portal,
-		portalDb,
 		productDb,
-		mailer,
 		entries,
 		product,
 		others,
@@ -492,7 +489,6 @@ export const startSystem = async ({ graceDays = 1, unit = NOTES, extras = [] } =
 		waitingNotices,
 		activity,
 		startOtherProduct,
-		settle,
 		/** Make the product unreachable (it answers 503 to everything) or reachable again. @param {boolean} value */
 		setReachable: (value) => {
 			reachable = value;
