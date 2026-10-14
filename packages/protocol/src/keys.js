@@ -45,7 +45,7 @@ const isObject = (value) => typeof value === 'object' && value !== null && !Arra
 const isOptionalSeconds = (value) => value === undefined || (Number.isInteger(value) && /** @type {number} */ (value) >= 0);
 
 /**
- * Validate and normalise a public Ed25519 JWK (drops any private or unknown members).
+ * Validate and normalize a public Ed25519 JWK (drops any private or unknown members).
  * @param {unknown} jwk
  * @returns {PublicJwk}
  */

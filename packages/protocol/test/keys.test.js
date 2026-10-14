@@ -125,7 +125,7 @@ describe('createKeyResolver', () => {
 		await expectCode(createKeyResolver({ jwks, isRevoked: (kid) => kid === 'b' }).resolve('b'), 'revoked_key');
 	});
 
-	it('honours nbf/exp overlap windows on keys', async () => {
+	it('honors nbf/exp overlap windows on keys', async () => {
 		const clock = createClock();
 		const t = clock.now() / 1000;
 		const old = await makeKey('old');

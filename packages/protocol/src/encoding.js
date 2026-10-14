@@ -100,7 +100,7 @@ export const getHeader = (headers, name) => {
 
 /**
  * Canonical JSON (RFC 8785 style): object keys sorted by UTF-16 code units, no whitespace, ECMAScript number and string
- * serialisation; `undefined` object members are omitted and `undefined` array items become `null` (as JSON.stringify).
+ * serialization; `undefined` object members are omitted and `undefined` array items become `null` (as JSON.stringify).
  * Throws on values JSON cannot represent (non-finite numbers, functions, symbols, bigints).
  * @param {unknown} value
  * @returns {string}

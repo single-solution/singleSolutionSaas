@@ -50,7 +50,7 @@ length is capped before parsing; `jose.compactVerify` runs with `algorithms: ['E
 
 `issueToken({ signer, issuer, websiteId, domain, productId, kind })` signs exactly
 `{ iss, jti, websiteId, domain, productId, kind, iat }`: no expiry, environment, scopes or address. `domain` is
-normalised with `normalizeDomain` (lower-case punycode; scheme, port, path, wildcards, IP literals, `localhost` and
+normalized with `normalizeDomain` (lower-case punycode; scheme, port, path, wildcards, IP literals, `localhost` and
 single-label names refused).
 
 `verifyToken({ token, keyResolver, issuer, productId, kind?, isRevoked? })` checks the signature against the pinned

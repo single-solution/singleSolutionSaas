@@ -207,7 +207,7 @@ describe('normalizeDomain', () => {
 		['shop.com.', 'shop.com'],
 		['münchen.de', 'xn--mnchen-3ya.de'],
 		['123.example.com', '123.example.com'],
-	])('normalises %s', (input, expected) => {
+	])('normalizes %s', (input, expected) => {
 		expect(normalizeDomain(input)).toBe(expected);
 	});
 
@@ -238,7 +238,7 @@ describe('normalizeDomain', () => {
 });
 
 describe('origins', () => {
-	it('canonicalises origins', () => {
+	it('canonicalizes origins', () => {
 		expect(canonicalOrigin('HTTPS://Shop.COM:443')).toBe('https://shop.com');
 		expect(canonicalOrigin('http://shop.com:80')).toBe('http://shop.com');
 		expect(canonicalOrigin('https://shop.com:8443')).toBe('https://shop.com:8443');
@@ -265,7 +265,7 @@ describe('origins', () => {
 			expect(canonicalOrigin(bad)).toBeNull();
 	});
 
-	it('recognises local origins on any port', () => {
+	it('recognizes local origins on any port', () => {
 		for (const origin of [
 			'http://localhost',
 			'https://localhost:3000',

@@ -208,7 +208,7 @@ describe('connect handshake', () => {
 		expectThrowCode(signed({ nonce: 'short' }), 'malformed');
 	});
 
-	it('canonicalises URLs for pinning', () => {
+	it('canonicalizes URLs for pinning', () => {
 		expect(canonicalUrl('HTTPS://Portal.Test:443/')).toBe('https://portal.test');
 		for (const bad of [1, 'nope', 'ftp://x', 'https://u:p@x', 'https://x/?q', 'https://x/#f'])
 			expectThrowCode(() => canonicalUrl(bad), 'invalid_argument');
