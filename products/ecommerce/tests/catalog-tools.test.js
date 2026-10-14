@@ -93,7 +93,9 @@ describe('CSV', () => {
 		expect(answer.status).toBe(200);
 		expect(answer.headers.get('content-type')).toBe('text/csv; charset=utf-8');
 		expect(answer.headers.get('content-disposition')).toBe('attachment; filename="products.csv"');
-		const [header, row] = answer.text.replace(/^\uFEFF/, '').split('\r\n');
+		// the byte order mark Excel needs to read UTF-8 arrives byte for byte (the decoded text leaves it out)
+		expect([...answer.bytes.slice(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
+		const [header, row] = answer.text.split('\r\n');
 		expect(header).toContain(`stock@${ids.shopFloor.id},stock@${ids.store.id}`);
 		expect(row).toContain(`${ids.phone.id},phone,Phone,active,physical,,,,,,,,true,${ids.phone.variants[0].id},PH-1,`);
 		expect(row).toContain(',1.00,,,5,,true,0,5');
@@ -231,10 +233,8 @@ describe('CSV', () => {
 			.collection(COLLECTIONS.orders)
 			.insertMany([order('2026-000001', '2026-09-01T10:00:00Z'), order('2026-000002', '2026-10-01T10:00:00Z')]);
 		const answer = await shop.api('GET', '/v1/csv/orders?from=2026-09-15&to=2026-12-31&status=delivered');
-		const lines = answer.text
-			.replace(/^\uFEFF/, '')
-			.trim()
-			.split('\r\n');
+		expect([...answer.bytes.slice(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
+		const lines = answer.text.trim().split('\r\n');
 		expect(lines[0]).toBe(
 			'number,placed_at,status,customer,city,product,variant,sku,quantity,unit_price,discount,total,currency,payment_method,payment_state',
 		);

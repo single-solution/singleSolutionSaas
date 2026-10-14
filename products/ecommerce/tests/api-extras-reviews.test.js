@@ -354,7 +354,9 @@ describe('reports', () => {
 				expect(answer.status).toBe(200);
 				expect(answer.headers.get('content-type')).toBe('text/csv; charset=utf-8');
 				expect(answer.headers.get('content-disposition')).toBe(`attachment; filename="${name}.csv"`);
-				expect(answer.text.replace(/^\uFEFF/, '').split('\r\n')[0]).toBe(header);
+				// the byte order mark Excel needs arrives byte for byte (the decoded text leaves it out)
+				expect([...answer.bytes.slice(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
+				expect(answer.text.split('\r\n')[0]).toBe(header);
 			}
 		const margin = await shop.api('GET', `/v1/reports/margin?${RANGE}&format=csv`);
 		expect(margin.text).toContain(`${phone.id},Report phone,2,30.00,40.00,-10`);

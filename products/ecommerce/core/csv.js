@@ -27,16 +27,16 @@ export const formatCell = (value, delimiter = ',') => {
 };
 
 /**
- * A whole document.
+ * A whole document, starting with the byte order mark.
  * @param {readonly string[]} header
  * @param {Iterable<readonly Cell[]>} rows
- * @param {{ delimiter?: string, bom?: boolean }} [options]
+ * @param {{ delimiter?: string }} [options]
  */
-export const toCsv = (header, rows, { delimiter = ',', bom = true } = {}) => {
+export const toCsv = (header, rows, { delimiter = ',' } = {}) => {
 	const line = (/** @type {readonly Cell[]} */ cells) =>
 		`${cells.map((cell) => formatCell(cell, delimiter)).join(delimiter)}\r\n`;
 	/** @type {string[]} */
-	const out = [bom ? CSV_BOM : '', line(header)];
+	const out = [CSV_BOM, line(header)];
 	for (const row of rows) out.push(line(row));
 	return out.join('');
 };

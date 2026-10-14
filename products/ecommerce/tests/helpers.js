@@ -255,7 +255,9 @@ export const setup = async ({ start = Date.parse('2026-10-05T10:00:00Z') } = {})
 				...(body === undefined ? {} : { body: typeof body === 'string' ? body : JSON.stringify(body) }),
 			}),
 		);
-		const text = await response.text();
+		// the bytes as sent (a CSV's byte order mark is in them; the decoded text, like `Response.text()`, leaves it out)
+		const bytes = new Uint8Array(await response.arrayBuffer());
+		const text = new TextDecoder().decode(bytes);
 		await flush();
 		/** @type {any} */
 		let json = null;
@@ -271,7 +273,7 @@ export const setup = async ({ start = Date.parse('2026-10-05T10:00:00Z') } = {})
 		const entry = described ? /** @type {Record<string, { response?: unknown }>} */ (apiJson)[described] : undefined;
 		if (!isText || entry?.response === undefined)
 			API.assert({ method, path, status: response.status, body: isText ? null : json });
-		return { status: response.status, headers: response.headers, json, text };
+		return { status: response.status, headers: response.headers, json, text, bytes };
 	};
 
 	/** An admin's dashboard session (Owner by default); returns the cookie. @param {'owner' | 'support'} [role] */

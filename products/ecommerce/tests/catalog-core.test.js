@@ -629,7 +629,7 @@ describe('CSV', () => {
 		expect(formatCell(false)).toBe('false');
 		expect(formatCell('-1')).toBe("'-1");
 		expect(formatCell('a;b', ';')).toBe('"a;b"');
-		expect(toCsv(['a'], [['x']], { bom: false })).toBe('a\r\nx\r\n');
+		expect(toCsv(['a'], [['x']])).toBe('\uFEFFa\r\nx\r\n');
 		expect(unescapeFormula("'x")).toBe("'x");
 		expect(parseCsv('a,b\r\n\r\n"x ""y""",z\rq,"line\nbreak"')).toEqual({
 			ok: true,

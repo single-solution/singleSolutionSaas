@@ -25,14 +25,14 @@ let idle;
 const byId = new Map();
 
 /**
- * The lines of a CSV answer, without the byte order mark.
- * @param {{ text: string }} answer
+ * The lines of a CSV answer, once its first bytes are checked: the byte order mark Excel needs to read UTF-8 arrives
+ * byte for byte (the decoded text leaves it out).
+ * @param {{ text: string, bytes: Uint8Array }} answer
  */
-const linesOf = (answer) =>
-	answer.text
-		.replace(/^\uFEFF/, '')
-		.trim()
-		.split('\r\n');
+const linesOf = (answer) => {
+	expect([...answer.bytes.slice(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
+	return answer.text.trim().split('\r\n');
+};
 
 /**
  * Write an order straight into the merchant database.
