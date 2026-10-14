@@ -36,7 +36,7 @@ const keyPath = (key) => key.split('/').map(encodeURIComponent).join('/');
  * when it names none.
  * @param {unknown} value
  */
-export const mediaPathOf = (value) => {
+const mediaPathOf = (value) => {
 	const path = `/${String(value ?? '').trim()}`.replace(/\/{2,}/g, '/').replace(/\/+$/, '');
 	return /^(\/[A-Za-z0-9._~-]+)+$/.test(path) ? path : MEDIA_PATH;
 };

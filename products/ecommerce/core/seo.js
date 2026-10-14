@@ -126,7 +126,7 @@ const isWordChar = (char) => /[\p{L}\p{N}]/u.test(char);
  * @param {string} text
  * @param {string} name
  */
-export const holdsName = (text, name) => {
+const holdsName = (text, name) => {
 	const haystack = String(text ?? '').toLocaleLowerCase();
 	const needle = String(name ?? '')
 		.trim()
