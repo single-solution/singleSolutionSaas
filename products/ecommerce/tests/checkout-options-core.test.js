@@ -341,6 +341,9 @@ const OPTIONS = {
 	rtoCount: 0,
 };
 
+/** The COD option of a list. @param {ReturnType<typeof paymentOptions>} options */
+const codOf = (options) => options.find((option) => option.method === 'cod');
+
 describe('payment options (E22, E23, E24)', () => {
 	const base = OPTIONS;
 
@@ -348,19 +351,19 @@ describe('payment options (E22, E23, E24)', () => {
 		const order = ['bank_transfer', 'cod', 'online', 'pickup'];
 		expect(paymentOptions({ ...base, order }).map((option) => option.method)).toEqual(order);
 		const fee = paymentOptions({ ...base, cod: { on: true, settings: { ...base.cod.settings, feePercent: 4 } } });
-		expect(fee[0]).toMatchObject({ method: 'cod', available: true, fee: 400 });
+		expect(codOf(fee)).toMatchObject({ method: 'cod', available: true, fee: 400 });
 		const pickup = { ...base, deliveryMethod: /** @type {any} */ ('pickup') };
-		expect(paymentOptions(pickup)[0]).toMatchObject({ method: 'cod', available: false, reason: 'needs_delivery' });
+		expect(codOf(paymentOptions(pickup))).toMatchObject({ method: 'cod', available: false, reason: 'needs_delivery' });
 		const atPickup = { ...pickup, cod: { on: true, settings: { ...base.cod.settings, atPickup: true } } };
-		expect(paymentOptions(atPickup)[0]).toMatchObject({ method: 'cod', available: true });
+		expect(codOf(paymentOptions(atPickup))).toMatchObject({ method: 'cod', available: true });
 	});
 
 	it('offers bank transfer without Payments when staff record it', () => {
 		const without = { ...base, paymentsConnected: false };
 		expect(paymentOptions(without).map((option) => option.method)).toEqual(['cod', 'pickup']);
 		expect(paymentOptions({ ...without, bankManual: true }).map((option) => option.method)).toEqual([
-			'cod',
 			'bank_transfer',
+			'cod',
 			'pickup',
 		]);
 	});
@@ -406,7 +409,7 @@ describe('payment options (E22, E23, E24)', () => {
 		expect(feeBaseOf(unpriced, 'goods_after_discounts')).toBe(10_000);
 		const cod = { on: true, settings: { ...COD, feePercent: 2 } };
 		const offered = { ...OPTIONS, cod, total: 9250 };
-		expect(paymentOptions(offered)[0]).toMatchObject({ method: 'cod', fee: 185 });
-		expect(paymentOptions({ ...offered, feeBase: 10_000 })[0]).toMatchObject({ method: 'cod', fee: 200 });
+		expect(codOf(paymentOptions(offered))).toMatchObject({ method: 'cod', fee: 185 });
+		expect(codOf(paymentOptions({ ...offered, feeBase: 10_000 }))).toMatchObject({ method: 'cod', fee: 200 });
 	});
 });

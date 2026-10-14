@@ -185,7 +185,7 @@ describe('placing an order', () => {
 		const placed = await placeOrder(data, { order, numberPrefix: 'A-', couponPerCustomer: 1 }, { now: shop.now() });
 		expect(placed.ok).toBe(true);
 		if (!placed.ok) return;
-		expect(placed.order.number).toBe('A-2026-000001');
+		expect(placed.order.number).toBe('A-000001');
 		expect(await stockOf(product.id)).toMatchObject({ stock: 1, inStock: true });
 		expect(
 			/** @type {any} */ (await data.collection(COLLECTIONS.coupons).findOne({ websiteId: data.websiteId, id: couponId }))
@@ -267,6 +267,37 @@ describe('placing an order', () => {
 		// the per-customer limit still counts the uses kept
 		expect(await place(2)).toMatchObject({ ok: false, code: 'offer_unavailable' });
 		expect(await place(3)).toMatchObject({ ok: true });
+	});
+
+	it('numbers orders in the form given: a running counter, or a year’s that starts after the highest number of its form', async () => {
+		const product = await shop.seedProduct({ stock: 5 });
+		const variantId = /** @type {string} */ (product.variants[0]?.id);
+		const place = (/** @type {Record<string, string>} */ form) =>
+			placeOrder(
+				data,
+				{ order: orderOf([{ productId: product.id, variantId, quantity: 1 }]), ...form, numberPrefix: 'N-' },
+				{ now: shop.now() },
+			);
+		await data
+			.collection(COLLECTIONS.orders)
+			.insertOne({ websiteId: data.websiteId, id: createId('ord'), number: 'N-2026-000041', customer: {} });
+		const yearly = await place({ numberPattern: '{prefix}{year}-{number}' });
+		expect(yearly.ok && yearly.order.number).toBe('N-2026-000042');
+		const running = await place({});
+		expect(running.ok && running.order.number).toBe('N-000001');
+		expect(
+			(
+				await data
+					.collection(COLLECTIONS.counters)
+					.find({ websiteId: data.websiteId, id: { $regex: '^orders-N-' } })
+					.toArray()
+			)
+				.map((counter) => [counter.id, counter.seq])
+				.sort(),
+		).toEqual([
+			['orders-N-2026', 42],
+			['orders-N-:', 1],
+		]);
 	});
 
 	it('takes stock from the first location that has it, books slots once and skips untracked items', async () => {

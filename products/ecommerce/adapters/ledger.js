@@ -14,12 +14,14 @@ import { createId, zonedParts } from '@ss/contracts';
 import { summarize } from '../core/catalog.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import { lotsByRule } from '../core/loyalty.js';
+import { counterIdOf, counterNumbers, numberFormOf, orderNumberOf } from '../core/order-numbers.js';
 import { balanceOf, compactLots, expireLots, spendFromLots, takeFromLots } from '../core/points.js';
 
 /** @typedef {import('@ss/app-kit').WebsiteData} WebsiteData */
 /** @typedef {import('mongodb').ClientSession} Session */
 /** @typedef {import('../core/model.js').OrderRecord} OrderRecord */
 /** @typedef {import('../core/model.js').LoyaltyRecord} LoyaltyRecord */
+/** @typedef {import('../core/order-numbers.js').NumberForm} NumberForm */
 
 /** Loyalty history entries kept per account (the newest). */
 const HISTORY_KEPT = 200;
@@ -503,22 +505,22 @@ const holdSlots = async (data, slots, session) => {
 const releaseSlots = (data, orderId, session) =>
 	data.collection(COLLECTIONS.slots).deleteMany({ websiteId: data.websiteId, orderId }, { session });
 
-/** Escape a text for a regular expression. @param {string} text */
-const escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
 /**
- * The highest sequence already used by an order number of a prefix and year (0 when none), whatever its digits.
+ * The highest sequence one counter already gave (0 when none), whatever its digits: the numbers of a year in the yearly
+ * form, of all time in the running one.
  * @param {WebsiteData} data
- * @param {{ prefix: string, year: number, session?: Session }} options
+ * @param {{ form: NumberForm, year: number, session?: Session }} options
  * @returns {Promise<number>}
  */
-const highestNumber = async (data, { prefix, year, session }) => {
+const highestNumber = async (data, { form, year, session }) => {
+	const numbers = counterNumbers(form, year);
 	const [found] = await data
 		.collection(COLLECTIONS.orders)
 		.aggregate(
 			[
-				{ $match: { websiteId: data.websiteId, number: { $regex: `^${escapeRegex(prefix)}${year}-\\d{1,12}$` } } },
-				{ $project: { n: { $toLong: { $arrayElemAt: [{ $split: ['$number', '-'] }, -1] } } } },
+				{ $match: { websiteId: data.websiteId, number: { $regex: numbers } } },
+				{ $project: { found: { $regexFind: { input: '$number', regex: numbers } } } },
+				{ $project: { n: { $toLong: { $arrayElemAt: ['$found.captures', 0] } } } },
 				{ $group: { _id: null, max: { $max: '$n' } } },
 			],
 			{ session },
@@ -528,21 +530,15 @@ const highestNumber = async (data, { prefix, year, session }) => {
 };
 
 /**
- * The counter of a prefix and year (E30).
- * @param {string} prefix @param {number} year
- */
-export const counterId = (prefix, year) => `orders-${prefix}${year}`;
-
-/**
- * The next order number of a year (the year in the business time zone, PLAN 0.8.10 K8; E30):
- * `<prefix><year>-<sequence of numberDigits>` (`SH-2026-0043`). A missing yearly counter starts after the highest
- * number already used for that prefix and year.
+ * The next order number (E30, `core/order-numbers.js`): `<prefix><sequence>` from one running counter, or
+ * `<prefix><year>-<sequence>` from the counter of the year (the year in the business time zone, PLAN 0.8.10 K8). A
+ * missing counter starts after the highest number already used in its form.
  * @param {WebsiteData} data
- * @param {{ prefix: string, year: number, digits?: number, session?: Session }} options
+ * @param {{ form: NumberForm, year: number, session?: Session }} options
  */
-const nextOrderNumber = async (data, { prefix, year, digits = 6, session }) => {
+const nextOrderNumber = async (data, { form, year, session }) => {
 	const counters = data.collection(COLLECTIONS.counters);
-	const id = counterId(prefix, year);
+	const id = counterIdOf(form, year);
 	const bump = () =>
 		counters.findOneAndUpdate(
 			{ websiteId: data.websiteId, id },
@@ -551,7 +547,7 @@ const nextOrderNumber = async (data, { prefix, year, digits = 6, session }) => {
 		);
 	let counter = /** @type {any} */ (await bump());
 	if (!counter) {
-		const used = await highestNumber(data, { prefix, year, ...(session ? { session } : {}) });
+		const used = await highestNumber(data, { form, year, ...(session ? { session } : {}) });
 		try {
 			await counters.updateOne(
 				{ websiteId: data.websiteId, id },
@@ -563,19 +559,20 @@ const nextOrderNumber = async (data, { prefix, year, digits = 6, session }) => {
 		}
 		counter = /** @type {any} */ (await bump());
 	}
-	return `${prefix}${year}-${String(counter?.seq ?? 1).padStart(Math.min(8, Math.max(4, digits)), '0')}`;
+	return orderNumberOf(form, { year, sequence: Number(counter?.seq ?? 1) });
 };
 
 /**
- * Set the next order number of a prefix and year (E30 `POST /v1/orders/counter`), never at or below one already used.
+ * Set the next sequence of a counter (E30 `POST /v1/orders/counter`: the running one, or a year's), never at or below
+ * one already used.
  * @param {WebsiteData} data
- * @param {{ prefix: string, year: number, next: number }} input
+ * @param {{ form: NumberForm, year: number, next: number }} input `year`: only the yearly form reads it
  * @returns {Promise<{ ok: true, next: number } | { ok: false, used: number }>}
  */
-export const setOrderCounter = async (data, { prefix, year, next }) => {
-	const used = await highestNumber(data, { prefix, year });
+export const setOrderCounter = async (data, { form, year, next }) => {
+	const used = await highestNumber(data, { form, year });
 	if (next <= used) return { ok: false, used };
-	const id = counterId(prefix, year);
+	const id = counterIdOf(form, year);
 	await data
 		.collection(COLLECTIONS.counters)
 		.updateOne({ websiteId: data.websiteId, id }, { $set: { seq: next - 1 }, $setOnInsert: { id } }, { upsert: true });
@@ -590,6 +587,7 @@ export const setOrderCounter = async (data, { prefix, year, next }) => {
  *   are filled from where the stock was taken)
  * @property {string} numberPrefix the `checkout` setting (may be '')
  * @property {number} [numberDigits] the `checkout` setting (E30; default 6)
+ * @property {string} [numberPattern] the `checkout` setting (E30; default one running counter)
  * @property {string[]} [lockedDealIds] deals whose locks the order keeps (E18)
  * @property {string[]} [locationOrder] locations to take stock from, in order (multi_location)
  * @property {number | null} [couponPerCustomer] the coupon's per-customer limit
@@ -655,9 +653,8 @@ export const placeOrder = async (data, placement, { now, timeZone = 'UTC' }) => 
 	try {
 		const placed = await data.transaction(async (session) => {
 			const number = await nextOrderNumber(data, {
-				prefix: placement.numberPrefix,
+				form: numberFormOf(placement),
 				year: zonedParts(now, timeZone).year,
-				digits: placement.numberDigits ?? 6,
 				session,
 			});
 			const stock = await holdStock(

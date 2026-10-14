@@ -31,7 +31,7 @@ import { taxOf, taxPercent } from './taxes.js';
 export const MAX_LINES = 50;
 export const MAX_QUANTITY = 99;
 /** Payment methods, in their default order (`checkout.paymentOrder`, E22). @type {ReadonlyArray<PaymentMethod>} */
-export const PAYMENT_METHODS = Object.freeze(/** @type {PaymentMethod[]} */ (['cod', 'online', 'bank_transfer', 'pickup']));
+export const PAYMENT_METHODS = Object.freeze(/** @type {PaymentMethod[]} */ (['online', 'bank_transfer', 'cod', 'pickup']));
 /** A deal lock's longest text (`adapters/crypto.js`). */
 const MAX_LOCK = 600;
 /** Address fields a merchant may make required (`checkout.addressRequired`, E22; name and phone always are). */

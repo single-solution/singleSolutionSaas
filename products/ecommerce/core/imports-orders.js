@@ -21,6 +21,7 @@ import { statusOf } from './flow.js';
 import { phoneDigitsOf, phoneRules } from './guests.js';
 import { ID_PREFIX } from './model.js';
 import { MAX_AMOUNT } from './money.js';
+import { describeNumberForm, numberFormOf, numberMatcher } from './order-numbers.js';
 import {
 	ADDRESS_FIELDS,
 	MAX_NOTE,
@@ -46,10 +47,11 @@ import { REVIEW_STATUSES, checkReply, checkReviewInput } from './reviews.js';
 
 /**
  * What the checks of one import call read of the website (the collections' `prepare`): the order flow, the order
- * number's form (`checkout.numberPrefix`, `numberDigits`), the shop's currency (`catalog.currency`), its phone rules
- * (as checkout reads phones, K12: `checkout.defaultCallingCode`, else the business.json country's calling code, and
- * `trunkPrefix`; so national numbers read as the shop's) and the time of the call.
- * @typedef {{ now: number, flow: OrderFlow, numberPrefix: string, numberDigits: number, currency: string,
+ * number's form (`checkout.numberPattern`, `numberPrefix`, `numberDigits`; `core/order-numbers.js`), the shop's
+ * currency (`catalog.currency`), its phone rules (as checkout reads phones, K12: `checkout.defaultCallingCode`, else
+ * the business.json country's calling code, and `trunkPrefix`; so national numbers read as the shop's) and the time of
+ * the call.
+ * @typedef {{ now: number, flow: OrderFlow, numbers: import('./order-numbers.js').NumberForm, currency: string,
  *   phoneRules: { defaultCallingCode: string, trunkPrefix: string } }} ImportRules
  */
 
@@ -81,17 +83,11 @@ const STAFF_ID = /^[A-Za-z0-9_.:@-]{1,80}$/;
 const PAYMENTS_ID = /^[A-Za-z0-9_-]{1,80}$/;
 const KEY_HASH = /^[A-Za-z0-9_-]{43}$/;
 
-/** Order numbers' parts, `<prefix><year>-<sequence>`, as `finish` reads them to set the counters (E30). */
-export const NUMBER_PARTS = '^(.*)(\\d{4})-(\\d{1,12})$';
-
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
 const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /** @param {unknown} value */
 const missing = (value) => value === undefined || value === null;
-
-/** @param {string} text */
-const escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /**
  * A record's known fields, from their names separated by spaces.
@@ -340,8 +336,7 @@ export const importRules = ({ flow, checkout, catalog, country, now }) => {
 	return {
 		now,
 		flow: /** @type {OrderFlow} */ (flow),
-		numberPrefix: typeof checkout.numberPrefix === 'string' ? checkout.numberPrefix : '',
-		numberDigits: Math.min(8, Math.max(4, Number.isSafeInteger(checkout.numberDigits) ? Number(checkout.numberDigits) : 6)),
+		numbers: numberFormOf(checkout),
 		currency: typeof catalog.currency === 'string' && catalog.currency ? catalog.currency : 'USD',
 		phoneRules: { defaultCallingCode, trunkPrefix },
 	};
@@ -454,12 +449,6 @@ const RELEASED_ROLES = Object.freeze(/** @type {StatusRole[]} */ (['cancelled', 
 const WAITING = Object.freeze(/** @type {StatusRole[]} */ (['awaiting_payment', 'awaiting_confirmation']));
 /** Who wrote a log entry when an import does not say. */
 const IMPORTED_BY = Object.freeze({ kind: 'server', id: 'server', name: 'Server' });
-
-/**
- * The website's order number form: `<prefix><year>-<sequence>`, the sequence of at least `numberDigits` digits (E30).
- * @param {ImportRules} rules
- */
-const numberForm = (rules) => new RegExp(`^${escapeRegex(rules.numberPrefix)}\\d{4}-\\d{${rules.numberDigits},12}$`);
 
 /**
  * Who made a payment or refund entry ({@link IMPORTED_BY} when not given).
@@ -870,10 +859,10 @@ export const checkImportedOrder = (record, rules) => {
 	c.fields(record, '', ORDER_FIELDS, 'an order');
 	const id = c.id(record.id, ID_PREFIX.order, '/id') ?? '';
 	const number = c.text(record.number, '/number', 40, { required: true });
-	if (number !== '' && !numberForm(rules).test(number))
+	if (number !== '' && !numberMatcher(rules.numbers).test(number))
 		c.fail(
 			'/number',
-			`An order number of this website is ${rules.numberPrefix}<year>-<at least ${rules.numberDigits} digits> (checkout.numberPrefix and numberDigits).`,
+			`An order number of this website is ${describeNumberForm(rules.numbers)} (checkout.numberPattern, numberPrefix and numberDigits).`,
 		);
 	const status = typeof record.status === 'string' ? record.status : '';
 	const definition = statusOf(flow, status);

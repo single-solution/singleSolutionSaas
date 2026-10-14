@@ -82,7 +82,10 @@ describe('bookings', () => {
 		const first = await newShopper();
 		const quote = await visit('POST', '/v1/shop/cart/quote', { body: { lines: [{ productId: service.id, slot }] } });
 		expect(quote.json).toMatchObject({ delivery: { method: 'none' }, ready: true, lines: [{ slot: { start: slot } }] });
-		expect(quote.json.paymentMethods[0]).toMatchObject({ method: 'cod', available: false, reason: 'needs_delivery' });
+		expect(quote.json.paymentMethods.find((/** @type {any} */ m) => m.method === 'cod')).toMatchObject({
+			available: false,
+			reason: 'needs_delivery',
+		});
 		const placed = await place(first, { lines: [{ productId: service.id, slot }], payment: 'online' });
 		expect(placed.status).toBe(201);
 		expect(placed.json.order).toMatchObject({

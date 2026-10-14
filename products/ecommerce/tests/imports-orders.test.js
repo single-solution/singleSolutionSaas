@@ -352,6 +352,8 @@ const placeNew = async (key) => {
 
 beforeAll(async () => {
 	shop = await readyShop();
+	// numbers restart each year, as the imported shop's (2026-000002 …)
+	await shop.setting('checkout', 'numberPattern', '{prefix}{year}-{number}');
 	data = await shop.db();
 	await data.ensureIndexes((await import('../adapters/product.js')).INDEXES);
 	const product = await shop.seedProduct({ id: PRODUCT, slug: 'phone', price: 2500, stock: 5, serialized: true });
@@ -655,6 +657,27 @@ describe('import of shoppers and orders (K10)', () => {
 		);
 		expect(entries.length).toBeGreaterThan(10);
 		expect(entries.every((entry) => entry.copy === 'none')).toBe(true);
+	});
+
+	it('with one running number, takes numbers of that form only and finish sets the running counter after them', async () => {
+		await shop.setting('checkout', 'numberPattern', '{prefix}{number}');
+		const last = /** @type {any} */ (orders().find((order) => order.id === LAST_YEAR));
+		const running = {
+			...last,
+			id: idOf('ord', 90),
+			number: '000120',
+			lines: [lineOf(90, OTHER, variants.other, { unitPrice: 1000, quantity: 3, total: 3000 })],
+			payments: [{ ...last.payments[0], id: idOf('opy', 90) }],
+		};
+		expect((await send('orders', [{ ...running, number: '2026-000120' }], { dryRun: true })).json.failed).toEqual([
+			{ line: 1, id: running.id, errors: [{ path: '/number', message: expect.stringContaining('<at least 6 digits>') }] },
+		]);
+		expect((await send('orders', [running])).json).toMatchObject({ inserted: 1, failed: [] });
+		expect(await finish()).toMatchObject({ countersSet: 1 });
+		const placed = await placeNew('after-running-import');
+		expect(placed.status).toBe(201);
+		expect(placed.json.order.number).toBe('000121');
+		await shop.setting('checkout', 'numberPattern', '{prefix}{year}-{number}');
 	});
 
 	it('reads national phone numbers with the business.json country’s calling code (K12)', async () => {

@@ -2,10 +2,17 @@
 	"type": "object",
 	"additionalProperties": false,
 	"properties": {
+		"numberPattern": {
+			"type": "string",
+			"title": "Order number form",
+			"description": "{prefix}{number}: one running number (SH-001043). {prefix}{year}-{number}: the number starts again each year, by your business time zone's year (SH-2026-0043).",
+			"default": "{prefix}{number}",
+			"enum": ["{prefix}{number}", "{prefix}{year}-{number}"]
+		},
 		"numberPrefix": {
 			"type": "string",
 			"title": "Order number prefix",
-			"description": "Put before every order number (for example SH-). Order numbers are <prefix><year>-<number> by your business time zone's year.",
+			"description": "Put before every order number (for example SH-); use letters, digits, - and _.",
 			"default": "",
 			"maxLength": 12
 		},
@@ -411,7 +418,7 @@
 			"type": "array",
 			"title": "Payment methods order",
 			"description": "The order the cart lists them; the first available is preselected.",
-			"default": ["cod", "online", "bank_transfer", "pickup"],
+			"default": ["online", "bank_transfer", "cod", "pickup"],
 			"items": {
 				"type": "string",
 				"enum": ["cod", "online", "bank_transfer", "pickup"]
@@ -493,7 +500,7 @@
 		"numberDigits": {
 			"type": "integer",
 			"title": "Order number digits",
-			"description": "The digits of the number part: SH-2026-0043 has 4.",
+			"description": "The fewest digits of the number part (zeros in front): SH-001043 has 6, SH-2026-0043 has 4.",
 			"default": 6,
 			"minimum": 4,
 			"maximum": 8

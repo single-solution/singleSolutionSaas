@@ -190,18 +190,33 @@ describe('order editing and numbers (E29, E30)', () => {
 		await shop.api('DELETE', `/v1/deals/${made.json.id}`);
 	});
 
-	it('sets the next order number, never below one used', async () => {
+	it('sets the next order number, never below one used: the running counter, or a year’s with the yearly form', async () => {
 		const year = new Date(shop.now()).getUTCFullYear();
 		const { id } = await confirmedOrder();
-		const used = Number(
-			String((await orderRecord(id)).number)
-				.split('-')
-				.pop(),
-		);
-		expect(codeOf(await shop.api('POST', '/v1/orders/counter', { year, next: used }))).toBe('validation_failed');
-		const set = await shop.api('POST', '/v1/orders/counter', { year, next: used + 100 });
-		expect(set.json.next).toBe(used + 100);
+		const used = Number((await orderRecord(id)).number);
+		expect(codeOf(await shop.api('POST', '/v1/orders/counter', { next: used }))).toBe('validation_failed');
+		// the running counter has no year
+		const yearGiven = await shop.api('POST', '/v1/orders/counter', { year, next: used + 100 });
+		expect(yearGiven.json.errors[0]).toMatchObject({ path: '/year' });
+		const set = await shop.api('POST', '/v1/orders/counter', { next: used + 100 });
+		expect(set.json).toEqual({ prefix: '', year: null, next: used + 100 });
 		const after = await confirmedOrder();
-		expect(String((await orderRecord(after.id)).number).endsWith(String(used + 100))).toBe(true);
+		expect((await orderRecord(after.id)).number).toBe(String(used + 100).padStart(6, '0'));
+
+		// the yearly form: a counter per year, which starts after the highest number of that year
+		await shop.setting('checkout', 'numberPattern', '{prefix}{year}-{number}');
+		await shop.setting('checkout', 'numberPrefix', 'Y-');
+		const first = await confirmedOrder();
+		expect((await orderRecord(first.id)).number).toBe(`Y-${year}-000001`);
+		expect((await shop.api('POST', '/v1/orders/counter', { next: 50 })).json.errors[0]).toMatchObject({ path: '/year' });
+		expect(codeOf(await shop.api('POST', '/v1/orders/counter', { year, next: 1 }))).toBe('validation_failed');
+		expect((await shop.api('POST', '/v1/orders/counter', { year, next: 50 })).json).toEqual({ prefix: 'Y-', year, next: 50 });
+		const fiftieth = await confirmedOrder();
+		expect((await orderRecord(fiftieth.id)).number).toBe(`Y-${year}-000050`);
+		await shop.setting('checkout', 'numberPattern', '{prefix}{number}');
+		await shop.setting('checkout', 'numberPrefix', '');
+		// back to the running form: its counter goes on where it was
+		const later = await confirmedOrder();
+		expect((await orderRecord(later.id)).number).toBe(String(used + 101).padStart(6, '0'));
 	});
 });

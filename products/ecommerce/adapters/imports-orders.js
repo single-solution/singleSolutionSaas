@@ -10,7 +10,6 @@
  * @module
  */
 import {
-	NUMBER_PARTS,
 	checkImportedAlert,
 	checkImportedCustomer,
 	checkImportedLoyalty,
@@ -27,7 +26,9 @@ import {
 import { ObjectId } from 'mongodb';
 import { COLLECTIONS } from '../core/model.js';
 import { ratingSummary } from '../core/reviews.js';
-import { counterId, setOrderCounter } from './ledger.js';
+import { setOrderCounter } from './ledger.js';
+import { escapeRegex } from '../core/lookup.js';
+import { counterIdOf, isYearly, numberFormOf } from '../core/order-numbers.js';
 
 /** @typedef {import('@ss/app-kit').WebsiteData} WebsiteData */
 /** @typedef {import('../core/imports-orders.js').ImportRules} ImportRules */
@@ -303,36 +304,38 @@ const finishSerials = async (data, { after, limit }) => {
 };
 
 /**
- * The order counters (E30): for each prefix and year the orders' numbers use, a counter behind the highest number is
- * set to it (by the ledger's own `setOrderCounter`), so the next order placed gets the number after.
+ * The order counters (E30): the counter of the website's number form (`core/order-numbers.js`) — the running one, or
+ * each year's that imported numbers use — behind the highest number in that form is set to it (by the ledger's own
+ * `setOrderCounter`), so the next order placed gets the number after.
  * @param {WebsiteData} data
+ * @param {import('../core/order-numbers.js').NumberForm} form
  */
-const finishCounters = async (data) => {
+const finishCounters = async (data, form) => {
 	const { websiteId } = data;
+	const yearly = isYearly(form);
+	const numbers = yearly ? `^${escapeRegex(form.prefix)}(\\d{4})-(\\d{1,12})$` : `^${escapeRegex(form.prefix)}()(\\d{1,12})$`;
 	const rows = await data
 		.collection(COLLECTIONS.orders)
 		.aggregate([
-			{ $match: { websiteId, number: { $type: 'string' } } },
-			{ $project: { _id: 0, parts: { $regexFind: { input: '$number', regex: NUMBER_PARTS } } } },
-			{ $match: { parts: { $ne: null } } },
+			{ $match: { websiteId, number: { $regex: numbers } } },
+			{ $project: { _id: 0, parts: { $regexFind: { input: '$number', regex: numbers } } } },
 			{
 				$group: {
-					_id: { prefix: { $arrayElemAt: ['$parts.captures', 0] }, year: { $arrayElemAt: ['$parts.captures', 1] } },
-					highest: { $max: { $toLong: { $arrayElemAt: ['$parts.captures', 2] } } },
+					_id: { $arrayElemAt: ['$parts.captures', 0] },
+					highest: { $max: { $toLong: { $arrayElemAt: ['$parts.captures', 1] } } },
 				},
 			},
 		])
 		.toArray();
 	let set = 0;
 	for (const row of rows) {
-		const prefix = String(row._id.prefix);
-		const year = Number(row._id.year);
+		const year = yearly ? Number(row._id) : 0;
 		const highest = Number(row.highest);
 		const counter = await data
 			.collection(COLLECTIONS.counters)
-			.findOne({ websiteId, id: counterId(prefix, year) }, { projection: { _id: 0, seq: 1 } });
+			.findOne({ websiteId, id: counterIdOf(form, year) }, { projection: { _id: 0, seq: 1 } });
 		if (counter && Number(counter.seq) >= highest) continue;
-		await setOrderCounter(data, { prefix, year, next: highest + 1 });
+		await setOrderCounter(data, { form, year, next: highest + 1 });
 		set += 1;
 	}
 	return set;
@@ -414,7 +417,16 @@ export const orderImports = (deps) => {
 				name: 'counters',
 				key: /^$/,
 				zero: { countersSet: 0 },
-				run: async (ctx) => ({ read: 0, last: null, counts: { countersSet: await finishCounters(await ctx.data()) } }),
+				run: async (ctx) => ({
+					read: 0,
+					last: null,
+					counts: {
+						countersSet: await finishCounters(
+							await ctx.data(),
+							numberFormOf(await deps.settings(ctx.websiteId, 'checkout')),
+						),
+					},
+				}),
 			},
 		],
 		totals: async (ctx) => {

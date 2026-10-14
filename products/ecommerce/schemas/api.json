@@ -5716,7 +5716,7 @@
 				},
 				"number": {
 					"type": "string",
-					"description": "The order number, unique per website (<prefix><year>-<sequence>)."
+					"description": "The order number, unique per website (checkout.numberPattern: <prefix><sequence>, or <prefix><year>-<sequence>)."
 				},
 				"customer": {
 					"$ref": "#/components/schemas/OrderCustomer"
@@ -6998,7 +6998,7 @@
 				},
 				"number": {
 					"type": "string",
-					"description": "The order number, unique per website (<prefix><year>-<sequence>)."
+					"description": "The order number, unique per website (checkout.numberPattern: <prefix><sequence>, or <prefix><year>-<sequence>)."
 				},
 				"customer": {
 					"$ref": "#/components/schemas/OrderCustomer"
@@ -11332,7 +11332,7 @@
 				},
 				"number": {
 					"type": "string",
-					"description": "Unique per website: <checkout.numberPrefix><year>-<sequence>."
+					"description": "Unique per website, in the form of checkout.numberPattern: <numberPrefix><sequence>, or <numberPrefix><year>-<sequence>."
 				},
 				"status": {
 					"type": "string",
@@ -21307,16 +21307,17 @@
 		}
 	},
 	"POST /v1/orders/counter": {
-		"summary": "Set the next order number of a year",
-		"description": "Numbers are <checkout numberPrefix><year>-<sequence>. 422 at /next when that number or a higher one of the year is already used; 422 at /year or /next for values out of range.",
+		"summary": "Set the next order number",
+		"description": "Numbers take the form of the checkout setting numberPattern: <numberPrefix><sequence> from one running counter (give only next), or <numberPrefix><year>-<sequence> from a counter per year (give year and next). 422 at /next when that number or a higher one is already used; 422 at /year when year is missing with the yearly form or given without it, or at /year or /next for values out of range.",
 		"body": {
 			"type": "object",
-			"required": ["year", "next"],
+			"required": ["next"],
 			"properties": {
 				"year": {
 					"type": "integer",
 					"minimum": 2000,
-					"maximum": 9999
+					"maximum": 9999,
+					"description": "With the yearly form only: the year whose counter is set."
 				},
 				"next": {
 					"type": "integer",
@@ -21336,7 +21337,8 @@
 					"description": "The checkout setting numberPrefix."
 				},
 				"year": {
-					"type": "integer"
+					"type": ["integer", "null"],
+					"description": "The year whose counter was set; null for the running counter."
 				},
 				"next": {
 					"type": "integer",

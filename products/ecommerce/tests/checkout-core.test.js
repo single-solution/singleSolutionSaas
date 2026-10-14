@@ -350,11 +350,11 @@ describe('payment methods', () => {
 		rtoCount: 0,
 	};
 
-	it('offers COD with its advance, online, transfer and pickup', () => {
+	it('offers online, transfer, COD with its advance and pickup, in that order by default', () => {
 		expect(paymentOptions(base)).toEqual([
-			{ method: 'cod', available: true, reason: null, advance: 100, fee: 0 },
 			{ method: 'online', available: true, reason: null, advance: 0, fee: 0 },
 			{ method: 'bank_transfer', available: true, reason: null, advance: 0, fee: 0 },
+			{ method: 'cod', available: true, reason: null, advance: 100, fee: 0 },
 			{ method: 'pickup', available: false, reason: 'needs_pickup', advance: 0, fee: 0 },
 		]);
 	});
@@ -362,10 +362,10 @@ describe('payment methods', () => {
 	it('says why a method cannot be used', () => {
 		const reasons = (/** @type {Partial<typeof base>} */ over) =>
 			paymentOptions({ ...base, ...over }).map((option) => `${option.method}:${option.reason ?? 'ok'}`);
-		expect(reasons({ deliveryMethod: 'pickup' })).toEqual(['cod:needs_delivery', 'online:ok', 'bank_transfer:ok', 'pickup:ok']);
-		expect(reasons({ digital: true })).toEqual(['cod:digital_items', 'online:ok', 'bank_transfer:ok', 'pickup:needs_pickup']);
+		expect(reasons({ deliveryMethod: 'pickup' })).toEqual(['online:ok', 'bank_transfer:ok', 'cod:needs_delivery', 'pickup:ok']);
+		expect(reasons({ digital: true })).toEqual(['online:ok', 'bank_transfer:ok', 'cod:digital_items', 'pickup:needs_pickup']);
 		expect(reasons({ deliveryMethod: 'pickup', digital: true }).at(-1)).toBe('pickup:digital_items');
-		expect(reasons({ total: 6000 })[0]).toBe('cod:over_max');
+		expect(reasons({ total: 6000 })[2]).toBe('cod:over_max');
 		expect(reasons({ paymentsConnected: false, rtoCount: 3 })).toEqual(['cod:advance_unavailable', 'pickup:needs_pickup']);
 		expect(reasons({ cod: { ...cod, on: false }, pickupPossible: false, offered: [] })).toEqual([]);
 	});

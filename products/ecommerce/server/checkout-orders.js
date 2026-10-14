@@ -995,6 +995,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 				order,
 				numberPrefix: String(checkout.numberPrefix),
 				numberDigits: Number(checkout.numberDigits ?? 6),
+				numberPattern: String(checkout.numberPattern ?? ''),
 				locationOrder,
 				couponPerCustomer: q.coupon?.perCustomer ?? null,
 				slots,

@@ -23,7 +23,7 @@ import {
 const NOW = Date.parse('2026-10-05T10:00:00Z');
 const RULES = importRules({
 	flow: DEFAULT_FLOW,
-	checkout: { numberPrefix: 'S-', numberDigits: 4, defaultCallingCode: '+1' },
+	checkout: { numberPattern: '{prefix}{year}-{number}', numberPrefix: 'S-', numberDigits: 4, defaultCallingCode: '+1' },
 	catalog: { currency: 'USD' },
 	country: 'GB',
 	now: NOW,
@@ -52,7 +52,7 @@ const LINE = {
 	total: 1900,
 };
 
-/** A valid delivered order (default flow, `S-` numbers of 4 digits, USD); `patch` replaces top-level fields. @param {Record<string, unknown>} [patch] */
+/** A valid delivered order (default flow, yearly `S-` numbers of 4 digits, USD); `patch` replaces top-level fields. @param {Record<string, unknown>} [patch] */
 const order = (patch = {}) => ({
 	id: idOf('ord', 1),
 	number: 'S-2026-0007',
@@ -78,16 +78,14 @@ const order = (patch = {}) => ({
 describe('import rules', () => {
 	it('read the order number form, currency and phone rules, with safe defaults', () => {
 		expect(RULES).toMatchObject({
-			numberPrefix: 'S-',
-			numberDigits: 4,
+			numbers: { pattern: '{prefix}{year}-{number}', prefix: 'S-', digits: 4 },
 			currency: 'USD',
 			phoneRules: { defaultCallingCode: '+1' },
 		});
 		expect(
 			importRules({ flow: DEFAULT_FLOW, checkout: { numberDigits: 12 }, catalog: {}, country: null, now: NOW }),
 		).toMatchObject({
-			numberPrefix: '',
-			numberDigits: 8,
+			numbers: { pattern: '{prefix}{number}', prefix: '', digits: 8 },
 			currency: 'USD',
 			phoneRules: { defaultCallingCode: '', trunkPrefix: '' },
 		});
@@ -99,7 +97,7 @@ describe('import rules', () => {
 			country: 'GB',
 			now: NOW,
 		});
-		expect(british).toMatchObject({ numberDigits: 6, currency: 'GBP', phoneRules: { defaultCallingCode: '+44' } });
+		expect(british).toMatchObject({ numbers: { digits: 6 }, currency: 'GBP', phoneRules: { defaultCallingCode: '+44' } });
 		expect(valueOf(checkImportedCustomer({ id: idOf('cus', 9), name: 'Pat', phone: '020 7946 0958' }, british))).toMatchObject({
 			phone: '+442079460958',
 		});
@@ -325,6 +323,26 @@ describe('orders', () => {
 			payments: [],
 		});
 		expect(valueOf(checkImportedOrder(free, RULES)).payment).toMatchObject({ state: 'paid', paid: 0 });
+	});
+
+	it('take a number in the website’s form only: running or yearly, with at least its digits', () => {
+		const running = { ...RULES, numbers: { ...RULES.numbers, pattern: /** @type {const} */ ('{prefix}{number}') } };
+		expect(pathsOf(checkImportedOrder(order({ number: 'S-0007' }), running))).toEqual([]);
+		expect(pathsOf(checkImportedOrder(order({ number: 'S-1234567' }), running))).toEqual([]);
+		const refused = checkImportedOrder(order({ number: 'S-2026-0007' }), running);
+		expect(refused).toEqual({
+			ok: false,
+			errors: [
+				{
+					path: '/number',
+					message:
+						'An order number of this website is S-<at least 4 digits> (checkout.numberPattern, numberPrefix and numberDigits).',
+				},
+			],
+		});
+		expect(pathsOf(checkImportedOrder(order({ number: 'S-007' }), running))).toEqual(['/number']);
+		expect(pathsOf(checkImportedOrder(order({ number: 'S-0007' }), RULES))).toEqual(['/number']);
+		expect(pathsOf(checkImportedOrder(order({ number: 'S-2026-007' }), RULES))).toEqual(['/number']);
 	});
 
 	it('refuse an order whose number, status, role, history or times do not fit', () => {

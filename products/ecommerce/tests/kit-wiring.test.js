@@ -650,7 +650,8 @@ describe('K7 and K8: Format and business time zone', () => {
 		});
 	});
 
-	it('numbers orders by the year in the business time zone', async () => {
+	it('numbers orders by the year in the business time zone (the yearly form)', async () => {
+		await shop.setting('checkout', 'numberPattern', '{prefix}{year}-{number}');
 		await useTimeZone('Asia/Karachi');
 		shop.advance(Date.parse('2026-12-31T20:00:00Z') - shop.now());
 		const item = await shop.seedProduct({ price: 1000, stock: 3 });
@@ -667,5 +668,6 @@ describe('K7 and K8: Format and business time zone', () => {
 		);
 		expect(placed.status).toBe(201);
 		expect(placed.json.order.number).toMatch(/^2027-\d{6}$/);
+		await shop.setting('checkout', 'numberPattern', '{prefix}{number}');
 	});
 });

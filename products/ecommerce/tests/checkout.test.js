@@ -95,7 +95,8 @@ describe('quote', () => {
 			points: null,
 			ready: true,
 		});
-		expect(response.json.paymentMethods.map((/** @type {any} */ m) => m.method)).toEqual(['cod', 'online', 'bank_transfer']);
+		// the default order: online, bank transfer, then cash on delivery
+		expect(response.json.paymentMethods.map((/** @type {any} */ m) => m.method)).toEqual(['online', 'bank_transfer', 'cod']);
 	});
 
 	it('uses the default fee, reports shortfalls without stock counts and checks the body', async () => {
@@ -217,7 +218,8 @@ describe('placing with cash on delivery', () => {
 			canCancel: true,
 			note: 'Leave at door',
 		});
-		expect(response.json.order.number).toMatch(/^2026-\d{6}$/);
+		// the default number form: one running number of 6 digits
+		expect(response.json.order.number).toMatch(/^\d{6}$/);
 		expect(response.json.order).not.toHaveProperty('staffNote');
 		expect(await stockOf(item.id)).toBe(2);
 		const record = await orderRecord(response.json.order.id);

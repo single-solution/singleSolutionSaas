@@ -36,6 +36,7 @@ import {
 } from '../core/orders.js';
 import { checkRestatus, statusOf } from '../core/flow.js';
 import { COLLECTIONS } from '../core/model.js';
+import { isYearly, numberFormOf } from '../core/order-numbers.js';
 import { createMedia } from './catalog-media.js';
 import { createCustomers } from './orders-customers.js';
 import { createMoves } from './orders-moves.js';
@@ -356,20 +357,35 @@ export const createOrders = (product, service, { ordering }) => {
 		return { scope, deleted };
 	};
 
-	/** POST /v1/orders/counter `{ year, next }`: the next order number of a year (E30). @param {any} ctx */
+	/**
+	 * POST /v1/orders/counter `{ year?, next }`: the next order number (E30) — of the running counter, or of a year's with
+	 * the yearly form (`checkout.numberPattern`; `year` is given exactly then).
+	 * @param {any} ctx
+	 */
 	const setCounter = async (ctx) => {
 		const body = typeof ctx.body === 'object' && ctx.body !== null ? ctx.body : {};
+		const s = await service.site(ctx);
+		const form = numberFormOf(await s.values('checkout'));
+		const yearly = isYearly(form);
 		const year = body.year;
 		const next = body.next;
-		if (!Number.isSafeInteger(year) || year < 2000 || year > 9999) throw service.invalid('year', 'year is a four-digit year.');
+		if (!yearly && year !== undefined)
+			throw service.invalid('year', 'Order numbers have no year (checkout.numberPattern): give only next.');
+		if (yearly && (!Number.isSafeInteger(year) || year < 2000 || year > 9999))
+			throw service.invalid('year', 'year is a four-digit year.');
 		if (!Number.isSafeInteger(next) || next < 1 || next > 99_999_999)
 			throw service.invalid('next', 'next is the next order number, from 1.');
-		const s = await service.site(ctx);
-		const prefix = String((await s.values('checkout')).numberPrefix ?? '');
-		const done = await setOrderCounter(await s.data(), { prefix, year, next });
-		if (!done.ok) throw service.invalid('next', `Order number ${done.used} of ${year} is already used; give a higher one.`);
-		await service.log(ctx, 'orders.counter_set', `${prefix}${year}`, { label: `${prefix}${year}`, detail: `Next ${next}` });
-		return { prefix, year, next: done.next };
+		const done = await setOrderCounter(await s.data(), { form, year: yearly ? year : 0, next });
+		if (!done.ok)
+			throw service.invalid(
+				'next',
+				yearly
+					? `Order number ${done.used} of ${year} is already used; give a higher one.`
+					: `Order number ${done.used} is already used; give a higher one.`,
+			);
+		const counter = yearly ? `${form.prefix}${year}` : form.prefix;
+		await service.log(ctx, 'orders.counter_set', counter || 'orders', { label: counter || 'Orders', detail: `Next ${next}` });
+		return { prefix: form.prefix, year: yearly ? year : null, next: done.next };
 	};
 
 	/**

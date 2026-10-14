@@ -83,7 +83,14 @@ const FEATURE_SECTION = Object.freeze({
 });
 
 /** Checkout settings shown under Orders and messages (the rest of checkout's go to Checkout and payment or Policies). */
-const ORDER_SETTINGS = new Set(['numberPrefix', 'messageChannels', 'editPricing', 'deleteGivesBack']);
+const ORDER_SETTINGS = new Set([
+	'numberPattern',
+	'numberPrefix',
+	'numberDigits',
+	'messageChannels',
+	'editPricing',
+	'deleteGivesBack',
+]);
 
 /**
  * The section of one setting.
