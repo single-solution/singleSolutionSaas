@@ -6,6 +6,7 @@ import { commonSchema } from './common.js';
 import { settingsMetaSchema } from './settings-schema.js';
 import { manifestSchema } from './manifest.js';
 import {
+	directoryListSchema,
 	directorySchema,
 	featureReportSchema,
 	noticeSchema,
@@ -41,6 +42,7 @@ export const ALL_SCHEMAS = deepFreeze([
 	websitesPageSchema,
 	revocationsSchema,
 	directorySchema,
+	directoryListSchema,
 	noticeSchema,
 	dataRightsRequestSchema,
 	activityCopySchema,

@@ -7,6 +7,7 @@ import {
 	PRODUCT_UNAVAILABLE_REASONS,
 	RULES,
 	validateDirectory,
+	validateDirectoryList,
 	validateFeatureReport,
 	validateNotice,
 	validatePriceReport,
@@ -129,6 +130,42 @@ describe('validateDirectory', () => {
 		expectProblem(validateDirectory({ baseUrl: 'not a url' }), '/baseUrl', RULES.url);
 		expectProblem(validateDirectory({ baseUrl: `https://${'a'.repeat(2050)}.dev` }), '/baseUrl', 'maxLength');
 		expectProblem(validateDirectory({}), '/baseUrl', 'required');
+	});
+});
+
+describe('validateDirectoryList', () => {
+	it('lists every connected product once, each at a service address', () => {
+		const items = [
+			{ productId: 'bookings', name: 'Bookings', baseUrl: 'https://bookings.example.dev' },
+			{ productId: 'chat', name: 'Chat', baseUrl: 'http://localhost:4000' },
+		];
+		expect(validateDirectoryList({ items }).ok).toBe(true);
+		expect(validateDirectoryList({ items: [] }).ok).toBe(true);
+		expectProblem(validateDirectoryList({}), '/items', 'required');
+		expectProblem(
+			validateDirectoryList({ items: [{ productId: 'Chat', name: 'Chat', baseUrl: 'https://chat.example.dev' }] }),
+			'/items/0/productId',
+			'pattern',
+		);
+		expectProblem(validateDirectoryList({ items: [{ productId: 'chat', name: 'Chat' }] }), '/items/0/baseUrl', 'required');
+		expectProblem(
+			validateDirectoryList({ items: [{ productId: 'chat', baseUrl: 'https://chat.example.dev' }] }),
+			'/items/0/name',
+			'required',
+		);
+		expectProblem(validateDirectoryList({ items: [{ ...items[0], secret: 'x' }] }), '/items/0/secret', 'additionalProperties');
+		expectProblem(
+			validateDirectoryList({
+				items: [items[0], { productId: 'bookings', name: 'Other', baseUrl: 'https://other.example.dev' }],
+			}),
+			'/items/1/productId',
+			RULES.duplicateKey,
+		);
+		expectProblem(
+			validateDirectoryList({ items: [{ productId: 'chat', name: 'Chat', baseUrl: 'http://chat.example.dev' }] }),
+			'/items/0/baseUrl',
+			RULES.url,
+		);
 	});
 });
 

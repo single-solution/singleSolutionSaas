@@ -1,6 +1,6 @@
 /**
  * Product ↔ Portal wire shapes (PLAN 0.4.12): price report, feature report, status response, websites page,
- * revocations, directory and notice body. The validators in `validate.js` add the semantic rules (unique keys,
+ * revocations, directory (one product, or every connected product) and notice body. The validators in `validate.js` add the semantic rules (unique keys,
  * dependencies, real timestamps, grace consistency).
  * @module
  */
@@ -139,6 +139,28 @@ export const directorySchema = deepFreeze({
 	required: ['baseUrl'],
 	additionalProperties: false,
 	properties: { baseUrl: ref('url') },
+});
+
+/** `GET /v1/product/directory` answer: every connected product with its name and address, by id. */
+export const directoryListSchema = deepFreeze({
+	$schema: draft,
+	$id: SCHEMA_IDS.directoryList,
+	title: 'Directory',
+	type: 'object',
+	required: ['items'],
+	additionalProperties: false,
+	properties: {
+		items: {
+			type: 'array',
+			maxItems: 1000,
+			items: {
+				type: 'object',
+				required: ['productId', 'name', 'baseUrl'],
+				additionalProperties: false,
+				properties: { productId: ref('productId'), name: ref('name'), baseUrl: ref('url') },
+			},
+		},
+	},
 });
 
 /** Notice body `{ type, websiteId?, subject? }`. */

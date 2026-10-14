@@ -207,6 +207,26 @@ export const checkDirectory = (directory) =>
 	isServiceUrl(directory.baseUrl) ? [] : [at(['baseUrl'], RULES.url, 'must be an https URL (http only on localhost)')];
 
 /**
+ * Every connected product once, each at a service URL.
+ * @param {import('./types.js').DirectoryList} list
+ * @returns {ValidationProblem[]}
+ */
+export const checkDirectoryList = (list) => {
+	/** @type {ValidationProblem[]} */
+	const out = [];
+	/** @type {Set<string>} */
+	const seen = new Set();
+	for (const [index, entry] of list.items.entries()) {
+		if (seen.has(entry.productId))
+			out.push(at(['items', index, 'productId'], RULES.duplicateKey, `product '${entry.productId}' is listed twice`));
+		seen.add(entry.productId);
+		if (!isServiceUrl(entry.baseUrl))
+			out.push(at(['items', index, 'baseUrl'], RULES.url, 'must be an https URL (http only on localhost)'));
+	}
+	return out;
+};
+
+/**
  * @param {import('./types.js').ActivityCopy} copy
  * @returns {ValidationProblem[]}
  */

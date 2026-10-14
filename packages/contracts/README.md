@@ -61,6 +61,7 @@ values must be valid.
 | `validateWebsitesPage`   | `{ items: [{ websiteId, domain, merchantId, merchantName, status }], cursor: string \| null }`                                 |
 | `validateRevocations`    | `{ tokenIds: string[], cursor: string \| null }`                                                                               |
 | `validateDirectory`      | `{ baseUrl }` (https, or http on a local host)                                                                                 |
+| `validateDirectoryList`  | `{ items: [{ productId, name, baseUrl }] }`: every connected product once, by id                                               |
 | `validateNotice`         | `{ type, websiteId }` for `status.changed`, `token.revoked`, `website.deleted`; `{ type, subject }` for `sessions.revoked`     |
 
 Times are ISO-8601 UTC strings (`Z`) and must be real instants; `graceEndsAt` is set exactly while the status is

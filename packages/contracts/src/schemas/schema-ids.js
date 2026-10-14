@@ -24,6 +24,7 @@ export const SCHEMA_IDS = Object.freeze({
 	websitesPage: schemaId('websites-page'),
 	revocations: schemaId('revocations'),
 	directory: schemaId('directory'),
+	directoryList: schemaId('directory-list'),
 	notice: schemaId('notice'),
 	dataRightsRequest: schemaId('data-rights-request'),
 	activityCopy: schemaId('activity-copy'),

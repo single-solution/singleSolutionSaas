@@ -115,6 +115,7 @@
 /** @typedef {{ items: WebsiteRow[], cursor: string | null }} WebsitesPage */
 /** @typedef {{ tokenIds: string[], cursor: string | null }} Revocations */
 /** @typedef {{ baseUrl: string }} Directory */
+/** @typedef {{ items: Array<{ productId: string, name: string, baseUrl: string }> }} DirectoryList every connected product, by id */
 /** @typedef {{ type: import('./constants.js').NoticeType, websiteId?: string, subject?: string }} Notice */
 
 /**

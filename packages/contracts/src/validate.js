@@ -13,6 +13,7 @@ import {
 	at,
 	checkActivityCopy,
 	checkDirectory,
+	checkDirectoryList,
 	checkManifest,
 	checkMessageDefaults,
 	checkPriceReport,
@@ -103,6 +104,7 @@ const result = (value, problems) =>
  * @property {(value: unknown) => ValidationResult<import('./types.js').WebsitesPage>} validateWebsitesPage
  * @property {(value: unknown) => ValidationResult<import('./types.js').Revocations>} validateRevocations
  * @property {(value: unknown) => ValidationResult<import('./types.js').Directory>} validateDirectory
+ * @property {(value: unknown) => ValidationResult<import('./types.js').DirectoryList>} validateDirectoryList
  * @property {(value: unknown) => ValidationResult<import('./types.js').Notice>} validateNotice
  * @property {(value: unknown) => ValidationResult<import('./types.js').DataRightsRequest>} validateDataRightsRequest
  * @property {(value: unknown) => ValidationResult<import('./types.js').ActivityCopy>} validateActivityCopy
@@ -274,6 +276,7 @@ export const createValidator = ({ schemas = [] } = {}) => {
 		validateWebsitesPage: /** @type {Validator['validateWebsitesPage']} */ (validator(SCHEMA_IDS.websitesPage)),
 		validateRevocations: /** @type {Validator['validateRevocations']} */ (validator(SCHEMA_IDS.revocations)),
 		validateDirectory: validator(SCHEMA_IDS.directory, checkDirectory),
+		validateDirectoryList: validator(SCHEMA_IDS.directoryList, checkDirectoryList),
 		validateNotice: /** @type {Validator['validateNotice']} */ (validator(SCHEMA_IDS.notice)),
 		validateDataRightsRequest: /** @type {Validator['validateDataRightsRequest']} */ (validator(SCHEMA_IDS.dataRightsRequest)),
 		validateActivityCopy: validator(SCHEMA_IDS.activityCopy, checkActivityCopy),
@@ -328,6 +331,8 @@ export const validateWebsitesPage = (value) => getDefaultValidator().validateWeb
 export const validateRevocations = (value) => getDefaultValidator().validateRevocations(value);
 /** @param {unknown} value */
 export const validateDirectory = (value) => getDefaultValidator().validateDirectory(value);
+/** @param {unknown} value */
+export const validateDirectoryList = (value) => getDefaultValidator().validateDirectoryList(value);
 /** @param {unknown} value */
 export const validateNotice = (value) => getDefaultValidator().validateNotice(value);
 /** @param {unknown} value */

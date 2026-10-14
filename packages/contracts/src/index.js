@@ -23,6 +23,7 @@ export {
 	validateWebsitesPage,
 	validateRevocations,
 	validateDirectory,
+	validateDirectoryList,
 	validateNotice,
 	validateDataRightsRequest,
 	validateActivityCopy,
@@ -90,6 +91,7 @@ export { ID_ALPHABET, idPattern, encodeBase32, createId, isId, normaliseDomain, 
 /** @typedef {import('./types.js').WebsitesPage} WebsitesPage */
 /** @typedef {import('./types.js').Revocations} Revocations */
 /** @typedef {import('./types.js').Directory} Directory */
+/** @typedef {import('./types.js').DirectoryList} DirectoryList */
 /** @typedef {import('./types.js').Notice} Notice */
 /** @typedef {import('./types.js').BusinessInfo} BusinessInfo */
 /** @typedef {import('./types.js').DataRightsRequest} DataRightsRequest */
